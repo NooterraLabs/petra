@@ -1,0 +1,170 @@
+"""Safe envelopes (lola/envelope.py) on the gadget domain of test_pipeline.py, and once on a
+shipped example through the command line.
+
+The gadget claim F - 1/2 * C <= 0 with C in [20 kN, 25 kN] holds exactly while the load F
+stays at or below 10 kN, so an envelope over F must stop within its resolution of 10 kN.
+"""
+import contextlib
+import io
+import json
+import unittest
+from fractions import Fraction
+from pathlib import Path
+from unittest import mock
+
+from lola import cli, envelope as envelope_module
+from lola.envelope import PROBE_OWNER, EnvelopeError, envelope, find_target, narrow, render, to_json
+from lola.ir import InputKind
+from lola.models.base import ComponentError
+from lola.premises import Tag
+from lola.units import DIMENSIONLESS, FORCE, TEMPERATURE, Quantity
+from lola.verdict import Pass
+from tests.test_pipeline import CAPACITY, REGISTRY, WAIVE_WEAR, GadgetDomain, Solver, gadget, point
+
+ROOT = Path(__file__).resolve().parent.parent
+KN = Fraction(1000)
+CLAIM = "claim fits: g.utilisation <= 1/2 under push\n"
+PUSH = 'load push {\n  on g force in [0 kN, 6 kN]\n  signed "client@example.org" source "brief rev A"\n}\n'
+
+
+def kn(x) -> Quantity:
+    return Quantity(point(Fraction(x) * KN), FORCE)
+
+
+class Envelopes(GadgetDomain):
+    BODY = (gadget(CAPACITY), PUSH, CLAIM, WAIVE_WEAR)
+
+    def run_envelope(self, *body, name="push.g.force", lo=kn(0), hi=kn(30), **kwargs):
+        return envelope(self.design(*(body or self.BODY)), REGISTRY, name, lo, hi, (Solver(),), **kwargs)
+
+    def test_the_envelope_stops_within_its_resolution_of_the_true_limit(self):
+        env = self.run_envelope(resolution=kn(Fraction(1, 2)))
+        lo, hi = env.safe
+        self.assertEqual(lo, 0)
+        self.assertTrue(10 * KN - KN / 2 <= hi <= 10 * KN, hi)
+        self.assertTrue(10 * KN < env.above.limit <= hi + KN / 2, env.above.limit)
+        self.assertEqual(env.above.blocker.status, "FAIL")
+        self.assertIsNone(env.below.blocker, "the low side passes to the end of the probe range")
+        self.assertEqual(env.anchor, 3 * KN, "the middle of the stated range [0, 6] kN")
+
+    def test_the_whole_envelope_is_one_pass_assumed_by_the_probe_not_the_owner(self):
+        env = self.run_envelope(resolution=kn(1))
+        self.assertEqual((env.confirm.lo, env.confirm.hi), env.safe)
+        report = env.confirm.report
+        self.assertIsInstance(report.verdict, Pass, report.render())
+        premise = next(p for p in report.verdict.footprint.premises if p.label == "in:rig.push.g.force")
+        self.assertEqual((premise.owner, premise.tag, premise.range.lo, premise.range.hi), (PROBE_OWNER, Tag.ASSUMED, *env.safe))
+
+    def test_every_proved_probe_lies_inside_the_envelope_and_every_other_reaches_past_it(self):
+        env = self.run_envelope(resolution=kn(1))
+        lo, hi = env.safe
+        for p in env.probes:
+            with self.subTest(probe=(p.lo, p.hi)):
+                if p.status == "PASS":
+                    self.assertTrue(lo <= p.lo and p.hi <= hi)
+                else:
+                    self.assertTrue(p.hi > hi or p.lo < lo)
+
+    def test_a_failing_anchor_has_no_envelope(self):
+        env = self.run_envelope(at=kn(12))
+        self.assertIsNone(env.safe)
+        self.assertEqual(env.start.status, "FAIL")
+        self.assertEqual(env.start.at, 12 * KN)
+        self.assertIn("envelope   none", render(env))
+
+    def test_a_param_is_probed_by_its_scope_parameter(self):
+        body = (gadget("  capacity param cap\n"), "param cap in [20 kN, 25 kN]\n", PUSH.replace("6 kN", "9 kN"), CLAIM, WAIVE_WEAR)
+        env = self.run_envelope(*body, name="cap", lo=kn(10), hi=kn(40), resolution=kn(1))
+        lo, hi = env.safe
+        self.assertEqual(hi, 40 * KN)
+        self.assertTrue(18 * KN <= lo <= 18 * KN + KN, lo)
+        self.assertEqual(env.target.label, "par:rig.cap")
+
+    def test_obligations_that_do_not_depend_on_the_input_are_set_aside(self):
+        other = 'load pull {\n  on h force in [0 kN, 5 kN]\n  signed "client@example.org" source "brief rev A"\n}\n'
+        waive_h = 'waive gadget.wear on h by "o@example.org" reason "no sliding contact"\n'
+        env = self.run_envelope(gadget(CAPACITY), gadget(CAPACITY, name="h"), PUSH, other, CLAIM, WAIVE_WEAR, waive_h, resolution=kn(2))
+        self.assertEqual((env.elsewhere, env.elsewhere_open), ("PASS", ()))
+        self.assertIn("do not depend on push.g.force are PASS", render(env))
+
+    def test_a_probe_the_design_refuses_is_invalid_and_stops_the_envelope(self):
+        real = envelope_module.check_design
+
+        def refusing(design, registry, sources, **kwargs):
+            force = design.loads["push"].entries[0].value.range.value
+            if force.hi > 8 * KN:
+                raise ComponentError(("g: the rig cannot apply more than 8 kN",))
+            return real(design, registry, sources, **kwargs)
+
+        with mock.patch.object(envelope_module, "check_design", refusing):
+            env = self.run_envelope(resolution=kn(1))
+        self.assertLessEqual(env.safe[1], 8 * KN)
+        self.assertEqual(env.above.blocker.status, "INVALID")
+        self.assertIn("cannot apply", env.above.blocker.why)
+
+    def test_requests_that_cannot_be_answered_are_refused(self):
+        cases = (
+            dict(name="nothing"),
+            dict(lo=Quantity(point(0), TEMPERATURE)),
+            dict(lo=kn(5), hi=kn(5)),
+            dict(at=kn(50)),
+            dict(resolution=Quantity(point(1), DIMENSIONLESS)),
+        )
+        for kwargs in cases:
+            with self.subTest(**{k: str(v) for k, v in kwargs.items()}), self.assertRaises(EnvelopeError):
+                self.run_envelope(**kwargs)
+
+    def test_an_input_with_a_mean_is_refused(self):
+        mean = PUSH.replace("[0 kN, 6 kN]", "[0 kN, 6 kN] mean 4 kN")
+        with self.assertRaises(EnvelopeError) as ctx:
+            self.run_envelope(gadget(CAPACITY), mean, CLAIM, WAIVE_WEAR)
+        self.assertIn("mean", str(ctx.exception))
+
+    def test_narrowing_replaces_one_bound_and_signs_it_as_a_probe(self):
+        design = self.design(*self.BODY)
+        target = find_target(design, REGISTRY, "g.capacity")
+        narrowed = narrow(design, target, 21 * KN, 22 * KN)
+        (attr,) = [a for a in narrowed.components["g"].attrs if a.key == "capacity"]
+        (bound,) = attr.args
+        self.assertEqual((bound.range.value.lo, bound.range.value.hi, bound.kind, bound.signature.owner), (21 * KN, 22 * KN, InputKind.ASSUMED, PROBE_OWNER))
+        self.assertEqual(narrowed.loads, design.loads)
+
+    def test_json_holds_exact_rationals(self):
+        found = to_json(self.run_envelope(resolution=kn(1)))
+        self.assertEqual((found["label"], found["unit"], found["probe"]), ("in:rig.push.g.force", "N", ["0", "30000"]))
+        self.assertEqual(found["safe"][0], "0")
+        self.assertEqual(found["above"]["status"], "FAIL")
+        self.assertEqual(found["probes"][0], {"range": ["3000", "3000"], "status": "PASS"})
+
+
+class CommandLine(unittest.TestCase):
+    def run_cli(self, *args: str) -> tuple[int, str]:
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
+            code = cli.main(["envelope", str(ROOT / "examples" / "circuit_pass.lola"), *args])
+        return code, out.getvalue()
+
+    def test_the_ambient_envelope_of_the_lighting_radial(self):
+        code, out = self.run_cli("--input", "ambient", "--from", "-20 degC", "--to", "100degC", "--json")
+        self.assertEqual(code, 0)
+        found = json.loads(out)
+        lo, hi = (Fraction(x) for x in found["safe"])
+        self.assertEqual(lo, -20)
+        self.assertTrue(40 <= hi < Fraction(found["above"]["limit"]) <= 100, found["above"])
+        self.assertEqual(found["above"]["status"], "FAIL")
+        self.assertIn("claim.hot", found["above"]["why"])
+        self.assertEqual(found["confirmed"], "PASS")
+
+    def test_an_unknown_input_or_a_wrong_unit_is_an_input_error(self):
+        self.assertEqual(self.run_cli("--input", "nothing", "--from", "0", "--to", "1")[0], 3)
+        self.assertEqual(self.run_cli("--input", "ambient", "--from", "0 A", "--to", "1 A")[0], 3)
+        self.assertEqual(self.run_cli("--input", "ambient", "--from", "zero", "--to", "1 degC")[0], 3)
+
+    def test_a_failing_anchor_exits_with_its_status(self):
+        code, out = self.run_cli("--input", "ambient", "--from", "-20 degC", "--to", "100 degC", "--at", "90 degC")
+        self.assertEqual(code, 1)
+        self.assertIn("envelope   none", out)
+
+
+if __name__ == "__main__":
+    unittest.main()

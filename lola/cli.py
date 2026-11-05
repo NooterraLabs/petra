@@ -18,6 +18,13 @@
         ComponentError or an unreadable deck; nothing is printed to stdout).
     python -m lola explain FILE
         Print the elaborated statements with hypothesis labels.
+    python -m lola envelope FILE --input NAME --from QTY --to QTY [--at QTY]
+                                 [--resolution QTY] [--library DIR] [--json]
+        Find the widest interval of one input (or param) around an anchor over which
+        every obligation that depends on it is proved, by bisecting the design's checks
+        (lola/envelope.py). A quantity is a number and a unit, such as "-20 degC". Exit 0
+        when the anchor passes, else the anchor's status code (1, 2 or 5), and 3 for an
+        input error such as an unknown input or a range in the wrong unit.
     python -m lola verify CERT.json [...]
         Kernel-check certificate files on their own (statement taken from the file), and
         library files, which are certificate envelopes with a "models" list. This is what
@@ -48,6 +55,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 import traceback
 from pathlib import Path
@@ -61,6 +69,7 @@ from .models.base import ComponentError
 from .pipeline import check_design, explain
 from .registry import DeckError, build_deck, build_registry, check_deck, read_deck, write_deck
 from .solvers import SolverSource
+from .units import Quantity, UnitError, parse_quantity
 from .verdict import STATUS, Open, Refuted, WithinMargin
 
 EXIT_CODES: Mapping[str, int] = {"PASS": 0, "FAIL": 1, "UNKNOWN": 2, "INPUT_ERROR": 3, "INTERNAL_ERROR": 4, "MARGINAL": 5}
@@ -77,8 +86,8 @@ class _Parser(argparse.ArgumentParser):
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Subcommands check, explain, verify, certify-family, registry (build, check) and
-    gym, with the flags in the module docstring."""
+    """Subcommands check, explain, envelope, verify, certify-family, registry (build,
+    check) and gym, with the flags in the module docstring."""
     from .gym.tasks import GENERATORS
 
     parser = _Parser(prog="lola", description="verdicts about physical designs as theorems relative to explicit premises")
@@ -96,6 +105,17 @@ def build_parser() -> argparse.ArgumentParser:
     explain_cmd = commands.add_parser("explain", help="print the elaborated statements")
     explain_cmd.add_argument("file")
     explain_cmd.set_defaults(run=cmd_explain)
+
+    env = commands.add_parser("envelope", help="find the widest proved interval of one input")
+    env.add_argument("file")
+    env.add_argument("--input", required=True, metavar="NAME", help="an input's label stem (ambient, lighting.supply.fault_current, lamp_draw.lighting.lamps.current) or a param")
+    env.add_argument("--from", dest="lo", required=True, metavar="QTY", help='the low end of the probe range, such as "-20 degC"')
+    env.add_argument("--to", dest="hi", required=True, metavar="QTY", help="the high end of the probe range")
+    env.add_argument("--at", metavar="QTY", help="the anchor the envelope grows from; default the middle of the stated range")
+    env.add_argument("--resolution", metavar="QTY", help="stop when each undecided gap is at most this; default 1/64 of the probe range")
+    env.add_argument("--library", metavar="DIR", help="family library to reuse evidence from")
+    env.add_argument("--json", action="store_true", help="print the envelope as JSON")
+    env.set_defaults(run=cmd_envelope)
 
     verify = commands.add_parser("verify", help="kernel-check certificate files on their own")
     verify.add_argument("certs", nargs="+", metavar="CERT")
@@ -156,6 +176,36 @@ def cmd_explain(args: argparse.Namespace) -> int:
         return _input_error(exc)
     print(text)
     return 0
+
+
+def cmd_envelope(args: argparse.Namespace) -> int:
+    from .envelope import EnvelopeError, envelope, render, to_json
+
+    try:
+        registry = build_registry()
+        design = load_design(args.file, registry)
+        quantities = [None if text is None else _quantity(text) for text in (args.lo, args.hi, args.at, args.resolution)]
+        library = Library(args.library) if args.library else None
+        sources = tuple(s for s in (library, SolverSource()) if s is not None)
+        found = envelope(design, registry, args.input, quantities[0], quantities[1], sources, at=quantities[2], resolution=quantities[3])
+    except (*_INPUT_ERRORS, EnvelopeError, UnitError) as exc:
+        return _input_error(exc)
+    print(json.dumps(to_json(found), sort_keys=True) if args.json else render(found))
+    if found.safe is not None:
+        return 0
+    return EXIT_CODES.get(found.start.status, EXIT_CODES["INPUT_ERROR"])
+
+
+_QUANTITY = re.compile(r"\s*([+-]?[0-9]+(?:\.[0-9]+|/[0-9]+)?)\s*(\S*)\s*")
+
+
+def _quantity(text: str) -> Quantity:
+    """ "-20 degC", "-20degC", "1/2" or "30 %" as an exact quantity."""
+    match = _QUANTITY.fullmatch(text)
+    if match is None:
+        raise UnitError(f"{text!r} is not a number with an optional unit")
+    number, unit = match.groups()
+    return parse_quantity(number, unit or None)
 
 
 def cmd_verify(args: argparse.Namespace) -> int:

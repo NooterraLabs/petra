@@ -385,7 +385,7 @@ def build_premise_book(design: Design, registry: Registry, outcomes: tuple[Outco
             premises.append(outcome.obligation.model.premise())
             result = outcome.theorem if isinstance(outcome, Discharged) else outcome.refutation
             premises += [_registry_premise(registry, label) for label in _labels(result.statement, LabelKind.REGISTRY)]
-    for inp in _signed_inputs(design, lower_components(design, registry)):
+    for inp in signed_inputs(design, lower_components(design, registry)):
         premises += _input_premises(design, inp)
     for record in design.tests.values():
         statement = f"{record.name} on {'.'.join(record.subject)}: {record.trials} trials, {record.failures} failures at {quantity_text(record.level)}"
@@ -420,7 +420,7 @@ def _input_premises(design: Design, inp: Input) -> list[Premise]:
     return found
 
 
-def _signed_inputs(design: Design, lowered: Mapping[str, Any]) -> Iterator[Input]:
+def signed_inputs(design: Design, lowered: Mapping[str, Any]) -> Iterator[Input]:
     """Every signed Input of the design: its ambient, its load entries, and the ones each
     domain lowered from component attributes into its typed model, found by walking the
     model, so a domain declares its inputs by holding them."""
@@ -515,4 +515,4 @@ def _term_lines(name: str, value: object, depth: int) -> list[str]:
     return [f"{pad}{name}  {value}"]
 
 
-__all__ = ["ComponentError", "EvidenceSink", "EvidenceSource", "Report", "build_premise_book", "check_design", "elaborate", "explain", "lower_components"]
+__all__ = ["ComponentError", "EvidenceSink", "EvidenceSource", "Report", "build_premise_book", "check_design", "elaborate", "explain", "lower_components", "signed_inputs"]
