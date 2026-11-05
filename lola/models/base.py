@@ -135,13 +135,17 @@ class Requirement:
 
     @property
     def id(self) -> str:
-        """Stable id: "<subject>/<mode>/<origin>", such as
-        "frame.diag_ad/truss.member_buckling/coverage.truss.axial_member". Used in reports."""
+        """Stable id, unique within a design: "<subject>/<mode>/<origin>", such as
+        "frame.diag_ad/truss.member_buckling/coverage.truss.axial_member", then "/<qoi>"
+        for a coverage requirement on one quantity, such as the two port contracts
+        "lighting.t1.wire/port.contract/coverage.port.contract/temperature" and ".../current".
+        A claim needs no suffix: its name is unique and names one quantity. Two coverage
+        requirements cannot share an id, because coverage.generate refuses them. Used in
+        reports."""
         if isinstance(self.origin, ClaimOrigin):
-            origin = f"claim.{self.origin.claim}"
-        else:
-            origin = f"coverage.{self.origin.rule}"
-        return f"{'.'.join(self.subject)}/{self.mode.id}/{origin}"
+            return f"{'.'.join(self.subject)}/{self.mode.id}/claim.{self.origin.claim}"
+        quantity = "" if self.qoi is None else f"/{self.qoi.name}"
+        return f"{'.'.join(self.subject)}/{self.mode.id}/coverage.{self.origin.rule}{quantity}"
 
 
 # --- What an open requirement needs ----------------------------------------------
@@ -275,8 +279,9 @@ FeatureKind = NewType("FeatureKind", str)
 cross-domain rules read are defined here."""
 
 CONTACT_PAIR = FeatureKind("contact_pair")
-"""Two materials in contact. Every domain reports its contact pairs so the galvanic rule
-in lola/coverage.py sees them all."""
+"""Two surfaces in contact, each named by the registry material it exposes
+(Registry.surface: a coated part exposes its coating). Every domain reports its contact
+pairs so the galvanic rule in lola/coverage.py sees them all."""
 
 
 @dataclass(frozen=True)
@@ -424,8 +429,8 @@ class StatementBuilder:
     """Local, single-use builder for one statement.
 
     The only ways to introduce a hypothesis are the typed methods below, each of which
-    needs a source that carries provenance: a registry property, a signed Input (its range,
-    its mean), a tests record, a design value, a Param, or a QuantityDef. There is
+    needs a source that carries provenance: a registry property or constant, a signed
+    Input (its range, its mean), a tests record, a design value, a Param, or a QuantityDef. There is
     deliberately no method that turns a bare number into a RangeHyp, so an elaborator
     cannot invent an input bound. Each method refuses an argument of any other type.
 
@@ -456,6 +461,11 @@ class StatementBuilder:
         as a point hyp labelled "dsg:<design>.<entry>.<p>" (a chosen size is the design),
         or else the hypothesis the caller binds in `series`, which a family uses to give
         a ParamRef. A parameter that is neither fixed nor bound, or both, raises ValueError.
+
+        Any other Sym("self.<p>") names another property of the same entry and expands the
+        same way, recursively: a cable's T1 names its outer diameter, which names its
+        conductor diameter, which names the area. A derivation that reaches its own
+        property again raises ValueError naming the cycle.
         """
         self._open()
         if not isinstance(entry_id, str) or not isinstance(prop, str):
@@ -464,30 +474,16 @@ class StatementBuilder:
         for name, sym in bound.items():
             if not (isinstance(sym, Sym) and sym.name in self._hyps):
                 raise TypeError(f"series parameter {name} must be bound to a hypothesis of this builder")
-        part = self._registry.parts.get(entry_id)
-        fixes = part.fixes if part is not None else {}
-        holder = part.series if part is not None and part.series is not None and prop not in part.props else entry_id
-        found = self._registry.property(holder, prop)
-        if isinstance(found, Stated):
-            return self._range(f"{holder}.{prop}", found.value, registry_label(holder, prop))
-        if not isinstance(found, Derived):
-            raise TypeError(f"{holder}.{prop} is neither Stated nor Derived")
-        replace: dict[str, Expr] = {}
-        for name in sorted(_syms(found.expr)):
-            namespace, _, rest = name.partition(".")
-            if namespace == "const":
-                replace[name] = self._constant(rest, f"{holder}.{prop}")
-            elif namespace != "self":
-                raise ValueError(f"the derivation of {holder}.{prop} names {name}, which is neither const.* nor self.*")
-            elif rest in bound and rest in fixes:
-                raise ValueError(f"{entry_id} fixes {rest}, so it cannot also be bound")
-            elif rest in bound:
-                replace[name] = bound[rest]
-            elif rest in fixes:
-                replace[name] = self._range(f"{entry_id}.{rest}", fixes[rest], design_label(self._design.name, f"{entry_id}.{rest}"))
-            else:
-                raise ValueError(f"{entry_id}.{prop} needs series parameter {rest}, which is neither fixed nor bound")
-        return _substitute(found.expr, replace)
+        return self._property(entry_id, prop, bound, ())
+
+    def constant(self, name: str) -> Sym:
+        """RangeHyp labelled "reg:const.<name>": a number a standard fixes that is no
+        entry's property, such as the 1.45 of IEC 60364-4-43's I2 <= 1.45 Iz. The
+        registry's Constant carries its tag, owner and source."""
+        self._open()
+        if not isinstance(name, str):
+            raise TypeError("a registry constant is named by its name")
+        return self._constant(name, "the elaborator")
 
     def input(self, inp: Input) -> Sym:
         """RangeHyp labelled "in:<design>.<input>"."""
@@ -556,6 +552,46 @@ class StatementBuilder:
             raise ValueError(f"the goal mentions symbols no hypothesis introduces: {sorted(unbound)}")
         self._finished = True
         return Statement(tuple(self._hyps[name] for name in sorted(used)), goal)
+
+    def _property(self, entry_id: str, prop: str, bound: Mapping[str, Sym], expanding: tuple[str, ...]) -> Expr:
+        if prop in expanding:
+            raise ValueError(f"{entry_id}: derivation cycle {' -> '.join((*expanding, prop))}")
+        holder = self._holder(entry_id, prop)
+        fixes = self._registry.parts[entry_id].fixes if entry_id in self._registry.parts else {}
+        found = self._registry.property(holder, prop)
+        if isinstance(found, Stated):
+            return self._range(f"{holder}.{prop}", found.value, registry_label(holder, prop))
+        if not isinstance(found, Derived):
+            raise TypeError(f"{holder}.{prop} is neither Stated nor Derived")
+        replace: dict[str, Expr] = {}
+        for name in sorted(_syms(found.expr)):
+            namespace, _, rest = name.partition(".")
+            if namespace == "const":
+                replace[name] = self._constant(rest, f"{holder}.{prop}")
+            elif namespace != "self":
+                raise ValueError(f"the derivation of {holder}.{prop} names {name}, which is neither const.* nor self.*")
+            elif rest in bound and rest in fixes:
+                raise ValueError(f"{entry_id} fixes {rest}, so it cannot also be bound")
+            elif rest in bound:
+                replace[name] = bound[rest]
+            elif rest in fixes:
+                replace[name] = self._range(f"{entry_id}.{rest}", fixes[rest], design_label(self._design.name, f"{entry_id}.{rest}"))
+            elif self._holds(entry_id, rest):
+                replace[name] = self._property(entry_id, rest, bound, (*expanding, prop))
+            else:
+                raise ValueError(f"{entry_id}.{prop} needs series parameter {rest}, which is neither fixed nor bound")
+        return _substitute(found.expr, replace)
+
+    def _holder(self, entry_id: str, prop: str) -> str:
+        part = self._registry.parts.get(entry_id)
+        return part.series if part is not None and part.series is not None and prop not in part.props else entry_id
+
+    def _holds(self, entry_id: str, prop: str) -> bool:
+        try:
+            self._registry.property(self._holder(entry_id, prop), prop)
+        except LookupError:
+            return False
+        return True
 
     def _constant(self, name: str, needed_by: str) -> Sym:
         constant = self._registry.constants.get(name)

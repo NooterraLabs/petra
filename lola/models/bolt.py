@@ -20,8 +20,8 @@ proof stress Sp (ISO 898-1), or its 0.2 % proof strength Rp02_min where the clas
 no Sp (ISO 3506-1 stainless), a sanctioned premise either way. A bolt_tension claim
 bounds F_bolt itself.
 
-A coated bolt or plate is refused at lowering: a Feature names registry materials only,
-so the galvanic rule would read the base metal's anodic index instead of the coating's.
+A coated bolt or plate touches its neighbours with the coating's surface material
+(Registry.surface), so the contact pairs the galvanic rule reads name that material.
 """
 from __future__ import annotations
 
@@ -66,7 +66,7 @@ from .base import (
 class Plate:
     material: str
     thickness: Value
-    process: str | None = None   # e.g. "process.mig_weld_6xxx"; v0 refuses a coating
+    process: str | None = None   # e.g. "process.mig_weld_6xxx" or "process.zinc_plate"
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,17 +88,15 @@ INPUTS: Mapping[str, tuple[Dim, str]] = {
 }
 """The signed inputs a joint takes: field -> (dimension, unit a gap asks for)."""
 
-_SURFACE_SAFE = frozenset({ProcessKind.WELD, ProcessKind.CUT})
-"""Processes that leave the plate's surface metal unchanged, so the galvanic rule reads
-the right anodic index."""
+_PLATE_PROCESSES = frozenset({ProcessKind.COATING, ProcessKind.WELD, ProcessKind.CUT})
 
 
 def lower_joint(component: Component, design: Design, registry: Registry) -> BoltedJoint:
     """Parse the attribute lines in the module docstring. Names the bounds
     "<joint>.torque", "<joint>.nut_factor" and "<joint>.load_share". Rejects
     (ComponentError): a missing or repeated bolt line, fewer than two plates, registry ids
-    of the wrong kind, a coated bolt or plate, a load field other than force, and a claim
-    qoi not in QOIS."""
+    of the wrong kind, a plate process that is not a coating, weld or cut, a load field
+    other than force, and a claim qoi not in QOIS."""
     problems: list[str] = []
     name = component.name
     bolts: list[tuple[str, int]] = []
@@ -161,12 +159,9 @@ def _bolt(args: tuple[Arg, ...], registry: Registry, say: Say) -> tuple[str, int
         say("count is a whole number of bolts, at least 1")
         return None
     try:
-        part = registry.part(pid, PartKind.BOLT)
+        registry.part(pid, PartKind.BOLT)
     except OutsideMakeableSet as e:
         say(str(e))
-        return None
-    if part.process is not None:
-        say(f"{pid} is coated ({part.process}); v0 cannot show a coating to the galvanic rule, so it takes uncoated bolts only")
         return None
     return pid, int(n.lo)
 
@@ -192,9 +187,9 @@ def _plate(args: tuple[Arg, ...], design: Design, registry: Registry, say: Say) 
         if found is None:
             say(f"{process} is not a registry process")
             ok = False
-        elif found.kind not in _SURFACE_SAFE:
-            say(f"{process} is a {found.kind.value} process; a plate takes {' or '.join(sorted(k.value for k in _SURFACE_SAFE))}, "
-                "since v0 cannot show a coating to the galvanic rule")
+        elif found.kind not in _PLATE_PROCESSES:
+            kinds = sorted(k.value for k in _PLATE_PROCESSES)
+            say(f"a plate takes a {', '.join(kinds[:-1])} or {kinds[-1]} process; {process} is {found.kind.value}")
             ok = False
     return Plate(material, thickness, process) if ok else None
 
@@ -300,8 +295,7 @@ def capacity(sb: StatementBuilder, joint: BoltedJoint, registry: Registry) -> Ex
     """The class's proof stress (Sp, else Rp02_min) times the stress area As."""
     part = registry.part(joint.bolt, PartKind.BOLT)
     stress = sb.registry(joint.bolt, "Sp" if "Sp" in part.props else "Rp02_min")
-    geometry = {p: sb.registry(joint.bolt, p) for p in ("d", "pitch")}
-    return Mul((stress, sb.registry(joint.bolt, "As", series=geometry)))
+    return Mul((stress, sb.registry(joint.bolt, "As")))
 
 
 def build_tension(req: Requirement, joint: BoltedJoint, design: Design, registry: Registry) -> tuple[Elaborated, ...]:
@@ -341,18 +335,21 @@ BOLTED_JOINT = FeatureKind("bolt.joint")
 
 
 def features(joint: BoltedJoint, design: Design, registry: Registry) -> tuple[Feature, ...]:
-    """One BOLTED_JOINT feature for the joint, and one CONTACT_PAIR per pair of materials
-    in contact (bolt against each plate, plate against plate), each with its process
-    applied, plus the environment. The galvanic rule in lola/coverage.py reads the pairs.
-    Every feature's subject is the joint, so a joint has one galvanic requirement however
-    many of its pairs are dissimilar."""
-    bolt = registry.parts[joint.bolt].material
+    """One BOLTED_JOINT feature naming the base materials, and one CONTACT_PAIR per pair
+    of surfaces in contact (bolt against each plate, plate against plate), plus the
+    environment. A pair names each part's exposed surface (Registry.surface), the
+    coating's material on a coated part, since that is what the galvanic rule in
+    lola/coverage.py must read. Every feature's subject is the joint, so a joint has one
+    galvanic requirement however many of its pairs are dissimilar."""
+    bolt = registry.parts[joint.bolt]
     plates = [p.material for p in joint.plates]
+    shown = registry.surface(bolt.material, bolt.process)
+    surfaces = [registry.surface(p.material, p.process) for p in joint.plates]
     subject = (joint.name,)
     contact = frozenset({EnergyDomain.MECHANICAL, EnergyDomain.CHEMICAL})
-    pairs = [(bolt, p) for p in plates] + list(zip(plates, plates[1:]))
+    pairs = [(shown, s) for s in surfaces] + list(zip(surfaces, surfaces[1:]))
     return (
-        Feature(subject, BOLTED_JOINT, tuple(dict.fromkeys((bolt, *plates))), frozenset({EnergyDomain.MECHANICAL}), design.environment),
+        Feature(subject, BOLTED_JOINT, tuple(dict.fromkeys((bolt.material, *plates))), frozenset({EnergyDomain.MECHANICAL}), design.environment),
         *(Feature(subject, CONTACT_PAIR, pair, contact, design.environment) for pair in dict.fromkeys(pairs)),
     )
 

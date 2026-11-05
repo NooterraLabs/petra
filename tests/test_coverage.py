@@ -4,6 +4,7 @@ The v0 domains' features hooks belong to other seams, so generation runs against
 widget domain registered in place of the real ones. The galvanic rule and the table are
 the real ones.
 """
+import dataclasses
 import unittest
 from fractions import Fraction
 from unittest import mock
@@ -35,6 +36,7 @@ from lola.models.base import (
     CONTACT_PAIR,
     GALVANIC_CORROSION,
     NO_PORTS,
+    PORT_CONTRACT,
     ClaimOrigin,
     CoverageOrigin,
     CoverageRule,
@@ -153,6 +155,20 @@ class Requirements(unittest.TestCase):
         )
         self.assertEqual(Requirement(("bracket",), bolt.TENSION, None, ClaimOrigin("tension")).id, "bracket/bolt.tension/claim.tension")
 
+    def test_two_coverage_requirements_that_differ_only_in_quantity_get_two_ids(self):
+        port = ("lighting", "t1", "wire")
+        temperature, current = (
+            Requirement(port, PORT_CONTRACT, None, CoverageOrigin("port.contract"), (), QoiRef(port, q)) for q in ("temperature", "current")
+        )
+        self.assertEqual(temperature.id, "lighting.t1.wire/port.contract/coverage.port.contract/temperature")
+        self.assertEqual(current.id, "lighting.t1.wire/port.contract/coverage.port.contract/current")
+        again = Requirement(port, PORT_CONTRACT, None, CoverageOrigin("port.contract"), (), QoiRef(port, "current"))
+        self.assertEqual(again.id, current.id, "one requirement has one id")
+
+    def test_a_claim_id_names_the_claim_and_not_its_quantity(self):
+        req = Requirement(("lighting", "w1"), circuit.STEADY_TEMPERATURE, None, ClaimOrigin("hot"), ("lamp_draw",), QoiRef(("lighting", "w1"), "temperature"))
+        self.assertEqual(req.id, "lighting.w1/wire.steady_temperature/claim.hot")
+
 
 class Claims(WidgetDomain):
     def test_a_claim_becomes_one_requirement(self):
@@ -186,6 +202,16 @@ class Generation(WidgetDomain):
                 Requirement(("w", "p1"), BEARING, None, CoverageOrigin("widget.part")),
             ],
         )
+
+    def test_a_rule_demanding_one_mode_on_one_subject_with_two_criteria_is_refused(self):
+        def by_material(mode: FailureMode, feature: Feature) -> Criterion:
+            return Criterion(Rel.LE, ONE if feature.materials == ("steel.S355",) else ratio(Fraction(1, 2)))
+
+        rule = CoverageRule("widget.part", lambda f, r: f.kind == PART, (STRENGTH,), by_material, "every widget part")
+        with mock.patch.object(coverage, "KINDS", {"widget": dataclasses.replace(WIDGET, coverage=(rule,))}):
+            with self.assertRaisesRegex(ValueError, "widget.part demands widget.strength on w.p1 with two different criteria"):
+                demanded(design(), part(), part(materials=("aluminium.6061_T6",)))
+            self.assertEqual(len(demanded(design(), part(), part())), 1, "one criterion twice is one requirement")
 
     def test_a_rule_that_does_not_match_demands_nothing(self):
         self.assertEqual(demanded(design(), part(kind=FeatureKind("widget.other"))), [])

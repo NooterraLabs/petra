@@ -16,6 +16,8 @@ from lola.registry import (
     OutsideMakeableSet,
     Part,
     PartKind,
+    Process,
+    ProcessKind,
     Registry,
     Stated,
     build_deck,
@@ -77,6 +79,27 @@ class Lookups(unittest.TestCase):
         ):
             with self.assertRaises(OutsideMakeableSet):
                 lookup()
+
+    def test_a_coated_part_exposes_its_coating_and_any_other_part_its_own_material(self):
+        self.assertEqual(REGISTRY.surface("steel.bolt_qt", "process.zinc_plate"), "zinc.electroplate")
+        self.assertEqual(REGISTRY.surface("aluminium.6061_T6", "process.mig_weld_6xxx"), "aluminium.6061_T6")
+        self.assertEqual(REGISTRY.surface("steel.bolt_qt", None), "steel.bolt_qt")
+        with self.assertRaises(OutsideMakeableSet):
+            REGISTRY.surface("steel.bolt_qt", "process.tin_plate")
+
+    def test_every_shipped_coating_exposes_a_material_with_an_anodic_index(self):
+        coatings = [p for p in REGISTRY.processes.values() if p.kind is ProcessKind.COATING]
+        self.assertEqual([p.id for p in coatings], ["process.zinc_plate"])
+        for p in coatings:
+            self.assertEqual(REGISTRY.material(p.surface).props["anodic_index"].value, point("1.25"))
+
+    def test_a_coating_names_its_surface_and_no_other_process_does(self):
+        self.assertEqual(Process("p.zn", ProcessKind.COATING, {}, surface="zinc.electroplate").surface, "zinc.electroplate")
+        self.assertIsNone(Process("p.weld", ProcessKind.WELD, {}).surface)
+        with self.assertRaisesRegex(ValueError, "names its surface"):
+            Process("p.zn", ProcessKind.COATING, {})
+        with self.assertRaisesRegex(ValueError, "names its surface"):
+            Process("p.weld", ProcessKind.WELD, {}, surface="zinc.electroplate")
 
     def test_a_part_of_the_wrong_kind_is_refused(self):
         with self.assertRaisesRegex(OutsideMakeableSet, "breaker"):

@@ -13,6 +13,7 @@ Hand values, 2.5 mm2 Cu/PVC (insulation 0.8 mm) clipped direct, h = 5 W/(m2 K):
         k^2 S^2 = 82419.04 A2s at 2.5 mm2, 29670.85 A2s at 1.5 mm2
     drop over 18 m at 10 A = 2 L I R20 (1 + alpha 50) = 2.970621 V
 """
+import dataclasses
 import unittest
 from fractions import Fraction
 from pathlib import Path
@@ -40,8 +41,11 @@ from lola.kernel.rules.r4_enclosure import MAX_DEPTH, AllNonpositive, Enclosure,
 from lola.lang import load_design, parse_design
 from lola.models import circuit
 from lola.models.base import ComponentError, CoverageOrigin, Gap, NeedsInputBound, NoRuleForQuantity, Obligation
+from lola.pipeline import check_design
+from lola.premises import Tag
 from lola.registry import build_registry
-from lola.solvers import r4_enclosure
+from lola.solvers import SolverSource, r4_enclosure
+from lola.verdict import Pass
 
 REGISTRY = build_registry()
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples"
@@ -360,6 +364,18 @@ class OverloadProtection(unittest.TestCase):
         ob = one(radial(), circuit.OVERLOAD_PROTECTION)
         self.assertTrue({"reg:mcb.B10.In", "reg:const.iec60898_1.trip_factor"} <= labels(ob.statement))
 
+    def test_the_overload_verdict_names_the_iec_60364_4_43_factor_in_its_footprint(self):
+        d = radial(extra="claim protected: lighting.w1.overload_protection <= 1 under lamp_draw\n"
+                         "claim hot: lighting.w1.temperature <= 70 degC under lamp_draw\n")
+        verdicts = {e.claim: e.verdict for e in check_design(d, REGISTRY, (SolverSource(),)).entries}
+        self.assertIsInstance(verdicts["protected"], Pass)
+        label = "reg:const.iec60364_4_43.overload_factor"
+        (factor,) = [p for p in verdicts["protected"].footprint.premises if p.label == label]
+        self.assertEqual((factor.tag, factor.owner, factor.range), (Tag.SANCTIONED, "IEC", Interval(Fraction(29, 20), Fraction(29, 20))))
+        self.assertIn("60364-4-43", factor.source)
+        self.assertIsInstance(verdicts["hot"], Pass)
+        self.assertNotIn(label, verdicts["hot"].footprint.labels, "the steady-temperature verdict does not rest on the overload rule")
+
     def test_without_a_breaker_overload_protection_is_a_gap(self):
         d = radial(("  breaker cb1 part mcb.B10\n", ""), ("  connect mains.out -> cb1.in\n  connect cb1.out -> w1.a\n", "  connect mains.out -> w1.a\n"))
         gap = one(d, circuit.OVERLOAD_PROTECTION)
@@ -464,6 +480,14 @@ class Features(unittest.TestCase):
             (("lighting", "cb1", "w1"), "contact_pair", ("copper.cu_etp", "copper.cu_etp")),
             (("lighting", "w1", "t1"), "contact_pair", ("copper.cu_etp", "copper.cu_etp")),
         ])
+
+    def test_a_coated_terminal_shows_its_coating_to_the_wire(self):
+        terminal = REGISTRY.parts["terminal.lever_4mm2_75C"]
+        plated = dataclasses.replace(REGISTRY, parts={**REGISTRY.parts, terminal.id: dataclasses.replace(terminal, process="process.zinc_plate")})
+        d = load_design(EXAMPLES / "circuit_pass.lola", REGISTRY)
+        found = circuit.features(lowered(d)["lighting"], d, plated)
+        self.assertEqual([f.materials for f in found if f.kind == "contact_pair"],
+                         [("copper.cu_etp", "copper.cu_etp"), ("copper.cu_etp", "zinc.electroplate")])
 
     def test_a_voltage_drop_claim_settles_the_coverage_demand_and_its_absence_does_not(self):
         claimed = load_design(EXAMPLES / "circuit_pass.lola", REGISTRY)

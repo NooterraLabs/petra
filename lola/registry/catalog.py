@@ -122,7 +122,8 @@ def build_registry() -> Registry:
     """The default makeable set. Pure; same output every call."""
     return Registry(
         constants=CONSTANTS,
-        materials={**structural_steels(), **aluminium_alloys(), **conductors_and_insulation(), **fastener_steels()},
+        materials={**structural_steels(), **aluminium_alloys(), **conductors_and_insulation(), **fastener_steels(),
+                   **coating_surfaces()},
         parts={**chs_sections(), **cables(), **breakers(), **terminals(), **metric_bolts()},
         processes=processes(),
         environments=environments(),
@@ -184,6 +185,16 @@ def fastener_steels() -> Mapping[str, Material]:
         }),
         "stainless.A4": Material("stainless.A4", "stainless", "ISO 3506-1:2020, austenitic grade A4", {
             "anodic_index": STATED["anodic.stainless_18cr"],
+        }),
+    }
+
+
+def coating_surfaces() -> Mapping[str, Material]:
+    """The materials a COATING process leaves exposed. Contact pairs name them in place of
+    the coated part's own material."""
+    return {
+        "zinc.electroplate": Material("zinc.electroplate", "zinc", "ISO 2081:2008, electroplated zinc on iron or steel", {
+            "anodic_index": STATED["anodic.zinc_plate"],
         }),
     }
 
@@ -300,8 +311,7 @@ def processes() -> Mapping[str, Process]:
     return {
         "install.clipped_direct": Process("install.clipped_direct", ProcessKind.INSTALL,
                                           {"h": constant("install.clipped_direct.h")}),
-        "process.zinc_plate": Process("process.zinc_plate", ProcessKind.COATING,
-                                      {"anodic_index": STATED["anodic.zinc_plate"]}),
+        "process.zinc_plate": Process("process.zinc_plate", ProcessKind.COATING, {}, surface="zinc.electroplate"),
         "process.mig_weld_6xxx": Process("process.mig_weld_6xxx", ProcessKind.WELD, {}, effects=(
             PropertyEffect("aluminium", "fy", STATED["weld.mig_6xxx_T6.haz_fy_factor"],
                            "within 30 mm of the weld for plates 6 mm < t <= 12 mm (EN 1999-1-1 6.1.6.3, not checked)"),

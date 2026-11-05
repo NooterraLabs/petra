@@ -26,8 +26,10 @@ from lola.models.base import (
     PortSpec,
     Side,
 )
+from lola.pipeline import check_design
 from lola.registry import build_registry
-from lola.solvers import r4_enclosure
+from lola.solvers import SolverSource, r4_enclosure
+from lola.verdict import Discharged, Fail, Refuted
 
 from tests.test_circuit import AMBIENT, CURRENT, H, WORST, at, lowered, radial
 
@@ -90,6 +92,29 @@ class WireIntoTerminal(unittest.TestCase):
     def test_a_wire_past_thermal_runaway_guarantees_no_temperature(self):
         ob = contracts_of(radial(("[0 A, 10 A]", "[62 A, 70 A]")))["temperature"]
         self.assertEqual(tuple(r4_enclosure.solve(ob.statement, max_cells=200)), ())
+
+    def test_the_two_contracts_at_one_port_keep_their_own_ids_and_verdicts(self):
+        """16 mm2 (insulation 1.0 mm) at 40 A, 40 degC, h = 5: d = 4.51352 mm, D = 6.51352 mm,
+        T1 = 0.291892, T4 = 9.773826, a = 17.354687, theta = 60.0889 degC, inside the
+        terminal's 75 degC; 40 A is 8 A over its 32 A. No breaker, so no other obligation
+        is refuted."""
+        d = radial(("  breaker cb1 part mcb.B10\n", ""), ("  connect mains.out -> cb1.in\n  connect cb1.out -> w1.a\n", "  connect mains.out -> w1.a\n"),
+                   ("cable.cu_pvc_2_5", "cable.cu_pvc_16"), ("[0 A, 10 A]", "[0 A, 40 A]"))
+        report = check_design(d, REGISTRY, (SolverSource(),))
+        by_id: dict = {}
+        for o in report.outcomes:
+            req = o.obligation.requirement if isinstance(o, (Discharged, Refuted)) else o.requirement
+            if req.mode == PORT_CONTRACT:
+                by_id.setdefault(req.id, []).append(o)
+        prefix = "lighting.t1.wire/port.contract/coverage.port.contract"
+        self.assertEqual(set(by_id), {f"{prefix}/temperature", f"{prefix}/current"})
+        (temperature,), (current,) = by_id[f"{prefix}/temperature"], by_id[f"{prefix}/current"]
+        self.assertIsInstance(temperature, Discharged)
+        self.assertAlmostEqual(at(temperature.obligation.statement, 0, {CURRENT: 40, AMBIENT: 40, H: 5}), 60.0889 - 75, places=3)
+        self.assertIsInstance(current, Refuted)
+        self.assertEqual(dict(current.refutation.point)[CURRENT], 40)
+        self.assertIsInstance(report.verdict, Fail)
+        self.assertEqual(report.verdict.obligation.requirement.id, f"{prefix}/current")
 
     def test_with_no_ambient_nothing_guarantees_the_temperature(self):
         d = radial(('ambient in [10 degC, 40 degC] signed "site.manager@example.org" source "survey"\n', ""),

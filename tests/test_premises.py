@@ -3,7 +3,7 @@ import unittest
 from fractions import Fraction
 
 from lola.ir import Design, Fixed, Input, InputKind, Param, ParamRef, Signature, Span, Tests
-from lola.kernel import Add, Const, DefinedHyp, Div, Interval, Matrix, Mul, Neg, RangeHyp, Sym
+from lola.kernel import Add, Const, DefinedHyp, Div, Interval, Matrix, Mul, Neg, RangeHyp, Sym, enclose
 from lola.kernel.rules.r3_hypercircle import MinimizerComponent, QuadraticProblem
 from lola.kernel.rules.r4_enclosure import AllNonpositive
 from lola.kernel.rules.r5_moment import MomentBound, MomentConstraint, RandomVar
@@ -25,7 +25,7 @@ from lola.premises import (
     param_label,
     registry_label,
 )
-from lola.registry import Constant, Corrosivity, Derived, Environment, Material, OutsideMakeableSet, Part, PartKind, Registry, Stated
+from lola.registry import Constant, Corrosivity, Derived, Environment, Material, OutsideMakeableSet, Part, PartKind, Registry, Stated, build_registry
 from lola.units import AREA, DIMENSIONLESS, FORCE, Quantity
 
 RANGE = Interval(Fraction(0), Fraction(1))
@@ -105,6 +105,14 @@ REGISTRY = FakeRegistry(
         "aluminium.6061_T6": material("aluminium.6061_T6", Fraction(9, 10)),
         "copper.annealed": material("copper.annealed", Fraction(7, 20)),
         "pvc.general": material("pvc.general"),
+        "probe.chain": material(
+            "probe.chain",
+            fy=stated(point(Fraction(355 * 10**6)), "Pa"),
+            twice=Derived(Mul((Const(Fraction(2)), Sym("self.fy"))), "Pa"),
+            over_nu=Derived(Div(Sym("self.twice"), Sym("const.steel.nu")), "Pa"),
+            loop_a=Derived(Add((Sym("self.loop_b"), Const(Fraction(1)))), "1"),
+            loop_b=Derived(Mul((Const(Fraction(2)), Sym("self.loop_a"))), "1"),
+        ),
     },
     parts={
         "cable.cu_pvc": Part(
@@ -116,6 +124,7 @@ REGISTRY = FakeRegistry(
                 "R20": Derived(Div(Sym("const.cu.rho20"), Sym("self.area")), "ohm/m"),
                 "theta_max": stated(point(Fraction(70)), "degC"),
                 "broken": Derived(Div(Sym("const.cu.rho20"), Sym("other.area")), "ohm/m"),
+                "conductance": Derived(Div(Const(Fraction(1)), Sym("self.R20")), "S m"),
             },
         ),
         "cable.cu_pvc_2_5": Part(
@@ -339,6 +348,57 @@ class BuilderLabels(unittest.TestCase):
         with self.assertRaises(ValueError, msg="a derivation may name only const.* and self.*, even when the rest matches a fixed parameter"):
             sb.registry("cable.cu_pvc_2_5", "broken")
 
+    def test_a_derivation_that_names_a_derived_property_expands_it_recursively(self):
+        sb = builder()
+        over_nu = sb.registry("probe.chain", "over_nu")
+        self.assertEqual(over_nu, Div(Mul((Const(Fraction(2)), Sym("probe.chain.fy"))), Sym("const.steel.nu")))
+        st = sb.finish(nonpositive(over_nu))
+        self.assertEqual(
+            st.hyps,
+            (
+                RangeHyp("const.steel.nu", Fraction(3, 10), Fraction(3, 10), "reg:const.steel.nu"),
+                RangeHyp("probe.chain.fy", Fraction(355 * 10**6), Fraction(355 * 10**6), "reg:probe.chain.fy"),
+            ),
+        )
+        box = {h.sym: Interval(h.lo, h.hi) for h in st.hyps}
+        self.assertEqual(enclose(over_nu, box), point(Fraction(2 * 355 * 10**6) / Fraction(3, 10)), "2 fy / nu")
+
+    def test_a_nested_property_of_a_size_reads_the_size_fixed_parameters(self):
+        sb = builder()
+        conductance = sb.registry("cable.cu_pvc_2_5", "conductance")
+        self.assertEqual(conductance, Div(Const(Fraction(1)), Div(Sym("const.cu.rho20"), Sym("cable.cu_pvc_2_5.area"))))
+        labels = {h.label for h in sb.finish(nonpositive(conductance)).hyps}
+        self.assertEqual(labels, {"reg:const.cu.rho20", "dsg:d.cable.cu_pvc_2_5.area"})
+
+    def test_a_derivation_cycle_is_refused_by_name(self):
+        with self.assertRaisesRegex(ValueError, r"probe\.chain: derivation cycle loop_a -> loop_b -> loop_a"):
+            builder().registry("probe.chain", "loop_a")
+
+    def test_nested_shipped_derivations_match_hand_values(self):
+        registry = build_registry()
+        cases = (
+            ("cable.cu_pvc_2_5", "T1", 0.509429, 1e-6,
+             {"dsg:d.cable.cu_pvc_2_5.area", "dsg:d.cable.cu_pvc_2_5.insulation", "reg:const.pvc.thermal_resistivity"}),
+            ("bolt.M12_8_8", "Fp", 48874.6, 0.1,
+             {"reg:bolt.M12_8_8.Sp", "reg:const.iso261.M12.d", "reg:const.iso261.M12.pitch",
+              "reg:const.iso724.d2_coefficient", "reg:const.iso724.d3_coefficient"}),
+        )
+        for entry, prop, expected, tolerance, labels in cases:
+            with self.subTest(f"{entry}.{prop}"):
+                sb = StatementBuilder(DESIGN, registry)
+                value = sb.registry(entry, prop)
+                st = sb.finish(nonpositive(value))
+                self.assertEqual({h.label for h in st.hyps}, labels)
+                found = enclose(value, {h.sym: Interval(h.lo, h.hi) for h in st.hyps})
+                self.assertLess(abs(float(found.midpoint()) - expected), tolerance, f"{entry}.{prop} = {float(found.midpoint())}")
+
+    def test_a_constant_no_entry_holds_is_one_labelled_hypothesis(self):
+        sb = builder()
+        nu = sb.constant("steel.nu")
+        self.assertEqual(sb.finish(nonpositive(nu)).hyps, (RangeHyp("const.steel.nu", Fraction(3, 10), Fraction(3, 10), "reg:const.steel.nu"),))
+        with self.assertRaises(ValueError, msg="a constant the registry does not hold"):
+            builder().constant("steel.mu")
+
     def test_inputs_means_and_tests_carry_their_owner_label(self):
         sb = builder()
         force = sb.input(FORCE_IN)
@@ -432,7 +492,7 @@ class BuilderFinish(unittest.TestCase):
 
 
 class NoBareNumbers(unittest.TestCase):
-    INTRODUCERS = {"registry", "input", "mean", "tests", "value", "param", "defined"}
+    INTRODUCERS = {"registry", "constant", "input", "mean", "tests", "value", "param", "defined"}
 
     def test_every_way_to_introduce_a_hypothesis_refuses_a_bare_number(self):
         public = {name for name in vars(StatementBuilder) if not name.startswith("_")}
@@ -440,6 +500,7 @@ class NoBareNumbers(unittest.TestCase):
         n = Fraction(12000)
         calls = {
             "registry": lambda sb: sb.registry(n, "fy"),
+            "constant": lambda sb: sb.constant(n),
             "input": lambda sb: sb.input(n),
             "mean": lambda sb: sb.mean(n),
             "tests": lambda sb: sb.tests(n),

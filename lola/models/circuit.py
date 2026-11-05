@@ -40,7 +40,8 @@ fraction of V). Summing makes the last wire's check the drop at the consumer.
 
 Overload protection (IEC 60364-4-43 433.1): I_B <= u I_n, theta(I_n / u) <= theta_max
 (I_n <= I_z) and theta(I_2 / (1.45 u)) <= theta_max (I_2 <= 1.45 I_z), with I_2 the
-breaker's conventional tripping current, all without computing I_z.
+breaker's conventional tripping current, all without computing I_z. The 1.45 is the
+sanctioned registry constant OVERLOAD_FACTOR, so it is a hypothesis of the statement.
 
 fault_withstand and overload_protection are utilisations: a claim bounds them by u, and
 coverage by 1. Every wire criterion is an upper bound; a GE claim is a gap.
@@ -60,10 +61,9 @@ from types import MappingProxyType
 from typing import Callable, Mapping, Union
 
 from ..ir import Arg, Bound, Component, Design, Exceeds, Fixed, Input, ParamRef, Punct, Ref, Rel, Span, Value
-from ..kernel import Add, Const, Div, Expr, Interval, Max, Min, Mul, Neg, Pi, PowInt, Sqrt, Sym, free_syms
+from ..kernel import Add, Const, Div, Expr, Interval, Max, Min, Mul, Neg, Pi, PowInt, Sqrt, Sym
 from ..kernel.rules.r4_enclosure import AllNonpositive
-from ..registry import OutsideMakeableSet, PartKind, ProcessKind, Registry, Stated
-from ..registry.model import map_syms
+from ..registry import OutsideMakeableSet, PartKind, ProcessKind, Registry
 from ..units import AREA, CURRENT, DIMENSIONLESS, LENGTH, TEMPERATURE, VOLTAGE, Dim, Quantity
 from .base import (
     CONTACT_PAIR,
@@ -439,9 +439,9 @@ CRITERION_DIMS: Mapping[FailureMode, Dim] = {
 }
 """What a criterion bounds: a temperature, or a fraction (of V, or a utilisation)."""
 
-OVERLOAD_FACTOR = Fraction(29, 20)
-"""IEC 60364-4-43 433.1.2: I_2 <= 1.45 I_z. A criterion of the standard rather than a
-property of any part, so it enters as a Const covered by model:wire.thermal."""
+OVERLOAD_FACTOR = "iec60364_4_43.overload_factor"
+"""The registry constant behind I_2 <= 1.45 I_z. A criterion of the standard rather than a
+property of any part, so the builder reads it with sb.constant."""
 
 # --- Elaboration -------------------------------------------------------------------------
 
@@ -517,43 +517,22 @@ class _Cable:
     StatementBuilder's convention); a series cable takes them from the design."""
 
     sb: StatementBuilder
-    registry: Registry
     series: str
     params: Mapping[str, Sym]
 
     def __getitem__(self, prop: str) -> Expr:
         if prop in self.params:
             return self.params[prop]
-        return _derived(self.sb, self.registry, self.series, prop, self.params)
+        return self.sb.registry(self.series, prop, series=self.params)
 
 
 def _cable(sb: StatementBuilder, circuit: Circuit, wire: Wire, registry: Registry) -> _Cable:
     part = registry.part(wire.cable, PartKind.CABLE)
     if part.series is None:
         values = {p: sb.value(getattr(wire, p), f"{circuit.name}.{wire.name}.{p}") for p in CABLE_PARAMS}
-        return _Cable(sb, registry, wire.cable, values)
+        return _Cable(sb, wire.cable, values)
     values = {p: sb.value(Fixed(Quantity(v, CABLE_PARAMS[p])), f"{wire.cable}.{p}") for p, v in part.fixes.items()}
-    return _Cable(sb, registry, part.series, values)
-
-
-def _derived(sb: StatementBuilder, registry: Registry, entry: str, prop: str, params: Mapping[str, Sym]) -> Expr:
-    """sb.registry, extended to a derivation that names another derived property of the
-    same entry (T1 names outer_diameter, which names conductor_diameter). Each such
-    property is expanded first. A single hypothesis is bound as a series parameter, so
-    the builder still turns constants into labelled hypotheses. A compound expression is
-    substituted by hand, so a derivation that also names a constant directly is refused:
-    the constant would reach the statement with no hypothesis behind it."""
-    found = registry.property(entry, prop)
-    if isinstance(found, Stated):
-        return sb.registry(entry, prop)
-    names = free_syms(found.expr)
-    inner = {n[len("self."):]: None for n in sorted(names) if n.startswith("self.") and n[len("self."):] not in params}
-    values = {**params, **{p: _derived(sb, registry, entry, p, params) for p in inner}}
-    if all(isinstance(v, Sym) for v in values.values()):
-        return sb.registry(entry, prop, series=values)
-    if any(n.startswith("const.") for n in names):
-        raise ValueError(f"{entry}.{prop} names a constant beside a compound property; StatementBuilder cannot bind it")
-    return map_syms(found.expr, lambda n: values[n[len("self."):]])
+    return _Cable(sb, part.series, values)
 
 
 def steady_temperature(sb: StatementBuilder, circuit: Circuit, wire: Wire, current: Expr, ambient: Expr, registry: Registry) -> tuple[Expr, Expr]:
@@ -713,11 +692,11 @@ def build_overload_protection(req: Requirement, circuit: Circuit, design: Design
     for draw in s.draws:
         sb = StatementBuilder(design, registry)
         rated = sb.registry(breaker, "In")
-        tripping = _derived(sb, registry, breaker, "I_t", {})
+        tripping = sb.registry(breaker, "I_t")
         ambient = _ambient(sb, circuit)
         theta_max = _cable(sb, circuit, s.wire, registry)["theta_max"]
         exprs = [_minus(_current(sb, draw), _times(u, rated))]
-        for current in (_over(rated, u), _over(tripping, u * OVERLOAD_FACTOR)):
+        for current in (_over(rated, u), Div(tripping, _times(u, sb.constant(OVERLOAD_FACTOR)))):
             theta, runaway = steady_temperature(sb, circuit, s.wire, current, ambient, registry)
             exprs += [_minus(theta, theta_max), runaway]
         out.append(Obligation(req, sb.finish(AllNonpositive(tuple(exprs))), THERMAL,
@@ -742,8 +721,9 @@ def _part_of(element: CircuitElement) -> str | None:
 def features(circuit: Circuit, design: Design, registry: Registry) -> tuple[Feature, ...]:
     """One CONDUCTOR feature per wire (its conductor material, energy {ELECTRICAL,
     THERMAL}), one CONTACT_PAIR per connection between two parts (wire conductor against
-    terminal body), plus the environment. A v0 cable part names only its conductor
-    material, so no insulation material reaches coverage."""
+    terminal body, each part's exposed surface by Registry.surface), plus the
+    environment. A v0 cable part names only its conductor material, so no insulation
+    material reaches coverage."""
     found = [
         Feature((circuit.name, e.name), CONDUCTOR, (registry.parts[e.cable].material,),
                 frozenset({EnergyDomain.ELECTRICAL, EnergyDomain.THERMAL}), design.environment)
@@ -753,7 +733,7 @@ def features(circuit: Circuit, design: Design, registry: Registry) -> tuple[Feat
         parts = [_part_of(circuit.elements[end.element]) for end in (c.a, c.b)]
         if None not in parts:
             found.append(Feature((circuit.name, c.a.element, c.b.element), CONTACT_PAIR,
-                                 tuple(registry.parts[p].material for p in parts),
+                                 tuple(registry.surface(registry.parts[p].material, registry.parts[p].process) for p in parts),
                                  frozenset({EnergyDomain.ELECTRICAL, EnergyDomain.CHEMICAL}), design.environment))
     return tuple(found)
 
