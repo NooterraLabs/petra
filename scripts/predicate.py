@@ -36,7 +36,7 @@ def check_examples() -> list[dict]:
     out = []
     for path in sorted(glob.glob(os.path.join(ROOT, "examples", "*.lola"))):
         r = run(["-m", "lola", "check", os.path.relpath(path, ROOT), "--json"])
-        if r.returncode not in (0, 1):
+        if r.returncode not in (0, 1, 2):
             raise RuntimeError(f"{path}: exit {r.returncode}: {tail(r.stderr)}")
         out.append(json.loads(r.stdout))
     return out
