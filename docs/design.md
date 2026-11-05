@@ -20,29 +20,39 @@ The design honours the frame's constraints. `lola/kernel` imports only the stand
 python -m lola check examples/truss_pass.lola
 ```
 
-`check` parses the file, elaborates every claim and every coverage obligation into kernel statements, gathers evidence (stored certificates, then the library, then the solvers), and lets the kernel decide each one. The expected output shape is below. It is a design target, not captured output. Hashes are elided.
+`check` parses the file, elaborates every claim and every coverage obligation into kernel statements, gathers evidence (stored certificates, then the library, then the solvers), and lets the kernel decide each one. The output below is captured from the build, with hashes cut to four hex digits, certified premises collapsed to one line, and long lines cut.
 
 ```text
 warren-footbridge-panel: PASS
+entries    strength PASS, stability PASS, stress PASS, coverage PASS
 scope      load cases crowd; environment indoor_dry; no parameters
-checked    11 obligations, 11 certified, 0 waived
-  frame/truss.plastic_collapse      claim strength    R1  solver  sha256:3c1f..
-  frame/truss.global_stability      claim stability   R2  solver  sha256:91ab..
-  frame.diag_ad/truss.elastic_stress claim stress     R3  solver  sha256:0e77..
-  frame/truss.small_strain          coverage          R3  solver  sha256:5a10..
-  frame.diag_ad/truss.member_buckling coverage        R4  solver  sha256:c2d4..
-  ... one member_buckling line per member
-footprint  20 premises
-  sanctioned       reg:steel.S355.fy          fy >= 355 MPa, t <= 16 mm   EN 10025-2:2019 Table 7
-  sanctioned       reg:const.steel.E          E in [200, 210] GPa         EN 1993-1-1 3.2.6
-  assumed          in:warren-footbridge-panel.crowd.D.fy   [-24, -16] kN  client.structures@example.org, brief rev B 3.2
-  assumed          in:warren-footbridge-panel.crowd.E.fy   [-24, -16] kN  client.structures@example.org, brief rev B 3.2
-  validated_model  model:truss.plastic@5d2c..  rigid-perfectly-plastic pin-jointed 2D truss
-  validated_model  model:truss.elastic@0b91..  linear elastic, |strain| <= 0.002 (checked)
-  validated_model  model:truss.stability@77e0.. linear prebuckling, Green-strain geometric stiffness
-  validated_model  model:truss.euler@e310..    pin-ended prismatic Euler column
-  judged           cov:8a41..                 LoLa coverage table v0, lola-maintainers
-  certified        cert:3c1f.. and 10 more    kernel-checked in this run (listed with --verbose)
+checked    11 obligations, 11 certified, 0 refuted, 0 waived, 0 open
+  frame/truss.plastic_collapse                 claim strength               R1  certified  solver  sha256:16af..
+  frame/truss.global_stability                 claim stability              R2  certified  solver  sha256:2a8a..
+  frame.diag_ad/truss.elastic_stress           claim stress                 R3  certified  solver  sha256:78ad..
+  frame/truss.small_strain                     coverage truss.frame         R3  certified  solver  sha256:5872..
+  frame.bottom_ab/truss.member_buckling        coverage truss.axial_member  R4  certified  solver  sha256:0486..
+  frame.bottom_bc/truss.member_buckling        coverage truss.axial_member  R4  certified  solver  sha256:90a5..
+  frame.top_de/truss.member_buckling           coverage truss.axial_member  R4  certified  solver  sha256:0482..
+  frame.diag_ad/truss.member_buckling          coverage truss.axial_member  R4  certified  solver  sha256:eab2..
+  frame.diag_db/truss.member_buckling          coverage truss.axial_member  R4  certified  solver  sha256:2972..
+  frame.diag_be/truss.member_buckling          coverage truss.axial_member  R4  certified  solver  sha256:c9d0..
+  frame.diag_ec/truss.member_buckling          coverage truss.axial_member  R4  certified  solver  sha256:bc2f..
+footprint  24 premises
+  certified        cert:sha256:0482.. and 10 more   kernel-checked in this run
+  sanctioned       reg:const.en10219_2.60_3x3_2.D   CHS 60.3 x 3.2 has outside diameter 60.3 mm   (CEN; EN 10219-2:...
+  sanctioned       reg:const.en10219_2.60_3x3_2.t   CHS 60.3 x 3.2 has wall thickness 3.2 mm   (CEN; EN 10219-2:200...
+  sanctioned       reg:const.en10219_2.76_1x3_2.D   CHS 76.1 x 3.2 has outside diameter 76.1 mm   (CEN; EN 10219-2:...
+  sanctioned       reg:const.en10219_2.76_1x3_2.t   CHS 76.1 x 3.2 has wall thickness 3.2 mm   (CEN; EN 10219-2:200...
+  sanctioned       reg:const.steel.E   the elastic modulus of structural steel lies in [200, 210] GPa   (CEN; EN 19...
+  sanctioned       reg:steel.S355.fy   steel.S355.fy 355000000 Pa, minimum upper yield strength ReH, nominal thickn...
+  validated_model  model:truss.elastic@798e..   linear elastic pin-jointed 2D truss: member forces minimise the com...
+  validated_model  model:truss.euler@798e..   pin-ended prismatic Euler column: compression N <= u pi^2 E I / L^2;...
+  validated_model  model:truss.plastic@798e..   rigid-perfectly-plastic pin-jointed 2D truss, static (lower-bound)...
+  validated_model  model:truss.stability@798e..   linear prebuckling of a pin-jointed 2D truss, Green-strain geomet...
+  assumed          in:warren-footbridge-panel.crowd.frame.D.fy   crowd.frame.D.fy in [-24000, -16000] N   (client.s...
+  assumed          in:warren-footbridge-panel.crowd.frame.E.fy   crowd.frame.E.fy in [-24000, -16000] N   (client.s...
+  judged           cov:2ed9..   every failure mode a v0 design must address is demanded by one of galvanic.contact,...
 ```
 
 The report has one entry per claim and one entry named `coverage` for the requirements no claim made (coverage rules and port contracts). The design's verdict is the conjunction of the entries. `--json` prints the same report as data:
@@ -191,7 +201,7 @@ ambient in [10 degC, 40 degC] signed "site.manager@example.org" source "site sur
 
 circuit lighting {
   supply mains voltage 230 V fault_current in [0 kA, 6 kA] signed "dno.liaison@example.org" source "DNO letter 2026-08-14"
-  breaker cb1 part mcb.B16
+  breaker cb1 part mcb.B10
   wire w1 cable cable.cu_pvc_2_5 length 18 m install install.clipped_direct
   terminal t1 part terminal.lever_4mm2_75C
   consumer lamps
@@ -361,36 +371,35 @@ A certificate file is an envelope around two kernel terms. The statement is stor
 - Canonical text is `json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=True)`. `statement_hash` is `"sha256:"` plus the hex digest of the canonical statement.
 - Hypotheses are sorted by `sym` with no duplicates.
 
-The example is the bolt-tension obligation from `bolt_unknown.lola`. A script that follows these rules generated it (`examples/bolt_tension.cert.json` holds the full file). Symbol names are short for the page. The builder names symbols by design path. The goal says T/(K d) + phi F - 0.9 Rp02 As <= 0 over the box, with As = (pi/4)((d2 + d3)/2)^2 written out from the ISO 724 coefficients. The evidence is a one-split partition on F. Every symbol with a nonzero range appears once, so on each leaf the interval enclosure equals the leaf's worst corner up to the pi enclosure. A float check of the worst corner of the whole box gives -5,086 N, so both leaves pass.
+The example is the bolt-tension obligation from `bolt_unknown.lola`, copied verbatim from `examples/bolt_tension.cert.json` (`tests/test_docs.py` fails if the two differ). The builder names symbols by design path. The goal says T/(K d) + phi F / n - 0.9 Rp02 As <= 0 over the box, where n is the bracket's bolt count and As = (pi/4)((d2 + d3)/2)^2 is written out from the ISO 724 coefficients. The evidence is a single leaf. Every symbol with a nonzero range appears once, so the interval enclosure over the whole box equals the worst corner up to the pi enclosure. A hand check of that corner gives 26,042 N of preload plus 3,000 N of external share against 0.9 x 450 MPa x 84.27 mm^2 = 34,128 N, a margin of -5,086 N.
 
 ```json
 {
   "format": "lola-cert/0",
   "kernel": "lola-kernel/0",
-  "statement_hash": "sha256:f7e4f42637918874eba38b225d8fa66cdb692d6dedb2f1b9c20dc5a8e324bc53",
+  "statement_hash": "sha256:9caaf82371013b4170cfbb25cde94eaa54b40ee325600116748e4ca91b55f372",
   "statement": {
     "t": "statement",
     "hyps": [
-      {"t": "range_hyp", "sym": "F", "lo": "0", "hi": "12000", "label": "in:mast-bracket-coastal.wind.bracket.force"},
-      {"t": "range_hyp", "sym": "K", "lo": "4/25", "hi": "11/50", "label": "in:mast-bracket-coastal.bracket.nut_factor"},
-      {"t": "range_hyp", "sym": "P", "lo": "7/4000", "hi": "7/4000", "label": "reg:const.iso261.M12.pitch"},
-      {"t": "range_hyp", "sym": "Rp02", "lo": "450000000", "hi": "450000000", "label": "reg:bolt.M12_A4_70.Rp02_min"},
-      {"t": "range_hyp", "sym": "T", "lo": "40", "hi": "50", "label": "in:mast-bracket-coastal.bracket.torque"},
-      {"t": "range_hyp", "sym": "c2", "lo": "649519/1000000", "hi": "649519/1000000", "label": "reg:const.iso724.d2_coefficient"},
-      {"t": "range_hyp", "sym": "c3", "lo": "1226869/1000000", "hi": "1226869/1000000", "label": "reg:const.iso724.d3_coefficient"},
-      {"t": "range_hyp", "sym": "d", "lo": "3/250", "hi": "3/250", "label": "reg:const.iso261.M12.d"},
-      {"t": "range_hyp", "sym": "phi", "lo": "1/10", "hi": "1/4", "label": "in:mast-bracket-coastal.bracket.load_share"}
+      {"t": "range_hyp", "sym": "bolt.M12_A4_70.Rp02_min", "lo": "450000000", "hi": "450000000", "label": "reg:bolt.M12_A4_70.Rp02_min"},
+      {"t": "range_hyp", "sym": "bracket.count", "lo": "1", "hi": "1", "label": "dsg:mast-bracket-coastal.bracket.count"},
+      {"t": "range_hyp", "sym": "bracket.load_share", "lo": "1/10", "hi": "1/4", "label": "in:mast-bracket-coastal.bracket.load_share"},
+      {"t": "range_hyp", "sym": "bracket.nut_factor", "lo": "4/25", "hi": "11/50", "label": "in:mast-bracket-coastal.bracket.nut_factor"},
+      {"t": "range_hyp", "sym": "bracket.torque", "lo": "40", "hi": "50", "label": "in:mast-bracket-coastal.bracket.torque"},
+      {"t": "range_hyp", "sym": "const.iso261.M12.d", "lo": "3/250", "hi": "3/250", "label": "reg:const.iso261.M12.d"},
+      {"t": "range_hyp", "sym": "const.iso261.M12.pitch", "lo": "7/4000", "hi": "7/4000", "label": "reg:const.iso261.M12.pitch"},
+      {"t": "range_hyp", "sym": "const.iso724.d2_coefficient", "lo": "649519/1000000", "hi": "649519/1000000", "label": "reg:const.iso724.d2_coefficient"},
+      {"t": "range_hyp", "sym": "const.iso724.d3_coefficient", "lo": "1226869/1000000", "hi": "1226869/1000000", "label": "reg:const.iso724.d3_coefficient"},
+      {"t": "range_hyp", "sym": "wind.bracket.force", "lo": "0", "hi": "12000", "label": "in:mast-bracket-coastal.wind.bracket.force"}
     ],
-    "goal": {"t": "all_nonpositive", "exprs": [
-      {"t": "add", "args": [{"t": "div", "num": {"t": "sym", "name": "T"}, "den": {"t": "mul", "args": [{"t": "sym", "name": "K"}, {"t": "sym", "name": "d"}]}}, {"t": "mul", "args": [{"t": "sym", "name": "phi"}, {"t": "sym", "name": "F"}]}, {"t": "neg", "arg": {"t": "mul", "args": [{"t": "const", "value": "9/10"}, {"t": "sym", "name": "Rp02"}, {"t": "mul", "args": [{"t": "div", "num": {"t": "pi"}, "den": {"t": "const", "value": "4"}}, {"t": "pow_int", "base": {"t": "div", "num": {"t": "add", "args": [{"t": "add", "args": [{"t": "sym", "name": "d"}, {"t": "neg", "arg": {"t": "mul", "args": [{"t": "sym", "name": "c2"}, {"t": "sym", "name": "P"}]}}]}, {"t": "add", "args": [{"t": "sym", "name": "d"}, {"t": "neg", "arg": {"t": "mul", "args": [{"t": "sym", "name": "c3"}, {"t": "sym", "name": "P"}]}}]}]}, "den": {"t": "const", "value": "2"}}, "exponent": 2}]}]}}]}
-    ]}
+    "goal": {"t": "all_nonpositive", "exprs": [{"t": "add", "args": [{"t": "add", "args": [{"t": "div", "num": {"t": "sym", "name": "bracket.torque"}, "den": {"t": "mul", "args": [{"t": "sym", "name": "bracket.nut_factor"}, {"t": "sym", "name": "const.iso261.M12.d"}]}}, {"t": "div", "num": {"t": "mul", "args": [{"t": "sym", "name": "bracket.load_share"}, {"t": "sym", "name": "wind.bracket.force"}]}, "den": {"t": "sym", "name": "bracket.count"}}]}, {"t": "neg", "arg": {"t": "mul", "args": [{"t": "const", "value": "9/10"}, {"t": "mul", "args": [{"t": "sym", "name": "bolt.M12_A4_70.Rp02_min"}, {"t": "mul", "args": [{"t": "div", "num": {"t": "pi"}, "den": {"t": "const", "value": "4"}}, {"t": "pow_int", "base": {"t": "div", "num": {"t": "add", "args": [{"t": "add", "args": [{"t": "sym", "name": "const.iso261.M12.d"}, {"t": "neg", "arg": {"t": "mul", "args": [{"t": "sym", "name": "const.iso724.d2_coefficient"}, {"t": "sym", "name": "const.iso261.M12.pitch"}]}}]}, {"t": "add", "args": [{"t": "sym", "name": "const.iso261.M12.d"}, {"t": "neg", "arg": {"t": "mul", "args": [{"t": "sym", "name": "const.iso724.d3_coefficient"}, {"t": "sym", "name": "const.iso261.M12.pitch"}]}}]}]}, "den": {"t": "const", "value": "2"}}, "exponent": 2}]}]}]}}]}]}
   },
-  "evidence": {"t": "evidence", "defined": [], "body": {"t": "enclosure", "partition": {"t": "split", "sym": "F", "at": "6000", "left": {"t": "leaf"}, "right": {"t": "leaf"}}}},
+  "evidence": {"t": "evidence", "body": {"t": "enclosure", "partition": {"t": "leaf"}}, "defined": []},
   "producer": {"source": "solver:r4_enclosure", "lola": "0.1.0"}
 }
 ```
 
-The kernel's answer for this file would be a `Theorem` whose `labels` are the nine labels above. Its footprint shows the four signed or measured inputs, the sanctioned ISO 261, ISO 724 and ISO 3506 values, `model:bolt.tension@...` and `cov:...`.
+The kernel's answer for this file is a `Theorem` whose `labels` are the ten labels above (`python -m lola verify examples/bolt_tension.cert.json`). Its footprint shows the four signed or measured inputs, the sanctioned ISO 261, ISO 724 and ISO 3506 values, `model:bolt.tension@...` and `cov:...`.
 
 ## Module map and line budget
 
