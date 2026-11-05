@@ -635,7 +635,7 @@ def build_member_buckling(req: Requirement, truss: Truss, design: Design, regist
         terms = _terms(truss, sb)
         force = _force(truss, sb, elastic_problem(truss, design, sb, (case,)), terms, index)
         goal = AllNonpositive((Add((Neg(force), Neg(Mul((Const(limit), terms[index].euler))))),))
-        describe = f"the compression in {truss.name}.{req.subject[1]} stays within {_text(limit)} of its Euler load under load case {case}"
+        describe = f"the compression in {truss.name}.{req.subject[1]} is at most {_text(limit)} times its Euler load under load case {case}"
         out.append(Obligation(req, sb.finish(goal), MODELS[MEMBER_BUCKLING], describe))
     return tuple(out)
 
