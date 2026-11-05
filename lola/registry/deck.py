@@ -20,21 +20,18 @@ Provenance grammar, one string per record:
 from __future__ import annotations
 
 import json
-import re
 from dataclasses import dataclass
 from fractions import Fraction
 from functools import cached_property
 from typing import Iterator, Mapping
 
-from ..kernel import Interval
+from ..kernel import Interval, enclose, free_syms, parse_q
 from ..premises import ALLOWED_TAGS, LabelKind, Tag
 from .catalog import build_registry
-from .enclosure import enclose, free_syms, render
-from .model import Constant, Derived, Registry, Stated
+from .model import Constant, Derived, Registry, Stated, render
 
 FORMAT = "lola-deck/0"
 _RECORD_KEYS = frozenset({"entry", "prop", "lo", "hi", "unit", "provenance"})
-_RATIONAL = re.compile(r"-?(0|[1-9][0-9]*)(/[1-9][0-9]*)?")
 _TAGS = frozenset(t.value for t in ALLOWED_TAGS[LabelKind.REGISTRY])
 
 
@@ -195,9 +192,10 @@ def _no_number(text: str) -> object:
 
 
 def _parse_q(text: object, where: str) -> Fraction:
-    if not isinstance(text, str) or not _RATIONAL.fullmatch(text) or str(Fraction(text)) != text:
-        raise DeckError(f"{where}: {text!r} is not a canonical rational (\"n\" or reduced \"p/q\")")
-    return Fraction(text)
+    try:
+        return parse_q(text)
+    except ValueError:
+        raise DeckError(f"{where}: {text!r} is not a canonical rational (\"n\" or reduced \"p/q\")") from None
 
 
 def _parse_record(raw: object, where: str) -> DeckRecord:

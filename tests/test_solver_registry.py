@@ -1,9 +1,29 @@
-"""Every registered rule has a solver module of the same name, and nothing else does. Owner: I."""
+"""The solver registry, SolverSource and the exact repair helpers. Owner: I.
+
+Every registered rule has a solver module of the same name, and nothing else does.
+"""
 import pkgutil
 import unittest
+from fractions import Fraction
+from unittest import mock
+
+import numpy as np
 
 import lola.solvers as solvers
-from lola.kernel import GOAL_RULE, MODULE_OF
+from lola.kernel import GOAL_RULE, LEMMAS, MODULE_OF, Add, Const, DefinedHyp, DefinedRange, Evidence, Leaf, Matrix, Neg, RangeHyp, Statement, Sym
+from lola.kernel.rules.r3_hypercircle import HypercircleFields, MinimizerComponent, QuadraticProblem
+from lola.kernel.rules.r4_enclosure import AllNonpositive, Enclosure, PointWitness
+from lola.solvers import SolverSource
+from lola.solvers.exact import project_onto_equalities, range_box, rationalize, solve_exact, to_numpy
+
+
+def matrix(*rows) -> Matrix:
+    entries = tuple((i, j, Fraction(v)) for i, row in enumerate(rows) for j, v in enumerate(row) if v)
+    return Matrix(len(rows), len(rows[0]), entries)
+
+
+def q(*values) -> tuple[Fraction, ...]:
+    return tuple(Fraction(v) for v in values)
 
 
 class SolverRegistry(unittest.TestCase):
@@ -15,6 +35,116 @@ class SolverRegistry(unittest.TestCase):
         self.assertEqual(set(solvers.SOLVERS), set(GOAL_RULE))
         for solve in solvers.SOLVERS.values():
             self.assertTrue(callable(solve))
+
+    def test_every_lemma_has_a_range_solver(self):
+        self.assertEqual(set(solvers.LEMMA_SOLVERS), set(LEMMAS))
+        for propose in solvers.LEMMA_SOLVERS.values():
+            self.assertTrue(callable(propose))
+
+
+X_LE_2 = Statement((RangeHyp("x", Fraction(0), Fraction(1), "in:t.x"),), AllNonpositive((Add((Sym("x"), Neg(Const(Fraction(2))))),)))
+PROOF = Evidence(Enclosure(Leaf()))
+COUNTER = Evidence(PointWitness((("x", Fraction(1)),), 0))
+
+
+class Source(unittest.TestCase):
+    def offer(self, statement, solve, source=None):
+        with mock.patch.dict(solvers.SOLVERS, {type(statement.goal): solve}):
+            return list((source or SolverSource()).offer(statement, "sha256:" + "0" * 64))
+
+    def test_the_goal_solver_candidates_pass_through_in_order(self):
+        self.assertEqual(self.offer(X_LE_2, lambda s: iter((PROOF, COUNTER))), [PROOF, COUNTER])
+
+    def test_limits_reach_a_solver_that_names_them_and_only_then(self):
+        seen = {}
+
+        def bounded(statement, max_cells):
+            seen["max_cells"] = max_cells
+            return (PROOF,)
+
+        self.assertEqual(self.offer(X_LE_2, bounded, SolverSource(max_cells=7)), [PROOF])
+        self.assertEqual(seen, {"max_cells": 7})
+        self.assertEqual(self.offer(X_LE_2, lambda statement: (PROOF,), SolverSource(max_cells=7)), [PROOF])
+
+    def test_a_spent_time_limit_stops_after_the_current_candidate(self):
+        self.assertEqual(self.offer(X_LE_2, lambda s: iter((PROOF, COUNTER)), SolverSource(time_limit_s=0)), [PROOF])
+
+
+class DefinedHyps(unittest.TestCase):
+    """n is the minimiser of s^2 subject to s = f, scaled by 1, so n = f; w is its weight.
+    The goal n - 5 <= 0 reads only n, so f and w are hypotheses only of the definition."""
+
+    PROBLEM = QuadraticProblem(matrix((1,)), (Sym("f"),), (Sym("w"),))
+    N = DefinedHyp("n", MinimizerComponent(PROBLEM, 0, Const(Fraction(1))))
+    STATEMENT = Statement(
+        (RangeHyp("f", Fraction(1), Fraction(3), "in:t.f"), N, RangeHyp("w", Fraction(1), Fraction(2), "in:t.w")),
+        AllNonpositive((Add((Sym("n"), Neg(Const(Fraction(5))))),)),
+    )
+    RANGE = DefinedRange("n", Fraction(1), Fraction(3), HypercircleFields((), ()))
+
+    def setUp(self):
+        self.seen = []
+
+        def solve(statement):
+            self.seen.append(statement)
+            return (PROOF, Evidence(PointWitness((("n", Fraction(3)),), 0)))
+
+        self.enterContext(mock.patch.dict(solvers.SOLVERS, {AllNonpositive: solve}))
+
+    def offer(self, *ranges):
+        with mock.patch.dict(solvers.LEMMA_SOLVERS, {MinimizerComponent: lambda statement: ranges}):
+            return list(SolverSource().offer(self.STATEMENT, "sha256:" + "0" * 64))
+
+    def test_the_goal_is_solved_over_the_proposed_range_and_the_range_goes_with_it(self):
+        self.assertEqual(self.offer(self.RANGE), [Evidence(PROOF.body, (self.RANGE,))], "the refutation is dropped")
+        (solved,) = self.seen
+        self.assertEqual(solved, Statement((RangeHyp("n", Fraction(1), Fraction(3), "lemma:n"),), self.STATEMENT.goal))
+
+    def test_a_definition_without_a_proposed_range_is_an_error_not_a_guess(self):
+        with self.assertRaises(ValueError):
+            self.offer()
+        self.assertEqual(self.seen, [])
+
+
+class SolveExact(unittest.TestCase):
+    def test_a_square_nonsingular_system_gets_its_one_solution(self):
+        self.assertEqual(solve_exact(matrix((2, 1), (1, 3)), q(3, 5)), q("4/5", "7/5"))
+
+    def test_an_underdetermined_system_gets_the_basic_solution(self):
+        self.assertEqual(solve_exact(matrix((1, 2, 3)), q(6)), q(6, 0, 0))
+
+    def test_a_consistent_dependent_system_is_solved(self):
+        self.assertEqual(solve_exact(matrix((1, 1), (2, 2)), q(1, 2)), q(1, 0))
+
+    def test_an_inconsistent_system_has_no_solution(self):
+        self.assertIsNone(solve_exact(matrix((1, 1), (2, 2)), q(1, 3)))
+
+    def test_a_right_hand_side_of_the_wrong_length_is_refused(self):
+        with self.assertRaises(ValueError):
+            solve_exact(matrix((1, 0), (0, 1)), q(1))
+
+
+class Repair(unittest.TestCase):
+    def test_the_residual_moves_onto_the_basic_entries_only(self):
+        repaired = project_onto_equalities(matrix((1, 1, 1)), q(1), q("1/3", "1/3", "1/4"), (2,))
+        self.assertEqual(repaired, q("1/3", "1/3", "1/3"))
+
+    def test_an_exact_point_is_returned_unchanged(self):
+        self.assertEqual(project_onto_equalities(matrix((1, 0), (0, 1)), q(1, 1), q(1, 1), (0,)), q(1, 1))
+
+    def test_a_basis_that_cannot_absorb_the_residual_is_an_error(self):
+        with self.assertRaises(ValueError):
+            project_onto_equalities(matrix((1, 0), (0, 1)), q(1, 1), q(0, 0), (0,))
+
+    def test_rationalize_rounds_each_float_to_a_nearby_rational(self):
+        self.assertEqual(rationalize(np.array([[0.25], [1 / 3]])), q("1/4", "1/3"))
+        self.assertEqual(rationalize([0.1], max_den=10), q("1/10"))
+
+    def test_to_numpy_places_every_entry_and_zeros_elsewhere(self):
+        self.assertEqual(to_numpy(matrix((0, "1/2"), (3, 0))).tolist(), [[0.0, 0.5], [3.0, 0.0]])
+
+    def test_range_box_reads_only_range_hypotheses(self):
+        self.assertEqual(range_box(DefinedHyps.STATEMENT), {"f": q(1, 3), "w": q(1, 2)})
 
 
 if __name__ == "__main__":

@@ -18,9 +18,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from .certs import CertStore
 from .lang import load_design, parse_design
 from .library import Library, certify_family
 from .pipeline import Report, check_design, explain
+from .registry import build_registry
+from .solvers import SolverSource
 from .verdict import Fail, Pass, Unknown, Verdict
 
 __version__ = "0.1.0"
@@ -28,12 +31,9 @@ __version__ = "0.1.0"
 
 def check_file(path: str | Path, *, certs: str | Path | None = None, library: Library | None = None, solve: bool = True) -> Report:
     """Convenience shell over check_design: default registry, evidence sources in the
-    order certs -> library -> solvers, accepted evidence recorded into `certs` when given.
-
-    TODO:
-      registry = registry.build_registry()
-      design = load_design(path, registry)
-      sources = [CertStore(certs)] if certs; + [library] if library; + [SolverSource()] if solve
-      return check_design(design, registry, tuple(sources), sink=CertStore(certs) if certs else None, path=str(path))
-    """
-    raise NotImplementedError
+    order certs -> library -> solvers, accepted evidence recorded into `certs` when given."""
+    registry = build_registry()
+    design = load_design(path, registry)
+    store = CertStore(certs) if certs is not None else None
+    sources = tuple(s for s in (store, library, SolverSource() if solve else None) if s is not None)
+    return check_design(design, registry, sources, sink=store, path=str(path))
