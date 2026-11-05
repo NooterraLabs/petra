@@ -148,6 +148,10 @@ def _constants() -> dict[str, Constant]:
         Constant("iec60898_1.trip_factor", _iv("1.45"), "1", SANCTIONED, "IEC",
                  "IEC 60898-1:2015 Table 7, test b: conventional tripping current 1.45 In (table number not checked)",
                  "a breaker trips within the conventional time at 1.45 In"),
+        Constant("iec60364_4_43.overload_factor", _iv("1.45"), "1", SANCTIONED, "IEC",
+                 "IEC 60364-4-43:2008 433.1, second condition I2 <= 1.45 Iz (formula number not checked)",
+                 "a device's conventional tripping current I2 may be at most 1.45 times the conductor's "
+                 "current-carrying capacity Iz"),
         Constant("install.clipped_direct.h", _iv("5", "10"), "W/(m2 K)", JUDGED, MAINTAINERS,
                  "combined convection and radiation coefficient of a PVC cable clipped direct to a wall in still "
                  "indoor air, judged by lola-maintainers; not taken from a standard",

@@ -392,6 +392,13 @@ class BuilderLabels(unittest.TestCase):
                 found = enclose(value, {h.sym: Interval(h.lo, h.hi) for h in st.hyps})
                 self.assertLess(abs(float(found.midpoint()) - expected), tolerance, f"{entry}.{prop} = {float(found.midpoint())}")
 
+    def test_a_constant_no_entry_holds_is_one_labelled_hypothesis(self):
+        sb = builder()
+        nu = sb.constant("steel.nu")
+        self.assertEqual(sb.finish(nonpositive(nu)).hyps, (RangeHyp("const.steel.nu", Fraction(3, 10), Fraction(3, 10), "reg:const.steel.nu"),))
+        with self.assertRaises(ValueError, msg="a constant the registry does not hold"):
+            builder().constant("steel.mu")
+
     def test_inputs_means_and_tests_carry_their_owner_label(self):
         sb = builder()
         force = sb.input(FORCE_IN)
@@ -485,7 +492,7 @@ class BuilderFinish(unittest.TestCase):
 
 
 class NoBareNumbers(unittest.TestCase):
-    INTRODUCERS = {"registry", "input", "mean", "tests", "value", "param", "defined"}
+    INTRODUCERS = {"registry", "constant", "input", "mean", "tests", "value", "param", "defined"}
 
     def test_every_way_to_introduce_a_hypothesis_refuses_a_bare_number(self):
         public = {name for name in vars(StatementBuilder) if not name.startswith("_")}
@@ -493,6 +500,7 @@ class NoBareNumbers(unittest.TestCase):
         n = Fraction(12000)
         calls = {
             "registry": lambda sb: sb.registry(n, "fy"),
+            "constant": lambda sb: sb.constant(n),
             "input": lambda sb: sb.input(n),
             "mean": lambda sb: sb.mean(n),
             "tests": lambda sb: sb.tests(n),

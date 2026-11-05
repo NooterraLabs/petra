@@ -424,8 +424,8 @@ class StatementBuilder:
     """Local, single-use builder for one statement.
 
     The only ways to introduce a hypothesis are the typed methods below, each of which
-    needs a source that carries provenance: a registry property, a signed Input (its range,
-    its mean), a tests record, a design value, a Param, or a QuantityDef. There is
+    needs a source that carries provenance: a registry property or constant, a signed
+    Input (its range, its mean), a tests record, a design value, a Param, or a QuantityDef. There is
     deliberately no method that turns a bare number into a RangeHyp, so an elaborator
     cannot invent an input bound. Each method refuses an argument of any other type.
 
@@ -470,6 +470,15 @@ class StatementBuilder:
             if not (isinstance(sym, Sym) and sym.name in self._hyps):
                 raise TypeError(f"series parameter {name} must be bound to a hypothesis of this builder")
         return self._property(entry_id, prop, bound, ())
+
+    def constant(self, name: str) -> Sym:
+        """RangeHyp labelled "reg:const.<name>": a number a standard fixes that is no
+        entry's property, such as the 1.45 of IEC 60364-4-43's I2 <= 1.45 Iz. The
+        registry's Constant carries its tag, owner and source."""
+        self._open()
+        if not isinstance(name, str):
+            raise TypeError("a registry constant is named by its name")
+        return self._constant(name, "the elaborator")
 
     def input(self, inp: Input) -> Sym:
         """RangeHyp labelled "in:<design>.<input>"."""

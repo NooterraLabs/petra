@@ -40,7 +40,8 @@ fraction of V). Summing makes the last wire's check the drop at the consumer.
 
 Overload protection (IEC 60364-4-43 433.1): I_B <= u I_n, theta(I_n / u) <= theta_max
 (I_n <= I_z) and theta(I_2 / (1.45 u)) <= theta_max (I_2 <= 1.45 I_z), with I_2 the
-breaker's conventional tripping current, all without computing I_z.
+breaker's conventional tripping current, all without computing I_z. The 1.45 is the
+sanctioned registry constant OVERLOAD_FACTOR, so it is a hypothesis of the statement.
 
 fault_withstand and overload_protection are utilisations: a claim bounds them by u, and
 coverage by 1. Every wire criterion is an upper bound; a GE claim is a gap.
@@ -438,9 +439,9 @@ CRITERION_DIMS: Mapping[FailureMode, Dim] = {
 }
 """What a criterion bounds: a temperature, or a fraction (of V, or a utilisation)."""
 
-OVERLOAD_FACTOR = Fraction(29, 20)
-"""IEC 60364-4-43 433.1.2: I_2 <= 1.45 I_z. A criterion of the standard rather than a
-property of any part, so it enters as a Const covered by model:wire.thermal."""
+OVERLOAD_FACTOR = "iec60364_4_43.overload_factor"
+"""The registry constant behind I_2 <= 1.45 I_z. A criterion of the standard rather than a
+property of any part, so the builder reads it with sb.constant."""
 
 # --- Elaboration -------------------------------------------------------------------------
 
@@ -695,7 +696,7 @@ def build_overload_protection(req: Requirement, circuit: Circuit, design: Design
         ambient = _ambient(sb, circuit)
         theta_max = _cable(sb, circuit, s.wire, registry)["theta_max"]
         exprs = [_minus(_current(sb, draw), _times(u, rated))]
-        for current in (_over(rated, u), _over(tripping, u * OVERLOAD_FACTOR)):
+        for current in (_over(rated, u), Div(tripping, _times(u, sb.constant(OVERLOAD_FACTOR)))):
             theta, runaway = steady_temperature(sb, circuit, s.wire, current, ambient, registry)
             exprs += [_minus(theta, theta_max), runaway]
         out.append(Obligation(req, sb.finish(AllNonpositive(tuple(exprs))), THERMAL,
