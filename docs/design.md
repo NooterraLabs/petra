@@ -336,7 +336,7 @@ Validation happens at three boundaries and nowhere else (per boundary-discipline
 - A `Footprint` holds premises sorted by label, each label once.
 - An input bound cannot exist without a `Signature`, because `ir.Input` has no optional owner.
 - A premise cannot carry tag `proved`, and its tag must fit its label namespace (`premises.ALLOWED_TAGS`). An owner's load range can never be tagged `sanctioned`.
-- Refutation evidence requires a statement with no `DefinedHyp`, so a counterexample is always a point the premises admit.
+- Refutation evidence names a point inside every `RangeHyp` range. Each `DefinedHyp` range is proved by its lemma at that point, and the rule shows the goal fails across those ranges, so a counterexample is always a point the premises admit with the true defined values there.
 - `RangeHyp` and `DefinedHyp` are separate types, so a defined quantity cannot carry a range the statement asserted.
 
 ### What the design deliberately does not do

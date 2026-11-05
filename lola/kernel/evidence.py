@@ -71,8 +71,9 @@ class DefinedRange:
 @dataclass(frozen=True, slots=True)
 class Evidence:
     """Everything one check consumes. `defined` must give exactly one DefinedRange per
-    DefinedHyp of the statement. Refutation evidence requires a statement with no
-    DefinedHyp, because a counterexample must be a point the premises admit."""
+    DefinedHyp of the statement. For refutation evidence each range is proved at the
+    evidence point rather than over the box, so the counterexample is a point the
+    premises admit together with the true defined values there."""
 
     body: "Union[ProofEvidence, RefutationEvidence]"
     defined: tuple[DefinedRange, ...] = ()
