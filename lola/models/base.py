@@ -14,16 +14,19 @@ statement, the builder returns a Gap whose typed needs say what is missing.
 """
 from __future__ import annotations
 
+import dataclasses
+import hashlib
+import inspect
 from dataclasses import dataclass
 from enum import Enum
 from fractions import Fraction
 from types import ModuleType
 from typing import Any, Callable, Mapping, NewType, Union
 
-from ..ir import Component, Design, Input, Param, QoiRef, Rel, Span, Value
-from ..kernel import Expr, Goal, QuantityDef, Statement, Sym
-from ..premises import Premise
-from ..registry import Registry
+from ..ir import Component, Design, Fixed, Input, Param, ParamRef, QoiRef, Rel, Span, Tests, Value
+from ..kernel import GOAL_RULE, LEMMAS, DefinedHyp, Expr, Goal, Hyp, Interval, QuantityDef, RangeHyp, Statement, Sym
+from ..premises import Label, Premise, Tag, constant_label, design_label, input_label, param_label, registry_label
+from ..registry import Derived, Registry, Stated
 from ..units import Quantity
 
 # --- Failure modes ----------------------------------------------------------------
@@ -66,13 +69,19 @@ class ModelSpec:
     source_hash: str
 
     def premise(self) -> Premise:
-        raise NotImplementedError
+        return Premise(
+            Label(f"model:{self.id}@{self.source_hash}"),
+            Tag.VALIDATED_MODEL,
+            self.owner,
+            self.source,
+            f"{self.form}; valid when {self.validity}",
+        )
 
 
 def model_spec(module: ModuleType, id: str, form: str, validity: str, owner: str, source: str) -> ModelSpec:
-    """Build a ModelSpec whose source_hash covers the module's source text.
-    TODO: hashlib.sha256(inspect.getsource(module).encode()).hexdigest()[:16]."""
-    raise NotImplementedError
+    """Build a ModelSpec whose source_hash covers the module's source text."""
+    source_hash = hashlib.sha256(inspect.getsource(module).encode("utf-8")).hexdigest()[:16]
+    return ModelSpec(id, form, validity, owner, source, source_hash)
 
 
 # --- Requirements -------------------------------------------------------------
@@ -126,8 +135,13 @@ class Requirement:
 
     @property
     def id(self) -> str:
-        """Stable id: "<subject>/<mode>/<origin>". Used in reports and cert file names."""
-        raise NotImplementedError
+        """Stable id: "<subject>/<mode>/<origin>", such as
+        "frame.diag_ad/truss.member_buckling/coverage.truss.axial_member". Used in reports."""
+        if isinstance(self.origin, ClaimOrigin):
+            origin = f"claim.{self.origin.claim}"
+        else:
+            origin = f"coverage.{self.origin.rule}"
+        return f"{'.'.join(self.subject)}/{self.mode.id}/{origin}"
 
 
 # --- What an open requirement needs ----------------------------------------------
@@ -405,42 +419,175 @@ class StatementBuilder:
     """Local, single-use builder for one statement.
 
     The only ways to introduce a hypothesis are the typed methods below, each of which
-    needs a source that carries provenance: a registry property, a signed Input, a design
-    value, a Param, or a QuantityDef. There is deliberately no method that turns a bare
-    number into a RangeHyp, so an elaborator cannot invent an input bound.
+    needs a source that carries provenance: a registry property, a signed Input (its range,
+    its mean), a tests record, a design value, a Param, or a QuantityDef. There is
+    deliberately no method that turns a bare number into a RangeHyp, so an elaborator
+    cannot invent an input bound. Each method refuses an argument of any other type.
+
+    One label always means one symbol. Asking twice for the same source returns the same
+    symbol; giving one symbol two meanings raises ValueError.
 
     `finish` sorts hyps by symbol and drops hyps the goal does not mention, so the kernel's
     "every hyp is used" rule always holds for builder output.
     """
 
     def __init__(self, design: Design, registry: Registry) -> None:
-        raise NotImplementedError
+        self._design = design
+        self._registry = registry
+        self._hyps: dict[str, Hyp] = {}
+        self._finished = False
 
-    def registry(self, entry_id: str, prop: str) -> Expr:
+    def registry(self, entry_id: str, prop: str, series: Mapping[str, Sym] | None = None) -> Expr:
         """A registry property as a kernel Expr.
 
         A Stated property (a rating, a property-class minimum) becomes one RangeHyp
         labelled "reg:<entry>.<prop>". A Derived property becomes its derivation, with
         each constant it uses as a RangeHyp labelled "reg:const.<name>", so the footprint
         names copper's resistivity rather than a cached resistance number.
+
+        A size entry ("cable.cu_pvc_2_5") that does not hold `prop` itself reads it from
+        its series ("cable.cu_pvc"), and the label names the entry that holds it. Each
+        series parameter Sym("self.<p>") in a derivation becomes the entry's fixed value
+        as a point hyp labelled "dsg:<design>.<entry>.<p>" (a chosen size is the design),
+        or else the hypothesis the caller binds in `series`, which a family uses to give
+        a ParamRef. A parameter that is neither fixed nor bound, or both, raises ValueError.
         """
-        raise NotImplementedError
+        self._open()
+        if not isinstance(entry_id, str) or not isinstance(prop, str):
+            raise TypeError("a registry property is named by an entry id and a property name")
+        bound = dict(series or {})
+        for name, sym in bound.items():
+            if not (isinstance(sym, Sym) and sym.name in self._hyps):
+                raise TypeError(f"series parameter {name} must be bound to a hypothesis of this builder")
+        part = self._registry.parts.get(entry_id)
+        fixes = part.fixes if part is not None else {}
+        holder = part.series if part is not None and part.series is not None and prop not in part.props else entry_id
+        found = self._registry.property(holder, prop)
+        if isinstance(found, Stated):
+            return self._range(f"{holder}.{prop}", found.value, registry_label(holder, prop))
+        if not isinstance(found, Derived):
+            raise TypeError(f"{holder}.{prop} is neither Stated nor Derived")
+        replace: dict[str, Expr] = {}
+        for name in sorted(_syms(found.expr)):
+            namespace, _, rest = name.partition(".")
+            if namespace == "const":
+                replace[name] = self._constant(rest, f"{holder}.{prop}")
+            elif namespace != "self":
+                raise ValueError(f"the derivation of {holder}.{prop} names {name}, which is neither const.* nor self.*")
+            elif rest in bound and rest in fixes:
+                raise ValueError(f"{entry_id} fixes {rest}, so it cannot also be bound")
+            elif rest in bound:
+                replace[name] = bound[rest]
+            elif rest in fixes:
+                replace[name] = self._range(f"{entry_id}.{rest}", fixes[rest], design_label(self._design.name, f"{entry_id}.{rest}"))
+            else:
+                raise ValueError(f"{entry_id}.{prop} needs series parameter {rest}, which is neither fixed nor bound")
+        return _substitute(found.expr, replace)
 
     def input(self, inp: Input) -> Sym:
         """RangeHyp labelled "in:<design>.<input>"."""
-        raise NotImplementedError
+        if not isinstance(inp, Input):
+            raise TypeError("an input hypothesis needs a signed Input")
+        return self._range(inp.name, inp.range.value, input_label(self._design.name, inp.name))
+
+    def mean(self, inp: Input) -> Sym:
+        """RangeHyp labelled "in:<design>.<input>.mean", the signed mean of a load (R5).
+        Raises ValueError when the input has none; the builder reports NeedsInputBound."""
+        if not isinstance(inp, Input):
+            raise TypeError("a mean hypothesis needs a signed Input")
+        if inp.mean is None:
+            raise ValueError(f"{inp.name} has no signed mean")
+        name = f"{inp.name}.mean"
+        return self._range(name, inp.mean.value, input_label(self._design.name, name))
+
+    def tests(self, record: Tests) -> tuple[Sym, Sym]:
+        """(trials, failures) of a signed tests record (R6), as point RangeHyps labelled
+        "in:<design>.tests.<name>.trials" and "in:<design>.tests.<name>.failures"."""
+        if not isinstance(record, Tests):
+            raise TypeError("test counts need a signed Tests record")
+
+        def count(field: str, n: int) -> Sym:
+            name = f"tests.{record.name}.{field}"
+            return self._range(name, Interval(Fraction(n), Fraction(n)), input_label(self._design.name, name))
+
+        return count("trials", record.trials), count("failures", record.failures)
 
     def value(self, v: Value, name: str) -> Sym:
         """Fixed -> RangeHyp labelled "dsg:<design>.<name>" (point range). ParamRef ->
-        RangeHyp labelled "par:<design>.<param>". Model inputs are always hyps, never
-        inlined constants, so a concrete statement and its family have the same shape."""
-        raise NotImplementedError
+        the param's hypothesis (see `param`), shared by every value that names it. Model
+        inputs are always hyps, never inlined constants, so a concrete statement and its
+        family have the same shape."""
+        if isinstance(v, ParamRef):
+            return self.param(self._design.params[v.name])
+        if not isinstance(v, Fixed):
+            raise TypeError("a design value is a Fixed quantity or a ParamRef")
+        return self._range(name, v.quantity.value, design_label(self._design.name, name))
 
     def param(self, p: Param) -> Sym:
-        raise NotImplementedError
+        """RangeHyp labelled "par:<design>.<param>" over the param's declared range."""
+        if not isinstance(p, Param):
+            raise TypeError("a scope parameter hypothesis needs a declared Param")
+        return self._range(p.name, p.range.value, param_label(self._design.name, p.name))
 
     def defined(self, name: str, definition: QuantityDef) -> Sym:
-        raise NotImplementedError
+        """DefinedHyp: `name` equals the quantity `definition` names. Its range comes from
+        a lemma in the evidence, never from the statement."""
+        if type(definition) not in LEMMAS:
+            raise TypeError(f"{type(definition).__name__} is not a quantity a lemma can prove")
+        return self._add(DefinedHyp(name, definition))
 
     def finish(self, goal: Goal) -> Statement:
-        raise NotImplementedError
+        self._open()
+        spec = GOAL_RULE.get(type(goal))
+        if spec is None:
+            raise TypeError(f"{type(goal).__name__} is not a registered goal")
+        used = _syms(goal) - spec.binds(goal)
+        for name in tuple(used):
+            hyp = self._hyps.get(name)
+            if isinstance(hyp, DefinedHyp):
+                used |= _syms(hyp.definition)
+        unbound = used - set(self._hyps)
+        if unbound:
+            raise ValueError(f"the goal mentions symbols no hypothesis introduces: {sorted(unbound)}")
+        self._finished = True
+        return Statement(tuple(self._hyps[name] for name in sorted(used)), goal)
+
+    def _constant(self, name: str, needed_by: str) -> Sym:
+        constant = self._registry.constants.get(name)
+        if constant is None:
+            raise ValueError(f"{needed_by} names constant {name}, which the registry does not hold")
+        return self._range(f"const.{name}", constant.value, constant_label(name))
+
+    def _range(self, sym: str, value: Interval, label: str) -> Sym:
+        return self._add(RangeHyp(sym, value.lo, value.hi, label))
+
+    def _add(self, hyp: Hyp) -> Sym:
+        self._open()
+        held = self._hyps.setdefault(hyp.sym, hyp)
+        if held != hyp:
+            raise ValueError(f"symbol {hyp.sym} already means {held}, so it cannot also mean {hyp}")
+        return Sym(hyp.sym)
+
+    def _open(self) -> None:
+        if self._finished:
+            raise RuntimeError("a StatementBuilder builds exactly one statement")
+
+
+def _syms(term: object) -> frozenset[str]:
+    if isinstance(term, Sym):
+        return frozenset((term.name,))
+    if isinstance(term, tuple):
+        return frozenset().union(*map(_syms, term))
+    if dataclasses.is_dataclass(term) and not isinstance(term, type):
+        return frozenset().union(*(_syms(getattr(term, f.name)) for f in dataclasses.fields(term)))
+    return frozenset()
+
+
+def _substitute(term: Any, replace: Mapping[str, Expr]) -> Any:
+    if isinstance(term, Sym):
+        return replace.get(term.name, term)
+    if isinstance(term, tuple):
+        return tuple(_substitute(t, replace) for t in term)
+    if dataclasses.is_dataclass(term) and not isinstance(term, type):
+        return dataclasses.replace(term, **{f.name: _substitute(getattr(term, f.name), replace) for f in dataclasses.fields(term)})
+    return term

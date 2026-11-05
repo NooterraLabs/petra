@@ -1,12 +1,16 @@
-"""The domain registry derives every table from one tuple and refuses bad specs. Owner: P."""
+"""The domain registry derives every table from one tuple and refuses bad specs, and each
+elaborator's model premise is keyed by its source. Owner: P."""
 import dataclasses
+import hashlib
 import importlib
 import pkgutil
 import unittest
+from pathlib import Path
 
 import lola.models as models
 from lola.lang.parser import DECLS
 from lola.models import _index, base, bolt, truss, uncertainty
+from lola.premises import Tag
 
 
 class Registered(unittest.TestCase):
@@ -62,6 +66,24 @@ class Refused(unittest.TestCase):
         twin = dataclasses.replace(bolt.DOMAIN, name="bolt2", kinds={"joint2": bolt.lower_joint})
         with self.assertRaisesRegex(RuntimeError, "declared twice"):
             _index((bolt.DOMAIN, twin))
+
+
+class ModelPremises(unittest.TestCase):
+    def spec(self, module):
+        return base.model_spec(module, "bolt.tension", "torque-tension", "no prying", "lola-maintainers", "VDI 2230")
+
+    def test_the_source_hash_covers_the_elaborator_module(self):
+        expected = hashlib.sha256(Path(bolt.__file__).read_text(encoding="utf-8").encode("utf-8")).hexdigest()[:16]
+        self.assertEqual(self.spec(bolt).source_hash, expected)
+        self.assertNotEqual(self.spec(truss).source_hash, expected, "another module's source gives another hash")
+
+    def test_the_premise_is_a_validated_model_named_by_id_and_hash(self):
+        spec = self.spec(bolt)
+        p = spec.premise()
+        self.assertEqual(p.label, f"model:bolt.tension@{spec.source_hash}")
+        self.assertIs(p.tag, Tag.VALIDATED_MODEL)
+        self.assertEqual((p.owner, p.source), ("lola-maintainers", "VDI 2230"))
+        self.assertIn("no prying", p.statement)
 
 
 if __name__ == "__main__":
