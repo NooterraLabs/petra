@@ -1,9 +1,10 @@
 lola 0
 
-# A 16 A lighting radial: MCB, 18 m of 2.5 mm2 Cu/PVC clipped direct, a 75 degC
-# lever terminal, and the luminaires. Coverage adds short circuit, overload
-# protection and voltage drop to the two claims; the wire-to-terminal connection
-# adds a temperature port contract.
+# A 10 A lighting radial: B10 MCB, 18 m of 2.5 mm2 Cu/PVC clipped direct, a 75 degC
+# lever terminal, and the luminaires. Coverage adds the insulation-rating temperature
+# check, short circuit and overload protection to the two claims (the 3 % drop claim
+# settles the 5 % coverage demand); the wire-to-terminal connection adds temperature
+# and current port contracts.
 
 design "workshop-lighting-radial" {
   owner "e.designer@example.org"
@@ -14,7 +15,7 @@ ambient in [10 degC, 40 degC] signed "site.manager@example.org" source "site sur
 
 circuit lighting {
   supply mains voltage 230 V fault_current in [0 kA, 6 kA] signed "dno.liaison@example.org" source "DNO letter 2026-08-14"
-  breaker cb1 part mcb.B16
+  breaker cb1 part mcb.B10
   wire w1 cable cable.cu_pvc_2_5 length 18 m install install.clipped_direct
   terminal t1 part terminal.lever_4mm2_75C
   consumer lamps
