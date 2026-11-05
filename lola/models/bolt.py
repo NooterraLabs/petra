@@ -12,33 +12,51 @@ Load field: force on `<joint>`. Claim path: `<joint>.<qoi>`.
 
 Bolt tension (simplified VDI 2230 load sharing, concentric axial load):
     F_bolt = F_V + Phi * F_A / n,      F_V = T / (K d)         (torque-tension relation)
-    goal  F_bolt - u * Sp * As <= 0    (u = claimed utilisation, default 1 = proof load)
+    goal  F_bolt - u * S * As <= 0     (u = claimed utilisation, default 1)
 T is the signed tightening torque range, K the nut factor (measured or judged input),
 Phi the joint load factor (judged input), F_A the signed external load, n the bolt count.
-As and Sp*As come from the registry derivations (ISO 898-1, ISO 724), Sp from the
-property class as a sanctioned premise.
+As comes from the registry derivation over ISO 724 geometry. S is the property class's
+proof stress Sp (ISO 898-1), or its 0.2 % proof strength Rp02_min where the class states
+no Sp (ISO 3506-1 stainless), a sanctioned premise either way. A bolt_tension claim
+bounds F_bolt itself.
+
+A coated bolt or plate is refused at lowering: a Feature names registry materials only,
+so the galvanic rule would read the base metal's anodic index instead of the coating's.
 """
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass
-from typing import Mapping
+from fractions import Fraction
+from typing import Callable, Mapping
 
-from ..ir import Component, Design, Input, Span, Value
-from ..kernel import Expr
-from ..registry import Registry
+from ..ir import Arg, Bound, Component, Design, Exceeds, Fixed, Input, ParamRef, Ref, Rel, Span, Value
+from ..kernel import Add, Const, Div, Expr, Interval, Mul, Neg
+from ..kernel.rules.r4_enclosure import AllNonpositive
+from ..registry import OutsideMakeableSet, PartKind, ProcessKind, Registry
+from ..units import DIMENSIONLESS, FORCE, LENGTH, TORQUE, Dim, Quantity
 from .base import (
+    CONTACT_PAIR,
     NO_PORTS,
+    ComponentError,
     CoverageRule,
     Criterion,
     DomainSpec,
     Elaborated,
+    EnergyDomain,
     FailureMode,
     Feature,
     FeatureKind,
+    Gap,
+    GapNeed,
     ModelSpec,
+    NeedsInputBound,
+    NoRuleForQuantity,
+    Obligation,
     Ports,
     Requirement,
     StatementBuilder,
+    model_spec,
 )
 
 # --- Typed model, produced by lower_joint --------------------------------------------
@@ -48,7 +66,7 @@ from .base import (
 class Plate:
     material: str
     thickness: Value
-    process: str | None = None   # e.g. "process.zinc_plate"; changes surface/galvanic class
+    process: str | None = None   # e.g. "process.mig_weld_6xxx"; v0 refuses a coating
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,12 +81,186 @@ class BoltedJoint:
     span: Span
 
 
+INPUTS: Mapping[str, tuple[Dim, str]] = {
+    "torque": (TORQUE, "Nm"),
+    "nut_factor": (DIMENSIONLESS, "1"),
+    "load_share": (DIMENSIONLESS, "1"),
+}
+"""The signed inputs a joint takes: field -> (dimension, unit a gap asks for)."""
+
+_SURFACE_SAFE = frozenset({ProcessKind.WELD, ProcessKind.CUT})
+"""Processes that leave the plate's surface metal unchanged, so the galvanic rule reads
+the right anodic index."""
+
+
 def lower_joint(component: Component, design: Design, registry: Registry) -> BoltedJoint:
     """Parse the attribute lines in the module docstring. Names the bounds
     "<joint>.torque", "<joint>.nut_factor" and "<joint>.load_share". Rejects
     (ComponentError): a missing or repeated bolt line, fewer than two plates, registry ids
-    of the wrong kind, a load field other than force, and a claim qoi not in QOIS."""
-    raise NotImplementedError
+    of the wrong kind, a coated bolt or plate, a load field other than force, and a claim
+    qoi not in QOIS."""
+    problems: list[str] = []
+    name = component.name
+    bolts: list[tuple[str, int]] = []
+    plates: list[Plate] = []
+    inputs: dict[str, Input] = {}
+    for attr in component.attrs:
+        say = _reporter(problems, attr.span, f"{name}.{attr.key}")
+        if attr.key == "bolt":
+            found = _bolt(attr.args, registry, say)
+            if found is not None:
+                bolts.append(found)
+        elif attr.key == "plate":
+            plate = _plate(attr.args, design, registry, say)
+            if plate is not None:
+                plates.append(plate)
+        elif attr.key in INPUTS:
+            if attr.key in inputs:
+                say("is given twice")
+            value = _input(f"{name}.{attr.key}", attr.key, attr.args, say)
+            if value is not None:
+                inputs[attr.key] = value
+        else:
+            say(f"unknown attribute; a joint takes {', '.join(sorted(['bolt', 'plate', *INPUTS]))}")
+    here = _reporter(problems, component.span, name)
+    if len(bolts) != 1:
+        here(f"a joint has exactly one bolt line, not {len(bolts)}")
+    if len(plates) < 2:
+        here(f"a joint clamps at least two plates, not {len(plates)}")
+    _check_references(name, design, problems)
+    if problems:
+        raise ComponentError(tuple(problems))
+    (bolt, count), = bolts
+    return BoltedJoint(name, bolt, count, tuple(plates), inputs.get("torque"), inputs.get("nut_factor"),
+                       inputs.get("load_share"), component.span)
+
+
+Say = Callable[[str], None]
+
+
+def _reporter(problems: list[str], span: Span, what: str) -> Say:
+    return lambda message: problems.append(f"{span.path}:{span.line}:{span.col}: {what}: {message}")
+
+
+def _registry_id(arg: Arg | None) -> str | None:
+    return ".".join(arg.parts) if isinstance(arg, Ref) else None
+
+
+def _keyword(arg: Arg | None, word: str) -> bool:
+    return arg == Ref((word,))
+
+
+def _bolt(args: tuple[Arg, ...], registry: Registry, say: Say) -> tuple[str, int] | None:
+    count = args[2] if len(args) == 3 and _keyword(args[1], "count") else None
+    pid = _registry_id(args[0]) if args else None
+    if pid is None or not isinstance(count, Fixed):
+        say("reads `bolt <registry bolt id> count <n>`")
+        return None
+    n = count.quantity.value
+    if count.quantity.dim != DIMENSIONLESS or n.lo != n.hi or n.lo.denominator != 1 or n.lo < 1:
+        say("count is a whole number of bolts, at least 1")
+        return None
+    try:
+        part = registry.part(pid, PartKind.BOLT)
+    except OutsideMakeableSet as e:
+        say(str(e))
+        return None
+    if part.process is not None:
+        say(f"{pid} is coated ({part.process}); v0 cannot show a coating to the galvanic rule, so it takes uncoated bolts only")
+        return None
+    return pid, int(n.lo)
+
+
+def _plate(args: tuple[Arg, ...], design: Design, registry: Registry, say: Say) -> Plate | None:
+    shape = len(args) in (3, 5) and _keyword(args[1], "thickness") and (len(args) == 3 or _keyword(args[3], "process"))
+    if not shape:
+        say("reads `plate <registry material id> thickness <value> [process <registry process id>]`")
+        return None
+    material, thickness = _registry_id(args[0]), args[2]
+    process = _registry_id(args[4]) if len(args) == 5 else None
+    ok = True
+    try:
+        registry.material(material or "")
+    except OutsideMakeableSet as e:
+        say(str(e))
+        ok = False
+    if not _is_length(thickness, design):
+        say("thickness needs a positive length or a param")
+        ok = False
+    if len(args) == 5:
+        found = registry.processes.get(process or "")
+        if found is None:
+            say(f"{process} is not a registry process")
+            ok = False
+        elif found.kind not in _SURFACE_SAFE:
+            say(f"{process} is a {found.kind.value} process; a plate takes {' or '.join(sorted(k.value for k in _SURFACE_SAFE))}, "
+                "since v0 cannot show a coating to the galvanic rule")
+            ok = False
+    return Plate(material, thickness, process) if ok else None
+
+
+def _is_length(arg: Arg, design: Design) -> bool:
+    if isinstance(arg, Fixed):
+        return arg.quantity.dim == LENGTH and arg.quantity.value.lo > 0
+    return isinstance(arg, ParamRef) and arg.name in design.params and design.params[arg.name].range.dim == LENGTH
+
+
+def _input(name: str, field: str, args: tuple[Arg, ...], say: Say) -> Input | None:
+    dim, _ = INPUTS[field]
+    bound = args[0] if len(args) == 1 else None
+    if not (isinstance(bound, Bound) and bound.range.dim == dim):
+        say(f"needs one signed {'torque' if dim == TORQUE else 'dimensionless'} bound")
+        return None
+    lo, hi = bound.range.value.lo, bound.range.value.hi
+    if field == "torque" and lo < 0:
+        say("a tightening torque is not negative")
+        return None
+    if field == "nut_factor" and lo <= 0:
+        say("a nut factor is positive")
+        return None
+    if field == "load_share" and not (0 <= lo and hi <= 1):
+        say("a load share is a fraction of the external force, within [0, 1]")
+        return None
+    return Input(name, bound.range, bound.signature, bound.kind, bound.span, bound.mean)
+
+
+def _check_references(joint: str, design: Design, problems: list[str]) -> None:
+    for case in design.loads.values():
+        say = _reporter(problems, case.span, f"load {case.name}")
+        entries = [e for e in case.entries if e.target[0] == joint]
+        if len(entries) > 1:
+            say(f"{joint}: one force per load case")
+        for entry in entries:
+            if len(entry.target) != 1:
+                say(f"{'.'.join(entry.target)}: a joint load acts on the joint itself, as in `on {joint} force ...`")
+            elif entry.field != "force":
+                say(f"{joint}: a joint's load field is force, not {entry.field}")
+            elif _dim(entry.value, design) != FORCE:
+                say(f"{joint}: force needs a force range")
+    for claim in design.claims:
+        if claim.qoi.path[0] != joint:
+            continue
+        say = _reporter(problems, claim.span, f"claim {claim.name}")
+        if len(claim.qoi.path) != 1:
+            say(f"a joint claim names the joint, as in {joint}.tension_utilisation")
+        elif claim.qoi.name not in QOIS:
+            say(f"unknown joint quantity '{claim.qoi.name}'; known: {', '.join(sorted(QOIS))}")
+        elif claim.bound.dim != CRITERION_DIMS[claim.qoi.name]:
+            say(f"{claim.qoi.name} is bounded by a {'force' if claim.qoi.name == 'bolt_tension' else 'fraction'}")
+    for claim in design.probability_claims:
+        path = claim.event.qoi.path if isinstance(claim.event, Exceeds) else claim.event.subject
+        if path[0] == joint:
+            _reporter(problems, claim.span, f"claim {claim.name}")("v0 states no probability claim on a joint")
+    for tests in design.tests.values():
+        if tests.subject[0] == joint:
+            _reporter(problems, tests.span, f"tests {tests.name}")("v0 reads no tests records on a joint")
+    for waiver in design.waivers:
+        if waiver.subject[0] == joint and len(waiver.subject) != 1:
+            _reporter(problems, waiver.span, "waiver")(f"a joint's requirements are on {joint} itself")
+
+
+def _dim(value: Input | ParamRef, design: Design) -> Dim:
+    return value.range.dim if isinstance(value, Input) else design.params[value.name].range.dim
 
 
 # --- Modes, quantities, model premises -----------------------------------------------
@@ -76,26 +268,71 @@ def lower_joint(component: Component, design: Design, registry: Registry) -> Bol
 TENSION = FailureMode("bolt.tension")
 PLATE_BEARING = FailureMode("bolt.plate_bearing")
 
-MODELS: Mapping[FailureMode, ModelSpec] = {}
-"""TODO: "bolt.tension" (torque-tension with nut factor; linear load sharing Phi; no
-prying; no thermal preload change)."""
+TENSION_MODEL = model_spec(
+    sys.modules[__name__], "bolt.tension",
+    "torque-tension preload F_V = T / (K d) plus the load share Phi F_A / n of a concentric axial load, "
+    "against the property class's proof stress (or 0.2 % proof strength) times the ISO 724 stress area",
+    "concentric axial external load shared equally by the bolts; linear joint load factor Phi; no prying, "
+    "bending, embedding loss or thermal change of preload; the nut factor covers thread and bearing friction",
+    "lola-maintainers", "VDI 2230 Part 1:2015 (simplified); ISO 898-1:2013; ISO 3506-1:2020; ISO 724",
+)
+
+MODELS: Mapping[FailureMode, ModelSpec] = {TENSION: TENSION_MODEL}
 
 QOIS: Mapping[str, FailureMode] = {
     "bolt_tension": TENSION,
     "tension_utilisation": TENSION,
 }
 
+CRITERION_DIMS: Mapping[str, Dim] = {"bolt_tension": FORCE, "tension_utilisation": DIMENSIONLESS}
+
 # --- Elaboration -------------------------------------------------------------------------
 
 
 def bolt_force(sb: StatementBuilder, joint: BoltedJoint, external: Expr) -> Expr:
     """F_V + Phi * external / n as an Expr over input and registry hyps."""
-    raise NotImplementedError
+    preload = Div(sb.input(joint.torque), Mul((sb.input(joint.nut_factor), sb.registry(joint.bolt, "d"))))
+    count = sb.value(Fixed(Quantity(Interval(Fraction(joint.count), Fraction(joint.count)), DIMENSIONLESS)), f"{joint.name}.count")
+    return Add((preload, Div(Mul((sb.input(joint.load_share), external)), count)))
+
+
+def capacity(sb: StatementBuilder, joint: BoltedJoint, registry: Registry) -> Expr:
+    """The class's proof stress (Sp, else Rp02_min) times the stress area As."""
+    part = registry.part(joint.bolt, PartKind.BOLT)
+    stress = sb.registry(joint.bolt, "Sp" if "Sp" in part.props else "Rp02_min")
+    geometry = {p: sb.registry(joint.bolt, p) for p in ("d", "pitch")}
+    return Mul((stress, sb.registry(joint.bolt, "As", series=geometry)))
 
 
 def build_tension(req: Requirement, joint: BoltedJoint, design: Design, registry: Registry) -> tuple[Elaborated, ...]:
     """Gap needing NeedsInputBound for each of torque, nut_factor, load_share that is None."""
-    raise NotImplementedError
+    criterion = req.criterion
+    qoi = req.qoi.name if req.qoi is not None else "tension_utilisation"
+    needs: list[GapNeed] = []
+    if isinstance(criterion, Criterion) and criterion.rel is Rel.GE:
+        needs.append(NoRuleForQuantity(qoi, "a bolt's tension is bounded from above only"))
+    needs += [NeedsInputBound((joint.name,), field, unit) for field, (_, unit) in INPUTS.items() if getattr(joint, field) is None]
+    forces = {case.name: e.value for case in design.loads.values() for e in case.entries if e.target == (joint.name,)}
+    cases = req.under or tuple(forces)
+    if not cases or any(case not in forces for case in cases):
+        needs.append(NeedsInputBound((joint.name,), "force", "N"))
+    if needs:
+        return (Gap(req, tuple(needs)),)
+    bound = criterion.bound.value.lo if isinstance(criterion, Criterion) else Fraction(1)
+    out = []
+    for case in cases:
+        sb = StatementBuilder(design, registry)
+        force = forces[case]
+        external = sb.input(force) if isinstance(force, Input) else sb.value(force, case)
+        tension = bolt_force(sb, joint, external)
+        if qoi == "bolt_tension":
+            limit, what = Const(bound), f"{float(bound) / 1000:g} kN"
+        else:
+            limit = capacity(sb, joint, registry)
+            limit, what = (limit if bound == 1 else Mul((Const(bound), limit))), f"{float(bound):g} of its proof capacity"
+        out.append(Obligation(req, sb.finish(AllNonpositive((Add((tension, Neg(limit))),))), TENSION_MODEL,
+                              f"the bolt in {joint.name} stays at or below {what} under {case}"))
+    return tuple(out)
 
 
 # --- Coverage ------------------------------------------------------------------------
@@ -106,17 +343,29 @@ BOLTED_JOINT = FeatureKind("bolt.joint")
 def features(joint: BoltedJoint, design: Design, registry: Registry) -> tuple[Feature, ...]:
     """One BOLTED_JOINT feature for the joint, and one CONTACT_PAIR per pair of materials
     in contact (bolt against each plate, plate against plate), each with its process
-    applied, plus the environment. The galvanic rule in lola/coverage.py reads the pairs."""
-    raise NotImplementedError
+    applied, plus the environment. The galvanic rule in lola/coverage.py reads the pairs.
+    Every feature's subject is the joint, so a joint has one galvanic requirement however
+    many of its pairs are dissimilar."""
+    bolt = registry.parts[joint.bolt].material
+    plates = [p.material for p in joint.plates]
+    subject = (joint.name,)
+    contact = frozenset({EnergyDomain.MECHANICAL, EnergyDomain.CHEMICAL})
+    pairs = [(bolt, p) for p in plates] + list(zip(plates, plates[1:]))
+    return (
+        Feature(subject, BOLTED_JOINT, tuple(dict.fromkeys((bolt, *plates))), frozenset({EnergyDomain.MECHANICAL}), design.environment),
+        *(Feature(subject, CONTACT_PAIR, pair, contact, design.environment) for pair in dict.fromkeys(pairs)),
+    )
 
 
 def _is_joint(feature: Feature, registry: Registry) -> bool:
-    raise NotImplementedError
+    return feature.kind == BOLTED_JOINT
 
 
 def _default_criterion(mode: FailureMode, feature: Feature) -> Criterion | None:
     """Tension utilisation <= 1 (proof load). None for PLATE_BEARING, which is unmodelled."""
-    raise NotImplementedError
+    if mode == TENSION:
+        return Criterion(Rel.LE, Quantity(Interval(Fraction(1), Fraction(1)), DIMENSIONLESS))
+    return None
 
 
 COVERAGE: tuple[CoverageRule, ...] = (

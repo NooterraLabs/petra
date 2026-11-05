@@ -192,7 +192,10 @@ class Registry:
 
     def property(self, entry_id: str, prop: str) -> Property:
         """Look up a property on a material, part or process by entry id. A size entry
-        inherits every property of its series that it does not define itself."""
+        inherits every property of its series that it does not define itself. An
+        environment's one property is its ambient class, "<environment>.ambient"."""
+        if entry_id in self.environments and prop == "ambient":
+            return self.environments[entry_id].ambient
         return self._find(entry_id, prop)[1]
 
     def expand(self, entry_id: str, prop: str, params: Mapping[str, Expr] | None = None) -> Expr:
