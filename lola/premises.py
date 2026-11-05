@@ -23,11 +23,32 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Iterable, Mapping, NewType
+from types import MappingProxyType
+from typing import Iterable, Mapping, NewType, Union
 
 from .kernel import Interval
 
 Label = NewType("Label", str)
+
+
+def registry_label(entry: str, prop: str) -> Label:
+    return Label(f"reg:{entry}.{prop}")
+
+
+def constant_label(name: str) -> Label:
+    return Label(f"reg:const.{name}")
+
+
+def input_label(design: str, name: str) -> Label:
+    return Label(f"in:{design}.{name}")
+
+
+def param_label(design: str, name: str) -> Label:
+    return Label(f"par:{design}.{name}")
+
+
+def design_label(design: str, name: str) -> Label:
+    return Label(f"dsg:{design}.{name}")
 
 
 class Tag(Enum):
@@ -74,9 +95,9 @@ def label_kind(label: str) -> LabelKind:
 
 @dataclass(frozen=True)
 class Premise:
-    """One non-proved fact. `range` is set for numeric premises and must contain the
-    range of every RangeHyp that carries this label (checked by `PremiseBook.resolve`).
-    Tag PROVED is never a Premise: proved facts are the kernel's own and stay out of the
+    """One non-proved fact. `range` is set for numeric premises and must lie inside the
+    range of every RangeHyp that carries this label (checked by `PremiseBook.resolve`), so
+    a theorem covers every value the premise admits. Tag PROVED is never a Premise: proved facts are the kernel's own and stay out of the
     footprint."""
 
     label: Label
@@ -147,26 +168,59 @@ class Footprint:
         return frozenset(p.label for p in self.premises)
 
     def by_tag(self) -> Mapping[Tag, tuple[Premise, ...]]:
-        raise NotImplementedError
+        """Non-empty groups in Tag order, each sorted by label."""
+        groups = {tag: tuple(p for p in self.premises if p.tag is tag) for tag in Tag}
+        return {tag: group for tag, group in groups.items() if group}
+
+
+Entry = Union[Premise, ScopeParam, DesignValue]
 
 
 class PremiseBook:
     """Label -> Premise or ScopeParam for one design check. Built once by the pipeline from
     the registry, the design's signed inputs, the elaborators used, the coverage table and
-    the waivers. Read-only afterwards."""
+    the waivers. Read-only afterwards. The same entry may be given twice; two different
+    entries for one label are refused."""
 
     def __init__(self, premises: Iterable[Premise], params: Iterable[ScopeParam], design_values: Iterable[DesignValue]) -> None:
-        raise NotImplementedError
+        entries: dict[str, Entry] = {}
+        for entry in (*premises, *params, *design_values):
+            if not isinstance(entry, (Premise, ScopeParam, DesignValue)):
+                raise TypeError(f"{entry!r} is not a premise, scope parameter or design value")
+            if entries.setdefault(entry.label, entry) != entry:
+                raise ValueError(f"{entry.label} names two different entries")
+        self._entries: Mapping[str, Entry] = MappingProxyType(entries)
 
     def resolve(self, label: str, hyp_range: Interval) -> Premise | ScopeParam | DesignValue:
         """Return the entry for a RangeHyp label. Raises UnresolvedLabel if missing, and
         RangeMismatch if a premise's range is not a subset of the hyp range (a statement
         that assumes a wider range than the premise grants is fine; a narrower one would
-        assume more than the premise says)."""
-        raise NotImplementedError
+        assume more than the premise says). A premise with no range cannot back a
+        RangeHyp, so it is a RangeMismatch too."""
+        entry = self._entries.get(label)
+        if entry is None:
+            raise UnresolvedLabel(label)
+        granted = entry.value if isinstance(entry, DesignValue) else entry.range
+        if granted is None:
+            raise RangeMismatch(f"{label} grants no range, so it cannot back a hypothesis")
+        if not (hyp_range.lo <= granted.lo and granted.hi <= hyp_range.hi):
+            raise RangeMismatch(
+                f"{label} grants [{granted.lo}, {granted.hi}] but the statement assumes only [{hyp_range.lo}, {hyp_range.hi}]"
+            )
+        return entry
 
     def footprint(self, labels: Iterable[str]) -> Footprint:
-        raise NotImplementedError
+        """The premises named by `labels`. Scope parameters and design values are not
+        premises, so their labels are skipped. Raises UnresolvedLabel for a missing one."""
+        premises = []
+        for label in set(labels):
+            if label_kind(label) in (LabelKind.PARAM, LabelKind.DESIGN):
+                continue
+            entry = self._entries.get(label)
+            if entry is None:
+                raise UnresolvedLabel(label)
+            premises.append(entry)
+        return Footprint(tuple(sorted(premises, key=lambda p: p.label)))
 
 
 class UnresolvedLabel(LookupError):
