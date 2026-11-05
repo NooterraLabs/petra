@@ -2,8 +2,8 @@ lola 0
 
 # Same truss as truss_pass.lola with the heavier crowd load from brief rev C.
 # At factor 1.5 the end diagonal needs 112.5 kN in compression; its Euler load is
-# about 78 kN, so the solver finds a collapse mechanism and the kernel checks the
-# Farkas ray. Expected verdict: FAIL on frame/truss.plastic_collapse.
+# 74 to 78 kN (E from 200 to 210 GPa), so the solver finds a collapse mechanism and
+# the kernel checks the Farkas ray. Expected verdict: FAIL on frame/truss.plastic_collapse.
 
 design "warren-footbridge-panel-rev-c" {
   owner "a.reviewer@example.org"
