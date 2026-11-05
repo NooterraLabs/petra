@@ -135,13 +135,17 @@ class Requirement:
 
     @property
     def id(self) -> str:
-        """Stable id: "<subject>/<mode>/<origin>", such as
-        "frame.diag_ad/truss.member_buckling/coverage.truss.axial_member". Used in reports."""
+        """Stable id, unique within a design: "<subject>/<mode>/<origin>", such as
+        "frame.diag_ad/truss.member_buckling/coverage.truss.axial_member", then "/<qoi>"
+        for a coverage requirement on one quantity, such as the two port contracts
+        "lighting.t1.wire/port.contract/coverage.port.contract/temperature" and ".../current".
+        A claim needs no suffix: its name is unique and names one quantity. Two coverage
+        requirements cannot share an id, because coverage.generate refuses them. Used in
+        reports."""
         if isinstance(self.origin, ClaimOrigin):
-            origin = f"claim.{self.origin.claim}"
-        else:
-            origin = f"coverage.{self.origin.rule}"
-        return f"{'.'.join(self.subject)}/{self.mode.id}/{origin}"
+            return f"{'.'.join(self.subject)}/{self.mode.id}/claim.{self.origin.claim}"
+        quantity = "" if self.qoi is None else f"/{self.qoi.name}"
+        return f"{'.'.join(self.subject)}/{self.mode.id}/coverage.{self.origin.rule}{quantity}"
 
 
 # --- What an open requirement needs ----------------------------------------------

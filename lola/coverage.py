@@ -195,19 +195,24 @@ def generate(design: Design, models: dict[str, object], registry: Registry) -> t
     (the owning DomainSpec's `features` hook) matched against the cross-domain rules and
     the owning domain's rules, in component, feature, rule and demand order, each once.
     A coverage requirement on the same (subject, mode) as a claim is dropped when the
-    claim's criterion is at least as strict, and kept otherwise."""
+    claim's criterion is at least as strict, and kept otherwise.
+
+    A rule that demands one mode on one subject with two different criteria (its
+    default read the features apart) raises ValueError: the two requirements would share
+    an id, and a report could not tell them apart."""
     claims = claim_requirements(design, models)
-    demanded: list[Requirement] = []
+    demanded: dict[str, Requirement] = {}
     for name, model in models.items():
         spec = KINDS[design.components[name].kind]
         for feature in spec.features(model, design, registry):
             for rule in CROSS_DOMAIN + spec.coverage:
-                if rule.when(feature, registry):
-                    demanded += [
-                        Requirement(feature.subject, mode, rule.default(mode, feature), CoverageOrigin(rule.id))
-                        for mode in rule.demands
-                    ]
-    kept = [r for r in dict.fromkeys(demanded) if not any(_settles(c, r, design) for c in claims)]
+                if not rule.when(feature, registry):
+                    continue
+                for mode in rule.demands:
+                    req = Requirement(feature.subject, mode, rule.default(mode, feature), CoverageOrigin(rule.id))
+                    if demanded.setdefault(req.id, req) != req:
+                        raise ValueError(f"coverage rule {rule.id} demands {mode.id} on {'.'.join(feature.subject)} with two different criteria")
+    kept = [r for r in demanded.values() if not any(_settles(c, r, design) for c in claims)]
     return claims + tuple(kept)
 
 
