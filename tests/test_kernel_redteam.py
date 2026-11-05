@@ -161,6 +161,17 @@ class R2NegativeWeights(Base):
     def test_a_positive_weight_is_certified(self):
         self.assertTheorem(check(one_term_pd(1, 2), Evidence(LDLFactor((Q(1),), self.IDENT, (Q(1),)))))
 
+    def test_a_lying_fraction_subclass_cannot_forge_a_positive_pivot(self):
+        class Liar(Q):
+            def __le__(self, other):
+                return False
+
+            def __gt__(self, other):
+                return True
+
+        forged = Evidence(LDLFactor((Q(-1),), self.IDENT, (Liar(-1),)))
+        self.assertRejected(check(one_term_pd(-1, -1), forged), Invalid, "pivot")
+
 
 PAIR = Matrix(1, 2, ((0, 0, Q(1)), (0, 1, Q(1))))
 PROBLEM = QuadraticProblem(B=PAIR, f=(Sym("F"),), w=(c(1), c(3)))
@@ -267,18 +278,21 @@ class Forgery(Base):
         self.assertFalse(is_issued(object.__new__(Theorem)))
         self.assertFalse(is_issued(object.__new__(Refutation)))
 
-    @unittest.expectedFailure
     def test_class_swap_cannot_launder_a_refutation_into_a_theorem(self):
-        # BUG (soundness): object.__setattr__(handle, "__class__", Theorem) retypes a
-        # genuine Refutation of a false statement into a Theorem that is_issued accepts and
-        # verdict.Pass then rests a PASS on. is_issued checks `type(result) in
-        # (Theorem, Refutation) and result in _ISSUED` but never checks the stored record's
-        # kind matches the handle's type, so the swap passes. Minimal fix in
-        # lola/kernel/check.py: is_issued must require a Theorem handle to hold a
-        # _TheoremRecord and a Refutation handle a _RefutationRecord.
         laundered = genuine_refutation()
         object.__setattr__(laundered, "__class__", Theorem)
         self.assertFalse(is_issued(laundered), "a class-swapped refutation must not read as an issued theorem")
+        with self.assertRaises(TypeError):
+            laundered.statement
+
+    def test_class_swap_cannot_turn_a_theorem_into_a_refutation(self):
+        swapped = genuine_theorem()
+        object.__setattr__(swapped, "__class__", Refutation)
+        self.assertFalse(is_issued(swapped), "a class-swapped theorem must not read as an issued refutation")
+
+    def test_unswapped_results_stay_issued(self):
+        self.assertTrue(is_issued(genuine_refutation()))
+        self.assertTrue(is_issued(genuine_theorem()))
 
 
 class Hypotheses(Base):

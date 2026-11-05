@@ -71,7 +71,7 @@ class _Issued:
 
     def _record(self):
         record = _ISSUED.get(self)
-        if record is None:
+        if record is None or type(record) is not _RECORD_OF.get(type(self)):
             raise TypeError(f"this {type(self).__name__} was not issued by lola.kernel.check")
         return record
 
@@ -125,6 +125,11 @@ class Refutation(_Issued):
         return self._record().point
 
 
+_RECORD_OF = {Theorem: _TheoremRecord, Refutation: _RefutationRecord}
+"""A handle is genuine only while its class matches the kind it was issued as, so
+reassigning __class__ cannot turn a refutation into a theorem."""
+
+
 def _issue(cls: type, record: object) -> _Issued:
     handle = object.__new__(cls)
     _ISSUED[handle] = record
@@ -145,7 +150,8 @@ def _issue_refutation(statement: Statement, statement_hash: str, evidence_hash: 
 
 def is_issued(result: object) -> bool:
     """True only for a Theorem or Refutation that `check` returned in this process."""
-    return type(result) in (Theorem, Refutation) and result in _ISSUED
+    kind = _RECORD_OF.get(type(result))
+    return kind is not None and type(_ISSUED.get(result)) is kind
 
 
 @dataclass(frozen=True, slots=True)
@@ -195,6 +201,7 @@ def check(statement: Statement, evidence: Evidence) -> CheckResult:
         reason = well_formed(statement)
         if reason is not None:
             return Rejection(digest, None, Invalid(reason))
+        statement = decode_statement(encode_statement(statement))
         spec = GOAL_RULE[type(statement.goal)]
         return _decide(statement, digest, evidence, spec)
     except Exception as exc:
@@ -205,8 +212,12 @@ def _decide(statement: Statement, digest: str, evidence: Evidence, spec) -> Chec
     def reject(fault: Fault) -> Rejection:
         return Rejection(digest, spec.id, fault)
 
-    if decode_evidence(encode_evidence(evidence)) != evidence:
+    canonical = decode_evidence(encode_evidence(evidence))
+    if canonical != evidence:
         return reject(Invalid("the evidence is not in canonical form"))
+    # Rules see only the decoded copy, built from plain Fractions and ints, so a value
+    # whose class overrides comparison cannot answer the rule's checks for itself.
+    evidence = canonical
     box = {h.sym: Interval(h.lo, h.hi) for h in statement.hyps if isinstance(h, RangeHyp)}
     defined = [h for h in statement.hyps if isinstance(h, DefinedHyp)]
     claims = {claim.sym: claim for claim in evidence.defined}
