@@ -2,7 +2,8 @@
 
 Owner: seam M. This module is the single source of truth behind
 tests/test_kernel_mutations.py. It builds one valid certificate per rule and per
-evidence kind (including refutations and the R3 lemma), and a set of mutation operators
+evidence kind (including refutations, and the R3 lemma under both a proof and a
+refutation, since check proves it over different boxes), and a set of mutation operators
 that are each guaranteed to invalidate a certificate. The test file asserts the fixtures
 check and the mutants are rejected; run this module directly to self-check both.
 
@@ -154,6 +155,17 @@ def _r3_lemma() -> tuple[Statement, Evidence]:
     return st, ev
 
 
+def _r3_lemma_refutation() -> tuple[Statement, Evidence]:
+    """The same q exceeds 5 at F = 8, where s* = (6, 2) and u* = 6. The lemma is proved at
+    that point, with the exact field once per vertex of the point box, so q = 6 there."""
+    st = Statement(
+        hyps=_sorted_hyps((RangeHyp("F", Q(4), Q(8), "in:F"), DefinedHyp("q", MinimizerComponent(_PROBLEM, 0, _c(1))))),
+        goal=AllNonpositive(exprs=(Add((Sym("q"), _c(-5))),)),
+    )
+    at_8 = HypercircleFields(s=((Q(6), Q(2)), (Q(6), Q(2))), u=((Q(6),), (Q(6),)))
+    return st, Evidence(PointWitness(point=(("F", Q(8)),), which=0), defined=(DefinedRange("q", Q(6), Q(6), at_8),))
+
+
 def _quadratic_partition() -> Split:
     """A partition fine enough to beat the dependency problem in x^2 - x - 1/10 over [0,1]."""
     def split(at, left=Leaf(), right=Leaf()) -> Split:
@@ -225,6 +237,7 @@ def _fixtures() -> tuple[Fixture, ...]:
     r3p_s, r3p_e = _r3_proof()
     r3r_s, r3r_e = _r3_refutation()
     r3l_s, r3l_e = _r3_lemma()
+    r3w_s, r3w_e = _r3_lemma_refutation()
     r4p_s, r4p_e = _r4_proof()
     r4r_s, r4r_e = _r4_refutation()
     r5p_s, r5p_e = _r5_proof()
@@ -237,6 +250,7 @@ def _fixtures() -> tuple[Fixture, ...]:
         Fixture("r3_hypercircle", "R3", "theorem", r3p_s, r3p_e, lb_path=("body", "fields", "s", 0, 0), vec_path=("body", "fields", "s")),
         Fixture("r3_violation", "R3", "refutation", r3r_s, r3r_e),
         Fixture("r3_lemma", "R4", "theorem", r3l_s, r3l_e, lb_path=("defined", 0, "proof", "s", 0, 0), vec_path=("defined", 0, "proof", "s")),
+        Fixture("r3_lemma_witness", "R4", "refutation", r3w_s, r3w_e, lb_path=("defined", 0, "proof", "s", 0, 0), vec_path=("defined", 0, "proof", "s")),
         Fixture("r4_enclosure", "R4", "theorem", r4p_s, r4p_e, has_split=True),
         Fixture("r4_point_witness", "R4", "refutation", r4r_s, r4r_e),
         Fixture("r5_moment_dual", "R5", "theorem", r5p_s, r5p_e, lb_path=("body", "y", 0), vec_path=("body", "y"), has_split=True),
@@ -414,6 +428,13 @@ def _edit_statement_byte(fix: Fixture, env: dict) -> dict:
     return env
 
 
+def _point_outside(fix: Fixture, env: dict) -> dict:
+    coordinate = env["evidence"]["body"]["point"][0]
+    (hyp,) = [h for h in env["statement"]["hyps"] if h["t"] == "range_hyp" and h["sym"] == coordinate[0]]
+    coordinate[1] = str(Q(hyp["hi"]) + 1)
+    return env
+
+
 def _foreign_evidence(fix: Fixture, env: dict) -> dict:
     if fix.rule == "R1":
         env["evidence"]["body"] = {"t": "enclosure", "partition": {"t": "leaf"}}
@@ -478,6 +499,13 @@ OPERATORS: tuple[Operator, ...] = (
         HASH_MISMATCH,
         lambda f: True,
         _edit_statement_byte,
+    ),
+    Operator(
+        "move_point_outside_box",
+        "a refutation point one past its RangeHyp's upper end is not a point the premises admit, so check rejects it before any lemma or rule runs",
+        REJECTION,
+        lambda f: f.kind == "refutation",
+        _point_outside,
     ),
     Operator(
         "foreign_rule_evidence",

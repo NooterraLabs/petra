@@ -75,11 +75,13 @@ def _field(problem: QuadraticProblem, weights: np.ndarray, f: tuple[Fraction, ..
     return s, rational(u)
 
 
-def defined_ranges(statement: Statement) -> tuple[DefinedRange, ...]:
+def defined_ranges(statement: Statement, box: Mapping[str, Interval] | None = None) -> tuple[DefinedRange, ...]:
     """For each DefinedHyp: compute fields (once per problem), enclose the component with
     the kernel's own formula, round outward by about a relative 1e-9 to a short dyadic, and
-    propose that range. Raises ValueError when a problem has no admissible field."""
-    box = range_box(statement)
+    propose that range. The box is the statement's RangeHyp box unless one is given; a
+    point box gives the ranges the kernel checks a refutation at that point with. Raises
+    ValueError when a problem has no admissible field."""
+    box = range_box(statement) if box is None else box
     fields: dict[QuadraticProblem, HypercircleFields] = {}
     out = []
     for h in statement.hyps:

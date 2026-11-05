@@ -13,6 +13,13 @@ Gives up after max_cells and returns nothing (the obligation becomes UNKNOWN).
 A violating point is moved to the worst corner it can reach by coordinate ascent, so a
 refutation names the worst-case input rather than the first failing one.
 
+A statement with DefinedHyps reaches `solve` with each one replaced by a RangeHyp over
+its proposed range (see SolverSource). A proof there proves the original, but a
+violating point does not refute it: the defined symbol need not take its true value
+there. So when no proof is found, the same ascent searches the original statement's
+RangeHyp box, scoring each point with the R3 lemma ranges proved at it, which is how the
+kernel checks the refutation.
+
 Also used by r5_moment.py for R5 domination trees and by library/transport.py to re-split
 the part of a query box that a family partition does not cover.
 """
@@ -20,7 +27,7 @@ from __future__ import annotations
 
 import heapq
 from fractions import Fraction
-from typing import Iterable
+from typing import Callable, Iterable
 
 from ..kernel import (
     DefinedHyp,
@@ -35,22 +42,28 @@ from ..kernel import (
     enclose,
 )
 from ..kernel.rules.r4_enclosure import MAX_DEPTH, AllNonpositive, Enclosure, PointWitness
+from .r3_hypercircle import defined_ranges
 
 _STATS: dict[str, int] = {"cells": 0, "enclosures": 0, "max_depth": 0}
 
 
-def solve(statement: Statement, max_cells: int = 20000) -> Iterable[Evidence]:
+def solve(statement: Statement, max_cells: int = 20000, original: Statement | None = None) -> Iterable[Evidence]:
     """Proof or refutation evidence for an AllNonpositive statement, or nothing.
 
-    Nothing for a statement with a DefinedHyp: its range comes from a lemma this solver
-    cannot prove. A caller holding proven DefinedRanges can call `search` with them in
-    the box and attach them to the Enclosure it returns."""
+    Nothing for a statement with a DefinedHyp, whose range only a lemma proves.
+    SolverSource passes `statement` with each DefinedHyp replaced by a RangeHyp over its
+    proposed range, and the statement as written as `original`. When no proof is found
+    and `original` has a DefinedHyp, the only candidate is a witness for `original`,
+    without DefinedRanges: SolverSource attaches the ones proved at its point."""
     if not isinstance(statement.goal, AllNonpositive) or any(isinstance(h, DefinedHyp) for h in statement.hyps):
         return ()
     box = {h.sym: Interval(h.lo, h.hi) for h in statement.hyps if isinstance(h, RangeHyp)}
     found = search(statement.goal.exprs, box, max_cells)
     if isinstance(found, (Leaf, Split)):
         return (Evidence(Enclosure(found)),)
+    if original is not None and any(isinstance(h, DefinedHyp) for h in original.hyps):
+        point = _witness(original)
+        return () if point is None else (point,)
     if isinstance(found, dict):
         which = next(k for k, e in enumerate(statement.goal.exprs) if _violates(e, found))
         return (Evidence(PointWitness(tuple((sym, found[sym]) for sym in box), which)),)
@@ -79,13 +92,13 @@ def search(exprs: tuple[Expr, ...], box: dict, max_cells: int) -> Partition | di
             break
         centre = {sym: _cut(iv) for sym, iv in cell.items()}
         if any(_violates(e, centre) for e in exprs):
-            return _worst(exprs, box, centre)
+            return _worst(lambda point: _score(exprs, point), box, centre)
         choice = _split_choice(exprs, cell, uppers, widths)
         if choice is None:
             return None
         sym, at, lean = choice
         if any(_violates(e, lean) for e in exprs):
-            return _worst(exprs, box, lean)
+            return _worst(lambda point: _score(exprs, point), box, lean)
         if _STATS["cells"] + 2 > max_cells or depth >= MAX_DEPTH:
             return None
         left = push({**cell, sym: Interval(cell[sym].lo, at)}, depth + 1)
@@ -123,9 +136,14 @@ def _upper(expr: Expr, cell: dict) -> Fraction | None:
 
 
 def _point_lo(expr: Expr, point: dict) -> Fraction | None:
+    return _lower(expr, {sym: Interval(v, v) for sym, v in point.items()})
+
+
+def _lower(expr: Expr, box: dict) -> Fraction | None:
+    """The kernel's lower enclosure, or None where the expression is undefined on the box."""
     _STATS["enclosures"] += 1
     try:
-        return enclose(expr, {sym: Interval(v, v) for sym, v in point.items()}).lo
+        return enclose(expr, box).lo
     except (ArithmeticError, ValueError):
         return None
 
@@ -194,10 +212,11 @@ def _cut(iv: Interval) -> Fraction:
     return round(iv.midpoint() / step) * step
 
 
-def _worst(exprs: tuple[Expr, ...], box: dict, start: dict) -> dict:
-    """Coordinate ascent over the box's faces from a violating point. Each move strictly
-    raises the largest lower enclosure, so the point stays violating and the loop ends."""
-    best, best_score = dict(start), _score(exprs, start)
+def _worst(score: Callable[[dict], Fraction | None], box: dict, start: dict) -> dict:
+    """Coordinate ascent over the box's faces from `start`. Each move strictly raises the
+    score (any score beats an undefined one), so the loop ends, and a violating start
+    stays violating."""
+    best, best_score = dict(start), score(start)
     improved = True
     while improved:
         improved = False
@@ -206,7 +225,35 @@ def _worst(exprs: tuple[Expr, ...], box: dict, start: dict) -> dict:
                 if value == best[sym]:
                     continue
                 candidate = {**best, sym: value}
-                score = _score(exprs, candidate)
-                if score is not None and score > best_score:
-                    best, best_score, improved = candidate, score, True
+                found = score(candidate)
+                if found is not None and (best_score is None or found > best_score):
+                    best, best_score, improved = candidate, found, True
     return best
+
+
+def _witness(statement: Statement) -> Evidence | None:
+    """A PointWitness for an AllNonpositive statement with DefinedHyps, or None.
+
+    The kernel checks it at a point h0 of the RangeHyp box with each defined symbol over
+    the range its lemma proves at h0, so a candidate scores the largest lower enclosure
+    over h0 and the R3 lemma ranges at h0, and a point whose lemma fails scores nothing.
+    The ascent starts from the box's centre; its end is a witness when the score there is
+    positive."""
+    box = {h.sym: Interval(h.lo, h.hi) for h in statement.hyps if isinstance(h, RangeHyp)}
+
+    def lows(point: dict) -> list[Fraction | None]:
+        at = {sym: Interval(v, v) for sym, v in point.items()}
+        try:
+            ranges = defined_ranges(statement, at)
+        except (ArithmeticError, ValueError):
+            return []
+        cell = {**at, **{r.sym: Interval(r.lo, r.hi) for r in ranges}}
+        return [_lower(e, cell) for e in statement.goal.exprs]
+
+    def score(point: dict) -> Fraction | None:
+        found = [lo for lo in lows(point) if lo is not None]
+        return max(found) if found else None
+
+    point = _worst(score, box, {sym: _cut(iv) for sym, iv in box.items()})
+    which = next((k for k, lo in enumerate(lows(point)) if lo is not None and lo > 0), None)
+    return None if which is None else Evidence(PointWitness(tuple(point.items()), which))

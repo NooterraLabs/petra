@@ -1,7 +1,8 @@
 """kernel.check: well-formedness, dispatch, lemma plumbing and issued results. Owner: K.
 
 Statements here use R4, the simplest goal, so each test isolates check's own behaviour.
-The lemma success path needs R3 and is tested in test_rules.
+A lemma proved over the RangeHyp box is tested with the rules in test_rules. A lemma
+proved at a refutation's point, a box check builds itself, is tested here.
 """
 import unittest
 from fractions import Fraction as F
@@ -56,6 +57,19 @@ WITH_LEMMA = Statement(
     hyps=(RangeHyp("f", F(0), F(10), LABEL), DefinedHyp("q", MinimizerComponent(PROBLEM, 0, c(1)))),
     goal=AllNonpositive(exprs=(Add((Sym("q"), Neg(c(8)))),)),
 )
+OVER_7 = Statement(hyps=WITH_LEMMA.hyps, goal=AllNonpositive(exprs=(Add((Sym("q"), Neg(c(7)))),)))
+"""q = s*_0 = 3f/4 for f in [0, 10], so q - 7 <= 0 fails at f = 10, where q = 15/2."""
+
+
+def exact_at(f) -> HypercircleFields:
+    """s* = (3f/4, f/4) and u* = 3f/4, once for each of the two vertices of the point box {f}."""
+    s, u = (F(3 * f, 4), F(f, 4)), (F(3 * f, 4),)
+    return HypercircleFields(s=(s, s), u=(u, u))
+
+
+def lemma_witness(f, lo, hi, fields=None) -> Evidence:
+    proof = exact_at(f) if fields is None else fields
+    return Evidence(body=PointWitness(point=(("f", F(f)),), which=0), defined=(DefinedRange("q", F(lo), F(hi), proof),))
 
 
 class IssuedResults(unittest.TestCase):
@@ -163,14 +177,41 @@ class Dispatch(unittest.TestCase):
         for evidence in [witness(("f", 11)), witness(), witness(("f", 10), ("g", 1)), witness(("f", 10), which=1)]:
             self.assertInvalid(below(5), evidence)
 
-    def test_refutation_needs_a_statement_without_defined_hyps(self):
-        lemma = DefinedRange("q", F(0), F(15, 2), FIELDS)
-        self.assertInvalid(WITH_LEMMA, Evidence(body=PointWitness(point=(("f", F(10)),), which=0), defined=(lemma,)))
-
     def test_one_defined_range_per_defined_hyp(self):
         lemma = DefinedRange("q", F(0), F(15, 2), FIELDS)
         for defined in [(), (lemma, lemma), (lemma, DefinedRange("z", F(0), F(1), FIELDS))]:
             self.assertInvalid(WITH_LEMMA, Evidence(body=Enclosure(partition=Leaf()), defined=defined))
+
+
+class RefutationWithLemma(unittest.TestCase):
+    """OVER_7 at f = 10, where the lemma proves q in [15/2, 15/2]."""
+
+    def assertRejected(self, evidence, fault, needle):
+        result = check(OVER_7, evidence)
+        self.assertIsInstance(result, Rejection)
+        self.assertIsInstance(result.fault, fault, result.reason)
+        self.assertIn(needle, result.reason)
+
+    def test_a_range_proved_at_the_point_refutes(self):
+        result = check(OVER_7, lemma_witness(10, F(15, 2), F(15, 2)))
+        self.assertIsInstance(result, Refutation, getattr(result, "reason", ""))
+        self.assertEqual((result.rule, result.point, result.labels), ("R4", (("f", F(10)),), frozenset({LABEL})))
+        self.assertEqual(result.statement, OVER_7)
+
+    def test_a_range_that_excludes_the_true_value_is_not_proved(self):
+        self.assertRejected(lemma_witness(10, 8, 9), TooWeak, "q: the hypercircle gives [15/2, 15/2]")
+
+    def test_a_range_holding_a_value_that_meets_the_goal_does_not_refute(self):
+        self.assertRejected(lemma_witness(10, 7, 8), TooWeak, "encloses down to 0")
+
+    def test_the_point_must_lie_in_the_box(self):
+        self.assertRejected(lemma_witness(11, F(33, 4), F(33, 4)), Invalid, "a value inside its range")
+
+    def test_the_lemma_is_proved_at_the_point_not_over_the_box(self):
+        self.assertRejected(lemma_witness(10, 0, F(15, 2), FIELDS), Invalid, "B s != f")
+
+    def test_every_defined_hyp_needs_its_range(self):
+        self.assertRejected(witness(("f", 10)), Invalid, "exactly one DefinedRange per DefinedHyp")
 
 
 if __name__ == "__main__":

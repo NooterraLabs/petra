@@ -1,13 +1,16 @@
 """Pin-jointed trusses from .lola text to kernel results. Owner: T.
 
 Statements are built from the lowered example IR, evidence comes from the truss solvers
-(R1, R2, R3; R4 buckling uses a one-leaf Enclosure with the R3 lemma ranges), and the
-kernel decides. Expected forces and margins are hand statics, kept in the messages.
+(R1, R2, R3; R4 buckling uses a one-leaf Enclosure with the R3 lemma ranges, or
+SolverSource where a buckling refutation is wanted), and the kernel decides. Expected
+forces and margins are hand statics, kept in the messages.
 
 Hand values used throughout, steel E in [200, 210] GPa, fy = 355 MPa:
   CHS 60.3x3.2  A = pi/4 (60.3^2 - 53.9^2) = 574.0 mm2,  I = pi/64 (60.3^4 - 53.9^4) = 23.47 cm4
+  CHS 76.1x3.2  I = pi/64 (76.1^4 - 69.7^4) = 48.78 cm4
   CHS 48.3x3.2  A = pi/4 (48.3^2 - 41.9^2) = 453.4 mm2,  A fy = 160.95 kN
   Euler load of a 2.5 m CHS 60.3x3.2 diagonal at E = 200 GPa: pi^2 E I / L^2 = 74.12 kN
+  Euler load of the 3 m CHS 76.1x3.2 top chord at E = 200 GPa: pi^2 E I / L^2 = 106.98 kN
 Footbridge statics (P_D, P_E node loads, downward negative):
   N_ad = 0.9375 P_D + 0.3125 P_E    N_ec = 0.3125 P_D + 0.9375 P_E
   N_ab = 0.75 (0.75 P_D + 0.25 P_E) N_de = 0.375 (P_D + P_E)    N_db = -N_be = 0.3125 (P_D - P_E)
@@ -19,7 +22,7 @@ from pathlib import Path
 
 from lola import coverage
 from lola.ir import Design
-from lola.kernel import Evidence, Leaf, Refutation, Rejection, Theorem, TooWeak, check, is_issued
+from lola.kernel import Evidence, Leaf, Refutation, Rejection, Theorem, TooWeak, check, is_issued, statement_hash
 from lola.kernel.rules.r1_linear import FarkasRay, FeasiblePoints, LinearFeasible
 from lola.kernel.rules.r2_definite import GramPositiveDefinite, LDLFactor
 from lola.kernel.rules.r3_hypercircle import Hypercircle, HypercircleFields, MinimizerBound
@@ -28,7 +31,7 @@ from lola.lang import parse_design
 from lola.models import truss
 from lola.models.base import ClaimOrigin, ComponentError, Gap, NeedsInputBound, NoRuleForQuantity, Obligation
 from lola.registry import build_registry
-from lola.solvers import r1_linear, r2_definite, r3_hypercircle
+from lola.solvers import SolverSource, r1_linear, r2_definite, r3_hypercircle
 
 REGISTRY = build_registry()
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples"
@@ -106,6 +109,20 @@ def decide(statement):
         if is_issued(result):
             return result
     return result
+
+
+def solved(statement):
+    """The first issued result over SolverSource's candidates, as the pipeline settles it."""
+    for evidence in SolverSource().offer(statement, statement_hash(statement)):
+        result = check(statement, evidence)
+        if is_issued(result):
+            return result
+    return None
+
+
+def buckling(d: Design, member: str):
+    (obligation,) = elaborate(d)[f"frame.{member}/truss.member_buckling/coverage.truss.axial_member"]
+    return obligation.statement
 
 
 def claimed(d: Design, claim: str) -> Obligation:
@@ -302,6 +319,20 @@ class Overload(unittest.TestCase):
         result = check(light, Evidence(FarkasRay(point, ray.body.y)))
         self.assertIsInstance(result, Rejection)
         self.assertIsInstance(result.fault, TooWeak, "at 1.5 x 24 kN diag_ad needs 45 kN, inside 74.12 kN, so a static field exists")
+
+    def test_the_end_diagonals_buckle_under_the_heaviest_crowd_on_the_softest_steel(self):
+        hand = "N_ad = N_ec = 0.9375 (-60) + 0.3125 (-60) = -75 kN, past the 74.12 kN Euler load at E = 200 GPa"
+        heavy = design(FAIL)
+        for member in ("diag_ad", "diag_ec"):
+            with self.subTest(member=member):
+                result = solved(buckling(heavy, member))
+                self.assertIsInstance(result, Refutation, hand)
+                point = dict(result.point)
+                self.assertEqual((point["crowd.frame.D.fy"], point["crowd.frame.E.fy"], point["const.steel.E"]), (-60 * KN, -60 * KN, 200 * 10 ** 9), hand)
+
+    def test_the_lighter_crowd_and_the_top_chord_do_not_buckle(self):
+        self.assertIsInstance(solved(buckling(design(PASS), "diag_ad")), Theorem, "N_ad = 1.25 (-24) = -30 kN, inside 74.12 kN")
+        self.assertIsInstance(solved(buckling(design(FAIL), "top_de")), Theorem, "N_de = 0.375 (-120) = -45 kN, inside 106.98 kN")
 
 
 class Hanger(unittest.TestCase):

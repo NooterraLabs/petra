@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ..evaluate import Box, at_vertices, enclose, free_syms, point_box
+from ..evaluate import Box, at_vertices, enclose, free_syms
 from ..evidence import Point, Vector
 from ..interval import Interval, Q
 from ..linalg import matvec, rmatvec
@@ -96,29 +96,30 @@ def prove(goal: LinearFeasible, body: FeasiblePoints, box: Box) -> Fault | None:
 
 
 def refute(goal: LinearFeasible, body: FarkasRay, box: Box) -> Fault | None:
-    """Theorem: Farkas' lemma, the easy direction, at the point h.
+    """Theorem: Farkas' lemma, the easy direction, at every point p of the box, which
+    fixes each RangeHyp at the evidence point and spans each DefinedHyp's proven range.
 
-    Let z = A^T y. For any x within the bounds at h, z^T x <= cap, where cap sums
-    z_i * upper_i(h) over z_i > 0 and z_i * lower_i(h) over z_i < 0; the rule bounds each
-    term above with the enclosure at h, and a missing bound where z_i != 0 makes the
-    ray Invalid. If some x had A x = b(h) it would give y^T b(h) = z^T x <= cap. So
-    y^T b(h) > cap, checked with the lower end of y^T b's enclosure, leaves no feasible
-    x at h. The inequality is strict. b need not be affine here.
+    Let z = A^T y. For any x within the bounds at p, z^T x <= cap, where cap sums the
+    upper ends of the enclosures over the box of z_i * upper_i for z_i > 0 and of
+    z_i * lower_i for z_i < 0. Each enclosure contains its value at p, and a missing
+    bound where z_i != 0 makes the ray Invalid. If some x had A x = b(p) it would give
+    y^T b(p) = z^T x <= cap. The enclosure of y^T b over the box contains y^T b(p), so
+    its lower end above cap leaves no feasible x at p. The inequality is strict, b need
+    not be affine, and p is any point of the box.
     """
     fault = _shape(goal)
     if fault is not None:
         return fault
     if len(body.y) != goal.A.rows:
         return Invalid(f"y has {len(body.y)} entries for {goal.A.rows} rows")
-    at = point_box(body.point)
     cap = Q(0)
     for zi, lo, hi in zip(rmatvec(goal.A, body.y), goal.lower, goal.upper):
         if zi != 0:
             side = hi if zi > 0 else lo
             if side is None:
                 return Invalid("the ray pushes along an unbounded variable")
-            cap += (Interval.point(zi) * enclose(side, at)).hi
-    yb = sum((Interval.point(yi) * enclose(bi, at) for yi, bi in zip(body.y, goal.b)), Interval.point(Q(0)))
+            cap += (Interval.point(zi) * enclose(side, box)).hi
+    yb = sum((Interval.point(yi) * enclose(bi, box) for yi, bi in zip(body.y, goal.b)), Interval.point(Q(0)))
     return None if yb.lo > cap else TooWeak(f"y^T b >= {yb.lo} does not exceed the cap {cap}")
 
 

@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ..evaluate import Box, enclose, point_box
+from ..evaluate import Box, enclose
 from ..evidence import Point, Vector
 from ..linalg import gram_quadratic, gram_sum, is_unit_lower, ldl_product
 from ..terms import Expr, Matrix
@@ -94,16 +94,17 @@ def prove(goal: GramPositiveDefinite, body: LDLFactor, box: Box) -> Fault | None
 
 
 def refute(goal: GramPositiveDefinite, body: NegativeDirection, box: Box) -> Fault | None:
-    """At the point h, v^T M(h) v = sum_j w_j(h) |V_j^T v|^2 is exact except for the
-    weights, which are enclosed. If v != 0 and the enclosure's upper end is <= 0, then
-    v^T M(h) v <= 0, so M(h) is not positive definite."""
+    """At every point p of the box, which fixes each RangeHyp at the evidence point and
+    spans each DefinedHyp's proven range, v^T M(p) v = sum_j w_j(p) |V_j^T v|^2 is exact
+    except for the weights, and each weight's enclosure over the box contains w_j(p). So
+    the enclosure q contains v^T M(p) v at every p. If v != 0 and q.hi <= 0, then
+    v^T M(p) v <= 0, so M(p) is not positive definite at any point of the box."""
     fault = _shape(goal)
     if fault is not None:
         return fault
     if len(body.v) != goal.dim or not any(body.v):
         return Invalid("v must be a nonzero vector with dim entries")
-    at = point_box(body.point)
-    q = gram_quadratic(tuple(enclose(t.weight, at) for t in goal.terms), tuple(t.factor for t in goal.terms), body.v)
+    q = gram_quadratic(tuple(enclose(t.weight, box) for t in goal.terms), tuple(t.factor for t in goal.terms), body.v)
     return None if q.hi <= 0 else TooWeak(f"v^T M v may be as large as {q.hi}")
 
 

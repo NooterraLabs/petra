@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from typing import Union
 
 from .codec import DecodeError, decode_evidence, decode_statement, encode_evidence, encode_statement, evidence_hash, statement_hash
-from .evaluate import free_syms
+from .evaluate import free_syms, point_box
 from .evidence import Evidence, Point
 from .interval import Interval
 from .rules import GOAL_RULE, LEMMAS, Fault, Invalid
@@ -116,7 +116,7 @@ class Theorem(_Issued):
 
 class Refutation(_Issued):
     """The statement is false: at `point`, which lies in every RangeHyp range, the goal
-    fails. The statement has no DefinedHyp."""
+    fails for the true value of every DefinedHyp there (see check)."""
 
     __slots__ = ()
 
@@ -188,9 +188,15 @@ def check(statement: Statement, evidence: Evidence) -> CheckResult:
     the goal holds at it, which is what the statement asserts for h. Forgetting how q_d
     depends on h is a deliberate relaxation: it can cost a proof, never soundness.
 
-    Why a Refutation means it fails. Refutation evidence is accepted only for a
-    statement with no DefinedHyp, and its point must assign every RangeHyp a value inside
-    its range, so the point is in B. The rule shows the goal false there.
+    Why a Refutation means it fails. The statement says goal(h, q(h)) holds for every h
+    in B. Refutation evidence names a point h0 that must assign every RangeHyp, in order,
+    a value inside its range, so h0 is in B. Each DefinedHyp d comes with a range whose
+    lemma, run over the degenerate box {h0}, proves q_d(h0) in [lo_d, hi_d]. The rule's
+    refute then shows the goal fails at every point of {h0} x prod_d [lo_d, hi_d],
+    treating each defined symbol as ranging over its whole interval as above, so it never
+    rests on one representative value. The point (h0, q(h0)) lies in that product, so
+    goal(h0, q(h0)) is false and the statement fails at h0. With no DefinedHyp the
+    product is the point h0 itself.
     """
     try:
         digest = statement_hash(statement)
@@ -225,30 +231,28 @@ def _decide(statement: Statement, digest: str, evidence: Evidence, spec) -> Chec
         return reject(Invalid("the evidence must give exactly one DefinedRange per DefinedHyp"))
     labels = frozenset(h.label for h in statement.hyps if isinstance(h, RangeHyp))
     body, ehash = evidence.body, evidence_hash(evidence)
-    if type(body) in spec.proofs:
-        ranges: dict[str, Interval] = {}
-        for h in defined:
-            lemma, claim = LEMMAS.get(type(h.definition)), claims[h.sym]
-            if lemma is None or type(claim.proof) is not lemma.evidence:
-                return reject(Invalid(f"no lemma proves a range for {h.sym} from {type(claim.proof).__name__}"))
-            fault = lemma.prove(h.definition, claim, box)
-            if fault is not None:
-                return reject(fault)
-            ranges[h.sym] = Interval(claim.lo, claim.hi)
-        fault = spec.prove(statement.goal, body, {**box, **ranges})
+    refuting = type(body) not in spec.proofs
+    if refuting:
+        if type(body) not in spec.refutations:
+            return reject(Invalid(f"{type(body).__name__} is not evidence for {spec.id}"))
+        if tuple(sym for sym, _ in body.point) != tuple(box) or not all(box[sym].contains(v) for sym, v in body.point):
+            return reject(Invalid("the point must assign every RangeHyp, in order, a value inside its range"))
+        box = point_box(body.point)
+    ranges: dict[str, Interval] = {}
+    for h in defined:
+        lemma, claim = LEMMAS.get(type(h.definition)), claims[h.sym]
+        if lemma is None or type(claim.proof) is not lemma.evidence:
+            return reject(Invalid(f"no lemma proves a range for {h.sym} from {type(claim.proof).__name__}"))
+        fault = lemma.prove(h.definition, claim, box)
         if fault is not None:
             return reject(fault)
-        return _issue_theorem(statement, digest, ehash, spec.id, labels, tuple(sorted(ranges.items())))
-    if type(body) not in spec.refutations:
-        return reject(Invalid(f"{type(body).__name__} is not evidence for {spec.id}"))
-    if defined:
-        return reject(Invalid("a refutation needs a statement with no DefinedHyp"))
-    if tuple(sym for sym, _ in body.point) != tuple(box) or not all(box[sym].contains(v) for sym, v in body.point):
-        return reject(Invalid("the point must assign every RangeHyp, in order, a value inside its range"))
-    fault = spec.refute(statement.goal, body, box)
+        ranges[h.sym] = Interval(claim.lo, claim.hi)
+    fault = (spec.refute if refuting else spec.prove)(statement.goal, body, {**box, **ranges})
     if fault is not None:
         return reject(fault)
-    return _issue_refutation(statement, digest, ehash, spec.id, labels, body.point)
+    if refuting:
+        return _issue_refutation(statement, digest, ehash, spec.id, labels, body.point)
+    return _issue_theorem(statement, digest, ehash, spec.id, labels, tuple(sorted(ranges.items())))
 
 
 def well_formed(statement: Statement) -> str | None:
