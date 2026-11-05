@@ -41,7 +41,7 @@ class GramPositiveDefinite:
 class LDLFactor:
     """Proof. reference_weights r_j <= enclosure(weight_j).lo, and
     L diag(d) L^T = sum_j r_j V_j V_j^T exactly, L unit lower triangular, every d_i > 0.
-    Reference weights let a family certificate serve every sub-box (library reuse)."""
+    Reference weights let one factor serve every sub-box of the box it was made for."""
 
     reference_weights: Vector
     L: Matrix

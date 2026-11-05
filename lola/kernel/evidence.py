@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Union
 
 from .interval import Q
+from .terms import Statement
 
 if TYPE_CHECKING:
     from .rules import LemmaEvidence, ProofEvidence, RefutationEvidence
@@ -29,7 +30,7 @@ Vector = tuple[Q, ...]
 Point = tuple[tuple[str, Q], ...]
 """An assignment of every RangeHyp symbol, sorted by symbol."""
 
-# --- Partitions, used by R4 and R5 and by library transport -----------------
+# --- Partitions, used by R4 and R5 ----------------------------------------------
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,15 +66,34 @@ class DefinedRange:
     proof: "LemmaEvidence"
 
 
+# --- Family instances ---------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class Instance:
+    """Proof evidence for every goal: the query is an instance of a family theorem.
+
+    `evidence` must prove `statement`, the family statement, and must not itself be an
+    Instance. `renaming` maps every symbol of the family statement, bound ones included,
+    to a symbol of the query, as (family sym, query sym) pairs sorted by family sym. The
+    query must be the family statement with every symbol renamed and every RangeHyp
+    range narrowed. check.py decides it, for every rule, and gives the argument."""
+
+    statement: Statement
+    evidence: "Evidence"
+    renaming: tuple[tuple[str, str], ...]
+
+
 # --- The envelope -------------------------------------------------------------
 
 
 @dataclass(frozen=True, slots=True)
 class Evidence:
     """Everything one check consumes. `defined` must give exactly one DefinedRange per
-    DefinedHyp of the statement. For refutation evidence each range is proved at the
-    evidence point rather than over the box, so the counterexample is a point the
-    premises admit together with the true defined values there."""
+    DefinedHyp of the statement, and none for an Instance, whose ranges come from the
+    family theorem. For refutation evidence each range is proved at the evidence point
+    rather than over the box, so the counterexample is a point the premises admit
+    together with the true defined values there."""
 
-    body: "Union[ProofEvidence, RefutationEvidence]"
+    body: "Union[ProofEvidence, RefutationEvidence, Instance]"
     defined: tuple[DefinedRange, ...] = ()

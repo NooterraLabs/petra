@@ -221,6 +221,16 @@ class Hypercircles(RuleCase):
         self.assertEqual(result.labels, frozenset({"in:F"}))
         self.assertFault(TooWeak, st, Enclosure(partition=Leaf()), defined=(DefinedRange("q", F(3), F(5), EXACT),))
 
+    def test_lemmas_sharing_one_problem_and_fields_each_check_their_own_claim(self):
+        # q0 = s*_0 = 3F/4 spans [3, 6] and q1 = s*_1 = F/4 spans [1, 2], so q0 + q1 = F <= 8.
+        both = (DefinedHyp("q0", MinimizerComponent(PROBLEM, 0, c(1))), DefinedHyp("q1", MinimizerComponent(PROBLEM, 1, c(1))))
+        st = Statement(hyps=(hyp("F", 4, 8),) + both, goal=AllNonpositive(exprs=(Add((Sym("q0"), Sym("q1"), c(-8))),)))
+        exact = (DefinedRange("q0", F(3), F(6), EXACT), DefinedRange("q1", F(1), F(2), EXACT))
+        self.assertTheorem(st, Enclosure(partition=Leaf()), defined=exact)
+        narrow = (DefinedRange("q0", F(3), F(6), EXACT), DefinedRange("q1", F(1), F(3, 2), EXACT))
+        result = self.assertFault(TooWeak, st, Enclosure(partition=Leaf()), defined=narrow)
+        self.assertIn("q1: the hypercircle gives [1, 2]", result.reason)
+
 
 AT_4 = HypercircleFields(s=((F(3), F(1)),) * 2, u=((F(3),),) * 2)
 AT_8 = HypercircleFields(s=((F(6), F(2)),) * 2, u=((F(6),),) * 2)

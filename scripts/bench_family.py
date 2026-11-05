@@ -2,11 +2,12 @@
 
 Runs every family in lola.bench.family.FAMILIES (the cu_pvc cable family, then the
 Warren truss family), or only the one named. Each is certified once, then seeded query
-designs inside its box are timed along two paths, reuse (library lookup, transport,
-kernel check) and recompute (solver, kernel check). Prints one block per family, each
-lola.bench.family.render(result): one line per path, the "reuse" line first, the split
-of each path's time, then the predicted and measured ratios. Untrusted measurement
-code; it never changes a verdict.
+designs inside its box are timed along two paths, reuse (the library lookup, which gives
+an Instance of the family, and the kernel check) and recompute (solver, kernel check).
+Prints one block per family, each lola.bench.family.render(result): one line per path,
+the "reuse" line first, the first query on a cold family memo, the split of each path's
+time, then the predicted and measured ratios. Untrusted measurement code; it never
+changes a verdict.
 """
 from __future__ import annotations
 

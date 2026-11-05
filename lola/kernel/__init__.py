@@ -12,6 +12,8 @@ fails if outside code imports one:
 
     check(statement, evidence) -> Theorem | Refutation | Rejection
     is_issued(result)                  True only for a result check returned
+    Instance                           proof evidence for any goal: a family theorem's instance
+    forget_families()                  empty check's memo of the family theorems Instances use
     RULES and the tables derived from it, and the Goal and evidence aliases
     term constructors (terms.py) and shared evidence pieces (evidence.py)
     encode_*/decode_*/statement_hash   the JSON contract a Lean kernel will share
@@ -19,7 +21,7 @@ fails if outside code imports one:
 """
 from __future__ import annotations
 
-from .check import CheckResult, Refutation, Rejection, Theorem, check, is_issued
+from .check import CheckResult, Refutation, Rejection, Theorem, check, forget_families, is_issued
 from .codec import (
     FORMAT,
     TAGS,
@@ -33,7 +35,7 @@ from .codec import (
     statement_hash,
 )
 from .evaluate import Box, NotAffine, affine_coefficients, enclose, free_syms
-from .evidence import DefinedRange, Evidence, Leaf, Partition, Point, Split, Vector
+from .evidence import DefinedRange, Evidence, Instance, Leaf, Partition, Point, Split, Vector
 from .interval import Interval, KernelArithmeticError, Q, i_ln, i_pi, i_sqrt, parse_q
 from .rules import (
     GOAL_RULE,

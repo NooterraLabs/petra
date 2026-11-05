@@ -1,8 +1,8 @@
 """The kernel mutation suite. Owner: M.
 
-Part 1 of seam M. For every rule R1 to R6 and every evidence kind (proofs, refutations
-and the R3 lemma under each) a valid certificate is built as a fixture under tests/fixtures/ and
-shown valid through kernel.check. Then a battery of mutation operators tampers with each
+Part 1 of seam M. For every rule R1 to R6 and every evidence kind (proofs, refutations,
+the R3 lemma under each, and an Instance of a family theorem) a valid certificate is built
+as a fixture under tests/fixtures/ and shown valid through kernel.check. Then a battery of mutation operators tampers with each
 certificate in a way that is guaranteed to destroy validity, and the suite asserts the
 kernel (or the strict codec, or the statement-hash binding) rejects every mutant.
 
@@ -22,6 +22,7 @@ from lola.kernel import (
     REFUTATION_RULE,
     RULES,
     DecodeError,
+    Instance,
     Refutation,
     Rejection,
     Theorem,
@@ -112,6 +113,15 @@ class OperatorsBite(unittest.TestCase):
             with self.subTest(operator=op.name):
                 self.assertTrue(any(op.applies(f) for f in FIXTURES), f"{op.name} applies to no fixture")
 
+    def test_every_operator_applies_to_an_instance(self):
+        """An Instance nests a family certificate, so each way of breaking one must reach
+        through it."""
+        instances = [f for f in FIXTURES if isinstance(f.evidence.body, Instance)]
+        self.assertTrue(instances, "there is an Instance fixture")
+        for op in OPERATORS:
+            with self.subTest(operator=op.name):
+                self.assertTrue(all(op.applies(f) for f in instances), f"{op.name} skips an Instance fixture")
+
 
 class Coverage(unittest.TestCase):
     """Derived from the rule registry, not a hand list: a rule or evidence kind with no
@@ -125,6 +135,7 @@ class Coverage(unittest.TestCase):
         bodies = {type(fix.evidence.body) for fix in FIXTURES}
         self.assertLessEqual(set(PROOF_RULE), bodies, "a proof evidence type has no fixture")
         self.assertLessEqual(set(REFUTATION_RULE), bodies, "a refutation evidence type has no fixture")
+        self.assertIn(Instance, bodies, "Instance evidence, accepted for every goal, has no fixture")
 
     def test_every_lemma_has_a_fixture_of_each_kind(self):
         """check proves a lemma over the RangeHyp box for a theorem and at the point for a

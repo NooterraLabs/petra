@@ -20,8 +20,7 @@ there. So when no proof is found, the same ascent searches the original statemen
 RangeHyp box, scoring each point with the R3 lemma ranges proved at it, which is how the
 kernel checks the refutation.
 
-Also used by r5_moment.py for R5 domination trees and by library/transport.py to re-split
-the part of a query box that a family partition does not cover.
+Also used by r5_moment.py for R5 domination trees.
 """
 from __future__ import annotations
 
@@ -45,6 +44,9 @@ from ..kernel.rules.r4_enclosure import MAX_DEPTH, AllNonpositive, Enclosure, Po
 from .r3_hypercircle import defined_ranges
 
 _STATS: dict[str, int] = {"cells": 0, "enclosures": 0, "max_depth": 0}
+"""Counters of the search running now. Enclosures evaluated outside a search, by the
+witness ascent of `solve`, land here too, but never in _LAST."""
+_LAST: dict[str, int] = dict(_STATS)
 
 
 def solve(statement: Statement, max_cells: int = 20000, original: Statement | None = None) -> Iterable[Evidence]:
@@ -73,6 +75,13 @@ def solve(statement: Statement, max_cells: int = 20000, original: Statement | No
 def search(exprs: tuple[Expr, ...], box: dict, max_cells: int) -> Partition | dict | None:
     """Partition on success, a violating point (dict) on refutation, None on give-up."""
     _STATS.update(cells=0, enclosures=0, max_depth=0)
+    try:
+        return _search(exprs, box, max_cells)
+    finally:
+        _LAST.update(_STATS)
+
+
+def _search(exprs: tuple[Expr, ...], box: dict, max_cells: int) -> Partition | dict | None:
     widths = {sym: iv.width() for sym, iv in box.items()}
     splits: dict[int, tuple[str, Fraction, int, int]] = {}
     queue: list = []
@@ -108,9 +117,10 @@ def search(exprs: tuple[Expr, ...], box: dict, max_cells: int) -> Partition | di
 
 
 def search_stats() -> dict:
-    """Counters from the last search: cells visited, enclosures evaluated, max depth.
-    The family benchmark reports these to explain its timing."""
-    return dict(_STATS)
+    """Counters of the last search call alone: cells visited, enclosures evaluated, max
+    depth. Each call starts from zero and nothing evaluated after it returns is added, so
+    the family benchmark can attribute them to the call it timed."""
+    return dict(_LAST)
 
 
 def _violates(expr: Expr, point: dict) -> bool:

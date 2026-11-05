@@ -2,9 +2,10 @@
 
 Owner: seam M. This module is the single source of truth behind
 tests/test_kernel_mutations.py. It builds one valid certificate per rule and per
-evidence kind (including refutations, and the R3 lemma under both a proof and a
-refutation, since check proves it over different boxes), and a set of mutation operators
-that are each guaranteed to invalidate a certificate. The test file asserts the fixtures
+evidence kind (including refutations, the R3 lemma under both a proof and a refutation,
+since check proves it over different boxes, and an Instance of a family theorem), and a
+set of mutation operators that are each guaranteed to invalidate a certificate. Every
+operator applies to the Instance fixture, whose evidence nests a whole certificate. The test file asserts the fixtures
 check and the mutants are rejected; run this module directly to self-check both.
 
 A fixture is stored as an envelope, the exact shape examples/bolt_tension.cert.json uses
@@ -36,6 +37,7 @@ from lola.kernel import (
     DefinedHyp,
     DefinedRange,
     Evidence,
+    Instance,
     Leaf,
     Matrix,
     Neg,
@@ -200,6 +202,21 @@ def _r5_proof() -> tuple[Statement, Evidence]:
     return Statement(hyps=hyps, goal=goal), Evidence(MomentDual(y0=Q(0), y=(Q(1, 36),), partition=Split("x", Q(36), Leaf(), Leaf())))
 
 
+def _r5_instance() -> tuple[Statement, Evidence]:
+    """The R5 statement renamed (C to cap, Hi to hi, Lo to lo, M to mean, x to load), with
+    the threshold narrowed to [37, 40], inside the family's [36, 40]: an Instance of it."""
+    family, evidence = _r5_proof()
+    goal = MomentBound(
+        random=(RandomVar("load", Sym("lo"), Sym("hi")),),
+        moments=(MomentConstraint(Sym("load"), Sym("mean"), Sym("mean")),),
+        fail=Add((Sym("load"), Neg(Sym("cap")))),
+        p=Q(3, 10),
+    )
+    hyps = (RangeHyp("cap", Q(37), Q(40), "in:cap"), RangeHyp("hi", Q(40), Q(40), "in:hi"), RangeHyp("lo", Q(0), Q(0), "in:lo"), RangeHyp("mean", Q(10), Q(10), "in:mean"))
+    renaming = (("C", "cap"), ("Hi", "hi"), ("Lo", "lo"), ("M", "mean"), ("x", "load"))
+    return Statement(hyps=hyps, goal=goal), Evidence(Instance(family, evidence, renaming))
+
+
 def _r6_proof() -> tuple[Statement, Evidence]:
     """0 failures in 300 trials at eps = 1/100: tail 0.99^300 ~ 0.0490 <= 1/20."""
     goal = BinomialTail(n=_c(300), k=_c(0), eps=_c(Q(1, 100)), beta=_c(Q(1, 20)))
@@ -241,6 +258,7 @@ def _fixtures() -> tuple[Fixture, ...]:
     r4p_s, r4p_e = _r4_proof()
     r4r_s, r4r_e = _r4_refutation()
     r5p_s, r5p_e = _r5_proof()
+    r5i_s, r5i_e = _r5_instance()
     r6p_s, r6p_e = _r6_proof()
     return (
         Fixture("r1_feasible", "R1", "theorem", r1p_s, r1p_e, lb_path=("body", "x", 0, 0), vec_path=("body", "x")),
@@ -254,6 +272,8 @@ def _fixtures() -> tuple[Fixture, ...]:
         Fixture("r4_enclosure", "R4", "theorem", r4p_s, r4p_e, has_split=True),
         Fixture("r4_point_witness", "R4", "refutation", r4r_s, r4r_e),
         Fixture("r5_moment_dual", "R5", "theorem", r5p_s, r5p_e, lb_path=("body", "y", 0), vec_path=("body", "y"), has_split=True),
+        Fixture("r5_instance", "R5", "theorem", r5i_s, r5i_e, lb_path=("body", "evidence", "body", "y", 0),
+                vec_path=("body", "evidence", "body", "y"), has_split=True),
         Fixture("r6_binomial", "R6", "theorem", r6p_s, r6p_e),
     )
 
@@ -429,10 +449,26 @@ def _edit_statement_byte(fix: Fixture, env: dict) -> dict:
 
 
 def _point_outside(fix: Fixture, env: dict) -> dict:
-    coordinate = env["evidence"]["body"]["point"][0]
+    body = env["evidence"]["body"]
+    if body["t"] == "instance":
+        family = next(h for h in body["statement"]["hyps"] if h["t"] == "range_hyp")
+        (query,) = [h for h in env["statement"]["hyps"] if h["sym"] == dict(body["renaming"])[family["sym"]]]
+        family["hi"] = str(Q(query["hi"]) - 1)
+        return env
+    coordinate = body["point"][0]
     (hyp,) = [h for h in env["statement"]["hyps"] if h["t"] == "range_hyp" and h["sym"] == coordinate[0]]
     coordinate[1] = str(Q(hyp["hi"]) + 1)
     return env
+
+
+def _swap_renaming_targets(fix: Fixture, env: dict) -> dict:
+    renaming = env["evidence"]["body"]["renaming"]
+    renaming[0][1], renaming[1][1] = renaming[1][1], renaming[0][1]
+    return env
+
+
+def _is_instance(fix: Fixture) -> bool:
+    return isinstance(fix.evidence.body, Instance)
 
 
 def _foreign_evidence(fix: Fixture, env: dict) -> dict:
@@ -502,10 +538,20 @@ OPERATORS: tuple[Operator, ...] = (
     ),
     Operator(
         "move_point_outside_box",
-        "a refutation point one past its RangeHyp's upper end is not a point the premises admit, so check rejects it before any lemma or rule runs",
+        "a refutation point one past its RangeHyp's upper end is not a point the premises admit, so check rejects it before any lemma or "
+        "rule runs; a family range cut to end one below its query range's upper end no longer contains the query range, so the Instance "
+        "is rejected whether or not the cut family still checks",
         REJECTION,
-        lambda f: f.kind == "refutation",
+        lambda f: f.kind == "refutation" or _is_instance(f),
         _point_outside,
+    ),
+    Operator(
+        "swap_renaming_targets",
+        "the first two family symbols trade query names; in the Instance fixture that pairs the query threshold [37, 40] with the "
+        "family's point range [40, 40], which does not contain it",
+        REJECTION,
+        _is_instance,
+        _swap_renaming_targets,
     ),
     Operator(
         "foreign_rule_evidence",

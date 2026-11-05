@@ -2,8 +2,9 @@
 
 Timings vary run to run, so these tests check the counters and the report's structure:
 every query lies inside its family's box, so both paths must end each claim statement in
-a kernel Theorem for that statement, the reuse path must never call a solver, and the
-recompute path must.
+a kernel Theorem for that statement. The reuse path checks an Instance of the family
+theorem, which the kernel has memoised, so it never calls a solver and runs no rule; the
+recompute path does both. The first query of a process pays the family checks.
 
 Hand check of the truss family box (examples/families/warren_truss.lola). The truss is
 statically determinate (7 members, 7 free DOFs: B x y, C x, D x y, E x y), so its member
@@ -30,8 +31,8 @@ against 203.8 kN, and the inner diagonals 1.5 x 0.3125 |P_D - P_E| <= 18.3 kN.
 Solver calls per truss query, from the solvers' own algorithms over a box with two load
 symbols, so 2^2 = 4 vertices: strength (R1) runs one HiGHS LP and one exact repair per
 vertex; stress (R3) one exact field repair per vertex; stability (R2) one field repair
-per vertex for the shared elastic problem, one hypercircle per member force lemma (7
-members) and one exact LDL.
+per vertex for the shared elastic problem, one hypercircle for that problem, which every
+member force lemma (7 members) reads, and one exact LDL.
 """
 import dataclasses
 import random
@@ -72,21 +73,29 @@ class CableBenchmark(unittest.TestCase):
         self.assertEqual(r.reuse.counts["theorems"], r.statements, "reuse proves every statement")
         self.assertEqual(r.recompute.counts["theorems"], r.statements, "recompute proves every statement")
 
-    def test_reuse_re_checks_leaves_without_searching(self):
+    def test_reuse_checks_an_instance_without_searching_or_running_a_rule(self):
         reuse, recompute, n = self.result.reuse.counts, self.result.recompute.counts, self.result.statements
-        self.assertEqual(reuse.get("searches", 0), 0, "reuse runs no search")
-        self.assertEqual(reuse.get("cells", 0), 0, "so it visits no cell")
-        self.assertGreaterEqual(reuse["leaves"], n, "reuse re-checks at least one leaf per statement")
+        self.assertEqual(reuse["instances"], n, "reuse answers every statement with an Instance")
+        for counter in ("searches", "cells", "leaves", "kernel enclosures"):
+            self.assertEqual(reuse.get(counter, 0), 0, f"reuse has no {counter}: the family theorem is memoised")
+        self.assertEqual(recompute.get("instances", 0), 0, "recompute never offers an Instance")
         self.assertGreaterEqual(recompute["cells"], n, "recompute searches at least one cell per statement")
-        self.assertGreater(recompute["enclosures"], reuse["enclosures"], "the search adds enclosures reuse does not pay")
+        self.assertGreater(recompute["kernel enclosures"], 0, "and the kernel re-evaluates its partition")
+
+    def test_the_first_query_pays_the_family_checks(self):
+        first = self.result.first
+        self.assertEqual(len(first.runs), bench.FIRST_REPS, "the first query is timed FIRST_REPS times")
+        self.assertEqual(first.statements, bench.FIRST_REPS * CABLE_CLAIMS, "each run has the query's two claims")
+        self.assertEqual(first.theorems, first.statements, "every run proves every statement")
+        self.assertGreater(first.kernel_enclosures, 0, "each run checks the family theorems, which runs their rule")
 
     def test_the_report_explains_the_ratio(self):
         lines = bench.render(self.result).splitlines()
-        self.assertTrue(any(line.startswith("reuse ") for line in lines), "a reuse line")
-        self.assertTrue(any(line.startswith("recompute ") for line in lines), "a recompute line")
-        self.assertIn("enclosure counts", self.result.basis, "the cable model counts enclosures")
-        self.assertIn("re-check", self.result.explanation, "the explanation names what reuse still pays for")
-        self.assertIn(f"{self.result.reuse.counts['leaves']} leaves", self.result.explanation, "with the leaf count")
+        for name in ("reuse ", "recompute ", "first ", "predicted ", "measured "):
+            self.assertTrue(any(line.startswith(name) for line in lines), f"a {name.strip()} line")
+        self.assertIn("linear in statement size", self.result.basis, "the model charges the Instance check by size")
+        self.assertIn("Instance", self.result.explanation, "the explanation names what reuse pays for")
+        self.assertIn("first query", self.result.explanation, "and what the first query pays besides")
 
     def test_counters_do_not_depend_on_timing(self):
         again = bench.run(bench.CABLE, queries=4, seed=0)
@@ -107,27 +116,31 @@ class TrussBenchmark(unittest.TestCase):
         for path in (r.reuse, r.recompute):
             self.assertEqual(path.counts["theorems"], r.statements, "every statement ends in a theorem for itself")
             self.assertEqual(path.counts["kernel checks"], r.statements, "the first candidate is accepted, so one check each")
-            self.assertEqual(path.counts["lemmas"], 2 * MEMBERS, "each stability check proves one force lemma per member")
+        self.assertEqual(r.recompute.counts["lemmas"], 2 * MEMBERS, "each stability check proves one force lemma per member")
+        self.assertEqual(r.reuse.counts.get("lemmas", 0), 0, "an Instance proves no lemma: the family theorem holds the ranges")
+        self.assertEqual(r.reuse.counts["instances"], r.statements, "reuse answers every statement with an Instance")
 
     def test_reuse_avoids_exactly_the_solver_calls_recompute_makes(self):
         reuse, recompute, n = self.result.reuse.counts, self.result.recompute.counts, self.result.queries
-        for counter in ("LP solves", "exact solves", "LDL factorizations", "solver hypercircles", "searches"):
+        for counter in ("LP solves", "exact solves", "LDL factorizations", "solver hypercircles", "searches", "kernel enclosures"):
             self.assertEqual(reuse.get(counter, 0), 0, f"reuse makes no {counter}")
         self.assertEqual(recompute["LP solves"], n * VERTICES, "one HiGHS LP per load vertex of the strength statement")
         self.assertEqual(recompute["exact solves"], n * 3 * VERTICES, "one exact repair per vertex for R1, R3 and R2's elastic problem")
         self.assertEqual(recompute["LDL factorizations"], n, "one exact LDL per stability statement")
-        self.assertEqual(recompute["solver hypercircles"], n * MEMBERS, "one lemma hypercircle per member force")
+        self.assertEqual(recompute["solver hypercircles"], n, "one lemma hypercircle per stability statement, read by every member force")
+        self.assertGreater(recompute["kernel enclosures"], 0, "the kernel replays each proof")
 
-    def test_the_truss_model_counts_solver_calls_not_enclosures(self):
+    def test_the_model_charges_the_instance_check_by_statement_size(self):
         r = self.result
-        self.assertEqual([u.rule for u in r.units], ["R1", "R2", "R3"], "one unit cost per rule, timed on the family statements")
-        self.assertTrue(all(min(u.solve_s, u.check_s, u.offer_s, u.reuse_check_s) > 0 for u in r.units), "every unit cost was timed")
-        self.assertIn("solver calls avoided", r.basis, "the prediction is solver calls against kernel checks")
-        self.assertNotIn("enclosure", r.basis, "the enclosure model is the cable's")
+        self.assertEqual([u.rule for u in r.units], ["R1", "R2", "R3"], "one unit cost per rule, timed on the first warm-up query")
+        self.assertTrue(all(min(u.solve_s, u.check_s, u.offer_s, u.instance_s) > 0 for u in r.units), "every unit cost was timed")
+        self.assertTrue(all(u.nodes > 0 and u.per_node_s > 0 for u in r.units), "the Instance check has a cost per node")
+        self.assertIn("linear in statement size", r.basis, "the prediction charges the Instance check by size")
         lines = bench.render(r).splitlines()
         self.assertTrue(lines[0].startswith("truss family"), "the block names its family")
-        self.assertTrue(any(line.startswith("reuse ") for line in lines), "a reuse line")
+        self.assertIn("instances", next(line for line in lines if line.startswith("reuse ")), "the reuse line counts Instances")
         self.assertIn("LP solves", next(line for line in lines if line.startswith("recompute ")), "the recompute line counts LP solves")
+        self.assertEqual(r.first.theorems, r.first.statements, "the first query proves every statement in every run")
 
     def test_the_split_covers_every_timed_query(self):
         n = self.result.queries
