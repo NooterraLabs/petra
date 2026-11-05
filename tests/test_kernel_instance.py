@@ -6,9 +6,11 @@ to P and q to z. tests/test_kernel_redteam.py holds the forgeries. This file pin
 accepted Instance yields, how a renaming is read, the symbol convention renaming relies
 on, and the family memo.
 """
+import sys
 import unittest
 from fractions import Fraction as Q
 from typing import get_args, get_type_hints
+from unittest import mock
 
 from lola.kernel import (
     TAGS,
@@ -39,6 +41,9 @@ from lola.kernel.check import FAMILY_MEMO_LIMIT
 from lola.kernel.rules.r3_hypercircle import HypercircleFields, MinimizerComponent, QuadraticProblem
 from lola.kernel.rules.r4_enclosure import AllNonpositive, Enclosure
 from tests import mutations
+
+KERNEL_CHECK = sys.modules["lola.kernel.check"]
+"""The module, which the package's `check` function shadows as an attribute."""
 
 
 def c(v) -> Const:
@@ -213,10 +218,19 @@ class SymbolConvention(Base):
 
 class FamilyMemo(Base):
     """The kernel remembers family theorems by the hashes of the family statement and
-    evidence an Instance spells, so a remembered family is not checked again."""
+    evidence an Instance spells, so a remembered family is not checked again. A family
+    is checked as it was encoded, so the caller's objects are never read again."""
 
     def setUp(self):
         forget_families()
+
+    def family_checks(self, statement=FAMILY) -> int:
+        """Evidence decodings while the kernel checks query(5, 7) as an Instance of
+        `statement`: two when it checks the family (decoding it from the Instance, then
+        checking it), none when it remembers the family theorem."""
+        with mock.patch.object(KERNEL_CHECK, "decode_evidence", wraps=KERNEL_CHECK.decode_evidence) as spy:
+            self.assertTheorem(check(query(5, 7), instance(statement=statement)))
+        return spy.call_count
 
     def test_a_failed_family_check_stores_nothing(self):
         too_narrow = Evidence(Enclosure(Leaf()), (DefinedRange("q", Q(3), Q(5), EXACT),))
@@ -224,7 +238,7 @@ class FamilyMemo(Base):
             self.assertRejected(check(query(5, 7), instance(evidence=too_narrow)), "does not check")
             self.assertTheorem(check(query(5, 7), instance()))
 
-    def test_a_family_that_encodes_differently_when_checked_is_rejected(self):
+    def test_a_family_is_checked_as_it_was_encoded(self):
         class Shifty(Q):
             """Spells -6 the first time its numerator is read, and its value -7 after."""
             read = False
@@ -236,26 +250,13 @@ class FamilyMemo(Base):
                 self.read = True
                 return -6
 
+        # The encoding says q <= 6, which the family evidence proves. The query claims
+        # z <= 7, which the object later reports, and is not that theorem renamed.
         liar = Statement(hyps=FAMILY.hyps, goal=between("q", bottom=Shifty(-7)))
-        self.assertRejected(check(query(5, 7, top=7), instance(statement=liar)), "encoded differently")
+        self.assertRejected(check(query(5, 7, top=7), instance(statement=liar)), "not the family goal renamed")
         self.assertTheorem(check(query(5, 7), instance()))
 
     def test_the_memo_is_bounded_least_recently_used_and_forgettable(self):
-        class Counting(Q):
-            reads = 0
-
-            @property
-            def numerator(self):
-                type(self).reads += 1
-                return self._numerator
-
-        counted = Statement(hyps=FAMILY.hyps, goal=between("q", bottom=Counting(-6)))
-
-        def reads() -> int:
-            before = Counting.reads
-            self.assertTheorem(check(query(5, 7), instance(statement=counted)))
-            return Counting.reads - before
-
         def others(count: int, start: int) -> None:
             for k in range(start, start + count):
                 goal = AllNonpositive(exprs=(Add((Sym("x"), c(-2 - k))),))
@@ -263,18 +264,17 @@ class FamilyMemo(Base):
                 renamed_query = Statement(hyps=(RangeHyp("y", Q(0), Q(1), "in:y"),), goal=AllNonpositive(exprs=(Add((Sym("y"), c(-2 - k))),)))
                 self.assertTheorem(check(renamed_query, instance(family, Evidence(Enclosure(Leaf())), (("x", "y"),))))
 
-        miss = reads()
-        hit = reads()
-        self.assertLess(hit, miss, "a remembered family is not checked again")
+        miss = self.family_checks()
+        self.assertEqual(miss, 2, "the first Instance decodes the family and checks it")
+        self.assertEqual(self.family_checks(), 0, "a remembered family is not checked again")
         others(FAMILY_MEMO_LIMIT - 1, 0)
-        self.assertEqual(reads(), hit, "a full memo still holds the family")
+        self.assertEqual(self.family_checks(), 0, "a full memo still holds the family")
         others(1, FAMILY_MEMO_LIMIT - 1)
-        self.assertEqual(reads(), hit, "the most recently used family outlives an eviction")
+        self.assertEqual(self.family_checks(), 0, "the most recently used family outlives an eviction")
         others(FAMILY_MEMO_LIMIT, FAMILY_MEMO_LIMIT)
-        self.assertEqual(reads(), miss, "a family pushed out of the bounded memo is checked again")
+        self.assertEqual(self.family_checks(), miss, "a family pushed out of the bounded memo is checked again")
         forget_families()
-        self.assertEqual(reads(), miss, "forget_families empties the memo")
-
+        self.assertEqual(self.family_checks(), miss, "forget_families empties the memo")
 
 if __name__ == "__main__":
     unittest.main()

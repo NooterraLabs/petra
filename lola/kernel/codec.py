@@ -10,6 +10,8 @@ The JSON spelling is the portability contract with a future Lean kernel. Rules:
   ensure_ascii=True)`. A hash is "sha256:" + hex digest of the canonical text.
 - Decoding is strict: unknown tags, unknown keys, missing keys, non-canonical rationals
   and non-canonical matrices are errors. A file has one meaning or none.
+- Strings hold no surrogate code points, in either direction, so canonical text is one
+  to one and two terms never share a hash except by a sha256 collision.
 
 The decoder is the kernel's only input boundary, so it is trusted and validated here.
 The encoder writes each Python value by its own type (Fraction as a string, int as an
@@ -147,9 +149,22 @@ def _encode(term: Any) -> Any:
         return [_encode(x) for x in term]
     if isinstance(term, Fraction):
         return format_q(term)
-    if term is None or kind in (int, str):
+    if term is None or kind is int:
         return term
+    if kind is str:
+        return _text(term, TypeError, "$")
     raise TypeError(f"{kind.__name__} is not a kernel term")
+
+
+def _text(s: str, error: type, path: str) -> str:
+    """`s`, if no other string has its canonical text. ensure_ascii spells a surrogate
+    pair and the character it encodes the same way, so a string holding a surrogate code
+    point could share its canonical text, and its hash, with another string."""
+    try:
+        s.encode("utf-8")
+    except UnicodeEncodeError:
+        raise error(f"{path}: a string may not hold a surrogate code point") from None
+    return s
 
 
 def _decode(obj: Any, expected: Any, path: str) -> Any:
@@ -164,7 +179,7 @@ def _decode(obj: Any, expected: Any, path: str) -> Any:
     if expected in (int, str):
         if type(obj) is not expected:
             raise DecodeError(f"{path}: expected {expected.__name__}, got {obj!r:.80}")
-        return obj
+        return _text(obj, DecodeError, path) if expected is str else obj
     if get_origin(expected) is tuple:
         kinds = get_args(expected)
         if type(obj) is not list or (kinds[-1] is not Ellipsis and len(obj) != len(kinds)):

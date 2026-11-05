@@ -20,6 +20,7 @@ from __future__ import annotations
 import weakref
 from collections import OrderedDict
 from dataclasses import dataclass
+from fractions import Fraction
 from typing import Union
 
 from .codec import DecodeError, decode_as, decode_evidence, decode_statement, encode_evidence, encode_statement, hash_of
@@ -184,9 +185,12 @@ def check(statement: Statement, evidence: Evidence) -> CheckResult:
     The statement is encoded once. The hash is taken from that encoding, and the
     statement must decode from it to a term equal to itself, which is what canonical
     means. From then on the kernel reads only the decoded copy, built from plain
-    Fractions and ints, so no caller object answers a comparison for itself, and the
-    hash, the checked term and the issued result all come from the one encoding.
-    Instance evidence is decided by `_instance`, for every goal.
+    Fractions and ints, so the hash, the checked term and the issued result all come
+    from the one encoding, and no caller object answers a comparison inside a rule. The
+    equality guard itself compares with the caller's object, so a caller's subclass can
+    answer that one comparison. The issued result is still about the decoded copy, so
+    code outside the kernel should compare against `result.statement` with terms it
+    built itself. Instance evidence is decided by `_instance`, for every goal.
 
     Why a Theorem means the statement holds. Let B be the box of RangeHyp ranges. Each
     DefinedHyp d names a quantity q_d(h), and its lemma proves q_d(h) in [lo_d, hi_d] for
@@ -277,8 +281,12 @@ def _decide(statement: Statement, digest: str, evidence: Evidence, spec) -> Chec
 _FAMILIES: "OrderedDict[tuple[str, str], Theorem]" = OrderedDict()
 """Family theorems that Instance checks used, keyed by (statement hash, evidence hash),
 least recently used first. Only `_family` writes it, and only a Theorem `check` just
-issued whose own hashes are the key, so every entry is the kernel's verdict on exactly
-the statement and evidence its key names."""
+issued whose own hashes are the key. Canonical text is one to one (codec refuses the
+surrogate code points that would make two strings share it), so an entry is the
+kernel's verdict on exactly the statement and evidence its key names, up to a sha256
+collision. `_instance` still reads the statement from the theorem, never from the
+Instance's spelling of it, so even a colliding key could only lend a theorem the kernel
+checked."""
 
 FAMILY_MEMO_LIMIT = 64
 
@@ -288,14 +296,19 @@ def forget_families() -> None:
     _FAMILIES.clear()
 
 
-def _family(key: tuple[str, str], instance: Instance) -> Theorem | str:
-    """The family Theorem for `key`, the hashes of the Instance's own encoding of its
-    family statement and evidence, or why there is none."""
+def _family(key: tuple[str, str], body: dict) -> Theorem | str:
+    """The family Theorem for `key`, the hashes of `body`, the Instance's encoding, at
+    its family statement and evidence, or why there is none. A family not yet in the memo
+    is decoded from that encoding and checked, so no caller object is read again."""
     found = _FAMILIES.get(key)
     if found is not None:
         _FAMILIES.move_to_end(key)
         return found
-    result = check(instance.statement, instance.evidence)
+    try:
+        statement, evidence = decode_statement(body["statement"]), decode_evidence(body["evidence"])
+    except DecodeError as exc:
+        return f"the family does not decode: {exc}"
+    result = check(statement, evidence)
     if isinstance(result, Refutation):
         return "the family evidence refutes the family statement, and a refutation has no instances"
     if isinstance(result, Rejection):
@@ -311,14 +324,19 @@ def _family(key: tuple[str, str], instance: Instance) -> Theorem | str:
 def _instance(query: Statement, digest: str, evidence: Evidence, spec) -> CheckResult:
     """Accept `query`, the decoded statement, as an instance of a family theorem.
 
-    Checks: (a) the family evidence checks to a Theorem for the family statement F, by a
-    full check memoised in _FAMILIES; (b) the renaming rho maps the symbols of F, its
-    hypotheses and the variables its goal binds, one to one onto distinct symbols;
-    (c) sorted by their renamed symbols, the hypotheses of F pair one to one with those
-    of the query Q, of the same kind, with every DefinedHyp definition equal to rho of
-    the family's and every Q range inside its family range, and Q's goal binds rho of
-    what F's binds; (d) Q's goal is rho of F's; (f) the family evidence is not itself
-    an Instance, so an Instance is one level deep. Labels are opaque and not compared.
+    The evidence is encoded once, and everything below reads that encoding or the
+    kernel's own results, never the caller's evidence object again. Checks: (a) the
+    family evidence checks to a Theorem for the family statement F, by a full check of
+    the decoded encoding, memoised in _FAMILIES; (b) the renaming rho maps the symbols
+    of F, its hypotheses and the variables its goal binds, one to one onto distinct
+    symbols; (c) sorted by their renamed symbols, the hypotheses of F pair one to one
+    with those of the query Q, of the same kind, with every DefinedHyp definition equal
+    to rho of the family's and every Q range inside its family range, and Q's goal binds
+    rho of what F's binds; (d) Q's goal is rho of F's; (e) the encoded family evidence is
+    Evidence whose body is not an Instance, so an Instance is one level deep. Depth is a
+    limit on cost, not on soundness: a valid chain of instances would still be true.
+    Labels are opaque and not compared. F is always the statement of the family
+    theorem, never the Instance's own spelling of it.
 
     Why a Theorem for Q means Q holds. A statement refers to a symbol only by name, as a
     Sym or as a str field named sym (tests/test_kernel_instance.py pins that
@@ -333,7 +351,11 @@ def _instance(query: Statement, digest: str, evidence: Evidence, spec) -> CheckR
     variables Q binds are rho of F's, which are disjoint from F's hypotheses, so they are
     disjoint from Q's. So goal_Q(h', q'(h')) is goal_F(h, q(h)), which holds. The
     defined ranges F's theorem proved hold at h, so their renamed copies hold at h'.
-    Symbol order shapes only the layout of evidence (vertex order), never meaning.
+    Symbol order shapes only the layout of evidence (vertex order), never meaning: no
+    term refers to a hypothesis by its position. Every goal's meaning at a point depends
+    on that point alone, never on the box around it, so narrowing ranges keeps each
+    point's meaning. R5 reads its support from ranges, and a narrower support only
+    shrinks the set of distributions the bound must cover.
 
     Q is also well formed, so its labels are its exact footprint. Sorted hypotheses with
     no duplicates and lo <= hi are checked here, and the binders are disjoint as above.
@@ -343,18 +365,22 @@ def _instance(query: Statement, digest: str, evidence: Evidence, spec) -> CheckR
     because free_syms commutes with rename, and F satisfies them.
 
     The issued Theorem carries the family rule id, Q's own labels, the family's defined
-    ranges renamed, and the hash of the Instance evidence.
+    ranges renamed and copied down to new Fractions, so no two issued results share a
+    mutable object, and the hash of the Instance evidence.
     """
     def reject(reason: str) -> Rejection:
         return Rejection(digest, spec.id, Invalid(reason))
 
     encoded = encode_evidence(evidence)
-    ehash, body, instance = hash_of(encoded), encoded["body"], evidence.body
+    ehash, body = hash_of(encoded), encoded["body"]
+    if body["t"] != "instance":
+        return reject("the evidence changed while it was read")
     if encoded["defined"]:
         return reject("an Instance takes its defined ranges from the family theorem, so it lists none")
-    if type(instance.evidence) is not Evidence or type(instance.evidence.body) is Instance:
+    inner = body["evidence"]
+    if type(inner) is not dict or inner.get("t") != "evidence" or inner["body"]["t"] == "instance":
         return reject("the family evidence must be Evidence that is not itself an Instance")
-    family = _family((hash_of(body["statement"]), hash_of(body["evidence"])), instance)
+    family = _family((hash_of(body["statement"]), hash_of(inner)), body)
     if isinstance(family, str):
         return reject(family)
     renaming = decode_as(body["renaming"], tuple[tuple[str, str], ...])
@@ -373,7 +399,7 @@ def _instance(query: Statement, digest: str, evidence: Evidence, spec) -> CheckR
     if spec.binds(query.goal) != {rho[x] for x in binds} or query.goal != rename(fam.goal, rho):
         return reject("the goal is not the family goal renamed")
     labels = frozenset(h.label for h in query.hyps if isinstance(h, RangeHyp))
-    ranges = tuple(sorted((rho[sym], iv) for sym, iv in family.defined_ranges))
+    ranges = tuple(sorted((rho[sym], Interval(Fraction(iv.lo), Fraction(iv.hi))) for sym, iv in family.defined_ranges))
     return _issue_theorem(query, digest, ehash, family.rule, labels, ranges)
 
 

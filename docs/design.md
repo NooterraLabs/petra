@@ -367,6 +367,7 @@ A certificate file is an envelope around two kernel terms. The statement is stor
 
 - Every term is an object with a `"t"` tag. Field keys are the dataclass field names in `kernel/terms.py`, `kernel/evidence.py` and the rule modules under `kernel/rules/`. `kernel/codec.py` lists the core tags and merges in the tags each `RuleSpec` declares.
 - Rationals are strings, `"n"` or `"p/q"` reduced with q > 1. The decoder rejects decimals, exponents and floats. Counts and indices are JSON integers.
+- Strings may not hold surrogate code points. Canonical text escapes a surrogate pair and the character it encodes alike, so allowing them would let two terms share a hash.
 - Matrices are `{"t": "matrix", "rows": m, "cols": n, "entries": [[i, j, "p/q"], ...]}` in (i, j) order with no zeros.
 - Canonical text is `json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=True)`. `statement_hash` is `"sha256:"` plus the hex digest of the canonical statement.
 - Hypotheses are sorted by `sym` with no duplicates.
@@ -413,10 +414,10 @@ Line counts do not include docstrings, comments or blank lines. The kernel colum
 | `lola/kernel/interval.py` | `Q`, canonical rational parsing, `Interval`, outward rounding, rigorous sqrt, ln, exp, pi | 141 |
 | `lola/kernel/terms.py` | `Expr` variants, `Matrix`, `RangeHyp`, `DefinedHyp`, `Statement` | 70 |
 | `lola/kernel/evidence.py` | partitions, points, `Evidence`, `DefinedRange`, `Instance` | 34 |
-| `lola/kernel/codec.py` | strict JSON codec, canonical text, hashes, core tags merged with rule tags | 122 |
+| `lola/kernel/codec.py` | strict JSON codec, canonical text, hashes, core tags merged with rule tags | 130 |
 | `lola/kernel/evaluate.py` | `enclose`, free symbols, affine decomposition, vertex order | 123 |
 | `lola/kernel/linalg.py` | exact sparse products, Gram sums, LDL^T product | 43 |
-| `lola/kernel/check.py` | `check`, well-formedness, registry dispatch, lemma handling, `Instance` checks and the family memo, issued results | 228 |
+| `lola/kernel/check.py` | `check`, well-formedness, registry dispatch, lemma handling, `Instance` checks and the family memo, issued results | 236 |
 | `lola/kernel/rules/base.py` | `RuleSpec`, `Lemma`, `Invalid`, `TooWeak` | 30 |
 | `lola/kernel/rules/__init__.py` | `_REGISTERED`, `_index`, derived tables, typing aliases | 92 |
 | `lola/kernel/rules/r1_linear.py` | goal and evidence types, vertex feasibility, Farkas | 71 |
@@ -426,7 +427,7 @@ Line counts do not include docstrings, comments or blank lines. The kernel colum
 | `lola/kernel/rules/r5_moment.py` | goal and evidence types, moment dual with cell-wise domination | 60 |
 | `lola/kernel/rules/r6_scenario.py` | goal type, exact binomial tail | 44 |
 | `lola/kernel/__init__.py` | public re-exports | 58 |
-| **Total** | | **1,398** |
+| **Total** | | **1,414** |
 
 ### Trusted outside the kernel
 

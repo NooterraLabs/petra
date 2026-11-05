@@ -12,6 +12,7 @@ pass.
 """
 import copy
 import dataclasses
+import json
 import pickle
 import unittest
 from fractions import Fraction as Q
@@ -29,6 +30,7 @@ from lola.kernel import (
     PowInt,
     DefinedHyp,
     Instance,
+    Interval,
     Leaf,
     RangeHyp,
     Refutation,
@@ -40,8 +42,12 @@ from lola.kernel import (
     Theorem,
     TooWeak,
     check,
+    decode_statement,
+    encode_statement,
+    forget_families,
     is_issued,
 )
+from lola.kernel.codec import DecodeError
 from lola.kernel.rules.r2_definite import GramPositiveDefinite, GramTerm, LDLFactor
 from lola.kernel.rules.r3_hypercircle import (
     ComponentBound,
@@ -543,6 +549,57 @@ class InstanceForgeries(Base):
         self.assertRejected(check(lacking, instance(with_r, FAMILY_EVIDENCE, renaming)), Invalid, "pair one to one")
         self.assertTheorem(check(holding, instance(with_r, FAMILY_EVIDENCE, renaming)))
 
+
+    def test_family_evidence_that_changes_while_read_is_judged_by_its_encoding(self):
+        # Reading the bound below turns the middle evidence's body from an Instance into a
+        # plain enclosure, after the encoder has already spelled it as an Instance. A
+        # check of the raw object would pass the one-level rule while the encoding, which
+        # the hash names, nests two levels.
+        middle = Statement(hyps=(RangeHyp("G", Q(4), Q(8), "in:G"), DefinedHyp("w", MinimizerComponent(QuadraticProblem(B=PAIR, f=(Sym("G"),), w=(c(1), c(3))), 0, c(1)))), goal=between("w", 6))
+
+        class Flip(Q):
+            @property
+            def numerator(self):
+                object.__setattr__(holder, "body", Enclosure(Leaf()))
+                return self._numerator
+
+        holder = Evidence(Instance(FAMILY, Evidence(Enclosure(Leaf()), (DefinedRange("q", Flip(3), Q(6), EXACT_FIELDS),)), (("F", "G"), ("q", "w"))))
+        forget_families()
+        result = check(query(5, 7), instance(middle, holder, (("G", "P"), ("w", "z"))))
+        self.assertRejected(result, Invalid, "not itself an Instance")
+        self.assertIsInstance(holder.body, Enclosure, "the raw object no longer shows the nesting")
+        self.assertTheorem(check(query(5, 7), instance()))
+
+    def test_instances_of_one_family_share_no_mutable_range(self):
+        # Every Instance of a family borrows the defined ranges of one remembered theorem.
+        # Writing into one issued range must not change what any other result certifies.
+        forget_families()
+        first = self.assertTheorem(check(query(5, 7), instance()))
+        second = self.assertTheorem(check(query(4, 8), instance()))
+        ((_, a),), ((_, b),) = first.defined_ranges, second.defined_ranges
+        self.assertIsNot(a, b)
+        self.assertIsNot(a.lo, b.lo)
+        object.__setattr__(a, "lo", Q(100))
+        object.__setattr__(a, "hi", Q(200))
+        third = self.assertTheorem(check(query(5, 6), instance()))
+        self.assertEqual(second.defined_ranges, (("z", Interval(Q(3), Q(6))),))
+        self.assertEqual(third.defined_ranges, (("z", Interval(Q(3), Q(6))),))
+
+    def test_strings_with_surrogates_have_no_canonical_text(self):
+        # ensure_ascii spells a surrogate pair and the character it encodes alike, so two
+        # different symbols would share a statement hash and a family memo key.
+        pair, astral = chr(0xD83D) + chr(0xDE00), chr(0x1F600)
+        self.assertEqual(json.dumps(pair, ensure_ascii=True), json.dumps(astral, ensure_ascii=True))
+
+        def named(sym: str) -> Statement:
+            return r4(sym, 0, 1, Add((Sym(sym), c(-1))))
+
+        self.assertRejected(leaf_check(named(pair)), Invalid, "surrogate")
+        self.assertTheorem(leaf_check(named(astral)))
+        lone = encode_statement(named("x"))
+        lone["hyps"][0]["sym"] = chr(0xD83D)
+        with self.assertRaises(DecodeError):
+            decode_statement(lone)
 
 if __name__ == "__main__":
     unittest.main()
