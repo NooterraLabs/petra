@@ -14,11 +14,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ..evaluate import Box
+from ..evaluate import Box, enclose
 from ..evidence import Partition, Vector
-from ..interval import Q
-from ..terms import Expr
-from .base import Fault, RuleSpec
+from ..interval import Interval, Q
+from ..terms import Add, Const, Expr, Max, Min, Mul, Neg
+from .base import Fault, Invalid, RuleSpec, TooWeak
+from .r4_enclosure import all_nonpositive_on
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,17 +72,34 @@ def binds(goal: MomentBound) -> frozenset[str]:
 
 
 def prove(goal: MomentBound, body: MomentDual, box: Box) -> Fault | None:
-    """TODO:
-      require len(y) == len(moments); random syms disjoint from hyp syms
-      Lj = enclose(lo_j, box).lo ; Hj = enclose(hi_j, box).hi
-      bound = y0 + sum_j max(y_j * Lj, y_j * Hj)        # exact rationals
-      require bound <= goal.p                           # TooWeak otherwise
-      support = {x.sym: Interval(enclose(x.lo, box).lo, enclose(x.hi, box).hi)}
-      cells = r4_enclosure.leaves(partition, box | support)
-      for each cell: G = enclose(g, cell); F = enclose(fail, cell)
-          require G.lo >= 1  or  (G.lo >= 0 and F.hi <= 0)
+    """Theorem: weak duality for the moment problem (module docstring).
+
+    Fix h in the box and an admissible measure mu. With L_j = inf lo_j and H_j = sup hi_j
+    over the box, E[fn_j] lies in [lo_j(h), hi_j(h)], inside [L_j, H_j], and y_j m is
+    largest at an end of that interval, so E[g] <= y0 + sum_j max(y_j L_j, y_j H_j),
+    which the rule requires to be <= p exactly. Domination is the R4 goal
+    min(1 - g, max(-g, fail)) <= 0, walked over the partition of the support hull times
+    the hypothesis box. At any point where that holds, g >= 1, or g >= 0 and fail <= 0,
+    so g >= 1_{fail > 0}. Every admissible support lies in the hull, so
+    mu{fail > 0} <= E[g] <= p. The walk also shows every fn_j is defined and bounded on
+    the hull, so E[g] exists. If no measure is admissible the goal holds vacuously.
+
+    On a cell, the walk's test is exactly G.lo >= 1, or G.lo >= 0 and F.hi <= 0, for the
+    enclosures G of g and F of fail. Conservative: the moments are taken at their worst
+    over the whole box, and domination must hold over the whole hull.
     """
-    raise NotImplementedError
+    syms = [x.sym for x in goal.random]
+    if len(set(syms)) != len(syms) or set(syms) & set(box) or len(body.y) != len(goal.moments):
+        return Invalid(f"random variables {syms} must be distinct and new, with one y per moment")
+    bound = body.y0
+    for yj, m in zip(body.y, goal.moments):
+        bound += max(yj * enclose(m.lo, box).lo, yj * enclose(m.hi, box).hi)
+    if bound > goal.p:
+        return TooWeak(f"the dual bound {bound} exceeds p = {goal.p}")
+    support = {x.sym: Interval(enclose(x.lo, box).lo, enclose(x.hi, box).hi) for x in goal.random}
+    g = Add((Const(body.y0),) + tuple(Mul((Const(yj), m.fn)) for yj, m in zip(body.y, goal.moments)))
+    dominated = Min((Add((Const(Q(1)), Neg(g))), Max((Neg(g), goal.fail))))
+    return all_nonpositive_on((dominated,), body.partition, {**box, **support})
 
 
 RULE = RuleSpec(

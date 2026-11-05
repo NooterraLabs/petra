@@ -11,6 +11,7 @@ tests/test_structure.py fails when an alias and the registry disagree.
 """
 from __future__ import annotations
 
+from dataclasses import fields
 from types import MappingProxyType
 from typing import Mapping, Union
 
@@ -59,6 +60,8 @@ def _index(registered: tuple[RuleSpec, ...]) -> tuple[Mapping, ...]:
             raise RuntimeError(f"{spec.id} names untagged types {sorted(c.__name__ for c in named - tagged)}")
         if (spec.refute is None) != (not spec.refutations):
             raise RuntimeError(f"{spec.id}: refute must be given exactly when refutations are")
+        if any("point" not in {f.name for f in fields(t)} for t in spec.refutations):
+            raise RuntimeError(f"{spec.id}: every refutation type needs a point field, which check.py reads")
         module_of[spec.id] = spec.goal.__module__.rsplit(".", 1)[-1]
     return tuple(MappingProxyType(t) for t in (rules, goal_rule, proof_rule, refutation_rule, lemmas, tags, module_of))
 

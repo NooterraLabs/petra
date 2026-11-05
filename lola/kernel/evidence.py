@@ -10,9 +10,10 @@ proof and refutation body types and registers them in its RuleSpec. The body's t
 decides which the kernel attempts.
 
 Vertex order. R1 and R3 enumerate the vertices of the box spanned by the vertex symbols
-(the RangeHyp symbols that occur in b or f). The order is fixed by the kernel: symbols
-sorted by name, bit k of the vertex index selects hi (1) or lo (0) of the k-th symbol.
-Evidence lists one entry per vertex in that order, so a solver cannot skip a vertex.
+(the hypothesis symbols that occur in b or f; a DefinedHyp symbol spans its proven
+range). The order is fixed by the kernel: symbols sorted by name, bit k of the vertex
+index selects hi (1) or lo (0) of the k-th symbol. Evidence lists one entry per vertex
+in that order, so a solver cannot skip a vertex.
 """
 from __future__ import annotations
 
