@@ -1,6 +1,6 @@
 # LoLa
 
-LoLa checks a physical design against its claims and answers PASS, FAIL or UNKNOWN. A design can be a pin-jointed truss, a wire circuit, a bolted joint, or a part under a load known only by its range and mean. Every PASS and every FAIL is a theorem that a small exact kernel checked. Every verdict lists the premises it rests on: standard values, signed inputs, models with their validity limits, and the coverage table. Solvers do the search, but the kernel trusts none of them. A solver hands in a certificate, and the kernel checks it with exact rational arithmetic.
+LoLa checks a physical design against its claims and answers PASS, FAIL, MARGINAL or UNKNOWN. A design can be a pin-jointed truss, a wire circuit, a bolted joint, or a part under a load known only by its range and mean. Every PASS and every FAIL is a theorem that a small exact kernel checked. Every verdict lists the premises it rests on: standard values, signed inputs, models with their validity limits, and the coverage table. Solvers do the search, but the kernel trusts none of them. A solver hands in a certificate, and the kernel checks it with exact rational arithmetic.
 
 [docs/frame.md](docs/frame.md) explains what a verdict means and what v0 covers. [docs/design.md](docs/design.md) explains how the parts fit and why.
 
@@ -48,7 +48,7 @@ You need Python 3.11. The kernel uses only the standard library. The solvers use
 	    needs no model for bolt.plate_bearing on bracket: waive bolt.plate_bearing on bracket by "<owner>" reason "<why>"
 	```
 
-4. To read verdicts from another program, add `--json`. The exit code carries the status: 0 for PASS, 1 for FAIL, 2 for UNKNOWN, 3 for an input error, and 4 for an internal error.
+4. To read verdicts from another program, add `--json`. The exit code carries the status: 0 for PASS, 1 for FAIL, 2 for UNKNOWN, 5 for MARGINAL, 3 for an input error, and 4 for an internal error.
 
 5. Check a certificate file on its own, with no solver and no design:
 
@@ -57,6 +57,24 @@ You need Python 3.11. The kernel uses only the standard library. The solvers use
 	```
 
 	The kernel reads the statement and the evidence from the file and prints `theorem` and the statement hash. [The certificate JSON format](docs/design.md#certificate-json-format) is language-neutral, so a second kernel can check the same files.
+
+## Ask how close, and how far
+
+A claim can name a margin after its bound:
+
+```text
+claim hot:  lighting.w1.temperature <= 70 degC margin 20 degC under lamp_draw
+```
+
+The verdict is FAIL if the wire can pass 70 degC. It is MARGINAL if the kernel certifies a point where the wire comes within 20 degC of the bound, and the claim's proof, when there is one, travels with it. It is PASS if the claim is proved and no point comes that close. `examples/circuit_pass.lola` with this claim is MARGINAL: the wire reaches about 55 degC at the hot corner.
+
+To find how far an input can go, name the range to explore:
+
+```bash
+python -m lola envelope examples/circuit_pass.lola --input ambient --from "-20 degC" --to "100 degC"
+```
+
+LoLa checks the design with the ambient's range replaced by probe intervals and bisects. It reports `ambient in [-20, 53.125] degC` as proved, with a certified failure of the `hot` claim at 54.3 degC. The probed range is an assumption of the command, not of whoever signed the design's ambient, and the footprint says so. `--input` also takes a load entry (`lamp_draw.lighting.lamps.current`), a component field (`lighting.mains.fault_current`) or a family param.
 
 ## Know what a verdict rests on
 
