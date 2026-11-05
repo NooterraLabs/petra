@@ -572,6 +572,12 @@ An operator that can leave a certificate valid, such as scaling a Farkas ray by 
 - The gym reward has no efficiency term because v0 has no design-limit claims. Is a pure PASS reward enough for the first baseline?
 - `scripts/predicate.py` accepts only exit codes 0 and 1 from `lola check --json` and raises on anything else, but this design exits 2 for UNKNOWN, and `examples/bolt_unknown.lola` is meant to be UNKNOWN. Either the predicate accepts 2, or `check --json` exits 0 whenever it printed a report and leaves the status to the JSON. The predicate's owner decides. This commit changes neither.
 - Who owns the galvanic thresholds (0.15 V for wet or C3 and above, from MIL-STD-889C), and the convection coefficient range for clipped-direct cables? Both are judged constants with a named owner in the sketch.
+- The kernel cannot defend against code that runs in its own process. The K3 red team reproduced three ways, none of them through data:
+  - `object.__setattr__` on an issued theorem's `statement` leaves it issued with a false goal, and `verdict.Discharged` then accepts it for a false obligation.
+  - Writing into the cached `i_pi()` interval makes `check` issue a theorem for a false statement. While the family memo holds a theorem checked in that window, it keeps lending that theorem after pi is restored.
+  - A caller's `Fraction` subclass answers the canonical-form guard's equality, so a raw statement can compare equal to a theorem about its canonical copy.
+
+  Certificates and agent designs must therefore reach the kernel as data, through the codec, never as Python objects built by untrusted code. The gym already works this way: `LolaEnv.step` takes design choices as strings and certificates as JSON envelopes that the strict codec decodes. Untrusted code must still never run in the checker's process. The Lean kernel, or a kernel in its own process, removes the class of attack.
 
 ## Next implementation step
 
