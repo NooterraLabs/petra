@@ -1,0 +1,235 @@
+{
+ "format": "lola-cert/0",
+ "kernel": "lola-kernel/0",
+ "statement_hash": "sha256:f7e4f42637918874eba38b225d8fa66cdb692d6dedb2f1b9c20dc5a8e324bc53",
+ "statement": {
+  "t": "statement",
+  "hyps": [
+   {
+    "t": "range_hyp",
+    "sym": "F",
+    "lo": "0",
+    "hi": "12000",
+    "label": "in:mast-bracket-coastal.wind.bracket.force"
+   },
+   {
+    "t": "range_hyp",
+    "sym": "K",
+    "lo": "4/25",
+    "hi": "11/50",
+    "label": "in:mast-bracket-coastal.bracket.nut_factor"
+   },
+   {
+    "t": "range_hyp",
+    "sym": "P",
+    "lo": "7/4000",
+    "hi": "7/4000",
+    "label": "reg:const.iso261.M12.pitch"
+   },
+   {
+    "t": "range_hyp",
+    "sym": "Rp02",
+    "lo": "450000000",
+    "hi": "450000000",
+    "label": "reg:bolt.M12_A4_70.Rp02_min"
+   },
+   {
+    "t": "range_hyp",
+    "sym": "T",
+    "lo": "40",
+    "hi": "50",
+    "label": "in:mast-bracket-coastal.bracket.torque"
+   },
+   {
+    "t": "range_hyp",
+    "sym": "c2",
+    "lo": "649519/1000000",
+    "hi": "649519/1000000",
+    "label": "reg:const.iso724.d2_coefficient"
+   },
+   {
+    "t": "range_hyp",
+    "sym": "c3",
+    "lo": "1226869/1000000",
+    "hi": "1226869/1000000",
+    "label": "reg:const.iso724.d3_coefficient"
+   },
+   {
+    "t": "range_hyp",
+    "sym": "d",
+    "lo": "3/250",
+    "hi": "3/250",
+    "label": "reg:const.iso261.M12.d"
+   },
+   {
+    "t": "range_hyp",
+    "sym": "phi",
+    "lo": "1/10",
+    "hi": "1/4",
+    "label": "in:mast-bracket-coastal.bracket.load_share"
+   }
+  ],
+  "goal": {
+   "t": "all_nonpositive",
+   "exprs": [
+    {
+     "t": "add",
+     "args": [
+      {
+       "t": "div",
+       "num": {
+        "t": "sym",
+        "name": "T"
+       },
+       "den": {
+        "t": "mul",
+        "args": [
+         {
+          "t": "sym",
+          "name": "K"
+         },
+         {
+          "t": "sym",
+          "name": "d"
+         }
+        ]
+       }
+      },
+      {
+       "t": "mul",
+       "args": [
+        {
+         "t": "sym",
+         "name": "phi"
+        },
+        {
+         "t": "sym",
+         "name": "F"
+        }
+       ]
+      },
+      {
+       "t": "neg",
+       "arg": {
+        "t": "mul",
+        "args": [
+         {
+          "t": "const",
+          "value": "9/10"
+         },
+         {
+          "t": "sym",
+          "name": "Rp02"
+         },
+         {
+          "t": "mul",
+          "args": [
+           {
+            "t": "div",
+            "num": {
+             "t": "pi"
+            },
+            "den": {
+             "t": "const",
+             "value": "4"
+            }
+           },
+           {
+            "t": "pow_int",
+            "base": {
+             "t": "div",
+             "num": {
+              "t": "add",
+              "args": [
+               {
+                "t": "add",
+                "args": [
+                 {
+                  "t": "sym",
+                  "name": "d"
+                 },
+                 {
+                  "t": "neg",
+                  "arg": {
+                   "t": "mul",
+                   "args": [
+                    {
+                     "t": "sym",
+                     "name": "c2"
+                    },
+                    {
+                     "t": "sym",
+                     "name": "P"
+                    }
+                   ]
+                  }
+                 }
+                ]
+               },
+               {
+                "t": "add",
+                "args": [
+                 {
+                  "t": "sym",
+                  "name": "d"
+                 },
+                 {
+                  "t": "neg",
+                  "arg": {
+                   "t": "mul",
+                   "args": [
+                    {
+                     "t": "sym",
+                     "name": "c3"
+                    },
+                    {
+                     "t": "sym",
+                     "name": "P"
+                    }
+                   ]
+                  }
+                 }
+                ]
+               }
+              ]
+             },
+             "den": {
+              "t": "const",
+              "value": "2"
+             }
+            },
+            "exponent": 2
+           }
+          ]
+         }
+        ]
+       }
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "evidence": {
+  "t": "evidence",
+  "defined": [],
+  "body": {
+   "t": "enclosure",
+   "partition": {
+    "t": "split",
+    "sym": "F",
+    "at": "6000",
+    "left": {
+     "t": "leaf"
+    },
+    "right": {
+     "t": "leaf"
+    }
+   }
+  }
+ },
+ "producer": {
+  "source": "solver:r4_enclosure",
+  "lola": "0.1.0"
+ }
+}

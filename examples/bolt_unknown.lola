@@ -1,0 +1,27 @@
+lola 0
+
+# A stainless bolt through aluminium plates on a coastal mast. The tension claim
+# passes, but coverage demands a galvanic-corrosion check (A4 stainless against
+# 6061 aluminium in a wet C5 environment) and a plate-bearing check. v0 has no model
+# for either and the owner signed no waiver, so the verdict is UNKNOWN and names both.
+
+design "mast-bracket-coastal" {
+  owner "m.engineer@example.org"
+  environment marine_c5
+}
+
+joint bracket {
+  bolt bolt.M12_A4_70 count 1
+  plate aluminium.6061_T6 thickness 10 mm
+  plate aluminium.6061_T6 thickness 10 mm
+  torque in [40 Nm, 50 Nm] signed "fitter.lead@example.org" source "assembly spec AS-12 rev C"
+  nut_factor in [0.16, 0.22] measured "test.lab@example.org" source "torque-tension report TT-2026-031"
+  load_share in [0.10, 0.25] signed "m.engineer@example.org" source "joint diagram calc JD-7"
+}
+
+load wind {
+  on bracket force in [0 kN, 12 kN]
+  signed "client.structures@example.org" source "wind study WS-4, 50-year return"
+}
+
+claim tension: bracket.tension_utilisation <= 0.9 under wind
