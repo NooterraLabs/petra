@@ -238,15 +238,20 @@ def refute(goal: MinimizerBound, body: HypercircleViolation, box: Box) -> Fault 
     return TooWeak(f"bound {body.which}: the hypercircle gives [{q.lo}, {q.hi}], which meets the allowed range")
 
 
-def prove_defined(definition: MinimizerComponent, claim: DefinedRange, box: Box) -> Fault | None:
+def prove_defined(definition: MinimizerComponent, claim: DefinedRange, box: Box, memo: dict) -> Fault | None:
     """Prove claim.lo <= scale * s*_index <= claim.hi over the box check.py gives it (the
     RangeHyp box, or the evidence point of a refutation), with claim.proof
     (HypercircleFields) through enclose_minimizer.
 
     Same theorem as `prove`: the enclosure q contains scale(h) * s*_index(h) for every h,
-    so q inside [claim.lo, claim.hi] proves the range at every h.
+    so q inside [claim.lo, claim.hi] proves the range at every h. The enclosure depends
+    only on the problem, the fields and the box, and the box is fixed for the one check
+    call `memo` lives in, so the force lemmas of one truss share a single enclosure.
     """
-    found = enclose_minimizer(definition.problem, claim.proof, box)
+    key = (definition.problem, claim.proof)
+    if key not in memo:
+        memo[key] = enclose_minimizer(definition.problem, claim.proof, box)
+    found = memo[key]
     if isinstance(found, Fault):
         return found
     q = _scaled(found[0], definition.index, definition.scale, box)

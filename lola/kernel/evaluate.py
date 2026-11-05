@@ -12,7 +12,7 @@ from functools import reduce
 from typing import Mapping
 
 from .interval import Interval, KernelArithmeticError, Q, i_exp, i_ln, i_max, i_min, i_pi, i_sqrt
-from .terms import Abs, Add, Const, Div, Exp, Expr, Ln, Max, Min, Mul, Neg, Pi, PowInt, Sqrt, Sym
+from .terms import Abs, Add, Const, Div, Exp, Expr, Ln, Matrix, Max, Min, Mul, Neg, Pi, PowInt, Sqrt, Sym
 
 Box = Mapping[str, Interval]
 """Symbol -> range. A point is a box of point intervals."""
@@ -91,6 +91,21 @@ def free_syms(term: object) -> frozenset[str]:
     else:
         return frozenset()
     return frozenset().union(*map(free_syms, parts))
+
+
+def rename(term: object, renaming: Mapping[str, str]) -> object:
+    """The statement term with every symbol renamed: each Sym's name and each str field
+    named sym, the hypothesis and bound-variable binders. A label or any other string is
+    not a symbol and stays. Raises KeyError for a symbol `renaming` does not map. Every
+    Sym is renamed, so free_syms(rename(t, r)) is {r[s] for s in free_syms(t)}."""
+    if isinstance(term, Sym):
+        return Sym(renaming[term.name])
+    if isinstance(term, tuple):
+        return tuple(rename(t, renaming) for t in term)
+    if not is_dataclass(term) or isinstance(term, Matrix):
+        return term
+    parts = ((f.name, getattr(term, f.name)) for f in fields(term))
+    return type(term)(*(renaming[v] if name == "sym" and isinstance(v, str) else rename(v, renaming) for name, v in parts))
 
 
 def affine_coefficients(expr: Expr, syms: tuple[str, ...]) -> tuple[Q, tuple[Q, ...]]:

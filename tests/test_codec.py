@@ -18,6 +18,7 @@ from lola.kernel import (
     Div,
     Evidence,
     Exp,
+    Instance,
     Leaf,
     Ln,
     Matrix,
@@ -91,7 +92,8 @@ BOLT_EVIDENCE_JSON = {"t": "evidence", "defined": [], "body": {"t": "enclosure",
 
 
 def samples() -> tuple[list[Statement], list[Evidence]]:
-    """One statement per goal and one evidence per body, together using every tag."""
+    """One statement per goal and one evidence per body, together using every tag. The
+    last evidence is an Instance of the AllNonpositive statement."""
     every_expr = Add((c(1), s("x"), Pi(), Mul((s("x"), c(F(-1, 2)))), Neg(s("x")), Div(s("x"), c(3)), PowInt(s("x"), 2), Sqrt(s("x")), Ln(s("x")), Exp(s("x")), Abs(s("x")), Min((s("x"), c(0))), Max((s("x"), c(0)))))
     m = Matrix(2, 2, ((0, 0, F(1)), (1, 0, F(-1, 3)), (1, 1, F(1))))
     problem = QuadraticProblem(B=Matrix(1, 2, ((0, 0, F(1)), (0, 1, F(1)))), f=(s("x"),), w=(c(1), c(3)))
@@ -115,6 +117,7 @@ def samples() -> tuple[list[Statement], list[Evidence]]:
     ]
     statements = [Statement(hyps=hyps, goal=g) for g in goals]
     evidences = [Evidence(body=b, defined=(DefinedRange("y", F(0), F(1), fields),)) for b in bodies]
+    evidences.append(Evidence(body=Instance(statements[3], evidences[6], (("x", "a"), ("y", "b")))))
     return statements, evidences
 
 
@@ -200,6 +203,22 @@ class Strictness(unittest.TestCase):
     def test_evidence_is_decoded_as_strictly(self):
         for edit in [lambda o: o["body"]["partition"].update(at="6000.5"), lambda o: o["body"].update(t="statement"), lambda o: o.pop("defined")]:
             self.assertRefused(edit, decode=decode_evidence, base=BOLT_EVIDENCE_JSON)
+
+    def test_an_instance_is_decoded_as_strictly(self):
+        instance = samples()[1][-1]
+        base = encode_evidence(instance)
+        self.assertEqual(decode_evidence(base), instance, "the unedited Instance decodes")
+        edits = [
+            lambda o: o["body"]["renaming"][0].append("c"),
+            lambda o: o["body"]["renaming"][0].__setitem__(1, 1),
+            lambda o: o["body"].update(renaming={"x": "a"}),
+            lambda o: o["body"].pop("renaming"),
+            lambda o: o["body"].update(rule="R4"),
+            lambda o: o["body"].update(statement=o["body"]["evidence"]),
+            lambda o: o["body"]["evidence"].update(t="statement"),
+        ]
+        for edit in edits:
+            self.assertRefused(edit, decode=decode_evidence, base=base)
 
     def test_encoder_refuses_values_outside_the_term_language(self):
         bad = [

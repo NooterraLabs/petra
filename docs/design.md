@@ -138,7 +138,7 @@ library = lola.Library("library/")
 family = lola.load_design("examples/families/cu_pvc_clipped.lola", registry)
 lola.certify_family(family, registry, library)          # R4 partitions over the whole box, stored
 report = lola.check_file("examples/circuit_pass.lola", library=library)
-# the `hot` and `drop` obligations show source "library": transported evidence, re-checked by the kernel
+# the `hot` and `drop` obligations show source "library": an Instance of the family theorem, checked by the kernel
 ```
 
 ### One example per domain
@@ -319,7 +319,7 @@ A reader traces any verdict in three files: the elaborator that built the statem
 3. **Lemmas live in evidence, not in statements.** A truss's stability and member-buckling checks need elastic member forces, which only a solver can bound. The statement names them as `DefinedHyp(sym, MinimizerComponent(problem, i, scale))`. The evidence proposes a range and proves it with hypercircle fields. The kernel checks the lemma, then uses the range. The rule that can prove a quantity declares it as a `Lemma` on its `RuleSpec`, and `check` finds the lemma through `rules.LEMMAS`, so a new quantity never edits `check.py`. Solver-chosen numbers never enter a statement, so decision 1 holds for statically indeterminate structures too.
 4. **Force densities make truss equilibrium exact.** With rational node coordinates, the equilibrium matrix in force densities q = N/L has entries x_j - x_i. Lengths appear only as `Sqrt(L^2)` inside capacity and weight expressions, which the kernel encloses rigorously. No float and no rounding ever touch an equality the kernel checks.
 5. **Each kind of uncertainty is covered by one theorem.** Loads that enter affinely (R1 right-hand sides, R3 load vectors) are covered by checking every vertex of the load box, by convexity. Material and geometry ranges are covered by interval evaluation over the whole box. A load-factor range [0, lambda] in R2 is a hypothesis inside the geometric-stiffness weights, and one Loewner lower bound plus one LDL^T covers every factor at once, so no pencil lemma is needed.
-6. **Family reuse is evidence transport.** The library is untrusted storage. A query inside a family box gets the family's evidence cut down to the query box. R4 and R5 drop partition subtrees outside it, R1 and R3 take exact convex combinations of vertex solutions, and R2 reuses its reference weights. The kernel then checks the cut-down evidence against the query's own statement. Reuse costs the leaves that meet the query, and soundness costs nothing. Interval arithmetic is inclusion-isotone, which is the only property transport needs.
+6. **Family reuse is an instance of a checked theorem.** The library is untrusted storage. A query inside a family box gets `Instance` evidence: the family statement, the family's evidence, and a renaming from family symbols to query symbols. The kernel checks the family evidence once per process and remembers the theorem by the hashes of the family statement and evidence. For each query it then checks that the query is the family statement with every symbol renamed one to one and every `RangeHyp` range narrowed. A theorem for every point of the family box holds at every point of a narrower box, so one family check serves every query, and a query costs one pass over its own statement. One kernel rule serves all six goal kinds, so a new rule needs no reuse code. The renaming must move every reference to a symbol, and `tests/test_kernel_instance.py` pins that statements name symbols only through `Sym` and the `sym` binder fields.
 7. **Every model input is a hypothesis, even a point value.** A concrete 2.5 mm2 wire and the 2.5 to 16 mm2 family produce statements with the same shape and different boxes, so the library matches them by a shape hash that erases ranges and labels.
 8. **Elaborators are hashed into their premises.** `ModelSpec.source_hash` is the sha256 of the elaborator module's source. Editing the physics changes the `model:` label in every footprint and every family key that depends on it.
 9. **One registration per concept, and every table is derived.** A rule is one `RuleSpec` in `kernel/rules/_REGISTERED`, and a domain is one `DomainSpec` in `models/_REGISTERED`. Each `_index` refuses a registry that would make a table ambiguous: a type, tag, kind or mode claimed twice, a spec naming an untagged type, or a domain reaching a mode it does not declare. A failure mode is declared once, by the domain that owns it, and waivers name it by id. The typing aliases (`Goal`, `ProofEvidence`, `QuantityDef` and the rest) stay for readers. `tests/test_structure.py` fails when an alias and the registry disagree, `tests/test_domain_registry.py` does the same for domains, and `tests/test_solver_registry.py` for solver modules (per model-the-domain and encode-lessons-in-structure).
@@ -343,13 +343,13 @@ Validation happens at three boundaries and nowhere else (per boundary-discipline
 
 - The kernel never interprets a label, a unit, or a physical name.
 - No part of LoLa substitutes a default input bound. A missing bound is a `Gap` needing `NeedsInputBound`. A design with no environment class is still checked: builders that need it report `NeedsInputBound`, and the galvanic rule treats an undeclared environment as wet.
-- The library and the certificate directory are never trusted. Both are re-checked on every use.
+- The library and the certificate directory are never trusted. The kernel checks what they offer on every use. A library family is checked once per process, and every query against it.
 - `gym.LolaEnv.step` never runs a solver for the agent.
 - The consistency checker can only add open items needing `RegistryInconsistent`, never remove one.
 
 ### Shared state
 
-The only shared mutable state is the certificate directory and the library, which gym workers, CI and `certify-family` may write at once. Both name each file by the hash of the statement it proves, and both write by temporary file plus atomic rename. Two writers of one entry each write a complete, kernel-accepted file, and whichever rename lands last wins with no loss. A crash leaves no partial file, and a second run finds the entry present and writes nothing (per separate-before-serializing-shared-state and make-operations-idempotent). Readers re-check everything, so a stale or foreign file costs a rejection, never a wrong verdict. Everything else is a pure function of the design and the registry.
+The only shared mutable state is the certificate directory and the library, which gym workers, CI and `certify-family` may write at once. Both name each file by the hash of the statement it proves, and both write by temporary file plus atomic rename. Two writers of one entry each write a complete, kernel-accepted file, and whichever rename lands last wins with no loss. A crash leaves no partial file, and a second run finds the entry present and writes nothing (per separate-before-serializing-shared-state and make-operations-idempotent). Readers re-check everything, so a stale or foreign file costs a rejection, never a wrong verdict. Inside one process the kernel also keeps a bounded memo of the family theorems that `Instance` evidence used, keyed by the hashes of the family statement and evidence. Only a theorem `check` has just issued for exactly those hashes enters it, so the memo saves time and changes no verdict. Everything else is a pure function of the design and the registry.
 
 ### Interface depth
 
@@ -367,9 +367,11 @@ A certificate file is an envelope around two kernel terms. The statement is stor
 
 - Every term is an object with a `"t"` tag. Field keys are the dataclass field names in `kernel/terms.py`, `kernel/evidence.py` and the rule modules under `kernel/rules/`. `kernel/codec.py` lists the core tags and merges in the tags each `RuleSpec` declares.
 - Rationals are strings, `"n"` or `"p/q"` reduced with q > 1. The decoder rejects decimals, exponents and floats. Counts and indices are JSON integers.
+- Strings may not hold surrogate code points. Canonical text escapes a surrogate pair and the character it encodes alike, so allowing them would let two terms share a hash.
 - Matrices are `{"t": "matrix", "rows": m, "cols": n, "entries": [[i, j, "p/q"], ...]}` in (i, j) order with no zeros.
 - Canonical text is `json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=True)`. `statement_hash` is `"sha256:"` plus the hex digest of the canonical statement.
 - Hypotheses are sorted by `sym` with no duplicates.
+- An `instance` evidence body holds a family `statement`, the family's `evidence`, and a `renaming`: pairs of family symbol and query symbol, sorted by family symbol, covering every family symbol, bound ones included. Its envelope's `defined` list is empty, because the defined ranges come from the family theorem. The family evidence may not itself be an `instance`.
 
 The example is the bolt-tension obligation from `bolt_unknown.lola`, copied verbatim from `examples/bolt_tension.cert.json` (`tests/test_docs.py` fails if the two differ). The builder names symbols by design path. The goal says T/(K d) + phi F / n - 0.9 Rp02 As <= 0 over the box, where n is the bracket's bolt count and As = (pi/4)((d2 + d3)/2)^2 is written out from the ISO 724 coefficients. The evidence is a single leaf. Every symbol with a nonzero range appears once, so the interval enclosure over the whole box equals the worst corner up to the pi enclosure. A hand check of that corner gives 26,042 N of preload plus 3,000 N of external share against 0.9 x 450 MPa x 84.27 mm^2 = 34,128 N, a margin of -5,086 N.
 
@@ -403,29 +405,29 @@ The kernel's answer for this file is a `Theorem` whose `labels` are the ten labe
 
 ## Module map and line budget
 
-Line counts are estimates of implemented code, not counting docstrings or comments. `tests/test_kernel_budget.py` enforces the kernel total against `kernel.KERNEL_LINE_BUDGET = 1500`.
+Line counts do not include docstrings, comments or blank lines. The kernel column is measured with the counter in `tests/test_kernel_budget.py`, which enforces the kernel total against `kernel.KERNEL_LINE_BUDGET = 1500`. The other tables are estimates.
 
 ### Trusted kernel, mathematics only and standard library only (the Lean port target)
 
-| File | Owns | Budget |
+| File | Owns | Code lines |
 |---|---|---|
-| `lola/kernel/interval.py` | `Q`, canonical rational parsing, `Interval`, outward rounding, rigorous sqrt, ln, exp, pi | 240 |
-| `lola/kernel/terms.py` | `Expr` variants, `Matrix`, `RangeHyp`, `DefinedHyp`, `Statement` | 100 |
-| `lola/kernel/evidence.py` | partitions, points, `Evidence`, `DefinedRange` | 50 |
-| `lola/kernel/codec.py` | strict JSON codec, canonical text, hashes, core tags merged with rule tags | 150 |
-| `lola/kernel/evaluate.py` | `enclose`, free symbols, affine decomposition, vertex order | 105 |
-| `lola/kernel/linalg.py` | exact sparse products, Gram sums, LDL^T product | 90 |
-| `lola/kernel/check.py` | `check`, well-formedness, registry dispatch, lemma handling, issued results | 140 |
-| `lola/kernel/rules/base.py` | `RuleSpec`, `Lemma`, `Invalid`, `TooWeak` | 25 |
-| `lola/kernel/rules/__init__.py` | `_REGISTERED`, `_index`, derived tables, typing aliases | 35 |
-| `lola/kernel/rules/r1_linear.py` | goal and evidence types, vertex feasibility, Farkas | 100 |
-| `lola/kernel/rules/r2_definite.py` | goal and evidence types, Loewner bound plus LDL^T, negative direction | 75 |
-| `lola/kernel/rules/r3_hypercircle.py` | `QuadraticProblem`, `MinimizerComponent`, hypercircle enclosure, `prove_defined` lemma | 165 |
-| `lola/kernel/rules/r4_enclosure.py` | goal and evidence types, partition walk, point witness | 90 |
-| `lola/kernel/rules/r5_moment.py` | goal and evidence types, moment dual with cell-wise domination | 85 |
-| `lola/kernel/rules/r6_scenario.py` | goal type, exact binomial tail | 35 |
-| `lola/kernel/__init__.py` | public re-exports | 0 (imports only) |
-| **Total** | | **1,485** |
+| `lola/kernel/interval.py` | `Q`, canonical rational parsing, `Interval`, outward rounding, rigorous sqrt, ln, exp, pi | 141 |
+| `lola/kernel/terms.py` | `Expr` variants, `Matrix`, `RangeHyp`, `DefinedHyp`, `Statement` | 70 |
+| `lola/kernel/evidence.py` | partitions, points, `Evidence`, `DefinedRange`, `Instance` | 34 |
+| `lola/kernel/codec.py` | strict JSON codec, canonical text, hashes, core tags merged with rule tags | 130 |
+| `lola/kernel/evaluate.py` | `enclose`, free symbols, affine decomposition, vertex order | 123 |
+| `lola/kernel/linalg.py` | exact sparse products, Gram sums, LDL^T product | 43 |
+| `lola/kernel/check.py` | `check`, well-formedness, registry dispatch, lemma handling, `Instance` checks and the family memo, issued results | 236 |
+| `lola/kernel/rules/base.py` | `RuleSpec`, `Lemma`, `Invalid`, `TooWeak` | 30 |
+| `lola/kernel/rules/__init__.py` | `_REGISTERED`, `_index`, derived tables, typing aliases | 92 |
+| `lola/kernel/rules/r1_linear.py` | goal and evidence types, vertex feasibility, Farkas | 71 |
+| `lola/kernel/rules/r2_definite.py` | goal and evidence types, Loewner bound plus LDL^T, negative direction | 68 |
+| `lola/kernel/rules/r3_hypercircle.py` | `QuadraticProblem`, `MinimizerComponent`, hypercircle enclosure, `prove_defined` lemma | 150 |
+| `lola/kernel/rules/r4_enclosure.py` | goal and evidence types, partition walk, point witness | 64 |
+| `lola/kernel/rules/r5_moment.py` | goal and evidence types, moment dual with cell-wise domination | 60 |
+| `lola/kernel/rules/r6_scenario.py` | goal type, exact binomial tail | 44 |
+| `lola/kernel/__init__.py` | public re-exports | 58 |
+| **Total** | | **1,414** |
 
 ### Trusted outside the kernel
 
@@ -468,7 +470,7 @@ A bug in any of these files costs an UNKNOWN or a slow run, never a false PASS, 
 | `lola/solvers/r5_moment.py` | R5 dual LP and domination tree | 140 |
 | `lola/solvers/r6_scenario.py` | R6 | 20 |
 | `lola/certs.py` | certificate envelope, `CertStore` | 120 |
-| `lola/library/store.py`, `transport.py`, `family.py`, `__init__.py` | library, transport, family certification | 420 |
+| `lola/library/store.py`, `family.py`, `__init__.py` | library, `Instance` offers, family certification | 270 |
 | `lola/registry/deck.py`, `consistency.py` | decks and the physics-consistency checker | 350 |
 | `lola/gym/tasks.py`, `env.py`, `agent.py`, `__init__.py` | gym and baseline agent | 450 |
 | `lola/bench/family.py`, `__init__.py`, `scripts/bench_family.py` | reuse benchmark | 220 |
@@ -556,7 +558,8 @@ An operator that can leave a certificate valid, such as scaling a Farkas ray by 
 - **An LCF-style kernel**, with a handful of inference rules and theorems built by composing them, as in HOL Light. It is the closest match to Lean and would make lemma use first-class. It lost on size and solver burden. Solvers would have to emit proof terms, and six certificate checks plus their supporting lemmas would not fit in 1,500 lines.
 - **Statements that carry solver-chosen lemma bounds**, with a separate `discharge(theorem, sym, lemma)` kernel call. It exposes one more kernel entry point and makes statements depend on solver output, which breaks binding by hash. `DefinedHyp` keeps one entry point and keeps statements a pure function of the design.
 - **Footprints listed by elaborators** as a side list on each obligation. It is simpler to write, but it creates a second source of truth that an elaborator can forget to update. Deriving the footprint from hypothesis labels makes omissions impossible for numeric premises, and the unused-hypothesis rule makes padding impossible.
-- **A trusted result cache** for family reuse, where the library stores "the kernel checked this" and a query does a containment check only. It is faster, but it makes the library part of the trusted base and needs signing or a ledger premise. Evidence transport keeps the library untrusted and still skips the solver search.
+- **A trusted result cache** for family reuse, where the library stores "the kernel checked this" and a query does a containment check only. It is faster, but it makes the library part of the trusted base and needs signing or a ledger premise. The kernel's own per-process memo of family theorems it checked keeps the library untrusted and gives the same speed after the first query.
+- **Evidence transport**, v0's first reuse design. It cut the family's evidence down to the query box, with one transport function per rule, and the kernel re-checked the result against the query. It was sound, but every query paid a full kernel check, which bounded reuse at about 1.57x even with free transport (1.31x measured on the Warren truss family). `Instance` evidence replaced it and measured 1.64x and 1.92x in two runs on the same family, with no solver call and no kernel enclosure per query.
 
 ## Open questions and risks
 

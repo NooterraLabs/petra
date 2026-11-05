@@ -1,4 +1,4 @@
-"""The certificate library: family certification, shape matching, transport and the
+"""The certificate library: family certification, shape matching, Instance offers and the
 store on disk. Owner: F.
 
 Hand check of the shipped family box (examples/families/cu_pvc_clipped.lola), from the
@@ -23,14 +23,15 @@ import unittest
 from fractions import Fraction
 from pathlib import Path
 
-from lola.kernel import Add, Const, Evidence, Interval, Leaf, Matrix, Neg, RangeHyp, Rejection, Split, Statement, Sym, Theorem, check, decode_statement, statement_hash
+from lola.kernel import Add, Const, Evidence, Instance, Leaf, Matrix, Neg, RangeHyp, Rejection, Split, Statement, Sym, Theorem, check, decode_statement, statement_hash
 from lola.kernel.rules.r1_linear import FeasiblePoints, LinearFeasible
 from lola.kernel.rules.r4_enclosure import AllNonpositive, Enclosure
 from lola.lang import parse_design
-from lola.library import Library, canonical_renaming, certify_family, claim_obligations, family_entry, leaf_count, restrict_partition, shape_hash, transport
+from lola.library import Library, canonical_renaming, certify_family, claim_obligations, family_entry, shape_hash
 from lola.pipeline import check_design
 from lola.registry import build_registry
 from lola.verdict import Discharged, Open
+from tests import mutations
 
 ROOT = Path(__file__).resolve().parents[1]
 FAMILY = (ROOT / "examples" / "families" / "cu_pvc_clipped.lola").read_text(encoding="utf-8")
@@ -155,51 +156,82 @@ class Lookup(unittest.TestCase):
             self.assertTrue(outcomes["hot"].rejections, "the rejection is recorded")
 
 
-class Transport(unittest.TestCase):
+def bound(name: str, lo: int, hi: int) -> Statement:
+    """name - 10 <= 0 over [lo, hi]: true exactly when hi <= 10."""
+    return Statement((RangeHyp(name, Fraction(lo), Fraction(hi), "load"),), AllNonpositive((Add((Sym(name), Neg(Const(Fraction(10))))),)))
+
+
+class Offers(unittest.TestCase):
     PARTITION = Split("x", Fraction(5), Leaf(), Split("x", Fraction(8), Leaf(), Leaf()))
 
-    def test_restriction_drops_subtrees_outside_the_query(self):
-        self.assertEqual(restrict_partition(self.PARTITION, {"x": Interval(Fraction(6), Fraction(7))}), Leaf(), "[6, 7] meets one leaf")
-        self.assertEqual(restrict_partition(self.PARTITION, {"x": Interval(Fraction(9), Fraction(10))}), Leaf(), "[9, 10] meets one leaf")
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.library = Library(self.dir.name)
 
-    def test_restriction_keeps_splits_that_cut_the_query(self):
-        self.assertEqual(restrict_partition(self.PARTITION, {"x": Interval(Fraction(4), Fraction(6))}),
-                         Split("x", Fraction(5), Leaf(), Leaf()), "[4, 6] is cut at 5 and nowhere else")
-        self.assertEqual(restrict_partition(self.PARTITION, {"x": Interval(Fraction(0), Fraction(10))}), self.PARTITION, "the whole box keeps every split")
+    def tearDown(self):
+        self.dir.cleanup()
 
-    def test_restricted_evidence_passes_a_query_inside_the_box(self):
-        family, query = self._statements(10, 7)
-        evidence = transport(family, Evidence(Enclosure(self.PARTITION)), query, {"x": "y"})
-        self.assertIsInstance(check(query, evidence), Theorem, "y - 10 <= 0 holds on y in [2, 7]")
-        self.assertEqual(leaf_count(evidence), 2, "[2, 7] meets the leaves [0, 5] and [5, 8]")
+    def offer(self, statement: Statement) -> tuple:
+        return tuple(self.library.offer(statement, statement_hash(statement)))
 
-    def test_transported_evidence_fails_a_query_outside_the_box(self):
-        family, query = self._statements(10, 12)
-        evidence = transport(family, Evidence(Enclosure(self.PARTITION)), query, {"x": "y"})
-        self.assertIsInstance(check(query, evidence), Rejection, "y - 10 <= 0 fails at y = 12, so no evidence proves it")
+    def test_an_offer_is_an_instance_under_the_canonical_renaming(self):
+        certify(FAMILY, self.dir.name)
+        query = claims(CIRCUIT)["hot"].statement
+        (evidence,) = self.offer(query)
+        self.assertIsInstance(evidence.body, Instance, "the library offers an Instance")
+        entry = self.library.lookup(query)
+        self.assertEqual((evidence.body.statement, evidence.body.evidence), (entry.statement, entry.evidence), "of the family lookup finds")
+        family_names, query_names = canonical_renaming(entry.statement), canonical_renaming(query)
+        self.assertEqual({family_names[f]: query_names[q] for f, q in evidence.body.renaming}, {c: c for c in family_names.values()},
+                         "each family symbol goes to the query symbol with the same canonical name")
+        result = check(query, evidence)
+        self.assertIsInstance(result, Theorem, getattr(result, "reason", ""))
+        self.assertEqual(result.statement_hash, statement_hash(query), "the theorem is about the query")
 
-    def test_r1_points_are_barycentric_combinations(self):
+    def test_an_instance_proves_a_query_inside_the_box(self):
+        self.library.add(family_entry(bound("x", 0, 10), Evidence(Enclosure(self.PARTITION)), ("model",)))
+        (evidence,) = self.offer(bound("y", 2, 7))
+        self.assertEqual(evidence.body.renaming, (("x", "y"),), "x is renamed to y")
+        self.assertIsInstance(check(bound("y", 2, 7), evidence), Theorem, "y - 10 <= 0 holds on y in [2, 7]")
+
+    def test_nothing_is_offered_outside_the_box_and_a_forced_instance_is_rejected(self):
+        family = bound("x", 0, 10)
+        self.library.add(family_entry(family, Evidence(Enclosure(self.PARTITION)), ("model",)))
+        self.assertEqual(self.offer(bound("y", 2, 12)), (), "[2, 12] is not inside [0, 10]")
+        forced = Evidence(Instance(family, Evidence(Enclosure(self.PARTITION)), (("x", "y"),)))
+        self.assertIsInstance(check(bound("y", 2, 12), forced), Rejection, "y - 10 <= 0 fails at y = 12, so no Instance proves it")
+
+    def test_the_family_with_the_fewest_leaves_is_offered(self):
+        self.library.add(family_entry(bound("x", 0, 10), Evidence(Enclosure(self.PARTITION)), ("model",)))
+        self.library.add(family_entry(bound("x", 0, 9), Evidence(Enclosure(Leaf())), ("model",)))
+        (evidence,) = self.offer(bound("y", 2, 7))
+        self.assertEqual(evidence.body.evidence, Evidence(Enclosure(Leaf())), "the one-leaf family over [0, 9] is cheaper to check than the three-leaf one")
+        self.assertIsInstance(check(bound("y", 2, 7), evidence), Theorem, "and it proves the query")
+
+    def test_a_renaming_that_reorders_symbols_needs_no_new_evidence(self):
         def statement(p: str, s: str, p_box: tuple[int, int], s_box: tuple[int, int]) -> Statement:
             hyps = sorted((RangeHyp(p, Fraction(p_box[0]), Fraction(p_box[1]), "p"), RangeHyp(s, Fraction(s_box[0]), Fraction(s_box[1]), "s")), key=lambda h: h.sym)
             goal = LinearFeasible(Matrix(1, 1, ((0, 0, Fraction(1)),)), (Add((Sym(p), Sym(s))),), (Const(Fraction(0)),), (Const(Fraction(20)),))
             return Statement(tuple(hyps), goal)
 
         family = statement("p", "s", (0, 10), (0, 4))
-        family_points = FeasiblePoints(((Fraction(0),), (Fraction(10),), (Fraction(4),), (Fraction(14),)))
-        self.assertIsInstance(check(family, Evidence(family_points)), Theorem, "x = p + s at the family vertices (p, s) = (0,0), (10,0), (0,4), (10,4)")
+        family_points = Evidence(FeasiblePoints(((Fraction(0),), (Fraction(10),), (Fraction(4),), (Fraction(14),))))
+        self.assertIsInstance(check(family, family_points), Theorem, "x = p + s at the family vertices (p, s) = (0,0), (10,0), (0,4), (10,4)")
         query = statement("b", "a", (2, 6), (1, 3))
-        evidence = transport(family, Evidence(family_points), query, {"p": "b", "s": "a"})
-        expected = FeasiblePoints(((Fraction(3),), (Fraction(5),), (Fraction(7),), (Fraction(9),)))
-        self.assertEqual(evidence.body, expected, "query vertices in (a, b) order: (1,2), (3,2), (1,6), (3,6), so x = a + b")
-        self.assertIsInstance(check(query, evidence), Theorem, "the kernel accepts the combined points")
-        self.assertIsInstance(check(query, Evidence(family_points)), Rejection, "the family's own points do not fit the query")
+        self.assertIsInstance(check(query, family_points), Rejection, "the family's own points do not fit the query's vertices")
+        self.library.add(family_entry(family, family_points, ("model",)))
+        (evidence,) = self.offer(query)
+        self.assertEqual(evidence.body.renaming, (("p", "b"), ("s", "a")), "p goes to b and s to a, which sort the other way")
+        self.assertIsInstance(check(query, evidence), Theorem, "the Instance proves the query with the family's points unchanged")
 
-    @staticmethod
-    def _statements(family_hi: int, query_hi: int) -> tuple[Statement, Statement]:
-        def statement(name: str, lo: int, hi: int) -> Statement:
-            return Statement((RangeHyp(name, Fraction(lo), Fraction(hi), "load"),), AllNonpositive((Add((Sym(name), Neg(Const(Fraction(10))))),)))
-
-        return statement("x", 0, family_hi), statement("y", 2, query_hi)
+    def test_a_bound_random_variable_is_renamed_with_the_hypotheses(self):
+        fix = mutations.BY_NAME["r5_instance"]
+        family = fix.evidence.body
+        self.library.add(family_entry(family.statement, family.evidence, ("model",)))
+        (evidence,) = self.offer(fix.statement)
+        self.assertEqual(evidence.body.renaming, (("C", "cap"), ("Hi", "hi"), ("Lo", "lo"), ("M", "mean"), ("x", "load")),
+                         "the goal's random variable x is renamed along with the hypotheses")
+        self.assertIsInstance(check(fix.statement, evidence), Theorem, "the threshold [37, 40] lies inside the family's [36, 40]")
 
 
 class Store(unittest.TestCase):

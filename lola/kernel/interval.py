@@ -8,8 +8,8 @@ enclose the real value.
 Invariants:
 - `Interval.lo <= Interval.hi`, both `Fraction`. A point is `Interval(x, x)`.
 - Every operation is inclusion-isotone: if A ⊆ A' and B ⊆ B' then op(A, B) ⊆ op(A', B').
-  Library reuse (lola/library/transport.py) depends on this to re-check a sub-cell of a
-  family partition, so outward rounding must be monotone too.
+  An enclosure over a cell then also holds over every sub-cell, so outward rounding must
+  be monotone too.
 - +, -, *, / and integer powers are exact. sqrt, ln, exp and pi round outward to the
   grid of dyadic rationals with `PRECISION_BITS` fractional bits, and the rounding is
   directed and exact: the lower endpoint of f over [a, b] is the largest grid point at or

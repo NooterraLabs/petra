@@ -1,5 +1,7 @@
-"""The certificate library. Untrusted: it stores evidence; the kernel re-checks every
-reuse against the query's own statement.
+"""The certificate library. Untrusted: it stores family theorems' evidence and offers a
+query an Instance of the family whose box contains it. The kernel checks the family once
+per process and, for every query, that the query is the family statement renamed with a
+narrower box.
 
 Keys:
   shape hash   sha256 of the canonical statement with every RangeHyp range and label
@@ -26,8 +28,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterable
 
 from ..certs import CertificateFile, decode_certificate, encode_certificate
-from ..kernel import Evidence, Interval, Leaf, RangeHyp, Split, Statement, canonical_text, encode_statement, statement_hash
-from .transport import transport
+from ..kernel import Evidence, Instance, Interval, Leaf, RangeHyp, Split, Statement, canonical_text, encode_statement, statement_hash
 
 _HEX = re.compile(r"[0-9a-f]{64}")
 
@@ -128,11 +129,12 @@ def leaf_count(term: object) -> int:
 class _Held:
     entry: FamilyEntry
     renaming: dict[str, str]
+    leaves: int
 
 
 class Library:
     """EvidenceSource and store. `offer` finds a family whose box contains the query's box
-    (after canonical renaming) and returns transported evidence."""
+    (after canonical renaming) and returns an Instance of it under that renaming."""
 
     name = "library"
 
@@ -163,18 +165,22 @@ class Library:
 
     def lookup(self, statement: Statement) -> FamilyEntry | None:
         """Containment check: same shape hash, every query RangeHyp range inside the
-        family's range for the same canonical symbol. Picks the smallest containing box
-        (fewest leaves to re-check)."""
+        family's range for the same canonical symbol. Picks the family whose evidence has
+        the fewest leaves, the cheapest for the kernel to check the one time a process
+        needs it."""
         found = self._match(statement)
         return None if found is None else found[0]
 
     def offer(self, statement: Statement, statement_hash: str) -> Iterable[Evidence]:
+        """An Instance of the lookup's family, renaming each family symbol to the query
+        symbol with the same canonical name."""
         found = self._match(statement)
         if found is None:
             self._misses += 1
             return ()
         self._hits += 1
-        return (found[1],)
+        entry, renaming = found
+        return (Evidence(Instance(entry.statement, entry.evidence, tuple(sorted(renaming.items())))),)
 
     def entries(self) -> tuple[FamilyEntry, ...]:
         """Every readable entry, sorted by family key."""
@@ -193,9 +199,9 @@ class Library:
             "unreadable": len(files) - len(held),
         }
 
-    def _match(self, statement: Statement) -> tuple[FamilyEntry, Evidence] | None:
-        """The containing family whose transported evidence has the fewest leaves, and
-        that evidence."""
+    def _match(self, statement: Statement) -> tuple[FamilyEntry, dict[str, str]] | None:
+        """The containing family whose evidence has the fewest leaves, and the renaming
+        from its symbols, bound ones included, to the query's."""
         shape, mine = _canonical(statement)
         canonical_box = {mine[h.sym]: Interval(h.lo, h.hi) for h in statement.hyps if isinstance(h, RangeHyp)}
         back = {c: s for s, c in mine.items()}
@@ -204,12 +210,12 @@ class Library:
             held = self._read(path, stamp)
             if held is None or not _contains(dict(held.entry.box), canonical_box):
                 continue
-            renaming = {f: back[c] for f, c in held.renaming.items()}
-            evidence = transport(held.entry.statement, held.entry.evidence, statement, renaming)
-            rank = (leaf_count(evidence), held.entry.family_key)
-            if best is None or rank < best[0]:
-                best = (rank, held.entry, evidence)
-        return None if best is None else (best[1], best[2])
+            if best is None or (held.leaves, held.entry.family_key) < best[0]:
+                best = ((held.leaves, held.entry.family_key), held)
+        if best is None:
+            return None
+        held = best[1]
+        return held.entry, {f: back[c] for f, c in held.renaming.items()}
 
     def _read(self, path: Path, stamp: tuple[int, int] | None = None) -> _Held | None:
         """The entry at `path`, parsed again only when its modification time or size
@@ -270,4 +276,4 @@ def _load(path: Path) -> _Held | None:
         return None
     if path.stem != entry.family_key.removeprefix("sha256:") or path.parent.name != entry.shape_hash.removeprefix("sha256:"):
         return None
-    return _Held(entry, canonical_renaming(entry.statement))
+    return _Held(entry, canonical_renaming(entry.statement), leaf_count(entry.evidence))

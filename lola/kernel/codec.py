@@ -10,6 +10,8 @@ The JSON spelling is the portability contract with a future Lean kernel. Rules:
   ensure_ascii=True)`. A hash is "sha256:" + hex digest of the canonical text.
 - Decoding is strict: unknown tags, unknown keys, missing keys, non-canonical rationals
   and non-canonical matrices are errors. A file has one meaning or none.
+- Strings hold no surrogate code points, in either direction, so canonical text is one
+  to one and two terms never share a hash except by a sha256 collision.
 
 The decoder is the kernel's only input boundary, so it is trusted and validated here.
 The encoder writes each Python value by its own type (Fraction as a string, int as an
@@ -26,14 +28,16 @@ from types import MappingProxyType
 from typing import Any, Mapping, Union, get_args, get_origin, get_type_hints
 
 from . import rules
-from .evidence import DefinedRange, Evidence, Leaf, Split
+from .evidence import DefinedRange, Evidence, Instance, Leaf, Split
 from .interval import format_q, parse_q
 from .terms import (
     Abs, Add, Const, DefinedHyp, Div, Exp, Ln, Matrix, Max, Min, Mul, Neg, Pi, PowInt, RangeHyp, Sqrt, Statement, Sym,
 )
 
 FORMAT = "lola-kernel/0"
-"""Version of the term encoding. Bumped on any change to TAGS or field spellings."""
+"""Version of the term encoding. Bumped when a change to TAGS or field spellings would
+give an existing file another meaning or none. Adding a tag does neither: every file
+that decoded before decodes to the same term."""
 
 _CORE_TAGS: tuple[tuple[str, type], ...] = (
     ("const", Const),
@@ -57,6 +61,7 @@ _CORE_TAGS: tuple[tuple[str, type], ...] = (
     ("leaf", Leaf),
     ("split", Split),
     ("defined_range", DefinedRange),
+    ("instance", Instance),
     ("evidence", Evidence),
 )
 """Tags of the core term language in terms.py and evidence.py. Rule-specific terms are
@@ -108,38 +113,58 @@ def decode_evidence(obj: Any) -> Evidence:
     return _decode(obj, Evidence, "$")
 
 
+def decode_as(obj: Any, expected: Any) -> Any:
+    """Strictly decode `obj` as the annotated type `expected`, such as one field's type."""
+    return _decode(obj, expected, "$")
+
+
 def canonical_text(obj: Any) -> str:
     return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
 
 
-def _digest(obj: Any) -> str:
+def hash_of(obj: Any) -> str:
+    """The hash of an encoded term: "sha256:" + hex digest of its canonical text."""
     return "sha256:" + hashlib.sha256(canonical_text(obj).encode("ascii")).hexdigest()
 
 
 def statement_hash(statement: Statement) -> str:
     """sha256 of the canonical encoding. The pipeline binds a stored certificate to an
     obligation by this hash, so it must be identical across runs and platforms."""
-    return _digest(encode_statement(statement))
+    return hash_of(encode_statement(statement))
 
 
 def evidence_hash(evidence: Evidence) -> str:
-    return _digest(encode_evidence(evidence))
+    return hash_of(encode_evidence(evidence))
 
 
 def _encode(term: Any) -> Any:
     """Generic encoder: dataclass -> {"t": tag, field: encode(value)}, Fraction -> string,
     tuple -> list, None -> null. Field order comes from dataclasses.fields(). Raises
-    TypeError for anything that is not a kernel value, such as a float or a bool."""
+    TypeError for anything that is not a kernel value, such as a float or a bool. Terms
+    are tested first because most nodes are terms, and a test against Fraction is slow."""
+    kind = type(term)
+    if kind in _TAG_OF:
+        return {"t": _TAG_OF[kind], **{name: _encode(getattr(term, name)) for name in _FIELDS[kind][0]}}
+    if kind is tuple:
+        return [_encode(x) for x in term]
     if isinstance(term, Fraction):
         return format_q(term)
-    if term is None or type(term) in (int, str):
+    if term is None or kind is int:
         return term
-    if type(term) is tuple:
-        return [_encode(x) for x in term]
-    if type(term) not in _TAG_OF:
-        raise TypeError(f"{type(term).__name__} is not a kernel term")
-    names, _ = _FIELDS[type(term)]
-    return {"t": _TAG_OF[type(term)], **{name: _encode(getattr(term, name)) for name in names}}
+    if kind is str:
+        return _text(term, TypeError, "$")
+    raise TypeError(f"{kind.__name__} is not a kernel term")
+
+
+def _text(s: str, error: type, path: str) -> str:
+    """`s`, if no other string has its canonical text. ensure_ascii spells a surrogate
+    pair and the character it encodes the same way, so a string holding a surrogate code
+    point could share its canonical text, and its hash, with another string."""
+    try:
+        s.encode("utf-8")
+    except UnicodeEncodeError:
+        raise error(f"{path}: a string may not hold a surrogate code point") from None
+    return s
 
 
 def _decode(obj: Any, expected: Any, path: str) -> Any:
@@ -154,7 +179,7 @@ def _decode(obj: Any, expected: Any, path: str) -> Any:
     if expected in (int, str):
         if type(obj) is not expected:
             raise DecodeError(f"{path}: expected {expected.__name__}, got {obj!r:.80}")
-        return obj
+        return _text(obj, DecodeError, path) if expected is str else obj
     if get_origin(expected) is tuple:
         kinds = get_args(expected)
         if type(obj) is not list or (kinds[-1] is not Ellipsis and len(obj) != len(kinds)):

@@ -12,6 +12,7 @@ pass.
 """
 import copy
 import dataclasses
+import json
 import pickle
 import unittest
 from fractions import Fraction as Q
@@ -28,6 +29,8 @@ from lola.kernel import (
     Neg,
     PowInt,
     DefinedHyp,
+    Instance,
+    Interval,
     Leaf,
     RangeHyp,
     Refutation,
@@ -39,8 +42,12 @@ from lola.kernel import (
     Theorem,
     TooWeak,
     check,
+    decode_statement,
+    encode_statement,
+    forget_families,
     is_issued,
 )
+from lola.kernel.codec import DecodeError
 from lola.kernel.rules.r2_definite import GramPositiveDefinite, GramTerm, LDLFactor
 from lola.kernel.rules.r3_hypercircle import (
     ComponentBound,
@@ -418,6 +425,181 @@ class DefinedRefutations(Base):
         at_6 = HypercircleViolation(point=(("F", Q(8)),), s=(Q(9, 2), Q(3, 2)), u=(Q(9, 2),), which=0)
         self.assertIsInstance(check(above(5), Evidence(at_6, (DefinedRange("q", Q(6), Q(6), fields_at(8)),))), Refutation)
 
+
+HAIR = Q(1, 2 ** 256)
+"""Exact rationals have no smallest step, so a hair stands for one: a positive excess far
+below every range in these statements. Any positive excess must be refused."""
+
+EXACT_FIELDS = HypercircleFields(s=((Q(3), Q(1)), (Q(6), Q(2))), u=((Q(3),), (Q(6),)))
+
+
+def between(q: str, top) -> AllNonpositive:
+    """q - top <= 0 and 3 - q <= 0."""
+    return AllNonpositive(exprs=(Add((Sym(q), c(-top))), Add((c(3), Neg(Sym(q))))))
+
+
+def family(top=6, extra=()) -> Statement:
+    """F in [4, 8] and q = s*_0 = 3F/4 of PROBLEM, so q spans exactly [3, 6]: q <= top
+    holds for top >= 6 and is false at F = 8 for top < 6."""
+    hyps = tuple(sorted((RangeHyp("F", Q(4), Q(8), "in:F"), DefinedHyp("q", MinimizerComponent(PROBLEM, 0, c(1)))) + extra, key=lambda h: h.sym))
+    return Statement(hyps=hyps, goal=between("q", top))
+
+
+FAMILY = family()
+FAMILY_EVIDENCE = Evidence(Enclosure(Leaf()), (DefinedRange("q", Q(3), Q(6), EXACT_FIELDS),))
+RHO = (("F", "P"), ("q", "z"))
+
+
+def query(lo, hi, top=6, scale=1) -> Statement:
+    """The family renamed F to P and q to z, over P in [lo, hi]. z = scale * 3P/4."""
+    problem = QuadraticProblem(B=PAIR, f=(Sym("P"),), w=(c(1), c(3)))
+    return Statement(hyps=(RangeHyp("P", Q(lo), Q(hi), "in:P"), DefinedHyp("z", MinimizerComponent(problem, 0, c(scale)))), goal=between("z", top))
+
+
+def instance(statement=FAMILY, evidence=FAMILY_EVIDENCE, renaming=RHO) -> Evidence:
+    return Evidence(Instance(statement, evidence, renaming))
+
+
+def hook_bound_as(x: str) -> Statement:
+    """hook(3/10) with its random variable named x."""
+    goal = MomentBound(
+        random=(RandomVar(x, Sym("Lo"), Sym("Hi")),),
+        moments=(MomentConstraint(Sym(x), Sym("M"), Sym("M")),),
+        fail=Add((Sym(x), Neg(Sym("C")))),
+        p=Q(3, 10),
+    )
+    return Statement(hyps=hook(Q(3, 10)).hyps, goal=goal)
+
+
+class InstanceForgeries(Base):
+    """Instance evidence lets a query borrow a family theorem through a renaming. Every
+    attack is refused and every neighbour borrows a theorem for a true instance. The
+    attacks aim at queries that are false or ill-formed, except the nested Instance,
+    which is refused for its depth alone. Over P in [lo, hi] the query's z = 3P/4 spans
+    [3lo/4, 3hi/4], so 3 <= z <= 6 holds exactly when [lo, hi] lies inside [4, 8], the
+    family box."""
+
+    def test_a_query_range_wider_by_a_hair_is_not_an_instance(self):
+        # At P = 8 + HAIR, z = 6 + 3 HAIR/4 > 6; at P = 4 - HAIR, z = 3 - 3 HAIR/4 < 3.
+        self.assertRejected(check(query(4, 8 + HAIR), instance()), Invalid, "not inside the family range")
+        self.assertRejected(check(query(4 - HAIR, 8), instance()), Invalid, "not inside the family range")
+        self.assertTheorem(check(query(4, 8), instance()))
+        self.assertTheorem(check(query(5, 7), instance()))
+
+    def test_an_empty_query_box_is_not_vacuously_an_instance(self):
+        self.assertRejected(check(query(7, 5), instance()), Invalid, "not inside the family range")
+        self.assertTheorem(check(query(5, 5), instance()))
+
+    def test_a_renaming_that_is_not_a_bijection_is_rejected(self):
+        # Renaming the random variable x to M captures the mean hypothesis M.
+        captured = (("C", "C"), ("Hi", "Hi"), ("Lo", "Lo"), ("M", "M"), ("x", "M"))
+        self.assertRejected(check(hook_bound_as("M"), instance(hook(Q(3, 10)), Evidence(dual(Q(1, 36))), captured)), Invalid, "distinct")
+        fresh = (("C", "C"), ("Hi", "Hi"), ("Lo", "Lo"), ("M", "M"), ("x", "y"))
+        result = self.assertTheorem(check(hook_bound_as("y"), instance(hook(Q(3, 10)), Evidence(dual(Q(1, 36))), fresh)))
+        self.assertEqual(result.rule, "R5", "an Instance reports its family's rule")
+        # a - b + 1 <= 0 holds over a in [0, 1], b in [2, 3]. Merging a and b into x
+        # would give 1 <= 0, which is false at every point.
+        pair = Statement(hyps=(RangeHyp("a", Q(0), Q(1), "in:a"), RangeHyp("b", Q(2), Q(3), "in:b")), goal=AllNonpositive(exprs=(Add((Sym("a"), Neg(Sym("b")), c(1))),)))
+        merged = Statement(hyps=(RangeHyp("x", Q(0), Q(1), "in:x"), RangeHyp("x", Q(2), Q(3), "in:y")), goal=AllNonpositive(exprs=(Add((Sym("x"), Neg(Sym("x")), c(1))),)))
+        kept = Statement(hyps=(RangeHyp("x", Q(0), Q(1), "in:x"), RangeHyp("y", Q(2), Q(3), "in:y")), goal=AllNonpositive(exprs=(Add((Sym("x"), Neg(Sym("y")), c(1))),)))
+        leaf = Evidence(Enclosure(Leaf()))
+        self.assertRejected(check(merged, instance(pair, leaf, (("a", "x"), ("b", "x")))), Invalid, "distinct")
+        self.assertTheorem(check(kept, instance(pair, leaf, (("a", "x"), ("b", "y")))))
+
+    def test_a_goal_that_differs_by_one_constant_is_not_an_instance(self):
+        # z <= 5 fails at P = 8, where z = 6.
+        self.assertRejected(check(query(4, 8, top=5), instance()), Invalid, "not the family goal renamed")
+        self.assertTheorem(check(query(4, 8, top=6), instance()))
+
+    def test_a_definition_that_differs_is_not_an_instance(self):
+        # Scale 2 makes z = 3P/2, which is 12 at P = 8.
+        self.assertRejected(check(query(4, 8, scale=2), instance()), Invalid, "not defined as its family counterpart")
+        self.assertTheorem(check(query(4, 8, scale=1), instance()))
+
+    def test_family_evidence_that_does_not_check_proves_nothing(self):
+        # The family with top 5 is false at F = 8, and q cannot be held to [3, 5].
+        lie = Evidence(Enclosure(Leaf()), (DefinedRange("q", Q(3), Q(5), EXACT_FIELDS),))
+        self.assertRejected(check(query(4, 8, top=5), instance(family(top=5), lie)), Invalid, "does not check")
+        self.assertTheorem(check(query(4, 8, top=6), instance(family(top=6), FAMILY_EVIDENCE)))
+
+    def test_a_family_refutation_has_no_instances(self):
+        witness = Evidence(PointWitness((("F", Q(8)),), 0), (DefinedRange("q", Q(6), Q(6), fields_at(8)),))
+        self.assertIsInstance(check(family(top=5), witness), Refutation, "the family with top 5 is false at F = 8")
+        self.assertRejected(check(query(4, 8, top=5), instance(family(top=5), witness)), Invalid, "refutes")
+        self.assertTheorem(check(query(4, 8, top=6), instance()))
+
+    def test_an_instance_of_an_instance_is_rejected(self):
+        middle = Statement(hyps=(RangeHyp("G", Q(4), Q(8), "in:G"), DefinedHyp("w", MinimizerComponent(QuadraticProblem(B=PAIR, f=(Sym("G"),), w=(c(1), c(3))), 0, c(1)))), goal=between("w", 6))
+        middle_evidence = instance(renaming=(("F", "G"), ("q", "w")))
+        self.assertTheorem(check(middle, middle_evidence))
+        self.assertRejected(check(query(5, 7), instance(middle, middle_evidence, (("G", "P"), ("w", "z")))), Invalid, "not itself an Instance")
+        self.assertTheorem(check(query(5, 7), instance()))
+
+    def test_a_family_hypothesis_the_query_lacks_is_not_dropped(self):
+        # q + r - 7 <= 0 holds for r in [0, 1]. Without its hypothesis zeta is free, and
+        # zeta = 2 breaks the goal at P = 8. zeta sorts last, so pairing the hypotheses
+        # in order would run out of query hypotheses before it.
+        with_r = Statement(hyps=family(extra=(RangeHyp("r", Q(0), Q(1), "in:r"),)).hyps, goal=AllNonpositive(exprs=(Add((Sym("q"), Sym("r"), c(-7))),)))
+        problem = QuadraticProblem(B=PAIR, f=(Sym("P"),), w=(c(1), c(3)))
+        z = DefinedHyp("z", MinimizerComponent(problem, 0, c(1)))
+        goal = AllNonpositive(exprs=(Add((Sym("z"), Sym("zeta"), c(-7))),))
+        lacking = Statement(hyps=(RangeHyp("P", Q(4), Q(8), "in:P"), z), goal=goal)
+        holding = Statement(hyps=(RangeHyp("P", Q(4), Q(8), "in:P"), z, RangeHyp("zeta", Q(0), Q(1, 2), "in:zeta")), goal=goal)
+        renaming = (("F", "P"), ("q", "z"), ("r", "zeta"))
+        self.assertRejected(check(lacking, instance(with_r, FAMILY_EVIDENCE, renaming)), Invalid, "pair one to one")
+        self.assertTheorem(check(holding, instance(with_r, FAMILY_EVIDENCE, renaming)))
+
+
+    def test_family_evidence_that_changes_while_read_is_judged_by_its_encoding(self):
+        # Reading the bound below turns the middle evidence's body from an Instance into a
+        # plain enclosure, after the encoder has already spelled it as an Instance. A
+        # check of the raw object would pass the one-level rule while the encoding, which
+        # the hash names, nests two levels.
+        middle = Statement(hyps=(RangeHyp("G", Q(4), Q(8), "in:G"), DefinedHyp("w", MinimizerComponent(QuadraticProblem(B=PAIR, f=(Sym("G"),), w=(c(1), c(3))), 0, c(1)))), goal=between("w", 6))
+
+        class Flip(Q):
+            @property
+            def numerator(self):
+                object.__setattr__(holder, "body", Enclosure(Leaf()))
+                return self._numerator
+
+        holder = Evidence(Instance(FAMILY, Evidence(Enclosure(Leaf()), (DefinedRange("q", Flip(3), Q(6), EXACT_FIELDS),)), (("F", "G"), ("q", "w"))))
+        forget_families()
+        result = check(query(5, 7), instance(middle, holder, (("G", "P"), ("w", "z"))))
+        self.assertRejected(result, Invalid, "not itself an Instance")
+        self.assertIsInstance(holder.body, Enclosure, "the raw object no longer shows the nesting")
+        self.assertTheorem(check(query(5, 7), instance()))
+
+    def test_instances_of_one_family_share_no_mutable_range(self):
+        # Every Instance of a family borrows the defined ranges of one remembered theorem.
+        # Writing into one issued range must not change what any other result certifies.
+        forget_families()
+        first = self.assertTheorem(check(query(5, 7), instance()))
+        second = self.assertTheorem(check(query(4, 8), instance()))
+        ((_, a),), ((_, b),) = first.defined_ranges, second.defined_ranges
+        self.assertIsNot(a, b)
+        self.assertIsNot(a.lo, b.lo)
+        object.__setattr__(a, "lo", Q(100))
+        object.__setattr__(a, "hi", Q(200))
+        third = self.assertTheorem(check(query(5, 6), instance()))
+        self.assertEqual(second.defined_ranges, (("z", Interval(Q(3), Q(6))),))
+        self.assertEqual(third.defined_ranges, (("z", Interval(Q(3), Q(6))),))
+
+    def test_strings_with_surrogates_have_no_canonical_text(self):
+        # ensure_ascii spells a surrogate pair and the character it encodes alike, so two
+        # different symbols would share a statement hash and a family memo key.
+        pair, astral = chr(0xD83D) + chr(0xDE00), chr(0x1F600)
+        self.assertEqual(json.dumps(pair, ensure_ascii=True), json.dumps(astral, ensure_ascii=True))
+
+        def named(sym: str) -> Statement:
+            return r4(sym, 0, 1, Add((Sym(sym), c(-1))))
+
+        self.assertRejected(leaf_check(named(pair)), Invalid, "surrogate")
+        self.assertTheorem(leaf_check(named(astral)))
+        lone = encode_statement(named("x"))
+        lone["hyps"][0]["sym"] = chr(0xD83D)
+        with self.assertRaises(DecodeError):
+            decode_statement(lone)
 
 if __name__ == "__main__":
     unittest.main()

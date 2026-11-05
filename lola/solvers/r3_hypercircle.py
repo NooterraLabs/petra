@@ -76,31 +76,28 @@ def _field(problem: QuadraticProblem, weights: np.ndarray, f: tuple[Fraction, ..
 
 
 def defined_ranges(statement: Statement, box: Mapping[str, Interval] | None = None) -> tuple[DefinedRange, ...]:
-    """For each DefinedHyp: compute fields (once per problem), enclose the component with
-    the kernel's own formula, round outward by about a relative 1e-9 to a short dyadic, and
-    propose that range. The box is the statement's RangeHyp box unless one is given; a
-    point box gives the ranges the kernel checks a refutation at that point with. Raises
-    ValueError when a problem has no admissible field."""
+    """For each DefinedHyp: compute fields and their enclosure once per problem, enclose
+    the component with the kernel's own formula, round outward by about a relative 1e-9
+    to a short dyadic, and propose that range. The box is the statement's RangeHyp box
+    unless one is given; a point box gives the ranges the kernel checks a refutation at
+    that point with. Raises ValueError when a problem has no admissible field."""
     box = range_box(statement) if box is None else box
-    fields: dict[QuadraticProblem, HypercircleFields] = {}
+    found: dict[QuadraticProblem, tuple[HypercircleFields, tuple]] = {}
     out = []
     for h in statement.hyps:
         if isinstance(h, DefinedHyp):
             problem = h.definition.problem
-            if problem not in fields:
-                fields[problem] = fields_for(problem, box)
-            out.append(_range(h.sym, h.definition, fields[problem], box))
+            if problem not in found:
+                fields = fields_for(problem, box)
+                enclosure = enclose_minimizer(problem, fields, box)
+                if not isinstance(enclosure, tuple):
+                    raise ValueError(enclosure.reason)
+                found[problem] = fields, enclosure
+            out.append(_range(h.sym, h.definition, *found[problem], box))
     return tuple(out)
 
 
-def defined_range(sym: str, definition: MinimizerComponent, box: dict) -> DefinedRange:
-    return _range(sym, definition, fields_for(definition.problem, box), box)
-
-
-def _range(sym: str, definition: MinimizerComponent, fields: HypercircleFields, box: Mapping[str, Interval]) -> DefinedRange:
-    found = enclose_minimizer(definition.problem, fields, box)
-    if not isinstance(found, tuple):
-        raise ValueError(found.reason)
+def _range(sym: str, definition: MinimizerComponent, fields: HypercircleFields, found: tuple, box: Mapping[str, Interval]) -> DefinedRange:
     q = enclose(definition.scale, box) * found[0][definition.index]
     scale = max(abs(q.lo), abs(q.hi))
     grid = Fraction(2) ** (30 - (scale.numerator.bit_length() - scale.denominator.bit_length()) if scale else 30)

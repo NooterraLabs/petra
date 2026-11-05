@@ -32,7 +32,7 @@ from lola.kernel import (
 )
 from lola.kernel.rules.r3_hypercircle import HypercircleFields, MinimizerComponent, QuadraticProblem
 from lola.kernel.rules.r4_enclosure import AllNonpositive, Enclosure, PointWitness
-from lola.solvers import SolverSource
+from lola.solvers import SolverSource, r4_enclosure
 from lola.solvers.exact import project_onto_equalities, range_box, rationalize, solve_exact, to_numpy
 
 
@@ -163,6 +163,35 @@ class Witnesses(unittest.TestCase):
     def test_a_bound_that_fails_only_over_the_range_is_not_refuted(self):
         results = self.results(Mul((Const(Fraction(-3, 4)), Sym("F"))), Neg(Const(Fraction(1, 10))))
         self.assertFalse([r for r in results if isinstance(r, Refutation)], "q - 3F/4 - 1/10 is -1/10 at every F, but 29/10 at q = 6, F = 4")
+
+
+class SearchStats(unittest.TestCase):
+    """r4_enclosure.search_stats describes the last search call alone, so a caller can
+    attribute the counters to the call it timed."""
+
+    BOX = {"x": Interval(Fraction(0), Fraction(1))}
+    NEEDS_SPLITS = (Add((Mul((Sym("x"), Sym("x"))), Neg(Sym("x")), Const(Fraction(-1, 10)))),)
+    HOLDS_AT_THE_ROOT = (Add((Sym("x"), Const(Fraction(-2)))),)
+
+    def test_each_search_reports_its_own_counters(self):
+        r4_enclosure.search(self.NEEDS_SPLITS, dict(self.BOX), 20000)
+        first = r4_enclosure.search_stats()
+        self.assertGreater(first["cells"], 1, "x^2 - x - 1/10 encloses to [-11/10, 9/10] on [0, 1], so the root splits")
+        r4_enclosure.search(self.HOLDS_AT_THE_ROOT, dict(self.BOX), 20000)
+        self.assertEqual(r4_enclosure.search_stats(), {"cells": 1, "enclosures": 1, "max_depth": 0}, "x - 2 encloses to [-2, -1] at the root")
+        r4_enclosure.search(self.NEEDS_SPLITS, dict(self.BOX), 20000)
+        self.assertEqual(r4_enclosure.search_stats(), first, "the same search counts the same again")
+
+    def test_the_witness_ascent_after_a_search_is_not_counted(self):
+        q = DefinedHyp("q", MinimizerComponent(Witnesses.PROBLEM, 0, Const(Fraction(1))))
+        goal = AllNonpositive((Add((Sym("q"), Neg(Const(Fraction(5))))),))
+        load = RangeHyp("F", Fraction(4), Fraction(8), "in:t.F")
+        over_range = Statement((load, RangeHyp("q", Fraction(3), Fraction(6), "lemma:q")), goal)
+        (witness,) = r4_enclosure.solve(over_range, original=Statement((load, q), goal))
+        self.assertIsInstance(witness.body, PointWitness, "q - 5 > 0 at F = 8, where q = 6")
+        after_solve = r4_enclosure.search_stats()
+        r4_enclosure.search(goal.exprs, {"F": Interval(Fraction(4), Fraction(8)), "q": Interval(Fraction(3), Fraction(6))}, 20000)
+        self.assertEqual(after_solve, r4_enclosure.search_stats(), "the counters are the search's, not the ascent's after it")
 
 
 class SolveExact(unittest.TestCase):

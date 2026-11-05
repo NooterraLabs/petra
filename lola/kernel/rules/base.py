@@ -53,13 +53,15 @@ class Lemma:
     """A quantity a DefinedHyp may name, and the rule's proof of a range for it.
 
     `defines` is a QuantityDef variant. `evidence` is the type `DefinedRange.proof` must
-    have for it. `prove(definition, defined_range, box)` returns None when the range holds
-    at every point of `box`, which check.py builds from the RangeHyps alone: their ranges
-    for a proof, the evidence point for a refutation."""
+    have for it. `prove(definition, defined_range, box, memo)` returns None when the range
+    holds at every point of `box`, which check.py builds from the RangeHyps alone: their
+    ranges for a proof, the evidence point for a refutation. `memo` is a dict that lives
+    for one check call and is shared by the lemmas of one QuantityDef, so work that
+    several DefinedHyps of one statement repeat over the same box is done once."""
 
     defines: type
     evidence: type
-    prove: Callable[[Any, Any, Box], Union[Fault, None]]
+    prove: Callable[[Any, Any, Box, dict], Union[Fault, None]]
 
 
 @dataclass(frozen=True, slots=True)
