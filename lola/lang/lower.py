@@ -393,6 +393,10 @@ class _Lowering:
         q = self.qty(node)
         if q is None or bound is None:
             return None
+        if bound.dim == DIMENSIONLESS and q.dim != DIMENSIONLESS:
+            number, unit = node.args
+            self.problem(node, f"{what}: the margin must have the bound's dimension, but the bound is a plain number and the margin is {number.text} {unit.text}; if the quantity has a unit, the bound needs a unit too")
+            return None
         if self.dimensioned(q, bound.dim, f"{what}: the margin must have the bound's dimension", node) is None:
             return None
         if q.value.lo <= 0:

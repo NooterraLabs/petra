@@ -10,21 +10,26 @@
                 {"claim": NAME, "status": "PASS" | "FAIL" | "UNKNOWN" | "MARGINAL",
                  "footprint": [{"tag", "label", "owner", "source"}, ...],
                  "rules": ["R1", ...],
-                 "obligations": [what each open item needs, ...]},   non-empty iff UNKNOWN
+                 "obligations": [what each open item needs, ...],    non-empty iff UNKNOWN
+                 "margins": [{"requirement", "proved", "margin": "proved" | "undecided"
+                              | "within", "point"?}, ...]},   claims with a margin
                 ...]}
         Exit code from the overall status (EXIT_CODES): 0 PASS, 1 FAIL, 2 UNKNOWN,
-        5 MARGINAL (a claim with a margin is neither proved nor refuted, and a certified
-        point is within its margin of its bound), 3 input error (syntax, lowering,
+        5 MARGINAL (a claim with a margin is proved, and a certified point lies within
+        its margin of its bound), 3 input error (syntax, lowering,
         ComponentError or an unreadable deck; nothing is printed to stdout).
     python -m lola explain FILE
         Print the elaborated statements with hypothesis labels.
     python -m lola envelope FILE --input NAME --from QTY --to QTY [--at QTY]
-                                 [--resolution QTY] [--library DIR] [--json]
+                                 [--resolution QTY] [--max-probes N] [--library DIR] [--json]
         Find the widest interval of one input (or param) around an anchor over which
         every obligation that depends on it is proved, by bisecting the design's checks
-        (lola/envelope.py). A quantity is a number and a unit, such as "-20 degC". Exit 0
-        when the anchor passes, else the anchor's status code (1, 2 or 5), and 3 for an
-        input error such as an unknown input or a range in the wrong unit.
+        (lola/envelope.py), with at most N checks (default 64). A quantity is a number
+        and a unit, such as "-20 degC" or -20degC. The exit code is that of the worse of
+        the anchor's status and the status of the obligations that do not depend on the
+        input ("elsewhere"): 0 when both pass, so an envelope over a design that fails
+        elsewhere does not exit 0. 3 for an input error such as an unknown input, a range
+        in the wrong unit or an anchor whose design does not lower.
     python -m lola verify CERT.json [...]
         Kernel-check certificate files on their own (statement taken from the file), and
         library files, which are certificate envelopes with a "models" list. This is what
@@ -32,9 +37,11 @@
         theorem or a refutation), 1 when it rejects one, 3 when a file does not decode.
     python -m lola certify-family FILE --library DIR
         Certify a family design's claims over its whole box and store them in the
-        library. Exit 0 when every claim is stored, 1 when one is refuted, 5 when none is
-        refuted and one is within its margin, 2 when one is otherwise neither proved nor
-        refuted, 3 when FILE is not a family or does not load.
+        library. A proved claim is stored even when a certified point lies within its
+        margin, and is then listed as "margin". Exit 0 when every claim is stored and
+        none is within its margin, 5 when every claim is stored and one is within its
+        margin, 1 when one is refuted, 2 when one is otherwise not stored (neither proved
+        nor refuted, or waived), 3 when FILE is not a family or does not load.
     python -m lola registry build --out DECK.json
     python -m lola registry check [DECK.json]
         Run the deck consistency checker. With no DECK, check the deck built from the
@@ -70,7 +77,7 @@ from .pipeline import check_design, explain
 from .registry import DeckError, build_deck, build_registry, check_deck, read_deck, write_deck
 from .solvers import SolverSource
 from .units import Quantity, UnitError, parse_quantity
-from .verdict import STATUS, Open, Refuted, WithinMargin
+from .verdict import SEVERITY, STATUS, Refuted
 
 EXIT_CODES: Mapping[str, int] = {"PASS": 0, "FAIL": 1, "UNKNOWN": 2, "INPUT_ERROR": 3, "INTERNAL_ERROR": 4, "MARGINAL": 5}
 
@@ -112,7 +119,8 @@ def build_parser() -> argparse.ArgumentParser:
     env.add_argument("--from", dest="lo", required=True, metavar="QTY", help='the low end of the probe range, such as "-20 degC"')
     env.add_argument("--to", dest="hi", required=True, metavar="QTY", help="the high end of the probe range")
     env.add_argument("--at", metavar="QTY", help="the anchor the envelope grows from; default the middle of the stated range")
-    env.add_argument("--resolution", metavar="QTY", help="stop when each undecided gap is at most this; default 1/64 of the probe range")
+    env.add_argument("--resolution", metavar="QTY", help="stop when each undecided gap is at most this; default 1/64 of the probe range, never finer than 1/2^20 of it")
+    env.add_argument("--max-probes", type=int, default=64, metavar="N", help="the most checks to run, at least 4; default 64")
     env.add_argument("--library", metavar="DIR", help="family library to reuse evidence from")
     env.add_argument("--json", action="store_true", help="print the envelope as JSON")
     env.set_defaults(run=cmd_envelope)
@@ -187,13 +195,14 @@ def cmd_envelope(args: argparse.Namespace) -> int:
         quantities = [None if text is None else _quantity(text) for text in (args.lo, args.hi, args.at, args.resolution)]
         library = Library(args.library) if args.library else None
         sources = tuple(s for s in (library, SolverSource()) if s is not None)
-        found = envelope(design, registry, args.input, quantities[0], quantities[1], sources, at=quantities[2], resolution=quantities[3])
+        found = envelope(design, registry, args.input, quantities[0], quantities[1], sources, at=quantities[2], resolution=quantities[3], max_probes=args.max_probes)
     except (*_INPUT_ERRORS, EnvelopeError, UnitError) as exc:
         return _input_error(exc)
     print(json.dumps(to_json(found), sort_keys=True) if args.json else render(found))
-    if found.safe is not None:
-        return 0
-    return EXIT_CODES.get(found.start.status, EXIT_CODES["INPUT_ERROR"])
+    if found.start.status not in SEVERITY:
+        return EXIT_CODES["INPUT_ERROR"]
+    statuses = [found.start.status, *([found.elsewhere] if found.elsewhere in SEVERITY else [])]
+    return EXIT_CODES[max(statuses, key=SEVERITY.__getitem__)]
 
 
 _QUANTITY = re.compile(r"\s*([+-]?[0-9]+(?:\.[0-9]+|/[0-9]+)?)\s*(\S*)\s*")
@@ -254,14 +263,14 @@ def cmd_certify_family(args: argparse.Namespace) -> int:
         return _input_error(exc)
     for entry in result.stored:
         print(f"stored   {entry.family_key} (shape {entry.shape_hash})")
+    for reason in result.near:
+        print(f"margin   {reason}")
     for reason in result.skipped:
         print(f"skipped  {reason}")
     if not result.skipped:
-        return 0
+        return EXIT_CODES["MARGINAL"] if result.near else EXIT_CODES["PASS"]
     if any(isinstance(o, Refuted) for o in result.report.outcomes):
         return EXIT_CODES["FAIL"]
-    if any(isinstance(o, WithinMargin) for o in result.report.outcomes) and not any(isinstance(o, Open) for o in result.report.outcomes):
-        return EXIT_CODES["MARGINAL"]
     return EXIT_CODES["UNKNOWN"]
 
 
@@ -298,8 +307,27 @@ def cmd_gym(args: argparse.Namespace) -> int:
     return 0
 
 
+_QUANTITY_FLAGS = ("--from", "--to", "--at", "--resolution")
+
+
+def _join_negative(argv: list[str]) -> list[str]:
+    """["--from", "-20degC"] -> ["--from=-20degC"]: argparse takes a value that starts
+    with "-" and is not a plain number for an option, so a negative quantity with its
+    unit attached would be refused."""
+    out: list[str] = []
+    i = 0
+    while i < len(argv):
+        if argv[i] in _QUANTITY_FLAGS and i + 1 < len(argv) and _QUANTITY.fullmatch(argv[i + 1]) and argv[i + 1].lstrip().startswith("-"):
+            out.append(f"{argv[i]}={argv[i + 1]}")
+            i += 2
+        else:
+            out.append(argv[i])
+            i += 1
+    return out
+
+
 def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    args = build_parser().parse_args(_join_negative(sys.argv[1:] if argv is None else list(argv)))
     try:
         return args.run(args)
     except Exception:  # an uncaught crash would exit 1, which reads as FAIL

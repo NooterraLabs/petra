@@ -5,6 +5,7 @@ The gadget claim F - 1/2 * C <= 0 with C in [20 kN, 25 kN] holds exactly while t
 stays at or below 10 kN, so an envelope over F must stop within its resolution of 10 kN.
 """
 import contextlib
+import dataclasses
 import io
 import json
 import unittest
@@ -129,6 +130,30 @@ class Envelopes(GadgetDomain):
         self.assertEqual((bound.range.value.lo, bound.range.value.hi, bound.kind, bound.signature.owner), (21 * KN, 22 * KN, InputKind.ASSUMED, PROBE_OWNER))
         self.assertEqual(narrowed.loads, design.loads)
 
+    def test_the_probe_limit_stops_the_search_and_says_so(self):
+        env = self.run_envelope(resolution=kn(Fraction(1, 10**6)), max_probes=6)
+        self.assertLessEqual(len(env.probes), 6)
+        self.assertTrue(env.above.capped)
+        self.assertEqual((env.confirm.lo, env.confirm.hi), env.safe, "the confirming check still runs")
+        self.assertTrue(any("stopped at the limit of 6 checks" in n for n in env.notes), env.notes)
+        self.assertIn("stopped at the probe limit", render(env))
+        self.assertTrue(to_json(env)["above"]["capped"])
+
+    def test_a_resolution_finer_than_the_range_over_2_to_the_20_is_raised(self):
+        env = self.run_envelope(resolution=kn(Fraction(1, 10**30)))
+        self.assertEqual(env.resolution, 30 * KN / 2**20)
+        self.assertTrue(any(n.startswith("resolution raised") for n in env.notes), env.notes)
+        self.assertLessEqual(len(env.probes), envelope_module.DEFAULT_MAX_PROBES)
+
+    def test_fewer_than_four_probes_is_refused(self):
+        with self.assertRaises(EnvelopeError):
+            self.run_envelope(max_probes=3)
+
+    def test_a_confirming_check_that_does_not_pass_is_named(self):
+        env = self.run_envelope(resolution=kn(1))
+        failing = dataclasses.replace(env.confirm, status="UNKNOWN")
+        self.assertIn("the check over the whole interval is UNKNOWN", render(dataclasses.replace(env, confirm=failing)))
+
     def test_json_holds_exact_rationals(self):
         found = to_json(self.run_envelope(resolution=kn(1)))
         self.assertEqual((found["label"], found["unit"], found["probe"]), ("in:rig.push.g.force", "N", ["0", "30000"]))
@@ -159,6 +184,11 @@ class CommandLine(unittest.TestCase):
         self.assertEqual(self.run_cli("--input", "nothing", "--from", "0", "--to", "1")[0], 3)
         self.assertEqual(self.run_cli("--input", "ambient", "--from", "0 A", "--to", "1 A")[0], 3)
         self.assertEqual(self.run_cli("--input", "ambient", "--from", "zero", "--to", "1 degC")[0], 3)
+
+    def test_a_negative_quantity_may_carry_its_unit_attached(self):
+        code, out = self.run_cli("--input", "ambient", "--from", "-20degC", "--to", "100degC", "--json")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(json.loads(out)["probe"], ["-20", "100"])
 
     def test_a_failing_anchor_exits_with_its_status(self):
         code, out = self.run_cli("--input", "ambient", "--from", "-20 degC", "--to", "100 degC", "--at", "90 degC")

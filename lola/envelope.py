@@ -1,7 +1,7 @@
 """Safe envelopes: the widest interval of one input, around an anchor value, over which
 every obligation that depends on that input is proved.
 
-    lola envelope FILE --input NAME --from LO --to HI [--at X] [--resolution R]
+    lola envelope FILE --input NAME --from LO --to HI [--at X] [--resolution R] [--max-probes N]
 
 Untrusted. This module only chooses which designs to check. Each probe is the design with
 the one input's range replaced by an interval, checked by pipeline.check_design like any
@@ -26,6 +26,11 @@ Obligations whose statements do not mention the input cannot change from probe t
 so they are set aside and reported once ("elsewhere"). The probe statuses, and the
 envelope, count only the obligations that depend on the input. An input that declares a
 mean is refused, since a probe interval need not contain it.
+
+The search is bounded. It runs at most `max_probes` checks (anchor and confirm included;
+the rest split between the two sides), and the resolution is never finer than the probe
+range over 2^20, since a gap of 1e-25 near a limit can cost one probe minutes of box
+search. A side the cap stops says so, with its undecided gap.
 """
 from __future__ import annotations
 
@@ -49,6 +54,12 @@ PROBE_OWNER = "lola envelope"
 
 DEFAULT_STEPS = 64
 """Without --resolution, the resolution is the probe range's width over this."""
+
+FINEST_STEPS = 2 ** 20
+"""The resolution is never finer than the probe range's width over this."""
+
+DEFAULT_MAX_PROBES = 64
+"""Without --max-probes, the most checks one envelope runs."""
 
 
 class EnvelopeError(ValueError):
@@ -96,6 +107,7 @@ class Side:
     proved: Fraction
     limit: Fraction
     blocker: Probe | None
+    capped: bool = False    # the probe limit stopped the bisection before the resolution
 
 
 @dataclass(frozen=True)
@@ -112,6 +124,8 @@ class Envelope:
     elsewhere: str                # the status of the obligations that do not depend on the input
     elsewhere_open: tuple[str, ...]   # those of them that are not proved
     probes: tuple[Probe, ...]
+    max_probes: int = DEFAULT_MAX_PROBES
+    notes: tuple[str, ...] = ()   # a raised resolution or a side the probe limit stopped
 
     @property
     def safe(self) -> tuple[Fraction, Fraction] | None:
@@ -177,11 +191,14 @@ def envelope(
     sources: tuple[EvidenceSource, ...],
     at: Quantity | None = None,
     resolution: Quantity | None = None,
+    max_probes: int = DEFAULT_MAX_PROBES,
 ) -> Envelope:
     """Probe the anchor, then grow the proved interval down to `lo` and up to `hi` by
-    bisection until each side's undecided gap is at most the resolution, then check the
-    whole proved interval once more. The anchor defaults to the middle of the input's
-    stated range when that lies in [lo, hi], else to the middle of [lo, hi]."""
+    bisection until each side's undecided gap is at most the resolution or the probe
+    limit is reached, then check the whole proved interval once more. The anchor defaults
+    to the middle of the input's stated range when that lies in [lo, hi], else to the
+    middle of [lo, hi]. `max_probes` is at least 4: the anchor, one probe per side and
+    the confirming check."""
     target = find_target(design, registry, name)
     for what, q in (("--from", lo), ("--to", hi), ("--at", at), ("--resolution", resolution)):
         if q is not None and q.dim != target.dim:
@@ -196,6 +213,13 @@ def envelope(
     step = resolution.value.lo if resolution is not None else (b - a) / DEFAULT_STEPS
     if step <= 0:
         raise EnvelopeError("the resolution must be positive")
+    if max_probes < 4:
+        raise EnvelopeError(f"--max-probes must be at least 4 (the anchor, one probe per side and the confirming check), got {max_probes}")
+    notes: list[str] = []
+    finest = (b - a) / FINEST_STEPS
+    if step < finest:
+        notes.append(f"resolution raised from {quantity_text(Quantity(Interval(step, step), target.dim))} to {quantity_text(Quantity(Interval(finest, finest), target.dim))}, the probe range over 2^20")
+        step = finest
 
     probes: list[Probe] = []
 
@@ -214,25 +238,35 @@ def envelope(
         raise EnvelopeError(f"no obligation of {design.name} depends on {name}")
     elsewhere, elsewhere_open = _elsewhere(() if start.report is None else start.report.outcomes, target.label)
     if start.status != "PASS":
-        return Envelope(target, a, b, anchor, step, start, None, None, None, elsewhere, elsewhere_open, tuple(probes))
-    below = _grow(lambda x: probe(x, anchor), anchor, a, step, -1)
-    above = _grow(lambda x: probe(anchor, x), anchor, b, step, +1)
+        return Envelope(target, a, b, anchor, step, start, None, None, None, elsewhere, elsewhere_open, tuple(probes), max_probes, tuple(notes))
+    budget = max_probes - 2
+    below = _grow(lambda x: probe(x, anchor), anchor, a, step, -1, budget // 2)
+    above = _grow(lambda x: probe(anchor, x), anchor, b, step, +1, max_probes - 1 - len(probes))
+    for name, side in (("below", below), ("above", above)):
+        if side.capped:
+            gap = quantity_text(Quantity(Interval(abs(side.limit - side.proved), abs(side.limit - side.proved)), target.dim))
+            notes.append(f"the {name} side stopped at the limit of {max_probes} checks with {gap} undecided; raise --max-probes or --resolution")
     confirm = probe(below.proved, above.proved) if below.proved < above.proved else None
-    return Envelope(target, a, b, anchor, step, start, below, above, confirm, elsewhere, elsewhere_open, tuple(probes))
+    return Envelope(target, a, b, anchor, step, start, below, above, confirm, elsewhere, elsewhere_open, tuple(probes), max_probes, tuple(notes))
 
 
-def _grow(probe, anchor: Fraction, end: Fraction, step: Fraction, sign: int) -> Side:
+def _grow(probe, anchor: Fraction, end: Fraction, step: Fraction, sign: int, budget: int) -> Side:
     """Bisect for the farthest x toward `end` such that the interval from the anchor to x
-    passes. `probe(x)` checks that interval."""
+    passes, with at most `budget` probes (at least one). `probe(x)` checks that
+    interval."""
     if end == anchor:
         return Side(anchor, anchor, None)
     first = probe(end)
     if first.status == "PASS":
         return Side(end, end, None)
     good, bad, blocker = anchor, _limit(first, anchor, end, sign), first
+    used = 1
     while abs(bad - good) > step:
+        if used >= budget:
+            return Side(good, bad, blocker, capped=True)
         mid = (good + bad) / 2
         p = probe(mid)
+        used += 1
         if p.status == "PASS":
             good = mid
         else:
@@ -274,12 +308,14 @@ def _assess(outcomes: Iterable[Outcome], label: str) -> tuple[str, str, Fraction
     status = _STATUS[type(worst)]
     if isinstance(worst, Discharged):
         return status, "", None
-    if isinstance(worst, Open):
+    if isinstance(worst, Open) and worst.near is None:
         return status, f"{worst.requirement.id} is neither proved nor refuted", None
-    point = dict(worst.refutation.point)
-    sym = next(h.sym for h in worst.refutation.statement.hyps if isinstance(h, RangeHyp) and h.label == label)
-    what = "is refuted" if isinstance(worst, Refuted) else "comes within its margin"
-    return status, f"{worst.obligation.requirement.id} {what} at this point", point[sym]
+    refutation = worst.near.refutation if isinstance(worst, Open) else worst.refutation
+    point = dict(refutation.point)
+    sym = next(h.sym for h in refutation.statement.hyps if isinstance(h, RangeHyp) and h.label == label)
+    what = ("is refuted" if isinstance(worst, Refuted) else "is proved and comes within its margin" if isinstance(worst, WithinMargin)
+            else "is neither proved nor refuted, and comes within its margin")
+    return status, f"{_id(worst)} {what} at this point", point[sym]
 
 
 def _elsewhere(outcomes: Iterable[Outcome], label: str) -> tuple[str, tuple[str, ...]]:
@@ -312,7 +348,8 @@ def _side_text(env: Envelope, side: Side) -> str:
     where = f" with {env.target.name} = {_q(env, p.at)}" if p.at is not None else ""
     why = f" ({p.why}{where})" if p.why else ""
     gap = abs(side.limit - side.proved)
-    return f"proved to {_q(env, side.proved)}; {_q(env, side.limit)} is not: {p.status}{why}; {_q(env, gap)} undecided"
+    capped = ", stopped at the probe limit" if side.capped else ""
+    return f"proved to {_q(env, side.proved)}; {_q(env, side.limit)} is not: {p.status}{why}; {_q(env, gap)} undecided{capped}"
 
 
 def render(env: Envelope) -> str:
@@ -324,7 +361,8 @@ def render(env: Envelope) -> str:
     else:
         lo, hi = env.safe
         confirmed = "one check over the whole interval passes" if env.confirm is not None and env.confirm.status == "PASS" else (
-            "rests on the two checks either side of the anchor" if env.confirm is not None else "a single point")
+            f"the check over the whole interval is {env.confirm.status}, so it rests on the two checks either side of the anchor" if env.confirm is not None
+            else "a single point")
         lines.append(f"envelope   {t.name} in {_iv(env, lo, hi)}: every obligation that depends on it is proved ({confirmed})")
     lines.append(f"input      {t.label}, stated {_iv(env, t.stated.lo, t.stated.hi)}; probed {_iv(env, env.lo, env.hi)} from {_q(env, env.anchor)}, resolution {_q(env, env.resolution)}")
     if env.below is not None and env.above is not None:
@@ -333,7 +371,8 @@ def render(env: Envelope) -> str:
     if env.elsewhere != "NONE":
         others = f": {', '.join(env.elsewhere_open)}" if env.elsewhere_open else ""
         lines.append(f"elsewhere  the obligations that do not depend on {t.name} are {env.elsewhere}{others}")
-    lines.append(f"probes     {len(env.probes)} checks")
+    lines += [f"note       {n}" for n in env.notes]
+    lines.append(f"probes     {len(env.probes)} checks (limit {env.max_probes})")
     for p in env.probes:
         lines.append(f"  {_iv(env, p.lo, p.hi):<32} {p.status}")
     return "\n".join(lines)
@@ -348,7 +387,7 @@ def to_json(env: Envelope) -> dict:
             return None
         b = s.blocker
         return {"proved": str(s.proved), "limit": str(s.limit), "status": None if b is None else b.status,
-                "why": None if b is None else b.why, "at": None if b is None or b.at is None else str(b.at)}
+                "why": None if b is None else b.why, "at": None if b is None or b.at is None else str(b.at), "capped": s.capped}
 
     safe = env.safe
     return {
@@ -366,5 +405,7 @@ def to_json(env: Envelope) -> dict:
         "below": side(env.below),
         "above": side(env.above),
         "elsewhere": {"status": env.elsewhere, "open": list(env.elsewhere_open)},
+        "notes": list(env.notes),
+        "max_probes": env.max_probes,
         "probes": [{"range": [str(p.lo), str(p.hi)], "status": p.status} for p in env.probes],
     }

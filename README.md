@@ -66,7 +66,7 @@ A claim can name a margin after its bound:
 claim hot:  lighting.w1.temperature <= 70 degC margin 20 degC under lamp_draw
 ```
 
-The verdict is FAIL if the wire can pass 70 degC. It is MARGINAL if the kernel certifies a point where the wire comes within 20 degC of the bound, and the claim's proof, when there is one, travels with it. It is PASS if the claim is proved and no point comes that close. `examples/circuit_pass.lola` with this claim is MARGINAL: the wire reaches about 55 degC at the hot corner.
+The verdict is FAIL if the wire can pass 70 degC. It is MARGINAL if the claim is proved and the kernel also certifies a point where the wire comes within 20 degC of the bound. It is PASS if the claim is proved and no point comes that close, and the report says whether the margin itself was proved (the claim holds with at least 20 degC to spare) or is undecided. A point within the margin while the claim is neither proved nor refuted gives UNKNOWN, with the point shown. `examples/circuit_pass.lola` with this claim is MARGINAL: the wire reaches about 55 degC at the hot corner.
 
 To find how far an input can go, name the range to explore:
 
@@ -74,7 +74,7 @@ To find how far an input can go, name the range to explore:
 python -m lola envelope examples/circuit_pass.lola --input ambient --from "-20 degC" --to "100 degC"
 ```
 
-LoLa checks the design with the ambient's range replaced by probe intervals and bisects. It reports `ambient in [-20, 53.125] degC` as proved, with a certified failure of the `hot` claim at 54.3 degC. The probed range is an assumption of the command, not of whoever signed the design's ambient, and the footprint says so. `--input` also takes a load entry (`lamp_draw.lighting.lamps.current`), a component field (`lighting.mains.fault_current`) or a family param.
+LoLa checks the design with the ambient's range replaced by probe intervals and bisects. It reports `ambient in [-20, 53.125] degC` as proved, with a certified failure of the `hot` claim at 54.3 degC. The probed range is an assumption of the command, not of whoever signed the design's ambient, and the footprint says so. `--input` also takes a load entry (`lamp_draw.lighting.lamps.current`), a component field (`lighting.mains.fault_current`) or a family param. The search runs at most 64 checks (`--max-probes`), and the command exits 0 only when the anchor and the obligations that do not depend on the input both pass.
 
 ## Know what a verdict rests on
 

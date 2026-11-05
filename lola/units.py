@@ -209,3 +209,16 @@ def quantity_text(q: Quantity) -> str:
     """A quantity in its SI unit, for reports."""
     unit = si_unit(q.dim)
     return format_quantity(q, unit) if unit in UNITS else f"{interval_text(q.value)} {unit}"
+
+
+def readable_text(q: Quantity) -> str:
+    """A quantity in the unit of its dimension with the largest factor that still leaves
+    its magnitude at least 1 (300 MPa, not 300000000 Pa), preferring the SI unit among
+    equal factors and never "%". quantity_text when no unit fits."""
+    si = si_unit(q.dim)
+    size = max(abs(q.value.lo), abs(q.value.hi))
+    units = [(factor, name == si, name) for name, (factor, dim) in UNITS.items() if dim == q.dim and name != "%"]
+    fitting = [u for u in units if u[0] <= size]
+    if not units or size == 0:
+        return quantity_text(q)
+    return format_quantity(q, max(fitting or [min(units)])[2])

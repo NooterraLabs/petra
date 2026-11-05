@@ -38,7 +38,8 @@ class Submission:
 
 
 REWARD = {"PASS": 1.0, "MARGINAL": 0.0, "UNKNOWN": 0.0, "FAIL": -1.0}
-"""MARGINAL earns what UNKNOWN does: the claim is not proved."""
+"""MARGINAL earns what UNKNOWN does: the claim is proved, but a certified point comes
+within its margin, so the design has not shown the slack it asked for."""
 
 
 class _Submitted:

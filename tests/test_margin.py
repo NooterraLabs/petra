@@ -20,15 +20,16 @@ from unittest import mock
 from lola import cli, coverage, models
 from lola.certs import CertStore
 from lola.ir import Rel
-from lola.kernel import Add, Const, Mul, Neg, RangeHyp, Refutation, Rejection, Statement, Sym, check
+from lola.kernel import Add, Const, Mul, Neg, RangeHyp, Refutation, Rejection, Statement, Sym, check, statement_hash
 from lola.kernel.check import _issue_refutation, _issue_theorem
 from lola.kernel.rules.r4_enclosure import AllNonpositive, PointWitness
-from lola.lang import LoweringError
-from lola.models.base import Criterion
+from lola.lang import LoweringError, parse_design
+from lola.models.base import ClaimOrigin, Criterion, NeedsCertificate, NoRuleForQuantity
 from lola.pipeline import explain
+from lola.premises import PremiseBook
 from lola.solvers import SolverSource
 from lola.units import DIMENSIONLESS, TEMPERATURE, Quantity
-from lola.verdict import Fail, Marginal, Pass, Unknown, WithinMargin, verdict_json
+from lola.verdict import Discharged, Fail, Marginal, Open, Pass, Scope, Unknown, WithinMargin, assemble, verdict_json
 from tests.test_pipeline import CAPACITY, GADGET, REGISTRY, STRENGTH, WAIVE_WEAR, GadgetDomain, Solver, build_strength, gadget, point, push
 from tests.test_seal import FOOTPRINT
 
@@ -86,6 +87,13 @@ class Syntax(GadgetDomain):
                 self.design(gadget(CAPACITY), push("10"), f"claim fits: g.utilisation <= 1/2 margin {margin}\n", WAIVE_WEAR)
             self.assertIn(fragment, str(ctx.exception))
 
+    def test_a_bound_without_a_unit_is_named_as_the_problem(self):
+        text = (ROOT / "examples" / "circuit_pass.lola").read_text(encoding="utf-8")
+        text = text.replace("lighting.w1.temperature <= 70 degC", "lighting.w1.temperature <= 70 margin 20 degC")
+        with self.assertRaises(LoweringError) as ctx:
+            parse_design(text, "radial.lola", REGISTRY)
+        self.assertIn("the bound needs a unit", str(ctx.exception))
+
     def test_explain_prints_the_margin_statement_beside_the_claim(self):
         text = explain(self.design(gadget(CAPACITY), push("10"), FITS, WAIVE_WEAR), REGISTRY)
         self.assertIn("margin obligation, the bound moved to 0.4", text)
@@ -93,9 +101,21 @@ class Syntax(GadgetDomain):
 
 
 class Verdicts(GadgetDomain):
-    def test_slack_beyond_the_margin_passes(self):
+    def test_slack_beyond_the_margin_passes_and_says_the_margin_is_proved(self):
         report = self.check(gadget(CAPACITY), push("7"), FITS, WAIVE_WEAR)
         self.assertIsInstance(report.verdict, Pass, report.render())
+        (proved,) = [o for o in report.outcomes if isinstance(o, Discharged)]
+        self.assertEqual(proved.margin_status, "proved")
+        self.assertIn(f"margin     {proved.obligation.requirement.id}: proved: the claim holds with at least 0.1 to spare", report.render())
+        self.assertEqual(verdict_json(report.entries[0])["margins"], [{"requirement": proved.obligation.requirement.id, "proved": True, "margin": "proved"}])
+
+    def test_a_margin_no_source_decides_is_reported_undecided(self):
+        body = (gadget(CAPACITY), push("7"), FITS, WAIVE_WEAR)
+        margin = next(o for o in self.check(*body).outcomes if isinstance(o, Discharged)).margin
+        report = self.check(*body, sources=(Skipping({statement_hash(margin.statement)}, Solver()),))
+        self.assertIsInstance(report.verdict, Pass, report.render())
+        self.assertIn("undecided: no point within 0.1 of the bound was found, and slack 0.1 is not proved", report.render())
+        self.assertEqual(verdict_json(report.entries[0])["margins"][0]["margin"], "undecided")
 
     def test_a_point_within_the_margin_is_marginal_and_keeps_the_proof(self):
         report = self.check(gadget(CAPACITY), push("9"), FITS, WAIVE_WEAR)
@@ -111,11 +131,18 @@ class Verdicts(GadgetDomain):
         entry = verdict_json(report.entries[0])
         self.assertEqual((entry["status"], entry["obligations"]), ("MARGINAL", []))
 
-    def test_without_a_proof_a_point_within_the_margin_is_still_marginal(self):
+    def test_without_a_proof_a_point_within_the_margin_is_unknown_and_shown(self):
+        # A point within the margin says nothing about the rest of the box, so without
+        # the claim's proof it cannot rank below UNKNOWN.
         report = self.check(gadget(CAPACITY), push("9"), FITS, WAIVE_WEAR, sources=(Witnesses(),))
-        self.assertIsInstance(report.verdict, Marginal, report.render())
-        self.assertIsNone(report.verdict.near[0].theorem)
-        self.assertIn("not proved and not refuted", report.render())
+        self.assertIsInstance(report.verdict, Unknown, report.render())
+        (item,) = report.verdict.open
+        self.assertIsNone(item.near.theorem)
+        self.assertEqual(dict(item.near.refutation.point)["push.g.force"], 9000)
+        self.assertIn("neither proved nor refuted; at this point it is within 0.1 of its bound", report.render())
+        self.assertIn("push.g.force = 9000 N", report.render())
+        (margin,) = verdict_json(report.entries[0])["margins"]
+        self.assertEqual((margin["proved"], margin["margin"], margin["point"]["push.g.force"]), (False, "within", "9000"))
 
     def test_a_refuted_claim_fails_whatever_its_margin(self):
         report = self.check(gadget(CAPACITY), push("12"), FITS, WAIVE_WEAR)
@@ -136,17 +163,25 @@ class Verdicts(GadgetDomain):
         tight = "claim tight: g.utilisation <= 1/3 under push\n"
         loose = "claim loose: g.utilisation <= 1 under push\n"
         cases = (
-            ((FITS, tight), (Witnesses(),), Fail),
-            ((FITS, loose), (Witnesses(),), Unknown),
-            ((FITS, loose), (Solver(),), Marginal),
+            ((FITS, tight), (Witnesses(),), Fail, Unknown),
+            ((FITS, loose), (Witnesses(),), Unknown, Unknown),
+            ((FITS, loose), (Solver(),), Marginal, Marginal),
         )
-        for claims, sources, expected in cases:
+        for claims, sources, expected, fits in cases:
             with self.subTest(claims=claims, expected=expected.__name__):
                 report = self.check(gadget(CAPACITY), push("9"), *claims, WAIVE_WEAR, sources=sources)
                 self.assertIsInstance(report.verdict, expected, report.render())
-                self.assertIsInstance(self.entry(report, "fits"), Marginal)
+                self.assertIsInstance(self.entry(report, "fits"), fits)
 
-    def test_a_builder_whose_tightened_statements_do_not_pair_gives_no_margin(self):
+    def test_marginal_and_an_open_item_combine_to_unknown(self):
+        loose = "claim loose: g.utilisation <= 1 under push\n"
+        body = (gadget(CAPACITY), push("9"), FITS, loose, WAIVE_WEAR)
+        other = next(o for o in self.check(*body).outcomes if isinstance(o, Discharged) and o.obligation.requirement.origin == ClaimOrigin("loose"))
+        report = self.check(*body, sources=(Skipping({statement_hash(other.obligation.statement)}, Solver()),))
+        self.assertIsInstance(report.verdict, Unknown, report.render())
+        self.assertIsInstance(self.entry(report, "fits"), Marginal)
+
+    def unpaired(self) -> None:
         def build(req, model, design, registry):
             built = build_strength(req, model, design, registry)
             return built if req.criterion.margin is not None else built + built
@@ -154,8 +189,19 @@ class Verdicts(GadgetDomain):
         domain = dataclasses.replace(GADGET, builders={**GADGET.builders, STRENGTH: build})
         self.enterContext(mock.patch.object(models, "KINDS", MappingProxyType({"gadget": domain})))
         self.enterContext(mock.patch.object(coverage, "KINDS", {"gadget": domain}))
+
+    def test_a_builder_whose_tightened_statements_do_not_pair_leaves_the_margin_open(self):
+        self.unpaired()
         report = self.check(gadget(CAPACITY), push("9"), FITS, WAIVE_WEAR)
-        self.assertIsInstance(report.verdict, Pass, report.render())
+        self.assertIsInstance(report.verdict, Unknown, report.render())
+        (need,) = report.verdict.open[0].needs
+        self.assertIsInstance(need, NoRuleForQuantity)
+        self.assertIn("margin statement was not checked", need.reason)
+        self.assertTrue(any("margin was not checked" in w for w in report.warnings), report.warnings)
+
+    def test_a_refuted_claim_with_an_unpaired_margin_still_fails(self):
+        self.unpaired()
+        self.assertIsInstance(self.check(gadget(CAPACITY), push("12"), FITS, WAIVE_WEAR).verdict, Fail)
 
 
 class StoredMarginPoints(GadgetDomain):
@@ -220,6 +266,33 @@ class Construction(GadgetDomain):
             Marginal((), FOOTPRINT)
         with self.assertRaises(TypeError):
             Marginal(("near the bound",), FOOTPRINT)
+
+    def test_a_marginal_verdict_needs_the_claims_proof(self):
+        n = self.near
+        bare = WithinMargin(n.obligation, n.margin, n.refutation, n.source)
+        with self.assertRaises(ValueError):
+            Marginal((bare,), FOOTPRINT)
+        with self.assertRaises(ValueError):
+            assemble((bare,), PremiseBook([], [], ()), Scope((), (), None))
+
+    def test_a_proved_margin_claim_carries_its_margin_obligation(self):
+        n = self.near
+        with self.assertRaises(ValueError):
+            Discharged(n.obligation, n.theorem, n.source)
+        Discharged(n.obligation, n.theorem, n.source, n.margin)
+        with self.assertRaises(ValueError):
+            Discharged(n.obligation, n.theorem, n.source, n.margin, n.theorem)
+
+    def test_an_open_items_margin_point_is_its_own_and_unproved(self):
+        n = self.near
+        bare = WithinMargin(n.obligation, n.margin, n.refutation, n.source)
+        need = (NeedsCertificate("sha256:s", "R4", "x"),)
+        Open(n.obligation.requirement, need, statement=n.obligation.statement, near=bare)
+        with self.assertRaises(TypeError):
+            Open(n.obligation.requirement, need, statement=n.obligation.statement, near=n)
+        other = dataclasses.replace(n.obligation.requirement, origin=ClaimOrigin("other"))
+        with self.assertRaises(ValueError):
+            Open(other, need, statement=n.obligation.statement, near=bare)
 
 
 class KnifeEdge(unittest.TestCase):

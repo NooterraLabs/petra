@@ -10,9 +10,12 @@ and nothing else.
 A claim with a margin is elaborated twice: once as written, and once with its criterion
 tightened by the margin (models.base.Criterion.tightened), which gives each claim
 obligation a margin obligation built the same way. Unless the claim obligation is
-refuted, its margin obligation is offered to the sources too, and a refutation of it
-settles the claim obligation as WithinMargin, with the claim's theorem when there is
-one, or as Refuted when the same evidence refutes the claim.
+refuted, its margin obligation is offered to the sources too. Every candidate is tried
+against the claim first, at every expression it names: a refutation there is a FAIL,
+and a proof there proves the claim. A refutation of the margin statement is then a
+point within the margin: MARGINAL beside the claim's proof, or an open item's margin
+point without one. A proof of it is the margin proved. A claim obligation whose margin
+obligation cannot be built beside it is an open item, never a silent PASS.
 
 Every dispatch reads the domain registry (lola/models/__init__.py): a component's kind
 picks its lowerer, a requirement's mode picks its builder. Nothing here names a domain.
@@ -39,7 +42,6 @@ from .models.base import (
     CertificateRejected,
     CertificateTooWeak,
     ComponentError,
-    Criterion,
     Elaborated,
     Gap,
     NeedsCertificate,
@@ -53,7 +55,7 @@ from .models.contracts import contract_obligations
 from .premises import Label, LabelKind, Premise, PremiseBook, ScopeParam, Tag, input_label, label_kind, param_label
 from .registry import Constant, Deck, OutsideMakeableSet, Registry, check_deck
 from .registry.model import render
-from .units import Quantity, interval_text, quantity_text, si_unit
+from .units import Quantity, interval_text, quantity_text, readable_text, si_unit
 from .verdict import (
     STATUS,
     ClaimVerdict,
@@ -68,6 +70,8 @@ from .verdict import (
     assemble,
     describe_need,
     entries,
+    has_margin,
+    margin_pair_fault,
     open_from_gap,
     render as render_verdict,
     verdict_json,
@@ -173,10 +177,12 @@ def elaborate(design: Design, models: Mapping[str, Any], requirements: tuple[Req
 
 @dataclass(frozen=True)
 class _Prepared:
-    """`margins[i]` is the margin obligation of `elaborated[i]`, or None."""
+    """`margins[i]` is the margin obligation of `elaborated[i]`; None when its
+    requirement has no margin; or, for a claim with a margin whose margin obligation
+    could not be built beside it, the reason, which _settle turns into an open item."""
 
     elaborated: tuple[Elaborated, ...]
-    margins: tuple[Obligation | None, ...]
+    margins: tuple[Obligation | str | None, ...]
     waived: tuple[tuple[Requirement, Premise], ...]
     warnings: tuple[str, ...]
 
@@ -199,47 +205,33 @@ def _prepare(design: Design, registry: Registry) -> _Prepared:
         if (w.mode, w.subject) not in matched
     )
     kept = tuple(e for e in elaborated if e.requirement not in dropped)
-    return _Prepared(kept, _margins(design, lowered, kept, registry), waived, warnings)
+    return _Prepared(kept, margin_obligations(design, lowered, kept, registry), waived, warnings)
 
 
-def _margins(design: Design, lowered: Mapping[str, Any], elaborated: tuple[Elaborated, ...], registry: Registry) -> tuple[Obligation | None, ...]:
+def margin_obligations(design: Design, lowered: Mapping[str, Any], elaborated: tuple[Elaborated, ...], registry: Registry) -> tuple[Obligation | str | None, ...]:
     """For each claim requirement with a margin, its builder runs again on the requirement
     with the tightened criterion. Builders are pure and read only rel and bound, so the
     i-th obligation built for the tightened requirement is the margin obligation of the
-    i-th obligation built for the claim. A pair counts only when both are obligations
-    over the same model, goal type and hypotheses; anything else has no margin
-    obligation, which leaves the claim to PASS, FAIL or UNKNOWN as before."""
-    margins: list[Obligation | None] = [None] * len(elaborated)
+    i-th obligation built for the claim. A pair counts only when
+    verdict.margin_pair_fault accepts it (same model, goal type and hypotheses, so the
+    same load case). Anything else gets the reason in place of a margin obligation, so a
+    margin is never dropped silently."""
+    margins: list[Obligation | str | None] = [None] * len(elaborated)
     positions: dict[Requirement, list[int]] = {}
     for i, item in enumerate(elaborated):
-        criterion = item.requirement.criterion
-        if isinstance(criterion, Criterion) and criterion.margin is not None:
+        if has_margin(item.requirement) and isinstance(item, Obligation):
             positions.setdefault(item.requirement, []).append(i)
     for req, where in positions.items():
-        if req.mode in domains.UNMODELLED:
-            continue
         spec = domains.KINDS[design.components[req.subject[0]].kind]
         tight = dataclasses.replace(req, criterion=req.criterion.tightened())
-        built = tuple(spec.builders[req.mode](tight, lowered[req.subject[0]], design, registry) or ())
+        built = tuple(e for e in spec.builders[req.mode](tight, lowered[req.subject[0]], design, registry) or () if isinstance(e, Obligation))
         if len(built) != len(where):
+            for i in where:
+                margins[i] = f"the builder stated {len(built)} obligations at the tightened bound and {len(where)} for the claim"
             continue
         for i, margin in zip(where, built):
-            if _pairs(elaborated[i], margin):
-                margins[i] = margin
+            margins[i] = margin_pair_fault(elaborated[i], margin) or margin
     return tuple(margins)
-
-
-def _pairs(item: Elaborated, margin: Elaborated) -> bool:
-    def hyps(statement: Statement) -> tuple[str, ...]:
-        return tuple(h.label if isinstance(h, RangeHyp) else h.sym for h in statement.hyps)
-
-    return (
-        isinstance(item, Obligation)
-        and isinstance(margin, Obligation)
-        and margin.model == item.model
-        and type(margin.statement.goal) is type(item.statement.goal)
-        and hyps(margin.statement) == hyps(item.statement)
-    )
 
 
 def check_design(design: Design, registry: Registry, sources: tuple[EvidenceSource, ...], sink: EvidenceSink | None = None, deck: Deck | None = None, path: str = "") -> Report:
@@ -270,23 +262,32 @@ def _settle(item: Elaborated, margin: Obligation | None, sources: tuple[Evidence
     if inconsistent:
         return Open(item.requirement, tuple(dict.fromkeys(inconsistent)), statement=statement)
     rejected: list[tuple[Rejection, str]] = []
-    proved = _first_accepted(item, sources, sink, rejected, warnings)
-    if isinstance(proved, Refuted):
-        return proved
-    near = None if margin is None else _within_margin(item, margin, None if proved is None else proved.theorem, sources, sink, warnings)
-    if near is not None:
-        return near
-    if proved is not None:
-        return proved
+    found = _first_accepted(item, sources, sink, rejected, warnings)
+    if found is not None and isinstance(found[0], Refutation):
+        return Refuted(item, *found)
+    near = None
+    if isinstance(margin, str):
+        warnings.append(f"{item.requirement.id}: its margin was not checked, because {margin}")
+        return Open(item.requirement, (NoRuleForQuantity(item.requirement.id, f"its margin statement was not checked, because {margin}"),), statement=statement)
+    if margin is not None:
+        settled = _at_margin(item, margin, found, sources, sink, warnings)
+        if not (isinstance(settled, WithinMargin) and settled.theorem is None):
+            if settled is not None:
+                return settled
+        else:
+            near = settled
+    elif found is not None:
+        return Discharged(item, *found)
     if not rejected:
-        return Open(item.requirement, (NeedsCertificate(digest, _rule_of(statement), item.describe),), statement=statement)
+        return Open(item.requirement, (NeedsCertificate(digest, _rule_of(statement), item.describe),), statement=statement, near=near)
     needs = tuple((CertificateTooWeak if isinstance(r.fault, TooWeak) else CertificateRejected)(r.statement_hash, r.rule, name, r.reason) for r, name in rejected)
-    return Open(item.requirement, needs, tuple(r for r, _ in rejected), statement)
+    return Open(item.requirement, needs, tuple(r for r, _ in rejected), statement, near)
 
 
-def _first_accepted(item: Obligation, sources: tuple[EvidenceSource, ...], sink: EvidenceSink | None, rejected: list[tuple[Rejection, str]], warnings: list[str]) -> Discharged | Refuted | None:
-    """The first evidence, in source order, that the kernel accepts for the obligation's
-    statement. Each rejection is appended to `rejected`."""
+def _first_accepted(item: Obligation, sources: tuple[EvidenceSource, ...], sink: EvidenceSink | None, rejected: list[tuple[Rejection, str]], warnings: list[str]) -> tuple[Theorem | Refutation, str] | None:
+    """The first result, with its source's name, that the kernel accepts for the
+    obligation's statement from the evidence the sources offer in order. Each rejection
+    is appended to `rejected`."""
     statement, digest = item.statement, statement_hash(item.statement)
     for source in sources:
         for evidence in _offered(source, statement, digest, item.requirement, warnings):
@@ -295,29 +296,72 @@ def _first_accepted(item: Obligation, sources: tuple[EvidenceSource, ...], sink:
                 rejected.append((result, source.name))
                 continue
             _record(sink, statement, digest, evidence, source.name, item.requirement, warnings)
-            kind = Discharged if isinstance(result, Theorem) else Refuted
-            return kind(item, result, source.name)
+            return result, source.name
     return None
 
 
-def _within_margin(item: Obligation, margin: Obligation, theorem: Theorem | None, sources: tuple[EvidenceSource, ...], sink: EvidenceSink | None, warnings: list[str]) -> Refuted | WithinMargin | None:
-    """The first evidence any source offers for the margin statement that the kernel
-    accepts as a refutation of it, whether or not the claim was proved (`theorem`). Each
-    candidate is checked against the claim statement first, so a point past the bound
-    itself is a FAIL, never a MARGINAL. A proof of the margin statement is set aside: it
-    is a theorem about another statement, and a PASS rests on the claim's own."""
+def _at_margin(item: Obligation, margin: Obligation, proved: tuple[Theorem, str] | None, sources: tuple[EvidenceSource, ...], sink: EvidenceSink | None, warnings: list[str]) -> Refuted | Discharged | WithinMargin | None:
+    """Offer the margin statement to the sources and settle the claim obligation with
+    what they return. Each candidate is tried against the claim first, at every
+    expression it can name (_against_claim): a refutation there is a FAIL, and a proof
+    there proves a claim nothing else proved. Then against the margin statement: a
+    refutation is a point within the margin, and a proof is the margin proved.
+
+    Returns Refuted; a WithinMargin, carrying the claim's theorem when the claim is
+    proved (MARGINAL) and none when it is not (the open item's margin point); a
+    Discharged carrying the margin obligation, with the margin statement's theorem when
+    it was proved and without when no point within the margin was found (undecided); or
+    None when the claim is unproved and no point within the margin was found."""
     statement, digest = margin.statement, statement_hash(margin.statement)
+    claim, claim_digest = item.statement, statement_hash(item.statement)
+    margin_theorem = None
     for source in sources:
         for evidence in _offered(source, statement, digest, margin.requirement, warnings):
-            past = check(item.statement, evidence)
-            if isinstance(past, Refutation):
-                _record(sink, item.statement, statement_hash(item.statement), evidence, source.name, item.requirement, warnings)
-                return Refuted(item, past, source.name)
+            result, used = _against_claim(claim, evidence)
+            if isinstance(result, Refutation):
+                _record(sink, claim, claim_digest, used, source.name, item.requirement, warnings)
+                return Refuted(item, result, source.name)
+            if isinstance(result, Theorem) and proved is None:
+                _record(sink, claim, claim_digest, used, source.name, item.requirement, warnings)
+                proved = (result, source.name)
             result = check(statement, evidence)
             if isinstance(result, Refutation):
                 _record(sink, statement, digest, evidence, source.name, margin.requirement, warnings)
-                return WithinMargin(item, margin, result, source.name, theorem)
-    return None
+                return WithinMargin(item, margin, result, source.name, None if proved is None else proved[0])
+            if isinstance(result, Theorem) and margin_theorem is None:
+                _record(sink, statement, digest, evidence, source.name, margin.requirement, warnings)
+                margin_theorem = result
+            if proved is not None and margin_theorem is not None:
+                return Discharged(item, *proved, margin, margin_theorem)
+    return None if proved is None else Discharged(item, *proved, margin, margin_theorem)
+
+
+_MAX_WHICH = 256
+"""The most expressions or bounds _against_claim tries a point witness at."""
+
+
+def _against_claim(claim: Statement, evidence: Evidence) -> tuple[Theorem | Refutation | Rejection, Evidence]:
+    """The kernel's result for `evidence` against the claim, with the evidence used. When
+    it neither proves nor refutes, and its body names one expression or bound of the goal
+    by an integer `which` (a point witness), the same body is tried naming each other one,
+    from -1 up, until the kernel answers that there is no such index: a margin witness
+    shows the margin statement fails at a point through one expression, and the claim may
+    fail at that point through another. The first refutation found is returned.
+    Untrusted search: every candidate is checked by the kernel."""
+    first = check(claim, evidence)
+    body = evidence.body
+    if isinstance(first, (Theorem, Refutation)) or not dataclasses.is_dataclass(body) or type(getattr(body, "which", None)) is not int:
+        return first, evidence
+    for k in range(-1, _MAX_WHICH):
+        if k == body.which:
+            continue
+        candidate = dataclasses.replace(evidence, body=dataclasses.replace(body, which=k))
+        result = check(claim, candidate)
+        if isinstance(result, Refutation):
+            return result, candidate
+        if k >= 0 and isinstance(result, Rejection) and not isinstance(result.fault, TooWeak):
+            break
+    return first, evidence
 
 
 def _record(sink: EvidenceSink | None, statement: Statement, digest: str, evidence: Evidence, source: str, requirement: Requirement, warnings: list[str]) -> None:
@@ -385,6 +429,9 @@ def build_premise_book(design: Design, registry: Registry, outcomes: tuple[Outco
             premises.append(outcome.obligation.model.premise())
             result = outcome.theorem if isinstance(outcome, Discharged) else outcome.refutation
             premises += [_registry_premise(registry, label) for label in _labels(result.statement, LabelKind.REGISTRY)]
+        elif isinstance(outcome, Open) and outcome.near is not None:
+            premises.append(outcome.near.margin.model.premise())
+            premises += [_registry_premise(registry, label) for label in _labels(outcome.near.refutation.statement, LabelKind.REGISTRY)]
     for inp in signed_inputs(design, lower_components(design, registry)):
         premises += _input_premises(design, inp)
     for record in design.tests.values():
@@ -464,9 +511,11 @@ def explain(design: Design, registry: Registry) -> str:
             lines += [f"  needs  {describe_need(n)}" for n in item.needs]
             continue
         lines += _statement_lines(f"obligation {item.requirement.id}", item)
-        if margin is not None:
-            moved = quantity_text(margin.requirement.criterion.bound)
+        if isinstance(margin, Obligation):
+            moved = readable_text(margin.requirement.criterion.bound)
             lines += _statement_lines(f"  margin obligation, the bound moved to {moved}", margin, "  ")
+        elif margin is not None:
+            lines.append(f"  margin not checked: {margin}")
     for req, premise in prepared.waived:
         lines += ["", f"waived {req.id}", f"  by     {premise.owner}: {premise.statement}"]
     lines += [f"warning {w}" for w in prepared.warnings]
@@ -515,4 +564,4 @@ def _term_lines(name: str, value: object, depth: int) -> list[str]:
     return [f"{pad}{name}  {value}"]
 
 
-__all__ = ["ComponentError", "EvidenceSink", "EvidenceSource", "Report", "build_premise_book", "check_design", "elaborate", "explain", "lower_components", "signed_inputs"]
+__all__ = ["ComponentError", "EvidenceSink", "EvidenceSource", "Report", "build_premise_book", "check_design", "elaborate", "explain", "lower_components", "margin_obligations", "signed_inputs"]
