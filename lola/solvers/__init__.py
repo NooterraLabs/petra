@@ -3,51 +3,113 @@ the kernel accepts; a buggy solver costs an UNKNOWN, never a false PASS.
 
 Each registered rule has one solver module with the same name as its kernel rule module
 (lola/kernel/rules/r4_enclosure.py -> lola/solvers/r4_enclosure.py), exposing
-`solve(statement) -> Iterable[Evidence]`. SOLVERS is derived from the rule registry by
-that convention, so adding a rule never edits this file, and
-tests/test_solver_registry.py fails when a rule has no solver module or a solver module
-has no rule. Modules in _HELPERS are shared helpers, not rule solvers.
+`solve(statement) -> Iterable[Evidence]`. A rule that declares lemmas also has its
+module expose `defined_ranges(statement) -> tuple[DefinedRange, ...]`, which proposes and
+proves a range for each DefinedHyp whose quantity that rule defines. SOLVERS and
+LEMMA_SOLVERS are derived from the rule registry by that convention, so adding a rule
+never edits this file, and tests/test_solver_registry.py fails when a rule has no solver
+module or a solver module has no rule. Modules in _HELPERS are shared helpers, not rule
+solvers.
 
 SolverSource dispatches on the goal type. Each goal solver first tries to prove, then to
 refute, and yields every candidate it found; the pipeline stops at the first one the
-kernel accepts.
+kernel accepts. A solve function that names a `max_cells` or `time_limit_s` parameter
+receives the source's limits.
 """
 from __future__ import annotations
 
 import importlib
+import inspect
+import time
 from typing import Callable, Iterable, Mapping
 
-from ..kernel import MODULE_OF, RULES, Evidence, Statement
+from ..kernel import GOAL_RULE, MODULE_OF, REFUTATION_RULE, RULES, DefinedHyp, DefinedRange, Evidence, RangeHyp, Statement, free_syms
 
 GoalSolver = Callable[[Statement], Iterable[Evidence]]
+LemmaSolver = Callable[[Statement], tuple[DefinedRange, ...]]
 
 _HELPERS: frozenset[str] = frozenset({"exact"})
 """Solver-package modules that serve several rules (exact rational repair)."""
 
 
+def _module(rule_id: str):
+    return importlib.import_module(f"{__name__}.{MODULE_OF[rule_id]}")
+
+
 def _solvers() -> Mapping[type, GoalSolver]:
     table: dict[type, GoalSolver] = {}
     for rule_id, spec in RULES.items():
-        module = importlib.import_module(f"{__name__}.{MODULE_OF[rule_id]}")
-        table[spec.goal] = module.solve
+        table[spec.goal] = _module(rule_id).solve
     return table
+
+
+def _lemma_solvers() -> Mapping[type, LemmaSolver]:
+    return {lemma.defines: _module(rule_id).defined_ranges for rule_id, spec in RULES.items() for lemma in spec.lemmas}
 
 
 SOLVERS: Mapping[type, GoalSolver] = _solvers()
 """Goal class -> solve function, one per registered rule."""
 
+LEMMA_SOLVERS: Mapping[type, LemmaSolver] = _lemma_solvers()
+"""QuantityDef class -> defined_ranges of the solver module of the rule that proves it."""
+
 
 class SolverSource:
     """EvidenceSource that runs the solver for the statement's goal. DefinedHyps are
-    solved first by r3_hypercircle.defined_ranges and attached to the evidence."""
+    solved first by the lemma solver of their quantity, and the goal solver then works
+    on the statement with each DefinedHyp replaced by a RangeHyp over its proposed range.
+    That is the box the kernel checks the goal over, so evidence for it, with the
+    DefinedRanges attached, is evidence for the original statement. Refutations are
+    dropped when the statement has a DefinedHyp, since the kernel never accepts them."""
 
     name = "solver"
 
     def __init__(self, max_cells: int = 20000, time_limit_s: float = 30.0) -> None:
-        raise NotImplementedError
+        self.max_cells = max_cells
+        self.time_limit_s = time_limit_s
 
     def offer(self, statement: Statement, statement_hash: str) -> Iterable[Evidence]:
-        raise NotImplementedError
+        deadline = time.monotonic() + self.time_limit_s
+        defined = tuple(h for h in statement.hyps if isinstance(h, DefinedHyp))
+        ranges = _defined_ranges(statement, defined)
+        solve = SOLVERS[type(statement.goal)]
+        for evidence in solve(_over_ranges(statement, ranges), **self._limits(solve)):
+            if not defined:
+                yield evidence
+            elif type(evidence.body) not in REFUTATION_RULE:
+                yield Evidence(evidence.body, ranges)
+            if time.monotonic() >= deadline:
+                return
+
+    def _limits(self, solve: GoalSolver) -> dict:
+        named = inspect.signature(solve).parameters
+        limits = {"max_cells": self.max_cells, "time_limit_s": self.time_limit_s}
+        return {k: v for k, v in limits.items() if k in named}
 
 
-__all__ = ["SOLVERS", "GoalSolver", "SolverSource"]
+def _defined_ranges(statement: Statement, defined: tuple[DefinedHyp, ...]) -> tuple[DefinedRange, ...]:
+    proposed: dict[str, DefinedRange] = {}
+    for solve_lemma in dict.fromkeys(LEMMA_SOLVERS[type(h.definition)] for h in defined):
+        proposed.update((r.sym, r) for r in solve_lemma(statement))
+    missing = [h.sym for h in defined if h.sym not in proposed]
+    if missing:
+        raise ValueError(f"no lemma solver proposed a range for {missing}")
+    return tuple(proposed[h.sym] for h in defined)
+
+
+def _over_ranges(statement: Statement, ranges: tuple[DefinedRange, ...]) -> Statement:
+    """Each DefinedHyp becomes a RangeHyp over its proposed range, and the RangeHyps only
+    the definitions used are dropped, so the result is a well-formed statement."""
+    if not ranges:
+        return statement
+    by_sym = {r.sym: r for r in ranges}
+    used = free_syms(statement.goal) - GOAL_RULE[type(statement.goal)].binds(statement.goal)
+    hyps = tuple(
+        RangeHyp(h.sym, by_sym[h.sym].lo, by_sym[h.sym].hi, f"lemma:{h.sym}") if isinstance(h, DefinedHyp) else h
+        for h in statement.hyps
+        if h.sym in used
+    )
+    return Statement(hyps, statement.goal)
+
+
+__all__ = ["LEMMA_SOLVERS", "SOLVERS", "GoalSolver", "LemmaSolver", "SolverSource"]

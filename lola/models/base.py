@@ -373,7 +373,12 @@ class ComponentError(ValueError):
 Lowerer = Callable[[Component, Design, Registry], Any]
 """(component, design, registry) -> the domain's typed model for the component. Validates
 the attributes and every load entry, claim, probability claim, tests record and waiver
-whose path starts with the component's name. Raises ComponentError."""
+whose path starts with the component's name. Raises ComponentError.
+
+The model keeps every signed bound it names from an attribute as an ir.Input, anywhere in
+its dataclasses, tuples or mappings. The pipeline's premise book finds each one there, so
+"in:<design>.<component>.<field>" resolves to its owner and source with no other
+declaration."""
 
 Builder = Callable[[Requirement, Any, Design, Registry], tuple[Elaborated, ...]]
 """(requirement, typed model, design, registry) -> obligations and gaps."""

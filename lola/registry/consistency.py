@@ -45,9 +45,9 @@ from dataclasses import dataclass, replace
 from fractions import Fraction
 from typing import Callable, Mapping
 
-from ..kernel import Add, Const, Div, Expr, Interval, Ln, Mul, Neg, Pi, PowInt, Sqrt, Sym
+from ..kernel import Add, Const, Div, Expr, Interval, KernelArithmeticError, Ln, Mul, Neg, Pi, PowInt, Sqrt, Sym, enclose, free_syms
 from .deck import Deck, DeckRecord, provenance_problem
-from .enclosure import EvaluationError, decimal, enclose, free_syms, interval_text, render
+from .model import render
 
 _PREMISE_KEY = re.compile(r"[A-Za-z0-9_]+(\.[A-Za-z0-9_]+)+")
 
@@ -206,7 +206,7 @@ def _check(relation: Relation, deck: Deck, entry: str, box: Mapping[str, Interva
         return None
     try:
         left = enclose(lhs, box)
-    except EvaluationError as exc:
+    except KernelArithmeticError as exc:
         zero = Interval(Fraction(0), Fraction(0))
         return Finding(entry, relation.id, zero, zero, f"cannot evaluate {render(lhs)}: {exc}")
     missing = sorted(free_syms(rhs) - box.keys())
@@ -214,7 +214,7 @@ def _check(relation: Relation, deck: Deck, entry: str, box: Mapping[str, Interva
         return Finding(entry, relation.id, left, left, f"cannot re-derive {render(lhs)}: no record {', '.join(missing)}")
     try:
         right = enclose(rhs, box)
-    except EvaluationError as exc:
+    except KernelArithmeticError as exc:
         return Finding(entry, relation.id, left, left, f"cannot evaluate {render(rhs)} for {render(lhs)}: {exc}")
     if _holds(relation.kind, relation.rel_tol, left, right):
         return None
@@ -258,3 +258,24 @@ def _holds(kind: str, tol: Fraction, left: Interval, right: Interval) -> bool:
 def _split(name: str) -> tuple[str, str]:
     entry, _, prop = name.rpartition(".")
     return entry, prop
+
+
+def decimal(x: Fraction, digits: int = 6) -> str:
+    """x in scientific notation with `digits` significant digits, from exact integer
+    arithmetic."""
+    if x == 0:
+        return "0"
+    sign, x = ("-" if x < 0 else ""), abs(x)
+    e = len(str(x.numerator)) - len(str(x.denominator))
+    if Fraction(10) ** e > x:
+        e -= 1
+    mantissa = round(x / Fraction(10) ** (e - digits + 1))
+    if mantissa == 10**digits:
+        mantissa, e = mantissa // 10, e + 1
+    text = str(mantissa)
+    tail = text[1:].rstrip("0")
+    return f"{sign}{text[0]}{'.' + tail if tail else ''}e{e}"
+
+
+def interval_text(x: Interval) -> str:
+    return decimal(x.lo) if x.lo == x.hi else f"[{decimal(x.lo)}, {decimal(x.hi)}]"

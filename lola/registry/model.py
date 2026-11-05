@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Callable, Mapping, Union
 
-from ..kernel import Expr, Interval, Sym
+from ..kernel import Abs, Add, Const, Div, Exp, Expr, Interval, Ln, Max, Min, Mul, Neg, Pi, PowInt, Sqrt, Sym
 from ..premises import ALLOWED_TAGS, LabelKind, Tag
 
 
@@ -272,3 +272,38 @@ def map_syms(expr: Expr, fn: Callable[[str], Expr]) -> Expr:
         elif dataclasses.is_dataclass(value):
             changes[f.name] = map_syms(value, fn)
     return dataclasses.replace(expr, **changes) if changes else expr
+
+
+def render(expr: Expr) -> str:
+    """Infix text with every compound operand in parentheses. Deck provenance strings
+    ("derived:<formula>") and `lola explain` print expressions with it."""
+    match expr:
+        case Const(value=v):
+            return str(v)
+        case Sym(name=name):
+            return name
+        case Pi():
+            return "pi"
+        case Add(args=args):
+            text = _operand(args[0]) if args else "0"
+            for a in args[1:]:
+                text += f" - {_operand(a.arg)}" if isinstance(a, Neg) else f" + {_operand(a)}"
+            return text
+        case Mul(args=args):
+            return " * ".join(_operand(a) for a in args) if args else "1"
+        case Neg(arg=a):
+            return f"-{_operand(a)}"
+        case Div(num=n, den=d):
+            return f"{_operand(n)} / {_operand(d)}"
+        case PowInt(base=b, exponent=k):
+            return f"{_operand(b)}^{k}"
+        case Sqrt(arg=a) | Ln(arg=a) | Exp(arg=a) | Abs(arg=a):
+            return f"{type(expr).__name__.lower()}({render(a)})"
+        case Min(args=args) | Max(args=args):
+            return f"{type(expr).__name__.lower()}({', '.join(render(a) for a in args)})"
+    raise TypeError(f"{type(expr).__name__} is not an expression")
+
+
+def _operand(expr: Expr) -> str:
+    text = render(expr)
+    return f"({text})" if isinstance(expr, (Add, Mul, Div, Neg)) else text
