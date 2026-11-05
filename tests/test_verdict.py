@@ -112,7 +112,7 @@ class Others(unittest.TestCase):
             Fail(OBLIGATION, genuine_refutation(), other)
 
     def test_status_names(self):
-        self.assertEqual(set(STATUS.values()), {"PASS", "FAIL", "UNKNOWN"})
+        self.assertEqual(set(STATUS.values()), {"PASS", "FAIL", "UNKNOWN", "MARGINAL"})
 
 
 def interval(lo: int, hi: int) -> Interval:

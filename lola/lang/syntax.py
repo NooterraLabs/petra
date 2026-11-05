@@ -18,7 +18,7 @@ that registers the kind (lola/models), so adding a domain never edits this file.
     load      = "load" IDENT "{" NL { "on" path IDENT bound NL } [ signature NL ] "}" ;
     tests     = "tests" IDENT "{" NL "on" path "trials" INT "failures" INT "at" qty
                 [ signature ] NL [ signature NL ] "}" ;
-    claim     = "claim" IDENT ":" ( qoi rel qty [ "under" IDENT { "," IDENT } ]
+    claim     = "claim" IDENT ":" ( qoi rel qty [ "margin" qty ] [ "under" IDENT { "," IDENT } ]
               | "P" "(" qoi ">" qty ")" "<=" NUMBER "under" IDENT
               | "P" "(" "fail" path "at" qty ")" "<=" NUMBER
                 "confidence" qty "from" IDENT ) ;

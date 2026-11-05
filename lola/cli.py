@@ -7,14 +7,15 @@
         registry against that deck file instead of the one built from the shipped
         registry. --json prints pipeline.Report.to_json():
             {"file": FILE, "design": NAME, "status": OVERALL, "verdicts": [
-                {"claim": NAME, "status": "PASS" | "FAIL" | "UNKNOWN",
+                {"claim": NAME, "status": "PASS" | "FAIL" | "UNKNOWN" | "MARGINAL",
                  "footprint": [{"tag", "label", "owner", "source"}, ...],
                  "rules": ["R1", ...],
                  "obligations": [what each open item needs, ...]},   non-empty iff UNKNOWN
                 ...]}
         Exit code from the overall status (EXIT_CODES): 0 PASS, 1 FAIL, 2 UNKNOWN,
-        3 input error (syntax, lowering, ComponentError or an unreadable deck; nothing is
-        printed to stdout).
+        5 MARGINAL (a claim with a margin is neither proved nor refuted, and a certified
+        point is within its margin of its bound), 3 input error (syntax, lowering,
+        ComponentError or an unreadable deck; nothing is printed to stdout).
     python -m lola explain FILE
         Print the elaborated statements with hypothesis labels.
     python -m lola verify CERT.json [...]
@@ -24,8 +25,9 @@
         theorem or a refutation), 1 when it rejects one, 3 when a file does not decode.
     python -m lola certify-family FILE --library DIR
         Certify a family design's claims over its whole box and store them in the
-        library. Exit 0 when every claim is stored, 1 when one is refuted, 2 when one is
-        neither proved nor refuted, 3 when FILE is not a family or does not load.
+        library. Exit 0 when every claim is stored, 1 when one is refuted, 5 when none is
+        refuted and one is within its margin, 2 when one is otherwise neither proved nor
+        refuted, 3 when FILE is not a family or does not load.
     python -m lola registry build --out DECK.json
     python -m lola registry check [DECK.json]
         Run the deck consistency checker. With no DECK, check the deck built from the
@@ -59,9 +61,9 @@ from .models.base import ComponentError
 from .pipeline import check_design, explain
 from .registry import DeckError, build_deck, build_registry, check_deck, read_deck, write_deck
 from .solvers import SolverSource
-from .verdict import STATUS, Refuted
+from .verdict import STATUS, Open, Refuted, WithinMargin
 
-EXIT_CODES: Mapping[str, int] = {"PASS": 0, "FAIL": 1, "UNKNOWN": 2, "INPUT_ERROR": 3, "INTERNAL_ERROR": 4}
+EXIT_CODES: Mapping[str, int] = {"PASS": 0, "FAIL": 1, "UNKNOWN": 2, "INPUT_ERROR": 3, "INTERNAL_ERROR": 4, "MARGINAL": 5}
 
 _INPUT_ERRORS = (LolaSyntaxError, LoweringError, ComponentError, DeckError, OSError)
 
@@ -206,8 +208,11 @@ def cmd_certify_family(args: argparse.Namespace) -> int:
         print(f"skipped  {reason}")
     if not result.skipped:
         return 0
-    refuted = any(isinstance(o, Refuted) for o in result.report.outcomes)
-    return EXIT_CODES["FAIL"] if refuted else EXIT_CODES["UNKNOWN"]
+    if any(isinstance(o, Refuted) for o in result.report.outcomes):
+        return EXIT_CODES["FAIL"]
+    if any(isinstance(o, WithinMargin) for o in result.report.outcomes) and not any(isinstance(o, Open) for o in result.report.outcomes):
+        return EXIT_CODES["MARGINAL"]
+    return EXIT_CODES["UNKNOWN"]
 
 
 def cmd_registry_build(args: argparse.Namespace) -> int:

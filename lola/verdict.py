@@ -10,8 +10,28 @@ Construction rules, enforced in __post_init__ so an illegal verdict cannot exist
   that names every premise the refuted statement rests on.
 - Unknown needs at least one Open item, and every Open item names at least one typed
   Need (lola/models/base.py), so "UNKNOWN" always says what would close it.
+- Marginal needs at least one WithinMargin outcome and a footprint that names every
+  premise each of their refutations rests on, as a Fail's does, and every premise each
+  of its theorems rests on, as a Pass's does.
 - Discharged and Refuted bind the kernel result to the obligation: the issued result's
   statement must equal the obligation's statement.
+- WithinMargin binds an issued Refutation to the margin obligation, and the margin
+  obligation to the claim's: same model, and a requirement equal to the claim's with its
+  criterion tightened by its own margin (models.base.Criterion.tightened). So MARGINAL
+  can only mean a certified point where the claimed quantity is within the claim's own
+  margin of its bound. A theorem it carries is bound to the claim's obligation.
+
+Verdicts at a margin. A claim with `margin m` asks two things: does the claim hold, and
+does the design come within m of its bound anywhere. FAIL when the claim is refuted.
+MARGINAL when a certified point is within m of the bound and the claim is not refuted;
+the claim's theorem rides along when it was proved too. PASS when the claim is proved
+and no such point was found. UNKNOWN only when the claim is neither proved nor refuted
+and no point within m was found. That last case needs a design whose quantity peaks at
+least m below its bound while the claim stays unproved, and a claim with slack m is
+what a fine enough box partition proves. So a claim the solvers can search ends in
+PASS, FAIL or MARGINAL given enough cells: the margin makes it decidable at tolerance m
+(delta-decidability, Gao, Avigad and Clarke 2012). MARGINAL never hides a refutation of
+the claim, because the pipeline checks every margin witness against the claim first.
 
 A report holds one ClaimVerdict per claim plus one named "coverage" for the coverage and
 port-contract requirements. The design's verdict is their conjunction (`assemble` over
@@ -24,6 +44,7 @@ rather than produce a verdict.
 """
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass
 from typing import Any, Iterable, Mapping, Union, get_args
 
@@ -33,6 +54,7 @@ from .models.base import (
     CertificateRejected,
     CertificateTooWeak,
     ClaimOrigin,
+    Criterion,
     Gap,
     Need,
     NeedsCertificate,
@@ -44,6 +66,7 @@ from .models.base import (
     Requirement,
 )
 from .premises import Footprint, Label, LabelKind, Premise, PremiseBook, RangeMismatch, ScopeParam, Tag, label_kind
+from .units import quantity_text
 
 COVERAGE_ENTRY = "coverage"
 """The report entry for requirements no claim made. lang/lower.py reserves the name."""
@@ -93,6 +116,33 @@ class Refuted:
 
 
 @dataclass(frozen=True)
+class WithinMargin:
+    """A claim obligation not refuted, whose margin obligation (the same claim stated
+    with its bound moved inward by its margin) the kernel refuted. `theorem` is the
+    claim's own theorem when it was proved too, else None."""
+
+    obligation: Obligation
+    margin: Obligation
+    refutation: Refutation
+    source: str
+    theorem: Theorem | None = None
+
+    def __post_init__(self) -> None:
+        _bound_to(self.refutation, Refutation, self.margin)
+        if self.theorem is not None:
+            _bound_to(self.theorem, Theorem, self.obligation)
+        if not isinstance(self.obligation, Obligation):
+            raise TypeError("expected an Obligation")
+        criterion = self.obligation.requirement.criterion
+        if not isinstance(criterion, Criterion) or criterion.margin is None:
+            raise ValueError("only a claim with a margin can be within its margin")
+        if self.margin.requirement != dataclasses.replace(self.obligation.requirement, criterion=criterion.tightened()):
+            raise ValueError("the margin obligation is not the claim's requirement at its tightened bound")
+        if self.margin.model != self.obligation.model:
+            raise ValueError("the margin obligation rests on a different model than the claim")
+
+
+@dataclass(frozen=True)
 class Waived:
     requirement: Requirement
     waiver: Premise
@@ -117,17 +167,19 @@ def _typed_needs(needs: object) -> None:
 class Open:
     """A requirement no theorem or refutation settled, with what would settle it. A kernel
     Rejection becomes CertificateRejected or CertificateTooWeak (by its fault type); no
-    evidence at all becomes NeedsCertificate; a Gap keeps its own needs."""
+    evidence at all becomes NeedsCertificate; a Gap keeps its own needs. `statement` is
+    the obligation's statement, or None for a Gap, which has none."""
 
     requirement: Requirement
     needs: tuple[Need, ...]
     rejections: tuple[Rejection, ...] = ()
+    statement: Statement | None = None
 
     def __post_init__(self) -> None:
         _typed_needs(self.needs)
 
 
-Outcome = Union[Discharged, Refuted, Waived, Open]
+Outcome = Union[Discharged, Refuted, WithinMargin, Waived, Open]
 _OUTCOME_TYPES: tuple[type, ...] = get_args(Outcome)
 
 
@@ -200,9 +252,38 @@ class Unknown:
         _issued(self.theorems, Theorem)
 
 
-Verdict = Union[Pass, Fail, Unknown]
+@dataclass(frozen=True)
+class Marginal:
+    """Every obligation proved or within its margin, at least one within it. `theorems`
+    are the claim theorems: those that discharged and those that came with a margin
+    point."""
 
-STATUS: Mapping[type, str] = {Pass: "PASS", Fail: "FAIL", Unknown: "UNKNOWN"}
+    near: tuple[WithinMargin, ...]
+    footprint: Footprint
+    theorems: tuple[Theorem, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.near, tuple) or not self.near:
+            raise ValueError("a Marginal names at least one obligation within its margin")
+        if not all(isinstance(n, WithinMargin) for n in self.near):
+            raise TypeError("a Marginal holds only WithinMargin items")
+        if not isinstance(self.footprint, Footprint):
+            raise TypeError("a Marginal needs a Footprint")
+        _issued(self.theorems, Theorem)
+        for n in self.near:
+            _resolved(frozenset(l for l in n.refutation.labels if label_kind(l) is not LabelKind.PARAM), self.footprint, None)
+        for t in self.theorems:
+            _resolved(frozenset(l for l in t.labels if label_kind(l) is not LabelKind.PARAM), self.footprint, None)
+
+
+Verdict = Union[Pass, Fail, Unknown, Marginal]
+
+STATUS: Mapping[type, str] = {Pass: "PASS", Fail: "FAIL", Unknown: "UNKNOWN", Marginal: "MARGINAL"}
+
+SEVERITY: Mapping[str, int] = {"PASS": 0, "MARGINAL": 1, "UNKNOWN": 2, "FAIL": 3}
+"""How the statuses combine: a conjunction takes the most severe. A refutation stands
+whatever else is open; an open item leaves the conjunction undecided even where the rest
+is decided at its margin."""
 
 
 @dataclass(frozen=True)
@@ -215,7 +296,7 @@ class ClaimVerdict:
 
 
 def _requirement(outcome: Outcome) -> Requirement:
-    if isinstance(outcome, (Discharged, Refuted)):
+    if isinstance(outcome, (Discharged, Refuted, WithinMargin)):
         return outcome.obligation.requirement
     if isinstance(outcome, (Waived, Open)):
         return outcome.requirement
@@ -251,30 +332,39 @@ def _footprint(premises: Iterable[Premise]) -> Footprint:
     return Footprint(tuple(by_label[label] for label in sorted(by_label)))
 
 
+def _witnessed(book: PremiseBook, refutation: Refutation) -> list[Premise]:
+    """The premises a refutation rests on, with its point checked inside each range."""
+    backing = _backing(book, refutation.statement)
+    point = dict(refutation.point)
+    for hyp, entry in backing:
+        if not entry.range.lo <= point[hyp.sym] <= entry.range.hi:
+            raise RangeMismatch(f"the counterexample puts {hyp.sym} at {point[hyp.sym]}, outside what {hyp.label} grants")
+    return [entry for _, entry in backing if isinstance(entry, Premise)]
+
+
 def assemble(outcomes: tuple[Outcome, ...], book: PremiseBook, scope: Scope) -> Verdict:
-    """Pure. FAIL if any outcome is Refuted (the first by requirement id; a counterexample
-    stands whatever else is open). Else UNKNOWN if any is Open. Else PASS.
+    """Pure. By SEVERITY: FAIL if any outcome is Refuted (the first by requirement id; a
+    counterexample stands whatever else is open). Else UNKNOWN if any is Open. Else
+    MARGINAL if any is WithinMargin. Else PASS. A WithinMargin's theorem counts with the
+    Discharged ones.
 
     Footprint = the book's premises for the labels of all theorems used (each checked
     by book.resolve) + model premises of their obligations + the coverage premise +
     waiver premises + one certified premise per theorem ("cert:<statement-hash>"). A
     FAIL's footprint is what its refutation rests
-    on: its premises, its model, the coverage premise and its certified premise.
+    on: its premises, its model, the coverage premise and its certified premise. A
+    MARGINAL's adds the same for each margin refutation to the PASS footprint of what
+    did discharge.
 
     A PASS needs a theorem, so outcomes that are all waivers have no verdict and the
     Pass constructor raises ValueError.
     """
     if not all(isinstance(o, _OUTCOME_TYPES) for o in outcomes):
-        raise TypeError("a verdict is assembled only from Discharged, Refuted, Waived and Open outcomes")
+        raise TypeError("a verdict is assembled only from Discharged, Refuted, WithinMargin, Waived and Open outcomes")
     refuted = sorted((o for o in outcomes if isinstance(o, Refuted)), key=lambda o: o.obligation.requirement.id)
     if refuted:
         first = refuted[0]
-        backing = _backing(book, first.refutation.statement)
-        point = dict(first.refutation.point)
-        for hyp, entry in backing:
-            if not entry.range.lo <= point[hyp.sym] <= entry.range.hi:
-                raise RangeMismatch(f"the counterexample puts {hyp.sym} at {point[hyp.sym]}, outside what {hyp.label} grants")
-        premises = [entry for _, entry in backing if isinstance(entry, Premise)]
+        premises = _witnessed(book, first.refutation)
         premises += [first.obligation.model.premise(), table_premise(), _certified(first.refutation)]
         return Fail(first.obligation, first.refutation, _footprint(premises))
     discharged = [o for o in outcomes if isinstance(o, Discharged)]
@@ -286,6 +376,15 @@ def assemble(outcomes: tuple[Outcome, ...], book: PremiseBook, scope: Scope) -> 
     still_open = tuple(o for o in outcomes if isinstance(o, Open))
     if still_open:
         return Unknown(still_open, _footprint(premises), theorems)
+    near = tuple(o for o in outcomes if isinstance(o, WithinMargin))
+    if near:
+        for n in near:
+            premises += _witnessed(book, n.refutation) + [n.margin.model.premise(), _certified(n.refutation)]
+            if n.theorem is not None:
+                premises += [entry for _, entry in _backing(book, n.theorem.statement) if isinstance(entry, Premise)]
+                premises.append(_certified(n.theorem))
+        proved = tuple(n.theorem for n in near if n.theorem is not None)
+        return Marginal(near, _footprint(premises), theorems + proved)
     return Pass(scope, _footprint(premises), theorems)
 
 
@@ -344,7 +443,11 @@ def describe_need(need: Need) -> str:
 
 
 def _results(verdict: Verdict) -> tuple[Theorem | Refutation, ...]:
-    return (verdict.refutation,) if isinstance(verdict, Fail) else verdict.theorems
+    if isinstance(verdict, Fail):
+        return (verdict.refutation,)
+    if isinstance(verdict, Marginal):
+        return verdict.theorems + tuple(n.refutation for n in verdict.near)
+    return verdict.theorems
 
 
 def verdict_json(entry: ClaimVerdict) -> Mapping[str, Any]:
@@ -383,6 +486,9 @@ def _outcome_row(outcome: Outcome) -> str:
             what = f"{outcome.theorem.rule}  certified  {outcome.source}  {outcome.theorem.statement_hash[:19]}.."
         case Refuted():
             what = f"{outcome.refutation.rule}  refuted    {outcome.source}  {outcome.refutation.statement_hash[:19]}.."
+        case WithinMargin():
+            proved = "proved, " if outcome.theorem is not None else ""
+            what = f"{outcome.refutation.rule}  marginal   {outcome.source}  {proved}margin point at {outcome.refutation.statement_hash[:19]}.."
         case Waived():
             what = f"--  waived by {outcome.waiver.owner}"
         case _:
@@ -391,28 +497,43 @@ def _outcome_row(outcome: Outcome) -> str:
     return f"{name:<44} {origin:<28} {what}"
 
 
+def _point_lines(refutation: Refutation, footprint: Footprint) -> list[str]:
+    labels = {h.sym: h.label for h in refutation.statement.hyps if isinstance(h, RangeHyp)}
+    units = {p.label: p.unit for p in footprint.premises}
+    lines = []
+    for sym, value in refutation.point:
+        unit = units.get(labels[sym])
+        shown = f"{value} {unit}" if unit else f"{value}"
+        lines.append(f"  {sym} = {shown}   ({labels[sym]})")
+    return lines
+
+
 def render(verdict: Verdict, outcomes: tuple[Outcome, ...]) -> str:
     """The text `lola check` prints: verdict line, scope, per-obligation table (rule,
     outcome, statement hash prefix, evidence source), then the footprint grouped by tag
     with owner and source. For UNKNOWN, each open item with what it needs. For FAIL, the
-    counterexample point, in SI base units (degC for temperature) as the IR holds it."""
-    count = {kind: sum(isinstance(o, kind) for o in outcomes) for kind in (Discharged, Refuted, Waived, Open)}
+    counterexample point, in SI base units (degC for temperature) as the IR holds it. For
+    MARGINAL, each point within a claim's margin, the same way."""
+    count = {kind: sum(isinstance(o, kind) for o in outcomes) for kind in (Discharged, Refuted, WithinMargin, Waived, Open)}
     lines = [STATUS[type(verdict)]]
     if isinstance(verdict, Pass):
         lines.append(f"scope      {_scope_text(verdict.scope)}")
     lines.append(
         f"checked    {len(outcomes)} obligations, {count[Discharged]} certified, {count[Refuted]} refuted, "
-        f"{count[Waived]} waived, {count[Open]} open"
+        + (f"{count[WithinMargin]} within margin, " if count[WithinMargin] else "")
+        + f"{count[Waived]} waived, {count[Open]} open"
     )
     lines += [f"  {_outcome_row(o)}" for o in outcomes]
     if isinstance(verdict, Fail):
-        labels = {h.sym: h.label for h in verdict.refutation.statement.hyps if isinstance(h, RangeHyp)}
-        units = {p.label: p.unit for p in verdict.footprint.premises}
         lines.append(f"counterexample  {verdict.obligation.requirement.id}: {verdict.obligation.describe}")
-        for sym, value in verdict.refutation.point:
-            unit = units.get(labels[sym])
-            shown = f"{value} {unit}" if unit else f"{value}"
-            lines.append(f"  {sym} = {shown}   ({labels[sym]})")
+        lines += _point_lines(verdict.refutation, verdict.footprint)
+    if isinstance(verdict, Marginal):
+        for n in verdict.near:
+            criterion = n.obligation.requirement.criterion
+            status = "proved" if n.theorem is not None else "not proved and not refuted"
+            lines.append(f"within margin  {n.obligation.requirement.id}: {n.obligation.describe}")
+            lines.append(f"  {status}; at this point it is within {quantity_text(criterion.margin)} of its bound")
+            lines += _point_lines(n.refutation, verdict.footprint)
     if isinstance(verdict, Unknown):
         lines.append(f"open       {len(verdict.open)} requirements")
         for item in verdict.open:

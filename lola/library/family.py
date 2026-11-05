@@ -24,7 +24,7 @@ from ..models.base import ClaimOrigin, Obligation
 from ..pipeline import Report, check_design, elaborate, lower_components
 from ..registry import Registry
 from ..solvers import SolverSource
-from ..verdict import Discharged, Open, Refuted, Waived, describe_need
+from ..verdict import Discharged, Open, Refuted, Waived, WithinMargin, describe_need
 from .store import FamilyEntry, Library, family_entry
 
 
@@ -56,7 +56,7 @@ def certify_family(design: Design, registry: Registry, library: Library) -> Fami
     stored: list[FamilyEntry] = []
     skipped: list[str] = []
     for outcome in report.outcomes:
-        requirement = outcome.obligation.requirement if isinstance(outcome, (Discharged, Refuted)) else outcome.requirement
+        requirement = outcome.obligation.requirement if isinstance(outcome, (Discharged, Refuted, WithinMargin)) else outcome.requirement
         if not isinstance(requirement.origin, ClaimOrigin):
             continue
         if isinstance(outcome, Discharged):
@@ -69,10 +69,11 @@ def certify_family(design: Design, registry: Registry, library: Library) -> Fami
     return FamilyReport(report, tuple(stored), tuple(skipped))
 
 
-def _why(outcome: Refuted | Open | Waived) -> str:
-    if isinstance(outcome, Refuted):
+def _why(outcome: Refuted | WithinMargin | Open | Waived) -> str:
+    if isinstance(outcome, (Refuted, WithinMargin)):
         point = ", ".join(f"{sym} = {value}" for sym, value in outcome.refutation.point)
-        return f"refuted by {outcome.refutation.rule} at {point}"
+        what = "refuted" if isinstance(outcome, Refuted) else "not proved, and within its margin of the bound"
+        return f"{what} by {outcome.refutation.rule} at {point}"
     if isinstance(outcome, Waived):
         return f"waived by {outcome.waiver.owner}, so there is nothing to store"
     return "; ".join(describe_need(n) for n in outcome.needs)

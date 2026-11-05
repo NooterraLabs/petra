@@ -104,11 +104,29 @@ Origin = Union[ClaimOrigin, CoverageOrigin]
 
 @dataclass(frozen=True)
 class Criterion:
-    """What must hold for the mode. Claims give rel and bound. Coverage rules give the
-    mode's default criterion (for example load factor >= 1, utilisation <= 1)."""
+    """What must hold for the mode. Claims give rel and bound, and may give a margin.
+    Coverage rules give the mode's default criterion (for example load factor >= 1,
+    utilisation <= 1) and no margin.
+
+    A margin is a positive point quantity in the bound's dimension. It changes nothing
+    a PASS or a FAIL means: the claim is still `rel bound`. It adds a second statement,
+    the `tightened` criterion, whose refutation is a certified point within the margin
+    of the bound, which verdict.py reports as MARGINAL when the claim itself is neither
+    proved nor refuted."""
 
     rel: Rel
     bound: Quantity
+    margin: Quantity | None = None
+
+    def tightened(self) -> Criterion:
+        """The bound moved inward by the margin (down for <=, up for >=), with no margin.
+        Elaborators read only rel and bound, so building a requirement with this
+        criterion states the claim at the tighter bound, as any builder states a claim."""
+        if self.margin is None:
+            raise ValueError("only a criterion with a margin has a tightened form")
+        m = self.margin.value.lo
+        step = -m if self.rel is Rel.LE else m
+        return Criterion(self.rel, Quantity(Interval(self.bound.value.lo + step, self.bound.value.hi + step), self.bound.dim))
 
 
 @dataclass(frozen=True)

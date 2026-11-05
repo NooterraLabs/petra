@@ -143,7 +143,7 @@ def _domain(design: Design, subject: tuple[str, ...]) -> DomainSpec:
 
 def _claim_requirement(claim: Claim, design: Design) -> Requirement:
     mode = _domain(design, claim.qoi.path).qois[claim.qoi.name]
-    return Requirement(claim.qoi.path, mode, Criterion(claim.rel, claim.bound), ClaimOrigin(claim.name), claim.under, claim.qoi)
+    return Requirement(claim.qoi.path, mode, Criterion(claim.rel, claim.bound, claim.margin), ClaimOrigin(claim.name), claim.under, claim.qoi)
 
 
 def _probability_requirement(claim: ProbabilityClaim, design: Design) -> Requirement:

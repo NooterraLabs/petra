@@ -194,6 +194,7 @@ class Claim:
     under: tuple[str, ...]   # load case names; empty means every load case on the subject
     signature: Signature | None
     span: Span
+    margin: Quantity | None = None   # a positive point in the bound's dimension; see models.base.Criterion
 
 
 @dataclass(frozen=True, slots=True)

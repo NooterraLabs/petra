@@ -33,7 +33,7 @@ DECLS: tuple[str, ...] = ("design", "param", "ambient", "load", "tests", "claim"
 
 LANGUAGE_VERSION = 0
 
-NOT_UNITS: frozenset[str] = frozenset({"in", "mean", "signed", "measured", "source", "param", "under", "from"})
+NOT_UNITS: frozenset[str] = frozenset({"in", "mean", "signed", "measured", "source", "param", "under", "from", "margin"})
 """Words the grammar puts right after a quantity, so an IDENT after a NUMBER is its unit
 unless it is one of these."""
 
@@ -253,6 +253,10 @@ class Parser:
             raise self._error(self._peek(), f"expected '<=' or '>=', found {_describe(self._peek())}")
         rel = self._next()
         bound = self._qty()
+        margin = None
+        if self._is(Kind.IDENT, "margin"):
+            self._next()
+            margin = self._qty()
         under = []
         if self._is(Kind.IDENT, "under"):
             self._next()
@@ -260,7 +264,7 @@ class Parser:
             while self._is(Kind.PUNCT, ","):
                 self._next()
                 under.append(self._ident("a load case name"))
-        return _node("claim", kw, name, qoi, rel, bound, tuple(under))
+        return _node("claim", kw, name, qoi, rel, bound, margin, tuple(under))
 
     def _waive(self) -> Node:
         kw = self._word("waive")
