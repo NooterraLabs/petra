@@ -300,8 +300,7 @@ def capacity(sb: StatementBuilder, joint: BoltedJoint, registry: Registry) -> Ex
     """The class's proof stress (Sp, else Rp02_min) times the stress area As."""
     part = registry.part(joint.bolt, PartKind.BOLT)
     stress = sb.registry(joint.bolt, "Sp" if "Sp" in part.props else "Rp02_min")
-    geometry = {p: sb.registry(joint.bolt, p) for p in ("d", "pitch")}
-    return Mul((stress, sb.registry(joint.bolt, "As", series=geometry)))
+    return Mul((stress, sb.registry(joint.bolt, "As")))
 
 
 def build_tension(req: Requirement, joint: BoltedJoint, design: Design, registry: Registry) -> tuple[Elaborated, ...]:

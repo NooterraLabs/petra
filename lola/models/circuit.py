@@ -60,10 +60,9 @@ from types import MappingProxyType
 from typing import Callable, Mapping, Union
 
 from ..ir import Arg, Bound, Component, Design, Exceeds, Fixed, Input, ParamRef, Punct, Ref, Rel, Span, Value
-from ..kernel import Add, Const, Div, Expr, Interval, Max, Min, Mul, Neg, Pi, PowInt, Sqrt, Sym, free_syms
+from ..kernel import Add, Const, Div, Expr, Interval, Max, Min, Mul, Neg, Pi, PowInt, Sqrt, Sym
 from ..kernel.rules.r4_enclosure import AllNonpositive
-from ..registry import OutsideMakeableSet, PartKind, ProcessKind, Registry, Stated
-from ..registry.model import map_syms
+from ..registry import OutsideMakeableSet, PartKind, ProcessKind, Registry
 from ..units import AREA, CURRENT, DIMENSIONLESS, LENGTH, TEMPERATURE, VOLTAGE, Dim, Quantity
 from .base import (
     CONTACT_PAIR,
@@ -517,43 +516,22 @@ class _Cable:
     StatementBuilder's convention); a series cable takes them from the design."""
 
     sb: StatementBuilder
-    registry: Registry
     series: str
     params: Mapping[str, Sym]
 
     def __getitem__(self, prop: str) -> Expr:
         if prop in self.params:
             return self.params[prop]
-        return _derived(self.sb, self.registry, self.series, prop, self.params)
+        return self.sb.registry(self.series, prop, series=self.params)
 
 
 def _cable(sb: StatementBuilder, circuit: Circuit, wire: Wire, registry: Registry) -> _Cable:
     part = registry.part(wire.cable, PartKind.CABLE)
     if part.series is None:
         values = {p: sb.value(getattr(wire, p), f"{circuit.name}.{wire.name}.{p}") for p in CABLE_PARAMS}
-        return _Cable(sb, registry, wire.cable, values)
+        return _Cable(sb, wire.cable, values)
     values = {p: sb.value(Fixed(Quantity(v, CABLE_PARAMS[p])), f"{wire.cable}.{p}") for p, v in part.fixes.items()}
-    return _Cable(sb, registry, part.series, values)
-
-
-def _derived(sb: StatementBuilder, registry: Registry, entry: str, prop: str, params: Mapping[str, Sym]) -> Expr:
-    """sb.registry, extended to a derivation that names another derived property of the
-    same entry (T1 names outer_diameter, which names conductor_diameter). Each such
-    property is expanded first. A single hypothesis is bound as a series parameter, so
-    the builder still turns constants into labelled hypotheses. A compound expression is
-    substituted by hand, so a derivation that also names a constant directly is refused:
-    the constant would reach the statement with no hypothesis behind it."""
-    found = registry.property(entry, prop)
-    if isinstance(found, Stated):
-        return sb.registry(entry, prop)
-    names = free_syms(found.expr)
-    inner = {n[len("self."):]: None for n in sorted(names) if n.startswith("self.") and n[len("self."):] not in params}
-    values = {**params, **{p: _derived(sb, registry, entry, p, params) for p in inner}}
-    if all(isinstance(v, Sym) for v in values.values()):
-        return sb.registry(entry, prop, series=values)
-    if any(n.startswith("const.") for n in names):
-        raise ValueError(f"{entry}.{prop} names a constant beside a compound property; StatementBuilder cannot bind it")
-    return map_syms(found.expr, lambda n: values[n[len("self."):]])
+    return _Cable(sb, part.series, values)
 
 
 def steady_temperature(sb: StatementBuilder, circuit: Circuit, wire: Wire, current: Expr, ambient: Expr, registry: Registry) -> tuple[Expr, Expr]:
@@ -713,7 +691,7 @@ def build_overload_protection(req: Requirement, circuit: Circuit, design: Design
     for draw in s.draws:
         sb = StatementBuilder(design, registry)
         rated = sb.registry(breaker, "In")
-        tripping = _derived(sb, registry, breaker, "I_t", {})
+        tripping = sb.registry(breaker, "I_t")
         ambient = _ambient(sb, circuit)
         theta_max = _cable(sb, circuit, s.wire, registry)["theta_max"]
         exprs = [_minus(_current(sb, draw), _times(u, rated))]
