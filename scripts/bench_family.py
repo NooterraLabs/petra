@@ -24,7 +24,12 @@ FAMILY = ROOT / "examples" / "families" / "cu_pvc_clipped.lola"
 def main(argv: list[str] | None = None) -> int:
     """Parse --queries (default 200) and --seed (default 0), run family.run on FAMILY,
     print family.render(result), and return 0."""
-    raise NotImplementedError
+    parser = argparse.ArgumentParser(description="family reuse versus recomputation")
+    parser.add_argument("--queries", type=int, default=200)
+    parser.add_argument("--seed", type=int, default=0)
+    args = parser.parse_args(argv)
+    print(family.render(family.run(str(FAMILY), args.queries, args.seed)))
+    return 0
 
 
 if __name__ == "__main__":
