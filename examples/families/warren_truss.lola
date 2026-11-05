@@ -1,0 +1,50 @@
+lola 0
+
+# Family: the two-panel Warren footbridge truss of truss_pass.lola (same nodes,
+# members, sections and steel) under any downward load up to 39 kN at each top node.
+# `lola certify-family` proves the three claims over the whole box once (R1, R2 with
+# its R3 force lemmas, R3) and stores the evidence. A concrete truss whose two node
+# loads sit inside the box, truss_pass.lola among them, reuses it.
+#
+# The truss is statically determinate, so the end diagonals carry
+# N_ad = 0.9375 P_D + 0.3125 P_E, 48.75 kN of compression at the worst vertex. The
+# strength claim needs 1.5 x 48.75 = 73.1 kN within the 74.12 kN Euler load of a
+# 2.5 m CHS 60.3x3.2 at E = 200 GPa, so the box edge is 39.53 kN per node
+# (tests/test_bench.py).
+
+design "family-warren-footbridge-panel" {
+  owner "lola.library@example.org"
+  environment indoor_dry
+}
+
+param load_d in [-39 kN, 0 kN]
+param load_e in [-39 kN, 0 kN]
+
+truss frame {
+  material steel.S355
+  section chs.60_3x3_2
+
+  node A at (0 m, 0 m) support pinned
+  node B at (3 m, 0 m)
+  node C at (6 m, 0 m) support roller_x
+  node D at (1.5 m, 2 m)
+  node E at (4.5 m, 2 m)
+
+  member bottom_ab: A -- B
+  member bottom_bc: B -- C
+  member top_de:    D -- E section chs.76_1x3_2
+  member diag_ad:   A -- D
+  member diag_db:   D -- B
+  member diag_be:   B -- E
+  member diag_ec:   E -- C
+}
+
+load crowd {
+  on frame.D fy param load_d
+  on frame.E fy param load_e
+  signed "lola.library@example.org" source "family definition"
+}
+
+claim strength:   frame.collapse_factor >= 1.5 under crowd
+claim stability:  frame.stability_factor >= 3 under crowd
+claim stress:     frame.member(diag_ad).stress <= 235 MPa under crowd

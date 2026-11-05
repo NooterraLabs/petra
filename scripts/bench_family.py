@@ -1,10 +1,12 @@
-"""Family reuse benchmark: `python scripts/bench_family.py [--queries N] [--seed S]`.
+"""Family reuse benchmark: `python scripts/bench_family.py [--queries N] [--seed S] [--family NAME]`.
 
-Certifies examples/families/cu_pvc_clipped.lola once, then times N seeded query designs
-inside its box along two paths, reuse (library lookup, transport, kernel check) and
-recompute (solver, kernel check). Prints lola.bench.family.render(result): one line per
-path, the "reuse" line first, then the predicted and measured ratios. Untrusted
-measurement code; it never changes a verdict.
+Runs every family in lola.bench.family.FAMILIES (the cu_pvc cable family, then the
+Warren truss family), or only the one named. Each is certified once, then seeded query
+designs inside its box are timed along two paths, reuse (library lookup, transport,
+kernel check) and recompute (solver, kernel check). Prints one block per family, each
+lola.bench.family.render(result): one line per path, the "reuse" line first, the split
+of each path's time, then the predicted and measured ratios. Untrusted measurement
+code; it never changes a verdict.
 """
 from __future__ import annotations
 
@@ -18,17 +20,19 @@ if str(ROOT) not in sys.path:
 
 from lola.bench import family  # noqa: E402
 
-FAMILY = ROOT / "examples" / "families" / "cu_pvc_clipped.lola"
-
 
 def main(argv: list[str] | None = None) -> int:
-    """Parse --queries (default 200) and --seed (default 0), run family.run on FAMILY,
-    print family.render(result), and return 0."""
+    """--queries overrides every family's default query count. Prints the blocks and
+    returns 0."""
+    names = [f.name for f in family.FAMILIES]
     parser = argparse.ArgumentParser(description="family reuse versus recomputation")
-    parser.add_argument("--queries", type=int, default=200)
+    parser.add_argument("--queries", type=int, default=None, help="queries per family (default: "
+                        + ", ".join(f"{f.name} {f.queries}" for f in family.FAMILIES) + ")")
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--family", choices=names, action="append", help="run only this family (repeatable)")
     args = parser.parse_args(argv)
-    print(family.render(family.run(str(FAMILY), args.queries, args.seed)))
+    chosen = [f for f in family.FAMILIES if args.family is None or f.name in args.family]
+    print("\n\n".join(family.render(family.run(f, args.queries, args.seed)) for f in chosen))
     return 0
 
 
