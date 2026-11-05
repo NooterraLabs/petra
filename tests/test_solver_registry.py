@@ -10,7 +10,26 @@ from unittest import mock
 import numpy as np
 
 import lola.solvers as solvers
-from lola.kernel import GOAL_RULE, LEMMAS, MODULE_OF, Add, Const, DefinedHyp, DefinedRange, Evidence, Leaf, Matrix, Neg, RangeHyp, Statement, Sym
+from lola.kernel import (
+    GOAL_RULE,
+    LEMMAS,
+    MODULE_OF,
+    Add,
+    Const,
+    DefinedHyp,
+    DefinedRange,
+    Evidence,
+    Interval,
+    Leaf,
+    Matrix,
+    Mul,
+    Neg,
+    RangeHyp,
+    Refutation,
+    Statement,
+    Sym,
+    check,
+)
 from lola.kernel.rules.r3_hypercircle import HypercircleFields, MinimizerComponent, QuadraticProblem
 from lola.kernel.rules.r4_enclosure import AllNonpositive, Enclosure, PointWitness
 from lola.solvers import SolverSource
@@ -81,9 +100,11 @@ class DefinedHyps(unittest.TestCase):
         AllNonpositive((Add((Sym("n"), Neg(Const(Fraction(5))))),)),
     )
     RANGE = DefinedRange("n", Fraction(1), Fraction(3), HypercircleFields((), ()))
+    AT_POINT = DefinedRange("n", Fraction(3), Fraction(3), HypercircleFields((), ()))
 
     def setUp(self):
         self.seen = []
+        self.boxes = []
 
         def solve(statement):
             self.seen.append(statement)
@@ -92,18 +113,56 @@ class DefinedHyps(unittest.TestCase):
         self.enterContext(mock.patch.dict(solvers.SOLVERS, {AllNonpositive: solve}))
 
     def offer(self, *ranges):
-        with mock.patch.dict(solvers.LEMMA_SOLVERS, {MinimizerComponent: lambda statement: ranges}):
+        def propose(statement, box=None):
+            self.boxes.append(box)
+            return ranges if box is None else (self.AT_POINT,)
+
+        with mock.patch.dict(solvers.LEMMA_SOLVERS, {MinimizerComponent: propose}):
             return list(SolverSource().offer(self.STATEMENT, "sha256:" + "0" * 64))
 
     def test_the_goal_is_solved_over_the_proposed_range_and_the_range_goes_with_it(self):
-        self.assertEqual(self.offer(self.RANGE), [Evidence(PROOF.body, (self.RANGE,))], "the refutation is dropped")
+        self.assertEqual(self.offer(self.RANGE), [Evidence(PROOF.body, (self.RANGE,))], "the refutation over n is dropped")
         (solved,) = self.seen
         self.assertEqual(solved, Statement((RangeHyp("n", Fraction(1), Fraction(3), "lemma:n"),), self.STATEMENT.goal))
+        self.assertEqual(self.boxes, [None])
+
+    def test_a_refutation_at_a_point_of_the_statement_gets_the_ranges_proved_there(self):
+        full = PointWitness((("f", Fraction(3)), ("w", Fraction(1))), 0)
+
+        def refute(statement, original):
+            self.seen.append(original)
+            return (Evidence(PointWitness((("n", Fraction(3)),), 0)), Evidence(PointWitness((("f", Fraction(3)),), 0)), Evidence(full))
+
+        with mock.patch.dict(solvers.SOLVERS, {AllNonpositive: refute}):
+            self.assertEqual(self.offer(self.RANGE), [Evidence(full, (self.AT_POINT,))], "a point over n, or missing w, is dropped")
+        self.assertEqual(self.seen, [self.STATEMENT], "a solver that names original sees the statement as written")
+        self.assertEqual(self.boxes, [None, {"f": Interval(Fraction(3), Fraction(3)), "w": Interval(Fraction(1), Fraction(1))}])
 
     def test_a_definition_without_a_proposed_range_is_an_error_not_a_guess(self):
         with self.assertRaises(ValueError):
             self.offer()
         self.assertEqual(self.seen, [])
+
+
+class Witnesses(unittest.TestCase):
+    """The real solvers on q = s*_0 of min s_0^2 + 3 s_1^2 subject to s_0 + s_1 = F, for F
+    in [4, 8], where s*_0 = 3F/4. Over q's proposed range [3, 6] alone, q and F vary
+    independently, so a goal can fail there and still hold at every true value of q."""
+
+    PROBLEM = QuadraticProblem(matrix((1, 1)), (Sym("F"),), (Const(Fraction(1)), Const(Fraction(3))))
+
+    def results(self, *terms):
+        q = DefinedHyp("q", MinimizerComponent(self.PROBLEM, 0, Const(Fraction(1))))
+        statement = Statement((RangeHyp("F", Fraction(4), Fraction(8), "in:t.F"), q), AllNonpositive((Add((Sym("q"), *terms)),)))
+        return [check(statement, evidence) for evidence in SolverSource().offer(statement, "sha256:" + "0" * 64)]
+
+    def test_a_bound_q_passes_is_refuted_where_q_peaks(self):
+        refuted = [r for r in self.results(Neg(Const(Fraction(5)))) if isinstance(r, Refutation)]
+        self.assertEqual([r.point for r in refuted], [(("F", Fraction(8)),)], "q - 5 > 0 for F > 20/3, most at F = 8")
+
+    def test_a_bound_that_fails_only_over_the_range_is_not_refuted(self):
+        results = self.results(Mul((Const(Fraction(-3, 4)), Sym("F"))), Neg(Const(Fraction(1, 10))))
+        self.assertFalse([r for r in results if isinstance(r, Refutation)], "q - 3F/4 - 1/10 is -1/10 at every F, but 29/10 at q = 6, F = 4")
 
 
 class SolveExact(unittest.TestCase):

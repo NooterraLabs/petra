@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ..evaluate import Box, enclose, point_box
+from ..evaluate import Box, enclose
 from ..evidence import Leaf, Partition, Point
 from ..interval import Interval
 from ..terms import Expr
@@ -38,7 +38,8 @@ class Enclosure:
 
 @dataclass(frozen=True, slots=True)
 class PointWitness:
-    """Refutation: expr `which` encloses strictly above 0 at `point`."""
+    """Refutation: expr `which` encloses strictly above 0 at `point`, with each DefinedHyp
+    over the range its lemma proves there."""
 
     point: Point
     which: int
@@ -97,11 +98,12 @@ def prove(goal: AllNonpositive, body: Enclosure, box: Box) -> Fault | None:
 
 
 def refute(goal: AllNonpositive, body: PointWitness, box: Box) -> Fault | None:
-    """At the point h (check.py has placed it in the box), enclose(e, {h}).lo > 0 means
-    the real e(h) > 0, since the enclosure contains it. So e <= 0 fails at h."""
+    """At every point p of the box, which fixes each RangeHyp at the evidence point and
+    spans each DefinedHyp's proven range, enclose(e, box).lo > 0 means the real e(p) > 0,
+    since the enclosure contains it. So e <= 0 fails at every point of the box."""
     if not 0 <= body.which < len(goal.exprs):
         return Invalid(f"there is no expression {body.which}")
-    lo = enclose(goal.exprs[body.which], point_box(body.point)).lo
+    lo = enclose(goal.exprs[body.which], box).lo
     return None if lo > 0 else TooWeak(f"expression {body.which} encloses down to {lo} at the point")
 
 

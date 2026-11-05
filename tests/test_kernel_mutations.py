@@ -1,7 +1,7 @@
 """The kernel mutation suite. Owner: M.
 
 Part 1 of seam M. For every rule R1 to R6 and every evidence kind (proofs, refutations
-and the R3 lemma) a valid certificate is built as a fixture under tests/fixtures/ and
+and the R3 lemma under each) a valid certificate is built as a fixture under tests/fixtures/ and
 shown valid through kernel.check. Then a battery of mutation operators tampers with each
 certificate in a way that is guaranteed to destroy validity, and the suite asserts the
 kernel (or the strict codec, or the statement-hash binding) rejects every mutant.
@@ -126,12 +126,13 @@ class Coverage(unittest.TestCase):
         self.assertLessEqual(set(PROOF_RULE), bodies, "a proof evidence type has no fixture")
         self.assertLessEqual(set(REFUTATION_RULE), bodies, "a refutation evidence type has no fixture")
 
-    def test_every_lemma_has_a_fixture(self):
-        proven = set()
-        for fix in FIXTURES:
-            proven.update(type(dr.proof) for dr in fix.evidence.defined)
+    def test_every_lemma_has_a_fixture_of_each_kind(self):
+        """check proves a lemma over the RangeHyp box for a theorem and at the point for a
+        refutation, so each needs its own fixture."""
         wanted = {lemma.evidence for lemma in LEMMAS.values()}
-        self.assertLessEqual(wanted, proven, "a registered lemma has no fixture exercising it")
+        for kind in ("theorem", "refutation"):
+            proven = {type(dr.proof) for fix in FIXTURES if fix.kind == kind for dr in fix.evidence.defined}
+            self.assertLessEqual(wanted, proven, f"a registered lemma has no {kind} fixture exercising it")
 
 
 if __name__ == "__main__":

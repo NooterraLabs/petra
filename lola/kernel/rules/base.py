@@ -33,7 +33,15 @@ Fault = Union[Invalid, TooWeak]
 """What a rule function returns instead of None when the evidence does not check."""
 
 Check = Callable[[Any, Any, Box], Union[Fault, None]]
-"""(goal, evidence body, box) -> None when the evidence proves or refutes the goal."""
+"""(goal, evidence body, box) -> None when the evidence proves or refutes the goal.
+
+check.py builds the box. For `prove` it holds every RangeHyp over its range and every
+DefinedHyp over the range its lemma proved there, and the rule must show the goal holds
+at every point of it. For `refute` it holds every RangeHyp fixed at the evidence point
+and every DefinedHyp over the range its lemma proved at that point, and the rule must
+show the goal fails at every point of it. Either way each symbol ranges over its whole
+interval, independently of the others, so a rule never rests on one representative
+value of an interval it is given."""
 
 
 def _binds_nothing(goal: Any) -> frozenset[str]:
@@ -45,8 +53,9 @@ class Lemma:
     """A quantity a DefinedHyp may name, and the rule's proof of a range for it.
 
     `defines` is a QuantityDef variant. `evidence` is the type `DefinedRange.proof` must
-    have for it. `prove(definition, defined_range, box)` returns None when the range is
-    proved over the RangeHyp box."""
+    have for it. `prove(definition, defined_range, box)` returns None when the range holds
+    at every point of `box`, which check.py builds from the RangeHyps alone: their ranges
+    for a proof, the evidence point for a refutation."""
 
     defines: type
     evidence: type

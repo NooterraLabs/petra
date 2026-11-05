@@ -60,8 +60,8 @@ class RuleCase(unittest.TestCase):
         self.assertIsInstance(result, Theorem, f"{why} {getattr(result, 'reason', '')}")
         return result
 
-    def assertRefutation(self, statement, body):
-        result = check(statement, Evidence(body=body))
+    def assertRefutation(self, statement, body, defined=()):
+        result = check(statement, Evidence(body=body, defined=defined))
         self.assertIsInstance(result, Refutation, getattr(result, "reason", None))
         return result
 
@@ -220,6 +220,66 @@ class Hypercircles(RuleCase):
         self.assertEqual(result.defined_ranges, (("q", Interval(F(3), F(6))),))
         self.assertEqual(result.labels, frozenset({"in:F"}))
         self.assertFault(TooWeak, st, Enclosure(partition=Leaf()), defined=(DefinedRange("q", F(3), F(5), EXACT),))
+
+
+AT_4 = HypercircleFields(s=((F(3), F(1)),) * 2, u=((F(3),),) * 2)
+AT_8 = HypercircleFields(s=((F(6), F(2)),) * 2, u=((F(6),),) * 2)
+UNIT = Matrix(1, 1, ((0, 0, F(1)),))
+
+
+def with_q(goal) -> Statement:
+    """A goal over q = s*_0 of PROBLEM for F in [4, 8], which is 3 at F = 4 and 6 at F = 8."""
+    return Statement(hyps=(hyp("F", 4, 8), DefinedHyp("q", MinimizerComponent(PROBLEM, 0, c(1)))), goal=goal)
+
+
+def q_in(lo, hi, fields=AT_8) -> tuple:
+    """q's range, proved at F = 8 with one exact field per vertex of the point box unless
+    other fields are given."""
+    return (DefinedRange("q", F(lo), F(hi), fields),)
+
+
+class DefinedRefutations(RuleCase):
+    """A refutation fixes F at its point and lets q span the range its lemma proves there.
+    Each rule must show the goal fails for every q in that range, so a range that still
+    holds a q meeting the goal reaches the side of the interval a sloppy rule would miss."""
+
+    def test_r1_bounds_the_load_from_below(self):
+        st = with_q(LinearFeasible(A=PAIR, b=(Sym("q"),), lower=(c(0), c(0)), upper=(c(2), c(2))))
+        ray = FarkasRay(point=pt(F=8), y=(F(1),))
+        self.assertRefutation(st, ray, q_in(6, 6))
+        self.assertFault(TooWeak, st, ray, q_in(4, 7))
+        self.assertFault(TooWeak, st, FarkasRay(point=pt(F=4), y=(F(1),)), q_in(3, 5, AT_4))
+
+    def test_r1_bounds_the_cap_from_above(self):
+        third = Mul((c(F(1, 3)), Sym("q")))
+        st = with_q(LinearFeasible(A=PAIR, b=(c(5),), lower=(c(0), c(0)), upper=(third, third)))
+        ray = FarkasRay(point=pt(F=8), y=(F(1),))
+        self.assertRefutation(st, ray, q_in(6, 6))
+        self.assertFault(TooWeak, st, ray, q_in(6, 8))
+
+    def test_r2_bounds_the_curvature_from_above(self):
+        st = with_q(GramPositiveDefinite(dim=1, terms=(GramTerm(Add((c(5), Neg(Sym("q")))), UNIT),)))
+        self.assertRefutation(st, NegativeDirection(point=pt(F=8), v=(F(1),)), q_in(6, 6))
+        self.assertFault(TooWeak, st, NegativeDirection(point=pt(F=8), v=(F(1),)), q_in(4, 7))
+        self.assertFault(TooWeak, st, NegativeDirection(point=pt(F=4), v=(F(1),)), q_in(3, 3, AT_4))
+
+    def test_r3_compares_with_the_far_end_of_a_bound(self):
+        st = with_q(MinimizerBound(problem=PROBLEM, bounds=(ComponentBound(0, c(1), None, Add((Sym("q"), c(-1)))),), energy_hi=None))
+        self.assertRefutation(st, violation(8, (6, 2), (6,)), q_in(6, 6))
+        self.assertFault(TooWeak, st, violation(8, (6, 2), (6,)), q_in(6, 8))
+
+    def test_r3_needs_its_right_hand_side_fixed_at_the_point(self):
+        loaded = QuadraticProblem(B=PAIR, f=(Sym("q"),), w=(c(1), c(3)))
+        st = with_q(MinimizerBound(problem=loaded, bounds=(bound(4),), energy_hi=None))
+        at_6 = violation(8, (F(9, 2), F(3, 2)), (F(9, 2),))
+        self.assertRefutation(st, at_6, q_in(6, 6))
+        self.assertFault(Invalid, st, at_6, q_in(6, 7))
+
+    def test_r4_bounds_the_expression_from_below(self):
+        st = with_q(AllNonpositive(exprs=(Add((Sym("q"), c(-5))),)))
+        self.assertRefutation(st, PointWitness(point=pt(F=8), which=0), q_in(6, 6))
+        self.assertFault(TooWeak, st, PointWitness(point=pt(F=8), which=0), q_in(5, 7))
+        self.assertFault(TooWeak, st, PointWitness(point=pt(F=4), which=0), q_in(3, 3, AT_4))
 
 
 def bolt(force_hi) -> Statement:

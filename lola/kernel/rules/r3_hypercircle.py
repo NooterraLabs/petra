@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ..evaluate import Box, at_vertices, enclose, free_syms, point_box
+from ..evaluate import Box, at_vertices, enclose, free_syms
 from ..evidence import DefinedRange, Point, Vector
 from ..interval import Interval, Q, i_sqrt
 from ..linalg import dot, matvec, rmatvec
@@ -196,43 +196,52 @@ def prove(goal: MinimizerBound, body: Hypercircle, box: Box) -> Fault | None:
 
 
 def refute(goal: MinimizerBound, body: HypercircleViolation, box: Box) -> Fault | None:
-    """At the point h, which check.py has placed in the box.
+    """At every point p of the box, which fixes each RangeHyp at the evidence point and
+    spans each DefinedHyp's proven range.
 
-    The rule checks B s = f(h) exactly, so the problem is feasible and s*(h) exists.
-    For which >= 0 the hypercircle at h encloses scale * s*_index in q, and a q wholly
-    above sup hi(h) or wholly below inf lo(h), strictly, violates that bound. For
-    which = -1 it uses the dual principle: for any u and any feasible s,
+    f must be one exact vector over the box, so every symbol of f must be fixed there
+    (Invalid otherwise): one s is admissible at one right-hand side only. The rule checks
+    B s = f exactly, so the problem is feasible at every p and s*(p) exists. The weight
+    enclosures w contain W(p), and `_sphere` holds for every weight vector in w, so it
+    encloses s*(p) at every p at once. For which >= 0, q then encloses
+    scale(p) * s*_index(p) at every p, and a q wholly above sup hi or wholly below inf lo
+    over the box, strictly, violates that bound at every p. For which = -1 it uses the
+    dual principle: for any u and any feasible s,
     0 <= |s - W^-1 B^T u|_W^2 = s^T W s - 2 f^T u + (B^T u)^T W^-1 (B^T u), so
-    s*^T W s* >= 2 f^T u - (B^T u)^T W^-1 (B^T u). A lower end of that enclosure strictly
-    above energy_hi(h) violates the energy bound.
+    s*^T W s* >= 2 f^T u - (B^T u)^T W^-1 (B^T u), which the dual interval encloses for
+    every W in w. A lower end strictly above sup energy_hi over the box violates the
+    energy bound at every p.
     """
-    at = point_box(body.point)
-    w = _weights(goal.problem, at)
+    w = _weights(goal.problem, box)
     if isinstance(w, Fault):
         return w
-    f = at_vertices(goal.problem.f, tuple(sorted(free_syms(goal.problem.f))), at)[0]
+    syms = tuple(sorted(free_syms(goal.problem.f)))
+    if any(box[s].lo != box[s].hi for s in syms):
+        return Invalid("f must be one exact vector, but a symbol of f spans a range")
+    f = at_vertices(goal.problem.f, syms, box)[0]
     sphere = _sphere(goal.problem.B, w, f, body.s, body.u)
     if isinstance(sphere, Fault):
         return sphere
     if body.which == -1 and goal.energy_hi is not None:
         e = rmatvec(goal.problem.B, body.u)
         dual = Interval.point(2 * dot(f, body.u)) - sum((Interval.point(ei * ei) / wi for ei, wi in zip(e, w)), Interval.point(Q(0)))
-        cap = enclose(goal.energy_hi, at).hi
+        cap = enclose(goal.energy_hi, box).hi
         return None if dual.lo > cap else TooWeak(f"the dual energy bound {dual.lo} does not exceed {cap}")
     if not 0 <= body.which < len(goal.bounds):
         return Invalid(f"there is no bound {body.which}")
     bound = goal.bounds[body.which]
-    q = _scaled(sphere[0], bound.index, bound.scale, at)
+    q = _scaled(sphere[0], bound.index, bound.scale, box)
     if isinstance(q, Fault):
         return q
-    if (bound.hi is not None and q.lo > enclose(bound.hi, at).hi) or (bound.lo is not None and q.hi < enclose(bound.lo, at).lo):
+    if (bound.hi is not None and q.lo > enclose(bound.hi, box).hi) or (bound.lo is not None and q.hi < enclose(bound.lo, box).lo):
         return None
     return TooWeak(f"bound {body.which}: the hypercircle gives [{q.lo}, {q.hi}], which meets the allowed range")
 
 
 def prove_defined(definition: MinimizerComponent, claim: DefinedRange, box: Box) -> Fault | None:
-    """Prove claim.lo <= scale * s*_index <= claim.hi over the RangeHyp box, with
-    claim.proof (HypercircleFields) through enclose_minimizer.
+    """Prove claim.lo <= scale * s*_index <= claim.hi over the box check.py gives it (the
+    RangeHyp box, or the evidence point of a refutation), with claim.proof
+    (HypercircleFields) through enclose_minimizer.
 
     Same theorem as `prove`: the enclosure q contains scale(h) * s*_index(h) for every h,
     so q inside [claim.lo, claim.hi] proves the range at every h.

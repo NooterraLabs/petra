@@ -19,6 +19,7 @@ from fractions import Fraction as Q
 from lola.kernel import (
     Add,
     Const,
+    DefinedRange,
     Div,
     Evidence,
     Invalid,
@@ -45,6 +46,7 @@ from lola.kernel.rules.r3_hypercircle import (
     ComponentBound,
     Hypercircle,
     HypercircleFields,
+    HypercircleViolation,
     MinimizerBound,
     MinimizerComponent,
     QuadraticProblem,
@@ -358,6 +360,63 @@ class NoFalseRefutation(Base):
         true_at_the_edge = r4("x", 0, 1, Add((Sym("x"), c(-1))))
         self.assertRejected(check(true_at_the_edge, Evidence(PointWitness((("x", Q(1)),), 0))), TooWeak)
         self.assertIsInstance(check(FALSE_ST, Evidence(PointWitness((("x", Q(2)),), 0))), Refutation)
+
+
+def over_q(goal) -> Statement:
+    return Statement(hyps=(RangeHyp("F", Q(4), Q(8), "in:F"), DefinedHyp("q", MinimizerComponent(PROBLEM, 0, c(1)))), goal=goal)
+
+
+def fields_at(F) -> HypercircleFields:
+    """The exact field at F, s* = (3F/4, F/4) and u* = 3F/4, once per vertex of the point box."""
+    s, u = (Q(3 * F, 4), Q(F, 4)), (Q(3 * F, 4),)
+    return HypercircleFields(s=(s, s), u=(u, u))
+
+
+def q_witness(F, lo, hi) -> Evidence:
+    return Evidence(PointWitness((("F", Q(F)),), 0), (DefinedRange("q", Q(lo), Q(hi), fields_at(F)),))
+
+
+def above(lo) -> Statement:
+    """s*_0 >= lo for the problem whose right-hand side is q itself: s*_0 = 3q/4, which lies
+    in [9/4, 9/2] over the box and is 9/2 at F = 8."""
+    loaded = QuadraticProblem(B=PAIR, f=(Sym("q"),), w=(c(1), c(3)))
+    return over_q(MinimizerBound(loaded, (ComponentBound(0, c(1), c(lo), None),), None))
+
+
+class DefinedRefutations(Base):
+    """q = s*_0 = 3F/4 of PROBLEM for F in [4, 8], so q <= 6 everywhere, with q = 6 at
+    F = 8. A refutation fixes F at its point and lets q span the range its lemma proves
+    there. q - 7 <= 0 and q - 6 <= 0 are true, q - 5 <= 0 is false at F = 8. Each attack
+    aims a Refutation at a statement true at the attack's point, and each neighbour
+    refutes a false statement with the same kind of evidence."""
+
+    TRUE_7 = over_q(AllNonpositive(exprs=(Add((Sym("q"), c(-7))),)))
+    TRUE_6 = over_q(AllNonpositive(exprs=(Add((Sym("q"), c(-6))),)))
+    FALSE_5 = over_q(AllNonpositive(exprs=(Add((Sym("q"), c(-5))),)))
+
+    def test_a_range_that_lies_about_q_is_not_proved(self):
+        self.assertRejected(check(self.TRUE_7, q_witness(8, 8, 9)), TooWeak, "the hypercircle gives [6, 6]")
+        self.assertIsInstance(check(self.FALSE_5, q_witness(8, 6, 6)), Refutation)
+
+    def test_an_honest_wide_range_cannot_stand_in_for_one_of_its_values(self):
+        self.assertRejected(check(self.TRUE_6, q_witness(8, 6, 7)), TooWeak, "encloses down to 0")
+        self.assertIsInstance(check(self.FALSE_5, q_witness(8, 6, 7)), Refutation)
+
+    def test_a_point_outside_the_box_is_not_a_counterexample(self):
+        self.assertRejected(check(self.TRUE_7, q_witness(12, 9, 9)), Invalid, "inside its range")
+        self.assertIsInstance(check(self.FALSE_5, q_witness(8, 6, 6)), Refutation)
+
+    def test_q_cannot_be_given_a_value_in_the_point(self):
+        smuggled = Evidence(PointWitness((("F", Q(8)), ("q", Q(9))), 0), (DefinedRange("q", Q(6), Q(6), fields_at(8)),))
+        self.assertRejected(check(self.TRUE_7, smuggled), Invalid, "in order")
+        self.assertIsInstance(check(self.FALSE_5, q_witness(8, 6, 6)), Refutation)
+
+    def test_a_right_hand_side_spanning_q_cannot_be_read_at_one_end(self):
+        at_2 = HypercircleViolation(point=(("F", Q(8)),), s=(Q(3, 2), Q(1, 2)), u=(Q(3, 2),), which=0)
+        wide = (DefinedRange("q", Q(2), Q(13, 2), fields_at(8)),)
+        self.assertRejected(check(above(2), Evidence(at_2, wide)), Invalid, "one exact vector")
+        at_6 = HypercircleViolation(point=(("F", Q(8)),), s=(Q(9, 2), Q(3, 2)), u=(Q(9, 2),), which=0)
+        self.assertIsInstance(check(above(5), Evidence(at_6, (DefinedRange("q", Q(6), Q(6), fields_at(8)),))), Refutation)
 
 
 if __name__ == "__main__":
