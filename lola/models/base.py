@@ -279,8 +279,9 @@ FeatureKind = NewType("FeatureKind", str)
 cross-domain rules read are defined here."""
 
 CONTACT_PAIR = FeatureKind("contact_pair")
-"""Two materials in contact. Every domain reports its contact pairs so the galvanic rule
-in lola/coverage.py sees them all."""
+"""Two surfaces in contact, each named by the registry material it exposes
+(Registry.surface: a coated part exposes its coating). Every domain reports its contact
+pairs so the galvanic rule in lola/coverage.py sees them all."""
 
 
 @dataclass(frozen=True)

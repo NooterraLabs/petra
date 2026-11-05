@@ -13,6 +13,7 @@ Hand values, 2.5 mm2 Cu/PVC (insulation 0.8 mm) clipped direct, h = 5 W/(m2 K):
         k^2 S^2 = 82419.04 A2s at 2.5 mm2, 29670.85 A2s at 1.5 mm2
     drop over 18 m at 10 A = 2 L I R20 (1 + alpha 50) = 2.970621 V
 """
+import dataclasses
 import unittest
 from fractions import Fraction
 from pathlib import Path
@@ -479,6 +480,14 @@ class Features(unittest.TestCase):
             (("lighting", "cb1", "w1"), "contact_pair", ("copper.cu_etp", "copper.cu_etp")),
             (("lighting", "w1", "t1"), "contact_pair", ("copper.cu_etp", "copper.cu_etp")),
         ])
+
+    def test_a_coated_terminal_shows_its_coating_to_the_wire(self):
+        terminal = REGISTRY.parts["terminal.lever_4mm2_75C"]
+        plated = dataclasses.replace(REGISTRY, parts={**REGISTRY.parts, terminal.id: dataclasses.replace(terminal, process="process.zinc_plate")})
+        d = load_design(EXAMPLES / "circuit_pass.lola", REGISTRY)
+        found = circuit.features(lowered(d)["lighting"], d, plated)
+        self.assertEqual([f.materials for f in found if f.kind == "contact_pair"],
+                         [("copper.cu_etp", "copper.cu_etp"), ("copper.cu_etp", "zinc.electroplate")])
 
     def test_a_voltage_drop_claim_settles_the_coverage_demand_and_its_absence_does_not(self):
         claimed = load_design(EXAMPLES / "circuit_pass.lola", REGISTRY)

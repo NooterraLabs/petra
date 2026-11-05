@@ -86,7 +86,7 @@ class PartKind(Enum):
 
 class ProcessKind(Enum):
     INSTALL = "install"     # cable installation method: sets the external thermal resistance
-    COATING = "coating"     # zinc plating, anodising: sets surface galvanic class
+    COATING = "coating"     # zinc plating, anodising: replaces the surface material
     WELD = "weld"           # heat-affected zone strength reduction
     CUT = "cut"
 
@@ -136,11 +136,19 @@ class PropertyEffect:
 
 @dataclass(frozen=True)
 class Process:
+    """A COATING names `surface`, the registry material it leaves exposed, so whatever
+    touches a coated part touches that material. No other kind names one."""
+
     id: str
     kind: ProcessKind
     props: Mapping[str, Property]
     effects: tuple[PropertyEffect, ...] = ()
     shape_limits: Mapping[str, Interval] = field(default_factory=dict)
+    surface: str | None = None
+
+    def __post_init__(self) -> None:
+        if (self.kind is ProcessKind.COATING) != (self.surface is not None):
+            raise ValueError(f"process {self.id}: a coating names its surface material and no other process does")
 
 
 @dataclass(frozen=True)
@@ -184,6 +192,14 @@ class Registry:
         if id not in self.processes:
             raise OutsideMakeableSet(f"{id} is not a registry process")
         return self.processes[id]
+
+    def surface(self, material: str, process: str | None) -> str:
+        """The registry material a part or plate of `material` shows to what touches it:
+        the coating's surface material under a COATING process, otherwise `material`."""
+        found = self.process(process) if process is not None else None
+        if found is None or found.kind is not ProcessKind.COATING:
+            return self.material(material).id
+        return self.material(found.surface).id
 
     def environment(self, id: str) -> Environment:
         if id not in self.environments:

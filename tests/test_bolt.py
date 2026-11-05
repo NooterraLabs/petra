@@ -9,13 +9,14 @@ Hand values (ISO 724: d2 = d - 0.649519 P, d3 = d - 1.226869 P, As = pi/4 ((d2 +
          Rp02 As = 37919.942 N -> margin -8878.276 N;  Sp(8.8) As = 580 MPa x As = 48874.592 N
     M10: F_V = 31250 N;  F_bolt = 34250 N;  0.9 Rp02 As = 23485.787 N -> margin +10764.213 N
 """
+import dataclasses
 import json
 import unittest
 from fractions import Fraction
 from pathlib import Path
 
 from lola import coverage, models
-from lola.kernel import Refutation, Rejection, Theorem, check, decode_evidence, decode_statement, statement_hash
+from lola.kernel import Interval, Refutation, Rejection, Theorem, check, decode_evidence, decode_statement, statement_hash
 from lola.lang import load_design, parse_design
 from lola.models import bolt
 from lola.models.base import (
@@ -29,7 +30,8 @@ from lola.models.base import (
     NoRuleForQuantity,
     Obligation,
 )
-from lola.registry import build_registry
+from lola.premises import Tag
+from lola.registry import Material, Process, ProcessKind, Stated, build_registry
 from lola.solvers import r4_enclosure
 
 from tests.test_circuit import at
@@ -137,6 +139,64 @@ class BoltUnknown(unittest.TestCase):
         ])
 
 
+CADMIUM = dataclasses.replace(
+    REGISTRY,
+    materials={**REGISTRY.materials, "cadmium.electroplate": Material("cadmium.electroplate", "cadmium", "ISO 2082", {
+        "anodic_index": Stated(Interval(Fraction(19, 20), Fraction(19, 20)), "V", Tag.JUDGED, "test.registry@example.org",
+                               "MIL-STD-889 anodic index, cadmium plated and chromate", "anodic index of the plated surface"),
+    })},
+    processes={**REGISTRY.processes,
+               "process.cadmium_plate": Process("process.cadmium_plate", ProcessKind.COATING, {}, surface="cadmium.electroplate")},
+    parts={**REGISTRY.parts, "bolt.M12_A4_70_cd": dataclasses.replace(
+        REGISTRY.parts["bolt.M12_A4_70"], id="bolt.M12_A4_70_cd", process="process.cadmium_plate")},
+)
+"""The shipped registry plus a cadmium-plated A4 bolt, a coating the shipped set lacks."""
+
+
+class Galvanic(unittest.TestCase):
+    """The contact pairs name each part's exposed surface. MIL-STD-889 anodic indices:
+    zinc plated 1.25 V, plain carbon steel 0.85 V, wrought 6061 aluminium 0.90 V, 18 % Cr
+    stainless 0.50 V, cadmium plated and chromate 0.95 V. The limit in wet marine_c5 is
+    0.15 V."""
+
+    def demanded(self, design, registry=REGISTRY) -> bool:
+        models = {name: bolt.lower_joint(c, design, registry) for name, c in design.components.items()}
+        return GALVANIC_CORROSION in [r.mode for r in coverage.generate(design, models, registry)]
+
+    def pairs(self, design, registry=REGISTRY) -> list:
+        model = bolt.lower_joint(design.components["bracket"], design, registry)
+        return [f.materials for f in bolt.features(model, design, registry) if f.kind == CONTACT_PAIR]
+
+    def test_a_zinc_plated_bolt_in_steel_plates_makes_a_dissimilar_pair(self):
+        """Zinc 1.25 against S355 0.85: 0.40 V apart. The bare 8.8 bolt is 0.85 against
+        0.85."""
+        zinc = joint(("bolt.M12_A4_70", "bolt.M12_8_8_zn"), ("plate aluminium.6061_T6", "plate steel.S355"))
+        self.assertEqual(self.pairs(zinc), [("zinc.electroplate", "steel.S355"), ("steel.S355", "steel.S355")])
+        self.assertTrue(self.demanded(zinc))
+        bare = joint(("bolt.M12_A4_70", "bolt.M12_8_8"), ("plate aluminium.6061_T6", "plate steel.S355"))
+        self.assertEqual(self.pairs(bare), [("steel.bolt_qt", "steel.S355"), ("steel.S355", "steel.S355")])
+        self.assertFalse(self.demanded(bare))
+
+    def test_a_zinc_plated_plate_shows_zinc_to_the_bolt_and_to_the_other_plate(self):
+        """Zinc 1.25 against the bolt's 0.85 and the bare plate's 0.85: 0.40 V apart."""
+        d = joint(("bolt.M12_A4_70", "bolt.M12_8_8"), ("plate aluminium.6061_T6", "plate steel.S355"),
+                  ("thickness 10 mm\n  plate", "thickness 10 mm process process.zinc_plate\n  plate"))
+        self.assertEqual(self.pairs(d), [("steel.bolt_qt", "zinc.electroplate"), ("steel.bolt_qt", "steel.S355"),
+                                         ("zinc.electroplate", "steel.S355")])
+        self.assertTrue(self.demanded(d))
+
+    def test_a_cadmium_plated_stainless_bolt_in_aluminium_plates_removes_the_pair(self):
+        """Cadmium 0.95 against 6061 0.90: 0.05 V apart. The bare A4 bolt is 0.50 against
+        0.90, 0.40 V apart."""
+        text = EXAMPLE.read_text(encoding="utf-8")
+        plated = parse_design(text.replace("bolt.M12_A4_70", "bolt.M12_A4_70_cd"), "joint.lola", CADMIUM)
+        self.assertEqual(self.pairs(plated, CADMIUM), [("cadmium.electroplate", "aluminium.6061_T6"),
+                                                        ("aluminium.6061_T6", "aluminium.6061_T6")])
+        self.assertFalse(self.demanded(plated, CADMIUM))
+        bare = parse_design(text, "joint.lola", CADMIUM)
+        self.assertTrue(self.demanded(bare, CADMIUM))
+
+
 class Tension(unittest.TestCase):
     def test_an_m10_bolt_is_refuted_at_the_worst_corner(self):
         ob = tension(joint(("bolt.M12_A4_70", "bolt.M10_A4_70")))
@@ -185,11 +245,16 @@ class Lowering(unittest.TestCase):
             lowered(joint(*edits, extra=extra))
         self.assertTrue(any(fragment in p for p in ctx.exception.problems), ctx.exception.problems)
 
-    def test_rejects_a_coated_bolt(self):
-        self.assertRejected(("bolt.M12_A4_70", "bolt.M12_8_8_zn"), fragment="is coated")
+    def test_accepts_a_coated_bolt(self):
+        self.assertEqual(lowered(joint(("bolt.M12_A4_70", "bolt.M12_8_8_zn")))["bracket"].bolt, "bolt.M12_8_8_zn")
 
-    def test_rejects_a_coated_plate(self):
-        self.assertRejected(("thickness 10 mm\n  plate", "thickness 10 mm process process.zinc_plate\n  plate"), fragment="coating process")
+    def test_accepts_a_coated_plate(self):
+        model = lowered(joint(("thickness 10 mm\n  plate", "thickness 10 mm process process.zinc_plate\n  plate")))["bracket"]
+        self.assertEqual([p.process for p in model.plates], ["process.zinc_plate", None])
+
+    def test_rejects_an_install_process_on_a_plate(self):
+        self.assertRejected(("thickness 10 mm\n  plate", "thickness 10 mm process install.clipped_direct\n  plate"),
+                            fragment="coating, cut or weld process; install.clipped_direct is install")
 
     def test_accepts_a_welded_plate(self):
         model = lowered(joint(("thickness 10 mm\n  plate", "thickness 10 mm process process.mig_weld_6xxx\n  plate")))["bracket"]

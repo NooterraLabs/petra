@@ -22,6 +22,10 @@ v0 rules (the domain rules live in their modules):
                          environment or corrosivity >= C3, or in an undeclared
                          environment (conservative) -> galvanic corrosion  (unmodelled)
 
+The galvanic rule reads the anodic index of each exposed surface, so a coating counts
+as intact: a zinc-plated bolt is zinc to the plates it touches. A design that relies on
+a coating to keep a pair similar rests on that judgement through this table's premise.
+
 There is no design-level gap. A design without an environment class is still checked:
 builders that need the environment report NeedsInputBound on their own requirement, and
 the galvanic rule treats an undeclared environment as wet.
@@ -76,8 +80,8 @@ def _anodic_index(material: str, registry: Registry) -> Interval | None:
 
 
 def _galvanic_applies(feature: Feature, registry: Registry) -> bool:
-    """CONTACT_PAIR whose registry anodic indices differ by more than 0.15 V, in a wet or
-    >= C3 environment, or in an undeclared one."""
+    """CONTACT_PAIR whose surfaces' registry anodic indices differ by more than 0.15 V,
+    in a wet or >= C3 environment, or in an undeclared one."""
     if feature.kind != CONTACT_PAIR or len(set(feature.materials)) < 2:
         return False
     indices = [_anodic_index(m, registry) for m in feature.materials]

@@ -721,8 +721,9 @@ def _part_of(element: CircuitElement) -> str | None:
 def features(circuit: Circuit, design: Design, registry: Registry) -> tuple[Feature, ...]:
     """One CONDUCTOR feature per wire (its conductor material, energy {ELECTRICAL,
     THERMAL}), one CONTACT_PAIR per connection between two parts (wire conductor against
-    terminal body), plus the environment. A v0 cable part names only its conductor
-    material, so no insulation material reaches coverage."""
+    terminal body, each part's exposed surface by Registry.surface), plus the
+    environment. A v0 cable part names only its conductor material, so no insulation
+    material reaches coverage."""
     found = [
         Feature((circuit.name, e.name), CONDUCTOR, (registry.parts[e.cable].material,),
                 frozenset({EnergyDomain.ELECTRICAL, EnergyDomain.THERMAL}), design.environment)
@@ -732,7 +733,7 @@ def features(circuit: Circuit, design: Design, registry: Registry) -> tuple[Feat
         parts = [_part_of(circuit.elements[end.element]) for end in (c.a, c.b)]
         if None not in parts:
             found.append(Feature((circuit.name, c.a.element, c.b.element), CONTACT_PAIR,
-                                 tuple(registry.parts[p].material for p in parts),
+                                 tuple(registry.surface(registry.parts[p].material, registry.parts[p].process) for p in parts),
                                  frozenset({EnergyDomain.ELECTRICAL, EnergyDomain.CHEMICAL}), design.environment))
     return tuple(found)
 
