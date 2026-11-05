@@ -454,13 +454,11 @@ def _terms(truss: Truss, sb: StatementBuilder) -> tuple[_Terms, ...]:
     for m in truss.members:
         start, end = nodes[m.start], nodes[m.end]
         length_sq = Add(tuple(PowInt(Add((coordinate(end, a), Neg(coordinate(start, a)))), 2) for a in ("x", "y")))
-        # StatementBuilder.registry does not expand self.D and self.t, so bind them here.
-        shape = {"D": sb.registry(m.section, "D"), "t": sb.registry(m.section, "t")}
         out.append(_Terms(
             length_sq=length_sq,
             length=Sqrt(length_sq),
-            area=sb.registry(m.section, "A", shape),
-            second_moment=sb.registry(m.section, "I", shape),
+            area=sb.registry(m.section, "A"),
+            second_moment=sb.registry(m.section, "I"),
             modulus=sb.registry(m.material, "E"),
             yield_strength=sb.registry(m.material, "fy"),
         ))

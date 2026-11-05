@@ -207,11 +207,9 @@ def build_range_mean(req: Requirement, demand: Demand, design: Design, registry:
 
 
 def build_tested(req: Requirement, demand: Demand, design: Design, registry: Registry) -> tuple[Elaborated, ...]:
-    """The claim's failure level is read from the claim itself, which the requirement's
-    criterion does not carry for a FailsAt event."""
     criterion = req.criterion
     record = design.tests[criterion.tests]
-    level = next(c.event.level for c in design.probability_claims if c.name == req.origin.claim)
+    level = criterion.threshold
     tested_at = format_quantity(record.level, "kN")
     if level.value.hi > record.level.value.lo:
         return (Gap(req, (NoRuleForQuantity(

@@ -113,7 +113,7 @@ class Criterion:
 
 @dataclass(frozen=True)
 class ProbabilityCriterion:
-    threshold: Quantity | None       # None for a FailsAt event
+    threshold: Quantity              # the exceedance threshold, or a FailsAt event's failure level
     p: Fraction
     load: str | None
     tests: str | None

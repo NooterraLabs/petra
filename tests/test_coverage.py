@@ -179,10 +179,12 @@ class Claims(WidgetDomain):
     def test_probability_claims_take_their_mode_from_the_method(self):
         qoi = QoiRef(("w",), "utilisation")
         exceeds = ProbabilityClaim("overload", Exceeds(qoi, ONE, "lift"), Fraction(3, 10), RangeMean(), span(12))
-        tested = ProbabilityClaim("tested", FailsAt(("w",), Quantity(Interval(Fraction(36000), Fraction(36000)), FORCE)), Fraction(1, 100), FromTests("proof", Fraction(95, 100)), span(13))
+        level = Quantity(Interval(Fraction(36000), Fraction(36000)), FORCE)
+        tested = ProbabilityClaim("tested", FailsAt(("w",), level), Fraction(1, 100), FromTests("proof", Fraction(95, 100)), span(13))
         first, second = claim_requirements(design(probability_claims=[exceeds, tested]), {"w": ()})
         self.assertEqual(first, Requirement(("w",), STRENGTH, ProbabilityCriterion(ONE, Fraction(3, 10), "lift", None, None), ClaimOrigin("overload"), ("lift",), qoi))
-        self.assertEqual(second, Requirement(("w",), STRENGTH, ProbabilityCriterion(None, Fraction(1, 100), None, "proof", Fraction(95, 100)), ClaimOrigin("tested"), (), None))
+        self.assertEqual(second, Requirement(("w",), STRENGTH, ProbabilityCriterion(level, Fraction(1, 100), None, "proof", Fraction(95, 100)), ClaimOrigin("tested"), (), None),
+                         "a tested claim carries its failure level in the criterion")
 
     def test_claims_keep_source_order(self):
         late = claim("late", ONE, line=30)

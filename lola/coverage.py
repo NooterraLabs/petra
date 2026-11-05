@@ -10,9 +10,9 @@ A coverage table is a judgement about what can go wrong, so LoLa says so rather 
 hiding it.
 
 v0 rules (the domain rules live in their modules):
-  truss.axial_member     every truss member      -> plastic collapse (lambda >= 1),
-                                                    member buckling, global stability
-  truss.elastic_claim    any elastic claim       -> small strain (model validity)
+  truss.frame            every truss             -> plastic collapse (lambda >= 1),
+                                                    global stability, small strain
+  truss.axial_member     every truss member      -> member buckling
   wire.conductor         every wire              -> steady temperature (theta <= insulation
                                                     theta_max), short circuit, overload
                                                     protection, voltage drop (<= 5 %)
@@ -151,7 +151,7 @@ def _probability_requirement(claim: ProbabilityClaim, design: Design) -> Require
     if isinstance(event, Exceeds):
         subject, under, qoi, threshold, load = event.qoi.path, (event.under,), event.qoi, event.threshold, event.under
     else:
-        subject, under, qoi, threshold, load = event.subject, (), None, None, None
+        subject, under, qoi, threshold, load = event.subject, (), None, event.level, None
     tests, confidence = (method.tests, method.confidence) if isinstance(method, FromTests) else (None, None)
     mode = _domain(design, subject).probability[type(method)]
     criterion = ProbabilityCriterion(threshold, claim.p, load, tests, confidence)
