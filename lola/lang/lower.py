@@ -379,12 +379,30 @@ class _Lowering:
         return Tests(name.text, path, trials, failures, level, signed[0], self.span(node))
 
     def claim(self, node: Node) -> Claim:
-        name, qoi_node, rel, bound_node, under = node.args
+        name, qoi_node, rel, bound_node, margin_node, under = node.args
         qoi = self.qoi(qoi_node, f"claim {name.text}")
         bound = self.qty(bound_node)
+        margin = None if margin_node is None else self.margin(margin_node, bound, f"claim {name.text}")
         for load in under:
             self.declared_load(load, f"claim {name.text}")
-        return Claim(name.text, qoi, Rel(rel.text), bound, tuple(t.text for t in under), None, self.span(node))
+        return Claim(name.text, qoi, Rel(rel.text), bound, tuple(t.text for t in under), None, self.span(node), margin)
+
+    def margin(self, node: Node, bound: Quantity | None, what: str) -> Quantity | None:
+        """A positive quantity in the bound's dimension. Temperatures are degC with no
+        offset, so a margin in degC is a difference, as it should be."""
+        q = self.qty(node)
+        if q is None or bound is None:
+            return None
+        if bound.dim == DIMENSIONLESS and q.dim != DIMENSIONLESS:
+            number, unit = node.args
+            self.problem(node, f"{what}: the margin must have the bound's dimension, but the bound is a plain number and the margin is {number.text} {unit.text}; if the quantity has a unit, the bound needs a unit too")
+            return None
+        if self.dimensioned(q, bound.dim, f"{what}: the margin must have the bound's dimension", node) is None:
+            return None
+        if q.value.lo <= 0:
+            self.problem(node, f"{what}: a margin must be positive, got {node.args[0].text}")
+            return None
+        return q
 
     def probability_claim(self, node: Node) -> ProbabilityClaim:
         name = node.args[0]

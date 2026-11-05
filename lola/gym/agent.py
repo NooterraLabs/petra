@@ -37,7 +37,7 @@ from ..verdict import STATUS, Discharged
 from .env import LolaEnv, Submission
 from .tasks import Box, Task, family_text, fill, registry_value
 
-_PREFERENCE = {"PASS": 0, "UNKNOWN": 1, "FAIL": 2}
+_PREFERENCE = {"PASS": 0, "MARGINAL": 1, "UNKNOWN": 2, "FAIL": 3}
 _DROP_MARGIN = Fraction(95, 100)
 """The family's run stops at 95 % of the length a 3 % drop allows at the hottest
 conductor, so the solver is not asked to prove a bound with no slack."""

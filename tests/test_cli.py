@@ -26,7 +26,7 @@ ROOT = Path(__file__).resolve().parents[1]
 EXAMPLES = ROOT / "examples"
 CIRCUIT = EXAMPLES / "circuit_pass.lola"
 FAMILY = EXAMPLES / "families" / "cu_pvc_clipped.lola"
-VERDICT_KEYS = {"claim", "status", "footprint", "rules", "obligations"}
+VERDICT_KEYS = {"claim", "status", "footprint", "rules", "obligations", "margins"}
 
 
 def run(*argv: str) -> tuple[int, str, str]:

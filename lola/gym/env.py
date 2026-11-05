@@ -37,7 +37,9 @@ class Submission:
     certificates: tuple[dict, ...]     # certs.CertificateFile JSON envelopes
 
 
-REWARD = {"PASS": 1.0, "UNKNOWN": 0.0, "FAIL": -1.0}
+REWARD = {"PASS": 1.0, "MARGINAL": 0.0, "UNKNOWN": 0.0, "FAIL": -1.0}
+"""MARGINAL earns what UNKNOWN does: the claim is proved, but a certified point comes
+within its margin, so the design has not shown the slack it asked for."""
 
 
 class _Submitted:

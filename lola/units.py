@@ -190,3 +190,35 @@ def format_quantity(q: Quantity, unit: str) -> str:
 
 class UnitError(ValueError):
     pass
+
+
+def si_unit(dim: Dim) -> str:
+    """The SI spelling of a dimension, or its base-unit exponents when UNITS has no unit
+    of factor 1 for it."""
+    named = next((u for u, (factor, d) in UNITS.items() if factor == 1 and d == dim), None)
+    if named is not None:
+        return named
+    return " ".join(f"{base}^{e}" for base, e in zip(("m", "kg", "s", "A", "degC"), (dim.m, dim.kg, dim.s, dim.A, dim.degC)) if e)
+
+
+def interval_text(value: Interval) -> str:
+    return str(value.lo) if value.lo == value.hi else f"[{value.lo}, {value.hi}]"
+
+
+def quantity_text(q: Quantity) -> str:
+    """A quantity in its SI unit, for reports."""
+    unit = si_unit(q.dim)
+    return format_quantity(q, unit) if unit in UNITS else f"{interval_text(q.value)} {unit}"
+
+
+def readable_text(q: Quantity) -> str:
+    """A quantity in the unit of its dimension with the largest factor that still leaves
+    its magnitude at least 1 (300 MPa, not 300000000 Pa), preferring the SI unit among
+    equal factors and never "%". quantity_text when no unit fits."""
+    si = si_unit(q.dim)
+    size = max(abs(q.value.lo), abs(q.value.hi))
+    units = [(factor, name == si, name) for name, (factor, dim) in UNITS.items() if dim == q.dim and name != "%"]
+    fitting = [u for u in units if u[0] <= size]
+    if not units or size == 0:
+        return quantity_text(q)
+    return format_quantity(q, max(fitting or [min(units)])[2])
