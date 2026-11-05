@@ -1,0 +1,350 @@
+"""Red team: try to make the kernel issue a Theorem for a false statement, or a
+Refutation for a true one. Owner: M.
+
+Part 2 of seam M. Each attack writes a statement whose truth was worked out by hand, with
+evidence crafted to slip past a rule, and asserts the kernel refuses it. Every attack is
+paired with a near-neighbour the kernel must still accept, so the attack demonstrably
+tells truth from falsehood rather than rejecting everything.
+
+One attack succeeds and exposes a soundness bug. It is kept, marked
+@unittest.expectedFailure with the bug named, and reported. Attacks are never weakened to
+pass.
+"""
+import copy
+import dataclasses
+import pickle
+import unittest
+from fractions import Fraction as Q
+
+from lola.kernel import (
+    Add,
+    Const,
+    Div,
+    Evidence,
+    Invalid,
+    Ln,
+    Matrix,
+    Neg,
+    PowInt,
+    DefinedHyp,
+    Leaf,
+    RangeHyp,
+    Refutation,
+    Rejection,
+    Split,
+    Sqrt,
+    Statement,
+    Sym,
+    Theorem,
+    TooWeak,
+    check,
+    is_issued,
+)
+from lola.kernel.rules.r2_definite import GramPositiveDefinite, GramTerm, LDLFactor
+from lola.kernel.rules.r3_hypercircle import (
+    ComponentBound,
+    Hypercircle,
+    HypercircleFields,
+    MinimizerBound,
+    MinimizerComponent,
+    QuadraticProblem,
+)
+from lola.kernel.rules.r4_enclosure import AllNonpositive, Enclosure, PointWitness
+from lola.kernel.rules.r5_moment import MomentBound, MomentConstraint, MomentDual, RandomVar
+from lola.kernel.rules.r6_scenario import Arithmetic, BinomialTail
+from tests import mutations
+
+
+def c(v) -> Const:
+    return Const(Q(v))
+
+
+def r4(sym, lo, hi, expr) -> Statement:
+    return Statement(hyps=(RangeHyp(sym, Q(lo), Q(hi), f"in:{sym}"),), goal=AllNonpositive(exprs=(expr,)))
+
+
+def leaf_check(statement: Statement):
+    return check(statement, Evidence(Enclosure(partition=Leaf())))
+
+
+class Base(unittest.TestCase):
+    def assertRejected(self, result, fault=None, needle=None):
+        self.assertIsInstance(result, Rejection, f"expected a Rejection, got {type(result).__name__}")
+        if fault is not None:
+            self.assertIsInstance(result.fault, fault, result.reason)
+        if needle is not None:
+            self.assertIn(needle, result.reason)
+        return result
+
+    def assertTheorem(self, result):
+        self.assertIsInstance(result, Theorem, getattr(result, "reason", ""))
+        return result
+
+
+class IntervalDomainErrors(Base):
+    """An interval that reaches a point where the expression is undefined must never
+    certify a bound. The enclosure raises and the kernel turns it into a Rejection, it
+    never silently skips the bad point."""
+
+    def test_zero_in_a_denominator_is_rejected_not_proven(self):
+        self.assertRejected(leaf_check(r4("x", -1, 1, Div(c(1), Sym("x")))), Invalid, "contains 0")
+        self.assertTheorem(leaf_check(r4("x", 1, 2, Add((Div(c(1), Sym("x")), c(-2))))))
+
+    def test_sqrt_and_ln_of_non_positive_intervals_are_rejected(self):
+        self.assertRejected(leaf_check(r4("x", -1, 1, Sqrt(Sym("x")))), Invalid, "sqrt")
+        self.assertRejected(leaf_check(r4("x", 0, 1, Ln(Sym("x")))), Invalid, "ln")
+        self.assertTheorem(leaf_check(r4("x", 1, 4, Add((Ln(Sym("x")), c(-2))))))
+
+
+class Magnitudes(Base):
+    """Exact rationals carry arbitrary magnitude with no float error, and sqrt rounds
+    outward, so a false bound by a hair is not accepted."""
+
+    HUGE = Q(10) ** 600
+    TINY = Q(1, 10 ** 600)
+
+    def test_huge_and_tiny_rationals_decide_correctly(self):
+        self.assertRejected(leaf_check(r4("x", 0, self.HUGE, Add((Sym("x"), c(-1))))), TooWeak)
+        self.assertTheorem(leaf_check(r4("x", 0, self.HUGE, Add((Sym("x"), Neg(c(self.HUGE)))))))
+        self.assertTheorem(leaf_check(r4("x", 0, self.TINY, Add((Sym("x"), Neg(c(self.TINY)))))))
+
+    def test_sqrt_rounds_outward_so_a_bound_below_the_root_fails(self):
+        # sqrt(2) = 1.41421356...; a claim of <= 1.41421 is false, <= 1.41422 is true.
+        self.assertRejected(leaf_check(r4("x", 2, 2, Add((Sqrt(Sym("x")), Neg(c(Q(141421, 100000))))))), TooWeak)
+        self.assertTheorem(leaf_check(r4("x", 2, 2, Add((Sqrt(Sym("x")), Neg(c(Q(141422, 100000))))))))
+
+
+class Boxes(Base):
+    def test_an_empty_box_is_malformed_not_vacuously_proven(self):
+        self.assertRejected(leaf_check(r4("x", 1, 0, Sym("x"))), Invalid, "lo > hi")
+
+    def test_a_degenerate_point_box_still_discriminates(self):
+        self.assertTheorem(leaf_check(r4("x", 5, 5, Add((Sym("x"), c(-5))))))
+        false_at_the_point = r4("x", 5, 5, Add((Sym("x"), c(-4))))
+        self.assertRejected(leaf_check(false_at_the_point), TooWeak)
+        self.assertIsInstance(check(false_at_the_point, Evidence(PointWitness((("x", Q(5)),), 0))), Refutation)
+
+
+QUAD = r4("x", 0, 1, Add((PowInt(Sym("x"), 2), Neg(Sym("x")), c(Q(-1, 10)))))
+
+
+class Partitions(Base):
+    """A split point must lie strictly inside its cell. On the boundary or outside it the
+    two halves would not cover the cell, so the walk rejects it."""
+
+    def test_split_on_the_boundary_or_outside_the_cell_is_rejected(self):
+        for at in (0, 1, 2, -1):
+            with self.subTest(at=at):
+                self.assertRejected(check(QUAD, Evidence(Enclosure(Split("x", Q(at), Leaf(), Leaf())))), Invalid, "strictly inside")
+
+    def test_an_interior_partition_still_proves_the_true_bound(self):
+        fix = mutations.BY_NAME["r4_enclosure"]
+        self.assertTheorem(check(fix.statement, fix.evidence))
+
+
+def one_term_pd(w_lo, w_hi) -> Statement:
+    goal = GramPositiveDefinite(dim=1, terms=(GramTerm(Sym("w"), Matrix(1, 1, ((0, 0, Q(1)),))),))
+    return Statement(hyps=(RangeHyp("w", Q(w_lo), Q(w_hi), "in:w"),), goal=goal)
+
+
+class R2NegativeWeights(Base):
+    """M(h) = w * [[1]] is positive definite only when w > 0. A negative weight cannot be
+    certified: no positive pivot can factor a negative reference matrix."""
+
+    IDENT = Matrix(1, 1, ((0, 0, Q(1)),))
+
+    def test_a_negative_weight_cannot_be_certified_positive_definite(self):
+        negative = one_term_pd(-1, -1)
+        self.assertRejected(check(negative, Evidence(LDLFactor((Q(-1),), self.IDENT, (Q(-1),)))), Invalid, "pivot")
+        self.assertRejected(check(negative, Evidence(LDLFactor((Q(1),), self.IDENT, (Q(1),)))), Invalid, "lower bound")
+
+    def test_a_positive_weight_is_certified(self):
+        self.assertTheorem(check(one_term_pd(1, 2), Evidence(LDLFactor((Q(1),), self.IDENT, (Q(1),)))))
+
+
+PAIR = Matrix(1, 2, ((0, 0, Q(1)), (0, 1, Q(1))))
+PROBLEM = QuadraticProblem(B=PAIR, f=(Sym("F"),), w=(c(1), c(3)))
+
+
+class R3Inconsistency(Base):
+    def test_a_field_that_breaks_equilibrium_is_rejected(self):
+        st = Statement(hyps=(RangeHyp("F", Q(4), Q(8), "in:F"),), goal=MinimizerBound(PROBLEM, (ComponentBound(0, c(1), None, c(6)),), None))
+        broken = HypercircleFields(s=((Q(0), Q(0)), (Q(0), Q(0))), u=((Q(0),), (Q(0),)))
+        self.assertRejected(check(st, Evidence(Hypercircle(broken))), Invalid, "B s != f")
+        self.assertTheorem(check(st, Evidence(Hypercircle(HypercircleFields(s=((Q(3), Q(1)), (Q(6), Q(2))), u=((Q(3),), (Q(6),)))))))
+
+
+def hook(p) -> Statement:
+    goal = MomentBound(
+        random=(RandomVar("x", Sym("Lo"), Sym("Hi")),),
+        moments=(MomentConstraint(Sym("x"), Sym("M"), Sym("M")),),
+        fail=Add((Sym("x"), Neg(Sym("C")))),
+        p=Q(p) if isinstance(p, int) else p,
+    )
+    hyps = tuple(sorted(
+        (RangeHyp("C", Q(36), Q(40), "in:C"), RangeHyp("Hi", Q(40), Q(40), "in:Hi"), RangeHyp("Lo", Q(0), Q(0), "in:Lo"), RangeHyp("M", Q(10), Q(10), "in:M")),
+        key=lambda h: h.sym,
+    ))
+    return Statement(hyps=hyps, goal=goal)
+
+
+def dual(y) -> MomentDual:
+    return MomentDual(y0=Q(0), y=(Q(y),), partition=Split("x", Q(36), Leaf(), Leaf()))
+
+
+class R5Domination(Base):
+    """A dual g must dominate the failure indicator over the whole support. A multiplier
+    that makes g dip below zero (so g fails to dominate on part of the support), or that
+    only meets a bound stronger than the truth, cannot certify the claim."""
+
+    def test_a_dual_that_does_not_dominate_everywhere_is_rejected(self):
+        # y = -1/36 makes g(x) = -x/36 < 0 on (0, 40], so it fails to dominate there.
+        self.assertRejected(check(hook(Q(3, 10)), Evidence(dual(Q(-1, 36)))), TooWeak)
+
+    def test_a_claim_stronger_than_the_true_bound_cannot_be_dualised(self):
+        # The true bound is E[X]/36 = 10/36 = 5/18; any valid g exceeds p = 1/10.
+        self.assertRejected(check(hook(Q(1, 10)), Evidence(dual(Q(1, 36)))), TooWeak, "5/18")
+
+    def test_the_true_markov_bound_is_certified(self):
+        self.assertTheorem(check(hook(Q(3, 10)), Evidence(dual(Q(1, 36)))))
+
+
+def binomial(n, k, eps, beta) -> Statement:
+    return Statement(hyps=(), goal=BinomialTail(n=c(n), k=c(k), eps=c(eps), beta=c(beta)))
+
+
+class R6Degenerate(Base):
+    """The binomial tail is defined for integers 0 <= k <= n and probabilities strictly
+    inside (0, 1). Every degenerate parameter is rejected, not computed into a false bound."""
+
+    def test_degenerate_parameters_are_rejected(self):
+        cases = {
+            "eps=0": binomial(300, 0, Q(0), Q(1, 20)),
+            "eps=1": binomial(300, 0, Q(1), Q(1, 20)),
+            "beta=1": binomial(300, 0, Q(1, 100), Q(1)),
+            "k>n": binomial(3, 5, Q(1, 100), Q(1, 20)),
+            "n=5/2": binomial(Q(5, 2), 0, Q(1, 100), Q(1, 20)),
+        }
+        for name, st in cases.items():
+            with self.subTest(case=name):
+                self.assertRejected(check(st, Evidence(Arithmetic())), Invalid)
+
+    def test_a_well_posed_tail_is_certified(self):
+        self.assertTheorem(check(binomial(300, 0, Q(1, 100), Q(1, 20)), Evidence(Arithmetic())))
+
+
+FALSE_ST = r4("x", 0, 2, Add((Sym("x"), c(-1))))      # false at x = 2
+TRUE_ST = r4("x", 0, 1, Add((Sym("x"), c(-2))))       # true over [0, 1]
+
+
+def genuine_refutation() -> Refutation:
+    r = check(FALSE_ST, Evidence(PointWitness((("x", Q(2)),), 0)))
+    assert isinstance(r, Refutation)
+    return r
+
+
+def genuine_theorem() -> Theorem:
+    t = check(TRUE_ST, Evidence(Enclosure(Leaf())))
+    assert isinstance(t, Theorem)
+    return t
+
+
+class Forgery(Base):
+    """Sealed results must not be forgeable. A laundered Refutation that reads as a
+    Theorem would let a FAIL be presented as a PASS for a false statement."""
+
+    def test_copy_pickle_and_replace_on_a_result_all_raise(self):
+        for result in (genuine_theorem(), genuine_refutation()):
+            for attack in (copy.copy, copy.deepcopy, pickle.dumps):
+                with self.subTest(kind=type(result).__name__, attack=attack.__name__):
+                    with self.assertRaises(TypeError):
+                        attack(result)
+            with self.subTest(kind=type(result).__name__, attack="replace"):
+                with self.assertRaises(TypeError):
+                    dataclasses.replace(result, statement=TRUE_ST)
+
+    def test_object_new_handles_are_not_issued(self):
+        self.assertFalse(is_issued(object.__new__(Theorem)))
+        self.assertFalse(is_issued(object.__new__(Refutation)))
+
+    @unittest.expectedFailure
+    def test_class_swap_cannot_launder_a_refutation_into_a_theorem(self):
+        # BUG (soundness): object.__setattr__(handle, "__class__", Theorem) retypes a
+        # genuine Refutation of a false statement into a Theorem that is_issued accepts and
+        # verdict.Pass then rests a PASS on. is_issued checks `type(result) in
+        # (Theorem, Refutation) and result in _ISSUED` but never checks the stored record's
+        # kind matches the handle's type, so the swap passes. Minimal fix in
+        # lola/kernel/check.py: is_issued must require a Theorem handle to hold a
+        # _TheoremRecord and a Refutation handle a _RefutationRecord.
+        laundered = genuine_refutation()
+        object.__setattr__(laundered, "__class__", Theorem)
+        self.assertFalse(is_issued(laundered), "a class-swapped refutation must not read as an issued theorem")
+
+
+class Hypotheses(Base):
+    """The footprint is the labels of the used hypotheses, so an unused or duplicated
+    hypothesis must be rejected rather than padding the footprint with facts the proof
+    never used."""
+
+    def test_an_unused_hypothesis_is_rejected(self):
+        with_spare = Statement(
+            hyps=tuple(sorted((RangeHyp("x", Q(0), Q(1), "in:x"), RangeHyp("z", Q(0), Q(1), "in:z")), key=lambda h: h.sym)),
+            goal=AllNonpositive(exprs=(Add((Sym("x"), c(-2))),)),
+        )
+        self.assertRejected(leaf_check(with_spare), Invalid, "unused")
+
+    def test_a_duplicate_hypothesis_is_rejected(self):
+        duped = Statement(
+            hyps=(RangeHyp("x", Q(0), Q(1), "in:x"), RangeHyp("x", Q(0), Q(1), "in:x2")),
+            goal=AllNonpositive(exprs=(Add((Sym("x"), c(-2))),)),
+        )
+        self.assertRejected(leaf_check(duped), Invalid, "duplicates")
+
+    def test_the_clean_statement_is_accepted(self):
+        self.assertTheorem(leaf_check(r4("x", 0, 1, Add((Sym("x"), c(-2))))))
+
+
+class DefinedHypCycles(Base):
+    """A DefinedHyp may name only RangeHyp symbols. A definition that reaches another
+    defined symbol is a cycle and is rejected before any rule runs."""
+
+    def test_a_definition_referring_to_another_defined_symbol_is_rejected(self):
+        cyclic = Statement(
+            hyps=tuple(sorted(
+                (RangeHyp("F", Q(4), Q(8), "in:F"),
+                 DefinedHyp("q", MinimizerComponent(PROBLEM, 0, Sym("q2"))),
+                 DefinedHyp("q2", MinimizerComponent(PROBLEM, 1, c(1)))),
+                key=lambda h: h.sym,
+            )),
+            goal=AllNonpositive(exprs=(Add((Sym("q"), Neg(Sym("q2")))),)),
+        )
+        self.assertRejected(check(cyclic, Evidence(Enclosure(Leaf()))), Invalid, "RangeHyp symbols only")
+
+    def test_a_definition_over_a_range_symbol_is_accepted(self):
+        fix = mutations.BY_NAME["r3_lemma"]
+        self.assertTheorem(check(fix.statement, fix.evidence))
+
+
+class StatementHashBinding(Base):
+    """A certificate is bound to its statement by hash (design.md call site 3). A file
+    whose stored hash does not match its statement is refused before the kernel runs."""
+
+    def test_a_tampered_statement_hash_is_detected(self):
+        env = mutations.BY_NAME["r1_feasible"].envelope()
+        self.assertIsInstance(mutations.verify_envelope(env), Theorem)
+        env["statement_hash"] = "sha256:" + "0" * 64
+        self.assertIsInstance(mutations.verify_envelope(env), mutations.HashMismatch)
+
+    def test_a_statement_whose_hash_matches_still_checks(self):
+        self.assertIsInstance(mutations.verify_envelope(mutations.BY_NAME["r6_binomial"].envelope()), Theorem)
+
+
+class NoFalseRefutation(Base):
+    def test_a_true_statement_cannot_be_refuted(self):
+        true_at_the_edge = r4("x", 0, 1, Add((Sym("x"), c(-1))))
+        self.assertRejected(check(true_at_the_edge, Evidence(PointWitness((("x", Q(1)),), 0))), TooWeak)
+        self.assertIsInstance(check(FALSE_ST, Evidence(PointWitness((("x", Q(2)),), 0))), Refutation)
+
+
+if __name__ == "__main__":
+    unittest.main()
