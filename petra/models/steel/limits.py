@@ -1,4 +1,5 @@
-"""AISC 360-22 Chapter J limit states as kernel expressions. Trusted physics.
+"""AISC 360-22 Chapter J limit states as kernel expressions. Trusted physics: AISC's
+layer over petra/mechanics.
 
 Every function takes kernel Exprs (hypothesis symbols from a StatementBuilder) and returns
 the nominal strength Rn, or the quantity a rule compares, as an Expr in SI units. No
@@ -6,10 +7,14 @@ function reads a design: the callers in checks.py decide which premise each argu
 Every number a provision prints (the 0.60 of Fnw = 0.60 FEXX, the 1.61 floor of k1) is a
 registry row with its clause and tag (petra/registry/steel.py, docs/principles.md D5), read
 through `k`, the caller's constant lookup, so it appears in footprints; each docstring
-shows the equation with its printed numbers, to read against the row. The only literals
-are 0, 1 and 2 and the integers of geometry: section and line properties (t d^2 / 4, the
-twelfths of a moment of inertia), pi d^2 / 4, and plate buckling's 12 (1 - nu^2)
-(tests/test_steel_principles.py holds the functions that may use them to a list).
+shows the equation with its printed numbers, to read against the row.
+
+The mechanics under the provisions belongs to no code, and lives in petra/mechanics: the
+properties of a section, how a force is shared among bolts or along a weld (the elastic
+method of Manual Parts 7 and 8), a plate's elastic buckling stress. This module takes
+them from there. Where the Specification names a geometric quantity (Ab, the bolt's body
+area; a bracket's a' and b'), a function here says which one it is. So the only literals
+here are 0, 1 and 2 (tests/test_steel_principles.py).
 
 A formula that depends on an inch- or ksi-valued quantity in a non-homogeneous way (the
 Fy in ksi under a square root) uses the unit as an exact Const, so the expression stays
@@ -21,10 +26,11 @@ Struik, Guide to Design Criteria for Bolted and Riveted Joints, 2nd ed., 1987).
 """
 from __future__ import annotations
 
-from fractions import Fraction
 from typing import Callable
 
-from ...kernel import Add, Const, Div, Exp, Expr, Ln, Max, Min, Mul, Neg, Pi, PowInt, Sqrt
+from ...kernel import Div, Expr, Ln, Max, Min, PowInt, Sqrt
+from ...mechanics import (add, c, circle_area, div, fillet_throat, mul, plate_buckling_stress, power,
+                          rectangle_elastic_modulus, rectangle_plastic_modulus, right_triangle, sq, sub)
 from ...units import CUSTOMARY
 
 INCH = CUSTOMARY["inch"][0]
@@ -32,35 +38,6 @@ KSI = CUSTOMARY["ksi"][0]
 
 K = Callable[[str], Expr]
 """A registry constant by name, as the caller's StatementBuilder states it (Ctx.const)."""
-
-
-def c(x: Fraction | int | str) -> Const:
-    return Const(Fraction(x))
-
-
-def add(*xs: Expr) -> Expr:
-    return xs[0] if len(xs) == 1 else Add(tuple(xs))
-
-
-def mul(*xs: Expr) -> Expr:
-    return xs[0] if len(xs) == 1 else Mul(tuple(xs))
-
-
-def sub(a: Expr, b: Expr) -> Expr:
-    return Add((a, Neg(b)))
-
-
-def div(a: Expr, b: Expr) -> Expr:
-    return Div(a, b)
-
-
-def sq(a: Expr) -> Expr:
-    return PowInt(a, 2)
-
-
-def power(a: Expr, exponent: Expr) -> Expr:
-    """a ** exponent for a > 0: exp(exponent ln a)."""
-    return Exp(Mul((exponent, Ln(a))))
 
 
 STRICT = "petra.strict.length"
@@ -77,8 +54,9 @@ STRICT_RATIO = "petra.strict.ratio"
 # --- J3: bolts ---------------------------------------------------------------------------
 
 def bolt_area(d: Expr) -> Expr:
-    """Ab = pi d^2 / 4, the nominal unthreaded body area (Table J3.2 note)."""
-    return Mul((Div(Pi(), c(4)), sq(d)))
+    """Ab, the nominal unthreaded body area (Table J3.2 note): the area of a circle of the
+    nominal diameter, pi d^2 / 4."""
+    return circle_area(d)
 
 
 def bolt_shear(fnv: Expr, d: Expr, planes: Expr) -> Expr:
@@ -178,49 +156,13 @@ def flexural_rupture(fu: Expr, znet: Expr) -> Expr:
     return mul(fu, znet)
 
 
-def plate_plastic_modulus(t: Expr, depth: Expr) -> Expr:
-    """Z = t L^2 / 4 for a rectangular plate bent about its strong axis."""
-    return Div(mul(t, sq(depth)), c(4))
-
-
-def plate_elastic_modulus(t: Expr, depth: Expr) -> Expr:
-    """S = t L^2 / 6 for a rectangular plate bent about its strong axis."""
-    return Div(mul(t, sq(depth)), c(6))
-
-
-def hex_corner(across_flats: Expr) -> Expr:
-    """The distance from a regular hexagon's centre to a corner, F / sqrt 3 for width F
-    across the flats: how far a nut reaches from its bolt's axis."""
-    return Div(across_flats, Sqrt(c(3)))
-
-
-def polar_moment(n: Expr, rows: int, cols: int, s: Expr, g: Expr) -> Expr:
-    """Ip = n [(rows^2 - 1) s^2 + (cols^2 - 1) g^2] / 12 of a rows x cols bolt pattern about
-    its centroid, per unit bolt area (Manual Part 7, elastic method)."""
-    return mul(n, Div(add(mul(c(rows * rows - 1), sq(s)), mul(c(cols * cols - 1), sq(g))), c(12)))
-
-
-def plate_net_modulus(t: Expr, depth: Expr, rows: int, pitch: Expr, hole: Expr) -> Expr:
-    """Znet of a plate of depth L with one vertical line of `rows` holes of net width dh'
-    at pitch s, centred on mid-depth: t/4 (L^2 - 4 dh' sum |y_i|), where each hole removes
-    dh' t at its distance |y_i| from the plastic neutral axis. For a regular pattern
-    sum |y_i| = s (rows^2 - (rows mod 2)) / 4. With an odd number of rows the middle hole
-    sits on the axis and removes its own plastic modulus t dh'^2 / 4 as well: Znet = Zg -
-    (t/4)[dh' s (n^2 - 1) + dh'^2] (Companion II.A-17B and II.A-19A; Manual Eq 15-4)."""
-    lever = Fraction(rows * rows - rows % 2, 4)   # sum of |y_i| / s over the rows
-    removed = mul(c(4), hole, c(lever), pitch)
-    if rows % 2:
-        removed = add(removed, sq(hole))
-    return Div(mul(t, sub(sq(depth), removed)), c(4))
-
-
 # --- J2: welds ----------------------------------------------------------------------------
 
 def fillet_line(k: K, fexx: Expr, w: Expr, length: Expr) -> Expr:
     """Eq J2-4 with Table J2.5 for a longitudinal line: Rn = 0.60 FEXX (w / sqrt 2) L, with
     kds = 1. The directional increase of Eq J2-5 and the group rule of Eq J2-6 are
     permitted, not required, and the deck takes neither (vocab, the weld model)."""
-    return mul(k("aisc360.j2_4.fnw"), fexx, Div(w, Sqrt(c(2))), length)
+    return mul(k("aisc360.j2_4.fnw"), fexx, fillet_throat(w), length)
 
 
 def end_loaded_length(k: K, length: Expr, w: Expr) -> Expr:
@@ -235,7 +177,7 @@ def end_loaded_length(k: K, length: Expr, w: Expr) -> Expr:
 
 def fillet_per_length(k: K, fexx: Expr, w: Expr) -> Expr:
     """Strength of a longitudinal fillet per unit length: 0.60 FEXX w / sqrt 2."""
-    return mul(k("aisc360.j2_4.fnw"), fexx, Div(w, Sqrt(c(2))))
+    return mul(k("aisc360.j2_4.fnw"), fexx, fillet_throat(w))
 
 
 def base_metal_per_length(k: K, fu: Expr, t: Expr) -> Expr:
@@ -312,32 +254,6 @@ def panel_zone(k: K, fy: Expr, dc: Expr, tw: Expr, pr: Expr, py: Expr, factor: E
 
 # --- Manual methods ---------------------------------------------------------------------------
 
-def tee_moduli(hc: Expr, tw: Expr, bf: Expr, tf: Expr) -> tuple[Expr, Expr]:
-    """(Sc, Zc) of the tee a top cope leaves: the web, tw thick, and the bottom flange,
-    bf by tf, hc deep in all, fillets neglected (the section Manual Tables 9-2a and 9-2b
-    tabulate). Sc is the elastic modulus to the cope edge, the tee's far fibre.
-
-    The plastic neutral axis lies at y = max(A / (2 bf), tf + (A/2 - Af) / tw) above the
-    flange's outer face: the first is right when the flange holds half the area, the
-    second when it does not, and in each case it is the larger, because bf > tw. With
-    m = min(y, tf) and n = max(y, tf), Zc = bf (m^2 + (tf - m)^2) / 2 + bf tf max(0, y - tf)
-    + tw ((n - tf)^2 + (hc - n)^2) / 2 + tw (hc - tf) max(0, tf - y), which is the first
-    moment of area about y in either case."""
-    h = sub(hc, tf)
-    af, aw = mul(bf, tf), mul(tw, h)
-    area = add(af, aw)
-    ybar = Div(add(mul(af, Div(tf, c(2))), mul(aw, add(tf, Div(h, c(2))))), area)
-    inertia = add(Div(mul(bf, PowInt(tf, 3)), c(12)), mul(af, sq(sub(ybar, Div(tf, c(2))))),
-                  Div(mul(tw, PowInt(h, 3)), c(12)), mul(aw, sq(sub(add(tf, Div(h, c(2))), ybar))))
-    sc = Div(inertia, sub(hc, ybar))
-    half = Div(area, c(2))
-    y = Max((Div(half, bf), add(tf, Div(sub(half, af), tw))))
-    m, n = Min((y, tf)), Max((y, tf))
-    zc = add(Div(mul(bf, add(sq(m), sq(sub(tf, m)))), c(2)), mul(bf, tf, Max((c(0), sub(y, tf)))),
-             Div(mul(tw, add(sq(sub(n, tf)), sq(sub(hc, n)))), c(2)), mul(tw, h, Max((c(0), sub(tf, y)))))
-    return sc, zc
-
-
 def cope_k1(k: K, hc: Expr, cope_length: Expr, d: Expr) -> Expr:
     """Manual Eqs 9-14, 9-19 and 9-20: k1 = f k >= 1.61, f = 2c/d for c/d <= 1, 1 + c/d
     above; k = 2.2 (hc/c)^1.65 for c/hc <= 1, 2.2 hc/c above. Each branch pair is joined
@@ -365,11 +281,12 @@ def cope_inelastic(mp: Expr, my: Expr, lam: Expr, lam_p: Expr) -> Expr:
 
 
 def cope_elastic(e: Expr, nu: Expr, k1: Expr, lam: Expr, sc: Expr) -> Expr:
-    """For lambda > 2 lambda_p, elastic local buckling of the coped web:
-    Mn = Fcr Sc, Fcr = pi^2 E k1 / (12 (1 - nu^2) lambda^2). At lambda = 2 lambda_p it is
+    """For lambda > 2 lambda_p, elastic local buckling of the coped web: Mn = Fcr Sc, Fcr
+    the plate buckling stress with the Manual's k1 as its coefficient and lambda = hc / tw
+    as its slenderness, pi^2 E k1 / (12 (1 - nu^2) lambda^2). At lambda = 2 lambda_p it is
     (pi^2 / (12 (1 - nu^2) 4 (0.475)^2)) Fy Sc = 1.0006 My, where Eq 9-11 gives My: the
     branches meet."""
-    return Div(mul(sq(Pi()), e, k1, sc), mul(c(12), sub(c(1), sq(nu)), sq(lam)))
+    return mul(plate_buckling_stress(e, nu, k1, lam), sc)
 
 
 def double_cope_cb(k: K, cope_length: Expr, d: Expr, dct: Expr) -> Expr:
@@ -385,73 +302,15 @@ def bar_ltb(k: K, e: Expr, fy: Expr, cb: Expr, lb_unbraced: Expr, depth: Expr, t
     each <= Mp = Fy Z (Eq F11-1, Z = 1.5 Sx). F11-3 is Cb [1.52 - 0.274 x Fy / E] My;
     F11-4 is Fcr Sx with Fcr = 1.9 E Cb / x. Below x = 0.08 E / Fy F11-3 with Cb >= 1 is
     already >= 1.49 My, and yielding (Mp = 1.5 My) governs, as F11.2(a) has it."""
-    sx = plate_elastic_modulus(t, depth)
-    my, mp = mul(fy, sx), mul(fy, plate_plastic_modulus(t, depth))
+    sx = rectangle_elastic_modulus(t, depth)
+    my, mp = mul(fy, sx), mul(fy, rectangle_plastic_modulus(t, depth))
     x = Div(mul(lb_unbraced, depth), sq(t))
     f11_3 = mul(cb, sub(k("aisc360.f11.inelastic_intercept"), mul(k("aisc360.f11.inelastic_slope"), x, Div(fy, e))), my)
     f11_4 = mul(Div(mul(k("aisc360.f11.elastic"), e, cb), x), sx)
     return x, Min((mp, f11_3)), Min((mp, f11_4))
 
 
-# --- Groups (elastic method, Manual Part 7) ------------------------------------------------------
-
-def elastic_bolt_force(v: Expr, e: Expr, n: Expr, rows: int, cols: int, s: Expr, g: Expr) -> tuple[Expr, Expr]:
-    """(horizontal, vertical) force on the critical corner bolt of a rows x cols pattern
-    under a vertical force v at eccentricity e from the pattern's centroid (Manual Part 7,
-    elastic method): Ip = n [(rows^2 - 1) s^2 + (cols^2 - 1) g^2] / 12, corner at
-    x = (cols - 1) g / 2, y = (rows - 1) s / 2; fx = v e y / Ip, fy = v/n + v e x / Ip."""
-    ip = polar_moment(n, rows, cols, s, g)
-    x = mul(c(Fraction(cols - 1, 2)), g)
-    y = mul(c(Fraction(rows - 1, 2)), s)
-    moment = mul(v, e)
-    return Div(mul(moment, y), ip), add(Div(v, n), Div(mul(moment, x), ip))
-
-
-def elastic_block_force(v: Expr, e: Expr, n: Expr, rows: int, cols: int, s: Expr, g: Expr, block_rows: int, block_cols: int) -> tuple[Expr, Expr]:
-    """(horizontal, vertical) resultant, by the same elastic method, of the forces on the
-    bolts of a block holding k = block_rows rows from one end and j = block_cols columns from
-    one side of the pattern. Over those bolts |sum y| = j k (rows - k) s / 2 and |sum x| =
-    k j (cols - j) g / 2, so fx = v e |sum y| / Ip and fy = v k j / n + v e |sum x| / Ip, which takes the side on
-    which the twist adds to the direct share. A block holding every bolt carries v."""
-    ip = polar_moment(n, rows, cols, s, g)
-    moment = mul(v, e)
-    kr, jc = block_rows, block_cols
-    sum_y = mul(c(Fraction(jc * kr * (rows - kr), 2)), s)
-    sum_x = mul(c(Fraction(kr * jc * (cols - jc), 2)), g)
-    return Div(mul(moment, sum_y), ip), add(Div(mul(v, c(kr * jc)), n), Div(mul(moment, sum_x), ip))
-
-
-def elastic_weld_line(v: Expr, e: Expr, length: Expr, lines: Expr) -> tuple[Expr, Expr]:
-    """(horizontal, vertical) force per unit length at the end of `lines` parallel vertical
-    weld lines of `length`, loaded by v at eccentricity e normal to the lines' plane
-    (Manual Part 8, elastic method on a line weld): f_v = v / (lines L), f_h = 6 v e /
-    (lines L^2)."""
-    total = mul(lines, length)
-    return Div(mul(c(6), v, e), mul(total, length)), Div(v, total)
-
-
-def elastic_weld_c(v: Expr, e: Expr, length: Expr, ret: Expr) -> tuple[Expr, Expr, Expr]:
-    """(horizontal, vertical at the return tips, vertical at the heel corners) force per
-    unit length on a C-shaped weld, by the elastic method (Manual Part 8, the line
-    properties of Manual Fig. 8-7): a
-    vertical line of `length` and two returns of `ret` at its ends running toward the load,
-    loaded by v at e from the vertical line. With ltot = L + 2 kl the centroid lies
-    xbar = kl^2 / ltot from the vertical line, ex = e - xbar,
-      Ix = L^3/12 + kl L^2 / 2,   Iy = 2 [kl^3/12 + kl (kl/2 - xbar)^2] + L xbar^2,
-    at the return tips (kl - xbar, +-L/2) and the heel corners (-xbar, +-L/2):
-      f_h = v ex (L/2) / Ip,   f_v = v / ltot + v ex x / Ip.
-    The force varies linearly along each segment, so its magnitude peaks at a segment's
-    end: one of these points, whichever side of the centroid the load lies."""
-    total = add(length, mul(c(2), ret))
-    xbar = Div(sq(ret), total)
-    ix = add(Div(PowInt(length, 3), c(12)), Div(mul(ret, sq(length)), c(2)))
-    iy = add(mul(c(2), add(Div(PowInt(ret, 3), c(12)), mul(ret, sq(sub(Div(ret, c(2)), xbar))))), mul(length, sq(xbar)))
-    ip = add(ix, iy)
-    moment = mul(v, sub(e, xbar))
-    direct = Div(v, total)
-    return (Div(mul(moment, Div(length, c(2))), ip), add(direct, Div(mul(moment, sub(ret, xbar)), ip)),
-            sub(direct, Div(mul(moment, xbar), ip)))
-
+# --- Seat welds (Manual Part 10) ------------------------------------------------------------------
 
 def seat_weld_line(k: K, v: Expr, e: Expr, length: Expr) -> tuple[Expr, Expr]:
     """(horizontal, vertical) force per unit length at the top of the two vertical weld
@@ -466,12 +325,11 @@ def seat_weld_line(k: K, v: Expr, e: Expr, length: Expr) -> tuple[Expr, Expr]:
 
 def bracket_section(a: Expr, b: Expr) -> tuple[Expr, Expr, Expr, Expr]:
     """(sin theta, cos theta, a', b') of a shaped bracket plate (Manual Fig. 15-2): a is
-    its depth at the support (section A-A), b the projection of its sloped free edge. The
-    free-edge section B-B runs normal to that edge: theta = atan(b/a), a' = a / cos theta
-    (Manual Eq 15-17), b' = a sin theta."""
-    hyp = Sqrt(add(sq(a), sq(b)))
-    sin, cos = Div(b, hyp), Div(a, hyp)
-    return sin, cos, hyp, Div(mul(a, b), hyp)
+    its depth at the support (section A-A), b the projection of its sloped free edge, so
+    the plate is the right triangle with legs a and b. The free-edge section B-B runs
+    normal to that edge: theta = atan(b/a), a' = a / cos theta (Manual Eq 15-17) is the
+    hypotenuse, and b' = a sin theta its distance from the right angle."""
+    return right_triangle(a, b)
 
 
 def bracket_lambda(k: K, a1: Expr, b1: Expr, t: Expr, fy: Expr) -> Expr:

@@ -150,25 +150,25 @@
 {"fault": {"fault": "overload", "base": "gate-101-00021", "kind": "hanger", "status": "FAIL", "named": ["prying"], "others": []}}
 {"fault": {"fault": "overload", "base": "gate-101-00032", "kind": "hanger", "status": "FAIL", "named": ["prying"], "others": ["bolt_tension", "tension_rupture", "tension_yield"]}}
 {"fault": {"fault": "overload", "base": "gate-101-00043", "kind": "hanger", "status": "FAIL", "named": ["prying"], "others": ["shear_rupture", "tension_rupture", "tension_yield"]}}
-{"breaker": {"base": "gate-1001-00003", "kind": "shear_tee", "seed": 1, "evaluations": 100, "accepted": 26, "best": 0.995322, "best_mode": "bolts", "best_hash": "15319af1826b257e", "false_pass": []}}
-{"breaker": {"base": "gate-1001-00005", "kind": "seated", "seed": 1, "evaluations": 100, "accepted": 37, "best": 1.0, "best_mode": "fillet_size", "best_hash": "1e7a04a66ff4a2e7", "false_pass": []}}
-{"breaker": {"base": "gate-1001-00006", "kind": "stiffened_seat", "seed": 1, "evaluations": 100, "accepted": 42, "best": 1.0, "best_mode": "fillet_size", "best_hash": "40adc6b6c89b97e3", "false_pass": []}}
-{"breaker": {"base": "gate-1001-00008", "kind": "bolt_bracket", "seed": 1, "evaluations": 100, "accepted": 41, "best": 1.0, "best_mode": "edge_min", "best_hash": "fa79ef054de38b98", "false_pass": []}}
-{"breaker": {"base": "gate-1001-00009", "kind": "weld_bracket", "seed": 1, "evaluations": 100, "accepted": 50, "best": 1.0, "best_mode": "fillet_size", "best_hash": "487b1e62619ccc6e", "false_pass": []}}
-{"breaker": {"base": "gate-1001-00014", "kind": "shear_tee", "seed": 1, "evaluations": 100, "accepted": 31, "best": 0.994763, "best_mode": "bolts", "best_hash": "91f59f63afd56217", "false_pass": []}}
-{"breaker": {"base": "gate-1001-00016", "kind": "seated", "seed": 1, "evaluations": 100, "accepted": 20, "best": 0.991239, "best_mode": "seat_flexure", "best_hash": "3b540602288ed85c", "false_pass": []}}
-{"breaker": {"base": "gate-1001-00017", "kind": "stiffened_seat", "seed": 1, "evaluations": 100, "accepted": 16, "best": 0.995949, "best_mode": "weld_base_metal", "best_hash": "5fffcc7a181359bc", "false_pass": []}}
-{"breaker": {"base": "gate-1001-00018", "kind": "flange_force", "seed": 1, "evaluations": 100, "accepted": 49, "best": 0.995546, "best_mode": "flange_local_bending", "best_hash": "7734d541df59697d", "false_pass": []}}
-{"breaker": {"base": "gate-1001-00020", "kind": "weld_bracket", "seed": 1, "evaluations": 100, "accepted": 16, "best": 0.999094, "best_mode": "weld", "best_hash": "8d43cb23c7ac3b95", "false_pass": []}}
-{"breaker": {"base": "gate-1001-00023", "kind": "double_angle", "seed": 1, "evaluations": 100, "accepted": 45, "best": 1.0, "best_mode": "fillet_size", "best_hash": "1f5650afa0d84bd7", "false_pass": []}}
-{"breaker": {"base": "gate-1001-00026", "kind": "shear_end_plate", "seed": 1, "evaluations": 100, "accepted": 43, "best": 1.0, "best_mode": "edge_min", "best_hash": "d3330d2621f0fc8e", "false_pass": []}}
-{"breaker": {"base": "gate-1001-00028", "kind": "stiffened_seat", "seed": 1, "evaluations": 100, "accepted": 15, "best": 0.994637, "best_mode": "weld_base_metal", "best_hash": "80a22c14562ac51e", "false_pass": []}}
-{"breaker": {"base": "gate-1001-00030", "kind": "bolt_bracket", "seed": 1, "evaluations": 100, "accepted": 14, "best": 0.999381, "best_mode": "bracket_edge", "best_hash": "6274328ba6e52638", "false_pass": []}}
-{"breaker": {"base": "gate-1001-00034", "kind": "double_angle", "seed": 1, "evaluations": 100, "accepted": 39, "best": 1.0, "best_mode": "edge_min", "best_hash": "6d6452a276451269", "false_pass": []}}
-{"breaker": {"base": "gate-1001-00035", "kind": "single_angle", "seed": 1, "evaluations": 100, "accepted": 22, "best": 0.994366, "best_mode": "bolts", "best_hash": "35d3d4e56b93814c", "false_pass": []}}
-{"breaker": {"base": "gate-1001-00036", "kind": "shear_tee", "seed": 1, "evaluations": 100, "accepted": 35, "best": 1.0, "best_mode": "edge_min", "best_hash": "fd7098010deda4f9", "false_pass": []}}
-{"breaker": {"base": "gate-1001-00038", "kind": "seated", "seed": 1, "evaluations": 100, "accepted": 14, "best": 1.0, "best_mode": "fillet_size", "best_hash": "d5d88611fbbf4d81", "false_pass": []}}
-{"breaker": {"base": "gate-1001-00048", "kind": "shear_end_plate", "seed": 1, "evaluations": 100, "accepted": 45, "best": 1.0, "best_mode": "edge_min", "best_hash": "2c1e817ff9410924", "false_pass": []}}
-{"breaker": {"base": "gate-1001-00051", "kind": "flange_force", "seed": 1, "evaluations": 100, "accepted": 50, "best": 0.990397, "best_mode": "flange_local_bending", "best_hash": "c68aef95c7a6f303", "false_pass": []}}
-{"breaker": {"base": "gate-1001-00054", "kind": "hanger", "seed": 1, "evaluations": 100, "accepted": 41, "best": 1.0, "best_mode": "hole_use", "best_hash": "86b904cf44eebb93", "false_pass": []}}
-{"breaker": {"base": "gate-1001-00059", "kind": "shear_end_plate", "seed": 1, "evaluations": 100, "accepted": 27, "best": 0.998786, "best_mode": "weld_base_metal", "best_hash": "c4f1bcc226f2ba92", "false_pass": []}}
+{"breaker": {"base": "gate-1001-00003", "kind": "shear_tee", "seed": 1, "evaluations": 100, "accepted": 26, "best": 0.995322, "best_mode": "bolts", "best_hash": "ae2e932928242039", "false_pass": []}}
+{"breaker": {"base": "gate-1001-00005", "kind": "seated", "seed": 1, "evaluations": 100, "accepted": 37, "best": 1.0, "best_mode": "fillet_size", "best_hash": "a103c1aff60ce86d", "false_pass": []}}
+{"breaker": {"base": "gate-1001-00006", "kind": "stiffened_seat", "seed": 1, "evaluations": 100, "accepted": 42, "best": 1.0, "best_mode": "fillet_size", "best_hash": "2e3a34cd42bd460b", "false_pass": []}}
+{"breaker": {"base": "gate-1001-00008", "kind": "bolt_bracket", "seed": 1, "evaluations": 100, "accepted": 41, "best": 1.0, "best_mode": "edge_min", "best_hash": "673e2e730ae94023", "false_pass": []}}
+{"breaker": {"base": "gate-1001-00009", "kind": "weld_bracket", "seed": 1, "evaluations": 100, "accepted": 50, "best": 1.0, "best_mode": "fillet_size", "best_hash": "4d4e801bfe5b654d", "false_pass": []}}
+{"breaker": {"base": "gate-1001-00014", "kind": "shear_tee", "seed": 1, "evaluations": 100, "accepted": 31, "best": 0.994763, "best_mode": "bolts", "best_hash": "b564aa329d6e0183", "false_pass": []}}
+{"breaker": {"base": "gate-1001-00016", "kind": "seated", "seed": 1, "evaluations": 100, "accepted": 20, "best": 0.991239, "best_mode": "seat_flexure", "best_hash": "3fe37bb491fb4a48", "false_pass": []}}
+{"breaker": {"base": "gate-1001-00017", "kind": "stiffened_seat", "seed": 1, "evaluations": 100, "accepted": 16, "best": 0.995949, "best_mode": "weld_base_metal", "best_hash": "d6c7f9aad773b308", "false_pass": []}}
+{"breaker": {"base": "gate-1001-00018", "kind": "flange_force", "seed": 1, "evaluations": 100, "accepted": 49, "best": 0.995546, "best_mode": "flange_local_bending", "best_hash": "54a6b5465fa96054", "false_pass": []}}
+{"breaker": {"base": "gate-1001-00020", "kind": "weld_bracket", "seed": 1, "evaluations": 100, "accepted": 16, "best": 0.999094, "best_mode": "weld", "best_hash": "5f68f2a7a49a1de3", "false_pass": []}}
+{"breaker": {"base": "gate-1001-00023", "kind": "double_angle", "seed": 1, "evaluations": 100, "accepted": 45, "best": 1.0, "best_mode": "fillet_size", "best_hash": "8f2f3bfecbbc43a5", "false_pass": []}}
+{"breaker": {"base": "gate-1001-00026", "kind": "shear_end_plate", "seed": 1, "evaluations": 100, "accepted": 43, "best": 1.0, "best_mode": "edge_min", "best_hash": "2af1e6e0a8fca975", "false_pass": []}}
+{"breaker": {"base": "gate-1001-00028", "kind": "stiffened_seat", "seed": 1, "evaluations": 100, "accepted": 15, "best": 0.994637, "best_mode": "weld_base_metal", "best_hash": "eb41a43e39b65a57", "false_pass": []}}
+{"breaker": {"base": "gate-1001-00030", "kind": "bolt_bracket", "seed": 1, "evaluations": 100, "accepted": 14, "best": 0.999381, "best_mode": "bracket_edge", "best_hash": "f2fefc53bed8d0cc", "false_pass": []}}
+{"breaker": {"base": "gate-1001-00034", "kind": "double_angle", "seed": 1, "evaluations": 100, "accepted": 39, "best": 1.0, "best_mode": "edge_min", "best_hash": "9944126be590cffe", "false_pass": []}}
+{"breaker": {"base": "gate-1001-00035", "kind": "single_angle", "seed": 1, "evaluations": 100, "accepted": 22, "best": 0.994366, "best_mode": "bolts", "best_hash": "fd384f56b0e722cb", "false_pass": []}}
+{"breaker": {"base": "gate-1001-00036", "kind": "shear_tee", "seed": 1, "evaluations": 100, "accepted": 35, "best": 1.0, "best_mode": "edge_min", "best_hash": "7ed3cc0bc379c7ab", "false_pass": []}}
+{"breaker": {"base": "gate-1001-00038", "kind": "seated", "seed": 1, "evaluations": 100, "accepted": 14, "best": 1.0, "best_mode": "fillet_size", "best_hash": "58e503d0a5f9d936", "false_pass": []}}
+{"breaker": {"base": "gate-1001-00048", "kind": "shear_end_plate", "seed": 1, "evaluations": 100, "accepted": 45, "best": 1.0, "best_mode": "edge_min", "best_hash": "7819acd63577ee7c", "false_pass": []}}
+{"breaker": {"base": "gate-1001-00051", "kind": "flange_force", "seed": 1, "evaluations": 100, "accepted": 50, "best": 0.990397, "best_mode": "flange_local_bending", "best_hash": "3867688f1a718ef4", "false_pass": []}}
+{"breaker": {"base": "gate-1001-00054", "kind": "hanger", "seed": 1, "evaluations": 100, "accepted": 41, "best": 1.0, "best_mode": "hole_use", "best_hash": "331eb23999881ed3", "false_pass": []}}
+{"breaker": {"base": "gate-1001-00059", "kind": "shear_end_plate", "seed": 1, "evaluations": 100, "accepted": 27, "best": 0.998786, "best_mode": "weld_base_metal", "best_hash": "4510d9060484afea", "false_pass": []}}

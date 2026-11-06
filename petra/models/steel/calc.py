@@ -13,10 +13,10 @@ from fractions import Fraction
 from ...ir import Design
 from ...kernel import Expr, Interval, Sqrt, enclose
 from ...kernel.rules.r4_enclosure import AllNonpositive
+from ...mechanics import add, sq
 from ...registry import Registry
 from ...units import CUSTOMARY
 from .checks import GENERATORS, GEOMETRY, Check, Ctx
-from .limits import add, div, mul, sq
 from .lower import Conn, lower_conn
 
 INCH, KIP = CUSTOMARY["inch"][0], CUSTOMARY["kip"][0]

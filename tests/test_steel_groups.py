@@ -31,7 +31,8 @@ import math
 import unittest
 from fractions import Fraction
 
-from petra.kernel import enclose
+from petra import mechanics as M
+from petra.kernel import Const, enclose
 from petra.models.steel import limits as L
 from petra.registry import build_registry
 from petra.units import CUSTOMARY
@@ -44,11 +45,11 @@ KSI = CUSTOMARY["ksi"][0]
 REGISTRY = build_registry()
 
 
-def const(name: str) -> L.Const:
+def const(name: str) -> Const:
     return L.c(REGISTRY.constants[name].value.lo)
 
 
-def inch(x) -> L.Const:
+def inch(x) -> Const:
     return L.c(Fraction(x) * INCH)
 
 
@@ -85,7 +86,7 @@ class IIA22(ex.Example):
             self.near(self.strength(basis, "flexural_rupture", "bracket plate:", body), printed, f"{self.tag} {basis}")
 
     def test_net_plastic_modulus_of_table_15_2(self):
-        z = L.plate_net_modulus(inch("0.375"), inch(18), 6, inch(3), inch(Fraction(7, 8)))
+        z = M.rectangle_net_plastic_modulus(inch("0.375"), inch(18), 6, inch(3), inch(Fraction(7, 8)))
         self.near(value(z, INCH ** 3), "21.5", "Znet")
 
     def test_normal_force_and_moment_on_the_free_edge(self):
@@ -205,7 +206,7 @@ class KulakTable13_1(unittest.TestCase):
     CRITICAL = (1 - math.exp(-3.4)) ** 0.55
 
     def elastic_c(self, n: int, lever: int) -> float:
-        fx, fy = L.elastic_bolt_force(L.c(1), inch(lever), L.c(n), n, 1, inch(3), L.c(0))
+        fx, fy = M.elastic_bolt_force(L.c(1), inch(lever), L.c(n), n, 1, inch(3), L.c(0))
         return 1 / math.hypot(value(fx), value(fy))
 
     def test_the_elastic_group_never_exceeds_the_instantaneous_centre(self):

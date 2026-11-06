@@ -2,7 +2,8 @@
 
 One FailureMode per limit state, each with one ModelSpec naming its clause. The model
 premise's source_hash covers every trusted module of the package (lower, limits, checks,
-build, vocab, domain), so editing any of the physics changes every steel premise label.
+build, vocab, domain) and the mechanics layer under them (petra/mechanics), so editing any
+of the physics changes every steel premise label.
 A mode's validity rows are the method's applicability limits the kernel decides over the
 design's box (checks.ROWS states each). A mode with no row says why in UNBOUNDED, and its
 model's validity words end with that reason (docs/principles.md D3).
@@ -13,20 +14,25 @@ import hashlib
 import os
 from typing import Mapping
 
+from ... import mechanics
 from ..base import FailureMode, ModelSpec, ValidityRow
 
 TRUSTED = ("lower", "limits", "checks", "build", "vocab", "domain")
 """The package modules whose source is the physics. generate, twin, faults, breaker and
 package are tooling and cannot change a verdict."""
 
+HASHED = (*(os.path.join(os.path.dirname(os.path.abspath(__file__)), f"{name}.py") for name in TRUSTED),
+          *mechanics.SOURCES)
+"""The files the premise hash reads: the trusted modules in TRUSTED order, then the
+mechanics layer's (petra.mechanics.SOURCES), whose formulas the trusted modules state."""
+
 
 def _source_hash() -> str:
-    """sha256 over the trusted modules' sources in TRUSTED order, read from disk so that
-    vocab can be imported before the others."""
-    here = os.path.dirname(__file__)
+    """sha256 over HASHED's sources, read from disk so that vocab can be imported before
+    the others."""
     digest = hashlib.sha256()
-    for name in TRUSTED:
-        with open(os.path.join(here, f"{name}.py"), encoding="utf-8") as f:
+    for path in HASHED:
+        with open(path, encoding="utf-8") as f:
             digest.update(f.read().encode("utf-8"))
     return digest.hexdigest()[:16]
 

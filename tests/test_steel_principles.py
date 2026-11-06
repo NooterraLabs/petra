@@ -9,11 +9,12 @@
 - D5, no magic numbers: a builder module's numeric literals are 0, 1 and 2 only, and every
   number a provision prints is a registry row read by name, with its clause and tag.
 
-D5's exceptions are named here, each with its reason: the integers of geometry in the
-limits.py functions GEOMETRY lists (section and line properties, pi d^2 / 4, a hexagon's
-sqrt 3, plate buckling's 12 (1 - nu^2)), an integer exponent of PowInt (the equation's
-tw^3), and vocab's 16-digit source-hash label, the length models/base.py gives every
-model label. The 2s are halves and doubles of geometry (d/2, two weld lines, 2 lev).
+D5's exceptions are named here, each with its reason: an integer exponent of PowInt (the
+equation's tw^3), and vocab's 16-digit source-hash label, the length models/base.py gives
+every model label. The 2s are halves and doubles of geometry (d/2, two weld lines, 2 lev).
+The integers of geometry (section and line properties, pi d^2 / 4, a hexagon's sqrt 3,
+plate buckling's 12 (1 - nu^2)) are petra/mechanics', which belongs to no code, and
+tests/test_mechanics.py holds that layer to integers alone.
 
 The citation test reads the checks of a seeded generator sample, ten designs of each of the
 11 kinds, which reaches every mode; a check no design of the sample states is not seen."""
@@ -37,16 +38,6 @@ faults, breaker, trace and package are tooling (a report, an independent twin, t
 machinery) and change no verdict."""
 
 GEOMETRY = {
-    ("limits", "bolt_area"): "pi d^2 / 4",
-    ("limits", "plate_net_modulus"): "a plate's net plastic modulus, t/4 (L^2 - ...)",
-    ("limits", "plate_plastic_modulus"): "t L^2 / 4",
-    ("limits", "plate_elastic_modulus"): "t L^2 / 6",
-    ("limits", "hex_corner"): "a hexagon's corner at F / sqrt 3",
-    ("limits", "polar_moment"): "a bolt pattern's polar moment, in twelfths",
-    ("limits", "tee_moduli"): "a tee's moments of inertia, in twelfths",
-    ("limits", "cope_elastic"): "plate buckling's 12 (1 - nu^2)",
-    ("limits", "elastic_weld_line"): "a weld line's section modulus L^2 / 6",
-    ("limits", "elastic_weld_c"): "a C-shaped weld's moments of inertia, in twelfths",
     ("vocab", "_source_hash"): "the 16-digit label length of models/base.py",
 }
 NUMBER = re.compile(r"-?\d+(\.\d+)?(/\d+)?")
@@ -255,7 +246,7 @@ class AiscSymbolsWithAGlossary(unittest.TestCase):
         self.assertEqual(sorted(set(_LENGTHS) - self.glossed), [])
 
     def test_the_glossary_reader(self):
-        self.assertTrue({"k", "block_cols", "block_rows", "lb_unbraced", "pitch", "free_edge"} <= self.glossed)
+        self.assertTrue({"k", "fnt", "fnv", "lb_unbraced", "pitch", "free_edge"} <= self.glossed)
 
 
 if __name__ == "__main__":

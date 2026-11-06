@@ -4,9 +4,10 @@ A second, independent implementation of the deck's limit states (docs/steel_conn
 section 8, "twin elaborator, written independently from the same sources"). It reads the
 method statements in vocab.py, the grammar in lower.py, the load paths in path.py and the
 numbers in the registry, and evaluates every check in plain float arithmetic at the upper
-end of each load interval. It never imports checks, limits, build, calc or domain, so a
-disagreement with the deck is a disagreement of translation, which tests/test_steel_twin.py
-records.
+end of each load interval. It never imports checks, limits, build, calc or domain, nor the
+mechanics layer under them (petra/mechanics), so a disagreement with the deck is a
+disagreement of translation, which tests/test_steel_twin.py records, and a slip in a
+shared formula cannot agree with itself (tests/test_mechanics.py holds the imports).
 
 Units: inches, kips, ksi throughout. Every number the registry holds is read from it.
 

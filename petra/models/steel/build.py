@@ -19,10 +19,10 @@ from typing import Callable
 from ...ir import Design, Rel
 from ...kernel import Const, Expr, Min, Sqrt
 from ...kernel.rules.r4_enclosure import AllNonpositive
+from ...mechanics import add, mul, sq, sub
 from ...registry import Registry
 from ..base import Criterion, Elaborated, Gap, GapNeed, NeedsInputBound, NoRuleForQuantity, Obligation, Requirement, validity_obligation
 from .checks import GENERATORS, GEOMETRY, ROWS, Check, Ctx
-from .limits import add, mul, sq, sub
 from .lower import KIND_SPECS, Conn
 from .vocab import MODELS, MODES
 

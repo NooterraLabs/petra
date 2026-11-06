@@ -19,7 +19,7 @@ import unittest
 from decimal import Decimal
 from fractions import Fraction
 
-from petra.kernel import enclose
+from petra.kernel import Const, enclose
 from petra.lang import parse_design
 from petra.models.steel import calc
 from petra.models.steel import limits as L
@@ -42,11 +42,11 @@ def value(expr, per=KIP) -> float:
     return float(enclose(expr, {}).lo / per)
 
 
-def inch(x) -> L.Const:
+def inch(x) -> Const:
     return L.c(Fraction(x) * INCH)
 
 
-def kips(x) -> L.Const:
+def kips(x) -> Const:
     return L.c(Fraction(x) * KIP)
 
 

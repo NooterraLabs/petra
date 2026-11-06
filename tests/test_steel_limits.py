@@ -25,6 +25,7 @@ import unittest
 from fractions import Fraction
 from pathlib import Path
 
+from petra import mechanics as M
 from petra.kernel import enclose
 from petra.lang import load_design, parse_design
 from petra.models.base import NeedsInputBound
@@ -111,15 +112,15 @@ class ElasticMethod(unittest.TestCase):
 
     def test_a_whole_group_carries_the_force_and_a_corner_block_the_corner_bolt(self):
         v, e, s, g = L.c(40), L.c(8), L.c(3), L.c(3)
-        fx, fy = L.elastic_block_force(v, e, L.c(8), 4, 2, s, g, 4, 2)
+        fx, fy = M.elastic_block_force(v, e, L.c(8), 4, 2, s, g, 4, 2)
         self.assertEqual((value(fx, 1), value(fy, 1)), (0.0, 40.0))
-        corner = L.elastic_bolt_force(v, e, L.c(4), 4, 1, s, L.c(0))
-        block = L.elastic_block_force(v, e, L.c(4), 4, 1, s, L.c(0), 1, 1)
+        corner = M.elastic_bolt_force(v, e, L.c(4), 4, 1, s, L.c(0))
+        block = M.elastic_block_force(v, e, L.c(4), 4, 1, s, L.c(0), 1, 1)
         self.assertEqual([value(x, 1) for x in corner], [value(x, 1) for x in block])
 
     def test_three_rows_of_a_two_column_bracket(self):
         # Ip = 8 (15 x 9 + 3 x 9) / 12 = 108; |sum y| = 2 x 3 x 1 x 3 / 2 = 9; |sum x| = 0
-        fx, fy = L.elastic_block_force(L.c(40), L.c(8), L.c(8), 4, 2, L.c(3), L.c(3), 3, 2)
+        fx, fy = M.elastic_block_force(L.c(40), L.c(8), L.c(8), 4, 2, L.c(3), L.c(3), 3, 2)
         self.assertAlmostEqual(value(fx, 1), 320 * 9 / 108, places=9)
         self.assertAlmostEqual(value(fy, 1), 30.0, places=9)
 

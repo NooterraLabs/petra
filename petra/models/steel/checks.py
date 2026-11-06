@@ -18,13 +18,14 @@ from dataclasses import dataclass, replace
 from fractions import Fraction
 from typing import Callable, Iterator, Mapping
 
+from ... import mechanics as M
 from ...ir import Design, Fixed, Input
 from ...kernel import Expr, Interval, Max, Min, Sqrt, Sym
+from ...mechanics import add, c, div, mul, sq, sub
 from ...registry import Registry
 from ...units import DIMENSIONLESS, Quantity
 from ..base import StatementBuilder
 from . import limits as L
-from .limits import add, c, div, mul, sq, sub
 from .lower import SHAPE_GROUP, AngleSpec, Bolts, Conn, Cope, Geo, Member, PlateSpec, TeeSpec, Weld
 
 
@@ -836,7 +837,7 @@ def _group_total(ctx: Ctx, itf: Interface) -> Expr:
 
 def _elastic(itf: Interface, force: Expr) -> tuple[Expr, Expr]:
     g = itf.gauge if itf.gauge is not None else c(0)
-    return L.elastic_bolt_force(force, itf.eccentricity, c(itf.n), itf.rows, itf.cols, itf.pitch, g)
+    return M.elastic_bolt_force(force, itf.eccentricity, c(itf.n), itf.rows, itf.cols, itf.pitch, g)
 
 
 def gen_bolts(ctx: Ctx, geo: Geometry) -> list[Check]:
@@ -977,7 +978,7 @@ def gen_block_shear(ctx: Ctx, geo: Geometry) -> list[Check]:
             if itf.eccentricity is None or (k == itf.rows and j == itf.cols):
                 share: tuple[Expr, ...] = (div(mul(itf.shear, c(k * j)), c(itf.n)),)
             else:
-                share = L.elastic_block_force(itf.shear, itf.eccentricity, c(itf.n), itf.rows, itf.cols, itf.pitch, gauge,
+                share = M.elastic_block_force(itf.shear, itf.eccentricity, c(itf.n), itf.rows, itf.cols, itf.pitch, gauge,
                                               k, min(j, itf.cols))
             out.append(Check(f"{ply.name}: block of {k} row(s) and {j} column(s) (J4.3)", share,
                              mul(c(ply.count), L.block_shear(ctx.const, fy, fu, agv, anv, ant, ubs)), "aisc360.j4_3", suffix="", guards=(), unit="kip"))
@@ -996,7 +997,7 @@ def gen_tension_rupture(ctx: Ctx, geo: Geometry) -> list[Check]:
 
 def gen_flexural_yield(ctx: Ctx, geo: Geometry) -> list[Check]:
     out = [Check(f"{f.name}: flexural yielding of the gross section (J4.5)", (f.moment,),
-                 L.flexural_yield(ctx.mat(f.grade, "fy"), L.plate_plastic_modulus(f.t, f.depth)), "aisc360.j4_5", "_y", unit="kip-in", guards=())
+                 L.flexural_yield(ctx.mat(f.grade, "fy"), M.rectangle_plastic_modulus(f.t, f.depth)), "aisc360.j4_5", "_y", unit="kip-in", guards=())
            for f in geo.flexures]
     sp = geo.single_plate
     if sp is not None and sp.form == "extended":
@@ -1012,7 +1013,7 @@ def gen_flexural_yield(ctx: Ctx, geo: Geometry) -> list[Check]:
 
 def gen_flexural_rupture(ctx: Ctx, geo: Geometry) -> list[Check]:
     return [Check(f"{f.name}: flexural rupture of the net section through the bolt holes (J4.5)", (f.moment,),
-                  L.flexural_rupture(ctx.mat(f.grade, "fu"), L.plate_net_modulus(f.t, f.depth, f.rows, f.pitch, f.hole)),
+                  L.flexural_rupture(ctx.mat(f.grade, "fu"), M.rectangle_net_plastic_modulus(f.t, f.depth, f.rows, f.pitch, f.hole)),
                   "aisc360.j4_5", "_r", unit="kip-in", guards=())
             for f in geo.flexures if f.rows > 0]
 
@@ -1027,9 +1028,9 @@ def _weld_points(ctx: Ctx, wg: WeldGroup) -> tuple[tuple[str, tuple[Expr, ...]],
     if wg.bearing:
         return (("", L.seat_weld_line(ctx.const, wg.force, wg.eccentricity, wg.length)),)
     if wg.ret is not None:
-        fx, tip, heel = L.elastic_weld_c(wg.force, wg.eccentricity, wg.length, wg.ret)
+        fx, tip, heel = M.elastic_weld_c(wg.force, wg.eccentricity, wg.length, wg.ret)
         return ((", at the return tips", (fx, tip)), (", at the heel corners", (fx, heel)))
-    return (("", L.elastic_weld_line(wg.force, wg.eccentricity, wg.length, c(wg.lines))),)
+    return (("", M.elastic_weld_line(wg.force, wg.eccentricity, wg.length, c(wg.lines))),)
 
 
 def _weld_checks(ctx: Ctx, fexx: Expr, wg: WeldGroup, over: str, guards: tuple[Expr, ...]) -> list[Check]:
@@ -1178,7 +1179,7 @@ def gen_clearance(ctx: Ctx, geo: Geometry) -> list[Check]:
     out = []
     for itf in geo.interfaces:
         nut = ctx.const(f"bolt_us.{itf.bolts.size}.nut_F")
-        need = add(L.hex_corner(nut), ctx.const("aisc_manual.clearance.socket"))
+        need = add(M.hex_corner(nut), ctx.const("aisc_manual.clearance.socket"))
         for what, distance in itf.clearances:
             out.append(Check(f"{itf.name}: room to tighten, clear of the {what} (Manual Part 7)", (need,), distance, unit="in", group=None, suffix="", guards=()))
     return out
@@ -1199,7 +1200,7 @@ def gen_cope_buckling(ctx: Ctx, geo: Geometry) -> list[Check]:
     m = (mul(cg.force, cg.moment_arm),)
     hc = cg.hc
     if cg.flanges == "top":
-        sc, zc = L.tee_moduli(hc, cg.tw, cg.bf, cg.tf)
+        sc, zc = M.tee_moduli(hc, cg.tw, cg.bf, cg.tf)
         k1 = L.cope_k1(ctx.const, hc, cg.c, cg.d)
         lam, lam_p = div(hc, cg.tw), L.cope_lambda_p(ctx.const, k1, e, fy)
         twice = mul(c(2), lam_p)
@@ -1283,11 +1284,11 @@ def gen_extended_ductility(ctx: Ctx, geo: Geometry) -> list[Check]:
         return []
     g = sp.gauge if sp.gauge is not None else c(0)
     n = sp.rows * sp.cols
-    ip = L.polar_moment(c(n), sp.rows, sp.cols, sp.pitch, g)
-    rmax = Sqrt(add(sq(mul(c(Fraction(sp.rows - 1, 2)), sp.pitch)), sq(mul(c(Fraction(sp.cols - 1, 2)), g))))
+    ip = M.polar_moment(c(n), sp.rows, sp.cols, sp.pitch, g)
+    rmax = M.corner_radius(sp.rows, sp.cols, sp.pitch, g)
     mmax = mul(div(_fnv(ctx, sp.bolts), ctx.const("aisc_manual.p10.fnv_divisor")), L.bolt_area(sp.d_bolt), div(ip, rmax))
     # the thickness at which the plate's yield moment Fy t L^2 / 6 reaches Mmax
-    tmax = div(mmax, L.plate_elastic_modulus(ctx.mat(sp.grade, "fy"), sp.depth))
+    tmax = M.rectangle_elastic_thickness(mmax, ctx.mat(sp.grade, "fy"), sp.depth)
     return [
         Check("plate: fillet at least 5/8 of the plate thickness (Manual Part 10)", (mul(ctx.const("aisc_manual.p10.weld_ratio"), sp.tp),), sp.weld_size, unit="in", group=None, suffix="", guards=()),
         Check("plate: no thicker than tmax, so it yields before the bolts fracture (Manual Part 10)", (sp.tp,), tmax, unit="in", group=None, suffix="", guards=()),
@@ -1322,7 +1323,7 @@ def gen_seat_flexure(ctx: Ctx, geo: Geometry) -> list[Check]:
     lb = Min((seat.lb, _required_bearing(ctx, beam)))
     arm = sub(add(seat.setback, div(lb, c(2))), add(seat.t, ctx.const("aisc_manual.seat.critical_offset")))
     return [Check("seat angle: flexural yielding of the outstanding leg at its critical section (Manual Part 10)",
-                  (mul(seat.force, arm),), L.flexural_yield(ctx.mat(seat.grade, "fy"), L.plate_plastic_modulus(seat.length, seat.t)),
+                  (mul(seat.force, arm),), L.flexural_yield(ctx.mat(seat.grade, "fy"), M.rectangle_plastic_modulus(seat.length, seat.t)),
                   "aisc360.j4_5", "_y", unit="kip-in", guards=())]
 
 
@@ -1371,7 +1372,7 @@ def gen_bracket_edge(ctx: Ctx, geo: Geometry) -> list[Check]:
                             (L.bracket_q_slender(ctx.const, lam), sub(lam, slender), "lambda > 1.41")):
         fcr = mul(q, fy)
         nc = ctx.available(mul(fcr, br.t, b1), "aisc360.j4_4", suffix="")
-        mc = ctx.available(mul(fcr, L.plate_plastic_modulus(br.t, b1)), "aisc360.j4_5", "_y")
+        mc = ctx.available(mul(fcr, M.rectangle_plastic_modulus(br.t, b1)), "aisc360.j4_5", "_y")
         out.append(Check(f"bracket plate: normal force and moment on the free-edge section B-B with its local buckling, "
                          f"{which} (Manual Eqs 15-8 to 15-18)", (mul(br.force, add(div(cos, nc), div(Max((lever, sub(c(0), lever))), mc))),), c(1),
                          guards=(guard,), unit="1", group=None, suffix=""))
