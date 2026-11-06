@@ -232,6 +232,7 @@ class Concentrated:
     below_yield: bool
     panel_shear: Expr | None = None
     axial: Expr | None = None
+    name: str = "member"        # its checks read "<name> web: ..." and "<name> flange: ..."
 
 
 @dataclass(frozen=True)
@@ -503,7 +504,7 @@ def geometry_end_plate(ctx: Ctx) -> Geometry:
     weld_length = sub(length, mul(c(2), w))
     out.welds.append(WeldGroup("end plate to beam web", weld, w, weld_length, weld.sides, v, None, Min((tp, bp["tw"])),
                                (("beam web", beam.grade, bp["tw"], weld.sides), ("end plate", plate.grade, tp, 1))))
-    out.web_shear.append(("beam web along the weld", beam.grade, mul(bp["tw"], weld_length), v))
+    out.web_shear.append(("beam web", beam.grade, mul(bp["tw"], weld_length), v))
     _cope(ctx, out, beam, bp, v)
     return out
 
@@ -520,9 +521,9 @@ def geometry_seated(ctx: Ctx) -> Geometry:
     support: Member = conn.attrs["support"]
     sp = _w(ctx, support)
     out = Geometry()
-    out.forces.append(Concentrated(beam.shape, beam.grade, v, lb, c(0), False, False, None, None, True))
+    out.forces.append(Concentrated(beam.shape, beam.grade, v, lb, c(0), False, False, None, None, True, name="beam"))
     out.seat = Seat(angle.grade, ta, seat_length, setback, lb, v)
-    out.web_shear.append(("seat outstanding leg", angle.grade, mul(seat_length, ta), v))
+    out.web_shear.append(("seat angle", angle.grade, mul(seat_length, ta), v))
     if conn.attrs["support_side"] == "bolted":
         bolts: Bolts = conn.attrs["bolts"]
         rows = conn.attrs["rows"]
@@ -556,7 +557,7 @@ def geometry_stiffened_seat(ctx: Ctx) -> Geometry:
     support: Member = conn.attrs["support"]
     t_sup = _face_t(support, _w(ctx, support))
     out = Geometry()
-    out.forces.append(Concentrated(beam.shape, beam.grade, v, sub(width, setback), c(0), False, False, None, None, True))
+    out.forces.append(Concentrated(beam.shape, beam.grade, v, sub(width, setback), c(0), False, False, None, None, True, name="beam"))
     weld: Weld = conn.attrs["weld"]
     w = ctx.geo(weld.size, "weld.size")
     out.welds.append(WeldGroup("stiffener to support", weld, w, length, 2, v, mul(c("0.8"), width), Min((ts, t_sup)),
@@ -1017,7 +1018,7 @@ def gen_cope_buckling(ctx: Ctx, geo: Geometry) -> list[Check]:
     else:
         ho = sub(cg.d, mul(c(2), cg.dc))
         fcr = L.cope_fcr_both(e, fy, cg.tw, ho, cg.c, cg.d, cg.dc)
-    return [Check("coped web: flexural local buckling at the cope face (Manual Part 9)", (mul(cg.force, cg.moment_arm),),
+    return [Check("beam web: flexural local buckling at the cope face (Manual Part 9)", (mul(cg.force, cg.moment_arm),),
                   mul(fcr, L.coped_section_modulus(cg.tw, ho)), "aisc360.j4_5", "_y", unit="kip-in")]
 
 
@@ -1032,11 +1033,11 @@ def gen_plate_buckling(ctx: Ctx, geo: Geometry) -> list[Check]:
     q2 = sub(c("1.34"), mul(c("0.486"), lam))
     q3 = div(c("1.30"), sq(lam))
     return [
-        Check("extended plate: plate buckling where lambda is at most 0.7 (Manual Part 9)", (m,), mul(fy, z), "aisc360.j4_5", "_y",
+        Check("plate: plate buckling where lambda is at most 0.7 (Manual Part 9)", (m,), mul(fy, z), "aisc360.j4_5", "_y",
               (add(sub(c("0.7"), lam), L.STRICT_RATIO),), unit="kip-in"),
-        Check("extended plate: plate buckling where lambda is over 0.7 and at most 1.41 (Manual Part 9)", (m,), mul(q2, fy, z),
+        Check("plate: plate buckling where lambda is over 0.7 and at most 1.41 (Manual Part 9)", (m,), mul(q2, fy, z),
               "aisc360.j4_5", "_y", (sub(lam, c("0.7")), add(sub(c("1.41"), lam), L.STRICT_RATIO)), unit="kip-in"),
-        Check("extended plate: plate buckling where lambda is over 1.41 (Manual Part 9)", (m,), mul(q3, fy, z), "aisc360.j4_5", "_y",
+        Check("plate: plate buckling where lambda is over 1.41 (Manual Part 9)", (m,), mul(q3, fy, z), "aisc360.j4_5", "_y",
               (sub(lam, c("1.41")),), unit="kip-in"),
     ]
 
@@ -1046,9 +1047,9 @@ def gen_ductility(ctx: Ctx, geo: Geometry) -> list[Check]:
     if sp is None or sp.form != "conventional":
         return []
     return [
-        Check("plate or beam web at most d/2 + 1/16 in thick (Manual Part 10)", (Min((sp.tp, sp.tw)),),
+        Check("plate: plate or beam web at most d/2 + 1/16 in thick (Manual Part 10)", (Min((sp.tp, sp.tw)),),
               add(div(sp.d_bolt, c(2)), L.SIXTEENTH), unit="in"),
-        Check("fillet at least 5/8 of the plate thickness (Manual Part 10)", (mul(c(Fraction(5, 8)), sp.tp),), sp.weld_size, unit="in"),
+        Check("plate: fillet at least 5/8 of the plate thickness (Manual Part 10)", (mul(c(Fraction(5, 8)), sp.tp),), sp.weld_size, unit="in"),
     ]
 
 
@@ -1066,8 +1067,8 @@ def gen_extended_ductility(ctx: Ctx, geo: Geometry) -> list[Check]:
     mmax = mul(div(_fnv(ctx, sp.bolts), c("0.9")), L.bolt_area(sp.d_bolt), div(ip, rmax))
     tmax = div(mul(c(6), mmax), mul(ctx.mat(sp.grade, "fy"), sq(sp.depth)))
     return [
-        Check("fillet at least 5/8 of the plate thickness (Manual Part 10)", (mul(c(Fraction(5, 8)), sp.tp),), sp.weld_size, unit="in"),
-        Check("extended plate no thicker than tmax, so it yields before the bolts fracture (Manual Part 10)", (sp.tp,), tmax, unit="in"),
+        Check("plate: fillet at least 5/8 of the plate thickness (Manual Part 10)", (mul(c(Fraction(5, 8)), sp.tp),), sp.weld_size, unit="in"),
+        Check("plate: no thicker than tmax, so it yields before the bolts fracture (Manual Part 10)", (sp.tp,), tmax, unit="in"),
     ]
 
 
@@ -1127,11 +1128,11 @@ def gen_web_local_yielding(ctx: Ctx, geo: Geometry) -> list[Check]:
     for f in geo.forces:
         d, tw, k = (ctx.shape(f.shape, p) for p in ("d", "tw", "kdes"))
         fy = ctx.mat(f.grade, "fy")
-        out.append(Check("web local yielding away from the member end (J10.2)", (f.force,),
+        out.append(Check(f"{f.name} web: web local yielding away from the member end (J10.2)", (f.force,),
                          L.web_local_yielding(fy, tw, k, f.lb, False), "aisc360.j10_2"))
         if f.end_distance is not None:
             # Eq J10-3 applies where the force is at most d from the end; excused beyond d.
-            out.append(Check("web local yielding within d of the member end (J10.2)", (f.force,),
+            out.append(Check(f"{f.name} web: web local yielding within d of the member end (J10.2)", (f.force,),
                              L.web_local_yielding(fy, tw, k, f.lb, True), "aisc360.j10_2",
                              guards=(add(sub(d, f.end_distance), L.STRICT),)))
     return out
@@ -1151,13 +1152,13 @@ def gen_web_crippling(ctx: Ctx, geo: Geometry) -> list[Check]:
             continue
         d, tw, tf = (ctx.shape(f.shape, p) for p in ("d", "tw", "tf"))
         e, fy = ctx.const("aisc360.E"), ctx.mat(f.grade, "fy")
-        out.append(Check("web local crippling away from the member end (J10.3)", (f.force,),
+        out.append(Check(f"{f.name} web: web local crippling away from the member end (J10.3)", (f.force,),
                          L.web_crippling(e, fy, tw, tf, d, f.lb, "interior"), "aisc360.j10_3"))
         if f.end_distance is not None:
             end = _end_crippling(L.web_crippling(e, fy, tw, tf, d, f.lb, "end_short"),
                                  L.web_crippling(e, fy, tw, tf, d, f.lb, "end_long"))
             # Eqs J10-5 apply where the force is less than d/2 from the end; excused from d/2 on.
-            out.append(Check("web local crippling within d/2 of the member end (J10.3)", (f.force,), end, "aisc360.j10_3",
+            out.append(Check(f"{f.name} web: web local crippling within d/2 of the member end (J10.3)", (f.force,), end, "aisc360.j10_3",
                              guards=(sub(div(d, c(2)), f.end_distance),)))
     return out
 
@@ -1169,10 +1170,10 @@ def gen_flange_local_bending(ctx: Ctx, geo: Geometry) -> list[Check]:
             continue
         tf = ctx.shape(f.shape, "tf")
         rn = L.flange_local_bending(ctx.mat(f.grade, "fy"), tf)
-        out.append(Check("flange local bending (J10.1)", (f.force,), rn, "aisc360.j10_1"))
+        out.append(Check(f"{f.name} flange: flange local bending (J10.1)", (f.force,), rn, "aisc360.j10_1"))
         if f.end_distance is not None:
             # Halved where the force is less than 10 tf from the end; excused from 10 tf on.
-            out.append(Check("flange local bending within 10 tf of the member end (J10.1)", (f.force,), div(rn, c(2)),
+            out.append(Check(f"{f.name} flange: flange local bending within 10 tf of the member end (J10.1)", (f.force,), div(rn, c(2)),
                              "aisc360.j10_1", guards=(sub(mul(c(10), tf), f.end_distance),)))
     return out
 
@@ -1188,7 +1189,7 @@ def gen_web_sidesway_buckling(ctx: Ctx, geo: Geometry) -> list[Check]:
         rn, r = L.web_sidesway(cr, tw, tf, h, f.unbraced, bf, f.restrained)
         limit = c("2.3") if f.restrained else c("1.7")
         # The limit state does not apply where r exceeds the limit; excused beyond it.
-        out.append(Check("web sidesway buckling where its slenderness ratio makes it apply (J10.4)", (f.force,), rn,
+        out.append(Check(f"{f.name} web: web sidesway buckling where its slenderness ratio makes it apply (J10.4)", (f.force,), rn,
                          "aisc360.j10_4", guards=(add(sub(limit, r), L.STRICT_RATIO),)))
     return out
 
@@ -1201,10 +1202,10 @@ def gen_web_compression_buckling(ctx: Ctx, geo: Geometry) -> list[Check]:
         d, tw, k = (ctx.shape(f.shape, p) for p in ("d", "tw", "kdes"))
         h = sub(d, mul(c(2), k))
         rn = L.web_compression_buckling(ctx.const("aisc360.E"), ctx.mat(f.grade, "fy"), tw, h)
-        out.append(Check("web compression buckling (J10.5)", (f.force,), rn, "aisc360.j10_5"))
+        out.append(Check(f"{f.name} web: web compression buckling (J10.5)", (f.force,), rn, "aisc360.j10_5"))
         if f.end_distance is not None:
             # Halved where the pair is less than d/2 from the end; excused from d/2 on.
-            out.append(Check("web compression buckling within d/2 of the member end (J10.5)", (f.force,), div(rn, c(2)),
+            out.append(Check(f"{f.name} web: web compression buckling within d/2 of the member end (J10.5)", (f.force,), div(rn, c(2)),
                              "aisc360.j10_5", guards=(sub(div(d, c(2)), f.end_distance),)))
     return out
 
@@ -1219,7 +1220,7 @@ def gen_panel_zone(ctx: Ctx, geo: Geometry) -> list[Check]:
         alpha = c(1) if ctx.lrfd else c("1.6")
         pr = f.axial if f.axial is not None else c(0)
         rn = L.panel_zone(fy, d, tw, pr, mul(fy, area), alpha)
-        out.append(Check("panel-zone web shear (J10.6)", (f.panel_shear,), rn, "aisc360.j10_6"))
+        out.append(Check(f"{f.name} web: panel-zone web shear (J10.6)", (f.panel_shear,), rn, "aisc360.j10_6"))
     return out
 
 

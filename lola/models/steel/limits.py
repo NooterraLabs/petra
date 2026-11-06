@@ -194,6 +194,22 @@ def fillet_line(fexx: Expr, w: Expr, length: Expr, transverse: bool) -> Expr:
     return mul(c("0.6"), fexx, Div(w, Sqrt(c(2))), length, kds)
 
 
+def directional_kds(sin_theta: Expr) -> Expr:
+    """Eq J2-5: kds = 1.0 + 0.50 sin^1.5 theta, theta the load's angle to the weld axis."""
+    return add(c(1), mul(c("0.5"), sin_theta, Sqrt(sin_theta)))
+
+
+def end_loaded_length(length: Expr, w: Expr) -> Expr:
+    """Section J2.2b(d): the effective length of an end-loaded fillet. Up to 100 w it is the
+    length; up to 300 w it is beta l with beta = 1.2 - 0.002 l / w (Eq J2-1); beyond, 180 w.
+    beta l = 1.2 l - 0.002 l^2 / w = 180 w - 0.002 (l - 300 w)^2 / w, which peaks at 180 w
+    at l = 300 w and exceeds l below 100 w, so the effective length is
+    min(l, 180 w - 0.002 (min(l, 300 w) - 300 w)^2 / w)."""
+    cap = mul(c(300), w)
+    curve = sub(mul(c(180), w), div(mul(c("0.002"), sq(sub(Min((length, cap)), cap))), w))
+    return Min((length, curve))
+
+
 def fillet_group(longitudinal: Expr, transverse: Expr) -> Expr:
     """Eq J2-6: Rn = max(Rnwl + Rnwt, 0.85 Rnwl + 1.5 Rnwt) for a group of longitudinal and
     transverse lines, with Rnwt taken without its directional increase (kds = 1). Callers

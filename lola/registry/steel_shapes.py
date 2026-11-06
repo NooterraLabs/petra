@@ -11,8 +11,7 @@ W18x50's nominal weight 50 lb/ft, an L4x3-1/2x3/8's legs and thickness.
 
 reads the published workbook (Excel 2007+ format, read with zipfile and ElementTree, no
 other package), keeps every W and L row, and rewrites the table with the file's sha256
-and tag sanctioned. Until a maintainer runs it on the published file, the shipped table is
-a transcription tagged judged.
+and tag sanctioned. The shipped table is that import of SHAPE160.xlsx (v16.0).
 """
 from __future__ import annotations
 
@@ -189,7 +188,11 @@ def import_workbook(path: str) -> dict:
         for sheet in sheets:
             rows = _rows(book, sheet, strings)
             header = next(rows, {})
-            names = {text: col for col, text in header.items()}
+            # The database repeats every header for its SI columns after the US customary
+            # ones; the first occurrence is the US customary column.
+            names: dict[str, int] = {}
+            for col, text in sorted(header.items()):
+                names.setdefault(text, col)
             if "AISC_Manual_Label" in names and "Type" in names and all(p in names for p in W_PROPS):
                 break
         else:

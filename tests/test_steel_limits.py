@@ -185,8 +185,8 @@ class J10Guards(unittest.TestCase):
 
     def test_end_checks_apply_only_within_their_distance(self):
         # W14x90: d = 14.0 in. J10-3 applies within d of the end, J10-5 within d/2.
-        near_yield, near_cripple = "web local yielding within d of the member end (J10.2)", \
-            "web local crippling within d/2 of the member end (J10.3)"
+        near_yield, near_cripple = "member web: web local yielding within d of the member end (J10.2)", \
+            "member web: web local crippling within d/2 of the member end (J10.3)"
         self.assertEqual((self.at_distance("5")[near_yield], self.at_distance("5")[near_cripple]), (False, False))
         self.assertEqual((self.at_distance("10")[near_yield], self.at_distance("10")[near_cripple]), (False, True))
         self.assertEqual((self.at_distance("20")[near_yield], self.at_distance("20")[near_cripple]), (True, True))

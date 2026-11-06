@@ -37,6 +37,7 @@ from .steel_shapes import constants as shape_constants
 SANCTIONED, JUDGED = Tag.SANCTIONED, Tag.JUDGED
 MAINTAINERS = "lola-maintainers"
 RECALLED = "recalled and not checked against the published text"
+CHECKED = "checked against the published text (A360-22W-ewr.pdf)"
 
 INCH = CUSTOMARY["inch"][0]
 KIP = CUSTOMARY["kip"][0]
@@ -95,7 +96,7 @@ EDGE_MIN: Mapping[str, str] = {
     "1/2": "3/4", "5/8": "7/8", "3/4": "1", "7/8": "1-1/8", "1": "1-1/4", "1-1/8": "1-1/2", "1-1/4": "1-5/8",
 }
 """AISC 360-22 Table J3.4, minimum edge distance in inches from the centre of a standard
-hole to an edge; over 1-1/4 in, 1.25 d. Recalled."""
+hole to an edge; over 1-1/4 in, 1.25 d. Checked against the published table."""
 
 PRETENSION: Mapping[str, tuple[int, int]] = {
     "1/2": (12, 15), "5/8": (19, 24), "3/4": (28, 35), "7/8": (39, 49), "1": (51, 64),
@@ -128,9 +129,9 @@ def _bolt_constants() -> list[Constant]:
                                  f"{names[prop]} {value} in ({how})",
                                  f"a {size} in bolt's {names[prop]} is {value} in"))
         edge = _q(EDGE_MIN[size]) if size in EDGE_MIN else Fraction(5, 4) * d
-        rows.append(Constant(f"{g}.edge_min", _iv(edge * INCH), "m", JUDGED, MAINTAINERS,
+        rows.append(Constant(f"{g}.edge_min", _iv(edge * INCH), "m", SANCTIONED, "AISC",
                              f"{AISC} Section J3.5, Table J3.4 Minimum Edge Distance from Center of Standard Hole to Edge "
-                             f"of Connected Part, {size} in bolt: {edge} in; {RECALLED}",
+                             f"of Connected Part, {size} in bolt: {edge} in; {CHECKED}",
                              f"a {size} in bolt in a standard hole sits at least {edge} in from an edge"))
         g120, g150 = PRETENSION[size]
         rows.append(Constant(f"{g}.Tm_g120", _iv(g120 * KIP), "N", SANCTIONED, "RCSC",
@@ -165,7 +166,8 @@ BOLT_GROUPS: Mapping[str, tuple[str, str, str | None, str | None, str | None, st
 """group -> (standard, Fnt, Fnv threads included, Fnv threads excluded, tensile strength,
 where Fn was checked), stresses in ksi. Groups 120, 144 and 150 are RCSC 2025 Table 5.1;
 Group 200's Fnt and Fnv(X) and A307's Fnt and Fnv are in AISC's comparison document;
-Group 200's Fnv(N) and A307's tensile strength are recalled. A307 has one Fnv, whatever
+Group 200's Fnv(N) was checked against AISC 360-22 Table J3.2; A307's tensile strength is
+recalled. A307 has one Fnv, whatever
 the threads."""
 
 
@@ -181,8 +183,8 @@ def _bolt_groups() -> dict[str, Material]:
                  else f"{AISC} Table J3.2 as printed in the {COMPARISON}")
         props: dict[str, Stated] = {
             "Fnt": stated(fnt, "nominal tensile stress Fnt", True, f"{table}, Group {group}: Fnt = {fnt} ksi"),
-            "Fnv_N": stated(fnv_n, "nominal shear stress Fnv, threads not excluded",
-                            not (group == "200"), f"{AISC} Table J3.2, Group {group}: Fnv (N) = {fnv_n} ksi"
+            "Fnv_N": stated(fnv_n, "nominal shear stress Fnv, threads not excluded", True,
+                            f"{AISC} Table J3.2, Group {group}: Fnv (N) = {fnv_n} ksi; {CHECKED}"
                             if group == "200" else f"{table}, Group {group}: Fnv = {fnv_n} ksi"),
         }
         if fnv_x is not None:
@@ -190,7 +192,8 @@ def _bolt_groups() -> dict[str, Material]:
                                     f"{table}, Group {group}: Fnv (X) = {fnv_x} ksi")
         if group == "A307":
             props["fu"] = stated(fu, "minimum tensile strength", False,
-                                 f"ASTM A307 Grade A minimum tensile strength 60 ksi ({AISC} Section J3.1)")
+                                 f"ASTM A307 Grade A minimum tensile strength 60 ksi (the ASTM A307 standard; {AISC} Section J3.1 "
+                                 "names the grade without it)")
         else:
             props["fu"] = Stated(_iv(_q(fu) * KSI), "Pa", SANCTIONED, "AISC",
                                  f"{AISC} Section J3.1-J3.2 bolt group naming ({COMPARISON}): Group {group} is named by "
@@ -203,25 +206,28 @@ def _bolt_groups() -> dict[str, Material]:
 
 # --- Plate and shape grades, electrodes -------------------------------------------------
 
-GRADES: Mapping[str, tuple[str, str, str]] = {
-    "A992": ("ASTM A992 (W shapes)", "50", "65"),
-    "A36": ("ASTM A36 (plates, angles, shapes)", "36", "58"),
-    "A572_50": ("ASTM A572 Grade 50 (plates, shapes)", "50", "65"),
+GRADES: Mapping[str, tuple[str, str, str, str | None]] = {
+    "A992": ("ASTM A992 (W shapes)", "50", "65", "Example D.1"),
+    "A36": ("ASTM A36 (plates, angles, shapes)", "36", "58", None),
+    "A572_50": ("ASTM A572 Grade 50 (plates, shapes)", "50", "65", "Example D.2"),
 }
-"""grade -> (standard, Fy, Fu) in ksi: the ASTM specified minimums AISC Manual Table 2-4
-lists. Recalled."""
+"""grade -> (standard, Fy, Fu, the Companion example that prints them) in ksi: the ASTM
+specified minimums AISC Manual Table 2-4 lists. AISC 360-22 Table A3.1 names the grades
+without values; the Companion to the Manual (v16.0, Vol. 1) quotes Table 2-4's values for
+A992 and A572 Grade 50. A36's appear in neither text, so they stay recalled."""
 
 
 def _grades() -> dict[str, Material]:
     out: dict[str, Material] = {}
-    for grade, (standard, fy, fu) in GRADES.items():
+    for grade, (standard, fy, fu, example) in GRADES.items():
+        tag, owner = (SANCTIONED, "AISC") if example else (JUDGED, MAINTAINERS)
+        where = (f"{MANUAL} Table 2-4, as quoted in the Companion to the Manual v16.0 Vol. 1 {example}" if example
+                 else f"{MANUAL} Table 2-4; {AISC} Table A3.1 lists the grade without values; {RECALLED}")
         props = {
-            "fy": Stated(_iv(_q(fy) * KSI), "Pa", JUDGED, MAINTAINERS,
-                         f"{standard} specified minimum yield stress Fy = {fy} ksi ({AISC} Section A3.1, AISC Manual "
-                         f"Table 2-4); {RECALLED}", f"{standard}: Fy >= {fy} ksi"),
-            "fu": Stated(_iv(_q(fu) * KSI), "Pa", JUDGED, MAINTAINERS,
-                         f"{standard} specified minimum tensile strength Fu = {fu} ksi ({AISC} Section A3.1, AISC "
-                         f"Manual Table 2-4); {RECALLED}", f"{standard}: Fu >= {fu} ksi"),
+            "fy": Stated(_iv(_q(fy) * KSI), "Pa", tag, owner,
+                         f"{standard} specified minimum yield stress Fy = {fy} ksi ({where})", f"{standard}: Fy >= {fy} ksi"),
+            "fu": Stated(_iv(_q(fu) * KSI), "Pa", tag, owner,
+                         f"{standard} specified minimum tensile strength Fu = {fu} ksi ({where})", f"{standard}: Fu >= {fu} ksi"),
             "E": Derived(Sym("const.aisc360.E"), "Pa", f"{AISC} Symbols list: E = 29,000 ksi"),
         }
         mid = f"steel.{grade}"
@@ -281,85 +287,89 @@ FACTORS: tuple[_F, ...] = (
      f"{RCSC}, Section 5.4: filler factor hf = 1.0 with no fillers or one filler (= {AISC} Section J3.9)"),
     ("rcsc2025.s5_4.hf_two", "0.85", "1", SANCTIONED, "RCSC",
      f"{RCSC}, Section 5.4: filler factor hf = 0.85 for two or more fillers without added bolts"),
-    ("aisc360.E", "29000", "Pa", JUDGED, MAINTAINERS,
-     f"{AISC} Symbols list: modulus of elasticity of steel E = 29,000 ksi; {RECALLED}"),
-    ("aisc360.nu", "0.3", "1", JUDGED, MAINTAINERS,
-     f"{AISC} Section J4 commentary and AISC Manual Part 9 plate-buckling expressions: Poisson's ratio 0.3; {RECALLED}"),
-    ("aisc360.j2_4.phi", "0.75", "1", JUDGED, MAINTAINERS, f"{AISC} Section J2.4, Table J2.5: weld metal phi = 0.75; {RECALLED}"),
-    ("aisc360.j2_4.omega", "2.00", "1", JUDGED, MAINTAINERS, f"{AISC} Section J2.4, Table J2.5: weld metal Omega = 2.00; {RECALLED}"),
-    ("aisc360.j4_1.phi_y", "0.90", "1", JUDGED, MAINTAINERS, f"{AISC} Section J4.1(a): tensile yielding phi = 0.90; {RECALLED}"),
-    ("aisc360.j4_1.omega_y", "1.67", "1", JUDGED, MAINTAINERS, f"{AISC} Section J4.1(a): tensile yielding Omega = 1.67; {RECALLED}"),
-    ("aisc360.j4_1.phi_r", "0.75", "1", JUDGED, MAINTAINERS, f"{AISC} Section J4.1(b): tensile rupture phi = 0.75; {RECALLED}"),
-    ("aisc360.j4_1.omega_r", "2.00", "1", JUDGED, MAINTAINERS, f"{AISC} Section J4.1(b): tensile rupture Omega = 2.00; {RECALLED}"),
-    ("aisc360.j4_2.phi_y", "1.00", "1", JUDGED, MAINTAINERS, f"{AISC} Section J4.2(a): shear yielding phi = 1.00; {RECALLED}"),
-    ("aisc360.j4_2.omega_y", "1.50", "1", JUDGED, MAINTAINERS, f"{AISC} Section J4.2(a): shear yielding Omega = 1.50; {RECALLED}"),
-    ("aisc360.j4_2.phi_r", "0.75", "1", JUDGED, MAINTAINERS, f"{AISC} Section J4.2(b): shear rupture phi = 0.75; {RECALLED}"),
-    ("aisc360.j4_2.omega_r", "2.00", "1", JUDGED, MAINTAINERS, f"{AISC} Section J4.2(b): shear rupture Omega = 2.00; {RECALLED}"),
-    ("aisc360.j4_3.phi", "0.75", "1", JUDGED, MAINTAINERS, f"{AISC} Section J4.3: block shear phi = 0.75; {RECALLED}"),
-    ("aisc360.j4_3.omega", "2.00", "1", JUDGED, MAINTAINERS, f"{AISC} Section J4.3: block shear Omega = 2.00; {RECALLED}"),
-    ("aisc360.j4_4.phi", "0.90", "1", JUDGED, MAINTAINERS, f"{AISC} Section J4.4: compression, Lc/r <= 25, phi = 0.90; {RECALLED}"),
-    ("aisc360.j4_4.omega", "1.67", "1", JUDGED, MAINTAINERS, f"{AISC} Section J4.4: compression, Lc/r <= 25, Omega = 1.67; {RECALLED}"),
-    ("aisc360.j4_5.phi_y", "0.90", "1", JUDGED, MAINTAINERS, f"{AISC} Section J4.5: flexural yielding phi = 0.90; {RECALLED}"),
-    ("aisc360.j4_5.omega_y", "1.67", "1", JUDGED, MAINTAINERS, f"{AISC} Section J4.5: flexural yielding Omega = 1.67; {RECALLED}"),
-    ("aisc360.j4_5.phi_r", "0.75", "1", JUDGED, MAINTAINERS, f"{AISC} Section J4.5: flexural rupture phi = 0.75; {RECALLED}"),
-    ("aisc360.j4_5.omega_r", "2.00", "1", JUDGED, MAINTAINERS, f"{AISC} Section J4.5: flexural rupture Omega = 2.00; {RECALLED}"),
-    ("aisc360.j7.phi", "0.75", "1", JUDGED, MAINTAINERS, f"{AISC} Section J7: bearing on milled surfaces phi = 0.75; {RECALLED}"),
-    ("aisc360.j7.omega", "2.00", "1", JUDGED, MAINTAINERS, f"{AISC} Section J7: bearing on milled surfaces Omega = 2.00; {RECALLED}"),
-    ("aisc360.j10_1.phi", "0.90", "1", JUDGED, MAINTAINERS, f"{AISC} Section J10.1: flange local bending phi = 0.90; {RECALLED}"),
-    ("aisc360.j10_1.omega", "1.67", "1", JUDGED, MAINTAINERS, f"{AISC} Section J10.1: flange local bending Omega = 1.67; {RECALLED}"),
-    ("aisc360.j10_2.phi", "1.00", "1", JUDGED, MAINTAINERS, f"{AISC} Section J10.2: web local yielding phi = 1.00; {RECALLED}"),
-    ("aisc360.j10_2.omega", "1.50", "1", JUDGED, MAINTAINERS, f"{AISC} Section J10.2: web local yielding Omega = 1.50; {RECALLED}"),
-    ("aisc360.j10_3.phi", "0.75", "1", JUDGED, MAINTAINERS, f"{AISC} Section J10.3: web local crippling phi = 0.75; {RECALLED}"),
-    ("aisc360.j10_3.omega", "2.00", "1", JUDGED, MAINTAINERS, f"{AISC} Section J10.3: web local crippling Omega = 2.00; {RECALLED}"),
-    ("aisc360.j10_4.phi", "0.85", "1", JUDGED, MAINTAINERS, f"{AISC} Section J10.4: web sidesway buckling phi = 0.85; {RECALLED}"),
-    ("aisc360.j10_4.omega", "1.76", "1", JUDGED, MAINTAINERS, f"{AISC} Section J10.4: web sidesway buckling Omega = 1.76; {RECALLED}"),
-    ("aisc360.j10_4.cr_below_my", "960000", "Pa", JUDGED, MAINTAINERS,
-     f"{AISC} Section J10.4: Cr = 960,000 ksi when Mu < My at the load; {RECALLED}"),
-    ("aisc360.j10_4.cr_at_my", "480000", "Pa", JUDGED, MAINTAINERS,
-     f"{AISC} Section J10.4: Cr = 480,000 ksi when Mu >= My at the load; {RECALLED}"),
-    ("aisc360.j10_5.phi", "0.90", "1", JUDGED, MAINTAINERS, f"{AISC} Section J10.5: web compression buckling phi = 0.90; {RECALLED}"),
-    ("aisc360.j10_5.omega", "1.67", "1", JUDGED, MAINTAINERS, f"{AISC} Section J10.5: web compression buckling Omega = 1.67; {RECALLED}"),
-    ("aisc360.j10_6.phi", "0.90", "1", JUDGED, MAINTAINERS, f"{AISC} Section J10.6: web panel-zone shear phi = 0.90; {RECALLED}"),
-    ("aisc360.j10_6.omega", "1.67", "1", JUDGED, MAINTAINERS, f"{AISC} Section J10.6: web panel-zone shear Omega = 1.67; {RECALLED}"),
-    ("aisc360.j3_4.spacing_ratio", "8/3", "1", JUDGED, MAINTAINERS,
-     f"{AISC} Section J3.4 (minimum spacing): centre-to-centre distance at least 2-2/3 d; {RECALLED}"),
-    ("aisc360.j3_6.pitch_t", "24", "1", JUDGED, MAINTAINERS,
+    ("aisc360.E", "29000", "Pa", SANCTIONED, "AISC",
+     f"{AISC} Symbols list: modulus of elasticity of steel E = 29,000 ksi; {CHECKED}"),
+    ("aisc360.nu", "0.3", "1", SANCTIONED, "AISC",
+     f"{AISC} Commentary Section E7, Eq. C-E7-3 (also Eq. C-F9-1): Poisson's ratio 0.3; {CHECKED}"),
+    ("aisc360.j2_4.phi", "0.75", "1", SANCTIONED, "AISC", f"{AISC} Section J2.4, Table J2.5: weld metal phi = 0.75; {CHECKED}"),
+    ("aisc360.j2_4.omega", "2.00", "1", SANCTIONED, "AISC", f"{AISC} Section J2.4, Table J2.5: weld metal Omega = 2.00; {CHECKED}"),
+    ("aisc360.j4_1.phi_y", "0.90", "1", SANCTIONED, "AISC", f"{AISC} Section J4.1(a): tensile yielding phi = 0.90; {CHECKED}"),
+    ("aisc360.j4_1.omega_y", "1.67", "1", SANCTIONED, "AISC", f"{AISC} Section J4.1(a): tensile yielding Omega = 1.67; {CHECKED}"),
+    ("aisc360.j4_1.phi_r", "0.75", "1", SANCTIONED, "AISC", f"{AISC} Section J4.1(b): tensile rupture phi = 0.75; {CHECKED}"),
+    ("aisc360.j4_1.omega_r", "2.00", "1", SANCTIONED, "AISC", f"{AISC} Section J4.1(b): tensile rupture Omega = 2.00; {CHECKED}"),
+    ("aisc360.j4_2.phi_y", "1.00", "1", SANCTIONED, "AISC", f"{AISC} Section J4.2(a): shear yielding phi = 1.00; {CHECKED}"),
+    ("aisc360.j4_2.omega_y", "1.50", "1", SANCTIONED, "AISC", f"{AISC} Section J4.2(a): shear yielding Omega = 1.50; {CHECKED}"),
+    ("aisc360.j4_2.phi_r", "0.75", "1", SANCTIONED, "AISC", f"{AISC} Section J4.2(b): shear rupture phi = 0.75; {CHECKED}"),
+    ("aisc360.j4_2.omega_r", "2.00", "1", SANCTIONED, "AISC", f"{AISC} Section J4.2(b): shear rupture Omega = 2.00; {CHECKED}"),
+    ("aisc360.j4_3.phi", "0.75", "1", SANCTIONED, "AISC", f"{AISC} Section J4.3: block shear phi = 0.75; {CHECKED}"),
+    ("aisc360.j4_3.omega", "2.00", "1", SANCTIONED, "AISC", f"{AISC} Section J4.3: block shear Omega = 2.00; {CHECKED}"),
+    ("aisc360.j4_4.phi", "0.90", "1", SANCTIONED, "AISC", f"{AISC} Section J4.4: compression, Lc/r <= 25, phi = 0.90; {CHECKED}"),
+    ("aisc360.j4_4.omega", "1.67", "1", SANCTIONED, "AISC", f"{AISC} Section J4.4: compression, Lc/r <= 25, Omega = 1.67; {CHECKED}"),
+    ("aisc360.j4_5.phi_y", "0.90", "1", SANCTIONED, "AISC", f"{AISC} Section F1(a), which Commentary Section J4.5 applies to connecting elements: flexural yielding "
+     f"phi = 0.90; {CHECKED}"),
+    ("aisc360.j4_5.omega_y", "1.67", "1", SANCTIONED, "AISC", f"{AISC} Section F1(b), which Commentary Section J4.5 applies to connecting elements: flexural yielding "
+     f"Omega = 1.67; {CHECKED}"),
+    ("aisc360.j4_5.phi_r", "0.75", "1", SANCTIONED, "AISC", f"{AISC} Commentary Section J4.5 (Fu Znet; Manual Eq. 9-8): flexural rupture phi = 0.75; {CHECKED}"),
+    ("aisc360.j4_5.omega_r", "2.00", "1", SANCTIONED, "AISC", f"{AISC} Commentary Section J4.5 (Fu Znet; Manual Eq. 9-8): flexural rupture Omega = 2.00; {CHECKED}"),
+    ("aisc360.j7.phi", "0.75", "1", SANCTIONED, "AISC", f"{AISC} Section J7: bearing on milled surfaces phi = 0.75; {CHECKED}"),
+    ("aisc360.j7.omega", "2.00", "1", SANCTIONED, "AISC", f"{AISC} Section J7: bearing on milled surfaces Omega = 2.00; {CHECKED}"),
+    ("aisc360.j10_1.phi", "0.90", "1", SANCTIONED, "AISC", f"{AISC} Section J10.1: flange local bending phi = 0.90; {CHECKED}"),
+    ("aisc360.j10_1.omega", "1.67", "1", SANCTIONED, "AISC", f"{AISC} Section J10.1: flange local bending Omega = 1.67; {CHECKED}"),
+    ("aisc360.j10_2.phi", "1.00", "1", SANCTIONED, "AISC", f"{AISC} Section J10.2: web local yielding phi = 1.00; {CHECKED}"),
+    ("aisc360.j10_2.omega", "1.50", "1", SANCTIONED, "AISC", f"{AISC} Section J10.2: web local yielding Omega = 1.50; {CHECKED}"),
+    ("aisc360.j10_3.phi", "0.75", "1", SANCTIONED, "AISC", f"{AISC} Section J10.3: web local crippling phi = 0.75; {CHECKED}"),
+    ("aisc360.j10_3.omega", "2.00", "1", SANCTIONED, "AISC", f"{AISC} Section J10.3: web local crippling Omega = 2.00; {CHECKED}"),
+    ("aisc360.j10_4.phi", "0.85", "1", SANCTIONED, "AISC", f"{AISC} Section J10.4: web sidesway buckling phi = 0.85; {CHECKED}"),
+    ("aisc360.j10_4.omega", "1.76", "1", SANCTIONED, "AISC", f"{AISC} Section J10.4: web sidesway buckling Omega = 1.76; {CHECKED}"),
+    ("aisc360.j10_4.cr_below_my", "960000", "Pa", SANCTIONED, "AISC",
+     f"{AISC} Section J10.4: Cr = 960,000 ksi when alpha_s Mr < My at the load (alpha_s 1.0 LRFD, 1.5 ASD); "
+     f"{CHECKED}"),
+    ("aisc360.j10_4.cr_at_my", "480000", "Pa", SANCTIONED, "AISC",
+     f"{AISC} Section J10.4: Cr = 480,000 ksi when alpha_s Mr >= My at the load (alpha_s 1.0 LRFD, 1.5 ASD); "
+     f"{CHECKED}"),
+    ("aisc360.j10_5.phi", "0.90", "1", SANCTIONED, "AISC", f"{AISC} Section J10.5: web compression buckling phi = 0.90; {CHECKED}"),
+    ("aisc360.j10_5.omega", "1.67", "1", SANCTIONED, "AISC", f"{AISC} Section J10.5: web compression buckling Omega = 1.67; {CHECKED}"),
+    ("aisc360.j10_6.phi", "0.90", "1", SANCTIONED, "AISC", f"{AISC} Section J10.6: web panel-zone shear phi = 0.90; {CHECKED}"),
+    ("aisc360.j10_6.omega", "1.67", "1", SANCTIONED, "AISC", f"{AISC} Section J10.6: web panel-zone shear Omega = 1.67; {CHECKED}"),
+    ("aisc360.j3_4.spacing_ratio", "8/3", "1", SANCTIONED, "AISC",
+     f"{AISC} Section J3.4 (minimum spacing): centre-to-centre distance at least 2-2/3 d; {CHECKED}"),
+    ("aisc360.j3_6.pitch_t", "24", "1", SANCTIONED, "AISC",
      f"{AISC} Section J3.6(a): maximum spacing 24 times the thinner part for painted or unpainted members not "
-     f"subject to corrosion; {RECALLED}"),
-    ("aisc360.j3_6.pitch_max", "12", "m", JUDGED, MAINTAINERS,
-     f"{AISC} Section J3.6(a): maximum spacing 12 in for painted or unpainted members not subject to corrosion; {RECALLED}"),
-    ("aisc360.j3_6.weathering_pitch_t", "14", "1", JUDGED, MAINTAINERS,
-     f"{AISC} Section J3.6(b): maximum spacing 14 times the thinner part for unpainted weathering steel; {RECALLED}"),
-    ("aisc360.j3_6.weathering_pitch_max", "7", "m", JUDGED, MAINTAINERS,
-     f"{AISC} Section J3.6(b): maximum spacing 7 in for unpainted weathering steel; {RECALLED}"),
-    ("aisc360.j3_6.edge_t", "12", "1", JUDGED, MAINTAINERS,
-     f"{AISC} Section J3.6: maximum edge distance 12 times the part's thickness; {RECALLED}"),
-    ("aisc360.j3_6.edge_max", "6", "m", JUDGED, MAINTAINERS, f"{AISC} Section J3.6: maximum edge distance 6 in; {RECALLED}"),
-    ("aisc360.j2_2b.t1", "1/4", "m", JUDGED, MAINTAINERS,
-     f"{AISC} Section J2.2b, Table J2.4 Minimum Size of Fillet Welds: first row, thinner part up to 1/4 in; {RECALLED}"),
-    ("aisc360.j2_2b.w1", "1/8", "m", JUDGED, MAINTAINERS,
-     f"{AISC} Section J2.2b, Table J2.4: minimum fillet 1/8 in for a thinner part up to 1/4 in; {RECALLED}"),
-    ("aisc360.j2_2b.t2", "1/2", "m", JUDGED, MAINTAINERS,
-     f"{AISC} Section J2.2b, Table J2.4: second row, thinner part over 1/4 in up to 1/2 in; {RECALLED}"),
-    ("aisc360.j2_2b.w2", "3/16", "m", JUDGED, MAINTAINERS,
-     f"{AISC} Section J2.2b, Table J2.4: minimum fillet 3/16 in for a thinner part over 1/4 in up to 1/2 in; {RECALLED}"),
-    ("aisc360.j2_2b.t3", "3/4", "m", JUDGED, MAINTAINERS,
-     f"{AISC} Section J2.2b, Table J2.4: third row, thinner part over 1/2 in up to 3/4 in; {RECALLED}"),
-    ("aisc360.j2_2b.w3", "1/4", "m", JUDGED, MAINTAINERS,
-     f"{AISC} Section J2.2b, Table J2.4: minimum fillet 1/4 in for a thinner part over 1/2 in up to 3/4 in; {RECALLED}"),
-    ("aisc360.j2_2b.w4", "5/16", "m", JUDGED, MAINTAINERS,
-     f"{AISC} Section J2.2b, Table J2.4: minimum fillet 5/16 in for a thinner part over 3/4 in; {RECALLED}"),
-    ("aisc360.j2_2b.edge_t", "1/4", "m", JUDGED, MAINTAINERS,
-     f"{AISC} Section J2.2b(b): along an edge at least 1/4 in thick the fillet is at most t - 1/16 in; {RECALLED}"),
-    ("aisc360.j2_2b.edge_less", "1/16", "m", JUDGED, MAINTAINERS,
-     f"{AISC} Section J2.2b(b): the fillet along an edge at least 1/4 in thick is at most 1/16 in less than t; {RECALLED}"),
-    ("aisc360.j2_2b.length_ratio", "4", "1", JUDGED, MAINTAINERS,
-     f"{AISC} Section J2.2b(c): a fillet weld is at least four times its size long; {RECALLED}"),
-    ("aisc360.j4_4.slenderness", "25", "1", JUDGED, MAINTAINERS,
-     f"{AISC} Section J4.4(a): the yield formula applies when Lc/r <= 25; {RECALLED}"),
-    ("aisc360.j3_3.long_slot_plies", "1", "1", JUDGED, MAINTAINERS,
-     f"{AISC} Section J3.3: long-slotted holes in only one of the connected parts at an individual faying surface; "
-     f"{RECALLED}"),
+     f"subject to corrosion; {CHECKED}"),
+    ("aisc360.j3_6.pitch_max", "12", "m", SANCTIONED, "AISC",
+     f"{AISC} Section J3.6(a): maximum spacing 12 in for painted or unpainted members not subject to corrosion; {CHECKED}"),
+    ("aisc360.j3_6.weathering_pitch_t", "14", "1", SANCTIONED, "AISC",
+     f"{AISC} Section J3.6(b): maximum spacing 14 times the thinner part for unpainted weathering steel; {CHECKED}"),
+    ("aisc360.j3_6.weathering_pitch_max", "7", "m", SANCTIONED, "AISC",
+     f"{AISC} Section J3.6(b): maximum spacing 7 in for unpainted weathering steel; {CHECKED}"),
+    ("aisc360.j3_6.edge_t", "12", "1", SANCTIONED, "AISC",
+     f"{AISC} Section J3.6: maximum edge distance 12 times the part's thickness; {CHECKED}"),
+    ("aisc360.j3_6.edge_max", "6", "m", SANCTIONED, "AISC", f"{AISC} Section J3.6: maximum edge distance 6 in; {CHECKED}"),
+    ("aisc360.j2_2b.t1", "1/4", "m", SANCTIONED, "AISC",
+     f"{AISC} Section J2.2b, Table J2.4 Minimum Size of Fillet Welds: first row, thinner part up to 1/4 in; {CHECKED}"),
+    ("aisc360.j2_2b.w1", "1/8", "m", SANCTIONED, "AISC",
+     f"{AISC} Section J2.2b, Table J2.4: minimum fillet 1/8 in for a thinner part up to 1/4 in; {CHECKED}"),
+    ("aisc360.j2_2b.t2", "1/2", "m", SANCTIONED, "AISC",
+     f"{AISC} Section J2.2b, Table J2.4: second row, thinner part over 1/4 in up to 1/2 in; {CHECKED}"),
+    ("aisc360.j2_2b.w2", "3/16", "m", SANCTIONED, "AISC",
+     f"{AISC} Section J2.2b, Table J2.4: minimum fillet 3/16 in for a thinner part over 1/4 in up to 1/2 in; {CHECKED}"),
+    ("aisc360.j2_2b.t3", "3/4", "m", SANCTIONED, "AISC",
+     f"{AISC} Section J2.2b, Table J2.4: third row, thinner part over 1/2 in up to 3/4 in; {CHECKED}"),
+    ("aisc360.j2_2b.w3", "1/4", "m", SANCTIONED, "AISC",
+     f"{AISC} Section J2.2b, Table J2.4: minimum fillet 1/4 in for a thinner part over 1/2 in up to 3/4 in; {CHECKED}"),
+    ("aisc360.j2_2b.w4", "5/16", "m", SANCTIONED, "AISC",
+     f"{AISC} Section J2.2b, Table J2.4: minimum fillet 5/16 in for a thinner part over 3/4 in; {CHECKED}"),
+    ("aisc360.j2_2b.edge_t", "1/4", "m", SANCTIONED, "AISC",
+     f"{AISC} Section J2.2b(b): along an edge at least 1/4 in thick the fillet is at most t - 1/16 in; {CHECKED}"),
+    ("aisc360.j2_2b.edge_less", "1/16", "m", SANCTIONED, "AISC",
+     f"{AISC} Section J2.2b(b): the fillet along an edge at least 1/4 in thick is at most 1/16 in less than t; {CHECKED}"),
+    ("aisc360.j2_2b.length_ratio", "4", "1", SANCTIONED, "AISC",
+     f"{AISC} Section J2.2b(c): a fillet weld is at least four times its size long; {CHECKED}"),
+    ("aisc360.j4_4.slenderness", "25", "1", SANCTIONED, "AISC",
+     f"{AISC} Section J4.4(a): the yield formula applies when Lc/r <= 25; {CHECKED}"),
+    ("aisc360.j3_3.long_slot_plies", "1", "1", SANCTIONED, "AISC",
+     f"{AISC} Section J3.3(f): long-slotted holes in only one of the connected parts at an individual faying surface; "
+     f"{CHECKED}"),
     ("rcsc2025.joint_level.snug", "0", "1", JUDGED, MAINTAINERS,
      f"{RCSC}, Section 4: joint types ranked by what their installation guarantees, snug-tight 0 < pretensioned 1 < "
      "slip-critical 2 (each meets the requirements of the ones before it); the ranking is LoLa's encoding, "

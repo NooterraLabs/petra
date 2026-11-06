@@ -59,7 +59,22 @@ class Provenance(unittest.TestCase):
             self.assertIs(constants[name].tag, Tag.SANCTIONED, name)
             self.assertEqual(constants[name].owner, "RCSC", name)
         self.assertIs(REGISTRY.fact("bolt_group.120.Fnv_N").tag, Tag.SANCTIONED)
-        self.assertIs(REGISTRY.fact("bolt_group.200.Fnv_N").tag, Tag.JUDGED, "Group 200's N value is recalled")
+        self.assertIs(REGISTRY.fact("bolt_group.A307.fu").tag, Tag.JUDGED, "A307's tensile strength is recalled")
+
+    def test_the_rows_checked_against_aisc_360_22_are_sanctioned(self):
+        # Each of these was found in the published text of AISC 360-22; A36's Fy and Fu, the
+        # Manual-only clearances and the ASME thread and nut rows are not printed there.
+        constants = steel_constants()
+        for name in ("aisc360.j4_3.phi", "aisc360.j10_4.cr_below_my", "aisc360.j2_2b.w4", "bolt_us.7_8.edge_min"):
+            self.assertIs(constants[name].tag, Tag.SANCTIONED, name)
+            self.assertEqual(constants[name].owner, "AISC", name)
+            self.assertIn("A360-22W-ewr.pdf", constants[name].source, name)
+        for name in ("bolt_group.200.Fnv_N", "steel.A992.fy", "steel.A572_50.fu"):
+            self.assertIs(REGISTRY.fact(name).tag, Tag.SANCTIONED, name)
+        for name in ("steel.A36.fy", "steel.A36.fu"):
+            self.assertIs(REGISTRY.fact(name).tag, Tag.JUDGED, name)
+        for name in ("aisc_manual.clearance.socket", "aisc_manual.seat.critical_offset", "bolt_us.3_4.tpi"):
+            self.assertIs(constants[name].tag, Tag.JUDGED, name)
 
     def test_steel_constants_and_the_v0_constants_do_not_collide(self):
         from lola.registry.constants import CONSTANTS
@@ -165,10 +180,13 @@ def _numeric(cell):
 class ShapesDatabase(unittest.TestCase):
     def test_the_importer_reads_w_and_l_rows_and_records_the_hash(self):
         rows = [
-            ["Type", "EDI_Std_Nomenclature", "AISC_Manual_Label", "W", "A", "d", "bf", "tw", "tf", "kdes"],
-            ["W", "W18X50", "W18X50", "50", "14.7", "18", "7.5", "0.35499999999999998", "0.57", "0.972"],
+            # The published sheet repeats each header for its SI columns after the US ones.
+            ["Type", "EDI_Std_Nomenclature", "AISC_Manual_Label", "W", "A", "d", "bf", "tw", "tf", "kdes",
+             "AISC_Manual_Label", "A", "d", "bf", "tw", "tf", "kdes"],
+            ["W", "W18X50", "W18X50", "50", "14.7", "18", "7.5", "0.35499999999999998", "0.57", "0.972",
+             "W460X74", "9480", "457", "191", "9.02", "14.5", "24.7"],
             ["W", "W99X1", "W99X1", "1", "–", "1", "1", "1", "1", "1"],
-            ["L", "L4X3-1/2X3/8", "L4X3-1/2X3/8", "9.1", "2.67", "4", "–", "–", "–", "0.75"],
+            ["L", "L4X3-1/2X3/8", "L4X3-1/2X3/8", "9.1", "2.67", "4", "–", "–", "–", "0.75", "L102X89X9.5"],
             ["C", "C15X50", "C15X50", "50", "14.7", "15", "3.72", "0.716", "0.65", "1.44"],
         ]
         with tempfile.TemporaryDirectory() as tmp:
@@ -181,7 +199,7 @@ class ShapesDatabase(unittest.TestCase):
             table = load(out)
         self.assertEqual(len(body["sha256"]), 64)
         self.assertEqual([r["label"] for r in body["W"]], ["W18X50"], "a row with a dash is skipped")
-        self.assertEqual(body["W"][0]["tw"], "0.355", "a float cell is read as its shortest decimal")
+        self.assertEqual(body["W"][0]["tw"], "0.355", "a float cell is read as its shortest decimal; the US column, not the SI one")
         self.assertEqual(body["L"], ["L4X3-1/2X3/8"])
         self.assertIs(table.tag, Tag.SANCTIONED)
         found = shape_constants(table)
@@ -190,12 +208,16 @@ class ShapesDatabase(unittest.TestCase):
         self.assertIn(body["sha256"], tw.source)
         self.assertEqual(tw.owner, "AISC")
 
-    def test_the_shipped_table_is_a_judged_transcription(self):
+    def test_the_shipped_table_is_the_published_database(self):
+        # Imported from SHAPE160.xlsx, the AISC Shapes Database v16.0 workbook. The earlier
+        # transcription from memory had 5 of its 168 values wrong, among them W30X90 kdes.
         table = load()
         self.assertIsInstance(table, ShapeTable)
-        self.assertIs(table.tag, Tag.JUDGED)
-        self.assertIsNone(table.sha256)
-        self.assertIn("W18X50", [r["label"] for r in table.w])
+        self.assertIs(table.tag, Tag.SANCTIONED)
+        self.assertEqual((table.file, table.sha256), ("SHAPE160.xlsx", "e08bea15bbe475e78251292e5f543ff5a11d16b59c9d6af47aec700f8f57f050"))
+        self.assertEqual((len(table.w), len(table.angles)), (289, 137))
+        rows = {r["label"]: r for r in table.w}
+        self.assertEqual((rows["W18X50"]["tw"], rows["W30X90"]["kdes"], rows["W14X90"]["d"]), ("0.355", "1.26", "14.0"))
 
     def test_designations(self):
         self.assertEqual(key("L4X3-1/2X3/8"), "L4x3_1_2x3_8")
