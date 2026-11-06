@@ -83,7 +83,7 @@ Each premise in a footprint carries one tag:
 - `proved` and `certified` come from the kernel.
 - `sanctioned` is a value from a named standard, such as a minimum yield strength.
 - `measured` and `assumed` are inputs that a named person signed, with a source.
-- `validated_model` is a physical model with its stated validity limits.
+- `validated_model` is a physical model. Its numeric validity limits, such as a member staying below yield, are checked inequalities: every PASS and FAIL carries a kernel proof of each one, and a model used outside its range gives UNKNOWN with the point. Limits not yet checked are printed as "not checked".
 - `judged` is the coverage table, which decides which failure modes a design must address.
 
 A verdict is true relative to its footprint. If a premise is wrong, the verdict can be wrong, and the footprint tells you which premise to check.
@@ -112,6 +112,6 @@ python scripts/predicate.py
 
 - The kernel is Python with exact rationals, not Lean. The certificate format is ready for a Lean kernel, but the Lean toolchain is not installed.
 - The coverage table is a judgement, and every footprint says so.
-- The Euler buckling model applies no imperfection reduction. Its validity text says so.
+- Member buckling uses the EN 1993-1-1 curve c reduction with gamma_M1 = 1 and no EN 1090 erection tolerance. The plastic collapse model lets a buckled member keep its buckling resistance, which is unconservative for an indeterminate truss. The 0.002 small-strain limit is the maintainers' choice, not a code value.
 - Each load case named in a claim is checked on its own. Cases are not summed.
 - Continuum finite elements, reduced bases and learned surrogates are out of scope.

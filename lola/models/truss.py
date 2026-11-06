@@ -8,8 +8,10 @@ Component kind `truss`. Attribute lines, one per line inside the block:
     node <name> at (<x>, <y>) [support pinned|roller_x|roller_y]     lengths, exact
     member <name>: <node> -- <node> [section <id>] [material <id>]
 
-Sections are circular hollow sections (registry props D, t, A, I), so one second moment
-serves buckling about every axis. Materials need fy and E.
+Sections are circular hollow sections (registry props D, t, A, I and buckling_alpha, the
+imperfection factor of the section's EN 1993-1-1 buckling curve), so one second moment
+serves buckling about every axis. Materials need fy and E, and belong to the family of
+the section's own material, since a buckling curve is drawn for one.
 
 Load fields: fx and fy on `<truss>.<node>`. Claim paths: `<truss>.<qoi>` and
 `<truss>.member(<member>).<qoi>`.
@@ -26,7 +28,7 @@ obligation per load case.
 
 Mapping onto kernel goals:
   plastic collapse   R1  LinearFeasible: B q = lambda f(h);  -C_i/L_i <= q_i <= T_i/L_i
-                         T_i = A_i fy_i ;  C_i = min(A_i fy_i, pi^2 E_i I_i / L_i^2)
+                         T_i = A_i fy_i ;  C_i = N_b,i, the flexural buckling resistance below
                          lambda is the claimed factor as a constant, since R1 needs b
                          affine in the hypotheses. Mechanism FAIL = FarkasRay.
   elastic response   R3  QuadraticProblem(B, f(h), w_i = L_i^3 E_0 / (E_i A_i)): the
@@ -43,12 +45,23 @@ Mapping onto kernel goals:
                          the evidence). min(0, .) drops tension stiffening, so the statement
                          covers every factor in [0, lambda]: for those factors
                          factor * q_i >= min(0, lambda q_i) in the Loewner sum.
-  member buckling    R4  AllNonpositive: -N_i - u pi^2 E_i I_i / L_i^2 <= 0, with N_i a
-                         DefinedHyp, one obligation per member so a FAIL names the member.
-                         buckling_utilisation = -N / (pi^2 E I / L^2), negative in tension.
-  small strain       R3  ComponentBound strain_i in [-eps_max, eps_max]: the elastic model's
-                         validity range, checked rather than stated, and attached to every
-                         elastic obligation.
+  member buckling    R4  AllNonpositive: -N_i - u N_b,i <= 0, with N_i a DefinedHyp, one
+                         obligation per member so a FAIL names the member.
+                         buckling_utilisation = -N / N_b, negative in tension.
+
+Flexural buckling resistance, EN 1993-1-1:2005 6.3.1.2 with gamma_M1 = 1:
+    N_b = chi A fy,  chi = min(1, 1 / (Phi + sqrt(Phi^2 - lambda^2)))
+    Phi = (1 + alpha (lambda - 0.2) + lambda^2) / 2,  lambda^2 = A fy / N_cr,  N_cr = pi^2 E I / L^2
+with alpha the section's buckling_alpha and buckling length L (pin-ended).
+
+Validity rows, each stated beside every obligation whose model has it (models/base.py):
+  below yield        R3  ComponentBound N_i / (A_i fy_i) in [-1, 1]: the elastic model
+                         holds only below yield.
+  small strain       R3  ComponentBound N_i / (E_i A_i) in [-0.002, 0.002].
+  section class      R4  AllNonpositive: D fy - 90 (235 MPa) t <= 0 per section, EN 1993-1-1
+                         Table 5.2 class 3 for tubes, so A fy is reached in compression.
+The two elastic rows are stated at the load case itself, factor 1, also beside a
+stability obligation: its factor scales a reference elastic state.
 """
 from __future__ import annotations
 
@@ -59,7 +72,7 @@ from fractions import Fraction
 from typing import Callable, Mapping
 
 from ..ir import Component, Design, Exceeds, Fixed, Input, Punct, Ref, Rel, Span, Vec
-from ..kernel import Add, Const, Div, Expr, Interval, Matrix, Min, Mul, Neg, Pi, PowInt, Sqrt
+from ..kernel import Add, Const, Div, Expr, Interval, Matrix, Max, Min, Mul, Neg, Pi, PowInt, Sqrt
 from ..kernel.rules.r1_linear import LinearFeasible
 from ..kernel.rules.r2_definite import GramPositiveDefinite, GramTerm
 from ..kernel.rules.r3_hypercircle import ComponentBound, MinimizerBound, MinimizerComponent, QuadraticProblem
@@ -84,8 +97,11 @@ from .base import (
     Obligation,
     Ports,
     Requirement,
+    Statement,
     StatementBuilder,
+    ValidityRow,
     model_spec,
+    validity_obligation,
 )
 
 # --- Typed model, produced by lower_truss ------------------------------------------
@@ -125,7 +141,7 @@ class Truss:
 
 _SUPPORTS = {s.value: s for s in Support if s is not Support.FREE}
 _FIXES = {Support.FREE: (), Support.PINNED: ("x", "y"), Support.ROLLER_X: ("y",), Support.ROLLER_Y: ("x",)}
-_SECTION_PROPS = ("D", "t", "A", "I")
+_SECTION_PROPS = ("D", "t", "A", "I", "buckling_alpha")
 _MATERIAL_PROPS = ("fy", "E")
 _LOAD_FIELDS = {"fx": "x", "fy": "y"}
 
@@ -202,6 +218,12 @@ def lower_truss(component: Component, design: Design, registry: Registry) -> Tru
         found = _entry_problem(registry.material, material, _MATERIAL_PROPS, "a structural material")
         if found:
             problem(component.span, found)
+    if not problems:
+        for member in members:
+            made_of = registry.part(member.section, PartKind.SECTION).material
+            if registry.material(made_of).family != registry.material(member.material).family:
+                problem(component.span, f"member {member.name}: section {member.section} is made of {made_of}, "
+                                        f"so its buckling curve does not hold for {member.material}")
     _check_references(name, nodes, lines, design, problem)
     if problems:
         raise ComponentError(tuple(problems))
@@ -307,56 +329,71 @@ GLOBAL_STABILITY = FailureMode("truss.global_stability")
 MEMBER_BUCKLING = FailureMode("truss.member_buckling")
 ELASTIC_STRESS = FailureMode("truss.elastic_stress")
 COMPLIANCE = FailureMode("truss.compliance")
-SMALL_STRAIN = FailureMode("truss.small_strain")
 
 SMALL_STRAIN_LIMIT = Fraction(1, 500)
 """|strain| <= 0.002: the range inside which the linear elastic model is used."""
 
-_MAINTAINERS = "lola-maintainers"
-_EULER_CAVEAT = (
-    "the compression capacity is the bare Euler load pi^2 E I / L^2 with no imperfection "
-    "reduction, which is unconservative against design codes (EN 1993-1-1 6.3.1 reduces it "
-    "with a buckling curve)"
+BELOW_YIELD = ValidityRow(
+    "truss.elastic.below_yield",
+    "every member's elastic force stays within its yield load, |N| <= A fy, under each load case",
+    "a linear elastic material law holds only below yield (EN 1993-1-1:2005 5.4.2, elastic global analysis)",
 )
+SMALL_STRAIN = ValidityRow(
+    "truss.elastic.small_strain",
+    "every member's elastic strain stays within 0.002, |N| / (E A) <= 0.002, under each load case",
+    "small-displacement theory of the pin-jointed truss; the 0.002 limit is the maintainers' choice",
+)
+SECTION_CLASS = ValidityRow(
+    "truss.section.class3",
+    "every member's circular hollow section is class 3 or better in compression, D / t <= 90 (235 MPa / fy)",
+    "EN 1993-1-1:2005 Table 5.2 (sheet 3), tubular sections: class 3 when d / t <= 90 eps^2, eps^2 = 235 / fy",
+)
+
+_MAINTAINERS = "lola-maintainers"
 _PLASTIC = model_spec(
     sys.modules[__name__], "truss.plastic",
-    "rigid-perfectly-plastic pin-jointed 2D truss, static (lower-bound) theorem",
-    "joints are frictionless pins; members are prismatic and loaded only at their ends; "
-    "displacements are small; the tension capacity is A fy; " + _EULER_CAVEAT,
-    _MAINTAINERS, "lower-bound theorem of plastic collapse (Gvozdev 1938; Neal, The Plastic Methods of Structural Analysis)",
+    "rigid-perfectly-plastic pin-jointed 2D truss, static (lower-bound) theorem; tension capacity A fy, "
+    "compression capacity the flexural buckling resistance chi A fy",
+    "joints are frictionless pins; members are prismatic, steel, and loaded only at their ends; displacements "
+    "are small; a member at its compression capacity is taken to hold it while the mechanism forms, which a "
+    "buckled member does not do, so the factor of a statically indeterminate truss may exceed what it carries",
+    _MAINTAINERS, "lower-bound theorem of plastic collapse (Gvozdev 1938; Neal, The Plastic Methods of Structural Analysis); "
+                  "EN 1993-1-1:2005 6.3.1.2 for the compression capacity",
+    rows=(SECTION_CLASS,),
 )
 _ELASTIC = model_spec(
     sys.modules[__name__], "truss.elastic",
     "linear elastic pin-jointed 2D truss: member forces minimise the complementary energy sum N^2 L / (E A)",
-    "joints are frictionless pins; members are prismatic, linear elastic and loaded only at "
-    "their ends; |strain| <= 0.002 in every member (checked by the small-strain bound)",
+    "joints are frictionless pins; members are prismatic, linear elastic and loaded only at their ends",
     _MAINTAINERS, "principle of minimum complementary energy; Prager and Synge (1947) hypercircle bounds",
+    rows=(BELOW_YIELD, SMALL_STRAIN),
 )
 _STABILITY = model_spec(
     sys.modules[__name__], "truss.stability",
     "linear prebuckling of a pin-jointed 2D truss, Green-strain geometric stiffness of the elastic member forces",
-    "member forces come from the linear elastic model and scale with the load factor; "
+    "member forces come from the linear elastic model at the load case and scale with the load factor; "
     "tension stiffening is ignored, which is conservative; buckling of a member between "
-    "its joints is checked separately by truss.euler",
+    "its joints is checked separately by truss.flexural_buckling",
     _MAINTAINERS, "linearised buckling eigenproblem (K + lambda K_G) of a pin-jointed truss",
+    rows=(BELOW_YIELD, SMALL_STRAIN),
 )
-_EULER = model_spec(
-    sys.modules[__name__], "truss.euler",
-    "pin-ended prismatic Euler column: compression N <= u pi^2 E I / L^2",
-    "members are straight, prismatic, pin-ended and elastic, with one second moment about "
-    "every axis (circular hollow sections), carrying the linear elastic member force; "
-    "no imperfection reduction is applied, so the bare Euler load is unconservative "
-    "against EN 1993-1-1 6.3.1 buckling curves",
-    _MAINTAINERS, "Euler (1744) critical load of a pin-ended column",
+_BUCKLING = model_spec(
+    sys.modules[__name__], "truss.flexural_buckling",
+    "flexural buckling of a pin-ended uniform member, EN 1993-1-1 6.3.1.2: compression N <= u chi A fy, "
+    "chi from the section's buckling curve, lambda^2 = A fy / N_cr, N_cr = pi^2 E I / L^2",
+    "members are straight within the EN 1090-2 tolerances the buckling curves assume, prismatic, pin-ended "
+    "(buckling length L) and steel, with one second moment about every axis (circular hollow sections), and "
+    "carry the linear elastic member force; the resistance is characteristic (gamma_M1 = 1)",
+    _MAINTAINERS, "EN 1993-1-1:2005 6.3.1.2 and Tables 6.1 and 6.2",
+    rows=(BELOW_YIELD, SMALL_STRAIN, SECTION_CLASS),
 )
 
 MODELS: Mapping[FailureMode, ModelSpec] = {
     PLASTIC_COLLAPSE: _PLASTIC,
     ELASTIC_STRESS: _ELASTIC,
     COMPLIANCE: _ELASTIC,
-    SMALL_STRAIN: _ELASTIC,
     GLOBAL_STABILITY: _STABILITY,
-    MEMBER_BUCKLING: _EULER,
+    MEMBER_BUCKLING: _BUCKLING,
 }
 
 QOIS: Mapping[str, FailureMode] = {
@@ -437,10 +474,39 @@ class _Terms:
     second_moment: Expr
     modulus: Expr
     yield_strength: Expr
+    diameter: Expr
+    thickness: Expr
+    alpha: Expr
+
+    @property
+    def squash(self) -> Expr:
+        """A fy."""
+        return Mul((self.area, self.yield_strength))
 
     @property
     def euler(self) -> Expr:
+        """N_cr = pi^2 E I / L^2."""
         return Div(Mul((PowInt(Pi(), 2), self.modulus, self.second_moment)), self.length_sq)
+
+    @property
+    def buckling_resistance(self) -> Expr:
+        """N_b = chi A fy, EN 1993-1-1:2005 6.3.1.2 (6.47, 6.49) with gamma_M1 = 1:
+        min(A fy, A fy / (Phi + sqrt(Phi^2 - lambda^2))), with lambda = sqrt(A fy / N_cr) and
+        Phi = (1 + eta + lambda^2) / 2, eta = alpha (lambda - 0.2).
+
+        Phi^2 - lambda^2 is written (Phi - lambda)(Phi + lambda), Phi -+ lambda =
+        ((lambda -+ 1)^2 + eta) / 2, so that every occurrence of lambda rises with it once
+        lambda >= 1 - alpha / 2: the kernel's interval enclosure is then exact over a range of
+        E, as R1, which encloses a capacity over the whole box, needs. Both factors are
+        positive for alpha < 3.2; Max(0, .) only keeps a wide enclosure from dipping below 0."""
+        slender = Sqrt(Div(self.squash, self.euler))
+        eta = Mul((self.alpha, Add((slender, Const(Fraction(-1, 5))))))
+        half = Const(Fraction(1, 2))
+        phi = Mul((half, Add((Const(Fraction(1)), eta, PowInt(slender, 2)))))
+        below = Mul((half, Add((PowInt(Add((slender, Const(Fraction(-1)))), 2), eta))))
+        above = Mul((half, Add((PowInt(Add((slender, Const(Fraction(1)))), 2), eta))))
+        chi_inverse = Add((phi, Sqrt(Max((Const(Fraction(0)), Mul((below, above)))))))
+        return Min((self.squash, Div(self.squash, chi_inverse)))
 
 
 def _terms(truss: Truss, sb: StatementBuilder) -> tuple[_Terms, ...]:
@@ -461,6 +527,9 @@ def _terms(truss: Truss, sb: StatementBuilder) -> tuple[_Terms, ...]:
             second_moment=sb.registry(m.section, "I"),
             modulus=sb.registry(m.material, "E"),
             yield_strength=sb.registry(m.material, "fy"),
+            diameter=sb.registry(m.section, "D"),
+            thickness=sb.registry(m.section, "t"),
+            alpha=sb.registry(m.section, "buckling_alpha"),
         ))
     return tuple(out)
 
@@ -496,6 +565,50 @@ def elastic_problem(truss: Truss, design: Design, sb: StatementBuilder, under: t
         for t in terms
     )
     return QuadraticProblem(geometry(truss).B, load_vector(truss, design, sb, under, Fraction(1)), weights)
+
+
+def _below_yield(truss: Truss, design: Design, sb: StatementBuilder, case: str) -> tuple[Statement, str]:
+    terms = _terms(truss, sb)
+    problem = elastic_problem(truss, design, sb, (case,))
+    bounds = tuple(ComponentBound(i, Div(t.length, t.squash), Const(Fraction(-1)), Const(Fraction(1))) for i, t in enumerate(terms))
+    return sb.finish(MinimizerBound(problem, bounds, None)), f"every member of {truss.name} stays below yield under load case {case}"
+
+
+def _small_strain(truss: Truss, design: Design, sb: StatementBuilder, case: str) -> tuple[Statement, str]:
+    terms = _terms(truss, sb)
+    problem = elastic_problem(truss, design, sb, (case,))
+    eps = SMALL_STRAIN_LIMIT
+    bounds = tuple(ComponentBound(i, Div(t.length, Mul((t.modulus, t.area))), Const(-eps), Const(eps)) for i, t in enumerate(terms))
+    return sb.finish(MinimizerBound(problem, bounds, None)), f"every member strain of {truss.name} stays within {_text(eps)} under load case {case}"
+
+
+def _section_class(truss: Truss, design: Design, sb: StatementBuilder, case: str) -> tuple[Statement, str]:
+    """One expression per distinct (section, material), in member order: D fy <= 90 (235 MPa) t.
+    No load enters, so every load case states the same statement."""
+    terms = _terms(truss, sb)
+    limit = Mul((sb.constant("en1993_1_1.class3_tube_limit"), sb.constant("en1993_1_1.epsilon_reference_fy")))
+    seen, exprs = set(), []
+    for m, t in zip(truss.members, terms):
+        if (m.section, m.material) not in seen:
+            seen.add((m.section, m.material))
+            exprs.append(Add((Mul((t.diameter, t.yield_strength)), Neg(Mul((limit, t.thickness))))))
+    return sb.finish(AllNonpositive(tuple(exprs))), f"every section of {truss.name} is class 3 or better in compression"
+
+
+_ROWS: Mapping[str, Callable[[Truss, Design, StatementBuilder, str], tuple[Statement, str]]] = {
+    BELOW_YIELD.id: _below_yield,
+    SMALL_STRAIN.id: _small_strain,
+    SECTION_CLASS.id: _section_class,
+}
+
+
+def _obligation(req: Requirement, model: ModelSpec, statement: Statement, describe: str, truss: Truss, design: Design, registry: Registry, case: str) -> Obligation:
+    """The obligation with one validity obligation per row of `model`, over load case `case`."""
+    validity = []
+    for row in model.rows:
+        row_statement, row_describe = _ROWS[row.id](truss, design, StatementBuilder(design, registry), case)
+        validity.append(validity_obligation(req, model, row, row_statement, row_describe))
+    return Obligation(req, statement, model, describe, tuple(validity))
 
 
 def _cases(req: Requirement, truss: Truss, design: Design) -> tuple[str, ...]:
@@ -541,48 +654,42 @@ def build_plastic_collapse(req: Requirement, truss: Truss, design: Design, regis
     for case in cases:
         sb = StatementBuilder(design, registry)
         terms = _terms(truss, sb)
-        squash = [Mul((t.area, t.yield_strength)) for t in terms]
         goal = LinearFeasible(
             A=B,
             b=load_vector(truss, design, sb, (case,), factor),
-            lower=tuple(Neg(Div(Min((p, t.euler)), t.length)) for p, t in zip(squash, terms)),
-            upper=tuple(Div(p, t.length) for p, t in zip(squash, terms)),
+            lower=tuple(Neg(Div(t.buckling_resistance, t.length)) for t in terms),
+            upper=tuple(Div(t.squash, t.length) for t in terms),
         )
         describe = f"a static field within every member's capacity carries {_text(factor)} times load case {case} on {truss.name}"
-        out.append(Obligation(req, sb.finish(goal), MODELS[PLASTIC_COLLAPSE], describe))
+        out.append(_obligation(req, MODELS[PLASTIC_COLLAPSE], sb.finish(goal), describe, truss, design, registry, case))
     return tuple(out)
 
 
 def build_elastic(req: Requirement, truss: Truss, design: Design, registry: Registry) -> tuple[Elaborated, ...]:
-    """Stress, compliance and small-strain requirements all become MinimizerBound goals
-    on elastic_problem; the small-strain bound is attached to every elastic obligation.
-    Stress is bounded in magnitude, |N| / A <= X."""
+    """Stress and compliance requirements become MinimizerBound goals on elastic_problem.
+    Stress is bounded in magnitude, |N| / A <= X. The elastic model's validity rows ride
+    beside each obligation."""
     limit = _limit(req, Rel.LE)
     if limit is None:
         return _no_rule(req, f"v0 bounds {req.mode.id} from above only")
     cases = _cases(req, truss, design)
     if not cases:
         return _unloaded(req, truss)
-    eps = limit if req.mode == SMALL_STRAIN else SMALL_STRAIN_LIMIT
     index = [m.name for m in truss.members].index(req.subject[1]) if req.mode == ELASTIC_STRESS else None
     out = []
     for case in cases:
         sb = StatementBuilder(design, registry)
         terms = _terms(truss, sb)
         problem = elastic_problem(truss, design, sb, (case,))
-        strain = tuple(
-            ComponentBound(i, Div(t.length, Mul((t.modulus, t.area))), Const(-eps), Const(eps)) for i, t in enumerate(terms)
-        )
-        bounds, energy, what = strain, None, f"every member strain of {truss.name} stays within {_text(eps)}"
         if req.mode == ELASTIC_STRESS:
             t = terms[index]
-            bounds = (ComponentBound(index, Div(t.length, t.area), Const(-limit), Const(limit)),) + strain
-            what = f"the stress magnitude in {truss.name}.{req.subject[1]} stays within {_text(limit, 'MPa')} and {what}"
-        elif req.mode == COMPLIANCE:
-            energy = Mul((Const(limit), terms[0].modulus))
-            what = f"the compliance of {truss.name} stays within {_text(limit, 'J')} and {what}"
+            bounds, energy = (ComponentBound(index, Div(t.length, t.area), Const(-limit), Const(limit)),), None
+            what = f"the stress magnitude in {truss.name}.{req.subject[1]} stays within {_text(limit, 'MPa')}"
+        else:
+            bounds, energy = (), Mul((Const(limit), terms[0].modulus))
+            what = f"the compliance of {truss.name} stays within {_text(limit, 'J')}"
         describe = f"{what} under load case {case}"
-        out.append(Obligation(req, sb.finish(MinimizerBound(problem, bounds, energy)), MODELS[req.mode], describe))
+        out.append(_obligation(req, MODELS[req.mode], sb.finish(MinimizerBound(problem, bounds, energy)), describe, truss, design, registry, case))
     return tuple(out)
 
 
@@ -617,7 +724,7 @@ def build_global_stability(req: Requirement, truss: Truss, design: Design, regis
         )
         goal = GramPositiveDefinite(len(geom.dofs), material + geometric)
         describe = f"{truss.name} stays stable in linear prebuckling for every load factor up to {_text(factor)} times load case {case}"
-        out.append(Obligation(req, sb.finish(goal), MODELS[GLOBAL_STABILITY], describe))
+        out.append(_obligation(req, MODELS[GLOBAL_STABILITY], sb.finish(goal), describe, truss, design, registry, case))
     return tuple(out)
 
 
@@ -634,9 +741,10 @@ def build_member_buckling(req: Requirement, truss: Truss, design: Design, regist
         sb = StatementBuilder(design, registry)
         terms = _terms(truss, sb)
         force = _force(truss, sb, elastic_problem(truss, design, sb, (case,)), terms, index)
-        goal = AllNonpositive((Add((Neg(force), Neg(Mul((Const(limit), terms[index].euler))))),))
-        describe = f"the compression in {truss.name}.{req.subject[1]} is at most {_text(limit)} times its Euler load under load case {case}"
-        out.append(Obligation(req, sb.finish(goal), MODELS[MEMBER_BUCKLING], describe))
+        goal = AllNonpositive((Add((Neg(force), Neg(Mul((Const(limit), terms[index].buckling_resistance))))),))
+        describe = (f"the compression in {truss.name}.{req.subject[1]} is at most {_text(limit)} times its flexural "
+                    f"buckling resistance under load case {case}")
+        out.append(_obligation(req, MODELS[MEMBER_BUCKLING], sb.finish(goal), describe, truss, design, registry, case))
     return tuple(out)
 
 
@@ -667,13 +775,11 @@ _DEFAULTS: Mapping[FailureMode, tuple[Rel, Fraction]] = {
     PLASTIC_COLLAPSE: (Rel.GE, Fraction(1)),
     GLOBAL_STABILITY: (Rel.GE, Fraction(1)),
     MEMBER_BUCKLING: (Rel.LE, Fraction(1)),
-    SMALL_STRAIN: (Rel.LE, SMALL_STRAIN_LIMIT),
 }
 
 
 def _default_criterion(mode: FailureMode, feature: Feature) -> Criterion | None:
-    """Collapse and stability factor >= 1, buckling utilisation <= 1, strain within the
-    elastic model's validity range."""
+    """Collapse and stability factor >= 1, buckling utilisation <= 1."""
     found = _DEFAULTS.get(mode)
     if found is None:
         return None
@@ -685,10 +791,9 @@ COVERAGE: tuple[CoverageRule, ...] = (
     CoverageRule(
         id="truss.frame",
         when=_is_frame,
-        demands=(PLASTIC_COLLAPSE, GLOBAL_STABILITY, SMALL_STRAIN),
+        demands=(PLASTIC_COLLAPSE, GLOBAL_STABILITY),
         default=_default_criterion,
-        note="every truss can collapse or destabilise, and its stability and buckling checks "
-             "use elastic member forces, which hold only inside the small-strain range",
+        note="every truss can collapse or destabilise",
     ),
     CoverageRule(
         id="truss.axial_member",
@@ -712,7 +817,6 @@ DOMAIN = DomainSpec(
         PLASTIC_COLLAPSE: build_plastic_collapse,
         ELASTIC_STRESS: build_elastic,
         COMPLIANCE: build_elastic,
-        SMALL_STRAIN: build_elastic,
         GLOBAL_STABILITY: build_global_stability,
         MEMBER_BUCKLING: build_member_buckling,
     },

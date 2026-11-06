@@ -12,6 +12,7 @@ template over Sym("self.<prop>"), and shared by every entry it applies to:
   bolt proof load Fp    = Sp(class) * As
   CHS area A            = (pi/4) * (D^2 - (D - 2t)^2)
   CHS second moment I   = (pi/64) * (D^4 - (D - 2t)^4)
+  CHS buckling alpha    = const.en1993_1_1.curve_c.alpha               (EN 10219 tubes: curve c)
   steel G               = E / (2 (1 + nu))
 
 A size entry (a cable size) names its series and defines the series parameters as
@@ -81,6 +82,9 @@ CHS_AREA = Derived(Mul((Div(Pi(), _n(4)), _minus(PowInt(_own("D"), 2), PowInt(_D
                    note="annulus: A = (pi/4) (D^2 - (D - 2t)^2)")
 CHS_SECOND_MOMENT = Derived(Mul((Div(Pi(), _n(64)), _minus(PowInt(_own("D"), 4), PowInt(_D_INNER, 4)))), "m4",
                             note="annulus: I = (pi/64) (D^4 - (D - 2t)^4)")
+CHS_BUCKLING_ALPHA = Derived(_c("en1993_1_1.curve_c.alpha"), "1",
+                             note="EN 1993-1-1:2005 Table 6.2: a cold-formed hollow section (EN 10219) buckles on curve c "
+                                  "about any axis, for any steel grade")
 
 CABLE_SERIES_PROPS: Mapping[str, Derived] = {
     "R20": Derived(Div(_c("cu.rho20"), _own("area")), "ohm/m",
@@ -208,6 +212,7 @@ def chs_sections() -> Mapping[str, Part]:
             "t": constant(f"en10219_2.{key}.t"),
             "A": CHS_AREA,
             "I": CHS_SECOND_MOMENT,
+            "buckling_alpha": CHS_BUCKLING_ALPHA,
         })
     return sections
 

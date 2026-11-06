@@ -17,6 +17,13 @@ point within the margin: MARGINAL beside the claim's proof, or an open item's ma
 point without one. A proof of it is the margin proved. A claim obligation whose margin
 obligation cannot be built beside it is an open item, never a silent PASS.
 
+Every obligation also carries one validity obligation per row of its model
+(models.base.ValidityRow). _Close decides each row, memoised by statement hash for the
+run, before an outcome is built: a proof of the claim counts only with every row proved
+over the box, and a refutation only with every row proved over the box or at its point
+(verdict.at_point). A row refuted there makes the claim an open item needing
+OutsideValidity; an undecided row adds its own needs.
+
 Every dispatch reads the domain registry (lola/models/__init__.py): a component's kind
 picks its lowerer, a requirement's mode picks its builder. Nothing here names a domain.
 
@@ -32,7 +39,7 @@ from __future__ import annotations
 
 import dataclasses
 from dataclasses import dataclass
-from typing import Any, Iterable, Iterator, Mapping, Protocol, get_args
+from typing import Any, Iterable, Iterator, Mapping, Protocol, Union, get_args
 
 from . import coverage
 from . import models as domains
@@ -44,10 +51,12 @@ from .models.base import (
     ComponentError,
     Elaborated,
     Gap,
+    Need,
     NeedsCertificate,
     NoModel,
     NoRuleForQuantity,
     Obligation,
+    OutsideValidity,
     RegistryInconsistent,
     Requirement,
 )
@@ -68,6 +77,7 @@ from .verdict import (
     Waived,
     WithinMargin,
     assemble,
+    at_point,
     describe_need,
     entries,
     has_margin,
@@ -208,6 +218,13 @@ def _prepare(design: Design, registry: Registry) -> _Prepared:
     return _Prepared(kept, margin_obligations(design, lowered, kept, registry), waived, warnings)
 
 
+def obligations_of(design: Design, registry: Registry) -> tuple[Elaborated, ...]:
+    """What check_design elaborates the design to, one item per requirement and load
+    case, each obligation with its validity rows: for a caller that needs the rows an
+    outcome rested on, since an open item carries only its claim's statement."""
+    return _prepare(design, registry).elaborated
+
+
 def margin_obligations(design: Design, lowered: Mapping[str, Any], elaborated: tuple[Elaborated, ...], registry: Registry) -> tuple[Obligation | str | None, ...]:
     """For each claim requirement with a margin, its builder runs again on the requirement
     with the tightened criterion. Builders are pure and read only rel and bound, so the
@@ -246,16 +263,113 @@ def check_design(design: Design, registry: Registry, sources: tuple[EvidenceSour
     for finding in check_deck(deck) if deck is not None else ():
         flagged.setdefault(finding.entry, []).append(RegistryInconsistent(finding.entry, finding.relation, finding.message))
     warnings = list(prepared.warnings)
-    outcomes = tuple(_settle(item, margin, sources, sink, flagged, warnings) for item, margin in zip(prepared.elaborated, prepared.margins))
+    decided: dict[str, Decision] = {}
+    outcomes = tuple(_settle(item, margin, sources, sink, flagged, warnings, decided) for item, margin in zip(prepared.elaborated, prepared.margins))
     outcomes += tuple(Waived(req, premise) for req, premise in prepared.waived)
     book = build_premise_book(design, registry, outcomes)
     scope = _scope(design)
     return Report(design.name, path or design.path, assemble(outcomes, book, scope), entries(outcomes, book, scope), outcomes, tuple(warnings))
 
 
-def _settle(item: Elaborated, margin: Obligation | None, sources: tuple[EvidenceSource, ...], sink: EvidenceSink | None, flagged: Mapping[str, list[RegistryInconsistent]], warnings: list[str]) -> Outcome:
+def _settle(item: Elaborated, margin: Obligation | str | None, sources: tuple[EvidenceSource, ...], sink: EvidenceSink | None, flagged: Mapping[str, list[RegistryInconsistent]], warnings: list[str], decided: dict[str, Decision]) -> Outcome:
+    """Settle one obligation: its model's validity rows first, then the claim, whose
+    outcome _Close builds with the row proofs. An open claim gains the needs of every row
+    not proved, so the report says all that stands between it and a verdict."""
     if isinstance(item, Gap):
         return open_from_gap(item)
+    close = _Close(item, sources, sink, flagged, warnings, decided)
+    outcome = _settle_claim(item, margin, close, sources, sink, flagged, warnings)
+    if isinstance(outcome, Open) and outcome.statement == item.statement:
+        named = {n.row for n in outcome.needs if isinstance(n, OutsideValidity)}
+        extra = tuple(
+            n for v, found in zip(item.validity, close.rows) if not isinstance(found, Theorem) and v.row.id not in named
+            for n in _row_needs(v, found)
+        )
+        if extra:
+            return dataclasses.replace(outcome, needs=tuple(dict.fromkeys(outcome.needs + extra)))
+    return outcome
+
+
+class _Close:
+    """Builds an obligation's Discharged, Refuted or WithinMargin outcome with the proofs
+    of its model's validity rows, each decided once over the box, or else the Open item
+    that takes its place:
+
+    - Proved, or proved and within its margin: kept when every row is proved over the
+      box.
+    - Refuted at a point: kept when every row is proved over the box or at that point
+      (verdict.at_point). A counterexample where the model does not hold is none.
+    - Otherwise open: a row refuted is OutsideValidity at the row's counterexample, or
+      at the claim's for a refuted claim; a row undecided needs what would decide it. A
+      claim proved within its margin keeps its point as the open item's margin point.
+
+    A margin point without the claim's proof (an open item's) needs no row proofs."""
+
+    def __init__(self, item: Obligation, sources: tuple[EvidenceSource, ...], sink: EvidenceSink | None, flagged: Mapping[str, list[RegistryInconsistent]], warnings: list[str], decided: dict[str, Decision]) -> None:
+        self.item = item
+        self._args = (sources, sink, flagged, warnings, decided)
+        self.rows = tuple(_decide(v, *self._args) for v in item.validity)
+
+    def __call__(self, kind: type, *fields: Any) -> Outcome:
+        item = self.item
+        if not item.validity or (kind is WithinMargin and fields[3] is None):
+            return kind(item, *fields)
+        if kind is Refuted:
+            proofs: list[Theorem] = []
+            for v, found in zip(item.validity, self.rows):
+                if not isinstance(found, Theorem):
+                    there = dataclasses.replace(v, statement=at_point(v.statement, fields[0]), describe=f"{v.describe}, at the counterexample")
+                    found = _decide(there, *self._args)
+                    if not isinstance(found, Theorem):
+                        return Open(item.requirement, _row_needs(there, found, v.statement), statement=item.statement)
+                proofs.append(found)
+            return Refuted(item, *fields, validity=tuple(proofs))
+        if all(isinstance(found, Theorem) for found in self.rows):
+            return kind(item, *fields, validity=self.rows)
+        needs = tuple(n for v, found in zip(item.validity, self.rows) if not isinstance(found, Theorem) for n in _row_needs(v, found))
+        near = WithinMargin(item, *fields[:3]) if kind is WithinMargin else None
+        return Open(item.requirement, needs, statement=item.statement, near=near)
+
+
+Decision = Union[Theorem, Refutation, tuple[Need, ...]]
+"""What the sources and the kernel made of one statement: a proof, a refutation, or what
+would decide it."""
+
+
+def _decide(item: Obligation, sources: tuple[EvidenceSource, ...], sink: EvidenceSink | None, flagged: Mapping[str, list[RegistryInconsistent]], warnings: list[str], decided: dict[str, Decision]) -> Decision:
+    """A validity obligation's decision, once per statement per check: the obligations
+    of one load case share their rows' statements."""
+    digest = statement_hash(item.statement)
+    if digest not in decided:
+        inconsistent = [need for label in _labels(item.statement, LabelKind.REGISTRY) for need in flagged.get(_registry_entry(label), ())]
+        if inconsistent:
+            decided[digest] = tuple(dict.fromkeys(inconsistent))
+        else:
+            rejected: list[tuple[Rejection, str]] = []
+            found = _first_accepted(item, sources, sink, rejected, warnings)
+            decided[digest] = found[0] if found is not None else _unsettled(item, digest, rejected)
+    return decided[digest]
+
+
+def _row_needs(row: Obligation, found: Decision, wide: Statement | None = None) -> tuple[Need, ...]:
+    """OutsideValidity for a refuted row, at the inputs its point varies over `wide`, the
+    row over the whole box (by default the refuted statement itself; for a row narrowed to
+    a counterexample, the row before narrowing, so the need names that point); else the
+    needs."""
+    if not isinstance(found, Refutation):
+        return found
+    ranges = {h.sym: h for h in (wide or found.statement).hyps if isinstance(h, RangeHyp)}
+    point = tuple((sym, str(value)) for sym, value in found.point if sym in ranges and ranges[sym].lo != ranges[sym].hi)
+    return (OutsideValidity(row.model.id, row.row.id, row.row.text, found.statement_hash, point),)
+
+
+def _unsettled(item: Obligation, digest: str, rejected: list[tuple[Rejection, str]]) -> tuple[Need, ...]:
+    if not rejected:
+        return (NeedsCertificate(digest, _rule_of(item.statement), item.describe),)
+    return tuple((CertificateTooWeak if isinstance(r.fault, TooWeak) else CertificateRejected)(r.statement_hash, r.rule, name, r.reason) for r, name in rejected)
+
+
+def _settle_claim(item: Obligation, margin: Obligation | str | None, close: _Close, sources: tuple[EvidenceSource, ...], sink: EvidenceSink | None, flagged: Mapping[str, list[RegistryInconsistent]], warnings: list[str]) -> Outcome:
     statement = item.statement
     digest = statement_hash(statement)
     inconsistent = [need for label in _labels(statement, LabelKind.REGISTRY) for need in flagged.get(_registry_entry(label), ())]
@@ -264,24 +378,21 @@ def _settle(item: Elaborated, margin: Obligation | None, sources: tuple[Evidence
     rejected: list[tuple[Rejection, str]] = []
     found = _first_accepted(item, sources, sink, rejected, warnings)
     if found is not None and isinstance(found[0], Refutation):
-        return Refuted(item, *found)
+        return close(Refuted, *found)
     near = None
     if isinstance(margin, str):
         warnings.append(f"{item.requirement.id}: its margin was not checked, because {margin}")
         return Open(item.requirement, (NoRuleForQuantity(item.requirement.id, f"its margin statement was not checked, because {margin}"),), statement=statement)
     if margin is not None:
-        settled = _at_margin(item, margin, found, sources, sink, warnings)
+        settled = _at_margin(item, margin, found, close, sources, sink, warnings)
         if not (isinstance(settled, WithinMargin) and settled.theorem is None):
             if settled is not None:
                 return settled
         else:
             near = settled
     elif found is not None:
-        return Discharged(item, *found)
-    if not rejected:
-        return Open(item.requirement, (NeedsCertificate(digest, _rule_of(statement), item.describe),), statement=statement, near=near)
-    needs = tuple((CertificateTooWeak if isinstance(r.fault, TooWeak) else CertificateRejected)(r.statement_hash, r.rule, name, r.reason) for r, name in rejected)
-    return Open(item.requirement, needs, tuple(r for r, _ in rejected), statement, near)
+        return close(Discharged, *found)
+    return Open(item.requirement, _unsettled(item, digest, rejected), tuple(r for r, _ in rejected), statement, near)
 
 
 def _first_accepted(item: Obligation, sources: tuple[EvidenceSource, ...], sink: EvidenceSink | None, rejected: list[tuple[Rejection, str]], warnings: list[str]) -> tuple[Theorem | Refutation, str] | None:
@@ -300,7 +411,7 @@ def _first_accepted(item: Obligation, sources: tuple[EvidenceSource, ...], sink:
     return None
 
 
-def _at_margin(item: Obligation, margin: Obligation, proved: tuple[Theorem, str] | None, sources: tuple[EvidenceSource, ...], sink: EvidenceSink | None, warnings: list[str]) -> Refuted | Discharged | WithinMargin | None:
+def _at_margin(item: Obligation, margin: Obligation, proved: tuple[Theorem, str] | None, close: _Close, sources: tuple[EvidenceSource, ...], sink: EvidenceSink | None, warnings: list[str]) -> Outcome | None:
     """Offer the margin statement to the sources and settle the claim obligation with
     what they return. Each candidate is tried against the claim first, at every
     expression it can name (_against_claim): a refutation there is a FAIL, and a proof
@@ -320,20 +431,20 @@ def _at_margin(item: Obligation, margin: Obligation, proved: tuple[Theorem, str]
             result, used = _against_claim(claim, evidence)
             if isinstance(result, Refutation):
                 _record(sink, claim, claim_digest, used, source.name, item.requirement, warnings)
-                return Refuted(item, result, source.name)
+                return close(Refuted, result, source.name)
             if isinstance(result, Theorem) and proved is None:
                 _record(sink, claim, claim_digest, used, source.name, item.requirement, warnings)
                 proved = (result, source.name)
             result = check(statement, evidence)
             if isinstance(result, Refutation):
                 _record(sink, statement, digest, evidence, source.name, margin.requirement, warnings)
-                return WithinMargin(item, margin, result, source.name, None if proved is None else proved[0])
+                return close(WithinMargin, margin, result, source.name, None if proved is None else proved[0])
             if isinstance(result, Theorem) and margin_theorem is None:
                 _record(sink, statement, digest, evidence, source.name, margin.requirement, warnings)
                 margin_theorem = result
             if proved is not None and margin_theorem is not None:
-                return Discharged(item, *proved, margin, margin_theorem)
-    return None if proved is None else Discharged(item, *proved, margin, margin_theorem)
+                return close(Discharged, *proved, margin, margin_theorem)
+    return None if proved is None else close(Discharged, *proved, margin, margin_theorem)
 
 
 _MAX_WHICH = 256
@@ -428,7 +539,10 @@ def build_premise_book(design: Design, registry: Registry, outcomes: tuple[Outco
         elif isinstance(outcome, (Discharged, Refuted, WithinMargin)):
             premises.append(outcome.obligation.model.premise())
             result = outcome.theorem if isinstance(outcome, Discharged) else outcome.refutation
-            premises += [_registry_premise(registry, label) for label in _labels(result.statement, LabelKind.REGISTRY)]
+            for statement in (result.statement, *(v.statement for v in outcome.obligation.validity)):
+                premises += [_registry_premise(registry, label) for label in _labels(statement, LabelKind.REGISTRY)]
+            if isinstance(outcome, WithinMargin) and outcome.theorem is not None:
+                premises += [_registry_premise(registry, label) for label in _labels(outcome.theorem.statement, LabelKind.REGISTRY)]
         elif isinstance(outcome, Open) and outcome.near is not None:
             premises.append(outcome.near.margin.model.premise())
             premises += [_registry_premise(registry, label) for label in _labels(outcome.near.refutation.statement, LabelKind.REGISTRY)]
@@ -511,6 +625,8 @@ def explain(design: Design, registry: Registry) -> str:
             lines += [f"  needs  {describe_need(n)}" for n in item.needs]
             continue
         lines += _statement_lines(f"obligation {item.requirement.id}", item)
+        for v in item.validity:
+            lines += _statement_lines(f"  validity {v.row.id}: {v.row.text}", v, "  ")
         if isinstance(margin, Obligation):
             moved = readable_text(margin.requirement.criterion.bound)
             lines += _statement_lines(f"  margin obligation, the bound moved to {moved}", margin, "  ")

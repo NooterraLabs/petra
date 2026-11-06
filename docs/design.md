@@ -26,33 +26,35 @@ python -m lola check examples/truss_pass.lola
 warren-footbridge-panel: PASS
 entries    strength PASS, stability PASS, stress PASS, coverage PASS
 scope      load cases crowd; environment indoor_dry; no parameters
-checked    11 obligations, 11 certified, 0 refuted, 0 waived, 0 open
-  frame/truss.plastic_collapse                 claim strength               R1  certified  solver  sha256:16af..
-  frame/truss.global_stability                 claim stability              R2  certified  solver  sha256:2a8a..
-  frame.diag_ad/truss.elastic_stress           claim stress                 R3  certified  solver  sha256:78ad..
-  frame/truss.small_strain                     coverage truss.frame         R3  certified  solver  sha256:5872..
-  frame.bottom_ab/truss.member_buckling        coverage truss.axial_member  R4  certified  solver  sha256:0486..
-  frame.bottom_bc/truss.member_buckling        coverage truss.axial_member  R4  certified  solver  sha256:90a5..
-  frame.top_de/truss.member_buckling           coverage truss.axial_member  R4  certified  solver  sha256:0482..
-  frame.diag_ad/truss.member_buckling          coverage truss.axial_member  R4  certified  solver  sha256:eab2..
-  frame.diag_db/truss.member_buckling          coverage truss.axial_member  R4  certified  solver  sha256:2972..
-  frame.diag_be/truss.member_buckling          coverage truss.axial_member  R4  certified  solver  sha256:c9d0..
-  frame.diag_ec/truss.member_buckling          coverage truss.axial_member  R4  certified  solver  sha256:bc2f..
-footprint  24 premises
-  certified        cert:sha256:0482.. and 10 more   kernel-checked in this run
-  sanctioned       reg:const.en10219_2.60_3x3_2.D   CHS 60.3 x 3.2 has outside diameter 60.3 mm   (CEN; EN 10219-2:...
-  sanctioned       reg:const.en10219_2.60_3x3_2.t   CHS 60.3 x 3.2 has wall thickness 3.2 mm   (CEN; EN 10219-2:200...
-  sanctioned       reg:const.en10219_2.76_1x3_2.D   CHS 76.1 x 3.2 has outside diameter 76.1 mm   (CEN; EN 10219-2:...
-  sanctioned       reg:const.en10219_2.76_1x3_2.t   CHS 76.1 x 3.2 has wall thickness 3.2 mm   (CEN; EN 10219-2:200...
-  sanctioned       reg:const.steel.E   the elastic modulus of structural steel lies in [200, 210] GPa   (CEN; EN 19...
-  sanctioned       reg:steel.S355.fy   steel.S355.fy 355000000 Pa, minimum upper yield strength ReH, nominal thickn...
-  validated_model  model:truss.elastic@798e..   linear elastic pin-jointed 2D truss: member forces minimise the com...
-  validated_model  model:truss.euler@798e..   pin-ended prismatic Euler column: compression N <= u pi^2 E I / L^2;...
-  validated_model  model:truss.plastic@798e..   rigid-perfectly-plastic pin-jointed 2D truss, static (lower-bound)...
-  validated_model  model:truss.stability@798e..   linear prebuckling of a pin-jointed 2D truss, Green-strain geomet...
-  assumed          in:warren-footbridge-panel.crowd.frame.D.fy   crowd.frame.D.fy in [-24000, -16000] N   (client.s...
-  assumed          in:warren-footbridge-panel.crowd.frame.E.fy   crowd.frame.E.fy in [-24000, -16000] N   (client.s...
-  judged           cov:2ed9..   every failure mode a v0 design must address is demanded by one of galvanic.contact,...
+checked    10 obligations, 10 certified, 0 refuted, 0 waived, 0 open
+  frame/truss.plastic_collapse                 claim strength               R1  certified  solver  sha256:aa44..  validity 1 proved
+  frame/truss.global_stability                 claim stability              R2  certified  solver  sha256:2a8a..  validity 2 proved
+  frame.diag_ad/truss.elastic_stress           claim stress                 R3  certified  solver  sha256:238a..  validity 2 proved
+  frame.bottom_ab/truss.member_buckling        coverage truss.axial_member  R4  certified  solver  sha256:8fbc..  validity 3 proved
+  frame.bottom_bc/truss.member_buckling        coverage truss.axial_member  R4  certified  solver  sha256:cfe6..  validity 3 proved
+  frame.top_de/truss.member_buckling           coverage truss.axial_member  R4  certified  solver  sha256:775d..  validity 3 proved
+  frame.diag_ad/truss.member_buckling          coverage truss.axial_member  R4  certified  solver  sha256:a1e9..  validity 3 proved
+  frame.diag_db/truss.member_buckling          coverage truss.axial_member  R4  certified  solver  sha256:05e1..  validity 3 proved
+  frame.diag_be/truss.member_buckling          coverage truss.axial_member  R4  certified  solver  sha256:00ec..  validity 3 proved
+  frame.diag_ec/truss.member_buckling          coverage truss.axial_member  R4  certified  solver  sha256:f0fd..  validity 3 proved
+footprint  29 premises
+  certified        cert:sha256:00ec.. and 12 more   kernel-checked in this run
+  sanctioned       reg:const.en10219_2.60_3x3_2.D   CHS 60.3 x 3.2 has outside diameter 60.3 mm   (CEN; EN 10219-2:20...
+  sanctioned       reg:const.en10219_2.60_3x3_2.t   CHS 60.3 x 3.2 has wall thickness 3.2 mm   (CEN; EN 10219-2:2006,...
+  sanctioned       reg:const.en10219_2.76_1x3_2.D   CHS 76.1 x 3.2 has outside diameter 76.1 mm   (CEN; EN 10219-2:20...
+  sanctioned       reg:const.en10219_2.76_1x3_2.t   CHS 76.1 x 3.2 has wall thickness 3.2 mm   (CEN; EN 10219-2:2006,...
+  sanctioned       reg:const.en1993_1_1.class3_tube_limit   a tube is class 3 or better in compression when d / t <= ...
+  sanctioned       reg:const.en1993_1_1.curve_c.alpha   buckling curve c has imperfection factor 0.49   (CEN; EN 1993...
+  sanctioned       reg:const.en1993_1_1.epsilon_reference_fy   the slenderness limits of EN 1993-1-1 Table 5.2 scale ...
+  sanctioned       reg:const.steel.E   the elastic modulus of structural steel lies in [200, 210] GPa   (CEN; EN 1993...
+  sanctioned       reg:steel.S355.fy   steel.S355.fy 355000000 Pa, minimum upper yield strength ReH, nominal thicknes...
+  validated_model  model:truss.elastic@b49e..   linear elastic pin-jointed 2D truss: member forces minimise the compl...
+  validated_model  model:truss.flexural_buckling@b49e..   flexural buckling of a pin-ended uniform member, EN 1993-1-...
+  validated_model  model:truss.plastic@b49e..   rigid-perfectly-plastic pin-jointed 2D truss, static (lower-bound) th...
+  validated_model  model:truss.stability@b49e..   linear prebuckling of a pin-jointed 2D truss, Green-strain geometri...
+  assumed          in:warren-footbridge-panel.crowd.frame.D.fy   crowd.frame.D.fy in [-24000, -16000] N   (client.str...
+  assumed          in:warren-footbridge-panel.crowd.frame.E.fy   crowd.frame.E.fy in [-24000, -16000] N   (client.str...
+  judged           cov:d668..   every failure mode a v0 design must address is demanded by one of galvanic.contact, t...
 ```
 
 The report has one entry per claim and one entry named `coverage` for the requirements no claim made (coverage rules and port contracts). The design's verdict is the conjunction of the entries. `--json` prints the same report as data:
@@ -234,7 +236,7 @@ claim stability:  frame.stability_factor >= 3 under crowd
 claim stress:     frame.member(diag_ad).stress <= 235 MPa under crowd
 ```
 
-A hand calculation gives the margins. At factor 1.5 the end diagonal carries 45 kN of compression against an Euler load of about 78 kN (CHS 60.3x3.2, I = 23.5 cm4, L = 2.5 m). With the rev C load of 60 kN it needs 112.5 kN, which fails.
+A hand calculation gives the margins. At factor 1.5 the end diagonal carries 45 kN of compression against an EN 1993-1-1 flexural buckling resistance of 54.7 kN (CHS 60.3x3.2, L = 2.5 m, curve c, relative slenderness 1.66, reduction factor 0.27, at E = 200 GPa). The bare Euler load would be 74.1 kN. With the rev C load of 60 kN it needs 112.5 kN, which fails.
 
 **Wire circuits** (`circuit_pass.lola`, expected PASS, two obligations reused from the family).
 
@@ -341,7 +343,7 @@ Five types carry the whole design, and two registries say which rules and which 
 2. **`kernel.Hyp`** is either `RangeHyp(sym, lo, hi, label)` or `DefinedHyp(sym, definition)`. The label is an opaque string to the kernel. Outside the kernel it names a premise (`reg:`, `in:`), a scope parameter (`par:`) or a drawn design value (`dsg:`).
 3. **`kernel.Evidence`** (`lola/kernel/evidence.py`) holds only what a solver chose: feasible points, an LDL factor, hypercircle fields, a split tree, dual multipliers, or a counterexample point. The body types are declared by the rule modules. Evidence never holds a matrix or an expression from the model.
 4. **`kernel.Theorem` and `kernel.Refutation`** are issued, not constructed. Each is a bare handle with no fields. Its data lives in a kernel-private table keyed by the handle's identity, and `kernel.is_issued(x)` is true only for a handle `check` returned. Calling the class raises, `object.__new__` gives a handle with no record, assignment (even `object.__setattr__`) has nothing to change, and copy, deepcopy, pickle and `dataclasses.replace` raise. `tests/test_seal.py` tries each one. A theorem exposes the statement, its hash, the rule, and `labels`, the exact set of hypothesis labels it rests on.
-5. **`verdict.Pass | Fail | Unknown | Marginal`** (`lola/verdict.py`). `Pass` takes a `Scope`, a non-empty `Footprint` and a non-empty tuple of issued theorems whose every label resolves to a footprint premise, a scope parameter or the design itself. `Fail` takes an issued `Refutation` of the obligation's own statement. `Marginal` takes at least one `WithinMargin` item, an issued `Refutation` of a claim's margin statement together with the claim's own theorem, and the `Scope` those theorems hold over. `Unknown` takes at least one `Open` item, and each `Open` names at least one typed `Need` (`lola/models/base.py`): `NeedsCertificate`, `CertificateRejected`, `CertificateTooWeak`, `NeedsInputBound`, `NoRuleForQuantity`, `NoModel` or `RegistryInconsistent`. An `Open` for a claim with a margin may also carry `near`, a `WithinMargin` without a theorem: the point within the margin found while the claim was neither proved nor refuted. A gym agent acts on the variant, and a report prints it.
+5. **`verdict.Pass | Fail | Unknown | Marginal`** (`lola/verdict.py`). `Pass` takes a `Scope`, a non-empty `Footprint` and a non-empty tuple of issued theorems whose every label resolves to a footprint premise, a scope parameter or the design itself. `Fail` takes an issued `Refutation` of the obligation's own statement, and a theorem for each validity row of its model, over the box or at the refutation's point. `Marginal` takes at least one `WithinMargin` item, an issued `Refutation` of a claim's margin statement together with the claim's own theorem, and the `Scope` those theorems hold over. `Unknown` takes at least one `Open` item, and each `Open` names at least one typed `Need` (`lola/models/base.py`): `NeedsCertificate`, `CertificateRejected`, `CertificateTooWeak`, `NeedsInputBound`, `NoRuleForQuantity`, `NoModel`, `RegistryInconsistent` or `OutsideValidity`. An `Open` for a claim with a margin may also carry `near`, a `WithinMargin` without a theorem: the point within the margin found while the claim was neither proved nor refuted. A gym agent acts on the variant, and a report prints it.
 
 The rule registry is `lola/kernel/rules/__init__.py`. Each rule module ends with `RULE = RuleSpec(...)`, which names its goal, evidence and lemma types, their JSON tags, and its check functions. `_REGISTERED` lists the six specs, and `RULES`, `GOAL_RULE`, `PROOF_RULE`, `REFUTATION_RULE`, `LEMMAS`, the rule part of `codec.TAGS`, and `MODULE_OF` are derived from it. The solver for a rule is the module of the same name under `lola/solvers/`.
 
@@ -374,6 +376,7 @@ A reader traces any verdict in three files: the elaborator that built the statem
 9. **One registration per concept, and every table is derived.** A rule is one `RuleSpec` in `kernel/rules/_REGISTERED`, and a domain is one `DomainSpec` in `models/_REGISTERED`. Each `_index` refuses a registry that would make a table ambiguous: a type, tag, kind or mode claimed twice, a spec naming an untagged type, or a domain reaching a mode it does not declare. A failure mode is declared once, by the domain that owns it, and waivers name it by id. The typing aliases (`Goal`, `ProofEvidence`, `QuantityDef` and the rest) stay for readers. `tests/test_structure.py` fails when an alias and the registry disagree, `tests/test_domain_registry.py` does the same for domains, and `tests/test_solver_registry.py` for solver modules (per model-the-domain and encode-lessons-in-structure).
 10. **A margin is a second statement, not a tolerance inside a rule.** `claim NAME: QOI <= B margin m` keeps the claim's statement as it was and adds one built by the same builder from the requirement with its bound at B - m (`Criterion.tightened`). Builders read only the relation and the bound, so they need no change, and the kernel sees two ordinary statements. FAIL is a refutation of the claim. Every margin witness is tried against the claim too, at every expression of its goal, so a point past the bound is never reported as merely within the margin. MARGINAL is a proof of the claim plus a refutation of the margin statement. PASS is a proof of the claim with no point found within the margin, and the report says whether the margin statement was proved as well ("margin proved") or not ("margin undecided"). A certificate that proves the margin statement proves the claim, whose goal is weaker, so the pipeline accepts it for both. A point within the margin without the claim's proof is UNKNOWN, with the point shown. Such a point says nothing about the rest of the box, and MARGINAL must not rate a claim that may fail elsewhere above UNKNOWN. This makes a claim decidable at tolerance m in the sense of Gao, Avigad and Clarke's delta-decidability. A peak at least m inside the bound leaves slack m, which a fine enough partition proves: PASS. A peak past the bound is refuted: FAIL. A peak strictly between B - m and B leaves the claim some slack and the margin search a point: MARGINAL. Only a peak exactly on B, or an exhausted budget, leaves UNKNOWN, and the report then shows the margin point; otherwise UNKNOWN is left for missing premises and missing models. `verdict.WithinMargin` and `verdict.Discharged` check that the margin obligation is the claim's own requirement at its own tightened bound, over the same model, with the same goal type and the same hypotheses. A builder that states its margin any other way gives the claim an open item, "margin not checked", and a warning, never a silent PASS.
 11. **An envelope is a search over checks, not a new kind of proof.** `lola envelope` (`lola/envelope.py`, untrusted) replaces one input's range with a probe interval and calls `check_design`. A claim holds for all values in its ranges, so a PASS over an interval is a PASS over every interval inside it, and whether [anchor, x] passes is monotone in x even when the physics is not. Bisection on x therefore finds the end of the proved interval within the resolution. A counterexample or margin point at input value v blocks every interval holding v, so growth stops there at once. The answer is a PASS the pipeline assembled, so the envelope adds nothing to the trusted base. The search is bounded: at most `--max-probes` checks (default 64), split between the two sides with the anchor and the confirming check reserved, and no bisection finer than 1/2^20 of the probe range. The report notes a raised resolution and a side that stopped at the limit. The exit code is the worse of the anchor's status and the status of the obligations that do not depend on the input, so a design that fails elsewhere never exits 0 from `lola envelope`.
+12. **A model's numeric validity limits are statements the kernel checks, not text.** A `ModelSpec` lists its limits as `ValidityRow`s, each an inequality over the same quantities as the claim: |N|/(A fy) <= 1 for a linear-elastic member, |N|/(E A) <= 0.002 for small strain, and D fy <= 90 t 235 MPa for a class 3 tube. Every obligation carries one validity obligation per row of its model, built over the same hypotheses and load case, with mode `validity.<row>` and no criterion. A row is a separate statement, not a conjunct of the claim's goal, so each proof stays one rule and one certificate, and a row shared by several obligations of one load case is solved once per run, keyed by its statement hash. `Discharged` and `WithinMargin` need a theorem of every row over the whole box, so a PASS or MARGINAL never rests on a model used outside the range its rows state. A proof of the claim alone cannot carry a PASS: the claim could hold only because the model is wrong where it is used. `Refuted` needs each row proved over the box or at the refutation's point. `verdict.at_point` narrows every range hypothesis the refutation assumes to its value there, and leaves the rest at full range, so a FAIL is a counterexample at which the model holds, even when a row fails elsewhere in the box. A row refuted at the point gives UNKNOWN with `OutsideValidity`, which names the model, the row and the point; an undecided row gives its own needs. The pipeline takes the first counterexample the sources offer and does not search for another where the rows hold, so a claim whose first counterexample lies outside the model's range reads UNKNOWN with that point, even when a valid counterexample exists elsewhere in the box. The kernel never learns what a row means. Validity lives in the elaborators and the pipeline, and the kernel checks ordinary statements. A limit not yet stated as a row is listed in `ModelSpec.unchecked`, and the premise text prints it as "not checked: ...". `tests/test_validity.py` fails when a model's validity text states a numeric limit in words.
 
 ### Where validation lives
 
@@ -384,6 +387,8 @@ Validation happens at three boundaries and nowhere else (per boundary-discipline
 - A PASS needs issued theorems, a `Scope` and a non-empty `Footprint`, enforced by constructor checks and the kernel seal. Every theorem label must resolve.
 - An UNKNOWN needs at least one open item, and an open item needs at least one typed `Need`, so an UNKNOWN never says only "unknown".
 - `Discharged` and `Refuted` require the kernel result's statement to equal the obligation's statement.
+- An obligation's validity obligations are exactly its model's rows, in order, each over the same model with the obligation's requirement in the row's mode (`Obligation.__post_init__`). A validity obligation has no rows of its own.
+- `Discharged`, and `WithinMargin` with a theorem, need an issued theorem of each row's statement, in order. `Refuted` and `Fail` need one of each row's statement or of the row at the refutation's point (`verdict._validity_bound`). A footprint lists the premises the row proofs used.
 - A margin obligation must be the claim's requirement with its criterion tightened by its own margin, over the same model, with the same goal type and the same hypothesis names in order (`verdict.margin_pair_fault`). `WithinMargin` and `Discharged` both check this. `WithinMargin` also requires its refutation's statement to equal the margin obligation's, and any theorem it carries to be the claim's own. `Discharged` refuses a claim with a margin but no margin obligation, and a margin theorem must prove the margin statement.
 - `Marginal` and `assemble` refuse a `WithinMargin` without the claim's theorem, so a MARGINAL always rests on a proof of the claim. A point without one travels as `Open.near`, which must be a theorem-less `WithinMargin` for the open item's own requirement and statement.
 - A `Footprint` holds premises sorted by label, each label once.
@@ -605,6 +610,7 @@ An operator that can leave a certificate valid, such as scaling a Farkas ray by 
 - We accept rational node coordinates in exchange for exact equilibrium. A 60-degree truss must be drawn with a rational approximation, and the verdict is about the truss as drawn. Geometric tolerances are not modelled in v0.
 - We accept that a family certifies its claims only, without coverage, in exchange for families that work as reusable lemmas across designs that differ in breakers and terminals.
 - We accept a coverage table that is one judged premise in exchange for saying plainly that what can go wrong is an engineering judgement.
+- We accept an extra kernel check per validity row, about a third more checking time on the test suite, in exchange for PASS and FAIL that never rest on a model used outside its range. A claim whose model leaves its range somewhere in the box now reads UNKNOWN where it used to read PASS. A FAIL needs the rows only at its own point, so a design is not excused by a row that fails elsewhere.
 
 ## Alternatives considered
 
@@ -620,7 +626,13 @@ An operator that can leave a certificate valid, such as scaling a Farkas ray by 
 ## Open questions and risks
 
 - Should the front end and pipeline appear in the footprint, for example as a `validated_model` premise "lola-language v0 semantics", so the footprint lists all trusted code and not only the elaborators?
-- Should truss compression capacity use the EN 1993-1-1 buckling-curve reduction (a sanctioned premise) rather than the bare Euler load? Euler without an imperfection knock-down is unconservative against codes. The change is one Expr in `truss.py`.
+- The plastic collapse model lets a buckled compression member keep its buckling resistance while the truss redistributes. That holds for a determinate truss, and is unconservative for an indeterminate one whose buckled members shed load. Should the plastic model take a row "the truss is statically determinate", or cap compression members at their post-buckling resistance?
+- A counterexample search that respects the rows would turn some of these UNKNOWNs into FAILs. On loads of 100 to 170 kN the solver refutes a 250 MPa stress claim at the 170 kN corner, past yield, so the claim reads UNKNOWN, although 130 kN refutes it where the member is elastic. The R3 refuter could search the box with the rows as constraints, or the pipeline could retry with the box cut at the row's boundary. Which is worth it?
+- A statically determinate truss's member forces follow from statics alone, so they stay exact past yield, and the below-yield and small-strain rows are needed only for elastic forces in an indeterminate truss. As built, a determinate truss loaded past yield gives UNKNOWN on its member-buckling obligations rather than FAIL. Plastic collapse still fails it unless that mode is waived. Should the elastic rows depend on determinacy?
+- EN 1993-1-1 5.6 asks for class 1 sections where plastic analysis needs members to redistribute load. The plastic model checks class 3, which is enough for members that carry axial load only and redistribute nothing they cannot hold at their buckling resistance. Should it check class 1?
+- The stability model's rows are checked at load factor 1. A claim of a stability factor below 1 can then read UNKNOWN on a row the claimed load never reaches.
+- The truss rows do not yet state EN 1090 erection tolerances, the partial factor (gamma_M1 is taken as 1), or whether the class 3 row should apply to tension members, which cannot buckle locally. The 0.002 small-strain limit is the maintainers' choice, not a code value. Who owns those choices?
+- The adiabatic fault model still needs "the fault is cleared within 5 s" as a row, but no breaker operating time is in the registry, so it is listed as not checked. Should breaker curves become sanctioned premises?
 - Should wire resistance come from resistivity over nominal area, as the frame says, or from the IEC 60228 maximum resistance, which is the value the standard guarantees? The consistency checker relates the two either way.
 - Should a FAIL that rests on a point admitted only by a spec range (yield at its guaranteed minimum) be reported differently from a FAIL at an owner-signed load corner? Both are refutations relative to premises, but they read differently to an owner.
 - When a claim and a coverage default address the same mode on the same subject, is "keep the stricter, keep both if incomparable" the rule the owner expects?

@@ -390,17 +390,19 @@ THERMAL = model_spec(
     _MODULE, "wire.thermal",
     "steady heat balance of one PVC-insulated copper conductor: insulation T1 plus surface-to-air T4 = 1/(pi D h), "
     "conductor resistance linear in temperature",
-    "steady state; one cable clipped direct in still air with no grouping or solar gain; a alpha < 1 (checked); "
-    "the wire carries its consumer's current",
+    "steady state; one cable clipped direct in still air with no grouping or solar gain; no thermal runaway, "
+    "which the statement itself checks; the wire carries its consumer's current",
     _MAINTAINERS, "IEC 60287-1-1 and IEC 60287-2-1 heat balance; IEC 60364-4-43:2008 433.1 overload conditions",
 )
 ADIABATIC = model_spec(
     _MODULE, "wire.adiabatic",
     "adiabatic short-circuit heating I2t <= k^2 S^2, k from IEC 60949 between theta_max and theta_sc; the breaker's "
     "let-through I2t at its rated breaking capacity bounds every fault up to that capacity",
-    "fault cleared within 5 s with no heat lost to the insulation; the conductor starts at theta_max; an "
+    "no heat is lost to the insulation during the fault; the conductor starts at theta_max; an "
     "energy-limiting breaker",
     _MAINTAINERS, "IEC 60949:1988; IEC 60364-4-43:2008 434.5.2",
+    unchecked=("the fault is cleared within 5 s (IEC 60364-4-43:2008 434.5.2); no breaker operating time is in the "
+               "registry, so nothing states it",),
 )
 DROP = model_spec(
     _MODULE, "wire.drop",

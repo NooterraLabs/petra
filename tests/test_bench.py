@@ -13,20 +13,27 @@ reaction at A is R_A = 0.75 P_D + 0.25 P_E, and the 2.5 m end diagonal (directio
 (1.5, 2) / 2.5) carries N_ad = -R_A / 0.8 = -(0.9375 P_D + 0.3125 P_E). At the worst
 vertex, P_D = P_E = P, that is 1.25 P of compression.
     CHS 60.3x3.2  A = pi/4 (60.3^2 - 53.9^2) = 574.03 mm2,  I = pi/64 (60.3^4 - 53.9^4) = 23.468 cm4
-    Euler load over 2.5 m at E = 200 GPa (the low end of steel's 200 to 210 GPa):
-        pi^2 E I / L^2 = 74.119 kN,  below A fy = 203.78 kN, so it is the compression capacity
-    collapse factor at the worst vertex = 74.119 / (1.25 P):
-        P = 39 kN   1.5204  (the shipped box)
-        P = 39.5 kN 1.5011
-        P = 39.6 kN 1.4974
-        P = 40 kN   1.4824
-so the strength claim's box edge is P = 74.119 / (1.5 x 1.25) = 39.53 kN per node. The
-other claims hold with room at P = 39 kN: |N_ad| / A = 84.9 MPa against 235 MPa, and a
+    over 2.5 m at E = 200 GPa (the low end of steel's 200 to 210 GPa, where capacity is least):
+        N_cr = pi^2 E I / L^2 = 74.119 kN,  A fy = 203.78 kN
+    EN 1993-1-1 6.3.1.2, curve c (alpha = 0.49):
+        lambda = sqrt(203.78 / 74.119) = 1.6581,  Phi = (1 + 0.49 (1.6581 - 0.2) + 1.6581^2) / 2 = 2.2319
+        chi = 1 / (Phi + sqrt(Phi^2 - lambda^2)) = 0.2684,  N_b = chi A fy = 54.692 kN,
+        the compression capacity
+    collapse factor at the worst vertex = 54.692 / (1.25 P):
+        P = 29 kN   1.5088  (the shipped box)
+        P = 29.1 kN 1.5036
+        P = 29.2 kN 1.4984
+        P = 30 kN   1.4585
+so the strength claim's box edge is P = 54.692 / (1.5 x 1.25) = 29.17 kN per node. The
+bare Euler load, which v0 used before the buckling curve, put it at 39.53 kN. The
+other claims hold with room at P = 29 kN: |N_ad| / A = 63.2 MPa against 235 MPa, and a
 float eigen-check of K + lambda K_G (tension stiffening dropped, as the statement does)
-puts global instability at a factor of about 670 against the claimed 3. The other
-members at factor 1.5: the top chord carries 1.5 x 0.375 (P_D + P_E) = 43.9 kN against
-its 107.0 kN Euler load (CHS 76.1x3.2 over 3 m), the bottom chord 43.9 kN of tension
-against 203.8 kN, and the inner diagonals 1.5 x 0.3125 |P_D - P_E| <= 18.3 kN.
+puts global instability far above the claimed 3. The other members at factor 1.5: the
+top chord carries 1.5 x 0.375 (P_D + P_E) = 32.6 kN against its 77.0 kN buckling
+resistance (CHS 76.1x3.2 over 3 m), the bottom chord 32.6 kN of tension against
+203.8 kN, and the inner diagonals 1.5 x 0.3125 |P_D - P_E| <= 13.6 kN. Every member stays
+below yield and far inside the 0.002 strain limit, and both sections are class 1
+(D / t = 18.8 and 23.8 against 90 x 235 / 355 = 59.6), so each validity row holds.
 
 Solver calls per truss query, from the solvers' own algorithms over a box with two load
 symbols, so 2^2 = 4 vertices: strength (R1) runs one HiGHS LP and one exact repair per
@@ -51,7 +58,7 @@ CABLE_CLAIMS = len(("hot", "drop"))
 TRUSS_CLAIMS = len(("strength", "stability", "stress"))
 MEMBERS = 7
 VERTICES = 2 ** len(("load_d", "load_e"))
-TRUSS_BOX = "[-39 kN, 0 kN]"
+TRUSS_BOX = "[-29 kN, 0 kN]"
 
 
 def edited(family: bench.Family, old: str, new: str, root: str) -> bench.Family:
@@ -183,14 +190,14 @@ class TrussBoxEdge(unittest.TestCase):
             return certify_family(load_design(family.path, REGISTRY), REGISTRY, Library(root)).skipped
 
     def test_the_shipped_box_certifies_every_claim(self):
-        self.assertEqual(self.certify("39"), (), "collapse factor 1.5204 at the worst vertex, stress 84.9 MPa, instability near 670")
+        self.assertEqual(self.certify("29"), (), "collapse factor 1.5088 at the worst vertex, stress 63.2 MPa")
 
     def test_the_box_edge_sits_where_the_hand_check_puts_it(self):
-        self.assertEqual(self.certify("39.5"), (), "1.5011 at 39.5 kN is within the claimed 1.5")
-        (skipped,) = self.certify("39.6")
-        self.assertIn("claim.strength", skipped, "only strength fails at 39.6 kN (1.4974 by hand)")
+        self.assertEqual(self.certify("29.1"), (), "1.5036 at 29.1 kN is within the claimed 1.5")
+        (skipped,) = self.certify("29.2")
+        self.assertIn("claim.strength", skipped, "only strength fails at 29.2 kN (1.4984 by hand)")
         self.assertIn("refuted by R1", skipped, "the solver finds a collapse mechanism")
-        for at in ("load_d = -39600", "load_e = -39600", "const.steel.E = 200000000000"):
+        for at in ("load_d = -29200", "load_e = -29200", "const.steel.E = 200000000000"):
             self.assertIn(at, skipped, f"at the hand check's worst vertex: {at}")
 
 

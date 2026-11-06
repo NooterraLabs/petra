@@ -38,12 +38,12 @@ import dataclasses
 from dataclasses import dataclass
 from fractions import Fraction
 from types import MappingProxyType
-from typing import Iterable
+from typing import Iterable, Mapping
 
 from .ir import Bound, Design, Input, InputKind, Signature, Span
 from .kernel import Interval, RangeHyp, Statement
-from .models.base import ComponentError
-from .pipeline import EvidenceSource, Report, check_design, lower_components, signed_inputs
+from .models.base import ComponentError, Obligation
+from .pipeline import EvidenceSource, Report, check_design, lower_components, obligations_of, signed_inputs
 from .premises import input_label, param_label
 from .registry import Registry
 from .units import Dim, Quantity, quantity_text, si_unit
@@ -222,6 +222,10 @@ def envelope(
         step = finest
 
     probes: list[Probe] = []
+    try:
+        reach = _row_reach(design, registry)
+    except ComponentError:
+        reach = {}
 
     def probe(x: Fraction, y: Fraction) -> Probe:
         try:
@@ -229,14 +233,14 @@ def envelope(
         except ComponentError as exc:
             p = Probe(x, y, "INVALID", "; ".join(exc.problems), None, None)
         else:
-            p = Probe(x, y, *_assess(report.outcomes, target.label), report)
+            p = Probe(x, y, *_assess(report.outcomes, target.label, reach), report)
         probes.append(p)
         return p
 
     start = probe(anchor, anchor)
-    if start.report is not None and not any(_depends(o, target.label) for o in start.report.outcomes):
+    if start.report is not None and not any(_depends(o, target.label, reach) for o in start.report.outcomes):
         raise EnvelopeError(f"no obligation of {design.name} depends on {name}")
-    elsewhere, elsewhere_open = _elsewhere(() if start.report is None else start.report.outcomes, target.label)
+    elsewhere, elsewhere_open = _elsewhere(() if start.report is None else start.report.outcomes, target.label, reach)
     if start.status != "PASS":
         return Envelope(target, a, b, anchor, step, start, None, None, None, elsewhere, elsewhere_open, tuple(probes), max_probes, tuple(notes))
     budget = max_probes - 2
@@ -291,17 +295,42 @@ def _statement(outcome: Outcome) -> Statement | None:
     return outcome.statement if isinstance(outcome, Open) else None
 
 
-def _depends(outcome: Outcome, label: str) -> bool:
+Reach = Mapping[tuple[str, frozenset[str]], frozenset[str]]
+"""The labels an obligation's validity rows range over, keyed by `_key`."""
+
+
+def _key(requirement_id: str, statement: Statement) -> tuple[str, frozenset[str]]:
+    """An obligation by its requirement and the labels its own statement ranges over,
+    which name its load case and stay the same when a probe narrows a range."""
+    return requirement_id, frozenset(h.label for h in statement.hyps if isinstance(h, RangeHyp))
+
+
+def _row_reach(design: Design, registry: Registry) -> dict[tuple[str, frozenset[str]], frozenset[str]]:
+    found: dict[tuple[str, frozenset[str]], frozenset[str]] = {}
+    for item in obligations_of(design, registry):
+        if isinstance(item, Obligation):
+            key = _key(item.requirement.id, item.statement)
+            rows = frozenset(h.label for v in item.validity for h in v.statement.hyps if isinstance(h, RangeHyp))
+            found[key] = found.get(key, frozenset()) | rows
+    return found
+
+
+def _depends(outcome: Outcome, label: str, reach: Reach) -> bool:
+    """Whether the input can change the outcome: its claim's statement, or one of the
+    validity rows it rests on, ranges over the input."""
     statement = _statement(outcome)
-    return statement is not None and any(isinstance(h, RangeHyp) and h.label == label for h in statement.hyps)
+    if statement is None:
+        return False
+    key = _key(_id(outcome), statement)
+    return label in key[1] or label in reach.get(key, ())
 
 
-def _assess(outcomes: Iterable[Outcome], label: str) -> tuple[str, str, Fraction | None]:
+def _assess(outcomes: Iterable[Outcome], label: str, reach: Reach) -> tuple[str, str, Fraction | None]:
     """(status, why, the input's value at its point) over the outcomes that depend on the
     input: the first outcome of the most severe status."""
     worst: Outcome | None = None
     for o in outcomes:
-        if _depends(o, label) and (worst is None or SEVERITY[_STATUS[type(o)]] > SEVERITY[_STATUS[type(worst)]]):
+        if _depends(o, label, reach) and (worst is None or SEVERITY[_STATUS[type(o)]] > SEVERITY[_STATUS[type(worst)]]):
             worst = o
     if worst is None:
         return "PASS", "", None
@@ -312,14 +341,14 @@ def _assess(outcomes: Iterable[Outcome], label: str) -> tuple[str, str, Fraction
         return status, f"{worst.requirement.id} is neither proved nor refuted", None
     refutation = worst.near.refutation if isinstance(worst, Open) else worst.refutation
     point = dict(refutation.point)
-    sym = next(h.sym for h in refutation.statement.hyps if isinstance(h, RangeHyp) and h.label == label)
+    sym = next((h.sym for h in refutation.statement.hyps if isinstance(h, RangeHyp) and h.label == label), None)
     what = ("is refuted" if isinstance(worst, Refuted) else "is proved and comes within its margin" if isinstance(worst, WithinMargin)
             else "is neither proved nor refuted, and comes within its margin")
-    return status, f"{_id(worst)} {what} at this point", point[sym]
+    return status, f"{_id(worst)} {what} at this point", None if sym is None else point[sym]
 
 
-def _elsewhere(outcomes: Iterable[Outcome], label: str) -> tuple[str, tuple[str, ...]]:
-    rest = [o for o in outcomes if not isinstance(o, Waived) and not _depends(o, label)]
+def _elsewhere(outcomes: Iterable[Outcome], label: str, reach: Reach) -> tuple[str, tuple[str, ...]]:
+    rest = [o for o in outcomes if not isinstance(o, Waived) and not _depends(o, label, reach)]
     if not rest:
         return "NONE", ()
     status = max((_STATUS[type(o)] for o in rest), key=SEVERITY.__getitem__)

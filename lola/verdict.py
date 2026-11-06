@@ -6,15 +6,20 @@ Construction rules, enforced in __post_init__ so an illegal verdict cannot exist
   labels to the design itself, every other label to a footprint premise. Theorems are
   sealed by the kernel (lola/kernel/check.py), so a Pass cannot be built from claims, a
   copied theorem or an altered one.
-- Fail needs an issued Refutation of the obligation's own statement, and a footprint
-  that names every premise the refuted statement rests on.
+- Fail needs an issued Refutation of the obligation's own statement, a theorem for each
+  validity row of its model (over the box, or at the refutation's point: at_point), and
+  a footprint that names every premise the refuted statement and those theorems rest on.
 - Unknown needs at least one Open item, and every Open item names at least one typed
   Need (lola/models/base.py), so "UNKNOWN" always says what would close it.
 - Marginal needs at least one WithinMargin outcome, each carrying the claim's own
   theorem, and a footprint that names every premise each of their refutations rests on,
   as a Fail's does, and every premise each of its theorems rests on, as a Pass's does.
 - Discharged and Refuted bind the kernel result to the obligation: the issued result's
-  statement must equal the obligation's statement. A Discharged claim with a margin
+  statement must equal the obligation's statement. Each also carries one issued theorem
+  per validity obligation (models.base.ValidityRow), in order: Discharged and a
+  WithinMargin with a theorem over the whole box, Refuted over the box or at the
+  refutation's point (_validity_bound). A model used outside its validity range proves
+  and refutes nothing. A Discharged claim with a margin
   carries its margin obligation, and the margin statement's theorem when it was proved.
 - WithinMargin binds an issued Refutation to the margin obligation, and the margin
   obligation to the claim's (margin_pair_fault): same model, same goal type, the same
@@ -75,6 +80,7 @@ from .models.base import (
     NoModel,
     NoRuleForQuantity,
     Obligation,
+    OutsideValidity,
     RegistryInconsistent,
     Requirement,
 )
@@ -110,6 +116,41 @@ def _bound_to(result: object, kind: type, obligation: Obligation) -> None:
 
 def _hyp_names(statement: Statement) -> tuple[str, ...]:
     return tuple(h.label if isinstance(h, RangeHyp) else h.sym for h in statement.hyps)
+
+
+def at_point(statement: Statement, refutation: Refutation) -> Statement:
+    """`statement` with each RangeHyp narrowed to the value the refutation's point gives
+    the hypothesis of the same label, where that value lies in its range. A hypothesis
+    the refutation does not assume keeps its range, so a theorem of the result holds at
+    the point for every value of it: the validity of a model at its counterexample."""
+    labels = {h.sym: h.label for h in refutation.statement.hyps if isinstance(h, RangeHyp)}
+    value = {labels[sym]: v for sym, v in refutation.point}
+    hyps = tuple(
+        RangeHyp(h.sym, value[h.label], value[h.label], h.label)
+        if isinstance(h, RangeHyp) and h.label in value and h.lo <= value[h.label] <= h.hi else h
+        for h in statement.hyps
+    )
+    return Statement(hyps, statement.goal)
+
+
+def _validity_bound(obligation: Obligation, theorems: object, refutation: Refutation | None = None) -> None:
+    """Every validity obligation of `obligation` proved, in its order: a theorem
+    kernel.check issued for its statement, or, beside a refutation, for its statement at
+    the refutation's point (`at_point`). A model used outside its validity range proves
+    and refutes nothing, so no outcome that rests on it can be built without these."""
+    if not isinstance(theorems, tuple):
+        raise TypeError("validity proofs are a tuple of theorems")
+    if len(theorems) != len(obligation.validity):
+        raise ValueError(
+            f"{obligation.requirement.id} rests on model {obligation.model.id}, whose {len(obligation.validity)} "
+            f"validity rows each need a proof; {len(theorems)} given"
+        )
+    for theorem, row in zip(theorems, obligation.validity):
+        if type(theorem) is not Theorem or not is_issued(theorem):
+            raise TypeError("a validity proof is a Theorem kernel.check issued")
+        allowed = (row.statement,) if refutation is None else (row.statement, at_point(row.statement, refutation))
+        if theorem.statement not in allowed:
+            raise ValueError(f"the proof offered for {row.requirement.mode.id} is for another statement")
 
 
 def margin_pair_fault(obligation: object, margin: object) -> str | None:
@@ -156,9 +197,11 @@ class Discharged:
     source: str            # "certs", "library", "solver:<name>": where the evidence came from
     margin: Obligation | None = None
     margin_theorem: Theorem | None = None
+    validity: tuple[Theorem, ...] = ()   # one proof per validity obligation, in order
 
     def __post_init__(self) -> None:
         _bound_to(self.theorem, Theorem, self.obligation)
+        _validity_bound(self.obligation, self.validity)
         if self.margin is None:
             if has_margin(self.obligation.requirement):
                 raise ValueError("a claim with a margin is discharged with its margin obligation, so the report can say whether the margin was checked")
@@ -179,12 +222,17 @@ class Discharged:
 
 @dataclass(frozen=True)
 class Refuted:
+    """`validity` proves each validity obligation over the whole box or at the
+    refutation's point, so the counterexample lies where the model holds."""
+
     obligation: Obligation
     refutation: Refutation
     source: str
+    validity: tuple[Theorem, ...] = ()
 
     def __post_init__(self) -> None:
         _bound_to(self.refutation, Refutation, self.obligation)
+        _validity_bound(self.obligation, self.validity, self.refutation)
 
 
 @dataclass(frozen=True)
@@ -200,11 +248,15 @@ class WithinMargin:
     refutation: Refutation
     source: str
     theorem: Theorem | None = None
+    validity: tuple[Theorem, ...] = ()   # with a theorem: one proof per validity obligation
 
     def __post_init__(self) -> None:
         _bound_to(self.refutation, Refutation, self.margin)
         if self.theorem is not None:
             _bound_to(self.theorem, Theorem, self.obligation)
+            _validity_bound(self.obligation, self.validity)
+        elif self.validity:
+            raise ValueError("an open item's margin point carries no validity proofs")
         _paired(self.obligation, self.margin)
 
 
@@ -301,12 +353,15 @@ class Fail:
     obligation: Obligation
     refutation: Refutation
     footprint: Footprint
+    validity: tuple[Theorem, ...] = ()
 
     def __post_init__(self) -> None:
         _bound_to(self.refutation, Refutation, self.obligation)
+        _validity_bound(self.obligation, self.validity, self.refutation)
         if not isinstance(self.footprint, Footprint):
             raise TypeError("a Fail needs a Footprint")
-        _resolved(frozenset(l for l in self.refutation.labels if label_kind(l) is not LabelKind.PARAM), self.footprint, None)
+        for result in (self.refutation, *self.validity):
+            _resolved(frozenset(l for l in result.labels if label_kind(l) is not LabelKind.PARAM), self.footprint, None)
 
 
 @dataclass(frozen=True)
@@ -448,15 +503,17 @@ def assemble(outcomes: tuple[Outcome, ...], book: PremiseBook, scope: Scope) -> 
         first = refuted[0]
         premises = _witnessed(book, first.refutation)
         premises += [first.obligation.model.premise(), table_premise(), _certified(first.refutation)]
-        return Fail(first.obligation, first.refutation, _footprint(premises))
+        premises += _validity_premises(book, first.obligation, first.validity)
+        return Fail(first.obligation, first.refutation, _footprint(premises), first.validity)
     discharged = [o for o in outcomes if isinstance(o, Discharged)]
     premises = [table_premise(), *(o.waiver for o in outcomes if isinstance(o, Waived))]
     for d in discharged:
         premises += [entry for _, entry in _backing(book, d.theorem.statement) if isinstance(entry, Premise)]
         premises += [d.obligation.model.premise(), _certified(d.theorem)]
+        premises += _validity_premises(book, d.obligation, d.validity)
         if d.margin_theorem is not None:
             premises.append(_certified(d.margin_theorem))
-    theorems = tuple(d.theorem for d in discharged)
+    theorems = _distinct(t for d in discharged for t in (d.theorem, *d.validity))
     still_open = tuple(o for o in outcomes if isinstance(o, Open))
     if still_open:
         for o in still_open:
@@ -469,8 +526,29 @@ def assemble(outcomes: tuple[Outcome, ...], book: PremiseBook, scope: Scope) -> 
             premises += _witnessed(book, n.refutation) + [n.margin.model.premise(), _certified(n.refutation)]
             premises += [entry for _, entry in _backing(book, n.theorem.statement) if isinstance(entry, Premise)]
             premises.append(_certified(n.theorem))
-        return Marginal(near, _footprint(premises), theorems + tuple(n.theorem for n in near), scope)
+            premises += _validity_premises(book, n.obligation, n.validity)
+        return Marginal(near, _footprint(premises), _distinct((*theorems, *(t for n in near for t in (n.theorem, *n.validity)))), scope)
     return Pass(scope, _footprint(premises), theorems)
+
+
+def _validity_premises(book: PremiseBook, obligation: Obligation, theorems: tuple[Theorem, ...]) -> list[Premise]:
+    """What the validity proofs rest on. A proof at a counterexample's point narrows only
+    labels the counterexample assumes, whose point `_witnessed` has checked against the
+    book, so the ranges are checked against each validity obligation's own statement."""
+    premises: list[Premise] = []
+    for row, theorem in zip(obligation.validity, theorems):
+        premises += [entry for _, entry in _backing(book, row.statement) if isinstance(entry, Premise)]
+        premises.append(_certified(theorem))
+    return premises
+
+
+def _distinct(theorems: Iterable[Theorem]) -> tuple[Theorem, ...]:
+    """Theorems in order, each statement once: obligations of one load case share
+    their validity proofs."""
+    seen: dict[str, Theorem] = {}
+    for t in theorems:
+        seen.setdefault(t.statement_hash, t)
+    return tuple(seen.values())
 
 
 def _entry_name(outcome: Outcome) -> str:
@@ -524,12 +602,16 @@ def describe_need(need: Need) -> str:
             return f'no model for {need.mode.id} on {subject}: waive {need.mode.id} on {subject} by "<owner>" reason "<why>"'
         case RegistryInconsistent():
             return f"registry entry {need.entry} breaks {need.relation}: {need.message}; correct the record"
+        case OutsideValidity():
+            point = ", ".join(f"{sym} = {value}" for sym, value in need.point) or "a point of the scope"
+            return (f"model {need.model} is used outside its validity range: {need.row} ({need.text}) is refuted at "
+                    f"{point}, statement {need.statement_hash}; narrow the signed inputs, change the design, or use a model valid there")
     raise TypeError(f"{need!r} is not a typed Need")
 
 
 def _results(verdict: Verdict) -> tuple[Theorem | Refutation, ...]:
     if isinstance(verdict, Fail):
-        return (verdict.refutation,)
+        return (verdict.refutation, *verdict.validity)
     if isinstance(verdict, Marginal):
         return verdict.theorems + tuple(n.refutation for n in verdict.near)
     return verdict.theorems
@@ -597,6 +679,9 @@ def _outcome_row(outcome: Outcome) -> str:
             what = f"--  waived by {outcome.waiver.owner}"
         case _:
             what = "--  open, margin point found" if outcome.near is not None else "--  open"
+    proofs = getattr(outcome, "validity", ())
+    if proofs:
+        what += f"  validity {len(proofs)} proved"
     name = f"{'.'.join(req.subject)}/{req.mode.id}"
     return f"{name:<44} {origin:<28} {what}"
 

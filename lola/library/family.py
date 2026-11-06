@@ -3,9 +3,11 @@
 A family is a .lola design with `param` ranges. Certifying it elaborates the family's
 claims only: coverage belongs to a concrete design, not to a reusable lemma, so the
 cu_pvc family need not name a breaker. Each claim statement is self-contained, so each
-proved claim becomes its own FamilyEntry, including one with a certified point within its
-margin, which is also listed in `near`; a claim that is not proved stores nothing and is
-listed in `skipped`. The solver sees each claim's margin statement too, so a family's
+proved claim becomes its own FamilyEntry, including one with a certified point within
+its margin, which is also listed in `near`. Each validity row the claim was proved with
+becomes an entry too, so an instance shows that its model holds as well as its claim. A
+claim that is not proved stores nothing and is listed in `skipped`, with the reason: a
+refuted claim names its counterexample, at which the solver also proves the rows. The solver sees each claim's margin statement too, so a family's
 margins are checked as a design's are. The kernel checked every stored entry in this
 run.
 A reuse is an Instance of the entry, so the kernel checks the entry again once per
@@ -28,7 +30,7 @@ from ..pipeline import Report, check_design, elaborate, lower_components, margin
 from ..registry import Registry
 from ..solvers import SolverSource
 from ..verdict import Discharged, Open, Refuted, Waived, WithinMargin, describe_need
-from .store import FamilyEntry, Library, family_entry
+from .store import FamilyEntry, Library, family_entry, shape_hash
 
 
 @dataclass(frozen=True)
@@ -62,11 +64,19 @@ def certify_family(design: Design, registry: Registry, library: Library) -> Fami
     wanted = frozenset(
         statement_hash(s.statement)
         for pair in _with_margins(design, registry)
-        for s in pair
-        if isinstance(s, Obligation)
+        for o in pair
+        if isinstance(o, Obligation)
+        for s in (o, *o.validity)
+    )
+    rows = frozenset(
+        shape_hash(v.statement)
+        for pair in _with_margins(design, registry)
+        for o in pair
+        if isinstance(o, Obligation)
+        for v in o.validity
     )
     accepted = _Accepted()
-    report = check_design(design, registry, (_ClaimsOnly(wanted, SolverSource()),), sink=accepted, path=design.path)
+    report = check_design(design, registry, (_ClaimsOnly(wanted, rows, SolverSource()),), sink=accepted, path=design.path)
     stored: list[FamilyEntry] = []
     skipped: list[str] = []
     near: list[str] = []
@@ -76,9 +86,13 @@ def certify_family(design: Design, registry: Registry, library: Library) -> Fami
             continue
         if isinstance(outcome, (Discharged, WithinMargin)):
             obligation = outcome.obligation
-            entry = family_entry(obligation.statement, accepted.evidence[outcome.theorem.statement_hash], (obligation.model.premise().label,))
-            library.add(entry)
-            stored.append(entry)
+            model = (obligation.model.premise().label,)
+            proved = ((obligation.statement, outcome.theorem), *((v.statement, t) for v, t in zip(obligation.validity, outcome.validity)))
+            for statement, theorem in proved:
+                entry = family_entry(statement, accepted.evidence[theorem.statement_hash], model)
+                library.add(entry)
+                if entry not in stored:
+                    stored.append(entry)
             if isinstance(outcome, WithinMargin):
                 near.append(f"{requirement.id}: proved, and within its margin of the bound by {outcome.refutation.rule} at {_point(outcome.refutation)}")
         else:
@@ -102,16 +116,21 @@ def _why(outcome: Refuted | Open | Waived) -> str:
 
 
 class _ClaimsOnly:
-    """The solver, for the claim statements and their margin statements only."""
+    """The solver, for the claim statements, their margin statements and their validity
+    rows only. A row narrowed to a claim's counterexample (verdict.at_point) has a row's
+    shape with a narrower box, so a refuted claim is a FAIL here as in its design."""
 
     name = "solver"
 
-    def __init__(self, wanted: frozenset[str], solver: SolverSource) -> None:
+    def __init__(self, wanted: frozenset[str], rows: frozenset[str], solver: SolverSource) -> None:
         self.wanted = wanted
+        self.rows = rows
         self.solver = solver
 
     def offer(self, statement: Statement, statement_hash: str) -> Iterable[Evidence]:
-        return self.solver.offer(statement, statement_hash) if statement_hash in self.wanted else ()
+        if statement_hash in self.wanted or shape_hash(statement) in self.rows:
+            return self.solver.offer(statement, statement_hash)
+        return ()
 
 
 class _Accepted:

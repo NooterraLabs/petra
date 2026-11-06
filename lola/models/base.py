@@ -53,12 +53,44 @@ CROSS_DOMAIN_UNMODELLED: frozenset[FailureMode] = frozenset({GALVANIC_CORROSION}
 
 
 @dataclass(frozen=True)
+class ValidityRow:
+    """One limit of a model's validity range that an inequality over the design can state,
+    such as "every member stays below yield". A model's limits are either rows, which the
+    kernel decides, or words in ModelSpec.validity, which it cannot: a number in the
+    words would be a limit nobody checks (tests/test_validity.py refuses one).
+
+    Every obligation that rests on the model carries one validity obligation per row
+    (Obligation.validity), stated by the same elaborator over the same load case and
+    inputs. The pipeline decides each like any statement, and a verdict that uses the
+    model needs them proved (verdict.py)."""
+
+    id: str        # "truss.elastic.below_yield"
+    text: str      # "|N_i| / A_i <= fy_i in every member"
+    source: str    # where the limit comes from
+
+    @property
+    def mode(self) -> FailureMode:
+        """The mode of this row's validity requirements: "validity.<id>"."""
+        return FailureMode(f"{VALIDITY_PREFIX}{self.id}")
+
+
+VALIDITY_PREFIX = "validity."
+"""Every validity requirement's mode id starts with this; no failure mode's does."""
+
+
+@dataclass(frozen=True)
 class ModelSpec:
     """The validated_model premise for one elaborator function.
 
     `source_hash` is the sha256 of the elaborator module's source text, computed at import
     by `model_spec`, so editing the physics changes the premise label, the family key, and
     every footprint that relies on it.
+
+    `validity` is what the model assumes and no inequality over the design states, in
+    words. `rows` are the limits that one does, each checked as a validity obligation.
+    `unchecked` are numeric limits the model has that no row states yet, such as a
+    breaker's clearing time the registry does not hold: the premise prints them as not
+    checked, so a footprint never hides a limit nobody checked.
     """
 
     id: str                 # "truss.plastic"
@@ -67,21 +99,31 @@ class ModelSpec:
     owner: str
     source: str             # standard or textbook the form comes from
     source_hash: str
+    rows: tuple[ValidityRow, ...] = ()
+    unchecked: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        ids = [r.id for r in self.rows]
+        if len(set(ids)) != len(ids):
+            raise ValueError(f"model {self.id} names a validity row twice")
 
     def premise(self) -> Premise:
+        checked = "; checked: " + "; ".join(r.text for r in self.rows) if self.rows else ""
+        unchecked = "; not checked: " + "; ".join(self.unchecked) if self.unchecked else ""
         return Premise(
             Label(f"model:{self.id}@{self.source_hash}"),
             Tag.VALIDATED_MODEL,
             self.owner,
             self.source,
-            f"{self.form}; valid when {self.validity}",
+            f"{self.form}; valid when {self.validity}{checked}{unchecked}",
         )
 
 
-def model_spec(module: ModuleType, id: str, form: str, validity: str, owner: str, source: str) -> ModelSpec:
+def model_spec(module: ModuleType, id: str, form: str, validity: str, owner: str, source: str,
+               rows: tuple[ValidityRow, ...] = (), unchecked: tuple[str, ...] = ()) -> ModelSpec:
     """Build a ModelSpec whose source_hash covers the module's source text."""
     source_hash = hashlib.sha256(inspect.getsource(module).encode("utf-8")).hexdigest()[:16]
-    return ModelSpec(id, form, validity, owner, source, source_hash)
+    return ModelSpec(id, form, validity, owner, source, source_hash, rows, unchecked)
 
 
 # --- Requirements -------------------------------------------------------------
@@ -246,6 +288,21 @@ class RegistryInconsistent:
     message: str
 
 
+@dataclass(frozen=True, slots=True)
+class OutsideValidity:
+    """The model an obligation rests on is used outside its validity range: the kernel
+    refuted validity row `row` of `model` at `point`, so what the model says there, proof
+    or counterexample, says nothing about the design. Narrower signed inputs, another
+    design, or a model valid there closes it. `point` gives each hypothesis symbol its
+    exact value, as text."""
+
+    model: str
+    row: str
+    text: str
+    statement_hash: str
+    point: tuple[tuple[str, str], ...]
+
+
 Need = Union[
     NeedsCertificate,
     CertificateRejected,
@@ -254,6 +311,7 @@ Need = Union[
     NoRuleForQuantity,
     NoModel,
     RegistryInconsistent,
+    OutsideValidity,
 ]
 GapNeed = Union[NeedsInputBound, NoRuleForQuantity, NoModel]
 """The needs an elaborator can report. The others come from evidence and the deck."""
@@ -264,10 +322,54 @@ GapNeed = Union[NeedsInputBound, NoRuleForQuantity, NoModel]
 
 @dataclass(frozen=True)
 class Obligation:
+    """A statement to decide and the model it rests on. `validity` holds one validity
+    obligation per row of the model, in the model's order, built by `validity_obligation`
+    over the same load case; a validity obligation states a row of its own model and has
+    no rows of its own. Construction refuses anything else, so no obligation can rest on
+    a model while leaving one of its rows unstated. What a row's statement says is the
+    elaborator's, trusted like the claim's statement."""
+
     requirement: Requirement
     statement: Statement
     model: ModelSpec
     describe: str          # one sentence for reports: what the statement means physically
+    validity: tuple["Obligation", ...] = ()
+
+    def __post_init__(self) -> None:
+        if self.requirement.mode.id.startswith(VALIDITY_PREFIX):
+            if self.validity:
+                raise ValueError(f"{self.requirement.id}: a validity obligation has no validity rows of its own")
+            if self.row is None:
+                raise ValueError(f"{self.requirement.id}: {self.requirement.mode.id} is not a validity row of model {self.model.id}")
+            return
+        if tuple(v.requirement.mode for v in self.validity) != tuple(r.mode for r in self.model.rows):
+            raise ValueError(
+                f"{self.requirement.id}: model {self.model.id} has validity rows "
+                f"{[r.id for r in self.model.rows]}, so the obligation states one validity obligation for each, in order"
+            )
+        for v, row in zip(self.validity, self.model.rows):
+            if v.model != self.model or v.requirement != validity_requirement(self.requirement, row):
+                raise ValueError(f"{self.requirement.id}: its validity obligation for {row.id} is not over the same model and requirement")
+
+    @property
+    def row(self) -> ValidityRow | None:
+        """For a validity obligation, the row it states; else None."""
+        return next((r for r in self.model.rows if r.mode == self.requirement.mode), None)
+
+
+def validity_requirement(requirement: Requirement, row: ValidityRow) -> Requirement:
+    """The requirement of `row`'s validity obligation beside an obligation for
+    `requirement`: the same subject, origin and load cases, the row's mode, no criterion."""
+    return dataclasses.replace(requirement, mode=row.mode, criterion=None, qoi=None)
+
+
+def validity_obligation(requirement: Requirement, model: ModelSpec, row: ValidityRow, statement: Statement, describe: str) -> Obligation:
+    """The validity obligation for `row` beside an obligation for `requirement` resting
+    on `model`. The elaborator states `statement` over the same load case and inputs as
+    the obligation it sits beside."""
+    if row not in model.rows:
+        raise ValueError(f"{row.id} is not a validity row of model {model.id}")
+    return Obligation(validity_requirement(requirement, row), statement, model, describe)
 
 
 @dataclass(frozen=True)
