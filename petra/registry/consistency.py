@@ -48,6 +48,7 @@ from typing import Callable, Mapping
 from ..kernel import Add, Const, Div, Expr, Interval, KernelArithmeticError, Ln, Mul, Neg, Pi, PowInt, Sqrt, Sym, enclose, free_syms
 from .deck import Deck, DeckRecord, provenance_problem
 from .model import render
+from .steel import steel_relations
 
 _PREMISE_KEY = re.compile(r"[A-Za-z0-9_]+(\.[A-Za-z0-9_]+)+")
 
@@ -161,7 +162,9 @@ RELATIONS: tuple[Relation, ...] = (
     Relation("thread.pitch_diameter_coefficient", "const.iso724", _rec("d2_coefficient"),
              _const_expr(Mul((_n(Fraction(3, 8)), Sqrt(_n(3))))), Fraction(1, 10**6)),
     Relation("thread.stress_area_table", "const.iso261.", _rec("As_table"), _stress_area, Fraction(1, 200)),
-)
+) + steel_relations(Relation)
+"""The steel deck's relations (bolt holes, pretensions, bolt-group stresses, W-shape
+areas and weights) come from registry/steel.py, which documents each."""
 
 
 def check_deck(deck: Deck, relations: tuple[Relation, ...] = RELATIONS) -> tuple[Finding, ...]:

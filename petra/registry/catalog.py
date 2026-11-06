@@ -25,6 +25,7 @@ from fractions import Fraction
 from typing import Mapping
 
 from ..kernel import Add, Const, Div, Expr, Ln, Mul, Neg, Pi, PowInt, Sqrt, Sym
+from .steel import steel_constants, steel_materials
 from .constants import CABLE_SIZES, CHS_SIZES, CONSTANTS, MCB_RATINGS, STATED, THREADS, chs_key
 from .model import (
     Corrosivity,
@@ -125,9 +126,9 @@ BREAKER_PROPS: Mapping[str, Derived] = {
 def build_registry() -> Registry:
     """The default makeable set. Pure; same output every call."""
     return Registry(
-        constants=CONSTANTS,
+        constants={**CONSTANTS, **steel_constants()},
         materials={**structural_steels(), **aluminium_alloys(), **conductors_and_insulation(), **fastener_steels(),
-                   **coating_surfaces()},
+                   **coating_surfaces(), **steel_materials()},
         parts={**chs_sections(), **cables(), **breakers(), **terminals(), **metric_bolts()},
         processes=processes(),
         environments=environments(),

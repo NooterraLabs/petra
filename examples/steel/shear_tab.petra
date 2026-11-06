@@ -1,0 +1,31 @@
+petra 0
+
+# A conventional single-plate shear connection: a W18x50 beam framing into the flange of
+# a W14x90 column through a 3/8 in A36 plate, four 3/4 in Group 120 bolts (threads in the
+# shear plane), the plate fillet-welded to the column both sides. Coverage demands every
+# limit state the kind carries; each is checked over the signed reaction range.
+
+design "steel-shear-tab" {
+  owner "s.engineer@example.org"
+}
+
+shear_tab st1 {
+  basis lrfd
+  beam W18x50 grade steel.A992
+  support W14x90 flange grade steel.A992
+  plate steel.A36 thickness 0.375 inch
+  bolts bolt_group.120 diameter 0.75 inch threads included
+  rows 4
+  pitch 3 inch
+  edge_vertical 1.5 inch
+  plate_edge 1.5 inch
+  bolt_line 3 inch
+  beam_edge 1.75 inch
+  top 3 inch
+  weld electrode.E70 size 0.25 inch sides 2
+}
+
+load gravity {
+  on st1 shear in [0 kip, 45 kip]
+  signed "s.engineer@example.org" source "beam reaction, LRFD 1.2D + 1.6L, calc SC-3"
+}
