@@ -392,6 +392,29 @@ FACTORS: tuple[_F, ...] = (
 )
 
 
+STOCK_PLATES: tuple[str, ...] = (
+    "3/16", "1/4", "5/16", "3/8", "7/16", "1/2", "9/16", "5/8",
+    "3/4", "7/8", "1", "1-1/8", "1-1/4", "1-3/8", "1-1/2",
+    "1-3/4", "2", "2-1/4", "2-1/2", "2-3/4", "3",
+)
+"""The shop deck's plate thicknesses in inches: sixteenths to 5/8, eighths to 1-1/2,
+quarters to 3. A plate, stiffener or seat of another thickness is outside the makeable set."""
+
+STOCK_PLATE = "shop_deck.plate."
+
+
+def stock_plate_id(size: str) -> str:
+    """ "1-1/8" -> "shop_deck.plate.t1_1_8" """
+    return STOCK_PLATE + "t" + size.replace("-", "_").replace("/", "_")
+
+
+def _stock_constants() -> list[Constant]:
+    return [Constant(stock_plate_id(t), _iv(_q(t) * INCH), "m", JUDGED, MAINTAINERS,
+                     f"{MANUAL} Part 1 (plate availability): the shop deck stocks plates in 1/16 in steps to 5/8 in, "
+                     f"1/8 in to 1-1/2 in, 1/4 in to 3 in, a judged list; {RECALLED}", f"plate {t} in is stocked")
+            for t in STOCK_PLATES]
+
+
 def _factor_constants() -> list[Constant]:
     rows = []
     for name, text, unit, tag, owner, source in FACTORS:
@@ -404,7 +427,7 @@ def _factor_constants() -> list[Constant]:
 # --- Assembly ----------------------------------------------------------------------------
 
 def steel_constants() -> dict[str, Constant]:
-    rows = [*_bolt_constants(), *_factor_constants(), *shape_constants().values()]
+    rows = [*_bolt_constants(), *_factor_constants(), *_stock_constants(), *shape_constants().values()]
     table = {c.name: c for c in rows}
     if len(table) != len(rows):
         raise RuntimeError("a steel constant is defined twice")

@@ -293,46 +293,83 @@ def panel_zone(fy: Expr, dc: Expr, tw: Expr, pr: Expr, py: Expr, factor: Expr) -
 
 # --- Manual methods ---------------------------------------------------------------------------
 
-def cope_fcr(e: Expr, nu: Expr, fy: Expr, tw: Expr, ho: Expr, cope_length: Expr, d: Expr) -> Expr:
-    """Manual Part 9, flexural local buckling of a beam web coped at the top flange
-    (Cheng, Yura and Johnson 1988): Fcr = [pi^2 E / (12 (1 - nu^2))] (tw/ho)^2 f k <= Fy,
-    f = 2c/d for c/d <= 1, 1 + c/d above; k = 2.2 (ho/c)^1.65 for c/ho <= 1, 2.2 ho/c
-    above. (The Manual's 26,210 ksi is the bracket with E = 29,000 ksi and nu = 0.3.)
-    Each branch pair is joined with min or max, which is exact: f = min(2x, 1 + x) with
-    x = c/d, because 2x <= 1 + x exactly when x <= 1; k = max(2.2 y^1.65, 2.2 y) with
-    y = ho/c, because y^1.65 >= y exactly when y >= 1. Valid for c <= 2d and dc <= d/2
-    (validity rows)."""
-    plate = Div(mul(sq(Pi()), e), mul(c(12), sub(c(1), sq(nu))))
+def tee_moduli(hc: Expr, tw: Expr, bf: Expr, tf: Expr) -> tuple[Expr, Expr]:
+    """(Sc, Zc) of the tee a top cope leaves: the web, tw thick, and the bottom flange,
+    bf by tf, hc deep in all, fillets neglected (the section Manual Tables 9-2a and 9-2b
+    tabulate). Sc is the elastic modulus to the cope edge, the tee's far fibre.
+
+    The plastic neutral axis lies at y = max(A / (2 bf), tf + (A/2 - Af) / tw) above the
+    flange's outer face: the first is right when the flange holds half the area, the
+    second when it does not, and in each case it is the larger, because bf > tw. With
+    m = min(y, tf) and n = max(y, tf), Zc = bf (m^2 + (tf - m)^2) / 2 + bf tf max(0, y - tf)
+    + tw ((n - tf)^2 + (hc - n)^2) / 2 + tw (hc - tf) max(0, tf - y), which is the first
+    moment of area about y in either case."""
+    h = sub(hc, tf)
+    af, aw = mul(bf, tf), mul(tw, h)
+    area = add(af, aw)
+    ybar = Div(add(mul(af, Div(tf, c(2))), mul(aw, add(tf, Div(h, c(2))))), area)
+    inertia = add(Div(mul(bf, PowInt(tf, 3)), c(12)), mul(af, sq(sub(ybar, Div(tf, c(2))))),
+                  Div(mul(tw, PowInt(h, 3)), c(12)), mul(aw, sq(sub(add(tf, Div(h, c(2))), ybar))))
+    sc = Div(inertia, sub(hc, ybar))
+    half = Div(area, c(2))
+    y = Max((Div(half, bf), add(tf, Div(sub(half, af), tw))))
+    m, n = Min((y, tf)), Max((y, tf))
+    zc = add(Div(mul(bf, add(sq(m), sq(sub(tf, m)))), c(2)), mul(bf, tf, Max((c(0), sub(y, tf)))),
+             Div(mul(tw, add(sq(sub(n, tf)), sq(sub(hc, n)))), c(2)), mul(tw, h, Max((c(0), sub(tf, y)))))
+    return sc, zc
+
+
+def cope_k1(hc: Expr, cope_length: Expr, d: Expr) -> Expr:
+    """Manual Eqs 9-14, 9-19 and 9-20: k1 = f k >= 1.61, f = 2c/d for c/d <= 1, 1 + c/d
+    above; k = 2.2 (hc/c)^1.65 for c/hc <= 1, 2.2 hc/c above. Each branch pair is joined
+    with min or max, which is exact: f = min(2x, 1 + x) with x = c/d, because 2x <= 1 + x
+    exactly when x <= 1; k = max(2.2 y^1.65, 2.2 y) with y = hc/c, because y^1.65 >= y
+    exactly when y >= 1."""
     x = Div(cope_length, d)
     f = Min((mul(c(2), x), add(c(1), x)))
-    y = Div(ho, cope_length)
+    y = Div(hc, cope_length)
     k = Max((mul(c("2.2"), power(y, Fraction(33, 20))), mul(c("2.2"), y)))
-    return Min((mul(plate, sq(Div(tw, ho)), f, k), fy))
+    return Max((mul(f, k), c("1.61")))
 
 
-def cope_fcr_both(e: Expr, fy: Expr, tw: Expr, ho: Expr, cope_length: Expr, d: Expr, dct: Expr) -> Expr:
-    """Manual Part 9, both flanges coped by dc: Fcr = 0.62 pi E tw^2 fd / (c ho) <= Fy with
-    fd = 3.5 - 7.5 dct/d. Valid for dct <= 0.2 d (a validity row)."""
-    fd = sub(c("3.5"), mul(c("7.5"), Div(dct, d)))
-    return Min((Div(mul(c("0.62"), Pi(), e, sq(tw), fd), mul(cope_length, ho)), fy))
+def cope_lambda_p(k1: Expr, e: Expr, fy: Expr) -> Expr:
+    """Manual Eq 9-18: lambda_p = 0.475 sqrt(k1 E / Fy), against lambda = hc / tw."""
+    return mul(c("0.475"), Sqrt(Div(mul(k1, e), fy)))
 
 
-def coped_section_modulus(tw: Expr, ho: Expr) -> Expr:
-    """Snet of the remaining web (a rectangle tw by ho, the flange cope removing the
-    flange): tw ho^2 / 6. Conservative: the Manual tabulates the tee section's elastic
-    modulus, which is larger when the bottom flange remains."""
-    return Div(mul(tw, sq(ho)), c(6))
+def cope_inelastic(mp: Expr, my: Expr, lam: Expr, lam_p: Expr) -> Expr:
+    """Manual Eqs 9-10 and 9-11, for lambda <= 2 lambda_p: Mn = Mp for lambda <= lambda_p,
+    Mp - (Mp - My)(lambda / lambda_p - 1) above. The second is >= Mp exactly when
+    lambda <= lambda_p, so Mn = min of the two."""
+    return Min((mp, sub(mp, mul(sub(mp, my), sub(Div(lam, lam_p), c(1))))))
 
 
-def plate_buckling_q(fy: Expr, t: Expr, ho: Expr, c_len: Expr) -> Expr:
-    """Manual Part 9 (Muir and Thornton 2004), plate buckling of an extended single plate
-    or a doubly coped web: lambda = ho sqrt(Fy/ksi) / (10 t sqrt(475 + 280 (ho/c)^2));
-    Q = 1 for lambda <= 0.7, 1.34 - 0.486 lambda for 0.7 < lambda <= 1.41, 1.30/lambda^2
-    above. The three branches meet continuously at 0.7 and 1.41 (within 0.1 %), and Q is
-    min(1, 1.34 - 0.486 lambda) on the first two and 1.30/lambda^2 on the last; the
-    elaborator guards each branch with its range of lambda. Returns lambda."""
-    ratio = Div(ho, c_len)
-    return Div(mul(ho, Sqrt(Div(fy, c(KSI)))), mul(c(10), t, Sqrt(add(c(475), mul(c(280), sq(ratio))))))
+def cope_elastic(e: Expr, nu: Expr, k1: Expr, lam: Expr, sc: Expr) -> Expr:
+    """For lambda > 2 lambda_p, elastic local buckling of the coped web:
+    Mn = Fcr Sc, Fcr = pi^2 E k1 / (12 (1 - nu^2) lambda^2). At lambda = 2 lambda_p it is
+    (pi^2 / (12 (1 - nu^2) 4 (0.475)^2)) Fy Sc = 1.0006 My, where Eq 9-11 gives My: the
+    branches meet."""
+    return Div(mul(sq(Pi()), e, k1, sc), mul(c(12), sub(c(1), sq(nu)), sq(lam)))
+
+
+def double_cope_cb(cope_length: Expr, d: Expr, dct: Expr) -> Expr:
+    """Manual Eq 9-21, a beam coped at both flanges with equal cope lengths:
+    Cb = [3 + ln(Lb / d)] (1 - dct / d) >= 1.84, Lb = c, d the full beam depth."""
+    return Max((mul(add(c(3), Ln(Div(cope_length, d))), sub(c(1), Div(dct, d))), c("1.84")))
+
+
+def bar_ltb(e: Expr, fy: Expr, cb: Expr, lb: Expr, depth: Expr, t: Expr) -> tuple[Expr, Expr, Expr]:
+    """Section F11 for a rectangular bar `depth` by `t` bent about its major axis, unbraced
+    over `lb`: (x = Lb d / t^2, Mn by Eq F11-3 for x <= 1.9 E / Fy, Mn by Eq F11-4 above),
+    each <= Mp = Fy Z (Eq F11-1, Z = 1.5 Sx). F11-3 is Cb [1.52 - 0.274 x Fy / E] My;
+    F11-4 is Fcr Sx with Fcr = 1.9 E Cb / x. Below x = 0.08 E / Fy F11-3 with Cb >= 1 is
+    already >= 1.49 My, and yielding (Mp = 1.5 My) governs, as F11.2(a) has it."""
+    sx = Div(mul(t, sq(depth)), c(6))
+    my, mp = mul(fy, sx), mul(c("1.5"), fy, sx)
+    x = Div(mul(lb, depth), sq(t))
+    f11_3 = mul(cb, sub(c("1.52"), mul(c("0.274"), x, Div(fy, e))), my)
+    f11_4 = mul(Div(mul(c("1.9"), e, cb), x), sx)
+    return x, Min((mp, f11_3)), Min((mp, f11_4))
 
 
 # --- Groups (elastic method, Manual Part 7) ------------------------------------------------------
@@ -369,6 +406,15 @@ def elastic_weld_line(v: Expr, e: Expr, length: Expr, lines: Expr) -> tuple[Expr
     (lines L^2)."""
     total = mul(lines, length)
     return Div(mul(c(6), v, e), mul(total, length)), Div(v, total)
+
+
+def seat_weld_line(v: Expr, e: Expr, length: Expr) -> tuple[Expr, Expr]:
+    """(horizontal, vertical) force per unit length at the top of the two vertical weld
+    lines of a seat angle, loaded by v at e from the support face, with the angle's
+    vertical leg bearing on the support below the welds' neutral axis (Manual Part 10,
+    the elastic method behind Table 10-6): R = v / (2 L^2) sqrt(L^2 + 20.25 e^2), so
+    f_h = 2.25 v e / L^2 and f_v = v / (2 L)."""
+    return Div(mul(c("2.25"), v, e), sq(length)), Div(v, mul(c(2), length))
 
 
 # --- Prying (Kulak Chapter 17, Manual Part 9) --------------------------------------------------------

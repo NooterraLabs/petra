@@ -17,7 +17,7 @@ Every connection kind reads the same attribute grammar, one attribute per line:
     weld <electrode> size <len> [sides 1|2]
     support_side bolted|welded        beam_side bolted|welded
     support_weld <electrode> size <len>    beam_weld <electrode> size <len>
-    cope top|both depth <len> length <len>
+    cope top|both depth <len> length <len> [bottom_depth <len>]
     rows <n>   columns <n>   support_rows <n>
     deformation considered|not_considered
     form conventional|extended
@@ -39,6 +39,7 @@ from typing import Callable, Mapping, Union
 
 from ...ir import Arg, Bound, Component, Design, Exceeds, Fixed, Input, ParamRef, Ref, Span
 from ...registry import OutsideMakeableSet, Registry
+from ...registry.steel import INCH, STOCK_PLATE
 from ...units import DIMENSIONLESS, FORCE, LENGTH, Dim
 from ..base import ComponentError
 
@@ -93,8 +94,9 @@ class Weld:
 @dataclass(frozen=True, slots=True)
 class Cope:
     flanges: str          # "top" | "both"
-    depth: Geo            # dc
-    length: Geo           # c
+    depth: Geo            # dc, or the top cope's dct when both flanges are coped
+    length: Geo           # c, the same at both flanges
+    bottom: Geo | None = None   # dcb when both flanges are coped (None: equal to depth)
 
 
 @dataclass(frozen=True)
@@ -237,7 +239,17 @@ def p_plate(conn, key, args, design, registry, say):
         return None
     grade = _grade(args[0], registry, say)
     t = _geo(conn, f"{key}.thickness", kw["thickness"], design, say)
+    if isinstance(t, Fixed) and not _stocked(t.quantity.value.lo, registry):
+        say(f"{float(t.quantity.value.lo / INCH):g} in is not a stocked plate thickness (registry {STOCK_PLATE}*)")
+        return None
     return PlateSpec(grade, t) if grade and t else None
+
+
+def _stocked(thickness: Fraction, registry: Registry) -> bool:
+    """A fixed plate thickness is makeable when the shop deck stocks it. A thickness left
+    as a parameter or a toleranced bound is a nominal the fabricator orders from the
+    same list; lowering cannot check a value it does not yet know."""
+    return any(name.startswith(STOCK_PLATE) and c.value.lo == thickness for name, c in registry.constants.items())
 
 
 def p_angle(conn, key, args, design, registry, say):
@@ -355,12 +367,16 @@ def _dimensionless(n: int):
 def p_cope(conn, key, args, design, registry, say):
     kw = _keywords(args, 1, say) if args else None
     flanges = _word_of(args[0]) if args else None
-    if kw is None or set(kw) != {"depth", "length"} or flanges not in ("top", "both"):
-        say(f"reads `{key} top|both depth <len> length <len>`")
+    allowed = {"depth", "length"} | ({"bottom_depth"} if flanges == "both" else set())
+    if kw is None or not {"depth", "length"} <= set(kw) <= allowed or flanges not in ("top", "both"):
+        say(f"reads `{key} top depth <len> length <len>` or `{key} both depth <len> length <len> [bottom_depth <len>]`")
         return None
     depth = _geo(conn, "cope.depth", kw["depth"], design, say)
     length = _geo(conn, "cope.length", kw["length"], design, say)
-    return Cope(flanges, depth, length) if depth and length else None
+    bottom = _geo(conn, "cope.bottom_depth", kw["bottom_depth"], design, say) if "bottom_depth" in kw else None
+    if "bottom_depth" in kw and bottom is None:
+        return None
+    return Cope(flanges, depth, length, bottom) if depth and length else None
 
 
 # --- Kinds ----------------------------------------------------------------------------------

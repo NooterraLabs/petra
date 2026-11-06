@@ -1,11 +1,11 @@
 """Coverage and the DomainSpec of the steel deck. Trusted.
 
-Limit-state completeness is set inclusion: `required(conn, design)` lists, from the
-connection's kind and the few facts that switch limit states on (bolted or welded sides,
-a cope, the single-plate form, slip-critical bolts, the load fields the design states),
-every mode the connection must satisfy. `features` reports one feature per required mode
-and the coverage rule for that mode demands it, so every requirement id names its mode
-once ("st1/steel.block_shear/coverage.steel.block_shear"). Each mode's builder must then
+Limit-state completeness is set inclusion: `required(conn, design)` lists every mode the
+connection must satisfy: the union of the limit states of the elements on its load path
+(path.py). The kind and a few facts decide the path: bolted or welded sides, a cope, the
+single-plate form, slip-critical bolts, the load fields the design states. `features`
+reports one feature per required mode and the coverage rule for that mode demands it, so
+every requirement id names its mode once ("st1/steel.block_shear/coverage.steel.block_shear"). Each mode's builder must then
 produce at least one check, or the requirement is a Gap: the deck never passes a mode it
 was required to check and did not.
 """
@@ -31,68 +31,17 @@ from ..base import (
 )
 from .build import BUILDERS
 from .lower import KIND_SPECS, Bolts, Conn, lower_conn
+from .path import ROLE_LIMITS, path
 from .vocab import LOAD_PATH, MODELS, MODES, QOIS, STIFFENED_FORCE, UNMODELLED
-
-MAKE = ("spacing_min", "edge_min", "spacing_max", "edge_max", "hole_use", "joint_type")
-PLY = ("shear_yield", "shear_rupture", "block_shear")
-WELDED = ("weld", "weld_base_metal", "fillet_size")
-BEAM_BEARING = ("web_local_yielding", "web_crippling")
-
-SHEAR_KINDS = ("shear_tab", "double_angle", "single_angle", "shear_tee", "shear_end_plate", "seated", "stiffened_seat")
-
 
 def _fields(conn: Conn, design: Design) -> set[str]:
     return {e.field for case in design.loads.values() for e in case.entries if e.target == (conn.name,)}
 
 
 def required(conn: Conn, design: Design) -> tuple[str, ...]:
-    """Every mode the connection must satisfy, in a fixed order, each once."""
-    kind, fields = conn.kind, _fields(conn, design)
-    bolted_support = conn.get("support_side") == "bolted"
-    welded_support = conn.get("support_side") == "welded"
-    modes: list[str] = []
-    if kind == "shear_tab":
-        modes += ["bolts", *PLY, "flexural_yield", "flexural_rupture", *WELDED, *MAKE, "clearance"]
-        modes += ["ductility"] if conn.get("form", "conventional") == "conventional" else ["plate_buckling", "extended_ductility"]
-    elif kind in ("double_angle", "single_angle"):
-        modes += ["bolts", *PLY, *MAKE, "clearance"] + (list(WELDED) if welded_support else [])
-    elif kind == "shear_tee":
-        modes += ["bolts", *PLY, "flexural_yield", "flexural_rupture", *MAKE, "clearance"] + (list(WELDED) if welded_support else [])
-    elif kind == "shear_end_plate":
-        modes += ["bolts", *PLY, *WELDED, *MAKE, "clearance"]
-    elif kind == "seated":
-        modes += ["seat_flexure", "shear_yield", *BEAM_BEARING]
-        modes += ["bolts", *MAKE, "clearance"] if bolted_support else list(WELDED)
-    elif kind == "stiffened_seat":
-        modes += ["bearing", "compression", *WELDED, *BEAM_BEARING]
-    elif kind == "flange_force":
-        modes += ["web_local_yielding"]
-        if conn.attrs["force_kind"] == "tensile":
-            modes += ["flange_local_bending"]
-        else:
-            modes += ["web_crippling"]
-            if conn.get("pair", "single") == "double":
-                modes += ["web_compression_buckling"]
-            elif "flange_restrained" in conn.attrs and "unbraced_length" in conn.attrs:
-                modes += ["web_sidesway_buckling"]
-        if "panel_shear" in fields:
-            modes += ["panel_zone"]
-    elif kind == "bolt_bracket":
-        modes += ["bolts", *PLY, *MAKE]
-    elif kind == "weld_bracket":
-        modes += list(WELDED)
-    elif kind == "hanger":
-        modes += ["bolt_tension", "prying", "tension_yield", "tension_rupture", *MAKE, "clearance"]
-        if "shear" in fields:
-            modes += ["bolts", "bolt_combined"]
-    bolts = conn.get("bolts")
-    if isinstance(bolts, Bolts) and bolts.joint == "slip_critical" and "bolts" in modes:
-        modes += ["slip"]
-    if conn.get("cope") is not None:
-        modes += ["cope_buckling"]
-    if kind in SHEAR_KINDS and "axial" in fields:
-        modes += ["load_path"]
-    return tuple(dict.fromkeys(modes))
+    """Every mode the connection must satisfy: the limit states of every element on its
+    load path (path.py), in path order, each once."""
+    return tuple(dict.fromkeys(mode for link in path(conn, _fields(conn, design)) for mode in ROLE_LIMITS[link.role]))
 
 
 REQUIRES = "steel.requires."

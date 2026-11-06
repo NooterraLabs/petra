@@ -181,6 +181,7 @@ class WeldGroup:
     eccentricity: Expr | None
     thinner: Expr               # thinner part joined (J2.2b minimum size)
     base: tuple[tuple[str, str, Expr, int], ...]   # (part, grade, thickness, fusion lines loading it at one place)
+    bearing: bool = False       # a seat's two weld lines, its vertical leg bearing on the support below them
 
 
 @dataclass(frozen=True)
@@ -208,12 +209,20 @@ class Tension:
 class CopeGeo:
     flanges: str
     d: Expr
-    dc: Expr
+    dc: Expr                    # the top cope's depth
+    dcb: Expr | None            # the bottom cope's depth when both flanges are coped
     c: Expr
     tw: Expr
+    bf: Expr
+    tf: Expr
     grade: str
     moment_arm: Expr
     force: Expr
+
+    @property
+    def hc(self) -> Expr:
+        """The depth of web the copes leave."""
+        return sub(self.d, self.dc) if self.dcb is None else sub(sub(self.d, self.dc), self.dcb)
 
 
 @dataclass(frozen=True)
@@ -328,19 +337,27 @@ def _beam_web_ply(ctx: Ctx, beam: Member, props: Mapping[str, Expr], columns: in
         return Ply("beam web", beam.grade, props["tw"], 1, 1, ctx.hole("beam"), "up", top, beam_edge, d, columns,
                    (("beam end", beam_edge),), block=False)
     dc = ctx.geo(cope.depth, "cope.depth")
-    depth = sub(d, dc) if cope.flanges == "top" else sub(d, mul(c(2), dc))
+    depth = sub(d, dc) if cope.flanges == "top" else sub(sub(d, dc), _bottom_cope(ctx, cope, dc))
     edge = sub(top, dc)
     return Ply("beam web", beam.grade, props["tw"], 1, 1, ctx.hole("beam"), "up", edge, beam_edge, depth, columns,
                (("beam end", beam_edge), ("cope edge", edge)))
 
 
+def _bottom_cope(ctx: Ctx, cope: Cope, dc: Expr) -> Expr:
+    return dc if cope.bottom is None else ctx.geo(cope.bottom, "cope.bottom_depth")
+
+
 def _cope(ctx: Ctx, out: Geometry, beam: Member, props: Mapping[str, Expr], v: Expr) -> None:
+    """The coped section, loaded by the reaction at the support face: its moment arm is
+    the cope length plus the setback (Manual Part 9, e = c + setback)."""
     cope: Cope | None = ctx.conn.get("cope")
     if cope is None:
         return
     dc, cl = ctx.geo(cope.depth, "cope.depth"), ctx.geo(cope.length, "cope.length")
+    dcb = None if cope.flanges == "top" else _bottom_cope(ctx, cope, dc)
     setback = ctx.opt("setback") or c(0)
-    out.cope = CopeGeo(cope.flanges, props["d"], dc, cl, props["tw"], beam.grade, add(cl, setback), v)
+    out.cope = CopeGeo(cope.flanges, props["d"], dc, dcb, cl, props["tw"], props["bf"], props["tf"], beam.grade,
+                       add(cl, setback), v)
 
 
 def _support_clearances(support: Member, sp: Mapping[str, Expr], gauge: Expr) -> tuple[tuple[str, Expr], ...]:
@@ -426,12 +443,16 @@ def geometry_angles(ctx: Ctx) -> Geometry:
         # double: gs spans the two bolt lines across the web; single: gs is heel to bolt line.
         heel = sub(div(gs, c(2)), div(bp["tw"], c(2))) if double else gs
         toe_s = sub(out_leg, heel)
-        legs = Ply(f"{key} outstanding", angle.grade, ta, 1, n_ang, ctx.hole(key), "down", lev, toe_s, length, 1,
+        legs = Ply(f"{key} outstanding", angle.grade, ta, 1, n_ang, ctx.hole(key), "up", lev, toe_s, length, 1,
                    (("outstanding top and bottom", lev), ("outstanding toe", toe_s)))
         ecc = None if double else add(gs, div(bp["tw"], c(2)))
         across = gs if double else mul(c(2), add(gs, div(bp["tw"], c(2))))
         out.interfaces.append(Interface("support side", bolts, rows, n_ang, s, gs if double else None, 1, (legs, _support_ply(ctx)),
                                         v, ecc, clearances=_support_clearances(support, sp, across)))
+        if not double:
+            # One angle's support leg carries V at e from its bolt line: it bends (Manual Part 10).
+            _, dh_v, _ = bolt_dims(ctx, bolts, ctx.hole(key))
+            out.flexures.append(Flexure(f"{key} outstanding", angle.grade, ta, length, mul(v, ecc), rows, s, L.hole_net(dh_v)))
     else:
         weld: Weld = conn.attrs["support_weld"]
         w = ctx.geo(weld.size, "support_weld.size")
@@ -464,7 +485,7 @@ def geometry_tee(ctx: Ctx) -> Geometry:
     if conn.attrs["support_side"] == "bolted":
         gs = ctx.attr("support_gauge")
         side = div(sub(tp["bf"], gs), c(2))
-        flange = Ply("tee flange", tee.grade, tp["tf"], 1, 2, ctx.hole("flange"), "down", lev, side, length, 1,
+        flange = Ply("tee flange", tee.grade, tp["tf"], 1, 2, ctx.hole("flange"), "up", lev, side, length, 1,
                      (("flange top and bottom", lev), ("flange edge", side)))
         out.interfaces.append(Interface("support side", bolts, rows, 2, s, gs, 1, (flange, _support_ply(ctx)), v, None,
                                         clearances=_support_clearances(support, sp, gs)))
@@ -472,7 +493,7 @@ def geometry_tee(ctx: Ctx) -> Geometry:
         weld: Weld = conn.attrs["support_weld"]
         w = ctx.geo(weld.size, "support_weld.size")
         t_sup = _face_t(support, sp)
-        out.welds.append(WeldGroup("tee flange to support", weld, w, length, 2, v, None, Min((tp["tf"], t_sup)),
+        out.welds.append(WeldGroup("tee flange to support", weld, w, length, 2, v, a, Min((tp["tf"], t_sup)),
                                    (("tee flange", tee.grade, tp["tf"], 1), (f"support {support.face}", support.grade, t_sup, 1))))
     _, dh_v, _ = bolt_dims(ctx, bolts, ctx.hole("stem"))
     out.flexures.append(Flexure("tee stem", tee.grade, tp["tw"], length, mul(v, a), rows, s, L.hole_net(dh_v)))
@@ -492,7 +513,7 @@ def geometry_end_plate(ctx: Ctx) -> Geometry:
     tp = ctx.geo(plate.thickness, "plate.thickness")
     v = ctx.load("shear")
     side = div(sub(width, gs), c(2))
-    plate_ply = Ply("end plate", plate.grade, tp, 1, 2, ctx.hole("plate"), "down", lev, side, length, 1,
+    plate_ply = Ply("end plate", plate.grade, tp, 1, 2, ctx.hole("plate"), "up", lev, side, length, 1,
                     (("plate top and bottom", lev), ("plate side", side)))
     support: Member = conn.attrs["support"]
     sp = _w(ctx, support)
@@ -542,7 +563,8 @@ def geometry_seated(ctx: Ctx) -> Geometry:
         t_sup = _face_t(support, sp)
         arm = add(setback, div(lb, c(2)))
         out.welds.append(WeldGroup("seat to support", weld, w, vertical, 2, v, arm, Min((ta, t_sup)),
-                                   (("seat angle", angle.grade, ta, 1), (f"support {support.face}", support.grade, t_sup, 1))))
+                                   (("seat angle", angle.grade, ta, 1), (f"support {support.face}", support.grade, t_sup, 1)),
+                                   bearing=True))
     return out
 
 
@@ -851,9 +873,19 @@ def gen_tension_rupture(ctx: Ctx, geo: Geometry) -> list[Check]:
 
 
 def gen_flexural_yield(ctx: Ctx, geo: Geometry) -> list[Check]:
-    return [Check(f"{f.name}: flexural yielding of the gross section (J4.5)", (f.moment,),
-                  L.flexural_yield(ctx.mat(f.grade, "fy"), L.plate_plastic_modulus(f.t, f.depth)), "aisc360.j4_5", "_y", unit="kip-in")
-            for f in geo.flexures]
+    out = [Check(f"{f.name}: flexural yielding of the gross section (J4.5)", (f.moment,),
+                 L.flexural_yield(ctx.mat(f.grade, "fy"), L.plate_plastic_modulus(f.t, f.depth)), "aisc360.j4_5", "_y", unit="kip-in")
+           for f in geo.flexures]
+    sp = geo.single_plate
+    if sp is not None and sp.form == "extended":
+        # Manual Eq 10-8: (Vr/Vc)^2 + (Mr/Mc)^2 <= 1, Vc by shear yielding of the plate and Mc
+        # the least of yielding and both F11 branches (the least is exact or errs low).
+        vc = ctx.available(L.shear_yield(ctx.mat(sp.grade, "fy"), mul(sp.depth, sp.tp)), "aisc360.j4_2", "_y")
+        _, inelastic, elastic = _extended_ltb(ctx, sp)
+        mc = ctx.available(Min((inelastic, elastic)), "aisc360.j4_5", "_y")
+        out.append(Check("plate: shear and flexural yielding interaction (Manual Eq 10-8)",
+                         (div(sp.force, vc), div(mul(sp.force, sp.a), mc)), c(1), unit="1"))
+    return out
 
 
 def gen_flexural_rupture(ctx: Ctx, geo: Geometry) -> list[Check]:
@@ -869,6 +901,8 @@ def _weld_force_per_length(wg: WeldGroup) -> tuple[Expr, ...]:
     """Force per unit length at the most stressed point of the group's lines."""
     if wg.eccentricity is None:
         return (div(wg.force, mul(c(wg.lines), wg.length)),)
+    if wg.bearing:
+        return L.seat_weld_line(wg.force, wg.eccentricity, wg.length)
     return L.elastic_weld_line(wg.force, wg.eccentricity, wg.length, c(wg.lines))
 
 
@@ -1007,38 +1041,62 @@ def gen_clearance(ctx: Ctx, geo: Geometry) -> list[Check]:
 # --- Copes and single plates ----------------------------------------------------------------------
 
 def gen_cope_buckling(ctx: Ctx, geo: Geometry) -> list[Check]:
+    """Manual Part 9 (16th ed.). A top cope: the tee left by the cope, Mn by Eqs 9-10 and
+    9-11 for lambda = hc/tw <= 2 lambda_p and by elastic local buckling above, each branch
+    guarded by its range. Both flanges coped: Section F11 on the web left between the
+    copes, Lb = c and Cb by Eq 9-21, F11-3 and F11-4 guarded by theirs."""
     cg = geo.cope
     if cg is None:
         return []
     fy = ctx.mat(cg.grade, "fy")
     e = ctx.const("aisc360.E")
+    m = (mul(cg.force, cg.moment_arm),)
+    hc = cg.hc
     if cg.flanges == "top":
-        ho = sub(cg.d, cg.dc)
-        fcr = L.cope_fcr(e, ctx.const("aisc360.nu"), fy, cg.tw, ho, cg.c, cg.d)
-    else:
-        ho = sub(cg.d, mul(c(2), cg.dc))
-        fcr = L.cope_fcr_both(e, fy, cg.tw, ho, cg.c, cg.d, cg.dc)
-    return [Check("beam web: flexural local buckling at the cope face (Manual Part 9)", (mul(cg.force, cg.moment_arm),),
-                  mul(fcr, L.coped_section_modulus(cg.tw, ho)), "aisc360.j4_5", "_y", unit="kip-in")]
+        sc, zc = L.tee_moduli(hc, cg.tw, cg.bf, cg.tf)
+        k1 = L.cope_k1(hc, cg.c, cg.d)
+        lam, lam_p = div(hc, cg.tw), L.cope_lambda_p(k1, e, fy)
+        twice = mul(c(2), lam_p)
+        return [
+            Check("beam web: flexural yielding and local buckling at the cope face, lambda <= 2 lambda_p (Manual Part 9)",
+                  m, L.cope_inelastic(mul(fy, zc), mul(fy, sc), lam, lam_p), "aisc360.j4_5", "_y",
+                  (add(sub(twice, lam), L.STRICT_RATIO),), unit="kip-in"),
+            Check("beam web: elastic local buckling at the cope face, lambda > 2 lambda_p (Manual Part 9)",
+                  m, L.cope_elastic(e, ctx.const("aisc360.nu"), k1, lam, sc), "aisc360.j4_5", "_y",
+                  (sub(lam, twice),), unit="kip-in"),
+        ]
+    cb = L.double_cope_cb(cg.c, cg.d, cg.dc)
+    x, inelastic, elastic = L.bar_ltb(e, fy, cb, cg.c, hc, cg.tw)
+    limit = mul(c("1.9"), div(e, fy))
+    return [
+        Check("beam web: lateral-torsional buckling of the doubly coped web, Lb d/t^2 <= 1.9 E/Fy (F11, Manual Eq 9-21)",
+              m, inelastic, "aisc360.j4_5", "_y", (add(sub(limit, x), L.STRICT_RATIO),), unit="kip-in"),
+        Check("beam web: lateral-torsional buckling of the doubly coped web, Lb d/t^2 > 1.9 E/Fy (F11, Manual Eq 9-21)",
+              m, elastic, "aisc360.j4_5", "_y", (sub(x, limit),), unit="kip-in"),
+    ]
+
+
+EXTENDED_CB = c("1.84")
+"""Manual Part 10, extended single-plate connections: the plate's lateral-torsional
+buckling by Section F11 with Cb = 1.84 and Lb = a, the weld line to the first bolt line."""
+
+
+def _extended_ltb(ctx: Ctx, sp: SinglePlate) -> tuple[Expr, Expr, Expr]:
+    return L.bar_ltb(ctx.const("aisc360.E"), ctx.mat(sp.grade, "fy"), EXTENDED_CB, sp.a, sp.depth, sp.tp)
 
 
 def gen_plate_buckling(ctx: Ctx, geo: Geometry) -> list[Check]:
     sp = geo.single_plate
     if sp is None or sp.form != "extended":
         return []
-    fy = ctx.mat(sp.grade, "fy")
-    lam = L.plate_buckling_q(fy, sp.tp, sp.depth, sp.a)
-    z = L.plate_plastic_modulus(sp.tp, sp.depth)
-    m = mul(sp.force, sp.a)
-    q2 = sub(c("1.34"), mul(c("0.486"), lam))
-    q3 = div(c("1.30"), sq(lam))
+    x, inelastic, elastic = _extended_ltb(ctx, sp)
+    limit = mul(c("1.9"), div(ctx.const("aisc360.E"), ctx.mat(sp.grade, "fy")))
+    m = (mul(sp.force, sp.a),)
     return [
-        Check("plate: plate buckling where lambda is at most 0.7 (Manual Part 9)", (m,), mul(fy, z), "aisc360.j4_5", "_y",
-              (add(sub(c("0.7"), lam), L.STRICT_RATIO),), unit="kip-in"),
-        Check("plate: plate buckling where lambda is over 0.7 and at most 1.41 (Manual Part 9)", (m,), mul(q2, fy, z),
-              "aisc360.j4_5", "_y", (sub(lam, c("0.7")), add(sub(c("1.41"), lam), L.STRICT_RATIO)), unit="kip-in"),
-        Check("plate: plate buckling where lambda is over 1.41 (Manual Part 9)", (m,), mul(q3, fy, z), "aisc360.j4_5", "_y",
-              (sub(lam, c("1.41")),), unit="kip-in"),
+        Check("plate: lateral-torsional buckling, Lb d/t^2 <= 1.9 E/Fy (F11, Cb = 1.84, Manual Part 10)", m, inelastic,
+              "aisc360.j4_5", "_y", (add(sub(limit, x), L.STRICT_RATIO),), unit="kip-in"),
+        Check("plate: lateral-torsional buckling, Lb d/t^2 > 1.9 E/Fy (F11, Cb = 1.84, Manual Part 10)", m, elastic,
+              "aisc360.j4_5", "_y", (sub(x, limit),), unit="kip-in"),
     ]
 
 
@@ -1267,8 +1325,9 @@ def _row_cope_length(ctx: Ctx, geo: Geometry) -> tuple[tuple[Expr, ...], str]:
 
 def _row_cope_depth(ctx: Ctx, geo: Geometry) -> tuple[tuple[Expr, ...], str]:
     cg = geo.cope
-    limit = div(cg.d, c(2)) if cg.flanges == "top" else mul(c("0.2"), cg.d)
-    return (sub(cg.dc, limit),), "the cope is no deeper than the cope-buckling method allows"
+    half = div(cg.d, c(2))
+    exprs = (sub(cg.dc, half),) if cg.dcb is None else (sub(cg.dc, half), sub(cg.dcb, half))
+    return exprs, "each cope is no deeper than half the beam"
 
 
 def _row_conventional_a(ctx: Ctx, geo: Geometry) -> tuple[tuple[Expr, ...], str]:

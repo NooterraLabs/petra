@@ -174,7 +174,9 @@ MAKEABILITY: tuple[tuple, ...] = (
      f"{AISC} Section J3.6"),
     ("fillet_size", "fillet size at least Table J2.4's minimum for the thinner part joined, length at least four "
      "times the size", "fillet welds in T-joints; the size limit along edges applies to lap joints, which the "
-     "catalogue's shear connections do not use", f"{AISC} Section J2.2b, Table J2.4"),
+     "catalogue's shear connections do not use", f"{AISC} Section J2.2b, Table J2.4",
+     ("weld access and torch angle are not checked: the catalogue's fillets join a plate, angle or tee to an open "
+      "face, and a weld between a column's flanges assumes the flanges leave the welder room",)),
     ("hole_use", "oversized holes and slots parallel to the force only in slip-critical joints", "holes as declared on "
      "each ply", f"{AISC} Section J3.3; RCSC 2025 Section 3.3"),
     ("joint_type", "the joint's installation meets the RCSC requirements its use imposes: Group 150 and 200 bolts in "
@@ -182,15 +184,21 @@ MAKEABILITY: tuple[tuple, ...] = (
      "RCSC 2025 Sections 4.2 and 4.3; AISC 360-22 Section J3.2"),
     ("clearance", "room to tighten each bolt: the distance from the bolt to the nearest obstruction at least half the "
      "nut's width across corners plus a socket allowance", "a standard impact wrench socket on a heavy hex nut",
-     f"{MANUAL} Part 7 (entering and tightening clearances, method encoded with a judged allowance)"),
+     f"{MANUAL} Part 7 (entering and tightening clearances, method encoded with a judged allowance)",
+     ("bolt lengths are not checked: the fabricator orders each length from the grip by the Manual's rule, and the "
+      "catalogue's grips are well inside the stocked lengths",)),
 )
+"""Plate thicknesses are makeable by catalogue membership, which lowering checks: a fixed
+plate, stiffener or seat thickness must be one the registry's shop deck stocks
+(shop_deck.plate.*)."""
 
 
 ROWS: Mapping[str, tuple[ValidityRow, ...]] = {
     "cope_buckling": (
         _row("cope_buckling", "cope_length", "cope length c <= 2 d", f"{MANUAL} Part 9, limits of the cope-buckling method"),
-        _row("cope_buckling", "cope_depth", "cope depth dc <= d / 2 (top cope) or <= 0.2 d (both flanges)",
-             f"{MANUAL} Part 9, limits of the cope-buckling method"),
+        _row("cope_buckling", "cope_depth", "each cope depth <= d / 2", f"{MANUAL} Part 9, limits of the top-cope "
+             "method; for both flanges coped, a maintainers' bound the Companion's Example II.A-7 (dct = 0.22 d) lies "
+             "inside"),
     ),
     "compression": (
         _row("compression", "width_thickness", "seat stiffener width-to-thickness W / ts <= 0.56 sqrt(E / Fy)",
@@ -224,12 +232,15 @@ for short, form, validity, source in (
     ("compression", "compressive yielding of a seat stiffener's section under the seat, Rn = Fy Ag (Eq J4-6)",
      "the stiffener is welded to the support along its full length, so it cannot buckle as a column; its width-to-"
      "thickness row excludes local buckling, the Manual's form of the short-element condition", f"{AISC} Section J4.4"),
-    ("cope_buckling", "flexural local buckling of a coped beam web, Mn = Fcr Snet with Fcr by the Manual's cope "
-     "method, against the moment at the cope face", "the remaining web acts as a rectangle; the reaction acts at the "
-     "support face", f"{MANUAL} Part 9 (Cheng, Yura and Johnson 1988)"),
-    ("plate_buckling", "flexural local buckling of an extended single plate, Mn = Q Fy Z with the plate-buckling "
-     "reduction Q of the Manual's lambda method, against the moment at the weld line", "the plate is unstiffened "
-     "between the weld and the bolt line", f"{MANUAL} Parts 9 and 10 (Muir and Thornton 2004)"),
+    ("cope_buckling", "flexural yielding and local buckling of a coped beam web against the moment at the cope "
+     "face: a top cope by the Manual's slenderness method on the remaining tee (Mn = Mp to My over lambda_p < "
+     "hc/tw <= 2 lambda_p, elastic buckling above); both flanges coped by Section F11 on the remaining web with "
+     "Lb = c and the Manual's Cb", "the reaction acts at the support face, e = c + setback; the tee's fillets are "
+     "neglected; both copes have the same length; the cope's reentrant corners are cut to the radius Section J1.6 "
+     "requires, a fabrication premise the deck does not check", f"{MANUAL} Part 9, Eqs 9-9 to 9-21; {AISC} Section F11"),
+    ("plate_buckling", "lateral-torsional buckling of an extended single plate as a rectangular bar, Section F11 "
+     "with Lb = a and Cb = 1.84, against the moment at the weld line", "the plate is unstiffened between the weld "
+     "and the bolt line; the beam is braced against rotation about its axis", f"{MANUAL} Part 10; {AISC} Section F11"),
     ("ductility", "rotational ductility of a conventional single-plate connection: plate or beam web thin enough "
      "(t <= d/2 + 1/16 in) to yield before the bolts fracture, and the weld at least five-eighths of the plate "
      "thickness so the plate yields before the weld", "the connection is a conventional single plate, so the simple "
