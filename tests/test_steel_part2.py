@@ -11,9 +11,9 @@ utilisation. For a check whose demand is the reaction itself that is its availab
 strength; for the coped section it is phi Mn / e, the Companion's Rn = Mn / e; for a block
 of an eccentric group it is what the whole group carries. Moments are compared in kip-in.
 
-Inputs the Companion makes conservative in its tables are stated as the tables take them:
-the 1/4 in beam underrun deducted from the beam web's end distance, and Tables 10-1c and
-10-10c's top edge distance of 1-1/2 in. Rounding: the Companion sums per-bolt strengths
+Lengths are stated as detailed: the deck takes the 1/4 in beam underrun off the beam web's
+end distance and adds it to a seat's setback, as the Companion's strength checks do.
+Tables 10-1c and 10-10c's top edge distance of 1-1/2 in is stated as the tables take it. Rounding: the Companion sums per-bolt strengths
 from tables printed to three figures, and Manual Tables 9-2a and 9-2b tabulate the coped
 tee's moduli (with the fillets); those comparisons allow 1 %.
 
@@ -85,12 +85,12 @@ class IIA2A(ex.Example):
 class IIA4(ex.Example):
     """All-bolted double angle in a coped beam: W18x50 (top cope 2 in by 4 in) to a W21x62
     girder web, 2L5x3-1/2x1/4 x 0'-8-1/2", three bolts. Ru = 60.0, Ra = 40.0 kips. The beam
-    web's end distance is 1-5/8 in less the 1/4 in underrun, as the Companion's block shear."""
+    web's end distance is 1-5/8 in, which the block shear takes less the 1/4 in underrun."""
 
     tag, kind, loads = "II.A-4", "double_angle", ("60.0", "40.0")
     body = ("  beam W18x50 grade steel.A992\n  support W21x62 web grade steel.A992\n"
             "  angles L5x3_1_2x1_4 grade steel.A572_50 outstanding long\n" + BOLTS +
-            "  rows 3\n  pitch 3 inch\n  edge_vertical 1.25 inch\n  beam_edge 1.375 inch\n  top 3.25 inch\n"
+            "  rows 3\n  pitch 3 inch\n  edge_vertical 1.25 inch\n  beam_edge 1.625 inch\n  top 3.25 inch\n"
             "  beam_gauge 2.125 inch\n  setback 0.5 inch\n  cope top depth 2 inch length 4 inch\n"
             "  support_side bolted\n  support_gauge 6.25 inch\n")
     printed = {
@@ -107,7 +107,7 @@ class IIA8BeamA(ex.Example):
     """All-bolted double angles, beams to a W30x99 girder web: Beam A, W12x40 (top cope 2 in
     by 5 in), 2L5x3-1/2x1/4 x 0'-5-1/2", two bolts, top bolt 2 in below the cope. Ru = 25.0,
     Ra = 16.7 kips. Table 10-1c's block shear takes the top edge as 1-1/2 in and the end
-    distance as 1-1/4 in; the second body states those."""
+    distance as 1-1/2 in less the 1/4 in underrun; the second body states those."""
 
     tag, kind, loads = "II.A-8A", "double_angle", ("25.0", "16.7")
     beam, rows, cope = "W12x40", 2, "  cope top depth 2 inch length 5 inch\n"
@@ -133,7 +133,7 @@ class IIA8BeamA(ex.Example):
         }
 
     def test_block_shear_with_the_tables_edge_distances(self):
-        body = self.body_with("3.5", "1.25")
+        body = self.body_with("3.5", "1.5")
         block = f"beam web: block of {self.rows} row(s) and 1 column(s)"
         for i, basis in enumerate(("lrfd", "asd")):
             self.near(self.strength(basis, "block_shear", block, body), self.printed_block[i], f"{self.tag} {basis}", 0.01)
@@ -209,13 +209,13 @@ class IIA11A(ex.Example):
 
 class IIA13(ex.Example):
     """Welded unstiffened seat, W21x62 on a W14x61 column flange, L8x4x5/8 x 0'-8" (A572
-    Gr. 50), 5/16 in E70 welds, setback 3/4 in with the underrun. Ru = 54.8, Ra = 36.5 kips.
+    Gr. 50), 5/16 in E70 welds, setback 1/2 in (3/4 in with the underrun). Ru = 54.8, Ra = 36.5 kips.
     The welds are Table 10-6's to its digits. Its seat row is lb = 1-1/8 in; the beam needs
     kdes = 1.12 in, so the seat's flexure moves by 1/2 %."""
 
     tag, kind, loads = "II.A-13", "seated", ("54.8", "36.5")
     body = ("  beam W21x62 grade steel.A992\n  support W14x61 flange grade steel.A992\n"
-            "  angle L8x4x5_8 grade steel.A572_50 outstanding short\n  seat_length 8 inch\n  setback 0.75 inch\n"
+            "  angle L8x4x5_8 grade steel.A572_50 outstanding short\n  seat_length 8 inch\n  setback 0.5 inch\n"
             "  support_side welded\n  support_weld electrode.E70 size 0.3125 inch\n"
             "  top_angle L4x4x1_4 grade steel.A572_50 outstanding long\n")
     printed = {
@@ -231,7 +231,7 @@ class IIA16(ex.Example):
 
     tag, kind, loads = "II.A-16", "seated", ("51.4", "34.2")
     body = ("  beam W14x38 grade steel.A992\n  support W12x65 flange grade steel.A992\n"
-            "  angle L7x4x5_8 grade steel.A572_50 outstanding short\n  seat_length 6 inch\n  setback 0.75 inch\n"
+            "  angle L7x4x5_8 grade steel.A572_50 outstanding short\n  seat_length 6 inch\n  setback 0.5 inch\n"
             "  support_side welded\n  support_weld electrode.E70 size 0.3125 inch\n"
             "  top_angle L4x4x1_4 grade steel.A572_50 outstanding long\n")
     printed = {
@@ -266,11 +266,11 @@ class IIA17A(ex.Example):
 class IIA18(ex.Example):
     """Conventional single plate, W18x35 (top cope 2 in by 4 in) to a W21x62 girder web,
     the plate of II.A-17A. Ru = 39.8, Ra = 26.5 kips. The beam web's block shear is Table
-    10-10c's: top edge 1-1/2 in, end distance 2-1/4 in less the table's 1/4 in underrun."""
+    10-10c's: top edge 1-1/2 in, end distance 2-1/2 in less the table's 1/4 in underrun."""
 
     tag, kind, loads = "II.A-18", "shear_tab", ("39.8", "26.5")
     body = ("  beam W18x35 grade steel.A992\n  support W21x62 web grade steel.A992\n" + SHEAR_TAB +
-            "  beam_edge 2 inch\n  top 3.5 inch\n  cope top depth 2 inch length 4 inch\n")
+            "  beam_edge 2.25 inch\n  top 3.5 inch\n  cope top depth 2 inch length 4 inch\n")
     printed = {
         ("block_shear", "beam web: block of 4 row(s) and 1 column(s)"): ("88.2", "58.7"),
         ("shear_rupture", "plate:"): ("58.5", "39.0"),
@@ -320,12 +320,12 @@ class IIA28A(ex.Example):
     """All-bolted single angle, W18x35 (top cope 2 in by 4 in, setback 3/4 in) to a W21x62
     girder web, L4x3x3/8 x 0'-11-1/2" (A572 Gr. 50), the 3 in leg on the girder at a
     1-3/4 in gage, four bolts each leg. Ru = 39.8, Ra = 26.5 kips. Beam web block shear with
-    lev = leh = 1-1/2 in (the underrun taken), as the Companion has it."""
+    lev = 1-1/2 in and leh = 1-3/4 in less the underrun, as the Companion has it."""
 
     tag, kind, loads = "II.A-28A", "single_angle", ("39.8", "26.5")
     body = ("  beam W18x35 grade steel.A992\n  support W21x62 web grade steel.A992\n"
             "  angle L4x3x3_8 grade steel.A572_50 outstanding short\n" + BOLTS +
-            "  rows 4\n  pitch 3 inch\n  edge_vertical 1.25 inch\n  beam_edge 1.5 inch\n  top 3.5 inch\n"
+            "  rows 4\n  pitch 3 inch\n  edge_vertical 1.25 inch\n  beam_edge 1.75 inch\n  top 3.5 inch\n"
             "  beam_gauge 2.5 inch\n  setback 0.75 inch\n  cope top depth 2 inch length 4 inch\n"
             "  support_side bolted\n  support_gauge 1.75 inch\n")
     moments = ("flexural_yield", "flexural_rupture", "cope_buckling")

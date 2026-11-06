@@ -40,6 +40,11 @@ UNCHECKED = ("load_path", "j10_stiffeners")
 """Modes that require() can list but that have no check (unmodelled in v1.0)."""
 
 SIXTEENTH = 1.0 / 16.0
+UNDERRUN = 0.25
+"""Inches a beam may arrive short (Manual Part 10). The Companion's strength checks take
+it off the beam web's end distance (II.A-4's block shear, Ant = leh - 1/4 in) and add it to
+a seat's setback (II.A-12A, II.A-14: lb = W - setback - underrun); its edge limits and its
+cope arm (II.A-4: e = c + setback = 4-1/2 in) use the lengths as detailed."""
 
 
 # --- Unit conversion and registry access -------------------------------------------------
@@ -748,7 +753,7 @@ def _shear_tab(ctx: _Ctx, modes: set[str]) -> None:
         web_edges["beam top (to the cope)"] = top - beam.dct
         # the coped web's blocks tear upward to the cope and out to the beam end; columns
         # counted from the beam end (the support side first)
-        block_shear(ctx, "beam web", group, v, beam.tw, beam.fy, beam.fu, hb, top - beam.dct, leh_b, False,
+        block_shear(ctx, "beam web", group, v, beam.tw, beam.fy, beam.fu, hb, top - beam.dct, leh_b - UNDERRUN, False,
                     list(range(nc)))
         beam.cope_buckling(ctx, v, setback)
     edges(ctx, "beam web", beam.tw, bolts.size, web_edges)
@@ -852,7 +857,7 @@ def _angle_kind(ctx: _Ctx, modes: set[str], double: bool) -> None:
     setback = ctx.get("setback", 0.5)
     if beam.cope is not None:
         web_edges["beam top (to the cope)"] = top - beam.dct
-        block_shear(ctx, "beam web", group_b, v, beam.tw, beam.fy, beam.fu, hb, top - beam.dct, leh_b, False, [0])
+        block_shear(ctx, "beam web", group_b, v, beam.tw, beam.fy, beam.fu, hb, top - beam.dct, leh_b - UNDERRUN, False, [0])
         beam.cope_buckling(ctx, v, setback)
     edges(ctx, "beam web", beam.tw, bolts.size, web_edges)
     hole_use(ctx, "beam web", hb, bolts)
@@ -960,7 +965,7 @@ def _shear_tee(ctx: _Ctx, modes: set[str]) -> None:
     setback = ctx.get("setback", 0.5)
     if beam.cope is not None:
         web_edges["beam top (to the cope)"] = top - beam.dct
-        block_shear(ctx, "beam web", group_b, v, beam.tw, beam.fy, beam.fu, hb, top - beam.dct, leh_b, False, [0])
+        block_shear(ctx, "beam web", group_b, v, beam.tw, beam.fy, beam.fu, hb, top - beam.dct, leh_b - UNDERRUN, False, [0])
         beam.cope_buckling(ctx, v, setback)
     edges(ctx, "beam web", beam.tw, bolts.size, web_edges)
     hole_use(ctx, "beam web", hb, bolts)
@@ -1105,7 +1110,7 @@ def _seated(ctx: _Ctx, modes: set[str]) -> None:
     vert = long if spec.outstanding == "short" else short
     afy, afu = ctx.reg.steel(spec.grade)
     ls = ctx.need("seat_length")
-    sb = ctx.get("setback", 0.0)
+    sb = ctx.need("setback") + UNDERRUN              # Companion II.A-12A: the setback and the underrun
     lb = out - sb                                    # the bearing the seat offers: leg less setback
     _seat_bearing(ctx, bshape, bfy, lb, r)
     # seat flexure: the reaction at the middle of the bearing length the beam needs (vocab
@@ -1163,8 +1168,8 @@ def _stiffened_seat(ctx: _Ctx, modes: set[str]) -> None:
     ts = ctx.geo(stiff.thickness)
     sfy_s, sfu_s = ctx.reg.steel(stiff.grade)
     width, lst = ctx.need("stiffener_width"), ctx.need("stiffener_length")
-    sb = ctx.get("setback", 0.0)
-    lb = width - sb                 # Companion II.A-14: lb = W - setback (less underrun)
+    sb = ctx.need("setback") + UNDERRUN
+    lb = width - sb                 # Companion II.A-14: lb = W - setback - underrun
     _seat_bearing(ctx, bshape, bfy, lb, r)
     clip = ctx.reg.const("aisc_manual.seat.stiffener_clip")
     ctx.check("bearing", "stiffener: bearing on its fitted top edge (J7)", r, 1.8 * sfy_s * (width - clip) * ts, "j7")
@@ -1317,8 +1322,18 @@ def _bolt_bracket(ctx: _Ctx, modes: set[str]) -> None:
     long_slots(ctx, "bracket bolts", (hp, hs))
     if bolts.joint == "slip_critical":
         slip(ctx, "bracket bolts", group, p, (hp, hs))
-    if conn.get("free_edge") is not None:
-        _bracket_edge(ctx, p, depth, ctx.need("free_edge"), tp, pfy, e_aa)
+    _bracket_plate(ctx, p, depth, tp, pfy, e_aa)
+
+
+def _bracket_plate(ctx: _Ctx, p: float, depth: float, t: float, fy: float, e_aa: float) -> None:
+    """A shaped bracket's section B-B (Manual Part 15); a rectangular one's lateral-torsional
+    buckling as a cantilever from section A-A to the load, Section F11 with Lb = e_aa and
+    Cb = 1.0, which Section F1(c) gives a cantilever whose free end is unbraced."""
+    if ctx.conn.get("free_edge") is not None:
+        _bracket_edge(ctx, p, depth, ctx.need("free_edge"), t, fy, e_aa)
+    else:
+        ctx.check("plate_buckling", "bracket plate: lateral-torsional buckling (F11)", p * e_aa,
+                  f11_mn(fy, ctx.reg.E, t, depth, e_aa, 1.0), "flexure_yield")
 
 
 def _weld_bracket(ctx: _Ctx, modes: set[str]) -> None:
@@ -1361,8 +1376,7 @@ def _weld_bracket(ctx: _Ctx, modes: set[str]) -> None:
         w = ctx.geo(weld.size)
         wmax = tp if tp < ctx.reg.const("aisc360.j2_2b.edge_t") else tp - ctx.reg.const("aisc360.j2_2b.edge_less")
         ctx.add("fillet_size", "bracket weld: maximum fillet size along the plate's edge (J2.2b(b))", _ratio(w, wmax))
-    if conn.get("free_edge") is not None:
-        _bracket_edge(ctx, p, length, ctx.need("free_edge"), tp, pfy, e_aa)
+    _bracket_plate(ctx, p, length, tp, pfy, e_aa)
 
 
 def prying_available(ctx: _Ctx, bolts: Bolts, b_per_bolt: float, tf: float, fu: float, tw: float, bf: float,

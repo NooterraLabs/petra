@@ -148,6 +148,21 @@ class EveryModelHasValidityRowsOrSaysWhyNot(unittest.TestCase):
         self.assertEqual(set(UNBOUNDED) - set(MODES), set())
 
 
+class AbsentReadingsHoldForEveryGrade(unittest.TestCase):
+    """lower.ABSENT reads an omitted `weathering` line as J3.6(a)'s spacing, which is exact
+    only while no grade is weathering steel: J3.6(b)'s tighter limits are for unpainted
+    weathering steel (ASTM A588, A242, A709 Grade 50W, A847 and the like). The grades below
+    are not. A weathering grade added to the registry makes the omitted line unsafe for it,
+    and this test asks for that decision (require the line for it, or read it as "yes")."""
+
+    NOT_WEATHERING = {"A992", "A36", "A572_50"}
+
+    def test_no_grade_is_weathering_steel(self):
+        self.assertLessEqual(set(deck_rows.GRADES), self.NOT_WEATHERING,
+                             "a new grade: if it is weathering steel, an omitted weathering line no longer means "
+                             "J3.6(a) for it")
+
+
 class NoDefaults(unittest.TestCase):
     """D4: every input is stated where it is used."""
 

@@ -13,7 +13,7 @@ seated seat1 {
   support W14x90 flange grade steel.A992
   angle L6x4x3_4 grade steel.A36 outstanding short
   seat_length 8 inch
-  setback 0.75 inch
+  setback 0.5 inch
   support_side bolted
   bolts bolt_group.120 diameter 0.75 inch threads included
   rows 2

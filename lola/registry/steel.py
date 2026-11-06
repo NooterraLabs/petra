@@ -477,6 +477,9 @@ COEFFICIENTS: tuple[_F, ...] = (
      f"{AISC} Section J10.6, Eq. J10-10: the factor (1.4 - alpha Pr / Py); {CHECKED}"),
     ("aisc360.j10_6.alpha_asd", "1.6", "1", SANCTIONED, "AISC",
      f"{AISC} Section J10.6: alpha = 1.6 (ASD), 1.0 (LRFD); {CHECKED}"),
+    ("aisc360.f1.cantilever_cb", "1", "1", SANCTIONED, "AISC",
+     f"{AISC} Section F1(c): Cb = 1.0 for a cantilever whose free end is unbraced, warping prevented at the support; "
+     f"{CHECKED}"),
     ("aisc360.f11.inelastic_intercept", "1.52", "1", SANCTIONED, "AISC",
      f"{AISC} Section F11.2(b), Eq. F11-3: Cb [1.52 - 0.274 (Lb d/t^2)(Fy/E)] My; {CHECKED}"),
     ("aisc360.f11.inelastic_slope", "0.274", "1", SANCTIONED, "AISC",
@@ -521,6 +524,9 @@ COEFFICIENTS: tuple[_F, ...] = (
     ("aisc_manual.p10.edge_ratio", "2", "1", SANCTIONED, "AISC",
      f"{MANUAL} Part 10, conventional single-plate connections: the horizontal edge distance Leh at least 2d on the "
      f"plate and the beam web (Companion II.A-17A); {QUOTED}"),
+    ("aisc_manual.p10.underrun", "1/4", "m", SANCTIONED, "AISC",
+     f"{MANUAL} Part 10: the length a beam may be delivered short, which the Companion takes off the beam web's end "
+     f"distance and adds to a seat's setback in its strength checks (II.A-4, II.A-12A, II.A-14, II.A-28A); {QUOTED}"),
     ("aisc_manual.p10.conventional_a", "3.5", "m", JUDGED, MAINTAINERS,
      f"{MANUAL} Part 10, conventional single-plate connections: the bolt line at most 3.5 in from the weld line; "
      f"{RECALLED}"),

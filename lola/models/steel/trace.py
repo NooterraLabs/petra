@@ -147,7 +147,8 @@ TABLE: tuple[Provision, ...] = (
               "a seat stiffener; a shaped bracket's free edge takes J4.4's factors with the Manual's Q"),
     Provision("J4.5", "Strength of Elements in Flexure", "check",
               ("flexural_yield", "flexural_rupture", "cope_buckling", "plate_buckling", "seat_flexure", "bracket_edge"),
-              "connecting plates, coped webs (Manual Part 9), extended plates (F11), seats, bracket edges (Part 15)"),
+              "connecting plates, coped webs (Manual Part 9), extended plates and rectangular bracket plates (F11), "
+              "seats, bracket edges (Part 15)"),
     Provision("J5.1", "Fillers in Welded Connections", "excluded", note="no fillers in v1.0's welded joints"),
     Provision("J5.2", "Fillers in Bolted Bearing-Type Connections", "check", ("bolts", "bolt_combined"),
               "a declared filler takes (a)'s least factor, 0.85, on the bolts' shear strength (the grammar gives no "
@@ -193,7 +194,9 @@ OTHER: tuple[Provision, ...] = (
     Provision("Manual Part 10", "Single-plate, seated and tee connections", "check",
               ("ductility", "extended_ductility", "plate_buckling", "seat_flexure", "compression", "flexural_yield"),
               "a seat stiffener's width-to-thickness limit is checked with its compression; an extended plate's "
-              "shear and flexural yielding interaction (Eq 10-8) with its flexural yielding"),
+              "shear and flexural yielding interaction (Eq 10-8) with its flexural yielding; the 1/4 in beam underrun "
+              "comes off a beam web's end distance and onto a seat's setback in the strength checks (block_shear, "
+              "seat_flexure, web_local_yielding, web_crippling, weld), as the Companion takes it"),
     Provision("Manual Part 15", "Bracket plates", "check", ("bracket_edge",)),
     Provision("Shop deck", "Stock plate thicknesses and bolt lengths", "rule",
               note="a fixed plate thickness must be stocked (registry shop_deck.plate.*), checked at lowering; bolt "

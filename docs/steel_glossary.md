@@ -94,9 +94,9 @@ and every length field of the grammar (`lower._LENGTHS`) to this page.
 | `edge_vertical` | Lev | vertical edge distance of the end rows |
 | `plate_edge` | Leh | horizontal edge distance on the connecting element |
 | `bolt_line` | a | weld line or support face to the bolt line (Manual Part 10) |
-| `beam_edge` | Leh | horizontal edge distance on the beam web |
+| `beam_edge` | Leh | horizontal edge distance on the beam web, as detailed; strength checks take it less the 1/4 in underrun (Manual Part 10) |
 | `top` | | beam's top to the top bolt row |
-| `setback` | | gap from the support face to the beam end |
+| `setback` | | gap from the support face to the beam end, as detailed; a seat's strength checks add the 1/4 in underrun |
 | `eccentricity` | e | load's distance from the bolt group's or weld's centroid |
 | `beam_gauge`, `support_gauge` | g | gauge of the bolts through the beam web, through the support |
 | `plate_width` | | an end plate's width |

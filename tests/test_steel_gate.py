@@ -7,7 +7,9 @@ stiffener a FAIL, each bolt's prying tributary by Manual Figure 9-4, a slot's le
 prying's delta, a seat's leg tearing toward its top edge, and a seat stiffener's welds
 taking their end-loaded length (J2.2b(d)); and those the red-team pass found: prying under
 shear working from F'nt, declared fillers (J5.2), a conventional plate's 2d edges, a plate
-welded on one face, and a seat stiffener at least as thick as the beam web."""
+welded on one face, a seat stiffener at least as thick as the beam web, the 1/4 in beam
+underrun in the strength checks, and a rectangular bracket plate's lateral-torsional
+buckling (F11 with F1(c)'s Cb = 1)."""
 import re
 import unittest
 from fractions import Fraction
@@ -240,6 +242,45 @@ class DeckFixes(unittest.TestCase):
         u = self.values(gen.source("s", "stiffened_seat", "lrfd", lines, Fraction(20)), "compression")
         rule = next(w for w in u if "beam web's thickness" in w)
         self.assertAlmostEqual(u[rule], 0.355 * 50 / 36 / 0.375, places=6)
+
+    def test_a_seat_takes_the_quarter_inch_underrun_on_its_setback(self):
+        # Companion II.A-12A and II.A-14: lb = seat - setback - 1/4 in. A seat detailed at a
+        # 1/2 in setback is checked as the Companion checks one at 3/4 in.
+        def seat(setback: str) -> float:
+            lines = ["  beam W16x50 grade steel.A992", "  support W14x90 web grade steel.A992",
+                     "  angle L6x4x1_2 grade steel.A572_50 outstanding short", "  seat_length 8 inch",
+                     f"  setback {setback} inch", "  support_side bolted",
+                     "  bolts bolt_group.120 diameter 0.75 inch threads included", "  rows 2", "  pitch 3 inch",
+                     "  edge_vertical 1.25 inch", "  support_gauge 5.5 inch",
+                     "  top_angle L4x4x1_4 grade steel.A36 outstanding long"]
+            return max(self.values(gen.source("s", "seated", "lrfd", lines, Fraction(40)), "seat_flexure").values())
+        # the bearing the reaction needs is kdes = 1.03 in, so M = 40 kip x (3/4 + 1.03 / 2 - (1/2 + 3/8))
+        # in = 15.6 kip-in against 0.9 x 50 x 8 x 1/2^2 / 4 = 22.5 kip-in
+        self.assertAlmostEqual(seat("0.5"), 40 * (0.75 + 1.03 / 2 - 0.875) / 22.5, places=3)
+        self.assertGreater(seat("0.5"), 2 * seat("0.25"))
+
+    def test_a_coped_beam_webs_block_runs_to_the_beam_end_less_the_underrun(self):
+        # Companion II.A-4: Ant = (leh - 1/4 in - (dh + 1/16 in) / 2) tw
+        coped = [("  top 3 inch", "  top 3 inch\n  setback 0.5 inch\n  cope top depth 1.5 inch length 4 inch")]
+        at_2 = self.values(self.tab(*coped, ("  beam_edge 1.75 inch", "  beam_edge 2 inch")), "block_shear")
+        at_175 = self.values(self.tab(*coped), "block_shear")
+        web = [w for w in at_2 if w.startswith("beam web")]
+        self.assertTrue(web)
+        self.assertTrue(all(at_175[w] > at_2[w] for w in web))
+
+    def test_a_rectangular_bracket_buckles_as_a_cantilever(self):
+        # F11 with Lb = 15 in from section A-A to the load, d = 18 in, t = 1/4 in, Cb = 1
+        # (F1(c)): Lb d/t^2 = 4320 > 1.9 E/Fy, Fcr = 1.9 E / 4320 = 12.75 ksi, phi Mn =
+        # 0.9 Fcr Sx = 154.95 kip-in against M = 10 x 15 kip-in; yielding alone gives 0.23.
+        lines = ["  plate steel.A36 thickness 0.25 inch", "  support W14x90 flange grade steel.A992",
+                 "  bolts bolt_group.120 diameter 0.75 inch threads included", "  rows 6", "  columns 2",
+                 "  pitch 3 inch", "  gauge 3 inch", "  eccentricity 16.5 inch", "  edge_vertical 1.5 inch",
+                 "  plate_edge 1.5 inch"]
+        text = gen.source("b", "bolt_bracket", "lrfd", lines, Fraction(10))
+        fcr = 1.9 * 29000 / (15 * 18 / 0.25 ** 2)
+        self.assertAlmostEqual(max(self.values(text, "plate_buckling").values()), 150 / (0.9 * fcr * 0.25 * 18 ** 2 / 6),
+                               places=4)
+        self.assertLess(max(self.values(text, "flexural_yield").values()), 0.25)
 
     def test_a_hanger_hangs_from_a_flange(self):
         text = self.hanger("WT9x25", "W21x62").replace("W21x62 flange", "W21x62 web")

@@ -42,7 +42,7 @@ Treatments: **check** (the modes whose checks encode it), **rule** (enforced whe
 | J4.2 | Strength of Elements in Shear | check | `shear_yield`, `shear_rupture` |  |
 | J4.3 | Block Shear Strength | check | `block_shear` | every enumerated block of the hole pattern |
 | J4.4 | Strength of Elements in Compression | check | `compression`, `bracket_edge` | a seat stiffener; a shaped bracket's free edge takes J4.4's factors with the Manual's Q |
-| J4.5 | Strength of Elements in Flexure | check | `flexural_yield`, `flexural_rupture`, `cope_buckling`, `plate_buckling`, `seat_flexure`, `bracket_edge` | connecting plates, coped webs (Manual Part 9), extended plates (F11), seats, bracket edges (Part 15) |
+| J4.5 | Strength of Elements in Flexure | check | `flexural_yield`, `flexural_rupture`, `cope_buckling`, `plate_buckling`, `seat_flexure`, `bracket_edge` | connecting plates, coped webs (Manual Part 9), extended plates and rectangular bracket plates (F11), seats, bracket edges (Part 15) |
 | J5.1 | Fillers in Welded Connections | excluded |  | no fillers in v1.0's welded joints |
 | J5.2 | Fillers in Bolted Bearing-Type Connections | check | `bolts`, `bolt_combined` | a declared filler takes (a)'s least factor, 0.85, on the bolts' shear strength (the grammar gives no thickness), in slip-critical joints' bearing checks too; an undeclared filler is taken to be absent |
 | J6 | Splices | excluded |  | beam and column splices are v1.1 (docs/steel_connections.md §3) |
@@ -67,7 +67,7 @@ Treatments: **check** (the modes whose checks encode it), **rule** (enforced whe
 | RCSC 4 | Joint types and installation | check | `joint_type` | at least snug-tight; Group 150 and 200 bolts in tension pretensioned; the holes that need a slip-critical joint are J3.3's (hole_use) |
 | Manual Part 7 | Entering and tightening clearances | check | `clearance` | the socket allowance is a judged registry row |
 | Manual Part 9 | Coped beams and prying action | check | `cope_buckling`, `prying` | prying by the T-stub model with each bolt's tributary length by Figure 9-4 |
-| Manual Part 10 | Single-plate, seated and tee connections | check | `ductility`, `extended_ductility`, `plate_buckling`, `seat_flexure`, `compression`, `flexural_yield` | a seat stiffener's width-to-thickness limit is checked with its compression; an extended plate's shear and flexural yielding interaction (Eq 10-8) with its flexural yielding |
+| Manual Part 10 | Single-plate, seated and tee connections | check | `ductility`, `extended_ductility`, `plate_buckling`, `seat_flexure`, `compression`, `flexural_yield` | a seat stiffener's width-to-thickness limit is checked with its compression; an extended plate's shear and flexural yielding interaction (Eq 10-8) with its flexural yielding; the 1/4 in beam underrun comes off a beam web's end distance and onto a seat's setback in the strength checks (block_shear, seat_flexure, web_local_yielding, web_crippling, weld), as the Companion takes it |
 | Manual Part 15 | Bracket plates | check | `bracket_edge` |  |
 | Shop deck | Stock plate thicknesses and bolt lengths | rule |  | a fixed plate thickness must be stocked (registry shop_deck.plate.*), checked at lowering; bolt lengths are an unchecked premise of the clearance model |
 | Connection kinds | Force components without a checked path | check | `load_path` | an axial force on a v1.0 shear connection requires the unmodelled load-path mode: UNKNOWN |

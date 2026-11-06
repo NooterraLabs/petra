@@ -170,7 +170,7 @@ class SeatBearingLength(unittest.TestCase):
     def test_the_seat_arm_uses_the_bearing_length_the_reaction_needs(self):
         # W16x26: J10-3 needs 30 / (50 x 0.25) - 2.5 x 0.747 = 0.53 in; J10-5a needs
         # (30 / 0.75 / 35.36 - 1) / (0.25 / 0.345)^1.5 x 15.7 / 3 = 1.11 in, which governs.
-        # Arm = 0.75 + 1.113 / 2 - (0.75 + 0.375) = 0.181 in; M = 30 x 0.181 = 5.43 kip-in.
+        # Arm = 0.5 + 0.25 (underrun) + 1.113 / 2 - (0.75 + 0.375) = 0.181 in; M = 30 x 0.181 = 5.43 kip-in.
         d = load_design(STEEL / "seated.lola", REGISTRY)
         (flexure,) = checks(d, "seat1", "seat_flexure").values()
         self.assertAlmostEqual(flexure.demand, 5.43, places=1)

@@ -201,12 +201,13 @@ class Flexure:
 
 @dataclass(frozen=True)
 class Bracket:
-    """A shaped bracket plate (Manual Part 15, Fig. 15-2): depth a at the support section
-    A-A, its sloped free edge projecting b from A-A, and the load at arm e from A-A."""
+    """A bracket plate (Manual Part 15, Fig. 15-2): depth a at the support section A-A, the
+    load at arm e from A-A, and a shaped plate's sloped free edge projecting b from A-A
+    (None: a rectangular plate, its free edge square to A-A)."""
     grade: str
     t: Expr
     a: Expr
-    b: Expr
+    b: Expr | None
     e: Expr
     force: Expr
 
@@ -354,20 +355,31 @@ def _support_ply(ctx: Ctx) -> Ply:
     return Ply(f"support {support.face}", support.grade, t, 1, 1, ctx.hole("support"), "down", None, None, None, 1, block=False, edges_min=())
 
 
+def _underrun(ctx: Ctx) -> Sym:
+    """The 1/4 in a beam may be delivered short (Manual Part 10). As the Companion does, the
+    strength checks take it off the beam web's end distance and add it to a seat's setback;
+    the dimensional limits (Table J3.4, J3.6, the Manual's 2d) and a cope's arm e = c +
+    setback (Manual Part 9; Companion II.A-4 takes e = 4-1/2 in at a 1/2 in setback) take
+    the lengths as detailed."""
+    return ctx.const("aisc_manual.p10.underrun")
+
+
 def _beam_web_ply(ctx: Ctx, beam: Member, props: Mapping[str, Expr], columns: int) -> Ply:
     """The beam web the bolts push up. Its free edge is the top of the beam, or the
     cope's horizontal edge; block shear applies only when coped (an uncoped web's top
-    bolt would have to tear through the flange)."""
+    bolt would have to tear through the flange). The block's tension plane runs to the
+    beam end less the underrun; the end's edge distance limits take it as detailed."""
     top, beam_edge = ctx.attr("top"), ctx.attr("beam_edge")
+    side = sub(beam_edge, _underrun(ctx))
     cope: Cope | None = ctx.conn.get("cope")
     d = props["d"]
     if cope is None:
-        return Ply("beam web", beam.grade, props["tw"], 1, 1, ctx.hole("beam"), "up", top, beam_edge, d, columns,
+        return Ply("beam web", beam.grade, props["tw"], 1, 1, ctx.hole("beam"), "up", top, side, d, columns,
                    (("beam end", beam_edge),), block=False)
     dc = ctx.geo(cope.depth, "cope.depth")
     depth = sub(d, dc) if cope.flanges == "top" else sub(sub(d, dc), _bottom_cope(ctx, cope, dc))
     edge = sub(top, dc)
-    return Ply("beam web", beam.grade, props["tw"], 1, 1, ctx.hole("beam"), "up", edge, beam_edge, depth, columns,
+    return Ply("beam web", beam.grade, props["tw"], 1, 1, ctx.hole("beam"), "up", edge, side, depth, columns,
                (("beam end", beam_edge), ("cope edge", edge)), block=True)
 
 
@@ -580,7 +592,7 @@ def geometry_seated(ctx: Ctx) -> Geometry:
     angle: AngleSpec = conn.attrs["angle"]
     vertical, outstanding, ta = _angle_legs(ctx, angle)
     seat_length = ctx.attr("seat_length")
-    setback = ctx.attr("setback")
+    setback = add(ctx.attr("setback"), _underrun(ctx))
     v = ctx.load("shear")
     lb = sub(outstanding, setback)
     support: Member = conn.attrs["support"]
@@ -619,7 +631,7 @@ def geometry_stiffened_seat(ctx: Ctx) -> Geometry:
     stiff: PlateSpec = conn.attrs["stiffener"]
     width, length = ctx.attr("stiffener_width"), ctx.attr("stiffener_length")
     ts = ctx.geo(stiff.thickness, "stiffener.thickness")
-    setback = ctx.attr("setback")
+    setback = add(ctx.attr("setback"), _underrun(ctx))
     v = ctx.load("shear")
     support: Member = conn.attrs["support"]
     t_sup = _face_t(support, _w(ctx, support))
@@ -665,8 +677,7 @@ def geometry_bolt_bracket(ctx: Ctx) -> Geometry:
     arm = sub(e, mul(c(Fraction(cols - 1, 2)), g))
     _, dh_v, _ = bolt_dims(ctx, bolts, ply.hole)
     out.flexures.append(Flexure("bracket plate", plate.grade, tp, depth, mul(v, arm), rows, s, L.hole_net(ctx.const, dh_v)))
-    if "free_edge" in conn.attrs:
-        out.bracket = Bracket(plate.grade, tp, depth, ctx.attr("free_edge"), arm, v)
+    out.bracket = Bracket(plate.grade, tp, depth, ctx.opt("free_edge"), arm, v)
     return out
 
 
@@ -690,8 +701,7 @@ def geometry_weld_bracket(ctx: Ctx) -> Geometry:
     arm = e if ret is None else sub(e, ret)
     out.web_shear.append(("bracket plate", plate.grade, mul(length, tp), v))
     out.flexures.append(Flexure("bracket plate", plate.grade, tp, length, mul(v, arm), 0, c(0), c(0)))
-    if "free_edge" in conn.attrs:
-        out.bracket = Bracket(plate.grade, tp, length, ctx.attr("free_edge"), arm, v)
+    out.bracket = Bracket(plate.grade, tp, length, ctx.opt("free_edge"), arm, v)
     return out
 
 
@@ -1220,16 +1230,31 @@ def _extended_ltb(ctx: Ctx, sp: SinglePlate) -> tuple[Expr, Expr, Expr]:
 
 
 def gen_plate_buckling(ctx: Ctx, geo: Geometry) -> list[Check]:
-    sp = geo.single_plate
-    if sp is None or sp.form != "extended":
-        return []
-    x, inelastic, elastic = _extended_ltb(ctx, sp)
-    limit = mul(ctx.const("aisc360.f11.inelastic_limit"), div(ctx.const("aisc360.E"), ctx.mat(sp.grade, "fy")))
-    m = (mul(sp.force, sp.a),)
+    """Section F11's lateral-torsional buckling of a plate bent about its major axis: an
+    extended single plate (Manual Part 10), and a rectangular bracket plate. The bracket is
+    a cantilever from section A-A, where the support holds it, to the load at its free end:
+    Lb is the arm from A-A to the load and Cb = 1 (F1(c)), nothing taken to brace that end.
+    A shaped bracket's free edge is Manual Part 15's (gen_bracket_edge)."""
+    sp, br = geo.single_plate, geo.bracket
+    if sp is not None and sp.form == "extended":
+        x, inelastic, elastic = _extended_ltb(ctx, sp)
+        return _ltb_checks(ctx, "plate", "Cb = 1.84, Manual Part 10", sp.grade, x, inelastic, elastic, mul(sp.force, sp.a))
+    if br is not None and br.b is None:
+        fy = ctx.mat(br.grade, "fy")
+        x, inelastic, elastic = L.bar_ltb(ctx.const, ctx.const("aisc360.E"), fy, ctx.const("aisc360.f1.cantilever_cb"),
+                                          br.e, br.a, br.t)
+        return _ltb_checks(ctx, "bracket plate", "Cb = 1 for a cantilever by F1(c), J4.5", br.grade, x, inelastic, elastic,
+                           mul(br.force, br.e))
+    return []
+
+
+def _ltb_checks(ctx: Ctx, name: str, cb: str, grade: str, x: Expr, inelastic: Expr, elastic: Expr, moment: Expr) -> list[Check]:
+    """Eq F11-3's check where Lb d/t^2 <= 1.9 E/Fy and Eq F11-4's above, each capped by Mp."""
+    limit = mul(ctx.const("aisc360.f11.inelastic_limit"), div(ctx.const("aisc360.E"), ctx.mat(grade, "fy")))
     return [
-        Check("plate: lateral-torsional buckling, Lb d/t^2 <= 1.9 E/Fy (F11, Cb = 1.84, Manual Part 10)", m, inelastic,
+        Check(f"{name}: lateral-torsional buckling, Lb d/t^2 <= 1.9 E/Fy (F11, {cb})", (moment,), inelastic,
               "aisc360.j4_5", "_y", (add(sub(limit, x), ctx.const(L.STRICT_RATIO)),), unit="kip-in"),
-        Check("plate: lateral-torsional buckling, Lb d/t^2 > 1.9 E/Fy (F11, Cb = 1.84, Manual Part 10)", m, elastic,
+        Check(f"{name}: lateral-torsional buckling, Lb d/t^2 > 1.9 E/Fy (F11, {cb})", (moment,), elastic,
               "aisc360.j4_5", "_y", (sub(x, limit),), unit="kip-in"),
     ]
 
@@ -1331,7 +1356,7 @@ def gen_bracket_edge(ctx: Ctx, geo: Geometry) -> list[Check]:
     normal force and moment on it with the edge's local buckling (Eqs 15-8 to 15-18), one
     check per branch of Q, the boundary lambda = 1.41 belonging to the stocky branch."""
     br = geo.bracket
-    if br is None:
+    if br is None or br.b is None:
         return []
     sin, cos, a1, b1 = L.bracket_section(br.a, br.b)
     fy = ctx.mat(br.grade, "fy")

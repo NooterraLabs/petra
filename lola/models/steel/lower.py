@@ -128,7 +128,7 @@ ABSENT: Mapping[str, object] = {
     "form": "conventional",         # a conventional single plate (Manual Part 10)
     "pair": "single",               # one concentrated force, not a pair on opposite flanges (J10.5)
     "holes": MappingProxyType({}),  # every ply has standard holes (Table J3.3)
-    "weathering": "no",             # painted or not weathering steel (J3.6)
+    "weathering": "no",             # not unpainted weathering steel (J3.6(a)): no grade the registry holds is one
     "deformation": "considered",    # deformation at the hole a design consideration: J3.11a's lower coefficients
 }
 """What an optional line's absence means: the feature is absent, or the reading that gives

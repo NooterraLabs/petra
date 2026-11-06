@@ -45,13 +45,9 @@ SURVIVORS: dict[str, str] = {
                                              "shear at any design with deformation not considered",
     "aisc360.j3_11a.bearing_lsl_perpendicular": "doubled (4.0 d t Fu): bearing at the one long slot across the force "
                                                 "no longer governs over bolt shear",
-    "aisc360.f11.inelastic_intercept": "doubled: Eq F11-3 with Cb >= 1.84 already exceeds Mp, which caps it",
-    "aisc360.f11.inelastic_slope": "Eq F11-3 with Cb >= 1.84 exceeds Mp = 1.5 My over its whole range (at "
-                                   "Lb d/t^2 = 1.9 E/Fy it is 1.84 x 0.999 My), so a slope that keeps it there "
-                                   "changes nothing, and no design's ratio is large enough for the doubled one",
-    "aisc360.f11.inelastic_limit": "moving the boundary between Eqs F11-3 and F11-4 changes nothing where Mp caps "
-                                   "both, as it does at every design but the slender double cope, which stays past "
-                                   "3.8 E/Fy",
+    "aisc360.f11.inelastic_limit": "doubled (3.8 E/Fy): no design where Mp does not cap both Eqs F11-3 and F11-4 has "
+                                   "its Lb d/t^2 between 1.9 and 3.8 E/Fy (the slender double cope and the slender "
+                                   "rectangular bracket lie past 3.8 E/Fy)",
     "aisc_manual.p10.extended_cb": "doubled: Eq F11-3 already exceeds Mp at the extended tabs",
     "aisc_manual.p10.fnv_divisor": "halved: tmax doubles, and the 5/8 tp weld rule governs extended_ductility at the "
                                    "extended tabs",

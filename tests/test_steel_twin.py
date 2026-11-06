@@ -630,6 +630,43 @@ hanger h5 {
   tee_gauge 3 inch
   edge_vertical 1.5 inch
 }""", "  on h5 tension in [0 kip, 20 kip]"),
+    # a thin rectangular bracket far out: Section F11's elastic buckling (Lb d/t^2 = 4320 past
+    # 1.9 E/Fy) governs over yielding, Cb = 1 for the cantilever (F1(c)); the red team's case
+    "bracket_rectangular_slender": _variant("bracket_rectangular_slender", """
+bolt_bracket bb5 {
+  basis lrfd
+  plate steel.A36 thickness 0.25 inch
+  support W14x90 flange grade steel.A992
+  bolts bolt_group.120 diameter 0.75 inch threads included
+  rows 6
+  columns 2
+  pitch 3 inch
+  gauge 3 inch
+  eccentricity 16.5 inch
+  edge_vertical 1.5 inch
+  plate_edge 1.5 inch
+}""", "  on bb5 shear in [0 kip, 10 kip]"),
+    # a rectangular welded bracket square to the support: Eq F11-3 (inelastic), below Mp
+    "weld_bracket_rectangular": _variant("weld_bracket_rectangular", """
+weld_bracket wb5 {
+  basis asd
+  plate steel.A36 thickness 0.375 inch
+  support W14x90 flange grade steel.A992
+  weld electrode.E70 size 0.25 inch sides 2
+  weld_length 12 inch
+  eccentricity 10 inch
+}""", "  on wb5 shear in [0 kip, 8 kip]"),
+    # a rectangular lapped bracket: Lb is the arm past the returns, e - kl
+    "weld_bracket_rectangular_lapped": _variant("weld_bracket_rectangular_lapped", """
+weld_bracket wb6 {
+  basis lrfd
+  plate steel.A36 thickness 0.375 inch
+  support W14x90 flange grade steel.A992
+  weld electrode.E70 size 0.25 inch sides 1
+  weld_length 10 inch
+  weld_return 3 inch
+  eccentricity 12 inch
+}""", "  on wb6 shear in [0 kip, 10 kip]"),
 }
 
 

@@ -38,8 +38,10 @@ ROLE_LIMITS: Mapping[str, tuple[str, ...]] = {
     "extended_plate": ("plate_buckling", "extended_ductility"),
     # a bracket plate welded to its support: no holes, so no rupture section
     "welded_bracket": ("shear_yield", "flexural_yield"),
-    # a shaped bracket's sloped free edge (Manual Part 15)
+    # a shaped bracket's sloped free edge (Manual Part 15); a rectangular one, a cantilever
+    # whose free end can buckle sideways (F11)
     "shaped_bracket": ("bracket_edge",),
+    "rectangular_bracket": ("plate_buckling",),
     # a seat leg under a beam end, and the beam web bearing on it
     "seat": ("seat_flexure", "shear_yield"),
     "seat_leg": EDGES,
@@ -90,7 +92,7 @@ def _bolts(conn: Conn, element: str, role: str) -> tuple[Link, ...]:
 
 
 def _shaped(conn: Conn) -> tuple[Link, ...]:
-    return (Link("bracket plate", "shaped_bracket"),) if conn.get("free_edge") is not None else ()
+    return (Link("bracket plate", "shaped_bracket" if conn.get("free_edge") is not None else "rectangular_bracket"),)
 
 
 def _face(conn: Conn) -> Link:

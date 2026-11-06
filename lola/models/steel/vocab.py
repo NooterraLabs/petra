@@ -90,7 +90,8 @@ STRENGTH: tuple[tuple[str, str, str, str, tuple[ValidityRow, ...]], ...] = (
      "block shear rupture over every tear-out path the hole pattern admits: blocks of the first k rows and j columns "
      "from the free edges carry their share k j / (rows cols) of a concentric force, or for an eccentric group the "
      "elastic method's resultant of the forces on the block's bolts (Manual Part 7), against Rn = 0.60 Fu Anv + "
-     "Ubs Fu Ant <= 0.60 Fy Agv + Ubs Fu Ant (Eq J4-5), Ubs = 1 for one column and 0.5 for more",
+     "Ubs Fu Ant <= 0.60 Fy Agv + Ubs Fu Ant (Eq J4-5), Ubs = 1 for one column and 0.5 for more; a beam web's "
+     "block runs to the beam end less the 1/4 in the beam may be delivered short (Companion II.A-4)",
      "each block is bounded by the free edges the element has; the block's capacity is taken for tear-out in the "
      "direction of the applied force, whatever the direction of the resultant on its bolts",
      f"{AISC} Section J4.3", ()),
@@ -105,8 +106,7 @@ STRENGTH: tuple[tuple[str, str, str, str, tuple[ValidityRow, ...]], ...] = (
     ("flexural_yield",
      "flexural yielding of a connecting plate under the moment of its eccentricity, Mn = Fy Z (Section J4.5)",
      "the plate bends about its strong axis at the bolt or weld line nearest the load (a bracket's section A-A); a "
-     "rectangular bracket plate's compression edge is taken not to buckle, which only a shaped bracket's free-edge "
-     "check covers",
+     "rectangular bracket plate's buckling is plate_buckling's, a shaped bracket's free edge bracket_edge's",
      f"{AISC} Section J4.5; {MANUAL} Parts 10 and 15", ()),
     ("flexural_rupture",
      "flexural rupture of the net section of a connecting plate, Mn = Fu Znet (Section J4.5)",
@@ -138,11 +138,12 @@ STRENGTH: tuple[tuple[str, str, str, str, tuple[ValidityRow, ...]], ...] = (
      f"{AISC} Section J7", ()),
     ("web_local_yielding",
      "web local yielding under a concentrated force, Rn = Fyw tw (5k + lb), or (2.5k + lb) within d of the member end "
-     "(Eqs J10-2, J10-3)",
+     "(Eqs J10-2, J10-3); on a seat, lb is the seat less the setback and the 1/4 in underrun (Companion II.A-14)",
      "a rolled W shape with no stiffener at the force",
      f"{AISC} Section J10.2", ()),
     ("web_crippling",
-     "web local crippling under a compressive concentrated force (Eqs J10-4, J10-5a, J10-5b, Qf = 1)",
+     "web local crippling under a compressive concentrated force (Eqs J10-4, J10-5a, J10-5b, Qf = 1); on a seat, lb "
+     "is the seat less the setback and the 1/4 in underrun (Companion II.A-14)",
      "a rolled W shape with no stiffener at the force; the force bears on one flange",
      f"{AISC} Section J10.3", ()),
     ("flange_local_bending",
@@ -169,8 +170,8 @@ STRENGTH: tuple[tuple[str, str, str, str, tuple[ValidityRow, ...]], ...] = (
     ("seat_flexure",
      "flexural yielding of an unstiffened seat angle's outstanding leg at the critical section, Mn = Fy L t^2 / 4, under "
      "the beam reaction at the middle of the bearing length it needs: the least of the outstanding leg less the setback "
-     "and the length web local yielding and crippling require (J10.2, J10.3), not less than kdes (Manual Table 10-5, "
-     "Companion II.A-12A)",
+     "(with the 1/4 in underrun) and the length web local yielding and crippling require (J10.2, J10.3), not less than "
+     "kdes (Manual Table 10-5, Companion II.A-12A)",
      "the critical section lies a judged offset beyond the angle thickness from the back of the vertical leg",
      f"{MANUAL} Part 10 (unstiffened seated connections)", ()),
     ("prying",
@@ -309,9 +310,12 @@ for short, form, validity, source in (
      "Lb = c and the Manual's Cb", "the reaction acts at the support face, e = c + setback; the tee's fillets are "
      "neglected; both copes have the same length; the cope's reentrant corners are cut to the radius Section J1.6 "
      "requires, a fabrication premise the deck does not check", f"{MANUAL} Part 9, Eqs 9-9 to 9-21; {AISC} Section F11"),
-    ("plate_buckling", "lateral-torsional buckling of an extended single plate as a rectangular bar, Section F11 "
-     "with Lb = a and Cb = 1.84, against the moment at the weld line", "the plate is unstiffened between the weld "
-     "and the bolt line; the beam is braced against rotation about its axis", f"{MANUAL} Part 10; {AISC} Section F11"),
+    ("plate_buckling", "lateral-torsional buckling of a plate as a rectangular bar, Section F11: an extended single "
+     "plate with Lb = a and Cb = 1.84 against the moment at the weld line; a rectangular bracket plate as a cantilever "
+     "from section A-A, Lb the arm to the load and Cb = 1 (Section F1(c)), against the moment at A-A",
+     "an extended plate is unstiffened between the weld and the bolt line, and its beam is braced against rotation "
+     "about its axis; nothing braces a bracket plate's loaded end against moving sideways",
+     f"{MANUAL} Part 10; {AISC} Sections F1 and F11"),
     ("ductility", "rotational ductility of a conventional single-plate connection: plate or beam web thin enough "
      "(t <= d/2 + 1/16 in) to yield before the bolts fracture, the fillet on each face of the plate at least "
      "five-eighths of its thickness so the plate yields before the weld, and the horizontal edge distance at least "
