@@ -12,7 +12,7 @@ from fractions import Fraction as Q
 from typing import get_args, get_type_hints
 from unittest import mock
 
-from lola.kernel import (
+from petra.kernel import (
     TAGS,
     Add,
     Const,
@@ -37,12 +37,12 @@ from lola.kernel import (
     rules,
     statement_hash,
 )
-from lola.kernel.check import FAMILY_MEMO_LIMIT
-from lola.kernel.rules.r3_hypercircle import HypercircleFields, MinimizerComponent, QuadraticProblem
-from lola.kernel.rules.r4_enclosure import AllNonpositive, Enclosure
+from petra.kernel.check import FAMILY_MEMO_LIMIT
+from petra.kernel.rules.r3_hypercircle import HypercircleFields, MinimizerComponent, QuadraticProblem
+from petra.kernel.rules.r4_enclosure import AllNonpositive, Enclosure
 from tests import mutations
 
-KERNEL_CHECK = sys.modules["lola.kernel.check"]
+KERNEL_CHECK = sys.modules["petra.kernel.check"]
 """The module, which the package's `check` function shadows as an attribute."""
 
 

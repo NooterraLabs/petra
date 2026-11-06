@@ -1,6 +1,6 @@
 {
- "format": "lola-cert/0",
- "kernel": "lola-kernel/0",
+ "format": "petra-cert/0",
+ "kernel": "petra-kernel/0",
  "statement_hash": "sha256:9caaf82371013b4170cfbb25cde94eaa54b40ee325600116748e4ca91b55f372",
  "statement": {
   "t": "statement",
@@ -246,6 +246,6 @@
  },
  "producer": {
   "source": "solver:r4_enclosure",
-  "lola": "0.1.0"
+  "petra": "0.1.0"
  }
 }

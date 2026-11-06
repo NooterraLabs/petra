@@ -1,6 +1,6 @@
 """Wire circuits: lowering, the four wire obligations, coverage features, and the R4
 search, each checked through the elaborator, the solver and kernel.check against margins
-worked by hand from the formulas in lola/models/circuit.py and the registry. Owner: C.
+worked by hand from the formulas in petra/models/circuit.py and the registry. Owner: C.
 
 Hand values, 2.5 mm2 Cu/PVC (insulation 0.8 mm) clipped direct, h = 5 W/(m2 K):
     R20 = rho20 / A = 1 / 145 ohm/m;  d = 1.78412 mm, D = 3.38412 mm
@@ -18,8 +18,8 @@ import unittest
 from fractions import Fraction
 from pathlib import Path
 
-from lola import coverage
-from lola.kernel import (
+from petra import coverage
+from petra.kernel import (
     Add,
     Const,
     Evidence,
@@ -37,15 +37,15 @@ from lola.kernel import (
     check,
     enclose,
 )
-from lola.kernel.rules.r4_enclosure import MAX_DEPTH, AllNonpositive, Enclosure, PointWitness
-from lola.lang import load_design, parse_design
-from lola.models import circuit
-from lola.models.base import ComponentError, CoverageOrigin, Gap, NeedsInputBound, NoRuleForQuantity, Obligation
-from lola.pipeline import check_design
-from lola.premises import Tag
-from lola.registry import build_registry
-from lola.solvers import SolverSource, r4_enclosure
-from lola.verdict import Pass
+from petra.kernel.rules.r4_enclosure import MAX_DEPTH, AllNonpositive, Enclosure, PointWitness
+from petra.lang import load_design, parse_design
+from petra.models import circuit
+from petra.models.base import ComponentError, CoverageOrigin, Gap, NeedsInputBound, NoRuleForQuantity, Obligation
+from petra.pipeline import check_design
+from petra.premises import Tag
+from petra.registry import build_registry
+from petra.solvers import SolverSource, r4_enclosure
+from petra.verdict import Pass
 
 REGISTRY = build_registry()
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples"
@@ -55,7 +55,7 @@ AMBIENT = "ambient"
 H = "const.install.clipped_direct.h"
 WORST = {CURRENT: 10, AMBIENT: 40, H: 5}
 
-RADIAL = """lola 0
+RADIAL = """petra 0
 design "radial" {
   owner "e.designer@example.org"
   environment indoor_dry
@@ -78,7 +78,7 @@ load lamp_draw {
 }
 """
 
-TWO_WIRES = """lola 0
+TWO_WIRES = """petra 0
 design "two-runs" {
   owner "e.designer@example.org"
   environment indoor_dry
@@ -102,9 +102,9 @@ load lamp_draw {
 }
 """
 
-FAMILY = """lola 0
+FAMILY = """petra 0
 design "family" {
-  owner "lola.library@example.org"
+  owner "petra.library@example.org"
 }
 param size in [2.5 mm2, 16 mm2]
 param ins in [0.8 mm, 1.0 mm]
@@ -120,7 +120,7 @@ circuit c {
 }
 load demand {
   on c.load current param draw
-  signed "lola.library@example.org" source "family definition"
+  signed "petra.library@example.org" source "family definition"
 }
 """
 
@@ -130,7 +130,7 @@ def radial(*edits: tuple[str, str], text: str = RADIAL, extra: str = ""):
         if old not in text:
             raise AssertionError(f"{old!r} is not in the template")
         text = text.replace(old, new)
-    return parse_design(text + extra, "radial.lola", REGISTRY)
+    return parse_design(text + extra, "radial.petra", REGISTRY)
 
 
 def lowered(design) -> dict:
@@ -182,7 +182,7 @@ def labels(statement: Statement) -> set[str]:
 
 class CircuitPass(unittest.TestCase):
     def setUp(self):
-        self.design = load_design(EXAMPLES / "circuit_pass.lola", REGISTRY)
+        self.design = load_design(EXAMPLES / "circuit_pass.petra", REGISTRY)
 
     def test_every_wire_obligation_is_a_theorem(self):
         results = elaborate(self.design)
@@ -387,7 +387,7 @@ class Family(unittest.TestCase):
     must split. Worst corner: 2.5 mm2, 0.8 mm, 10 A, 40 degC, h = 5, theta 55.1667 degC."""
 
     def obligation(self, limit: str) -> Obligation:
-        d = parse_design(FAMILY + f"claim hot: c.w1.temperature <= {limit} degC under demand\n", "family.lola", REGISTRY)
+        d = parse_design(FAMILY + f"claim hot: c.w1.temperature <= {limit} degC under demand\n", "family.petra", REGISTRY)
         return one(d, circuit.STEADY_TEMPERATURE, "hot")
 
     def test_a_claim_just_above_the_worst_corner_needs_a_partition(self):
@@ -412,7 +412,7 @@ class Family(unittest.TestCase):
 
 class Lowering(unittest.TestCase):
     def test_the_example_lowers_to_its_elements_and_one_series_path(self):
-        model = lowered(load_design(EXAMPLES / "circuit_pass.lola", REGISTRY))["lighting"]
+        model = lowered(load_design(EXAMPLES / "circuit_pass.petra", REGISTRY))["lighting"]
         self.assertEqual(model.elements["cb1"], circuit.Breaker("cb1", "mcb.B10"))
         self.assertEqual(model.elements["t1"], circuit.Terminal("t1", "terminal.lever_4mm2_75C"))
         wire = model.elements["w1"]
@@ -473,7 +473,7 @@ class Lowering(unittest.TestCase):
 
 class Features(unittest.TestCase):
     def test_a_wire_is_a_conductor_and_each_connection_of_parts_a_contact_pair(self):
-        d = load_design(EXAMPLES / "circuit_pass.lola", REGISTRY)
+        d = load_design(EXAMPLES / "circuit_pass.petra", REGISTRY)
         found = circuit.features(lowered(d)["lighting"], d, REGISTRY)
         self.assertEqual([(f.subject, f.kind, f.materials) for f in found], [
             (("lighting", "w1"), circuit.CONDUCTOR, ("copper.cu_etp",)),
@@ -484,13 +484,13 @@ class Features(unittest.TestCase):
     def test_a_coated_terminal_shows_its_coating_to_the_wire(self):
         terminal = REGISTRY.parts["terminal.lever_4mm2_75C"]
         plated = dataclasses.replace(REGISTRY, parts={**REGISTRY.parts, terminal.id: dataclasses.replace(terminal, process="process.zinc_plate")})
-        d = load_design(EXAMPLES / "circuit_pass.lola", REGISTRY)
+        d = load_design(EXAMPLES / "circuit_pass.petra", REGISTRY)
         found = circuit.features(lowered(d)["lighting"], d, plated)
         self.assertEqual([f.materials for f in found if f.kind == "contact_pair"],
                          [("copper.cu_etp", "copper.cu_etp"), ("copper.cu_etp", "zinc.electroplate")])
 
     def test_a_voltage_drop_claim_settles_the_coverage_demand_and_its_absence_does_not(self):
-        claimed = load_design(EXAMPLES / "circuit_pass.lola", REGISTRY)
+        claimed = load_design(EXAMPLES / "circuit_pass.petra", REGISTRY)
         demanded = [r.mode for r in coverage.generate(claimed, lowered(claimed), REGISTRY) if isinstance(r.origin, CoverageOrigin)]
         self.assertEqual(demanded, [circuit.STEADY_TEMPERATURE, circuit.SHORT_CIRCUIT, circuit.OVERLOAD_PROTECTION])
         bare = radial()

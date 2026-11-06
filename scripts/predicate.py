@@ -1,4 +1,4 @@
-"""Check the LoLa v0 definition of done (docs/frame.md) item by item.
+"""Check the Petra v0 definition of done (docs/frame.md) item by item.
 
 Usage: python scripts/predicate.py
 Prints one line per item, VERIFIED or NOT VERIFIED, with the evidence, and exits 0 only if every item is VERIFIED.
@@ -34,8 +34,8 @@ def p1_tests() -> tuple[bool, str]:
 
 def check_examples() -> list[dict]:
     out = []
-    for path in sorted(glob.glob(os.path.join(ROOT, "examples", "*.lola"))):
-        r = run(["-m", "lola", "check", os.path.relpath(path, ROOT), "--json"])
+    for path in sorted(glob.glob(os.path.join(ROOT, "examples", "*.petra"))):
+        r = run(["-m", "petra", "check", os.path.relpath(path, ROOT), "--json"])
         if r.returncode not in (0, 1, 2):
             raise RuntimeError(f"{path}: exit {r.returncode}: {tail(r.stderr)}")
         out.append(json.loads(r.stdout))
@@ -51,9 +51,9 @@ def p2_verdicts(reports: list[dict]) -> tuple[bool, str]:
 
 
 def p3_kernel_stdlib() -> tuple[bool, str]:
-    files = glob.glob(os.path.join(ROOT, "lola", "kernel", "**", "*.py"), recursive=True)
+    files = glob.glob(os.path.join(ROOT, "petra", "kernel", "**", "*.py"), recursive=True)
     if not files:
-        return False, "no lola/kernel files"
+        return False, "no petra/kernel files"
     bad = []
     lines = 0
     for f in files:
@@ -67,9 +67,9 @@ def p3_kernel_stdlib() -> tuple[bool, str]:
                 names = [node.module]
             for name in names:
                 top = name.split(".")[0]
-                if top not in sys.stdlib_module_names and top != "lola":
+                if top not in sys.stdlib_module_names and top != "petra":
                     bad.append(f"{os.path.relpath(f, ROOT)} imports {name}")
-                if top == "lola" and not name.startswith("lola.kernel"):
+                if top == "petra" and not name.startswith("petra.kernel"):
                     bad.append(f"{os.path.relpath(f, ROOT)} imports untrusted {name}")
     r = run(["-m", "unittest", "tests.test_kernel_mutations"])
     mut_ok = r.returncode == 0
@@ -79,11 +79,11 @@ def p3_kernel_stdlib() -> tuple[bool, str]:
 
 def p4_rules(reports: list[dict]) -> tuple[bool, str]:
     used = {rule for rep in reports for v in rep["verdicts"] for rule in v.get("rules", [])}
-    return RULES <= used, f"rules exercised from .lola files: {sorted(used)}, missing: {sorted(RULES - used)}"
+    return RULES <= used, f"rules exercised from .petra files: {sorted(used)}, missing: {sorted(RULES - used)}"
 
 
 def p5_registry() -> tuple[bool, str]:
-    r = run(["-m", "lola", "registry", "check"])
+    r = run(["-m", "petra", "registry", "check"])
     t = run(["-m", "unittest", "tests.test_registry_consistency"])
     return r.returncode == 0 and t.returncode == 0, f"registry check exit {r.returncode}: {tail(r.stdout, 1)}; corruption tests: {tail(t.stderr, 1)}"
 
@@ -100,7 +100,7 @@ def p7_family_bench() -> tuple[bool, str]:
 
 
 def p8_gym() -> tuple[bool, str]:
-    r = run(["-m", "lola", "gym", "--episodes", "20", "--seed", "0"])
+    r = run(["-m", "petra", "gym", "--episodes", "20", "--seed", "0"])
     return r.returncode == 0 and "solved" in r.stdout, tail(r.stdout, 3)
 
 

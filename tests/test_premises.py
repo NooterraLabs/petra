@@ -2,13 +2,13 @@
 import unittest
 from fractions import Fraction
 
-from lola.ir import Design, Fixed, Input, InputKind, Param, ParamRef, Signature, Span, Tests
-from lola.kernel import Add, Const, DefinedHyp, Div, Interval, Matrix, Mul, Neg, RangeHyp, Sym, enclose
-from lola.kernel.rules.r3_hypercircle import MinimizerComponent, QuadraticProblem
-from lola.kernel.rules.r4_enclosure import AllNonpositive
-from lola.kernel.rules.r5_moment import MomentBound, MomentConstraint, RandomVar
-from lola.models.base import StatementBuilder
-from lola.premises import (
+from petra.ir import Design, Fixed, Input, InputKind, Param, ParamRef, Signature, Span, Tests
+from petra.kernel import Add, Const, DefinedHyp, Div, Interval, Matrix, Mul, Neg, RangeHyp, Sym, enclose
+from petra.kernel.rules.r3_hypercircle import MinimizerComponent, QuadraticProblem
+from petra.kernel.rules.r4_enclosure import AllNonpositive
+from petra.kernel.rules.r5_moment import MomentBound, MomentConstraint, RandomVar
+from petra.models.base import StatementBuilder
+from petra.premises import (
     DesignValue,
     Footprint,
     LabelKind,
@@ -25,11 +25,11 @@ from lola.premises import (
     param_label,
     registry_label,
 )
-from lola.registry import Constant, Corrosivity, Derived, Environment, Material, OutsideMakeableSet, Part, PartKind, Registry, Stated, build_registry
-from lola.units import AREA, DIMENSIONLESS, FORCE, Quantity
+from petra.registry import Constant, Corrosivity, Derived, Environment, Material, OutsideMakeableSet, Part, PartKind, Registry, Stated, build_registry
+from petra.units import AREA, DIMENSIONLESS, FORCE, Quantity
 
 RANGE = Interval(Fraction(0), Fraction(1))
-SPAN = Span("t.lola", 1, 1)
+SPAN = Span("t.petra", 1, 1)
 
 
 def premise(label: str, tag: Tag = Tag.ASSUMED, owner: str = "o@example.org", source: str = "s", range: Interval | None = None) -> Premise:
@@ -142,7 +142,7 @@ REGISTRY = FakeRegistry(
 DESIGN = Design(
     name="d",
     owner="o@example.org",
-    path="t.lola",
+    path="t.petra",
     environment=None,
     ambient=None,
     components={},

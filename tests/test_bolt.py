@@ -3,7 +3,7 @@ through the elaborator, the R4 solver and kernel.check. Owner: C.
 
 Hand values (ISO 724: d2 = d - 0.649519 P, d3 = d - 1.226869 P, As = pi/4 ((d2 + d3)/2)^2):
     M12 (P 1.75 mm): As = 84.26654 mm2;  M10 (P 1.5 mm): As = 57.98960 mm2
-    worst corner of bolt_unknown.lola: T = 50 Nm, K = 0.16, Phi = 0.25, F = 12 kN
+    worst corner of bolt_unknown.petra: T = 50 Nm, K = 0.16, Phi = 0.25, F = 12 kN
     M12: F_V = T / (K d) = 26041.667 N;  F_bolt = F_V + Phi F = 29041.667 N
          0.9 Rp02 As = 0.9 x 450 MPa x As = 34127.948 N  -> margin -5086.281 N
          Rp02 As = 37919.942 N -> margin -8878.276 N;  Sp(8.8) As = 580 MPa x As = 48874.592 N
@@ -15,11 +15,11 @@ import unittest
 from fractions import Fraction
 from pathlib import Path
 
-from lola import coverage, models
-from lola.kernel import Interval, Refutation, Rejection, Theorem, check, decode_evidence, decode_statement, statement_hash
-from lola.lang import load_design, parse_design
-from lola.models import bolt
-from lola.models.base import (
+from petra import coverage, models
+from petra.kernel import Interval, Refutation, Rejection, Theorem, check, decode_evidence, decode_statement, statement_hash
+from petra.lang import load_design, parse_design
+from petra.models import bolt
+from petra.models.base import (
     CONTACT_PAIR,
     GALVANIC_CORROSION,
     ClaimOrigin,
@@ -30,15 +30,15 @@ from lola.models.base import (
     NoRuleForQuantity,
     Obligation,
 )
-from lola.premises import Tag
-from lola.registry import Material, Process, ProcessKind, Stated, build_registry
-from lola.solvers import r4_enclosure
+from petra.premises import Tag
+from petra.registry import Material, Process, ProcessKind, Stated, build_registry
+from petra.solvers import r4_enclosure
 
 from tests.test_circuit import at
 
 REGISTRY = build_registry()
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples"
-EXAMPLE = EXAMPLES / "bolt_unknown.lola"
+EXAMPLE = EXAMPLES / "bolt_unknown.petra"
 CERT = EXAMPLES / "bolt_tension.cert.json"
 
 WORST = {"bracket.torque": 50, "bracket.nut_factor": Fraction(4, 25), "bracket.load_share": Fraction(1, 4), "wind.bracket.force": 12000}
@@ -48,9 +48,9 @@ def joint(*edits: tuple[str, str], extra: str = ""):
     text = EXAMPLE.read_text(encoding="utf-8")
     for old, new in edits:
         if old not in text:
-            raise AssertionError(f"{old!r} is not in bolt_unknown.lola")
+            raise AssertionError(f"{old!r} is not in bolt_unknown.petra")
         text = text.replace(old, new)
-    return parse_design(text + extra, "joint.lola", REGISTRY)
+    return parse_design(text + extra, "joint.petra", REGISTRY)
 
 
 def lowered(design) -> dict:
@@ -189,11 +189,11 @@ class Galvanic(unittest.TestCase):
         """Cadmium 0.95 against 6061 0.90: 0.05 V apart. The bare A4 bolt is 0.50 against
         0.90, 0.40 V apart."""
         text = EXAMPLE.read_text(encoding="utf-8")
-        plated = parse_design(text.replace("bolt.M12_A4_70", "bolt.M12_A4_70_cd"), "joint.lola", CADMIUM)
+        plated = parse_design(text.replace("bolt.M12_A4_70", "bolt.M12_A4_70_cd"), "joint.petra", CADMIUM)
         self.assertEqual(self.pairs(plated, CADMIUM), [("cadmium.electroplate", "aluminium.6061_T6"),
                                                         ("aluminium.6061_T6", "aluminium.6061_T6")])
         self.assertFalse(self.demanded(plated, CADMIUM))
-        bare = parse_design(text, "joint.lola", CADMIUM)
+        bare = parse_design(text, "joint.petra", CADMIUM)
         self.assertTrue(self.demanded(bare, CADMIUM))
 
 

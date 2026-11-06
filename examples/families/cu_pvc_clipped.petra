@@ -1,0 +1,41 @@
+petra 0
+
+# Family: any Cu/PVC cable from 2.5 to 16 mm2, clipped direct, up to 20 m, drawing up
+# to 13 A, in 10-40 degC ambient, stays at or below 70 degC and drops at most 3 % of
+# 230 V. `petra certify-family` proves both claims over the whole box once (R4) and
+# stores the partitions in the library. circuit_pass.petra (2.5 mm2, 18 m, 10 A) sits
+# inside the box, so its two claims reuse these certificates.
+#
+# The hottest corner is 2.5 mm2 with 0.8 mm insulation, 13 A, 40 degC and the low
+# surface coefficient h = 5 W/m2K: about 66.7 degC. A 16 A draw would reach about
+# 82.5 degC there, which is why the draw stops at 13 A (tests/test_library.py).
+
+design "family-cu-pvc-clipped-direct" {
+  owner "petra.library@example.org"
+  environment indoor_dry
+}
+
+param size       in [2.5 mm2, 16 mm2]
+param insulation in [0.8 mm, 1.0 mm]
+param run        in [0 m, 20 m]
+param draw       in [0 A, 13 A]
+param amb        in [10 degC, 40 degC]
+
+ambient param amb
+
+circuit c {
+  supply mains voltage 230 V
+  wire w1 cable cable.cu_pvc area param size insulation param insulation length param run install install.clipped_direct
+  consumer load
+
+  connect mains.out -> w1.a
+  connect w1.b -> load.in
+}
+
+load demand {
+  on c.load current param draw
+  signed "petra.library@example.org" source "family definition"
+}
+
+claim hot:  c.w1.temperature <= 70 degC under demand
+claim drop: c.w1.voltage_drop <= 3 % under demand

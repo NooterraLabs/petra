@@ -7,11 +7,11 @@ import json
 import unittest
 from fractions import Fraction
 
-from lola.coverage import table_premise
-from lola.kernel import Add, Const, Interval, Invalid, Neg, RangeHyp, Rejection, Statement, Sym
-from lola.kernel.check import _issue_refutation, _issue_theorem
-from lola.kernel.rules.r4_enclosure import AllNonpositive
-from lola.models.base import (
+from petra.coverage import table_premise
+from petra.kernel import Add, Const, Interval, Invalid, Neg, RangeHyp, Rejection, Statement, Sym
+from petra.kernel.check import _issue_refutation, _issue_theorem
+from petra.kernel.rules.r4_enclosure import AllNonpositive
+from petra.models.base import (
     GALVANIC_CORROSION,
     CertificateRejected,
     CertificateTooWeak,
@@ -27,8 +27,8 @@ from lola.models.base import (
     RegistryInconsistent,
     Requirement,
 )
-from lola.premises import Footprint, Premise, PremiseBook, RangeMismatch, ScopeParam, Tag, UnresolvedLabel
-from lola.verdict import (
+from petra.premises import Footprint, Premise, PremiseBook, RangeMismatch, ScopeParam, Tag, UnresolvedLabel
+from petra.verdict import (
     COVERAGE_ENTRY,
     STATUS,
     ClaimVerdict,
@@ -131,7 +131,7 @@ ARM_STATEMENT = Statement(
 )
 ARM = Obligation(Requirement(("d", "arm"), MODE, None, CoverageOrigin("test.rule")), ARM_STATEMENT, MODEL, "m stays below 20")
 COVERAGE_OPEN = Open(Requirement(("d", "arm"), GALVANIC_CORROSION, None, CoverageOrigin("galvanic.contact")), (NoModel(GALVANIC_CORROSION, ("d", "arm")),))
-WAIVER = Premise("waive:d.test.mode.d.arm", Tag.JUDGED, "m.engineer@example.org", "t.lola:40", "checked by hand")
+WAIVER = Premise("waive:d.test.mode.d.arm", Tag.JUDGED, "m.engineer@example.org", "t.petra:40", "checked by hand")
 WAIVED = Waived(ARM.requirement, WAIVER)
 MODEL_LABEL = "model:test.model@0000000000000000"
 

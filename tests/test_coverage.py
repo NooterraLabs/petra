@@ -9,9 +9,9 @@ import unittest
 from fractions import Fraction
 from unittest import mock
 
-from lola import coverage
-from lola.coverage import GALVANIC_CONTACT, RULES, apply_waivers, claim_requirements, generate, table_premise
-from lola.ir import (
+from petra import coverage
+from petra.coverage import GALVANIC_CONTACT, RULES, apply_waivers, claim_requirements, generate, table_premise
+from petra.ir import (
     Claim,
     Component,
     Design,
@@ -30,9 +30,9 @@ from lola.ir import (
     Span,
     Waiver,
 )
-from lola.kernel import Interval
-from lola.models import bolt, circuit, truss
-from lola.models.base import (
+from petra.kernel import Interval
+from petra.models import bolt, circuit, truss
+from petra.models.base import (
     CONTACT_PAIR,
     GALVANIC_CORROSION,
     NO_PORTS,
@@ -49,8 +49,8 @@ from lola.models.base import (
     ProbabilityCriterion,
     Requirement,
 )
-from lola.premises import Tag
-from lola.units import DIMENSIONLESS, FORCE, STRESS, Quantity
+from petra.premises import Tag
+from petra.units import DIMENSIONLESS, FORCE, STRESS, Quantity
 from tests.test_premises import REGISTRY
 
 STRENGTH = FailureMode("widget.strength")
@@ -84,7 +84,7 @@ WIDGET = DomainSpec(
 
 
 def span(line: int) -> Span:
-    return Span("t.lola", line, 1)
+    return Span("t.petra", line, 1)
 
 
 def part(name: str = "p1", materials: tuple[str, ...] = ("steel.S355",), kind: FeatureKind = PART, environment: str | None = "marine_c5") -> Feature:
@@ -108,7 +108,7 @@ def design(claims=(), probability_claims=(), loads=(), waivers=()) -> Design:
     return Design(
         name="d",
         owner="o@example.org",
-        path="t.lola",
+        path="t.petra",
         environment="marine_c5",
         ambient=None,
         components={"w": Component("widget", "w", (), span(1))},
@@ -141,7 +141,7 @@ class Table(unittest.TestCase):
         p = table_premise()
         self.assertRegex(p.label, r"^cov:[0-9a-f]{16}$")
         self.assertIs(p.tag, Tag.JUDGED)
-        self.assertEqual(p.owner, "lola-maintainers")
+        self.assertEqual(p.owner, "petra-maintainers")
         self.assertEqual(table_premise(), p)
         for rule in RULES:
             self.assertIn(rule.id, p.statement)
@@ -291,7 +291,7 @@ class Waivers(unittest.TestCase):
         self.assertIs(premise.tag, Tag.JUDGED)
         self.assertEqual(premise.owner, "m.engineer@example.org")
         self.assertIn("calc C-14", premise.statement)
-        self.assertIn("t.lola:40", premise.source)
+        self.assertIn("t.petra:40", premise.source)
 
     def test_a_waiver_matches_exact_mode_and_subject_only(self):
         reqs = (self.BEARING_REQ,)

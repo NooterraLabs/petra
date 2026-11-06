@@ -5,9 +5,9 @@ import tokenize
 import unittest
 from pathlib import Path
 
-from lola.kernel import KERNEL_LINE_BUDGET
+from petra.kernel import KERNEL_LINE_BUDGET
 
-KERNEL = Path(__file__).resolve().parents[1] / "lola" / "kernel"
+KERNEL = Path(__file__).resolve().parents[1] / "petra" / "kernel"
 NOT_CODE = {tokenize.COMMENT, tokenize.NL, tokenize.NEWLINE, tokenize.INDENT, tokenize.DEDENT, tokenize.ENDMARKER}
 
 
@@ -37,7 +37,7 @@ class KernelBudget(unittest.TestCase):
 
     def test_kernel_is_within_budget(self):
         total = sum(code_lines(path.read_text(encoding="utf-8")) for path in KERNEL.rglob("*.py"))
-        self.assertLessEqual(total, KERNEL_LINE_BUDGET, f"lola/kernel has {total} code lines")
+        self.assertLessEqual(total, KERNEL_LINE_BUDGET, f"petra/kernel has {total} code lines")
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-"""Pin-jointed trusses from .lola text to kernel results. Owner: T.
+"""Pin-jointed trusses from .petra text to kernel results. Owner: T.
 
 Statements are built from the lowered example IR, evidence comes from the truss solvers
 (R1, R2, R3; R4 buckling uses a one-leaf Enclosure with the R3 lemma ranges, or
@@ -23,26 +23,26 @@ import unittest
 from fractions import Fraction
 from pathlib import Path
 
-from lola import coverage
-from lola.ir import Design
-from lola.kernel import Evidence, Leaf, Refutation, Rejection, Theorem, TooWeak, check, is_issued, statement_hash
-from lola.kernel.rules.r1_linear import FarkasRay, FeasiblePoints, LinearFeasible
-from lola.kernel.rules.r2_definite import GramPositiveDefinite, LDLFactor
-from lola.kernel.rules.r3_hypercircle import Hypercircle, HypercircleFields, MinimizerBound
-from lola.kernel.rules.r4_enclosure import AllNonpositive, Enclosure
-from lola.lang import parse_design
-from lola.models import truss
-from lola.models.base import ClaimOrigin, ComponentError, Gap, NeedsInputBound, NoRuleForQuantity, Obligation
-from lola.registry import build_registry
-from lola.solvers import SolverSource, r1_linear, r2_definite, r3_hypercircle
+from petra import coverage
+from petra.ir import Design
+from petra.kernel import Evidence, Leaf, Refutation, Rejection, Theorem, TooWeak, check, is_issued, statement_hash
+from petra.kernel.rules.r1_linear import FarkasRay, FeasiblePoints, LinearFeasible
+from petra.kernel.rules.r2_definite import GramPositiveDefinite, LDLFactor
+from petra.kernel.rules.r3_hypercircle import Hypercircle, HypercircleFields, MinimizerBound
+from petra.kernel.rules.r4_enclosure import AllNonpositive, Enclosure
+from petra.lang import parse_design
+from petra.models import truss
+from petra.models.base import ClaimOrigin, ComponentError, Gap, NeedsInputBound, NoRuleForQuantity, Obligation
+from petra.registry import build_registry
+from petra.solvers import SolverSource, r1_linear, r2_definite, r3_hypercircle
 
 REGISTRY = build_registry()
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples"
-PASS = (EXAMPLES / "truss_pass.lola").read_text(encoding="utf-8")
-FAIL = (EXAMPLES / "truss_fail.lola").read_text(encoding="utf-8")
+PASS = (EXAMPLES / "truss_pass.petra").read_text(encoding="utf-8")
+FAIL = (EXAMPLES / "truss_fail.petra").read_text(encoding="utf-8")
 KN = 1000
 
-HANGER = """lola 0
+HANGER = """petra 0
 
 design "three-bar-hanger" {
   owner "a.reviewer@example.org"
@@ -85,7 +85,7 @@ def design(text: str, *edits: tuple[str, str]) -> Design:
         if old not in text:
             raise AssertionError(f"edit target {old!r} is not in the text")
         text = text.replace(old, new)
-    return parse_design(text, "t.lola", REGISTRY)
+    return parse_design(text, "t.petra", REGISTRY)
 
 
 def lowered(d: Design) -> truss.Truss:
@@ -219,7 +219,7 @@ class Coverage(unittest.TestCase):
 
 
 class Footbridge(unittest.TestCase):
-    """examples/truss_pass.lola: 16 to 24 kN at D and E."""
+    """examples/truss_pass.petra: 16 to 24 kN at D and E."""
 
     @classmethod
     def setUpClass(cls):
@@ -311,7 +311,7 @@ class Footbridge(unittest.TestCase):
 
 
 class Overload(unittest.TestCase):
-    """examples/truss_fail.lola: 40 to 60 kN at D and E."""
+    """examples/truss_fail.petra: 40 to 60 kN at D and E."""
 
     def test_collapse_is_refuted_by_a_mechanism(self):
         obligation = claimed(design(FAIL), "strength")

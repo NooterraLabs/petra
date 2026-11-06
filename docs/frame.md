@@ -1,6 +1,6 @@
-# LoLa v0 frame
+# Petra v0 frame
 
-LoLa checks claims about physical designs. A verdict is a theorem relative to explicit premises, in the way a Lean proof is relative to its axioms. Untrusted solvers produce certificates. A small trusted kernel checks those certificates with exact rational arithmetic and never trusts a floating-point number.
+Petra checks claims about physical designs. A verdict is a theorem relative to explicit premises, in the way a Lean proof is relative to its axioms. Untrusted solvers produce certificates. A small trusted kernel checks those certificates with exact rational arithmetic and never trusts a floating-point number.
 
 This file is the shared grounding for every design runner and implementer. It states what done means, the concepts, the first physics domains and the constraints.
 
@@ -9,9 +9,9 @@ This file is the shared grounding for every design runner and implementer. It st
 Each item is a check someone can run.
 
 1. `python -m unittest discover -s tests` passes on Python 3.11 with the standard library plus numpy and scipy.
-2. `python -m lola check examples/<name>.lola` prints a PASS, a FAIL and an UNKNOWN verdict across the example designs. Each verdict prints its premise footprint.
-3. `lola/kernel` imports only the standard library and uses exact rationals and rational intervals. A mutation suite tampers with every certificate type, and the kernel rejects every tampered certificate.
-4. Every certificate rule below runs end to end from a `.lola` file through an untrusted solver to the kernel.
+2. `python -m petra check examples/<name>.petra` prints a PASS, a FAIL and an UNKNOWN verdict across the example designs. Each verdict prints its premise footprint.
+3. `petra/kernel` imports only the standard library and uses exact rationals and rational intervals. A mutation suite tampers with every certificate type, and the kernel rejects every tampered certificate.
+4. Every certificate rule below runs end to end from a `.petra` file through an untrusted solver to the kernel.
 5. Registries (the makeable set) are computed from physics plus a short list of constants, not typed in as tables. A consistency checker built on physics relations catches deliberately corrupted records.
 6. A coverage generator turns a design into obligations. An obligation with no certificate and no named waiver makes the verdict UNKNOWN and names what is missing.
 7. Family certification proves a parametric family over a whole parameter box once. Later queries inside the box reuse the stored certificate. A benchmark compares the cost of reuse with recomputation, and explains the number.
@@ -101,7 +101,7 @@ A gym-style environment generates tasks from parametric requirements. An agent r
 ## Constraints
 
 - Windows 10, Python 3.11.9, with numpy 2.4, scipy 1.17, sympy 1.14 and mpmath 1.3 installed. No pytest, so tests use `unittest`. No Lean toolchain. No network installs.
-- `lola/kernel` uses only the standard library (`fractions`, `math`, `dataclasses`, `hashlib`, `json`).
+- `petra/kernel` uses only the standard library (`fractions`, `math`, `dataclasses`, `hashlib`, `json`).
 - Keep the trusted kernel small, under about 1,500 lines. Everything outside the kernel is untrusted and may use numpy and scipy.
 - Certificates serialise to JSON in a language-neutral format, so a Lean kernel can check the same files later.
 

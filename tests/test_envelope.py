@@ -1,4 +1,4 @@
-"""Safe envelopes (lola/envelope.py) on the gadget domain of test_pipeline.py, and once on a
+"""Safe envelopes (petra/envelope.py) on the gadget domain of test_pipeline.py, and once on a
 shipped example through the command line.
 
 The gadget claim F - 1/2 * C <= 0 with C in [20 kN, 25 kN] holds exactly while the load F
@@ -13,13 +13,13 @@ from fractions import Fraction
 from pathlib import Path
 from unittest import mock
 
-from lola import cli, envelope as envelope_module
-from lola.envelope import PROBE_OWNER, EnvelopeError, envelope, find_target, narrow, render, to_json
-from lola.ir import InputKind
-from lola.models.base import ComponentError
-from lola.premises import Tag
-from lola.units import DIMENSIONLESS, FORCE, TEMPERATURE, Quantity
-from lola.verdict import Pass
+from petra import cli, envelope as envelope_module
+from petra.envelope import PROBE_OWNER, EnvelopeError, envelope, find_target, narrow, render, to_json
+from petra.ir import InputKind
+from petra.models.base import ComponentError
+from petra.premises import Tag
+from petra.units import DIMENSIONLESS, FORCE, TEMPERATURE, Quantity
+from petra.verdict import Pass
 from tests.test_pipeline import CAPACITY, REGISTRY, WAIVE_WEAR, GadgetDomain, Solver, gadget, point
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -166,7 +166,7 @@ class CommandLine(unittest.TestCase):
     def run_cli(self, *args: str) -> tuple[int, str]:
         out = io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
-            code = cli.main(["envelope", str(ROOT / "examples" / "circuit_pass.lola"), *args])
+            code = cli.main(["envelope", str(ROOT / "examples" / "circuit_pass.petra"), *args])
         return code, out.getvalue()
 
     def test_the_ambient_envelope_of_the_lighting_radial(self):

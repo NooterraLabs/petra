@@ -3,7 +3,7 @@ import unittest
 from decimal import Decimal
 from fractions import Fraction as F
 
-from lola.kernel import (
+from petra.kernel import (
     Abs,
     Add,
     Const,
@@ -25,8 +25,8 @@ from lola.kernel import (
     enclose,
     free_syms,
 )
-from lola.kernel.evaluate import at_vertices, vertices
-from lola.kernel.rules.r4_enclosure import AllNonpositive
+from petra.kernel.evaluate import at_vertices, vertices
+from petra.kernel.rules.r4_enclosure import AllNonpositive
 
 x, y = Sym("x"), Sym("y")
 BOX = {"x": Interval(F(1), F(2)), "y": Interval(F(-3), F(4))}

@@ -10,10 +10,10 @@ from fractions import Fraction
 from pathlib import Path
 from unittest import mock
 
-from lola import __version__
-from lola.certs import CertificateError, CertificateFile, CertStore, decode_certificate, encode_certificate, load_certificate
-from lola.kernel import Add, Const, Evidence, Leaf, Neg, RangeHyp, Split, Statement, Sym, Theorem, check, statement_hash
-from lola.kernel.rules.r4_enclosure import AllNonpositive, Enclosure
+from petra import __version__
+from petra.certs import CertificateError, CertificateFile, CertStore, decode_certificate, encode_certificate, load_certificate
+from petra.kernel import Add, Const, Evidence, Leaf, Neg, RangeHyp, Split, Statement, Sym, Theorem, check, statement_hash
+from petra.kernel.rules.r4_enclosure import AllNonpositive, Enclosure
 
 EXAMPLE = Path(__file__).resolve().parent.parent / "examples" / "bolt_tension.cert.json"
 
@@ -28,7 +28,7 @@ SPLIT = Evidence(Enclosure(Split("x", Fraction(1, 2), Leaf(), Leaf())))
 
 
 def certificate(s: Statement = statement(), evidence: Evidence = LEAF) -> CertificateFile:
-    return CertificateFile(statement_hash(s), s, evidence, {"source": "solver", "lola": __version__})
+    return CertificateFile(statement_hash(s), s, evidence, {"source": "solver", "petra": __version__})
 
 
 class Envelope(unittest.TestCase):
@@ -51,8 +51,8 @@ class Envelope(unittest.TestCase):
     def test_every_malformed_envelope_is_refused(self):
         good = encode_certificate(certificate())
         cases = {
-            "another envelope format": dict(good, format="lola-cert/1"),
-            "another kernel format": dict(good, kernel="lola-kernel/1"),
+            "another envelope format": dict(good, format="petra-cert/1"),
+            "another kernel format": dict(good, kernel="petra-kernel/1"),
             "an extra key": dict(good, note="hi"),
             "a missing key": {k: v for k, v in good.items() if k != "producer"},
             "a non-string producer value": dict(good, producer={"source": 1}),
@@ -68,7 +68,7 @@ class Envelope(unittest.TestCase):
         with tempfile.TemporaryDirectory() as root:
             path = Path(root) / "c.json"
             text = json.dumps(encode_certificate(certificate()))
-            path.write_text(text[:-1] + ', "format": "lola-cert/0"}', encoding="utf-8")
+            path.write_text(text[:-1] + ', "format": "petra-cert/0"}', encoding="utf-8")
             with self.assertRaises(CertificateError):
                 load_certificate(path)
 
@@ -103,7 +103,7 @@ class Store(unittest.TestCase):
         self.assertEqual(tuple(self.store.offer(other, statement_hash(other))), ())
         (path,) = self.store.paths()
         self.assertEqual(path.name, self.digest.removeprefix("sha256:") + ".json")
-        self.assertEqual(load_certificate(path).producer, {"source": "solver", "lola": __version__})
+        self.assertEqual(load_certificate(path).producer, {"source": "solver", "petra": __version__})
 
     def test_the_file_on_disk_is_canonical_utf8_with_lf(self):
         self.store.record(self.s, self.digest, LEAF, "solver")
@@ -128,7 +128,7 @@ class Store(unittest.TestCase):
 
     def test_a_crash_mid_write_leaves_the_old_file_and_no_temporary(self):
         self.store.record(self.s, self.digest, LEAF, "solver")
-        with mock.patch("lola.certs.os.replace", side_effect=OSError("power cut")), self.assertRaises(OSError):
+        with mock.patch("petra.certs.os.replace", side_effect=OSError("power cut")), self.assertRaises(OSError):
             self.store.record(self.s, self.digest, SPLIT, "solver")
         self.assertEqual(tuple(self.store.offer(self.s, self.digest)), (LEAF,))
         self.assertEqual(len(self.files()), 1)

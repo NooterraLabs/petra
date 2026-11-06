@@ -17,19 +17,19 @@ from pathlib import Path
 from types import MappingProxyType
 from unittest import mock
 
-from lola import cli, coverage, models
-from lola.certs import CertStore
-from lola.ir import Rel
-from lola.kernel import Add, Const, Mul, Neg, RangeHyp, Refutation, Rejection, Statement, Sym, check, statement_hash
-from lola.kernel.check import _issue_refutation, _issue_theorem
-from lola.kernel.rules.r4_enclosure import AllNonpositive, PointWitness
-from lola.lang import LoweringError, parse_design
-from lola.models.base import ClaimOrigin, Criterion, NeedsCertificate, NoRuleForQuantity
-from lola.pipeline import explain
-from lola.premises import PremiseBook
-from lola.solvers import SolverSource
-from lola.units import DIMENSIONLESS, TEMPERATURE, Quantity
-from lola.verdict import Discharged, Fail, Marginal, Open, Pass, Scope, Unknown, WithinMargin, assemble, verdict_json
+from petra import cli, coverage, models
+from petra.certs import CertStore
+from petra.ir import Rel
+from petra.kernel import Add, Const, Mul, Neg, RangeHyp, Refutation, Rejection, Statement, Sym, check, statement_hash
+from petra.kernel.check import _issue_refutation, _issue_theorem
+from petra.kernel.rules.r4_enclosure import AllNonpositive, PointWitness
+from petra.lang import LoweringError, parse_design
+from petra.models.base import ClaimOrigin, Criterion, NeedsCertificate, NoRuleForQuantity
+from petra.pipeline import explain
+from petra.premises import PremiseBook
+from petra.solvers import SolverSource
+from petra.units import DIMENSIONLESS, TEMPERATURE, Quantity
+from petra.verdict import Discharged, Fail, Marginal, Open, Pass, Scope, Unknown, WithinMargin, assemble, verdict_json
 from tests.test_pipeline import CAPACITY, GADGET, REGISTRY, STRENGTH, WAIVE_WEAR, GadgetDomain, Solver, build_strength, gadget, point, push
 from tests.test_seal import FOOTPRINT
 
@@ -88,10 +88,10 @@ class Syntax(GadgetDomain):
             self.assertIn(fragment, str(ctx.exception))
 
     def test_a_bound_without_a_unit_is_named_as_the_problem(self):
-        text = (ROOT / "examples" / "circuit_pass.lola").read_text(encoding="utf-8")
+        text = (ROOT / "examples" / "circuit_pass.petra").read_text(encoding="utf-8")
         text = text.replace("lighting.w1.temperature <= 70 degC", "lighting.w1.temperature <= 70 margin 20 degC")
         with self.assertRaises(LoweringError) as ctx:
-            parse_design(text, "radial.lola", REGISTRY)
+            parse_design(text, "radial.petra", REGISTRY)
         self.assertIn("the bound needs a unit", str(ctx.exception))
 
     def test_explain_prints_the_margin_statement_beside_the_claim(self):
@@ -317,10 +317,10 @@ class KnifeEdge(unittest.TestCase):
 
 class CommandLine(unittest.TestCase):
     def run_check(self, bound: str, *flags: str) -> tuple[int, str]:
-        text = (ROOT / "examples" / "circuit_pass.lola").read_text(encoding="utf-8")
+        text = (ROOT / "examples" / "circuit_pass.petra").read_text(encoding="utf-8")
         text = text.replace("lighting.w1.temperature <= 70 degC", f"lighting.w1.temperature <= {bound}")
         with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "radial.lola"
+            path = Path(tmp) / "radial.petra"
             path.write_text(text, encoding="utf-8")
             out = io.StringIO()
             with contextlib.redirect_stdout(out):

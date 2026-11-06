@@ -6,7 +6,7 @@ a kernel Theorem for that statement. The reuse path checks an Instance of the fa
 theorem, which the kernel has memoised, so it never calls a solver and runs no rule; the
 recompute path does both. The first query of a process pays the family checks.
 
-Hand check of the truss family box (examples/families/warren_truss.lola). The truss is
+Hand check of the truss family box (examples/families/warren_truss.petra). The truss is
 statically determinate (7 members, 7 free DOFs: B x y, C x, D x y, E x y), so its member
 forces are statics and do not depend on E. With P_D, P_E the downward node loads, the
 reaction at A is R_A = 0.75 P_D + 0.25 P_E, and the 2.5 m end diagonal (direction
@@ -47,10 +47,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from lola.bench import family as bench
-from lola.lang import load_design, parse_design
-from lola.library import Library, certify_family
-from lola.registry import build_registry
+from petra.bench import family as bench
+from petra.lang import load_design, parse_design
+from petra.library import Library, certify_family
+from petra.registry import build_registry
 
 ROOT = Path(__file__).resolve().parents[1]
 REGISTRY = build_registry()
@@ -167,7 +167,7 @@ class TrussQueries(unittest.TestCase):
         rng = random.Random(0)
         frame = [(a.key, a.args) for a in self.family.components["frame"].attrs]
         for i in range(8):
-            query = parse_design(bench.TRUSS.query(i, rng, self.family, self.text, REGISTRY), "q.lola", REGISTRY)
+            query = parse_design(bench.TRUSS.query(i, rng, self.family, self.text, REGISTRY), "q.petra", REGISTRY)
             self.assertFalse(query.is_family, "a query is a concrete design")
             self.assertEqual([(a.key, a.args) for a in query.components["frame"].attrs], frame, "same nodes, members, sections, steel")
             self.assertEqual([(c.name, c.qoi, c.rel, c.bound) for c in query.claims],

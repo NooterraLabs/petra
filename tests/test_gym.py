@@ -2,7 +2,7 @@
 Owner: Y.
 
 The passing and failing designs come from facts the rest of the suite establishes by
-hand. examples/circuit_pass.lola (B10, 2.5 mm2 Cu/PVC clipped direct, 18 m, a 75 degC
+hand. examples/circuit_pass.petra (B10, 2.5 mm2 Cu/PVC clipped direct, 18 m, a 75 degC
 lever terminal, 10 A, ambient up to 40 degC, fault level up to 6 kA) passes, and every
 bound it checks grows with the draw, the run, the ambient and the fault level, so the
 same parts pass any task with at most 10 A over at most 18 m. A B6 breaker on a draw
@@ -14,18 +14,18 @@ import unittest
 from fractions import Fraction
 from unittest import mock
 
-from lola.certs import CertificateFile, encode_certificate
-from lola.gym import GENERATORS, AgentStats, BaselineAgent, LolaEnv, Submission, run_episodes
-from lola.gym.tasks import family_text, fill, generate
-from lola.kernel import Evidence, Leaf, Split, encode_evidence
-from lola.kernel.rules.r4_enclosure import Enclosure
-from lola.lang import parse_design
-from lola.library import Library
-from lola.models import DOMAINS
-from lola.pipeline import check_design
-from lola.registry import PartKind, build_registry
-from lola.solvers import SolverSource
-from lola.verdict import Discharged, Fail, Pass, Unknown
+from petra.certs import CertificateFile, encode_certificate
+from petra.gym import GENERATORS, AgentStats, BaselineAgent, LolaEnv, Submission, run_episodes
+from petra.gym.tasks import family_text, fill, generate
+from petra.kernel import Evidence, Leaf, Split, encode_evidence
+from petra.kernel.rules.r4_enclosure import Enclosure
+from petra.lang import parse_design
+from petra.library import Library
+from petra.models import DOMAINS
+from petra.pipeline import check_design
+from petra.registry import PartKind, build_registry
+from petra.solvers import SolverSource
+from petra.verdict import Discharged, Fail, Pass, Unknown
 
 REGISTRY = build_registry()
 PASSING = {"cb1.part": "mcb.B10", "w1.cable": "cable.cu_pvc_2_5", "t1.part": "terminal.lever_4mm2_75C"}
@@ -51,7 +51,7 @@ class _Collect:
 
 def solved_certificates(task, choices) -> tuple[dict, ...]:
     sink = _Collect()
-    check_design(parse_design(fill(task, choices), "local.lola", REGISTRY), REGISTRY, (SolverSource(),), sink=sink)
+    check_design(parse_design(fill(task, choices), "local.petra", REGISTRY), REGISTRY, (SolverSource(),), sink=sink)
     return tuple(encode_certificate(CertificateFile(h, s, e, {"source": "test"})) for h, s, e in sink.items)
 
 
@@ -73,7 +73,7 @@ class Tasks(unittest.TestCase):
         for domain in GENERATORS:
             for seed in range(3):
                 task = generate(domain, seed, REGISTRY)
-                design = parse_design(fill(task, {h.name: h.choices[-1] for h in task.holes}), "filled.lola", REGISTRY)
+                design = parse_design(fill(task, {h.name: h.choices[-1] for h in task.holes}), "filled.petra", REGISTRY)
                 self.assertTrue(design.claims, f"{task.id} keeps its claims")
 
     def test_choices_are_registry_parts_cheapest_first(self):
@@ -95,7 +95,7 @@ class Tasks(unittest.TestCase):
     def test_a_family_text_widens_the_owner_inputs(self):
         task = generate("circuit", SMALL, REGISTRY)
         box = {"draw": (Fraction(0), Fraction(10)), "run": (Fraction(0), Fraction(18)), "amb": (Fraction(5), Fraction(40))}
-        design = parse_design(family_text(task, PASSING, box), "family.lola", REGISTRY)
+        design = parse_design(family_text(task, PASSING, box), "family.petra", REGISTRY)
         self.assertTrue(design.is_family, "the widened design is a family")
         self.assertEqual(set(design.params), {"draw", "run", "amb"}, "with one param per widened input")
         with self.assertRaises(ValueError):
@@ -224,7 +224,7 @@ class Agent(unittest.TestCase):
         self.assertEqual(self.library.stats()["families"], 0, "the library is untouched")
 
     def test_stats_render_the_summary_line(self):
-        self.assertEqual(AgentStats(20, 17, 5, 9).render(), "solved 17/20 episodes (library hits 5, families added 9)", "the lola gym summary line")
+        self.assertEqual(AgentStats(20, 17, 5, 9).render(), "solved 17/20 episodes (library hits 5, families added 9)", "the petra gym summary line")
 
     def test_run_episodes_counts_every_episode(self):
         stats = run_episodes(("circuit",), 1, SMALL, None)

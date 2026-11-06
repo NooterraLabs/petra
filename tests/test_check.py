@@ -7,8 +7,8 @@ proved at a refutation's point, a box check builds itself, is tested here.
 import unittest
 from fractions import Fraction as F
 
-from lola import kernel
-from lola.kernel import (
+from petra import kernel
+from petra.kernel import (
     Add,
     Const,
     DefinedHyp,
@@ -29,10 +29,10 @@ from lola.kernel import (
     check,
     is_issued,
 )
-from lola.kernel.rules.r1_linear import FeasiblePoints
-from lola.kernel.rules.r3_hypercircle import HypercircleFields, MinimizerComponent, QuadraticProblem
-from lola.kernel.rules.r4_enclosure import AllNonpositive, Enclosure, PointWitness
-from lola.kernel.rules.r5_moment import MomentBound, MomentConstraint, MomentDual, RandomVar
+from petra.kernel.rules.r1_linear import FeasiblePoints
+from petra.kernel.rules.r3_hypercircle import HypercircleFields, MinimizerComponent, QuadraticProblem
+from petra.kernel.rules.r4_enclosure import AllNonpositive, Enclosure, PointWitness
+from petra.kernel.rules.r5_moment import MomentBound, MomentConstraint, MomentDual, RandomVar
 
 LABEL = "in:d.lift.force"
 LEAF = Evidence(body=Enclosure(partition=Leaf()))

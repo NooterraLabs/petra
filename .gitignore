@@ -1,4 +1,6 @@
 __pycache__/
 *.pyc
-.lola-cache/
+.petra-cache/
 .claude/
+# Standards and source PDFs obtained under their publishers' terms: read locally, never published
+docs/research/sources/

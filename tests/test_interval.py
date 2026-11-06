@@ -9,7 +9,7 @@ import unittest
 from decimal import Decimal, localcontext
 from fractions import Fraction as F
 
-from lola.kernel.interval import (
+from petra.kernel.interval import (
     PRECISION_BITS,
     Interval,
     KernelArithmeticError,

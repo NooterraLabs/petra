@@ -1,0 +1,30 @@
+petra 0
+
+# A hoist hook rated by proof testing. The lift load is known only by its range and
+# its mean from the duty log, so the overload claim uses R5: over every distribution on
+# [0, 40] kN with mean 10 kN, P(load > capacity) <= 10 / 36 < 3/10 at the lowest
+# capacity, with no distribution assumed. The proof tests give a second, empirical
+# claim through R6: 300 trials, 0 failures, so (1 - 1/100)^300 ~ 0.049 <= 1 - 0.95.
+# The demand domain knows no bolt: the capacity is a measured input. Expected: PASS.
+
+design "hoist-hook" {
+  owner "m.engineer@example.org"
+  environment indoor_dry
+}
+
+demand hook {
+  capacity in [36 kN, 40 kN] measured "qa.lab@example.org" source "proof-load report PL-0917, minimum of 12 samples"
+}
+
+load lift {
+  on hook force in [0 kN, 40 kN] mean 10 kN
+  signed "ops.lead@example.org" source "hoist duty log 2025, 14200 lifts"
+}
+
+tests proof {
+  on hook trials 300 failures 0 at 36 kN
+  signed "qa.lab@example.org" source "batch 2026-09 proof tests, independent lots"
+}
+
+claim overload: P(hook.utilisation > 1) <= 3/10 under lift
+claim tested:   P(fail hook at 36 kN) <= 1/100 confidence 95 % from proof

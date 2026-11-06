@@ -17,14 +17,14 @@ from types import MappingProxyType
 from typing import Mapping
 from unittest import mock
 
-from lola import coverage, models
-from lola.certs import CertStore
-from lola.ir import Bound, FromTests, Input, ParamRef, Ref, Rel
-from lola.kernel import Add, Const, Evidence, Interval, Leaf, Mul, Neg, Split, Sym, enclose
-from lola.kernel.rules.r4_enclosure import AllNonpositive, Enclosure, PointWitness
-from lola.kernel.rules.r6_scenario import Arithmetic, BinomialTail
-from lola.lang import parse_design
-from lola.models.base import (
+from petra import coverage, models
+from petra.certs import CertStore
+from petra.ir import Bound, FromTests, Input, ParamRef, Ref, Rel
+from petra.kernel import Add, Const, Evidence, Interval, Leaf, Mul, Neg, Split, Sym, enclose
+from petra.kernel.rules.r4_enclosure import AllNonpositive, Enclosure, PointWitness
+from petra.kernel.rules.r6_scenario import Arithmetic, BinomialTail
+from petra.lang import parse_design
+from petra.models.base import (
     CROSS_DOMAIN_MODES,
     CROSS_DOMAIN_UNMODELLED,
     PORT_CONTRACT,
@@ -53,11 +53,11 @@ from lola.models.base import (
     StatementBuilder,
     model_spec,
 )
-from lola.pipeline import build_premise_book, check_design, explain
-from lola.premises import RangeMismatch, ScopeParam, Tag
-from lola.registry import Constant, Corrosivity, Deck, DeckRecord, Derived, Environment, Material, Registry, Stated
-from lola.units import DIMENSIONLESS, Quantity
-from lola.verdict import Fail, Pass, Unknown
+from petra.pipeline import build_premise_book, check_design, explain
+from petra.premises import RangeMismatch, ScopeParam, Tag
+from petra.registry import Constant, Corrosivity, Deck, DeckRecord, Derived, Environment, Material, Registry, Stated
+from petra.units import DIMENSIONLESS, Quantity
+from petra.verdict import Fail, Pass, Unknown
 
 STRENGTH = FailureMode("gadget.strength")
 WEAR = FailureMode("gadget.wear")
@@ -172,7 +172,7 @@ def registry() -> Registry:
 
 
 REGISTRY = registry()
-HEADER = 'lola 0\ndesign "rig" {\n  owner "o@example.org"\n  environment dry\n}\n'
+HEADER = 'petra 0\ndesign "rig" {\n  owner "o@example.org"\n  environment dry\n}\n'
 CAPACITY = '  capacity in [20 kN, 25 kN] measured "lab@example.org" source "proof report P-1"\n'
 
 
@@ -248,7 +248,7 @@ class GadgetDomain(unittest.TestCase):
         self.enterContext(mock.patch.object(coverage, "KINDS", {"gadget": GADGET}))
 
     def design(self, *blocks: str, registry: Registry = REGISTRY):
-        return parse_design(HEADER + "".join(blocks), "rig.lola", registry)
+        return parse_design(HEADER + "".join(blocks), "rig.petra", registry)
 
     def check(self, *blocks: str, sources=(Solver(),), **kwargs):
         return check_design(self.design(*blocks), REGISTRY, tuple(sources), **kwargs)
@@ -487,7 +487,7 @@ class PortContracts(GadgetDomain):
 
     def setUp(self):
         super().setUp()
-        self.enterContext(mock.patch("lola.pipeline.contract_obligations", self.contracts))
+        self.enterContext(mock.patch("petra.pipeline.contract_obligations", self.contracts))
 
     def test_every_components_ports_reach_the_contracts_and_their_obligations_are_checked(self):
         report = self.check(gadget(CAPACITY, "  port a\n", "  port b\n"), push("10"), CLAIM, WAIVE_WEAR)
@@ -515,7 +515,7 @@ class Decks(GadgetDomain):
     def deck(self, fy: int, fu: int) -> Deck:
         provenance = "stated:sanctioned:maker@example.org:Std 2"
         records = (DeckRecord("metal.M1", "fu", point(fu), "Pa", provenance), DeckRecord("metal.M1", "fy", point(fy), "Pa", provenance))
-        return Deck("lola-deck/0", records)
+        return Deck("petra-deck/0", records)
 
     def test_an_obligation_that_reads_a_flagged_entry_stays_open_without_asking_a_source(self):
         asked = Offers("asked", Evidence(Enclosure(Leaf())))
@@ -534,7 +534,7 @@ class Reports(GadgetDomain):
     def test_the_json_report_has_one_verdict_per_claim_then_coverage(self):
         report = self.check(gadget(CAPACITY), push("10"), CLAIM)
         body = json.loads(json.dumps(report.to_json()))
-        self.assertEqual((body["file"], body["design"], body["status"]), ("rig.lola", "rig", "UNKNOWN"))
+        self.assertEqual((body["file"], body["design"], body["status"]), ("rig.petra", "rig", "UNKNOWN"))
         self.assertEqual([(v["claim"], v["status"]) for v in body["verdicts"]], [("fits", "PASS"), ("coverage", "UNKNOWN")])
         self.assertEqual([bool(v["obligations"]) for v in body["verdicts"]], [False, True])
         self.assertEqual(body["verdicts"][0]["rules"], ["R4"])

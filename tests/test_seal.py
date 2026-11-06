@@ -10,13 +10,13 @@ import pickle
 import unittest
 from fractions import Fraction
 
-from lola.kernel import Const, RangeHyp, Refutation, Statement, Sym, Theorem, is_issued
-from lola.kernel.check import _issue_refutation, _issue_theorem
-from lola.kernel.rules.r4_enclosure import AllNonpositive
-from lola.kernel.terms import Add, Neg
-from lola.models.base import ClaimOrigin, FailureMode, ModelSpec, Obligation, Requirement
-from lola.premises import Footprint, Premise, Tag
-from lola.verdict import Discharged, Fail, Pass, Refuted, Scope
+from petra.kernel import Const, RangeHyp, Refutation, Statement, Sym, Theorem, is_issued
+from petra.kernel.check import _issue_refutation, _issue_theorem
+from petra.kernel.rules.r4_enclosure import AllNonpositive
+from petra.kernel.terms import Add, Neg
+from petra.models.base import ClaimOrigin, FailureMode, ModelSpec, Obligation, Requirement
+from petra.premises import Footprint, Premise, Tag
+from petra.verdict import Discharged, Fail, Pass, Refuted, Scope
 
 LABEL = "in:d.lift.force"
 STATEMENT = Statement(
