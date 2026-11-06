@@ -539,6 +539,8 @@ def _check_kind(kind: str, attrs: Mapping[str, object], say: Say) -> None:
         say("a weld_return makes a C-shaped weld around a plate lapped on the support face: one fillet, `sides 1`")
     if kind == "bolt_bracket" and isinstance(attrs.get("rows"), int) and attrs["rows"] * attrs.get("columns", 1) < 2:
         say("an eccentric bolt group has at least two bolts")
+    if kind == "hanger" and isinstance(attrs.get("support"), Member) and attrs["support"].face != "flange":
+        say("a hanger hangs from the support's flange (the tee's bolts pass through it and it bends about the web)")
     if kind == "flange_force" and attrs.get("location") == "end" and "distance" not in attrs:
         say("a force at the member end names its distance from the end")
     if kind == "flange_force" and attrs.get("location") == "interior" and "distance" in attrs:

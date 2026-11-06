@@ -180,9 +180,14 @@ def plate_net_modulus(t: Expr, depth: Expr, rows: int, pitch: Expr, hole: Expr) 
     """Znet of a plate of depth L with one vertical line of `rows` holes of net width dh'
     at pitch s, centred on mid-depth: t/4 (L^2 - 4 dh' sum |y_i|), where each hole removes
     dh' t at its distance |y_i| from the plastic neutral axis. For a regular pattern
-    sum |y_i| = s (rows^2 - (rows mod 2)) / 4."""
+    sum |y_i| = s (rows^2 - (rows mod 2)) / 4. With an odd number of rows the middle hole
+    sits on the axis and removes its own plastic modulus t dh'^2 / 4 as well: Znet = Zg -
+    (t/4)[dh' s (n^2 - 1) + dh'^2] (Companion II.A-17B and II.A-19A; Manual Eq 15-4)."""
     lever = Fraction(rows * rows - rows % 2, 4)   # sum of |y_i| / s over the rows
-    return Div(mul(t, sub(sq(depth), mul(c(4), hole, c(lever), pitch))), c(4))
+    removed = mul(c(4), hole, c(lever), pitch)
+    if rows % 2:
+        removed = add(removed, sq(hole))
+    return Div(mul(t, sub(sq(depth), removed)), c(4))
 
 
 # --- J2: welds ----------------------------------------------------------------------------

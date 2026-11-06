@@ -74,7 +74,8 @@ STRENGTH: tuple[tuple[str, str, str, str, tuple[ValidityRow, ...]], ...] = (
      f"{AISC} Sections J3.9 and J3.10; RCSC 2025 Section 5.4", ()),
     ("shear_yield",
      "shear yielding of the gross section of each connected element, Rn = 0.60 Fy Agv (Eq J4-3)",
-     "the element's gross shear plane runs the length of its bolt line or weld",
+     "the element's gross shear plane runs the length of its bolt line or weld; a beam web's runs its depth less the "
+     "copes, bolted or welded (Companion II.A-5)",
      f"{AISC} Section J4.2(a)", ()),
     ("shear_rupture",
      "shear rupture of the net section of each connected element, Rn = 0.60 Fu Anv (Eq J4-4), holes 1/16 in wider "
@@ -105,14 +106,19 @@ STRENGTH: tuple[tuple[str, str, str, str, tuple[ValidityRow, ...]], ...] = (
      f"{AISC} Section J4.5; {MANUAL} Parts 10 and 15", ()),
     ("flexural_rupture",
      "flexural rupture of the net section of a connecting plate, Mn = Fu Znet (Section J4.5)",
-     "the net section through the line of holes nearest the support",
+     "the net section through the line of holes nearest the support; with an odd number of rows the middle hole on the "
+     "axis removes its own t dh'^2 / 4 (Companion II.A-17B)",
      f"{AISC} Section J4.5; {MANUAL} Part 15", ()),
     ("weld",
      "fillet weld strength Rn = 0.60 FEXX Awe kds (Eq J2-4), kds by the line's direction, longitudinal and transverse "
      "lines combined by Eq J2-6; an eccentric group (parallel lines, or a line with returns in a C) by the elastic "
-     "method on its line properties, at its most stressed point, without the directional increase",
+     "method on its line properties, at its most stressed point, without the directional increase; a seat angle's two "
+     "lines, its vertical leg bearing on the support below them, by the Manual's seat-weld form f = R sqrt(L^2 + 20.25 "
+     "e^2) / (2 L^2) (Table 10-6, Companion II.A-16)",
      "matching filler metal (Table J2.5); welds of the declared size and length; the elastic method assumes a rigid "
-     "connected part",
+     "connected part; support-side welds as Manual Table 10-2 welds B, each line carrying its share at the outstanding "
+     "leg's width (a single angle's reaction at the beam web's centre, the leg plus tw/2, Companion II.A-29; a tee's "
+     "flange-tip lines at half the flange width, Companion II.A-31)",
      f"{AISC} Section J2.4, Table J2.5; {MANUAL} Part 8 (elastic method)", ()),
     ("weld_base_metal",
      "shear rupture of the base metal along each fusion face, 0.60 Fu t per unit length against the weld force it "
@@ -134,7 +140,8 @@ STRENGTH: tuple[tuple[str, str, str, str, tuple[ValidityRow, ...]], ...] = (
      f"{AISC} Section J10.3", ()),
     ("flange_local_bending",
      "flange local bending under a tensile concentrated force, Rn = 6.25 Fyf tf^2, halved within 10 tf of the end "
-     "(Eq J10-1); not required when the loaded length across the flange is small",
+     "(Eq J10-1); J10.1's exemption for a load narrower than 0.15 bf across the flange is not taken, since the "
+     "grammar declares no width across the flange",
      "a rolled W shape with no stiffener at the force",
      f"{AISC} Section J10.1", ()),
     ("web_sidesway_buckling",
@@ -154,14 +161,19 @@ STRENGTH: tuple[tuple[str, str, str, str, tuple[ValidityRow, ...]], ...] = (
      f"{AISC} Section J10.6", ()),
     ("seat_flexure",
      "flexural yielding of an unstiffened seat angle's outstanding leg at the critical section, Mn = Fy L t^2 / 4, under "
-     "the beam reaction at the middle of its bearing length",
-     "the critical section lies a judged offset beyond the angle thickness from the back of the vertical leg; the "
-     "bearing length is the outstanding leg less the setback",
+     "the beam reaction at the middle of the bearing length it needs: the least of the outstanding leg less the setback "
+     "and the length web local yielding and crippling require (J10.2, J10.3), not less than kdes (Manual Table 10-5, "
+     "Companion II.A-12A)",
+     "the critical section lies a judged offset beyond the angle thickness from the back of the vertical leg",
      f"{MANUAL} Part 10 (unstiffened seated connections)", ()),
     ("prying",
      "bolt tension with prying action by the Struik-de Back T-stub model in the Manual's form: available tension per "
-     "bolt B Q with Q from tc, alpha' and delta",
-     "a T-stub flange in double curvature between the bolt line and the stem; bolts in one line on each side of the stem",
+     "bolt B Q with Q from tc, alpha' and delta = 1 - d'/p (d' the hole's length along the flange), for the tee's flange and for the support's flange under the same bolts "
+     "(each taken against a rigid partner, as the Companion checks a column flange in II.C-1); each bolt's tributary "
+     "length p by Manual Figure 9-4, at most 1.75 b either side of it: an end bolt min(le, 1.75 b) + min(s/2, 1.75 b), "
+     "an inner bolt 2 min(s/2, 1.75 b) (Companion II.D-1), the support's flange with the tee's le and s and its own b",
+     "a T-stub flange in double curvature between the bolt line and the stem; bolts in one line on each side of the "
+     "stem, centred on the support's web",
      f"{MANUAL} Part 9; Kulak, Fisher and Struik (1987) Sections 17.5-17.6", ()),
 )
 
@@ -182,9 +194,9 @@ MAKEABILITY: tuple[tuple, ...] = (
       "face, and a weld between a column's flanges assumes the flanges leave the welder room",)),
     ("hole_use", "oversized holes and slots parallel to the force only in slip-critical joints", "holes as declared on "
      "each ply", f"{AISC} Section J3.3; RCSC 2025 Section 3.3"),
-    ("joint_type", "the joint's installation meets the RCSC requirements its use imposes: Group 150 and 200 bolts in "
-     "tension pretensioned; oversized holes and parallel slots slip-critical", "the joint carries the loads declared",
-     "RCSC 2025 Sections 4.2 and 4.3; AISC 360-22 Section J3.2"),
+    ("joint_type", "the joint's installation meets the RCSC requirements its use imposes: at least snug-tight, and "
+     "Group 150 and 200 bolts in tension pretensioned (the holes that need a slip-critical joint are hole_use's rule)",
+     "the joint carries the loads declared", "RCSC 2025 Sections 4.1 and 4.2; AISC 360-22 Section J3.2"),
     ("clearance", "room to tighten each bolt: the distance from the bolt to the nearest obstruction at least half the "
      "nut's width across corners plus a socket allowance", "a standard impact wrench socket on a heavy hex nut",
      f"{MANUAL} Part 7 (entering and tightening clearances, method encoded with a judged allowance)",
@@ -203,10 +215,6 @@ ROWS: Mapping[str, tuple[ValidityRow, ...]] = {
              "method; for both flanges coped, a maintainers' bound the Companion's Example II.A-7 (dct = 0.22 d) lies "
              "inside"),
     ),
-    "compression": (
-        _row("compression", "width_thickness", "seat stiffener width-to-thickness W / ts <= 0.56 sqrt(E / Fy)",
-             f"{MANUAL} Part 10 (stiffened seated connections); {AISC} Section J4.4"),
-    ),
     "ductility": (
         _row("ductility", "conventional_a", "a conventional single plate has its bolt line at most 3.5 in from the "
              "weld line", f"{MANUAL} Part 10, conventional configuration"),
@@ -214,8 +222,9 @@ ROWS: Mapping[str, tuple[ValidityRow, ...]] = {
              f"{MANUAL} Part 10, conventional configuration"),
     ),
     "prying": (
-        _row("prying", "bolt_clear_of_stem", "the bolt line lies outside the stem face by more than half a bolt "
-             "diameter (b' > 0)", "Kulak, Fisher and Struik (1987) Section 17.5"),
+        _row("prying", "bolt_clear_of_stem", "each bolt line lies outside the web its flange bends about (the tee's "
+             "stem, the support's web) by more than half a bolt diameter (b' > 0)", "Kulak, Fisher and Struik (1987) "
+             "Section 17.5"),
     ),
 }
 
@@ -232,9 +241,11 @@ for short, form, validity, source, *unchecked in MAKEABILITY:
     MODELS[MODES[short]] = _spec(short, form, validity, source, unchecked=unchecked[0] if unchecked else ())
 
 for short, form, validity, source in (
-    ("compression", "compressive yielding of a seat stiffener's section under the seat, Rn = Fy Ag (Eq J4-6)",
-     "the stiffener is welded to the support along its full length, so it cannot buckle as a column; its width-to-"
-     "thickness row excludes local buckling, the Manual's form of the short-element condition", f"{AISC} Section J4.4"),
+    ("compression", "compressive yielding of a seat stiffener's section under the seat, Rn = Fy Ag (Eq J4-6), and its "
+     "width-to-thickness ratio W / t at most 0.56 sqrt(E / Fy)",
+     "the stiffener is welded to the support along its full length, so it cannot buckle as a column; the Manual's "
+     "width-to-thickness limit, a check of this mode beside the yielding check, excludes local buckling",
+     f"{AISC} Section J4.4; {MANUAL} Part 10 (stiffened seated connections)"),
     ("cope_buckling", "flexural yielding and local buckling of a coped beam web against the moment at the cope "
      "face: a top cope by the Manual's slenderness method on the remaining tee (Mn = Mp to My over lambda_p < "
      "hc/tw <= 2 lambda_p, elastic buckling above); both flanges coped by Section F11 on the remaining web with "
