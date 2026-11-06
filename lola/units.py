@@ -93,6 +93,27 @@ UNITS: dict[str, tuple[Fraction, Dim]] = {
 lexer cannot write "N m" or "ohm/km"; they serve format_quantity and callers outside
 .lola text."""
 
+_INCH = Fraction(127, 5000)
+_LBF = Fraction(45359237, 10**8) * Fraction(980665, 10**5)
+_KIP = 1000 * _LBF
+
+CUSTOMARY: dict[str, tuple[Fraction, Dim]] = {
+    "inch": (_INCH, LENGTH),
+    "ft": (12 * _INCH, LENGTH),
+    "inch2": (_INCH**2, AREA),
+    "lbf": (_LBF, FORCE),
+    "kip": (_KIP, FORCE),
+    "kips": (_KIP, FORCE),
+    "psi": (_LBF / _INCH**2, STRESS),
+    "ksi": (_KIP / _INCH**2, STRESS),
+    "kip_in": (_KIP * _INCH, TORQUE),
+    "kip_ft": (_KIP * 12 * _INCH, TORQUE),
+}
+"""US customary spellings for the steel deck (AISC 360 is written in inches and kips),
+exact by definition: 1 inch = 25.4 mm, 1 lbf = 0.45359237 kg x 9.80665 m/s2. Parsed and
+formatted like UNITS, but readable_text and si_unit never choose one, so SI reports stay
+SI. "in" is a .lola keyword, so the inch is spelled "inch"."""
+
 _NAMED_DIMS: dict[Dim, str] = {
     DIMENSIONLESS: "dimensionless",
     LENGTH: "length",
@@ -123,10 +144,10 @@ def _parse_number(text: str) -> Fraction:
 
 
 def _unit(unit: str) -> tuple[Fraction, Dim]:
-    try:
-        return UNITS[unit]
-    except KeyError:
-        raise UnitError(f"unknown unit {unit!r}; known units: {', '.join(sorted(UNITS))}") from None
+    found = UNITS.get(unit) or CUSTOMARY.get(unit)
+    if found is None:
+        raise UnitError(f"unknown unit {unit!r}; known units: {', '.join(sorted({*UNITS, *CUSTOMARY}))}")
+    return found
 
 
 def _dim_text(dim: Dim) -> str:

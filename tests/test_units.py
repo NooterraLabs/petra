@@ -110,7 +110,7 @@ class Format(unittest.TestCase):
         with self.assertRaises(UnitError):
             format_quantity(point(24000, FORCE), "MPa")
         with self.assertRaises(UnitError):
-            format_quantity(point(24000, FORCE), "kip")
+            format_quantity(point(24000, FORCE), "furlong")
 
 
 if __name__ == "__main__":

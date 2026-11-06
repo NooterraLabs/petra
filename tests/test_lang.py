@@ -252,7 +252,7 @@ class Rejections(Case):
 
     def test_an_unknown_unit(self):
         self.assertProblem('demand hook {\n  capacity in [36 kNN, 40 kN] measured "qa@example.org" source "PL-1"\n}\n', 7, 19, "kNN")
-        self.assertProblem("claim c: hook.utilisation <= 1 kip\n" + HOOK, 6, 32, "kip")
+        self.assertProblem("claim c: hook.utilisation <= 1 furlong\n" + HOOK, 6, 32, "furlong")
 
     def test_a_dimension_mismatch(self):
         self.assertProblem('demand hook {\n  capacity in [36 kN, 40 m] measured "qa@example.org" source "PL-1"\n}\n', 7, 23, "force", "length")
