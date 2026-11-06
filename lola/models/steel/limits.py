@@ -408,6 +408,29 @@ def elastic_weld_line(v: Expr, e: Expr, length: Expr, lines: Expr) -> tuple[Expr
     return Div(mul(c(6), v, e), mul(total, length)), Div(v, total)
 
 
+def elastic_weld_c(v: Expr, e: Expr, length: Expr, ret: Expr) -> tuple[Expr, Expr, Expr]:
+    """(horizontal, vertical at the return tips, vertical at the heel corners) force per
+    unit length on a C-shaped weld, by the elastic method (Manual Part 8, the line
+    properties of Manual Fig. 8-7): a
+    vertical line of `length` and two returns of `ret` at its ends running toward the load,
+    loaded by v at e from the vertical line. With ltot = L + 2 kl the centroid lies
+    xbar = kl^2 / ltot from the vertical line, ex = e - xbar,
+      Ix = L^3/12 + kl L^2 / 2,   Iy = 2 [kl^3/12 + kl (kl/2 - xbar)^2] + L xbar^2,
+    at the return tips (kl - xbar, +-L/2) and the heel corners (-xbar, +-L/2):
+      f_h = v ex (L/2) / Ip,   f_v = v / ltot + v ex x / Ip.
+    The force varies linearly along each segment, so its magnitude peaks at a segment's
+    end: one of these points, whichever side of the centroid the load lies."""
+    total = add(length, mul(c(2), ret))
+    xbar = Div(sq(ret), total)
+    ix = add(Div(PowInt(length, 3), c(12)), Div(mul(ret, sq(length)), c(2)))
+    iy = add(mul(c(2), add(Div(PowInt(ret, 3), c(12)), mul(ret, sq(sub(Div(ret, c(2)), xbar))))), mul(length, sq(xbar)))
+    ip = add(ix, iy)
+    moment = mul(v, sub(e, xbar))
+    direct = Div(v, total)
+    return (Div(mul(moment, Div(length, c(2))), ip), add(direct, Div(mul(moment, sub(ret, xbar)), ip)),
+            sub(direct, Div(mul(moment, xbar), ip)))
+
+
 def seat_weld_line(v: Expr, e: Expr, length: Expr) -> tuple[Expr, Expr]:
     """(horizontal, vertical) force per unit length at the top of the two vertical weld
     lines of a seat angle, loaded by v at e from the support face, with the angle's
@@ -415,6 +438,36 @@ def seat_weld_line(v: Expr, e: Expr, length: Expr) -> tuple[Expr, Expr]:
     the elastic method behind Table 10-6): R = v / (2 L^2) sqrt(L^2 + 20.25 e^2), so
     f_h = 2.25 v e / L^2 and f_v = v / (2 L)."""
     return Div(mul(c("2.25"), v, e), sq(length)), Div(v, mul(c(2), length))
+
+
+# --- Bracket plates (Manual Part 15) ------------------------------------------------------------------
+
+def bracket_section(a: Expr, b: Expr) -> tuple[Expr, Expr, Expr, Expr]:
+    """(sin theta, cos theta, a', b') of a shaped bracket plate (Manual Fig. 15-2): a is
+    its depth at the support (section A-A), b the projection of its sloped free edge. The
+    free-edge section B-B runs normal to that edge: theta = atan(b/a), a' = a / cos theta
+    (Manual Eq 15-17), b' = a sin theta."""
+    hyp = Sqrt(add(sq(a), sq(b)))
+    sin, cos = Div(b, hyp), Div(a, hyp)
+    return sin, cos, hyp, Div(mul(a, b), hyp)
+
+
+def bracket_lambda(a1: Expr, b1: Expr, t: Expr, fy: Expr) -> Expr:
+    """Slenderness of the free edge (Manual Eq 15-18), Fy in ksi:
+    lambda = (b'/t) sqrt(Fy) / (5 sqrt(475 + 1120 (b'/a')^2))."""
+    return Div(mul(Div(b1, t), Sqrt(Div(fy, c(KSI)))), mul(c(5), Sqrt(add(c(475), mul(c(1120), sq(Div(b1, a1)))))))
+
+
+def bracket_q_stocky(lam: Expr) -> Expr:
+    """Reduction Q for lambda <= 1.41 (Manual Eqs 15-13 to 15-15): 1 up to 0.70, then
+    1.34 - 0.486 lambda. The least of the two is exact on [0, 1.41] but at lambda = 0.70,
+    where it is 0.9998 rather than 1."""
+    return Min((c(1), sub(c("1.34"), mul(c("0.486"), lam))))
+
+
+def bracket_q_slender(lam: Expr) -> Expr:
+    """Reduction Q for lambda > 1.41 (Manual Eq 15-16): 1.30 / lambda^2."""
+    return Div(c("1.30"), sq(lam))
 
 
 # --- Prying (Kulak Chapter 17, Manual Part 9) --------------------------------------------------------

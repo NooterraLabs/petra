@@ -99,15 +99,18 @@ STRENGTH: tuple[tuple[str, str, str, str, tuple[ValidityRow, ...]], ...] = (
      f"{AISC} Section J4.1(b)", ()),
     ("flexural_yield",
      "flexural yielding of a connecting plate under the moment of its eccentricity, Mn = Fy Z (Section J4.5)",
-     "the plate bends about its strong axis at the bolt or weld line nearest the support",
-     f"{AISC} Section J4.5; {MANUAL} Part 10", ()),
+     "the plate bends about its strong axis at the bolt or weld line nearest the load (a bracket's section A-A); a "
+     "rectangular bracket plate's compression edge is taken not to buckle, which only a shaped bracket's free-edge "
+     "check covers",
+     f"{AISC} Section J4.5; {MANUAL} Parts 10 and 15", ()),
     ("flexural_rupture",
      "flexural rupture of the net section of a connecting plate, Mn = Fu Znet (Section J4.5)",
      "the net section through the line of holes nearest the support",
      f"{AISC} Section J4.5; {MANUAL} Part 15", ()),
     ("weld",
      "fillet weld strength Rn = 0.60 FEXX Awe kds (Eq J2-4), kds by the line's direction, longitudinal and transverse "
-     "lines combined by Eq J2-6; an eccentric pair of lines by the elastic method",
+     "lines combined by Eq J2-6; an eccentric group (parallel lines, or a line with returns in a C) by the elastic "
+     "method on its line properties, at its most stressed point, without the directional increase",
      "matching filler metal (Table J2.5); welds of the declared size and length; the elastic method assumes a rigid "
      "connected part",
      f"{AISC} Section J2.4, Table J2.5; {MANUAL} Part 8 (elastic method)", ()),
@@ -245,6 +248,12 @@ for short, form, validity, source in (
      "(t <= d/2 + 1/16 in) to yield before the bolts fracture, and the weld at least five-eighths of the plate "
      "thickness so the plate yields before the weld", "the connection is a conventional single plate, so the simple "
      "beam's end rotation is accommodated by bolt deformation and plate yielding", f"{MANUAL} Part 10"),
+    ("bracket_edge", "a shaped bracket plate's free-edge section B-B, normal to its sloped edge: shear yielding, "
+     "Vn = 0.60 Fy t b' against P sin theta, and the normal force and moment on it, N/Nc + M/Mc <= 1 with N = P cos "
+     "theta and M = P e - N b'/2, at Fcr = Q Fy reduced for the edge's local buckling by its slenderness lambda",
+     "a triangular or trapezoidal plate, unstiffened along its free edge, loaded in its plane at its top edge; the "
+     "Manual's Q is continuous to 0.9998 at lambda = 0.70, where the deck's least-of form takes it", f"{MANUAL} Part 15, "
+     "Eqs 15-6 to 15-18 (bracket plates)"),
     ("extended_ductility", "rotational ductility of an extended single-plate connection: the plate no thicker than "
      "tmax = 6 Mmax / (Fy L^2), Mmax = (Fnv / 0.90) Ab C' with C' the bolt group's elastic moment coefficient, so it "
      "yields before the bolts fracture, and the weld at least five-eighths of the plate thickness",

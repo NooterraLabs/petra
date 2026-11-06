@@ -40,93 +40,12 @@ lb = 1-1/8 in where the beam needs only kdes = 1.03 in, and its printed bolt str
 six bolts' for a four-bolt seat; II.A-13 and II.A-16 carry its seat checks.
 """
 import unittest
-from decimal import Decimal
 
-from lola.lang import parse_design
-from lola.models.steel import calc
-from lola.registry import build_registry
-
-from tests.test_steel_companion import Published
-
-REGISTRY = build_registry()
-
-ROUNDED = 0.005
-"""The Companion rounds each area to three figures before it multiplies (Agv = 2.875 in^2
-prints as 2.88, so 0.60 Fy Agv as 86.4 kips, not 86.25), and an ASD value is often the
-rounded Rn over Omega: printed values move by up to 1/2 % from the exact ones."""
-
-TEMPLATE = """lola 0
-
-design "companion-{tag}" {{
-  owner "s.engineer@example.org"
-}}
-
-{kind} c1 {{
-  basis {basis}
-{body}}}
-
-load reaction {{
-  on c1 shear in [0 kip, {load} kip]
-  signed "s.engineer@example.org" source "Companion Example {tag}"
-}}
-"""
-
-BOLTS = "  bolts bolt_group.120 diameter 0.75 inch threads included\n"
+from tests import steel_examples as ex
+from tests.steel_examples import BOLTS
 
 
-class Example(Published):
-    """One Companion example: `kind`, `body` (the connection's lines), the LRFD and ASD
-    reactions, and the printed numbers: {(mode, check name prefix): (LRFD, ASD[, rel])}
-    reproduced, and the same shape for strengths the deck bounds from below."""
-
-    tag = ""
-    kind = ""
-    body = ""
-    loads = ("0", "0")
-    printed: dict = {}
-    bounded: dict = {}
-    moments: tuple[str, ...] = ()       # modes whose printed number is a moment, kip-in
-
-    def values(self, basis: str, mode: str, body: str | None = None):
-        load = self.loads[0 if basis == "lrfd" else 1]
-        text = TEMPLATE.format(tag=self.tag, kind=self.kind, basis=basis, body=body or self.body, load=load)
-        d = parse_design(text, f"{self.tag}.lola", REGISTRY)
-        return calc.values(calc.connection(d, "c1", REGISTRY), d, REGISTRY, mode, "reaction"), float(load)
-
-    def strength(self, basis: str, mode: str, prefix: str, body: str | None = None) -> float:
-        found, load = self.values(basis, mode, body)
-        hits = [v for v in found if v.what.startswith(prefix) and not v.excused]
-        self.assertTrue(hits, f"{self.tag}: no {mode} check starts with {prefix!r}; found {[v.what for v in found]}")
-        worst = max(hits, key=lambda v: v.utilisation)
-        if mode in self.moments:
-            return worst.available
-        return load / worst.utilisation
-
-    def near(self, computed: float, printed: str, what: str, rel: float = ROUNDED) -> None:
-        """Within one unit of the printed last digit or `rel` of the printed value."""
-        digits = Decimal(printed.replace(",", ""))
-        unit = float(Decimal(1).scaleb(digits.as_tuple().exponent))
-        allowed = max(unit, rel * float(digits))
-        self.assertLessEqual(abs(computed - float(digits)), allowed, f"{what}: computed {computed:.4f}, printed {printed}")
-
-    def test_reproduced(self):
-        for (mode, prefix), printed in self.printed.items():
-            for i, basis in enumerate(("lrfd", "asd")):
-                with self.subTest(mode=mode, check=prefix, basis=basis):
-                    rel = printed[2] if len(printed) > 2 else ROUNDED
-                    self.near(self.strength(basis, mode, prefix), printed[i], f"{self.tag} {basis} {prefix}", rel)
-
-    def test_bounded(self):
-        for (mode, prefix), printed in self.bounded.items():
-            for i, basis in enumerate(("lrfd", "asd")):
-                with self.subTest(mode=mode, check=prefix, basis=basis):
-                    ours = self.strength(basis, mode, prefix)
-                    self.assertLessEqual(ours, float(printed[i]), f"{self.tag} {basis} {prefix}: {ours:.1f} > {printed[i]}")
-
-
-# --- Double angles ------------------------------------------------------------------------------
-
-class IIA1A(Example):
+class IIA1A(ex.Example):
     """All-bolted double angle, W36x231 to a W14x90 column flange, 2L5x3-1/2x5/16 x 1'-11-1/2"
     (A572 Gr. 50), eight 3/4 in Group 120-N bolts at 3 in. Ru = 226, Ra = 151 kips."""
 
@@ -144,7 +63,7 @@ class IIA1A(Example):
     }
 
 
-class IIA2A(Example):
+class IIA2A(ex.Example):
     """Bolted/welded double angle, W36x231 to a W14x90 column flange, 2L4x3-1/2x3/8, eight
     bolts, 5/16 in E70 welds B. Ru = 226, Ra = 151 kips."""
 
@@ -163,7 +82,7 @@ class IIA2A(Example):
     bounded = {("weld", "angles to support:"): ("318", "212")}
 
 
-class IIA4(Example):
+class IIA4(ex.Example):
     """All-bolted double angle in a coped beam: W18x50 (top cope 2 in by 4 in) to a W21x62
     girder web, 2L5x3-1/2x1/4 x 0'-8-1/2", three bolts. Ru = 60.0, Ra = 40.0 kips. The beam
     web's end distance is 1-5/8 in less the 1/4 in underrun, as the Companion's block shear."""
@@ -184,7 +103,7 @@ class IIA4(Example):
     }
 
 
-class IIA8BeamA(Example):
+class IIA8BeamA(ex.Example):
     """All-bolted double angles, beams to a W30x99 girder web: Beam A, W12x40 (top cope 2 in
     by 5 in), 2L5x3-1/2x1/4 x 0'-5-1/2", two bolts, top bolt 2 in below the cope. Ru = 25.0,
     Ra = 16.7 kips. Table 10-1c's block shear takes the top edge as 1-1/2 in and the end
@@ -237,7 +156,7 @@ END_PLATE_HOST = ("  support W14x90 flange grade steel.A992\n  plate steel.A572_
 """A welded shear connection to host a cope: the Companion's II.A-6 and 7 give none."""
 
 
-class IIA6A(Example):
+class IIA6A(ex.Example):
     """A W21x62 coped at the top flange, dc = 8 in, c = 9 in, setback 1/2 in (e = 9.50 in).
     Flexural yielding and local web buckling of the coped section."""
 
@@ -254,7 +173,7 @@ class IIA6B(IIA6A):
     printed = {("cope_buckling", "beam web: flexural yielding and local buckling"): ("150", "100", 0.01)}
 
 
-class IIA7(Example):
+class IIA7(ex.Example):
     """A W16x40 coped at both flanges, dct = 3-1/2 in, dcb = 2 in, c = 9-1/2 in, setback
     1/2 in (e = 10.0 in): Section F11 with Cb by Manual Eq 9-21, Mn = Mp = 421 kip-in."""
 
@@ -266,7 +185,7 @@ class IIA7(Example):
 
 # --- Shear end plate -------------------------------------------------------------------------------
 
-class IIA11A(Example):
+class IIA11A(ex.Example):
     """Shear end plate, W18x50 (top cope 2 in by 4 in) to a W21x62 girder web, PL1/4x6x0'-8-1/2"
     (A572 Gr. 50), six bolts, 3/16 in E70 fillets both sides of the web. Ru = 60.0, Ra =
     40.0 kips. The plate's shear rupture is Table 10-4a's (unrounded Anv); Part B rounds Anv
@@ -288,7 +207,7 @@ class IIA11A(Example):
 
 # --- Seats -------------------------------------------------------------------------------------------
 
-class IIA13(Example):
+class IIA13(ex.Example):
     """Welded unstiffened seat, W21x62 on a W14x61 column flange, L8x4x5/8 x 0'-8" (A572
     Gr. 50), 5/16 in E70 welds, setback 3/4 in with the underrun. Ru = 54.8, Ra = 36.5 kips.
     The welds are Table 10-6's to its digits. Its seat row is lb = 1-1/8 in; the beam needs
@@ -305,7 +224,7 @@ class IIA13(Example):
     }
 
 
-class IIA16(Example):
+class IIA16(ex.Example):
     """Offset welded seat, W14x38 on a W12x65 column flange, L7x4x5/8 x 0'-6", 5/16 in E70
     welds. The Companion designs the seat for twice the heavier weld's share, 51.4 / 34.2
     kips, from Table 10-6: the seat's shear yielding governs it."""
@@ -329,7 +248,7 @@ SHEAR_TAB = ("  plate steel.A572_50 thickness 0.25 inch\n" + BOLTS + "  rows 4\n
 """The conventional single plate of II.A-17A and 18, e = a/2 by Manual Table 10-9."""
 
 
-class IIA17A(Example):
+class IIA17A(ex.Example):
     """Conventional single plate, W16x50 to a W14x90 column flange, PL1/4x4-1/2x0'-11-1/2"
     (A572 Gr. 50), four bolts, a = 3 in. Ru = 49.6, Ra = 33.0 kips."""
 
@@ -344,7 +263,7 @@ class IIA17A(Example):
     bounded = {("bolts", "beam side:"): ("58.5", "38.9")}
 
 
-class IIA18(Example):
+class IIA18(ex.Example):
     """Conventional single plate, W18x35 (top cope 2 in by 4 in) to a W21x62 girder web,
     the plate of II.A-17A. Ru = 39.8, Ra = 26.5 kips. The beam web's block shear is Table
     10-10c's: top edge 1-1/2 in, end distance 2-1/4 in less the table's 1/4 in underrun."""
@@ -359,7 +278,7 @@ class IIA18(Example):
     bounded = {("bolts", "beam side:"): ("58.5", "38.9")}
 
 
-class IIA19A(Example):
+class IIA19A(ex.Example):
     """Extended single plate, W16x36 to a W14x90 column web, PL1/2x12x1'-1-1/4" (A572 Gr. 50),
     two lines of four bolts at 3 in, a = 9 in to the first line, 5/16 in E70 fillets both
     sides. Ru = 36.0, Ra = 24.0 kips. Flexural rupture: Znet = 12.75 in^3; the Companion
@@ -397,7 +316,7 @@ class IIA19A(Example):
 
 # --- Single angles -------------------------------------------------------------------------------------
 
-class IIA28A(Example):
+class IIA28A(ex.Example):
     """All-bolted single angle, W18x35 (top cope 2 in by 4 in, setback 3/4 in) to a W21x62
     girder web, L4x3x3/8 x 0'-11-1/2" (A572 Gr. 50), the 3 in leg on the girder at a
     1-3/4 in gage, four bolts each leg. Ru = 39.8, Ra = 26.5 kips. Beam web block shear with
@@ -425,7 +344,7 @@ class IIA28A(Example):
     bounded = {("bolts", "beam side:"): ("68.5", "45.6")}
 
 
-class IIA29(Example):
+class IIA29(ex.Example):
     """Bolted/welded single angle, W16x50 to a W14x90 column flange, L4x3x3/8 x 0'-11-1/2",
     the 4 in leg bolted to the beam web (bolt line 2-3/4 in from the column), the 3 in leg
     welded with 3/16 in E70 fillets. Ru = 54.0, Ra = 36.0 kips."""
@@ -458,7 +377,7 @@ TEE_STEM = {
 }
 
 
-class IIA30(Example):
+class IIA30(ex.Example):
     """All-bolted tee, W16x50 to a W14x90 column flange, WT5x22.5 x 0'-11-1/2" (A992), four
     bolts through the stem at a = 3.80 in, eight through the flange at a 5-1/2 in gage.
     Ru = 36.0, Ra = 24.0 kips."""
@@ -480,7 +399,6 @@ class IIA31(IIA30):
     bounded = {("bolts", "beam side:"): ("43.5", "28.9"), ("weld", "tee flange to support:"): ("99.7", "66.5")}
 
 
-del Example
 
 if __name__ == "__main__":
     unittest.main()

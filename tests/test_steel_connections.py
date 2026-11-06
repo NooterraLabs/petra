@@ -4,7 +4,8 @@ the path cannot carry stays UNKNOWN.
 
 The examples in examples/steel/ cover each kind. The variants below add the details that
 switch limit states on: a coped beam, a welded support side, slip-critical bolts, an
-extended single plate, and an axial force. A plate thickness the shop deck does not stock
+extended single plate, shaped and lapped bracket plates, and an axial force. A plate
+thickness the shop deck does not stock
 is rejected at lowering.
 """
 import unittest
@@ -46,7 +47,13 @@ VARIANTS = {
                                               "  support_side welded\n  support_weld electrode.E70 size 0.3125 inch\n")),
     "welded tee": lambda: variant("shear_tee", ("  support_side bolted\n  support_gauge 5.5 inch\n",
                                                 "  support_side welded\n  support_weld electrode.E70 size 0.25 inch\n")),
+    "shaped bolt bracket": lambda: variant("bolt_bracket", ("thickness 0.5 inch", "thickness 0.75 inch"),
+                                           ("  plate_edge 1.5 inch\n", "  plate_edge 1.5 inch\n  free_edge 8 inch\n")),
+    "lapped weld bracket": lambda: variant("weld_bracket", ("thickness 0.5 inch", "thickness 0.75 inch"), ("sides 2", "sides 1"),
+                                           ("  weld_length 12 inch\n", "  weld_length 12 inch\n  weld_return 2 inch\n  free_edge 8 inch\n")),
 }
+"""The bracket variants pass. With the examples' 1/2 in plates their free edges fail: the
+40 kip load at 6 to 8 in buckles a 1/2 in shaped plate (B-B ratios 1.14 and 2.1)."""
 
 
 def designs():
@@ -99,6 +106,14 @@ class LoadPath(unittest.TestCase):
         extended = required(conn("extended shear tab", "st1"), built["extended shear tab"])
         self.assertTrue({"plate_buckling", "extended_ductility"} <= set(extended))
         self.assertNotIn("ductility", extended)
+        self.assertIn("bracket_edge", required(conn("shaped bolt bracket", "bb1"), built["shaped bolt bracket"]))
+        lapped = required(conn("lapped weld bracket", "wb1"), built["lapped weld bracket"])
+        self.assertTrue({"bracket_edge", "shear_yield", "flexural_yield", "weld"} <= set(lapped))
+
+    def test_the_bracket_variants_pass(self):
+        for label in ("shaped bolt bracket", "lapped weld bracket"):
+            report = check_design(VARIANTS[label](), REGISTRY, (SolverSource(),))
+            self.assertEqual({type(o).__name__ for o in report.outcomes}, {"Discharged"}, label)
 
 
 class AxialForce(unittest.TestCase):

@@ -36,6 +36,10 @@ ROLE_LIMITS: Mapping[str, tuple[str, ...]] = {
     "bent_ply": (*SHEAR_PLY, "flexural_yield", "flexural_rupture"),
     "conventional_plate": ("ductility",),
     "extended_plate": ("plate_buckling", "extended_ductility"),
+    # a bracket plate welded to its support: no holes, so no rupture section
+    "welded_bracket": ("shear_yield", "flexural_yield"),
+    # a shaped bracket's sloped free edge (Manual Part 15)
+    "shaped_bracket": ("bracket_edge",),
     # a seat leg under a beam end, and the beam web bearing on it
     "seat": ("seat_flexure", "shear_yield"),
     "seat_leg": EDGES,
@@ -51,7 +55,8 @@ ROLE_LIMITS: Mapping[str, tuple[str, ...]] = {
     # the support's face under the bolts; its bearing and tearout are in the bolt group's check
     "face": ("hole_use",),
     "tension_element": ("tension_yield", "tension_rupture"),
-    "tension_flange": EDGES,
+    # a hanger's flange, carrying the bolts' tension to the stem in shear
+    "tension_flange": ("shear_yield", "shear_rupture", *EDGES),
     # a member flange under a concentrated force (J10)
     "j10_web_yielding": ("web_local_yielding",),
     "j10_crippling": ("web_crippling",),
@@ -82,6 +87,10 @@ def _bolts(conn: Conn, element: str, role: str) -> tuple[Link, ...]:
     bolts = conn.get("bolts")
     slip = isinstance(bolts, Bolts) and bolts.joint == "slip_critical"
     return (Link(element, role),) + ((Link(element, "slip_critical"),) if slip else ())
+
+
+def _shaped(conn: Conn) -> tuple[Link, ...]:
+    return (Link("bracket plate", "shaped_bracket"),) if conn.get("free_edge") is not None else ()
 
 
 def _face(conn: Conn) -> Link:
@@ -137,9 +146,9 @@ def path(conn: Conn, fields: set[str]) -> tuple[Link, ...]:
         if "panel_shear" in fields:
             links += (Link("member web", "panel"),)
     elif kind == "bolt_bracket":
-        links = (Link("bracket plate", "ply"), *_bolts(conn, "bracket bolts", "bracket_bolts"), _face(conn))
+        links = (Link("bracket plate", "bent_ply"), *_shaped(conn), *_bolts(conn, "bracket bolts", "bracket_bolts"), _face(conn))
     elif kind == "weld_bracket":
-        links = (Link("bracket weld", "fillet"),)
+        links = (Link("bracket plate", "welded_bracket"), *_shaped(conn), Link("bracket weld", "fillet"))
     elif kind == "hanger":
         links = (Link("tee stem", "tension_element"), Link("tee flange", "tension_flange"),
                  Link("hanger bolts", "tension_bolts"))

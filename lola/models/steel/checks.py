@@ -182,6 +182,8 @@ class WeldGroup:
     thinner: Expr               # thinner part joined (J2.2b minimum size)
     base: tuple[tuple[str, str, Expr, int], ...]   # (part, grade, thickness, fusion lines loading it at one place)
     bearing: bool = False       # a seat's two weld lines, its vertical leg bearing on the support below them
+    ret: Expr | None = None     # returns at both ends of the line, toward the load: a C-shaped group
+    edge: Expr | None = None    # a lapped part whose edge the fillet runs along (J2.2b maximum size)
 
 
 @dataclass(frozen=True)
@@ -194,6 +196,18 @@ class Flexure:
     rows: int
     pitch: Expr
     hole: Expr                  # net hole width dh + 1/16 in
+
+
+@dataclass(frozen=True)
+class Bracket:
+    """A shaped bracket plate (Manual Part 15, Fig. 15-2): depth a at the support section
+    A-A, its sloped free edge projecting b from A-A, and the load at arm e from A-A."""
+    grade: str
+    t: Expr
+    a: Expr
+    b: Expr
+    e: Expr
+    force: Expr
 
 
 @dataclass(frozen=True)
@@ -290,11 +304,13 @@ class Geometry:
     flexures: list[Flexure] = field(default_factory=list)
     tensions: list[Tension] = field(default_factory=list)
     web_shear: list[tuple[str, str, Expr, Expr]] = field(default_factory=list)   # (name, grade, Agv, V): gross shear only
+    net_shear: list[tuple[str, str, Expr, Expr]] = field(default_factory=list)   # (name, grade, Anv, V): its net section
     cope: CopeGeo | None = None
     forces: list[Concentrated] = field(default_factory=list)
     seat: Seat | None = None
     stiffener: Stiffener | None = None
     single_plate: SinglePlate | None = None
+    bracket: Bracket | None = None
 
 
 HOLE_DIMS = {
@@ -612,8 +628,15 @@ def geometry_bolt_bracket(ctx: Ctx) -> Geometry:
     tp = ctx.geo(plate.thickness, "plate.thickness")
     ply = Ply("bracket plate", plate.grade, tp, 1, 1, ctx.hole("plate"), "down", lev, leh, depth, cols,
               (("plate top and bottom", lev), ("plate side", leh)))
+    v = ctx.load("shear")
     out = Geometry()
-    out.interfaces.append(Interface("bracket bolts", bolts, rows, cols, s, g, 1, (ply, _support_ply(ctx)), ctx.load("shear"), e))
+    out.interfaces.append(Interface("bracket bolts", bolts, rows, cols, s, g, 1, (ply, _support_ply(ctx)), v, e))
+    # Section A-A runs down the bolt column nearest the load (Manual Part 15).
+    arm = sub(e, mul(c(Fraction(cols - 1, 2)), g))
+    _, dh_v, _ = bolt_dims(ctx, bolts, ply.hole)
+    out.flexures.append(Flexure("bracket plate", plate.grade, tp, depth, mul(v, arm), rows, s, L.hole_net(dh_v)))
+    if "free_edge" in conn.attrs:
+        out.bracket = Bracket(plate.grade, tp, depth, ctx.attr("free_edge"), arm, v)
     return out
 
 
@@ -625,9 +648,20 @@ def geometry_weld_bracket(ctx: Ctx) -> Geometry:
     weld: Weld = conn.attrs["weld"]
     w = ctx.geo(weld.size, "weld.size")
     tp = ctx.geo(plate.thickness, "plate.thickness")
+    length, e, v = ctx.attr("weld_length"), ctx.attr("eccentricity"), ctx.load("shear")
+    ret = ctx.attr("weld_return") if "weld_return" in conn.attrs else None
     out = Geometry()
-    out.welds.append(WeldGroup("bracket weld", weld, w, ctx.attr("weld_length"), 2, ctx.load("shear"), ctx.attr("eccentricity"),
-                               Min((tp, t_sup)), (("bracket plate", plate.grade, tp, 2), (f"support {support.face}", support.grade, t_sup, 1))))
+    # Both fillets of a plate set on edge load it at one place; a lapped plate's single
+    # C-shaped fillet runs along its edges.
+    out.welds.append(WeldGroup("bracket weld", weld, w, length, weld.sides, v, e, Min((tp, t_sup)),
+                               (("bracket plate", plate.grade, tp, weld.sides), (f"support {support.face}", support.grade, t_sup, 1)),
+                               ret=ret, edge=None if ret is None else tp))
+    # Section A-A is at the weld line, or past the returns where the plate leaves the support.
+    arm = e if ret is None else sub(e, ret)
+    out.web_shear.append(("bracket plate", plate.grade, mul(length, tp), v))
+    out.flexures.append(Flexure("bracket plate", plate.grade, tp, length, mul(v, arm), 0, c(0), c(0)))
+    if "free_edge" in conn.attrs:
+        out.bracket = Bracket(plate.grade, tp, length, ctx.attr("free_edge"), arm, v)
     return out
 
 
@@ -650,6 +684,11 @@ def geometry_hanger(ctx: Ctx) -> Geometry:
                                     prying=Prying(b, a, div(length, c(rows)), tp["tf"], tee.grade)))
     gross = mul(tp["tw"], length)
     out.tensions.append(Tension("tee stem", tee.grade, gross, gross, t))
+    # The bolts' tension reaches the stem through the flange in shear either side of it:
+    # two gross sections the flange's length long, and two net through the line of holes.
+    _, dh_v, _ = bolt_dims(ctx, bolts, flange.hole)
+    out.web_shear.append(("tee flange", tee.grade, mul(c(2), length, tp["tf"]), t))
+    out.net_shear.append(("tee flange", tee.grade, mul(c(2), sub(length, mul(c(rows), L.hole_net(dh_v))), tp["tf"]), t))
     return out
 
 
@@ -824,6 +863,9 @@ def gen_shear_rupture(ctx: Ctx, geo: Geometry) -> list[Check]:
         anv = mul(c(ply.sections), sub(ply.depth, mul(c(itf.rows), L.hole_net(dh_v))), ply.t)
         out.append(Check(f"{ply.name}: shear rupture of the net section (J4.2b)", (itf.shear,),
                          L.shear_rupture(ctx.mat(ply.grade, "fu"), anv), "aisc360.j4_2", "_r"))
+    for name, grade, anv, v in geo.net_shear:
+        out.append(Check(f"{name}: shear rupture of the net section (J4.2b)", (v,), L.shear_rupture(ctx.mat(grade, "fu"), anv),
+                         "aisc360.j4_2", "_r"))
     return out
 
 
@@ -892,18 +934,22 @@ def gen_flexural_rupture(ctx: Ctx, geo: Geometry) -> list[Check]:
     return [Check(f"{f.name}: flexural rupture of the net section through the bolt holes (J4.5)", (f.moment,),
                   L.flexural_rupture(ctx.mat(f.grade, "fu"), L.plate_net_modulus(f.t, f.depth, f.rows, f.pitch, f.hole)),
                   "aisc360.j4_5", "_r", unit="kip-in")
-            for f in geo.flexures]
+            for f in geo.flexures if f.rows > 0]
 
 
 # --- Welds ------------------------------------------------------------------------------------------------
 
-def _weld_force_per_length(wg: WeldGroup) -> tuple[Expr, ...]:
-    """Force per unit length at the most stressed point of the group's lines."""
+def _weld_points(wg: WeldGroup) -> tuple[tuple[str, tuple[Expr, ...]], ...]:
+    """Force per unit length at the most stressed point of the group's lines, named where
+    a C-shaped group has two candidates."""
     if wg.eccentricity is None:
-        return (div(wg.force, mul(c(wg.lines), wg.length)),)
+        return (("", (div(wg.force, mul(c(wg.lines), wg.length)),)),)
     if wg.bearing:
-        return L.seat_weld_line(wg.force, wg.eccentricity, wg.length)
-    return L.elastic_weld_line(wg.force, wg.eccentricity, wg.length, c(wg.lines))
+        return (("", L.seat_weld_line(wg.force, wg.eccentricity, wg.length)),)
+    if wg.ret is not None:
+        fx, tip, heel = L.elastic_weld_c(wg.force, wg.eccentricity, wg.length, wg.ret)
+        return ((", at the return tips", (fx, tip)), (", at the heel corners", (fx, heel)))
+    return (("", L.elastic_weld_line(wg.force, wg.eccentricity, wg.length, c(wg.lines))),)
 
 
 def gen_weld(ctx: Ctx, geo: Geometry) -> list[Check]:
@@ -914,19 +960,20 @@ def gen_weld(ctx: Ctx, geo: Geometry) -> list[Check]:
             rn = mul(c(wg.lines), L.fillet_line(fexx, wg.size, wg.length, False))
             out.append(Check(f"{wg.name}: fillet welds in longitudinal shear (J2.4)", (wg.force,), rn, "aisc360.j2_4"))
         else:
-            out.append(Check(f"{wg.name}: most stressed point of the welds by the elastic method (J2.4)",
-                             _weld_force_per_length(wg), L.fillet_per_length(fexx, wg.size), "aisc360.j2_4", unit="kip/in"))
+            for where, force in _weld_points(wg):
+                out.append(Check(f"{wg.name}: most stressed point of the welds by the elastic method{where} (J2.4)",
+                                 force, L.fillet_per_length(fexx, wg.size), "aisc360.j2_4", unit="kip/in"))
     return out
 
 
 def gen_weld_base_metal(ctx: Ctx, geo: Geometry) -> list[Check]:
     out = []
     for wg in geo.welds:
-        per_length = _weld_force_per_length(wg)
-        for part, grade, t, faces in wg.base:
-            demand = tuple(mul(c(faces), f) if faces > 1 else f for f in per_length)
-            out.append(Check(f"{wg.name}: {part} base metal in shear rupture along the weld (J2.4a)", demand,
-                             L.base_metal_per_length(ctx.mat(grade, "fu"), t), "aisc360.j4_2", "_r", unit="kip/in"))
+        for where, per_length in _weld_points(wg):
+            for part, grade, t, faces in wg.base:
+                demand = tuple(mul(c(faces), f) if faces > 1 else f for f in per_length)
+                out.append(Check(f"{wg.name}: {part} base metal in shear rupture along the weld{where} (J2.4a)", demand,
+                                 L.base_metal_per_length(ctx.mat(grade, "fu"), t), "aisc360.j4_2", "_r", unit="kip/in"))
     return out
 
 
@@ -940,6 +987,15 @@ def gen_fillet_size(ctx: Ctx, geo: Geometry) -> list[Check]:
                              guards=() if guard is None else (guard,), unit="in"))
         out.append(Check(f"{wg.name}: fillet at least four times its size long (J2.2b)",
                          (mul(ctx.const("aisc360.j2_2b.length_ratio"), wg.size),), wg.length, unit="in"))
+        if wg.edge is not None:
+            # J2.2b(b): along an edge thinner than 1/4 in, at most its thickness; otherwise
+            # at most 1/16 in less. The boundary t = 1/4 in belongs to the second.
+            edge_t = ctx.const("aisc360.j2_2b.edge_t")
+            out.append(Check(f"{wg.name}: maximum fillet size along the edge of a part under 1/4 in (J2.2b(b))", (wg.size,),
+                             wg.edge, guards=(sub(edge_t, wg.edge),), unit="in"))
+            out.append(Check(f"{wg.name}: maximum fillet size along the edge of a part at least 1/4 in thick (J2.2b(b))",
+                             (wg.size,), sub(wg.edge, ctx.const("aisc360.j2_2b.edge_less")),
+                             guards=(add(sub(wg.edge, edge_t), L.STRICT),), unit="in"))
     return out
 
 
@@ -1179,6 +1235,37 @@ def gen_compression(ctx: Ctx, geo: Geometry) -> list[Check]:
                   L.compression(ctx.mat(st.grade, "fy"), mul(st.width, st.t)), "aisc360.j4_4")]
 
 
+# --- Bracket plates (Manual Part 15) ------------------------------------------------------------------
+
+BRACKET_LAMBDA = c("1.41")
+
+
+def gen_bracket_edge(ctx: Ctx, geo: Geometry) -> list[Check]:
+    """A shaped bracket's free-edge section B-B: shear yielding (Manual Eq 15-7), and the
+    normal force and moment on it with the edge's local buckling (Eqs 15-8 to 15-18), one
+    check per branch of Q, the boundary lambda = 1.41 belonging to the stocky branch."""
+    br = geo.bracket
+    if br is None:
+        return []
+    sin, cos, a1, b1 = L.bracket_section(br.a, br.b)
+    fy = ctx.mat(br.grade, "fy")
+    out = [Check("bracket plate: shear yielding of the free-edge section B-B (Manual Eq 15-7)", (mul(br.force, sin),),
+                 L.shear_yield(fy, mul(br.t, b1)), "aisc360.j4_2", "_y")]
+    lam = L.bracket_lambda(a1, b1, br.t, fy)
+    # N = P cos theta and M = P e - N b'/2 = P (e - cos theta b'/2): the force is factored
+    # out so the interaction is linear in it, which interval enclosure keeps tight.
+    lever = sub(br.e, div(mul(cos, b1), c(2)))
+    for q, guard, which in ((L.bracket_q_stocky(lam), add(sub(BRACKET_LAMBDA, lam), L.STRICT_RATIO), "lambda <= 1.41"),
+                            (L.bracket_q_slender(lam), sub(lam, BRACKET_LAMBDA), "lambda > 1.41")):
+        fcr = mul(q, fy)
+        nc = ctx.available(mul(fcr, br.t, b1), "aisc360.j4_4")
+        mc = ctx.available(div(mul(fcr, br.t, sq(b1)), c(4)), "aisc360.j4_5", "_y")
+        out.append(Check(f"bracket plate: normal force and moment on the free-edge section B-B with its local buckling, "
+                         f"{which} (Manual Eqs 15-8 to 15-18)", (mul(br.force, add(div(cos, nc), div(Max((lever, sub(c(0), lever))), mc))),), c(1),
+                         guards=(guard,), unit="1"))
+    return out
+
+
 # --- J10 --------------------------------------------------------------------------------------------------
 
 def gen_web_local_yielding(ctx: Ctx, geo: Geometry) -> list[Check]:
@@ -1313,6 +1400,7 @@ GENERATORS: Mapping[str, Callable[[Ctx, Geometry], list[Check]]] = {
     "web_local_yielding": gen_web_local_yielding, "web_crippling": gen_web_crippling,
     "flange_local_bending": gen_flange_local_bending, "web_sidesway_buckling": gen_web_sidesway_buckling,
     "web_compression_buckling": gen_web_compression_buckling, "panel_zone": gen_panel_zone, "prying": gen_prying,
+    "bracket_edge": gen_bracket_edge,
 }
 
 

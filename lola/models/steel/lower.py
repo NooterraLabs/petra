@@ -18,6 +18,8 @@ Every connection kind reads the same attribute grammar, one attribute per line:
     support_side bolted|welded        beam_side bolted|welded
     support_weld <electrode> size <len>    beam_weld <electrode> size <len>
     cope top|both depth <len> length <len> [bottom_depth <len>]
+    weld_return <len>       (weld_bracket: returns at both ends of the weld, a C-shape on a lapped plate)
+    free_edge <len>         (bolt_bracket, weld_bracket: a shaped plate's sloped free edge, projected)
     rows <n>   columns <n>   support_rows <n>
     deformation considered|not_considered
     form conventional|extended
@@ -384,7 +386,7 @@ def p_cope(conn, key, args, design, registry, say):
 _BASIS = ("basis", p_word("lrfd", "asd"))
 _LENGTHS = ("pitch", "gauge", "edge_vertical", "plate_edge", "bolt_line", "beam_edge", "top", "setback", "eccentricity",
             "beam_gauge", "support_gauge", "plate_width", "seat_length", "bearing_length", "distance", "unbraced_length",
-            "stiffener_width", "stiffener_length", "weld_length", "tee_gauge", "panel_depth")
+            "stiffener_width", "stiffener_length", "weld_length", "tee_gauge", "panel_depth", "weld_return", "free_edge")
 _COMMON: dict[str, Parser] = {
     "basis": p_word("lrfd", "asd"),
     "beam": p_member(False),
@@ -468,11 +470,11 @@ KIND_SPECS: Mapping[str, KindSpec] = {
     "bolt_bracket": KindSpec(
         ("basis", "plate", "support", "bolts", "rows", "columns", "pitch", "gauge", "eccentricity",
          "edge_vertical", "plate_edge"),
-        ("holes", "deformation", "weathering"),
+        ("holes", "deformation", "weathering", "free_edge"),
         ("plate", "support"), ("shear",)),
     "weld_bracket": KindSpec(
         ("basis", "plate", "support", "weld", "weld_length", "eccentricity"),
-        (),
+        ("weld_return", "free_edge"),
         (), ("shear",)),
     "hanger": KindSpec(
         ("basis", "tee", "support", "bolts", "rows", "pitch", "tee_gauge", "edge_vertical"),
@@ -533,6 +535,8 @@ def _check_kind(kind: str, attrs: Mapping[str, object], say: Say) -> None:
         say("a shear tab with more than one bolt column names its gauge")
     if kind in ("shear_tab", "double_angle", "single_angle", "shear_tee") and isinstance(attrs.get("rows"), int) and attrs["rows"] < 2:
         say("a beam-side bolt group has at least two rows, so it can resist the eccentricity")
+    if kind == "weld_bracket" and "weld_return" in attrs and isinstance(attrs.get("weld"), Weld) and attrs["weld"].sides != 1:
+        say("a weld_return makes a C-shaped weld around a plate lapped on the support face: one fillet, `sides 1`")
     if kind == "bolt_bracket" and isinstance(attrs.get("rows"), int) and attrs["rows"] * attrs.get("columns", 1) < 2:
         say("an eccentric bolt group has at least two bolts")
     if kind == "flange_force" and attrs.get("location") == "end" and "distance" not in attrs:
