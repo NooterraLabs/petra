@@ -1,4 +1,4 @@
-"""The steel deck's exhaustiveness machinery (docs/steel_connections.md §9 items 4 to 8) on
+"""The steel deck's exhaustiveness machinery (docs/steel_connections.md §9 items 4 to 9) on
 a small sample: the generator, decidedness, manufactured faults, the breaker, and the
 published gate (docs/steel_gate.md, from `python scripts/steel_gate.py`). Also the deck
 fixes the generator, the twin and the breaker found: a hanger's support flange checked for
@@ -189,6 +189,7 @@ class Published(unittest.TestCase):
         self.assertRegex(text, r"\| 7\. Breaker \| \d+ runs, \d+ deck evaluations each; 0 found a false PASS \|")
         fails = re.search(r"\| 8\. Makeability \| (\d+) of (\d+) FAILs carry a witness \|", text).groups()
         self.assertEqual(fails[0], fails[1])
+        self.assertIn(f"| 9. Report | {n} of {n} calculation packages re-check", text)
 
 
 if __name__ == "__main__":

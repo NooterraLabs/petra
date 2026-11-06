@@ -1,4 +1,4 @@
-"""The steel deck's exhaustiveness gate (docs/steel_connections.md §9 items 4 to 8). Tooling:
+"""The steel deck's exhaustiveness gate (docs/steel_connections.md §9 items 4 to 9). Tooling:
 nothing here changes a verdict. `python scripts/steel_gate.py` runs it and writes
 docs/steel_gate.md and docs/steel_gate_log.jsonl.
 
@@ -8,10 +8,15 @@ docs/steel_gate.md and docs/steel_gate_log.jsonl.
   6. Manufactured faults: every one caught (not PASS) and named (a fault mode refuted or open).
   7. Breaker: no design the deck passes and the twin fails, within the budget.
   8. Makeability: every FAIL carries a refutation, the witness point.
+  9. Report: every design's calculation package (package.py) re-checks: the kernel accepts
+     every certificate, every cited statement has one, and the design re-checked from
+     the certificates alone gets the same verdict.
 """
 from __future__ import annotations
 
 import json
+import shutil
+import tempfile
 from collections import Counter
 from dataclasses import asdict, dataclass, field
 from typing import Iterable
@@ -22,6 +27,7 @@ from ...registry import Registry, build_registry
 from ...solvers import SolverSource
 from ...verdict import STATUS
 from . import faults as F
+from . import package as P
 from .generate import Generated, generate
 
 SLACK = 1e-6
@@ -41,6 +47,7 @@ class Assessed:
     twin: dict[str, float] | None = None
     twin_error: str | None = None
     disagreements: list[tuple[str, str, float | None]] = field(default_factory=list)
+    package: str | None = None                        # None: not packaged; "ok"; else what failed
 
 
 def deck_outcomes(report) -> tuple[dict[str, str], bool]:
@@ -88,11 +95,33 @@ def assess(g: Generated, registry: Registry, with_twin: bool = True) -> Assessed
     return out
 
 
-def chunk(args: tuple[int, int, int, bool]) -> list[dict]:
-    """A worker's slice of the stream: (seed, start, count, with_twin)."""
-    seed, start, count, with_twin = args
+def packaged(g: Generated, registry: Registry, status: str) -> str:
+    """Write the design's calculation package to a temporary directory, re-check it, and
+    say "ok" or what failed."""
+    root = tempfile.mkdtemp(prefix="steel-package-")
+    try:
+        pkg = P.write_package(g.text, root, registry)
+        again = P.recheck(pkg, registry)
+        if pkg.status != status:
+            return f"packaged as {pkg.status}, checked as {status}"
+        if not again.holds(status):
+            return f"rejected {list(again.rejected)}, missing {list(again.missing)}, re-checked as {again.status}"
+        return "ok"
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def chunk(args: tuple[int, int, int, bool, bool]) -> list[dict]:
+    """A worker's slice of the stream: (seed, start, count, with_twin, with_packages)."""
+    seed, start, count, with_twin, with_packages = args
     registry = build_registry()
-    return [asdict(assess(g, registry, with_twin)) for g in generate(count, seed, registry, start)]
+    rows = []
+    for g in generate(count, seed, registry, start):
+        a = assess(g, registry, with_twin)
+        if with_packages:
+            a.package = packaged(g, registry, a.status)
+        rows.append(asdict(a))
+    return rows
 
 
 @dataclass
@@ -110,6 +139,8 @@ class Summary:
     toleranced: int
     free: int
     twinned: int
+    packaged: int
+    package_failures: list[dict]
     faults: list[F.Caught]
     breaker: list[dict]
     budget: int
@@ -129,6 +160,8 @@ def summarise(rows: Iterable[dict], seed: int, faults: list[F.Caught], breaker: 
          for r in rows if r["disagreements"]],
         sum(r["toleranced"] for r in rows), sum(r["free"] for r in rows),
         sum(r["twin"] is not None or r["twin_error"] is not None for r in rows),
+        sum(r["package"] is not None for r in rows),
+        [{"name": r["name"], "package": r["package"]} for r in rows if r["package"] not in (None, "ok")],
         faults, breaker, budget)
 
 
@@ -153,6 +186,9 @@ def render(s: Summary) -> str:
         f"| 6. Manufactured faults | {caught} of {len(s.faults)} caught, {named} named by the fault's mode |",
         f"| 7. Breaker | {len(s.breaker)} runs, {s.budget} deck evaluations each; {len(found)} found a false PASS |",
         f"| 8. Makeability | {s.statuses['FAIL'] - len(s.unwitnessed)} of {s.statuses['FAIL']} FAILs carry a witness |",
+        f"| 9. Report | {s.packaged - len(s.package_failures)} of {s.packaged} calculation packages re-check (every "
+        "certificate accepted by the kernel, every cited statement present, the verdict reproduced from the "
+        "certificates alone) |",
         "",
         "## Verdicts by kind",
         "",
@@ -187,6 +223,7 @@ def log_lines(s: Summary) -> list[str]:
     out = [json.dumps({"undecided": u}) for u in s.undecided]
     out += [json.dumps({"unexpected": u}) for u in s.unexpected]
     out += [json.dumps({"twin_error": e}) for e in s.twin_errors]
+    out += [json.dumps({"package_failure": f}) for f in s.package_failures]
     out += [json.dumps({"disagreement": d}) for d in s.disagreements]
     out += [json.dumps({"fault": asdict(c)}) for c in s.faults]
     out += [json.dumps({"breaker": b}) for b in s.breaker]

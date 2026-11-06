@@ -1,9 +1,9 @@
 """The steel deck's gate: `python scripts/steel_gate.py [--n 10000] [--seed 1] [--workers 6]
-[--faults 3] [--runs 22] [--budget 100] [--no-twin]`.
+[--faults 3] [--runs 22] [--budget 100] [--no-twin] [--no-packages]`.
 
-Generates the connections, checks each with the deck and the twin, seeds the
-manufactured faults, runs the breaker, and writes docs/steel_gate.md (the summary, §9
-items 4 to 8) and
+Generates the connections, checks each with the deck and the twin, writes and re-checks
+each one's calculation package in a temporary directory, seeds the manufactured faults,
+runs the breaker, and writes docs/steel_gate.md (the summary, §9 items 4 to 9) and
 docs/steel_gate_log.jsonl (every undecided design, disagreement, fault and breaker run).
 Untrusted tooling; it never changes a verdict. Exits 1 when an item fails.
 """
@@ -35,12 +35,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--runs", type=int, default=22, help="breaker runs, round-robin over the kinds")
     parser.add_argument("--budget", type=int, default=100, help="deck evaluations per breaker run")
     parser.add_argument("--no-twin", action="store_true")
+    parser.add_argument("--no-packages", action="store_true", help="skip writing and re-checking each design's package")
     parser.add_argument("--out", type=Path, default=ROOT / "docs")
     args = parser.parse_args(argv)
     with_twin = not args.no_twin
     start = time.time()
     step = 50
-    jobs = [(args.seed, i, min(step, args.n - i), with_twin) for i in range(0, args.n, step)]
+    jobs = [(args.seed, i, min(step, args.n - i), with_twin, not args.no_packages) for i in range(0, args.n, step)]
     rows: list[dict] = []
     with Pool(args.workers) as pool:
         for done, part in enumerate(pool.imap(G.chunk, jobs), 1):
@@ -65,6 +66,7 @@ def main(argv: list[str] | None = None) -> int:
                                                      newline="\n")
     print(G.render(summary))
     failed = (summary.undecided or summary.unwitnessed or summary.disagreements or summary.twin_errors
+              or summary.package_failures
               or not all(c.caught and c.is_named for c in caught) or any(r["false_pass"] for r in runs))
     return 1 if failed else 0
 
