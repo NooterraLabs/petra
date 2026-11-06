@@ -1,0 +1,23 @@
+lola 0
+
+# A concentrated compressive force from a beam flange on a W14x90 column flange, away from
+# the column ends, with the panel-zone shear and the column's axial load.
+
+design "steel-flange-force" {
+  owner "s.engineer@example.org"
+}
+
+flange_force ff1 {
+  basis lrfd
+  member W14x90 grade steel.A992
+  bearing_length 0.5 inch
+  location interior
+  force_kind compressive
+  flange_restrained yes
+  unbraced_length 144 inch
+}
+
+load gravity {
+  on ff1 force in [0 kip, 150 kip]
+  signed "s.engineer@example.org" source "beam reaction, LRFD 1.2D + 1.6L, calc SC-3"
+}

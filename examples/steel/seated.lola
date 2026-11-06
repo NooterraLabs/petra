@@ -1,0 +1,29 @@
+lola 0
+
+# An unstiffened seated connection: a W16x26 beam bearing on an L6x4x3/4 seat (4 in leg
+# outstanding) bolted to the column flange, with a top angle for stability.
+
+design "steel-seated" {
+  owner "s.engineer@example.org"
+}
+
+seated seat1 {
+  basis lrfd
+  beam W16x26 grade steel.A992
+  support W14x90 flange grade steel.A992
+  angle L6x4x3_4 grade steel.A36 outstanding short
+  seat_length 8 inch
+  setback 0.75 inch
+  support_side bolted
+  bolts bolt_group.120 diameter 0.75 inch threads included
+  rows 2
+  pitch 3 inch
+  edge_vertical 1.25 inch
+  support_gauge 5.5 inch
+  top_angle L4x4x1_4 grade steel.A36 outstanding long
+}
+
+load gravity {
+  on seat1 shear in [0 kip, 30 kip]
+  signed "s.engineer@example.org" source "beam reaction, LRFD 1.2D + 1.6L, calc SC-3"
+}

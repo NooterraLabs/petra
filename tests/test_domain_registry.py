@@ -15,7 +15,7 @@ from lola.premises import Tag
 
 class Registered(unittest.TestCase):
     def test_the_four_v0_domains_in_order(self):
-        self.assertEqual(tuple(models.DOMAINS), ("truss", "circuit", "bolt", "uncertainty"))
+        self.assertEqual(tuple(models.DOMAINS), ("truss", "circuit", "bolt", "uncertainty", "steel"))
 
     def test_every_domain_module_is_registered(self):
         for info in pkgutil.iter_modules(models.__path__):

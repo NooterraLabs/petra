@@ -44,6 +44,7 @@ KSI = CUSTOMARY["ksi"][0]
 
 RCSC = "RCSC 2025 Specification for Structural Joints Using High-Strength Bolts"
 AISC = "AISC 360-22"
+MANUAL = "AISC Steel Construction Manual, 16th ed."
 COMPARISON = "AISC 360-22 vs 360-16 comparison (aisc.org, 2022-to-2016-spec-comparison.pdf)"
 
 
@@ -356,6 +357,28 @@ FACTORS: tuple[_F, ...] = (
      f"{AISC} Section J2.2b(c): a fillet weld is at least four times its size long; {RECALLED}"),
     ("aisc360.j4_4.slenderness", "25", "1", JUDGED, MAINTAINERS,
      f"{AISC} Section J4.4(a): the yield formula applies when Lc/r <= 25; {RECALLED}"),
+    ("aisc360.j3_3.long_slot_plies", "1", "1", JUDGED, MAINTAINERS,
+     f"{AISC} Section J3.3: long-slotted holes in only one of the connected parts at an individual faying surface; "
+     f"{RECALLED}"),
+    ("rcsc2025.joint_level.snug", "0", "1", JUDGED, MAINTAINERS,
+     f"{RCSC}, Section 4: joint types ranked by what their installation guarantees, snug-tight 0 < pretensioned 1 < "
+     "slip-critical 2 (each meets the requirements of the ones before it); the ranking is LoLa's encoding, "
+     "not checked against the published text"),
+    ("rcsc2025.joint_level.pretensioned", "1", "1", JUDGED, MAINTAINERS,
+     f"{RCSC}, Section 4: a pretensioned joint ranks 1 (above snug-tight, below slip-critical); LoLa's encoding, "
+     "not checked against the published text"),
+    ("rcsc2025.joint_level.slip_critical", "2", "1", JUDGED, MAINTAINERS,
+     f"{RCSC}, Section 4: a slip-critical joint ranks 2, the highest; LoLa's encoding, not checked against the "
+     "published text"),
+    ("aisc_manual.clearance.socket", "1/2", "m", JUDGED, MAINTAINERS,
+     f"{MANUAL} Part 7 (entering and tightening clearances): socket wall allowance beyond the nut's corners, judged "
+     "at 1/2 in; the method is encoded, the value is judged and not checked against the Manual's table"),
+    ("aisc_manual.seat.critical_offset", "3/8", "m", JUDGED, MAINTAINERS,
+     f"{MANUAL} Part 10 (unstiffened seated connections): critical section of the outstanding leg 3/8 in beyond the "
+     f"angle thickness from the back of the angle; {RECALLED}"),
+    ("aisc_manual.seat.stiffener_clip", "1/2", "m", JUDGED, MAINTAINERS,
+     f"{MANUAL} Part 10 (stiffened seated connections): corner clip of the stiffener's bearing edge, judged at 1/2 in; "
+     "the bearing area is (W - clip) ts; not checked against the published text"),
 )
 
 

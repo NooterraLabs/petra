@@ -1,6 +1,6 @@
 """The domain registry: the one place that lists the physics domains.
 
-`_REGISTERED` names the four v0 domains. Every lookup table the rest of LoLa needs is
+`_REGISTERED` names the four v0 domains and the steel-connection deck. Every lookup table the rest of LoLa needs is
 derived from it here, so a domain is one module under lola/models ending in
 `DOMAIN = DomainSpec(...)` plus one entry below. Domain implementers fill in their own
 module and never edit this file.
@@ -13,10 +13,10 @@ from __future__ import annotations
 from types import MappingProxyType
 from typing import Mapping
 
-from . import bolt, circuit, truss, uncertainty
+from . import bolt, circuit, steel, truss, uncertainty
 from .base import CROSS_DOMAIN_MODES, CROSS_DOMAIN_UNMODELLED, CoverageRule, DomainSpec, FailureMode
 
-_REGISTERED: tuple[DomainSpec, ...] = (truss.DOMAIN, circuit.DOMAIN, bolt.DOMAIN, uncertainty.DOMAIN)
+_REGISTERED: tuple[DomainSpec, ...] = (truss.DOMAIN, circuit.DOMAIN, bolt.DOMAIN, uncertainty.DOMAIN, steel.DOMAIN)
 
 
 def _index(registered: tuple[DomainSpec, ...]) -> tuple:

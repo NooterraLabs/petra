@@ -22,8 +22,8 @@ KIP = CUSTOMARY["kip"][0]
 REGISTRY = build_registry()
 DECK = build_deck(REGISTRY)
 
-CITATION = re.compile(r"(AISC 360-22|RCSC 2025|ASTM [A-Z]?\d|AWS A5|ASME B\d|AISC Shapes Database)")
-CLAUSE = re.compile(r"(Section [A-Z]?\d|Table [A-Z]?\d|designation|row [WL]\d|thread series \(UNC\)|dimensions of heavy hex nuts|Symbols list)")
+CITATION = re.compile(r"(AISC 360-22|RCSC 2025|ASTM [A-Z]?\d|AWS A5|ASME B\d|AISC Shapes Database|AISC Steel Construction Manual)")
+CLAUSE = re.compile(r"(Section [A-Z]?\d|Part \d|Table [A-Z]?\d|designation|row [WL]\d|thread series \(UNC\)|dimensions of heavy hex nuts|Symbols list)")
 
 
 def steel_rows():
