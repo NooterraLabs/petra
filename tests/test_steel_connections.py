@@ -36,7 +36,7 @@ def variant(name: str, *edits: tuple[str, str]):
 
 
 VARIANTS = {
-    "coped double angle": lambda: variant("double_angle", ("  top 3 inch\n", "  top 3 inch\n  cope top length 4 inch depth 1.5 inch\n")),
+    "coped double angle": lambda: variant("double_angle", ("  top 3 inch\n", "  top 3 inch\n  cope top length 4 inch depth 1.5 inch\n  setback 0.5 inch\n")),
     "welded double angle": lambda: variant("double_angle", ("  support_side bolted\n  support_gauge 5.5 inch\n",
                                                             "  support_side welded\n  support_weld electrode.E70 size 0.25 inch\n")),
     "slip-critical shear tab": lambda: variant("shear_tab", ("threads included", "threads included joint slip_critical surface class_a")),

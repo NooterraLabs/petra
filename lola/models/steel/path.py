@@ -103,7 +103,7 @@ def path(conn: Conn, fields: set[str]) -> tuple[Link, ...]:
     bolted_support = conn.get("support_side") == "bolted"
     links: tuple[Link, ...]
     if kind == "shear_tab":
-        form = conn.get("form", "conventional")
+        form = conn.get("form")
         links = (*_beam_web(conn), *_bolts(conn, "beam side", "shear_bolts"), Link("plate", "bent_ply"),
                  Link("plate", f"{form}_plate"), Link("plate to support", "fillet"))
     elif kind in ("double_angle", "single_angle"):
@@ -139,7 +139,7 @@ def path(conn: Conn, fields: set[str]) -> tuple[Link, ...]:
             links += (Link("member flange", "j10_flange_bending"),)
         else:
             links += (Link("member web", "j10_crippling"),)
-            if conn.get("pair", "single") == "double":
+            if conn.get("pair") == "double":
                 links += (Link("member web", "j10_compression_buckling"),)
             elif "flange_restrained" in conn.attrs and "unbraced_length" in conn.attrs:
                 links += (Link("member web", "j10_sidesway"),)

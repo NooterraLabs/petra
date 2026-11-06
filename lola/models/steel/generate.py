@@ -153,13 +153,17 @@ class _Sampler:
         elif self.chance(0.15):
             self.line(f"holes {self.pick(plies)} ssl")
 
-    def options(self, *, deformation: bool = True, weathering: bool = True, setback: bool = False) -> None:
+    def options(self, *, deformation: bool = True, weathering: bool = True, setback: bool = False,
+                coped: bool = False) -> None:
         if deformation and self.chance(0.2):
             self.line(f"deformation {self.pick(('considered', 'not_considered'))}")
         if weathering and self.chance(0.1):
             self.line("weathering yes")
-        if setback and self.chance(0.3):
-            self.length("setback", self.pick(("0.5", "0.75")))
+        if setback:
+            if self.chance(0.3):
+                self.length("setback", self.pick(("0.5", "0.75")))
+            elif coped:
+                self.length("setback", "0.5")    # a coped beam states its setback (lower.SET_BACK)
 
     def rows(self, depth: Fraction, top: Fraction) -> int:
         """Rows that fit the beam with an edge below: top + 3 (n - 1) + 1.5 <= d - 2."""
@@ -181,9 +185,9 @@ class _Sampler:
     def face_t(self, support: tuple[str, str]) -> Fraction:
         return self.dim(support[0], "tf" if support[1] == "flange" else "tw")
 
-    def cope(self, depth: Fraction, top: Fraction, rows: int) -> None:
+    def cope(self, depth: Fraction, top: Fraction, rows: int) -> bool:
         if not self.chance(0.25):
-            return
+            return False
         room = top - (0 if self.free else EDGE)
         depths = [x for x in (Fraction(1), Fraction(3, 2), Fraction(2)) if x <= room] or [Fraction(1)]
         dc = self.pick(depths)
@@ -194,6 +198,7 @@ class _Sampler:
             self.line(f"cope both depth {_inch(dc)} length {_inch(length)} bottom_depth {_inch(bottom)}")
         else:
             self.line(f"cope top depth {_inch(dc)} length {_inch(length)}")
+        return True
 
     def weld(self, key: str = "weld", sides: int | None = None, least: Fraction = Fraction(0)) -> Fraction:
         sizes = [w for w in WELDS if self.free or Fraction(w) >= least] or [WELDS[-1]]
@@ -226,14 +231,16 @@ def _shear_tab(s: _Sampler) -> None:
         s.length("gauge", 3)
     s.length("pitch", 3)
     s.length("edge_vertical", s.pick(("1.25", "1.5")), widen=True)
-    s.length("plate_edge", s.pick(("1.5", "2")), widen=True)
+    two_d = 2 * Fraction(d)         # a conventional plate's Leh >= 2d (Manual Part 10)
+    s.length("plate_edge", s.pick(x for x in ("1.5", "2") if s.free or extended or Fraction(x) >= two_d), widen=True)
     s.length("bolt_line", s.pick(("6", "7.5", "9")) if extended else s.pick(("3", "3.5")))
-    s.length("beam_edge", s.pick(("1.5", "1.75", "2")), widen=True)
+    s.length("beam_edge", s.pick(x for x in ("1.5", "1.75", "2") if s.free or extended or Fraction(x) >= two_d),
+             widen=True)
     s.weld(sides=2, least=max(Fraction(5, 8) * tp, min_fillet(min(tp, s.face_t(support)))))
     if extended:
         s.line("form extended")
-    s.cope(s.dim(beam, "d"), top, rows)
-    s.options(setback=True)
+    coped = s.cope(s.dim(beam, "d"), top, rows)
+    s.options(setback=True, coped=coped)
 
 
 def _angles(s: _Sampler, double: bool) -> None:
@@ -261,8 +268,8 @@ def _angles(s: _Sampler, double: bool) -> None:
     else:
         s.line("support_side welded")
         s.weld("support_weld", least=min_fillet(min(t, s.face_t(support))))
-    s.cope(s.dim(beam, "d"), top, rows)
-    s.options(setback=True)
+    coped = s.cope(s.dim(beam, "d"), top, rows)
+    s.options(setback=True, coped=coped)
 
 
 def _shear_tee(s: _Sampler) -> None:
@@ -289,8 +296,8 @@ def _shear_tee(s: _Sampler) -> None:
     else:
         s.line("support_side welded")
         s.weld("support_weld", least=min_fillet(min(s.dim(tee, "tf"), s.face_t(support))))
-    s.cope(s.dim(beam, "d"), top, rows)
-    s.options(setback=True)
+    coped = s.cope(s.dim(beam, "d"), top, rows)
+    s.options(setback=True, coped=coped)
 
 
 def _end_plate(s: _Sampler) -> None:
@@ -336,13 +343,13 @@ def _seated(s: _Sampler) -> None:
 
 
 def _stiffened_seat(s: _Sampler) -> None:
-    s.beam(("W18x35", "W18x50", "W21x44", "W21x62", "W24x55"))
+    beam = s.beam(("W18x35", "W18x50", "W21x44", "W21x62", "W24x55"))
     support = s.support(("flange",))
     tp = Fraction(s.pick(("0.375", "0.5")))
     s.line(f"plate steel.A36 thickness {_inch(tp)}")
     limit = Fraction(1589, 100)      # 0.56 sqrt(29000 / 36), a little under
     pairs = [(w, t) for w in (Fraction(4), Fraction(5), Fraction(6)) for t in (Fraction(3, 8), Fraction(1, 2), Fraction(5, 8))
-             if s.free or w / t <= limit]
+             if s.free or w / t <= limit and t >= s.dim(beam, "tw") * 50 / 36]     # ts >= tw Fyb / Fys
     width, ts = s.pick(pairs)
     s.line(f"stiffener steel.A36 thickness {_inch(ts)}")
     s.length("stiffener_width", width)
@@ -371,6 +378,8 @@ def _flange_force(s: _Sampler) -> None:
             s.length("unbraced_length", s.pick(("60", "120", "144")))
         if s.chance(0.3):
             s.line(f"moment_at_force {s.pick(('below_yield', 'at_yield'))}")
+        elif force == "compressive":
+            s.line("moment_at_force below_yield")     # J10.4 reads it (lower._check_kind)
     if s.chance(0.3):
         s.secondary.append(("panel_shear", Fraction(s.pick(("0.5", "1", "2")))))
 

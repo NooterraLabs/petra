@@ -94,15 +94,15 @@ class PublishedValues(unittest.TestCase):
 
     def test_bearing_and_tearout_per_inch_of_thickness(self):
         phi, fu, t = const("rcsc2025.s5_3.phi"), L.c(58 * KSI), L.c(INCH)
-        considered, _ = L.BEARING["considered"]
+        considered = const(L.BEARING["considered"][0])
         bearing = L.mul(phi, L.bearing(self.d, t, fu, considered))
         lc = L.sub(L.c(Fraction(5, 4) * INCH), L.div(const("bolt_us.3_4.std"), L.c(2)))
-        tearout = L.mul(phi, L.tearout(lc, t, fu, L.BEARING["considered"][1]))
+        tearout = L.mul(phi, L.tearout(lc, t, fu, const(L.BEARING["considered"][1])))
         self.assertAlmostEqual(value(bearing), 78.3, places=1)
         self.assertAlmostEqual(value(tearout), 44.0, places=1)
 
     def test_fillet_weld_per_sixteenth(self):
-        w = L.mul(const("aisc360.j2_4.phi"), L.fillet_per_length(prop("electrode.E70", "FEXX"), L.c(INCH / 16)))
+        w = L.mul(const("aisc360.j2_4.phi"), L.fillet_per_length(const, prop("electrode.E70", "FEXX"), L.c(INCH / 16)))
         self.assertAlmostEqual(value(w, KIP / INCH), 1.392, places=3)
 
 
@@ -175,6 +175,42 @@ class SeatBearingLength(unittest.TestCase):
         (flexure,) = checks(d, "seat1", "seat_flexure").values()
         self.assertAlmostEqual(flexure.demand, 5.43, places=1)
         self.assertAlmostEqual(flexure.available, 0.9 * 36 * 8 * 0.75 ** 2 / 4, places=6)
+
+
+class PryingClosedForm(unittest.TestCase):
+    """limits.prying_available writes B Q as the least of its three branches, B once in each,
+    so an interval B (reduced for shear by Eq J3-3) encloses exactly; here it is held to the
+    Manual's form, Q = (t/tc)^2 (1 + delta alpha') with alpha' clipped to [0, 1] and Q <= 1."""
+
+    @staticmethod
+    def manual(bt, d, dh, p, b, a, t, fu, phi):
+        b1, a1 = b - d / 2, min(a, 1.25 * b) + d / 2
+        rho, delta = b1 / a1, 1 - dh / p
+        tc2 = 4 * bt * b1 / (phi * p * fu)
+        alpha = (tc2 / t ** 2 - 1) / (delta * (1 + rho))
+        return bt * min(1.0, t ** 2 / tc2 * (1 + delta * min(1.0, max(0.0, alpha))))
+
+    def test_it_is_the_manuals_form(self):
+        import random
+        rng = random.Random(7)
+        for _ in range(400):
+            args = (rng.uniform(5, 60), rng.choice((0.75, 0.875, 1.0)), rng.choice((0.8125, 0.9375, 1.0625)),
+                    rng.uniform(2.5, 6), rng.uniform(1.0, 3.5), rng.uniform(1.0, 4.0), rng.uniform(0.3, 1.5), 65.0,
+                    rng.choice((0.9, 1 / 1.67)))
+            mine = L.prying_available(const, *(L.c(Fraction(x).limit_denominator(10**6)) for x in args))
+            with self.subTest(args=args):
+                self.assertAlmostEqual(float(enclose(mine, {}).lo), self.manual(*args), delta=1e-6 * self.manual(*args))
+
+    def test_an_interval_b_encloses_exactly(self):
+        from lola.kernel import Interval
+        from lola.kernel.terms import Sym
+        b = Sym("b_tension")
+        fixed = [L.c(x) for x in (Fraction(3, 4), Fraction(13, 16), Fraction(3), Fraction(7, 4), Fraction(2),
+                                  Fraction(1, 2), Fraction(65), Fraction(9, 10))]
+        expr = L.prying_available(const, b, *fixed)
+        for lo, hi in ((Fraction(10), Fraction(20)), (Fraction(20), Fraction(60)), (Fraction(5), Fraction(80))):
+            at_lo = L.prying_available(const, L.c(lo), *fixed)
+            self.assertEqual(enclose(expr, {b.name: Interval(lo, hi)}).lo, enclose(at_lo, {}).lo)
 
 
 class J10Guards(unittest.TestCase):

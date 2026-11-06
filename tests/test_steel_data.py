@@ -8,17 +8,24 @@ import tempfile
 import unittest
 import zipfile
 from fractions import Fraction
+from pathlib import Path
+from unittest import mock
 
 from lola.premises import Tag
 from lola.registry import build_deck, build_registry, check_deck
 from lola.registry.consistency import corrupt
 from lola.registry.steel import BOLT_SIZES, holes_for, size_id, steel_constants, steel_materials
-from lola.registry.steel_shapes import ShapeTable, angle_legs, constants as shape_constants, import_workbook, key, load
+from lola.registry.steel_shapes import (TABLE, ShapeTable, angle_legs, constants as shape_constants, import_workbook,
+                                        key, load)
 from lola.units import CUSTOMARY, parse_quantity
 
 INCH = CUSTOMARY["inch"][0]
 KSI = CUSTOMARY["ksi"][0]
 KIP = CUSTOMARY["kip"][0]
+PUBLISHED_SHA256 = "e08bea15bbe475e78251292e5f543ff5a11d16b59c9d6af47aec700f8f57f050"
+"""SHAPE160.xlsx, the AISC Shapes Database v16.0 workbook the shipped rows were copied from."""
+_SOURCES = Path(__file__).resolve().parents[1] / "docs" / "research" / "sources" / "SHAPE160.xlsx"
+WORKBOOK = os.environ.get("LOLA_SHAPES_XLSX") or (str(_SOURCES) if _SOURCES.exists() else None)
 REGISTRY = build_registry()
 DECK = build_deck(REGISTRY)
 
@@ -208,16 +215,44 @@ class ShapesDatabase(unittest.TestCase):
         self.assertIn(body["sha256"], tw.source)
         self.assertEqual(tw.owner, "AISC")
 
-    def test_the_shipped_table_is_the_published_database(self):
-        # Imported from SHAPE160.xlsx, the AISC Shapes Database v16.0 workbook. The earlier
+    def test_the_shipped_rows_cite_the_published_database(self):
+        # Copied from SHAPE160.xlsx, the AISC Shapes Database v16.0 workbook. The earlier
         # transcription from memory had 5 of its 168 values wrong, among them W30X90 kdes.
-        table = load()
+        table = load(TABLE)
         self.assertIsInstance(table, ShapeTable)
         self.assertIs(table.tag, Tag.SANCTIONED)
-        self.assertEqual((table.file, table.sha256), ("SHAPE160.xlsx", "e08bea15bbe475e78251292e5f543ff5a11d16b59c9d6af47aec700f8f57f050"))
-        self.assertEqual((len(table.w), len(table.angles)), (289, 137))
+        self.assertEqual((table.file, table.sha256), ("SHAPE160.xlsx", PUBLISHED_SHA256))
         rows = {r["label"]: r for r in table.w}
         self.assertEqual((rows["W18X50"]["tw"], rows["W30X90"]["kdes"], rows["W14X90"]["d"]), ("0.355", "1.26", "14.0"))
+
+    def test_the_repository_ships_only_the_rows_it_uses(self):
+        # docs/principles.md P9: the database is AISC's compilation; the full table loads at
+        # run time from the user's own copy (LOLA_SHAPES_XLSX), never from the repository.
+        with open(TABLE, encoding="utf-8") as f:
+            body = json.load(f)
+        self.assertLessEqual(len(body["W"]), 40)
+        self.assertLessEqual(len(body["L"]), 20)
+
+    @unittest.skipUnless(WORKBOOK, "the published workbook is not at hand (set LOLA_SHAPES_XLSX, or keep it in "
+                                   "docs/research/sources/)")
+    def test_every_shipped_row_is_the_workbooks(self):
+        published = import_workbook(WORKBOOK)
+        self.assertEqual(published["sha256"], PUBLISHED_SHA256)
+        rows = {r["label"]: r for r in published["W"]}
+        shipped = load(TABLE)
+        for row in shipped.w:
+            self.assertEqual(row, rows[row["label"]])
+        self.assertLessEqual(set(shipped.angles), set(published["L"]))
+
+    def test_a_workbook_that_is_not_the_cited_one_is_refused(self):
+        rows = [["Type", "EDI_Std_Nomenclature", "AISC_Manual_Label", "W", "A", "d", "bf", "tw", "tf", "kdes"],
+                ["W", "W18X50", "W18X50", "50", "14.7", "18", "7.5", "0.355", "0.57", "0.972"]]
+        with tempfile.TemporaryDirectory() as tmp:
+            book = os.path.join(tmp, "SHAPE160.xlsx")
+            _workbook(book, rows)
+            with mock.patch.dict(os.environ, {"LOLA_SHAPES_XLSX": book}):
+                with self.assertRaisesRegex(ValueError, "is not the workbook the shipped rows cite"):
+                    load(TABLE)
 
     def test_designations(self):
         self.assertEqual(key("L4X3-1/2X3/8"), "L4x3_1_2x3_8")

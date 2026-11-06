@@ -291,6 +291,8 @@ class BoltSet:
         self.fnt = reg.stated(mat, "Fnt")
         fnv_x = reg.r.materials[mat].props.get("Fnv_X")
         self.fnv = reg.stated(mat, "Fnv_X") if bolts.threads == "excluded" and fnv_x is not None else reg.stated(mat, "Fnv_N")
+        if bolts.fillers != "none":
+            self.fnv *= 0.85        # J5.2(a)'s least factor: the grammar gives no filler thickness
         self.n = rows * cols
 
     # hole dimension along the force (vertical) and across it (horizontal), J3.3
@@ -315,7 +317,7 @@ class BoltSet:
             lc = None if ply.edge is None else ply.edge - hv / 2
         else:
             lc = self.s - hv
-        deformation = self.ctx.conn.get("deformation", "considered")
+        deformation = self.ctx.conn.attrs.get("deformation", "considered")
         t, fu, d = ply.t, ply.fu, self.d
         if ply.hole == "lsl":
             # J3.11a(2): long slot perpendicular to the force, Eqs J3-6e and J3-6f
@@ -405,7 +407,7 @@ class BoltSet:
 # --- Shared element checks ----------------------------------------------------------------
 
 def _holes(conn: Conn, ply: str) -> str:
-    return (conn.get("holes") or {}).get(ply, "std")
+    return conn.attrs.get("holes", {}).get(ply, "std")
 
 
 def shear_yield(ctx: _Ctx, element: str, v: float, fy: float, agv: float) -> None:
@@ -451,7 +453,7 @@ def edges(ctx: _Ctx, element: str, t: float, size: str, named: Mapping[str, floa
 def spacing(ctx: _Ctx, label: str, bolts: Bolts, thinner: float, named: Mapping[str, float]) -> None:
     d = ctx.reg.bolt(bolts.size, "d")
     ratio = ctx.reg.const("aisc360.j3_4.spacing_ratio")
-    weathering = ctx.conn.get("weathering", "no") == "yes"
+    weathering = ctx.conn.attrs.get("weathering", "no") == "yes"
     k_t = ctx.reg.const("aisc360.j3_6.weathering_pitch_t" if weathering else "aisc360.j3_6.pitch_t")
     k_max = ctx.reg.const("aisc360.j3_6.weathering_pitch_max" if weathering else "aisc360.j3_6.pitch_max")
     for name, s in named.items():
@@ -669,8 +671,8 @@ class _Beam:
         Mn = Mp (lambda <= lambda_p), Mp - (Mp - My)(lambda/lambda_p - 1) (to 2 lambda_p),
         Fcr Sc with Fcr = 0.903 E k1 / lambda^2 above (Manual Eqs 9-10 to 9-13).
         Both flanges coped: Section F11 on the remaining web as a rectangular bar,
-        d = hc, Lb = c, Cb = 3 + ln(Lb/d)(1 - dct/d) >= 1.84 (Manual Eq 9-21,
-        Companion II.A-7)."""
+        d = hc, Lb = c, Cb = [3 + ln(Lb/d)] (1 - dct/d) >= 1.84 with d the full depth (Manual
+        Eq 9-21; Companion II.A-7 prints 1.94 for c = 9.5 in, d = 16.0 in, dct = 3.5 in)."""
         if self.cope is None:
             return
         e = self.c + setback
@@ -694,7 +696,7 @@ class _Beam:
                 mn = 0.903 * E * k1 / lam ** 2 * sc
         else:
             hc = self.h
-            cb = max(3 + math.log(self.c / self.d) * (1 - self.dct / self.d), 1.84)
+            cb = max((3 + math.log(self.c / self.d)) * (1 - self.dct / self.d), 1.84)
             mn = f11_mn(fy, E, self.tw, hc, self.c, cb)
         ctx.check("cope_buckling", "beam web: flexural yielding and local buckling at the cope (Manual Part 9)", m, mn,
                   "flexure_yield")
@@ -714,7 +716,7 @@ def _shear_tab(ctx: _Ctx, modes: set[str]) -> None:
     pfy, pfu = ctx.reg.steel(plate.grade)
     bolts: Bolts = conn.attrs["bolts"]
     n, s = conn.attrs["rows"], ctx.need("pitch")
-    nc = conn.get("columns", 1)
+    nc = conn.attrs.get("columns", 1)
     g = ctx.get("gauge", 0.0) if nc > 1 else 0.0
     lev, leh_p, a, leh_b, top = (ctx.need(k) for k in ("edge_vertical", "plate_edge", "bolt_line", "beam_edge", "top"))
     length = 2 * lev + (n - 1) * s
@@ -769,13 +771,16 @@ def _shear_tab(ctx: _Ctx, modes: set[str]) -> None:
     znet = rect_net_z(tp, length, ys, hv_p + SIXTEENTH)
     ctx.check("flexural_rupture", "plate: flexural rupture of the net section through the bolt holes (J4.5)", m,
               pfu * znet, "flexure_rupture")
-    form = conn.get("form", "conventional")
+    form = conn.attrs.get("form", "conventional")
     if form == "conventional":
         # Manual Part 10 (vocab ductility): t <= d/2 + 1/16 for the plate or the beam web
         # (either suffices, so the thinner one), weld >= 5/8 tp
         d = group.d
         ctx.add("ductility", "plate: plate or beam web at most d/2 + 1/16 in thick", _ratio(min(tp, beam.tw), d / 2 + SIXTEENTH))
         ctx.add("ductility", "plate: fillet at least 5/8 of the plate thickness", _ratio(5 / 8 * tp, w))
+        # Companion II.A-17A: Leh >= 2d on the plate and on the beam web
+        ctx.add("ductility", "plate: Leh at least 2d", _ratio(2 * d, leh_p))
+        ctx.add("ductility", "beam web: Leh at least 2d", _ratio(2 * d, leh_b))
     else:
         # Section F11 with Lb = a, Cb = 1.84, against M = V a at the weld line (Companion
         # II.A-19A: Mr = Vu a with a = 9 in)
@@ -1169,6 +1174,9 @@ def _stiffened_seat(ctx: _Ctx, modes: set[str]) -> None:
     # before it buckles locally
     ctx.add("compression", "stiffener: width-to-thickness at most 0.56 sqrt(E / Fy) (Manual Part 10)",
             _ratio(width / ts, 0.56 * math.sqrt(ctx.reg.E / sfy_s)))
+    # Companion II.A-14: the stiffener at least as thick as the beam web, scaled by the yield stresses
+    ctx.add("compression", "stiffener: at least tw Fy,beam / Fy,stiffener thick (Manual Part 10)",
+            _ratio(bshape["tw"] * bfy / sfy_s, ts))
     weld: Weld = conn.attrs["weld"]
     # Two fillets along the stiffener's length, the reaction out of their plane at 0.8 W
     # from the support face (Manual Table 10-8's eccentricity). Table 10-8 also counts
@@ -1177,6 +1185,14 @@ def _stiffened_seat(ctx: _Ctx, modes: set[str]) -> None:
     f = lines_out_of_plane(r, 0.8 * width, lst, weld.sides)
     q = fillet_capacity_per_inch(ctx, weld)
     ctx.add("weld", "stiffener to support: most stressed point of the welds by the elastic method (J2.4)", _ratio(f, q))
+    # The reaction enters the stiffener's welds at their top end, as at a bearing stiffener,
+    # which Commentary J2.2b names end-loaded: past 100 w only J2.2b(d)'s effective length
+    # counts, beta l with beta = 1.2 - 0.002 l / w (Eq J2-1), and 180 w past 300 w.
+    w = ctx.geo(weld.size)
+    if lst > 100 * w:
+        effective = 180 * w if lst > 300 * w else (1.2 - 0.002 * lst / w) * lst
+        ctx.add("weld", "stiffener to support: the welds over their end-loaded effective length (J2.2b(d))",
+                _ratio(lines_out_of_plane(r, 0.8 * width, effective, weld.sides), q))
     base_metal(ctx, "stiffener", f * weld.sides, sfu_s, ts, "stiffener to support")
     base_metal(ctx, f"support {face}", f, sfu, st, "stiffener to support")
     fillet_size(ctx, "stiffener to support", weld, min(ts, st), lst)
@@ -1203,7 +1219,7 @@ def _flange_force(ctx: _Ctx, modes: set[str]) -> None:
         ctx.check("flange_local_bending", "member flange: flange local bending (J10.1)", force, rn, "j10_1")
     else:
         j10_crippling(ctx, "member web", m, fy, lb, force, end and dist < d / 2)
-        if conn.get("pair", "single") == "double":
+        if conn.attrs.get("pair", "single") == "double":
             rn = 24 * tw ** 3 * math.sqrt(E * fy) / h * (0.5 if end and dist < d / 2 else 1.0)    # J10-8
             ctx.check("web_compression_buckling", "member web: web compression buckling (J10.5)", force, rn, "j10_5")
         elif "flange_restrained" in conn.attrs and "unbraced_length" in conn.attrs:
@@ -1414,6 +1430,16 @@ def _hanger(ctx: _Ctx, modes: set[str]) -> None:
     hole_use(ctx, "tee flange", hf, bolts)
     hole_use(ctx, f"support {face}", hs, bolts)
     b_avail = ctx.avail(group.fnt * group.ab, "bolt")
+    b_prying = b_avail
+    if "bolt_combined" in modes:
+        # Manual Part 9, Companion II.A-1B: with shear, prying works from F'nt Ab (Eq J3-3)
+        frv_p = v / (nb * group.ab)
+        phi, omega = FACTORS["bolt"]
+        if ctx.lrfd:
+            fnt_s = 1.3 * group.fnt - group.fnt / (ctx.reg.const(phi) * group.fnv) * frv_p
+        else:
+            fnt_s = 1.3 * group.fnt - ctx.reg.const(omega) * group.fnt / group.fnv * frv_p
+        b_prying = ctx.avail(min(fnt_s, group.fnt) * group.ab, "bolt")
     per_bolt = t_load / nb
     ctx.add("bolt_tension", "hanger bolts: bolt tension (J3.7)", _ratio(per_bolt, b_avail))
     # tributary length per bolt (Manual Figure 9-4, Companion II.D-1):
@@ -1431,14 +1457,14 @@ def _hanger(ctx: _Ctx, modes: set[str]) -> None:
                 out.append(2 * min(s / 2, 1.75 * b))
         return out
 
-    worst = min(prying_available(ctx, bolts, b_avail, tf, tfu, tws, bf, g, p, hv) for p in tributaries(b))
+    worst = min(prying_available(ctx, bolts, b_prying, tf, tfu, tws, bf, g, p, hv) for p in tributaries(b))
     ctx.add("prying", "hanger bolts: bolt tension with prying of the tee flange (Manual Part 9; Kulak 17.5)",
             _ratio(per_bolt, worst))
     # vocab prying: the support's flange under the same bolts by the same T-stub model,
     # bending about the support's web (Companion II.C-1 checks a column flange so)
     hsv, _ = group.hole_dims(hs)
     b_s = (g - sup["tw"]) / 2
-    worst_s = min(prying_available(ctx, bolts, b_avail, st, sfu, sup["tw"], sup["bf"], g, p, hsv)
+    worst_s = min(prying_available(ctx, bolts, b_prying, st, sfu, sup["tw"], sup["bf"], g, p, hsv)
                   for p in tributaries(b_s))
     ctx.add("prying", "hanger bolts: bolt tension with prying of the support flange (Manual Part 9; Kulak 17.5)",
             _ratio(per_bolt, worst_s))

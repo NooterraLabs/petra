@@ -14,7 +14,7 @@ Every connection kind reads the same attribute grammar, one attribute per line:
     bolts <group> diameter <len> threads included|excluded [joint snug|pretensioned|slip_critical]
           [surface class_a|class_b] [fillers none|one|two]
     holes <ply> std|ovs|ssl|lsl|ssl_parallel|lsl_parallel [<ply> <type> ...]   (unnamed plies: std)
-    weld <electrode> size <len> [sides 1|2]
+    weld <electrode> size <len> sides 1|2     (sides: optional only where no check reads it)
     support_side bolted|welded        beam_side bolted|welded
     support_weld <electrode> size <len>    beam_weld <electrode> size <len>
     cope top|both depth <len> length <len> [bottom_depth <len>]
@@ -24,6 +24,11 @@ Every connection kind reads the same attribute grammar, one attribute per line:
     deformation considered|not_considered
     form conventional|extended
     <length field> <len>              (pitch, gauge, edge_vertical, ... per kind)
+
+An omitted optional line means the feature is absent, as ABSENT says: one bolt column, a
+conventional plate, a single force, standard holes, painted steel, bearing deformation a
+design consideration. A line whose absence a check would have to guess is required where
+that check reads it (WELD_SIDES, SET_BACK, and J10.4's inputs; docs/principles.md D4).
 
 A <len> is a length (Fixed), a signed bound `in [lo, hi] signed "..." source "..."`
 (an ir.Input named "<conn>.<field>", which the pipeline's premise book finds in the
@@ -37,6 +42,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from fractions import Fraction
+from types import MappingProxyType
 from typing import Callable, Mapping, Union
 
 from ...ir import Arg, Bound, Component, Design, Exceeds, Fixed, Input, ParamRef, Ref, Span
@@ -53,7 +59,7 @@ Geo = Union[Fixed, ParamRef, Input]
 class Member:
     shape: str            # "W18x50"
     grade: str            # "steel.A992"
-    face: str | None = None   # a support's connected face: "flange" | "web"
+    face: str | None   # a support's connected face: "flange" | "web"
 
 
 @dataclass(frozen=True, slots=True)
@@ -90,7 +96,7 @@ class Bolts:
 class Weld:
     electrode: str        # "electrode.E70"
     size: Geo
-    sides: int            # fillets per joint line: 1 or 2
+    sides: int | None     # fillets per joint line, 1 or 2; None where the kind's geometry fixes the lines
 
 
 @dataclass(frozen=True, slots=True)
@@ -98,7 +104,7 @@ class Cope:
     flanges: str          # "top" | "both"
     depth: Geo            # dc, or the top cope's dct when both flanges are coped
     length: Geo           # c, the same at both flanges
-    bottom: Geo | None = None   # dcb when both flanges are coped (None: equal to depth)
+    bottom: Geo | None   # dcb when both flanges are coped (None: equal to depth)
 
 
 @dataclass(frozen=True)
@@ -112,8 +118,30 @@ class Conn:
     attrs: Mapping[str, object]
     span: Span
 
-    def get(self, key: str, default: object = None) -> object:
-        return self.attrs.get(key, default)
+    def get(self, key: str) -> object:
+        """The attribute, or what its absence means (ABSENT), or None: the feature is absent."""
+        return self.attrs.get(key, ABSENT.get(key))
+
+
+ABSENT: Mapping[str, object] = {
+    "columns": 1,                   # one column of bolts
+    "form": "conventional",         # a conventional single plate (Manual Part 10)
+    "pair": "single",               # one concentrated force, not a pair on opposite flanges (J10.5)
+    "holes": MappingProxyType({}),  # every ply has standard holes (Table J3.3)
+    "weathering": "no",             # painted or not weathering steel (J3.6)
+    "deformation": "considered",    # deformation at the hole a design consideration: J3.11a's lower coefficients
+}
+"""What an optional line's absence means: the feature is absent, or the reading that gives
+the lower strength. An absence that would raise a strength is not here: that line is
+required where a check reads it."""
+
+WELD_SIDES = ("shear_tab", "shear_end_plate", "weld_bracket", "stiffened_seat")
+"""Kinds whose `weld` line gives the fillets per joint line the strength reads."""
+
+SET_BACK = ("shear_tab", "double_angle", "single_angle", "shear_tee")
+"""Kinds whose coped beam stands off the support by its setback, the cope's moment arm
+being c + setback (Manual Part 9). A seat's bearing length is its width less the setback,
+so seated and stiffened_seat require it too; an end plate's beam is welded to the plate."""
 
 
 Say = Callable[[str], None]
@@ -136,18 +164,18 @@ def _id_of(arg: Arg | None) -> str | None:
     return ".".join(arg.parts) if isinstance(arg, Ref) else None
 
 
-def _geo(conn: str, field: str, arg: Arg | None, design: Design, say: Say, dim: Dim = LENGTH) -> Geo | None:
+def _geo(conn: str, field: str, arg: Arg | None, design: Design, say: Say) -> Geo | None:
     """A positive length: Fixed, ParamRef or a signed Bound (-> Input "<conn>.<field>")."""
-    if isinstance(arg, Fixed) and arg.quantity.dim == dim and arg.quantity.value.lo > 0:
+    if isinstance(arg, Fixed) and arg.quantity.dim == LENGTH and arg.quantity.value.lo > 0:
         return arg
     if isinstance(arg, ParamRef):
         param = design.params.get(arg.name)
-        if param is not None and param.range.dim == dim and param.range.value.lo > 0:
+        if param is not None and param.range.dim == LENGTH and param.range.value.lo > 0:
             return arg
-        say(f"param {arg.name} is not a declared positive {'length' if dim == LENGTH else 'quantity'}")
+        say(f"param {arg.name} is not a declared positive length")
         return None
     if isinstance(arg, Bound):
-        if arg.range.dim != dim or arg.range.value.lo <= 0:
+        if arg.range.dim != LENGTH or arg.range.value.lo <= 0:
             say("needs a positive length range")
             return None
         return Input(f"{conn}.{field}", arg.range, arg.signature, arg.kind, arg.span, arg.mean)
@@ -163,7 +191,7 @@ def _shape(arg: Arg | None, prefix: str, registry: Registry, say: Say) -> str | 
     return shape
 
 
-def _grade(arg: Arg | None, registry: Registry, say: Say, family: str = "steel") -> str | None:
+def _grade(arg: Arg | None, registry: Registry, say: Say, family: str) -> str | None:
     grade = _id_of(arg)
     try:
         material = registry.material(grade or "")
@@ -220,17 +248,16 @@ def p_count(conn, key, args, design, registry, say):
 
 def p_member(face: bool) -> Parser:
     def parse(conn, key, args, design, registry, say):
-        if face:
-            ok = len(args) == 4 and _word_of(args[1]) in ("flange", "web") and _word_of(args[2]) == "grade"
-            shape_arg, grade_arg = args[0] if args else None, args[3] if len(args) == 4 else None
-        else:
-            ok = len(args) == 3 and _word_of(args[1]) == "grade"
-            shape_arg, grade_arg = args[0] if args else None, args[2] if len(args) == 3 else None
-        if not ok:
-            say(f"reads `{key} <W shape> {'flange|web ' if face else ''}grade <material>`")
-            return None
-        shape, grade = _shape(shape_arg, "W", registry, say), _grade(grade_arg, registry, say)
-        return Member(shape, grade, _word_of(args[1]) if face else None) if shape and grade else None
+        match tuple(args):
+            case (shape_arg, side, word, grade_arg) if face and _word_of(side) in ("flange", "web") and _word_of(word) == "grade":
+                which = _word_of(side)
+            case (shape_arg, word, grade_arg) if not face and _word_of(word) == "grade":
+                which = None
+            case _:
+                say(f"reads `{key} <W shape> {'flange|web ' if face else ''}grade <material>`")
+                return None
+        shape, grade = _shape(shape_arg, "W", registry, say), _grade(grade_arg, registry, say, "steel")
+        return Member(shape, grade, which) if shape and grade else None
     return parse
 
 
@@ -239,7 +266,7 @@ def p_plate(conn, key, args, design, registry, say):
     if kw is None or set(kw) != {"thickness"}:
         say(f"reads `{key} <material> thickness <len>`")
         return None
-    grade = _grade(args[0], registry, say)
+    grade = _grade(args[0], registry, say, "steel")
     t = _geo(conn, f"{key}.thickness", kw["thickness"], design, say)
     if isinstance(t, Fixed) and not _stocked(t.quantity.value.lo, registry):
         say(f"{float(t.quantity.value.lo / INCH):g} in is not a stocked plate thickness (registry {STOCK_PLATE}*)")
@@ -259,7 +286,7 @@ def p_angle(conn, key, args, design, registry, say):
     if kw is None or set(kw) != {"grade", "outstanding"} or _word_of(kw["outstanding"]) not in ("long", "short"):
         say(f"reads `{key} <L shape> grade <material> outstanding long|short`")
         return None
-    shape, grade = _shape(args[0], "L", registry, say), _grade(kw["grade"], registry, say)
+    shape, grade = _shape(args[0], "L", registry, say), _grade(kw["grade"], registry, say, "steel")
     return AngleSpec(shape, grade, _word_of(kw["outstanding"])) if shape and grade else None
 
 
@@ -286,7 +313,7 @@ def p_tee(conn, key, args, design, registry, say):
     if f"{SHAPE_GROUP}.{parent}.d" not in registry.constants:
         say(f"{shape} is cut from {parent}, which is not in the shape table")
         return None
-    grade = _grade(kw["grade"], registry, say)
+    grade = _grade(kw["grade"], registry, say, "steel")
     return TeeSpec(shape, parent, grade) if grade else None
 
 
@@ -352,18 +379,12 @@ def p_weld(conn, key, args, design, registry, say):
         return None
     electrode = _grade(args[0], registry, say, family="electrode")
     size = _geo(conn, f"{key}.size", kw["size"], design, say)
-    sides = kw.get("sides", Fixed(_dimensionless(2)))
+    sides = kw.get("sides")
     n = sides.quantity.value.lo if isinstance(sides, Fixed) and sides.quantity.dim == DIMENSIONLESS else None
-    if n not in (1, 2):
+    if sides is not None and n not in (1, 2):
         say("sides is 1 or 2")
         return None
-    return Weld(electrode, size, int(n)) if electrode and size else None
-
-
-def _dimensionless(n: int):
-    from ...kernel import Interval
-    from ...units import Quantity
-    return Quantity(Interval(Fraction(n), Fraction(n)), DIMENSIONLESS)
+    return Weld(electrode, size, None if n is None else int(n)) if electrode and size else None
 
 
 def p_cope(conn, key, args, design, registry, say):
@@ -386,7 +407,7 @@ def p_cope(conn, key, args, design, registry, say):
 _BASIS = ("basis", p_word("lrfd", "asd"))
 _LENGTHS = ("pitch", "gauge", "edge_vertical", "plate_edge", "bolt_line", "beam_edge", "top", "setback", "eccentricity",
             "beam_gauge", "support_gauge", "plate_width", "seat_length", "bearing_length", "distance", "unbraced_length",
-            "stiffener_width", "stiffener_length", "weld_length", "tee_gauge", "panel_depth", "weld_return", "free_edge")
+            "stiffener_width", "stiffener_length", "weld_length", "tee_gauge", "weld_return", "free_edge")
 _COMMON: dict[str, Parser] = {
     "basis": p_word("lrfd", "asd"),
     "beam": p_member(False),
@@ -535,6 +556,11 @@ def _check_kind(kind: str, attrs: Mapping[str, object], say: Say) -> None:
         say("a shear tab with more than one bolt column names its gauge")
     if kind in ("shear_tab", "double_angle", "single_angle", "shear_tee") and isinstance(attrs.get("rows"), int) and attrs["rows"] < 2:
         say("a beam-side bolt group has at least two rows, so it can resist the eccentricity")
+    if kind in WELD_SIDES and isinstance(attrs.get("weld"), Weld) and attrs["weld"].sides is None:
+        say(f"a {kind}'s weld states its sides, 1 or 2: the fillets at each joint line, which its weld strength reads")
+    if (kind in SET_BACK and "cope" in attrs or kind in ("seated", "stiffened_seat")) and "setback" not in attrs:
+        say(f"a {'coped beam' if kind in SET_BACK else kind.replace('_', ' ')} states its setback from the support, "
+            "which its cope's moment arm or its bearing length reads")
     if kind == "weld_bracket" and "weld_return" in attrs and isinstance(attrs.get("weld"), Weld) and attrs["weld"].sides != 1:
         say("a weld_return makes a C-shaped weld around a plate lapped on the support face: one fillet, `sides 1`")
     if kind == "bolt_bracket" and isinstance(attrs.get("rows"), int) and attrs["rows"] * attrs.get("columns", 1) < 2:
@@ -548,8 +574,9 @@ def _check_kind(kind: str, attrs: Mapping[str, object], say: Say) -> None:
     if kind == "flange_force" and attrs.get("pair") == "double" and attrs.get("force_kind") == "tensile":
         say("a double (pair) force is compressive; J10.5 has no tensile pair")
     if (kind == "flange_force" and attrs.get("force_kind") == "compressive" and attrs.get("pair", "single") == "single"
-            and not {"flange_restrained", "unbraced_length"} <= set(attrs)):
-        say("a single compressive force names flange_restrained and unbraced_length, which web sidesway buckling (J10.4) reads")
+            and not {"flange_restrained", "unbraced_length", "moment_at_force"} <= set(attrs)):
+        say("a single compressive force names flange_restrained, unbraced_length and moment_at_force, which web sidesway "
+            "buckling (J10.4) reads")
     bolts = attrs.get("bolts")
     if isinstance(bolts, Bolts):
         if bolts.joint == "slip_critical" and bolts.group not in ("bolt_group.120", "bolt_group.150"):

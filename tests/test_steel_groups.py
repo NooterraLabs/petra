@@ -33,6 +33,7 @@ from fractions import Fraction
 
 from lola.kernel import enclose
 from lola.models.steel import limits as L
+from lola.registry import build_registry
 from lola.units import CUSTOMARY
 
 from tests import steel_examples as ex
@@ -40,6 +41,11 @@ from tests import steel_examples as ex
 INCH = CUSTOMARY["inch"][0]
 KIP = CUSTOMARY["kip"][0]
 KSI = CUSTOMARY["ksi"][0]
+REGISTRY = build_registry()
+
+
+def const(name: str) -> L.Const:
+    return L.c(REGISTRY.constants[name].value.lo)
 
 
 def inch(x) -> L.Const:
@@ -171,7 +177,7 @@ class IID1(ex.Example):
         deck's available tension with prying is the bolt's required 15.0 / 10.0 kips."""
         fu = L.c(65 * KSI)
         for b_avail, phi, printed in (("29.8", L.c("0.90"), "15.0"), ("19.9", L.c(Fraction(100, 167)), "10.0")):
-            t = L.prying_available(L.c(Fraction(b_avail) * KIP), inch("0.75"), inch(Fraction(13, 16)), inch("4.5"),
+            t = L.prying_available(const, L.c(Fraction(b_avail) * KIP), inch("0.75"), inch(Fraction(13, 16)), inch("4.5"),
                                    inch("1.60"), inch("1.53"), inch("0.393"), fu, phi)
             self.near(value(t, KIP), printed, f"T at tmin, B = {b_avail}")
 

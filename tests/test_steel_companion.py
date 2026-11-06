@@ -10,8 +10,10 @@ rounds its intermediate values to three figures, and a value computed from those
 intermediates can move its last digit by one. Example J.3's ASD F'nt, printed 76.7 ksi,
 is 76.8 ksi from the unrounded shear stress.
 
-Out of scope here: J.2B, a PJP groove weld (groove welds join the deck in v1.1), and J.6,
-bearing on concrete (Section J8, v1.1).
+Out of scope here: J.2A, a fillet loaded at 60 degrees to its axis (the deck takes kds = 1
+and never Eq J2-5's directional increase, so it has no such weld to check), J.2B, a PJP
+groove weld (groove welds join the deck in v1.1), and J.6, bearing on concrete (Section
+J8, v1.1).
 """
 import unittest
 from decimal import Decimal
@@ -71,17 +73,17 @@ class J1FilletWeldInLongitudinalShear(Published):
 
     def test_weld_strength_with_the_end_loaded_reduction(self):
         fexx = prop("electrode.E70", "FEXX")
-        per_inch = L.fillet_per_length(fexx, self.w)
+        per_inch = L.fillet_per_length(const, fexx, self.w)
         self.published(value(per_inch, KIP / INCH), "5.57", "Rn per inch")
-        beta = value(L.end_loaded_length(self.length, self.w), INCH) / 27
+        beta = value(L.end_loaded_length(const, self.length, self.w), INCH) / 27
         self.published(beta, "0.912", "beta, Eq J2-1")
-        rn = L.mul(L.c(2), L.fillet_line(fexx, self.w, L.end_loaded_length(self.length, self.w), False))
+        rn = L.mul(L.c(2), L.fillet_line(const, fexx, self.w, L.end_loaded_length(const, self.length, self.w)))
         self.published(value(rn), "274", "Rn")
         self.published(value(L.mul(const("aisc360.j2_4.phi"), rn)), "206", "phi Rn")
         self.published(value(L.div(rn, const("aisc360.j2_4.omega"))), "137", "Rn / Omega")
 
     def test_base_metal_of_the_thinner_plate(self):
-        rn = L.mul(L.base_metal_per_length(prop("steel.A572_50", "fu"), inch(Fraction(1, 4))), L.c(2), self.length)
+        rn = L.mul(L.base_metal_per_length(const, prop("steel.A572_50", "fu"), inch(Fraction(1, 4))), L.c(2), self.length)
         self.published(value(rn), "527", "Rn")
         self.published(value(L.mul(const("aisc360.j2_4.phi"), rn)), "395", "phi Rn")
         self.published(value(L.div(rn, const("aisc360.j2_4.omega"))), "264", "Rn / Omega")
@@ -89,25 +91,8 @@ class J1FilletWeldInLongitudinalShear(Published):
     def test_effective_length_limits(self):
         w = inch(Fraction(1, 4))
         for l_over_w, effective in ((50, 50), (100, 100), (200, 200 * Fraction(4, 5)), (300, 180), (400, 180)):
-            got = value(L.end_loaded_length(L.mul(L.c(l_over_w), w), w), INCH / 4)
+            got = value(L.end_loaded_length(const, L.mul(L.c(l_over_w), w), w), INCH / 4)
             self.assertAlmostEqual(got, float(effective), places=9, msg=f"l/w = {l_over_w}")
-
-
-class J2AFilletWeldLoadedAtAnAngle(Published):
-    """A two-sided 5/16 in E70 fillet loaded at 60 degrees to its axis; Pu = 300 kips,
-    Pa = 200 kips."""
-
-    def test_directional_strength_and_required_length(self):
-        kds = L.directional_kds(L.div(L.Sqrt(L.c(3)), L.c(2)))     # sin 60 degrees
-        self.published(value(kds, 1), "1.40", "kds, Eq J2-5")
-        rn = L.mul(L.fillet_per_length(prop("electrode.E70", "FEXX"), inch(Fraction(5, 16))), kds)
-        self.published(value(rn, KIP / INCH), "13.0", "Rn per inch")
-        lrfd = value(L.mul(const("aisc360.j2_4.phi"), rn, L.c(2)), KIP / INCH)
-        asd = value(L.div(L.mul(rn, L.c(2)), const("aisc360.j2_4.omega")), KIP / INCH)
-        self.published(lrfd, "19.5", "phi Rn, two sides")
-        self.published(asd, "13.0", "Rn / Omega, two sides")
-        self.published(300 / lrfd, "15.4", "required length, LRFD")
-        self.published(200 / asd, "15.4", "required length, ASD")
 
 
 class J3CombinedTensionAndShearInBearing(Published):
@@ -125,7 +110,7 @@ class J3CombinedTensionAndShearInBearing(Published):
                 f = const(f"rcsc2025.s5_1.{factor}")
                 available_fnv = L.mul(f, fnv) if lrfd else L.div(fnv, f)
                 frv = L.div(kips(Fraction(v)), ab)
-                fnt_prime = L.combined_fnt(fnt, fnv, frv, f, lrfd)
+                fnt_prime = L.combined_fnt(const, fnt, fnv, frv, f, lrfd)
                 rn = L.mul(fnt_prime, ab)
                 self.published(value(available_fnv, KSI), printed[0], "available Fnv")
                 self.published(value(frv, KSI), printed[1], "frv")
@@ -192,6 +177,7 @@ flange_force girder {{
   force_kind compressive
   flange_restrained yes
   unbraced_length 240 inch
+  moment_at_force below_yield
 }}
 
 load reaction {{

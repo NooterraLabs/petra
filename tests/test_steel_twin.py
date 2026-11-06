@@ -412,6 +412,224 @@ stiffened_seat ss2 {
   weld electrode.E70 size 0.25 inch sides 2
   top_angle L4x4x1_4 grade steel.A36 outstanding long
 }""", "  on ss2 shear in [0 kip, 35 kip]"),
+    # a stiffened seat whose welds are past 100 w, so J2.2b(d)'s end-loaded length governs
+    "stiffened_long_weld": _variant("stiffened_long_weld", """
+stiffened_seat ss3 {
+  basis lrfd
+  beam W21x44 grade steel.A992
+  support W14x90 flange grade steel.A992
+  plate steel.A36 thickness 0.375 inch
+  stiffener steel.A36 thickness 0.5 inch
+  stiffener_width 6 inch
+  stiffener_length 24 inch
+  setback 0.75 inch
+  weld electrode.E70 size 0.1875 inch sides 2
+  top_angle L4x4x1_4 grade steel.A36 outstanding long
+}""", "  on ss3 shear in [0 kip, 40 kip]"),
+    # The variants below reach branches the mutation test (tests/test_steel_mutation.py)
+    # found no other design reaching.
+    # welds past 300 w (24 in of 1/16 in fillet): J2.2b(d)'s effective length is 180 w
+    "stiffened_longest_weld": _variant("stiffened_longest_weld", """
+stiffened_seat ss4 {
+  basis lrfd
+  beam W21x44 grade steel.A992
+  support W14x90 flange grade steel.A992
+  plate steel.A36 thickness 0.375 inch
+  stiffener steel.A36 thickness 0.5 inch
+  stiffener_width 6 inch
+  stiffener_length 24 inch
+  setback 0.75 inch
+  weld electrode.E70 size 0.0625 inch sides 2
+  top_angle L4x4x1_4 grade steel.A36 outstanding long
+}""", "  on ss4 shear in [0 kip, 20 kip]"),
+    # a hanger on slip-critical bolts, ASD: its tension reduces the slip resistance (Eq J3-5b)
+    "hanger_slip_asd": _variant("hanger_slip_asd", """
+hanger h4 {
+  basis asd
+  tee WT9x25 grade steel.A992
+  support W18x50 flange grade steel.A992
+  bolts bolt_group.150 diameter 0.75 inch threads included joint slip_critical surface class_a
+  rows 3
+  pitch 3 inch
+  tee_gauge 4 inch
+  edge_vertical 1.5 inch
+}""", "  on h4 tension in [0 kip, 40 kip]\n  on h4 shear in [0 kip, 12 kip]"),
+    # J10.4 applies, r = 1.6, the flange restrained; ASD, with panel shear and axial load
+    "flange_sidesway_restrained_asd": _variant("flange_sidesway_restrained_asd", """
+flange_force ff5 {
+  basis asd
+  member W14x90 grade steel.A992
+  bearing_length 4 inch
+  location interior
+  force_kind compressive
+  flange_restrained yes
+  unbraced_length 240 inch
+  moment_at_force below_yield
+}""", "  on ff5 force in [0 kip, 60 kip]\n  on ff5 panel_shear in [0 kip, 150 kip]\n  on ff5 axial in [0 kip, 500 kip]"),
+    # J10.4 with the flange unrestrained: it applies at r = 1.6 and not at r = 2.6
+    "flange_free_applies": _variant("flange_free_applies", """
+flange_force ff6 {
+  basis lrfd
+  member W14x90 grade steel.A992
+  bearing_length 4 inch
+  location interior
+  force_kind compressive
+  flange_restrained no
+  unbraced_length 240 inch
+  moment_at_force below_yield
+}""", "  on ff6 force in [0 kip, 60 kip]"),
+    "flange_free_excused": _variant("flange_free_excused", """
+flange_force ff7 {
+  basis lrfd
+  member W14x90 grade steel.A992
+  bearing_length 4 inch
+  location interior
+  force_kind compressive
+  flange_restrained no
+  unbraced_length 144 inch
+  moment_at_force below_yield
+}""", "  on ff7 force in [0 kip, 60 kip]"),
+    # a long double cope on a thin web: F11-4's elastic buckling governs
+    "tab_double_cope_slender": _variant("tab_double_cope_slender", """
+shear_tab st5 {
+  basis lrfd
+  beam W18x35 grade steel.A992
+  support W14x90 web grade steel.A992
+  plate steel.A36 thickness 0.375 inch
+  bolts bolt_group.120 diameter 0.75 inch threads included
+  rows 3
+  pitch 3 inch
+  edge_vertical 1.5 inch
+  plate_edge 1.5 inch
+  bolt_line 3 inch
+  beam_edge 1.75 inch
+  top 4 inch
+  setback 0.5 inch
+  cope both depth 2 inch length 15 inch bottom_depth 2 inch
+  weld electrode.E70 size 0.25 inch sides 2
+}""", "  on st5 shear in [0 kip, 10 kip]"),
+    # a thin shaped bracket with a long free edge: lambda past 1.41, Q = 1.30 / lambda^2
+    "bolt_bracket_slender": _variant("bolt_bracket_slender", """
+bolt_bracket bb4 {
+  basis lrfd
+  plate steel.A36 thickness 0.375 inch
+  support W14x90 flange grade steel.A992
+  bolts bolt_group.120 diameter 0.875 inch threads included
+  rows 6
+  columns 2
+  pitch 3 inch
+  gauge 3 inch
+  eccentricity 12 inch
+  edge_vertical 1.5 inch
+  plate_edge 1.5 inch
+  free_edge 18 inch
+}""", "  on bb4 shear in [0 kip, 10 kip]"),
+    # a conventional tab whose thickness, not its weld, governs Manual Part 10's ductility rules
+    "tab_ductile_plate": _variant("tab_ductile_plate", """
+shear_tab st6 {
+  basis lrfd
+  beam W21x62 grade steel.A992
+  support W14x90 web grade steel.A992
+  plate steel.A36 thickness 0.375 inch
+  bolts bolt_group.120 diameter 0.75 inch threads included
+  rows 4
+  pitch 3 inch
+  edge_vertical 1.5 inch
+  plate_edge 1.5 inch
+  bolt_line 3 inch
+  beam_edge 1.75 inch
+  top 3 inch
+  weld electrode.E70 size 0.3125 inch sides 2
+}""", "  on st6 shear in [0 kip, 40 kip]"),
+    # the same tab with 2 in edges, so the plate's thickness alone governs Manual Part 10's
+    # ductility rules, then its weld (a 1/4 in fillet on a 3/8 in plate)
+    "tab_ductile_thickness": _variant("tab_ductile_thickness", """
+shear_tab st7 {
+  basis lrfd
+  beam W21x62 grade steel.A992
+  support W14x90 web grade steel.A992
+  plate steel.A36 thickness 0.375 inch
+  bolts bolt_group.120 diameter 0.75 inch threads included
+  rows 4
+  pitch 3 inch
+  edge_vertical 1.5 inch
+  plate_edge 2 inch
+  bolt_line 3 inch
+  beam_edge 2 inch
+  top 3 inch
+  weld electrode.E70 size 0.3125 inch sides 2
+}""", "  on st7 shear in [0 kip, 40 kip]"),
+    "tab_ductile_weld": _variant("tab_ductile_weld", """
+shear_tab st8 {
+  basis lrfd
+  beam W21x62 grade steel.A992
+  support W14x90 web grade steel.A992
+  plate steel.A36 thickness 0.375 inch
+  bolts bolt_group.120 diameter 0.75 inch threads included
+  rows 4
+  pitch 3 inch
+  edge_vertical 1.5 inch
+  plate_edge 2 inch
+  bolt_line 3 inch
+  beam_edge 2 inch
+  top 3 inch
+  weld electrode.E70 size 0.25 inch sides 2
+}""", "  on st8 shear in [0 kip, 40 kip]"),
+    # a Grade 50 stiffener near its width-to-thickness limit, thicker than the beam web needs
+    "stiffened_wide_stiffener": _variant("stiffened_wide_stiffener", """
+stiffened_seat ss5 {
+  basis lrfd
+  beam W18x35 grade steel.A992
+  support W14x90 flange grade steel.A992
+  plate steel.A36 thickness 0.375 inch
+  stiffener steel.A572_50 thickness 0.5 inch
+  stiffener_width 6 inch
+  stiffener_length 12 inch
+  setback 0.5 inch
+  weld electrode.E70 size 0.25 inch sides 2
+  top_angle L4x4x1_4 grade steel.A36 outstanding long
+}""", "  on ss5 shear in [0 kip, 30 kip]"),
+    # a hanger in tension and shear, so prying works from F'nt Ab (Companion II.A-1B)
+    "hanger_prying_shear": _variant("hanger_prying_shear", """
+hanger h9 {
+  basis lrfd
+  tee WT7x45 grade steel.A992
+  support W14x90 flange grade steel.A992
+  bolts bolt_group.120 diameter 0.75 inch threads included joint pretensioned
+  rows 2
+  pitch 3 inch
+  tee_gauge 4 inch
+  edge_vertical 1.5 inch
+}""", "  on h9 tension in [0 kip, 78 kip]\n  on h9 shear in [0 kip, 44 kip]"),
+    # declared fillers in a snug shear tab: J5.2(a)'s 0.85 on the bolts' shear strength
+    "tab_fillers": _variant("tab_fillers", """
+shear_tab st10 {
+  basis lrfd
+  beam W16x26 grade steel.A992
+  support W14x90 web grade steel.A992
+  plate steel.A36 thickness 0.375 inch
+  bolts bolt_group.120 diameter 0.75 inch threads included fillers one
+  rows 3
+  pitch 3 inch
+  edge_vertical 1.5 inch
+  plate_edge 1.5 inch
+  bolt_line 3 inch
+  beam_edge 1.75 inch
+  top 3 inch
+  weld electrode.E70 size 0.25 inch sides 2
+}""", "  on st10 shear in [0 kip, 40 kip]"),
+    # a wide, thin tee flange that prying bends: a > 1.25 b, s/2 > 1.75 b, and Q < 1
+    "hanger_thin_flange": _variant("hanger_thin_flange", """
+hanger h5 {
+  basis lrfd
+  tee WT12x27_5 grade steel.A992
+  support W14x90 flange grade steel.A992
+  bolts bolt_group.120 diameter 0.75 inch threads included joint pretensioned
+  rows 2
+  pitch 6 inch
+  tee_gauge 3 inch
+  edge_vertical 1.5 inch
+}""", "  on h5 tension in [0 kip, 20 kip]"),
 }
 
 

@@ -149,7 +149,9 @@ def _deep_cope(text: str, g: Generated) -> str | None:
     cope = f"top depth {float(depth * Fraction(3, 5)):g} inch length 4 inch"
     if _field(text, "cope") is not None:
         return _set(text, "cope", cope)
-    return text.replace("  top ", f"  cope {cope}\n  top ", 1)
+    out = text.replace("  top ", f"  cope {cope}\n  top ", 1)
+    # a coped beam states its setback (lower.SET_BACK)
+    return out if _field(out, "setback") is not None else out.replace("  top ", "  setback 0.5 inch\n  top ", 1)
 
 
 def _overload(text: str, g: Generated) -> str | None:

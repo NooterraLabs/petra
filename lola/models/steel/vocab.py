@@ -4,7 +4,8 @@ One FailureMode per limit state, each with one ModelSpec naming its clause. The 
 premise's source_hash covers every trusted module of the package (lower, limits, checks,
 build, vocab, domain), so editing any of the physics changes every steel premise label.
 A mode's validity rows are the method's applicability limits the kernel decides over the
-design's box (checks.ROWS states each).
+design's box (checks.ROWS states each). A mode with no row says why in UNBOUNDED, and its
+model's validity words end with that reason (docs/principles.md D3).
 """
 from __future__ import annotations
 
@@ -40,9 +41,11 @@ def _mode(short: str) -> FailureMode:
     return FailureMode(f"steel.{short}")
 
 
-def _spec(short: str, form: str, validity: str, source: str, rows: tuple[ValidityRow, ...] = (),
-          unchecked: tuple[str, ...] = ()) -> ModelSpec:
-    return ModelSpec(f"steel.{short}", form, validity, OWNER, source, SOURCE_HASH, rows, unchecked)
+def _spec(short: str, form: str, validity: str, source: str, rows: tuple[ValidityRow, ...],
+          unchecked: tuple[str, ...]) -> ModelSpec:
+    """A mode's model; one with no validity row carries its UNBOUNDED reason in its words."""
+    words = validity if rows else f"{validity}. Unbounded: {UNBOUNDED[short]}"
+    return ModelSpec(f"steel.{short}", form, words, OWNER, source, SOURCE_HASH, rows, unchecked)
 
 
 def _row(short: str, name: str, text: str, source: str) -> ValidityRow:
@@ -55,7 +58,8 @@ STRENGTH: tuple[tuple[str, str, str, str, tuple[ValidityRow, ...]], ...] = (
     ("bolts",
      "bolt shear rupture (Eq J3-1) and bearing and tearout at every hole (Eq J3-6a-f), taken per bolt as the least of "
      "its shear strength and its bearing or tearout strength in each ply, summed over a concentric group; an "
-     "eccentric group by the elastic method against the weakest bolt",
+     "eccentric group by the elastic method against the weakest bolt; through declared fillers the shear strength "
+     "times 0.85, J5.2(a)'s least factor, since the grammar gives no filler thickness",
      "bolts of one group, size and installation; holes of the declared type; threads included or excluded as "
      "declared; the elastic method assumes a rigid connected part rotating about the group centroid",
      f"{AISC} Sections J3.7 and J3.11a, Table J3.2; {MANUAL} Part 7 (elastic method)", ()),
@@ -110,16 +114,19 @@ STRENGTH: tuple[tuple[str, str, str, str, tuple[ValidityRow, ...]], ...] = (
      "axis removes its own t dh'^2 / 4 (Companion II.A-17B)",
      f"{AISC} Section J4.5; {MANUAL} Part 15", ()),
     ("weld",
-     "fillet weld strength Rn = 0.60 FEXX Awe kds (Eq J2-4), kds by the line's direction, longitudinal and transverse "
-     "lines combined by Eq J2-6; an eccentric group (parallel lines, or a line with returns in a C) by the elastic "
-     "method on its line properties, at its most stressed point, without the directional increase; a seat angle's two "
+     "fillet weld strength Rn = 0.60 FEXX Awe (Eq J2-4) with kds = 1, every concentric group being longitudinal lines; "
+     "the directional increase of Eq J2-5 and the group rule of Eq J2-6 are permitted, not required, and not taken; "
+     "an eccentric group (parallel lines, or a line with returns in a C) by the elastic method on its line properties, "
+     "at its most stressed point; a seat angle's two "
      "lines, its vertical leg bearing on the support below them, by the Manual's seat-weld form f = R sqrt(L^2 + 20.25 "
-     "e^2) / (2 L^2) (Table 10-6, Companion II.A-16)",
+     "e^2) / (2 L^2) (Table 10-6, Companion II.A-16); a seat stiffener's welds, which the reaction loads from their end "
+     "as at a bearing stiffener (Commentary J2.2b), also over their effective length past 100 w, beta l with beta = 1.2 "
+     "- 0.002 l / w and 180 w past 300 w (Section J2.2b(d), Eq J2-1)",
      "matching filler metal (Table J2.5); welds of the declared size and length; the elastic method assumes a rigid "
      "connected part; support-side welds as Manual Table 10-2 welds B, each line carrying its share at the outstanding "
      "leg's width (a single angle's reaction at the beam web's centre, the leg plus tw/2, Companion II.A-29; a tee's "
      "flange-tip lines at half the flange width, Companion II.A-31)",
-     f"{AISC} Section J2.4, Table J2.5; {MANUAL} Part 8 (elastic method)", ()),
+     f"{AISC} Sections J2.2b(d) and J2.4, Table J2.5; {MANUAL} Part 8 (elastic method)", ()),
     ("weld_base_metal",
      "shear rupture of the base metal along each fusion face, 0.60 Fu t per unit length against the weld force it "
      "carries (Section J2.4(a) with Eq J4-4)",
@@ -168,7 +175,8 @@ STRENGTH: tuple[tuple[str, str, str, str, tuple[ValidityRow, ...]], ...] = (
      f"{MANUAL} Part 10 (unstiffened seated connections)", ()),
     ("prying",
      "bolt tension with prying action by the Struik-de Back T-stub model in the Manual's form: available tension per "
-     "bolt B Q with Q from tc, alpha' and delta = 1 - d'/p (d' the hole's length along the flange), for the tee's flange and for the support's flange under the same bolts "
+     "bolt B Q, B = phi F'nt Ab reduced for the group's shear by Eq J3-3 (F'nt = Fnt without it; Companion II.A-1B), "
+     "with Q from tc, alpha' and delta = 1 - d'/p (d' the hole's length along the flange), for the tee's flange and for the support's flange under the same bolts "
      "(each taken against a rigid partner, as the Companion checks a column flange in II.C-1); each bolt's tributary "
      "length p by Manual Figure 9-4, at most 1.75 b either side of it: an end bolt min(le, 1.75 b) + min(s/2, 1.75 b), "
      "an inner bolt 2 min(s/2, 1.75 b) (Companion II.D-1), the support's flange with the tee's le and s and its own b",
@@ -208,6 +216,8 @@ plate, stiffener or seat thickness must be one the registry's shop deck stocks
 (shop_deck.plate.*)."""
 
 
+BOTH_FACES = "the plate is welded to the support with a fillet on each face, as the five-eighths rule assumes"
+
 ROWS: Mapping[str, tuple[ValidityRow, ...]] = {
     "cope_buckling": (
         _row("cope_buckling", "cope_length", "cope length c <= 2 d", f"{MANUAL} Part 9, limits of the cope-buckling method"),
@@ -220,6 +230,10 @@ ROWS: Mapping[str, tuple[ValidityRow, ...]] = {
              "weld line", f"{MANUAL} Part 10, conventional configuration"),
         _row("ductility", "conventional_rows", "a conventional single plate has at most 12 bolt rows",
              f"{MANUAL} Part 10, conventional configuration"),
+        _row("ductility", "both_faces", BOTH_FACES, f"{MANUAL} Part 10, conventional configuration (Companion II.A-17A)"),
+    ),
+    "extended_ductility": (
+        _row("extended_ductility", "both_faces", BOTH_FACES, f"{MANUAL} Part 10, extended configuration"),
     ),
     "prying": (
         _row("prying", "bolt_clear_of_stem", "each bolt line lies outside the web its flange bends about (the tee's "
@@ -229,20 +243,63 @@ ROWS: Mapping[str, tuple[ValidityRow, ...]] = {
 }
 
 
+_RULE = "a detailing rule: the check is the limit itself, so there is no range outside which it stops applying"
+_OWN = "states no range of its own"
+_THEIR = "state no range of their own"
+
+UNBOUNDED: Mapping[str, str] = {
+    "bolts": f"Eqs J3-1 and J3-6 {_THEIR}; Table J3.2's reduction of Fnv for long end-loaded joints does not arise, "
+             "since every catalogue bolt group is a shear connection's, a bracket's or a hanger's, which Commentary J3.7 "
+             "exempts",
+    "bolt_tension": f"Eq J3-1 {_OWN}",
+    "bolt_combined": f"Eqs J3-3a and J3-3b {_THEIR}; the exemption for a small stress is a branch of the check",
+    "slip": f"Eqs J3-4, J3-5a and J3-5b {_THEIR}; ksc and the hole type's factors are branches of the check",
+    "shear_yield": f"Eq J4-3 {_OWN}",
+    "shear_rupture": f"Eq J4-4 {_OWN}",
+    "block_shear": f"Eq J4-5 {_OWN}; Ubs is a branch of the check",
+    "tension_yield": f"Eq J4-1 {_OWN}",
+    "tension_rupture": f"Eq J4-2 {_OWN}",
+    "flexural_yield": f"Section J4.5 {_OWN} for a plate's yielding",
+    "flexural_rupture": f"Section J4.5 {_OWN} for a plate's rupture",
+    "weld": f"Eq J2-4 {_OWN}; J2.2b(d)'s end-loaded length is a branch of the check",
+    "weld_base_metal": f"Section J2.4(a) with Eq J4-4 {_OWN}",
+    "bearing": f"Eq J7-1 {_OWN}",
+    "web_local_yielding": f"Eqs J10-2 and J10-3 {_THEIR}; the force's distance to the member end chooses between them",
+    "web_crippling": f"Eqs J10-4, J10-5a and J10-5b {_THEIR}; the end distance and lb / d choose between them",
+    "flange_local_bending": f"Eq J10-1 {_OWN}; the end distance halves it inside the check",
+    "web_sidesway_buckling": f"Eqs J10-6 and J10-7 {_THEIR}; the slenderness ratio that decides whether the limit "
+                             "state applies is a branch of the check",
+    "web_compression_buckling": f"Eq J10-8 {_OWN}; the end distance halves it inside the check",
+    "panel_zone": f"Eqs J10-9 and J10-10 {_THEIR}; the axial ratio chooses between them",
+    "seat_flexure": "the Manual's unstiffened-seat method states no range beyond its configuration",
+    "compression": "J4.4(a)'s slenderness condition holds by the configuration: the stiffener is welded to the "
+                   "support along its full length, so it has no laterally unbraced length",
+    "plate_buckling": "Section F11's branches by Lb d / t^2 are taken inside the check, and F11 states no other range",
+    "bracket_edge": "the Manual's bracket-plate method states no range beyond its configuration; Q's branches by "
+                    "lambda are taken inside the check",
+    "spacing_min": _RULE, "edge_min": _RULE, "spacing_max": _RULE, "edge_max": _RULE, "fillet_size": _RULE,
+    "hole_use": _RULE, "joint_type": _RULE, "clearance": _RULE,
+}
+"""Why each mode with no validity row needs none (docs/principles.md D3): its clause states
+no applicability range, its branches are inside its checks, or it is a detailing rule whose
+check is the limit. tests/test_steel_principles.py holds every mode to a row or a reason."""
+
+
 MODES: dict[str, FailureMode] = {}
 MODELS: dict[FailureMode, ModelSpec] = {}
 
 for short, form, validity, source, rows in STRENGTH:
     MODES[short] = _mode(short)
-    MODELS[MODES[short]] = _spec(short, form, validity, source, rows or ROWS.get(short, ()))
+    MODELS[MODES[short]] = _spec(short, form, validity, source, rows or ROWS.get(short, ()), ())
 
 for short, form, validity, source, *unchecked in MAKEABILITY:
     MODES[short] = _mode(short)
-    MODELS[MODES[short]] = _spec(short, form, validity, source, unchecked=unchecked[0] if unchecked else ())
+    MODELS[MODES[short]] = _spec(short, form, validity, source, (), unchecked[0] if unchecked else ())
 
 for short, form, validity, source in (
     ("compression", "compressive yielding of a seat stiffener's section under the seat, Rn = Fy Ag (Eq J4-6), and its "
-     "width-to-thickness ratio W / t at most 0.56 sqrt(E / Fy)",
+     "width-to-thickness ratio W / t at most 0.56 sqrt(E / Fy), and its thickness at least the beam web's times "
+     "Fy of the beam over Fy of the stiffener (Companion II.A-14)",
      "the stiffener is welded to the support along its full length, so it cannot buckle as a column; the Manual's "
      "width-to-thickness limit, a check of this mode beside the yielding check, excludes local buckling",
      f"{AISC} Section J4.4; {MANUAL} Part 10 (stiffened seated connections)"),
@@ -256,8 +313,9 @@ for short, form, validity, source in (
      "with Lb = a and Cb = 1.84, against the moment at the weld line", "the plate is unstiffened between the weld "
      "and the bolt line; the beam is braced against rotation about its axis", f"{MANUAL} Part 10; {AISC} Section F11"),
     ("ductility", "rotational ductility of a conventional single-plate connection: plate or beam web thin enough "
-     "(t <= d/2 + 1/16 in) to yield before the bolts fracture, and the weld at least five-eighths of the plate "
-     "thickness so the plate yields before the weld", "the connection is a conventional single plate, so the simple "
+     "(t <= d/2 + 1/16 in) to yield before the bolts fracture, the fillet on each face of the plate at least "
+     "five-eighths of its thickness so the plate yields before the weld, and the horizontal edge distance at least "
+     "2d on the plate and the beam web (Companion II.A-17A)", "the connection is a conventional single plate, so the simple "
      "beam's end rotation is accommodated by bolt deformation and plate yielding", f"{MANUAL} Part 10"),
     ("bracket_edge", "a shaped bracket plate's free-edge section B-B, normal to its sloped edge: shear yielding, "
      "Vn = 0.60 Fy t b' against P sin theta, and the normal force and moment on it, N/Nc + M/Mc <= 1 with N = P cos "
@@ -267,11 +325,11 @@ for short, form, validity, source in (
      "Eqs 15-6 to 15-18 (bracket plates)"),
     ("extended_ductility", "rotational ductility of an extended single-plate connection: the plate no thicker than "
      "tmax = 6 Mmax / (Fy L^2), Mmax = (Fnv / 0.90) Ab C' with C' the bolt group's elastic moment coefficient, so it "
-     "yields before the bolts fracture, and the weld at least five-eighths of the plate thickness",
+     "yields before the bolts fracture, and the fillet on each face of the plate at least five-eighths of its thickness",
      "the connection is an extended single plate whose rotation the plate's yielding accommodates", f"{MANUAL} Part 10"),
 ):
     MODES[short] = _mode(short)
-    MODELS[MODES[short]] = _spec(short, form, validity, source, ROWS.get(short, ()))
+    MODELS[MODES[short]] = _spec(short, form, validity, source, ROWS.get(short, ()), ())
 
 LOAD_PATH = _mode("load_path")
 """An axial or other force component a v1.0 connection type has no checked path for.

@@ -1,21 +1,27 @@
-"""Rolled shapes for the steel deck: the AISC Shapes Database table and its importer.
+"""Rolled shapes for the steel deck: the AISC Shapes Database rows and their importer.
 
-The table lives in aisc_shapes.json beside this module, so a verdict never depends on a
-file outside the repository. Each W row becomes constants "aisc_shapes_v16.<key>.<prop>"
-(d, bf, tf, tw, kdes, A) carrying the table's tag, owner and source; the source names the
-database file and its sha256 when the table came from it. Each W and L designation also
-gives constants of its own, tagged sanctioned because the designation is the value: a
-W18x50's nominal weight 50 lb/ft, an L4x3-1/2x3/8's legs and thickness.
+The Shapes Database is AISC's compilation, so the repository ships only the rows the
+deck's examples, tests and generator use (aisc_shapes.json beside this module, copied
+unchanged from SHAPE160.xlsx and citing its sha256; docs/principles.md P9). Set
+LOLA_SHAPES_XLSX to your own copy of the workbook to load every row at run time; it must
+be the workbook the shipped rows cite (its sha256 is checked).
 
-    python -m lola.registry.steel_shapes import FILE.xlsx [--out PATH]
+Each W row becomes constants "aisc_shapes_v16.<key>.<prop>" (d, bf, tf, tw, kdes, A)
+carrying the table's tag, owner and source; the source names the database file and its
+sha256. Each W and L designation also gives constants of its own, tagged sanctioned
+because the designation is the value: a W18x50's nominal weight 50 lb/ft, an
+L4x3-1/2x3/8's legs and thickness.
+
+    python -m lola.registry.steel_shapes import FILE.xlsx [--out PATH] [--keep LABEL ...]
 
 reads the published workbook (Excel 2007+ format, read with zipfile and ElementTree, no
-other package), keeps every W and L row, and rewrites the table with the file's sha256
-and tag sanctioned. The shipped table is that import of SHAPE160.xlsx (v16.0).
+other package) and writes a table with the file's sha256 and tag sanctioned: every W and
+L row, or with --keep only the rows named.
 """
 from __future__ import annotations
 
 import argparse
+import functools
 import hashlib
 import json
 import os
@@ -33,6 +39,8 @@ from ..units import CUSTOMARY
 from .model import Constant
 
 TABLE = os.path.join(os.path.dirname(__file__), "aisc_shapes.json")
+WORKBOOK = "LOLA_SHAPES_XLSX"
+"""The environment variable naming the user's own copy of the published workbook."""
 FORMAT = "lola-shapes/0"
 GROUP = "aisc_shapes_v16"
 W_PROPS: tuple[str, ...] = ("d", "bf", "tf", "tw", "kdes", "A")
@@ -60,12 +68,24 @@ def key(label: str) -> str:
 
 
 def load(path: str = TABLE) -> ShapeTable:
+    """The shipped rows; or, when LOLA_SHAPES_XLSX names the workbook they cite, every row."""
     with open(path, encoding="utf-8") as f:
         body = json.load(f)
     if body.get("format") != FORMAT:
         raise ValueError(f"{path}: format {body.get('format')!r} is not {FORMAT}")
+    book = os.environ.get(WORKBOOK)
+    if book and path == TABLE:
+        body = _workbook_table(os.path.abspath(book), body["sha256"])
     return ShapeTable(body["file"], body["sha256"], Tag(body["tag"]), body["owner"], body["source"],
                       tuple(body["W"]), tuple(body["L"]))
+
+
+@functools.lru_cache(maxsize=2)
+def _workbook_table(book: str, cited: str) -> dict:
+    digest = sha256(book)
+    if digest != cited:
+        raise ValueError(f"{WORKBOOK}={book}: sha256 {digest} is not the workbook the shipped rows cite ({cited})")
+    return import_workbook(book)
 
 
 def _mixed(text: str) -> Fraction:
@@ -226,8 +246,13 @@ def main(argv: list[str] | None = None) -> int:
     imp = sub.add_parser("import", help="rewrite the shape table from the published workbook")
     imp.add_argument("file")
     imp.add_argument("--out", default=TABLE)
+    imp.add_argument("--keep", nargs="*", help="keep only these labels (W18X50, L4X3-1/2X3/8)")
     args = parser.parse_args(argv)
     body = import_workbook(args.file)
+    if args.keep is not None:
+        keep = set(args.keep)
+        body["W"] = [r for r in body["W"] if r["label"] in keep]
+        body["L"] = [label for label in body["L"] if label in keep]
     with open(args.out, "w", encoding="utf-8", newline="\n") as f:
         f.write(json.dumps(body, indent=1, ensure_ascii=False) + "\n")
     print(f"{len(body['W'])} W rows and {len(body['L'])} angles from {args.file} (sha256 {body['sha256']}) -> {args.out}")

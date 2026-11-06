@@ -15,6 +15,7 @@ flange_force ff1 {
   force_kind compressive
   flange_restrained yes
   unbraced_length 144 inch
+  moment_at_force below_yield
 }
 
 load gravity {

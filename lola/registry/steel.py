@@ -365,8 +365,9 @@ FACTORS: tuple[_F, ...] = (
      f"{AISC} Section J2.2b(b): the fillet along an edge at least 1/4 in thick is at most 1/16 in less than t; {CHECKED}"),
     ("aisc360.j2_2b.length_ratio", "4", "1", SANCTIONED, "AISC",
      f"{AISC} Section J2.2b(c): a fillet weld is at least four times its size long; {CHECKED}"),
-    ("aisc360.j4_4.slenderness", "25", "1", SANCTIONED, "AISC",
-     f"{AISC} Section J4.4(a): the yield formula applies when Lc/r <= 25; {CHECKED}"),
+    ("aisc360.j2_2b.end_loaded_ratio", "100", "1", SANCTIONED, "AISC",
+     f"{AISC} Section J2.2b(d)(1): an end-loaded fillet up to 100 times its size long counts its actual length; "
+     f"{CHECKED}"),
     ("aisc360.j3_3.long_slot_plies", "1", "1", SANCTIONED, "AISC",
      f"{AISC} Section J3.3(f): long-slotted holes in only one of the connected parts at an individual faying surface; "
      f"{CHECKED}"),
@@ -390,6 +391,173 @@ FACTORS: tuple[_F, ...] = (
      f"{MANUAL} Part 10 (stiffened seated connections): corner clip of the stiffener's bearing edge, judged at 1/2 in; "
      "the bearing area is (W - clip) ts; not checked against the published text"),
 )
+
+
+QUOTED = "checked against the Companion's use of it (P901-23W.pdf)"
+
+COEFFICIENTS: tuple[_F, ...] = (
+    ("aisc360.b4_1a.case1", "0.56", "1", SANCTIONED, "AISC",
+     f"{AISC} Table B4.1a, Case 1: limiting width-to-thickness 0.56 sqrt(E/Fy) of a projecting plate, which "
+     f"{MANUAL} Part 10 holds a seat stiffener to; {CHECKED}"),
+    ("aisc360.b4_3b.hole_allowance", "1/16", "m", SANCTIONED, "AISC",
+     f"{AISC} Section B4.3b: a bolt hole's width for net area is 1/16 in more than its nominal dimension; {CHECKED}"),
+    ("aisc360.j2_2b.beta_intercept", "1.2", "1", SANCTIONED, "AISC",
+     f"{AISC} Section J2.2b(d)(2), Eq. J2-1: beta = 1.2 - 0.002 (l/w); {CHECKED}"),
+    ("aisc360.j2_2b.beta_slope", "0.002", "1", SANCTIONED, "AISC",
+     f"{AISC} Section J2.2b(d)(2), Eq. J2-1: beta = 1.2 - 0.002 (l/w); {CHECKED}"),
+    ("aisc360.j2_2b.end_loaded_cap", "300", "1", SANCTIONED, "AISC",
+     f"{AISC} Section J2.2b(d)(2)-(3): beta applies up to 300 times the weld size; beyond, the effective length is "
+     f"180 w, the value beta l takes at 300 w; {CHECKED}"),
+    ("aisc360.j2_4.fnw", "0.60", "1", SANCTIONED, "AISC",
+     f"{AISC} Section J2.4, Table J2.5: fillet weld metal Fnw = 0.60 FEXX; {CHECKED}"),
+    ("aisc360.j3_8.intercept", "1.3", "1", SANCTIONED, "AISC",
+     f"{AISC} Section J3.8, Eqs. J3-3a and J3-3b: F'nt = 1.3 Fnt - ...; {CHECKED}"),
+    ("aisc360.j3_8.exemption", "0.30", "1", SANCTIONED, "AISC",
+     f"{AISC} Section J3.8, User Note: combined stress need not be investigated where the required shear or tension "
+     f"stress is at most 30% of the corresponding available stress; {CHECKED}"),
+    ("aisc360.j3_10.ksc_asd", "1.5", "1", SANCTIONED, "AISC",
+     f"{AISC} Section J3.10, Eq. J3-5b: ksc = 1 - 1.5 Ta / (Du Tb nb) (ASD); {CHECKED}"),
+    ("aisc360.j3_11a.bearing_considered", "2.4", "1", SANCTIONED, "AISC",
+     f"{AISC} Section J3.11a(1)(i), Eq. J3-6a: bearing 2.4 d t Fu, deformation a design consideration; {CHECKED}"),
+    ("aisc360.j3_11a.tearout_considered", "1.2", "1", SANCTIONED, "AISC",
+     f"{AISC} Section J3.11a(1)(i), Eq. J3-6c: tearout 1.2 lc t Fu, deformation a design consideration; {CHECKED}"),
+    ("aisc360.j3_11a.bearing_not_considered", "3.0", "1", SANCTIONED, "AISC",
+     f"{AISC} Section J3.11a(1)(ii), Eq. J3-6b: bearing 3.0 d t Fu, deformation not a design consideration; "
+     f"{CHECKED}"),
+    ("aisc360.j3_11a.tearout_not_considered", "1.5", "1", SANCTIONED, "AISC",
+     f"{AISC} Section J3.11a(1)(ii), Eq. J3-6d: tearout 1.5 lc t Fu, deformation not a design consideration; "
+     f"{CHECKED}"),
+    ("aisc360.j3_11a.bearing_lsl_perpendicular", "2.0", "1", SANCTIONED, "AISC",
+     f"{AISC} Section J3.11a(2), Eq. J3-6e: bearing 2.0 d t Fu at a long slot perpendicular to the force; {CHECKED}"),
+    ("aisc360.j3_11a.tearout_lsl_perpendicular", "1.0", "1", SANCTIONED, "AISC",
+     f"{AISC} Section J3.11a(2), Eq. J3-6f: tearout 1.0 lc t Fu at a long slot perpendicular to the force; "
+     f"{CHECKED}"),
+    ("aisc360.j4_2.shear", "0.60", "1", SANCTIONED, "AISC",
+     f"{AISC} Section J4.2, Eqs. J4-3 and J4-4: shear yielding 0.60 Fy Agv, shear rupture 0.60 Fu Anv; {CHECKED}"),
+    ("aisc360.j4_3.shear", "0.60", "1", SANCTIONED, "AISC",
+     f"{AISC} Section J4.3, Eq. J4-5: block shear 0.60 Fu Anv + Ubs Fu Ant <= 0.60 Fy Agv + Ubs Fu Ant; {CHECKED}"),
+    ("aisc360.j4_3.ubs_nonuniform", "0.5", "1", SANCTIONED, "AISC",
+     f"{AISC} Section J4.3: Ubs = 0.5 where the tension stress is nonuniform (1 where uniform); {CHECKED}"),
+    ("aisc360.j5_2.floor", "0.85", "1", SANCTIONED, "AISC",
+     f"{AISC} Section J5.2(a): through fillers over 1/4 in thick a bolt's shear strength is multiplied by "
+     f"1 - 0.4(t - 0.25), not less than 0.85; {CHECKED}"),
+    ("aisc360.j7.milled", "1.8", "1", SANCTIONED, "AISC",
+     f"{AISC} Section J7, Eq. J7-1: bearing on milled surfaces 1.8 Fy Apb; {CHECKED}"),
+    ("aisc360.j10_1.coefficient", "6.25", "1", SANCTIONED, "AISC",
+     f"{AISC} Section J10.1, Eq. J10-1: flange local bending 6.25 Fyf tf^2; {CHECKED}"),
+    ("aisc360.j10_1.end_distance", "10", "1", SANCTIONED, "AISC",
+     f"{AISC} Section J10.1: the strength is halved for a force less than 10 tf from the member end; {CHECKED}"),
+    ("aisc360.j10_2.interior", "5", "1", SANCTIONED, "AISC",
+     f"{AISC} Section J10.2, Eq. J10-2: web local yielding Fyw tw (5k + lb) away from the end; {CHECKED}"),
+    ("aisc360.j10_2.end", "2.5", "1", SANCTIONED, "AISC",
+     f"{AISC} Section J10.2, Eq. J10-3: web local yielding Fyw tw (2.5k + lb) within d of the end; {CHECKED}"),
+    ("aisc360.j10_3.interior", "0.80", "1", SANCTIONED, "AISC",
+     f"{AISC} Section J10.3, Eq. J10-4: web local crippling 0.80 tw^2 [...] away from the end; {CHECKED}"),
+    ("aisc360.j10_3.end", "0.40", "1", SANCTIONED, "AISC",
+     f"{AISC} Section J10.3, Eqs. J10-5a and J10-5b: web local crippling 0.40 tw^2 [...] near the end; {CHECKED}"),
+    ("aisc360.j10_3.bearing", "3", "1", SANCTIONED, "AISC",
+     f"{AISC} Section J10.3, Eqs. J10-4 and J10-5a: the term 3 (lb/d); {CHECKED}"),
+    ("aisc360.j10_3.long_bearing", "4", "1", SANCTIONED, "AISC",
+     f"{AISC} Section J10.3, Eq. J10-5b: the term (4 lb/d - 0.2); {CHECKED}"),
+    ("aisc360.j10_3.long_offset", "0.2", "1", SANCTIONED, "AISC",
+     f"{AISC} Section J10.3, Eq. J10-5b: the term (4 lb/d - 0.2), for lb/d > 0.2; {CHECKED}"),
+    ("aisc360.j10_4.coefficient", "0.4", "1", SANCTIONED, "AISC",
+     f"{AISC} Section J10.4, Eqs. J10-6 and J10-7: the term 0.4 [(h/tw)/(Lb/bf)]^3; {CHECKED}"),
+    ("aisc360.j10_4.restrained_limit", "2.3", "1", SANCTIONED, "AISC",
+     f"{AISC} Section J10.4(a): with the compression flange restrained, the limit state does not apply above "
+     f"(h/tw)/(Lb/bf) = 2.3; {CHECKED}"),
+    ("aisc360.j10_4.unrestrained_limit", "1.7", "1", SANCTIONED, "AISC",
+     f"{AISC} Section J10.4(b): with the compression flange not restrained, the limit state does not apply above "
+     f"(h/tw)/(Lb/bf) = 1.7; {CHECKED}"),
+    ("aisc360.j10_5.coefficient", "24", "1", SANCTIONED, "AISC",
+     f"{AISC} Section J10.5, Eq. J10-8: web compression buckling 24 tw^3 sqrt(E Fyw) / h; {CHECKED}"),
+    ("aisc360.j10_6.coefficient", "0.60", "1", SANCTIONED, "AISC",
+     f"{AISC} Section J10.6, Eqs. J10-9 and J10-10: panel-zone shear 0.60 Fy dc tw; {CHECKED}"),
+    ("aisc360.j10_6.intercept", "1.4", "1", SANCTIONED, "AISC",
+     f"{AISC} Section J10.6, Eq. J10-10: the factor (1.4 - alpha Pr / Py); {CHECKED}"),
+    ("aisc360.j10_6.alpha_asd", "1.6", "1", SANCTIONED, "AISC",
+     f"{AISC} Section J10.6: alpha = 1.6 (ASD), 1.0 (LRFD); {CHECKED}"),
+    ("aisc360.f11.inelastic_intercept", "1.52", "1", SANCTIONED, "AISC",
+     f"{AISC} Section F11.2(b), Eq. F11-3: Cb [1.52 - 0.274 (Lb d/t^2)(Fy/E)] My; {CHECKED}"),
+    ("aisc360.f11.inelastic_slope", "0.274", "1", SANCTIONED, "AISC",
+     f"{AISC} Section F11.2(b), Eq. F11-3: Cb [1.52 - 0.274 (Lb d/t^2)(Fy/E)] My; {CHECKED}"),
+    ("aisc360.f11.inelastic_limit", "1.9", "1", SANCTIONED, "AISC",
+     f"{AISC} Section F11.2(b)-(c): Eq. F11-3 applies up to Lb d/t^2 = 1.9 E/Fy, Eq. F11-4 above; {CHECKED}"),
+    ("aisc360.f11.elastic", "1.9", "1", SANCTIONED, "AISC",
+     f"{AISC} Section F11.2(c), Eq. F11-5: Fcr = 1.9 E Cb / (Lb d/t^2); {CHECKED}"),
+    ("aisc_manual.p9.k_coefficient", "2.2", "1", SANCTIONED, "AISC",
+     f"{MANUAL} Part 9, Eqs. 9-19a and 9-19b: the plate buckling coefficient k = 2.2 (hc/c)^1.65 or 2.2 hc/c; {QUOTED}"),
+    ("aisc_manual.p9.k_exponent", "1.65", "1", SANCTIONED, "AISC",
+     f"{MANUAL} Part 9, Eq. 9-19a: k = 2.2 (hc/c)^1.65 for c/hc <= 1; {QUOTED}"),
+    ("aisc_manual.p9.k1_min", "1.61", "1", SANCTIONED, "AISC",
+     f"{MANUAL} Part 9, coped beams: k1 = f k >= 1.61; {QUOTED}"),
+    ("aisc_manual.p9.lambda_p", "0.475", "1", SANCTIONED, "AISC",
+     f"{MANUAL} Part 9, Eq. 9-18: lambda_p = 0.475 sqrt(k1 E / Fy); {QUOTED}"),
+    ("aisc_manual.p9.cb_intercept", "3", "1", SANCTIONED, "AISC",
+     f"{MANUAL} Part 9, Eq. 9-21: Cb = [3 + ln(Lb/d)](1 - dct/d) >= 1.84; {QUOTED}"),
+    ("aisc_manual.p9.cb_min", "1.84", "1", SANCTIONED, "AISC",
+     f"{MANUAL} Part 9, Eq. 9-21: Cb = [3 + ln(Lb/d)](1 - dct/d) >= 1.84; {QUOTED}"),
+    ("aisc_manual.p9.a_limit", "1.25", "1", SANCTIONED, "AISC",
+     f"{MANUAL} Part 9, Eq. 9-23: a' = min(a, 1.25 b) + d/2; {QUOTED}"),
+    ("aisc_manual.p9.tc", "4", "1", SANCTIONED, "AISC",
+     f"{MANUAL} Part 9, Eq. 9-30a: tc = sqrt(4 B b' / (phi p Fu)); {QUOTED}"),
+    ("aisc_manual.p9.tributary", "1.75", "1", SANCTIONED, "AISC",
+     f"{MANUAL} Part 9, Figure 9-4: the flange length a bolt's prying acts on reaches at most 1.75 b either side of "
+     f"it; {QUOTED} (Example II.D-1)"),
+    ("aisc_manual.p9.cope_length", "2", "1", JUDGED, MAINTAINERS,
+     f"{MANUAL} Part 9, coped beams: the method holds for a cope no longer than 2 d; {RECALLED}"),
+    ("aisc_manual.p9.cope_depth", "1/2", "1", JUDGED, MAINTAINERS,
+     f"{MANUAL} Part 9, coped beams: the method holds for a cope no deeper than d/2; {RECALLED}"),
+    ("aisc_manual.p10.extended_cb", "1.84", "1", SANCTIONED, "AISC",
+     f"{MANUAL} Part 10, extended single-plate connections: the plate's buckling by {AISC} Section F11 with "
+     f"Cb = 1.84; {QUOTED}"),
+    ("aisc_manual.p10.fnv_divisor", "0.90", "1", SANCTIONED, "AISC",
+     f"{MANUAL} Part 10, Eq. 10-7: Mmax = (Fnv / 0.90) Ab C'; {QUOTED}"),
+    ("aisc_manual.p10.ductile_allowance", "1/16", "m", SANCTIONED, "AISC",
+     f"{MANUAL} Part 10, Table 10-9: the plate or the beam web at most d/2 + 1/16 in thick; {QUOTED}"),
+    ("aisc_manual.p10.weld_ratio", "5/8", "1", SANCTIONED, "AISC",
+     f"{MANUAL} Part 10, single-plate connections: fillets on both faces of the plate, each at least 5/8 of its "
+     f"thickness (Companion II.A-17A); {QUOTED}"),
+    ("aisc_manual.p10.edge_ratio", "2", "1", SANCTIONED, "AISC",
+     f"{MANUAL} Part 10, conventional single-plate connections: the horizontal edge distance Leh at least 2d on the "
+     f"plate and the beam web (Companion II.A-17A); {QUOTED}"),
+    ("aisc_manual.p10.conventional_a", "3.5", "m", JUDGED, MAINTAINERS,
+     f"{MANUAL} Part 10, conventional single-plate connections: the bolt line at most 3.5 in from the weld line; "
+     f"{RECALLED}"),
+    ("aisc_manual.p10.conventional_rows", "12", "1", JUDGED, MAINTAINERS,
+     f"{MANUAL} Part 10, Table 10-9: conventional single-plate connections of 2 to 12 bolt rows; {RECALLED}"),
+    ("aisc_manual.t10_6.lever", "2.25", "1", JUDGED, MAINTAINERS,
+     f"{MANUAL} Part 10, the elastic method behind Table 10-6: R = v / (2 L^2) sqrt(L^2 + 20.25 e^2), so the "
+     f"horizontal force per length is 2.25 v e / L^2; {RECALLED}"),
+    ("aisc_manual.t10_8.eccentricity", "0.8", "1", JUDGED, MAINTAINERS,
+     f"{MANUAL} Part 10, Table 10-8: the reaction on a stiffened seat at 0.8 W from the support face; {RECALLED}"),
+    ("aisc_manual.p15.lambda_coefficient", "5", "1", SANCTIONED, "AISC",
+     f"{MANUAL} Part 15, Eq. 15-18: lambda = (b'/t) sqrt(Fy) / (5 sqrt(475 + 1120 (b'/a')^2)); {QUOTED}"),
+    ("aisc_manual.p15.lambda_intercept", "475", "1", SANCTIONED, "AISC",
+     f"{MANUAL} Part 15, Eq. 15-18: lambda = (b'/t) sqrt(Fy) / (5 sqrt(475 + 1120 (b'/a')^2)); {QUOTED}"),
+    ("aisc_manual.p15.lambda_slope", "1120", "1", SANCTIONED, "AISC",
+     f"{MANUAL} Part 15, Eq. 15-18: lambda = (b'/t) sqrt(Fy) / (5 sqrt(475 + 1120 (b'/a')^2)); {QUOTED}"),
+    ("aisc_manual.p15.q_intercept", "1.34", "1", SANCTIONED, "AISC",
+     f"{MANUAL} Part 15: Q = 1.34 - 0.486 lambda for 0.70 < lambda <= 1.41; {QUOTED}"),
+    ("aisc_manual.p15.q_slope", "0.486", "1", SANCTIONED, "AISC",
+     f"{MANUAL} Part 15: Q = 1.34 - 0.486 lambda for 0.70 < lambda <= 1.41; {QUOTED}"),
+    ("aisc_manual.p15.q_slender", "1.30", "1", SANCTIONED, "AISC",
+     f"{MANUAL} Part 15, Eq. 15-16: Q = 1.30 / lambda^2 for lambda > 1.41; {QUOTED}"),
+    ("aisc_manual.p15.lambda_slender", "1.41", "1", SANCTIONED, "AISC",
+     f"{MANUAL} Part 15: the free edge's slenderness at which Q turns from 1.34 - 0.486 lambda to 1.30 / lambda^2; "
+     f"{QUOTED}"),
+    ("lola.strict.length", "1/1000000", "m", JUDGED, MAINTAINERS,
+     f"{AISC} strict boundaries such as Section J10.2's 'x > d': LoLa's shift of a length guard a millionth of an "
+     "inch toward the excused side, so the stricter formula holds at the boundary and just past it, which only errs "
+     "safe; LoLa's encoding, not checked against the published text"),
+    ("lola.strict.ratio", "1/1000000000", "1", JUDGED, MAINTAINERS,
+     f"{AISC} strict boundaries such as Section F11.2(c)'s 'Lb d / t^2 > 1.9 E / Fy': LoLa's shift of a "
+     "dimensionless guard a billionth toward the excused side, which only errs safe; LoLa's encoding, not checked "
+     "against the published text"),
+)
+"""The numbers the provisions print, which limits.py and checks.py read by name (D5 of
+docs/principles.md): each with its clause and tag, a value LoLa has seen in the published
+text sanctioned, one it recalls judged."""
 
 
 STOCK_PLATES: tuple[str, ...] = (
@@ -417,7 +585,7 @@ def _stock_constants() -> list[Constant]:
 
 def _factor_constants() -> list[Constant]:
     rows = []
-    for name, text, unit, tag, owner, source in FACTORS:
+    for name, text, unit, tag, owner, source in (*FACTORS, *COEFFICIENTS):
         scale = {"1": Fraction(1), "Pa": KSI, "m": INCH}[unit]
         shown = {"1": "", "Pa": " ksi", "m": " in"}[unit]
         rows.append(Constant(name, _iv(_q(text) * scale), unit, tag, owner, source, f"{name} = {text}{shown}"))

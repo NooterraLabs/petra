@@ -4,7 +4,10 @@ published gate (docs/steel_gate.md, from `python scripts/steel_gate.py`). Also t
 fixes the generator, the twin and the breaker found: a hanger's support flange checked for
 prying, slip-critical joints checked for combined tension and shear (J3.9), a slender seat
 stiffener a FAIL, each bolt's prying tributary by Manual Figure 9-4, a slot's length in
-prying's delta, and a seat's leg tearing toward its top edge."""
+prying's delta, a seat's leg tearing toward its top edge, and a seat stiffener's welds
+taking their end-loaded length (J2.2b(d)); and those the red-team pass found: prying under
+shear working from F'nt, declared fillers (J5.2), a conventional plate's 2d edges, a plate
+welded on one face, and a seat stiffener at least as thick as the beam web."""
 import re
 import unittest
 from fractions import Fraction
@@ -169,6 +172,74 @@ class DeckFixes(unittest.TestCase):
             text = gen.source("s", "seated", "lrfd", lines, Fraction(20))
             return max(v.utilisation for (m, _), v in gen.checks(text, REGISTRY).items() if m == "bolts")
         self.assertGreater(bolts(1), bolts(2))
+
+    def test_a_long_stiffener_weld_counts_its_end_loaded_length(self):
+        # J2.2b(d): a seat stiffener's welds are end-loaded (Commentary J2.2b); past 100 w only
+        # beta l counts (Eq J2-1). At 75 w the check is excused; at 128 w it governs.
+        def weld(length):
+            lines = ["  beam W21x44 grade steel.A992", "  support W14x90 flange grade steel.A992",
+                     "  plate steel.A36 thickness 0.375 inch", "  stiffener steel.A36 thickness 0.5 inch",
+                     "  stiffener_width 6 inch", f"  stiffener_length {length} inch", "  setback 0.75 inch",
+                     "  weld electrode.E70 size 0.1875 inch sides 2",
+                     "  top_angle L4x4x1_4 grade steel.A36 outstanding long"]
+            text = gen.source("s", "stiffened_seat", "lrfd", lines, Fraction(40))
+            return {v.what: v.utilisation for (m, _), v in gen.checks(text, REGISTRY).items() if m == "weld"}
+        short, long = weld(14), weld(24)
+        end_loaded = next(w for w in long if "end-loaded" in w)
+        self.assertEqual(short[end_loaded], 0.0)
+        self.assertGreater(long[end_loaded], max(u for w, u in long.items() if w != end_loaded))
+
+    def tab(self, *edits: tuple[str, str]) -> str:
+        lines = ["  beam W16x26 grade steel.A992", "  support W14x90 web grade steel.A992",
+                 "  plate steel.A36 thickness 0.375 inch", "  bolts bolt_group.120 diameter 0.75 inch threads included",
+                 "  rows 3", "  pitch 3 inch", "  edge_vertical 1.5 inch", "  plate_edge 1.5 inch", "  bolt_line 3 inch",
+                 "  beam_edge 1.75 inch", "  top 3 inch", "  weld electrode.E70 size 0.25 inch sides 2"]
+        for old, new in edits:
+            self.assertIn(old, lines)
+            lines = [new if x == old else x for x in lines]
+        return gen.source("t", "shear_tab", "lrfd", lines, Fraction(30))
+
+    @staticmethod
+    def values(text: str, mode: str) -> dict[str, float]:
+        return {v.what: v.utilisation for (m, _), v in gen.checks(text, REGISTRY).items() if m == mode}
+
+    def test_prying_under_shear_works_from_the_tension_j3_8_leaves(self):
+        # Companion II.A-1B: B = phi F'nt Ab. A WT7x45 under 78 kip of tension and 44 kip of
+        # shear: 1.04 by the Manual, 0.78 with B = phi Fnt Ab as before.
+        lines = ["  tee WT7x45 grade steel.A992", "  support W14x90 flange grade steel.A992",
+                 "  bolts bolt_group.120 diameter 0.75 inch threads included joint pretensioned", "  rows 2",
+                 "  pitch 3 inch", "  tee_gauge 4 inch", "  edge_vertical 1.5 inch"]
+        sheared = gen.source("h", "hanger", "lrfd", lines, Fraction(78), (("shear", Fraction(44, 78)),))
+        plain = gen.source("h", "hanger", "lrfd", lines, Fraction(78))
+        self.assertAlmostEqual(max(self.values(sheared, "prying").values()), 1.038, places=3)
+        self.assertLess(max(self.values(plain, "prying").values()), 0.8)
+
+    def test_declared_fillers_take_j5_2s_least_factor(self):
+        plain = self.values(self.tab(), "bolts")
+        filled = self.values(self.tab(("  bolts bolt_group.120 diameter 0.75 inch threads included",
+                                       "  bolts bolt_group.120 diameter 0.75 inch threads included fillers one")), "bolts")
+        self.assertGreater(max(filled.values()), max(plain.values()))
+
+    def test_a_conventional_plate_keeps_2d_horizontal_edges(self):
+        # Companion II.A-17A: Leh >= 2d on the plate and on the beam web
+        u = self.values(self.tab(("  plate_edge 1.5 inch", "  plate_edge 1.125 inch")), "ductility")
+        self.assertAlmostEqual(u["plate: horizontal edge distance at least 2d (Manual Part 10)"], 4 / 3, places=6)
+
+    def test_a_plate_welded_on_one_face_is_outside_the_single_plate_method(self):
+        verdict, modes = status(self.tab(("  weld electrode.E70 size 0.25 inch sides 2", "  weld electrode.E70 size 0.25 inch sides 1")))
+        self.assertNotEqual(verdict, "PASS")
+        self.assertNotIn(modes.get("ductility"), ("pass", "fail"))
+
+    def test_a_seat_stiffener_is_as_thick_as_the_beam_web_scaled_by_yield(self):
+        # Companion II.A-14: ts >= tw Fy,beam / Fy,stiffener; a W18x50 web (0.355 in) over an
+        # A36 stiffener wants 0.493 in
+        lines = ["  beam W18x50 grade steel.A992", "  support W14x90 flange grade steel.A992",
+                 "  plate steel.A36 thickness 0.375 inch", "  stiffener steel.A36 thickness 0.375 inch",
+                 "  stiffener_width 4 inch", "  stiffener_length 10 inch", "  setback 0.5 inch",
+                 "  weld electrode.E70 size 0.25 inch sides 2", "  top_angle L4x4x1_4 grade steel.A36 outstanding long"]
+        u = self.values(gen.source("s", "stiffened_seat", "lrfd", lines, Fraction(20)), "compression")
+        rule = next(w for w in u if "beam web's thickness" in w)
+        self.assertAlmostEqual(u[rule], 0.355 * 50 / 36 / 0.375, places=6)
 
     def test_a_hanger_hangs_from_a_flange(self):
         text = self.hanger("WT9x25", "W21x62").replace("W21x62 flange", "W21x62 web")

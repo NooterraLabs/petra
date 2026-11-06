@@ -17,11 +17,11 @@ Treatments: **check** (the modes whose checks encode it), **rule** (enforced whe
 | J1.9 | Welded Alterations to Structures with Existing Rivets or Bolts | excluded |  | existing structures are out of scope (§4) |
 | J1.10 | High-Strength Bolts in Combination with Existing Rivets | excluded |  | existing structures and rivets are out of scope (§4) |
 | J2.1 | Groove Welds | excluded |  | no groove welds in v1.0; CJP flange welds are v1.1 (docs/steel_connections.md §3) |
-| J2.2a | Fillet Welds: Effective Area | check | `weld` | effective throat 0.707 w of an equal-leg fillet; the end-loaded reduction of Eq J2-1 |
-| J2.2b | Fillet Welds: Limitations | check | `fillet_size` | minimum size (Table J2.4), length at least 4 w, maximum along a lapped part's edge; welds are continuous (no intermittent fillets); a lapped bracket's lap is its weld return |
+| J2.2a | Fillet Welds: Effective Area | check | `weld` | effective throat 0.707 w of an equal-leg fillet |
+| J2.2b | Fillet Welds: Limitations | check | `fillet_size`, `weld` | minimum size (Table J2.4), length at least 4 w, maximum along a lapped part's edge; welds are continuous (no intermittent fillets); a lapped bracket's lap is its weld return; (d) the end-loaded length of Eq J2-1 for a seat stiffener's welds, which the reaction loads from their end as at a bearing stiffener; Commentary J2.2b counts the welds of beam web angles and shear plates as not end-loaded, and a seat angle's welds, along a leg of at most 12 in (the Shapes Database's longest) with a fillet of at least Table J2.4's least size, 1/8 in, never pass 100 w; a smaller fillet fails fillet_size |
 | J2.3 | Plug and Slot Welds | excluded |  | not used by the v1.0 catalogue |
-| J2.4 | Strength | check | `weld`, `weld_base_metal` |  |
-| J2.5 | Combination of Welds | check | `weld` | longitudinal and transverse lines of one group combined by Eq J2-6 |
+| J2.4 | Strength | check | `weld`, `weld_base_metal` | Eq J2-4 with kds = 1: the directional increase of Eq J2-5 and the group rule of Eq J2-6 are permitted, not required, and not taken, which errs safe |
+| J2.5 | Combination of Welds | excluded |  | v1.0's welded joints are fillet welds only; no joint combines weld types |
 | J2.6 | Filler Metal Requirements | premise | `weld` | matching filler metal (Table J2.5), stated in the weld model |
 | J2.7 | Mixed Weld Metal | premise | `weld` | one electrode per joint as declared; no notch-toughness requirement applies to v1.0's statically loaded shear connections |
 | J3.1 | Common Bolts | rule |  | A307 bolts are installed snug-tight (lower.py rejects another joint type) |
@@ -44,7 +44,7 @@ Treatments: **check** (the modes whose checks encode it), **rule** (enforced whe
 | J4.4 | Strength of Elements in Compression | check | `compression`, `bracket_edge` | a seat stiffener; a shaped bracket's free edge takes J4.4's factors with the Manual's Q |
 | J4.5 | Strength of Elements in Flexure | check | `flexural_yield`, `flexural_rupture`, `cope_buckling`, `plate_buckling`, `seat_flexure`, `bracket_edge` | connecting plates, coped webs (Manual Part 9), extended plates (F11), seats, bracket edges (Part 15) |
 | J5.1 | Fillers in Welded Connections | excluded |  | no fillers in v1.0's welded joints |
-| J5.2 | Fillers in Bolted Bearing-Type Connections | premise | `slip` | fillers are declared on slip-critical joints only (hf of Eq J3-4); a bearing-type joint is taken to have no filler over 1/4 in |
+| J5.2 | Fillers in Bolted Bearing-Type Connections | check | `bolts`, `bolt_combined` | a declared filler takes (a)'s least factor, 0.85, on the bolts' shear strength (the grammar gives no thickness), in slip-critical joints' bearing checks too; an undeclared filler is taken to be absent |
 | J6 | Splices | excluded |  | beam and column splices are v1.1 (docs/steel_connections.md §3) |
 | J7 | Bearing Strength | check | `bearing` | a stiffened seat's stiffener on the beam flange |
 | J8 | Column Bases and Bearing on Concrete | excluded |  | base plates are v1.1 (docs/steel_connections.md §3) |
@@ -66,10 +66,10 @@ Treatments: **check** (the modes whose checks encode it), **rule** (enforced whe
 | K5 | Welds of Plates and Branches to HSS | excluded |  | v1.2, Chapter K HSS connections (docs/steel_connections.md §3) |
 | RCSC 4 | Joint types and installation | check | `joint_type` | at least snug-tight; Group 150 and 200 bolts in tension pretensioned; the holes that need a slip-critical joint are J3.3's (hole_use) |
 | Manual Part 7 | Entering and tightening clearances | check | `clearance` | the socket allowance is a judged registry row |
-| Manual Part 9 | Coped beams | check | `cope_buckling` |  |
-| Manual Part 10 | Single-plate, seated and tee connections | check | `ductility`, `extended_ductility`, `plate_buckling`, `seat_flexure`, `compression` | a seat stiffener's width-to-thickness limit is checked with its compression |
+| Manual Part 9 | Coped beams and prying action | check | `cope_buckling`, `prying` | prying by the T-stub model with each bolt's tributary length by Figure 9-4 |
+| Manual Part 10 | Single-plate, seated and tee connections | check | `ductility`, `extended_ductility`, `plate_buckling`, `seat_flexure`, `compression`, `flexural_yield` | a seat stiffener's width-to-thickness limit is checked with its compression; an extended plate's shear and flexural yielding interaction (Eq 10-8) with its flexural yielding |
 | Manual Part 15 | Bracket plates | check | `bracket_edge` |  |
 | Shop deck | Stock plate thicknesses and bolt lengths | rule |  | a fixed plate thickness must be stocked (registry shop_deck.plate.*), checked at lowering; bolt lengths are an unchecked premise of the clearance model |
 | Connection kinds | Force components without a checked path | check | `load_path` | an axial force on a v1.0 shear connection requires the unmodelled load-path mode: UNKNOWN |
 
-AISC 360-22 Chapters J and K: 58 provisions, 28 check, 5 rule, 6 premise, 19 excluded.
+AISC 360-22 Chapters J and K: 58 provisions, 28 check, 5 rule, 5 premise, 20 excluded.
