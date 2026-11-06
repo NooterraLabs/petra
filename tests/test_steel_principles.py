@@ -26,7 +26,7 @@ from pathlib import Path
 
 from petra.models.steel import generate as gen
 from petra.models.steel import trace
-from petra.models.steel.vocab import MODELS, MODES, UNBOUNDED
+from petra.models.steel.vocab import MODELS, MODES, TRUSTED, UNBOUNDED
 from petra.registry import build_registry
 from petra.registry import steel as deck_rows
 
@@ -137,6 +137,15 @@ class EveryModelHasValidityRowsOrSaysWhyNot(unittest.TestCase):
 
     def test_every_reason_names_a_mode(self):
         self.assertEqual(set(UNBOUNDED) - set(MODES), set())
+
+
+class EveryBuilderIsInThePremiseHash(unittest.TestCase):
+    """A builder decides verdicts (path.py, for one, decides which limit states coverage
+    demands), so the steel premise's source hash reads it: editing one changes every steel
+    premise label. vocab.TRUSTED is the hash's list, BUILDERS this file's."""
+
+    def test_the_trusted_modules_are_the_builders(self):
+        self.assertEqual(set(TRUSTED), set(BUILDERS))
 
 
 class AbsentReadingsHoldForEveryGrade(unittest.TestCase):

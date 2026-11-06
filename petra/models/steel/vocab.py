@@ -2,8 +2,8 @@
 
 One FailureMode per limit state, each with one ModelSpec naming its clause. The model
 premise's source_hash covers every trusted module of the package (lower, limits, checks,
-build, vocab, domain) and the mechanics layer under them (petra/mechanics), so editing any
-of the physics changes every steel premise label.
+build, vocab, domain, path) and the mechanics layer under them (petra/mechanics), so
+editing any of the physics changes every steel premise label.
 A mode's validity rows are the method's applicability limits the kernel decides over the
 design's box (checks.ROWS states each). A mode with no row says why in UNBOUNDED, and its
 model's validity words end with that reason (docs/principles.md D3).
@@ -17,9 +17,11 @@ from typing import Mapping
 from ... import mechanics
 from ..base import FailureMode, ModelSpec, ValidityRow
 
-TRUSTED = ("lower", "limits", "checks", "build", "vocab", "domain")
-"""The package modules whose source is the physics. generate, twin, faults, breaker and
-package are tooling and cannot change a verdict."""
+TRUSTED = ("lower", "limits", "checks", "build", "vocab", "domain", "path")
+"""The package modules whose source is the physics, path's limit lists included (they
+decide what coverage demands). generate, twin, faults, breaker and package are tooling
+and cannot change a verdict. tests/test_steel_principles.py holds this to its builder
+list."""
 
 HASHED = (*(os.path.join(os.path.dirname(os.path.abspath(__file__)), f"{name}.py") for name in TRUSTED),
           *mechanics.SOURCES)
