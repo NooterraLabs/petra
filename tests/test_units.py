@@ -3,8 +3,8 @@ at the parse boundary. Owner: L."""
 import unittest
 from fractions import Fraction
 
-from lola.kernel import Interval
-from lola.units import (
+from petra.kernel import Interval
+from petra.units import (
     AREA,
     CURRENT,
     DIMENSIONLESS,

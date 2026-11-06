@@ -4,7 +4,7 @@ calculation, the J10 guards excuse exactly the checks they should, every example
 connection passes, and a corrupted design fails on the check it breaks.
 
 Published values (AISC Steel Construction Manual, 16th ed., Parts 7 and 8), each recomputed
-from the registry's rows through lola.models.steel.limits, LRFD:
+from the registry's rows through petra.models.steel.limits, LRFD:
     3/4 in Group 120 bolt, single shear: threads included 17.9 kips, excluded 22.5 kips
     3/4 in Group 120 bolt, tension: 29.8 kips
     3/4 in Group 120 bolt, slip, Class A, standard holes, one plane: 9.49 kips
@@ -12,7 +12,7 @@ from the registry's rows through lola.models.steel.limits, LRFD:
     tearout of a 3/4 in bolt in a standard hole, edge 1 1/4 in, Fu = 58 ksi: 44.0 kips/in
     E70 fillet weld, per sixteenth of an inch of leg, per inch of length: 1.392 kips/in
 
-Hand values for examples/steel/shear_tab.lola (W18x50 beam, 3/8 in A36 plate, four 3/4 in
+Hand values for examples/steel/shear_tab.petra (W18x50 beam, 3/8 in A36 plate, four 3/4 in
 Group 120 bolts at 3 in, a = 3 in, V = 45 kips):
     elastic method, e = a: Ip = 4 (15 x 9) / 12 = 45 in2, M = 135 kip-in,
         corner bolt fx = 135 x 4.5 / 45 = 13.5, fy = 45 / 4 = 11.25 -> 17.573 kips
@@ -25,16 +25,16 @@ import unittest
 from fractions import Fraction
 from pathlib import Path
 
-from lola.kernel import enclose
-from lola.lang import load_design, parse_design
-from lola.models.base import NeedsInputBound
-from lola.models.steel import calc
-from lola.models.steel import limits as L
-from lola.models.steel.checks import block_paths
-from lola.pipeline import check_design
-from lola.registry import build_registry
-from lola.solvers import SolverSource
-from lola.units import CUSTOMARY
+from petra.kernel import enclose
+from petra.lang import load_design, parse_design
+from petra.models.base import NeedsInputBound
+from petra.models.steel import calc
+from petra.models.steel import limits as L
+from petra.models.steel.checks import block_paths
+from petra.pipeline import check_design
+from petra.registry import build_registry
+from petra.solvers import SolverSource
+from petra.units import CUSTOMARY
 
 REGISTRY = build_registry()
 STEEL = Path(__file__).resolve().parents[1] / "examples" / "steel"
@@ -54,12 +54,12 @@ def value(expr, per=KIP) -> float:
 
 
 def design(name: str, *edits: tuple[str, str], extra: str = ""):
-    text = (STEEL / f"{name}.lola").read_text(encoding="utf-8")
+    text = (STEEL / f"{name}.petra").read_text(encoding="utf-8")
     for old, new in edits:
         if old not in text:
-            raise AssertionError(f"{old!r} is not in {name}.lola")
+            raise AssertionError(f"{old!r} is not in {name}.petra")
         text = text.replace(old, new)
-    return parse_design(text + extra, f"{name}.lola", REGISTRY)
+    return parse_design(text + extra, f"{name}.petra", REGISTRY)
 
 
 def outcomes(d) -> dict[str, str]:
@@ -131,7 +131,7 @@ class ElasticMethod(unittest.TestCase):
 class ShearTabHandValues(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.d = load_design(STEEL / "shear_tab.lola", REGISTRY)
+        cls.d = load_design(STEEL / "shear_tab.petra", REGISTRY)
 
     def test_the_most_loaded_bolt_against_the_weakest(self):
         (bolts,) = checks(self.d, "st1", "bolts").values()
@@ -171,7 +171,7 @@ class SeatBearingLength(unittest.TestCase):
         # W16x26: J10-3 needs 30 / (50 x 0.25) - 2.5 x 0.747 = 0.53 in; J10-5a needs
         # (30 / 0.75 / 35.36 - 1) / (0.25 / 0.345)^1.5 x 15.7 / 3 = 1.11 in, which governs.
         # Arm = 0.5 + 0.25 (underrun) + 1.113 / 2 - (0.75 + 0.375) = 0.181 in; M = 30 x 0.181 = 5.43 kip-in.
-        d = load_design(STEEL / "seated.lola", REGISTRY)
+        d = load_design(STEEL / "seated.petra", REGISTRY)
         (flexure,) = checks(d, "seat1", "seat_flexure").values()
         self.assertAlmostEqual(flexure.demand, 5.43, places=1)
         self.assertAlmostEqual(flexure.available, 0.9 * 36 * 8 * 0.75 ** 2 / 4, places=6)
@@ -202,8 +202,8 @@ class PryingClosedForm(unittest.TestCase):
                 self.assertAlmostEqual(float(enclose(mine, {}).lo), self.manual(*args), delta=1e-6 * self.manual(*args))
 
     def test_an_interval_b_encloses_exactly(self):
-        from lola.kernel import Interval
-        from lola.kernel.terms import Sym
+        from petra.kernel import Interval
+        from petra.kernel.terms import Sym
         b = Sym("b_tension")
         fixed = [L.c(x) for x in (Fraction(3, 4), Fraction(13, 16), Fraction(3), Fraction(7, 4), Fraction(2),
                                   Fraction(1, 2), Fraction(65), Fraction(9, 10))]
@@ -230,7 +230,7 @@ class J10Guards(unittest.TestCase):
 
 class Verdicts(unittest.TestCase):
     def test_every_example_connection_passes(self):
-        for path in sorted(STEEL.glob("*.lola")):
+        for path in sorted(STEEL.glob("*.petra")):
             with self.subTest(example=path.name):
                 found = outcomes(load_design(path, REGISTRY))
                 self.assertTrue(found)

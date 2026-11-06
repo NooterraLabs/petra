@@ -19,11 +19,11 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from lola.models.steel import breaker as B  # noqa: E402
-from lola.models.steel import faults as F  # noqa: E402
-from lola.models.steel import gate as G  # noqa: E402
-from lola.models.steel.generate import generate  # noqa: E402
-from lola.registry import build_registry  # noqa: E402
+from petra.models.steel import breaker as B  # noqa: E402
+from petra.models.steel import faults as F  # noqa: E402
+from petra.models.steel import gate as G  # noqa: E402
+from petra.models.steel.generate import generate  # noqa: E402
+from petra.registry import build_registry  # noqa: E402
 
 
 def main(argv: list[str] | None = None) -> int:

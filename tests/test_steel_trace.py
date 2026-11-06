@@ -4,8 +4,8 @@ every mode the deck has is named by a provision; the published table is current.
 import unittest
 from pathlib import Path
 
-from lola.models.steel import trace
-from lola.models.steel.vocab import MODELS, MODES
+from petra.models.steel import trace
+from petra.models.steel.vocab import MODELS, MODES
 
 DOC = Path(__file__).resolve().parents[1] / "docs" / "steel_traceability.md"
 
@@ -43,7 +43,7 @@ class Traceability(unittest.TestCase):
 
     def test_the_published_table_is_current(self):
         self.assertEqual(DOC.read_text(encoding="utf-8"), trace.render(),
-                         "docs/steel_traceability.md is stale: run python -m lola.models.steel.trace")
+                         "docs/steel_traceability.md is stale: run python -m petra.models.steel.trace")
 
 
 if __name__ == "__main__":

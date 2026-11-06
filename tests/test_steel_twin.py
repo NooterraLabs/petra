@@ -1,6 +1,6 @@
 """The twin elaborator against the deck (docs/steel_connections.md sections 8 and 9).
 
-lola/models/steel/twin.py evaluates every steel limit state a second time, written from
+petra/models/steel/twin.py evaluates every steel limit state a second time, written from
 the method statements in vocab.py and the sources without reading the deck's checks. For
 every example design and the variants below, each mode the deck owes is compared: the
 twin's governing utilisation against the largest of the deck's values that are not
@@ -16,14 +16,14 @@ import glob
 import os
 import unittest
 
-from lola.lang import load_design, parse_design
-from lola.models.steel import calc, domain, twin
-from lola.registry import build_registry
+from petra.lang import load_design, parse_design
+from petra.models.steel import calc, domain, twin
+from petra.registry import build_registry
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TOLERANCE = 1e-6
 
-_HEAD = 'lola 0\n\ndesign "steel-twin-{name}" {{\n  owner "s.engineer@example.org"\n}}\n\n'
+_HEAD = 'petra 0\n\ndesign "steel-twin-{name}" {{\n  owner "s.engineer@example.org"\n}}\n\n'
 _SIGN = '  signed "s.engineer@example.org" source "twin variant"\n}}\n'
 
 
@@ -687,7 +687,7 @@ KNOWN: dict[tuple[str, str, str], str] = {}
 
 def _designs(registry):
     out = []
-    for path in sorted(glob.glob(os.path.join(ROOT, "examples", "steel", "*.lola"))):
+    for path in sorted(glob.glob(os.path.join(ROOT, "examples", "steel", "*.petra"))):
         out.append((os.path.basename(path)[:-5], load_design(path, registry)))
     for name, text in VARIANTS.items():
         out.append((name, parse_design(text, f"<twin:{name}>", registry)))

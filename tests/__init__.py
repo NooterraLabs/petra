@@ -1,1 +1,1 @@
-"""LoLa tests. unittest only: python -m unittest discover -s tests -t ."""
+"""Petra tests. unittest only: python -m unittest discover -s tests -t ."""

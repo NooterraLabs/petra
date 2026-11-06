@@ -1,0 +1,26 @@
+petra 0
+
+# A stiffened seated connection: a W21x44 beam on a 3/8 in seat plate carried by a 1/2 in
+# stiffener welded to the column flange.
+
+design "steel-stiffened-seat" {
+  owner "s.engineer@example.org"
+}
+
+stiffened_seat ss1 {
+  basis lrfd
+  beam W21x44 grade steel.A992
+  support W14x90 flange grade steel.A992
+  plate steel.A36 thickness 0.375 inch
+  stiffener steel.A36 thickness 0.5 inch
+  stiffener_width 5 inch
+  stiffener_length 12 inch
+  setback 0.5 inch
+  weld electrode.E70 size 0.3125 inch sides 2
+  top_angle L4x4x1_4 grade steel.A36 outstanding long
+}
+
+load gravity {
+  on ss1 shear in [0 kip, 60 kip]
+  signed "s.engineer@example.org" source "beam reaction, LRFD 1.2D + 1.6L, calc SC-3"
+}

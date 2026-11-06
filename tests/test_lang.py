@@ -1,12 +1,12 @@
-"""The .lola front end: text -> Design IR, and every rejection the parse boundary owns.
+"""The .petra front end: text -> Design IR, and every rejection the parse boundary owns.
 Owner: L."""
 import dataclasses
 import unittest
 from fractions import Fraction
 from pathlib import Path
 
-from lola import models
-from lola.ir import (
+from petra import models
+from petra.ir import (
     Attr,
     Bound,
     Claim,
@@ -31,11 +31,11 @@ from lola.ir import (
     Vec,
     Waiver,
 )
-from lola.kernel import Interval
-from lola.lang import LolaSyntaxError, LoweringError, load_design, parse_design
-from lola.premises import Tag
-from lola.registry import Corrosivity, Environment, Registry, Stated
-from lola.units import AREA, CURRENT, DIMENSIONLESS, FORCE, LENGTH, STRESS, TEMPERATURE, TORQUE, VOLTAGE, Quantity
+from petra.kernel import Interval
+from petra.lang import LolaSyntaxError, LoweringError, load_design, parse_design
+from petra.premises import Tag
+from petra.registry import Corrosivity, Environment, Registry, Stated
+from petra.units import AREA, CURRENT, DIMENSIONLESS, FORCE, LENGTH, STRESS, TEMPERATURE, TORQUE, VOLTAGE, Quantity
 
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples"
 
@@ -50,14 +50,14 @@ def environments_only(*ids: str) -> Registry:
 
 REGISTRY = environments_only("indoor_dry", "outdoor_c3", "marine_c5")
 
-HEADER = 'lola 0\ndesign "d" {\n  owner "o@example.org"\n  environment indoor_dry\n}\n'
+HEADER = 'petra 0\ndesign "d" {\n  owner "o@example.org"\n  environment indoor_dry\n}\n'
 HOOK = 'demand hook {\n  capacity in [36 kN, 40 kN] measured "qa@example.org" source "PL-1"\n}\n'
 LIFT = 'load lift {\n  on hook force in [0 kN, 40 kN] mean 10 kN\n  signed "ops@example.org" source "duty log"\n}\n'
 PROOF = 'tests proof {\n  on hook trials 300 failures 0 at 36 kN\n  measured "qa@example.org" source "batch 9"\n}\n'
 
 
 def lower_text(body: str, header: str = HEADER) -> Design:
-    return parse_design(header + body, "t.lola", REGISTRY)
+    return parse_design(header + body, "t.petra", REGISTRY)
 
 
 def q(x, dim) -> Quantity:
@@ -80,7 +80,7 @@ class Case(unittest.TestCase):
     def assertProblem(self, body: str, line: int, col: int, *fragments: str, header: str = HEADER) -> LoweringError:
         with self.assertRaises(LoweringError) as ctx:
             lower_text(body, header)
-        at = [p for p in ctx.exception.problems if p.startswith(f"t.lola:{line}:{col}: ")]
+        at = [p for p in ctx.exception.problems if p.startswith(f"t.petra:{line}:{col}: ")]
         self.assertTrue(at, f"no problem at {line}:{col} in {ctx.exception.problems}")
         for fragment in fragments:
             self.assertIn(fragment, at[0])
@@ -88,14 +88,14 @@ class Case(unittest.TestCase):
 
     def assertSyntax(self, text: str, line: int, col: int) -> None:
         with self.assertRaises(LolaSyntaxError) as ctx:
-            parse_design(text, "t.lola", REGISTRY)
-        self.assertEqual((ctx.exception.path, ctx.exception.line, ctx.exception.col), ("t.lola", line, col), str(ctx.exception))
-        self.assertTrue(str(ctx.exception).startswith(f"t.lola:{line}:{col}: "))
+            parse_design(text, "t.petra", REGISTRY)
+        self.assertEqual((ctx.exception.path, ctx.exception.line, ctx.exception.col), ("t.petra", line, col), str(ctx.exception))
+        self.assertTrue(str(ctx.exception).startswith(f"t.petra:{line}:{col}: "))
 
 
 class Examples(Case):
     def paths(self) -> list[Path]:
-        paths = sorted(EXAMPLES.rglob("*.lola"))
+        paths = sorted(EXAMPLES.rglob("*.petra"))
         self.assertTrue(any(p.parent.name == "families" for p in paths), "examples/families is swept too")
         return paths
 
@@ -121,7 +121,7 @@ class Examples(Case):
                     parse_design(broken, str(path), REGISTRY)
 
     def test_truss_pass_lowers_to_generic_attributes_and_si_loads(self):
-        d = load_design(EXAMPLES / "truss_pass.lola", REGISTRY)
+        d = load_design(EXAMPLES / "truss_pass.petra", REGISTRY)
         self.assertEqual((d.name, d.owner, d.environment, d.is_family), ("warren-footbridge-panel", "a.reviewer@example.org", "indoor_dry", False))
         self.assertEqual(d.components["frame"].kind, "truss")
         self.assertEqual(attr(d, "frame", "section"), (Ref(("chs", "60_3x3_2")),))
@@ -141,7 +141,7 @@ class Examples(Case):
         self.assertEqual((stress.qoi, stress.rel, stress.bound), (QoiRef(("frame", "diag_ad"), "stress"), Rel.LE, q(235_000_000, STRESS)))
 
     def test_bolt_unknown_keeps_digit_led_registry_ids_and_measured_bounds(self):
-        d = load_design(EXAMPLES / "bolt_unknown.lola", REGISTRY)
+        d = load_design(EXAMPLES / "bolt_unknown.petra", REGISTRY)
         self.assertEqual(d.environment, "marine_c5")
         self.assertEqual(attr(d, "bracket", "bolt"), (Ref(("bolt", "M12_A4_70")), Ref(("count",)), Fixed(q(1, DIMENSIONLESS))))
         self.assertEqual(attr(d, "bracket", "plate"), (Ref(("aluminium", "6061_T6")), Ref(("thickness",)), Fixed(q(Fraction(1, 100), LENGTH))))
@@ -151,7 +151,7 @@ class Examples(Case):
         self.assertEqual((nut_factor.range, nut_factor.kind), (rng(Fraction(4, 25), Fraction(11, 50), DIMENSIONLESS), InputKind.MEASURED))
 
     def test_circuit_pass_has_a_signed_ambient_and_port_connections(self):
-        d = load_design(EXAMPLES / "circuit_pass.lola", REGISTRY)
+        d = load_design(EXAMPLES / "circuit_pass.petra", REGISTRY)
         self.assertEqual(
             unspanned(d.ambient),
             Input("ambient", rng(10, 40, TEMPERATURE), Signature("site.manager@example.org", "site survey 2026-09"), InputKind.ASSUMED, None),
@@ -164,7 +164,7 @@ class Examples(Case):
         self.assertEqual(d.claims[1].bound, q(Fraction(3, 100), DIMENSIONLESS))
 
     def test_hook_uncertain_pairs_each_probability_method_with_its_event(self):
-        d = load_design(EXAMPLES / "hook_uncertain.lola", REGISTRY)
+        d = load_design(EXAMPLES / "hook_uncertain.petra", REGISTRY)
         self.assertEqual(d.loads["lift"].entries[0].value.mean, q(10000, FORCE))
         proof = d.tests["proof"]
         self.assertEqual((proof.subject, proof.trials, proof.failures, proof.level), (("hook",), 300, 0, q(36000, FORCE)))
@@ -175,7 +175,7 @@ class Examples(Case):
         self.assertEqual(d.claims, ())
 
     def test_the_family_example_is_a_family_of_param_refs(self):
-        d = load_design(EXAMPLES / "families" / "cu_pvc_clipped.lola", REGISTRY)
+        d = load_design(EXAMPLES / "families" / "cu_pvc_clipped.petra", REGISTRY)
         self.assertTrue(d.is_family)
         self.assertEqual(tuple(d.params), ("size", "insulation", "run", "draw", "amb"))
         self.assertEqual(d.params["size"].range, rng(Fraction(1, 400000), Fraction(1, 62500), AREA))
@@ -188,17 +188,17 @@ class Lowering(Case):
     def test_a_component_keeps_its_positions(self):
         d = lower_text(HOOK)
         hook = d.components["hook"]
-        self.assertEqual((hook.span, hook.attrs[0].span), (Span("t.lola", 6, 1), Span("t.lola", 7, 3)))
+        self.assertEqual((hook.span, hook.attrs[0].span), (Span("t.petra", 6, 1), Span("t.petra", 7, 3)))
         self.assertEqual(
             hook.attrs[0].args,
-            (Bound(rng(36000, 40000, FORCE), Signature("qa@example.org", "PL-1"), InputKind.MEASURED, Span("t.lola", 7, 12)),),
+            (Bound(rng(36000, 40000, FORCE), Signature("qa@example.org", "PL-1"), InputKind.MEASURED, Span("t.petra", 7, 12)),),
         )
 
     def test_any_attribute_line_of_a_registered_kind_reaches_its_domain_typed(self):
         d = lower_text('param p in [1 m, 2 m]\ntruss frame {\n  anything 3 kN foo.bar "x y" (1 m, 2 m) : -- -> param p\n}\n')
         self.assertEqual(
             d.components["frame"].attrs,
-            (Attr("anything", (Fixed(q(3000, FORCE)), Ref(("foo", "bar")), Text("x y"), Vec((q(1, LENGTH), q(2, LENGTH))), Punct(":"), Punct("--"), Punct("->"), ParamRef("p")), Span("t.lola", 8, 3)),),
+            (Attr("anything", (Fixed(q(3000, FORCE)), Ref(("foo", "bar")), Text("x y"), Vec((q(1, LENGTH), q(2, LENGTH))), Punct(":"), Punct("--"), Punct("->"), ParamRef("p")), Span("t.petra", 8, 3)),),
         )
 
     def test_comments_blank_lines_and_bracketed_line_breaks_are_layout(self):
@@ -206,11 +206,11 @@ class Lowering(Case):
         self.assertEqual(d.components["hook"].attrs[0].args[0].range, rng(36000, 40000, FORCE))
 
     def test_crlf_line_ends_lower_like_lf(self):
-        crlf = parse_design((HEADER + HOOK).replace("\n", "\r\n"), "t.lola", REGISTRY)
+        crlf = parse_design((HEADER + HOOK).replace("\n", "\r\n"), "t.petra", REGISTRY)
         self.assertEqual(crlf.components["hook"], lower_text(HOOK).components["hook"])
 
     def test_string_escapes(self):
-        d = lower_text("", header='lola 0\ndesign "d" {\n  owner "a \\"b\\" \\\\ c"\n}\n')
+        d = lower_text("", header='petra 0\ndesign "d" {\n  owner "a \\"b\\" \\\\ c"\n}\n')
         self.assertEqual(d.owner, 'a "b" \\ c')
         self.assertIsNone(d.environment)
 
@@ -226,7 +226,7 @@ class Lowering(Case):
 
     def test_a_known_waiver_mode_is_kept(self):
         d = lower_text(HOOK + 'waive corrosion.galvanic on hook by "o@example.org" reason "isolated"\n')
-        self.assertEqual(d.waivers, (Waiver("corrosion.galvanic", ("hook",), "o@example.org", "isolated", Span("t.lola", 9, 1)),))
+        self.assertEqual(d.waivers, (Waiver("corrosion.galvanic", ("hook",), "o@example.org", "isolated", Span("t.petra", 9, 1)),))
 
     def test_a_point_range_is_well_formed(self):
         d = lower_text(HOOK.replace("[36 kN, 40 kN]", "[5 kN, 5 kN]"))
@@ -300,20 +300,20 @@ class Rejections(Case):
 
     def test_every_problem_in_a_file_is_reported_together_in_source_order(self):
         error = self.assertProblem("claim c: nowhere.x <= 1\ntrus frame {\n}\n", 7, 1, "trus")
-        self.assertEqual([p.split(": ")[0] for p in error.problems], ["t.lola:6:10", "t.lola:7:1"])
+        self.assertEqual([p.split(": ")[0] for p in error.problems], ["t.petra:6:10", "t.petra:7:1"])
 
     def test_a_file_without_a_design_block(self):
         with self.assertRaises(LoweringError) as ctx:
-            parse_design("lola 0\n" + HOOK, "t.lola", REGISTRY)
-        self.assertTrue(ctx.exception.problems[0].startswith("t.lola:1:1: "))
-        self.assertProblem("", 2, 1, "owner", header='lola 0\ndesign "d" {\n}\n')
+            parse_design("petra 0\n" + HOOK, "t.petra", REGISTRY)
+        self.assertTrue(ctx.exception.problems[0].startswith("t.petra:1:1: "))
+        self.assertProblem("", 2, 1, "owner", header='petra 0\ndesign "d" {\n}\n')
 
 
 class SyntaxErrors(Case):
     def test_positions_name_the_offending_token(self):
         self.assertSyntax(HEADER + "claim c: x.y <= 1 ;\n", 6, 19)
         self.assertSyntax(HEADER + "requirement x\n", 6, 1)
-        self.assertSyntax("lola 1\n", 1, 6)
+        self.assertSyntax("petra 1\n", 1, 7)
         self.assertSyntax("design \"d\" {\n}\n", 1, 1)
         self.assertSyntax(HEADER + 'claim c: x.y <= 1 under "l"\n', 6, 25)
         self.assertSyntax(HEADER + 'demand hook {\n  owner "unterminated\n}\n', 7, 9)
@@ -323,7 +323,7 @@ class SyntaxErrors(Case):
 
     def test_the_declaration_error_lists_the_language_keywords(self):
         with self.assertRaises(LolaSyntaxError) as ctx:
-            parse_design(HEADER + "requirement x\n", "t.lola", REGISTRY)
+            parse_design(HEADER + "requirement x\n", "t.petra", REGISTRY)
         for keyword in ("design", "param", "ambient", "load", "tests", "claim", "waive"):
             self.assertIn(keyword, str(ctx.exception))
 

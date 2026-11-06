@@ -2,7 +2,7 @@
 never lowers capacity; scaling units changes nothing; mirroring a design changes nothing; a
 larger load box never turns FAIL into PASS"), the structural test of §4 item 7.
 
-Every property runs over designs the gate's generator draws (lola/models/steel/generate.py,
+Every property runs over designs the gate's generator draws (petra/models/steel/generate.py,
 stream seed SEED), not hand-picked ones, and asserts the deck's behaviour: kernel verdicts,
 the per-mode outcomes behind them (gate.deck_outcomes), and the utilisations and available
 strengths calc.py encloses over each design's box.
@@ -22,11 +22,11 @@ strengths calc.py encloses over each design's box.
     level): every check's utilisation over the wider box is at least the narrower box's.
   Units.test_lengths_and_loads_in_other_units_change_nothing (V3, scaling units): every
     length and load rewritten in mm and kN, in m and N, and in ft and lbf (as p/q where the
-    decimal does not terminate), by lola/units.py's exact factors (1 inch = 25.4 mm, 1 kip =
+    decimal does not terminate), by petra/units.py's exact factors (1 inch = 25.4 mm, 1 kip =
     4.4482216152605 kN). The verdict, every mode's outcome and every check's utilisation,
     demand and available strength are identical, not merely close: the parser normalises
     every spelling to the same exact rationals. The steel grammar takes every length unit
-    (m, mm, cm, km, inch, ft) and force unit (N, kN, MN, lbf, kip, kips) lola/units.py
+    (m, mm, cm, km, inch, ft) and force unit (N, kN, MN, lbf, kip, kips) petra/units.py
     defines, bolt diameters included (19.05 mm is the 3/4 in bolt), so none is left out;
     the three pairs tested cover a smaller unit, the base units, and the other customary
     pair written with p/q numbers.
@@ -64,19 +64,19 @@ import unittest
 from collections import defaultdict
 from fractions import Fraction
 
-from lola.lang import parse_design
-from lola.models.steel import calc, vocab
-from lola.models.steel import gate as G
-from lola.models.steel import generate as gen
-from lola.models.steel.checks import GENERATORS
-from lola.models.steel.domain import required
-from lola.models.steel.lower import KIND_SPECS, tee_parent
-from lola.pipeline import check_design
-from lola.registry import build_registry
-from lola.registry.steel import STOCK_PLATE
-from lola.solvers import SolverSource
-from lola.units import CUSTOMARY, UNITS
-from lola.verdict import STATUS
+from petra.lang import parse_design
+from petra.models.steel import calc, vocab
+from petra.models.steel import gate as G
+from petra.models.steel import generate as gen
+from petra.models.steel.checks import GENERATORS
+from petra.models.steel.domain import required
+from petra.models.steel.lower import KIND_SPECS, tee_parent
+from petra.pipeline import check_design
+from petra.registry import build_registry
+from petra.registry.steel import STOCK_PLATE
+from petra.solvers import SolverSource
+from petra.units import CUSTOMARY, UNITS
+from petra.verdict import STATUS
 
 REGISTRY = build_registry()
 SEED = 19
@@ -124,7 +124,7 @@ Checks = dict[tuple[str, str], list[calc.Value]]
 def checks_of(text: str, conn: str, case: str) -> Checks:
     """Every check the deck owes `conn` under `case`, by (mode, what), in the deck's order.
     Cached: callers only read it."""
-    design = parse_design(text, "t.lola", REGISTRY)
+    design = parse_design(text, "t.petra", REGISTRY)
     lowered = calc.connection(design, conn, REGISTRY)
     out: Checks = defaultdict(list)
     for mode in required(lowered, design):
@@ -137,7 +137,7 @@ def checks_of(text: str, conn: str, case: str) -> Checks:
 @functools.cache
 def verdict_of(text: str) -> tuple[str, dict[str, str]]:
     """The kernel's verdict and each mode's outcome ("pass", "fail" or "open")."""
-    report = check_design(parse_design(text, "t.lola", REGISTRY), REGISTRY, (SolverSource(),))
+    report = check_design(parse_design(text, "t.petra", REGISTRY), REGISTRY, (SolverSource(),))
     return STATUS[type(report.verdict)], G.deck_outcomes(report)[0]
 
 
@@ -147,7 +147,7 @@ def numbers(found: Checks) -> dict[tuple[str, str], list[tuple[float, float, flo
 
 
 def number(x: Fraction) -> str:
-    """x >= 0 exactly as .lola reads numbers: a terminating decimal where there is one, p/q otherwise."""
+    """x >= 0 exactly as .petra reads numbers: a terminating decimal where there is one, p/q otherwise."""
     for places in range(40):
         if (x * 10**places).denominator == 1:
             whole, frac = divmod(int(x * 10**places), 10**places)
@@ -285,7 +285,7 @@ def in_units(text: str, length: str, force: str) -> str:
 # --- The same design written another way ---------------------------------------------------------
 
 def parts(text: str) -> tuple[str, str, list[str], list[str], str]:
-    """(`lola 0`, the design block, the component block's lines, the load block's lines, the
+    """(`petra 0`, the design block, the component block's lines, the load block's lines, the
     kind) of a generated design."""
     head, design, component, load = text.strip("\n").split("\n\n")
     return head, design, component.split("\n"), load.split("\n"), component.split(" ", 1)[0]

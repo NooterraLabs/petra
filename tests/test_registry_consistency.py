@@ -6,9 +6,9 @@ import tempfile
 import unittest
 from fractions import Fraction
 
-from lola.kernel import Sym
-from lola.registry import Deck, build_deck, check_deck, read_deck, write_deck
-from lola.registry.consistency import RELATIONS, corrupt, flagged_entries
+from petra.kernel import Sym
+from petra.registry import Deck, build_deck, check_deck, read_deck, write_deck
+from petra.registry.consistency import RELATIONS, corrupt, flagged_entries
 
 DECK = None
 MM2 = Fraction(1, 10**6)
@@ -168,7 +168,7 @@ class Provenance(unittest.TestCase):
                              {("bolt.M12_A4_70", "record.provenance")}, repr(provenance))
 
     def test_well_formed_provenance_of_every_kind_passes(self):
-        for provenance in ("stated:judged:lola-maintainers:recalled", "published:ISO 3506-1:2020 Table 6",
+        for provenance in ("stated:judged:petra-maintainers:recalled", "published:ISO 3506-1:2020 Table 6",
                            "stated:measured:Acme Fasteners:test report 17"):
             self.assertEqual(broken(with_provenance(DECK, "bolt.M12_A4_70", "Rp02_min", provenance)), set(),
                              repr(provenance))

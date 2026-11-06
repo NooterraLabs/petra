@@ -1,7 +1,7 @@
 """V5 of docs/principles.md: the steel deck's mutation test.
 
 Each number a provision prints is a registry row the deck reads by name
-(lola/registry/steel.py COEFFICIENTS). The twin (lola/models/steel/twin.py) carries its own
+(petra/registry/steel.py COEFFICIENTS). The twin (petra/models/steel/twin.py) carries its own
 copy of each, written from the method statements, so a wrong row shows as a disagreement
 between the two. Here every row is mutated twice, its value doubled and halved, and the
 twin comparison of tests/test_steel_twin.py runs again on each (design, connection, mode,
@@ -20,13 +20,13 @@ import unittest
 from dataclasses import replace
 from fractions import Fraction
 
-from lola.kernel import Interval, enclose
-from lola.kernel.rules.r4_enclosure import AllNonpositive
-from lola.lang import parse_design
-from lola.models.steel import calc, domain, twin
-from lola.models.steel.checks import GENERATORS, GEOMETRY, ROWS, Ctx
-from lola.registry import build_registry
-from lola.registry.steel import COEFFICIENTS
+from petra.kernel import Interval, enclose
+from petra.kernel.rules.r4_enclosure import AllNonpositive
+from petra.lang import parse_design
+from petra.models.steel import calc, domain, twin
+from petra.models.steel.checks import GENERATORS, GEOMETRY, ROWS, Ctx
+from petra.registry import build_registry
+from petra.registry.steel import COEFFICIENTS
 from tests.test_steel_twin import _designs, _differs, _variant
 
 FACTORS = (Fraction(2), Fraction(1, 2))
@@ -51,9 +51,9 @@ SURVIVORS: dict[str, str] = {
     "aisc_manual.p10.extended_cb": "doubled: Eq F11-3 already exceeds Mp at the extended tabs",
     "aisc_manual.p10.fnv_divisor": "halved: tmax doubles, and the 5/8 tp weld rule governs extended_ductility at the "
                                    "extended tabs",
-    # LoLa's strict-boundary shift
-    "lola.strict.length": "a millionth of an inch: no design sits that close to a strict boundary",
-    "lola.strict.ratio": "a billionth: no design sits that close to a strict boundary",
+    # Petra's strict-boundary shift
+    "petra.strict.length": "a millionth of an inch: no design sits that close to a strict boundary",
+    "petra.strict.ratio": "a billionth: no design sits that close to a strict boundary",
 }
 """Row -> which mutant survives, and why the comparison cannot see it."""
 

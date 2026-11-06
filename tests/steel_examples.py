@@ -5,9 +5,9 @@ class is not collected."""
 import unittest
 from decimal import Decimal
 
-from lola.lang import parse_design
-from lola.models.steel import calc
-from lola.registry import build_registry
+from petra.lang import parse_design
+from petra.models.steel import calc
+from petra.registry import build_registry
 
 from tests.test_steel_companion import Published
 
@@ -18,7 +18,7 @@ ROUNDED = 0.005
 prints as 2.88, so 0.60 Fy Agv as 86.4 kips, not 86.25), and an ASD value is often the
 rounded Rn over Omega: printed values move by up to 1/2 % from the exact ones."""
 
-TEMPLATE = """lola 0
+TEMPLATE = """petra 0
 
 design "companion-{tag}" {{
   owner "s.engineer@example.org"
@@ -56,7 +56,7 @@ class Example(Published):
     def values(self, basis: str, mode: str, body: str | None = None):
         load = self.loads[0 if basis == "lrfd" else 1]
         text = TEMPLATE.format(tag=self.tag, kind=self.kind, basis=basis, body=body or self.body, load=load, field=self.field)
-        d = parse_design(text, f"{self.tag}.lola", REGISTRY)
+        d = parse_design(text, f"{self.tag}.petra", REGISTRY)
         return calc.values(calc.connection(d, "c1", REGISTRY), d, REGISTRY, mode, "reaction"), float(load)
 
     def strength(self, basis: str, mode: str, prefix: str, body: str | None = None) -> float:

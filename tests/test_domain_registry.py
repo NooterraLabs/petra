@@ -7,10 +7,10 @@ import pkgutil
 import unittest
 from pathlib import Path
 
-import lola.models as models
-from lola.lang.parser import DECLS
-from lola.models import _index, base, bolt, truss, uncertainty
-from lola.premises import Tag
+import petra.models as models
+from petra.lang.parser import DECLS
+from petra.models import _index, base, bolt, truss, uncertainty
+from petra.premises import Tag
 
 
 class Registered(unittest.TestCase):
@@ -19,10 +19,10 @@ class Registered(unittest.TestCase):
 
     def test_every_domain_module_is_registered(self):
         for info in pkgutil.iter_modules(models.__path__):
-            module = importlib.import_module(f"lola.models.{info.name}")
+            module = importlib.import_module(f"petra.models.{info.name}")
             spec = getattr(module, "DOMAIN", None)
             if spec is not None:
-                self.assertIn(spec, models._REGISTERED, f"lola.models.{info.name} declares an unregistered DOMAIN")
+                self.assertIn(spec, models._REGISTERED, f"petra.models.{info.name} declares an unregistered DOMAIN")
 
     def test_tables_derive_from_the_specs(self):
         for spec in models._REGISTERED:
@@ -70,7 +70,7 @@ class Refused(unittest.TestCase):
 
 class ModelPremises(unittest.TestCase):
     def spec(self, module):
-        return base.model_spec(module, "bolt.tension", "torque-tension", "no prying", "lola-maintainers", "VDI 2230")
+        return base.model_spec(module, "bolt.tension", "torque-tension", "no prying", "petra-maintainers", "VDI 2230")
 
     def test_the_source_hash_covers_the_elaborator_module(self):
         expected = hashlib.sha256(Path(bolt.__file__).read_text(encoding="utf-8").encode("utf-8")).hexdigest()[:16]
@@ -82,7 +82,7 @@ class ModelPremises(unittest.TestCase):
         p = spec.premise()
         self.assertEqual(p.label, f"model:bolt.tension@{spec.source_hash}")
         self.assertIs(p.tag, Tag.VALIDATED_MODEL)
-        self.assertEqual((p.owner, p.source), ("lola-maintainers", "VDI 2230"))
+        self.assertEqual((p.owner, p.source), ("petra-maintainers", "VDI 2230"))
         self.assertIn("no prying", p.statement)
 
 

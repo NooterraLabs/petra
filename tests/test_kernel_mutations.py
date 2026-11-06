@@ -16,7 +16,7 @@ import json
 import unittest
 from pathlib import Path
 
-from lola.kernel import (
+from petra.kernel import (
     LEMMAS,
     PROOF_RULE,
     REFUTATION_RULE,

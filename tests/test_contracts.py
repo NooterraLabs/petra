@@ -10,11 +10,11 @@ import unittest
 from fractions import Fraction
 from pathlib import Path
 
-from lola.ir import QoiRef, Span
-from lola.kernel import Refutation, Theorem, check
-from lola.lang import load_design
-from lola.models import circuit, contracts
-from lola.models.base import (
+from petra.ir import QoiRef, Span
+from petra.kernel import Refutation, Theorem, check
+from petra.lang import load_design
+from petra.models import circuit, contracts
+from petra.models.base import (
     PORT_CONTRACT,
     Connection,
     CoverageOrigin,
@@ -26,10 +26,10 @@ from lola.models.base import (
     PortSpec,
     Side,
 )
-from lola.pipeline import check_design
-from lola.registry import build_registry
-from lola.solvers import SolverSource, r4_enclosure
-from lola.verdict import Discharged, Fail, Refuted
+from petra.pipeline import check_design
+from petra.registry import build_registry
+from petra.solvers import SolverSource, r4_enclosure
+from petra.verdict import Discharged, Fail, Refuted
 
 from tests.test_circuit import AMBIENT, CURRENT, H, WORST, at, lowered, radial
 
@@ -54,7 +54,7 @@ def solved(ob: Obligation):
 
 class WireIntoTerminal(unittest.TestCase):
     def test_the_example_states_two_contracts_at_the_terminal_and_both_hold(self):
-        found = contracts_of(load_design(EXAMPLES / "circuit_pass.lola", REGISTRY))
+        found = contracts_of(load_design(EXAMPLES / "circuit_pass.petra", REGISTRY))
         self.assertEqual(set(found), {"temperature", "current"})
         for quantity, ob in found.items():
             with self.subTest(quantity=quantity):
@@ -64,7 +64,7 @@ class WireIntoTerminal(unittest.TestCase):
                 self.assertIsInstance(solved(ob)[0], Theorem)
 
     def test_margins_at_the_worst_corner_match_the_hand_values(self):
-        found = contracts_of(load_design(EXAMPLES / "circuit_pass.lola", REGISTRY))
+        found = contracts_of(load_design(EXAMPLES / "circuit_pass.petra", REGISTRY))
         self.assertAlmostEqual(at(found["temperature"].statement, 0, WORST), 55.1667 - 75, places=3)
         self.assertEqual(at(found["current"].statement, 0, WORST), 10 - 32)
 
@@ -137,11 +137,11 @@ class Synthetic(unittest.TestCase):
     [draw, draw] checked against an assumption of [B6 rating, terminal rating] = [6, 32]."""
 
     def setUp(self):
-        self.design = load_design(EXAMPLES / "circuit_pass.lola", REGISTRY)
+        self.design = load_design(EXAMPLES / "circuit_pass.petra", REGISTRY)
         draw = lowered(self.design)["lighting"].elements["lamps"].draws[0].current
         self.draw = lambda sb: sb.input(draw)
         self.out, self.into = PortRef("x", "p", "out"), PortRef("x", "q", "in")
-        self.connection = Connection(self.out, self.into, Span("t.lola", 1, 1))
+        self.connection = Connection(self.out, self.into, Span("t.petra", 1, 1))
 
     def obligations(self, assumes: Side, guarantees: Side | None) -> tuple:
         specs = {self.out: PortSpec(self.out, {PortQuantity.CURRENT: assumes}, {})}

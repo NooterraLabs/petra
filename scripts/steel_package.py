@@ -1,7 +1,7 @@
-"""A steel connection's calculation package: `python scripts/steel_package.py DESIGN.lola OUT_DIR`.
+"""A steel connection's calculation package: `python scripts/steel_package.py DESIGN.petra OUT_DIR`.
 
-Checks the design and writes OUT_DIR/design.lola, OUT_DIR/report.md and OUT_DIR/certs/
-(lola/models/steel/package.py), then re-checks the package as `lola verify` and `lola
+Checks the design and writes OUT_DIR/design.petra, OUT_DIR/report.md and OUT_DIR/certs/
+(petra/models/steel/package.py), then re-checks the package as `petra verify` and `petra
 check --certs --no-solve` would. Prints the verdict and the re-check; exits 0 when the
 package re-checks, 1 otherwise. Untrusted tooling; it never changes a verdict.
 """
@@ -15,8 +15,8 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from lola.models.steel.package import recheck, write_package  # noqa: E402
-from lola.registry import build_registry  # noqa: E402
+from petra.models.steel.package import recheck, write_package  # noqa: E402
+from petra.registry import build_registry  # noqa: E402
 
 
 def main(argv: list[str] | None = None) -> int:

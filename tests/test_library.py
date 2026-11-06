@@ -1,8 +1,8 @@
 """The certificate library: family certification, shape matching, Instance offers and the
 store on disk. Owner: F.
 
-Hand check of the shipped family box (examples/families/cu_pvc_clipped.lola), from the
-heat balance in lola/models/circuit.py, theta = amb + I^2 R20 (1 + alpha (theta - 20)) T,
+Hand check of the shipped family box (examples/families/cu_pvc_clipped.petra), from the
+heat balance in petra/models/circuit.py, theta = amb + I^2 R20 (1 + alpha (theta - 20)) T,
 solved for theta:  theta(I) = (amb + I^2 k (1 - 20 alpha)) / (1 - I^2 k alpha),  k = R20 T.
 
 The hottest corner of the box is the thinnest conductor with the thinnest insulation
@@ -23,19 +23,19 @@ import unittest
 from fractions import Fraction
 from pathlib import Path
 
-from lola.kernel import Add, Const, Evidence, Instance, Leaf, Matrix, Neg, RangeHyp, Rejection, Split, Statement, Sym, Theorem, check, decode_statement, statement_hash
-from lola.kernel.rules.r1_linear import FeasiblePoints, LinearFeasible
-from lola.kernel.rules.r4_enclosure import AllNonpositive, Enclosure
-from lola.lang import parse_design
-from lola.library import Library, canonical_renaming, certify_family, claim_obligations, family_entry, shape_hash
-from lola.pipeline import check_design
-from lola.registry import build_registry
-from lola.verdict import Discharged, Open
+from petra.kernel import Add, Const, Evidence, Instance, Leaf, Matrix, Neg, RangeHyp, Rejection, Split, Statement, Sym, Theorem, check, decode_statement, statement_hash
+from petra.kernel.rules.r1_linear import FeasiblePoints, LinearFeasible
+from petra.kernel.rules.r4_enclosure import AllNonpositive, Enclosure
+from petra.lang import parse_design
+from petra.library import Library, canonical_renaming, certify_family, claim_obligations, family_entry, shape_hash
+from petra.pipeline import check_design
+from petra.registry import build_registry
+from petra.verdict import Discharged, Open
 from tests import mutations
 
 ROOT = Path(__file__).resolve().parents[1]
-FAMILY = (ROOT / "examples" / "families" / "cu_pvc_clipped.lola").read_text(encoding="utf-8")
-CIRCUIT = (ROOT / "examples" / "circuit_pass.lola").read_text(encoding="utf-8")
+FAMILY = (ROOT / "examples" / "families" / "cu_pvc_clipped.petra").read_text(encoding="utf-8")
+CIRCUIT = (ROOT / "examples" / "circuit_pass.petra").read_text(encoding="utf-8")
 REGISTRY = build_registry()
 DRAW = "param draw       in [0 A, 13 A]"
 
@@ -50,16 +50,16 @@ def circuit_with_draw(amps: str) -> str:
 
 
 def claims(text: str) -> dict:
-    design = parse_design(text, "test.lola", REGISTRY)
+    design = parse_design(text, "test.petra", REGISTRY)
     return {o.requirement.id.rsplit(".", 1)[-1]: o for o in claim_obligations(design, REGISTRY)}
 
 
 def certify(text: str, root: str):
-    return certify_family(parse_design(text, "family.lola", REGISTRY), REGISTRY, Library(root))
+    return certify_family(parse_design(text, "family.petra", REGISTRY), REGISTRY, Library(root))
 
 
 def library_outcomes(text: str, library: Library) -> dict:
-    report = check_design(parse_design(text, "query.lola", REGISTRY), REGISTRY, (library,))
+    report = check_design(parse_design(text, "query.petra", REGISTRY), REGISTRY, (library,))
     return {o.requirement.id.rsplit(".", 1)[-1]: o for o in report.outcomes if isinstance(o, Open)} | {
         o.obligation.requirement.id.rsplit(".", 1)[-1]: o for o in report.outcomes if isinstance(o, Discharged)
     }

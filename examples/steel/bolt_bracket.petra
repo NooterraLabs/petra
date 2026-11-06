@@ -1,0 +1,27 @@
+petra 0
+
+# An eccentrically loaded bolted bracket: a 1/2 in A36 plate bolted to a column flange with
+# two columns of four 7/8 in Group 120 bolts, loaded 8 in from the group centroid.
+
+design "steel-bolt-bracket" {
+  owner "s.engineer@example.org"
+}
+
+bolt_bracket bb1 {
+  basis lrfd
+  plate steel.A36 thickness 0.5 inch
+  support W14x90 flange grade steel.A992
+  bolts bolt_group.120 diameter 0.875 inch threads included
+  rows 4
+  columns 2
+  pitch 3 inch
+  gauge 3 inch
+  eccentricity 8 inch
+  edge_vertical 1.5 inch
+  plate_edge 1.5 inch
+}
+
+load gravity {
+  on bb1 shear in [0 kip, 40 kip]
+  signed "s.engineer@example.org" source "beam reaction, LRFD 1.2D + 1.6L, calc SC-3"
+}

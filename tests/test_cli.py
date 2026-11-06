@@ -1,6 +1,6 @@
 """The command line: exit codes, the JSON report, and each subcommand. Owner: Y.
 
-Expected verdicts: examples/circuit_pass.lola passes and examples/bolt_unknown.lola is
+Expected verdicts: examples/circuit_pass.petra passes and examples/bolt_unknown.petra is
 UNKNOWN (their own headers say why). With a 16 A draw the circuit_pass design breaks
 the overload condition I_B <= I_n of its B10 breaker (IEC 60364-4-43 433.1), so it
 fails. A stress area of 1.5 x 84.267 mm2 for M12 contradicts ISO 724, so a deck holding
@@ -16,16 +16,16 @@ import unittest
 from fractions import Fraction
 from pathlib import Path
 
-from lola.cli import EXIT_CODES, main
-from lola.gym.tasks import generate
-from lola.kernel import Evidence, Leaf, Split, encode_evidence
-from lola.kernel.rules.r4_enclosure import Enclosure
-from lola.registry import build_registry
+from petra.cli import EXIT_CODES, main
+from petra.gym.tasks import generate
+from petra.kernel import Evidence, Leaf, Split, encode_evidence
+from petra.kernel.rules.r4_enclosure import Enclosure
+from petra.registry import build_registry
 
 ROOT = Path(__file__).resolve().parents[1]
 EXAMPLES = ROOT / "examples"
-CIRCUIT = EXAMPLES / "circuit_pass.lola"
-FAMILY = EXAMPLES / "families" / "cu_pvc_clipped.lola"
+CIRCUIT = EXAMPLES / "circuit_pass.petra"
+FAMILY = EXAMPLES / "families" / "cu_pvc_clipped.petra"
 VERDICT_KEYS = {"claim", "status", "footprint", "rules", "obligations", "margins"}
 
 
@@ -67,22 +67,22 @@ class Check(Workspace):
             self.assertEqual(verdict["obligations"], [], f"{verdict['claim']} has nothing open")
 
     def test_an_unknown_design_exits_2_and_names_what_is_open(self):
-        code, out, _ = run("check", str(EXAMPLES / "bolt_unknown.lola"), "--json")
+        code, out, _ = run("check", str(EXAMPLES / "bolt_unknown.petra"), "--json")
         self.assertEqual(code, EXIT_CODES["UNKNOWN"], "bolt_unknown exits 2")
         unknown = [v for v in json.loads(out)["verdicts"] if v["status"] == "UNKNOWN"]
         self.assertTrue(unknown, "some entry is UNKNOWN")
         self.assertTrue(all(v["obligations"] for v in unknown), "each UNKNOWN entry says what it needs")
 
     def test_a_refuted_design_exits_1(self):
-        path = self.write("overloaded.lola", CIRCUIT.read_text(encoding="utf-8").replace("[0 A, 10 A]", "[0 A, 16 A]"))
+        path = self.write("overloaded.petra", CIRCUIT.read_text(encoding="utf-8").replace("[0 A, 10 A]", "[0 A, 16 A]"))
         code, out, _ = run("check", path)
         self.assertEqual(code, EXIT_CODES["FAIL"], "16 A on a B10 exits 1")
         self.assertIn("FAIL", out.splitlines()[0], "the first line gives the overall status")
 
     def test_input_errors_exit_3_and_print_nothing(self):
-        syntax = self.write("broken.lola", "lola 0\ndesign {\n")
+        syntax = self.write("broken.petra", "petra 0\ndesign {\n")
         deck = self.write("deck.json", "not a deck")
-        for argv in (("check", syntax), ("check", str(self.tmp / "missing.lola")), ("check", str(CIRCUIT), "--deck", deck)):
+        for argv in (("check", syntax), ("check", str(self.tmp / "missing.petra")), ("check", str(CIRCUIT), "--deck", deck)):
             code, out, err = run(*argv)
             self.assertEqual(code, EXIT_CODES["INPUT_ERROR"], f"{argv} exits 3")
             self.assertEqual(out, "", f"{argv} prints nothing to stdout")
@@ -101,21 +101,21 @@ class Check(Workspace):
         self.assertEqual(statuses["coverage"], "UNKNOWN", "coverage needs the solver the run switched off")
         self.assertEqual(code, EXIT_CODES["UNKNOWN"], "so the design exits 2")
 
-    def test_python_dash_m_lola_uses_the_same_exit_codes(self):
-        done = subprocess.run([sys.executable, "-m", "lola", "check", str(EXAMPLES / "bolt_unknown.lola"), "--json"],
+    def test_python_dash_m_petra_uses_the_same_exit_codes(self):
+        done = subprocess.run([sys.executable, "-m", "petra", "check", str(EXAMPLES / "bolt_unknown.petra"), "--json"],
                               cwd=ROOT, capture_output=True, text=True, timeout=300)
-        self.assertEqual(done.returncode, EXIT_CODES["UNKNOWN"], "python -m lola exits with the verdict's code")
+        self.assertEqual(done.returncode, EXIT_CODES["UNKNOWN"], "python -m petra exits with the verdict's code")
         self.assertEqual(json.loads(done.stdout)["status"], "UNKNOWN", "and prints the report")
 
 
 class Explain(Workspace):
     def test_explain_prints_the_statements(self):
-        code, out, _ = run("explain", str(EXAMPLES / "bolt_unknown.lola"))
+        code, out, _ = run("explain", str(EXAMPLES / "bolt_unknown.petra"))
         self.assertEqual(code, 0, "explain exits 0")
         self.assertIn("obligation", out, "it lists the obligations")
 
     def test_explain_refuses_a_broken_file(self):
-        self.assertEqual(run("explain", self.write("broken.lola", "lola 0\ndesign {\n"))[0], EXIT_CODES["INPUT_ERROR"], "a syntax error exits 3")
+        self.assertEqual(run("explain", self.write("broken.petra", "petra 0\ndesign {\n"))[0], EXIT_CODES["INPUT_ERROR"], "a syntax error exits 3")
 
 
 class Verify(Workspace):
@@ -161,7 +161,7 @@ class CertifyFamily(Workspace):
         self.assertEqual(out.count("stored "), 2, "one line per stored claim")
 
     def test_a_false_family_exits_1(self):
-        path = self.write("too_hot.lola", FAMILY.read_text(encoding="utf-8").replace("[0 A, 13 A]", "[0 A, 16 A]"))
+        path = self.write("too_hot.petra", FAMILY.read_text(encoding="utf-8").replace("[0 A, 13 A]", "[0 A, 16 A]"))
         code, out, _ = run("certify-family", path, "--library", str(self.tmp / "library"))
         self.assertEqual(code, EXIT_CODES["FAIL"], "the hot claim is refuted at 16 A")
         self.assertIn("skipped", out, "the refuted claim is listed")

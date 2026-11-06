@@ -1,10 +1,10 @@
 # Niche 1, finished exhaustively: steel connections to AISC 360-22
 
-Written 2026-11-05. This is the build specification for the first niche LoLa finishes completely before any public release. It follows [NICHE.md](NICHE.md) §14, which picks steel connections as the open deck with the most designs, and [COMPILER.md](COMPILER.md), which places this deck in the standard-library layer. Tags are as in NICHE.md.
+Written 2026-11-05. This is the build specification for the first niche Petra finishes completely before any public release. It follows [NICHE.md](NICHE.md) §14, which picks steel connections as the open deck with the most designs, and [COMPILER.md](COMPILER.md), which places this deck in the standard-library layer. Tags are as in NICHE.md.
 
 ## 0. The claim this work must earn
 
-> **LoLa checks every provision of AISC 360-22 Chapters J and K, for every connection type in its catalogue. Every verdict covers the whole tolerance and material range, and every result is re-checkable by the kernel.**
+> **Petra checks every provision of AISC 360-22 Chapters J and K, for every connection type in its catalogue. Every verdict covers the whole tolerance and material range, and every result is re-checkable by the kernel.**
 
 That claim covers a real slice of structural engineering. Fabricators and connection engineers design these connections every day, and AI connection tools are starting to produce them (NICHE §14.5).
 
@@ -156,7 +156,7 @@ All must hold before the claim in §0 is published.
 6. **Manufactured faults:** 100% caught.
 7. **Breaker:** no false PASS after a fixed adversarial budget, with every run logged.
 8. **Makeability:** every generated design passes the deck, or fails with a witness.
-9. **Report:** every connection gets a calculation package that `lola verify` re-checks.
+9. **Report:** every connection gets a calculation package that `petra verify` re-checks.
 
 ## 10. Build milestones
 
@@ -167,7 +167,7 @@ All must hold before the claim in §0 is published.
 | M3 | Simple shear connections | Shear tab, double angle, single angle, tee, end plate, seated; copes; load-path coverage; makeability | Every Part II shear-connection example reproduced |
 | M4 | Groups and hangers | Eccentric bolt and weld groups (elastic); hangers with prying | Companion and Kulak cases |
 | M5 | Exhaustiveness machinery | Traceability table in CI; connection generator; twin elaborator; manufactured faults; breaker | Gate items 4–7 for v1.0 |
-| M6 | Calculation package | Report and `lola verify` | Gate item 9 |
+| M6 | Calculation package | Report and `petra verify` | Gate item 9 |
 | — | **v1.0 complete** | Simple shear, J10, groups, hangers | §9 for the v1.0 catalogue |
 | M7 | v1.1 | Gussets and the uniform force method, flange-plated and CJP moment connections, splices, base plates | §9 extended |
 | M8 | v1.2 | End plates, Chapter K HSS | §9 for the whole catalogue: the §0 claim |

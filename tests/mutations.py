@@ -30,7 +30,7 @@ from dataclasses import dataclass
 from fractions import Fraction as Q
 from typing import Any, Callable
 
-from lola.kernel import (
+from petra.kernel import (
     Add,
     Const,
     DecodeError,
@@ -56,9 +56,9 @@ from lola.kernel import (
     encode_statement,
     statement_hash,
 )
-from lola.kernel.rules.r1_linear import FarkasRay, FeasiblePoints, LinearFeasible
-from lola.kernel.rules.r2_definite import GramPositiveDefinite, GramTerm, LDLFactor, NegativeDirection
-from lola.kernel.rules.r3_hypercircle import (
+from petra.kernel.rules.r1_linear import FarkasRay, FeasiblePoints, LinearFeasible
+from petra.kernel.rules.r2_definite import GramPositiveDefinite, GramTerm, LDLFactor, NegativeDirection
+from petra.kernel.rules.r3_hypercircle import (
     ComponentBound,
     Hypercircle,
     HypercircleFields,
@@ -67,12 +67,12 @@ from lola.kernel.rules.r3_hypercircle import (
     MinimizerComponent,
     QuadraticProblem,
 )
-from lola.kernel.rules.r4_enclosure import AllNonpositive, Enclosure, PointWitness
-from lola.kernel.rules.r5_moment import MomentBound, MomentConstraint, MomentDual, RandomVar
-from lola.kernel.rules.r6_scenario import Arithmetic, BinomialTail
+from petra.kernel.rules.r4_enclosure import AllNonpositive, Enclosure, PointWitness
+from petra.kernel.rules.r5_moment import MomentBound, MomentConstraint, MomentDual, RandomVar
+from petra.kernel.rules.r6_scenario import Arithmetic, BinomialTail
 
-ENVELOPE_FORMAT = "lola-cert/0"
-KERNEL_VERSION = "lola-kernel/0"
+ENVELOPE_FORMAT = "petra-cert/0"
+KERNEL_VERSION = "petra-kernel/0"
 
 
 def _c(v) -> Const:
@@ -242,7 +242,7 @@ class Fixture:
             "statement_hash": statement_hash(self.statement),
             "statement": st_json,
             "evidence": encode_evidence(self.evidence),
-            "producer": {"source": "tests.mutations", "lola": "0"},
+            "producer": {"source": "tests.mutations", "petra": "0"},
         }
 
 

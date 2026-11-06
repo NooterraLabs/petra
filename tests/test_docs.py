@@ -26,7 +26,7 @@ class DesignDoc(unittest.TestCase):
         self.assertNotEqual(json_block_after("## Certificate JSON format"), drifted)
 
     def test_every_example_file_the_doc_names_exists(self):
-        named = set(re.findall(r"examples/[\w/]+\.(?:lola|json)", DESIGN))
+        named = set(re.findall(r"examples/[\w/]+\.(?:petra|json)", DESIGN))
         self.assertTrue(named, "the doc names example files")
         missing = sorted(p for p in named if not (ROOT / p).exists())
         self.assertEqual(missing, [], "docs/design.md names example files that do not exist")

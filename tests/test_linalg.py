@@ -2,8 +2,8 @@
 import unittest
 from fractions import Fraction as F
 
-from lola.kernel import Interval, Matrix
-from lola.kernel.linalg import dot, gram_quadratic, gram_sum, is_unit_lower, ldl_product, matvec, rmatvec
+from petra.kernel import Interval, Matrix
+from petra.kernel.linalg import dot, gram_quadratic, gram_sum, is_unit_lower, ldl_product, matvec, rmatvec
 
 A = Matrix(2, 3, ((0, 0, F(1)), (0, 2, F(2)), (1, 1, F(-1))))
 IDENTITY = Matrix(2, 2, ((0, 0, F(1)), (1, 1, F(1))))

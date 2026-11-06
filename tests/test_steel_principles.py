@@ -23,14 +23,14 @@ import unittest
 from fractions import Fraction
 from pathlib import Path
 
-from lola.models.steel import generate as gen
-from lola.models.steel import trace
-from lola.models.steel.vocab import MODELS, MODES, UNBOUNDED
-from lola.registry import build_registry
-from lola.registry import steel as deck_rows
+from petra.models.steel import generate as gen
+from petra.models.steel import trace
+from petra.models.steel.vocab import MODELS, MODES, UNBOUNDED
+from petra.registry import build_registry
+from petra.registry import steel as deck_rows
 
 REGISTRY = build_registry()
-STEEL = Path(__file__).resolve().parents[1] / "lola" / "models" / "steel"
+STEEL = Path(__file__).resolve().parents[1] / "petra" / "models" / "steel"
 BUILDERS = ("lower", "limits", "checks", "build", "vocab", "domain", "path")
 """The deck's builder modules: what turns a design into obligations. calc, twin, generate,
 faults, breaker, trace and package are tooling (a report, an independent twin, the gate's
@@ -204,7 +204,7 @@ class NoMagicNumbers(unittest.TestCase):
         for module in ("limits", "checks"):
             text = (STEEL / f"{module}.py").read_text(encoding="utf-8")
             named |= set(re.findall(r'(?:\bk|ctx\.const)\("([a-z0-9_.]+)"\)', text))
-        from lola.models.steel import limits as L
+        from petra.models.steel import limits as L
         named |= {n for pair in L.BEARING.values() for n in pair} | {L.STRICT, L.STRICT_RATIO}
         self.assertEqual(sorted(n for n in named if n not in REGISTRY.constants), [])
 
@@ -214,16 +214,16 @@ class NoMagicNumbers(unittest.TestCase):
         for name, *_ in deck_rows.COEFFICIENTS:
             with self.subTest(name):
                 self.assertTrue(f'"{name}"' in text or name.rsplit(".", 1)[-1].startswith(("bearing_", "tearout_"))
-                                or name.startswith("lola.strict"))
+                                or name.startswith("petra.strict"))
 
     def test_every_row_carries_its_clause_and_tag(self):
-        clause = re.compile(r"Section|Eqs?\.|Table|Figure|Part \d|User Note|Symbols list|LoLa's")
+        clause = re.compile(r"Section|Eqs?\.|Table|Figure|Part \d|User Note|Symbols list|Petra's")
         for name, text, unit, tag, owner, source in (*deck_rows.FACTORS, *deck_rows.COEFFICIENTS):
             with self.subTest(name):
                 self.assertRegex(source, clause)
                 self.assertIn(tag, (deck_rows.SANCTIONED, deck_rows.JUDGED))
                 self.assertIn(unit, ("1", "Pa", "m"))
-                # a judged value is LoLa's to answer for; a sanctioned one is its issuer's
+                # a judged value is Petra's to answer for; a sanctioned one is its issuer's
                 self.assertEqual(owner == deck_rows.MAINTAINERS, tag == deck_rows.JUDGED)
                 if tag == deck_rows.SANCTIONED and owner == "AISC":
                     self.assertTrue(source.endswith((deck_rows.CHECKED, deck_rows.QUOTED))
@@ -251,7 +251,7 @@ class AiscSymbolsWithAGlossary(unittest.TestCase):
                         self.assertIn(a.arg, self.glossed)
 
     def test_every_length_field_is_glossed(self):
-        from lola.models.steel.lower import _LENGTHS
+        from petra.models.steel.lower import _LENGTHS
         self.assertEqual(sorted(set(_LENGTHS) - self.glossed), [])
 
     def test_the_glossary_reader(self):

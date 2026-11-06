@@ -11,13 +11,13 @@ from fractions import Fraction
 from pathlib import Path
 from unittest import mock
 
-from lola.premises import Tag
-from lola.registry import build_deck, build_registry, check_deck
-from lola.registry.consistency import corrupt
-from lola.registry.steel import BOLT_SIZES, holes_for, size_id, steel_constants, steel_materials
-from lola.registry.steel_shapes import (TABLE, ShapeTable, angle_legs, constants as shape_constants, import_workbook,
+from petra.premises import Tag
+from petra.registry import build_deck, build_registry, check_deck
+from petra.registry.consistency import corrupt
+from petra.registry.steel import BOLT_SIZES, holes_for, size_id, steel_constants, steel_materials
+from petra.registry.steel_shapes import (TABLE, ShapeTable, angle_legs, constants as shape_constants, import_workbook,
                                         key, load)
-from lola.units import CUSTOMARY, parse_quantity
+from petra.units import CUSTOMARY, parse_quantity
 
 INCH = CUSTOMARY["inch"][0]
 KSI = CUSTOMARY["ksi"][0]
@@ -25,7 +25,7 @@ KIP = CUSTOMARY["kip"][0]
 PUBLISHED_SHA256 = "e08bea15bbe475e78251292e5f543ff5a11d16b59c9d6af47aec700f8f57f050"
 """SHAPE160.xlsx, the AISC Shapes Database v16.0 workbook the shipped rows were copied from."""
 _SOURCES = Path(__file__).resolve().parents[1] / "docs" / "research" / "sources" / "SHAPE160.xlsx"
-WORKBOOK = os.environ.get("LOLA_SHAPES_XLSX") or (str(_SOURCES) if _SOURCES.exists() else None)
+WORKBOOK = os.environ.get("PETRA_SHAPES_XLSX") or (str(_SOURCES) if _SOURCES.exists() else None)
 REGISTRY = build_registry()
 DECK = build_deck(REGISTRY)
 
@@ -54,7 +54,7 @@ class Provenance(unittest.TestCase):
     def test_a_judged_row_says_it_was_not_checked_and_a_sanctioned_row_names_its_issuer(self):
         for name, tag, owner, source in steel_rows():
             if tag is Tag.JUDGED:
-                self.assertEqual(owner, "lola-maintainers", name)
+                self.assertEqual(owner, "petra-maintainers", name)
                 self.assertRegex(source, "not checked", name)
             else:
                 self.assertIs(tag, Tag.SANCTIONED, name)
@@ -84,7 +84,7 @@ class Provenance(unittest.TestCase):
             self.assertIs(constants[name].tag, Tag.JUDGED, name)
 
     def test_steel_constants_and_the_v0_constants_do_not_collide(self):
-        from lola.registry.constants import CONSTANTS
+        from petra.registry.constants import CONSTANTS
         self.assertFalse(set(CONSTANTS) & set(steel_constants()))
         self.assertEqual(len(REGISTRY.constants), len(CONSTANTS) + len(steel_constants()))
 
@@ -227,13 +227,13 @@ class ShapesDatabase(unittest.TestCase):
 
     def test_the_repository_ships_only_the_rows_it_uses(self):
         # docs/principles.md P9: the database is AISC's compilation; the full table loads at
-        # run time from the user's own copy (LOLA_SHAPES_XLSX), never from the repository.
+        # run time from the user's own copy (PETRA_SHAPES_XLSX), never from the repository.
         with open(TABLE, encoding="utf-8") as f:
             body = json.load(f)
         self.assertLessEqual(len(body["W"]), 40)
         self.assertLessEqual(len(body["L"]), 20)
 
-    @unittest.skipUnless(WORKBOOK, "the published workbook is not at hand (set LOLA_SHAPES_XLSX, or keep it in "
+    @unittest.skipUnless(WORKBOOK, "the published workbook is not at hand (set PETRA_SHAPES_XLSX, or keep it in "
                                    "docs/research/sources/)")
     def test_every_shipped_row_is_the_workbooks(self):
         published = import_workbook(WORKBOOK)
@@ -250,7 +250,7 @@ class ShapesDatabase(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             book = os.path.join(tmp, "SHAPE160.xlsx")
             _workbook(book, rows)
-            with mock.patch.dict(os.environ, {"LOLA_SHAPES_XLSX": book}):
+            with mock.patch.dict(os.environ, {"PETRA_SHAPES_XLSX": book}):
                 with self.assertRaisesRegex(ValueError, "is not the workbook the shipped rows cite"):
                     load(TABLE)
 

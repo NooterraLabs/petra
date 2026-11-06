@@ -9,8 +9,8 @@ from unittest import mock
 
 import numpy as np
 
-import lola.solvers as solvers
-from lola.kernel import (
+import petra.solvers as solvers
+from petra.kernel import (
     GOAL_RULE,
     LEMMAS,
     MODULE_OF,
@@ -30,10 +30,10 @@ from lola.kernel import (
     Sym,
     check,
 )
-from lola.kernel.rules.r3_hypercircle import HypercircleFields, MinimizerComponent, QuadraticProblem
-from lola.kernel.rules.r4_enclosure import AllNonpositive, Enclosure, PointWitness
-from lola.solvers import SolverSource, r4_enclosure
-from lola.solvers.exact import project_onto_equalities, range_box, rationalize, solve_exact, to_numpy
+from petra.kernel.rules.r3_hypercircle import HypercircleFields, MinimizerComponent, QuadraticProblem
+from petra.kernel.rules.r4_enclosure import AllNonpositive, Enclosure, PointWitness
+from petra.solvers import SolverSource, r4_enclosure
+from petra.solvers.exact import project_onto_equalities, range_box, rationalize, solve_exact, to_numpy
 
 
 def matrix(*rows) -> Matrix:

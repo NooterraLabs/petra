@@ -6,9 +6,9 @@ import tempfile
 import unittest
 from fractions import Fraction
 
-from lola.kernel import Add, Const, Div, Interval, Mul, Neg, Pi, PowInt, Sym
-from lola.premises import Tag
-from lola.registry import (
+from petra.kernel import Add, Const, Div, Interval, Mul, Neg, Pi, PowInt, Sym
+from petra.premises import Tag
+from petra.registry import (
     Constant,
     Corrosivity,
     DeckError,
@@ -25,7 +25,7 @@ from lola.registry import (
     read_deck,
     write_deck,
 )
-from lola.registry.constants import CONSTANTS, STATED
+from petra.registry.constants import CONSTANTS, STATED
 
 REGISTRY = build_registry()
 DECK = None
@@ -244,10 +244,10 @@ class Provenance(unittest.TestCase):
             self.assertIn(tag, {Tag.SANCTIONED, Tag.MEASURED, Tag.JUDGED}, name)
             self.assertTrue(owner and source, name)
             if tag is Tag.JUDGED:
-                self.assertEqual(owner, "lola-maintainers", f"{name}: a judged value is the maintainers' judgement")
+                self.assertEqual(owner, "petra-maintainers", f"{name}: a judged value is the maintainers' judgement")
                 self.assertRegex(source, "recalled|judged", f"{name}: a judged source says why it is not sanctioned")
             else:
-                self.assertNotEqual(owner, "lola-maintainers", f"{name}: a sanctioned value is owned by its standards body")
+                self.assertNotEqual(owner, "petra-maintainers", f"{name}: a sanctioned value is owned by its standards body")
 
     def test_the_footprint_premises_of_the_design_resolve(self):
         steel_e = REGISTRY.fact("const.steel.E")
@@ -261,7 +261,7 @@ class Provenance(unittest.TestCase):
     def test_a_value_without_provenance_or_with_a_non_registry_tag_cannot_be_built(self):
         iv = point("1")
         Constant("x", iv, "1", Tag.SANCTIONED, "ISO", "ISO 1", "a fact")
-        Stated(iv, "1", Tag.JUDGED, "lola-maintainers", "judged", "conditions")
+        Stated(iv, "1", Tag.JUDGED, "petra-maintainers", "judged", "conditions")
         for build in (
             lambda: Constant("x", iv, "1", Tag.SANCTIONED, "ISO", "", "no source"),
             lambda: Constant("x", iv, "1", Tag.SANCTIONED, " ", "ISO 1", "no owner"),
@@ -306,22 +306,22 @@ class DeckFiles(unittest.TestCase):
         self.assertIsNone(DECK.get("cable.cu_pvc_2_5", "toughness"))
 
     def test_a_valid_minimal_deck_parses(self):
-        deck = read_deck(self.write_body({"format": "lola-deck/0", "records": [self.good_record()]}))
+        deck = read_deck(self.write_body({"format": "petra-deck/0", "records": [self.good_record()]}))
         self.assertEqual(deck.get("chs.60_3x3_2", "A").value, Interval(Fraction(1, 2), Fraction(3, 4)))
 
     def test_malformed_decks_are_refused(self):
         cases = {
-            "float": {"format": "lola-deck/0", "records": [self.good_record(lo=0.5)]},
-            "decimal string": {"format": "lola-deck/0", "records": [self.good_record(lo="0.5")]},
-            "unreduced": {"format": "lola-deck/0", "records": [self.good_record(lo="2/4")]},
-            "unit denominator": {"format": "lola-deck/0", "records": [self.good_record(lo="1/1")]},
-            "negative zero": {"format": "lola-deck/0", "records": [self.good_record(lo="-0")]},
-            "lo above hi": {"format": "lola-deck/0", "records": [self.good_record(lo="1", hi="0")]},
-            "dotted prop": {"format": "lola-deck/0", "records": [self.good_record(prop="A.x")]},
-            "extra key": {"format": "lola-deck/0", "records": [self.good_record(note="x")]},
-            "duplicate": {"format": "lola-deck/0", "records": [self.good_record(), self.good_record()]},
-            "wrong format": {"format": "lola-deck/1", "records": []},
-            "extra top-level key": {"format": "lola-deck/0", "records": [], "x": 1},
+            "float": {"format": "petra-deck/0", "records": [self.good_record(lo=0.5)]},
+            "decimal string": {"format": "petra-deck/0", "records": [self.good_record(lo="0.5")]},
+            "unreduced": {"format": "petra-deck/0", "records": [self.good_record(lo="2/4")]},
+            "unit denominator": {"format": "petra-deck/0", "records": [self.good_record(lo="1/1")]},
+            "negative zero": {"format": "petra-deck/0", "records": [self.good_record(lo="-0")]},
+            "lo above hi": {"format": "petra-deck/0", "records": [self.good_record(lo="1", hi="0")]},
+            "dotted prop": {"format": "petra-deck/0", "records": [self.good_record(prop="A.x")]},
+            "extra key": {"format": "petra-deck/0", "records": [self.good_record(note="x")]},
+            "duplicate": {"format": "petra-deck/0", "records": [self.good_record(), self.good_record()]},
+            "wrong format": {"format": "petra-deck/1", "records": []},
+            "extra top-level key": {"format": "petra-deck/0", "records": [], "x": 1},
             "not an object": [],
         }
         for name, body in cases.items():

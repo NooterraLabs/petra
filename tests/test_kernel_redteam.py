@@ -17,7 +17,7 @@ import pickle
 import unittest
 from fractions import Fraction as Q
 
-from lola.kernel import (
+from petra.kernel import (
     Add,
     Const,
     DefinedRange,
@@ -47,9 +47,9 @@ from lola.kernel import (
     forget_families,
     is_issued,
 )
-from lola.kernel.codec import DecodeError
-from lola.kernel.rules.r2_definite import GramPositiveDefinite, GramTerm, LDLFactor
-from lola.kernel.rules.r3_hypercircle import (
+from petra.kernel.codec import DecodeError
+from petra.kernel.rules.r2_definite import GramPositiveDefinite, GramTerm, LDLFactor
+from petra.kernel.rules.r3_hypercircle import (
     ComponentBound,
     Hypercircle,
     HypercircleFields,
@@ -58,9 +58,9 @@ from lola.kernel.rules.r3_hypercircle import (
     MinimizerComponent,
     QuadraticProblem,
 )
-from lola.kernel.rules.r4_enclosure import AllNonpositive, Enclosure, PointWitness
-from lola.kernel.rules.r5_moment import MomentBound, MomentConstraint, MomentDual, RandomVar
-from lola.kernel.rules.r6_scenario import Arithmetic, BinomialTail
+from petra.kernel.rules.r4_enclosure import AllNonpositive, Enclosure, PointWitness
+from petra.kernel.rules.r5_moment import MomentBound, MomentConstraint, MomentDual, RandomVar
+from petra.kernel.rules.r6_scenario import Arithmetic, BinomialTail
 from tests import mutations
 
 

@@ -7,7 +7,7 @@ import json
 import unittest
 from fractions import Fraction as F
 
-from lola.kernel import (
+from petra.kernel import (
     TAGS,
     Abs,
     Add,
@@ -41,9 +41,9 @@ from lola.kernel import (
     evidence_hash,
     statement_hash,
 )
-from lola.kernel.rules.r1_linear import FarkasRay, FeasiblePoints, LinearFeasible
-from lola.kernel.rules.r2_definite import GramPositiveDefinite, GramTerm, LDLFactor, NegativeDirection
-from lola.kernel.rules.r3_hypercircle import (
+from petra.kernel.rules.r1_linear import FarkasRay, FeasiblePoints, LinearFeasible
+from petra.kernel.rules.r2_definite import GramPositiveDefinite, GramTerm, LDLFactor, NegativeDirection
+from petra.kernel.rules.r3_hypercircle import (
     ComponentBound,
     Hypercircle,
     HypercircleFields,
@@ -52,9 +52,9 @@ from lola.kernel.rules.r3_hypercircle import (
     MinimizerComponent,
     QuadraticProblem,
 )
-from lola.kernel.rules.r4_enclosure import AllNonpositive, Enclosure, PointWitness
-from lola.kernel.rules.r5_moment import MomentBound, MomentConstraint, MomentDual, RandomVar
-from lola.kernel.rules.r6_scenario import Arithmetic, BinomialTail
+from petra.kernel.rules.r4_enclosure import AllNonpositive, Enclosure, PointWitness
+from petra.kernel.rules.r5_moment import MomentBound, MomentConstraint, MomentDual, RandomVar
+from petra.kernel.rules.r6_scenario import Arithmetic, BinomialTail
 
 DESIGN_HASH = "sha256:f7e4f42637918874eba38b225d8fa66cdb692d6dedb2f1b9c20dc5a8e324bc53"
 

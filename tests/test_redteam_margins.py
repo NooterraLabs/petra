@@ -1,4 +1,4 @@
-"""Red-team reproductions for margins (MARGINAL) and `lola envelope`.
+"""Red-team reproductions for margins (MARGINAL) and `petra envelope`.
 
 Each finding has a test asserting the behaviour the design documents promise; they were
 expected failures until the fixes landed. The precondition tests pin what each one relies
@@ -13,17 +13,17 @@ import unittest
 from fractions import Fraction
 from pathlib import Path
 
-from lola import cli
-from lola.certs import CertStore
-from lola.kernel import Evidence, Refutation, Theorem, check, statement_hash
-from lola.kernel.rules.r4_enclosure import PointWitness
-from lola.lang import parse_design
-from lola.library import Library, certify_family
-from lola.models.base import ClaimOrigin
-from lola.pipeline import _prepare, check_design
-from lola.registry import build_registry
-from lola.solvers import SolverSource
-from lola.verdict import Marginal, Pass, Refuted, WithinMargin
+from petra import cli
+from petra.certs import CertStore
+from petra.kernel import Evidence, Refutation, Theorem, check, statement_hash
+from petra.kernel.rules.r4_enclosure import PointWitness
+from petra.lang import parse_design
+from petra.library import Library, certify_family
+from petra.models.base import ClaimOrigin
+from petra.pipeline import _prepare, check_design
+from petra.registry import build_registry
+from petra.solvers import SolverSource
+from petra.verdict import Marginal, Pass, Refuted, WithinMargin
 
 ROOT = Path(__file__).resolve().parent.parent
 REGISTRY = build_registry()
@@ -82,7 +82,7 @@ HOT_OVERLOAD = (
 class MarginWitnessHidesFail(_Files):
     def setUp(self):
         super().setUp()
-        self.path = self.write("ol.lola", edited("examples/circuit_pass.lola", *HOT_OVERLOAD))
+        self.path = self.write("ol.petra", edited("examples/circuit_pass.petra", *HOT_OVERLOAD))
         design = parse_design(Path(self.path).read_text(encoding="utf-8"), self.path, REGISTRY)
         prepared = _prepare(design, REGISTRY)
         (i,) = [k for k, e in enumerate(prepared.elaborated) if e.requirement.origin == ClaimOrigin("ol")]
@@ -134,13 +134,13 @@ class UndecidedMarginPasses(_Files):
     HUGE = "1000000000000000000000000000000"
 
     def report(self, claim: str):
-        text = edited("examples/truss_pass.lola", ("claim stability:  frame.stability_factor >= 3 under crowd", claim))
-        return check_design(parse_design(text, "t.lola", REGISTRY), REGISTRY, (SolverSource(),))
+        text = edited("examples/truss_pass.petra", ("claim stability:  frame.stability_factor >= 3 under crowd", claim))
+        return check_design(parse_design(text, "t.petra", REGISTRY), REGISTRY, (SolverSource(),))
 
     def test_a_stress_margin_prints_in_a_readable_unit(self):
-        text = edited("examples/truss_pass.lola", ("claim stress:     frame.member(diag_ad).stress <= 235 MPa under crowd",
+        text = edited("examples/truss_pass.petra", ("claim stress:     frame.member(diag_ad).stress <= 235 MPa under crowd",
                                                      "claim stress: frame.member(diag_ad).stress <= 235 MPa margin 300 MPa under crowd"))
-        report = check_design(parse_design(text, "t.lola", REGISTRY), REGISTRY, (SolverSource(),))
+        report = check_design(parse_design(text, "t.petra", REGISTRY), REGISTRY, (SolverSource(),))
         self.assertIn("300 MPa", report.render())
         self.assertNotIn("300000000 Pa", report.render())
 
@@ -164,9 +164,9 @@ class MarginProofDiscarded(_Files):
 
     def test_precondition_the_margin_certificate_proves_the_claim(self):
         certs = str(self.dir / "certs")
-        plain = self.write("p.lola", edited("examples/circuit_pass.lola", ("<= 70 degC under lamp_draw", "<= 58 degC under lamp_draw")))
+        plain = self.write("p.petra", edited("examples/circuit_pass.petra", ("<= 70 degC under lamp_draw", "<= 58 degC under lamp_draw")))
         self.assertEqual(run_cli("check", plain, "--certs", certs)[0], 0)
-        path = self.write("m.lola", edited("examples/circuit_pass.lola", ("<= 70 degC under lamp_draw", "<= 60 degC margin 2 degC under lamp_draw")))
+        path = self.write("m.petra", edited("examples/circuit_pass.petra", ("<= 70 degC under lamp_draw", "<= 60 degC margin 2 degC under lamp_draw")))
         design = parse_design(Path(path).read_text(encoding="utf-8"), path, REGISTRY)
         prepared = _prepare(design, REGISTRY)
         (i,) = [k for k, e in enumerate(prepared.elaborated) if e.requirement.origin == ClaimOrigin("hot")]
@@ -177,9 +177,9 @@ class MarginProofDiscarded(_Files):
 
     def test_the_claim_passes_on_the_margin_certificate(self):
         certs = str(self.dir / "certs")
-        plain = self.write("p.lola", edited("examples/circuit_pass.lola", ("<= 70 degC under lamp_draw", "<= 58 degC under lamp_draw")))
+        plain = self.write("p.petra", edited("examples/circuit_pass.petra", ("<= 70 degC under lamp_draw", "<= 58 degC under lamp_draw")))
         run_cli("check", plain, "--certs", certs)
-        path = self.write("m.lola", edited("examples/circuit_pass.lola", ("<= 70 degC under lamp_draw", "<= 60 degC margin 2 degC under lamp_draw")))
+        path = self.write("m.petra", edited("examples/circuit_pass.petra", ("<= 70 degC under lamp_draw", "<= 60 degC margin 2 degC under lamp_draw")))
         code, out, _ = run_cli("check", path, "--no-solve", "--certs", certs)
         self.assertEqual(code, 0, out)
         self.assertIn("proved: the claim holds with at least 2 degC to spare", out)
@@ -190,14 +190,14 @@ class MarginProofDiscarded(_Files):
 class MispairedWithinMargin(unittest.TestCase):
     def test_within_margin_refuses_a_margin_obligation_of_another_load_case(self):
         text = edited(
-            "examples/truss_pass.lola",
+            "examples/truss_pass.petra",
             ("claim strength:   frame.collapse_factor >= 1.5 under crowd\n", ""),
             ("claim stability:  frame.stability_factor >= 3 under crowd\n", ""),
             ("claim stress:     frame.member(diag_ad).stress <= 235 MPa under crowd",
              "claim stress: frame.member(diag_ad).stress <= 235 MPa margin 300 MPa"),
             ("", 'load gust {\n  on frame.E fx in [1 kN, 2 kN]\n  signed "c@example.org" source "s"\n}\n'),
         )
-        prepared = _prepare(parse_design(text, "t.lola", REGISTRY), REGISTRY)
+        prepared = _prepare(parse_design(text, "t.petra", REGISTRY), REGISTRY)
         (crowd, _), (gust, gust_margin) = [(e, m) for e, m in zip(prepared.elaborated, prepared.margins) if m is not None]
         self.assertIn("crowd", crowd.describe)
         self.assertIn("gust", gust_margin.describe)
@@ -213,12 +213,12 @@ class MispairedWithinMargin(unittest.TestCase):
 class FamilyMarginMessage(_Files):
     def test_a_proved_claim_with_a_margin_point_is_not_called_unproved(self):
         text = edited(
-            "examples/families/cu_pvc_clipped.lola",
+            "examples/families/cu_pvc_clipped.petra",
             ("claim hot:  c.w1.temperature <= 70 degC under demand",
              "claim hot:  c.w1.temperature <= 70 degC margin 20 degC under demand\n"
              "claim hot50: c.w1.temperature <= 50 degC under demand"),
         )
-        design = parse_design(text, "f.lola", REGISTRY)
+        design = parse_design(text, "f.petra", REGISTRY)
         result = certify_family(design, REGISTRY, Library(self.dir / "lib"))
         near = [o for o in result.report.outcomes if isinstance(o, WithinMargin)]
         self.assertTrue(near and near[0].theorem is not None, "precondition: hot is proved and within its margin")
@@ -229,7 +229,7 @@ class FamilyMarginMessage(_Files):
 
 class EnvelopeCli(_Files):
     def test_exit_status_is_not_zero_when_the_design_fails_elsewhere(self):
-        path = self.write("c.lola", edited("examples/circuit_pass.lola", ("fault_current in [0 kA, 6 kA]", "fault_current in [0 kA, 9 kA]")))
+        path = self.write("c.petra", edited("examples/circuit_pass.petra", ("fault_current in [0 kA, 6 kA]", "fault_current in [0 kA, 9 kA]")))
         self.assertEqual(run_cli("check", path)[0], 1)
         code, out, _ = run_cli("envelope", path, "--input", "ambient", "--from", "10 degC", "--to", "60 degC")
         self.assertIn("elsewhere  the obligations that do not depend on ambient are FAIL", out)
@@ -237,7 +237,7 @@ class EnvelopeCli(_Files):
 
     def test_a_negative_quantity_with_its_unit_attached_is_accepted(self):
         # _quantity documents "-20degC"; argparse takes it for an option and exits 3.
-        code, out, err = run_cli("envelope", str(ROOT / "examples/truss_pass.lola"), "--input", "crowd.frame.D.fy",
+        code, out, err = run_cli("envelope", str(ROOT / "examples/truss_pass.petra"), "--input", "crowd.frame.D.fy",
                                  "--from", "-30kN", "--to", "-10kN", "--resolution", "10kN")
         self.assertEqual(code, 0, err)
 

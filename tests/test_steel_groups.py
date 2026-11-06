@@ -31,10 +31,10 @@ import math
 import unittest
 from fractions import Fraction
 
-from lola.kernel import enclose
-from lola.models.steel import limits as L
-from lola.registry import build_registry
-from lola.units import CUSTOMARY
+from petra.kernel import enclose
+from petra.models.steel import limits as L
+from petra.registry import build_registry
+from petra.units import CUSTOMARY
 
 from tests import steel_examples as ex
 

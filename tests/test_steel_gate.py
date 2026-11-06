@@ -15,15 +15,15 @@ import unittest
 from fractions import Fraction
 from pathlib import Path
 
-from lola.lang import parse_design
-from lola.models.steel import breaker as B
-from lola.models.steel import faults as F
-from lola.models.steel import gate as G
-from lola.models.steel import generate as gen
-from lola.pipeline import check_design
-from lola.registry import build_registry
-from lola.solvers import SolverSource
-from lola.verdict import STATUS
+from petra.lang import parse_design
+from petra.models.steel import breaker as B
+from petra.models.steel import faults as F
+from petra.models.steel import gate as G
+from petra.models.steel import generate as gen
+from petra.pipeline import check_design
+from petra.registry import build_registry
+from petra.solvers import SolverSource
+from petra.verdict import STATUS
 
 REGISTRY = build_registry()
 DOC = Path(__file__).resolve().parents[1] / "docs" / "steel_gate.md"
@@ -31,7 +31,7 @@ SAMPLE = list(gen.generate(44, 5, REGISTRY))
 
 
 def status(text: str) -> tuple[str, dict[str, str]]:
-    report = check_design(parse_design(text, "t.lola", REGISTRY), REGISTRY, (SolverSource(),))
+    report = check_design(parse_design(text, "t.petra", REGISTRY), REGISTRY, (SolverSource(),))
     return STATUS[type(report.verdict)], G.deck_outcomes(report)[0]
 
 

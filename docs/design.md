@@ -1,23 +1,23 @@
-# LoLa v0: the math-only kernel
+# Petra v0: the math-only kernel
 
 This is the design of record. It began as arena candidate 1 and carries the grafts and fixes listed under Synthesis decision.
 
 ## Problem
 
-LoLa turns a `.lola` design into a verdict that is a theorem relative to named premises. Untrusted solvers produce certificates, and a small kernel checks them in exact rational arithmetic. The frame asks for six certificate rules, four physics domains, a makeable set, coverage, port contracts, family certificates, a gym, and a kernel under about 1,500 lines that a Lean kernel can later replace.
+Petra turns a `.petra` design into a verdict that is a theorem relative to named premises. Untrusted solvers produce certificates, and a small kernel checks them in exact rational arithmetic. The frame asks for six certificate rules, four physics domains, a makeable set, coverage, port contracts, family certificates, a gym, and a kernel under about 1,500 lines that a Lean kernel can later replace.
 
 The shape is not obvious because of one sentence in the frame. Each rule checks a certificate "against equations the kernel builds itself from the design". If the kernel builds the equations, the kernel knows physics, and the Lean port has to port trusses, wires and bolts too. Every v1 item (continuum FE, reduced basis, neural surrogates) would add physics to the kernel.
 
 This candidate keeps the intent and moves the physics. The kernel knows only mathematics: rationals, intervals, expressions, exact matrices, and six theorems about them. Small trusted elaborators, one per domain, build the equations from the design. A solver still never supplies a matrix or a model equation. It receives a statement an elaborator built and returns numbers. Each elaborator is named in every footprint as a `validated_model` premise, keyed by the hash of its source.
 
-The design honours the frame's constraints. `lola/kernel` imports only the standard library, and a test enforces it. Certificates are language-neutral JSON. A PASS cannot be built without theorems the kernel issued, a scope and a footprint. An UNKNOWN always names, as typed data, what would close it. The checker never invents an input bound.
+The design honours the frame's constraints. `petra/kernel` imports only the standard library, and a test enforces it. Certificates are language-neutral JSON. A PASS cannot be built without theorems the kernel issued, a scope and a footprint. An UNKNOWN always names, as typed data, what would close it. The checker never invents an input bound.
 
 ## Usage (caller's view)
 
 ### README quickstart
 
 ```text
-python -m lola check examples/truss_pass.lola
+python -m petra check examples/truss_pass.petra
 ```
 
 `check` parses the file, elaborates every claim and every coverage obligation into kernel statements, gathers evidence (stored certificates, then the library, then the solvers), and lets the kernel decide each one. The output below is captured from the build, with hashes cut to four hex digits, certified premises collapsed to one line, and long lines cut.
@@ -60,7 +60,7 @@ footprint  29 premises
 The report has one entry per claim and one entry named `coverage` for the requirements no claim made (coverage rules and port contracts). The design's verdict is the conjunction of the entries. `--json` prints the same report as data:
 
 ```json
-{"file": "examples/bolt_unknown.lola", "design": "mast-bracket-coastal", "status": "UNKNOWN", "verdicts": [
+{"file": "examples/bolt_unknown.petra", "design": "mast-bracket-coastal", "status": "UNKNOWN", "verdicts": [
   {"claim": "tension", "status": "PASS", "rules": ["R4"], "obligations": [],
    "footprint": [{"tag": "assumed", "label": "in:mast-bracket-coastal.wind.bracket.force", "owner": "client.structures@example.org", "source": "wind study WS-4, 50-year return"}, "..."]},
   {"claim": "coverage", "status": "UNKNOWN", "rules": [],
@@ -70,19 +70,19 @@ The report has one entry per claim and one entry named `coverage` for the requir
 
 `obligations` is non-empty exactly when the entry is UNKNOWN. Each line is `verdict.describe_need` applied to one typed `Need`.
 
-The other commands are `lola explain FILE` (print the statements with every hypothesis label), `lola envelope FILE --input NAME --from LO --to HI` (the widest proved interval of one input, call site 5), `lola verify CERT.json` (check a certificate file on its own, the job a Lean kernel will take over), `lola certify-family FILE --library DIR`, `lola registry build --out DECK` and `lola registry check [DECK]` (with no deck it checks the shipped registry and exits 0 when every relation holds), and `lola gym --episodes N --seed S`, which prints a `solved k/N` line. The family benchmark is `scripts/bench_family.py`, which prints a `reuse` line and a `recompute` line. Exit codes for `check` are 0 PASS, 1 FAIL, 2 UNKNOWN, 5 MARGINAL, 3 input error, taken from the overall status. `envelope` exits with the worse of its anchor's status and the status of the obligations that do not depend on the input.
+The other commands are `petra explain FILE` (print the statements with every hypothesis label), `petra envelope FILE --input NAME --from LO --to HI` (the widest proved interval of one input, call site 5), `petra verify CERT.json` (check a certificate file on its own, the job a Lean kernel will take over), `petra certify-family FILE --library DIR`, `petra registry build --out DECK` and `petra registry check [DECK]` (with no deck it checks the shipped registry and exits 0 when every relation holds), and `petra gym --episodes N --seed S`, which prints a `solved k/N` line. The family benchmark is `scripts/bench_family.py`, which prints a `reuse` line and a `recompute` line. Exit codes for `check` are 0 PASS, 1 FAIL, 2 UNKNOWN, 5 MARGINAL, 3 input error, taken from the overall status. `envelope` exits with the worse of its anchor's status and the status of the obligations that do not depend on the input.
 
 ### Call site 1. A CI gate in a hardware repo
 
 ```python
 import sys
-import lola
-from lola.premises import Tag
+import petra
+from petra.premises import Tag
 
-report = lola.check_file("designs/bracket.lola", certs="certs/", library=lola.Library("lib/"), solve=False)
+report = petra.check_file("designs/bracket.petra", certs="certs/", library=petra.Library("lib/"), solve=False)
 print(report.render())
 verdict = report.verdict
-if not isinstance(verdict, lola.Pass):
+if not isinstance(verdict, petra.Pass):
     sys.exit(1)
 judged = [p for p in verdict.footprint.premises if p.tag is Tag.JUDGED and not p.label.startswith("cov:")]
 APPROVED_SIGNERS = {"m.engineer@example.org", "a.reviewer@example.org"}
@@ -95,11 +95,11 @@ if any(p.owner not in APPROVED_SIGNERS for p in judged):
 ### Call site 2. An AI lab using the gym as a grader
 
 ```python
-from lola import Library
-from lola.gym import BaselineAgent, LolaEnv
+from petra import Library
+from petra.gym import BaselineAgent, LolaEnv
 
 library = Library("library/")
-env = LolaEnv("circuit", seed=7, library=library)   # a key of lola.models.DOMAINS with a gym generator
+env = LolaEnv("circuit", seed=7, library=library)   # a key of petra.models.DOMAINS with a gym generator
 agent = BaselineAgent(library)
 for _ in range(200):
     task = env.reset()
@@ -115,7 +115,7 @@ print(agent.stats())
 
 ```python
 import json
-from lola import kernel
+from petra import kernel
 
 env = json.load(open("certs/f7e4f426.json"))
 statement = kernel.decode_statement(env["statement"])
@@ -132,26 +132,26 @@ The kernel needs nothing but the file. That is the contract a Lean port reimplem
 ### Call site 4. Certify a family once, reuse it
 
 ```python
-import lola
-from lola.registry import build_registry
+import petra
+from petra.registry import build_registry
 
 registry = build_registry()
-library = lola.Library("library/")
-family = lola.load_design("examples/families/cu_pvc_clipped.lola", registry)
-lola.certify_family(family, registry, library)          # R4 partitions over the whole box, stored
-report = lola.check_file("examples/circuit_pass.lola", library=library)
+library = petra.Library("library/")
+family = petra.load_design("examples/families/cu_pvc_clipped.petra", registry)
+petra.certify_family(family, registry, library)          # R4 partitions over the whole box, stored
+report = petra.check_file("examples/circuit_pass.petra", library=library)
 # the `hot` and `drop` obligations show source "library": an Instance of the family theorem, checked by the kernel
 ```
 
 ### Call site 5. Margins and safe envelopes
 
-A claim may name a margin after its bound. `examples/circuit_pass.lola` with its `hot` claim edited to
+A claim may name a margin after its bound. `examples/circuit_pass.petra` with its `hot` claim edited to
 
 ```text
 claim hot:  lighting.w1.temperature <= 70 degC margin 20 degC under lamp_draw
 ```
 
-asks two things: does the wire stay at or below 70 degC, and does it come within 20 degC of that anywhere. The pipeline builds a second statement for each claim obligation with the bound moved inward by the margin (`lola explain` prints it as "margin obligation, the bound moved to 50 degC"). It offers that statement to the sources unless the claim is refuted, and tries every margin witness against the claim too, so a point past the bound is a FAIL. MARGINAL needs both a proof of the claim and a certified point within the margin. Here the claim is proved, but the wire reaches about 55 degC at the hot corner, so `check` exits 5:
+asks two things: does the wire stay at or below 70 degC, and does it come within 20 degC of that anywhere. The pipeline builds a second statement for each claim obligation with the bound moved inward by the margin (`petra explain` prints it as "margin obligation, the bound moved to 50 degC"). It offers that statement to the sources unless the claim is refuted, and tries every margin witness against the claim too, so a point past the bound is a FAIL. MARGINAL needs both a proof of the claim and a certified point within the margin. Here the claim is proved, but the wire reaches about 55 degC at the hot corner, so `check` exits 5:
 
 ```text
 workshop-lighting-radial: MARGINAL
@@ -175,10 +175,10 @@ margin     lighting.w1/wire.steady_temperature/claim.hot: proved: the claim hold
 
 The solver proved the claim at 68 degC as well. When it finds neither a point within the margin nor a proof at the tightened bound, the line reads `undecided: no point within 2 degC of the bound was found, and slack 2 degC is not proved`, and the verdict is still PASS, because the claim is proved. With the bound at 50 degC the design fails. A point within the margin found while the claim itself is neither proved nor refuted gives UNKNOWN, and the point is printed under the open item: it says nothing about the rest of the box, where the claim may still fail. `--json` lists each margin claim under `margins` with `proved` and `margin` (`proved`, `undecided`, or `within` with its point). The margin statement's hash is the hash of the plain `<= 50 degC` claim, so certificates serve both, and a certificate that proves the margin statement proves the claim too.
 
-`lola envelope` answers the inverse question: over what range of one input does the design hold? It never invents a bound. The caller names the range to explore:
+`petra envelope` answers the inverse question: over what range of one input does the design hold? It never invents a bound. The caller names the range to explore:
 
 ```text
-python -m lola envelope examples/circuit_pass.lola --input ambient --from "-20 degC" --to "100 degC"
+python -m petra envelope examples/circuit_pass.petra --input ambient --from "-20 degC" --to "100 degC"
 ```
 
 ```text
@@ -190,16 +190,16 @@ elsewhere  the obligations that do not depend on ambient are PASS
 probes     10 checks (limit 64)
 ```
 
-Each probe is the design with the ambient's range replaced and checked like any design, so the reported interval is a PASS assembled from kernel theorems. The probed range is assumed by `lola envelope`, not signed by the site manager, because the manager signed only [10, 40] degC. The same command takes a load entry (`--input lamp_draw.lighting.lamps.current` stops at 10.06 A, where the B10 breaker no longer protects the wire), a component field (`lighting.mains.fault_current` stops at 6.19 kA, the wire's short-circuit withstand) or a family param. With a margin claim the envelope shrinks to where the margin holds: `margin 10 degC` stops it at 43.75 degC, with MARGINAL at 44.9 degC. The search is bounded. It runs at most 64 checks (`--max-probes N`), split between the two sides with the anchor and the confirming check reserved, and it never bisects finer than 1/2^20 of the probe range. A finer `--resolution` is raised to that floor, and a side that stops at the limit reports how much is left undecided. The exit code is the worse of the anchor's status and the elsewhere status, so an envelope over a design that fails elsewhere does not exit 0. A negative bound may be written `--from -20degC`. `--json` prints the same as exact rationals in SI units.
+Each probe is the design with the ambient's range replaced and checked like any design, so the reported interval is a PASS assembled from kernel theorems. The probed range is assumed by `petra envelope`, not signed by the site manager, because the manager signed only [10, 40] degC. The same command takes a load entry (`--input lamp_draw.lighting.lamps.current` stops at 10.06 A, where the B10 breaker no longer protects the wire), a component field (`lighting.mains.fault_current` stops at 6.19 kA, the wire's short-circuit withstand) or a family param. With a margin claim the envelope shrinks to where the margin holds: `margin 10 degC` stops it at 43.75 degC, with MARGINAL at 44.9 degC. The search is bounded. It runs at most 64 checks (`--max-probes N`), split between the two sides with the anchor and the confirming check reserved, and it never bisects finer than 1/2^20 of the probe range. A finer `--resolution` is raised to that floor, and a side that stops at the limit reports how much is left undecided. The exit code is the worse of the anchor's status and the elsewhere status, so an envelope over a design that fails elsewhere does not exit 0. A negative bound may be written `--from -20degC`. `--json` prints the same as exact rationals in SI units.
 
 ### One example per domain
 
 The sketch ships these in `examples/`. Numbers were chosen by hand calculation to land on the stated verdict and will be re-tuned when the solvers run.
 
-**Trusses** (`truss_pass.lola`, expected PASS. `truss_fail.lola` raises the load to 60 kN per node and expects FAIL by a collapse mechanism on the end diagonal).
+**Trusses** (`truss_pass.petra`, expected PASS. `truss_fail.petra` raises the load to 60 kN per node and expects FAIL by a collapse mechanism on the end diagonal).
 
-```lola
-lola 0
+```petra
+petra 0
 
 design "warren-footbridge-panel" {
   owner "a.reviewer@example.org"
@@ -238,10 +238,10 @@ claim stress:     frame.member(diag_ad).stress <= 235 MPa under crowd
 
 A hand calculation gives the margins. At factor 1.5 the end diagonal carries 45 kN of compression against an EN 1993-1-1 flexural buckling resistance of 54.7 kN (CHS 60.3x3.2, L = 2.5 m, curve c, relative slenderness 1.66, reduction factor 0.27, at E = 200 GPa). The bare Euler load would be 74.1 kN. With the rev C load of 60 kN it needs 112.5 kN, which fails.
 
-**Wire circuits** (`circuit_pass.lola`, expected PASS, two obligations reused from the family).
+**Wire circuits** (`circuit_pass.petra`, expected PASS, two obligations reused from the family).
 
-```lola
-lola 0
+```petra
+petra 0
 
 design "workshop-lighting-radial" {
   owner "e.designer@example.org"
@@ -274,10 +274,10 @@ claim drop: lighting.w1.voltage_drop <= 3 % under lamp_draw
 
 Coverage adds short circuit (breaker let-through I2t against k^2 S^2 with k derived from copper's constants), overload protection (IEC 60364-4-43, I_B <= I_n and the wire at I_n stays below 70 degC), and the default voltage-drop limit. The `w1.b -> t1.wire` connection adds a port contract, which requires the wire's steady-temperature guarantee to sit inside the terminal's 75 degC assumption.
 
-**Bolts** (`bolt_unknown.lola`, expected UNKNOWN).
+**Bolts** (`bolt_unknown.petra`, expected UNKNOWN).
 
-```lola
-lola 0
+```petra
+petra 0
 
 design "mast-bracket-coastal" {
   owner "m.engineer@example.org"
@@ -303,10 +303,10 @@ claim tension: bracket.tension_utilisation <= 0.9 under wind
 
 The tension claim is certified (worst case 29.0 kN against 0.9 x 450 MPa x 84.3 mm2 = 34.1 kN). Coverage demands `corrosion.galvanic` (A4 stainless against 6061 aluminium in a wet C5 environment) and `bolt.plate_bearing`. v0 has no model for either and no waiver names them, so the verdict is UNKNOWN and lists both with what each needs.
 
-**Uncertain loads** (`hook_uncertain.lola`, expected PASS). The demand domain compares a demand with a capacity and knows nothing about bolts, so this example depends on no other domain's model.
+**Uncertain loads** (`hook_uncertain.petra`, expected PASS). The demand domain compares a demand with a capacity and knows nothing about bolts, so this example depends on no other domain's model.
 
-```lola
-lola 0
+```petra
+petra 0
 
 design "hoist-hook" {
   owner "m.engineer@example.org"
@@ -339,20 +339,20 @@ claim tested:   P(fail hook at 36 kN) <= 1/100 confidence 95 % from proof
 
 Five types carry the whole design, and two registries say which rules and which domains exist. Everything else is a function between them.
 
-1. **`kernel.Statement`** (`lola/kernel/terms.py`) is `hyps` plus one `goal`. It reads "for every value of the range hypotheses inside their ranges, and every defined hypothesis equal to the quantity it names, the goal holds." There are six goal variants, one per rule, each defined in its rule module under `lola/kernel/rules/`: `LinearFeasible` (R1), `GramPositiveDefinite` (R2), `MinimizerBound` (R3), `AllNonpositive` (R4), `MomentBound` (R5), `BinomialTail` (R6). Their fields are `Expr` trees, sparse exact `Matrix` values, and rationals. No field names a physical thing.
+1. **`kernel.Statement`** (`petra/kernel/terms.py`) is `hyps` plus one `goal`. It reads "for every value of the range hypotheses inside their ranges, and every defined hypothesis equal to the quantity it names, the goal holds." There are six goal variants, one per rule, each defined in its rule module under `petra/kernel/rules/`: `LinearFeasible` (R1), `GramPositiveDefinite` (R2), `MinimizerBound` (R3), `AllNonpositive` (R4), `MomentBound` (R5), `BinomialTail` (R6). Their fields are `Expr` trees, sparse exact `Matrix` values, and rationals. No field names a physical thing.
 2. **`kernel.Hyp`** is either `RangeHyp(sym, lo, hi, label)` or `DefinedHyp(sym, definition)`. The label is an opaque string to the kernel. Outside the kernel it names a premise (`reg:`, `in:`), a scope parameter (`par:`) or a drawn design value (`dsg:`).
-3. **`kernel.Evidence`** (`lola/kernel/evidence.py`) holds only what a solver chose: feasible points, an LDL factor, hypercircle fields, a split tree, dual multipliers, or a counterexample point. The body types are declared by the rule modules. Evidence never holds a matrix or an expression from the model.
+3. **`kernel.Evidence`** (`petra/kernel/evidence.py`) holds only what a solver chose: feasible points, an LDL factor, hypercircle fields, a split tree, dual multipliers, or a counterexample point. The body types are declared by the rule modules. Evidence never holds a matrix or an expression from the model.
 4. **`kernel.Theorem` and `kernel.Refutation`** are issued, not constructed. Each is a bare handle with no fields. Its data lives in a kernel-private table keyed by the handle's identity, and `kernel.is_issued(x)` is true only for a handle `check` returned. Calling the class raises, `object.__new__` gives a handle with no record, assignment (even `object.__setattr__`) has nothing to change, and copy, deepcopy, pickle and `dataclasses.replace` raise. `tests/test_seal.py` tries each one. A theorem exposes the statement, its hash, the rule, and `labels`, the exact set of hypothesis labels it rests on.
-5. **`verdict.Pass | Fail | Unknown | Marginal`** (`lola/verdict.py`). `Pass` takes a `Scope`, a non-empty `Footprint` and a non-empty tuple of issued theorems whose every label resolves to a footprint premise, a scope parameter or the design itself. `Fail` takes an issued `Refutation` of the obligation's own statement, and a theorem for each validity row of its model, over the box or at the refutation's point. `Marginal` takes at least one `WithinMargin` item, an issued `Refutation` of a claim's margin statement together with the claim's own theorem, and the `Scope` those theorems hold over. `Unknown` takes at least one `Open` item, and each `Open` names at least one typed `Need` (`lola/models/base.py`): `NeedsCertificate`, `CertificateRejected`, `CertificateTooWeak`, `NeedsInputBound`, `NoRuleForQuantity`, `NoModel`, `RegistryInconsistent` or `OutsideValidity`. An `Open` for a claim with a margin may also carry `near`, a `WithinMargin` without a theorem: the point within the margin found while the claim was neither proved nor refuted. A gym agent acts on the variant, and a report prints it.
+5. **`verdict.Pass | Fail | Unknown | Marginal`** (`petra/verdict.py`). `Pass` takes a `Scope`, a non-empty `Footprint` and a non-empty tuple of issued theorems whose every label resolves to a footprint premise, a scope parameter or the design itself. `Fail` takes an issued `Refutation` of the obligation's own statement, and a theorem for each validity row of its model, over the box or at the refutation's point. `Marginal` takes at least one `WithinMargin` item, an issued `Refutation` of a claim's margin statement together with the claim's own theorem, and the `Scope` those theorems hold over. `Unknown` takes at least one `Open` item, and each `Open` names at least one typed `Need` (`petra/models/base.py`): `NeedsCertificate`, `CertificateRejected`, `CertificateTooWeak`, `NeedsInputBound`, `NoRuleForQuantity`, `NoModel`, `RegistryInconsistent` or `OutsideValidity`. An `Open` for a claim with a margin may also carry `near`, a `WithinMargin` without a theorem: the point within the margin found while the claim was neither proved nor refuted. A gym agent acts on the variant, and a report prints it.
 
-The rule registry is `lola/kernel/rules/__init__.py`. Each rule module ends with `RULE = RuleSpec(...)`, which names its goal, evidence and lemma types, their JSON tags, and its check functions. `_REGISTERED` lists the six specs, and `RULES`, `GOAL_RULE`, `PROOF_RULE`, `REFUTATION_RULE`, `LEMMAS`, the rule part of `codec.TAGS`, and `MODULE_OF` are derived from it. The solver for a rule is the module of the same name under `lola/solvers/`.
+The rule registry is `petra/kernel/rules/__init__.py`. Each rule module ends with `RULE = RuleSpec(...)`, which names its goal, evidence and lemma types, their JSON tags, and its check functions. `_REGISTERED` lists the six specs, and `RULES`, `GOAL_RULE`, `PROOF_RULE`, `REFUTATION_RULE`, `LEMMAS`, the rule part of `codec.TAGS`, and `MODULE_OF` are derived from it. The solver for a rule is the module of the same name under `petra/solvers/`.
 
-The domain registry is `lola/models/__init__.py`. Each domain module ends with `DOMAIN = DomainSpec(...)`, which names its component kinds and their lowerers, its failure modes and their builders, its claimable quantities, its probability methods, its coverage rules, its model premises, and its feature and port hooks. `_REGISTERED` names the four v0 domains (truss, circuit, bolt, uncertainty), and `DOMAINS`, `KINDS`, `MODES`, `UNMODELLED` and `COVERAGE` are derived from it. The tuple is already filled in, so no implementer edits the file.
+The domain registry is `petra/models/__init__.py`. Each domain module ends with `DOMAIN = DomainSpec(...)`, which names its component kinds and their lowerers, its failure modes and their builders, its claimable quantities, its probability methods, its coverage rules, its model premises, and its feature and port hooks. `_REGISTERED` names the four v0 domains (truss, circuit, bolt, uncertainty), and `DOMAINS`, `KINDS`, `MODES`, `UNMODELLED` and `COVERAGE` are derived from it. The tuple is already filled in, so no implementer edits the file.
 
 ### How data flows
 
 ```text
-.lola text  --lang.parse_design-->      ir.Design             trusted front end: names, units, signatures; generic components
+.petra text  --lang.parse_design-->      ir.Design             trusted front end: names, units, signatures; generic components
 ir.Design   --pipeline.lower_components--> typed models       each kind's lowerer (models.KINDS): attributes, registry ids
 models      --coverage.generate-->      Requirement[]         claims plus the coverage table, minus waivers
 Requirement --pipeline.elaborate-->     Obligation | Gap      the owning domain's builder: Statement plus ModelSpec
@@ -375,7 +375,7 @@ A reader traces any verdict in three files: the elaborator that built the statem
 8. **Elaborators are hashed into their premises.** `ModelSpec.source_hash` is the sha256 of the elaborator module's source. Editing the physics changes the `model:` label in every footprint and every family key that depends on it.
 9. **One registration per concept, and every table is derived.** A rule is one `RuleSpec` in `kernel/rules/_REGISTERED`, and a domain is one `DomainSpec` in `models/_REGISTERED`. Each `_index` refuses a registry that would make a table ambiguous: a type, tag, kind or mode claimed twice, a spec naming an untagged type, or a domain reaching a mode it does not declare. A failure mode is declared once, by the domain that owns it, and waivers name it by id. The typing aliases (`Goal`, `ProofEvidence`, `QuantityDef` and the rest) stay for readers. `tests/test_structure.py` fails when an alias and the registry disagree, `tests/test_domain_registry.py` does the same for domains, and `tests/test_solver_registry.py` for solver modules (per model-the-domain and encode-lessons-in-structure).
 10. **A margin is a second statement, not a tolerance inside a rule.** `claim NAME: QOI <= B margin m` keeps the claim's statement as it was and adds one built by the same builder from the requirement with its bound at B - m (`Criterion.tightened`). Builders read only the relation and the bound, so they need no change, and the kernel sees two ordinary statements. FAIL is a refutation of the claim. Every margin witness is tried against the claim too, at every expression of its goal, so a point past the bound is never reported as merely within the margin. MARGINAL is a proof of the claim plus a refutation of the margin statement. PASS is a proof of the claim with no point found within the margin, and the report says whether the margin statement was proved as well ("margin proved") or not ("margin undecided"). A certificate that proves the margin statement proves the claim, whose goal is weaker, so the pipeline accepts it for both. A point within the margin without the claim's proof is UNKNOWN, with the point shown. Such a point says nothing about the rest of the box, and MARGINAL must not rate a claim that may fail elsewhere above UNKNOWN. This makes a claim decidable at tolerance m in the sense of Gao, Avigad and Clarke's delta-decidability. A peak at least m inside the bound leaves slack m, which a fine enough partition proves: PASS. A peak past the bound is refuted: FAIL. A peak strictly between B - m and B leaves the claim some slack and the margin search a point: MARGINAL. Only a peak exactly on B, or an exhausted budget, leaves UNKNOWN, and the report then shows the margin point; otherwise UNKNOWN is left for missing premises and missing models. `verdict.WithinMargin` and `verdict.Discharged` check that the margin obligation is the claim's own requirement at its own tightened bound, over the same model, with the same goal type and the same hypotheses. A builder that states its margin any other way gives the claim an open item, "margin not checked", and a warning, never a silent PASS.
-11. **An envelope is a search over checks, not a new kind of proof.** `lola envelope` (`lola/envelope.py`, untrusted) replaces one input's range with a probe interval and calls `check_design`. A claim holds for all values in its ranges, so a PASS over an interval is a PASS over every interval inside it, and whether [anchor, x] passes is monotone in x even when the physics is not. Bisection on x therefore finds the end of the proved interval within the resolution. A counterexample or margin point at input value v blocks every interval holding v, so growth stops there at once. The answer is a PASS the pipeline assembled, so the envelope adds nothing to the trusted base. The search is bounded: at most `--max-probes` checks (default 64), split between the two sides with the anchor and the confirming check reserved, and no bisection finer than 1/2^20 of the probe range. The report notes a raised resolution and a side that stopped at the limit. The exit code is the worse of the anchor's status and the status of the obligations that do not depend on the input, so a design that fails elsewhere never exits 0 from `lola envelope`.
+11. **An envelope is a search over checks, not a new kind of proof.** `petra envelope` (`petra/envelope.py`, untrusted) replaces one input's range with a probe interval and calls `check_design`. A claim holds for all values in its ranges, so a PASS over an interval is a PASS over every interval inside it, and whether [anchor, x] passes is monotone in x even when the physics is not. Bisection on x therefore finds the end of the proved interval within the resolution. A counterexample or margin point at input value v blocks every interval holding v, so growth stops there at once. The answer is a PASS the pipeline assembled, so the envelope adds nothing to the trusted base. The search is bounded: at most `--max-probes` checks (default 64), split between the two sides with the anchor and the confirming check reserved, and no bisection finer than 1/2^20 of the probe range. The report notes a raised resolution and a side that stopped at the limit. The exit code is the worse of the anchor's status and the status of the obligations that do not depend on the input, so a design that fails elsewhere never exits 0 from `petra envelope`.
 12. **A model's numeric validity limits are statements the kernel checks, not text.** A `ModelSpec` lists its limits as `ValidityRow`s, each an inequality over the same quantities as the claim: |N|/(A fy) <= 1 for a linear-elastic member, |N|/(E A) <= 0.002 for small strain, and D fy <= 90 t 235 MPa for a class 3 tube. Every obligation carries one validity obligation per row of its model, built over the same hypotheses and load case, with mode `validity.<row>` and no criterion. A row is a separate statement, not a conjunct of the claim's goal, so each proof stays one rule and one certificate, and a row shared by several obligations of one load case is solved once per run, keyed by its statement hash. `Discharged` and `WithinMargin` need a theorem of every row over the whole box, so a PASS or MARGINAL never rests on a model used outside the range its rows state. A proof of the claim alone cannot carry a PASS: the claim could hold only because the model is wrong where it is used. `Refuted` needs each row proved over the box or at the refutation's point. `verdict.at_point` narrows every range hypothesis the refutation assumes to its value there, and leaves the rest at full range, so a FAIL is a counterexample at which the model holds, even when a row fails elsewhere in the box. A row refuted at the point gives UNKNOWN with `OutsideValidity`, which names the model, the row and the point; an undecided row gives its own needs. The pipeline takes the first counterexample the sources offer and does not search for another where the rows hold, so a claim whose first counterexample lies outside the model's range reads UNKNOWN with that point, even when a valid counterexample exists elsewhere in the box. The kernel never learns what a row means. Validity lives in the elaborators and the pipeline, and the kernel checks ordinary statements. A limit not yet stated as a row is listed in `ModelSpec.unchecked`, and the premise text prints it as "not checked: ...". `tests/test_validity.py` fails when a model's validity text states a numeric limit in words.
 
 ### Where validation lives
@@ -400,7 +400,7 @@ Validation happens at three boundaries and nowhere else (per boundary-discipline
 ### What the design deliberately does not do
 
 - The kernel never interprets a label, a unit, or a physical name.
-- No part of LoLa substitutes a default input bound. A missing bound is a `Gap` needing `NeedsInputBound`. A design with no environment class is still checked: builders that need it report `NeedsInputBound`, and the galvanic rule treats an undeclared environment as wet.
+- No part of Petra substitutes a default input bound. A missing bound is a `Gap` needing `NeedsInputBound`. A design with no environment class is still checked: builders that need it report `NeedsInputBound`, and the galvanic rule treats an undeclared environment as wet.
 - The library and the certificate directory are never trusted. The kernel checks what they offer on every use. A library family is checked once per process, and every query against it.
 - `gym.LolaEnv.step` never runs a solver for the agent.
 - The consistency checker can only add open items needing `RegistryInconsistent`, never remove one.
@@ -415,13 +415,13 @@ The only shared mutable state is the certificate directory and the library, whic
 
 `pipeline.check_design(design, registry, sources)` is the only way to get a verdict. A source is a one-method protocol (`offer`), so certificate files, the library and the solvers plug in the same way. A new source, such as a remote solver farm, is one class.
 
-An elaborator is one function per failure mode, `(requirement, typed model, design, registry) -> tuple[Obligation | Gap, ...]`, registered on its domain's `DomainSpec`. It hides all of a domain's physics, and the rest of LoLa sees only statements.
+An elaborator is one function per failure mode, `(requirement, typed model, design, registry) -> tuple[Obligation | Gap, ...]`, registered on its domain's `DomainSpec`. It hides all of a domain's physics, and the rest of Petra sees only statements.
 
 The exposed complexity is the term language itself. An elaborator author must express physics as one of six goal shapes. That is the price of a physics-free kernel, and the alternatives section weighs it.
 
 ## Certificate JSON format
 
-A certificate file is an envelope around two kernel terms. The statement is stored so the file can be checked on its own (call site 3). LoLa's pipeline never trusts it. It re-elaborates and looks files up by the hash of the fresh statement.
+A certificate file is an envelope around two kernel terms. The statement is stored so the file can be checked on its own (call site 3). Petra's pipeline never trusts it. It re-elaborates and looks files up by the hash of the fresh statement.
 
 - Every term is an object with a `"t"` tag. Field keys are the dataclass field names in `kernel/terms.py`, `kernel/evidence.py` and the rule modules under `kernel/rules/`. `kernel/codec.py` lists the core tags and merges in the tags each `RuleSpec` declares.
 - Rationals are strings, `"n"` or `"p/q"` reduced with q > 1. The decoder rejects decimals, exponents and floats. Counts and indices are JSON integers.
@@ -431,12 +431,12 @@ A certificate file is an envelope around two kernel terms. The statement is stor
 - Hypotheses are sorted by `sym` with no duplicates.
 - An `instance` evidence body holds a family `statement`, the family's `evidence`, and a `renaming`: pairs of family symbol and query symbol, sorted by family symbol, covering every family symbol, bound ones included. Its envelope's `defined` list is empty, because the defined ranges come from the family theorem. The family evidence may not itself be an `instance`.
 
-The example is the bolt-tension obligation from `bolt_unknown.lola`, copied verbatim from `examples/bolt_tension.cert.json` (`tests/test_docs.py` fails if the two differ). The builder names symbols by design path. The goal says T/(K d) + phi F / n - 0.9 Rp02 As <= 0 over the box, where n is the bracket's bolt count and As = (pi/4)((d2 + d3)/2)^2 is written out from the ISO 724 coefficients. The evidence is a single leaf. Every symbol with a nonzero range appears once, so the interval enclosure over the whole box equals the worst corner up to the pi enclosure. A hand check of that corner gives 26,042 N of preload plus 3,000 N of external share against 0.9 x 450 MPa x 84.27 mm^2 = 34,128 N, a margin of -5,086 N.
+The example is the bolt-tension obligation from `bolt_unknown.petra`, copied verbatim from `examples/bolt_tension.cert.json` (`tests/test_docs.py` fails if the two differ). The builder names symbols by design path. The goal says T/(K d) + phi F / n - 0.9 Rp02 As <= 0 over the box, where n is the bracket's bolt count and As = (pi/4)((d2 + d3)/2)^2 is written out from the ISO 724 coefficients. The evidence is a single leaf. Every symbol with a nonzero range appears once, so the interval enclosure over the whole box equals the worst corner up to the pi enclosure. A hand check of that corner gives 26,042 N of preload plus 3,000 N of external share against 0.9 x 450 MPa x 84.27 mm^2 = 34,128 N, a margin of -5,086 N.
 
 ```json
 {
-  "format": "lola-cert/0",
-  "kernel": "lola-kernel/0",
+  "format": "petra-cert/0",
+  "kernel": "petra-kernel/0",
   "statement_hash": "sha256:9caaf82371013b4170cfbb25cde94eaa54b40ee325600116748e4ca91b55f372",
   "statement": {
     "t": "statement",
@@ -455,11 +455,11 @@ The example is the bolt-tension obligation from `bolt_unknown.lola`, copied verb
     "goal": {"t": "all_nonpositive", "exprs": [{"t": "add", "args": [{"t": "add", "args": [{"t": "div", "num": {"t": "sym", "name": "bracket.torque"}, "den": {"t": "mul", "args": [{"t": "sym", "name": "bracket.nut_factor"}, {"t": "sym", "name": "const.iso261.M12.d"}]}}, {"t": "div", "num": {"t": "mul", "args": [{"t": "sym", "name": "bracket.load_share"}, {"t": "sym", "name": "wind.bracket.force"}]}, "den": {"t": "sym", "name": "bracket.count"}}]}, {"t": "neg", "arg": {"t": "mul", "args": [{"t": "const", "value": "9/10"}, {"t": "mul", "args": [{"t": "sym", "name": "bolt.M12_A4_70.Rp02_min"}, {"t": "mul", "args": [{"t": "div", "num": {"t": "pi"}, "den": {"t": "const", "value": "4"}}, {"t": "pow_int", "base": {"t": "div", "num": {"t": "add", "args": [{"t": "add", "args": [{"t": "sym", "name": "const.iso261.M12.d"}, {"t": "neg", "arg": {"t": "mul", "args": [{"t": "sym", "name": "const.iso724.d2_coefficient"}, {"t": "sym", "name": "const.iso261.M12.pitch"}]}}]}, {"t": "add", "args": [{"t": "sym", "name": "const.iso261.M12.d"}, {"t": "neg", "arg": {"t": "mul", "args": [{"t": "sym", "name": "const.iso724.d3_coefficient"}, {"t": "sym", "name": "const.iso261.M12.pitch"}]}}]}]}, "den": {"t": "const", "value": "2"}}, "exponent": 2}]}]}]}}]}]}
   },
   "evidence": {"t": "evidence", "body": {"t": "enclosure", "partition": {"t": "leaf"}}, "defined": []},
-  "producer": {"source": "solver:r4_enclosure", "lola": "0.1.0"}
+  "producer": {"source": "solver:r4_enclosure", "petra": "0.1.0"}
 }
 ```
 
-The kernel's answer for this file is a `Theorem` whose `labels` are the ten labels above (`python -m lola verify examples/bolt_tension.cert.json`). Its footprint shows the four signed or measured inputs, the sanctioned ISO 261, ISO 724 and ISO 3506 values, `model:bolt.tension@...` and `cov:...`.
+The kernel's answer for this file is a `Theorem` whose `labels` are the ten labels above (`python -m petra verify examples/bolt_tension.cert.json`). Its footprint shows the four signed or measured inputs, the sanctioned ISO 261, ISO 724 and ISO 3506 values, `model:bolt.tension@...` and `cov:...`.
 
 ## Module map and line budget
 
@@ -469,22 +469,22 @@ Line counts do not include docstrings, comments or blank lines. The kernel colum
 
 | File | Owns | Code lines |
 |---|---|---|
-| `lola/kernel/interval.py` | `Q`, canonical rational parsing, `Interval`, outward rounding, rigorous sqrt, ln, exp, pi | 141 |
-| `lola/kernel/terms.py` | `Expr` variants, `Matrix`, `RangeHyp`, `DefinedHyp`, `Statement` | 70 |
-| `lola/kernel/evidence.py` | partitions, points, `Evidence`, `DefinedRange`, `Instance` | 34 |
-| `lola/kernel/codec.py` | strict JSON codec, canonical text, hashes, core tags merged with rule tags | 130 |
-| `lola/kernel/evaluate.py` | `enclose`, free symbols, affine decomposition, vertex order | 123 |
-| `lola/kernel/linalg.py` | exact sparse products, Gram sums, LDL^T product | 43 |
-| `lola/kernel/check.py` | `check`, well-formedness, registry dispatch, lemma handling, `Instance` checks and the family memo, issued results | 236 |
-| `lola/kernel/rules/base.py` | `RuleSpec`, `Lemma`, `Invalid`, `TooWeak` | 30 |
-| `lola/kernel/rules/__init__.py` | `_REGISTERED`, `_index`, derived tables, typing aliases | 92 |
-| `lola/kernel/rules/r1_linear.py` | goal and evidence types, vertex feasibility, Farkas | 71 |
-| `lola/kernel/rules/r2_definite.py` | goal and evidence types, Loewner bound plus LDL^T, negative direction | 68 |
-| `lola/kernel/rules/r3_hypercircle.py` | `QuadraticProblem`, `MinimizerComponent`, hypercircle enclosure, `prove_defined` lemma | 150 |
-| `lola/kernel/rules/r4_enclosure.py` | goal and evidence types, partition walk, point witness | 64 |
-| `lola/kernel/rules/r5_moment.py` | goal and evidence types, moment dual with cell-wise domination | 60 |
-| `lola/kernel/rules/r6_scenario.py` | goal type, exact binomial tail | 44 |
-| `lola/kernel/__init__.py` | public re-exports | 58 |
+| `petra/kernel/interval.py` | `Q`, canonical rational parsing, `Interval`, outward rounding, rigorous sqrt, ln, exp, pi | 141 |
+| `petra/kernel/terms.py` | `Expr` variants, `Matrix`, `RangeHyp`, `DefinedHyp`, `Statement` | 70 |
+| `petra/kernel/evidence.py` | partitions, points, `Evidence`, `DefinedRange`, `Instance` | 34 |
+| `petra/kernel/codec.py` | strict JSON codec, canonical text, hashes, core tags merged with rule tags | 130 |
+| `petra/kernel/evaluate.py` | `enclose`, free symbols, affine decomposition, vertex order | 123 |
+| `petra/kernel/linalg.py` | exact sparse products, Gram sums, LDL^T product | 43 |
+| `petra/kernel/check.py` | `check`, well-formedness, registry dispatch, lemma handling, `Instance` checks and the family memo, issued results | 236 |
+| `petra/kernel/rules/base.py` | `RuleSpec`, `Lemma`, `Invalid`, `TooWeak` | 30 |
+| `petra/kernel/rules/__init__.py` | `_REGISTERED`, `_index`, derived tables, typing aliases | 92 |
+| `petra/kernel/rules/r1_linear.py` | goal and evidence types, vertex feasibility, Farkas | 71 |
+| `petra/kernel/rules/r2_definite.py` | goal and evidence types, Loewner bound plus LDL^T, negative direction | 68 |
+| `petra/kernel/rules/r3_hypercircle.py` | `QuadraticProblem`, `MinimizerComponent`, hypercircle enclosure, `prove_defined` lemma | 150 |
+| `petra/kernel/rules/r4_enclosure.py` | goal and evidence types, partition walk, point witness | 64 |
+| `petra/kernel/rules/r5_moment.py` | goal and evidence types, moment dual with cell-wise domination | 60 |
+| `petra/kernel/rules/r6_scenario.py` | goal type, exact binomial tail | 44 |
+| `petra/kernel/__init__.py` | public re-exports | 58 |
 | **Total** | | **1,414** |
 
 ### Trusted outside the kernel
@@ -493,24 +493,24 @@ These files decide what a statement means. A bug here can produce a wrong verdic
 
 | File | Owns | Estimate |
 |---|---|---|
-| `lola/models/base.py` | `FailureMode`, `ModelSpec`, `Requirement`, the `Need` variants, `Obligation`, `Gap`, coverage and port vocabulary, `DomainSpec`, `StatementBuilder` | 260 |
-| `lola/models/truss.py` | truss model and lowerer, geometry, R1, R2, R3, R4 statements, coverage rules, `DOMAIN` | 380 |
-| `lola/models/circuit.py` | circuit model and lowerer, series topology, heat balance, adiabatic, drop, overload statements, ports, `DOMAIN` | 380 |
-| `lola/models/bolt.py` | joint model and lowerer, torque-tension and load sharing, features, coverage rules, `DOMAIN` | 170 |
-| `lola/models/uncertainty.py` | demand model and lowerer, R5 and R6 builders, `DOMAIN` | 150 |
-| `lola/models/contracts.py` | assume-guarantee statements over every domain's ports | 120 |
-| `lola/models/__init__.py` | `_REGISTERED`, `_index`, derived tables (already complete) | 50 |
-| `lola/registry/model.py` | makeable-set types, `Registry` lookups | 120 |
-| `lola/registry/constants.py` | the short constants list | 250 |
-| `lola/registry/catalog.py` | generators that derive every registry entry | 400 |
-| `lola/registry/__init__.py` | re-exports | 0 |
-| `lola/lang/lexer.py`, `syntax.py`, `parser.py`, `lower.py`, `__init__.py` | text to IR, generic component blocks | 850 |
-| `lola/ir.py` | design IR with generic components | 220 |
-| `lola/units.py` | exact units | 120 |
-| `lola/premises.py` | tags, labels, premises, footprint, `PremiseBook` | 180 |
-| `lola/coverage.py` | cross-domain rules, requirement generation, waivers | 160 |
-| `lola/verdict.py` | verdict types, per-claim entries, assembly, JSON, rendering | 260 |
-| `lola/pipeline.py` | `lower_components`, `elaborate`, `check_design`, `explain`, `Report`, source protocol | 220 |
+| `petra/models/base.py` | `FailureMode`, `ModelSpec`, `Requirement`, the `Need` variants, `Obligation`, `Gap`, coverage and port vocabulary, `DomainSpec`, `StatementBuilder` | 260 |
+| `petra/models/truss.py` | truss model and lowerer, geometry, R1, R2, R3, R4 statements, coverage rules, `DOMAIN` | 380 |
+| `petra/models/circuit.py` | circuit model and lowerer, series topology, heat balance, adiabatic, drop, overload statements, ports, `DOMAIN` | 380 |
+| `petra/models/bolt.py` | joint model and lowerer, torque-tension and load sharing, features, coverage rules, `DOMAIN` | 170 |
+| `petra/models/uncertainty.py` | demand model and lowerer, R5 and R6 builders, `DOMAIN` | 150 |
+| `petra/models/contracts.py` | assume-guarantee statements over every domain's ports | 120 |
+| `petra/models/__init__.py` | `_REGISTERED`, `_index`, derived tables (already complete) | 50 |
+| `petra/registry/model.py` | makeable-set types, `Registry` lookups | 120 |
+| `petra/registry/constants.py` | the short constants list | 250 |
+| `petra/registry/catalog.py` | generators that derive every registry entry | 400 |
+| `petra/registry/__init__.py` | re-exports | 0 |
+| `petra/lang/lexer.py`, `syntax.py`, `parser.py`, `lower.py`, `__init__.py` | text to IR, generic component blocks | 850 |
+| `petra/ir.py` | design IR with generic components | 220 |
+| `petra/units.py` | exact units | 120 |
+| `petra/premises.py` | tags, labels, premises, footprint, `PremiseBook` | 180 |
+| `petra/coverage.py` | cross-domain rules, requirement generation, waivers | 160 |
+| `petra/verdict.py` | verdict types, per-claim entries, assembly, JSON, rendering | 260 |
+| `petra/pipeline.py` | `lower_components`, `elaborate`, `check_design`, `explain`, `Report`, source protocol | 220 |
 | **Total** | | **about 4,500** |
 
 ### Untrusted
@@ -519,52 +519,52 @@ A bug in any of these files costs an UNKNOWN or a slow run, never a false PASS, 
 
 | File | Owns | Estimate |
 |---|---|---|
-| `lola/solvers/__init__.py` | `SOLVERS` derived by module name, `SolverSource` | 50 |
-| `lola/solvers/exact.py` | float to exact repair | 160 |
-| `lola/solvers/r1_linear.py` | R1 via HiGHS, Farkas rays | 160 |
-| `lola/solvers/r2_definite.py` | R2 exact LDL^T, eigenvector refutation | 120 |
-| `lola/solvers/r3_hypercircle.py` | R3 fields, `DefinedRange` lemmas | 160 |
-| `lola/solvers/r4_enclosure.py` | R4 branch and bound, `search` | 200 |
-| `lola/solvers/r5_moment.py` | R5 dual LP and domination tree | 140 |
-| `lola/solvers/r6_scenario.py` | R6 | 20 |
-| `lola/certs.py` | certificate envelope, `CertStore` | 120 |
-| `lola/library/store.py`, `family.py`, `__init__.py` | library, `Instance` offers, family certification | 270 |
-| `lola/registry/deck.py`, `consistency.py` | decks and the physics-consistency checker | 350 |
-| `lola/gym/tasks.py`, `env.py`, `agent.py`, `__init__.py` | gym and baseline agent | 450 |
-| `lola/bench/family.py`, `__init__.py`, `scripts/bench_family.py` | reuse benchmark | 220 |
-| `lola/envelope.py` | probe narrowing, bounded bisection, envelope reports | 410 |
-| `lola/cli.py`, `lola/__main__.py`, `lola/__init__.py` | shell | 250 |
+| `petra/solvers/__init__.py` | `SOLVERS` derived by module name, `SolverSource` | 50 |
+| `petra/solvers/exact.py` | float to exact repair | 160 |
+| `petra/solvers/r1_linear.py` | R1 via HiGHS, Farkas rays | 160 |
+| `petra/solvers/r2_definite.py` | R2 exact LDL^T, eigenvector refutation | 120 |
+| `petra/solvers/r3_hypercircle.py` | R3 fields, `DefinedRange` lemmas | 160 |
+| `petra/solvers/r4_enclosure.py` | R4 branch and bound, `search` | 200 |
+| `petra/solvers/r5_moment.py` | R5 dual LP and domination tree | 140 |
+| `petra/solvers/r6_scenario.py` | R6 | 20 |
+| `petra/certs.py` | certificate envelope, `CertStore` | 120 |
+| `petra/library/store.py`, `family.py`, `__init__.py` | library, `Instance` offers, family certification | 270 |
+| `petra/registry/deck.py`, `consistency.py` | decks and the physics-consistency checker | 350 |
+| `petra/gym/tasks.py`, `env.py`, `agent.py`, `__init__.py` | gym and baseline agent | 450 |
+| `petra/bench/family.py`, `__init__.py`, `scripts/bench_family.py` | reuse benchmark | 220 |
+| `petra/envelope.py` | probe narrowing, bounded bisection, envelope reports | 410 |
+| `petra/cli.py`, `petra/__main__.py`, `petra/__init__.py` | shell | 250 |
 | **Total** | | **about 3,000** |
 
 ## Implementation seams
 
-The sketch is the shared-types commit. Every type in it is complete, and only bodies are missing. Once it lands, the seams below run in three waves. Each seam owns its files outright, including its tests and examples, so no two implementers touch one file (per separate-before-serializing-shared-state). A seam that needs a helper from another seam's file asks that owner and does not edit the file. `lola/models/__init__.py` belongs to no seam: its `_REGISTERED` tuple already names the four domains, and nobody edits it.
+The sketch is the shared-types commit. Every type in it is complete, and only bodies are missing. Once it lands, the seams below run in three waves. Each seam owns its files outright, including its tests and examples, so no two implementers touch one file (per separate-before-serializing-shared-state). A seam that needs a helper from another seam's file asks that owner and does not edit the file. `petra/models/__init__.py` belongs to no seam: its `_REGISTERED` tuple already names the four domains, and nobody edits it.
 
 **Wave 1.** These seams need only the sketch.
 
 | Seam | Owns |
 |---|---|
-| K kernel | every file under `lola/kernel/` (`interval.py`, `terms.py`, `evidence.py`, `codec.py`, `evaluate.py`, `linalg.py`, `check.py`, `__init__.py`, `rules/*`), `tests/__init__.py`, `tests/test_structure.py`, `tests/test_seal.py`, `tests/test_kernel_budget.py`, `tests/test_interval.py`, `tests/test_evaluate.py`, `tests/test_linalg.py`, `tests/test_codec.py`, `tests/test_check.py`, `tests/test_rules.py` |
-| L language and units | `lola/lang/*`, `lola/ir.py`, `lola/units.py`, `tests/test_lang.py`, `tests/test_units.py` |
-| G registry | `lola/registry/*` (`model.py`, `constants.py`, `catalog.py`, `deck.py`, `consistency.py`, `__init__.py`), `tests/test_registry.py`, `tests/test_registry_consistency.py` |
-| P builder, premises, coverage, verdict | `lola/models/base.py`, `lola/premises.py`, `lola/coverage.py`, `lola/verdict.py`, `tests/test_domain_registry.py`, `tests/test_premises.py`, `tests/test_coverage.py`, `tests/test_verdict.py` |
+| K kernel | every file under `petra/kernel/` (`interval.py`, `terms.py`, `evidence.py`, `codec.py`, `evaluate.py`, `linalg.py`, `check.py`, `__init__.py`, `rules/*`), `tests/__init__.py`, `tests/test_structure.py`, `tests/test_seal.py`, `tests/test_kernel_budget.py`, `tests/test_interval.py`, `tests/test_evaluate.py`, `tests/test_linalg.py`, `tests/test_codec.py`, `tests/test_check.py`, `tests/test_rules.py` |
+| L language and units | `petra/lang/*`, `petra/ir.py`, `petra/units.py`, `tests/test_lang.py`, `tests/test_units.py` |
+| G registry | `petra/registry/*` (`model.py`, `constants.py`, `catalog.py`, `deck.py`, `consistency.py`, `__init__.py`), `tests/test_registry.py`, `tests/test_registry_consistency.py` |
+| P builder, premises, coverage, verdict | `petra/models/base.py`, `petra/premises.py`, `petra/coverage.py`, `petra/verdict.py`, `tests/test_domain_registry.py`, `tests/test_premises.py`, `tests/test_coverage.py`, `tests/test_verdict.py` |
 
 **Wave 2.** These seams code against the sketch's signatures from the start and switch to running tests as K, L, G and P land.
 
 | Seam | Owns | Needs |
 |---|---|---|
-| T trusses | `lola/models/truss.py`, `lola/solvers/r1_linear.py`, `lola/solvers/r2_definite.py`, `lola/solvers/r3_hypercircle.py`, `examples/truss_pass.lola`, `examples/truss_fail.lola`, `tests/test_truss.py` | K, L, G, P |
-| C circuits, bolts, port contracts | `lola/models/circuit.py`, `lola/models/bolt.py`, `lola/models/contracts.py`, `lola/solvers/r4_enclosure.py`, `examples/circuit_pass.lola`, `examples/bolt_unknown.lola`, `examples/bolt_tension.cert.json`, `tests/test_circuit.py`, `tests/test_bolt.py`, `tests/test_contracts.py` | K, L, G, P |
-| U uncertainty | `lola/models/uncertainty.py`, `lola/solvers/r5_moment.py`, `lola/solvers/r6_scenario.py`, `examples/hook_uncertain.lola`, `tests/test_uncertainty.py` | K, L, G, P; `r4_enclosure.search` from C for R5 domination trees (its signature is in the sketch). The example uses the demand domain only, so U never waits on the bolt model. |
-| I pipeline | `lola/pipeline.py`, `lola/certs.py`, `lola/solvers/__init__.py`, `lola/solvers/exact.py`, `lola/__init__.py`, `tests/test_pipeline.py`, `tests/test_certs.py`, `tests/test_solver_registry.py` | K, L, P |
+| T trusses | `petra/models/truss.py`, `petra/solvers/r1_linear.py`, `petra/solvers/r2_definite.py`, `petra/solvers/r3_hypercircle.py`, `examples/truss_pass.petra`, `examples/truss_fail.petra`, `tests/test_truss.py` | K, L, G, P |
+| C circuits, bolts, port contracts | `petra/models/circuit.py`, `petra/models/bolt.py`, `petra/models/contracts.py`, `petra/solvers/r4_enclosure.py`, `examples/circuit_pass.petra`, `examples/bolt_unknown.petra`, `examples/bolt_tension.cert.json`, `tests/test_circuit.py`, `tests/test_bolt.py`, `tests/test_contracts.py` | K, L, G, P |
+| U uncertainty | `petra/models/uncertainty.py`, `petra/solvers/r5_moment.py`, `petra/solvers/r6_scenario.py`, `examples/hook_uncertain.petra`, `tests/test_uncertainty.py` | K, L, G, P; `r4_enclosure.search` from C for R5 domination trees (its signature is in the sketch). The example uses the demand domain only, so U never waits on the bolt model. |
+| I pipeline | `petra/pipeline.py`, `petra/certs.py`, `petra/solvers/__init__.py`, `petra/solvers/exact.py`, `petra/__init__.py`, `tests/test_pipeline.py`, `tests/test_certs.py`, `tests/test_solver_registry.py` | K, L, P |
 | M mutation suite | `tests/test_kernel_mutations.py`, `tests/mutations.py`, `tests/fixtures/*` | K |
 
 **Wave 3.**
 
 | Seam | Owns | Needs |
 |---|---|---|
-| F library, families, benchmark | `lola/library/*`, `lola/bench/*`, `examples/families/*`, `scripts/bench_family.py`, `tests/test_library.py`, `tests/test_bench.py` | I, C |
-| Y gym and CLI | `lola/gym/*`, `lola/cli.py`, `lola/__main__.py`, `tests/test_gym.py`, `tests/test_cli.py`, `tests/test_examples.py` | I, F |
+| F library, families, benchmark | `petra/library/*`, `petra/bench/*`, `examples/families/*`, `scripts/bench_family.py`, `tests/test_library.py`, `tests/test_bench.py` | I, C |
+| Y gym and CLI | `petra/gym/*`, `petra/cli.py`, `petra/__main__.py`, `tests/test_gym.py`, `tests/test_cli.py`, `tests/test_examples.py` | I, F |
 
 The sketch ships `tests/test_structure.py`, `tests/test_seal.py`, `tests/test_domain_registry.py`, `tests/test_solver_registry.py`, `tests/test_premises.py` and `tests/test_verdict.py`, and they pass. `tests/test_kernel_mutations.py` (M) and `tests/test_registry_consistency.py` (G) are named by `scripts/predicate.py` and are deliberately absent. A placeholder would exit 0 without running a mutation or a corruption, and the predicate would count it as verified.
 
@@ -585,16 +585,16 @@ An operator that can leave a certificate valid, such as scaling a Farkas ray by 
 
 **Grafts, all from candidate 2.**
 
-1. **Registration.** Each registry has one `_REGISTERED` tuple, and every other table is derived from it. For kernel rules, each rule module declares its goal, evidence and lemma types, their tags and its check functions in one `RuleSpec` (`lola/kernel/rules/base.py`, `lola/kernel/rules/*.py`). `GOAL_RULE`, `RULES`, `PROOF_RULE`, `REFUTATION_RULE`, `LEMMAS` and `MODULE_OF` are derived in `lola/kernel/rules/__init__.py`, the codec tags in `lola/kernel/codec.py`, and the solver table by module name in `lola/solvers/__init__.py`. For domains, `lola/models/__init__.py` names the four `DomainSpec`s, and each domain module owns its component kinds, failure modes, coverage rules and elaborators (`lola/models/base.py`, `lola/models/<domain>.py`). The typing aliases stay, checked against the registries by tests.
-2. **Generic components.** An IR component is a kind, a name and typed attribute lines (`lola/ir.py`, `lola/lang/syntax.py`). The grammar and the IR know no domain.
-3. **Typed needs.** A `Need` union replaces free-text needs (`lola/models/base.py`, `lola/verdict.py`): `NeedsCertificate`, `CertificateRejected`, `CertificateTooWeak`, `NeedsInputBound`, `NoRuleForQuantity` and `NoModel`, plus this design's `RegistryInconsistent`. Candidate 2's `NeedsWaiver` is folded into `NoModel`. Here both name the same state, a mode no model builds, which only a waiver or a design change closes.
-4. **A demand-versus-capacity uncertainty example**, after candidate 2's hoist hook (`examples/hook_uncertain.lola`, `lola/models/uncertainty.py`). The uncertainty seam no longer depends on the bolt model.
+1. **Registration.** Each registry has one `_REGISTERED` tuple, and every other table is derived from it. For kernel rules, each rule module declares its goal, evidence and lemma types, their tags and its check functions in one `RuleSpec` (`petra/kernel/rules/base.py`, `petra/kernel/rules/*.py`). `GOAL_RULE`, `RULES`, `PROOF_RULE`, `REFUTATION_RULE`, `LEMMAS` and `MODULE_OF` are derived in `petra/kernel/rules/__init__.py`, the codec tags in `petra/kernel/codec.py`, and the solver table by module name in `petra/solvers/__init__.py`. For domains, `petra/models/__init__.py` names the four `DomainSpec`s, and each domain module owns its component kinds, failure modes, coverage rules and elaborators (`petra/models/base.py`, `petra/models/<domain>.py`). The typing aliases stay, checked against the registries by tests.
+2. **Generic components.** An IR component is a kind, a name and typed attribute lines (`petra/ir.py`, `petra/lang/syntax.py`). The grammar and the IR know no domain.
+3. **Typed needs.** A `Need` union replaces free-text needs (`petra/models/base.py`, `petra/verdict.py`): `NeedsCertificate`, `CertificateRejected`, `CertificateTooWeak`, `NeedsInputBound`, `NoRuleForQuantity` and `NoModel`, plus this design's `RegistryInconsistent`. Candidate 2's `NeedsWaiver` is folded into `NoModel`. Here both name the same state, a mode no model builds, which only a waiver or a design change closes.
+4. **A demand-versus-capacity uncertainty example**, after candidate 2's hoist hook (`examples/hook_uncertain.petra`, `petra/models/uncertainty.py`). The uncertainty seam no longer depends on the bolt model.
 
 **Fixes to this design found in review.**
 
-- Seal laundering. `dataclasses.replace` on a theorem returned a sealed theorem. Theorems and refutations are now bare handles over a kernel-private table (`lola/kernel/check.py`), and `tests/test_seal.py` attacks them.
+- Seal laundering. `dataclasses.replace` on a theorem returned a sealed theorem. Theorems and refutations are now bare handles over a kernel-private table (`petra/kernel/check.py`), and `tests/test_seal.py` attacks them.
 - Lemma proving dispatches through `rules.LEMMAS` instead of naming `r3_hypercircle` in `check.py`.
-- The constructor checks in `lola/verdict.py` and `lola/premises.py` are implemented, not left as TODOs.
+- The constructor checks in `petra/verdict.py` and `petra/premises.py` are implemented, not left as TODOs.
 - `build_premise_book` has the signature its one call site uses, `(design, registry, outcomes)`.
 
 **Rejected: candidate 2's untrusted lowering.** Its lowering writes raw numbers into models, and those numbers never reach the footprint. A wrong lowering could change a verdict with no premise naming it. The cross-judge found this soundness hole. Here the lowerers are trusted, every model number enters a statement through `StatementBuilder` as a labelled hypothesis, and the footprint is derived from the labels of the theorems used.
@@ -625,7 +625,7 @@ An operator that can leave a certificate valid, such as scaling a Farkas ray by 
 
 ## Open questions and risks
 
-- Should the front end and pipeline appear in the footprint, for example as a `validated_model` premise "lola-language v0 semantics", so the footprint lists all trusted code and not only the elaborators?
+- Should the front end and pipeline appear in the footprint, for example as a `validated_model` premise "petra-language v0 semantics", so the footprint lists all trusted code and not only the elaborators?
 - The plastic collapse model lets a buckled compression member keep its buckling resistance while the truss redistributes. That holds for a determinate truss, and is unconservative for an indeterminate one whose buckled members shed load. Should the plastic model take a row "the truss is statically determinate", or cap compression members at their post-buckling resistance?
 - A counterexample search that respects the rows would turn some of these UNKNOWNs into FAILs. On loads of 100 to 170 kN the solver refutes a 250 MPa stress claim at the 170 kN corner, past yield, so the claim reads UNKNOWN, although 130 kN refutes it where the member is elastic. The R3 refuter could search the box with the rows as constraints, or the pipeline could retry with the box cut at the row's boundary. Which is worth it?
 - A statically determinate truss's member forces follow from statics alone, so they stay exact past yield, and the below-yield and small-strain rows are needed only for elastic forces in an indeterminate truss. As built, a determinate truss loaded past yield gives UNKNOWN on its member-buckling obligations rather than FAIL. Plastic collapse still fails it unless that mode is waived. Should the elastic rows depend on determinacy?
@@ -638,10 +638,10 @@ An operator that can leave a certificate valid, such as scaling a Farkas ray by 
 - When a claim and a coverage default address the same mode on the same subject, is "keep the stricter, keep both if incomparable" the rule the owner expects?
 - Independent lemma ranges lose correlation between member forces. On highly indeterminate trusses this may give UNKNOWN for global stability. Is v0 allowed to stay determinate-first?
 - The gym reward has no efficiency term because v0 has no design-limit claims. Is a pure PASS reward enough for the first baseline?
-- `scripts/predicate.py` accepts only exit codes 0 and 1 from `lola check --json` and raises on anything else, but this design exits 2 for UNKNOWN, and `examples/bolt_unknown.lola` is meant to be UNKNOWN. Either the predicate accepts 2, or `check --json` exits 0 whenever it printed a report and leaves the status to the JSON. The predicate's owner decides. This commit changes neither.
+- `scripts/predicate.py` accepts only exit codes 0 and 1 from `petra check --json` and raises on anything else, but this design exits 2 for UNKNOWN, and `examples/bolt_unknown.petra` is meant to be UNKNOWN. Either the predicate accepts 2, or `check --json` exits 0 whenever it printed a report and leaves the status to the JSON. The predicate's owner decides. This commit changes neither.
 - Who owns the galvanic thresholds (0.15 V for wet or C3 and above, from MIL-STD-889C), and the convection coefficient range for clipped-direct cables? Both are judged constants with a named owner in the sketch.
 - A claim whose peak sits exactly on its bound costs the claim search its whole cell budget before the margin search answers. On x(1 - x) <= 1/4 the R4 search spent all 20,000 cells (6 s in one dimension, 18 s in three) and gave up, then the margin statement was refuted in one cell, so the report is UNKNOWN with that point. A combined search that proves at B and witnesses at B - m in one pass would stop at once, but it would give up on the claim's proof, and a claim with less than m of slack would read UNKNOWN where it could have been MARGINAL. Is the cell budget the right place to pay for that?
-- `lola envelope` probes one input. A safe region over two inputs, such as ambient and load current together, needs a 2D partition of probe boxes, and an input with a mean is refused, since a probe interval need not contain it. Its probe limit counts checks, not time: 64 checks of a design with a knife-edge claim can still take minutes. Should the limit be a time budget?
+- `petra envelope` probes one input. A safe region over two inputs, such as ambient and load current together, needs a 2D partition of probe boxes, and an input with a mean is refused, since a probe interval need not contain it. Its probe limit counts checks, not time: 64 checks of a design with a knife-edge claim can still take minutes. Should the limit be a time budget?
 - The gym rewards MARGINAL like UNKNOWN (0.0), although a MARGINAL claim is proved. A margin-aware reward could pay for slack, with full reward for "margin proved" and less for "margin undecided" and MARGINAL, but v0's gym tasks state no margins.
 - The kernel cannot defend against code that runs in its own process. The K3 red team reproduced three ways, none of them through data:
   - `object.__setattr__` on an issued theorem's `statement` leaves it issued with a false goal, and `verdict.Discharged` then accepts it for a false obligation.

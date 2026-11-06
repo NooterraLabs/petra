@@ -1,5 +1,5 @@
 """Calculation packages (docs/steel_connections.md §9 item 9): every connection's package
-re-checks with `lola verify` and with `lola check --certs --no-solve`, without trusting the
+re-checks with `petra verify` and with `petra check --certs --no-solve`, without trusting the
 report."""
 import contextlib
 import io
@@ -8,13 +8,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from lola import cli
-from lola.lang import parse_design
-from lola.models.steel import calc
-from lola.models.steel import generate as gen
-from lola.models.steel.domain import required
-from lola.models.steel.package import recheck, write_package
-from lola.registry import build_registry
+from petra import cli
+from petra.lang import parse_design
+from petra.models.steel import calc
+from petra.models.steel import generate as gen
+from petra.models.steel.domain import required
+from petra.models.steel.package import recheck, write_package
+from petra.registry import build_registry
 
 REGISTRY = build_registry()
 STREAM = list(gen.generate(33, 9, REGISTRY))
@@ -48,7 +48,7 @@ class Packages(unittest.TestCase):
         g = pick(lambda g: g.kind == "shear_tab" and g.expected == "PASS")
         pkg = self.package(g)
         text = (pkg.root / "report.md").read_text(encoding="utf-8")
-        d = parse_design(g.text, "t.lola", REGISTRY)
+        d = parse_design(g.text, "t.petra", REGISTRY)
         for mode in required(calc.connection(d, "c1", REGISTRY), d):
             self.assertIn(f"### {mode}: holds", text)
         for h in pkg.hashes:
@@ -62,7 +62,7 @@ class Packages(unittest.TestCase):
         self.assertIn("FAILS", text)
         self.assertIn("Witness (SI units):", text)
 
-    def test_lola_verify_accepts_every_certificate(self):
+    def test_petra_verify_accepts_every_certificate(self):
         pkg = self.package(pick(lambda g: g.kind == "hanger"))
         files = [str(p) for p in sorted((pkg.root / "certs").glob("*.json"))]
         out = io.StringIO()
@@ -71,12 +71,12 @@ class Packages(unittest.TestCase):
         self.assertEqual(code, 0, out.getvalue())
         self.assertEqual(len(out.getvalue().splitlines()), len(files))
 
-    def test_lola_check_from_the_certificates_alone_reproduces_the_verdict(self):
+    def test_petra_check_from_the_certificates_alone_reproduces_the_verdict(self):
         g = pick(lambda g: g.kind == "bolt_bracket")
         pkg = self.package(g)
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
-            cli.main(["check", "--certs", str(pkg.root / "certs"), "--no-solve", str(pkg.root / "design.lola")])
+            cli.main(["check", "--certs", str(pkg.root / "certs"), "--no-solve", str(pkg.root / "design.petra")])
         self.assertIn(f"{g.name}: {pkg.status}", out.getvalue())
 
     def test_a_tampered_certificate_is_caught(self):

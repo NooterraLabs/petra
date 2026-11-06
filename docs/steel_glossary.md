@@ -4,7 +4,7 @@ D8 of [principles.md](principles.md): the deck's code names are AISC's symbols, 
 where Python needs it, and this page maps each name to its symbol and meaning. Symbols are
 AISC 360-22's unless marked Manual (AISC Steel Construction Manual, 16th ed.). A name
 listed with two meanings has one per function, and the function's docstring says which.
-`tests/test_steel_principles.py` holds every parameter of `lola/models/steel/limits.py`
+`tests/test_steel_principles.py` holds every parameter of `petra/models/steel/limits.py`
 and every length field of the grammar (`lower._LENGTHS`) to this page.
 
 ## Quantities in limits.py
@@ -115,6 +115,6 @@ and every length field of the grammar (`lower._LENGTHS`) to this page.
 
 A coefficient's row is named `<document>.<clause>.<role>`: `aisc360.j10_3.long_offset` is
 the 0.2 of Eq. J10-5b, `aisc_manual.p9.tc` the 4 of Manual Eq. 9-30a. Resistance and
-safety factors are `<group>.phi<suffix>` and `<group>.omega<suffix>`; `lola.strict.*` are
-LoLa's own encoding of a strict inequality. `lola/registry/steel.py` gives each row its
+safety factors are `<group>.phi<suffix>` and `<group>.omega<suffix>`; `petra.strict.*` are
+Petra's own encoding of a strict inequality. `petra/registry/steel.py` gives each row its
 clause, tag and owner.

@@ -2,7 +2,7 @@
 import unittest
 from fractions import Fraction as F
 
-from lola.kernel import (
+from petra.kernel import (
     Add,
     Const,
     DefinedHyp,
@@ -25,9 +25,9 @@ from lola.kernel import (
     TooWeak,
     check,
 )
-from lola.kernel.rules.r1_linear import FarkasRay, FeasiblePoints, LinearFeasible
-from lola.kernel.rules.r2_definite import GramPositiveDefinite, GramTerm, LDLFactor, NegativeDirection
-from lola.kernel.rules.r3_hypercircle import (
+from petra.kernel.rules.r1_linear import FarkasRay, FeasiblePoints, LinearFeasible
+from petra.kernel.rules.r2_definite import GramPositiveDefinite, GramTerm, LDLFactor, NegativeDirection
+from petra.kernel.rules.r3_hypercircle import (
     ComponentBound,
     Hypercircle,
     HypercircleFields,
@@ -36,9 +36,9 @@ from lola.kernel.rules.r3_hypercircle import (
     MinimizerComponent,
     QuadraticProblem,
 )
-from lola.kernel.rules.r4_enclosure import AllNonpositive, Enclosure, PointWitness
-from lola.kernel.rules.r5_moment import MomentBound, MomentConstraint, MomentDual, RandomVar
-from lola.kernel.rules.r6_scenario import Arithmetic, BinomialTail, tail
+from petra.kernel.rules.r4_enclosure import AllNonpositive, Enclosure, PointWitness
+from petra.kernel.rules.r5_moment import MomentBound, MomentConstraint, MomentDual, RandomVar
+from petra.kernel.rules.r6_scenario import Arithmetic, BinomialTail, tail
 from tests.test_codec import BOLT_EVIDENCE, bolt_statement
 
 

@@ -24,12 +24,12 @@ import unittest
 from fractions import Fraction
 from pathlib import Path
 
-from lola import models
-from lola.kernel import RangeHyp, Refutation, Statement, Theorem, check, statement_hash
-from lola.lang import load_design, parse_design
-from lola.library import Library, certify_family
-from lola.models import truss
-from lola.models.base import (
+from petra import models
+from petra.kernel import RangeHyp, Refutation, Statement, Theorem, check, statement_hash
+from petra.lang import load_design, parse_design
+from petra.library import Library, certify_family
+from petra.models import truss
+from petra.models.base import (
     VALIDITY_PREFIX,
     ClaimOrigin,
     ComponentError,
@@ -39,14 +39,14 @@ from lola.models.base import (
     OutsideValidity,
     validity_obligation,
 )
-from lola.pipeline import check_design, elaborate, explain, lower_components
-from lola.registry import build_registry
-from lola.solvers import SolverSource
-from lola.verdict import Discharged, Fail, Open, Pass, Refuted, Unknown, at_point, describe_need
+from petra.pipeline import check_design, elaborate, explain, lower_components
+from petra.registry import build_registry
+from petra.solvers import SolverSource
+from petra.verdict import Discharged, Fail, Open, Pass, Refuted, Unknown, at_point, describe_need
 
 REGISTRY = build_registry()
 ROOT = Path(__file__).resolve().parents[1]
-PASS = (ROOT / "examples" / "truss_pass.lola").read_text(encoding="utf-8")
+PASS = (ROOT / "examples" / "truss_pass.petra").read_text(encoding="utf-8")
 CROWD = "  on frame.D fy in [-24 kN, -16 kN]\n  on frame.E fy in [-24 kN, -16 kN]"
 CLAIMS = """claim strength:   frame.collapse_factor >= 1.5 under crowd
 claim stability:  frame.stability_factor >= 3 under crowd
@@ -57,14 +57,14 @@ LIMIT = re.compile(r"(<=?|>=?|≤|≥|\bwithin\b|\bat most\b|\bat least\b|\bup t
 
 
 def footbridge(lo_kn: int, hi_kn: int, claims: str):
-    assert CROWD in PASS and CLAIMS in PASS, "truss_pass.lola changed shape"
+    assert CROWD in PASS and CLAIMS in PASS, "truss_pass.petra changed shape"
     text = PASS.replace(CROWD, f"  on frame.D fy in [{lo_kn} kN, {hi_kn} kN]\n  on frame.E fy in [{lo_kn} kN, {hi_kn} kN]")
-    return parse_design(text.replace(CLAIMS, claims), "t.lola", REGISTRY)
+    return parse_design(text.replace(CLAIMS, claims), "t.petra", REGISTRY)
 
 
 def obligations(design) -> tuple[Obligation, ...]:
     lowered = lower_components(design, REGISTRY)
-    from lola import coverage
+    from petra import coverage
     return tuple(o for o in elaborate(design, lowered, coverage.generate(design, lowered, REGISTRY), REGISTRY) if isinstance(o, Obligation))
 
 
@@ -89,7 +89,7 @@ def entry(report, name: str):
 def all_model_specs() -> set[ModelSpec]:
     found = set()
     for info in pkgutil.iter_modules(models.__path__):
-        module = importlib.import_module(f"lola.models.{info.name}")
+        module = importlib.import_module(f"petra.models.{info.name}")
         found |= {v for v in vars(module).values() if isinstance(v, ModelSpec)}
     for domain in (models.DOMAINS.values() if hasattr(models.DOMAINS, "values") else models.DOMAINS):
         found |= set(domain.models.values())
@@ -110,7 +110,7 @@ class Lint(unittest.TestCase):
                 self.assertIsNotNone(LIMIT.search(text))
 
     def test_an_unchecked_limit_is_printed_as_not_checked(self):
-        from lola.models import circuit
+        from petra.models import circuit
         self.assertIn("not checked: the fault is cleared within 5 s", circuit.ADIABATIC.premise().statement)
 
     def test_every_truss_obligation_states_each_row_of_its_model_over_its_own_load_case(self):
@@ -255,7 +255,7 @@ class Verdicts(unittest.TestCase):
     def test_the_shipped_examples_keep_their_verdicts(self):
         for name, kind in (("truss_pass", Pass), ("truss_fail", Fail)):
             with self.subTest(example=name):
-                report = check_design(load_design(ROOT / "examples" / f"{name}.lola", REGISTRY), REGISTRY, (SolverSource(),))
+                report = check_design(load_design(ROOT / "examples" / f"{name}.petra", REGISTRY), REGISTRY, (SolverSource(),))
                 self.assertIsInstance(report.verdict, kind)
                 for outcome in report.outcomes:
                     if isinstance(outcome, (Discharged, Refuted)):
@@ -270,7 +270,7 @@ class Verdicts(unittest.TestCase):
 class Lowering(unittest.TestCase):
     def test_a_member_of_another_family_than_its_section_is_refused(self):
         text = PASS.replace("member diag_ad:   A -- D", "member diag_ad:   A -- D material aluminium.6061_T6")
-        design = parse_design(text, "t.lola", REGISTRY)
+        design = parse_design(text, "t.petra", REGISTRY)
         with self.assertRaisesRegex(ComponentError, "buckling curve does not hold"):
             lower_components(design, REGISTRY)
 
@@ -286,7 +286,7 @@ class Lowering(unittest.TestCase):
 
 class Envelope(unittest.TestCase):
     def test_an_input_a_row_reads_counts_as_one_the_obligation_depends_on(self):
-        from lola import envelope
+        from petra import envelope
         design = footbridge(-24, -16, CLAIMS)
         reach = envelope._row_reach(design, REGISTRY)
         o = claimed(design, "stress")
@@ -300,7 +300,7 @@ class Envelope(unittest.TestCase):
 
 class Family(unittest.TestCase):
     def test_a_family_stores_its_row_proofs_and_an_instance_reuses_them(self):
-        family = load_design(ROOT / "examples" / "families" / "warren_truss.lola", REGISTRY)
+        family = load_design(ROOT / "examples" / "families" / "warren_truss.petra", REGISTRY)
         with tempfile.TemporaryDirectory() as root:
             library = Library(root)
             certified = certify_family(family, REGISTRY, library)
@@ -310,19 +310,19 @@ class Family(unittest.TestCase):
                 if isinstance(outcome, Discharged) and isinstance(outcome.obligation.requirement.origin, ClaimOrigin):
                     for v in outcome.obligation.validity:
                         self.assertIn(statement_hash(v.statement), stored, v.requirement.id)
-            report = check_design(load_design(ROOT / "examples" / "truss_pass.lola", REGISTRY), REGISTRY, (Library(root),))
+            report = check_design(load_design(ROOT / "examples" / "truss_pass.petra", REGISTRY), REGISTRY, (Library(root),))
             for name in ("strength", "stability", "stress"):
                 with self.subTest(claim=name):
                     verdict = entry(report, name).verdict
                     self.assertIsInstance(verdict, Pass, "the claim and every row it rests on come from the family")
 
     def test_a_family_claim_refuted_where_its_rows_hold_is_reported_refuted(self):
-        text = (ROOT / "examples" / "families" / "warren_truss.lola").read_text(encoding="utf-8")
+        text = (ROOT / "examples" / "families" / "warren_truss.petra").read_text(encoding="utf-8")
         text = text.replace("[-29 kN, 0 kN]", "[-170 kN, -100 kN]")
         text = "\n".join(line for line in text.splitlines() if not line.startswith("claim "))
         text += "\nclaim stress: frame.member(diag_db).stress <= 30 MPa under crowd\n"
         with tempfile.TemporaryDirectory() as root:
-            certified = certify_family(parse_design(text, "f.lola", REGISTRY), REGISTRY, Library(root))
+            certified = certify_family(parse_design(text, "f.petra", REGISTRY), REGISTRY, Library(root))
         (skipped,) = certified.skipped
         self.assertIn("refuted by R3", skipped, "the rows are proved at the counterexample, as in a design")
 

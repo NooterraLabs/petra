@@ -20,23 +20,23 @@ import unittest
 from fractions import Fraction as F
 from pathlib import Path
 
-from lola import coverage
-from lola.ir import Input, InputKind, Signature
-from lola.kernel import Const, Evidence, Leaf, RangeHyp, Rejection, Split, Theorem, TooWeak, check
-from lola.kernel.rules.r5_moment import MomentDual
-from lola.kernel.rules.r6_scenario import Arithmetic
-from lola.lang import load_design, parse_design
-from lola.models import uncertainty
-from lola.models.base import ComponentError, Gap, NeedsInputBound, NoRuleForQuantity, Obligation
-from lola.pipeline import check_design, elaborate, lower_components
-from lola.premises import Tag
-from lola.registry import build_registry
-from lola.solvers import SolverSource, r5_moment, r6_scenario
-from lola.units import FORCE
-from lola.verdict import Pass, Unknown
+from petra import coverage
+from petra.ir import Input, InputKind, Signature
+from petra.kernel import Const, Evidence, Leaf, RangeHyp, Rejection, Split, Theorem, TooWeak, check
+from petra.kernel.rules.r5_moment import MomentDual
+from petra.kernel.rules.r6_scenario import Arithmetic
+from petra.lang import load_design, parse_design
+from petra.models import uncertainty
+from petra.models.base import ComponentError, Gap, NeedsInputBound, NoRuleForQuantity, Obligation
+from petra.pipeline import check_design, elaborate, lower_components
+from petra.premises import Tag
+from petra.registry import build_registry
+from petra.solvers import SolverSource, r5_moment, r6_scenario
+from petra.units import FORCE
+from petra.verdict import Pass, Unknown
 
 REGISTRY = build_registry()
-EXAMPLE = Path(__file__).resolve().parents[1] / "examples" / "hook_uncertain.lola"
+EXAMPLE = Path(__file__).resolve().parents[1] / "examples" / "hook_uncertain.petra"
 DESIGN = "hoist-hook"
 OVERLOAD = "<= 3/10 under lift"
 TRIALS = "trials 300 failures 0"
@@ -47,9 +47,9 @@ def hook(*edits: tuple[str, str], extra: str = ""):
     text = EXAMPLE.read_text(encoding="utf-8")
     for old, new in edits:
         if old not in text:
-            raise AssertionError(f"{old!r} is not in hook_uncertain.lola")
+            raise AssertionError(f"{old!r} is not in hook_uncertain.petra")
         text = text.replace(old, new)
-    return parse_design(text + extra, "hook.lola", REGISTRY)
+    return parse_design(text + extra, "hook.petra", REGISTRY)
 
 
 def elaborated(design, claim: str):
@@ -90,9 +90,9 @@ class HookExample(unittest.TestCase):
             label("lift.hook.force.mean"): (Tag.ASSUMED, "ops.lead@example.org"),
             label("tests.proof.trials"): (Tag.MEASURED, "qa.lab@example.org"),
             label("tests.proof.failures"): (Tag.MEASURED, "qa.lab@example.org"),
-            uncertainty.MOMENT_MODEL.premise().label: (Tag.VALIDATED_MODEL, "lola-maintainers"),
-            uncertainty.SCENARIO_MODEL.premise().label: (Tag.VALIDATED_MODEL, "lola-maintainers"),
-            coverage.table_premise().label: (Tag.JUDGED, "lola-maintainers"),
+            uncertainty.MOMENT_MODEL.premise().label: (Tag.VALIDATED_MODEL, "petra-maintainers"),
+            uncertainty.SCENARIO_MODEL.premise().label: (Tag.VALIDATED_MODEL, "petra-maintainers"),
+            coverage.table_premise().label: (Tag.JUDGED, "petra-maintainers"),
         })
 
 

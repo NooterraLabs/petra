@@ -1,6 +1,6 @@
 # Steel deck: clause traceability
 
-Generated from `lola/models/steel/trace.py` by `python -m lola.models.steel.trace`; `tests/test_steel_trace.py` fails when this file is stale or a provision is unmapped.
+Generated from `petra/models/steel/trace.py` by `python -m petra.models.steel.trace`; `tests/test_steel_trace.py` fails when this file is stale or a provision is unmapped.
 
 Treatments: **check** (the modes whose checks encode it), **rule** (enforced where the design is read or factored), **premise** (stated, not checked), **excluded** (outside v1.0).
 

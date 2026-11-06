@@ -2,7 +2,7 @@
 Vol. 1 Design Examples (AISC 2023), reproduced to rounding.
 
 Each test names its example. It states the example's inputs and the numbers the Companion
-prints, nothing more. It recomputes those numbers through lola.models.steel.limits from
+prints, nothing more. It recomputes those numbers through petra.models.steel.limits from
 the registry's rows, or through the connection elaborator for a whole connection.
 
 "To rounding" means within one unit of the printed number's last digit. The Companion
@@ -19,12 +19,12 @@ import unittest
 from decimal import Decimal
 from fractions import Fraction
 
-from lola.kernel import enclose
-from lola.lang import parse_design
-from lola.models.steel import calc
-from lola.models.steel import limits as L
-from lola.registry import build_registry
-from lola.units import CUSTOMARY
+from petra.kernel import enclose
+from petra.lang import parse_design
+from petra.models.steel import calc
+from petra.models.steel import limits as L
+from petra.registry import build_registry
+from petra.units import CUSTOMARY
 
 REGISTRY = build_registry()
 INCH, KIP, KSI = (CUSTOMARY[u][0] for u in ("inch", "kip", "ksi"))
@@ -163,7 +163,7 @@ class J5CombinedTensionAndShearSlipCritical(Published):
                 self.published(value(L.mul(per_bolt, ksc, L.c(8))), printed[1], "available slip of the group")
 
 
-GIRDER = """lola 0
+GIRDER = """petra 0
 
 design "companion-j7" {{
   owner "s.engineer@example.org"
@@ -198,7 +198,7 @@ class J7ConcentratedForcesOnAGirder(Published):
     1 % there and checks the printed value from the rounded r directly."""
 
     def available(self, basis: str, force: str) -> dict[str, float]:
-        d = parse_design(GIRDER.format(basis=basis, force=force), "j7.lola", REGISTRY)
+        d = parse_design(GIRDER.format(basis=basis, force=force), "j7.petra", REGISTRY)
         conn = calc.connection(d, "girder", REGISTRY)
         found = {}
         for mode in ("web_local_yielding", "web_crippling", "web_sidesway_buckling"):

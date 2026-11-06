@@ -11,28 +11,28 @@ is rejected at lowering.
 import unittest
 from pathlib import Path
 
-from lola.lang import load_design, parse_design
-from lola.models.steel import calc
-from lola.models.base import ComponentError
-from lola.models.steel.domain import required
-from lola.models.steel.lower import lower_conn
-from lola.models.steel.path import ROLE_LIMITS, path
-from lola.models.steel.vocab import MODES, UNMODELLED
-from lola.pipeline import check_design
-from lola.registry import build_registry
-from lola.solvers import SolverSource
+from petra.lang import load_design, parse_design
+from petra.models.steel import calc
+from petra.models.base import ComponentError
+from petra.models.steel.domain import required
+from petra.models.steel.lower import lower_conn
+from petra.models.steel.path import ROLE_LIMITS, path
+from petra.models.steel.vocab import MODES, UNMODELLED
+from petra.pipeline import check_design
+from petra.registry import build_registry
+from petra.solvers import SolverSource
 
 REGISTRY = build_registry()
 STEEL = Path(__file__).resolve().parents[1] / "examples" / "steel"
 
 
 def variant(name: str, *edits: tuple[str, str]):
-    text = (STEEL / f"{name}.lola").read_text(encoding="utf-8")
+    text = (STEEL / f"{name}.petra").read_text(encoding="utf-8")
     for old, new in edits:
         if old not in text:
-            raise AssertionError(f"{old!r} is not in {name}.lola")
+            raise AssertionError(f"{old!r} is not in {name}.petra")
         text = text.replace(old, new)
-    return parse_design(text, f"{name}.lola", REGISTRY)
+    return parse_design(text, f"{name}.petra", REGISTRY)
 
 
 VARIANTS = {
@@ -57,7 +57,7 @@ VARIANTS = {
 
 
 def designs():
-    for p in sorted(STEEL.glob("*.lola")):
+    for p in sorted(STEEL.glob("*.petra")):
         yield p.name, load_design(p, REGISTRY)
     for name, make in VARIANTS.items():
         yield name, make()
