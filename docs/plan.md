@@ -1,12 +1,12 @@
 # Petra: what we make, cover, conquer and build
 
-Written 2026-11-06, revised the same day after two adversarial reviews. This plan sets one order of work. It replaces the conflicting first picks in ENGINE_MAP (drones), BRAINSTORM (electronics) and NICHE (lifting, then connections). Every claim carries a label: **measured** (run or read this session), **inferred** (reasoned from measured facts), or **guess**.
+Written 2026-11-06, revised the same day after two adversarial reviews. This plan sets one order of work. ENGINE_MAP picks drones first and BRAINSTORM picks electronics. NICHE §14.4 picks steel connections, with lifting as the designer's first product. This plan keeps NICHE's first pick, moves lifting later, and makes connections the designer's first product too. Every claim carries a label: **measured** (run or read this session), **inferred** (reasoned from measured facts), or **guess**.
 
 ## The answer
 
 1. **We make a compiler for physical designs.** A signed requirements card and a design go in. A verdict anyone can re-check comes out, then the build files: PASS, FAIL with a counterexample, or UNKNOWN naming what is missing.
 2. **It has three parts.** The open checker (Petra), a benchmark and training environment (Petra Bench), and a designer that writes Petra and emits CAD.
-3. **Today no stranger can use Petra, and it is not yet safe.** It has no package file, licence, public repository or language reference (measured). A fresh agent and a reviewer found eight kinds of false PASS in one afternoon: parts that do not fit, a cable that does not fit its terminal, a nominal resistance, a truss with no self-weight (§1).
+3. **Today no stranger can use Petra, and it is not yet safe.** It has no package file, licence, public repository or language reference (measured). A fresh agent and a reviewer found false PASSes in one afternoon. They fall into three kinds: parts that do not fit, a conductor that does not fit its terminal, and a truss with no self-weight. A cable resistance also leans the unsafe way (§1).
 4. **Every false PASS sits in the layer that turns a design into maths.** None sits in the kernel. Our gate reported zero false PASS because it checks Petra against itself (inferred from §1).
 5. **So the first real work is a geometry judge and a measured breaker, not more physics.** Packaging runs alongside it. Publishing waits for both.
 6. **The first users are AI agents,** then labs, then engineers. Whether agents really come first is measured after publishing, with a dated check (§3).
@@ -25,16 +25,16 @@ The first rows come from my own checks. The rest come from a cold-start test. A 
 |---|---|---|---|
 | Find it | A public repository or package page | No git remote | measured |
 | Trust the licence | A licence file | None | measured |
-| Install | `pip install petra` | No `pyproject.toml`. pip prints "Neither 'setup.py' nor 'pyproject.toml' found". The agent needed a hand-made `.pth` file and wrapper scripts, about 8 tool calls. The name `petra` is free on PyPI. | measured |
-| Get the real product | One trunk | `master` is 15 commits behind `daedalus/mechanics-layer`. It is a fast-forward, since `validity-obligations` is already inside it. | measured |
+| Install | `pip install petra` | No `pyproject.toml` (`ls` fails, measured). The name `petra` is free on PyPI (measured). The cold-start agent reports that pip printed "Neither 'setup.py' nor 'pyproject.toml' found", and that it needed a hand-made `.pth` file and wrapper scripts, about 8 tool calls. | measured, partly by the agent |
+| Get the real product | One trunk | `master` is 16 commits behind `daedalus/mechanics-layer` (15 before this plan's own commit). It is a fast-forward, since `validity-obligations` is already inside it. | measured |
 | Read what the code cites | Every cited doc in git | `docs/principles.md` is cited by the steel code and tests but untracked | measured |
 | Find the steel deck | A README pointer | The README never mentions it. The agent found `examples/steel` with `ls`. | measured |
 | Learn the language | A reference and templates | None. The agent copied an example's 13 lines and learned field names from error messages, which were clear. | measured |
-| Name parts | A way to list the registry | None. "A325 is not a registry material", with no suggestion. The agent grepped a 305 KB deck JSON. | measured |
+| Name parts | A way to list the registry | None. "A325 is not a registry material", with no suggestion. The agent grepped a 305 KB deck JSON. | reported by the agent |
 | Use any beam | The full shapes table | 30 W shapes and 16 angles ship. W8x31 is "not a W shape in the shape table". The full table needs the AISC spreadsheet locally. | measured by reviewer A |
 | Run a check | A `petra` command | Works. 1.8 s from the command line, of which 0.07 s is the check and the rest is import. | measured |
-| Read results in code | A documented API and full JSON | `petra.check_file` works, but per-claim access is undocumented. `--json` printed `"obligations": []` and no counterexample. | measured |
-| Fix a FAIL | Demand, capacity, the input to change | None of these. Counterexamples print as SI rationals, some without units. The agent repaired the design in three hand-computed tries. | measured |
+| Read results in code | A documented API and full JSON | `petra.check_file` works (measured). Per-claim access is undocumented, and `--json` printed `"obligations": []` and no counterexample (reported by the agent, reproduced by reviewer A). | measured, partly |
+| Fix a FAIL | Demand, capacity, the input to change | None of these. Counterexamples print as SI rationals, some without units. The agent repaired the design in three hand-computed tries. | reported by the agent |
 | Train against it | An environment in a hub format | `petra gym` has its own `step(Submission)` API, in no hub format, with generators for circuits and bolts only | measured |
 
 ### What the checker can prove today
@@ -44,12 +44,14 @@ The first rows come from my own checks. The rest come from a cold-start test. A 
 | Kernel | 6 rule families, exact rationals, 2,615 lines | measured |
 | Trusted elaboration | Models, language, coverage, registry and pipeline, about 15,000 lines. Every false PASS below is here. | measured by reviewer A |
 | Domains | 2D trusses, one cable's heating and voltage drop, bolted joints, probability bounds, 11 AISC steel connection kinds | measured |
-| Steel gate | 10,000 of 10,000 random designs decided, a twin elaborator agrees, 151 of 151 planted faults caught, 22 breaker runs with no false PASS | measured |
+| Steel gate | 10,000 of 10,000 random designs decided, a twin elaborator agrees, 151 of 151 planted faults caught, 22 breaker runs with no false PASS | measured in the gate run earlier this session |
 | Geometry | Exact 2D points or scalar parameters. No 3D, mesh or B-rep. | measured |
 | Across parts | Port contracts on current, temperature, voltage and force only | measured |
 | Vibration, fatigue, transients | None | measured |
 
 ### False PASSes found on 2026-11-06
+
+I re-ran five of these myself. The rest are labelled by who found them.
 
 | Design | Verdict | Why it is wrong | Label |
 |---|---|---|---|
@@ -84,7 +86,7 @@ It is a compiler, layer by layer (COMPILER §1). The language is `.petra`. The k
 
 ## 3. Who it is for, in order
 
-1. **Coding agents.** A user asks Claude Code, Codex or Cursor to "check this steel connection" or "size this connection for 45 kips". The agent installs Petra, reads one page, writes a design, and acts on the verdict. Reaching agents costs no outreach, because they install from PyPI and start a new tool with `--help` (Appendix B, item 9). A 3D machined or printed bracket is a different job, and waits for coverage row 8 (inferred).
+1. **Coding agents.** A user asks Claude Code, Codex or Cursor to "check this steel connection" or "size this connection for 45 kips". The agent installs Petra, reads one page, writes a design, and acts on the verdict. Reaching agents should cost no outreach, because they install from PyPI and start a new tool with `--help` (Appendix B, item 9, search snippets only, so this is a guess until P1's publish predicate measures it). A 3D machined or printed bracket is a different job, and waits for coverage row 8 (inferred).
 2. **Labs and agent builders.** They load environments in Harbor, verifiers or OpenEnv format, tagged `rl-environment` on Hugging Face (items 5 to 7). Xplore, Talos and Vektor grade with solvers and keep their tasks closed. EngDesign is open and graded by simulation (items 10 to 12). None was found that certifies code compliance or answers UNKNOWN.
 3. **Engineers.** They check a design they or an AI made. For steel connections this already works as a check calculation once the parameters are typed in (measured, cold-start job 2). Today they must work in AISC and US customary units.
 
@@ -107,7 +109,7 @@ No class meets this today. Steel connections meet all but the geometry, loads an
 
 ### The order
 
-Coverage grows by rule family. Rows that open a family come early, because each family serves many niches (NICHE §14.7). Durations are guesses for one founder with agents. Writing code is fast; the 22,369-line package took about two days (measured from git). Getting it right is the slow part.
+Coverage grows by rule family. Rows that open a family come early, because each family serves many niches (NICHE §14.7). Durations are guesses for one founder with agents. Writing code is fast. The 22,369-line package (measured) was written between 2026-11-05 and 2026-11-06 (reviewer B, from git). Getting it right is the slow part.
 
 | Order | Coverage step | New maths | Niches it opens | Guess |
 |---|---|---|---|---|
@@ -238,6 +240,7 @@ Units inside the certificate (E2), twin elaborators for every deck, and finally 
 4. **Claim `petra` on PyPI.** It is free today (measured).
 5. **The designer's name.** Daedalus is taken by the wave-physics engine.
 6. **The last credits, to 2026-11-15.** I recommend spending them on the P0 canary campaign and the P1 breaker runs.
+7. **Registry values from physics, or from specified limits.** `docs/frame.md` item 5 says registries are computed from physics, with wire resistance from resistivity and nominal area as the example. That derivation is what produced the low resistance. IEC 60228 specifies a maximum resistance, not an area, so physics alone cannot give the guaranteed value. I recommend allowing a short list of specified limits as constants, and changing frame.md item 5 to say so.
 
 ## Appendix A. Cold-start test
 
@@ -276,7 +279,7 @@ A research agent read these on 2026-11-06. "Snippet" means only a search excerpt
 
 ## Appendix C. What the two reviews changed
 
-Two independent reviewers attacked the first draft. Both ran on the same model as the author, because every pstack role in this setup is set to the parent model, so the panel had no model diversity. Findings both raised carry the most weight.
+Two independent reviewers attacked the first draft. The rewrite that followed (a new P1, a new coverage order, new predicates) has not been reviewed again. Both ran on the same model as the author, because every pstack role in this setup is set to the parent model, so the panel had no model diversity. Findings both raised carry the most weight.
 
 **Acted on, raised by both:**
 - The fit fix was too narrow. Five more false PASSes reproduced (§1). P1 now builds one geometric model per kind instead of writing a fit rule per kind.
@@ -298,5 +301,7 @@ Two independent reviewers attacked the first draft. Both ran on the same model a
 **Considered and kept as is:**
 - Electronics as the second deck. It is now named as the strongest candidate to run alongside row 2, not moved ahead of it.
 - Copyright of standards tables. Single specified limits per size, such as IEC 60228 maximum resistances, are values. Rating tables stay out, and current ratings stay derived, with their judged coefficient disclosed.
+
+**Left to you:** reviewer B's point that taking IEC 60228 maxima conflicts with `docs/frame.md` item 5 (§8, decision 7).
 
 **Dismissed:** none. Every finding had a concrete basis.
