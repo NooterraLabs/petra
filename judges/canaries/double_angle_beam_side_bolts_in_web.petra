@@ -1,0 +1,32 @@
+petra 0
+
+# violates: steel.beam_side.bolts_in_web
+# Design 1886 of `python scripts/absurd_gap.py --seed 1` at commit b9e9792 (docs/absurd_gap.md):
+# bottom bolt hole reaches 22.062 in below the W18x50's top, past its flat web, which ends at 16 in.
+
+design "absurd-01886" {
+  owner "gate@petra.dev"
+}
+
+double_angle c1 {
+  basis lrfd
+  beam W18x50 grade steel.A992
+  support W14x61 web grade steel.A992
+  angles L4x3_1_2x5_16 grade steel.A36 outstanding short
+  bolts bolt_group.120 diameter 1 inch threads excluded
+  top 3.5 inch
+  rows 7
+  pitch 3 inch
+  edge_vertical 1.5 inch
+  beam_edge 1.5 inch
+  beam_gauge 2.75 inch
+  support_side bolted
+  support_gauge 4.75 inch
+  setback 0.5 inch
+  cope both depth 2 inch length 4 inch
+}
+
+load gate {
+  on c1 shear in [0 kip, 29.097 kip]
+  signed "gate@petra.dev" source "steel gate generator"
+}

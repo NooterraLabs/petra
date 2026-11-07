@@ -1,0 +1,27 @@
+petra 0
+
+# violates: steel.beam_side.seat_bearing
+# Design 383 of `python scripts/absurd_gap.py --seed 1` at commit b9e9792 (docs/absurd_gap.md):
+# beam end 6 in off the support face, past the stiffener, which projects 5 in.
+
+design "absurd-00383" {
+  owner "gate@petra.dev"
+}
+
+stiffened_seat c1 {
+  basis asd
+  beam W21x44 grade steel.A992
+  support W14x90 flange grade steel.A992
+  plate steel.A36 thickness 0.5 inch
+  stiffener steel.A36 thickness 0.5 inch
+  stiffener_width 5 inch
+  stiffener_length 14 inch
+  setback 6 inch
+  weld electrode.E70 size 0.375 inch sides 2
+  top_angle L4x4x1_4 grade steel.A36 outstanding long
+}
+
+load gate {
+  on c1 shear in [0 kip, 1.422 kip]
+  signed "gate@petra.dev" source "steel gate generator"
+}

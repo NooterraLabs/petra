@@ -1,0 +1,33 @@
+petra 0
+
+# violates: steel.beam_vs_support.beam_end
+# Design 754 of `python scripts/absurd_gap.py --seed 1` at commit b9e9792 (docs/absurd_gap.md):
+# beam end -0.5 in out from the support face, inside the support face, which reaches 0 in.
+
+design "absurd-00754" {
+  owner "gate@petra.dev"
+}
+
+shear_tab c1 {
+  basis lrfd
+  beam W21x50 grade steel.A992
+  support W10x49 flange grade steel.A992
+  plate steel.A36 thickness 0.3125 inch
+  bolts bolt_group.120 diameter 0.875 inch threads included
+  holes beam ssl
+  top 3 inch
+  rows 3
+  pitch 3 inch
+  edge_vertical 1.25 inch
+  plate_edge 2 inch
+  bolt_line 1.5 inch
+  beam_edge 2 inch
+  weld electrode.E70 size 0.3125 inch sides 2
+  cope top depth 1 inch length 4 inch
+  setback 0.75 inch
+}
+
+load gate {
+  on c1 shear in [0 kip, 4.970 kip]
+  signed "gate@petra.dev" source "steel gate generator"
+}

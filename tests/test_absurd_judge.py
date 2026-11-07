@@ -11,7 +11,7 @@ import unittest
 from pathlib import Path
 
 from judges import CONDITIONS, judge
-from petra.lang import load_design
+from petra.lang import load_design, parse_design
 from petra.registry import build_registry
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -45,6 +45,31 @@ class Canaries(unittest.TestCase):
                 found = judge(load_design(path, REGISTRY), REGISTRY)
                 self.assertIn(stated, found.ids, [(v.id, v.reason) for v in found.violations])
 
+    def test_every_kind_a_condition_covers_has_a_canary(self):
+        covered = set()
+        for path in CANARIES:
+            stated = CONDITIONS[_stated(path)]
+            covered |= {c.kind for c in load_design(path, REGISTRY).components.values()} & set(stated.kinds)
+        self.assertEqual(covered, {kind for c in CONDITIONS.values() for kind in c.kinds})
+
+
+class Counterparts(unittest.TestCase):
+    """The new domains' canaries with the one fact that makes them absurd taken back: the judge
+    still reads them and finds nothing."""
+
+    def _found(self, name: str, old: str, new: str):
+        text = (ROOT / "judges" / "canaries" / f"{name}.petra").read_text(encoding="utf-8")
+        self.assertIn(old, text)
+        found = judge(parse_design(text.replace(old, new), f"{name}.petra", REGISTRY), REGISTRY)
+        self.assertEqual(found.undecided, ())
+        return [(v.id, v.reason) for v in found.violations]
+
+    def test_a_pull_one_bolt_carries_alone_is_not_flagged_when_the_joint_opens(self):
+        self.assertEqual(self._found("joint_opens_under_load", "[0 kN, 40 kN]", "[0 kN, 30 kN]"), [])
+
+    def test_a_failure_at_the_stated_capacity_witnesses_nothing_below_it(self):
+        self.assertEqual(self._found("demand_failed_below_capacity", "failures 1 at 30 kN", "failures 1 at 36 kN"), [])
+
 
 class Examples(unittest.TestCase):
     def test_the_judge_finds_every_example_buildable(self):
@@ -57,7 +82,9 @@ class Examples(unittest.TestCase):
 
 class Independence(unittest.TestCase):
     def test_the_judges_source_imports_nothing_from_petras_models(self):
-        for path in sorted((ROOT / "judges").glob("*.py")):
+        sources = sorted((ROOT / "judges").rglob("*.py"))
+        self.assertTrue({"steel.py", "bolt.py", "uncertainty.py"} <= {p.name for p in sources})
+        for path in sources:
             tree = ast.parse(path.read_text(encoding="utf-8"))
             for node in ast.walk(tree):
                 names = ([a.name for a in node.names] if isinstance(node, ast.Import)
@@ -75,7 +102,7 @@ class Generator(unittest.TestCase):
 
     def test_a_seed_gives_the_same_designs_and_findings(self):
         n = len(dict.fromkeys(self.A.SCHEDULE))    # one design of every kind
-        first, second = (self.A.run(3, n, workers=1) for _ in range(2))
+        first, second = (self.A.run((3,), n, workers=1) for _ in range(2))
         strip = lambda rows: [{k: v for k, v in r.items() if k != "seconds"} for r in rows]
         self.assertEqual(strip(first), strip(second))
         self.assertEqual(self.A.log_lines(first, []), self.A.log_lines(second, []))

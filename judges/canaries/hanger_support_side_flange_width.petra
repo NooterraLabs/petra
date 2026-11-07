@@ -1,0 +1,25 @@
+petra 0
+
+# violates: steel.support_side.flange_width
+# Design 621 of `python scripts/absurd_gap.py --seed 1` at commit b9e9792 (docs/absurd_gap.md):
+# bolt lines: 6.625 in across, wider than the W16x31's 5.53 in flange.
+
+design "absurd-00621" {
+  owner "gate@petra.dev"
+}
+
+hanger c1 {
+  basis asd
+  tee WT7x26_5 grade steel.A992
+  support W16x31 flange grade steel.A992
+  bolts bolt_group.150 diameter 1 inch threads excluded joint pretensioned
+  rows 2
+  pitch 5 inch
+  tee_gauge 5.5 inch
+  edge_vertical 2 inch
+}
+
+load gate {
+  on c1 tension in [0 kip, 3.120 kip]
+  signed "gate@petra.dev" source "steel gate generator"
+}

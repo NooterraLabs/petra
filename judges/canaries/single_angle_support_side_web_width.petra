@@ -1,0 +1,30 @@
+petra 0
+
+# violates: steel.support_side.web_width
+# Design 6632 of `python scripts/absurd_gap.py --seed 1` at commit b9e9792 (docs/absurd_gap.md):
+# beam web and support bolt line: 14.656 in across, wider than the W14x90's 11.38 in flat web.
+
+design "absurd-06632" {
+  owner "gate@petra.dev"
+}
+
+single_angle c1 {
+  basis lrfd
+  beam W16x26 grade steel.A992
+  support W14x90 web grade steel.A992
+  angle L4x4x3_8 grade steel.A36 outstanding long
+  bolts bolt_group.120 diameter 0.75 inch threads included
+  rows 3
+  pitch 3 inch
+  edge_vertical 1.25 inch
+  beam_edge 1.75 inch
+  top 4 inch
+  beam_gauge 2.5 inch
+  support_side bolted
+  support_gauge 14 inch
+}
+
+load gate {
+  on c1 shear in [0 kip, 3.795 kip]
+  signed "gate@petra.dev" source "steel gate generator"
+}

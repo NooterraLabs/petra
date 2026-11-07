@@ -15,7 +15,7 @@ from typing import Mapping
 from petra.ir import Design
 from petra.registry import Registry
 
-from . import circuit, steel, truss
+from . import bolt, circuit, steel, truss, uncertainty
 
 _STEEL_BEAM = ("shear_tab", "double_angle", "single_angle", "shear_tee")
 
@@ -59,10 +59,16 @@ CONDITIONS: Mapping[str, Condition] = MappingProxyType({c.id: c for c in (
               "every conductor clamped in a terminal lies in the terminal's conductor range"),
     Condition("truss.self_weight", ("truss",),
               "a collapse-factor claim that holds on the design's loads still holds with the members' weight added"),
+    Condition("bolt.tension.separation", ("joint",),
+              "a tension claim that holds while the plates stay clamped still holds once the force opens the joint "
+              "and each bolt carries its whole share, F / n"),
+    Condition("uncertain.capacity.tested", ("demand",),
+              "a probability claim that holds at the stated capacity still holds at the level where the design's own "
+              "tests broke a part, when that level lies below the capacity"),
 )})
 
-JUDGED_KINDS = (*steel.READERS, "circuit", "truss")
-"""The component kinds the judge reads. Any other kind (joint, demand) it leaves alone."""
+JUDGED_KINDS = (*steel.READERS, "circuit", "truss", "joint", "demand")
+"""The component kinds the judge reads."""
 
 
 @dataclass(frozen=True)
@@ -97,6 +103,12 @@ def judge(design: Design, registry: Registry) -> Judgement:
             undecided += notes
         elif component.kind == "truss":
             found, notes = truss.facts(component, design)
+            undecided += notes
+        elif component.kind == "joint":
+            found, notes = bolt.facts(component, design, registry)
+            undecided += notes
+        elif component.kind == "demand":
+            found, notes = uncertainty.facts(component, design)
             undecided += notes
         else:
             continue

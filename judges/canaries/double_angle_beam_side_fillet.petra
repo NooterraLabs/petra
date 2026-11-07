@@ -1,0 +1,31 @@
+petra 0
+
+# violates: steel.beam_side.fillet
+# Design 209 of `python scripts/absurd_gap.py --seed 1` at commit b9e9792 (docs/absurd_gap.md):
+# angles top edge 1 in below the W27x84's top, on its fillet, off the flat web (1.24 in).
+
+design "absurd-00209" {
+  owner "gate@petra.dev"
+}
+
+double_angle c1 {
+  basis asd
+  beam W27x84 grade steel.A992
+  support W10x49 flange grade steel.A992
+  angles L4x3_1_2x3_8 grade steel.A36 outstanding short
+  bolts bolt_group.150 diameter 0.875 inch threads included joint pretensioned
+  top 2.5 inch
+  rows 2
+  pitch 3 inch
+  edge_vertical 1.5 inch
+  beam_edge 1.75 inch
+  beam_gauge 2.75 inch
+  support_side welded
+  support_weld electrode.E70 size 0.375 inch
+  deformation considered
+}
+
+load gate {
+  on c1 shear in [0 kip, 1.971 kip]
+  signed "gate@petra.dev" source "steel gate generator"
+}

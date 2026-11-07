@@ -1,0 +1,31 @@
+petra 0
+
+# violates: steel.beam_vs_support.web_clearance
+# Design 54 of `python scripts/absurd_gap.py --seed 1` at commit b9e9792 (docs/absurd_gap.md):
+# the W30x90's 10.4 in flange is wider than the 8.88 in between the W10x49's flanges, and its end, 1 in out, lies inside their tips at 4.83 in.
+
+design "absurd-00054" {
+  owner "gate@petra.dev"
+}
+
+single_angle c1 {
+  basis asd
+  beam W30x90 grade steel.A992
+  support W10x49 web grade steel.A992
+  angle L4x4x1_2 grade steel.A36 outstanding long
+  bolts bolt_group.150 diameter 0.875 inch threads excluded joint slip_critical surface class_b
+  holes support ssl_parallel
+  top 3 inch
+  rows 4
+  pitch 3 inch
+  edge_vertical 1.25 inch
+  beam_edge 1.75 inch
+  beam_gauge 2.75 inch
+  support_side bolted
+  support_gauge 2.75 inch
+}
+
+load gate {
+  on c1 shear in [0 kip, 1.859 kip]
+  signed "gate@petra.dev" source "steel gate generator"
+}

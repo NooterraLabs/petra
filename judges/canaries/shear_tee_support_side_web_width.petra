@@ -1,0 +1,30 @@
+petra 0
+
+# violates: steel.support_side.web_width
+# Design 2174 of `python scripts/absurd_gap.py --seed 1` at commit b9e9792 (docs/absurd_gap.md):
+# support welds at the tee flange tips: 14.5 in across, wider than the 12.58 in between the W14x90's flanges.
+
+design "absurd-02174" {
+  owner "gate@petra.dev"
+}
+
+shear_tee c1 {
+  basis lrfd
+  beam W24x76 grade steel.A992
+  support W14x90 web grade steel.A992
+  tee WT7x45 grade steel.A992
+  bolts bolt_group.120 diameter 0.875 inch threads excluded joint slip_critical surface class_a
+  top 3.5 inch
+  rows 2
+  pitch 6 inch
+  edge_vertical 1.25 inch
+  bolt_line 3 inch
+  beam_edge 1.5 inch
+  support_side welded
+  support_weld electrode.E70 size 0.3125 inch
+}
+
+load gate {
+  on c1 shear in [0 kip, 6.259 kip]
+  signed "gate@petra.dev" source "steel gate generator"
+}
