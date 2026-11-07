@@ -798,13 +798,26 @@ def ports(circuit: Circuit, registry: Registry) -> Ports:
     """PortSpecs (see models.base) and the circuit's connections:
       wire.a / wire.b   guarantee TEMPERATURE <= steady_temperature(...)  (model bound)
                         guarantee CURRENT     in consumer's signed range
+                        guarantee CONDUCTOR_AREA = the cable's nominal area: its size's,
+                                  or the area a series cable gives (a family's param)
       terminal.wire     assume    TEMPERATURE <= rating temperature_max   (stated)
                         assume    CURRENT     <= rating current_max       (stated)
+                        assume    CONDUCTOR_AREA in [conductor_min, conductor_max] (stated),
+                                  when a wire is connected there
+      terminal.out      the same three, when a wire is connected there: a terminal clamps
+                        the conductor on either side, and its ratings hold for each
       breaker.out       guarantee CURRENT     <= I_n is NOT claimed: a breaker does not
                         bound steady current below I_n; overload protection covers it.
-    A wire whose consumer has no signed draw guarantees nothing, and with no ambient it
-    guarantees no temperature, so a terminal on it is a gap rather than a pass.
+    A wire whose consumer has no signed draw guarantees no current, and with no ambient
+    it guarantees no temperature, so a terminal on it is a gap rather than a pass. Its
+    area needs neither.
     """
+    peers = {end: other for c in circuit.connections for end, other in ((c.a, c.b), (c.b, c.a))}
+
+    def clamps_a_wire(ref: PortRef) -> bool:
+        peer = peers.get(ref)
+        return peer is not None and peer.component == circuit.name and isinstance(circuit.elements.get(peer.element), Wire)
+
     specs = []
     for path in topology(circuit):
         draws = circuit.elements[path.consumer].draws
@@ -814,7 +827,10 @@ def ports(circuit: Circuit, registry: Registry) -> Ports:
                 given = _wire_guarantees(circuit, element, draws, registry)
                 specs += [PortSpec(PortRef(circuit.name, name, port), {}, given) for port in PORTS[Wire]]
             elif isinstance(element, Terminal):
-                specs.append(PortSpec(PortRef(circuit.name, name, "wire"), _terminal_assumptions(element.part), {}))
+                for port in PORTS[Terminal]:
+                    ref = PortRef(circuit.name, name, port)
+                    if port == "wire" or clamps_a_wire(ref):
+                        specs.append(PortSpec(ref, _terminal_assumptions(element.part, clamps_a_wire(ref)), {}))
     return Ports(tuple(specs), circuit.connections)
 
 
@@ -826,10 +842,14 @@ def _drawn(op: type, draws: tuple[Draw, ...]) -> Callable[[StatementBuilder], Ex
 
 
 def _wire_guarantees(circuit: Circuit, wire: Wire, draws: tuple[Draw, ...], registry: Registry) -> dict[PortQuantity, Side]:
+    def area(sb: StatementBuilder) -> Expr:
+        return _cable(sb, circuit, wire, registry)["area"]
+
+    given = {PortQuantity.CONDUCTOR_AREA: Side(area, area, None)}
     if not draws:
-        return {}
+        return given
     most = _drawn(Max, draws)
-    given = {PortQuantity.CURRENT: Side(_drawn(Min, draws), most, SERIES)}
+    given[PortQuantity.CURRENT] = Side(_drawn(Min, draws), most, SERIES)
     if _has_ambient(circuit):
         def hottest(sb: StatementBuilder) -> Expr:
             return steady_temperature(sb, circuit, wire, most(sb), _ambient(sb, circuit), registry)[0]
@@ -841,11 +861,16 @@ def _rating(part: str, prop: str) -> Callable[[StatementBuilder], Expr]:
     return lambda sb: sb.registry(part, prop)
 
 
-def _terminal_assumptions(part: str) -> dict[PortQuantity, Side]:
-    return {
+def _terminal_assumptions(part: str, clamps_a_wire: bool) -> dict[PortQuantity, Side]:
+    """The terminal's ratings at one port; the conductor range only where a wire, whose
+    conductor it clamps, is connected."""
+    out = {
         PortQuantity.TEMPERATURE: Side(None, _rating(part, "temperature_max"), None),
         PortQuantity.CURRENT: Side(None, _rating(part, "current_max"), None),
     }
+    if clamps_a_wire:
+        out[PortQuantity.CONDUCTOR_AREA] = Side(_rating(part, "conductor_min"), _rating(part, "conductor_max"), None)
+    return out
 
 
 DOMAIN = DomainSpec(

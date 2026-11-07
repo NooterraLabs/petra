@@ -7,6 +7,12 @@ Refutation: if a vertex LP is infeasible, solve the alternative LP
 rationalise y, choose the point, and evaluate the Farkas inequality exactly before
 offering it. In truss terms y is a collapse mechanism.
 
+A crossed pair of bounds (lo_i > hi_i, as when a member's own weight exceeds its capacity)
+would let that LP run unbounded with p_i = n_i, which the kernel does not credit: it charges
+hi_i z_i for z_i > 0 and lo_i z_i for z_i < 0. So each crossed coordinate is pinned, once at
+hi_i and once at lo_i; either pin charges at least what the kernel charges, whatever the
+sign of z_i.
+
 The exact helpers below (range_box, vertices, values_at, rational, solve_exact) serve the
 R2 and R3 solvers too.
 """
@@ -189,20 +195,37 @@ def farkas_ray(statement: Statement, vertex: dict) -> Evidence | None:
     try:
         b = values_at(goal.b, syms, vertex)
         lows, highs = _bounds(goal, box)
-        rays = [_ray(goal.A, b, lows, highs)]
+        rays = _rays(goal.A, b, lows, highs)
         point = {s: vertex.get(s, r.lo) for s, r in box.items()}
-        if rays[0] is not None:
+        if rays:
             for s, r in box.items():
                 if s not in vertex and r.lo < r.hi:
                     point[s] = min((r.lo, r.hi), key=lambda v: _cap(goal, rays[0], {**point, s: v}))
         lows, highs = _bounds(goal, {s: Interval(v, v) for s, v in point.items()})
-        rays.insert(0, _ray(goal.A, b, lows, highs))
+        rays = _rays(goal.A, b, lows, highs) + rays
         for y in rays:
-            if y is not None and _refutes(goal, y, point):
+            if _refutes(goal, y, point):
                 return Evidence(FarkasRay(tuple(sorted(point.items())), y))
     except (KernelArithmeticError, NotAffine, ValueError):
         return None
     return None
+
+
+def _rays(A: Matrix, b: Vector, lows: list, highs: list) -> list[Vector]:
+    """Candidate rays for the alternative LP, with each crossed coordinate pinned (see the
+    module docstring)."""
+    crossed = [i for i, (lo, hi) in enumerate(zip(lows, highs)) if lo is not None and hi is not None and lo > hi]
+    if not crossed:
+        return [y for y in (_ray(A, b, lows, highs),) if y is not None]
+    out = []
+    for pin in (highs, lows):
+        lo2, hi2 = list(lows), list(highs)
+        for i in crossed:
+            lo2[i] = hi2[i] = pin[i]
+        y = _ray(A, b, lo2, hi2)
+        if y is not None:
+            out.append(y)
+    return out
 
 
 def _ray(A: Matrix, b: Vector, lows: list, highs: list) -> Vector | None:

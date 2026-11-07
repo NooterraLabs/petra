@@ -146,6 +146,13 @@ def _constants() -> dict[str, Constant]:
         Constant("aluminium.density", _iv("2700"), "kg/m3", SANCTIONED, "CEN",
                  "EN 1999-1-1:2007 3.2.5(1): unit mass 2700 kg/m3",
                  "wrought aluminium alloys have density 2700 kg/m3"),
+        # Gravity, which turns a member's mass into its self-weight (models/truss.py).
+        Constant("earth.gravity", _iv("9.76", "9.84"), "m/s2", JUDGED, MAINTAINERS,
+                 "WGS 84 normal gravity at sea level runs from 9.7803 m/s2 at the equator to 9.8322 m/s2 at the "
+                 "poles (NIMA TR8350.2); the range widens it for the altitude of the highest summits and for local "
+                 "anomalies, and holds the standard acceleration 9.80665 m/s2 (CGPM 1901); recalled and not "
+                 "checked against the published text",
+                 "the acceleration of gravity at any site on the Earth's surface lies in [9.76, 9.84] m/s2"),
         Constant("iso724.d2_coefficient", _iv("0.649519"), "1", SANCTIONED, "ISO",
                  "ISO 724:1993 basic dimensions: d2 = d - 2 x 3/8 H with H = (sqrt 3 / 2) P from ISO 68-1, "
                  "so the coefficient is 3 sqrt 3 / 8 = 0.64951905, rounded to six places",

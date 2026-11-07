@@ -19,27 +19,38 @@ vertex, P_D = P_E = P, that is 1.25 P of compression.
         lambda = sqrt(203.78 / 74.119) = 1.6581,  Phi = (1 + 0.49 (1.6581 - 0.2) + 1.6581^2) / 2 = 2.2319
         chi = 1 / (Phi + sqrt(Phi^2 - lambda^2)) = 0.2684,  N_b = chi A fy = 54.692 kN,
         the compression capacity
-    collapse factor at the worst vertex = 54.692 / (1.25 P):
-        P = 29 kN   1.5088  (the shipped box)
-        P = 29.1 kN 1.5036
-        P = 29.2 kN 1.4984
-        P = 30 kN   1.4585
-so the strength claim's box edge is P = 54.692 / (1.5 x 1.25) = 29.17 kN per node. The
-bare Euler load, which v0 used before the buckling curve, put it at 39.53 kN. The
-other claims hold with room at P = 29 kN: |N_ad| / A = 63.2 MPa against 235 MPa, and a
+    the members' own weight at g = 9.84 m/s2 (the top of the registry's range) and 7850 kg/m3:
+        44.3 N/m for CHS 60.3x3.2 and 56.6 N/m for CHS 76.1x3.2, so 0.196 kN at D and E
+        and 0.244 kN at B; N_ad gains 1.25 x 0.196 + 0.625 x 0.244 = 0.397 kN, and 0.044 kN
+        more at its lower end, the axial share of its own weight (44.3 N/m x 2 m rise / 2)
+    the strength claim factors the load and not the weight, so the collapse factor at the
+    worst vertex is (54.692 - 0.441) / (1.25 P):
+        P = 28.5 kN 1.5228  (the shipped box)
+        P = 28.8 kN 1.5070
+        P = 29 kN   1.4966
+        P = 40 kN   1.0850
+so the strength claim's box edge is P = 54.251 / (1.5 x 1.25) = 28.93 kN per node. Without
+the weight it was 29.17 kN, and the bare Euler load, which v0 used before the buckling
+curve, put it at 39.53 kN. The other claims hold with room at P = 28.5 kN: the stress
+claim reads (|N_ad| + 0.441 kN + 1.533 kN) / A = 65.5 MPa against 235 MPa, the 1.533 kN
+being the bending the diagonal's weight causes at midspan (EN 1993-1-1 6.2.1(7)), and a
 float eigen-check of K + lambda K_G (tension stiffening dropped, as the statement does)
 puts global instability far above the claimed 3. The other members at factor 1.5: the
-top chord carries 1.5 x 0.375 (P_D + P_E) = 32.6 kN against its 77.0 kN buckling
-resistance (CHS 76.1x3.2 over 3 m), the bottom chord 32.6 kN of tension against
-203.8 kN, and the inner diagonals 1.5 x 0.3125 |P_D - P_E| <= 13.6 kN. Every member stays
-below yield and far inside the 0.002 strain limit, and both sections are class 1
-(D / t = 18.8 and 23.8 against 90 x 235 / 355 = 59.6), so each validity row holds.
+top chord carries 1.5 x 0.375 (P_D + P_E) = 32.1 kN against its 77.0 kN buckling
+resistance (CHS 76.1x3.2 over 3 m), the bottom chord 32.1 kN of tension against
+203.8 kN, and the inner diagonals 1.5 x 0.3125 |P_D - P_E| <= 13.4 kN, each with well
+under 1 kN from the weight. Every member stays below yield and far inside the 0.002
+strain limit, and both sections are class 1 (D / t = 18.8 and 23.8 against
+90 x 235 / 355 = 59.6), so each validity row holds.
 
 Solver calls per truss query, from the solvers' own algorithms over a box with two load
-symbols, so 2^2 = 4 vertices: strength (R1) runs one HiGHS LP and one exact repair per
-vertex; stress (R3) one exact field repair per vertex; stability (R2) one field repair
-per vertex for the shared elastic problem, one hypercircle for that problem, which every
-member force lemma (7 members) reads, and one exact LDL.
+symbols, so 2^2 = 4 vertices. Strength (R1) runs one HiGHS LP and one exact repair per
+vertex. Stability (R2) and stress (R4) each read member force lemmas from four elastic
+problems: the load case, with one exact field repair per vertex, and a unit downward load
+at each of the three free y DOFs (B, D, E), which the weight loads, with one exact repair
+each. Each problem has one hypercircle, which every lemma on it reads: stability proves
+7 x 4 lemmas and stress 1 x 4, for diag_ad alone. Stability runs one exact LDL and stress
+one R4 search.
 """
 import dataclasses
 import random
@@ -58,7 +69,9 @@ CABLE_CLAIMS = len(("hot", "drop"))
 TRUSS_CLAIMS = len(("strength", "stability", "stress"))
 MEMBERS = 7
 VERTICES = 2 ** len(("load_d", "load_e"))
-TRUSS_BOX = "[-29 kN, 0 kN]"
+UNIT_LOADS = len(("B", "D", "E"))
+PROBLEMS = 1 + UNIT_LOADS
+TRUSS_BOX = "[-28.5 kN, 0 kN]"
 
 
 def edited(family: bench.Family, old: str, new: str, root: str) -> bench.Family:
@@ -119,11 +132,11 @@ class TrussBenchmark(unittest.TestCase):
     def test_every_query_statement_is_proved_on_both_paths(self):
         r = self.result
         self.assertEqual(r.statements, 2 * TRUSS_CLAIMS, "each query has the family's three claims")
-        self.assertEqual({rule: s.statements for rule, s in r.reuse.by_rule.items()}, {"R1": 2, "R2": 2, "R3": 2}, "one statement per rule per query")
+        self.assertEqual({rule: s.statements for rule, s in r.reuse.by_rule.items()}, {"R1": 2, "R2": 2, "R4": 2}, "one statement per rule per query")
         for path in (r.reuse, r.recompute):
             self.assertEqual(path.counts["theorems"], r.statements, "every statement ends in a theorem for itself")
             self.assertEqual(path.counts["kernel checks"], r.statements, "the first candidate is accepted, so one check each")
-        self.assertEqual(r.recompute.counts["lemmas"], 2 * MEMBERS, "each stability check proves one force lemma per member")
+        self.assertEqual(r.recompute.counts["lemmas"], 2 * (MEMBERS + 1) * PROBLEMS, "stability reads every member, stress one, on each elastic problem")
         self.assertEqual(r.reuse.counts.get("lemmas", 0), 0, "an Instance proves no lemma: the family theorem holds the ranges")
         self.assertEqual(r.reuse.counts["instances"], r.statements, "reuse answers every statement with an Instance")
 
@@ -132,14 +145,14 @@ class TrussBenchmark(unittest.TestCase):
         for counter in ("LP solves", "exact solves", "LDL factorizations", "solver hypercircles", "searches", "kernel enclosures"):
             self.assertEqual(reuse.get(counter, 0), 0, f"reuse makes no {counter}")
         self.assertEqual(recompute["LP solves"], n * VERTICES, "one HiGHS LP per load vertex of the strength statement")
-        self.assertEqual(recompute["exact solves"], n * 3 * VERTICES, "one exact repair per vertex for R1, R3 and R2's elastic problem")
+        self.assertEqual(recompute["exact solves"], n * (3 * VERTICES + 2 * UNIT_LOADS), "one exact repair per vertex for R1 and each load problem, one per unit problem")
         self.assertEqual(recompute["LDL factorizations"], n, "one exact LDL per stability statement")
-        self.assertEqual(recompute["solver hypercircles"], n, "one lemma hypercircle per stability statement, read by every member force")
+        self.assertEqual(recompute["solver hypercircles"], n * 2 * PROBLEMS, "one hypercircle per elastic problem of the stability and stress statements")
         self.assertGreater(recompute["kernel enclosures"], 0, "the kernel replays each proof")
 
     def test_the_model_charges_the_instance_check_by_statement_size(self):
         r = self.result
-        self.assertEqual([u.rule for u in r.units], ["R1", "R2", "R3"], "one unit cost per rule, timed on the first warm-up query")
+        self.assertEqual([u.rule for u in r.units], ["R1", "R2", "R4"], "one unit cost per rule, timed on the first warm-up query")
         self.assertTrue(all(min(u.solve_s, u.check_s, u.offer_s, u.instance_s) > 0 for u in r.units), "every unit cost was timed")
         self.assertTrue(all(u.nodes > 0 and u.per_node_s > 0 for u in r.units), "the Instance check has a cost per node")
         self.assertIn("linear in statement size", r.basis, "the prediction charges the Instance check by size")
@@ -190,14 +203,14 @@ class TrussBoxEdge(unittest.TestCase):
             return certify_family(load_design(family.path, REGISTRY), REGISTRY, Library(root)).skipped
 
     def test_the_shipped_box_certifies_every_claim(self):
-        self.assertEqual(self.certify("29"), (), "collapse factor 1.5088 at the worst vertex, stress 63.2 MPa")
+        self.assertEqual(self.certify("28.5"), (), "collapse factor 1.5228 at the worst vertex, stress 65.5 MPa")
 
     def test_the_box_edge_sits_where_the_hand_check_puts_it(self):
-        self.assertEqual(self.certify("29.1"), (), "1.5036 at 29.1 kN is within the claimed 1.5")
-        (skipped,) = self.certify("29.2")
-        self.assertIn("claim.strength", skipped, "only strength fails at 29.2 kN (1.4984 by hand)")
+        self.assertEqual(self.certify("28.8"), (), "1.5070 at 28.8 kN is within the claimed 1.5")
+        (skipped,) = self.certify("29")
+        self.assertIn("claim.strength", skipped, "only strength fails at 29 kN (1.4966 by hand)")
         self.assertIn("refuted by R1", skipped, "the solver finds a collapse mechanism")
-        for at in ("load_d = -29200", "load_e = -29200", "const.steel.E = 200000000000"):
+        for at in ("load_d = -29000", "load_e = -29000", "const.steel.E = 200000000000", "const.earth.gravity = 246/25"):
             self.assertIn(at, skipped, f"at the hand check's worst vertex: {at}")
 
 
@@ -212,7 +225,7 @@ class Refusals(unittest.TestCase):
             too_heavy = edited(bench.TRUSS, TRUSS_BOX, "[-40 kN, 0 kN]", root)
             with self.assertRaises(ValueError) as caught:
                 bench.run(too_heavy, queries=1, seed=0)
-        self.assertIn("claim.strength", str(caught.exception), "40 kN per node gives 1.4824 by hand, below 1.5")
+        self.assertIn("claim.strength", str(caught.exception), "40 kN per node gives 1.0850 by hand, below 1.5")
 
     def test_no_queries_is_refused(self):
         with self.assertRaises(ValueError):

@@ -145,8 +145,8 @@ api        the Python API, and the JSON that `petra check --json` prints
 	entries    strength PASS, stability PASS, stress PASS, coverage PASS
 	scope      load cases crowd; environment indoor_dry; no parameters
 	checked    10 obligations, 10 certified, 0 refuted, 0 waived, 0 open
-	governing  strength   frame.diag_ad/truss.member_buckling/coverage.truss.axial_member: compression against the flexural buckling resistance: demand 30 kN, capacity 54.69 kN, utilisation 0.549
-	  frame/truss.plastic_collapse                 claim strength               R1  certified  solver  sha256:aa44bf3a95d0..  validity 1 proved
+	governing  strength   frame.diag_ad/truss.member_buckling/coverage.truss.axial_member: compression against the flexural buckling resistance: demand 30.45 kN, capacity 54.69 kN, utilisation 0.557
+	  frame/truss.plastic_collapse                 claim strength               R1  certified  solver  sha256:68b23684fdb0..  validity 2 proved
 	```
 
 	The footprint at the end lists every premise. For example, `reg:steel.S355.fy` cites EN 10025-2, and `in:warren-footbridge-panel.crowd.frame.D.fy` names the person who signed that load range.
@@ -164,19 +164,19 @@ api        the Python API, and the JSON that `petra check --json` prints
 	warren-footbridge-panel-rev-c: FAIL
 	entries    strength FAIL, coverage FAIL
 	checked    9 obligations, 6 certified, 3 refuted, 0 waived, 0 open
-	counterexample  frame/truss.plastic_collapse/claim.strength: a static field within every member's capacity carries 1.5 times load case crowd on frame
-	  governing  load factor: the claimed factor against the largest one a static field within every member's capacity carries: demand 1.5, capacity 0.7292, utilisation 2.06
-	  claim      strength: collapse_factor is 0.7292 here, against its bound 1.5
-	  at         const.steel.E    = 200 GPa   (reg:const.steel.E)
-	             crowd.frame.D.fy = -60 kN   (in:warren-footbridge-panel-rev-c.crowd.frame.D.fy)
-	             crowd.frame.E.fy = -60 kN   (in:warren-footbridge-panel-rev-c.crowd.frame.E.fy)
+	counterexample  frame/truss.plastic_collapse/claim.strength: a static field within every member's capacity carries the self-weight of frame, alone and with 1.5 times load case crowd
+	  governing  load factor: the claimed factor against the largest one a static field within every member's capacity carries: demand 1.5, capacity 0.7232, utilisation 2.07
+	  claim      strength: collapse_factor is 0.7232 here, against its bound 1.5
+	  at         const.earth.gravity = 9.84 m/s2   (reg:const.earth.gravity)
+	             const.steel.E       = 200 GPa   (reg:const.steel.E)
+	             const.steel.density = ~8004.77 kg/m3   (reg:const.steel.density)
+	             crowd.frame.D.fy    = -60 kN   (in:warren-footbridge-panel-rev-c.crowd.frame.D.fy)
+	             crowd.frame.E.fy    = -60 kN   (in:warren-footbridge-panel-rev-c.crowd.frame.E.fy)
 	  fixed      16 more values, as the design and the registry state them (--json lists each)
-	counterexample  frame.diag_ad/truss.member_buckling/coverage.truss.axial_member: the compression in frame.diag_ad is at most 1 times its flexural buckling resistance under load case crowd
-	  governing  compression against the flexural buckling resistance: demand 75 kN, capacity 54.69 kN, utilisation 1.37
-	  at         const.steel.E    = 200 GPa   (reg:const.steel.E)
-	             crowd.frame.D.fy = -60 kN   (in:warren-footbridge-panel-rev-c.crowd.frame.D.fy)
-	             crowd.frame.E.fy = -60 kN   (in:warren-footbridge-panel-rev-c.crowd.frame.E.fy)
-	  fixed      16 more values, as the design and the registry state them (--json lists each)
+	counterexample  frame.diag_ad/truss.member_buckling/coverage.truss.axial_member: the compression in frame.diag_ad is at most 1 times its flexural buckling resistance under load case crowd and the self-weight
+	  governing  compression against the flexural buckling resistance: demand 75.45 kN, capacity 54.69 kN, utilisation 1.38
+	  at         const.earth.gravity = 9.84 m/s2   (reg:const.earth.gravity)
+	             const.steel.E       = 200 GPa   (reg:const.steel.E)
 	```
 
 3. Check a bolted joint whose coverage is incomplete:

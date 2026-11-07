@@ -41,12 +41,13 @@ from petra.kernel import (
 from petra.kernel.rules.r4_enclosure import MAX_DEPTH, AllNonpositive, Enclosure, PointWitness
 from petra.lang import load_design, parse_design
 from petra.models import circuit
+from petra.models import contracts as port_contracts
 from petra.models.base import ComponentError, CoverageOrigin, Gap, NeedsInputBound, NoRuleForQuantity, Obligation
 from petra.pipeline import check_design
 from petra.premises import Tag
 from petra.registry import build_registry
 from petra.solvers import SolverSource, r4_enclosure
-from petra.verdict import Pass
+from petra.verdict import Fail, Pass
 
 REGISTRY = build_registry()
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples"
@@ -500,6 +501,59 @@ class Features(unittest.TestCase):
         bare = radial()
         demanded = [r.mode for r in coverage.generate(bare, lowered(bare), REGISTRY) if isinstance(r.origin, CoverageOrigin)]
         self.assertEqual(demanded, [circuit.STEADY_TEMPERATURE, circuit.SHORT_CIRCUIT, circuit.OVERLOAD_PROTECTION, circuit.VOLTAGE_DROP])
+
+
+class TerminalFit(unittest.TestCase):
+    """A terminal clamps every wire connected at either of its ports, and the wire's
+    conductor area must lie in the clamp's range (registry conductor_min to
+    conductor_max): 0.2 to 4 mm2 for the lever terminal, 1.5 to 16 mm2 for the screw one."""
+
+    FIT = "conductor_area"
+
+    def contracts(self, design) -> dict:
+        """{(port, quantity): obligation or gap} for every contract the circuits state."""
+        out = []
+        for model in lowered(design).values():
+            ports = circuit.ports(model, REGISTRY)
+            out += port_contracts.contract_obligations(design, ports.connections, {s.ref: s for s in ports.specs}, REGISTRY)
+        return {(".".join(e.requirement.subject), e.requirement.qoi.name): e for e in out}
+
+    def test_the_example_conductor_fits_its_terminal(self):
+        ob = self.contracts(load_design(EXAMPLES / "circuit_pass.petra", REGISTRY))[("lighting.t1.wire", self.FIT)]
+        self.assertIsInstance(solved(ob)[0], Theorem)
+        self.assertAlmostEqual(at(ob.statement, 0, {}), 2.5e-6 - 4e-6)
+        self.assertAlmostEqual(at(ob.statement, 1, {}), 0.2e-6 - 2.5e-6)
+        self.assertIn("reg:terminal.lever_4mm2_75C.conductor_max", labels(ob.statement))
+
+    def test_a_16_mm2_conductor_in_a_4_mm2_terminal_fails_its_contract(self):
+        report = check_design(radial(("cable.cu_pvc_2_5", "cable.cu_pvc_16")), REGISTRY, (SolverSource(),))
+        self.assertIsInstance(report.verdict, Fail)
+        self.assertEqual(report.verdict.obligation.requirement.id, f"lighting.t1.wire/port.contract/coverage.port.contract/{self.FIT}")
+        self.assertAlmostEqual(at(report.verdict.obligation.statement, 0, {}), 16e-6 - 4e-6)
+
+    def test_a_terminal_clamps_a_wire_at_its_out_port_too(self):
+        found = self.contracts(radial(("cable.cu_pvc_2_5 length 18 m install install.clipped_direct\n  consumer",
+                                       "cable.cu_pvc_16 length 18 m install install.clipped_direct\n  consumer"), text=TWO_WIRES))
+        self.assertIsInstance(solved(found[("lighting.t1.wire", self.FIT)])[0], Theorem, "w1 is 2.5 mm2")
+        result, _ = solved(found[("lighting.t1.out", self.FIT)])
+        self.assertIsInstance(result, Refutation, "w2 is 16 mm2")
+        self.assertEqual({q for port, q in found if port == "lighting.t1.out"}, {"temperature", "current", self.FIT},
+                         "the terminal's ratings hold for the conductor on each side")
+
+    def test_a_port_that_clamps_no_wire_states_no_fit(self):
+        found = self.contracts(load_design(EXAMPLES / "circuit_pass.petra", REGISTRY))
+        self.assertFalse([key for key in found if key[0] == "lighting.t1.out"], "t1.out joins the consumer, not a wire")
+
+    def test_a_conductor_below_the_clamp_fails_at_the_small_end(self):
+        family = FAMILY.replace("param size in [2.5 mm2, 16 mm2]", "param size in [1 mm2, 16 mm2]").replace(
+            "  consumer load\n  connect mains.out -> w1.a\n  connect w1.b -> load.in\n",
+            "  terminal t1 part terminal.screw_16mm2_75C\n  consumer load\n  connect mains.out -> w1.a\n"
+            "  connect w1.b -> t1.wire\n  connect t1.out -> load.in\n")
+        ob = self.contracts(parse_design(family, "f.petra", REGISTRY))[("c.t1.wire", self.FIT)]
+        result, evidence = solved(ob)
+        self.assertIsInstance(result, Refutation)
+        self.assertEqual(evidence.body.which, 1, "the lower end of the clamp's range")
+        self.assertEqual(dict(result.point)["size"], Fraction(1, 10**6))
 
 
 def parabola(c: Fraction) -> Statement:
