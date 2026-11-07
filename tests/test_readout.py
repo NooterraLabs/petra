@@ -473,6 +473,20 @@ class Labels(unittest.TestCase):
         f = next(f for f in check(ROOT / "examples" / "steel" / "shear_tee.petra").findings if "/steel.edge_min/" in f.requirement)
         self.assertIn("tee flange: flange side edge distance at least Table J3.4's (J3.5)", {v.what for v in f.values})
 
+    def test_a_port_contract_names_its_quantity_in_its_unit(self):
+        report = check(ROOT / "judges" / "canaries" / "circuit_16mm2_in_4mm2_terminal.petra")
+        f = next(f for f in report.findings if f.requirement.endswith("/conductor_area"))
+        self.assertEqual(f.outcome, "refuted")
+        v = f.governing
+        self.assertEqual((v.what, v.unit, v.demand, v.capacity), ("largest conductor area guaranteed against the rated maximum", "mm2", 16, 4))
+
+    def test_a_truss_that_cannot_carry_its_own_weight_carries_no_load_factor(self):
+        report = check(ROOT / "judges" / "canaries" / "truss_600m_span.petra")
+        f = next(f for f in report.findings if "/truss.plastic_collapse/" in f.requirement)
+        self.assertEqual(f.outcome, "refuted")
+        self.assertEqual(f.governing.capacity, 0, f.note)
+        self.assertIn("no static field carries the self-weight alone", f.governing.what)
+
 
 if __name__ == "__main__":
     unittest.main()
