@@ -69,13 +69,28 @@ def key(label: str) -> str:
 
 def load(path: str = TABLE) -> ShapeTable:
     """The shipped rows; or, when PETRA_SHAPES_XLSX names the workbook they cite, every row."""
+    body = _read(path)
+    book = os.environ.get(WORKBOOK)
+    if book and path == TABLE:
+        body = _workbook_table(os.path.abspath(book), body["sha256"])
+    return _table(body)
+
+
+def shipped() -> ShapeTable:
+    """The rows aisc_shapes.json ships, whatever PETRA_SHAPES_XLSX names: what
+    docs/reference.md lists, so the reference reads the same on every machine."""
+    return _table(_read(TABLE))
+
+
+def _read(path: str) -> dict:
     with open(path, encoding="utf-8") as f:
         body = json.load(f)
     if body.get("format") != FORMAT:
         raise ValueError(f"{path}: format {body.get('format')!r} is not {FORMAT}")
-    book = os.environ.get(WORKBOOK)
-    if book and path == TABLE:
-        body = _workbook_table(os.path.abspath(book), body["sha256"])
+    return body
+
+
+def _table(body: Mapping) -> ShapeTable:
     return ShapeTable(body["file"], body["sha256"], Tag(body["tag"]), body["owner"], body["source"],
                       tuple(body["W"]), tuple(body["L"]))
 

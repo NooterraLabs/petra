@@ -47,6 +47,16 @@
         Run the deck consistency checker. With no DECK, check the deck built from the
         shipped registry. Exit 0 when every relation holds, 1 when one fails, 3 when the
         deck does not parse.
+    python -m petra registry list [PREFIX]
+        Print every registry id a design can name, one line each: what it is, and the
+        common names that stand for it (A325 for bolt_group.120). With PREFIX, the ids and
+        common names that start with it, in any case; 3 when none does.
+    python -m petra kinds [DOMAIN|KIND] [--json]
+        Print each component kind's load and claim forms and its attribute lines, required
+        and optional, with their units, registry prefixes and meanings (petra/teach.py).
+    python -m petra new KIND [--name NAME]
+        Print a complete design of KIND to start from, its canonical example with the
+        component renamed to NAME. 3 for an unknown kind or a name the design cannot take.
     python -m petra gym --episodes N --seed S [--domain NAME ...] [--library DIR]
         Run the baseline agent. Prints one summary line, AgentStats.render():
         "solved k/N episodes (library hits h, families added f)". --domain takes names
@@ -94,7 +104,7 @@ class _Parser(argparse.ArgumentParser):
 
 def build_parser() -> argparse.ArgumentParser:
     """Subcommands check, explain, envelope, verify, certify-family, registry (build,
-    check) and gym, with the flags in the module docstring."""
+    check, list), gym, kinds and new, with the flags in the module docstring."""
     from .gym.tasks import GENERATORS
 
     parser = _Parser(prog="petra", description="verdicts about physical designs as theorems relative to explicit premises")
@@ -150,6 +160,7 @@ def build_parser() -> argparse.ArgumentParser:
                      help=f"one of {', '.join(sorted(GENERATORS))}; repeat for several")
     gym.add_argument("--library", metavar="DIR")
     gym.set_defaults(run=cmd_gym)
+    _add_teach_commands(commands, decks)
     return parser
 
 
@@ -304,6 +315,56 @@ def cmd_gym(args: argparse.Namespace) -> int:
 
     domains = tuple(args.domain) if args.domain else tuple(sorted(GENERATORS))
     print(run_episodes(domains, args.episodes, args.seed, args.library).render())
+    return 0
+
+
+# --- Teaching: kinds, new, registry list (petra/teach.py) --------------------------------
+
+
+def _add_teach_commands(commands: argparse._SubParsersAction, decks: argparse._SubParsersAction) -> None:
+    kinds = commands.add_parser("kinds", help="print the component kinds and their attribute lines")
+    kinds.add_argument("name", nargs="?", metavar="DOMAIN|KIND")
+    kinds.add_argument("--json", action="store_true", help="print the kinds as JSON")
+    kinds.set_defaults(run=cmd_kinds)
+    new = commands.add_parser("new", help="print a complete design of one kind to start from")
+    new.add_argument("kind")
+    new.add_argument("--name", metavar="NAME", help="the component's name; default the example's")
+    new.set_defaults(run=cmd_new)
+    listing = decks.add_parser("list", help="print the registry ids a design can name")
+    listing.add_argument("prefix", nargs="?", metavar="PREFIX")
+    listing.set_defaults(run=cmd_registry_list)
+
+
+def cmd_kinds(args: argparse.Namespace) -> int:
+    from .teach import TeachError, kinds_json, kinds_text
+
+    try:
+        text = json.dumps(kinds_json(args.name), indent=1) + "\n" if args.json else kinds_text(args.name)
+    except TeachError as exc:
+        return _input_error(exc)
+    print(text, end="")
+    return 0
+
+
+def cmd_new(args: argparse.Namespace) -> int:
+    from .teach import TeachError, new_text
+
+    try:
+        text = new_text(args.kind, args.name, build_registry())
+    except (*_INPUT_ERRORS, TeachError) as exc:
+        return _input_error(exc)
+    print(text, end="")
+    return 0
+
+
+def cmd_registry_list(args: argparse.Namespace) -> int:
+    from .teach import TeachError, registry_text
+
+    try:
+        registry = build_registry()
+        print(registry_text(registry, args.prefix, registry.constants), end="")
+    except TeachError as exc:
+        return _input_error(exc)
     return 0
 
 
