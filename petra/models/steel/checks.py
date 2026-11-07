@@ -165,7 +165,9 @@ class Interface:
     shear: Expr | None          # force the group carries in the plane of the plies
     eccentricity: Expr | None   # of the shear from the group centroid, in the plies' plane
     tension: Expr | None # total bolt tension
-    clearances: tuple[tuple[str, Expr], ...]
+    # (obstruction, distance from a bolt to it), and for a group the lines place nowhere in
+    # particular a third item: excused where it is <= 0, another placement leaving room
+    clearances: tuple[tuple[str, Expr] | tuple[str, Expr, Expr], ...]
     prying: tuple[Prying, ...]
 
     @property
@@ -424,6 +426,31 @@ def _support_clearances(support: Member, sp: Mapping[str, Expr], gauge: Expr) ->
     return (("support flanges", div(sub(sub(sp["d"], mul(c(2), sp["tf"])), gauge), c(2))),)
 
 
+def _bracket_clearances(ctx: Ctx, bolts: Bolts, columns: int, g: Expr) -> tuple[tuple[str, Expr] | tuple[str, Expr, Expr], ...]:
+    """Room to tighten a bracket's bolts, `columns` at gauge g, which the lines place
+    nowhere in particular (geometry.bracket_columns), at the placement that leaves the most.
+    On a web: centred between the flanges, ((d - 2 tf) - (columns - 1) g) / 2 to each. On a
+    flange: all on one side of the web with the outer hole on the flange, (bf - tw) / 2 -
+    (columns - 1) g - dh / 2 from the web; excused where a split straddling the web fits
+    ((columns - 1) g + dh <= bf) and leaves the room needed, the web centred between two
+    columns as far as the larger part, ceil(columns / 2) columns, allows: min((g - tw) / 2,
+    (bf - tw) / 2 - dh / 2 - (ceil(columns / 2) - 1) g). A placement that leaves room also
+    fits, since the room needed exceeds dh / 2."""
+    support: Member = ctx.conn.attrs["support"]
+    sp = _w(ctx, support)
+    if support.face == "web":
+        return (("support flanges", div(sub(sub(sp["d"], mul(c(2), sp["tf"])), mul(c(columns - 1), g)), c(2))),)
+    dh = G.hole_size(ctx, bolts, "support", G.ACROSS)
+    side = div(sub(sp["bf"], sp["tw"]), c(2))
+    one_side = sub(sub(side, mul(c(columns - 1), g)), div(dh, c(2)))
+    if columns == 1:
+        return (("support web", one_side),)
+    need = add(M.hex_corner(ctx.const(f"bolt_us.{bolts.size}.nut_F")), ctx.const("aisc_manual.clearance.socket"))
+    larger = (columns + 1) // 2
+    split = Min((div(sub(g, sp["tw"]), c(2)), sub(sub(side, div(dh, c(2))), mul(c(larger - 1), g))))
+    return (("support web", one_side, Max((sub(need, split), sub(add(mul(c(columns - 1), g), dh), sp["bf"])))),)
+
+
 def _length(ctx: Ctx, rows: int) -> tuple[Expr, Expr, Expr]:
     """(pitch, vertical edge distance, element length 2 lev + (rows - 1) s)."""
     s, lev = ctx.attr("pitch"), ctx.attr("edge_vertical")
@@ -620,6 +647,10 @@ def geometry_seated(ctx: Ctx) -> Geometry:
     out.forces.append(Concentrated(beam.shape, beam.grade, v, lb, c(0), False, False, None, None, True, name="beam", panel_shear=None, axial=None))
     out.seat = Seat(angle.grade, ta, seat_length, setback, lb, v)
     out.web_shear.append(("seat angle", angle.grade, mul(seat_length, ta), v))
+    # The beam's end carries the reaction down its web to the seat: its gross section,
+    # uncut by holes or a cope, yields in shear over d tw (J4.2(a), as on a framed beam).
+    bp = _w(ctx, beam)
+    out.web_shear.append(("beam web", beam.grade, mul(bp["d"], bp["tw"]), v))
     if conn.attrs["support_side"] == "bolted":
         bolts: Bolts = conn.attrs["bolts"]
         rows = conn.attrs["rows"]
@@ -656,9 +687,17 @@ def geometry_stiffened_seat(ctx: Ctx) -> Geometry:
     t_sup = _face_t(support, _w(ctx, support))
     out = Geometry.empty()
     out.forces.append(Concentrated(beam.shape, beam.grade, v, sub(width, setback), c(0), False, False, None, None, True, name="beam", panel_shear=None, axial=None))
+    bp = _w(ctx, beam)
+    out.web_shear.append(("beam web", beam.grade, mul(bp["d"], bp["tw"]), v))
+    # The stiffener carries the reaction to the support as a bracket plate welded on edge
+    # does: its section along the weld line in shear and in flexure under the reaction at
+    # Table 10-8's 0.8 W from the support face. No holes, so no rupture section.
+    ecc = mul(ctx.const("aisc_manual.t10_8.eccentricity"), width)
+    out.web_shear.append(("stiffener", stiff.grade, mul(length, ts), v))
+    out.flexures.append(Flexure("stiffener", stiff.grade, ts, length, mul(v, ecc), 0, c(0), c(0)))
     weld: Weld = conn.attrs["weld"]
     w = ctx.geo(weld.size, "weld.size")
-    out.welds.append(WeldGroup("stiffener to support", weld, w, length, weld.sides, v, mul(ctx.const("aisc_manual.t10_8.eccentricity"), width), Min((ts, t_sup)),
+    out.welds.append(WeldGroup("stiffener to support", weld, w, length, weld.sides, v, ecc, Min((ts, t_sup)),
                                (("stiffener", stiff.grade, ts, weld.sides), (f"support {support.face}", support.grade, t_sup, 1)),
                                end_loaded=True, bearing=False, ret=None, edge=None))
     seat: PlateSpec = conn.attrs["plate"]
@@ -692,7 +731,8 @@ def geometry_bolt_bracket(ctx: Ctx) -> Geometry:
               (("plate top and bottom", lev), ("plate side", leh)), block=True)
     v = ctx.load("shear")
     out = Geometry.empty()
-    out.interfaces.append(Interface("bracket bolts", bolts, rows, cols, s, g, 1, (ply, _support_ply(ctx)), v, e, tension=None, clearances=(), prying=()))
+    out.interfaces.append(Interface("bracket bolts", bolts, rows, cols, s, g, 1, (ply, _support_ply(ctx)), v, e, tension=None,
+                                    clearances=_bracket_clearances(ctx, bolts, cols, g), prying=()))
     # Section A-A runs down the bolt column nearest the load (Manual Part 15).
     arm = sub(e, mul(c(Fraction(cols - 1, 2)), g))
     _, dh_v, _ = bolt_dims(ctx, bolts, ply.hole)
@@ -753,6 +793,12 @@ def geometry_hanger(ctx: Ctx) -> Geometry:
                                                    flange.hole),
                                             Prying("support flange", b_s, a_s, _tributaries(ctx, rows, lev, s, b_s), sp["tf"],
                                                    support.grade, hold.hole))))
+    # The tension pulls the support's flange, which hands it to the support's web: J10.2's
+    # web local yielding over lb, the bolt rows' extent (the force enters at the bolts). The
+    # grammar gives no distance to the support's end, so the force is taken at it: Eq J10-3,
+    # the lesser, holds wherever the hanger is.
+    out.forces.append(Concentrated(support.shape, support.grade, t, mul(c(rows - 1), s), c(0), True, False, None, None, True,
+                                   name="support", panel_shear=None, axial=None))
     gross = mul(tp["tw"], length)
     out.tensions.append(Tension("tee stem", tee.grade, gross, gross, t))
     # The bolts' tension reaches the stem through the flange in shear either side of it:
@@ -1213,8 +1259,9 @@ def gen_clearance(ctx: Ctx, geo: Geometry) -> list[Check]:
     for itf in geo.interfaces:
         nut = ctx.const(f"bolt_us.{itf.bolts.size}.nut_F")
         need = add(M.hex_corner(nut), ctx.const("aisc_manual.clearance.socket"))
-        for what, distance in itf.clearances:
-            out.append(Check(f"{itf.name}: room to tighten, clear of the {what} (Manual Part 7)", (need,), distance, unit="in", group=None, suffix="", guards=()))
+        for what, distance, *placed in itf.clearances:
+            out.append(Check(f"{itf.name}: room to tighten, clear of the {what} (Manual Part 7)", (need,), distance, unit="in", group=None,
+                             suffix="", guards=tuple(placed)))
     return out
 
 

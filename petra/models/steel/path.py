@@ -51,16 +51,19 @@ ROLE_LIMITS: Mapping[str, tuple[str, ...]] = {
     # whose free end can buckle sideways (F11)
     "shaped_bracket": ("bracket_edge",),
     "rectangular_bracket": ("plate_buckling",),
-    # a seat leg under a beam end, and the beam web bearing on it
+    # a seat leg under a beam end, and the beam web bearing on it, whose end carries the
+    # reaction down to it in shear
     "seat": ("seat_flexure", "shear_yield"),
     "seat_leg": EDGES,
-    "bearing_web": ("web_local_yielding", "web_crippling", "beam_fit"),
-    "stiffener": ("bearing", "compression"),
+    "bearing_web": ("web_local_yielding", "web_crippling", "shear_yield", "beam_fit"),
+    # a seat stiffener: compressed under the seat, and welded on edge to the support, whose
+    # section along the weld carries the reaction in shear and its eccentricity in flexure
+    "stiffener": ("bearing", "compression", "shear_yield", "flexural_yield"),
     # a stiffened seat's plate under the beam, bearing on the stiffener's fitted top edge
     "seat_plate": ("bearing",),
     # bolt groups
     "shear_bolts": ("bolts", "spacing_min", "spacing_max", "joint_type", "clearance"),
-    "bracket_bolts": ("bolts", "spacing_min", "spacing_max", "joint_type"),
+    "bracket_bolts": ("bolts", "spacing_min", "spacing_max", "joint_type", "clearance"),
     "tension_bolts": ("bolt_tension", "prying", "spacing_min", "spacing_max", "joint_type", "clearance"),
     "tension_shear_bolts": ("bolts", "bolt_combined"),
     "slip_critical": ("slip",),
@@ -176,7 +179,7 @@ def path(conn: Conn, fields: set[str]) -> tuple[Link, ...]:
         links = (Link("bracket plate", "welded_bracket"), *_shaped(conn), Link("bracket weld", "fillet"))
     elif kind == "hanger":
         links = (Link("tee stem", "tension_element"), Link("tee flange", "tension_flange"),
-                 Link("hanger bolts", "tension_bolts"))
+                 Link("hanger bolts", "tension_bolts"), Link("support web", "j10_web_yielding"))
         if "shear" in fields:
             links += _bolts(conn, "hanger bolts", "tension_shear_bolts")
         links += (_face(conn),)

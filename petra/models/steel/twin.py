@@ -1166,6 +1166,8 @@ def _seated(ctx: _Ctx, modes: set[str]) -> None:
     ctx.check("seat_flexure", "seat angle: flexural yielding of the outstanding leg at its critical section", r * max(e, 0.0),
               afy * ls * t * t / 4, "flexure_yield")
     shear_yield(ctx, "seat angle", r, afy, ls * t)
+    # the beam's end in shear over its full depth: no hole or cope cuts it at a seat
+    shear_yield(ctx, "beam web", r, bfy, bshape["d"] * bshape["tw"])
     if conn.get("support_side") == "bolted":
         bolts: Bolts = conn.attrs["bolts"]
         n, s, lev, g = conn.attrs["rows"], ctx.need("pitch"), ctx.need("edge_vertical"), ctx.need("support_gauge")
@@ -1230,6 +1232,12 @@ def _stiffened_seat(ctx: _Ctx, modes: set[str]) -> None:
     # Companion II.A-14: the stiffener at least as thick as the beam web, scaled by the yield stresses
     ctx.add("compression", "stiffener: at least tw Fy,beam / Fy,stiffener thick (Manual Part 10)",
             _ratio(bshape["tw"] * bfy / sfy_s, ts))
+    shear_yield(ctx, "beam web", r, bfy, bshape["d"] * bshape["tw"])
+    # the stiffener welded on edge to the support, like a welded bracket plate: its section
+    # at the support, L long, in shear and in flexure under the reaction at 0.8 W
+    shear_yield(ctx, "stiffener", r, sfy_s, lst * ts)
+    ctx.check("flexural_yield", "stiffener: flexural yielding at the support face (J4.5)", r * 0.8 * width,
+              sfy_s * ts * lst ** 2 / 4, "flexure_yield")
     weld: Weld = conn.attrs["weld"]
     # Two fillets along the stiffener's length, the reaction out of their plane at 0.8 W
     # from the support face (Manual Table 10-8's eccentricity). Table 10-8 also counts
@@ -1366,6 +1374,18 @@ def _bolt_bracket(ctx: _Ctx, modes: set[str]) -> None:
     group.check_bolts(p, "bracket bolts")
     # spacing between rows and between columns only where there are two or more of them
     spacing(ctx, "bracket bolts", bolts, min(tp, st), {**({"pitch": s} if n > 1 else {}), **({"gauge": g} if nc > 1 else {})})
+    # Manual Part 7 tightening room, the columns placed where it is most: centred between
+    # a web's flanges; on a flange all on one side of the web, the outer hole on the flange,
+    # unless a split straddling the web fits and leaves enough
+    if face == "web":
+        clearance(ctx, "bracket bolts", bolts, (sup["d"] - 2 * sup["tf"] - (nc - 1) * g) / 2, "the support flanges")
+    else:
+        dh = _hole_size(ctx, bolts, hs, False)
+        room = (sup["bf"] - sup["tw"]) / 2
+        need = ctx.reg.bolt(bolts.size, "nut_F") / math.sqrt(3.0) + ctx.reg.const("aisc_manual.clearance.socket")
+        split = min((g - sup["tw"]) / 2, room - dh / 2 - (math.ceil(nc / 2) - 1) * g)
+        if not (nc > 1 and (nc - 1) * g + dh <= sup["bf"] and split >= need):
+            clearance(ctx, "bracket bolts", bolts, room - (nc - 1) * g - dh / 2, "the support web")
     joint_type(ctx, "bracket bolts", bolts, (hp, hs), tension=False)
     long_slots(ctx, "bracket bolts", (hp, hs))
     if bolts.joint == "slip_critical":
@@ -1530,6 +1550,10 @@ def _hanger(ctx: _Ctx, modes: set[str]) -> None:
                   for p in tributaries(b_s))
     ctx.add("prying", "hanger bolts: bolt tension with prying of the support flange (Manual Part 9; Kulak 17.5)",
             _ratio(per_bolt, worst_s))
+    # J10.2 at the support's web under the tension, over the bolt rows' extent; the distance
+    # to its end is unknown, so at the end (J10-3) as well as away from it
+    for at_end in (False, True):
+        j10_web_yielding(ctx, "support web", sup, sfy, (n - 1) * s, t_load, at_end)
     spacing(ctx, "hanger bolts", bolts, min(tf, st), {"pitch": s, "gauge": g})
     joint_type(ctx, "hanger bolts", bolts, (hf, hs), tension=t_load > 0)
     long_slots(ctx, "hanger bolts", (hf, hs))

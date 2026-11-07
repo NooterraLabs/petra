@@ -4,9 +4,11 @@ Tooling: nothing here changes a verdict.
 A fault is one known defect put into a design the deck passes: a fillet far under Table
 J2.4's minimum, a short edge, holes too close or too far apart, oversized holes in a
 bearing joint, Group 150 bolts in tension left snug, a shear tab or tee too stiff to rotate, a
-slender seat stiffener, a seat plate softer than the stiffener it bears on, a lapped fillet
-as thick as its plate, bolts against a hanger's stem, a cope deeper than half the beam, a
-load past the governing strength; and parts that
+slender seat stiffener, a seat plate softer than the stiffener it bears on, a seat stiffener
+too short for its moment, a seated beam's web past its shear yielding, a hanger's support web
+past its local yielding, bracket bolts with no room for a socket, a lapped fillet as thick
+as its plate, bolts against a hanger's stem, a cope deeper than half the beam, a load past
+the governing strength; and parts that
 do not fit: bolt rows run past the beam's depth or off a seat's leg, a support gauge wider
 than the face, a beam too wide to pass between a column's flanges, a plate on the beam's
 fillet, a bracket's bolt columns off the flange; a flange force's panel_shear or axial
@@ -166,6 +168,65 @@ def _soft_seat_plate(text: str, g: Generated) -> str | None:
     return re.sub(r"^  on c1 shear in .*$", f"  on c1 shear in [0 kip, {load:.3f} kip]", out, count=1, flags=re.M)
 
 
+def _available(text: str, nominal: Fraction, phi: Fraction, omega: Fraction) -> Fraction:
+    """A nominal strength in kip at the design's basis: phi Rn (LRFD) or Rn / Omega (ASD)."""
+    return nominal * phi if _field(text, "basis") == "lrfd" else nominal / omega
+
+
+def _loaded(text: str, field: str, load: Fraction) -> str:
+    return re.sub(rf"^  on c1 {field} in .*$", f"  on c1 {field} in [0 kip, {float(load):.3f} kip]", text, count=1, flags=re.M)
+
+
+def _short_stiffener(text: str, g: Generated) -> str | None:
+    """A 6 x 1/2 in A36 seat stiffener only 4 in long, bent at its weld line by the reaction
+    at 0.8 W = 4.8 in: Mn = Fy t L^2 / 4 = 36 (0.5)(16) / 4 = 72 kip-in, loaded to 1.25 times
+    the reaction that reaches it (J4.5; phi 0.90, Omega 1.67)."""
+    out = _set(text, "stiffener", "steel.A36 thickness 0.5 inch")
+    out = out and _set(out, "stiffener_width", "6 inch")
+    out = out and _set(out, "stiffener_length", "4 inch")
+    if out is None:
+        return None
+    reaction = _available(text, Fraction(72), Fraction(9, 10), Fraction(167, 100)) / Fraction(48, 10)
+    return _loaded(out, "shear", reaction * Fraction(125, 100))
+
+
+def _seated_web_in_shear(text: str, g: Generated) -> str | None:
+    """A W12x26 (d 12.2 in, tw 0.230 in) on its seat, loaded to 1.2 times its web's shear
+    yielding at the end, 0.6 (50 ksi)(12.2 in)(0.230 in) = 84.18 kip (J4.2(a); phi 1.00,
+    Omega 1.50)."""
+    out = _set(text, "beam", "W12x26 grade steel.A992")
+    if out is None:
+        return None
+    return _loaded(out, "shear", _available(text, Fraction(8418, 100), Fraction(1), Fraction(3, 2)) * Fraction(12, 10))
+
+
+def _thin_support_web(text: str, g: Generated) -> str | None:
+    """A hanger from a W16x26 (tw 0.250 in, kdes 0.747 in) with two rows 3 in apart, pulled
+    to 1.25 times its web's local yielding at the member end, 50 ksi (0.250 in)(2.5 (0.747
+    in) + 3 in) = 60.84 kip (J10-3; phi 1.00, Omega 1.50)."""
+    out = _set(text, "support", "W16x26 flange grade steel.A992")
+    out = out and _set(out, "rows", "2")
+    out = out and _set(out, "pitch", "3 inch")
+    if out is None:
+        return None
+    return _loaded(out, "tension", _available(text, Fraction(6084375, 100000), Fraction(1), Fraction(3, 2)) * Fraction(125, 100))
+
+
+def _cramped_bracket(text: str, g: Generated) -> str | None:
+    """Two columns of 3/4 in bolts 2-1/2 in apart on a W12x26's flange (bf 6.49 in, tw
+    0.230 in). On one side of the web the outer hole on the flange leaves 3.13 - 2.5 - 0.41 =
+    0.22 in to the web; split across it, they leave (2.5 - 0.23) / 2 = 1.135 in. A socket on
+    a 3/4 in heavy hex nut needs 1.25 / sqrt 3 + 1/2 = 1.222 in (Manual Part 7). The split
+    fits the flange; only the wrench has no room."""
+    bolts = _field(text, "bolts")
+    out = _set(text, "support", "W12x26 flange grade steel.A992")
+    out = out and _set(out, "columns", "2")
+    out = out and _set(out, "gauge", "2.5 inch")
+    if out is None or bolts is None:
+        return None
+    return _set(out, "bolts", re.sub(r"diameter [0-9.]+ inch", "diameter 0.75 inch", bolts))
+
+
 def _thick_lap_fillet(text: str, g: Generated) -> str | None:
     if _field(text, "weld_return") is None:
         return None
@@ -319,6 +380,14 @@ FAULTS: tuple[Fault, ...] = (
           _drop_load("axial"), frozenset({"panel_zone"})),
     Fault("free end", "a flange force at a member end free to twist about its axis", ("flange_force",), _free_end,
           frozenset({"j10_stiffeners"})),
+    Fault("short stiffener", "a 4 in long seat stiffener bent at its weld line past its yield", ("stiffened_seat",),
+          _short_stiffener, frozenset({"flexural_yield"})),
+    Fault("seated web in shear", "a W12x26 on its seat loaded past its web's shear yielding", ("seated", "stiffened_seat"),
+          _seated_web_in_shear, frozenset({"shear_yield"})),
+    Fault("thin support web", "a hanger from a W16x26 pulled past its web's local yielding", ("hanger",), _thin_support_web,
+          frozenset({"web_local_yielding"})),
+    Fault("cramped bracket bolts", "two bracket bolt columns 2-1/2 in apart on a W12x26's flange, no room for a socket",
+          ("bolt_bracket",), _cramped_bracket, frozenset({"clearance"})),
 )
 
 

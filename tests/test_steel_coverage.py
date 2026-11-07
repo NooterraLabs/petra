@@ -156,6 +156,90 @@ class TeeDuctility(unittest.TestCase):
         self.assertEqual(outcome(written(stiff), "tee_ductility"), "refuted")
 
 
+def utilisations(report, mode: str) -> dict[str, float]:
+    return {c["check"]: c["utilisation"] for v in report.to_json()["verdicts"] for o in v["obligations"]
+            if f"/steel.{mode}/" in o["requirement"] for c in o["checks"]}
+
+
+class SeatShear(unittest.TestCase):
+    """A seated beam's end carries its reaction down its web to the seat, so the web yields
+    in shear over d tw (J4.2(a)), as a framed beam's does. A stiffened seat's stiffener is
+    welded on edge to the support like a bracket plate: its section along the weld carries
+    the reaction in shear and, at Table 10-8's 0.8 W from the face, in flexure (J4.5)."""
+
+    SEAT = (STEEL / "seated.petra").read_text(encoding="utf-8")
+    STIFFENED = (STEEL / "stiffened_seat.petra").read_text(encoding="utf-8")
+    WEB = "beam web: shear yielding of the gross section (J4.2a)"
+
+    def test_a_seated_beams_web_yields_in_shear(self):
+        # W16x26: 0.6 (50 ksi)(15.7 in)(0.250 in) = 117.75 kip against 30 kip
+        self.assertAlmostEqual(utilisations(written(self.SEAT), "shear_yield")[self.WEB], 30 / 117.75, places=6)
+
+    def test_a_stiffened_seats_beam_web_and_stiffener_yield_in_shear(self):
+        found = utilisations(written(self.STIFFENED), "shear_yield")
+        self.assertAlmostEqual(found[self.WEB], 60 / (0.6 * 50 * 20.7 * 0.35), places=6)          # W21x44
+        self.assertAlmostEqual(found["stiffener: shear yielding of the gross section (J4.2a)"], 60 / (0.6 * 36 * 12 * 0.5), places=6)
+
+    def test_the_stiffener_bends_at_its_weld_line(self):
+        # M = 60 kip (0.8)(5 in) = 240 kip-in against 0.9 (36 ksi)(0.5 in)(12 in)^2 / 4
+        (u,) = utilisations(written(self.STIFFENED), "flexural_yield").values()
+        self.assertAlmostEqual(u, 240 / (0.9 * 36 * 0.5 * 144 / 4), places=6)
+
+    def test_a_short_stiffener_fails_in_flexure(self):
+        short = written(self.STIFFENED.replace("stiffener_length 12 inch", "stiffener_length 5 inch"))
+        self.assertEqual(outcome(short, "flexural_yield"), "refuted")
+
+
+class HangerSupportWeb(unittest.TestCase):
+    """A hanger's tension pulls the support's flange, which hands it to the support's web:
+    J10.2's web local yielding over the bolt rows' extent. The grammar gives no distance to
+    the support's end, so Eq J10-3, the lesser, is taken: it holds wherever the hanger is."""
+
+    HANGER = (STEEL / "hanger.petra").read_text(encoding="utf-8")
+
+    def test_the_support_web_yields_under_the_hangers_tension_at_the_end_formula(self):
+        # W18x50: 50 ksi (0.355 in)(2.5 (0.972 in) + 3 in) = 96.38 kip against 40 kip
+        found = utilisations(written(self.HANGER), "web_local_yielding")
+        self.assertAlmostEqual(max(found.values()), 40 / (50 * 0.355 * (2.5 * 0.972 + 3)), places=6)
+        self.assertTrue(all(name.startswith("support web: ") for name in found), found)
+
+    def test_a_thin_support_web_fails(self):
+        thin = written(self.HANGER.replace("support W18x50 flange", "support W16x26 flange").replace("[0 kip, 40 kip]", "[0 kip, 70 kip]"))
+        self.assertEqual(outcome(thin, "web_local_yielding"), "refuted")
+
+
+class BracketClearance(unittest.TestCase):
+    """A bracket's bolts need room to tighten (Manual Part 7) clear of the support's web or
+    flanges, at the placement of its columns that leaves the most: centred between a web's
+    flanges; on a flange, all on one side of the web, or split across it where that fits. A
+    socket on a 7/8 in heavy hex nut needs 1.4375 / sqrt 3 + 1/2 = 1.330 in."""
+
+    BRACKET = (STEEL / "bolt_bracket.petra").read_text(encoding="utf-8")
+    NEED = 1.4375 / 3 ** 0.5 + 0.5
+
+    def test_one_side_of_a_wide_flange(self):
+        # W14x90: (14.5 - 0.44) / 2 - 3 - 15/32 = 3.561 in to the web
+        (u,) = utilisations(written(self.BRACKET), "clearance").values()
+        self.assertAlmostEqual(u, self.NEED / ((14.5 - 0.44) / 2 - 3 - 15 / 32), places=6)
+
+    def test_a_split_across_the_web_that_leaves_room_excuses_the_one_sided_check(self):
+        # W12x50 (bf 8.08, tw 0.37): split at 4 in leaves (4 - 0.37) / 2 = 1.815 in
+        report = written(self.BRACKET.replace("support W14x90", "support W12x50").replace("gauge 3 inch", "gauge 4 inch"))
+        self.assertEqual(outcome(report, "clearance"), "certified")
+        self.assertIn("excused    bb1/steel.clearance: bracket bolts: room to tighten, clear of the support web", report.render())
+
+    def test_columns_that_fit_the_flange_but_leave_no_room_fail(self):
+        # at 3 in the split fits the flange but leaves (3 - 0.37) / 2 = 1.315 in, under 1.330 in
+        report = written(self.BRACKET.replace("support W14x90", "support W12x50"))
+        self.assertEqual(outcome(report, "flange_fit"), "certified")
+        self.assertEqual(outcome(report, "clearance"), "refuted")
+
+    def test_on_a_web_the_columns_are_centred_between_the_flanges(self):
+        # W14x90 web: (14.0 - 2 (0.71) - 3) / 2 = 4.79 in to each flange
+        (u,) = utilisations(written(self.BRACKET.replace("W14x90 flange", "W14x90 web")), "clearance").values()
+        self.assertAlmostEqual(u, self.NEED / ((14.0 - 2 * 0.71 - 3) / 2), places=6)
+
+
 class UnframedEnd(unittest.TestCase):
     """J10.7 wants a pair of full-depth stiffeners at an unframed member end not otherwise
     restrained against twisting about its axis. A force at a member end says which its end
