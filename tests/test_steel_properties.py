@@ -143,7 +143,7 @@ def verdict_of(text: str) -> tuple[str, dict[str, str]]:
 
 def numbers(found: Checks) -> dict[tuple[str, str], list[tuple[float, float, float, bool]]]:
     """Each check's (utilisation, demand, available, excused), order-free within a key."""
-    return {k: sorted((v.utilisation, v.demand, v.available, v.excused) for v in vs) for k, vs in found.items()}
+    return {k: sorted((v.utilisation, v.demand, v.capacity, v.excused) for v in vs) for k, vs in found.items()}
 
 
 def number(x: Fraction) -> str:
@@ -453,8 +453,8 @@ class Monotonicity(unittest.TestCase):
                             # lambda): there is no strength to compare
                             if old.excused or new.excused:
                                 continue
-                            self.assertGreaterEqual(new.available, old.available * (1 - ROUNDING),
-                                                    f"{key}: {old.available} -> {new.available} {old.unit}")
+                            self.assertGreaterEqual(new.capacity, old.capacity * (1 - ROUNDING),
+                                                    f"{key}: {old.capacity} -> {new.capacity} {old.unit}")
 
 
 class LoadBox(unittest.TestCase):

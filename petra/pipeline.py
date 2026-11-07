@@ -38,8 +38,9 @@ costs only the evidence it would have offered.
 from __future__ import annotations
 
 import dataclasses
-from dataclasses import dataclass
-from typing import Any, Iterable, Iterator, Mapping, Protocol, Union, get_args
+from dataclasses import dataclass, field
+from functools import cached_property
+from typing import TYPE_CHECKING, Any, Iterable, Iterator, Mapping, Protocol, Union, get_args
 
 from . import coverage
 from . import models as domains
@@ -87,6 +88,9 @@ from .verdict import (
     verdict_json,
 )
 
+if TYPE_CHECKING:
+    from .readout import Finding
+
 
 class EvidenceSource(Protocol):
     """Untrusted. Implemented by certs.CertStore, library.Library and solvers.SolverSource.
@@ -108,7 +112,8 @@ class EvidenceSink(Protocol):
 @dataclass(frozen=True)
 class Report:
     """`verdict` is the conjunction over every entry; `entries` has one ClaimVerdict per
-    claim, in source order, then the "coverage" entry."""
+    claim, in source order, then the "coverage" entry. `ir` and `registry` are what the
+    design was checked from and against, which `findings` reads."""
 
     design: str
     path: str
@@ -116,23 +121,37 @@ class Report:
     entries: tuple[ClaimVerdict, ...]
     outcomes: tuple[Outcome, ...]
     warnings: tuple[str, ...]
+    ir: Design | None = field(default=None, repr=False, compare=False)
+    registry: Registry | None = field(default=None, repr=False, compare=False)
+
+    @cached_property
+    def findings(self) -> tuple[Finding, ...]:
+        """One petra.readout.Finding per outcome, in order: its outcome, rule, statement
+        hash, demand, capacity and utilisation in the design's units, and its point.
+        Computed on first use by tooling that reads the verdict and cannot change it."""
+        from .readout import findings
+        return findings(self)
 
     def render(self) -> str:
         """The design name and overall status, one status per entry, then
-        verdict.render's scope, obligation table, open items and footprint, then any
-        warnings."""
-        status, *rest = render_verdict(self.verdict, self.outcomes).split("\n")
+        verdict.render's scope, obligation table, each counterexample and margin point
+        with its finding's numbers, open items and footprint, then any warnings."""
+        found = {id(o): f for o, f in zip(self.outcomes, self.findings)}
+        status, *rest = render_verdict(self.verdict, self.outcomes, lambda o: found[id(o)].lines()).split("\n")
         statuses = ", ".join(f"{e.claim} {STATUS[type(e.verdict)]}" for e in self.entries)
         return "\n".join([f"{self.design}: {status}", f"entries    {statuses}", *rest, *(f"warning    {w}" for w in self.warnings)])
 
     def to_json(self) -> Mapping[str, Any]:
         """{"file": path, "design": name, "status": the overall status, "verdicts":
-        [verdict.verdict_json(e) for e in entries]}. `petra check --json` prints this."""
+        [verdict.verdict_json(e) and "obligations": the Finding.to_json of each of the
+        entry's outcomes, for e in entries]}. `petra check --json` prints this, and
+        docs/api.md documents every key."""
+        found = {id(o): f for o, f in zip(self.outcomes, self.findings)}
         return {
             "file": self.path,
             "design": self.design,
             "status": STATUS[type(self.verdict)],
-            "verdicts": [verdict_json(e) for e in self.entries],
+            "verdicts": [{**verdict_json(e), "obligations": [found[id(o)].to_json() for o in e.outcomes]} for e in self.entries],
         }
 
 
@@ -268,7 +287,7 @@ def check_design(design: Design, registry: Registry, sources: tuple[EvidenceSour
     outcomes += tuple(Waived(req, premise) for req, premise in prepared.waived)
     book = build_premise_book(design, registry, outcomes)
     scope = _scope(design)
-    return Report(design.name, path or design.path, assemble(outcomes, book, scope), entries(outcomes, book, scope), outcomes, tuple(warnings))
+    return Report(design.name, path or design.path, assemble(outcomes, book, scope), entries(outcomes, book, scope), outcomes, tuple(warnings), design, registry)
 
 
 def _settle(item: Elaborated, margin: Obligation | str | None, sources: tuple[EvidenceSource, ...], sink: EvidenceSink | None, flagged: Mapping[str, list[RegistryInconsistent]], warnings: list[str], decided: dict[str, Decision]) -> Outcome:

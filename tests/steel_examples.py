@@ -65,14 +65,14 @@ class Example(Published):
         self.assertTrue(hits, f"{self.tag}: no {mode} check starts with {prefix!r}; found {[v.what for v in found]}")
         worst = max(hits, key=lambda v: v.utilisation)
         if mode in self.moments:
-            return worst.available * self.plates
+            return worst.capacity * self.plates
         return load / worst.utilisation * self.plates
 
     def available(self, basis: str, mode: str, prefix: str) -> float:
         found, _ = self.values(basis, mode)
         hits = [v for v in found if v.what.startswith(prefix) and not v.excused]
         self.assertTrue(hits, f"{self.tag}: no {mode} check starts with {prefix!r}; found {[v.what for v in found]}")
-        return min(v.available for v in hits) * self.plates
+        return min(v.capacity for v in hits) * self.plates
 
     def near(self, computed: float, printed: str, what: str, rel: float = ROUNDED) -> None:
         """Within one unit of the printed last digit or `rel` of the printed value."""

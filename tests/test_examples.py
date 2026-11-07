@@ -38,7 +38,8 @@ class Examples(unittest.TestCase):
                     self.assertTrue(verdict["footprint"], f"{path} {verdict['claim']} names its premises")
                     if verdict["status"] == "PASS":
                         self.assertTrue(verdict["rules"], f"{path} {verdict['claim']} names the rules its proof used")
-                    self.assertEqual(bool(verdict["obligations"]), verdict["status"] == "UNKNOWN", f"{path} {verdict['claim']} lists obligations only when open")
+                    self.assertEqual(bool(verdict["needs"]), verdict["status"] == "UNKNOWN", f"{path} {verdict['claim']} lists needs only when open")
+                    self.assertTrue(verdict["obligations"], f"{path} {verdict['claim']} lists its obligations")
 
     def test_a_design_inside_the_family_reuses_it_without_solving(self):
         with tempfile.TemporaryDirectory() as library:

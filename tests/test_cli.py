@@ -26,7 +26,7 @@ ROOT = Path(__file__).resolve().parents[1]
 EXAMPLES = ROOT / "examples"
 CIRCUIT = EXAMPLES / "circuit_pass.petra"
 FAMILY = EXAMPLES / "families" / "cu_pvc_clipped.petra"
-VERDICT_KEYS = {"claim", "status", "footprint", "rules", "obligations", "margins"}
+VERDICT_KEYS = {"claim", "status", "footprint", "rules", "needs", "margins", "obligations"}
 
 
 def run(*argv: str) -> tuple[int, str, str]:
@@ -64,14 +64,16 @@ class Check(Workspace):
             self.assertEqual(set(verdict), VERDICT_KEYS, f"{verdict['claim']} has the documented keys")
             self.assertEqual(verdict["status"], "PASS", f"{verdict['claim']} passes")
             self.assertTrue(verdict["footprint"], f"{verdict['claim']} names its premises")
-            self.assertEqual(verdict["obligations"], [], f"{verdict['claim']} has nothing open")
+            self.assertEqual(verdict["needs"], [], f"{verdict['claim']} has nothing open")
+            self.assertTrue(verdict["obligations"], f"{verdict['claim']} lists its obligations")
+            self.assertEqual({o["outcome"] for o in verdict["obligations"]}, {"certified"}, f"{verdict['claim']} certifies each")
 
     def test_an_unknown_design_exits_2_and_names_what_is_open(self):
         code, out, _ = run("check", str(EXAMPLES / "bolt_unknown.petra"), "--json")
         self.assertEqual(code, EXIT_CODES["UNKNOWN"], "bolt_unknown exits 2")
         unknown = [v for v in json.loads(out)["verdicts"] if v["status"] == "UNKNOWN"]
         self.assertTrue(unknown, "some entry is UNKNOWN")
-        self.assertTrue(all(v["obligations"] for v in unknown), "each UNKNOWN entry says what it needs")
+        self.assertTrue(all(v["needs"] for v in unknown), "each UNKNOWN entry says what it needs")
 
     def test_a_refuted_design_exits_1(self):
         path = self.write("overloaded.petra", CIRCUIT.read_text(encoding="utf-8").replace("[0 A, 10 A]", "[0 A, 16 A]"))

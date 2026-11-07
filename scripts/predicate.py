@@ -90,8 +90,8 @@ def p5_registry() -> tuple[bool, str]:
 
 def p6_coverage(reports: list[dict]) -> tuple[bool, str]:
     unknown = [v for rep in reports for v in rep["verdicts"] if v["status"] == "UNKNOWN"]
-    named = [o for v in unknown for o in v.get("obligations", [])]
-    return bool(unknown) and all(v.get("obligations") for v in unknown), f"{len(unknown)} UNKNOWN verdicts, obligations named: {named[:3]}"
+    named = [n for v in unknown for n in v.get("needs", [])]
+    return bool(unknown) and all(v.get("needs") for v in unknown), f"{len(unknown)} UNKNOWN verdicts, needs named: {named[:3]}"
 
 
 def p7_family_bench() -> tuple[bool, str]:

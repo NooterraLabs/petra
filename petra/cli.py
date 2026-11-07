@@ -5,14 +5,17 @@
         kernel-check, print one verdict per claim plus the "coverage" entry, with each
         footprint. Accepted evidence is written to --certs when given. --deck checks the
         registry against that deck file instead of the one built from the shipped
-        registry. --json prints pipeline.Report.to_json():
+        registry. Under each refuted obligation the text gives the governing term's demand,
+        capacity and utilisation in the design's units, and its counterexample as decimals
+        in those units. --json prints pipeline.Report.to_json() (docs/api.md):
             {"file": FILE, "design": NAME, "status": OVERALL, "verdicts": [
                 {"claim": NAME, "status": "PASS" | "FAIL" | "UNKNOWN" | "MARGINAL",
                  "footprint": [{"tag", "label", "owner", "source"}, ...],
                  "rules": ["R1", ...],
-                 "obligations": [what each open item needs, ...],    non-empty iff UNKNOWN
+                 "needs": [what each open item needs, ...],    non-empty iff UNKNOWN
                  "margins": [{"requirement", "proved", "margin": "proved" | "undecided"
-                              | "within", "point"?}, ...]},   claims with a margin
+                              | "within", "point"?}, ...],   claims with a margin
+                 "obligations": [readout.Finding.to_json(), ...]},   one per outcome
                 ...]}
         Exit code from the overall status (EXIT_CODES): 0 PASS, 1 FAIL, 2 UNKNOWN,
         5 MARGINAL (a claim with a margin is proved, and a certified point lies within
@@ -25,7 +28,10 @@
         Find the widest interval of one input (or param) around an anchor over which
         every obligation that depends on it is proved, by bisecting the design's checks
         (petra/envelope.py), with at most N checks (default 64). A quantity is a number
-        and a unit, such as "-20 degC" or -20degC. The exit code is that of the worse of
+        and a unit, such as "-20 degC" or -20degC; the text prints in the unit of --from
+        (else --to, else --at), the JSON in exact SI. Without --at, the anchor is the
+        middle of the input's stated range, or the low end of the probe range when the
+        design does not pass at the middle. The exit code is that of the worse of
         the anchor's status and the status of the obligations that do not depend on the
         input ("elsewhere"): 0 when both pass, so an envelope over a design that fails
         elsewhere does not exit 0. 3 for an input error such as an unknown input, a range
@@ -193,9 +199,12 @@ def cmd_envelope(args: argparse.Namespace) -> int:
         registry = build_registry()
         design = load_design(args.file, registry)
         quantities = [None if text is None else _quantity(text) for text in (args.lo, args.hi, args.at, args.resolution)]
+        written = (_QUANTITY.fullmatch(text).group(2) for text in (args.lo, args.hi, args.at) if text is not None)
+        unit = next((u for u in written if u), None)
         library = Library(args.library) if args.library else None
         sources = tuple(s for s in (library, SolverSource()) if s is not None)
-        found = envelope(design, registry, args.input, quantities[0], quantities[1], sources, at=quantities[2], resolution=quantities[3], max_probes=args.max_probes)
+        found = envelope(design, registry, args.input, quantities[0], quantities[1], sources, at=quantities[2], resolution=quantities[3],
+                         max_probes=args.max_probes, unit=unit)
     except (*_INPUT_ERRORS, EnvelopeError, UnitError) as exc:
         return _input_error(exc)
     print(json.dumps(to_json(found), sort_keys=True) if args.json else render(found))

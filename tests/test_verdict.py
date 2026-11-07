@@ -243,20 +243,20 @@ class Json(unittest.TestCase):
         self.assertEqual(data["claim"], "c")
         self.assertEqual(data["status"], "PASS")
         self.assertEqual(data["rules"], ["R4"])
-        self.assertEqual(data["obligations"], [])
+        self.assertEqual(data["needs"], [])
         self.assertIn({"tag": "assumed", "label": LABEL, "owner": "owner@example.org", "source": "brief"}, data["footprint"])
         self.assertEqual(len(data["footprint"]), 4)
         json.dumps(data)
 
-    def test_an_unknown_entry_names_its_obligations(self):
+    def test_an_unknown_entry_names_what_it_needs(self):
         data = verdict_json(self.entry(proved(), OPEN))
         self.assertEqual(data["status"], "UNKNOWN")
-        self.assertEqual(data["obligations"], [describe_need(NoModel(MODE, ("d",)))])
+        self.assertEqual(data["needs"], [describe_need(NoModel(MODE, ("d",)))])
         self.assertEqual(data["rules"], ["R4"])
 
     def test_a_fail_entry(self):
         data = verdict_json(self.entry(refuted()))
-        self.assertEqual((data["status"], data["rules"], data["obligations"]), ("FAIL", ["R4"], []))
+        self.assertEqual((data["status"], data["rules"], data["needs"]), ("FAIL", ["R4"], []))
         self.assertIn(LABEL, [p["label"] for p in data["footprint"]])
 
     def test_rules_list_each_rule_once_sorted(self):

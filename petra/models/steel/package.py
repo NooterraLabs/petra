@@ -105,7 +105,7 @@ def render(design, report: Report, registry: Registry, text: str) -> tuple[str, 
                 lines += [f"Load case `{case}`:", "", "| Check | Demand | Available | Unit | Utilisation |", "|---|---|---|---|---|"]
                 for v in values:
                     u = "excused" if v.excused else _number(v.utilisation)
-                    lines.append(f"| {v.what} | {_number(v.demand)} | {_number(v.available)} | {v.unit} | {u} |")
+                    lines.append(f"| {v.what} | {_number(v.demand)} | {_number(v.capacity)} | {v.unit} | {u} |")
                 lines.append("")
             if outcome is not None:
                 claim, validity = _hashes(outcome)

@@ -203,7 +203,7 @@ class J7ConcentratedForcesOnAGirder(Published):
         found = {}
         for mode in ("web_local_yielding", "web_crippling", "web_sidesway_buckling"):
             for v in calc.values(conn, d, REGISTRY, mode, "reaction"):
-                found[mode] = v.available
+                found[mode] = v.capacity
         return found
 
     def test_lrfd(self):

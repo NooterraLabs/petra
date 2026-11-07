@@ -73,6 +73,41 @@ class Envelopes(GadgetDomain):
         self.assertEqual(env.start.at, 12 * KN)
         self.assertIn("envelope   none", render(env))
 
+    def test_a_failing_middle_re_anchors_at_the_low_end(self):
+        # The load is stated up to 30 kN, so its middle, 15 kN, is past the 10 kN the
+        # gadget carries; the envelope still exists from the low end.
+        env = self.run_envelope(gadget(CAPACITY), PUSH.replace("6 kN", "30 kN"), CLAIM, WAIVE_WEAR, resolution=kn(1))
+        first = env.probes[0]
+        self.assertEqual((first.lo, first.hi, first.status), (15 * KN, 15 * KN, "FAIL"))
+        self.assertEqual((env.anchor, env.start.status), (0, "PASS"))
+        lo, hi = env.safe
+        self.assertEqual(lo, 0)
+        self.assertTrue(9 * KN <= hi <= 10 * KN, hi)
+        self.assertTrue(any("anchored at the low end" in n for n in env.notes), env.notes)
+        self.assertIn("anchored at the low end", render(env))
+        self.assertLessEqual(len(env.probes), envelope_module.DEFAULT_MAX_PROBES)
+
+    def test_a_given_anchor_is_never_moved(self):
+        env = self.run_envelope(gadget(CAPACITY), PUSH.replace("6 kN", "30 kN"), CLAIM, WAIVE_WEAR, at=kn(15))
+        self.assertIsNone(env.safe)
+        self.assertEqual((env.anchor, len(env.probes)), (15 * KN, 1))
+
+    def test_when_the_low_end_fails_too_both_are_named(self):
+        body = (gadget(CAPACITY), PUSH.replace("[0 kN, 6 kN]", "[20 kN, 30 kN]"), CLAIM, WAIVE_WEAR)
+        env = self.run_envelope(*body, lo=kn(20), hi=kn(30))
+        self.assertIsNone(env.safe)
+        self.assertEqual(env.anchor, 25 * KN)
+        self.assertTrue(any("at the low end of the probe range, 20000 N, it is FAIL too" in n for n in env.notes), env.notes)
+
+    def test_reports_print_in_the_unit_of_the_request(self):
+        env = self.run_envelope(resolution=kn(1), unit="kN")
+        text = render(env)
+        self.assertIn("stated [0, 6] kN; probed [0, 30] kN from 3 kN, resolution 1 kN", text)
+        self.assertNotRegex(text, r"\d N\b")
+        self.assertEqual(to_json(env)["probe"], ["0", "30000"], "the JSON stays exact SI")
+        with self.assertRaises(EnvelopeError):
+            self.run_envelope(unit="degC")
+
     def test_a_param_is_probed_by_its_scope_parameter(self):
         body = (gadget("  capacity param cap\n"), "param cap in [20 kN, 25 kN]\n", PUSH.replace("6 kN", "9 kN"), CLAIM, WAIVE_WEAR)
         env = self.run_envelope(*body, name="cap", lo=kn(10), hi=kn(40), resolution=kn(1))
@@ -189,6 +224,17 @@ class CommandLine(unittest.TestCase):
         code, out = self.run_cli("--input", "ambient", "--from", "-20degC", "--to", "100degC", "--json")
         self.assertEqual(code, 0, out)
         self.assertEqual(json.loads(out)["probe"], ["-20", "100"])
+
+    def test_a_steel_envelope_reads_in_kips_from_the_low_end(self):
+        out = io.StringIO()
+        fixture = ROOT / "tests" / "fixtures" / "readout" / "job5_fail_60k.petra"
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
+            code = cli.main(["envelope", str(fixture), "--input", "reaction.tab.shear", "--from", "0 kip", "--to", "60 kip", "--max-probes", "4"])
+        text = out.getvalue()
+        self.assertEqual(code, 0, text)
+        self.assertIn("at reaction.tab.shear = 30 kip, the middle, the design is FAIL", text)
+        self.assertIn("stated [0, 60] kip; probed [0, 60] kip from 0 kip", text)
+        self.assertNotRegex(text, r"\d N\b")
 
     def test_a_failing_anchor_exits_with_its_status(self):
         code, out = self.run_cli("--input", "ambient", "--from", "-20 degC", "--to", "100 degC", "--at", "90 degC")
