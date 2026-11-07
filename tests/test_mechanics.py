@@ -196,6 +196,25 @@ class Sections(unittest.TestCase):
                 self.assertEqual(exact(M.rectangle_net_plastic_modulus(q(t), q(d), rows, q(pitch), q(hole))),
                                  _first_moment(net, Fraction(0)))
 
+    def test_a_rectangles_net_elastic_modulus(self):
+        for rows, pitch, hole, t, d in ((6, 3, Fraction(15, 16), Fraction(3, 8), 18), (5, 3, Fraction(13, 16), Fraction(1, 2), 15),
+                                        (1, 3, Fraction(7, 8), Fraction(1, 4), 6), (2, Fraction(5, 2), 1, Fraction(5, 8), 8)):
+            with self.subTest(rows=rows):
+                d, pitch, hole = Fraction(d), Fraction(pitch), Fraction(hole)
+                net = [(-d / 2, d / 2, t)] + [(y - hole / 2, y + hole / 2, -t)
+                                             for y in ((i - Fraction(rows - 1, 2)) * pitch for i in range(rows))]
+                self.assertEqual(_centroid(net), 0)    # the axis stays at mid-depth
+                self.assertEqual(exact(M.rectangle_net_elastic_modulus(q(t), q(d), rows, q(pitch), q(hole))),
+                                 _second_moment(net, Fraction(0)) / (d / 2))
+
+    def test_a_rectangles_peak_shear_stress(self):
+        # v Q / (I t) at every strip edge of the section, Q the first moment of the part above
+        for v, t, d in ((Fraction(45), Fraction(3, 8), Fraction(12)), (Fraction(7), Fraction(1, 2), Fraction(5))):
+            rect = [(-d / 2, d / 2, t)]
+            inertia = _second_moment(rect, Fraction(0))
+            flows = [v * t * (d / 2 - y) * (d / 2 + y) / 2 / (inertia * t) for y in (d * Fraction(k, 20) - d / 2 for k in range(21))]
+            self.assertEqual(exact(M.rectangle_peak_shear_stress(q(v), q(t), q(d))), max(flows))
+
     def test_a_tees_moduli_with_its_plastic_axis_in_the_stem_and_in_the_flange(self):
         for hc, tw, bf, tf in ((Fraction(142, 10), Fraction(1, 4), Fraction(11, 2), Fraction(69, 200)),   # in the stem
                                (Fraction(3), Fraction(3, 10), Fraction(8), Fraction(3, 5)),                # in the flange

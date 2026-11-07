@@ -24,7 +24,7 @@ A design code is a thin layer on top. The code layer decides which mechanical qu
 | Module | Functions | Checked against |
 |---|---|---|
 | `algebra` | `c`, `add`, `sub`, `mul`, `div`, `sq`, `power` | (expression builders) |
-| `sections` | `circle_area`, `rectangle_plastic_modulus`, `rectangle_elastic_modulus`, `rectangle_elastic_thickness`, `rectangle_net_plastic_modulus`, `tee_moduli`, `hex_corner`, `right_triangle` | strip integration, exact integrals of \|y\| over the net section, and polygon geometry |
+| `sections` | `circle_area`, `rectangle_plastic_modulus`, `rectangle_elastic_modulus`, `rectangle_elastic_thickness`, `rectangle_net_plastic_modulus`, `rectangle_net_elastic_modulus`, `rectangle_peak_shear_stress`, `tee_moduli`, `hex_corner`, `right_triangle` | strip integration, exact integrals of \|y\| over the net section, and polygon geometry |
 | `bolt_groups` | `polar_moment`, `corner_radius`, `elastic_bolt_force`, `elastic_block_force` | a sum over every bolt of the pattern |
 | `weld_groups` | `fillet_throat`, `elastic_weld_line`, `elastic_weld_c` | the weld cut into short segments |
 | `stability` | `plate_buckling_stress` | a finite-difference solution of D ∇⁴w + N ∂²w/∂x² = 0 |

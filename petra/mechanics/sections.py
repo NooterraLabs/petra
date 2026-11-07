@@ -54,6 +54,24 @@ def rectangle_net_plastic_modulus(t: Expr, depth: Expr, rows: int, pitch: Expr, 
     return Div(mul(t, sub(sq(depth), removed)), c(4))
 
 
+def rectangle_net_elastic_modulus(t: Expr, depth: Expr, rows: int, pitch: Expr, hole: Expr) -> Expr:
+    """Snet = Inet / (depth / 2) of the rectangle and line of holes rectangle_net_plastic_modulus
+    takes. The elastic axis stays at mid-depth by symmetry. Each hole removes its own second
+    moment, t hole^3 / 12, and its area t hole times y_i^2 at its distance y_i from the axis.
+    For a regular line, sum y_i^2 = pitch^2 rows (rows^2 - 1) / 12. So
+    Inet = t (depth^3 - rows hole^3 - hole pitch^2 rows (rows^2 - 1)) / 12."""
+    spread = c(rows * (rows * rows - 1))       # 12 sum y_i^2 / pitch^2
+    removed = add(mul(c(rows), PowInt(hole, 3)), mul(hole, sq(pitch), spread))
+    return Div(mul(t, sub(PowInt(depth, 3), removed)), mul(c(6), depth))
+
+
+def rectangle_peak_shear_stress(v: Expr, t: Expr, depth: Expr) -> Expr:
+    """The largest shear stress v Q / (I t) in a rectangle t by depth carrying shear v in
+    the plane of depth. It is reached at mid-depth, where Q = t depth^2 / 8 and
+    I = t depth^3 / 12, so it is 3 v / (2 t depth)."""
+    return Div(mul(c(3), v), mul(c(2), t, depth))
+
+
 def tee_moduli(hc: Expr, tw: Expr, bf: Expr, tf: Expr) -> tuple[Expr, Expr]:
     """(S, Z) of a tee hc deep overall: a flange bf by tf and a stem (web) tw thick. S is
     the elastic modulus to the stem's tip, which is the tee's far fibre. Z is the plastic
