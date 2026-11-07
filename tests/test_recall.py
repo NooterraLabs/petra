@@ -91,7 +91,8 @@ class TheR20Erratum(unittest.TestCase):
         canary = ROOT / "judges" / "canaries" / "circuit_16mm2_in_4mm2_terminal.petra"
         fixture = ROOT / "tests" / "fixtures" / "readout" / "cable_30m_protected.petra"
         found = recall(REGISTRY, "cable.cu_pvc", [canary, fixture])
-        self.assertEqual([(d.file, d.status) for d in found.designs], [(canary.as_posix(), "PASS"), (fixture.as_posix(), "FAIL")])
+        self.assertEqual([(d.file, d.status) for d in found.designs], [(canary.as_posix(), "FAIL"), (fixture.as_posix(), "FAIL")],
+                         "the canary fails its terminal fit and still rests on the cable series")
 
 
 class SavedReports(unittest.TestCase):
