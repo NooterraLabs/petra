@@ -15,6 +15,17 @@ proof stress Sp (ISO 898-1), or its 0.2 % proof strength Rp02_min where the clas
 no Sp (ISO 3506-1 stainless), a sanctioned premise either way. A bolt_tension claim
 bounds F_bolt itself.
 
+Validity row CLOSED, stated beside every tension obligation over its load case (R4):
+    (1 - Phi) * F_A / n - F_V <= 0     the plates' share never takes back the least preload
+The split above holds only while the plates stay clamped. Once (1 - Phi) F_A / n passes
+F_V the joint opens and each bolt carries F_A / n, whatever Phi says. VDI 2230 Part 1
+does not certify an opened joint: it splits the load (R3) for a clamped one and sizes the
+least assembly preload (R5) so that the residual clamp load stays at least the required
+clamp load of R2. The grammar draws no transverse load, seal or eccentric load, so the
+required clamp load here is zero. A joint that can open somewhere in the box is outside
+the model, and the claim stays UNKNOWN naming the row and the point (OutsideValidity),
+not PASS on the closed-joint share and not FAIL on a bolt force the method does not give.
+
 A coated bolt or plate touches its neighbours with the coating's surface material
 (Registry.surface), so the contact pairs the galvanic rule reads name that material.
 """
@@ -54,7 +65,9 @@ from .base import (
     Ports,
     Requirement,
     StatementBuilder,
+    ValidityRow,
     model_spec,
+    validity_obligation,
 )
 
 # --- Typed model, produced by lower_joint --------------------------------------------
@@ -283,6 +296,15 @@ def _dim(value: Input | ParamRef, design: Design) -> Dim:
 TENSION = FailureMode("bolt.tension")
 PLATE_BEARING = FailureMode("bolt.plate_bearing")
 
+CLOSED = ValidityRow(
+    "bolt.tension.closed",
+    "the joint stays closed, (1 - Phi) F_A / n <= T / (K d): the plates' share of the external force never takes "
+    "back the preload",
+    "VDI 2230 Part 1:2015 splits the operating load by Phi only for a clamped joint (R3), and sizes the minimum "
+    "assembly preload (R5) so the residual clamp load stays at least the required clamp load (R2), which is zero "
+    "for a concentric axial load with no transverse load or seal",
+)
+
 TENSION_MODEL = model_spec(
     sys.modules[__name__], "bolt.tension",
     "torque-tension preload F_V = T / (K d) plus the load share Phi F_A / n of a concentric axial load, "
@@ -290,6 +312,7 @@ TENSION_MODEL = model_spec(
     "concentric axial external load shared equally by the bolts; linear joint load factor Phi; no prying, "
     "bending, embedding loss or thermal change of preload; the nut factor covers thread and bearing friction",
     "petra-maintainers", "VDI 2230 Part 1:2015 (simplified); ISO 898-1:2013; ISO 3506-1:2020; ISO 724",
+    rows=(CLOSED,),
 )
 
 MODELS: Mapping[FailureMode, ModelSpec] = {TENSION: TENSION_MODEL}
@@ -304,11 +327,31 @@ CRITERION_DIMS: Mapping[str, Dim] = {"bolt_tension": FORCE, "tension_utilisation
 # --- Elaboration -------------------------------------------------------------------------
 
 
+def preload(sb: StatementBuilder, joint: BoltedJoint) -> Expr:
+    """F_V = T / (K d), the torque-tension relation."""
+    return Div(sb.input(joint.torque), Mul((sb.input(joint.nut_factor), sb.registry(joint.bolt, "d"))))
+
+
+def per_bolt(sb: StatementBuilder, joint: BoltedJoint, share: Expr, external: Expr) -> Expr:
+    """share * external / n: one bolt's part of a share of the external force."""
+    count = sb.value(Fixed(Quantity(Interval(Fraction(joint.count), Fraction(joint.count)), DIMENSIONLESS)), f"{joint.name}.count")
+    return Div(Mul((share, external)), count)
+
+
 def bolt_force(sb: StatementBuilder, joint: BoltedJoint, external: Expr) -> Expr:
     """F_V + Phi * external / n as an Expr over input and registry hyps."""
-    preload = Div(sb.input(joint.torque), Mul((sb.input(joint.nut_factor), sb.registry(joint.bolt, "d"))))
-    count = sb.value(Fixed(Quantity(Interval(Fraction(joint.count), Fraction(joint.count)), DIMENSIONLESS)), f"{joint.name}.count")
-    return Add((preload, Div(Mul((sb.input(joint.load_share), external)), count)))
+    return Add((preload(sb, joint), per_bolt(sb, joint, sb.input(joint.load_share), external)))
+
+
+def clamp_lost(sb: StatementBuilder, joint: BoltedJoint, external: Expr) -> Expr:
+    """(1 - Phi) * external / n - F_V: the plates' share of the external force less the
+    preload, at most 0 while the joint stays closed (row CLOSED)."""
+    relief = Add((Const(Fraction(1)), Neg(sb.input(joint.load_share))))
+    return Add((per_bolt(sb, joint, relief, external), Neg(preload(sb, joint))))
+
+
+def _external(sb: StatementBuilder, force: Input | ParamRef | Fixed, case: str) -> Expr:
+    return sb.input(force) if isinstance(force, Input) else sb.value(force, case)
 
 
 def capacity(sb: StatementBuilder, joint: BoltedJoint, registry: Registry) -> Expr:
@@ -319,7 +362,8 @@ def capacity(sb: StatementBuilder, joint: BoltedJoint, registry: Registry) -> Ex
 
 
 def build_tension(req: Requirement, joint: BoltedJoint, design: Design, registry: Registry) -> tuple[Elaborated, ...]:
-    """Gap needing NeedsInputBound for each of torque, nut_factor, load_share that is None."""
+    """One obligation per load case, each with its CLOSED row over the same case. Gap
+    needing NeedsInputBound for each of torque, nut_factor, load_share that is None."""
     criterion = req.criterion
     qoi = req.qoi.name if req.qoi is not None else "tension_utilisation"
     needs: list[GapNeed] = []
@@ -337,15 +381,17 @@ def build_tension(req: Requirement, joint: BoltedJoint, design: Design, registry
     for case in cases:
         sb = StatementBuilder(design, registry)
         force = forces[case]
-        external = sb.input(force) if isinstance(force, Input) else sb.value(force, case)
-        tension = bolt_force(sb, joint, external)
+        tension = bolt_force(sb, joint, _external(sb, force, case))
         if qoi == "bolt_tension":
             limit, what = Const(bound), f"{float(bound) / 1000:g} kN"
         else:
             limit = capacity(sb, joint, registry)
             limit, what = (limit if bound == 1 else Mul((Const(bound), limit))), f"{float(bound):g} of its proof capacity"
+        row = StatementBuilder(design, registry)
+        closed = validity_obligation(req, TENSION_MODEL, CLOSED, row.finish(AllNonpositive((clamp_lost(row, joint, _external(row, force, case)),))),
+                                     f"the plates of {joint.name} stay clamped under {case}, even at the least preload")
         out.append(Obligation(req, sb.finish(AllNonpositive((Add((tension, Neg(limit))),))), TENSION_MODEL,
-                              f"the bolt in {joint.name} stays at or below {what} under {case}"))
+                              f"the bolt in {joint.name} stays at or below {what} under {case}", (closed,)))
     return tuple(out)
 
 

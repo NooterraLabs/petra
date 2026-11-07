@@ -193,7 +193,7 @@ api        the Python API, and the JSON that `petra check --json` prints
 	entries    tension PASS, coverage UNKNOWN
 	checked    3 obligations, 1 certified, 0 refuted, 0 waived, 2 open
 	governing  strength   bracket/bolt.tension/claim.tension: bolt tension against its limit: demand 29.04 kN, capacity 34.13 kN, utilisation 0.851
-	  bracket/bolt.tension                         claim tension                R4  certified  solver  sha256:9caaf8237101..  utilisation 0.851
+	  bracket/bolt.tension                         claim tension                R4  certified  solver  sha256:9caaf8237101..  validity 1 proved  utilisation 0.851
 	  bracket/bolt.plate_bearing                   coverage bolt.bearing        --  open
 	  bracket/corrosion.galvanic                   coverage galvanic.contact    --  open
 	open       2 requirements
