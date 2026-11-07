@@ -6,11 +6,13 @@ Petra is at version 0.1.0 and has one maintainer. It checks the claims and loads
 
 ## Install
 
-Petra needs Python 3.11 or later. pip installs `numpy` and `scipy` with it:
+Petra needs Python 3.11 or later. Its package on PyPI is `petra-lang`, and pip installs `numpy` and `scipy` with it:
 
 ```bash
-pip install petra
+pip install petra-lang
 ```
+
+The command it installs is `petra`, and the Python package is `import petra`.
 
 To work on Petra, install a clone in editable mode, so your edits take effect without reinstalling:
 
@@ -22,7 +24,7 @@ pip install -e .
 
 To run Petra from the clone without installing it, write `python -m petra` in place of `petra`.
 
-The build backend is part of the repository (`_build/petra_build.py`), so pip builds Petra from a clone without network access. To install on a machine with no network, build a wheel with `pip wheel --no-deps -w dist .` and copy it there. If that machine already has `numpy` and `scipy`, install the wheel with `pip install --no-index petra-0.1.0-py3-none-any.whl`.
+The build backend is part of the repository (`_build/petra_build.py`), so pip builds Petra from a clone without network access. To install on a machine with no network, build a wheel with `pip wheel --no-deps -w dist .` and copy it there. If that machine already has `numpy` and `scipy`, install the wheel with `pip install --no-index petra_lang-0.1.0-py3-none-any.whl`.
 
 ## Check a steel connection
 

@@ -4,7 +4,7 @@ build-backend = "petra_build"
 backend-path = ["_build"]
 
 [project]
-name = "petra"
+name = "petra-lang"
 version = "0.1.0"
 description = "Checks physical designs against their stated claims, with an exact-arithmetic certificate for every PASS and FAIL"
 readme = "README.md"

@@ -26,7 +26,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PROJECT = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]
-DIST_INFO = f"petra-{PROJECT['version']}.dist-info"
+DIST = PROJECT["name"].replace("-", "_")
+DIST_INFO = f"{DIST}-{PROJECT['version']}.dist-info"
 OFFLINE = ("--disable-pip-version-check", "--no-index", "--no-deps", "--no-cache-dir")
 
 # A stranger has no pip configuration of ours, no shapes workbook and no repository on sys.path.
@@ -91,7 +92,7 @@ class Packaging(unittest.TestCase):
 
     def test_the_wheel_metadata_names_petra_its_licence_and_its_dependencies(self):
         meta = BytesParser().parsebytes(self.files[f"{DIST_INFO}/METADATA"])
-        self.assertEqual((meta["Name"], meta["Version"]), ("petra", PROJECT["version"]))
+        self.assertEqual((meta["Name"], meta["Version"]), ("petra-lang", PROJECT["version"]))
         self.assertEqual(meta["Requires-Python"], ">=3.11")
         self.assertEqual(meta["License-Expression"], "Apache-2.0")
         self.assertEqual({d.split(">=")[0] for d in meta.get_all("Requires-Dist")}, {"numpy", "scipy"})
@@ -120,7 +121,7 @@ class Packaging(unittest.TestCase):
             self.assertEqual((digest, int(size)), (expected, len(data)), path)
 
     def test_the_sdist_builds_the_same_wheel_byte_for_byte(self):
-        self.assertEqual(self.sdist.name, f"petra-{PROJECT['version']}.tar.gz")
+        self.assertEqual(self.sdist.name, f"{DIST}-{PROJECT['version']}.tar.gz")
         self.assertEqual(self.sdist_wheel.read_bytes(), self.wheel.read_bytes())
 
     def test_the_installed_command_runs_outside_the_repository(self):
@@ -131,7 +132,7 @@ class Packaging(unittest.TestCase):
         self.assertEqual(done.returncode, 0, done.stderr)
         self.assertEqual(done.stdout.splitlines()[0], "steel-shear-tab: PASS")
         where, *versions = ok(self.python, "-c", "import importlib.metadata, petra; print(petra.__file__); "
-                              "print(importlib.metadata.version('petra')); print(petra.__version__)", cwd=self.outside).splitlines()
+                              "print(importlib.metadata.version('petra-lang')); print(petra.__version__)", cwd=self.outside).splitlines()
         self.assertTrue(Path(where).resolve().is_relative_to((self.tmp / "venv").resolve()), f"petra imports from the venv, not {where}")
         self.assertEqual(versions, [PROJECT["version"]] * 2, "the installed metadata and petra.__version__ match pyproject.toml")
 

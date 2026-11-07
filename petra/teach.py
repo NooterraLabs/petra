@@ -503,7 +503,7 @@ def readme() -> str:
     the copy the installed distribution carries as its description."""
     if (ROOT / "pyproject.toml").is_file() and (ROOT / "README.md").is_file():
         return (ROOT / "README.md").read_text(encoding="utf-8")
-    return importlib.metadata.metadata("petra").get_payload()
+    return importlib.metadata.metadata("petra-lang").get_payload()
 
 
 DOCS: Mapping[str, tuple[str, Callable[[], str]]] = {

@@ -31,7 +31,7 @@ The first rows come from the plan author's own checks. The rest come from a cold
 |---|---|---|---|
 | Find it | A public repository or package page | No git remote | measured |
 | Trust the licence | A licence file | None | measured |
-| Install | `pip install petra` | No `pyproject.toml` (`ls` fails, measured). The name `petra` is free on PyPI (measured). The cold-start agent reports that pip printed "Neither 'setup.py' nor 'pyproject.toml' found", and that it needed a hand-made `.pth` file and wrapper scripts, about 8 tool calls. | measured, partly by the agent |
+| Install | `pip install petra` | No `pyproject.toml` (`ls` fails, measured). The PyPI JSON API returned 404 for `petra`, which was read as the name being free. That reading was wrong: the API returns 404 for a project with no releases, and `petra` is held by such a project. The cold-start agent reports that pip printed "Neither 'setup.py' nor 'pyproject.toml' found", and that it needed a hand-made `.pth` file and wrapper scripts, about 8 tool calls. | measured, partly by the agent |
 | Get the real product | One trunk | `master` is 16 commits behind `daedalus/mechanics-layer` (15 before this plan's own commit). It is a fast-forward, because `validity-obligations` is already inside it. | measured |
 | Read what the code cites | Every cited doc in git | The steel code and tests cite `docs/principles.md`, but git does not track it | measured |
 | Find the steel deck | A README pointer | The README never mentions it. The agent found `examples/steel` with `ls`. | measured |
@@ -342,7 +342,7 @@ P8 is the cheap test of stage 3 in §5. It takes one AISC formula, block shear o
 1. **Publish after P1, or earlier as an alpha with the false-PASS list printed on the README.** **Decided on 2026-11-06 to publish after P1,** because a checker's first public fact should not be a false PASS.
 2. **Where to publish.** **Decided on 2026-11-07:** the public repository `NooterraLabs/petra`, after P1 closed.
 3. **The licence.** The licence is Apache-2.0, which ENGINE_MAP D3 made conditional on a data-licence audit. The full AISC shapes table cannot ship until that audit says how.
-4. **Claim `petra` on PyPI.** The name was free on 2026-11-06 (measured). Claiming it needs the maintainer's PyPI account, so the maintainer must do it.
+4. **The PyPI name.** `petra` is held by another account's project, which has no releases. **Decided on 2026-11-07:** Petra publishes as `petra-lang`. The command stays `petra` and the import stays `import petra`.
 5. **The designer's name.** Daedalus is taken by the wave-physics engine.
 6. **The last credits, which run to 2026-11-15.** **Decided on 2026-11-06** that they go to the canary campaign and the P1 breaker runs.
 7. **Registry values from physics, or from specified limits.** `docs/frame.md` item 5 says registries are computed from physics, with wire resistance from resistivity and nominal area as the example. That derivation is what produced the low resistance. IEC 60228 specifies a maximum resistance, not an area, so physics alone cannot give the guaranteed value. **Decided on 2026-11-06** that a short list of specified limits may stand as constants. `docs/frame.md` item 5 and `docs/registry.md` now say so.
