@@ -15,6 +15,12 @@ reads as the run that solved it:
 - that point, each coordinate as a decimal in the design's units beside the exact
   rational the kernel checked.
 
+Each obligation is a strength check or a detailing check (DETAILING_MODES), and
+`governing(findings)` names the governing check of each across a whole report, so a
+PASS says how close it came. A detailing RULE (hole use, joint type) is met or not and
+carries no numbers. A capacity made of parts, such as a bolt group's, names what sets
+each part (Part): the limit state and ply that make a bolt the weakest.
+
 A domain with a reader of its own names its terms (READERS: the steel deck's calc.read,
 in kips and inches). Any other R4 goal is read term by term from the statement: a term
 `a - b` gives demand a and capacity b, named and dimensioned by TERMS when its mode is
@@ -27,10 +33,10 @@ its numbers: the finding keeps its outcome and says why.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from fractions import Fraction
 from functools import cache
-from typing import TYPE_CHECKING, Any, Callable, Mapping
+from typing import TYPE_CHECKING, Any, Callable, Iterable, Mapping
 
 from .ir import Design, Rel
 from .kernel import GOAL_RULE, Add, Const, DefinedHyp, Expr, Interval, KernelArithmeticError, Neg, RangeHyp, Refutation, Statement, enclose, statement_hash
@@ -49,28 +55,103 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True)
+class Limit:
+    """One limit state of a part, such as one bolt's tearout of one ply, with its strength
+    in the unit of the check it belongs to. A tearout's `what` gives its clear distance lc."""
+
+    what: str
+    capacity: float
+
+    def to_json(self) -> dict[str, Any]:
+        return {"limit": self.what, "capacity": self.capacity}
+
+
+@dataclass(frozen=True)
+class Part:
+    """`count` alike parts of a capacity made of parts, such as the bolts in one row of a
+    bolt group, each as strong as the least of its `limits`: `capacity`, set by the limit
+    `governing` names."""
+
+    what: str
+    count: int
+    limits: tuple[Limit, ...]
+    capacity: float = field(init=False)
+    governing: Limit = field(init=False)
+
+    def __post_init__(self) -> None:
+        weakest = min(self.limits, key=lambda limit: limit.capacity)
+        object.__setattr__(self, "governing", weakest)
+        object.__setattr__(self, "capacity", weakest.capacity)
+
+    def text(self, unit: str | None, every: bool) -> str:
+        """Its strength and the limit that sets it, then, if `every`, each other limit,
+        weakest first."""
+        u = _unit_text(unit)
+        out = f"{self.what}: {_number(self.capacity)}{u}, set by {self.governing.what}"
+        if every:
+            out += "".join(f"; {limit.what} {_number(limit.capacity)}{u}" for limit in sorted(self.limits, key=lambda limit: limit.capacity)
+                           if limit is not self.governing)
+        return out
+
+    def to_json(self) -> dict[str, Any]:
+        return {"part": self.what, "count": self.count, "capacity": self.capacity, "governing": self.governing.what,
+                "limits": [limit.to_json() for limit in self.limits]}
+
+
+@dataclass(frozen=True)
 class Value:
     """One term: the demand against the capacity it is held to, both in `unit` (None
     when the term's dimension is unknown: SI base units). Over a box, the largest demand
     and the least capacity; at a point, their values there. `excused`: a guard of the
     clause excuses the term (everywhere in the box, or at the point). `claimed`: the term
     holds the claimed quantity against the claim's bound, so for a claim that quantity is
-    the bound times the utilisation."""
+    the bound times the utilisation.
+
+    A rule (DETAILING_MODES) has no demand, capacity, unit or utilisation, only `met`, which is
+    None for every other term. `parts`: what a capacity made of parts is made of, weakest
+    first (the bolts of a bolt group, by row); empty otherwise. `utilisation` is demand /
+    capacity: 0 when excused, infinite for a positive demand on no capacity."""
 
     what: str
     unit: str | None
-    demand: float
-    capacity: float
+    demand: float | None
+    capacity: float | None
     excused: bool
     claimed: bool
+    met: bool | None
+    parts: tuple[Part, ...]
+    utilisation: float | None = field(init=False)
 
-    @property
-    def utilisation(self) -> float:
-        if self.excused:
-            return 0.0
-        if self.capacity <= 0:
-            return float("inf") if self.demand > 0 else 0.0
-        return self.demand / self.capacity
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "parts", tuple(sorted(self.parts, key=lambda p: p.capacity)))
+        object.__setattr__(self, "utilisation", _utilisation(self.demand, self.capacity, self.excused))
+
+    def to_json(self) -> dict[str, Any]:
+        return {"check": self.what, "demand": self.demand, "capacity": self.capacity, "unit": self.unit,
+                "utilisation": _finite(self.utilisation), "excused": self.excused, "met": self.met,
+                "parts": [p.to_json() for p in self.parts]}
+
+
+def _utilisation(demand: float | None, capacity: float | None, excused: bool) -> float | None:
+    if demand is None or capacity is None:
+        return None
+    if excused:
+        return 0.0
+    if capacity <= 0:
+        return float("inf") if demand > 0 else 0.0
+    return demand / capacity
+
+
+def _rank(v: Value) -> tuple[bool, float]:
+    """Governing order: a rule not met first, then the highest utilisation."""
+    return v.met is False, v.utilisation if v.utilisation is not None else 0.0
+
+
+def _ranked(values: Iterable[Value]) -> Value | None:
+    """The value that governs: of those no guard excuses, a rule not met or the highest
+    utilisation; None when none has a utilisation and every rule is met."""
+    live = [v for v in values if not v.excused and (v.utilisation is not None or v.met is False)]
+    return max(live, key=_rank) if live else None
 
 
 @dataclass(frozen=True)
@@ -124,6 +205,22 @@ FACTORED: frozenset[str] = frozenset({"truss.plastic_collapse"})
 (models/truss.py build_plastic_collapse), so the factor carried at a point is f times
 the largest multiple of the right-hand side that stays feasible there."""
 
+STRENGTH, DETAILING = "strength", "detailing"
+MEASURED, RULE = "measured", "rule"
+
+DETAILING_MODES: Mapping[str, str] = {
+    "steel.edge_min": MEASURED, "steel.edge_max": MEASURED, "steel.spacing_min": MEASURED, "steel.spacing_max": MEASURED,
+    "steel.clearance": MEASURED, "steel.fillet_size": MEASURED, "steel.ductility": MEASURED,
+    "steel.extended_ductility": MEASURED, "steel.hole_use": RULE, "steel.joint_type": RULE,
+}
+"""Mode id -> how its checks read, for the modes that check how a design is detailed:
+edge distance, spacing, room to tighten, fillet size, the proportions that keep a
+connection ductile, hole use and joint type. Every other mode checks a strength. A
+report ranks the two apart, so the governing strength check is never an edge distance.
+A MEASURED check has a demand and a capacity as a strength does. A RULE's demand and
+capacity are levels and counts (the joint type a hole needs against the joint's), so a
+report says only whether each is met."""
+
 
 @dataclass(frozen=True)
 class Coordinate:
@@ -169,13 +266,17 @@ OUTCOMES: Mapping[type, str] = {Discharged: "certified", Refuted: "refuted", Wit
 
 @dataclass(frozen=True)
 class Finding:
-    """One outcome of a report, read for a person. `values` are evaluated `at` "point"
-    (the counterexample of a refuted obligation, or the point within the margin of a
-    marginal one or of an open item that found one) or over the "box"; `at` is None when
-    no term was read, and `note` says why. `point` is that point."""
+    """One outcome of a report, read for a person. `category` is "strength" or
+    "detailing" (DETAILING_MODES). `values` are evaluated `at` "point" (the
+    counterexample of a refuted obligation, or the point within the margin of a marginal
+    one or of an open item that found one) or over the "box"; `at` is None when no term
+    was read, and `note` says why. `point` is that point. `governing` is the term no guard
+    excuses with the highest utilisation, or a rule that is not met, and `utilisation` is
+    its utilisation: None when no term has one."""
 
     requirement: str
     entry: str
+    category: str
     outcome: str
     rule: str | None
     statement_hash: str | None
@@ -186,22 +287,30 @@ class Finding:
     point: tuple[Coordinate, ...]
     needs: tuple[str, ...]
     note: str | None
+    governing: Value | None = field(init=False)
+    utilisation: float | None = field(init=False)
 
-    @property
-    def governing(self) -> Value | None:
-        """The term with the highest utilisation that no guard excuses."""
-        live = [v for v in self.values if not v.excused]
-        return max(live, key=lambda v: v.utilisation) if live else None
+    def __post_init__(self) -> None:
+        g = _ranked(self.values)
+        object.__setattr__(self, "governing", g)
+        object.__setattr__(self, "utilisation", None if g is None else g.utilisation)
+
+    def row(self) -> str:
+        """The utilisation at the end of the obligation's table row, or nothing."""
+        return "" if self.utilisation is None else f"  utilisation {_ratio(self.utilisation)}"
 
     def lines(self) -> list[str]:
-        """The text under a refuted obligation or a margin point: the governing term, any
-        other term over its capacity, the claim's quantity, then the point. Coordinates
-        the statement fixes (design values, registry constants) are counted, not listed;
-        inputs and params are always listed."""
+        """The text under a refuted obligation or a margin point: the governing term and
+        what its capacity is made of, any other term over its capacity or rule not met,
+        the claim's quantity, then the point. Coordinates the statement fixes (design
+        values, registry constants) are counted, not listed; inputs and params are
+        always listed."""
         g = self.governing
         out = [f"governing  {_value_text(g)}" if g is not None else f"numbers    not read: {self.note}"]
-        over = sorted((v for v in self.values if v is not g and not v.excused and v.utilisation > 1), key=lambda v: -v.utilisation)
-        out += [f"also over  {v.what}: utilisation {_ratio(v.utilisation)}" for v in over]
+        if g is not None:
+            out += _parts_lines(g)
+        over = sorted((v for v in self.values if v is not g and not v.excused and _rank(v) > (False, 1)), key=_rank, reverse=True)
+        out += [f"also over  {_value_text(v) if v.met is False else f'{v.what}: utilisation {_ratio(v.utilisation)}'}" for v in over]
         if self.claim is not None:
             out.append(f"claim      {self.claim.text()}")
         shown = [c for c in self.point if c.varies or label_kind(c.label) in (LabelKind.INPUT, LabelKind.PARAM)]
@@ -219,6 +328,7 @@ class Finding:
         return {
             "requirement": self.requirement,
             "entry": self.entry,
+            "category": self.category,
             "outcome": self.outcome,
             "rule": self.rule,
             "statement_hash": self.statement_hash,
@@ -228,9 +338,8 @@ class Finding:
             "demand": None if g is None else g.demand,
             "capacity": None if g is None else g.capacity,
             "unit": None if g is None else g.unit,
-            "utilisation": None if g is None else _finite(g.utilisation),
-            "checks": [{"check": v.what, "demand": v.demand, "capacity": v.capacity, "unit": v.unit,
-                        "utilisation": _finite(v.utilisation), "excused": v.excused} for v in self.values],
+            "utilisation": _finite(self.utilisation),
+            "checks": [v.to_json() for v in self.values],
             "claim": None if claim is None else {"claim": claim.claim, "quantity": claim.quantity, "value": claim.value,
                                                  "bound": claim.bound, "unit": claim.unit},
             "counterexample": point if self.outcome == "refuted" else None,
@@ -240,11 +349,46 @@ class Finding:
         }
 
 
+@dataclass(frozen=True)
+class Governing:
+    """A report's governing check of one category: of the terms of every obligation in
+    it, the one a Finding would call governing, and the requirement it belongs to."""
+
+    category: str
+    requirement: str
+    value: Value
+
+    def text(self) -> str:
+        weakest = self.value.parts[0].text(self.value.unit, False) if self.value.parts else None
+        return f"{self.requirement}: {_value_text(self.value)}" + (f"; weakest {weakest}" if weakest else "")
+
+    def to_json(self) -> dict[str, Any]:
+        return {"requirement": self.requirement, **self.value.to_json()}
+
+
 def findings(report: Report) -> tuple[Finding, ...]:
     """One Finding per outcome of `report`, in order. A report built without its design
     and registry gives findings with no terms and no units."""
     context = _Context(report.ir, report.registry) if report.ir is not None and report.registry is not None else None
     return tuple(_finding(o, context) for o in report.outcomes)
+
+
+def governing(found: tuple[Finding, ...]) -> dict[str, Governing | None]:
+    """The governing strength check and the governing detailing check of a report's
+    findings, each None when no term of that category has a utilisation or is a rule
+    that is not met. Among equals, the first in report order."""
+    out: dict[str, Governing | None] = {}
+    for category in (STRENGTH, DETAILING):
+        candidates = [f for f in found if f.category == category and f.governing is not None]
+        best = max(candidates, key=lambda f: _rank(f.governing), default=None)
+        out[category] = None if best is None else Governing(category, best.requirement, best.governing)
+    return out
+
+
+def summary(governs: Mapping[str, Governing | None]) -> list[str]:
+    """One line per category, after the report's `checked` line."""
+    return [f"governing  {category:<10} " + (g.text() if g is not None else f"none: no {category} check here has a utilisation")
+            for category, g in governs.items()]
 
 
 class _Context:
@@ -283,13 +427,14 @@ def _finding(outcome: Outcome, context: _Context | None) -> Finding:
     requirement = outcome.requirement if isinstance(outcome, (Waived, Open)) else outcome.obligation.requirement
     entry = requirement.origin.claim if isinstance(requirement.origin, ClaimOrigin) else COVERAGE_ENTRY
     kind = OUTCOMES[type(outcome)]
+    category = DETAILING if requirement.mode.id in DETAILING_MODES else STRENGTH
     statement, refutation, rule = _parts(outcome)
     describe = outcome.obligation.describe if isinstance(outcome, (Discharged, Refuted, WithinMargin)) else requirement.id
     needs = tuple(describe_need(n) for n in outcome.needs) if isinstance(outcome, Open) else ()
     digest = None if statement is None else (outcome.theorem.statement_hash if isinstance(outcome, Discharged) else statement_hash(statement))
     if statement is None or context is None:
         note = "nothing was stated to read" if statement is None else "the report carries no design to read it against"
-        return Finding(requirement.id, entry, kind, rule, digest, describe, (), None, None, (), needs, note)
+        return Finding(requirement.id, entry, category, kind, rule, digest, describe, (), None, None, (), needs, note)
     name, domain = context.domain(requirement)
     units = domain.units if domain is not None else {}
     at = None if refutation is None else _at_labels(refutation)
@@ -300,9 +445,15 @@ def _finding(outcome: Outcome, context: _Context | None) -> Finding:
     except Exception as exc:  # a reader is tooling: its failure costs its numbers, never the report
         readout = Readout((), {}, f"the {name} reader failed: {type(exc).__name__}: {exc}")
     point = () if refutation is None else _coordinates(refutation, context, readout.dims, units)
-    where = None if not readout.values else ("box" if refutation is None else "point")
-    claim = _claimed(requirement, readout.values, units)
-    return Finding(requirement.id, entry, kind, rule, digest, describe, readout.values, where, claim, point, needs, readout.note)
+    values = tuple(map(_rule, readout.values)) if DETAILING_MODES.get(requirement.mode.id) == RULE else readout.values
+    where = None if not values else ("box" if refutation is None else "point")
+    claim = _claimed(requirement, values, units)
+    return Finding(requirement.id, entry, category, kind, rule, digest, describe, values, where, claim, point, needs, readout.note)
+
+
+def _rule(v: Value) -> Value:
+    """A rule's term as met or not, by the levels or counts the reader gave."""
+    return Value(v.what, None, None, None, v.excused, v.claimed, v.demand is not None and v.capacity is not None and v.demand <= v.capacity, ())
 
 
 def _parts(outcome: Outcome) -> tuple[Statement | None, Refutation | None, str | None]:
@@ -328,7 +479,7 @@ def _claimed(requirement: Requirement, values: tuple[Value, ...], units: Mapping
     criterion = requirement.criterion
     if not isinstance(requirement.origin, ClaimOrigin) or not isinstance(criterion, Criterion) or criterion.rel not in (Rel.LE, Rel.GE):
         return None
-    carried = [v.utilisation for v in values if v.claimed and not v.excused and math.isfinite(v.utilisation)]
+    carried = [v.utilisation for v in values if v.claimed and not v.excused and v.utilisation is not None and math.isfinite(v.utilisation)]
     if not carried or (criterion.rel is Rel.GE and max(carried) <= 0):
         return None
     bound = criterion.bound.value.lo if criterion.rel is Rel.LE else criterion.bound.value.hi
@@ -400,7 +551,7 @@ def _generic(requirement: Requirement, statement: Statement, at: Mapping[str, Fr
         demand, capacity = a.hi, b.lo
         unit = _unit(dim, max(abs(demand), abs(capacity)), units) if dim is not None else None
         factor = _factor(unit) if unit is not None else Fraction(1)
-        out.append(Value(what, unit, float(demand / factor), float(capacity / factor), False, claimed))
+        out.append(Value(what, unit, float(demand / factor), float(capacity / factor), False, claimed, None, ()))
     reasons = [f"{shapeless} not of the form demand - capacity"] if shapeless else []
     if undefined:
         reasons.append(f"{undefined} reading a quantity a lemma defines (such as a member force), which no lemma solver "
@@ -459,7 +610,7 @@ def _load_factor(requirement: Requirement, goal: LinearFeasible, box: Mapping[st
     else:
         carried = float(claimed) * float(found.x[-1])
     what = "load factor: the claimed factor against the largest one a static field within every member's capacity carries"
-    return Readout((Value(what, "1", float(claimed), carried, False, True),), {}, None)
+    return Readout((Value(what, "1", float(claimed), carried, False, True, None, ()),), {}, None)
 
 
 def _sides(expr: Expr) -> tuple[Expr, Expr] | None:
@@ -511,14 +662,30 @@ def _ratio(x: float) -> str:
     return "unbounded" if math.isinf(x) else f"{x:.3g}"
 
 
-def _finite(x: float) -> float | None:
-    return x if math.isfinite(x) else None
+def _finite(x: float | None) -> float | None:
+    return x if x is not None and math.isfinite(x) else None
+
+
+def _unit_text(unit: str | None) -> str:
+    return "" if unit in (None, "1") else f" {unit}"
 
 
 def _value_text(v: Value) -> str:
-    unit = "" if v.unit in (None, "1") else f" {v.unit}"
+    if v.demand is None or v.capacity is None:
+        return f"{v.what}: {'met' if v.met else 'not met'}"
+    unit = _unit_text(v.unit)
     base = " (SI base units)" if v.unit is None else ""
     return f"{v.what}: demand {_number(v.demand)}{unit}, capacity {_number(v.capacity)}{unit}, utilisation {_ratio(v.utilisation)}{base}"
 
 
-__all__ = ["Claimed", "Coordinate", "Finding", "Readout", "Value", "findings", "READERS", "TERMS"]
+def _parts_lines(v: Value) -> list[str]:
+    """What a capacity made of parts is made of: the weakest part with every limit, then
+    each other part with the limit that sets it."""
+    if not v.parts:
+        return []
+    weakest, *rest = v.parts
+    return [f"weakest    {weakest.text(v.unit, True)}", *(f"part       {p.text(v.unit, False)}" for p in rest)]
+
+
+__all__ = ["Claimed", "Coordinate", "Finding", "Governing", "Limit", "Part", "Readout", "Value", "findings", "governing",
+           "summary", "DETAILING_MODES", "READERS", "TERMS"]

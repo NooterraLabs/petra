@@ -9,10 +9,13 @@ import petra
 
 report = petra.check_file("examples/truss_fail.petra")
 print(type(report.verdict).__name__)               # Fail
+strength = report.governing["strength"]            # the highest utilisation of any strength check
+print(strength.requirement, strength.value.what, strength.value.utilisation)
 for f in report.findings:
+    print(f.requirement, f.category, f.outcome, f.utilisation)
     if f.outcome == "refuted":
         g = f.governing
-        print(f.requirement, g.what, g.demand, g.capacity, g.unit, round(g.utilisation, 2))
+        print("  ", g.what, g.demand, g.capacity, g.unit, round(g.utilisation, 2))
         for c in f.point:
             if c.varies:
                 print("  at", c.symbol, "=", c.shown, "exact", c.exact, c.si_unit)
@@ -41,8 +44,9 @@ The same report as data comes from `petra check --json examples/truss_fail.petra
 | `ir` | `petra.ir.Design \| None` | the design that was checked |
 | `registry` | `Registry \| None` | the registry it was checked against |
 | `findings` | `tuple[Finding, ...]` | one per outcome, in the same order, computed on first use |
+| `governing` | `dict[str, Governing \| None]` | the governing `"strength"` check and the governing `"detailing"` check of the whole report, computed on first use (see Findings) |
 
-`report.render()` returns the text `petra check` prints. `report.to_json()` returns the JSON described below.
+`report.render()` returns the text `petra check` prints. Right after its `checked` line come two lines, `governing  strength` and `governing  detailing`, each naming the requirement, the check, its demand, capacity and utilisation in the design's units, or `none` when no check of that category has a utilisation. Each row of the obligation table ends with its finding's utilisation, or with nothing when it has none. `report.to_json()` returns the JSON described below.
 
 ## Verdicts
 
@@ -79,20 +83,33 @@ Each requirement ends as one of five outcome classes, all defined in `petra.verd
 
 `petra.readout.Finding` is tooling. It reads an outcome after the verdict is assembled and cannot change it. If a domain reader fails, the finding loses its numbers and says so in `note`.
 
-| field | meaning |
-|---|---|
-| `requirement`, `entry`, `outcome`, `rule`, `statement_hash`, `describe` | which obligation this is, and how it ended |
-| `values` | its terms, as `Value(what, unit, demand, capacity, excused, claimed)`, with `utilisation` = demand / capacity |
-| `governing` | the term with the highest utilisation that no guard excuses, or None |
-| `at` | `"point"` when `values` were evaluated at the counterexample or margin point, `"box"` when they were enclosed over the whole box, None when nothing was read |
-| `claim` | `Claimed(claim, quantity, value, bound, unit)`: a claim's quantity where it was read, against its bound |
-| `point` | the counterexample or margin point, as `Coordinate(symbol, label, exact, si_unit, decimal, unit, varies)` |
-| `needs` | for an open item, what would settle it |
-| `note` | why some or all terms were not read |
+| field | JSON key | meaning |
+|---|---|---|
+| `requirement`, `entry`, `outcome`, `rule`, `statement_hash`, `describe` | the same | which obligation this is, and how it ended |
+| `category` | `category` | `"strength"` or `"detailing"`, by the mode (`readout.DETAILING_MODES`) |
+| `values` | `checks` | its terms, each a `Value` (below) |
+| `governing` | `governing` (its `what`), `demand`, `capacity`, `unit` | the term no guard excuses with the highest utilisation, or a rule that is not met; None when no term has a utilisation |
+| `utilisation` | `utilisation` | the governing term's utilisation, or None. JSON gives null when it is unbounded. |
+| `at` | `at` | `"point"` when `values` were evaluated at the counterexample or margin point, `"box"` when they were enclosed over the whole box, None when nothing was read |
+| `claim` | `claim` | `Claimed(claim, quantity, value, bound, unit)`: a claim's quantity where it was read, against its bound |
+| `point` | `counterexample` or `margin_point` | the counterexample or margin point, as `Coordinate(symbol, label, exact, si_unit, decimal, unit, varies)` |
+| `needs` | `needs` | for an open item, what would settle it |
+| `note` | `note` | why some or all terms were not read |
+
+A `Value` is one term: `what`, `unit`, `demand`, `capacity`, `excused`, `claimed`, `met`, `parts` and `utilisation`, which is demand / capacity, 0 when a guard excuses the term, and infinite for a positive demand against no capacity. `Value.to_json()` gives the term's JSON record.
+
+- **Rules.** Hole use and joint type are rules, met or not (`DETAILING_MODES` marks them `"rule"`). Their demand and capacity are joint levels and counts, not quantities, so `demand`, `capacity`, `unit` and `utilisation` are None, and `met` says whether the rule holds. `met` is None for every other term.
+- **Parts.** A capacity made of parts lists them in `parts`, weakest first. Today these are the two bolt group checks of the steel deck, "most loaded bolt ... against the weakest bolt" and "bolt shear, bearing and tearout summed over the group". Each `Part(what, count, limits)` is one row position of the group, such as `"bottom row (1 bolt)"`. Its `limits` are each bolt's strengths there: `Limit(what, capacity)` for its shear and for its bearing and tearout in each ply, in the check's unit. A tearout names its clear distance, as in `"tearout of the tee stem to its edge (lc 0.6875 in)"`. `Part.capacity` is the least of its limits, and `Part.governing` is the limit that sets it.
+
+A claim's utilisation is its quantity against its bound: for `q <= bound` the governing term's utilisation is q / bound, and for `q >= bound` it is bound / q.
 
 The numbers are in the design's units: kips, inches and ksi for the steel deck, and readable SI elsewhere (degC, V, A, kN). Each number is a float rounded for people. The exact value the kernel checked is `Coordinate.exact`, a `Fraction` in SI base units. Over a box, the demand is the largest value and the capacity the least, so the utilisation is an upper bound for every point in the box.
 
 Some obligations have no single demand and capacity to read. These are R2 (definiteness), R3 (hypercircle), R5 and R6 statements, and R1 statements other than a truss's collapse factor. For those, `values` is empty and `note` says why. The point is still given.
+
+### The governing checks
+
+`report.governing` (or `petra.readout.governing(report.findings)`) has two keys. `"strength"` is the governing strength check and `"detailing"` the governing detailing check. Each is ranked as a finding's `governing` is, over every finding of that category: a rule that is not met first, then the highest utilisation, the first in report order among equals. Each is a `Governing(category, requirement, value)`, or None when no term of the category has a utilisation. Detailing means edge distance, spacing, room to tighten, fillet size, the proportions that keep a connection ductile, hole use and joint type (`readout.DETAILING_MODES`). Every other mode is a strength check, so the governing strength check is never an edge distance.
 
 ## JSON
 
@@ -100,7 +117,10 @@ Some obligations have no single demand and capacity to read. These are R2 (defin
 
 ```
 {"file": FILE, "design": NAME, "status": "PASS" | "FAIL" | "UNKNOWN" | "MARGINAL",
+ "governing": {"strength": GOVERNING | null, "detailing": GOVERNING | null},
  "verdicts": [ENTRY, ...]}                     one per claim, then "coverage"
+
+GOVERNING = {"requirement", **CHECK}           the report's governing check of that category
 
 ENTRY = {"claim": NAME, "status": STATUS,
          "rules": ["R1", ...],                 the rules of the kernel results the verdict used
@@ -111,17 +131,27 @@ ENTRY = {"claim": NAME, "status": STATUS,
          "obligations": [OBLIGATION, ...]}     one per outcome of the entry
 
 OBLIGATION = {"requirement", "entry", "describe",
+              "category": "strength" | "detailing",
               "outcome": "certified" | "refuted" | "marginal" | "waived" | "open",
               "rule": "R4" | ... | null, "statement_hash": "sha256:..." | null,
               "at": "point" | "box" | null,
-              "governing": NAME | null, "demand", "capacity": NUMBER | null,
-              "unit": UNIT | null,                   null: SI base units, dimension unknown
-              "utilisation": NUMBER | null,          null when unbounded
-              "checks": [{"check", "demand", "capacity", "unit", "utilisation", "excused"}, ...],
+              "governing": NAME | null, "demand", "capacity": NUMBER | null,   null for a rule
+              "unit": UNIT | null,                   null: SI base units, dimension unknown, or a rule
+              "utilisation": NUMBER | null,          null when unbounded, for a rule, or with no term read
+              "checks": [CHECK, ...],
               "claim": {"claim", "quantity", "value", "bound", "unit"} | null,
               "counterexample": [COORDINATE, ...] | null,   for "refuted"
               "margin_point": [COORDINATE, ...] | null,     for "marginal", or "open" with a margin point
               "needs": [TEXT, ...], "note": TEXT | null}
+
+CHECK = {"check": NAME, "demand", "capacity": NUMBER | null,   null for a rule
+         "unit": UNIT | null, "utilisation": NUMBER | null, "excused": true | false,
+         "met": true | false | null,           a rule's outcome; null for any other check
+         "parts": [PART, ...]}                 what a bolt group's capacity is made of, weakest first; else []
+
+PART = {"part": NAME, "count": N,              a row position of a bolt group and how many bolts sit there
+        "capacity": NUMBER, "governing": NAME, each bolt's strength there, and the limit that sets it
+        "limits": [{"limit": NAME, "capacity": NUMBER}, ...]}   its shear, and its bearing and tearout in each ply
 
 COORDINATE = {"symbol", "label",
               "value": DECIMAL TEXT, "unit": UNIT | null,   in the design's unit; "~" marks a rounded decimal
@@ -131,17 +161,24 @@ COORDINATE = {"symbol", "label",
 
 The JSON deliberately omits where each piece of evidence came from (solver, certificate store or library). A report replayed from stored certificates therefore prints the same JSON as the run that found them.
 
-Here is the bolts obligation of the 60 kip shear tab in `tests/fixtures/readout/job5_fail_60k.petra`, cut down to one fixed coordinate:
+Here is the bolts obligation of the 60 kip shear tab in `tests/fixtures/readout/job5_fail_60k.petra`, cut down to one part of the bolt group and one fixed coordinate. Every bolt's strength is set by bolt shear here, so the bolt group needs more or larger bolts, not more edge distance:
 
 ```json
-{"requirement": "tab/steel.bolts/coverage.steel.bolts", "entry": "coverage", "outcome": "refuted", "rule": "R4",
+{"requirement": "tab/steel.bolts/coverage.steel.bolts", "entry": "coverage", "category": "strength", "outcome": "refuted", "rule": "R4",
  "statement_hash": "sha256:967688885e06a51cbc60952fbc87219edb7b531f98916adcfc509a0266cdfc92",
  "describe": "tab (shear_tab) holds every bolts check under reaction: beam side: most loaded bolt by the elastic method against the weakest bolt (J3.7, J3.11a)",
  "at": "point",
  "governing": "beam side: most loaded bolt by the elastic method against the weakest bolt (J3.7, J3.11a)",
  "demand": 36.05551275463989, "capacity": 17.89235190989812, "unit": "kip", "utilisation": 2.015135457664112,
  "checks": [{"check": "beam side: most loaded bolt by the elastic method against the weakest bolt (J3.7, J3.11a)",
-             "demand": 36.05551275463989, "capacity": 17.89235190989812, "unit": "kip", "utilisation": 2.015135457664112, "excused": false}],
+             "demand": 36.05551275463989, "capacity": 17.89235190989812, "unit": "kip", "utilisation": 2.015135457664112,
+             "excused": false, "met": null,
+             "parts": [{"part": "top row (1 bolt)", "count": 1, "capacity": 17.89235190989812, "governing": "bolt shear",
+                        "limits": [{"limit": "bolt shear", "capacity": 17.89235190989812},
+                                   {"limit": "bearing on the plate", "capacity": 29.3625},
+                                   {"limit": "tearout of the plate to the next hole (lc 2.188 in)", "capacity": 42.8203125},
+                                   {"limit": "bearing on the beam web", "capacity": 24.13125},
+                                   {"limit": "tearout of the beam web to its edge (lc 2.594 in)", "capacity": 41.726953125}]}]}],
  "claim": null,
  "counterexample": [
    {"symbol": "reaction.tab.shear", "label": "in:job5-shear-tab-60k.reaction.tab.shear", "value": "60", "unit": "kip",

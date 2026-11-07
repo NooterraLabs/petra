@@ -1,0 +1,32 @@
+petra 0
+
+# Try 4: as try 3 (3/4 in A325-X bolts, five rows) with 1.5 in vertical edge distance:
+# try 3 left the weakest bolt at 18.26 kip, below the threads-excluded shear, so the end
+# bolt's tearout at the 1.25 in edge governed.
+# A shear tee: a WT6x25 bolted to the beam web through its stem and to the column flange
+# through its flange.
+
+design "shear-tee-t7-rev-a" {
+  owner "s.engineer@example.org"
+}
+
+shear_tee tee1 {
+  basis lrfd
+  beam W18x50 grade steel.A992
+  support W14x90 flange grade steel.A992
+  tee WT6x25 grade steel.A992
+  bolts bolt_group.120 diameter 0.75 inch threads excluded
+  rows 5
+  pitch 3 inch
+  edge_vertical 1.5 inch
+  bolt_line 3 inch
+  beam_edge 1.75 inch
+  top 3 inch
+  support_side bolted
+  support_gauge 5.5 inch
+}
+
+load gravity {
+  on tee1 shear in [0 kip, 75 kip]
+  signed "s.engineer@example.org" source "beam reaction, LRFD 1.2D + 1.6L, calc SC-3"
+}

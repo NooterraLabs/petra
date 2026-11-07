@@ -1,0 +1,30 @@
+petra 0
+
+# All-bolted double-angle beam-to-column-flange connection.
+# W21x44 (A992) beam to a W14x61 (A992) column flange, 70 kip LRFD reaction.
+# Two L4x3-1/2x3/8 A36 angles, long legs outstanding; 3/4 in A325-N bolts.
+
+design "job2-double-angle" {
+  owner "engineer@example.org"
+}
+
+double_angle da1 {
+  basis lrfd
+  beam W21x44 grade steel.A992
+  support W14x61 flange grade steel.A992
+  angles L4x3_1_2x3_8 grade steel.A36 outstanding long
+  bolts bolt_group.120 diameter 0.75 inch threads included
+  rows 4
+  pitch 3 inch
+  edge_vertical 1.25 inch
+  beam_edge 1.75 inch
+  top 3 inch
+  beam_gauge 2 inch
+  support_side bolted
+  support_gauge 5.5 inch
+}
+
+load reaction {
+  on da1 shear in [0 kip, 70 kip]
+  signed "engineer@example.org" source "beam end reaction, LRFD factored, given"
+}

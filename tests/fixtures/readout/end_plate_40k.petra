@@ -1,0 +1,29 @@
+petra 0
+
+# Bolted shear end plate: W18x35 (A992) beam to the flange of a W12x65 (A992) column,
+# 3/4 in A325-N bolts, 40 kip LRFD reaction. Fabricator's details: 1/4 in A36 plate,
+# 8 in wide, three rows of bolts at 3 in pitch, 1.25 in vertical edge distance,
+# 5.5 in gauge, 3/16 in E70 fillet both sides of the web.
+
+design "job2-shear-end-plate" {
+  owner "engineer@example.org"
+}
+
+shear_end_plate ep1 {
+  basis lrfd
+  beam W18x35 grade steel.A992
+  support W12x65 flange grade steel.A992
+  plate steel.A36 thickness 0.25 inch
+  plate_width 8 inch
+  bolts bolt_group.120 diameter 0.75 inch threads included
+  rows 3
+  pitch 3 inch
+  edge_vertical 1.25 inch
+  support_gauge 5.5 inch
+  weld electrode.E70 size 0.1875 inch sides 2
+}
+
+load gravity {
+  on ep1 shear in [0 kip, 40 kip]
+  signed "engineer@example.org" source "beam reaction, LRFD, 40 kip given"
+}
