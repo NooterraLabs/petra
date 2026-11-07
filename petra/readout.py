@@ -47,7 +47,7 @@ from .kernel import (GOAL_RULE, Abs, Add, Const, DefinedHyp, Div, Expr, Interval
 from .kernel.rules.r1_linear import LinearFeasible
 from .kernel.rules.r4_enclosure import AllNonpositive
 from .models import KINDS
-from .models.base import ClaimOrigin, Criterion, FailureMode, Grammar, Requirement
+from .models.base import ClaimOrigin, Criterion, FailureMode, Grammar, OutsideValidity, Requirement
 from .premises import LabelKind, input_label, label_kind, param_label
 from .registry import Registry
 from .registry.model import render
@@ -588,8 +588,11 @@ def _finding(outcome: Outcome, context: _Context | None) -> Finding:
     describe = outcome.obligation.describe if isinstance(outcome, (Discharged, Refuted, WithinMargin)) else requirement.id
     needs = tuple(describe_need(n) for n in outcome.needs) if isinstance(outcome, Open) else ()
     digest = None if statement is None else (outcome.theorem.statement_hash if isinstance(outcome, Discharged) else statement_hash(statement))
-    if statement is None or context is None:
-        note = "nothing was stated to read" if statement is None else "the report carries no design to read it against"
+    outside = isinstance(outcome, Open) and any(isinstance(n, OutsideValidity) for n in outcome.needs)
+    if statement is None or context is None or outside:
+        note = ("nothing was stated to read" if statement is None else
+                "its model is used outside its validity range, so the model's numbers say nothing here" if outside else
+                "the report carries no design to read it against")
         return Finding(requirement.id, entry, category, kind, rule, digest, describe, (), None, None, (), needs, note)
     name, domain = context.domain(requirement)
     units = domain.units if domain is not None else {}

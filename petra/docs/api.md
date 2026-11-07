@@ -106,7 +106,7 @@ A claim's utilisation is its quantity against its bound: for `q <= bound` the go
 
 The numbers are in the design's units: kips, inches and ksi for the steel deck, and readable SI elsewhere (degC, V, A, kN). Each number is a float rounded for people. The exact value the kernel checked is `Coordinate.exact`, a `Fraction` in SI base units. Over a box, the demand is the largest value and the capacity the least, so the utilisation is an upper bound for every point in the box.
 
-Some obligations have no single demand and capacity to read. These are R2 (definiteness), R3 (hypercircle), R5 and R6 statements, and R1 statements other than a truss's collapse factor. For those, `values` is empty and `note` says why. The point is still given.
+Some obligations have no single demand and capacity to read. These are R2 (definiteness), R3 (hypercircle), R5 and R6 statements, and R1 statements other than a truss's collapse factor. For those, `values` is empty and `note` says why. The point is still given. An open item whose model is used outside its validity range (its needs name the row) is not read either, because that model's numbers say nothing about the design.
 
 ### The governing checks
 

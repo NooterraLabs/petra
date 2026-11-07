@@ -8,6 +8,9 @@ Hand values (ISO 724: d2 = d - 0.649519 P, d3 = d - 1.226869 P, As = pi/4 ((d2 +
          0.9 Rp02 As = 0.9 x 450 MPa x As = 34127.948 N  -> margin -5086.281 N
          Rp02 As = 37919.942 N -> margin -8878.276 N;  Sp(8.8) As = 580 MPa x As = 48874.592 N
     M10: F_V = 31250 N;  F_bolt = 34250 N;  0.9 Rp02 As = 23485.787 N -> margin +10764.213 N
+    least preload, T = 40 Nm, K = 0.22: F_V = 15151.515 N against the plates' share
+         (1 - 0.1) 12 kN = 10800 N -> row CLOSED margin -4351.515 N
+    torque [5, 10] Nm: least F_V = 1893.939 N -> row margin +8906.061 N, the joint opens
 """
 import dataclasses
 import json
@@ -29,10 +32,13 @@ from petra.models.base import (
     NeedsInputBound,
     NoRuleForQuantity,
     Obligation,
+    OutsideValidity,
 )
+from petra.pipeline import check_design
 from petra.premises import Tag
 from petra.registry import Material, Process, ProcessKind, Stated, build_registry
-from petra.solvers import r4_enclosure
+from petra.solvers import SolverSource, r4_enclosure
+from petra.verdict import Fail, Unknown
 
 from tests.test_circuit import at
 
@@ -42,6 +48,9 @@ EXAMPLE = EXAMPLES / "bolt_unknown.petra"
 CERT = EXAMPLES / "bolt_tension.cert.json"
 
 WORST = {"bracket.torque": 50, "bracket.nut_factor": Fraction(4, 25), "bracket.load_share": Fraction(1, 4), "wind.bracket.force": 12000}
+LEAST = {"bracket.torque": 40, "bracket.nut_factor": Fraction(11, 50), "bracket.load_share": Fraction(1, 10), "wind.bracket.force": 12000}
+OPENS = ("torque in [40 Nm, 50 Nm]", "torque in [5 Nm, 10 Nm]")
+CANARY = Path(__file__).resolve().parents[1] / "judges" / "canaries" / "joint_opens_under_load.petra"
 
 
 def joint(*edits: tuple[str, str], extra: str = ""):
@@ -238,6 +247,45 @@ class Tension(unittest.TestCase):
     def test_a_lower_bound_on_tension_is_a_gap(self):
         gap = tension(joint(("tension_utilisation <= 0.9", "tension_utilisation >= 0.1")))
         self.assertIsInstance(gap.needs[0], NoRuleForQuantity)
+
+
+class Separation(unittest.TestCase):
+    """Row CLOSED, (1 - Phi) F / n - T / (K d) <= 0, is worst at the least preload and the least share."""
+
+    def test_every_tension_obligation_states_the_closed_row_over_its_load_case(self):
+        ob = tension(load_design(EXAMPLE, REGISTRY))
+        self.assertEqual(tuple(v.row for v in ob.validity), (bolt.CLOSED,))
+        row = ob.validity[0].statement
+        self.assertLessEqual({h.label for h in row.hyps}, {h.label for h in ob.statement.hyps})
+        self.assertAlmostEqual(at(row, 0, LEAST), 10800 - 15151.515, places=2)
+        self.assertIsInstance(solved(ob.validity[0])[0], Theorem)
+
+    def test_a_joint_that_opens_is_unknown_naming_the_row_and_its_point(self):
+        d = joint(OPENS)
+        ob = tension(d)
+        self.assertIsInstance(solved(ob)[0], Theorem, "the closed-joint share alone stays under the limit")
+        self.assertAlmostEqual(at(ob.validity[0].statement, 0, {**LEAST, "bracket.torque": 5}), 10800 - 1893.939, places=2)
+        report = check_design(d, REGISTRY, (SolverSource(),))
+        tension_entry = next(e.verdict for e in report.entries if e.claim == "tension")
+        self.assertIsInstance(tension_entry, Unknown)
+        (item,) = tension_entry.open
+        self.assertEqual(item.requirement.id, "bracket/bolt.tension/claim.tension")
+        (need,) = item.needs
+        self.assertIsInstance(need, OutsideValidity)
+        self.assertEqual((need.model, need.row), ("bolt.tension", "bolt.tension.closed"))
+        self.assertEqual(dict(need.point), {"bracket.torque": "5", "bracket.nut_factor": "11/50",
+                                            "bracket.load_share": "1/10", "wind.bracket.force": "12000"})
+
+    def test_a_counterexample_where_the_joint_stays_closed_is_a_fail(self):
+        report = check_design(joint(("bolt.M12_A4_70", "bolt.M10_A4_70")), REGISTRY, (SolverSource(),))
+        self.assertIsInstance(next(e.verdict for e in report.entries if e.claim == "tension"), Fail)
+
+    def test_the_canary_whose_joint_opens_is_refused_on_its_tension_claim(self):
+        report = check_design(load_design(CANARY, REGISTRY), REGISTRY, (SolverSource(),))
+        self.assertIsInstance(report.verdict, Unknown)
+        (item,) = report.verdict.open
+        self.assertEqual(item.requirement.id, "bracket/bolt.tension/claim.tension")
+        self.assertEqual([n.row for n in item.needs], ["bolt.tension.closed"])
 
 
 class Lowering(unittest.TestCase):
