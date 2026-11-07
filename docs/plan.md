@@ -219,6 +219,17 @@ The gap baseline is 1,711 of 15,600 generated designs that PASS but cannot be bu
 
 **Done when** the absurd-design count is zero on seed 1 and the held-out seeds 2 and 3, canary recall meets the bar above, and the full gate passes.
 
+**Done, 2026-11-07, on commit `9ae6009`.** All eight items are merged. Measured on that tree:
+
+| Check | Result | Report |
+|---|---|---|
+| Absurd-design gap, seeds 1, 2, 3 (18,000 each) | 0, 0, 0; stream hashes `47073143610e`, `291b3478e158`, `14fe2e487b13` | `docs/absurd_gap.md` |
+| Canary recall, pooled | 52 of 53 holes (98%); the miss is a double angle's support-side web width | `docs/canary_recall.md` |
+| Steel gate, 10,000 designs and 22 breaker runs | All decided, twins agree, 218 of 218 faults caught and named, 0 false PASS | `docs/steel_gate.md` |
+| Test suite | 1,230 tests pass | |
+
+Left open: rotational flexibility of angles and end plates is not encoded; the stiffened seat's top-angle and plate welds are not checked, with the reason printed; J10.8 and J10.9 are not credited; the hanger's J10.2 check rests on Eq. J10-3 as a premise; fault clearing time is not checked; the joint's F_Z is taken as 0. The readout prints the enclosure utilisation, which can read above 1 on a PASS (gate design 01614), and the gate's 3 FAIL-as-PASS against the generator's aim come from the same enclosure overstating a utilisation. 37 of 13,200 steel designs FAIL though the outside judge calls them buildable.
+
 **Then publish,** on your go (§8): the public repository, then PyPI. **Done when** a networked fresh agent installs from public PyPI and passes the rotated briefs.
 
 ### P2. In the loop (1 to 2 weeks)
