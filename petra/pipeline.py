@@ -592,10 +592,11 @@ def build_premise_book(design: Design, registry: Registry, outcomes: tuple[Outco
 def _registry_premise(registry: Registry, label: str) -> Premise:
     key = label[len("reg:"):]
     fact = registry.fact(key)
+    version = registry.entry_of(key).provenance.version
     if isinstance(fact, Constant):
-        return Premise(Label(label), fact.tag, fact.owner, fact.source, fact.statement, fact.value, fact.unit)
+        return Premise(Label(label), fact.tag, fact.owner, fact.source, fact.statement, fact.value, fact.unit, version)
     statement = f"{key} {interval_text(fact.value)} {fact.unit}, {fact.conditions}"
-    return Premise(Label(label), fact.tag, fact.owner, fact.standard, statement, fact.value, fact.unit)
+    return Premise(Label(label), fact.tag, fact.owner, fact.standard, statement, fact.value, fact.unit, version)
 
 
 _INPUT_TAG = {InputKind.ASSUMED: Tag.ASSUMED, InputKind.MEASURED: Tag.MEASURED}

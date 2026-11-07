@@ -1,4 +1,5 @@
 """Premises, the premise book, footprints, and the statement builder's labelling. Owner: P."""
+import dataclasses
 import unittest
 from fractions import Fraction
 
@@ -219,6 +220,13 @@ class Premises(unittest.TestCase):
             premise("in:d.lift.force", owner="")
         with self.assertRaises(ValueError):
             premise("in:d.lift.force", source="")
+
+    def test_only_a_registry_premise_has_a_version(self):
+        self.assertEqual(dataclasses.replace(premise("reg:steel.S355.fy", Tag.SANCTIONED), version=2).version, 2)
+        for label, tag, version in (("in:d.lift.force", Tag.ASSUMED, 1), ("cov:0123", Tag.JUDGED, 1),
+                                    ("reg:steel.S355.fy", Tag.SANCTIONED, 0)):
+            with self.assertRaises(ValueError, msg=f"{label} {version}"):
+                dataclasses.replace(premise(label, tag), version=version)
 
     def test_scope_params_and_design_values_keep_their_namespace(self):
         ScopeParam("par:d.length", "length", RANGE, "m")

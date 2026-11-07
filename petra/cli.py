@@ -10,7 +10,7 @@
         in those units. --json prints pipeline.Report.to_json() (`petra docs api`):
             {"file": FILE, "design": NAME, "status": OVERALL, "verdicts": [
                 {"claim": NAME, "status": "PASS" | "FAIL" | "UNKNOWN" | "MARGINAL",
-                 "footprint": [{"tag", "label", "owner", "source"}, ...],
+                 "footprint": [{"tag", "label", "owner", "source", "version"?}, ...],
                  "rules": ["R1", ...],
                  "needs": [what each open item needs, ...],    non-empty iff UNKNOWN
                  "margins": [{"requirement", "proved", "margin": "proved" | "undecided"
