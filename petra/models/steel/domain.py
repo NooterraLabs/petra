@@ -29,11 +29,12 @@ from ..base import (
     FeatureKind,
     Ports,
 )
+from . import cyclic
 from .absent import reasons
 from .build import BUILDERS
 from .lower import KIND_SPECS, Bolts, Conn, grammar, lower_conn
 from .path import ROLE_LIMITS, path
-from .vocab import LOAD_PATH, MODELS, MODES, QOIS, STIFFENED_FORCE, UNMODELLED
+from .vocab import FATIGUE_DETAIL, LOAD_PATH, MODELS, MODES, QOIS, STIFFENED_FORCE, UNMODELLED
 
 def _fields(conn: Conn, design: Design) -> set[str]:
     return {e.field for case in design.loads.values() for e in case.entries if e.target == (conn.name,)}
@@ -41,8 +42,10 @@ def _fields(conn: Conn, design: Design) -> set[str]:
 
 def required(conn: Conn, design: Design) -> tuple[str, ...]:
     """Every mode the connection must satisfy: the limit states of every element on its
-    load path (path.py), in path order, each once."""
-    return tuple(dict.fromkeys(mode for link in path(conn, _fields(conn, design)) for mode in ROLE_LIMITS[link.role]))
+    load path (path.py), in path order, each once, then the fatigue modes of its details
+    when a load case is cyclic (cyclic.py)."""
+    on_path = (mode for link in path(conn, _fields(conn, design)) for mode in ROLE_LIMITS[link.role])
+    return tuple(dict.fromkeys((*on_path, *cyclic.required(conn, design))))
 
 
 REQUIRES = "steel.requires."
@@ -86,7 +89,7 @@ def _default(mode: FailureMode, feature: Feature) -> Criterion | None:
     return None if mode in UNMODELLED else Criterion(Rel.LE, _ONE)
 
 
-_ALL = {**MODES, "load_path": LOAD_PATH, "j10_stiffeners": STIFFENED_FORCE}
+_ALL = {**MODES, "load_path": LOAD_PATH, "j10_stiffeners": STIFFENED_FORCE, "fatigue_detail": FATIGUE_DETAIL}
 
 COVERAGE: tuple[CoverageRule, ...] = tuple(
     CoverageRule(id=f"steel.{short}", when=_requires(short), demands=(mode,), default=_default,
@@ -100,7 +103,7 @@ def absent(conn: Conn, design: Design) -> dict[FailureMode, str]:
     arise for it (absent.py). A mode with no reason there is left out, so the readout says
     it is not demanded, and tests/test_steel_coverage.py fails."""
     owed = set(required(conn, design))
-    why = reasons(conn)
+    why = {**reasons(conn), **cyclic.reasons(conn, design)}
     return {mode: why[short] for short, mode in _ALL.items() if short not in owed and short in why}
 
 

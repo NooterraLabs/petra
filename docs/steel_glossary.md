@@ -106,10 +106,29 @@ and plate buckling. Their names are in [mechanics.md](mechanics.md).
 | `weld_return` | kl | length of a bracket weld's returns |
 | `free_edge` | b | projected length of a shaped bracket's free edge |
 
+## Fatigue (Appendix 3)
+
+These are the names in `petra/models/steel/fatigue.py` and the load field that states a cyclic load.
+
+| Code name | Symbol | Meaning |
+|---|---|---|
+| `cycles` | nSR | the number of stress-range cycles over the design life. A load case that names it on a connection is cyclic, as in `on c1 cycles in [0, 2000000]` |
+| `nsr` | nSR | the cycles as the formulas read them, no fewer than 20,000 (Section 3.1) |
+| `floor` | | nSR less 20,000, the guard that excuses a fatigue check at 20,000 cycles or fewer |
+| `fsr` | FSR | allowable stress range (Eqs. A-3-1, A-3-2 and A-3-5) |
+| `cf` | Cf | the constant of a stress category (Table A-3.1) |
+| `fth` | FTH | threshold allowable stress range, the least FSR of a category (Table A-3.1) |
+| `rfil` | RFIL | reduction factor for the root crack of a pair of fillets at a plate's end (Eq. A-3-6) |
+| `tensile_stress_area` | At | a bolt's tensile stress area (Eq. A-3-7) |
+| `peak_limit` | | 0.66 Fy, the most stress the peak cyclic load may cause (Section 3.1) |
+| `section_stress` | | M / S plus 3 V / (2 t d), the bound on a section's largest principal stress |
+
 ## Registry row names
 
 A coefficient's registry row is named `<document>.<clause>.<role>`. For example,
 `aisc360.j10_3.long_offset` is the 0.2 of Eq. J10-5b, and `aisc_manual.p9.tc` is the 4 of
 Manual Eq. 9-30a. Resistance factors are named `<group>.phi<suffix>`, and safety factors are
 named `<group>.omega<suffix>`. The `petra.strict.*` rows are Petra's own encoding of a strict
-inequality. `petra/registry/steel.py` gives each row its clause, tag and owner.
+inequality. `petra/registry/steel.py` gives each row its clause, tag and owner. Appendix 3's
+rows are `aisc360.app3.*` in `petra/registry/steel_fatigue.py`, and a stress category's are
+`aisc360.app3.cat_<category>.cf` and `.fth`.

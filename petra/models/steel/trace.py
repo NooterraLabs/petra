@@ -121,7 +121,7 @@ TABLE: tuple[Provision, ...] = (
               "joint type."),
     Provision("J3.2", "High-Strength Bolts", "check", ("joint_type",),
               "Bolt groups and their strengths are registry rows (Tables J3.1 and J3.2). Pretension is checked where "
-              "the joint's use requires it."),
+              "the joint's use requires it, a cyclic load included (J3.2(a)(2) and (b)(1))."),
     Provision("J3.3", "Size and Use of Holes", "check", ("hole_use",), "Hole dimensions are registry rows (Table J3.3)."),
     Provision("J3.4", "Minimum Spacing", "check", ("spacing_min",)),
     Provision("J3.5", "Minimum Edge Distance", "check", ("edge_min",),
@@ -193,7 +193,8 @@ TABLE: tuple[Provision, ...] = (
 
 OTHER: tuple[Provision, ...] = (
     Provision("RCSC 4", "Joint types and installation", "check", ("joint_type",),
-              "Joints are at least snug-tight. Group 150 and 200 bolts in tension are pretensioned. J3.3 sets the "
+              "Joints are at least snug-tight. Group 150 and 200 bolts in tension are pretensioned, and so is every "
+              "joint under a cyclic load past 20,000 cycles (Section 4.2's joints under a fatigue load). J3.3 sets the "
               "holes that need a slip-critical joint (`hole_use`)."),
     Provision("Manual Part 1", "Dimensions and properties: the flat web T = d - 2 kdes", "check", ("beam_fit", "web_fit"),
               "A part, weld or bolt hole on a beam's or a column's web lies on the web's flat, between the fillets "
@@ -224,7 +225,143 @@ OTHER: tuple[Provision, ...] = (
     Provision("Connection kinds", "Force components without a checked path", "check", ("load_path",),
               "An axial force on a v1.0 shear connection requires the unmodelled `load_path` mode, so the result is "
               "UNKNOWN."),
+    Provision("Connection kinds", "Cyclic details without an encoded category", "check", ("fatigue_detail",),
+              "Under a cyclic load, a detail whose Table A-3.1 category the deck does not encode requires the "
+              "unmodelled `fatigue_detail` mode: a single fillet at an angle's or a tee's toe, a plate welded on one "
+              "face, a lapped plate's C-shaped fillet, a seat angle, a hanger's tee, and a member's flange under a "
+              "tensile force. The result is UNKNOWN (`cyclic.py`)."),
 )
+
+FATIGUE = ("fatigue_bolted", "fatigue_bolt_tension", "fatigue_weld", "fatigue_weld_end", "fatigue_cope")
+NO_GROOVE = "v1.0 has no groove welds (J2.1)."
+
+APPENDIX3_SECTIONS: tuple[tuple[str, str], ...] = (
+    ("App. 3.1", "General Provisions: cycles, threshold and peak stress"),
+    ("App. 3.1", "General Provisions: HSS under wind loads"),
+    ("App. 3.1", "General Provisions: the details and cyclic loads the engineer of record states"),
+    ("App. 3.1", "General Provisions: corrosion and temperature"),
+    ("App. 3.2", "Calculation of Maximum Stresses and Stress Ranges"),
+    ("App. 3.2", "Calculation of Maximum Stresses and Stress Ranges: axially loaded angle members"),
+    ("App. 3.3a", "Plain Material and Welded Joints: categories A to E', Eq A-3-1"),
+    ("App. 3.3b", "Plain Material and Welded Joints: category F, Eq A-3-2"),
+    ("App. 3.3c", "Tension-loaded plate ends: weld toe, and the roots of a pair of fillets, Eqs A-3-5 and A-3-6"),
+    ("App. 3.3c", "Tension-loaded plate ends: PJP groove welds, Eqs A-3-3 and A-3-4"),
+    ("App. 3.4a", "Bolts and Threaded Parts: connections loaded in shear"),
+    ("App. 3.4b", "Bolts and Threaded Parts: bolts in tension, Eq A-3-7"),
+    ("App. 3.5", "Fabrication and Erection Requirements: reentrant corners, cut edges and end returns"),
+    ("App. 3.5", "Fabrication and Erection Requirements: backing, CJP reinforcing fillets and weld tabs"),
+    ("App. 3.6", "Nondestructive Examination Requirements for Fatigue"),
+    ("Table A-3.1 Cases 1.1, 1.2, 1.4 and 1.5", "Plain material away from welds, weld access holes and member holes"),
+    ("Table A-3.1 Case 1.3", "Reentrant corners at copes, cuts and block-outs"),
+    ("Table A-3.1 Case 2.1", "Gross section of base metal in slip-critical bolted lap joints"),
+    ("Table A-3.1 Case 2.2", "Net section of base metal in pretensioned bolted lap joints"),
+    ("Table A-3.1 Cases 2.3 and 2.4", "Riveted joints, eyebars and pin plates"),
+    ("Table A-3.1 Section 3", "Welded joints joining components of built-up members"),
+    ("Table A-3.1 Section 4", "Longitudinal fillet-welded end connections"),
+    ("Table A-3.1 Cases 5.1 to 5.6", "Groove-welded joints transverse to the stress"),
+    ("Table A-3.1 Case 5.7", "A pair of fillet welds at a tension-loaded plate's end"),
+    ("Table A-3.1 Case 5.8", "Base metal at the toe of a transverse stiffener's fillets"),
+    ("Table A-3.1 Section 6", "Base metal at welded transverse member connections"),
+    ("Table A-3.1 Section 7", "Base metal at short attachments"),
+    ("Table A-3.1 Case 8.1", "Steel headed stud anchors"),
+    ("Table A-3.1 Case 8.2", "Shear on the throat of fillet welds"),
+    ("Table A-3.1 Cases 8.3 and 8.4", "Plug and slot welds"),
+    ("Table A-3.1 Case 8.5", "Bolts and threaded rods in tension"),
+)
+"""AISC 360-22 Appendix 3, by its sections, with Table A-3.1 by its sections and cases. A
+section whose paragraphs get different treatments is split by paragraph."""
+
+APPENDIX3: tuple[Provision, ...] = (
+    Provision("App. 3.1", "General Provisions: cycles, threshold and peak stress", "check", FATIGUE,
+              "A load case that names cycles on a connection (`on c1 cycles in [lo, hi]`) states the cyclic load. "
+              "Its other loads vary inside their intervals, so each interval's width is the load's range and its "
+              "larger magnitude the peak. Every fatigue check is excused at 20,000 cycles or fewer. Its allowable "
+              "range is at least FTH, and the stress from the peak load is at most 0.66 Fy. A connection's loads are "
+              "magnitudes whose sense the connection fixes, so no range reverses."),
+    Provision("App. 3.1", "General Provisions: HSS under wind loads", "excluded", note=V12),
+    Provision("App. 3.1", "General Provisions: the details and cyclic loads the engineer of record states", "rule",
+              note="A design states every part and weld size. Lowering rejects a connection without them, and a "
+                   "cyclic case states the load range and the number of cycles."),
+    Provision("App. 3.1", "General Provisions: corrosion and temperature", "premise", FATIGUE,
+              "Each fatigue model states that the steel has suitable corrosion protection or sits in a mildly "
+              "corrosive atmosphere, and stays at or below 300 F. The deck does not check either."),
+    Provision("App. 3.2", "Calculation of Maximum Stresses and Stress Ranges", "check", FATIGUE,
+              "Stresses come from elastic analysis with no stress concentration factor. An eccentric bolt or weld "
+              "group's force takes its eccentricity, by the elastic method. A section's stress is bounded by its "
+              "extreme-fibre bending stress plus its peak shear stress. A bolt's tension includes no prying, and the "
+              "validity row `no_prying` holds each flange thick enough for that."),
+    Provision("App. 3.2", "Calculation of Maximum Stresses and Stress Ranges: axially loaded angle members",
+              "excluded", note="v1.0 draws no axially loaded angle member. An axial force on a connection requires "
+                               "`load_path`."),
+    Provision("App. 3.3a", "Plain Material and Welded Joints: categories A to E', Eq A-3-1", "check",
+              ("fatigue_bolted", "fatigue_bolt_tension", "fatigue_weld_end", "fatigue_cope"),
+              "Categories B (Cases 2.1 and 2.2), C (Case 5.7's toe), E' (Case 1.3) and G (Case 8.5, by Section 3.4)."),
+    Provision("App. 3.3b", "Plain Material and Welded Joints: category F, Eq A-3-2", "check", ("fatigue_weld",)),
+    Provision("App. 3.3c", "Tension-loaded plate ends: weld toe, and the roots of a pair of fillets, Eqs A-3-5 and A-3-6",
+              "check", ("fatigue_weld_end",),
+              "The toe is category C. The root is C'' with RFIL, and the root check is excused where RFIL reaches 1."),
+    Provision("App. 3.3c", "Tension-loaded plate ends: PJP groove welds, Eqs A-3-3 and A-3-4", "excluded",
+              note=NO_GROOVE),
+    Provision("App. 3.4a", "Bolts and Threaded Parts: connections loaded in shear", "check",
+              ("fatigue_bolted", "joint_type"),
+              "Slip-critical and pretensioned joints use Table A-3.1 Section 2. Appendix 3 considers and permits "
+              "pretensioned joints only (Commentary 3.4), and RCSC 4.2 requires them under a fatigue load, so "
+              "`joint_type` fails a snug-tight joint in a cyclic case."),
+    Provision("App. 3.4b", "Bolts and Threaded Parts: bolts in tension, Eq A-3-7", "check",
+              ("fatigue_bolt_tension", "joint_type"),
+              "Snug-tight bolts carry the whole range, though `joint_type` fails them in a cyclic case (J3.2(a)(2)). "
+              "Pretensioned bolts with only steel in the grip carry 20% of the peak load, the Section's alternative "
+              "to a stiffness analysis. Anchor rods are excluded with J9."),
+    Provision("App. 3.5", "Fabrication and Erection Requirements: reentrant corners, cut edges and end returns",
+              "premise", ("fatigue_cope", "fatigue_weld"),
+              "A cope's corners are cut to a radius of at least 3/8 in, and thermally cut edges are no rougher than "
+              "1,000 micro-inches. A fillet loaded normal to an angle's outstanding leg or along an end plate's outer "
+              "edge has end returns of two to four times its size. The models state these and the deck does not "
+              "check them."),
+    Provision("App. 3.5", "Fabrication and Erection Requirements: backing, CJP reinforcing fillets and weld tabs",
+              "excluded", note=NO_GROOVE),
+    Provision("App. 3.6", "Nondestructive Examination Requirements for Fatigue", "excluded",
+              note=f"The section applies to CJP groove welds. {NO_GROOVE}"),
+    Provision("Table A-3.1 Cases 1.1, 1.2, 1.4 and 1.5", "Plain material away from welds, weld access holes and member holes",
+              "excluded", note="A member's base metal away from its connections belongs to its member design. The deck "
+                               "draws no weld access holes. Bolt holes in a connection are connected material, which "
+                               "Section 2 covers."),
+    Provision("Table A-3.1 Case 1.3", "Reentrant corners at copes, cuts and block-outs", "check", ("fatigue_cope",),
+              "A beam coped at both flanges is checked at its bottom corner as category E', for a radius of at least "
+              "3/8 in. The top corner is in compression (Commentary 3.2)."),
+    Provision("Table A-3.1 Case 2.1", "Gross section of base metal in slip-critical bolted lap joints", "check",
+              ("fatigue_bolted",)),
+    Provision("Table A-3.1 Case 2.2", "Net section of base metal in pretensioned bolted lap joints", "check",
+              ("fatigue_bolted",)),
+    Provision("Table A-3.1 Cases 2.3 and 2.4", "Riveted joints, eyebars and pin plates", "excluded",
+              note="v1.0 has no rivets, eyebars or pins."),
+    Provision("Table A-3.1 Section 3", "Welded joints joining components of built-up members", "excluded",
+              note="v1.0 draws no built-up member."),
+    Provision("Table A-3.1 Section 4", "Longitudinal fillet-welded end connections", "excluded",
+              note="The section covers axially loaded members, and v1.0 draws none."),
+    Provision("Table A-3.1 Cases 5.1 to 5.6", "Groove-welded joints transverse to the stress", "excluded", note=NO_GROOVE),
+    Provision("Table A-3.1 Case 5.7", "A pair of fillet welds at a tension-loaded plate's end", "check",
+              ("fatigue_weld_end",),
+              "A single plate, a seat stiffener or a bracket plate welded to the support on both faces. A plate "
+              "welded on one face requires `fatigue_detail`."),
+    Provision("Table A-3.1 Case 5.8", "Base metal at the toe of a transverse stiffener's fillets", "excluded",
+              note="v1.0 draws no transverse stiffener on a member. J10.8's stiffeners are never credited."),
+    Provision("Table A-3.1 Section 6", "Base metal at welded transverse member connections", "excluded",
+              note="v1.0 draws no member welded across another with a transition radius."),
+    Provision("Table A-3.1 Section 7", "Base metal at short attachments", "premise",
+              note="A connection's plate or stiffener welded to its support is a short attachment on the support "
+                   "member. The member's own stress range there belongs to its member design, which the connection "
+                   "does not know."),
+    Provision("Table A-3.1 Case 8.1", "Steel headed stud anchors", "excluded", note="v1.0 draws no stud anchors."),
+    Provision("Table A-3.1 Case 8.2", "Shear on the throat of fillet welds", "check", ("fatigue_weld",)),
+    Provision("Table A-3.1 Cases 8.3 and 8.4", "Plug and slot welds", "excluded",
+              note="The v1.0 catalogue uses no plug or slot welds (J2.3)."),
+    Provision("Table A-3.1 Case 8.5", "Bolts and threaded rods in tension", "check", ("fatigue_bolt_tension",)),
+)
+"""Every Appendix 3 provision, in APPENDIX3_SECTIONS order."""
+
+ALL: tuple[Provision, ...] = (*TABLE, *APPENDIX3, *OTHER)
+"""Every row the deck traces."""
 
 
 def render() -> str:
@@ -245,12 +382,16 @@ def render() -> str:
         "| Provision | Title | Treatment | Modes | Note |",
         "|---|---|---|---|---|",
     ]
-    for p in (*TABLE, *OTHER):
+    for p in ALL:
         modes = ", ".join(f"`{m}`" for m in p.modes)
         lines.append(f"| {p.section} | {p.title} | {p.treatment} | {modes} | {p.note} |")
-    counts = {t: sum(1 for p in TABLE if p.treatment == t) for t in TREATMENTS}
-    lines += ["", f"The table maps {len(TABLE)} provisions of AISC 360-22 Chapters J and K: "
-              + ", ".join(f"{n} {t}" for t, n in counts.items()) + "."]
+
+    def tally(rows: tuple[Provision, ...]) -> str:
+        counts = {t: sum(1 for p in rows if p.treatment == t) for t in TREATMENTS}
+        return ", ".join(f"{n} {t}" for t, n in counts.items())
+
+    lines += ["", f"The table maps {len(TABLE)} provisions of AISC 360-22 Chapters J and K: {tally(TABLE)}. "
+              f"It maps {len(APPENDIX3)} provisions of Appendix 3, Fatigue: {tally(APPENDIX3)}."]
     return "\n".join(lines) + "\n"
 
 

@@ -109,7 +109,7 @@ class Check:
     group: str | None
     suffix: str
     guards: tuple[Expr, ...]
-    unit: str           # how reports print demand and capacity: kip, kip-in, kip/in, in or 1
+    unit: str           # how reports print demand and capacity: kip, kip-in, kip/in, in, ksi or 1
 
 
 # --- Geometry ---------------------------------------------------------------------------------------

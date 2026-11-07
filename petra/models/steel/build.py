@@ -22,8 +22,10 @@ from ...kernel.rules.r4_enclosure import AllNonpositive
 from ...mechanics import add, mul, sq, sub
 from ...registry import Registry
 from ..base import Criterion, Elaborated, Gap, GapNeed, NeedsInputBound, NoRuleForQuantity, Obligation, Requirement, validity_obligation
-from .checks import GENERATORS, GEOMETRY, ROWS, Check, Ctx
-from .lower import KIND_SPECS, Conn
+from .checks import GEOMETRY, Check, Ctx
+from .cyclic import FATIGUE
+from .fatigue import GENERATORS, ROWS
+from .lower import CYCLES, KIND_SPECS, Conn
 from .vocab import MODELS, MODES
 
 
@@ -53,14 +55,18 @@ out leaves the mode open, naming it."""
 
 def load_cases(req: Requirement, conn: Conn, design: Design) -> tuple[tuple[str, ...], tuple[GapNeed, ...]]:
     """The cases the requirement is checked under: those it names, else every case that
-    loads the connection. Each must give the kind's primary load field and the fields
-    NEEDS lists for the mode."""
-    fields = (KIND_SPECS[conn.kind].loads[0], *NEEDS.get(req.mode.id.removeprefix("steel."), ()))
-    acting = [case.name for case in design.loads.values() if any(e.target == (conn.name,) for e in case.entries)]
-    cases = tuple(req.under) if req.under else tuple(acting)
+    loads the connection, or for a fatigue mode every cyclic one (cyclic.py). Each must
+    give the kind's primary load field and the fields NEEDS lists for the mode, and a
+    fatigue mode's its cycles."""
+    short = req.mode.id.removeprefix("steel.")
+    fatigue = short in FATIGUE
+    fields = (KIND_SPECS[conn.kind].loads[0], *NEEDS.get(short, ()), *((CYCLES,) if fatigue else ()))
     given = {(case.name, e.field) for case in design.loads.values() for e in case.entries if e.target == (conn.name,)}
+    acting = [case.name for case in design.loads.values() if any(e.target == (conn.name,) for e in case.entries)
+              and (not fatigue or (case.name, CYCLES) in given)]
+    cases = tuple(req.under) if req.under else tuple(acting)
     missing = [f for f in fields if not cases or any((case, f) not in given for case in cases)]
-    return cases, tuple(NeedsInputBound((conn.name,), f, "kip") for f in missing)
+    return cases, tuple(NeedsInputBound((conn.name,), f, "1" if f == CYCLES else "kip") for f in missing)
 
 
 def describe(conn: Conn, short: str, case: str, checks: list[Check], u: Fraction) -> str:

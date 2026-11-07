@@ -1,7 +1,7 @@
 """V5 of docs/principles.md: the steel deck's mutation test.
 
 Each number a provision prints is a registry row the deck reads by name
-(petra/registry/steel.py COEFFICIENTS). The twin (petra/models/steel/twin.py) carries its own
+(petra/registry/steel.py COEFFICIENTS, petra/registry/steel_fatigue.py FATIGUE). The twin (petra/models/steel/twin.py) carries its own
 copy of each, written from the method statements, so a wrong row shows as a disagreement
 between the two. Here every row is mutated twice, its value doubled and halved, and the
 twin comparison of tests/test_steel_twin.py runs again on each (design, connection, mode,
@@ -24,9 +24,11 @@ from petra.kernel import Interval, enclose
 from petra.kernel.rules.r4_enclosure import AllNonpositive
 from petra.lang import parse_design
 from petra.models.steel import calc, domain, twin
-from petra.models.steel.checks import GENERATORS, GEOMETRY, ROWS, Ctx
+from petra.models.steel.checks import GEOMETRY, Ctx
+from petra.models.steel.fatigue import GENERATORS, ROWS
 from petra.registry import build_registry
 from petra.registry.steel import COEFFICIENTS
+from petra.registry.steel_fatigue import FATIGUE
 from tests.test_steel_twin import _designs, _differs, _variant
 
 FACTORS = (Fraction(2), Fraction(1, 2))
@@ -141,7 +143,7 @@ class EveryCoefficientMatters(unittest.TestCase):
                             continue        # a known disagreement (test_steel_twin.KNOWN) kills nothing
                         cls.sites.append((conn, design, mode, case, t, _reads(conn, design, cls.registry, mode, case)))
         cls.killed = {}
-        for name, *_ in COEFFICIENTS:
+        for name, *_ in (*COEFFICIENTS, *FATIGUE):
             reached = [s for s in cls.sites if name in s[5]]
             cls.killed[name] = [any(_differs(t, _deck(conn, design, _mutant(cls.registry, name, f), mode, case))
                                     for conn, design, mode, case, t, _ in reached)

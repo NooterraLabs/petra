@@ -25,12 +25,12 @@ from ...registry import Registry
 from ...units import AREA, CUSTOMARY, FORCE, LENGTH, STRESS, TORQUE, Dim
 from ..base import Criterion, Requirement, StatementBuilder
 from .build import load_cases, term
-from .checks import (GENERATORS, GEOMETRY, BoltStrength, Check, Ctx, Geometry, bolt_rows, bolt_strengths, group_total,
-                     weakest_bolt)
+from .checks import GEOMETRY, BoltStrength, Check, Ctx, Geometry, bolt_rows, bolt_strengths, group_total, weakest_bolt
+from .fatigue import GENERATORS
 from .lower import Conn, lower_conn
 
-INCH, KIP = CUSTOMARY["inch"][0], CUSTOMARY["kip"][0]
-UNITS = {"kip": KIP, "kip-in": KIP * INCH, "kip/in": KIP / INCH, "in": INCH, "1": Fraction(1)}
+INCH, KIP, KSI = CUSTOMARY["inch"][0], CUSTOMARY["kip"][0], CUSTOMARY["ksi"][0]
+UNITS = {"kip": KIP, "kip-in": KIP * INCH, "kip/in": KIP / INCH, "in": INCH, "ksi": KSI, "1": Fraction(1)}
 
 DISPLAY: Mapping[Dim, str] = {FORCE: "kip", LENGTH: "inch", AREA: "inch2", STRESS: "ksi", TORQUE: "kip_in"}
 """The unit each dimension prints in: AISC 360 is written in kips and inches."""

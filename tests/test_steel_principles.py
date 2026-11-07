@@ -17,22 +17,31 @@ plate buckling's 12 (1 - nu^2)) are petra/mechanics', which belongs to no code, 
 tests/test_mechanics.py holds that layer to integers alone.
 
 The citation test reads the checks of a seeded generator sample, ten designs of each of the
-11 kinds, which reaches every mode; a check no design of the sample states is not seen."""
+11 kinds, and of the cyclic designs in CYCLIC, which the generator does not draw (a hanger,
+whose tee owes the unmodelled fatigue_detail) or draws too rarely for ten of a kind (a beam
+coped at both flanges under a cyclic load). Together they reach every mode; a check no design
+of the sample states is not seen."""
 import ast
 import re
 import unittest
 from fractions import Fraction
 from pathlib import Path
 
+from petra.lang import load_design, parse_design
+from petra.models.steel import calc
 from petra.models.steel import generate as gen
 from petra.models.steel import trace
+from petra.models.steel.domain import required
+from petra.models.steel.fatigue import GENERATORS
 from petra.models.steel.vocab import MODELS, MODES, TRUSTED, UNBOUNDED
 from petra.registry import build_registry
 from petra.registry import steel as deck_rows
+from petra.registry import steel_fatigue as fatigue_rows
 
 REGISTRY = build_registry()
 STEEL = Path(__file__).resolve().parents[1] / "petra" / "models" / "steel"
-BUILDERS = ("lower", "limits", "checks", "geometry", "build", "vocab", "domain", "path")
+EXAMPLES = Path(__file__).resolve().parents[1] / "examples" / "steel"
+BUILDERS = ("lower", "limits", "checks", "geometry", "build", "vocab", "domain", "path", "cyclic", "fatigue")
 """The deck's builder modules: what turns a design into obligations. calc, twin, generate,
 faults, breaker, trace and package are tooling (a report, an independent twin, the gate's
 machinery) and change no verdict."""
@@ -76,6 +85,21 @@ def _literals(module: str) -> list[tuple[int, str, str]]:
             continue
         out.append((n.lineno, repr(n.value), where))
     return out
+CYCLIC_HANGER = (EXAMPLES / "hanger.petra").read_text(encoding="utf-8") + """
+load crane {
+  on h1 tension in [2 kip, 10 kip]
+  on h1 cycles in [0, 2000000]
+  signed "s.engineer@example.org" source "hoist, service loads"
+}
+"""
+"""The hanger example under a cyclic tension: it owes fatigue_bolt_tension."""
+
+
+def _cyclic_designs():
+    yield load_design(EXAMPLES / "shear_tab_cyclic.petra", REGISTRY)
+    yield parse_design(CYCLIC_HANGER, "hanger_cyclic.petra", REGISTRY)
+
+
 CITATION = re.compile(r"\(((?:[^()]|\([^()]*\))*)\)\s*$")
 """A check's closing parenthesis, one level of nesting allowed: "(J2.2b(b))"."""
 
@@ -89,6 +113,9 @@ def provisions(citation: str) -> set[str]:
         out |= {m.group(1), m.group(1).rstrip("abcdefgh")}
     out |= {f"Manual Part {n}" for n in re.findall(r"Manual (?:Part|Eqs?|Table|Figure) (\d+)", citation)}
     out |= {f"RCSC {n}" for n in re.findall(r"RCSC (\d+)", citation)}
+    for m in re.finditer(r"\bApp\. (3\.\d)(?:\(([a-z])\))?", citation):
+        out |= {f"App. {m.group(1)}{m.group(2) or ''}", f"App. {m.group(1)}"}
+    out |= {f"Table A-3.1 Case {n}" for n in re.findall(r"Table A-3\.1 Case (\d\.\d)", citation)}
     return out
 
 
@@ -99,8 +126,13 @@ class EveryBuilderCitesItsClause(unittest.TestCase):
     def setUpClass(cls):
         cls.checks = {(mode, v.what) for g in gen.generate(110, 3, REGISTRY)
                       for (mode, _), v in gen.checks(g.text, REGISTRY).items()}
+        for design in _cyclic_designs():
+            for name in design.components:
+                conn = calc.connection(design, name, REGISTRY)
+                cls.checks |= {(mode, v.what) for mode in required(conn, design) if mode in GENERATORS
+                               for case in design.loads for v in calc.values(conn, design, REGISTRY, mode, case)}
         cls.modes_of: dict[str, set[str]] = {}
-        for p in (*trace.TABLE, *trace.OTHER):
+        for p in trace.ALL:
             cls.modes_of.setdefault(p.section, set()).update(p.modes)
 
     def test_the_sample_reaches_every_mode(self):
@@ -122,6 +154,11 @@ class EveryBuilderCitesItsClause(unittest.TestCase):
         self.assertEqual(provisions("RCSC 4.2"), {"RCSC 4"})
         self.assertEqual(provisions("geometry"), {"Geometry"})
         self.assertEqual(provisions("Manual Part 1"), {"Manual Part 1"})
+        self.assertEqual(provisions("App. 3.4(a), Table A-3.1 Case 2.1"),
+                         {"App. 3.4a", "App. 3.4", "Table A-3.1 Case 2.1"})
+        self.assertEqual(provisions("App. 3.3(c)(3), Table A-3.1 Case 5.7"),
+                         {"App. 3.3c", "App. 3.3", "Table A-3.1 Case 5.7"})
+        self.assertEqual(provisions("App. 3.1"), {"App. 3.1"})
 
 
 class EveryModelHasValidityRowsOrSaysWhyNot(unittest.TestCase):
@@ -204,9 +241,10 @@ class NoMagicNumbers(unittest.TestCase):
 
     def test_every_constant_a_builder_names_is_a_registry_row(self):
         named = set()
-        for module in ("limits", "checks", "geometry"):
+        for module in ("limits", "checks", "geometry", "fatigue"):
             text = (STEEL / f"{module}.py").read_text(encoding="utf-8")
             named |= set(re.findall(r'(?:\bk|ctx\.const)\("([a-z0-9_.]+)"\)', text))
+            named |= {f"aisc360.app3.{n}" for n in re.findall(r'_k\(ctx, "([a-z0-9_.]+)"\)', text)}
         from petra.models.steel import limits as L
         named |= {n for pair in L.BEARING.values() for n in pair} | {L.STRICT, L.STRICT_RATIO}
         self.assertEqual(sorted(n for n in named if n not in REGISTRY.constants), [])
@@ -219,9 +257,21 @@ class NoMagicNumbers(unittest.TestCase):
                 self.assertTrue(f'"{name}"' in text or name.rsplit(".", 1)[-1].startswith(("bearing_", "tearout_"))
                                 or name.startswith("petra.strict"))
 
+    def test_every_fatigue_row_is_read(self):
+        """A category's rows are read through fsr's category argument, every other by name."""
+        text = (STEEL / "fatigue.py").read_text(encoding="utf-8")
+        for name, *_ in fatigue_rows.FATIGUE:
+            short = name.removeprefix("aisc360.app3.")
+            with self.subTest(name):
+                if short.startswith("cat_"):
+                    self.assertIn(f'"{short.removeprefix("cat_").split(".")[0]}"', text)
+                else:
+                    self.assertIn(f'"{short}"', text)
+
     def test_every_row_carries_its_clause_and_tag(self):
         clause = re.compile(r"Section|Eqs?\.|Table|Figure|Part \d|User Note|Symbols list|Petra's")
-        for name, text, unit, tag, owner, source in (*deck_rows.FACTORS, *deck_rows.COEFFICIENTS):
+        for name, text, unit, tag, owner, source in (*deck_rows.FACTORS, *deck_rows.COEFFICIENTS,
+                                                     *fatigue_rows.FATIGUE):
             with self.subTest(name):
                 self.assertRegex(source, clause)
                 self.assertIn(tag, (deck_rows.SANCTIONED, deck_rows.JUDGED))

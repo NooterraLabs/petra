@@ -17,11 +17,11 @@ from typing import Mapping
 from ... import mechanics
 from ..base import FailureMode, ModelSpec, ValidityRow
 
-TRUSTED = ("lower", "limits", "checks", "geometry", "build", "vocab", "domain", "path")
-"""The package modules whose source is the physics, path's limit lists included (they
-decide what coverage demands). generate, twin, faults, breaker and package are tooling
-and cannot change a verdict. tests/test_steel_principles.py holds this to its builder
-list."""
+TRUSTED = ("lower", "limits", "checks", "geometry", "build", "vocab", "domain", "path", "cyclic", "fatigue")
+"""The package modules whose source is the physics, path's and cyclic's limit lists included
+(they decide what coverage demands). generate, twin, faults, breaker and package are
+tooling and cannot change a verdict. tests/test_steel_principles.py holds this to its
+builder list."""
 
 HASHED = (*(os.path.join(os.path.dirname(os.path.abspath(__file__)), f"{name}.py") for name in TRUSTED),
           *mechanics.SOURCES)
@@ -219,9 +219,13 @@ MAKEABILITY: tuple[tuple, ...] = (
       "face, and a weld between a column's flanges assumes the flanges leave the welder room",)),
     ("hole_use", "oversized holes and slots parallel to the force only in slip-critical joints", "holes as declared on "
      "each ply", f"{AISC} Section J3.3; RCSC 2025 Section 3.3"),
-    ("joint_type", "the joint's installation meets the RCSC requirements its use imposes: at least snug-tight, and "
-     "Group 150 and 200 bolts in tension pretensioned (the holes that need a slip-critical joint are hole_use's rule)",
-     "the joint carries the loads declared", "RCSC 2025 Sections 4.1 and 4.2; AISC 360-22 Section J3.2"),
+    ("joint_type", "the joint's installation meets the RCSC requirements its use imposes: at least snug-tight, "
+     "Group 150 and 200 bolts in tension pretensioned, and in a cyclic case every joint pretensioned, excused where "
+     "nSR <= 20,000 (J3.2(a)(2) allows snug-tight bolts in tension only where fatigue is no design consideration, "
+     "J3.2(b)(1) defers to RCSC 4.2, and Appendix 3 considers and permits pretensioned joints only, Commentary 3.4); "
+     "the holes that need a slip-critical joint are hole_use's rule",
+     "the joint carries the loads declared",
+     "RCSC 2025 Sections 4.1 and 4.2; AISC 360-22 Section J3.2, Commentary Section 3.4"),
     ("clearance", "room to tighten each bolt: the distance from the bolt to the nearest obstruction at least half the "
      "nut's width across corners plus a socket allowance", "a standard impact wrench socket on a heavy hex nut",
      f"{MANUAL} Part 7 (entering and tightening clearances, method encoded with a judged allowance)",
@@ -313,6 +317,12 @@ ROWS: Mapping[str, tuple[ValidityRow, ...]] = {
              "stem, the support's web) by more than half a bolt diameter (b' > 0)", "Kulak, Fisher and Struik (1987) "
              "Section 17.5"),
     ),
+    "fatigue_bolt_tension": (
+        _row("fatigue_bolt_tension", "no_prying", "each flange the bolts bend is at least tmin = sqrt(4 T b' / (phi p "
+             "Fu)) thick under the peak cyclic tension per bolt T, at each bolt's tributary length p, so the bolts carry "
+             "no prying force", f"{MANUAL} Part 9, Eq 9-20a; {AISC} Appendix 3, Section 3.2 and Commentary 3.4 (the "
+             "category holds only where prying is small)"),
+    ),
 }
 
 
@@ -356,6 +366,14 @@ UNBOUNDED: Mapping[str, str] = {
     "spacing_min": _RULE, "edge_min": _RULE, "spacing_max": _RULE, "edge_max": _RULE, "fillet_size": _RULE,
     "hole_use": _RULE, "joint_type": _RULE, "clearance": _RULE,
     "beam_fit": _RULE, "flange_fit": _RULE, "web_fit": _RULE,
+    "fatigue_bolted": f"Eq A-3-1 {_OWN}; Section 3.1's floor of 20,000 cycles and the threshold FTH are branches of "
+                      "the check",
+    "fatigue_weld": f"Eq A-3-2 {_OWN}; Section 3.1's floor of 20,000 cycles and the 8 ksi threshold are branches of "
+                    "the check",
+    "fatigue_weld_end": f"Eqs A-3-1, A-3-5 and A-3-6 {_THEIR}; the floor of 20,000 cycles, the threshold and RFIL "
+                        "reaching 1, past which the toe governs, are branches of the check",
+    "fatigue_cope": f"Eq A-3-1 {_OWN}; Section 3.1's floor of 20,000 cycles and the threshold FTH are branches of "
+                    "the check",
 }
 """Why each mode with no validity row needs none (docs/principles.md D3): its clause states
 no applicability range, its branches are inside its checks, or it is a detailing rule whose
@@ -420,6 +438,84 @@ for short, form, validity, source in (
     MODES[short] = _mode(short)
     MODELS[MODES[short]] = _spec(short, form, validity, source, ROWS.get(short, ()), ())
 
+
+# --- Fatigue (Appendix 3) --------------------------------------------------------------------
+# A load case that names cycles on the connection is cyclic (lower.CYCLES): its loads are
+# service loads that vary inside their intervals, so each interval's width is the load's
+# range and its larger magnitude the peak. cyclic.py says which details owe which mode.
+
+APPENDIX3 = f"{AISC} Appendix 3"
+EQ_A31 = "FSR = 1000 (Cf / nSR)^0.333 ksi, at least FTH (Eq A-3-1)"
+FLOOR = "each check excused where nSR <= 20,000 (Section 3.1)"
+PEAK = "the stress from the peak cyclic load, on the section the range is taken on, at most 0.66 Fy (Section 3.1)"
+PRINCIPAL = ("the stress at a section is bounded by its extreme-fibre bending stress M / S plus its peak shear "
+             "stress 3 V / (2 t d), which bounds the largest principal stress anywhere on it, a conservative bound; on "
+             "a net section d is the depth less the holes and S the net section's, I / (d / 2) about the gross "
+             "section's middle, each hole 1/16 in larger than its size along the line (Section B4.3b) and the holes "
+             "centred on the depth at the pitch")
+SERVICE = ("elastic analysis with no stress concentration factor (Section 3.2); the cyclic case states service loads; "
+           "suitable corrosion protection or a mildly corrosive atmosphere, and temperatures at most 300 F (Section 3.1)")
+
+FATIGUE: tuple[tuple[str, str, str, str], ...] = (
+    ("fatigue_bolted",
+     f"the stress range of the material a slip-critical or pretensioned bolt group connects, against category B's {EQ_A31}, "
+     "Cf = 12 and FTH = 16 ksi (Section 3.4(a)): a slip-critical joint's on the gross section (Table A-3.1 Case 2.1), a "
+     "pretensioned joint's on the net section through the line of holes (Case 2.2); each ply carries the bolt group's "
+     f"shear on its section along the bolt line, and a ply that bends also its flexural checks' moment; {PRINCIPAL}; "
+     f"{PEAK}; {FLOOR}",
+     f"{SERVICE}; the joint meets its slip-critical or pretensioned requirements, which the bolts, slip and joint_type "
+     "checks hold it to; the support's face under the bolts is the support member's, whose own stress range the "
+     "connection does not know",
+     f"{APPENDIX3}, Sections 3.1, 3.2 and 3.4(a), Table A-3.1 Cases 2.1 and 2.2"),
+    ("fatigue_bolt_tension",
+     "the tensile stress range of each bolt on its tensile stress area At = (pi / 4) (db - 0.9743 / n)^2, n threads per "
+     f"inch (Eq A-3-7), against category G's {EQ_A31}, Cf = 0.39 and FTH = 7 ksi (Section 3.4(b), Table A-3.1 Case "
+     "8.5): snug-tight bolts carry the whole range of the applied tension; pretensioned and slip-critical bolts, with "
+     f"only steel in the grip, carry 20% of the peak applied tension (Section 3.4(b)); {FLOOR}",
+     f"{SERVICE}; the tension is shared equally by the bolts; the grip holds only steel, a tee's flange and the "
+     "support's; prying is negligible, which the row no_prying holds each flange to",
+     f"{APPENDIX3}, Sections 3.1, 3.2 and 3.4(b), Eq A-3-7, Table A-3.1 Case 8.5; {MANUAL} Part 9"),
+    ("fatigue_weld",
+     "the shear stress range on each fillet's throat, w / sqrt 2, at its most stressed point as the weld check finds "
+     "it (the elastic method for an eccentric group, the end-loaded effective length past 100 w), against category F's "
+     f"FSR = 100 (1.5 / nSR)^0.167 ksi, at least 8 ksi (Eq A-3-2, Table A-3.1 Case 8.2); {FLOOR}",
+     f"{SERVICE}; a fillet loaded normal to an angle's outstanding leg or along an end plate's outer edge has end "
+     "returns of two to four times its size (Section 3.5), a fabrication premise the deck does not check",
+     f"{APPENDIX3}, Sections 3.1, 3.3(b) and 3.5, Eq A-3-2, Table A-3.1 Case 8.2"),
+    ("fatigue_weld_end",
+     "a plate set on edge against the support and welded with a pair of fillets, one on each face (Table A-3.1 Case "
+     "5.7): the plate's stress range across the welds, M / S + 3 V / (2 t L) with S = t L^2 / 6 over the weld length L, "
+     f"against category C at the weld toe, {EQ_A31}, Cf = 4.4 and FTH = 10 ksi (Section 3.3(c)(1)), and at the weld "
+     "root FSR = 1000 RFIL (4.4 / nSR)^0.333 ksi with no threshold (Eq A-3-5), RFIL = (0.06 + 0.72 w / tp) / tp^0.167 "
+     "with w and tp in inches (Eq A-3-6), the root check excused where RFIL >= 1, past which the toe governs; "
+     f"{PEAK}; {FLOOR}",
+     f"{SERVICE}; the moment at the weld line is a single plate's V times the distance from the weld line to its "
+     "bolt group's centroid, a + (columns - 1) g / 2, the most elastic analysis puts there with the beam end free to "
+     "rotate at the bolts; a seat stiffener's V times 0.8 W and a bracket's V e, its flexural checks'; the side the "
+     "moment puts in tension governs",
+     f"{APPENDIX3}, Sections 3.1 and 3.3(c), Eqs A-3-1, A-3-5 and A-3-6, Table A-3.1 Case 5.7"),
+    ("fatigue_cope",
+     "a beam coped at both flanges: the stress range at the bottom cope's reentrant corner, M / S + 3 V / (2 tw hc) on "
+     "the web the copes leave, S = tw hc^2 / 6 and M = V (c + setback), against category E' (E prime), "
+     f"{EQ_A31}, Cf = 0.39 and FTH = 2.6 ksi (Table A-3.1 Case 1.3); {PEAK}; {FLOOR}",
+     f"{SERVICE}; the cope's corners are cut to a radius of at least 3/8 in, which Case 1.3 asks of E' and Section "
+     "3.5 of every reentrant corner, and thermally cut edges are no rougher than Section 3.5's 1,000 micro-inches, "
+     "fabrication premises the deck does not check; the top cope's corner, which the beam end's moment compresses, "
+     "is no fatigue case (Commentary 3.2)",
+     f"{APPENDIX3}, Sections 3.1, 3.3(a) and 3.5, Eq A-3-1, Table A-3.1 Case 1.3"),
+)
+"""The fatigue modes the deck checks. Their constants are petra/registry/steel_fatigue.py's."""
+
+for short, form, validity, source in FATIGUE:
+    MODES[short] = _mode(short)
+    MODELS[MODES[short]] = _spec(short, form, validity, source, ROWS.get(short, ()), ())
+
+FATIGUE_DETAIL = _mode("fatigue_detail")
+"""A detail under cyclic load whose Table A-3.1 category the deck does not encode: a single
+fillet at an angle's or a tee's toe, a plate welded on one face, a lapped plate's C-shaped
+fillet, a seat angle, a hanger's tee stem and flange, a member's flange under a cyclic
+tensile force. Unmodelled: the verdict is UNKNOWN, never PASS."""
+
 LOAD_PATH = _mode("load_path")
 """An axial or other force component a v1.0 connection type has no checked path for.
 Unmodelled: requiring it yields a Gap needing NoModel, so the verdict is UNKNOWN."""
@@ -431,7 +527,7 @@ end is declared free (end_twist free). The deck draws no stiffeners, so the mode
 unmodelled and the verdict UNKNOWN. J10.8 and J10.9's stiffeners and doublers are never
 credited: a force past a J10 limit state's unstiffened strength fails that check."""
 
-UNMODELLED = frozenset({LOAD_PATH, STIFFENED_FORCE})
+UNMODELLED = frozenset({LOAD_PATH, STIFFENED_FORCE, FATIGUE_DETAIL})
 
 QOIS: Mapping[str, FailureMode] = {short: mode for short, mode in MODES.items()}
 """A claim names a mode by its short name: `st1.block_shear <= 1`."""

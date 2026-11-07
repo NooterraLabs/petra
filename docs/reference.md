@@ -292,7 +292,7 @@ Load entries and claims on a `demand` component take these forms:
 
 ### Domain steel
 
-Waivable modes: `steel.beam_fit`, `steel.bearing`, `steel.block_shear`, `steel.bolt_combined`, `steel.bolt_tension`, `steel.bolts`, `steel.bracket_edge`, `steel.clearance`, `steel.compression`, `steel.cope_buckling`, `steel.ductility`, `steel.edge_max`, `steel.edge_min`, `steel.extended_ductility`, `steel.fillet_size`, `steel.flange_fit`, `steel.flange_local_bending`, `steel.flexural_rupture`, `steel.flexural_yield`, `steel.hole_use`, `steel.j10_stiffeners`, `steel.joint_type`, `steel.load_path`, `steel.panel_zone`, `steel.plate_buckling`, `steel.prying`, `steel.seat_flexure`, `steel.shear_rupture`, `steel.shear_yield`, `steel.slip`, `steel.spacing_max`, `steel.spacing_min`, `steel.tee_ductility`, `steel.tension_rupture`, `steel.tension_yield`, `steel.web_compression_buckling`, `steel.web_crippling`, `steel.web_fit`, `steel.web_local_yielding`, `steel.web_sidesway_buckling`, `steel.weld`, `steel.weld_base_metal`.
+Waivable modes: `steel.beam_fit`, `steel.bearing`, `steel.block_shear`, `steel.bolt_combined`, `steel.bolt_tension`, `steel.bolts`, `steel.bracket_edge`, `steel.clearance`, `steel.compression`, `steel.cope_buckling`, `steel.ductility`, `steel.edge_max`, `steel.edge_min`, `steel.extended_ductility`, `steel.fatigue_bolt_tension`, `steel.fatigue_bolted`, `steel.fatigue_cope`, `steel.fatigue_detail`, `steel.fatigue_weld`, `steel.fatigue_weld_end`, `steel.fillet_size`, `steel.flange_fit`, `steel.flange_local_bending`, `steel.flexural_rupture`, `steel.flexural_yield`, `steel.hole_use`, `steel.j10_stiffeners`, `steel.joint_type`, `steel.load_path`, `steel.panel_zone`, `steel.plate_buckling`, `steel.prying`, `steel.seat_flexure`, `steel.shear_rupture`, `steel.shear_yield`, `steel.slip`, `steel.spacing_max`, `steel.spacing_min`, `steel.tee_ductility`, `steel.tension_rupture`, `steel.tension_yield`, `steel.web_compression_buckling`, `steel.web_crippling`, `steel.web_fit`, `steel.web_local_yielding`, `steel.web_sidesway_buckling`, `steel.weld`, `steel.weld_base_metal`.
 
 #### shear_tab
 
@@ -300,10 +300,10 @@ A `shear_tab` component is written `shear_tab <name> { ... }`. `petra new shear_
 
 Load entries and claims on a `shear_tab` component take these forms:
 
-- Load entry: `on <conn> shear|axial in [<lo>, <hi>] [mean <value>]`
+- Load entry: `on <conn> shear|axial|cycles in [<lo>, <hi>] [mean <value>]`
 - Claim: `claim <name>: <conn>.<qoi> <=|>= <value> [margin <value>] [under <load>, ...]`
 
-In a claim, `<qoi>` is one of `bolts`, `bolt_tension`, `bolt_combined`, `slip`, `shear_yield`, `shear_rupture`, `block_shear`, `tension_yield`, `tension_rupture`, `flexural_yield`, `flexural_rupture`, `weld`, `weld_base_metal`, `bearing`, `web_local_yielding`, `web_crippling`, `flange_local_bending`, `web_sidesway_buckling`, `web_compression_buckling`, `panel_zone`, `seat_flexure`, `prying`, `spacing_min`, `edge_min`, `spacing_max`, `edge_max`, `fillet_size`, `hole_use`, `joint_type`, `clearance`, `beam_fit`, `flange_fit`, `web_fit`, `compression`, `cope_buckling`, `plate_buckling`, `ductility`, `tee_ductility`, `bracket_edge`, `extended_ductility`.
+In a claim, `<qoi>` is one of `bolts`, `bolt_tension`, `bolt_combined`, `slip`, `shear_yield`, `shear_rupture`, `block_shear`, `tension_yield`, `tension_rupture`, `flexural_yield`, `flexural_rupture`, `weld`, `weld_base_metal`, `bearing`, `web_local_yielding`, `web_crippling`, `flange_local_bending`, `web_sidesway_buckling`, `web_compression_buckling`, `panel_zone`, `seat_flexure`, `prying`, `spacing_min`, `edge_min`, `spacing_max`, `edge_max`, `fillet_size`, `hole_use`, `joint_type`, `clearance`, `beam_fit`, `flange_fit`, `web_fit`, `compression`, `cope_buckling`, `plate_buckling`, `ductility`, `tee_ductility`, `bracket_edge`, `extended_ductility`, `fatigue_bolted`, `fatigue_bolt_tension`, `fatigue_weld`, `fatigue_weld_end`, `fatigue_cope`.
 
 | line | form | needed | unit | ids | meaning |
 |---|---|---|---|---|---|
@@ -336,10 +336,10 @@ A `double_angle` component is written `double_angle <name> { ... }`. `petra new 
 
 Load entries and claims on a `double_angle` component take these forms:
 
-- Load entry: `on <conn> shear|axial in [<lo>, <hi>] [mean <value>]`
+- Load entry: `on <conn> shear|axial|cycles in [<lo>, <hi>] [mean <value>]`
 - Claim: `claim <name>: <conn>.<qoi> <=|>= <value> [margin <value>] [under <load>, ...]`
 
-In a claim, `<qoi>` is one of `bolts`, `bolt_tension`, `bolt_combined`, `slip`, `shear_yield`, `shear_rupture`, `block_shear`, `tension_yield`, `tension_rupture`, `flexural_yield`, `flexural_rupture`, `weld`, `weld_base_metal`, `bearing`, `web_local_yielding`, `web_crippling`, `flange_local_bending`, `web_sidesway_buckling`, `web_compression_buckling`, `panel_zone`, `seat_flexure`, `prying`, `spacing_min`, `edge_min`, `spacing_max`, `edge_max`, `fillet_size`, `hole_use`, `joint_type`, `clearance`, `beam_fit`, `flange_fit`, `web_fit`, `compression`, `cope_buckling`, `plate_buckling`, `ductility`, `tee_ductility`, `bracket_edge`, `extended_ductility`.
+In a claim, `<qoi>` is one of `bolts`, `bolt_tension`, `bolt_combined`, `slip`, `shear_yield`, `shear_rupture`, `block_shear`, `tension_yield`, `tension_rupture`, `flexural_yield`, `flexural_rupture`, `weld`, `weld_base_metal`, `bearing`, `web_local_yielding`, `web_crippling`, `flange_local_bending`, `web_sidesway_buckling`, `web_compression_buckling`, `panel_zone`, `seat_flexure`, `prying`, `spacing_min`, `edge_min`, `spacing_max`, `edge_max`, `fillet_size`, `hole_use`, `joint_type`, `clearance`, `beam_fit`, `flange_fit`, `web_fit`, `compression`, `cope_buckling`, `plate_buckling`, `ductility`, `tee_ductility`, `bracket_edge`, `extended_ductility`, `fatigue_bolted`, `fatigue_bolt_tension`, `fatigue_weld`, `fatigue_weld_end`, `fatigue_cope`.
 
 | line | form | needed | unit | ids | meaning |
 |---|---|---|---|---|---|
@@ -369,10 +369,10 @@ A `single_angle` component is written `single_angle <name> { ... }`. `petra new 
 
 Load entries and claims on a `single_angle` component take these forms:
 
-- Load entry: `on <conn> shear|axial in [<lo>, <hi>] [mean <value>]`
+- Load entry: `on <conn> shear|axial|cycles in [<lo>, <hi>] [mean <value>]`
 - Claim: `claim <name>: <conn>.<qoi> <=|>= <value> [margin <value>] [under <load>, ...]`
 
-In a claim, `<qoi>` is one of `bolts`, `bolt_tension`, `bolt_combined`, `slip`, `shear_yield`, `shear_rupture`, `block_shear`, `tension_yield`, `tension_rupture`, `flexural_yield`, `flexural_rupture`, `weld`, `weld_base_metal`, `bearing`, `web_local_yielding`, `web_crippling`, `flange_local_bending`, `web_sidesway_buckling`, `web_compression_buckling`, `panel_zone`, `seat_flexure`, `prying`, `spacing_min`, `edge_min`, `spacing_max`, `edge_max`, `fillet_size`, `hole_use`, `joint_type`, `clearance`, `beam_fit`, `flange_fit`, `web_fit`, `compression`, `cope_buckling`, `plate_buckling`, `ductility`, `tee_ductility`, `bracket_edge`, `extended_ductility`.
+In a claim, `<qoi>` is one of `bolts`, `bolt_tension`, `bolt_combined`, `slip`, `shear_yield`, `shear_rupture`, `block_shear`, `tension_yield`, `tension_rupture`, `flexural_yield`, `flexural_rupture`, `weld`, `weld_base_metal`, `bearing`, `web_local_yielding`, `web_crippling`, `flange_local_bending`, `web_sidesway_buckling`, `web_compression_buckling`, `panel_zone`, `seat_flexure`, `prying`, `spacing_min`, `edge_min`, `spacing_max`, `edge_max`, `fillet_size`, `hole_use`, `joint_type`, `clearance`, `beam_fit`, `flange_fit`, `web_fit`, `compression`, `cope_buckling`, `plate_buckling`, `ductility`, `tee_ductility`, `bracket_edge`, `extended_ductility`, `fatigue_bolted`, `fatigue_bolt_tension`, `fatigue_weld`, `fatigue_weld_end`, `fatigue_cope`.
 
 | line | form | needed | unit | ids | meaning |
 |---|---|---|---|---|---|
@@ -402,10 +402,10 @@ A `shear_tee` component is written `shear_tee <name> { ... }`. `petra new shear_
 
 Load entries and claims on a `shear_tee` component take these forms:
 
-- Load entry: `on <conn> shear|axial in [<lo>, <hi>] [mean <value>]`
+- Load entry: `on <conn> shear|axial|cycles in [<lo>, <hi>] [mean <value>]`
 - Claim: `claim <name>: <conn>.<qoi> <=|>= <value> [margin <value>] [under <load>, ...]`
 
-In a claim, `<qoi>` is one of `bolts`, `bolt_tension`, `bolt_combined`, `slip`, `shear_yield`, `shear_rupture`, `block_shear`, `tension_yield`, `tension_rupture`, `flexural_yield`, `flexural_rupture`, `weld`, `weld_base_metal`, `bearing`, `web_local_yielding`, `web_crippling`, `flange_local_bending`, `web_sidesway_buckling`, `web_compression_buckling`, `panel_zone`, `seat_flexure`, `prying`, `spacing_min`, `edge_min`, `spacing_max`, `edge_max`, `fillet_size`, `hole_use`, `joint_type`, `clearance`, `beam_fit`, `flange_fit`, `web_fit`, `compression`, `cope_buckling`, `plate_buckling`, `ductility`, `tee_ductility`, `bracket_edge`, `extended_ductility`.
+In a claim, `<qoi>` is one of `bolts`, `bolt_tension`, `bolt_combined`, `slip`, `shear_yield`, `shear_rupture`, `block_shear`, `tension_yield`, `tension_rupture`, `flexural_yield`, `flexural_rupture`, `weld`, `weld_base_metal`, `bearing`, `web_local_yielding`, `web_crippling`, `flange_local_bending`, `web_sidesway_buckling`, `web_compression_buckling`, `panel_zone`, `seat_flexure`, `prying`, `spacing_min`, `edge_min`, `spacing_max`, `edge_max`, `fillet_size`, `hole_use`, `joint_type`, `clearance`, `beam_fit`, `flange_fit`, `web_fit`, `compression`, `cope_buckling`, `plate_buckling`, `ductility`, `tee_ductility`, `bracket_edge`, `extended_ductility`, `fatigue_bolted`, `fatigue_bolt_tension`, `fatigue_weld`, `fatigue_weld_end`, `fatigue_cope`.
 
 | line | form | needed | unit | ids | meaning |
 |---|---|---|---|---|---|
@@ -436,10 +436,10 @@ A `shear_end_plate` component is written `shear_end_plate <name> { ... }`. `petr
 
 Load entries and claims on a `shear_end_plate` component take these forms:
 
-- Load entry: `on <conn> shear|axial in [<lo>, <hi>] [mean <value>]`
+- Load entry: `on <conn> shear|axial|cycles in [<lo>, <hi>] [mean <value>]`
 - Claim: `claim <name>: <conn>.<qoi> <=|>= <value> [margin <value>] [under <load>, ...]`
 
-In a claim, `<qoi>` is one of `bolts`, `bolt_tension`, `bolt_combined`, `slip`, `shear_yield`, `shear_rupture`, `block_shear`, `tension_yield`, `tension_rupture`, `flexural_yield`, `flexural_rupture`, `weld`, `weld_base_metal`, `bearing`, `web_local_yielding`, `web_crippling`, `flange_local_bending`, `web_sidesway_buckling`, `web_compression_buckling`, `panel_zone`, `seat_flexure`, `prying`, `spacing_min`, `edge_min`, `spacing_max`, `edge_max`, `fillet_size`, `hole_use`, `joint_type`, `clearance`, `beam_fit`, `flange_fit`, `web_fit`, `compression`, `cope_buckling`, `plate_buckling`, `ductility`, `tee_ductility`, `bracket_edge`, `extended_ductility`.
+In a claim, `<qoi>` is one of `bolts`, `bolt_tension`, `bolt_combined`, `slip`, `shear_yield`, `shear_rupture`, `block_shear`, `tension_yield`, `tension_rupture`, `flexural_yield`, `flexural_rupture`, `weld`, `weld_base_metal`, `bearing`, `web_local_yielding`, `web_crippling`, `flange_local_bending`, `web_sidesway_buckling`, `web_compression_buckling`, `panel_zone`, `seat_flexure`, `prying`, `spacing_min`, `edge_min`, `spacing_max`, `edge_max`, `fillet_size`, `hole_use`, `joint_type`, `clearance`, `beam_fit`, `flange_fit`, `web_fit`, `compression`, `cope_buckling`, `plate_buckling`, `ductility`, `tee_ductility`, `bracket_edge`, `extended_ductility`, `fatigue_bolted`, `fatigue_bolt_tension`, `fatigue_weld`, `fatigue_weld_end`, `fatigue_cope`.
 
 | line | form | needed | unit | ids | meaning |
 |---|---|---|---|---|---|
@@ -466,10 +466,10 @@ A `seated` component is written `seated <name> { ... }`. `petra new seated` prin
 
 Load entries and claims on a `seated` component take these forms:
 
-- Load entry: `on <conn> shear|axial in [<lo>, <hi>] [mean <value>]`
+- Load entry: `on <conn> shear|axial|cycles in [<lo>, <hi>] [mean <value>]`
 - Claim: `claim <name>: <conn>.<qoi> <=|>= <value> [margin <value>] [under <load>, ...]`
 
-In a claim, `<qoi>` is one of `bolts`, `bolt_tension`, `bolt_combined`, `slip`, `shear_yield`, `shear_rupture`, `block_shear`, `tension_yield`, `tension_rupture`, `flexural_yield`, `flexural_rupture`, `weld`, `weld_base_metal`, `bearing`, `web_local_yielding`, `web_crippling`, `flange_local_bending`, `web_sidesway_buckling`, `web_compression_buckling`, `panel_zone`, `seat_flexure`, `prying`, `spacing_min`, `edge_min`, `spacing_max`, `edge_max`, `fillet_size`, `hole_use`, `joint_type`, `clearance`, `beam_fit`, `flange_fit`, `web_fit`, `compression`, `cope_buckling`, `plate_buckling`, `ductility`, `tee_ductility`, `bracket_edge`, `extended_ductility`.
+In a claim, `<qoi>` is one of `bolts`, `bolt_tension`, `bolt_combined`, `slip`, `shear_yield`, `shear_rupture`, `block_shear`, `tension_yield`, `tension_rupture`, `flexural_yield`, `flexural_rupture`, `weld`, `weld_base_metal`, `bearing`, `web_local_yielding`, `web_crippling`, `flange_local_bending`, `web_sidesway_buckling`, `web_compression_buckling`, `panel_zone`, `seat_flexure`, `prying`, `spacing_min`, `edge_min`, `spacing_max`, `edge_max`, `fillet_size`, `hole_use`, `joint_type`, `clearance`, `beam_fit`, `flange_fit`, `web_fit`, `compression`, `cope_buckling`, `plate_buckling`, `ductility`, `tee_ductility`, `bracket_edge`, `extended_ductility`, `fatigue_bolted`, `fatigue_bolt_tension`, `fatigue_weld`, `fatigue_weld_end`, `fatigue_cope`.
 
 | line | form | needed | unit | ids | meaning |
 |---|---|---|---|---|---|
@@ -497,10 +497,10 @@ A `stiffened_seat` component is written `stiffened_seat <name> { ... }`. `petra 
 
 Load entries and claims on a `stiffened_seat` component take these forms:
 
-- Load entry: `on <conn> shear|axial in [<lo>, <hi>] [mean <value>]`
+- Load entry: `on <conn> shear|axial|cycles in [<lo>, <hi>] [mean <value>]`
 - Claim: `claim <name>: <conn>.<qoi> <=|>= <value> [margin <value>] [under <load>, ...]`
 
-In a claim, `<qoi>` is one of `bolts`, `bolt_tension`, `bolt_combined`, `slip`, `shear_yield`, `shear_rupture`, `block_shear`, `tension_yield`, `tension_rupture`, `flexural_yield`, `flexural_rupture`, `weld`, `weld_base_metal`, `bearing`, `web_local_yielding`, `web_crippling`, `flange_local_bending`, `web_sidesway_buckling`, `web_compression_buckling`, `panel_zone`, `seat_flexure`, `prying`, `spacing_min`, `edge_min`, `spacing_max`, `edge_max`, `fillet_size`, `hole_use`, `joint_type`, `clearance`, `beam_fit`, `flange_fit`, `web_fit`, `compression`, `cope_buckling`, `plate_buckling`, `ductility`, `tee_ductility`, `bracket_edge`, `extended_ductility`.
+In a claim, `<qoi>` is one of `bolts`, `bolt_tension`, `bolt_combined`, `slip`, `shear_yield`, `shear_rupture`, `block_shear`, `tension_yield`, `tension_rupture`, `flexural_yield`, `flexural_rupture`, `weld`, `weld_base_metal`, `bearing`, `web_local_yielding`, `web_crippling`, `flange_local_bending`, `web_sidesway_buckling`, `web_compression_buckling`, `panel_zone`, `seat_flexure`, `prying`, `spacing_min`, `edge_min`, `spacing_max`, `edge_max`, `fillet_size`, `hole_use`, `joint_type`, `clearance`, `beam_fit`, `flange_fit`, `web_fit`, `compression`, `cope_buckling`, `plate_buckling`, `ductility`, `tee_ductility`, `bracket_edge`, `extended_ductility`, `fatigue_bolted`, `fatigue_bolt_tension`, `fatigue_weld`, `fatigue_weld_end`, `fatigue_cope`.
 
 | line | form | needed | unit | ids | meaning |
 |---|---|---|---|---|---|
@@ -521,10 +521,10 @@ A `flange_force` component is written `flange_force <name> { ... }`. `petra new 
 
 Load entries and claims on a `flange_force` component take these forms:
 
-- Load entry: `on <conn> force|panel_shear|axial in [<lo>, <hi>] [mean <value>]`
+- Load entry: `on <conn> force|panel_shear|axial|cycles in [<lo>, <hi>] [mean <value>]`
 - Claim: `claim <name>: <conn>.<qoi> <=|>= <value> [margin <value>] [under <load>, ...]`
 
-In a claim, `<qoi>` is one of `bolts`, `bolt_tension`, `bolt_combined`, `slip`, `shear_yield`, `shear_rupture`, `block_shear`, `tension_yield`, `tension_rupture`, `flexural_yield`, `flexural_rupture`, `weld`, `weld_base_metal`, `bearing`, `web_local_yielding`, `web_crippling`, `flange_local_bending`, `web_sidesway_buckling`, `web_compression_buckling`, `panel_zone`, `seat_flexure`, `prying`, `spacing_min`, `edge_min`, `spacing_max`, `edge_max`, `fillet_size`, `hole_use`, `joint_type`, `clearance`, `beam_fit`, `flange_fit`, `web_fit`, `compression`, `cope_buckling`, `plate_buckling`, `ductility`, `tee_ductility`, `bracket_edge`, `extended_ductility`.
+In a claim, `<qoi>` is one of `bolts`, `bolt_tension`, `bolt_combined`, `slip`, `shear_yield`, `shear_rupture`, `block_shear`, `tension_yield`, `tension_rupture`, `flexural_yield`, `flexural_rupture`, `weld`, `weld_base_metal`, `bearing`, `web_local_yielding`, `web_crippling`, `flange_local_bending`, `web_sidesway_buckling`, `web_compression_buckling`, `panel_zone`, `seat_flexure`, `prying`, `spacing_min`, `edge_min`, `spacing_max`, `edge_max`, `fillet_size`, `hole_use`, `joint_type`, `clearance`, `beam_fit`, `flange_fit`, `web_fit`, `compression`, `cope_buckling`, `plate_buckling`, `ductility`, `tee_ductility`, `bracket_edge`, `extended_ductility`, `fatigue_bolted`, `fatigue_bolt_tension`, `fatigue_weld`, `fatigue_weld_end`, `fatigue_cope`.
 
 | line | form | needed | unit | ids | meaning |
 |---|---|---|---|---|---|
@@ -546,10 +546,10 @@ A `bolt_bracket` component is written `bolt_bracket <name> { ... }`. `petra new 
 
 Load entries and claims on a `bolt_bracket` component take these forms:
 
-- Load entry: `on <conn> shear in [<lo>, <hi>] [mean <value>]`
+- Load entry: `on <conn> shear|cycles in [<lo>, <hi>] [mean <value>]`
 - Claim: `claim <name>: <conn>.<qoi> <=|>= <value> [margin <value>] [under <load>, ...]`
 
-In a claim, `<qoi>` is one of `bolts`, `bolt_tension`, `bolt_combined`, `slip`, `shear_yield`, `shear_rupture`, `block_shear`, `tension_yield`, `tension_rupture`, `flexural_yield`, `flexural_rupture`, `weld`, `weld_base_metal`, `bearing`, `web_local_yielding`, `web_crippling`, `flange_local_bending`, `web_sidesway_buckling`, `web_compression_buckling`, `panel_zone`, `seat_flexure`, `prying`, `spacing_min`, `edge_min`, `spacing_max`, `edge_max`, `fillet_size`, `hole_use`, `joint_type`, `clearance`, `beam_fit`, `flange_fit`, `web_fit`, `compression`, `cope_buckling`, `plate_buckling`, `ductility`, `tee_ductility`, `bracket_edge`, `extended_ductility`.
+In a claim, `<qoi>` is one of `bolts`, `bolt_tension`, `bolt_combined`, `slip`, `shear_yield`, `shear_rupture`, `block_shear`, `tension_yield`, `tension_rupture`, `flexural_yield`, `flexural_rupture`, `weld`, `weld_base_metal`, `bearing`, `web_local_yielding`, `web_crippling`, `flange_local_bending`, `web_sidesway_buckling`, `web_compression_buckling`, `panel_zone`, `seat_flexure`, `prying`, `spacing_min`, `edge_min`, `spacing_max`, `edge_max`, `fillet_size`, `hole_use`, `joint_type`, `clearance`, `beam_fit`, `flange_fit`, `web_fit`, `compression`, `cope_buckling`, `plate_buckling`, `ductility`, `tee_ductility`, `bracket_edge`, `extended_ductility`, `fatigue_bolted`, `fatigue_bolt_tension`, `fatigue_weld`, `fatigue_weld_end`, `fatigue_cope`.
 
 | line | form | needed | unit | ids | meaning |
 |---|---|---|---|---|---|
@@ -575,10 +575,10 @@ A `weld_bracket` component is written `weld_bracket <name> { ... }`. `petra new 
 
 Load entries and claims on a `weld_bracket` component take these forms:
 
-- Load entry: `on <conn> shear in [<lo>, <hi>] [mean <value>]`
+- Load entry: `on <conn> shear|cycles in [<lo>, <hi>] [mean <value>]`
 - Claim: `claim <name>: <conn>.<qoi> <=|>= <value> [margin <value>] [under <load>, ...]`
 
-In a claim, `<qoi>` is one of `bolts`, `bolt_tension`, `bolt_combined`, `slip`, `shear_yield`, `shear_rupture`, `block_shear`, `tension_yield`, `tension_rupture`, `flexural_yield`, `flexural_rupture`, `weld`, `weld_base_metal`, `bearing`, `web_local_yielding`, `web_crippling`, `flange_local_bending`, `web_sidesway_buckling`, `web_compression_buckling`, `panel_zone`, `seat_flexure`, `prying`, `spacing_min`, `edge_min`, `spacing_max`, `edge_max`, `fillet_size`, `hole_use`, `joint_type`, `clearance`, `beam_fit`, `flange_fit`, `web_fit`, `compression`, `cope_buckling`, `plate_buckling`, `ductility`, `tee_ductility`, `bracket_edge`, `extended_ductility`.
+In a claim, `<qoi>` is one of `bolts`, `bolt_tension`, `bolt_combined`, `slip`, `shear_yield`, `shear_rupture`, `block_shear`, `tension_yield`, `tension_rupture`, `flexural_yield`, `flexural_rupture`, `weld`, `weld_base_metal`, `bearing`, `web_local_yielding`, `web_crippling`, `flange_local_bending`, `web_sidesway_buckling`, `web_compression_buckling`, `panel_zone`, `seat_flexure`, `prying`, `spacing_min`, `edge_min`, `spacing_max`, `edge_max`, `fillet_size`, `hole_use`, `joint_type`, `clearance`, `beam_fit`, `flange_fit`, `web_fit`, `compression`, `cope_buckling`, `plate_buckling`, `ductility`, `tee_ductility`, `bracket_edge`, `extended_ductility`, `fatigue_bolted`, `fatigue_bolt_tension`, `fatigue_weld`, `fatigue_weld_end`, `fatigue_cope`.
 
 | line | form | needed | unit | ids | meaning |
 |---|---|---|---|---|---|
@@ -597,10 +597,10 @@ A `hanger` component is written `hanger <name> { ... }`. `petra new hanger` prin
 
 Load entries and claims on a `hanger` component take these forms:
 
-- Load entry: `on <conn> tension|shear in [<lo>, <hi>] [mean <value>]`
+- Load entry: `on <conn> tension|shear|cycles in [<lo>, <hi>] [mean <value>]`
 - Claim: `claim <name>: <conn>.<qoi> <=|>= <value> [margin <value>] [under <load>, ...]`
 
-In a claim, `<qoi>` is one of `bolts`, `bolt_tension`, `bolt_combined`, `slip`, `shear_yield`, `shear_rupture`, `block_shear`, `tension_yield`, `tension_rupture`, `flexural_yield`, `flexural_rupture`, `weld`, `weld_base_metal`, `bearing`, `web_local_yielding`, `web_crippling`, `flange_local_bending`, `web_sidesway_buckling`, `web_compression_buckling`, `panel_zone`, `seat_flexure`, `prying`, `spacing_min`, `edge_min`, `spacing_max`, `edge_max`, `fillet_size`, `hole_use`, `joint_type`, `clearance`, `beam_fit`, `flange_fit`, `web_fit`, `compression`, `cope_buckling`, `plate_buckling`, `ductility`, `tee_ductility`, `bracket_edge`, `extended_ductility`.
+In a claim, `<qoi>` is one of `bolts`, `bolt_tension`, `bolt_combined`, `slip`, `shear_yield`, `shear_rupture`, `block_shear`, `tension_yield`, `tension_rupture`, `flexural_yield`, `flexural_rupture`, `weld`, `weld_base_metal`, `bearing`, `web_local_yielding`, `web_crippling`, `flange_local_bending`, `web_sidesway_buckling`, `web_compression_buckling`, `panel_zone`, `seat_flexure`, `prying`, `spacing_min`, `edge_min`, `spacing_max`, `edge_max`, `fillet_size`, `hole_use`, `joint_type`, `clearance`, `beam_fit`, `flange_fit`, `web_fit`, `compression`, `cope_buckling`, `plate_buckling`, `ductility`, `tee_ductility`, `bracket_edge`, `extended_ductility`, `fatigue_bolted`, `fatigue_bolt_tension`, `fatigue_weld`, `fatigue_weld_end`, `fatigue_cope`.
 
 | line | form | needed | unit | ids | meaning |
 |---|---|---|---|---|---|

@@ -1,6 +1,7 @@
 """Steel deck connections (M3): every element on a connection's load path is checked for
-every limit state of its role, coverage is exactly the union along the path, and a force
-the path cannot carry stays UNKNOWN.
+every limit state of its role, coverage is exactly the union along the path and, under a
+cyclic load, its details' fatigue modes (cyclic.py), and a force the path cannot carry
+stays UNKNOWN.
 
 The examples in examples/steel/ cover each kind. The variants below add the details that
 switch limit states on: a coped beam, a welded support side, slip-critical bolts, an
@@ -12,7 +13,7 @@ import unittest
 from pathlib import Path
 
 from petra.lang import load_design, parse_design
-from petra.models.steel import calc
+from petra.models.steel import calc, cyclic
 from petra.models.base import ComponentError
 from petra.models.steel.domain import required
 from petra.models.steel.lower import lower_conn
@@ -87,7 +88,7 @@ class LoadPath(unittest.TestCase):
             for name in d.components:
                 conn = calc.connection(d, name, REGISTRY)
                 union = {m for link in path(conn, fields(d, name)) for m in ROLE_LIMITS[link.role]}
-                self.assertEqual(set(required(conn, d)), union, label)
+                self.assertEqual(set(required(conn, d)), union | set(cyclic.required(conn, d)), label)
 
     def test_every_role_limit_state_is_a_mode_of_the_deck(self):
         for role, modes in ROLE_LIMITS.items():
