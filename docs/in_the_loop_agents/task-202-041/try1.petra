@@ -1,0 +1,22 @@
+petra 0
+
+# Task 202-041: an eccentrically loaded welded bracket, a plate fillet-welded both sides
+# to a W14x90 column flange, loaded 6 in from the weld line.
+
+design "task-202-041-weld-bracket" {
+  owner "task.owner@example.org"
+}
+
+weld_bracket wb1 {
+  basis lrfd
+  plate steel.A36 thickness 0.625 inch
+  support W14x90 flange grade steel.A992
+  weld electrode.E70 size 0.375 inch sides 2
+  weld_length 14 inch
+  eccentricity 6 inch
+}
+
+load factored {
+  on wb1 shear in [0 kip, 68.125 kip]
+  signed "task.owner@example.org" source "task 202-041"
+}

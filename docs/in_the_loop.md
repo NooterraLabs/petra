@@ -75,7 +75,7 @@ The loop and the skill were built on seed 101. The held-out tasks come from seed
 
 **The loop run.** The loop runs on the first 100 tasks of seed 202. A task counts as reached when the loop's first PASS comes within 10 checks. This run measures the repair moves, not an agent.
 
-**The agent run.** The agent tasks are the first 10 tasks of seed 202 whose draft fails, so that each one needs a repair. Each task goes to one fresh agent with no memory of this work. `python scripts/in_the_loop.py briefs DIR --petra PATH` writes the brief. The agent may use every `petra` command and document, but not Petra's source. It saves each design it wants checked as `try1.petra`, `try2.petra` and so on, and each `petra check` of one of them counts as a check. `python scripts/in_the_loop.py score DIR` then re-checks the tries in order. A task counts as reached when a try within the first 10 passes, keeps the job, and draws no violation from the judge. The bar is 8 of 10.
+**The agent run.** The agent tasks are the first 10 tasks of seed 202 whose draft fails, so that `petra new` with the job written in is not enough. Each task goes to one fresh agent with no memory of this work. `python scripts/in_the_loop.py briefs DIR --petra PATH` writes the brief. The agent may use every `petra` command and document, but not Petra's source. It saves each design it wants checked as `try1.petra`, `try2.petra` and so on, and each `petra check` of one of them counts as a check. `python scripts/in_the_loop.py score DIR` then re-checks the tries in order. A task counts as reached when a try within the first 10 passes, keeps the job, and draws no violation from the judge. The bar is 8 of 10.
 
 **Geometry.** The judge reads every design the loop keeps in the loop run, and the first passing try of each agent. The bar is no violation.
 
@@ -85,4 +85,40 @@ The loop and the skill were built on seed 101. The held-out tasks come from seed
 
 **Development, seed 101.** These runs came before the freeze, and their misses were used to fix the loop. On 30 tasks, the loop reached PASS within 10 checks on all 30 (measured). 19 drafts passed at the first check. The 11 that needed a repair took a median of 2 checks and at most 5. The judge read the 218 designs the loop kept and found no violation. One pilot agent, on task 101-005, passed at its first check.
 
-**Held out, seed 202.** Not yet measured.
+**Held out, seed 202.** All numbers below are measured, on the code of the freeze commit. Both bars are met.
+
+| Measure | Result | Bar |
+|---|---|---|
+| Fresh agents that reached a faithful PASS within 10 checks | 10 of 10 | 8 of 10 |
+| Loop tasks that reached PASS within 10 checks | 97 of 100 | none set |
+| Judge violations in the designs the loop kept (644) and the agents' passing tries (10) | 0 | 0 |
+| Loop optima that change the job | 0 | 0 |
+| CalculiX spot checks | none run | open |
+
+The loop run took 4 workers on a 4-core ARM machine. A task took a median of 3.3 s and at most 48 s. The log, one JSON line per task with the first PASS and the optimum, is [in_the_loop_log.jsonl](in_the_loop_log.jsonl).
+
+- 60 drafts passed at the first check. The 37 that needed a repair took a median of 2 checks and at most 4.
+- The minimiser checked 3983 designs and kept 547. The optimum's estimated mass over the first PASS's had a median of 0.66 and a range of 0.22 to 1.00.
+- The loop missed 3 tasks. On 202-013 and 202-100, double angles into a W10x49's web, the outstanding legs are wider than the web's flat. The fix is the word `outstanding short`, which is neither a number nor a shape, so the repair offers no move. On 202-020, a single angle at 130 kip, one-number moves went back and forth between rows, pitch and edge distance. The agent on the same task changed the bolt diameter, the threads and the rows together.
+
+The agents' briefs and tries are in [in_the_loop_agents](in_the_loop_agents). `python scripts/in_the_loop.py score docs/in_the_loop_agents` re-scores them.
+
+| Task | Kind | Checks | Statuses |
+|---|---|---|---|
+| 202-001 | shear_tab | 1 | PASS |
+| 202-009 | stiffened_seat | 1 | PASS |
+| 202-013 | double_angle | 1 | PASS |
+| 202-018 | hanger | 1 | PASS |
+| 202-020 | single_angle | 2 | FAIL, PASS |
+| 202-024 | hanger | 1 | PASS |
+| 202-029 | hanger | 2 | FAIL, PASS |
+| 202-032 | shear_tee | 1 | PASS |
+| 202-040 | bolt_bracket | 1 | PASS |
+| 202-041 | weld_bracket | 1 | PASS |
+
+Read these numbers with four limits:
+
+- The agents did not start from the failing draft. Each read `petra docs`, `petra new` and the reference, then sized its own design. So 8 of 10 passed at the first check, and only 2 used a repair. Both of those took Petra's first move and passed at the next check. The run shows that an agent can design with Petra's documents. It says little about repair.
+- The agents were general-purpose subagents of the same model that wrote the skill and the docs, with no memory of this work. A different model may do worse.
+- The agent on 202-032 ran `petra explain` four times on two versions of its design before its one check. `explain` evaluates the design, but the brief did not count it as a check. Counting each run as a check gives 5 checks, which still reaches the bar.
+- Ten tasks is a small sample. One more miss would leave 9 of 10, and three more would fall below the bar.

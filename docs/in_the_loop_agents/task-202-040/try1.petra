@@ -1,0 +1,25 @@
+petra 0
+# Task 202-040: an eccentrically loaded bolted bracket on a W14x90 column flange, LRFD.
+
+design "task-202-040-bolt-bracket" {
+  owner "task.owner@example.org"
+}
+
+bolt_bracket bb1 {
+  basis lrfd
+  plate steel.A36 thickness 0.5 inch
+  support W14x90 flange grade steel.A992
+  bolts bolt_group.120 diameter 0.875 inch threads included
+  rows 5
+  columns 2
+  pitch 3 inch
+  gauge 3 inch
+  eccentricity 8 inch
+  edge_vertical 1.5 inch
+  plate_edge 1.5 inch
+}
+
+load factored {
+  on bb1 shear in [0 kip, 76.628 kip]
+  signed "task.owner@example.org" source "task 202-040"
+}
