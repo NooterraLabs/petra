@@ -14,6 +14,10 @@ any other number by a tenth of its leading digit's place, so 30 m steps by 1 m a
 by 0.1 mm2. An edit that the language or the domain refuses (a plate thickness the shop
 deck does not stock, a bolt diameter that RCSC Table 5.2 does not list) is not a step,
 and the search walks on to the next number.
+
+When no number lowers the check, `repair` swaps instead: each angle or tee the connection
+adds for every other shape of its family in the shapes table, keeping the swaps that lower
+the check, the ones that leave the fewest failed checks first.
 """
 from __future__ import annotations
 
@@ -38,13 +42,16 @@ LADDER = 64
 """The most steps a search takes in one direction from the written value."""
 CLEARED = 3
 """How many of the best moves get a search for the value at which the check holds."""
+SHAPE_PARTS = ("angles", "angle", "top_angle", "tee")
+"""The lines that name a rolled shape the connection adds, which a swap move changes."""
 
 
 @dataclass(frozen=True)
 class Site:
     """A number written on a component's attribute line, outside any bound: one input a
     move edits. `input` names it as `<component>.<key>`, with the word before the number
-    when that word is not the key, as in `tab.plate thickness`."""
+    when that word is not the key, as in `tab.plate thickness`. A shape site (shape_sites)
+    holds the shape named on an angle or tee line instead, and has no value."""
 
     input: str
     line: int
@@ -60,14 +67,38 @@ def sites(text: str) -> tuple[Site, ...]:
     """Every number on a component's lines, in the order written. Numbers in a bound or a
     tuple, and every number outside a component block, are not sites: the bound is a
     signed input, and the tuples are coordinates the design is drawn on."""
-    tokens = tokenize(text, "<sites>")
+    return tuple(site for component, line in _component_lines(text) for site in _line_sites(component, line))
+
+
+def shape_sites(text: str, registry: Any) -> tuple[Site, ...]:
+    """The shape on each of a component's SHAPE_PARTS lines, written as a registry id that
+    has a family to swap within (see `family`)."""
+    return tuple(Site(f"{component}.{line[0].text}", line[1].line, line[1].col, line[1].text, None)
+                 for component, line in _component_lines(text)
+                 if line[0].text in SHAPE_PARTS and len(line) > 1 and line[1].kind is Kind.IDENT
+                 and family(line[1].text, registry))
+
+
+def family(shape: str, registry: Any) -> list[str]:
+    """The other shapes of `shape`'s family in the shipped shapes table: every angle for an
+    angle, every tee cut from one of its W shapes for a tee, and nothing for any other name."""
+    from .teach import tee_of
+
+    names = {k.split(".")[1] for k in registry.constants if k.startswith("aisc_shapes_v16.")}
+    if shape.startswith("L") and shape in names:
+        return sorted(n for n in names if n.startswith("L") and n != shape)
+    tees = {t for n in names if n.startswith("W") and (t := tee_of(n))}
+    return sorted(tees - {shape}) if shape in tees else []
+
+
+def _component_lines(text: str) -> Iterator[tuple[str, list]]:
+    """Each line inside a component block, as (the component's name, the line's tokens)."""
     lines: list[list] = [[]]
-    for tok in tokens:
+    for tok in tokenize(text, "<sites>"):
         if tok.kind is Kind.NEWLINE:
             lines.append([])
         elif tok.kind is not Kind.EOF:
             lines[-1].append(tok)
-    out: list[Site] = []
     component: str | None = None
     for line in lines:
         if not line:
@@ -79,8 +110,7 @@ def sites(text: str) -> tuple[Site, ...]:
         if line[0].text == "}":
             component = None
             continue
-        out += _line_sites(component, line)
-    return tuple(out)
+        yield component, line
 
 
 def _line_sites(component: str, line: list) -> list[Site]:
@@ -135,7 +165,7 @@ def written(x: Fraction, like: str) -> str:
 
 
 def edit(text: str, site: Site, number: str) -> str:
-    """The design with the site's number replaced, the rest of the text untouched."""
+    """The design with the site's number (or shape) replaced, the rest of the text untouched."""
     lines = text.split("\n")
     row = lines[site.line - 1]
     at = site.col - 1
@@ -199,7 +229,8 @@ class Probe:
 class Move:
     """One step of one site, `direction` "increase" or "decrease", that lowers the governing
     check's utilisation. `clears` is the first value found in that direction at which the
-    check is certified, or None when the search found none or did not run."""
+    check is certified, or None when the search found none or did not run. A "swap" move
+    puts another shape on a shape site; its `clears` is its step when the check holds there."""
 
     site: Site
     direction: str
@@ -218,7 +249,7 @@ class Move:
         if self.clears is not None:
             where = "the design passes" if self.clears.status == "PASS" else f"the design is {self.clears.status}" + (
                 f" on {', '.join(_short(r) for r in self.clears.fails)}" if self.clears.fails else "")
-            out += f"; it holds at {self.clears.to}{unit}, where {where}"
+            out += f"; it holds there, and {where}" if self.direction == "swap" else f"; it holds at {self.clears.to}{unit}, where {where}"
         return out
 
 
@@ -238,9 +269,11 @@ class Repair:
         """The text `petra check` prints after the governing lines."""
         head = f"repair     {_short(self.check)} at utilisation {_ratio(self.utilisation)}"
         if not self.moves:
-            return [f"{head}: no single number on a component's lines lowers it; change a part, a grade or a shape"]
+            return [f"{head}: no single number on a component's lines, and no other angle or tee, lowers it; "
+                    "change a part or a grade"]
         rest = len(self.moves) - shown
-        return [f"{head}; each move lowers it, the first the most:", *(f"  {m.text()}" for m in self.moves[:shown]),
+        order = "the ones that leave the fewest failed checks first" if self.moves[0].direction == "swap" else "the first the most"
+        return [f"{head}; each move lowers it, {order}:", *(f"  {m.text()}" for m in self.moves[:shown]),
                 *([f"  {rest} more (--json lists each)"] if rest > 0 else [])]
 
 
@@ -251,26 +284,40 @@ def governing_failure(found: tuple[Finding, ...]) -> Finding | None:
     return max(refuted, key=_severity, default=None)
 
 
-def repair(text: str, report: Report, check: Checker) -> Repair | None:
-    """The moves for a FAIL report of `text`, or None when the report is not a FAIL."""
+def repair(text: str, report: Report, check: Checker, registry: Any = None) -> Repair | None:
+    """The moves for a FAIL report of `text`, or None when the report is not a FAIL. When
+    no single number lowers the governing check and `registry` is given, the moves are the
+    swaps of each angle or tee for another of its family that lower it."""
     if STATUS[type(report.verdict)] != "FAIL":
         return None
     target = governing_failure(report.findings)
     if target is None:
         return None
     before = _level(target)
+
+    def lowers(probe: Probe) -> bool:
+        after = _probe_level(probe)
+        return after is not None and (before is None or after < before)
+
     moves: list[tuple[Move, int]] = []
     for site in sites(text):
         for direction in (1, -1):
             first = _first(text, site, direction, 1, check, target.requirement)
-            if first is None:
-                continue
-            k, probe = first
-            after = _probe_level(probe)
-            if after is not None and (before is None or after < before):
-                moves.append((Move(site, _WAY[direction], probe, None), k))
-    moves.sort(key=lambda mk: (_probe_level(mk[0].step), SEVERITY[mk[0].step.status]))
-    best = [_with_clears(text, m, k, check, target.requirement) if i < CLEARED else m for i, (m, k) in enumerate(moves)]
+            if first is not None and lowers(first[1]):
+                moves.append((Move(site, _WAY[direction], first[1], None), first[0]))
+    if not moves and registry is not None:
+        for site in shape_sites(text, registry):
+            for shape in family(site.text, registry):
+                report = check(edit(text, site, shape))
+                probe = None if report is None else _read(shape, report, target.requirement)
+                if probe is not None and lowers(probe):
+                    moves.append((Move(site, "swap", probe, probe if probe.outcome == "certified" else None), 0))
+    if moves and moves[0][0].direction == "swap":
+        moves.sort(key=lambda mk: (SEVERITY[mk[0].step.status], len(mk[0].step.fails), _probe_level(mk[0].step)))
+    else:
+        moves.sort(key=lambda mk: (_probe_level(mk[0].step), SEVERITY[mk[0].step.status]))
+    best = [_with_clears(text, m, k, check, target.requirement) if i < CLEARED and m.direction != "swap" else m
+            for i, (m, k) in enumerate(moves)]
     return Repair(target.requirement, target.utilisation, tuple(best))
 
 
@@ -395,5 +442,5 @@ def check_text(text: str, path: str, registry: Any, sources: tuple, *, sink: Any
         report = check_design(parse_design(text, path, registry), registry, sources, sink=sink, deck=deck, path=path)
     except INPUT_ERRORS as exc:
         return Checked(path, None, None, str(exc))
-    found = repair(text, report, checker(registry, sources, path, deck)) if moves else None
+    found = repair(text, report, checker(registry, sources, path, deck), registry) if moves else None
     return Checked(path, report, found, None)

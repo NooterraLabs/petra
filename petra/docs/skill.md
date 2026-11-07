@@ -34,7 +34,8 @@ The first line names the governing failed check and its utilisation. Each move c
 
 - If a move holds and the design passes there, make that edit.
 - If the design would then fail another check, make the edit anyway when no move does better, and check again. The repair then targets the named check. In the example, five rows clear the bolts but no longer fit the W16x31's web, so the next repair works on the fit.
-- If no move holds, combine moves, or change a part that is not a number: a thicker angle or tee, a stronger grade, or `threads excluded`.
+- When no number lowers the check, the moves are `swap` moves, which put another angle or tee on the line. The ones that leave the fewest failed checks come first.
+- If no move holds, combine moves, or change a part that is not a number: a stronger grade, or `threads excluded`.
 - UNKNOWN is not a FAIL. Its `needs` lines say what is missing, such as a load or a line.
 
 ## Rules

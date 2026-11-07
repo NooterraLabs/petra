@@ -173,7 +173,9 @@ For each site, `repair` tries one step up and one step down and checks each edit
 
 A move is a step that lowers the governing check's utilisation. Moves come sorted by that utilisation, so the first move lowers the check the most. For the first three moves, `repair` also searches outward in the move's direction for a value at which the check is certified. It doubles the step until the check holds, then halves the gap. The move's `clears` gives that value and the design's status there, or null when the search found none within 64 steps.
 
-A move changes one number. The design's status after a move can still be FAIL on another check, and `fails` names those checks. A rule that no single number fixes, such as a slip-critical joint's hole type, gives an empty `moves`. On a FAIL, a check runs one design for each site and direction, plus up to about 40 more for the `clears` searches, so it takes a few seconds.
+A move changes one number. The design's status after a move can still be FAIL on another check, and `fails` names those checks. On a FAIL, a check runs one design for each site and direction, plus up to about 40 more for the `clears` searches, so it takes a few seconds.
+
+When no single number lowers the check, `repair` tries swaps instead. A swap puts another shape of the same family on an `angles`, `angle`, `top_angle` or `tee` line: any angle in the shapes table for an angle, and any tee cut from one of its W shapes for a tee. The moves are then the swaps that lower the check, with the ones that leave the fewest failed checks first. A swap's `clears` is the swap itself when the check holds there. A rule that neither a number nor a swap fixes, such as a slip-critical joint's hole type, gives an empty `moves`.
 
 `petra check` prints the first three moves after the governing lines:
 
@@ -199,13 +201,13 @@ With `--no-solve`, `petra check` computes no repair.
 
 REPAIR = {"check": REQUIREMENT,                the governing check: the refuted obligation that ranks first
           "utilisation": NUMBER | null,        its utilisation
-          "moves": [MOVE, ...]}                the steps that lower it, the one that lowers it most first
+          "moves": [MOVE, ...]}                the steps that lower it, the one that lowers it most first, or the swaps
 
 MOVE = {"input": NAME,                         "<component>.<key>", with the word before the number, as "tab.plate thickness"
-        "line": N, "from": NUMBER TEXT,        where the number is written, and the number as written
-        "unit": UNIT | null,                   the unit written after it
-        "direction": "increase" | "decrease",
-        "to": NUMBER TEXT,                     the step, written as the design writes numbers
+        "line": N, "from": NUMBER TEXT,        where the number (or a swap's shape) is written, and it as written
+        "unit": UNIT | null,                   the unit written after it; null for a swap
+        "direction": "increase" | "decrease" | "swap",
+        "to": NUMBER TEXT,                     the step, written as the design writes numbers, or the swap's shape
         "utilisation": NUMBER | null,          the governing check's after the step
         "status": STATUS, "fails": [REQUIREMENT, ...],   the design's after the step, and its refuted checks
         "clears": {"to", "utilisation", "status", "fails"} | null}   a value at which the check holds; first three moves only

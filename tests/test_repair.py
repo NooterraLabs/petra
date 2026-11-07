@@ -100,6 +100,38 @@ class Others(unittest.TestCase):
             self.assertNotEqual(petra.check(set_number(text, m["line"], m["from"], m["to"]), repair=False)["status"], "INPUT_ERROR", m["input"])
 
 
+class Swaps(unittest.TestCase):
+    """The example shear tee framed into a W10x49's web instead of a W14x90's flange: the
+    WT6x25's 8.08 in flange is wider than the web's 7.88 in flat, and no number on the
+    tee's lines narrows it, so the repair swaps the tee."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.text = (ROOT / "examples" / "steel" / "shear_tee.petra").read_text(encoding="utf-8") \
+            .replace("support W14x90 flange", "support W10x49 web")
+        cls.result = petra.check(cls.text)
+
+    def test_when_no_number_lowers_the_check_the_moves_swap_the_tee(self):
+        self.assertEqual(self.result["repair"]["check"], "tee1/steel.web_fit/coverage.steel.web_fit")
+        moves = self.result["repair"]["moves"]
+        self.assertTrue(moves)
+        self.assertEqual({(m["input"], m["direction"], m["from"]) for m in moves}, {("tee1.tee", "swap", "WT6x25")})
+
+    def test_a_swap_reads_what_checking_the_swapped_design_reads(self):
+        for m in self.result["repair"]["moves"][:3]:
+            after = petra.check(self.text.replace("tee WT6x25", f"tee {m['to']}"), repair=False)
+            self.assertAlmostEqual(obligation(after, self.result["repair"]["check"])["utilisation"], m["utilisation"], msg=m["to"])
+            self.assertLess(m["utilisation"], self.result["repair"]["utilisation"], m["to"])
+            self.assertEqual(after["status"], m["status"], m["to"])
+            certified = obligation(after, self.result["repair"]["check"])["outcome"] == "certified"
+            self.assertEqual(m["clears"], {k: m[k] for k in ("to", "utilisation", "status", "fails")} if certified else None, m["to"])
+
+    def test_swaps_that_leave_fewer_failed_checks_come_first(self):
+        moves = self.result["repair"]["moves"]
+        self.assertEqual([len(m["fails"]) for m in moves[:3]], sorted(len(m["fails"]) for m in moves[:3]))
+        self.assertEqual(min(len(m["fails"]) for m in moves), len(moves[0]["fails"]))
+
+
 class Sites(unittest.TestCase):
     def test_numbers_in_a_bound_or_outside_a_component_are_not_sites(self):
         text = FAILING.read_text(encoding="utf-8").replace("  rows 3\n", "  rows 3\n  top in [3 inch, 3.125 inch] signed \"x\" source \"y\"\n")
