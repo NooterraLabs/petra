@@ -1126,12 +1126,12 @@ def gen_spacing_max(ctx: Ctx, geo: Geometry) -> list[Check]:
     weathering = ctx.conn.get("weathering") == "yes"
     ratio, cap = ("aisc360.j3_6.weathering_pitch_t", "aisc360.j3_6.weathering_pitch_max") if weathering else \
                  ("aisc360.j3_6.pitch_t", "aisc360.j3_6.pitch_max")
-    for itf in geo.interfaces:
+    # J3.6 limits the longitudinal spacing, the pitch along a bolt line; the gauge across
+    # the force is not limited by it (Commentary J3.6).
+    for itf in (i for i in geo.interfaces if i.rows > 1):
         thinner = Min(tuple(p.t for p in itf.plies))
-        spans = ([("pitch", itf.pitch)] if itf.rows > 1 else []) + ([("gauge", itf.gauge)] if itf.cols > 1 and itf.gauge is not None else [])
-        for what, span in spans:
-            out.append(Check(f"{itf.name}: {what} at most the thickness multiple (J3.6)", (span,), mul(ctx.const(ratio), thinner), unit="in", group=None, suffix="", guards=()))
-            out.append(Check(f"{itf.name}: {what} at most the absolute limit (J3.6)", (span,), ctx.const(cap), unit="in", group=None, suffix="", guards=()))
+        out.append(Check(f"{itf.name}: pitch at most the thickness multiple (J3.6)", (itf.pitch,), mul(ctx.const(ratio), thinner), unit="in", group=None, suffix="", guards=()))
+        out.append(Check(f"{itf.name}: pitch at most the absolute limit (J3.6)", (itf.pitch,), ctx.const(cap), unit="in", group=None, suffix="", guards=()))
     return out
 
 

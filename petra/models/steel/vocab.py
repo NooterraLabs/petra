@@ -200,8 +200,9 @@ MAKEABILITY: tuple[tuple, ...] = (
     ("edge_min", "edge distance from each hole centre at least Table J3.4's value for the bolt size", "edges sheared or "
      "rolled as fabricated; measured to the hole centre", f"{AISC} Section J3.5, Table J3.4",
      ("the Table J3.5 increment C2 for oversized and slotted holes is not added to the minimum edge distance",)),
-    ("spacing_max", "spacing of bolts in the line of force at most 24 t and 12 in (14 t and 7 in for unpainted "
-     "weathering steel)", "the thinner connected part sets the limit", f"{AISC} Section J3.6"),
+    ("spacing_max", "longitudinal spacing of bolts, the pitch along a bolt line, at most 24 t and 12 in (14 t and 7 in "
+     "for unpainted weathering steel); the gauge across the force is not limited, since J3.6 limits the longitudinal "
+     "spacing only (Commentary J3.6)", "the thinner connected part sets the limit", f"{AISC} Section J3.6"),
     ("edge_max", "edge distance at most 12 t and 6 in", "the connected part's own thickness sets the limit",
      f"{AISC} Section J3.6"),
     ("fillet_size", "fillet size at least Table J2.4's minimum for the thinner part joined, length at least four "

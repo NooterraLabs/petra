@@ -464,8 +464,9 @@ def spacing(ctx: _Ctx, label: str, bolts: Bolts, thinner: float, named: Mapping[
     k_max = ctx.reg.const("aisc360.j3_6.weathering_pitch_max" if weathering else "aisc360.j3_6.pitch_max")
     for name, s in named.items():
         ctx.add("spacing_min", f"{label}: {name} at least 2-2/3 d (J3.4)", _ratio(ratio * d, s))
-        ctx.add("spacing_max", f"{label}: {name} at most the thickness multiple (J3.6)", _ratio(s, k_t * thinner))
-        ctx.add("spacing_max", f"{label}: {name} at most the absolute limit (J3.6)", _ratio(s, k_max))
+        if name == "pitch":     # J3.6 limits only the longitudinal spacing, along the bolt line
+            ctx.add("spacing_max", f"{label}: {name} at most the thickness multiple (J3.6)", _ratio(s, k_t * thinner))
+            ctx.add("spacing_max", f"{label}: {name} at most the absolute limit (J3.6)", _ratio(s, k_max))
 
 
 JOINT_LEVEL = {"snug": "rcsc2025.joint_level.snug", "pretensioned": "rcsc2025.joint_level.pretensioned",

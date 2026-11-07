@@ -303,11 +303,12 @@ class GoverningChecks(unittest.TestCase):
 
     def test_a_pass_names_its_governing_strength_and_detailing_checks(self):
         # The cold-start agents found these by sorting --json: bolts 0.57 for the double
-        # angle, the weld 0.59 and spacing_max 0.92 for the end plate. The double angle's
-        # detailing is its beam end against the support: end distance 1.75 in of the
-        # angles' beam gauge 2 in.
+        # angle, the weld 0.59 for the end plate. The double angle's detailing is its beam
+        # end against the support: end distance 1.75 in of the angles' beam gauge 2 in. The
+        # end plate's is its 1 in minimum edge distance of the 1.25 in it has; its 5.5 in
+        # gauge is no longer held to J3.6, which limits only the pitch along a bolt line.
         for path, strength, detailing in ((DOUBLE_ANGLE, ("da1/steel.bolts/", 0.57), ("da1/steel.beam_fit/", 0.875)),
-                                          (END_PLATE, ("ep1/steel.weld/", 0.589), ("ep1/steel.spacing_max/", 0.917))):
+                                          (END_PLATE, ("ep1/steel.weld/", 0.589), ("ep1/steel.edge_min/", 0.8))):
             with self.subTest(path=path.name):
                 report = check(path)
                 self.assertIsInstance(report.verdict, petra.Pass)
