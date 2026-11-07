@@ -310,8 +310,8 @@ class IIA19A(ex.Example):
         for basis in ("lrfd", "asd"):
             found, _ = self.values(basis, "extended_ductility")
             check = next(v for v in found if v.what.startswith("plate: no thicker than tmax"))
-            self.assertLessEqual(check.available, 0.575)
-            self.assertGreaterEqual(check.available, 0.5)
+            self.assertLessEqual(check.capacity, 0.575)
+            self.assertGreaterEqual(check.capacity, 0.5)
 
 
 # --- Single angles -------------------------------------------------------------------------------------

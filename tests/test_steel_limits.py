@@ -137,7 +137,7 @@ class ShearTabHandValues(unittest.TestCase):
     def test_the_most_loaded_bolt_against_the_weakest(self):
         (bolts,) = checks(self.d, "st1", "bolts").values()
         self.assertAlmostEqual(bolts.demand, 17.573, places=3)
-        self.assertAlmostEqual(bolts.available, 17.892, places=3)
+        self.assertAlmostEqual(bolts.capacity, 17.892, places=3)
 
     def test_plate_strengths(self):
         found = {**checks(self.d, "st1", "shear_yield"), **checks(self.d, "st1", "shear_rupture"),
@@ -152,18 +152,18 @@ class ShearTabHandValues(unittest.TestCase):
             "plate to support: fillet welds in longitudinal shear (J2.4)": 133.643,
         }
         for what, available in expected.items():
-            self.assertAlmostEqual(found[what].available, available, places=2, msg=what)
+            self.assertAlmostEqual(found[what].capacity, available, places=2, msg=what)
 
     def test_the_full_block_carries_the_reaction_and_smaller_blocks_their_resultant(self):
         found = checks(self.d, "st1", "block_shear")
         self.assertAlmostEqual(found["plate: block of 4 row(s) and 1 column(s) (J4.3)"].demand, 45.0, places=6)
         self.assertAlmostEqual(found["plate: block of 1 row(s) and 1 column(s) (J4.3)"].demand, 17.573, places=3)
-        self.assertAlmostEqual(found["plate: block of 4 row(s) and 1 column(s) (J4.3)"].available, 81.12, places=2)
+        self.assertAlmostEqual(found["plate: block of 4 row(s) and 1 column(s) (J4.3)"].capacity, 81.12, places=2)
 
     def test_asd_divides_by_omega(self):
         d = design("shear_tab", ("basis lrfd", "basis asd"), ("[0 kip, 45 kip]", "[0 kip, 30 kip]"))
         (bolts,) = checks(d, "st1", "bolts").values()
-        self.assertAlmostEqual(bolts.available, 17.892 / 1.5, places=3)
+        self.assertAlmostEqual(bolts.capacity, 17.892 / 1.5, places=3)
         self.assertAlmostEqual(bolts.demand, 17.573 * 30 / 45, places=3)
 
 
@@ -175,7 +175,7 @@ class SeatBearingLength(unittest.TestCase):
         d = load_design(STEEL / "seated.petra", REGISTRY)
         (flexure,) = checks(d, "seat1", "seat_flexure").values()
         self.assertAlmostEqual(flexure.demand, 5.43, places=1)
-        self.assertAlmostEqual(flexure.available, 0.9 * 36 * 8 * 0.75 ** 2 / 4, places=6)
+        self.assertAlmostEqual(flexure.capacity, 0.9 * 36 * 8 * 0.75 ** 2 / 4, places=6)
 
 
 class PryingClosedForm(unittest.TestCase):

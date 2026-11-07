@@ -1,0 +1,32 @@
+petra 0
+
+# Job 3: 2.5 mm2 Cu/PVC cable, 30 m, clipped direct, 16-20 A, 30 degC ambient, 230 V.
+# Questions: voltage drop <= 3 % of 230 V, and conductor within its 70 degC PVC limit.
+# Not in the brief, chosen here because Petra coverage asked for them: a B20 MCB upstream,
+# prospective fault current 0-6 kA at the origin; environment indoor_dry.
+
+design "job3-cable-2-5-30m" {
+  owner "coldstart-agent"
+  environment indoor_dry
+}
+
+ambient in [30 degC, 30 degC] signed "coldstart-agent" source "user brief: 30 degC ambient"
+
+circuit feed {
+  supply mains voltage 230 V fault_current in [0 kA, 6 kA] signed "coldstart-agent" source "assumed: typical 6 kA MCB rating, not in brief"
+  breaker cb1 part mcb.B20
+  wire w1 cable cable.cu_pvc_2_5 length 30 m install install.clipped_direct
+  consumer load
+
+  connect mains.out -> cb1.in
+  connect cb1.out -> w1.a
+  connect w1.b -> load.in
+}
+
+load draw {
+  on feed.load current in [16 A, 20 A]
+  signed "coldstart-agent" source "user brief: 16 to 20 A"
+}
+
+claim hot:  feed.w1.temperature <= 70 degC under draw
+claim drop: feed.w1.voltage_drop <= 3 % under draw

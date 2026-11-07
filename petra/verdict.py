@@ -64,7 +64,7 @@ from __future__ import annotations
 
 import dataclasses
 from dataclasses import dataclass
-from typing import Any, Iterable, Mapping, Union, get_args
+from typing import Any, Callable, Iterable, Mapping, Union, get_args
 
 from .coverage import table_premise
 from .kernel import FORMAT, Interval, RangeHyp, Refutation, Rejection, Statement, Theorem, is_issued
@@ -620,16 +620,17 @@ def _results(verdict: Verdict) -> tuple[Theorem | Refutation, ...]:
 def verdict_json(entry: ClaimVerdict) -> Mapping[str, Any]:
     """{"claim", "status": STATUS[type(verdict)], "footprint": [{"tag", "label", "owner",
     "source"}], "rules": sorted rule ids of the kernel results used ("R1"...),
-    "obligations": [describe_need(n) for every need of every open item], "margins":
+    "needs": [describe_need(n) for every need of every open item], "margins":
     margin_json for every obligation of a claim with a margin that is not refuted or
-    waived}. "obligations" is non-empty exactly when status is UNKNOWN."""
+    waived}. "needs" is non-empty exactly when status is UNKNOWN. pipeline.Report adds
+    the entry's "obligations"."""
     verdict = entry.verdict
     still_open = verdict.open if isinstance(verdict, Unknown) else ()
     return {
         "claim": entry.claim,
         "status": STATUS[type(verdict)],
         "rules": sorted({r.rule for r in _results(verdict)}),
-        "obligations": [describe_need(n) for o in still_open for n in o.needs],
+        "needs": [describe_need(n) for o in still_open for n in o.needs],
         "margins": [m for o in entry.outcomes if (m := margin_json(o)) is not None],
         "footprint": [
             {"tag": p.tag.value, "label": p.label, "owner": p.owner, "source": p.source}
@@ -686,14 +687,17 @@ def _outcome_row(outcome: Outcome) -> str:
     return f"{name:<44} {origin:<28} {what}"
 
 
-def _point_lines(refutation: Refutation, footprint: Footprint, pad: str = "  ") -> list[str]:
+def _point_lines(outcome: Outcome, footprint: Footprint) -> list[str]:
+    """The point of a Refuted or WithinMargin outcome, or of an Open item's margin point,
+    as exact rationals with the unit of each premise the footprint names."""
+    refutation = outcome.near.refutation if isinstance(outcome, Open) else outcome.refutation
     labels = {h.sym: h.label for h in refutation.statement.hyps if isinstance(h, RangeHyp)}
     units = {p.label: p.unit for p in footprint.premises}
     lines = []
     for sym, value in refutation.point:
         unit = units.get(labels[sym])
         shown = f"{value} {unit}" if unit else f"{value}"
-        lines.append(f"{pad}{sym} = {shown}   ({labels[sym]})")
+        lines.append(f"{sym} = {shown}   ({labels[sym]})")
     return lines
 
 
@@ -714,15 +718,18 @@ def _margin_lines(outcomes: tuple[Outcome, ...]) -> list[str]:
     return lines
 
 
-def render(verdict: Verdict, outcomes: tuple[Outcome, ...]) -> str:
+def render(verdict: Verdict, outcomes: tuple[Outcome, ...], detail: Callable[[Outcome], list[str]] | None = None) -> str:
     """The text `petra check` prints: verdict line, scope, per-obligation table (rule,
     outcome, statement hash prefix, evidence source), then the footprint grouped by tag
-    with owner and source. For UNKNOWN, each open item with what it needs. For FAIL, the
-    counterexample point, in SI base units (degC for temperature) as the IR holds it. For
-    MARGINAL, each point within a claim's margin, the same way, and for an open item the
-    point within its margin when the search found one. Each proved claim with a margin
-    gets a line saying whether the margin was proved or is undecided. Margins print in a
-    readable unit of their dimension (units.readable_text)."""
+    with owner and source. For UNKNOWN, each open item with what it needs. For FAIL, every
+    refuted obligation with its own counterexample. For MARGINAL, each point within a
+    claim's margin, and for an open item the point within its margin when the search found
+    one. `detail(outcome)` gives the lines under each such point: by default the point in
+    SI base units (degC for temperature) as the IR holds it; pipeline.Report passes its
+    findings', with demand, capacity and utilisation in the design's units. Each proved
+    claim with a margin gets a line saying whether the margin was proved or is undecided.
+    Margins print in a readable unit of their dimension (units.readable_text)."""
+    show = detail or (lambda o: _point_lines(o, verdict.footprint))
     count = {kind: sum(isinstance(o, kind) for o in outcomes) for kind in (Discharged, Refuted, WithinMargin, Waived, Open)}
     lines = [STATUS[type(verdict)]]
     if isinstance(verdict, (Pass, Marginal)) and verdict.scope is not None:
@@ -735,14 +742,15 @@ def render(verdict: Verdict, outcomes: tuple[Outcome, ...]) -> str:
     lines += [f"  {_outcome_row(o)}" for o in outcomes]
     if not isinstance(verdict, Fail):
         lines += _margin_lines(outcomes)
-    if isinstance(verdict, Fail):
-        lines.append(f"counterexample  {verdict.obligation.requirement.id}: {verdict.obligation.describe}")
-        lines += _point_lines(verdict.refutation, verdict.footprint)
+    for o in outcomes:
+        if isinstance(o, Refuted):
+            lines.append(f"counterexample  {o.obligation.requirement.id}: {o.obligation.describe}")
+            lines += [f"  {line}" for line in show(o)]
     if isinstance(verdict, Marginal):
         for n in verdict.near:
             lines.append(f"within margin  {n.obligation.requirement.id}: {n.obligation.describe}")
             lines.append(f"  proved; at this point it is within {_margin_of(n.obligation.requirement)} of its bound")
-            lines += _point_lines(n.refutation, verdict.footprint)
+            lines += [f"  {line}" for line in show(n)]
     if isinstance(verdict, Unknown):
         lines.append(f"open       {len(verdict.open)} requirements")
         for item in verdict.open:
@@ -750,7 +758,7 @@ def render(verdict: Verdict, outcomes: tuple[Outcome, ...]) -> str:
             lines += [f"    needs {describe_need(n)}" for n in item.needs]
             if item.near is not None:
                 lines.append(f"    neither proved nor refuted; at this point it is within {_margin_of(item.requirement)} of its bound")
-                lines += _point_lines(item.near.refutation, verdict.footprint, "      ")
+                lines += [f"      {line}" for line in show(item)]
     lines.append(f"footprint  {len(verdict.footprint.premises)} premises")
     for tag, premises in verdict.footprint.by_tag().items():
         lines += [f"  {tag.value:<16} {p.label}   {p.statement}   ({p.owner}; {p.source})" for p in premises]

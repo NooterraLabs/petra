@@ -536,7 +536,7 @@ class Reports(GadgetDomain):
         body = json.loads(json.dumps(report.to_json()))
         self.assertEqual((body["file"], body["design"], body["status"]), ("rig.petra", "rig", "UNKNOWN"))
         self.assertEqual([(v["claim"], v["status"]) for v in body["verdicts"]], [("fits", "PASS"), ("coverage", "UNKNOWN")])
-        self.assertEqual([bool(v["obligations"]) for v in body["verdicts"]], [False, True])
+        self.assertEqual([bool(v["needs"]) for v in body["verdicts"]], [False, True])
         self.assertEqual(body["verdicts"][0]["rules"], ["R4"])
 
     def test_the_text_report_names_the_design_each_entry_and_each_warning(self):

@@ -129,7 +129,7 @@ class Verdicts(GadgetDomain):
         self.assertIn("within margin", text)
         self.assertIn("proved; at this point it is within 0.1 of its bound", text)
         entry = verdict_json(report.entries[0])
-        self.assertEqual((entry["status"], entry["obligations"]), ("MARGINAL", []))
+        self.assertEqual((entry["status"], entry["needs"]), ("MARGINAL", []))
 
     def test_without_a_proof_a_point_within_the_margin_is_unknown_and_shown(self):
         # A point within the margin says nothing about the rest of the box, so without
@@ -140,7 +140,7 @@ class Verdicts(GadgetDomain):
         self.assertIsNone(item.near.theorem)
         self.assertEqual(dict(item.near.refutation.point)["push.g.force"], 9000)
         self.assertIn("neither proved nor refuted; at this point it is within 0.1 of its bound", report.render())
-        self.assertIn("push.g.force = 9000 N", report.render())
+        self.assertIn("push.g.force = 9 kN", report.render())
         (margin,) = verdict_json(report.entries[0])["margins"]
         self.assertEqual((margin["proved"], margin["margin"], margin["point"]["push.g.force"]), (False, "within", "9000"))
 

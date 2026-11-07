@@ -61,14 +61,16 @@ The report has one entry per claim and one entry named `coverage` for the requir
 
 ```json
 {"file": "examples/bolt_unknown.petra", "design": "mast-bracket-coastal", "status": "UNKNOWN", "verdicts": [
-  {"claim": "tension", "status": "PASS", "rules": ["R4"], "obligations": [],
-   "footprint": [{"tag": "assumed", "label": "in:mast-bracket-coastal.wind.bracket.force", "owner": "client.structures@example.org", "source": "wind study WS-4, 50-year return"}, "..."]},
-  {"claim": "coverage", "status": "UNKNOWN", "rules": [],
-   "obligations": ["no model for corrosion.galvanic on bracket: waive corrosion.galvanic on bracket by ...", "no model for bolt.plate_bearing on bracket: waive bolt.plate_bearing on bracket by ..."],
-   "footprint": ["..."]}]}
+  {"claim": "tension", "status": "PASS", "rules": ["R4"], "needs": [], "margins": [],
+   "footprint": [{"tag": "assumed", "label": "in:mast-bracket-coastal.wind.bracket.force", "owner": "client.structures@example.org", "source": "wind study WS-4, 50-year return"}, "..."],
+   "obligations": [{"requirement": "bracket/bolt.tension/claim.tension", "outcome": "certified", "rule": "R4", "statement_hash": "sha256:9caa...",
+                    "governing": "bolt tension against its limit", "demand": 29.04, "capacity": 34.13, "unit": "kN", "utilisation": 0.851, "at": "box", "...": "..."}]},
+  {"claim": "coverage", "status": "UNKNOWN", "rules": [], "margins": [],
+   "needs": ["no model for bolt.plate_bearing on bracket: waive bolt.plate_bearing on bracket by ...", "no model for corrosion.galvanic on bracket: waive corrosion.galvanic on bracket by ..."],
+   "footprint": ["..."], "obligations": ["..."]}]}
 ```
 
-`obligations` is non-empty exactly when the entry is UNKNOWN. Each line is `verdict.describe_need` applied to one typed `Need`.
+`needs` is non-empty exactly when the entry is UNKNOWN. Each line is `verdict.describe_need` applied to one typed `Need`. `obligations` has one record per outcome of the entry, with its numbers in the design's units and, when refuted, its counterexample; docs/api.md gives every field.
 
 The other commands are `petra explain FILE` (print the statements with every hypothesis label), `petra envelope FILE --input NAME --from LO --to HI` (the widest proved interval of one input, call site 5), `petra verify CERT.json` (check a certificate file on its own, the job a Lean kernel will take over), `petra certify-family FILE --library DIR`, `petra registry build --out DECK` and `petra registry check [DECK]` (with no deck it checks the shipped registry and exits 0 when every relation holds), and `petra gym --episodes N --seed S`, which prints a `solved k/N` line. The family benchmark is `scripts/bench_family.py`, which prints a `reuse` line and a `recompute` line. Exit codes for `check` are 0 PASS, 1 FAIL, 2 UNKNOWN, 5 MARGINAL, 3 input error, taken from the overall status. `envelope` exits with the worse of its anchor's status and the status of the obligations that do not depend on the input.
 

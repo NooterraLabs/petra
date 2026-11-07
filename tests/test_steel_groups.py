@@ -127,7 +127,7 @@ class IIA23(ex.Example):
         live = {v.what: v for v in found if not v.excused}
         edge = [v for what, v in live.items() if "along the edge" in what]
         self.assertEqual(len(edge), 1)
-        self.near(edge[0].available, "0.3125", "maximum along the edge")
+        self.near(edge[0].capacity, "0.3125", "maximum along the edge")
         self.assertTrue(all(v.utilisation <= 1 for v in live.values()))
 
 

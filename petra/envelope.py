@@ -27,10 +27,18 @@ so they are set aside and reported once ("elsewhere"). The probe statuses, and t
 envelope, count only the obligations that depend on the input. An input that declares a
 mean is refused, since a probe interval need not contain it.
 
-The search is bounded. It runs at most `max_probes` checks (anchor and confirm included;
-the rest split between the two sides), and the resolution is never finer than the probe
-range over 2^20, since a gap of 1e-25 near a limit can cost one probe minutes of box
-search. A side the cap stops says so, with its undecided gap.
+The anchor is --at when given. Otherwise it is the middle of the input's stated range
+(or of the probe range, when the stated middle lies outside it), and when the design
+does not pass there the search re-anchors at the low end of the probe range: a load
+whose stated range runs past what the design carries still has an envelope from zero.
+
+The search is bounded. It runs at most `max_probes` checks (anchors and confirm
+included; the rest split between the two sides), and the resolution is never finer than
+the probe range over 2^20, since a gap of 1e-25 near a limit can cost one probe minutes
+of box search. A side the cap stops says so, with its undecided gap.
+
+Reports print values in the unit the request was written in (`unit`), else in the
+input's SI unit; JSON holds exact rationals in SI base units.
 """
 from __future__ import annotations
 
@@ -38,7 +46,7 @@ import dataclasses
 from dataclasses import dataclass
 from fractions import Fraction
 from types import MappingProxyType
-from typing import Iterable, Mapping
+from typing import Callable, Iterable, Mapping
 
 from .ir import Bound, Design, Input, InputKind, Signature, Span
 from .kernel import Interval, RangeHyp, Statement
@@ -46,7 +54,7 @@ from .models.base import ComponentError, Obligation
 from .pipeline import EvidenceSource, Report, check_design, lower_components, obligations_of, signed_inputs
 from .premises import input_label, param_label
 from .registry import Registry
-from .units import Dim, Quantity, quantity_text, si_unit
+from .units import CUSTOMARY, UNITS, Dim, Quantity, format_quantity, quantity_text, si_unit
 from .verdict import SEVERITY, Discharged, Open, Outcome, Refuted, Waived, WithinMargin
 
 PROBE_OWNER = "petra envelope"
@@ -125,7 +133,8 @@ class Envelope:
     elsewhere_open: tuple[str, ...]   # those of them that are not proved
     probes: tuple[Probe, ...]
     max_probes: int = DEFAULT_MAX_PROBES
-    notes: tuple[str, ...] = ()   # a raised resolution or a side the probe limit stopped
+    notes: tuple[str, ...] = ()   # a re-anchoring, a raised resolution or a side the probe limit stopped
+    unit: str | None = None       # the unit reports print in; None: the input's SI unit
 
     @property
     def safe(self) -> tuple[Fraction, Fraction] | None:
@@ -192,24 +201,33 @@ def envelope(
     at: Quantity | None = None,
     resolution: Quantity | None = None,
     max_probes: int = DEFAULT_MAX_PROBES,
+    unit: str | None = None,
 ) -> Envelope:
     """Probe the anchor, then grow the proved interval down to `lo` and up to `hi` by
     bisection until each side's undecided gap is at most the resolution or the probe
-    limit is reached, then check the whole proved interval once more. The anchor defaults
-    to the middle of the input's stated range when that lies in [lo, hi], else to the
-    middle of [lo, hi]. `max_probes` is at least 4: the anchor, one probe per side and
-    the confirming check."""
+    limit is reached, then check the whole proved interval once more. The anchor is `at`,
+    else the middle of the input's stated range when that lies in [lo, hi], else the
+    middle of [lo, hi]; without `at`, a middle that does not pass gives way to `lo` when
+    `lo` passes. `max_probes` is at least 4: the anchors, one probe per side and the
+    confirming check. `unit`, a unit of the input's dimension such as "kip", is the
+    unit reports print in."""
     target = find_target(design, registry, name)
     for what, q in (("--from", lo), ("--to", hi), ("--at", at), ("--resolution", resolution)):
         if q is not None and q.dim != target.dim:
             raise EnvelopeError(f"{what} must be in {target.unit}, the unit of {name}")
+    if unit is not None and (UNITS.get(unit) or CUSTOMARY.get(unit) or (None, None))[1] != target.dim:
+        raise EnvelopeError(f"{unit!r} is not a unit of {name}, which is in {target.unit}")
+
+    def show(x: Fraction) -> str:
+        return _text(x, x, target.dim, unit)
+
     a, b = lo.value.lo, hi.value.lo
     if not a < b:
-        raise EnvelopeError(f"the probe range must run upward, got {quantity_text(lo)} to {quantity_text(hi)}")
+        raise EnvelopeError(f"the probe range must run upward, got {show(a)} to {show(b)}")
     middle = (target.stated.lo + target.stated.hi) / 2
     anchor = at.value.lo if at is not None else middle if a <= middle <= b else (a + b) / 2
     if not a <= anchor <= b:
-        raise EnvelopeError(f"the anchor {quantity_text(Quantity(Interval(anchor, anchor), target.dim))} lies outside the probe range")
+        raise EnvelopeError(f"the anchor {show(anchor)} lies outside the probe range")
     step = resolution.value.lo if resolution is not None else (b - a) / DEFAULT_STEPS
     if step <= 0:
         raise EnvelopeError("the resolution must be positive")
@@ -218,7 +236,7 @@ def envelope(
     notes: list[str] = []
     finest = (b - a) / FINEST_STEPS
     if step < finest:
-        notes.append(f"resolution raised from {quantity_text(Quantity(Interval(step, step), target.dim))} to {quantity_text(Quantity(Interval(finest, finest), target.dim))}, the probe range over 2^20")
+        notes.append(f"resolution raised from {show(step)} to {show(finest)}, the probe range over 2^20")
         step = finest
 
     probes: list[Probe] = []
@@ -238,20 +256,29 @@ def envelope(
         return p
 
     start = probe(anchor, anchor)
-    if start.report is not None and not any(_depends(o, target.label, reach) for o in start.report.outcomes):
+    if at is None and start.status != "PASS" and anchor != a:
+        low = probe(a, a)
+        there = f"at {name} = {show(anchor)}, the middle, the design is {start.status}{_reason(start, name, show)}"
+        if low.status == "PASS":
+            notes.append(f"{there}; the envelope is anchored at the low end of the probe range instead")
+            start, anchor = low, a
+        else:
+            notes.append(f"{there}; at the low end of the probe range, {show(a)}, it is {low.status} too")
+    checked = next((p.report for p in probes if p.report is not None), None)
+    if checked is not None and not any(_depends(o, target.label, reach) for o in checked.outcomes):
         raise EnvelopeError(f"no obligation of {design.name} depends on {name}")
-    elsewhere, elsewhere_open = _elsewhere(() if start.report is None else start.report.outcomes, target.label, reach)
+    elsewhere, elsewhere_open = _elsewhere(() if checked is None else checked.outcomes, target.label, reach)
     if start.status != "PASS":
-        return Envelope(target, a, b, anchor, step, start, None, None, None, elsewhere, elsewhere_open, tuple(probes), max_probes, tuple(notes))
-    budget = max_probes - 2
+        return Envelope(target, a, b, anchor, step, start, None, None, None, elsewhere, elsewhere_open, tuple(probes), max_probes, tuple(notes), unit)
+    budget = max_probes - len(probes) - 1
     below = _grow(lambda x: probe(x, anchor), anchor, a, step, -1, budget // 2)
     above = _grow(lambda x: probe(anchor, x), anchor, b, step, +1, max_probes - 1 - len(probes))
-    for name, side in (("below", below), ("above", above)):
+    for side_name, side in (("below", below), ("above", above)):
         if side.capped:
-            gap = quantity_text(Quantity(Interval(abs(side.limit - side.proved), abs(side.limit - side.proved)), target.dim))
-            notes.append(f"the {name} side stopped at the limit of {max_probes} checks with {gap} undecided; raise --max-probes or --resolution")
+            notes.append(f"the {side_name} side stopped at the limit of {max_probes} checks with {show(abs(side.limit - side.proved))} undecided; "
+                         "raise --max-probes or --resolution")
     confirm = probe(below.proved, above.proved) if below.proved < above.proved else None
-    return Envelope(target, a, b, anchor, step, start, below, above, confirm, elsewhere, elsewhere_open, tuple(probes), max_probes, tuple(notes))
+    return Envelope(target, a, b, anchor, step, start, below, above, confirm, elsewhere, elsewhere_open, tuple(probes), max_probes, tuple(notes), unit)
 
 
 def _grow(probe, anchor: Fraction, end: Fraction, step: Fraction, sign: int, budget: int) -> Side:
@@ -362,20 +389,30 @@ def _id(outcome: Outcome) -> str:
 # --- Reports -------------------------------------------------------------------------
 
 
+def _text(x: Fraction, y: Fraction, dim: Dim, unit: str | None) -> str:
+    q = Quantity(Interval(x, y), dim)
+    return quantity_text(q) if unit is None else format_quantity(q, unit)
+
+
+def _reason(p: Probe, name: str, show: Callable[[Fraction], str]) -> str:
+    """Why a probe did not pass, with the input's value at its point."""
+    where = f" with {name} = {show(p.at)}" if p.at is not None else ""
+    return f" ({p.why}{where})" if p.why else ""
+
+
 def _q(env: Envelope, x: Fraction) -> str:
-    return quantity_text(Quantity(Interval(x, x), env.target.dim))
+    return _text(x, x, env.target.dim, env.unit)
 
 
 def _iv(env: Envelope, x: Fraction, y: Fraction) -> str:
-    return quantity_text(Quantity(Interval(x, y), env.target.dim))
+    return _text(x, y, env.target.dim, env.unit)
 
 
 def _side_text(env: Envelope, side: Side) -> str:
     if side.blocker is None:
         return f"proved to {_q(env, side.proved)}, the end of the probe range"
     p = side.blocker
-    where = f" with {env.target.name} = {_q(env, p.at)}" if p.at is not None else ""
-    why = f" ({p.why}{where})" if p.why else ""
+    why = _reason(p, env.target.name, lambda x: _q(env, x))
     gap = abs(side.limit - side.proved)
     capped = ", stopped at the probe limit" if side.capped else ""
     return f"proved to {_q(env, side.proved)}; {_q(env, side.limit)} is not: {p.status}{why}; {_q(env, gap)} undecided{capped}"
@@ -385,7 +422,7 @@ def render(env: Envelope) -> str:
     t = env.target
     lines = []
     if env.safe is None:
-        why = f" ({env.start.why}{f' with {t.name} = {_q(env, env.start.at)}' if env.start.at is not None else ''})" if env.start.why else ""
+        why = _reason(env.start, t.name, lambda x: _q(env, x))
         lines.append(f"envelope   none: at {t.name} = {_q(env, env.anchor)} the design is {env.start.status}{why}")
     else:
         lo, hi = env.safe
@@ -408,7 +445,8 @@ def render(env: Envelope) -> str:
 
 
 def to_json(env: Envelope) -> dict:
-    """Values are exact rationals in SI base units (degC for temperature), as strings."""
+    """Values are exact rationals in SI base units (degC for temperature), as strings,
+    whatever unit the request was written in."""
     t = env.target
 
     def side(s: Side | None) -> dict | None:
