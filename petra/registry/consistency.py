@@ -25,8 +25,8 @@ v0 relations (each catches a class of corrupted record):
   bolt.class_ratio       second digit of class / 10 == Rp02/Rm         tol 2 %
   bolt.yield_order       Rp02_min <= Rm_min
   thread.*_coefficient   ISO 724 coefficients == 3 sqrt 3 / 8, 17 sqrt 3 / 24   tol 1e-6
-  cable.resistance       R20     in [rho20/A, 1.10 * rho20/A]           (IEC 60228 allowance)
-  conductor.resistance_table   IEC 60228 maximum, the same band
+  cable.resistance       R20     == rho20_max / A                       tol 0.5 %
+  cable.resistance_allowance   rho20_max in [rho20, 1.10 * rho20]   (IEC 60228 maximum over annealed copper)
   cable.k_factor         k       == sqrt(qc (beta+20)/rho20 ln((beta+tf)/(beta+ti)))  tol 1 %
   insulation.k_factor_table    k = 115 of IEC 60364-4-43, the same relation         tol 1 %
   copper.adiabatic_constant    K = 226 == sqrt(qc (beta + 20) / rho20)   tol 0.5 %
@@ -47,6 +47,7 @@ from typing import Callable, Mapping
 
 from ..kernel import Add, Const, Div, Expr, Interval, KernelArithmeticError, Ln, Mul, Neg, Pi, PowInt, Sqrt, Sym, enclose, free_syms
 from .deck import Deck, DeckRecord, provenance_problem
+from .model import provenance_problem as entry_problem
 from .model import render
 from .steel import steel_relations
 
@@ -92,10 +93,6 @@ def _stress_area(deck: Deck, e: str) -> Expr:
     d2 = Add((d, Neg(Mul((_c("iso724.d2_coefficient"), p)))))
     d3 = Add((d, Neg(Mul((_c("iso724.d3_coefficient"), p)))))
     return Mul((Div(Pi(), _n(4)), PowInt(Div(Add((d2, d3)), _n(2)), 2)))
-
-
-def _resistance(deck: Deck, e: str) -> Expr:
-    return Div(_c("cu.rho20"), Sym(f"{e}.area"))
 
 
 def _adiabatic(deck: Deck) -> Expr:
@@ -144,8 +141,9 @@ RELATIONS: tuple[Relation, ...] = (
     Relation("cable.outer_diameter", "cable.", _rec("outer_diameter"),
              lambda deck, e: Add((Sym(f"{e}.conductor_diameter"), Mul((_n(2), Sym(f"{e}.insulation"))))),
              Fraction(1, 200)),
-    Relation("cable.resistance", "cable.", _rec("R20"), _resistance, Fraction(1, 10), "within"),
-    Relation("conductor.resistance_table", "const.iec60228.", _rec("R20_max_table"), _resistance, Fraction(1, 10),
+    Relation("cable.resistance", "cable.", _rec("R20"),
+             lambda deck, e: Div(Sym(f"{e}.rho20_max"), Sym(f"{e}.area")), Fraction(1, 200)),
+    Relation("cable.resistance_allowance", "cable.", _rec("rho20_max"), _const_expr(_c("cu.rho20")), Fraction(1, 10),
              "within"),
     Relation("copper.adiabatic_constant", "const.cu", _rec("K_table"), lambda deck, e: Sqrt(_adiabatic(deck)),
              Fraction(1, 200)),
@@ -173,6 +171,7 @@ def check_deck(deck: Deck, relations: tuple[Relation, ...] = RELATIONS) -> tuple
     entries = sorted({r.entry for r in deck.records})
     findings = [Finding(r.entry, "record.provenance", r.value, r.value, f"{r.prop}: {problem}")
                 for r in deck.records if (problem := provenance_problem(r.provenance)) is not None]
+    findings += _entry_findings(deck)
     findings += [f for r in deck.records if (f := _check_copy(r, box)) is not None]
     for relation in relations:
         for entry in entries:
@@ -189,7 +188,7 @@ def corrupt(deck: Deck, entry: str, prop: str, factor: Fraction) -> Deck:
     record = _record(deck, entry, prop)
     lo, hi = sorted((record.value.lo * factor, record.value.hi * factor))
     scaled = replace(record, value=Interval(Fraction(lo), Fraction(hi)))
-    return Deck(deck.format, tuple(scaled if r is record else r for r in deck.records))
+    return replace(deck, records=tuple(scaled if r is record else r for r in deck.records))
 
 
 def flagged_entries(findings: tuple[Finding, ...]) -> frozenset[str]:
@@ -232,6 +231,29 @@ def _check(relation: Relation, deck: Deck, entry: str, box: Mapping[str, Interva
         "within": f"{found} lies outside 1 to 1 + {tol} times {derived}",
     }[relation.kind]
     return Finding(entry, relation.id, left, right, message)
+
+
+def _entry_findings(deck: Deck) -> list[Finding]:
+    """Relation "entry.provenance": an entry row with no source, a malformed or out of
+    order erratum, or a version that is not one more than its errata count; and a derived
+    or stated record whose entry has no row, once per entry. A finding names the record
+    entry ("const.cu" for the constant "const.cu.rho20"), as the pipeline flags it."""
+    zero = Interval(Fraction(0), Fraction(0))
+    out = []
+    for e in deck.entries:
+        problem = entry_problem(e.source, e.errata)
+        if problem is None and e.version != 1 + len(e.errata):
+            problem = f"is version {e.version} with {len(e.errata)} errata; a version is one more than its errata"
+        if problem is not None:
+            holder = _split(e.entry)[0] if e.entry.startswith("const.") else e.entry
+            out.append(Finding(holder, "entry.provenance", zero, zero, f"{e.entry} {problem}"))
+    missing = {}
+    for r in deck.records:
+        if not r.provenance.startswith("published:") and deck.entry(r.registry_entry) is None:
+            missing.setdefault(r.registry_entry, r)
+    out += [Finding(r.entry, "entry.provenance", r.value, r.value, f"no entry row gives {id}'s source and version")
+            for id, r in missing.items()]
+    return out
 
 
 def _check_copy(record: DeckRecord, box: Mapping[str, Interval]) -> Finding | None:

@@ -10,7 +10,7 @@
         in those units. --json prints pipeline.Report.to_json() (`petra docs api`):
             {"file": FILE, "design": NAME, "status": OVERALL, "verdicts": [
                 {"claim": NAME, "status": "PASS" | "FAIL" | "UNKNOWN" | "MARGINAL",
-                 "footprint": [{"tag", "label", "owner", "source"}, ...],
+                 "footprint": [{"tag", "label", "owner", "source", "version"?}, ...],
                  "rules": ["R1", ...],
                  "needs": [what each open item needs, ...],    non-empty iff UNKNOWN
                  "margins": [{"requirement", "proved", "margin": "proved" | "undecided"
@@ -53,6 +53,14 @@
         Run the deck consistency checker. With no DECK, check the deck built from the
         shipped registry. Exit 0 when every relation holds, 1 when one fails, 3 when the
         deck does not parse.
+    python -m petra registry recall ID [FILE ...] [--json]
+        Print each design whose verdicts rest on the registry entry ID (an entry, a premise
+        key, a common name or an id prefix), with its status, each such claim's status and
+        the premises it rests on with the version each was checked at (petra/recall.py).
+        A FILE is a .petra design (checked now), a saved `petra check --json` report (a
+        premise checked at an older version is marked) or a directory of .petra files;
+        default examples/. Exit 0 when every file was read, 3 for an unknown ID or a file
+        that could not be read (the rest are still printed).
     python -m petra registry list [PREFIX]
         Print every registry id a design can name, one line each: what it is, and the
         common names that stand for it (A325 for bolt_group.120). With PREFIX, the ids and
@@ -116,7 +124,7 @@ class _Parser(argparse.ArgumentParser):
 
 def build_parser() -> argparse.ArgumentParser:
     """Subcommands check, explain, envelope, verify, certify-family, registry (build,
-    check, list), gym, kinds, new and docs, with the flags in the module docstring."""
+    check, recall, list), gym, kinds, new and docs, with the flags in the module docstring."""
     from .gym.tasks import GENERATORS
 
     parser = _Parser(prog="petra", description="verdicts about physical designs as theorems relative to explicit premises",
@@ -167,6 +175,12 @@ def build_parser() -> argparse.ArgumentParser:
     consistency = decks.add_parser("check", help="run the deck consistency checker")
     consistency.add_argument("deck", nargs="?", metavar="DECK")
     consistency.set_defaults(run=cmd_registry_check)
+    recall_cmd = decks.add_parser("recall", help="print the designs whose verdicts rest on a registry entry")
+    recall_cmd.add_argument("id", metavar="ID", help="a registry entry, premise key, common name or id prefix")
+    recall_cmd.add_argument("files", nargs="*", metavar="FILE",
+                            help=".petra designs, saved `petra check --json` reports or directories; default examples/")
+    recall_cmd.add_argument("--json", action="store_true", help="print the recall as JSON")
+    recall_cmd.set_defaults(run=cmd_registry_recall)
 
     gym = commands.add_parser("gym", help="run the baseline agent")
     gym.add_argument("--episodes", type=int, required=True)
@@ -324,6 +338,17 @@ def cmd_registry_check(args: argparse.Namespace) -> int:
         print(f"{f.entry}: {f.relation}: {f.message} (lhs {f.lhs.lo}..{f.lhs.hi}, rhs {f.rhs.lo}..{f.rhs.hi})")
     print(f"{len(deck.records)} records, {len(findings)} findings")
     return 1 if findings else 0
+
+
+def cmd_registry_recall(args: argparse.Namespace) -> int:
+    from .recall import RecallError, recall, render, to_json
+
+    try:
+        found = recall(build_registry(), args.id, args.files)
+    except RecallError as exc:
+        return _input_error(exc)
+    print(json.dumps(to_json(found), sort_keys=True) if args.json else render(found))
+    return EXIT_CODES["INPUT_ERROR"] if found.errors else 0
 
 
 def cmd_gym(args: argparse.Namespace) -> int:

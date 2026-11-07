@@ -619,7 +619,7 @@ def _results(verdict: Verdict) -> tuple[Theorem | Refutation, ...]:
 
 def verdict_json(entry: ClaimVerdict) -> Mapping[str, Any]:
     """{"claim", "status": STATUS[type(verdict)], "footprint": [{"tag", "label", "owner",
-    "source"}], "rules": sorted rule ids of the kernel results used ("R1"...),
+    "source", "version" for a registry premise}], "rules": sorted rule ids of the kernel results used ("R1"...),
     "needs": [describe_need(n) for every need of every open item], "margins":
     margin_json for every obligation of a claim with a margin that is not refuted or
     waived}. "needs" is non-empty exactly when status is UNKNOWN. pipeline.Report adds
@@ -633,7 +633,8 @@ def verdict_json(entry: ClaimVerdict) -> Mapping[str, Any]:
         "needs": [describe_need(n) for o in still_open for n in o.needs],
         "margins": [m for o in entry.outcomes if (m := margin_json(o)) is not None],
         "footprint": [
-            {"tag": p.tag.value, "label": p.label, "owner": p.owner, "source": p.source}
+            {"tag": p.tag.value, "label": p.label, "owner": p.owner, "source": p.source,
+             **({} if p.version is None else {"version": p.version})}
             for p in verdict.footprint.premises
         ],
     }
@@ -685,6 +686,10 @@ def _outcome_row(outcome: Outcome) -> str:
         what += f"  validity {len(proofs)} proved"
     name = f"{'.'.join(req.subject)}/{req.mode.id}"
     return f"{name:<44} {origin:<28} {what}"
+
+
+def _version_text(premise: Premise) -> str:
+    return "" if premise.version is None else f"; version {premise.version}"
 
 
 def _point_lines(outcome: Outcome, footprint: Footprint) -> list[str]:
@@ -766,5 +771,5 @@ def render(verdict: Verdict, outcomes: tuple[Outcome, ...], detail: Callable[[Ou
                 lines += [f"      {line}" for line in show(item)]
     lines.append(f"footprint  {len(verdict.footprint.premises)} premises")
     for tag, premises in verdict.footprint.by_tag().items():
-        lines += [f"  {tag.value:<16} {p.label}   {p.statement}   ({p.owner}; {p.source})" for p in premises]
+        lines += [f"  {tag.value:<16} {p.label}   {p.statement}   ({p.owner}; {p.source}{_version_text(p)})" for p in premises]
     return "\n".join(lines)

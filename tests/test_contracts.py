@@ -3,7 +3,7 @@ connects to assumes, through the circuit's ports, the R4 solver and kernel.check
 Owner: C.
 
 Hand values (see tests/test_circuit.py for the heat balance): a 2.5 mm2 wire at 40 degC
-ambient in still air (h = 5) runs at 55.1667 degC at 10 A and 76.6572 degC at 15 A. The
+ambient in still air (h = 5) runs at 56.3632 degC at 10 A and 79.7819 degC at 15 A. The
 lever terminal is rated 75 degC and 32 A.
 """
 import unittest
@@ -31,7 +31,7 @@ from petra.registry import build_registry
 from petra.solvers import SolverSource, r4_enclosure
 from petra.verdict import Discharged, Fail, Refuted
 
-from tests.test_circuit import AMBIENT, CURRENT, H, WORST, at, lowered, radial
+from tests.test_circuit import AMBIENT, CURRENT, H, RHO, RHO_2_5, WORST, at, lowered, radial
 
 REGISTRY = build_registry()
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples"
@@ -65,7 +65,7 @@ class WireIntoTerminal(unittest.TestCase):
 
     def test_margins_at_the_worst_corner_match_the_hand_values(self):
         found = contracts_of(load_design(EXAMPLES / "circuit_pass.petra", REGISTRY))
-        self.assertAlmostEqual(at(found["temperature"].statement, 0, WORST), 55.1667 - 75, places=3)
+        self.assertAlmostEqual(at(found["temperature"].statement, 0, WORST), 56.3632 - 75, places=3)
         self.assertEqual(at(found["current"].statement, 0, WORST), 10 - 32)
 
     def test_each_side_rests_on_the_model_that_computes_it(self):
@@ -80,7 +80,7 @@ class WireIntoTerminal(unittest.TestCase):
         self.assertIsInstance(result, Refutation)
         point = dict(result.point)
         self.assertEqual((point[CURRENT], point[AMBIENT], point[H]), (15, 40, 5))
-        self.assertAlmostEqual(at(ob.statement, 0, point), 76.6572 - 75, places=3)
+        self.assertAlmostEqual(at(ob.statement, 0, point), 79.7819 - 75, places=3)
 
     def test_40_A_exceeds_the_terminal_rating(self):
         ob = contracts_of(radial(("[0 A, 10 A]", "[0 A, 40 A]")))["current"]
@@ -95,9 +95,10 @@ class WireIntoTerminal(unittest.TestCase):
 
     def test_the_two_contracts_at_one_port_keep_their_own_ids_and_verdicts(self):
         """16 mm2 (insulation 1.0 mm) at 40 A, 40 degC, h = 5: d = 4.51352 mm, D = 6.51352 mm,
-        T1 = 0.291892, T4 = 9.773826, a = 17.354687, theta = 60.0889 degC, inside the
-        terminal's 75 degC; 40 A is 8 A over its 32 A. No breaker, so no other obligation
-        is refuted."""
+        T1 = 0.291892, T4 = 9.773826; the circuit model reads rho20_max through the series,
+        whose span tops out at 2.5 mm2's 18.525e-9 ohm m, so a = 18.646743 and theta =
+        61.7028 degC, inside the terminal's 75 degC; 40 A is 8 A over its 32 A. No breaker,
+        so no other obligation is refuted."""
         d = radial(("  breaker cb1 part mcb.B10\n", ""), ("  connect mains.out -> cb1.in\n  connect cb1.out -> w1.a\n", "  connect mains.out -> w1.a\n"),
                    ("cable.cu_pvc_2_5", "cable.cu_pvc_16"), ("[0 A, 10 A]", "[0 A, 40 A]"))
         report = check_design(d, REGISTRY, (SolverSource(),))
@@ -110,7 +111,8 @@ class WireIntoTerminal(unittest.TestCase):
         self.assertEqual(set(by_id), {f"{prefix}/temperature", f"{prefix}/current"})
         (temperature,), (current,) = by_id[f"{prefix}/temperature"], by_id[f"{prefix}/current"]
         self.assertIsInstance(temperature, Discharged)
-        self.assertAlmostEqual(at(temperature.obligation.statement, 0, {CURRENT: 40, AMBIENT: 40, H: 5}), 60.0889 - 75, places=3)
+        self.assertAlmostEqual(at(temperature.obligation.statement, 0, {CURRENT: 40, AMBIENT: 40, H: 5, RHO: RHO_2_5}),
+                               61.7028 - 75, places=3)
         self.assertIsInstance(current, Refuted)
         self.assertEqual(dict(current.refutation.point)[CURRENT], 40)
         self.assertIsInstance(report.verdict, Fail)

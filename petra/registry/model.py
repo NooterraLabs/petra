@@ -10,6 +10,13 @@ Premise keys. `Registry.fact(key)` resolves each one, and its premise label is "
     "const.<name>"         a Constant
     "<entry>.<prop>"       a Stated property, on the entry that defines it
     "<environment>.ambient"
+
+Entries and their versions. A Constant, Material, Part, Process or Environment is a
+registry entry. Each has a `provenance`: its source (document, edition, and clause or
+table) and its errata, oldest first. Version 1 is the entry as first entered, and each
+erratum adds one, so a version cannot disagree with its history. A premise key belongs to
+one entry (`Registry.entry_of`), and a footprint names that entry's version beside the
+key. Correcting a value means adding an Erratum to every entry the value reaches.
 """
 from __future__ import annotations
 
@@ -18,11 +25,68 @@ import difflib
 import os
 import re
 from dataclasses import dataclass, field
+from datetime import date
 from enum import Enum
-from typing import Callable, Collection, Mapping, Union
+from typing import Callable, Collection, Iterator, Mapping, Union
 
 from ..kernel import Abs, Add, Const, Div, Exp, Expr, Interval, Ln, Max, Min, Mul, Neg, Pi, PowInt, Sqrt, Sym
 from ..premises import ALLOWED_TAGS, LabelKind, Tag
+
+
+@dataclass(frozen=True)
+class Erratum:
+    """One correction to a registry entry: the day it landed (YYYY-MM-DD), what the entry
+    said before, and what it says now and why."""
+
+    date: str
+    was: str
+    now: str
+
+
+@dataclass(frozen=True)
+class Provenance:
+    """Where a registry entry comes from and how it has changed since."""
+
+    source: str
+    errata: tuple[Erratum, ...] = ()
+
+    def __post_init__(self) -> None:
+        problem = provenance_problem(self.source, self.errata)
+        if problem is not None:
+            raise ValueError(problem)
+
+    @property
+    def version(self) -> int:
+        return 1 + len(self.errata)
+
+
+def provenance_problem(source: str, errata: tuple[Erratum, ...]) -> str | None:
+    """What is wrong with an entry's source and errata, or None. The registry refuses an
+    entry with a problem; the deck checker reports one as relation "entry.provenance"."""
+    if not source.strip():
+        return "names no source"
+    days = []
+    for e in errata:
+        try:
+            day = date.fromisoformat(e.date)
+        except (TypeError, ValueError):
+            day = None
+        if day is None or day.isoformat() != e.date:
+            return f"erratum date {e.date!r} is not a YYYY-MM-DD day"
+        if not e.was.strip() or not e.now.strip():
+            return f"erratum of {e.date} does not say both what was wrong and what replaced it"
+        days.append(day)
+    if days != sorted(days):
+        return "errata are not oldest first"
+    return None
+
+
+def _check_entry(what: str, source: str, errata: tuple[Erratum, ...]) -> None:
+    if not isinstance(errata, tuple) or not all(isinstance(e, Erratum) for e in errata):
+        raise TypeError(f"{what}: errata are a tuple of Erratum")
+    problem = provenance_problem(source, errata)
+    if problem is not None:
+        raise ValueError(f"{what} {problem}")
 
 
 def _require_provenance(what: str, tag: Tag, owner: str, source: str) -> None:
@@ -43,9 +107,15 @@ class Constant:
     owner: str
     source: str
     statement: str
+    errata: tuple[Erratum, ...] = field(default=(), kw_only=True)
 
     def __post_init__(self) -> None:
         _require_provenance(f"constant {self.name}", self.tag, self.owner, self.source)
+        _check_entry(f"constant {self.name}", self.source, self.errata)
+
+    @property
+    def provenance(self) -> Provenance:
+        return Provenance(self.source, self.errata)
 
 
 @dataclass(frozen=True)
@@ -107,10 +177,20 @@ class Corrosivity(Enum):
 
 @dataclass(frozen=True)
 class Material:
+    """`standard` is the material's source."""
+
     id: str                       # "steel.S355"
     family: str                   # "steel", "aluminium", "copper", "pvc"
     standard: str                 # "EN 10025-2:2019"
     props: Mapping[str, Property]  # fy, fu, E, nu, G, density, anodic_index, ...
+    errata: tuple[Erratum, ...] = field(default=(), kw_only=True)
+
+    def __post_init__(self) -> None:
+        _check_entry(f"material {self.id}", self.standard, self.errata)
+
+    @property
+    def provenance(self) -> Provenance:
+        return Provenance(self.standard, self.errata)
 
 
 @dataclass(frozen=True)
@@ -123,6 +203,15 @@ class Part:
     process: str | None = None    # coating or treatment applied by the maker
     series: str | None = None     # size entries: the series entry they instantiate
     fixes: Mapping[str, Interval] = field(default_factory=dict)  # series param -> value
+    source: str = field(kw_only=True)   # "ISO 898-1:2013 class 8.8; ISO 261:1998 M12"
+    errata: tuple[Erratum, ...] = field(default=(), kw_only=True)
+
+    def __post_init__(self) -> None:
+        _check_entry(f"part {self.id}", self.source, self.errata)
+
+    @property
+    def provenance(self) -> Provenance:
+        return Provenance(self.source, self.errata)
 
 
 @dataclass(frozen=True)
@@ -148,10 +237,17 @@ class Process:
     effects: tuple[PropertyEffect, ...] = ()
     shape_limits: Mapping[str, Interval] = field(default_factory=dict)
     surface: str | None = None
+    source: str = field(kw_only=True)
+    errata: tuple[Erratum, ...] = field(default=(), kw_only=True)
 
     def __post_init__(self) -> None:
         if (self.kind is ProcessKind.COATING) != (self.surface is not None):
             raise ValueError(f"process {self.id}: a coating names its surface material and no other process does")
+        _check_entry(f"process {self.id}", self.source, self.errata)
+
+    @property
+    def provenance(self) -> Provenance:
+        return Provenance(self.source, self.errata)
 
 
 @dataclass(frozen=True)
@@ -160,6 +256,15 @@ class Environment:
     ambient: Stated               # ambient temperature class, degC
     corrosivity: Corrosivity
     wet: bool
+    source: str = field(kw_only=True)
+    errata: tuple[Erratum, ...] = field(default=(), kw_only=True)
+
+    def __post_init__(self) -> None:
+        _check_entry(f"environment {self.id}", self.source, self.errata)
+
+    @property
+    def provenance(self) -> Provenance:
+        return Provenance(self.source, self.errata)
 
 
 class OutsideMakeableSet(LookupError):
@@ -167,7 +272,10 @@ class OutsideMakeableSet(LookupError):
     error; it never becomes a guessed default."""
 
 
-Entry = Union[Material, Part, Process]
+Holder = Union[Material, Part, Process]
+"""An entry that holds properties."""
+
+Entry = Union[Constant, Material, Part, Process, Environment]
 
 _SEPARATORS = re.compile(r"[\s._-]+")
 _GRADE_WORDS = frozenset({"gr", "grade"})
@@ -296,10 +404,32 @@ class Registry:
             raise OutsideMakeableSet(f"{key} names no registry constant or stated value")
         return found
 
+    def entry(self, id: str) -> Entry:
+        """The entry with this id: "const.<name>" for a constant, otherwise a material,
+        part, process or environment id."""
+        if id.startswith("const.") and id[len("const."):] in self.constants:
+            return self.constants[id[len("const."):]]
+        for table in (self.materials, self.parts, self.processes, self.environments):
+            if id in table:
+                return table[id]
+        raise OutsideMakeableSet(f"{id} is not a registry entry")
+
+    def entry_of(self, key: str) -> Entry:
+        """The entry a premise key belongs to: "const.<name>" is its own entry, and
+        "<entry>.<prop>" belongs to <entry>."""
+        return self.entry(key if key.startswith("const.") else key.rpartition(".")[0])
+
+    def entries(self) -> Iterator[tuple[str, Entry]]:
+        """(id, entry) for every entry: each constant as "const.<name>", then the
+        materials, parts (series included), processes and environments."""
+        yield from ((f"const.{name}", c) for name, c in self.constants.items())
+        for table in (self.materials, self.parts, self.processes, self.environments):
+            yield from table.items()
+
     def _has_entry(self, entry_id: str) -> bool:
         return entry_id in self.materials or entry_id in self.parts or entry_id in self.processes
 
-    def _entry(self, entry_id: str) -> Entry:
+    def _entry(self, entry_id: str) -> Holder:
         for table in (self.materials, self.parts, self.processes):
             if entry_id in table:
                 return table[entry_id]

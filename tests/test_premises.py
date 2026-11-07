@@ -1,4 +1,5 @@
 """Premises, the premise book, footprints, and the statement builder's labelling. Owner: P."""
+import dataclasses
 import unittest
 from fractions import Fraction
 
@@ -82,7 +83,7 @@ def material(id: str, anodic_index: Fraction | None = None, **props) -> Material
 
 
 def environment(id: str, corrosivity: Corrosivity, wet: bool) -> Environment:
-    return Environment(id, stated(Interval(Fraction(10), Fraction(40)), "degC"), corrosivity, wet)
+    return Environment(id, stated(Interval(Fraction(10), Fraction(40)), "degC"), corrosivity, wet, source="a standard")
 
 
 AREA_2_5 = Fraction(1, 400000)
@@ -126,9 +127,11 @@ REGISTRY = FakeRegistry(
                 "broken": Derived(Div(Sym("const.cu.rho20"), Sym("other.area")), "ohm/m"),
                 "conductance": Derived(Div(Const(Fraction(1)), Sym("self.R20")), "S m"),
             },
+            source="a standard",
         ),
         "cable.cu_pvc_2_5": Part(
-            "cable.cu_pvc_2_5", PartKind.CABLE, "Cu/PVC 2.5 mm2", "copper.annealed", {}, series="cable.cu_pvc", fixes={"area": point(AREA_2_5)}
+            "cable.cu_pvc_2_5", PartKind.CABLE, "Cu/PVC 2.5 mm2", "copper.annealed", {}, series="cable.cu_pvc", fixes={"area": point(AREA_2_5)},
+            source="a standard",
         ),
     },
     processes={},
@@ -217,6 +220,13 @@ class Premises(unittest.TestCase):
             premise("in:d.lift.force", owner="")
         with self.assertRaises(ValueError):
             premise("in:d.lift.force", source="")
+
+    def test_only_a_registry_premise_has_a_version(self):
+        self.assertEqual(dataclasses.replace(premise("reg:steel.S355.fy", Tag.SANCTIONED), version=2).version, 2)
+        for label, tag, version in (("in:d.lift.force", Tag.ASSUMED, 1), ("cov:0123", Tag.JUDGED, 1),
+                                    ("reg:steel.S355.fy", Tag.SANCTIONED, 0)):
+            with self.assertRaises(ValueError, msg=f"{label} {version}"):
+                dataclasses.replace(premise(label, tag), version=version)
 
     def test_scope_params_and_design_values_keep_their_namespace(self):
         ScopeParam("par:d.length", "length", RANGE, "m")

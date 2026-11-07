@@ -98,7 +98,8 @@ class Premise:
     """One non-proved fact. `range` is set for numeric premises and must lie inside the
     range of every RangeHyp that carries this label (checked by `PremiseBook.resolve`), so
     a theorem covers every value the premise admits. Tag PROVED is never a Premise: proved facts are the kernel's own and stay out of the
-    footprint."""
+    footprint. `version` is set on a registry premise only: the version of the registry entry
+    the value came from (registry.model.Provenance), which the label does not carry."""
 
     label: Label
     tag: Tag
@@ -107,6 +108,7 @@ class Premise:
     statement: str
     range: Interval | None = None
     unit: str | None = None
+    version: int | None = None
 
     def __post_init__(self) -> None:
         if self.tag is Tag.PROVED:
@@ -116,6 +118,8 @@ class Premise:
             raise ValueError(f"{self.label}: tag {self.tag.value} does not fit its label namespace")
         if not self.owner or not self.source:
             raise ValueError(f"{self.label}: a premise needs an owner and a source")
+        if self.version is not None and (label_kind(self.label) is not LabelKind.REGISTRY or self.version < 1):
+            raise ValueError(f"{self.label}: only a registry premise has a version, and a version is at least 1")
 
 
 @dataclass(frozen=True)

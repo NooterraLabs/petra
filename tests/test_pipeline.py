@@ -55,7 +55,7 @@ from petra.models.base import (
 )
 from petra.pipeline import build_premise_book, check_design, explain
 from petra.premises import RangeMismatch, ScopeParam, Tag
-from petra.registry import Constant, Corrosivity, Deck, DeckRecord, Derived, Environment, Material, Registry, Stated
+from petra.registry import Constant, Corrosivity, Deck, DeckEntry, DeckRecord, Derived, Environment, Material, Registry, Stated
 from petra.units import DIMENSIONLESS, Quantity
 from petra.verdict import Fail, Pass, Unknown
 
@@ -167,7 +167,8 @@ def registry() -> Registry:
         materials={"metal.M1": Material("metal.M1", "metal", "Std 2", props)},
         parts={},
         processes={},
-        environments={"dry": Environment("dry", stated(Interval(Fraction(10), Fraction(30)), "met@example.org", "climate class"), Corrosivity.C1, False)},
+        environments={"dry": Environment("dry", stated(Interval(Fraction(10), Fraction(30)), "met@example.org", "climate class"), Corrosivity.C1, False,
+                                       source="climate class")},
     )
 
 
@@ -515,7 +516,7 @@ class Decks(GadgetDomain):
     def deck(self, fy: int, fu: int) -> Deck:
         provenance = "stated:sanctioned:maker@example.org:Std 2"
         records = (DeckRecord("metal.M1", "fu", point(fu), "Pa", provenance), DeckRecord("metal.M1", "fy", point(fy), "Pa", provenance))
-        return Deck("petra-deck/0", records)
+        return Deck("petra-deck/1", records, (DeckEntry("metal.M1", 1, "Std 2", ()),))
 
     def test_an_obligation_that_reads_a_flagged_entry_stays_open_without_asking_a_source(self):
         asked = Offers("asked", Evidence(Enclosure(Leaf())))

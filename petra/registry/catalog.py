@@ -5,7 +5,7 @@ properties are Derived expressions. Adding a size means adding one row to a seri
 constants.py, never a row of computed values. Each formula is written once, as a
 template over Sym("self.<prop>"), and shared by every entry it applies to:
 
-  cable R20             = const.cu.rho20 / self.area                  (A = nominal area)
+  cable R20             = self.rho20_max / self.area   (IEC 60228 maximum resistance)
   cable k (adiabatic)   = sqrt(const.cu.qc * (const.cu.beta + 20) / const.cu.rho20
                                * ln((const.cu.beta + theta_f) / (const.cu.beta + theta_i)))
   bolt As               = (pi/4) * ((d2 + d3) / 2)^2,  d2, d3 from ISO 724 coefficients
@@ -17,7 +17,7 @@ template over Sym("self.<prop>"), and shared by every entry it applies to:
 
 A size entry (a cable size) names its series and defines the series parameters as
 Derived references to the constants it was cut from, so Registry.expand of
-"cable.cu_pvc_2_5" R20 is const.cu.rho20 / const.iec60228.2_5.area.
+"cable.cu_pvc_2_5" R20 is cable.cu_pvc_2_5.rho20_max / const.iec60228.2_5.area.
 """
 from __future__ import annotations
 
@@ -31,6 +31,7 @@ from .model import (
     Corrosivity,
     Derived,
     Environment,
+    Erratum,
     Material,
     Part,
     PartKind,
@@ -88,8 +89,8 @@ CHS_BUCKLING_ALPHA = Derived(_c("en1993_1_1.curve_c.alpha"), "1",
                                   "about any axis, for any steel grade")
 
 CABLE_SERIES_PROPS: Mapping[str, Derived] = {
-    "R20": Derived(Div(_c("cu.rho20"), _own("area")), "ohm/m",
-                   note="conductor of the nominal area: R20 = rho20 / A"),
+    "R20": Derived(Div(_own("rho20_max"), _own("area")), "ohm/m",
+                   note="IEC 60228 maximum resistance: R20 = rho20_max / A, rho20_max the maximum times the nominal area"),
     "alpha": constant("cu.alpha20"),
     "theta_max": constant("pvc.theta_max"),
     "theta_sc": constant("pvc.theta_sc"),
@@ -215,29 +216,57 @@ def chs_sections() -> Mapping[str, Part]:
             "A": CHS_AREA,
             "I": CHS_SECOND_MOMENT,
             "buckling_alpha": CHS_BUCKLING_ALPHA,
-        })
+        }, source=f"EN 10219-2:2006, cold-formed CHS {d} x {t} (the designation); EN 1993-1-1:2005 Table 6.2 for "
+                  "its buckling curve")
     return sections
+
+
+R20_ERRATUM_DAY = "2026-11-06"   # the day cable R20 became the IEC 60228 maximum
+
+
+def _ohm_mm2_per_km(value: Fraction) -> str:
+    return f"{float(value * 10**9):g}"
 
 
 def cables() -> Mapping[str, Part]:
     """A series entry per insulation ("cable.cu_pvc") whose props are Derived over two
     series parameters, Sym("self.area") and Sym("self.insulation"), plus one size entry
     per IEC 60228 size ("cable.cu_pvc_2_5") that fixes both. Props: R20, alpha,
-    theta_max, theta_sc, k, conductor_diameter, outer_diameter, thermal_resistivity, T1.
+    theta_max, theta_sc, k, conductor_diameter, outer_diameter, thermal_resistivity, T1,
+    and rho20_max, the IEC 60228 maximum resistance times the nominal area.
 
     A size defines area and insulation as references to the constants they came from,
-    so Registry.expand gives a concrete wire and the series family the same statement
+    and states its own rho20_max; the series states the span of rho20_max over its sizes.
+    So Registry.expand gives a concrete wire and the series family the same statement
     shape and the library can match them."""
     series = "cable.cu_pvc"
+    hull = STATED["iec60228.class2_cu.rho20_max"].value
     parts = {series: Part(series, PartKind.CABLE, "copper conductor, IEC 60228 class 2, PVC insulated, single core",
-                          "copper.cu_etp", CABLE_SERIES_PROPS)}
-    for key, area, insulation in CABLE_SIZES:
+                          "copper.cu_etp", {**CABLE_SERIES_PROPS, "rho20_max": STATED["iec60228.class2_cu.rho20_max"]},
+                          source="IEC 60228:2004 class 2 copper conductors; IEC 60227-3:1993 type 60227 IEC 01 "
+                                 "PVC insulation",
+                          errata=(Erratum(R20_ERRATUM_DAY,
+                                          "R20 = const.cu.rho20 / area, annealed copper of exactly the nominal area",
+                                          f"R20 = rho20_max / area with rho20_max in [{_ohm_mm2_per_km(hull.lo)}, "
+                                          f"{_ohm_mm2_per_km(hull.hi)}] ohm mm2/km, the span of IEC 60228 Table 2 "
+                                          "maximum resistance times nominal area over the catalogue's sizes"),))}
+    for key, area, insulation, r_max in CABLE_SIZES:
         area_name, insulation_name = f"iec60228.{key}.area", f"iec60227_3.{key}.insulation"
+        nominal = CONSTANTS["cu.rho20"].value.lo / CONSTANTS[area_name].value.lo * 1000
         parts[f"{series}_{key}"] = Part(
             f"{series}_{key}", PartKind.CABLE, f"{area} mm2 copper, PVC insulated (type 60227 IEC 01)", "copper.cu_etp",
-            {"area": constant(area_name), "insulation": constant(insulation_name)},
+            {"area": constant(area_name), "insulation": constant(insulation_name),
+             "rho20_max": STATED[f"iec60228.{key}.rho20_max"]},
             series=series,
             fixes={"area": CONSTANTS[area_name].value, "insulation": CONSTANTS[insulation_name].value},
+            source=f"IEC 60228:2004 Table 2, class 2 copper conductor {area} mm2; IEC 60227-3:1993 Table 1, "
+                   "type 60227 IEC 01",
+            errata=(Erratum(R20_ERRATUM_DAY,
+                            f"R20 = const.cu.rho20 / area = {float(nominal):.3f} ohm/km, annealed copper of exactly "
+                            "the nominal area",
+                            f"R20 = {r_max} ohm/km, the IEC 60228 Table 2 maximum for a class 2 plain copper "
+                            f"{area} mm2 conductor; the old value was {float(1 - nominal / Fraction(r_max)):.1%} "
+                            "below it, so it understated heating and voltage drop"),),
         )
     return parts
 
@@ -255,7 +284,8 @@ def breakers() -> Mapping[str, Part]:
                                            **BREAKER_PROPS,
                                            "Icn": STATED["iec60898_1.Icn_6000"],
                                            "I2t": STATED[f"en60898_1.class3.{energy}.I2t"],
-                                       })
+                                       }, source=f"IEC 60898-1:2015, type B circuit-breaker rated {rating} A with Icn "
+                                                 "6000 A; EN 60898-1 Annex ZA, energy-limiting class 3")
     return parts
 
 
@@ -268,7 +298,9 @@ def terminals() -> Mapping[str, Part]:
         ("screw_16mm2_75C", "screw terminal, 1.5 to 16 mm2, 76 A, 75 degC"),
     ):
         props = {p: STATED[f"terminal.{name}.{p}"] for p in ("temperature_max", "current_max", "conductor_min", "conductor_max")}
-        parts[f"terminal.{name}"] = Part(f"terminal.{name}", PartKind.TERMINAL, designation, "copper.cu_etp", props)
+        parts[f"terminal.{name}"] = Part(f"terminal.{name}", PartKind.TERMINAL, designation, "copper.cu_etp", props,
+                                         source="a generic terminal standing for a manufacturer's datasheet tested to "
+                                                "IEC 60998-2-2, judged by petra-maintainers")
     return parts
 
 
@@ -303,12 +335,14 @@ def metric_bolts() -> Mapping[str, Part]:
         for suffix, grade, material, coating in _BOLT_GRADES:
             pid = f"bolt.{size}_{suffix}"
             finish = ", zinc plated" if coating else ""
+            standard = "ISO 3506-1:2020" if grade == "A4-70" else "ISO 898-1:2013"
             parts[pid] = Part(pid, PartKind.BOLT, f"{size}x{p_mm} property class {grade}{finish}", material, {
                 "d": constant(f"iso261.{size}.d"),
                 "pitch": constant(f"iso261.{size}.pitch"),
                 "As": STRESS_AREA,
                 **_class_ratings(grade, d_mm),
-            }, process=coating)
+            }, process=coating, source=f"ISO 261:1998 Table 1, {size} coarse thread; {standard}, property class {grade}"
+                                       + ("; ISO 2081:2008 zinc electroplating" if coating else ""))
     return parts
 
 
@@ -317,19 +351,25 @@ def processes() -> Mapping[str, Process]:
     thermal resistance per metre), coatings, welds."""
     return {
         "install.clipped_direct": Process("install.clipped_direct", ProcessKind.INSTALL,
-                                          {"h": constant("install.clipped_direct.h")}),
-        "process.zinc_plate": Process("process.zinc_plate", ProcessKind.COATING, {}, surface="zinc.electroplate"),
+                                          {"h": constant("install.clipped_direct.h")},
+                                          source="cable clipped direct to a wall in still indoor air, its surface "
+                                                 "coefficient judged by petra-maintainers; not taken from a standard"),
+        "process.zinc_plate": Process("process.zinc_plate", ProcessKind.COATING, {}, surface="zinc.electroplate",
+                                      source="ISO 2081:2008, electroplated coatings of zinc on iron or steel"),
         "process.mig_weld_6xxx": Process("process.mig_weld_6xxx", ProcessKind.WELD, {}, effects=(
             PropertyEffect("aluminium", "fy", STATED["weld.mig_6xxx_T6.haz_fy_factor"],
                            "within 30 mm of the weld for plates 6 mm < t <= 12 mm (EN 1999-1-1 6.1.6.3, not checked)"),
-        )),
+        ), source="EN 1999-1-1:2007 6.1.6 and Table 3.2b, the heat-affected zone of MIG-welded 6xxx alloys in temper T6"),
     }
 
 
 def environments() -> Mapping[str, Environment]:
     """indoor_dry (C1), outdoor_c3 (C3), marine_c5 (C5, wet)."""
     return {
-        "indoor_dry": Environment("indoor_dry", STATED["iec60364_5_51.AA5"], Corrosivity.C1, wet=False),
-        "outdoor_c3": Environment("outdoor_c3", STATED["iec60364_5_51.AA7"], Corrosivity.C3, wet=True),
-        "marine_c5": Environment("marine_c5", STATED["iec60364_5_51.AA7"], Corrosivity.C5, wet=True),
+        "indoor_dry": Environment("indoor_dry", STATED["iec60364_5_51.AA5"], Corrosivity.C1, wet=False,
+                                  source="IEC 60364-5-51:2005 external influence AA5; ISO 9223:2012 corrosivity C1"),
+        "outdoor_c3": Environment("outdoor_c3", STATED["iec60364_5_51.AA7"], Corrosivity.C3, wet=True,
+                                  source="IEC 60364-5-51:2005 external influence AA7; ISO 9223:2012 corrosivity C3"),
+        "marine_c5": Environment("marine_c5", STATED["iec60364_5_51.AA7"], Corrosivity.C5, wet=True,
+                                 source="IEC 60364-5-51:2005 external influence AA7; ISO 9223:2012 corrosivity C5"),
     }

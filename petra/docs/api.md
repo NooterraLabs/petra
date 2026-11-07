@@ -59,7 +59,7 @@ The same report as data comes from `petra check --json examples/truss_fail.petra
 | `petra.Unknown` | UNKNOWN | `open` (the `Open` items), `footprint`, `theorems` (those that discharged) |
 | `petra.Marginal` | MARGINAL | `near` (the `WithinMargin` items), `footprint`, `theorems`, `scope` |
 
-`footprint.premises` lists every premise that is not proved and that the verdict rests on. Each premise has a `tag` (`assumed`, `measured`, `sanctioned`, `judged`, `validated_model` or `certified`), a `label`, an `owner` and a `source`. A FAIL's footprint names the premises behind its counterexample.
+`footprint.premises` lists every premise that is not proved and that the verdict rests on. Each premise has a `tag` (`assumed`, `measured`, `sanctioned`, `judged`, `validated_model` or `certified`), a `label`, an `owner` and a `source`. A registry premise (`reg:`) also has a `version`, the version of the registry entry its value came from, one more than the number of errata recorded against that entry. `petra registry recall ID` lists the designs whose verdicts rest on an entry. A FAIL's footprint names the premises behind its counterexample.
 
 ## Entries
 
@@ -124,7 +124,7 @@ GOVERNING = {"requirement", **CHECK}           the report's governing check of t
 
 ENTRY = {"claim": NAME, "status": STATUS,
          "rules": ["R1", ...],                 the rules of the kernel results the verdict used
-         "footprint": [{"tag", "label", "owner", "source"}, ...],
+         "footprint": [{"tag", "label", "owner", "source", "version"?}, ...],
          "needs": [TEXT, ...],                 what each open item needs; non-empty iff UNKNOWN
          "margins": [{"requirement", "proved", "margin": "proved" | "undecided" | "within",
                       "point"?: {SYMBOL: EXACT}}, ...],     claims with a margin

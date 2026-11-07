@@ -148,7 +148,7 @@ class SteelFailure(unittest.TestCase):
 
 
 class WiringFailure(unittest.TestCase):
-    """The 30 m cable: 100 degC against 70 degC, 9.9 V against 6.9 V."""
+    """The 30 m cable: 106.8 degC against 70 degC, 10.6 V against 6.9 V."""
 
     def setUp(self):
         self.report = check(CABLE)
@@ -157,7 +157,7 @@ class WiringFailure(unittest.TestCase):
         found = {f.requirement: f for f in refuted(self.report)}
         hot = found["feed.w1/wire.steady_temperature/claim.hot"]
         self.assertEqual((hot.governing.unit, hot.claim.unit, hot.claim.bound), ("degC", "degC", 70))
-        self.assertAlmostEqual(hot.claim.value, 100.1, places=1)
+        self.assertAlmostEqual(hot.claim.value, 106.8, places=1)
         drop = found["feed.w1/wire.voltage_drop/claim.drop"]
         self.assertEqual((drop.governing.unit, drop.claim.quantity, drop.claim.bound), ("V", "voltage_drop", 0.03))
         self.assertAlmostEqual(drop.claim.value, drop.governing.demand / 230, places=6)
@@ -165,7 +165,7 @@ class WiringFailure(unittest.TestCase):
 
     def test_the_point_gives_each_input_in_its_unit(self):
         text = self.report.render()
-        self.assertIn("claim      hot: temperature is 100.1 degC here, against its bound 70 degC", text)
+        self.assertIn("claim      hot: temperature is 106.8 degC here, against its bound 70 degC", text)
         self.assertIn("draw.feed.load.current = 20 A", text)
         self.assertIn("ambient                        = 30 degC", text)
         for requirement, lines in blocks(text).items():
