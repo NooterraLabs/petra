@@ -6,7 +6,9 @@ The catalogue (component kinds), the attribute grammar and the load fields are i
 lower.py; the failure modes, model premises and validity rows in vocab.py; the clause
 formulas in limits.py, AISC's layer over petra/mechanics; what each limit state checks on
 each kind in checks.py; each connection's load path and the limit states its elements
-owe in path.py; coverage in domain.py. docs/steel_connections.md is the specification.
+owe in path.py; coverage in domain.py; why each mode a connection does not owe cannot
+arise for it in absent.py, which the readout prints and no verdict reads.
+docs/steel_connections.md is the specification.
 """
 from .domain import DOMAIN
 

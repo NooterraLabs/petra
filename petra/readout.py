@@ -442,8 +442,9 @@ def unchecked(report: Report) -> tuple[Unchecked, ...]:
     The reason comes from the coverage table itself. A load field the component's kind
     takes (Grammar.loads, on a kind whose loads target the component) and the design does
     not declare is added in a probe load case, and coverage.generate runs again: each mode
-    it then demands gets "no <field> load is declared; one would demand it". A mode no
-    coverage rule of its domain demands is CLAIM_ONLY. Any other is NOT_DEMANDED. The
+    it then demands gets "no <field> load is declared; one would demand it". Else the
+    domain's own reason the mode cannot arise for the component (DomainSpec.absent). A mode
+    no coverage rule of its domain demands is CLAIM_ONLY. Any other is NOT_DEMANDED. The
     probe is a copy of the design read only here, so it cannot change what the report
     demands or decides; a probe that raises costs only its reason."""
     design, registry = report.ir, report.registry
@@ -462,7 +463,9 @@ def unchecked(report: Report) -> tuple[Unchecked, ...]:
             continue
         loads = _load_reasons(name, spec.grammars.get(component.kind), design, models, registry, named)
         ruled = {m for rule in spec.coverage for m in rule.demands}
-        out += [Unchecked(name, m.id, loads.get(m) or (NOT_DEMANDED if m in ruled else CLAIM_ONLY)) for m in left]
+        absent = spec.absent(models[name], design) if spec.absent is not None else {}
+        out += [Unchecked(name, m.id, loads.get(m) or absent.get(m) or (NOT_DEMANDED if m in ruled else CLAIM_ONLY))
+                for m in left]
     return tuple(out)
 
 
@@ -507,7 +510,7 @@ def edge(found: tuple[Finding, ...], left: tuple[Unchecked, ...]) -> list[str]:
     `excused` line per check a guard excuses, by obligation (subject/mode) and check name,
     its conditions joined by "; " and each said once across load cases. Then one `not
     checked` line per reason and set of components, naming the modes; a reason that names
-    a load comes first, then CLAIM_ONLY, then NOT_DEMANDED."""
+    a load or why the mode cannot arise comes first, then CLAIM_ONLY, then NOT_DEMANDED."""
     excused: dict[tuple[str, str], list[str]] = {}
     for f in found:
         where = "/".join(f.requirement.split("/")[:2])

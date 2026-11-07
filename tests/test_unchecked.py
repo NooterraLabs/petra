@@ -1,7 +1,7 @@
 """Where a check stopped (petra/readout.py, plan P1 item 6): every check a guard of its
 clause excuses says so, with the condition and its numbers, and every mode a
 component's domain declares that no requirement names on it is listed with the reason
-the coverage table gives.
+the coverage table gives, or the domain's reason the mode cannot arise for it.
 
 Cold-start agents found both silent: flange_force.petra passes with its sidesway
 buckling check excused and a blank utilisation, and with no panel-zone check because it
@@ -162,12 +162,23 @@ class NotChecked(unittest.TestCase):
                 self.assertLessEqual(named, demanded)
                 self.assertFalse(named & {u.mode for u in loaded.unchecked})
 
-    def test_a_shear_tee_says_ductility_and_prying_are_not_demanded(self):
+    def test_a_shear_tee_says_why_a_single_plates_ductility_and_prying_do_not_arise(self):
         report = check(SHEAR_TEE)
-        for mode in ("steel.ductility", "steel.prying"):
-            self.assertIn(readout.Unchecked("tee1", mode, readout.NOT_DEMANDED), report.unchecked)
-        (line,) = [line for line in edge(report.render(), "not checked  ") if line.endswith(readout.NOT_DEMANDED)]
-        self.assertRegex(line, r"\bsteel\.ductility\b.*\bsteel\.prying\b.* on tee1: ")
+        why = {u.mode: u.reason for u in report.unchecked if u.subject == "tee1"}
+        self.assertEqual(why["steel.ductility"], "no single plate framing a beam is drawn")
+        self.assertEqual(why["steel.prying"], "no bolt is in tension, so none is pried (Manual Part 9)")
+        self.assertNotIn("steel.tee_ductility", why)
+        self.assertIn("not checked  steel.prying on tee1: no bolt is in tension, so none is pried (Manual Part 9)",
+                      edge(report.render(), "not checked  "))
+
+    def test_no_steel_component_is_left_not_demanded(self):
+        # docs/plan.md P1 item 5: every mode of a steel connection is demanded, or its
+        # reason for not arising is recorded (petra/models/steel/absent.py)
+        for path in DESIGNS:
+            report = check(path)
+            steel = {name for name, c in report.ir.components.items() if models.KINDS[c.kind].name == "steel"}
+            with self.subTest(path=path.name):
+                self.assertFalse([u for u in report.unchecked if u.subject in steel and u.reason == readout.NOT_DEMANDED])
 
     def test_a_mode_only_a_claim_demands_says_so(self):
         report = check(TRUSS_PASS)

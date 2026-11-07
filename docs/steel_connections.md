@@ -141,10 +141,13 @@ The twin (§8) restates every fit from the method statements, and the gate's man
 | **Clause traceability table** | Every provision in §4 maps to a check, a premise or an exclusion. CI fails if one is unmapped. |
 | **Load-path graph** | Every force component (shear, axial, moment) has a checked path through every fastener and element to the support |
 | **Limit-state completeness per element** | Every element type has a required list of limit states. The coverage check is set inclusion, trusted and simple. |
+| **A reason for every other mode** | Every mode of the domain a connection does not owe has a recorded physical reason it cannot arise there (`petra/models/steel/absent.py`): the part is not drawn, the force that would load it so is not there, or the source's method takes it as a premise. The readout prints the reason; `tests/test_steel_coverage.py` fails if a generated connection leaves a mode neither owed nor explained. |
 | **Block-shear path enumeration** | The elaborator enumerates every admissible tear-out path from the hole pattern. The twin elaborator must find the same set. |
 | **Tolerance and material ranges** | Every claim covers the tolerance box and the material range, not the nominal value |
 | **Validity rows** | Every formula's applicability limits (such as K1 limits and edge-distance conditions) are proved over the box, or the result is UNKNOWN |
 | **Margins** | Every claim carries a margin δ, so limited compute never leaves an UNKNOWN |
+
+Two drawn parts carry no computed force, and no obligation names them. A seat's top angle holds the beam's top flange: the deck reads it as the restraint that frames the beam's end (J10.7) and keeps both flanges from moving sideways (J10.4), and the Manual proportions it by practice, not for a force (Part 10; Companion Examples II.A-13 and II.A-14 choose it without a calculation). A stiffened seat plate's welds follow the Manual's detailing (Part 10, Fig. 10-11(b)): its weld to the support is the return of the stiffener's weld group under it, which the deck's weld check leaves out, conservatively, and its weld to the stiffener is sized to match that one. The grammar draws neither weld. The seat plate's bearing on the stiffener's fitted edge is checked at its own yield stress (J7).
 
 ## 7. What the kernel and elaborators need
 

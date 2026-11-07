@@ -156,6 +156,55 @@ class TeeDuctility(unittest.TestCase):
         self.assertEqual(outcome(written(stiff), "tee_ductility"), "refuted")
 
 
+class EveryModeOwedOrExplained(unittest.TestCase):
+    """Every mode of the steel domain is, for each connection, on its load path
+    (domain.required) or given a reason it cannot arise (absent.py), never both and never
+    neither, so the readout never says a steel mode is merely not demanded. Held over the
+    generator's samplers, rules kept and free, every kind and the details they draw, with
+    an axial load on some shear connections and a free end on some flange forces."""
+
+    PER_KIND = 40
+
+    def test_over_the_generators_samples(self):
+        import random
+        from fractions import Fraction
+
+        from petra.lang import parse_design
+        from petra.models.base import ComponentError
+        from petra.models.steel import domain, generate as gen
+        from petra.pipeline import lower_components
+        from petra.registry import build_registry
+
+        registry = build_registry()
+        modes = set(domain.DOMAIN.modes)
+        seen: dict[str, int] = {}
+        for kind, sampler in gen.SAMPLERS.items():
+            for i in range(self.PER_KIND):
+                rng = random.Random(f"absent:{kind}:{i}")
+                s = gen._Sampler(rng, registry)
+                sampler(s)
+                secondary = list(s.secondary)
+                if kind in ("shear_tab", "double_angle", "single_angle", "shear_tee", "shear_end_plate", "seated",
+                            "stiffened_seat") and rng.random() < 0.2:
+                    secondary.append(("axial", Fraction(1, 5)))
+                lines = [line.replace("end_twist restrained", "end_twist free") if rng.random() < 0.5 else line
+                         for line in s.lines]
+                text = gen.source(f"absent-{kind}-{i}", kind, rng.choice(("lrfd", "asd")), lines, Fraction(10), tuple(secondary))
+                try:
+                    design = parse_design(text, "<absent>", registry)
+                    conn = lower_components(design, registry)["c1"]
+                except ComponentError:
+                    continue
+                owed = {m for m in modes if m.id.removeprefix("steel.") in set(domain.required(conn, design))}
+                why = domain.absent(conn, design)
+                with self.subTest(kind=kind, i=i):
+                    self.assertFalse(owed & set(why))
+                    self.assertEqual(owed | set(why), modes, sorted(m.id for m in modes - owed - set(why)))
+                    self.assertTrue(all(why.values()))
+                seen[kind] = seen.get(kind, 0) + 1
+        self.assertEqual(set(seen), set(gen.SAMPLERS))
+
+
 def utilisations(report, mode: str) -> dict[str, float]:
     return {c["check"]: c["utilisation"] for v in report.to_json()["verdicts"] for o in v["obligations"]
             if f"/steel.{mode}/" in o["requirement"] for c in o["checks"]}
