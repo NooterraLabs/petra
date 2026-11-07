@@ -269,7 +269,7 @@ LABEL_LENGTH = ("domain", 16)
 
 
 class BuilderRules(unittest.TestCase):
-    """D3 to D5 of docs/steel_connections.md, for the trusted modules here."""
+    """D3 to D5 of docs/principles.md, for the trusted modules here."""
 
     def trees(self):
         for module in domain.TRUSTED:

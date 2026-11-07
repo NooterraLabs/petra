@@ -20,8 +20,9 @@ Some files are generated. Edit the source, then regenerate them:
 | `docs/reference.md` and `petra/templates.py` | `python -m petra.teach --write` |
 | `docs/steel_traceability.md` | `python -m petra.models.steel.trace` |
 | `docs/absurd_gap.md`, `docs/canary_recall.md`, `docs/steel_gate.md` | `scripts/absurd_gap.py`, `scripts/canary_recall.py`, `scripts/steel_gate.py` |
+| `docs/electronics_gate.md` | `scripts/electronics_gate.py`, about 7 minutes on six workers |
 
-Each report in the last row takes 40 minutes or more to regenerate on four cores. The `checks` workflow in `.github/workflows/checks.yml` runs the suite, the absurd-design gap and canary recall on GitHub's runners.
+Each report in the third row takes 40 minutes or more to regenerate on four cores. The `checks` workflow in `.github/workflows/checks.yml` runs the suite, the absurd-design gap and canary recall on GitHub's runners.
 
 ## Releases
 
