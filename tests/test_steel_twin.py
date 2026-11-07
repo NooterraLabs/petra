@@ -672,6 +672,92 @@ weld_bracket wb6 {
   weld_return 3 inch
   eccentricity 12 inch
 }""", "  on wb6 shear in [0 kip, 10 kip]"),
+    # Shear tees whose stem and beam web are both thicker than Eq 9-53's d/2 + 1/16 in, so
+    # the Manual's Part 9 ductility rule is checked, not excused: bolted, Eq 9-52's cap
+    # governs dmin at a 5.5 in gauge and its first term at a 12 in gauge; welded, Eq 9-51's
+    # first term governs wmin over four rows and its cap over two. The last tee's 5/8 in
+    # bolts put its W18x50 web just inside Eq 9-53's limit, which excuses the check; a
+    # smaller allowance would not.
+    "tee_ductile_cap": _variant("tee_ductile_cap", """
+shear_tee tee4 {
+  basis lrfd
+  beam W21x73 grade steel.A992
+  support W14x90 flange grade steel.A992
+  tee WT10_5x36_5 grade steel.A992
+  bolts bolt_group.120 diameter 0.75 inch threads included
+  rows 4
+  pitch 3 inch
+  edge_vertical 1.25 inch
+  bolt_line 3 inch
+  beam_edge 1.75 inch
+  top 3 inch
+  support_side bolted
+  support_gauge 5.5 inch
+}""", "  on tee4 shear in [0 kip, 40 kip]"),
+    "tee_ductile_wide": _variant("tee_ductile_wide", """
+shear_tee tee5 {
+  basis lrfd
+  beam W21x73 grade steel.A992
+  support W14x90 flange grade steel.A992
+  tee WT7x45 grade steel.A992
+  bolts bolt_group.120 diameter 0.75 inch threads included
+  rows 5
+  pitch 2.25 inch
+  edge_vertical 1 inch
+  bolt_line 3 inch
+  beam_edge 1.75 inch
+  top 3 inch
+  support_side bolted
+  support_gauge 12 inch
+}""", "  on tee5 shear in [0 kip, 40 kip]"),
+    "tee_ductile_welded": _variant("tee_ductile_welded", """
+shear_tee tee6 {
+  basis lrfd
+  beam W21x73 grade steel.A992
+  support W14x90 flange grade steel.A992
+  tee WT10_5x36_5 grade steel.A992
+  bolts bolt_group.120 diameter 0.75 inch threads included
+  rows 4
+  pitch 3 inch
+  edge_vertical 1.25 inch
+  bolt_line 3 inch
+  beam_edge 1.75 inch
+  top 3 inch
+  support_side welded
+  support_weld electrode.E70 size 0.3125 inch sides 1
+}""", "  on tee6 shear in [0 kip, 40 kip]"),
+    "tee_ductile_welded_short": _variant("tee_ductile_welded_short", """
+shear_tee tee7 {
+  basis lrfd
+  beam W21x73 grade steel.A992
+  support W14x90 flange grade steel.A992
+  tee WT10_5x36_5 grade steel.A992
+  bolts bolt_group.120 diameter 0.75 inch threads included
+  rows 2
+  pitch 3 inch
+  edge_vertical 1.25 inch
+  bolt_line 3 inch
+  beam_edge 1.75 inch
+  top 3 inch
+  support_side welded
+  support_weld electrode.E70 size 0.3125 inch sides 1
+}""", "  on tee7 shear in [0 kip, 25 kip]"),
+    "tee_ductile_excused": _variant("tee_ductile_excused", """
+shear_tee tee8 {
+  basis lrfd
+  beam W18x50 grade steel.A992
+  support W14x90 flange grade steel.A992
+  tee WT6x25 grade steel.A992
+  bolts bolt_group.120 diameter 0.625 inch threads included
+  rows 4
+  pitch 3 inch
+  edge_vertical 1.25 inch
+  bolt_line 3 inch
+  beam_edge 1.75 inch
+  top 3 inch
+  support_side bolted
+  support_gauge 5.5 inch
+}""", "  on tee8 shear in [0 kip, 30 kip]"),
 }
 
 
