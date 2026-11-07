@@ -1,62 +1,155 @@
 # Petra
 
-Petra checks a physical design against its claims and answers PASS, FAIL, MARGINAL or UNKNOWN. A design can be a pin-jointed truss, a wire circuit, a bolted joint, or a part under a load known only by its range and mean. Every PASS and every FAIL is a theorem that a small exact kernel checked. Every verdict lists the premises it rests on: standard values, signed inputs, models with their validity limits, and the coverage table. Solvers do the search, but the kernel trusts none of them. A solver hands in a certificate, and the kernel checks it with exact rational arithmetic.
+Petra checks a physical design against its claims and answers PASS, FAIL, MARGINAL or UNKNOWN. A design can be a steel connection, a pin-jointed truss, a wire circuit, a bolted joint, or a part under a load known only by its range and mean. Every PASS and every FAIL is a theorem that a small exact kernel checked. Every verdict lists the premises it rests on: standard values, signed inputs, models with their validity limits, and the coverage table. Solvers do the search, but the kernel trusts none of them. A solver hands in a certificate, and the kernel checks it with exact rational arithmetic.
 
-[docs/frame.md](docs/frame.md) explains what a verdict means and what v0 covers. [docs/design.md](docs/design.md) explains how the parts fit and why.
+The steel connections deck checks connections to AISC 360-22 Chapters J and K. It covers single-plate shear tabs, double and single angles, shear end plates, shear tees, unstiffened and stiffened seats, tee hangers, bolted and welded brackets, and concentrated flange forces on a column. [examples/steel](examples/steel) holds one design of each kind, and [docs/steel_connections.md](docs/steel_connections.md) is the deck's specification. Petra ships only the rows of the AISC Shapes Database that the examples and tests use. To use every W shape and angle, set `PETRA_SHAPES_XLSX` to your own copy of `SHAPE160.xlsx`.
 
-## Check your first design
+[docs/reference.md](docs/reference.md) is the language reference, and [docs/api.md](docs/api.md) documents the Python API. [docs/frame.md](docs/frame.md) explains what a verdict means and what v0 covers. [docs/design.md](docs/design.md) explains how the parts fit and why.
 
-You need Python 3.11. The kernel uses only the standard library. The solvers use `numpy` and `scipy` (HiGHS for linear programs).
+## Install
+
+You need Python 3.11 or later. Petra depends on `numpy` and `scipy` (HiGHS for linear programs). The kernel uses only the standard library.
+
+From a clone of this repository, install Petra and its `petra` command:
+
+```bash
+pip install .
+```
+
+To install a working copy whose edits take effect without reinstalling, add `-e`:
+
+```bash
+pip install -e .
+```
+
+The build backend is part of the repository (`_build/petra_build.py`) and needs no packages, so pip builds Petra without network access. pip needs the network only to fetch `numpy` and `scipy` when they are missing. To build a wheel to install on another machine, run `pip wheel --no-deps -w dist .`.
+
+Petra is not on PyPI yet. Publication is pending.
+
+To run Petra from the repository root without installing it, write `python -m petra` in place of `petra`.
+
+## Quickstart
+
+1. Check a steel shear tab. It joins a W18x50 beam to the flange of a W14x90 column through a 3/8 in plate and four 3/4 in bolts.
+
+	```bash
+	petra check examples/steel/shear_tab.petra
+	```
+
+	The first lines give the verdict and count the obligations:
+
+	<!-- sample: petra check examples/steel/shear_tab.petra | head -n 4 -->
+	```text
+	steel-shear-tab: PASS
+	entries    coverage PASS
+	scope      load cases gravity; environment undeclared; no parameters
+	checked    17 obligations, 17 certified, 0 refuted, 0 waived, 0 open
+	```
+
+	Then comes one line per limit state the kernel certified, such as `st1/steel.block_shear`. The footprint at the end lists every premise the verdict rests on.
+
+2. To read the verdict from another program, add `--json`. Petra prints the same report as one JSON object.
+
+	```bash
+	petra check examples/steel/shear_tab.petra --json
+	```
+
+	The exit code carries the overall status: 0 for PASS, 1 for FAIL, 2 for UNKNOWN, 5 for MARGINAL, 3 for an input error, and 4 for an internal error.
+
+3. To check a design from Python, call `petra.check_file`. `report.to_json()` returns the object that `--json` prints, and `report.render()` returns the text that `petra check` prints.
+
+	```python
+	import petra
+	report = petra.check_file("examples/bolt_unknown.petra")
+	print(report.to_json()["status"], [(v["claim"], v["status"]) for v in report.to_json()["verdicts"]])
+	```
+
+	<!-- sample: python -->
+	```text
+	UNKNOWN [('tension', 'PASS'), ('coverage', 'UNKNOWN')]
+	```
+
+## Walk through the examples
 
 1. Check a truss whose claims hold:
 
 	```bash
-	python -m petra check examples/truss_pass.petra
+	petra check examples/truss_pass.petra
 	```
 
-	The first lines name the verdict and each obligation the kernel certified:
+	The first lines name the verdict and the first obligation the kernel certified:
 
+	<!-- sample: petra check examples/truss_pass.petra | head -n 5 -->
 	```text
 	warren-footbridge-panel: PASS
 	entries    strength PASS, stability PASS, stress PASS, coverage PASS
 	scope      load cases crowd; environment indoor_dry; no parameters
-	checked    11 obligations, 11 certified, 0 refuted, 0 waived, 0 open
-	  frame/truss.plastic_collapse                 claim strength               R1  certified  solver  sha256:16afbc9f5e6f..
+	checked    10 obligations, 10 certified, 0 refuted, 0 waived, 0 open
+	  frame/truss.plastic_collapse                 claim strength               R1  certified  solver  sha256:aa44bf3a95d0..  validity 1 proved
 	```
 
-	The footprint at the end lists all 24 premises. For example, `reg:steel.S355.fy` cites EN 10025-2, and `in:warren-footbridge-panel.crowd.frame.D.fy` names the person who signed that load range.
+	The footprint at the end lists every premise. For example, `reg:steel.S355.fy` cites EN 10025-2, and `in:warren-footbridge-panel.crowd.frame.D.fy` names the person who signed that load range.
 
 2. Check the same truss under a heavier load:
 
 	```bash
-	python -m petra check examples/truss_fail.petra
+	petra check examples/truss_fail.petra
 	```
 
-	The verdict is FAIL, with three refutations. The panel cannot carry the load (R1, a Farkas ray), and two diagonals buckle (R4). Each refutation prints the counterexample point, such as `crowd.frame.D.fy = -60000 N` and `const.steel.E = 200000000000 Pa`. Every value lies inside its signed or sanctioned range.
+	The verdict is FAIL, with three refutations. The panel cannot carry the load (R1, a Farkas ray), and two diagonals buckle (R4). Each refutation prints the counterexample point. Every value lies inside its signed or sanctioned range. These lines show the counts and the start of the first counterexample:
+
+	<!-- sample: petra check examples/truss_fail.petra | sed -n '1,3p;13,20p' -->
+	```text
+	warren-footbridge-panel-rev-c: FAIL
+	entries    strength FAIL, coverage FAIL
+	checked    9 obligations, 6 certified, 3 refuted, 0 waived, 0 open
+	counterexample  frame.diag_ad/truss.member_buckling/coverage.truss.axial_member: the compression in frame.diag_ad is at most 1 times its flexural buckling resistance under load case crowd
+	  const.en10219_2.60_3x3_2.D = 603/10000 m   (reg:const.en10219_2.60_3x3_2.D)
+	  const.en10219_2.60_3x3_2.t = 2/625 m   (reg:const.en10219_2.60_3x3_2.t)
+	  const.en10219_2.76_1x3_2.D = 761/10000 m   (reg:const.en10219_2.76_1x3_2.D)
+	  const.en10219_2.76_1x3_2.t = 2/625 m   (reg:const.en10219_2.76_1x3_2.t)
+	  const.en1993_1_1.curve_c.alpha = 49/100 1   (reg:const.en1993_1_1.curve_c.alpha)
+	  const.steel.E = 200000000000 Pa   (reg:const.steel.E)
+	  crowd.frame.D.fy = -60000 N   (in:warren-footbridge-panel-rev-c.crowd.frame.D.fy)
+	```
 
 3. Check a bolted joint whose coverage is incomplete:
 
 	```bash
-	python -m petra check examples/bolt_unknown.petra
+	petra check examples/bolt_unknown.petra
 	```
 
 	The tension claim passes. The verdict is still UNKNOWN, because coverage asks for plate bearing and galvanic corrosion, and v0 has no model for either. Petra names each open requirement and what would close it:
 
+	<!-- sample: petra check examples/bolt_unknown.petra | head -n 11 -->
 	```text
+	mast-bracket-coastal: UNKNOWN
+	entries    tension PASS, coverage UNKNOWN
+	checked    3 obligations, 1 certified, 0 refuted, 0 waived, 2 open
+	  bracket/bolt.tension                         claim tension                R4  certified  solver  sha256:9caaf8237101..
+	  bracket/bolt.plate_bearing                   coverage bolt.bearing        --  open
+	  bracket/corrosion.galvanic                   coverage galvanic.contact    --  open
 	open       2 requirements
 	  bracket/bolt.plate_bearing/coverage.bolt.bearing
 	    needs no model for bolt.plate_bearing on bracket: waive bolt.plate_bearing on bracket by "<owner>" reason "<why>"
+	  bracket/corrosion.galvanic/coverage.galvanic.contact
+	    needs no model for corrosion.galvanic on bracket: waive corrosion.galvanic on bracket by "<owner>" reason "<why>"
 	```
 
-4. To read verdicts from another program, add `--json`. The exit code carries the status: 0 for PASS, 1 for FAIL, 2 for UNKNOWN, 5 for MARGINAL, 3 for an input error, and 4 for an internal error.
-
-5. Check a certificate file on its own, with no solver and no design:
+4. Check a certificate file on its own, with no solver and no design:
 
 	```bash
-	python -m petra verify examples/bolt_tension.cert.json
+	petra verify examples/bolt_tension.cert.json
 	```
 
-	The kernel reads the statement and the evidence from the file and prints `theorem` and the statement hash. [The certificate JSON format](docs/design.md#certificate-json-format) is language-neutral, so a second kernel can check the same files.
+	The kernel reads the statement and the evidence from the file and prints `theorem` and the statement hash:
+
+	<!-- sample: petra verify examples/bolt_tension.cert.json -->
+	```text
+	examples/bolt_tension.cert.json: theorem sha256:9caaf82371013b4170cfbb25cde94eaa54b40ee325600116748e4ca91b55f372
+	```
+
+	[The certificate JSON format](docs/design.md#certificate-json-format) is language-neutral, so a second kernel can check the same files.
 
 ## Ask how close, and how far
 
@@ -66,15 +159,25 @@ A claim can name a margin after its bound:
 claim hot:  lighting.w1.temperature <= 70 degC margin 20 degC under lamp_draw
 ```
 
-The verdict is FAIL if the wire can pass 70 degC. It is MARGINAL if the claim is proved and the kernel also certifies a point where the wire comes within 20 degC of the bound. It is PASS if the claim is proved and no point comes that close, and the report says whether the margin itself was proved (the claim holds with at least 20 degC to spare) or is undecided. A point within the margin while the claim is neither proved nor refuted gives UNKNOWN, with the point shown. `examples/circuit_pass.petra` with this claim is MARGINAL: the wire reaches about 55 degC at the hot corner.
+The verdict is FAIL if the wire can pass 70 degC. It is MARGINAL if the claim is proved and the kernel also certifies a point where the wire comes within 20 degC of the bound. It is PASS if the claim is proved and no point comes that close, and the report says whether the margin itself was proved (the claim holds with at least 20 degC to spare) or is undecided. A point within the margin while the claim is neither proved nor refuted gives UNKNOWN, with the point shown. `examples/circuit_pass.petra` with this claim is MARGINAL, because the wire reaches about 55 degC at the hot corner.
 
 To find how far an input can go, name the range to explore:
 
 ```bash
-python -m petra envelope examples/circuit_pass.petra --input ambient --from "-20 degC" --to "100 degC"
+petra envelope examples/circuit_pass.petra --input ambient --from "-20 degC" --to "100 degC"
 ```
 
-Petra checks the design with the ambient's range replaced by probe intervals and bisects. It reports `ambient in [-20, 53.125] degC` as proved, with a certified failure of the `hot` claim at 54.3 degC. The probed range is an assumption of the command, not of whoever signed the design's ambient, and the footprint says so. `--input` also takes a load entry (`lamp_draw.lighting.lamps.current`), a component field (`lighting.mains.fault_current`) or a family param. The search runs at most 64 checks (`--max-probes`), and the command exits 0 only when the anchor and the obligations that do not depend on the input both pass.
+Petra checks the design with the ambient's range replaced by probe intervals and bisects. It reports the widest interval it proved and the first point where a claim fails:
+
+<!-- sample: petra envelope examples/circuit_pass.petra --input ambient --from "-20 degC" --to "100 degC" | head -n 4 -->
+```text
+envelope   ambient in [-20, 53.125] degC: every obligation that depends on it is proved (one check over the whole interval passes)
+input      in:workshop-lighting-radial.ambient, stated [10, 40] degC; probed [-20, 100] degC from 25 degC, resolution 1.875 degC
+below      proved to -20 degC, the end of the probe range
+above      proved to 53.125 degC; 54.296875 degC is not: FAIL (lighting.w1/wire.steady_temperature/claim.hot is refuted at this point with ambient = 54.296875 degC); 1.171875 degC undecided
+```
+
+The probed range is an assumption of the command, not of whoever signed the design's ambient, and the footprint says so. `--input` also takes a load entry (`lamp_draw.lighting.lamps.current`), a component field (`lighting.mains.fault_current`) or a family param. The search runs at most 64 checks (`--max-probes`), and the command exits 0 only when the anchor and the obligations that do not depend on the input both pass.
 
 ## Know what a verdict rests on
 
@@ -83,16 +186,16 @@ Each premise in a footprint carries one tag:
 - `proved` and `certified` come from the kernel.
 - `sanctioned` is a value from a named standard, such as a minimum yield strength.
 - `measured` and `assumed` are inputs that a named person signed, with a source.
-- `validated_model` is a physical model. Its numeric validity limits, such as a member staying below yield, are checked inequalities: every PASS and FAIL carries a kernel proof of each one, and a model used outside its range gives UNKNOWN with the point. Limits not yet checked are printed as "not checked".
+- `validated_model` is a physical model. Its numeric validity limits, such as a member staying below yield, are checked inequalities. Every PASS and FAIL carries a kernel proof of each one, and a model used outside its range gives UNKNOWN with the point. Limits not yet checked are printed as "not checked".
 - `judged` is the coverage table, which decides which failure modes a design must address.
 
 A verdict is true relative to its footprint. If a premise is wrong, the verdict can be wrong, and the footprint tells you which premise to check.
 
 ## Certify a family once
 
-`python -m petra certify-family FILE --library DIR` proves a design's claims over a whole box of inputs and stores the certificates. A later design whose claims fall inside that box gets them from the library. With `python -m petra check FILE --library DIR --no-solve`, the kernel proves those claims and no solver runs. Coverage obligations that the family did not certify stay open. `python scripts/bench_family.py` times that reuse against recomputing, and explains the ratio from its own counters.
+`petra certify-family FILE --library DIR` proves a design's claims over a whole box of inputs and stores the certificates. A later design whose claims fall inside that box gets them from the library. With `petra check FILE --library DIR --no-solve`, the kernel proves those claims and no solver runs. Coverage obligations that the family did not certify stay open. `python scripts/bench_family.py` times that reuse against recomputing, and explains the ratio from its own counters.
 
-`python -m petra gym --episodes 20 --seed 0` runs a baseline agent on generated circuit and bolt tasks. The reward comes only from the kernel verdict.
+`petra gym --episodes 20 --seed 0` runs a baseline agent on generated circuit and bolt tasks. The reward comes only from the kernel verdict.
 
 ## Check the build
 
@@ -100,6 +203,12 @@ Run the tests:
 
 ```bash
 python -m unittest discover -s tests -t .
+```
+
+The samples in this README are command output. A test runs each command and fails when a sample is stale. To rewrite every sample from its command, run:
+
+```bash
+python tests/test_docs.py --write
 ```
 
 Check the definition of done in [docs/frame.md](docs/frame.md), item by item:

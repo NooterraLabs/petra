@@ -1,0 +1,20 @@
+[build-system]
+requires = []
+build-backend = "petra_build"
+backend-path = ["_build"]
+
+[project]
+name = "petra"
+version = "0.1.0"
+description = "Checks physical designs against their claims, with every verdict a theorem from an exact kernel"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+dependencies = ["numpy>=1.23.2", "scipy>=1.9.2"]
+
+[project.scripts]
+petra = "petra.cli:main"
+
+[tool.petra-build]
+include = ["petra/**/*.py", "petra/registry/aisc_shapes.json"]
