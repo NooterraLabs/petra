@@ -24,6 +24,10 @@ Some files are generated. Edit the source, then regenerate them:
 
 Each report in the last row takes 40 minutes or more to regenerate on four cores. The `checks` workflow in `.github/workflows/checks.yml` runs the suite, the absurd-design gap and canary recall on GitHub's runners.
 
+## Releases
+
+A release is a tag `v<version>` whose version matches `pyproject.toml`. Pushing the tag runs `.github/workflows/release.yml`, which builds the wheel and sdist, runs the suite, and publishes both to PyPI through trusted publishing. Links in the README that PyPI shows point into the repository at that tag.
+
 ## Changes to the kernel
 
 Every verdict trusts `petra/kernel/`, so a change there needs the maintainer's approval before it merges. The kernel imports only the Python standard library, and a test enforces this.

@@ -13,6 +13,7 @@ import hashlib
 import importlib.util
 import io
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -96,6 +97,17 @@ class Packaging(unittest.TestCase):
         self.assertEqual({d.split(">=")[0] for d in meta.get_all("Requires-Dist")}, {"numpy", "scipy"})
         self.assertEqual(self.files[f"{DIST_INFO}/licenses/LICENSE"], (ROOT / "LICENSE").read_bytes())
         self.assertIn("petra = petra.cli:main", self.files[f"{DIST_INFO}/entry_points.txt"].decode("utf-8").splitlines())
+        self.assertIn("Source, https://github.com/NooterraLabs/petra", meta.get_all("Project-URL"))
+
+    def test_the_published_readme_links_into_the_repository_at_the_release_tag(self):
+        published = BytesParser().parsebytes(self.files[f"{DIST_INFO}/METADATA"]).get_payload()
+        targets = re.findall(r"\]\(([^)\s]+)\)", published)
+        self.assertEqual([t for t in targets if not t.startswith(("https://", "http://", "#"))], [],
+                         "no link is relative, because PyPI and an installed petra have no repository beside them")
+        tag = f"https://github.com/NooterraLabs/petra/blob/v{PROJECT['version']}/"
+        self.assertIn(f"]({tag}docs/plan.md)", published)
+        self.assertEqual(re.sub(re.escape(tag), "", published), (ROOT / "README.md").read_text(encoding="utf-8"),
+                         "only the link targets differ from README.md")
 
     def test_every_wheel_file_matches_its_record_row(self):
         rows = list(csv.reader(io.StringIO(self.files[f"{DIST_INFO}/RECORD"].decode("utf-8"))))
@@ -128,10 +140,11 @@ class Packaging(unittest.TestCase):
         self.assertIn("`petra docs`", ok(petra, "--help", cwd=self.outside).rstrip("\n").splitlines()[-1])
         listed = [line.split()[0] for line in ok(petra, "docs", cwd=self.outside).splitlines()[:-1]]
         self.assertEqual(listed, ["readme", "reference", "api"])
-        for name, path in (("api", ROOT / "petra" / "docs" / "api.md"), ("reference", ROOT / "docs" / "reference.md"),
-                           ("readme", ROOT / "README.md")):
+        for name, text in (("api", (ROOT / "petra" / "docs" / "api.md").read_text(encoding="utf-8")),
+                           ("reference", (ROOT / "docs" / "reference.md").read_text(encoding="utf-8")),
+                           ("readme", backend().description(PROJECT))):
             with self.subTest(name):
-                self.assertEqual(ok(petra, "docs", name, cwd=self.outside), path.read_text(encoding="utf-8"))
+                self.assertEqual(ok(petra, "docs", name, cwd=self.outside), text)
 
     def test_an_editable_install_imports_the_source_tree(self):
         python, _ = venv(self.tmp / "editable")

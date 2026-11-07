@@ -29,7 +29,7 @@ except ModuleNotFoundError as exc:
 
 ROOT = Path(__file__).resolve().parent.parent
 
-WRITTEN = frozenset({"name", "version", "description", "readme", "requires-python", "license", "license-files", "dependencies", "scripts"})
+WRITTEN = frozenset({"name", "version", "description", "readme", "requires-python", "license", "license-files", "dependencies", "urls", "scripts"})
 """The [project] keys the metadata carries."""
 
 ZIP_EPOCH = (1980, 1, 1, 0, 0, 0)
@@ -66,6 +66,18 @@ def _shipped(include: list[str]) -> list[str]:
     return sorted(paths)
 
 
+RELATIVE_LINK = re.compile(r"\]\((?!https?://|#|mailto:)([^)\s]+)\)")
+
+
+def description(project: dict[str, Any]) -> str:
+    """The readme as PyPI and an installed `petra docs readme` show it. Neither has the
+    repository beside it, so each relative link points into the repository at the release
+    tag `v<version>`."""
+    base = f"{project['urls']['Source']}/blob/v{project['version']}/"
+    readme = (ROOT / project["readme"]).read_text(encoding="utf-8")
+    return RELATIVE_LINK.sub(lambda m: f"]({base}{m.group(1)})", readme)
+
+
 def _metadata(project: dict[str, Any]) -> bytes:
     fields = [
         ("Metadata-Version", "2.4"),
@@ -76,10 +88,10 @@ def _metadata(project: dict[str, Any]) -> bytes:
         ("License-Expression", project["license"]),
         *(("License-File", f) for f in project["license-files"]),
         *(("Requires-Dist", d) for d in project["dependencies"]),
+        *(("Project-URL", f"{label}, {url}") for label, url in project["urls"].items()),
         ("Description-Content-Type", "text/markdown"),
     ]
-    readme = (ROOT / project["readme"]).read_text(encoding="utf-8")
-    return ("".join(f"{k}: {v}\n" for k, v in fields) + "\n" + readme).encode("utf-8")
+    return ("".join(f"{k}: {v}\n" for k, v in fields) + "\n" + description(project)).encode("utf-8")
 
 
 def _wheel(directory: str, project: dict[str, Any], payload: list[tuple[str, bytes]]) -> str:

@@ -6,12 +6,16 @@ backend-path = ["_build"]
 [project]
 name = "petra"
 version = "0.1.0"
-description = "Checks physical designs against their claims, with every verdict a theorem from an exact kernel"
+description = "Checks physical designs against their stated claims, with an exact-arithmetic certificate for every PASS and FAIL"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 dependencies = ["numpy>=1.23.2", "scipy>=1.9.2"]
+
+[project.urls]
+Source = "https://github.com/NooterraLabs/petra"
+Issues = "https://github.com/NooterraLabs/petra/issues"
 
 [project.scripts]
 petra = "petra.cli:main"
