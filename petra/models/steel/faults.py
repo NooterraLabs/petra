@@ -8,7 +8,8 @@ slender seat stiffener, a lapped fillet as thick as its plate, bolts against a h
 stem, a cope deeper than half the beam, a load past the governing strength; and parts that
 do not fit: bolt rows run past the beam's depth or off a seat's leg, a support gauge wider
 than the face, a beam too wide to pass between a column's flanges, a plate on the beam's
-fillet, a bracket's bolt columns off the flange. `seed_faults`
+fillet, a bracket's bolt columns off the flange; and a flange force's panel_shear or axial
+load left out, which leaves its panel zone open rather than unchecked. `seed_faults`
 applies each fault to passing designs from the generator; the deck catches a fault when
 its verdict is not PASS, and names it when a refuted or open requirement is one of the
 fault's modes. The gate wants every fault caught and named.
@@ -95,6 +96,13 @@ def _short_edge(text: str, g: Generated) -> str | None:
 def _close_holes(text: str, g: Generated) -> str | None:
     rows = _field(text, "rows")
     return _set(text, "pitch", "1.5 inch") if rows and int(rows) > 1 else None
+
+
+def _drop_load(field: str) -> Callable[[str, Generated], str | None]:
+    """The design with its `field` load left out of the load case."""
+    def edit(text: str, g: Generated) -> str | None:
+        return re.sub(rf"^  on c1 {field} in .*\n", "", text, count=1, flags=re.M)
+    return edit
 
 
 def _far_holes(text: str, g: Generated) -> str | None:
@@ -263,6 +271,10 @@ FAULTS: tuple[Fault, ...] = (
           BEAM_SIDE, _plate_on_fillet, frozenset({"beam_fit"})),
     Fault("columns off the flange", "two bracket bolt columns 16 in apart", ("bolt_bracket",), _columns_off_flange,
           FIT_FACES),
+    Fault("panel shear left out", "a flange force's panel_shear load left out of its case", ("flange_force",),
+          _drop_load("panel_shear"), frozenset({"panel_zone"})),
+    Fault("column axial left out", "a flange force's axial load left out of its case", ("flange_force",),
+          _drop_load("axial"), frozenset({"panel_zone"})),
 )
 
 

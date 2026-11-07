@@ -153,8 +153,10 @@ def path(conn: Conn, fields: set[str]) -> tuple[Link, ...]:
                 links += (Link("member web", "j10_compression_buckling"),)
             elif "flange_restrained" in conn.attrs and "unbraced_length" in conn.attrs:
                 links += (Link("member web", "j10_sidesway"),)
-        if "panel_shear" in fields:
-            links += (Link("member web", "panel"),)
+        # Whatever loads the design declares, a flange force may be one flange of a moment
+        # connection's couple, which shears the panel zone (J10.6); build.NEEDS says what
+        # its check reads that the force alone does not give.
+        links += (Link("member web", "panel"),)
     elif kind == "bolt_bracket":
         links = (Link("bracket plate", "bent_ply"), *_shaped(conn), *_bolts(conn, "bracket bolts", "bracket_bolts"), _face(conn))
     elif kind == "weld_bracket":

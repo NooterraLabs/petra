@@ -384,8 +384,12 @@ TEMPLATES: dict[str, tuple[str, str, str]] = {
         'petra 0\n'
         '\n'
         '# A concentrated compressive force from a beam flange on a W14x90 column flange, away from\n'
-        '# the column ends. No panel_shear or axial load is declared, so the panel zone (J10.6) is\n'
-        '# not checked here: add `on ff1 panel_shear in [...]` to demand it.\n'
+        '# the column ends. The panel zone (J10.6) is demanded at every flange force, and its check\n'
+        "# reads two loads the force alone does not give: the panel's required shear (the flange\n"
+        "# forces of the moment connections at the joint less the story shear) and the column's\n"
+        '# axial force. Neither is declared here, so the panel zone stays open (UNKNOWN) naming\n'
+        '# both: add `on ff1 panel_shear in [...]` and `on ff1 axial in [...]`, or a panel_shear of\n'
+        '# zero where the force is no flange of a moment connection.\n'
         '\n'
         'design "steel-flange-force" {\n'
         '  owner "s.engineer@example.org"\n'

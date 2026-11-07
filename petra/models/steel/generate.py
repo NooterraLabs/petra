@@ -460,8 +460,9 @@ def _flange_force(s: _Sampler) -> None:
             s.line(f"moment_at_force {s.pick(('below_yield', 'at_yield'))}")
         elif force == "compressive":
             s.line("moment_at_force below_yield")     # J10.4 reads it (lower._check_kind)
-    if s.chance(0.3):
-        s.secondary.append(("panel_shear", Fraction(s.pick(("0.5", "1", "2")))))
+    # The panel zone is demanded at every flange force and reads both (build.NEEDS).
+    s.secondary.append(("panel_shear", Fraction(s.pick(("0", "0.5", "1", "2")))))
+    s.secondary.append(("axial", Fraction(s.pick(("0", "0.5", "2")))))
 
 
 def _bolt_bracket(s: _Sampler) -> None:

@@ -20,7 +20,7 @@ from typing import Callable, Iterator, Mapping
 
 from ... import mechanics as M
 from ...ir import Design, Fixed, Input
-from ...kernel import Expr, Interval, Max, Min, Sqrt, Sym
+from ...kernel import Abs, Expr, Interval, Max, Min, Sqrt, Sym
 from ...mechanics import add, c, div, mul, sq, sub
 from ...registry import Registry
 from ...units import DIMENSIONLESS, Quantity
@@ -1484,7 +1484,8 @@ def gen_panel_zone(ctx: Ctx, geo: Geometry) -> list[Check]:
         d, tw, area = (ctx.shape(f.shape, p) for p in ("d", "tw", "A"))
         fy = ctx.mat(f.grade, "fy")
         alpha = c(1) if ctx.lrfd else ctx.const("aisc360.j10_6.alpha_asd")
-        pr = f.axial if f.axial is not None else c(0)
+        # build.NEEDS has the case give the axial force; tension or compression, its magnitude
+        pr = Abs(f.axial) if f.axial is not None else c(0)
         rn = L.panel_zone(ctx.const, fy, d, tw, pr, mul(fy, area), alpha)
         out.append(Check(f"{f.name} web: panel-zone web shear (J10.6)", (f.panel_shear,), rn, "aisc360.j10_6", suffix="", guards=(), unit="kip"))
     return out

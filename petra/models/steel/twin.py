@@ -255,6 +255,16 @@ class _Ctx:
                 return _kip(rng.value.hi)
         return 0.0
 
+    def magnitude(self, field: str) -> float:
+        """The largest magnitude the load interval on this connection reaches, in kips (0
+        if absent): a signed load such as an axial force, either end."""
+        case = self.design.loads[self.case]
+        for e in case.entries:
+            if e.target == (self.conn.name,) and e.field == field:
+                rng = e.value.range if isinstance(e.value, Input) else self.design.params[e.value.name].range
+                return max(abs(_kip(rng.value.lo)), abs(_kip(rng.value.hi)))
+        return 0.0
+
     def avail(self, rn: float, limit: str) -> float:
         phi, omega = FACTORS[limit]
         return rn * self.reg.const(phi) if self.lrfd else rn / self.reg.const(omega)
@@ -1245,7 +1255,7 @@ def _flange_force(ctx: _Ctx, modes: set[str]) -> None:
                 ctx.check("web_sidesway_buckling", "member web: web sidesway buckling (J10.4)", force, rn, "j10_4")
     if "panel_zone" in modes:
         vp = ctx.load("panel_shear")
-        pr = abs(ctx.load("axial"))
+        pr = ctx.magnitude("axial")
         py = fy * m["A"]
         alpha = 1.0 if ctx.lrfd else 1.6
         rn = 0.6 * fy * d * tw

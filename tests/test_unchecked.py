@@ -81,6 +81,8 @@ flange_force ff1 {
 
 load gravity {
   on ff1 force in [0 kip, 400 kip]
+  on ff1 panel_shear in [0 kip, 50 kip]
+  on ff1 axial in [0 kip, 100 kip]
   signed "s.engineer@example.org" source "beam reaction"
 }
 """
@@ -138,15 +140,17 @@ class Excused(unittest.TestCase):
 
 
 class NotChecked(unittest.TestCase):
-    def test_the_panel_zone_names_the_load_that_would_demand_it(self):
+    def test_the_panel_zone_is_demanded_and_names_the_loads_it_reads(self):
         report = check(FLANGE_FORCE)
-        reason = "no panel_shear load is declared; one would demand it"
-        self.assertIn(readout.Unchecked("ff1", "steel.panel_zone", reason), report.unchecked)
-        self.assertIn(f"not checked  steel.panel_zone on ff1: {reason}", edge(report.render(), "not checked  "))
+        self.assertFalse([u for u in report.unchecked if u.mode == "steel.panel_zone"])
+        (open_,) = [o for v in report.to_json()["verdicts"] for o in v["obligations"] if "/steel.panel_zone/" in o["requirement"]]
+        self.assertEqual(open_["outcome"], "open")
+        text = report.render()
+        for field in ("panel_shear", "axial"):
+            self.assertIn(f"needs signed bound on ff1.{field} [kip]", text)
 
     def test_declaring_the_named_load_demands_the_mode(self):
-        for path, line in ((FLANGE_FORCE, "on ff1 panel_shear in [0 kip, 10 kip]"), (SHEAR_TEE, "on tee1 axial in [0 kip, 5 kip]"),
-                           (HANGER, "on h1 shear in [0 kip, 5 kip]")):
+        for path, line in ((SHEAR_TEE, "on tee1 axial in [0 kip, 5 kip]"), (HANGER, "on h1 shear in [0 kip, 5 kip]")):
             report = check(path)
             field = line.split()[2]
             named = {u.mode for u in report.unchecked if u.reason == f"no {field} load is declared; one would demand it"}
@@ -185,8 +189,9 @@ class NotChecked(unittest.TestCase):
         twice = text.replace(block, f"{block}\n\n{block.replace('ff1', 'ff2')}").replace(
             "  signed ", "  on ff2 force in [0 kip, 150 kip]\n  signed ")
         lines = edge(written(twice).render(), "not checked  ")
-        self.assertIn("not checked  steel.panel_zone on ff1, ff2: no panel_shear load is declared; one would demand it", lines)
-        self.assertEqual(len(lines), 2, lines)
+        self.assertTrue(lines)
+        for line in lines:
+            self.assertRegex(line, r" on ff1, ff2: ")
 
     def test_a_report_without_its_design_lists_nothing(self):
         bare = dataclasses.replace(check(FLANGE_FORCE), ir=None, registry=None)

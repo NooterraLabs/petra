@@ -172,9 +172,15 @@ STRENGTH: tuple[tuple[str, str, str, str, tuple[ValidityRow, ...]], ...] = (
      f"{AISC} Section J10.5", ()),
     ("panel_zone",
      "panel-zone web shear, Rn = 0.60 Fy dc tw, reduced by (1.4 - alpha Pr/Py) above alpha Pr = 0.4 Py "
-     "(Eqs J10-9, J10-10)",
+     "(Eqs J10-9, J10-10), against the panel's required shear, the declared panel_shear: the flange forces of the "
+     "moment connections at the joint less the story shear (Commentary Eq C-J10-3), which the one flange force "
+     "declared does not give; Pr is the declared axial force's magnitude, tension or compression. Demanded at every "
+     "flange force, since the grammar does not say whether the force is one flange of a moment connection's "
+     "couple (J10.6's double-concentrated forces); a case that gives no panel_shear or no axial leaves it open "
+     "naming the load, since no value is safe over either's range, and a force with no couple closes it with a "
+     "signed panel_shear of zero",
      "the effect of panel-zone deformation on frame stability is not considered in the analysis",
-     f"{AISC} Section J10.6", ()),
+     f"{AISC} Section J10.6 and Commentary J10.6", ()),
     ("seat_flexure",
      "flexural yielding of an unstiffened seat angle's outstanding leg at the critical section, Mn = Fy L t^2 / 4, under "
      "the beam reaction at the middle of the bearing length it needs: the least of the outstanding leg less the setback "
