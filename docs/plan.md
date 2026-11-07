@@ -186,7 +186,13 @@ The gap baseline is 1,711 of 15,600 generated designs that PASS but cannot be bu
    - Whether a part on a web-to-flange fillet counts as unbuildable decides 238 of the 1,711.
    - The gap count is compared only at a pinned seed and generator commit.
 
-**Done when** the absurd-design count from P0 is zero, canary recall is at least 90% in every kind and domain, and the full gate passes.
+8. **The joint and demand classes the canary lane found.** A bolted joint's force model holds only while the plates stay clamped, and a demand's stated capacity can sit above the level where the design's own tests broke a part. The outside judge finds about 360 and 340 such designs in 54,000 (seeds 1 to 3). Each becomes an obligation or an UNKNOWN.
+
+**Result so far, 2026-11-07.** Items 1, 3, 6 and the canaries of item 7 are merged. The steel gap fell from 1,516 to 0 on seed 1 and is 0 on the unseen seed 7. Canary recall on Petra before the fit checks was 51 of 53. The canary lane showed the recall measure needed restating, below.
+
+**How recall is measured.** A canary hole is the set of modes that refuse a canary, treated as discharged in tooling. The search, with the judge as its oracle, must find a PASS of that canary's kind and condition. The bar is at least 90% of canary holes pooled, with each hole's budget set to three over its cell's measured rate (at least 600 designs). Per kind, recall is reported, not gated, because one rare cell sinks a kind with one to three canaries. Recall by single mode is reported only: it falls toward zero as the fit gaps close. Runs compare by stream hash, not by seed and commit, because the generator samples the registry. flange_force has no canary because its grammar draws no parts, and the report says so (P5 draws more).
+
+**Done when** the absurd-design count is zero on seed 1 and the held-out seeds 2 and 3, canary recall meets the bar above, and the full gate passes.
 
 **Then publish,** on your go (§8): the public repository, then PyPI. **Done when** a networked fresh agent installs from public PyPI and passes the rotated briefs.
 
