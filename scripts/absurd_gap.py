@@ -1,21 +1,27 @@
-"""The absurd-design gap (docs/plan.md P0 item 2): `python scripts/absurd_gap.py [--n 20000]
-[--seed 1] [--workers 7] [--out docs]`, or `--seed S --show INDEX` to print one design.
+"""The absurd-design gap (docs/plan.md P0 item 2): `python scripts/absurd_gap.py [--n 18000]
+[--seeds 1,2,3] [--workers 7] [--out docs]`, or `--seeds S --show INDEX` to print one design.
 
-Generates designs across the eleven steel kinds, the circuit and the truss, mutated along
-the dimensions that decide whether parts fit: rows, pitch, top, edge distances, gauges,
-setback, beam and support swaps, web or flange, copes, angle and tee swaps, conductor size
-against terminal, truss span and load scale. Checks each design with Petra and with the
-outside judge (judges/), and writes docs/absurd_gap.md and docs/absurd_gap_log.jsonl. The
-canaries in judges/canaries run every time. The gap is the designs the judge finds
-unbuildable that Petra passes; P1 drives it to zero.
+Generates designs across the eleven steel kinds, the circuit, the truss, the bolted joint
+and the demand, mutated along the dimensions that decide whether parts fit or a model's
+premise holds: rows, pitch, top, edge distances, gauges, setback, beam and support swaps,
+web or flange, copes, angle and tee swaps, conductor size against terminal, truss span and
+load scale, a joint's preload against its pull, a demand's tests against its capacity.
+Checks each design with Petra and with the outside judge (judges/), and writes
+docs/absurd_gap.md and docs/absurd_gap_log.jsonl. The canaries in judges/canaries run
+every time. The gap is the designs the judge rejects that Petra passes; P1 drives it to
+zero.
 
 Tooling: deterministic for a seed, since design i draws from its own stream "seed:i".
 Steel designs start from the deck's own samplers (petra/models/steel/generate.py) or from
-the examples, so their loads are drawn here, not sized by the deck.
+the examples, so their loads are drawn here, not sized by the deck. Two runs measured the
+same designs exactly when each seed's stream hash in the report agrees; the report names
+the commits of the generator and of the petra/ it measured, so a later Petra is compared
+at the same generator commit and seeds.
 """
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import random
@@ -43,9 +49,9 @@ from petra.solvers import SolverSource  # noqa: E402
 from petra.verdict import STATUS  # noqa: E402
 
 STEEL = tuple(G.SAMPLERS)
-SCHEDULE = (*STEEL, "circuit", "truss", *STEEL, "circuit", "circuit")
-"""Design i is of kind SCHEDULE[i % 26]: every steel kind twice, the circuit three times and
-the truss once per 26, the first 13 covering every kind."""
+SCHEDULE = (*STEEL, "circuit", "truss", "joint", "demand", *STEEL, "circuit", "circuit", "joint", "demand")
+"""Design i is of kind SCHEDULE[i % 30]: every steel kind, the joint and the demand twice,
+the circuit three times and the truss once per 30, the first 15 covering every kind."""
 
 CANARIES = ROOT / "judges" / "canaries"
 EXAMPLES = ROOT / "examples"
@@ -296,6 +302,111 @@ def _truss(index: int, rng: random.Random, registry) -> Sample:
     return Sample(index, "truss", "example", tuple(labels), text)
 
 
+JOINT = """petra 0
+
+design "absurd-{index:05d}" {{
+  owner "gate@petra.dev"
+  environment indoor_dry
+}}
+
+joint bracket {{
+  bolt {bolt} count {count}
+  plate {plate} thickness {thickness} mm
+  plate steel.S355 thickness 10 mm
+  torque in [{torque}] signed "gate@petra.dev" source "absurd gap generator"
+  nut_factor in [{nut_factor}] signed "gate@petra.dev" source "absurd gap generator"
+  load_share in [{load_share}] signed "gate@petra.dev" source "absurd gap generator"
+}}
+
+load pull {{
+  on bracket force in [0 kN, {force} kN]
+  signed "gate@petra.dev" source "absurd gap generator"
+}}
+
+claim tension: bracket.tension_utilisation <= {u} under pull
+
+waive bolt.plate_bearing on bracket by "gate@petra.dev" reason "not modelled; the generator tests the tension check"
+"""
+
+
+def _joint(index: int, rng: random.Random, registry) -> Sample:
+    """examples/bolt_unknown.petra indoors, its bearing waived, so the tension check decides.
+    The pull is drawn log-uniform from 0.05 to 3 times the bolts' rough proof load, 0.35 kN
+    per mm2 of d^2 each, the way steel loads are drawn; a mutation moves the bolt, the
+    preload (a fraction of the torque that would reach that load at K = 0.2), the load
+    share, the nut factor, the plates or the claim."""
+    choices = {
+        "bolt": sorted(p for p in registry.parts if p.startswith("bolt.")),
+        "count": ("1", "2", "4", "8"),
+        "plate": ("steel.S355", "aluminium.6061_T6"),
+        "thickness": ("3", "10", "40"),
+        "preload": ("0", "0.1", "0.25", "0.45", "0.75", "1"),
+        "nut_factor": ("0.12, 0.16", "0.16, 0.22", "0.2, 0.3"),
+        "load_share": ("0.05, 0.1", "0.1, 0.25", "0.2, 0.4", "0.5, 0.8"),
+        "u": ("0.5", "0.7", "0.9", "1"),
+    }
+    fields = {"bolt": "bolt.M12_8_8", "count": "1", "plate": "steel.S355", "thickness": "10", "preload": "0.45",
+              "nut_factor": "0.16, 0.22", "load_share": "0.1, 0.25", "u": "0.9"}
+    labels = []
+    for field in rng.sample(sorted(choices), rng.choice(MUTATIONS)):
+        fields[field] = rng.choice(choices[field])
+        labels.append(f"{field}={fields[field]}")
+    d = int(fields["bolt"].split(".")[1].split("_")[0][1:])
+    proof = 0.35 * d * d                                              # kN for one bolt, d in mm
+    torque = float(fields.pop("preload")) * 0.2 * proof * d           # N m = K F d, in kN and mm
+    force = int(fields["count"]) * proof * math.exp(rng.uniform(math.log(0.05), math.log(3)))
+    return Sample(index, "joint", "example", tuple(labels), JOINT.format(
+        index=index, torque=f"{0.8 * torque:.2f} Nm, {torque:.2f} Nm", force=f"{force:.3f}", **fields))
+
+
+DEMAND = """petra 0
+
+design "absurd-{index:05d}" {{
+  owner "gate@petra.dev"
+  environment indoor_dry
+}}
+
+demand hook {{
+  capacity in [{capacity}] measured "gate@petra.dev" source "absurd gap generator"
+}}
+
+load lift {{
+  on hook force in [{lo} kN, {hi} kN] mean {mean} kN
+  signed "gate@petra.dev" source "absurd gap generator"
+}}
+
+tests proof {{
+  on hook trials {trials} failures {failures} at {level} kN
+  signed "gate@petra.dev" source "absurd gap generator"
+}}
+
+claim overload: P(hook.utilisation > {u}) <= {p} under lift
+claim tested:   P(fail hook at {level} kN) <= 1/100 confidence 95 % from proof
+"""
+
+
+def _demand(index: int, rng: random.Random, registry) -> Sample:
+    """examples/hook_uncertain.petra with its capacity, load, tests and overload claim drawn
+    against each other; the tested claim sits at the tested level."""
+    choices = {
+        "capacity": ("20 kN, 25 kN", "36 kN, 40 kN", "50 kN, 60 kN"),
+        "load": ("0 40 10", "0 40 20", "0 30 5", "5 60 15"),
+        "tests": ("300 0 36", "500 1 30", "2000 1 30", "2000 3 20", "100 0 45", "1000 2 36"),
+        "overload": ("1 3/10", "1 1/2", "0.8 3/10", "1 1/10"),
+    }
+    fields = {"capacity": "36 kN, 40 kN", "load": "0 40 10", "tests": "300 0 36", "overload": "1 3/10"}
+    labels = []
+    for field in rng.sample(sorted(choices), rng.choice(MUTATIONS)):
+        fields[field] = rng.choice(choices[field])
+        labels.append(f"{field}={fields[field]}")
+    lo, hi, mean = fields["load"].split()
+    trials, failures, level = fields["tests"].split()
+    u, p = fields["overload"].split()
+    text = DEMAND.format(index=index, capacity=fields["capacity"], lo=lo, hi=hi, mean=mean, trials=trials,
+                         failures=failures, level=level, u=u, p=p)
+    return Sample(index, "demand", "example", tuple(labels), text)
+
+
 def sample(seed: int, index: int, registry) -> Sample:
     rng = random.Random(f"{seed}:{index}")
     kind = SCHEDULE[index % len(SCHEDULE)]
@@ -303,13 +414,49 @@ def sample(seed: int, index: int, registry) -> Sample:
         return _circuit(index, rng, registry)
     if kind == "truss":
         return _truss(index, rng, registry)
+    if kind == "joint":
+        return _joint(index, rng, registry)
+    if kind == "demand":
+        return _demand(index, rng, registry)
     return _steel(index, kind, rng, registry)
 
 
+REFUSAL = {"Refuted": "fail", "Open": "open", "WithinMargin": "margin"}
+"""Outcomes that keep a mode from passing, by the verdict they force: FAIL, then UNKNOWN,
+then MARGINAL (petra/verdict.py assemble)."""
+SEVERITY = ("margin", "open", "fail")
+VERDICT = {"fail": "FAIL", "open": "UNKNOWN", "margin": "MARGINAL"}
+
+
+def refusals(report) -> tuple[dict[str, str], list[str]]:
+    """(each mode that does not pass -> its worst refusal, every mode the report checks and
+    no waiver excuses)."""
+    refused: dict[str, str] = {}
+    checked = []
+    for o in report.outcomes:
+        name = type(o).__name__
+        req = o.requirement if hasattr(o, "requirement") else o.obligation.requirement
+        if name != "Waived":
+            checked.append(req.mode.id)
+        state = REFUSAL.get(name)
+        if state is not None and SEVERITY.index(state) >= SEVERITY.index(refused.get(req.mode.id, "margin")):
+            refused[req.mode.id] = state
+    return refused, sorted(set(checked))
+
+
+def holed_status(row: dict, hole: frozenset[str] | set[str] = frozenset()) -> str:
+    """Petra's verdict with every outcome of the modes in `hole` taken as discharged: a deck
+    that lacks those checks. With no hole it is Petra's own verdict."""
+    if row["status"] in ("REJECTED", "ERROR"):
+        return row["status"]
+    states = [state for mode, state in row["refused"].items() if mode not in hole]
+    return VERDICT[max(states, key=SEVERITY.index)] if states else "PASS"
+
+
 def assess(s: Sample, registry) -> dict:
-    """Petra's verdict and the judge's findings for one design."""
+    """Petra's verdict, the modes that refuse it, and the judge's findings for one design."""
     start = time.perf_counter()
-    status, note, violations, undecided = "PASS", None, [], []
+    status, note, violations, undecided, refused, checked = "PASS", None, [], [], {}, []
     try:
         design = parse_design(s.text, f"{s.kind}.petra", registry)
     except (LolaSyntaxError, LoweringError) as e:
@@ -319,11 +466,17 @@ def assess(s: Sample, registry) -> dict:
         violations = [[v.id, v.reason] for v in found.violations]
         undecided = list(found.undecided)
         try:
-            status = STATUS[type(check_design(design, registry, (SolverSource(),)).verdict)]
+            report = check_design(design, registry, (SolverSource(),))
         except ComponentError as e:
             status, note = "REJECTED", e.problems[0][:200]
-    return {**asdict(s), "mutations": list(s.mutations), "status": status, "note": note, "violations": violations,
-            "undecided": undecided, "seconds": time.perf_counter() - start}
+        else:
+            status = STATUS[type(report.verdict)]
+            refused, checked = refusals(report)
+    row = {**asdict(s), "mutations": list(s.mutations), "status": status, "note": note, "violations": violations,
+           "undecided": undecided, "refused": refused, "checked": checked, "seconds": time.perf_counter() - start}
+    if holed_status(row) != status:
+        raise AssertionError(f"design {s.index}: the outcomes give {holed_status(row)}, the verdict {status}")
+    return row
 
 
 _REGISTRY = None
@@ -336,11 +489,12 @@ def _init() -> None:
 
 def chunk(job: tuple[int, int, int]) -> list[dict]:
     seed, start, count = job
-    return [assess(sample(seed, i, _REGISTRY), _REGISTRY) for i in range(start, start + count)]
+    return [{**assess(sample(seed, i, _REGISTRY), _REGISTRY), "seed": seed} for i in range(start, start + count)]
 
 
-def run(seed: int, n: int, workers: int, step: int = 26) -> list[dict]:
-    jobs = [(seed, i, min(step, n - i)) for i in range(0, n, step)]
+def run(seeds: tuple[int, ...], n: int, workers: int, step: int = 30) -> list[dict]:
+    """The first n designs of each seed's stream, assessed, in seed then index order."""
+    jobs = [(seed, i, min(step, n - i)) for seed in seeds for i in range(0, n, step)]
     if workers <= 1:
         _init()
         return [row for job in jobs for row in chunk(job)]
@@ -352,6 +506,25 @@ def run(seed: int, n: int, workers: int, step: int = 26) -> list[dict]:
             if done % 40 == 0:
                 print(f"{len(rows)} designs, {time.time() - started:.0f} s", flush=True)
     return rows
+
+
+def stream_hash(rows: list[dict]) -> str:
+    """A hash of every design text in order: two runs drew the same designs exactly when it agrees."""
+    h = hashlib.sha256()
+    for row in rows:
+        h.update(row["text"].encode("utf-8"))
+    return h.hexdigest()[:12]
+
+
+GENERATOR = ("scripts/absurd_gap.py", "judges", "petra/models/steel/generate.py")
+"""The files that decide which designs are drawn and which are judged."""
+
+
+def commit(paths: tuple[str, ...]) -> str:
+    """The last commit that touched `paths`, and whether the checkout changes them."""
+    git = lambda *a: subprocess.run(["git", *a, "--", *paths], cwd=ROOT, capture_output=True, text=True).stdout.strip()
+    last = git("log", "-1", "--format=%h") or "unknown"
+    return f"`{last}`" + (", with uncommitted changes" if git("status", "--porcelain") else ", clean")
 
 
 def canaries(registry) -> list[dict]:
@@ -405,7 +578,7 @@ def _reason(row: dict, cid: str) -> str:
     return next(v[1] for v in row["violations"] if v[0] == cid)
 
 
-def render(rows: list[dict], canary_rows: list[dict], args, wall: float, commit: str) -> str:
+def render(rows: list[dict], canary_rows: list[dict], args, wall: float, provenance: dict[str, str]) -> str:
     kinds, per_kind, cells = _summary(rows)
     total = Counter()
     for c in per_kind.values():
@@ -413,21 +586,39 @@ def render(rows: list[dict], canary_rows: list[dict], args, wall: float, commit:
     seconds = defaultdict(float)
     for row in rows:
         seconds[row["kind"]] += row["seconds"]
+    seeds = ",".join(str(x) for x in args.seeds)
     out = [
         "# The absurd-design gap",
         "",
-        f"Generated by `python scripts/absurd_gap.py --n {args.n} --seed {args.seed} --workers {args.workers}` at commit "
-        f"`{commit}`, in {wall / 60:.1f} minutes of wall time. Do not edit by hand; re-run the script.",
+        f"Generated by `python scripts/absurd_gap.py --n {args.n} --seeds {seeds} --workers {args.workers}`, in "
+        f"{wall / 60:.1f} minutes of wall time. Do not edit by hand; re-run the script.",
+        "",
+        "| Measured | Last commit touching it |",
+        "|---|---|",
+        f"| Petra, `petra/` | {provenance['petra']} |",
+        f"| The generator: `{'`, `'.join(GENERATOR)}` | {provenance['generator']} |",
+        "",
+        "A gap count compares with another run's only at the same generator commit and seeds, and only when each seed's "
+        "stream hash agrees: the hash covers every design text, so it also shows a registry or sampler change that "
+        "moved the stream.",
         "",
         "Each design is a sample from the steel deck's own samplers (`petra/models/steel/generate.py`) or an example, "
         "mutated 0 to 3 times along the dimensions that decide whether parts fit, with its load drawn log-uniform "
-        "(1 to 40 kip, 1 to 200 kip for flange_force), so most strength checks pass and fit is what is tested. Petra checks "
+        "(1 to 40 kip, 1 to 200 kip for flange_force), so most strength checks pass and fit is what is tested. The circuit, "
+        "truss, joint and demand start from their examples and mutate the same way; a joint's pull is drawn log-uniform "
+        "from 0.05 to 3 times its bolts' rough proof load. Petra checks "
         "it (`check_design`, the solvers as evidence), and the outside judge in `judges/` reads it. **Judged** means the "
         "judge finds at least one violated condition. **Gap** means judged and Petra PASS: a design Petra certifies that "
         "cannot be built as drawn, or is unsafe for a reason Petra's models never name. P1 drives the gap to zero "
         "(docs/plan.md §6).",
         "",
-        "## Per kind",
+        "## Per seed",
+        "",
+        "| Seed | Designs | Stream hash | Petra PASS | Judged | Gap (judged and PASS) | Gap share of PASS |",
+        "|---|---|---|---|---|---|---|",
+        *_seed_rows(rows, args.seeds),
+        "",
+        "## Per kind, all seeds",
         "",
         "| Kind | Generated | Rejected by lowering | Petra PASS | Judged | Gap (judged and PASS) | Gap share of PASS | "
         "Controls judged (gap) | Mean check s |",
@@ -455,21 +646,28 @@ def render(rows: list[dict], canary_rows: list[dict], args, wall: float, commit:
                 continue
             cell = cells.get((k, cid), {"judged": 0, "pass": 0, "example": None, "first": None})
             row = cell["example"] or cell["first"]
-            example = f"[#{row['index']}](#design-{row['index']})" if cell["example"] else (f"#{row['index']} (`--show {row['index']}`)" if row else "")
+            example = (f"[{_name(row)}](#{_anchor(row)})" if cell["example"]
+                       else f"{_name(row)} (`--seeds {row['seed']} --show {row['index']}`)" if row else "")
             out.append(f"| {k} | `{cid}` | {cell['judged']} | {cell['pass']} | {example} |")
         if not any(k in cond.kinds for cond in CONDITIONS.values()):
             out.append(f"| {k} | none | | | {UNDRAWN.get(k, '')} |")
     out += ["", "## Canaries", "",
-            "Each file in `judges/canaries` is a false PASS found by hand on 2026-11-06, run in every run. **Re-found** means "
-            "the generator produced a design of the same kind, with the same condition, that Petra passes.", "",
-            "| Canary | Condition | Petra | Judge names it | Re-found |", "|---|---|---|---|---|"]
+            "Each file in `judges/canaries` is a design the judge rejects for the condition its `# violates:` line names, "
+            "run in every run: the false PASSes found by hand on 2026-11-06, and one design for each kind and condition the "
+            "seed-1 run of 2026-11-06 raised. **Refused by** lists the modes that keep Petra from passing it, the hole "
+            "`scripts/canary_recall.py` plants. **Re-found** means some seed produced a design of the same kind, with the "
+            "same condition, that Petra passes.", "",
+            "| Canary | Condition | Petra | Refused by | Judge names it | Re-found |", "|---|---|---|---|---|---|"]
     found = 0
     for c in canary_rows:
         names = any(v[0] == c["condition"] for v in c["violations"])
         again = refound(c, rows)
         found += again
-        out.append(f"| `{c['name']}` | `{c['condition']}` | {c['status']} | {'yes' if names else 'no'} | {'yes' if again else 'no'} |")
-    out += ["", f"Canary recall: the generator re-found {found} of {len(canary_rows)}.", ""]
+        refused = ", ".join(f"`{m}`" for m in sorted(c["refused"])) or "nothing"
+        out.append(f"| `{c['name']}` | `{c['condition']}` | {c['status']} | {refused} | {'yes' if names else 'no'} | "
+                   f"{'yes' if again else 'no'} |")
+    out += ["", f"Re-found {found} of {len(canary_rows)} canaries as a PASS of the same kind and condition. "
+            "`docs/canary_recall.md` measures recall with a hole planted for each.", ""]
     undecided = Counter()
     for row in rows:
         for note in row["undecided"]:
@@ -493,6 +691,9 @@ def render(rows: list[dict], canary_rows: list[dict], args, wall: float, commit:
         "- Wrench clearance, weld access and bolt length are not judged; Petra names clearance for some plies.",
         "- The truss judge cannot decide out-of-plane bracing, which the truss model assumes and never states.",
         "- The circuit judge reads the terminal's conductor range from the registry, whose rows are tagged judged.",
+        "- A joint's lines draw no bolt length, hole, edge distance or washer, so grip, edge and pull-through fit are not "
+        "judged. Every generated joint waives plate bearing, which Petra does not model, so its tension check decides.",
+        "- A demand's lines draw no part. The judge takes its capacity against its own tests only.",
         "",
         "## Examples, one per gap cell",
         "",
@@ -501,46 +702,71 @@ def render(rows: list[dict], canary_rows: list[dict], args, wall: float, commit:
         row = cell["example"]
         if row is None:
             continue
-        out += [f"### Design {row['index']}", "", f"{k}, `{cid}`: {_reason(row, cid)}. Mutations: "
+        out += [f"### {_name(row)}", "", f"{k}, `{cid}`: {_reason(row, cid)}. Mutations: "
                 f"{', '.join(row['mutations']) or 'none'}. Origin: {row['origin']}.", "", "```", row["text"].rstrip(), "```", ""]
     return "\n".join(out) + "\n"
 
 
+def _name(row: dict) -> str:
+    return f"Seed {row['seed']}, design {row['index']}"
+
+
+def _anchor(row: dict) -> str:
+    return f"seed-{row['seed']}-design-{row['index']}"
+
+
+def _seed_rows(rows: list[dict], seeds: tuple[int, ...]) -> list[str]:
+    out = []
+    for seed in seeds:
+        mine = [r for r in rows if r["seed"] == seed]
+        passed = sum(r["status"] == "PASS" for r in mine)
+        judged = [r for r in mine if r["violations"]]
+        gap = sum(r["status"] == "PASS" for r in judged)
+        share = f"{100 * gap / passed:.0f}%" if passed else "n/a"
+        out.append(f"| {seed} | {len(mine)} | `{stream_hash(mine)}` | {passed} | {len(judged)} | {gap} | {share} |")
+    return out
+
+
 def log_lines(rows: list[dict], canary_rows: list[dict]) -> list[str]:
     """Every canary with its text, and every generated design the judge flags or leaves
-    undecided or Petra rejects, without its text: `--show INDEX` regenerates any design from
-    the seed. Per-design times are left out, so a seed's log is the same on every run."""
+    undecided or Petra rejects, without its text: `--seeds S --show INDEX` regenerates any
+    design. Per-design times are left out, so a seed's log is the same on every run."""
     out = []
     for row in canary_rows + rows:
         if row["origin"] != "canary" and not (row["violations"] or row["undecided"] or row["status"] in ("REJECTED", "ERROR")):
             continue
-        keep = {k: v for k, v in row.items() if k not in ("seconds", "text")}
+        keep = {k: v for k, v in row.items() if k not in ("seconds", "text", "checked")}
         if row["origin"] == "canary":
             keep["text"] = row["text"]
         out.append(json.dumps(keep, sort_keys=True))
     return out
 
 
+def seeds(text: str) -> tuple[int, ...]:
+    return tuple(int(x) for x in text.split(","))
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="measure the absurd-design gap")
-    parser.add_argument("--n", type=int, default=20000)
-    parser.add_argument("--seed", type=int, default=1)
+    parser.add_argument("--n", type=int, default=18000, help="designs per seed")
+    parser.add_argument("--seeds", type=seeds, default=(1,), help="comma-separated, as in 1,2,3")
     parser.add_argument("--workers", type=int, default=7)
     parser.add_argument("--out", type=Path, default=ROOT / "docs")
-    parser.add_argument("--show", type=int, metavar="INDEX", help="print design INDEX of the seed and stop")
+    parser.add_argument("--show", type=int, metavar="INDEX", help="print design INDEX of the first seed and stop")
     args = parser.parse_args(argv)
     if args.show is not None:
-        print(sample(args.seed, args.show, build_registry()).text)
+        print(sample(args.seeds[0], args.show, build_registry()).text)
         return 0
     started = time.time()
-    rows = run(args.seed, args.n, args.workers)
+    rows = run(args.seeds, args.n, args.workers)
     canary_rows = canaries(build_registry())
     wall = time.time() - started
-    commit = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
+    provenance = {"petra": commit(("petra",)), "generator": commit(GENERATOR)}
     args.out.mkdir(parents=True, exist_ok=True)
-    report = render(rows, canary_rows, args, wall, commit)
+    report = render(rows, canary_rows, args, wall, provenance)
     (args.out / "absurd_gap.md").write_text(report, encoding="utf-8", newline="\n")
-    (args.out / "absurd_gap_log.jsonl").write_text("\n".join(log_lines(rows, canary_rows)) + "\n", encoding="utf-8", newline="\n")
+    (args.out / "absurd_gap_log.jsonl").write_text("\n".join(log_lines(rows, canary_rows)) + "\n", encoding="utf-8",
+                                                   newline="\n")
     print(report.split("## Examples", 1)[0])
     return 0
 

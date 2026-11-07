@@ -1,0 +1,33 @@
+petra 0
+
+# violates: steel.beam_side.fillet
+# Design 403 of `python scripts/absurd_gap.py --seed 1` at commit b9e9792 (docs/absurd_gap.md):
+# plate top edge 1 in below the W30x99's top, on its fillet, off the flat web (1.32 in).
+
+design "absurd-00403" {
+  owner "gate@petra.dev"
+}
+
+shear_tab c1 {
+  basis asd
+  beam W30x99 grade steel.A992
+  support W14x90 flange grade steel.A992
+  plate steel.A36 thickness 0.25 inch
+  bolts bolt_group.150 diameter 0.75 inch threads excluded joint pretensioned
+  holes plate ssl
+  top 2.5 inch
+  rows 7
+  pitch 4 inch
+  edge_vertical 1.5 inch
+  plate_edge 2 inch
+  bolt_line 3.5 inch
+  beam_edge 1.5 inch
+  weld electrode.E70 size 0.3125 inch sides 2
+  cope top depth 1 inch length 3 inch
+  setback 0.5 inch
+}
+
+load gate {
+  on c1 shear in [0 kip, 4.358 kip]
+  signed "gate@petra.dev" source "steel gate generator"
+}

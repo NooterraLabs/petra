@@ -1,0 +1,30 @@
+petra 0
+
+# violates: steel.beam_side.depth
+# Design 53 of `python scripts/absurd_gap.py --seed 1` at commit b9e9792 (docs/absurd_gap.md):
+# angles top edge -0.5 in below the W30x90's top, inside its flange (0.61 in).
+
+design "absurd-00053" {
+  owner "gate@petra.dev"
+}
+
+double_angle c1 {
+  basis lrfd
+  beam W30x90 grade steel.A992
+  support W12x40 web grade steel.A992
+  angles L4x4x3_8 grade steel.A36 outstanding long
+  bolts bolt_group.150 diameter 0.875 inch threads included
+  top 2.5 inch
+  rows 8
+  pitch 3 inch
+  edge_vertical 3 inch
+  beam_edge 1.5 inch
+  beam_gauge 2.75 inch
+  support_side bolted
+  support_gauge 5.75 inch
+}
+
+load gate {
+  on c1 shear in [0 kip, 38.811 kip]
+  signed "gate@petra.dev" source "steel gate generator"
+}

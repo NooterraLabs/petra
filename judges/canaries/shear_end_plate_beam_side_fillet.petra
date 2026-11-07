@@ -1,0 +1,30 @@
+petra 0
+
+# violates: steel.beam_side.fillet
+# Design 1616 of `python scripts/absurd_gap.py --seed 1` at commit b9e9792 (docs/absurd_gap.md):
+# end plate welds 14.25 in long; the W16x26 leaves 13.953 in on its flat web.
+
+design "absurd-01616" {
+  owner "gate@petra.dev"
+}
+
+shear_end_plate c1 {
+  basis asd
+  beam W16x26 grade steel.A992
+  support W12x50 web grade steel.A992
+  plate steel.A36 thickness 0.375 inch
+  plate_width 9 inch
+  bolts bolt_group.120 diameter 0.875 inch threads excluded joint pretensioned
+  rows 4
+  pitch 3 inch
+  edge_vertical 3 inch
+  support_gauge 5.5 inch
+  weld electrode.E70 size 0.375 inch sides 2
+  setback 0.75 inch
+  cope top depth 1 inch length 4 inch
+}
+
+load gate {
+  on c1 shear in [0 kip, 14.050 kip]
+  signed "gate@petra.dev" source "steel gate generator"
+}

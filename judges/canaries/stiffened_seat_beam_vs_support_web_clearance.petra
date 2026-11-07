@@ -1,0 +1,27 @@
+petra 0
+
+# violates: steel.beam_vs_support.web_clearance
+# Design 6428 of `python scripts/absurd_gap.py --seed 1` at commit b9e9792 (docs/absurd_gap.md):
+# the W14x90's 14.5 in flange is wider than the 10.92 in between the W12x50's flanges, and its end, 0.5 in out, lies inside their tips at 3.855 in.
+
+design "absurd-06428" {
+  owner "gate@petra.dev"
+}
+
+stiffened_seat c1 {
+  basis lrfd
+  beam W14x90 grade steel.A992
+  support W12x50 web grade steel.A992
+  plate steel.A36 thickness 0.375 inch
+  stiffener steel.A36 thickness 0.625 inch
+  stiffener_width 4 inch
+  stiffener_length 10 inch
+  setback 0.5 inch
+  weld electrode.E70 size 0.25 inch sides 2
+  top_angle L4x4x1_4 grade steel.A36 outstanding long
+}
+
+load gate {
+  on c1 shear in [0 kip, 12.004 kip]
+  signed "gate@petra.dev" source "steel gate generator"
+}

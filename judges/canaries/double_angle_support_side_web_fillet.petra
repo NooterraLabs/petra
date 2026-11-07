@@ -1,0 +1,30 @@
+petra 0
+
+# violates: steel.support_side.web_fillet
+# Design 300 of `python scripts/absurd_gap.py --seed 1` at commit b9e9792 (docs/absurd_gap.md):
+# outstanding legs: 8.395 in across, wider than the W10x49's 7.88 in flat web.
+
+design "absurd-00300" {
+  owner "gate@petra.dev"
+}
+
+double_angle c1 {
+  basis asd
+  beam W24x55 grade steel.A992
+  support W10x49 web grade steel.A992
+  angles L4x4x1_2 grade steel.A36 outstanding long
+  bolts bolt_group.120 diameter 0.75 inch threads included joint slip_critical surface class_b
+  top 3.5 inch
+  rows 3
+  pitch 3 inch
+  edge_vertical 1.5 inch
+  beam_edge 1.5 inch
+  beam_gauge 2.25 inch
+  support_side bolted
+  support_gauge 2.5 inch
+}
+
+load gate {
+  on c1 shear in [0 kip, 1.302 kip]
+  signed "gate@petra.dev" source "steel gate generator"
+}

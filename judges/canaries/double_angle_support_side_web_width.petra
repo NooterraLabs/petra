@@ -1,0 +1,30 @@
+petra 0
+
+# violates: steel.support_side.web_width
+# Design 222 of `python scripts/absurd_gap.py --seed 1` at commit b9e9792 (docs/absurd_gap.md):
+# support welds at the outstanding legs' toes: 12.4 in across, wider than the 10.92 in between the W12x50's flanges.
+
+design "absurd-00222" {
+  owner "gate@petra.dev"
+}
+
+double_angle c1 {
+  basis lrfd
+  beam W21x62 grade steel.A992
+  support W12x50 web grade steel.A992
+  angles L6x4x1_2 grade steel.A36 outstanding long
+  bolts bolt_group.150 diameter 1 inch threads included joint pretensioned
+  top 3.5 inch
+  rows 3
+  pitch 3 inch
+  edge_vertical 1.25 inch
+  beam_edge 1.75 inch
+  beam_gauge 2.75 inch
+  support_side welded
+  support_weld electrode.E70 size 0.3125 inch
+}
+
+load gate {
+  on c1 shear in [0 kip, 8.665 kip]
+  signed "gate@petra.dev" source "steel gate generator"
+}

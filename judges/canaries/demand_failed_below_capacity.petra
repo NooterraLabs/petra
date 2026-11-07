@@ -1,0 +1,29 @@
+petra 0
+
+# violates: uncertain.capacity.tested
+# The hook example with its proof tests rerun at 30 kN: one hook of 500 broke there, yet
+# the capacity is still stated as at least 36 kN. Over loads on [0, 40] kN with mean
+# 10 kN, P(load > 36 kN) <= 10 / 36 = 0.278 passes the 0.3 claim, but a hook that holds
+# only 30 kN gives 10 / 30 = 0.333.
+
+design "hoist-hook-retested" {
+  owner "m.engineer@example.org"
+  environment indoor_dry
+}
+
+demand hook {
+  capacity in [36 kN, 40 kN] measured "qa.lab@example.org" source "proof-load report PL-0917, minimum of 12 samples"
+}
+
+load lift {
+  on hook force in [0 kN, 40 kN] mean 10 kN
+  signed "ops.lead@example.org" source "hoist duty log 2025, 14200 lifts"
+}
+
+tests proof {
+  on hook trials 500 failures 1 at 30 kN
+  signed "qa.lab@example.org" source "batch 2026-10 proof tests, independent lots"
+}
+
+claim overload: P(hook.utilisation > 1) <= 3/10 under lift
+claim tested:   P(fail hook at 30 kN) <= 1/100 confidence 95 % from proof

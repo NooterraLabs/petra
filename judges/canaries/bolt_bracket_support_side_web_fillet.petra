@@ -1,0 +1,28 @@
+petra 0
+
+# violates: steel.support_side.web_fillet
+# Design 4623 of `python scripts/absurd_gap.py --seed 1` at commit b9e9792 (docs/absurd_gap.md):
+# bracket plate: 12 in across, wider than the W14x90's 11.38 in flat web.
+
+design "absurd-04623" {
+  owner "gate@petra.dev"
+}
+
+bolt_bracket c1 {
+  basis asd
+  plate steel.A36 thickness 0.5 inch
+  support W14x90 web grade steel.A992
+  bolts bolt_group.120 diameter 0.875 inch threads included
+  rows 4
+  columns 4
+  pitch 3 inch
+  gauge 3 inch
+  eccentricity 8 inch
+  edge_vertical 3 inch
+  plate_edge 1.5 inch
+}
+
+load gate {
+  on c1 shear in [0 kip, 14.747 kip]
+  signed "gate@petra.dev" source "steel gate generator"
+}

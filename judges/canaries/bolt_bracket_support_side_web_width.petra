@@ -1,0 +1,29 @@
+petra 0
+
+# violates: steel.support_side.web_width
+# Design 2803 of `python scripts/absurd_gap.py --seed 1` at commit b9e9792 (docs/absurd_gap.md):
+# 3 bolt columns: 11.812 in across, wider than the W12x65's 9.7 in flat web.
+
+design "absurd-02803" {
+  owner "gate@petra.dev"
+}
+
+bolt_bracket c1 {
+  basis lrfd
+  plate steel.A36 thickness 0.75 inch
+  support W12x65 web grade steel.A992
+  bolts bolt_group.120 diameter 0.75 inch threads excluded
+  rows 2
+  columns 3
+  pitch 3 inch
+  gauge 5.5 inch
+  eccentricity 6 inch
+  edge_vertical 1.5 inch
+  plate_edge 1.5 inch
+  free_edge 8 inch
+}
+
+load gate {
+  on c1 shear in [0 kip, 1.560 kip]
+  signed "gate@petra.dev" source "steel gate generator"
+}
