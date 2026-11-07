@@ -215,7 +215,8 @@ def chs_sections() -> Mapping[str, Part]:
             "A": CHS_AREA,
             "I": CHS_SECOND_MOMENT,
             "buckling_alpha": CHS_BUCKLING_ALPHA,
-        })
+        }, source=f"EN 10219-2:2006, cold-formed CHS {d} x {t} (the designation); EN 1993-1-1:2005 Table 6.2 for "
+                  "its buckling curve")
     return sections
 
 
@@ -230,7 +231,9 @@ def cables() -> Mapping[str, Part]:
     shape and the library can match them."""
     series = "cable.cu_pvc"
     parts = {series: Part(series, PartKind.CABLE, "copper conductor, IEC 60228 class 2, PVC insulated, single core",
-                          "copper.cu_etp", CABLE_SERIES_PROPS)}
+                          "copper.cu_etp", CABLE_SERIES_PROPS,
+                          source="IEC 60228:2004 class 2 copper conductors; IEC 60227-3:1993 type 60227 IEC 01 "
+                                 "PVC insulation")}
     for key, area, insulation in CABLE_SIZES:
         area_name, insulation_name = f"iec60228.{key}.area", f"iec60227_3.{key}.insulation"
         parts[f"{series}_{key}"] = Part(
@@ -238,6 +241,8 @@ def cables() -> Mapping[str, Part]:
             {"area": constant(area_name), "insulation": constant(insulation_name)},
             series=series,
             fixes={"area": CONSTANTS[area_name].value, "insulation": CONSTANTS[insulation_name].value},
+            source=f"IEC 60228:2004 Table 2, class 2 copper conductor {area} mm2; IEC 60227-3:1993 Table 1, "
+                   "type 60227 IEC 01",
         )
     return parts
 
@@ -255,7 +260,8 @@ def breakers() -> Mapping[str, Part]:
                                            **BREAKER_PROPS,
                                            "Icn": STATED["iec60898_1.Icn_6000"],
                                            "I2t": STATED[f"en60898_1.class3.{energy}.I2t"],
-                                       })
+                                       }, source=f"IEC 60898-1:2015, type B circuit-breaker rated {rating} A with Icn "
+                                                 "6000 A; EN 60898-1 Annex ZA, energy-limiting class 3")
     return parts
 
 
@@ -268,7 +274,9 @@ def terminals() -> Mapping[str, Part]:
         ("screw_16mm2_75C", "screw terminal, 1.5 to 16 mm2, 76 A, 75 degC"),
     ):
         props = {p: STATED[f"terminal.{name}.{p}"] for p in ("temperature_max", "current_max", "conductor_min", "conductor_max")}
-        parts[f"terminal.{name}"] = Part(f"terminal.{name}", PartKind.TERMINAL, designation, "copper.cu_etp", props)
+        parts[f"terminal.{name}"] = Part(f"terminal.{name}", PartKind.TERMINAL, designation, "copper.cu_etp", props,
+                                         source="a generic terminal standing for a manufacturer's datasheet tested to "
+                                                "IEC 60998-2-2, judged by petra-maintainers")
     return parts
 
 
@@ -303,12 +311,14 @@ def metric_bolts() -> Mapping[str, Part]:
         for suffix, grade, material, coating in _BOLT_GRADES:
             pid = f"bolt.{size}_{suffix}"
             finish = ", zinc plated" if coating else ""
+            standard = "ISO 3506-1:2020" if grade == "A4-70" else "ISO 898-1:2013"
             parts[pid] = Part(pid, PartKind.BOLT, f"{size}x{p_mm} property class {grade}{finish}", material, {
                 "d": constant(f"iso261.{size}.d"),
                 "pitch": constant(f"iso261.{size}.pitch"),
                 "As": STRESS_AREA,
                 **_class_ratings(grade, d_mm),
-            }, process=coating)
+            }, process=coating, source=f"ISO 261:1998 Table 1, {size} coarse thread; {standard}, property class {grade}"
+                                       + ("; ISO 2081:2008 zinc electroplating" if coating else ""))
     return parts
 
 
@@ -317,19 +327,25 @@ def processes() -> Mapping[str, Process]:
     thermal resistance per metre), coatings, welds."""
     return {
         "install.clipped_direct": Process("install.clipped_direct", ProcessKind.INSTALL,
-                                          {"h": constant("install.clipped_direct.h")}),
-        "process.zinc_plate": Process("process.zinc_plate", ProcessKind.COATING, {}, surface="zinc.electroplate"),
+                                          {"h": constant("install.clipped_direct.h")},
+                                          source="cable clipped direct to a wall in still indoor air, its surface "
+                                                 "coefficient judged by petra-maintainers; not taken from a standard"),
+        "process.zinc_plate": Process("process.zinc_plate", ProcessKind.COATING, {}, surface="zinc.electroplate",
+                                      source="ISO 2081:2008, electroplated coatings of zinc on iron or steel"),
         "process.mig_weld_6xxx": Process("process.mig_weld_6xxx", ProcessKind.WELD, {}, effects=(
             PropertyEffect("aluminium", "fy", STATED["weld.mig_6xxx_T6.haz_fy_factor"],
                            "within 30 mm of the weld for plates 6 mm < t <= 12 mm (EN 1999-1-1 6.1.6.3, not checked)"),
-        )),
+        ), source="EN 1999-1-1:2007 6.1.6 and Table 3.2b, the heat-affected zone of MIG-welded 6xxx alloys in temper T6"),
     }
 
 
 def environments() -> Mapping[str, Environment]:
     """indoor_dry (C1), outdoor_c3 (C3), marine_c5 (C5, wet)."""
     return {
-        "indoor_dry": Environment("indoor_dry", STATED["iec60364_5_51.AA5"], Corrosivity.C1, wet=False),
-        "outdoor_c3": Environment("outdoor_c3", STATED["iec60364_5_51.AA7"], Corrosivity.C3, wet=True),
-        "marine_c5": Environment("marine_c5", STATED["iec60364_5_51.AA7"], Corrosivity.C5, wet=True),
+        "indoor_dry": Environment("indoor_dry", STATED["iec60364_5_51.AA5"], Corrosivity.C1, wet=False,
+                                  source="IEC 60364-5-51:2005 external influence AA5; ISO 9223:2012 corrosivity C1"),
+        "outdoor_c3": Environment("outdoor_c3", STATED["iec60364_5_51.AA7"], Corrosivity.C3, wet=True,
+                                  source="IEC 60364-5-51:2005 external influence AA7; ISO 9223:2012 corrosivity C3"),
+        "marine_c5": Environment("marine_c5", STATED["iec60364_5_51.AA7"], Corrosivity.C5, wet=True,
+                                 source="IEC 60364-5-51:2005 external influence AA7; ISO 9223:2012 corrosivity C5"),
     }

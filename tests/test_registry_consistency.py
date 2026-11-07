@@ -7,7 +7,7 @@ import unittest
 from fractions import Fraction
 
 from petra.kernel import Sym
-from petra.registry import Deck, build_deck, check_deck, read_deck, write_deck
+from petra.registry import Deck, Erratum, build_deck, check_deck, read_deck, write_deck
 from petra.registry.consistency import RELATIONS, corrupt, flagged_entries
 
 DECK = None
@@ -33,12 +33,12 @@ def with_provenance(deck: Deck, entry: str, prop: str, provenance: str) -> Deck:
     record = deck.get(entry, prop)
     assert record is not None, f"deck has {entry}.{prop}"
     edited = dataclasses.replace(record, provenance=provenance)
-    return Deck(deck.format, tuple(edited if r is record else r for r in deck.records))
+    return dataclasses.replace(deck, records=tuple(edited if r is record else r for r in deck.records))
 
 
 def without(deck: Deck, entry: str, prop: str) -> Deck:
     assert deck.get(entry, prop) is not None, f"deck has {entry}.{prop}"
-    return Deck(deck.format, tuple(r for r in deck.records if (r.entry, r.prop) != (entry, prop)))
+    return dataclasses.replace(deck, records=tuple(r for r in deck.records if (r.entry, r.prop) != (entry, prop)))
 
 
 def applicable(relation) -> list[str]:
@@ -172,6 +172,36 @@ class Provenance(unittest.TestCase):
                            "stated:measured:Acme Fasteners:test report 17"):
             self.assertEqual(broken(with_provenance(DECK, "bolt.M12_A4_70", "Rp02_min", provenance)), set(),
                              repr(provenance))
+
+
+class EntryProvenance(unittest.TestCase):
+    def edited(self, id: str, **changes) -> Deck:
+        entry = DECK.entry(id)
+        assert entry is not None, f"deck has entry {id}"
+        return dataclasses.replace(DECK, entries=tuple(dataclasses.replace(e, **changes) if e is entry else e
+                                                       for e in DECK.entries))
+
+    def test_an_entry_without_a_source_is_caught_on_the_entry_the_pipeline_flags(self):
+        self.assertEqual(broken(self.edited("bolt.M12_A4_70", source=" ")), {("bolt.M12_A4_70", "entry.provenance")})
+        self.assertEqual(broken(self.edited("const.cu.rho20", source="")), {("const.cu", "entry.provenance")})
+
+    def test_a_version_that_does_not_count_the_errata_is_caught(self):
+        fix = Erratum("2026-11-06", "it said 1", "it says 2")
+        self.assertEqual(broken(self.edited("steel.S355", version=2)), {("steel.S355", "entry.provenance")})
+        self.assertEqual(broken(self.edited("steel.S355", version=2, errata=(fix,))), set())
+        self.assertIn("version 1 with 1 errata", finding(self.edited("steel.S355", errata=(fix,)), "steel.S355",
+                                                          "entry.provenance").message)
+
+    def test_a_malformed_erratum_is_caught(self):
+        for erratum in (Erratum("6 Nov 2026", "a", "b"), Erratum("2026-11-06", "a", " ")):
+            self.assertEqual(broken(self.edited("steel.S355", version=2, errata=(erratum,))),
+                             {("steel.S355", "entry.provenance")}, repr(erratum))
+
+    def test_a_record_whose_entry_has_no_row_is_caught_once_per_entry(self):
+        reduced = dataclasses.replace(DECK, entries=tuple(e for e in DECK.entries if e.entry not in ("chs.60_3x3_2", "const.cu.qc")))
+        self.assertEqual(broken(reduced), {("chs.60_3x3_2", "entry.provenance"), ("const.cu", "entry.provenance")})
+        self.assertIn("no entry row gives chs.60_3x3_2's source and version",
+                      finding(reduced, "chs.60_3x3_2", "entry.provenance").message)
 
 
 class MissingAndUndefined(unittest.TestCase):

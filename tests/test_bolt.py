@@ -146,7 +146,8 @@ CADMIUM = dataclasses.replace(
                                "MIL-STD-889 anodic index, cadmium plated and chromate", "anodic index of the plated surface"),
     })},
     processes={**REGISTRY.processes,
-               "process.cadmium_plate": Process("process.cadmium_plate", ProcessKind.COATING, {}, surface="cadmium.electroplate")},
+               "process.cadmium_plate": Process("process.cadmium_plate", ProcessKind.COATING, {}, surface="cadmium.electroplate",
+                                                 source="ISO 2082, cadmium electroplating")},
     parts={**REGISTRY.parts, "bolt.M12_A4_70_cd": dataclasses.replace(
         REGISTRY.parts["bolt.M12_A4_70"], id="bolt.M12_A4_70_cd", process="process.cadmium_plate")},
 )

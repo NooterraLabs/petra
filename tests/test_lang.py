@@ -44,7 +44,7 @@ def environments_only(*ids: str) -> Registry:
     """Design-level lowering reads only the registry's environment ids; the domains'
     lowerers read the rest."""
     ambient = Stated(Interval(Fraction(0), Fraction(40)), "degC", Tag.SANCTIONED, "test fixture", "test fixture", "test fixture")
-    envs = {e: Environment(e, ambient, Corrosivity.C1, False) for e in ids}
+    envs = {e: Environment(e, ambient, Corrosivity.C1, False, source="test fixture") for e in ids}
     return Registry(constants={}, materials={}, parts={}, processes={}, environments=envs)
 
 

@@ -16,10 +16,17 @@ Provenance grammar, one string per record:
     "derived:<formula over premise keys>"
     "stated:<tag>:<owner>:<source>"     constants and stated properties
     "published:<standard and table>"
+
+Entries. Every registry entry has one row in "entries": its id ("const.<name>" for a
+constant), its version as a decimal string, its source and its errata, oldest first, each
+{"date", "was", "now"} (model.Provenance). A derived or stated record belongs to the
+entry DeckRecord.registry_entry names, and the consistency checker reports a record whose
+entry has no row, and a row whose version is not one more than its errata count.
 """
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from fractions import Fraction
 from functools import cached_property
@@ -28,10 +35,13 @@ from typing import Iterator, Mapping
 from ..kernel import Interval, enclose, free_syms, parse_q
 from ..premises import ALLOWED_TAGS, LabelKind, Tag
 from .catalog import build_registry
-from .model import Constant, Derived, Registry, Stated, render
+from .model import Constant, Derived, Erratum, Registry, Stated, render
 
-FORMAT = "petra-deck/0"
+FORMAT = "petra-deck/1"
 _RECORD_KEYS = frozenset({"entry", "prop", "lo", "hi", "unit", "provenance"})
+_ENTRY_KEYS = frozenset({"entry", "version", "source", "errata"})
+_ERRATUM_KEYS = frozenset({"date", "was", "now"})
+_VERSION = re.compile(r"[1-9][0-9]*")
 _TAGS = frozenset(t.value for t in ALLOWED_TAGS[LabelKind.REGISTRY])
 
 
@@ -43,18 +53,43 @@ class DeckRecord:
     unit: str
     provenance: str          # "derived:<formula>", "stated:<tag>:<owner>:<source>", "published:<standard table>"
 
+    @property
+    def registry_entry(self) -> str:
+        """The id of the registry entry the record belongs to: the constant itself for a
+        constant record ("const.cu" "rho20" -> "const.cu.rho20"), else its entry."""
+        return f"{self.entry}.{self.prop}" if self.entry.startswith("const.") else self.entry
+
+
+@dataclass(frozen=True)
+class DeckEntry:
+    """One entry's provenance as a deck carries it. Unchecked on read: check_deck reports
+    what is wrong with it."""
+
+    entry: str
+    version: int
+    source: str
+    errata: tuple[Erratum, ...]
+
 
 @dataclass(frozen=True)
 class Deck:
-    format: str              # "petra-deck/0"
+    format: str              # "petra-deck/1"
     records: tuple[DeckRecord, ...]
+    entries: tuple[DeckEntry, ...]
 
     def get(self, entry: str, prop: str) -> DeckRecord | None:
         return self._index.get((entry, prop))
 
+    def entry(self, id: str) -> DeckEntry | None:
+        return self._entries.get(id)
+
     @cached_property
     def _index(self) -> Mapping[tuple[str, str], DeckRecord]:
         return {(r.entry, r.prop): r for r in self.records}
+
+    @cached_property
+    def _entries(self) -> Mapping[str, DeckEntry]:
+        return {e.entry: e for e in self.entries}
 
 
 class DeckError(ValueError):
@@ -118,7 +153,8 @@ def build_deck(registry: Registry | None = None) -> Deck:
     groups = {r.entry for r in records if r.entry.startswith("const.")}
     records += [DeckRecord(entry, prop, Interval(value, value), unit, f"published:{source}")
                 for entry, prop, unit, value, source in PUBLISHED if entry in groups]
-    return Deck(FORMAT, tuple(sorted(records, key=lambda r: (r.entry, r.prop))))
+    entries = (DeckEntry(id, e.provenance.version, e.provenance.source, e.provenance.errata) for id, e in registry.entries())
+    return Deck(FORMAT, tuple(sorted(records, key=lambda r: (r.entry, r.prop))), tuple(sorted(entries, key=lambda e: e.entry)))
 
 
 def write_deck(deck: Deck, path: str) -> None:
@@ -126,6 +162,10 @@ def write_deck(deck: Deck, path: str) -> None:
         {"entry": r.entry, "prop": r.prop, "lo": str(r.value.lo), "hi": str(r.value.hi), "unit": r.unit,
          "provenance": r.provenance}
         for r in deck.records
+    ], "entries": [
+        {"entry": e.entry, "version": str(e.version), "source": e.source,
+         "errata": [{"date": x.date, "was": x.was, "now": x.now} for x in e.errata]}
+        for e in deck.entries
     ]}
     with open(path, "w", encoding="utf-8", newline="\n") as f:
         f.write(json.dumps(body, indent=1, sort_keys=True, ensure_ascii=False) + "\n")
@@ -138,12 +178,12 @@ def read_deck(path: str) -> Deck:
             body = json.loads(f.read(), parse_float=_no_number, parse_int=_no_number, parse_constant=_no_number)
     except (OSError, UnicodeDecodeError, json.JSONDecodeError, DeckError) as exc:
         raise DeckError(f"{path}: {exc}") from None
-    if not isinstance(body, dict) or set(body) != {"format", "records"}:
-        raise DeckError(f"{path}: a deck is an object with exactly the keys format and records")
+    if not isinstance(body, dict) or set(body) != {"format", "records", "entries"}:
+        raise DeckError(f"{path}: a deck is an object with exactly the keys format, records and entries")
     if body["format"] != FORMAT:
         raise DeckError(f"{path}: format {body['format']!r} is not {FORMAT}")
-    if not isinstance(body["records"], list):
-        raise DeckError(f"{path}: records must be a list")
+    if not isinstance(body["records"], list) or not isinstance(body["entries"], list):
+        raise DeckError(f"{path}: records and entries must be lists")
     records, seen = [], set()
     for i, raw in enumerate(body["records"]):
         record = _parse_record(raw, f"{path}: record {i}")
@@ -151,7 +191,13 @@ def read_deck(path: str) -> Deck:
             raise DeckError(f"{path}: record {i}: {record.entry}.{record.prop} appears twice")
         seen.add((record.entry, record.prop))
         records.append(record)
-    return Deck(FORMAT, tuple(records))
+    entries: dict[str, DeckEntry] = {}
+    for i, raw in enumerate(body["entries"]):
+        entry = _parse_entry(raw, f"{path}: entry {i}")
+        if entry.entry in entries:
+            raise DeckError(f"{path}: entry {i}: {entry.entry} appears twice")
+        entries[entry.entry] = entry
+    return Deck(FORMAT, tuple(records), tuple(entries.values()))
 
 
 def _entries(registry: Registry) -> Iterator[tuple[str, list[str]]]:
@@ -210,3 +256,20 @@ def _parse_record(raw: object, where: str) -> DeckRecord:
     if lo > hi:
         raise DeckError(f"{where}: lo {raw['lo']} is above hi {raw['hi']}")
     return DeckRecord(raw["entry"], raw["prop"], Interval(lo, hi), raw["unit"], raw["provenance"])
+
+
+def _parse_entry(raw: object, where: str) -> DeckEntry:
+    if not isinstance(raw, dict) or set(raw) != _ENTRY_KEYS:
+        raise DeckError(f"{where}: an entry has exactly the keys {', '.join(sorted(_ENTRY_KEYS))}")
+    if not all(isinstance(raw[key], str) for key in ("entry", "version", "source")) or not raw["entry"]:
+        raise DeckError(f"{where}: entry, version and source must be strings, and entry non-empty")
+    if not _VERSION.fullmatch(raw["version"]):
+        raise DeckError(f"{where}: version {raw['version']!r} is not a positive integer without leading zeros")
+    if not isinstance(raw["errata"], list):
+        raise DeckError(f"{where}: errata must be a list")
+    errata = []
+    for e in raw["errata"]:
+        if not isinstance(e, dict) or set(e) != _ERRATUM_KEYS or not all(isinstance(v, str) for v in e.values()):
+            raise DeckError(f"{where}: an erratum has exactly the string keys {', '.join(sorted(_ERRATUM_KEYS))}")
+        errata.append(Erratum(e["date"], e["was"], e["now"]))
+    return DeckEntry(raw["entry"], int(raw["version"]), raw["source"], tuple(errata))

@@ -13,6 +13,9 @@ from petra.registry import (
     Corrosivity,
     DeckError,
     Derived,
+    Environment,
+    Erratum,
+    Material,
     OutsideMakeableSet,
     Part,
     PartKind,
@@ -94,12 +97,13 @@ class Lookups(unittest.TestCase):
             self.assertEqual(REGISTRY.material(p.surface).props["anodic_index"].value, point("1.25"))
 
     def test_a_coating_names_its_surface_and_no_other_process_does(self):
-        self.assertEqual(Process("p.zn", ProcessKind.COATING, {}, surface="zinc.electroplate").surface, "zinc.electroplate")
-        self.assertIsNone(Process("p.weld", ProcessKind.WELD, {}).surface)
+        self.assertEqual(Process("p.zn", ProcessKind.COATING, {}, surface="zinc.electroplate", source="ISO 2081").surface,
+                         "zinc.electroplate")
+        self.assertIsNone(Process("p.weld", ProcessKind.WELD, {}, source="EN 1999-1-1").surface)
         with self.assertRaisesRegex(ValueError, "names its surface"):
-            Process("p.zn", ProcessKind.COATING, {})
+            Process("p.zn", ProcessKind.COATING, {}, source="ISO 2081")
         with self.assertRaisesRegex(ValueError, "names its surface"):
-            Process("p.weld", ProcessKind.WELD, {}, surface="zinc.electroplate")
+            Process("p.weld", ProcessKind.WELD, {}, surface="zinc.electroplate", source="EN 1999-1-1")
 
     def test_a_part_of_the_wrong_kind_is_refused(self):
         with self.assertRaisesRegex(OutsideMakeableSet, "breaker"):
@@ -181,7 +185,7 @@ class Derivations(unittest.TestCase):
 
     def test_broken_derivations_are_refused(self):
         def registry(props):
-            part = Part("x.part", PartKind.SECTION, "test part", "steel.S355", props)
+            part = Part("x.part", PartKind.SECTION, "test part", "steel.S355", props, source="a test")
             return Registry(CONSTANTS, {}, {"x.part": part}, {}, {})
 
         cyclic = registry({"a": Derived(Sym("self.b"), "1"), "b": Derived(Sym("self.a"), "1")})
@@ -258,6 +262,45 @@ class Provenance(unittest.TestCase):
         self.assertEqual(fy.value, point("355e6"))
         self.assertEqual(fy.standard, "EN 10025-2:2019 Table 7")
 
+    def test_every_entry_names_its_source_and_its_version_counts_its_errata(self):
+        entries = dict(REGISTRY.entries())
+        tables = (REGISTRY.constants, REGISTRY.materials, REGISTRY.parts, REGISTRY.processes, REGISTRY.environments)
+        self.assertEqual(len(entries), sum(map(len, tables)), "every entry is listed once")
+        for id, entry in entries.items():
+            self.assertIs(REGISTRY.entry(id), entry)
+            self.assertTrue(entry.provenance.source.strip(), f"{id} names its source")
+            self.assertEqual(entry.provenance.version, 1 + len(entry.errata), id)
+
+    def test_a_premise_key_belongs_to_the_entry_that_holds_it(self):
+        self.assertIs(REGISTRY.entry_of("const.cu.rho20"), REGISTRY.constants["cu.rho20"])
+        self.assertIs(REGISTRY.entry_of("steel.S355.fy"), REGISTRY.materials["steel.S355"])
+        self.assertIs(REGISTRY.entry_of("indoor_dry.ambient"), REGISTRY.environments["indoor_dry"])
+        for key in ("const.unobtainium", "steel.S999.fy", "cable"):
+            with self.assertRaises(OutsideMakeableSet, msg=key):
+                REGISTRY.entry_of(key)
+
+    def test_an_entry_without_a_source_or_with_a_malformed_erratum_cannot_be_built(self):
+        ambient = REGISTRY.environments["indoor_dry"].ambient
+
+        def part(source: str = "ISO 1", *errata: Erratum) -> Part:
+            return Part("x.p", PartKind.SECTION, "p", "steel.S355", {}, source=source, errata=errata)
+
+        self.assertEqual(part("ISO 1", Erratum("2026-11-06", "it said 1", "it says 2")).provenance.version, 2)
+        with self.assertRaises(TypeError, msg="a part with no source"):
+            Part("x.p", PartKind.SECTION, "p", "steel.S355", {})
+        for build in (
+            lambda: part(" "),
+            lambda: Process("x.w", ProcessKind.WELD, {}, source=""),
+            lambda: Environment("x.e", ambient, Corrosivity.C1, False, source=""),
+            lambda: Material("x.m", "steel", "", {}),
+            lambda: part("ISO 1", Erratum("6 Nov 2026", "it said 1", "it says 2")),
+            lambda: part("ISO 1", Erratum("20261106", "it said 1", "it says 2")),
+            lambda: part("ISO 1", Erratum("2026-11-06", "", "it says 2")),
+            lambda: part("ISO 1", Erratum("2026-11-07", "it said 1", "it says 2"), Erratum("2026-11-06", "it said 2", "it says 3")),
+        ):
+            with self.assertRaises(ValueError):
+                build()
+
     def test_a_value_without_provenance_or_with_a_non_registry_tag_cannot_be_built(self):
         iv = point("1")
         Constant("x", iv, "1", Tag.SANCTIONED, "ISO", "ISO 1", "a fact")
@@ -305,23 +348,49 @@ class DeckFiles(unittest.TestCase):
         self.assertFalse(any(entry == "cable.cu_pvc" for entry, _ in keys), "a series is a template, not a part")
         self.assertIsNone(DECK.get("cable.cu_pvc_2_5", "toughness"))
 
+    def good_entry(self, **changes):
+        entry = {"entry": "chs.60_3x3_2", "version": "2", "source": "EN 10219-2:2006",
+                 "errata": [{"date": "2026-11-06", "was": "D 60 mm", "now": "D 60.3 mm"}]}
+        entry.update(changes)
+        return entry
+
+    def body(self, records=(), entries=(), **top):
+        return {"format": "petra-deck/1", "records": list(records), "entries": list(entries), **top}
+
     def test_a_valid_minimal_deck_parses(self):
-        deck = read_deck(self.write_body({"format": "petra-deck/0", "records": [self.good_record()]}))
+        deck = read_deck(self.write_body(self.body([self.good_record()], [self.good_entry()])))
         self.assertEqual(deck.get("chs.60_3x3_2", "A").value, Interval(Fraction(1, 2), Fraction(3, 4)))
+        entry = deck.entry("chs.60_3x3_2")
+        self.assertEqual((entry.version, entry.source), (2, "EN 10219-2:2006"))
+        self.assertEqual(entry.errata, (Erratum("2026-11-06", "D 60 mm", "D 60.3 mm"),))
+
+    def test_the_shipped_deck_gives_every_registry_entry_its_version_and_source(self):
+        self.assertEqual({e.entry for e in DECK.entries}, {id for id, _ in REGISTRY.entries()})
+        for e in DECK.entries:
+            provenance = REGISTRY.entry(e.entry).provenance
+            self.assertEqual((e.version, e.source, e.errata), (provenance.version, provenance.source, provenance.errata))
 
     def test_malformed_decks_are_refused(self):
+        record, entry = self.good_record(), self.good_entry()
         cases = {
-            "float": {"format": "petra-deck/0", "records": [self.good_record(lo=0.5)]},
-            "decimal string": {"format": "petra-deck/0", "records": [self.good_record(lo="0.5")]},
-            "unreduced": {"format": "petra-deck/0", "records": [self.good_record(lo="2/4")]},
-            "unit denominator": {"format": "petra-deck/0", "records": [self.good_record(lo="1/1")]},
-            "negative zero": {"format": "petra-deck/0", "records": [self.good_record(lo="-0")]},
-            "lo above hi": {"format": "petra-deck/0", "records": [self.good_record(lo="1", hi="0")]},
-            "dotted prop": {"format": "petra-deck/0", "records": [self.good_record(prop="A.x")]},
-            "extra key": {"format": "petra-deck/0", "records": [self.good_record(note="x")]},
-            "duplicate": {"format": "petra-deck/0", "records": [self.good_record(), self.good_record()]},
-            "wrong format": {"format": "petra-deck/1", "records": []},
-            "extra top-level key": {"format": "petra-deck/0", "records": [], "x": 1},
+            "float": self.body([self.good_record(lo=0.5)]),
+            "decimal string": self.body([self.good_record(lo="0.5")]),
+            "unreduced": self.body([self.good_record(lo="2/4")]),
+            "unit denominator": self.body([self.good_record(lo="1/1")]),
+            "negative zero": self.body([self.good_record(lo="-0")]),
+            "lo above hi": self.body([self.good_record(lo="1", hi="0")]),
+            "dotted prop": self.body([self.good_record(prop="A.x")]),
+            "extra key": self.body([self.good_record(note="x")]),
+            "duplicate": self.body([record, record]),
+            "version zero": self.body([record], [self.good_entry(version="0")]),
+            "version with a leading zero": self.body([record], [self.good_entry(version="02")]),
+            "version as a JSON number": self.body([record], [self.good_entry(version=2)]),
+            "entry without errata": self.body([record], [{k: v for k, v in entry.items() if k != "errata"}]),
+            "erratum with an extra key": self.body([record], [self.good_entry(errata=[{**entry["errata"][0], "by": "x"}])]),
+            "duplicate entry": self.body([record], [entry, entry]),
+            "wrong format": {"format": "petra-deck/0", "records": [], "entries": []},
+            "no entries": {"format": "petra-deck/1", "records": []},
+            "extra top-level key": self.body(x=1),
             "not an object": [],
         }
         for name, body in cases.items():

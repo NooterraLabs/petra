@@ -82,7 +82,7 @@ def material(id: str, anodic_index: Fraction | None = None, **props) -> Material
 
 
 def environment(id: str, corrosivity: Corrosivity, wet: bool) -> Environment:
-    return Environment(id, stated(Interval(Fraction(10), Fraction(40)), "degC"), corrosivity, wet)
+    return Environment(id, stated(Interval(Fraction(10), Fraction(40)), "degC"), corrosivity, wet, source="a standard")
 
 
 AREA_2_5 = Fraction(1, 400000)
@@ -126,9 +126,11 @@ REGISTRY = FakeRegistry(
                 "broken": Derived(Div(Sym("const.cu.rho20"), Sym("other.area")), "ohm/m"),
                 "conductance": Derived(Div(Const(Fraction(1)), Sym("self.R20")), "S m"),
             },
+            source="a standard",
         ),
         "cable.cu_pvc_2_5": Part(
-            "cable.cu_pvc_2_5", PartKind.CABLE, "Cu/PVC 2.5 mm2", "copper.annealed", {}, series="cable.cu_pvc", fixes={"area": point(AREA_2_5)}
+            "cable.cu_pvc_2_5", PartKind.CABLE, "Cu/PVC 2.5 mm2", "copper.annealed", {}, series="cable.cu_pvc", fixes={"area": point(AREA_2_5)},
+            source="a standard",
         ),
     },
     processes={},
