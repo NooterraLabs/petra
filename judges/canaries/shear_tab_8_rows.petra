@@ -1,0 +1,31 @@
+petra 0
+
+# violates: steel.beam_side.depth
+# A conventional shear tab with 8 rows at 3 in pitch, the top row 3 in below the top of a
+# W16x31 (d = 15.9 in): the plate runs to 25.5 in and the bottom bolt sits 24 in below the
+# beam's top, past its 15.06 in of flat web (d - kdes). Found 2026-11-06 (docs/plan.md §1).
+
+design "steel-shear-tab" {
+  owner "s.engineer@example.org"
+}
+
+shear_tab st1 {
+  basis lrfd
+  beam W16x31 grade steel.A992
+  support W14x90 flange grade steel.A992
+  plate steel.A36 thickness 0.375 inch
+  bolts bolt_group.120 diameter 0.75 inch threads included
+  rows 8
+  pitch 3 inch
+  edge_vertical 1.5 inch
+  plate_edge 1.5 inch
+  bolt_line 3 inch
+  beam_edge 1.75 inch
+  top 3 inch
+  weld electrode.E70 size 0.25 inch sides 2
+}
+
+load gravity {
+  on st1 shear in [0 kip, 45 kip]
+  signed "s.engineer@example.org" source "beam reaction, LRFD 1.2D + 1.6L, calc SC-3"
+}

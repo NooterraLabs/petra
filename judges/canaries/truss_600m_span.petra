@@ -1,0 +1,39 @@
+petra 0
+
+# violates: truss.self_weight
+# The Warren truss example scaled to a 600 m span under 1 to 2 N per top node. Its 250 m
+# diagonals of CHS 60.3x3.2 each weigh about 11 kN, which the truss model never loads.
+
+design "warren-footbridge-panel" {
+  owner "a.reviewer@example.org"
+  environment indoor_dry
+}
+
+truss frame {
+  material steel.S355
+  section chs.60_3x3_2
+
+  node A at (0 m, 0 m) support pinned
+  node B at (300 m, 0 m)
+  node C at (600 m, 0 m) support roller_x
+  node D at (150 m, 200 m)
+  node E at (450 m, 200 m)
+
+  member bottom_ab: A -- B
+  member bottom_bc: B -- C
+  member top_de:    D -- E section chs.76_1x3_2
+  member diag_ad:   A -- D
+  member diag_db:   D -- B
+  member diag_be:   B -- E
+  member diag_ec:   E -- C
+}
+
+load crowd {
+  on frame.D fy in [-2 N, -1 N]
+  on frame.E fy in [-2 N, -1 N]
+  signed "client.structures@example.org" source "brief rev B, section 3.2"
+}
+
+claim strength:   frame.collapse_factor >= 1.5 under crowd
+claim stability:  frame.stability_factor >= 3 under crowd
+claim stress:     frame.member(diag_ad).stress <= 235 MPa under crowd

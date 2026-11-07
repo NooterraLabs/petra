@@ -1,0 +1,30 @@
+petra 0
+
+# violates: steel.support_side.leg_length
+# The seated example with 6 rows of bolts at 3 in pitch in the seat's vertical leg: the
+# L6x4x3/4's leg is 6 in long, and the bottom hole reaches 16.7 in below its heel.
+
+design "steel-seated" {
+  owner "s.engineer@example.org"
+}
+
+seated seat1 {
+  basis lrfd
+  beam W16x26 grade steel.A992
+  support W14x90 flange grade steel.A992
+  angle L6x4x3_4 grade steel.A36 outstanding short
+  seat_length 8 inch
+  setback 0.5 inch
+  support_side bolted
+  bolts bolt_group.120 diameter 0.75 inch threads included
+  rows 6
+  pitch 3 inch
+  edge_vertical 1.25 inch
+  support_gauge 5.5 inch
+  top_angle L4x4x1_4 grade steel.A36 outstanding long
+}
+
+load gravity {
+  on seat1 shear in [0 kip, 30 kip]
+  signed "s.engineer@example.org" source "beam reaction, LRFD 1.2D + 1.6L, calc SC-3"
+}

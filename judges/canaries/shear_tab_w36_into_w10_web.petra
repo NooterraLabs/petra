@@ -1,0 +1,30 @@
+petra 0
+
+# violates: steel.beam_vs_support.web_clearance
+# A W36x231 beam (flange 16.5 in) framed by a shear tab into the web of a W10x45 column,
+# whose flanges stand 8.86 in apart (d - 2 tf): the beam cannot pass between them.
+
+design "steel-shear-tab" {
+  owner "s.engineer@example.org"
+}
+
+shear_tab st1 {
+  basis lrfd
+  beam W36x231 grade steel.A992
+  support W10x45 web grade steel.A992
+  plate steel.A36 thickness 0.375 inch
+  bolts bolt_group.120 diameter 0.75 inch threads included
+  rows 4
+  pitch 3 inch
+  edge_vertical 1.5 inch
+  plate_edge 1.5 inch
+  bolt_line 3 inch
+  beam_edge 1.75 inch
+  top 3 inch
+  weld electrode.E70 size 0.25 inch sides 2
+}
+
+load gravity {
+  on st1 shear in [0 kip, 45 kip]
+  signed "s.engineer@example.org" source "beam reaction, LRFD 1.2D + 1.6L, calc SC-3"
+}

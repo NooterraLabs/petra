@@ -1,0 +1,30 @@
+petra 0
+
+# violates: steel.beam_vs_support.web_clearance
+# The double-angle example with a W36x231 beam framed into the web of a W10x45 column: the
+# beam's 16.5 in flange cannot pass between flanges 8.86 in apart.
+
+design "steel-double-angle" {
+  owner "s.engineer@example.org"
+}
+
+double_angle da1 {
+  basis lrfd
+  beam W36x231 grade steel.A992
+  support W10x45 web grade steel.A992
+  angles L4x3_1_2x3_8 grade steel.A36 outstanding long
+  bolts bolt_group.120 diameter 0.75 inch threads included
+  rows 4
+  pitch 3 inch
+  edge_vertical 1.25 inch
+  beam_edge 1.75 inch
+  top 3 inch
+  beam_gauge 2 inch
+  support_side bolted
+  support_gauge 5.5 inch
+}
+
+load gravity {
+  on da1 shear in [0 kip, 60 kip]
+  signed "s.engineer@example.org" source "beam reaction, LRFD 1.2D + 1.6L, calc SC-3"
+}

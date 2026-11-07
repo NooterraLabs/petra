@@ -1,0 +1,28 @@
+petra 0
+
+# violates: steel.beam_side.depth
+# The shear end plate example with 8 rows at 3 in pitch on a W16x31 (d = 15.9 in): the plate
+# is 23.5 in long and its welds 23.1 in, against 14.2 in of flat web (d - 2 kdes).
+
+design "steel-shear-end-plate" {
+  owner "s.engineer@example.org"
+}
+
+shear_end_plate ep1 {
+  basis lrfd
+  beam W16x31 grade steel.A992
+  support W14x90 flange grade steel.A992
+  plate steel.A36 thickness 0.25 inch
+  plate_width 8 inch
+  bolts bolt_group.120 diameter 0.75 inch threads included
+  rows 8
+  pitch 3 inch
+  edge_vertical 1.25 inch
+  support_gauge 5.5 inch
+  weld electrode.E70 size 0.1875 inch sides 2
+}
+
+load gravity {
+  on ep1 shear in [0 kip, 50 kip]
+  signed "s.engineer@example.org" source "beam reaction, LRFD 1.2D + 1.6L, calc SC-3"
+}
