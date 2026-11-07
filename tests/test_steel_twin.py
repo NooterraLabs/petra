@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import glob
 import os
+import re
 import unittest
 
 from petra.lang import load_design, parse_design
@@ -22,6 +23,8 @@ from petra.registry import build_registry
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TOLERANCE = 1e-6
+DOUBLED = re.compile(r"\b(\w+) \1\b")
+"""A word printed twice in a row, as in "flange edge edge distance"."""
 
 _HEAD = 'petra 0\n\ndesign "steel-twin-{name}" {{\n  owner "s.engineer@example.org"\n}}\n\n'
 _SIGN = '  signed "s.engineer@example.org" source "twin variant"\n}}\n'
@@ -751,6 +754,23 @@ class TwinAgreesWithTheDeck(unittest.TestCase):
     def test_every_kind_is_compared(self):
         kinds = {calc.connection(d, n, self.registry).kind for _, d in _designs(self.registry) for n in d.components}
         self.assertEqual(kinds, set(twin.KINDS))
+
+    def test_the_twin_names_every_edge_distance_as_the_deck_does(self):
+        # The tee flange's side edge once read "flange edge edge distance" in both, and a
+        # coped web's top edge "cope edge edge distance" in the deck and "beam top (to the
+        # cope) edge distance" in the twin.
+        for label, design in _designs(self.registry):
+            for name in design.components:
+                conn = calc.connection(design, name, self.registry)
+                case = next(iter(design.loads))
+                mine = twin.checks(conn, design, self.registry, case)
+                for mode in ("edge_min", "edge_max"):
+                    if mode not in mine:
+                        continue
+                    deck = {v.what for v in calc.values(conn, design, self.registry, mode, case)}
+                    with self.subTest(design=label, conn=name, mode=mode):
+                        self.assertEqual({what for what, _ in mine[mode]}, deck)
+                        self.assertEqual([w for w in deck if DOUBLED.search(w)], [])
 
 
 if __name__ == "__main__":

@@ -751,7 +751,7 @@ def _shear_tab(ctx: _Ctx, modes: set[str]) -> None:
     beam.web_checks(ctx, v, n, hb, group)
     web_edges = {"beam end": leh_b}
     if beam.cope is not None:
-        web_edges["beam top (to the cope)"] = top - beam.dct
+        web_edges["cope"] = top - beam.dct
         # the coped web's blocks tear upward to the cope and out to the beam end; columns
         # counted from the beam end (the support side first)
         block_shear(ctx, "beam web", group, v, beam.tw, beam.fy, beam.fu, hb, top - beam.dct, leh_b - UNDERRUN, False,
@@ -857,7 +857,7 @@ def _angle_kind(ctx: _Ctx, modes: set[str], double: bool) -> None:
     web_edges = {"beam end": leh_b}
     setback = ctx.get("setback", 0.5)
     if beam.cope is not None:
-        web_edges["beam top (to the cope)"] = top - beam.dct
+        web_edges["cope"] = top - beam.dct
         block_shear(ctx, "beam web", group_b, v, beam.tw, beam.fy, beam.fu, hb, top - beam.dct, leh_b - UNDERRUN, False, [0])
         beam.cope_buckling(ctx, v, setback)
     edges(ctx, "beam web", beam.tw, bolts.size, web_edges)
@@ -965,7 +965,7 @@ def _shear_tee(ctx: _Ctx, modes: set[str]) -> None:
     web_edges = {"beam end": leh_b}
     setback = ctx.get("setback", 0.5)
     if beam.cope is not None:
-        web_edges["beam top (to the cope)"] = top - beam.dct
+        web_edges["cope"] = top - beam.dct
         block_shear(ctx, "beam web", group_b, v, beam.tw, beam.fy, beam.fu, hb, top - beam.dct, leh_b - UNDERRUN, False, [0])
         beam.cope_buckling(ctx, v, setback)
     edges(ctx, "beam web", beam.tw, bolts.size, web_edges)
@@ -990,7 +990,7 @@ def _shear_tee(ctx: _Ctx, modes: set[str]) -> None:
         shear_rupture(ctx, "tee flange", v, tfu, 2 * (length - n * (hv_f + SIXTEENTH)) * tf)
         one = BoltSet(ctx, bolts, n, 1, s, 0.0, [fl_ply, sup_ply], 1, None, "support side")
         block_shear(ctx, "tee flange", one, v, tf, tfy, tfu, hfl, lev, fl_edge, False, [0], planes=2)
-        edges(ctx, "tee flange", tf, bolts.size, {"flange top and bottom": lev, "flange edge": fl_edge})
+        edges(ctx, "tee flange", tf, bolts.size, {"flange top and bottom": lev, "flange side": fl_edge})
         hole_use(ctx, "tee flange", hfl, bolts)
         hole_use(ctx, f"support {face}", hs, bolts)
         group_s.check_bolts(v, "support side")
@@ -1438,10 +1438,10 @@ def _hanger(ctx: _Ctx, modes: set[str]) -> None:
     shear_yield(ctx, "tee flange", t_load, tfy, 2 * length * tf)
     shear_rupture(ctx, "tee flange", t_load, tfu, 2 * (length - n * (hv + SIXTEENTH)) * tf)
     fl_edge = (bf - g) / 2
-    edges(ctx, "tee flange", tf, bolts.size, {"flange top and bottom": lev, "flange edge": fl_edge})
+    edges(ctx, "tee flange", tf, bolts.size, {"flange top and bottom": lev, "flange side": fl_edge})
     # the bolts pass through the support's flange at the tee's gauge, centred on its web
     # (vocab prying): its edge distance runs from the gauge line to its flange tip
-    edges(ctx, f"support {face}", st, bolts.size, {"flange edge": (sup["bf"] - g) / 2})
+    edges(ctx, f"support {face}", st, bolts.size, {"flange side": (sup["bf"] - g) / 2})
     hole_use(ctx, "tee flange", hf, bolts)
     hole_use(ctx, f"support {face}", hs, bolts)
     b_avail = ctx.avail(group.fnt * group.ab, "bolt")

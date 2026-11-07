@@ -718,7 +718,8 @@ def _margin_lines(outcomes: tuple[Outcome, ...]) -> list[str]:
     return lines
 
 
-def render(verdict: Verdict, outcomes: tuple[Outcome, ...], detail: Callable[[Outcome], list[str]] | None = None) -> str:
+def render(verdict: Verdict, outcomes: tuple[Outcome, ...], detail: Callable[[Outcome], list[str]] | None = None,
+           row: Callable[[Outcome], str] | None = None, summary: tuple[str, ...] = ()) -> str:
     """The text `petra check` prints: verdict line, scope, per-obligation table (rule,
     outcome, statement hash prefix, evidence source), then the footprint grouped by tag
     with owner and source. For UNKNOWN, each open item with what it needs. For FAIL, every
@@ -726,9 +727,12 @@ def render(verdict: Verdict, outcomes: tuple[Outcome, ...], detail: Callable[[Ou
     claim's margin, and for an open item the point within its margin when the search found
     one. `detail(outcome)` gives the lines under each such point: by default the point in
     SI base units (degC for temperature) as the IR holds it; pipeline.Report passes its
-    findings', with demand, capacity and utilisation in the design's units. Each proved
-    claim with a margin gets a line saying whether the margin was proved or is undecided.
-    Margins print in a readable unit of their dimension (units.readable_text)."""
+    findings', with demand, capacity and utilisation in the design's units. `summary`
+    lines follow the `checked` line and `row(outcome)` ends the outcome's table row:
+    pipeline.Report passes the governing strength and detailing checks and each finding's
+    utilisation. Each proved claim with a margin gets a line saying whether the margin was
+    proved or is undecided. Margins print in a readable unit of their dimension
+    (units.readable_text)."""
     show = detail or (lambda o: _point_lines(o, verdict.footprint))
     count = {kind: sum(isinstance(o, kind) for o in outcomes) for kind in (Discharged, Refuted, WithinMargin, Waived, Open)}
     lines = [STATUS[type(verdict)]]
@@ -739,7 +743,8 @@ def render(verdict: Verdict, outcomes: tuple[Outcome, ...], detail: Callable[[Ou
         + (f"{count[WithinMargin]} within margin, " if count[WithinMargin] else "")
         + f"{count[Waived]} waived, {count[Open]} open"
     )
-    lines += [f"  {_outcome_row(o)}" for o in outcomes]
+    lines += summary
+    lines += [f"  {_outcome_row(o)}{row(o) if row is not None else ''}" for o in outcomes]
     if not isinstance(verdict, Fail):
         lines += _margin_lines(outcomes)
     for o in outcomes:

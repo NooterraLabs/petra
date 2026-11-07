@@ -381,7 +381,7 @@ def _beam_web_ply(ctx: Ctx, beam: Member, props: Mapping[str, Expr], columns: in
     depth = sub(d, dc) if cope.flanges == "top" else sub(sub(d, dc), _bottom_cope(ctx, cope, dc))
     edge = sub(top, dc)
     return Ply("beam web", beam.grade, props["tw"], 1, 1, ctx.hole("beam"), "up", edge, side, depth, columns,
-               (("beam end", beam_edge), ("cope edge", edge)), block=True)
+               (("beam end", beam_edge), ("cope", edge)), block=True)
 
 
 def _bottom_cope(ctx: Ctx, cope: Cope, dc: Expr) -> Expr:
@@ -531,7 +531,7 @@ def geometry_tee(ctx: Ctx) -> Geometry:
         gs = ctx.attr("support_gauge")
         side = div(sub(tp["bf"], gs), c(2))
         flange = Ply("tee flange", tee.grade, tp["tf"], 1, 2, ctx.hole("flange"), "up", lev, side, length, 1,
-                     (("flange top and bottom", lev), ("flange edge", side)), block=True)
+                     (("flange top and bottom", lev), ("flange side", side)), block=True)
         out.interfaces.append(Interface("support side", bolts, rows, 2, s, gs, 1, (flange, _support_ply(ctx)), v, None,
                                         clearances=_support_clearances(support, sp, gs), tension=None, prying=()))
     else:
@@ -718,7 +718,7 @@ def geometry_hanger(ctx: Ctx) -> Geometry:
     b = div(sub(gt, tp["tw"]), c(2))
     a = div(sub(tp["bf"], gt), c(2))
     flange = Ply("tee flange", tee.grade, tp["tf"], 1, 2, ctx.hole("flange"), "down", lev, a, None, 1,
-                 (("flange top and bottom", lev), ("flange edge", a)), block=False)
+                 (("flange top and bottom", lev), ("flange side", a)), block=False)
     # The support's flange bends about its web under the same bolts, by the same T-stub
     # model (the Companion checks it so in II.C-1 and notes in II.D-1 that the thicker
     # flange need not be checked): its b and a run from the gauge to its web and edge.
@@ -726,7 +726,7 @@ def geometry_hanger(ctx: Ctx) -> Geometry:
     sp = _w(ctx, support)
     b_s, a_s = div(sub(gt, sp["tw"]), c(2)), div(sub(sp["bf"], gt), c(2))
     hold = Ply("support flange", support.grade, sp["tf"], 1, 1, ctx.hole("support"), "down", None, None, None, 1,
-               (("flange edge", a_s),), block=False)
+               (("flange side", a_s),), block=False)
     out = Geometry.empty()
     out.interfaces.append(Interface("hanger bolts", bolts, rows, 2, s, gt, 1, (flange, hold), ctx.secondary("shear"),
                                     None, tension=t, clearances=(("tee stem", b),),
@@ -795,43 +795,57 @@ def _coefficients(ctx: Ctx, hole: str) -> tuple[Expr, Expr]:
     return ctx.const(bearing), ctx.const(tearout)
 
 
-def _per_bolt(ctx: Ctx, itf: Interface, row: str) -> Expr:
-    """Available strength of one bolt in row "only", "top", "bottom" or "middle": the least
-    of its shear strength and, in each ply, its bearing and its tearout strength. Tearout
-    runs to the free edge from the extreme row in the push direction, else to the next hole."""
+@dataclass(frozen=True)
+class BoltStrength:
+    """One limit state of one bolt, named for reports: its shear, or its bearing or tearout
+    in one ply, with the clear distance lc a tearout runs (None for the others)."""
+
+    what: str
+    lc: Expr | None
+    available: Expr
+
+
+def bolt_strengths(ctx: Ctx, itf: Interface, row: str) -> tuple[BoltStrength, ...]:
+    """The available strengths of one bolt in row "only", "top", "bottom" or "middle": its
+    shear strength and, in each ply, its bearing and its tearout strength. Tearout runs to
+    the free edge from the extreme row in the push direction, else to the next hole."""
     d = ctx.const(f"bolt_us.{itf.bolts.size}.d")
-    terms = [ctx.available(L.bolt_shear(_fnv(ctx, itf.bolts), d, c(itf.planes)), "rcsc2025.s5_1", suffix="")]
+    out = [BoltStrength("bolt shear", None, ctx.available(L.bolt_shear(_fnv(ctx, itf.bolts), d, c(itf.planes)), "rcsc2025.s5_1", suffix=""))]
     for ply in itf.plies:
         _, dh_v, _ = bolt_dims(ctx, itf.bolts, ply.hole)
         fu = ctx.mat(ply.grade, "fu")
         kb, kt = _coefficients(ctx, ply.hole)
-        terms.append(ctx.available(mul(c(ply.count), L.bearing(d, ply.t, fu, kb)), "rcsc2025.s5_3", suffix=""))
+        out.append(BoltStrength(f"bearing on the {ply.name}", None,
+                                ctx.available(mul(c(ply.count), L.bearing(d, ply.t, fu, kb)), "rcsc2025.s5_3", suffix="")))
         extreme = row == "only" or row == ("bottom" if ply.direction == "down" else "top")
-        if extreme:
-            if ply.edge is not None:
-                lc = sub(ply.edge, div(dh_v, c(2)))
-                terms.append(ctx.available(mul(c(ply.count), L.tearout(lc, ply.t, fu, kt)), "rcsc2025.s5_3", suffix=""))
-        else:
-            lc = sub(itf.pitch, dh_v)
-            terms.append(ctx.available(mul(c(ply.count), L.tearout(lc, ply.t, fu, kt)), "rcsc2025.s5_3", suffix=""))
-    return Min(tuple(terms))
+        if extreme and ply.edge is None:
+            continue
+        lc = sub(ply.edge, div(dh_v, c(2))) if extreme else sub(itf.pitch, dh_v)
+        out.append(BoltStrength(f"tearout of the {ply.name} to {'its edge' if extreme else 'the next hole'}", lc,
+                                ctx.available(mul(c(ply.count), L.tearout(lc, ply.t, fu, kt)), "rcsc2025.s5_3", suffix="")))
+    return tuple(out)
 
 
-def _rows(itf: Interface) -> tuple[tuple[str, int], ...]:
+def _per_bolt(ctx: Ctx, itf: Interface, row: str) -> Expr:
+    """Available strength of one bolt: the least of its bolt_strengths."""
+    return Min(tuple(s.available for s in bolt_strengths(ctx, itf, row)))
+
+
+def bolt_rows(itf: Interface) -> tuple[tuple[str, int], ...]:
     """(row kind, how many rows of that kind) per column."""
     if itf.rows == 1:
         return (("only", 1),)
     return (("top", 1), ("bottom", 1)) + ((("middle", itf.rows - 2),) if itf.rows > 2 else ())
 
 
-def _weakest_bolt(ctx: Ctx, itf: Interface) -> Expr:
-    found = [_per_bolt(ctx, itf, r) for r, _ in _rows(itf)]
+def weakest_bolt(ctx: Ctx, itf: Interface) -> Expr:
+    found = [_per_bolt(ctx, itf, r) for r, _ in bolt_rows(itf)]
     return found[0] if len(found) == 1 else Min(tuple(found))
 
 
-def _group_total(ctx: Ctx, itf: Interface) -> Expr:
+def group_total(ctx: Ctx, itf: Interface) -> Expr:
     """Sum over the bolts of their available strengths (J3.7 with J3.11a)."""
-    per_column = add(*(mul(c(k), _per_bolt(ctx, itf, r)) if k > 1 else _per_bolt(ctx, itf, r) for r, k in _rows(itf)))
+    per_column = add(*(mul(c(k), _per_bolt(ctx, itf, r)) if k > 1 else _per_bolt(ctx, itf, r) for r, k in bolt_rows(itf)))
     return mul(c(itf.cols), per_column) if itf.cols > 1 else per_column
 
 
@@ -847,10 +861,10 @@ def gen_bolts(ctx: Ctx, geo: Geometry) -> list[Check]:
             continue
         if itf.eccentricity is not None:
             out.append(Check(f"{itf.name}: most loaded bolt by the elastic method against the weakest bolt (J3.7, J3.11a)",
-                             _elastic(itf, itf.shear), _weakest_bolt(ctx, itf), group=None, suffix="", guards=(), unit="kip"))
+                             _elastic(itf, itf.shear), weakest_bolt(ctx, itf), group=None, suffix="", guards=(), unit="kip"))
         else:
             out.append(Check(f"{itf.name}: bolt shear, bearing and tearout summed over the group (J3.7, J3.11a)",
-                             (itf.shear,), _group_total(ctx, itf), group=None, suffix="", guards=(), unit="kip"))
+                             (itf.shear,), group_total(ctx, itf), group=None, suffix="", guards=(), unit="kip"))
     return out
 
 
