@@ -1,6 +1,3 @@
-{"unexpected": {"name": "gate-1-01614", "kind": "bolt_bracket", "expected": "FAIL", "status": "PASS", "toleranced": true, "free": false}}
-{"unexpected": {"name": "gate-1-06124", "kind": "bolt_bracket", "expected": "FAIL", "status": "PASS", "toleranced": true, "free": false}}
-{"unexpected": {"name": "gate-1-06696", "kind": "bolt_bracket", "expected": "FAIL", "status": "PASS", "toleranced": true, "free": false}}
 {"fault": {"fault": "missing weld", "base": "gate-101-00000", "kind": "shear_tab", "status": "FAIL", "named": ["fillet_size"], "others": ["ductility", "weld"]}}
 {"fault": {"fault": "missing weld", "base": "gate-101-00022", "kind": "shear_tab", "status": "FAIL", "named": ["fillet_size"], "others": ["ductility"]}}
 {"fault": {"fault": "missing weld", "base": "gate-101-00044", "kind": "shear_tab", "status": "FAIL", "named": ["fillet_size"], "others": ["ductility"]}}

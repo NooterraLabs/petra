@@ -8,14 +8,14 @@ Stream seed 1: 10000 generated connections across 11 kinds, 1283 with a toleranc
 | 5. Twins | 10000 of 10000 agree on every mode; 0 disagree; 0 twin errors |
 | 6. Manufactured faults | 218 of 218 caught, 218 named by the fault's mode |
 | 7. Breaker | 22 runs, 100 deck evaluations each; 0 found a false PASS |
-| 8. Makeability | 2943 of 2943 FAILs carry a witness |
-| 9. Report | 10000 of 10000 calculation packages re-check (every certificate accepted by the kernel, every cited statement present, the verdict reproduced from the certificates alone) |
+| 8. Makeability | 2946 of 2946 FAILs carry a witness |
+| 9. Report | 10000 of 10000 calculation packages re-check (every certificate accepted by the kernel, every cited statement present, the verdict reproduced from the certificates alone, no limit state that holds read above 1) |
 
 ## Verdicts by kind
 
 | Kind | PASS | FAIL | other |
 |---|---|---|---|
-| bolt_bracket | 666 | 243 | 0 |
+| bolt_bracket | 663 | 246 | 0 |
 | double_angle | 632 | 277 | 0 |
 | flange_force | 703 | 206 | 0 |
 | hanger | 604 | 305 | 0 |
@@ -27,7 +27,7 @@ Stream seed 1: 10000 generated connections across 11 kinds, 1283 with a toleranc
 | stiffened_seat | 637 | 272 | 0 |
 | weld_bracket | 655 | 254 | 0 |
 
-Expected (from the deck's own utilisations and geometry) against the verdict: FAIL as FAIL: 2943, FAIL as PASS: 3, PASS as PASS: 7054. The generator aims from the deck's interval enclosure, which can overstate a utilisation; the 3 designs decided otherwise are in the log.
+Expected (from the deck's own utilisations and geometry) against the verdict: FAIL as FAIL: 2946, PASS as PASS: 7054.
 
 ## Manufactured faults
 
