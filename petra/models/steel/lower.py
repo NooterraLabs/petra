@@ -19,7 +19,7 @@ Load fields per kind: LOAD_FIELDS. Claims name `<conn>.<qoi>`, a mode's short na
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from fractions import Fraction
 from types import MappingProxyType
 from typing import Callable, Mapping, Union
@@ -434,7 +434,7 @@ _LENGTHS: Mapping[str, str] = {
     "gauge": "spacing of bolt columns (g)",
     "edge_vertical": "vertical edge distance of the end rows (Lev)",
     "plate_edge": "horizontal edge distance on the connecting element (Leh)",
-    "bolt_line": "weld line or support face to the bolt line (a, Manual Part 10)",
+    "bolt_line": "distance a to the bolt line (Manual Part 10)",
     "beam_edge": "horizontal edge distance on the beam web, as detailed; strength checks take it less the 1/4 in "
                  "underrun (Leh, Manual Part 10)",
     "top": "beam's top to the top bolt row",
@@ -457,6 +457,31 @@ _LENGTHS: Mapping[str, str] = {
 }
 """The lines that give one length: line -> its meaning, with the symbol docs/steel_glossary.md
 maps it to."""
+
+READINGS: Mapping[str, Mapping[str, str]] = {
+    "support_gauge": {
+        "double_angle": "between the two bolt lines, one in each angle's outstanding leg: twice each leg's gauge "
+                        "from its heel, plus the beam web's thickness",
+        "single_angle": "from the angle's heel, at the face of the beam web, to the bolt line in its outstanding leg",
+        "shear_tee": "between the two bolt lines across the tee flange, one each side of the stem",
+        "shear_end_plate": "between the two bolt lines across the end plate, one each side of the beam web",
+        "seated": "between the two bolt lines across the seat angle's vertical leg",
+    },
+    "beam_gauge": {
+        "double_angle": "from the angles' heel, the back of their outstanding legs, to the bolt line in the legs on "
+                        "the beam web; the toe's edge distance is that leg less this gauge",
+        "single_angle": "from the angle's heel, the back of its outstanding leg, to the bolt line in the leg on the "
+                        "beam web; the toe's edge distance is that leg less this gauge",
+    },
+    "bolt_line": {
+        "shear_tab": "from the weld line at the support face; with more than one column, to the column nearest the "
+                     "support",
+        "shear_tee": "measured along the stem from the back of the tee flange, at the support face",
+    },
+}
+"""The lines each kind measures its own way: line -> kind -> where it is measured from or
+between, which follows the line's meaning in the kind's grammar. Every kind that takes the
+line has its reading (tests/test_teach.py)."""
 
 _COMMON: dict[str, Parser] = {
     "beam": p_member(False),
@@ -537,12 +562,15 @@ usage error prints, and its meaning. A <length> is a length, a signed bound or a
 
 
 def grammar(kind: str) -> Grammar:
-    """The kind's lines, required and optional, as KIND_SPECS lists them."""
+    """The kind's lines, required and optional, as KIND_SPECS lists them, each line with
+    the kind's own reading of it (READINGS)."""
     spec = KIND_SPECS[kind]
     holes = Field("holes", f"<ply> {'|'.join(HOLE_TYPES)} [<ply> <type> ...]", "", (),
                   f"hole types by ply (Table J3.3), plies {', '.join(spec.plies) or 'none'}; a ply it does not "
                   "name has standard holes")
-    fields = {**FIELDS, "holes": holes}
+    fields = {**FIELDS, "holes": holes,
+              **{line: replace(FIELDS[line], meaning=f"{FIELDS[line].meaning}, {by_kind[kind]}")
+                 for line, by_kind in READINGS.items() if kind in by_kind}}
     return Grammar(tuple(fields[n] for n in spec.required), tuple(fields[n] for n in spec.optional), "<conn>",
                    spec.loads)
 
@@ -651,7 +679,7 @@ def _check_kind(kind: str, attrs: Mapping[str, object], say: Say) -> None:
     """The combinations a kind's lines must agree on."""
     side = attrs.get("support_side")
     if side == "bolted" and "support_gauge" not in attrs:
-        say("a bolted support side names support_gauge (across the two bolt lines, or heel to bolt line on one angle)")
+        say(f"a bolted support side names support_gauge, {READINGS['support_gauge'][kind]}")
     if side == "bolted" and kind == "seated" and not {"bolts", "rows", "pitch", "edge_vertical"} <= set(attrs):
         say("a bolted seat names its bolts, rows, pitch and edge_vertical")
     if side == "welded" and "support_weld" not in attrs:

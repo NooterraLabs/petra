@@ -33,6 +33,19 @@ def run(*argv: str) -> tuple[int, str, str]:
     return code, out.getvalue(), err.getvalue()
 
 
+def help_text(*argv: str) -> str:
+    """What `petra ARGV --help` prints; argparse exits 0 after printing it."""
+    out = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(out):
+            cli.main([*argv, "--help"])
+    except SystemExit as exc:
+        if exc.code == 0:
+            return out.getvalue()
+        raise AssertionError(f"petra {' '.join(argv)} --help exited {exc.code}") from None
+    raise AssertionError(f"petra {' '.join(argv)} --help did not exit")
+
+
 def lowering_errors(text: str) -> str:
     """The input error a design raises while it lowers, or "" when it lowers."""
     try:
@@ -82,6 +95,54 @@ class OneGrammarPerKind(unittest.TestCase):
     def test_a_steel_usage_error_prints_its_form(self):
         problems = lowering_errors(example("shear_tab")[1].replace("  rows 4", "  rows four"))
         self.assertIn("reads `rows <n>`", problems)
+
+
+class KindReadings(unittest.TestCase):
+    """A line one kind measures differently from another says, in each kind's grammar, what
+    it is measured from or between."""
+
+    @staticmethod
+    def meanings(line: str) -> dict[str, str]:
+        """kind -> the meaning `petra kinds --json` prints for `line`, for each kind that takes it."""
+        domains = json.loads(run("kinds", "--json")[1])["domains"]
+        return {k["kind"]: f["meaning"] for d in domains for k in d["kinds"] for f in k["fields"] if f["name"] == line}
+
+    def test_every_kind_that_takes_a_line_read_by_kind_has_its_reading(self):
+        for line, by_kind in steel.READINGS.items():
+            with self.subTest(line):
+                takers = {kind for kind, spec in steel.KIND_SPECS.items() if line in (*spec.required, *spec.optional)}
+                self.assertEqual(set(by_kind), takers)
+
+    def test_each_kind_says_where_its_support_gauge_is_measured(self):
+        found = self.meanings("support_gauge")
+        self.assertEqual(set(found), {"double_angle", "single_angle", "shear_tee", "shear_end_plate", "seated"})
+        for kind in ("double_angle", "shear_tee", "shear_end_plate", "seated"):
+            self.assertIn("between the two bolt lines", found[kind], kind)
+        self.assertIn("plus the beam web's thickness", found["double_angle"])
+        self.assertIn("from the angle's heel", found["single_angle"])
+        self.assertIn("tee flange", found["shear_tee"])
+        self.assertIn("end plate", found["shear_end_plate"])
+        self.assertIn("seat angle", found["seated"])
+        self.assertEqual(len(set(found.values())), len(found), "no two kinds read it the same way")
+
+    def test_the_beam_gauge_is_measured_from_the_heel(self):
+        found = self.meanings("beam_gauge")
+        self.assertEqual(set(found), {"double_angle", "single_angle"})
+        for kind, meaning in found.items():
+            self.assertIn("heel", meaning, kind)
+            self.assertIn("toe's edge distance is that leg less this gauge", meaning, kind)
+
+    def test_the_bolt_line_says_where_it_starts(self):
+        found = self.meanings("bolt_line")
+        self.assertIn("from the weld line", found["shear_tab"])
+        self.assertIn("from the back of the tee flange", found["shear_tee"])
+
+    def test_a_bolted_support_side_without_its_gauge_says_how_to_measure_it(self):
+        for kind, reading in (("single_angle", "from the angle's heel"), ("double_angle", "between the two bolt lines")):
+            with self.subTest(kind):
+                self.assertIn("  support_side bolted\n", example(kind)[1])
+                problems = lowering_errors(re.sub(r"\n  support_gauge [^\n]*", "", example(kind)[1]))
+                self.assertIn(f"a bolted support side names support_gauge, {reading}", problems)
 
 
 class CommonNames(unittest.TestCase):
@@ -209,16 +270,50 @@ class PetraNew(unittest.TestCase):
         code, _, err = run("new", "truss", "--name", "design")
         self.assertEqual(code, cli.EXIT_CODES["INPUT_ERROR"], "a declaration word is not a component name")
 
+    def test_the_help_names_every_kind(self):
+        text = " ".join(help_text("new").split())
+        self.assertIn("KIND the component kind: ", text)
+        for kind in models.KINDS:
+            self.assertRegex(text, rf"\b{kind}\b")
+        self.assertIn("`petra kinds KIND`", text)
+
 
 class PetraKinds(unittest.TestCase):
-    def test_every_kind_prints_every_line_with_its_form(self):
+    def test_with_no_argument_it_prints_each_domain_and_its_kinds_in_a_few_lines(self):
         code, out, _ = run("kinds")
+        self.assertEqual(code, 0)
+        domain_lines = [line for line in out.splitlines() if line.startswith("domain ")]
+        self.assertEqual([line.split(":")[0] for line in domain_lines], [f"domain {d}" for d in models.DOMAINS])
+        for name, domain in models.DOMAINS.items():
+            with self.subTest(name):
+                block = out.split(f"domain {name}: ", 1)[1].split("\ndomain ", 1)[0].split("\n\n", 1)[0]
+                self.assertEqual(re.split(r",\s+", block.strip()), list(domain.kinds))
+                self.assertLessEqual(len(block.splitlines()), 2, "a domain's kinds take one or two lines")
+        self.assertLessEqual(len(out.splitlines()), 2 * len(models.DOMAINS) + 5)
+        self.assertNotIn("required:", out)
+        for hint in ("`petra kinds KIND`", "`petra kinds DOMAIN`", "`petra kinds --all`", "`petra new KIND`"):
+            self.assertIn(hint, out)
+
+    def test_every_kind_prints_every_line_with_its_form(self):
+        code, out, _ = run("kinds", "--all")
         self.assertEqual(code, 0)
         for kind, spec in models.KINDS.items():
             with self.subTest(kind):
                 self.assertIn(f"\n{kind} <name> {{", out)
                 for f in spec.grammars[kind].fields:
                     self.assertIn(f"    {f.name} {f.form}\n        {f.meaning}", out)
+
+    def test_all_with_a_name_is_an_input_error(self):
+        code, out, err = run("kinds", "steel", "--all")
+        self.assertEqual((code, out), (cli.EXIT_CODES["INPUT_ERROR"], ""))
+        self.assertIn("--all", err)
+
+    def test_the_help_names_the_domains_and_kinds_it_takes(self):
+        text = " ".join(help_text("kinds").split())
+        self.assertIn("DOMAIN|KIND a domain (", text)
+        for name in (*models.DOMAINS, *models.KINDS):
+            self.assertRegex(text, rf"\b{name}\b")
+        self.assertIn("--all print the lines of every kind", text)
 
     def test_a_domain_or_a_kind_prints_only_its_own(self):
         code, out, _ = run("kinds", "steel")
@@ -279,6 +374,48 @@ class RegistryList(unittest.TestCase):
         for w in ("W18x50", "W10x45", "W6x8_5", "W5x16"):
             with self.subTest(w):
                 self.assertEqual(steel.tee_parent(teach.tee_of(w)), w)
+
+
+class PetraDocs(unittest.TestCase):
+    """`petra docs` from the source tree; tests/test_packaging.py runs it from an installed
+    wheel and an editable install."""
+
+    FILES = {"readme": ROOT / "README.md", "reference": ROOT / "docs" / "reference.md",
+             "api": ROOT / "petra" / "docs" / "api.md"}
+
+    def test_with_no_name_it_lists_each_document_with_what_it_covers(self):
+        code, out, _ = run("docs")
+        self.assertEqual(code, 0)
+        listed = {line.split()[0]: line for line in out.splitlines()[:-1]}
+        self.assertEqual(set(listed), set(self.FILES))
+        self.assertTrue(all(len(line.split(maxsplit=1)) == 2 for line in listed.values()))
+        self.assertIn("`petra docs NAME`", out.splitlines()[-1])
+
+    def test_each_document_prints_whole(self):
+        for name, path in self.FILES.items():
+            with self.subTest(name):
+                code, out, err = run("docs", name)
+                self.assertEqual(code, 0, err)
+                self.assertEqual(out, path.read_text(encoding="utf-8"))
+
+    def test_every_document_the_package_ships_prints_by_its_name(self):
+        shipped = sorted((ROOT / "petra" / "docs").glob("*.md"))
+        self.assertTrue(shipped)
+        for path in shipped:
+            with self.subTest(path.name):
+                self.assertEqual(run("docs", path.stem)[1], path.read_text(encoding="utf-8"))
+
+    def test_an_unknown_name_suggests(self):
+        code, out, err = run("docs", "referense")
+        self.assertEqual((code, out), (cli.EXIT_CODES["INPUT_ERROR"], ""))
+        self.assertIn("did you mean reference", err)
+
+    def test_the_help_names_the_documents(self):
+        text = " ".join(help_text("docs").split())
+        self.assertIn("NAME the document: readme, reference, api", text)
+
+    def test_petra_help_ends_by_naming_petra_docs(self):
+        self.assertIn("`petra docs`", help_text().rstrip("\n").splitlines()[-1])
 
 
 class Generated(unittest.TestCase):

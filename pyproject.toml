@@ -17,4 +17,4 @@ dependencies = ["numpy>=1.23.2", "scipy>=1.9.2"]
 petra = "petra.cli:main"
 
 [tool.petra-build]
-include = ["petra/**/*.py", "petra/registry/aisc_shapes.json"]
+include = ["petra/**/*.py", "petra/registry/aisc_shapes.json", "petra/docs/*.md"]

@@ -4,7 +4,7 @@ Petra checks a physical design against its claims and answers PASS, FAIL, MARGIN
 
 The steel connections deck checks connections to AISC 360-22 Chapters J and K. It covers single-plate shear tabs, double and single angles, shear end plates, shear tees, unstiffened and stiffened seats, tee hangers, bolted and welded brackets, and concentrated flange forces on a column. [examples/steel](examples/steel) holds one design of each kind, and [docs/steel_connections.md](docs/steel_connections.md) is the deck's specification. Petra ships only the rows of the AISC Shapes Database that the examples and tests use. To use every W shape and angle, set `PETRA_SHAPES_XLSX` to your own copy of `SHAPE160.xlsx`.
 
-[docs/reference.md](docs/reference.md) is the language reference, and [docs/api.md](docs/api.md) documents the Python API. [docs/frame.md](docs/frame.md) explains what a verdict means and what v0 covers. [docs/design.md](docs/design.md) explains how the parts fit and why.
+[docs/reference.md](docs/reference.md) is the language reference, and [petra/docs/api.md](petra/docs/api.md) documents the Python API. `petra docs reference` and `petra docs api` print them from any install. [docs/frame.md](docs/frame.md) explains what a verdict means and what v0 covers. [docs/design.md](docs/design.md) explains how the parts fit and why.
 
 ## Install
 
@@ -24,9 +24,29 @@ pip install -e .
 
 The build backend is part of the repository (`_build/petra_build.py`) and needs no packages, so pip builds Petra without network access. pip needs the network only to fetch `numpy` and `scipy` when they are missing. To build a wheel to install on another machine, run `pip wheel --no-deps -w dist .`.
 
+To install a wheel file, such as one built that way, pass its path to pip:
+
+```bash
+pip install petra-0.1.0-py3-none-any.whl
+```
+
 Petra is not on PyPI yet. Publication is pending.
 
 To run Petra from the repository root without installing it, write `python -m petra` in place of `petra`.
+
+The documentation is installed with Petra. `petra docs` lists it, and `petra docs NAME` prints one document:
+
+```bash
+petra docs
+```
+
+<!-- sample: petra docs -->
+```text
+readme     installing Petra, a quickstart and worked examples
+reference  the .petra language: syntax, units, every kind's lines and every registry id
+api        the Python API, and the JSON that `petra check --json` prints
+`petra docs NAME` prints one.
+```
 
 ## Quickstart
 
@@ -69,7 +89,27 @@ To run Petra from the repository root without installing it, write `python -m pe
 	UNKNOWN [('tension', 'PASS'), ('coverage', 'UNKNOWN')]
 	```
 
-4. To write your own design, start from a template. `petra kinds` lists every component kind and the lines it takes. `petra new double_angle` prints a complete double-angle design to edit. `petra registry list` prints every material, part and shape Petra knows, and common names such as A325 and A992 resolve to their registry ids.
+4. To write your own design, start from a template. `petra kinds` lists the component kinds by domain:
+
+	```bash
+	petra kinds
+	```
+
+	<!-- sample: petra kinds -->
+	```text
+	domain truss: truss
+	domain circuit: circuit
+	domain bolt: joint
+	domain uncertainty: demand
+	domain steel: shear_tab, double_angle, single_angle, shear_tee, shear_end_plate, seated,
+	  stiffened_seat, flange_force, bolt_bracket, weld_bracket, hanger
+
+	`petra kinds KIND` prints the lines a kind takes, each with its meaning; `petra kinds DOMAIN`
+	prints them for every kind of a domain, and `petra kinds --all` for every kind.
+	`petra new KIND` prints a complete design of KIND to start from.
+	```
+
+	`petra kinds double_angle` prints every line a double angle takes, each with its meaning and unit, and `petra new double_angle` prints a complete double-angle design to edit. `petra registry list` prints every material, part and shape Petra knows, and common names such as A325 and A992 resolve to their registry ids.
 
 	```bash
 	petra registry list bolt_group

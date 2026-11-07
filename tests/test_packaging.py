@@ -3,8 +3,9 @@
 setUpClass builds the wheel through pip from this tree (build isolation on, no index),
 the sdist through the backend's hook, and a second wheel through pip from that sdist,
 then installs the first wheel into a fresh venv. The tests check what the wheel ships,
-that the sdist rebuilds the same wheel, and that the installed `petra` command answers
-from a directory outside the repository, as it would for a stranger.
+that the sdist rebuilds the same wheel, and that the installed `petra` command answers,
+and prints its documents, from a directory outside the repository, as it would for a
+stranger.
 """
 import base64
 import csv
@@ -82,6 +83,7 @@ class Packaging(unittest.TestCase):
             self.skipTest("not a git checkout")
         tracked = set(listed.stdout.decode("utf-8").split("\0")) - {""}
         self.assertIn("petra/registry/aisc_shapes.json", tracked, "the shapes table is tracked")
+        self.assertIn("petra/docs/api.md", tracked, "the API document is tracked")
         self.assertEqual(tracked - set(self.files), set(), "the wheel ships every tracked file under petra/, data files included")
         stray = {n for n in self.files if not n.startswith(("petra/", f"{DIST_INFO}/"))}
         self.assertEqual(stray, set(), "the wheel ships only the package and its .dist-info")
@@ -121,11 +123,24 @@ class Packaging(unittest.TestCase):
         self.assertTrue(Path(where).resolve().is_relative_to((self.tmp / "venv").resolve()), f"petra imports from the venv, not {where}")
         self.assertEqual(versions, [PROJECT["version"]] * 2, "the installed metadata and petra.__version__ match pyproject.toml")
 
+    def test_the_installed_command_prints_its_documents_outside_the_repository(self):
+        petra = shutil.which("petra", path=str(self.scripts))
+        self.assertIn("`petra docs`", ok(petra, "--help", cwd=self.outside).rstrip("\n").splitlines()[-1])
+        listed = [line.split()[0] for line in ok(petra, "docs", cwd=self.outside).splitlines()[:-1]]
+        self.assertEqual(listed, ["readme", "reference", "api"])
+        for name, path in (("api", ROOT / "petra" / "docs" / "api.md"), ("reference", ROOT / "docs" / "reference.md"),
+                           ("readme", ROOT / "README.md")):
+            with self.subTest(name):
+                self.assertEqual(ok(petra, "docs", name, cwd=self.outside), path.read_text(encoding="utf-8"))
+
     def test_an_editable_install_imports_the_source_tree(self):
         python, _ = venv(self.tmp / "editable")
         ok(python, "-m", "pip", "install", *OFFLINE, "--no-compile", "-e", ROOT, cwd=self.tmp)
         where = ok(python, "-c", "import petra; print(petra.__file__)", cwd=self.outside).strip()
         self.assertEqual(Path(where).resolve(), (ROOT / "petra" / "__init__.py").resolve())
+        for name, path in (("api", ROOT / "petra" / "docs" / "api.md"), ("readme", ROOT / "README.md")):
+            with self.subTest(name):
+                self.assertEqual(ok(python, "-m", "petra", "docs", name, cwd=self.outside), path.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

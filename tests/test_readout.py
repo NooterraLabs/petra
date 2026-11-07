@@ -240,7 +240,7 @@ class Api(unittest.TestCase):
         self.assertEqual(bare.verdict, check(CABLE).verdict)
 
     def test_docs_api_shows_an_obligation_with_every_key(self):
-        text = (ROOT / "docs" / "api.md").read_text(encoding="utf-8")
+        text = (ROOT / "petra" / "docs" / "api.md").read_text(encoding="utf-8")
         start = text.index("```json\n") + len("```json\n")
         sample = json.loads(text[start:text.index("\n```", start)])
         self.assertEqual(set(sample), OBLIGATION_KEYS)
