@@ -199,9 +199,9 @@ Waivable modes: `truss.compliance`, `truss.elastic_stress`, `truss.global_stabil
 
 | line | form | needed | unit | ids | meaning |
 |---|---|---|---|---|---|
-| `node` | `<name> at (<x>, <y>) [support pinned\|roller_x\|roller_y]` | required | length |  | a joint at exact coordinates, one line per node; a support fixes x and y (pinned), y only (roller_x) or x only (roller_y) |
+| `node` | `<name> at (<x>, <y>) [support pinned\|roller_x\|roller_y]` | required | length |  | a joint at exact coordinates, one line per node, y pointing up (the members' own weight acts in -y); a support fixes x and y (pinned), y only (roller_x) or x only (roller_y) |
 | `member` | `<name>: <node> -- <node> [section <id>] [material <id>]` | required |  | `chs.*`, `steel.*` | a pin-ended bar between two nodes, one line per member; its options override the defaults |
-| `material` | `<registry material id>` | optional |  | `steel.*` | the material of every member that names none; it needs fy and E and the section's material family |
+| `material` | `<registry material id>` | optional |  | `steel.*` | the material of every member that names none; it needs fy, E and density and the section's material family |
 | `section` | `<registry section id>` | optional |  | `chs.*` | the circular hollow section of every member that names none |
 
 ### Domain circuit

@@ -8,12 +8,14 @@ over the box or at its point, and anything else is UNKNOWN naming the row.
 
 Hand values (tests/test_truss.py): at equal node loads P the end diagonal of the Warren
 footbridge carries 1.25 P of compression. CHS 60.3x3.2: A = 574.03 mm2, A fy = 203.78 kN,
-N_cr = 74.12 kN and EN 1993-1-1 curve c N_b = 54.69 kN over 2.5 m at E = 200 GPa.
+N_cr = 74.12 kN and EN 1993-1-1 curve c N_b = 54.69 kN over 2.5 m at E = 200 GPa. The
+members' own weight adds 0.40 kN to it at g = 9.84 m/s2, 0.04 kN more at its worse end,
+and the bending it causes adds 1.53 kN to what a stress or yield check reads.
     P = 58 kN   1.25 P = 72.5 kN: inside the bare Euler load, past N_b
-    P = 100 kN  diag stress 1.25 P / A = 217.8 MPa
-    P = 130 kN  283.1 MPa
-    P = 165 kN  359.3 MPa, past fy = 355 MPa
-    P = 170 kN  370.2 MPa; strain 370.2 MPa / 200 GPa = 0.00185, inside 0.002
+    P = 100 kN  diag stress (1.25 P + 1.97 kN) / A = 221.2 MPa
+    P = 130 kN  286.5 MPa
+    P = 165 kN  362.7 MPa, past fy = 355 MPa
+    P = 170 kN  373.6 MPa; strain (1.25 P + 0.44 kN) / (E A) = 0.00185, inside 0.002
 """
 import dataclasses
 import importlib
@@ -172,12 +174,12 @@ class Verdicts(unittest.TestCase):
         report = check_design(footbridge(-58, -50, "claim strength: frame.collapse_factor >= 1 under crowd"), REGISTRY, (SolverSource(),))
         verdict = entry(report, "strength").verdict
         self.assertIsInstance(verdict, Fail, "1.25 x 58 = 72.5 kN of compression against N_b = 54.69 kN")
-        self.assertEqual(len(verdict.validity), 1, "the section-class row is proved beside the mechanism")
+        self.assertEqual(len(verdict.validity), 2, "the section-class and determinacy rows are proved beside the mechanism")
         self.assertIn("model:truss.plastic", {p.label.split("@")[0] for p in verdict.footprint.premises})
 
     def test_a_stress_claim_past_yield_is_unknown_not_proved(self):
         """The audit's H3: an elastic stress claim proved where the elastic model no longer
-        holds. 359 to 370 MPa is within the claimed 400 MPa, and past fy = 355 MPa."""
+        holds. 363 to 374 MPa is within the claimed 400 MPa, and past fy = 355 MPa."""
         design = footbridge(-170, -165, "claim stress: frame.member(diag_ad).stress <= 400 MPa under crowd")
         self.assertIsInstance(solved(claimed(design, "stress").statement), Theorem, "the claim statement alone is proved")
         verdict = entry(check_design(design, REGISTRY, (SolverSource(),)), "stress").verdict
@@ -190,19 +192,19 @@ class Verdicts(unittest.TestCase):
 
     def test_a_counterexample_outside_the_model_is_not_a_fail(self):
         design = footbridge(-170, -165, "claim stress: frame.member(diag_ad).stress <= 300 MPa under crowd")
-        self.assertIsInstance(solved(claimed(design, "stress").statement), Refutation, "359 MPa and up exceeds 300 MPa")
+        self.assertIsInstance(solved(claimed(design, "stress").statement), Refutation, "363 MPa and up exceeds 300 MPa")
         verdict = entry(check_design(design, REGISTRY, (SolverSource(),)), "stress").verdict
         self.assertIsInstance(verdict, Unknown, "every point of the box is past yield, so the model says nothing there")
         (item,) = verdict.open
         self.assertTrue(any(isinstance(n, OutsideValidity) and n.row == truss.BELOW_YIELD.id for n in item.needs))
 
     def test_a_counterexample_where_the_model_holds_is_a_fail_though_the_row_fails_elsewhere(self):
-        """Loads 100 to 170 kN: the row fails at 170 kN (370 MPa), and holds at 130 kN
-        (283 MPa), where a 250 MPa claim fails. The FAIL rests on the row at that point."""
+        """Loads 100 to 170 kN: the row fails at 170 kN (374 MPa), and holds at 130 kN
+        (287 MPa), where a 250 MPa claim fails. The FAIL rests on the row at that point."""
         design = footbridge(-170, -100, "claim stress: frame.member(diag_ad).stress <= 250 MPa under crowd")
         o = claimed(design, "stress")
         below, strain = o.validity
-        self.assertIsInstance(solved(below.statement), Refutation, "370 MPa > 355 MPa at 170 kN")
+        self.assertIsInstance(solved(below.statement), Refutation, "374 MPa > 355 MPa at 170 kN")
         loads = {h.label for h in o.statement.hyps if isinstance(h, RangeHyp) and h.label.startswith("in:")}
         narrow = Statement(tuple(dataclasses.replace(h, lo=Fraction(-130000), hi=Fraction(-130000)) if isinstance(h, RangeHyp) and h.label in loads else h for h in o.statement.hyps), o.statement.goal)
         (evidence,) = [e for e in SolverSource().offer(narrow, statement_hash(narrow)) if isinstance(check(narrow, e), Refutation)][:1]
@@ -233,7 +235,9 @@ class Verdicts(unittest.TestCase):
         self.assertIsInstance(verdict, Unknown)
         (item,) = verdict.open
         (outside,) = [n for n in item.needs if isinstance(n, OutsideValidity) and n.row == truss.BELOW_YIELD.id]
-        self.assertEqual(set(dict(outside.point).values()), {"-170000"}, "both node loads at the corner")
+        point = dict(outside.point)
+        self.assertEqual({v for s, v in point.items() if s.startswith("crowd.")}, {"-170000"}, "both node loads at the corner")
+        self.assertEqual(point.get("const.earth.gravity"), "246/25", "and gravity at the top of its range, where the weight is greatest")
         self.assertIn("-170000", describe_need(outside))
 
     def test_at_point_narrows_only_what_the_counterexample_assumes(self):
@@ -263,7 +267,7 @@ class Verdicts(unittest.TestCase):
 
     def test_explain_prints_each_row_beside_its_obligation(self):
         text = explain(footbridge(-24, -16, CLAIMS), REGISTRY)
-        for row in (truss.BELOW_YIELD, truss.SMALL_STRAIN, truss.SECTION_CLASS):
+        for row in (truss.BELOW_YIELD, truss.SMALL_STRAIN, truss.SECTION_CLASS, truss.DETERMINATE):
             self.assertIn(f"validity {row.id}: {row.text}", text)
 
 
@@ -318,13 +322,13 @@ class Family(unittest.TestCase):
 
     def test_a_family_claim_refuted_where_its_rows_hold_is_reported_refuted(self):
         text = (ROOT / "examples" / "families" / "warren_truss.petra").read_text(encoding="utf-8")
-        text = text.replace("[-29 kN, 0 kN]", "[-170 kN, -100 kN]")
+        text = text.replace("[-28.5 kN, 0 kN]", "[-170 kN, -100 kN]")
         text = "\n".join(line for line in text.splitlines() if not line.startswith("claim "))
         text += "\nclaim stress: frame.member(diag_db).stress <= 30 MPa under crowd\n"
         with tempfile.TemporaryDirectory() as root:
             certified = certify_family(parse_design(text, "f.petra", REGISTRY), REGISTRY, Library(root))
         (skipped,) = certified.skipped
-        self.assertIn("refuted by R3", skipped, "the rows are proved at the counterexample, as in a design")
+        self.assertIn("refuted by R4", skipped, "the rows are proved at the counterexample, as in a design")
 
 
 if __name__ == "__main__":

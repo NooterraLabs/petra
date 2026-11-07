@@ -1,9 +1,8 @@
 """Pin-jointed trusses from .petra text to kernel results. Owner: T.
 
 Statements are built from the lowered example IR, evidence comes from the truss solvers
-(R1, R2, R3; R4 buckling uses a one-leaf Enclosure with the R3 lemma ranges, or
-SolverSource where a buckling refutation is wanted), and the kernel decides. Expected
-forces and margins are hand statics, kept in the messages.
+(R1, R2; R4 goals over the R3 force lemmas through SolverSource), and the kernel decides.
+Expected forces and margins are hand statics, kept in the messages.
 
 Hand values used throughout, steel E in [200, 210] GPa, fy = 355 MPa:
   CHS 60.3x3.2  A = pi/4 (60.3^2 - 53.9^2) = 574.0 mm2,  I = pi/64 (60.3^4 - 53.9^4) = 23.47 cm4
@@ -17,6 +16,12 @@ Hand values used throughout, steel E in [200, 210] GPa, fy = 355 MPa:
 Footbridge statics (P_D, P_E node loads, downward negative):
   N_ad = 0.9375 P_D + 0.3125 P_E    N_ec = 0.3125 P_D + 0.9375 P_E
   N_ab = 0.75 (0.75 P_D + 0.25 P_E) N_de = 0.375 (P_D + P_E)    N_db = -N_be = 0.3125 (P_D - P_E)
+  a downward load P_B at B: N_ad = N_ec = -0.625 P_B
+Self-weight, steel 7850 kg/m3, g in [9.76, 9.84] m/s2 (at 9.84):
+  CHS 60.3x3.2 weighs 44.34 N/m, CHS 76.1x3.2 56.61 N/m
+  node loads W_D = W_E = 195.8 N (half the top chord and two diagonals), W_B = 243.9 N
+  N_ad(weight) = -(1.25 x 195.8 + 0.625 x 243.9) = -397.1 N
+  the force along diag_ad varies by g rho A |dy| / 2 = 44.3 N either side of N_ad
 """
 import dataclasses
 import unittest
@@ -25,16 +30,18 @@ from pathlib import Path
 
 from petra import coverage
 from petra.ir import Design
-from petra.kernel import Evidence, Leaf, Refutation, Rejection, Theorem, TooWeak, check, is_issued, statement_hash
+from petra.kernel import Const, Evidence, Matrix, Refutation, Rejection, Statement, Theorem, TooWeak, check, is_issued, statement_hash
 from petra.kernel.rules.r1_linear import FarkasRay, FeasiblePoints, LinearFeasible
-from petra.kernel.rules.r2_definite import GramPositiveDefinite, LDLFactor
-from petra.kernel.rules.r3_hypercircle import Hypercircle, HypercircleFields, MinimizerBound
-from petra.kernel.rules.r4_enclosure import AllNonpositive, Enclosure
+from petra.kernel.rules.r2_definite import GramPositiveDefinite
+from petra.kernel.rules.r3_hypercircle import HypercircleFields
+from petra.kernel.rules.r4_enclosure import AllNonpositive
 from petra.lang import parse_design
 from petra.models import truss
-from petra.models.base import ClaimOrigin, ComponentError, Gap, NeedsInputBound, NoRuleForQuantity, Obligation
+from petra.models.base import ClaimOrigin, ComponentError, Gap, NeedsInputBound, NoRuleForQuantity, Obligation, OutsideValidity
+from petra.pipeline import check_design
 from petra.registry import build_registry
 from petra.solvers import SolverSource, r1_linear, r2_definite, r3_hypercircle
+from petra.verdict import Unknown
 
 REGISTRY = build_registry()
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples"
@@ -75,9 +82,11 @@ claim stress:    frame.member(middle).stress <= 235 MPa under hang
 """Three bars from pinned supports at (-3, 4), (0, 4), (3, 4) m to one free node: two
 free DOFs, three members, so one degree of indeterminacy. Compatibility with equal E A:
 the middle bar stretches by the drop d, the 5 m sides by 0.8 d, so N_m / N_s = (1/4) /
-(0.8/5) = 25/16, and N_m + 2 (0.8) N_s = P gives N_m = 125 P / 253, N_s = 80 P / 253."""
+(0.8/5) = 25/16, and N_m + 2 (0.8) N_s = P gives N_m = 125 P / 253, N_s = 80 P / 253.
+CHS 48.3x3.2 weighs 35.02 N/m at g = 9.84, so D carries W_D = 35.02 (4 + 5 + 5) / 2 =
+245.2 N of the bars' weight on top of P."""
 
-SOLVERS = {LinearFeasible: r1_linear.solve, GramPositiveDefinite: r2_definite.solve, MinimizerBound: r3_hypercircle.solve}
+SOLVERS = {LinearFeasible: r1_linear.solve, GramPositiveDefinite: r2_definite.solve}
 
 
 def design(text: str, *edits: tuple[str, str]) -> Design:
@@ -100,7 +109,7 @@ def elaborate(d: Design) -> dict[str, tuple]:
 
 def candidates(statement) -> list[Evidence]:
     if isinstance(statement.goal, AllNonpositive):
-        return [Evidence(Enclosure(Leaf()), r3_hypercircle.defined_ranges(statement))]
+        return list(SolverSource().offer(statement, statement_hash(statement)))
     return list(SOLVERS[type(statement.goal)](statement))
 
 
@@ -133,9 +142,15 @@ def claimed(d: Design, claim: str) -> Obligation:
     return found
 
 
-def forces(statement) -> dict[str, tuple[Fraction, Fraction]]:
-    """Member name -> the R3 lemma range the solver proposes for its force, in newtons."""
-    return {r.sym.split(".")[1]: (r.lo, r.hi) for r in r3_hypercircle.defined_ranges(statement)}
+def forces(statement, part: str = "N_load") -> dict[str, tuple[Fraction, Fraction]]:
+    """Member name -> the R3 lemma range the solver proposes for one part of its force:
+    "N_load" in newtons, or "N_per_down.<node>" in newtons per newton downward at node."""
+    return {r.sym.split(".")[1]: (r.lo, r.hi) for r in r3_hypercircle.defined_ranges(statement) if r.sym.split(".", 2)[2] == part}
+
+
+def validity(obligation: Obligation, row) -> object:
+    (found,) = [v for v in obligation.validity if v.row == row]
+    return found.statement
 
 
 class Lowering(unittest.TestCase):
@@ -246,8 +261,26 @@ class Footbridge(unittest.TestCase):
             "reg:const.en10219_2.76_1x3_2.t",
             "in:warren-footbridge-panel.crowd.frame.D.fy",
             "dsg:warren-footbridge-panel.frame.D.x",
+            "reg:const.steel.density",
+            "reg:const.earth.gravity",
         ):
             self.assertIn(label, result.labels)
+
+    def test_the_weight_enters_through_unit_loads_at_the_free_y_dofs(self):
+        """B, D and E move in y; A and C carry their share straight into the supports."""
+        statement = self.statement("frame/truss.global_stability/claim.stability")
+        for node, hand in (("B", Fraction(-5, 8)), ("D", Fraction(-15, 16)), ("E", Fraction(-5, 16))):
+            with self.subTest(node=node):
+                lo, hi = forces(statement, f"N_per_down.{node}")["diag_ad"]
+                self.assertTrue(lo <= hand <= hi and hi - lo < Fraction(1, 10**6), f"diag_ad per newton down at {node}: {hand}, lemma [{lo}, {hi}]")
+        self.assertFalse(forces(statement, "N_per_down.A"), "a node restrained in y takes no unit load")
+
+    def test_the_buckling_check_carries_the_weight_and_its_gradient(self):
+        """diag_ad at 24 kN: 30 kN of load, 397.1 N of weight and 44.3 N along the member."""
+        found = solved(claimed(design(PASS + "claim slender: frame.member(diag_ad).buckling_utilisation <= 0.557 under crowd\n"), "slender").statement)
+        self.assertIsInstance(found, Theorem, "30.441 kN / 54.692 kN = 0.5566")
+        found = solved(claimed(design(PASS + "claim slender: frame.member(diag_ad).buckling_utilisation <= 0.556 under crowd\n"), "slender").statement)
+        self.assertIsInstance(found, Refutation, "30.441 kN against 0.556 x 54.692 kN = 30.409 kN; without the weight 30 kN would pass")
 
     def test_lemma_ranges_hold_the_hand_forces(self):
         found = forces(self.statement("frame/truss.global_stability/claim.stability"))
@@ -271,10 +304,11 @@ class Footbridge(unittest.TestCase):
 
     def test_a_field_off_equilibrium_is_rejected(self):
         statement = self.statement("frame.diag_ad/truss.elastic_stress/claim.stress")
-        evidence = next(iter(r3_hypercircle.solve(statement)))
-        fields = evidence.body.fields
-        s = ((fields.s[0][0] + Fraction(1, 1000), *fields.s[0][1:]), *fields.s[1:])
-        result = check(statement, Evidence(Hypercircle(HypercircleFields(s, fields.u))))
+        (evidence,) = [e for e in candidates(statement) if isinstance(check(statement, e), Theorem)]
+        first, *rest = evidence.defined
+        s = ((first.proof.s[0][0] + Fraction(1, 1000), *first.proof.s[0][1:]), *first.proof.s[1:])
+        nudged = dataclasses.replace(first, proof=HypercircleFields(s, first.proof.u))
+        result = check(statement, Evidence(evidence.body, (nudged, *rest)))
         self.assertIsInstance(result, Rejection)
         self.assertIn("B s != f", result.reason)
 
@@ -292,22 +326,34 @@ class Footbridge(unittest.TestCase):
         result = decide(obligation.statement)
         self.assertIsInstance(result, Refutation, "diag_ad at 24 kN: 30 kN / 574.0 mm2 = 52.3 MPa > 40 MPa")
 
+    def test_the_stress_claim_reads_the_weight_and_the_bending_it_causes(self):
+        """diag_ad at 24 kN: (30 kN + 397.1 N + 44.3 N) / 574.03 mm2 = 53.03 MPa axial, plus
+        M / W_el, M = 44.34 N/m x 1.5 m x 2.5 m / 8 = 20.78 N m, W_el = 2 I / D = 7.784 cm3:
+        2.67 MPa. 55.70 MPa in all."""
+        held = decide(claimed(design(PASS, ("stress <= 235 MPa", "stress <= 55.8 MPa")), "stress").statement)
+        self.assertIsInstance(held, Theorem, "55.70 MPa <= 55.8 MPa")
+        broken = decide(claimed(design(PASS, ("stress <= 235 MPa", "stress <= 55.6 MPa")), "stress").statement)
+        self.assertIsInstance(broken, Refutation, "55.70 MPa > 55.6 MPa")
+
     def test_a_too_strict_buckling_claim_is_not_proved(self):
         slender = "claim slender: frame.member(diag_ad).buckling_utilisation <= 0.5 under crowd\n"
         obligation = claimed(design(PASS + slender), "slender")
         result = decide(obligation.statement)
-        self.assertIsInstance(result, Rejection)
-        self.assertIsInstance(result.fault, TooWeak, "diag_ad: 30 kN / 54.69 kN = 0.549 > 0.5")
+        self.assertIsInstance(result, Refutation, "diag_ad: 30.44 kN / 54.69 kN = 0.557 > 0.5")
 
     def test_a_generous_buckling_claim_is_proved(self):
         slender = "claim slender: frame.member(diag_ad).buckling_utilisation <= 0.56 under crowd\n"
         result = decide(claimed(design(PASS + slender), "slender").statement)
-        self.assertIsInstance(result, Theorem, "diag_ad: 30 kN / 54.69 kN = 0.549 <= 0.56")
+        self.assertIsInstance(result, Theorem, "diag_ad: 30.44 kN / 54.69 kN = 0.557 <= 0.56")
 
     def test_the_bare_euler_load_would_have_passed_a_claim_the_buckling_curve_refutes(self):
         slender = "claim slender: frame.member(diag_ad).buckling_utilisation <= 0.41 under crowd\n"
         result = solved(claimed(design(PASS + slender), "slender").statement)
-        self.assertIsInstance(result, Refutation, "30 kN / 74.12 kN = 0.405 passed the bare Euler load; 30 / 54.69 = 0.549 > 0.41")
+        self.assertIsInstance(result, Refutation, "30 kN / 74.12 kN = 0.405 passed the bare Euler load; 30.44 / 54.69 = 0.557 > 0.41")
+
+    def test_the_footbridge_is_statically_determinate(self):
+        strength = claimed(design(PASS), "strength")
+        self.assertIsInstance(solved(validity(strength, truss.DETERMINATE)), Theorem, "7 free DOFs, 7 members, B invertible")
 
 
 class Overload(unittest.TestCase):
@@ -359,18 +405,81 @@ class Hanger(unittest.TestCase):
                 self.assertIsInstance(decide(obligation.statement), Theorem)
 
     def test_collapse_past_the_three_bar_mechanism_is_refuted(self):
-        hand = "all three bars yield at A fy = 160.95 kN: P_c = 160.95 (1 + 2 x 0.8) = 418.5 kN"
-        held = decide(claimed(design(HANGER, ("collapse_factor >= 4", "collapse_factor >= 4.15")), "strength").statement)
-        self.assertIsInstance(held, Theorem, f"{hand} >= 4.15 x 100 kN")
-        broken = decide(claimed(design(HANGER, ("collapse_factor >= 4", "collapse_factor >= 4.2")), "strength").statement)
-        self.assertIsInstance(broken, Refutation, f"{hand} < 4.2 x 100 kN")
+        hand = ("all three bars yield: the middle one at A fy less the 70 N its weight varies along it, 160.88 kN; "
+                "each 5 m side also gives up its self-weight bending, A M / W_el = 6.21 kN (M = 65.66 N m, "
+                "W_el = 4.797 cm3), so 154.67 kN. P_c = 160.88 + 2 x 0.8 x 154.67 = 408.35 kN, less the 0.245 kN "
+                "of weight at D: a factor of 4.081 on 100 kN")
+        held = decide(claimed(design(HANGER, ("collapse_factor >= 4", "collapse_factor >= 4.07")), "strength").statement)
+        self.assertIsInstance(held, Theorem, f"{hand} >= 4.07")
+        broken = decide(claimed(design(HANGER, ("collapse_factor >= 4", "collapse_factor >= 4.1")), "strength").statement)
+        self.assertIsInstance(broken, Refutation, f"{hand} < 4.1")
+
+    def test_an_indeterminate_truss_is_outside_the_plastic_model(self):
+        """The plastic model's static field is the truss's own only when equilibrium fixes it:
+        here 2 free DOFs hold 3 members, so a state of self-stress exists. The exact LDL^T
+        of B^T B (+) B B^T stops at its third pivot, and the direction there refutes the row."""
+        strength = claimed(design(HANGER), "strength")
+        row = solved(validity(strength, truss.DETERMINATE))
+        self.assertIsInstance(row, Refutation)
+        verdict = check_design(design(HANGER), REGISTRY, (SolverSource(),))
+        (entry,) = [e for e in verdict.entries if e.claim == "strength"]
+        self.assertIsInstance(entry.verdict, Unknown, "the claim statement is proved, but on a model used outside its range")
+        (item,) = entry.verdict.open
+        self.assertTrue(any(isinstance(n, OutsideValidity) and n.row == truss.DETERMINATE.id for n in item.needs))
 
     def test_compliance_takes_the_softest_modulus(self):
-        hand = "C = P^2 / k, k = E A (1/4 + 2 x 0.8^2 / 5) = 253 E A / 500: 217.9 J at P = 100 kN, E = 200 GPa, A = 453.4 mm2"
+        hand = ("C = P^2 / k, k = E A (1/4 + 2 x 0.8^2 / 5) = 253 E A / 500: 217.9 J at P = 100 kN, E = 200 GPa, "
+                "A = 453.4 mm2; with the 245.2 N of weight at D, 219.0 J")
         held = decide(claimed(design(HANGER + "claim stiffness: frame.compliance <= 220 J under hang\n"), "stiffness").statement)
         self.assertIsInstance(held, Theorem, f"{hand} <= 220 J")
         broken = decide(claimed(design(HANGER + "claim stiffness: frame.compliance <= 210 J under hang\n"), "stiffness").statement)
-        self.assertIsInstance(broken, Refutation, f"{hand} > 210 J, though only 207.6 J at E = 210 GPa")
+        self.assertIsInstance(broken, Refutation, f"{hand} > 210 J, though only 208.6 J at E = 210 GPa")
+
+
+class SelfWeight(unittest.TestCase):
+    """judges/canaries/truss_600m_span.petra: the footbridge scaled by 100 under 1 to 2 N."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.design = design((Path(__file__).resolve().parents[1] / "judges" / "canaries" / "truss_600m_span.petra").read_text(encoding="utf-8"))
+
+    def test_a_truss_that_cannot_carry_its_own_weight_fails_collapse(self):
+        """250 m diagonals of CHS 60.3x3.2 weigh 11.1 kN each, and N_ad(weight) = 39.7 kN of
+        compression against a buckling resistance of 7.4 N: no static field carries the
+        weight even alone."""
+        result = solved(claimed(self.design, "strength").statement)
+        self.assertIsInstance(result, Refutation)
+
+    def test_the_end_diagonals_buckle_under_their_own_weight(self):
+        result = solved(buckling(self.design, "diag_ad"))
+        self.assertIsInstance(result, Refutation, "39.7 kN of compression against 7.4 N")
+
+    def test_the_weight_alone_is_a_load_case_of_the_collapse_claim(self):
+        """An upward load can relieve the weight's compression at the claimed factor and not
+        at factor 0: the goal states both copies of the system, so it reads the weight alone."""
+        goal = claimed(design(PASS), "strength").statement.goal
+        rows = truss.geometry(lowered(design(PASS))).B.rows
+        self.assertEqual(goal.A.rows, 2 * rows)
+        self.assertTrue(all(isinstance(b, Const) and b.value == 0 for b in goal.b[rows:]), "the second copy carries no load")
+
+
+class Solvers(unittest.TestCase):
+    """The two solver cases the self-weight and the determinacy row reach."""
+
+    def test_r1_refutes_bounds_that_cross(self):
+        """x = 0 with 2 <= x <= 1: the alternative LP would run unbounded along both
+        bounds at once, which the kernel does not credit; a pinned coordinate gives the
+        ray y = -1, whose cap 2 x (-1) = -2 lies below y^T b = 0."""
+        statement = Statement((), LinearFeasible(Matrix(1, 1, ((0, 0, Fraction(1)),)), (Const(Fraction(0)),),
+                                                 (Const(Fraction(2)),), (Const(Fraction(1)),)))
+        (ray,) = r1_linear.solve(statement)
+        self.assertIsInstance(ray.body, FarkasRay)
+        self.assertIsInstance(check(statement, ray), Refutation)
+
+    def test_r2_stops_where_the_exact_ldl_meets_a_zero_pivot(self):
+        """[[1, 1], [1, 1]]: d_0 = 1, L_10 = 1, d_1 = 0, so v = L^-T e_1 = (-1, 1) and v^T M v = 0."""
+        self.assertEqual(r2_definite.stop_direction({(0, 0): 1, (0, 1): 1, (1, 1): 1}, 2), (Fraction(-1), Fraction(1)))
+        self.assertIsNone(r2_definite.stop_direction({(0, 0): 2, (0, 1): 1, (1, 1): 2}, 2), "positive definite")
 
 
 class Gaps(unittest.TestCase):
@@ -410,6 +519,18 @@ class Models(unittest.TestCase):
         for mode in (truss.ELASTIC_STRESS, truss.COMPLIANCE, truss.GLOBAL_STABILITY, truss.MEMBER_BUCKLING):
             with self.subTest(mode=mode.id):
                 self.assertEqual(truss.MODELS[mode].rows[:2], (truss.BELOW_YIELD, truss.SMALL_STRAIN))
+
+    def test_the_plastic_model_holds_only_for_a_determinate_truss(self):
+        self.assertIn(truss.DETERMINATE, truss.MODELS[truss.PLASTIC_COLLAPSE].rows)
+        self.assertNotIn("indeterminate truss may exceed", truss.MODELS[truss.PLASTIC_COLLAPSE].premise().statement)
+
+    def test_every_premise_states_gravity_and_the_models_on_buckling_state_the_bracing(self):
+        for mode, spec in truss.MODELS.items():
+            with self.subTest(mode=mode.id):
+                self.assertIn("gravity acts in -y", spec.premise().statement)
+        for mode in (truss.PLASTIC_COLLAPSE, truss.MEMBER_BUCKLING):
+            with self.subTest(mode=mode.id):
+                self.assertIn("buckling length about every axis is its length L", truss.MODELS[mode].premise().statement)
 
     def test_every_built_mode_rests_on_a_model_premise(self):
         self.assertEqual(set(truss.MODELS), set(truss.DOMAIN.builders))

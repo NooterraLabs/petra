@@ -77,7 +77,7 @@ Underneath all rules sit rational intervals with rigorous bounds for square root
 
 ### Composition
 
-Components expose ports that carry interval quantities: current, temperature, force, voltage. A connection checks the assume–guarantee contracts on both ends by interval inclusion. For example, a terminal rated to 75 °C caps the temperature a wire may reach at that port.
+Components expose ports that carry interval quantities: current, temperature, force, voltage, conductor area. A connection checks the assume–guarantee contracts on both ends by interval inclusion. For example, a terminal rated to 75 °C caps the temperature a wire may reach at that port, and its clamp's conductor range bounds the area of the wire it holds.
 
 ### Coverage
 
@@ -93,8 +93,8 @@ A gym-style environment generates tasks from parametric requirements. An agent r
 
 ## First physics domains
 
-1. **Pin-jointed 2D trusses.** Elastic response (R3), plastic collapse (R1), global stability (R2), member flexural buckling to EN 1993-1-1 (R4).
-2. **Electrical wire circuits.** Ampacity from a steady heat balance, short-circuit adiabatic heating (the k factor), voltage drop, and terminal and breaker coordination through port contracts. A family certificate over wire sizes and ambient temperatures (R4).
+1. **Pin-jointed 2D trusses.** Elastic response (R4 over R3 force lemmas), plastic collapse of a statically determinate truss (R1), global stability (R2), member flexural buckling to EN 1993-1-1 (R4). Every load case carries the members' own weight.
+2. **Electrical wire circuits.** Ampacity from a steady heat balance, short-circuit adiabatic heating (the k factor), voltage drop, and terminal and breaker coordination through port contracts, including a conductor that fits its terminal's clamp. A family certificate over wire sizes and ambient temperatures (R4).
 3. **Bolts.** Metric thread stress area computed from geometry, property-class minimum strengths as sanctioned premises, and a tension check (R4).
 4. **Uncertain loads.** Load known only by range and mean (R5), and a probability claim from sampled tests (R6).
 

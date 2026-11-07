@@ -1,25 +1,27 @@
 petra 0
 
 # Family: the two-panel Warren footbridge truss of truss_pass.petra (same nodes,
-# members, sections and steel) under any downward load up to 29 kN at each top node.
-# `petra certify-family` proves the three claims over the whole box once (R1, R2 with
-# its R3 force lemmas, R3) and stores the evidence. A concrete truss whose two node
+# members, sections and steel) under any downward load up to 28.5 kN at each top node.
+# `petra certify-family` proves the three claims over the whole box once (R1, R2 and
+# R4, with R3 force lemmas) and stores the evidence. A concrete truss whose two node
 # loads sit inside the box, truss_pass.petra among them, reuses it.
 #
 # The truss is statically determinate, so the end diagonals carry
-# N_ad = 0.9375 P_D + 0.3125 P_E, 36.25 kN of compression at the worst vertex. The
-# strength claim needs 1.5 x 36.25 = 54.4 kN within the 54.69 kN EN 1993-1-1
-# flexural buckling resistance (curve c) of a 2.5 m CHS 60.3x3.2 at E = 200 GPa, so
-# the box edge is 29.17 kN per node (tests/test_bench.py). Against the bare Euler
-# load of 74.12 kN, which v0 used before, it was 39.53 kN.
+# N_ad = 0.9375 P_D + 0.3125 P_E, 1.25 P of compression at the worst vertex, plus
+# 0.44 kN from the members' own weight (g = 9.84 m/s2, the top of the registry's
+# range). The strength claim factors the load and not the weight, so it needs
+# 1.5 x 1.25 P + 0.44 kN within the 54.69 kN EN 1993-1-1 flexural buckling resistance
+# (curve c) of a 2.5 m CHS 60.3x3.2 at E = 200 GPa: the box edge is 28.93 kN per node
+# (tests/test_bench.py). Without the weight it was 29.17 kN, and against the bare
+# Euler load of 74.12 kN, which v0 used before, 39.53 kN.
 
 design "family-warren-footbridge-panel" {
   owner "petra.library@example.org"
   environment indoor_dry
 }
 
-param load_d in [-29 kN, 0 kN]
-param load_e in [-29 kN, 0 kN]
+param load_d in [-28.5 kN, 0 kN]
+param load_e in [-28.5 kN, 0 kN]
 
 truss frame {
   material steel.S355

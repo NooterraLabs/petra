@@ -451,6 +451,7 @@ class PortQuantity(Enum):
     TEMPERATURE = "temperature"
     VOLTAGE = "voltage"
     FORCE = "force"
+    CONDUCTOR_AREA = "conductor_area"
 
 
 BoundBuilder = Callable[["StatementBuilder"], Expr]
