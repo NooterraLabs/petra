@@ -507,7 +507,7 @@ def readme() -> str:
 
 
 DOCS: Mapping[str, tuple[str, Callable[[], str]]] = {
-    "readme": ("installing Petra, a quickstart and worked examples", readme),
+    "readme": ("installing Petra and a quickstart", readme),
     "reference": ("the .petra language: syntax, units, every kind's lines and every registry id", render_reference),
     "api": ("the Python API, and the JSON that `petra check --json` prints",
             lambda: (DOCS_DIR / "api.md").read_text(encoding="utf-8")),

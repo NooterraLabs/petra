@@ -11,13 +11,12 @@ pip install -e .
 python -m unittest discover -s tests -t .
 ```
 
-The suite has 1,230 tests. Tests that need the full AISC Shapes Database skip unless `PETRA_SHAPES_XLSX` names your copy of the workbook. Never commit the workbook, a standard's PDF, or text copied from a standard. Petra cites clauses and encodes methods. It does not reproduce them.
+Tests that need the full AISC Shapes Database skip unless `PETRA_SHAPES_XLSX` names your copy of the workbook. Never commit the workbook, a standard's PDF, or text copied from a standard. Petra cites clauses and encodes methods. It does not reproduce them.
 
 Some files are generated. Edit the source, then regenerate them:
 
 | File | Regenerate with |
 |---|---|
-| Sample outputs in `README.md` | `python tests/test_docs.py --write` |
 | `docs/reference.md` and `petra/templates.py` | `python -m petra.teach --write` |
 | `docs/steel_traceability.md` | `python -m petra.models.steel.trace` |
 | `docs/absurd_gap.md`, `docs/canary_recall.md`, `docs/steel_gate.md` | `scripts/absurd_gap.py`, `scripts/canary_recall.py`, `scripts/steel_gate.py` |
