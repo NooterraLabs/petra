@@ -56,7 +56,9 @@ Designs may only reference entries in four registries:
 - **Processes.** Shape limits, tolerances, and how the process changes material properties (welding lowers strength near the weld).
 - **Environments.** Named classes such as ambient temperature ranges and corrosivity.
 
-Where possible a registry entry is computed from physics plus constants rather than stored as a number. For example, a wire's resistance per metre comes from copper's resistivity and the cross-section. A bolt's stress area comes from the thread geometry. The consistency checker re-derives every derivable number and flags records that disagree.
+Where possible a registry entry is computed from physics plus constants rather than stored as a number. For example, a bolt's stress area comes from the thread geometry, and a wire's resistance per metre is its standard's maximum resistance, kept as a resistivity over the cross-section. The consistency checker re-derives every derivable number and flags records that disagree.
+
+Every entry names its source (document, edition, clause or table) and lists its errata. Its version is one more than its errata count, and a footprint names the version of each registry premise. `petra registry recall ID` lists the designs whose verdicts rest on an entry ([registry.md](registry.md)).
 
 Anything outside the makeable set needs its own evidence or gets UNKNOWN.
 
