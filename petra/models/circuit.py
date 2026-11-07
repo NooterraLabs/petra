@@ -1,14 +1,7 @@
 """Domain: wire circuits. Trusted physics; footprint premises "model:wire.*@<hash>".
 
-Component kind `circuit`. Attribute lines, one per line inside the block:
-
-    supply <name> voltage <V> [fault_current <signed bound>]
-    breaker <name> part <registry breaker id>
-    wire <name> cable <registry cable id> [area <value> insulation <value>]
-         length <value> install <registry install process id>
-    terminal <name> part <registry terminal id>
-    consumer <name>
-    connect <element>.<port> -> <element>.<port>
+Component kind `circuit`. Its attribute lines, one per line inside the block, are GRAMMAR
+below (`petra kinds circuit` prints them).
 
 A <value> is a quantity or `param <name>`. A cable id names a size ("cable.cu_pvc_2_5")
 or a series ("cable.cu_pvc"); a series needs `area` and `insulation`. Load field:
@@ -76,9 +69,12 @@ from .base import (
     EnergyDomain,
     FailureMode,
     Feature,
+    SIGNED_BOUND,
     FeatureKind,
+    Field,
     Gap,
     GapNeed,
+    Grammar,
     ModelSpec,
     NeedsInputBound,
     NoRuleForQuantity,
@@ -188,7 +184,7 @@ def lower_circuit(component: Component, design: Design, registry: Registry) -> C
         reader = _READERS.get(attr.key)
         head = attr.args[0] if attr.args else None
         if reader is None:
-            say(f"unknown attribute; a circuit takes {', '.join(sorted([*_READERS, 'connect']))}")
+            say(f"unknown attribute; a circuit takes {', '.join(sorted(GRAMMAR.names))}")
         elif not (isinstance(head, Ref) and len(head.parts) == 1):
             say("starts with the element's name")
         elif head.parts[0] in elements:
@@ -310,6 +306,31 @@ def _wire(path: str, name: str, args, design: Design, registry: Registry, say: S
 
 _READERS = {"supply": _supply, "breaker": _breaker, "wire": _wire, "terminal": _terminal, "consumer": _consumer}
 
+GRAMMAR = Grammar(
+    required=(
+        Field("supply", f"<name> voltage <voltage> [fault_current {SIGNED_BOUND}]", "voltage, current", (),
+              "the source a radial path starts from; without a signed prospective fault current the short-circuit "
+              "check is UNKNOWN"),
+        Field("consumer", "<name>", "", (),
+              "the load at the end of a path; load cases draw current from it"),
+        Field("connect", "<element>.<port> -> <element>.<port>", "", (),
+              "joins a downstream port to the next upstream port (supply out, breaker in and out, wire a and b, "
+              "terminal wire and out, consumer in); every element lies on one path from a supply to a consumer"),
+    ),
+    optional=(
+        Field("breaker", "<name> part <registry breaker id>", "", ("mcb.",),
+              "the protective device of a path, upstream of its wires; at most one per path"),
+        Field("wire", "<name> cable <registry cable id> length <length> install <registry install id> "
+                      "[area <area> insulation <length>]", "length, area", ("cable.", "install."),
+              "a cable run; a size id (cable.cu_pvc_2_5) fixes area and insulation, a series id (cable.cu_pvc) "
+              "takes them as values or params"),
+        Field("terminal", "<name> part <registry terminal id>", "", ("terminal.",),
+              "a terminal a wire lands on; its temperature and current ratings become port contracts"),
+    ),
+    target="<circuit>.<consumer>",
+    loads=("current",),
+)
+
 
 def _connection(circuit: str, attr, elements: Mapping[str, CircuitElement], problems: list[str]) -> Connection | None:
     say = _reporter(problems, attr.span, f"{circuit}.connect")
@@ -341,8 +362,8 @@ def _draws(circuit: str, design: Design, elements: Mapping[str, CircuitElement],
             target = ".".join(entry.target)
             if len(entry.target) != 2 or not isinstance(elements.get(entry.target[1]), Consumer):
                 say(f"{target}: a circuit load acts on one of its consumers")
-            elif entry.field != "current":
-                say(f"{target}: a consumer's load field is current, not {entry.field}")
+            elif entry.field not in GRAMMAR.loads:
+                say(f"{target}: a consumer's load field is {', '.join(GRAMMAR.loads)}, not {entry.field}")
             elif isinstance(entry.value, Input) and entry.value.range.dim != CURRENT:
                 say(f"{target}: current needs a current range")
             elif isinstance(entry.value, ParamRef) and design.params[entry.value.name].range.dim != CURRENT:
@@ -843,4 +864,5 @@ DOMAIN = DomainSpec(
     models=MODELS,
     features=features,
     ports=ports,
+    grammars={"circuit": GRAMMAR},
 )

@@ -43,6 +43,8 @@ def _index(registered: tuple[DomainSpec, ...]) -> tuple:
         reached |= {m for rule in spec.coverage for m in rule.demands}
         if not reached <= spec.modes:
             raise RuntimeError(f"{spec.name} refers to modes it does not declare: {sorted(m.id for m in reached - spec.modes)}")
+        if set(spec.grammars) != set(spec.kinds):
+            raise RuntimeError(f"{spec.name}: every component kind has one grammar, and only a kind has one")
         unmodelled |= spec.unmodelled
         coverage.extend(spec.coverage)
     return (

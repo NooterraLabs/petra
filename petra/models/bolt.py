@@ -1,12 +1,7 @@
 """Domain: bolted joints. Trusted physics; footprint premises "model:bolt.*@<hash>".
 
-Component kind `joint`. Attribute lines, one per line inside the block:
-
-    bolt <registry bolt id> count <n>
-    plate <registry material id> thickness <value> [process <registry process id>]
-    torque <signed bound>
-    nut_factor <signed bound>
-    load_share <signed bound>
+Component kind `joint`. Its attribute lines, one per line inside the block, are GRAMMAR
+below (`petra kinds joint` prints them).
 
 Load field: force on `<joint>`. Claim path: `<joint>.<qoi>`.
 
@@ -38,6 +33,7 @@ from ..units import DIMENSIONLESS, FORCE, LENGTH, TORQUE, Dim, Quantity
 from .base import (
     CONTACT_PAIR,
     NO_PORTS,
+    SIGNED_BOUND,
     ComponentError,
     CoverageRule,
     Criterion,
@@ -47,8 +43,10 @@ from .base import (
     FailureMode,
     Feature,
     FeatureKind,
+    Field,
     Gap,
     GapNeed,
+    Grammar,
     ModelSpec,
     NeedsInputBound,
     NoRuleForQuantity,
@@ -88,6 +86,28 @@ INPUTS: Mapping[str, tuple[Dim, str]] = {
 }
 """The signed inputs a joint takes: field -> (dimension, unit a gap asks for)."""
 
+GRAMMAR = Grammar(
+    required=(
+        Field("bolt", "<registry bolt id> count <n>", "count", ("bolt.",),
+              "the bolts, exactly one line: a metric bolt (thread, property class, coating) and how many share the load"),
+        Field("plate", "<registry material id> thickness <length> [process <registry process id>]", "length",
+              ("aluminium.", "steel.", "stainless.", "process."),
+              "a clamped plate, one line per plate, at least two; a coating, weld or cut process changes its surface "
+              "or its strength"),
+    ),
+    optional=(
+        Field("torque", SIGNED_BOUND, "torque", (),
+              "the tightening torque; without it the tension check is UNKNOWN"),
+        Field("nut_factor", SIGNED_BOUND, "dimensionless", (),
+              "the nut factor K of the torque-tension relation, positive; without it the tension check is UNKNOWN"),
+        Field("load_share", SIGNED_BOUND, "dimensionless", (),
+              "the joint load factor Phi, the share of the external force the bolts take, within [0, 1]; without "
+              "it the tension check is UNKNOWN"),
+    ),
+    target="<joint>",
+    loads=("force",),
+)
+
 _PLATE_PROCESSES = frozenset({ProcessKind.COATING, ProcessKind.WELD, ProcessKind.CUT})
 
 
@@ -119,7 +139,7 @@ def lower_joint(component: Component, design: Design, registry: Registry) -> Bol
             if value is not None:
                 inputs[attr.key] = value
         else:
-            say(f"unknown attribute; a joint takes {', '.join(sorted(['bolt', 'plate', *INPUTS]))}")
+            say(f"unknown attribute; a joint takes {', '.join(sorted(GRAMMAR.names))}")
     here = _reporter(problems, component.span, name)
     if len(bolts) != 1:
         here(f"a joint has exactly one bolt line, not {len(bolts)}")
@@ -228,8 +248,8 @@ def _check_references(joint: str, design: Design, problems: list[str]) -> None:
         for entry in entries:
             if len(entry.target) != 1:
                 say(f"{'.'.join(entry.target)}: a joint load acts on the joint itself, as in `on {joint} force ...`")
-            elif entry.field != "force":
-                say(f"{joint}: a joint's load field is force, not {entry.field}")
+            elif entry.field not in GRAMMAR.loads:
+                say(f"{joint}: a joint's load field is {', '.join(GRAMMAR.loads)}, not {entry.field}")
             elif _dim(entry.value, design) != FORCE:
                 say(f"{joint}: force needs a force range")
     for claim in design.claims:
@@ -398,4 +418,5 @@ DOMAIN = DomainSpec(
     models=MODELS,
     features=features,
     ports=ports,
+    grammars={"joint": GRAMMAR},
 )

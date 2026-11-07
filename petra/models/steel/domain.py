@@ -30,7 +30,7 @@ from ..base import (
     Ports,
 )
 from .build import BUILDERS
-from .lower import KIND_SPECS, Bolts, Conn, lower_conn
+from .lower import KIND_SPECS, Bolts, Conn, grammar, lower_conn
 from .path import ROLE_LIMITS, path
 from .vocab import LOAD_PATH, MODELS, MODES, QOIS, STIFFENED_FORCE, UNMODELLED
 
@@ -110,4 +110,5 @@ DOMAIN = DomainSpec(
     models=MODELS,
     features=features,
     ports=ports,
+    grammars={kind: grammar(kind) for kind in KIND_SPECS},
 )

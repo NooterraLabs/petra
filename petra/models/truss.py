@@ -1,12 +1,8 @@
 """Domain: pin-jointed 2D trusses. Trusted physics; appears in footprints as the
 validated_model premises "model:truss.*@<hash>".
 
-Component kind `truss`. Attribute lines, one per line inside the block:
-
-    material <registry material id>                default for every member
-    section <registry section id>                  default for every member
-    node <name> at (<x>, <y>) [support pinned|roller_x|roller_y]     lengths, exact
-    member <name>: <node> -- <node> [section <id>] [material <id>]
+Component kind `truss`. Its attribute lines, one per line inside the block, are GRAMMAR
+below (`petra kinds truss` prints them).
 
 Sections are circular hollow sections (registry props D, t, A, I and buckling_alpha, the
 imperfection factor of the section's EN 1993-1-1 buckling curve), so one second moment
@@ -90,7 +86,9 @@ from .base import (
     FailureMode,
     Feature,
     FeatureKind,
+    Field,
     Gap,
+    Grammar,
     ModelSpec,
     NeedsInputBound,
     NoRuleForQuantity,
@@ -145,6 +143,24 @@ _SECTION_PROPS = ("D", "t", "A", "I", "buckling_alpha")
 _MATERIAL_PROPS = ("fy", "E")
 _LOAD_FIELDS = {"fx": "x", "fy": "y"}
 
+GRAMMAR = Grammar(
+    required=(
+        Field("node", "<name> at (<x>, <y>) [support pinned|roller_x|roller_y]", "length", (),
+              "a joint at exact coordinates, one line per node; a support fixes x and y (pinned), y only "
+              "(roller_x) or x only (roller_y)"),
+        Field("member", "<name>: <node> -- <node> [section <id>] [material <id>]", "", ("chs.", "steel."),
+              "a pin-ended bar between two nodes, one line per member; its options override the defaults"),
+    ),
+    optional=(
+        Field("material", "<registry material id>", "", ("steel.",),
+              "the material of every member that names none; it needs fy and E and the section's material family"),
+        Field("section", "<registry section id>", "", ("chs.",),
+              "the circular hollow section of every member that names none"),
+    ),
+    target="<truss>.<node>",
+    loads=tuple(_LOAD_FIELDS),
+)
+
 
 def lower_truss(component: Component, design: Design, registry: Registry) -> Truss:
     """Parse the attribute lines in the module docstring. Rejects (ComponentError):
@@ -189,7 +205,7 @@ def lower_truss(component: Component, design: Design, registry: Registry) -> Tru
             else:
                 lines[member[0]] = (*member[1:], attr.span)
         else:
-            problem(attr.span, f"unknown truss attribute '{attr.key}'; expected material, section, node or member")
+            problem(attr.span, f"unknown truss attribute '{attr.key}'; expected {_listed(GRAMMAR.names, 'or')}")
 
     members: list[Member] = []
     for member_name, (start, end, options, span) in lines.items():
@@ -228,6 +244,10 @@ def lower_truss(component: Component, design: Design, registry: Registry) -> Tru
     if problems:
         raise ComponentError(tuple(problems))
     return Truss(name, tuple(nodes.values()), tuple(members), component.span)
+
+
+def _listed(words: tuple[str, ...], last: str) -> str:
+    return f"{', '.join(words[:-1])} {last} {words[-1]}" if len(words) > 1 else words[0]
 
 
 def _word(arg: object) -> str | None:
@@ -292,7 +312,7 @@ def _check_references(name: str, nodes: Mapping, members: Mapping, design: Desig
             if len(entry.target) != 2 or entry.target[1] not in nodes:
                 problem(span, f"load {case.name} targets {target}, which is not a node of {name}")
             if entry.field not in _LOAD_FIELDS:
-                problem(span, f"load {case.name} on {target} has field {entry.field}; a truss node takes fx and fy")
+                problem(span, f"load {case.name} on {target} has field {entry.field}; a truss node takes {_listed(GRAMMAR.loads, 'and')}")
             value = entry.value.range if isinstance(entry.value, Input) else design.params[entry.value.name].range
             if value.dim != FORCE:
                 problem(span, f"load {case.name} on {target}.{entry.field} must be a force")
@@ -827,4 +847,5 @@ DOMAIN = DomainSpec(
     models=MODELS,
     features=features,
     ports=ports,
+    grammars={"truss": GRAMMAR},
 )
