@@ -161,12 +161,30 @@ Each phase ends in a predicate someone can re-run. Lanes that touch different fi
 
 **Done when** the scripted cold-start test passes on fresh agents with rotated, held-out briefs. Install takes one call from the wheel, offline. The steel job takes under 10 tool calls, with no `dir()` or repr digging. The repair job reaches PASS from the output alone. The baseline is about 8 calls to install, 22 for the steel job, and three hand-computed repair tries (Appendix A).
 
+**Result, 2026-11-07: met in round 2.** Each round ran two fresh agents on held-out briefs, with only the wheel, outside the repository. The outside judge found every design they reached PASS on buildable.
+
+| Round | Install | Steel job | Repair | Library |
+|---|---|---|---|---|
+| 1 (sets A, B) | 1 pip call each | 7 and 8 calls; both needed `--json` and a script to name the governing check | 1 try after a hand calculation; 4 tries, which found tearout from AISC knowledge | `dir()` and repr, because no document shipped |
+| 2 (sets C, D), after one fix round | 1 pip call each | 5 and 8 calls, read from the text report | 1 try each, chosen from the limit the report names | `petra docs api` alone; one inspection to learn why a utilisation was blank |
+
+The gap baseline is 1,711 of 15,600 generated designs that PASS but cannot be built as drawn, 16% of all PASSes (`docs/absurd_gap.md`, seed 1). Sixty-three of the 2,532 designs the deck's own samplers drew are in it, so the steel gate's "no false PASS" held for strength only.
+
+`master` has not moved. The fast-forward waits on your go.
+
 ### P1. Safe (1 to 3 weeks)
 
 1. **An exact geometric model for every steel kind.** Plates, bolts, beam and support become exact rational shapes, and containment, non-intersection, edge and clearance obligations are generated from that one model. This covers all three fit classes: the beam side, the support side, and the beam against the support (flange clearance, cope needed). The same model later emits the CAD in P4.
 2. **Loads and premises.** Add self-weight to the truss, and state its bracing assumption as a premise. Add a conductor-to-terminal fit check. Close the unconservative premises the code already admits, or turn them into UNKNOWN.
 3. **The registry as a versioned, physical instruction set.** Values become intervals. Each entry gets a version, its source and an errata field, and the cable resistance fix is the first erratum. A recall query answers "which verdicts rest on this entry" (COMPILER §6, rows 3 and 4).
 4. **Re-run the whole gate.** That means the twin, the planted faults, the 10,000 designs, and the breaker with canary recall of at least 90%, across every kind and domain.
+5. **Coverage from the physics, not from the declared loads.** A flange force demands the panel-zone check only when the design declares a `panel_shear` load (`petra/models/steel/path.py`), so leaving the load out removes the check. The same question holds for a shear tee's flexibility and prying, and for the stiffened seat's plate and top angle, which no obligation names. Each mode a part's physics implies is demanded. A load the design leaves out gives UNKNOWN with what it needs, not a shorter list.
+6. **Say what was not checked.** An excused check and a mode the coverage table did not demand both print a line that names it and why.
+7. **What P0 found the plan must decide.**
+   - Five steel kinds and the bolt and uncertainty domains have no canary yet. Seed them from the gap examples, or recall cannot be measured.
+   - The grammar does not say whether a support is a column or a girder, so "cope needed" cannot be judged.
+   - Whether a part on a web-to-flange fillet counts as unbuildable decides 238 of the 1,711.
+   - The gap count is compared only at a pinned seed and generator commit.
 
 **Done when** the absurd-design count from P0 is zero, canary recall is at least 90% in every kind and domain, and the full gate passes.
 
