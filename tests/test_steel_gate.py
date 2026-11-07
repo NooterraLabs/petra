@@ -53,6 +53,22 @@ class Generator(unittest.TestCase):
                 if not g.free:
                     self.assertLessEqual(g.geometry, 1)
 
+    def test_a_toleranced_bracket_is_decided_on_the_side_its_load_was_aimed(self):
+        # Gate design 01614. Its free-edge check, enclosed once over the 1/8 in tolerance
+        # on its edge distance, read 1.04 at a load where no point of the box passes 0.98,
+        # so a load aimed to fail by that reading passed.
+        lines = ["  plate steel.A36 thickness 0.625 inch", "  support W12x40 flange grade steel.A992",
+                 "  bolts bolt_group.120 diameter 0.875 inch threads excluded", "  rows 2", "  columns 2",
+                 "  pitch 3 inch", "  gauge 4 inch", "  eccentricity 6 inch",
+                 '  edge_vertical in [1.9375 inch, 2.0625 inch] signed "gate@petra.dev" source "steel gate generator"',
+                 "  plate_edge 2 inch", "  free_edge 6 inch"]
+        build = lambda load: gen.source("aim", "bolt_bracket", "lrfd", lines, load)
+        for goal, expected in ((Fraction(104, 100), "FAIL"), (Fraction(96, 100), "PASS")):
+            with self.subTest(goal=goal):
+                load, u, mode, _ = gen.scale(build, goal, REGISTRY)
+                self.assertEqual(mode, "bracket_edge")
+                self.assertEqual(status(build(load))[0], expected)
+
     def test_min_fillet_follows_table_j2_4(self):
         self.assertEqual([gen.min_fillet(Fraction(t)) for t in ("0.25", "0.5", "0.75", "1")],
                          [Fraction(1, 8), Fraction(3, 16), Fraction(1, 4), Fraction(5, 16)])
