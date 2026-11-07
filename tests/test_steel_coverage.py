@@ -91,5 +91,58 @@ class PanelZone(unittest.TestCase):
         self.assertAlmostEqual(utilisation("[-1000 kip, 0 kip]"), expected, places=3)
 
 
+class UnframedEnd(unittest.TestCase):
+    """J10.7 wants a pair of full-depth stiffeners at an unframed member end not otherwise
+    restrained against twisting about its axis. A force at a member end says which its end
+    is; the deck draws no stiffeners, so a free end stays open, never passed."""
+
+    END = """petra 0
+
+design "flange-force-at-an-end" {
+  owner "s.engineer@example.org"
+}
+
+flange_force ff1 {
+  basis lrfd
+  member W14x90 grade steel.A992
+  bearing_length 0.5 inch
+  location end
+  distance 20 inch
+  end_twist restrained
+  force_kind compressive
+  flange_restrained yes
+  unbraced_length 144 inch
+  moment_at_force below_yield
+}
+
+load gravity {
+  on ff1 force in [0 kip, 100 kip]
+  on ff1 panel_shear in [0 kip, 50 kip]
+  on ff1 axial in [0 kip, 100 kip]
+  signed "s.engineer@example.org" source "beam reaction"
+}
+"""
+
+    def test_a_restrained_end_passes_without_stiffeners(self):
+        report = written(self.END)
+        self.assertIsInstance(report.verdict, petra.Pass)
+        self.assertFalse([o for v in report.to_json()["verdicts"] for o in v["obligations"] if "/steel.j10_stiffeners/" in o["requirement"]])
+
+    def test_a_free_end_stays_open_for_its_stiffeners(self):
+        report = written(self.END.replace("end_twist restrained", "end_twist free"))
+        self.assertIsInstance(report.verdict, petra.Unknown)
+        self.assertEqual(outcome(report, "j10_stiffeners"), "open")
+
+    def test_an_end_force_must_say_whether_its_end_can_twist(self):
+        with self.assertRaisesRegex(Exception, r"end_twist restrained\|free.*J10\.7"):
+            written(self.END.replace("  end_twist restrained\n", ""))
+
+    def test_an_interior_force_takes_no_end_twist(self):
+        interior = self.END.replace("location end", "location interior").replace("  distance 20 inch\n", "")
+        self.assertIsInstance(written(interior.replace("  end_twist restrained\n", "")).verdict, petra.Pass)
+        with self.assertRaisesRegex(Exception, "an interior force takes no end_twist"):
+            written(interior)
+
+
 if __name__ == "__main__":
     unittest.main()

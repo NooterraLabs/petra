@@ -447,6 +447,7 @@ def _flange_force(s: _Sampler) -> None:
     if s.chance(0.3):
         s.line("location end")
         s.length("distance", s.pick(("2", "4", "8", "16")))
+        s.line("end_twist restrained")      # a free end needs J10.7's stiffeners, which leave it UNKNOWN
     else:
         s.line("location interior")
     s.line(f"force_kind {force}")

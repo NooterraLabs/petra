@@ -421,6 +421,7 @@ _WORDS: Mapping[str, tuple[str, ...]] = {
     "form": ("conventional", "extended"),
     "support_side": ("bolted", "welded"),
     "location": ("interior", "end"),
+    "end_twist": ("restrained", "free"),
     "force_kind": ("compressive", "tensile"),
     "pair": ("single", "double"),
     "flange_restrained": ("yes", "no"),
@@ -544,6 +545,9 @@ FIELDS: Mapping[str, Field] = {f.name: f for f in (
           "how the angles, tee or seat meet the support: bolted (with support_gauge) or welded (with support_weld)"),
     Field("location", "|".join(_WORDS["location"]), "", (),
           "where the force acts: away from the member's ends, or near one (with distance)"),
+    Field("end_twist", "|".join(_WORDS["end_twist"]), "", (),
+          "whether the member end near the force is framed or otherwise restrained against twisting about its "
+          "longitudinal axis, or free; a free end needs a pair of full-depth stiffeners (Section J10.7)"),
     Field("force_kind", "|".join(_WORDS["force_kind"]), "", (), "the sense of the concentrated force"),
     Field("pair", "|".join(_WORDS["pair"]), "", (),
           "one force, or a pair of compressive forces on opposite flanges at one section (Section J10.5); single "
@@ -621,7 +625,7 @@ KIND_SPECS: Mapping[str, KindSpec] = {
         (), ("shear", "axial")),
     "flange_force": KindSpec(
         ("basis", "member", "bearing_length", "location", "force_kind"),
-        ("distance", "pair", "flange_restrained", "unbraced_length", "moment_at_force"),
+        ("distance", "end_twist", "pair", "flange_restrained", "unbraced_length", "moment_at_force"),
         (), ("force", "panel_shear", "axial")),
     "bolt_bracket": KindSpec(
         ("basis", "plate", "support", "bolts", "rows", "columns", "pitch", "gauge", "eccentricity",
@@ -705,8 +709,13 @@ def _check_kind(kind: str, attrs: Mapping[str, object], say: Say) -> None:
         say("a hanger hangs from the support's flange (the tee's bolts pass through it and it bends about the web)")
     if kind == "flange_force" and attrs.get("location") == "end" and "distance" not in attrs:
         say("a force at the member end names its distance from the end")
+    if kind == "flange_force" and attrs.get("location") == "end" and "end_twist" not in attrs:
+        say("a force at the member end says whether that end is restrained against twisting about its axis "
+            "(end_twist restrained|free): a free end needs a pair of full-depth stiffeners (J10.7)")
     if kind == "flange_force" and attrs.get("location") == "interior" and "distance" in attrs:
         say("an interior force takes no distance; a force near the end is at location end")
+    if kind == "flange_force" and attrs.get("location") == "interior" and "end_twist" in attrs:
+        say("an interior force takes no end_twist; a force near the end is at location end")
     if kind == "flange_force" and attrs.get("pair") == "double" and attrs.get("force_kind") == "tensile":
         say("a double (pair) force is compressive; J10.5 has no tensile pair")
     if (kind == "flange_force" and attrs.get("force_kind") == "compressive" and attrs.get("pair", "single") == "single"

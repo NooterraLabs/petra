@@ -8,8 +8,9 @@ slender seat stiffener, a lapped fillet as thick as its plate, bolts against a h
 stem, a cope deeper than half the beam, a load past the governing strength; and parts that
 do not fit: bolt rows run past the beam's depth or off a seat's leg, a support gauge wider
 than the face, a beam too wide to pass between a column's flanges, a plate on the beam's
-fillet, a bracket's bolt columns off the flange; and a flange force's panel_shear or axial
-load left out, which leaves its panel zone open rather than unchecked. `seed_faults`
+fillet, a bracket's bolt columns off the flange; a flange force's panel_shear or axial
+load left out, which leaves its panel zone open rather than unchecked; and a flange force
+at a member end free to twist, whose J10.7 stiffeners leave it open. `seed_faults`
 applies each fault to passing designs from the generator; the deck catches a fault when
 its verdict is not PASS, and names it when a refuted or open requirement is one of the
 fault's modes. The gate wants every fault caught and named.
@@ -103,6 +104,14 @@ def _drop_load(field: str) -> Callable[[str, Generated], str | None]:
     def edit(text: str, g: Generated) -> str | None:
         return re.sub(rf"^  on c1 {field} in .*\n", "", text, count=1, flags=re.M)
     return edit
+
+
+def _free_end(text: str, g: Generated) -> str | None:
+    """The force at a member end free to twist about its axis, which J10.7 stiffens: an
+    end force's end_twist set free, or an interior force moved 16 in from a free end."""
+    if _field(text, "end_twist") is not None:
+        return _set(text, "end_twist", "free")
+    return _set(text, "location", "end\n  distance 16 inch\n  end_twist free")
 
 
 def _far_holes(text: str, g: Generated) -> str | None:
@@ -275,6 +284,8 @@ FAULTS: tuple[Fault, ...] = (
           _drop_load("panel_shear"), frozenset({"panel_zone"})),
     Fault("column axial left out", "a flange force's axial load left out of its case", ("flange_force",),
           _drop_load("axial"), frozenset({"panel_zone"})),
+    Fault("free end", "a flange force at a member end free to twist about its axis", ("flange_force",), _free_end,
+          frozenset({"j10_stiffeners"})),
 )
 
 

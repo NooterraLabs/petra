@@ -216,7 +216,7 @@ class PryingClosedForm(unittest.TestCase):
 
 class J10Guards(unittest.TestCase):
     def at_distance(self, inches: str) -> dict[str, bool]:
-        d = design("flange_force", ("location interior", f"location end\n  distance {inches} inch"))
+        d = design("flange_force", ("location interior", f"location end\n  distance {inches} inch\n  end_twist restrained"))
         found = {**checks(d, "ff1", "web_local_yielding"), **checks(d, "ff1", "web_crippling")}
         return {what: v.excused for what, v in found.items()}
 
@@ -231,11 +231,14 @@ class J10Guards(unittest.TestCase):
 
 class Verdicts(unittest.TestCase):
     def test_every_example_connection_passes(self):
+        # flange_force.petra declares no panel_shear or axial load, which its panel zone reads (build.NEEDS)
+        left_open = {"flange_force.petra": {"ff1/steel.panel_zone/coverage.steel.panel_zone"}}
         for path in sorted(STEEL.glob("*.petra")):
             with self.subTest(example=path.name):
                 found = outcomes(load_design(path, REGISTRY))
                 self.assertTrue(found)
-                self.assertEqual(set(found.values()), {"Discharged"}, found)
+                self.assertEqual({r: o for r, o in found.items() if o != "Discharged"},
+                                 dict.fromkeys(left_open.get(path.name, ()), "Open"), found)
 
     def test_a_short_edge_fails_the_minimum_edge_distance(self):
         found = outcomes(design("shear_tab", ("edge_vertical 1.5 inch", "edge_vertical 0.75 inch")))

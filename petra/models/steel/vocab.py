@@ -412,8 +412,11 @@ LOAD_PATH = _mode("load_path")
 Unmodelled: requiring it yields a Gap needing NoModel, so the verdict is UNKNOWN."""
 
 STIFFENED_FORCE = _mode("j10_stiffeners")
-"""Transverse stiffeners and doublers at a concentrated force (J10.7-J10.9). Unmodelled in
-v1.0."""
+"""The pair of full-depth transverse stiffeners J10.7 requires at an unframed member end
+not otherwise restrained against twisting about its axis: demanded at a flange force whose
+end is declared free (end_twist free). The deck draws no stiffeners, so the mode is
+unmodelled and the verdict UNKNOWN. J10.8 and J10.9's stiffeners and doublers are never
+credited: a force past a J10 limit state's unstiffened strength fails that check."""
 
 UNMODELLED = frozenset({LOAD_PATH, STIFFENED_FORCE})
 

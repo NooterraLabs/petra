@@ -17,6 +17,8 @@ on the beam and its end against the support.
 A force the path cannot carry (an axial force on a shear connection) adds the element
 "connection" in role "axial", whose one limit state, the load path, is unmodelled: the
 deck reports it UNKNOWN rather than passing a connection whose axial path nobody checked.
+So does a flange force at a member end free to twist about its axis, whose J10.7
+stiffeners the deck does not draw.
 """
 from __future__ import annotations
 
@@ -74,6 +76,9 @@ ROLE_LIMITS: Mapping[str, tuple[str, ...]] = {
     "j10_compression_buckling": ("web_compression_buckling",),
     "j10_sidesway": ("web_sidesway_buckling",),
     "panel": ("panel_zone",),
+    # a member end free to twist about its axis, which J10.7 stiffens; the deck draws no
+    # stiffeners, so the mode is unmodelled and the verdict UNKNOWN
+    "unframed_end": ("j10_stiffeners",),
     "axial": ("load_path",),
 }
 
@@ -157,6 +162,8 @@ def path(conn: Conn, fields: set[str]) -> tuple[Link, ...]:
         # connection's couple, which shears the panel zone (J10.6); build.NEEDS says what
         # its check reads that the force alone does not give.
         links += (Link("member web", "panel"),)
+        if conn.attrs["location"] == "end" and conn.get("end_twist") == "free":
+            links += (Link("member end", "unframed_end"),)
     elif kind == "bolt_bracket":
         links = (Link("bracket plate", "bent_ply"), *_shaped(conn), *_bolts(conn, "bracket bolts", "bracket_bolts"), _face(conn))
     elif kind == "weld_bracket":

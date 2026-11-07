@@ -73,6 +73,7 @@ flange_force ff1 {
   bearing_length 0.5 inch
   location end
   distance in [16 inch, 30 inch] signed "s.engineer@example.org" source "framing plan"
+  end_twist restrained
   force_kind compressive
   flange_restrained yes
   unbraced_length 144 inch

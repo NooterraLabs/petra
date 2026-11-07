@@ -376,6 +376,7 @@ flange_force ff2 {
   bearing_length 6 inch
   location end
   distance 5 inch
+  end_twist restrained
   force_kind tensile
 }""", "  on ff2 force in [0 kip, 120 kip]"),
     # J10: a pair of compressive forces at the end, with panel shear and axial load
@@ -386,6 +387,7 @@ flange_force ff3 {
   bearing_length 1 inch
   location end
   distance 4 inch
+  end_twist restrained
   force_kind compressive
   pair double
 }""", "  on ff3 force in [0 kip, 150 kip]\n  on ff3 panel_shear in [0 kip, 250 kip]\n  on ff3 axial in [0 kip, 700 kip]"),

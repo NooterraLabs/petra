@@ -165,9 +165,10 @@ TABLE: tuple[Provision, ...] = (
     Provision("J10.4", "Web Sidesway Buckling", "check", ("web_sidesway_buckling",)),
     Provision("J10.5", "Web Compression Buckling", "check", ("web_compression_buckling",)),
     Provision("J10.6", "Web Panel-Zone Shear", "check", ("panel_zone",)),
-    Provision("J10.7", "Unframed Ends of Beams and Girders", "premise",
-              note="a member end under a concentrated force is framed or restrained against rotation about its axis; "
-              "the deck has no inputs for end stiffeners (j10_stiffeners is unmodelled)"),
+    Provision("J10.7", "Unframed Ends of Beams and Girders", "check", ("j10_stiffeners",),
+              "a flange force at a member end states whether the end is restrained against twisting about its axis "
+              "(end_twist); a free end requires the unmodelled j10_stiffeners mode, since the deck draws no "
+              "stiffeners: UNKNOWN. A framed connection frames its beam's end, and a seat's top angle restrains it"),
     Provision("J10.8", "Additional Stiffener Requirements for Concentrated Forces", "rule",
               note="a J10 force beyond the unstiffened strength fails its check; the deck designs no stiffeners "
               "(j10_stiffeners, unmodelled), so a stiffened design is rejected, never passed"),
