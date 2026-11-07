@@ -13,7 +13,7 @@ Written 2026-11-06, revised the same day after two adversarial reviews. This pla
 7. **We cover one design class completely before the next,** and coverage grows by rule family, not by niche (§4).
 8. **We win with engines that grow with compute.** Breakers, an optimiser that hunts for false PASSes, a task generator, and self-play. The install path and the certificate format grow with adoption, and we measure that honestly (§5).
 9. **CAD is an output first.** Reading other tools' files comes later, one reader per kind of data (§6, P6).
-10. **Build order.** P0 usable, P1 safe, then publish. P2 in the loop, P3 benchmark, P4 designer, P5 coverage, P6 readers, P7 trust (§6).
+10. **Build order.** P0 usable, P1 safe, then publish. P2 in the loop, P3 benchmark, P4 designer, P5 coverage, P6 readers, P7 trust (§6). P8, a pilot proving one code formula against physics, runs alongside P2 and tests the north star in §5.
 
 ## 1. Where we stand, measured
 
@@ -145,6 +145,31 @@ Lean is the precedent. It became the checker for AI mathematics through a one-li
 - the install path agents find first: PyPI, a SKILL.md, the MCP registry, the Hugging Face tag;
 - the open requirements card, design and certificate specifications.
 
+**The north star.** Petra becomes for physical objects what Lean is for mathematics: the place where every claim about a built thing is written down and re-checked. Lean won with a small trusted kernel, one library that keeps growing, automation whose output the kernel checks, and a benchmark labs train against. Petra copies all four and adds a fifth Lean never needed, a versioned contract with reality: materials, models and ratings, each with its source and errata.
+
+Today the kernel checks code formulas such as AISC's, so trust rests on our transcription of the code, the layer where every false PASS so far has been. The decisive step gives the kernel rules that bound the physics directly, for any geometry:
+
+| Physics | Kernel rule | What it bounds |
+|---|---|---|
+| Collapse | Lower-bound limit analysis | The load capacity of any part |
+| Stiffness | Equilibrated stress (Prager and Synge) | Deflection of any shape |
+| Buckling, vibration | Eigenvalue enclosures | Critical loads and frequencies |
+| Dynamics | Barrier certificates | Staying inside a safe region |
+| Scatter, fatigue | Scenario statistics | Failure probability |
+
+Three things follow (inferred, not yet tested). Any 3D part becomes checkable, so the decks become shortcuts rather than boundaries. Every code formula becomes a theorem to prove, that inside its validity range it never claims more than the physics bound allows. A clause that cannot be proved is flagged, so Petra starts auditing the codes. The premises that remain are the irreducible floor, as axioms are for Lean: material behaviour, measured strengths, imperfection and fracture data, and loads, each stated, versioned and recallable. "Capture it all" never means every design is decided. It means no design is silently wrong. Each gets PASS relative to listed premises, FAIL with a counterexample, or UNKNOWN naming what is missing.
+
+| Stage | What it captures | How we know it worked |
+|---|---|---|
+| 1. Steel connections (P0 to P4) | One code-governed niche, with agents in the loop | The lift test in P3, and no false PASS under the breaker |
+| 2. All code-governed design | Members, joints, welds, pressure vessels, wiring, timber, concrete, autoformalised | Decks grow with compute, and each passes its gate |
+| 3. The physics kernel (P8 first) | Any 3D part, and codes proved against physics | Code formulas proved conservative, or flagged |
+| 4. Systems | Assemblies across force, heat and current, dynamics and probability | Linked contracts between parts |
+| 5. Lifecycle | Manufacture, inspection, field use and recall | An erratum reaches every affected design within a day |
+| 6. Lean underneath | The kernel and the physics rules in Lean | A PASS is a Lean proof |
+
+Stage 3 is the bet that makes "all" possible rather than one deck at a time, and P8 tests it cheaply.
+
 ## 6. What we build
 
 Each phase ends in a predicate someone can re-run. Lanes that touch different files run in parallel. A phase is done only when its predicate passes.
@@ -248,6 +273,15 @@ Units inside the certificate (E2), twin elaborators for every deck, and finally 
 
 **Done when** the Lean checker accepts every certificate in the gate corpus and rejects every planted fault, and every deck has a twin that agrees on the full gate.
 
+### P8. The physics-kernel pilot (3 to 5 days, after P1, alongside P2)
+
+The cheap test of stage 3 in §5. Take one AISC formula, block shear on a plate (AISC 360-22 J4.3), and prove that inside its validity range it never claims more than a 2D lower-bound limit analysis allows.
+
+- **Method.** A statically admissible stress field on a triangulated plate, with the yield surface replaced by an inscribed polygon so the bound stays a lower bound. That is a linear programme, so its certificate is the kind R1 already checks (inferred). If it needs a new kernel rule, the pilot stops and reports, because the kernel changes only with your approval.
+- **The question it settles.** J4.3 takes the rupture terms at the tensile strength F_u, while a perfectly plastic limit analysis can use only a flow stress. So the expected outcome is mixed (guess). The yield terms are provable from physics, and the rupture terms rest on strain hardening and test data. Either outcome is a result. A proof makes the extreme version real. A flag names the premise the code rests on, and that premise goes into the registry with its source.
+
+**Done when** the kernel proves the bound over a stated box of plate geometries, or the first configuration where J4.3 exceeds it is printed with the premise it rests on.
+
 ## 7. What we stop
 
 - **dira and the Studio stay frozen.** Pieces move into Petra only when a phase needs them (ENGINE_MAP D1).
@@ -259,14 +293,14 @@ Units inside the certificate (E2), twin elaborators for every deck, and finally 
 
 ## 8. Decisions only you can make
 
-1. **Publish after P1, or earlier as an alpha with the false-PASS list printed on the README.** I recommend after P1, because a checker's first public fact should not be a false PASS.
-2. **Where to publish.** A `NooterraLabs` or `nooterra` GitHub org. Publishing is an outward action, so it waits for you.
+1. **Publish after P1, or earlier as an alpha with the false-PASS list printed on the README.** **Decided 2026-11-06: after P1,** because a checker's first public fact should not be a false PASS.
+2. **Where to publish.** A `NooterraLabs` or `nooterra` GitHub org. Publishing is an outward action, so it waits for you, after P1.
 3. **The licence.** Apache-2.0, which ENGINE_MAP D3 made conditional on a data-licence audit. The full AISC shapes table cannot ship until that audit says how.
-4. **Claim `petra` on PyPI.** It is free today (measured).
+4. **Claim `petra` on PyPI.** It is free today (measured). Claiming it needs your PyPI account, so it is yours to do.
 5. **The designer's name.** Daedalus is taken by the wave-physics engine.
-6. **The last credits, to 2026-11-15.** I recommend spending them on the P0 canary campaign and the P1 breaker runs.
-7. **Registry values from physics, or from specified limits.** `docs/frame.md` item 5 says registries are computed from physics, with wire resistance from resistivity and nominal area as the example. That derivation is what produced the low resistance. IEC 60228 specifies a maximum resistance, not an area, so physics alone cannot give the guaranteed value. I recommend allowing a short list of specified limits as constants, and changing frame.md item 5 to say so.
-8. **How Petra is run in the open.** `docs/open_source.md` sets out how Lean, Rocq, seL4, Ferrocene, code_aster and the open benchmarks are run, and a playbook for Petra. **Decided 2026-11-06:** the docs are CC BY 4.0 (`docs/LICENSE.md`), contributions are signed off under the DCO with a pledge that Petra stays Apache-2.0 (`CONTRIBUTING.md`), and Nooterra holds the name under `TRADEMARK.md`, which reserves "Petra-checked" for checkers that pass the conformance corpus. When the repository goes public, CI starts refusing unsigned commits and the name policy opens for comment.
+6. **The last credits, to 2026-11-15.** **Decided 2026-11-06:** they go to the canary campaign and the P1 breaker runs.
+7. **Registry values from physics, or from specified limits.** `docs/frame.md` item 5 says registries are computed from physics, with wire resistance from resistivity and nominal area as the example. That derivation is what produced the low resistance. IEC 60228 specifies a maximum resistance, not an area, so physics alone cannot give the guaranteed value. **Decided 2026-11-06:** a short list of specified limits may stand as constants, and frame.md item 5 and `docs/registry.md` now say so.
+8. **How Petra is run in the open.** `docs/open_source.md` sets out how Lean, Rocq, seL4, Ferrocene, code_aster and the open benchmarks are run, and a playbook for Petra. **Decided 2026-11-06:** the docs are CC BY 4.0 (`docs/LICENSE.md`), contributions are signed off under the DCO with a pledge that Petra stays Apache-2.0 (`CONTRIBUTING.md`), and `TRADEMARK.md` sets how the name may be used, which reserves "Petra-checked" for checkers that pass the conformance corpus. When the repository goes public, CI starts refusing unsigned commits and the name policy opens for comment.
 
 ## Appendix A. Cold-start test
 

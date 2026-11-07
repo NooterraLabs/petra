@@ -1,6 +1,6 @@
 # The Petra name
 
-Nooterra holds the name Petra for this checker and its `.petra` language. This policy says how anyone may use the name. It is a draft. It opens for public comment when the repository goes public, and it changes only after that comment.
+Nooterra uses the name Petra for this checker and its `.petra` language. This policy says how anyone may use the name for this project. It claims nothing over other products called Petra. It is a draft. It opens for public comment when the repository goes public, and it changes only after that comment.
 
 ## Use it freely, without asking
 

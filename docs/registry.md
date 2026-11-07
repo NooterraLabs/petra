@@ -28,7 +28,7 @@ Values stay points unless the entry's own source states a range or a tolerance. 
 
 `cable.cu_pvc.rho20_max` is also an interval, but it is not a tolerance. It spans the per-size values over the catalogue's sizes, so a family over sizes covers each of them.
 
-Whether a registry value should be the physics or a specified limit stays open (plan section 8, item 7). The cable fix below takes the specified limit because the standard caps the resistance a conforming conductor may have.
+A registry value may be a specified limit rather than the physics when the standard guarantees the limit and not the property (plan section 8, item 7, decided 2026-11-06). The cable fix below takes the specified limit because the standard caps the resistance a conforming conductor may have.
 
 ## The first erratum, cable resistance (2026-11-06)
 

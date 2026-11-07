@@ -12,7 +12,7 @@ Each item is a check someone can run.
 2. `python -m petra check examples/<name>.petra` prints a PASS, a FAIL and an UNKNOWN verdict across the example designs. Each verdict prints its premise footprint.
 3. `petra/kernel` imports only the standard library and uses exact rationals and rational intervals. A mutation suite tampers with every certificate type, and the kernel rejects every tampered certificate.
 4. Every certificate rule below runs end to end from a `.petra` file through an untrusted solver to the kernel.
-5. Registries (the makeable set) are computed from physics plus a short list of constants, not typed in as tables. A consistency checker built on physics relations catches deliberately corrupted records.
+5. Registries (the makeable set) are computed from physics plus a short list of constants, not typed in as tables. A constant may be a limit a standard specifies, such as IEC 60228's maximum conductor resistance, when the standard guarantees the limit rather than the physical property. A consistency checker built on physics relations catches deliberately corrupted records.
 6. A coverage generator turns a design into obligations. An obligation with no certificate and no named waiver makes the verdict UNKNOWN and names what is missing.
 7. Family certification proves a parametric family over a whole parameter box once. Later queries inside the box reuse the stored certificate. A benchmark compares the cost of reuse with recomputation, and explains the number.
 8. A gym-style environment generates tasks, takes a design plus certificates from an agent, and returns a reward computed only by the kernel. A baseline agent solves generated tasks, and its successful family certificates land in the library.
