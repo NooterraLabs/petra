@@ -1,0 +1,75 @@
+name: checks
+
+# The checks that close a phase, run on GitHub's machines: the test suite, the absurd-design
+# gap with one job per seed, and canary recall. The steel gate stays off CI because it reads
+# the full AISC shapes workbook, which is not in the repository.
+
+on:
+  workflow_dispatch:
+    inputs:
+      n:
+        description: designs per seed for the absurd-design gap
+        default: "18000"
+      seeds:
+        description: gap seeds as a JSON list, one job each
+        default: "[1, 2, 3]"
+      recall:
+        description: also run canary recall (seed 2, budget 600)
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  suite:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install numpy==2.4.6 scipy==1.17.1
+      - run: nproc && python -m unittest discover -s tests
+
+  gap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        seed: ${{ fromJSON(inputs.seeds) }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install numpy==2.4.6 scipy==1.17.1
+      - run: python scripts/absurd_gap.py --n "${{ inputs.n }}" --seeds "${{ matrix.seed }}" --workers "$(nproc)" --out out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gap-seed-${{ matrix.seed }}
+          path: out/
+
+  recall:
+    if: ${{ inputs.recall }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install numpy==2.4.6 scipy==1.17.1
+      - run: python scripts/canary_recall.py --seed 2 --budget 600 --workers "$(nproc)" --out out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: canary-recall
+          path: out/
