@@ -7,8 +7,10 @@
         registry against that deck file instead of the one built from the shipped
         registry. Under each refuted obligation the text gives the governing term's demand,
         capacity and utilisation in the design's units, and its counterexample as decimals
-        in those units. --json prints pipeline.Report.to_json() (`petra docs api`):
-            {"file": FILE, "design": NAME, "status": OVERALL, "verdicts": [
+        in those units. On a FAIL, unless --no-solve, the lines after the governing lines
+        name the moves that lower the governing check, best first (petra/repair.py). --json
+        prints pipeline.Report.to_json() with "repair", the moves or null (`petra docs api`):
+            {"file": FILE, "design": NAME, "status": OVERALL, "repair": REPAIR | null, "verdicts": [
                 {"claim": NAME, "status": "PASS" | "FAIL" | "UNKNOWN" | "MARGINAL",
                  "footprint": [{"tag", "label", "owner", "source", "version"?}, ...],
                  "rules": ["R1", ...],
@@ -100,11 +102,12 @@ from typing import Mapping, NoReturn
 
 from . import kernel
 from .certs import CertificateError, CertStore, decode_certificate
-from .lang import LolaSyntaxError, LoweringError, load_design
+from .lang import LolaSyntaxError, LoweringError, load_design, parse_design
 from .library import Library, certify_family
 from .models.base import ComponentError
 from .pipeline import check_design, explain
 from .registry import DeckError, build_deck, build_registry, check_deck, read_deck, write_deck
+from .repair import checker, repair
 from .solvers import SolverSource
 from .units import Quantity, UnitError, parse_quantity
 from .verdict import SEVERITY, STATUS, Refuted
@@ -204,7 +207,8 @@ def cmd_check(args: argparse.Namespace) -> int:
     LoweringError or ComponentError (message on stderr)."""
     try:
         registry = build_registry()
-        design = load_design(args.file, registry)
+        text = Path(args.file).read_text(encoding="utf-8")
+        design = parse_design(text, args.file, registry)
         deck = read_deck(args.deck) if args.deck else None
         store = CertStore(args.certs) if args.certs else None
         library = Library(args.library) if args.library else None
@@ -212,8 +216,19 @@ def cmd_check(args: argparse.Namespace) -> int:
         report = check_design(design, registry, sources, sink=store, deck=deck, path=args.file)
     except _INPUT_ERRORS as exc:
         return _input_error(exc)
-    print(json.dumps(report.to_json(), sort_keys=True) if args.json else report.render())
+    found = None if args.no_solve else repair(text, report, checker(registry, sources, args.file, deck))
+    if args.json:
+        print(json.dumps({**report.to_json(), "repair": None if found is None else found.to_json()}, sort_keys=True))
+    else:
+        print(_with_repair(report.render(), [] if found is None else found.lines()))
     return EXIT_CODES[STATUS[type(report.verdict)]]
+
+
+def _with_repair(rendered: str, lines: list[str]) -> str:
+    """The report's text with the repair lines after its governing lines."""
+    out = rendered.split("\n")
+    at = max((i + 1 for i, line in enumerate(out[:8]) if line.startswith("governing  ")), default=min(2, len(out)))
+    return "\n".join(out[:at] + lines + out[at:])
 
 
 def cmd_explain(args: argparse.Namespace) -> int:

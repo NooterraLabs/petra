@@ -1,6 +1,6 @@
 # Petra's Python API and `--json` output
 
-This page describes what a program needs to read a check. It covers the call, the report that the call returns, the verdict and outcome classes, the findings, and the JSON that `petra check --json` prints. A finding gives one obligation's numbers in the design's units. The definitions are in `petra/__init__.py`, `petra/pipeline.py`, `petra/verdict.py`, and `petra/readout.py`. Where this page and the code disagree, the code is correct.
+This page describes what a program needs to read a check. It covers the calls, the report that `check_file` returns, the verdict and outcome classes, the findings, the repair that names what to change on a FAIL, and the JSON that `petra check --json` prints. A finding gives one obligation's numbers in the design's units. The definitions are in `petra/__init__.py`, `petra/pipeline.py`, `petra/verdict.py`, `petra/readout.py`, and `petra/repair.py`. Where this page and the code disagree, the code is correct.
 
 ## Example
 
@@ -21,9 +21,20 @@ for f in report.findings:
                 print("  at", c.symbol, "=", c.shown, "exact", c.exact, c.si_unit)
 ```
 
-`petra check --json examples/truss_fail.petra` gives the same report as JSON, and so does `json.dumps(report.to_json())`.
+`petra check --json examples/truss_fail.petra` gives the same report as JSON, and so does `petra.check(text)`. `report.to_json()` gives it without the `repair` key.
 
 ## Check functions
+
+`petra.check(text, *, path="<text>", repair=True) -> dict` checks a design given as text, with the shipped registry and the solvers. It returns plain data that `json.dumps` takes as it is: the JSON that `petra check --json` prints, described in the JSON section. A FAIL's `repair` key names the inputs that lower the governing check, as Repair describes. With `repair=False`, `repair` is null and the call runs one check. A design that does not lower returns `{"file": path, "status": "INPUT_ERROR", "error": TEXT}` and does not raise. `path` is the name that error messages and `file` give the text.
+
+```python
+import petra
+
+result = petra.check(open("tab.petra", encoding="utf-8").read())
+if result["status"] == "FAIL":
+    move = result["repair"]["moves"][0]
+    print(move["direction"], move["input"], "on line", move["line"], "from", move["from"], "to", move["to"])
+```
 
 `petra.check_file(path, *, certs=None, library=None, solve=True) -> Report` loads a `.petra` file with the shipped registry and checks it. It gathers evidence from these sources, in this order:
 
@@ -149,6 +160,32 @@ not checked  steel.bearing, steel.block_shear, ... on ff1: not demanded by the c
 
 Modes of other domains that a component could meet are not listed, because they belong to the connection, not to the component's domain. A port contract and galvanic corrosion are such modes.
 
+## Repair
+
+`petra.repair` is tooling. It reads a FAIL and never changes a verdict. The governing check of a FAIL is its refuted obligation that ranks first, by the order The governing checks describes. A site is a number written on a component's line, outside any bound or tuple. A load is never a site, because its owner signed it.
+
+For each site, `repair` tries one step up and one step down and checks each edited design. A step is the smallest edit that the design accepts:
+
+- A count, such as `rows 3`, steps by 1.
+- A length in inches steps by 1/16 in.
+- Any other number steps by a tenth of its leading digit's place, so 30 m steps by 1 m.
+- An edit that the language or the domain refuses is not a step. Examples are a plate thickness that the shop deck does not stock and a bolt diameter that RCSC Table 5.2 does not list. The search walks on to the next value.
+
+A move is a step that lowers the governing check's utilisation. Moves come sorted by that utilisation, so the first move lowers the check the most. For the first three moves, `repair` also searches outward in the move's direction for a value at which the check is certified. It doubles the step until the check holds, then halves the gap. The move's `clears` gives that value and the design's status there, or null when the search found none within 64 steps.
+
+A move changes one number. The design's status after a move can still be FAIL on another check, and `fails` names those checks. A rule that no single number fixes, such as a slip-critical joint's hole type, gives an empty `moves`. On a FAIL, a check runs one design for each site and direction, plus up to about 40 more for the `clears` searches, so it takes a few seconds.
+
+`petra check` prints the first three moves after the governing lines:
+
+```
+repair     tab/steel.bolts at utilisation 2.02; each move lowers it, the first the most:
+  increase  tab.rows (line 19) from 3 to 4: utilisation 1.31; it holds at 5, where the design is FAIL on tab/steel.beam_fit
+  increase  tab.bolts diameter (line 18) from 0.75 to 0.875 inch: utilisation 1.79
+  decrease  tab.bolt_line (line 23) from 3 to 2.9375 inch: utilisation 1.99
+```
+
+With `--no-solve`, `petra check` computes no repair.
+
 ## JSON
 
 `petra check --json FILE` prints one object with sorted keys. In the shape below, an upper-case name is a placeholder, a key followed by `?` may be absent, and text to the right of a line describes it.
@@ -157,7 +194,21 @@ Modes of other domains that a component could meet are not listed, because they 
 {"file": FILE, "design": NAME, "status": "PASS" | "FAIL" | "UNKNOWN" | "MARGINAL",
  "governing": {"strength": GOVERNING | null, "detailing": GOVERNING | null},
  "verdicts": [ENTRY, ...],                     one per claim, then "coverage"
- "unchecked": [UNCHECKED, ...]}                each mode of a component's domain no requirement names, design order
+ "unchecked": [UNCHECKED, ...],                each mode of a component's domain no requirement names, design order
+ "repair": REPAIR | null}                      a FAIL's moves; null for any other status
+
+REPAIR = {"check": REQUIREMENT,                the governing check: the refuted obligation that ranks first
+          "utilisation": NUMBER | null,        its utilisation
+          "moves": [MOVE, ...]}                the steps that lower it, the one that lowers it most first
+
+MOVE = {"input": NAME,                         "<component>.<key>", with the word before the number, as "tab.plate thickness"
+        "line": N, "from": NUMBER TEXT,        where the number is written, and the number as written
+        "unit": UNIT | null,                   the unit written after it
+        "direction": "increase" | "decrease",
+        "to": NUMBER TEXT,                     the step, written as the design writes numbers
+        "utilisation": NUMBER | null,          the governing check's after the step
+        "status": STATUS, "fails": [REQUIREMENT, ...],   the design's after the step, and its refuted checks
+        "clears": {"to", "utilisation", "status", "fails"} | null}   a value at which the check holds; first three moves only
 
 UNCHECKED = {"subject": NAME, "mode": MODE, "reason": TEXT}   see What was not checked
 
