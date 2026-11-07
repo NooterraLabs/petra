@@ -4,7 +4,8 @@ petra 0
 # One M12 8.8 bolt tightened to at most 10 Nm clamps two steel plates against a 40 kN
 # pull. The preload, at most 10 / (0.16 x 0.012 m) = 5.2 kN, cannot hold the plates
 # together, so the joint opens and the bolt carries all 40 kN, 82 % of its 48.9 kN proof
-# load, against the 70 % claimed. Petra's load share counts only Phi F = 8 kN of it.
+# load, against the 70 % claimed. Petra once counted only Phi F = 8 kN of it; it now
+# states the bolt force clamped or open and checks bolt.separation on its own.
 
 design "joint-opens" {
   owner "m.engineer@example.org"
