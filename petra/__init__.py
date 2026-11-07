@@ -42,16 +42,9 @@ def check(text: str, *, path: str = "<text>", repair: bool = True) -> dict:
     "repair" key, which on a FAIL names the inputs that lower the governing check (repair.py)
     and is None otherwise, or with `repair=False`. A design that does not lower gives
     {"file", "status": "INPUT_ERROR", "error"} instead of raising."""
-    from . import repair as moves
+    from .repair import check_text
 
-    registry = build_registry()
-    sources = (SolverSource(),)
-    try:
-        report = check_design(parse_design(text, path, registry), registry, sources, path=path)
-    except moves.INPUT_ERRORS as exc:
-        return {"file": path, "status": "INPUT_ERROR", "error": str(exc)}
-    found = moves.repair(text, report, moves.checker(registry, sources, path)) if repair else None
-    return {**report.to_json(), "repair": None if found is None else found.to_json()}
+    return check_text(text, path, build_registry(), (SolverSource(),), moves=repair).to_json()
 
 
 def check_file(path: str | Path, *, certs: str | Path | None = None, library: Library | None = None, solve: bool = True) -> Report:

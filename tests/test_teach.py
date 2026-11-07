@@ -381,7 +381,7 @@ class PetraDocs(unittest.TestCase):
     wheel and an editable install."""
 
     FILES = {"readme": ROOT / "README.md", "reference": ROOT / "docs" / "reference.md",
-             "api": ROOT / "petra" / "docs" / "api.md"}
+             "api": ROOT / "petra" / "docs" / "api.md", "skill": ROOT / "petra" / "docs" / "skill.md"}
 
     def test_with_no_name_it_lists_each_document_with_what_it_covers(self):
         code, out, _ = run("docs")
