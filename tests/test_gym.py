@@ -210,14 +210,15 @@ class Agent(unittest.TestCase):
 
     def test_the_agent_solves_a_bolt_task(self):
         """With torque in [40, 50] Nm and a force up to 26 kN, two M12 A4-70 bolts keep
-        the joint closed, since the plates' share per bolt, 0.9 x 13 kN = 11.7 kN, stays
-        under the least preload 40 / (0.22 x 12 mm) = 15.15 kN, and each carries
-        F_V + Phi F / n = 50 / (0.16 x 12 mm) + 0.25 x 13 kN = 29.29 kN, within 0.9 x
-        450 MPa x 84.3 mm2 = 34.14 kN, so a pass exists among the agent's candidates.
-        One bolt opens the joint past 16.8 kN."""
+        the joint closed, as coverage's separation check demands, since the plates' share
+        per bolt, 0.9 x 13 kN = 11.7 kN, stays under the least preload 40 / (0.22 x 12 mm)
+        = 15.15 kN, and each carries F_V + Phi F / n = 50 / (0.16 x 12 mm) + 0.25 x 13 kN
+        = 29.29 kN, within 0.9 x 450 MPa x 84.3 mm2 = 34.14 kN, so a pass exists among the
+        agent's candidates. One bolt opens the joint past 16.8 kN."""
         reward, _ = self.episode("bolt", LIGHT_BOLT)
         self.assertEqual(reward, 1.0, "the environment confirms a bolt pass")
-        self.assertEqual(self.agent.stats().families_added, 2, "the tension claim and its closed-joint row are stored")
+        self.assertEqual(self.agent.stats().families_added, 1,
+                         "the tension claim is stored as one family; a family stores claims, not coverage checks")
 
     def test_a_reward_below_one_teaches_nothing(self):
         task = generate("circuit", SMALL, REGISTRY)

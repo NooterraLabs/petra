@@ -210,6 +210,7 @@ TERMS: Mapping[str, tuple[tuple[str, Dim, bool], ...]] = {
                                  ("conductor temperature at the tripping current I_2 / 1.45", TEMPERATURE, False),
                                  ("thermal runaway at I_2 / 1.45", DIMENSIONLESS, False)),
     "bolt.tension": (("bolt tension against its limit", FORCE, True),),
+    "bolt.separation": (("the plates' share of the force against the preload", FORCE, False),),
     "truss.member_buckling": (("compression against the flexural buckling resistance", FORCE, True),),
 }
 """Mode id -> (name, dimension, claimed) for each term of its R4 goal, in order, for

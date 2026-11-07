@@ -1,4 +1,4 @@
-"""Bolted joints: lowering, the tension obligation, coverage, and the stored certificate,
+"""Bolted joints: lowering, the tension and separation obligations, coverage, and the stored certificate,
 through the elaborator, the R4 solver and kernel.check. Owner: C.
 
 Hand values (ISO 724: d2 = d - 0.649519 P, d3 = d - 1.226869 P, As = pi/4 ((d2 + d3)/2)^2):
@@ -9,8 +9,12 @@ Hand values (ISO 724: d2 = d - 0.649519 P, d3 = d - 1.226869 P, As = pi/4 ((d2 +
          Rp02 As = 37919.942 N -> margin -8878.276 N;  Sp(8.8) As = 580 MPa x As = 48874.592 N
     M10: F_V = 31250 N;  F_bolt = 34250 N;  0.9 Rp02 As = 23485.787 N -> margin +10764.213 N
     least preload, T = 40 Nm, K = 0.22: F_V = 15151.515 N against the plates' share
-         (1 - 0.1) 12 kN = 10800 N -> row CLOSED margin -4351.515 N
-    torque [5, 10] Nm: least F_V = 1893.939 N -> row margin +8906.061 N, the joint opens
+         (1 - 0.1) 12 kN = 10800 N -> separation margin -4351.515 N
+    torque [5, 10] Nm: least F_V = 1893.939 N -> separation margin +8906.061 N, the joint
+         opens and the bolt carries F / n = 12 kN -> tension margin 12000 - 34127.948 N
+    canary (M12 8.8, torque [5, 10] Nm, K [0.16, 0.2], Phi [0.1, 0.2], F up to 40 kN, u 0.7):
+         clamped share at most 10 / (0.16 x 0.012) + 0.2 x 40 kN = 13208.333 N, opened
+         F / n = 40 kN, against 0.7 x 48874.592 N = 34212.214 N -> tension margin +5787.786 N
 """
 import dataclasses
 import json
@@ -32,13 +36,12 @@ from petra.models.base import (
     NeedsInputBound,
     NoRuleForQuantity,
     Obligation,
-    OutsideValidity,
 )
 from petra.pipeline import check_design
 from petra.premises import Tag
 from petra.registry import Material, Process, ProcessKind, Stated, build_registry
 from petra.solvers import SolverSource, r4_enclosure
-from petra.verdict import Fail, Unknown
+from petra.verdict import Fail, Pass
 
 from tests.test_circuit import at
 
@@ -70,17 +73,32 @@ def requirements(design) -> tuple:
     return coverage.generate(design, lowered(design), REGISTRY)
 
 
-def tension(design, origin: str = "tension"):
-    """The one tension result of the requirement from `origin` (a claim name or rule id)."""
+def built(design, mode, origin: str) -> list:
+    """Every result for `mode` of the requirement from `origin` (a claim name or rule id)."""
     model = lowered(design)
     found = []
     for req in requirements(design):
         name = req.origin.claim if isinstance(req.origin, ClaimOrigin) else req.origin.rule
-        if req.mode == bolt.TENSION and name == origin:
-            found += bolt.build_tension(req, model[req.subject[0]], design, REGISTRY)
+        if req.mode == mode and name == origin:
+            found += bolt.DOMAIN.builders[mode](req, model[req.subject[0]], design, REGISTRY)
+    return found
+
+
+def tension(design, origin: str = "tension"):
+    """The one tension result of the requirement from `origin` (a claim name or rule id)."""
+    found = built(design, bolt.TENSION, origin)
     if len(found) != 1:
         raise AssertionError(f"{len(found)} tension results from {origin}")
     return found[0]
+
+
+def separation(design) -> list:
+    """The separation results coverage demands of the bracket, one per load case."""
+    return built(design, bolt.SEPARATION, "bolt.separation")
+
+
+def entry(report, claim: str):
+    return next(e.verdict for e in report.entries if e.claim == claim)
 
 
 def solved(ob: Obligation):
@@ -118,14 +136,16 @@ class BoltUnknown(unittest.TestCase):
             "reg:bolt.M12_A4_70.Rp02_min",
         })
 
-    def test_coverage_leaves_galvanic_corrosion_and_plate_bearing_open(self):
+    def test_coverage_demands_separation_and_leaves_galvanic_corrosion_and_plate_bearing_open(self):
         reqs = requirements(load_design(EXAMPLE, REGISTRY))
         self.assertEqual([(r.subject, r.mode, type(r.origin)) for r in reqs], [
             (("bracket",), bolt.TENSION, ClaimOrigin),
+            (("bracket",), bolt.SEPARATION, CoverageOrigin),
             (("bracket",), bolt.PLATE_BEARING, CoverageOrigin),
             (("bracket",), GALVANIC_CORROSION, CoverageOrigin),
         ])
         self.assertTrue({GALVANIC_CORROSION, bolt.PLATE_BEARING} <= models.UNMODELLED)
+        self.assertNotIn(bolt.SEPARATION, models.UNMODELLED)
 
     def test_in_a_dry_room_the_same_pair_raises_no_galvanic_demand(self):
         reqs = requirements(joint(("environment marine_c5", "environment indoor_dry")))
@@ -234,6 +254,12 @@ class Tension(unittest.TestCase):
         ob = tension(joint(("count 1", "count 2")))
         self.assertAlmostEqual(at(ob.statement, 0, WORST), 26041.667 + 1500 - 34127.948, places=2)
 
+    def test_the_bolt_carries_its_whole_share_once_the_joint_opens(self):
+        ob = tension(joint(OPENS))
+        self.assertEqual(ob.validity, (), "the bound holds clamped or open, so the model states no row")
+        self.assertAlmostEqual(at(ob.statement, 0, {**LEAST, "bracket.torque": 5}), 12000 - 34127.948, places=2)
+        self.assertAlmostEqual(at(ob.statement, 0, {**WORST, "bracket.torque": 10}), 12000 - 34127.948, places=2)
+
     def test_a_missing_input_is_a_gap_naming_it(self):
         gap = tension(joint(('  torque in [40 Nm, 50 Nm] signed "fitter.lead@example.org" source "assembly spec AS-12 rev C"\n', "")))
         self.assertIsInstance(gap, Gap)
@@ -250,42 +276,44 @@ class Tension(unittest.TestCase):
 
 
 class Separation(unittest.TestCase):
-    """Row CLOSED, (1 - Phi) F / n - T / (K d) <= 0, is worst at the least preload and the least share."""
+    """(1 - Phi) F / n - T / (K d) <= 0, worst at the least preload, the least share and the largest force."""
 
-    def test_every_tension_obligation_states_the_closed_row_over_its_load_case(self):
-        ob = tension(load_design(EXAMPLE, REGISTRY))
-        self.assertEqual(tuple(v.row for v in ob.validity), (bolt.CLOSED,))
-        row = ob.validity[0].statement
-        self.assertLessEqual({h.label for h in row.hyps}, {h.label for h in ob.statement.hyps})
-        self.assertAlmostEqual(at(row, 0, LEAST), 10800 - 15151.515, places=2)
-        self.assertIsInstance(solved(ob.validity[0])[0], Theorem)
+    def test_coverage_checks_the_joint_stays_clamped_under_each_load_case(self):
+        gust = 'load gust {\n  on bracket force in [0 kN, 20 kN]\n  signed "client.structures@example.org" source "gust study"\n}\n'
+        wind, gusty = separation(joint(extra=gust))
+        self.assertEqual((wind.model.id, wind.validity), ("bolt.separation", ()))
+        self.assertAlmostEqual(at(wind.statement, 0, LEAST), 10800 - 15151.515, places=2)
+        self.assertIsInstance(solved(wind)[0], Theorem)
+        self.assertAlmostEqual(at(gusty.statement, 0, {**LEAST, "gust.bracket.force": 20000}), 18000 - 15151.515, places=2)
+        self.assertIsInstance(solved(gusty)[0], Refutation, "20 kN takes back the least preload")
 
-    def test_a_joint_that_opens_is_unknown_naming_the_row_and_its_point(self):
-        d = joint(OPENS)
-        ob = tension(d)
-        self.assertIsInstance(solved(ob)[0], Theorem, "the closed-joint share alone stays under the limit")
-        self.assertAlmostEqual(at(ob.validity[0].statement, 0, {**LEAST, "bracket.torque": 5}), 10800 - 1893.939, places=2)
-        report = check_design(d, REGISTRY, (SolverSource(),))
-        tension_entry = next(e.verdict for e in report.entries if e.claim == "tension")
-        self.assertIsInstance(tension_entry, Unknown)
-        (item,) = tension_entry.open
-        self.assertEqual(item.requirement.id, "bracket/bolt.tension/claim.tension")
-        (need,) = item.needs
-        self.assertIsInstance(need, OutsideValidity)
-        self.assertEqual((need.model, need.row), ("bolt.tension", "bolt.tension.closed"))
-        self.assertEqual(dict(need.point), {"bracket.torque": "5", "bracket.nut_factor": "11/50",
-                                            "bracket.load_share": "1/10", "wind.bracket.force": "12000"})
+    def test_a_joint_that_opens_fails_on_separation_at_its_least_preload(self):
+        report = check_design(joint(OPENS), REGISTRY, (SolverSource(),))
+        self.assertIsInstance(entry(report, "tension"), Pass, "an opened bolt carries 12 kN, within its limit")
+        failed = entry(report, "coverage")
+        self.assertIsInstance(failed, Fail)
+        self.assertEqual(failed.obligation.requirement.id, "bracket/bolt.separation/coverage.bolt.separation")
+        point = dict(failed.refutation.point)
+        self.assertEqual({k: point[k] for k in LEAST}, {**LEAST, "bracket.torque": 5})
+
+    def test_a_missing_input_is_a_gap_naming_it(self):
+        (gap,) = separation(joint(('  torque in [40 Nm, 50 Nm] signed "fitter.lead@example.org" source "assembly spec AS-12 rev C"\n', "")))
+        self.assertEqual(gap.needs, (NeedsInputBound(("bracket",), "torque", "Nm"),))
 
     def test_a_counterexample_where_the_joint_stays_closed_is_a_fail(self):
         report = check_design(joint(("bolt.M12_A4_70", "bolt.M10_A4_70")), REGISTRY, (SolverSource(),))
-        self.assertIsInstance(next(e.verdict for e in report.entries if e.claim == "tension"), Fail)
+        self.assertIsInstance(entry(report, "tension"), Fail)
 
-    def test_the_canary_whose_joint_opens_is_refused_on_its_tension_claim(self):
+    def test_the_canary_whose_joint_opens_fails_its_tension_claim_and_separation(self):
         report = check_design(load_design(CANARY, REGISTRY), REGISTRY, (SolverSource(),))
-        self.assertIsInstance(report.verdict, Unknown)
-        (item,) = report.verdict.open
-        self.assertEqual(item.requirement.id, "bracket/bolt.tension/claim.tension")
-        self.assertEqual([n.row for n in item.needs], ["bolt.tension.closed"])
+        self.assertIsInstance(report.verdict, Fail)
+        claim, covered = entry(report, "tension"), entry(report, "coverage")
+        self.assertEqual((claim.obligation.requirement.id, covered.obligation.requirement.id),
+                         ("bracket/bolt.tension/claim.tension", "bracket/bolt.separation/coverage.bolt.separation"))
+        point = dict(claim.refutation.point)
+        self.assertEqual(point["pull.bracket.force"], 40000)
+        self.assertAlmostEqual(at(claim.obligation.statement, 0, point), 40000 - 34212.214, places=2,
+                               msg="the bolt carries the whole 40 kN once the joint opens")
 
 
 class Lowering(unittest.TestCase):

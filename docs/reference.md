@@ -227,7 +227,7 @@ Waivable modes: `wire.overload_protection`, `wire.short_circuit`, `wire.steady_t
 
 ### Domain bolt
 
-Waivable modes: `bolt.plate_bearing`, `bolt.tension`.
+Waivable modes: `bolt.plate_bearing`, `bolt.separation`, `bolt.tension`.
 
 #### joint
 

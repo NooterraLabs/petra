@@ -1,9 +1,11 @@
 petra 0
 
 # A stainless bolt through aluminium plates on a coastal mast. The tension claim
-# passes, but coverage demands a galvanic-corrosion check (A4 stainless against
-# 6061 aluminium in a wet C5 environment) and a plate-bearing check. v0 has no model
-# for either and the owner signed no waiver, so the verdict is UNKNOWN and names both.
+# passes, and so does the separation check coverage adds: even the least preload
+# keeps the plates clamped under the whole wind load. Coverage also demands a
+# galvanic-corrosion check (A4 stainless against 6061 aluminium in a wet C5
+# environment) and a plate-bearing check. v0 has no model for either and the owner
+# signed no waiver, so the verdict is UNKNOWN and names both.
 
 design "mast-bracket-coastal" {
   owner "m.engineer@example.org"

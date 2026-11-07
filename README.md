@@ -185,15 +185,16 @@ api        the Python API, and the JSON that `petra check --json` prints
 	petra check examples/bolt_unknown.petra
 	```
 
-	The tension claim passes. The verdict is still UNKNOWN, because coverage asks for plate bearing and galvanic corrosion, and v0 has no model for either. Petra names each open requirement and what would close it:
+	The tension claim passes, and so does the separation check coverage adds: the least preload keeps the joint clamped. The verdict is still UNKNOWN, because coverage also asks for plate bearing and galvanic corrosion, and v0 has no model for either. Petra names each open requirement and what would close it:
 
-	<!-- sample: petra check examples/bolt_unknown.petra | head -n 12 -->
+	<!-- sample: petra check examples/bolt_unknown.petra | head -n 13 -->
 	```text
 	mast-bracket-coastal: UNKNOWN
 	entries    tension PASS, coverage UNKNOWN
-	checked    3 obligations, 1 certified, 0 refuted, 0 waived, 2 open
+	checked    4 obligations, 2 certified, 0 refuted, 0 waived, 2 open
 	governing  strength   bracket/bolt.tension/claim.tension: bolt tension against its limit: demand 29.04 kN, capacity 34.13 kN, utilisation 0.851
-	  bracket/bolt.tension                         claim tension                R4  certified  solver  sha256:9caaf8237101..  validity 1 proved  utilisation 0.851
+	  bracket/bolt.tension                         claim tension                R4  certified  solver  sha256:4b704bfeffe3..  utilisation 0.851
+	  bracket/bolt.separation                      coverage bolt.separation     R4  certified  solver  sha256:ac3c5a1677e6..  utilisation 0.713
 	  bracket/bolt.plate_bearing                   coverage bolt.bearing        --  open
 	  bracket/corrosion.galvanic                   coverage galvanic.contact    --  open
 	open       2 requirements
@@ -213,7 +214,7 @@ api        the Python API, and the JSON that `petra check --json` prints
 
 	<!-- sample: petra verify examples/bolt_tension.cert.json -->
 	```text
-	examples/bolt_tension.cert.json: theorem sha256:9caaf82371013b4170cfbb25cde94eaa54b40ee325600116748e4ca91b55f372
+	examples/bolt_tension.cert.json: theorem sha256:4b704bfeffe30102181ec044dad0e38272fbed879c59c4cd3f1a05fb68851960
 	```
 
 	[The certificate JSON format](docs/design.md#certificate-json-format) is language-neutral, so a second kernel can check the same files.

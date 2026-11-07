@@ -1,7 +1,7 @@
 {
  "format": "petra-cert/0",
  "kernel": "petra-kernel/0",
- "statement_hash": "sha256:9caaf82371013b4170cfbb25cde94eaa54b40ee325600116748e4ca91b55f372",
+ "statement_hash": "sha256:4b704bfeffe30102181ec044dad0e38272fbed879c59c4cd3f1a05fb68851960",
  "statement": {
   "t": "statement",
   "hyps": [
@@ -83,42 +83,58 @@
      "t": "add",
      "args": [
       {
-       "t": "add",
+       "t": "max",
        "args": [
         {
-         "t": "div",
-         "num": {
-          "t": "sym",
-          "name": "bracket.torque"
-         },
-         "den": {
-          "t": "mul",
-          "args": [
-           {
+         "t": "add",
+         "args": [
+          {
+           "t": "div",
+           "num": {
             "t": "sym",
-            "name": "bracket.nut_factor"
+            "name": "bracket.torque"
            },
-           {
-            "t": "sym",
-            "name": "const.iso261.M12.d"
+           "den": {
+            "t": "mul",
+            "args": [
+             {
+              "t": "sym",
+              "name": "bracket.nut_factor"
+             },
+             {
+              "t": "sym",
+              "name": "const.iso261.M12.d"
+             }
+            ]
            }
-          ]
-         }
+          },
+          {
+           "t": "mul",
+           "args": [
+            {
+             "t": "sym",
+             "name": "bracket.load_share"
+            },
+            {
+             "t": "div",
+             "num": {
+              "t": "sym",
+              "name": "wind.bracket.force"
+             },
+             "den": {
+              "t": "sym",
+              "name": "bracket.count"
+             }
+            }
+           ]
+          }
+         ]
         },
         {
          "t": "div",
          "num": {
-          "t": "mul",
-          "args": [
-           {
-            "t": "sym",
-            "name": "bracket.load_share"
-           },
-           {
-            "t": "sym",
-            "name": "wind.bracket.force"
-           }
-          ]
+          "t": "sym",
+          "name": "wind.bracket.force"
          },
          "den": {
           "t": "sym",
@@ -245,7 +261,7 @@
   "defined": []
  },
  "producer": {
-  "source": "solver:r4_enclosure",
-  "petra": "0.1.0"
+  "petra": "0.1.0",
+  "source": "solver"
  }
 }

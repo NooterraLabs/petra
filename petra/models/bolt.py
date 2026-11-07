@@ -5,26 +5,34 @@ below (`petra kinds joint` prints them).
 
 Load field: force on `<joint>`. Claim path: `<joint>.<qoi>`.
 
-Bolt tension (simplified VDI 2230 load sharing, concentric axial load):
-    F_bolt = F_V + Phi * F_A / n,      F_V = T / (K d)         (torque-tension relation)
-    goal  F_bolt - u * S * As <= 0     (u = claimed utilisation, default 1)
+The joint diagram, simplified from VDI 2230 Part 1 for a concentric axial load, per bolt:
+    F_V  = T / (K d)                   torque-tension preload
+    F_KR = F_V - (1 - Phi) * F_A / n   residual clamp force, the plates' share taken off it
+    F_bolt = F_V + Phi * F_A / n       while F_KR >= 0: the plates stay clamped
+    F_bolt = F_A / n                   once F_KR < 0: the plates part, and statics leaves
+                                       each bolt its whole share
 T is the signed tightening torque range, K the nut factor (measured or judged input),
 Phi the joint load factor (judged input), F_A the signed external load, n the bolt count.
+The two branches meet where F_KR = 0, and on each side the one that applies is the
+larger, so, exactly, clamped or open,
+    F_bolt = max(F_V + Phi * F_A / n, F_A / n).
+
+Bolt tension (TENSION), every claim on the bolt and the proof-load coverage demand (R4):
+    goal  F_bolt - u * S * As <= 0     (u = claimed utilisation, default 1)
 As comes from the registry derivation over ISO 724 geometry. S is the property class's
 proof stress Sp (ISO 898-1), or its 0.2 % proof strength Rp02_min where the class states
 no Sp (ISO 3506-1 stainless), a sanctioned premise either way. A bolt_tension claim
-bounds F_bolt itself.
+bounds F_bolt itself. The bound holds on both sides of opening, so a proof and a
+counterexample each say what the bolt carries, and the model has no validity row.
 
-Validity row CLOSED, stated beside every tension obligation over its load case (R4):
-    (1 - Phi) * F_A / n - F_V <= 0     the plates' share never takes back the least preload
-The split above holds only while the plates stay clamped. Once (1 - Phi) F_A / n passes
-F_V the joint opens and each bolt carries F_A / n, whatever Phi says. VDI 2230 Part 1
-does not certify an opened joint: it splits the load (R3) for a clamped one and sizes the
-least assembly preload (R5) so that the residual clamp load stays at least the required
-clamp load of R2. The grammar draws no transverse load, seal or eccentric load, so the
-required clamp load here is zero. A joint that can open somewhere in the box is outside
-the model, and the claim stays UNKNOWN naming the row and the point (OutsideValidity),
-not PASS on the closed-joint share and not FAIL on a bolt force the method does not give.
+Joint separation (SEPARATION), demanded of every joint (R4):
+    goal  (1 - Phi) * F_A / n - F_V <= 0     the residual clamp force stays at least zero
+VDI 2230 Part 1 never designs an opened joint: it splits the load by Phi (R3) only while
+the joint is clamped, and sizes the least assembly preload (R5) so that the residual
+clamp load stays at least the required clamp load (R2). The grammar draws no transverse
+load, seal or eccentric load, so the required clamp load here is zero. The goal is worst
+at the least preload T_lo / (K_hi d), the least load share and the largest force, so a
+joint that can open anywhere in its box fails here, however strong its bolt.
 
 A coated bolt or plate touches its neighbours with the coating's surface material
 (Registry.surface), so the contact pairs the galvanic rule reads name that material.
@@ -37,7 +45,7 @@ from fractions import Fraction
 from typing import Callable, Mapping
 
 from ..ir import Arg, Bound, Component, Design, Exceeds, Fixed, Input, ParamRef, Ref, Rel, Span, Value
-from ..kernel import Add, Const, Div, Expr, Interval, Mul, Neg
+from ..kernel import Add, Const, Div, Expr, Interval, Max, Mul, Neg
 from ..kernel.rules.r4_enclosure import AllNonpositive
 from ..registry import OutsideMakeableSet, PartKind, ProcessKind, Registry
 from ..units import DIMENSIONLESS, FORCE, LENGTH, TORQUE, Dim, Quantity
@@ -65,9 +73,7 @@ from .base import (
     Ports,
     Requirement,
     StatementBuilder,
-    ValidityRow,
     model_spec,
-    validity_obligation,
 )
 
 # --- Typed model, produced by lower_joint --------------------------------------------
@@ -294,28 +300,33 @@ def _dim(value: Input | ParamRef, design: Design) -> Dim:
 # --- Modes, quantities, model premises -----------------------------------------------
 
 TENSION = FailureMode("bolt.tension")
+SEPARATION = FailureMode("bolt.separation")
 PLATE_BEARING = FailureMode("bolt.plate_bearing")
 
-CLOSED = ValidityRow(
-    "bolt.tension.closed",
-    "the joint stays closed, (1 - Phi) F_A / n <= T / (K d): the plates' share of the external force never takes "
-    "back the preload",
-    "VDI 2230 Part 1:2015 splits the operating load by Phi only for a clamped joint (R3), and sizes the minimum "
-    "assembly preload (R5) so the residual clamp load stays at least the required clamp load (R2), which is zero "
-    "for a concentric axial load with no transverse load or seal",
-)
+_JOINT_DIAGRAM = ("concentric axial external load shared equally by the bolts; linear joint diagram with joint load "
+                  "factor Phi; no prying, bending, embedding loss or thermal change of preload; the nut factor covers "
+                  "thread and bearing friction")
 
 TENSION_MODEL = model_spec(
     sys.modules[__name__], "bolt.tension",
-    "torque-tension preload F_V = T / (K d) plus the load share Phi F_A / n of a concentric axial load, "
-    "against the property class's proof stress (or 0.2 % proof strength) times the ISO 724 stress area",
-    "concentric axial external load shared equally by the bolts; linear joint load factor Phi; no prying, "
-    "bending, embedding loss or thermal change of preload; the nut factor covers thread and bearing friction",
-    "petra-maintainers", "VDI 2230 Part 1:2015 (simplified); ISO 898-1:2013; ISO 3506-1:2020; ISO 724",
-    rows=(CLOSED,),
+    "the joint diagram's bolt force max(F_V + Phi F_A / n, F_A / n), F_V = T / (K d): the load share Phi while the "
+    "plates stay clamped, the whole share once they part, against the property class's proof stress (or 0.2 % proof "
+    "strength) times the ISO 724 stress area",
+    _JOINT_DIAGRAM,
+    "petra-maintainers", "VDI 2230 Part 1:2015 (simplified joint diagram); ISO 898-1:2013; ISO 3506-1:2020; ISO 724",
 )
 
-MODELS: Mapping[FailureMode, ModelSpec] = {TENSION: TENSION_MODEL}
+SEPARATION_MODEL = model_spec(
+    sys.modules[__name__], "bolt.separation",
+    "the joint diagram's residual clamp force F_V - (1 - Phi) F_A / n, F_V = T / (K d), against the required "
+    "clamp load",
+    f"{_JOINT_DIAGRAM}; no transverse load, seal or eccentric load, so the required clamp load is zero",
+    "petra-maintainers",
+    "VDI 2230 Part 1:2015 (simplified): the operating load splits by Phi only while the joint is clamped (R3), and "
+    "the minimum assembly preload keeps the residual clamp load at least the required clamp load (R2, R5)",
+)
+
+MODELS: Mapping[FailureMode, ModelSpec] = {TENSION: TENSION_MODEL, SEPARATION: SEPARATION_MODEL}
 
 QOIS: Mapping[str, FailureMode] = {
     "bolt_tension": TENSION,
@@ -332,22 +343,24 @@ def preload(sb: StatementBuilder, joint: BoltedJoint) -> Expr:
     return Div(sb.input(joint.torque), Mul((sb.input(joint.nut_factor), sb.registry(joint.bolt, "d"))))
 
 
-def per_bolt(sb: StatementBuilder, joint: BoltedJoint, share: Expr, external: Expr) -> Expr:
-    """share * external / n: one bolt's part of a share of the external force."""
+def per_bolt(sb: StatementBuilder, joint: BoltedJoint, external: Expr) -> Expr:
+    """external / n: one bolt's share of the external force."""
     count = sb.value(Fixed(Quantity(Interval(Fraction(joint.count), Fraction(joint.count)), DIMENSIONLESS)), f"{joint.name}.count")
-    return Div(Mul((share, external)), count)
+    return Div(external, count)
 
 
 def bolt_force(sb: StatementBuilder, joint: BoltedJoint, external: Expr) -> Expr:
-    """F_V + Phi * external / n as an Expr over input and registry hyps."""
-    return Add((preload(sb, joint), per_bolt(sb, joint, sb.input(joint.load_share), external)))
+    """max(F_V + Phi * external / n, external / n): the bolt force of the joint diagram,
+    the load share while the plates stay clamped and the whole share once they part."""
+    share = per_bolt(sb, joint, external)
+    return Max((Add((preload(sb, joint), Mul((sb.input(joint.load_share), share)))), share))
 
 
 def clamp_lost(sb: StatementBuilder, joint: BoltedJoint, external: Expr) -> Expr:
     """(1 - Phi) * external / n - F_V: the plates' share of the external force less the
-    preload, at most 0 while the joint stays closed (row CLOSED)."""
+    preload, the residual clamp force negated, at most 0 while the joint stays clamped."""
     relief = Add((Const(Fraction(1)), Neg(sb.input(joint.load_share))))
-    return Add((per_bolt(sb, joint, relief, external), Neg(preload(sb, joint))))
+    return Add((Mul((relief, per_bolt(sb, joint, external))), Neg(preload(sb, joint))))
 
 
 def _external(sb: StatementBuilder, force: Input | ParamRef | Fixed, case: str) -> Expr:
@@ -361,37 +374,58 @@ def capacity(sb: StatementBuilder, joint: BoltedJoint, registry: Registry) -> Ex
     return Mul((stress, sb.registry(joint.bolt, "As")))
 
 
+def _loading(req: Requirement, joint: BoltedJoint, design: Design) -> tuple[list[GapNeed], dict[str, Input | ParamRef], tuple[str, ...]]:
+    """(NeedsInputBound for each of torque, nut_factor, load_share the joint lacks and for
+    a force when a case req is checked under puts none on it, each load case's force on
+    the joint, the cases req is checked under)."""
+    needs: list[GapNeed] = [NeedsInputBound((joint.name,), field, unit)
+                            for field, (_, unit) in INPUTS.items() if getattr(joint, field) is None]
+    forces = {case.name: e.value for case in design.loads.values() for e in case.entries if e.target == (joint.name,)}
+    cases = req.under or tuple(forces)
+    if not cases or any(case not in forces for case in cases):
+        needs.append(NeedsInputBound((joint.name,), "force", "N"))
+    return needs, forces, cases
+
+
 def build_tension(req: Requirement, joint: BoltedJoint, design: Design, registry: Registry) -> tuple[Elaborated, ...]:
-    """One obligation per load case, each with its CLOSED row over the same case. Gap
-    needing NeedsInputBound for each of torque, nut_factor, load_share that is None."""
+    """One obligation per load case, F_bolt - limit <= 0, or a Gap naming what `_loading`
+    finds missing and a GE claim (NoRuleForQuantity)."""
     criterion = req.criterion
     qoi = req.qoi.name if req.qoi is not None else "tension_utilisation"
     needs: list[GapNeed] = []
     if isinstance(criterion, Criterion) and criterion.rel is Rel.GE:
         needs.append(NoRuleForQuantity(qoi, "a bolt's tension is bounded from above only"))
-    needs += [NeedsInputBound((joint.name,), field, unit) for field, (_, unit) in INPUTS.items() if getattr(joint, field) is None]
-    forces = {case.name: e.value for case in design.loads.values() for e in case.entries if e.target == (joint.name,)}
-    cases = req.under or tuple(forces)
-    if not cases or any(case not in forces for case in cases):
-        needs.append(NeedsInputBound((joint.name,), "force", "N"))
+    missing, forces, cases = _loading(req, joint, design)
+    needs += missing
     if needs:
         return (Gap(req, tuple(needs)),)
     bound = criterion.bound.value.lo if isinstance(criterion, Criterion) else Fraction(1)
     out = []
     for case in cases:
         sb = StatementBuilder(design, registry)
-        force = forces[case]
-        tension = bolt_force(sb, joint, _external(sb, force, case))
+        tension = bolt_force(sb, joint, _external(sb, forces[case], case))
         if qoi == "bolt_tension":
             limit, what = Const(bound), f"{float(bound) / 1000:g} kN"
         else:
             limit = capacity(sb, joint, registry)
             limit, what = (limit if bound == 1 else Mul((Const(bound), limit))), f"{float(bound):g} of its proof capacity"
-        row = StatementBuilder(design, registry)
-        closed = validity_obligation(req, TENSION_MODEL, CLOSED, row.finish(AllNonpositive((clamp_lost(row, joint, _external(row, force, case)),))),
-                                     f"the plates of {joint.name} stay clamped under {case}, even at the least preload")
         out.append(Obligation(req, sb.finish(AllNonpositive((Add((tension, Neg(limit))),))), TENSION_MODEL,
-                              f"the bolt in {joint.name} stays at or below {what} under {case}", (closed,)))
+                              f"the bolt in {joint.name} stays at or below {what} under {case}, clamped or open"))
+    return tuple(out)
+
+
+def build_separation(req: Requirement, joint: BoltedJoint, design: Design, registry: Registry) -> tuple[Elaborated, ...]:
+    """One obligation per load case, (1 - Phi) F_A / n - F_V <= 0, or a Gap naming what
+    `_loading` finds missing."""
+    needs, forces, cases = _loading(req, joint, design)
+    if needs:
+        return (Gap(req, tuple(needs)),)
+    out = []
+    for case in cases:
+        sb = StatementBuilder(design, registry)
+        lost = clamp_lost(sb, joint, _external(sb, forces[case], case))
+        out.append(Obligation(req, sb.finish(AllNonpositive((lost,))), SEPARATION_MODEL,
+                              f"the plates of {joint.name} stay clamped under {case}, even at the least preload"))
     return tuple(out)
 
 
@@ -425,7 +459,8 @@ def _is_joint(feature: Feature, registry: Registry) -> bool:
 
 
 def _default_criterion(mode: FailureMode, feature: Feature) -> Criterion | None:
-    """Tension utilisation <= 1 (proof load). None for PLATE_BEARING, which is unmodelled."""
+    """Tension utilisation <= 1 (proof load). None for SEPARATION, whose required clamp
+    load is fixed by the model, and for PLATE_BEARING, which is unmodelled."""
     if mode == TENSION:
         return Criterion(Rel.LE, Quantity(Interval(Fraction(1), Fraction(1)), DIMENSIONLESS))
     return None
@@ -438,6 +473,13 @@ COVERAGE: tuple[CoverageRule, ...] = (
         demands=(TENSION,),
         default=_default_criterion,
         note="every bolt stays below its proof load",
+    ),
+    CoverageRule(
+        id="bolt.separation",
+        when=_is_joint,
+        demands=(SEPARATION,),
+        default=_default_criterion,
+        note="every joint stays clamped under its load, even at the least preload",
     ),
     CoverageRule(
         id="bolt.bearing",
@@ -456,7 +498,7 @@ def ports(joint: BoltedJoint, registry: Registry) -> Ports:
 DOMAIN = DomainSpec(
     name="bolt",
     kinds={"joint": lower_joint},
-    builders={TENSION: build_tension},
+    builders={TENSION: build_tension, SEPARATION: build_separation},
     unmodelled=frozenset({PLATE_BEARING}),
     qois=QOIS,
     probability={},
