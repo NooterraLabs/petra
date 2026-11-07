@@ -266,6 +266,7 @@ Units inside the certificate (E2), twin elaborators for every deck, and finally 
 5. **The designer's name.** Daedalus is taken by the wave-physics engine.
 6. **The last credits, to 2026-11-15.** I recommend spending them on the P0 canary campaign and the P1 breaker runs.
 7. **Registry values from physics, or from specified limits.** `docs/frame.md` item 5 says registries are computed from physics, with wire resistance from resistivity and nominal area as the example. That derivation is what produced the low resistance. IEC 60228 specifies a maximum resistance, not an area, so physics alone cannot give the guaranteed value. I recommend allowing a short list of specified limits as constants, and changing frame.md item 5 to say so.
+8. **How Petra is run in the open.** `docs/open_source.md` sets out how Lean, Rocq, seL4, Ferrocene, code_aster and the open benchmarks are run, and a playbook for Petra. Three of its steps are yours: CC-BY-4.0 for the docs, the DCO with a pledge that Petra stays Apache-2.0, and who holds the Petra name and on what terms others may use it.
 
 ## Appendix A. Cold-start test
 
