@@ -51,7 +51,7 @@ from .models.base import ClaimOrigin, Criterion, FailureMode, Grammar, Requireme
 from .premises import LabelKind, input_label, label_kind, param_label
 from .registry import Registry
 from .registry.model import render
-from .units import (CURRENT, CUSTOMARY, DIMENSIONLESS, FORCE, I2T, TEMPERATURE, UNITS, VOLTAGE, Dim, Quantity,
+from .units import (AREA, CURRENT, CUSTOMARY, DIMENSIONLESS, FORCE, I2T, TEMPERATURE, UNITS, VOLTAGE, Dim, Quantity,
                     format_quantity, si_unit)
 from .verdict import COVERAGE_ENTRY, Discharged, Open, Outcome, Refuted, Waived, WithinMargin, describe_need
 
@@ -215,6 +215,26 @@ TERMS: Mapping[str, tuple[tuple[str, Dim, bool], ...]] = {
 """Mode id -> (name, dimension, claimed) for each term of its R4 goal, in order, for
 modes whose builders state a fixed number of terms (tests/test_readout.py holds each to
 its builder). A goal of another length reads as unnamed terms of unknown dimension."""
+
+PORT_QUANTITIES: Mapping[str, Dim] = {"current": CURRENT, "temperature": TEMPERATURE, "voltage": VOLTAGE,
+                                       "force": FORCE, "conductor_area": AREA}
+"""A port contract's quantity (the last part of its requirement id, models/contracts.py)
+-> its dimension. A contract states the guarantee's upper end against the rated maximum,
+then the rated minimum against the guarantee's lower end, each where the rating states
+it, so a two-term goal names both and a one-term goal names the rating it has."""
+
+
+def _port_terms(requirement: Requirement, count: int) -> tuple[tuple[str, Dim, bool], ...] | None:
+    quantity = requirement.id.rpartition("/")[2]
+    dim = PORT_QUANTITIES.get(quantity)
+    if requirement.mode.id != "port.contract" or dim is None or count not in (1, 2):
+        return None
+    q = quantity.replace("_", " ")
+    if count == 1:
+        return ((f"{q} guaranteed against the rating", dim, False),)
+    return ((f"largest {q} guaranteed against the rated maximum", dim, False),
+            (f"rated minimum against the smallest {q} guaranteed", dim, False))
+
 
 FACTORED: frozenset[str] = frozenset({"truss.plastic_collapse"})
 """Modes whose R1 goal states a claimed load factor f as A x = f b, b the load
@@ -802,7 +822,7 @@ def _generic(requirement: Requirement, statement: Statement, at: Mapping[str, Fr
         return _load_factor(requirement, goal, box, at is not None)
     if not isinstance(goal, AllNonpositive):
         return Readout((), {}, f"an {GOAL_RULE[type(goal)].id} statement has no demand and capacity terms to read")
-    names = TERMS.get(requirement.mode.id)
+    names = TERMS.get(requirement.mode.id) or _port_terms(requirement, len(goal.exprs))
     if names is not None and len(names) != len(goal.exprs):
         names = None
     if at is not None:
@@ -875,13 +895,16 @@ def _load_factor(requirement: Requirement, goal: LinearFeasible, box: Mapping[st
     objective[-1] = -1.0   # maximise t
     found = linprog(objective, A_eq=np.hstack([A, -b[:, None]]), b_eq=np.zeros(A.shape[0]),
                     bounds=[*zip(lower, upper), (0, None)], method="highs")
-    if found.status == 3:
+    what = "load factor: the claimed factor against the largest one a static field within every member's capacity carries"
+    if found.status == 2:   # infeasible at every t >= 0, t = 0 included: the self-weight alone is not carried
+        what += "; none, since no static field carries the self-weight alone"
+        carried = 0.0
+    elif found.status == 3:
         carried = math.inf
     elif found.status != 0:
         return Readout((), {}, f"the load factor could not be computed here: {found.message}")
     else:
         carried = float(claimed) * float(found.x[-1])
-    what = "load factor: the claimed factor against the largest one a static field within every member's capacity carries"
     return Readout((Value(what, "1", float(claimed), carried, False, True, None, ()),), {}, None)
 
 
