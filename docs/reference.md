@@ -177,10 +177,10 @@ A `.petra` file accepts these unit spellings.
 | area | `mm2`, `m2`, `inch2` |
 | force | `N`, `kN`, `MN`, `lbf`, `kip`, `kips` |
 | stress | `Pa`, `kPa`, `MPa`, `GPa`, `psi`, `ksi` |
-| current | `A`, `kA` |
+| current | `uA`, `mA`, `A`, `kA` |
 | voltage | `V`, `kV` |
-| resistance | `ohm`, `mohm` |
-| power | `W` |
+| resistance | `ohm`, `mohm`, `kohm`, `Mohm` |
+| power | `mW`, `W` |
 | energy, torque | `J`, `Nm`, `kip_in`, `kip_ft` |
 | time | `s`, `ms` |
 | temperature | `degC` |
@@ -651,6 +651,16 @@ bolt_group.200            bolt: ASTM F3043 and F3111 (Group 200); AISC's -N and 
 bolt_group.A307           bolt: ASTM A307 Grade A; AISC's -N and -X are `threads included` and `threads excluded`; also A307
 electrode.E70             electrode: AWS A5.1/A5.5 E70XX; also E70, E70XX
 electrode.E80             electrode: AWS A5.1/A5.5 E80XX; also E80, E80XX
+res.0603_1pct             resistor: Yageo RC series thick-film chip resistor datasheet: 0603 thick-film chip resistor, 1 % (E96); recalled and not checked against the published text
+res.0603_5pct             resistor: Yageo RC series thick-film chip resistor datasheet: 0603 thick-film chip resistor, 5 % (E24); recalled and not checked against the published text
+res.0805_1pct             resistor: Yageo RC series thick-film chip resistor datasheet: 0805 thick-film chip resistor, 1 % (E96); recalled and not checked against the published text
+res.1206_1pct             resistor: Yageo RC series thick-film chip resistor datasheet: 1206 thick-film chip resistor, 1 % (E96); recalled and not checked against the published text
+led.red_0603              led: typical 0603 chip LED datasheet: 0603 red AlInGaP LED; recalled and not checked against the published text
+led.white_0603            led: typical 0603 chip LED datasheet: 0603 white InGaN LED; recalled and not checked against the published text
+reg.lm317_to220           regulator_floating: TI LM317 datasheet (SLVS044), electrical characteristics: LM317 adjustable regulator, TO-220; recalled and not checked against the published text
+reg.ldo1117_3v3_sot223    regulator_fixed: TI LM1117 datasheet (SNOS412), electrical characteristics: 1117 fixed 3.3 V regulator, SOT-223; recalled and not checked against the published text
+reg.ldo1117_5v0_sot223    regulator_fixed: TI LM1117 datasheet (SNOS412), electrical characteristics: 1117 fixed 5.0 V regulator, SOT-223; recalled and not checked against the published text
+reg.ldo_adj_sot23_5       regulator_grounded: typical 150 mA adjustable low-dropout regulator in SOT-23-5 (MIC5205-ADJ datasheet): adjustable 150 mA low-dropout regulator, SOT-23-5; recalled and not checked against the published text
 chs.48_3x3_2              section: EN 10219-2 CHS 48.3 x 3.2
 chs.60_3x3_2              section: EN 10219-2 CHS 60.3 x 3.2
 chs.76_1x3_2              section: EN 10219-2 CHS 76.1 x 3.2
