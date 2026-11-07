@@ -18,10 +18,14 @@ import io
 import locale
 import re
 import tarfile
-import tomllib
 import zipfile
 from pathlib import Path
 from typing import Any
+
+try:
+    import tomllib
+except ModuleNotFoundError as exc:
+    raise RuntimeError("Petra needs Python 3.11 or later") from exc
 
 ROOT = Path(__file__).resolve().parent.parent
 
