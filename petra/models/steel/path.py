@@ -10,6 +10,10 @@ twice over: every element of the kind is on its path, and every limit state of i
 is demanded. The tests check the converse: every element on the path gets a check of
 every limit state its role lists.
 
+Every connection with a support ends at the support's face, in role flange_face or
+web_face: the parts drawn on it must fit it. Every beam web owes beam_fit, the parts drawn
+on the beam and its end against the support.
+
 A force the path cannot carry (an axial force on a shear connection) adds the element
 "connection" in role "axial", whose one limit state, the load path, is unmodelled: the
 deck reports it UNKNOWN rather than passing a connection whose axial path nobody checked.
@@ -25,10 +29,11 @@ EDGES = ("edge_min", "edge_max", "hole_use")
 SHEAR_PLY = ("shear_yield", "shear_rupture", "block_shear", *EDGES)
 
 ROLE_LIMITS: Mapping[str, tuple[str, ...]] = {
-    # a beam web the bolts bear on; uncoped, its top bolt cannot tear out through the flange
-    "web": ("shear_yield", "shear_rupture", *EDGES),
-    "coped_web": ("shear_yield", "shear_rupture", "block_shear", *EDGES),
-    "welded_web": ("shear_yield",),
+    # a beam web the bolts bear on; uncoped, its top bolt cannot tear out through the flange.
+    # Every beam web owes beam_fit: the parts on it, and its end against the support.
+    "web": ("shear_yield", "shear_rupture", *EDGES, "beam_fit"),
+    "coped_web": ("shear_yield", "shear_rupture", "block_shear", *EDGES, "beam_fit"),
+    "welded_web": ("shear_yield", "beam_fit"),
     "cope": ("cope_buckling",),
     # a connecting element with bolt holes, loaded in shear
     "ply": SHEAR_PLY,
@@ -45,7 +50,7 @@ ROLE_LIMITS: Mapping[str, tuple[str, ...]] = {
     # a seat leg under a beam end, and the beam web bearing on it
     "seat": ("seat_flexure", "shear_yield"),
     "seat_leg": EDGES,
-    "bearing_web": ("web_local_yielding", "web_crippling"),
+    "bearing_web": ("web_local_yielding", "web_crippling", "beam_fit"),
     "stiffener": ("bearing", "compression"),
     # bolt groups
     "shear_bolts": ("bolts", "spacing_min", "spacing_max", "joint_type", "clearance"),
@@ -56,6 +61,9 @@ ROLE_LIMITS: Mapping[str, tuple[str, ...]] = {
     "fillet": ("weld", "weld_base_metal", "fillet_size"),
     # the support's face under the bolts; its bearing and tearout are in the bolt group's check
     "face": ("hole_use",),
+    # the support's face as a room: what is drawn on it must fit it (geometry.py)
+    "flange_face": ("flange_fit",),
+    "web_face": ("web_fit",),
     "tension_element": ("tension_yield", "tension_rupture"),
     # a hanger's flange, carrying the bolts' tension to the stem in shear
     "tension_flange": ("shear_yield", "shear_rupture", *EDGES),
@@ -159,6 +167,9 @@ def path(conn: Conn, fields: set[str]) -> tuple[Link, ...]:
         links += (_face(conn),)
     else:
         raise ValueError(f"no load path for kind {kind}")
+    support = conn.attrs.get("support")
+    if support is not None:
+        links += (Link(f"support {support.face}", f"{support.face}_face"),)
     if kind in SHEAR_KINDS and "axial" in fields:
         links += (Link("connection", "axial"),)
     return links

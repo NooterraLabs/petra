@@ -35,7 +35,7 @@ from petra.models.steel import vocab
 
 ROOT = Path(__file__).resolve().parents[1]
 LAYER = ROOT / "petra" / "mechanics"
-FORBIDDEN = {"checks", "limits", "build", "calc", "domain"}
+FORBIDDEN = {"checks", "geometry", "limits", "build", "calc", "domain"}
 """The deck builders the steel twin must not import (its docstring)."""
 
 

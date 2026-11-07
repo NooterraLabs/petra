@@ -25,7 +25,9 @@ from ...mechanics import add, c, div, mul, sq, sub
 from ...registry import Registry
 from ...units import DIMENSIONLESS, Quantity
 from ..base import StatementBuilder
+from . import geometry as G
 from . import limits as L
+from .geometry import HOLE_DIMS
 from .lower import SHAPE_GROUP, AngleSpec, Bolts, Conn, Cope, Geo, Member, PlateSpec, TeeSpec, Weld
 
 
@@ -325,14 +327,6 @@ class Geometry:
         """A kind's geometry function starts here and adds what the connection has."""
         return Geometry(interfaces=[], welds=[], flexures=[], tensions=[], web_shear=[], net_shear=[], cope=None,
                         forces=[], seat=None, stiffener=None, single_plate=None, bracket=None)
-
-
-HOLE_DIMS = {
-    "std": ("std", "std"), "ovs": ("ovs", "ovs"), "ssl": ("ssl_w", "ssl_l"), "lsl": ("lsl_w", "lsl_l"),
-    "ssl_parallel": ("ssl_l", "ssl_w"), "lsl_parallel": ("lsl_l", "lsl_w"),
-}
-"""Hole type -> (dimension along the vertical force, across it). A slot named plainly runs
-across the force (perpendicular); `_parallel` runs along it (Table J3.3)."""
 
 
 def bolt_dims(ctx: Ctx, bolts: Bolts, hole: str) -> tuple[Expr, Expr, Expr]:
@@ -1523,6 +1517,31 @@ def gen_prying(ctx: Ctx, geo: Geometry) -> list[Check]:
     return out
 
 
+# --- Fit of the drawn parts ----------------------------------------------------------------------------
+
+def _fit(fit: G.Fit) -> Check:
+    return Check(fit.what, (fit.need,), fit.have, unit="in", group=None, suffix="", guards=fit.guards)
+
+
+def gen_beam_fit(ctx: Ctx, geo: Geometry) -> list[Check]:
+    return [_fit(f) for f in G.fits(ctx).beam]
+
+
+def _face_fits(ctx: Ctx, face: str) -> list[Check]:
+    support = ctx.conn.get("support")
+    if not isinstance(support, Member) or support.face != face:
+        return []
+    return [_fit(f) for f in G.fits(ctx).face]
+
+
+def gen_flange_fit(ctx: Ctx, geo: Geometry) -> list[Check]:
+    return _face_fits(ctx, "flange")
+
+
+def gen_web_fit(ctx: Ctx, geo: Geometry) -> list[Check]:
+    return _face_fits(ctx, "web")
+
+
 GENERATORS: Mapping[str, Callable[[Ctx, Geometry], list[Check]]] = {
     "bolts": gen_bolts, "slip": gen_slip, "bolt_tension": gen_bolt_tension, "bolt_combined": gen_bolt_combined,
     "shear_yield": gen_shear_yield, "shear_rupture": gen_shear_rupture, "block_shear": gen_block_shear,
@@ -1538,6 +1557,7 @@ GENERATORS: Mapping[str, Callable[[Ctx, Geometry], list[Check]]] = {
     "flange_local_bending": gen_flange_local_bending, "web_sidesway_buckling": gen_web_sidesway_buckling,
     "web_compression_buckling": gen_web_compression_buckling, "panel_zone": gen_panel_zone, "prying": gen_prying,
     "bracket_edge": gen_bracket_edge,
+    "beam_fit": gen_beam_fit, "flange_fit": gen_flange_fit, "web_fit": gen_web_fit,
 }
 
 

@@ -65,11 +65,13 @@ Treatments: **check** (the modes whose checks encode it), **rule** (enforced whe
 | K4 | HSS-to-HSS Moment Connections | excluded |  | v1.2, Chapter K HSS connections (docs/steel_connections.md §3) |
 | K5 | Welds of Plates and Branches to HSS | excluded |  | v1.2, Chapter K HSS connections (docs/steel_connections.md §3) |
 | RCSC 4 | Joint types and installation | check | `joint_type` | at least snug-tight; Group 150 and 200 bolts in tension pretensioned; the holes that need a slip-critical joint are J3.3's (hole_use) |
+| Manual Part 1 | Dimensions and properties: the flat web T = d - 2 kdes | check | `beam_fit`, `web_fit` | a part, weld or bolt hole on a beam's or a column's web lies on its flat, between the fillets that kdes bounds; a part on a fillet counts as not fitting (geometry.py) |
 | Manual Part 7 | Entering and tightening clearances | check | `clearance` | the socket allowance is a judged registry row |
 | Manual Part 9 | Coped beams and prying action | check | `cope_buckling`, `prying` | prying by the T-stub model with each bolt's tributary length by Figure 9-4 |
 | Manual Part 10 | Single-plate, seated and tee connections | check | `ductility`, `extended_ductility`, `plate_buckling`, `seat_flexure`, `compression`, `flexural_yield` | a seat stiffener's width-to-thickness limit is checked with its compression; an extended plate's shear and flexural yielding interaction (Eq 10-8) with its flexural yielding; the 1/4 in beam underrun comes off a beam web's end distance and onto a seat's setback in the strength checks (block_shear, seat_flexure, web_local_yielding, web_crippling, weld), as the Companion takes it |
 | Manual Part 15 | Bracket plates | check | `bracket_edge` |  |
 | Shop deck | Stock plate thicknesses and bolt lengths | rule |  | a fixed plate thickness must be stocked (registry shop_deck.plate.*), checked at lowering; bolt lengths are an unchecked premise of the clearance model |
+| Geometry | Fit of the drawn parts | check | `beam_fit`, `flange_fit`, `web_fit` | the parts each kind's lines draw, placed in one frame per connection (geometry.py): the beam end clear of the support and landing on a seat, holes and welds on the support's flange and clear of its web, a seat's holes on its leg, a beam's flange between a column's flanges; positions the lines leave open are taken where they fit best |
 | Connection kinds | Force components without a checked path | check | `load_path` | an axial force on a v1.0 shear connection requires the unmodelled load-path mode: UNKNOWN |
 
 AISC 360-22 Chapters J and K: 58 provisions, 28 check, 5 rule, 5 premise, 20 excluded.

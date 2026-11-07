@@ -2,7 +2,7 @@
 
 One FailureMode per limit state, each with one ModelSpec naming its clause. The model
 premise's source_hash covers every trusted module of the package (lower, limits, checks,
-build, vocab, domain, path) and the mechanics layer under them (petra/mechanics), so
+geometry, build, vocab, domain, path) and the mechanics layer under them (petra/mechanics), so
 editing any of the physics changes every steel premise label.
 A mode's validity rows are the method's applicability limits the kernel decides over the
 design's box (checks.ROWS states each). A mode with no row says why in UNBOUNDED, and its
@@ -17,7 +17,7 @@ from typing import Mapping
 from ... import mechanics
 from ..base import FailureMode, ModelSpec, ValidityRow
 
-TRUSTED = ("lower", "limits", "checks", "build", "vocab", "domain", "path")
+TRUSTED = ("lower", "limits", "checks", "geometry", "build", "vocab", "domain", "path")
 """The package modules whose source is the physics, path's limit lists included (they
 decide what coverage demands). generate, twin, faults, breaker and package are tooling
 and cannot change a verdict. tests/test_steel_principles.py holds this to its builder
@@ -219,6 +219,62 @@ MAKEABILITY: tuple[tuple, ...] = (
      f"{MANUAL} Part 7 (entering and tightening clearances, method encoded with a judged allowance)",
      ("bolt lengths are not checked: the fabricator orders each length from the grip by the Manual's rule, and the "
       "catalogue's grips are well inside the stocked lengths",)),
+    ("beam_fit", "the parts on the beam fit it and the beam fits its support, each check need <= have in inches "
+     "(geometry.py): a plate, angle or tee bolted to the beam web spans from Lev above its top row, `top` below the "
+     "beam's top, to Lev below its bottom row, (rows - 1) s lower; its top edge is at least kdes below the beam's top "
+     "and its bottom edge at most d - kdes, the beam's flat web (Manual Part 1, T = d - 2 kdes), except at a flange "
+     "whose cope is at least kdes deep and runs past the part: the cope starts at the beam end (the bolt line less "
+     "the beam's end distance, a - Leh for a plate or a tee, the beam gauge less Leh for angles) or at the setback "
+     "where that is farther out, and must reach the part's far edge (a plate's a + (columns - 1) g + its Leh, an "
+     "angle's leg on the beam, a tee's stem, half its parent's depth); the beam web's holes, dh/2 above the top row "
+     "and below the bottom row (dh the beam hole's size along the force, Table J3.3), lie at least kdes below the "
+     "top, or the top cope's depth where that is deeper, and at most d less kdes or the bottom cope's depth where "
+     "deeper; an end plate's welds, (rows - 1) s + 2 Lev - 2 w long, fit d less the larger of kdes and each cope's "
+     "depth at each flange (kdes alone at an uncoped flange); the beam end stands clear of the support: the beam's "
+     "end distance at most a (a shear tab), at most the beam gauge (angles), and with the tee flange's thickness at "
+     "most a (a tee); and a seated beam's end, its setback as detailed, lies short of the seat angle's outstanding "
+     "leg or the stiffener's width by more than petra.strict.length",
+     "kdes, the shapes table's detailing distance from the outer face of a flange to the toe of its fillet, bounds "
+     "the flat web a part can bear on and a bolt can seat on; a part's corner on a fillet, or on the fillet a "
+     "shallow cope leaves, counts as not fitting, since the deck does not model clipped corners; where the lines "
+     "leave a position open (the cope's start, an end plate's place down the web) the reading most favourable to "
+     "fit is taken", f"{MANUAL} Part 1 (T and kdes); plain geometry of the drawn parts",
+     ("whether the stated setback agrees with the beam end the bolt line and end distance draw is not checked",
+      "a beam framing to a girder, whose flanges its own may meet, is not checked: the deck reads every support as a "
+      "column")),
+    ("flange_fit", "the parts on the support's flange fit it, each check need <= have in inches (geometry.py), with "
+     "dh the support hole's size across the force (Table J3.3) and every position the lines leave open taken where "
+     "it fits best: a pair of bolt lines, centred on the member at gauge g, spans g + dh <= bf and leaves g - dh >= "
+     "tw between its holes for the web; a single angle's bolt line, beside the beam web, spans the beam's tw + the "
+     "support gauge + dh/2 <= bf; welds on the face span: a plate or stiffener set on edge and welded on `sides` "
+     "faces, t + sides w; a C-shaped weld's returns, kl + w; angles welded at their outstanding legs' toes, 2 leg + "
+     "tw + 2 w (one angle, leg + tw + w); a tee welded at its flange tips, bf + 2 w; a seat angle welded at its "
+     "ends, L + 2 w; each <= bf; a bracket's bolt columns, columns at gauge g, either all on one side of the web, "
+     "(columns - 1) g + dh <= (bf - tw)/2, or split across it, g - dh >= tw, (columns - 1) g + dh <= bf and "
+     "(ceil(columns/2) - 1) g + dh <= (bf - tw)/2 (the one-sided check, excused where the split fits); and a seat "
+     "angle's bolt holes on its vertical leg, the top hole's edge, Lev - dh/2 below the heel (dh along the force), "
+     "at least the angle's thickness, the bottom hole's, Lev + (rows - 1) s + dh/2, at most the leg",
+     "a part's body may overhang the flange's tips, since nothing stands beyond them; bolts and welds must lie on "
+     "the flange; a pair of bolt lines is centred on the member, as the grammar's gauge across the web reads",
+     "plain geometry of the drawn parts",
+     ("wrench clearance to the web is the clearance mode's; the flange's fillet under a bolt near the web is not "
+      "checked beyond the holes clearing the web",)),
+    ("web_fit", "the parts on a column's web fit it, each check need <= have in inches (geometry.py), the web's room "
+     "being its flat between the fillets, d - 2 kdes (Manual Part 1, T), and every position the lines leave open "
+     "taken where it fits best: a pair of bolt lines spans g + dh; a single angle's bolt line, beside the beam web, "
+     "tw + the support gauge + dh/2; parts: the outstanding legs, 2 leg + tw (one angle, leg + tw), a tee's flange "
+     "bf, an end plate's width, a seat angle's length L, a bracket's bolt columns (columns - 1) g + dh and its plate "
+     "(columns - 1) g + 2 Leh; welds as on a flange (flange_fit); each <= d - 2 kdes; a seat angle's bolt holes on "
+     "its vertical leg as on a flange; and the beam's flange, bf, passes between the column's flanges, d - 2 tf of "
+     "the column, except where the beam end lies at or past the flange tips, (bf - tw)/2 of the column out from the "
+     "web: the beam end at a - Leh (a plate, a tee), the beam gauge less Leh (angles), the end plate's thickness, or "
+     "the setback (seats)",
+     "the support is a column met on its web, the beam framing between its flanges (an assumed premise: a support "
+     "on its web is read as a column, never a girder); a part or weld on the web's fillets counts as not fitting",
+     f"{MANUAL} Part 1 (T and kdes); plain geometry of the drawn parts",
+     ("a girder support, whose web a beam meets with its own depth between the girder's flanges or a cope, is not "
+      "modelled: the premise reads every web support as a column",
+      "the beam flange's corners against the column's web-to-flange fillets are not checked")),
 )
 """Plate thicknesses are makeable by catalogue membership, which lowering checks: a fixed
 plate, stiffener or seat thickness must be one the registry's shop deck stocks
@@ -288,6 +344,7 @@ UNBOUNDED: Mapping[str, str] = {
                     "lambda are taken inside the check",
     "spacing_min": _RULE, "edge_min": _RULE, "spacing_max": _RULE, "edge_max": _RULE, "fillet_size": _RULE,
     "hole_use": _RULE, "joint_type": _RULE, "clearance": _RULE,
+    "beam_fit": _RULE, "flange_fit": _RULE, "web_fit": _RULE,
 }
 """Why each mode with no validity row needs none (docs/principles.md D3): its clause states
 no applicability range, its branches are inside its checks, or it is a detailing rule whose

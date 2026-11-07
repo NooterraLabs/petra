@@ -109,6 +109,30 @@ Done means every "shall" in these sections maps to an encoded check, a premise, 
 | Cope and weld-access-hole geometry | J1.6 | Inequalities |
 | Stock plate thicknesses and bolt lengths | Shop deck | Catalogue membership |
 | Installation type matches the joint type | RCSC | Rule check |
+| Fit of the drawn parts: each part on the member it bears on, the beam clear of its support | Manual Part 1 (T, kdes); geometry | Exact rational containment, one R4 term per fit (`beam_fit`, `flange_fit`, `web_fit`) |
+
+### 5a. Fit of the drawn parts
+
+`petra/models/steel/geometry.py` (trusted, in the premise hash) places each kind's parts in one frame per connection, in exact rationals over the design's hypotheses. Three axes carry them. Depth runs down from the beam's top, out runs from the support face along the beam, and across runs over the support face. A part is a span on an axis, a room is where spans must lie, and each containment is one check `need <= have` in inches, excused where its guard is at most zero. The checks print their numbers like any other, so a FAIL names the part, the room and both lengths.
+
+| Mode | Demanded by | What it holds |
+|---|---|---|
+| `beam_fit` | every beam web on the load path | A plate, angle or tee bolted to the beam web lies on the flat web, kdes to d - kdes. A cope at least kdes deep frees the edge at its flange when it runs past the part's far edge. The beam's holes lie on the flat web below and above the copes. An end plate's welds fit the flat web the copes leave. The beam end stands clear of the support face (a tab, angles) or the tee's flange. A seated beam's end lands on the seat angle or the stiffener. |
+| `flange_fit` | a support met on its flange | A pair of bolt lines centred at the gauge lies on the flange and clears the web between its holes. A single angle's bolt line, beside the beam web, lies on the flange. Welds at a plate's faces, a C weld's returns, angle toes, tee tips and seat ends lie on the flange, the fillet's leg included. A bracket's bolt columns have some placement on the flange clear of the web. A seat's bolt holes lie on its vertical leg, below the outstanding leg. |
+| `web_fit` | a support met on its web | Bolt lines, parts and welds lie on the web's flat, d - 2 kdes. A seat's holes lie on its leg. The beam's flange passes between the column's flanges, unless the beam end lies at or past their tips. |
+
+Premises and readings, stated in the modes' model statements:
+
+- A support met on its web is a column, and the beam frames between its flanges. `web_fit`'s model carries it, so every design with a web support has it in its footprint. A girder support, whose flanges the beam's own may meet, is not modelled.
+- kdes from the shapes table bounds the flat web. A part's corner on a fillet, or on the fillet a shallow cope leaves, does not fit, since the deck does not model clipped corners.
+- Where the lines leave a position open, the reading most favourable to fit is taken. A single angle, a plate set on edge and a bracket's bolt columns go wherever they fit. An end plate's welds sit anywhere down the web. A cope starts at the beam end or at the setback, whichever lies farther out. A pair of bolt lines is centred on the member, as the gauge across the web reads.
+- Holes take their size along or across the force from Table J3.3 for the ply's declared type. A slot across the face needs its length.
+
+Not covered: the beam flange's corners against the column's web-to-flange fillets; the angle's own heel fillet under a seat's top bolt (the angle's thickness stands in for it); whether the stated setback agrees with the beam end the bolt line draws; a top angle's and a stiffened seat plate's position, which the grammar does not draw; a girder support.
+
+The outside judge (`judges/steel.py`) names the same conditions from its own reading. The deck is stricter in three places. A fillet weld at a toe or tip carries its leg past the part's edge, so the deck adds it where the judge does not. A shallow cope that leaves part of the fillet does not free the part or the holes below it. A cope or a beam end frees a fit only where it does so at every point of the design's tolerance box, where the judge takes the box's most favourable point.
+
+The twin (§8) restates every fit from the method statements, and the gate's manufactured faults (§9) put six misfits into passing designs: rows past the beam's depth, rows off a seat's leg, support bolt lines wider than the face, a beam too wide for a column's web, a plate on the fillet, bracket columns off the flange. `tests/test_steel_geometry.py` holds each class of misfit to the check that names it, the readings that free a fit, the column premise in a web support's footprint, and the generator's samplers to designs that fit and that the judge finds buildable.
 
 ## 6. How exhaustiveness is enforced, not just claimed
 

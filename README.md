@@ -69,7 +69,7 @@ api        the Python API, and the JSON that `petra check --json` prints
 	steel-shear-tab: PASS
 	entries    coverage PASS
 	scope      load cases gravity; environment undeclared; no parameters
-	checked    17 obligations, 17 certified, 0 refuted, 0 waived, 0 open
+	checked    19 obligations, 19 certified, 0 refuted, 0 waived, 0 open
 	```
 
 	Then comes one line per limit state the kernel certified, such as `st1/steel.block_shear`. The footprint at the end lists every premise the verdict rests on.

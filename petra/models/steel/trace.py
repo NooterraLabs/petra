@@ -187,6 +187,9 @@ OTHER: tuple[Provision, ...] = (
     Provision("RCSC 4", "Joint types and installation", "check", ("joint_type",),
               "at least snug-tight; Group 150 and 200 bolts in tension pretensioned; the holes that need a "
               "slip-critical joint are J3.3's (hole_use)"),
+    Provision("Manual Part 1", "Dimensions and properties: the flat web T = d - 2 kdes", "check", ("beam_fit", "web_fit"),
+              "a part, weld or bolt hole on a beam's or a column's web lies on its flat, between the fillets that kdes "
+              "bounds; a part on a fillet counts as not fitting (geometry.py)"),
     Provision("Manual Part 7", "Entering and tightening clearances", "check", ("clearance",),
               "the socket allowance is a judged registry row"),
     Provision("Manual Part 9", "Coped beams and prying action", "check", ("cope_buckling", "prying"),
@@ -201,6 +204,11 @@ OTHER: tuple[Provision, ...] = (
     Provision("Shop deck", "Stock plate thicknesses and bolt lengths", "rule",
               note="a fixed plate thickness must be stocked (registry shop_deck.plate.*), checked at lowering; bolt "
               "lengths are an unchecked premise of the clearance model"),
+    Provision("Geometry", "Fit of the drawn parts", "check", ("beam_fit", "flange_fit", "web_fit"),
+              "the parts each kind's lines draw, placed in one frame per connection (geometry.py): the beam end clear "
+              "of the support and landing on a seat, holes and welds on the support's flange and clear of its web, a "
+              "seat's holes on its leg, a beam's flange between a column's flanges; positions the lines leave open "
+              "are taken where they fit best"),
     Provision("Connection kinds", "Force components without a checked path", "check", ("load_path",),
               "an axial force on a v1.0 shear connection requires the unmodelled load-path mode: UNKNOWN"),
 )
