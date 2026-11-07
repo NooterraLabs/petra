@@ -286,6 +286,25 @@ class Stiffener:
 
 
 @dataclass(frozen=True)
+class TeeFlex:
+    """What a shear tee's rotational ductility reads (Manual Part 9, Eqs 9-51 to 9-53, as
+    Companion II.A-30 and II.A-31 apply them)."""
+    grade: str
+    tf: Expr
+    ts: Expr                # the stem's thickness
+    k1: Expr                # the parent W's, web centerline to the toe of its fillet
+    bf: Expr
+    length: Expr            # the tee's, l
+    beam_tw: Expr
+    d_bolt: Expr            # the bolts through the stem and the beam web, which Eq 9-53 reads
+    gauge: Expr | None      # bolted to the support: across its flange; welded: None
+    weld_size: Expr | None  # welded to the support: the flange-tip fillet; bolted: None
+    rows: int
+    pitch: Expr
+    edge: Expr
+
+
+@dataclass(frozen=True)
 class SinglePlate:
     """What the Manual's single-plate rules read."""
 
@@ -322,12 +341,13 @@ class Geometry:
     stiffener: Stiffener | None
     single_plate: SinglePlate | None
     bracket: Bracket | None
+    tee: TeeFlex | None
 
     @staticmethod
     def empty() -> Geometry:
         """A kind's geometry function starts here and adds what the connection has."""
         return Geometry(interfaces=[], welds=[], flexures=[], tensions=[], web_shear=[], net_shear=[], cope=None,
-                        forces=[], seat=None, stiffener=None, single_plate=None, bracket=None)
+                        forces=[], seat=None, stiffener=None, single_plate=None, bracket=None, tee=None)
 
 
 def bolt_dims(ctx: Ctx, bolts: Bolts, hole: str) -> tuple[Expr, Expr, Expr]:
@@ -512,7 +532,7 @@ def geometry_tee(ctx: Ctx) -> Geometry:
     rows = conn.attrs["rows"]
     s, lev, length = _length(ctx, rows)
     a = ctx.attr("bolt_line")
-    tp = {p: ctx.shape(tee.parent, p) for p in ("d", "tw", "tf", "bf")}
+    tp = {p: ctx.shape(tee.parent, p) for p in ("d", "tw", "tf", "bf", "k1")}
     v = ctx.load("shear")
     toe = sub(div(tp["d"], c(2)), a)
     stem = Ply("tee stem", tee.grade, tp["tw"], 1, 1, ctx.hole("stem"), "down", lev, toe, length, 1,
@@ -522,8 +542,10 @@ def geometry_tee(ctx: Ctx) -> Geometry:
                                     ctx.opt("eccentricity") or a, clearances=(("tee flange", sub(a, tp["tf"])),), tension=None, prying=()))
     support: Member = conn.attrs["support"]
     sp = _w(ctx, support)
+    d_bolt, _, _ = bolt_dims(ctx, bolts, ctx.hole("stem"))
     if conn.attrs["support_side"] == "bolted":
         gs = ctx.attr("support_gauge")
+        out.tee = TeeFlex(tee.grade, tp["tf"], tp["tw"], tp["k1"], tp["bf"], length, bp["tw"], d_bolt, gs, None, rows, s, lev)
         side = div(sub(tp["bf"], gs), c(2))
         flange = Ply("tee flange", tee.grade, tp["tf"], 1, 2, ctx.hole("flange"), "up", lev, side, length, 1,
                      (("flange top and bottom", lev), ("flange side", side)), block=True)
@@ -532,6 +554,7 @@ def geometry_tee(ctx: Ctx) -> Geometry:
     else:
         weld: Weld = conn.attrs["support_weld"]
         w = ctx.geo(weld.size, "support_weld.size")
+        out.tee = TeeFlex(tee.grade, tp["tf"], tp["tw"], tp["k1"], tp["bf"], length, bp["tw"], d_bolt, None, w, rows, s, lev)
         t_sup = _face_t(support, sp)
         # The flange-tip welds as Manual Table 10-2 welds B (Companion II.A-31): each line
         # carries R/2 at half the flange width from the stem.
@@ -1285,6 +1308,35 @@ def gen_ductility(ctx: Ctx, geo: Geometry) -> list[Check]:
     ]
 
 
+def gen_tee_ductility(ctx: Ctx, geo: Geometry) -> list[Check]:
+    """Manual Part 9's rotational ductility of a shear tee, as Companion II.A-30 and II.A-31
+    apply it: the tee flange must bend before its bolts or welds to the support fracture, so
+    they are at least Eq 9-52's dmin (bolted) or Eq 9-51's wmin (welded). The flexible
+    width b runs from the bolt line to the toe of the stem's fillet (Figure 9-6(b)) with the
+    gauge centred on the beam web, the smaller of the tee's two, or from the flange tip to
+    that toe (Figure 9-6(a)); p is the largest flange length a bolt acts on (Figure 9-4).
+    Eq 9-53, the stem or the beam web at most d/2 + 1/16 in thick, is the alternate where
+    the stem is bolted to the beam, as it always is here: it excuses the check. b is floored
+    at a millionth of an inch: as it vanishes the first terms grow without bound and the
+    caps govern."""
+    tee = geo.tee
+    if tee is None:
+        return []
+    fy = ctx.mat(tee.grade, "fy")
+    alternate = sub(Min((tee.ts, tee.beam_tw)), add(div(tee.d_bolt, c(2)), ctx.const("aisc_manual.p9.tee_stem_allowance")))
+    floor = ctx.const(L.STRICT)
+    if tee.gauge is None:
+        b = Max((sub(div(tee.bf, c(2)), tee.k1), floor))
+        return [Check("tee flange to support: fillet at least Eq 9-51's wmin, so the tee flange bends before the weld "
+                      "tears (Manual Part 9)", (L.tee_weld_min(ctx.const, fy, tee.tf, b, tee.length, tee.ts),), tee.weld_size,
+                      unit="in", group=None, suffix="", guards=(alternate,))]
+    b = Max((sub(div(tee.gauge, c(2)), add(div(tee.ts, c(2)), div(tee.beam_tw, c(2)), tee.k1)), floor))
+    p = Max(tuple(length for _, length in _tributaries(ctx, tee.rows, tee.edge, tee.pitch, b)))
+    return [Check("tee flange: bolts at least Eq 9-52's dmin in diameter, so the tee flange bends before they fracture "
+                  "(Manual Part 9)", (L.tee_bolt_min(ctx.const, fy, tee.tf, p, b, tee.length, tee.ts),), tee.d_bolt,
+                  unit="in", group=None, suffix="", guards=(alternate,))]
+
+
 def gen_extended_ductility(ctx: Ctx, geo: Geometry) -> list[Check]:
     """Manual Part 10, extended single plate: the fillet at least 5/8 tp, and tp at most
     tmax = 6 Mmax / (Fy L^2), Mmax = (Fnv / 0.90) Ab C', C' = Ip / r_max for the bolt group
@@ -1558,6 +1610,7 @@ GENERATORS: Mapping[str, Callable[[Ctx, Geometry], list[Check]]] = {
     "spacing_min": gen_spacing_min, "edge_min": gen_edge_min, "spacing_max": gen_spacing_max, "edge_max": gen_edge_max,
     "hole_use": gen_hole_use, "joint_type": gen_joint_type, "clearance": gen_clearance,
     "cope_buckling": gen_cope_buckling, "plate_buckling": gen_plate_buckling, "ductility": gen_ductility,
+    "tee_ductility": gen_tee_ductility,
     "extended_ductility": gen_extended_ductility, "seat_flexure": gen_seat_flexure, "bearing": gen_bearing,
     "compression": gen_compression,
     "web_local_yielding": gen_web_local_yielding, "web_crippling": gen_web_crippling,

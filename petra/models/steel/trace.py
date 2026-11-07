@@ -194,8 +194,10 @@ OTHER: tuple[Provision, ...] = (
               "bounds; a part on a fillet counts as not fitting (geometry.py)"),
     Provision("Manual Part 7", "Entering and tightening clearances", "check", ("clearance",),
               "the socket allowance is a judged registry row"),
-    Provision("Manual Part 9", "Coped beams and prying action", "check", ("cope_buckling", "prying"),
-              "prying by the T-stub model with each bolt's tributary length by Figure 9-4"),
+    Provision("Manual Part 9", "Coped beams, prying action and shear tee ductility", "check",
+              ("cope_buckling", "prying", "tee_ductility"),
+              "prying by the T-stub model with each bolt's tributary length by Figure 9-4; a shear tee's rotational "
+              "ductility by Eqs 9-51 and 9-52, or the alternate Eq 9-53, as Companion II.A-30 and II.A-31 apply them"),
     Provision("Manual Part 10", "Single-plate, seated and tee connections", "check",
               ("ductility", "extended_ductility", "plate_buckling", "seat_flexure", "compression", "flexural_yield"),
               "a seat stiffener's width-to-thickness limit is checked with its compression; an extended plate's "

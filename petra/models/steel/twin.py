@@ -86,7 +86,7 @@ class _Reg:
         return self.const("aisc360.E")
 
     def w_shape(self, shape: str) -> dict[str, float]:
-        out = {p: self.const(f"aisc_shapes_v16.{shape}.{p}") for p in ("d", "bf", "tf", "tw", "kdes")}
+        out = {p: self.const(f"aisc_shapes_v16.{shape}.{p}") for p in ("d", "bf", "tf", "tw", "kdes", "k1")}
         out["A"] = self.const(f"aisc_shapes_v16.{shape}.A")
         return out
 
@@ -1023,6 +1023,39 @@ def _shear_tee(ctx: _Ctx, modes: set[str]) -> None:
         base_metal(ctx, "tee flange", f, tfu, tf, "tee flange to support")
         base_metal(ctx, f"support {face}", f, sfu, st, "tee flange to support")
         fillet_size(ctx, "tee flange to support", weld, min(tf, st), length)
+    _tee_ductility(ctx, parent, tfy, length, n, s, lev, beam.tw, ctx.reg.bolt(bolts.size, "d"))
+
+
+def _tee_ductility(ctx: _Ctx, parent: Mapping[str, float], fy: float, length: float, n: int, s: float, lev: float,
+                   beam_tw: float, d: float) -> None:
+    """Rotational ductility as Companion II.A-30 (bolted flange, Manual Eq 9-52) and
+    II.A-31 (welded flange, Eq 9-51) work it: the flange bends before what holds it to the
+    support fractures. Both examples note the alternate, Eq 9-53, for a stem bolted to the
+    beam: the stem or the beam web at most d/2 + 1/16 in thick, which leaves the check out."""
+    ts, tf, bf, k1 = parent["tw"], parent["tf"], parent["bf"], parent["k1"]
+    if min(ts, beam_tw) <= d / 2 + SIXTEENTH:
+        return
+
+    def flex(b: float) -> float:
+        return b * b / (length * length) + 2
+
+    if ctx.conn.get("support_side") == "bolted":
+        g = ctx.need("support_gauge")
+        # II.A-30: b = g/2 - ts/2 - tw/2 - k1, the gauge centred on the beam web
+        b = max(g / 2 - ts / 2 - beam_tw / 2 - k1, 1e-6)
+        # the largest tributary length a bolt acts on (Figure 9-4), 1.75 b either side at most
+        reach = 1.75 * b
+        ends = (min(lev, reach) + min(s / 2, reach)) if n > 1 else 2 * min(lev, reach)
+        p = max(ends, 2 * min(s / 2, reach)) if n > 2 else ends
+        dmin = min(0.0941 * tf * math.sqrt(fy * p / b * flex(b)), 0.115 * math.sqrt(fy * ts))
+        ctx.add("tee_ductility", "tee flange: bolts at least Eq 9-52's dmin in diameter (Manual Part 9)", _ratio(dmin, d))
+    else:
+        weld: Weld = ctx.conn.attrs["support_weld"]
+        # II.A-31: b = (bf - 2 k1) / 2, the flange tip to the toe of the stem's fillet
+        b = max(bf / 2 - k1, 1e-6)
+        wmin = min(0.0155 * fy * tf * tf / b * flex(b), 0.625 * ts)
+        ctx.add("tee_ductility", "tee flange to support: fillet at least Eq 9-51's wmin (Manual Part 9)",
+                _ratio(wmin, ctx.geo(weld.size)))
 
 
 def _shear_end_plate(ctx: _Ctx, modes: set[str]) -> None:

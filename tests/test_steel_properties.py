@@ -99,6 +99,8 @@ STRENGTH = frozenset({short for short, *_ in vocab.STRENGTH} | {"compression", "
 #   ductility, extended_ductility: a single plate must be thin enough to yield before its
 #     bolts fracture (t <= d/2 + 1/16 in; t <= tmax) and its fillet at least 5/8 of its
 #     thickness, so a thicker plate fails them by design;
+#   tee_ductility: a shear tee's flange must be thin enough to bend before its bolts or
+#     welds to the support fracture, so a thicker flange needs larger ones (Manual Eqs 9-51, 9-52);
 #   fillet_size: Table J2.4's minimum fillet grows with the thinner part joined, a lapped
 #     edge's maximum fillet is its thickness less 1/16 in, and a fillet must be four times
 #     its size long, so a thicker part or a larger fillet can fail it;
@@ -107,7 +109,7 @@ STRENGTH = frozenset({short for short, *_ in vocab.STRENGTH} | {"compression", "
 #   spacing_min, edge_min, spacing_max, edge_max, hole_use, joint_type: makeability rules
 #     whose "available" is a geometric or installation limit, not a capacity (edge_max and
 #     spacing_max even loosen with thickness, 12 t and 24 t, but they carry no load).
-RULES = frozenset({short for short, *_ in vocab.MAKEABILITY} | {"ductility", "extended_ductility"})
+RULES = frozenset({short for short, *_ in vocab.MAKEABILITY} | {"ductility", "extended_ductility", "tee_ductility"})
 
 ROUNDING = 1e-9
 """Relative slack on available strengths compared across two designs: calc encloses each

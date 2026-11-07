@@ -118,6 +118,44 @@ class SeatPlate(unittest.TestCase):
         self.assertEqual(outcome(written(soft), "bearing"), "refuted")
 
 
+def demand(report, mode: str) -> float:
+    (found,) = [c["demand"] for v in report.to_json()["verdicts"] for o in v["obligations"] if f"/steel.{mode}/" in o["requirement"]
+                for c in o["checks"]]
+    return found
+
+
+class TeeDuctility(unittest.TestCase):
+    """A shear tee's flange must bend as the beam end rotates before its bolts or welds to
+    the support fracture: Manual Eq 9-52 (bolted) or 9-51 (welded), with Eq 9-53 the
+    alternate where the stem is bolted to the beam, as Companion II.A-30 and II.A-31 apply
+    them. The Companion's tee is a WT5x22.5 on a beam with a 0.380 in web, four rows at
+    3 in, 1-1/4 in end distances, a 5-1/2 in gauge."""
+
+    TEE = (STEEL / "shear_tee.petra").read_text(encoding="utf-8")
+    COMPANION = TEE.replace("WT6x25", "WT5x22_5").replace("beam W18x50", "beam W16x50")
+
+    def test_the_bolted_tee_needs_the_companions_least_bolt(self):
+        # II.A-30: b = 2-3/4 - 0.350/2 - 0.380/2 - 13/16 = 1.57 in, p = s = 3 in, l = 11-1/2 in;
+        # 0.0941 tf sqrt(...) = 0.810 in, capped at 0.115 sqrt(Fy ts) = 0.481 in.
+        report = written(self.COMPANION)
+        self.assertAlmostEqual(demand(report, "tee_ductility"), 0.481, places=3)
+        self.assertEqual(outcome(report, "tee_ductility"), "certified")
+
+    def test_the_welded_tee_needs_the_companions_least_fillet(self):
+        # II.A-31: b = (8.02 - 2 (13/16)) / 2 = 3.20 in; wmin = 0.193 in, under (5/8) ts = 0.219 in.
+        welded = self.COMPANION.replace("support_side bolted\n  support_gauge 5.5 inch",
+                                        "support_side welded\n  support_weld electrode.E70 size 0.25 inch")
+        # The Companion rounds b to 3.20 in; at 3.1975 in wmin is 0.1935 in.
+        self.assertAlmostEqual(demand(written(welded), "tee_ductility"), 0.193, delta=0.001)
+
+    def test_a_stiff_welded_tee_fails(self):
+        # A WT10.5x36.5 (stem 0.455 in, flange 0.740 in) on a W30x90 (web 0.470 in): both past
+        # d/2 + 1/16 = 7/16 in, so Eq 9-53 does not excuse; wmin is about 0.28 in.
+        stiff = self.TEE.replace("WT6x25", "WT10_5x36_5").replace("beam W18x50", "beam W30x90").replace(
+            "support_side bolted\n  support_gauge 5.5 inch", "support_side welded\n  support_weld electrode.E70 size 0.25 inch")
+        self.assertEqual(outcome(written(stiff), "tee_ductility"), "refuted")
+
+
 class UnframedEnd(unittest.TestCase):
     """J10.7 wants a pair of full-depth stiffeners at an unframed member end not otherwise
     restrained against twisting about its axis. A force at a member end says which its end

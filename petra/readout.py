@@ -226,7 +226,7 @@ MEASURED, RULE = "measured", "rule"
 
 DETAILING_MODES: Mapping[str, str] = {
     "steel.edge_min": MEASURED, "steel.edge_max": MEASURED, "steel.spacing_min": MEASURED, "steel.spacing_max": MEASURED,
-    "steel.clearance": MEASURED, "steel.fillet_size": MEASURED, "steel.ductility": MEASURED,
+    "steel.clearance": MEASURED, "steel.fillet_size": MEASURED, "steel.ductility": MEASURED, "steel.tee_ductility": MEASURED,
     "steel.extended_ductility": MEASURED, "steel.hole_use": RULE, "steel.joint_type": RULE,
     "steel.beam_fit": MEASURED, "steel.flange_fit": MEASURED, "steel.web_fit": MEASURED,
 }

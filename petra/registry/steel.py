@@ -531,6 +531,22 @@ COEFFICIENTS: tuple[_F, ...] = (
     ("aisc_manual.p9.tributary", "1.75", "1", SANCTIONED, "AISC",
      f"{MANUAL} Part 9, Figure 9-4: the flange length a bolt's prying acts on reaches at most 1.75 b either side of "
      f"it; {QUOTED} (Example II.D-1)"),
+    ("aisc_manual.p9.tee_weld_coefficient", "0.0155", "1", SANCTIONED, "AISC",
+     f"{MANUAL} Part 9, Eq. 9-51: a shear tee welded to its support is ductile with fillets of at least wmin = "
+     f"0.0155 (Fy tf^2 / b)(b^2 / l^2 + 2) <= (5/8) ts, Fy in ksi and lengths in inches; {QUOTED} (Example II.A-31)"),
+    ("aisc_manual.p9.tee_weld_cap", "5/8", "1", SANCTIONED, "AISC",
+     f"{MANUAL} Part 9, Eq. 9-51: wmin = 0.0155 (Fy tf^2 / b)(b^2 / l^2 + 2) <= (5/8) ts; {QUOTED} (Example II.A-31)"),
+    ("aisc_manual.p9.tee_bolt_coefficient", "0.0941", "1", SANCTIONED, "AISC",
+     f"{MANUAL} Part 9, Eq. 9-52: a shear tee bolted to its support is ductile with bolts of at least dmin = "
+     f"0.0941 tf sqrt((Fy p / b)(b^2 / l^2 + 2)) <= 0.115 sqrt(Fy ts), Fy in ksi and lengths in inches; {QUOTED} "
+     "(Example II.A-30)"),
+    ("aisc_manual.p9.tee_bolt_cap", "0.115", "1", SANCTIONED, "AISC",
+     f"{MANUAL} Part 9, Eq. 9-52: dmin <= 0.115 sqrt(Fy ts), Fy in ksi and ts in inches; {QUOTED} (Example II.A-30)"),
+    ("aisc_manual.p9.tee_flexibility", "2", "1", SANCTIONED, "AISC",
+     f"{MANUAL} Part 9, Eqs. 9-51 and 9-52: the term (b^2 / l^2 + 2); {QUOTED} (Examples II.A-30 and II.A-31)"),
+    ("aisc_manual.p9.tee_stem_allowance", "1/16", "m", SANCTIONED, "AISC",
+     f"{MANUAL} Part 9, Eq. 9-53: a shear tee bolted to the beam web is ductile when the stem or the beam web is "
+     f"at most d/2 + 1/16 in thick, the alternate to Eqs. 9-51 and 9-52; {QUOTED} (Examples II.A-30 and II.A-31)"),
     ("aisc_manual.p9.cope_length", "2", "1", JUDGED, MAINTAINERS,
      f"{MANUAL} Part 9, coped beams: the method holds for a cope no longer than 2 d; {RECALLED}"),
     ("aisc_manual.p9.cope_depth", "1/2", "1", JUDGED, MAINTAINERS,

@@ -188,13 +188,13 @@ class ShapesDatabase(unittest.TestCase):
     def test_the_importer_reads_w_and_l_rows_and_records_the_hash(self):
         rows = [
             # The published sheet repeats each header for its SI columns after the US ones.
-            ["Type", "EDI_Std_Nomenclature", "AISC_Manual_Label", "W", "A", "d", "bf", "tw", "tf", "kdes",
-             "AISC_Manual_Label", "A", "d", "bf", "tw", "tf", "kdes"],
-            ["W", "W18X50", "W18X50", "50", "14.7", "18", "7.5", "0.35499999999999998", "0.57", "0.972",
-             "W460X74", "9480", "457", "191", "9.02", "14.5", "24.7"],
-            ["W", "W99X1", "W99X1", "1", "–", "1", "1", "1", "1", "1"],
-            ["L", "L4X3-1/2X3/8", "L4X3-1/2X3/8", "9.1", "2.67", "4", "–", "–", "–", "0.75", "L102X89X9.5"],
-            ["C", "C15X50", "C15X50", "50", "14.7", "15", "3.72", "0.716", "0.65", "1.44"],
+            ["Type", "EDI_Std_Nomenclature", "AISC_Manual_Label", "W", "A", "d", "bf", "tw", "tf", "kdes", "k1",
+             "AISC_Manual_Label", "A", "d", "bf", "tw", "tf", "kdes", "k1"],
+            ["W", "W18X50", "W18X50", "50", "14.7", "18", "7.5", "0.35499999999999998", "0.57", "0.972", "0.8125",
+             "W460X74", "9480", "457", "191", "9.02", "14.5", "24.7", "21"],
+            ["W", "W99X1", "W99X1", "1", "–", "1", "1", "1", "1", "1", "1"],
+            ["L", "L4X3-1/2X3/8", "L4X3-1/2X3/8", "9.1", "2.67", "4", "–", "–", "–", "0.75", "–", "L102X89X9.5"],
+            ["C", "C15X50", "C15X50", "50", "14.7", "15", "3.72", "0.716", "0.65", "1.44", "–"],
         ]
         with tempfile.TemporaryDirectory() as tmp:
             book = os.path.join(tmp, "aisc-shapes-database-v16.0.xlsx")

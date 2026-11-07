@@ -3,7 +3,7 @@ Tooling: nothing here changes a verdict.
 
 A fault is one known defect put into a design the deck passes: a fillet far under Table
 J2.4's minimum, a short edge, holes too close or too far apart, oversized holes in a
-bearing joint, Group 150 bolts in tension left snug, a shear tab too thick to rotate, a
+bearing joint, Group 150 bolts in tension left snug, a shear tab or tee too stiff to rotate, a
 slender seat stiffener, a seat plate softer than the stiffener it bears on, a lapped fillet
 as thick as its plate, bolts against a hanger's stem, a cope deeper than half the beam, a
 load past the governing strength; and parts that
@@ -211,6 +211,20 @@ def _thick_tab(text: str, g: Generated) -> str | None:
     return _weld_size(out, "weld", "0.5")
 
 
+def _stiff_tee(text: str, g: Generated) -> str | None:
+    """A tee too stiff to rotate: a WT10.5x36.5 (stem 0.455 in, flange 0.740 in) on a
+    W30x90 (web 0.470 in) with 3/4 in bolts, both past d/2 + 1/16 = 7/16 in, its flange
+    welded to the support with 3/16 in fillets where Manual Eq 9-51 wants about 0.28 in."""
+    bolts = _field(text, "bolts")
+    out = _set(text, "tee", "WT10_5x36_5 grade steel.A992")
+    out = _set(out, "beam", "W30x90 grade steel.A992")
+    out = _set(out, "bolts", re.sub(r"diameter [0-9.]+ inch", "diameter 0.75 inch", bolts))
+    if _field(out, "support_weld") is not None:
+        return _weld_size(out, "support_weld", "0.1875")
+    out = re.sub(r"^  support_gauge .*\n", "", out, count=1, flags=re.M)
+    return _set(out, "support_side", "welded\n  support_weld electrode.E70 size 0.1875 inch")
+
+
 def _rows_past_depth(text: str, g: Generated) -> str | None:
     """Rows at the pitch drawn to reach 3 pitches past the beam's nominal depth."""
     beam, pitch = _field(text, "beam"), _inches(text, "pitch")
@@ -280,6 +294,8 @@ FAULTS: tuple[Fault, ...] = (
           frozenset({"fillet_size"})),
     Fault("bolts at the stem", "a 1-1/4 in hanger gauge, the bolts against the stem", ("hanger",), _bolts_at_stem,
           frozenset({"clearance", "prying", "edge_max"})),
+    Fault("stiff tee", "a WT10.5x36.5 on a W30x90, both past d/2 + 1/16 in, welded with 3/16 in fillets", ("shear_tee",),
+          _stiff_tee, frozenset({"tee_ductility"})),
     Fault("deep cope", "a cope 3/5 of the beam deep", ("shear_tab", "double_angle", "single_angle", "shear_tee"), _deep_cope,
           frozenset({"cope_buckling"})),
     Fault("overload", "a load past the governing strength", ("shear_tab", "double_angle", "single_angle", "shear_tee",

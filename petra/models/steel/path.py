@@ -42,6 +42,8 @@ ROLE_LIMITS: Mapping[str, tuple[str, ...]] = {
     # one whose bolt line sits away from its support, so it also bends
     "bent_ply": (*SHEAR_PLY, "flexural_yield", "flexural_rupture"),
     "conventional_plate": ("ductility",),
+    # a shear tee's flange, which bends as the beam end rotates (Manual Part 9)
+    "flexible_tee": ("tee_ductility",),
     "extended_plate": ("plate_buckling", "extended_ductility"),
     # a bracket plate welded to its support: no holes, so no rupture section
     "welded_bracket": ("shear_yield", "flexural_yield"),
@@ -135,9 +137,10 @@ def path(conn: Conn, fields: set[str]) -> tuple[Link, ...]:
     elif kind == "shear_tee":
         links = (*_beam_web(conn), *_bolts(conn, "beam side", "shear_bolts"), Link("tee stem", "bent_ply"))
         if bolted_support:
-            links += (Link("tee flange", "ply"), *_bolts(conn, "support side", "shear_bolts"), _face(conn))
+            links += (Link("tee flange", "ply"), Link("tee flange", "flexible_tee"), *_bolts(conn, "support side", "shear_bolts"),
+                      _face(conn))
         else:
-            links += (Link("tee flange to support", "fillet"),)
+            links += (Link("tee flange to support", "fillet"), Link("tee flange to support", "flexible_tee"))
     elif kind == "shear_end_plate":
         cope = (Link("beam web", "cope"),) if conn.get("cope") is not None else ()
         links = (Link("beam web", "welded_web"), *cope, Link("end plate to beam web", "fillet"), Link("end plate", "ply"),
