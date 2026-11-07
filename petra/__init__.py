@@ -7,7 +7,9 @@
     report.verdict.footprint  # every non-proved premise the verdict used
     report.findings           # each obligation's numbers in the design's units (readout.py)
 
-docs/api.md documents this API and the JSON `petra check --json` prints.
+petra/docs/api.md documents this API and the JSON `petra check --json` prints, and
+`petra docs api` prints it from any install. `petra docs` lists every document, the
+language reference among them.
 
 Trust layout:
     petra.kernel     mathematics only, stdlib only, the part a Lean kernel replaces

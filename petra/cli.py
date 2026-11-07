@@ -7,7 +7,7 @@
         registry against that deck file instead of the one built from the shipped
         registry. Under each refuted obligation the text gives the governing term's demand,
         capacity and utilisation in the design's units, and its counterexample as decimals
-        in those units. --json prints pipeline.Report.to_json() (docs/api.md):
+        in those units. --json prints pipeline.Report.to_json() (`petra docs api`):
             {"file": FILE, "design": NAME, "status": OVERALL, "verdicts": [
                 {"claim": NAME, "status": "PASS" | "FAIL" | "UNKNOWN" | "MARGINAL",
                  "footprint": [{"tag", "label", "owner", "source"}, ...],
@@ -57,12 +57,18 @@
         Print every registry id a design can name, one line each: what it is, and the
         common names that stand for it (A325 for bolt_group.120). With PREFIX, the ids and
         common names that start with it, in any case; 3 when none does.
-    python -m petra kinds [DOMAIN|KIND] [--json]
-        Print each component kind's load and claim forms and its attribute lines, required
-        and optional, with their units, registry prefixes and meanings (petra/teach.py).
+    python -m petra kinds [DOMAIN|KIND] [--all] [--json]
+        With no argument, print each domain and its kinds. With DOMAIN or KIND, or with
+        --all for every kind, print each kind's load and claim forms and its attribute
+        lines, required and optional, with their units, registry prefixes and meanings
+        (petra/teach.py). --json prints every kind unless DOMAIN or KIND names some. 3 for
+        an unknown name, or a name with --all.
     python -m petra new KIND [--name NAME]
         Print a complete design of KIND to start from, its canonical example with the
         component renamed to NAME. 3 for an unknown kind or a name the design cannot take.
+    python -m petra docs [NAME]
+        Print the document NAME: readme, reference (the language) or api (the Python API
+        and the JSON). With no NAME, list them. 3 for an unknown name.
     python -m petra gym --episodes N --seed S [--domain NAME ...] [--library DIR]
         Run the baseline agent. Prints one summary line, AgentStats.render():
         "solved k/N episodes (library hits h, families added f)". --domain takes names
@@ -110,10 +116,13 @@ class _Parser(argparse.ArgumentParser):
 
 def build_parser() -> argparse.ArgumentParser:
     """Subcommands check, explain, envelope, verify, certify-family, registry (build,
-    check, list), gym, kinds and new, with the flags in the module docstring."""
+    check, list), gym, kinds, new and docs, with the flags in the module docstring."""
     from .gym.tasks import GENERATORS
 
-    parser = _Parser(prog="petra", description="verdicts about physical designs as theorems relative to explicit premises")
+    parser = _Parser(prog="petra", description="verdicts about physical designs as theorems relative to explicit premises",
+                     formatter_class=argparse.RawDescriptionHelpFormatter,
+                     epilog="The README, the language reference and the Python API come with Petra:\n"
+                            "`petra docs` lists them, and `petra docs NAME` prints one.")
     commands = parser.add_subparsers(dest="command", required=True, parser_class=_Parser)
 
     check = commands.add_parser("check", help="check a design and print its verdicts")
@@ -331,24 +340,55 @@ def cmd_gym(args: argparse.Namespace) -> int:
 
 
 def _add_teach_commands(commands: argparse._SubParsersAction, decks: argparse._SubParsersAction) -> None:
-    kinds = commands.add_parser("kinds", help="print the component kinds and their attribute lines")
-    kinds.add_argument("name", nargs="?", metavar="DOMAIN|KIND")
-    kinds.add_argument("--json", action="store_true", help="print the kinds as JSON")
+    from . import models
+    from .teach import DOCS
+
+    kinds = commands.add_parser("kinds", help="print the component kinds and the lines each takes",
+                                description="With no argument, print each domain and its component kinds. With a "
+                                            "DOMAIN or a KIND, print the load and claim forms of each kind it names "
+                                            "and its attribute lines, with their units, registry ids and meanings.")
+    kinds.add_argument("name", nargs="?", metavar="DOMAIN|KIND",
+                       help=f"a domain ({', '.join(models.DOMAINS)}) or a component kind ({', '.join(models.KINDS)})")
+    kinds.add_argument("--all", action="store_true", help="print the lines of every kind")
+    kinds.add_argument("--json", action="store_true", help="print the kinds as JSON: every kind unless DOMAIN|KIND is given")
     kinds.set_defaults(run=cmd_kinds)
-    new = commands.add_parser("new", help="print a complete design of one kind to start from")
-    new.add_argument("kind")
+    new = commands.add_parser("new", help="print a complete design of one kind to start from",
+                              description="Print a complete design of KIND, its canonical example, to edit. "
+                                          "`petra kinds KIND` lists every line a KIND takes.")
+    new.add_argument("kind", metavar="KIND", help=f"the component kind: {', '.join(models.KINDS)}")
     new.add_argument("--name", metavar="NAME", help="the component's name; default the example's")
     new.set_defaults(run=cmd_new)
+    docs = commands.add_parser("docs", help="print the README, the language reference or the API",
+                               description="Print a document that comes with Petra, or list them.")
+    docs.add_argument("name", nargs="?", metavar="NAME",
+                      help=f"the document: {', '.join(DOCS)}; leave it out to list them with what each covers")
+    docs.set_defaults(run=cmd_docs)
     listing = decks.add_parser("list", help="print the registry ids a design can name")
     listing.add_argument("prefix", nargs="?", metavar="PREFIX")
     listing.set_defaults(run=cmd_registry_list)
 
 
 def cmd_kinds(args: argparse.Namespace) -> int:
-    from .teach import TeachError, kinds_json, kinds_text
+    from .teach import TeachError, kinds_json, kinds_summary, kinds_text
 
     try:
-        text = json.dumps(kinds_json(args.name), indent=1) + "\n" if args.json else kinds_text(args.name)
+        if args.all and args.name is not None:
+            raise TeachError(f"--all prints every kind; give it or {args.name}, not both")
+        if args.json:
+            text = json.dumps(kinds_json(args.name), indent=1) + "\n"
+        else:
+            text = kinds_text(args.name) if args.all or args.name is not None else kinds_summary()
+    except TeachError as exc:
+        return _input_error(exc)
+    print(text, end="")
+    return 0
+
+
+def cmd_docs(args: argparse.Namespace) -> int:
+    from .teach import TeachError, docs_text
+
+    try:
+        text = docs_text(args.name)
     except TeachError as exc:
         return _input_error(exc)
     print(text, end="")

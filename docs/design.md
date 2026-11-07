@@ -70,7 +70,7 @@ The report has one entry per claim and one entry named `coverage` for the requir
    "footprint": ["..."], "obligations": ["..."]}]}
 ```
 
-`needs` is non-empty exactly when the entry is UNKNOWN. Each line is `verdict.describe_need` applied to one typed `Need`. `obligations` has one record per outcome of the entry, with its numbers in the design's units and, when refuted, its counterexample; docs/api.md gives every field.
+`needs` is non-empty exactly when the entry is UNKNOWN. Each line is `verdict.describe_need` applied to one typed `Need`. `obligations` has one record per outcome of the entry, with its numbers in the design's units and, when refuted, its counterexample; petra/docs/api.md gives every field.
 
 The other commands are `petra explain FILE` (print the statements with every hypothesis label), `petra envelope FILE --input NAME --from LO --to HI` (the widest proved interval of one input, call site 5), `petra verify CERT.json` (check a certificate file on its own, the job a Lean kernel will take over), `petra certify-family FILE --library DIR`, `petra registry build --out DECK` and `petra registry check [DECK]` (with no deck it checks the shipped registry and exits 0 when every relation holds), and `petra gym --episodes N --seed S`, which prints a `solved k/N` line. The family benchmark is `scripts/bench_family.py`, which prints a `reuse` line and a `recompute` line. Exit codes for `check` are 0 PASS, 1 FAIL, 2 UNKNOWN, 5 MARGINAL, 3 input error, taken from the overall status. `envelope` exits with the worse of its anchor's status and the status of the obligations that do not depend on the input.
 
