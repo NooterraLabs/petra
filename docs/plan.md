@@ -203,6 +203,7 @@ The gap baseline is 1,711 of 15,600 generated designs that PASS but cannot be bu
 - **Tasks** are requirements cards with the design left blank. The agent may call Petra, as an engineer calls a checker. The score is certified mass against the reference optimum, and FAIL or UNKNOWN scores zero. Hard tiers and hidden variants come from the generator.
 - **Format.** Harbor task directories with Petra in `tests/test.sh`, tagged on Hugging Face.
 - **Baselines** for three or four frontier models, run by us.
+- **Lift.** Each baseline also runs without Petra: the same model and the same held-out tasks, with Python and whatever it knows of the specification. Both arms are graded by checks that do not trust the agent: Petra, the outside judge for buildability, CalculiX for strength, and a hand-checked sample. The numbers are the share of final designs that are safe and buildable, the share the agent called safe that are not, mass against the reference optimum, and checks and tokens to finish. If the arm without Petra scores as well, the bet in §3 is wrong, so a pilot of ten tasks per arm runs as soon as P1 is done.
 - **Grader honesty.** Publish the breaker sample size and Petra's false-PASS count, split into arithmetic, coverage and validity (PRIOR_ART A2). Compare against an independent solver at equal compute (ENGINE_MAP §6.1), and run Petra over other graders' passing designs to count their false PASSes (BRAINSTORM X3).
 - **Open specifications** for the requirements card, the design and the certificate, with a written `.petra` semantics (E3).
 
