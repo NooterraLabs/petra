@@ -69,6 +69,20 @@ To run Petra from the repository root without installing it, write `python -m pe
 	UNKNOWN [('tension', 'PASS'), ('coverage', 'UNKNOWN')]
 	```
 
+4. To write your own design, start from a template. `petra kinds` lists every component kind and the lines it takes. `petra new double_angle` prints a complete double-angle design to edit. `petra registry list` prints every material, part and shape Petra knows, and common names such as A325 and A992 resolve to their registry ids.
+
+	```bash
+	petra registry list bolt_group
+	```
+
+	<!-- sample: petra registry list bolt_group | head -n 2 -->
+	```text
+	bolt_group.120   bolt: ASTM F3125 Grades A325 and F1852 (Group 120); AISC's -N and -X are `threads included` and `threads excluded`; also A325, F1852
+	bolt_group.144   bolt: ASTM F3148 Grade 144 (Group 144); AISC's -N and -X are `threads included` and `threads excluded`; also F3148
+	```
+
+	A FAIL names each refuted check with its demand, capacity and utilisation in the design's units, and the point where it fails. Change the input that check reads and check again.
+
 ## Walk through the examples
 
 1. Check a truss whose claims hold:
