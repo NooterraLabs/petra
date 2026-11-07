@@ -250,6 +250,30 @@ def _electrodes() -> dict[str, Material]:
     }
 
 
+COMMON_NAMES: Mapping[str, tuple[str, ...]] = {
+    "bolt_group.120": ("A325", "F1852"),
+    "bolt_group.144": ("F3148",),
+    "bolt_group.150": ("A490", "F2280"),
+    "bolt_group.200": ("F3043", "F3111"),
+    "bolt_group.A307": ("A307",),
+    "steel.A36": ("A36",),
+    "steel.A572_50": ("A572 Grade 50",),
+    "steel.A992": ("A992",),
+    "electrode.E70": ("E70", "E70XX"),
+    "electrode.E80": ("E80", "E80XX"),
+}
+"""Registry id -> the designations an engineer writes for it, each one its standard text
+names (AISC 360-22 Section J3.1 puts A325 and F1852 in Group 120, A490 and F2280 in Group
+150). Registry.canonical maps each to its id, after `model.fold`, so "A572 Gr 50" and
+A572_50 are A572 Grade 50. AISC's A325-N and A325-X are not names: the N and X say
+whether the threads are included in or excluded from the shear planes, which a `bolts`
+line states with `threads`."""
+
+
+def steel_names() -> dict[str, str]:
+    return {name: mid for mid, names in COMMON_NAMES.items() for name in names}
+
+
 # --- Factors and limits ------------------------------------------------------------------
 
 _F = tuple[str, str, str, Tag, str, str]

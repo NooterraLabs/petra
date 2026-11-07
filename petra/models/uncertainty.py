@@ -1,9 +1,8 @@
 """Domain: a demand against a capacity, with the demand known only by range and mean or
 by sampled tests. Trusted; footprint premises "model:uncertain.*@<hash>".
 
-Component kind `demand`. Attribute lines, one per line inside the block:
-
-    capacity <signed bound>        the capacity the demand is compared with
+Component kind `demand`. Its one attribute line is GRAMMAR below (`petra kinds demand`
+prints it).
 
 The capacity bound is named "<demand>.capacity" and must be a positive force, so that
 utilisation = force / capacity > u is the same event as force - u * capacity > 0. Load
@@ -40,12 +39,15 @@ from ..registry import Registry
 from ..units import DIMENSIONLESS, FORCE, Dim, format_quantity
 from .base import (
     NO_PORTS,
+    SIGNED_BOUND,
     ComponentError,
     DomainSpec,
     Elaborated,
     FailureMode,
     Feature,
+    Field,
     Gap,
+    Grammar,
     ModelSpec,
     NeedsInputBound,
     NoRuleForQuantity,
@@ -66,6 +68,17 @@ class Demand:
     span: Span
 
 
+GRAMMAR = Grammar(
+    required=(
+        Field("capacity", SIGNED_BOUND, "force", (),
+              "the capacity the demand is compared with, exactly one line: a positive force range with no mean"),
+    ),
+    optional=(),
+    target="<demand>",
+    loads=("force",),
+)
+
+
 def lower_demand(component: Component, design: Design, registry: Registry) -> Demand:
     """Parse the attribute line in the module docstring. Rejects (ComponentError): a
     missing or repeated capacity, a capacity that is not a positive signed force or that
@@ -78,8 +91,8 @@ def lower_demand(component: Component, design: Design, registry: Registry) -> De
     capacities: list[Input] = []
     for attr in component.attrs:
         say = _reporter(problems, attr.span, f"{name}.{attr.key}")
-        if attr.key != "capacity":
-            say("unknown attribute; a demand takes capacity")
+        if attr.key not in GRAMMAR.names:
+            say(f"unknown attribute; a demand takes {', '.join(GRAMMAR.names)}")
             continue
         bound = attr.args[0] if len(attr.args) == 1 else None
         if not (isinstance(bound, Bound) and bound.range.dim == FORCE):
@@ -112,7 +125,7 @@ def _check_references(demand: str, design: Design, problems: list[str]) -> None:
         for entry in case.entries:
             if entry.target[0] != demand:
                 continue
-            if entry.target != (demand,) or entry.field != "force":
+            if entry.target != (demand,) or entry.field not in GRAMMAR.loads:
                 say(f"{'.'.join(entry.target)} {entry.field}: a demand's load is a force on the demand itself, as in `on {demand} force ...`")
             elif _dim(entry.value, design) != FORCE:
                 say(f"{demand}: force needs a force range")
@@ -244,4 +257,5 @@ DOMAIN = DomainSpec(
     models=MODELS,
     features=features,
     ports=ports,
+    grammars={"demand": GRAMMAR},
 )

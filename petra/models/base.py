@@ -510,6 +510,46 @@ Builder = Callable[[Requirement, Any, Design, Registry], tuple[Elaborated, ...]]
 
 
 @dataclass(frozen=True)
+class Field:
+    """One attribute line of a component kind: the keyword, then `form`, what follows it
+    with <placeholders>, such as `pitch <length>`. `unit` is the dimension of the
+    quantities the line takes ("" for none). `registry` lists the prefixes of the registry
+    ids it names, such as "steel." (`petra registry list steel.` prints them)."""
+
+    name: str
+    form: str
+    unit: str
+    registry: tuple[str, ...]
+    meaning: str
+
+
+SIGNED_BOUND = 'in [<lo>, <hi>] signed "<owner>" source "<source>"'
+"""The form of a signed bound on an attribute line (`measured` may stand for `signed`)."""
+
+
+@dataclass(frozen=True)
+class Grammar:
+    """What a .petra file says about one component kind: its attribute lines, and the
+    load fields a load entry on it names (`on <target> <field> in [lo, hi] ...`). The
+    kind's lowerer reads it for the lines it names in its errors, and `petra kinds`,
+    `petra new` and docs/reference.md print it, so the two cannot disagree. A required
+    line appears at least once."""
+
+    required: tuple[Field, ...]
+    optional: tuple[Field, ...]
+    target: str                  # the path a load entry names: "<truss>.<node>"
+    loads: tuple[str, ...]       # the load fields on it: ("fx", "fy")
+
+    @property
+    def fields(self) -> tuple[Field, ...]:
+        return (*self.required, *self.optional)
+
+    @property
+    def names(self) -> tuple[str, ...]:
+        return tuple(f.name for f in self.fields)
+
+
+@dataclass(frozen=True)
 class DomainSpec:
     """One physics domain. Declared once, at the bottom of its module, as DOMAIN.
 
@@ -524,6 +564,8 @@ class DomainSpec:
     - `models`: mode -> ModelSpec, the validated_model premise of its builder.
     - `features(model, design, registry)` and `ports(model, registry)`: the hooks coverage
       and port contracts read.
+    - `grammars`: component kind -> its Grammar. models._index requires one per kind of a
+      registered domain.
     """
 
     name: str
@@ -536,6 +578,7 @@ class DomainSpec:
     models: Mapping[FailureMode, ModelSpec]
     features: Callable[[Any, Design, Registry], tuple[Feature, ...]]
     ports: Callable[[Any, Registry], Ports]
+    grammars: Mapping[str, Grammar] = dataclasses.field(default_factory=dict)
 
     @property
     def modes(self) -> frozenset[FailureMode]:

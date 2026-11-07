@@ -150,6 +150,11 @@ def _unit(unit: str) -> tuple[Fraction, Dim]:
     return found
 
 
+def dimension_name(dim: Dim) -> str:
+    """"length", "force", ...: the name unit errors use, or the base-unit exponents."""
+    return _dim_text(dim)
+
+
 def _dim_text(dim: Dim) -> str:
     if dim in _NAMED_DIMS:
         return _NAMED_DIMS[dim]

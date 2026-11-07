@@ -1,29 +1,8 @@
 """Lowering for the steel-connection deck: attribute lines -> a typed Conn. Trusted.
 
-Every connection kind reads the same attribute grammar, one attribute per line:
-
-    basis lrfd|asd
-    beam <W shape> grade <material>
-    support <W shape> flange|web grade <material>
-    member <W shape> grade <material>                   (flange_force)
-    plate <material> thickness <len>                    (shear_tab, shear_end_plate, stiffened_seat)
-    stiffener <material> thickness <len>                (stiffened_seat)
-    angles <L shape> grade <material> outstanding long|short     (double_angle, single angle: angle)
-    angle  <L shape> grade <material> outstanding long|short
-    tee <WT shape> grade <material>                     (shear_tee, hanger)
-    bolts <group> diameter <len> threads included|excluded [joint snug|pretensioned|slip_critical]
-          [surface class_a|class_b] [fillers none|one|two]
-    holes <ply> std|ovs|ssl|lsl|ssl_parallel|lsl_parallel [<ply> <type> ...]   (unnamed plies: std)
-    weld <electrode> size <len> sides 1|2     (sides: optional only where no check reads it)
-    support_side bolted|welded        beam_side bolted|welded
-    support_weld <electrode> size <len>    beam_weld <electrode> size <len>
-    cope top|both depth <len> length <len> [bottom_depth <len>]
-    weld_return <len>       (weld_bracket: returns at both ends of the weld, a C-shape on a lapped plate)
-    free_edge <len>         (bolt_bracket, weld_bracket: a shaped plate's sloped free edge, projected)
-    rows <n>   columns <n>   support_rows <n>
-    deformation considered|not_considered
-    form conventional|extended
-    <length field> <len>              (pitch, gauge, edge_vertical, ... per kind)
+Every connection kind reads the same attribute grammar, one attribute per line. FIELDS
+gives each line's form and meaning, KIND_SPECS the lines each kind requires and allows,
+and `grammar(kind)` joins the two into the kind's Grammar (`petra kinds steel` prints it).
 
 An omitted optional line means the feature is absent, as ABSENT says: one bolt column, a
 conventional plate, a single force, standard holes, painted steel, bearing deformation a
@@ -45,11 +24,11 @@ from fractions import Fraction
 from types import MappingProxyType
 from typing import Callable, Mapping, Union
 
-from ...ir import Arg, Bound, Component, Design, Exceeds, Fixed, Input, ParamRef, Ref, Span
+from ...ir import Arg, Bound, Component, Design, Exceeds, Fixed, Input, ParamRef, Ref, Span, Text
 from ...registry import OutsideMakeableSet, Registry
 from ...registry.steel import INCH, STOCK_PLATE
 from ...units import DIMENSIONLESS, FORCE, LENGTH, Dim
-from ..base import ComponentError
+from ..base import ComponentError, Field, Grammar
 
 Geo = Union[Fixed, ParamRef, Input]
 """A design length: a fixed value, a scope parameter, or a signed toleranced bound."""
@@ -185,23 +164,53 @@ def _geo(conn: str, field: str, arg: Arg | None, design: Design, say: Say) -> Ge
 
 def _shape(arg: Arg | None, prefix: str, registry: Registry, say: Say) -> str | None:
     shape = _word_of(arg)
-    if shape is None or not shape.startswith(prefix) or f"{SHAPE_GROUP}.{shape}.{'t' if prefix == 'L' else 'd'}" not in registry.constants:
-        say(f"{shape or arg} is not a {prefix} shape in the shape table")
+    prop = "t" if prefix == "L" else "d"
+    if shape is None or not shape.startswith(prefix) or f"{SHAPE_GROUP}.{shape}.{prop}" not in registry.constants:
+        say(registry.unknown(shape or str(arg), f"{prefix} shape", _shapes(prefix, prop, registry)))
         return None
     return shape
 
 
+def _shapes(prefix: str, prop: str, registry: Registry) -> set[str]:
+    """The shape table's designations that start with `prefix` and state `prop`."""
+    out = set()
+    for key in registry.constants:
+        group, _, rest = key.partition(".")
+        shape, _, stated = rest.partition(".")
+        if group == SHAPE_GROUP and stated == prop and shape.startswith(prefix):
+            out.add(shape)
+    return out
+
+
+THREAD_MARKS: Mapping[str, str] = {"N": "included", "X": "excluded"}
+"""AISC's bolt suffixes, as in A325-N and A490-X (Table J3.2's columns): the threads are
+included in (N) or excluded from (X) the shear planes."""
+
+
 def _grade(arg: Arg | None, registry: Registry, say: Say, family: str) -> str | None:
-    grade = _id_of(arg)
+    """The registry id the line names, a common name (A325, A992, "A572 Gr 50") read as its id."""
+    named = arg.value if isinstance(arg, Text) else _id_of(arg) or ""
+    grade = registry.canonical(named)
     try:
-        material = registry.material(grade or "")
+        material = registry.material(grade)
     except OutsideMakeableSet as e:
-        say(str(e))
+        say(_threads_note(named, registry) or str(e))
         return None
     if material.family != family:
         say(f"{grade} is a {material.family} material, not {family}")
         return None
     return grade
+
+
+def _threads_note(named: str, registry: Registry) -> str | None:
+    """For A325N or A325_N: what AISC's suffix means and how a `bolts` line says it."""
+    stem, mark = named[:-1].rstrip("_"), named[-1:].upper()
+    group = registry.materials.get(registry.canonical(stem))
+    if mark not in THREAD_MARKS or group is None or group.family != "bolt":
+        return None
+    return (f"{named} is not a registry material: AISC's suffix -N means threads included in the shear planes and "
+            f"-X threads excluded, which a bolts line states apart from the group: `bolts {group.id} diameter "
+            f"<length> threads {THREAD_MARKS[mark]}`")
 
 
 def _keywords(args: tuple[Arg, ...], start: int, say: Say) -> dict[str, Arg] | None:
@@ -220,11 +229,15 @@ def _keywords(args: tuple[Arg, ...], start: int, say: Say) -> dict[str, Arg] | N
     return out
 
 
+def _usage(key: str) -> str:
+    return f"reads `{key} {FIELDS[key].form}`"
+
+
 def p_word(*choices: str) -> Parser:
     def parse(conn, key, args, design, registry, say):
         word = _word_of(args[0]) if len(args) == 1 else None
         if word not in choices:
-            say(f"reads `{key} {'|'.join(choices)}`")
+            say(_usage(key))
             return None
         return word
     return parse
@@ -232,7 +245,7 @@ def p_word(*choices: str) -> Parser:
 
 def p_length(conn, key, args, design, registry, say):
     if len(args) != 1:
-        say(f"reads `{key} <length>`")
+        say(_usage(key))
         return None
     return _geo(conn, key, args[0], design, say)
 
@@ -241,7 +254,7 @@ def p_count(conn, key, args, design, registry, say):
     n = args[0] if len(args) == 1 else None
     if not (isinstance(n, Fixed) and n.quantity.dim == DIMENSIONLESS and n.quantity.value.lo == n.quantity.value.hi
             and n.quantity.value.lo.denominator == 1 and n.quantity.value.lo >= 1):
-        say(f"reads `{key} <n>`, a whole number at least 1 on a line of its own")
+        say(f"{_usage(key)}, a whole number at least 1 on a line of its own")
         return None
     return int(n.quantity.value.lo)
 
@@ -254,7 +267,7 @@ def p_member(face: bool) -> Parser:
             case (shape_arg, word, grade_arg) if not face and _word_of(word) == "grade":
                 which = None
             case _:
-                say(f"reads `{key} <W shape> {'flange|web ' if face else ''}grade <material>`")
+                say(_usage(key))
                 return None
         shape, grade = _shape(shape_arg, "W", registry, say), _grade(grade_arg, registry, say, "steel")
         return Member(shape, grade, which) if shape and grade else None
@@ -264,7 +277,7 @@ def p_member(face: bool) -> Parser:
 def p_plate(conn, key, args, design, registry, say):
     kw = _keywords(args, 1, say) if args else None
     if kw is None or set(kw) != {"thickness"}:
-        say(f"reads `{key} <material> thickness <len>`")
+        say(_usage(key))
         return None
     grade = _grade(args[0], registry, say, "steel")
     t = _geo(conn, f"{key}.thickness", kw["thickness"], design, say)
@@ -284,7 +297,7 @@ def _stocked(thickness: Fraction, registry: Registry) -> bool:
 def p_angle(conn, key, args, design, registry, say):
     kw = _keywords(args, 1, say) if args else None
     if kw is None or set(kw) != {"grade", "outstanding"} or _word_of(kw["outstanding"]) not in ("long", "short"):
-        say(f"reads `{key} <L shape> grade <material> outstanding long|short`")
+        say(_usage(key))
         return None
     shape, grade = _shape(args[0], "L", registry, say), _grade(kw["grade"], registry, say, "steel")
     return AngleSpec(shape, grade, _word_of(kw["outstanding"])) if shape and grade else None
@@ -308,7 +321,7 @@ def p_tee(conn, key, args, design, registry, say):
     shape = _word_of(args[0]) if args else None
     parent = tee_parent(shape or "")
     if kw is None or set(kw) != {"grade"} or parent is None:
-        say(f"reads `{key} <WT shape> grade <material>`")
+        say(_usage(key))
         return None
     if f"{SHAPE_GROUP}.{parent}.d" not in registry.constants:
         say(f"{shape} is cut from {parent}, which is not in the shape table")
@@ -320,10 +333,8 @@ def p_tee(conn, key, args, design, registry, say):
 def p_bolts(conn, key, args, design, registry, say):
     from ...registry.steel import BOLT_SIZES, size_id
     kw = _keywords(args, 1, say) if args else None
-    usage = (f"reads `{key} <bolt group> diameter <len> threads included|excluded [joint snug|pretensioned|"
-             "slip_critical] [surface class_a|class_b] [fillers none|one|two]`")
     if kw is None or not {"diameter", "threads"} <= set(kw) <= {"diameter", "threads", "joint", "surface", "fillers"}:
-        say(usage)
+        say(_usage(key))
         return None
     group = _grade(args[0], registry, say, family="bolt")
     d = kw["diameter"]
@@ -375,7 +386,7 @@ def p_holes(plies: tuple[str, ...]) -> Parser:
 def p_weld(conn, key, args, design, registry, say):
     kw = _keywords(args, 1, say) if args else None
     if kw is None or not {"size"} <= set(kw) <= {"size", "sides"}:
-        say(f"reads `{key} <electrode> size <len> [sides 1|2]`")
+        say(_usage(key))
         return None
     electrode = _grade(args[0], registry, say, family="electrode")
     size = _geo(conn, f"{key}.size", kw["size"], design, say)
@@ -392,7 +403,7 @@ def p_cope(conn, key, args, design, registry, say):
     flanges = _word_of(args[0]) if args else None
     allowed = {"depth", "length"} | ({"bottom_depth"} if flanges == "both" else set())
     if kw is None or not {"depth", "length"} <= set(kw) <= allowed or flanges not in ("top", "both"):
-        say(f"reads `{key} top depth <len> length <len>` or `{key} both depth <len> length <len> [bottom_depth <len>]`")
+        say(f"{_usage(key)}; bottom_depth goes with both")
         return None
     depth = _geo(conn, "cope.depth", kw["depth"], design, say)
     length = _geo(conn, "cope.length", kw["length"], design, say)
@@ -404,12 +415,50 @@ def p_cope(conn, key, args, design, registry, say):
 
 # --- Kinds ----------------------------------------------------------------------------------
 
-_BASIS = ("basis", p_word("lrfd", "asd"))
-_LENGTHS = ("pitch", "gauge", "edge_vertical", "plate_edge", "bolt_line", "beam_edge", "top", "setback", "eccentricity",
-            "beam_gauge", "support_gauge", "plate_width", "seat_length", "bearing_length", "distance", "unbraced_length",
-            "stiffener_width", "stiffener_length", "weld_length", "tee_gauge", "weld_return", "free_edge")
+_WORDS: Mapping[str, tuple[str, ...]] = {
+    "basis": ("lrfd", "asd"),
+    "deformation": ("considered", "not_considered"),
+    "form": ("conventional", "extended"),
+    "support_side": ("bolted", "welded"),
+    "location": ("interior", "end"),
+    "force_kind": ("compressive", "tensile"),
+    "pair": ("single", "double"),
+    "flange_restrained": ("yes", "no"),
+    "moment_at_force": ("below_yield", "at_yield"),
+    "weathering": ("no", "yes"),
+}
+"""The lines that name one word: line -> the words it takes."""
+
+_LENGTHS: Mapping[str, str] = {
+    "pitch": "spacing of bolt rows (s)",
+    "gauge": "spacing of bolt columns (g)",
+    "edge_vertical": "vertical edge distance of the end rows (Lev)",
+    "plate_edge": "horizontal edge distance on the connecting element (Leh)",
+    "bolt_line": "weld line or support face to the bolt line (a, Manual Part 10)",
+    "beam_edge": "horizontal edge distance on the beam web, as detailed; strength checks take it less the 1/4 in "
+                 "underrun (Leh, Manual Part 10)",
+    "top": "beam's top to the top bolt row",
+    "setback": "gap from the support face to the beam end, as detailed; a seat's strength checks add the 1/4 in "
+               "underrun",
+    "eccentricity": "load's distance from the bolt group's or weld's centroid (e)",
+    "beam_gauge": "gauge of the bolts through the beam web (g)",
+    "support_gauge": "gauge of the bolts through the support (g)",
+    "plate_width": "an end plate's width",
+    "seat_length": "a seat angle's length along the beam's width",
+    "bearing_length": "length of bearing (lb, J10)",
+    "distance": "from the member end to a concentrated force (J10)",
+    "unbraced_length": "J10.4's laterally unbraced length (Lb)",
+    "stiffener_width": "width of a seat stiffener (W, Manual Table 10-8)",
+    "stiffener_length": "length of a seat stiffener and its welds (l)",
+    "weld_length": "length of a bracket's weld line (L)",
+    "tee_gauge": "gauge across a hanger tee's flange (g)",
+    "weld_return": "a bracket weld's returns (kl): a C-shaped weld around a plate lapped on the support face",
+    "free_edge": "a shaped bracket's free edge, projected (b)",
+}
+"""The lines that give one length: line -> its meaning, with the symbol docs/steel_glossary.md
+maps it to."""
+
 _COMMON: dict[str, Parser] = {
-    "basis": p_word("lrfd", "asd"),
     "beam": p_member(False),
     "support": p_member(True),
     "member": p_member(False),
@@ -422,22 +471,80 @@ _COMMON: dict[str, Parser] = {
     "bolts": p_bolts,
     "weld": p_weld,
     "support_weld": p_weld,
-    "beam_weld": p_weld,
     "cope": p_cope,
     "rows": p_count,
     "columns": p_count,
-    "deformation": p_word("considered", "not_considered"),
-    "form": p_word("conventional", "extended"),
-    "support_side": p_word("bolted", "welded"),
-    "beam_side": p_word("bolted", "welded"),
-    "location": p_word("interior", "end"),
-    "force_kind": p_word("compressive", "tensile"),
-    "pair": p_word("single", "double"),
-    "flange_restrained": p_word("yes", "no"),
-    "moment_at_force": p_word("below_yield", "at_yield"),
-    "weathering": p_word("no", "yes"),
+    **{name: p_word(*words) for name, words in _WORDS.items()},
     **{name: p_length for name in _LENGTHS},
 }
+
+_ANGLE = "<L shape> grade <steel grade> outstanding long|short"
+_WELD = "<electrode> size <length> [sides 1|2]"
+
+FIELDS: Mapping[str, Field] = {f.name: f for f in (
+    Field("basis", "|".join(_WORDS["basis"]), "", (),
+          "the design basis: lrfd (factored loads against phi Rn) or asd (service loads against Rn / Omega)"),
+    Field("beam", "<W shape> grade <steel grade>", "", ("W", "steel."), "the supported beam, a W shape from the shape table"),
+    Field("support", "<W shape> flange|web grade <steel grade>", "", ("W", "steel."),
+          "the supporting member and the face the connection meets: a column flange, or a column or girder web"),
+    Field("member", "<W shape> grade <steel grade>", "", ("W", "steel."), "the member the concentrated force acts on"),
+    Field("plate", "<steel grade> thickness <length>", "length", ("steel.",),
+          "the connecting plate (a shear tab, end plate, seat plate or bracket plate); a fixed thickness is a stocked one"),
+    Field("stiffener", "<steel grade> thickness <length>", "length", ("steel.",), "a stiffened seat's stiffener plate"),
+    Field("angles", _ANGLE, "", ("L", "steel."), "the pair of connection angles; outstanding names the leg on the support"),
+    Field("angle", _ANGLE, "", ("L", "steel."),
+          "the single angle, or a seat's angle; outstanding names the leg on the support, or the seat's leg under the beam"),
+    Field("top_angle", _ANGLE, "", ("L", "steel."), "a seat's top angle, which holds the beam's top flange in place"),
+    Field("tee", "<WT shape> grade <steel grade>", "", ("WT", "steel."),
+          "the tee, cut from a W shape in the shape table (WT9x25 from W18x50)"),
+    Field("bolts", "<bolt group> diameter <length> threads included|excluded [joint snug|pretensioned|slip_critical] "
+                   "[surface class_a|class_b] [fillers none|one|two]", "length", ("bolt_group.",),
+          "the bolts: a Table J3.2 group (A325 is bolt_group.120, A490 bolt_group.150), an RCSC Table 5.2 diameter, "
+          "threads in or out of the shear planes (AISC's A325-N is threads included, A325-X threads excluded), the "
+          "installation (snug unless stated), a slip-critical joint's faying surface, and fillers (none unless stated)"),
+    Field("weld", _WELD, "length", ("electrode.",),
+          f"the fillet weld: electrode, leg size, and fillets at each joint line, which {', '.join(WELD_SIDES)} state"),
+    Field("support_weld", _WELD, "length", ("electrode.",), "the weld to the support on a welded support side"),
+    Field("cope", "top|both depth <length> length <length> [bottom_depth <length>]", "length", (),
+          "a cope at the beam's top flange or both flanges: the (top) cope's depth, its length, and with both a "
+          "bottom depth where it differs; a coped beam states its setback"),
+    Field("rows", "<n>", "count", (), "bolt rows, a whole number"),
+    Field("columns", "<n>", "count", (), "bolt columns; one unless stated"),
+    Field("deformation", "|".join(_WORDS["deformation"]), "", (),
+          "whether deformation at the bolt holes at service load is a design consideration (Section J3.11a); "
+          "considered unless stated"),
+    Field("form", "|".join(_WORDS["form"]), "", (),
+          "a single plate's configuration (Manual Part 10); conventional unless stated"),
+    Field("support_side", "|".join(_WORDS["support_side"]), "", (),
+          "how the angles, tee or seat meet the support: bolted (with support_gauge) or welded (with support_weld)"),
+    Field("location", "|".join(_WORDS["location"]), "", (),
+          "where the force acts: away from the member's ends, or near one (with distance)"),
+    Field("force_kind", "|".join(_WORDS["force_kind"]), "", (), "the sense of the concentrated force"),
+    Field("pair", "|".join(_WORDS["pair"]), "", (),
+          "one force, or a pair of compressive forces on opposite flanges at one section (Section J10.5); single "
+          "unless stated"),
+    Field("flange_restrained", "|".join(_WORDS["flange_restrained"]), "", (),
+          "whether the loaded flange is restrained against rotation, which web sidesway buckling (Section J10.4) reads"),
+    Field("moment_at_force", "|".join(_WORDS["moment_at_force"]), "", (),
+          "whether the member's moment at the force is below or at yield, which sets J10.4's Cr"),
+    Field("weathering", "|".join(_WORDS["weathering"]), "", (),
+          "whether the steel is unpainted weathering steel, whose spacing limits are tighter (Section J3.6); no "
+          "unless stated"),
+    *(Field(name, "<length>", "length", (), meaning) for name, meaning in _LENGTHS.items()),
+)}
+"""Every attribute line but `holes`, whose plies are the kind's: its form, which the line's
+usage error prints, and its meaning. A <length> is a length, a signed bound or a param."""
+
+
+def grammar(kind: str) -> Grammar:
+    """The kind's lines, required and optional, as KIND_SPECS lists them."""
+    spec = KIND_SPECS[kind]
+    holes = Field("holes", f"<ply> {'|'.join(HOLE_TYPES)} [<ply> <type> ...]", "", (),
+                  f"hole types by ply (Table J3.3), plies {', '.join(spec.plies) or 'none'}; a ply it does not "
+                  "name has standard holes")
+    fields = {**FIELDS, "holes": holes}
+    return Grammar(tuple(fields[n] for n in spec.required), tuple(fields[n] for n in spec.optional), "<conn>",
+                   spec.loads)
 
 
 @dataclass(frozen=True)
@@ -531,7 +638,8 @@ def lower_conn(component: Component, design: Design, registry: Registry) -> Conn
     given = {attr.key for attr in component.attrs}
     missing = [k for k in spec.required if k not in given]
     if missing:
-        here(f"a {component.kind} needs {', '.join(missing)}")
+        here(f"a {component.kind} needs {', '.join(missing)}: "
+             + "; ".join(f"`{k} {FIELDS[k].form}`" for k in missing))
     _check_kind(component.kind, attrs, here)
     _check_references(name, component.kind, design, problems)
     if problems:

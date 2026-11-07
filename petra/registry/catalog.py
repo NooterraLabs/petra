@@ -25,7 +25,7 @@ from fractions import Fraction
 from typing import Mapping
 
 from ..kernel import Add, Const, Div, Expr, Ln, Mul, Neg, Pi, PowInt, Sqrt, Sym
-from .steel import steel_constants, steel_materials
+from .steel import steel_constants, steel_materials, steel_names
 from .constants import CABLE_SIZES, CHS_SIZES, CONSTANTS, MCB_RATINGS, STATED, THREADS, chs_key
 from .model import (
     Corrosivity,
@@ -132,6 +132,7 @@ def build_registry() -> Registry:
         parts={**chs_sections(), **cables(), **breakers(), **terminals(), **metric_bolts()},
         processes=processes(),
         environments=environments(),
+        names=steel_names(),
     )
 
 
