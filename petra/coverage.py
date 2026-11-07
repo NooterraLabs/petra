@@ -17,7 +17,9 @@ v0 rules (the domain rules live in their modules):
                                                     theta_max), short circuit, overload
                                                     protection, voltage drop (<= 5 %)
   bolt.tension           every bolted joint      -> bolt tension (proof load)
-  bolt.bearing           every bolted joint      -> plate bearing           (unmodelled)
+  bolt.separation        every bolted joint      -> joint separation (residual clamp force
+                                                    stays at least zero)
+  bolt.bearing          every bolted joint      -> plate bearing           (unmodelled)
   galvanic.contact       contact pair with anodic index difference > 0.15 V in a wet
                          environment or corrosivity >= C3, or in an undeclared
                          environment (conservative) -> galvanic corrosion  (unmodelled)
