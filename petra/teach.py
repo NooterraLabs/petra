@@ -511,6 +511,8 @@ DOCS: Mapping[str, tuple[str, Callable[[], str]]] = {
     "reference": ("the .petra language: syntax, units, every kind's lines and every registry id", render_reference),
     "api": ("the Python API, and the JSON that `petra check --json` prints",
             lambda: (DOCS_DIR / "api.md").read_text(encoding="utf-8")),
+    "skill": ("how a coding agent designs, checks and repairs with Petra, and the MCP server; a SKILL.md",
+              lambda: (DOCS_DIR / "skill.md").read_text(encoding="utf-8")),
 }
 """`petra docs NAME` -> (what the document is, its text)."""
 

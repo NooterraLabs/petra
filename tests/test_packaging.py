@@ -140,7 +140,7 @@ class Packaging(unittest.TestCase):
         petra = shutil.which("petra", path=str(self.scripts))
         self.assertIn("`petra docs`", ok(petra, "--help", cwd=self.outside).rstrip("\n").splitlines()[-1])
         listed = [line.split()[0] for line in ok(petra, "docs", cwd=self.outside).splitlines()[:-1]]
-        self.assertEqual(listed, ["readme", "reference", "api"])
+        self.assertEqual(listed, ["readme", "reference", "api", "skill"])
         for name, text in (("api", (ROOT / "petra" / "docs" / "api.md").read_text(encoding="utf-8")),
                            ("reference", (ROOT / "docs" / "reference.md").read_text(encoding="utf-8")),
                            ("readme", backend().description(PROJECT))):

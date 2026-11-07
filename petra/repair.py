@@ -353,3 +353,47 @@ def _finite(x: float | None) -> float | None:
 
 def _ratio(x: float | None) -> str:
     return "unknown" if x is None else "unbounded" if x == float("inf") else f"{x:.3g}"
+
+
+# --- One design checked from its text ------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Checked:
+    """A design checked from its text: its report and, on a FAIL, its repair; or, for a
+    design that does not lower, the input error and no report."""
+
+    path: str
+    report: Report | None
+    repair: Repair | None
+    error: str | None
+
+    @property
+    def status(self) -> str:
+        return "INPUT_ERROR" if self.report is None else STATUS[type(self.report.verdict)]
+
+    def to_json(self) -> dict[str, Any]:
+        """The report's JSON with "repair", or {"file", "status": "INPUT_ERROR", "error"}."""
+        if self.report is None:
+            return {"file": self.path, "status": "INPUT_ERROR", "error": self.error}
+        return {**self.report.to_json(), "repair": None if self.repair is None else self.repair.to_json()}
+
+    def text(self) -> str:
+        """What `petra check` prints: the report, with the repair after its governing lines."""
+        if self.report is None:
+            return f"{self.path}: INPUT_ERROR\n{self.error}"
+        out = self.report.render().split("\n")
+        at = max((i + 1 for i, line in enumerate(out[:8]) if line.startswith("governing  ")), default=min(2, len(out)))
+        return "\n".join(out[:at] + ([] if self.repair is None else self.repair.lines()) + out[at:])
+
+
+def check_text(text: str, path: str, registry: Any, sources: tuple, *, sink: Any = None, deck: Any = None,
+               moves: bool = True) -> Checked:
+    """Check `text` against `registry` with `sources`, recording accepted evidence into
+    `sink`. With `moves`, a FAIL gets its repair, probed with the same sources and no sink."""
+    try:
+        report = check_design(parse_design(text, path, registry), registry, sources, sink=sink, deck=deck, path=path)
+    except INPUT_ERRORS as exc:
+        return Checked(path, None, None, str(exc))
+    found = repair(text, report, checker(registry, sources, path, deck)) if moves else None
+    return Checked(path, report, found, None)
