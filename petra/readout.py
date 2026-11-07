@@ -110,7 +110,10 @@ class Value:
     A rule (DETAILING_MODES) has no demand, capacity, unit or utilisation, only `met`, which is
     None for every other term. `parts`: what a capacity made of parts is made of, weakest
     first (the bolts of a bolt group, by row); empty otherwise. `utilisation` is demand /
-    capacity: 0 when excused, infinite for a positive demand on no capacity."""
+    capacity: 0 when excused or when the demand acts the other way (a truss member in
+    tension against its buckling resistance), infinite for a positive demand on no
+    capacity. `ratio` is demand / capacity with its sign, which a claim's quantity is
+    read back from."""
 
     what: str
     unit: str | None
@@ -124,7 +127,12 @@ class Value:
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "parts", tuple(sorted(self.parts, key=lambda p: p.capacity)))
-        object.__setattr__(self, "utilisation", _utilisation(self.demand, self.capacity, self.excused))
+        ratio = self.ratio
+        object.__setattr__(self, "utilisation", None if ratio is None else max(0.0, ratio))
+
+    @property
+    def ratio(self) -> float | None:
+        return _ratio_of(self.demand, self.capacity, self.excused)
 
     def to_json(self) -> dict[str, Any]:
         return {"check": self.what, "demand": self.demand, "capacity": self.capacity, "unit": self.unit,
@@ -132,7 +140,7 @@ class Value:
                 "parts": [p.to_json() for p in self.parts]}
 
 
-def _utilisation(demand: float | None, capacity: float | None, excused: bool) -> float | None:
+def _ratio_of(demand: float | None, capacity: float | None, excused: bool) -> float | None:
     if demand is None or capacity is None:
         return None
     if excused:
@@ -386,9 +394,11 @@ def governing(found: tuple[Finding, ...]) -> dict[str, Governing | None]:
 
 
 def summary(governs: Mapping[str, Governing | None]) -> list[str]:
-    """One line per category, after the report's `checked` line."""
+    """The lines after the report's `checked` line: the governing strength check, or
+    `none` when no strength check has a utilisation, then the governing detailing check
+    when the design has one."""
     return [f"governing  {category:<10} " + (g.text() if g is not None else f"none: no {category} check here has a utilisation")
-            for category, g in governs.items()]
+            for category, g in governs.items() if g is not None or category == STRENGTH]
 
 
 class _Context:
@@ -479,7 +489,7 @@ def _claimed(requirement: Requirement, values: tuple[Value, ...], units: Mapping
     criterion = requirement.criterion
     if not isinstance(requirement.origin, ClaimOrigin) or not isinstance(criterion, Criterion) or criterion.rel not in (Rel.LE, Rel.GE):
         return None
-    carried = [v.utilisation for v in values if v.claimed and not v.excused and v.utilisation is not None and math.isfinite(v.utilisation)]
+    carried = [v.ratio for v in values if v.claimed and not v.excused and v.ratio is not None and math.isfinite(v.ratio)]
     if not carried or (criterion.rel is Rel.GE and max(carried) <= 0):
         return None
     bound = criterion.bound.value.lo if criterion.rel is Rel.LE else criterion.bound.value.hi

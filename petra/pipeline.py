@@ -157,7 +157,7 @@ class Report:
         {"strength", "detailing"}: each Governing.to_json or None, "verdicts":
         [verdict.verdict_json(e) and "obligations": the Finding.to_json of each of the
         entry's outcomes, for e in entries]}. `petra check --json` prints this, and
-        docs/api.md documents every key."""
+        petra/docs/api.md documents every key."""
         found = {id(o): f for o, f in zip(self.outcomes, self.findings)}
         return {
             "file": self.path,

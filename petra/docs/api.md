@@ -46,7 +46,7 @@ The same report as data comes from `petra check --json examples/truss_fail.petra
 | `findings` | `tuple[Finding, ...]` | one per outcome, in the same order, computed on first use |
 | `governing` | `dict[str, Governing \| None]` | the governing `"strength"` check and the governing `"detailing"` check of the whole report, computed on first use (see Findings) |
 
-`report.render()` returns the text `petra check` prints. Right after its `checked` line come two lines, `governing  strength` and `governing  detailing`, each naming the requirement, the check, its demand, capacity and utilisation in the design's units, or `none` when no check of that category has a utilisation. Each row of the obligation table ends with its finding's utilisation, or with nothing when it has none. `report.to_json()` returns the JSON described below.
+`report.render()` returns the text `petra check` prints. Right after its `checked` line come the lines `governing  strength` and `governing  detailing`, each naming the requirement, the check, its demand, capacity and utilisation in the design's units. The strength line reads `none` when no strength check has a utilisation, and the detailing line is left out when no detailing check has one. Each row of the obligation table ends with its finding's utilisation, or with nothing when it has none. `report.to_json()` returns the JSON described below.
 
 ## Verdicts
 
@@ -96,7 +96,7 @@ Each requirement ends as one of five outcome classes, all defined in `petra.verd
 | `needs` | `needs` | for an open item, what would settle it |
 | `note` | `note` | why some or all terms were not read |
 
-A `Value` is one term: `what`, `unit`, `demand`, `capacity`, `excused`, `claimed`, `met`, `parts` and `utilisation`, which is demand / capacity, 0 when a guard excuses the term, and infinite for a positive demand against no capacity. `Value.to_json()` gives the term's JSON record.
+A `Value` is one term: `what`, `unit`, `demand`, `capacity`, `excused`, `claimed`, `met`, `parts` and `utilisation`, which is demand / capacity, 0 when a guard excuses the term or the demand acts the other way (a truss member in tension against its buckling resistance), and infinite for a positive demand against no capacity. `Value.ratio` keeps the sign. `Value.to_json()` gives the term's JSON record.
 
 - **Rules.** Hole use and joint type are rules, met or not (`DETAILING_MODES` marks them `"rule"`). Their demand and capacity are joint levels and counts, not quantities, so `demand`, `capacity`, `unit` and `utilisation` are None, and `met` says whether the rule holds. `met` is None for every other term.
 - **Parts.** A capacity made of parts lists them in `parts`, weakest first. Today these are the two bolt group checks of the steel deck, "most loaded bolt ... against the weakest bolt" and "bolt shear, bearing and tearout summed over the group". Each `Part(what, count, limits)` is one row position of the group, such as `"bottom row (1 bolt)"`. Its `limits` are each bolt's strengths there: `Limit(what, capacity)` for its shear and for its bearing and tearout in each ply, in the check's unit. A tearout names its clear distance, as in `"tearout of the tee stem to its edge (lc 0.6875 in)"`. `Part.capacity` is the least of its limits, and `Part.governing` is the limit that sets it.

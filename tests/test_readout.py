@@ -290,10 +290,11 @@ class Api(unittest.TestCase):
 
 
 def summary_lines(text: str) -> list[str]:
-    """The two lines after the `checked` line."""
+    """The `governing` lines right after the `checked` line."""
     lines = text.split("\n")
-    at = next(i for i, line in enumerate(lines) if line.startswith("checked    "))
-    return lines[at + 1:at + 3]
+    at = next(i for i, line in enumerate(lines) if line.startswith("checked    ")) + 1
+    end = next(i for i in range(at, len(lines)) if not lines[i].startswith("governing  "))
+    return lines[at:end]
 
 
 class GoverningChecks(unittest.TestCase):
@@ -343,16 +344,23 @@ class GoverningChecks(unittest.TestCase):
     def test_a_design_without_numbers_says_none(self):
         report = check(HOOK)
         self.assertIsInstance(report.verdict, petra.Pass)
-        self.assertEqual(summary_lines(report.render()), ["governing  strength   none: no strength check here has a utilisation",
-                                                           "governing  detailing  none: no detailing check here has a utilisation"])
+        self.assertEqual(summary_lines(report.render()), ["governing  strength   none: no strength check here has a utilisation"])
         self.assertEqual(report.to_json()["governing"], {"strength": None, "detailing": None})
+
+    def test_a_member_in_tension_uses_none_of_its_buckling_resistance(self):
+        report = check(ROOT / "examples" / "truss_pass.petra")
+        chord = next(f for f in report.findings if f.requirement.startswith("frame.bottom_ab/truss.member_buckling"))
+        self.assertLess(chord.governing.ratio, 0)
+        self.assertEqual(chord.utilisation, 0.0)
+        self.assertNotIn("utilisation -", report.render())
+        self.assertEqual(len(summary_lines(report.render())), 1)
 
     def test_every_table_row_ends_with_its_utilisation_or_nothing(self):
         for path in (DOUBLE_ANGLE, TEE_TRY1, OVS, TRUSS, HOOK):
             with self.subTest(path=path.name):
                 report = check(path)
                 lines = report.render().split("\n")
-                at = next(i for i, line in enumerate(lines) if line.startswith("checked    ")) + 3
+                at = next(i for i, line in enumerate(lines) if line.startswith("checked    ")) + 1 + len(summary_lines(report.render()))
                 for f, line in zip(report.findings, lines[at:at + len(report.findings)]):
                     if f.utilisation is None:
                         self.assertNotIn("utilisation", line)

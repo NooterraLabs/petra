@@ -139,7 +139,7 @@ api        the Python API, and the JSON that `petra check --json` prints
 	entries    strength PASS, stability PASS, stress PASS, coverage PASS
 	scope      load cases crowd; environment indoor_dry; no parameters
 	checked    10 obligations, 10 certified, 0 refuted, 0 waived, 0 open
-	  frame/truss.plastic_collapse                 claim strength               R1  certified  solver  sha256:aa44bf3a95d0..  validity 1 proved
+	governing  strength   frame.diag_ad/truss.member_buckling/coverage.truss.axial_member: compression against the flexural buckling resistance: demand 30 kN, capacity 54.69 kN, utilisation 0.549
 	```
 
 	The footprint at the end lists every premise. For example, `reg:steel.S355.fy` cites EN 10025-2, and `in:warren-footbridge-panel.crowd.frame.D.fy` names the person who signed that load range.
@@ -157,6 +157,7 @@ api        the Python API, and the JSON that `petra check --json` prints
 	warren-footbridge-panel-rev-c: FAIL
 	entries    strength FAIL, coverage FAIL
 	checked    9 obligations, 6 certified, 3 refuted, 0 waived, 0 open
+	  frame.diag_ec/truss.member_buckling          coverage truss.axial_member  R4  refuted    solver  sha256:ba8cae317f02..  validity 3 proved  utilisation 1.37
 	counterexample  frame/truss.plastic_collapse/claim.strength: a static field within every member's capacity carries 1.5 times load case crowd on frame
 	  governing  load factor: the claimed factor against the largest one a static field within every member's capacity carries: demand 1.5, capacity 0.7292, utilisation 2.06
 	  claim      strength: collapse_factor is 0.7292 here, against its bound 1.5
@@ -169,7 +170,6 @@ api        the Python API, and the JSON that `petra check --json` prints
 	  at         const.steel.E    = 200 GPa   (reg:const.steel.E)
 	             crowd.frame.D.fy = -60 kN   (in:warren-footbridge-panel-rev-c.crowd.frame.D.fy)
 	             crowd.frame.E.fy = -60 kN   (in:warren-footbridge-panel-rev-c.crowd.frame.E.fy)
-	  fixed      16 more values, as the design and the registry state them (--json lists each)
 	```
 
 3. Check a bolted joint whose coverage is incomplete:
@@ -185,14 +185,14 @@ api        the Python API, and the JSON that `petra check --json` prints
 	mast-bracket-coastal: UNKNOWN
 	entries    tension PASS, coverage UNKNOWN
 	checked    3 obligations, 1 certified, 0 refuted, 0 waived, 2 open
-	  bracket/bolt.tension                         claim tension                R4  certified  solver  sha256:9caaf8237101..
+	governing  strength   bracket/bolt.tension/claim.tension: bolt tension against its limit: demand 29.04 kN, capacity 34.13 kN, utilisation 0.851
+	  bracket/bolt.tension                         claim tension                R4  certified  solver  sha256:9caaf8237101..  utilisation 0.851
 	  bracket/bolt.plate_bearing                   coverage bolt.bearing        --  open
 	  bracket/corrosion.galvanic                   coverage galvanic.contact    --  open
 	open       2 requirements
 	  bracket/bolt.plate_bearing/coverage.bolt.bearing
 	    needs no model for bolt.plate_bearing on bracket: waive bolt.plate_bearing on bracket by "<owner>" reason "<why>"
 	  bracket/corrosion.galvanic/coverage.galvanic.contact
-	    needs no model for corrosion.galvanic on bracket: waive corrosion.galvanic on bracket by "<owner>" reason "<why>"
 	```
 
 4. Check a certificate file on its own, with no solver and no design:
