@@ -228,10 +228,12 @@ DETAILING_MODES: Mapping[str, str] = {
     "steel.edge_min": MEASURED, "steel.edge_max": MEASURED, "steel.spacing_min": MEASURED, "steel.spacing_max": MEASURED,
     "steel.clearance": MEASURED, "steel.fillet_size": MEASURED, "steel.ductility": MEASURED,
     "steel.extended_ductility": MEASURED, "steel.hole_use": RULE, "steel.joint_type": RULE,
+    "steel.beam_fit": MEASURED, "steel.flange_fit": MEASURED, "steel.web_fit": MEASURED,
 }
 """Mode id -> how its checks read, for the modes that check how a design is detailed:
 edge distance, spacing, room to tighten, fillet size, the proportions that keep a
-connection ductile, hole use and joint type. Every other mode checks a strength. A
+connection ductile, hole use, joint type, and whether the drawn parts fit the beam and the
+support's face. Every other mode checks a strength. A
 report ranks the two apart, so the governing strength check is never an edge distance.
 A MEASURED check has a demand and a capacity as a strength does. A RULE's demand and
 capacity are levels and counts (the joint type a hole needs against the joint's), so a

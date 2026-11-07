@@ -302,9 +302,11 @@ class GoverningChecks(unittest.TestCase):
     detailing check, each with its numbers, right after the `checked` line."""
 
     def test_a_pass_names_its_governing_strength_and_detailing_checks(self):
-        # The cold-start agents found these by sorting --json: bolts 0.57 and edge_min 0.80
-        # for the double angle, the weld 0.59 and spacing_max 0.92 for the end plate.
-        for path, strength, detailing in ((DOUBLE_ANGLE, ("da1/steel.bolts/", 0.57), ("da1/steel.edge_min/", 0.8)),
+        # The cold-start agents found these by sorting --json: bolts 0.57 for the double
+        # angle, the weld 0.59 and spacing_max 0.92 for the end plate. The double angle's
+        # detailing is its beam end against the support: end distance 1.75 in of the
+        # angles' beam gauge 2 in.
+        for path, strength, detailing in ((DOUBLE_ANGLE, ("da1/steel.bolts/", 0.57), ("da1/steel.beam_fit/", 0.875)),
                                           (END_PLATE, ("ep1/steel.weld/", 0.589), ("ep1/steel.spacing_max/", 0.917))):
             with self.subTest(path=path.name):
                 report = check(path)
