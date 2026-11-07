@@ -345,7 +345,7 @@ class Gate(unittest.TestCase):
                 x = g.extremes[(c.subject, c.side)]
                 slack = abs(c.bound - x) / x
                 with self.subTest(g.name, claim=c.name):
-                    self.assertGreaterEqual(slack, gen.DELTA * Fraction(99, 100))
+                    self.assertGreaterEqual(slack, gen.DELTA * Fraction(9, 10), "the bound rounds to 4 figures")
 
     def test_each_fault_is_caught_and_named_in_one_base(self):
         pool = F.bases(REGISTRY, 1, 101)
