@@ -89,7 +89,7 @@ from .verdict import (
 )
 
 if TYPE_CHECKING:
-    from .readout import Finding, Governing
+    from .readout import Finding, Governing, Unchecked
 
 
 class EvidenceSource(Protocol):
@@ -139,16 +139,25 @@ class Report:
         from .readout import governing
         return governing(self.findings)
 
+    @cached_property
+    def unchecked(self) -> tuple[Unchecked, ...]:
+        """Each mode a component's domain declares that no requirement here names on the
+        component, with the reason the coverage table gives (petra.readout.unchecked).
+        Tooling, computed on first use."""
+        from .readout import unchecked
+        return unchecked(self)
+
     def render(self) -> str:
         """The design name and overall status, one status per entry, then
         verdict.render's scope, the governing strength and detailing checks, the
-        obligation table with each finding's utilisation, each counterexample and margin
-        point with its finding's numbers, open items and footprint, then any warnings."""
-        from .readout import summary
+        obligation table with each finding's utilisation, the `excused` and `not checked`
+        lines (petra.readout.edge), each counterexample and margin point with its
+        finding's numbers, open items and footprint, then any warnings."""
+        from .readout import edge, summary
 
         found = {id(o): f for o, f in zip(self.outcomes, self.findings)}
         status, *rest = render_verdict(self.verdict, self.outcomes, lambda o: found[id(o)].lines(), lambda o: found[id(o)].row(),
-                                       tuple(summary(self.governing))).split("\n")
+                                       tuple(summary(self.governing)), tuple(edge(self.findings, self.unchecked))).split("\n")
         statuses = ", ".join(f"{e.claim} {STATUS[type(e.verdict)]}" for e in self.entries)
         return "\n".join([f"{self.design}: {status}", f"entries    {statuses}", *rest, *(f"warning    {w}" for w in self.warnings)])
 
@@ -156,8 +165,9 @@ class Report:
         """{"file": path, "design": name, "status": the overall status, "governing":
         {"strength", "detailing"}: each Governing.to_json or None, "verdicts":
         [verdict.verdict_json(e) and "obligations": the Finding.to_json of each of the
-        entry's outcomes, for e in entries]}. `petra check --json` prints this, and
-        petra/docs/api.md documents every key."""
+        entry's outcomes, for e in entries], "unchecked": the Unchecked.to_json of each
+        mode not demanded}. `petra check --json` prints this, and petra/docs/api.md
+        documents every key."""
         found = {id(o): f for o, f in zip(self.outcomes, self.findings)}
         return {
             "file": self.path,
@@ -165,6 +175,7 @@ class Report:
             "status": STATUS[type(self.verdict)],
             "governing": {category: None if g is None else g.to_json() for category, g in self.governing.items()},
             "verdicts": [{**verdict_json(e), "obligations": [found[id(o)].to_json() for o in e.outcomes]} for e in self.entries],
+            "unchecked": [u.to_json() for u in self.unchecked],
         }
 
 

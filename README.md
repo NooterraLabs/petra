@@ -159,7 +159,7 @@ api        the Python API, and the JSON that `petra check --json` prints
 
 	The verdict is FAIL, with three refutations. The panel cannot carry the load (R1, a Farkas ray), and two diagonals buckle (R4). Each refutation prints the counterexample point. Every value lies inside its signed or sanctioned range. Each refutation names its governing check with demand, capacity and utilisation. These lines show the counts and the first two refutations:
 
-	<!-- sample: petra check examples/truss_fail.petra | sed -n '1,3p;14,26p' -->
+	<!-- sample: petra check examples/truss_fail.petra | sed -n '1,3p;15,27p' -->
 	```text
 	warren-footbridge-panel-rev-c: FAIL
 	entries    strength FAIL, coverage FAIL
