@@ -32,20 +32,25 @@ its numbers: the finding keeps its outcome and says why.
 """
 from __future__ import annotations
 
+import dataclasses
+import functools
 import math
+import re
 from dataclasses import dataclass, field
 from fractions import Fraction
-from functools import cache
 from typing import TYPE_CHECKING, Any, Callable, Iterable, Mapping
 
-from .ir import Design, Rel
-from .kernel import GOAL_RULE, Add, Const, DefinedHyp, Expr, Interval, KernelArithmeticError, Neg, RangeHyp, Refutation, Statement, enclose, statement_hash
+from . import coverage
+from .ir import Design, Input, InputKind, LoadCase, LoadEntry, Rel, Signature, Span
+from .kernel import (GOAL_RULE, Abs, Add, Const, DefinedHyp, Div, Expr, Interval, KernelArithmeticError, Max, Min, Mul, Neg,
+                     PowInt, RangeHyp, Refutation, Sqrt, Statement, Sym, enclose, statement_hash)
 from .kernel.rules.r1_linear import LinearFeasible
 from .kernel.rules.r4_enclosure import AllNonpositive
 from .models import KINDS
-from .models.base import ClaimOrigin, Criterion, Requirement
+from .models.base import ClaimOrigin, Criterion, FailureMode, Grammar, Requirement
 from .premises import LabelKind, input_label, label_kind, param_label
 from .registry import Registry
+from .registry.model import render
 from .units import (CURRENT, CUSTOMARY, DIMENSIONLESS, FORCE, I2T, TEMPERATURE, UNITS, VOLTAGE, Dim, Quantity,
                     format_quantity, si_unit)
 from .verdict import COVERAGE_ENTRY, Discharged, Open, Outcome, Refuted, Waived, WithinMargin, describe_need
@@ -113,7 +118,9 @@ class Value:
     capacity: 0 when excused or when the demand acts the other way (a truss member in
     tension against its buckling resistance), infinite for a positive demand on no
     capacity. `ratio` is demand / capacity with its sign, which a claim's quantity is
-    read back from."""
+    read back from. `excuse`: for an excused term, the condition that excuses it with its
+    numbers where the term was read. A reader may word it; otherwise `findings` reads it
+    from the guard in the statement (_excuse)."""
 
     what: str
     unit: str | None
@@ -123,6 +130,7 @@ class Value:
     claimed: bool
     met: bool | None
     parts: tuple[Part, ...]
+    excuse: str | None = None
     utilisation: float | None = field(init=False)
 
     def __post_init__(self) -> None:
@@ -136,7 +144,7 @@ class Value:
 
     def to_json(self) -> dict[str, Any]:
         return {"check": self.what, "demand": self.demand, "capacity": self.capacity, "unit": self.unit,
-                "utilisation": _finite(self.utilisation), "excused": self.excused, "met": self.met,
+                "utilisation": _finite(self.utilisation), "excused": self.excused, "excuse": self.excuse, "met": self.met,
                 "parts": [p.to_json() for p in self.parts]}
 
 
@@ -181,7 +189,7 @@ class Domain:
     units: Mapping[Dim, str]   # the unit each dimension prints in; any other prints in readable SI
 
 
-@cache
+@functools.cache
 def _steel() -> Domain:
     from .models.steel import calc
     return Domain(calc.read, calc.DISPLAY)
@@ -304,8 +312,11 @@ class Finding:
         object.__setattr__(self, "utilisation", None if g is None else g.utilisation)
 
     def row(self) -> str:
-        """The utilisation at the end of the obligation's table row, or nothing."""
-        return "" if self.utilisation is None else f"  utilisation {_ratio(self.utilisation)}"
+        """The utilisation at the end of the obligation's table row, `excused` when a
+        guard excuses every term, or nothing."""
+        if self.utilisation is None:
+            return "  excused" if self.values and all(v.excused for v in self.values) else ""
+        return f"  utilisation {_ratio(self.utilisation)}"
 
     def lines(self) -> list[str]:
         """The text under a refuted obligation or a margin point: the governing term and
@@ -401,6 +412,119 @@ def summary(governs: Mapping[str, Governing | None]) -> list[str]:
             for category, g in governs.items() if g is not None or category == STRENGTH]
 
 
+# --- What a report did not check ------------------------------------------------------------
+
+NOT_DEMANDED = "not demanded by the coverage table"
+CLAIM_ONLY = "only a claim demands it; the coverage table never does"
+
+
+@dataclass(frozen=True)
+class Unchecked:
+    """A mode the subject's domain declares that no requirement of the report names on
+    the subject (a component), and why: the load whose absence leaves it undemanded, that
+    only a claim demands it, or NOT_DEMANDED when the coverage table records no reason."""
+
+    subject: str
+    mode: str
+    reason: str
+
+    def to_json(self) -> dict[str, Any]:
+        return {"subject": self.subject, "mode": self.mode, "reason": self.reason}
+
+
+def unchecked(report: Report) -> tuple[Unchecked, ...]:
+    """For each component, in design order, each mode of its domain (DomainSpec.modes) that
+    no outcome's requirement names on it, by mode id. A report without its design and
+    registry gives none.
+
+    The reason comes from the coverage table itself. A load field the component's kind
+    takes (Grammar.loads, on a kind whose loads target the component) and the design does
+    not declare is added in a probe load case, and coverage.generate runs again: each mode
+    it then demands gets "no <field> load is declared; one would demand it". A mode no
+    coverage rule of its domain demands is CLAIM_ONLY. Any other is NOT_DEMANDED. The
+    probe is a copy of the design read only here, so it cannot change what the report
+    demands or decides; a probe that raises costs only its reason."""
+    design, registry = report.ir, report.registry
+    if design is None or registry is None:
+        return ()
+    from . import models as domains  # read at call time, as pipeline.lower_components reads it
+    from .pipeline import lower_components
+
+    named = {(r.subject[0], r.mode) for r in map(_requirement, report.outcomes) if r.subject}
+    models = lower_components(design, registry)
+    out: list[Unchecked] = []
+    for name, component in design.components.items():
+        spec = domains.KINDS[component.kind]
+        left = sorted((m for m in spec.modes if (name, m) not in named), key=lambda m: m.id)
+        if not left:
+            continue
+        loads = _load_reasons(name, spec.grammars.get(component.kind), design, models, registry, named)
+        ruled = {m for rule in spec.coverage for m in rule.demands}
+        out += [Unchecked(name, m.id, loads.get(m) or (NOT_DEMANDED if m in ruled else CLAIM_ONLY)) for m in left]
+    return tuple(out)
+
+
+PROBE = "petra.probe"
+"""The name of the load case a probe adds; a .petra load name cannot contain a dot."""
+
+
+def _load_reasons(name: str, grammar: Grammar | None, design: Design, models: Mapping[str, Any], registry: Registry,
+                  named: set[tuple[str, FailureMode]]) -> dict[FailureMode, str]:
+    if grammar is None or "." in grammar.target:  # no grammar, or loads that target a part of the component
+        return {}
+    declared = {e.field for case in design.loads.values() for e in case.entries if e.target == (name,)}
+    fields: dict[FailureMode, list[str]] = {}
+    for load in grammar.loads:
+        if load in declared:
+            continue
+        try:
+            found = coverage.generate(_probe(design, name, load), models, registry)
+        except Exception:  # the probe is tooling: a domain hook that refuses it costs only this reason
+            continue
+        for r in found:
+            if r.subject and r.subject[0] == name and (name, r.mode) not in named:
+                fields.setdefault(r.mode, []).append(load)
+    return {mode: f"no {' or '.join(dict.fromkeys(f))} load is declared; one would demand it" for mode, f in fields.items()}
+
+
+def _probe(design: Design, name: str, load: str) -> Design:
+    """The design with one more load case, giving `load` on component `name` as zero."""
+    span = Span("<probe>", 0, 0)
+    value = Input(f"{PROBE}.{name}.{load}", Quantity(Interval(Fraction(0), Fraction(0)), DIMENSIONLESS),
+                  Signature("petra", "a load the design does not declare, added to see what coverage would demand"),
+                  InputKind.ASSUMED, span)
+    return dataclasses.replace(design, loads={**design.loads, PROBE: LoadCase(PROBE, (LoadEntry((name,), load, value),), span)})
+
+
+def _requirement(outcome: Outcome) -> Requirement:
+    return outcome.requirement if isinstance(outcome, (Waived, Open)) else outcome.obligation.requirement
+
+
+def edge(found: tuple[Finding, ...], left: tuple[Unchecked, ...]) -> list[str]:
+    """The lines after the obligation table that say where the checking stopped. One
+    `excused` line per check a guard excuses, by obligation (subject/mode) and check name,
+    its conditions joined by "; " and each said once across load cases. Then one `not
+    checked` line per reason and set of components, naming the modes; a reason that names
+    a load comes first, then CLAIM_ONLY, then NOT_DEMANDED."""
+    excused: dict[tuple[str, str], list[str]] = {}
+    for f in found:
+        where = "/".join(f.requirement.split("/")[:2])
+        for v in f.values:
+            if v.excused:
+                excused.setdefault((where, v.what), []).append(v.excuse or "a guard of its clause excuses it")
+    lines = [f"excused    {where}: {what}: {'; '.join(dict.fromkeys(why))}" for (where, what), why in excused.items()]
+    subjects: dict[tuple[str, str], list[str]] = {}
+    for u in left:
+        subjects.setdefault((u.reason, u.mode), []).append(u.subject)
+    modes: dict[tuple[str, tuple[str, ...]], list[str]] = {}
+    for (reason, mode), names in subjects.items():
+        modes.setdefault((reason, tuple(names)), []).append(mode)
+    order = {CLAIM_ONLY: 1, NOT_DEMANDED: 2}
+    for reason, names in sorted(modes, key=lambda k: order.get(k[0], 0)):
+        lines.append(f"not checked  {', '.join(modes[reason, names])} on {', '.join(names)}: {reason}")
+    return lines
+
+
 class _Context:
     """What reading a design's outcomes needs once: the dimension of every signed input and
     param, and each domain's reader."""
@@ -434,7 +558,7 @@ class _Context:
 
 
 def _finding(outcome: Outcome, context: _Context | None) -> Finding:
-    requirement = outcome.requirement if isinstance(outcome, (Waived, Open)) else outcome.obligation.requirement
+    requirement = _requirement(outcome)
     entry = requirement.origin.claim if isinstance(requirement.origin, ClaimOrigin) else COVERAGE_ENTRY
     kind = OUTCOMES[type(outcome)]
     category = DETAILING if requirement.mode.id in DETAILING_MODES else STRENGTH
@@ -456,6 +580,7 @@ def _finding(outcome: Outcome, context: _Context | None) -> Finding:
         readout = Readout((), {}, f"the {name} reader failed: {type(exc).__name__}: {exc}")
     point = () if refutation is None else _coordinates(refutation, context, readout.dims, units)
     values = tuple(map(_rule, readout.values)) if DETAILING_MODES.get(requirement.mode.id) == RULE else readout.values
+    values = _excused(values, statement, at, context, readout.dims, units)
     where = None if not values else ("box" if refutation is None else "point")
     claim = _claimed(requirement, values, units)
     return Finding(requirement.id, entry, category, kind, rule, digest, describe, values, where, claim, point, needs, readout.note)
@@ -463,7 +588,142 @@ def _finding(outcome: Outcome, context: _Context | None) -> Finding:
 
 def _rule(v: Value) -> Value:
     """A rule's term as met or not, by the levels or counts the reader gave."""
-    return Value(v.what, None, None, None, v.excused, v.claimed, v.demand is not None and v.capacity is not None and v.demand <= v.capacity, ())
+    met = v.demand is not None and v.capacity is not None and v.demand <= v.capacity
+    return Value(v.what, None, None, None, v.excused, v.claimed, met, (), v.excuse)
+
+
+# --- Why a term is excused ----------------------------------------------------------------
+
+
+def _excused(values: tuple[Value, ...], statement: Statement, at: Mapping[str, Fraction] | None, context: _Context,
+             dsg: Mapping[str, Dim], units: Mapping[Dim, str]) -> tuple[Value, ...]:
+    """Each excused term the reader left unworded, with the condition that excuses it read
+    from the statement (_excuse). The reader's terms are the goal's, in order, so a goal
+    of another length leaves them as they are."""
+    goal = statement.goal
+    if not any(v.excused and v.excuse is None for v in values) or not isinstance(goal, AllNonpositive) or len(goal.exprs) != len(values):
+        return values
+    hyps = [h for h in statement.hyps if isinstance(h, RangeHyp)]
+    box = {h.sym: Interval(at[h.label], at[h.label]) if at is not None and h.label in at else Interval(h.lo, h.hi) for h in hyps}
+    dims = {h.sym: _label_dim(h.label, context, dsg) for h in hyps}
+    kinds = {h.sym: label_kind(h.label) for h in hyps}
+    return tuple(dataclasses.replace(v, excuse=_excuse(term, box, dims, kinds, units)) if v.excused and v.excuse is None else v
+                 for v, term in zip(values, goal.exprs))
+
+
+def _label_dim(label: str, context: _Context, dsg: Mapping[str, Dim]) -> Dim | None:
+    kind = label_kind(label)
+    if kind is LabelKind.REGISTRY:
+        return context.registry_unit(label)[0]
+    return (dsg if kind is LabelKind.DESIGN else context.dims).get(label)
+
+
+def _excuse(term: Expr, box: Mapping[str, Interval], dims: Mapping[str, Dim | None], kinds: Mapping[str, LabelKind],
+            units: Mapping[Dim, str]) -> str | None:
+    """A guarded term is Min((check, *guards)), as the steel deck's builder writes it
+    (models/steel/build.term): it holds where the check holds or where any guard is <= 0,
+    the region where the clause excuses the formula. Each guard <= 0 over the box (or at
+    the point) gives its condition (_condition), joined by "; ". None when the term is no
+    such Min or no guard is <= 0 there."""
+    if not isinstance(term, Min):
+        return None
+    try:
+        found = [g for g in term.args[1:] if enclose(g, box).hi <= 0]
+        return "; ".join(_condition(g, box, dims, kinds, units) for g in found) or None
+    except (KeyError, KernelArithmeticError):
+        return None
+
+
+def _condition(guard: Expr, box: Mapping[str, Interval], dims: Mapping[str, Dim | None], kinds: Mapping[str, LabelKind],
+               units: Mapping[Dim, str]) -> str:
+    """`guard <= 0` as `a = x <= b = y`, its positive summands against its negated ones,
+    each side's value over the box in the design's unit for its dimension. The side that
+    names an input or a design value comes first: "ff1.distance = 20 inch >= W14x90.d / 2
+    = 7 inch". Symbols print by their last two dotted parts (W14x90.d), or in full where
+    two would print alike."""
+    summands = list(_summands(guard))
+    a = _sum([t for t in summands if not _negative(t)])
+    b = _sum([t.arg if isinstance(t, Neg) else Const(-t.value) for t in summands if _negative(t)])
+    full = _names(guard)
+    short = {n: ".".join(n.removeprefix("const.").split(".")[-2:]) for n in full}
+    shown = {n: s if list(short.values()).count(s) == 1 else n.removeprefix("const.") for n, s in short.items()}
+
+    def side(e: Expr) -> str:
+        return f"{_NAME.sub(lambda m: shown.get(m[0], m[0]), render(e))} = {_amount(e, box, dims, units)}"
+
+    if not any(_negative(t) for t in summands):
+        return f"{side(guard)} <= 0"
+    design = {LabelKind.DESIGN, LabelKind.INPUT, LabelKind.PARAM}
+    if any(kinds.get(n) in design for n in _names(b)) and not any(kinds.get(n) in design for n in _names(a)):
+        return f"{side(b)} >= {side(a)}"
+    return f"{side(a)} <= {side(b)}"
+
+
+_NAME = re.compile(r"[A-Za-z_][\w.]*")
+"""A symbol, or a function name, in the text `render` writes."""
+
+
+def _names(expr: Expr) -> set[str]:
+    return set(_NAME.findall(render(expr)))
+
+
+def _summands(expr: Expr):
+    if isinstance(expr, Add):
+        for a in expr.args:
+            yield from _summands(a)
+    else:
+        yield expr
+
+
+def _negative(term: Expr) -> bool:
+    return isinstance(term, Neg) or (isinstance(term, Const) and term.value < 0)
+
+
+def _sum(terms: list[Expr]) -> Expr:
+    return Const(Fraction(0)) if not terms else terms[0] if len(terms) == 1 else Add(tuple(terms))
+
+
+def _amount(expr: Expr, box: Mapping[str, Interval], dims: Mapping[str, Dim | None], units: Mapping[Dim, str]) -> str:
+    """Its value over the box, `lo to hi` where it ranges, in the unit `_unit` picks for
+    its dimension; a bare SI number when the dimension is unknown."""
+    value = enclose(expr, box)
+    dim = _dim_of(expr, dims)
+    unit = None if dim is None else _unit(dim, max(abs(value.lo), abs(value.hi)), units)
+    scale = Fraction(1) if unit is None else _factor(unit)
+    lo, hi = _number(float(value.lo / scale)), _number(float(value.hi / scale))
+    return f"{lo if lo == hi else f'{lo} to {hi}'}{_unit_text(unit)}"
+
+
+def _dim_of(expr: Expr, dims: Mapping[str, Dim | None]) -> Dim | None:
+    """The dimension of an expression over symbols of known dimension, or None."""
+    match expr:
+        case Sym(name=name):
+            return dims.get(name)
+        case Const():
+            return DIMENSIONLESS
+        case Neg(arg=a) | Abs(arg=a):
+            return _dim_of(a, dims)
+        case Add(args=args) | Min(args=args) | Max(args=args):
+            found = {_dim_of(a, dims) for a in args}
+            return found.pop() if len(found) == 1 else None
+        case Mul(args=args):
+            return functools.reduce(lambda x, y: _power(x, y, 1), (_dim_of(a, dims) for a in args), DIMENSIONLESS)
+        case Div(num=n, den=d):
+            return _power(_dim_of(n, dims), _dim_of(d, dims), -1)
+        case PowInt(base=b, exponent=k):
+            return _power(DIMENSIONLESS, _dim_of(b, dims), k)
+        case Sqrt(arg=a):
+            inner = _dim_of(a, dims)
+            if inner is not None and not any(e % 2 for e in dataclasses.astuple(inner)):
+                return Dim(*(e // 2 for e in dataclasses.astuple(inner)))
+    return None
+
+
+def _power(a: Dim | None, b: Dim | None, k: int) -> Dim | None:
+    """a times b to the k."""
+    if a is None or b is None:
+        return None
+    return Dim(*(x + k * y for x, y in zip(dataclasses.astuple(a), dataclasses.astuple(b))))
 
 
 def _parts(outcome: Outcome) -> tuple[Statement | None, Refutation | None, str | None]:
@@ -697,5 +957,5 @@ def _parts_lines(v: Value) -> list[str]:
     return [f"weakest    {weakest.text(v.unit, True)}", *(f"part       {p.text(v.unit, False)}" for p in rest)]
 
 
-__all__ = ["Claimed", "Coordinate", "Finding", "Governing", "Limit", "Part", "Readout", "Value", "findings", "governing",
-           "summary", "DETAILING_MODES", "READERS", "TERMS"]
+__all__ = ["Claimed", "Coordinate", "Finding", "Governing", "Limit", "Part", "Readout", "Unchecked", "Value", "edge", "findings",
+           "governing", "summary", "unchecked", "CLAIM_ONLY", "DETAILING_MODES", "NOT_DEMANDED", "READERS", "TERMS"]

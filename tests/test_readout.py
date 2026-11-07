@@ -44,7 +44,7 @@ KIP = CUSTOMARY["kip"][0]
 RATIONAL = re.compile(r"\b\d+/\d+\b")
 OBLIGATION_KEYS = {"requirement", "entry", "category", "outcome", "rule", "statement_hash", "describe", "at", "governing",
                    "demand", "capacity", "unit", "utilisation", "checks", "claim", "counterexample", "margin_point", "needs", "note"}
-CHECK_KEYS = {"check", "demand", "capacity", "unit", "utilisation", "excused", "met", "parts"}
+CHECK_KEYS = {"check", "demand", "capacity", "unit", "utilisation", "excused", "excuse", "met", "parts"}
 PART_KEYS = {"part", "count", "capacity", "governing", "limits"}
 WEAKEST = "most loaded bolt by the elastic method against the weakest bolt"
 SUMMED = "bolt shear, bearing and tearout summed over the group"

@@ -45,8 +45,9 @@ The same report as data comes from `petra check --json examples/truss_fail.petra
 | `registry` | `Registry \| None` | the registry it was checked against |
 | `findings` | `tuple[Finding, ...]` | one per outcome, in the same order, computed on first use |
 | `governing` | `dict[str, Governing \| None]` | the governing `"strength"` check and the governing `"detailing"` check of the whole report, computed on first use (see Findings) |
+| `unchecked` | `tuple[Unchecked, ...]` | each mode a component's domain knows that no requirement names on that component, with the reason, computed on first use (see What was not checked) |
 
-`report.render()` returns the text `petra check` prints. Right after its `checked` line come the lines `governing  strength` and `governing  detailing`, each naming the requirement, the check, its demand, capacity and utilisation in the design's units. The strength line reads `none` when no strength check has a utilisation, and the detailing line is left out when no detailing check has one. Each row of the obligation table ends with its finding's utilisation, or with nothing when it has none. `report.to_json()` returns the JSON described below.
+`report.render()` returns the text `petra check` prints. Right after its `checked` line come the lines `governing  strength` and `governing  detailing`, each naming the requirement, the check, its demand, capacity and utilisation in the design's units. The strength line reads `none` when no strength check has a utilisation, and the detailing line is left out when no detailing check has one. Each row of the obligation table ends with its finding's utilisation, with `excused` when a guard excuses every term it read, or with nothing. After the table (and its margin lines) come the `excused` and `not checked` lines described under What was not checked. `report.to_json()` returns the JSON described below.
 
 ## Verdicts
 
@@ -96,7 +97,7 @@ Each requirement ends as one of five outcome classes, all defined in `petra.verd
 | `needs` | `needs` | for an open item, what would settle it |
 | `note` | `note` | why some or all terms were not read |
 
-A `Value` is one term: `what`, `unit`, `demand`, `capacity`, `excused`, `claimed`, `met`, `parts` and `utilisation`, which is demand / capacity, 0 when a guard excuses the term or the demand acts the other way (a truss member in tension against its buckling resistance), and infinite for a positive demand against no capacity. `Value.ratio` keeps the sign. `Value.to_json()` gives the term's JSON record.
+A `Value` is one term: `what`, `unit`, `demand`, `capacity`, `excused`, `excuse`, `claimed`, `met`, `parts` and `utilisation`, which is demand / capacity, 0 when a guard excuses the term or the demand acts the other way (a truss member in tension against its buckling resistance), and infinite for a positive demand against no capacity. `Value.ratio` keeps the sign. `Value.to_json()` gives the term's JSON record. `excuse` is None unless `excused`; then it is the condition that excuses the term, with its numbers where the term was read (see What was not checked).
 
 - **Rules.** Hole use and joint type are rules, met or not (`DETAILING_MODES` marks them `"rule"`). Their demand and capacity are joint levels and counts, not quantities, so `demand`, `capacity`, `unit` and `utilisation` are None, and `met` says whether the rule holds. `met` is None for every other term.
 - **Parts.** A capacity made of parts lists them in `parts`, weakest first. Today these are the two bolt group checks of the steel deck, "most loaded bolt ... against the weakest bolt" and "bolt shear, bearing and tearout summed over the group". Each `Part(what, count, limits)` is one row position of the group, such as `"bottom row (1 bolt)"`. Its `limits` are each bolt's strengths there: `Limit(what, capacity)` for its shear and for its bearing and tearout in each ply, in the check's unit. A tearout names its clear distance, as in `"tearout of the tee stem to its edge (lc 0.6875 in)"`. `Part.capacity` is the least of its limits, and `Part.governing` is the limit that sets it.
@@ -111,6 +112,33 @@ Some obligations have no single demand and capacity to read. These are R2 (defin
 
 `report.governing` (or `petra.readout.governing(report.findings)`) has two keys. `"strength"` is the governing strength check and `"detailing"` the governing detailing check. Each is ranked as a finding's `governing` is, over every finding of that category: a rule that is not met first, then the highest utilisation, the first in report order among equals. Each is a `Governing(category, requirement, value)`, or None when no term of the category has a utilisation. Detailing means edge distance, spacing, room to tighten, fillet size, the proportions that keep a connection ductile, hole use and joint type (`readout.DETAILING_MODES`). Every other mode is a strength check, so the governing strength check is never an edge distance.
 
+### What was not checked
+
+A pass covers the obligations in its table and nothing else. Two kinds of line after the table say where the checking stopped. Both are tooling, read after the verdict, and change no verdict.
+
+**Excused checks.** Some clauses apply only under a condition, and the check's term carries a guard: the term holds wherever the formula holds or the guard is <= 0. Where a guard is <= 0 over the whole box, or at the counterexample or margin point, the term is excused, its `Value.excused` is true and its utilisation is 0. Its `Value.excuse` then gives each guard that excuses it as a condition with its numbers, both sides in the design's units, the side that names a design input first:
+
+```
+excused    ff1/steel.web_sidesway_buckling: member web: web sidesway buckling where its slenderness ratio makes it apply (J10.4): ((W14x90.d - (2 * W14x90.kdes)) / W14x90.tw) / (ff1.unbraced_length / W14x90.bf) = 2.604 >= j10_4.restrained_limit + strict.ratio = 2.3
+```
+
+A domain reader may word the excuse itself by setting `Value.excuse`. When it does not, `readout.findings` reads it from the guard in the kernel statement, a term of the form `Min((check, *guards))` as the steel deck builds it. Symbols print by their last two dotted parts, or in full where two would print alike. A check excused in several load cases prints one line, its distinct conditions joined by `; `.
+
+**Modes not demanded.** `readout.unchecked(report)` (or `report.unchecked`) lists, per component in design order, each mode of its domain (`KINDS[kind].modes`) that no requirement names on that component, as `Unchecked(subject, mode, reason)`. The reason comes from the coverage table:
+
+- `"no <field> load is declared; one would demand it"`: the component's kind takes a load `field` that no load case declares on it, and a probe copy of the design with that load added as zero makes `coverage.generate` demand the mode. The probe changes nothing the report demands or decides.
+- `readout.CLAIM_ONLY`, "only a claim demands it; the coverage table never does": no coverage rule of the domain lists the mode.
+- `readout.NOT_DEMANDED`, "not demanded by the coverage table": a coverage rule can demand the mode but does not for this component, and the table records no reason. The component's attributes or kind are the usual cause.
+
+The text prints one line per reason and set of components, naming the modes in id order, with the load reasons first:
+
+```
+not checked  steel.panel_zone on ff1: no panel_shear load is declared; one would demand it
+not checked  steel.bearing, steel.block_shear, ... on ff1: not demanded by the coverage table
+```
+
+Modes of other domains a component could meet (a port contract, galvanic corrosion) are not listed: they belong to the connection, not the component's domain.
+
 ## JSON
 
 `petra check --json FILE` prints a single object, with keys sorted.
@@ -118,7 +146,10 @@ Some obligations have no single demand and capacity to read. These are R2 (defin
 ```
 {"file": FILE, "design": NAME, "status": "PASS" | "FAIL" | "UNKNOWN" | "MARGINAL",
  "governing": {"strength": GOVERNING | null, "detailing": GOVERNING | null},
- "verdicts": [ENTRY, ...]}                     one per claim, then "coverage"
+ "verdicts": [ENTRY, ...],                     one per claim, then "coverage"
+ "unchecked": [UNCHECKED, ...]}                each mode of a component's domain no requirement names, design order
+
+UNCHECKED = {"subject": NAME, "mode": MODE, "reason": TEXT}   see What was not checked
 
 GOVERNING = {"requirement", **CHECK}           the report's governing check of that category
 
@@ -146,6 +177,7 @@ OBLIGATION = {"requirement", "entry", "describe",
 
 CHECK = {"check": NAME, "demand", "capacity": NUMBER | null,   null for a rule
          "unit": UNIT | null, "utilisation": NUMBER | null, "excused": true | false,
+         "excuse": TEXT | null,                the condition that excuses it, with its numbers; null unless excused
          "met": true | false | null,           a rule's outcome; null for any other check
          "parts": [PART, ...]}                 what a bolt group's capacity is made of, weakest first; else []
 
@@ -172,7 +204,7 @@ Here is the bolts obligation of the 60 kip shear tab in `tests/fixtures/readout/
  "demand": 36.05551275463989, "capacity": 17.89235190989812, "unit": "kip", "utilisation": 2.015135457664112,
  "checks": [{"check": "beam side: most loaded bolt by the elastic method against the weakest bolt (J3.7, J3.11a)",
              "demand": 36.05551275463989, "capacity": 17.89235190989812, "unit": "kip", "utilisation": 2.015135457664112,
-             "excused": false, "met": null,
+             "excused": false, "excuse": null, "met": null,
              "parts": [{"part": "top row (1 bolt)", "count": 1, "capacity": 17.89235190989812, "governing": "bolt shear",
                         "limits": [{"limit": "bolt shear", "capacity": 17.89235190989812},
                                    {"limit": "bearing on the plate", "capacity": 29.3625},

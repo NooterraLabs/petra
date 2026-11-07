@@ -724,7 +724,7 @@ def _margin_lines(outcomes: tuple[Outcome, ...]) -> list[str]:
 
 
 def render(verdict: Verdict, outcomes: tuple[Outcome, ...], detail: Callable[[Outcome], list[str]] | None = None,
-           row: Callable[[Outcome], str] | None = None, summary: tuple[str, ...] = ()) -> str:
+           row: Callable[[Outcome], str] | None = None, summary: tuple[str, ...] = (), edge: tuple[str, ...] = ()) -> str:
     """The text `petra check` prints: verdict line, scope, per-obligation table (rule,
     outcome, statement hash prefix, evidence source), then the footprint grouped by tag
     with owner and source. For UNKNOWN, each open item with what it needs. For FAIL, every
@@ -736,8 +736,9 @@ def render(verdict: Verdict, outcomes: tuple[Outcome, ...], detail: Callable[[Ou
     lines follow the `checked` line and `row(outcome)` ends the outcome's table row:
     pipeline.Report passes the governing strength and detailing checks and each finding's
     utilisation. Each proved claim with a margin gets a line saying whether the margin was
-    proved or is undecided. Margins print in a readable unit of their dimension
-    (units.readable_text)."""
+    proved or is undecided. `edge` lines follow the table and its margin lines:
+    pipeline.Report passes the checks a guard excused and the modes not demanded. Margins
+    print in a readable unit of their dimension (units.readable_text)."""
     show = detail or (lambda o: _point_lines(o, verdict.footprint))
     count = {kind: sum(isinstance(o, kind) for o in outcomes) for kind in (Discharged, Refuted, WithinMargin, Waived, Open)}
     lines = [STATUS[type(verdict)]]
@@ -752,6 +753,7 @@ def render(verdict: Verdict, outcomes: tuple[Outcome, ...], detail: Callable[[Ou
     lines += [f"  {_outcome_row(o)}{row(o) if row is not None else ''}" for o in outcomes]
     if not isinstance(verdict, Fail):
         lines += _margin_lines(outcomes)
+    lines += edge
     for o in outcomes:
         if isinstance(o, Refuted):
             lines.append(f"counterexample  {o.obligation.requirement.id}: {o.obligation.describe}")
