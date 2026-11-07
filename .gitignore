@@ -2,5 +2,7 @@ __pycache__/
 *.pyc
 .petra-cache/
 .claude/
+# Wheels and sdists built by hand, as by `pip wheel --no-deps -w dist .`
+/dist/
 # Standards and source PDFs obtained under their publishers' terms: read locally, never published
 docs/research/sources/
