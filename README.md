@@ -292,3 +292,7 @@ python scripts/predicate.py
 - Member buckling uses the EN 1993-1-1 curve c reduction with gamma_M1 = 1 and no EN 1090 erection tolerance. The plastic collapse model lets a buckled member keep its buckling resistance, which is unconservative for an indeterminate truss. The 0.002 small-strain limit is the maintainers' choice, not a code value.
 - Each load case named in a claim is checked on its own. Cases are not summed.
 - Continuum finite elements, reduced bases and learned surrogates are out of scope.
+
+## Licence and contributing
+
+Petra's code is Apache-2.0 ([LICENSE](LICENSE)) and its documentation is CC BY 4.0 ([docs/LICENSE.md](docs/LICENSE.md)). It stays that way, as [CONTRIBUTING.md](CONTRIBUTING.md) pledges. Contributions are signed off under the Developer Certificate of Origin. [TRADEMARK.md](TRADEMARK.md) says how the Petra name may be used and what "Petra-checked" means.

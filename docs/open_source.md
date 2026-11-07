@@ -59,7 +59,7 @@ Three research passes read the sources on 2026-11-06. I re-checked the claims th
 
 ## 2. The playbook for Petra
 
-"Has" is what the repo holds on 2026-11-06. "When" ties each step to `docs/plan.md`.
+"Has" is what the repo holds on 2026-11-06, after the three release decisions in `docs/plan.md` §8 item 8. "When" ties each step to `docs/plan.md`.
 
 | Practice | Precedent | Petra has | Petra adds | When |
 |---|---|---|---|---|
@@ -69,9 +69,9 @@ Three research passes read the sources on 2026-11-06. I re-checked the claims th
 | Independent checkers, scored in public | Kernel Arena | One kernel, a twin elaborator per deck, the outside judge | A written certificate format and a public corpus of valid and planted-invalid certificates. Any checker, `always-accept` and `always-reject` included, is scored on it | P3 specifications, P7 Lean port |
 | Qualify the small checker, publish the evidence | NASA, Ferrocene, MOOSE, code_aster | A kernel of about 1,500 lines, `docs/steel_traceability.md`, the gate logs | An evidence set per release: the traceability matrix, the gate, recall and gap reports, and the rule text each mode cites | Each release |
 | Rerun everything on every change | code_aster, Rocq | The full suite, the steel gate, canary recall and the absurd-design gap | CI that runs the gate and recall on every merge and rebuilds every example | Before first publish |
-| Apache-2.0, docs CC-BY-4.0 | Lean, MCP | `LICENSE` and `pyproject.toml` say Apache-2.0 | CC-BY-4.0 for `docs/`. The data-licence audit for the shapes table stays as `docs/plan.md` §8 item 3 says | Before first publish |
-| DCO and a no-relicence pledge | GitLab, Pydantic, Astral | Nothing | A DCO check on pull requests, and one README sentence saying Petra stays Apache-2.0 | Before first publish |
-| A name policy written before forks exist | PSF, Rust, OpenFOAM | Nothing | "Compatible with Petra" free to all. "Petra-checked" only for a verdict from a checker that passes the conformance corpus. Drafted in public before adoption | Before first publish |
+| Apache-2.0, docs CC-BY-4.0 | Lean, MCP | `LICENSE` says Apache-2.0, and `docs/LICENSE.md` puts the docs under CC BY 4.0 | The data-licence audit for the shapes table, as `docs/plan.md` §8 item 3 says | Before first publish |
+| DCO and a no-relicence pledge | GitLab, Pydantic, Astral | `CONTRIBUTING.md` asks for a DCO sign-off and pledges that Petra stays Apache-2.0 | A CI check that refuses unsigned commits | Before first publish |
+| A name policy written before forks exist | PSF, Rust, OpenFOAM | `TRADEMARK.md` lets anyone say "compatible with Petra" and reserves "Petra-checked" for checkers that pass the conformance corpus | Public comment on the draft, and the conformance corpus it points to | Before first publish |
 | Small merge group, open review, labelled AI work | mathlib, Lean core, Ferrocene | Lanes merge through one integrator | Anyone reviews, a few named maintainers merge, CI gates the merge. Changes to the kernel, registries and modes start as a proposal. AI-assisted pull requests carry a label | Before first publish |
 | Proposals need a sponsor, a prototype and a conformance test | MCP, Rust | Registry errata record date, old value and new value | Petra proposals for the language, certificate format, modes and registries. Final status requires a canary or conformance case | When outside contributors arrive |
 | Dated deprecation | mathlib, MCP, SemVer | Registry versions count errata | Stay on 0.y until the certificate format is stable. Treat `.petra` syntax and the certificate format as public API, each deprecation dated, kept twelve months after 1.0 | From first publish |
