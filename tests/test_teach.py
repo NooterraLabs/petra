@@ -84,6 +84,54 @@ class OneGrammarPerKind(unittest.TestCase):
         self.assertIn("reads `rows <n>`", problems)
 
 
+class KindReadings(unittest.TestCase):
+    """A line one kind measures differently from another says, in each kind's grammar, what
+    it is measured from or between."""
+
+    @staticmethod
+    def meanings(line: str) -> dict[str, str]:
+        """kind -> the meaning `petra kinds --json` prints for `line`, for each kind that takes it."""
+        domains = json.loads(run("kinds", "--json")[1])["domains"]
+        return {k["kind"]: f["meaning"] for d in domains for k in d["kinds"] for f in k["fields"] if f["name"] == line}
+
+    def test_every_kind_that_takes_a_line_read_by_kind_has_its_reading(self):
+        for line, by_kind in steel.READINGS.items():
+            with self.subTest(line):
+                takers = {kind for kind, spec in steel.KIND_SPECS.items() if line in (*spec.required, *spec.optional)}
+                self.assertEqual(set(by_kind), takers)
+
+    def test_each_kind_says_where_its_support_gauge_is_measured(self):
+        found = self.meanings("support_gauge")
+        self.assertEqual(set(found), {"double_angle", "single_angle", "shear_tee", "shear_end_plate", "seated"})
+        for kind in ("double_angle", "shear_tee", "shear_end_plate", "seated"):
+            self.assertIn("between the two bolt lines", found[kind], kind)
+        self.assertIn("plus the beam web's thickness", found["double_angle"])
+        self.assertIn("from the angle's heel", found["single_angle"])
+        self.assertIn("tee flange", found["shear_tee"])
+        self.assertIn("end plate", found["shear_end_plate"])
+        self.assertIn("seat angle", found["seated"])
+        self.assertEqual(len(set(found.values())), len(found), "no two kinds read it the same way")
+
+    def test_the_beam_gauge_is_measured_from_the_heel(self):
+        found = self.meanings("beam_gauge")
+        self.assertEqual(set(found), {"double_angle", "single_angle"})
+        for kind, meaning in found.items():
+            self.assertIn("heel", meaning, kind)
+            self.assertIn("toe's edge distance is that leg less this gauge", meaning, kind)
+
+    def test_the_bolt_line_says_where_it_starts(self):
+        found = self.meanings("bolt_line")
+        self.assertIn("from the weld line", found["shear_tab"])
+        self.assertIn("from the back of the tee flange", found["shear_tee"])
+
+    def test_a_bolted_support_side_without_its_gauge_says_how_to_measure_it(self):
+        for kind, reading in (("single_angle", "from the angle's heel"), ("double_angle", "between the two bolt lines")):
+            with self.subTest(kind):
+                self.assertIn("  support_side bolted\n", example(kind)[1])
+                problems = lowering_errors(re.sub(r"\n  support_gauge [^\n]*", "", example(kind)[1]))
+                self.assertIn(f"a bolted support side names support_gauge, {reading}", problems)
+
+
 class CommonNames(unittest.TestCase):
     def test_the_common_names_resolve(self):
         for name, mid in (("A325", "bolt_group.120"), ("a490", "bolt_group.150"), ("F1852", "bolt_group.120"),
