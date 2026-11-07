@@ -97,13 +97,16 @@ def assess(g: Generated, registry: Registry, with_twin: bool = True) -> Assessed
 
 def packaged(g: Generated, registry: Registry, status: str) -> str:
     """Write the design's calculation package to a temporary directory, re-check it, and
-    say "ok" or what failed."""
+    say "ok" or what failed, a limit state that holds but reads a utilisation above 1
+    included."""
     root = tempfile.mkdtemp(prefix="steel-package-")
     try:
         pkg = P.write_package(g.text, root, registry)
         again = P.recheck(pkg, registry)
         if pkg.status != status:
             return f"packaged as {pkg.status}, checked as {status}"
+        if pkg.over:
+            return f"a limit state that holds reads above 1: {'; '.join(pkg.over)}"
         if not again.holds(status):
             return f"rejected {list(again.rejected)}, missing {list(again.missing)}, re-checked as {again.status}"
         return "ok"
@@ -188,7 +191,7 @@ def render(s: Summary) -> str:
         f"| 8. Makeability | {s.statuses['FAIL'] - len(s.unwitnessed)} of {s.statuses['FAIL']} FAILs carry a witness |",
         f"| 9. Report | {s.packaged - len(s.package_failures)} of {s.packaged} calculation packages re-check (every "
         "certificate accepted by the kernel, every cited statement present, the verdict reproduced from the "
-        "certificates alone) |",
+        "certificates alone, no limit state that holds read above 1) |",
         "",
         "## Verdicts by kind",
         "",
@@ -200,8 +203,7 @@ def render(s: Summary) -> str:
         lines.append(f"| {kind} | {s.by_kind[(kind, 'PASS')]} | {s.by_kind[(kind, 'FAIL')]} | {other} |")
     lines += ["", "Expected (from the deck's own utilisations and geometry) against the verdict: " +
               ", ".join(f"{e} as {st}: {n}" for (e, st), n in sorted(s.expected.items())) + "." +
-              (" The generator aims from the deck's interval enclosure, which can overstate a utilisation; the "
-               f"{len(s.unexpected)} designs decided otherwise are in the log." if s.unexpected else ""), ""]
+              (f" The {len(s.unexpected)} designs decided otherwise are in the log." if s.unexpected else ""), ""]
     if mode_disagree:
         lines += ["## Twin disagreements by mode", "", "| Mode | Designs |", "|---|---|"]
         lines += [f"| {m} | {n} |" for m, n in mode_disagree.most_common()]

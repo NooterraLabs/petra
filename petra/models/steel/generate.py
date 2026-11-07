@@ -75,7 +75,7 @@ class Generated:
     toleranced: bool
     free: bool                # drawn without the detailer's rules
     redraws: int
-    utilisation: float        # the deck's governing load-dependent utilisation, by enclosure
+    utilisation: float        # the deck's governing load-dependent utilisation, as calc.values reads it
     governing: str            # its mode
     geometry: float           # the deck's governing utilisation over checks the load does not change
 

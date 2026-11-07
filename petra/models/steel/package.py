@@ -44,6 +44,7 @@ class Package:
     status: str
     hashes: tuple[str, ...]          # every statement hash the report cites (obligations and validity)
     report: Report
+    over: tuple[str, ...] = ()       # each check the report reads above 1 under a limit state that holds
 
 
 def _hashes(outcome) -> tuple[str | None, tuple[str, ...]]:
@@ -61,12 +62,13 @@ def _number(x: float) -> str:
     return "inf" if x == float("inf") else f"{x:.4g}"
 
 
-def render(design, report: Report, registry: Registry, text: str) -> tuple[str, tuple[str, ...]]:
+def render(design, report: Report, registry: Registry, text: str) -> tuple[str, tuple[str, ...], tuple[str, ...]]:
     outcomes = {}
     for o in report.outcomes:
         req = o.requirement if type(o).__name__ in ("Open", "Waived") else o.obligation.requirement
         outcomes[(req.subject[0], req.mode.id)] = o
     cited: list[str] = []
+    over: list[str] = []
     lines = [f"# Calculation package: {design.name}", "",
              f"Verdict: **{STATUS[type(report.verdict)]}**, by the Petra kernel over every load case and every value in each "
              "stated range.", "",
@@ -105,6 +107,8 @@ def render(design, report: Report, registry: Registry, text: str) -> tuple[str, 
                 lines += [f"Load case `{case}`:", "", "| Check | Demand | Available | Unit | Utilisation |", "|---|---|---|---|---|"]
                 for v in values:
                     u = "excused" if v.excused else _number(v.utilisation)
+                    if state == STATES["Discharged"] and not v.excused and v.utilisation > 1:
+                        over.append(f"{name} {mode} under {case}: {v.what}, utilisation {v.utilisation:.6g}")
                     lines.append(f"| {v.what} | {_number(v.demand)} | {_number(v.capacity)} | {v.unit} | {u} |")
                 lines.append("")
             if outcome is not None:
@@ -121,7 +125,7 @@ def render(design, report: Report, registry: Registry, text: str) -> tuple[str, 
                 if type(outcome).__name__ == "Open":
                     lines.append("Open: " + "; ".join(str(n) for n in outcome.needs))
                 lines.append("")
-    return "\n".join(lines) + "\n", tuple(dict.fromkeys(cited))
+    return "\n".join(lines) + "\n", tuple(dict.fromkeys(cited)), tuple(over)
 
 
 def write_package(text: str, out: Path, registry: Registry) -> Package:
@@ -131,9 +135,9 @@ def write_package(text: str, out: Path, registry: Registry) -> Package:
     path.write_text(text, encoding="utf-8", newline="\n")
     design = parse_design(text, str(path), registry)
     report = check_design(design, registry, (SolverSource(),), sink=CertStore(out / "certs"), path=str(path))
-    body, cited = render(design, report, registry, text)
+    body, cited, over = render(design, report, registry, text)
     (out / "report.md").write_text(body, encoding="utf-8", newline="\n")
-    return Package(out, STATUS[type(report.verdict)], cited, report)
+    return Package(out, STATUS[type(report.verdict)], cited, report, over)
 
 
 @dataclass(frozen=True)
