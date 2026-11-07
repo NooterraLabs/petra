@@ -1,0 +1,30 @@
+petra 0
+
+# violates: steel.beam_side.depth
+# The single-angle example with 8 rows at 3 in pitch on a W16x26 (d = 15.7 in): the angle
+# runs from 1.25 in to 24.75 in below the beam's top, past its 14.95 in of flat web.
+
+design "steel-single-angle" {
+  owner "s.engineer@example.org"
+}
+
+single_angle sa1 {
+  basis lrfd
+  beam W16x26 grade steel.A992
+  support W14x90 flange grade steel.A992
+  angle L4x4x3_8 grade steel.A36 outstanding long
+  bolts bolt_group.120 diameter 0.75 inch threads included
+  rows 8
+  pitch 3 inch
+  edge_vertical 1.25 inch
+  beam_edge 1.75 inch
+  top 2.5 inch
+  beam_gauge 2.5 inch
+  support_side bolted
+  support_gauge 2.5 inch
+}
+
+load gravity {
+  on sa1 shear in [0 kip, 20 kip]
+  signed "s.engineer@example.org" source "beam reaction, LRFD 1.2D + 1.6L, calc SC-3"
+}
