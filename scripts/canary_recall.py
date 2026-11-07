@@ -23,7 +23,8 @@ The holes, unless --hole names others:
     today's Petra from passing that canary. A canary Petra passes gives a hole with no
     modes, already open, which the search exposes by re-finding a PASS of its kind and
     condition. Once P1 makes the canary fail, the modes that refuse it become its hole, so
-    the harness needs no new list.
+    the harness needs no new list. A canary Petra's lowering rejects has no outcome to
+    discharge, so it plants no hole; the report names it.
   - one per mode Petra checks on the kind's generated designs, guarding any condition: the
     strength and detailing modes the judge is silent on, found only when a design the judge
     rejects for some condition passes everything but that mode.
@@ -269,6 +270,9 @@ def render(results: list[dict], stats: dict, args, wall: float, provenance: dict
         today = stats["canaries"].get(r["hole"], "")
         modes = _codes(r["modes"]) if r["modes"] else "none (already open)"
         out.append(f"| `{r['hole']}` | {r['kind']} | {target} | {today} | {modes} | {_found(r)} |")
+    rejected = sorted(name for name, status in stats["canaries"].items() if status == "REJECTED")
+    out += ["", f"Canaries Petra's lowering rejects, which leave no outcome to discharge and so plant no hole: "
+                f"{_codes(rejected)}."]
     out += ["", "## Mode holes", "", "| Kind | Exposed | Not exposed |", "|---|---|---|"]
     for kind in KINDS:
         mine = by_kind[kind]["mode"] if kind in by_kind else []
