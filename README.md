@@ -30,6 +30,12 @@ To install a wheel file, such as one built that way, pass its path to pip:
 pip install petra-0.1.0-py3-none-any.whl
 ```
 
+On a machine with no network, where `numpy` and `scipy` are already installed, add `--no-index` so pip does not try to reach an index:
+
+```bash
+pip install --no-index petra-0.1.0-py3-none-any.whl
+```
+
 Petra is not on PyPI yet. Publication is pending.
 
 To run Petra from the repository root without installing it, write `python -m petra` in place of `petra`.

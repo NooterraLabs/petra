@@ -1,7 +1,8 @@
 petra 0
 
 # A concentrated compressive force from a beam flange on a W14x90 column flange, away from
-# the column ends, with the panel-zone shear and the column's axial load.
+# the column ends. No panel_shear or axial load is declared, so the panel zone (J10.6) is
+# not checked here: add `on ff1 panel_shear in [...]` to demand it.
 
 design "steel-flange-force" {
   owner "s.engineer@example.org"

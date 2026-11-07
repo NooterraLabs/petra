@@ -384,7 +384,8 @@ TEMPLATES: dict[str, tuple[str, str, str]] = {
         'petra 0\n'
         '\n'
         '# A concentrated compressive force from a beam flange on a W14x90 column flange, away from\n'
-        "# the column ends, with the panel-zone shear and the column's axial load.\n"
+        '# the column ends. No panel_shear or axial load is declared, so the panel zone (J10.6) is\n'
+        '# not checked here: add `on ff1 panel_shear in [...]` to demand it.\n'
         '\n'
         'design "steel-flange-force" {\n'
         '  owner "s.engineer@example.org"\n'
