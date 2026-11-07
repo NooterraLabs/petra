@@ -1,0 +1,34 @@
+petra 0
+
+# A sensor board fed from a 12 V adapter. A 1117 regulator makes the 3.3 V logic rail,
+# a red LED shows the rail is up, and a divider scales the input for the logic's ADC.
+# The claims bound the divider's output and the LED's current. Coverage adds every
+# rating the parts carry: each resistor's power and voltage, the LED's derated current,
+# the regulator's headroom, input, current and junction temperature, and the adapter's
+# capacity. Every value holds at the worst corner of every part's tolerance, its
+# temperature coefficient and the ambient range of an indoor room.
+
+design "sensor-board-power" {
+  owner "e.designer@example.org"
+  environment indoor_dry
+}
+
+board psu {
+  supply vin voltage in [11.4 V, 12.6 V] signed "e.designer@example.org" source "adapter datasheet, 12 V +-5 %" capacity in [1 A, 1 A] signed "e.designer@example.org" source "adapter datasheet, 1 A"
+  regulator v3 part reg.ldo1117_3v3_sot223 from vin
+  sink logic from v3
+  led d1 part led.red_0603 from v3 resistor r1
+  resistor r1 part res.0603_1pct value 150 ohm
+  divider sense from vin top r2 bottom r3
+  resistor r2 part res.0603_1pct value 33.2 kohm
+  resistor r3 part res.0603_1pct value 10 kohm
+}
+
+load run {
+  on psu.logic current in [5 mA, 80 mA]
+  signed "e.designer@example.org" source "logic power budget rev 2"
+}
+
+claim adc_high: psu.sense.output <= 3 V
+claim adc_low:  psu.sense.output >= 2.5 V
+claim lit:      psu.d1.current >= 5 mA

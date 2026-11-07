@@ -64,6 +64,45 @@ def series_key(steps: int, mantissa: str) -> str:
     return f"iec60063.E{steps}.{mantissa.replace('.', '_')}"
 
 
+BASE = Fraction(10)
+"""A preferred-number series repeats each decade, so a value is a mantissa in [1, 10)
+times a power of ten."""
+
+
+def split_decade(value: Fraction) -> tuple[Fraction, Fraction]:
+    """(mantissa in [1, 10), power of ten) whose product is `value` > 0."""
+    decade = Fraction(1)
+    while value / decade >= BASE:
+        decade *= BASE
+    while value / decade < 1:
+        decade /= BASE
+    return value / decade, decade
+
+
+def _mantissas(steps: int, constants: Mapping[str, Constant]) -> dict[Fraction, str]:
+    prefix = f"iec60063.E{steps}."
+    return {c.value.lo: name for name, c in constants.items() if name.startswith(prefix)}
+
+
+def preferred(value: Fraction, steps: int, constants: Mapping[str, Constant]) -> tuple[str, Fraction] | None:
+    """(the series constant of the value's mantissa, the value's power of ten), or None
+    when `value` is not a value of the E<steps> series."""
+    if value <= 0:
+        return None
+    mantissa, decade = split_decade(value)
+    name = _mantissas(steps, constants).get(mantissa)
+    return None if name is None else (name, decade)
+
+
+def neighbours(value: Fraction, steps: int, constants: Mapping[str, Constant]) -> tuple[Fraction, Fraction]:
+    """The series values just below and just above `value` > 0."""
+    mantissa, decade = split_decade(value)
+    values = sorted(_mantissas(steps, constants))
+    below = max((m for m in values if m <= mantissa), default=values[-1] / BASE)
+    above = min((m for m in values if m >= mantissa), default=values[0] * BASE)
+    return below * decade, above * decade
+
+
 def _series_constants() -> list[Constant]:
     table = {24: "E24, the series of 24 values per decade", 96: "E96, the series of 96 values per decade"}
     return [Constant(series_key(steps, m), _iv(m), "1", JUDGED, MAINTAINERS,

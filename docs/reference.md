@@ -615,6 +615,30 @@ In a claim, `<qoi>` is one of `bolts`, `bolt_tension`, `bolt_combined`, `slip`, 
 | `holes` | `<ply> std\|ovs\|ssl\|lsl\|ssl_parallel\|lsl_parallel [<ply> <type> ...]` | optional |  |  | hole types by ply (Table J3.3), plies flange, support; a ply it does not name has standard holes |
 | `weathering` | `no\|yes` | optional |  |  | whether the steel is unpainted weathering steel, whose spacing limits are tighter (Section J3.6); no unless stated |
 
+### Domain electronics
+
+Waivable modes: `dc.divider_output`, `dc.led_current`, `dc.led_rating`, `dc.rail_voltage`, `dc.regulator_current`, `dc.regulator_headroom`, `dc.regulator_input`, `dc.regulator_min_load`, `dc.regulator_thermal`, `dc.resistor_power`, `dc.resistor_voltage`, `dc.supply_current`.
+
+#### board
+
+A `board` component is written `board <name> { ... }`. `petra new board` prints its example, `examples/electronics/board.petra`.
+
+Load entries and claims on a `board` component take these forms:
+
+- Load entry: `on <board>.<sink> current in [<lo>, <hi>] [mean <value>]`
+- Claim: `claim <name>: <board>.<qoi> <=|>= <value> [margin <value>] [under <load>, ...]`
+
+In a claim, `<qoi>` is one of `voltage`, `output`, `current`, `power_utilisation`, `junction_temperature`.
+
+| line | form | needed | unit | ids | meaning |
+|---|---|---|---|---|---|
+| `supply` | `<name> voltage in [<lo>, <hi>] signed "<owner>" source "<source>" [capacity in [<lo>, <hi>] signed "<owner>" source "<source>"]` | required | voltage, current |  | a rail fed from outside the board, named by the supply; capacity is the most current it can deliver, and without it the supply-current check is UNKNOWN |
+| `regulator` | `<name> part <registry regulator id> from <rail> [top <resistor> bottom <resistor>]` | optional |  | `reg.*` | a linear regulator fed from a rail; its name is its output rail; an adjustable one names its feedback resistors, top from the output and bottom to ground |
+| `resistor` | `<name> part <registry resistor id> value <resistance> [from <rail>]` | optional | resistance | `res.*` | a chip resistor whose value is in its part's E24 or E96 series; with from, it runs from that rail to ground, and otherwise one divider, LED or regulator names it |
+| `divider` | `<name> from <rail> top <resistor> bottom <resistor>` | optional |  |  | two resistors in series from a rail to ground; its output is the node between them |
+| `led` | `<name> part <registry led id> from <rail> resistor <resistor> [count <n>]` | optional |  | `led.*` | a string of count LEDs (one by default) in series with its current-limit resistor, from a rail to ground |
+| `sink` | `<name> from <rail>` | optional |  |  | a load on a rail; each load case signs the current it draws |
+
 ## Registry
 
 The list below is the output of `petra registry list`. It gives every id a design can name, then the

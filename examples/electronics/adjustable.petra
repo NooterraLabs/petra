@@ -1,0 +1,35 @@
+petra 0
+
+# Two adjustable regulators in a chain. An LM317 sets a 5 V rail with its 121 ohm and
+# 365 ohm feedback pair, and an adjustable LDO takes 5 V down to 3.3 V with its own pair.
+# Each output depends on its reference's spread, the adjust or feedback pin current and
+# both resistors' tolerances. The LM317 also needs a minimum load to stay in regulation,
+# and its own top resistor draws most of it. The claims bound both rails.
+
+design "two-rail-adjustable" {
+  owner "e.designer@example.org"
+  environment indoor_dry
+}
+
+board power {
+  supply vin voltage in [11.4 V, 12.6 V] signed "e.designer@example.org" source "bench supply setting" capacity in [500 mA, 500 mA] signed "e.designer@example.org" source "bench supply limit"
+  regulator v5 part reg.lm317_to220 from vin top r1 bottom r2
+  resistor r1 part res.0603_1pct value 121 ohm
+  resistor r2 part res.0603_1pct value 365 ohm
+  regulator v3 part reg.ldo_adj_sot23_5 from v5 top r3 bottom r4
+  resistor r3 part res.0603_1pct value 16.9 kohm
+  resistor r4 part res.0603_1pct value 10 kohm
+  sink motor from v5
+  sink mcu from v3
+}
+
+load run {
+  on power.motor current in [5 mA, 100 mA]
+  on power.mcu current in [5 mA, 50 mA]
+  signed "e.designer@example.org" source "power budget rev 4"
+}
+
+claim five_high:  power.v5.voltage <= 5.4 V
+claim five_low:   power.v5.voltage >= 4.7 V
+claim three_high: power.v3.voltage <= 3.5 V
+claim three_low:  power.v3.voltage >= 3.1 V

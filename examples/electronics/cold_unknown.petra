@@ -1,0 +1,28 @@
+petra 0
+
+# The LM317 rail of an outdoor enclosure. Every check holds over the stated ranges, but
+# the regulator's data hold only from a 0 degC junction, and an outdoor C3 site reaches
+# -25 degC. Below that the reference may leave its stated range, so no proof over the
+# whole box stands: the verdict is UNKNOWN, and it names the validity row and the cold
+# corner. A regulator rated for the cold, or a heated enclosure with a signed ambient,
+# closes it.
+
+design "outdoor-logger-rail" {
+  owner "e.designer@example.org"
+  environment outdoor_c3
+}
+
+board logger {
+  supply vin voltage in [11 V, 14.4 V] signed "e.designer@example.org" source "12 V lead-acid battery, charging" capacity in [2 A, 2 A] signed "e.designer@example.org" source "battery fuse"
+  regulator v5 part reg.lm317_to220 from vin top r1 bottom r2
+  resistor r1 part res.0805_1pct value 121 ohm
+  resistor r2 part res.0805_1pct value 365 ohm
+  sink logger from v5
+}
+
+load log {
+  on logger.logger current in [2 mA, 60 mA]
+  signed "e.designer@example.org" source "logger power budget"
+}
+
+claim rail: logger.v5.voltage <= 5.4 V

@@ -498,4 +498,42 @@ TEMPLATES: dict[str, tuple[str, str, str]] = {
         '  signed "s.engineer@example.org" source "beam reaction, LRFD 1.2D + 1.6L, calc SC-3"\n'
         '}\n'
     ),
+    'board': (
+        'examples/electronics/board.petra',
+        'psu',
+        'petra 0\n'
+        '\n'
+        '# A sensor board fed from a 12 V adapter. A 1117 regulator makes the 3.3 V logic rail,\n'
+        "# a red LED shows the rail is up, and a divider scales the input for the logic's ADC.\n"
+        "# The claims bound the divider's output and the LED's current. Coverage adds every\n"
+        "# rating the parts carry: each resistor's power and voltage, the LED's derated current,\n"
+        "# the regulator's headroom, input, current and junction temperature, and the adapter's\n"
+        "# capacity. Every value holds at the worst corner of every part's tolerance, its\n"
+        '# temperature coefficient and the ambient range of an indoor room.\n'
+        '\n'
+        'design "sensor-board-power" {\n'
+        '  owner "e.designer@example.org"\n'
+        '  environment indoor_dry\n'
+        '}\n'
+        '\n'
+        'board psu {\n'
+        '  supply vin voltage in [11.4 V, 12.6 V] signed "e.designer@example.org" source "adapter datasheet, 12 V +-5 %" capacity in [1 A, 1 A] signed "e.designer@example.org" source "adapter datasheet, 1 A"\n'
+        '  regulator v3 part reg.ldo1117_3v3_sot223 from vin\n'
+        '  sink logic from v3\n'
+        '  led d1 part led.red_0603 from v3 resistor r1\n'
+        '  resistor r1 part res.0603_1pct value 150 ohm\n'
+        '  divider sense from vin top r2 bottom r3\n'
+        '  resistor r2 part res.0603_1pct value 33.2 kohm\n'
+        '  resistor r3 part res.0603_1pct value 10 kohm\n'
+        '}\n'
+        '\n'
+        'load run {\n'
+        '  on psu.logic current in [5 mA, 80 mA]\n'
+        '  signed "e.designer@example.org" source "logic power budget rev 2"\n'
+        '}\n'
+        '\n'
+        'claim adc_high: psu.sense.output <= 3 V\n'
+        'claim adc_low:  psu.sense.output >= 2.5 V\n'
+        'claim lit:      psu.d1.current >= 5 mA\n'
+    ),
 }

@@ -1,0 +1,21 @@
+petra 0
+
+# A status LED on a 5 V USB rail with a 150 ohm 5 % resistor. At the typical forward
+# voltage and room temperature it draws about 21 mA, under the LED's 25 mA. The worst
+# case is higher: a high rail, a low resistor, the lowest forward voltage, and a warm
+# room in which the LED's rating has derated. The verdict is FAIL, and the counterexample
+# names the corner. The checks that read the LED's current read UNKNOWN beside it: at
+# that corner the current leaves the range the LED's forward-voltage data cover.
+
+design "usb-status-led" {
+  owner "e.designer@example.org"
+  environment indoor_dry
+}
+
+board panel {
+  supply usb voltage in [4.75 V, 5.25 V] signed "e.designer@example.org" source "USB 2.0 port voltage" capacity in [500 mA, 500 mA] signed "e.designer@example.org" source "USB 2.0 port current"
+  led d1 part led.red_0603 from usb resistor r1
+  resistor r1 part res.0603_5pct value 150 ohm
+}
+
+claim visible: panel.d1.current >= 5 mA
