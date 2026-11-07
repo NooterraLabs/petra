@@ -317,33 +317,39 @@ def registry_text(registry: Registry, prefix: str | None, shapes: Mapping[str, C
 # --- docs/reference.md --------------------------------------------------------------------
 
 SNIPPETS: tuple[tuple[str, str, str], ...] = (
-    ("design", "One per file. `owner` is required; `environment` names a registry environment (the list below) "
-     "and may be left out.",
+    ("design", "A file has one `design` block. `owner` is required. `environment` is optional and names a registry "
+     "environment from the registry list at the end of this page.",
      'design "warren-footbridge-panel" {\n  owner "a.reviewer@example.org"\n  environment indoor_dry\n}'),
-    ("param", "Declares a family: the design holds for every value in the range. An attribute line or a load "
-     "names it as `param NAME` where a bound would go.",
+    ("param", "`param` declares a family. The design holds for every value in the param's range. An attribute "
+     "line or a load names the param by writing `param NAME` in place of a bound.",
      "param run in [0 m, 20 m]"),
-    ("ambient", "The ambient temperature range, signed.",
+    ("ambient", "`ambient` declares the ambient temperature range, with a signature.",
      'ambient in [10 degC, 40 degC] signed "site.manager@example.org" source "site survey 2026-09"'),
-    ("component", "`KIND NAME { ... }`, one attribute per line. The kinds and their lines are below.",
+    ("component", "A component is written `KIND NAME { ... }`, with one attribute per line. The Component kinds "
+     "section lists every kind and its lines.",
      'demand hook {\n  capacity in [36 kN, 40 kN] measured "qa.lab@example.org" source "proof-load report PL-0917"\n}'),
-    ("load", "A load case: `on <target> <field> <bound>` entries, each signed by its own signature or by the "
-     "block's last line. A probability claim reads a `mean`.",
+    ("load", "A `load` block is one load case. Each entry is `on <target> <field> <bound>`. An entry is signed by "
+     "its own signature or by the signature on the block's last line. A probability claim reads the `mean` of "
+     "an entry.",
      'load lift {\n  on hook force in [0 kN, 40 kN] mean 10 kN\n'
      '  signed "ops.lead@example.org" source "hoist duty log 2025, 14200 lifts"\n}'),
-    ("tests", "A record of proof tests, which a tested-failure claim reads.",
+    ("tests", "A `tests` block records proof tests. A tested-failure claim reads it.",
      'tests proof {\n  on hook trials 300 failures 0 at 36 kN\n'
      '  signed "qa.lab@example.org" source "batch 2026-09 proof tests, independent lots"\n}'),
-    ("claim", "Three forms: a bound on a quantity, with an optional margin and the load cases it holds under "
-     "(every case on the component when `under` is left out); a range-and-mean probability bound; a tested-failure "
-     "probability bound. The kinds below list each kind's quantities. A claim with a margin is MARGINAL when it "
+    ("claim", "A claim takes one of three forms:\n\n"
+     "- A bound on a quantity, with an optional margin and the load cases it holds under. Without `under`, the "
+     "claim holds under every load case on the component.\n"
+     "- A range-and-mean probability bound.\n"
+     "- A tested-failure probability bound.\n\n"
+     "The Component kinds section lists the quantities of each kind. A claim with a margin is MARGINAL when it "
      "is proved and a certified point lies within the margin of its bound.",
      "claim strength: frame.collapse_factor >= 1.5 under crowd\n"
      "claim stress:   frame.member(diag_ad).stress <= 235 MPa margin 10 MPa under crowd\n"
      "claim overload: P(hook.utilisation > 1) <= 3/10 under lift\n"
      "claim tested:   P(fail hook at 36 kN) <= 1/100 confidence 95 % from proof"),
-    ("waive", "Accepts an open coverage demand on a component: a failure mode (the kinds below list each domain's) "
-     "and who answers for it. A waived demand is reported as waived, never as proved.",
+    ("waive", "`waive` accepts an open coverage demand on a component. It names the failure mode, who answers "
+     "for it, and the reason. The Component kinds section lists the failure modes of each domain. Petra reports "
+     "a waived demand as waived, never as proved.",
      'waive bolt.plate_bearing on bracket by "m.engineer@example.org" reason "bearing checked by test PB-3"'),
 )
 """(declaration, what it says, an example). tests/test_teach.py parses the examples."""
@@ -380,11 +386,13 @@ def _kinds_markdown() -> list[str]:
         for kind in domain.kinds:
             grammar = domain.grammars[kind]
             out += [f"#### {kind}", "",
-                    f"`{kind} <name> {{ ... }}`. `petra new {kind}` prints `{example_of(kind)}`.", "",
-                    f"- load: `{load_form(domain, kind)}`"]
-            out += [f"- `{form}`" for form in claim_forms(domain, kind)]
+                    f"A `{kind}` component is written `{kind} <name> {{ ... }}`. `petra new {kind}` prints its "
+                    f"example, `{example_of(kind)}`.", "",
+                    f"Load entries and claims on a `{kind}` component take these forms:", "",
+                    f"- Load entry: `{load_form(domain, kind)}`"]
+            out += [f"- Claim: `{form}`" for form in claim_forms(domain, kind)]
             if domain.qois:
-                out.append(f"- `<qoi>`: {', '.join(f'`{q}`' for q in domain.qois)}")
+                out += ["", f"In a claim, `<qoi>` is one of {', '.join(f'`{q}`' for q in domain.qois)}."]
             out += ["", "| line | form | needed | unit | ids | meaning |", "|---|---|---|---|---|---|"]
             for required, fields in ((True, grammar.required), (False, grammar.optional)):
                 for f in fields:
@@ -404,12 +412,15 @@ def render_reference() -> str:
     lines = [
         "# The .petra language",
         "",
-        "Generated by `python -m petra.teach --write` from the grammars the lowerers read, the registry and the",
-        "examples; do not edit. tests/test_teach.py fails when this file is stale. `petra docs reference` prints",
-        "this page. On the command line, `petra kinds [DOMAIN|KIND]`, `petra new KIND [--name NAME]` and",
-        "`petra registry list [PREFIX]` print the same tables.",
+        "`petra docs reference` prints this page. On the command line, `petra kinds [DOMAIN|KIND]`,",
+        "`petra new KIND [--name NAME]`, and `petra registry list [PREFIX]` print the same tables.",
         "",
-        "## A file",
+        "`python -m petra.teach --write` generates this page from the grammars that the lowerers read, the",
+        "registry, and the examples. Do not edit it by hand. tests/test_teach.py fails when the page is stale.",
+        "",
+        "## File layout and syntax",
+        "",
+        "A `.petra` file has this layout.",
         "",
         "```",
         "petra 0",
@@ -424,48 +435,60 @@ def render_reference() -> str:
         "}",
         "```",
         "",
+        "These rules apply to every file.",
+        "",
         "- The first line is `petra 0`, the language version.",
-        "- Then one `design` block, components, and `param`, `ambient`, `load`, `tests`, `claim` and `waive`",
-        "  declarations. Each component, load, tests, param and claim name is declared once.",
-        "- Inside a block, one attribute per line. A comment runs from `#` to the end of the line.",
-        "- A name is letters, digits and `_`, and starts with a letter or `_`. A `-` is never part of a name: write",
-        "  `L4x3-1/2x3/8` as `L4x3_1_2x3_8` and `WT5x22.5` as `WT5x22_5`.",
-        "- A registry id is dotted, `steel.A992`; the part after a dot may start with a digit, `bolt_group.120`.",
-        "  The registry list below gives every id, and the common names that stand for one.",
-        "- A number is exact: an integer, a decimal or a fraction `3/4`, never an exponent. Its unit follows it:",
-        "  `0.75 inch`, `45 kip`, `10mm`. A number with no unit is dimensionless.",
-        '- A string is `"..."`; `\\"` and `\\\\` are its only escapes.',
-        "- A bound is a range with its provenance: `in [<lo>, <hi>] [mean <value>] signed \"<owner>\" source",
-        "  \"<source>\"`, or `measured` in place of `signed` for a measured value. Outside a family design every",
-        "  bound carries a signature. In a family, `param NAME` stands where a bound would.",
-        "- `in`, `mean`, `signed`, `measured`, `source` and `param` start a bound or a signature, so they are not",
-        "  names inside a line, and no declared name is a declaration word.",
+        "- The rest of the file holds one `design` block, the components, and the `param`, `ambient`, `load`,",
+        "  `tests`, `claim`, and `waive` declarations. Each component, load, tests, param, and claim name is",
+        "  declared once.",
+        "- Inside a block, each line holds one attribute. A comment runs from `#` to the end of the line.",
+        "- A name consists of letters, digits, and `_`, and starts with a letter or `_`. A `-` is never part of a",
+        "  name. Write `L4x3-1/2x3/8` as `L4x3_1_2x3_8`, and write `WT5x22.5` as `WT5x22_5`.",
+        "- A registry id is dotted, as in `steel.A992`. The part after a dot may start with a digit, as in",
+        "  `bolt_group.120`. The registry list at the end of this page gives every id and the common names that",
+        "  stand for it.",
+        "- A number is exact. It is an integer, a decimal, or a fraction such as `3/4`, and it never has an",
+        "  exponent. The unit follows the number, as in `0.75 inch`, `45 kip`, and `10mm`. A number with no unit",
+        "  is dimensionless.",
+        '- A string is written `"..."`. Its only escapes are `\\"` and `\\\\`.',
+        "- A bound is a range with its provenance, written",
+        "  `in [<lo>, <hi>] [mean <value>] signed \"<owner>\" source \"<source>\"`. A measured value has",
+        "  `measured` in place of `signed`. Outside a family design every bound carries a signature. In a family,",
+        "  `param NAME` stands where a bound would.",
+        "- `in`, `mean`, `signed`, `measured`, `source`, and `param` start a bound or a signature, so they cannot",
+        "  be names inside a line. No declared name can be a declaration word.",
         "",
         "## Declarations",
         "",
     ]
     for decl, what, example in SNIPPETS:
         lines += [f"### {decl}", "", what, "", "```", example, "```", ""]
-    lines += ["## Grammar", "", "EBNF; NL is a line end. Component kinds and their lines are not in the grammar: "
-              "each domain declares its own (below).", "", "```", _grammar(), "```", "",
-              "## Units", "", "| dimension | spellings |", "|---|---|", *_units(), "",
+    lines += ["## Grammar", "", "The grammar below is EBNF, and `NL` is a line end. Component kinds and their lines "
+              "are not in the grammar. Each domain declares its own, as the Component kinds section shows.",
+              "", "```", _grammar(), "```", "",
+              "## Units", "", "A `.petra` file accepts these unit spellings.", "",
+              "| dimension | spellings |", "|---|---|", *_units(), "",
               "## Exit codes of `petra check`", "", "| status | code |", "|---|---|",
               *(f"| {status} | {code} |" for status, code in EXIT_CODES.items()), "",
               "## Component kinds", "",
-              "A component is `KIND NAME { ... }`, one line per attribute. A required line appears at least once.",
-              "A `<length>` is a length, a signed bound or `param NAME`. Cross-domain modes, waivable on any "
-              f"component: {', '.join(f'`{m.id}`' for m in CROSS_DOMAIN_MODES)}.", "",
+              "A component is written `KIND NAME { ... }`, with one line per attribute. A required line appears at",
+              "least once. In a form, `<length>` stands for a length, a signed bound, or `param NAME`. These",
+              "cross-domain modes can be waived on any component: "
+              f"{', '.join(f'`{m.id}`' for m in CROSS_DOMAIN_MODES)}.", "",
               *_kinds_markdown(),
               "## Registry", "",
-              "Every id a design can name, then the stocked plate thicknesses a fixed plate thickness is one of,",
-              "from `petra registry list`. Shapes are the shipped table's; with",
-              "PETRA_SHAPES_XLSX set to the AISC Shapes Database v16.0 workbook, every W and L row in it is an id.",
-              "A WT is cut from its W: WT9x25 from W18x50.", "",
-              "Where a steel connection names a grade, a bolt group or an electrode, a common name stands for its",
-              "id, in any case, with `Gr` or `Grade` optional, written as one name with `_` between its words or",
-              'quoted: `A325` is `bolt_group.120`; `A572_50`, `A572_Gr_50` and `"A572 Gr 50"` are `steel.A572_50`.',
-              "A footprint names the id. AISC's thread suffixes are not part of a name: on the bolts line",
-              f"{marks}, so A325-N is `bolts bolt_group.120 ... threads included`.", "",
+              "The list below is the output of `petra registry list`. It gives every id a design can name, then the",
+              "stocked plate thicknesses. A fixed plate thickness is one of the stocked thicknesses.", "",
+              "The listed shapes are those of the shipped shape table. When `PETRA_SHAPES_XLSX` is set to the AISC",
+              "Shapes Database v16.0 workbook, every W and L row in that workbook is an id. A WT is cut from its W,",
+              "as WT9x25 is cut from W18x50.", "",
+              "Where a steel connection names a grade, a bolt group, or an electrode, a common name can stand for",
+              "the id. A common name matches in any letter case, and `Gr` or `Grade` in it is optional. A common",
+              "name is written as one name with `_` between its words, or quoted. For example, `A325` is",
+              '`bolt_group.120`, and `A572_50`, `A572_Gr_50`, and `"A572 Gr 50"` are all `steel.A572_50`. A',
+              "footprint names the id, not the common name.", "",
+              "AISC's thread suffixes are not part of a name. The `bolts` line states the thread condition instead.",
+              f"On that line, {marks}, so A325-N is `bolts bolt_group.120 ... threads included`.", "",
               "```", registry_text(registry, None, shapes).rstrip("\n"), "```", ""]
     return "\n".join(lines)
 

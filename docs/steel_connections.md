@@ -1,153 +1,173 @@
-# Niche 1, finished exhaustively: steel connections to AISC 360-22
+# Steel connections deck specification, AISC 360-22
 
-Written 2026-11-05. This is the build specification for the first niche Petra finishes completely before any public release. It follows [NICHE.md](NICHE.md) §14, which picks steel connections as the open deck with the most designs, and [COMPILER.md](COMPILER.md), which places this deck in the standard-library layer. Tags are as in NICHE.md.
+Written 2026-11-05. This is the build specification for the steel connections deck, the first domain Petra aims to cover completely. Steel connections came first because, of the decks open to Petra, they have the most designs. A tag in square brackets says how a statement is known: [verified] against its source, [inference] drawn from sources but not checked, or [check sources] and [check method source] for statements still to check.
 
-## 0. The claim this work must earn
+The deck's symbols and code names are in [steel_glossary.md](steel_glossary.md). The clause traceability table is [steel_traceability.md](steel_traceability.md).
 
-> **Petra checks every provision of AISC 360-22 Chapters J and K, for every connection type in its catalogue. Every verdict covers the whole tolerance and material range, and every result is re-checkable by the kernel.**
+## 0. The claim
 
-That claim covers a real slice of structural engineering. Fabricators and connection engineers design these connections every day, and AI connection tools are starting to produce them (NICHE §14.5).
+> Petra checks every provision of AISC 360-22 Chapters J and K, for every connection type in its catalogue. Every verdict covers the whole tolerance and material range, and every result is re-checkable by the kernel.
 
-**Why this niche can be closed:**
-- **Forces arrive as signed inputs.** The engineer of record gives the required strengths at each connection, so no building-wide analysis is needed.
+The claim covers connections that fabricators and connection engineers design every day, and that AI connection tools are starting to produce.
+
+The niche can be finished completely for three reasons.
+
+- **Forces are signed inputs.** The engineer of record gives the required strengths at each connection, so no building-wide analysis is needed.
 - **The rules are free and finite.** Chapters J and K list every limit state in a free document.
-- **The kernel already suffices.** Almost every check is a closed-form inequality over a box, which R4 handles. Load distribution in bolt and weld groups is a linear program, which R1 handles. No new kernel rule is needed for the first release (one possible exception is noted in §7).
+- **The kernel's existing rules suffice.** Almost every check is a closed-form inequality over a box, which R4 handles. Load distribution in bolt and weld groups is a linear program, which R1 handles. The first release needs no new kernel rule, with one possible exception that §7 notes.
 
 ## 1. Sources
 
 | Source | Role | Access |
 |---|---|---|
-| AISC 360-22, Chapters J and K (and B–H for supporting members) | The provisions | Free PDF [verified] |
+| AISC 360-22, Chapters J and K, and Chapters B to H for supporting members | The provisions | Free PDF [verified] |
 | AISC 360-22 vs 360-16 comparison | Change list. It confirms the 360-22 section numbering used in §4 | Free [verified] |
 | AISC Design Examples (Companion), v16 | Ground truth: Chapter J and K examples, plus the Part II connection examples | Free [verified] |
 | AISC Shapes Database v16 | Section dimensions | Free [verified] |
 | RCSC Specification for Structural Joints Using High-Strength Bolts (2025) | Bolt installation types, joint types, faying surfaces | Free from boltcouncil.org [verified] |
-| Kulak, Fisher and Struik, *Guide to Design Criteria for Bolted and Riveted Joints*, 2nd ed. | The research and test data behind the bolt rules: the rawest material, and an outside judge | Free from boltcouncil.org [verified] |
+| Kulak, Fisher and Struik, *Guide to Design Criteria for Bolted and Riveted Joints*, 2nd ed. | The research and test data behind the bolt rules. It is the least processed source, and an outside judge (§8) | Free from boltcouncil.org [verified] |
 | AISC 303-22 Code of Standard Practice | Fabrication and erection tolerances | [check: free download] |
-| AISC Steel Construction Manual, 16th ed., Parts 7–15 | Design procedures: prying, eccentric groups, copes, uniform force method, conventional shear-tab configurations | Paid. Encode the methods, not the text (NICHE §4), or derive them from the free research they cite |
+| AISC Steel Construction Manual, 16th ed., Parts 7 to 15 | Design procedures: prying, eccentric groups, copes, uniform force method, conventional shear-tab configurations | Paid. The deck encodes the methods, not the text, or derives them from the free research they cite |
 | AISC Design Guides 1, 4, 16, 29 | Base plates, end plates, bracing connections | [check: free to members only] |
-| AWS D1.1 | Prequalified weld details | Paid; enters as `assumed` premises |
-| ACI 318 Chapter 17 | Concrete anchorage | Paid. Out of scope; enters as premises from ICC-ES reports |
+| AWS D1.1 | Prequalified weld details | Paid. Enters as `assumed` premises |
+| ACI 318 Chapter 17 | Concrete anchorage | Paid and out of scope. Enters as premises from ICC-ES reports |
 
 ## 2. The requirements card (inputs)
 
 | Input | Example | Premise tag |
 |---|---|---|
-| Required strengths per load combination (LRFD or ASD) | Vu in [0, 62] kips; Tu in [0, 15] kips | `assumed`, signed by the engineer of record |
+| Required strengths per load combination (LRFD or ASD) | Vu in [0, 62] kips and Tu in [0, 15] kips | `assumed`, signed by the engineer of record |
 | Members | W18x50 beam to W14x90 column flange | `sanctioned` (Shapes DB, with hash) |
-| Materials | A992 (Fy ≥ 50, Fu ≥ 65 ksi); A36 plate (36 and 58 ksi) | `sanctioned` (ASTM guaranteed minimums) |
-| Bolts | Group 120, 3/4 in., STD holes, threads included, snug-tight | `sanctioned` (Table J3.2) plus the joint type per RCSC |
-| Welds | E70 fillet, 1/4 in., both sides, 8.5 in. long | Design values; quality enters as an AWS `assumed` premise |
+| Materials | A992 (Fy ≥ 50, Fu ≥ 65 ksi) and A36 plate (36 and 58 ksi) | `sanctioned` (ASTM guaranteed minimums) |
+| Bolts | Group 120, 3/4 in., STD holes, threads included, snug-tight | `sanctioned` (Table J3.2), and the joint type per RCSC |
+| Welds | E70 fillet, 1/4 in., both sides, 8.5 in. long | Design values. Quality enters as an AWS `assumed` premise |
 | Geometry | Bolt pitch, gauges, edge distances, cope size, setback | Design values, with tolerance intervals |
 | Tolerances | Hole position, mill under-run, cope cut | From AISC 303 and ASTM A6, as interval premises [check sources] |
 | Environment | Indoor dry, or galvanized faying surfaces | `assumed` |
 
 ## 3. The connection catalogue (closed list)
 
-Each type is a graph of elements: supported member → fasteners → connecting element → fasteners → supporting member. Coverage generates every limit state for every node and edge (§6).
+Each type is a graph of elements. The graph runs from the supported member, through fasteners, the connecting element and fasteners again, to the supporting member. Coverage generates every limit state for every node and edge (§6).
 
 | Release | Connection type | Limit states (beyond the bolt, weld and element checks every type gets) |
 |---|---|---|
-| v1.0 | Single-plate (shear tab), conventional and extended | Plate shear yield and rupture; block shear in the plate and the beam web; plate flexure from eccentricity; plate buckling for the extended form; rotational ductility limits; weld sized to develop the plate |
-| v1.0 | Double angle: bolted–bolted, bolted–welded | Angle shear yield and rupture; block shear; eccentric weld groups on the outstanding legs |
-| v1.0 | Single angle; tee shear connection | Eccentricity on the support side; tee stem and flange checks |
-| v1.0 | Shear end plate | Plate shear; welds to the web; bolt group |
-| v1.0 | Unstiffened and stiffened seated connections | Seat-angle flexure; web local yielding and crippling (J10); stiffener and weld checks |
+| v1.0 | Single-plate (shear tab), conventional and extended | Plate shear yield and rupture, block shear in the plate and the beam web, plate flexure from eccentricity, plate buckling for the extended form, rotational ductility limits, and a weld sized to develop the plate |
+| v1.0 | Double angle, bolted-bolted or bolted-welded | Angle shear yield and rupture, block shear, and eccentric weld groups on the outstanding legs |
+| v1.0 | Single angle and tee shear connections | Eccentricity on the support side, and tee stem and flange checks |
+| v1.0 | Shear end plate | Plate shear, welds to the web, and the bolt group |
+| v1.0 | Unstiffened and stiffened seated connections | Seat-angle flexure, web local yielding and crippling (J10), and stiffener and weld checks |
 | v1.0 | Coped beams (applies to all of the above) | Block shear and flexural local web buckling at the cope |
 | v1.0 | Concentrated forces on the support (J10) | Flange local bending, web local yielding, web crippling, sidesway buckling, compression buckling, panel-zone shear, unframed ends, stiffener and doubler requirements |
-| v1.0 | Eccentric bolt and weld groups (brackets) | Elastic method first; instantaneous-centre method once its certificate exists (§7) |
-| v1.0 | Hangers (tee or angle in tension) | Prying action; flange flexure; bolt tension plus prying |
-| v1.1 | Bracing connections: gusset plates | Whitmore-section yield and buckling (J4.4); block shear; interface forces by the uniform force method; gusset-to-beam and gusset-to-column welds |
-| v1.1 | Flange-plated FR moment connection | Flange plate tension and compression; bolts or welds to the beam flange; J10 checks on the column |
-| v1.1 | Directly welded flange (CJP) FR moment connection | Groove-weld strength (J2.1); J10 checks on the column; panel zone |
-| v1.1 | Beam and column splices (bolted flange and web plates) | Splice plates per J6; fillers per J5 |
-| v1.1 | Column base plates under axial load | Bearing on concrete (J8); base-plate flexure; anchor rods (J9); concrete anchorage as a premise |
-| v1.2 | End-plate moment connections, flush and extended | Yield-line plate strength, with the governing pattern from the published method; bolt tension with and without prying [check method source] |
-| v1.2 | HSS connections (Chapter K): concentrated forces, truss T/Y/X/K, moment, welds to HSS | All K2–K5 limit states, with K1 validity limits as validity rows |
+| v1.0 | Eccentric bolt and weld groups (brackets) | The elastic method first, then the instantaneous-centre method once its certificate exists (§7) |
+| v1.0 | Hangers (tee or angle in tension) | Prying action, flange flexure, and bolt tension plus prying |
+| v1.1 | Bracing connections with gusset plates | Whitmore-section yield and buckling (J4.4), block shear, interface forces by the uniform force method, and gusset-to-beam and gusset-to-column welds |
+| v1.1 | Flange-plated FR moment connection | Flange plate tension and compression, bolts or welds to the beam flange, and J10 checks on the column |
+| v1.1 | Directly welded flange (CJP) FR moment connection | Groove-weld strength (J2.1), J10 checks on the column, and the panel zone |
+| v1.1 | Beam and column splices (bolted flange and web plates) | Splice plates per J6 and fillers per J5 |
+| v1.1 | Column base plates under axial load | Bearing on concrete (J8), base-plate flexure, anchor rods (J9), and concrete anchorage as a premise |
+| v1.2 | End-plate moment connections, flush and extended | Yield-line plate strength, with the governing pattern from the published method. Bolt tension with and without prying [check method source] |
+| v1.2 | HSS connections (Chapter K): concentrated forces, truss T, Y, X and K, moment, welds to HSS | All K2 to K5 limit states, with K1 validity limits as validity rows |
 
-## 4. Clause coverage: every section mapped
+## 4. Clause coverage of every section
 
-Done means every "shall" in these sections maps to an encoded check, a premise, or an out-of-scope entry with its reason. The section list follows the 360-22 numbering [verified against the AISC comparison document].
+Coverage is complete when every "shall" in these sections maps to an encoded check, a premise, or an out-of-scope entry with its reason. The section list follows the 360-22 numbering [verified against the AISC comparison document].
 
 | Section | Content | Treatment |
 |---|---|---|
-| J1 | General provisions: design basis, simple and moment connections, compression members with bearing joints, splices in heavy sections, weld access holes, placement of welds and bolts, bolts with welds, bolts with existing rivets | Encoded as rules and coverage triggers. Heavy-section splice and weld-access-hole geometry are makeability checks. Rivets are out of scope (no existing structures in v1). |
-| J2 | Welds and welded joints: groove, fillet, plug and slot welds; effective areas; size and length limits; strength including the new directional-strength factor; combinations; filler metal; mixed weld metal | Encoded. Filler metal matching and mixed weld metal become premises. |
-| J3.1–J3.2 | Common and high-strength bolts (Groups 120, 144, 150, 200) | Registry rows and joint-type rules (with RCSC) |
-| J3.3–J3.6 | Holes, minimum spacing, minimum edge distance, maximum spacing and edge distance | Makeability inequalities |
-| J3.7–J3.8 | Tension and shear; combined, bearing-type | Encoded |
-| J3.9–J3.10 | Slip-critical; combined, slip-critical | Encoded; the faying-surface class is a premise |
-| J3.11 | Bearing and tearout at holes (a: snug-tight or pretensioned; b: bolts through unstiffened box or HSS) | Encoded, per hole |
-| J3.12–J3.13 | Special fasteners; wall strength at tension fasteners | Special fasteners are out of scope in v1; wall strength is encoded for HSS (v1.2) |
-| J4.1–J4.5 | Affected elements in tension, shear, block shear, compression and flexure | Encoded. Block shear runs over every enumerated path (§6). |
+| J1 | General provisions: design basis, simple and moment connections, compression members with bearing joints, splices in heavy sections, weld access holes, placement of welds and bolts, bolts with welds, bolts with existing rivets | Encoded as rules and coverage triggers. Heavy-section splice and weld-access-hole geometry are makeability checks. Rivets are out of scope, because v1 has no existing structures. |
+| J2 | Welds and welded joints. Groove, fillet, plug and slot welds. Effective areas, size and length limits, and strength, including the new directional-strength factor. Combinations, filler metal, and mixed weld metal | Encoded. Filler metal matching and mixed weld metal become premises. |
+| J3.1 to J3.2 | Common and high-strength bolts (Groups 120, 144, 150, 200) | Registry rows and joint-type rules (with RCSC) |
+| J3.3 to J3.6 | Holes, minimum spacing, minimum edge distance, maximum spacing and edge distance | Makeability inequalities |
+| J3.7 to J3.8 | Tension and shear, and combined tension and shear in bearing-type connections | Encoded |
+| J3.9 to J3.10 | Slip-critical connections, and combined tension and shear in slip-critical connections | Encoded. The faying-surface class is a premise |
+| J3.11 | Bearing and tearout at holes. J3.11a covers snug-tight or pretensioned bolts, and J3.11b covers bolts through an unstiffened box or HSS | Encoded, per hole |
+| J3.12 to J3.13 | Special fasteners, and wall strength at tension fasteners | Special fasteners are out of scope in v1. Wall strength is encoded for HSS (v1.2) |
+| J4.1 to J4.5 | Affected elements in tension, shear, block shear, compression and flexure | Encoded. Block shear is checked on every enumerated path (§6). |
 | J5 | Fillers in welded and bolted connections | Encoded (v1.1) |
 | J6 | Splices | Encoded (v1.1) |
 | J7 | Bearing strength | Encoded |
 | J8 | Column bases and bearing on concrete | Encoded (v1.1) |
-| J9 | Anchor rods and embedments | Rod strength encoded. Concrete breakout is a premise (ACI 318 Chapter 17, out of scope). |
-| J10.1–J10.9 | Flanges and webs with concentrated forces | Encoded, with stiffener and doubler requirements as coverage triggers |
+| J9 | Anchor rods and embedments | Rod strength is encoded. Concrete breakout is a premise (ACI 318 Chapter 17, out of scope). |
+| J10.1 to J10.9 | Flanges and webs with concentrated forces | Encoded, with stiffener and doubler requirements as coverage triggers |
 | K1 | HSS parameters, effective width, chord-stress interaction, end distance, limits of applicability | Limits of applicability become validity rows (v1.2) |
-| K2–K5 | Concentrated forces on HSS; truss connections; moment connections; welds to HSS | Encoded (v1.2) |
-| B–H as needed | Supporting-member checks such as the beam web at the connection, and the column for J10 | Encoded where a connection check needs them |
+| K2 to K5 | Concentrated forces on HSS, truss connections, moment connections, and welds to HSS | Encoded (v1.2) |
+| B to H as needed | Supporting-member checks, such as the beam web at the connection and the column for J10 | Encoded where a connection check needs them |
 
-**Excluded outright, as typed UNKNOWN:**
-- seismic connections (AISC 341, 358);
-- fatigue (Appendix 3) unless declared;
-- fire (Appendix 4);
-- composite connections (Chapter I);
-- existing structures and rivets;
-- concrete anchorage design.
+These are excluded outright, and the deck reports each one as a typed UNKNOWN:
+
+- seismic connections (AISC 341, 358)
+- fatigue (Appendix 3), unless declared
+- fire (Appendix 4)
+- composite connections (Chapter I)
+- existing structures and rivets
+- concrete anchorage design
 
 ## 5. Makeability checks
 
 | Check | Source | How |
 |---|---|---|
-| Hole sizes, minimum spacing, edge distances, maximum spacing | J3.3–J3.6 | Linear inequalities (R4) |
+| Hole sizes, minimum spacing, edge distances, maximum spacing | J3.3 to J3.6 | Linear inequalities (R4) |
 | Room to enter and tighten each bolt | Wrench and socket clearance geometry | Exact rational geometry, with the clashing point as the witness (expressed as R4 inequalities) |
 | Weld access and torch angle | Joint geometry | Geometry inequalities |
-| Fillet size limits: minimum by thickness, maximum along edges | J2.2b | Inequalities |
+| Fillet size limits, with the minimum by thickness and the maximum along edges | J2.2b | Inequalities |
 | Cope and weld-access-hole geometry | J1.6 | Inequalities |
 | Stock plate thicknesses and bolt lengths | Shop deck | Catalogue membership |
 | Installation type matches the joint type | RCSC | Rule check |
-| Fit of the drawn parts: each part on the member it bears on, the beam clear of its support | Manual Part 1 (T, kdes); geometry | Exact rational containment, one R4 term per fit (`beam_fit`, `flange_fit`, `web_fit`) |
+| Fit of the drawn parts. Each part lies on the member it bears on, and the beam clears its support | Manual Part 1 (T, kdes) and geometry | Exact rational containment, one R4 term per fit (`beam_fit`, `flange_fit`, `web_fit`) |
 
 ### 5a. Fit of the drawn parts
 
-`petra/models/steel/geometry.py` (trusted, in the premise hash) places each kind's parts in one frame per connection, in exact rationals over the design's hypotheses. Three axes carry them. Depth runs down from the beam's top, out runs from the support face along the beam, and across runs over the support face. A part is a span on an axis, a room is where spans must lie, and each containment is one check `need <= have` in inches, excused where its guard is at most zero. The checks print their numbers like any other, so a FAIL names the part, the room and both lengths.
+`petra/models/steel/geometry.py` places each kind's parts in one frame per connection, in exact rationals over the design's hypotheses. The module is trusted and is in the premise hash. The frame has three axes. Depth runs down from the beam's top, out runs from the support face along the beam, and across runs over the support face. A part is a span on an axis, and a room is where spans must lie. Each containment is one check, `need <= have` in inches, excused where its guard is at most zero. Each check prints its numbers like any other check, so a FAIL names the part, the room and both lengths.
 
-| Mode | Demanded by | What it holds |
+| Mode | Demanded by | What it checks |
 |---|---|---|
-| `beam_fit` | every beam web on the load path | A plate, angle or tee bolted to the beam web lies on the flat web, kdes to d - kdes. A cope at least kdes deep frees the edge at its flange when it runs past the part's far edge. The beam's holes lie on the flat web below and above the copes. An end plate's welds fit the flat web the copes leave. The beam end stands clear of the support face (a tab, angles) or the tee's flange. A seated beam's end lands on the seat angle or the stiffener. |
+| `beam_fit` | every beam web on the load path | A plate, angle or tee bolted to the beam web lies on the flat web, kdes to d - kdes. A cope at least kdes deep frees the edge at its flange when the cope runs past the part's far edge. The beam's holes lie on the flat web below and above the copes. An end plate's welds fit the flat web the copes leave. The beam end clears the support face for a tab or angles, and the tee's flange for a tee. A seated beam's end lands on the seat angle or the stiffener. |
 | `flange_fit` | a support met on its flange | A pair of bolt lines centred at the gauge lies on the flange and clears the web between its holes. A single angle's bolt line, beside the beam web, lies on the flange. Welds at a plate's faces, a C weld's returns, angle toes, tee tips and seat ends lie on the flange, the fillet's leg included. A bracket's bolt columns have some placement on the flange clear of the web. A seat's bolt holes lie on its vertical leg, below the outstanding leg. |
 | `web_fit` | a support met on its web | Bolt lines, parts and welds lie on the web's flat, d - 2 kdes. A seat's holes lie on its leg. The beam's flange passes between the column's flanges, unless the beam end lies at or past their tips. |
 
-Premises and readings, stated in the modes' model statements:
+The modes' model statements state these premises and readings:
 
-- A support met on its web is a column, and the beam frames between its flanges. `web_fit`'s model carries it, so every design with a web support has it in its footprint. A girder support, whose flanges the beam's own may meet, is not modelled.
-- kdes from the shapes table bounds the flat web. A part's corner on a fillet, or on the fillet a shallow cope leaves, does not fit, since the deck does not model clipped corners.
-- Where the lines leave a position open, the reading most favourable to fit is taken. A single angle, a plate set on edge and a bracket's bolt columns go wherever they fit. An end plate's welds sit anywhere down the web. A cope starts at the beam end or at the setback, whichever lies farther out. A pair of bolt lines is centred on the member, as the gauge across the web reads.
+- A support met on its web is a column, and the beam frames between its flanges. `web_fit`'s model states this premise, so it is in the footprint of every design with a web support. The deck does not model a girder support, whose flanges the beam's own flanges may meet.
+- kdes from the shapes table bounds the flat web. A part's corner on a fillet, or on the fillet a shallow cope leaves, does not fit, because the deck does not model clipped corners.
+- Where the lines leave a position open, the deck takes the reading most favourable to fit. A single angle, a plate set on edge and a bracket's bolt columns go wherever they fit. An end plate's welds sit anywhere down the web. A cope starts at the beam end or at the setback, whichever lies farther out. A pair of bolt lines is centred on the member, as the gauge across the web reads.
 - Holes take their size along or across the force from Table J3.3 for the ply's declared type. A slot across the face needs its length.
 
-Not covered: the beam flange's corners against the column's web-to-flange fillets; the angle's own heel fillet under a seat's top bolt (the angle's thickness stands in for it); whether the stated setback agrees with the beam end the bolt line draws; a top angle's and a stiffened seat plate's position, which the grammar does not draw; a girder support.
+The fit checks do not cover:
 
-The outside judge (`judges/steel.py`) names the same conditions from its own reading. The deck is stricter in four places. A fillet weld at a toe or tip carries its leg past the part's edge, so the deck adds it where the judge does not. A shallow cope that leaves part of the fillet does not free the part or the holes below it. Each hole takes the size of its ply's declared type, where the judge takes standard holes, the smallest the grammar allows. A cope or a beam end frees a fit only where it does so at every point of the design's tolerance box, where the judge takes the box's most favourable point. On the absurd-gap stream (seed 1, 13,200 steel designs) the first three account for every design the judge finds buildable and a fit check fails, 37 in all.
+- the beam flange's corners against the column's web-to-flange fillets
+- the angle's own heel fillet under a seat's top bolt, for which the angle's thickness stands in
+- whether the stated setback agrees with the beam end that the bolt line draws
+- the positions of a top angle and a stiffened seat plate, which the grammar does not draw
+- a girder support
 
-The twin (§8) restates every fit from the method statements, and the gate's manufactured faults (§9) put six misfits into passing designs: rows past the beam's depth, rows off a seat's leg, support bolt lines wider than the face, a beam too wide for a column's web, a plate on the fillet, bracket columns off the flange. `tests/test_steel_geometry.py` holds each class of misfit to the check that names it, the readings that free a fit, the column premise in a web support's footprint, and the generator's samplers to designs that fit and that the judge finds buildable.
+The outside judge (`judges/steel.py`) names the same conditions from its own reading. The deck is stricter than the judge in four places:
 
-## 6. How exhaustiveness is enforced, not just claimed
+1. A fillet weld at a toe or tip carries its leg past the part's edge. The deck adds the leg, and the judge does not.
+2. A shallow cope that leaves part of the fillet does not free the part or the holes below it.
+3. Each hole takes the size of its ply's declared type. The judge takes standard holes, the smallest the grammar allows.
+4. A cope or a beam end frees a fit only where it does so at every point of the design's tolerance box. The judge takes the box's most favourable point.
+
+On the absurd-gap stream (seed 1, 13,200 steel designs), the judge finds 37 designs buildable that a fit check fails. The first three differences account for all 37.
+
+The twin (§8) restates every fit from the method statements. The gate's manufactured faults (§9) put six misfits into passing designs: rows past the beam's depth, rows off a seat's leg, support bolt lines wider than the face, a beam too wide for a column's web, a plate on the fillet, and bracket columns off the flange. `tests/test_steel_geometry.py` checks four things. Each class of misfit fails the check that names it. The readings that free a fit do free it. A web support's footprint holds the column premise. The generator's samplers produce designs that fit and that the judge finds buildable.
+
+## 6. How the deck enforces exhaustiveness
 
 | Mechanism | What it guarantees |
 |---|---|
-| **Clause traceability table** | Every provision in §4 maps to a check, a premise or an exclusion. CI fails if one is unmapped. |
-| **Load-path graph** | Every force component (shear, axial, moment) has a checked path through every fastener and element to the support |
-| **Limit-state completeness per element** | Every element type has a required list of limit states. The coverage check is set inclusion, trusted and simple. |
-| **A reason for every other mode** | Every mode of the domain a connection does not owe has a recorded physical reason it cannot arise there (`petra/models/steel/absent.py`): the part is not drawn, the force that would load it so is not there, or the source's method takes it as a premise. The readout prints the reason; `tests/test_steel_coverage.py` fails if a generated connection leaves a mode neither owed nor explained. |
-| **Block-shear path enumeration** | The elaborator enumerates every admissible tear-out path from the hole pattern. The twin elaborator must find the same set. |
-| **Tolerance and material ranges** | Every claim covers the tolerance box and the material range, not the nominal value |
-| **Validity rows** | Every formula's applicability limits (such as K1 limits and edge-distance conditions) are proved over the box, or the result is UNKNOWN |
-| **Margins** | Every claim carries a margin δ, so limited compute never leaves an UNKNOWN |
+| Clause traceability table | Every provision in §4 maps to a check, a premise or an exclusion, in [steel_traceability.md](steel_traceability.md). CI fails if one is unmapped. |
+| Load-path graph | Every force component (shear, axial, moment) has a checked path through every fastener and element to the support |
+| Limit-state completeness per element | Every element type has a required list of limit states. The coverage check is a trusted, simple set inclusion. |
+| A reason for every other mode | Each mode of the domain that a connection does not owe has a recorded physical reason it cannot arise there (`petra/models/steel/absent.py`). The reason is one of three: the part is not drawn, the force that would load it that way is absent, or the source's method takes it as a premise. The readout prints the reason. `tests/test_steel_coverage.py` fails if a generated connection leaves a mode neither owed nor explained. |
+| Block-shear path enumeration | The elaborator enumerates every admissible tear-out path from the hole pattern. The twin elaborator must find the same set. |
+| Tolerance and material ranges | Every claim covers the tolerance box and the material range, not the nominal value |
+| Validity rows | Every formula's applicability limits (such as K1 limits and edge-distance conditions) are proved over the box, or the result is UNKNOWN |
+| Margins | Every claim carries a margin δ, so limited compute never leaves an UNKNOWN |
 
-Two drawn parts carry no computed force, and no obligation names them. A seat's top angle holds the beam's top flange: the deck reads it as the restraint that frames the beam's end (J10.7) and keeps both flanges from moving sideways (J10.4), and the Manual proportions it by practice, not for a force (Part 10; Companion Examples II.A-13 and II.A-14 choose it without a calculation). A stiffened seat plate's welds follow the Manual's detailing (Part 10, Fig. 10-11(b)): its weld to the support is the return of the stiffener's weld group under it, which the deck's weld check leaves out, conservatively, and its weld to the stiffener is sized to match that one. The grammar draws neither weld. The seat plate's bearing on the stiffener's fitted edge is checked at its own yield stress (J7).
+No obligation names a seat's top angle or a stiffened seat plate's welds, because neither carries a computed force.
+
+- A seat's top angle holds the beam's top flange. The deck reads the angle as the restraint that frames the beam's end (J10.7) and keeps both flanges from moving sideways (J10.4). The Manual proportions the angle by practice, not for a force (Part 10). Companion Examples II.A-13 and II.A-14 choose it without a calculation.
+- A stiffened seat plate's welds follow the Manual's detailing (Part 10, Fig. 10-11(b)). The plate's weld to the support is the return of the stiffener's weld group under it. The deck's weld check leaves that return out, which is conservative. The plate's weld to the stiffener is sized to match the weld to the support. The grammar draws neither weld. The seat plate's bearing on the stiffener's fitted edge is checked at the plate's own yield stress (J7).
 
 ## 7. What the kernel and elaborators need
 
@@ -155,10 +175,10 @@ Two drawn parts carry no computed force, and no obligation names them. A seat's 
 |---|---|---|
 | Closed-form limit states over boxes | R4 interval branch-and-bound | No |
 | Load share in bolt and weld groups | Elastic method in closed form (R4). A lower bound from any admissible distribution (R1). | No |
-| Instantaneous-centre method for eccentric groups | Needs a proof that an equilibrium point exists in a box (interval Newton or Krawczyk). Until then, use the elastic method, which is conservative. | **Possibly**: one small existence rule |
+| Instantaneous-centre method for eccentric groups | Needs a proof that an equilibrium point exists in a box (interval Newton or Krawczyk). Until then, the deck uses the elastic method, which is conservative. | Possibly, one small existence rule |
 | Clearances and access | Polynomial inequalities over exact coordinates (R4) | No |
 | Yield-line end plates (v1.2) | The published governing pattern as a compliance check. A physics PASS needs a lower bound, which R1 can give on a plate strip model [inference]. | No |
-| Units | E2 dimension vectors (in progress in the original session) | No |
+| Units | Dimension vectors inside the certificate, planned for P7 ([plan.md](plan.md)) | No |
 
 ## 8. Ground truth and outside judges
 
@@ -167,45 +187,46 @@ Two drawn parts carry no computed force, and no obligation names them. A seat's 
 | Every Companion v16 example in Chapters J and K and the Part II connection examples, reproduced to rounding | Code implementation |
 | Kulak et al. test data (bolt shear, slip, bearing, joint length effects) | Physics behind the bolt rules |
 | Twin elaborator, written independently from the same sources, agreeing on all generated cases | Translation |
-| Manufactured faults: designs with exactly one known defect (missing weld, short edge distance, wrong joint type), all caught | Coverage |
-| Breaker: an optimiser searches for PASSes that an independent check refutes | False PASS |
+| Manufactured faults, which are designs with exactly one known defect (missing weld, short edge distance, wrong joint type), all caught | Coverage |
+| Breaker, an optimiser that searches for PASSes an independent check refutes | False PASS |
 | CalculiX spot checks inside validity rows (plate yielding, Whitmore stresses) | Model sanity |
 
 ## 9. The done gate
 
-All must hold before the claim in §0 is published.
+Every item must hold before the claim in §0 is published.
 
-1. **Clause traceability:** 100% of J1–J10 and K1–K5 mapped (§4), with the table published.
-2. **Catalogue coverage:** every type in §3 has every applicable limit state, each with validity rows.
-3. **Ground truth:** every in-scope Companion example reproduced to rounding, and every discrepancy explained.
-4. **Decidedness:** on 10,000 generated connections across the catalogue, each with a margin δ, no UNKNOWN caused by compute or a missing model.
-5. **Twins:** the independent elaborator agrees on all 10,000.
-6. **Manufactured faults:** 100% caught.
-7. **Breaker:** no false PASS after a fixed adversarial budget, with every run logged.
-8. **Makeability:** every generated design passes the deck, or fails with a witness.
-9. **Report:** every connection gets a calculation package that `petra verify` re-checks.
+1. **Clause traceability.** 100% of J1 to J10 and K1 to K5 is mapped (§4), and the table is published.
+2. **Catalogue coverage.** Every type in §3 has every applicable limit state, each with validity rows.
+3. **Ground truth.** Every in-scope Companion example is reproduced to rounding, and every discrepancy is explained.
+4. **Decidedness.** On 10,000 generated connections across the catalogue, each with a margin δ, no UNKNOWN is caused by compute or a missing model.
+5. **Twins.** The independent elaborator agrees on all 10,000.
+6. **Manufactured faults.** 100% are caught.
+7. **Breaker.** No false PASS after a fixed adversarial budget, and every run is logged.
+8. **Makeability.** Every generated design passes the deck, or fails with a witness.
+9. **Report.** Every connection gets a calculation package that `petra verify` re-checks.
 
 ## 10. Build milestones
 
 | # | Milestone | Contents | Gate |
 |---|---|---|---|
-| M1 | Data layer | Shapes DB v16 loader with hash; ASTM minimums; Table J3.2 bolt strengths; J3.3 hole sizes; J3.4–J3.6 spacing and edge tables; provenance on every row | Registry consistency checker passes; every row cites its clause |
+| M1 | Data layer | Shapes DB v16 loader with hash, ASTM minimums, Table J3.2 bolt strengths, J3.3 hole sizes, J3.4 to J3.6 spacing and edge tables, and provenance on every row | The registry consistency checker passes, and every row cites its clause |
 | M2 | Element limit states | J2 welds, J3 bolts, J4 affected elements, J7 bearing, J10 concentrated forces, as statement builders with validity rows | Every Companion Chapter J element example reproduced |
-| M3 | Simple shear connections | Shear tab, double angle, single angle, tee, end plate, seated; copes; load-path coverage; makeability | Every Part II shear-connection example reproduced |
-| M4 | Groups and hangers | Eccentric bolt and weld groups (elastic); hangers with prying | Companion and Kulak cases |
-| M5 | Exhaustiveness machinery | Traceability table in CI; connection generator; twin elaborator; manufactured faults; breaker | Gate items 4–7 for v1.0 |
+| M3 | Simple shear connections | Shear tab, double angle, single angle, tee, end plate and seated connections, copes, load-path coverage, and makeability | Every Part II shear-connection example reproduced |
+| M4 | Groups and hangers | Eccentric bolt and weld groups (elastic), and hangers with prying | Companion and Kulak cases |
+| M5 | Exhaustiveness machinery | Traceability table in CI, connection generator, twin elaborator, manufactured faults, and breaker | Gate items 4 to 7 for v1.0 |
 | M6 | Calculation package | Report and `petra verify` | Gate item 9 |
-| — | **v1.0 complete** | Simple shear, J10, groups, hangers | §9 for the v1.0 catalogue |
+| | v1.0 complete | Simple shear, J10, groups, hangers | §9 for the v1.0 catalogue |
 | M7 | v1.1 | Gussets and the uniform force method, flange-plated and CJP moment connections, splices, base plates | §9 extended |
-| M8 | v1.2 | End plates, Chapter K HSS | §9 for the whole catalogue: the §0 claim |
+| M8 | v1.2 | End plates, Chapter K HSS | §9 for the whole catalogue, which is the §0 claim |
 
-## 11. What the same deck unlocks next
+## 11. Domains that build on this deck
 
-Members (Chapters D–H) plus these connections give the shared core for:
-- below-the-hook lifting devices (ASME BTH-1 encoded as methods);
-- GSE and tooling;
-- entertainment rigging;
-- temporary works;
-- platforms.
+Members (Chapters D to H) and these connections form the shared core of these domains:
 
-Each becomes a thin rule set on top (NICHE §14.4).
+- below-the-hook lifting devices, with ASME BTH-1 encoded as methods
+- GSE and tooling
+- entertainment rigging
+- temporary works
+- platforms
+
+Each domain becomes a thin rule set on top of the core.

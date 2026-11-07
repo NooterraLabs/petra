@@ -1,6 +1,6 @@
 # Petra's Python API and `--json` output
 
-This page covers what a program needs to read a check: the call, the report it returns, the verdict and outcome classes, the findings (each obligation's numbers in the design's units), and the JSON that `petra check --json` prints. `petra/__init__.py`, `petra/pipeline.py`, `petra/verdict.py` and `petra/readout.py` hold the definitions. If this page and the code disagree, the code is right.
+This page describes what a program needs to read a check. It covers the call, the report that the call returns, the verdict and outcome classes, the findings, and the JSON that `petra check --json` prints. A finding gives one obligation's numbers in the design's units. The definitions are in `petra/__init__.py`, `petra/pipeline.py`, `petra/verdict.py`, and `petra/readout.py`. Where this page and the code disagree, the code is correct.
 
 ## Example
 
@@ -21,13 +21,19 @@ for f in report.findings:
                 print("  at", c.symbol, "=", c.shown, "exact", c.exact, c.si_unit)
 ```
 
-The same report as data comes from `petra check --json examples/truss_fail.petra`, or from `json.dumps(report.to_json())`.
+`petra check --json examples/truss_fail.petra` gives the same report as JSON, and so does `json.dumps(report.to_json())`.
 
-## Checking a design
+## Check functions
 
-`petra.check_file(path, *, certs=None, library=None, solve=True) -> Report` loads a `.petra` file with the shipped registry and checks it. It gathers evidence in the order certificate store (`certs`, a directory), then `library` (a `petra.Library`), then the solvers (unless `solve=False`). The kernel checks every piece of evidence. Accepted evidence is written to `certs` when you give it. A syntax error raises `petra.lang.LolaSyntaxError`, and a design that cannot be lowered raises `petra.lang.LoweringError` or `petra.models.base.ComponentError`. The CLI reports each of these as exit code 3.
+`petra.check_file(path, *, certs=None, library=None, solve=True) -> Report` loads a `.petra` file with the shipped registry and checks it. It gathers evidence from these sources, in this order:
 
-`petra.check_design(design, registry, sources, sink=None, deck=None, path="") -> Report` is the same thing for a design and registry you already hold. `petra.parse_design`, `petra.load_design` and `petra.build_registry` make those.
+1. The certificate store `certs`, a directory.
+2. `library`, a `petra.Library`.
+3. The solvers, unless `solve=False`.
+
+The kernel checks every piece of evidence. When `certs` is given, `check_file` records accepted evidence there. A syntax error raises `petra.lang.LolaSyntaxError`. A design that cannot be lowered raises `petra.lang.LoweringError` or `petra.models.base.ComponentError`. The CLI reports each of these errors as exit code 3.
+
+`petra.check_design(design, registry, sources, sink=None, deck=None, path="") -> Report` does the same check for a design and registry that you already hold. `petra.parse_design` and `petra.load_design` return a design, and `petra.build_registry` returns a registry.
 
 ## Report
 
@@ -36,22 +42,22 @@ The same report as data comes from `petra check --json examples/truss_fail.petra
 | field | type | meaning |
 |---|---|---|
 | `design` | `str` | the design's name |
-| `path` | `str` | the file it was read from |
-| `verdict` | `Pass \| Fail \| Unknown \| Marginal` | the conjunction over every entry |
+| `path` | `str` | the file the design was read from |
+| `verdict` | `Pass \| Fail \| Unknown \| Marginal` | the conjunction of the verdicts of all entries |
 | `entries` | `tuple[ClaimVerdict, ...]` | one per claim, in source order, then the `coverage` entry |
 | `outcomes` | `tuple[Outcome, ...]` | every requirement's outcome, in elaboration order |
 | `warnings` | `tuple[str, ...]` | what the run could not do or match: a waiver that matches no requirement, an evidence source that failed, a certificate it could not record, a margin it did not check |
 | `ir` | `petra.ir.Design \| None` | the design that was checked |
-| `registry` | `Registry \| None` | the registry it was checked against |
+| `registry` | `Registry \| None` | the registry the design was checked against |
 | `findings` | `tuple[Finding, ...]` | one per outcome, in the same order, computed on first use |
-| `governing` | `dict[str, Governing \| None]` | the governing `"strength"` check and the governing `"detailing"` check of the whole report, computed on first use (see Findings) |
-| `unchecked` | `tuple[Unchecked, ...]` | each mode a component's domain knows that no requirement names on that component, with the reason, computed on first use (see What was not checked) |
+| `governing` | `dict[str, Governing \| None]` | the governing `"strength"` check and the governing `"detailing"` check of the whole report, computed on first use (see The governing checks) |
+| `unchecked` | `tuple[Unchecked, ...]` | each mode of a component's domain that no requirement names on that component, with the reason, computed on first use (see What was not checked) |
 
-`report.render()` returns the text `petra check` prints. Right after its `checked` line come the lines `governing  strength` and `governing  detailing`, each naming the requirement, the check, its demand, capacity and utilisation in the design's units. The strength line reads `none` when no strength check has a utilisation, and the detailing line is left out when no detailing check has one. Each row of the obligation table ends with its finding's utilisation, with `excused` when a guard excuses every term it read, or with nothing. After the table (and its margin lines) come the `excused` and `not checked` lines described under What was not checked. `report.to_json()` returns the JSON described below.
+`report.render()` returns the text that `petra check` prints. Right after its `checked` line, the text has a `governing  strength` line and a `governing  detailing` line. Each line names the requirement and the check, with the check's demand, capacity, and utilisation in the design's units. The strength line reads `none` when no strength check has a utilisation. The detailing line is left out when no detailing check has a utilisation. Each row of the obligation table ends with its finding's utilisation, with `excused` when a guard excuses every term the finding read, or with nothing. The `excused` and `not checked` lines come after the table and its margin lines, as What was not checked describes. `report.to_json()` returns the JSON that the JSON section describes.
 
 ## Verdicts
 
-`petra.verdict.STATUS` maps each class to its status string. `SEVERITY` orders the statuses. The conjunction of several verdicts takes the most severe one: PASS 0, MARGINAL 1, UNKNOWN 2, FAIL 3. `petra check` exits with 0 for PASS, 1 for FAIL, 2 for UNKNOWN and 5 for MARGINAL. All four classes are importable from `petra`.
+`petra.verdict.STATUS` maps each verdict class to its status string. `SEVERITY` orders the statuses: PASS 0, MARGINAL 1, UNKNOWN 2, FAIL 3. The conjunction of several verdicts takes the most severe one. `petra check` exits with 0 for PASS, 1 for FAIL, 2 for UNKNOWN, and 5 for MARGINAL. All four classes are importable from `petra`.
 
 | class | status | fields |
 |---|---|---|
@@ -60,15 +66,15 @@ The same report as data comes from `petra check --json examples/truss_fail.petra
 | `petra.Unknown` | UNKNOWN | `open` (the `Open` items), `footprint`, `theorems` (those that discharged) |
 | `petra.Marginal` | MARGINAL | `near` (the `WithinMargin` items), `footprint`, `theorems`, `scope` |
 
-`footprint.premises` lists every premise that is not proved and that the verdict rests on. Each premise has a `tag` (`assumed`, `measured`, `sanctioned`, `judged`, `validated_model` or `certified`), a `label`, an `owner` and a `source`. A registry premise (`reg:`) also has a `version`, the version of the registry entry its value came from, one more than the number of errata recorded against that entry. `petra registry recall ID` lists the designs whose verdicts rest on an entry. A FAIL's footprint names the premises behind its counterexample.
+`footprint.premises` lists every premise that the verdict depends on and that is not proved. Each premise has a `tag`, a `label`, an `owner`, and a `source`. The `tag` is one of `assumed`, `measured`, `sanctioned`, `judged`, `validated_model`, or `certified`. A registry premise, whose label starts with `reg:`, also has a `version`. The `version` is the version of the registry entry that the premise's value came from, which is one more than the number of errata recorded against that entry. `petra registry recall ID` lists the designs whose verdicts depend on an entry. A FAIL's footprint names the premises behind its counterexample.
 
 ## Entries
 
-`petra.verdict.ClaimVerdict(claim, verdict, outcomes)` is one entry of a report. `claim` is the claim's name, or `"coverage"` (`verdict.COVERAGE_ENTRY`) for the requirements no claim made, which are the coverage rules and port contracts. `verdict` is the entry's own verdict, and `outcomes` are the entry's outcomes.
+`petra.verdict.ClaimVerdict(claim, verdict, outcomes)` is one entry of a report. `claim` is the claim's name. The requirements that no claim made, which are the coverage rules and the port contracts, form one entry whose `claim` is `"coverage"`, the value of `verdict.COVERAGE_ENTRY`. `verdict` is the entry's own verdict, and `outcomes` are the entry's outcomes.
 
 ## Outcomes
 
-Each requirement ends as one of five outcome classes, all defined in `petra.verdict`.
+Each requirement ends in one of five outcomes. `petra.verdict` defines a class for each.
 
 | class | finding `outcome` | what happened | fields |
 |---|---|---|---|
@@ -78,70 +84,74 @@ Each requirement ends as one of five outcome classes, all defined in `petra.verd
 | `Waived` | `waived` | a named owner waived the requirement | `requirement`, `waiver` |
 | `Open` | `open` | nothing settled it | `requirement`, `needs`, `rejections`, `statement`, `near` |
 
-`obligation.requirement.id` names a requirement as `subject/mode/origin`, for example `tab/steel.bolts/coverage.steel.bolts`. `obligation.statement` is the kernel statement. `refutation.point` gives each symbol of the statement's hypotheses an exact `Fraction` in SI base units, with temperatures in degC. `verdict.describe_need(n)` turns each of an `Open` item's `needs` into one line of text.
+`obligation.requirement.id` names a requirement as `subject/mode/origin`, for example `tab/steel.bolts/coverage.steel.bolts`. `obligation.statement` is the kernel statement. `refutation.point` gives each symbol of the statement's hypotheses an exact `Fraction` in SI base units. Temperatures are in degC. `verdict.describe_need(n)` turns one of an `Open` item's `needs` into one line of text.
 
 ## Findings
 
-`petra.readout.Finding` is tooling. It reads an outcome after the verdict is assembled and cannot change it. If a domain reader fails, the finding loses its numbers and says so in `note`.
+`petra.readout.Finding` is tooling. It reads an outcome after the verdict is assembled, and it cannot change the verdict. If a domain reader fails, the finding has no numbers, and its `note` says so.
 
 | field | JSON key | meaning |
 |---|---|---|
 | `requirement`, `entry`, `outcome`, `rule`, `statement_hash`, `describe` | the same | which obligation this is, and how it ended |
-| `category` | `category` | `"strength"` or `"detailing"`, by the mode (`readout.DETAILING_MODES`) |
-| `values` | `checks` | its terms, each a `Value` (below) |
-| `governing` | `governing` (its `what`), `demand`, `capacity`, `unit` | the term no guard excuses with the highest utilisation, or a rule that is not met; None when no term has a utilisation |
-| `utilisation` | `utilisation` | the governing term's utilisation, or None. JSON gives null when it is unbounded. |
-| `at` | `at` | `"point"` when `values` were evaluated at the counterexample or margin point, `"box"` when they were enclosed over the whole box, None when nothing was read |
-| `claim` | `claim` | `Claimed(claim, quantity, value, bound, unit)`: a claim's quantity where it was read, against its bound |
+| `category` | `category` | `"strength"` or `"detailing"`, set by the mode (`readout.DETAILING_MODES`) |
+| `values` | `checks` | the finding's terms, each a `Value` (described below) |
+| `governing` | `governing` (its `what`), `demand`, `capacity`, `unit` | among the terms that no guard excuses, a rule that is not met, else the term with the highest utilisation. None when no term has a utilisation. |
+| `utilisation` | `utilisation` | the governing term's utilisation, or None. The JSON gives null when the utilisation is unbounded. |
+| `at` | `at` | `"point"` when `values` were evaluated at the counterexample or margin point, `"box"` when they were enclosed over the whole box, or None when nothing was read |
+| `claim` | `claim` | `Claimed(claim, quantity, value, bound, unit)`, a claim's quantity where it was read, against its bound |
 | `point` | `counterexample` or `margin_point` | the counterexample or margin point, as `Coordinate(symbol, label, exact, si_unit, decimal, unit, varies)` |
 | `needs` | `needs` | for an open item, what would settle it |
 | `note` | `note` | why some or all terms were not read |
 
-A `Value` is one term: `what`, `unit`, `demand`, `capacity`, `excused`, `excuse`, `claimed`, `met`, `parts` and `utilisation`, which is demand / capacity, 0 when a guard excuses the term or the demand acts the other way (a truss member in tension against its buckling resistance), and infinite for a positive demand against no capacity. `Value.ratio` keeps the sign. `Value.to_json()` gives the term's JSON record. `excuse` is None unless `excused`; then it is the condition that excuses the term, with its numbers where the term was read (see What was not checked).
+A `Value` is one term. Its fields are `what`, `unit`, `demand`, `capacity`, `excused`, `excuse`, `claimed`, `met`, `parts`, and `utilisation`. `utilisation` is demand / capacity. It is 0 when a guard excuses the term, or when the demand acts the other way, as for a truss member in tension against its buckling resistance. It is infinite for a positive demand against no capacity. `Value.ratio` keeps the sign. `Value.to_json()` gives the term's JSON record. `excuse` is None unless `excused` is true. For an excused term, `excuse` is the condition that excuses the term, with its numbers where the term was read (see What was not checked).
 
-- **Rules.** Hole use and joint type are rules, met or not (`DETAILING_MODES` marks them `"rule"`). Their demand and capacity are joint levels and counts, not quantities, so `demand`, `capacity`, `unit` and `utilisation` are None, and `met` says whether the rule holds. `met` is None for every other term.
-- **Parts.** A capacity made of parts lists them in `parts`, weakest first. Today these are the two bolt group checks of the steel deck, "most loaded bolt ... against the weakest bolt" and "bolt shear, bearing and tearout summed over the group". Each `Part(what, count, limits)` is one row position of the group, such as `"bottom row (1 bolt)"`. Its `limits` are each bolt's strengths there: `Limit(what, capacity)` for its shear and for its bearing and tearout in each ply, in the check's unit. A tearout names its clear distance, as in `"tearout of the tee stem to its edge (lc 0.6875 in)"`. `Part.capacity` is the least of its limits, and `Part.governing` is the limit that sets it.
+Two fields, `met` and `parts`, apply only to some terms.
 
-A claim's utilisation is its quantity against its bound: for `q <= bound` the governing term's utilisation is q / bound, and for `q >= bound` it is bound / q.
+- **Rules.** Hole use and joint type are rules, which are either met or not. `DETAILING_MODES` marks them `"rule"`. A rule's demand and capacity are joint levels and counts, not quantities. For a rule, `demand`, `capacity`, `unit`, and `utilisation` are None, and `met` says whether the rule holds. `met` is None for every other term.
+- **Parts.** A capacity made of parts lists them in `parts`, weakest first. Only the two bolt group checks of the steel deck have parts: "most loaded bolt ... against the weakest bolt" and "bolt shear, bearing and tearout summed over the group". Each `Part(what, count, limits)` is one row position of the group, such as `"bottom row (1 bolt)"`. Its `limits` are each bolt's strengths at that position, in the check's unit. There is one `Limit(what, capacity)` for the bolt's shear, and one for bearing and one for tearout in each ply. A tearout names its clear distance, as in `"tearout of the tee stem to its edge (lc 0.6875 in)"`. `Part.capacity` is the least of the part's limits, and `Part.governing` is the limit that sets that capacity.
 
-The numbers are in the design's units: kips, inches and ksi for the steel deck, and readable SI elsewhere (degC, V, A, kN). Each number is a float rounded for people. The exact value the kernel checked is `Coordinate.exact`, a `Fraction` in SI base units. Over a box, the demand is the largest value and the capacity the least, so the utilisation is an upper bound for every point in the box.
+A claim's utilisation compares its quantity with its bound. For `q <= bound`, the governing term's utilisation is q / bound. For `q >= bound`, it is bound / q.
 
-Some obligations have no single demand and capacity to read. These are R2 (definiteness), R3 (hypercircle), R5 and R6 statements, and R1 statements other than a truss's collapse factor. For those, `values` is empty and `note` says why. The point is still given. An open item whose model is used outside its validity range (its needs name the row) is not read either, because that model's numbers say nothing about the design.
+The numbers are in the design's units. The steel deck uses kips, inches, and ksi. Other domains use readable SI units, such as degC, V, A, and kN. Each number is a float, rounded for people to read. The exact value that the kernel checked is `Coordinate.exact`, a `Fraction` in SI base units. Over a box, the demand is the largest value and the capacity is the least value, so the utilisation is an upper bound for every point in the box.
+
+Some obligations have no single demand and capacity to read. These are the R2 (definiteness), R3 (hypercircle), R5, and R6 statements, and every R1 statement other than a truss's collapse factor. For these obligations, `values` is empty and `note` says why, but `point` is still given. An open item whose model is used outside its validity range is not read either, because that model's numbers say nothing about the design. Its `needs` name the validity row.
 
 ### The governing checks
 
-`report.governing` (or `petra.readout.governing(report.findings)`) has two keys. `"strength"` is the governing strength check and `"detailing"` the governing detailing check. Each is ranked as a finding's `governing` is, over every finding of that category: a rule that is not met first, then the highest utilisation, the first in report order among equals. Each is a `Governing(category, requirement, value)`, or None when no term of the category has a utilisation. Detailing means edge distance, spacing, room to tighten, fillet size, the proportions that keep a connection ductile, hole use and joint type (`readout.DETAILING_MODES`). Every other mode is a strength check, so the governing strength check is never an edge distance.
+`report.governing` has two keys, and `petra.readout.governing(report.findings)` returns the same dictionary. `"strength"` is the governing strength check, and `"detailing"` is the governing detailing check. Each is chosen from every finding of its category by the same ranking as a finding's `governing`: a rule that is not met first, then the highest utilisation, then the first in report order among equals. Each is a `Governing(category, requirement, value)`, or None when no term of the category has a utilisation.
+
+`readout.DETAILING_MODES` lists the detailing modes: edge distance, spacing, room to tighten, fillet size, the proportions that keep a connection ductile, hole use, and joint type. Every other mode is a strength check, so the governing strength check is never an edge distance.
 
 ### What was not checked
 
-A pass covers the obligations in its table and nothing else. Two kinds of line after the table say where the checking stopped. Both are tooling, read after the verdict, and change no verdict.
+A PASS covers the obligations in its table and nothing else. Two kinds of line after the table say where checking stopped. Both come from tooling that reads the report after the verdict, and neither changes the verdict.
 
-**Excused checks.** Some clauses apply only under a condition, and the check's term carries a guard: the term holds wherever the formula holds or the guard is <= 0. Where a guard is <= 0 over the whole box, or at the counterexample or margin point, the term is excused, its `Value.excused` is true and its utilisation is 0. Its `Value.excuse` then gives each guard that excuses it as a condition with its numbers, both sides in the design's units, the side that names a design input first:
+**Excused checks.** Some clauses apply only under a condition. The term of such a check carries a guard, and the term holds wherever the formula holds or the guard is <= 0. Where a guard is <= 0 over the whole box, or at the counterexample or margin point, the term is excused. An excused term has `Value.excused` set to true and a utilisation of 0. Its `Value.excuse` gives each guard that excuses it as a condition with its numbers. Both sides of the condition are in the design's units, and the side that names a design input comes first. For example:
 
 ```
 excused    ff1/steel.web_sidesway_buckling: member web: web sidesway buckling where its slenderness ratio makes it apply (J10.4): ((W14x90.d - (2 * W14x90.kdes)) / W14x90.tw) / (ff1.unbraced_length / W14x90.bf) = 2.604 >= j10_4.restrained_limit + strict.ratio = 2.3
 ```
 
-A domain reader may word the excuse itself by setting `Value.excuse`. When it does not, `readout.findings` reads it from the guard in the kernel statement, a term of the form `Min((check, *guards))` as the steel deck builds it. Symbols print by their last two dotted parts, or in full where two would print alike. A check excused in several load cases prints one line, its distinct conditions joined by `; `.
+A domain reader may word the excuse itself by setting `Value.excuse`. Otherwise, `readout.findings` reads the excuse from the guard in the kernel statement, a term of the form `Min((check, *guards))` as the steel deck builds it. A symbol prints as its last two dotted parts, or in full where two symbols would print alike. A check excused in several load cases prints one line, with its distinct conditions joined by `; `.
 
-**Modes not demanded.** `readout.unchecked(report)` (or `report.unchecked`) lists, per component in design order, each mode of its domain (`KINDS[kind].modes`) that no requirement names on that component, as `Unchecked(subject, mode, reason)`. The reason comes from the coverage table:
+**Modes not demanded.** `readout.unchecked(report)`, also available as `report.unchecked`, lists each mode of a component's domain (`KINDS[kind].modes`) that no requirement names on that component. It takes the components in design order and gives each mode as `Unchecked(subject, mode, reason)`. The reason comes from the coverage table and is one of these:
 
-- `"no <field> load is declared; one would demand it"`: the component's kind takes a load `field` that no load case declares on it, and a probe copy of the design with that load added as zero makes `coverage.generate` demand the mode. The probe changes nothing the report demands or decides.
-- `readout.CLAIM_ONLY`, "only a claim demands it; the coverage table never does": no coverage rule of the domain lists the mode.
-- `readout.NOT_DEMANDED`, "not demanded by the coverage table": a coverage rule can demand the mode but does not for this component, and the table records no reason. The component's attributes or kind are the usual cause.
+- `"no <field> load is declared; one would demand it"`. The component's kind takes a load `field` that no load case declares on the component. A probe copy of the design, with that load added as zero, makes `coverage.generate` demand the mode. The probe changes nothing that the report demands or decides.
+- `readout.CLAIM_ONLY`, `"only a claim demands it; the coverage table never does"`. No coverage rule of the domain lists the mode.
+- `readout.NOT_DEMANDED`, `"not demanded by the coverage table"`. A coverage rule can demand the mode but does not demand it for this component, and the table records no reason. The usual cause is the component's attributes or kind.
 
-The text prints one line per reason and set of components, naming the modes in id order, with the load reasons first:
+The text prints one line per reason and set of components. Each line names the modes in id order, and the lines with a load reason come first:
 
 ```
 not checked  steel.panel_zone on ff1: no panel_shear load is declared; one would demand it
 not checked  steel.bearing, steel.block_shear, ... on ff1: not demanded by the coverage table
 ```
 
-Modes of other domains a component could meet (a port contract, galvanic corrosion) are not listed: they belong to the connection, not the component's domain.
+Modes of other domains that a component could meet are not listed, because they belong to the connection, not to the component's domain. A port contract and galvanic corrosion are such modes.
 
 ## JSON
 
-`petra check --json FILE` prints a single object, with keys sorted.
+`petra check --json FILE` prints one object with sorted keys. In the shape below, an upper-case name is a placeholder, a key followed by `?` may be absent, and text to the right of a line describes it.
 
 ```
 {"file": FILE, "design": NAME, "status": "PASS" | "FAIL" | "UNKNOWN" | "MARGINAL",
@@ -191,9 +201,9 @@ COORDINATE = {"symbol", "label",
               "varies": true | false}                       true: the statement lets it range
 ```
 
-The JSON deliberately omits where each piece of evidence came from (solver, certificate store or library). A report replayed from stored certificates therefore prints the same JSON as the run that found them.
+The JSON leaves out the source of each piece of evidence, so that a report replayed from stored certificates prints the same JSON as the run that found them. That source is the solver, the certificate store, or the library.
 
-Here is the bolts obligation of the 60 kip shear tab in `tests/fixtures/readout/job5_fail_60k.petra`, cut down to one part of the bolt group and one fixed coordinate. Every bolt's strength is set by bolt shear here, so the bolt group needs more or larger bolts, not more edge distance:
+The example below is the bolts obligation of the 60 kip shear tab in `tests/fixtures/readout/job5_fail_60k.petra`, cut down to one part of the bolt group and one fixed coordinate. Here bolt shear sets every bolt's strength, so the bolt group needs more or larger bolts, not more edge distance.
 
 ```json
 {"requirement": "tab/steel.bolts/coverage.steel.bolts", "entry": "coverage", "category": "strength", "outcome": "refuted", "rule": "R4",
@@ -222,4 +232,4 @@ Here is the bolts obligation of the 60 kip shear tab in `tests/fixtures/readout/
 
 ## Envelopes
 
-`petra envelope FILE --input NAME --from LO --to HI` finds the widest interval of one input over which every obligation that depends on it is proved. The search and its report live in `petra/envelope.py` (`envelope`, `render`, `to_json`). Without `--at`, the search starts from the middle of the input's stated range. If the design does not pass there, the search starts again from the low end of the probe range. The text prints values in the unit of `--from`, and `--json` prints exact rationals in SI base units.
+`petra envelope FILE --input NAME --from LO --to HI` finds the widest interval of one input over which every obligation that depends on that input is proved. `petra/envelope.py` holds the search and its report, in `envelope`, `render`, and `to_json`. Without `--at`, the search starts from the middle of the input's stated range. If the design does not pass there, the search starts again from the low end of the probe range. The text output prints values in the unit of `--from`, and `--json` prints exact rationals in SI base units.

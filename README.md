@@ -1,46 +1,270 @@
 # Petra
 
-Petra checks a physical design against its claims and answers PASS, FAIL, MARGINAL or UNKNOWN. A design can be a steel connection, a pin-jointed truss, a wire circuit, a bolted joint, or a part under a load known only by its range and mean. Every PASS and every FAIL is a theorem that a small exact kernel checked. Every verdict lists the premises it rests on: standard values, signed inputs, models with their validity limits, and the coverage table. Solvers do the search, but the kernel trusts none of them. A solver hands in a certificate, and the kernel checks it with exact rational arithmetic.
+Petra checks a physical design against the claims written in it and answers PASS, FAIL, MARGINAL or UNKNOWN. A design is a short `.petra` file that describes a steel connection, a truss, a wire circuit, a bolted joint or a load known only by its range and mean. Every PASS and every FAIL comes with a certificate that a small kernel re-checks in exact rational arithmetic. Every verdict lists the premises it rests on.
 
-The steel connections deck checks connections to AISC 360-22 Chapters J and K. It covers single-plate shear tabs, double and single angles, shear end plates, shear tees, unstiffened and stiffened seats, tee hangers, bolted and welded brackets, and concentrated flange forces on a column. [examples/steel](examples/steel) holds one design of each kind, and [docs/steel_connections.md](docs/steel_connections.md) is the deck's specification. Petra ships only the rows of the AISC Shapes Database that the examples and tests use. To use every W shape and angle, set `PETRA_SHAPES_XLSX` to your own copy of `SHAPE160.xlsx`.
-
-[docs/reference.md](docs/reference.md) is the language reference, and [petra/docs/api.md](petra/docs/api.md) documents the Python API. `petra docs reference` and `petra docs api` print them from any install. [docs/frame.md](docs/frame.md) explains what a verdict means and what v0 covers. [docs/design.md](docs/design.md) explains how the parts fit and why.
+Petra is at version 0.1.0, has one maintainer, and is not on PyPI yet. It checks the claims and loads that a design states. It does not choose the loads, and it does not replace the engineer who signs the design.
 
 ## Install
 
-You need Python 3.11 or later. Petra depends on `numpy` and `scipy` (HiGHS for linear programs). The kernel uses only the standard library.
-
-From a clone of this repository, install Petra and its `petra` command:
+Petra needs Python 3.11 or later, with `numpy` and `scipy`. Install it from a clone:
 
 ```bash
+git clone https://github.com/NooterraLabs/petra
+cd petra
 pip install .
 ```
 
-To install a working copy whose edits take effect without reinstalling, add `-e`:
+Add `-e` to install a working copy whose edits take effect without reinstalling. To run Petra from the clone without installing it, write `python -m petra` in place of `petra`.
+
+The build backend is part of the repository (`_build/petra_build.py`), so pip builds Petra without network access. To install on a machine with no network, build a wheel with `pip wheel --no-deps -w dist .` and copy it there. If that machine already has `numpy` and `scipy`, install the wheel with `pip install --no-index petra-0.1.0-py3-none-any.whl`.
+
+## Check a steel connection
+
+[examples/steel](examples/steel) holds one design of each steel connection kind. `petra new KIND` prints the example of a kind, ready to edit. This shear tab joins a W18x50 beam to the flange of a W14x90 column through a 3/8 in plate and four 3/4 in bolts:
 
 ```bash
-pip install -e .
+petra new shear_tab
 ```
 
-The build backend is part of the repository (`_build/petra_build.py`) and needs no packages, so pip builds Petra without network access. pip needs the network only to fetch `numpy` and `scipy` when they are missing. To build a wheel to install on another machine, run `pip wheel --no-deps -w dist .`.
+<!-- sample: petra new shear_tab | sed -n '13,31p' -->
+```text
+shear_tab st1 {
+  basis lrfd
+  beam W18x50 grade steel.A992
+  support W14x90 flange grade steel.A992
+  plate steel.A36 thickness 0.375 inch
+  bolts bolt_group.120 diameter 0.75 inch threads included
+  rows 4
+  pitch 3 inch
+  edge_vertical 1.5 inch
+  plate_edge 1.5 inch
+  bolt_line 3 inch
+  beam_edge 1.75 inch
+  top 3 inch
+  weld electrode.E70 size 0.25 inch sides 2
+}
 
-To install a wheel file, such as one built that way, pass its path to pip:
+load gravity {
+  on st1 shear in [0 kip, 45 kip]
+  signed "s.engineer@example.org" source "beam reaction, LRFD 1.2D + 1.6L, calc SC-3"
+```
+
+Check it:
 
 ```bash
-pip install petra-0.1.0-py3-none-any.whl
+petra check examples/steel/shear_tab.petra
 ```
 
-On a machine with no network, where `numpy` and `scipy` are already installed, add `--no-index` so pip does not try to reach an index:
+These lines come from the report:
+
+<!-- sample: petra check examples/steel/shear_tab.petra | sed -n '1,5p;13p;39p;45p;108p;112p;129p;130p' -->
+```text
+steel-shear-tab: PASS
+entries    coverage PASS
+scope      load cases gravity; environment undeclared; no parameters
+checked    19 obligations, 19 certified, 0 refuted, 0 waived, 0 open
+governing  strength   st1/steel.bolts/coverage.steel.bolts: beam side: most loaded bolt by the elastic method against the weakest bolt (J3.7, J3.11a): demand 17.57 kip, capacity 17.89 kip, utilisation 0.982; weakest top row (1 bolt): 17.89 kip, set by bolt shear
+  st1/steel.bolts                              coverage steel.bolts         R4  certified  solver  sha256:fafccb69d51e..  utilisation 0.982
+not checked  steel.prying on st1: no bolt is in tension, so none is pried (Manual Part 9)
+footprint  92 premises
+  sanctioned       reg:steel.A992.fu   steel.A992.fu 115653761996773/258064 Pa, ASTM A992 (W shapes): Fu >= 65 ksi   (AISC; ASTM A992 (W shapes) specified minimum tensile strength Fu = 65 ksi (AISC Steel Construction Manual, 16th ed. Table 2-4, as quoted in the Companion to the Manual v16.0 Vol. 1 Example D.1); version 1)
+  validated_model  model:steel.bolts@04e8b4dfa2652ed8   bolt shear rupture (Eq J3-1) and bearing and tearout at every hole (Eq J3-6a-f), taken per bolt as the least of its shear strength and its bearing or tearout strength in each ply, summed over a concentric group; an eccentric group by the elastic method against the weakest bolt; through declared fillers the shear strength times 0.85, J5.2(a)'s least factor, since the grammar gives no filler thickness; valid when bolts of one group, size and installation; holes of the declared type; threads included or excluded as declared; the elastic method assumes a rigid connected part rotating about the group centroid. Unbounded: Eqs J3-1 and J3-6 state no range of their own; Table J3.2's reduction of Fnv for long end-loaded joints does not arise, since every catalogue bolt group is a shear connection's, a bracket's or a hanger's, which Commentary J3.7 exempts   (petra-maintainers; AISC 360-22 Sections J3.7 and J3.11a, Table J3.2; AISC Steel Construction Manual, 16th ed. (method encoded, not its text) Part 7 (elastic method))
+  assumed          in:steel-shear-tab.gravity.st1.shear   gravity.st1.shear in [0, 200169.9726867225] N   (s.engineer@example.org; beam reaction, LRFD 1.2D + 1.6L, calc SC-3)
+  judged           cov:cf885ae3de145584   every failure mode a v0 design must address is demanded by one of galvanic.contact, truss.frame, truss.axial_member, wire.conductor, bolt.tension, bolt.separation, bolt.bearing, steel.bolts, steel.bolt_tension, steel.bolt_combined, steel.slip, steel.shear_yield, steel.shear_rupture, steel.block_shear, steel.tension_yield, steel.tension_rupture, steel.flexural_yield, steel.flexural_rupture, steel.weld, steel.weld_base_metal, steel.bearing, steel.web_local_yielding, steel.web_crippling, steel.flange_local_bending, steel.web_sidesway_buckling, steel.web_compression_buckling, steel.panel_zone, steel.seat_flexure, steel.prying, steel.spacing_min, steel.edge_min, steel.spacing_max, steel.edge_max, steel.fillet_size, steel.hole_use, steel.joint_type, steel.clearance, steel.beam_fit, steel.flange_fit, steel.web_fit, steel.compression, steel.cope_buckling, steel.plate_buckling, steel.ductility, steel.tee_ductility, steel.bracket_edge, steel.extended_ductility, steel.load_path, steel.j10_stiffeners   (petra-maintainers; Petra coverage table v0: petra/coverage.py and each domain's coverage rules)
+```
+
+The first line is the verdict. An obligation is one statement that the design must satisfy. Petra makes one for each claim and one for each failure mode that the coverage table demands for the kind. All 19 obligations here have certificates that the kernel accepted. The `governing` line names the check closest to its limit, with the AISC clauses it encodes and its demand, capacity and utilisation. Each obligation line names the kernel rule that checked its certificate (R4 here) and the hash of its statement. A `not checked` line names a failure mode that cannot arise in this design, and says why. The footprint lists the 92 premises that the verdict rests on.
+
+## Read a FAIL and an UNKNOWN
+
+This truss carries a heavier load than [examples/truss_pass.petra](examples/truss_pass.petra):
 
 ```bash
-pip install --no-index petra-0.1.0-py3-none-any.whl
+petra check examples/truss_fail.petra
 ```
 
-Petra is not on PyPI yet. Publication is pending.
+A FAIL prints a counterexample for each refuted obligation. The counterexample is a point where every input lies inside its signed or sanctioned range and the claim does not hold. These lines show the counts and the first two refutations:
 
-To run Petra from the repository root without installing it, write `python -m petra` in place of `petra`.
+<!-- sample: petra check examples/truss_fail.petra | sed -n '1,3p;15,27p' -->
+```text
+warren-footbridge-panel-rev-c: FAIL
+entries    strength FAIL, coverage FAIL
+checked    9 obligations, 6 certified, 3 refuted, 0 waived, 0 open
+counterexample  frame/truss.plastic_collapse/claim.strength: a static field within every member's capacity carries the self-weight of frame, alone and with 1.5 times load case crowd
+  governing  load factor: the claimed factor against the largest one a static field within every member's capacity carries: demand 1.5, capacity 0.7232, utilisation 2.07
+  claim      strength: collapse_factor is 0.7232 here, against its bound 1.5
+  at         const.earth.gravity = 9.84 m/s2   (reg:const.earth.gravity)
+             const.steel.E       = 200 GPa   (reg:const.steel.E)
+             const.steel.density = ~8004.77 kg/m3   (reg:const.steel.density)
+             crowd.frame.D.fy    = -60 kN   (in:warren-footbridge-panel-rev-c.crowd.frame.D.fy)
+             crowd.frame.E.fy    = -60 kN   (in:warren-footbridge-panel-rev-c.crowd.frame.E.fy)
+  fixed      16 more values, as the design and the registry state them (--json lists each)
+counterexample  frame.diag_ad/truss.member_buckling/coverage.truss.axial_member: the compression in frame.diag_ad is at most 1 times its flexural buckling resistance under load case crowd and the self-weight
+  governing  compression against the flexural buckling resistance: demand 75.45 kN, capacity 54.69 kN, utilisation 1.38
+  at         const.earth.gravity = 9.84 m/s2   (reg:const.earth.gravity)
+             const.steel.E       = 200 GPa   (reg:const.steel.E)
+```
 
-The documentation is installed with Petra. `petra docs` lists it, and `petra docs NAME` prints one document:
+This bolted joint is missing models for two of the failure modes that coverage demands:
+
+```bash
+petra check examples/bolt_unknown.petra
+```
+
+The tension claim passes, and so does the separation check that coverage adds. The verdict is still UNKNOWN, because v0 has no model for plate bearing or galvanic corrosion. Petra names each open requirement and what would close it:
+
+<!-- sample: petra check examples/bolt_unknown.petra | head -n 13 -->
+```text
+mast-bracket-coastal: UNKNOWN
+entries    tension PASS, coverage UNKNOWN
+checked    4 obligations, 2 certified, 0 refuted, 0 waived, 2 open
+governing  strength   bracket/bolt.tension/claim.tension: bolt tension against its limit: demand 29.04 kN, capacity 34.13 kN, utilisation 0.851
+  bracket/bolt.tension                         claim tension                R4  certified  solver  sha256:4b704bfeffe3..  utilisation 0.851
+  bracket/bolt.separation                      coverage bolt.separation     R4  certified  solver  sha256:ac3c5a1677e6..  utilisation 0.713
+  bracket/bolt.plate_bearing                   coverage bolt.bearing        --  open
+  bracket/corrosion.galvanic                   coverage galvanic.contact    --  open
+open       2 requirements
+  bracket/bolt.plate_bearing/coverage.bolt.bearing
+    needs no model for bolt.plate_bearing on bracket: waive bolt.plate_bearing on bracket by "<owner>" reason "<why>"
+  bracket/corrosion.galvanic/coverage.galvanic.contact
+    needs no model for corrosion.galvanic on bracket: waive corrosion.galvanic on bracket by "<owner>" reason "<why>"
+```
+
+A claim may also name a margin, such as `<= 70 degC margin 20 degC`. Its verdict is MARGINAL when the claim is proved and the kernel certifies a point within the margin of the bound. [docs/reference.md](docs/reference.md) gives the rules.
+
+## What a verdict rests on
+
+Solvers search for a proof or a counterexample for each obligation and hand it in as a certificate. The kernel in [petra/kernel](petra/kernel) checks the certificate with exact rational arithmetic under one of six rules, R1 to R6. The kernel imports only the Python standard library and trusts no solver. `petra verify` checks a certificate file on its own, with no solver and no design:
+
+```bash
+petra verify examples/bolt_tension.cert.json
+```
+
+<!-- sample: petra verify examples/bolt_tension.cert.json -->
+```text
+examples/bolt_tension.cert.json: theorem sha256:4b704bfeffe30102181ec044dad0e38272fbed879c59c4cd3f1a05fb68851960
+```
+
+[The certificate JSON format](docs/design.md#certificate-json-format) does not depend on Python, so a second kernel can check the same files.
+
+A verdict is true relative to its footprint. Each premise in the footprint carries one of these tags:
+
+| Tag | Source | Example from the shear tab |
+|---|---|---|
+| `certified`, `proved` | The kernel | A certificate for the bolts' shear and bearing |
+| `sanctioned` | A value from a named standard | ASTM A992's minimum tensile strength, 65 ksi |
+| `measured`, `assumed` | An input that a named person signed, with its source | The beam reaction, 0 to 45 kip |
+| `validated_model` | A physical model with numeric validity limits, which the kernel checks | Bolt shear rupture and bearing, AISC 360-22 Eqs. J3-1 and J3-6 |
+| `judged` | The coverage table, and values the maintainers chose | Which failure modes a design must address |
+
+If a premise is wrong, the verdict can be wrong, and the footprint tells you which premise to check. A model used outside its validity limits gives UNKNOWN, with the point where it leaves them.
+
+## What Petra covers
+
+| Domain | Kinds | What it checks |
+|---|---|---|
+| `steel` | `shear_tab`, `double_angle`, `single_angle`, `shear_tee`, `shear_end_plate`, `seated`, `stiffened_seat`, `flange_force`, `bolt_bracket`, `weld_bracket`, `hanger` | AISC 360-22 Chapters J and K, with the AISC Manual (16th edition) and the RCSC 2025 bolt specification. [docs/steel_connections.md](docs/steel_connections.md) is the specification. |
+| `truss` | `truss` | Plastic collapse, member buckling (EN 1993-1-1), stress and stability of a pin-jointed truss |
+| `circuit` | `circuit` | Wire temperature, short circuit, overload protection (IEC 60364-4-43) and voltage drop |
+| `bolt` | `joint` | Bolt tension and joint separation |
+| `uncertainty` | `demand` | A demand known by its range and mean, or by tests to failure, against a capacity |
+
+Petra ships only the rows of the AISC Shapes Database that its examples and tests use. To use every W shape and angle, set `PETRA_SHAPES_XLSX` to your own copy of `SHAPE160.xlsx`.
+
+## Write a design
+
+`petra kinds` lists the component kinds by domain:
+
+```bash
+petra kinds
+```
+
+<!-- sample: petra kinds -->
+```text
+domain truss: truss
+domain circuit: circuit
+domain bolt: joint
+domain uncertainty: demand
+domain steel: shear_tab, double_angle, single_angle, shear_tee, shear_end_plate, seated,
+  stiffened_seat, flange_force, bolt_bracket, weld_bracket, hanger
+
+`petra kinds KIND` prints the lines a kind takes, each with its meaning; `petra kinds DOMAIN`
+prints them for every kind of a domain, and `petra kinds --all` for every kind.
+`petra new KIND` prints a complete design of KIND to start from.
+```
+
+`petra kinds double_angle` prints every line a double angle takes, with its meaning and unit. `petra registry list` prints every material, part and shape that Petra knows. Common names such as A325 and A992 resolve to their registry ids:
+
+```bash
+petra registry list bolt_group
+```
+
+<!-- sample: petra registry list bolt_group | head -n 2 -->
+```text
+bolt_group.120   bolt: ASTM F3125 Grades A325 and F1852 (Group 120); AISC's -N and -X are `threads included` and `threads excluded`; also A325, F1852
+bolt_group.144   bolt: ASTM F3148 Grade 144 (Group 144); AISC's -N and -X are `threads included` and `threads excluded`; also F3148
+```
+
+When a design fails, the report names each refuted check with its demand, capacity and utilisation in the design's units. Change the input that the check reads, and check again.
+
+## Use Petra from a program
+
+`petra check FILE --json` prints the same report as one JSON object. The exit code carries the overall verdict:
+
+| Exit code | Meaning |
+|---|---|
+| 0 | PASS |
+| 1 | FAIL |
+| 2 | UNKNOWN |
+| 5 | MARGINAL |
+| 3 | Input error |
+| 4 | Internal error |
+
+From Python, `petra.check_file` returns a report. `report.to_json()` returns the object that `--json` prints, and `report.render()` returns the text that `petra check` prints:
+
+```python
+import petra
+report = petra.check_file("examples/bolt_unknown.petra")
+print(report.to_json()["status"], [(v["claim"], v["status"]) for v in report.to_json()["verdicts"]])
+```
+
+<!-- sample: python -->
+```text
+UNKNOWN [('tension', 'PASS'), ('coverage', 'UNKNOWN')]
+```
+
+Other commands:
+
+- `petra envelope FILE --input NAME --from LO --to HI` finds the widest interval of one input over which the design still passes.
+- `petra certify-family FILE --library DIR` proves a design's claims over a box of inputs once. A later design inside the box gets its certificates from the library, with no solver run.
+- `petra registry recall ID` lists the designs whose verdicts rest on a registry entry.
+- `petra gym --episodes 20 --seed 0` runs a baseline agent on generated circuit and bolt tasks, rewarded only by kernel verdicts.
+
+[petra/docs/api.md](petra/docs/api.md) documents each command's output and the Python API.
+
+## How Petra is tested
+
+The samples in this README are real command output, and `tests/test_docs.py` fails when one goes stale. The measures below ran on commit `9ae6009` on 2026-11-07:
+
+| Measure | Result | Report |
+|---|---|---|
+| The test suite | 1,230 tests pass | `python -m unittest discover -s tests -t .` |
+| Absurd-design gap: generated designs that Petra passes and the separate judge in [judges](judges) rejects | 0 of 54,000, over seeds 1, 2 and 3 | [docs/absurd_gap.md](docs/absurd_gap.md) |
+| Canary recall: copies of Petra with checks taken out, for each of which the search must find a design the copy wrongly passes | 52 of 53 found | [docs/canary_recall.md](docs/canary_recall.md) |
+| Steel gate: 10,000 generated connections, checked against a second implementation, planted faults and an adversarial search | 0 false PASS, and 218 of 218 planted faults caught | [docs/steel_gate.md](docs/steel_gate.md) |
+
+## Limits of v0
+
+- The kernel is Python with exact rationals, not Lean. The certificate format is ready for a Lean kernel, but that kernel does not exist yet.
+- The coverage table is a judgement, and every footprint says so.
+- Member buckling uses the EN 1993-1-1 curve c reduction with gamma_M1 = 1 and no EN 1090 erection tolerance. The plastic collapse model lets a buckled member keep its buckling resistance, which is unconservative for an indeterminate truss. The 0.002 small-strain limit is the maintainers' choice, not a code value.
+- Petra checks each load case named in a claim on its own. It does not sum load cases.
+- The steel deck does not yet model the rotational flexibility of angles and end plates, and does not check the welds of a stiffened seat's top angle and plate. [docs/plan.md](docs/plan.md) lists the rest under P1.
+- Continuum finite elements, reduced bases and learned surrogates are out of scope.
+
+## Documentation
+
+`petra docs` prints the documents that install with Petra:
 
 ```bash
 petra docs
@@ -54,245 +278,17 @@ api        the Python API, and the JSON that `petra check --json` prints
 `petra docs NAME` prints one.
 ```
 
-## Quickstart
+The rest are in [docs](docs):
 
-1. Check a steel shear tab. It joins a W18x50 beam to the flange of a W14x90 column through a 3/8 in plate and four 3/4 in bolts.
+- [docs/frame.md](docs/frame.md) says what a verdict means and what v0 covers.
+- [docs/design.md](docs/design.md) says how the parts fit together, and why.
+- [docs/steel_connections.md](docs/steel_connections.md) specifies the steel deck.
+- [docs/plan.md](docs/plan.md) is the plan, with each phase's measured results.
 
-	```bash
-	petra check examples/steel/shear_tab.petra
-	```
+## Contributing
 
-	The first lines give the verdict and count the obligations:
+[CONTRIBUTING.md](CONTRIBUTING.md) says how to run the tests and regenerate the generated files. Every commit needs a sign-off under the Developer Certificate of Origin. A bug report is most useful with the `.petra` file, the command and Petra's output.
 
-	<!-- sample: petra check examples/steel/shear_tab.petra | head -n 4 -->
-	```text
-	steel-shear-tab: PASS
-	entries    coverage PASS
-	scope      load cases gravity; environment undeclared; no parameters
-	checked    19 obligations, 19 certified, 0 refuted, 0 waived, 0 open
-	```
+## Licence
 
-	Then comes one line per limit state the kernel certified, such as `st1/steel.block_shear`. The footprint at the end lists every premise the verdict rests on.
-
-2. To read the verdict from another program, add `--json`. Petra prints the same report as one JSON object.
-
-	```bash
-	petra check examples/steel/shear_tab.petra --json
-	```
-
-	The exit code carries the overall status: 0 for PASS, 1 for FAIL, 2 for UNKNOWN, 5 for MARGINAL, 3 for an input error, and 4 for an internal error.
-
-3. To check a design from Python, call `petra.check_file`. `report.to_json()` returns the object that `--json` prints, and `report.render()` returns the text that `petra check` prints.
-
-	```python
-	import petra
-	report = petra.check_file("examples/bolt_unknown.petra")
-	print(report.to_json()["status"], [(v["claim"], v["status"]) for v in report.to_json()["verdicts"]])
-	```
-
-	<!-- sample: python -->
-	```text
-	UNKNOWN [('tension', 'PASS'), ('coverage', 'UNKNOWN')]
-	```
-
-4. To write your own design, start from a template. `petra kinds` lists the component kinds by domain:
-
-	```bash
-	petra kinds
-	```
-
-	<!-- sample: petra kinds -->
-	```text
-	domain truss: truss
-	domain circuit: circuit
-	domain bolt: joint
-	domain uncertainty: demand
-	domain steel: shear_tab, double_angle, single_angle, shear_tee, shear_end_plate, seated,
-	  stiffened_seat, flange_force, bolt_bracket, weld_bracket, hanger
-
-	`petra kinds KIND` prints the lines a kind takes, each with its meaning; `petra kinds DOMAIN`
-	prints them for every kind of a domain, and `petra kinds --all` for every kind.
-	`petra new KIND` prints a complete design of KIND to start from.
-	```
-
-	`petra kinds double_angle` prints every line a double angle takes, each with its meaning and unit, and `petra new double_angle` prints a complete double-angle design to edit. `petra registry list` prints every material, part and shape Petra knows, and common names such as A325 and A992 resolve to their registry ids.
-
-	```bash
-	petra registry list bolt_group
-	```
-
-	<!-- sample: petra registry list bolt_group | head -n 2 -->
-	```text
-	bolt_group.120   bolt: ASTM F3125 Grades A325 and F1852 (Group 120); AISC's -N and -X are `threads included` and `threads excluded`; also A325, F1852
-	bolt_group.144   bolt: ASTM F3148 Grade 144 (Group 144); AISC's -N and -X are `threads included` and `threads excluded`; also F3148
-	```
-
-	A FAIL names each refuted check with its demand, capacity and utilisation in the design's units, and the point where it fails. Change the input that check reads and check again.
-
-## Walk through the examples
-
-1. Check a truss whose claims hold:
-
-	```bash
-	petra check examples/truss_pass.petra
-	```
-
-	The first lines name the verdict, the governing strength check with its utilisation, and the first obligation the kernel certified:
-
-	<!-- sample: petra check examples/truss_pass.petra | head -n 6 -->
-	```text
-	warren-footbridge-panel: PASS
-	entries    strength PASS, stability PASS, stress PASS, coverage PASS
-	scope      load cases crowd; environment indoor_dry; no parameters
-	checked    10 obligations, 10 certified, 0 refuted, 0 waived, 0 open
-	governing  strength   frame.diag_ad/truss.member_buckling/coverage.truss.axial_member: compression against the flexural buckling resistance: demand 30.45 kN, capacity 54.69 kN, utilisation 0.557
-	  frame/truss.plastic_collapse                 claim strength               R1  certified  solver  sha256:68b23684fdb0..  validity 2 proved
-	```
-
-	The footprint at the end lists every premise. For example, `reg:steel.S355.fy` cites EN 10025-2, and `in:warren-footbridge-panel.crowd.frame.D.fy` names the person who signed that load range.
-
-2. Check the same truss under a heavier load:
-
-	```bash
-	petra check examples/truss_fail.petra
-	```
-
-	The verdict is FAIL, with three refutations. The panel cannot carry the load (R1, a Farkas ray), and two diagonals buckle (R4). Each refutation prints the counterexample point. Every value lies inside its signed or sanctioned range. Each refutation names its governing check with demand, capacity and utilisation. These lines show the counts and the first two refutations:
-
-	<!-- sample: petra check examples/truss_fail.petra | sed -n '1,3p;15,27p' -->
-	```text
-	warren-footbridge-panel-rev-c: FAIL
-	entries    strength FAIL, coverage FAIL
-	checked    9 obligations, 6 certified, 3 refuted, 0 waived, 0 open
-	counterexample  frame/truss.plastic_collapse/claim.strength: a static field within every member's capacity carries the self-weight of frame, alone and with 1.5 times load case crowd
-	  governing  load factor: the claimed factor against the largest one a static field within every member's capacity carries: demand 1.5, capacity 0.7232, utilisation 2.07
-	  claim      strength: collapse_factor is 0.7232 here, against its bound 1.5
-	  at         const.earth.gravity = 9.84 m/s2   (reg:const.earth.gravity)
-	             const.steel.E       = 200 GPa   (reg:const.steel.E)
-	             const.steel.density = ~8004.77 kg/m3   (reg:const.steel.density)
-	             crowd.frame.D.fy    = -60 kN   (in:warren-footbridge-panel-rev-c.crowd.frame.D.fy)
-	             crowd.frame.E.fy    = -60 kN   (in:warren-footbridge-panel-rev-c.crowd.frame.E.fy)
-	  fixed      16 more values, as the design and the registry state them (--json lists each)
-	counterexample  frame.diag_ad/truss.member_buckling/coverage.truss.axial_member: the compression in frame.diag_ad is at most 1 times its flexural buckling resistance under load case crowd and the self-weight
-	  governing  compression against the flexural buckling resistance: demand 75.45 kN, capacity 54.69 kN, utilisation 1.38
-	  at         const.earth.gravity = 9.84 m/s2   (reg:const.earth.gravity)
-	             const.steel.E       = 200 GPa   (reg:const.steel.E)
-	```
-
-3. Check a bolted joint whose coverage is incomplete:
-
-	```bash
-	petra check examples/bolt_unknown.petra
-	```
-
-	The tension claim passes, and so does the separation check coverage adds: the least preload keeps the joint clamped. The verdict is still UNKNOWN, because coverage also asks for plate bearing and galvanic corrosion, and v0 has no model for either. Petra names each open requirement and what would close it:
-
-	<!-- sample: petra check examples/bolt_unknown.petra | head -n 13 -->
-	```text
-	mast-bracket-coastal: UNKNOWN
-	entries    tension PASS, coverage UNKNOWN
-	checked    4 obligations, 2 certified, 0 refuted, 0 waived, 2 open
-	governing  strength   bracket/bolt.tension/claim.tension: bolt tension against its limit: demand 29.04 kN, capacity 34.13 kN, utilisation 0.851
-	  bracket/bolt.tension                         claim tension                R4  certified  solver  sha256:4b704bfeffe3..  utilisation 0.851
-	  bracket/bolt.separation                      coverage bolt.separation     R4  certified  solver  sha256:ac3c5a1677e6..  utilisation 0.713
-	  bracket/bolt.plate_bearing                   coverage bolt.bearing        --  open
-	  bracket/corrosion.galvanic                   coverage galvanic.contact    --  open
-	open       2 requirements
-	  bracket/bolt.plate_bearing/coverage.bolt.bearing
-	    needs no model for bolt.plate_bearing on bracket: waive bolt.plate_bearing on bracket by "<owner>" reason "<why>"
-	  bracket/corrosion.galvanic/coverage.galvanic.contact
-	    needs no model for corrosion.galvanic on bracket: waive corrosion.galvanic on bracket by "<owner>" reason "<why>"
-	```
-
-4. Check a certificate file on its own, with no solver and no design:
-
-	```bash
-	petra verify examples/bolt_tension.cert.json
-	```
-
-	The kernel reads the statement and the evidence from the file and prints `theorem` and the statement hash:
-
-	<!-- sample: petra verify examples/bolt_tension.cert.json -->
-	```text
-	examples/bolt_tension.cert.json: theorem sha256:4b704bfeffe30102181ec044dad0e38272fbed879c59c4cd3f1a05fb68851960
-	```
-
-	[The certificate JSON format](docs/design.md#certificate-json-format) is language-neutral, so a second kernel can check the same files.
-
-## Ask how close, and how far
-
-A claim can name a margin after its bound:
-
-```text
-claim hot:  lighting.w1.temperature <= 70 degC margin 20 degC under lamp_draw
-```
-
-The verdict is FAIL if the wire can pass 70 degC. It is MARGINAL if the claim is proved and the kernel also certifies a point where the wire comes within 20 degC of the bound. It is PASS if the claim is proved and no point comes that close, and the report says whether the margin itself was proved (the claim holds with at least 20 degC to spare) or is undecided. A point within the margin while the claim is neither proved nor refuted gives UNKNOWN, with the point shown. `examples/circuit_pass.petra` with this claim is MARGINAL, because the wire reaches about 56 degC at the hot corner.
-
-To find how far an input can go, name the range to explore:
-
-```bash
-petra envelope examples/circuit_pass.petra --input ambient --from "-20 degC" --to "100 degC"
-```
-
-Petra checks the design with the ambient's range replaced by probe intervals and bisects. It reports the widest interval it proved and the first point where a claim fails:
-
-<!-- sample: petra envelope examples/circuit_pass.petra --input ambient --from "-20 degC" --to "100 degC" | head -n 4 -->
-```text
-envelope   ambient in [-20, 51.953125] degC: every obligation that depends on it is proved (one check over the whole interval passes)
-input      in:workshop-lighting-radial.ambient, stated [10, 40] degC; probed [-20, 100] degC from 25 degC, resolution 1.875 degC
-below      proved to -20 degC, the end of the probe range
-above      proved to 51.953125 degC; 53.125 degC is not: FAIL (lighting.w1/wire.steady_temperature/claim.hot is refuted at this point with ambient = 53.125 degC); 1.171875 degC undecided
-```
-
-The probed range is an assumption of the command, not of whoever signed the design's ambient, and the footprint says so. `--input` also takes a load entry (`lamp_draw.lighting.lamps.current`), a component field (`lighting.mains.fault_current`) or a family param. The search runs at most 64 checks (`--max-probes`), and the command exits 0 only when the anchor and the obligations that do not depend on the input both pass.
-
-## Know what a verdict rests on
-
-Each premise in a footprint carries one tag:
-
-- `proved` and `certified` come from the kernel.
-- `sanctioned` is a value from a named standard, such as a minimum yield strength.
-- `measured` and `assumed` are inputs that a named person signed, with a source.
-- `validated_model` is a physical model. Its numeric validity limits, such as a member staying below yield, are checked inequalities. Every PASS and FAIL carries a kernel proof of each one, and a model used outside its range gives UNKNOWN with the point. Limits not yet checked are printed as "not checked".
-- `judged` is the coverage table, which decides which failure modes a design must address.
-
-A verdict is true relative to its footprint. If a premise is wrong, the verdict can be wrong, and the footprint tells you which premise to check.
-
-## Certify a family once
-
-`petra certify-family FILE --library DIR` proves a design's claims over a whole box of inputs and stores the certificates. A later design whose claims fall inside that box gets them from the library. With `petra check FILE --library DIR --no-solve`, the kernel proves those claims and no solver runs. Coverage obligations that the family did not certify stay open. `python scripts/bench_family.py` times that reuse against recomputing, and explains the ratio from its own counters.
-
-`petra gym --episodes 20 --seed 0` runs a baseline agent on generated circuit and bolt tasks. The reward comes only from the kernel verdict.
-
-## Check the build
-
-Run the tests:
-
-```bash
-python -m unittest discover -s tests -t .
-```
-
-The samples in this README are command output. A test runs each command and fails when a sample is stale. To rewrite every sample from its command, run:
-
-```bash
-python tests/test_docs.py --write
-```
-
-Check the definition of done in [docs/frame.md](docs/frame.md), item by item:
-
-```bash
-python scripts/predicate.py
-```
-
-## Limits of v0
-
-- The kernel is Python with exact rationals, not Lean. The certificate format is ready for a Lean kernel, but the Lean toolchain is not installed.
-- The coverage table is a judgement, and every footprint says so.
-- Member buckling uses the EN 1993-1-1 curve c reduction with gamma_M1 = 1 and no EN 1090 erection tolerance. The plastic collapse model lets a buckled member keep its buckling resistance, which is unconservative for an indeterminate truss. The 0.002 small-strain limit is the maintainers' choice, not a code value.
-- Each load case named in a claim is checked on its own. Cases are not summed.
-- Continuum finite elements, reduced bases and learned surrogates are out of scope.
-
-## Licence and contributing
-
-Petra's code is Apache-2.0 ([LICENSE](LICENSE)) and its documentation is CC BY 4.0 ([docs/LICENSE.md](docs/LICENSE.md)). It stays that way, as [CONTRIBUTING.md](CONTRIBUTING.md) pledges. Contributions are signed off under the Developer Certificate of Origin. [TRADEMARK.md](TRADEMARK.md) says how the Petra name may be used and what "Petra-checked" means.
+Petra's code is Apache-2.0 ([LICENSE](LICENSE)), and its documentation is CC BY 4.0 ([docs/LICENSE.md](docs/LICENSE.md)). [CONTRIBUTING.md](CONTRIBUTING.md) pledges to keep those licences. [TRADEMARK.md](TRADEMARK.md) says how the Petra name may be used, and what "Petra-checked" means.

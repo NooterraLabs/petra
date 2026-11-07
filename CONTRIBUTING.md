@@ -1,25 +1,51 @@
 # Contributing to Petra
 
+Petra takes issues and pull requests at [NooterraLabs/petra](https://github.com/NooterraLabs/petra). A bug report is most useful with the `.petra` file, the command you ran, and what Petra printed.
+
+## Run the tests
+
+You need Python 3.11 or later with `numpy` and `scipy`. From a clone, install Petra in editable mode and run the suite:
+
+```bash
+pip install -e .
+python -m unittest discover -s tests -t .
+```
+
+The suite has 1,230 tests. Tests that need the full AISC Shapes Database skip unless `PETRA_SHAPES_XLSX` names your copy of the workbook. Never commit the workbook, a standard's PDF, or text copied from a standard. Petra cites clauses and encodes methods. It does not reproduce them.
+
+Some files are generated. Edit the source, then regenerate them:
+
+| File | Regenerate with |
+|---|---|
+| Sample outputs in `README.md` | `python tests/test_docs.py --write` |
+| `docs/reference.md` and `petra/templates.py` | `python -m petra.teach --write` |
+| `docs/steel_traceability.md` | `python -m petra.models.steel.trace` |
+| `docs/absurd_gap.md`, `docs/canary_recall.md`, `docs/steel_gate.md` | `scripts/absurd_gap.py`, `scripts/canary_recall.py`, `scripts/steel_gate.py` |
+
+Each report in the last row takes 40 minutes or more to regenerate on four cores. The `checks` workflow in `.github/workflows/checks.yml` runs the suite, the absurd-design gap and canary recall on GitHub's runners.
+
+## Changes to the kernel
+
+Every verdict trusts `petra/kernel/`, so a change there needs the maintainer's approval before it merges. The kernel imports only the Python standard library, and a test enforces this.
+
 ## Sign off every commit
 
-Petra takes contributions under the [Developer Certificate of Origin 1.1](https://developercertificate.org/) (DCO), not a contributor licence agreement. Signing off certifies that you wrote the change, or otherwise have the right to submit it under the project's licence. `git commit -s` adds the line:
+Petra takes contributions under the [Developer Certificate of Origin 1.1](https://developercertificate.org/) (DCO), not a contributor licence agreement. Your sign-off certifies that you wrote the change, or have the right to submit it under the project's licence. `git commit -s` adds the line:
 
 ```text
 Signed-off-by: Your Name <you@example.com>
 ```
 
-Use your real name. A pull request with an unsigned commit is not merged.
+Use your real name. A pull request with an unsigned commit does not merge.
 
-## What your contribution is licensed under
+## Your contribution's licence
 
-Code is Apache-2.0 ([LICENSE](LICENSE)). Documentation in `docs/` is CC BY 4.0 ([docs/LICENSE.md](docs/LICENSE.md)). You keep the copyright in your work. Petra asks for no rights beyond those licences, so the project holds no more right to your contribution than anyone else does.
+Code is Apache-2.0 ([LICENSE](LICENSE)). Documentation in `docs/` is CC BY 4.0 ([docs/LICENSE.md](docs/LICENSE.md)). You keep the copyright in your work. Petra asks for no rights beyond those licences, so the project holds no more rights to your contribution than anyone else.
 
-## The pledge
+## The licence pledge
 
-Petra's code stays under Apache-2.0 and its documentation under CC BY 4.0. Nooterra will not move Petra to a source-available licence, or to any licence that is not approved by the Open Source Initiative.
-
-Terraform, Redis and Elasticsearch each made such a move after people relied on them, and each was forked. This pledge is the promise not to repeat it. Whatever happens, a version released under Apache-2.0 stays available under Apache-2.0. [docs/open_source.md](docs/open_source.md) gives the sources.
+Nooterra will not move Petra to a source-available licence, or to any licence the Open Source Initiative has not approved. Terraform, Redis and Elasticsearch each changed licence after people came to rely on them, and each was forked. Even if the pledge were broken, every version released under Apache-2.0 would stay available under Apache-2.0. [docs/open_source.md](docs/open_source.md) gives the sources.
 
 ## The name
 
-[TRADEMARK.md](TRADEMARK.md) says how the Petra name may be used, and what "Petra-checked" means.
+[TRADEMARK.md](TRADEMARK.md) says how anyone may use the Petra name, and what "Petra-checked" means.

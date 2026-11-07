@@ -1,49 +1,51 @@
 # Steel deck glossary
 
-D8 of [principles.md](principles.md): the deck's code names are AISC's symbols, lowercased
-where Python needs it, and this page maps each name to its symbol and meaning. Symbols are
-AISC 360-22's unless marked Manual (AISC Steel Construction Manual, 16th ed.). A name
-listed with two meanings has one per function, and the function's docstring says which.
-`tests/test_steel_principles.py` holds every parameter of `petra/models/steel/limits.py`
-and every length field of the grammar (`lower._LENGTHS`) to this page. The mechanics the
-deck builds on (section properties, bolt and weld groups, plate buckling) is
-`petra/mechanics`, whose names are in [mechanics.md](mechanics.md).
+This page maps each code name in the steel deck to its AISC symbol and its meaning. Principle
+D8 in [principles.md](principles.md) makes the deck's code names AISC's symbols, lowercased
+where Python needs it. Symbols are AISC 360-22's unless the meaning cites the Manual, the AISC
+Steel Construction Manual, 16th ed. A name with two meanings has one meaning per function,
+and the function's docstring says which one applies.
+
+`tests/test_steel_principles.py` fails if this page is missing a parameter of a function in
+`petra/models/steel/limits.py` or a length field of the grammar (`lower._LENGTHS`). The
+deck builds on the mechanics in `petra/mechanics`: section properties, bolt and weld groups,
+and plate buckling. Their names are in [mechanics.md](mechanics.md).
 
 ## Quantities in limits.py
 
 | Code name | Symbol | Meaning |
 |---|---|---|
-| `k` | | the registry constant lookup every function takes first: `k("aisc360.j4_2.shear")` is 0.60 |
-| `a` | a | prying (Manual Part 9): bolt line to the flange edge. Bracket (Manual Fig. 15-2): plate depth at the support, section A-A |
-| `a1` | a′ | bracket: length of the free-edge section B-B (Manual Eq. 15-17) |
+| `k` | | the registry constant lookup, which every function takes as its first argument. `k("aisc360.j4_2.shear")` is 0.60 |
+| `a` | a | in prying (Manual Part 9), the distance from the bolt line to the flange edge. In a bracket (Manual Fig. 15-2), the plate depth at the support, section A-A |
+| `a1` | a′ | in a bracket, the length of the free-edge section B-B (Manual Eq. 15-17) |
 | `ae` | Ae | effective net area |
 | `ag` | Ag | gross area |
 | `agv` | Agv | gross area in shear |
 | `ant` | Ant | net area in tension |
 | `anv` | Anv | net area in shear |
 | `apb` | Apb | projected bearing area (J7) |
-| `b` | b | prying: bolt line to the face of the stem or web. Bracket: projection of the sloped free edge from section A-A. Shear tee: the flange's flexible width (Manual Fig. 9-6) |
-| `b1` | b′ | bracket: depth of section B-B normal to the free edge |
+| `b` | b | in prying, the distance from the bolt line to the face of the stem or web. In a bracket, the projection of the sloped free edge from section A-A. In a shear tee, the flange's flexible width (Manual Fig. 9-6) |
+| `b1` | b′ | in a bracket, the depth of section B-B normal to the free edge |
 | `b_tension` | B | available tension per bolt (Manual Part 9) |
 | `bf` | bf | flange width |
-| `case` | | which web-crippling equation: `interior` (J10-4), `end_short` (J10-5a), `end_long` (J10-5b) |
+| `case` | | the web-crippling equation that applies: `interior` (J10-4), `end_short` (J10-5a) or `end_long` (J10-5b) |
 | `cb` | Cb | lateral-torsional buckling modification factor |
 | `coefficient` | | the J3.11a bearing or tearout coefficient, a registry row |
 | `cope_length` | c | length of a cope |
 | `cr` | Cr | J10.4's constant, 960,000 or 480,000 ksi |
-| `d` | d | bolt diameter (J3, prying); member depth (J10, Manual Part 9), by function |
+| `d` | d | bolt diameter (J3, prying) or member depth (J10, Manual Part 9), by function |
 | `dc` | dc | column depth (J10.6) |
 | `dct` | dct | depth of the top cope (Manual Eq. 9-21) |
 | `depth` | d, L | depth of a plate or bar in bending (F11's d) |
 | `dh` | dh | nominal hole dimension |
 | `du` | Du | slip multiplier |
-| `e` | E, e | modulus of elasticity in J10, F11 and Manual Parts 9 and 15; eccentricity in `seat_weld_line` |
-| `factor` | φ, Ω, α | resistance or safety factor; J10.6's α |
+| `e` | E, e | modulus of elasticity in J10, F11 and Manual Parts 9 and 15, or eccentricity in `seat_weld_line` |
+| `factor` | φ, Ω, α | resistance or safety factor, or J10.6's α |
 | `fexx` | FEXX | filler metal classification strength |
 | `fnt`, `fnv` | Fnt, Fnv | nominal tensile and shear stress of a bolt (Table J3.2) |
 | `frv` | frv | required shear stress |
 | `fu`, `fy` | Fu, Fy | specified minimum tensile and yield stress |
-| `fyf`, `fyw` | Fyf, Fyw | yield stress of the flange, of the web |
+| `fyf`, `fyw` | Fyf, Fyw | yield stress of the flange and of the web |
 | `h` | h | clear web depth, d − 2k |
 | `hc` | hc | web depth a cope leaves |
 | `hf` | hf | filler factor |
@@ -58,13 +60,13 @@ deck builds on (section properties, bolt and weld groups, plate buckling) is
 | `lrfd` | | LRFD (true) or ASD (false) |
 | `mp`, `my` | Mp, My | plastic and yield moment |
 | `mu` | μ | mean slip coefficient |
-| `near_end` | | J10.2: the force within d of the member end |
+| `near_end` | | true when the force is within d of the member end (J10.2) |
 | `nu` | ν | Poisson's ratio |
 | `p` | p | flange length tributary to a bolt (Manual Fig. 9-4) |
 | `phi` | φ | resistance factor, or 1/Ω in ASD (prying) |
-| `planes` | ns | shear or slip planes |
-| `pr`, `py` | Pr, Py | required axial strength; axial yield strength (J10.6) |
-| `restrained` | | J10.4: the loaded flange restrained against rotation |
+| `planes` | ns | number of shear or slip planes |
+| `pr`, `py` | Pr, Py | required axial strength and axial yield strength (J10.6) |
+| `restrained` | | true when the loaded flange is restrained against rotation (J10.4) |
 | `sc` | Sc | elastic section modulus of a coped section |
 | `t` | t | thickness |
 | `t1`, `t2`, `t3`, `w1`, `w2`, `w3`, `w4` | | Table J2.4's thickness rows and minimum fillet sizes |
@@ -86,28 +88,28 @@ deck builds on (section properties, bolt and weld groups, plate buckling) is
 | `gauge` | g | spacing of bolt columns |
 | `edge_vertical` | Lev | vertical edge distance of the end rows |
 | `plate_edge` | Leh | horizontal edge distance on the connecting element |
-| `bolt_line` | a | weld line or support face to the bolt line (Manual Part 10) |
-| `beam_edge` | Leh | horizontal edge distance on the beam web, as detailed; strength checks take it less the 1/4 in underrun (Manual Part 10) |
-| `top` | | beam's top to the top bolt row |
-| `setback` | | gap from the support face to the beam end, as detailed; a seat's strength checks add the 1/4 in underrun |
-| `eccentricity` | e | load's distance from the bolt group's or weld's centroid |
-| `beam_gauge`, `support_gauge` | g | gauge of the bolts through the beam web, through the support |
+| `bolt_line` | a | distance from the weld line or the support face to the bolt line (Manual Part 10) |
+| `beam_edge` | Leh | horizontal edge distance on the beam web, as detailed. Strength checks take it less the 1/4 in underrun (Manual Part 10) |
+| `top` | | distance from the beam's top to the top bolt row |
+| `setback` | | gap from the support face to the beam end, as detailed. A seat's strength checks add the 1/4 in underrun |
+| `eccentricity` | e | the load's distance from the centroid of the bolt group or the weld |
+| `beam_gauge`, `support_gauge` | g | gauge of the bolts through the beam web, and of the bolts through the support |
 | `plate_width` | | an end plate's width |
 | `seat_length` | | a seat angle's length along the beam's width |
 | `bearing_length` | lb | length of bearing (J10) |
-| `distance` | | from the member end to a concentrated force (J10) |
+| `distance` | | distance from the member end to a concentrated force (J10) |
 | `unbraced_length` | Lb | J10.4's laterally unbraced length |
 | `stiffener_width` | W | width of a seat stiffener (Manual Table 10-8) |
 | `stiffener_length` | l | length of a seat stiffener and its welds |
 | `weld_length` | L | length of a bracket's weld line |
 | `tee_gauge` | g | gauge across a hanger tee's flange |
-| `weld_return` | kl | a bracket weld's returns |
-| `free_edge` | b | a shaped bracket's free edge, projected |
+| `weld_return` | kl | length of a bracket weld's returns |
+| `free_edge` | b | projected length of a shaped bracket's free edge |
 
-## Registry rows
+## Registry row names
 
-A coefficient's row is named `<document>.<clause>.<role>`: `aisc360.j10_3.long_offset` is
-the 0.2 of Eq. J10-5b, `aisc_manual.p9.tc` the 4 of Manual Eq. 9-30a. Resistance and
-safety factors are `<group>.phi<suffix>` and `<group>.omega<suffix>`; `petra.strict.*` are
-Petra's own encoding of a strict inequality. `petra/registry/steel.py` gives each row its
-clause, tag and owner.
+A coefficient's registry row is named `<document>.<clause>.<role>`. For example,
+`aisc360.j10_3.long_offset` is the 0.2 of Eq. J10-5b, and `aisc_manual.p9.tc` is the 4 of
+Manual Eq. 9-30a. Resistance factors are named `<group>.phi<suffix>`, and safety factors are
+named `<group>.omega<suffix>`. The `petra.strict.*` rows are Petra's own encoding of a strict
+inequality. `petra/registry/steel.py` gives each row its clause, tag and owner.
