@@ -454,7 +454,18 @@ PRINCIPAL = ("the stress at a section is bounded by its extreme-fibre bending st
              "section's middle, each hole 1/16 in larger than its size along the line (Section B4.3b) and the holes "
              "centred on the depth at the pitch")
 SERVICE = ("elastic analysis with no stress concentration factor (Section 3.2); the cyclic case states service loads; "
-           "suitable corrosion protection or a mildly corrosive atmosphere, and temperatures at most 300 F (Section 3.1)")
+           "suitable corrosion protection or a mildly corrosive atmosphere (Section 3.1)")
+NOT_CHECKED: dict[str, tuple[str, ...]] = {
+    "": ("temperatures at most 300 F (Section 3.1)",),
+    "fatigue_weld": ("end returns of two to four times the fillet's size where it is loaded normal to an angle's "
+                     "outstanding leg or along an end plate's outer edge (Section 3.5)",),
+    "fatigue_cope": ("the cope's corners cut to a radius of at least 3/8 in, which Case 1.3 asks of E' and Section 3.5 "
+                     "of every reentrant corner",
+                     "thermally cut edges no rougher than 1,000 micro-inches (Section 3.5)"),
+}
+"""The numeric premises of each fatigue model that no validity row states: the deck reads no
+temperature, and the cope radius, the cut edges and the end returns are fabrication. The
+package prints each as not checked; "" lists those every fatigue model has."""
 
 FATIGUE: tuple[tuple[str, str, str, str], ...] = (
     ("fatigue_bolted",
@@ -479,8 +490,7 @@ FATIGUE: tuple[tuple[str, str, str, str], ...] = (
      "the shear stress range on each fillet's throat, w / sqrt 2, at its most stressed point as the weld check finds "
      "it (the elastic method for an eccentric group, the end-loaded effective length past 100 w), against category F's "
      f"FSR = 100 (1.5 / nSR)^0.167 ksi, at least 8 ksi (Eq A-3-2, Table A-3.1 Case 8.2); {FLOOR}",
-     f"{SERVICE}; a fillet loaded normal to an angle's outstanding leg or along an end plate's outer edge has end "
-     "returns of two to four times its size (Section 3.5), a fabrication premise the deck does not check",
+     SERVICE,
      f"{APPENDIX3}, Sections 3.1, 3.3(b) and 3.5, Eq A-3-2, Table A-3.1 Case 8.2"),
     ("fatigue_weld_end",
      "a plate set on edge against the support and welded with a pair of fillets, one on each face (Table A-3.1 Case "
@@ -498,17 +508,15 @@ FATIGUE: tuple[tuple[str, str, str, str], ...] = (
      "a beam coped at both flanges: the stress range at the bottom cope's reentrant corner, M / S + 3 V / (2 tw hc) on "
      "the web the copes leave, S = tw hc^2 / 6 and M = V (c + setback), against category E' (E prime), "
      f"{EQ_A31}, Cf = 0.39 and FTH = 2.6 ksi (Table A-3.1 Case 1.3); {PEAK}; {FLOOR}",
-     f"{SERVICE}; the cope's corners are cut to a radius of at least 3/8 in, which Case 1.3 asks of E' and Section "
-     "3.5 of every reentrant corner, and thermally cut edges are no rougher than Section 3.5's 1,000 micro-inches, "
-     "fabrication premises the deck does not check; the top cope's corner, which the beam end's moment compresses, "
-     "is no fatigue case (Commentary 3.2)",
+     f"{SERVICE}; the top cope's corner, which the beam end's moment compresses, is no fatigue case (Commentary 3.2)",
      f"{APPENDIX3}, Sections 3.1, 3.3(a) and 3.5, Eq A-3-1, Table A-3.1 Case 1.3"),
 )
 """The fatigue modes the deck checks. Their constants are petra/registry/steel_fatigue.py's."""
 
 for short, form, validity, source in FATIGUE:
     MODES[short] = _mode(short)
-    MODELS[MODES[short]] = _spec(short, form, validity, source, ROWS.get(short, ()), ())
+    MODELS[MODES[short]] = _spec(short, form, validity, source, ROWS.get(short, ()),
+                                 (*NOT_CHECKED[""], *NOT_CHECKED.get(short, ())))
 
 FATIGUE_DETAIL = _mode("fatigue_detail")
 """A detail under cyclic load whose Table A-3.1 category the deck does not encode: a single
