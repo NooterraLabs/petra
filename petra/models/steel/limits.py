@@ -375,3 +375,30 @@ def prying_available(k: K, b_tension: Expr, d: Expr, dh: Expr, p: Expr, b: Expr,
     no_prying = Div(mul(phi, p, fu, sq(t)), mul(k("aisc_manual.p9.tc"), b1))
     partial = Div(add(mul(no_prying, rho), b_tension), add(c(1), rho))
     return Min((b_tension, partial, mul(no_prying, add(c(1), delta))))
+
+
+# --- Shear tee rotational ductility (Manual Part 9) ---------------------------------------------------
+
+def tee_flexibility(k: K, b: Expr, length: Expr) -> Expr:
+    """The term (b^2 / l^2 + 2) of Manual Eqs 9-51 and 9-52: b the tee flange's flexible
+    width (Figure 9-6), l the tee's length."""
+    return add(Div(sq(b), sq(length)), k("aisc_manual.p9.tee_flexibility"))
+
+
+def tee_weld_min(k: K, fy: Expr, tf: Expr, b: Expr, length: Expr, ts: Expr) -> Expr:
+    """The least fillet that lets a tee welded to its support rotate (Manual Eq 9-51), Fy
+    in ksi and lengths in inches: wmin = 0.0155 (Fy tf^2 / b)(b^2 / l^2 + 2) <= (5/8) ts.
+    The first term is homogeneous in length once Fy is in ksi."""
+    first = mul(k("aisc_manual.p9.tee_weld_coefficient"), Div(fy, c(KSI)), Div(sq(tf), b), tee_flexibility(k, b, length))
+    return Min((first, mul(k("aisc_manual.p9.tee_weld_cap"), ts)))
+
+
+def tee_bolt_min(k: K, fy: Expr, tf: Expr, p: Expr, b: Expr, length: Expr, ts: Expr) -> Expr:
+    """The least bolt diameter that lets a tee bolted to its support rotate (Manual Eq
+    9-52), Fy in ksi and lengths in inches: dmin = 0.0941 tf sqrt((Fy p / b)(b^2 / l^2 + 2))
+    <= 0.115 sqrt(Fy ts), p the flange length each bolt acts on (Figure 9-4). The cap is
+    in inches with ts in inches."""
+    ksi = Div(fy, c(KSI))
+    first = mul(k("aisc_manual.p9.tee_bolt_coefficient"), tf, Sqrt(mul(ksi, Div(p, b), tee_flexibility(k, b, length))))
+    cap = mul(k("aisc_manual.p9.tee_bolt_cap"), Sqrt(mul(ksi, Div(ts, c(INCH)))), c(INCH))
+    return Min((first, cap))

@@ -24,7 +24,7 @@ class Traceability(unittest.TestCase):
                     self.assertTrue(p.note, "a rule, premise or exclusion says what it is")
 
     def test_named_modes_exist(self):
-        known = {*MODES, "load_path"}
+        known = {*MODES, "load_path", "j10_stiffeners"}
         for p in (*trace.TABLE, *trace.OTHER):
             for mode in p.modes:
                 self.assertIn(mode, known, p.section)

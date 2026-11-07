@@ -6,7 +6,7 @@ unchanged from SHAPE160.xlsx and citing its sha256; docs/principles.md P9). Set
 PETRA_SHAPES_XLSX to your own copy of the workbook to load every row at run time; it must
 be the workbook the shipped rows cite (its sha256 is checked).
 
-Each W row becomes constants "aisc_shapes_v16.<key>.<prop>" (d, bf, tf, tw, kdes, A)
+Each W row becomes constants "aisc_shapes_v16.<key>.<prop>" (d, bf, tf, tw, kdes, k1, A)
 carrying the table's tag, owner and source; the source names the database file and its
 sha256. Each W and L designation also gives constants of its own, tagged sanctioned
 because the designation is the value: a W18x50's nominal weight 50 lb/ft, an
@@ -43,8 +43,10 @@ WORKBOOK = "PETRA_SHAPES_XLSX"
 """The environment variable naming the user's own copy of the published workbook."""
 FORMAT = "petra-shapes/0"
 GROUP = "aisc_shapes_v16"
-W_PROPS: tuple[str, ...] = ("d", "bf", "tf", "tw", "kdes", "A")
-"""The W-shape columns a connection check reads, by their Shapes Database header names."""
+W_PROPS: tuple[str, ...] = ("d", "bf", "tf", "tw", "kdes", "k1", "A")
+"""The W-shape columns a connection check reads, by their Shapes Database header names. k1
+is the distance from the web's centerline to the toe of its fillet, which a tee's flexible
+width reads (Manual Figure 9-6)."""
 
 _INCH = CUSTOMARY["inch"][0]
 _LB_PER_FT = Fraction(45359237, 10**8) / (12 * _INCH)

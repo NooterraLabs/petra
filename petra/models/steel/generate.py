@@ -426,12 +426,14 @@ def _stiffened_seat(s: _Sampler) -> None:
     beam = s.beam(("W18x35", "W18x50", "W21x44", "W21x62", "W24x55"))
     support = s.support(("flange",))
     tp = Fraction(s.pick(("0.375", "0.5")))
-    s.line(f"plate steel.A36 thickness {_inch(tp)}")
-    limit = Fraction(1589, 100)      # 0.56 sqrt(29000 / 36), a little under
+    # Either grade for either plate: the seat plate bears on the stiffener's edge at its own Fy (J7).
+    s.line(f"plate {s.pick(('steel.A36', 'steel.A572_50'))} thickness {_inch(tp)}")
+    # limit: 0.56 sqrt(29000 / Fy), a little under
+    grade, fy, limit = s.pick((("steel.A36", 36, Fraction(1589, 100)), ("steel.A572_50", 50, Fraction(1348, 100))))
     pairs = [(w, t) for w in (Fraction(4), Fraction(5), Fraction(6)) for t in (Fraction(3, 8), Fraction(1, 2), Fraction(5, 8))
-             if s.free or w / t <= limit and t >= s.dim(beam, "tw") * 50 / 36]     # ts >= tw Fyb / Fys
+             if s.free or w / t <= limit and t >= s.dim(beam, "tw") * 50 / fy]     # ts >= tw Fyb / Fys
     width, ts = s.pick(pairs)
-    s.line(f"stiffener steel.A36 thickness {_inch(ts)}")
+    s.line(f"stiffener {grade} thickness {_inch(ts)}")
     s.length("stiffener_width", width)
     s.length("stiffener_length", s.pick(("10", "12", "14")))
     s.length("setback", s.pick(("0.5", "0.75")))
@@ -447,6 +449,7 @@ def _flange_force(s: _Sampler) -> None:
     if s.chance(0.3):
         s.line("location end")
         s.length("distance", s.pick(("2", "4", "8", "16")))
+        s.line("end_twist restrained")      # a free end needs J10.7's stiffeners, which leave it UNKNOWN
     else:
         s.line("location interior")
     s.line(f"force_kind {force}")
@@ -460,8 +463,9 @@ def _flange_force(s: _Sampler) -> None:
             s.line(f"moment_at_force {s.pick(('below_yield', 'at_yield'))}")
         elif force == "compressive":
             s.line("moment_at_force below_yield")     # J10.4 reads it (lower._check_kind)
-    if s.chance(0.3):
-        s.secondary.append(("panel_shear", Fraction(s.pick(("0.5", "1", "2")))))
+    # The panel zone is demanded at every flange force and reads both (build.NEEDS).
+    s.secondary.append(("panel_shear", Fraction(s.pick(("0", "0.5", "1", "2")))))
+    s.secondary.append(("axial", Fraction(s.pick(("0", "0.5", "2")))))
 
 
 def _bolt_bracket(s: _Sampler) -> None:

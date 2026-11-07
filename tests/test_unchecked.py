@@ -1,7 +1,7 @@
 """Where a check stopped (petra/readout.py, plan P1 item 6): every check a guard of its
 clause excuses says so, with the condition and its numbers, and every mode a
 component's domain declares that no requirement names on it is listed with the reason
-the coverage table gives.
+the coverage table gives, or the domain's reason the mode cannot arise for it.
 
 Cold-start agents found both silent: flange_force.petra passes with its sidesway
 buckling check excused and a blank utilisation, and with no panel-zone check because it
@@ -73,6 +73,7 @@ flange_force ff1 {
   bearing_length 0.5 inch
   location end
   distance in [16 inch, 30 inch] signed "s.engineer@example.org" source "framing plan"
+  end_twist restrained
   force_kind compressive
   flange_restrained yes
   unbraced_length 144 inch
@@ -81,6 +82,8 @@ flange_force ff1 {
 
 load gravity {
   on ff1 force in [0 kip, 400 kip]
+  on ff1 panel_shear in [0 kip, 50 kip]
+  on ff1 axial in [0 kip, 100 kip]
   signed "s.engineer@example.org" source "beam reaction"
 }
 """
@@ -138,15 +141,17 @@ class Excused(unittest.TestCase):
 
 
 class NotChecked(unittest.TestCase):
-    def test_the_panel_zone_names_the_load_that_would_demand_it(self):
+    def test_the_panel_zone_is_demanded_and_names_the_loads_it_reads(self):
         report = check(FLANGE_FORCE)
-        reason = "no panel_shear load is declared; one would demand it"
-        self.assertIn(readout.Unchecked("ff1", "steel.panel_zone", reason), report.unchecked)
-        self.assertIn(f"not checked  steel.panel_zone on ff1: {reason}", edge(report.render(), "not checked  "))
+        self.assertFalse([u for u in report.unchecked if u.mode == "steel.panel_zone"])
+        (open_,) = [o for v in report.to_json()["verdicts"] for o in v["obligations"] if "/steel.panel_zone/" in o["requirement"]]
+        self.assertEqual(open_["outcome"], "open")
+        text = report.render()
+        for field in ("panel_shear", "axial"):
+            self.assertIn(f"needs signed bound on ff1.{field} [kip]", text)
 
     def test_declaring_the_named_load_demands_the_mode(self):
-        for path, line in ((FLANGE_FORCE, "on ff1 panel_shear in [0 kip, 10 kip]"), (SHEAR_TEE, "on tee1 axial in [0 kip, 5 kip]"),
-                           (HANGER, "on h1 shear in [0 kip, 5 kip]")):
+        for path, line in ((SHEAR_TEE, "on tee1 axial in [0 kip, 5 kip]"), (HANGER, "on h1 shear in [0 kip, 5 kip]")):
             report = check(path)
             field = line.split()[2]
             named = {u.mode for u in report.unchecked if u.reason == f"no {field} load is declared; one would demand it"}
@@ -157,12 +162,23 @@ class NotChecked(unittest.TestCase):
                 self.assertLessEqual(named, demanded)
                 self.assertFalse(named & {u.mode for u in loaded.unchecked})
 
-    def test_a_shear_tee_says_ductility_and_prying_are_not_demanded(self):
+    def test_a_shear_tee_says_why_a_single_plates_ductility_and_prying_do_not_arise(self):
         report = check(SHEAR_TEE)
-        for mode in ("steel.ductility", "steel.prying"):
-            self.assertIn(readout.Unchecked("tee1", mode, readout.NOT_DEMANDED), report.unchecked)
-        (line,) = [line for line in edge(report.render(), "not checked  ") if line.endswith(readout.NOT_DEMANDED)]
-        self.assertRegex(line, r"\bsteel\.ductility\b.*\bsteel\.prying\b.* on tee1: ")
+        why = {u.mode: u.reason for u in report.unchecked if u.subject == "tee1"}
+        self.assertEqual(why["steel.ductility"], "no single plate framing a beam is drawn")
+        self.assertEqual(why["steel.prying"], "no bolt is in tension, so none is pried (Manual Part 9)")
+        self.assertNotIn("steel.tee_ductility", why)
+        self.assertIn("not checked  steel.prying on tee1: no bolt is in tension, so none is pried (Manual Part 9)",
+                      edge(report.render(), "not checked  "))
+
+    def test_no_steel_component_is_left_not_demanded(self):
+        # docs/plan.md P1 item 5: every mode of a steel connection is demanded, or its
+        # reason for not arising is recorded (petra/models/steel/absent.py)
+        for path in DESIGNS:
+            report = check(path)
+            steel = {name for name, c in report.ir.components.items() if models.KINDS[c.kind].name == "steel"}
+            with self.subTest(path=path.name):
+                self.assertFalse([u for u in report.unchecked if u.subject in steel and u.reason == readout.NOT_DEMANDED])
 
     def test_a_mode_only_a_claim_demands_says_so(self):
         report = check(TRUSS_PASS)
@@ -185,8 +201,9 @@ class NotChecked(unittest.TestCase):
         twice = text.replace(block, f"{block}\n\n{block.replace('ff1', 'ff2')}").replace(
             "  signed ", "  on ff2 force in [0 kip, 150 kip]\n  signed ")
         lines = edge(written(twice).render(), "not checked  ")
-        self.assertIn("not checked  steel.panel_zone on ff1, ff2: no panel_shear load is declared; one would demand it", lines)
-        self.assertEqual(len(lines), 2, lines)
+        self.assertTrue(lines)
+        for line in lines:
+            self.assertRegex(line, r" on ff1, ff2: ")
 
     def test_a_report_without_its_design_lists_nothing(self):
         bare = dataclasses.replace(check(FLANGE_FORCE), ir=None, registry=None)

@@ -22,7 +22,7 @@ deck builds on (section properties, bolt and weld groups, plate buckling) is
 | `ant` | Ant | net area in tension |
 | `anv` | Anv | net area in shear |
 | `apb` | Apb | projected bearing area (J7) |
-| `b` | b | prying: bolt line to the face of the stem or web. Bracket: projection of the sloped free edge from section A-A |
+| `b` | b | prying: bolt line to the face of the stem or web. Bracket: projection of the sloped free edge from section A-A. Shear tee: the flange's flexible width (Manual Fig. 9-6) |
 | `b1` | b′ | bracket: depth of section B-B normal to the free edge |
 | `b_tension` | B | available tension per bolt (Manual Part 9) |
 | `bf` | bf | flange width |
@@ -71,6 +71,7 @@ deck builds on (section properties, bolt and weld groups, plate buckling) is
 | `tb` | Tb | minimum bolt pretension |
 | `tension_per_bolt` | Tu/nb, Ta/nb | required tension on one bolt |
 | `tf`, `tw` | tf, tw | flange and web thickness |
+| `ts` | ts | a tee's stem thickness |
 | `ubs` | Ubs | block shear tension-stress factor |
 | `v` | R, V | the force a group carries |
 | `w` | w | fillet weld leg size |

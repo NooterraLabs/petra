@@ -86,7 +86,7 @@ class _Reg:
         return self.const("aisc360.E")
 
     def w_shape(self, shape: str) -> dict[str, float]:
-        out = {p: self.const(f"aisc_shapes_v16.{shape}.{p}") for p in ("d", "bf", "tf", "tw", "kdes")}
+        out = {p: self.const(f"aisc_shapes_v16.{shape}.{p}") for p in ("d", "bf", "tf", "tw", "kdes", "k1")}
         out["A"] = self.const(f"aisc_shapes_v16.{shape}.A")
         return out
 
@@ -253,6 +253,16 @@ class _Ctx:
             if e.target == (self.conn.name,) and e.field == field:
                 rng = e.value.range if isinstance(e.value, Input) else self.design.params[e.value.name].range
                 return _kip(rng.value.hi)
+        return 0.0
+
+    def magnitude(self, field: str) -> float:
+        """The largest magnitude the load interval on this connection reaches, in kips (0
+        if absent): a signed load such as an axial force, either end."""
+        case = self.design.loads[self.case]
+        for e in case.entries:
+            if e.target == (self.conn.name,) and e.field == field:
+                rng = e.value.range if isinstance(e.value, Input) else self.design.params[e.value.name].range
+                return max(abs(_kip(rng.value.lo)), abs(_kip(rng.value.hi)))
         return 0.0
 
     def avail(self, rn: float, limit: str) -> float:
@@ -464,8 +474,9 @@ def spacing(ctx: _Ctx, label: str, bolts: Bolts, thinner: float, named: Mapping[
     k_max = ctx.reg.const("aisc360.j3_6.weathering_pitch_max" if weathering else "aisc360.j3_6.pitch_max")
     for name, s in named.items():
         ctx.add("spacing_min", f"{label}: {name} at least 2-2/3 d (J3.4)", _ratio(ratio * d, s))
-        ctx.add("spacing_max", f"{label}: {name} at most the thickness multiple (J3.6)", _ratio(s, k_t * thinner))
-        ctx.add("spacing_max", f"{label}: {name} at most the absolute limit (J3.6)", _ratio(s, k_max))
+        if name == "pitch":     # J3.6 limits only the longitudinal spacing, along the bolt line
+            ctx.add("spacing_max", f"{label}: {name} at most the thickness multiple (J3.6)", _ratio(s, k_t * thinner))
+            ctx.add("spacing_max", f"{label}: {name} at most the absolute limit (J3.6)", _ratio(s, k_max))
 
 
 JOINT_LEVEL = {"snug": "rcsc2025.joint_level.snug", "pretensioned": "rcsc2025.joint_level.pretensioned",
@@ -1012,6 +1023,39 @@ def _shear_tee(ctx: _Ctx, modes: set[str]) -> None:
         base_metal(ctx, "tee flange", f, tfu, tf, "tee flange to support")
         base_metal(ctx, f"support {face}", f, sfu, st, "tee flange to support")
         fillet_size(ctx, "tee flange to support", weld, min(tf, st), length)
+    _tee_ductility(ctx, parent, tfy, length, n, s, lev, beam.tw, ctx.reg.bolt(bolts.size, "d"))
+
+
+def _tee_ductility(ctx: _Ctx, parent: Mapping[str, float], fy: float, length: float, n: int, s: float, lev: float,
+                   beam_tw: float, d: float) -> None:
+    """Rotational ductility as Companion II.A-30 (bolted flange, Manual Eq 9-52) and
+    II.A-31 (welded flange, Eq 9-51) work it: the flange bends before what holds it to the
+    support fractures. Both examples note the alternate, Eq 9-53, for a stem bolted to the
+    beam: the stem or the beam web at most d/2 + 1/16 in thick, which leaves the check out."""
+    ts, tf, bf, k1 = parent["tw"], parent["tf"], parent["bf"], parent["k1"]
+    if min(ts, beam_tw) <= d / 2 + SIXTEENTH:
+        return
+
+    def flex(b: float) -> float:
+        return b * b / (length * length) + 2
+
+    if ctx.conn.get("support_side") == "bolted":
+        g = ctx.need("support_gauge")
+        # II.A-30: b = g/2 - ts/2 - tw/2 - k1, the gauge centred on the beam web
+        b = max(g / 2 - ts / 2 - beam_tw / 2 - k1, 1e-6)
+        # the largest tributary length a bolt acts on (Figure 9-4), 1.75 b either side at most
+        reach = 1.75 * b
+        ends = (min(lev, reach) + min(s / 2, reach)) if n > 1 else 2 * min(lev, reach)
+        p = max(ends, 2 * min(s / 2, reach)) if n > 2 else ends
+        dmin = min(0.0941 * tf * math.sqrt(fy * p / b * flex(b)), 0.115 * math.sqrt(fy * ts))
+        ctx.add("tee_ductility", "tee flange: bolts at least Eq 9-52's dmin in diameter (Manual Part 9)", _ratio(dmin, d))
+    else:
+        weld: Weld = ctx.conn.attrs["support_weld"]
+        # II.A-31: b = (bf - 2 k1) / 2, the flange tip to the toe of the stem's fillet
+        b = max(bf / 2 - k1, 1e-6)
+        wmin = min(0.0155 * fy * tf * tf / b * flex(b), 0.625 * ts)
+        ctx.add("tee_ductility", "tee flange to support: fillet at least Eq 9-51's wmin (Manual Part 9)",
+                _ratio(wmin, ctx.geo(weld.size)))
 
 
 def _shear_end_plate(ctx: _Ctx, modes: set[str]) -> None:
@@ -1122,6 +1166,8 @@ def _seated(ctx: _Ctx, modes: set[str]) -> None:
     ctx.check("seat_flexure", "seat angle: flexural yielding of the outstanding leg at its critical section", r * max(e, 0.0),
               afy * ls * t * t / 4, "flexure_yield")
     shear_yield(ctx, "seat angle", r, afy, ls * t)
+    # the beam's end in shear over its full depth: no hole or cope cuts it at a seat
+    shear_yield(ctx, "beam web", r, bfy, bshape["d"] * bshape["tw"])
     if conn.get("support_side") == "bolted":
         bolts: Bolts = conn.attrs["bolts"]
         n, s, lev, g = conn.attrs["rows"], ctx.need("pitch"), ctx.need("edge_vertical"), ctx.need("support_gauge")
@@ -1174,6 +1220,9 @@ def _stiffened_seat(ctx: _Ctx, modes: set[str]) -> None:
     _seat_bearing(ctx, bshape, bfy, lb, r)
     clip = ctx.reg.const("aisc_manual.seat.stiffener_clip")
     ctx.check("bearing", "stiffener: bearing on its fitted top edge (J7)", r, 1.8 * sfy_s * (width - clip) * ts, "j7")
+    # J7's surfaces in contact: the seat plate yields locally at its own Fy over the same area
+    seat_fy, _ = ctx.reg.steel(conn.attrs["plate"].grade)
+    ctx.check("bearing", "seat plate: bearing on the stiffener's fitted top edge (J7)", r, 1.8 * seat_fy * (width - clip) * ts, "j7")
     ctx.check("compression", "stiffener: compressive yielding of its section under the seat (J4.4)", r, sfy_s * width * ts,
               "compression")
     # vocab compression: the Manual's width-to-thickness limit, so the stiffener yields
@@ -1183,6 +1232,12 @@ def _stiffened_seat(ctx: _Ctx, modes: set[str]) -> None:
     # Companion II.A-14: the stiffener at least as thick as the beam web, scaled by the yield stresses
     ctx.add("compression", "stiffener: at least tw Fy,beam / Fy,stiffener thick (Manual Part 10)",
             _ratio(bshape["tw"] * bfy / sfy_s, ts))
+    shear_yield(ctx, "beam web", r, bfy, bshape["d"] * bshape["tw"])
+    # the stiffener welded on edge to the support, like a welded bracket plate: its section
+    # at the support, L long, in shear and in flexure under the reaction at 0.8 W
+    shear_yield(ctx, "stiffener", r, sfy_s, lst * ts)
+    ctx.check("flexural_yield", "stiffener: flexural yielding at the support face (J4.5)", r * 0.8 * width,
+              sfy_s * ts * lst ** 2 / 4, "flexure_yield")
     weld: Weld = conn.attrs["weld"]
     # Two fillets along the stiffener's length, the reaction out of their plane at 0.8 W
     # from the support face (Manual Table 10-8's eccentricity). Table 10-8 also counts
@@ -1244,7 +1299,7 @@ def _flange_force(ctx: _Ctx, modes: set[str]) -> None:
                 ctx.check("web_sidesway_buckling", "member web: web sidesway buckling (J10.4)", force, rn, "j10_4")
     if "panel_zone" in modes:
         vp = ctx.load("panel_shear")
-        pr = abs(ctx.load("axial"))
+        pr = ctx.magnitude("axial")
         py = fy * m["A"]
         alpha = 1.0 if ctx.lrfd else 1.6
         rn = 0.6 * fy * d * tw
@@ -1319,6 +1374,18 @@ def _bolt_bracket(ctx: _Ctx, modes: set[str]) -> None:
     group.check_bolts(p, "bracket bolts")
     # spacing between rows and between columns only where there are two or more of them
     spacing(ctx, "bracket bolts", bolts, min(tp, st), {**({"pitch": s} if n > 1 else {}), **({"gauge": g} if nc > 1 else {})})
+    # Manual Part 7 tightening room, the columns placed where it is most: centred between
+    # a web's flanges; on a flange all on one side of the web, the outer hole on the flange,
+    # unless a split straddling the web fits and leaves enough
+    if face == "web":
+        clearance(ctx, "bracket bolts", bolts, (sup["d"] - 2 * sup["tf"] - (nc - 1) * g) / 2, "the support flanges")
+    else:
+        dh = _hole_size(ctx, bolts, hs, False)
+        room = (sup["bf"] - sup["tw"]) / 2
+        need = ctx.reg.bolt(bolts.size, "nut_F") / math.sqrt(3.0) + ctx.reg.const("aisc_manual.clearance.socket")
+        split = min((g - sup["tw"]) / 2, room - dh / 2 - (math.ceil(nc / 2) - 1) * g)
+        if not (nc > 1 and (nc - 1) * g + dh <= sup["bf"] and split >= need):
+            clearance(ctx, "bracket bolts", bolts, room - (nc - 1) * g - dh / 2, "the support web")
     joint_type(ctx, "bracket bolts", bolts, (hp, hs), tension=False)
     long_slots(ctx, "bracket bolts", (hp, hs))
     if bolts.joint == "slip_critical":
@@ -1483,6 +1550,10 @@ def _hanger(ctx: _Ctx, modes: set[str]) -> None:
                   for p in tributaries(b_s))
     ctx.add("prying", "hanger bolts: bolt tension with prying of the support flange (Manual Part 9; Kulak 17.5)",
             _ratio(per_bolt, worst_s))
+    # J10.2 at the support's web under the tension, over the bolt rows' extent; the distance
+    # to its end is unknown, so at the end (J10-3) as well as away from it
+    for at_end in (False, True):
+        j10_web_yielding(ctx, "support web", sup, sfy, (n - 1) * s, t_load, at_end)
     spacing(ctx, "hanger bolts", bolts, min(tf, st), {"pitch": s, "gauge": g})
     joint_type(ctx, "hanger bolts", bolts, (hf, hs), tension=t_load > 0)
     long_slots(ctx, "hanger bolts", (hf, hs))

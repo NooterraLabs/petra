@@ -40,17 +40,27 @@ def term(ctx: Ctx, check: Check, u: Fraction) -> Expr:
     return Min((expr, *check.guards)) if check.guards else expr
 
 
+NEEDS: dict[str, tuple[str, ...]] = {
+    "panel_zone": ("panel_shear", "axial"),
+}
+"""Load fields a mode's checks read that each of its cases must give, beyond the kind's
+primary one, because no value is safe over the field's whole range: the panel's required
+shear takes the flange forces of every moment connection at the joint less the story shear
+(Commentary Eq C-J10-3), which the one force a flange_force declares does not give, and
+Eq J10-10 falls without bound as the column's axial force grows. A case that leaves one
+out leaves the mode open, naming it."""
+
+
 def load_cases(req: Requirement, conn: Conn, design: Design) -> tuple[tuple[str, ...], tuple[GapNeed, ...]]:
     """The cases the requirement is checked under: those it names, else every case that
-    loads the connection. Each must give the kind's primary load field."""
-    primary = KIND_SPECS[conn.kind].loads[0]
+    loads the connection. Each must give the kind's primary load field and the fields
+    NEEDS lists for the mode."""
+    fields = (KIND_SPECS[conn.kind].loads[0], *NEEDS.get(req.mode.id.removeprefix("steel."), ()))
     acting = [case.name for case in design.loads.values() if any(e.target == (conn.name,) for e in case.entries)]
-    giving = {case.name for case in design.loads.values()
-              if any(e.target == (conn.name,) and e.field == primary for e in case.entries)}
     cases = tuple(req.under) if req.under else tuple(acting)
-    if not cases or any(case not in giving for case in cases):
-        return cases, (NeedsInputBound((conn.name,), primary, "kip"),)
-    return cases, ()
+    given = {(case.name, e.field) for case in design.loads.values() for e in case.entries if e.target == (conn.name,)}
+    missing = [f for f in fields if not cases or any((case, f) not in given for case in cases)]
+    return cases, tuple(NeedsInputBound((conn.name,), f, "kip") for f in missing)
 
 
 def describe(conn: Conn, short: str, case: str, checks: list[Check], u: Fraction) -> str:

@@ -29,6 +29,7 @@ from ..base import (
     FeatureKind,
     Ports,
 )
+from .absent import reasons
 from .build import BUILDERS
 from .lower import KIND_SPECS, Bolts, Conn, grammar, lower_conn
 from .path import ROLE_LIMITS, path
@@ -94,6 +95,15 @@ COVERAGE: tuple[CoverageRule, ...] = tuple(
 )
 
 
+def absent(conn: Conn, design: Design) -> dict[FailureMode, str]:
+    """Each mode of the domain the connection does not owe (`required`), and why it cannot
+    arise for it (absent.py). A mode with no reason there is left out, so the readout says
+    it is not demanded, and tests/test_steel_coverage.py fails."""
+    owed = set(required(conn, design))
+    why = reasons(conn)
+    return {mode: why[short] for short, mode in _ALL.items() if short not in owed and short in why}
+
+
 def ports(conn: Conn, registry: Registry) -> Ports:
     """No ports in v1.0: a connection meets the world through its signed loads."""
     return NO_PORTS
@@ -111,4 +121,5 @@ DOMAIN = DomainSpec(
     features=features,
     ports=ports,
     grammars={kind: grammar(kind) for kind in KIND_SPECS},
+    absent=absent,
 )

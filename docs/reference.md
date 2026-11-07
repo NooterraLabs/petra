@@ -263,7 +263,7 @@ Waivable modes: `uncertain.range_mean`, `uncertain.tested`.
 
 ### Domain steel
 
-Waivable modes: `steel.beam_fit`, `steel.bearing`, `steel.block_shear`, `steel.bolt_combined`, `steel.bolt_tension`, `steel.bolts`, `steel.bracket_edge`, `steel.clearance`, `steel.compression`, `steel.cope_buckling`, `steel.ductility`, `steel.edge_max`, `steel.edge_min`, `steel.extended_ductility`, `steel.fillet_size`, `steel.flange_fit`, `steel.flange_local_bending`, `steel.flexural_rupture`, `steel.flexural_yield`, `steel.hole_use`, `steel.j10_stiffeners`, `steel.joint_type`, `steel.load_path`, `steel.panel_zone`, `steel.plate_buckling`, `steel.prying`, `steel.seat_flexure`, `steel.shear_rupture`, `steel.shear_yield`, `steel.slip`, `steel.spacing_max`, `steel.spacing_min`, `steel.tension_rupture`, `steel.tension_yield`, `steel.web_compression_buckling`, `steel.web_crippling`, `steel.web_fit`, `steel.web_local_yielding`, `steel.web_sidesway_buckling`, `steel.weld`, `steel.weld_base_metal`.
+Waivable modes: `steel.beam_fit`, `steel.bearing`, `steel.block_shear`, `steel.bolt_combined`, `steel.bolt_tension`, `steel.bolts`, `steel.bracket_edge`, `steel.clearance`, `steel.compression`, `steel.cope_buckling`, `steel.ductility`, `steel.edge_max`, `steel.edge_min`, `steel.extended_ductility`, `steel.fillet_size`, `steel.flange_fit`, `steel.flange_local_bending`, `steel.flexural_rupture`, `steel.flexural_yield`, `steel.hole_use`, `steel.j10_stiffeners`, `steel.joint_type`, `steel.load_path`, `steel.panel_zone`, `steel.plate_buckling`, `steel.prying`, `steel.seat_flexure`, `steel.shear_rupture`, `steel.shear_yield`, `steel.slip`, `steel.spacing_max`, `steel.spacing_min`, `steel.tee_ductility`, `steel.tension_rupture`, `steel.tension_yield`, `steel.web_compression_buckling`, `steel.web_crippling`, `steel.web_fit`, `steel.web_local_yielding`, `steel.web_sidesway_buckling`, `steel.weld`, `steel.weld_base_metal`.
 
 #### shear_tab
 
@@ -271,7 +271,7 @@ Waivable modes: `steel.beam_fit`, `steel.bearing`, `steel.block_shear`, `steel.b
 
 - load: `on <conn> shear|axial in [<lo>, <hi>] [mean <value>]`
 - `claim <name>: <conn>.<qoi> <=|>= <value> [margin <value>] [under <load>, ...]`
-- `<qoi>`: `bolts`, `bolt_tension`, `bolt_combined`, `slip`, `shear_yield`, `shear_rupture`, `block_shear`, `tension_yield`, `tension_rupture`, `flexural_yield`, `flexural_rupture`, `weld`, `weld_base_metal`, `bearing`, `web_local_yielding`, `web_crippling`, `flange_local_bending`, `web_sidesway_buckling`, `web_compression_buckling`, `panel_zone`, `seat_flexure`, `prying`, `spacing_min`, `edge_min`, `spacing_max`, `edge_max`, `fillet_size`, `hole_use`, `joint_type`, `clearance`, `beam_fit`, `flange_fit`, `web_fit`, `compression`, `cope_buckling`, `plate_buckling`, `ductility`, `bracket_edge`, `extended_ductility`
+- `<qoi>`: `bolts`, `bolt_tension`, `bolt_combined`, `slip`, `shear_yield`, `shear_rupture`, `block_shear`, `tension_yield`, `tension_rupture`, `flexural_yield`, `flexural_rupture`, `weld`, `weld_base_metal`, `bearing`, `web_local_yielding`, `web_crippling`, `flange_local_bending`, `web_sidesway_buckling`, `web_compression_buckling`, `panel_zone`, `seat_flexure`, `prying`, `spacing_min`, `edge_min`, `spacing_max`, `edge_max`, `fillet_size`, `hole_use`, `joint_type`, `clearance`, `beam_fit`, `flange_fit`, `web_fit`, `compression`, `cope_buckling`, `plate_buckling`, `ductility`, `tee_ductility`, `bracket_edge`, `extended_ductility`
 
 | line | form | needed | unit | ids | meaning |
 |---|---|---|---|---|---|
@@ -304,7 +304,7 @@ Waivable modes: `steel.beam_fit`, `steel.bearing`, `steel.block_shear`, `steel.b
 
 - load: `on <conn> shear|axial in [<lo>, <hi>] [mean <value>]`
 - `claim <name>: <conn>.<qoi> <=|>= <value> [margin <value>] [under <load>, ...]`
-- `<qoi>`: `bolts`, `bolt_tension`, `bolt_combined`, `slip`, `shear_yield`, `shear_rupture`, `block_shear`, `tension_yield`, `tension_rupture`, `flexural_yield`, `flexural_rupture`, `weld`, `weld_base_metal`, `bearing`, `web_local_yielding`, `web_crippling`, `flange_local_bending`, `web_sidesway_buckling`, `web_compression_buckling`, `panel_zone`, `seat_flexure`, `prying`, `spacing_min`, `edge_min`, `spacing_max`, `edge_max`, `fillet_size`, `hole_use`, `joint_type`, `clearance`, `beam_fit`, `flange_fit`, `web_fit`, `compression`, `cope_buckling`, `plate_buckling`, `ductility`, `bracket_edge`, `extended_ductility`
+- `<qoi>`: `bolts`, `bolt_tension`, `bolt_combined`, `slip`, `shear_yield`, `shear_rupture`, `block_shear`, `tension_yield`, `tension_rupture`, `flexural_yield`, `flexural_rupture`, `weld`, `weld_base_metal`, `bearing`, `web_local_yielding`, `web_crippling`, `flange_local_bending`, `web_sidesway_buckling`, `web_compression_buckling`, `panel_zone`, `seat_flexure`, `prying`, `spacing_min`, `edge_min`, `spacing_max`, `edge_max`, `fillet_size`, `hole_use`, `joint_type`, `clearance`, `beam_fit`, `flange_fit`, `web_fit`, `compression`, `cope_buckling`, `plate_buckling`, `ductility`, `tee_ductility`, `bracket_edge`, `extended_ductility`
 
 | line | form | needed | unit | ids | meaning |
 |---|---|---|---|---|---|
@@ -334,7 +334,7 @@ Waivable modes: `steel.beam_fit`, `steel.bearing`, `steel.block_shear`, `steel.b
 
 - load: `on <conn> shear|axial in [<lo>, <hi>] [mean <value>]`
 - `claim <name>: <conn>.<qoi> <=|>= <value> [margin <value>] [under <load>, ...]`
-- `<qoi>`: `bolts`, `bolt_tension`, `bolt_combined`, `slip`, `shear_yield`, `shear_rupture`, `block_shear`, `tension_yield`, `tension_rupture`, `flexural_yield`, `flexural_rupture`, `weld`, `weld_base_metal`, `bearing`, `web_local_yielding`, `web_crippling`, `flange_local_bending`, `web_sidesway_buckling`, `web_compression_buckling`, `panel_zone`, `seat_flexure`, `prying`, `spacing_min`, `edge_min`, `spacing_max`, `edge_max`, `fillet_size`, `hole_use`, `joint_type`, `clearance`, `beam_fit`, `flange_fit`, `web_fit`, `compression`, `cope_buckling`, `plate_buckling`, `ductility`, `bracket_edge`, `extended_ductility`
+- `<qoi>`: `bolts`, `bolt_tension`, `bolt_combined`, `slip`, `shear_yield`, `shear_rupture`, `block_shear`, `tension_yield`, `tension_rupture`, `flexural_yield`, `flexural_rupture`, `weld`, `weld_base_metal`, `bearing`, `web_local_yielding`, `web_crippling`, `flange_local_bending`, `web_sidesway_buckling`, `web_compression_buckling`, `panel_zone`, `seat_flexure`, `prying`, `spacing_min`, `edge_min`, `spacing_max`, `edge_max`, `fillet_size`, `hole_use`, `joint_type`, `clearance`, `beam_fit`, `flange_fit`, `web_fit`, `compression`, `cope_buckling`, `plate_buckling`, `ductility`, `tee_ductility`, `bracket_edge`, `extended_ductility`
 
 | line | form | needed | unit | ids | meaning |
 |---|---|---|---|---|---|
@@ -364,7 +364,7 @@ Waivable modes: `steel.beam_fit`, `steel.bearing`, `steel.block_shear`, `steel.b
 
 - load: `on <conn> shear|axial in [<lo>, <hi>] [mean <value>]`
 - `claim <name>: <conn>.<qoi> <=|>= <value> [margin <value>] [under <load>, ...]`
-- `<qoi>`: `bolts`, `bolt_tension`, `bolt_combined`, `slip`, `shear_yield`, `shear_rupture`, `block_shear`, `tension_yield`, `tension_rupture`, `flexural_yield`, `flexural_rupture`, `weld`, `weld_base_metal`, `bearing`, `web_local_yielding`, `web_crippling`, `flange_local_bending`, `web_sidesway_buckling`, `web_compression_buckling`, `panel_zone`, `seat_flexure`, `prying`, `spacing_min`, `edge_min`, `spacing_max`, `edge_max`, `fillet_size`, `hole_use`, `joint_type`, `clearance`, `beam_fit`, `flange_fit`, `web_fit`, `compression`, `cope_buckling`, `plate_buckling`, `ductility`, `bracket_edge`, `extended_ductility`
+- `<qoi>`: `bolts`, `bolt_tension`, `bolt_combined`, `slip`, `shear_yield`, `shear_rupture`, `block_shear`, `tension_yield`, `tension_rupture`, `flexural_yield`, `flexural_rupture`, `weld`, `weld_base_metal`, `bearing`, `web_local_yielding`, `web_crippling`, `flange_local_bending`, `web_sidesway_buckling`, `web_compression_buckling`, `panel_zone`, `seat_flexure`, `prying`, `spacing_min`, `edge_min`, `spacing_max`, `edge_max`, `fillet_size`, `hole_use`, `joint_type`, `clearance`, `beam_fit`, `flange_fit`, `web_fit`, `compression`, `cope_buckling`, `plate_buckling`, `ductility`, `tee_ductility`, `bracket_edge`, `extended_ductility`
 
 | line | form | needed | unit | ids | meaning |
 |---|---|---|---|---|---|
@@ -395,7 +395,7 @@ Waivable modes: `steel.beam_fit`, `steel.bearing`, `steel.block_shear`, `steel.b
 
 - load: `on <conn> shear|axial in [<lo>, <hi>] [mean <value>]`
 - `claim <name>: <conn>.<qoi> <=|>= <value> [margin <value>] [under <load>, ...]`
-- `<qoi>`: `bolts`, `bolt_tension`, `bolt_combined`, `slip`, `shear_yield`, `shear_rupture`, `block_shear`, `tension_yield`, `tension_rupture`, `flexural_yield`, `flexural_rupture`, `weld`, `weld_base_metal`, `bearing`, `web_local_yielding`, `web_crippling`, `flange_local_bending`, `web_sidesway_buckling`, `web_compression_buckling`, `panel_zone`, `seat_flexure`, `prying`, `spacing_min`, `edge_min`, `spacing_max`, `edge_max`, `fillet_size`, `hole_use`, `joint_type`, `clearance`, `beam_fit`, `flange_fit`, `web_fit`, `compression`, `cope_buckling`, `plate_buckling`, `ductility`, `bracket_edge`, `extended_ductility`
+- `<qoi>`: `bolts`, `bolt_tension`, `bolt_combined`, `slip`, `shear_yield`, `shear_rupture`, `block_shear`, `tension_yield`, `tension_rupture`, `flexural_yield`, `flexural_rupture`, `weld`, `weld_base_metal`, `bearing`, `web_local_yielding`, `web_crippling`, `flange_local_bending`, `web_sidesway_buckling`, `web_compression_buckling`, `panel_zone`, `seat_flexure`, `prying`, `spacing_min`, `edge_min`, `spacing_max`, `edge_max`, `fillet_size`, `hole_use`, `joint_type`, `clearance`, `beam_fit`, `flange_fit`, `web_fit`, `compression`, `cope_buckling`, `plate_buckling`, `ductility`, `tee_ductility`, `bracket_edge`, `extended_ductility`
 
 | line | form | needed | unit | ids | meaning |
 |---|---|---|---|---|---|
@@ -422,7 +422,7 @@ Waivable modes: `steel.beam_fit`, `steel.bearing`, `steel.block_shear`, `steel.b
 
 - load: `on <conn> shear|axial in [<lo>, <hi>] [mean <value>]`
 - `claim <name>: <conn>.<qoi> <=|>= <value> [margin <value>] [under <load>, ...]`
-- `<qoi>`: `bolts`, `bolt_tension`, `bolt_combined`, `slip`, `shear_yield`, `shear_rupture`, `block_shear`, `tension_yield`, `tension_rupture`, `flexural_yield`, `flexural_rupture`, `weld`, `weld_base_metal`, `bearing`, `web_local_yielding`, `web_crippling`, `flange_local_bending`, `web_sidesway_buckling`, `web_compression_buckling`, `panel_zone`, `seat_flexure`, `prying`, `spacing_min`, `edge_min`, `spacing_max`, `edge_max`, `fillet_size`, `hole_use`, `joint_type`, `clearance`, `beam_fit`, `flange_fit`, `web_fit`, `compression`, `cope_buckling`, `plate_buckling`, `ductility`, `bracket_edge`, `extended_ductility`
+- `<qoi>`: `bolts`, `bolt_tension`, `bolt_combined`, `slip`, `shear_yield`, `shear_rupture`, `block_shear`, `tension_yield`, `tension_rupture`, `flexural_yield`, `flexural_rupture`, `weld`, `weld_base_metal`, `bearing`, `web_local_yielding`, `web_crippling`, `flange_local_bending`, `web_sidesway_buckling`, `web_compression_buckling`, `panel_zone`, `seat_flexure`, `prying`, `spacing_min`, `edge_min`, `spacing_max`, `edge_max`, `fillet_size`, `hole_use`, `joint_type`, `clearance`, `beam_fit`, `flange_fit`, `web_fit`, `compression`, `cope_buckling`, `plate_buckling`, `ductility`, `tee_ductility`, `bracket_edge`, `extended_ductility`
 
 | line | form | needed | unit | ids | meaning |
 |---|---|---|---|---|---|
@@ -450,7 +450,7 @@ Waivable modes: `steel.beam_fit`, `steel.bearing`, `steel.block_shear`, `steel.b
 
 - load: `on <conn> shear|axial in [<lo>, <hi>] [mean <value>]`
 - `claim <name>: <conn>.<qoi> <=|>= <value> [margin <value>] [under <load>, ...]`
-- `<qoi>`: `bolts`, `bolt_tension`, `bolt_combined`, `slip`, `shear_yield`, `shear_rupture`, `block_shear`, `tension_yield`, `tension_rupture`, `flexural_yield`, `flexural_rupture`, `weld`, `weld_base_metal`, `bearing`, `web_local_yielding`, `web_crippling`, `flange_local_bending`, `web_sidesway_buckling`, `web_compression_buckling`, `panel_zone`, `seat_flexure`, `prying`, `spacing_min`, `edge_min`, `spacing_max`, `edge_max`, `fillet_size`, `hole_use`, `joint_type`, `clearance`, `beam_fit`, `flange_fit`, `web_fit`, `compression`, `cope_buckling`, `plate_buckling`, `ductility`, `bracket_edge`, `extended_ductility`
+- `<qoi>`: `bolts`, `bolt_tension`, `bolt_combined`, `slip`, `shear_yield`, `shear_rupture`, `block_shear`, `tension_yield`, `tension_rupture`, `flexural_yield`, `flexural_rupture`, `weld`, `weld_base_metal`, `bearing`, `web_local_yielding`, `web_crippling`, `flange_local_bending`, `web_sidesway_buckling`, `web_compression_buckling`, `panel_zone`, `seat_flexure`, `prying`, `spacing_min`, `edge_min`, `spacing_max`, `edge_max`, `fillet_size`, `hole_use`, `joint_type`, `clearance`, `beam_fit`, `flange_fit`, `web_fit`, `compression`, `cope_buckling`, `plate_buckling`, `ductility`, `tee_ductility`, `bracket_edge`, `extended_ductility`
 
 | line | form | needed | unit | ids | meaning |
 |---|---|---|---|---|---|
@@ -471,7 +471,7 @@ Waivable modes: `steel.beam_fit`, `steel.bearing`, `steel.block_shear`, `steel.b
 
 - load: `on <conn> force|panel_shear|axial in [<lo>, <hi>] [mean <value>]`
 - `claim <name>: <conn>.<qoi> <=|>= <value> [margin <value>] [under <load>, ...]`
-- `<qoi>`: `bolts`, `bolt_tension`, `bolt_combined`, `slip`, `shear_yield`, `shear_rupture`, `block_shear`, `tension_yield`, `tension_rupture`, `flexural_yield`, `flexural_rupture`, `weld`, `weld_base_metal`, `bearing`, `web_local_yielding`, `web_crippling`, `flange_local_bending`, `web_sidesway_buckling`, `web_compression_buckling`, `panel_zone`, `seat_flexure`, `prying`, `spacing_min`, `edge_min`, `spacing_max`, `edge_max`, `fillet_size`, `hole_use`, `joint_type`, `clearance`, `beam_fit`, `flange_fit`, `web_fit`, `compression`, `cope_buckling`, `plate_buckling`, `ductility`, `bracket_edge`, `extended_ductility`
+- `<qoi>`: `bolts`, `bolt_tension`, `bolt_combined`, `slip`, `shear_yield`, `shear_rupture`, `block_shear`, `tension_yield`, `tension_rupture`, `flexural_yield`, `flexural_rupture`, `weld`, `weld_base_metal`, `bearing`, `web_local_yielding`, `web_crippling`, `flange_local_bending`, `web_sidesway_buckling`, `web_compression_buckling`, `panel_zone`, `seat_flexure`, `prying`, `spacing_min`, `edge_min`, `spacing_max`, `edge_max`, `fillet_size`, `hole_use`, `joint_type`, `clearance`, `beam_fit`, `flange_fit`, `web_fit`, `compression`, `cope_buckling`, `plate_buckling`, `ductility`, `tee_ductility`, `bracket_edge`, `extended_ductility`
 
 | line | form | needed | unit | ids | meaning |
 |---|---|---|---|---|---|
@@ -481,6 +481,7 @@ Waivable modes: `steel.beam_fit`, `steel.bearing`, `steel.block_shear`, `steel.b
 | `location` | `interior\|end` | required |  |  | where the force acts: away from the member's ends, or near one (with distance) |
 | `force_kind` | `compressive\|tensile` | required |  |  | the sense of the concentrated force |
 | `distance` | `<length>` | optional | length |  | from the member end to a concentrated force (J10) |
+| `end_twist` | `restrained\|free` | optional |  |  | whether the member end near the force is framed or otherwise restrained against twisting about its longitudinal axis, or free; a free end needs a pair of full-depth stiffeners (Section J10.7) |
 | `pair` | `single\|double` | optional |  |  | one force, or a pair of compressive forces on opposite flanges at one section (Section J10.5); single unless stated |
 | `flange_restrained` | `yes\|no` | optional |  |  | whether the loaded flange is restrained against rotation, which web sidesway buckling (Section J10.4) reads |
 | `unbraced_length` | `<length>` | optional | length |  | J10.4's laterally unbraced length (Lb) |
@@ -492,7 +493,7 @@ Waivable modes: `steel.beam_fit`, `steel.bearing`, `steel.block_shear`, `steel.b
 
 - load: `on <conn> shear in [<lo>, <hi>] [mean <value>]`
 - `claim <name>: <conn>.<qoi> <=|>= <value> [margin <value>] [under <load>, ...]`
-- `<qoi>`: `bolts`, `bolt_tension`, `bolt_combined`, `slip`, `shear_yield`, `shear_rupture`, `block_shear`, `tension_yield`, `tension_rupture`, `flexural_yield`, `flexural_rupture`, `weld`, `weld_base_metal`, `bearing`, `web_local_yielding`, `web_crippling`, `flange_local_bending`, `web_sidesway_buckling`, `web_compression_buckling`, `panel_zone`, `seat_flexure`, `prying`, `spacing_min`, `edge_min`, `spacing_max`, `edge_max`, `fillet_size`, `hole_use`, `joint_type`, `clearance`, `beam_fit`, `flange_fit`, `web_fit`, `compression`, `cope_buckling`, `plate_buckling`, `ductility`, `bracket_edge`, `extended_ductility`
+- `<qoi>`: `bolts`, `bolt_tension`, `bolt_combined`, `slip`, `shear_yield`, `shear_rupture`, `block_shear`, `tension_yield`, `tension_rupture`, `flexural_yield`, `flexural_rupture`, `weld`, `weld_base_metal`, `bearing`, `web_local_yielding`, `web_crippling`, `flange_local_bending`, `web_sidesway_buckling`, `web_compression_buckling`, `panel_zone`, `seat_flexure`, `prying`, `spacing_min`, `edge_min`, `spacing_max`, `edge_max`, `fillet_size`, `hole_use`, `joint_type`, `clearance`, `beam_fit`, `flange_fit`, `web_fit`, `compression`, `cope_buckling`, `plate_buckling`, `ductility`, `tee_ductility`, `bracket_edge`, `extended_ductility`
 
 | line | form | needed | unit | ids | meaning |
 |---|---|---|---|---|---|
@@ -518,7 +519,7 @@ Waivable modes: `steel.beam_fit`, `steel.bearing`, `steel.block_shear`, `steel.b
 
 - load: `on <conn> shear in [<lo>, <hi>] [mean <value>]`
 - `claim <name>: <conn>.<qoi> <=|>= <value> [margin <value>] [under <load>, ...]`
-- `<qoi>`: `bolts`, `bolt_tension`, `bolt_combined`, `slip`, `shear_yield`, `shear_rupture`, `block_shear`, `tension_yield`, `tension_rupture`, `flexural_yield`, `flexural_rupture`, `weld`, `weld_base_metal`, `bearing`, `web_local_yielding`, `web_crippling`, `flange_local_bending`, `web_sidesway_buckling`, `web_compression_buckling`, `panel_zone`, `seat_flexure`, `prying`, `spacing_min`, `edge_min`, `spacing_max`, `edge_max`, `fillet_size`, `hole_use`, `joint_type`, `clearance`, `beam_fit`, `flange_fit`, `web_fit`, `compression`, `cope_buckling`, `plate_buckling`, `ductility`, `bracket_edge`, `extended_ductility`
+- `<qoi>`: `bolts`, `bolt_tension`, `bolt_combined`, `slip`, `shear_yield`, `shear_rupture`, `block_shear`, `tension_yield`, `tension_rupture`, `flexural_yield`, `flexural_rupture`, `weld`, `weld_base_metal`, `bearing`, `web_local_yielding`, `web_crippling`, `flange_local_bending`, `web_sidesway_buckling`, `web_compression_buckling`, `panel_zone`, `seat_flexure`, `prying`, `spacing_min`, `edge_min`, `spacing_max`, `edge_max`, `fillet_size`, `hole_use`, `joint_type`, `clearance`, `beam_fit`, `flange_fit`, `web_fit`, `compression`, `cope_buckling`, `plate_buckling`, `ductility`, `tee_ductility`, `bracket_edge`, `extended_ductility`
 
 | line | form | needed | unit | ids | meaning |
 |---|---|---|---|---|---|
@@ -537,7 +538,7 @@ Waivable modes: `steel.beam_fit`, `steel.bearing`, `steel.block_shear`, `steel.b
 
 - load: `on <conn> tension|shear in [<lo>, <hi>] [mean <value>]`
 - `claim <name>: <conn>.<qoi> <=|>= <value> [margin <value>] [under <load>, ...]`
-- `<qoi>`: `bolts`, `bolt_tension`, `bolt_combined`, `slip`, `shear_yield`, `shear_rupture`, `block_shear`, `tension_yield`, `tension_rupture`, `flexural_yield`, `flexural_rupture`, `weld`, `weld_base_metal`, `bearing`, `web_local_yielding`, `web_crippling`, `flange_local_bending`, `web_sidesway_buckling`, `web_compression_buckling`, `panel_zone`, `seat_flexure`, `prying`, `spacing_min`, `edge_min`, `spacing_max`, `edge_max`, `fillet_size`, `hole_use`, `joint_type`, `clearance`, `beam_fit`, `flange_fit`, `web_fit`, `compression`, `cope_buckling`, `plate_buckling`, `ductility`, `bracket_edge`, `extended_ductility`
+- `<qoi>`: `bolts`, `bolt_tension`, `bolt_combined`, `slip`, `shear_yield`, `shear_rupture`, `block_shear`, `tension_yield`, `tension_rupture`, `flexural_yield`, `flexural_rupture`, `weld`, `weld_base_metal`, `bearing`, `web_local_yielding`, `web_crippling`, `flange_local_bending`, `web_sidesway_buckling`, `web_compression_buckling`, `panel_zone`, `seat_flexure`, `prying`, `spacing_min`, `edge_min`, `spacing_max`, `edge_max`, `fillet_size`, `hole_use`, `joint_type`, `clearance`, `beam_fit`, `flange_fit`, `web_fit`, `compression`, `cope_buckling`, `plate_buckling`, `ductility`, `tee_ductility`, `bracket_edge`, `extended_ductility`
 
 | line | form | needed | unit | ids | meaning |
 |---|---|---|---|---|---|

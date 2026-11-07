@@ -583,6 +583,9 @@ class DomainSpec:
       and port contracts read.
     - `grammars`: component kind -> its Grammar. models._index requires one per kind of a
       registered domain.
+    - `absent(model, design)`: optional; for one component, why each mode of the domain
+      its coverage does not demand cannot arise for it, by mode. The readout prints the
+      reason where the mode is not checked, in place of readout.NOT_DEMANDED.
     """
 
     name: str
@@ -596,6 +599,7 @@ class DomainSpec:
     features: Callable[[Any, Design, Registry], tuple[Feature, ...]]
     ports: Callable[[Any, Registry], Ports]
     grammars: Mapping[str, Grammar] = dataclasses.field(default_factory=dict)
+    absent: Callable[[Any, Design], Mapping[FailureMode, str]] | None = None
 
     @property
     def modes(self) -> frozenset[FailureMode]:

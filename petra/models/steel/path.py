@@ -17,6 +17,8 @@ on the beam and its end against the support.
 A force the path cannot carry (an axial force on a shear connection) adds the element
 "connection" in role "axial", whose one limit state, the load path, is unmodelled: the
 deck reports it UNKNOWN rather than passing a connection whose axial path nobody checked.
+So does a flange force at a member end free to twist about its axis, whose J10.7
+stiffeners the deck does not draw.
 """
 from __future__ import annotations
 
@@ -40,6 +42,8 @@ ROLE_LIMITS: Mapping[str, tuple[str, ...]] = {
     # one whose bolt line sits away from its support, so it also bends
     "bent_ply": (*SHEAR_PLY, "flexural_yield", "flexural_rupture"),
     "conventional_plate": ("ductility",),
+    # a shear tee's flange, which bends as the beam end rotates (Manual Part 9)
+    "flexible_tee": ("tee_ductility",),
     "extended_plate": ("plate_buckling", "extended_ductility"),
     # a bracket plate welded to its support: no holes, so no rupture section
     "welded_bracket": ("shear_yield", "flexural_yield"),
@@ -47,14 +51,19 @@ ROLE_LIMITS: Mapping[str, tuple[str, ...]] = {
     # whose free end can buckle sideways (F11)
     "shaped_bracket": ("bracket_edge",),
     "rectangular_bracket": ("plate_buckling",),
-    # a seat leg under a beam end, and the beam web bearing on it
+    # a seat leg under a beam end, and the beam web bearing on it, whose end carries the
+    # reaction down to it in shear
     "seat": ("seat_flexure", "shear_yield"),
     "seat_leg": EDGES,
-    "bearing_web": ("web_local_yielding", "web_crippling", "beam_fit"),
-    "stiffener": ("bearing", "compression"),
+    "bearing_web": ("web_local_yielding", "web_crippling", "shear_yield", "beam_fit"),
+    # a seat stiffener: compressed under the seat, and welded on edge to the support, whose
+    # section along the weld carries the reaction in shear and its eccentricity in flexure
+    "stiffener": ("bearing", "compression", "shear_yield", "flexural_yield"),
+    # a stiffened seat's plate under the beam, bearing on the stiffener's fitted top edge
+    "seat_plate": ("bearing",),
     # bolt groups
     "shear_bolts": ("bolts", "spacing_min", "spacing_max", "joint_type", "clearance"),
-    "bracket_bolts": ("bolts", "spacing_min", "spacing_max", "joint_type"),
+    "bracket_bolts": ("bolts", "spacing_min", "spacing_max", "joint_type", "clearance"),
     "tension_bolts": ("bolt_tension", "prying", "spacing_min", "spacing_max", "joint_type", "clearance"),
     "tension_shear_bolts": ("bolts", "bolt_combined"),
     "slip_critical": ("slip",),
@@ -74,6 +83,9 @@ ROLE_LIMITS: Mapping[str, tuple[str, ...]] = {
     "j10_compression_buckling": ("web_compression_buckling",),
     "j10_sidesway": ("web_sidesway_buckling",),
     "panel": ("panel_zone",),
+    # a member end free to twist about its axis, which J10.7 stiffens; the deck draws no
+    # stiffeners, so the mode is unmodelled and the verdict UNKNOWN
+    "unframed_end": ("j10_stiffeners",),
     "axial": ("load_path",),
 }
 
@@ -128,9 +140,10 @@ def path(conn: Conn, fields: set[str]) -> tuple[Link, ...]:
     elif kind == "shear_tee":
         links = (*_beam_web(conn), *_bolts(conn, "beam side", "shear_bolts"), Link("tee stem", "bent_ply"))
         if bolted_support:
-            links += (Link("tee flange", "ply"), *_bolts(conn, "support side", "shear_bolts"), _face(conn))
+            links += (Link("tee flange", "ply"), Link("tee flange", "flexible_tee"), *_bolts(conn, "support side", "shear_bolts"),
+                      _face(conn))
         else:
-            links += (Link("tee flange to support", "fillet"),)
+            links += (Link("tee flange to support", "fillet"), Link("tee flange to support", "flexible_tee"))
     elif kind == "shear_end_plate":
         cope = (Link("beam web", "cope"),) if conn.get("cope") is not None else ()
         links = (Link("beam web", "welded_web"), *cope, Link("end plate to beam web", "fillet"), Link("end plate", "ply"),
@@ -142,7 +155,8 @@ def path(conn: Conn, fields: set[str]) -> tuple[Link, ...]:
         else:
             links += (Link("seat to support", "fillet"),)
     elif kind == "stiffened_seat":
-        links = (Link("beam web", "bearing_web"), Link("stiffener", "stiffener"), Link("stiffener to support", "fillet"))
+        links = (Link("beam web", "bearing_web"), Link("seat plate", "seat_plate"), Link("stiffener", "stiffener"),
+                 Link("stiffener to support", "fillet"))
     elif kind == "flange_force":
         links = (Link("member web", "j10_web_yielding"),)
         if conn.attrs["force_kind"] == "tensile":
@@ -153,15 +167,19 @@ def path(conn: Conn, fields: set[str]) -> tuple[Link, ...]:
                 links += (Link("member web", "j10_compression_buckling"),)
             elif "flange_restrained" in conn.attrs and "unbraced_length" in conn.attrs:
                 links += (Link("member web", "j10_sidesway"),)
-        if "panel_shear" in fields:
-            links += (Link("member web", "panel"),)
+        # Whatever loads the design declares, a flange force may be one flange of a moment
+        # connection's couple, which shears the panel zone (J10.6); build.NEEDS says what
+        # its check reads that the force alone does not give.
+        links += (Link("member web", "panel"),)
+        if conn.attrs["location"] == "end" and conn.get("end_twist") == "free":
+            links += (Link("member end", "unframed_end"),)
     elif kind == "bolt_bracket":
         links = (Link("bracket plate", "bent_ply"), *_shaped(conn), *_bolts(conn, "bracket bolts", "bracket_bolts"), _face(conn))
     elif kind == "weld_bracket":
         links = (Link("bracket plate", "welded_bracket"), *_shaped(conn), Link("bracket weld", "fillet"))
     elif kind == "hanger":
         links = (Link("tee stem", "tension_element"), Link("tee flange", "tension_flange"),
-                 Link("hanger bolts", "tension_bolts"))
+                 Link("hanger bolts", "tension_bolts"), Link("support web", "j10_web_yielding"))
         if "shear" in fields:
             links += _bolts(conn, "hanger bolts", "tension_shear_bolts")
         links += (_face(conn),)

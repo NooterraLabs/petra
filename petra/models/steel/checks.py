@@ -20,7 +20,7 @@ from typing import Callable, Iterator, Mapping
 
 from ... import mechanics as M
 from ...ir import Design, Fixed, Input
-from ...kernel import Expr, Interval, Max, Min, Sqrt, Sym
+from ...kernel import Abs, Expr, Interval, Max, Min, Sqrt, Sym
 from ...mechanics import add, c, div, mul, sq, sub
 from ...registry import Registry
 from ...units import DIMENSIONLESS, Quantity
@@ -165,7 +165,9 @@ class Interface:
     shear: Expr | None          # force the group carries in the plane of the plies
     eccentricity: Expr | None   # of the shear from the group centroid, in the plies' plane
     tension: Expr | None # total bolt tension
-    clearances: tuple[tuple[str, Expr], ...]
+    # (obstruction, distance from a bolt to it), and for a group the lines place nowhere in
+    # particular a third item: excused where it is <= 0, another placement leaving room
+    clearances: tuple[tuple[str, Expr] | tuple[str, Expr, Expr], ...]
     prying: tuple[Prying, ...]
 
     @property
@@ -282,6 +284,26 @@ class Stiffener:
     force: Expr
     beam_grade: str
     beam_tw: Expr
+    seat_grade: str     # the seat plate's, which bears on the stiffener's fitted top edge
+
+
+@dataclass(frozen=True)
+class TeeFlex:
+    """What a shear tee's rotational ductility reads (Manual Part 9, Eqs 9-51 to 9-53, as
+    Companion II.A-30 and II.A-31 apply them)."""
+    grade: str
+    tf: Expr
+    ts: Expr                # the stem's thickness
+    k1: Expr                # the parent W's, web centerline to the toe of its fillet
+    bf: Expr
+    length: Expr            # the tee's, l
+    beam_tw: Expr
+    d_bolt: Expr            # the bolts through the stem and the beam web, which Eq 9-53 reads
+    gauge: Expr | None      # bolted to the support: across its flange; welded: None
+    weld_size: Expr | None  # welded to the support: the flange-tip fillet; bolted: None
+    rows: int
+    pitch: Expr
+    edge: Expr
 
 
 @dataclass(frozen=True)
@@ -321,12 +343,13 @@ class Geometry:
     stiffener: Stiffener | None
     single_plate: SinglePlate | None
     bracket: Bracket | None
+    tee: TeeFlex | None
 
     @staticmethod
     def empty() -> Geometry:
         """A kind's geometry function starts here and adds what the connection has."""
         return Geometry(interfaces=[], welds=[], flexures=[], tensions=[], web_shear=[], net_shear=[], cope=None,
-                        forces=[], seat=None, stiffener=None, single_plate=None, bracket=None)
+                        forces=[], seat=None, stiffener=None, single_plate=None, bracket=None, tee=None)
 
 
 def bolt_dims(ctx: Ctx, bolts: Bolts, hole: str) -> tuple[Expr, Expr, Expr]:
@@ -401,6 +424,31 @@ def _support_clearances(support: Member, sp: Mapping[str, Expr], gauge: Expr) ->
     if support.face == "flange":
         return (("support web", sub(div(gauge, c(2)), div(sp["tw"], c(2)))),)
     return (("support flanges", div(sub(sub(sp["d"], mul(c(2), sp["tf"])), gauge), c(2))),)
+
+
+def _bracket_clearances(ctx: Ctx, bolts: Bolts, columns: int, g: Expr) -> tuple[tuple[str, Expr] | tuple[str, Expr, Expr], ...]:
+    """Room to tighten a bracket's bolts, `columns` at gauge g, which the lines place
+    nowhere in particular (geometry.bracket_columns), at the placement that leaves the most.
+    On a web: centred between the flanges, ((d - 2 tf) - (columns - 1) g) / 2 to each. On a
+    flange: all on one side of the web with the outer hole on the flange, (bf - tw) / 2 -
+    (columns - 1) g - dh / 2 from the web; excused where a split straddling the web fits
+    ((columns - 1) g + dh <= bf) and leaves the room needed, the web centred between two
+    columns as far as the larger part, ceil(columns / 2) columns, allows: min((g - tw) / 2,
+    (bf - tw) / 2 - dh / 2 - (ceil(columns / 2) - 1) g). A placement that leaves room also
+    fits, since the room needed exceeds dh / 2."""
+    support: Member = ctx.conn.attrs["support"]
+    sp = _w(ctx, support)
+    if support.face == "web":
+        return (("support flanges", div(sub(sub(sp["d"], mul(c(2), sp["tf"])), mul(c(columns - 1), g)), c(2))),)
+    dh = G.hole_size(ctx, bolts, "support", G.ACROSS)
+    side = div(sub(sp["bf"], sp["tw"]), c(2))
+    one_side = sub(sub(side, mul(c(columns - 1), g)), div(dh, c(2)))
+    if columns == 1:
+        return (("support web", one_side),)
+    need = add(M.hex_corner(ctx.const(f"bolt_us.{bolts.size}.nut_F")), ctx.const("aisc_manual.clearance.socket"))
+    larger = (columns + 1) // 2
+    split = Min((div(sub(g, sp["tw"]), c(2)), sub(sub(side, div(dh, c(2))), mul(c(larger - 1), g))))
+    return (("support web", one_side, Max((sub(need, split), sub(add(mul(c(columns - 1), g), dh), sp["bf"])))),)
 
 
 def _length(ctx: Ctx, rows: int) -> tuple[Expr, Expr, Expr]:
@@ -511,7 +559,7 @@ def geometry_tee(ctx: Ctx) -> Geometry:
     rows = conn.attrs["rows"]
     s, lev, length = _length(ctx, rows)
     a = ctx.attr("bolt_line")
-    tp = {p: ctx.shape(tee.parent, p) for p in ("d", "tw", "tf", "bf")}
+    tp = {p: ctx.shape(tee.parent, p) for p in ("d", "tw", "tf", "bf", "k1")}
     v = ctx.load("shear")
     toe = sub(div(tp["d"], c(2)), a)
     stem = Ply("tee stem", tee.grade, tp["tw"], 1, 1, ctx.hole("stem"), "down", lev, toe, length, 1,
@@ -521,8 +569,10 @@ def geometry_tee(ctx: Ctx) -> Geometry:
                                     ctx.opt("eccentricity") or a, clearances=(("tee flange", sub(a, tp["tf"])),), tension=None, prying=()))
     support: Member = conn.attrs["support"]
     sp = _w(ctx, support)
+    d_bolt, _, _ = bolt_dims(ctx, bolts, ctx.hole("stem"))
     if conn.attrs["support_side"] == "bolted":
         gs = ctx.attr("support_gauge")
+        out.tee = TeeFlex(tee.grade, tp["tf"], tp["tw"], tp["k1"], tp["bf"], length, bp["tw"], d_bolt, gs, None, rows, s, lev)
         side = div(sub(tp["bf"], gs), c(2))
         flange = Ply("tee flange", tee.grade, tp["tf"], 1, 2, ctx.hole("flange"), "up", lev, side, length, 1,
                      (("flange top and bottom", lev), ("flange side", side)), block=True)
@@ -531,6 +581,7 @@ def geometry_tee(ctx: Ctx) -> Geometry:
     else:
         weld: Weld = conn.attrs["support_weld"]
         w = ctx.geo(weld.size, "support_weld.size")
+        out.tee = TeeFlex(tee.grade, tp["tf"], tp["tw"], tp["k1"], tp["bf"], length, bp["tw"], d_bolt, None, w, rows, s, lev)
         t_sup = _face_t(support, sp)
         # The flange-tip welds as Manual Table 10-2 welds B (Companion II.A-31): each line
         # carries R/2 at half the flange width from the stem.
@@ -596,6 +647,10 @@ def geometry_seated(ctx: Ctx) -> Geometry:
     out.forces.append(Concentrated(beam.shape, beam.grade, v, lb, c(0), False, False, None, None, True, name="beam", panel_shear=None, axial=None))
     out.seat = Seat(angle.grade, ta, seat_length, setback, lb, v)
     out.web_shear.append(("seat angle", angle.grade, mul(seat_length, ta), v))
+    # The beam's end carries the reaction down its web to the seat: its gross section,
+    # uncut by holes or a cope, yields in shear over d tw (J4.2(a), as on a framed beam).
+    bp = _w(ctx, beam)
+    out.web_shear.append(("beam web", beam.grade, mul(bp["d"], bp["tw"]), v))
     if conn.attrs["support_side"] == "bolted":
         bolts: Bolts = conn.attrs["bolts"]
         rows = conn.attrs["rows"]
@@ -632,12 +687,21 @@ def geometry_stiffened_seat(ctx: Ctx) -> Geometry:
     t_sup = _face_t(support, _w(ctx, support))
     out = Geometry.empty()
     out.forces.append(Concentrated(beam.shape, beam.grade, v, sub(width, setback), c(0), False, False, None, None, True, name="beam", panel_shear=None, axial=None))
+    bp = _w(ctx, beam)
+    out.web_shear.append(("beam web", beam.grade, mul(bp["d"], bp["tw"]), v))
+    # The stiffener carries the reaction to the support as a bracket plate welded on edge
+    # does: its section along the weld line in shear and in flexure under the reaction at
+    # Table 10-8's 0.8 W from the support face. No holes, so no rupture section.
+    ecc = mul(ctx.const("aisc_manual.t10_8.eccentricity"), width)
+    out.web_shear.append(("stiffener", stiff.grade, mul(length, ts), v))
+    out.flexures.append(Flexure("stiffener", stiff.grade, ts, length, mul(v, ecc), 0, c(0), c(0)))
     weld: Weld = conn.attrs["weld"]
     w = ctx.geo(weld.size, "weld.size")
-    out.welds.append(WeldGroup("stiffener to support", weld, w, length, weld.sides, v, mul(ctx.const("aisc_manual.t10_8.eccentricity"), width), Min((ts, t_sup)),
+    out.welds.append(WeldGroup("stiffener to support", weld, w, length, weld.sides, v, ecc, Min((ts, t_sup)),
                                (("stiffener", stiff.grade, ts, weld.sides), (f"support {support.face}", support.grade, t_sup, 1)),
                                end_loaded=True, bearing=False, ret=None, edge=None))
-    out.stiffener = Stiffener(stiff.grade, ts, width, length, v, beam.grade, _w(ctx, beam)["tw"])
+    seat: PlateSpec = conn.attrs["plate"]
+    out.stiffener = Stiffener(stiff.grade, ts, width, length, v, beam.grade, _w(ctx, beam)["tw"], seat.grade)
     return out
 
 
@@ -667,7 +731,8 @@ def geometry_bolt_bracket(ctx: Ctx) -> Geometry:
               (("plate top and bottom", lev), ("plate side", leh)), block=True)
     v = ctx.load("shear")
     out = Geometry.empty()
-    out.interfaces.append(Interface("bracket bolts", bolts, rows, cols, s, g, 1, (ply, _support_ply(ctx)), v, e, tension=None, clearances=(), prying=()))
+    out.interfaces.append(Interface("bracket bolts", bolts, rows, cols, s, g, 1, (ply, _support_ply(ctx)), v, e, tension=None,
+                                    clearances=_bracket_clearances(ctx, bolts, cols, g), prying=()))
     # Section A-A runs down the bolt column nearest the load (Manual Part 15).
     arm = sub(e, mul(c(Fraction(cols - 1, 2)), g))
     _, dh_v, _ = bolt_dims(ctx, bolts, ply.hole)
@@ -728,6 +793,12 @@ def geometry_hanger(ctx: Ctx) -> Geometry:
                                                    flange.hole),
                                             Prying("support flange", b_s, a_s, _tributaries(ctx, rows, lev, s, b_s), sp["tf"],
                                                    support.grade, hold.hole))))
+    # The tension pulls the support's flange, which hands it to the support's web: J10.2's
+    # web local yielding over lb, the bolt rows' extent (the force enters at the bolts). The
+    # grammar gives no distance to the support's end, so the force is taken at it: Eq J10-3,
+    # the lesser, holds wherever the hanger is.
+    out.forces.append(Concentrated(support.shape, support.grade, t, mul(c(rows - 1), s), c(0), True, False, None, None, True,
+                                   name="support", panel_shear=None, axial=None))
     gross = mul(tp["tw"], length)
     out.tensions.append(Tension("tee stem", tee.grade, gross, gross, t))
     # The bolts' tension reaches the stem through the flange in shear either side of it:
@@ -1126,12 +1197,12 @@ def gen_spacing_max(ctx: Ctx, geo: Geometry) -> list[Check]:
     weathering = ctx.conn.get("weathering") == "yes"
     ratio, cap = ("aisc360.j3_6.weathering_pitch_t", "aisc360.j3_6.weathering_pitch_max") if weathering else \
                  ("aisc360.j3_6.pitch_t", "aisc360.j3_6.pitch_max")
-    for itf in geo.interfaces:
+    # J3.6 limits the longitudinal spacing, the pitch along a bolt line; the gauge across
+    # the force is not limited by it (Commentary J3.6).
+    for itf in (i for i in geo.interfaces if i.rows > 1):
         thinner = Min(tuple(p.t for p in itf.plies))
-        spans = ([("pitch", itf.pitch)] if itf.rows > 1 else []) + ([("gauge", itf.gauge)] if itf.cols > 1 and itf.gauge is not None else [])
-        for what, span in spans:
-            out.append(Check(f"{itf.name}: {what} at most the thickness multiple (J3.6)", (span,), mul(ctx.const(ratio), thinner), unit="in", group=None, suffix="", guards=()))
-            out.append(Check(f"{itf.name}: {what} at most the absolute limit (J3.6)", (span,), ctx.const(cap), unit="in", group=None, suffix="", guards=()))
+        out.append(Check(f"{itf.name}: pitch at most the thickness multiple (J3.6)", (itf.pitch,), mul(ctx.const(ratio), thinner), unit="in", group=None, suffix="", guards=()))
+        out.append(Check(f"{itf.name}: pitch at most the absolute limit (J3.6)", (itf.pitch,), ctx.const(cap), unit="in", group=None, suffix="", guards=()))
     return out
 
 
@@ -1188,8 +1259,9 @@ def gen_clearance(ctx: Ctx, geo: Geometry) -> list[Check]:
     for itf in geo.interfaces:
         nut = ctx.const(f"bolt_us.{itf.bolts.size}.nut_F")
         need = add(M.hex_corner(nut), ctx.const("aisc_manual.clearance.socket"))
-        for what, distance in itf.clearances:
-            out.append(Check(f"{itf.name}: room to tighten, clear of the {what} (Manual Part 7)", (need,), distance, unit="in", group=None, suffix="", guards=()))
+        for what, distance, *placed in itf.clearances:
+            out.append(Check(f"{itf.name}: room to tighten, clear of the {what} (Manual Part 7)", (need,), distance, unit="in", group=None,
+                             suffix="", guards=tuple(placed)))
     return out
 
 
@@ -1283,6 +1355,35 @@ def gen_ductility(ctx: Ctx, geo: Geometry) -> list[Check]:
     ]
 
 
+def gen_tee_ductility(ctx: Ctx, geo: Geometry) -> list[Check]:
+    """Manual Part 9's rotational ductility of a shear tee, as Companion II.A-30 and II.A-31
+    apply it: the tee flange must bend before its bolts or welds to the support fracture, so
+    they are at least Eq 9-52's dmin (bolted) or Eq 9-51's wmin (welded). The flexible
+    width b runs from the bolt line to the toe of the stem's fillet (Figure 9-6(b)) with the
+    gauge centred on the beam web, the smaller of the tee's two, or from the flange tip to
+    that toe (Figure 9-6(a)); p is the largest flange length a bolt acts on (Figure 9-4).
+    Eq 9-53, the stem or the beam web at most d/2 + 1/16 in thick, is the alternate where
+    the stem is bolted to the beam, as it always is here: it excuses the check. b is floored
+    at a millionth of an inch: as it vanishes the first terms grow without bound and the
+    caps govern."""
+    tee = geo.tee
+    if tee is None:
+        return []
+    fy = ctx.mat(tee.grade, "fy")
+    alternate = sub(Min((tee.ts, tee.beam_tw)), add(div(tee.d_bolt, c(2)), ctx.const("aisc_manual.p9.tee_stem_allowance")))
+    floor = ctx.const(L.STRICT)
+    if tee.gauge is None:
+        b = Max((sub(div(tee.bf, c(2)), tee.k1), floor))
+        return [Check("tee flange to support: fillet at least Eq 9-51's wmin, so the tee flange bends before the weld "
+                      "tears (Manual Part 9)", (L.tee_weld_min(ctx.const, fy, tee.tf, b, tee.length, tee.ts),), tee.weld_size,
+                      unit="in", group=None, suffix="", guards=(alternate,))]
+    b = Max((sub(div(tee.gauge, c(2)), add(div(tee.ts, c(2)), div(tee.beam_tw, c(2)), tee.k1)), floor))
+    p = Max(tuple(length for _, length in _tributaries(ctx, tee.rows, tee.edge, tee.pitch, b)))
+    return [Check("tee flange: bolts at least Eq 9-52's dmin in diameter, so the tee flange bends before they fracture "
+                  "(Manual Part 9)", (L.tee_bolt_min(ctx.const, fy, tee.tf, p, b, tee.length, tee.ts),), tee.d_bolt,
+                  unit="in", group=None, suffix="", guards=(alternate,))]
+
+
 def gen_extended_ductility(ctx: Ctx, geo: Geometry) -> list[Check]:
     """Manual Part 10, extended single plate: the fillet at least 5/8 tp, and tp at most
     tmax = 6 Mmax / (Fy L^2), Mmax = (Fnv / 0.90) Ab C', C' = Ip / r_max for the bolt group
@@ -1340,8 +1441,12 @@ def gen_bearing(ctx: Ctx, geo: Geometry) -> list[Check]:
     if st is None:
         return []
     apb = mul(sub(st.width, ctx.const("aisc_manual.seat.stiffener_clip")), st.t)
+    # J7 gives the bearing strength of the surfaces in contact: the stiffener's fitted top
+    # edge and the seat plate on it, each of which yields locally at its own Fy.
     return [Check("stiffener: bearing on its fitted top edge (J7)", (st.force,), L.bearing_milled(ctx.const, ctx.mat(st.grade, "fy"), apb),
-                  "aisc360.j7", suffix="", guards=(), unit="kip")]
+                  "aisc360.j7", suffix="", guards=(), unit="kip"),
+            Check("seat plate: bearing on the stiffener's fitted top edge (J7)", (st.force,),
+                  L.bearing_milled(ctx.const, ctx.mat(st.seat_grade, "fy"), apb), "aisc360.j7", suffix="", guards=(), unit="kip")]
 
 
 def gen_compression(ctx: Ctx, geo: Geometry) -> list[Check]:
@@ -1484,7 +1589,8 @@ def gen_panel_zone(ctx: Ctx, geo: Geometry) -> list[Check]:
         d, tw, area = (ctx.shape(f.shape, p) for p in ("d", "tw", "A"))
         fy = ctx.mat(f.grade, "fy")
         alpha = c(1) if ctx.lrfd else ctx.const("aisc360.j10_6.alpha_asd")
-        pr = f.axial if f.axial is not None else c(0)
+        # build.NEEDS has the case give the axial force; tension or compression, its magnitude
+        pr = Abs(f.axial) if f.axial is not None else c(0)
         rn = L.panel_zone(ctx.const, fy, d, tw, pr, mul(fy, area), alpha)
         out.append(Check(f"{f.name} web: panel-zone web shear (J10.6)", (f.panel_shear,), rn, "aisc360.j10_6", suffix="", guards=(), unit="kip"))
     return out
@@ -1551,6 +1657,7 @@ GENERATORS: Mapping[str, Callable[[Ctx, Geometry], list[Check]]] = {
     "spacing_min": gen_spacing_min, "edge_min": gen_edge_min, "spacing_max": gen_spacing_max, "edge_max": gen_edge_max,
     "hole_use": gen_hole_use, "joint_type": gen_joint_type, "clearance": gen_clearance,
     "cope_buckling": gen_cope_buckling, "plate_buckling": gen_plate_buckling, "ductility": gen_ductility,
+    "tee_ductility": gen_tee_ductility,
     "extended_ductility": gen_extended_ductility, "seat_flexure": gen_seat_flexure, "bearing": gen_bearing,
     "compression": gen_compression,
     "web_local_yielding": gen_web_local_yielding, "web_crippling": gen_web_crippling,

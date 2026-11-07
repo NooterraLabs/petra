@@ -154,7 +154,8 @@ TABLE: tuple[Provision, ...] = (
               "a declared filler takes (a)'s least factor, 0.85, on the bolts' shear strength (the grammar gives no "
               "thickness), in slip-critical joints' bearing checks too; an undeclared filler is taken to be absent"),
     Provision("J6", "Splices", "excluded", note=f"beam and column splices are {V11}"),
-    Provision("J7", "Bearing Strength", "check", ("bearing",), "a stiffened seat's stiffener on the beam flange"),
+    Provision("J7", "Bearing Strength", "check", ("bearing",),
+              "a stiffened seat's fitted stiffener edge and the seat plate on it, each surface at its own Fy"),
     Provision("J8", "Column Bases and Bearing on Concrete", "excluded", note=f"base plates are {V11}"),
     Provision("J9", "Anchor Rods and Embedments", "excluded", note=f"anchor rods are {V11}"),
     Provision("J10.1", "Flange Local Bending", "check", ("flange_local_bending",),
@@ -165,9 +166,10 @@ TABLE: tuple[Provision, ...] = (
     Provision("J10.4", "Web Sidesway Buckling", "check", ("web_sidesway_buckling",)),
     Provision("J10.5", "Web Compression Buckling", "check", ("web_compression_buckling",)),
     Provision("J10.6", "Web Panel-Zone Shear", "check", ("panel_zone",)),
-    Provision("J10.7", "Unframed Ends of Beams and Girders", "premise",
-              note="a member end under a concentrated force is framed or restrained against rotation about its axis; "
-              "the deck has no inputs for end stiffeners (j10_stiffeners is unmodelled)"),
+    Provision("J10.7", "Unframed Ends of Beams and Girders", "check", ("j10_stiffeners",),
+              "a flange force at a member end states whether the end is restrained against twisting about its axis "
+              "(end_twist); a free end requires the unmodelled j10_stiffeners mode, since the deck draws no "
+              "stiffeners: UNKNOWN. A framed connection frames its beam's end, and a seat's top angle restrains it"),
     Provision("J10.8", "Additional Stiffener Requirements for Concentrated Forces", "rule",
               note="a J10 force beyond the unstiffened strength fails its check; the deck designs no stiffeners "
               "(j10_stiffeners, unmodelled), so a stiffened design is rejected, never passed"),
@@ -192,8 +194,10 @@ OTHER: tuple[Provision, ...] = (
               "bounds; a part on a fillet counts as not fitting (geometry.py)"),
     Provision("Manual Part 7", "Entering and tightening clearances", "check", ("clearance",),
               "the socket allowance is a judged registry row"),
-    Provision("Manual Part 9", "Coped beams and prying action", "check", ("cope_buckling", "prying"),
-              "prying by the T-stub model with each bolt's tributary length by Figure 9-4"),
+    Provision("Manual Part 9", "Coped beams, prying action and shear tee ductility", "check",
+              ("cope_buckling", "prying", "tee_ductility"),
+              "prying by the T-stub model with each bolt's tributary length by Figure 9-4; a shear tee's rotational "
+              "ductility by Eqs 9-51 and 9-52, or the alternate Eq 9-53, as Companion II.A-30 and II.A-31 apply them"),
     Provision("Manual Part 10", "Single-plate, seated and tee connections", "check",
               ("ductility", "extended_ductility", "plate_buckling", "seat_flexure", "compression", "flexural_yield"),
               "a seat stiffener's width-to-thickness limit is checked with its compression; an extended plate's "

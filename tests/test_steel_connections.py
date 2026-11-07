@@ -92,7 +92,7 @@ class LoadPath(unittest.TestCase):
     def test_every_role_limit_state_is_a_mode_of_the_deck(self):
         for role, modes in ROLE_LIMITS.items():
             for mode in modes:
-                self.assertIn(mode, {**MODES, "load_path": None}, f"{role}: {mode}")
+                self.assertIn(mode, {**MODES, "load_path": None, "j10_stiffeners": None}, f"{role}: {mode}")
 
     def test_details_switch_their_limit_states_on(self):
         built = dict(designs())

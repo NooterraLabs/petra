@@ -46,7 +46,7 @@ Treatments: **check** (the modes whose checks encode it), **rule** (enforced whe
 | J5.1 | Fillers in Welded Connections | excluded |  | no fillers in v1.0's welded joints |
 | J5.2 | Fillers in Bolted Bearing-Type Connections | check | `bolts`, `bolt_combined` | a declared filler takes (a)'s least factor, 0.85, on the bolts' shear strength (the grammar gives no thickness), in slip-critical joints' bearing checks too; an undeclared filler is taken to be absent |
 | J6 | Splices | excluded |  | beam and column splices are v1.1 (docs/steel_connections.md §3) |
-| J7 | Bearing Strength | check | `bearing` | a stiffened seat's stiffener on the beam flange |
+| J7 | Bearing Strength | check | `bearing` | a stiffened seat's fitted stiffener edge and the seat plate on it, each surface at its own Fy |
 | J8 | Column Bases and Bearing on Concrete | excluded |  | base plates are v1.1 (docs/steel_connections.md §3) |
 | J9 | Anchor Rods and Embedments | excluded |  | anchor rods are v1.1 (docs/steel_connections.md §3) |
 | J10.1 | Flange Local Bending | check | `flange_local_bending` | the exemption for a load narrower than 0.15 bf across the flange is not taken (no such width is declared) |
@@ -55,7 +55,7 @@ Treatments: **check** (the modes whose checks encode it), **rule** (enforced whe
 | J10.4 | Web Sidesway Buckling | check | `web_sidesway_buckling` |  |
 | J10.5 | Web Compression Buckling | check | `web_compression_buckling` |  |
 | J10.6 | Web Panel-Zone Shear | check | `panel_zone` |  |
-| J10.7 | Unframed Ends of Beams and Girders | premise |  | a member end under a concentrated force is framed or restrained against rotation about its axis; the deck has no inputs for end stiffeners (j10_stiffeners is unmodelled) |
+| J10.7 | Unframed Ends of Beams and Girders | check | `j10_stiffeners` | a flange force at a member end states whether the end is restrained against twisting about its axis (end_twist); a free end requires the unmodelled j10_stiffeners mode, since the deck draws no stiffeners: UNKNOWN. A framed connection frames its beam's end, and a seat's top angle restrains it |
 | J10.8 | Additional Stiffener Requirements for Concentrated Forces | rule |  | a J10 force beyond the unstiffened strength fails its check; the deck designs no stiffeners (j10_stiffeners, unmodelled), so a stiffened design is rejected, never passed |
 | J10.9 | Additional Doubler Plate Requirements for Concentrated Forces | rule |  | as J10.8: panel-zone shear beyond the unreinforced web fails; doublers are not modelled |
 | J10.10 | Transverse Forces on Plate Elements | check | `prying` | a hanger's tee flange and the support flange under the same bolts, each by the prying model |
@@ -67,11 +67,11 @@ Treatments: **check** (the modes whose checks encode it), **rule** (enforced whe
 | RCSC 4 | Joint types and installation | check | `joint_type` | at least snug-tight; Group 150 and 200 bolts in tension pretensioned; the holes that need a slip-critical joint are J3.3's (hole_use) |
 | Manual Part 1 | Dimensions and properties: the flat web T = d - 2 kdes | check | `beam_fit`, `web_fit` | a part, weld or bolt hole on a beam's or a column's web lies on its flat, between the fillets that kdes bounds; a part on a fillet counts as not fitting (geometry.py) |
 | Manual Part 7 | Entering and tightening clearances | check | `clearance` | the socket allowance is a judged registry row |
-| Manual Part 9 | Coped beams and prying action | check | `cope_buckling`, `prying` | prying by the T-stub model with each bolt's tributary length by Figure 9-4 |
+| Manual Part 9 | Coped beams, prying action and shear tee ductility | check | `cope_buckling`, `prying`, `tee_ductility` | prying by the T-stub model with each bolt's tributary length by Figure 9-4; a shear tee's rotational ductility by Eqs 9-51 and 9-52, or the alternate Eq 9-53, as Companion II.A-30 and II.A-31 apply them |
 | Manual Part 10 | Single-plate, seated and tee connections | check | `ductility`, `extended_ductility`, `plate_buckling`, `seat_flexure`, `compression`, `flexural_yield` | a seat stiffener's width-to-thickness limit is checked with its compression; an extended plate's shear and flexural yielding interaction (Eq 10-8) with its flexural yielding; the 1/4 in beam underrun comes off a beam web's end distance and onto a seat's setback in the strength checks (block_shear, seat_flexure, web_local_yielding, web_crippling, weld), as the Companion takes it |
 | Manual Part 15 | Bracket plates | check | `bracket_edge` |  |
 | Shop deck | Stock plate thicknesses and bolt lengths | rule |  | a fixed plate thickness must be stocked (registry shop_deck.plate.*), checked at lowering; bolt lengths are an unchecked premise of the clearance model |
 | Geometry | Fit of the drawn parts | check | `beam_fit`, `flange_fit`, `web_fit` | the parts each kind's lines draw, placed in one frame per connection (geometry.py): the beam end clear of the support and landing on a seat, holes and welds on the support's flange and clear of its web, a seat's holes on its leg, a beam's flange between a column's flanges; positions the lines leave open are taken where they fit best |
 | Connection kinds | Force components without a checked path | check | `load_path` | an axial force on a v1.0 shear connection requires the unmodelled load-path mode: UNKNOWN |
 
-AISC 360-22 Chapters J and K: 58 provisions, 28 check, 5 rule, 5 premise, 20 excluded.
+AISC 360-22 Chapters J and K: 58 provisions, 29 check, 5 rule, 4 premise, 20 excluded.

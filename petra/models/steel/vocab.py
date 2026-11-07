@@ -141,7 +141,8 @@ STRENGTH: tuple[tuple[str, str, str, str, tuple[ValidityRow, ...]], ...] = (
      "the base metal's thickness is uniform along the weld",
      f"{AISC} Sections J2.4(a) and J4.2(b)", ()),
     ("bearing",
-     "bearing on the fitted bearing area of a stiffener, Rn = 1.8 Fy Apb (Eq J7-1)",
+     "bearing on the fitted bearing area of a stiffener, Rn = 1.8 Fy Apb (Eq J7-1), for each surface in contact at "
+     "its own Fy: the stiffener's top edge and the seat plate on it, so the lesser Fy governs",
      "the bearing surface is milled or fitted",
      f"{AISC} Section J7", ()),
     ("web_local_yielding",
@@ -172,9 +173,15 @@ STRENGTH: tuple[tuple[str, str, str, str, tuple[ValidityRow, ...]], ...] = (
      f"{AISC} Section J10.5", ()),
     ("panel_zone",
      "panel-zone web shear, Rn = 0.60 Fy dc tw, reduced by (1.4 - alpha Pr/Py) above alpha Pr = 0.4 Py "
-     "(Eqs J10-9, J10-10)",
+     "(Eqs J10-9, J10-10), against the panel's required shear, the declared panel_shear: the flange forces of the "
+     "moment connections at the joint less the story shear (Commentary Eq C-J10-3), which the one flange force "
+     "declared does not give; Pr is the declared axial force's magnitude, tension or compression. Demanded at every "
+     "flange force, since the grammar does not say whether the force is one flange of a moment connection's "
+     "couple (J10.6's double-concentrated forces); a case that gives no panel_shear or no axial leaves it open "
+     "naming the load, since no value is safe over either's range, and a force with no couple closes it with a "
+     "signed panel_shear of zero",
      "the effect of panel-zone deformation on frame stability is not considered in the analysis",
-     f"{AISC} Section J10.6", ()),
+     f"{AISC} Section J10.6 and Commentary J10.6", ()),
     ("seat_flexure",
      "flexural yielding of an unstiffened seat angle's outstanding leg at the critical section, Mn = Fy L t^2 / 4, under "
      "the beam reaction at the middle of the bearing length it needs: the least of the outstanding leg less the setback "
@@ -200,8 +207,9 @@ MAKEABILITY: tuple[tuple, ...] = (
     ("edge_min", "edge distance from each hole centre at least Table J3.4's value for the bolt size", "edges sheared or "
      "rolled as fabricated; measured to the hole centre", f"{AISC} Section J3.5, Table J3.4",
      ("the Table J3.5 increment C2 for oversized and slotted holes is not added to the minimum edge distance",)),
-    ("spacing_max", "spacing of bolts in the line of force at most 24 t and 12 in (14 t and 7 in for unpainted "
-     "weathering steel)", "the thinner connected part sets the limit", f"{AISC} Section J3.6"),
+    ("spacing_max", "longitudinal spacing of bolts, the pitch along a bolt line, at most 24 t and 12 in (14 t and 7 in "
+     "for unpainted weathering steel); the gauge across the force is not limited, since J3.6 limits the longitudinal "
+     "spacing only (Commentary J3.6)", "the thinner connected part sets the limit", f"{AISC} Section J3.6"),
     ("edge_max", "edge distance at most 12 t and 6 in", "the connected part's own thickness sets the limit",
      f"{AISC} Section J3.6"),
     ("fillet_size", "fillet size at least Table J2.4's minimum for the thinner part joined, length at least four "
@@ -342,6 +350,9 @@ UNBOUNDED: Mapping[str, str] = {
     "plate_buckling": "Section F11's branches by Lb d / t^2 are taken inside the check, and F11 states no other range",
     "bracket_edge": "the Manual's bracket-plate method states no range beyond its configuration; Q's branches by "
                     "lambda are taken inside the check",
+    "tee_ductility": "Eqs 9-51, 9-52 and 9-53 state no range of their own; as the flexible width b vanishes their "
+                     "first terms grow without bound and the caps, 5/8 ts and 0.115 sqrt(Fy ts), govern, which the "
+                     "check takes with b floored at a millionth of an inch",
     "spacing_min": _RULE, "edge_min": _RULE, "spacing_max": _RULE, "edge_max": _RULE, "fillet_size": _RULE,
     "hole_use": _RULE, "joint_type": _RULE, "clearance": _RULE,
     "beam_fit": _RULE, "flange_fit": _RULE, "web_fit": _RULE,
@@ -386,6 +397,15 @@ for short, form, validity, source in (
      "five-eighths of its thickness so the plate yields before the weld, and the horizontal edge distance at least "
      "2d on the plate and the beam web (Companion II.A-17A)", "the connection is a conventional single plate, so the simple "
      "beam's end rotation is accommodated by bolt deformation and plate yielding", f"{MANUAL} Part 10"),
+    ("tee_ductility", "rotational ductility of a shear tee: its flange bends before its bolts or welds to the "
+     "support fracture, so the bolts are at least dmin = 0.0941 tf sqrt((Fy p / b)(b^2 / l^2 + 2)) <= 0.115 sqrt(Fy ts) "
+     "in diameter (Manual Eq 9-52) or the flange-tip fillets at least wmin = 0.0155 (Fy tf^2 / b)(b^2 / l^2 + 2) <= "
+     "(5/8) ts (Eq 9-51), Fy in ksi and lengths in inches, with b the flange's flexible width (Figure 9-6) and p the "
+     "flange length a bolt acts on (Figure 9-4); or, the alternate where the stem is bolted to the beam, the stem or "
+     "the beam web at most d/2 + 1/16 in thick (Eq 9-53) (Companion II.A-30, II.A-31)",
+     "the tee's stem is bolted to the beam web and its flange bolted or welded to the support, so the beam end's "
+     "rotation bends the flange; the bolt gauge is centred on the beam web, so b is the smaller of the tee's two",
+     f"{MANUAL} Part 9 (shear tees, rotational ductility)"),
     ("bracket_edge", "a shaped bracket plate's free-edge section B-B, normal to its sloped edge: shear yielding, "
      "Vn = 0.60 Fy t b' against P sin theta, and the normal force and moment on it, N/Nc + M/Mc <= 1 with N = P cos "
      "theta and M = P e - N b'/2, at Fcr = Q Fy reduced for the edge's local buckling by its slenderness lambda",
@@ -405,8 +425,11 @@ LOAD_PATH = _mode("load_path")
 Unmodelled: requiring it yields a Gap needing NoModel, so the verdict is UNKNOWN."""
 
 STIFFENED_FORCE = _mode("j10_stiffeners")
-"""Transverse stiffeners and doublers at a concentrated force (J10.7-J10.9). Unmodelled in
-v1.0."""
+"""The pair of full-depth transverse stiffeners J10.7 requires at an unframed member end
+not otherwise restrained against twisting about its axis: demanded at a flange force whose
+end is declared free (end_twist free). The deck draws no stiffeners, so the mode is
+unmodelled and the verdict UNKNOWN. J10.8 and J10.9's stiffeners and doublers are never
+credited: a force past a J10 limit state's unstiffened strength fails that check."""
 
 UNMODELLED = frozenset({LOAD_PATH, STIFFENED_FORCE})
 
