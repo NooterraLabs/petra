@@ -96,21 +96,26 @@ To run Petra from the repository root without installing it, write `python -m pe
 	petra check examples/truss_fail.petra
 	```
 
-	The verdict is FAIL, with three refutations. The panel cannot carry the load (R1, a Farkas ray), and two diagonals buckle (R4). Each refutation prints the counterexample point. Every value lies inside its signed or sanctioned range. These lines show the counts and the start of the first counterexample:
+	The verdict is FAIL, with three refutations. The panel cannot carry the load (R1, a Farkas ray), and two diagonals buckle (R4). Each refutation prints the counterexample point. Every value lies inside its signed or sanctioned range. Each refutation names its governing check with demand, capacity and utilisation. These lines show the counts and the first two refutations:
 
-	<!-- sample: petra check examples/truss_fail.petra | sed -n '1,3p;13,20p' -->
+	<!-- sample: petra check examples/truss_fail.petra | sed -n '1,3p;13,25p' -->
 	```text
 	warren-footbridge-panel-rev-c: FAIL
 	entries    strength FAIL, coverage FAIL
 	checked    9 obligations, 6 certified, 3 refuted, 0 waived, 0 open
+	counterexample  frame/truss.plastic_collapse/claim.strength: a static field within every member's capacity carries 1.5 times load case crowd on frame
+	  governing  load factor: the claimed factor against the largest one a static field within every member's capacity carries: demand 1.5, capacity 0.7292, utilisation 2.06
+	  claim      strength: collapse_factor is 0.7292 here, against its bound 1.5
+	  at         const.steel.E    = 200 GPa   (reg:const.steel.E)
+	             crowd.frame.D.fy = -60 kN   (in:warren-footbridge-panel-rev-c.crowd.frame.D.fy)
+	             crowd.frame.E.fy = -60 kN   (in:warren-footbridge-panel-rev-c.crowd.frame.E.fy)
+	  fixed      16 more values, as the design and the registry state them (--json lists each)
 	counterexample  frame.diag_ad/truss.member_buckling/coverage.truss.axial_member: the compression in frame.diag_ad is at most 1 times its flexural buckling resistance under load case crowd
-	  const.en10219_2.60_3x3_2.D = 603/10000 m   (reg:const.en10219_2.60_3x3_2.D)
-	  const.en10219_2.60_3x3_2.t = 2/625 m   (reg:const.en10219_2.60_3x3_2.t)
-	  const.en10219_2.76_1x3_2.D = 761/10000 m   (reg:const.en10219_2.76_1x3_2.D)
-	  const.en10219_2.76_1x3_2.t = 2/625 m   (reg:const.en10219_2.76_1x3_2.t)
-	  const.en1993_1_1.curve_c.alpha = 49/100 1   (reg:const.en1993_1_1.curve_c.alpha)
-	  const.steel.E = 200000000000 Pa   (reg:const.steel.E)
-	  crowd.frame.D.fy = -60000 N   (in:warren-footbridge-panel-rev-c.crowd.frame.D.fy)
+	  governing  compression against the flexural buckling resistance: demand 75 kN, capacity 54.69 kN, utilisation 1.37
+	  at         const.steel.E    = 200 GPa   (reg:const.steel.E)
+	             crowd.frame.D.fy = -60 kN   (in:warren-footbridge-panel-rev-c.crowd.frame.D.fy)
+	             crowd.frame.E.fy = -60 kN   (in:warren-footbridge-panel-rev-c.crowd.frame.E.fy)
+	  fixed      16 more values, as the design and the registry state them (--json lists each)
 	```
 
 3. Check a bolted joint whose coverage is incomplete:
