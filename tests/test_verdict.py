@@ -19,6 +19,7 @@ from petra.models.base import (
     CoverageOrigin,
     FailureMode,
     Gap,
+    InputContradicted,
     NeedsCertificate,
     NeedsInputBound,
     NoModel,
@@ -279,6 +280,7 @@ class Needs(unittest.TestCase):
             CertificateRejected("sha256:ab", "R1", "certs", "A x != b"): ("certs", "sha256:ab", "R1", "A x != b"),
             CertificateTooWeak("sha256:ab", None, "library", "leaf crosses 0"): ("library", "sha256:ab", "leaf crosses 0"),
             NoRuleForQuantity("frame.stability_factor", "indeterminate truss"): ("frame.stability_factor", "indeterminate truss"),
+            InputContradicted(("hook",), "capacity", "N", "tests proof", "1 of 500 parts broke at 30 kN"): ("hook.capacity", "tests proof", "30 kN"),
             RegistryInconsistent("cable.cu_pvc_2_5", "R20 = rho20 / A", "off by 3 %"): ("cable.cu_pvc_2_5", "R20 = rho20 / A", "off by 3 %"),
         }
         for need, parts in cases.items():

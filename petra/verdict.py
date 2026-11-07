@@ -74,6 +74,7 @@ from .models.base import (
     ClaimOrigin,
     Criterion,
     Gap,
+    InputContradicted,
     Need,
     NeedsCertificate,
     NeedsInputBound,
@@ -595,6 +596,9 @@ def describe_need(need: Need) -> str:
             return f"{need.source} evidence for {need.statement_hash} too weak{by}: {need.reason}; a finer partition or a sharper field may close it"
         case NeedsInputBound():
             return f"signed bound on {'.'.join(need.target)}.{need.field} [{need.unit}]"
+        case InputContradicted():
+            return (f"signed bound on {'.'.join(need.target)}.{need.field} [{need.unit}] is contradicted by {need.record}: "
+                    f"{need.reason}; sign a bound {need.record} admits, or correct the record")
         case NoRuleForQuantity():
             return f"no rule for {need.qoi}: {need.reason}"
         case NoModel():

@@ -27,16 +27,17 @@ from petra.kernel.rules.r5_moment import MomentDual
 from petra.kernel.rules.r6_scenario import Arithmetic
 from petra.lang import load_design, parse_design
 from petra.models import uncertainty
-from petra.models.base import ComponentError, Gap, NeedsInputBound, NoRuleForQuantity, Obligation
+from petra.models.base import ComponentError, Gap, InputContradicted, NeedsInputBound, NoRuleForQuantity, Obligation
 from petra.pipeline import check_design, elaborate, lower_components
 from petra.premises import Tag
 from petra.registry import build_registry
 from petra.solvers import SolverSource, r5_moment, r6_scenario
 from petra.units import FORCE
-from petra.verdict import Pass, Unknown
+from petra.verdict import Pass, Unknown, describe_need
 
 REGISTRY = build_registry()
 EXAMPLE = Path(__file__).resolve().parents[1] / "examples" / "hook_uncertain.petra"
+CANARY = Path(__file__).resolve().parents[1] / "judges" / "canaries" / "demand_failed_below_capacity.petra"
 DESIGN = "hoist-hook"
 OVERLOAD = "<= 3/10 under lift"
 TRIALS = "trials 300 failures 0"
@@ -147,6 +148,40 @@ class RangeAndMean(unittest.TestCase):
         latch = 'demand latch {\n  capacity in [5 kN, 6 kN] measured "qa.lab@example.org" source "PL-0918"\n}\n'
         gap = elaborated(hook(extra=latch + "claim latched: P(latch.utilisation > 1) <= 1/10 under lift\n"), "latched")
         self.assertEqual(gap.needs, (NeedsInputBound(("lift", "latch"), "force", "N"),))
+
+
+class TestsAgainstCapacity(unittest.TestCase):
+    """A part that broke at L held at most L, so a failure below C_lo refutes the signed capacity."""
+
+    def test_a_failure_below_the_capacity_refutes_it_and_the_bound_stays_open(self):
+        design = hook(("trials 300 failures 0 at 36 kN", "trials 500 failures 1 at 30 kN"))
+        gap = elaborated(design, "overload")
+        self.assertIsInstance(gap, Gap)
+        (need,) = gap.needs
+        self.assertIsInstance(need, InputContradicted)
+        self.assertEqual((need.target, need.field, need.record), (("hook",), "capacity", "tests proof"))
+        line = describe_need(need)
+        for part in ("hook.capacity", "tests proof", "30 kN", "36 kN"):
+            self.assertIn(part, line)
+        self.assertIsInstance(verdicts(self, design)["overload"], Unknown)
+
+    def test_a_failure_at_the_capacity_or_a_clean_test_below_it_refutes_nothing(self):
+        for edit in ("trials 300 failures 1 at 36 kN", "trials 300 failures 0 at 30 kN"):
+            with self.subTest(tests=edit):
+                design = hook(("trials 300 failures 0 at 36 kN", edit))
+                self.assertIsInstance(elaborated(design, "overload"), Obligation)
+                self.assertIsInstance(verdicts(self, design)["overload"], Pass)
+
+    def test_a_refuted_capacity_and_a_missing_mean_are_both_named(self):
+        gap = elaborated(hook(("trials 300 failures 0 at 36 kN", "trials 500 failures 1 at 30 kN"), (" mean 10 kN", "")), "overload")
+        self.assertEqual([type(n) for n in gap.needs], [InputContradicted, NeedsInputBound])
+
+    def test_the_canary_with_a_failure_below_its_capacity_is_refused_on_its_overload_claim(self):
+        report = check_design(load_design(CANARY, REGISTRY), REGISTRY, (SolverSource(),))
+        self.assertIsInstance(report.verdict, Unknown)
+        (item,) = report.verdict.open
+        self.assertEqual(item.requirement.id, "hook/uncertain.range_mean/claim.overload")
+        self.assertEqual([type(n) for n in item.needs], [InputContradicted])
 
 
 class FromTests(unittest.TestCase):

@@ -259,6 +259,21 @@ class NeedsInputBound:
 
 
 @dataclass(frozen=True, slots=True)
+class InputContradicted:
+    """The design's own `record` contradicts the signed bound on this input, as tests that
+    broke a part below every capacity the stated range admits do: `reason` says how. No
+    point satisfies both premises, so neither a proof nor a counterexample over them says
+    anything. Only the owners can close it, by signing a bound the record admits or by
+    correcting the record. Petra never moves the bound itself."""
+
+    target: tuple[str, ...]
+    field: str
+    unit: str
+    record: str
+    reason: str
+
+
+@dataclass(frozen=True, slots=True)
 class NoRuleForQuantity:
     """The subject's domain cannot state this quantity in this form: GE on a temperature,
     stability of an indeterminate truss, a tested failure level above the level tested.
@@ -308,12 +323,13 @@ Need = Union[
     CertificateRejected,
     CertificateTooWeak,
     NeedsInputBound,
+    InputContradicted,
     NoRuleForQuantity,
     NoModel,
     RegistryInconsistent,
     OutsideValidity,
 ]
-GapNeed = Union[NeedsInputBound, NoRuleForQuantity, NoModel]
+GapNeed = Union[NeedsInputBound, InputContradicted, NoRuleForQuantity, NoModel]
 """The needs an elaborator can report. The others come from evidence and the deck."""
 
 

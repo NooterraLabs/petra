@@ -16,6 +16,12 @@ what probability is acceptable is the requirement owner's claim.
       MomentConstraint(fn = x, lo = mean hyp, hi = mean hyp)
       fail = x - u * capacity, with capacity a RangeHyp over its signed bound
       model "uncertain.moment": no distribution assumed; only support and mean.
+      A tests record on the demand that broke a part at a level below the capacity's
+      lower end refutes the signed range the bound rests on: the requirement is a gap
+      needing InputContradicted, UNKNOWN until the owners sign a range the tests admit
+      or correct the tests. Not FAIL, since no point the premises admit refutes the
+      claim; not a bound at the tested level, since that would invent an input bound,
+      and a part that broke at L held at most L, not at least.
 
   P(fail at level) <= eps with confidence c, from n trials with k failures -> R6
       BinomialTail(n = trials hyp, k = failures hyp, eps = p, beta = 1 - c)
@@ -32,11 +38,11 @@ from dataclasses import dataclass
 from typing import Callable, Mapping
 
 from ..ir import Bound, Component, Design, Exceeds, FailsAt, FromTests, Input, ParamRef, RangeMean, Span
-from ..kernel import Add, Const, Mul, Neg, Sym
+from ..kernel import Add, Const, Interval, Mul, Neg, Sym
 from ..kernel.rules.r5_moment import MomentBound, MomentConstraint, RandomVar
 from ..kernel.rules.r6_scenario import BinomialTail
 from ..registry import Registry
-from ..units import DIMENSIONLESS, FORCE, Dim, format_quantity
+from ..units import DIMENSIONLESS, FORCE, Dim, Quantity, format_quantity
 from .base import (
     NO_PORTS,
     SIGNED_BOUND,
@@ -47,7 +53,9 @@ from .base import (
     Feature,
     Field,
     Gap,
+    GapNeed,
     Grammar,
+    InputContradicted,
     ModelSpec,
     NeedsInputBound,
     NoRuleForQuantity,
@@ -193,17 +201,36 @@ MODELS: Mapping[FailureMode, ModelSpec] = {RANGE_MEAN: MOMENT_MODEL, TESTED: SCE
 # --- Elaboration -------------------------------------------------------------------------
 
 
+def contradicted(demand: Demand, design: Design) -> tuple[InputContradicted, ...]:
+    """One need per tests record on the demand that broke a part at a level whose upper
+    end is below the capacity's lower end. That part held less than every capacity the
+    signed range admits, so the record refutes the range, whose every use the moment model
+    takes to hold at least its lower end."""
+    stated = demand.capacity.range
+    floor = Quantity(Interval(stated.value.lo, stated.value.lo), FORCE)
+    return tuple(
+        InputContradicted((demand.name,), "capacity", "N", f"tests {t.name}",
+                          f"{t.failures} of {t.trials} parts broke at {format_quantity(t.level, 'kN')}, below the "
+                          f"{format_quantity(floor, 'kN')} lower end of the signed capacity {format_quantity(stated, 'kN')}")
+        for t in design.tests.values()
+        if t.subject == (demand.name,) and t.failures > 0 and t.level.value.hi < stated.value.lo
+    )
+
+
 def build_range_mean(req: Requirement, demand: Demand, design: Design, registry: Registry) -> tuple[Elaborated, ...]:
-    """Gap needing NeedsInputBound when the load has no signed mean.
+    """Gap needing InputContradicted for each tests record that refutes the capacity
+    range (`contradicted`), and NeedsInputBound when the load has no signed mean.
 
     The threshold enters at its lower end, which gives the larger event. The threshold
     and p are the owner's claim, not premises, so both enter as constants."""
     criterion = req.criterion
     case = criterion.load
     force = next((e.value for e in design.loads[case].entries if e.target == (demand.name,)), None)
+    needs: list[GapNeed] = list(contradicted(demand, design))
     if not isinstance(force, Input) or force.mean is None:
-        field = "force" if force is None else "force.mean"
-        return (Gap(req, (NeedsInputBound((case, demand.name), field, "N"),)),)
+        needs.append(NeedsInputBound((case, demand.name), "force" if force is None else "force.mean", "N"))
+    if needs:
+        return (Gap(req, tuple(needs)),)
     u = criterion.threshold.value.lo
     sb = StatementBuilder(design, registry)
     load, mean, capacity = sb.input(force), sb.mean(force), sb.input(demand.capacity)
