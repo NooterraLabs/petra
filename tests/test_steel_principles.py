@@ -32,7 +32,7 @@ from petra.registry import steel as deck_rows
 
 REGISTRY = build_registry()
 STEEL = Path(__file__).resolve().parents[1] / "petra" / "models" / "steel"
-BUILDERS = ("lower", "limits", "checks", "build", "vocab", "domain", "path")
+BUILDERS = ("lower", "limits", "checks", "geometry", "build", "vocab", "domain", "path")
 """The deck's builder modules: what turns a design into obligations. calc, twin, generate,
 faults, breaker, trace and package are tooling (a report, an independent twin, the gate's
 machinery) and change no verdict."""
@@ -82,8 +82,9 @@ CITATION = re.compile(r"\(((?:[^()]|\([^()]*\))*)\)\s*$")
 
 def provisions(citation: str) -> set[str]:
     """The trace sections a citation names: "J4.2a" -> J4.2a and J4.2; "Manual Eq 10-8" ->
-    Manual Part 10; "RCSC 4.1" -> RCSC 4."""
-    out: set[str] = set()
+    Manual Part 10; "RCSC 4.1" -> RCSC 4; "geometry", a plain fit of the drawn parts ->
+    Geometry."""
+    out: set[str] = {"Geometry"} if re.search(r"\bgeometry\b", citation) else set()
     for m in re.finditer(r"\b([JK]\d+\.\d+[a-z]?|[JK]\d+)\b", citation):
         out |= {m.group(1), m.group(1).rstrip("abcdefgh")}
     out |= {f"Manual Part {n}" for n in re.findall(r"Manual (?:Part|Eqs?|Table|Figure) (\d+)", citation)}
@@ -119,6 +120,8 @@ class EveryBuilderCitesItsClause(unittest.TestCase):
         self.assertEqual(provisions("F11, Cb = 1.84, Manual Part 10"), {"Manual Part 10"})
         self.assertEqual(provisions("Manual Eqs 15-8 to 15-18"), {"Manual Part 15"})
         self.assertEqual(provisions("RCSC 4.2"), {"RCSC 4"})
+        self.assertEqual(provisions("geometry"), {"Geometry"})
+        self.assertEqual(provisions("Manual Part 1"), {"Manual Part 1"})
 
 
 class EveryModelHasValidityRowsOrSaysWhyNot(unittest.TestCase):
@@ -201,7 +204,7 @@ class NoMagicNumbers(unittest.TestCase):
 
     def test_every_constant_a_builder_names_is_a_registry_row(self):
         named = set()
-        for module in ("limits", "checks"):
+        for module in ("limits", "checks", "geometry"):
             text = (STEEL / f"{module}.py").read_text(encoding="utf-8")
             named |= set(re.findall(r'(?:\bk|ctx\.const)\("([a-z0-9_.]+)"\)', text))
         from petra.models.steel import limits as L

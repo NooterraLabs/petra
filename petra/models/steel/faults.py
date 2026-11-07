@@ -5,7 +5,10 @@ A fault is one known defect put into a design the deck passes: a fillet far unde
 J2.4's minimum, a short edge, holes too close or too far apart, oversized holes in a
 bearing joint, Group 150 bolts in tension left snug, a shear tab too thick to rotate, a
 slender seat stiffener, a lapped fillet as thick as its plate, bolts against a hanger's
-stem, a cope deeper than half the beam, a load past the governing strength. `seed_faults`
+stem, a cope deeper than half the beam, a load past the governing strength; and parts that
+do not fit: bolt rows run past the beam's depth or off a seat's leg, a support gauge wider
+than the face, a beam too wide to pass between a column's flanges, a plate on the beam's
+fillet, a bracket's bolt columns off the flange. `seed_faults`
 applies each fault to passing designs from the generator; the deck catches a fault when
 its verdict is not PASS, and names it when a refuted or open requirement is one of the
 fault's modes. The gate wants every fault caught and named.
@@ -176,6 +179,51 @@ def _thick_tab(text: str, g: Generated) -> str | None:
     return _weld_size(out, "weld", "0.5")
 
 
+def _rows_past_depth(text: str, g: Generated) -> str | None:
+    """Rows at the pitch drawn to reach 3 pitches past the beam's nominal depth."""
+    beam, pitch = _field(text, "beam"), _inches(text, "pitch")
+    if beam is None or pitch is None or _field(text, "rows") is None:
+        return None
+    nominal = Fraction(re.match(r"W(\d+)x", beam).group(1))
+    return _set(text, "rows", str(int(nominal // pitch) + 4))
+
+
+def _rows_off_leg(text: str, g: Generated) -> str | None:
+    """A bolted seat's leg with six rows: the bottom hole runs past the leg."""
+    return _set(text, "rows", "6") if _field(text, "support_side") == "bolted" else None
+
+
+def _gauge_off_face(text: str, g: Generated) -> str | None:
+    """Support bolt lines 20 in apart: wider than every support's flange and web."""
+    key = "tee_gauge" if g.kind == "hanger" else "support_gauge"
+    return _set(text, key, "20 inch")
+
+
+def _beam_too_wide(text: str, g: Generated) -> str | None:
+    """A W24x76 (flange 8.99 in) framed into the web of a W10x49, whose flanges stand 8.86 in
+    apart, its end inside their tips."""
+    out = _set(text, "beam", "W24x76 grade steel.A992")
+    return _set(out, "support", "W10x49 web grade steel.A992") if out else None
+
+
+def _plate_on_fillet(text: str, g: Generated) -> str | None:
+    """The top row a quarter inch more than the edge distance below the beam's top: the
+    part's top edge is on the flange's fillet, kdes down (at least half an inch on every W)."""
+    lev = _inches(text, "edge_vertical")
+    if lev is None or _field(text, "cope") is not None:
+        return None
+    return _set(text, "top", f"{float(lev + Fraction(1, 4)):g} inch")
+
+
+def _columns_off_flange(text: str, g: Generated) -> str | None:
+    """Two bracket bolt columns 16 in apart: no flange of the catalogue's supports is that wide."""
+    out = _set(text, "columns", "2")
+    return _set(out, "gauge", "16 inch") if out else None
+
+
+BEAM_SIDE = ("shear_tab", "double_angle", "single_angle", "shear_tee")
+FIT_FACES = frozenset({"flange_fit", "web_fit"})
+
 FAULTS: tuple[Fault, ...] = (
     Fault("missing weld", "a 1/16 in fillet, far under Table J2.4's minimum",
           ("shear_tab", "shear_end_plate", "stiffened_seat", "weld_bracket", "double_angle", "single_angle", "shear_tee",
@@ -203,6 +251,18 @@ FAULTS: tuple[Fault, ...] = (
     Fault("overload", "a load past the governing strength", ("shear_tab", "double_angle", "single_angle", "shear_tee",
           "shear_end_plate", "seated", "stiffened_seat", "flange_force", "bolt_bracket", "weld_bracket", "hanger"), _overload,
           frozenset()),
+    Fault("rows past the depth", "bolt rows running three pitches past the beam's depth", (*BEAM_SIDE, "shear_end_plate"),
+          _rows_past_depth, frozenset({"beam_fit"})),
+    Fault("rows off the seat leg", "six rows of bolts in a seat angle's vertical leg", ("seated",), _rows_off_leg,
+          FIT_FACES),
+    Fault("gauge off the face", "support bolt lines 20 in apart, wider than the support's face",
+          ("double_angle", "shear_tee", "shear_end_plate", "seated", "hanger"), _gauge_off_face, FIT_FACES),
+    Fault("beam too wide for the web", "a W24x76 framed between the flanges of a W10x49, 8.86 in apart",
+          (*BEAM_SIDE, "shear_end_plate", "seated", "stiffened_seat"), _beam_too_wide, frozenset({"web_fit"})),
+    Fault("plate on the fillet", "the part's top edge a quarter inch below the beam's top flange, on its fillet",
+          BEAM_SIDE, _plate_on_fillet, frozenset({"beam_fit"})),
+    Fault("columns off the flange", "two bracket bolt columns 16 in apart", ("bolt_bracket",), _columns_off_flange,
+          FIT_FACES),
 )
 
 

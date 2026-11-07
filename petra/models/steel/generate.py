@@ -11,7 +11,12 @@ in five states one length as a toleranced bound (+-1/16 in), so the claim covers
 Most samples follow a detailer's rules: edges from 1-1/4 in, gauges that fit the flange,
 fillets no smaller than Table J2.4's minimum for the thinner part, a shear tab no thicker
 than d/2 + 1/16 in, stiffeners within their width-to-thickness limit, Group 150 bolts in
-tension pretensioned. Such a sample whose geometry the deck still fails is drawn again.
+tension pretensioned; and the parts fit (docs/steel_connections.md, fit of the drawn
+parts): the top row far enough down that the part clears the beam's flange and fillet,
+rows that end above the bottom fillet, a beam framed to a column's web narrow enough to
+pass between its flanges, parts, welds and bolt lines within the face they sit on, a seat's
+holes on its vertical leg. Each rule allows for the toleranced lengths and the largest hole
+the sample can draw. Such a sample whose geometry the deck still fails is drawn again.
 One sample in `FREE` (a "free" one) ignores the rules and keeps whatever geometry it
 draws, so some designs fail on geometry and their FAIL must carry a witness (§9 item 8).
 
@@ -82,6 +87,18 @@ def _inch(x) -> str:
 def _quarter(x: Fraction) -> Fraction:
     """Down to a quarter inch."""
     return Fraction(math.floor(x * 4), 4)
+
+
+def _quarter_up(x: Fraction) -> Fraction:
+    """Up to a quarter inch."""
+    return Fraction(math.ceil(x * 4), 4)
+
+
+def hole_max(d: Fraction) -> Fraction:
+    """The largest hole a rule-following sample draws for bolt diameter d, along or across
+    the force: a short slot's length, d + 1/4 in up to 7/8 in bolts and d + 5/16 in for 1 in
+    (Table J3.3)."""
+    return d + Fraction(5, 16)
 
 
 def min_fillet(t: Fraction) -> Fraction:
@@ -165,22 +182,36 @@ class _Sampler:
             elif coped:
                 self.length("setback", "0.5")    # a coped beam states its setback (lower.SET_BACK)
 
-    def rows(self, depth: Fraction, top: Fraction) -> int:
-        """Rows that fit the beam with an edge below: top + 3 (n - 1) + 1.5 <= d - 2."""
-        most = max(2, min(8, int((depth - 2 - top - Fraction(3, 2)) // 3) + 1))
+    def rows(self, room: Fraction) -> int:
+        """Rows at a 3 in pitch whose span, 3 (n - 1), is at most `room`; two at least."""
+        most = max(2, min(8, int(room // 3) + 1))
         n = self.rng.randint(2, most)
         self.line(f"rows {n}")
         return n
+
+    def beam_rows(self, beam: str, top: Fraction, lev: Fraction) -> int:
+        """Rows whose part ends above the beam's bottom fillet: top + 3 (n - 1) + Lev <= d -
+        kdes, Lev at its toleranced most."""
+        return self.rows(self.dim(beam, "d") - self.dim(beam, "kdes") - top - lev - TOLERANCE)
 
     def beam(self, options=BEAMS) -> str:
         shape = self.pick(s for s in options if self.has(s))
         self.line(f"beam {shape} grade steel.A992")
         return shape
 
-    def support(self, faces=("flange", "web"), options=SUPPORTS) -> tuple[str, str]:
-        shape, face = self.pick(s for s in options if self.has(s)), self.pick(faces)
+    def support(self, faces=("flange", "web"), options=SUPPORTS, beam: str | None = None) -> tuple[str, str]:
+        """A support and its face; a beam framed to a column's web passes between its
+        flanges (d - 2 tf at least the beam's bf)."""
+        face = self.pick(faces)
+        shape = self.pick(s for s in options if self.has(s) and (
+            self.free or beam is None or face == "flange" or self.dim(s, "d") - 2 * self.dim(s, "tf") >= self.dim(beam, "bf")))
         self.line(f"support {shape} {face} grade steel.A992")
         return shape, face
+
+    def width(self, support: tuple[str, str]) -> Fraction:
+        """The room across the face: a flange's width, or a web's flat between its fillets."""
+        shape, face = support
+        return self.dim(shape, "bf") if face == "flange" else self.dim(shape, "d") - 2 * self.dim(shape, "kdes")
 
     def face_t(self, support: tuple[str, str]) -> Fraction:
         return self.dim(support[0], "tf" if support[1] == "flange" else "tw")
@@ -200,15 +231,21 @@ class _Sampler:
             self.line(f"cope top depth {_inch(dc)} length {_inch(length)}")
         return True
 
-    def weld(self, key: str = "weld", sides: int | None = None, least: Fraction = Fraction(0)) -> Fraction:
-        sizes = [w for w in WELDS if self.free or Fraction(w) >= least] or [WELDS[-1]]
+    def weld(self, key: str = "weld", sides: int | None = None, least: Fraction = Fraction(0),
+             most: Fraction | None = None) -> Fraction:
+        sizes = [w for w in WELDS if self.free or least <= Fraction(w) <= (most if most is not None else Fraction(w))] \
+            or [w for w in WELDS if Fraction(w) >= least] or [WELDS[-1]]
         size = self.pick(sizes)
         self.line(f"{key} electrode.E70 size {size} inch" + (f" sides {sides}" if sides is not None else ""))
         return Fraction(size)
 
 
-def _top(s: _Sampler) -> Fraction:
+def _top(s: _Sampler, beam: str, lev: Fraction) -> Fraction:
+    """The top row, deep enough that the part, Lev above it at its toleranced most, clears
+    the beam's flange and fillet (kdes)."""
     top = Fraction(s.pick(("2.5", "3", "3.5")))
+    if not s.free:
+        top = max(top, _quarter_up(s.dim(beam, "kdes") + lev + TOLERANCE))
     s.length("top", top)
     return top
 
@@ -216,21 +253,22 @@ def _top(s: _Sampler) -> Fraction:
 def _shear_tab(s: _Sampler) -> None:
     beam = s.beam()
     extended = s.chance(0.25)
-    support = s.support(("web",) if extended else ("flange", "web"))
+    support = s.support(("web",) if extended else ("flange", "web"), beam=beam)
     grade = s.pick(("A36", "A572_50"))
     d = s.pick(("0.75", "0.875"))
     tp = Fraction(s.pick(t for t in PLATES if s.free or extended or Fraction(t) <= Fraction(d) / 2 + TOLERANCE))
     s.line(f"plate steel.{grade} thickness {_inch(tp)}")
     _, joint = s.bolts(d=d)
     s.holes(("plate", "beam"), joint)
-    top = _top(s)
-    rows = s.rows(s.dim(beam, "d"), top)
+    lev = Fraction(s.pick(("1.25", "1.5")))
+    top = _top(s, beam, lev)
+    rows = s.beam_rows(beam, top, lev)
     columns = 2 if extended and s.chance(0.4) else 1
     if columns == 2:
         s.line("columns 2")
         s.length("gauge", 3)
     s.length("pitch", 3)
-    s.length("edge_vertical", s.pick(("1.25", "1.5")), widen=True)
+    s.length("edge_vertical", lev, widen=True)
     two_d = 2 * Fraction(d)         # a conventional plate's Leh >= 2d (Manual Part 10)
     s.length("plate_edge", s.pick(x for x in ("1.5", "2") if s.free or extended or Fraction(x) >= two_d), widen=True)
     s.length("bolt_line", s.pick(("6", "7.5", "9")) if extended else s.pick(("3", "3.5")))
@@ -243,52 +281,82 @@ def _shear_tab(s: _Sampler) -> None:
     s.options(setback=True, coped=coped)
 
 
+def _angle_fits(s: _Sampler, shape: str, outstanding: str, double: bool, bolted: bool, beam: str,
+                support: tuple[str, str]) -> bool:
+    """The angles' support side fits the face, for any toe, hole and weld the sample can
+    draw: welds at the toes within it; bolt lines (gauge from the heel at the 1-1/4 in toe)
+    within it; on a web, the outstanding legs on its flat too."""
+    long, short = s.dim(shape, "d"), s.dim(shape, "b")
+    out = long if outstanding == "long" else short
+    tw, room = s.dim(beam, "tw"), s.width(support)
+    legs = 2 * out + tw if double else out + tw
+    if not bolted:
+        least = min_fillet(min(s.dim(shape, "t"), s.face_t(support)))
+        return legs + (2 if double else 1) * least <= room
+    heel = max(Fraction(3, 2), out - EDGE)
+    bolt_lines = 2 * heel + tw + hole_max(Fraction(1)) if double else tw + heel + hole_max(Fraction(1)) / 2
+    return bolt_lines <= room and (support[1] == "flange" or legs <= room)
+
+
 def _angles(s: _Sampler, double: bool) -> None:
     beam = s.beam()
-    support = s.support(("flange", "web"))
-    shape = s.pick(a for a in ANGLES if s.has(a))
+    support = s.support(("flange", "web"), beam=beam)
+    bolted = s.chance(0.7)
+    choices = [(a, o) for a in ANGLES if s.has(a) for o in ("long", "short")]
+    fitting = [c for c in choices if s.free or _angle_fits(s, *c, double, bolted, beam, support)]
+    shape, outstanding = s.pick(fitting or choices)
     long, short, t = s.dim(shape, "d"), s.dim(shape, "b"), s.dim(shape, "t")
-    outstanding = s.pick(("long", "short"))
     out_leg, beam_leg = (long, short) if outstanding == "long" else (short, long)
     s.line(f"{'angles' if double else 'angle'} {shape} grade steel.A36 outstanding {outstanding}")
     d, joint = s.bolts()
     s.holes(("angles" if double else "angle", "beam", "support"), joint)
-    top = _top(s)
-    rows = s.rows(s.dim(beam, "d"), top)
+    lev = Fraction(s.pick(("1.25", "1.5")))
+    top = _top(s, beam, lev)
+    rows = s.beam_rows(beam, top, lev)
     s.length("pitch", 3)
-    s.length("edge_vertical", s.pick(("1.25", "1.5")), widen=True)
-    s.length("beam_edge", s.pick(("1.5", "1.75")), widen=True)
+    s.length("edge_vertical", lev, widen=True)
     toe = Fraction(s.pick(("1.25", "1.5")))
-    s.length("beam_gauge", Fraction(s.pick(("2", "2.25", "2.5"))) if s.free else max(Fraction(3, 2), beam_leg - toe))
-    if s.chance(0.7):
+    gauge = Fraction(s.pick(("2", "2.25", "2.5"))) if s.free else max(Fraction(3, 2), beam_leg - toe)
+    # the beam end stands clear of the support face: its end distance within the beam gauge
+    s.length("beam_edge", s.pick(x for x in ("1.5", "1.75") if s.free or Fraction(x) + TOLERANCE <= gauge), widen=True)
+    s.length("beam_gauge", gauge)
+    if bolted:
         s.line("support_side bolted")
         heel = max(Fraction(3, 2), out_leg - toe)
         gauge = 2 * heel + s.dim(beam, "tw") if double else heel
         s.length("support_gauge", Fraction(s.pick(("5.5", "2.5"))) if s.free else _quarter(gauge))
     else:
         s.line("support_side welded")
-        s.weld("support_weld", least=min_fillet(min(t, s.face_t(support))))
+        # the welds at the toes within the face
+        legs = 2 * out_leg + s.dim(beam, "tw") if double else out_leg + s.dim(beam, "tw")
+        s.weld("support_weld", least=min_fillet(min(t, s.face_t(support))), most=(s.width(support) - legs) / (2 if double else 1))
     coped = s.cope(s.dim(beam, "d"), top, rows)
     s.options(setback=True, coped=coped)
 
 
 def _shear_tee(s: _Sampler) -> None:
     beam = s.beam()
-    support = s.support(("flange", "web"))
-    tee = s.pick(t for t in TEES if s.has(t))
+    support = s.support(("flange", "web"), beam=beam)
+    bolted = s.chance(0.7)
+    room = s.width(support)
+    # the tee's flange on a web's flat, its tip welds within the face
+    fitting = [t for t in TEES if s.has(t) and (s.free or (
+        s.dim(t, "bf") + 2 * Fraction(WELDS[-1]) <= room if not bolted else support[1] == "flange" or s.dim(t, "bf") <= room))]
+    tee = s.pick(fitting or [t for t in TEES if s.has(t)])
     s.line(f"tee {tee} grade steel.A992")
     d, joint = s.bolts()
     s.holes(("stem", "flange", "beam", "support"), joint)
-    top = _top(s)
-    rows = s.rows(s.dim(beam, "d"), top)
+    lev = Fraction(s.pick(("1.25", "1.5")))
+    top = _top(s, beam, lev)
+    rows = s.beam_rows(beam, top, lev)
     s.length("pitch", 3)
-    s.length("edge_vertical", s.pick(("1.25", "1.5")), widen=True)
+    s.length("edge_vertical", lev, widen=True)
     depth, tw = s.dim(tee, "d") / 2, s.dim(tee, "tw")
     toe = min(12 * tw, Fraction(6)) - Fraction(1, 4)
     line = Fraction(s.pick(("3", "3.5"))) if s.free else max(Fraction(3), _quarter(depth - toe) + Fraction(1, 4))
     s.length("bolt_line", line)
     s.length("beam_edge", s.pick(("1.5", "1.75")), widen=True)
-    if s.chance(0.7):
+    if bolted:
         s.line("support_side bolted")
         room = s.dim(tee, "bf") - 2 * EDGE
         gauges = [g for g in (Fraction(7, 2), Fraction(4), Fraction(11, 2)) if s.free or g <= room] or [Fraction(7, 2)]
@@ -302,37 +370,49 @@ def _shear_tee(s: _Sampler) -> None:
 
 def _end_plate(s: _Sampler) -> None:
     beam = s.beam()
-    support = s.support(("flange", "web"))
+    support = s.support(("flange", "web"), beam=beam)
     tp = Fraction(s.pick(("0.25", "0.3125", "0.375")))
     s.line(f"plate steel.A36 thickness {_inch(tp)}")
     gauge = Fraction(s.pick(("3.5", "5.5")))
-    widths = [w for w in (Fraction(7), Fraction(8), Fraction(9)) if s.free or w - gauge >= 2 * EDGE]
-    s.length("plate_width", s.pick(widths))
+    # on a web, the plate on its flat
+    widths = [w for w in (Fraction(7), Fraction(8), Fraction(9)) if s.free or (
+        w - gauge >= 2 * EDGE and (support[1] == "flange" or w <= s.width(support)))]
+    s.length("plate_width", s.pick(widths or [Fraction(7)]))
     d, joint = s.bolts()
     s.holes(("plate", "support"), joint)
-    s.rows(s.dim(beam, "d"), Fraction(3))
+    lev = Fraction(s.pick(("1.25", "1.5")))
+    # the welds, 3 (n - 1) + 2 Lev - 2 w long, on the flat web
+    s.rows(s.dim(beam, "d") - 2 * s.dim(beam, "kdes") - 2 * (lev + TOLERANCE))
     s.length("pitch", 3)
-    s.length("edge_vertical", s.pick(("1.25", "1.5")), widen=True)
+    s.length("edge_vertical", lev, widen=True)
     s.length("support_gauge", gauge)
     s.weld(sides=2, least=min_fillet(min(tp, s.dim(beam, "tw"))))
     s.options(setback=True)
 
 
 def _seated(s: _Sampler) -> None:
-    s.beam(("W12x26", "W14x22", "W16x26", "W16x31", "W18x35"))
-    support = s.support(("flange", "web"))
+    beam = s.beam(("W12x26", "W14x22", "W16x26", "W16x31", "W18x35"))
+    support = s.support(("flange", "web"), beam=beam)
     seat = s.pick(a for a in SEATS if s.has(a))
     s.line(f"angle {seat} grade steel.A36 outstanding short")
-    length = Fraction(s.pick(("6", "8")))
+    bolted = s.chance(0.6)
+    room = s.width(support)
+    # the seat on a web's flat, its end welds within the face
+    lengths = [x for x in (Fraction(6), Fraction(8)) if s.free or (
+        x + 2 * Fraction(WELDS[-1]) <= room if not bolted else support[1] == "flange" or x <= room)]
+    length = s.pick(lengths or [Fraction(6)])
     s.length("seat_length", length)
     s.length("setback", s.pick(("0.5", "0.75")))
-    if s.chance(0.6):
+    if bolted:
         s.line("support_side bolted")
         d, joint = s.bolts(joint=False)
         s.holes(("angle", "support"), joint)
         s.line("rows 2")
         s.length("pitch", 3)
-        s.length("edge_vertical", s.pick(("1.25", "1.5")), widen=True)
+        # the top hole below the outstanding leg: Lev - 1/16 - dh/2 >= t
+        t = s.dim(seat, "t")
+        levs = [x for x in ("1.25", "1.5", "1.75") if s.free or Fraction(x) - TOLERANCE - hole_max(d) / 2 >= t]
+        s.length("edge_vertical", s.pick(levs or ["1.75"]), widen=True)
         gauges = [g for g in (Fraction(7, 2), Fraction(11, 2)) if s.free or length - g >= 2 * EDGE]
         s.length("support_gauge", s.pick(gauges))
     else:

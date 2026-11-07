@@ -1510,6 +1510,204 @@ def _hanger(ctx: _Ctx, modes: set[str]) -> None:
         slip(ctx, "hanger bolts", group, v, (hf, hs), tension=t_load)
 
 
+# --- Fit of the drawn parts (vocab beam_fit, flange_fit, web_fit) -----------------------
+#
+# Written from the three method statements: every check is need <= have in inches, its
+# utilisation need / have, and a check its clause excuses is left out. A beam web's flat
+# runs from kdes to d - kdes; a column web's flat is d - 2 kdes wide; a flange is bf wide.
+
+def _hole_size(ctx: _Ctx, bolts: Bolts, hole: str, along: bool) -> float:
+    """Table J3.3: a hole's size down the force (along) or across it."""
+    names = {"std": ("std", "std"), "ovs": ("ovs", "ovs"), "ssl": ("ssl_w", "ssl_l"), "lsl": ("lsl_w", "lsl_l"),
+             "ssl_parallel": ("ssl_l", "ssl_w"), "lsl_parallel": ("lsl_l", "lsl_w")}[hole]
+    return ctx.reg.bolt(bolts.size, names[0] if along else names[1])
+
+
+def _fit(ctx: _Ctx, mode: str, what: str, need: float, have: float) -> None:
+    ctx.add(mode, what, _ratio(need, have))
+
+
+def _fit_on_beam_web(ctx: _Ctx, part: str, reach: float, end: float) -> None:
+    """A plate, angle or tee on the beam web, `reach` out from the support face, the beam's
+    end `end` out: the part's edges on the flat web unless a cope at least kdes deep at that
+    flange runs past it; the beam's holes on the flat web below and above the copes."""
+    conn = ctx.conn
+    b = ctx.reg.w_shape(conn.attrs["beam"].shape)
+    d, k = b["d"], b["kdes"]
+    n, s, lev, top = conn.attrs["rows"], ctx.need("pitch"), ctx.need("edge_vertical"), ctx.need("top")
+    bottom_row = top + (n - 1) * s
+    dh = _hole_size(ctx, conn.attrs["bolts"], _holes(conn, "beam"), True)
+    cope: Cope | None = conn.get("cope")
+    dct = dcb = None
+    covered = False
+    if cope is not None:
+        dct = ctx.geo(cope.depth)
+        if cope.flanges == "both":
+            dcb = ctx.geo(cope.bottom) if cope.bottom is not None else dct
+        setback = ctx.get("setback")
+        start = end if setback is None else max(setback, end)   # the reading most favourable to the cope
+        covered = start + ctx.geo(cope.length) >= reach
+    if not (dct is not None and dct >= k and covered):
+        _fit(ctx, "beam_fit", f"{part}: top edge below the beam's top flange and fillet", k, top - lev)
+    if not (dcb is not None and dcb >= k and covered):
+        _fit(ctx, "beam_fit", f"{part}: bottom edge above the beam's bottom flange and fillet", bottom_row + lev, d - k)
+    _fit(ctx, "beam_fit", "beam web: top bolt hole on the flat web", k if dct is None else max(k, dct), top - dh / 2)
+    _fit(ctx, "beam_fit", "beam web: bottom bolt hole on the flat web", bottom_row + dh / 2,
+         d - (k if dcb is None else max(k, dcb)))
+
+
+class _Face:
+    """The support's face: its width for things placed on it, a flange's bf or a column
+    web's flat d - 2 kdes, and the mode its fits belong to."""
+
+    def __init__(self, ctx: _Ctx) -> None:
+        sup: Member = ctx.conn.attrs["support"]
+        self.ctx, self.face, self.s = ctx, sup.face, ctx.reg.w_shape(sup.shape)
+        self.width = self.s["bf"] if self.face == "flange" else self.s["d"] - 2 * self.s["kdes"]
+        self.mode = f"{self.face}_fit"
+
+    def fits(self, what: str, width: float) -> None:
+        _fit(self.ctx, self.mode, f"support {self.face}: {what} on the face", width, self.width)
+
+    def part(self, what: str, width: float) -> None:
+        """A part's body overhangs a flange freely; on a web it stands on the flat."""
+        if self.face == "web":
+            self.fits(what, width)
+
+    def pair(self, g: float, bolts: Bolts) -> None:
+        dh = _hole_size(self.ctx, bolts, _holes(self.ctx.conn, "support"), False)
+        self.fits("two bolt lines centred at the gauge", g + dh)
+        if self.face == "flange":
+            _fit(self.ctx, self.mode, "support flange: the web between the two bolt lines' holes", self.s["tw"], g - dh)
+
+    def beam_passes(self, end: float) -> None:
+        """On a column's web the beam's flange passes between the column's flanges, unless the
+        beam end lies at or past their tips."""
+        if self.face != "web":
+            return
+        b = self.ctx.reg.w_shape(self.ctx.conn.attrs["beam"].shape)
+        if end >= (self.s["bf"] - self.s["tw"]) / 2:
+            return
+        _fit(self.ctx, self.mode, "support web: the beam flange between the column's flanges", b["bf"],
+             self.s["d"] - 2 * self.s["tf"])
+
+    def seat_holes(self, vertical: float, t: float) -> None:
+        conn = self.ctx.conn
+        n, s, lev = conn.attrs["rows"], self.ctx.need("pitch"), self.ctx.need("edge_vertical")
+        dh = _hole_size(self.ctx, conn.attrs["bolts"], _holes(conn, "angle"), True)
+        _fit(self.ctx, self.mode, "seat angle: top bolt hole below the outstanding leg", t, lev - dh / 2)
+        _fit(self.ctx, self.mode, "seat angle: bottom bolt hole on the vertical leg", lev + (n - 1) * s + dh / 2, vertical)
+
+
+def _fits(ctx: _Ctx) -> None:
+    conn, kind = ctx.conn, ctx.conn.kind
+    if kind == "flange_force":
+        return
+    face = _Face(ctx)
+    strict = ctx.reg.const("petra.strict.length")
+    if kind == "shear_tab":
+        a, leh_b, leh_p = ctx.need("bolt_line"), ctx.need("beam_edge"), ctx.need("plate_edge")
+        nc = conn.attrs.get("columns", 1)
+        reach = a + (ctx.need("gauge") * (nc - 1) if nc > 1 else 0.0) + leh_p
+        _fit_on_beam_web(ctx, "plate", reach, a - leh_b)
+        _fit(ctx, "beam_fit", "beam web: the beam end clear of the support face", leh_b, a)
+        weld: Weld = conn.attrs["weld"]
+        face.fits("the plate on edge and its welds", ctx.geo(conn.attrs["plate"].thickness) + weld.sides * ctx.geo(weld.size))
+        face.beam_passes(a - leh_b)
+    elif kind in ("double_angle", "single_angle"):
+        double = kind == "double_angle"
+        spec: AngleSpec = conn.attrs["angles" if double else "angle"]
+        beam_leg, out, _ = _angles_geometry(ctx, spec)
+        tw = ctx.reg.w_shape(conn.attrs["beam"].shape)["tw"]
+        gb, leh_b = ctx.need("beam_gauge"), ctx.need("beam_edge")
+        _fit_on_beam_web(ctx, "angles" if double else "angle", beam_leg, gb - leh_b)
+        _fit(ctx, "beam_fit", "beam web: the beam end clear of the support face", leh_b, gb)
+        legs = 2 * out + tw if double else out + tw
+        if conn.attrs["support_side"] == "bolted":
+            bolts: Bolts = conn.attrs["bolts"]
+            gs = ctx.need("support_gauge")
+            if double:
+                face.pair(gs, bolts)
+                face.part("the outstanding legs", legs)
+            else:
+                dh = _hole_size(ctx, bolts, _holes(conn, "support"), False)
+                face.fits("the beam web, the gauge and half the hole", tw + gs + dh / 2)
+                face.part("the beam web and the outstanding leg", legs)
+        else:
+            w = ctx.geo(conn.attrs["support_weld"].size)
+            face.fits("the outstanding legs and their toe welds", legs + (2 * w if double else w))
+        face.beam_passes(gb - leh_b)
+    elif kind == "shear_tee":
+        tee: TeeSpec = conn.attrs["tee"]
+        p = ctx.reg.w_shape(tee.parent)
+        a, leh_b = ctx.need("bolt_line"), ctx.need("beam_edge")
+        _fit_on_beam_web(ctx, "tee stem", p["d"] / 2, a - leh_b)
+        _fit(ctx, "beam_fit", "beam web: the beam end clear of the tee flange", leh_b + p["tf"], a)
+        if conn.attrs["support_side"] == "bolted":
+            face.pair(ctx.need("support_gauge"), conn.attrs["bolts"])
+            face.part("the tee flange", p["bf"])
+        else:
+            face.fits("the tee flange and its tip welds", p["bf"] + 2 * ctx.geo(conn.attrs["support_weld"].size))
+        face.beam_passes(a - leh_b)
+    elif kind == "shear_end_plate":
+        b = ctx.reg.w_shape(conn.attrs["beam"].shape)
+        k = b["kdes"]
+        n, s, lev = conn.attrs["rows"], ctx.need("pitch"), ctx.need("edge_vertical")
+        w = ctx.geo(conn.attrs["weld"].size)
+        cope: Cope | None = conn.get("cope")
+        top_band = bottom_band = k
+        if cope is not None:
+            top_band = max(k, ctx.geo(cope.depth))
+            if cope.flanges == "both":
+                bottom_band = max(k, ctx.geo(cope.bottom) if cope.bottom is not None else ctx.geo(cope.depth))
+        _fit(ctx, "beam_fit", "beam web: the end plate welds on the flat web", (n - 1) * s + 2 * lev - 2 * w,
+             b["d"] - top_band - bottom_band)
+        face.pair(ctx.need("support_gauge"), conn.attrs["bolts"])
+        face.part("the end plate", ctx.need("plate_width"))
+        face.beam_passes(ctx.geo(conn.attrs["plate"].thickness))
+    elif kind == "seated":
+        spec = conn.attrs["angle"]
+        vertical, out, t = _angles_geometry(ctx, spec)
+        _fit(ctx, "beam_fit", "beam web: the beam end on the seat", ctx.need("setback") + strict, out)
+        ls = ctx.need("seat_length")
+        if conn.attrs["support_side"] == "bolted":
+            face.pair(ctx.need("support_gauge"), conn.attrs["bolts"])
+            face.part("the seat angle", ls)
+            face.seat_holes(vertical, t)
+        else:
+            face.fits("the seat angle and its end welds", ls + 2 * ctx.geo(conn.attrs["support_weld"].size))
+        face.beam_passes(ctx.need("setback"))
+    elif kind == "stiffened_seat":
+        _fit(ctx, "beam_fit", "beam web: the beam end on the stiffener", ctx.need("setback") + strict,
+             ctx.need("stiffener_width"))
+        weld = conn.attrs["weld"]
+        face.fits("the stiffener on edge and its welds", ctx.geo(conn.attrs["stiffener"].thickness) + weld.sides * ctx.geo(weld.size))
+        face.beam_passes(ctx.need("setback"))
+    elif kind == "bolt_bracket":
+        nc, g = conn.attrs["columns"], ctx.need("gauge")
+        dh = _hole_size(ctx, conn.attrs["bolts"], _holes(conn, "support"), False)
+        if face.face == "web":
+            face.fits("the bracket's bolt columns", (nc - 1) * g + dh)
+            face.fits("the bracket plate", (nc - 1) * g + 2 * ctx.need("plate_edge"))
+        else:
+            tw, bf = face.s["tw"], face.s["bf"]
+            room = (bf - tw) / 2
+            larger = math.ceil(nc / 2)
+            split = nc > 1 and g - dh >= tw and (nc - 1) * g + dh <= bf and (larger - 1) * g + dh <= room
+            if not split:
+                _fit(ctx, "flange_fit", "support flange: the bracket's bolt columns on one side of the web",
+                     (nc - 1) * g + dh, room)
+    elif kind == "weld_bracket":
+        weld = conn.attrs["weld"]
+        w = ctx.geo(weld.size)
+        if "weld_return" in conn.attrs:
+            face.fits("the C-shaped weld's returns", ctx.need("weld_return") + w)
+        else:
+            face.fits("the plate on edge and its welds", ctx.geo(conn.attrs["plate"].thickness) + weld.sides * w)
+    elif kind == "hanger":
+        face.pair(ctx.need("tee_gauge"), conn.attrs["bolts"])
+
+
 KINDS: Mapping[str, Callable[[_Ctx, set[str]], None]] = {
     "shear_tab": _shear_tab,
     "double_angle": lambda ctx, modes: _angle_kind(ctx, modes, True),
@@ -1527,6 +1725,12 @@ KINDS: Mapping[str, Callable[[_Ctx, set[str]], None]] = {
 
 # --- Entry points -----------------------------------------------------------------------
 
+def _run(ctx: _Ctx, modes: set[str]) -> None:
+    """The kind's checks, then the fits of its drawn parts."""
+    KINDS[ctx.conn.kind](ctx, modes)
+    _fits(ctx)
+
+
 def modes_owed(conn: Conn, design: Design) -> tuple[str, ...]:
     """The modes the connection's load path demands (path.py's roles), in path order,
     from the load fields any case puts on it."""
@@ -1543,7 +1747,7 @@ def checks(conn: Conn, design: Design, registry: Registry, case: str) -> dict[st
     """Every check the twin makes, by mode: (what, utilisation)."""
     ctx = _Ctx(conn, design, registry, case)
     modes = set(modes_owed(conn, design))
-    KINDS[conn.kind](ctx, modes)
+    _run(ctx, modes)
     return {m: v for m, v in ctx.out.items() if m in modes}
 
 
@@ -1558,7 +1762,7 @@ def utilisations(conn: Conn, design: Design, registry: Registry, case: str) -> d
     ends of the ranged lengths (a toleranced length must hold over its whole range)."""
     modes = set(modes_owed(conn, design))
     first = _Ctx(conn, design, registry, case)
-    KINDS[conn.kind](first, modes)
+    _run(first, modes)
     runs = [first.out]
     ranged = sorted(first.ranged)
     if len(ranged) > MAX_RANGED:
@@ -1566,7 +1770,7 @@ def utilisations(conn: Conn, design: Design, registry: Registry, case: str) -> d
     for ends in (itertools.product((0, 1), repeat=len(ranged)) if ranged else ()):
         ctx = _Ctx(conn, design, registry, case)
         ctx.ends = dict(zip(ranged, ends))
-        KINDS[conn.kind](ctx, modes)
+        _run(ctx, modes)
         runs.append(ctx.out)
     return {m: max((u for out in runs for _, u in out.get(m, ())), default=0.0)
             for m in modes_owed(conn, design) if m not in UNCHECKED}
