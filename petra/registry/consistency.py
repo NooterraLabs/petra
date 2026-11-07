@@ -25,8 +25,8 @@ v0 relations (each catches a class of corrupted record):
   bolt.class_ratio       second digit of class / 10 == Rp02/Rm         tol 2 %
   bolt.yield_order       Rp02_min <= Rm_min
   thread.*_coefficient   ISO 724 coefficients == 3 sqrt 3 / 8, 17 sqrt 3 / 24   tol 1e-6
-  cable.resistance       R20     in [rho20/A, 1.10 * rho20/A]           (IEC 60228 allowance)
-  conductor.resistance_table   IEC 60228 maximum, the same band
+  cable.resistance       R20     == rho20_max / A                       tol 0.5 %
+  cable.resistance_allowance   rho20_max in [rho20, 1.10 * rho20]   (IEC 60228 maximum over annealed copper)
   cable.k_factor         k       == sqrt(qc (beta+20)/rho20 ln((beta+tf)/(beta+ti)))  tol 1 %
   insulation.k_factor_table    k = 115 of IEC 60364-4-43, the same relation         tol 1 %
   copper.adiabatic_constant    K = 226 == sqrt(qc (beta + 20) / rho20)   tol 0.5 %
@@ -95,10 +95,6 @@ def _stress_area(deck: Deck, e: str) -> Expr:
     return Mul((Div(Pi(), _n(4)), PowInt(Div(Add((d2, d3)), _n(2)), 2)))
 
 
-def _resistance(deck: Deck, e: str) -> Expr:
-    return Div(_c("cu.rho20"), Sym(f"{e}.area"))
-
-
 def _adiabatic(deck: Deck) -> Expr:
     return Div(Mul((_c("cu.qc"), Add((_c("cu.beta"), _n(20))))), _c("cu.rho20"))
 
@@ -145,8 +141,9 @@ RELATIONS: tuple[Relation, ...] = (
     Relation("cable.outer_diameter", "cable.", _rec("outer_diameter"),
              lambda deck, e: Add((Sym(f"{e}.conductor_diameter"), Mul((_n(2), Sym(f"{e}.insulation"))))),
              Fraction(1, 200)),
-    Relation("cable.resistance", "cable.", _rec("R20"), _resistance, Fraction(1, 10), "within"),
-    Relation("conductor.resistance_table", "const.iec60228.", _rec("R20_max_table"), _resistance, Fraction(1, 10),
+    Relation("cable.resistance", "cable.", _rec("R20"),
+             lambda deck, e: Div(Sym(f"{e}.rho20_max"), Sym(f"{e}.area")), Fraction(1, 200)),
+    Relation("cable.resistance_allowance", "cable.", _rec("rho20_max"), _const_expr(_c("cu.rho20")), Fraction(1, 10),
              "within"),
     Relation("copper.adiabatic_constant", "const.cu", _rec("K_table"), lambda deck, e: Sqrt(_adiabatic(deck)),
              Fraction(1, 200)),

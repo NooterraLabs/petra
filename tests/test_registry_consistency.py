@@ -107,17 +107,23 @@ class Corruptions(unittest.TestCase):
         self.assertEqual(broken(corrupted), {("cable.cu_pvc_2_5", "cable.resistance")})
         self.assertIn("cable.cu_pvc_2_5.R20", finding(corrupted, "cable.cu_pvc_2_5", "cable.resistance").message)
 
-    def test_a_resistance_inside_the_iec_60228_allowance_passes(self):
-        self.assertEqual(broken(corrupt(DECK, "cable.cu_pvc_2_5", "R20", Fraction(109, 100))), set())
-
-    def test_a_resistance_outside_the_iec_60228_allowance_is_caught(self):
-        for factor in (Fraction(111, 100), Fraction(99, 100)):
+    def test_a_resistance_that_is_not_the_stated_maximum_over_area_is_caught(self):
+        for factor in (Fraction(101, 100), Fraction(99, 100)):
             self.assertEqual(broken(corrupt(DECK, "cable.cu_pvc_2_5", "R20", factor)),
                              {("cable.cu_pvc_2_5", "cable.resistance")}, f"R20 times {factor}")
 
-    def test_a_wrong_published_maximum_resistance_is_caught(self):
-        self.assertEqual(broken(corrupt(DECK, "const.iec60228.2_5", "R20_max_table", Fraction(1, 2))),
-                         {("const.iec60228.2_5", "conductor.resistance_table")})
+    def test_a_stated_maximum_inside_the_allowance_breaks_only_the_r20_derived_from_it(self):
+        self.assertEqual(broken(corrupt(DECK, "cable.cu_pvc_2_5", "rho20_max", Fraction(102, 100))),
+                         {("cable.cu_pvc_2_5", "cable.resistance")}, "R20 still records the old maximum")
+
+    def test_a_stated_maximum_outside_the_iec_60228_allowance_is_caught(self):
+        for factor in (Fraction(11, 10), Fraction(9, 10), Fraction(10)):
+            self.assertEqual(broken(corrupt(DECK, "cable.cu_pvc_2_5", "rho20_max", factor)),
+                             {("cable.cu_pvc_2_5", "cable.resistance"), ("cable.cu_pvc_2_5", "cable.resistance_allowance")},
+                             f"rho20_max times {factor}")
+        found = finding(corrupt(DECK, "cable.cu_pvc_16", "rho20_max", Fraction(10)), "cable.cu_pvc_16",
+                        "cable.resistance_allowance")
+        self.assertIn("cable.cu_pvc_16.rho20_max", found.message)
 
     def test_unit_slips_by_a_factor_of_1000_are_caught(self):
         cases = (

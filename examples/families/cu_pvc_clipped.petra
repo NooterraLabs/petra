@@ -7,8 +7,9 @@ petra 0
 # inside the box, so its two claims reuse these certificates.
 #
 # The hottest corner is 2.5 mm2 with 0.8 mm insulation, 13 A, 40 degC and the low
-# surface coefficient h = 5 W/m2K: about 66.7 degC. A 16 A draw would reach about
-# 82.5 degC there, which is why the draw stops at 13 A (tests/test_library.py).
+# surface coefficient h = 5 W/m2K, with the conductor at its IEC 60228 maximum
+# resistance: about 68.8 degC. A 16 A draw would reach about 86.2 degC there, which is
+# why the draw stops at 13 A (tests/test_library.py).
 
 design "family-cu-pvc-clipped-direct" {
   owner "petra.library@example.org"

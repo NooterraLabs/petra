@@ -7,15 +7,16 @@ solved for theta:  theta(I) = (amb + I^2 k (1 - 20 alpha)) / (1 - I^2 k alpha), 
 
 The hottest corner of the box is the thinnest conductor with the thinnest insulation
 and the poorest cooling: A = 2.5 mm2, t = 0.8 mm, h = 5 W/m2K, amb = 40 degC, with
-alpha = 0.00393 /K, rho20 = 1/58 ohm mm2/m and the PVC thermal resistivity 5 K m/W.
+alpha = 0.00393 /K, the IEC 60228 maximum resistance 7.41 ohm/km (rho20_max = 18.525e-9
+ohm m, the top of the series span) and the PVC thermal resistivity 5 K m/W.
     d  = sqrt(4 A / pi) = 1.78412 mm,  D = d + 2 t = 3.38412 mm
     T1 = (5 / 2 pi) ln(D / d) = 0.50943 K m/W,  T4 = 1 / (pi D h) = 18.8120 K m/W
-    R20 = rho20 / A = 6.89655e-3 ohm/m,  k = R20 (T1 + T4) = 0.133251
-    theta(13 A) = 66.65 degC   theta(13.6 A) = 69.43 degC
-    theta(13.8 A) = 70.40 degC theta(16 A) = 82.49 degC
-so the 70 degC claim holds up to I = 13.72 A and fails at the 16 A the family first
+    R20 = rho20_max / A = 7.41e-3 ohm/m,  k = R20 (T1 + T4) = 0.143171
+    theta(13 A) = 68.84 degC   theta(13.2 A) = 69.83 degC
+    theta(13.3 A) = 70.34 degC theta(16 A) = 86.19 degC
+so the 70 degC claim holds up to I = 13.23 A and fails at the 16 A the family first
 declared. The 3 % drop claim holds over the whole run: at 16 A and 20 m, with the
-conductor at 70 degC, 2 L I R20 (1 + 50 alpha) = 5.28 V, under 3 % of 230 V = 6.9 V.
+conductor at 70 degC, 2 L I R20 (1 + 50 alpha) = 5.67 V, under 3 % of 230 V = 6.9 V.
 """
 import json
 import tempfile
@@ -69,23 +70,23 @@ class FamilyBox(unittest.TestCase):
     def test_shipped_box_certifies_both_claims(self):
         with tempfile.TemporaryDirectory() as root:
             result = certify(FAMILY, root)
-            self.assertEqual(result.skipped, (), "the hand check puts the hottest corner of the 13 A box at 66.65 degC")
+            self.assertEqual(result.skipped, (), "the hand check puts the hottest corner of the 13 A box at 68.84 degC")
             self.assertEqual(len(result.stored), 2, "hot and drop each store one entry")
 
     def test_the_16_A_box_is_refuted_on_temperature_only(self):
         with tempfile.TemporaryDirectory() as root:
             result = certify(family_with_draw("16"), root)
-            self.assertEqual(len(result.skipped), 1, "only the hot claim fails at 16 A (82.49 degC by hand)")
+            self.assertEqual(len(result.skipped), 1, "only the hot claim fails at 16 A (86.19 degC by hand)")
             self.assertIn("claim.hot", result.skipped[0], "the skipped claim is hot")
             self.assertIn("refuted", result.skipped[0], "the solver refutes it rather than giving up")
-            self.assertEqual(len(result.stored), 1, "the drop claim (5.28 V of 6.9 V by hand) is still stored")
+            self.assertEqual(len(result.stored), 1, "the drop claim (5.67 V of 6.9 V by hand) is still stored")
 
     def test_the_box_edge_sits_where_the_hand_check_puts_it(self):
         with tempfile.TemporaryDirectory() as root:
-            self.assertEqual(certify(family_with_draw("13.6"), root).skipped, (), "69.43 degC at 13.6 A is within 70 degC")
+            self.assertEqual(certify(family_with_draw("13.2"), root).skipped, (), "69.83 degC at 13.2 A is within 70 degC")
         with tempfile.TemporaryDirectory() as root:
-            skipped = certify(family_with_draw("13.8"), root).skipped
-            self.assertTrue(any("claim.hot" in s and "refuted" in s for s in skipped), "70.40 degC at 13.8 A is refuted")
+            skipped = certify(family_with_draw("13.3"), root).skipped
+            self.assertTrue(any("claim.hot" in s and "refuted" in s for s in skipped), "70.34 degC at 13.3 A is refuted")
 
     def test_certifying_twice_stores_nothing_new(self):
         with tempfile.TemporaryDirectory() as root:

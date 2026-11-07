@@ -101,10 +101,6 @@ PUBLISHED: tuple[tuple[str, str, str, Fraction, str], ...] = (
        "ISO 898-1:2013 Table 4, nominal stress area As,nom")
       for size, area in (("M6", "20.1"), ("M8", "36.6"), ("M10", "58.0"), ("M12", "84.3"),
                          ("M16", "157"), ("M20", "245"), ("M24", "353"))),
-    *((f"const.iec60228.{size}", "R20_max_table", "ohm/m", Fraction(ohm_per_km) / 1000,
-       "IEC 60228:2004 Table 2, class 2 plain copper, maximum resistance at 20 degC")
-      for size, ohm_per_km in (("1_5", "12.1"), ("2_5", "7.41"), ("4", "4.61"), ("6", "3.08"),
-                               ("10", "1.83"), ("16", "1.15"))),
     ("const.pvc", "k_cu_table", "A s0.5/m2", Fraction(115) * 10**6,
      "IEC 60364-4-43:2008 Table 43A, copper, PVC up to 300 mm2: k = 115 A s0.5/mm2"),
     ("const.cu", "K_table", "A s0.5/m2", Fraction(226) * 10**6,

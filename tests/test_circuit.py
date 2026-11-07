@@ -3,15 +3,16 @@ search, each checked through the elaborator, the solver and kernel.check against
 worked by hand from the formulas in petra/models/circuit.py and the registry. Owner: C.
 
 Hand values, 2.5 mm2 Cu/PVC (insulation 0.8 mm) clipped direct, h = 5 W/(m2 K):
-    R20 = rho20 / A = 1 / 145 ohm/m;  d = 1.78412 mm, D = 3.38412 mm
+    R20 = rho20_max / A = 7.41e-3 ohm/m, the IEC 60228 maximum (rho20_max = 18.525e-9 ohm m,
+        the top of the series span the statement carries);  d = 1.78412 mm, D = 3.38412 mm
     T1 = 5 / (2 pi) ln(D / d) = 0.509429;  T4 = 1 / (pi D h) = 18.81195 K m/W
     theta(I, 40 degC) = (40 + a (1 - 20 alpha)) / (1 - a alpha),  a = I^2 R20 (T1 + T4)
-        theta(10 A) = 55.1667 degC,  a alpha = 0.052368
-        theta(15 A) = 76.6572 degC,  theta(16 A) = 82.4897 degC
-    runaway at a alpha = 1: 43.70 A for h = 5; at 62 A, h = 10: a alpha - 1 = 0.033043
+        theta(10 A) = 56.3632 degC,  a alpha = 0.056266
+        theta(15 A) = 79.7819 degC,  theta(16 A) = 86.1853 degC
+    runaway at a alpha = 1: 42.16 A for h = 5; at 62 A, h = 10: a alpha - 1 = 0.109953
     k = sqrt(qc (beta + 20) / rho20 ln((beta + 160) / (beta + 70))) = 114.835 A s^0.5 / mm2
         k^2 S^2 = 82419.04 A2s at 2.5 mm2, 29670.85 A2s at 1.5 mm2
-    drop over 18 m at 10 A = 2 L I R20 (1 + alpha 50) = 2.970621 V
+    drop over 18 m at 10 A = 2 L I R20 (1 + alpha 50) = 3.191783 V
 """
 import dataclasses
 import unittest
@@ -53,7 +54,9 @@ EXAMPLES = Path(__file__).resolve().parents[1] / "examples"
 CURRENT = "lamp_draw.lighting.lamps.current"
 AMBIENT = "ambient"
 H = "const.install.clipped_direct.h"
-WORST = {CURRENT: 10, AMBIENT: 40, H: 5}
+RHO = "cable.cu_pvc.rho20_max"
+RHO_2_5 = Fraction("18.525e-9")   # IEC 60228: 7.41 ohm/km times 2.5 mm2, the top of the series span
+WORST = {CURRENT: 10, AMBIENT: 40, H: 5, RHO: RHO_2_5}
 
 RADIAL = """petra 0
 design "radial" {
@@ -203,15 +206,15 @@ class CircuitPass(unittest.TestCase):
 
     def test_margins_at_the_worst_corner_match_the_hand_values(self):
         hot = one(self.design, circuit.STEADY_TEMPERATURE, "hot").statement
-        self.assertAlmostEqual(at(hot, 0, WORST), 55.1667 - 70, places=3)
-        self.assertAlmostEqual(at(hot, 1, WORST), 0.052368 - 1, places=5)
+        self.assertAlmostEqual(at(hot, 0, WORST), 56.3632 - 70, places=3)
+        self.assertAlmostEqual(at(hot, 1, WORST), 0.056266 - 1, places=5)
         drop = one(self.design, circuit.VOLTAGE_DROP).statement
-        self.assertAlmostEqual(at(drop, 0, WORST), 2.970621 - 6.9, places=5)
+        self.assertAlmostEqual(at(drop, 0, WORST), 3.191783 - 6.9, places=5)
         fault = one(self.design, circuit.SHORT_CIRCUIT).statement
         self.assertAlmostEqual(at(fault, 0, {"lighting.mains.fault_current": 6000}), 35000 - 82419.04, places=1)
         self.assertEqual(at(fault, 1, {"lighting.mains.fault_current": 6000}), 0)
         overload = one(self.design, circuit.OVERLOAD_PROTECTION).statement
-        expected = [0, 55.1667 - 70, 0.052368 - 1, 55.1667 - 70, 0.052368 - 1]
+        expected = [0, 56.3632 - 70, 0.056266 - 1, 56.3632 - 70, 0.056266 - 1]
         for k, margin in enumerate(expected):
             self.assertAlmostEqual(at(overload, k, WORST), margin, places=3)
 
@@ -230,7 +233,7 @@ class SteadyTemperature(unittest.TestCase):
         self.assertIsInstance(result, Refutation)
         point = dict(result.point)
         self.assertEqual((point[CURRENT], point[AMBIENT], point[H]), (10, 40, 5))
-        self.assertAlmostEqual(at(ob.statement, evidence.body.which, point), 55.1667 - 50, places=3)
+        self.assertAlmostEqual(at(ob.statement, evidence.body.which, point), 56.3632 - 50, places=3)
 
     def test_the_coverage_limit_is_the_insulation_rating_and_a_claim_states_its_own(self):
         d = radial(extra="claim hot: lighting.w1.temperature <= 70 degC under lamp_draw\n")
@@ -246,8 +249,8 @@ class SteadyTemperature(unittest.TestCase):
             "in:radial.lamp_draw.lighting.lamps.current",
             "dsg:radial.cable.cu_pvc_2_5.area",
             "dsg:radial.cable.cu_pvc_2_5.insulation",
+            "reg:cable.cu_pvc.rho20_max",
             "reg:const.cu.alpha20",
-            "reg:const.cu.rho20",
             "reg:const.install.clipped_direct.h",
             "reg:const.pvc.thermal_resistivity",
             "reg:const.pvc.theta_max",
@@ -258,12 +261,12 @@ class SteadyTemperature(unittest.TestCase):
         result, evidence = solved(ob)
         self.assertIsInstance(result, Refutation)
         self.assertEqual(evidence.body.which, 1)
-        self.assertAlmostEqual(at(ob.statement, 1, {CURRENT: 62, AMBIENT: 40, H: 10}), 0.033043, places=5)
+        self.assertAlmostEqual(at(ob.statement, 1, {CURRENT: 62, AMBIENT: 40, H: 10, RHO: RHO_2_5}), 0.109953, places=5)
 
     def test_short_of_runaway_the_side_condition_holds(self):
-        ob = one(radial(("[0 A, 10 A]", "[0 A, 43 A]")), circuit.STEADY_TEMPERATURE)
-        self.assertLess(at(ob.statement, 1, {CURRENT: 43, AMBIENT: 40, H: 5}), 0)
-        self.assertGreater(at(ob.statement, 1, {CURRENT: 44, AMBIENT: 40, H: 5}), 0)
+        ob = one(radial(("[0 A, 10 A]", "[0 A, 42 A]")), circuit.STEADY_TEMPERATURE)
+        self.assertLess(at(ob.statement, 1, {CURRENT: 42, AMBIENT: 40, H: 5, RHO: RHO_2_5}), 0)
+        self.assertGreater(at(ob.statement, 1, {CURRENT: 43, AMBIENT: 40, H: 5, RHO: RHO_2_5}), 0)
 
     def test_the_environment_class_gives_the_ambient_when_none_is_signed(self):
         ob = one(radial(('ambient in [10 degC, 40 degC] signed "site.manager@example.org" source "survey"\n', "")), circuit.STEADY_TEMPERATURE)
@@ -325,11 +328,11 @@ class VoltageDrop(unittest.TestCase):
         result, _ = solved(ob)
         self.assertIsInstance(result, Refutation)
         self.assertEqual(dict(result.point)[CURRENT], 10)
-        self.assertAlmostEqual(at(ob.statement, 0, dict(result.point)), 2.970621 - 2.3, places=5)
+        self.assertAlmostEqual(at(ob.statement, 0, dict(result.point)), 3.191783 - 2.3, places=5)
 
     def test_coverage_allows_5_percent(self):
         ob = one(radial(), circuit.VOLTAGE_DROP)
-        self.assertAlmostEqual(at(ob.statement, 0, WORST), 2.970621 - 11.5, places=5)
+        self.assertAlmostEqual(at(ob.statement, 0, WORST), 3.191783 - 11.5, places=5)
         self.assertIsInstance(solved(ob)[0], Theorem)
 
     def test_a_downstream_wire_carries_the_drop_of_every_wire_before_it(self):
@@ -337,8 +340,8 @@ class VoltageDrop(unittest.TestCase):
                   "claim far: lighting.w2.voltage_drop <= 2 % under lamp_draw\n")
         d = radial(text=TWO_WIRES, extra=claims)
         near, far = one(d, circuit.VOLTAGE_DROP, "near"), one(d, circuit.VOLTAGE_DROP, "far")
-        self.assertAlmostEqual(at(near.statement, 0, WORST), 2.970621 - 4.6, places=5)
-        self.assertAlmostEqual(at(far.statement, 0, WORST), 2 * 2.970621 - 4.6, places=5)
+        self.assertAlmostEqual(at(near.statement, 0, WORST), 3.191783 - 4.6, places=5)
+        self.assertAlmostEqual(at(far.statement, 0, WORST), 2 * 3.191783 - 4.6, places=5)
         self.assertIsInstance(solved(near)[0], Theorem)
         self.assertIsInstance(solved(far)[0], Refutation)
 
@@ -351,7 +354,7 @@ class OverloadProtection(unittest.TestCase):
         self.assertEqual(evidence.body.which, 1)
         point = dict(result.point)
         self.assertEqual((point[AMBIENT], point[H]), (40, 5))
-        self.assertAlmostEqual(at(ob.statement, 1, point), 82.4897 - 70, places=3)
+        self.assertAlmostEqual(at(ob.statement, 1, point), 86.1853 - 70, places=3)
 
     def test_a_design_current_above_the_rating_is_refuted(self):
         ob = one(radial(("[0 A, 10 A]", "[0 A, 12 A]")), circuit.OVERLOAD_PROTECTION)
@@ -384,21 +387,22 @@ class OverloadProtection(unittest.TestCase):
 
 class Family(unittest.TestCase):
     """A series cable over a range of sizes: the root box over-estimates, so the solver
-    must split. Worst corner: 2.5 mm2, 0.8 mm, 10 A, 40 degC, h = 5, theta 55.1667 degC."""
+    must split. Worst corner: 2.5 mm2, 0.8 mm, 10 A, 40 degC, h = 5, rho20_max at the top of
+    its span, theta 56.3632 degC."""
 
     def obligation(self, limit: str) -> Obligation:
         d = parse_design(FAMILY + f"claim hot: c.w1.temperature <= {limit} degC under demand\n", "family.petra", REGISTRY)
         return one(d, circuit.STEADY_TEMPERATURE, "hot")
 
     def test_a_claim_just_above_the_worst_corner_needs_a_partition(self):
-        ob = self.obligation("55.2")
+        ob = self.obligation("56.4")
         self.assertIsInstance(check(ob.statement, Evidence(Enclosure(Leaf()))), Rejection)
         result, evidence = solved(ob)
         self.assertIsInstance(result, Theorem)
         self.assertIsInstance(evidence.body.partition, Split)
 
     def test_a_claim_just_below_the_worst_corner_is_refuted_there(self):
-        ob = self.obligation("55.1")
+        ob = self.obligation("56.3")
         result, _ = solved(ob)
         self.assertIsInstance(result, Refutation)
         point = dict(result.point)

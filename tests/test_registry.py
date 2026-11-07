@@ -121,9 +121,18 @@ class Lookups(unittest.TestCase):
 
 
 class Derivations(unittest.TestCase):
-    def test_resistance_per_metre_is_resistivity_over_area(self):
+    def test_resistance_per_metre_is_the_iec_60228_maximum_over_area(self):
         self.assertEqual(REGISTRY.expand("cable.cu_pvc_2_5", "R20"),
-                         Div(Sym("const.cu.rho20"), Sym("const.iec60228.2_5.area")))
+                         Div(Sym("cable.cu_pvc_2_5.rho20_max"), Sym("const.iec60228.2_5.area")))
+
+    def test_the_series_resistivity_spans_its_sizes_and_each_size_carries_the_r20_erratum(self):
+        sizes = [p for p in REGISTRY.parts.values() if p.series == "cable.cu_pvc"]
+        values = [REGISTRY.fact(f"{p.id}.rho20_max").value for p in sizes]
+        self.assertEqual(REGISTRY.fact("cable.cu_pvc.rho20_max").value,
+                         Interval(min(v.lo for v in values), max(v.hi for v in values)))
+        for entry in (REGISTRY.parts["cable.cu_pvc"], *sizes):
+            self.assertEqual((entry.provenance.version, entry.errata[-1].date), (2, "2026-11-06"), entry.id)
+            self.assertIn("rho20 / area", entry.errata[-1].was)
 
     def test_a_size_inherits_its_series_derivations(self):
         self.assertIs(REGISTRY.property("cable.cu_pvc_2_5", "R20"), REGISTRY.property("cable.cu_pvc", "R20"))
@@ -156,7 +165,7 @@ class Derivations(unittest.TestCase):
 
     def test_a_family_supplies_the_parameters_its_series_leaves_open(self):
         area = Sym("par:area")
-        self.assertEqual(REGISTRY.expand("cable.cu_pvc", "R20", {"area": area}), Div(Sym("const.cu.rho20"), area))
+        self.assertEqual(REGISTRY.expand("cable.cu_pvc", "R20", {"area": area}), Div(Sym("cable.cu_pvc.rho20_max"), area))
         with self.assertRaisesRegex(OutsideMakeableSet, "area"):
             REGISTRY.expand("cable.cu_pvc", "R20")
 
@@ -206,8 +215,8 @@ class Derivations(unittest.TestCase):
 
 class HandCalculations(unittest.TestCase):
     def test_wire_resistance_per_metre(self):
-        self.assertEqual(value("cable.cu_pvc_2_5", "R20"), point("1/145"), "1 / (58e6 S/m * 2.5e-6 m2)")
-        self.assertEqual(value("cable.cu_pvc_16", "R20"), point("1/928"), "1 / (58e6 S/m * 16e-6 m2)")
+        self.assertEqual(value("cable.cu_pvc_2_5", "R20"), point("7.41e-3"), "IEC 60228 Table 2: 7.41 ohm/km")
+        self.assertEqual(value("cable.cu_pvc_16", "R20"), point("1.15e-3"), "IEC 60228 Table 2: 1.15 ohm/km")
 
     def test_short_circuit_k_factor_for_copper_in_pvc(self):
         k = value("cable.cu_pvc_2_5", "k")

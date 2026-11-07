@@ -21,13 +21,15 @@ from typing import Mapping
 
 from ..kernel import Interval
 from ..premises import Tag
-from .model import Constant, Stated
+from .model import Constant, Erratum, Stated
 
 SANCTIONED, JUDGED = Tag.SANCTIONED, Tag.JUDGED
 MAINTAINERS = "petra-maintainers"
 
 MM = Fraction(1, 1000)
 MM2 = Fraction(1, 10**6)
+OHM_MM2_PER_KM = Fraction(1, 10**9)   # ohm/km times mm2, in ohm m
+STANDARD_GRAVITY = Fraction("9.80665")   # m/s2, the CGPM 1901 conventional value
 MPA = Fraction(10**6)
 GPA = Fraction(10**9)
 
@@ -50,15 +52,17 @@ THREADS: tuple[tuple[str, str, str], ...] = (
 )
 """ISO 261 coarse threads: (designation, nominal diameter d in mm, pitch P in mm)."""
 
-CABLE_SIZES: tuple[tuple[str, str, str], ...] = (
-    ("1_5", "1.5", "0.7"),
-    ("2_5", "2.5", "0.8"),
-    ("4", "4", "0.8"),
-    ("6", "6", "0.8"),
-    ("10", "10", "1.0"),
-    ("16", "16", "1.0"),
+CABLE_SIZES: tuple[tuple[str, str, str, str], ...] = (
+    ("1_5", "1.5", "0.7", "12.1"),
+    ("2_5", "2.5", "0.8", "7.41"),
+    ("4", "4", "0.8", "4.61"),
+    ("6", "6", "0.8", "3.08"),
+    ("10", "10", "1.0", "1.83"),
+    ("16", "16", "1.0", "1.15"),
 )
-"""(size key, IEC 60228 nominal area in mm2, IEC 60227-3 type 01 insulation thickness in mm)."""
+"""(size key, IEC 60228 nominal area in mm2, IEC 60227-3 type 01 insulation thickness in mm,
+IEC 60228 Table 2 maximum resistance at 20 degC of the class 2 plain copper conductor in
+ohm/km)."""
 
 CHS_SIZES: tuple[tuple[str, str], ...] = (
     ("48.3", "3.2"),
@@ -123,10 +127,15 @@ def _constants() -> dict[str, Constant]:
         Constant("en1993_1_1.epsilon_reference_fy", _iv("235", scale=MPA), "Pa", SANCTIONED, "CEN",
                  "EN 1993-1-1:2005 Table 5.2: eps = sqrt(235 / fy) with fy in N/mm2",
                  "the slenderness limits of EN 1993-1-1 Table 5.2 scale with 235 MPa / fy"),
-        Constant("steel.density", _iv("7850"), "kg/m3", JUDGED, MAINTAINERS,
-                 "conventional density of carbon steel; EN 1991-1-1:2002 Table A.4 gives 77.0 to 78.5 kN/m3, "
-                 "recalled and not checked against the published text",
-                 "structural steel has density 7850 kg/m3"),
+        Constant("steel.density", _iv("77000", "78500", 1 / STANDARD_GRAVITY), "kg/m3", JUDGED, MAINTAINERS,
+                 "EN 1991-1-1:2002 Table A.4, steel: unit weight 77.0 to 78.5 kN/m3, over standard gravity "
+                 "9.80665 m/s2; the range is the source's own; recalled and not checked against the published text",
+                 "structural steel has density 7851.8 to 8004.8 kg/m3 (unit weight 77.0 to 78.5 kN/m3)",
+                 errata=(Erratum("2026-11-06", "7850 kg/m3, a conventional point value below the range its own "
+                                 "source states (77.0 kN/m3 is 7851.8 kg/m3 at standard gravity)",
+                                 "the range EN 1991-1-1 Table A.4 states, 77.0 to 78.5 kN/m3, over standard gravity: "
+                                 "[7851.8, 8004.8] kg/m3, so a self-weight is checked at the heaviest steel the "
+                                 "source allows"),)),
         Constant("aluminium.E", _iv("68", "70", GPA), "Pa", SANCTIONED, "CEN",
                  "EN 1999-1-1:2007 3.2.5(1) fixes E = 70000 N/mm2; the range widens it down to 68 GPa "
                  "to cover 6061-T6 handbook values",
@@ -173,7 +182,7 @@ def _constants() -> dict[str, Constant]:
         rows.append(Constant(f"iso261.{name}.pitch", _iv(p, scale=MM), "m", SANCTIONED, "ISO",
                              f"ISO 261:1998 Table 1: coarse pitch of {name} is {p} mm",
                              f"an {name} coarse thread has pitch {p} mm"))
-    for key, area, insulation in CABLE_SIZES:
+    for key, area, insulation, _ in CABLE_SIZES:
         rows.append(Constant(f"iec60228.{key}.area", _iv(area, scale=MM2), "m2", SANCTIONED, "IEC",
                              f"IEC 60228:2004 Table 2, class 2 conductor: nominal cross-sectional area {area} mm2 "
                              "(the size designation)",
@@ -288,6 +297,19 @@ def _stated() -> dict[str, Stated]:
                                                          "smallest conductor the clamp accepts")
         table[f"terminal.{part}.conductor_max"] = Stated(_iv(largest, scale=MM2), "m2", JUDGED, MAINTAINERS, terminal,
                                                          "largest conductor the clamp accepts")
+    for key, area, _, r_max in CABLE_SIZES:
+        table[f"iec60228.{key}.rho20_max"] = Stated(
+            _iv(r_max, scale=Fraction(area) * OHM_MM2_PER_KM), "ohm m", JUDGED, MAINTAINERS,
+            f"IEC 60228:2004 Table 2, class 2 plain copper conductor {area} mm2: maximum resistance at 20 degC "
+            f"{r_max} ohm/km, times the nominal area; " + recalled,
+            f"resistivity of a conductor at its IEC 60228 maximum resistance: {r_max} ohm/km times {area} mm2")
+    sizes = [table[f"iec60228.{key}.rho20_max"].value for key, *_ in CABLE_SIZES]
+    table["iec60228.class2_cu.rho20_max"] = Stated(
+        Interval(min(v.lo for v in sizes), max(v.hi for v in sizes)), "ohm m", JUDGED, MAINTAINERS,
+        "IEC 60228:2004 Table 2, class 2 plain copper: the least and greatest maximum resistance at 20 degC times "
+        "nominal area over the catalogue's sizes " + ", ".join(area for _, area, *_ in CABLE_SIZES) + " mm2; "
+        + recalled,
+        "the span of a size's rho20_max over the catalogue's sizes, not a tolerance")
     for rating in MCB_RATINGS:
         table[f"iec60898_1.B{rating}.In"] = Stated(_iv(rating), "A", SANCTIONED, "IEC",
                                                    f"IEC 60898-1:2015, rated current {rating} A, a preferred value "
