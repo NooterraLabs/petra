@@ -426,12 +426,14 @@ def _stiffened_seat(s: _Sampler) -> None:
     beam = s.beam(("W18x35", "W18x50", "W21x44", "W21x62", "W24x55"))
     support = s.support(("flange",))
     tp = Fraction(s.pick(("0.375", "0.5")))
-    s.line(f"plate steel.A36 thickness {_inch(tp)}")
-    limit = Fraction(1589, 100)      # 0.56 sqrt(29000 / 36), a little under
+    # Either grade for either plate: the seat plate bears on the stiffener's edge at its own Fy (J7).
+    s.line(f"plate {s.pick(('steel.A36', 'steel.A572_50'))} thickness {_inch(tp)}")
+    # limit: 0.56 sqrt(29000 / Fy), a little under
+    grade, fy, limit = s.pick((("steel.A36", 36, Fraction(1589, 100)), ("steel.A572_50", 50, Fraction(1348, 100))))
     pairs = [(w, t) for w in (Fraction(4), Fraction(5), Fraction(6)) for t in (Fraction(3, 8), Fraction(1, 2), Fraction(5, 8))
-             if s.free or w / t <= limit and t >= s.dim(beam, "tw") * 50 / 36]     # ts >= tw Fyb / Fys
+             if s.free or w / t <= limit and t >= s.dim(beam, "tw") * 50 / fy]     # ts >= tw Fyb / Fys
     width, ts = s.pick(pairs)
-    s.line(f"stiffener steel.A36 thickness {_inch(ts)}")
+    s.line(f"stiffener {grade} thickness {_inch(ts)}")
     s.length("stiffener_width", width)
     s.length("stiffener_length", s.pick(("10", "12", "14")))
     s.length("setback", s.pick(("0.5", "0.75")))

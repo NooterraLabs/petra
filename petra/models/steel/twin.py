@@ -1185,6 +1185,9 @@ def _stiffened_seat(ctx: _Ctx, modes: set[str]) -> None:
     _seat_bearing(ctx, bshape, bfy, lb, r)
     clip = ctx.reg.const("aisc_manual.seat.stiffener_clip")
     ctx.check("bearing", "stiffener: bearing on its fitted top edge (J7)", r, 1.8 * sfy_s * (width - clip) * ts, "j7")
+    # J7's surfaces in contact: the seat plate yields locally at its own Fy over the same area
+    seat_fy, _ = ctx.reg.steel(conn.attrs["plate"].grade)
+    ctx.check("bearing", "seat plate: bearing on the stiffener's fitted top edge (J7)", r, 1.8 * seat_fy * (width - clip) * ts, "j7")
     ctx.check("compression", "stiffener: compressive yielding of its section under the seat (J4.4)", r, sfy_s * width * ts,
               "compression")
     # vocab compression: the Manual's width-to-thickness limit, so the stiffener yields

@@ -4,8 +4,9 @@ Tooling: nothing here changes a verdict.
 A fault is one known defect put into a design the deck passes: a fillet far under Table
 J2.4's minimum, a short edge, holes too close or too far apart, oversized holes in a
 bearing joint, Group 150 bolts in tension left snug, a shear tab too thick to rotate, a
-slender seat stiffener, a lapped fillet as thick as its plate, bolts against a hanger's
-stem, a cope deeper than half the beam, a load past the governing strength; and parts that
+slender seat stiffener, a seat plate softer than the stiffener it bears on, a lapped fillet
+as thick as its plate, bolts against a hanger's stem, a cope deeper than half the beam, a
+load past the governing strength; and parts that
 do not fit: bolt rows run past the beam's depth or off a seat's leg, a support gauge wider
 than the face, a beam too wide to pass between a column's flanges, a plate on the beam's
 fillet, a bracket's bolt columns off the flange; a flange force's panel_shear or axial
@@ -151,6 +152,20 @@ def _slender_stiffener(text: str, g: Generated) -> str | None:
     return _set(out, "stiffener_width", "6 inch")
 
 
+def _soft_seat_plate(text: str, g: Generated) -> str | None:
+    """An A36 seat plate on a 5 x 1/2 in A572 Grade 50 stiffener, loaded to 1.15 times the
+    plate's available bearing on the stiffener's fitted edge (J7), 1.8 (36 ksi)(5 in - 1/2
+    in)(1/2 in) = 145.8 kip nominal, and to 0.83 times the stiffener's."""
+    if _field(text, "stiffener") is None:
+        return None
+    available = Fraction(1458, 10) * (Fraction(3, 4) if _field(text, "basis") == "lrfd" else Fraction(1, 2))
+    out = re.sub(r"^  plate steel\.\w+ ", "  plate steel.A36 ", text, count=1, flags=re.M)
+    out = re.sub(r"^  stiffener .*$", "  stiffener steel.A572_50 thickness 0.5 inch", out, count=1, flags=re.M)
+    out = _set(out, "stiffener_width", "5 inch")
+    load = float(available * Fraction(115, 100))
+    return re.sub(r"^  on c1 shear in .*$", f"  on c1 shear in [0 kip, {load:.3f} kip]", out, count=1, flags=re.M)
+
+
 def _thick_lap_fillet(text: str, g: Generated) -> str | None:
     if _field(text, "weld_return") is None:
         return None
@@ -259,6 +274,8 @@ FAULTS: tuple[Fault, ...] = (
           frozenset({"ductility"})),
     Fault("slender stiffener", "a 6 x 1/4 in seat stiffener, past 0.56 sqrt(E / Fy)", ("stiffened_seat",), _slender_stiffener,
           frozenset({"compression"})),
+    Fault("soft seat plate", "an A36 seat plate bearing on a Grade 50 stiffener's edge past its own yield",
+          ("stiffened_seat",), _soft_seat_plate, frozenset({"bearing"})),
     Fault("thick lap fillet", "a fillet as thick as the lapped plate it runs along", ("weld_bracket",), _thick_lap_fillet,
           frozenset({"fillet_size"})),
     Fault("bolts at the stem", "a 1-1/4 in hanger gauge, the bolts against the stem", ("hanger",), _bolts_at_stem,

@@ -46,7 +46,7 @@ Treatments: **check** (the modes whose checks encode it), **rule** (enforced whe
 | J5.1 | Fillers in Welded Connections | excluded |  | no fillers in v1.0's welded joints |
 | J5.2 | Fillers in Bolted Bearing-Type Connections | check | `bolts`, `bolt_combined` | a declared filler takes (a)'s least factor, 0.85, on the bolts' shear strength (the grammar gives no thickness), in slip-critical joints' bearing checks too; an undeclared filler is taken to be absent |
 | J6 | Splices | excluded |  | beam and column splices are v1.1 (docs/steel_connections.md §3) |
-| J7 | Bearing Strength | check | `bearing` | a stiffened seat's stiffener on the beam flange |
+| J7 | Bearing Strength | check | `bearing` | a stiffened seat's fitted stiffener edge and the seat plate on it, each surface at its own Fy |
 | J8 | Column Bases and Bearing on Concrete | excluded |  | base plates are v1.1 (docs/steel_connections.md §3) |
 | J9 | Anchor Rods and Embedments | excluded |  | anchor rods are v1.1 (docs/steel_connections.md §3) |
 | J10.1 | Flange Local Bending | check | `flange_local_bending` | the exemption for a load narrower than 0.15 bf across the flange is not taken (no such width is declared) |

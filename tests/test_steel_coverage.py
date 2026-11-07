@@ -91,6 +91,33 @@ class PanelZone(unittest.TestCase):
         self.assertAlmostEqual(utilisation("[-1000 kip, 0 kip]"), expected, places=3)
 
 
+class SeatPlate(unittest.TestCase):
+    """A stiffened seat's plate bears on the stiffener's fitted top edge. J7 gives the
+    bearing strength of the surfaces in contact, so the plate is checked at its own Fy as
+    the stiffener is at its: an A36 plate on a Grade 50 stiffener governs."""
+
+    SEAT = (STEEL / "stiffened_seat.petra").read_text(encoding="utf-8")
+
+    def bearing(self, text: str) -> dict[str, float]:
+        report = written(text)
+        return {c["check"]: c["utilisation"] for v in report.to_json()["verdicts"] for o in v["obligations"]
+                if "/steel.bearing/" in o["requirement"] for c in o["checks"]}
+
+    def test_the_seat_plate_and_the_stiffener_each_bear_at_their_own_yield_stress(self):
+        found = self.bearing(self.SEAT.replace("stiffener steel.A36", "stiffener steel.A572_50"))
+        plate, stiffener = (found[f"{part}: bearing on {edge} fitted top edge (J7)"]
+                            for part, edge in (("seat plate", "the stiffener's"), ("stiffener", "its")))
+        self.assertAlmostEqual(plate, 60 / (0.75 * 1.8 * 36 * (5 - 0.5) * 0.5), places=4)
+        self.assertAlmostEqual(plate / stiffener, 50 / 36, places=6)
+
+    def test_a_soft_seat_plate_fails_where_the_stiffener_would_not(self):
+        soft = self.SEAT.replace("stiffener steel.A36", "stiffener steel.A572_50").replace("[0 kip, 60 kip]", "[0 kip, 120 kip]")
+        found = self.bearing(soft)
+        self.assertGreater(found["seat plate: bearing on the stiffener's fitted top edge (J7)"], 1)
+        self.assertLess(found["stiffener: bearing on its fitted top edge (J7)"], 1)
+        self.assertEqual(outcome(written(soft), "bearing"), "refuted")
+
+
 class UnframedEnd(unittest.TestCase):
     """J10.7 wants a pair of full-depth stiffeners at an unframed member end not otherwise
     restrained against twisting about its axis. A force at a member end says which its end

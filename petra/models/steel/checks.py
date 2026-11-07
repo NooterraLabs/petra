@@ -282,6 +282,7 @@ class Stiffener:
     force: Expr
     beam_grade: str
     beam_tw: Expr
+    seat_grade: str     # the seat plate's, which bears on the stiffener's fitted top edge
 
 
 @dataclass(frozen=True)
@@ -637,7 +638,8 @@ def geometry_stiffened_seat(ctx: Ctx) -> Geometry:
     out.welds.append(WeldGroup("stiffener to support", weld, w, length, weld.sides, v, mul(ctx.const("aisc_manual.t10_8.eccentricity"), width), Min((ts, t_sup)),
                                (("stiffener", stiff.grade, ts, weld.sides), (f"support {support.face}", support.grade, t_sup, 1)),
                                end_loaded=True, bearing=False, ret=None, edge=None))
-    out.stiffener = Stiffener(stiff.grade, ts, width, length, v, beam.grade, _w(ctx, beam)["tw"])
+    seat: PlateSpec = conn.attrs["plate"]
+    out.stiffener = Stiffener(stiff.grade, ts, width, length, v, beam.grade, _w(ctx, beam)["tw"], seat.grade)
     return out
 
 
@@ -1340,8 +1342,12 @@ def gen_bearing(ctx: Ctx, geo: Geometry) -> list[Check]:
     if st is None:
         return []
     apb = mul(sub(st.width, ctx.const("aisc_manual.seat.stiffener_clip")), st.t)
+    # J7 gives the bearing strength of the surfaces in contact: the stiffener's fitted top
+    # edge and the seat plate on it, each of which yields locally at its own Fy.
     return [Check("stiffener: bearing on its fitted top edge (J7)", (st.force,), L.bearing_milled(ctx.const, ctx.mat(st.grade, "fy"), apb),
-                  "aisc360.j7", suffix="", guards=(), unit="kip")]
+                  "aisc360.j7", suffix="", guards=(), unit="kip"),
+            Check("seat plate: bearing on the stiffener's fitted top edge (J7)", (st.force,),
+                  L.bearing_milled(ctx.const, ctx.mat(st.seat_grade, "fy"), apb), "aisc360.j7", suffix="", guards=(), unit="kip")]
 
 
 def gen_compression(ctx: Ctx, geo: Geometry) -> list[Check]:

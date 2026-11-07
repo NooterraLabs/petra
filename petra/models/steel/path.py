@@ -54,6 +54,8 @@ ROLE_LIMITS: Mapping[str, tuple[str, ...]] = {
     "seat_leg": EDGES,
     "bearing_web": ("web_local_yielding", "web_crippling", "beam_fit"),
     "stiffener": ("bearing", "compression"),
+    # a stiffened seat's plate under the beam, bearing on the stiffener's fitted top edge
+    "seat_plate": ("bearing",),
     # bolt groups
     "shear_bolts": ("bolts", "spacing_min", "spacing_max", "joint_type", "clearance"),
     "bracket_bolts": ("bolts", "spacing_min", "spacing_max", "joint_type"),
@@ -147,7 +149,8 @@ def path(conn: Conn, fields: set[str]) -> tuple[Link, ...]:
         else:
             links += (Link("seat to support", "fillet"),)
     elif kind == "stiffened_seat":
-        links = (Link("beam web", "bearing_web"), Link("stiffener", "stiffener"), Link("stiffener to support", "fillet"))
+        links = (Link("beam web", "bearing_web"), Link("seat plate", "seat_plate"), Link("stiffener", "stiffener"),
+                 Link("stiffener to support", "fillet"))
     elif kind == "flange_force":
         links = (Link("member web", "j10_web_yielding"),)
         if conn.attrs["force_kind"] == "tensile":

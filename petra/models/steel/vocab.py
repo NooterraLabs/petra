@@ -141,7 +141,8 @@ STRENGTH: tuple[tuple[str, str, str, str, tuple[ValidityRow, ...]], ...] = (
      "the base metal's thickness is uniform along the weld",
      f"{AISC} Sections J2.4(a) and J4.2(b)", ()),
     ("bearing",
-     "bearing on the fitted bearing area of a stiffener, Rn = 1.8 Fy Apb (Eq J7-1)",
+     "bearing on the fitted bearing area of a stiffener, Rn = 1.8 Fy Apb (Eq J7-1), for each surface in contact at "
+     "its own Fy: the stiffener's top edge and the seat plate on it, so the lesser Fy governs",
      "the bearing surface is milled or fitted",
      f"{AISC} Section J7", ()),
     ("web_local_yielding",

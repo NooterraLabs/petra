@@ -154,7 +154,8 @@ TABLE: tuple[Provision, ...] = (
               "a declared filler takes (a)'s least factor, 0.85, on the bolts' shear strength (the grammar gives no "
               "thickness), in slip-critical joints' bearing checks too; an undeclared filler is taken to be absent"),
     Provision("J6", "Splices", "excluded", note=f"beam and column splices are {V11}"),
-    Provision("J7", "Bearing Strength", "check", ("bearing",), "a stiffened seat's stiffener on the beam flange"),
+    Provision("J7", "Bearing Strength", "check", ("bearing",),
+              "a stiffened seat's fitted stiffener edge and the seat plate on it, each surface at its own Fy"),
     Provision("J8", "Column Bases and Bearing on Concrete", "excluded", note=f"base plates are {V11}"),
     Provision("J9", "Anchor Rods and Embedments", "excluded", note=f"anchor rods are {V11}"),
     Provision("J10.1", "Flange Local Bending", "check", ("flange_local_bending",),
