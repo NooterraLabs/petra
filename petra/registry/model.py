@@ -14,9 +14,12 @@ Premise keys. `Registry.fact(key)` resolves each one, and its premise label is "
 from __future__ import annotations
 
 import dataclasses
+import difflib
+import os
+import re
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Callable, Mapping, Union
+from typing import Callable, Collection, Mapping, Union
 
 from ..kernel import Abs, Add, Const, Div, Exp, Expr, Interval, Ln, Max, Min, Mul, Neg, Pi, PowInt, Sqrt, Sym
 from ..premises import ALLOWED_TAGS, LabelKind, Tag
@@ -166,6 +169,25 @@ class OutsideMakeableSet(LookupError):
 
 Entry = Union[Material, Part, Process]
 
+_SEPARATORS = re.compile(r"[\s._-]+")
+_GRADE_WORDS = frozenset({"gr", "grade"})
+
+
+def fold(name: str) -> str:
+    """A name as `Registry.canonical` and `Registry.suggest` compare it: lower case, its
+    words joined by "_" whatever separated them (spaces, dots, hyphens, underscores), the
+    words "gr" and "grade" dropped. "A572 Gr 50", "a572_grade_50" and "A572-50" fold to
+    one name."""
+    return "_".join(w for w in _SEPARATORS.split(name.lower()) if w and w not in _GRADE_WORDS)
+
+
+def hint(close: tuple[str, ...]) -> str:
+    """The tail of an unknown-name error: the close ids, or where every id is listed."""
+    if not close:
+        return "; `petra registry list` prints every id"
+    either = close[0] if len(close) == 1 else f"{', '.join(close[:-1])} or {close[-1]}"
+    return f"; did you mean {either}?"
+
 
 @dataclass(frozen=True)
 class Registry:
@@ -174,15 +196,52 @@ class Registry:
     parts: Mapping[str, Part]
     processes: Mapping[str, Process]
     environments: Mapping[str, Environment]
+    names: Mapping[str, str] = field(default_factory=dict)
+    """Common name -> registry id: "A325" -> "bolt_group.120". `canonical` reads it and
+    the lookups below do not, so a footprint spells every id one way."""
+
+    def canonical(self, name: str) -> str:
+        """The registry id `name` stands for: `name` when it is an id, else the id of the
+        common name it folds to (see `fold`), else `name` unchanged."""
+        if self._has_entry(name) or name in self.environments:
+            return name
+        return {fold(common): id for common, id in self.names.items()}.get(fold(name), name)
+
+    def suggest(self, name: str, ids: Collection[str]) -> tuple[str, ...]:
+        """Up to three ids among `ids` whose spelling is close to `name`, by the id, its
+        last dotted part, or a common name of it, after `fold`: difflib's ratio at least
+        0.6, closest first, ties to the longer common prefix (W18x51 is nearer W18x50
+        than W18x71)."""
+        keys: dict[str, str] = {}
+        for id in ids:
+            keys.setdefault(fold(id), id)
+            keys.setdefault(fold(id.rpartition(".")[2]), id)
+        for common, id in self.names.items():
+            if id in ids:
+                keys.setdefault(fold(common), id)
+        target = fold(name)
+        matcher = difflib.SequenceMatcher(b=target)
+        scored = []
+        for key in keys:
+            matcher.set_seq1(key)
+            ratio = matcher.ratio()
+            if ratio >= 0.6:
+                scored.append((-ratio, -len(os.path.commonprefix((key, target))), key))
+        return tuple(dict.fromkeys(keys[key] for *_, key in sorted(scored)))[:3]
+
+    def unknown(self, name: str, what: str, ids: Collection[str]) -> str:
+        """The error for a name that is not among `ids`: "<name> is not a registry
+        <what>", then the ids it may have meant."""
+        return f"{name} is not a registry {what}{hint(self.suggest(name, ids))}"
 
     def material(self, id: str) -> Material:
         if id not in self.materials:
-            raise OutsideMakeableSet(f"{id} is not a registry material")
+            raise OutsideMakeableSet(self.unknown(id, "material", self.materials))
         return self.materials[id]
 
     def part(self, id: str, kind: PartKind) -> Part:
         if id not in self.parts:
-            raise OutsideMakeableSet(f"{id} is not a registry part")
+            raise OutsideMakeableSet(self.unknown(id, "part", {p for p, part in self.parts.items() if part.kind is kind}))
         part = self.parts[id]
         if part.kind is not kind:
             raise OutsideMakeableSet(f"{id} is a {part.kind.value}, not a {kind.value}")
@@ -190,7 +249,7 @@ class Registry:
 
     def process(self, id: str) -> Process:
         if id not in self.processes:
-            raise OutsideMakeableSet(f"{id} is not a registry process")
+            raise OutsideMakeableSet(self.unknown(id, "process", self.processes))
         return self.processes[id]
 
     def surface(self, material: str, process: str | None) -> str:
@@ -203,7 +262,7 @@ class Registry:
 
     def environment(self, id: str) -> Environment:
         if id not in self.environments:
-            raise OutsideMakeableSet(f"{id} is not a registry environment")
+            raise OutsideMakeableSet(self.unknown(id, "environment", self.environments))
         return self.environments[id]
 
     def property(self, entry_id: str, prop: str) -> Property:

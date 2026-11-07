@@ -205,7 +205,7 @@ def _plate(args: tuple[Arg, ...], design: Design, registry: Registry, say: Say) 
     if len(args) == 5:
         found = registry.processes.get(process or "")
         if found is None:
-            say(f"{process} is not a registry process")
+            say(registry.unknown(str(process), "process", registry.processes))
             ok = False
         elif found.kind not in _PLATE_PROCESSES:
             kinds = sorted(k.value for k in _PLATE_PROCESSES)

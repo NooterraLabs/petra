@@ -24,7 +24,7 @@ from fractions import Fraction
 from types import MappingProxyType
 from typing import Callable, Mapping, Union
 
-from ...ir import Arg, Bound, Component, Design, Exceeds, Fixed, Input, ParamRef, Ref, Span
+from ...ir import Arg, Bound, Component, Design, Exceeds, Fixed, Input, ParamRef, Ref, Span, Text
 from ...registry import OutsideMakeableSet, Registry
 from ...registry.steel import INCH, STOCK_PLATE
 from ...units import DIMENSIONLESS, FORCE, LENGTH, Dim
@@ -164,23 +164,53 @@ def _geo(conn: str, field: str, arg: Arg | None, design: Design, say: Say) -> Ge
 
 def _shape(arg: Arg | None, prefix: str, registry: Registry, say: Say) -> str | None:
     shape = _word_of(arg)
-    if shape is None or not shape.startswith(prefix) or f"{SHAPE_GROUP}.{shape}.{'t' if prefix == 'L' else 'd'}" not in registry.constants:
-        say(f"{shape or arg} is not a {prefix} shape in the shape table")
+    prop = "t" if prefix == "L" else "d"
+    if shape is None or not shape.startswith(prefix) or f"{SHAPE_GROUP}.{shape}.{prop}" not in registry.constants:
+        say(registry.unknown(shape or str(arg), f"{prefix} shape", _shapes(prefix, prop, registry)))
         return None
     return shape
 
 
+def _shapes(prefix: str, prop: str, registry: Registry) -> set[str]:
+    """The shape table's designations that start with `prefix` and state `prop`."""
+    out = set()
+    for key in registry.constants:
+        group, _, rest = key.partition(".")
+        shape, _, stated = rest.partition(".")
+        if group == SHAPE_GROUP and stated == prop and shape.startswith(prefix):
+            out.add(shape)
+    return out
+
+
+THREAD_MARKS: Mapping[str, str] = {"N": "included", "X": "excluded"}
+"""AISC's bolt suffixes, as in A325-N and A490-X (Table J3.2's columns): the threads are
+included in (N) or excluded from (X) the shear planes."""
+
+
 def _grade(arg: Arg | None, registry: Registry, say: Say, family: str) -> str | None:
-    grade = _id_of(arg)
+    """The registry id the line names, a common name (A325, A992, "A572 Gr 50") read as its id."""
+    named = arg.value if isinstance(arg, Text) else _id_of(arg) or ""
+    grade = registry.canonical(named)
     try:
-        material = registry.material(grade or "")
+        material = registry.material(grade)
     except OutsideMakeableSet as e:
-        say(str(e))
+        say(_threads_note(named, registry) or str(e))
         return None
     if material.family != family:
         say(f"{grade} is a {material.family} material, not {family}")
         return None
     return grade
+
+
+def _threads_note(named: str, registry: Registry) -> str | None:
+    """For A325N or A325_N: what AISC's suffix means and how a `bolts` line says it."""
+    stem, mark = named[:-1].rstrip("_"), named[-1:].upper()
+    group = registry.materials.get(registry.canonical(stem))
+    if mark not in THREAD_MARKS or group is None or group.family != "bolt":
+        return None
+    return (f"{named} is not a registry material: AISC's suffix -N means threads included in the shear planes and "
+            f"-X threads excluded, which a bolts line states apart from the group: `bolts {group.id} diameter "
+            f"<length> threads {THREAD_MARKS[mark]}`")
 
 
 def _keywords(args: tuple[Arg, ...], start: int, say: Say) -> dict[str, Arg] | None:

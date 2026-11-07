@@ -113,6 +113,10 @@ def tokenize(text: str, path: str) -> tuple[Token, ...]:
                 depth -= 1
             emit(Kind.PUNCT, ch, i)
             i += 1
+        elif ch == "-" and tokens and tokens[-1].kind is Kind.IDENT and tokens[-1].line == line \
+                and line_start + tokens[-1].col - 1 + len(tokens[-1].text) == i:
+            raise fail(i, f"unexpected character '-' after {tokens[-1].text}: a name is letters, digits and _, "
+                          "so write _ where a designation has -")
         else:
             raise fail(i, f"unexpected character {ch!r}")
     if tokens and tokens[-1].kind is not Kind.NEWLINE:
