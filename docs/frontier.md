@@ -95,6 +95,8 @@ It runs in two arenas, so that truth does not depend on AISC's rupture calibrati
 | Petra has no false PASS, and another grader's false-PASS rate has a 95% lower bound above 10% (threshold a guess) | Publish the curves. The certified-gap benchmark (F7) moves first. |
 | Every grader's false-PASS rate stays under 2% at the top budget (threshold a guess) | Honesty does not set Petra apart in that arena. Move to the arena where the float model is known to be weak, deflection and collapse of continua, once F6 makes it affordable. |
 
+[The keystone protocol](keystone_protocol.md) fixes this experiment's truth, tasks, rewards, budgets and stop rules before it runs.
+
 ### The decision table
 
 Every rate below is a one-sided 95% lower bound, so a row fires on evidence and not on noise. The thresholds themselves are guesses. The false-FAIL rate is measured over every design the pilots and the regime search grade safe by hand checks.
