@@ -1,8 +1,9 @@
 name: checks
 
 # The checks that close a phase, run on GitHub's machines: the test suite, the absurd-design
-# gap with one job per seed, and canary recall. The steel gate stays off CI because it reads
-# the full AISC shapes workbook, which is not in the repository.
+# gap with one job per seed, canary recall, and the metamorphic relations over the steel
+# gate's stream. The steel gate stays off CI because it reads the full AISC shapes workbook,
+# which is not in the repository.
 
 on:
   workflow_dispatch:
@@ -15,6 +16,10 @@ on:
         default: "[1, 2, 3]"
       recall:
         description: also run canary recall (seed 2, budget 600)
+        type: boolean
+        default: true
+      metamorphic:
+        description: also run the metamorphic relations (steel gate stream, seed 1, 10000 designs)
         type: boolean
         default: true
 
@@ -72,4 +77,24 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: canary-recall
+          path: out/
+
+  metamorphic:
+    if: ${{ inputs.metamorphic }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install numpy==2.4.6 scipy==1.17.1
+      - run: python scripts/metamorphic.py --n 10000 --seed 1 --workers "$(nproc)" --out out
+      # the log names every broken relation, so it is kept when the run fails
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: metamorphic
           path: out/
