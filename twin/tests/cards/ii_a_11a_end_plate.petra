@@ -1,0 +1,21 @@
+petra 0
+
+# Companion Example II.A-11A. Shear end plate, W18x50 beam to a W21x62 girder web.
+
+shear_end_plate ii_a_11a {
+  basis lrfd
+  beam W18x50 grade steel.A992
+  support W21x62 web grade steel.A992
+  plate steel.A572_50 thickness 0.25 inch
+  plate_width 8 inch
+  bolts bolt_group.120 diameter 0.75 inch threads included
+  rows 3
+  pitch 3 inch
+  edge_vertical 1.25 inch
+  support_gauge 5.5 inch
+  weld electrode.E70 size 0.1875 inch sides 2
+}
+
+load reaction {
+  on ii_a_11a shear in [0 kip, 60 kip]
+}

@@ -1,0 +1,27 @@
+petra 0
+
+# Companion Example II.A-4. All-bolted double angle in a W18x50 beam coped 2 in. deep by 4 in.
+# long, to a W21x62 girder web. beam_gauge and support_gauge only let the card run; the test
+# compares the beam web and the bolts.
+
+double_angle ii_a_4 {
+  basis lrfd
+  beam W18x50 grade steel.A992
+  support W21x62 web grade steel.A992
+  angles L5x3_1_2x1_4 grade steel.A572_50 outstanding long
+  bolts bolt_group.120 diameter 0.75 inch threads included
+  rows 3
+  pitch 3 inch
+  edge_vertical 1.25 inch
+  beam_edge 1.625 inch
+  top 3.25 inch
+  beam_gauge 2.25 inch
+  support_side bolted
+  support_gauge 6.5 inch
+  cope top depth 2 inch length 4 inch
+  setback 0.5 inch
+}
+
+load reaction {
+  on ii_a_4 shear in [0 kip, 60 kip]
+}

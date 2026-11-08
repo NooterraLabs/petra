@@ -1,0 +1,23 @@
+petra 0
+
+# Companion Example II.A-22. Bolted bracket plate, six rows of two bolts, 12 in. eccentricity.
+# The support line only lets the card run; the test compares the plate and the bolts.
+
+bolt_bracket ii_a_22 {
+  basis lrfd
+  plate steel.A572_50 thickness 0.375 inch
+  support W14x90 flange grade steel.A992
+  bolts bolt_group.120 diameter 0.75 inch threads included
+  rows 6
+  columns 2
+  pitch 3 inch
+  gauge 5.5 inch
+  eccentricity 12 inch
+  edge_vertical 2.5 inch
+  plate_edge 2 inch
+  free_edge 15.25 inch
+}
+
+load reaction {
+  on ii_a_22 shear in [0 kip, 36 kip]
+}
