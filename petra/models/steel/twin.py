@@ -23,6 +23,11 @@ shear connection acts downward on the beam, so:
 This is the edge assignment the Companion v16 uses throughout Part II (Examples II.A-1A,
 II.A-11A, II.A-17A, II.A-28A, II.A-30: "the edge bolt" is the bottom bolt in the plate or
 beam-side leg and the top bolt in the support-side leg or end plate).
+
+Fatigue (Appendix 3, vocab.FATIGUE) is read from the same statements: in a case that names
+cycles on the connection, every stress is linear in the cyclic load, so each detail is a
+stress per kip, taken at the load's range against its allowable range and at its peak
+against 0.66 Fy. cyclic.py says which modes a connection owes, as path.py says the rest.
 """
 from __future__ import annotations
 
@@ -34,10 +39,11 @@ from typing import Callable, Iterable, Mapping
 from ...ir import Design, Fixed, Input, ParamRef
 from ...registry import Registry
 from ...registry.steel import INCH, KIP, KSI
-from .lower import KIND_SPECS, AngleSpec, Bolts, Conn, Cope, Member, PlateSpec, TeeSpec, Weld, lower_conn
+from . import cyclic
+from .lower import CYCLES, KIND_SPECS, AngleSpec, Bolts, Conn, Cope, Member, PlateSpec, TeeSpec, Weld, lower_conn
 from .path import ROLE_LIMITS, path
 
-UNCHECKED = ("load_path", "j10_stiffeners")
+UNCHECKED = ("load_path", "j10_stiffeners", "fatigue_detail")
 """Modes that require() can list but that have no check (unmodelled in v1.0)."""
 
 SIXTEENTH = 1.0 / 16.0
@@ -71,7 +77,7 @@ class _Reg:
     def const(self, name: str) -> float:
         c = self.r.constants[name]
         v = c.value.lo
-        scale = {"m": INCH, "Pa": KSI, "N": KIP, "1": Fraction(1), "m2": INCH * INCH}[c.unit]
+        scale = {"m": INCH, "Pa": KSI, "N": KIP, "1": Fraction(1), "m2": INCH * INCH, "1/m": 1 / INCH}[c.unit]
         return float(v / scale)
 
     def stated(self, entry: str, prop: str) -> float:
@@ -218,6 +224,11 @@ class _Ctx:
         self.out: dict[str, list[tuple[str, float]]] = {}
         self.ranged: set[tuple[Fraction, Fraction]] = set()
         self.ends: dict[tuple[Fraction, Fraction], int] = {}
+        # nSR, the upper end of the case's cycles interval (vocab: n at its upper end); None
+        # where the case is not cyclic or Section 3.1's floor excuses every fatigue check
+        cycles = self._interval(CYCLES)
+        n = None if cycles is None else float(cycles.hi)
+        self.nsr = n if n is not None and n > self.reg.const("aisc360.app3.cycles_min") else None
 
     # values
     def geo(self, value: object) -> float:
@@ -246,24 +257,29 @@ class _Ctx:
     def need(self, key: str) -> float:
         return self.geo(self.conn.attrs[key])
 
+    def _interval(self, field: str):
+        """The case's interval of `field` on this connection, or None if absent."""
+        for e in self.design.loads[self.case].entries:
+            if e.target == (self.conn.name,) and e.field == field:
+                return (e.value.range if isinstance(e.value, Input) else self.design.params[e.value.name].range).value
+        return None
+
     def load(self, field: str) -> float:
         """The upper end of the load interval on this connection, in kips (0 if absent)."""
-        case = self.design.loads[self.case]
-        for e in case.entries:
-            if e.target == (self.conn.name,) and e.field == field:
-                rng = e.value.range if isinstance(e.value, Input) else self.design.params[e.value.name].range
-                return _kip(rng.value.hi)
-        return 0.0
+        iv = self._interval(field)
+        return 0.0 if iv is None else _kip(iv.hi)
 
     def magnitude(self, field: str) -> float:
         """The largest magnitude the load interval on this connection reaches, in kips (0
         if absent): a signed load such as an axial force, either end."""
-        case = self.design.loads[self.case]
-        for e in case.entries:
-            if e.target == (self.conn.name,) and e.field == field:
-                rng = e.value.range if isinstance(e.value, Input) else self.design.params[e.value.name].range
-                return max(abs(_kip(rng.value.lo)), abs(_kip(rng.value.hi)))
-        return 0.0
+        iv = self._interval(field)
+        return 0.0 if iv is None else max(abs(_kip(iv.lo)), abs(_kip(iv.hi)))
+
+    def cyclic(self, field: str) -> tuple[float, float]:
+        """(range, peak) of a cyclic load in kips (lower.CYCLES): its interval's width and
+        its larger magnitude."""
+        iv = self._interval(field)
+        return (0.0, 0.0) if iv is None else (_kip(iv.hi - iv.lo), self.magnitude(field))
 
     def avail(self, rn: float, limit: str) -> float:
         phi, omega = FACTORS[limit]
@@ -493,6 +509,11 @@ def joint_type(ctx: _Ctx, label: str, bolts: Bolts, holes: Iterable[str], tensio
         need = "pretensioned"
     ctx.add("joint_type", f"{label}: the joint is at least {need}",
             _level_ratio(reg.const(JOINT_LEVEL[need]), reg.const(JOINT_LEVEL[bolts.joint])))
+    if ctx.nsr is not None:
+        # vocab joint_type: under a cyclic load past 20,000 cycles every joint is
+        # pretensioned (J3.2(a)(2) and (b)(1), RCSC 4.2; Commentary 3.4)
+        ctx.add("joint_type", f"{label}: the joint is pretensioned under the cyclic load",
+                _level_ratio(reg.const(JOINT_LEVEL["pretensioned"]), reg.const(JOINT_LEVEL[bolts.joint])))
 
 
 def hole_use(ctx: _Ctx, element: str, hole: str, bolts: Bolts) -> None:
@@ -598,6 +619,97 @@ def c_shape_in_plane(p: float, e: float, length: float, ret: float) -> float:
         ry = p / total + m * cx / ip
         best = max(best, math.hypot(rx, ry))
     return best
+
+
+# --- Fatigue (Appendix 3) ------------------------------------------------------------------
+#
+# Written from vocab.FATIGUE and Appendix 3. Every check is a stress in ksi against an
+# allowable one, with no resistance or safety factor, and each is left out where ctx.nsr is
+# None (no cycles in the case, or nSR at most 20,000: Section 3.1).
+
+def eq_a3_1(reg: _Reg, category: str, nsr: float) -> float:
+    """Eq A-3-1: FSR = 1000 (Cf / nSR)^0.333 ksi, at least FTH, Cf and FTH from Table A-3.1."""
+    life = reg.const("aisc360.app3.a3_1") * (reg.const(f"aisc360.app3.cat_{category}.cf") / nsr) ** reg.const(
+        "aisc360.app3.a3_1_exponent")
+    return max(life, reg.const(f"aisc360.app3.cat_{category}.fth"))
+
+
+def eq_a3_2(reg: _Reg, nsr: float) -> float:
+    """Eq A-3-2, category F: FSR = 100 (1.5 / nSR)^0.167 ksi, at least 8 ksi."""
+    life = reg.const("aisc360.app3.a3_2") * (reg.const("aisc360.app3.a3_2_cf") / nsr) ** reg.const(
+        "aisc360.app3.a3_2_exponent")
+    return max(life, reg.const("aisc360.app3.a3_2_threshold"))
+
+
+def rect_stress(t: float, depth: float, arm: float, ys: Iterable[float] = (), hole: float = 0.0) -> float:
+    """vocab PRINCIPAL per kip of shear: M / S + 3 V / (2 t d) with M = arm V, on a plate t
+    thick and `depth` deep bent in its plane, less a column of holes `hole` long down the
+    depth centred at `ys` from mid-depth (the net section). On the net section S = I / (d/2)
+    of the net area and d is the net depth, d less the holes, as J4.2(b)'s Anv."""
+    ys = list(ys)
+    inertia = t * depth ** 3 / 12 - sum(t * hole ** 3 / 12 + t * hole * y * y for y in ys)
+    return arm * (depth / 2) / inertia + 1.5 / (t * (depth - len(ys) * hole))
+
+
+def fatigue(ctx: _Ctx, mode: str, what: str, unit: float, allowable: float, fy: float | None,
+            field: str = "shear") -> None:
+    """A stress `unit` ksi per kip of the cyclic load `field`: its range against `allowable`
+    and, with the part's Fy, the stress from the peak load at most 0.66 Fy (Section 3.1)."""
+    rng, peak = ctx.cyclic(field)
+    ctx.add(mode, f"{what}: stress range (Appendix 3)", _ratio(unit * rng, allowable))
+    if fy is not None:
+        ctx.add(mode, f"{what}: stress from the peak cyclic load at most 0.66 Fy (Section 3.1)",
+                _ratio(unit * peak, ctx.reg.const("aisc360.app3.peak") * fy))
+
+
+def fatigue_ply(ctx: _Ctx, element: str, group: BoltSet, hole: str, t: float, depth: float, fy: float,
+                arm: float = 0.0) -> None:
+    """fatigue_bolted (Section 3.4(a), category B): a ply the bolt group connects, t its
+    thickness summed over its parallel plates (two angles, a flange's two shear planes),
+    `depth` its section along the bolt line, carrying the group's shear and, for a ply
+    that bends, the moment `arm` per kip of it. A slip-critical joint's on the gross
+    section (Case 2.1), a pretensioned joint's on the net section through the line of holes
+    (Case 2.2), each hole B4.3b's 1/16 in wider than it is long down the line, as every
+    other net section in this file. Snug-tight bolts owe none: joint_type fails them."""
+    joint = group.b.joint
+    if ctx.nsr is None or joint == "snug":
+        return
+    if joint == "slip_critical":
+        unit, where = rect_stress(t, depth, arm), "gross section (Case 2.1)"
+    else:
+        hv, _ = group.hole_dims(hole)
+        ys = [(i - (group.rows - 1) / 2) * group.s for i in range(group.rows)]
+        unit, where = rect_stress(t, depth, arm, ys, hv + SIXTEENTH), "net section (Case 2.2)"
+    fatigue(ctx, "fatigue_bolted", f"{element}: {where}", unit, eq_a3_1(ctx.reg, "b", ctx.nsr), fy)
+
+
+def fatigue_throat(ctx: _Ctx, label: str, per_inch: float, weld: Weld) -> None:
+    """fatigue_weld (Case 8.2, category F): the force per inch on a fillet's most stressed
+    point per kip of the load, as the weld check finds it, over the throat w / sqrt 2."""
+    if ctx.nsr is None:
+        return
+    fatigue(ctx, "fatigue_weld", f"{label}: shear on the fillet's throat (Case 8.2)",
+            per_inch / (ctx.geo(weld.size) / math.sqrt(2.0)), eq_a3_2(ctx.reg, ctx.nsr), None)
+
+
+def fatigue_plate_end(ctx: _Ctx, label: str, t: float, length: float, arm: float, weld: Weld, fy: float) -> None:
+    """fatigue_weld_end (Case 5.7): a plate t thick set on edge against the support, welded
+    over `length` with a fillet on each face, its stress across the welds M / S + 3 V / (2 t L)
+    with M = arm V, against category C at the toe (Section 3.3(c)(1)) and, where RFIL < 1,
+    Eq A-3-5 at the root, which has no threshold."""
+    if ctx.nsr is None or weld.sides != 2:
+        return
+    reg, nsr = ctx.reg, ctx.nsr
+    unit = rect_stress(t, length, arm)
+    fatigue(ctx, "fatigue_weld_end", f"{label}: the plate at the weld toe (Case 5.7, category C)", unit,
+            eq_a3_1(reg, "c", nsr), fy)
+    w = ctx.geo(weld.size)
+    rfil = (reg.const("aisc360.app3.a3_6_intercept") + reg.const("aisc360.app3.a3_6_slope") * w / t) / t ** reg.const(
+        "aisc360.app3.a3_6_exponent")                                                         # Eq A-3-6
+    if rfil < 1.0:
+        root = reg.const("aisc360.app3.a3_1") * rfil * (reg.const("aisc360.app3.cat_c.cf") / nsr) ** reg.const(
+            "aisc360.app3.a3_1_exponent")                                                     # Eq A-3-5
+        fatigue(ctx, "fatigue_weld_end", f"{label}: the plate at the weld root (Case 5.7, Eq A-3-5)", unit, root, None)
 
 
 # --- J10 -------------------------------------------------------------------------------
@@ -717,6 +829,11 @@ class _Beam:
             mn = f11_mn(fy, E, self.tw, hc, self.c, cb)
         ctx.check("cope_buckling", "beam web: flexural yielding and local buckling at the cope (Manual Part 9)", m, mn,
                   "flexure_yield")
+        if self.cope.flanges == "both" and ctx.nsr is not None:
+            # vocab fatigue_cope: the bottom cope's corner (Case 1.3, category E') on the web
+            # the copes leave, under the cope-buckling moment V (c + setback)
+            fatigue(ctx, "fatigue_cope", "beam web: the bottom cope's reentrant corner (Case 1.3, category E')",
+                    rect_stress(self.tw, self.h, e), eq_a3_1(ctx.reg, "e_prime", ctx.nsr), fy)
 
 
 def _beam_web_ply(ctx: _Ctx, beam: _Beam, top: float) -> Ply:
@@ -825,6 +942,13 @@ def _shear_tab(ctx: _Ctx, modes: set[str]) -> None:
     base_metal(ctx, "plate", per_fillet * weld.sides, pfu, tp, "plate to support")
     base_metal(ctx, f"support {face}", per_fillet, sfu, st, "plate to support")
     fillet_size(ctx, "plate to support", weld, min(tp, st), length)
+    # fatigue: the plate bends under its flexural checks' V a at the bolt line; at the weld
+    # line, under V times the distance to the bolt group's centroid (vocab fatigue_weld_end:
+    # the beam end free to rotate at the bolts), a with one column
+    fatigue_ply(ctx, "plate", group, hp, tp, length, pfy, arm=a)
+    fatigue_ply(ctx, "beam web", group, hb, beam.tw, beam.h, beam.fy)
+    fatigue_throat(ctx, "plate to support", 1.0 / (weld.sides * length), weld)
+    fatigue_plate_end(ctx, "plate to support", tp, length, a + (nc - 1) * g / 2, weld, pfy)
 
 
 def _angles_geometry(ctx: _Ctx, spec: AngleSpec) -> tuple[float, float, float]:
@@ -880,6 +1004,9 @@ def _angle_kind(ctx: _Ctx, modes: set[str], double: bool) -> None:
     clearance(ctx, "beam side", bolts, gb - t, "the outstanding leg")
     if bolts.joint == "slip_critical":
         slip(ctx, "beam side", group_b, v, (ha, hb))
+    # fatigue: the leg on the beam web is a ply in shear only (path.py role "ply")
+    fatigue_ply(ctx, key, group_b, ha, count * t, length, afy)
+    fatigue_ply(ctx, "beam web", group_b, hb, beam.tw, beam.h, beam.fy)
     if conn.get("support_side") == "bolted":
         g = ctx.need("support_gauge")
         # Double angles: support_gauge runs across the two bolt lines, so each angle's
@@ -914,6 +1041,9 @@ def _angle_kind(ctx: _Ctx, modes: set[str], double: bool) -> None:
         clearance(ctx, "support side", bolts, prov, what)
         if bolts.joint == "slip_critical":
             slip(ctx, "support side", group_s, v, (ha, hs))
+        # fatigue: one angle's support leg bends under V e (path.py role "bent_ply"); the
+        # support's face is the support member's (vocab fatigue_bolted)
+        fatigue_ply(ctx, el, group_s, ha, count * t, length, afy, arm=0.0 if double else e_sup)
         if not double:
             # the support leg bends under V e, e = g + tw/2 (Companion II.A-28A), gross
             # and net through its bolt line
@@ -936,6 +1066,7 @@ def _angle_kind(ctx: _Ctx, modes: set[str], double: bool) -> None:
         base_metal(ctx, key, f, afu, t, f"{key} to support")
         base_metal(ctx, f"support {face}", f, sfu, st, f"{key} to support")
         fillet_size(ctx, f"{key} to support", weld, min(t, st), length)
+        fatigue_throat(ctx, f"{key} to support", lines_out_of_plane(1.0, e, length, count), weld)
 
 
 def _shear_tee(ctx: _Ctx, modes: set[str]) -> None:
@@ -988,6 +1119,9 @@ def _shear_tee(ctx: _Ctx, modes: set[str]) -> None:
     clearance(ctx, "beam side", bolts, a - tf, "the tee flange")
     if bolts.joint == "slip_critical":
         slip(ctx, "beam side", group_b, v, (hst, hb))
+    # fatigue: the stem bends under its flexural checks' V a
+    fatigue_ply(ctx, "tee stem", group_b, hst, tws, length, tfy, arm=a)
+    fatigue_ply(ctx, "beam web", group_b, hb, beam.tw, beam.h, beam.fy)
     if conn.get("support_side") == "bolted":
         g = ctx.need("support_gauge")
         fl_edge = (bf - g) / 2
@@ -1012,6 +1146,8 @@ def _shear_tee(ctx: _Ctx, modes: set[str]) -> None:
         clearance(ctx, "support side", bolts, prov, what)
         if bolts.joint == "slip_critical":
             slip(ctx, "support side", group_s, v, (hfl, hs))
+        # fatigue: the flange's two shear planes, one per bolt line, as its shear checks
+        fatigue_ply(ctx, "tee flange", group_s, hfl, 2 * tf, length, tfy)
     else:
         weld: Weld = conn.attrs["support_weld"]
         # the flange welded along both tips, each line carrying V/2 at bf/2 from the stem
@@ -1023,6 +1159,7 @@ def _shear_tee(ctx: _Ctx, modes: set[str]) -> None:
         base_metal(ctx, "tee flange", f, tfu, tf, "tee flange to support")
         base_metal(ctx, f"support {face}", f, sfu, st, "tee flange to support")
         fillet_size(ctx, "tee flange to support", weld, min(tf, st), length)
+        fatigue_throat(ctx, "tee flange to support", lines_out_of_plane(1.0, bf / 2, length, 2), weld)
     _tee_ductility(ctx, parent, tfy, length, n, s, lev, beam.tw, ctx.reg.bolt(bolts.size, "d"))
 
 
@@ -1090,6 +1227,7 @@ def _shear_end_plate(ctx: _Ctx, modes: set[str]) -> None:
     base_metal(ctx, "beam web", per_fillet * weld.sides, beam.fu, beam.tw, "end plate to beam web")
     base_metal(ctx, "end plate", per_fillet, pfu, tp, "end plate to beam web")
     fillet_size(ctx, "end plate to beam web", weld, min(tp, beam.tw), lw)
+    fatigue_throat(ctx, "end plate to beam web", 1.0 / (weld.sides * lw), weld)
     plate_ply = Ply("plate", tp, pfu, hp, lev, down=False)
     sup_ply = Ply("support", st, sfu, hs, None, down=True)
     group = BoltSet(ctx, bolts, n, 2, s, g, [plate_ply, sup_ply], 1, None, "support side")
@@ -1110,6 +1248,8 @@ def _shear_end_plate(ctx: _Ctx, modes: set[str]) -> None:
     clearance(ctx, "support side", bolts, prov, what)
     if bolts.joint == "slip_critical":
         slip(ctx, "support side", group, v, (hp, hs))
+    # fatigue: the plate's two vertical shear planes, one per bolt line, as its shear checks
+    fatigue_ply(ctx, "end plate", group, hp, 2 * tp, length, pfy)
 
 
 def _seat_bearing(ctx: _Ctx, beam_shape: dict, fy: float, lb: float, r: float) -> None:
@@ -1202,6 +1342,7 @@ def _seated(ctx: _Ctx, modes: set[str]) -> None:
         base_metal(ctx, "seat angle", f, afu, t, "seat to support")
         base_metal(ctx, f"support {face}", f, sfu, st, "seat to support")
         fillet_size(ctx, "seat to support", weld, min(t, st), vert)
+        fatigue_throat(ctx, "seat to support", seat_weld(1.0, e_w, vert), weld)
 
 
 def _stiffened_seat(ctx: _Ctx, modes: set[str]) -> None:
@@ -1250,13 +1391,21 @@ def _stiffened_seat(ctx: _Ctx, modes: set[str]) -> None:
     # which Commentary J2.2b names end-loaded: past 100 w only J2.2b(d)'s effective length
     # counts, beta l with beta = 1.2 - 0.002 l / w (Eq J2-1), and 180 w past 300 w.
     w = ctx.geo(weld.size)
+    fatigue_throat(ctx, "stiffener to support", lines_out_of_plane(1.0, 0.8 * width, lst, weld.sides), weld)
     if lst > 100 * w:
         effective = 180 * w if lst > 300 * w else (1.2 - 0.002 * lst / w) * lst
         ctx.add("weld", "stiffener to support: the welds over their end-loaded effective length (J2.2b(d))",
                 _ratio(lines_out_of_plane(r, 0.8 * width, effective, weld.sides), q))
+        # vocab fatigue_weld: the most stressed point as the weld check finds it, which
+        # past 100 w is over the end-loaded effective length
+        fatigue_throat(ctx, "stiffener to support, end-loaded", lines_out_of_plane(1.0, 0.8 * width, effective,
+                                                                                   weld.sides), weld)
     base_metal(ctx, "stiffener", f * weld.sides, sfu_s, ts, "stiffener to support")
     base_metal(ctx, f"support {face}", f, sfu, st, "stiffener to support")
     fillet_size(ctx, "stiffener to support", weld, min(ts, st), lst)
+    # vocab fatigue_weld_end: the stiffener's end across its welds, under its flexural
+    # check's moment V times 0.8 W, over the weld length
+    fatigue_plate_end(ctx, "stiffener to support", ts, lst, 0.8 * width, weld, sfy_s)
 
 
 def _flange_force(ctx: _Ctx, modes: set[str]) -> None:
@@ -1390,6 +1539,8 @@ def _bolt_bracket(ctx: _Ctx, modes: set[str]) -> None:
     long_slots(ctx, "bracket bolts", (hp, hs))
     if bolts.joint == "slip_critical":
         slip(ctx, "bracket bolts", group, p, (hp, hs))
+    # fatigue: the plate bends at section A-A under its flexural checks' P e_aa
+    fatigue_ply(ctx, "bracket plate", group, hp, tp, depth, pfy, arm=e_aa)
     _bracket_plate(ctx, p, depth, tp, pfy, e_aa)
 
 
@@ -1429,10 +1580,13 @@ def _weld_bracket(ctx: _Ctx, modes: set[str]) -> None:
         # the moment P e bends the weld lines out of their plane
         f = lines_out_of_plane(p, e, length, weld.sides)
         plate_q = f * weld.sides
+        fatigue_throat(ctx, "bracket weld", lines_out_of_plane(1.0, e, length, weld.sides), weld)
+        fatigue_plate_end(ctx, "bracket weld", tp, length, e_aa, weld, pfy)
     else:
         # a plate lapped on the support face, one C-shaped fillet: in-plane elastic method
         f = c_shape_in_plane(p, e, length, ret)
         plate_q = f
+        fatigue_throat(ctx, "bracket weld", c_shape_in_plane(1.0, e, length, ret), weld)
     ctx.add("weld", "bracket weld: most stressed point of the welds by the elastic method (J2.4)", _ratio(f, q))
     base_metal(ctx, "bracket plate", plate_q, pfu, tp, "bracket weld")
     base_metal(ctx, f"support {face}", f, sfu, st, "bracket weld")
@@ -1524,6 +1678,15 @@ def _hanger(ctx: _Ctx, modes: set[str]) -> None:
         b_prying = ctx.avail(min(fnt_s, group.fnt) * group.ab, "bolt")
     per_bolt = t_load / nb
     ctx.add("bolt_tension", "hanger bolts: bolt tension (J3.7)", _ratio(per_bolt, b_avail))
+    if ctx.nsr is not None:
+        # vocab fatigue_bolt_tension (Section 3.4(b), Case 8.5): each bolt's equal share on
+        # its tensile stress area (Eq A-3-7), the whole range on snug-tight bolts, 20% of
+        # the peak on pretensioned and slip-critical ones
+        rng, peak = ctx.cyclic("tension")
+        cyclic_t = rng if bolts.joint == "snug" else ctx.reg.const("aisc360.app3.s3_4_share") * peak
+        at = math.pi / 4 * (group.d - ctx.reg.const("aisc360.app3.a3_7_thread") / ctx.reg.bolt(bolts.size, "tpi")) ** 2
+        ctx.add("fatigue_bolt_tension", "hanger bolts: tensile stress range on the tensile stress area (Case 8.5)",
+                _ratio(cyclic_t / nb / at, eq_a3_1(ctx.reg, "g", ctx.nsr)))
     # tributary length per bolt (Manual Figure 9-4, Companion II.D-1):
     # an end row min(le, 1.75 b) + min(s/2, 1.75 b), an inner row 2 min(s/2, 1.75 b)
     b = (g - tws) / 2
@@ -1804,14 +1967,15 @@ def _run(ctx: _Ctx, modes: set[str]) -> None:
 
 def modes_owed(conn: Conn, design: Design) -> tuple[str, ...]:
     """The modes the connection's load path demands (path.py's roles), in path order,
-    from the load fields any case puts on it."""
+    from the load fields any case puts on it, then the fatigue modes a cyclic case demands
+    (cyclic.py)."""
     fields = {e.field for case in design.loads.values() for e in case.entries if e.target == (conn.name,)}
     out: list[str] = []
     for link in path(conn, fields):
         for mode in ROLE_LIMITS[link.role]:
             if mode not in out:
                 out.append(mode)
-    return tuple(out)
+    return tuple(dict.fromkeys((*out, *cyclic.required(conn, design))))
 
 
 def checks(conn: Conn, design: Design, registry: Registry, case: str) -> dict[str, list[tuple[str, float]]]:

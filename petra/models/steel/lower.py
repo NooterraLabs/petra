@@ -576,7 +576,14 @@ def grammar(kind: str) -> Grammar:
               **{line: replace(FIELDS[line], meaning=f"{FIELDS[line].meaning}, {by_kind[kind]}")
                  for line, by_kind in READINGS.items() if kind in by_kind}}
     return Grammar(tuple(fields[n] for n in spec.required), tuple(fields[n] for n in spec.optional), "<conn>",
-                   spec.loads)
+                   (*spec.loads, CYCLES))
+
+
+CYCLES = "cycles"
+"""The load field that makes a load case cyclic, on every kind: `on <conn> cycles in [lo, hi]`
+bounds the number of stress-range cycles in the design life (nSR, Appendix 3). The case's
+other loads on the connection are then the cyclic load, which varies between the bounds of
+its interval: the interval's width is the load's range, its larger magnitude the peak."""
 
 
 @dataclass(frozen=True)
@@ -736,7 +743,7 @@ def _dim(value: Input | ParamRef, design: Design) -> Dim:
 
 def _check_references(conn: str, kind: str, design: Design, problems: list[str]) -> None:
     from .vocab import QOIS
-    fields = KIND_SPECS[kind].loads
+    fields = (*KIND_SPECS[kind].loads, CYCLES)
     for case in design.loads.values():
         say = _reporter(problems, case.span, f"load {case.name}")
         seen: set[str] = set()
@@ -747,6 +754,9 @@ def _check_references(conn: str, kind: str, design: Design, problems: list[str])
                 say(f"{conn}: a {kind} takes load fields {', '.join(fields)}, not {entry.field}")
             elif entry.field in seen:
                 say(f"{conn}: {entry.field} is given twice")
+            elif entry.field == CYCLES:
+                if _dim(entry.value, design) != DIMENSIONLESS or _lo(entry.value, design) < 0:
+                    say(f"{conn}: cycles is a number of stress-range cycles, as in `on {conn} cycles in [0, 2000000]`")
             elif _dim(entry.value, design) != FORCE:
                 say(f"{conn}: {entry.field} needs a force range")
             elif _lo(entry.value, design) < 0 and entry.field != "axial":

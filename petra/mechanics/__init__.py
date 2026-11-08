@@ -26,7 +26,8 @@ import os
 from .algebra import add, c, div, mul, power, sq, sub
 from .bolt_groups import corner_radius, elastic_block_force, elastic_bolt_force, polar_moment
 from .sections import (circle_area, hex_corner, rectangle_elastic_modulus, rectangle_elastic_thickness,
-                       rectangle_net_plastic_modulus, rectangle_plastic_modulus, right_triangle, tee_moduli)
+                       rectangle_net_elastic_modulus, rectangle_net_plastic_modulus, rectangle_peak_shear_stress,
+                       rectangle_plastic_modulus, right_triangle, tee_moduli)
 from .stability import plate_buckling_stress
 from .weld_groups import elastic_weld_c, elastic_weld_line, fillet_throat
 
@@ -42,7 +43,8 @@ __all__ = [
     "MODULES", "SOURCES",
     "add", "c", "div", "mul", "power", "sq", "sub",
     "circle_area", "hex_corner", "rectangle_elastic_modulus", "rectangle_elastic_thickness",
-    "rectangle_net_plastic_modulus", "rectangle_plastic_modulus", "right_triangle", "tee_moduli",
+    "rectangle_net_elastic_modulus", "rectangle_net_plastic_modulus", "rectangle_peak_shear_stress",
+    "rectangle_plastic_modulus", "right_triangle", "tee_moduli",
     "corner_radius", "elastic_block_force", "elastic_bolt_force", "polar_moment",
     "elastic_weld_c", "elastic_weld_line", "fillet_throat",
     "plate_buckling_stress",

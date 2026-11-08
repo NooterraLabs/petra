@@ -37,6 +37,7 @@ The niche can be finished completely for three reasons.
 | Input | Example | Premise tag |
 |---|---|---|
 | Required strengths per load combination (LRFD or ASD) | Vu in [0, 62] kips and Tu in [0, 15] kips | `assumed`, signed by the engineer of record |
+| Cyclic loads, when fatigue applies (§4a) | V in [2, 10] kips for nSR in [0, 500,000] cycles | `assumed`, signed by the engineer of record |
 | Members | W18x50 beam to W14x90 column flange | `sanctioned` (Shapes DB, with hash) |
 | Materials | A992 (Fy ≥ 50, Fu ≥ 65 ksi) and A36 plate (36 and 58 ksi) | `sanctioned` (ASTM guaranteed minimums) |
 | Bolts | Group 120, 3/4 in., STD holes, threads included, snug-tight | `sanctioned` (Table J3.2), and the joint type per RCSC |
@@ -92,15 +93,43 @@ Coverage is complete when every "shall" in these sections maps to an encoded che
 | K1 | HSS parameters, effective width, chord-stress interaction, end distance, limits of applicability | Limits of applicability become validity rows (v1.2) |
 | K2 to K5 | Concentrated forces on HSS, truss connections, moment connections, and welds to HSS | Encoded (v1.2) |
 | B to H as needed | Supporting-member checks, such as the beam web at the connection and the column for J10 | Encoded where a connection check needs them |
+| Appendix 3 | Fatigue: cycles, threshold and peak stress, stress ranges, Table A-3.1's categories, bolts in shear and in tension | Encoded for a declared cyclic load (§4a) |
 
 These are excluded outright, and the deck reports each one as a typed UNKNOWN:
 
 - seismic connections (AISC 341, 358)
-- fatigue (Appendix 3), unless declared
+- fatigue (Appendix 3) where no load case declares a cyclic load. This one is not an UNKNOWN. The readout prints a "not checked" line for each fatigue mode the connection's details would owe, and says that a cyclic load would demand it.
 - fire (Appendix 4)
 - composite connections (Chapter I)
 - existing structures and rivets
 - concrete anchorage design
+
+### 4a. Fatigue (Appendix 3)
+
+A load case that names `cycles` on a connection is cyclic. Its other loads on that connection are service loads. Each varies inside its interval, so the interval's width is the load's stress-producing range and its larger end is the peak.
+
+```
+load crane {
+  on st1 shear in [2 kip, 10 kip]
+  on st1 cycles in [0, 500000]
+  signed "s.engineer@example.org" source "runway reaction, service loads"
+}
+```
+
+Under a cyclic case, coverage demands the fatigue mode of every detail on the load path (`petra/models/steel/cyclic.py`).
+
+| Detail | Table A-3.1 | Mode |
+|---|---|---|
+| Plies of a slip-critical bolted joint, gross section | Case 2.1, category B | `fatigue_bolted` |
+| Plies of a pretensioned bolted joint, net section | Case 2.2, category B | `fatigue_bolted` |
+| Bolts in tension, on the tensile stress area | Case 8.5, category G | `fatigue_bolt_tension` |
+| Shear on a fillet's throat | Case 8.2, category F | `fatigue_weld` |
+| A plate's end welded with a fillet on each face, at the toe and the root | Case 5.7, C and C'' | `fatigue_weld_end` |
+| The bottom cope's corner of a beam coped at both flanges | Case 1.3, category E' | `fatigue_cope` |
+
+Each check holds the stress range to FSR, and the stress from the peak load to 0.66 Fy. FSR follows the finite-life formula down to the category's threshold FTH. Each check is excused at 20,000 cycles or fewer. A joint under a cyclic load must be pretensioned (J3.2, RCSC 4.2), so `joint_type` fails a snug-tight one.
+
+A detail the deck draws but whose category it does not encode requires the unmodelled `fatigue_detail` mode, so the verdict is UNKNOWN. These details are a single fillet at an angle's or a tee's toe, a plate welded on one face, a lapped plate's C-shaped fillet, a seat angle, a hanger's tee, and a member's flange under a tensile force. `examples/steel/shear_tab_cyclic.petra` is a cyclic design that passes. [steel_traceability.md](steel_traceability.md) maps every Appendix 3 provision.
 
 ## 5. Makeability checks
 

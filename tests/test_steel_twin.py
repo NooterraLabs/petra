@@ -30,8 +30,14 @@ _HEAD = 'petra 0\n\ndesign "steel-twin-{name}" {{\n  owner "s.engineer@example.o
 _SIGN = '  signed "s.engineer@example.org" source "twin variant"\n}}\n'
 
 
-def _variant(name: str, body: str, loads: str) -> str:
-    return _HEAD.format(name=name) + body.strip() + "\n\nload gravity {\n" + loads.rstrip() + "\n" + _SIGN.format()
+def _case(name: str, loads: str) -> str:
+    return f"\n\nload {name} {{\n" + loads.rstrip() + "\n" + _SIGN.format()
+
+
+def _variant(name: str, body: str, loads: str, cyclic: str = "") -> str:
+    """A design of one connection: its strength case, and a cyclic case (Appendix 3) when
+    `cyclic` names one's loads."""
+    return _HEAD.format(name=name) + body.strip() + _case("gravity", loads) + (_case("cyclic", cyclic) if cyclic else "")
 
 
 VARIANTS: dict[str, str] = {
@@ -758,6 +764,307 @@ shear_tee tee8 {
   support_side bolted
   support_gauge 5.5 inch
 }""", "  on tee8 shear in [0 kip, 30 kip]"),
+    # Appendix 3. Each variant below adds a cyclic case. Slip-critical bolts load the plies'
+    # gross sections (Table A-3.1 Case 2.1), pretensioned ones their net sections (Case 2.2).
+    # At 2 x 10^8 cycles every category's threshold FTH governs (B, E', F, C at the weld
+    # toe), while the root crack, which has none, still falls with nSR (Eq A-3-5)
+    "tab_cyclic_threshold": _variant("tab_cyclic_threshold", """
+shear_tab st11 {
+  basis lrfd
+  beam W18x50 grade steel.A992
+  support W14x90 flange grade steel.A992
+  plate steel.A36 thickness 0.375 inch
+  bolts bolt_group.120 diameter 0.75 inch threads included joint slip_critical surface class_a
+  rows 4
+  pitch 3 inch
+  edge_vertical 1.5 inch
+  plate_edge 1.5 inch
+  bolt_line 3 inch
+  beam_edge 1.75 inch
+  top 3 inch
+  setback 0.5 inch
+  cope both depth 1.5 inch length 5 inch bottom_depth 2 inch
+  weld electrode.E70 size 0.25 inch sides 2
+}""", "  on st11 shear in [0 kip, 40 kip]", "  on st11 shear in [1 kip, 4 kip]\n  on st11 cycles in [0, 200000000]"),
+    # an extended tab, two columns, pretensioned: the plate's moment is its flexural checks'
+    # V a, at the bolt line and at the weld line alike (vocab fatigue_bolted, fatigue_weld_end)
+    "tab_extended_cyclic": _variant("tab_extended_cyclic", """
+shear_tab st13 {
+  basis lrfd
+  beam W16x26 grade steel.A992
+  support W14x90 web grade steel.A992
+  plate steel.A36 thickness 0.375 inch
+  bolts bolt_group.120 diameter 0.75 inch threads included joint pretensioned
+  form extended
+  rows 4
+  columns 2
+  gauge 3 inch
+  pitch 3 inch
+  edge_vertical 1.5 inch
+  plate_edge 1.5 inch
+  bolt_line 9 inch
+  beam_edge 1.75 inch
+  top 2.5 inch
+  weld electrode.E70 size 0.25 inch sides 2
+}""", "  on st13 shear in [0 kip, 30 kip]", "  on st13 shear in [1 kip, 4 kip]\n  on st13 cycles in [0, 1000000]"),
+    # nSR at Section 3.1's floor of 20,000 cycles: every fatigue check is excused
+    "tab_cyclic_excused": _variant("tab_cyclic_excused", """
+shear_tab st12 {
+  basis lrfd
+  beam W18x50 grade steel.A992
+  support W14x90 flange grade steel.A992
+  plate steel.A36 thickness 0.375 inch
+  bolts bolt_group.120 diameter 0.75 inch threads included joint pretensioned
+  rows 4
+  pitch 3 inch
+  edge_vertical 1.5 inch
+  plate_edge 1.5 inch
+  bolt_line 3 inch
+  beam_edge 1.75 inch
+  top 3 inch
+  setback 0.5 inch
+  cope both depth 1.5 inch length 5 inch bottom_depth 2 inch
+  weld electrode.E70 size 0.25 inch sides 2
+}""", "  on st12 shear in [0 kip, 40 kip]", "  on st12 shear in [2 kip, 10 kip]\n  on st12 cycles in [0, 20000]"),
+    # double angles bolted on both legs, slip-critical, beam coped at both flanges
+    "angles_cyclic_slip": _variant("angles_cyclic_slip", """
+double_angle da5 {
+  basis lrfd
+  beam W18x50 grade steel.A992
+  support W14x90 flange grade steel.A992
+  angles L4x3_1_2x3_8 grade steel.A36 outstanding long
+  bolts bolt_group.120 diameter 0.75 inch threads included joint slip_critical surface class_a
+  rows 4
+  pitch 3 inch
+  edge_vertical 1.5 inch
+  beam_edge 1.75 inch
+  top 3 inch
+  beam_gauge 2.25 inch
+  cope both depth 1.5 inch length 4 inch bottom_depth 1.5 inch
+  setback 0.5 inch
+  support_side bolted
+  support_gauge 5.5 inch
+}""", "  on da5 shear in [0 kip, 50 kip]", "  on da5 shear in [5 kip, 25 kip]\n  on da5 cycles in [0, 1000000]"),
+    # one angle bolted on both legs, pretensioned: its support leg bends under V e on its net section
+    "angle_cyclic_bent": _variant("angle_cyclic_bent", """
+single_angle sa4 {
+  basis lrfd
+  beam W16x26 grade steel.A992
+  support W14x90 flange grade steel.A992
+  angle L4x4x3_8 grade steel.A36 outstanding long
+  bolts bolt_group.120 diameter 0.75 inch threads included joint pretensioned
+  rows 4
+  pitch 3 inch
+  edge_vertical 1.25 inch
+  beam_edge 1.75 inch
+  top 2.5 inch
+  beam_gauge 2.5 inch
+  support_side bolted
+  support_gauge 2.5 inch
+}""", "  on sa4 shear in [0 kip, 20 kip]", "  on sa4 shear in [2 kip, 8 kip]\n  on sa4 cycles in [0, 400000]"),
+    # a tee bolted to the support, pretensioned: the stem bends, the flange's two shear planes
+    "tee_cyclic_bolted": _variant("tee_cyclic_bolted", """
+shear_tee tee9 {
+  basis lrfd
+  beam W18x50 grade steel.A992
+  support W14x90 flange grade steel.A992
+  tee WT6x25 grade steel.A992
+  bolts bolt_group.120 diameter 0.75 inch threads included joint pretensioned
+  rows 3
+  pitch 3 inch
+  edge_vertical 1.25 inch
+  bolt_line 3 inch
+  beam_edge 1.75 inch
+  top 3 inch
+  cope both depth 1.5 inch length 4 inch
+  setback 0.5 inch
+  support_side bolted
+  support_gauge 5.5 inch
+}""", "  on tee9 shear in [0 kip, 35 kip]", "  on tee9 shear in [3 kip, 12 kip]\n  on tee9 cycles in [0, 2000000]"),
+    # an end plate, pretensioned, on a beam coped at both flanges
+    "end_plate_cyclic": _variant("end_plate_cyclic", """
+shear_end_plate ep3 {
+  basis lrfd
+  beam W16x26 grade steel.A992
+  support W14x90 flange grade steel.A992
+  plate steel.A36 thickness 0.25 inch
+  plate_width 7 inch
+  bolts bolt_group.120 diameter 0.75 inch threads included joint pretensioned
+  rows 3
+  pitch 3 inch
+  edge_vertical 1.25 inch
+  support_gauge 4.5 inch
+  cope both depth 1.5 inch length 4 inch
+  setback 0.25 inch
+  weld electrode.E70 size 0.1875 inch sides 2
+}""", "  on ep3 shear in [0 kip, 30 kip]", "  on ep3 shear in [2 kip, 9 kip]\n  on ep3 cycles in [0, 600000]"),
+    # a stiffened seat: the stiffener's end across its pair of fillets, RFIL < 1, so the
+    # root crack (Eq A-3-5) is checked beside the toe
+    "stiffened_cyclic": _variant("stiffened_cyclic", """
+stiffened_seat ss6 {
+  basis asd
+  beam W18x50 grade steel.A992
+  support W14x90 flange grade steel.A992
+  plate steel.A36 thickness 0.375 inch
+  stiffener steel.A36 thickness 0.375 inch
+  stiffener_width 4 inch
+  stiffener_length 10 inch
+  setback 0.5 inch
+  weld electrode.E70 size 0.25 inch sides 2
+  top_angle L4x4x1_4 grade steel.A36 outstanding long
+}""", "  on ss6 shear in [0 kip, 35 kip]", "  on ss6 shear in [4 kip, 14 kip]\n  on ss6 cycles in [0, 500000]"),
+    # a stiffened seat whose welds are past 100 w: the throat's stress over the end-loaded length
+    "stiffened_cyclic_long_weld": _variant("stiffened_cyclic_long_weld", """
+stiffened_seat ss7 {
+  basis lrfd
+  beam W21x44 grade steel.A992
+  support W14x90 flange grade steel.A992
+  plate steel.A36 thickness 0.375 inch
+  stiffener steel.A36 thickness 0.5 inch
+  stiffener_width 6 inch
+  stiffener_length 24 inch
+  setback 0.75 inch
+  weld electrode.E70 size 0.1875 inch sides 2
+  top_angle L4x4x1_4 grade steel.A36 outstanding long
+}""", "  on ss7 shear in [0 kip, 40 kip]", "  on ss7 shear in [5 kip, 20 kip]\n  on ss7 cycles in [0, 3000000]"),
+    # a bolted bracket, pretensioned: its plate bends at section A-A on the net section; at
+    # 30,000 cycles, just past Section 3.1's floor of 20,000
+    "bolt_bracket_cyclic": _variant("bolt_bracket_cyclic", """
+bolt_bracket bb6 {
+  basis lrfd
+  plate steel.A36 thickness 0.5 inch
+  support W14x90 flange grade steel.A992
+  bolts bolt_group.120 diameter 0.875 inch threads included joint pretensioned
+  rows 3
+  columns 2
+  pitch 3 inch
+  gauge 3 inch
+  eccentricity 9 inch
+  edge_vertical 1.5 inch
+  plate_edge 1.5 inch
+  free_edge 6 inch
+}""", "  on bb6 shear in [0 kip, 25 kip]", "  on bb6 shear in [1 kip, 6 kip]\n  on bb6 cycles in [0, 30000]"),
+    # a welded bracket on both faces: RFIL = 1.06 >= 1, so the root is excused and the toe
+    # governs at its threshold; at 2 x 10^8 cycles a root check, which has none, would govern
+    "weld_bracket_cyclic": _variant("weld_bracket_cyclic", """
+weld_bracket wb7 {
+  basis lrfd
+  plate steel.A36 thickness 0.375 inch
+  support W14x90 flange grade steel.A992
+  weld electrode.E70 size 0.4375 inch sides 2
+  weld_length 12 inch
+  eccentricity 6 inch
+  free_edge 6 inch
+}""", "  on wb7 shear in [0 kip, 30 kip]", "  on wb7 shear in [2 kip, 8 kip]\n  on wb7 cycles in [0, 200000000]"),
+    # Welded details that also owe the unmodelled fatigue_detail: their throats still compare
+    "angles_cyclic_welded": _variant("angles_cyclic_welded", """
+double_angle da6 {
+  basis lrfd
+  beam W18x50 grade steel.A992
+  support W14x90 flange grade steel.A992
+  angles L4x3_1_2x5_16 grade steel.A36 outstanding long
+  bolts bolt_group.120 diameter 0.75 inch threads included joint pretensioned
+  rows 3
+  pitch 3 inch
+  edge_vertical 1.25 inch
+  beam_edge 1.75 inch
+  top 3 inch
+  beam_gauge 2 inch
+  support_side welded
+  support_weld electrode.E70 size 0.25 inch sides 1
+}""", "  on da6 shear in [0 kip, 45 kip]", "  on da6 shear in [2 kip, 12 kip]\n  on da6 cycles in [0, 500000]"),
+    "angle_cyclic_welded": _variant("angle_cyclic_welded", """
+single_angle sa5 {
+  basis lrfd
+  beam W16x26 grade steel.A992
+  support W14x90 flange grade steel.A992
+  angle L4x4x3_8 grade steel.A36 outstanding long
+  bolts bolt_group.120 diameter 0.75 inch threads included joint slip_critical surface class_b
+  rows 4
+  pitch 3 inch
+  edge_vertical 1.25 inch
+  beam_edge 1.75 inch
+  top 2.5 inch
+  beam_gauge 2.5 inch
+  support_side welded
+  support_weld electrode.E70 size 0.25 inch sides 1
+}""", "  on sa5 shear in [0 kip, 20 kip]", "  on sa5 shear in [1 kip, 5 kip]\n  on sa5 cycles in [0, 500000]"),
+    "tee_cyclic_welded": _variant("tee_cyclic_welded", """
+shear_tee tee10 {
+  basis lrfd
+  beam W18x50 grade steel.A992
+  support W14x90 flange grade steel.A992
+  tee WT6x25 grade steel.A992
+  bolts bolt_group.120 diameter 0.75 inch threads included joint pretensioned
+  rows 3
+  pitch 3 inch
+  edge_vertical 1.25 inch
+  bolt_line 3 inch
+  beam_edge 1.75 inch
+  top 3 inch
+  support_side welded
+  support_weld electrode.E70 size 0.25 inch sides 1
+}""", "  on tee10 shear in [0 kip, 35 kip]", "  on tee10 shear in [2 kip, 12 kip]\n  on tee10 cycles in [0, 500000]"),
+    "seat_cyclic_welded": _variant("seat_cyclic_welded", """
+seated seat4 {
+  basis lrfd
+  beam W16x26 grade steel.A992
+  support W14x90 flange grade steel.A992
+  angle L6x4x3_4 grade steel.A36 outstanding short
+  seat_length 8 inch
+  setback 0.5 inch
+  support_side welded
+  support_weld electrode.E70 size 0.3125 inch sides 2
+  top_angle L4x4x1_4 grade steel.A36 outstanding long
+}""", "  on seat4 shear in [0 kip, 30 kip]", "  on seat4 shear in [2 kip, 10 kip]\n  on seat4 cycles in [0, 500000]"),
+    "weld_bracket_cyclic_lapped": _variant("weld_bracket_cyclic_lapped", """
+weld_bracket wb8 {
+  basis lrfd
+  plate steel.A36 thickness 0.5 inch
+  support W14x90 flange grade steel.A992
+  weld electrode.E70 size 0.3125 inch sides 1
+  weld_length 12 inch
+  weld_return 4 inch
+  eccentricity 10 inch
+  free_edge 6 inch
+}""", "  on wb8 shear in [0 kip, 30 kip]", "  on wb8 shear in [2 kip, 8 kip]\n  on wb8 cycles in [0, 500000]"),
+    # Hangers owe fatigue_detail too (the tee), so their verdict is UNKNOWN; the bolts' own
+    # tension still compares. Snug-tight bolts carry the whole range, pretensioned ones 20%
+    # of the peak (Section 3.4(b)); at 2 x 10^8 cycles category G's threshold governs
+    "hanger_cyclic_snug": _variant("hanger_cyclic_snug", """
+hanger h10 {
+  basis lrfd
+  tee WT9x25 grade steel.A992
+  support W18x50 flange grade steel.A992
+  bolts bolt_group.120 diameter 0.75 inch threads included
+  rows 2
+  pitch 3 inch
+  tee_gauge 4 inch
+  edge_vertical 1.5 inch
+}""", "  on h10 tension in [0 kip, 30 kip]", "  on h10 tension in [2 kip, 10 kip]\n  on h10 cycles in [0, 500000]"),
+    "hanger_cyclic_pretensioned": _variant("hanger_cyclic_pretensioned", """
+hanger h11 {
+  basis lrfd
+  tee WT9x25 grade steel.A992
+  support W18x50 flange grade steel.A992
+  bolts bolt_group.120 diameter 0.75 inch threads included joint pretensioned
+  rows 2
+  pitch 3 inch
+  tee_gauge 4 inch
+  edge_vertical 1.5 inch
+}""", "  on h11 tension in [0 kip, 30 kip]", "  on h11 tension in [4 kip, 20 kip]\n  on h11 cycles in [0, 500000]"),
+    "hanger_cyclic_threshold": _variant("hanger_cyclic_threshold", """
+hanger h12 {
+  basis lrfd
+  tee WT9x25 grade steel.A992
+  support W18x50 flange grade steel.A992
+  bolts bolt_group.150 diameter 0.75 inch threads included joint slip_critical surface class_a
+  rows 3
+  pitch 3 inch
+  tee_gauge 4 inch
+  edge_vertical 1.5 inch
+}""", "  on h12 tension in [0 kip, 60 kip]\n  on h12 shear in [0 kip, 20 kip]",
+        "  on h12 tension in [6 kip, 30 kip]\n  on h12 shear in [1 kip, 5 kip]\n  on h12 cycles in [0, 200000000]"),
 }
 
 

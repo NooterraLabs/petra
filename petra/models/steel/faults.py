@@ -13,7 +13,9 @@ do not fit: bolt rows run past the beam's depth or off a seat's leg, a support g
 than the face, a beam too wide to pass between a column's flanges, a plate on the beam's
 fillet, a bracket's bolt columns off the flange; a flange force's panel_shear or axial
 load left out, which leaves its panel zone open rather than unchecked; and a flange force
-at a member end free to twist, whose J10.7 stiffeners leave it open. `seed_faults`
+at a member end free to twist, whose J10.7 stiffeners leave it open; and under a cyclic
+load (Appendix 3): snug-tight bolts, a load range past a detail's fatigue strength, and a
+plate's end welded on one face, whose detail the deck does not encode. `seed_faults`
 applies each fault to passing designs from the generator; the deck catches a fault when
 its verdict is not PASS, and names it when a refuted or open requirement is one of the
 fault's modes. The gate wants every fault caught and named.
@@ -32,6 +34,7 @@ from ...solvers import SolverSource
 from ...verdict import STATUS
 from ..base import ComponentError
 from .generate import SIGNATURE, Generated, generate
+from .lower import CYCLES, KIND_SPECS
 
 BOLTED = ("shear_tab", "double_angle", "single_angle", "shear_tee", "shear_end_plate", "bolt_bracket", "hanger")
 
@@ -260,6 +263,50 @@ def _overload(text: str, g: Generated) -> str | None:
     return re.sub(r"^  on c1 (\w+) in \[0 kip, ([0-9.]+) kip\]$", raised, text, flags=re.M)
 
 
+def _cyclic_case(text: str, g: Generated, factor: int, cycles: int) -> str | None:
+    """The design with a second load case, cyclic: its gate case's primary load, `factor`
+    times over, as the range [0, factor P] for `cycles` cycles."""
+    field = KIND_SPECS[g.kind].loads[0]
+    m = re.search(rf"^  on c1 {field} in \[0 kip, ([0-9.]+) kip\]$", text, re.M)
+    if m is None:
+        return None
+    top = Fraction(m.group(1)) * factor
+    return (f"{text}\nload cycled {{\n  on c1 {field} in [0 kip, {float(top):.3f} kip]\n"
+            f"  on c1 {CYCLES} in [0, {cycles}]\n  {SIGNATURE}\n}}\n")
+
+
+def _bolts_as(text: str, joint: str) -> str | None:
+    """The bolts installed `joint`: snug, or pretensioned unless slip-critical."""
+    bolts = _field(text, "bolts")
+    if bolts is None:
+        return None
+    if joint == "pretensioned" and "slip_critical" in bolts:
+        return text
+    plain = re.sub(r" joint \w+( surface \w+)?( fillers \w+)?", "", bolts)
+    return text.replace(f"  bolts {bolts}\n", f"  bolts {plain}{'' if joint == 'snug' else ' joint ' + joint}\n", 1)
+
+
+def _snug_under_cycles(text: str, g: Generated) -> str | None:
+    """Snug-tight bolts under the design's own load, cycled two million times."""
+    out = _bolts_as(text, "snug")
+    return _cyclic_case(out, g, 1, 2_000_000) if out else None
+
+
+def _cyclic_overload(text: str, g: Generated) -> str | None:
+    """A pretensioned joint under three times the design's load, cycled 200 million times:
+    every detail's range far past its threshold."""
+    out = _bolts_as(text, "pretensioned") if _field(text, "bolts") is not None else text
+    return _cyclic_case(out, g, 3, 200_000_000) if out else None
+
+
+def _one_sided_end(text: str, g: Generated) -> str | None:
+    """A plate's end welded on one face under the design's load, cycled two million times."""
+    weld = _field(text, "weld")
+    if weld is None or " sides 2" not in weld or _field(text, "weld_return") is not None:
+        return None
+    return _cyclic_case(_set(text, "weld", weld.replace(" sides 2", " sides 1")), g, 1, 2_000_000)
+
+
 def _thick_tab(text: str, g: Generated) -> str | None:
     """Neither part thin enough to rotate: a 3/4 in plate on a W30x90 (tw 0.470 in) with
     3/4 in bolts, both past d/2 + 1/16 = 7/16 in."""
@@ -330,6 +377,7 @@ def _columns_off_flange(text: str, g: Generated) -> str | None:
 
 BEAM_SIDE = ("shear_tab", "double_angle", "single_angle", "shear_tee")
 FIT_FACES = frozenset({"flange_fit", "web_fit"})
+FATIGUE = frozenset({"fatigue_bolted", "fatigue_bolt_tension", "fatigue_weld", "fatigue_weld_end", "fatigue_cope"})
 
 FAULTS: tuple[Fault, ...] = (
     Fault("missing weld", "a 1/16 in fillet, far under Table J2.4's minimum",
@@ -388,6 +436,12 @@ FAULTS: tuple[Fault, ...] = (
           frozenset({"web_local_yielding"})),
     Fault("cramped bracket bolts", "two bracket bolt columns 2-1/2 in apart on a W12x26's flange, no room for a socket",
           ("bolt_bracket",), _cramped_bracket, frozenset({"clearance"})),
+    Fault("snug joint under cycles", "snug-tight bolts under a cyclic load, which RCSC 4.2 requires pretensioned", BOLTED,
+          _snug_under_cycles, frozenset({"joint_type"})),
+    Fault("cyclic overload", "three times the design load cycled 200 million times, past every detail's threshold",
+          (*BOLTED, "stiffened_seat", "weld_bracket"), _cyclic_overload, FATIGUE),
+    Fault("one-sided plate end", "a cyclic plate's end welded on one face, a detail without an encoded category",
+          ("shear_tab", "stiffened_seat", "weld_bracket"), _one_sided_end, frozenset({"fatigue_detail"})),
 )
 
 

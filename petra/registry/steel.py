@@ -629,19 +629,27 @@ def _stock_constants() -> list[Constant]:
             for t in STOCK_PLATES]
 
 
-def _factor_constants() -> list[Constant]:
+def rows_to_constants(table: tuple[_F, ...]) -> list[Constant]:
+    """Constants from (name, value text, unit, tag, owner, source) rows, the value written
+    in ksi or inches where the unit is "Pa" or "m"."""
     rows = []
-    for name, text, unit, tag, owner, source in (*FACTORS, *COEFFICIENTS):
+    for name, text, unit, tag, owner, source in table:
         scale = {"1": Fraction(1), "Pa": KSI, "m": INCH}[unit]
         shown = {"1": "", "Pa": " ksi", "m": " in"}[unit]
         rows.append(Constant(name, _iv(_q(text) * scale), unit, tag, owner, source, f"{name} = {text}{shown}"))
     return rows
 
 
+def _factor_constants() -> list[Constant]:
+    return rows_to_constants((*FACTORS, *COEFFICIENTS))
+
+
 # --- Assembly ----------------------------------------------------------------------------
 
 def steel_constants() -> dict[str, Constant]:
-    rows = [*_bolt_constants(), *_factor_constants(), *_stock_constants(), *shape_constants().values()]
+    from .steel_fatigue import fatigue_constants  # it reads this module's row format
+    rows = [*_bolt_constants(), *_factor_constants(), *fatigue_constants(), *_stock_constants(),
+            *shape_constants().values()]
     table = {c.name: c for c in rows}
     if len(table) != len(rows):
         raise RuntimeError("a steel constant is defined twice")

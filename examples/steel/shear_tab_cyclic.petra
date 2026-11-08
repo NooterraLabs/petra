@@ -1,0 +1,43 @@
+petra 0
+
+# A single-plate shear connection under a cyclic load: a W18x50 crane runway beam, coped
+# at both flanges, framing into the flange of a W14x90 column through a 3/8 in A36 plate,
+# four 3/4 in Group 120 bolts pretensioned, the plate fillet-welded to the column on both
+# faces. The load case that names cycles is the cyclic one (AISC 360-22 Appendix 3). Its
+# shear varies between 2 and 10 kip, a service range of 8 kip, for 500,000 cycles. Coverage
+# then demands the fatigue check of every detail: the plate and beam web at the bolt holes
+# (Table A-3.1 Case 2.2), the welds' throats (Case 8.2), the plate's welded end (Case 5.7)
+# and the bottom cope's corner (Case 1.3).
+
+design "steel-shear-tab-cyclic" {
+  owner "s.engineer@example.org"
+}
+
+shear_tab st1 {
+  basis lrfd
+  beam W18x50 grade steel.A992
+  support W14x90 flange grade steel.A992
+  plate steel.A36 thickness 0.375 inch
+  bolts bolt_group.120 diameter 0.75 inch threads included joint pretensioned
+  rows 4
+  pitch 3 inch
+  edge_vertical 1.5 inch
+  plate_edge 1.5 inch
+  bolt_line 3 inch
+  beam_edge 1.75 inch
+  top 3 inch
+  setback 0.5 inch
+  cope both depth 1.5 inch length 5 inch bottom_depth 2 inch
+  weld electrode.E70 size 0.25 inch sides 2
+}
+
+load gravity {
+  on st1 shear in [0 kip, 40 kip]
+  signed "s.engineer@example.org" source "beam reaction, LRFD 1.2D + 1.6L, calc SC-3"
+}
+
+load crane {
+  on st1 shear in [2 kip, 10 kip]
+  on st1 cycles in [0, 500000]
+  signed "s.engineer@example.org" source "runway reaction under the crane, service loads, 500,000 cycles, calc SC-7"
+}
