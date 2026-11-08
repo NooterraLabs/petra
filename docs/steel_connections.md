@@ -236,7 +236,7 @@ The deck reads the method in these ways.
 - C is the group's geometry against the load's line, so added material can lower it. A heavier beam's thicker web moves a single angle's support-side load line out, and a thicker plate can leave Table 10-9's configuration (a fillet at least 5/8 tp). No bolt's own strength falls, and that is what `tests/test_steel_properties.py` holds the group to.
 - A bracket's group holds C times its weakest bolt (Manual Part 7). Each bolt tears out along its own force, about the centre of the method that gives C (J3.11a). The support's edges are not declared, so only its holes bound its tearout.
 - A bracket plate on edge, welded on both faces with e past L/8, is Manual Table 8-4's group at k = 0. Its base metal carries the force along the weld, at most 1.04 times the load's share per unit length (`petra.weld_ic.along_peak`). The bound is 1.0337 for the directional increase times 1.0008 for the curve's peak (measured).
-- Edge distances add Table J3.5's C2 for an oversized hole, and for a slot at an edge it runs toward. A plain slot in an eccentric bracket needs a slip-critical joint (J3.3), since the bracket's bolts push along it.
+- Edge distances add Table J3.5's C2 for an oversized hole, and for a slot at an edge it runs toward. A plain slot in an eccentric bracket needs a slip-critical joint (J3.3), since the bracket's bolts push along it. For the same reason its slip resistance takes J3.9's factors for a slot parallel to the load, 0.85 for LRFD and 1.76 for ASD. A shear tab's plain short slot keeps the factors for a slot normal to the load, 1.00 and 1.50, as Manual Part 10 details it.
 
 What the certificate costs, measured.
 

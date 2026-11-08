@@ -37,7 +37,7 @@ Each row gives its provision one treatment:
 | J3.6 | Maximum Spacing and Edge Distance | check | `spacing_max`, `edge_max` |  |
 | J3.7 | Tensile and Shear Strength of Bolts and Threaded Parts | check | `bolts`, `bolt_tension`, `prying` | Prying uses the Manual Part 9 T-stub model. |
 | J3.8 | Combined Tension and Shear in Bearing-Type Connections | check | `bolt_combined` |  |
-| J3.9 | High-Strength Bolts in Slip-Critical Connections | check | `slip`, `bolts`, `bolt_combined` | The faying-surface class is a premise of the slip model. Slip-critical joints are also checked for the bearing-type limit states. |
+| J3.9 | High-Strength Bolts in Slip-Critical Connections | check | `slip`, `bolts`, `bolt_combined` | The faying-surface class is a premise of the slip model. Slip-critical joints are also checked for the bearing-type limit states. A plain slot in an eccentric bracket group takes the factor of a slot parallel to the load, since the bracket's bolts push along it. |
 | J3.10 | Combined Tension and Shear in Slip-Critical Connections | check | `slip` | ksc of Eqs J3-5a and J3-5b. |
 | J3.11a | Bearing and Tearout: Snug-Tightened or Pretensioned High-Strength Bolted Connections | check | `bolts` | Per hole, the least of shear, bearing and tearout per bolt. A bracket's bolt tears out along its own force, which turns about the centre of the method that loads it. |
 | J3.11b | Bearing and Tearout: Bolts or Rods Through an Unstiffened Box Member or HSS | excluded |  | In v1.2, with the Chapter K HSS connections (docs/steel_connections.md §3). |

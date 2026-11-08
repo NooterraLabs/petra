@@ -812,12 +812,15 @@ def clearance(ctx: _Ctx, label: str, bolts: Bolts, provided: float, what: str) -
     ctx.add("clearance", f"{label}: room to tighten, clear of {what}", _ratio(need, provided))
 
 
-def slip(ctx: _Ctx, label: str, group: BoltSet, p: float, holes: Iterable[str], tension: float = 0.0) -> None:
+def slip(ctx: _Ctx, label: str, group: BoltSet, p: float, holes: Iterable[str], tension: float = 0.0,
+         bracket: bool = False) -> None:
     """J3.9 Eq J3-4 per bolt, with ksc of Eq J3-5 when tension acts, the resistance
     factor of the worst hole type among the plies (J3.9(a)-(c)). An eccentric group's
-    most loaded bolt (elastic method) is compared with one bolt's resistance."""
+    most loaded bolt (elastic method) is compared with one bolt's resistance. In an
+    eccentric bracket group the bolts push along a plain slot (hole_use), so a plain
+    short slot takes J3.9(b)'s factor for a slot parallel to the load."""
     reg, b = ctx.reg, group.b
-    holes = list(holes)
+    holes = [f"{h}_parallel" if bracket and h in ("ssl", "lsl") else h for h in holes]
     if any(h in ("lsl", "lsl_parallel") for h in holes):
         limit = "slip_lsl"
     elif any(h in ("ovs", "ssl_parallel") for h in holes):
@@ -1830,7 +1833,7 @@ def _bolt_bracket(ctx: _Ctx, modes: set[str]) -> None:
     joint_type(ctx, "bracket bolts", bolts, (hp, hs), tension=False)
     long_slots(ctx, "bracket bolts", (hp, hs))
     if bolts.joint == "slip_critical":
-        slip(ctx, "bracket bolts", group, p, (hp, hs))
+        slip(ctx, "bracket bolts", group, p, (hp, hs), bracket=True)
     # fatigue: the plate bends at section A-A under its flexural checks' P e_aa
     fatigue_ply(ctx, "bracket plate", group, hp, tp, depth, pfy, arm=e_aa)
     _bracket_plate(ctx, p, depth, tp, pfy, e_aa)

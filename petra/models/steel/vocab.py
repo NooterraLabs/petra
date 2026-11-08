@@ -96,7 +96,9 @@ STRENGTH: tuple[tuple[str, str, str, str, tuple[ValidityRow, ...]], ...] = (
      "shear and tension shared equally by the bolts of the group",
      f"{AISC} Section J3.8", ()),
     ("slip",
-     "slip resistance Rn = mu Du hf Tb ns ksc per bolt (Eqs J3-4, J3-5a/b), with the resistance factor of the hole type",
+     "slip resistance Rn = mu Du hf Tb ns ksc per bolt (Eqs J3-4, J3-5a/b), with the resistance factor of the hole type; "
+     "in an eccentric bracket group, whose bolt forces turn across the depth along a plain slot, a plain slot takes "
+     "the factor of a slot parallel to the load",
      "faying surfaces prepared to the declared class; bolts pretensioned to at least Table J3.1; fillers as declared",
      f"{AISC} Sections J3.9 and J3.10; RCSC 2025 Section 5.4", ()),
     ("shear_yield",

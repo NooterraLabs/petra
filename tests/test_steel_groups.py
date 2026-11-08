@@ -545,5 +545,61 @@ class BracketHoles(unittest.TestCase):
         self.assertEqual(obligation(checked(slip), "hole_use")["outcome"], "certified")
 
 
+SLOT_SLIP = """petra 0
+
+design "gate-1-01042" {
+  owner "gate@petra.dev"
+}
+
+bolt_bracket c1 {
+  basis asd
+  plate steel.A36 thickness 0.625 inch
+  support W10x49 flange grade steel.A992
+  bolts bolt_group.120 diameter 0.875 inch threads included joint slip_critical surface class_b fillers one
+  holes plate ssl
+  rows 3
+  columns 1
+  pitch 3 inch
+  gauge 3 inch
+  eccentricity 8 inch
+  edge_vertical 1.5 inch
+  plate_edge 2 inch
+}
+
+load gate {
+  on c1 shear in [0 kip, 9.474 kip]
+  signed "gate@petra.dev" source "steel gate generator"
+}
+"""
+
+
+class BracketSlip(unittest.TestCase):
+    """J3.9 gives a short slot normal to the load phi = 1.00 and Omega = 1.50, and one
+    parallel to it 0.85 and 1.76. A bracket's bolts above and below its centroid push
+    mostly across the depth, along a plain slot, as hole_use already reads them. The
+    gate's bracket gate-1-01042: three 7/8 in Group 120 bolts, class B, one filler, so
+    each holds mu Du hf Tb = 0.50 x 1.13 x 1.0 x 39 = 22.04 kips. The elastic method puts
+    9.474 / 3 = 3.158 kips down on the top bolt and 9.474 x 8 x 3 / 18 = 12.63 kips across
+    it. The deck passed it at 97407e3 against Omega = 1.50, at 0.886."""
+
+    def test_a_plain_short_slot_in_a_bracket_takes_the_parallel_factor(self):
+        report = checked(SLOT_SLIP)
+        self.assertEqual(report["status"], "FAIL")
+        found = obligation(report, "slip")
+        self.assertEqual(found["outcome"], "refuted")
+        force = math.hypot(9.474 / 3, 9.474 * 8 * 3 / 18)
+        self.assertAlmostEqual(found["utilisation"], force / (0.50 * 1.13 * 1.0 * 39 / 1.76), places=6)
+
+    def test_a_shear_tabs_short_slot_stays_normal_to_the_load(self):
+        """Manual Part 10 details a shear tab's short slots horizontal, normal to its
+        reaction, so a slip-critical tab keeps Omega = 1.50: four 3/4 in Group 120 bolts,
+        class A, 0.30 x 1.13 x 1.0 x 28 = 9.49 kips each."""
+        text = (ROOT / "examples" / "steel" / "shear_tab.petra").read_text(encoding="utf-8")
+        text = text.replace("threads included", "threads included joint slip_critical surface class_a")
+        text = text.replace("  rows 4\n", "  holes plate ssl\n  rows 4\n").replace("basis lrfd", "basis asd")
+        found = obligation(checked(text), "slip")
+        self.assertAlmostEqual(found["capacity"], 0.30 * 1.13 * 1.0 * 28 / 1.50, places=6)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1199,6 +1199,15 @@ def gen_bolts(ctx: Ctx, geo: Geometry) -> list[Check]:
     return out
 
 
+def load_hole(itf: Interface, hole: str) -> str:
+    """The hole type as J3.3 and J3.9 read it against the bolts' force. An eccentric
+    bracket group's bolts above and below its centroid push mostly across the depth axis,
+    along a plain slot, so there a plain slot reads as a slot parallel to the load."""
+    if itf.outline is not None and itf.eccentricity is not None and hole in ("ssl", "lsl"):
+        return f"{hole}_parallel"
+    return hole
+
+
 def gen_slip(ctx: Ctx, geo: Geometry) -> list[Check]:
     out = []
     for itf in geo.interfaces:
@@ -1211,7 +1220,7 @@ def gen_slip(ctx: Ctx, geo: Geometry) -> list[Check]:
         du = ctx.const("rcsc2025.s5_4.Du")
         hf = ctx.const(f"rcsc2025.s5_4.hf_{'two' if b.fillers == 'two' else 'one'}")
         ksc = c(1) if itf.tension is None else L.slip_ksc(div(itf.tension, c(itf.n)), du, tb, None if ctx.lrfd else ctx.const("aisc360.j3_10.ksc_asd"))
-        holes = {p.hole for p in itf.plies}
+        holes = {load_hole(itf, p.hole) for p in itf.plies}
         suffix = "_lsl" if holes & {"lsl", "lsl_parallel"} else "_ovs" if holes & {"ovs", "ssl_parallel"} else "_std"
         per_bolt = ctx.available(L.slip(mu, du, hf, tb, c(itf.planes), ksc), "rcsc2025.s5_4", suffix)
         if itf.eccentricity is not None:
@@ -1586,10 +1595,10 @@ def gen_hole_use(ctx: Ctx, geo: Geometry) -> list[Check]:
     for itf in geo.interfaces:
         level = _joint_level(ctx, itf.bolts)
         for ply in itf.plies:
-            if itf.outline is not None and itf.eccentricity is not None and ply.hole in ("ssl", "lsl"):
-                # J3.3(e) and (f): in a bearing-type joint a slot lies normal to the loading.
-                # A bracket's bolts above and below its centroid push mostly across the depth
-                # axis, along a plain slot, so only a slip-critical joint takes one.
+            if load_hole(itf, ply.hole) != ply.hole:
+                # J3.3(e) and (f): in a bearing-type joint a slot lies normal to the loading,
+                # and a bracket's bolts push along a plain one, so only a slip-critical joint
+                # takes it.
                 out.append(Check(f"{ply.name}: {ply.hole} holes in an eccentric bracket group, whose bolt forces run along "
                                  "the slots, only in a slip-critical joint (J3.3)",
                                  (ctx.const("rcsc2025.joint_level.slip_critical"),), level, unit="1", group=None, suffix="", guards=()))
