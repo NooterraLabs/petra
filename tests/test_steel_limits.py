@@ -273,5 +273,68 @@ class Verdicts(unittest.TestCase):
                 self.assertIn(NeedsInputBound(("st1",), "shear", "kip"), o.needs, o.requirement.id)
 
 
+BOTTOM_COPE = """petra 0
+
+design "gate-1-05546" {
+  owner "gate@petra.dev"
+}
+
+single_angle c1 {
+  basis asd
+  beam W12x26 grade steel.A992
+  support W12x65 web grade steel.A992
+  angle L4x4x1_2 grade steel.A36 outstanding short
+  bolts bolt_group.120 diameter 0.875 inch threads included
+  holes angle ssl
+  top 3.5 inch
+  rows 3
+  pitch 3 inch
+  edge_vertical 1.5 inch
+  beam_edge 1.5 inch
+  beam_gauge 2.25 inch
+  support_side welded
+  support_weld electrode.E70 size 0.25 inch
+  cope both depth 1.5 inch length 3 inch bottom_depth 2 inch
+  setback 0.5 inch
+}
+
+load gate {
+  on c1 shear in [0 kip, 10.728 kip]
+  signed "gate@petra.dev" source "steel gate generator"
+}
+"""
+
+
+class BottomCopeEdge(unittest.TestCase):
+    """J3.5 holds a bolt's centre a Table J3.4 distance from every edge of the part, the
+    cut edge of a beam's bottom cope among them. The gate's single angle gate-1-05546:
+    a W12x26 (d = 12.2 in) coped 1-1/2 in at the top and 2 in at the bottom, three 7/8 in
+    bolts from 3-1/2 in below its top at 3 in. The bottom bolt sits 3.5 + 2 x 3 = 9.5 in
+    down, 12.2 - 2 - 9.5 = 0.7 in above the bottom cope, where Table J3.4 asks 1-1/8 in.
+    The deck passed it at 03a6fbf."""
+
+    def test_a_bolt_near_the_bottom_cope_fails_the_minimum_edge_distance(self):
+        d = parse_design(BOTTOM_COPE, "gate.petra", REGISTRY)
+        self.assertEqual(outcomes(d)["c1/steel.edge_min/coverage.steel.edge_min"], "Refuted")
+        found = checks(d, "c1", "edge_min", "gate")["beam web: bottom cope edge distance at least Table J3.4's (J3.5)"]
+        self.assertAlmostEqual(found.demand, 1.125, places=9)
+        self.assertAlmostEqual(found.capacity, 0.7, places=9)
+
+    def test_the_bottom_cope_takes_c2_and_no_maximum(self):
+        """Table J3.5 adds C2 = 1/16 in for a 7/8 in bolt's oversized hole. J3.6 bounds the
+        distance to a bolt's nearest edge, which the beam end already holds within its
+        limit, so the bottom cope takes no maximum: on a W18x50 (d = 18.0 in) it sits
+        18.0 - 2 - 9.5 = 6.5 in below the bottom bolt, past J3.6's 6 in."""
+        text = BOTTOM_COPE.replace("W12x26", "W18x50").replace("holes angle ssl", "holes beam ovs")
+        text = text.replace("threads included", "threads included joint slip_critical surface class_a")
+        d = parse_design(text, "gate.petra", REGISTRY)
+        found = checks(d, "c1", "edge_min", "gate")
+        near = found["beam web: bottom cope edge distance at least Table J3.4's plus Table J3.5's C2 for its ovs holes (J3.5)"]
+        self.assertAlmostEqual(near.demand, 1.125 + 0.0625, places=9)
+        self.assertAlmostEqual(near.capacity, 6.5, places=9)
+        self.assertFalse([what for what in checks(d, "c1", "edge_max", "gate") if "bottom cope" in what])
+        self.assertEqual(outcomes(d)["c1/steel.edge_max/coverage.steel.edge_max"], "Discharged")
+
+
 if __name__ == "__main__":
     unittest.main()

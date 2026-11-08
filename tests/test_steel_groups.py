@@ -134,14 +134,16 @@ class IIA22(ex.Example):
 
 class IIA23(ex.Example):
     """A welded bracket plate: two PL3/8 A572 Gr. 50 lapped on the column, each welded by a
-    3/16 in E70 C-shaped fillet, 18 in long with 3 in returns, the load 11-1/4 in from the
-    vertical weld (8-1/4 in from section A-A at the returns' tips), the free edge projecting
-    11-1/2 in. Pu = 54.0, Pa = 36.0 kips shared by the two plates; the design models one."""
+    3/16 in E70 C-shaped fillet, 18 in long with 3 in returns, the load al = 10-7/8 in from
+    the weld's centroid (printed 10.9), which lies xl = 9 / 24 = 0.375 in inside the vertical
+    weld. So the load is 11-1/4 in from the vertical weld and 8-1/4 in from section A-A at
+    the returns' tips. The free edge projects 11-1/2 in. Pu = 54.0, Pa = 36.0 kips shared by
+    the two plates; the design models one."""
 
     tag, kind, plates, loads = "II.A-23", "weld_bracket", 2, ("27.0", "18.0")
     body = ("  plate steel.A572_50 thickness 0.375 inch\n  support W14x90 flange grade steel.A992\n"
             "  weld electrode.E70 size 0.1875 inch sides 1\n  weld_length 18 inch\n  weld_return 3 inch\n"
-            "  eccentricity 11.25 inch\n  free_edge 11.5 inch\n")
+            "  eccentricity 10.875 inch\n  free_edge 11.5 inch\n")
     printed = {
         ("shear_yield", "bracket plate:"): ("405", "270"),
         ("flexural_yield", "bracket plate:"): ("2,740", "1,820"),
@@ -190,14 +192,15 @@ class IIA24And25(ex.Example):
 
 
 class IIA26And27(ex.Example):
-    """A C-shaped 3/8 in E70 fillet, 10 in long with 5 in returns, a vertical load 10 in from
-    the vertical weld (ex = 8.75 in from the centroid). II.A-27 is the elastic method;
-    II.A-26 the instantaneous centre (C = 1.88)."""
+    """A C-shaped 3/8 in E70 fillet, 10 in long with 5 in returns, a vertical load ex = 8.75
+    in from the centroid, which lies 25 / 20 = 1.25 in inside the vertical weld, so 10 in
+    from that weld. II.A-27 is the elastic method; II.A-26 the instantaneous centre (C =
+    1.88)."""
 
     tag, kind, loads = "II.A-27", "weld_bracket", ("40", "25")
     body = ("  plate steel.A36 thickness 0.5 inch\n  support W14x90 flange grade steel.A992\n"
             "  weld electrode.E70 size 0.375 inch sides 1\n  weld_length 10 inch\n  weld_return 5 inch\n"
-            "  eccentricity 10 inch\n")
+            "  eccentricity 8.75 inch\n")
     printed = {("weld", "bracket weld:"): ("47.2", "31.5")}
     bounded = {("weld", "bracket weld:"): ("84.8", "56.5")}
 
@@ -543,6 +546,109 @@ class BracketHoles(unittest.TestCase):
         self.assertEqual(obligation(checked(SLOTTED), "hole_use")["outcome"], "refuted")
         slip = SLOTTED.replace("joint pretensioned", "joint slip_critical surface class_a")
         self.assertEqual(obligation(checked(slip), "hole_use")["outcome"], "certified")
+
+
+SLOT_SLIP = """petra 0
+
+design "gate-1-01042" {
+  owner "gate@petra.dev"
+}
+
+bolt_bracket c1 {
+  basis asd
+  plate steel.A36 thickness 0.625 inch
+  support W10x49 flange grade steel.A992
+  bolts bolt_group.120 diameter 0.875 inch threads included joint slip_critical surface class_b fillers one
+  holes plate ssl
+  rows 3
+  columns 1
+  pitch 3 inch
+  gauge 3 inch
+  eccentricity 8 inch
+  edge_vertical 1.5 inch
+  plate_edge 2 inch
+}
+
+load gate {
+  on c1 shear in [0 kip, 9.474 kip]
+  signed "gate@petra.dev" source "steel gate generator"
+}
+"""
+
+
+class BracketSlip(unittest.TestCase):
+    """J3.9 gives a short slot normal to the load phi = 1.00 and Omega = 1.50, and one
+    parallel to it 0.85 and 1.76. A bracket's bolts above and below its centroid push
+    mostly across the depth, along a plain slot, as hole_use already reads them. The
+    gate's bracket gate-1-01042: three 7/8 in Group 120 bolts, class B, one filler, so
+    each holds mu Du hf Tb = 0.50 x 1.13 x 1.0 x 39 = 22.04 kips. The elastic method puts
+    9.474 / 3 = 3.158 kips down on the top bolt and 9.474 x 8 x 3 / 18 = 12.63 kips across
+    it. The deck passed it at 97407e3 against Omega = 1.50, at 0.886."""
+
+    def test_a_plain_short_slot_in_a_bracket_takes_the_parallel_factor(self):
+        report = checked(SLOT_SLIP)
+        self.assertEqual(report["status"], "FAIL")
+        found = obligation(report, "slip")
+        self.assertEqual(found["outcome"], "refuted")
+        force = math.hypot(9.474 / 3, 9.474 * 8 * 3 / 18)
+        self.assertAlmostEqual(found["utilisation"], force / (0.50 * 1.13 * 1.0 * 39 / 1.76), places=6)
+
+    def test_a_shear_tabs_short_slot_stays_normal_to_the_load(self):
+        """Manual Part 10 details a shear tab's short slots horizontal, normal to its
+        reaction, so a slip-critical tab keeps Omega = 1.50: four 3/4 in Group 120 bolts,
+        class A, 0.30 x 1.13 x 1.0 x 28 = 9.49 kips each."""
+        text = (ROOT / "examples" / "steel" / "shear_tab.petra").read_text(encoding="utf-8")
+        text = text.replace("threads included", "threads included joint slip_critical surface class_a")
+        text = text.replace("  rows 4\n", "  holes plate ssl\n  rows 4\n").replace("basis lrfd", "basis asd")
+        found = obligation(checked(text), "slip")
+        self.assertAlmostEqual(found["capacity"], 0.30 * 1.13 * 1.0 * 28 / 1.50, places=6)
+
+
+WELD_ARM = """petra 0
+
+design "gate-1-00009" {
+  owner "gate@petra.dev"
+}
+
+weld_bracket c1 {
+  basis asd
+  plate steel.A36 thickness 0.75 inch
+  support W12x50 flange grade steel.A992
+  weld electrode.E70 size 0.3125 inch sides 1
+  weld_length 14 inch
+  weld_return 3 inch
+  eccentricity 8 inch
+  free_edge 6 inch
+}
+
+load gate {
+  on c1 shear in [0 kip, 30.515 kip]
+  signed "gate@petra.dev" source "steel gate generator"
+}
+"""
+
+
+class WeldBracketArm(unittest.TestCase):
+    """A weld bracket's eccentricity is the load's distance from its weld group's centroid
+    (docs/reference.md). A C-shaped weld's centroid lies kl^2 / (L + 2 kl) inside its
+    vertical line (Manual Part 8), and the load's arm to section A-A runs from the returns'
+    tips. The gate's bracket gate-1-00009: a 3/4 in A36 plate on a 14 in weld with 3 in
+    returns, the load 8 in from the centroid. The centroid lies 9 / 20 = 0.45 in inside the
+    line, so the arm is 8 + 0.45 - 3 = 5.45 in. The free edge projects 6 in: theta =
+    atan(6 / 14), b' = 14 sin theta = 5.515 in, lambda = 0.354, so Q = 1 (Manual Part 15).
+    The deck read the arm from the vertical line, 5.00 in, and passed it at 03a6fbf at 0.927."""
+
+    def test_the_arm_runs_from_the_centroid(self):
+        report = checked(WELD_ARM)
+        self.assertEqual(report["status"], "FAIL")
+        found = obligation(report, "bracket_edge")
+        self.assertEqual(found["outcome"], "refuted")
+        arm = 8 + 9 / 20 - 3
+        hyp = math.hypot(14, 6)
+        cos, b1 = 14 / hyp, 14 * 6 / hyp
+        nc = 36 * 0.75 * b1 / 1.67
+        mc = 36 * 0.75 * b1 ** 2 / 4 / 1.67
+        self.assertAlmostEqual(found["utilisation"], 30.515 * (cos / nc + (arm - cos * b1 / 2) / mc), places=6)
 
 
 if __name__ == "__main__":

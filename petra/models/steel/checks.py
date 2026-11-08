@@ -125,7 +125,10 @@ class Ply:
     edge: from the extreme row, in the direction the bolts push, to a free edge (None: none).
     side: from the outer column to the free side edge (the block's tension plane).
     depth: one section's gross length along the bolt line (None: no shear check).
-    columns: bolt columns one element of the ply holds."""
+    columns: bolt columns one element of the ply holds.
+    edges_min: edges J3.5 holds the bolts from and J3.6 limits.
+    edges_far: edges J3.5 alone reads. J3.6's maximum is to a bolt's nearest edge, and an
+    edge of edges_min already lies nearer within its limit."""
 
     name: str
     grade: str
@@ -140,6 +143,7 @@ class Ply:
     columns: int
     edges_min: tuple[tuple[str, Expr], ...]
     block: bool
+    edges_far: tuple[tuple[str, Expr], ...]
 
 
 @dataclass(frozen=True)
@@ -387,7 +391,7 @@ def _face_t(member: Member, props: Mapping[str, Expr]) -> Expr:
 def _support_ply(ctx: Ctx) -> Ply:
     support: Member = ctx.conn.attrs["support"]
     t = _face_t(support, _w(ctx, support))
-    return Ply(f"support {support.face}", support.grade, t, 1, 1, ctx.hole("support"), "down", None, None, None, 1, block=False, edges_min=())
+    return Ply(f"support {support.face}", support.grade, t, 1, 1, ctx.hole("support"), "down", None, None, None, 1, block=False, edges_min=(), edges_far=())
 
 
 def _underrun(ctx: Ctx) -> Sym:
@@ -403,19 +407,25 @@ def _beam_web_ply(ctx: Ctx, beam: Member, props: Mapping[str, Expr], columns: in
     """The beam web the bolts push up. Its free edge is the top of the beam, or the
     cope's horizontal edge; block shear applies only when coped (an uncoped web's top
     bolt would have to tear through the flange). The block's tension plane runs to the
-    beam end less the underrun; the end's edge distance limits take it as detailed."""
+    beam end less the underrun; the end's edge distance limits take it as detailed. A
+    bottom cope's cut edge holds the bottom row J3.5's distance off."""
     top, beam_edge = ctx.attr("top"), ctx.attr("beam_edge")
     side = sub(beam_edge, _underrun(ctx))
     cope: Cope | None = ctx.conn.get("cope")
     d = props["d"]
     if cope is None:
         return Ply("beam web", beam.grade, props["tw"], 1, 1, ctx.hole("beam"), "up", top, side, d, columns,
-                   (("beam end", beam_edge),), block=False)
+                   (("beam end", beam_edge),), block=False, edges_far=())
     dc = ctx.geo(cope.depth, "cope.depth")
     depth = sub(d, dc) if cope.flanges == "top" else sub(sub(d, dc), _bottom_cope(ctx, cope, dc))
     edge = sub(top, dc)
+    far = ()
+    if cope.flanges == "both":
+        # the web left between the copes, less the top bolt's distance to the top cope and the rows' spread
+        spread = mul(c(ctx.conn.attrs["rows"] - 1), ctx.attr("pitch"))
+        far = (("bottom cope", sub(sub(depth, edge), spread)),)
     return Ply("beam web", beam.grade, props["tw"], 1, 1, ctx.hole("beam"), "up", edge, side, depth, columns,
-               (("beam end", beam_edge), ("cope", edge)), block=True)
+               (("beam end", beam_edge), ("cope", edge)), block=True, edges_far=far)
 
 
 def _bottom_cope(ctx: Ctx, cope: Cope, dc: Expr) -> Expr:
@@ -487,7 +497,7 @@ def geometry_shear_tab(ctx: Ctx) -> Geometry:
     tp = ctx.geo(plate.thickness, "plate.thickness")
     v = ctx.load("shear")
     plate_ply = Ply("plate", plate.grade, tp, 1, 1, ctx.hole("plate"), "down", lev, leh, depth, cols,
-                    (("plate top and bottom", lev), ("plate side", leh)), block=True)
+                    (("plate top and bottom", lev), ("plate side", leh)), block=True, edges_far=())
     e = ctx.opt("eccentricity")
     if e is None:
         e = a if cols == 1 else add(a, div(mul(c(cols - 1), g), c(2)))
@@ -532,7 +542,7 @@ def geometry_angles(ctx: Ctx) -> Geometry:
     v = ctx.load("shear")
     toe = sub(beam_leg, gb)
     angle_ply = Ply(key, angle.grade, ta, n_ang, n_ang, ctx.hole(key), "down", lev, toe, length, 1,
-                    (("angle top and bottom", lev), ("angle toe", toe)), block=True)
+                    (("angle top and bottom", lev), ("angle toe", toe)), block=True, edges_far=())
     out = Geometry.empty()
     out.interfaces.append(Interface("beam side", bolts, rows, 1, s, None, n_ang, (angle_ply, _beam_web_ply(ctx, beam, bp, 1)),
                                     v, None if double else gb, clearances=(("outstanding leg", sub(gb, ta)),), tension=None, prying=(), outline=None))
@@ -544,7 +554,7 @@ def geometry_angles(ctx: Ctx) -> Geometry:
         heel = sub(div(gs, c(2)), div(bp["tw"], c(2))) if double else gs
         toe_s = sub(out_leg, heel)
         legs = Ply(f"{key} outstanding", angle.grade, ta, 1, n_ang, ctx.hole(key), "up", lev, toe_s, length, 1,
-                   (("outstanding top and bottom", lev), ("outstanding toe", toe_s)), block=True)
+                   (("outstanding top and bottom", lev), ("outstanding toe", toe_s)), block=True, edges_far=())
         ecc = None if double else add(gs, div(bp["tw"], c(2)))
         across = gs if double else mul(c(2), add(gs, div(bp["tw"], c(2))))
         out.interfaces.append(Interface("support side", bolts, rows, n_ang, s, gs if double else None, 1, (legs, _support_ply(ctx)),
@@ -580,7 +590,7 @@ def geometry_tee(ctx: Ctx) -> Geometry:
     v = ctx.load("shear")
     toe = sub(div(tp["d"], c(2)), a)
     stem = Ply("tee stem", tee.grade, tp["tw"], 1, 1, ctx.hole("stem"), "down", lev, toe, length, 1,
-               (("stem top and bottom", lev), ("stem toe", toe)), block=True)
+               (("stem top and bottom", lev), ("stem toe", toe)), block=True, edges_far=())
     out = Geometry.empty()
     out.interfaces.append(Interface("beam side", bolts, rows, 1, s, None, 1, (stem, _beam_web_ply(ctx, beam, bp, 1)), v,
                                     ctx.opt("eccentricity") or a, clearances=(("tee flange", sub(a, tp["tf"])),), tension=None, prying=(), outline=None))
@@ -592,7 +602,7 @@ def geometry_tee(ctx: Ctx) -> Geometry:
         out.tee = TeeFlex(tee.grade, tp["tf"], tp["tw"], tp["k1"], tp["bf"], length, bp["tw"], d_bolt, gs, None, rows, s, lev)
         side = div(sub(tp["bf"], gs), c(2))
         flange = Ply("tee flange", tee.grade, tp["tf"], 1, 2, ctx.hole("flange"), "up", lev, side, length, 1,
-                     (("flange top and bottom", lev), ("flange side", side)), block=True)
+                     (("flange top and bottom", lev), ("flange side", side)), block=True, edges_far=())
         out.interfaces.append(Interface("support side", bolts, rows, 2, s, gs, 1, (flange, _support_ply(ctx)), v, None,
                                         clearances=_support_clearances(support, sp, gs), tension=None, prying=(), outline=None))
     else:
@@ -623,7 +633,7 @@ def geometry_end_plate(ctx: Ctx) -> Geometry:
     v = ctx.load("shear")
     side = div(sub(width, gs), c(2))
     plate_ply = Ply("end plate", plate.grade, tp, 1, 2, ctx.hole("plate"), "up", lev, side, length, 1,
-                    (("plate top and bottom", lev), ("plate side", side)), block=True)
+                    (("plate top and bottom", lev), ("plate side", side)), block=True, edges_far=())
     support: Member = conn.attrs["support"]
     sp = _w(ctx, support)
     out = Geometry.empty()
@@ -678,7 +688,7 @@ def geometry_seated(ctx: Ctx) -> Geometry:
         # vertical leg, which tears toward its top edge from the top row (as the end plate
         # and the tee flange do). The support's bolts bear down on it (_support_ply).
         seat_ply = Ply("seat angle", angle.grade, ta, 1, 1, ctx.hole("angle"), "up", lev, None, None, 1,
-                       (("seat leg top", lev), ("seat leg side", side)), block=False)
+                       (("seat leg top", lev), ("seat leg side", side)), block=False, edges_far=())
         out.interfaces.append(Interface("seat to support", bolts, rows, 2, s, gs, 1, (seat_ply, _support_ply(ctx)), v, None,
                                         clearances=_support_clearances(support, sp, gs), tension=None, prying=(), outline=None))
     else:
@@ -751,7 +761,7 @@ def geometry_bolt_bracket(ctx: Ctx) -> Geometry:
         # line, to the top edge b in front of it (Manual Figure 15-2(a)), so the front
         # column's bottom bolt lies lev b / sqrt(b^2 + depth^2) from it, the least of any.
         edges += (("plate free", div(mul(lev, slope), Sqrt(add(sq(slope), sq(depth))))),)
-    ply = Ply("bracket plate", plate.grade, tp, 1, 1, ctx.hole("plate"), "down", lev, leh, depth, cols, edges, block=True)
+    ply = Ply("bracket plate", plate.grade, tp, 1, 1, ctx.hole("plate"), "down", lev, leh, depth, cols, edges, block=True, edges_far=())
     v = ctx.load("shear")
     out = Geometry.empty()
     out.interfaces.append(Interface("bracket bolts", bolts, rows, cols, s, g, 1, (ply, _support_ply(ctx)), v, e, tension=None,
@@ -775,6 +785,11 @@ def geometry_weld_bracket(ctx: Ctx) -> Geometry:
     tp = ctx.geo(plate.thickness, "plate.thickness")
     length, e, v = ctx.attr("weld_length"), ctx.attr("eccentricity"), ctx.load("shear")
     ret = ctx.attr("weld_return") if "weld_return" in conn.attrs else None
+    if ret is not None:
+        # e is the load's distance from the weld group's centroid (docs/reference.md). A
+        # C-shaped weld's centroid lies kl^2 / (L + 2 kl) from its vertical line toward the load (Manual
+        # Part 8), and the elastic method and section A-A read the load from that line.
+        e = add(e, div(sq(ret), add(length, mul(c(2), ret))))
     out = Geometry.empty()
     # Both fillets of a plate set on edge load it at one place; a lapped plate's single
     # C-shaped fillet runs along its edges.
@@ -805,7 +820,7 @@ def geometry_hanger(ctx: Ctx) -> Geometry:
     b = div(sub(gt, tp["tw"]), c(2))
     a = div(sub(tp["bf"], gt), c(2))
     flange = Ply("tee flange", tee.grade, tp["tf"], 1, 2, ctx.hole("flange"), "down", lev, a, None, 1,
-                 (("flange top and bottom", lev), ("flange side", a)), block=False)
+                 (("flange top and bottom", lev), ("flange side", a)), block=False, edges_far=())
     # The support's flange bends about its web under the same bolts, by the same T-stub
     # model (the Companion checks it so in II.C-1 and notes in II.D-1 that the thicker
     # flange need not be checked): its b and a run from the gauge to its web and edge.
@@ -813,7 +828,7 @@ def geometry_hanger(ctx: Ctx) -> Geometry:
     sp = _w(ctx, support)
     b_s, a_s = div(sub(gt, sp["tw"]), c(2)), div(sub(sp["bf"], gt), c(2))
     hold = Ply("support flange", support.grade, sp["tf"], 1, 1, ctx.hole("support"), "down", None, None, None, 1,
-               (("flange side", a_s),), block=False)
+               (("flange side", a_s),), block=False, edges_far=())
     out = Geometry.empty()
     out.interfaces.append(Interface("hanger bolts", bolts, rows, 2, s, gt, 1, (flange, hold), ctx.secondary("shear"),
                                     None, tension=t, clearances=(("tee stem", b),),
@@ -1199,6 +1214,15 @@ def gen_bolts(ctx: Ctx, geo: Geometry) -> list[Check]:
     return out
 
 
+def load_hole(itf: Interface, hole: str) -> str:
+    """The hole type as J3.3 and J3.9 read it against the bolts' force. An eccentric
+    bracket group's bolts above and below its centroid push mostly across the depth axis,
+    along a plain slot, so there a plain slot reads as a slot parallel to the load."""
+    if itf.outline is not None and itf.eccentricity is not None and hole in ("ssl", "lsl"):
+        return f"{hole}_parallel"
+    return hole
+
+
 def gen_slip(ctx: Ctx, geo: Geometry) -> list[Check]:
     out = []
     for itf in geo.interfaces:
@@ -1211,7 +1235,7 @@ def gen_slip(ctx: Ctx, geo: Geometry) -> list[Check]:
         du = ctx.const("rcsc2025.s5_4.Du")
         hf = ctx.const(f"rcsc2025.s5_4.hf_{'two' if b.fillers == 'two' else 'one'}")
         ksc = c(1) if itf.tension is None else L.slip_ksc(div(itf.tension, c(itf.n)), du, tb, None if ctx.lrfd else ctx.const("aisc360.j3_10.ksc_asd"))
-        holes = {p.hole for p in itf.plies}
+        holes = {load_hole(itf, p.hole) for p in itf.plies}
         suffix = "_lsl" if holes & {"lsl", "lsl_parallel"} else "_ovs" if holes & {"ovs", "ssl_parallel"} else "_std"
         per_bolt = ctx.available(L.slip(mu, du, hf, tb, c(itf.planes), ksc), "rcsc2025.s5_4", suffix)
         if itf.eccentricity is not None:
@@ -1535,7 +1559,7 @@ def gen_edge_min(ctx: Ctx, geo: Geometry) -> list[Check]:
     for itf in geo.interfaces:
         need = ctx.const(f"bolt_us.{itf.bolts.size}.edge_min")
         for ply in itf.plies:
-            for what, e in ply.edges_min:
+            for what, e in ply.edges_min + ply.edges_far:
                 c2 = edge_increment(ctx, itf.bolts, ply.hole, _edge_axis(what))
                 if c2 is None:
                     out.append(Check(f"{ply.name}: {what} edge distance at least Table J3.4's (J3.5)", (need,), e, unit="in", group=None, suffix="", guards=()))
@@ -1586,10 +1610,10 @@ def gen_hole_use(ctx: Ctx, geo: Geometry) -> list[Check]:
     for itf in geo.interfaces:
         level = _joint_level(ctx, itf.bolts)
         for ply in itf.plies:
-            if itf.outline is not None and itf.eccentricity is not None and ply.hole in ("ssl", "lsl"):
-                # J3.3(e) and (f): in a bearing-type joint a slot lies normal to the loading.
-                # A bracket's bolts above and below its centroid push mostly across the depth
-                # axis, along a plain slot, so only a slip-critical joint takes one.
+            if load_hole(itf, ply.hole) != ply.hole:
+                # J3.3(e) and (f): in a bearing-type joint a slot lies normal to the loading,
+                # and a bracket's bolts push along a plain one, so only a slip-critical joint
+                # takes it.
                 out.append(Check(f"{ply.name}: {ply.hole} holes in an eccentric bracket group, whose bolt forces run along "
                                  "the slots, only in a slip-critical joint (J3.3)",
                                  (ctx.const("rcsc2025.joint_level.slip_critical"),), level, unit="1", group=None, suffix="", guards=()))

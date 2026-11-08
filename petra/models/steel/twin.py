@@ -729,18 +729,22 @@ def increment(ctx: _Ctx, size: str, hole: str, name: str) -> float | None:
     return ctx.reg.const("aisc360.j3_5.c2_lsl") * ctx.reg.bolt(size, "d")
 
 
-def edges(ctx: _Ctx, element: str, t: float, size: str, named: Mapping[str, float], hole: str = "std") -> None:
-    """J3.5 minimum and J3.6 maximum edge distances of one element whose holes are `hole`."""
+def edges(ctx: _Ctx, element: str, t: float, size: str, named: Mapping[str, float], hole: str = "std",
+          far: Mapping[str, float] | None = None) -> None:
+    """J3.5 minimum and J3.6 maximum edge distances of one element whose holes are `hole`.
+    `far` names edges J3.5 alone reads: J3.6's maximum is to a bolt's nearest edge, and an
+    edge in `named` lies nearer within its limit."""
     emin = ctx.reg.bolt(size, "edge_min")
     lim_t = ctx.reg.const("aisc360.j3_6.edge_t") * t
     lim = ctx.reg.const("aisc360.j3_6.edge_max")
-    for name, e in named.items():
+    for name, e in {**named, **(far or {})}.items():
         c2 = increment(ctx, size, hole, name)
         if c2 is None:
             ctx.add("edge_min", f"{element}: {name} edge distance at least Table J3.4's (J3.5)", _ratio(emin, e))
         else:
             ctx.add("edge_min", f"{element}: {name} edge distance at least Table J3.4's plus Table J3.5's C2 for its "
                     f"{hole} holes (J3.5)", _ratio(emin + c2, e))
+    for name, e in named.items():
         ctx.add("edge_max", f"{element}: {name} edge distance at most 12 t (J3.6)", _ratio(e, lim_t))
         ctx.add("edge_max", f"{element}: {name} edge distance at most 6 in (J3.6)", _ratio(e, lim))
 
@@ -812,12 +816,15 @@ def clearance(ctx: _Ctx, label: str, bolts: Bolts, provided: float, what: str) -
     ctx.add("clearance", f"{label}: room to tighten, clear of {what}", _ratio(need, provided))
 
 
-def slip(ctx: _Ctx, label: str, group: BoltSet, p: float, holes: Iterable[str], tension: float = 0.0) -> None:
+def slip(ctx: _Ctx, label: str, group: BoltSet, p: float, holes: Iterable[str], tension: float = 0.0,
+         bracket: bool = False) -> None:
     """J3.9 Eq J3-4 per bolt, with ksc of Eq J3-5 when tension acts, the resistance
     factor of the worst hole type among the plies (J3.9(a)-(c)). An eccentric group's
-    most loaded bolt (elastic method) is compared with one bolt's resistance."""
+    most loaded bolt (elastic method) is compared with one bolt's resistance. In an
+    eccentric bracket group the bolts push along a plain slot (hole_use), so a plain
+    short slot takes J3.9(b)'s factor for a slot parallel to the load."""
     reg, b = ctx.reg, group.b
-    holes = list(holes)
+    holes = [f"{h}_parallel" if bracket and h in ("ssl", "lsl") else h for h in holes]
     if any(h in ("lsl", "lsl_parallel") for h in holes):
         limit = "slip_lsl"
     elif any(h in ("ovs", "ssl_parallel") for h in holes):
@@ -1053,6 +1060,13 @@ class _Beam:
         flange (path.py, role "web")."""
         return None if self.cope is None else top - self.dct
 
+    def bottom_edge(self, top: float, rows: int, s: float) -> dict[str, float]:
+        """The bottom row's distance to a bottom cope's horizontal cut, which J3.5 reads:
+        d - dcb less the bottom row's depth top + (rows - 1) s; none without a bottom cope."""
+        if self.cope is None or self.cope.flanges != "both":
+            return {}
+        return {"bottom cope": self.d - self.dcb - top - (rows - 1) * s}
+
     def web_checks(self, ctx: _Ctx, v: float, rows: int, hole: str | None, group: BoltSet | None) -> None:
         """Shear yielding of the beam web's gross section (d - copes) tw (Companion II.A-6,
         II.A-28A: Agv = hc tw), and with bolts its net section through one line of holes."""
@@ -1170,7 +1184,7 @@ def _shear_tab(ctx: _Ctx, modes: set[str]) -> None:
         block_shear(ctx, "beam web", group, v, beam.tw, beam.fy, beam.fu, hb, top - beam.dct, leh_b - UNDERRUN, False,
                     list(range(nc)))
         beam.cope_buckling(ctx, v, setback)
-    edges(ctx, "beam web", beam.tw, bolts.size, web_edges, hb)
+    edges(ctx, "beam web", beam.tw, bolts.size, web_edges, hb, far=beam.bottom_edge(top, n, s))
     hole_use(ctx, "beam web", hb, bolts)
     # bolts
     group.check_bolts(v, "beam side")
@@ -1278,7 +1292,7 @@ def _angle_kind(ctx: _Ctx, modes: set[str], double: bool) -> None:
         web_edges["cope"] = top - beam.dct
         block_shear(ctx, "beam web", group_b, v, beam.tw, beam.fy, beam.fu, hb, top - beam.dct, leh_b - UNDERRUN, False, [0])
         beam.cope_buckling(ctx, v, setback)
-    edges(ctx, "beam web", beam.tw, bolts.size, web_edges, hb)
+    edges(ctx, "beam web", beam.tw, bolts.size, web_edges, hb, far=beam.bottom_edge(top, n, s))
     hole_use(ctx, "beam web", hb, bolts)
     group_b.check_bolts(v, "beam side")
     spacing(ctx, "beam side", bolts, min(t, beam.tw), {"pitch": s})
@@ -1393,7 +1407,7 @@ def _shear_tee(ctx: _Ctx, modes: set[str]) -> None:
         web_edges["cope"] = top - beam.dct
         block_shear(ctx, "beam web", group_b, v, beam.tw, beam.fy, beam.fu, hb, top - beam.dct, leh_b - UNDERRUN, False, [0])
         beam.cope_buckling(ctx, v, setback)
-    edges(ctx, "beam web", beam.tw, bolts.size, web_edges, hb)
+    edges(ctx, "beam web", beam.tw, bolts.size, web_edges, hb, far=beam.bottom_edge(top, n, s))
     hole_use(ctx, "beam web", hb, bolts)
     group_b.check_bolts(v, "beam side")
     spacing(ctx, "beam side", bolts, min(tws, beam.tw), {"pitch": s})
@@ -1830,7 +1844,7 @@ def _bolt_bracket(ctx: _Ctx, modes: set[str]) -> None:
     joint_type(ctx, "bracket bolts", bolts, (hp, hs), tension=False)
     long_slots(ctx, "bracket bolts", (hp, hs))
     if bolts.joint == "slip_critical":
-        slip(ctx, "bracket bolts", group, p, (hp, hs))
+        slip(ctx, "bracket bolts", group, p, (hp, hs), bracket=True)
     # fatigue: the plate bends at section A-A under its flexural checks' P e_aa
     fatigue_ply(ctx, "bracket plate", group, hp, tp, depth, pfy, arm=e_aa)
     _bracket_plate(ctx, p, depth, tp, pfy, e_aa)
@@ -1857,11 +1871,15 @@ def _weld_bracket(ctx: _Ctx, modes: set[str]) -> None:
     weld: Weld = conn.attrs["weld"]
     length, e = ctx.need("weld_length"), ctx.need("eccentricity")
     ret = ctx.get("weld_return")
+    # The declared eccentricity is the load's distance from the weld group's centroid
+    # (docs/reference.md), xl = kl^2 / (2 kl + L) from a C-shaped weld's vertical line toward the load
+    # (Manual Part 8); e below is the load's distance from that line.
+    if ret is not None:
+        e = e + ret * ret / (length + 2 * ret)
     # Section A-A lies at the weld nearest the load (vocab flexural_yield): the weld line
     # for a plate square to the support, the returns' tips for a C-shaped weld, kl from
     # its vertical line (Companion II.A-23: e = 8-1/4 in to section A-A where the load is
-    # al + xl = 11-1/4 in from the vertical weld with kl = 3 in). The declared
-    # eccentricity is the load's distance from the weld group's vertical line.
+    # al + xl = 11-1/4 in from the vertical weld with kl = 3 in).
     e_aa = e if ret is None else e - ret
     shear_yield(ctx, "bracket plate", p, pfy, length * tp)
     ctx.check("flexural_yield", "bracket plate: flexural yielding of the gross section (J4.5)", p * e_aa,
