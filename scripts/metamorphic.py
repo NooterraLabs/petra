@@ -420,6 +420,10 @@ EXEMPT: tuple[Exemption, ...] = (
               "Another row deepens the plate, which lengthens section B-B and its slenderness. The stated eccentricity "
               "runs from the group's centroid, so another column moves section A-A toward the load. The moment on B-B, "
               "P (e - cos(theta) b'/2), grows in size where that arm is under cos(theta) b'/2."),
+    Exemption(("rows_plus_one",), "petra", ("edge_min",), r"^bracket plate: plate free edge distance at least", NOTHING,
+              f"{MANUAL} Part 15, Figure 15-2(a), with AISC 360-22 J3.5",
+              "A shaped plate's free edge slopes from the bottom of section A-A to b in front of the top edge. Another "
+              "row deepens the plate, which steepens that edge and brings it nearer the front column's bottom bolt."),
     Exemption(("columns_plus_one",), "petra", ("fatigue_weld_end",), r"^plate: stress", CAPACITY,
               f"AISC 360-22 Appendix 3, Table A-3.1 Case 5.7, with {SINGLE_PLATE}",
               "The welds carry V e, e from the support to the group's centroid, and another column moves the centroid "
