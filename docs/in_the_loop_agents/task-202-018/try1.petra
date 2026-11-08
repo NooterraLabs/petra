@@ -1,0 +1,23 @@
+petra 0
+
+# Task 202-018: a tee hanger from the bottom flange of a W21x57, ASD.
+
+design "task-202-018-hanger" {
+  owner "task.owner@example.org"
+}
+
+hanger h1 {
+  basis asd
+  tee WT10_5x28_5 grade steel.A992
+  support W21x57 flange grade steel.A992
+  bolts bolt_group.120 diameter 0.75 inch threads included joint pretensioned
+  rows 3
+  pitch 3 inch
+  tee_gauge 4 inch
+  edge_vertical 1.5 inch
+}
+
+load service {
+  on h1 tension in [0 kip, 62.485 kip]
+  signed "task.owner@example.org" source "task 202-018"
+}

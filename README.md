@@ -23,6 +23,7 @@ petra check tab.petra
 
 - [Language reference](docs/reference.md)
 - [Using Petra from Python](petra/docs/api.md)
+- [Petra in a coding agent's loop](docs/in_the_loop.md)
 - [How the checker works](docs/design.md)
 - [Steel connections](docs/steel_connections.md)
 - [Roadmap and test results](docs/plan.md)

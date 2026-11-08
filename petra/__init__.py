@@ -1,6 +1,7 @@
 """Petra: verdicts about physical designs as theorems relative to explicit premises.
 
     import petra
+    result = petra.check(text)  # plain data; a FAIL's "repair" names the inputs to change
     report = petra.check_file("examples/truss_pass.petra")
     print(report.render())
     report.verdict            # petra.Pass | petra.Fail | petra.Unknown | petra.Marginal
@@ -33,6 +34,17 @@ from .solvers import SolverSource
 from .verdict import Fail, Marginal, Pass, Unknown, Verdict
 
 __version__ = "0.1.0"
+
+
+def check(text: str, *, path: str = "<text>", repair: bool = True) -> dict:
+    """Check a design given as text, with the shipped registry and the solvers, and return
+    plain data that json.dumps takes as it is: the report's JSON (petra/docs/api.md) with a
+    "repair" key, which on a FAIL names the inputs that lower the governing check (repair.py)
+    and is None otherwise, or with `repair=False`. A design that does not lower gives
+    {"file", "status": "INPUT_ERROR", "error"} instead of raising."""
+    from .repair import check_text
+
+    return check_text(text, path, build_registry(), (SolverSource(),), moves=repair).to_json()
 
 
 def check_file(path: str | Path, *, certs: str | Path | None = None, library: Library | None = None, solve: bool = True) -> Report:

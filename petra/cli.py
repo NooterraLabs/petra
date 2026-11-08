@@ -7,8 +7,10 @@
         registry against that deck file instead of the one built from the shipped
         registry. Under each refuted obligation the text gives the governing term's demand,
         capacity and utilisation in the design's units, and its counterexample as decimals
-        in those units. --json prints pipeline.Report.to_json() (`petra docs api`):
-            {"file": FILE, "design": NAME, "status": OVERALL, "verdicts": [
+        in those units. On a FAIL, unless --no-solve, the lines after the governing lines
+        name the moves that lower the governing check, best first (petra/repair.py). --json
+        prints pipeline.Report.to_json() with "repair", the moves or null (`petra docs api`):
+            {"file": FILE, "design": NAME, "status": OVERALL, "repair": REPAIR | null, "verdicts": [
                 {"claim": NAME, "status": "PASS" | "FAIL" | "UNKNOWN" | "MARGINAL",
                  "footprint": [{"tag", "label", "owner", "source", "version"?}, ...],
                  "rules": ["R1", ...],
@@ -75,8 +77,12 @@
         Print a complete design of KIND to start from, its canonical example with the
         component renamed to NAME. 3 for an unknown kind or a name the design cannot take.
     python -m petra docs [NAME]
-        Print the document NAME: readme, reference (the language) or api (the Python API
-        and the JSON). With no NAME, list them. 3 for an unknown name.
+        Print the document NAME: readme, reference (the language), api (the Python API
+        and the JSON) or skill (a SKILL.md for coding agents). With no NAME, list them.
+        3 for an unknown name.
+    python -m petra mcp
+        Serve check, kinds, new, registry_list and docs to an MCP client, JSON-RPC over
+        stdin and stdout, until stdin closes (petra/mcp.py). Exit 0.
     python -m petra gym --episodes N --seed S [--domain NAME ...] [--library DIR]
         Run the baseline agent. Prints one summary line, AgentStats.render():
         "solved k/N episodes (library hits h, families added f)". --domain takes names
@@ -103,11 +109,12 @@ from .certs import CertificateError, CertStore, decode_certificate
 from .lang import LolaSyntaxError, LoweringError, load_design
 from .library import Library, certify_family
 from .models.base import ComponentError
-from .pipeline import check_design, explain
+from .pipeline import explain
 from .registry import DeckError, build_deck, build_registry, check_deck, read_deck, write_deck
+from .repair import check_text
 from .solvers import SolverSource
 from .units import Quantity, UnitError, parse_quantity
-from .verdict import SEVERITY, STATUS, Refuted
+from .verdict import SEVERITY, Refuted
 
 EXIT_CODES: Mapping[str, int] = {"PASS": 0, "FAIL": 1, "UNKNOWN": 2, "INPUT_ERROR": 3, "INTERNAL_ERROR": 4, "MARGINAL": 5}
 
@@ -124,12 +131,15 @@ class _Parser(argparse.ArgumentParser):
 
 def build_parser() -> argparse.ArgumentParser:
     """Subcommands check, explain, envelope, verify, certify-family, registry (build,
-    check, recall, list), gym, kinds, new and docs, with the flags in the module docstring."""
+    check, recall, list), gym, kinds, new, docs and mcp, with the flags in the module
+    docstring."""
     from .gym.tasks import GENERATORS
 
     parser = _Parser(prog="petra", description="verdicts about physical designs as theorems relative to explicit premises",
                      formatter_class=argparse.RawDescriptionHelpFormatter,
-                     epilog="The README, the language reference and the Python API come with Petra:\n"
+                     epilog="Coding agents: `petra docs skill` prints a SKILL.md on designing, checking and repairing\n"
+                            "with Petra, and `petra mcp` serves Petra's tools to an MCP client over stdio.\n"
+                            "The README, the language reference, the Python API and that skill come with Petra:\n"
                             "`petra docs` lists them, and `petra docs NAME` prints one.")
     commands = parser.add_subparsers(dest="command", required=True, parser_class=_Parser)
 
@@ -190,6 +200,10 @@ def build_parser() -> argparse.ArgumentParser:
     gym.add_argument("--library", metavar="DIR")
     gym.set_defaults(run=cmd_gym)
     _add_teach_commands(commands, decks)
+    serve = commands.add_parser("mcp", help="serve check, kinds, new, registry_list and docs to an MCP client over stdio",
+                                description="Run an MCP server on stdin and stdout, for a coding agent's client to "
+                                            "start. `petra docs skill` shows how to add it to a client.")
+    serve.set_defaults(run=cmd_mcp)
     return parser
 
 
@@ -199,21 +213,29 @@ def _input_error(exc: BaseException) -> int:
 
 
 def cmd_check(args: argparse.Namespace) -> int:
-    """Load, check_design, print render() or json.dumps(to_json(), sort_keys=True).
-    Returns EXIT_CODES[report status], or EXIT_CODES["INPUT_ERROR"] on LolaSyntaxError,
-    LoweringError or ComponentError (message on stderr)."""
+    """repair.check_text on the file, print its text() or json.dumps(to_json(),
+    sort_keys=True). Returns EXIT_CODES[status], or EXIT_CODES["INPUT_ERROR"] when the file
+    or the deck cannot be read or the design does not lower (message on stderr)."""
     try:
         registry = build_registry()
-        design = load_design(args.file, registry)
+        text = Path(args.file).read_text(encoding="utf-8")
         deck = read_deck(args.deck) if args.deck else None
         store = CertStore(args.certs) if args.certs else None
         library = Library(args.library) if args.library else None
-        sources = tuple(s for s in (store, library, None if args.no_solve else SolverSource()) if s is not None)
-        report = check_design(design, registry, sources, sink=store, deck=deck, path=args.file)
     except _INPUT_ERRORS as exc:
         return _input_error(exc)
-    print(json.dumps(report.to_json(), sort_keys=True) if args.json else report.render())
-    return EXIT_CODES[STATUS[type(report.verdict)]]
+    sources = tuple(s for s in (store, library, None if args.no_solve else SolverSource()) if s is not None)
+    checked = check_text(text, args.file, registry, sources, sink=store, deck=deck, moves=not args.no_solve)
+    if checked.report is None:
+        return _input_error(checked.error)
+    print(json.dumps(checked.to_json(), sort_keys=True) if args.json else checked.text())
+    return EXIT_CODES[checked.status]
+
+
+def cmd_mcp(args: argparse.Namespace) -> int:
+    from .mcp import main as serve
+
+    return serve()
 
 
 def cmd_explain(args: argparse.Namespace) -> int:

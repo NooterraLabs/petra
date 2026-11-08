@@ -1,0 +1,28 @@
+petra 0
+
+# Task 202-032: shear tee, W21x62 beam to the flange of a W12x40 column, LRFD.
+
+design "task-202-032-shear-tee" {
+  owner "task.owner@example.org"
+}
+
+shear_tee tee1 {
+  basis lrfd
+  beam W21x62 grade steel.A992
+  support W12x40 flange grade steel.A992
+  tee WT6x25 grade steel.A992
+  bolts bolt_group.120 diameter 0.75 inch threads included
+  rows 5
+  pitch 3 inch
+  edge_vertical 1.25 inch
+  bolt_line 3 inch
+  beam_edge 1.75 inch
+  top 3 inch
+  support_side bolted
+  support_gauge 5.5 inch
+}
+
+load gravity {
+  on tee1 shear in [0 kip, 54.244 kip]
+  signed "task.owner@example.org" source "task 202-032"
+}

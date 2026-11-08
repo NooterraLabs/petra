@@ -1,0 +1,26 @@
+petra 0
+
+design "task-202-020-single-angle" {
+  owner "task.owner@example.org"
+}
+
+single_angle sa1 {
+  basis lrfd
+  beam W27x84 grade steel.A992
+  support W10x49 flange grade steel.A992
+  angle L4x4x1_2 grade steel.A36 outstanding long
+  bolts bolt_group.120 diameter 0.875 inch threads excluded
+  rows 8
+  pitch 3 inch
+  edge_vertical 1.25 inch
+  beam_edge 1.75 inch
+  top 3 inch
+  beam_gauge 2.5 inch
+  support_side bolted
+  support_gauge 2.5 inch
+}
+
+load gravity {
+  on sa1 shear in [0 kip, 130.296 kip]
+  signed "task.owner@example.org" source "task 202-020"
+}

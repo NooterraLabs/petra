@@ -1,0 +1,23 @@
+petra 0
+
+# Task 202-029: a tee hanger bolted to the flange of a W18x35, LRFD, factored tension 0 to 42.043 kip.
+
+design "task-202-029-hanger" {
+  owner "task.owner@example.org"
+}
+
+hanger h1 {
+  basis lrfd
+  tee WT9x25 grade steel.A992
+  support W18x35 flange grade steel.A992
+  bolts bolt_group.120 diameter 0.75 inch threads included joint pretensioned
+  rows 2
+  pitch 3 inch
+  tee_gauge 4 inch
+  edge_vertical 1.5 inch
+}
+
+load factored {
+  on h1 tension in [0 kip, 42.043 kip]
+  signed "task.owner@example.org" source "task 202-029"
+}
