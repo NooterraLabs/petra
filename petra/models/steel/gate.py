@@ -27,11 +27,17 @@ from ...registry import Registry, build_registry
 from ...solvers import SolverSource
 from ...verdict import STATUS
 from . import faults as F
+from . import ic
 from . import package as P
 from .generate import Generated, generate
 
 SLACK = 1e-6
 """The twin computes in floats; the deck decides exactly. Within SLACK of 1 both readings stand."""
+CERTIFIED = {"weld": ic.WELD_LOSS, "weld_base_metal": ic.WELD_LOSS}
+"""Modes whose deck capacity on a weld line loaded out of its plane is the kernel-certified lower
+bound of the instantaneous center, which may give up ic.WELD_LOSS of the twin's C. A deck FAIL
+with the twin that far below 1 is the certificate's margin, not a disagreement. A deck PASS is
+held to SLACK in every mode."""
 
 
 @dataclass
@@ -75,7 +81,7 @@ def compare(deck: dict[str, str], twin: dict[str, float]) -> list[tuple[str, str
         state, u = deck.get(mode), twin.get(mode)
         if state is None or u is None:
             out.append((mode, state or "absent", u))
-        elif state == "pass" and u > 1 + SLACK or state == "fail" and u < 1 - SLACK or state == "open":
+        elif state == "pass" and u > 1 + SLACK or state == "fail" and u < 1 - CERTIFIED.get(mode, SLACK) or state == "open":
             out.append((mode, state, u))
     return out
 

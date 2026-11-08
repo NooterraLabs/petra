@@ -641,15 +641,21 @@ class BoltSet:
         return (gap - h * width) * rho / tilt
 
     def block_demand(self, p: float, rows: Iterable[int], cols: Iterable[int]) -> float:
+        """The elastic resultant over the block's bolts, on the side of the pattern where the
+        twist adds to the direct share: the block's columns or their mirror image.
+        elastic_forces puts the force on the side away from column 0, a bracket's load; a
+        shear tab's reaction sits on column 0's side, so a block read on one side alone
+        would take the lighter column for the heavier."""
         rows, cols = set(rows), set(cols)
         if self.e is None:
             return p * len(rows) * len(cols) / self.n
-        fx = fy = 0.0
-        for i, c, x, y in self.elastic_forces(p):
-            if i in rows and c in cols:
-                fx += x
-                fy += y
-        return math.hypot(fx, fy)
+        forces = self.elastic_forces(p)
+
+        def resultant(side: set[int]) -> float:
+            fx = sum(x for i, c, x, _ in forces if i in rows and c in side)
+            fy = sum(y for i, c, _, y in forces if i in rows and c in side)
+            return math.hypot(fx, fy)
+        return max(resultant(cols), resultant({self.cols - 1 - c for c in cols}))
 
     def max_force(self, p: float) -> float:
         if self.e is None:

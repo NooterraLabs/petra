@@ -101,6 +101,29 @@ shear_tab st4 {
   top 2.5 inch
   weld electrode.E70 size 0.25 inch sides 2
 }""", "  on st4 shear in [0 kip, 30 kip]"),
+    # an extended tab under a top and bottom cope: the beam web's one-column blocks tear to
+    # the beam end, at the column beside the support, which the group's twist loads most
+    "tab_extended_coped": _variant("tab_extended_coped", """
+shear_tab st14 {
+  basis asd
+  beam W12x26 grade steel.A992
+  support W14x61 web grade steel.A992
+  plate steel.A572_50 thickness 0.5 inch
+  bolts bolt_group.120 diameter 0.875 inch threads excluded
+  form extended
+  rows 2
+  columns 2
+  gauge 3 inch
+  pitch 3 inch
+  edge_vertical 1.25 inch
+  plate_edge 1.5 inch
+  bolt_line 7.5 inch
+  beam_edge 1.5 inch
+  top 2.5 inch
+  weld electrode.E70 size 0.375 inch sides 2
+  cope both depth 1 inch length 4 inch bottom_depth 2 inch
+  setback 0.5 inch
+}""", "  on st14 shear in [0 kip, 8 kip]"),
     # slip-critical bolts in oversized holes in the plate
     "tab_slip": _variant("tab_slip", """
 shear_tab st5 {
