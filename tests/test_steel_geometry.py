@@ -138,6 +138,51 @@ class Misfits(unittest.TestCase):
         self.assertEqual({m for m, _ in found}, {"flange_fit"})
 
 
+class JudgeReadings(unittest.TestCase):
+    """Three readings where the deck stood stricter than the outside judge until the judge
+    took them up (docs/steel_connections.md §5a): a fillet weld's leg past the edge it runs
+    along, a cope too shallow to clear the fillet, and a declared slot's length across the
+    face. Each misfit fails the deck's check and raises the judge's condition, and its
+    counterpart passes both."""
+
+    @staticmethod
+    def both(text: str) -> tuple[set[tuple[str, str]], set[str]]:
+        found = failing(fits(text))
+        return found, {v.id for v in judge(parse_design(text, "g.petra", REGISTRY), REGISTRY).violations}
+
+    @staticmethod
+    def welded_seat(size: str) -> str:
+        """Absurd-gap design 4925 (seed 1): a 6 in seat welded at its ends to a W12x26's
+        6.49 in flange."""
+        text = example("seated", support="W12x26 flange grade steel.A992", angle="L6x4x1_2 grade steel.A36 outstanding short",
+                       seat_length="6 inch", support_side="welded")
+        text = re.sub(r"  bolts .*\n(  (rows|pitch|edge_vertical|support_gauge) .*\n)+", "", text)
+        return text.replace("  support_side welded\n", f"  support_side welded\n  support_weld electrode.E70 size {size}\n")
+
+    def test_a_weld_at_a_seats_end_lays_its_leg_on_the_flange(self):
+        found, ids = self.both(self.welded_seat("0.25 inch"))
+        self.assertEqual(found, {("flange_fit", "support flange: the welds at the seat angle's ends within the flange's width")})
+        self.assertEqual(ids, {"steel.support_side.flange_width"})
+        self.assertEqual(self.both(self.welded_seat("0.1875 inch")), (set(), set()))
+
+    def test_a_cope_shallower_than_the_fillet_frees_no_edge(self):
+        coped = lambda depth: shear_tab(top="2 inch", extra=f"\n  setback 0.5 inch\n  cope top depth {depth} length 6 inch")
+        found, ids = self.both(coped("0.5 inch"))     # W16x26: tf 0.345 in, kdes 0.747 in
+        self.assertEqual(found, {("beam_fit", "plate: top edge on the beam's flat web")})
+        self.assertEqual(ids, {"steel.beam_side.fillet"})
+        self.assertEqual(self.both(coped("0.75 inch")), (set(), set()))
+
+    def test_a_declared_slot_across_the_face_needs_its_length_on_the_flange(self):
+        hanger = lambda holes: example("hanger", tee_gauge="6 inch").replace(
+            "  edge_vertical 1.5 inch\n", f"  edge_vertical 1.5 inch\n  holes support {holes}\n")
+        found, ids = self.both(hanger("lsl"))           # 6 in + 1-7/8 in on a W18x50's 7.50 in flange
+        self.assertEqual(found, {("flange_fit", "support flange: the bolt lines' holes within the flange's width")})
+        self.assertEqual(ids, {"steel.support_side.flange_width"})
+        for holes in ("std", "lsl_parallel"):
+            with self.subTest(holes=holes):
+                self.assertEqual(self.both(hanger(holes)), (set(), set()))
+
+
 class Verdicts(unittest.TestCase):
     def test_a_misfit_fails_on_its_fit_mode(self):
         report = check_design(parse_design(shear_tab(beam="W24x76", support="W10x49 web", rows=4), "g.petra", REGISTRY),

@@ -9,7 +9,8 @@ The fixtures are designs cold-start agents wrote: a 60 kip shear tab whose bolts
 block shear fail (steel, kips and inches), a 30 m cable that runs hot and drops too
 much voltage (wiring, SI), a 75 kip shear tee before and after its repair, a double angle
 and an end plate that pass. shear_tab_ovs_snug.petra puts oversized holes in a snug-tight
-joint. truss_fail.petra is the shipped failing example.
+joint. bracket_toleranced.petra is a steel gate design with a toleranced edge distance.
+truss_fail.petra is the shipped failing example.
 """
 import dataclasses
 import json
@@ -25,7 +26,10 @@ from unittest import mock
 import petra
 from petra import readout, verdict
 from petra.kernel.rules.r4_enclosure import AllNonpositive
+from petra.lang import parse_design
+from petra.models.steel import calc
 from petra.pipeline import Report
+from petra.registry import build_registry
 from petra.units import CUSTOMARY, UNITS
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -37,10 +41,12 @@ TEE_TRY4 = FIXTURES / "shear_tee_75k_try4.petra"
 DOUBLE_ANGLE = FIXTURES / "double_angle_70k.petra"
 END_PLATE = FIXTURES / "end_plate_40k.petra"
 OVS = FIXTURES / "shear_tab_ovs_snug.petra"
+BRACKET = FIXTURES / "bracket_toleranced.petra"
 TRUSS = ROOT / "examples" / "truss_fail.petra"
 HOOK = ROOT / "examples" / "hook_uncertain.petra"
 STEEL = sorted((ROOT / "examples" / "steel").glob("*.petra"))
 KIP = CUSTOMARY["kip"][0]
+INCH = CUSTOMARY["inch"][0]
 RATIONAL = re.compile(r"\b\d+/\d+\b")
 OBLIGATION_KEYS = {"requirement", "entry", "category", "outcome", "rule", "statement_hash", "describe", "at", "governing",
                    "demand", "capacity", "unit", "utilisation", "checks", "claim", "counterexample", "margin_point", "needs", "note"}
@@ -377,6 +383,37 @@ class GoverningChecks(unittest.TestCase):
             self.assertAlmostEqual(f.utilisation, f.claim.value / f.claim.bound, places=9)
         collapse = next(f for f in check(TRUSS).findings if f.requirement == "frame/truss.plastic_collapse/claim.strength")
         self.assertAlmostEqual(collapse.utilisation, collapse.claim.bound / collapse.claim.value, places=9)
+
+
+class ToleranceBox(unittest.TestCase):
+    """A toleranced length makes a design a box of designs, and a PASS reads its
+    utilisations over the box. Enclosed once over the whole box, the bracket's free-edge
+    check read 1.04 on a PASS, though no point of the box passes 0.976."""
+
+    def test_a_pass_reads_no_utilisation_above_one(self):
+        report = check(BRACKET)
+        self.assertIsInstance(report.verdict, petra.Pass)
+        read = [(f.requirement, v.what, v.utilisation) for f in report.findings for v in f.values
+                if v.utilisation is not None and not v.excused]
+        self.assertTrue(read)
+        for found in read:
+            self.assertLessEqual(found[2], 1, found)
+
+    def test_the_box_reads_its_worst_corner_within_the_tolerance(self):
+        registry = build_registry()
+        design = parse_design(BRACKET.read_text(encoding="utf-8"), BRACKET.name, registry)
+        conn = calc.connection(design, "c1", registry)
+        edge, shear = "in:gate-1-01614.c1.edge_vertical", "in:gate-1-01614.gate.c1.shear"
+        boxed = calc.values(conn, design, registry, "bracket_edge", "gate")
+        corners = [calc.values(conn, design, registry, "bracket_edge", "gate", {edge: x * INCH, shear: Fraction("32.044") * KIP})
+                   for x in (Fraction("1.9375"), Fraction("2.0625"))]
+        for k, v in enumerate(boxed):
+            if v.excused:
+                continue
+            worst = max(c[k].utilisation for c in corners)
+            with self.subTest(v.what):
+                self.assertGreaterEqual(v.utilisation, worst - 1e-12)
+                self.assertLessEqual(v.utilisation, worst * (1 + float(calc.TOLERANCE)))
 
 
 class Rules(unittest.TestCase):

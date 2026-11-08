@@ -1,0 +1,28 @@
+petra 0
+
+# Steel gate design 01614 (seed 1): a bolted bracket whose vertical edge distance is
+# toleranced, 1-15/16 to 2-1/16 in. Its free-edge check at the worst edge reads 0.976.
+
+design "gate-1-01614" {
+  owner "gate@petra.dev"
+}
+
+bolt_bracket c1 {
+  basis lrfd
+  plate steel.A36 thickness 0.625 inch
+  support W12x40 flange grade steel.A992
+  bolts bolt_group.120 diameter 0.875 inch threads excluded
+  rows 2
+  columns 2
+  pitch 3 inch
+  gauge 4 inch
+  eccentricity 6 inch
+  edge_vertical in [1.9375 inch, 2.0625 inch] signed "gate@petra.dev" source "steel gate generator"
+  plate_edge 2 inch
+  free_edge 6 inch
+}
+
+load gate {
+  on c1 shear in [0 kip, 32.044 kip]
+  signed "gate@petra.dev" source "steel gate generator"
+}

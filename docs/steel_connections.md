@@ -169,16 +169,17 @@ The fit checks do not cover:
 - the positions of a top angle and a stiffened seat plate, which the grammar does not draw
 - a girder support
 
-The outside judge (`judges/steel.py`) names the same conditions from its own reading. The deck is stricter than the judge in four places:
+The outside judge (`judges/steel.py`) names the same conditions from its own reading. Until 2026-11-07 it read three things more loosely than the deck. The sources side with the deck in each, so the judge now reads them the same way:
 
-1. A fillet weld at a toe or tip carries its leg past the part's edge. The deck adds the leg, and the judge does not.
-2. A shallow cope that leaves part of the fillet does not free the part or the holes below it.
-3. Each hole takes the size of its ply's declared type. The judge takes standard holes, the smallest the grammar allows.
-4. A cope or a beam end frees a fit only where it does so at every point of the design's tolerance box. The judge takes the box's most favourable point.
+1. **A fillet weld at a toe, tip or seat end lays its leg on the face past the part.** The part and the leg at each such weld must lie on the face. The judge already added the leg for a plate's welds. The Manual asks for more: Companion Examples K.2 and K.3 take a shelf of twice the weld size from AISC Manual Figure 8-13. The deck and the judge take only the leg, the least that a weld of the stated size needs.
+2. **A cope frees a part's edge only where it cuts at least kdes deep.** AISC 360-22 defines k as the distance from the flange's outer face to the web toe of the fillet. A shallower cut leaves fillet below it, under the part's corner or a hole.
+3. **Each hole takes the size Table J3.3 gives its ply's declared type.** The type is stated, so it is not a reading the judge may choose. A plain slot runs across the force, so its length lies across the support's face.
 
-On the absurd-gap stream (seed 1, 13,200 steel designs), the judge finds 37 designs buildable that a fit check fails. The first three differences account for all 37.
+The deck is still stricter than the judge in one place. A cope or a beam end frees a fit only where it does so at every point of the design's tolerance box. The judge takes the box's most favourable point.
 
-The twin (§8) restates every fit from the method statements. The gate's manufactured faults (§9) put six misfits into passing designs: rows past the beam's depth, rows off a seat's leg, support bolt lines wider than the face, a beam too wide for a column's web, a plate on the fillet, and bracket columns off the flange. `tests/test_steel_geometry.py` checks four things. Each class of misfit fails the check that names it. The readings that free a fit do free it. A web support's footprint holds the column premise. The generator's samplers produce designs that fit and that the judge finds buildable.
+Measured on the absurd-gap stream at seed 1 (13,200 steel designs), at commit `af95e6a` with the old judge: 29 designs failed a fit check that the judge called buildable. 19 had a weld's leg off the face, 8 a cope shallower than kdes and 2 a declared slot. 10 of the 29 also fail another mode. The judge now raises a condition on all 29, and on the same stream no design fails a fit check that the judge calls buildable. P1's close recorded 37 such designs; the count at `af95e6a` is 29.
+
+The twin (§8) restates every fit from the method statements. The gate's manufactured faults (§9) put six misfits into passing designs: rows past the beam's depth, rows off a seat's leg, support bolt lines wider than the face, a beam too wide for a column's web, a plate on the fillet, and bracket columns off the flange. `tests/test_steel_geometry.py` checks five things. Each class of misfit fails the check that names it. The readings that free a fit do free it. The judge reads a weld's leg, a shallow cope and a declared slot as the deck does. A web support's footprint holds the column premise. The generator's samplers produce designs that fit and that the judge finds buildable.
 
 ## 6. How the deck enforces exhaustiveness
 

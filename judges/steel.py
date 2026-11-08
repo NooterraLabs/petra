@@ -12,15 +12,28 @@ Two depths bound a part against a web: between the flanges (d - 2 tf), where sol
 stops it, and the flat web (d - 2 kdes), past which it rides up the web-to-flange fillets.
 A part that clears the flanges but not the fillets gets a fillet condition of its own, so
 the counts keep a part off the beam apart from one that needs a clipped corner. A bolt
-hole must lie in the flat web, since its head and nut cannot seat on a fillet.
+hole must lie in the flat web, since its head and nut cannot seat on a fillet. A cope
+frees a part's edge only where it cuts at least as deep as the steel the edge would meet:
+tf for the flange, k for the fillet. AISC 360-22 defines k as the distance from the
+flange's outer face to the web toe of the fillet, so a shallower cut leaves fillet below it.
+
+A fillet weld along a part's edge lays its leg on the face beyond that edge, so a weld at
+a part's toe, tip or end needs its leg's width of face past the part. The Manual asks more:
+the Companion's Examples K.2 and K.3 take a shelf of twice the weld size from AISC Manual
+Figure 8-13. The judge takes the leg, the least a weld of the stated size needs.
+
+Each ply's hole has the size Table J3.3 gives its declared type; a ply the `holes` line
+does not name has standard holes. A slot named plainly runs across the force, which runs
+down the depth axis (along a hanger's rows), so its length lies across the support's face;
+one named `_parallel` runs along the force.
 
 A toleranced length is an interval, and a condition is violated when it fails anywhere in
 the box, since the design claims every value in it. Where the lines leave a dimension
 open (a bracket's bolt group position, a single angle's offset from the column's centre,
-the beam end before its bolt line, the hole type), the judge takes the reading most
-favourable to the design, so a flag holds under every reading: standard holes (AISC
-360-22 Table J3.3), the beam end and its cope as far out as the lines allow, a symmetric
-group centred on the column, a one-sided group placed anywhere on the face.
+the beam end before its bolt line), the judge takes the reading most favourable to the
+design, so a flag holds under every reading: the beam end and its cope as far out as the
+lines allow, a symmetric group centred on the column, a one-sided group placed anywhere
+on the face.
 """
 from __future__ import annotations
 
@@ -95,40 +108,53 @@ class Missing(Exception):
 @dataclass(frozen=True)
 class OnBeamWeb:
     """A part against the beam web spans [top, bottom] down from the beam's top. It must lie
-    between the flanges, and on the flat web, at each flange the cope does not clear
-    (`free_top`, `free_bottom`). An end plate's position is not drawn (top is None): its
-    welds, `length` long, must fit the web the copes leave."""
+    between the flanges, and on the flat web, at each flange where no cope that runs past
+    the part (`past_top`, `past_bottom`: its depth) cuts that deep. An end plate's position
+    is not drawn (top is None): its welds, `length` long, must fit the web the copes leave."""
 
     what: str
     beam: W
     top: Iv | None
     bottom: Iv | None
     length: Iv
-    free_top: bool
-    free_bottom: bool
+    past_top: Iv | None
+    past_bottom: Iv | None
     cope_top: Iv | None       # an end plate's web starts below a top cope
     cope_bottom: Iv | None
 
     def check(self) -> Found:
         b = self.beam
         if self.top is None:
-            for limit, cid, room in (("between its flanges", "steel.beam_side.depth", b.d - 2 * b.tf),
-                                     ("on its flat web", "steel.beam_side.fillet", b.d - 2 * b.kdes)):
-                if self.cope_top is not None or self.cope_bottom is not None:
-                    left = iv(b.d) - (self.cope_top or iv(b.d - room) / 2) - (self.cope_bottom or iv(b.d - room) / 2)
-                else:
-                    left = iv(room)
+            for limit, cid, edge in (("between its flanges", "steel.beam_side.depth", b.tf),
+                                     ("on its flat web", "steel.beam_side.fillet", b.kdes)):
+                left = iv(b.d) - _below(self.cope_top, edge) - _below(self.cope_bottom, edge)
                 if self.length.hi > left.lo:
                     return cid, f"{self.what} {self.length.text()} long; the {b.label} leaves {left.text()} {limit}"
             return None
         for cid, depth, where in (("steel.beam_side.depth", b.tf, "inside its flange"),
                                   ("steel.beam_side.fillet", b.kdes, "on its fillet, off the flat web")):
-            if not self.free_top and self.top.lo < depth:
-                return cid, f"{self.what} top edge {self.top.text()} below the {b.label}'s top, {where} ({_in(depth)})"
-            if not self.free_bottom and self.bottom.hi > b.d - depth:
+            if not _clears(self.past_top, depth) and self.top.lo < depth:
+                return cid, (f"{self.what} top edge {self.top.text()} below the {b.label}'s top, {where} ({_in(depth)})"
+                             + _shallow(self.past_top))
+            if not _clears(self.past_bottom, depth) and self.bottom.hi > b.d - depth:
                 return cid, (f"{self.what} bottom edge {self.bottom.text()} below the {b.label}'s top, {where} "
-                             f"(from {_in(b.d - depth)})")
+                             f"(from {_in(b.d - depth)})" + _shallow(self.past_bottom))
         return None
+
+
+def _below(cut: Iv | None, edge: Fraction) -> Iv:
+    """How far the steel the web loses at a flange reaches: the flange and its fillet to
+    `edge`, or a cope's cut where that lies deeper."""
+    return iv(edge) if cut is None else Iv(max(cut.lo, edge), max(cut.hi, edge))
+
+
+def _clears(cut: Iv | None, depth: Fraction) -> bool:
+    """A cope `cut` deep removes the steel to `depth` everywhere in the box."""
+    return cut is not None and cut.lo >= depth
+
+
+def _shallow(cut: Iv | None) -> str:
+    return "" if cut is None else f", and the cope above it cuts only {cut.text()} deep"
 
 
 @dataclass(frozen=True)
@@ -387,11 +413,27 @@ class Reading:
             raise Missing(f"{self.word('tee')} is not cut from a W in the shapes table")
         return t
 
-    def hole(self) -> Iv:
-        """A standard hole, Table J3.3: d + 1/16 in below 1 in, d + 1/8 in from 1 in."""
+    def hole(self, ply: str, across: bool) -> Iv:
+        """The hole in `ply`, its size across the support's face or down the depth axis:
+        Table J3.3 for the type the `holes` line declares for the ply, standard where it
+        names none. A plain slot's length lies across the face; a `_parallel` slot's runs
+        down the depth axis."""
+        kind = self.hole_types().get(ply, "std")
+        parallel = kind.endswith("_parallel")
         d = self.kw_length("bolts", "diameter")
-        grow = lambda x: x + (Fraction(1, 16) if x < 1 else Fraction(1, 8))
-        return Iv(grow(d.lo), grow(d.hi))
+        lo, hi = (_j33(x, kind.removesuffix("_parallel")) for x in (d.lo, d.hi))
+        i = 1 if across != parallel else 0
+        return Iv(lo[i], hi[i])
+
+    def hole_types(self) -> dict[str, str]:
+        """Each ply the `holes` line names -> its hole type."""
+        if not self.has("holes"):
+            return {}
+        args = self.args("holes")
+        words = [".".join(a.parts) for a in args if isinstance(a, Ref)]
+        if len(words) != len(args) or len(words) % 2:
+            raise Missing("`holes` is not a list of plies and hole types")
+        return dict(zip(words[0::2], words[1::2]))
 
     def weld(self, key: str) -> tuple[Iv, int]:
         sides = self.keyword(key, "sides")
@@ -412,20 +454,49 @@ class Reading:
 def _beam_web(r: Reading, beam: W, what: str, reach: Iv, start: Iv) -> list[Fact]:
     """A part bolted to the beam web from `top`, and its bolts. A coped flange frees the
     part's edge on that side when the cope, starting `start` out, runs past the part's
-    `reach`; the bolts need flat web below the cope either way."""
-    n, s, lev, top, hole = r.count("rows"), r.length("pitch"), r.length("edge_vertical"), r.length("top"), r.hole()
+    `reach` and cuts deep enough; the bolts need flat web below the cope either way."""
+    n, s, lev, top = r.count("rows"), r.length("pitch"), r.length("edge_vertical"), r.length("top")
+    hole = r.hole("beam", across=False)
     cope = r.cope()
     top_cut = cope[1] if cope else None
     bottom_cut = cope[3] if cope and cope[0] == "both" else None
     covered = cope is not None and start.hi + cope[2].hi >= reach.lo
     last = top + s * (n - 1)
     return [
-        OnBeamWeb(what, beam, top - lev, last + lev, s * (n - 1) + 2 * lev, top_cut is not None and covered,
-                  bottom_cut is not None and covered, None, None),
-        BoltsInWeb(beam.label, top - hole / 2, last + hole / 2,
-                   top_cut if top_cut is not None else iv(beam.kdes),
-                   iv(beam.d) - bottom_cut if bottom_cut is not None else iv(beam.d - beam.kdes)),
+        OnBeamWeb(what, beam, top - lev, last + lev, s * (n - 1) + 2 * lev, top_cut if covered else None,
+                  bottom_cut if covered else None, None, None),
+        BoltsInWeb(beam.label, top - hole / 2, last + hole / 2, _below(top_cut, beam.kdes),
+                   iv(beam.d) - _below(bottom_cut, beam.kdes)),
     ]
+
+
+J3_3: dict[Fraction, tuple[Fraction, Fraction, Fraction, Fraction]] = {
+    Fraction(1, 2): (Fraction(9, 16), Fraction(5, 8), Fraction(11, 16), Fraction(5, 4)),
+    Fraction(5, 8): (Fraction(11, 16), Fraction(13, 16), Fraction(7, 8), Fraction(25, 16)),
+    Fraction(3, 4): (Fraction(13, 16), Fraction(15, 16), Fraction(1), Fraction(15, 8)),
+    Fraction(7, 8): (Fraction(15, 16), Fraction(17, 16), Fraction(9, 8), Fraction(35, 16)),
+    Fraction(1): (Fraction(9, 8), Fraction(5, 4), Fraction(21, 16), Fraction(5, 2)),
+}
+"""AISC 360-22 Table J3.3, in inches, by bolt diameter: the standard hole's diameter (each
+slot's width), the oversized hole's diameter, the short slot's length, the long slot's."""
+
+
+def _j33(d: Fraction, kind: str) -> tuple[Fraction, Fraction]:
+    """(width, length) of a `kind` hole for a bolt `d` across; a round hole's are its
+    diameter twice. Table J3.3's last row covers bolts from 1-1/8 in: d + 1/8, d + 5/16,
+    (d + 1/8) by (d + 3/8), (d + 1/8) by 2.5 d. Below 1 in a standard hole is d + 1/16."""
+    row = J3_3.get(d)
+    if row is None and d >= Fraction(9, 8):
+        row = (d + Fraction(1, 8), d + Fraction(5, 16), d + Fraction(3, 8), Fraction(5, 2) * d)
+    std = row[0] if row is not None else d + (Fraction(1, 16) if d < 1 else Fraction(1, 8))
+    if kind == "std":
+        return std, std
+    if row is None:
+        raise Missing(f"Table J3.3 has no {kind} hole for a {_num(d)} in bolt")
+    sizes = {"ovs": (row[1], row[1]), "ssl": (std, row[2]), "lsl": (std, row[3])}
+    if kind not in sizes:
+        raise Missing(f"`holes` names {kind}, which is not a hole type")
+    return sizes[kind]
 
 
 def _beam_to_web(beam: W, support: W, face: str, end: Iv) -> list[Fact]:
@@ -465,13 +536,16 @@ def angles(r: Reading) -> list[Fact]:
     end = r.length("beam_gauge") - r.length("beam_edge")
     legs = iv(2 * out_leg + beam.tw) if double else iv(out_leg + beam.tw)
     if r.word("support_side") == "welded":
-        items = [OnFace("support welds at the outstanding legs' toes", "weld", legs, face, support)]
+        # A weld at each toe lays its leg on the face past the toe.
+        w, _ = r.weld("support_weld")
+        items = [OnFace("support welds at the outstanding legs' toes", "weld", legs + w * (2 if double else 1), face, support)]
     elif double:
-        items = [_pair("support bolt lines", r.length("support_gauge"), r.hole(), face, support),
+        items = [_pair("support bolt lines", r.length("support_gauge"), r.hole("support", across=True), face, support),
                  OnFace("outstanding legs", "part", legs, face, support)]
     else:
         # One angle beside the beam web, placed anywhere: from the web's far face to the hole's far edge.
-        items = [OnFace("beam web and support bolt line", "bolt", beam.tw + r.length("support_gauge") + r.hole() / 2, face, support),
+        items = [OnFace("beam web and support bolt line", "bolt",
+                        beam.tw + r.length("support_gauge") + r.hole("support", across=True) / 2, face, support),
                  OnFace("beam web and outstanding leg", "part", legs, face, support)]
     return [*_beam_web(r, beam, "angles" if double else "angle", iv(beam_leg), _start(r, end)),
             BeamEnd(end, iv(0), "support face"),
@@ -484,10 +558,11 @@ def shear_tee(r: Reading) -> list[Fact]:
     end = r.length("bolt_line") - r.length("beam_edge")
     flange = iv(tee.parent.bf)
     if r.word("support_side") == "bolted":
-        items = [_pair("support bolt lines", r.length("support_gauge"), r.hole(), face, support),
+        items = [_pair("support bolt lines", r.length("support_gauge"), r.hole("support", across=True), face, support),
                  OnFace("tee flange", "part", flange, face, support)]
     else:
-        items = [OnFace("support welds at the tee flange tips", "weld", flange, face, support)]
+        w, _ = r.weld("support_weld")
+        items = [OnFace("support welds at the tee flange tips", "weld", flange + 2 * w, face, support)]
     return [*_beam_web(r, beam, "tee stem", iv(tee.depth), _start(r, end)),
             BeamEnd(end, iv(tee.parent.tf), f"{tee.label}'s flange"),
             *items,
@@ -500,9 +575,9 @@ def shear_end_plate(r: Reading) -> list[Fact]:
     w, _ = r.weld("weld")
     cope = r.cope()
     welds = s * (n - 1) + 2 * lev - 2 * w
-    return [OnBeamWeb("end plate welds", beam, None, None, welds, False, False,
+    return [OnBeamWeb("end plate welds", beam, None, None, welds, None, None,
                       cope[1] if cope else None, cope[3] if cope and cope[0] == "both" else None),
-            _pair("support bolt lines", r.length("support_gauge"), r.hole(), face, support),
+            _pair("support bolt lines", r.length("support_gauge"), r.hole("support", across=True), face, support),
             OnFace("end plate", "part", r.length("plate_width"), face, support),
             *_beam_to_web(beam, support, face, r.kw_length("plate", "thickness"))]
 
@@ -513,12 +588,13 @@ def seated(r: Reading) -> list[Fact]:
     setback, length = r.length("setback"), r.length("seat_length")
     facts: list[Fact] = [SeatBearing("seat's outstanding leg", setback, iv(out_leg))]
     if r.word("support_side") == "bolted":
-        n, s, lev, hole = r.count("rows"), r.length("pitch"), r.length("edge_vertical"), r.hole()
+        n, s, lev, hole = r.count("rows"), r.length("pitch"), r.length("edge_vertical"), r.hole("angle", across=False)
         facts += [LegBolts(angle.label, lev - hole / 2, lev + s * (n - 1) + hole / 2, iv(angle.t), iv(vertical)),
-                  _pair("support bolt lines", r.length("support_gauge"), hole, face, support),
+                  _pair("support bolt lines", r.length("support_gauge"), r.hole("support", across=True), face, support),
                   OnFace("seat angle", "part", length, face, support)]
     else:
-        facts.append(OnFace("seat welds at the angle's ends", "weld", length, face, support))
+        w, _ = r.weld("support_weld")
+        facts.append(OnFace("seat welds at the angle's ends", "weld", length + 2 * w, face, support))
     return facts + _beam_to_web(beam, support, face, setback)
 
 
@@ -533,7 +609,7 @@ def stiffened_seat(r: Reading) -> list[Fact]:
 
 def bolt_bracket(r: Reading) -> list[Fact]:
     cols, g, leh = r.count("columns"), r.length("gauge"), r.length("plate_edge")
-    return [GroupOnFace(cols, g, r.hole(), g * (cols - 1) + 2 * leh, r.face(), r.w("support"))]
+    return [GroupOnFace(cols, g, r.hole("support", across=True), g * (cols - 1) + 2 * leh, r.face(), r.w("support"))]
 
 
 def weld_bracket(r: Reading) -> list[Fact]:
@@ -547,7 +623,7 @@ def weld_bracket(r: Reading) -> list[Fact]:
 def hanger(r: Reading) -> list[Fact]:
     if r.face() != "flange":
         raise Missing("a hanger hangs from a support flange")
-    return [_pair("bolt lines", r.length("tee_gauge"), r.hole(), "flange", r.w("support"))]
+    return [_pair("bolt lines", r.length("tee_gauge"), r.hole("support", across=True), "flange", r.w("support"))]
 
 
 def flange_force(r: Reading) -> list[Fact]:
