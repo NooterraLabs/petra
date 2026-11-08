@@ -81,7 +81,7 @@ def double_cope_moment(beam, fy, dct, dcb, c):
     sc, zc = tw * hc * hc / 6, tw * hc * hc / 4
     my, mp = fy * sc, fy * zc
     lb = c
-    cb = max(3 + F(math.log(float(lb / beam.d))) * (1 - dct / beam.d), F(184, 100))  # Manual Eq. 9-21
+    cb = max((3 + F(math.log(float(lb / beam.d)))) * (1 - dct / beam.d), F(184, 100))  # Manual Eq. 9-21
     ratio = lb * hc / (tw * tw)
     if ratio <= F(8, 100) * E / fy:
         return mp, "F11.1, Eq. F11-1"

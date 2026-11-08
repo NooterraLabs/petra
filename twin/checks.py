@@ -130,8 +130,14 @@ def plastic_modulus(t, depth):
 
 
 def net_plastic_modulus(t, depth, hole_width, offsets):
-    """Z of a rectangle less its holes, each at a distance from the mid-depth (Manual Eq. 9-8)."""
-    return t * depth * depth / 4 - t * hole_width * sum(abs(y) for y in offsets)
+    """Z of a rectangle about its mid-depth less its holes, each centred at an offset from the
+    mid-depth (Manual Eq. 9-8). A hole removes t times the integral of |y| over its width, which
+    is hole_width |y| clear of the axis and y^2 + hole_width^2 / 4 where it spans the axis."""
+    def removed(y):
+        y = abs(y)
+        return hole_width * y if y >= hole_width / 2 else y * y + hole_width * hole_width / 4
+
+    return t * depth * depth / 4 - t * sum(removed(y) for y in offsets)
 
 
 # Concentrated forces on the beam web, J10.2 and J10.3, at a beam end

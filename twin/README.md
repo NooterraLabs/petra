@@ -27,6 +27,12 @@ check, and did not run Petra. The sources read were the Specification (AISC 360-
 design examples (AISC Design Examples v16.0, file P901-23W), the Companion's design tables (P902-23W),
 and AISC's shape database (SHAPE160.xlsx).
 
+A second revision fixed points a comparison raised, each stated against the Specification or the
+Companion, and checked each against those documents first. Its author followed the same rule. It read
+`twin/`, `docs/reference.md`, `docs/steel_glossary.md`, `examples/steel/`, the Specification, the
+Companion's design examples and the front matter of its design tables. It did not read Petra's code,
+tests, judges, scripts or other documents, and did not run Petra.
+
 ## Use
 
 ```
@@ -35,12 +41,18 @@ py -3.11 -m unittest discover -s twin -t .
 ```
 
 The first prints one JSON report per card. Each steel component gets a status of `checked`,
-`unsupported` (a kind the twin does not model) or `input_error` (a line it needs is missing or
-malformed). A checked component lists its checks, the governing one, notes, and the parts of the
+`unsupported` (a kind the twin does not model, or too many intervals) or `input_error` (a line it
+needs is missing or malformed). A checked component lists its checks, the governing one, notes, and the parts of the
 card the twin does not model.
 
 The demand is the largest magnitude over every load range on the component, for the field the kind
 carries (`shear`, or `tension` for a hanger). The basis line chooses LRFD (phi) or ASD (Omega).
+
+A length may be an interval, a signed bound `in [lo, hi] ...` or `param NAME`. The twin runs the
+component at both ends of every interval and reports each check where its utilisation is highest,
+with a note naming those ends. Lines that read one param share its end. The report lists the
+intervals. A component with more than 8 intervals is reported as `unsupported`. A load given as
+`param NAME` is not read.
 
 ## Files
 
@@ -54,7 +66,7 @@ carries (`shear`, or `tension` for a hanger). The basis line chooses LRFD (phi) 
 | `coped.py` | coped beam sections |
 | `kinds.py` | the limit states each connection kind carries |
 | `run.py` | load envelope, rendering and the JSON report |
-| `tests/` | parser tests, IC tests, and the Companion examples restated as cards |
+| `tests/` | parser tests, IC tests, the Companion examples restated as cards, and hand calculations |
 
 `shapes.json` keeps 289 W, 289 WT and 137 L shapes. Angle legs and thickness come exactly from the
 shape name, because the table rounds thickness to three decimals.
@@ -66,6 +78,10 @@ appear. These are bolt shear (J3.7, Eq. J3-1), bearing and tearout of each ply (
 J3-6f), the sum of each bolt's least strength (the J3.7 User Note), and slip (J3.9, Eq. J3-4) when the
 joint is slip-critical. An eccentric bolt line scales all four by C/n from the IC method of Manual
 Part 7.
+
+Every block shear check (J4.3) comes in two parts. One is the block through the whole bolt column.
+The other is the weakest block through fewer rows, the ones nearest the edge the bolts push toward,
+against those rows' share of the demand.
 
 | kind | limit states | clauses |
 |---|---|---|
@@ -100,13 +116,14 @@ Part 7.
 | | seat outstanding leg flexure | Manual Part 10 |
 | | bolt line, seat to support | J3.7, J3.11a |
 | `bolt_bracket` | bolt group, IC | J3.7, J3.11a, Manual Part 7 |
+| | slip of the group, IC, when slip-critical | J3.9, Manual Part 7 |
 | | section A-A flexural yielding and rupture | Manual Eqs. 15-1 to 15-3 |
 | | section A-A shear yielding and rupture | J4.2(a), J4.2(b) |
 | | section B-B shear yielding and the normal and flexural interaction | Manual Eqs. 15-6 to 15-18 |
 | `weld_bracket` | weld group, IC for a C-shaped weld | J2.4, Manual Part 8 |
 | | sections A-A and B-B as for `bolt_bracket`, no holes | Manual Part 15, J4.2 |
 | `hanger` | bolt tension | J3.7 |
-| | bolt tension with prying, tee flange and support flange | Manual Part 9, Eqs. 9-23 to 9-30 |
+| | bolt tension with prying, tee flange and support flange, from F'nt when shear is present | Manual Part 9, Eqs. 9-23 to 9-30, J3.8 |
 | | tee stem tensile yielding | J4.1(a) |
 | | tee flange shear yielding and rupture | J4.2(a), J4.2(b) |
 | | bolt shear and combined tension and shear, when shear is present | J3.7, J3.8 |
@@ -132,6 +149,8 @@ The report lists each of these under `unsupported` when a card asks for it.
 - Extended or multi-column single plates.
 - Welded support sides of double angles, single angles and tees, and welded seats.
 - Slip-critical hangers (the J3.10 tension reduction of slip).
+- Block shear of a bolted bracket plate. The eccentric group loads each block with a force and a
+  moment, and the documents read give no J4.3 demand for that. Example II.A-22 does not check it.
 - Coped sections with c/d or c/hc above 1.0, or with lambda above 2 lambda_p. The documents read
   do not give Manual Eqs. 9-12, 9-13, 9-19b or 9-20b.
 - Fit and geometry checks of every kind. The twin checks strength only.
@@ -172,8 +191,11 @@ Each item says how the twin reads a point the documents leave open, and how sure
    Table 10-11 Case I as a conservative bound for e below 2-1/2 in. The IC method at e = 2.5 gives
    C = 3.065 against the table's 3.07 (measured), so the table is the IC method at 2-1/2 in. (inferred).
    The twin is less conservative here by design.
-3. Beam web tearout. An uncoped web has no edge in the direction the bolts push it, so every bolt
-   in it is an interior bolt (inferred from II.A-1A). A top cope makes the top bolt an edge bolt.
+3. Beam web tearout. The bolts push the web up. J3.11 measures lc in that direction to the next
+   hole or the edge of the material, so the top bolt's lc runs to the cope's cut or, uncoped, to the
+   beam's top less half the hole. A card without `top` leaves the uncoped top bolt an interior bolt,
+   as II.A-1A treats it, which is conservative. A support ply has no edge on the card and keeps every
+   bolt interior.
 4. Bracket flexural rupture. II.A-22 takes Znet from Manual Table 15-2, which assumes lev = 1-1/2 in.
    The twin uses the plate's actual depth. For II.A-22 its rupture strength is 1,396 kip-in. against
    the example's 1,050 (measured).
@@ -199,8 +221,10 @@ Each item says how the twin reads a point the documents leave open, and how sure
     double cope the twin checks the net section (inferred). For a welded web it checks hc tw (II.A-6).
 14. Coped branch for lambda at most lambda_p. The twin takes Mn = Mp, where Eq. 9-11 meets Mp
     (inferred). Branches the documents do not show are reported as unsupported.
-15. Double cope Cb. Manual Eq. 9-21 as II.A-7 prints it gives Cb = 2.59 for that beam, but the example
-    shows 1.94 (measured). The twin encodes the equation as printed. Mp governs II.A-7 either way.
+15. Double cope Cb. Manual Eq. 9-21 groups as [3 + ln(Lb/d)](1 - dct/d), at least 1.84. That gives
+    II.A-7's printed 1.94 (measured, 1.9365). The first revision read it as 3 + ln(Lb/d)(1 - dct/d),
+    which gives 2.59 and overstates Mn wherever lateral-torsional buckling governs. Mp governs II.A-7
+    either way.
 16. II.A-28A edge distance. The example's bolt check takes the top bolt 1-1/4 in. below the cope and
     its block shear takes 1-1/2 in., as given. The card carries 1-1/2 in. and a test covers both.
 17. Underrun. Beam web Leh loses 1/4 in. and a seat's setback gains 1/4 in., as II.A-4 and II.A-12A
@@ -213,3 +237,25 @@ Each item says how the twin reads a point the documents leave open, and how sure
     with g the support gauge (inferred).
 21. Demand. The twin ignores the sign of a load and takes the largest magnitude (inferred from the
     card format, where ranges can be signed).
+22. Partial block shear. J4.3 holds on every failure path. A block through the k rows nearest the
+    edge carries k/n of the demand, the equal share per bolt the whole-column block also assumes
+    (inferred). On the cards in `tests/cards/` and `examples/steel/` no partial path governs. On
+    II.A-1A, II.A-28A and II.A-30 it comes within 0.25 percent of the whole column (measured, LRFD).
+23. Eccentric bolt groups. The twin keeps C/n times the sum of the bolts' least strengths. II.A-17A
+    and II.A-30 apply exactly that to a shear tab and a tee stem. II.A-28A and II.A-19B take C times
+    the least single-bolt strength, Manual Eq. 7-15, and II.A-28A calls that conservative. With each
+    bolt's own strength in the IC method, C/n times the sum overstates the group by 1.2 percent for
+    II.A-17A and by 13 percent for an edge bolt at half strength with e = 6 in. (guess, from a model
+    the documents do not give).
+24. Bracket holes. Every bolt takes the least clear distance, as II.A-22 takes its least edge
+    distance for every bolt. Toward the top and bottom edges and between rows lc subtracts the hole's
+    vertical dimension, and toward the side edge and between columns its horizontal one. The bolt
+    forces about the IC run from near vertical to near horizontal, so a long slot either way gets
+    J3.11a(2) and a short slot gets J3.9(b) for slip (inferred).
+25. Bracket slip. The twin takes C times one bolt's J3.9 slip resistance on one slip plane, as it
+    scales an eccentric bolt line's slip (inferred). No example in the documents read checks an
+    eccentric slip-critical group.
+26. Hanger prying under shear. With shear on the bolts, Tc in Manual Eqs. 9-30 and 9-40 is the
+    available tension from F'nt of J3.8, as II.A-1B does.
+27. Interval lengths. The twin checks only the ends of each interval. A check whose worst case lies
+    strictly inside an interval would be missed, and the twin does not prove that none does.

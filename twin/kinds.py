@@ -98,12 +98,17 @@ def bolt_line(out, line, bolts, deformation=True):
     out.add(f"bolt group effective strength, {line.label}", "bolts", "bolts",
             f"{SPEC} J3.7 User Note with J3.11a{ecc}", k * effective, "J3.6")
     if bolts.joint == "slip_critical":
-        mu = F(1, 2) if bolts.surface == "class_b" else F(3, 10)
-        kinds = {ply.hole.kind for _, ply in line.plies}
-        factor = "slip_lsl" if kinds & {"lsl", "lsl_parallel"} else (
-            "slip_ovs" if kinds & {"ovs", "ssl_parallel"} else "slip_std")
-        out.add(f"slip, {line.label}", "slip", "bolts", f"{SPEC} J3.9, Eq. J3-4{ecc}",
-                k * n * ck.slip(mu, bolts.pretension, line.planes, bolts.fillers), factor)
+        slip(out, f"slip, {line.label}", bolts, {ply.hole.kind for _, ply in line.plies}, line.planes, k * n, ecc)
+
+
+def slip(out, name, bolts, hole_kinds, planes, bolt_count, ecc=""):
+    """J3.9 slip resistance of bolt_count bolts, with the phi and Omega of the most slip-prone
+    hole, J3.9(a) to (c)."""
+    mu = F(1, 2) if bolts.surface == "class_b" else F(3, 10)
+    factor = "slip_lsl" if hole_kinds & {"lsl", "lsl_parallel"} else (
+        "slip_ovs" if hole_kinds & {"ovs", "ssl_parallel"} else "slip_std")
+    out.add(name, "slip", "bolts", f"{SPEC} J3.9, Eq. J3-4{ecc}",
+            bolt_count * ck.slip(mu, bolts.pretension, planes, bolts.fillers), factor)
 
 
 def eccentric(points, ex):
@@ -127,14 +132,26 @@ def shear_element(out, label, grade, t, length, n_holes, hole, planes=1):
             planes * ck.shear_rupture(grade.fu, anv), "J4.2b")
 
 
-def block_shear(out, label, grade, t, length, lev, leh, rows, hole, blocks=1):
-    """One or more blocks along a single bolt column: shear from the end of the element through
-    the far bolt, tension from the column out to the edge across the force, Ubs = 1."""
-    agv = (length - lev) * t
-    anv = agv - (rows - F(1, 2)) * (hole.along + ALLOWANCE) * t
+def block_shear(out, label, grade, t, lev, pitch, leh, rows, hole, blocks=1):
+    """One or more blocks along a single bolt column, torn toward the edge the bolts push: shear
+    from that edge through the k-th bolt, tension from there out to the edge across the force,
+    Ubs = 1. J4.3 holds on every path, so besides the whole column (k = rows) the twin checks the
+    block through the k rows nearest the edge with the least strength per row, against those
+    rows' equal share k / rows of the demand."""
+    clause = f"{SPEC} J4.3, Eq. J4-5, Ubs = 1"
     ant = (leh - (hole.across + ALLOWANCE) / 2) * t
-    out.add(f"block shear, {label}", "block_shear", label, f"{SPEC} J4.3, Eq. J4-5, Ubs = 1",
-            blocks * ck.block_shear(grade.fy, grade.fu, agv, anv, ant), "J4.3")
+
+    def strength(k):
+        agv = (lev + (k - 1) * pitch) * t
+        anv = agv - (k - F(1, 2)) * (hole.along + ALLOWANCE) * t
+        return blocks * ck.block_shear(grade.fy, grade.fu, agv, anv, ant)
+
+    out.add(f"block shear, {label}", "block_shear", label, clause, strength(rows), "J4.3")
+    if rows > 1:
+        k = min(range(1, rows), key=lambda k: strength(k) / k)
+        out.add(f"block shear, {label}, partial path", "block_shear", label,
+                f"{clause}, through the {k} of {rows} rows nearest the edge", strength(k), "J4.3",
+                out.demand * k / rows, note=f"demand is the share of {k} of {rows} rows")
 
 
 def flexure_element(out, label, grade, t, depth, hole, offsets, moment):
@@ -165,10 +182,11 @@ def support_ply(lines):
 
 
 def beam_web_ply(lines, beam, grade, hole):
-    """The bolts push the beam web up. Uncoped, the web runs on into the flange; with a top
-    cope the edge is the cope's horizontal cut."""
+    """The bolts push the beam web up. J3.11's lc for the top bolt runs to the edge of the
+    material, the cope's horizontal cut or, uncoped, the beam's top. A card without `top` leaves
+    the uncoped top bolt an interior bolt, which is conservative."""
     cope = lines.cope()
-    edge = None
+    edge = lines.optional_length("top")
     if cope is not None:
         edge = lines.length("top") - cope.depth
     return Ply("beam web", beam.tw, grade.fu, hole, edge, "top")
@@ -217,8 +235,7 @@ def cope_checks(out, lines, beam, grade, rows=None, pitch=None, hole=None):
     if leh is None:
         out.unsupported.append("coped web block shear: no beam_edge on the card")
         return
-    block_shear(out, "beam web", grade, beam.tw, element_length(rows, pitch, lev), lev, leh - UNDERRUN,
-                rows, hole)
+    block_shear(out, "beam web", grade, beam.tw, lev, pitch, leh - UNDERRUN, rows, hole)
 
 
 # Kinds
@@ -248,7 +265,7 @@ def shear_tab(lines, out, demands):
     web = beam_web_ply(lines, beam, beam_grade, holes["beam"])
     bolt_line(out, BoltLine("beam side", n, s, 1, 1, ((1, plate), (1, web)), k, note), bolts, deformation)
     shear_element(out, "plate", grade, tp, length, n, holes["plate"])
-    block_shear(out, "plate", grade, tp, length, lev, leh, n, holes["plate"])
+    block_shear(out, "plate", grade, tp, lev, s, leh, n, holes["plate"])
     out.add("fillet weld, plate to support", "weld", "weld", f"{SPEC} J2.4, Eq. J2-4, kds = 1.0",
             weld.sides * ck.fillet_weld(weld.fexx, weld.w, length), "J2.4")
     out.add(f"support {face} shear rupture at the weld", "weld_base_metal", f"support {face}",
@@ -280,7 +297,7 @@ def double_angle(lines, out, demands):
     web = beam_web_ply(lines, beam, beam_grade, holes["beam"])
     bolt_line(out, BoltLine("beam side", n, s, 1, 2, ((2, angle_beam), (1, web))), bolts, deformation)
     shear_element(out, "angles", grade, t, length, n, holes["angles"], planes=2)
-    block_shear(out, "angles, beam leg", grade, t, length, lev, beam_leg - beam_gauge, n,
+    block_shear(out, "angles, beam leg", grade, t, lev, s, beam_leg - beam_gauge, n,
                 holes["angles"], blocks=2)
     side = lines.word("support_side")
     if side == "bolted":
@@ -288,7 +305,7 @@ def double_angle(lines, out, demands):
         angle_sup = Ply("angles", t, grade.fu, holes["angles"], lev, "top")
         sup = Ply(f"support {face}", t_sup, sup_grade.fu, holes["support"])
         bolt_line(out, BoltLine("support side", n, s, 2, 1, ((1, angle_sup), (1, sup))), bolts, deformation)
-        block_shear(out, "angles, outstanding leg", grade, t, length, lev, out_leg - g_out, n,
+        block_shear(out, "angles, outstanding leg", grade, t, lev, s, out_leg - g_out, n,
                     holes["angles"], blocks=2)
     else:
         out.unsupported.append("welded support side: the eccentric angle-to-support weld is not modeled")
@@ -311,7 +328,7 @@ def shear_end_plate(lines, out, demands):
     sup = Ply(f"support {face}", t_sup, sup_grade.fu, holes["support"])
     bolt_line(out, BoltLine("support side", n, s, 2, 1, ((1, plate), (1, sup))), bolts, deformation)
     shear_element(out, "plate", grade, tp, length, n, holes["plate"], planes=2)
-    block_shear(out, "plate", grade, tp, length, lev, (width - gauge) / 2, n, holes["plate"], blocks=2)
+    block_shear(out, "plate", grade, tp, lev, s, (width - gauge) / 2, n, holes["plate"], blocks=2)
     lw = length - 2 * weld.w
     out.add("fillet weld, plate to beam web", "weld", "weld",
             f"{SPEC} J2.4, Eq. J2-4, kds = 1.0, length less twice the weld size",
@@ -344,7 +361,7 @@ def single_angle(lines, out, demands):
     web = beam_web_ply(lines, beam, beam_grade, holes["beam"])
     bolt_line(out, BoltLine("beam leg", n, s, 1, 1, ((1, angle_beam), (1, web)), k_b, note_b), bolts, deformation)
     shear_element(out, "angle", grade, t, length, n, holes["angle"])
-    block_shear(out, "angle, beam leg", grade, t, length, lev, beam_leg - beam_gauge, n, holes["angle"])
+    block_shear(out, "angle, beam leg", grade, t, lev, s, beam_leg - beam_gauge, n, holes["angle"])
     side = lines.word("support_side")
     if side == "bolted":
         g_sup = lines.length("support_gauge")
@@ -353,7 +370,7 @@ def single_angle(lines, out, demands):
         angle_sup = Ply("angle", t, grade.fu, holes["angle"], lev, "top")
         sup = Ply(f"support {face}", t_sup, sup_grade.fu, holes["support"])
         bolt_line(out, BoltLine("support leg", n, s, 1, 1, ((1, angle_sup), (1, sup)), k_s, note_s), bolts, deformation)
-        block_shear(out, "angle, support leg", grade, t, length, lev, sup_leg - g_sup, n, holes["angle"])
+        block_shear(out, "angle, support leg", grade, t, lev, s, sup_leg - g_sup, n, holes["angle"])
         flexure_element(out, "angle, support leg", grade, t, length, holes["angle"],
                         hole_offsets(n, s), out.demand * e)
     else:
@@ -379,7 +396,7 @@ def shear_tee(lines, out, demands):
     bolt_line(out, BoltLine("stem", n, s, 1, 1, ((1, stem), (1, web)), k, note), bolts, deformation)
     flexure_element(out, "tee stem", grade, tee.tw, length, holes["stem"], hole_offsets(n, s), out.demand * a)
     shear_element(out, "tee stem", grade, tee.tw, length, n, holes["stem"])
-    block_shear(out, "tee stem", grade, tee.tw, length, lev, tee.d - a, n, holes["stem"])
+    block_shear(out, "tee stem", grade, tee.tw, lev, s, tee.d - a, n, holes["stem"])
     side = lines.word("support_side")
     if side == "bolted":
         gauge = lines.length("support_gauge")
@@ -387,7 +404,7 @@ def shear_tee(lines, out, demands):
         sup = Ply(f"support {face}", t_sup, sup_grade.fu, holes["support"])
         bolt_line(out, BoltLine("flange", n, s, 2, 1, ((1, flange), (1, sup))), bolts, deformation)
         shear_element(out, "tee flange", grade, tee.tf, length, n, holes["flange"], planes=2)
-        block_shear(out, "tee flange", grade, tee.tf, length, lev, (tee.bf - gauge) / 2, n,
+        block_shear(out, "tee flange", grade, tee.tf, lev, s, (tee.bf - gauge) / 2, n,
                     holes["flange"], blocks=2)
     else:
         out.unsupported.append("welded support side: the tee-flange-to-support weld is not modeled")
@@ -464,26 +481,38 @@ def bolt_bracket(lines, out, demands):
     pts = bolt_grid(n, m, float(s), float(g))
     c = F(bolt_coefficient(pts, float(ex)))
     note = f"{MANUAL} Part 7 instantaneous center, C = {float(c):.4g} at ex = {float(ex):.4g} in."
-    edge = min(lev, leh)
-    clear = [edge - holes["plate"].along / 2]
+    hp, hs = holes["plate"], holes["support"]
+    # The bolt forces about the instantaneous center run from near vertical to near horizontal,
+    # so each lc is taken in both directions with the hole's own dimension in that direction, and
+    # a long slot either way lies across some bolt's force (J3.11a(2)).
+    long_p, long_s = (h.kind in ("lsl", "lsl_parallel") for h in (hp, hs))
+    clear = [lev - hp.along / 2, leh - hp.across / 2]
     if n > 1:
-        clear.append(s - holes["plate"].along)
+        clear.append(s - hp.along)
     if m > 1:
-        clear.append(g - holes["plate"].across)
+        clear.append(g - hp.across)
     lc = min(clear)
     rs = ck.bolt_shear(bolts.fnv, bolts.d)
-    rp = min(ck.bearing(bolts.d, tp, grade.fu, deformation), ck.tearout(lc, tp, grade.fu, deformation))
-    spacing = ([s - holes["support"].along] if n > 1 else []) + ([g - holes["support"].across] if m > 1 else [])
-    rsup = ck.bearing(bolts.d, t_sup, sup_grade.fu, deformation)
+    rp = min(ck.bearing(bolts.d, tp, grade.fu, deformation, long_p),
+             ck.tearout(lc, tp, grade.fu, deformation, long_p))
+    spacing = ([s - hs.along] if n > 1 else []) + ([g - hs.across] if m > 1 else [])
+    rsup = ck.bearing(bolts.d, t_sup, sup_grade.fu, deformation, long_s)
     if spacing:
-        rsup = min(rsup, ck.tearout(min(spacing), t_sup, sup_grade.fu, deformation))
+        rsup = min(rsup, ck.tearout(min(spacing), t_sup, sup_grade.fu, deformation, long_s))
     out.add("bolt shear", "bolts", "bolts", f"{SPEC} J3.7, Eq. J3-1; {note}", c * rs, "J3.6")
     out.add("bearing and tearout, plate", "bearing", "plate",
-            f"{SPEC} J3.11a at the least clear distance for every bolt (Example II.A-22); {note}", c * rp, "J3.11")
-    out.add(f"bearing and tearout, support {face}", "bearing", f"support {face}", f"{SPEC} J3.11a; {note}",
-            c * rsup, "J3.11")
+            f"{SPEC} J3.11a{'(2)' if long_p else ''} at the least clear distance for every bolt (Example II.A-22); "
+            f"{note}", c * rp, "J3.11")
+    out.add(f"bearing and tearout, support {face}", "bearing", f"support {face}",
+            f"{SPEC} J3.11a{'(2)' if long_s else ''}; {note}", c * rsup, "J3.11")
     out.add("bolt group effective strength", "bolts", "bolts", f"{SPEC} J3.7 User Note with J3.11a; {note}",
             c * min(rs, rp, rsup), "J3.6")
+    if bolts.joint == "slip_critical":
+        # A short slot across the shear lies along the horizontal bolt forces, so J3.9(b) applies.
+        kinds = {"ssl_parallel" if h.kind == "ssl" else h.kind for h in (hp, hs)}
+        slip(out, "slip", bolts, kinds, 1, c, f"; {note}")
+    out.unsupported.append("bracket plate block shear: the eccentric group loads each block with a force and a "
+                           "moment, and the documents read give no J4.3 demand for that (Example II.A-22 omits it)")
     e_aa = ex - F(m - 1, 2) * g
     moment = out.demand * e_aa
     out.add("flexural yielding, section A-A", "flexural_yield", "plate", f"{MANUAL} Eqs. 15-1 and 15-2",
@@ -563,28 +592,31 @@ def hanger(lines, out, demands):
     holes = lines.holes(bolts.d, ["flange", "support"])
     length = element_length(n, s, lev)
     nb = 2 * n
-    rn = ck.bolt_tension(bolts.fnt, bolts.d)
-    out.add("bolt tension", "bolt_tension", "bolts", f"{SPEC} J3.7, Eq. J3-1 with Fnt", nb * rn, "J3.6")
+    ab = ck.bolt_area(bolts.d)
+    out.add("bolt tension", "bolt_tension", "bolts", f"{SPEC} J3.7, Eq. J3-1 with Fnt", nb * bolts.fnt * ab, "J3.6")
+    shear = demands.get("shear", F(0))
+    fnt = bolts.fnt
+    if shear:
+        phi, omega = ck.FACTORS["J3.6"]
+        frv = shear / (nb * ab)
+        reduction = (bolts.fnt / (phi * bolts.fnv)) if out.lrfd else (omega * bolts.fnt / bolts.fnv)
+        fnt = max(min(F(13, 10) * bolts.fnt - reduction * frv, bolts.fnt), F(0))
+        out.add("bolt shear", "bolts", "bolts", f"{SPEC} J3.7, Eq. J3-1", nb * ck.bolt_shear(bolts.fnv, bolts.d),
+                "J3.6", shear)
+        out.add("bolt tension with shear", "bolt_combined", "bolts", f"{SPEC} J3.8, Eqs. J3-2 and J3-3",
+                nb * fnt * ab, "J3.6")
+    rn = fnt * ab  # with shear, F'nt of J3.8 sets the bolt tension prying works against (Example II.A-1B)
     for label, t, fu, bf, tw, hole in (
         ("tee flange", tee.tf, grade.fu, tee.bf, tee.tw, holes["flange"]),
         (f"support {face}", sup.tf if face == "flange" else sup.tw, sup_grade.fu, sup.bf, sup.tw, holes["support"]),
     ):
         q_sum, detail = _prying(out, bolts, rn, n, s, lev, g, t, fu, bf, tw, hole)
         out.add(f"bolt tension with prying, {label}", "prying", label,
-                f"{MANUAL} Part 9 prying, Eqs. 9-23 to 9-40; {detail}", 2 * q_sum * rn, "J3.6")
-    shear = demands.get("shear", F(0))
+                f"{MANUAL} Part 9 prying, Eqs. 9-23 to 9-40, Fnt' = {float(fnt):.4g} ksi; {detail}",
+                2 * q_sum * rn, "J3.6")
     out.add("tee stem tensile yielding", "tension_yield", "tee stem", f"{SPEC} J4.1(a), Eq. J4-1 over the tee length",
             ck.tension_yield(grade.fy, length * tee.tw), "J4.1a")
     shear_element(out, "tee flange", grade, tee.tf, length, n, holes["flange"], planes=2)
-    if shear:
-        rs = ck.bolt_shear(bolts.fnv, bolts.d)
-        out.add("bolt shear", "bolts", "bolts", f"{SPEC} J3.7, Eq. J3-1", nb * rs, "J3.6", shear)
-        phi, omega = ck.FACTORS["J3.6"]
-        frv = shear / (nb * ck.bolt_area(bolts.d))
-        reduction = (bolts.fnt / (phi * bolts.fnv)) if out.lrfd else (omega * bolts.fnt / bolts.fnv)
-        fnt1 = min(F(13, 10) * bolts.fnt - reduction * frv, bolts.fnt)
-        out.add("bolt tension with shear", "bolt_combined", "bolts", f"{SPEC} J3.8, Eqs. J3-2 and J3-3",
-                nb * fnt1 * ck.bolt_area(bolts.d), "J3.6")
     if bolts.joint == "slip_critical":
         out.unsupported.append("slip-critical hanger: J3.10's tension reduction of slip is not modeled")
 

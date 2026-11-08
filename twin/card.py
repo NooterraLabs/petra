@@ -77,6 +77,7 @@ class LoadEntry:
 class Card:
     components: tuple
     loads: tuple
+    params: dict  # name -> (lo, hi) Quantities of each `param NAME in [lo, hi]`
 
 
 _TOKEN = re.compile(
@@ -91,7 +92,7 @@ _TOKEN = re.compile(
 
 _SIGNATURE_WORDS = {"signed", "measured"}
 _IGNORED_BLOCKS = {"design", "tests"}
-_IGNORED_LINES = {"param", "ambient", "claim", "waive"}
+_IGNORED_LINES = {"ambient", "claim", "waive"}
 
 
 def _strip_comment(line):
@@ -165,7 +166,7 @@ def _bound(tokens, lineno):
 
 
 def parse(text):
-    components, loads = [], []
+    components, loads, params = [], [], {}
     block = None
     for lineno, raw in enumerate(text.splitlines(), 1):
         toks = _tokens(_strip_comment(raw), lineno)
@@ -186,6 +187,9 @@ def parse(text):
                     block = ("component", Component(head, toks[1][1], {}, {}))
                 continue
             if head in _IGNORED_LINES:
+                continue
+            if head == "param" and len(toks) > 2 and toks[1][0] == "ident":
+                params[toks[1][1]] = _bound(toks[2:], lineno)
                 continue
             raise CardError(f"line {lineno}: unexpected {head!r} outside a block")
         if toks == [("punct", "}")]:
@@ -211,4 +215,4 @@ def parse(text):
         owner.line_numbers[key] = lineno
     if block is not None:
         raise CardError("unclosed block at end of file")
-    return Card(tuple(components), tuple(loads))
+    return Card(tuple(components), tuple(loads), params)
