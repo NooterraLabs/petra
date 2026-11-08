@@ -14,7 +14,7 @@ Every claim carries a label: **measured** (run or read while writing this plan),
 4. **"Unsafe" must be defined before anything is measured.** Code compliance and physical failure are different truths, and Petra's current judges are not independent of Petra (§3).
 5. **The first build work is oracles that are not Petra.** These are a clean-room twin of the steel deck, metamorphic relations, and table-based differential tests. They address the weakest measured number. If one of Petra's own checks went missing, today's judges and breaker would expose the gap in only 22 of 199 cases, because the judges have no condition of their own for those modes (`docs/canary_recall.md`, measured).
 6. **Petra's own false FAILs cost users now.** It rejected 3 of 10 safe designs in P3 (measured). That alone meets the decision table's false-FAIL row (§4, computed). Fixing those comes before new physics.
-7. **Compute credits end on 2026-11-15** (plan §6). The token-heavy experiments run before then, and so do the keystone experiment's LLM arms. The CPU-heavy work (CalculiX, kernel rules) runs after (§4).
+7. **The order follows what each step needs, not a date.** No compute deadline applies (plan §8 item 6). The oracles that are not Petra come first, because they judge the keystone experiment's steel arena (§4).
 8. **The kernel stays frozen until evidence asks for a rule.** It is at 1,414 of its 1,500 budgeted code lines (measured). Each new rule must first state its soundness conditions, then ship a mutation corpus and a check against an outside checker (§7).
 9. **Each new design class ships its own judge, canaries and breaker first,** one class at a time. That is the plan's coverage rule (plan §4), applied to function, contracts and dynamics.
 10. **Some things stay out of reach.** Fracture with no declared flaw, rigid impact with friction, and complete knowledge of failure modes stay out of reach (§8). Petra answers UNKNOWN there, with what is missing.
@@ -69,9 +69,9 @@ These rules come from the reviews. Each one names a failure the first draft had.
 
 ## 4. Order of work
 
-### Before credits end on 2026-11-15
+### First runs
 
-These runs need tokens more than CPU, so they go first. The plan gave the last credits to the canary campaign and the P1 breaker runs (plan §8 item 6). P1 has closed, so these runs use what remains (inferred).
+The keystone experiment and the decision table depend on these, so they go first.
 
 | Run | What it measures | Truth and judge | Size |
 |---|---|---|---|
@@ -79,9 +79,9 @@ These runs need tokens more than CPU, so they go first. The plan gave the last c
 | Missing-obligation tasks, unaided arm only | Whether agents name and check a decisive obligation the brief does not mention | The planted obligation, built from synthetic mechanisms of strength and of function, not from famous cases, which the models already know | 25 tasks |
 | Clean-room twin of the steel deck | A second implementation of the steel limit states, written from the AISC specification by agents with no access to Petra's code | Disagreement with Petra on the 10,000-design gate stream. Labelled single-family (§3 rule 2). The AISC specification is licensed, so the twin reads it in place and encodes methods with clause citations, never its text. | One deck |
 | Grader-honesty setup | Task sets and pre-registration for the keystone experiment below | | Protocol only |
-| Keystone LLM arms | The LLM-judge reward and the LLM design loop, in the trusses and frames arena | Closed forms now. Converged CalculiX runs on CPU after the credits end. | As the protocol sets. If it is not ready in time, the keystone runs CMA-ES alone and reports the LLM arms as not run. |
+| Keystone LLM arms | The LLM-judge reward and the LLM design loop, in the trusses and frames arena | Closed forms, and converged CalculiX runs | As the protocol sets |
 
-### The keystone experiment: honesty under optimisation (LLM arms first, the rest in weeks 1 to 4)
+### The keystone experiment: honesty under optimisation (weeks 1 to 4)
 
 The same optimisers minimise mass under each of three rewards: Petra, an LLM judge, and floating-point finite elements at a fixed mesh. Two optimiser families run, CMA-ES and an LLM design loop. Judges that never serve as a reward then grade the optimised designs as the optimisation budget grows.
 
@@ -108,7 +108,7 @@ Every rate below is a one-sided 95% lower bound, so a row fires on evidence and 
 | No row above selects a design class | The first new class is frames, through K-C. Frames serve buckling, vibration and F4's frequency contracts, and the keystone's truss arena already builds their judge (guess). | F3 waits for a row or a user |
 | Petra's false-FAIL rate on safe designs is above 5% | False-FAIL fixes come before everything. P3 already fires this row, at 3 of 10, a lower bound of 8.7% (computed). | |
 
-### The 12-week core (after 2026-11-15)
+### The 12-week core
 
 | Week | Item | Done when | Killed when |
 |---|---|---|---|
@@ -294,7 +294,7 @@ Petra answers UNKNOWN on each of these and names what is missing.
 **Raised by both reviewers, and acted on:**
 - "Unsafe" had no definition, and the judges share Petra's registry and parser.
 - Same-family checks were treated as independent.
-- The draft ignored the credit cliff and was several times over scope.
+- The draft was several times over scope.
 - The frequency contract bounds from the unsafe side.
 - The first kernel wave came before any evidence and went over the ceiling.
 - The atlas could not measure lift before the capabilities existed, and had no decision table or null branch.
@@ -320,7 +320,7 @@ Petra answers UNKNOWN on each of these and names what is missing.
 - The decision table's rates became 95% lower bounds, and its thresholds are labelled guesses.
 - F2, F3, F4 and F6 gained done tests and kill conditions.
 - Dropped items are now listed: the function and assembly gap tests, the premise concentration index, and K-G.
-- The keystone's LLM arms moved before the credits end.
+- The keystone's LLM arms got their own row in the first runs.
 - The clean-room twin is labelled by what it shares.
 - J10.8 and J10.9 are marked as open since P1, not found in P3.
 - The kernel table's total is stated.

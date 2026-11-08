@@ -198,7 +198,7 @@ Stage 3 is the bet that lets Petra capture all design rather than one deck at a 
 
 Each phase ends in a predicate someone can re-run, and a phase is done only when its predicate passes. Lanes of work that touch different files run in parallel, each on its own branch.
 
-**Compute credits end on 2026-11-15** (ENGINE_MAP D5). The canary campaign in P0 and the breaker runs in P1 need the most compute, so they run first.
+The canary campaign in P0 and the breaker runs in P1 need the most compute, so they run first.
 
 ### P0. Usable, and the gap measured (2 to 4 days)
 
@@ -332,7 +332,7 @@ P8 is the cheap test of stage 3 in §5. It takes one AISC formula, block shear o
 ### The frontier track (after P8)
 
 [The frontier plan](frontier.md) sets the work after P8. In short:
-- **Before compute credits end on 2026-11-15.** Run the token-heavy experiments: an unaided failure-regime search, missing-obligation tasks, a clean-room twin of the steel deck, and the keystone experiment's LLM arms.
+- **First.** Run the experiments the keystone depends on: an unaided failure-regime search, missing-obligation tasks, a clean-room twin of the steel deck, and the keystone experiment's LLM arms.
 - **Then the rest of the keystone experiment.** Petra, an LLM judge and floating-point finite elements each serve as the reward for the same optimisers. Judges that share nothing with Petra grade the results.
 - **Then a 12-week core:**
   - false-FAIL fixes;
@@ -362,7 +362,7 @@ The kernel stays frozen until a validated program needs a new rule.
 3. **The licence.** The licence is Apache-2.0, which ENGINE_MAP D3 made conditional on a data-licence audit. The full AISC shapes table cannot ship until that audit says how.
 4. **The PyPI name.** `petra` is held by another account's project, which has no releases. **Decided on 2026-11-07:** Petra publishes as `petra-lang`. The command stays `petra` and the import stays `import petra`.
 5. **The designer's name.** Daedalus is taken by the wave-physics engine.
-6. **The last credits, which run to 2026-11-15.** **Decided on 2026-11-06** that they go to the canary campaign and the P1 breaker runs.
+6. **Compute deadline.** **Decided on 2026-11-06** that the last credits, then due to end on 2026-11-15, go to the canary campaign and the P1 breaker runs. **Decided on 2026-11-07** that no compute deadline applies. Modal is no longer used, and the remaining runs fit on free machines.
 7. **Registry values from physics, or from specified limits.** `docs/frame.md` item 5 says registries are computed from physics, with wire resistance from resistivity and nominal area as the example. That derivation is what produced the low resistance. IEC 60228 specifies a maximum resistance, not an area, so physics alone cannot give the guaranteed value. **Decided on 2026-11-06** that a short list of specified limits may stand as constants. `docs/frame.md` item 5 and `docs/registry.md` now say so.
 8. **How Petra is run in the open.** `docs/open_source.md` describes how Lean, Rocq, seL4, Ferrocene, code_aster and the open benchmarks are run, and sets out a playbook for Petra. **Decided on 2026-11-06:**
    - The docs are under CC BY 4.0 (`docs/LICENSE.md`).
@@ -440,7 +440,7 @@ Reviewer B raised five:
 - The benchmark needed a score beyond PASS, a decision on checker access, an independent oracle, and an attack on outside graders.
 - The designer needed read-back before signing, and P4 should cover connections only.
 - Coverage rows that open families should come earlier, with estimates.
-- Credits end on 2026-11-15, and gating the phases in series wasted parallel lanes.
+- Gating the phases in series wasted parallel lanes.
 - The agents-first bet needed a measure and a date.
 
 **Considered and kept as is:**
