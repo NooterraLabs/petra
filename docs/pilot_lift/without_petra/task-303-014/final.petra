@@ -1,0 +1,32 @@
+petra 0
+
+# An all-bolted double-angle connection: a W24x55 beam to the web of a W14x61 column through
+# two L4x3-1/2x3/8 A36 angles, 12 in long, long legs outstanding. Four 7/8 in Group 120 bolts
+# (A325-N) in double shear through the beam web and four in single shear through each
+# outstanding leg into the column web. The beam is uncoped and sits between the column flanges.
+
+design "steel-double-angle-303-014" {
+  owner "task.owner@example.org"
+}
+
+double_angle da1 {
+  basis lrfd
+  beam W24x55 grade steel.A992
+  support W14x61 web grade steel.A992
+  angles L4x3_1_2x3_8 grade steel.A36 outstanding long
+  bolts bolt_group.120 diameter 0.875 inch threads included
+  rows 4
+  pitch 3 inch
+  edge_vertical 1.5 inch
+  beam_edge 1.5 inch
+  top 3.5 inch
+  beam_gauge 2 inch
+  support_side bolted
+  support_gauge 5.5 inch
+  setback 0.5 inch
+}
+
+load gravity {
+  on da1 shear in [0 kip, 142.863 kip]
+  signed "task.owner@example.org" source "task 303-014"
+}

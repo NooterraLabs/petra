@@ -1,0 +1,29 @@
+petra 0
+
+# Task 303-015: single-angle connection, W24x55 beam to W14x61 column flange, ASD.
+
+design "task-303-015-single-angle" {
+  owner "task.owner@example.org"
+}
+
+single_angle sa1 {
+  basis asd
+  beam W24x55 grade steel.A992
+  support W14x61 flange grade steel.A992
+  angle L4x4x1_4 grade steel.A36 outstanding long
+  bolts bolt_group.120 diameter 0.875 inch threads included
+  rows 4
+  pitch 3 inch
+  edge_vertical 2.0625 inch
+  beam_edge 1.5 inch
+  top 3.625 inch
+  beam_gauge 2 inch
+  support_side bolted
+  support_gauge 2 inch
+  setback 0.5 inch
+}
+
+load service {
+  on sa1 shear in [0 kip, 39.449 kip]
+  signed "task.owner@example.org" source "task 303-015"
+}

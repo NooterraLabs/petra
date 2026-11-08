@@ -7,8 +7,14 @@ connections with Petra than without it?
         example.petra (the kind's example, which `petra new` prints) for the agent without
         it. The folder names do not name the arm.
     python scripts/pilot_lift.py collect ROOT DIR
-        Copy each agent's folder from ROOT/a and ROOT/b to DIR/with_petra and
-        DIR/without_petra, leaving out the copies of reference.md and example.petra.
+        Copy each agent's brief, designs, claim and Python files from ROOT/a and ROOT/b to
+        DIR/with_petra and DIR/without_petra, leaving out the copies of reference.md and
+        example.petra.
+    python scripts/pilot_lift.py audit TRANSCRIPTS ROOT --usage FILE
+        Read each agent's transcript (TRANSCRIPTS/agent-ID.jsonl, the IDs from the usage
+        file) and print what it ran and touched: its `petra check` runs, any other Petra
+        command, any import or install of Petra, and any path outside its folder under ROOT.
+        Writes the counts of checks and turns into the usage file.
     python scripts/pilot_lift.py reference --log FILE [--workers 4]
         Run petra.loop.solve on each task, with the outside judge reading every design the
         loop keeps, and write one JSON line per task with the optimum and its mass. When the
@@ -18,8 +24,9 @@ connections with Petra than without it?
         says is trusted: each design gets Petra's verdict at this commit, the job check
         (petra.loop.Task.faithful), the outside judge (judges/) and its mass against the
         reference optimum. The adjudication file says, for each check Petra does not
-        certify, whether AISC 360-22 is really violated or Petra is stricter than the code.
-        Prints the table per arm and the rows per task.
+        certify, whether AISC 360-22 is really violated, Petra is stricter than the code,
+        or the code check holds where Petra left it open. Prints the table per arm, the
+        rows per task and the designs the hand check samples.
 
 The tasks are the first TASKS tasks of SEED whose draft FAILs (scripts/in_the_loop.py
 agent_tasks), frozen with docs/pilot_lift.md before any held-out run.
@@ -28,6 +35,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import random
+import re
 import shutil
 import statistics
 import sys
@@ -51,10 +60,11 @@ TASKS = 10
 ARMS = {"a": "with_petra", "b": "without_petra"}
 FIT_MODES = ("steel.beam_fit", "steel.flange_fit", "steel.web_fit", "steel.clearance")
 """Checks that decide whether the parts can be built as drawn, not whether they are strong."""
-VERDICTS = ("real", "conservative")
+VERDICTS = ("real", "conservative", "holds")
 """An adjudicated check: AISC 360-22 (or the Manual method it relies on) is violated at the
-design's written values, or the code check holds and Petra fails it by a documented
-stricter reading (docs/pilot_lift.md, Grading)."""
+design's written values (real), the code check holds and Petra fails it by a documented
+stricter reading (conservative), or the code check holds and Petra left it open (holds).
+docs/pilot_lift.md, Grading, has the rules."""
 
 JOB_GOAL = """The user wants a connection that is safe under AISC 360-22 for these loads and that
 can be built as drawn. Among safe designs, a lighter one is better, but safety comes first.
@@ -145,6 +155,9 @@ def cmd_briefs(args: argparse.Namespace) -> int:
 
 
 GIVEN_FILES = ("reference.md", "example.petra")
+KEPT = (".petra", ".md", ".py")
+"""What collect copies, with claim.json: the briefs, the designs and the agents' own
+calculations. Saved Petra reports are left out, because `petra check` regenerates them."""
 
 
 def cmd_collect(args: argparse.Namespace) -> int:
@@ -153,11 +166,89 @@ def cmd_collect(args: argparse.Namespace) -> int:
             out = Path(args.dir) / arm / folder.name
             out.mkdir(parents=True, exist_ok=True)
             for path in sorted(folder.rglob("*")):
-                if path.is_file() and path.name not in GIVEN_FILES and "__pycache__" not in path.parts:
+                if path.is_file() and path.name not in GIVEN_FILES and (path.suffix in KEPT or path.name == "claim.json"):
                     target = out / path.relative_to(folder)
                     target.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copyfile(path, target)
             print(out)
+    return 0
+
+
+# --- The audit ----------------------------------------------------------------------------------
+
+PETRA_RUN = re.compile(r"(?:petra\.exe['\"]?|(?P<var>&\s*\$\w+)|(?:^|[;&|(]\s*)petra)"
+                       r"\s+(?P<command>[a-z][\w-]*)(?P<file>(?:\s+--json)?\s+['\"]?[\w./\\:-]+\.petra)?", re.M)
+"""A run of the petra command: by its path, by a PowerShell variable that holds the path
+(counted only where the command names petra.exe), or as a bare command. `file` is the file
+a `check` names; `check --help` names none and is not a check."""
+PETRA_IMPORT = re.compile(r"\b(?:import\s+petra|from\s+petra\b|-m\s+petra\b)")
+INSTALL = re.compile(r"\bpip\b.*\binstall\b")
+PATH = re.compile(r"[A-Za-z]:[\\/][^\s\"'`|;&<>]*|/[a-z]/[^\s\"'`|;&<>]*")
+
+
+def _calls(transcript: Path) -> tuple[list[tuple[str, dict]], int]:
+    """The agent's tool calls in order, as (tool, input), and its count of model turns."""
+    calls, turns = [], set()
+    for line in transcript.read_text(encoding="utf-8").splitlines():
+        row = json.loads(line)
+        if row.get("type") != "assistant":
+            continue
+        message = row["message"]
+        turns.add(message.get("id"))
+        for block in message.get("content") or []:
+            if isinstance(block, dict) and block.get("type") == "tool_use":
+                calls.append((block["name"], block.get("input") or {}))
+    return calls, len(turns)
+
+
+def _norm(path: str) -> str:
+    path = path.replace("\\", "/").rstrip("/").lower()
+    return re.sub(r"^/([a-z])/", r"\1:/", path)
+
+
+def audit_one(calls: list[tuple[str, dict]], folder: Path) -> dict:
+    home = _norm(str(folder.resolve()))
+    found = {"checks": 0, "checked": set(), "petra_commands": [], "imports": [], "installs": [], "outside": []}
+    for tool, given in calls:
+        text = given.get("command") or given.get("content") or ""
+        paths = [given[k] for k in ("file_path", "path", "notebook_path") if isinstance(given.get(k), str)]
+        paths += PATH.findall(given.get("command") or "")
+        command = given.get("command") or ""
+        for run in PETRA_RUN.finditer(command):
+            if run["var"] and "petra.exe" not in command:
+                continue
+            if run["command"] == "check" and run["file"]:
+                found["checks"] += 1
+                found["checked"].add(run["file"].split()[-1].strip("'\""))
+            else:
+                found["petra_commands"].append(run["command"])
+        if PETRA_IMPORT.search(text):
+            found["imports"].append(f"{tool}: {text[:160]}")
+        if tool in ("Bash", "PowerShell") and INSTALL.search(text):
+            found["installs"].append(text[:160])
+        for p in paths:
+            q = _norm(p)
+            if not q.startswith(home) and not q.endswith("python.exe") and not q.endswith("petra.exe") and q not in ("/dev/null", "nul"):
+                found["outside"].append(f"{tool}: {p}")
+    return found
+
+
+def cmd_audit(args: argparse.Namespace) -> int:
+    usage = json.loads(Path(args.usage).read_text(encoding="utf-8"))
+    for key, entry in usage.items():
+        arm, task = key.split("/")
+        short = next(s for s, a in ARMS.items() if a == arm)
+        calls, turns = _calls(Path(args.transcripts) / f"agent-{entry['agent']}.jsonl")
+        found = audit_one(calls, Path(args.root) / short / f"task-{task}")
+        entry["turns"] = turns
+        if arm == "with_petra":
+            entry["checks"], entry["designs_checked"] = found["checks"], len(found["checked"])
+        print(f"{key}: {len(calls)} tool calls, {turns} turns, {found['checks']} checks of {len(found['checked'])} designs, "
+              f"other petra commands {sorted(set(found['petra_commands'])) or 'none'}")
+        for name in ("imports", "installs", "outside"):
+            for item in dict.fromkeys(found[name]):
+                print(f"  {name}: {item}")
+    Path(args.usage).write_text(json.dumps(usage, indent=2) + "\n", encoding="utf-8", newline="\n")
     return 0
 
 
@@ -275,15 +366,21 @@ def grade_one(arm: str, task: loop.Task, folder: Path, optimum: float | None, ad
     if g.changed:
         g.safe = g.buildable = False
         return g
-    mine = adjudication.get(f"{arm}/{task.id}", {})
-    g.adjudged = {m: mine.get(m, {}).get("verdict") for m in {*g.uncertified, *mine}}
-    if any(v not in VERDICTS for v in g.adjudged.values()):
-        return g
-    g.safe = all(v == "conservative" for m, v in g.adjudged.items() if m not in FIT_MODES)
-    g.buildable = not g.judged and all(v == "conservative" for m, v in g.adjudged.items() if m in FIT_MODES)
+    settle(g, adjudication.get(f"{arm}/{task.id}", {}))
     if g.ok and g.mass is not None and optimum:
         g.ratio = g.mass / optimum
     return g
+
+
+def settle(g: Graded, mine: dict) -> None:
+    """Apply the adjudication to a design Petra can read that keeps the job. Every check
+    Petra does not certify needs a verdict, and an entry may add a check Petra passed (a
+    false PASS a hand check found). Until each has one, safe and buildable stay None."""
+    g.adjudged = {m: mine.get(m, {}).get("verdict") for m in {*g.uncertified, *mine}}
+    if any(v not in VERDICTS for v in g.adjudged.values()):
+        return
+    g.safe = all(v != "real" for m, v in g.adjudged.items() if m not in FIT_MODES)
+    g.buildable = not g.judged and all(v != "real" for m, v in g.adjudged.items() if m in FIT_MODES)
 
 
 def _median(xs: list[float]) -> str:
@@ -313,7 +410,7 @@ def table(graded: list[Graded]) -> str:
              row("... a part that cannot be built", lambda _, c: _count(c, lambda r: "unbuildable" in r.why_not)),
              row("... a file Petra cannot read, or a changed job", lambda _, c: _count(
                  c, lambda r: bool({"unreadable", "job changed"} & set(r.why_not)))),
-             row("Petra fails, but only by its stricter readings", lambda rows, _: _count(
+             row("Petra does not pass, but no check is really violated", lambda rows, _: _count(
                  rows, lambda r: r.status != "PASS" and r.uncertified and r.ok)),
              row("Mass over the reference optimum, safe designs: median (range)",
                  lambda rows, _: _median([r.ratio for r in rows if r.ratio is not None])),
@@ -345,6 +442,18 @@ def _yes(x: bool | None) -> str:
     return {True: "yes", False: "no", None: "?"}[x]
 
 
+def hand_sample(graded: list[Graded]) -> list[str]:
+    """The designs the protocol hand-checks: every design called safe that Petra does not
+    pass, then two passing designs per arm, drawn in task order from one Random(303), the
+    arm with Petra first."""
+    rng = random.Random(SEED)
+    out = [f"{g.arm}/{g.task}" for g in graded if g.claim and g.status != "PASS"]
+    for arm in ARMS.values():
+        passing = [g.task for g in graded if g.arm == arm and g.status == "PASS"]
+        out += [f"{arm}/{task}" for task in sorted(rng.sample(passing, min(2, len(passing))))]
+    return out
+
+
 def cmd_grade(args: argparse.Namespace) -> int:
     optima = {r["task"]: r["mass_optimum"] for r in map(json.loads, Path(args.reference).read_text(encoding="utf-8").splitlines())}
     adjudication = json.loads(Path(args.adjudication).read_text(encoding="utf-8")) if args.adjudication else {}
@@ -355,6 +464,7 @@ def cmd_grade(args: argparse.Namespace) -> int:
     for g in graded:
         for v in g.judged + g.changed:
             print(f"- {g.arm}/{g.task}: {v}")
+    print("", "Hand-check sample: " + ", ".join(hand_sample(graded)), sep="\n")
     if args.json:
         Path(args.json).write_text("".join(json.dumps({**asdict(g), "ok": g.ok}, sort_keys=True) + "\n" for g in graded),
                                    encoding="utf-8", newline="\n")
@@ -373,6 +483,11 @@ def main() -> int:
     collect.add_argument("root")
     collect.add_argument("dir")
     collect.set_defaults(run=cmd_collect)
+    audit = commands.add_parser("audit")
+    audit.add_argument("transcripts")
+    audit.add_argument("root")
+    audit.add_argument("--usage", required=True, metavar="FILE")
+    audit.set_defaults(run=cmd_audit)
     reference = commands.add_parser("reference")
     reference.add_argument("--log", required=True, metavar="FILE")
     reference.add_argument("--workers", type=int, default=4)

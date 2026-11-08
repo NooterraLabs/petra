@@ -1,0 +1,28 @@
+petra 0
+
+# An eccentrically loaded bolted bracket, ASD: a 3/8 in A572 Gr 50 plate lapped on a W12x65
+# column flange with two columns of six 3/4 in Group 150 (A490-N) bolts at the 5-1/2 in workable
+# gauge, loaded 6 in from the bolt group centroid. Standard holes, snug-tight bolts.
+
+design "steel-bolt-bracket-303-004" {
+  owner "task.owner@example.org"
+}
+
+bolt_bracket bb1 {
+  basis asd
+  plate steel.A572_50 thickness 0.375 inch
+  support W12x65 flange grade steel.A992
+  bolts bolt_group.150 diameter 0.75 inch threads included
+  rows 6
+  columns 2
+  pitch 3 inch
+  gauge 5.5 inch
+  eccentricity 6 inch
+  edge_vertical 1.75 inch
+  plate_edge 1.75 inch
+}
+
+load service {
+  on bb1 shear in [0 kip, 88.107 kip]
+  signed "task.owner@example.org" source "task 303-004"
+}

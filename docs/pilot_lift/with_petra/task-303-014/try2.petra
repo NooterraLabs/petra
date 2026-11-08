@@ -1,0 +1,32 @@
+petra 0
+
+# Double-angle beam-to-column-web connection, task 303-014: W24x55 beam to the web of a
+# W14x61 column through two L4x3x3/8 angles, short legs outstanding on the column web,
+# four 7/8 in Group 120 bolts (A325-N) in double shear through the beam web and four in
+# single shear through each outstanding leg into the column web.
+
+design "task-303-014-double-angle" {
+  owner "task.owner@example.org"
+}
+
+double_angle da1 {
+  basis lrfd
+  beam W24x55 grade steel.A992
+  support W14x61 web grade steel.A992
+  angles L4x3x3_8 grade steel.A36 outstanding short
+  bolts bolt_group.120 diameter 0.875 inch threads included
+  rows 4
+  pitch 3 inch
+  edge_vertical 1.25 inch
+  beam_edge 1.75 inch
+  top 3 inch
+  beam_gauge 2.25 inch
+  setback 0.5 inch
+  support_side bolted
+  support_gauge 3.875 inch
+}
+
+load reaction {
+  on da1 shear in [0 kip, 142.863 kip]
+  signed "task.owner@example.org" source "task 303-014"
+}
