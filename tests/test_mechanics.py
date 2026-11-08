@@ -30,7 +30,7 @@ from scipy.sparse import diags, identity, kron
 from scipy.sparse.linalg import eigsh
 
 from petra import mechanics as M
-from petra.kernel import enclose
+from petra.kernel import Exp, Neg, enclose
 from petra.models.steel import vocab
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -306,6 +306,31 @@ class BoltGroups(unittest.TestCase):
                         self.assertIn((fx, fy), {(abs(a), b) for a, b in corners})
                         others = [resultant(r, xs[:j]) for r in (ys[:k], ys[-k:])]          # the -x side
                         self.assertGreaterEqual(fx * fx + fy * fy, max(a * a + b * b for a, b in others))
+
+    def test_the_bolts_about_an_instantaneous_centre(self):
+        """Every bolt turned about a centre at (-r, 0): its force is curve(rho / rho_max),
+        rho_max the largest rho of any bolt, normal to its radius. The forces across the
+        load cancel; along it they sum to V, and their moments about the centre to M. The
+        centres lie outside the pattern, inside it between columns, and far away."""
+        def curve(x):
+            return 1 - math.exp(-3 * x)
+
+        for rows, cols, s, g in PATTERNS:
+            bolts = [(float(x), float(y)) for x, y in _bolts(rows, cols, Fraction(s), Fraction(g))]
+            for r in (Fraction(1, 3), Fraction(7, 4), Fraction(5), Fraction(40)):
+                if any(y == 0 and x + float(r) == 0 for x, y in bolts):
+                    continue
+                with self.subTest(rows=rows, cols=cols, r=r):
+                    radii = [(x + float(r), y) for x, y in bolts]
+                    far = max(math.hypot(a, b) for a, b in radii)
+                    forces = [(curve(math.hypot(a, b) / far) * -b / math.hypot(a, b),
+                               curve(math.hypot(a, b) / far) * a / math.hypot(a, b)) for a, b in radii]
+                    self.assertAlmostEqual(sum(f for f, _ in forces), 0.0, places=12)
+                    moment = sum(a * fy - b * fx for (a, b), (fx, fy) in zip(radii, forces))
+                    got_v, got_m = M.instantaneous_centre(q(r), rows, cols, q(s), q(g),
+                                                          lambda x: M.sub(q(1), Exp(Neg(M.mul(q(3), x)))))
+                    self.assertAlmostEqual(num(got_v), sum(f for _, f in forces), places=10)
+                    self.assertAlmostEqual(num(got_m), moment, places=10)
 
 
 # --- Weld groups: the weld cut into short pieces ----------------------------------------------------------

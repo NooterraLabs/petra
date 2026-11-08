@@ -1082,6 +1082,19 @@ hanger h12 {
 KNOWN: dict[tuple[str, str, str], str] = {}
 """(design, connection, mode) -> the twin's reading where it disagrees with the deck."""
 
+_WELD_IC = 0.01
+"""A plate welded on both faces turns about an axis across its weld line (Manual Table 8-4,
+k = 0). The twin integrates the method by quadrature; the deck states a certified lower
+bound on C over segments of the line, which gives up at most ic.WELD_LOSS of it."""
+BOUNDED: dict[tuple[str, str, str], float] = {
+    (design, conn, mode): _WELD_IC
+    for design, conn in (("weld_bracket.", "wb1"), ("weld_bracket_shaped", "wb2"), ("weld_bracket_rectangular", "wb5"),
+                         ("weld_bracket_cyclic", "wb7"))
+    for mode in ("weld", "weld_base_metal")}
+"""(design, connection, mode) -> how far the deck's utilisation may lie above the twin's,
+relative to it, where the deck certifies a bound on a method the twin computes in floats.
+The deck must not lie below."""
+
 
 def _designs(registry):
     out = []
@@ -1134,10 +1147,19 @@ class TwinAgreesWithTheDeck(unittest.TestCase):
 
     def test_every_comparison_outside_known_agrees(self):
         for key, (t, d) in sorted(self.rows.items()):
-            if key in KNOWN:
+            if key in KNOWN or key in BOUNDED:
                 continue
             with self.subTest(design=key[0], conn=key[1], mode=key[2]):
                 self.assertFalse(_differs(t, d), f"twin {t!r} deck {d!r}")
+
+    def test_every_bounded_comparison_errs_safe_within_its_share(self):
+        for key, share in BOUNDED.items():
+            with self.subTest(design=key[0], conn=key[1], mode=key[2]):
+                self.assertIn(key, self.rows)
+                t, d = self.rows[key]
+                self.assertTrue(_differs(t, d), f"twin and deck now agree at {t!r}; drop the BOUNDED entry")
+                self.assertLessEqual(t, d)
+                self.assertLessEqual(d, t * (1 + share))
 
     def test_every_known_disagreement_still_disagrees(self):
         for key in KNOWN:

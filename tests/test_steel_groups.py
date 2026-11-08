@@ -7,13 +7,19 @@ weld group, likewise) and II.D-1 (a WT hanger with prying). Kulak, Fisher and St
 Guide to Design Criteria for Bolted and Riveted Joints, 2nd ed. (1987), Table 13.1: the
 instantaneous-centre coefficients C of a line of bolts.
 
-Reproduced: the elastic groups (II.A-25, 27); the bracket plates' section A-A (shear,
-flexural yielding) and their free-edge section B-B (shear, the normal force and moment
-with local buckling) (II.A-22, 23); the hanger's bolt tension, its flange in shear, and the
-flange thickness at which prying uses the bolt up (II.D-1).
+Reproduced: the bolt groups by the instantaneous centre (II.A-22's bolts, II.A-24), and
+the elastic method's coefficient (II.A-25), which the deck takes where it is the larger;
+Kulak's coefficients; the elastic C-shaped weld group (II.A-27); the bracket plates'
+section A-A (shear, flexural yielding) and their free-edge section B-B (shear, the normal
+force and moment with local buckling) (II.A-22, 23); the hanger's bolt tension, its flange
+in shear, and the flange thickness at which prying uses the bolt up (II.D-1).
 
-Bounded: the deck's groups are elastic, the Companion's instantaneous-centre groups carry
-more (II.A-22's bolts, 23's welds, 24, 26), and so do Kulak's coefficients.
+Bounded: the deck's C-shaped weld groups are elastic, and the Companion's
+instantaneous-centre groups carry more (II.A-23's welds, 26).
+
+The instantaneous centre's premise, measured: along the axis through the centroid across
+the load, the eccentricity a centre balances falls as the centre moves out, and the force
+the bolts hold rises (the certificate in checks.py and ic.py rests on it).
 
 Not reproduced, each explained:
 - II.A-22's flexural rupture: Manual Table 15-2 takes the vertical edge distance as 1-1/2
@@ -30,15 +36,22 @@ the ASD flexure by 0.6 %.
 import math
 import unittest
 from fractions import Fraction
+from pathlib import Path
 
+import numpy as np
+
+import petra
 from petra import mechanics as M
 from petra.kernel import Const, enclose
+from petra.lang import parse_design
+from petra.models.steel import calc, ic
 from petra.models.steel import limits as L
 from petra.registry import build_registry
 from petra.units import CUSTOMARY
 
 from tests import steel_examples as ex
 
+ROOT = Path(__file__).resolve().parents[1]
 INCH = CUSTOMARY["inch"][0]
 KIP = CUSTOMARY["kip"][0]
 KSI = CUSTOMARY["ksi"][0]
@@ -77,8 +90,8 @@ class IIA22(ex.Example):
     }
     moments = ("flexural_yield", "flexural_rupture")
     availables = {("bracket_edge", "bracket plate: shear yielding of the free-edge"): ("136", "90.7")}
-    # Table 7-8: C = 4.53 at ex = 12 in, times the bolt's 17.9 / 11.9 kips (bolt shear governs).
-    bounded = {("bolts", "bracket bolts:"): ("81.1", "53.9")}
+    # Table 7-6: C = 4.53 at ex = 12 in, times the bolt's 17.9 / 11.9 kips (bolt shear governs).
+    printed = {**printed, ("bolts", "bracket bolts:"): ("81.1", "53.9")}
 
     def test_flexural_rupture_at_the_tables_edge_distance(self):
         body = self.body.replace("edge_vertical 2.5 inch", "edge_vertical 1.5 inch")
@@ -139,11 +152,18 @@ GROUP_24 = ("  plate steel.A36 thickness 0.875 inch\n  support W14x90 flange gra
 class IIA24And25(ex.Example):
     """Two columns of six 7/8 in Group 120-N bolts in single shear (gauge 5-1/2, pitch 3), a
     vertical load 16 in from the centroid; bolt shear governs (24.3 / 16.2 kips a bolt).
-    II.A-25 is the elastic method; II.A-24 the instantaneous centre (C = 3.55)."""
+    II.A-24 is the instantaneous centre (C = 3.55), which the deck takes; II.A-25 the
+    elastic method, whose coefficient the deck takes only where it is the larger."""
 
-    tag, kind, body, loads = "II.A-25", "bolt_bracket", GROUP_24, ("60", "40")
-    printed = {("bolts", "bracket bolts:"): ("69.0", "46.0")}
-    bounded = {("bolts", "bracket bolts:"): ("86.3", "57.5")}
+    tag, kind, body, loads = "II.A-24", "bolt_bracket", GROUP_24, ("60", "40")
+    printed = {("bolts", "bracket bolts:"): ("86.3", "57.5")}
+
+    def test_the_elastic_coefficient_of_II_A_25(self):
+        fx, fy = M.elastic_bolt_force(L.c(1), inch(16), L.c(12), 6, 2, inch(3), inch("5.5"))
+        elastic = 1 / math.hypot(value(fx), value(fy))
+        bolt = value(L.bolt_shear(L.c(54 * KSI), inch("0.875"), L.c(1)), KIP)
+        for factor, printed in ((0.75, "69.0"), (1 / 2.00, "46.0")):
+            self.near(elastic * bolt * factor, printed, "II.A-25")
 
 
 class IIA26And27(ex.Example):
@@ -219,6 +239,80 @@ class KulakTable13_1(unittest.TestCase):
         for lever in (3, 6, 12, 24, 36):
             with self.subTest(l=lever):
                 self.assertAlmostEqual(self.elastic_c(2, lever) * self.CRITICAL, float(self.TABLE[(2, lever)]), delta=0.006)
+
+    def test_the_certificate_reproduces_the_table(self):
+        """The deck's certified C (checks._ic_coefficient's bound at ic.bolt_centre's
+        centre) is at most the printed C plus half its last digit, and within 1/2 % of it
+        or one unit of its last digit."""
+        for (n, lever), printed in self.TABLE.items():
+            with self.subTest(n=n, l=lever):
+                s, e = inch(3), inch(lever)
+                r = ic.bolt_centre(REGISTRY, n, 1, s, L.c(0), e, {})
+                self.assertIsNotNone(r)
+                v, m = M.instantaneous_centre(r, n, 1, s, L.c(0), L.ic_bolt_curve(const))
+                found = min(value(v), value(M.sub(m, M.mul(v, M.add(e, r)))) / value(const("petra.switch.length")))
+                unit = 0.01 if float(printed) < 10 else 0.1
+                self.assertLessEqual(found, float(printed) + unit / 2)
+                self.assertLessEqual(abs(found - float(printed)), max(unit, 0.005 * float(printed)))
+
+
+class InstantaneousCentrePremise(unittest.TestCase):
+    """The certificate's premise (ic.py): along the axis through the centroid across the
+    load, a centre r from the centroid balances the eccentricity e(r) = M(r)/V(r) - r with
+    the force V(r), e falls and V rises as r grows, so the centre that balances a smaller e
+    lies farther out and holds more. Measured with the deck's curve over patterns of 1 to 12
+    rows and 1 to 4 columns, gauge from a fifth to five times the pitch, and centres from a
+    ten-thousandth of the pitch to ten thousand pitches."""
+
+    def test_e_falls_and_v_rises_along_the_axis(self):
+        exponent, power = ic.curve(REGISTRY)
+        rs = np.geomspace(1e-4, 1e4, 4000)
+        for rows in range(1, 13):
+            for cols in range(1, 5):
+                if rows * cols < 2:
+                    continue
+                for ratio in ((0.0,) if cols == 1 else (0.2, 1.0, 5.0)):
+                    x, y = ic._pattern(rows, cols, 1.0, ratio)
+                    sums = np.array([ic._sums(r, x, y, exponent, power) for r in rs])
+                    e = sums[:, 1] / sums[:, 0] - rs
+                    with self.subTest(rows=rows, cols=cols, gauge=ratio):
+                        self.assertTrue((np.diff(e) < 0).all())
+                        self.assertTrue((np.diff(sums[:, 0]) > 0).all())
+
+
+class TableTenNine(unittest.TestCase):
+    """A conventional single plate's bolt group takes Manual Table 10-9's eccentricity a/2
+    for 2 to 5 rows in standard or short-slotted holes, and a past it. The P3 pilot's task
+    303-006, four rows at a = 2-1/2 in, failed by the elastic method at e = a (1.08); by the
+    instantaneous centre at a/2 it uses 0.84 of the group, at a 0.999."""
+
+    PILOT = ROOT / "docs" / "pilot_lift" / "without_petra" / "task-303-006" / "final.petra"
+
+    def bolts(self, *edits: tuple[str, str]) -> float:
+        text = self.PILOT.read_text(encoding="utf-8")
+        for old, new in edits:
+            self.assertIn(old, text)
+            text = text.replace(old, new)
+        d = parse_design(text, "303-006.petra", REGISTRY)
+        (found,) = calc.values(calc.connection(d, "st1", REGISTRY), d, REGISTRY, "bolts", "service")
+        return found.utilisation
+
+    def test_the_pilots_plate_passes_at_half_a(self):
+        self.assertEqual(petra.check_file(self.PILOT).to_json()["status"], "PASS")
+        self.assertAlmostEqual(self.bolts(), 0.836, delta=0.001)
+        self.assertAlmostEqual(self.bolts(("  form conventional", "  form conventional\n  eccentricity 2.5 inch")), 0.999,
+                               delta=0.001)
+
+    def test_six_rows_keep_a(self):
+        six = (("rows 4", "rows 6"),)
+        self.assertEqual(self.bolts(*six), self.bolts(*six, ("  form conventional", "  form conventional\n  eccentricity 2.5 inch")))
+
+    def test_a_plate_edge_short_of_2d_keeps_a(self):
+        """The configuration has Leh at least 2d = 1-1/2 in on the plate."""
+        short = (("plate_edge 1.75 inch", "plate_edge 1.4375 inch"),)
+        explicit = ("  form conventional", "  form conventional\n  eccentricity 2.5 inch")
+        self.assertEqual(self.bolts(*short), self.bolts(*short, explicit))
+        self.assertGreater(self.bolts(*short), 0.99)
 
 
 if __name__ == "__main__":

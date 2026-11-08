@@ -506,7 +506,7 @@ class NoBareNumbers(unittest.TestCase):
 
     def test_every_way_to_introduce_a_hypothesis_refuses_a_bare_number(self):
         public = {name for name in vars(StatementBuilder) if not name.startswith("_")}
-        self.assertEqual(public, self.INTRODUCERS | {"finish"}, "a new builder method needs a bare-number check here")
+        self.assertEqual(public, self.INTRODUCERS | {"finish", "box"}, "a new builder method needs a bare-number check here")
         n = Fraction(12000)
         calls = {
             "registry": lambda sb: sb.registry(n, "fy"),
@@ -527,6 +527,16 @@ class NoBareNumbers(unittest.TestCase):
         sb = builder()
         self.assertEqual(sb.input(FORCE_IN), Sym("wind.bracket.force"))
         self.assertEqual(sb.param(DESIGN.params["size"]), Sym("size"))
+
+    def test_reading_the_box_introduces_nothing(self):
+        sb = builder()
+        force = sb.input(FORCE_IN)
+        box = sb.box()
+        self.assertEqual(set(box), {force.name})
+        box.clear()
+        self.assertEqual(set(sb.box()), {force.name})
+        statement = sb.finish(nonpositive(force))
+        self.assertEqual([h.sym for h in statement.hyps], [force.name])
 
 
 if __name__ == "__main__":

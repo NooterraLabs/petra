@@ -125,7 +125,9 @@ TABLE: tuple[Provision, ...] = (
     Provision("J3.3", "Size and Use of Holes", "check", ("hole_use",), "Hole dimensions are registry rows (Table J3.3)."),
     Provision("J3.4", "Minimum Spacing", "check", ("spacing_min",)),
     Provision("J3.5", "Minimum Edge Distance", "check", ("edge_min",),
-              "The Table J3.5 increment for oversized and slotted holes is an unchecked premise of the model."),
+              "Table J3.5's increment C2 is added to Table J3.4's distance at each edge it applies to. An oversized "
+              "hole takes it at every edge, and a slot at an edge its length runs toward. A sloping edge takes it in "
+              "full."),
     Provision("J3.6", "Maximum Spacing and Edge Distance", "check", ("spacing_max", "edge_max")),
     Provision("J3.7", "Tensile and Shear Strength of Bolts and Threaded Parts", "check",
               ("bolts", "bolt_tension", "prying"), "Prying uses the Manual Part 9 T-stub model."),
@@ -136,7 +138,8 @@ TABLE: tuple[Provision, ...] = (
     Provision("J3.10", "Combined Tension and Shear in Slip-Critical Connections", "check", ("slip",),
               "ksc of Eqs J3-5a and J3-5b."),
     Provision("J3.11a", "Bearing and Tearout: Snug-Tightened or Pretensioned High-Strength Bolted Connections",
-              "check", ("bolts",), "Per hole, the least of shear, bearing and tearout per bolt."),
+              "check", ("bolts",), "Per hole, the least of shear, bearing and tearout per bolt. A bracket's bolt "
+              "tears out along its own force, which turns about the centre of the method that loads it."),
     Provision("J3.11b", "Bearing and Tearout: Bolts or Rods Through an Unstiffened Box Member or HSS", "excluded",
               note=V12),
     Provision("J3.12", "Special Fasteners", "excluded",
@@ -204,6 +207,14 @@ OTHER: tuple[Provision, ...] = (
               "for fit."),
     Provision("Manual Part 7", "Entering and tightening clearances", "check", ("clearance",),
               "The socket allowance is a judged registry row."),
+    Provision("Manual Part 7", "Eccentrically loaded bolt groups", "check", ("bolts",),
+              "The instantaneous center method with Part 7's load-deformation curve, or the elastic method, whichever "
+              "holds more. A float search places the centre, and the kernel proves what the group holds about it "
+              "(`ic.py`). A conventional single plate in Table 10-9's configuration takes its eccentricity as a/2."),
+    Provision("Manual Part 8", "Eccentrically loaded weld groups", "check", ("weld", "weld_base_metal"),
+              "A bracket plate on edge, welded on both faces with e past L/8, takes the instantaneous center method "
+              "with Table 8-4's k = 0. Its base metal takes the force along the weld that the method puts there. "
+              "Every other eccentric weld group takes the elastic method."),
     Provision("Manual Part 9", "Coped beams, prying action and shear tee ductility", "check",
               ("cope_buckling", "prying", "tee_ductility"),
               "Prying uses the T-stub model, with each bolt's tributary length from Figure 9-4. A shear tee's "
