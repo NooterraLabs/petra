@@ -66,11 +66,26 @@ STRENGTH: tuple[tuple[str, str, str, str, tuple[ValidityRow, ...]], ...] = (
     ("bolts",
      "bolt shear rupture (Eq J3-1) and bearing and tearout at every hole (Eq J3-6a-f), taken per bolt as the least of "
      "its shear strength and its bearing or tearout strength in each ply, summed over a concentric group; an "
-     "eccentric group by the elastic method against the weakest bolt; through declared fillers the shear strength "
-     "times 0.85, J5.2(a)'s least factor, since the grammar gives no filler thickness",
+     "eccentric group holds C times its weakest bolt, C the larger of the elastic method's and the instantaneous "
+     "center method's (Manual Part 7, R = Rult (1 - e^(-10 Delta))^0.55 with Delta = 0.34 in at the farthest bolt), "
+     "the latter as a certified lower bound, and for a conventional single plate in Manual Table 10-9's "
+     "configuration also C at e = a/2 (one column of at most 5 rows in standard or short-slotted holes, a at most "
+     "3-1/2 in, welds on both faces at least 5/8 tp, Leh at least 2d on the plate and the beam web, and with "
+     "standard holes the plate or the beam web at most d/2 + 1/16 in thick); a bracket's group holds the larger "
+     "over the two methods of C times its weakest bolt, each bolt's tearout along its force about that method's "
+     "centre (J3.11a), the least over centres at or beyond it and over the edges and holes the force can point at: "
+     "the top edge and, where the force can point down, the bottom edge, at the edge distance; the back edge from "
+     "a bolt above the centroid and the front edge or a shaped plate's sloping edge from one below, along the "
+     "force; the next hole above, below, behind or ahead, at the clear spacing; a long slot either way takes the "
+     "perpendicular slot's coefficients; through declared fillers the shear strength times 0.85, J5.2(a)'s least "
+     "factor, since the grammar gives no filler thickness",
      "bolts of one group, size and installation; holes of the declared type; threads included or excluded as "
-     "declared; the elastic method assumes a rigid connected part rotating about the group centroid",
-     f"{AISC} Sections J3.7 and J3.11a, Table J3.2; {MANUAL} Part 7 (elastic method)", ()),
+     "declared; both methods take the connected part as rigid, the elastic method rotating it about the group "
+     "centroid with equal bolt springs, the instantaneous center method about the centre that balances the load "
+     "with Crawford and Kulak's load-deformation curve; a bracket's support takes the opposite force at its holes "
+     "and its edges are not declared",
+     f"{AISC} Sections J3.7 and J3.11a, Table J3.2; {MANUAL} Part 7 (elastic and instantaneous center methods) and "
+     f"Part 10 (Table 10-9)", ()),
     ("bolt_tension",
      "bolt tensile rupture, Rn = Fnt Ab (Eq J3-1), with the tension shared equally by the bolts",
      "tension shared equally by the bolts of the group, after any prying the prying check adds",
@@ -123,21 +138,29 @@ STRENGTH: tuple[tuple[str, str, str, str, tuple[ValidityRow, ...]], ...] = (
      f"{AISC} Section J4.5; {MANUAL} Part 15", ()),
     ("weld",
      "fillet weld strength Rn = 0.60 FEXX Awe (Eq J2-4) with kds = 1, every concentric group being longitudinal lines; "
-     "the directional increase of Eq J2-5 and the group rule of Eq J2-6 are permitted, not required, and not taken; "
-     "an eccentric group (parallel lines, or a line with returns in a C) by the elastic method on its line properties, "
-     "at its most stressed point; a seat angle's two "
+     "the directional increase of Eq J2-5 and the group rule of Eq J2-6 are permitted, not required, and taken only "
+     "within the instantaneous center method; a bracket plate set on edge with a fillet on each face, its load at "
+     "e past L/8 from the weld line, by the instantaneous center method with Manual Table 8-4's k = 0 (each element "
+     "kds f(p) of Fnw Aw per unit length, kds = 1 + 0.50 sin^1.5 theta, f(p) = [p (1.9 - 0.9 p)]^0.3, Delta_m = "
+     "0.209 (theta + 2)^-0.32 w, Delta_u = 1.087 (theta + 6)^-0.65 w <= 0.17 w), as a certified lower bound on C; "
+     "every other eccentric group (a single fillet, parallel lines, or a line with returns in a C) by the elastic "
+     "method on its line properties, at its most stressed point; a seat angle's two "
      "lines, its vertical leg bearing on the support below them, by the Manual's seat-weld form f = R sqrt(L^2 + 20.25 "
      "e^2) / (2 L^2) (Table 10-6, Companion II.A-16); a seat stiffener's welds, which the reaction loads from their end "
      "as at a bearing stiffener (Commentary J2.2b), also over their effective length past 100 w, beta l with beta = 1.2 "
      "- 0.002 l / w and 180 w past 300 w (Section J2.2b(d), Eq J2-1)",
-     "matching filler metal (Table J2.5); welds of the declared size and length; the elastic method assumes a rigid "
-     "connected part; support-side welds as Manual Table 10-2 welds B, each line carrying its share at the outstanding "
+     "matching filler metal (Table J2.5); welds of the declared size and length; both methods assume a rigid "
+     "connected part, the instantaneous center method turning it about the centre that balances the load, whose "
+     "element nearest its deformation limit is the line's end; support-side welds as Manual Table 10-2 welds B, each line carrying its share at the outstanding "
      "leg's width (a single angle's reaction at the beam web's centre, the leg plus tw/2, Companion II.A-29; a tee's "
      "flange-tip lines at half the flange width, Companion II.A-31)",
-     f"{AISC} Sections J2.2b(d) and J2.4, Table J2.5; {MANUAL} Part 8 (elastic method)", ()),
+     f"{AISC} Sections J2.2b(d) and J2.4, Table J2.5; {MANUAL} Part 8 (elastic and instantaneous center methods)", ()),
     ("weld_base_metal",
      "shear rupture of the base metal along each fusion face, 0.60 Fu t per unit length against the weld force it "
-     "carries (Section J2.4(a) with Eq J4-4)",
+     "carries (Section J2.4(a) with Eq J4-4); under the instantaneous center method against the force along the "
+     "weld, at most 1.04 times P / (lines L C) per unit length, the load's measure of Fnw Aw, since an element's "
+     "share along the weld, kds f(p) cos theta in units of Fnw Aw, peaks at 1.035; the share across the weld pulls the part across its edge, and the "
+     "Specification's shear planes are those of longitudinal shear (Commentary J2.4, Fig. C-J2.10)",
      "the base metal's thickness is uniform along the weld",
      f"{AISC} Sections J2.4(a) and J4.2(b)", ()),
     ("bearing",
@@ -204,9 +227,10 @@ STRENGTH: tuple[tuple[str, str, str, str, tuple[ValidityRow, ...]], ...] = (
 MAKEABILITY: tuple[tuple, ...] = (
     ("spacing_min", "centre-to-centre spacing of holes at least 2-2/3 d", "standard, oversized or slotted holes of the "
      "declared sizes", f"{AISC} Section J3.4"),
-    ("edge_min", "edge distance from each hole centre at least Table J3.4's value for the bolt size", "edges sheared or "
-     "rolled as fabricated; measured to the hole centre", f"{AISC} Section J3.5, Table J3.4",
-     ("the Table J3.5 increment C2 for oversized and slotted holes is not added to the minimum edge distance",)),
+    ("edge_min", "edge distance from each hole centre at least Table J3.4's value for the bolt size, plus Table J3.5's "
+     "C2 for an oversized hole and for a slot whose length points at the edge (a slot along the edge adds none, and "
+     "a shaped bracket's sloping edge takes a slot's full C2)", "edges sheared or rolled as fabricated; measured to "
+     "the hole centre; slots of the full length Table J3.3 allows", f"{AISC} Section J3.5, Tables J3.4 and J3.5"),
     ("spacing_max", "longitudinal spacing of bolts, the pitch along a bolt line, at most 24 t and 12 in (14 t and 7 in "
      "for unpainted weathering steel); the gauge across the force is not limited, since J3.6 limits the longitudinal "
      "spacing only (Commentary J3.6)", "the thinner connected part sets the limit", f"{AISC} Section J3.6"),
@@ -217,7 +241,9 @@ MAKEABILITY: tuple[tuple, ...] = (
      "catalogue's shear connections do not use", f"{AISC} Section J2.2b, Table J2.4",
      ("weld access and torch angle are not checked: the catalogue's fillets join a plate, angle or tee to an open "
       "face, and a weld between a column's flanges assumes the flanges leave the welder room",)),
-    ("hole_use", "oversized holes and slots parallel to the force only in slip-critical joints", "holes as declared on "
+    ("hole_use", "oversized holes and slots parallel to the force only in slip-critical joints; in an eccentric "
+     "bracket group, whose bolt forces turn across the depth along a plain slot, any slot only in a slip-critical "
+     "joint (J3.3(e) and (f): in a bearing-type joint a slot lies normal to the load)", "holes as declared on "
      "each ply", f"{AISC} Section J3.3; RCSC 2025 Section 3.3"),
     ("joint_type", "the joint's installation meets the RCSC requirements its use imposes: at least snug-tight, "
      "Group 150 and 200 bolts in tension pretensioned, and in a cyclic case every joint pretensioned, excused where "

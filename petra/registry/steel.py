@@ -98,6 +98,14 @@ EDGE_MIN: Mapping[str, str] = {
 """AISC 360-22 Table J3.4, minimum edge distance in inches from the centre of a standard
 hole to an edge; over 1-1/4 in, 1.25 d. Checked against the published table."""
 
+C2_INCREMENT: Mapping[str, tuple[Fraction, Fraction]] = {
+    "up to 7/8 in": (Fraction(1, 16), Fraction(1, 8)), "1 in": (Fraction(1, 8), Fraction(1, 8)),
+    "1-1/8 in and over": (Fraction(1, 8), Fraction(3, 16)),
+}
+"""AISC 360-22 Table J3.5, the edge distance increment C2 in inches by nominal diameter:
+(oversized holes, short slots with the long axis perpendicular to the edge). Long slots so
+laid take 3/4 d, and a slot along the edge takes 0. Checked against the published table."""
+
 PRETENSION: Mapping[str, tuple[int, int]] = {
     "1/2": (12, 15), "5/8": (19, 24), "3/4": (28, 35), "7/8": (39, 49), "1": (51, 64),
     "1-1/8": (64, 80), "1-1/4": (81, 102), "1-3/8": (97, 121), "1-1/2": (118, 148),
@@ -133,6 +141,13 @@ def _bolt_constants() -> list[Constant]:
                              f"{AISC} Section J3.5, Table J3.4 Minimum Edge Distance from Center of Standard Hole to Edge "
                              f"of Connected Part, {size} in bolt: {edge} in; {CHECKED}",
                              f"a {size} in bolt in a standard hole sits at least {edge} in from an edge"))
+        row = "up to 7/8 in" if d <= Fraction(7, 8) else "1 in" if d == 1 else "1-1/8 in and over"
+        for hole, increment in zip(("ovs", "ssl"), C2_INCREMENT[row]):
+            what = "an oversized hole" if hole == "ovs" else "a short slot with its long axis perpendicular to the edge"
+            rows.append(Constant(f"{g}.c2_{hole}", _iv(increment * INCH), "m", SANCTIONED, "AISC",
+                                 f"{AISC} Section J3.5, Table J3.5 Values of Edge Distance Increment C2, nominal diameter "
+                                 f"{row}: {increment} in for {what}; {CHECKED}",
+                                 f"a {size} in bolt in {what} sits {increment} in further from that edge"))
         g120, g150 = PRETENSION[size]
         rows.append(Constant(f"{g}.Tm_g120", _iv(g120 * KIP), "N", SANCTIONED, "RCSC",
                              f"{RCSC}, Table 5.2 Minimum Bolt Pretension, Group 120, {size} in: {g120} kips "
@@ -369,6 +384,9 @@ FACTORS: tuple[_F, ...] = (
     ("aisc360.j3_6.edge_t", "12", "1", SANCTIONED, "AISC",
      f"{AISC} Section J3.6: maximum edge distance 12 times the part's thickness; {CHECKED}"),
     ("aisc360.j3_6.edge_max", "6", "m", SANCTIONED, "AISC", f"{AISC} Section J3.6: maximum edge distance 6 in; {CHECKED}"),
+    ("aisc360.j3_5.c2_lsl", "3/4", "1", SANCTIONED, "AISC",
+     f"{AISC} Section J3.5, Table J3.5: a long slot with its long axis perpendicular to the edge adds C2 = 3/4 d to the "
+     f"edge distance (the footnote's reduction for a slot shorter than the maximum is permitted, not required); {CHECKED}"),
     ("aisc360.j2_2b.t1", "1/4", "m", SANCTIONED, "AISC",
      f"{AISC} Section J2.2b, Table J2.4 Minimum Size of Fillet Welds: first row, thinner part up to 1/4 in; {CHECKED}"),
     ("aisc360.j2_2b.w1", "1/8", "m", SANCTIONED, "AISC",
@@ -419,6 +437,32 @@ FACTORS: tuple[_F, ...] = (
 
 QUOTED = "checked against the Companion's use of it (P901-23W.pdf)"
 
+
+def _weld_ic_rows() -> tuple[_F, ...]:
+    """Manual Part 8's weld element in the instantaneous center of rotation method, which
+    AISC 360-16 printed as Eqs. J2-6 to J2-9 and 360-22 leaves to the Manual (Commentary
+    J2.4). An element at theta degrees to its force holds Fnw Aw kds f(p), with
+    f(p) = [p (1.9 - 0.9 p)]^0.3 and p = Delta / Delta_m, Delta_m = 0.209 (theta + 2)^-0.32 w;
+    the element farthest from the centre reaches Delta_u = 1.087 (theta + 6)^-0.65 w, at
+    most 0.17 w, and the others deform in proportion to their distance."""
+    method = f"{MANUAL} Part 8, the instantaneous center of rotation method for weld groups (AISC 360-16 Eqs. J2-6 to J2-9)"
+    parts = (
+        ("ic_delta_m", "0.209", "an element's deformation at its peak strength, Delta_m = 0.209 (theta + 2)^-0.32 w"),
+        ("ic_delta_m_offset", "2", "the 2 degrees of Delta_m = 0.209 (theta + 2)^-0.32 w"),
+        ("ic_delta_m_power", "0.32", "the power -0.32 of Delta_m = 0.209 (theta + 2)^-0.32 w"),
+        ("ic_delta_u", "1.087", "an element's deformation at fracture, Delta_u = 1.087 (theta + 6)^-0.65 w"),
+        ("ic_delta_u_offset", "6", "the 6 degrees of Delta_u = 1.087 (theta + 6)^-0.65 w"),
+        ("ic_delta_u_power", "0.65", "the power -0.65 of Delta_u = 1.087 (theta + 6)^-0.65 w"),
+        ("ic_delta_u_cap", "0.17", "Delta_u at most 0.17 w"),
+        ("ic_curve_a", "1.9", "the 1.9 of f(p) = [p (1.9 - 0.9 p)]^0.3"),
+        ("ic_curve_b", "0.9", "the 0.9 of f(p) = [p (1.9 - 0.9 p)]^0.3"),
+        ("ic_curve_power", "0.3", "the power 0.3 of f(p) = [p (1.9 - 0.9 p)]^0.3"),
+    )
+    return tuple((f"aisc_manual.p8.{key}", value, "1", JUDGED, MAINTAINERS, f"{method}: {what}; {RECALLED}; with the "
+                  "rows beside it it gives the C of Manual Table 8-4 that the Companion reads (3.61 at k = 0, a = 0.170, "
+                  "II.A-2A; 3.71 at k = 0, a = 0)") for key, value, what in parts)
+
+
 COEFFICIENTS: tuple[_F, ...] = (
     ("aisc360.b4_1a.case1", "0.56", "1", SANCTIONED, "AISC",
      f"{AISC} Table B4.1a, Case 1: limiting width-to-thickness 0.56 sqrt(E/Fy) of a projecting plate, which "
@@ -434,6 +478,11 @@ COEFFICIENTS: tuple[_F, ...] = (
      f"180 w, the value beta l takes at 300 w; {CHECKED}"),
     ("aisc360.j2_4.fnw", "0.60", "1", SANCTIONED, "AISC",
      f"{AISC} Section J2.4, Table J2.5: fillet weld metal Fnw = 0.60 FEXX; {CHECKED}"),
+    ("aisc360.j2_4.kds", "0.50", "1", SANCTIONED, "AISC",
+     f"{AISC} Section J2.4, Eq. J2-5: kds = 1.0 + 0.50 sin^1.5 theta for fillet welds where strain compatibility of "
+     f"the weld elements is considered; {CHECKED}"),
+    ("aisc360.j2_4.kds_power", "1.5", "1", SANCTIONED, "AISC",
+     f"{AISC} Section J2.4, Eq. J2-5: kds = 1.0 + 0.50 sin^1.5 theta; {CHECKED}"),
     ("aisc360.j3_8.intercept", "1.3", "1", SANCTIONED, "AISC",
      f"{AISC} Section J3.8, Eqs. J3-3a and J3-3b: F'nt = 1.3 Fnt - ...; {CHECKED}"),
     ("aisc360.j3_8.exemption", "0.30", "1", SANCTIONED, "AISC",
@@ -572,6 +621,40 @@ COEFFICIENTS: tuple[_F, ...] = (
      f"{RECALLED}"),
     ("aisc_manual.p10.conventional_rows", "12", "1", JUDGED, MAINTAINERS,
      f"{MANUAL} Part 10, Table 10-9: conventional single-plate connections of 2 to 12 bolt rows; {RECALLED}"),
+    ("aisc_manual.t10_9.eccentricity", "1/2", "1", SANCTIONED, "AISC",
+     f"{MANUAL} Part 10, Table 10-9: the bolt group of a conventional single plate with 2 to 5 rows in standard or "
+     f"short-slotted holes takes the eccentricity e = a/2; {QUOTED} (II.A-17, four rows in standard holes)"),
+    ("aisc_manual.t10_9.rows", "5", "1", JUDGED, MAINTAINERS,
+     f"{MANUAL} Part 10, Table 10-9: e = a/2 for 2 to 5 bolt rows; from 6 rows in standard holes the table takes "
+     f"e = a, which Petra keeps for 6 rows or more in any holes; {RECALLED}"),
+    ("aisc_manual.p7.ic_mu", "10", "1", JUDGED, MAINTAINERS,
+     f"{MANUAL} Part 7, the instantaneous center of rotation method: a bolt's load-deformation curve "
+     "R = Rult (1 - e^(-10 Delta))^0.55, Delta in inches (Crawford and Kulak, 1971), so 10 per inch; "
+     f"{RECALLED}; with the two rows below it reproduces the coefficients C the Companion reads from Manual "
+     "Table 7-6, Angle = 0 (II.A-17, II.A-22, II.A-24), to their printed rounding"),
+    ("aisc_manual.p7.ic_lambda", "0.55", "1", JUDGED, MAINTAINERS,
+     f"{MANUAL} Part 7, the instantaneous center of rotation method: the power 0.55 of a bolt's load-deformation "
+     f"curve R = Rult (1 - e^(-10 Delta))^0.55; {RECALLED}"),
+    ("aisc_manual.p7.ic_delta_max", "0.34", "m", JUDGED, MAINTAINERS,
+     f"{MANUAL} Part 7, the instantaneous center of rotation method: the bolt farthest from the center deforms "
+     f"Delta_max = 0.34 in at its ultimate strength, the others in proportion to their distance; {RECALLED}"),
+    *_weld_ic_rows(),
+    ("petra.weld_ic.a_min", "1/8", "1", JUDGED, MAINTAINERS,
+     f"{MANUAL} Part 8, Table 8-4 with k = 0: the least ratio a = e / L at which the deck holds two fillets along one "
+     "line, loaded out of their plane, to the instantaneous center method. The deck's certificate needs the group's "
+     "V(r) to rise up to the balancing centre, which tests/test_steel_groups.py measures: V peaks at the centre that "
+     "balances a = 0.102; below 1/8 the elastic method stays; Petra's encoding, not checked against the published "
+     "text"),
+    ("petra.weld_ic.along_peak", "1.04", "1", JUDGED, MAINTAINERS,
+     f"{MANUAL} Part 8, the instantaneous center method, with {AISC} Section J2.4, Eq. J2-5: no weld element's force "
+     "along the weld exceeds 1.04 Fnw Aw, the peak of (1 + 0.50 sin^1.5 theta) cos theta, 1.0337 near 20 degrees, "
+     "times the peak of f(p), 1.0008, which tests/test_steel_groups.py measures; the base metal's shear along the weld "
+     "reads it; Petra's encoding, not checked against the published text"),
+    ("petra.switch.length", "1/1000000000000000", "m", JUDGED, MAINTAINERS,
+     f"{MANUAL} Parts 7, 8 and 10, where a method holds only in its configuration (Table 10-9's, Table 8-4's a at "
+     "least 1/8): the length that turns a margin into the factor of a certificate's switch, min(C, margin / length): "
+     "C where the margin passes C times 10^-15 in, at most zero where it is negative; any positive length is sound, "
+     "and a shorter one gives up less; Petra's encoding, not checked against the published text"),
     ("aisc_manual.t10_6.lever", "2.25", "1", JUDGED, MAINTAINERS,
      f"{MANUAL} Part 10, the elastic method behind Table 10-6: R = v / (2 L^2) sqrt(L^2 + 20.25 e^2), so the "
      f"horizontal force per length is 2.25 v e / L^2; {RECALLED}"),

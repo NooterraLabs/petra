@@ -1,10 +1,11 @@
 """petra.check(text) returns plain data, and a FAIL names the input that lowers its governing
 check the most and the way to move it (petra/repair.py).
 
-The 60 kip shear tab of tests/fixtures/readout/job5_fail_60k.petra fails on its bolts:
-three 3/4 in bolts in one column carry 60 kip at the elastic method's eccentricity, at
-about twice their strength. Bolt shear sets every bolt's strength, so the plate's thickness
-does not move that check, and a fourth bolt row moves it the most.
+The 60 kip shear tab of tests/fixtures/readout/job5_fail_60k.petra fails on its block shear
+and its bolts. The plate's one-row block takes the elastic method's resultant on its bolt,
+36.06 kip, at 1.36 times its strength. The three 3/4 in bolts hold C = 2.48 times one bolt
+(the instantaneous center at Table 10-9's e = a/2), 1.35. The repair targets the block,
+which the weld does not touch, and a fourth bolt row moves it the most.
 """
 import contextlib
 import io
@@ -48,20 +49,20 @@ class Failing(unittest.TestCase):
         refuted = [o for v in self.result["verdicts"] for o in v["obligations"] if o["outcome"] == "refuted"]
         worst = max(refuted, key=lambda o: o["utilisation"])
         self.assertEqual(self.result["repair"]["check"], worst["requirement"])
-        self.assertEqual(self.result["repair"]["check"], "tab/steel.bolts/coverage.steel.bolts")
+        self.assertEqual(self.result["repair"]["check"], "tab/steel.block_shear/coverage.steel.block_shear")
         self.assertAlmostEqual(self.result["repair"]["utilisation"], worst["utilisation"])
 
-    def test_a_fourth_row_lowers_the_bolts_most(self):
+    def test_a_fourth_row_lowers_the_block_shear_most(self):
         first = self.result["repair"]["moves"][0]
         self.assertEqual((first["input"], first["direction"], first["from"], first["to"]), ("tab.rows", "increase", "3", "4"))
 
     def test_every_move_lowers_the_check_and_the_first_lowers_it_most(self):
         moves = self.result["repair"]["moves"]
-        self.assertGreater(len(moves), 1, "more than one input moves the bolts")
+        self.assertGreater(len(moves), 1, "more than one input moves the block shear")
         for m in moves:
             self.assertLess(m["utilisation"], self.result["repair"]["utilisation"], m["input"])
         self.assertEqual([m["utilisation"] for m in moves], sorted(m["utilisation"] for m in moves))
-        self.assertNotIn("tab.plate thickness", {m["input"] for m in moves}, "bolt shear does not read the plate")
+        self.assertNotIn("tab.weld size", {m["input"] for m in moves}, "the plate's block shear does not read the weld")
 
     def test_a_move_reads_what_checking_the_edited_design_reads(self):
         for m in self.result["repair"]["moves"][:2]:
@@ -71,7 +72,7 @@ class Failing(unittest.TestCase):
 
     def test_clears_names_a_value_at_which_the_check_holds(self):
         cleared = [m for m in self.result["repair"]["moves"] if m["clears"] is not None]
-        self.assertTrue(cleared, "some move clears the bolts")
+        self.assertTrue(cleared, "some move clears the block shear")
         m = cleared[0]
         after = petra.check(set_number(self.text, m["line"], m["from"], m["clears"]["to"]), repair=False)
         self.assertEqual(obligation(after, self.result["repair"]["check"])["outcome"], "certified")

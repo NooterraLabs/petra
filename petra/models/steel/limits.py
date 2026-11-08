@@ -26,10 +26,11 @@ Struik, Guide to Design Criteria for Bolted and Riveted Joints, 2nd ed., 1987).
 """
 from __future__ import annotations
 
-from typing import Callable
+from fractions import Fraction
+from typing import Callable, Sequence
 
-from ...kernel import Div, Expr, Ln, Max, Min, PowInt, Sqrt
-from ...mechanics import (add, c, circle_area, div, fillet_throat, mul, plate_buckling_stress, power,
+from ...kernel import Abs, Div, Exp, Expr, Ln, Max, Min, Neg, PowInt, Sqrt
+from ...mechanics import (add, c, circle_area, div, element_angles, fillet_throat, mul, plate_buckling_stress, power,
                           rectangle_elastic_modulus, rectangle_plastic_modulus, right_triangle, sq, sub)
 from ...units import CUSTOMARY
 
@@ -104,6 +105,76 @@ def tearout(lc: Expr, t: Expr, fu: Expr, coefficient: Expr) -> Expr:
 BEARING = {case: (f"aisc360.j3_11a.bearing_{case}", f"aisc360.j3_11a.tearout_{case}")
            for case in ("considered", "not_considered", "lsl_perpendicular")}
 """Section J3.11a: the registry rows of the (bearing, tearout) coefficients by case."""
+
+
+def ic_bolt_curve(k: K) -> Callable[[Expr], Expr]:
+    """Manual Part 7's load-deformation curve of a bolt in the instantaneous center method
+    (Crawford and Kulak): R = Rult (1 - e^(-10 Delta))^0.55, Delta in inches, with the bolt
+    farthest from the center at Delta_max = 0.34 in and every other deformed in proportion
+    to its distance. As a function of q = rho / rho_max, the fraction of Rult a bolt holds:
+    (1 - e^(-10 (0.34 in / 1 in) q))^0.55. The mechanics layer turns the bolts about the
+    center (mechanics.instantaneous_centre)."""
+    exponent = mul(k("aisc_manual.p7.ic_mu"), div(k("aisc_manual.p7.ic_delta_max"), c(INCH)))
+    lam = k("aisc_manual.p7.ic_lambda")
+    return lambda q: power(sub(c(1), Exp(Neg(mul(exponent, q)))), lam)
+
+
+def ic_weld_bounds(k: K, r: Fraction, zs: Sequence[Fraction]) -> list[tuple[Expr, Expr]]:
+    """Bounds (lo, hi) on a weld element's force, in units of Fnw Aw per unit length, over
+    each segment [zs[i], zs[i + 1]] of a line of unit length turning about a centre r from
+    its midpoint (mechanics.line_ic). Manual Part 8's instantaneous center method (AISC
+    360-16 Eqs. J2-6 to J2-9; 360-22 Eq. J2-5 for kds): an element at theta degrees to its
+    force holds kds f(p), kds = 1.0 + 0.50 sin^1.5 theta, f(p) = [p (1.9 - 0.9 p)]^0.3,
+    p = Delta / Delta_m with Delta_m = 0.209 (theta + 2)^-0.32 w. The element at the line's
+    end is farthest from the centre at the largest theta, so it reaches its Delta_u =
+    1.087 (theta + 6)^-0.65 w (at most 0.17 w) first, and the element at z deforms
+    rho / rho_max of it: p = (rho / rho_max) Delta_u(theta_max) / Delta_m(theta).
+
+    Along the segment, sin theta = z / rho and p rise with z (rho and theta rise, Delta_m
+    falls). f depends on p only through its distance from the peak p* = 1.9 / 1.8:
+    p (1.9 - 0.9 p) = 0.9 (p*^2 - (p - p*)^2). So over a segment f is least at the end
+    farthest from p* and largest at the point nearest it. With theta bounded by
+    mechanics.element_angles, and p_lo at a segment's start and p_hi at its end,
+      lo = kds(z_i) f at max(|p_lo - p*|, |p_hi - p*|),
+      hi = kds(z_i+1) f at max(p_lo - p*, p* - p_hi, 0),
+    p_lo taking Delta_u at the largest theta_max and Delta_m at the least theta, p_hi the
+    reverse."""
+    kds, kds_power = k("aisc360.j2_4.kds"), k("aisc360.j2_4.kds_power")
+
+
+    def delta_m(theta: Expr) -> Expr:
+        return mul(k("aisc_manual.p8.ic_delta_m"), power(add(theta, k("aisc_manual.p8.ic_delta_m_offset")), Neg(k("aisc_manual.p8.ic_delta_m_power"))))
+
+    def delta_u(theta: Expr) -> Expr:
+        return Min((mul(k("aisc_manual.p8.ic_delta_u"), power(add(theta, k("aisc_manual.p8.ic_delta_u_offset")), Neg(k("aisc_manual.p8.ic_delta_u_power")))),
+                    k("aisc_manual.p8.ic_delta_u_cap")))
+
+    peak = div(k("aisc_manual.p8.ic_curve_a"), mul(c(2), k("aisc_manual.p8.ic_curve_b")))
+
+    def f(distance: Expr) -> Expr:
+        # f at a distance from the peak, 0.9 (p*^2 - distance^2) to the power 0.3
+        return power(mul(k("aisc_manual.p8.ic_curve_b"), sub(sq(peak), sq(distance))), k("aisc_manual.p8.ic_curve_power"))
+
+    angles = element_angles(r, zs)
+    end = zs[-1]
+    far = Sqrt(c(end * end + r * r))
+    u_lo, u_hi = delta_u(angles[-1][1]), delta_u(angles[-1][0])
+    points = []
+    for z, (theta_lo, theta_hi) in zip(zs, angles):
+        rho = Sqrt(c(z * z + r * r))
+        share = div(rho, far)
+        increase = c(1) if z == 0 else add(c(1), mul(kds, power(div(c(z), rho), kds_power)))
+        points.append((increase, *(_rounded(div(mul(share, u), delta_m(theta))) for u, theta in ((u_lo, theta_lo), (u_hi, theta_hi)))))
+    out = []
+    for (k_a, p_a, _), (k_b, _, p_b) in zip(points, points[1:]):
+        out.append((mul(k_a, f(Max((Abs(sub(p_a, peak)), Abs(sub(p_b, peak)))))),
+                    mul(k_b, f(Max((sub(p_a, peak), sub(peak, p_b), c(0)))))))
+    return out
+
+def _rounded(x: Expr) -> Expr:
+    """x >= 0 as sqrt(x^2), which the kernel rounds outward to its grid: the same number, held
+    short, so the arithmetic on it stays fast."""
+    return Sqrt(sq(x))
 
 
 def hole_net(k: K, dh: Expr) -> Expr:

@@ -91,9 +91,10 @@ class PetrasStrengths(unittest.TestCase):
     def test_an_eccentric_group_keeps_its_weakest_bolt_and_its_sum(self):
         el = element("202-004")
         bolts = next(s for s in el.states if s.mode == "bolts")
-        # the tee stem's four bolts by the elastic method: the weakest, tearout to the edge
-        # (12.852 kip), against the most loaded (12.333 kip at the design's 23.379 kip)
-        self.assertAlmostEqual(bolts.design, 23.379 * 12.852 / 12.333, delta=0.01)
+        # the tee stem's four bolts at 1-15/16 in, 3 in from the load, by the instantaneous
+        # centre (C = 2.1235, more than the elastic method's 23.379 / 12.333 = 1.896): C times
+        # the stem's weakest bolt, tearout to the edge (12.852 kip)
+        self.assertAlmostEqual(bolts.design, 2.1235 * 12.852, delta=0.01)
         # summed as a concentric group: three bolts bear (27.056 kip), the bottom one tears out
         self.assertAlmostEqual(bolts.summed, (3 * 27.056 + 12.852) / 0.75, delta=0.01)
         concentric = next(s for s in element("202-002").states if s.mode == "bolts")

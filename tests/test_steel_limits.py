@@ -15,8 +15,12 @@ from the registry's rows through petra.models.steel.limits, LRFD:
 Hand values for examples/steel/shear_tab.petra (W18x50 beam, 3/8 in A36 plate, four 3/4 in
 Group 120 bolts at 3 in, a = 3 in, V = 45 kips):
     elastic method, e = a: Ip = 4 (15 x 9) / 12 = 45 in2, M = 135 kip-in,
-        corner bolt fx = 135 x 4.5 / 45 = 13.5, fy = 45 / 4 = 11.25 -> 17.573 kips
+        corner bolt fx = 135 x 4.5 / 45 = 13.5, fy = 45 / 4 = 11.25 -> 17.573 kips,
+        which the plate's one-row block carries
     weakest bolt: shear 0.75 x 54 x 0.4418 = 17.892 kips (bearing and tearout are larger)
+    bolt group: a conventional single plate of 4 rows takes Table 10-9's e = a/2 = 1.5 in;
+        the instantaneous center (R = Rult (1 - e^(-10 Delta))^0.55, Delta_max 0.34 in,
+        Manual Part 7) balances at C = 3.5564, so the group holds 3.5564 x 17.892 = 63.632 kips
     plate shear yield 1.0 x 0.6 x 36 x 12 x 0.375 = 97.2; rupture 0.75 x 0.6 x 58 x 8.5 x 0.375 = 83.194
     plate flexure 0.9 x 36 x 13.5 = 437.4 kip-in; rupture 0.75 x 58 x 9.5625 = 415.969 kip-in
     welds 2 x 12 x 4 x 1.392 = 133.643 kips
@@ -134,10 +138,11 @@ class ShearTabHandValues(unittest.TestCase):
     def setUpClass(cls):
         cls.d = load_design(STEEL / "shear_tab.petra", REGISTRY)
 
-    def test_the_most_loaded_bolt_against_the_weakest(self):
+    def test_the_group_holds_c_times_its_weakest_bolt(self):
         (bolts,) = checks(self.d, "st1", "bolts").values()
-        self.assertAlmostEqual(bolts.demand, 17.573, places=3)
-        self.assertAlmostEqual(bolts.capacity, 17.892, places=3)
+        self.assertAlmostEqual(bolts.demand, 45.0, places=6)
+        self.assertAlmostEqual(bolts.parts[0].capacity, 17.892, places=3)
+        self.assertAlmostEqual(bolts.capacity, 3.5564 * 17.892, places=2)
 
     def test_plate_strengths(self):
         found = {**checks(self.d, "st1", "shear_yield"), **checks(self.d, "st1", "shear_rupture"),
@@ -163,8 +168,9 @@ class ShearTabHandValues(unittest.TestCase):
     def test_asd_divides_by_omega(self):
         d = design("shear_tab", ("basis lrfd", "basis asd"), ("[0 kip, 45 kip]", "[0 kip, 30 kip]"))
         (bolts,) = checks(d, "st1", "bolts").values()
-        self.assertAlmostEqual(bolts.capacity, 17.892 / 1.5, places=3)
-        self.assertAlmostEqual(bolts.demand, 17.573 * 30 / 45, places=3)
+        self.assertAlmostEqual(bolts.parts[0].capacity, 17.892 / 0.75 / 2.00, places=3)
+        self.assertAlmostEqual(bolts.capacity, 3.5564 * 17.892 / 0.75 / 2.00, places=2)
+        self.assertAlmostEqual(bolts.demand, 30.0, places=6)
 
 
 class SeatBearingLength(unittest.TestCase):
@@ -251,7 +257,8 @@ class Verdicts(unittest.TestCase):
         self.assertEqual(found["st1/steel.weld/coverage.steel.weld"], "Discharged")
 
     def test_a_claim_tightens_the_utilisation(self):
-        extra = "\nclaim tight: st1.bolts <= 0.95 under gravity\nclaim loose: st1.block_shear <= 0.9 under gravity\n"
+        # the bolts read 45 / 63.632 = 0.707, above the tight claim's 0.6
+        extra = "\nclaim tight: st1.bolts <= 0.6 under gravity\nclaim loose: st1.block_shear <= 0.9 under gravity\n"
         found = outcomes(design("shear_tab", extra=extra))
         self.assertEqual(found["st1/steel.bolts/claim.tight"], "Refuted")
         self.assertEqual(found["st1/steel.block_shear/claim.loose"], "Discharged")

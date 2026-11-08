@@ -52,7 +52,7 @@ OBLIGATION_KEYS = {"requirement", "entry", "category", "outcome", "rule", "state
                    "demand", "capacity", "unit", "utilisation", "checks", "claim", "counterexample", "margin_point", "needs", "note"}
 CHECK_KEYS = {"check", "demand", "capacity", "unit", "utilisation", "excused", "excuse", "met", "parts"}
 PART_KEYS = {"part", "count", "capacity", "governing", "limits"}
-WEAKEST = "most loaded bolt by the elastic method against the weakest bolt"
+WEAKEST = "C times the weakest bolt"
 SUMMED = "bolt shear, bearing and tearout summed over the group"
 
 _REPORTS: dict[Path, Report] = {}
@@ -103,9 +103,11 @@ class SteelFailure(unittest.TestCase):
                 self.assertGreater(g.demand, g.capacity)
                 self.assertGreater(g.utilisation, 1)
         bolts = next(f for f in found if "bolts" in f.requirement)
-        self.assertIn("most loaded bolt", bolts.governing.what)
-        self.assertAlmostEqual(bolts.governing.demand, 36.06, places=2)
-        self.assertAlmostEqual(bolts.governing.utilisation, 2.02, places=2)
+        # the group's 60 kip against C = 2.48 times its weakest bolt, the instantaneous
+        # center at Table 10-9's e = a/2
+        self.assertIn(WEAKEST, bolts.governing.what)
+        self.assertAlmostEqual(bolts.governing.demand, 60, places=6)
+        self.assertAlmostEqual(bolts.governing.utilisation, 1.35, places=2)
 
     def test_each_counterexample_gives_the_load_in_kips_and_its_exact_value(self):
         for f in refuted(self.report):
@@ -137,7 +139,7 @@ class SteelFailure(unittest.TestCase):
         self.assertTrue(f.governing.what.endswith("against 0.95 of its available strength"), f.governing.what)
         self.assertEqual((f.claim.claim, f.claim.quantity, f.claim.bound, f.claim.unit), ("tight", "bolts", 0.95, "1"))
         self.assertAlmostEqual(f.claim.value, 0.95 * f.governing.utilisation)
-        self.assertIn("claim      tight: bolts is 2.015 here, against its bound 0.95", text)
+        self.assertIn("claim      tight: bolts is 1.352 here, against its bound 0.95", text)
 
     def test_a_failing_reader_costs_its_numbers_never_the_verdict(self):
         def broken():
@@ -461,7 +463,8 @@ class BoltGroups(unittest.TestCase):
         self.assertEqual((weakest.what, weakest.count), ("bottom row (1 bolt)", 1))
         self.assertEqual(weakest.governing.what, "tearout of the tee stem to its edge (lc 0.6875 in)")
         self.assertAlmostEqual(weakest.capacity, 0.75 * 1.2 * 0.6875 * 0.37 * 65, places=9)
-        self.assertAlmostEqual(g.capacity, weakest.capacity, places=9)
+        # the group holds C times it, C between one bolt and the four
+        self.assertTrue(weakest.capacity < g.capacity < 4 * weakest.capacity, g.capacity)
         self.assertIn("bolt shear", {limit.what for limit in weakest.limits})
         text = check(TEE_TRY1).render()
         self.assertIn("weakest    bottom row (1 bolt): 14.88 kip, set by tearout of the tee stem to its edge (lc 0.6875 in); ", text)
@@ -473,7 +476,7 @@ class BoltGroups(unittest.TestCase):
         # shear, phi Fnv Ab = 0.75 x 68 x pi 0.75^2 / 4, is now below the stem's tearout.
         g = self.bolts(TEE_TRY4).governing
         self.assertEqual(g.parts[0].governing.what, "bolt shear")
-        self.assertAlmostEqual(g.capacity, 0.75 * 68 * 3.141592653589793 * 0.75 ** 2 / 4, places=3)
+        self.assertAlmostEqual(g.parts[0].capacity, 0.75 * 68 * 3.141592653589793 * 0.75 ** 2 / 4, places=3)
 
     def test_every_bolt_group_check_names_its_parts(self):
         for path in STEEL:
@@ -487,7 +490,9 @@ class BoltGroups(unittest.TestCase):
                         for p in v.parts:
                             self.assertEqual(p.capacity, min(limit.capacity for limit in p.limits))
                         if WEAKEST in v.what:
-                            self.assertAlmostEqual(v.capacity, v.parts[0].capacity, places=9)
+                            # C times the weakest bolt, C more than none and less than the bolts
+                            bolts = sum(p.count for p in v.parts)
+                            self.assertTrue(0 < v.capacity < bolts * v.parts[0].capacity, v.capacity)
                         else:
                             self.assertAlmostEqual(v.capacity, sum(p.count * p.capacity for p in v.parts), places=6)
 

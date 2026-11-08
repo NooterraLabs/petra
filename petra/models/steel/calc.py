@@ -28,7 +28,7 @@ from ...solvers.r4_enclosure import _cut
 from ...units import AREA, CUSTOMARY, FORCE, LENGTH, STRESS, TORQUE, Dim
 from ..base import Criterion, Requirement, StatementBuilder
 from .build import load_cases, term
-from .checks import GEOMETRY, BoltStrength, Check, Ctx, Geometry, bolt_rows, bolt_strengths, group_total, weakest_bolt
+from .checks import GEOMETRY, BoltStrength, Check, Ctx, Geometry, bolt_capacity, bolt_rows, bolt_strengths, bracket_positions
 from .fatigue import GENERATORS
 from .lower import Conn, lower_conn
 
@@ -77,14 +77,19 @@ Positions = tuple[tuple[str, int, tuple[BoltStrength, ...]], ...]
 
 
 def _bolt_groups(ctx: Ctx, geo: Geometry) -> dict[Expr, Positions]:
-    """The capacity checks.gen_bolts holds a bolt group to (its weakest bolt, or the sum
-    over its bolts) -> each row position of its bolts: its name, how many bolts sit there,
-    and the strengths whose least is each one's."""
+    """The capacity checks.gen_bolts holds a bolt group to (C times its weakest bolt, or
+    the sum over its bolts) -> each row position of its bolts: its name, how many bolts sit
+    there, and the strengths whose least is each one's."""
     out: dict[Expr, Positions] = {}
     for itf in geo.interfaces:
-        rows = tuple((f"{ROW_NAMES[row]}{'s' if k > 1 else ''}", k * itf.cols, bolt_strengths(ctx, itf, row))
-                     for row, k in bolt_rows(itf))
-        out[weakest_bolt(ctx, itf)] = out[group_total(ctx, itf)] = rows
+        if itf.shear is None:
+            continue
+        bracket = bracket_positions(ctx, itf)
+        if bracket is not None:
+            out[bolt_capacity(ctx, geo, itf)] = tuple((where, 1, found) for where, found in bracket)
+            continue
+        out[bolt_capacity(ctx, geo, itf)] = tuple((f"{ROW_NAMES[row]}{'s' if k > 1 else ''}", k * itf.cols,
+                                                   bolt_strengths(ctx, itf, row)) for row, k in bolt_rows(itf))
     return out
 
 

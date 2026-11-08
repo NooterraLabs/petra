@@ -51,7 +51,7 @@ class Tasks(unittest.TestCase):
 
     def test_the_brief_names_the_kind_the_members_and_the_loads(self):
         brief = self.tasks[0].brief()
-        for text in ("shear_tab", "W21x44", "W12x65 flange", "10.643 kip"):
+        for text in ("shear_tab", "W21x44", "W12x65 flange", "16.294 kip"):
             self.assertIn(text, brief)
 
 

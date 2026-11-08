@@ -59,7 +59,7 @@ Each type is a graph of elements. The graph runs from the supported member, thro
 | v1.0 | Unstiffened and stiffened seated connections | Seat-angle flexure, web local yielding and crippling (J10), and stiffener and weld checks |
 | v1.0 | Coped beams (applies to all of the above) | Block shear and flexural local web buckling at the cope |
 | v1.0 | Concentrated forces on the support (J10) | Flange local bending, web local yielding, web crippling, sidesway buckling, compression buckling, panel-zone shear, unframed ends, stiffener and doubler requirements |
-| v1.0 | Eccentric bolt and weld groups (brackets) | The elastic method first, then the instantaneous-centre method once its certificate exists (§7) |
+| v1.0 | Eccentric bolt and weld groups (brackets) | A bolt group by the instantaneous-centre method or the elastic method, whichever holds more. A bracket plate on edge, welded on both faces, by the instantaneous-centre method. Every other weld group by the elastic method (§7a) |
 | v1.0 | Hangers (tee or angle in tension) | Prying action, flange flexure, and bolt tension plus prying |
 | v1.1 | Bracing connections with gusset plates | Whitmore-section yield and buckling (J4.4), block shear, interface forces by the uniform force method, and gusset-to-beam and gusset-to-column welds |
 | v1.1 | Flange-plated FR moment connection | Flange plate tension and compression, bolts or welds to the beam flange, and J10 checks on the column |
@@ -78,10 +78,10 @@ Coverage is complete when every "shall" in these sections maps to an encoded che
 | J1 | General provisions: design basis, simple and moment connections, compression members with bearing joints, splices in heavy sections, weld access holes, placement of welds and bolts, bolts with welds, bolts with existing rivets | Encoded as rules and coverage triggers. Heavy-section splice and weld-access-hole geometry are makeability checks. Rivets are out of scope, because v1 has no existing structures. |
 | J2 | Welds and welded joints. Groove, fillet, plug and slot welds. Effective areas, size and length limits, and strength, including the new directional-strength factor. Combinations, filler metal, and mixed weld metal | Encoded. Filler metal matching and mixed weld metal become premises. |
 | J3.1 to J3.2 | Common and high-strength bolts (Groups 120, 144, 150, 200) | Registry rows and joint-type rules (with RCSC) |
-| J3.3 to J3.6 | Holes, minimum spacing, minimum edge distance, maximum spacing and edge distance | Makeability inequalities |
+| J3.3 to J3.6 | Holes, minimum spacing, minimum edge distance, maximum spacing and edge distance | Makeability inequalities. Table J3.5's increment C2 is added for oversized and slotted holes. |
 | J3.7 to J3.8 | Tension and shear, and combined tension and shear in bearing-type connections | Encoded |
 | J3.9 to J3.10 | Slip-critical connections, and combined tension and shear in slip-critical connections | Encoded. The faying-surface class is a premise |
-| J3.11 | Bearing and tearout at holes. J3.11a covers snug-tight or pretensioned bolts, and J3.11b covers bolts through an unstiffened box or HSS | Encoded, per hole |
+| J3.11 | Bearing and tearout at holes. J3.11a covers snug-tight or pretensioned bolts, and J3.11b covers bolts through an unstiffened box or HSS | Encoded, per hole. A bracket's bolt tears out along its own force. |
 | J3.12 to J3.13 | Special fasteners, and wall strength at tension fasteners | Special fasteners are out of scope in v1. Wall strength is encoded for HSS (v1.2) |
 | J4.1 to J4.5 | Affected elements in tension, shear, block shear, compression and flexure | Encoded. Block shear is checked on every enumerated path (§6). |
 | J5 | Fillers in welded and bolted connections | Encoded (v1.1) |
@@ -209,10 +209,49 @@ No obligation names a seat's top angle or a stiffened seat plate's welds, becaus
 |---|---|---|
 | Closed-form limit states over boxes | R4 interval branch-and-bound | No |
 | Load share in bolt and weld groups | Elastic method in closed form (R4). A lower bound from any admissible distribution (R1). | No |
-| Instantaneous-centre method for eccentric groups | Needs a proof that an equilibrium point exists in a box (interval Newton or Krawczyk). Until then, the deck uses the elastic method, which is conservative. | Possibly, one small existence rule |
+| Instantaneous-centre method for eccentric groups | A float search places the centre, and R4 proves what the group holds about it. The proof rests on a measured premise (§7a). | No |
 | Clearances and access | Polynomial inequalities over exact coordinates (R4) | No |
 | Yield-line end plates (v1.2) | The published governing pattern as a compliance check. A physics PASS needs a lower bound, which R1 can give on a plate strip model [inference]. | No |
 | Units | Dimension vectors inside the certificate, planned for P7 ([plan.md](plan.md)) | No |
+
+### 7a. The instantaneous-centre certificate
+
+The Manual's instantaneous-centre method turns the connected part about a centre. Each bolt, or each element of a weld, deforms in proportion to its distance from the centre and carries a force from a load-deformation curve. The group holds a load where those forces balance it. The balancing centre has no closed form, so the deck finds it in two steps.
+
+1. A float search finds the centre on the axis through the centroid across the load, and steps a little short of it toward the group (`petra/models/steel/ic.py`).
+2. At that fixed centre r, R4 proves a lower bound on V(r), the force the group holds along the load. It also proves the moment margin M(r) - V(r) (e + r), the moment about r that the group holds beyond what the load puts there. The mechanics layer writes V and M as a sum over the bolts (`instantaneous_centre`), or as exact integrals over a weld line cut into segments, with the weld's curve bounded on each segment (`line_ic`).
+
+The certificate gives min(V(r), margin / ell), with ell = 10^-15 in. Where the margin is positive, that is V(r). Where it is not, it is at most zero and cannot pass a design. The check takes the largest of the certificates and the elastic method's C, so C is never less than the elastic method gives.
+
+The kernel proves that the group holds V(r) about r with a positive moment margin. Two facts about the method are premises, which tests measure. First, the eccentricity e(r) = M(r)/V(r) - r that a centre balances falls as r grows, so with a positive margin the balancing centre lies beyond r. Second, V rises up to the balancing centre, so the method's C is at least V(r).
+
+- For bolts, `tests/test_steel_groups.py` measures both over 1 to 12 rows and 1 to 4 columns, gauges from a fifth to five times the pitch, and centres from 10^-4 to 10^4 pitches.
+- For a weld line, V peaks at the centre that balances a = 0.102 (measured). The deck takes the method only from a = 1/8 (`petra.weld_ic.a_min`), and the elastic method below it.
+
+A toleranced design gets one certificate for each pitch and gauge corner of its box, and four along a toleranced length. Each certificate holds over the whole box, and the check takes the largest.
+
+The deck reads the method in these ways.
+
+- A conventional single plate in Manual Table 10-9's configuration takes its eccentricity as a/2. The deck takes it only where every condition holds over the whole box, and otherwise keeps a. The statement still carries the row count, so the kernel proves it: C at a/2 enters times min(1, 6 - rows).
+- C is the group's geometry against the load's line, so added material can lower it. A heavier beam's thicker web moves a single angle's support-side load line out, and a thicker plate can leave Table 10-9's configuration (a fillet at least 5/8 tp). No bolt's own strength falls, and that is what `tests/test_steel_properties.py` holds the group to.
+- A bracket's group holds C times its weakest bolt (Manual Part 7). Each bolt tears out along its own force, about the centre of the method that gives C (J3.11a). The support's edges are not declared, so only its holes bound its tearout.
+- A bracket plate on edge, welded on both faces with e past L/8, is Manual Table 8-4's group at k = 0. Its base metal carries the force along the weld, at most 1.04 times the load's share per unit length (`petra.weld_ic.along_peak`). The bound is 1.0337 for the directional increase times 1.0008 for the curve's peak (measured).
+- Edge distances add Table J3.5's C2 for an oversized hole, and for a slot at an edge it runs toward. A plain slot in an eccentric bracket needs a slip-critical joint (J3.3), since the bracket's bolts push along it.
+
+What the certificate costs, measured.
+
+- It gives up at most 0.93% of the method's C on the P3 pilot's designs and on toleranced brackets.
+- It reproduces Kulak's Table 13.1 to within 1/2% or one unit of the last printed digit.
+- At k = 0 and a = 0.170, Companion II.A-2A interpolates Table 8-4 to C = 3.61. The deck certifies 3.6125.
+- Finding a weld group's centre and segments takes about 6 s. A toleranced bracket's report takes about 15 s, against 5 s with the elastic method alone.
+
+Open items.
+
+- C-shaped weld groups stay elastic. So does an edge-on weld group below a = 1/8, and every fatigue check.
+- A bracket's support has no declared edges, so its tearout is bounded only by its holes.
+- The clean-room twin (`twin/`) takes an edge-on weld group by the elastic method, so it fails some designs the deck passes. The deck's tests hold its weld groups to Companion II.A-2A instead.
+- The clean-room twin takes a bracket bolt's tearout at its least clear distance in any direction, where J3.11a reads it in the direction of the force. So it fails three gate brackets the deck passes. A separate hand calculation of the method matches the deck on each, to 0.7% on the toleranced one (measured).
+- The gate's internal twin runs the weld method in floats. Where a weld check lies above 1 by less than the certificate gives up, the deck fails a design the twin passes. Two of the gate's 10,000 designs do this, by 0.87% and 0.70% (measured).
 
 ## 8. Ground truth and outside judges
 
@@ -246,7 +285,7 @@ Every item must hold before the claim in §0 is published.
 | M1 | Data layer | Shapes DB v16 loader with hash, ASTM minimums, Table J3.2 bolt strengths, J3.3 hole sizes, J3.4 to J3.6 spacing and edge tables, and provenance on every row | The registry consistency checker passes, and every row cites its clause |
 | M2 | Element limit states | J2 welds, J3 bolts, J4 affected elements, J7 bearing, J10 concentrated forces, as statement builders with validity rows | Every Companion Chapter J element example reproduced |
 | M3 | Simple shear connections | Shear tab, double angle, single angle, tee, end plate and seated connections, copes, load-path coverage, and makeability | Every Part II shear-connection example reproduced |
-| M4 | Groups and hangers | Eccentric bolt and weld groups (elastic), and hangers with prying | Companion and Kulak cases |
+| M4 | Groups and hangers | Eccentric bolt and weld groups (elastic, then the instantaneous centre), and hangers with prying | Companion and Kulak cases |
 | M5 | Exhaustiveness machinery | Traceability table in CI, connection generator, twin elaborator, manufactured faults, and breaker | Gate items 4 to 7 for v1.0 |
 | M6 | Calculation package | Report and `petra verify` | Gate item 9 |
 | | v1.0 complete | Simple shear, J10, groups, hangers | §9 for the v1.0 catalogue |

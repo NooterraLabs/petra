@@ -62,9 +62,12 @@ ROLE_LIMITS: Mapping[str, tuple[str, ...]] = {
     # a stiffened seat's plate under the beam, bearing on the stiffener's fitted top edge
     "seat_plate": ("bearing",),
     # bolt groups
-    "shear_bolts": ("bolts", "spacing_min", "spacing_max", "joint_type", "clearance"),
-    "bracket_bolts": ("bolts", "spacing_min", "spacing_max", "joint_type", "clearance"),
-    "tension_bolts": ("bolt_tension", "prying", "spacing_min", "spacing_max", "joint_type", "clearance"),
+    "shear_bolts": ("bolts", "spacing_min", "joint_type", "clearance"),
+    "bracket_bolts": ("bolts", "spacing_min", "joint_type", "clearance"),
+    "tension_bolts": ("bolt_tension", "prying", "spacing_min", "joint_type", "clearance"),
+    # a bolt group of two rows or more: J3.6 limits its pitch, the spacing along the bolt
+    # line. One row has no pitch, and J3.6 does not limit the gauge across the force.
+    "bolt_rows": ("spacing_max",),
     "tension_shear_bolts": ("bolts", "bolt_combined"),
     "slip_critical": ("slip",),
     "fillet": ("weld", "weld_base_metal", "fillet_size"),
@@ -105,10 +108,14 @@ def _beam_web(conn: Conn) -> tuple[Link, ...]:
     return (Link("beam web", "coped_web"), Link("beam web", "cope"))
 
 
+def _rows(conn: Conn, element: str) -> tuple[Link, ...]:
+    return () if conn.get("rows") == 1 else (Link(element, "bolt_rows"),)
+
+
 def _bolts(conn: Conn, element: str, role: str) -> tuple[Link, ...]:
     bolts = conn.get("bolts")
     slip = isinstance(bolts, Bolts) and bolts.joint == "slip_critical"
-    return (Link(element, role),) + ((Link(element, "slip_critical"),) if slip else ())
+    return (Link(element, role), *_rows(conn, element)) + ((Link(element, "slip_critical"),) if slip else ())
 
 
 def _shaped(conn: Conn) -> tuple[Link, ...]:
@@ -179,7 +186,7 @@ def path(conn: Conn, fields: set[str]) -> tuple[Link, ...]:
         links = (Link("bracket plate", "welded_bracket"), *_shaped(conn), Link("bracket weld", "fillet"))
     elif kind == "hanger":
         links = (Link("tee stem", "tension_element"), Link("tee flange", "tension_flange"),
-                 Link("hanger bolts", "tension_bolts"), Link("support web", "j10_web_yielding"))
+                 Link("hanger bolts", "tension_bolts"), *_rows(conn, "hanger bolts"), Link("support web", "j10_web_yielding"))
         if "shear" in fields:
             links += _bolts(conn, "hanger bolts", "tension_shear_bolts")
         links += (_face(conn),)

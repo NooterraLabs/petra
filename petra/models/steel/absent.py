@@ -103,7 +103,10 @@ def _bolts(conn: Conn) -> dict[str, str]:
         out["bolt_tension"] = "the seat's bolts carry the reaction in shear; the Manual's seat method takes none in tension (Part 10)"
     elif kind == "bolt_bracket":
         out["bolt_tension"] = ("the load acts in the plane of the bracket's bolt group, so the bolts carry it in shear, "
-                               "its eccentricity by the elastic method")
+                               "its eccentricity by the instantaneous center or the elastic method")
+    if conn.get("rows") == 1:
+        out["spacing_max"] = ("one row of bolts has no pitch: J3.6 limits the longitudinal spacing along a bolt line, "
+                              "not the gauge across it (Commentary J3.6)")
     if bolts.joint != "slip_critical":
         out["slip"] = (f"the joint is {bolts.joint.replace('_', '-')}, not slip-critical: a bearing joint may slip into "
                        "bearing, which the bolts check takes (J3.9 binds slip-critical joints)")

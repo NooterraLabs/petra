@@ -721,6 +721,14 @@ class StatementBuilder:
             raise TypeError(f"{type(definition).__name__} is not a quantity a lemma can prove")
         return self._add(DefinedHyp(name, definition))
 
+    def box(self) -> dict[str, Interval]:
+        """The range of every RangeHyp introduced so far, by symbol. Read-only: it
+        introduces nothing. An elaborator's search reads it to pick a number its goal
+        then states, such as a certificate's constant; the kernel checks the goal at every
+        point of these ranges whatever the number."""
+        self._open()
+        return {name: Interval(h.lo, h.hi) for name, h in self._hyps.items() if isinstance(h, RangeHyp)}
+
     def finish(self, goal: Goal) -> Statement:
         self._open()
         spec = GOAL_RULE.get(type(goal))

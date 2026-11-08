@@ -53,7 +53,7 @@ Each run judges the limit states below. A state counts only when it is on the mo
 
 This section was committed before the sample ran. Three designs, 202-001, 202-006 and 202-010, were run while the model was built. They are in the sample too.
 
-Petra states each limit state as a check whose demand is linear in the connection's load. So every strength reads as a load: the connection load at which the check reaches utilisation 1, which is the design's load divided by the check's utilisation. For a bolt group the script keeps only the element's bearing and tearout, summed over the bolts, or, for an eccentric group, the weakest bolt over the elastic method's most loaded one.
+Petra states each limit state as a check whose demand is linear in the connection's load. So every strength reads as a load: the connection load at which the check reaches utilisation 1, which is the design's load divided by the check's utilisation. For a bolt group the script keeps only the element's bearing and tearout, summed over the bolts, or, for an eccentric group, the group's C times the element's weakest bolt. The results on this page were measured when the deck took every eccentric group by the elastic method, as its weakest bolt over the most loaded one. The deck now takes the larger of that and the instantaneous centre, and this page has not been rerun.
 
 For each run:
 

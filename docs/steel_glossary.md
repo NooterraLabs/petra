@@ -66,6 +66,7 @@ and plate buckling. Their names are in [mechanics.md](mechanics.md).
 | `phi` | φ | resistance factor, or 1/Ω in ASD (prying) |
 | `planes` | ns | number of shear or slip planes |
 | `pr`, `py` | Pr, Py | required axial strength and axial yield strength (J10.6) |
+| `r` | | the distance of a weld line's instantaneous center from its midpoint, over the line's length (Manual Part 8) |
 | `restrained` | | true when the loaded flange is restrained against rotation (J10.4) |
 | `sc` | Sc | elastic section modulus of a coped section |
 | `t` | t | thickness |
@@ -79,6 +80,7 @@ and plate buckling. Their names are in [mechanics.md](mechanics.md).
 | `w` | w | fillet weld leg size |
 | `x` | | F11's Lb d / t², or lb / d in J10.3 |
 | `z`, `znet` | Z, Znet | plastic section modulus, gross and net |
+| `zs` | | the ends of the segments a weld line's half is cut into, over its length, from its midpoint (0) to its end (1/2) |
 
 ## The grammar's length fields
 
