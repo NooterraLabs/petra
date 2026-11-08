@@ -20,6 +20,7 @@ Every claim carries a label: **measured** (run or read while writing this plan),
 8. **Petra wins its category with engines that grow with compute.** These are breakers, an optimiser that hunts for false PASSes, a task generator, and self-play. The install path and the certificate format grow with adoption, and the project measures that growth rather than assuming it (§5).
 9. **CAD is an output first.** Reading other tools' files comes later, with one reader per kind of data (§6, P6).
 10. **The build order.** P0 makes Petra usable and P1 makes it safe. Then Petra is published. After that come P2 (Petra in the agent's loop), P3 (the benchmark), P4 (the designer), P5 (coverage), P6 (readers for other tools' files) and P7 (trust upgrades), all in §6. P8 is a pilot that proves one code formula against physics. It runs alongside P2 and is the first test of the long-term aim in §5.
+11. **The frontier track follows, in [the frontier plan](frontier.md).** It was written on 2026-11-07, after the P3 and P8 pilots. It covers premises, function, assemblies and coverage, and it orders that work by a keystone experiment on honesty under optimisation (§6, "The frontier track").
 
 ## 1. Where Petra stood on 2026-11-06, measured
 
@@ -328,6 +329,23 @@ P8 is the cheap test of stage 3 in §5. It takes one AISC formula, block shear o
 
 **Done when** the kernel proves the bound over a stated box of plate geometries, or the first configuration where J4.3 exceeds it is printed with the premise it rests on.
 
+### The frontier track (after P8)
+
+[The frontier plan](frontier.md) sets the work after P8. In short:
+- **Before compute credits end on 2026-11-15.** Run the token-heavy experiments: an unaided failure-regime search, missing-obligation tasks, and a clean-room twin of the steel deck.
+- **Then the keystone experiment.** Petra, an LLM judge and floating-point finite elements each serve as the reward for the same optimisers. Judges that share nothing with Petra grade the results.
+- **Then a 12-week core:**
+  - false-FAIL fixes;
+  - P8's one-column rows against coped-beam tests;
+  - metamorphic oracles;
+  - a premise lockfile with `petra audit`;
+  - repair intervals;
+  - closed-world coverage on steel;
+  - the certified-gap benchmark;
+  - one new design class chosen by a pre-registered decision table.
+
+The kernel stays frozen until a validated program needs a new rule.
+
 ## 7. What the project stops doing
 
 - **dira and its Studio stay frozen.** dira is the project's earlier, larger engine. Pieces move into Petra only when a phase needs them (ENGINE_MAP D1).
@@ -352,6 +370,11 @@ P8 is the cheap test of stage 3 in §5. It takes one AISC formula, block shear o
    - `TRADEMARK.md` sets how the name may be used. It reserves "Petra-checked" for checkers that pass the conformance corpus.
 
    The repository went public on 2026-11-07, so the name policy is open for comment. A CI check that refuses unsigned commits is still to be added.
+9. **The frontier track's open decisions** are listed in the frontier plan, §9:
+   - the kernel ceiling;
+   - a second model family;
+   - the definition of truth for each limit state;
+   - whether a confirmed P8 erratum goes public.
 
 ## Appendix A. Cold-start test
 
