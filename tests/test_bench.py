@@ -17,27 +17,31 @@ vertex, P_D = P_E = P, that is 1.25 P of compression.
         N_cr = pi^2 E I / L^2 = 74.119 kN,  A fy = 203.78 kN
     EN 1993-1-1 6.3.1.2, curve c (alpha = 0.49):
         lambda = sqrt(203.78 / 74.119) = 1.6581,  Phi = (1 + 0.49 (1.6581 - 0.2) + 1.6581^2) / 2 = 2.2319
-        chi = 1 / (Phi + sqrt(Phi^2 - lambda^2)) = 0.2684,  N_b = chi A fy = 54.692 kN,
+        chi = 1 / (Phi + sqrt(Phi^2 - lambda^2)) = 0.2684,  N_b = chi A fy = 54.692 kN
+    the members' own weight at g = 9.84 m/s2 and 8004.77 kg/m3 (the tops of the registry's
+    ranges): 45.21 N/m for CHS 60.3x3.2 and 57.73 N/m for CHS 76.1x3.2, so 0.200 kN at D
+    and E and 0.249 kN at B; N_ad gains 1.25 x 0.200 + 0.625 x 0.249 = 0.405 kN, and
+    0.045 kN more at its lower end, the axial share of its own weight (45.21 N/m x 2 m rise / 2)
+    EN 1993-1-1 6.3.3 by Annex B lowers N_b for the bending that weight causes,
+    M = 45.21 N/m x 1.5 m run x 2.5 m / 8 = 21.19 N m, with W_el = 2 I / D = 7.784 cm3:
+        x = 0.95 M / (W_el fy) = 0.00729,  N_c = N_b (1 - x) / (1 + 0.8 x) = 0.98696 N_b = 53.979 kN,
         the compression capacity
-    the members' own weight at g = 9.84 m/s2 (the top of the registry's range) and 7850 kg/m3:
-        44.3 N/m for CHS 60.3x3.2 and 56.6 N/m for CHS 76.1x3.2, so 0.196 kN at D and E
-        and 0.244 kN at B; N_ad gains 1.25 x 0.196 + 0.625 x 0.244 = 0.397 kN, and 0.044 kN
-        more at its lower end, the axial share of its own weight (44.3 N/m x 2 m rise / 2)
     the strength claim factors the load and not the weight, so the collapse factor at the
-    worst vertex is (54.692 - 0.441) / (1.25 P):
-        P = 28.5 kN 1.5228  (the shipped box)
-        P = 28.8 kN 1.5070
-        P = 29 kN   1.4966
-        P = 40 kN   1.0850
-so the strength claim's box edge is P = 54.251 / (1.5 x 1.25) = 28.93 kN per node. Without
-the weight it was 29.17 kN, and the bare Euler load, which v0 used before the buckling
-curve, put it at 39.53 kN. The other claims hold with room at P = 28.5 kN: the stress
-claim reads (|N_ad| + 0.441 kN + 1.533 kN) / A = 65.5 MPa against 235 MPa, the 1.533 kN
-being the bending the diagonal's weight causes at midspan (EN 1993-1-1 6.2.1(7)), and a
-float eigen-check of K + lambda K_G (tension stiffening dropped, as the statement does)
-puts global instability far above the claimed 3. The other members at factor 1.5: the
-top chord carries 1.5 x 0.375 (P_D + P_E) = 32.1 kN against its 77.0 kN buckling
-resistance (CHS 76.1x3.2 over 3 m), the bottom chord 32.1 kN of tension against
+    worst vertex is (53.979 - 0.450) / (1.25 P):
+        P = 28.5 kN   1.5026  (the shipped box)
+        P = 28.54 kN  1.5005
+        P = 28.6 kN   1.4973
+        P = 40 kN     1.0706
+so the strength claim's box edge is P = 53.529 / (1.5 x 1.25) = 28.55 kN per node. Before
+the 6.3.3 check it was 28.93 kN, without the weight 29.17 kN, and the bare Euler load,
+which v0 used before the buckling curve, put it at 39.53 kN. The other claims hold with
+room at P = 28.5 kN: the stress claim reads (|N_ad| + 0.450 kN + 1.563 kN) / A = 65.6 MPa
+against 235 MPa, the 1.563 kN being the bending the diagonal's weight causes at midspan
+(EN 1993-1-1 6.2.1(7)), and a float eigen-check of K + lambda K_G (tension stiffening
+dropped, as the statement does) puts global instability far above the claimed 3. The
+other members at factor 1.5: the top chord carries 1.5 x 0.375 (P_D + P_E) = 32.1 kN
+against its 75.2 kN compression capacity (CHS 76.1x3.2 over 3 m, 77.0 kN before its own
+bending), the bottom chord 32.1 kN of tension against
 203.8 kN, and the inner diagonals 1.5 x 0.3125 |P_D - P_E| <= 13.4 kN, each with well
 under 1 kN from the weight. Every member stays below yield and far inside the 0.002
 strain limit, and both sections are class 1 (D / t = 18.8 and 23.8 against
@@ -203,14 +207,14 @@ class TrussBoxEdge(unittest.TestCase):
             return certify_family(load_design(family.path, REGISTRY), REGISTRY, Library(root)).skipped
 
     def test_the_shipped_box_certifies_every_claim(self):
-        self.assertEqual(self.certify("28.5"), (), "collapse factor 1.5228 at the worst vertex, stress 65.5 MPa")
+        self.assertEqual(self.certify("28.5"), (), "collapse factor 1.5026 at the worst vertex, stress 65.6 MPa")
 
     def test_the_box_edge_sits_where_the_hand_check_puts_it(self):
-        self.assertEqual(self.certify("28.8"), (), "1.5070 at 28.8 kN is within the claimed 1.5")
-        (skipped,) = self.certify("29")
-        self.assertIn("claim.strength", skipped, "only strength fails at 29 kN (1.4966 by hand)")
+        self.assertEqual(self.certify("28.54"), (), "1.5005 at 28.54 kN is within the claimed 1.5")
+        (skipped,) = self.certify("28.6")
+        self.assertIn("claim.strength", skipped, "only strength fails at 28.6 kN (1.4973 by hand), by the 6.3.3 check; 28.8 kN passed before it")
         self.assertIn("refuted by R1", skipped, "the solver finds a collapse mechanism")
-        for at in ("load_d = -29000", "load_e = -29000", "const.steel.E = 200000000000", "const.earth.gravity = 246/25"):
+        for at in ("load_d = -28600", "load_e = -28600", "const.steel.E = 200000000000", "const.earth.gravity = 246/25"):
             self.assertIn(at, skipped, f"at the hand check's worst vertex: {at}")
 
 
@@ -225,7 +229,7 @@ class Refusals(unittest.TestCase):
             too_heavy = edited(bench.TRUSS, TRUSS_BOX, "[-40 kN, 0 kN]", root)
             with self.assertRaises(ValueError) as caught:
                 bench.run(too_heavy, queries=1, seed=0)
-        self.assertIn("claim.strength", str(caught.exception), "40 kN per node gives 1.0850 by hand, below 1.5")
+        self.assertIn("claim.strength", str(caught.exception), "40 kN per node gives 1.0706 by hand, below 1.5")
 
     def test_no_queries_is_refused(self):
         with self.assertRaises(ValueError):

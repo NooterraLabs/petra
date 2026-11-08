@@ -13,6 +13,11 @@ Hand values used throughout, steel E in [200, 210] GPa, fy = 355 MPa:
   EN 1993-1-1 6.3.1.2, curve c (alpha 0.49), at E = 200 GPa:
     diagonal  lambda = sqrt(203.78 / 74.12) = 1.658, Phi = 2.232, chi = 0.2684, N_b = 54.69 kN
     top chord lambda = sqrt(260.17 / 106.98) = 1.559, Phi = 2.049, chi = 0.2960, N_b = 77.02 kN
+  EN 1993-1-1 6.3.3 by Annex B lowers N_b for the self-weight bending M to
+  N_c = N_b (1 - x) / (1 + 0.8 x), x = 0.95 M / (W_el fy), at the registry's top density
+  8004.77 kg/m3 and g = 9.84 m/s2 (W_el = 2 I / D):
+    diagonal  M = 45.21 N/m x 1.5 m x 2.5 m / 8 = 21.19 N m, x = 0.00729, N_c = 0.98696 N_b = 53.98 kN
+    top chord M = 57.73 N/m x 3 m x 3 m / 8 = 64.94 N m, x = 0.01356, N_c = 0.97586 N_b = 75.16 kN
 Footbridge statics (P_D, P_E node loads, downward negative):
   N_ad = 0.9375 P_D + 0.3125 P_E    N_ec = 0.3125 P_D + 0.9375 P_E
   N_ab = 0.75 (0.75 P_D + 0.25 P_E) N_de = 0.375 (P_D + P_E)    N_db = -N_be = 0.3125 (P_D - P_E)
@@ -321,11 +326,12 @@ class Footbridge(unittest.TestCase):
         self.assertFalse(forces(statement, "N_per_down.A"), "a node restrained in y takes no unit load")
 
     def test_the_buckling_check_carries_the_weight_and_its_gradient(self):
-        """diag_ad at 24 kN: 30 kN of load, 397.1 N of weight and 44.3 N along the member."""
-        found = solved(claimed(design(PASS + "claim slender: frame.member(diag_ad).buckling_utilisation <= 0.557 under crowd\n"), "slender").statement)
-        self.assertIsInstance(found, Theorem, "30.441 kN / 54.692 kN = 0.5566")
-        found = solved(claimed(design(PASS + "claim slender: frame.member(diag_ad).buckling_utilisation <= 0.556 under crowd\n"), "slender").statement)
-        self.assertIsInstance(found, Refutation, "30.441 kN against 0.556 x 54.692 kN = 30.409 kN; without the weight 30 kN would pass")
+        """diag_ad at 24 kN: 30 kN of load, 405.2 N of weight and 45.2 N along the member at the
+        registry's top density, against N_c = 53.979 kN with the self-weight bending (6.3.3)."""
+        found = solved(claimed(design(PASS + "claim slender: frame.member(diag_ad).buckling_utilisation <= 0.565 under crowd\n"), "slender").statement)
+        self.assertIsInstance(found, Theorem, "30.450 kN / 53.979 kN = 0.5641")
+        found = solved(claimed(design(PASS + "claim slender: frame.member(diag_ad).buckling_utilisation <= 0.563 under crowd\n"), "slender").statement)
+        self.assertIsInstance(found, Refutation, "30.450 kN against 0.563 x 53.979 kN = 30.390 kN; without the weight 30 kN would pass")
 
     def test_lemma_ranges_hold_the_hand_forces(self):
         found = forces(self.statement("frame/truss.global_stability/claim.stability"))
@@ -384,17 +390,17 @@ class Footbridge(unittest.TestCase):
         slender = "claim slender: frame.member(diag_ad).buckling_utilisation <= 0.5 under crowd\n"
         obligation = claimed(design(PASS + slender), "slender")
         result = decide(obligation.statement)
-        self.assertIsInstance(result, Refutation, "diag_ad: 30.44 kN / 54.69 kN = 0.557 > 0.5")
+        self.assertIsInstance(result, Refutation, "diag_ad: 30.45 kN / 53.98 kN = 0.564 > 0.5")
 
     def test_a_generous_buckling_claim_is_proved(self):
-        slender = "claim slender: frame.member(diag_ad).buckling_utilisation <= 0.56 under crowd\n"
+        slender = "claim slender: frame.member(diag_ad).buckling_utilisation <= 0.57 under crowd\n"
         result = decide(claimed(design(PASS + slender), "slender").statement)
-        self.assertIsInstance(result, Theorem, "diag_ad: 30.44 kN / 54.69 kN = 0.557 <= 0.56")
+        self.assertIsInstance(result, Theorem, "diag_ad: 30.45 kN / 53.98 kN = 0.564 <= 0.57")
 
     def test_the_bare_euler_load_would_have_passed_a_claim_the_buckling_curve_refutes(self):
         slender = "claim slender: frame.member(diag_ad).buckling_utilisation <= 0.41 under crowd\n"
         result = solved(claimed(design(PASS + slender), "slender").statement)
-        self.assertIsInstance(result, Refutation, "30 kN / 74.12 kN = 0.405 passed the bare Euler load; 30.44 / 54.69 = 0.557 > 0.41")
+        self.assertIsInstance(result, Refutation, "30 kN / 74.12 kN = 0.405 passed the bare Euler load; 30.45 / 53.98 = 0.564 > 0.41")
 
     def test_the_footbridge_is_statically_determinate(self):
         strength = claimed(design(PASS), "strength")
@@ -407,7 +413,7 @@ class Overload(unittest.TestCase):
     def test_collapse_is_refuted_by_a_mechanism(self):
         obligation = claimed(design(FAIL), "strength")
         result = decide(obligation.statement)
-        self.assertIsInstance(result, Refutation, "diag_ad needs 1.5 x 1.25 x 60 = 112.5 kN against a 54.69 kN buckling resistance")
+        self.assertIsInstance(result, Refutation, "diag_ad needs 1.5 x 1.25 x 60 = 112.5 kN against a 53.98 kN compression resistance")
         self.assertEqual(result.statement, obligation.statement)
 
     def test_the_footbridge_load_admits_no_mechanism(self):
@@ -416,10 +422,10 @@ class Overload(unittest.TestCase):
         point = tuple((sym, Fraction(-24 * KN) if sym.startswith("crowd.") else value) for sym, value in ray.body.point)
         result = check(light, Evidence(FarkasRay(point, ray.body.y)))
         self.assertIsInstance(result, Rejection)
-        self.assertIsInstance(result.fault, TooWeak, "at 1.5 x 24 kN diag_ad needs 45 kN, inside 54.69 kN, so a static field exists")
+        self.assertIsInstance(result.fault, TooWeak, "at 1.5 x 24 kN diag_ad needs 45 kN, inside 53.98 kN, so a static field exists")
 
     def test_the_end_diagonals_buckle_under_the_heaviest_crowd_on_the_softest_steel(self):
-        hand = "N_ad = N_ec = 0.9375 (-60) + 0.3125 (-60) = -75 kN, past the 54.69 kN buckling resistance at E = 200 GPa"
+        hand = "N_ad = N_ec = 0.9375 (-60) + 0.3125 (-60) = -75 kN, past the 53.98 kN compression resistance at E = 200 GPa"
         heavy = design(FAIL)
         for member in ("diag_ad", "diag_ec"):
             with self.subTest(member=member):
@@ -429,8 +435,8 @@ class Overload(unittest.TestCase):
                 self.assertEqual((point["crowd.frame.D.fy"], point["crowd.frame.E.fy"], point["const.steel.E"]), (-60 * KN, -60 * KN, 200 * 10 ** 9), hand)
 
     def test_the_lighter_crowd_and_the_top_chord_do_not_buckle(self):
-        self.assertIsInstance(solved(buckling(design(PASS), "diag_ad")), Theorem, "N_ad = 1.25 (-24) = -30 kN, inside 54.69 kN")
-        self.assertIsInstance(solved(buckling(design(FAIL), "top_de")), Theorem, "N_de = 0.375 (-120) = -45 kN, inside 77.02 kN")
+        self.assertIsInstance(solved(buckling(design(PASS), "diag_ad")), Theorem, "N_ad = 1.25 (-24) = -30 kN, inside 53.98 kN")
+        self.assertIsInstance(solved(buckling(design(FAIL), "top_de")), Theorem, "N_de = 0.375 (-120) = -45 kN, inside 75.16 kN")
 
 
 class Mechanism(unittest.TestCase):
@@ -590,7 +596,16 @@ class Models(unittest.TestCase):
                 premise = truss.MODELS[mode].premise()
                 self.assertIn("EN 1993-1-1", premise.source)
                 self.assertIn("chi A fy", premise.statement)
+                self.assertIn("6.3.3 with Annex B", premise.statement, "the self-weight bending lowers the resistance")
+                self.assertIn("Annex B", premise.source)
                 self.assertIn(truss.SECTION_CLASS, truss.MODELS[mode].rows, "chi A fy needs a section that reaches A fy")
+
+    def test_no_premise_discloses_the_closed_bending_gap(self):
+        """Gap G1 of docs/keystone_protocol.md: the premises once said the bending's effect on
+        buckling was not checked. It is checked now, so none may say so."""
+        for mode, spec in truss.MODELS.items():
+            with self.subTest(mode=mode.id):
+                self.assertNotIn("not checked", spec.premise().statement)
 
     def test_models_on_elastic_forces_check_the_elastic_rows(self):
         for mode in (truss.ELASTIC_STRESS, truss.COMPLIANCE, truss.GLOBAL_STABILITY, truss.MEMBER_BUCKLING):

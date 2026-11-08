@@ -26,7 +26,8 @@ in kips and inches). Any other R4 goal is read term by term from the statement: 
 `a - b` gives demand a and capacity b, named and dimensioned by TERMS when its mode is
 listed there, with each quantity a lemma defines (a member force) over the range the
 theorem proved, or at a point over the range its lemma solver gives there. A FACTORED
-R1 goal reads as its load factor at the point. Other R1, R2 and R3 goals are not read.
+R1 goal reads as its load factor at the point, with the member bounds that set it. Other
+R1, R2 and R3 goals are not read.
 Units follow the domain (READERS) or else readable SI. A reader that fails costs only
 its numbers: the finding keeps its outcome and says why.
 """
@@ -211,7 +212,7 @@ TERMS: Mapping[str, tuple[tuple[str, Dim, bool], ...]] = {
                                  ("thermal runaway at I_2 / 1.45", DIMENSIONLESS, False)),
     "bolt.tension": (("bolt tension against its limit", FORCE, True),),
     "bolt.separation": (("the plates' share of the force against the preload", FORCE, False),),
-    "truss.member_buckling": (("compression against the flexural buckling resistance", FORCE, True),),
+    "truss.member_buckling": (("compression against the flexural buckling resistance with the self-weight bending", FORCE, True),),
 }
 """Mode id -> (name, dimension, claimed) for each term of its R4 goal, in order, for
 modes whose builders state a fixed number of terms (tests/test_readout.py holds each to
@@ -604,7 +605,7 @@ def _finding(outcome: Outcome, context: _Context | None) -> Finding:
     defined = dict(outcome.theorem.defined_ranges) if isinstance(outcome, Discharged) else {}
     try:
         readout = domain.read(requirement, statement, context.design, context.registry, at) if domain is not None else \
-            _generic(requirement, statement, at, defined, units)
+            _generic(requirement, statement, at, defined, units, _collapse_bounds(requirement, context))
     except Exception as exc:  # a reader is tooling: its failure costs its numbers, never the report
         readout = Readout((), {}, f"the {name} reader failed: {type(exc).__name__}: {exc}")
     point = () if refutation is None else _coordinates(refutation, context, readout.dims, units)
@@ -815,18 +816,28 @@ def _coordinates(refutation: Refutation, context: _Context, dsg: Mapping[str, Di
     return tuple(out)
 
 
+def _collapse_bounds(requirement: Requirement, context: _Context) -> tuple[tuple[str, str], ...] | None:
+    """For a FACTORED mode, what bounds each member's force in its goal (models/truss.py)."""
+    if requirement.mode.id not in FACTORED:
+        return None
+    from .models import truss
+    component = context.design.components[requirement.subject[0]]
+    return truss.collapse_bounds(truss.lower_truss(component, context.design, context.registry))
+
+
 def _generic(requirement: Requirement, statement: Statement, at: Mapping[str, Fraction] | None,
-             defined: Mapping[str, Interval], units: Mapping[Dim, str]) -> Readout:
+             defined: Mapping[str, Interval], units: Mapping[Dim, str],
+             bounds: tuple[tuple[str, str], ...] | None = None) -> Readout:
     """Each `a - b` term of an R4 goal at the point, or over the box with the ranges the
     theorem proved for its defined quantities; for a FACTORED mode, its load factor at
-    the point."""
+    the point, with the member `bounds` that set it."""
     goal = statement.goal
     box: dict[str, Interval] = {}
     for h in statement.hyps:
         if isinstance(h, RangeHyp):
             box[h.sym] = Interval(at[h.label], at[h.label]) if at is not None and h.label in at else Interval(h.lo, h.hi)
     if isinstance(goal, LinearFeasible) and requirement.mode.id in FACTORED:
-        return _load_factor(requirement, goal, box, at is not None)
+        return _load_factor(requirement, goal, box, at is not None, bounds)
     if not isinstance(goal, AllNonpositive):
         return Readout((), {}, f"an {GOAL_RULE[type(goal)].id} statement has no demand and capacity terms to read")
     names = TERMS.get(requirement.mode.id) or _port_terms(requirement, len(goal.exprs))
@@ -878,10 +889,13 @@ def _defined_at(statement: Statement, point: Mapping[str, Interval]) -> dict[str
     return found
 
 
-def _load_factor(requirement: Requirement, goal: LinearFeasible, box: Mapping[str, Interval], at_point: bool) -> Readout:
+def _load_factor(requirement: Requirement, goal: LinearFeasible, box: Mapping[str, Interval], at_point: bool,
+                 bounds: tuple[tuple[str, str], ...] | None) -> Readout:
     """A claim `factor >= f` stated as A x = f b within the bounds (FACTORED): at the
     point, the largest t for which A x = t f b is feasible there, by linear programming in
-    floating point, so the factor the design carries is t f against the claimed f."""
+    floating point, so the factor the design carries is t f against the claimed f. The
+    column bounds whose marginals are not zero hold t there, and `bounds` (column j's
+    lower and upper, cycling) names them."""
     criterion = requirement.criterion
     if not at_point:
         return Readout((), {}, "a load factor is read at a counterexample or margin point, not over the box")
@@ -912,6 +926,10 @@ def _load_factor(requirement: Requirement, goal: LinearFeasible, box: Mapping[st
         return Readout((), {}, f"the load factor could not be computed here: {found.message}")
     else:
         carried = float(claimed) * float(found.x[-1])
+        held = [bounds[j % len(bounds)][side] for j in range(cols) if bounds
+                for side, marginal in enumerate((found.lower.marginals[j], found.upper.marginals[j])) if abs(marginal) > 1e-12]
+        if held:
+            what += f", set by {' and '.join(dict.fromkeys(held))}"
     return Readout((Value(what, "1", float(claimed), carried, False, True, None, ()),), {}, None)
 
 
