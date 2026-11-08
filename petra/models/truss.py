@@ -26,8 +26,8 @@ bounds cover what lumping leaves out (_Terms.end_excess, _Terms.sag):
     s_i = A M / W_el             M = g rho A |dx| L / 8, the midspan bending; a tension or
                                  yield check adds it, by the linear interaction of
                                  EN 1993-1-1 6.2.1(7)
-How that bending lowers a compression member's buckling resistance is not checked, and
-every model's premise says so.
+In compression the same bending lowers the member's buckling resistance, by the member
+check of EN 1993-1-1 6.3.3 (the compression resistance N_c below).
 
 Everything is written in force densities q_i = N_i / L_i, because with rational node
 coordinates the equilibrium matrix in force densities is exact:
@@ -41,8 +41,8 @@ obligation per load case.
 
 Mapping onto kernel goals:
   plastic collapse   R1  LinearFeasible: B q = lambda f(h) + w;  -C_i/L_i <= q_i <= T_i/L_i
-                         T_i = A_i fy_i - v_i - s_i ;  C_i = N_b,i - v_i, with N_b,i the
-                         flexural buckling resistance below
+                         T_i = A_i fy_i - v_i - s_i ;  C_i = N_c,i - v_i, with N_c,i the
+                         compression resistance below
                          lambda is the claimed factor as a constant, since R1 needs b
                          affine in the hypotheses. The weight w is not: it carries Sqrt and
                          Pi. So w moves into the bounds through an exact rational right
@@ -74,9 +74,9 @@ Mapping onto kernel goals:
                          tension stiffening this way covers every factor t in [0, lambda]:
                          t N_i(load) + N_i(weight) >= c_i, and the Loewner sum falls with
                          each coefficient.
-  member buckling    R4  AllNonpositive: -N_i + v_i - u N_b,i <= 0, one obligation per
+  member buckling    R4  AllNonpositive: -N_i + v_i - u N_c,i <= 0, one obligation per
                          member so a FAIL names the member.
-                         buckling_utilisation = -N / N_b, negative in tension.
+                         buckling_utilisation = -N / N_c, negative in tension.
 
 Flexural buckling resistance, EN 1993-1-1:2005 6.3.1.2 with gamma_M1 = 1:
     N_b = chi A fy,  chi = min(1, 1 / (Phi + sqrt(Phi^2 - lambda^2)))
@@ -84,6 +84,25 @@ Flexural buckling resistance, EN 1993-1-1:2005 6.3.1.2 with gamma_M1 = 1:
 with alpha the section's buckling_alpha and buckling length L (pin-ended). The truss is
 taken to be braced out of its plane at every node, so L is the buckling length about
 every axis; each model that uses N_b states that bracing as a premise.
+
+Compression resistance with the self-weight bending, the member check of EN 1993-1-1:2005
+6.3.3 by its Annex B, gamma_M1 = 1. A tube does not twist, so chi_LT = 1, and chi_z = chi_y
+= chi, since one second moment and one buckling length serve both axes. The weight bends
+the member in the truss's plane by M = g rho A |dx| L / 8, and (6.61) asks
+    N / (chi A fy) + k_yy M / M_Rk <= 1
+(6.62) has k_zy = 0.6 k_yy for class 1 and 2, 0.8 k_yy for class 3, so it never governs.
+The model takes bounds that hold for every section the class 3 row admits:
+    k_yy <= C_my (1 + 0.8 N / (chi A fy))   Table B.1, the cap; 0.6 in class 3
+    C_my = 0.95                             Table B.3, uniform load, no end moments
+    M_Rk >= W_el fy                         Table 6.7, W_pl fy in class 1 and 2
+Table B.1 is written for I and RHS sections, whose k_yy and k_zy agree; the model reads a
+tube the same way. Every factor here is recalled, not read from the EN text. Annex A, the
+other method 6.3.3 allows, is not computed, so N_c never exceeds the Annex B value. With
+x = 0.95 M / (W_el fy), the check holds exactly while
+    N <= N_c = N_b (1 - x) / (1 + 0.8 x)
+N stands for the largest compression along the member, |N| + v, as in 6.3.1. N_c = N_b
+for a vertical member. Once x >= 1 the bending alone uses the whole of (6.61), N_c <= 0,
+and the member may carry no compression at all.
 
 Validity rows, each stated beside every obligation whose model has it (models/base.py):
   below yield        R4  |N_i| + v_i + s_i <= A_i fy_i: the elastic model holds only below
@@ -430,8 +449,11 @@ NO_SELF_STRESS = ValidityRow(
 
 _SELF_WEIGHT = ("the y axis points up and gravity acts in -y; each member's weight loads its two end joints, half at "
                 "each; along an inclined member the force is taken at its worse end, and a tension or yield check "
-                "adds the bending the weight causes at midspan by the linear interaction of EN 1993-1-1 6.2.1(7); "
-                "how that bending lowers a compression member's buckling resistance is not checked")
+                "adds the bending the weight causes at midspan by the linear interaction of EN 1993-1-1 6.2.1(7)")
+_COMPRESSION = ("the flexural buckling resistance chi A fy lowered for the self-weight bending M by the member check of "
+                "EN 1993-1-1 6.3.3 with Annex B: the largest N with N / (chi A fy) + 0.95 (1 + 0.8 N / (chi A fy)) "
+                "M / (W_el fy) <= 1, taking C_my = 0.95 for a uniform load on a pin-ended span, k_yy at its cap and "
+                "W_el in place of W_pl, bounds that hold in classes 1 to 3")
 _BRACING = ("every joint is braced against displacement out of the plane of the truss, so a member's buckling "
             "length about every axis is its length L")
 
@@ -439,12 +461,12 @@ _MAINTAINERS = "petra-maintainers"
 _PLASTIC = model_spec(
     sys.modules[__name__], "truss.plastic",
     "rigid-perfectly-plastic pin-jointed 2D truss, static (lower-bound) theorem; tension capacity A fy, "
-    "compression capacity the flexural buckling resistance chi A fy",
+    f"compression capacity {_COMPRESSION}",
     f"joints are frictionless pins; members are prismatic, steel, and loaded only at their ends; {_SELF_WEIGHT}; "
     f"{_BRACING}; displacements are small; a member at its compression capacity is taken to hold it, which "
     "asks no redistribution of a truss with no state of self-stress",
     _MAINTAINERS, "lower-bound theorem of plastic collapse (Gvozdev 1938; Neal, The Plastic Methods of Structural Analysis); "
-                  "EN 1993-1-1:2005 6.3.1.2 for the compression capacity",
+                  "EN 1993-1-1:2005 6.3.1.2, and 6.3.3 with Annex B Tables B.1 and B.3, for the compression capacity",
     rows=(SECTION_CLASS, NO_SELF_STRESS),
 )
 _ELASTIC = model_spec(
@@ -466,12 +488,12 @@ _STABILITY = model_spec(
 )
 _BUCKLING = model_spec(
     sys.modules[__name__], "truss.flexural_buckling",
-    "flexural buckling of a pin-ended uniform member, EN 1993-1-1 6.3.1.2: compression N <= u chi A fy, "
-    "chi from the section's buckling curve, lambda^2 = A fy / N_cr, N_cr = pi^2 E I / L^2",
+    "flexural buckling of a pin-ended uniform member, EN 1993-1-1 6.3.1.2 and 6.3.3: compression N <= u N_c, "
+    f"N_c {_COMPRESSION}; chi from the section's buckling curve, lambda^2 = A fy / N_cr, N_cr = pi^2 E I / L^2",
     "members are straight within the EN 1090-2 tolerances the buckling curves assume, prismatic, pin-ended "
     "and steel, with one second moment about every axis (circular hollow sections), and carry the linear "
     f"elastic member force; {_BRACING}; {_SELF_WEIGHT}; the resistance is characteristic (gamma_M1 = 1)",
-    _MAINTAINERS, "EN 1993-1-1:2005 6.3.1.2 and Tables 6.1 and 6.2",
+    _MAINTAINERS, "EN 1993-1-1:2005 6.3.1.2, 6.3.3, Tables 6.1, 6.2 and 6.7, and Annex B Tables B.1 and B.3",
     rows=(BELOW_YIELD, SMALL_STRAIN, SECTION_CLASS),
 )
 
@@ -622,6 +644,18 @@ class _Terms:
         above = Mul((half, Add((PowInt(Add((slender, Const(Fraction(1)))), 2), eta))))
         chi_inverse = Add((phi, Sqrt(Max((Const(Fraction(0)), Mul((below, above)))))))
         return Min((self.squash, Div(self.squash, chi_inverse)))
+
+    @property
+    def compression_resistance(self) -> Expr:
+        """N_c = N_b (1 - x) / (1 + 0.8 x), x = 0.95 M / (W_el fy) = 0.95 sag / (A fy): the
+        largest compression the 6.3.3 bound of the module docstring allows beside the
+        self-weight bending. Written 9/4 / (1 + 4 x / 5) - 5/4, so x occurs once and its
+        enclosure stays exact. N_b when the member is vertical."""
+        if self.sag is None:
+            return self.buckling_resistance
+        x = Mul((Const(Fraction(19, 20)), Div(self.sag, self.squash)))
+        lowered = Add((Div(Const(Fraction(9, 4)), Add((Const(Fraction(1)), Mul((Const(Fraction(4, 5)), x))))), Const(Fraction(-5, 4))))
+        return Mul((self.buckling_resistance, lowered))
 
 
 def _terms(truss: Truss, sb: StatementBuilder) -> tuple[_Terms, ...]:
@@ -965,8 +999,8 @@ def build_plastic_collapse(req: Requirement, truss: Truss, design: Design, regis
         terms = _terms(truss, sb)
         b = load_vector(truss, design, sb, (case,), factor)
         alone = tuple(Const(Fraction(0)) for _ in b)
-        lower = tuple(Div(_plus(Neg(t.buckling_resistance), t.end_excess), t.length) if t.end_excess is not None
-                      else Neg(Div(t.buckling_resistance, t.length)) for t in terms)
+        lower = tuple(Div(_plus(Neg(t.compression_resistance), t.end_excess), t.length) if t.end_excess is not None
+                      else Neg(Div(t.compression_resistance, t.length)) for t in terms)
         upper = tuple(Div(_less(t.squash, _extreme(t)), t.length) if _extreme(t) is not None
                       else Div(t.squash, t.length) for t in terms)
         shift = _weight_shift(truss, sb, terms)
@@ -981,6 +1015,20 @@ def build_plastic_collapse(req: Requirement, truss: Truss, design: Design, regis
         describe = (f"a static field within every member's capacity carries the self-weight of {truss.name}, alone and "
                     f"with {_text(factor)} times load case {case}")
         out.append(_obligation(req, MODELS[PLASTIC_COLLAPSE], sb.finish(goal), describe, truss, design, registry, case))
+    return tuple(out)
+
+
+def collapse_bounds(truss: Truss) -> tuple[tuple[str, str], ...]:
+    """For a reader naming what sets a collapse factor: what bounds each member's force in
+    build_plastic_collapse's goal, in compression and in tension, in member order. The
+    goal's columns are the members, twice."""
+    x = {n.name: n.x for n in truss.nodes}
+    out = []
+    for m in truss.members:
+        bent = x[m.start] != x[m.end]
+        out.append((f"{m.name}'s compression capacity, its flexural buckling resistance"
+                    + (" with its self-weight bending (EN 1993-1-1 6.3.3)" if bent else " (EN 1993-1-1 6.3.1)"),
+                    f"{m.name}'s tension capacity, its yield load" + (" less its self-weight bending (EN 1993-1-1 6.2.1(7))" if bent else "")))
     return tuple(out)
 
 
@@ -1065,9 +1113,9 @@ def build_member_buckling(req: Requirement, truss: Truss, design: Design, regist
         terms = _terms(truss, sb)
         force = _forces(truss, design, sb, case, terms, (index,))[index].total
         t = terms[index]
-        goal = AllNonpositive((Add((_plus(Neg(force), t.end_excess), Neg(Mul((Const(limit), t.buckling_resistance))))),))
+        goal = AllNonpositive((Add((_plus(Neg(force), t.end_excess), Neg(Mul((Const(limit), t.compression_resistance))))),))
         describe = (f"the compression in {truss.name}.{req.subject[1]} is at most {_text(limit)} times its flexural "
-                    f"buckling resistance under load case {case} and the self-weight")
+                    f"buckling resistance with its self-weight bending under load case {case} and the self-weight")
         out.append(_obligation(req, MODELS[MEMBER_BUCKLING], sb.finish(goal), describe, truss, design, registry, case))
     return tuple(out)
 

@@ -2,8 +2,9 @@ petra 0
 
 # Same truss as truss_pass.petra with the heavier crowd load from brief rev C.
 # At factor 1.5 the end diagonal needs 112.5 kN in compression; its EN 1993-1-1
-# buckling resistance is 54.7 to 56.9 kN (E from 200 to 210 GPa), so the solver
-# finds a collapse mechanism and the kernel checks the Farkas ray.
+# buckling resistance is 54.7 to 56.9 kN (E from 200 to 210 GPa), a little less
+# with its own weight's bending (6.3.3), so the solver finds a collapse mechanism
+# and the kernel checks the Farkas ray.
 # Expected verdict: FAIL on frame/truss.plastic_collapse.
 
 design "warren-footbridge-panel-rev-c" {
