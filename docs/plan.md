@@ -258,8 +258,12 @@ P1 leaves these items open:
 - The hanger's J10.2 check rests on Eq. J10-3 as a premise.
 - Fault clearing time is not checked.
 - The joint's F_Z is taken as 0.
-- The readout prints the enclosure utilisation, which can read above 1 on a PASS (gate design 01614). The gate's 3 FAIL-as-PASS against the generator's aim come from the same enclosure overstating a utilisation.
-- 37 of 13,200 steel designs FAIL though the outside judge calls them buildable.
+- The fit checks read the beam's flat web from kdes, and so does the judge. The Manual's workable depth T is narrower: the Companion gives T = 15-1/2 in for a W18x35, where d - 2 kdes is 16.05 in. The shipped shapes rows carry neither T nor kdet, the detailing value, so a part on that band passes both the deck and the judge.
+
+**Closed after P1, 2026-11-07.** Two trust defects that P1 left open are closed:
+
+- **A utilisation above 1 on a PASS.** The readout read a proved check over its whole tolerance box with one interval enclosure. The largest demand and the least strength can sit at different points, so the read ran high: gate design 01614 read 1.04 where no point of its box exceeds 0.976. The steel reader now splits the box as the R4 solver does and reads the part where the utilisation peaks (`petra/models/steel/calc.py`). The gate's generator aims with the same number. Measured on the regenerated gate: no limit state that holds reads above 1 in any of the 10,000 packages, and FAIL as PASS fell from 3 to 0. The split stops after 400 cells per check, so a check whose peak lies within 1 part in 2,000 of 1 could still read above 1.
+- **Fit FAILs the judge called buildable.** At `af95e6a`, 29 steel designs of seed 1's stream failed a fit check while the outside judge found them buildable. P1's close recorded 37, which does not reproduce. In each, the deck read the source and the judge read less: a weld's leg past the part (19), a cope shallower than kdes (8), a declared slot (2). The judge now reads them as the deck does (`docs/steel_connections.md` §5a), and the count on the same stream is 0. The gap stays 0 on seeds 1, 2 and 3, with the stream hashes unchanged.
 
 **Then publish.** The public repository came first, on 2026-11-07 (§8 item 2). PyPI comes next. **Done when** a networked fresh agent installs from public PyPI and passes the rotated briefs.
 
