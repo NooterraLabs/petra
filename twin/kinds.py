@@ -127,14 +127,26 @@ def shear_element(out, label, grade, t, length, n_holes, hole, planes=1):
             planes * ck.shear_rupture(grade.fu, anv), "J4.2b")
 
 
-def block_shear(out, label, grade, t, length, lev, leh, rows, hole, blocks=1):
-    """One or more blocks along a single bolt column: shear from the end of the element through
-    the far bolt, tension from the column out to the edge across the force, Ubs = 1."""
-    agv = (length - lev) * t
-    anv = agv - (rows - F(1, 2)) * (hole.along + ALLOWANCE) * t
+def block_shear(out, label, grade, t, lev, pitch, leh, rows, hole, blocks=1):
+    """One or more blocks along a single bolt column, torn toward the edge the bolts push: shear
+    from that edge through the k-th bolt, tension from there out to the edge across the force,
+    Ubs = 1. J4.3 holds on every path, so besides the whole column (k = rows) the twin checks the
+    block through the k rows nearest the edge with the least strength per row, against those
+    rows' equal share k / rows of the demand."""
+    clause = f"{SPEC} J4.3, Eq. J4-5, Ubs = 1"
     ant = (leh - (hole.across + ALLOWANCE) / 2) * t
-    out.add(f"block shear, {label}", "block_shear", label, f"{SPEC} J4.3, Eq. J4-5, Ubs = 1",
-            blocks * ck.block_shear(grade.fy, grade.fu, agv, anv, ant), "J4.3")
+
+    def strength(k):
+        agv = (lev + (k - 1) * pitch) * t
+        anv = agv - (k - F(1, 2)) * (hole.along + ALLOWANCE) * t
+        return blocks * ck.block_shear(grade.fy, grade.fu, agv, anv, ant)
+
+    out.add(f"block shear, {label}", "block_shear", label, clause, strength(rows), "J4.3")
+    if rows > 1:
+        k = min(range(1, rows), key=lambda k: strength(k) / k)
+        out.add(f"block shear, {label}, partial path", "block_shear", label,
+                f"{clause}, through the {k} of {rows} rows nearest the edge", strength(k), "J4.3",
+                out.demand * k / rows, note=f"demand is the share of {k} of {rows} rows")
 
 
 def flexure_element(out, label, grade, t, depth, hole, offsets, moment):
@@ -217,8 +229,7 @@ def cope_checks(out, lines, beam, grade, rows=None, pitch=None, hole=None):
     if leh is None:
         out.unsupported.append("coped web block shear: no beam_edge on the card")
         return
-    block_shear(out, "beam web", grade, beam.tw, element_length(rows, pitch, lev), lev, leh - UNDERRUN,
-                rows, hole)
+    block_shear(out, "beam web", grade, beam.tw, lev, pitch, leh - UNDERRUN, rows, hole)
 
 
 # Kinds
@@ -248,7 +259,7 @@ def shear_tab(lines, out, demands):
     web = beam_web_ply(lines, beam, beam_grade, holes["beam"])
     bolt_line(out, BoltLine("beam side", n, s, 1, 1, ((1, plate), (1, web)), k, note), bolts, deformation)
     shear_element(out, "plate", grade, tp, length, n, holes["plate"])
-    block_shear(out, "plate", grade, tp, length, lev, leh, n, holes["plate"])
+    block_shear(out, "plate", grade, tp, lev, s, leh, n, holes["plate"])
     out.add("fillet weld, plate to support", "weld", "weld", f"{SPEC} J2.4, Eq. J2-4, kds = 1.0",
             weld.sides * ck.fillet_weld(weld.fexx, weld.w, length), "J2.4")
     out.add(f"support {face} shear rupture at the weld", "weld_base_metal", f"support {face}",
@@ -280,7 +291,7 @@ def double_angle(lines, out, demands):
     web = beam_web_ply(lines, beam, beam_grade, holes["beam"])
     bolt_line(out, BoltLine("beam side", n, s, 1, 2, ((2, angle_beam), (1, web))), bolts, deformation)
     shear_element(out, "angles", grade, t, length, n, holes["angles"], planes=2)
-    block_shear(out, "angles, beam leg", grade, t, length, lev, beam_leg - beam_gauge, n,
+    block_shear(out, "angles, beam leg", grade, t, lev, s, beam_leg - beam_gauge, n,
                 holes["angles"], blocks=2)
     side = lines.word("support_side")
     if side == "bolted":
@@ -288,7 +299,7 @@ def double_angle(lines, out, demands):
         angle_sup = Ply("angles", t, grade.fu, holes["angles"], lev, "top")
         sup = Ply(f"support {face}", t_sup, sup_grade.fu, holes["support"])
         bolt_line(out, BoltLine("support side", n, s, 2, 1, ((1, angle_sup), (1, sup))), bolts, deformation)
-        block_shear(out, "angles, outstanding leg", grade, t, length, lev, out_leg - g_out, n,
+        block_shear(out, "angles, outstanding leg", grade, t, lev, s, out_leg - g_out, n,
                     holes["angles"], blocks=2)
     else:
         out.unsupported.append("welded support side: the eccentric angle-to-support weld is not modeled")
@@ -311,7 +322,7 @@ def shear_end_plate(lines, out, demands):
     sup = Ply(f"support {face}", t_sup, sup_grade.fu, holes["support"])
     bolt_line(out, BoltLine("support side", n, s, 2, 1, ((1, plate), (1, sup))), bolts, deformation)
     shear_element(out, "plate", grade, tp, length, n, holes["plate"], planes=2)
-    block_shear(out, "plate", grade, tp, length, lev, (width - gauge) / 2, n, holes["plate"], blocks=2)
+    block_shear(out, "plate", grade, tp, lev, s, (width - gauge) / 2, n, holes["plate"], blocks=2)
     lw = length - 2 * weld.w
     out.add("fillet weld, plate to beam web", "weld", "weld",
             f"{SPEC} J2.4, Eq. J2-4, kds = 1.0, length less twice the weld size",
@@ -344,7 +355,7 @@ def single_angle(lines, out, demands):
     web = beam_web_ply(lines, beam, beam_grade, holes["beam"])
     bolt_line(out, BoltLine("beam leg", n, s, 1, 1, ((1, angle_beam), (1, web)), k_b, note_b), bolts, deformation)
     shear_element(out, "angle", grade, t, length, n, holes["angle"])
-    block_shear(out, "angle, beam leg", grade, t, length, lev, beam_leg - beam_gauge, n, holes["angle"])
+    block_shear(out, "angle, beam leg", grade, t, lev, s, beam_leg - beam_gauge, n, holes["angle"])
     side = lines.word("support_side")
     if side == "bolted":
         g_sup = lines.length("support_gauge")
@@ -353,7 +364,7 @@ def single_angle(lines, out, demands):
         angle_sup = Ply("angle", t, grade.fu, holes["angle"], lev, "top")
         sup = Ply(f"support {face}", t_sup, sup_grade.fu, holes["support"])
         bolt_line(out, BoltLine("support leg", n, s, 1, 1, ((1, angle_sup), (1, sup)), k_s, note_s), bolts, deformation)
-        block_shear(out, "angle, support leg", grade, t, length, lev, sup_leg - g_sup, n, holes["angle"])
+        block_shear(out, "angle, support leg", grade, t, lev, s, sup_leg - g_sup, n, holes["angle"])
         flexure_element(out, "angle, support leg", grade, t, length, holes["angle"],
                         hole_offsets(n, s), out.demand * e)
     else:
@@ -379,7 +390,7 @@ def shear_tee(lines, out, demands):
     bolt_line(out, BoltLine("stem", n, s, 1, 1, ((1, stem), (1, web)), k, note), bolts, deformation)
     flexure_element(out, "tee stem", grade, tee.tw, length, holes["stem"], hole_offsets(n, s), out.demand * a)
     shear_element(out, "tee stem", grade, tee.tw, length, n, holes["stem"])
-    block_shear(out, "tee stem", grade, tee.tw, length, lev, tee.d - a, n, holes["stem"])
+    block_shear(out, "tee stem", grade, tee.tw, lev, s, tee.d - a, n, holes["stem"])
     side = lines.word("support_side")
     if side == "bolted":
         gauge = lines.length("support_gauge")
@@ -387,7 +398,7 @@ def shear_tee(lines, out, demands):
         sup = Ply(f"support {face}", t_sup, sup_grade.fu, holes["support"])
         bolt_line(out, BoltLine("flange", n, s, 2, 1, ((1, flange), (1, sup))), bolts, deformation)
         shear_element(out, "tee flange", grade, tee.tf, length, n, holes["flange"], planes=2)
-        block_shear(out, "tee flange", grade, tee.tf, length, lev, (tee.bf - gauge) / 2, n,
+        block_shear(out, "tee flange", grade, tee.tf, lev, s, (tee.bf - gauge) / 2, n,
                     holes["flange"], blocks=2)
     else:
         out.unsupported.append("welded support side: the tee-flange-to-support weld is not modeled")
