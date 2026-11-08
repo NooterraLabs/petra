@@ -8,6 +8,7 @@ import contextlib
 import dataclasses
 import io
 import json
+import tempfile
 import unittest
 from fractions import Fraction
 from pathlib import Path
@@ -226,14 +227,21 @@ class CommandLine(unittest.TestCase):
         self.assertEqual(json.loads(out)["probe"], ["-20", "100"])
 
     def test_a_steel_envelope_reads_in_kips_from_the_low_end(self):
+        # job5's tab, stated up to 120 kip: its bolts and block shear fail near 44 kip, so the
+        # middle of the stated range fails and the search anchors at the low end
         out = io.StringIO()
         fixture = ROOT / "tests" / "fixtures" / "readout" / "job5_fail_60k.petra"
-        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
-            code = cli.main(["envelope", str(fixture), "--input", "reaction.tab.shear", "--from", "0 kip", "--to", "60 kip", "--max-probes", "4"])
+        source = fixture.read_text(encoding="utf-8").replace("[0 kip, 60 kip]", "[0 kip, 120 kip]")
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "job5_120k.petra"
+            path.write_text(source, encoding="utf-8", newline="\n")
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
+                code = cli.main(["envelope", str(path), "--input", "reaction.tab.shear", "--from", "0 kip", "--to", "120 kip",
+                                 "--max-probes", "4"])
         text = out.getvalue()
         self.assertEqual(code, 0, text)
-        self.assertIn("at reaction.tab.shear = 30 kip, the middle, the design is FAIL", text)
-        self.assertIn("stated [0, 60] kip; probed [0, 60] kip from 0 kip", text)
+        self.assertIn("at reaction.tab.shear = 60 kip, the middle, the design is FAIL", text)
+        self.assertIn("stated [0, 120] kip; probed [0, 120] kip from 0 kip", text)
         self.assertNotRegex(text, r"\d N\b")
 
     def test_a_failing_anchor_exits_with_its_status(self):

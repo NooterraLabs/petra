@@ -49,12 +49,16 @@ VARIANTS = {
     "welded tee": lambda: variant("shear_tee", ("  support_side bolted\n  support_gauge 5.5 inch\n",
                                                 "  support_side welded\n  support_weld electrode.E70 size 0.25 inch\n")),
     "shaped bolt bracket": lambda: variant("bolt_bracket", ("thickness 0.5 inch", "thickness 0.75 inch"),
+                                           ("edge_vertical 1.5 inch", "edge_vertical 2.25 inch"),
                                            ("  plate_edge 1.5 inch\n", "  plate_edge 1.5 inch\n  free_edge 8 inch\n")),
     "lapped weld bracket": lambda: variant("weld_bracket", ("thickness 0.5 inch", "thickness 0.75 inch"), ("sides 2", "sides 1"),
                                            ("  weld_length 12 inch\n", "  weld_length 12 inch\n  weld_return 2 inch\n  free_edge 8 inch\n")),
 }
 """The bracket variants pass. With the examples' 1/2 in plates their free edges fail: the
-40 kip load at 6 to 8 in buckles a 1/2 in shaped plate (B-B ratios 1.14 and 2.1)."""
+40 kip load at 6 to 8 in buckles a 1/2 in shaped plate (B-B ratios 1.14 and 2.1). The shaped
+bolt bracket's edge rises from below its front column, so at the example's 1-1/2 in lev the
+edge lies 1.5 x 8 / hypot(8, 12) = 0.83 in from the bottom bolt, under Table J3.4's 1-1/8 in;
+at 2-1/4 in it lies 1.15 in away."""
 
 
 def designs():

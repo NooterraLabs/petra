@@ -65,8 +65,6 @@ def elastic_weld_c(v: Expr, e: Expr, length: Expr, ret: Expr) -> tuple[Expr, Exp
             sub(direct, Div(mul(moment, xbar), ip)))
 
 
-
-
 ANGLE_GRID = 1 << 80
 """The angles below are rounded outward to this many parts of a radian."""
 

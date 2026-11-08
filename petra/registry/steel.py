@@ -640,19 +640,21 @@ COEFFICIENTS: tuple[_F, ...] = (
      f"Delta_max = 0.34 in at its ultimate strength, the others in proportion to their distance; {RECALLED}"),
     *_weld_ic_rows(),
     ("petra.weld_ic.a_min", "1/8", "1", JUDGED, MAINTAINERS,
-     "Petra's encoding: the least ratio a = e / L at which the deck holds two fillets along one line, loaded out of "
-     "their plane, to the instantaneous center method (Manual Table 8-4, k = 0). The deck's certificate needs the "
-     "group's V(r) to rise up to the balancing centre, which tests/test_premises.py measures up to a = 0.10; below "
-     "1/8 the elastic method stays; not a number of any code"),
+     f"{MANUAL} Part 8, Table 8-4 with k = 0: the least ratio a = e / L at which the deck holds two fillets along one "
+     "line, loaded out of their plane, to the instantaneous center method. The deck's certificate needs the group's "
+     "V(r) to rise up to the balancing centre, which tests/test_steel_groups.py measures: V peaks at the centre that "
+     "balances a = 0.102; below 1/8 the elastic method stays; Petra's encoding, not checked against the published "
+     "text"),
     ("petra.weld_ic.along_peak", "1.04", "1", JUDGED, MAINTAINERS,
-     "Petra's encoding: in the instantaneous center method no weld element's force along the weld exceeds 1.04 "
-     "Fnw Aw, the peak of (1 + 0.50 sin^1.5 theta) cos theta, 1.0337 near 20 degrees, times the peak of f(p), "
-     "1.0008, which tests/test_premises.py measures; the base metal's shear along the weld reads it; not a number "
-     "of any code"),
+     f"{MANUAL} Part 8, the instantaneous center method, with {AISC} Section J2.4, Eq. J2-5: no weld element's force "
+     "along the weld exceeds 1.04 Fnw Aw, the peak of (1 + 0.50 sin^1.5 theta) cos theta, 1.0337 near 20 degrees, "
+     "times the peak of f(p), 1.0008, which tests/test_steel_groups.py measures; the base metal's shear along the weld "
+     "reads it; Petra's encoding, not checked against the published text"),
     ("petra.switch.length", "1/1000000000000000", "m", JUDGED, MAINTAINERS,
-     "Petra's encoding: the length that turns a margin into the factor of a certificate's switch, "
-     "min(C, margin / length): C where the margin passes C times 10^-15 in, at most zero where it is "
-     "negative; any positive length is sound, and a shorter one gives up less; not a number of any code"),
+     f"{MANUAL} Parts 7, 8 and 10, where a method holds only in its configuration (Table 10-9's, Table 8-4's a at "
+     "least 1/8): the length that turns a margin into the factor of a certificate's switch, min(C, margin / length): "
+     "C where the margin passes C times 10^-15 in, at most zero where it is negative; any positive length is sound, "
+     "and a shorter one gives up less; Petra's encoding, not checked against the published text"),
     ("aisc_manual.t10_6.lever", "2.25", "1", JUDGED, MAINTAINERS,
      f"{MANUAL} Part 10, the elastic method behind Table 10-6: R = v / (2 L^2) sqrt(L^2 + 20.25 e^2), so the "
      f"horizontal force per length is 2.25 v e / L^2; {RECALLED}"),

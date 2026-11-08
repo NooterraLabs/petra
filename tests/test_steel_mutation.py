@@ -6,7 +6,10 @@ copy of each, written from the method statements, so a wrong row shows as a disa
 between the two. Here every row is mutated twice, its value doubled and halved, and the
 twin comparison of tests/test_steel_twin.py runs again on each (design, connection, mode,
 load case) whose statement reads the row. A mutant is killed when the deck's governing
-utilisation there no longer agrees with the twin's. A validity row's number (a model's
+utilisation there no longer agrees with the twin's. Where the deck certifies a bound on a
+method the twin computes in floats (test_steel_twin.BOUNDED, the weld instantaneous
+center), agreeing means lying between the twin's utilisation and that times one plus the
+entry's share, and a mutant is killed when it leaves that band. A validity row's number (a model's
 range, which the twin does not compare) is killed instead at a pair of designs on its
 boundary, one just inside and one just past it (BOUNDARIES): doubled, the one past it
 comes inside; halved, the one inside goes out.
@@ -29,9 +32,17 @@ from petra.models.steel.fatigue import GENERATORS, ROWS
 from petra.registry import build_registry
 from petra.registry.steel import COEFFICIENTS
 from petra.registry.steel_fatigue import FATIGUE
-from tests.test_steel_twin import _designs, _differs, _variant
+from tests.test_steel_twin import BOUNDED, _designs, _differs, _variant
 
 FACTORS = (Fraction(2), Fraction(1, 2))
+
+
+def _agrees(t: float, d: float, share: float | None) -> bool:
+    """Whether the deck's utilisation d agrees with the twin's t: equal within the twin
+    comparison's tolerance, or for a BOUNDED site between t and t (1 + share)."""
+    if share is None:
+        return not _differs(t, d)
+    return t <= d <= t * (1 + share)
 
 SURVIVORS: dict[str, str] = {
     # a boundary or floor no twin design lies near
@@ -42,6 +53,18 @@ SURVIVORS: dict[str, str] = {
     "aisc_manual.p9.cb_min": "halved (0.92): where the floor binds (short double copes) Mp governs Section F11",
     "aisc_manual.p9.k1_min": "the floor never binds within the validity rows (c <= 2 d, dc <= d/2 give k1 >= 1.65), "
                              "and doubled it matters only to a slender coped web; every top-coped web here is compact",
+    "aisc_manual.t10_9.rows": "doubled (10 rows): no conventional single plate here has 6 to 10 rows, where it would "
+                              "take e = a/2",
+    "petra.weld_ic.a_min": "no weld bracket here has e / L between 1/16 and 1/4, where the doubled or halved switch "
+                           "would change the method; tests/test_steel_groups.py reads it at e / L = 0.115",
+    # a change smaller than the band the twin bounds the deck's weld certificate to (1 %)
+    "aisc_manual.p8.ic_delta_m_offset": "doubled (4 degrees): it moves a weld line's C by at most 0.33 % for a from "
+                                        "1/8 to 3 (measured)",
+    "aisc_manual.p8.ic_delta_u_offset": "halved (3 degrees): it moves a weld line's C by at most 0.24 % for a from "
+                                        "1/8 to 3 (measured)",
+    "aisc_manual.p8.ic_delta_u_cap": "the cap binds only near theta = 0, short of each line's critical element, its end: "
+                                     "doubled it moves C by nothing, halved by at most 0.073 % for a from 1/8 to 3 "
+                                     "(measured)",
     # a capped or non-governing branch
     "aisc360.j3_11a.tearout_not_considered": "doubled (3.0 lc t Fu): tearout no longer governs over bearing or bolt "
                                              "shear at any design with deformation not considered",
@@ -56,6 +79,7 @@ SURVIVORS: dict[str, str] = {
     # Petra's strict-boundary shift
     "petra.strict.length": "a millionth of an inch: no design sits that close to a strict boundary",
     "petra.strict.ratio": "a billionth: no design sits that close to a strict boundary",
+    "petra.switch.length": "10^-15 in: no switch's margin here lies that close to zero",
 }
 """Row -> which mutant survives, and why the comparison cannot see it."""
 
@@ -130,7 +154,7 @@ class EveryCoefficientMatters(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.registry = build_registry()
-        cls.sites = []      # (conn, design, mode, case, twin u, reads)
+        cls.sites = []      # (conn, design, mode, case, twin u, share, reads)
         for label, design in _designs(cls.registry):
             for name in design.components:
                 conn = calc.connection(design, name, cls.registry)
@@ -139,14 +163,15 @@ class EveryCoefficientMatters(unittest.TestCase):
                     mine = twin.utilisations(conn, design, cls.registry, case)
                     for mode in owed:
                         t = mine.get(mode, float("nan"))
-                        if _differs(t, _deck(conn, design, cls.registry, mode, case)):
+                        share = BOUNDED.get((label, name, mode))
+                        if not _agrees(t, _deck(conn, design, cls.registry, mode, case), share):
                             continue        # a known disagreement (test_steel_twin.KNOWN) kills nothing
-                        cls.sites.append((conn, design, mode, case, t, _reads(conn, design, cls.registry, mode, case)))
+                        cls.sites.append((conn, design, mode, case, t, share, _reads(conn, design, cls.registry, mode, case)))
         cls.killed = {}
         for name, *_ in (*COEFFICIENTS, *FATIGUE):
-            reached = [s for s in cls.sites if name in s[5]]
-            cls.killed[name] = [any(_differs(t, _deck(conn, design, _mutant(cls.registry, name, f), mode, case))
-                                    for conn, design, mode, case, t, _ in reached)
+            reached = [s for s in cls.sites if name in s[6]]
+            cls.killed[name] = [any(not _agrees(t, _deck(conn, design, _mutant(cls.registry, name, f), mode, case), share)
+                                    for conn, design, mode, case, t, share, _ in reached)
                                 or cls._past_a_boundary(name, f) for f in FACTORS]
 
     @classmethod

@@ -26,6 +26,7 @@ from fractions import Fraction
 from pathlib import Path
 
 import numpy as np
+from scipy.integrate import quad
 from scipy.sparse import diags, identity, kron
 from scipy.sparse.linalg import eigsh
 
@@ -332,6 +333,17 @@ class BoltGroups(unittest.TestCase):
                     self.assertAlmostEqual(num(got_v), sum(f for _, f in forces), places=10)
                     self.assertAlmostEqual(num(got_m), moment, places=10)
 
+    def test_the_elastic_forces_turn_about_the_elastic_centre(self):
+        """Every bolt's force by the elastic method is normal to its radius from (-R, 0),
+        R = elastic_centre: the method turns the group about that point."""
+        for rows, cols, s, g in PATTERNS:
+            bolts = _bolts(rows, cols, Fraction(s), Fraction(g))
+            for e in (Fraction(3), Fraction(33, 2)):
+                with self.subTest(rows=rows, cols=cols, e=e):
+                    r = exact(M.elastic_centre(q(e), rows, cols, q(s), q(g)))
+                    for (x, y), (fx, fy) in zip(bolts, _forces(bolts, Fraction(40), e)):
+                        self.assertEqual(fx * (x + r) + fy * y, 0)
+
 
 # --- Weld groups: the weld cut into short pieces ----------------------------------------------------------
 
@@ -380,6 +392,49 @@ class WeldGroups(unittest.TestCase):
                 for (x, y), f in (((ret, length / 2), tip), ((0.0, length / 2), heel)):
                     self.assertAlmostEqual(f, v / total + m * (x - xc) / ip, places=7)
                 self.assertAlmostEqual(fh, m * (length / 2) / ip, places=7)
+
+    def test_the_angle_of_each_element_about_a_centre(self):
+        """element_angles brackets atan(z / r) in degrees, tightly, for centres near the
+        line, at its scale and far from it."""
+        zs = [Fraction(0), Fraction(1, 1000), Fraction(1, 7), Fraction(3, 10), Fraction(1, 2)]
+        for r in (Fraction(1, 10 ** 6), Fraction(1, 50), Fraction(3, 10), Fraction(7, 2), Fraction(400)):
+            with self.subTest(r=r):
+                for z, (lo, hi) in zip(zs, M.element_angles(r, zs)):
+                    true = math.degrees(math.atan2(float(z), float(r)))
+                    low, high = float(enclose(lo, {}).lo), float(enclose(hi, {}).hi)
+                    self.assertLessEqual(low, true * (1 + 1e-15))
+                    self.assertGreaterEqual(high, true * (1 - 1e-15))
+                    self.assertLessEqual(high - low, 1e-12 * max(true, 1.0))
+
+    def test_a_lines_instantaneous_centre(self):
+        """line_ic against quadrature of the line's elements: exact for a force constant
+        along the line, and lower bounds on V and on M - V (a + r) for one that rises
+        along it, closing in as the segments shrink. Centres near the line with z0 =
+        sqrt(a r) inside it, and far from it with z0 past its end."""
+        def truth(force, r: float, a: float) -> tuple[float, float]:
+            v = quad(lambda z: force(z) * r / math.hypot(z, r), 0.0, 0.5, epsabs=1e-14, epsrel=1e-13, limit=200)[0]
+            gap = quad(lambda z: force(z) * (z * z - a * r) / math.hypot(z, r), 0.0, 0.5, epsabs=1e-14, epsrel=1e-13,
+                       limit=200)[0]
+            return 2 * v, 2 * gap
+
+        def rising(z):
+            return 1 / 2 + z
+
+        for r, a in ((Fraction(1, 20), Fraction(1, 4)), (Fraction(3, 10), Fraction(1, 8)), (Fraction(2), Fraction(3))):
+            for n in (1, 7, 200):
+                zs = [Fraction(k, 2 * n) for k in range(n + 1)]
+                with self.subTest(r=r, a=a, n=n):
+                    v, gap = M.line_ic(r, a, zs, [(q(1), q(1))] * n)
+                    want_v, want_gap = truth(lambda z: 1.0, float(r), float(a))
+                    self.assertAlmostEqual(num(v), want_v, places=10)
+                    self.assertAlmostEqual(num(gap), want_gap, places=10)
+                    v, gap = M.line_ic(r, a, zs, [(q(rising(p)), q(rising(w))) for p, w in zip(zs, zs[1:])])
+                    want_v, want_gap = truth(rising, float(r), float(a))
+                    self.assertLessEqual(num(v), want_v + 1e-12)
+                    self.assertLessEqual(num(gap), want_gap + 1e-12)
+                    if n == 200:
+                        self.assertAlmostEqual(num(v), want_v, delta=0.005 * abs(want_v))
+                        self.assertAlmostEqual(num(gap), want_gap, delta=0.005 * (abs(want_v) + abs(want_gap)))
 
 
 # --- Stability: the plate equation by finite differences ------------------------------------------

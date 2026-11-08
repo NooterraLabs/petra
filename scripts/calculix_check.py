@@ -301,8 +301,8 @@ def _factor(registry, group: str, suffix: str, lrfd: bool) -> float:
 
 
 def _ply_limits(part, ply: str) -> float | None:
-    found = [lim.capacity for lim in part.limits
-             if lim.what == f"bearing on the {ply}" or lim.what.startswith(f"tearout of the {ply} to ")]
+    found = [lim.capacity for lim in part.limits if lim.what == f"bearing on the {ply}"
+             or lim.what.startswith((f"tearout of the {ply} to ", f"tearout of the {ply} along "))]
     return min(found) if found else None
 
 
@@ -333,13 +333,18 @@ def _states(conn, design, registry, names: set[str], v_top: float) -> dict[str, 
                     continue
                 if mode == "bolts":
                     concentric = "summed over the group" in value.what
+                    # an eccentric group holds C times its weakest bolt, so the element's
+                    # weakest bearing or tearout holds C times that
+                    coefficient = value.capacity / min(part.capacity for part in value.parts) \
+                        if "C times the weakest bolt" in value.what else None
                     for name in names:
                         caps = [(part.count, _ply_limits(part, name)) for part in value.parts]
                         caps = [(k, cap) for k, cap in caps if cap is not None]
                         if not caps:
                             continue
                         summed = sum(k * cap for k, cap in caps)
-                        capacity = summed if concentric else min(cap for _, cap in caps)
+                        weakest = min(cap for _, cap in caps)
+                        capacity = summed if concentric else weakest if coefficient is None else coefficient * weakest
                         design_load = v_top * capacity / value.demand
                         out[name].append(State(mode, f"{value.what.split(':')[0]}: bearing and tearout of the {name}", run,
                                                v_top / design_load, design_load, nominal(design_load), nominal(summed)))

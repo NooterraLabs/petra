@@ -12,7 +12,12 @@ strengths calc.py encloses over each design's box.
     `seated`) with the same legs one size thicker, a fillet 1/16 in larger, and a tee,
     member, beam or support replaced by the next heavier W (or the WT cut from it) of the
     same nominal depth that is no smaller in any dimension the deck reads. No strength
-    check's available strength falls (checks matched by mode and `what`). Detailing and
+    check's available strength falls (checks matched by mode and `what`). An eccentric
+    bolt group holds C times its weakest bolt, and C is the group's geometry against the
+    load's line, which added material may move: a heavier beam's thicker web moves a
+    single angle's support-side load line out, and a thicker plate can leave Table 10-9's
+    configuration (a fillet at least 5/8 tp), so a shear tab's group loses e = a/2. There
+    no bolt's strength falls (the check's parts, matched by position). Detailing and
     ductility rules are left out; STRENGTH and RULES say which and why.
   LoadBox.test_a_wider_load_box_keeps_a_fail_a_fail and
   LoadBox.test_a_narrower_load_box_keeps_a_pass_a_pass (V3, larger load box): a FAIL's load
@@ -454,6 +459,14 @@ class Monotonicity(unittest.TestCase):
                             # slenderness limit, the other branch of a cope's or a bracket's
                             # lambda): there is no strength to compare
                             if old.excused or new.excused:
+                                continue
+                            if "C times the weakest bolt" in old.what:
+                                # C is geometry, not material: each bolt position's strength
+                                held = {p.what: p.capacity for p in new.parts}
+                                self.assertEqual(sorted(held), sorted(p.what for p in old.parts), key)
+                                for p in old.parts:
+                                    self.assertGreaterEqual(held[p.what], p.capacity * (1 - ROUNDING),
+                                                            f"{key}, {p.what}: {p.capacity} -> {held[p.what]} {old.unit}")
                                 continue
                             self.assertGreaterEqual(new.capacity, old.capacity * (1 - ROUNDING),
                                                     f"{key}: {old.capacity} -> {new.capacity} {old.unit}")

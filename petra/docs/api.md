@@ -119,7 +119,7 @@ A `Value` is one term. Its fields are `what`, `unit`, `demand`, `capacity`, `exc
 Two fields, `met` and `parts`, apply only to some terms.
 
 - **Rules.** Hole use and joint type are rules, which are either met or not. `DETAILING_MODES` marks them `"rule"`. A rule's demand and capacity are joint levels and counts, not quantities. For a rule, `demand`, `capacity`, `unit`, and `utilisation` are None, and `met` says whether the rule holds. `met` is None for every other term.
-- **Parts.** A capacity made of parts lists them in `parts`, weakest first. Only the two bolt group checks of the steel deck have parts: "most loaded bolt ... against the weakest bolt" and "bolt shear, bearing and tearout summed over the group". Each `Part(what, count, limits)` is one row position of the group, such as `"bottom row (1 bolt)"`. Its `limits` are each bolt's strengths at that position, in the check's unit. There is one `Limit(what, capacity)` for the bolt's shear, and one for bearing and one for tearout in each ply. A tearout names its clear distance, as in `"tearout of the tee stem to its edge (lc 0.6875 in)"`. `Part.capacity` is the least of the part's limits, and `Part.governing` is the limit that sets that capacity.
+- **Parts.** A capacity made of parts lists them in `parts`, weakest first. Only the two bolt group checks of the steel deck have parts: an eccentric group's "C times the weakest bolt", whose capacity is C times its first part's, and "bolt shear, bearing and tearout summed over the group". Each `Part(what, count, limits)` is one row position of the group, such as `"bottom row (1 bolt)"`. Its `limits` are each bolt's strengths at that position, in the check's unit. There is one `Limit(what, capacity)` for the bolt's shear, and one for bearing and one for tearout in each ply. A tearout names its clear distance, as in `"tearout of the tee stem to its edge (lc 0.6875 in)"`. `Part.capacity` is the least of the part's limits, and `Part.governing` is the limit that sets that capacity.
 
 A claim's utilisation compares its quantity with its bound. For `q <= bound`, the governing term's utilisation is q / bound. For `q >= bound`, it is bound / q.
 
@@ -256,17 +256,17 @@ COORDINATE = {"symbol", "label",
 
 The JSON leaves out the source of each piece of evidence, so that a report replayed from stored certificates prints the same JSON as the run that found them. That source is the solver, the certificate store, or the library.
 
-The example below is the bolts obligation of the 60 kip shear tab in `tests/fixtures/readout/job5_fail_60k.petra`, cut down to one part of the bolt group and one fixed coordinate. Here bolt shear sets every bolt's strength, so the bolt group needs more or larger bolts, not more edge distance.
+The example below is the bolts obligation of the 60 kip shear tab in `tests/fixtures/readout/job5_fail_60k.petra`, cut down to one part of the bolt group and one fixed coordinate. Here bolt shear sets every bolt's strength, so the bolt group needs more or larger bolts, not more edge distance. The group holds C = 2.48 times its weakest bolt, by the instantaneous center at Table 10-9's e = a/2.
 
 ```json
 {"requirement": "tab/steel.bolts/coverage.steel.bolts", "entry": "coverage", "category": "strength", "outcome": "refuted", "rule": "R4",
- "statement_hash": "sha256:967688885e06a51cbc60952fbc87219edb7b531f98916adcfc509a0266cdfc92",
- "describe": "tab (shear_tab) holds every bolts check under reaction: beam side: most loaded bolt by the elastic method against the weakest bolt (J3.7, J3.11a)",
+ "statement_hash": "sha256:b9be510498ee6ee6b5c84332337eaf755889fb55bf85620479ff4da28b07e446",
+ "describe": "tab (shear_tab) holds every bolts check under reaction: beam side: the eccentric group by the instantaneous center or the elastic method, C times the weakest bolt (J3.7, J3.11a, Manual Part 7)",
  "at": "point",
- "governing": "beam side: most loaded bolt by the elastic method against the weakest bolt (J3.7, J3.11a)",
- "demand": 36.05551275463989, "capacity": 17.89235190989812, "unit": "kip", "utilisation": 2.015135457664112,
- "checks": [{"check": "beam side: most loaded bolt by the elastic method against the weakest bolt (J3.7, J3.11a)",
-             "demand": 36.05551275463989, "capacity": 17.89235190989812, "unit": "kip", "utilisation": 2.015135457664112,
+ "governing": "beam side: the eccentric group by the instantaneous center or the elastic method, C times the weakest bolt (J3.7, J3.11a, Manual Part 7)",
+ "demand": 60.0, "capacity": 44.39425071742194, "unit": "kip", "utilisation": 1.3515263582645352,
+ "checks": [{"check": "beam side: the eccentric group by the instantaneous center or the elastic method, C times the weakest bolt (J3.7, J3.11a, Manual Part 7)",
+             "demand": 60.0, "capacity": 44.39425071742194, "unit": "kip", "utilisation": 1.3515263582645352,
              "excused": false, "excuse": null, "met": null,
              "parts": [{"part": "top row (1 bolt)", "count": 1, "capacity": 17.89235190989812, "governing": "bolt shear",
                         "limits": [{"limit": "bolt shear", "capacity": 17.89235190989812},

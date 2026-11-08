@@ -158,8 +158,8 @@ STRENGTH: tuple[tuple[str, str, str, str, tuple[ValidityRow, ...]], ...] = (
     ("weld_base_metal",
      "shear rupture of the base metal along each fusion face, 0.60 Fu t per unit length against the weld force it "
      "carries (Section J2.4(a) with Eq J4-4); under the instantaneous center method against the force along the "
-     "weld, at most 1.04 times the mean P / (lines L C) per unit length, since an element's share along the weld, "
-     "kds f(p) cos theta, peaks at 1.034; the share across the weld pulls the part across its edge, and the "
+     "weld, at most 1.04 times P / (lines L C) per unit length, the load's measure of Fnw Aw, since an element's "
+     "share along the weld, kds f(p) cos theta in units of Fnw Aw, peaks at 1.035; the share across the weld pulls the part across its edge, and the "
      "Specification's shear planes are those of longitudinal shear (Commentary J2.4, Fig. C-J2.10)",
      "the base metal's thickness is uniform along the weld",
      f"{AISC} Sections J2.4(a) and J4.2(b)", ()),

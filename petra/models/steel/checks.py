@@ -1133,17 +1133,19 @@ def _slope_reach(ctx: Ctx, itf: Interface, o: Outline, depth: Expr, i: int, j: i
     return div(mul(sub(gap, mul(h, width)), rho), tilt)
 
 
-def _table_10_9(ctx: Ctx, geo: Geometry, itf: Interface) -> tuple[Expr, Expr | None] | None:
+def _table_10_9(ctx: Ctx, geo: Geometry, itf: Interface) -> tuple[Expr, Expr] | None:
     """Manual Table 10-9's eccentricity of a conventional single plate's bolt group, a/2,
     and the switch factor that keeps it only where the table's configuration holds. The
     plate is welded on both faces to the support, with one column of bolts in standard or
     short-slotted holes, and no declared eccentricity: these are read here. Over the box:
     at most the table's 5 rows, the bolt line at most 3.5 in from the weld, the fillet at
     least 5/8 tp, Leh at least 2d on the plate and the beam web, and with standard holes the
-    plate or the beam web at most d/2 + 1/16 in thick. Where every margin is at least zero
-    over the whole box the table holds and the factor is None; where one is negative over
-    it, the result is None. Between, the factor is min(margin / ell, rows_max + 1 - rows):
-    at least 1 where every one holds by ell (10^-15 in), at most zero where one fails."""
+    plate or the beam web at most d/2 + 1/16 in thick. Where every length margin is at
+    least zero over the whole box, the factor is the rows' alone, rows_max + 1 - rows, an
+    integer the kernel proves at least 1, so the statement still names the table's row
+    count; where one margin is negative over it, the result is None. Between, the factor
+    is min(margin / ell, rows_max + 1 - rows): at least 1 where every one holds by ell
+    (10^-15 in), at most zero where one fails."""
     sp = geo.single_plate
     holes = {p.hole for p in itf.plies}
     if (sp is None or ctx.conn.kind != "shear_tab" or itf.name != "beam side" or sp.form != "conventional"
@@ -1158,10 +1160,10 @@ def _table_10_9(ctx: Ctx, geo: Geometry, itf: Interface) -> tuple[Expr, Expr | N
     box = ctx.sb.box()
     found = [enclose(m, box) for m in (*margins, sub(rows, c(1)))]
     half = mul(ctx.const("aisc_manual.t10_9.eccentricity"), sp.a)
-    if all(m.lo >= 0 for m in found):
-        return half, None
     if any(m.hi < 0 for m in found):
         return None
+    if all(m.lo >= 0 for m in found[:-1]):
+        return half, rows
     return half, Min((div(Min(tuple(margins)), ctx.const(SWITCH)), rows))
 
 
@@ -1169,7 +1171,7 @@ def bolt_capacity(ctx: Ctx, geo: Geometry, itf: Interface) -> Expr:
     """What gen_bolts holds a group's shear to. A concentric group: the sum over its bolts
     of their available strengths. An eccentric one: C times its weakest bolt's, the larger
     C of the group's own eccentricity and, where Manual Table 10-9's configuration holds
-    (switch factor at least 1), of the table's."""
+    (switch factor at least 1), of the table's: C there times min(1, factor), since C >= 0."""
     if itf.eccentricity is None:
         return group_total(ctx, itf)
     if itf.outline is not None:
@@ -1178,8 +1180,7 @@ def bolt_capacity(ctx: Ctx, geo: Geometry, itf: Interface) -> Expr:
     table = _table_10_9(ctx, geo, itf)
     if table is not None:
         e, switch = table
-        half = bolt_coefficient(ctx, itf, e)
-        coefficient = Max((coefficient, half if switch is None else Min((half, mul(half, switch)))))
+        coefficient = Max((coefficient, mul(bolt_coefficient(ctx, itf, e), Min((c(1), switch)))))
     return mul(coefficient, weakest_bolt(ctx, itf))
 
 
@@ -1387,7 +1388,7 @@ def weld_coefficient(ctx: Ctx, wg: WeldGroup) -> Expr | None:
 
     Why it is sound: the method's gap M(r) - V(r) (a + r) is positive at r, and e(r) =
     M/V - r falls as r grows, so the centre balancing a lies beyond r; V(r) rises with r up
-    to that centre wherever a >= a_min (the premise, which tests/test_premises.py measures),
+    to that centre wherever a >= a_min (the premise, which tests/test_steel_groups.py measures),
     so the method's C at a is at least V(r) >= V_lo. C falls as a grows past a_min (the
     balancing centre nears the line, and V falls with it), so the C at the design's own
     e / L, at most a, is larger still. A switch term is V_lo where its margin passes by
