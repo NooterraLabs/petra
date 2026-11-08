@@ -5,6 +5,7 @@ docstring. Hole sizes are Table J3.3's, and net areas add B4.3b's 1/16 in.
 """
 
 import itertools
+import math
 import unittest
 from fractions import Fraction as F
 from pathlib import Path
@@ -118,28 +119,59 @@ class ContinuousWebEndBoltTest(HandTest):
         self.close(c["bearing and tearout, beam web, beam side"]["nominal"], 685.425, "beam web")
 
 
-class BracketSlotTest(HandTest):
-    """II.A-22 with Leh = 1-1/2 in.: lc is the least clear distance per direction, taken for every
-    bolt as the example does, with the hole's own dimension in that direction."""
+class BracketTearoutTest(HandTest):
+    """II.A-22 cut to two bolts in one column, s = 3 in., loaded e = 3 in. from their centroid.
+    J3.11a measures lc in the direction of the force, and about the instantaneous center each bolt
+    pushes the plate perpendicular to its own radius.
 
-    C = bolt_coefficient(bolt_grid(6, 2, 3.0, 5.5), 12.0)
+    Both bolts sit rho from the center and reach the same force R, so vertical equilibrium gives
+    2 R r0 / rho = P and moments about the center give 2 R rho = P (e + r0), with r0 the center's
+    offset from the bolt line. Hence r0 = (s/2)^2 / e = 0.75 in., rho = 1.6771 in. and
+    C = 2 (1 - e^-3.4)^0.55 r0 / rho. The top bolt pushes the plate along (-2, 1)/sqrt 5, toward the
+    back edge Leh behind it, which the line meets sqrt(5) Leh / 2 from the bolt. The bottom bolt
+    pushes along (2, 1)/sqrt 5, toward the load, and meets the top edge 5.5 sqrt 5 in. away, so
+    bearing governs it. Plate t = 3/8, Fu = 65, d = 3/4. The plate's strength is (C/n) times the sum
+    of the bolts' strengths, as Example II.A-17A sums an eccentric group.
+    """
 
-    def plate(self, holes):
-        c = checks("ii_a_22_bolt_bracket.petra",
-                   (("plate_edge 2 inch", f"plate_edge 1.5 inch\n  holes plate {holes}"),))
-        return c["bearing and tearout, plate"]["nominal"]
+    R0 = 1.5**2 / 3
+    C = 2 * (1 - math.exp(-3.4)) ** 0.55 * R0 / math.hypot(R0, 1.5)
+    TWO_BOLTS = (("rows 6", "rows 2"), ("columns 2", "columns 1"), ("eccentricity 12 inch", "eccentricity 3 inch"))
 
-    def test_short_slot_parallel_to_the_shear(self):
-        """Slot 13/16 wide by 1 in. long, vertical. lc = min(2.5 - 1/2, 1.5 - 13/32, 3 - 1,
-        5.5 - 13/16) = 1.09375 in. Tearout 1.2(1.09375)(3/8)(65) = 31.992 kips < bearing 43.875."""
-        self.close(self.plate("ssl_parallel") / self.C, 31.9921875, "ssl_parallel")
+    def plate(self, *replace):
+        return checks("ii_a_22_bolt_bracket.petra", self.TWO_BOLTS + replace)["bearing and tearout, plate"]["nominal"]
+
+    def test_each_bolt_tears_out_along_its_own_force(self):
+        """Leh = 1-1/4 in., standard holes. Top bolt lc = 1.25 sqrt(5)/2 - 13/32 = 0.99129 in.,
+        tearout 1.2(0.99129)(3/8)(65) = 28.995 kips. Bottom bolt bearing 2.4(3/4)(3/8)(65) = 43.875
+        kips. The least clear distance in any direction, Leh - 13/32 = 0.84375 in., would give both
+        bolts 24.680 kips."""
+        lc = 1.25 * math.sqrt(5) / 2 - 13 / 32
+        hand = self.C / 2 * (1.2 * lc * 0.375 * 65 + 2.4 * 0.75 * 0.375 * 65)
+        got = self.plate(("  free_edge 15.25 inch\n", ""), ("plate_edge 2 inch", "plate_edge 1.25 inch"))
+        self.close(got, hand, "standard holes")
 
     def test_long_slot_across_the_shear(self):
-        """Slot 13/16 wide by 1-7/8 in. long, horizontal, so 15/16 in. of it reaches toward the
-        back edge: lc = min(2.5 - 13/32, 1.5 - 15/16, 3 - 13/16, 5.5 - 15/8) = 0.5625 in. The slot
-        lies across the vertical force, so J3-6e and J3-6f apply: tearout 1.0(0.5625)(3/8)(65)
-        = 13.711 kips < bearing 2.0(3/4)(3/8)(65) = 36.5625 kips."""
-        self.close(self.plate("lsl") / self.C, 13.7109375, "lsl")
+        """Leh = 1-1/2 in. and a horizontal slot 13/16 by 1-7/8 in., a 13/32 in. radius drawn out
+        17/32 in. each way. The top bolt's line leaves its slot through the end arc, at
+        (17/32)(2/sqrt 5) + sqrt((13/32)^2 - (17/32)^2 / 5) = 0.80470 in., so lc = 1.5 sqrt(5)/2
+        - 0.80470 = 0.87235 in. A long slot lies across some bolt's force, so Eqs. J3-6e and J3-6f
+        apply: tearout 1.0(0.87235)(3/8)(65) = 21.264 kips, bearing 2.0(3/4)(3/8)(65) = 36.5625."""
+        h, r = 17 / 32, 13 / 32
+        lc = 1.5 * math.sqrt(5) / 2 - (h * 2 / math.sqrt(5) + math.sqrt(r * r - h * h / 5))
+        hand = self.C / 2 * (lc * 0.375 * 65 + 2.0 * 0.75 * 0.375 * 65)
+        got = self.plate(("  free_edge 15.25 inch\n", ""), ("plate_edge 2 inch", "plate_edge 1.5 inch\n  holes plate lsl"))
+        self.close(got, hand, "long slot")
+
+    def test_a_shaped_brackets_free_edge_stops_the_bottom_bolt(self):
+        """free_edge 2 in.: the free edge rises from the bottom of section A-A, 2.5 in. below the
+        bottom bolt, to the top edge 8 in. higher and 2 in. on, so it climbs 4 in. per inch. The
+        bottom bolt's line (2, 1)/sqrt 5 meets it after 2.5 / (7/sqrt 5) = 0.79861 in., lc = 0.39236
+        in., tearout 1.2(0.39236)(3/8)(65) = 11.477 kips. The top bolt is as with Leh = 1-1/4 in."""
+        top = 1.2 * (1.25 * math.sqrt(5) / 2 - 13 / 32) * 0.375 * 65
+        bottom = 1.2 * (2.5 * math.sqrt(5) / 7 - 13 / 32) * 0.375 * 65
+        got = self.plate(("free_edge 15.25 inch", "free_edge 2 inch"), ("plate_edge 2 inch", "plate_edge 1.25 inch"))
+        self.close(got, self.C / 2 * (top + bottom), "free edge")
 
 
 SIGNED = 'signed "detailer@example.org" source "fabrication tolerance"'
@@ -178,7 +210,7 @@ class BracketSlipAndBlockShearTest(HandTest):
         must be listed, not dropped."""
         out = component("ii_a_22_bolt_bracket.petra", (("threads included", "threads included joint slip_critical"),))
         c = {x["name"]: x for x in out["checks"]}
-        self.close(c["slip"]["nominal"] / BracketSlotTest.C, 9.492, "slip")
+        self.close(c["slip"]["nominal"] / bolt_coefficient(bolt_grid(6, 2, 3.0, 5.5), 12.0), 9.492, "slip")
         self.assertTrue(any("block shear" in u for u in out["unsupported"]), out["unsupported"])
 
 

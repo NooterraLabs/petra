@@ -1,0 +1,24 @@
+petra 0
+
+design "gate-1-07378" {
+  owner "gate@petra.dev"
+}
+
+bolt_bracket c1 {
+  basis asd
+  plate steel.A36 thickness 0.75 inch
+  support W14x90 flange grade steel.A992
+  bolts bolt_group.150 diameter 1 inch threads included
+  rows 5
+  columns 1
+  pitch 3 inch
+  gauge 3 inch
+  eccentricity 6 inch
+  edge_vertical 2 inch
+  plate_edge 1.5 inch
+}
+
+load gate {
+  on c1 shear in [0 kip, 66.183 kip]
+  signed "gate@petra.dev" source "steel gate generator"
+}
