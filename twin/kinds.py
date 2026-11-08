@@ -574,28 +574,31 @@ def hanger(lines, out, demands):
     holes = lines.holes(bolts.d, ["flange", "support"])
     length = element_length(n, s, lev)
     nb = 2 * n
-    rn = ck.bolt_tension(bolts.fnt, bolts.d)
-    out.add("bolt tension", "bolt_tension", "bolts", f"{SPEC} J3.7, Eq. J3-1 with Fnt", nb * rn, "J3.6")
+    ab = ck.bolt_area(bolts.d)
+    out.add("bolt tension", "bolt_tension", "bolts", f"{SPEC} J3.7, Eq. J3-1 with Fnt", nb * bolts.fnt * ab, "J3.6")
+    shear = demands.get("shear", F(0))
+    fnt = bolts.fnt
+    if shear:
+        phi, omega = ck.FACTORS["J3.6"]
+        frv = shear / (nb * ab)
+        reduction = (bolts.fnt / (phi * bolts.fnv)) if out.lrfd else (omega * bolts.fnt / bolts.fnv)
+        fnt = max(min(F(13, 10) * bolts.fnt - reduction * frv, bolts.fnt), F(0))
+        out.add("bolt shear", "bolts", "bolts", f"{SPEC} J3.7, Eq. J3-1", nb * ck.bolt_shear(bolts.fnv, bolts.d),
+                "J3.6", shear)
+        out.add("bolt tension with shear", "bolt_combined", "bolts", f"{SPEC} J3.8, Eqs. J3-2 and J3-3",
+                nb * fnt * ab, "J3.6")
+    rn = fnt * ab  # with shear, F'nt of J3.8 sets the bolt tension prying works against (Example II.A-1B)
     for label, t, fu, bf, tw, hole in (
         ("tee flange", tee.tf, grade.fu, tee.bf, tee.tw, holes["flange"]),
         (f"support {face}", sup.tf if face == "flange" else sup.tw, sup_grade.fu, sup.bf, sup.tw, holes["support"]),
     ):
         q_sum, detail = _prying(out, bolts, rn, n, s, lev, g, t, fu, bf, tw, hole)
         out.add(f"bolt tension with prying, {label}", "prying", label,
-                f"{MANUAL} Part 9 prying, Eqs. 9-23 to 9-40; {detail}", 2 * q_sum * rn, "J3.6")
-    shear = demands.get("shear", F(0))
+                f"{MANUAL} Part 9 prying, Eqs. 9-23 to 9-40, Fnt' = {float(fnt):.4g} ksi; {detail}",
+                2 * q_sum * rn, "J3.6")
     out.add("tee stem tensile yielding", "tension_yield", "tee stem", f"{SPEC} J4.1(a), Eq. J4-1 over the tee length",
             ck.tension_yield(grade.fy, length * tee.tw), "J4.1a")
     shear_element(out, "tee flange", grade, tee.tf, length, n, holes["flange"], planes=2)
-    if shear:
-        rs = ck.bolt_shear(bolts.fnv, bolts.d)
-        out.add("bolt shear", "bolts", "bolts", f"{SPEC} J3.7, Eq. J3-1", nb * rs, "J3.6", shear)
-        phi, omega = ck.FACTORS["J3.6"]
-        frv = shear / (nb * ck.bolt_area(bolts.d))
-        reduction = (bolts.fnt / (phi * bolts.fnv)) if out.lrfd else (omega * bolts.fnt / bolts.fnv)
-        fnt1 = min(F(13, 10) * bolts.fnt - reduction * frv, bolts.fnt)
-        out.add("bolt tension with shear", "bolt_combined", "bolts", f"{SPEC} J3.8, Eqs. J3-2 and J3-3",
-                nb * fnt1 * ck.bolt_area(bolts.d), "J3.6")
     if bolts.joint == "slip_critical":
         out.unsupported.append("slip-critical hanger: J3.10's tension reduction of slip is not modeled")
 
