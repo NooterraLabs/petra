@@ -5,11 +5,10 @@ A relation changes one thing in a generated design and says how each check must 
 A thicker part, one more bolt or a higher Fy must not raise any check's utilisation at the
 same load. A change of units must change nothing. The bolt group reflected about the beam's
 mid-depth must keep every check's numbers, and a positional check its outcome. Each
-relation is read per check, never per
-verdict, so a rule that rightly turns a PASS into a FAIL (Table J2.4's least fillet for a
-thicker part, Manual Part 10's thickest single plate) is named in EXEMPT with its clause.
-A reading of Petra's that breaks a relation for a reason outside its clause is named in
-DEFECTS: reported, never excused.
+relation is read per check, never per verdict, so a rule that rightly turns a PASS into a
+FAIL (Table J2.4's least fillet for a thicker part, Manual Part 10's thickest single plate)
+is named in EXEMPT with its clause. A reading of Petra's or the twin's that breaks a
+relation for a reason outside its clause is named in DEFECTS: reported, never excused.
 
 Petra is read through its calculation readout (petra.models.steel.calc) and its kernel
 verdict. The clean-room twin (twin/, frozen) is read through its JSON report, with its
@@ -127,10 +126,13 @@ class Exemption:
 
 @dataclass(frozen=True)
 class Defect:
-    """A reading of Petra's that breaks a relation for a reason outside its clause. A break
-    it matches is still counted and logged, as known, and does not fail the run."""
+    """A reading of Petra's or the twin's that breaks a relation for a reason outside its
+    clause. A break it matches is still counted and logged, as known. A Petra break it
+    matches does not fail the run, and a design the twin breaks a relation on stays
+    undecided under docs/keystone_protocol.md."""
 
     relations: tuple[str, ...]
+    oracle: str
     modes: tuple[str, ...]
     check: str
     finding: str
@@ -454,16 +456,27 @@ EXEMPT: tuple[Exemption, ...] = (
               "The moment on the support leg, V e, grows with e."),
     Exemption(("rows_plus_one",), "twin", ("shear_rupture",), r"coped section", NOTHING, "AISC 360-22 J4.2(b)",
               "The coped web's depth is fixed, and each row takes a hole out of its net area."),
+    Exemption(("rows_plus_one",), "twin", ("plate_buckling",), r"^normal and flexural interaction, section B-B",
+              CAPACITY, f"{MANUAL} Part 15, Eqs 15-8 to 15-18",
+              "Another row deepens the plate, which lengthens section B-B and raises its slenderness and the normal "
+              "force on it, P cos(theta)."),
 )
 
 DEFECTS: tuple[Defect, ...] = (
-    Defect(("plate_thicker", "rows_plus_one") + STRONGER, ("flexural_yield",),
+    Defect(("plate_thicker", "rows_plus_one") + STRONGER, "petra", ("flexural_yield",),
            r"^plate: shear and flexural yielding interaction \(Manual Eq 10-8\)",
            "An extended single plate's Mc in Eq 10-8 is the least of Mp and both F11 branches, each read outside its "
            "own range (checks.gen_flexural_yield). Past Lb d/t^2 = 3.65 E/Fy, where the two branches cross again "
            "(inferred from their formulas), the least is Eq F11-3, which falls as Fy or the plate's depth rises. Past "
            "5.55 E/Fy it is negative, and the check reads its size, so a thicker plate reads weaker. Companion "
            "II.A-19A takes Mc as the plate's flexural yielding strength and checks lateral-torsional buckling apart."),
+    Defect(("rows_plus_one", "web_thicker"), "twin", ("block_shear", "bolts"),
+           r"^(block shear, angle, support leg|bolt group effective strength, beam side)$",
+           "Where a hole runs past an edge, the twin reads a negative strength (twin/kinds.py, block_shear and "
+           "_ply_nominal). Eq J4-5's Ant is negative once the edge across the force is under half the hole's width, "
+           "and Eq J3-6c's Lc once the edge along it is under half the hole's length. A thicker ply then reads weaker, "
+           "and another row can turn a negative block shear strength positive. J4.3 and J3.11a do not reach such a "
+           "hole, and J3.4's least edge distance, Petra's edge_min, refuses it."),
 )
 
 POSITIONAL = ("beam_fit",)
@@ -481,8 +494,8 @@ def exemption(relation: str, oracle: str, key: Key) -> int | None:
 
 def defect(relation: str, oracle: str, key: Key) -> int | None:
     mode, name, _ = key
-    return None if oracle != "petra" else next(
-        (i for i, d in enumerate(DEFECTS) if relation in d.relations and mode in d.modes and re.search(d.check, name)), None)
+    return next((i for i, d in enumerate(DEFECTS)
+                 if relation in d.relations and d.oracle == oracle and mode in d.modes and re.search(d.check, name)), None)
 
 
 def _close(a: float | None, b: float | None, slack: float) -> bool:
@@ -644,7 +657,7 @@ def unexplained(found: dict) -> list[dict]:
 def summarise(rows: list[dict], names: Iterable[str]) -> tuple[dict[str, Tally], Counter, Counter, Counter]:
     """Per relation its tally; uses of each exemption by (index, oracle) and of each defect
     by (index, "defect"); Petra's and the twin's broken checks by (relation, mode, check,
-    what, defect or None)."""
+    what, defect index or None)."""
     tallies = {n: Tally() for n in names}
     used, petra, twins = Counter(), Counter(), Counter()
     for row in rows:
@@ -671,19 +684,23 @@ def summarise(rows: list[dict], names: Iterable[str]) -> tuple[dict[str, Tally],
             for i, n in tw["exempt"].items():
                 used[(int(i), "twin")] += n
             for b in tw["broken"]:
-                twins[(name, b["mode"], b["check"], b["what"], None)] += 1
+                twins[(name, b["mode"], b["check"], b["what"], b.get("defect"))] += 1
+                if "defect" in b:
+                    used[(b["defect"], "defect")] += 1
     return tallies, used, petra, twins
 
 
 def log_lines(rows: list[dict]) -> list[str]:
+    """One line per oracle and relation with a break. Status and new status are that
+    oracle's, on the design and on the changed design."""
     out = []
     for row in rows:
         for name, found in row["relations"].items():
-            for oracle in ("petra", "twin"):
+            for oracle, status in (("petra", row["status"]), ("twin", row["twin"])):
                 f = found.get(oracle)
                 if f and f["broken"]:
                     out.append(json.dumps({"design": row["name"], "kind": row["kind"], "toleranced": row["toleranced"],
-                                           "relation": name, "oracle": oracle, "status": row["status"],
+                                           "relation": name, "oracle": oracle, "status": status,
                                            "new_status": f["status"], "broken": f["broken"]}))
     return out
 
@@ -716,6 +733,8 @@ def render(rows: list[dict], names: tuple[str, ...], args: argparse.Namespace, s
     broken_designs = {r["name"] for r in rows for f in r["relations"].values() if f["petra"]["broken"]}
     open_designs = {r["name"] for r in rows for f in r["relations"].values() if unexplained(f)}
     twin_designs = {r["name"] for r in rows for f in r["relations"].values() if f.get("twin") and f["twin"]["broken"]}
+    twin_open = {r["name"] for r in rows for f in r["relations"].values()
+                 if f.get("twin") and any("defect" not in b for b in f["twin"]["broken"])}
     twin = (f"The clean-room twin in `twin/` is read through its JSON report, with its shape and grade tables patched "
             f"in memory for the relations that change them. It read {read} of the {n} designs (measured). It does not "
             f"model {' or '.join(sorted(set(unmodelled))) or 'every kind'} ({len(unmodelled)} designs). It refused "
@@ -771,18 +790,19 @@ def render(rows: list[dict], names: tuple[str, ...], args: argparse.Namespace, s
         "",
         f"Petra broke a relation outside the exemption table on {len(broken_designs)} designs. On "
         f"{len(broken_designs) - len(open_designs)} of them every break is a known defect, so {len(open_designs)} are "
-        f"unexplained. The twin broke one on {len(twin_designs)} designs. Under `docs/keystone_protocol.md` a design on "
-        "which the twin breaks a relation is undecided.",
+        f"unexplained. The twin broke one on {len(twin_designs)} designs. On "
+        f"{len(twin_designs) - len(twin_open)} of them every break is a known defect of the twin's. Under "
+        "`docs/keystone_protocol.md` a design on which the twin breaks a relation is undecided, known defect or not.",
         "",
         "## Known defects",
         "",
-        "A known defect is a reading of Petra's that breaks a relation for a reason outside its clause. It is not "
-        "excused. Its breaks are counted and logged, and the run does not fail on them. Breaks counts the checks it "
-        "accounts for in this run.",
+        "A known defect is a reading of Petra's or the twin's that breaks a relation for a reason outside its clause. "
+        "It is not excused. Its breaks are counted and logged, and the run does not fail on them. Breaks counts the "
+        "checks it accounts for in this run.",
         "",
-        "| # | Relations | Modes | Check | Finding | Breaks |",
-        "|---|---|---|---|---|---|",
-        *(f"| {i} | {', '.join(d.relations)} | {', '.join(d.modes)} | `{_cell(d.check)}` | {d.finding} | "
+        "| # | Relations | Oracle | Modes | Check | Finding | Breaks |",
+        "|---|---|---|---|---|---|---|",
+        *(f"| {i} | {', '.join(d.relations)} | {d.oracle} | {', '.join(d.modes)} | `{_cell(d.check)}` | {d.finding} | "
           f"{used[(i, 'defect')]} |" for i, d in enumerate(DEFECTS)),
         "",
         "## Exemptions",

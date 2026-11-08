@@ -165,6 +165,17 @@ class KnownDefects(unittest.TestCase):
         row = R.assess(g, REGISTRY, [R.BY_NAME["plate_thicker"]], with_twin=False)
         self.assertEqual(row["relations"]["plate_thicker"]["petra"]["broken"], [])
 
+    HOLE_PAST_THE_COPE = 4213
+    """A shear tab whose top bolt sits 1/2 in under a 2 in top cope in a short slot 1 1/8 in
+    long, so the twin reads the beam web's Lc for it as -1/16 in and its tearout as negative."""
+
+    def test_the_twin_reads_a_hole_past_an_edge_as_a_negative_strength(self):
+        self.assertEqual([b.get("defect") for b in broken(self.HOLE_PAST_THE_COPE, "web_thicker", "twin")], [1])
+
+    @unittest.expectedFailure
+    def test_the_twins_bolt_group_does_not_weaken_as_the_web_thickens(self):
+        self.assertEqual(broken(self.HOLE_PAST_THE_COPE, "web_thicker", "twin"), [])
+
 
 class Judging(unittest.TestCase):
     FILLET = ("ductility", "plate: fillet at least 5/8 of the plate thickness (Manual Part 10)", 0)
@@ -232,6 +243,7 @@ class Exemptions(unittest.TestCase):
         for i, d in enumerate(R.DEFECTS):
             with self.subTest(defect=i):
                 self.assertTrue(d.relations and set(d.relations) <= set(R.BY_NAME))
+                self.assertIn(d.oracle, ("petra", "twin"))
                 self.assertTrue(d.modes and set(d.modes) <= set(GENERATORS))
                 self.assertIsNone(re.search(d.check, ""))
                 self.assertGreaterEqual(len(d.check), 10)
