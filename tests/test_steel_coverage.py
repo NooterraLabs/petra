@@ -46,6 +46,18 @@ class MaximumSpacing(unittest.TestCase):
         tall = written(self.END_PLATE.replace("pitch 3 inch", "pitch 6.5 inch").replace("rows 4", "rows 2"))
         self.assertEqual(outcome(tall, "spacing_max"), "refuted")
 
+    def test_one_row_has_no_pitch_to_limit(self):
+        """A seat bolted to its support by one row of two bolts, the P3 pilot's task 303-003:
+        its bolts sit side by side across the reaction, so J3.6 has no pitch to limit. It
+        was left open for want of a spacing check; it is not owed, and says why."""
+        report = petra.check_file(ROOT / "docs" / "pilot_lift" / "without_petra" / "task-303-003" / "final.petra")
+        self.assertEqual(report.to_json()["status"], "PASS")
+        why = [u["reason"] for u in report.to_json()["unchecked"] if u["mode"] == "steel.spacing_max"]
+        self.assertEqual(len(why), 1)
+        self.assertIn("no pitch", why[0])
+        two = written((STEEL / "seated.petra").read_text(encoding="utf-8"))
+        self.assertEqual(outcome(two, "spacing_max"), "certified")
+
 
 class PanelZone(unittest.TestCase):
     """A flange force may be one flange of a moment connection's couple, which shears the
