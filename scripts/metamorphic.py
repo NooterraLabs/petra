@@ -428,6 +428,12 @@ EXEMPT: tuple[Exemption, ...] = (
               "Another row deepens the plate, which lengthens section B-B and its slenderness. The stated eccentricity "
               "runs from the group's centroid, so another column moves section A-A toward the load. The moment on B-B, "
               "P (e - cos(theta) b'/2), grows in size where that arm is under cos(theta) b'/2."),
+    Exemption(MORE_BOLTS, "petra", ("bolts",), r"^bracket bolts: the eccentric group by the instantaneous center",
+              NOTHING, f"{MANUAL} Part 7, C times the least bolt strength as Companion II.A-28A takes it, with "
+              "AISC 360-22 J3.11a's tearout along each bolt's force",
+              "C multiplies the weakest bolt's strength, and each bolt tears out along its own force about the "
+              "instantaneous center. Another row or column turns a corner bolt's force toward a nearer edge, and that "
+              "bolt's tearout then sets every bolt's strength."),
     Exemption(("rows_plus_one",), "petra", ("edge_min",), r"^bracket plate: plate free edge distance at least", NOTHING,
               f"{MANUAL} Part 15, Figure 15-2(a), with AISC 360-22 J3.5",
               "A shaped plate's free edge slopes from the bottom of section A-A to b in front of the top edge. Another "
@@ -492,12 +498,6 @@ DEFECTS: tuple[Defect, ...] = (
            "(inferred from their formulas), the least is Eq F11-3, which falls as Fy or the plate's depth rises. Past "
            "5.55 E/Fy it is negative, and the check reads its size, so a thicker plate reads weaker. Companion "
            "II.A-19A takes Mc as the plate's flexural yielding strength and checks lateral-torsional buckling apart."),
-    Defect(MORE_BOLTS, "petra", ("bolts",), r"^bracket bolts: the eccentric group by the instantaneous center",
-           "A bracket's eccentric group is held to C times its weakest bolt (checks.bolt_capacity), and each bolt's "
-           "tearout is read along that bolt's own force about the instantaneous center. Another row or column turns a "
-           "corner bolt's force toward a nearer edge, and that one bolt's tearout then sets every bolt's strength, so "
-           "a larger group can read weaker. Manual Part 7's coefficient C takes every bolt at one strength. The twin "
-           "scales the sum of each bolt's least strength by C/n instead."),
 )
 
 POSITIONAL = ("beam_fit",)
