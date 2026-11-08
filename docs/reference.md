@@ -196,6 +196,7 @@ A `.petra` file accepts these unit spellings.
 | INPUT_ERROR | 3 |
 | INTERNAL_ERROR | 4 |
 | MARGINAL | 5 |
+| BROKEN_PIPE | 141 |
 
 ## Component kinds
 

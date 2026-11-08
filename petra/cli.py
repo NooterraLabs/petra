@@ -90,15 +90,19 @@
 
 A usage error (an unknown subcommand or flag) is an input error too and exits 3. A crash
 (an unimplemented elaborator, a bug) prints its traceback and exits 4, so it never reads
-as a verdict.
+as a verdict. When the reader closes stdout early, as `petra check FILE | head` does, the
+subcommand stops writing and exits 141 without a traceback.
 
 The family benchmark is scripts/bench_family.py, not a subcommand.
 """
 from __future__ import annotations
 
 import argparse
+import errno
 import json
+import os
 import re
+import stat
 import sys
 import traceback
 from pathlib import Path
@@ -116,7 +120,10 @@ from .solvers import SolverSource
 from .units import Quantity, UnitError, parse_quantity
 from .verdict import SEVERITY, Refuted
 
-EXIT_CODES: Mapping[str, int] = {"PASS": 0, "FAIL": 1, "UNKNOWN": 2, "INPUT_ERROR": 3, "INTERNAL_ERROR": 4, "MARGINAL": 5}
+EXIT_CODES: Mapping[str, int] = {"PASS": 0, "FAIL": 1, "UNKNOWN": 2, "INPUT_ERROR": 3, "INTERNAL_ERROR": 4, "MARGINAL": 5,
+                                 "BROKEN_PIPE": 141}
+"""BROKEN_PIPE: the reader closed stdout before Petra finished writing. 141 is 128 plus
+SIGPIPE's number, the status a shell reports for a command that a closed pipe stopped."""
 
 _INPUT_ERRORS = (LolaSyntaxError, LoweringError, ComponentError, DeckError, OSError)
 
@@ -484,9 +491,29 @@ def _join_negative(argv: list[str]) -> list[str]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(_join_negative(sys.argv[1:] if argv is None else list(argv)))
     try:
-        return args.run(args)
-    except Exception:  # an uncaught crash would exit 1, which reads as FAIL
+        args = build_parser().parse_args(_join_negative(sys.argv[1:] if argv is None else list(argv)))
+        code = args.run(args)
+        sys.stdout.flush()
+        return code
+    except Exception as exc:  # an uncaught crash would exit 1, which reads as FAIL
+        if _reader_closed(exc):
+            # Point stdout at the null device, or the flush at exit raises again.
+            os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
+            return EXIT_CODES["BROKEN_PIPE"]
         traceback.print_exc()
         return EXIT_CODES["INTERNAL_ERROR"]
+
+
+def _reader_closed(exc: Exception) -> bool:
+    """Whether `exc` is a write to stdout failing because its reader closed the pipe, as
+    `petra check FILE | head` does: EPIPE, or on Windows EINVAL when the reader went before
+    the write began."""
+    if isinstance(exc, BrokenPipeError):
+        return True
+    if os.name != "nt" or not isinstance(exc, OSError) or exc.errno != errno.EINVAL:
+        return False
+    try:
+        return stat.S_ISFIFO(os.fstat(sys.stdout.fileno()).st_mode)
+    except (OSError, ValueError):
+        return False

@@ -109,6 +109,17 @@ class Check(Workspace):
         self.assertEqual(done.returncode, EXIT_CODES["UNKNOWN"], "python -m petra exits with the verdict's code")
         self.assertEqual(json.loads(done.stdout)["status"], "UNKNOWN", "and prints the report")
 
+    def test_a_reader_that_closes_stdout_early_stops_the_output_without_a_traceback(self):
+        # As `petra check FILE | head` does once it has its lines. Every subcommand, not only check.
+        for argv in (("check", str(CIRCUIT)), ("docs", "reference")):
+            proc = subprocess.Popen([sys.executable, "-m", "petra", *argv], cwd=ROOT, stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE)
+            proc.stdout.close()
+            err = proc.stderr.read().decode("utf-8", "replace")
+            proc.stderr.close()
+            self.assertEqual(proc.wait(timeout=300), EXIT_CODES["BROKEN_PIPE"], f"{argv} exits 141, not 4")
+            self.assertEqual(err, "", f"{argv} prints no traceback")
+
 
 class Explain(Workspace):
     def test_explain_prints_the_statements(self):
