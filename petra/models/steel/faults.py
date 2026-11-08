@@ -362,7 +362,8 @@ def _beam_too_wide(text: str, g: Generated) -> str | None:
 
 def _plate_on_fillet(text: str, g: Generated) -> str | None:
     """The top row a quarter inch more than the edge distance below the beam's top: the
-    part's top edge is on the flange's fillet, kdes down (at least half an inch on every W)."""
+    part's top edge is on the flange's fillet, which reaches (d - T)/2 down (at least 0.665 in
+    on every W in the Shapes Database)."""
     lev = _inches(text, "edge_vertical")
     if lev is None or _field(text, "cope") is not None:
         return None

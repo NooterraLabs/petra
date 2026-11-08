@@ -2,7 +2,7 @@ petra 0
 
 # violates: steel.beam_side.depth
 # The shear end plate example with 8 rows at 3 in pitch on a W16x31 (d = 15.9 in): the plate
-# is 23.5 in long and its welds 23.1 in, against 14.2 in of flat web (d - 2 kdes).
+# is 23.5 in long and its welds 23.1 in, against 13.625 in of flat web (T).
 
 design "steel-shear-end-plate" {
   owner "s.engineer@example.org"

@@ -92,7 +92,7 @@ class _Reg:
         return self.const("aisc360.E")
 
     def w_shape(self, shape: str) -> dict[str, float]:
-        out = {p: self.const(f"aisc_shapes_v16.{shape}.{p}") for p in ("d", "bf", "tf", "tw", "kdes", "k1")}
+        out = {p: self.const(f"aisc_shapes_v16.{shape}.{p}") for p in ("d", "bf", "tf", "tw", "kdes", "k1", "T")}
         out["A"] = self.const(f"aisc_shapes_v16.{shape}.A")
         return out
 
@@ -1748,7 +1748,8 @@ def _hanger(ctx: _Ctx, modes: set[str]) -> None:
 #
 # Written from the three method statements: every check is need <= have in inches, its
 # utilisation need / have, and a check its clause excuses is left out. A beam web's flat
-# runs from kdes to d - kdes; a column web's flat is d - 2 kdes wide; a flange is bf wide.
+# is T deep, centred, so it runs from (d - T)/2 to (d + T)/2; a column web's flat is T
+# wide; a flange is bf wide.
 
 def _hole_size(ctx: _Ctx, bolts: Bolts, hole: str, along: bool) -> float:
     """Table J3.3: a hole's size down the force (along) or across it."""
@@ -1763,11 +1764,12 @@ def _fit(ctx: _Ctx, mode: str, what: str, need: float, have: float) -> None:
 
 def _fit_on_beam_web(ctx: _Ctx, part: str, reach: float, end: float) -> None:
     """A plate, angle or tee on the beam web, `reach` out from the support face, the beam's
-    end `end` out: the part's edges on the flat web unless a cope at least kdes deep at that
-    flange runs past it; the beam's holes on the flat web below and above the copes."""
+    end `end` out: the part's edges on the flat web unless a cope at least (d - T)/2 deep
+    at that flange runs past it; the beam's holes on the flat web below and above the
+    copes."""
     conn = ctx.conn
     b = ctx.reg.w_shape(conn.attrs["beam"].shape)
-    d, k = b["d"], b["kdes"]
+    d, k = b["d"], (b["d"] - b["T"]) / 2
     n, s, lev, top = conn.attrs["rows"], ctx.need("pitch"), ctx.need("edge_vertical"), ctx.need("top")
     bottom_row = top + (n - 1) * s
     dh = _hole_size(ctx, conn.attrs["bolts"], _holes(conn, "beam"), True)
@@ -1792,12 +1794,12 @@ def _fit_on_beam_web(ctx: _Ctx, part: str, reach: float, end: float) -> None:
 
 class _Face:
     """The support's face: its width for things placed on it, a flange's bf or a column
-    web's flat d - 2 kdes, and the mode its fits belong to."""
+    web's flat T, and the mode its fits belong to."""
 
     def __init__(self, ctx: _Ctx) -> None:
         sup: Member = ctx.conn.attrs["support"]
         self.ctx, self.face, self.s = ctx, sup.face, ctx.reg.w_shape(sup.shape)
-        self.width = self.s["bf"] if self.face == "flange" else self.s["d"] - 2 * self.s["kdes"]
+        self.width = self.s["bf"] if self.face == "flange" else self.s["T"]
         self.mode = f"{self.face}_fit"
 
     def fits(self, what: str, width: float) -> None:
@@ -1885,7 +1887,7 @@ def _fits(ctx: _Ctx) -> None:
         face.beam_passes(a - leh_b)
     elif kind == "shear_end_plate":
         b = ctx.reg.w_shape(conn.attrs["beam"].shape)
-        k = b["kdes"]
+        k = (b["d"] - b["T"]) / 2
         n, s, lev = conn.attrs["rows"], ctx.need("pitch"), ctx.need("edge_vertical")
         w = ctx.geo(conn.attrs["weld"].size)
         cope: Cope | None = conn.get("cope")

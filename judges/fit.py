@@ -32,7 +32,7 @@ CONDITIONS: Mapping[str, Condition] = MappingProxyType({c.id: c for c in (
               "the part on the beam web lies between its flanges, d - 2 tf, unless a cope clears it; an end plate's "
               "welds fit the web between the flanges and copes"),
     Condition("steel.beam_side.fillet", (*_STEEL_BEAM, "shear_end_plate"),
-              "a part that clears the beam's flanges also clears its fillets, lying on the flat web, d - 2 kdes"),
+              "a part that clears the beam's flanges also clears its fillets, lying on the flat web, T"),
     Condition("steel.beam_side.bolts_in_web", _STEEL_BEAM,
               "every beam-side bolt hole lies in the beam's flat web, or in the web a cope leaves"),
     Condition("steel.beam_side.seat_bearing", ("seated", "stiffened_seat"),
@@ -43,10 +43,10 @@ CONDITIONS: Mapping[str, Condition] = MappingProxyType({c.id: c for c in (
     Condition("steel.support_side.web_width",
               (*_STEEL_BEAM, "shear_end_plate", "seated", "stiffened_seat", "bolt_bracket", "weld_bracket"),
               "parts and welds on a support web fit between its flanges, d - 2 tf, and bolt holes lie on its flat "
-              "web, d - 2 kdes"),
+              "web, T"),
     Condition("steel.support_side.web_fillet",
               (*_STEEL_BEAM, "shear_end_plate", "seated", "stiffened_seat", "bolt_bracket", "weld_bracket"),
-              "a part or weld that fits between a support web's flanges also clears its fillets, d - 2 kdes"),
+              "a part or weld that fits between a support web's flanges also clears its fillets, T"),
     Condition("steel.support_side.leg_length", ("seated",),
               "a seat's bolt holes lie on its vertical leg, below the outstanding leg"),
     Condition("steel.beam_vs_support.web_clearance",

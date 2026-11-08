@@ -4,20 +4,23 @@ A connection's attribute lines draw its parts. This module places them in one fr
 connection, in exact rationals (kernel Exprs over the design's hypotheses), along three
 axes:
 
-  depth   down from the beam's top. The beam web is flat between its fillets, from kdes
-          to d - kdes (the shapes table's detailing value; Manual Part 1 tabulates the
-          flat depth T = d - 2 kdes). A plate, angle or tee bolted to the web spans Lev
-          above its top row to Lev below its bottom row, its holes dh/2 either side (dh
-          the hole's size along the force). A cope removes the flange it cuts, so a part
-          the cope runs past is free at that flange, and the holes stop at the cut. A
-          seat's vertical leg runs down from its heel.
+  depth   down from the beam's top. The beam web is flat between the toes of its
+          fillets for the workable depth T that Manual Part 1 tabulates, centred on the
+          web: from (d - T)/2 to (d + T)/2. T is less than d - 2 kdes in every W row of
+          the Shapes Database: kdes is k for design calculations, and a detailer reads
+          the larger kdet. A plate, angle or tee bolted to the web spans Lev above its
+          top row to Lev below its bottom row, its holes dh/2 either side (dh the hole's
+          size along the force). A cope at least (d - T)/2 deep removes the flange it
+          cuts and that flange's fillet, so a part the cope runs past is free at that
+          flange, and the holes stop at the cut. A seat's vertical leg runs down from its
+          heel.
   out     out from the support face along the beam. The beam end stands at the bolt line
           less the beam's end distance (a seat's beam end at its setback); a cope starts
           there, or at the setback where that is farther out, and runs its length; a part
           reaches its far edge (a plate's a + (columns - 1) g + Leh, an angle's leg on the
           beam, a tee's stem, d/2 of its parent).
   across  across the support face, from one edge of the room on it. A flange is bf wide; a
-          column's web is flat for d - 2 kdes between its fillets (beyond them stand the
+          column's web is flat for T between its fillets (beyond them stand the
           flanges). A pair of bolt lines is centred on the member at gauge g; a part placed
           by the lines alone (a single angle, a plate set on edge, a bracket's bolt
           columns) goes wherever it fits best, so it needs only its width.
@@ -113,7 +116,13 @@ def hole_size(ctx: Reads, bolts: Bolts, ply: str, axis: int) -> Expr:
 
 
 def _w(ctx: Reads, member: Member) -> dict[str, Expr]:
-    return {p: ctx.shape(member.shape, p) for p in ("d", "tw", "tf", "bf", "kdes")}
+    return {p: ctx.shape(member.shape, p) for p in ("d", "tw", "tf", "bf", "T")}
+
+
+def _toe(w: Mapping[str, Expr]) -> Expr:
+    """How far down from a flange's outer face the web's fillet reaches: (d - T)/2, the
+    flat depth T centred on the web (Manual Part 1)."""
+    return div(sub(w["d"], w["T"]), c(2))
 
 
 def inside(owner: str, span: Span, room: Room, free_lo: tuple[Expr, ...], free_hi: tuple[Expr, ...]) -> tuple[Fit, Fit]:
@@ -164,7 +173,7 @@ def _past(ctx: Reads, reach: Expr, end: Expr) -> Expr:
 def _band(beam: Mapping[str, Expr], cut: Cut) -> Room:
     """The flat web the copes leave: below the fillet and any top cut, above the fillet and
     any bottom cut."""
-    k = beam["kdes"]
+    k = _toe(beam)
     lo = k if cut.top is None else Max((k, cut.top))
     hi = sub(beam["d"], k if cut.bottom is None else Max((k, cut.bottom)))
     return Room("the flat web the copes leave" if cut.top is not None else "the flat web", lo, hi, FLAT)
@@ -172,8 +181,8 @@ def _band(beam: Mapping[str, Expr], cut: Cut) -> Room:
 
 def _freed(beam: Mapping[str, Expr], depth: Expr | None, past: Expr | None) -> tuple[Expr, ...]:
     """A part's edge at a coped flange is free where the cut clears the fillet (depth >=
-    kdes) and the cope runs past the part."""
-    return () if depth is None or past is None else (Max((sub(beam["kdes"], depth), past)),)
+    (d - T)/2) and the cope runs past the part."""
+    return () if depth is None or past is None else (Max((sub(_toe(beam), depth), past)),)
 
 
 def on_beam_web(ctx: Reads, part: str, reach: Expr, end: Expr) -> list[Fit]:
@@ -187,7 +196,7 @@ def on_beam_web(ctx: Reads, part: str, reach: Expr, end: Expr) -> list[Fit]:
     dh = hole_size(ctx, conn.attrs["bolts"], "beam", ALONG)
     cut = _cut(ctx)
     past = None if cut.top is None else _past(ctx, reach, end)
-    web = Room("the beam's flat web", beam["kdes"], sub(beam["d"], beam["kdes"]), FLAT)
+    web = Room("the beam's flat web", _toe(beam), sub(beam["d"], _toe(beam)), FLAT)
     body = Span(part, "top edge", "bottom edge", sub(top, lev), add(last, lev))
     holes = Span("bolt holes", "top bolt hole", "bottom bolt hole", sub(top, div(dh, c(2))), add(last, div(dh, c(2))))
     return [*inside(part, body, web, _freed(beam, cut.top, past), _freed(beam, cut.bottom, past)),
@@ -229,7 +238,7 @@ def face_room(ctx: Reads) -> tuple[str, dict[str, Expr], Room]:
     sp = _w(ctx, support)
     if support.face == "flange":
         return "flange", sp, Room("the flange's width", c(0), sp["bf"], PLAIN)
-    return "web", sp, Room("the web's flat between its fillets", c(0), sub(sp["d"], mul(c(2), sp["kdes"])), FLAT)
+    return "web", sp, Room("the web's flat between its fillets", c(0), sp["T"], FLAT)
 
 
 def pair(ctx: Reads, owner: str, gauge: Expr, bolts: Bolts) -> list[Fit]:

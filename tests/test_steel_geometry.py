@@ -112,7 +112,7 @@ class Misfits(unittest.TestCase):
         self.assertIn(("beam_fit", "plate: top edge on the beam's flat web"), failing(found))
 
     def test_a_beam_too_wide_for_the_columns_web(self):
-        found = fits(shear_tab(beam="W24x76", support="W10x49 web", rows=4))
+        found = fits(shear_tab(beam="W24x76", support="W10x49 web", rows=4, top="3.5 inch"))
         self.assertEqual(set(found), {"beam_fit", "web_fit"})
         self.assertEqual(failing(found), {("web_fit", "support web: the beam's flange passes between the column's flanges")})
 
@@ -167,10 +167,13 @@ class JudgeReadings(unittest.TestCase):
 
     def test_a_cope_shallower_than_the_fillet_frees_no_edge(self):
         coped = lambda depth: shear_tab(top="2 inch", extra=f"\n  setback 0.5 inch\n  cope top depth {depth} length 6 inch")
-        found, ids = self.both(coped("0.5 inch"))     # W16x26: tf 0.345 in, kdes 0.747 in
-        self.assertEqual(found, {("beam_fit", "plate: top edge on the beam's flat web")})
-        self.assertEqual(ids, {"steel.beam_side.fillet"})
-        self.assertEqual(self.both(coped("0.75 inch")), (set(), set()))
+        # W16x26: tf 0.345 in, kdes 0.747 in, and its fillet reaches (d - T)/2 = 1.0375 in
+        for shallow in ("0.5 inch", "0.875 inch"):
+            with self.subTest(depth=shallow):
+                found, ids = self.both(coped(shallow))
+                self.assertEqual(found, {("beam_fit", "plate: top edge on the beam's flat web")})
+                self.assertEqual(ids, {"steel.beam_side.fillet"})
+        self.assertEqual(self.both(coped("1.125 inch")), (set(), set()))
 
     def test_a_declared_slot_across_the_face_needs_its_length_on_the_flange(self):
         hanger = lambda holes: example("hanger", tee_gauge="6 inch").replace(
@@ -181,6 +184,35 @@ class JudgeReadings(unittest.TestCase):
         for holes in ("std", "lsl_parallel"):
             with self.subTest(holes=holes):
                 self.assertEqual(self.both(hanger(holes)), (set(), set()))
+
+
+class FlatWebIsT(unittest.TestCase):
+    """The flat web is T, the workable depth between the fillets' toes that Manual Part 1
+    tabulates, not d - 2 kdes. Petra 0.1.0 read kdes, so a part on the band between them
+    passed the deck and the judge. The Companion gives T = 15-1/2 in for a W18x35, where
+    d - 2 kdes = 16.05 in."""
+
+    @staticmethod
+    def judged(text: str) -> set[str]:
+        return {v.id for v in judge(parse_design(text, "g.petra", REGISTRY), REGISTRY).violations}
+
+    def test_a_plate_edge_below_kdes_but_on_the_fillet_fails_and_the_judge_rejects_it(self):
+        # W18x35: kdes 0.827 in, d 17.7 in, T 15.5 in, so the fillet reaches 1.1 in. The
+        # plate's top edge, Lev = 1.5 in above the top row, lies 1 in down.
+        band = shear_tab(beam="W18x35", top="2.5 inch")
+        self.assertEqual(failing(fits(band)), {("beam_fit", "plate: top edge on the beam's flat web")})
+        self.assertEqual(self.judged(band), {"steel.beam_side.fillet"})
+        report = check_design(parse_design(band, "g.petra", REGISTRY), REGISTRY, (SolverSource(),))
+        self.assertEqual(STATUS[type(report.verdict)], "FAIL")
+        clear = shear_tab(beam="W18x35", top="2.75 inch")
+        self.assertEqual((failing(fits(clear)), self.judged(clear)), (set(), set()))
+
+    def test_a_part_wider_than_a_column_webs_T_fails_and_the_judge_rejects_it(self):
+        # W14x90: T 10 in, d - 2 kdes 11.38 in, d - 2 tf 12.58 in.
+        plate = lambda width: example("shear_end_plate", support="W14x90 web grade steel.A992", plate_width=width)
+        self.assertEqual(failing(fits(plate("10.5 inch"))), {("web_fit", "support web: the end plate within the web's flat between its fillets")})
+        self.assertEqual(self.judged(plate("10.5 inch")), {"steel.support_side.web_fillet"})
+        self.assertEqual((failing(fits(plate("9.5 inch"))), self.judged(plate("9.5 inch"))), (set(), set()))
 
 
 class Verdicts(unittest.TestCase):

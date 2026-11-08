@@ -9,13 +9,16 @@ the beam; widths run across the support face. Every support is read as a column,
 beam framing to its web enters between its flanges.
 
 Two depths bound a part against a web: between the flanges (d - 2 tf), where solid steel
-stops it, and the flat web (d - 2 kdes), past which it rides up the web-to-flange fillets.
-A part that clears the flanges but not the fillets gets a fillet condition of its own, so
-the counts keep a part off the beam apart from one that needs a clipped corner. A bolt
-hole must lie in the flat web, since its head and nut cannot seat on a fillet. A cope
-frees a part's edge only where it cuts at least as deep as the steel the edge would meet:
-tf for the flange, k for the fillet. AISC 360-22 defines k as the distance from the
-flange's outer face to the web toe of the fillet, so a shallower cut leaves fillet below it.
+stops it, and the flat web, past which it rides up the web-to-flange fillets. The flat web
+is T, the workable depth between the fillets' toes that AISC Manual Part 1 tabulates and
+the Shapes Database lists, centred on the web, so each fillet reaches (d - T)/2 from its
+flange's outer face. T is less than d - 2 kdes in every W row: kdes is k for design
+calculations, not the detailing reach of the fillet. A part that clears the flanges but
+not the fillets gets a fillet condition of its own, so the counts keep a part off the beam
+apart from one that needs a clipped corner. A bolt hole must lie in the flat web, since its
+head and nut cannot seat on a fillet. A cope frees a part's edge only where it cuts at
+least as deep as the steel the edge would meet: tf for the flange, (d - T)/2 for the
+fillet, so a shallower cut leaves fillet below it.
 
 A fillet weld along a part's edge lays its leg on the face beyond that edge, so a weld at
 a part's toe, tip or end needs its leg's width of face past the part. The Manual asks more:
@@ -126,13 +129,13 @@ class OnBeamWeb:
         b = self.beam
         if self.top is None:
             for limit, cid, edge in (("between its flanges", "steel.beam_side.depth", b.tf),
-                                     ("on its flat web", "steel.beam_side.fillet", b.kdes)):
+                                     ("on its flat web", "steel.beam_side.fillet", b.toe)):
                 left = iv(b.d) - _below(self.cope_top, edge) - _below(self.cope_bottom, edge)
                 if self.length.hi > left.lo:
                     return cid, f"{self.what} {self.length.text()} long; the {b.label} leaves {left.text()} {limit}"
             return None
         for cid, depth, where in (("steel.beam_side.depth", b.tf, "inside its flange"),
-                                  ("steel.beam_side.fillet", b.kdes, "on its fillet, off the flat web")):
+                                  ("steel.beam_side.fillet", b.toe, "on its fillet, off the flat web")):
             if not _clears(self.past_top, depth) and self.top.lo < depth:
                 return cid, (f"{self.what} top edge {self.top.text()} below the {b.label}'s top, {where} ({_in(depth)})"
                              + _shallow(self.past_top))
@@ -219,7 +222,7 @@ class OnFace:
             if self.role != "part" and self.span.hi > s.bf:
                 return cid, f"{self.what}: {self.span.text()} across, wider than the {s.label}'s {_in(s.bf)} flange"
             return None
-        between, flat = s.d - 2 * s.tf, s.d - 2 * s.kdes
+        between, flat = s.d - 2 * s.tf, s.T
         if self.role == "bolt" and self.span.hi > flat:
             return "steel.support_side.web_width", f"{self.what}: {self.span.text()} across, wider than the {s.label}'s {_in(flat)} flat web"
         if self.role != "bolt" and self.span.hi > between:
@@ -465,8 +468,8 @@ def _beam_web(r: Reading, beam: W, what: str, reach: Iv, start: Iv) -> list[Fact
     return [
         OnBeamWeb(what, beam, top - lev, last + lev, s * (n - 1) + 2 * lev, top_cut if covered else None,
                   bottom_cut if covered else None, None, None),
-        BoltsInWeb(beam.label, top - hole / 2, last + hole / 2, _below(top_cut, beam.kdes),
-                   iv(beam.d) - _below(bottom_cut, beam.kdes)),
+        BoltsInWeb(beam.label, top - hole / 2, last + hole / 2, _below(top_cut, beam.toe),
+                   iv(beam.d) - _below(bottom_cut, beam.toe)),
     ]
 
 

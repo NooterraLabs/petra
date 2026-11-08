@@ -21,7 +21,13 @@ class W:
     bf: Fraction
     tf: Fraction
     tw: Fraction
-    kdes: Fraction
+    T: Fraction       # the workable flat depth between the fillets' toes (Manual Part 1)
+
+    @property
+    def toe(self) -> Fraction:
+        """How far down from a flange's outer face the fillet reaches: the flat depth T sits
+        centred on the web."""
+        return (self.d - self.T) / 2
 
 
 @dataclass(frozen=True)
@@ -45,7 +51,7 @@ def w_table() -> dict[str, W]:
     out = {}
     for row in steel_shapes.load().w:
         key = row["label"].replace("X", "x").replace(".", "_")
-        out[key] = W(key, *(Fraction(row[p]) for p in ("d", "bf", "tf", "tw", "kdes")))
+        out[key] = W(key, *(Fraction(row[p]) for p in ("d", "bf", "tf", "tw", "T")))
     return out
 
 

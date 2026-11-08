@@ -233,24 +233,27 @@ MAKEABILITY: tuple[tuple, ...] = (
       "catalogue's grips are well inside the stocked lengths",)),
     ("beam_fit", "the parts on the beam fit it and the beam fits its support, each check need <= have in inches "
      "(geometry.py): a plate, angle or tee bolted to the beam web spans from Lev above its top row, `top` below the "
-     "beam's top, to Lev below its bottom row, (rows - 1) s lower; its top edge is at least kdes below the beam's top "
-     "and its bottom edge at most d - kdes, the beam's flat web (Manual Part 1, T = d - 2 kdes), except at a flange "
-     "whose cope is at least kdes deep and runs past the part: the cope starts at the beam end (the bolt line less "
+     "beam's top, to Lev below its bottom row, (rows - 1) s lower; its top edge is at least (d - T)/2 below the "
+     "beam's top and its bottom edge at most (d + T)/2, the beam's flat web, T deep and centred on the web (Manual "
+     "Part 1), except at a flange whose cope is at least (d - T)/2 deep and runs past the part: the cope starts at "
+     "the beam end (the bolt line less "
      "the beam's end distance, a - Leh for a plate or a tee, the beam gauge less Leh for angles) or at the setback "
      "where that is farther out, and must reach the part's far edge (a plate's a + (columns - 1) g + its Leh, an "
      "angle's leg on the beam, a tee's stem, half its parent's depth); the beam web's holes, dh/2 above the top row "
-     "and below the bottom row (dh the beam hole's size along the force, Table J3.3), lie at least kdes below the "
-     "top, or the top cope's depth where that is deeper, and at most d less kdes or the bottom cope's depth where "
-     "deeper; an end plate's welds, (rows - 1) s + 2 Lev - 2 w long, fit d less the larger of kdes and each cope's "
-     "depth at each flange (kdes alone at an uncoped flange); the beam end stands clear of the support: the beam's "
+     "and below the bottom row (dh the beam hole's size along the force, Table J3.3), lie at least (d - T)/2 below "
+     "the top, or the top cope's depth where that is deeper, and at most d less (d - T)/2 or the bottom cope's depth "
+     "where deeper; an end plate's welds, (rows - 1) s + 2 Lev - 2 w long, fit d less the larger of (d - T)/2 and "
+     "each cope's depth at each flange ((d - T)/2 alone at an uncoped flange); the beam end stands clear of the "
+     "support: the beam's "
      "end distance at most a (a shear tab), at most the beam gauge (angles), and with the tee flange's thickness at "
      "most a (a tee); and a seated beam's end, its setback as detailed, lies short of the seat angle's outstanding "
      "leg or the stiffener's width by more than petra.strict.length",
-     "kdes, the shapes table's detailing distance from the outer face of a flange to the toe of its fillet, bounds "
-     "the flat web a part can bear on and a bolt can seat on; a part's corner on a fillet, or on the fillet a "
-     "shallow cope leaves, counts as not fitting, since the deck does not model clipped corners; where the lines "
-     "leave a position open (the cope's start, an end plate's place down the web) the reading most favourable to "
-     "fit is taken", f"{MANUAL} Part 1 (T and kdes); plain geometry of the drawn parts",
+     "T, the workable flat depth between the toes of the fillets that the shapes table lists, bounds the flat web a "
+     "part can bear on and a bolt can seat on, so each fillet reaches (d - T)/2 from its flange's outer face (kdes, "
+     "k for design calculations, reaches less far in every W row and is not read here); a part's corner on a "
+     "fillet, or on the fillet a shallow cope leaves, counts as not fitting, since the deck does not model clipped "
+     "corners; where the lines leave a position open (the cope's start, an end plate's place down the web) the "
+     "reading most favourable to fit is taken", f"{MANUAL} Part 1 (T); plain geometry of the drawn parts",
      ("whether the stated setback agrees with the beam end the bolt line and end distance draw is not checked",
       "a beam framing to a girder, whose flanges its own may meet, is not checked: the deck reads every support as a "
       "column")),
@@ -272,18 +275,18 @@ MAKEABILITY: tuple[tuple, ...] = (
      ("wrench clearance to the web is the clearance mode's; the flange's fillet under a bolt near the web is not "
       "checked beyond the holes clearing the web",)),
     ("web_fit", "the parts on a column's web fit it, each check need <= have in inches (geometry.py), the web's room "
-     "being its flat between the fillets, d - 2 kdes (Manual Part 1, T), and every position the lines leave open "
+     "being its flat between the fillets, T (Manual Part 1), and every position the lines leave open "
      "taken where it fits best: a pair of bolt lines spans g + dh; a single angle's bolt line, beside the beam web, "
      "tw + the support gauge + dh/2; parts: the outstanding legs, 2 leg + tw (one angle, leg + tw), a tee's flange "
      "bf, an end plate's width, a seat angle's length L, a bracket's bolt columns (columns - 1) g + dh and its plate "
-     "(columns - 1) g + 2 Leh; welds as on a flange (flange_fit); each <= d - 2 kdes; a seat angle's bolt holes on "
+     "(columns - 1) g + 2 Leh; welds as on a flange (flange_fit); each <= T; a seat angle's bolt holes on "
      "its vertical leg as on a flange; and the beam's flange, bf, passes between the column's flanges, d - 2 tf of "
      "the column, except where the beam end lies at or past the flange tips, (bf - tw)/2 of the column out from the "
      "web: the beam end at a - Leh (a plate, a tee), the beam gauge less Leh (angles), the end plate's thickness, or "
      "the setback (seats)",
      "the support is a column met on its web, the beam framing between its flanges (an assumed premise: a support "
      "on its web is read as a column, never a girder); a part or weld on the web's fillets counts as not fitting",
-     f"{MANUAL} Part 1 (T and kdes); plain geometry of the drawn parts",
+     f"{MANUAL} Part 1 (T); plain geometry of the drawn parts",
      ("a girder support, whose web a beam meets with its own depth between the girder's flanges or a cope, is not "
       "modelled: the premise reads every web support as a column",
       "the beam flange's corners against the column's web-to-flange fillets are not checked")),

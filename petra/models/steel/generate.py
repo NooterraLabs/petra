@@ -205,10 +205,14 @@ class _Sampler:
         self.line(f"rows {n}")
         return n
 
+    def toe(self, shape: str) -> Fraction:
+        """How far down from a flange's outer face the web's fillet reaches: (d - T)/2."""
+        return (self.dim(shape, "d") - self.dim(shape, "T")) / 2
+
     def beam_rows(self, beam: str, top: Fraction, lev: Fraction) -> int:
         """Rows whose part ends above the beam's bottom fillet: top + 3 (n - 1) + Lev <= d -
-        kdes, Lev at its toleranced most."""
-        return self.rows(self.dim(beam, "d") - self.dim(beam, "kdes") - top - lev - TOLERANCE)
+        (d - T)/2, Lev at its toleranced most."""
+        return self.rows(self.dim(beam, "d") - self.toe(beam) - top - lev - TOLERANCE)
 
     def beam(self, options=BEAMS) -> str:
         shape = self.pick(s for s in options if self.has(s))
@@ -227,7 +231,7 @@ class _Sampler:
     def width(self, support: tuple[str, str]) -> Fraction:
         """The room across the face: a flange's width, or a web's flat between its fillets."""
         shape, face = support
-        return self.dim(shape, "bf") if face == "flange" else self.dim(shape, "d") - 2 * self.dim(shape, "kdes")
+        return self.dim(shape, "bf") if face == "flange" else self.dim(shape, "T")
 
     def face_t(self, support: tuple[str, str]) -> Fraction:
         return self.dim(support[0], "tf" if support[1] == "flange" else "tw")
@@ -258,10 +262,10 @@ class _Sampler:
 
 def _top(s: _Sampler, beam: str, lev: Fraction) -> Fraction:
     """The top row, deep enough that the part, Lev above it at its toleranced most, clears
-    the beam's flange and fillet (kdes)."""
+    the beam's flange and fillet ((d - T)/2)."""
     top = Fraction(s.pick(("2.5", "3", "3.5")))
     if not s.free:
-        top = max(top, _quarter_up(s.dim(beam, "kdes") + lev + TOLERANCE))
+        top = max(top, _quarter_up(s.toe(beam) + lev + TOLERANCE))
     s.length("top", top)
     return top
 
@@ -398,7 +402,7 @@ def _end_plate(s: _Sampler) -> None:
     s.holes(("plate", "support"), joint)
     lev = Fraction(s.pick(("1.25", "1.5")))
     # the welds, 3 (n - 1) + 2 Lev - 2 w long, on the flat web
-    s.rows(s.dim(beam, "d") - 2 * s.dim(beam, "kdes") - 2 * (lev + TOLERANCE))
+    s.rows(s.dim(beam, "T") - 2 * (lev + TOLERANCE))
     s.length("pitch", 3)
     s.length("edge_vertical", lev, widen=True)
     s.length("support_gauge", gauge)

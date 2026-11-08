@@ -190,18 +190,19 @@ class ShapesDatabase(unittest.TestCase):
     def test_the_importer_reads_w_and_l_rows_and_records_the_hash(self):
         rows = [
             # The published sheet repeats each header for its SI columns after the US ones.
-            ["Type", "EDI_Std_Nomenclature", "AISC_Manual_Label", "W", "A", "d", "bf", "tw", "tf", "kdes", "k1",
-             "AISC_Manual_Label", "A", "d", "bf", "tw", "tf", "kdes", "k1"],
-            ["W", "W18X50", "W18X50", "50", "14.7", "18", "7.5", "0.35499999999999998", "0.57", "0.972", "0.8125",
-             "W460X74", "9480", "457", "191", "9.02", "14.5", "24.7", "21"],
-            ["W", "W99X1", "W99X1", "1", "–", "1", "1", "1", "1", "1", "1"],
-            ["L", "L4X3-1/2X3/8", "L4X3-1/2X3/8", "9.1", "2.67", "4", "–", "–", "–", "0.75", "–", "L102X89X9.5"],
-            ["C", "C15X50", "C15X50", "50", "14.7", "15", "3.72", "0.716", "0.65", "1.44", "–"],
+            ["Type", "EDI_Std_Nomenclature", "AISC_Manual_Label", "W", "A", "d", "bf", "tw", "tf", "kdes", "k1", "T",
+             "AISC_Manual_Label", "A", "d", "bf", "tw", "tf", "kdes", "k1", "T"],
+            ["W", "W18X50", "W18X50", "50", "14.7", "18", "7.5", "0.35499999999999998", "0.57", "0.972", "0.8125", "15.5",
+             "W460X74", "9480", "457", "191", "9.02", "14.5", "24.7", "21", "394"],
+            ["W", "W99X1", "W99X1", "1", "–", "1", "1", "1", "1", "1", "1", "1"],
+            ["L", "L4X3-1/2X3/8", "L4X3-1/2X3/8", "9.1", "2.67", "4", "–", "–", "–", "0.75", "–", "–", "L102X89X9.5"],
+            ["C", "C15X50", "C15X50", "50", "14.7", "15", "3.72", "0.716", "0.65", "1.44", "–", "12.125"],
         ]
         with tempfile.TemporaryDirectory() as tmp:
             book = os.path.join(tmp, "aisc-shapes-database-v16.0.xlsx")
             _workbook(book, rows)
             body = import_workbook(book)
+            kept = import_workbook(book, keep={"L4X3-1/2X3/8"})
             out = os.path.join(tmp, "shapes.json")
             with open(out, "w", encoding="utf-8") as f:
                 json.dump(body, f)
@@ -209,6 +210,9 @@ class ShapesDatabase(unittest.TestCase):
         self.assertEqual(len(body["sha256"]), 64)
         self.assertEqual([r["label"] for r in body["W"]], ["W18X50"], "a row with a dash is skipped")
         self.assertEqual(body["W"][0]["tw"], "0.355", "a float cell is read as its shortest decimal; the US column, not the SI one")
+        self.assertEqual(body["W"][0]["T"], "15.5", "T, the flat web the fit checks read, in inches")
+        self.assertEqual((kept["W"], kept["L"]), ([], ["L4X3-1/2X3/8"]), "keep holds only the labels named")
+        self.assertIn("PETRA_SHAPES_XLSX", kept["scope"], "and a kept table says how to load every row")
         self.assertEqual(body["L"], ["L4X3-1/2X3/8"])
         self.assertIs(table.tag, Tag.SANCTIONED)
         found = shape_constants(table)

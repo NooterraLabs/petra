@@ -196,9 +196,12 @@ OTHER: tuple[Provision, ...] = (
               "Joints are at least snug-tight. Group 150 and 200 bolts in tension are pretensioned, and so is every "
               "joint under a cyclic load past 20,000 cycles (Section 4.2's joints under a fatigue load). J3.3 sets the "
               "holes that need a slip-critical joint (`hole_use`)."),
-    Provision("Manual Part 1", "Dimensions and properties: the flat web T = d - 2 kdes", "check", ("beam_fit", "web_fit"),
-              "A part, weld or bolt hole on a beam's or a column's web lies on the web's flat, between the fillets "
-              "that kdes bounds. A part on a fillet does not fit (`geometry.py`)."),
+    Provision("Manual Part 1", "Dimensions and properties: the workable flat depth T of a W's web", "check",
+              ("beam_fit", "web_fit"),
+              "A part, weld or bolt hole on a beam's or a column's web lies on the web's flat, T deep between the "
+              "toes of the fillets and centred on the web. A part on a fillet does not fit (`geometry.py`). kdes, k "
+              "for design calculations, reaches less far than (d - T)/2 in every W row, so the deck does not read it "
+              "for fit."),
     Provision("Manual Part 7", "Entering and tightening clearances", "check", ("clearance",),
               "The socket allowance is a judged registry row."),
     Provision("Manual Part 9", "Coped beams, prying action and shear tee ductility", "check",

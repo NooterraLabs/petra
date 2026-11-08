@@ -6,17 +6,19 @@ unchanged from SHAPE160.xlsx and citing its sha256; docs/principles.md P9). Set
 PETRA_SHAPES_XLSX to your own copy of the workbook to load every row at run time; it must
 be the workbook the shipped rows cite (its sha256 is checked).
 
-Each W row becomes constants "aisc_shapes_v16.<key>.<prop>" (d, bf, tf, tw, kdes, k1, A)
+Each W row becomes constants "aisc_shapes_v16.<key>.<prop>" (d, bf, tf, tw, kdes, k1, T, A)
 carrying the table's tag, owner and source; the source names the database file and its
 sha256. Each W and L designation also gives constants of its own, tagged sanctioned
 because the designation is the value: a W18x50's nominal weight 50 lb/ft, an
 L4x3-1/2x3/8's legs and thickness.
 
-    python -m petra.registry.steel_shapes import FILE.xlsx [--out PATH] [--keep LABEL ...]
+    python -m petra.registry.steel_shapes import FILE.xlsx [--out PATH] [--keep LABEL ... | --shipped]
 
 reads the published workbook (Excel 2007+ format, read with zipfile and ElementTree, no
 other package) and writes a table with the file's sha256 and tag sanctioned: every W and
-L row, or with --keep only the rows named.
+L row, with --keep only the rows named, or with --shipped the rows the table at --out
+already holds. `import SHAPE160.xlsx --shipped` rewrites aisc_shapes.json after a column
+joins W_PROPS.
 """
 from __future__ import annotations
 
@@ -30,7 +32,7 @@ import sys
 import zipfile
 from dataclasses import dataclass
 from fractions import Fraction
-from typing import Iterator, Mapping
+from typing import Collection, Iterator, Mapping
 from xml.etree import ElementTree
 
 from ..kernel import Interval
@@ -43,10 +45,14 @@ WORKBOOK = "PETRA_SHAPES_XLSX"
 """The environment variable naming the user's own copy of the published workbook."""
 FORMAT = "petra-shapes/0"
 GROUP = "aisc_shapes_v16"
-W_PROPS: tuple[str, ...] = ("d", "bf", "tf", "tw", "kdes", "k1", "A")
+SCOPE = ("the rows the deck's examples, tests and generator use, copied unchanged from the workbook; set "
+         "PETRA_SHAPES_XLSX to your own copy of the workbook to load every row at run time")
+W_PROPS: tuple[str, ...] = ("d", "bf", "tf", "tw", "kdes", "k1", "T", "A")
 """The W-shape columns a connection check reads, by their Shapes Database header names. k1
 is the distance from the web's centerline to the toe of its fillet, which a tee's flexible
-width reads (Manual Figure 9-6)."""
+width reads (Manual Figure 9-6). T is the web's workable flat depth between the toes of
+its fillets (Manual Part 1), where a part or a bolt hole on the web must lie; it is less
+than d - 2 kdes in every W row of the database."""
 
 _INCH = CUSTOMARY["inch"][0]
 _LB_PER_FT = Fraction(45359237, 10**8) / (12 * _INCH)
@@ -215,9 +221,10 @@ def _decimal(text: str) -> str | None:
     return repr(x) if x > 0 else None
 
 
-def import_workbook(path: str) -> dict:
+def import_workbook(path: str, keep: Collection[str] | None = None) -> dict:
     """The table body for aisc_shapes.json from the published workbook: every W row with
-    all of W_PROPS numeric, and every L designation, with the file's sha256."""
+    all of W_PROPS numeric, and every L designation, with the file's sha256. With `keep`,
+    only the labels it names, and a scope line that says so."""
     digest = sha256(path)
     with zipfile.ZipFile(path) as book:
         strings = _shared_strings(book)
@@ -244,17 +251,19 @@ def import_workbook(path: str) -> dict:
             elif kind == "L" and _LABEL.fullmatch(label):
                 angles.append(label)
     name = os.path.basename(path)
-    return {
+    body = {
         "format": FORMAT,
         "file": name,
         "sha256": digest,
         "tag": Tag.SANCTIONED.value,
         "owner": "AISC",
         "source": f"AISC Shapes Database v16.0 ({name}, sha256 {digest})",
-        "units": {p: "inch2" if p == "A" else "inch" for p in W_PROPS},
-        "W": w,
-        "L": angles,
     }
+    if keep is not None:
+        body["scope"] = SCOPE
+        w = [r for r in w if r["label"] in keep]
+        angles = [label for label in angles if label in keep]
+    return {**body, "units": {p: "inch2" if p == "A" else "inch" for p in W_PROPS}, "W": w, "L": angles}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -263,13 +272,15 @@ def main(argv: list[str] | None = None) -> int:
     imp = sub.add_parser("import", help="rewrite the shape table from the published workbook")
     imp.add_argument("file")
     imp.add_argument("--out", default=TABLE)
-    imp.add_argument("--keep", nargs="*", help="keep only these labels (W18X50, L4X3-1/2X3/8)")
+    which = imp.add_mutually_exclusive_group()
+    which.add_argument("--keep", nargs="*", help="keep only these labels (W18X50, L4X3-1/2X3/8)")
+    which.add_argument("--shipped", action="store_true", help="keep the labels the table at --out holds")
     args = parser.parse_args(argv)
-    body = import_workbook(args.file)
-    if args.keep is not None:
-        keep = set(args.keep)
-        body["W"] = [r for r in body["W"] if r["label"] in keep]
-        body["L"] = [label for label in body["L"] if label in keep]
+    keep = args.keep
+    if args.shipped:
+        held = _read(args.out)
+        keep = [r["label"] for r in held["W"]] + held["L"]
+    body = import_workbook(args.file, keep)
     with open(args.out, "w", encoding="utf-8", newline="\n") as f:
         f.write(json.dumps(body, indent=1, ensure_ascii=False) + "\n")
     print(f"{len(body['W'])} W rows and {len(body['L'])} angles from {args.file} (sha256 {body['sha256']}) -> {args.out}")

@@ -166,7 +166,7 @@ def splice(text: str, span: tuple[int, int], new: str) -> str:
 STOCK = sorted(c.value.lo / CUSTOMARY["inch"][0] for name, c in REGISTRY.constants.items() if name.startswith(STOCK_PLATE))
 ANGLE_SHAPES = sorted({n.split(".")[1] for n in REGISTRY.constants if n.startswith(f"{SHAPES}.L") and n.endswith(".t")})
 W_SHAPES = sorted({n.split(".")[1] for n in REGISTRY.constants if n.startswith(f"{SHAPES}.W") and n.endswith(".d")})
-W_PROPS = ("d", "tw", "tf", "bf", "kdes", "A")
+W_PROPS = ("d", "tw", "tf", "bf", "kdes", "T", "A")
 """Every dimension of a W shape (or of a WT's parent) the deck reads."""
 WELD_STEP = Fraction(1, 16)
 

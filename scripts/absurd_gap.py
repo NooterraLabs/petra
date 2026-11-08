@@ -680,11 +680,12 @@ def render(rows: list[dict], canary_rows: list[dict], args, wall: float, provena
     out += [
         "- Every support is read as a column. Under a girder reading, a beam framing to the web would also need its depth "
         "to fit between the girder's flanges or a cope; the grammar does not say which, so that condition is not judged.",
-        "- Bolt holes are taken as standard (Table J3.3), the smallest the grammar allows, and fits are physical "
-        "(a hole wholly on the part), not Table J3.4's minimum edge distances, which Petra checks where it names them.",
+        "- Each ply's holes take the size Table J3.3 gives its declared type, and standard holes where the `holes` line "
+        "names no type. Fits are physical (a hole wholly on the part), not Table J3.4's minimum edge distances, which "
+        "Petra checks where it names them.",
         "- `steel.beam_side.fillet` and `steel.support_side.web_fillet` flag a part that clears the flanges but sits on "
-        "the web-to-flange fillets, inside kdes (the shapes table's detailing value). A fabricator can clip such a "
-        "corner, so these are counted apart from parts that hit solid steel or leave the member.",
+        "the web-to-flange fillets, off the flat web T that the shapes table lists, centred on the web. A fabricator "
+        "can clip such a corner, so these are counted apart from parts that hit solid steel or leave the member.",
         "- Where the lines leave a position open, the judge takes the most favourable one: a symmetric pair of bolt "
         "lines is centred on the column, a one-sided group (a single angle, a bracket's columns) goes wherever it fits, "
         "and a beam end and its cope reach as far out as the lines allow.",
