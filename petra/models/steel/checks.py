@@ -203,14 +203,15 @@ class WeldGroup:
     length: Expr
     lines: int
     force: Expr
-    eccentricity: Expr | None
+    eccentricity: Expr | None   # the load's distance from the group's centroid
     thinner: Expr               # thinner part joined (J2.2b minimum size)
     base: tuple[tuple[str, str, Expr, int], ...]   # (part, grade, thickness, fusion lines loading it at one place)
     bearing: bool       # a seat's two weld lines, its vertical leg bearing on the support below them
     ret: Expr | None     # returns at both ends of the line, toward the load: a C-shaped group
     edge: Expr | None    # a lapped part whose edge the fillet runs along (J2.2b maximum size)
     end_loaded: bool    # the force enters at the lines' end (Commentary J2.2b): J2.2b(d) applies
-    turns: bool         # two fillets along one line, loaded out of its plane: Manual Table 8-4, k = 0
+    turns: bool         # turns in its plane about a centre: two fillets along one line, loaded out of the
+                        # line's plane (Manual Table 8-4, k = 0), or a lapped plate's C (Table 8-8)
 
 
 @dataclass(frozen=True)
@@ -785,23 +786,20 @@ def geometry_weld_bracket(ctx: Ctx) -> Geometry:
     tp = ctx.geo(plate.thickness, "plate.thickness")
     length, e, v = ctx.attr("weld_length"), ctx.attr("eccentricity"), ctx.load("shear")
     ret = ctx.attr("weld_return") if "weld_return" in conn.attrs else None
-    if ret is not None:
-        # e is the load's distance from the weld group's centroid (docs/reference.md). A
-        # C-shaped weld's centroid lies kl^2 / (L + 2 kl) from its vertical line toward the load (Manual
-        # Part 8), and the elastic method and section A-A read the load from that line.
-        e = add(e, div(sq(ret), add(length, mul(c(2), ret))))
     out = Geometry.empty()
+    # e is the load's distance from the weld group's centroid (docs/reference.md).
     # Both fillets of a plate set on edge load it at one place; a lapped plate's single
     # C-shaped fillet runs along its edges.
     # A plate set on edge with a fillet on each face turns about an axis across its weld
-    # line: the Manual's out-of-plane case, Table 8-4 with k = 0. A single fillet would
-    # bend about its root (Commentary J2.4, Fig. C-J2.12), and keeps the elastic method.
+    # line: the Manual's out-of-plane case, Table 8-4 with k = 0. A lapped plate turns in
+    # its own plane on its C (Table 8-8). A single fillet along a plate on edge would bend
+    # about its root (Commentary J2.4, Fig. C-J2.12), and keeps the elastic method.
     out.welds.append(WeldGroup("bracket weld", weld, w, length, weld.sides, v, e, Min((tp, t_sup)),
                                (("bracket plate", plate.grade, tp, weld.sides), (f"support {support.face}", support.grade, t_sup, 1)),
                                ret=ret, edge=None if ret is None else tp, bearing=False, end_loaded=False,
-                               turns=ret is None and weld.sides == 2))
+                               turns=ret is not None or weld.sides == 2))
     # Section A-A is at the weld line, or past the returns where the plate leaves the support.
-    arm = e if ret is None else sub(e, ret)
+    arm = e if ret is None else sub(add(e, c_centroid(length, ret)), ret)
     out.web_shear.append(("bracket plate", plate.grade, mul(length, tp), v))
     out.flexures.append(Flexure("bracket plate", plate.grade, tp, length, mul(v, arm), 0, c(0), c(0)))
     out.bracket = Bracket(plate.grade, tp, length, ctx.opt("free_edge"), arm, v)
@@ -1389,6 +1387,12 @@ def gen_flexural_rupture(ctx: Ctx, geo: Geometry) -> list[Check]:
 
 # --- Welds ------------------------------------------------------------------------------------------------
 
+def c_centroid(length: Expr, ret: Expr) -> Expr:
+    """How far a C-shaped weld's centroid lies from its vertical line toward the load,
+    kl^2 / (L + 2 kl) (Manual Part 8)."""
+    return div(sq(ret), add(length, mul(c(2), ret)))
+
+
 def _weld_points(ctx: Ctx, wg: WeldGroup) -> tuple[tuple[str, tuple[Expr, ...]], ...]:
     """Force per unit length at the most stressed point of the group's lines, named where
     a C-shaped group has two candidates."""
@@ -1397,38 +1401,96 @@ def _weld_points(ctx: Ctx, wg: WeldGroup) -> tuple[tuple[str, tuple[Expr, ...]],
     if wg.bearing:
         return (("", L.seat_weld_line(ctx.const, wg.force, wg.eccentricity, wg.length)),)
     if wg.ret is not None:
-        fx, tip, heel = M.elastic_weld_c(wg.force, wg.eccentricity, wg.length, wg.ret)
+        fx, tip, heel = M.elastic_weld_c(wg.force, add(wg.eccentricity, c_centroid(wg.length, wg.ret)), wg.length, wg.ret)
         return ((", at the return tips", (fx, tip)), (", at the heel corners", (fx, heel)))
     return (("", M.elastic_weld_line(wg.force, wg.eccentricity, wg.length, c(wg.lines))),)
 
 
 def weld_coefficient(ctx: Ctx, wg: WeldGroup) -> Expr | None:
-    """C of a turning group (WeldGroup.turns) by the instantaneous center method, in units
-    of Fnw Aw per unit length over the line pair, or None where the deck keeps the elastic
-    method. A lower bound, stated at a constant ratio a at least the box's largest e / L on a
-    line of unit length: min(V_lo, gap_lo L / ell, (a L - e) / ell, (e - a_min L) / ell),
-    with V_lo and gap_lo mechanics.line_ic's bounds over limits.ic_weld_bounds' segments at
-    the centre r that ic.weld_centre picks.
+    """C of a turning group (WeldGroup.turns), in units of Fnw Aw per unit length over its
+    lines L long: the larger of the instantaneous center method's certified lower bound
+    and the elastic method's C, or None where the deck keeps the elastic method alone. The
+    Manual permits either (Part 8).
+
+    The instantaneous center's bound is stated at constant ratios on a line of unit length:
+    a at least the box's largest e / L, and for a C-shaped group, k at most its least
+    kl / L. It is min(V_lo, gap_lo L / ell, (a L - e) / ell, (e - a_min L) / ell, held L /
+    ell), with (kl - k L) / ell and (k_max L - kl) / ell for a C, where V_lo and gap_lo are
+    mechanics.group_ic's bounds at the centre r that ic.weld_centre picks, and held each
+    margin of weld_certificate's constants.
 
     Why it is sound: the method's gap M(r) - V(r) (a + r) is positive at r, and e(r) =
-    M/V - r falls as r grows, so the centre balancing a lies beyond r; V(r) rises with r up
-    to that centre wherever a >= a_min (the premise, which tests/test_steel_groups.py measures),
-    so the method's C at a is at least V(r) >= V_lo. C falls as a grows past a_min (the
-    balancing centre nears the line, and V falls with it), so the C at the design's own
-    e / L, at most a, is larger still. A switch term is V_lo where its margin passes by
-    ell and at most zero where it fails."""
+    M/V - r falls as r grows wherever V is positive, so the centre balancing a lies beyond
+    r (where V(r) is not positive, neither is the bound). V(r) rises with r up to that
+    centre wherever a >= a_min, and C falls as a grows past a_min and rises with k up to
+    k_max (the premises, which tests/test_steel_groups.py measures). So the method's C at
+    the design's own e / L, at most a, and kl / L, at least k, is at least V(r) >= V_lo. A
+    switch term is V_lo where its margin passes by ell and at most zero where it fails."""
     if not wg.turns or wg.eccentricity is None:
         return None
-    ratio = enclose(div(wg.eccentricity, wg.length), ctx.sb.box())
-    a = ic.weld_ratio(ratio, ctx.registry.constants["petra.weld_ic.a_min"].value.lo)
-    found = None if a is None else ic.weld_centre(ic.weld_curve(ctx.registry), a)
-    if a is None or found is None:
+    box, e, length = ctx.sb.box(), wg.eccentricity, wg.length
+    constant = ctx.registry.constants
+    a = ic.weld_ratio(enclose(div(e, length), box), constant["petra.weld_ic.a_min"].value.lo)
+    k = Fraction(0) if wg.ret is None else ic.weld_returns(enclose(div(wg.ret, length), box),
+                                                            constant["petra.weld_ic.k_max"].value.lo)
+    curve = ic.weld_curve(ctx.registry)
+    found = None if a is None or k is None else ic.weld_centre(curve, turning_group(k), a)
+    if found is None:
         return None
-    r, zs = found
-    v, gap = M.line_ic(r, a, zs, L.ic_weld_bounds(ctx.const, r, zs))
-    ell, e, length = ctx.const(SWITCH), wg.eccentricity, wg.length
-    return Min((v, div(mul(gap, length), ell), div(sub(mul(c(a), length), e), ell),
-                div(sub(e, mul(ctx.const("petra.weld_ic.a_min"), length)), ell)))
+    r, runs = found
+    v, gap, held = weld_certificate(ctx.const, curve, a, r, runs)
+    ell = ctx.const(SWITCH)
+    margins = [mul(gap, length), sub(mul(c(a), length), e), sub(e, mul(ctx.const("petra.weld_ic.a_min"), length)),
+               *(mul(m, length) for m in held)]
+    if wg.ret is not None:
+        margins += [sub(wg.ret, mul(c(k), length)), sub(mul(ctx.const("petra.weld_ic.k_max"), length), wg.ret)]
+    return Max((Min((v, *(div(m, ell) for m in margins))), _elastic_weld_coefficient(wg)))
+
+
+def weld_certificate(k: L.K, curve: tuple[float, ...], a: Fraction, r: Fraction,
+                     runs: tuple[M.Run, ...]) -> tuple[Expr, Expr, list[Expr]]:
+    """(V_lo, gap_lo, held) for a weld group's runs about a centre r behind its centroid,
+    the load a from it, all in units of the group's line. The critical element's ratio and
+    each segment's bounds on the element force (limits.ic_weld_critical, ic_weld_bounds)
+    are held by rational constants just inside them, which the float method picks
+    (ic.weld_held), and mechanics.group_ic sums the constants. `held` is each constant's
+    margin inside its bound: the certificate stands where every one is positive. So each
+    bound's expression appears once in the statement, not once in V and again in the gap,
+    and the critical ratio once, not once at every point: the kernel's statement is a tree,
+    and each copy of a shared term costs its powers again."""
+    low, high = L.ic_weld_critical(k, runs)
+    critical, constants = ic.weld_held(runs, curve)
+    bounds = L.ic_weld_bounds(k, runs, critical)
+    v, gap = M.group_ic(a + r, runs, [[(c(lo), c(hi)) for lo, hi in run] for run in constants])
+    held = [sub(low, c(critical[0])), sub(c(critical[1]), high)]
+    for run, values in zip(bounds, constants):
+        for (lo, hi), (q_lo, q_hi) in zip(run, values):
+            held += [sub(lo, c(q_lo)), sub(c(q_hi), hi)]
+    return v, gap, held
+
+
+def turning_group(k: Fraction) -> tuple[ic.Segment, ...]:
+    """A turning group's welds (ic.Segment) at constant ratios, in units of its line's
+    length: the line along the load, with returns k long at both ends toward the load for a
+    lapped plate's C (Manual Table 8-8), or alone at k = 0 (Table 8-4 with k = 0)."""
+    top, bottom = (Fraction(0), Fraction(1, 2)), (Fraction(0), Fraction(-1, 2))
+    line = (bottom, top, Fraction(1))
+    if not k:
+        return (line,)
+    return (line, (top, (k, top[1]), Fraction(1)), (bottom, (k, bottom[1]), Fraction(1)))
+
+
+def _elastic_weld_coefficient(wg: WeldGroup) -> Expr:
+    """The elastic method's C for a group of `lines` lines L long: 1 / (lines L |f|), with
+    f the force per unit length at its most stressed point under a unit load."""
+    assert wg.eccentricity is not None
+    if wg.ret is not None:
+        fx, tip, heel = M.elastic_weld_c(c(1), add(wg.eccentricity, c_centroid(wg.length, wg.ret)), wg.length, wg.ret)
+        peak = Max(tuple(Sqrt(add(sq(fx), sq(f))) for f in (tip, heel)))
+    else:
+        fx, fy = M.elastic_weld_line(c(1), wg.eccentricity, wg.length, c(wg.lines))
+        peak = Sqrt(add(sq(fx), sq(fy)))
+    return div(c(1), mul(c(wg.lines), wg.length, peak))
 
 
 def _weld_checks(ctx: Ctx, fexx: Expr, wg: WeldGroup, over: str, guards: tuple[Expr, ...]) -> list[Check]:
@@ -1447,8 +1509,9 @@ def gen_weld(ctx: Ctx, geo: Geometry) -> list[Check]:
         fexx = ctx.mat(wg.weld.electrode, "FEXX")
         coefficient = weld_coefficient(ctx, wg)
         if coefficient is not None:
-            out.append(Check(f"{wg.name}: the welds by the instantaneous center with Manual Table 8-4's k = 0, C times "
-                             "the lines' longitudinal strength (J2.4, Manual Part 8)", (wg.force,),
+            table = "Table 8-8's C-shaped group" if wg.ret is not None else "Table 8-4's k = 0"
+            out.append(Check(f"{wg.name}: the welds by the instantaneous center with Manual {table} or the elastic method, "
+                             "the larger C times the lines' longitudinal strength (J2.4, Manual Part 8)", (wg.force,),
                              mul(c(wg.lines), wg.length, coefficient, L.fillet_per_length(ctx.const, fexx, wg.size)),
                              "aisc360.j2_4", guards=(), unit="kip", suffix=""))
             continue

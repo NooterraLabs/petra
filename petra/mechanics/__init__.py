@@ -30,7 +30,7 @@ from .sections import (circle_area, hex_corner, rectangle_elastic_modulus, recta
                        rectangle_net_elastic_modulus, rectangle_net_plastic_modulus, rectangle_peak_shear_stress,
                        rectangle_plastic_modulus, right_triangle, tee_moduli)
 from .stability import plate_buckling_stress
-from .weld_groups import elastic_weld_c, elastic_weld_line, element_angles, fillet_throat, line_ic
+from .weld_groups import Run, elastic_weld_c, elastic_weld_line, element_angles, fillet_throat, group_ic
 
 MODULES = ("algebra", "sections", "bolt_groups", "weld_groups", "stability")
 """The layer's modules, in the order a model premise's source hash reads them."""
@@ -47,6 +47,6 @@ __all__ = [
     "rectangle_net_elastic_modulus", "rectangle_net_plastic_modulus", "rectangle_peak_shear_stress",
     "rectangle_plastic_modulus", "right_triangle", "tee_moduli",
     "corner_radius", "elastic_block_force", "elastic_bolt_force", "elastic_centre", "instantaneous_centre", "polar_moment",
-    "elastic_weld_c", "elastic_weld_line", "element_angles", "fillet_throat", "line_ic",
+    "Run", "elastic_weld_c", "elastic_weld_line", "element_angles", "fillet_throat", "group_ic",
     "plate_buckling_stress",
 ]

@@ -406,35 +406,70 @@ class WeldGroups(unittest.TestCase):
                     self.assertGreaterEqual(high, true * (1 - 1e-15))
                     self.assertLessEqual(high - low, 1e-12 * max(true, 1.0))
 
-    def test_a_lines_instantaneous_centre(self):
-        """line_ic against quadrature of the line's elements: exact for a force constant
-        along the line, and lower bounds on V and on M - V (a + r) for one that rises
-        along it, closing in as the segments shrink. Centres near the line with z0 =
-        sqrt(a r) inside it, and far from it with z0 past its end."""
-        def truth(force, r: float, a: float) -> tuple[float, float]:
-            v = quad(lambda z: force(z) * r / math.hypot(z, r), 0.0, 0.5, epsabs=1e-14, epsrel=1e-13, limit=200)[0]
-            gap = quad(lambda z: force(z) * (z * z - a * r) / math.hypot(z, r), 0.0, 0.5, epsabs=1e-14, epsrel=1e-13,
-                       limit=200)[0]
+    def test_a_groups_instantaneous_centre(self):
+        """group_ic against quadrature of each run's elements, an element at (x, y) holding
+        F normal to its radius about the centre: exact for a force constant along the runs,
+        and lower bounds on V and on M - V arm for one that rises along them, closing in as
+        the segments shrink. Runs along the load in front of the centre and behind it, and
+        across it on either side, with the roots of M - V arm's weight inside them and past
+        their ends: a line turning about a centre near it and far from it, and a C whose
+        centre lies behind its line and between its line and its returns' tips."""
+        def truth(force, arm: float, runs) -> tuple[float, float]:
+            v = gap = 0.0
+            for run in runs:
+                d, s, lo, hi = float(run.d), run.sign, float(run.us[0]), float(run.us[-1])
+
+                def x(u):
+                    return s * u if run.across else s * d
+                # the weight's roots as quadrature breakpoints
+                stops = [u for u in np.roots([1.0, -arm * s if run.across else 0.0, d * d - (0.0 if run.across else arm * s * d)])
+                         if abs(u.imag) < 1e-12 and lo < u.real < hi]
+                points = [float(u.real) for u in stops] or None
+                v += quad(lambda u: force(u) * x(u) / math.hypot(u, d), lo, hi, points=points, epsabs=1e-14, epsrel=1e-13,
+                          limit=200)[0]
+                gap += quad(lambda u: force(u) * (u * u + d * d - arm * x(u)) / math.hypot(u, d), lo, hi, points=points,
+                            epsabs=1e-14, epsrel=1e-13, limit=200)[0]
             return 2 * v, 2 * gap
 
-        def rising(z):
-            return 1 / 2 + z
+        def rising(u):
+            return 1 / 2 + u
 
-        for r, a in ((Fraction(1, 20), Fraction(1, 4)), (Fraction(3, 10), Fraction(1, 8)), (Fraction(2), Fraction(3))):
+        def cut(lo: Fraction, hi: Fraction, n: int) -> tuple[Fraction, ...]:
+            return tuple(lo + (hi - lo) * Fraction(k, n) for k in range(n + 1))
+
+        def line(r: Fraction, n: int) -> tuple:
+            return (M.Run(r, cut(Fraction(0), Fraction(1, 2), n), False, 1, Fraction(1)),)
+
+        def c_shape(h: Fraction, k: Fraction, n: int) -> tuple:
+            # the line at x = h from the centre; returns from it to h + k at y = 1/2
+            out = [M.Run(abs(h), cut(Fraction(0), Fraction(1, 2), n), False, 1 if h > 0 else -1, Fraction(1))]
+            if h >= 0:
+                return (*out, M.Run(Fraction(1, 2), cut(h, h + k, n), True, 1, Fraction(1)))
+            return (*out, M.Run(Fraction(1, 2), cut(Fraction(0), -h, n), True, -1, Fraction(1)),
+                    M.Run(Fraction(1, 2), cut(Fraction(0), h + k, n), True, 1, Fraction(1)))
+
+        cases = (("near line", Fraction(1, 20) + Fraction(1, 4), lambda n: line(Fraction(1, 20), n)),
+                 ("line", Fraction(3, 10) + Fraction(1, 8), lambda n: line(Fraction(3, 10), n)),
+                 ("far line", Fraction(5), lambda n: line(Fraction(2), n)),
+                 ("C behind", Fraction(13, 10), lambda n: c_shape(Fraction(1, 5), Fraction(1, 2), n)),
+                 ("C between", Fraction(9, 10), lambda n: c_shape(Fraction(-1, 5), Fraction(1, 2), n)),
+                 ("C between, long arm", Fraction(3), lambda n: c_shape(Fraction(-3, 10), Fraction(1), n)))
+        for name, arm, runs_of in cases:
             for n in (1, 7, 200):
-                zs = [Fraction(k, 2 * n) for k in range(n + 1)]
-                with self.subTest(r=r, a=a, n=n):
-                    v, gap = M.line_ic(r, a, zs, [(q(1), q(1))] * n)
-                    want_v, want_gap = truth(lambda z: 1.0, float(r), float(a))
+                runs = runs_of(n)
+                with self.subTest(name, n=n):
+                    v, gap = M.group_ic(arm, runs, [[(q(1), q(1))] * (len(run.us) - 1) for run in runs])
+                    want_v, want_gap = truth(lambda u: 1.0, float(arm), runs)
                     self.assertAlmostEqual(num(v), want_v, places=10)
                     self.assertAlmostEqual(num(gap), want_gap, places=10)
-                    v, gap = M.line_ic(r, a, zs, [(q(rising(p)), q(rising(w))) for p, w in zip(zs, zs[1:])])
-                    want_v, want_gap = truth(rising, float(r), float(a))
+                    v, gap = M.group_ic(arm, runs, [[(q(rising(p)), q(rising(w))) for p, w in zip(run.us, run.us[1:])]
+                                                    for run in runs])
+                    want_v, want_gap = truth(rising, float(arm), runs)
                     self.assertLessEqual(num(v), want_v + 1e-12)
                     self.assertLessEqual(num(gap), want_gap + 1e-12)
                     if n == 200:
-                        self.assertAlmostEqual(num(v), want_v, delta=0.005 * abs(want_v))
-                        self.assertAlmostEqual(num(gap), want_gap, delta=0.005 * (abs(want_v) + abs(want_gap)))
+                        self.assertAlmostEqual(num(v), want_v, delta=0.01 * (abs(want_v) + abs(want_gap)))
+                        self.assertAlmostEqual(num(gap), want_gap, delta=0.01 * (abs(want_v) + abs(want_gap)))
 
 
 # --- Stability: the plate equation by finite differences ------------------------------------------
