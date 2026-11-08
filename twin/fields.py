@@ -66,13 +66,70 @@ class Cope:
     bottom_depth: F
 
 
-class Lines:
-    """One component's lines, read on demand. A missing required line raises FieldError."""
+@dataclass(frozen=True)
+class Interval:
+    """A length given as a range, a signed bound or a param. var names the range: the line's key
+    for a bound, shared by every line that reads the same param."""
 
-    def __init__(self, component):
+    var: str
+    lo: F
+    hi: F
+
+
+class Lines:
+    """One component's lines, read on demand. A missing required line raises FieldError.
+
+    ends picks "lo" or "hi" for each interval's var; a length that is an interval reads that end."""
+
+    def __init__(self, component, params=None, ends=None):
         self.kind = component.kind
         self.name = component.name
-        self._lines = component.lines
+        self._ends = ends or {}
+        self._lines = {key: self._collapse(key, args, params or {}) for key, args in component.lines.items()}
+
+    def _collapse(self, key, args, params):
+        """Replace each `in [lo, hi] [mean q] [signed|measured "s" source "s"]` and each
+        `param NAME` in a line with one ("interval", Interval) token."""
+        args, out, i = list(args), [], 0
+        while i < len(args):
+            if args[i] == ("ident", "param") and i + 1 < len(args) and args[i + 1][0] == "ident":
+                name = args[i + 1][1]
+                if name not in params:
+                    raise FieldError(f"{self.name}: `{key}` reads undeclared param {name}")
+                out.append(("interval", self._interval(f"param {name}", *params[name], key)))
+                i += 2
+                continue
+            if args[i] == ("ident", "in") and args[i + 1:i + 2] == [("punct", "[")]:
+                lo, comma, hi, close = (args[i + 2:i + 6] + [None] * 4)[:4]
+                if None in (lo, hi) or lo[0] != "qty" or hi[0] != "qty" or comma != ("punct", ",") or close != ("punct", "]"):
+                    raise FieldError(f"{self.name}: `{key}` has a malformed range")
+                count = sum(1 for kind, _ in out if kind == "interval")
+                out.append(("interval", self._interval(key if count == 0 else f"{key} {count + 1}", lo[1], hi[1], key)))
+                i += 6
+                if args[i:i + 1] == [("ident", "mean")]:
+                    i += 2
+                if i < len(args) and args[i] in (("ident", "signed"), ("ident", "measured")):
+                    i += 4
+                continue
+            out.append(args[i])
+            i += 1
+        return tuple(out)
+
+    def _interval(self, var, lo, hi, key):
+        if lo.dim != "length" or hi.dim != "length" or lo.value > hi.value:
+            raise FieldError(f"{self.name}: `{key}` range must be two lengths, the lower first")
+        return Interval(var, lo.value, hi.value)
+
+    def intervals(self):
+        """Every interval the lines read, by var."""
+        return {tok[1].var: tok[1] for args in self._lines.values() for tok in args if tok[0] == "interval"}
+
+    def _value(self, tok, dim):
+        if tok[0] == "interval" and dim == "length":
+            return tok[1].lo if self._ends[tok[1].var] == "lo" else tok[1].hi
+        if tok[0] == "qty" and tok[1].dim == dim:
+            return tok[1].value
+        return None
 
     def has(self, key):
         return key in self._lines
@@ -88,9 +145,10 @@ class Lines:
         return args[i][1]
 
     def _qty(self, args, i, key, dim):
-        if i >= len(args) or args[i][0] != "qty" or args[i][1].dim != dim:
+        value = self._value(args[i], dim) if i < len(args) else None
+        if value is None:
             raise FieldError(f"{self.name}: `{key}` expects a {dim} at position {i + 1}")
-        return args[i][1].value
+        return value
 
     def _options(self, args, start, key):
         out = {}
@@ -100,7 +158,10 @@ class Lines:
             if i + 1 >= len(args):
                 raise FieldError(f"{self.name}: `{key}` option {word} has no value")
             nxt = args[i + 1]
-            out[word] = nxt[1].value if nxt[0] == "qty" else nxt[1]
+            if nxt[0] == "interval":
+                out[word] = self._value(nxt, "length")
+            else:
+                out[word] = nxt[1].value if nxt[0] == "qty" else nxt[1]
             i += 2
         return out
 
