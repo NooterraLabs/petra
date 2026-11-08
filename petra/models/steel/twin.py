@@ -729,18 +729,22 @@ def increment(ctx: _Ctx, size: str, hole: str, name: str) -> float | None:
     return ctx.reg.const("aisc360.j3_5.c2_lsl") * ctx.reg.bolt(size, "d")
 
 
-def edges(ctx: _Ctx, element: str, t: float, size: str, named: Mapping[str, float], hole: str = "std") -> None:
-    """J3.5 minimum and J3.6 maximum edge distances of one element whose holes are `hole`."""
+def edges(ctx: _Ctx, element: str, t: float, size: str, named: Mapping[str, float], hole: str = "std",
+          far: Mapping[str, float] | None = None) -> None:
+    """J3.5 minimum and J3.6 maximum edge distances of one element whose holes are `hole`.
+    `far` names edges J3.5 alone reads: J3.6's maximum is to a bolt's nearest edge, and an
+    edge in `named` lies nearer within its limit."""
     emin = ctx.reg.bolt(size, "edge_min")
     lim_t = ctx.reg.const("aisc360.j3_6.edge_t") * t
     lim = ctx.reg.const("aisc360.j3_6.edge_max")
-    for name, e in named.items():
+    for name, e in {**named, **(far or {})}.items():
         c2 = increment(ctx, size, hole, name)
         if c2 is None:
             ctx.add("edge_min", f"{element}: {name} edge distance at least Table J3.4's (J3.5)", _ratio(emin, e))
         else:
             ctx.add("edge_min", f"{element}: {name} edge distance at least Table J3.4's plus Table J3.5's C2 for its "
                     f"{hole} holes (J3.5)", _ratio(emin + c2, e))
+    for name, e in named.items():
         ctx.add("edge_max", f"{element}: {name} edge distance at most 12 t (J3.6)", _ratio(e, lim_t))
         ctx.add("edge_max", f"{element}: {name} edge distance at most 6 in (J3.6)", _ratio(e, lim))
 
@@ -1056,6 +1060,13 @@ class _Beam:
         flange (path.py, role "web")."""
         return None if self.cope is None else top - self.dct
 
+    def bottom_edge(self, top: float, rows: int, s: float) -> dict[str, float]:
+        """The bottom row's distance to a bottom cope's horizontal cut, which J3.5 reads:
+        d - dcb less the bottom row's depth top + (rows - 1) s; none without a bottom cope."""
+        if self.cope is None or self.cope.flanges != "both":
+            return {}
+        return {"bottom cope": self.d - self.dcb - top - (rows - 1) * s}
+
     def web_checks(self, ctx: _Ctx, v: float, rows: int, hole: str | None, group: BoltSet | None) -> None:
         """Shear yielding of the beam web's gross section (d - copes) tw (Companion II.A-6,
         II.A-28A: Agv = hc tw), and with bolts its net section through one line of holes."""
@@ -1173,7 +1184,7 @@ def _shear_tab(ctx: _Ctx, modes: set[str]) -> None:
         block_shear(ctx, "beam web", group, v, beam.tw, beam.fy, beam.fu, hb, top - beam.dct, leh_b - UNDERRUN, False,
                     list(range(nc)))
         beam.cope_buckling(ctx, v, setback)
-    edges(ctx, "beam web", beam.tw, bolts.size, web_edges, hb)
+    edges(ctx, "beam web", beam.tw, bolts.size, web_edges, hb, far=beam.bottom_edge(top, n, s))
     hole_use(ctx, "beam web", hb, bolts)
     # bolts
     group.check_bolts(v, "beam side")
@@ -1281,7 +1292,7 @@ def _angle_kind(ctx: _Ctx, modes: set[str], double: bool) -> None:
         web_edges["cope"] = top - beam.dct
         block_shear(ctx, "beam web", group_b, v, beam.tw, beam.fy, beam.fu, hb, top - beam.dct, leh_b - UNDERRUN, False, [0])
         beam.cope_buckling(ctx, v, setback)
-    edges(ctx, "beam web", beam.tw, bolts.size, web_edges, hb)
+    edges(ctx, "beam web", beam.tw, bolts.size, web_edges, hb, far=beam.bottom_edge(top, n, s))
     hole_use(ctx, "beam web", hb, bolts)
     group_b.check_bolts(v, "beam side")
     spacing(ctx, "beam side", bolts, min(t, beam.tw), {"pitch": s})
@@ -1396,7 +1407,7 @@ def _shear_tee(ctx: _Ctx, modes: set[str]) -> None:
         web_edges["cope"] = top - beam.dct
         block_shear(ctx, "beam web", group_b, v, beam.tw, beam.fy, beam.fu, hb, top - beam.dct, leh_b - UNDERRUN, False, [0])
         beam.cope_buckling(ctx, v, setback)
-    edges(ctx, "beam web", beam.tw, bolts.size, web_edges, hb)
+    edges(ctx, "beam web", beam.tw, bolts.size, web_edges, hb, far=beam.bottom_edge(top, n, s))
     hole_use(ctx, "beam web", hb, bolts)
     group_b.check_bolts(v, "beam side")
     spacing(ctx, "beam side", bolts, min(tws, beam.tw), {"pitch": s})

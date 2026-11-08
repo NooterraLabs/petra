@@ -127,8 +127,10 @@ TABLE: tuple[Provision, ...] = (
     Provision("J3.5", "Minimum Edge Distance", "check", ("edge_min",),
               "Table J3.5's increment C2 is added to Table J3.4's distance at each edge it applies to. An oversized "
               "hole takes it at every edge, and a slot at an edge its length runs toward. A sloping edge takes it in "
-              "full."),
-    Provision("J3.6", "Maximum Spacing and Edge Distance", "check", ("spacing_max", "edge_max")),
+              "full. A beam coped at both flanges holds its bottom row from the bottom cope's cut."),
+    Provision("J3.6", "Maximum Spacing and Edge Distance", "check", ("spacing_max", "edge_max"),
+              "The maximum is to a bolt's nearest edge. A bottom cope takes none, since the beam end's own limit "
+              "already bounds the bottom row's nearest edge."),
     Provision("J3.7", "Tensile and Shear Strength of Bolts and Threaded Parts", "check",
               ("bolts", "bolt_tension", "prying"), "Prying uses the Manual Part 9 T-stub model."),
     Provision("J3.8", "Combined Tension and Shear in Bearing-Type Connections", "check", ("bolt_combined",)),

@@ -144,6 +144,8 @@ A detail the deck draws but whose category it does not encode requires the unmod
 | Installation type matches the joint type | RCSC | Rule check |
 | Fit of the drawn parts. Each part lies on the member it bears on, and the beam clears its support | Manual Part 1 (T) and geometry | Exact rational containment, one R4 term per fit (`beam_fit`, `flange_fit`, `web_fit`) |
 
+J3.5 holds each bolt Table J3.4's distance, plus Table J3.5's C2, from every edge of the part it passes through. On a beam web the deck reads the beam end and a top cope's cut above the top row. Since 2026-11-08 it also reads a bottom cope's cut below the bottom row, for a beam coped at both flanges. Before that, the gate's single angle gate-1-05546 passed with its bottom bolt 0.7 in above the cut (measured), where Table J3.4 asks 1-1/8 in. J3.6's maximum is to a bolt's nearest edge. The beam end's own limit already bounds it, so the bottom cope takes no maximum.
+
 ### 5a. Fit of the drawn parts
 
 `petra/models/steel/geometry.py` places each kind's parts in one frame per connection, in exact rationals over the design's hypotheses. The module is trusted and is in the premise hash. The frame has three axes. Depth runs down from the beam's top, out runs from the support face along the beam, and across runs over the support face. A part is a span on an axis, and a room is where spans must lie. Each containment is one check, `need <= have` in inches, excused where its guard is at most zero. Each check prints its numbers like any other check, so a FAIL names the part, the room and both lengths.

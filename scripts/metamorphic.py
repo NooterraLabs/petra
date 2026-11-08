@@ -457,6 +457,9 @@ EXEMPT: tuple[Exemption, ...] = (
               "RFIL falls as the part thickens, so the root's allowable stress range falls."),
     Exemption(("rows_plus_one",), "petra", ("shear_rupture",), r"^beam web: shear rupture of the net section", NOTHING,
               "AISC 360-22 J4.2(b)", "The beam web's depth is fixed, and each row takes a hole out of its net area."),
+    Exemption(("rows_plus_one",), "petra", ("edge_min",), r"^beam web: bottom cope edge distance at least", NOTHING,
+              "AISC 360-22 J3.5, Table J3.4",
+              "The bottom cope stays where it is, and another row brings the bottom bolt nearer it."),
     Exemption(("rows_plus_one",), "petra", ("fatigue_bolted",), r"^beam web \(beam side\): .* net section through the "
               r"holes", CAPACITY, "AISC 360-22 Appendix 3, Table A-3.1 Case 2.2",
               "Each row takes a hole out of the beam web's net section, so its stress rises."),

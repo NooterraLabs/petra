@@ -33,8 +33,8 @@ Each row gives its provision one treatment:
 | J3.2 | High-Strength Bolts | check | `joint_type` | Bolt groups and their strengths are registry rows (Tables J3.1 and J3.2). Pretension is checked where the joint's use requires it, a cyclic load included (J3.2(a)(2) and (b)(1)). |
 | J3.3 | Size and Use of Holes | check | `hole_use` | Hole dimensions are registry rows (Table J3.3). |
 | J3.4 | Minimum Spacing | check | `spacing_min` |  |
-| J3.5 | Minimum Edge Distance | check | `edge_min` | Table J3.5's increment C2 is added to Table J3.4's distance at each edge it applies to. An oversized hole takes it at every edge, and a slot at an edge its length runs toward. A sloping edge takes it in full. |
-| J3.6 | Maximum Spacing and Edge Distance | check | `spacing_max`, `edge_max` |  |
+| J3.5 | Minimum Edge Distance | check | `edge_min` | Table J3.5's increment C2 is added to Table J3.4's distance at each edge it applies to. An oversized hole takes it at every edge, and a slot at an edge its length runs toward. A sloping edge takes it in full. A beam coped at both flanges holds its bottom row from the bottom cope's cut. |
+| J3.6 | Maximum Spacing and Edge Distance | check | `spacing_max`, `edge_max` | The maximum is to a bolt's nearest edge. A bottom cope takes none, since the beam end's own limit already bounds the bottom row's nearest edge. |
 | J3.7 | Tensile and Shear Strength of Bolts and Threaded Parts | check | `bolts`, `bolt_tension`, `prying` | Prying uses the Manual Part 9 T-stub model. |
 | J3.8 | Combined Tension and Shear in Bearing-Type Connections | check | `bolt_combined` |  |
 | J3.9 | High-Strength Bolts in Slip-Critical Connections | check | `slip`, `bolts`, `bolt_combined` | The faying-surface class is a premise of the slip model. Slip-critical joints are also checked for the bearing-type limit states. A plain slot in an eccentric bracket group takes the factor of a slot parallel to the load, since the bracket's bolts push along it. |
