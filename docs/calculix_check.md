@@ -126,7 +126,7 @@ Each run ends on a plateau: its load grows by less than 0.3% over the last fifth
 | 202-010 `bolt_bracket` | yield | 59.2 | 59.1 | 59.0 | −0.3% |
 | | rupture | 62.0 | 61.4 | 61.1 | −1.5% |
 
-Every capacity falls as the mesh refines, by at most 3.7% from 0.5 to 0.25 in. So the 5% of the close-call rule covers the step from the screen to the judged size. The yield run is settled to 1%. The shear tab's rupture run still falls 1.6% from 0.35 to 0.25 in, because its capacity hangs on how the edge of a hole deforms. Its judged capacity may be a few percent high.
+The capacities fall as the mesh refines, by at most 3.7% from 0.5 to 0.25 in. So the 5% of the close-call rule covers the step from the screen to the judged size. The yield run is settled to 1%. The shear tab's rupture run still falls 1.6% from 0.35 to 0.25 in, because its capacity hangs on how the edge of a hole deforms. Its judged capacity may be a few percent high.
 
 ## Results
 
@@ -137,7 +137,7 @@ Every capacity falls as the mesh refines, by at most 3.7% from 0.5 to 0.25 in. S
 - **No ASD flag.** The least ASD yield FE capacity is 1.17 times Rn/Ω.
 - **No design falls below its own load.** Every FE capacity exceeds the factored or service load the design was sized for.
 
-The forecast held. It named 33 LRFD yield flags and got 32. The one it named and missed is 202-047, a welded bracket whose R_int sits at 0.997 of φRn. Its FE capacity came out 14% over R_int, as welded brackets do, and so above φRn.
+The forecast held. It named 33 LRFD yield flags and got 32. The one it named and missed is 202-047, a welded bracket whose R_int sits at 0.997 of φRn. Its FE capacity came out 14% over R_int, the most of any welded bracket, and so above φRn.
 
 ### The flags
 
@@ -213,9 +213,9 @@ FE capacity over the governing state's Rn, for every design:
 | rupture | LRFD | shear rupture | 9 | 1.062 | 1.101 | 1.134 | 1.217 | 1.218 |
 | rupture | LRFD | weld base metal | 4 | 1.402 | 1.421 | 1.512 | 1.872 | 2.006 |
 
-No yield ratio under shear yielding passes 0.940, under the 0.962 that von Mises allows. Where flexural yielding governs, the ratio reaches 1.06, with help from the held edge.
+Where shear yielding governs, no yield ratio passes 0.940, under the 0.962 that von Mises allows. Where flexural yielding governs, the ratio reaches 1.06, with help from the held edge.
 
-Block shear has the lowest rupture ratios, down to 0.864 (202-030). Its shear planes are 0.962 of 0.6 Fu under von Mises, and the run stops at a hole stretch of 0.25 in, before the whole block has flowed. With φ = 0.75 that still leaves a margin of 1.15.
+Block shear has the lowest rupture ratios, down to 0.864 (202-030). Its shear planes are 0.962 of 0.6 Fu under von Mises, and the run stops at a hole stretch of 0.25 in or at the end of its push, before the whole block has flowed. With φ = 0.75 that still leaves a margin of 1.15.
 
 The bolt-group and weld base metal ratios are high for a reason in the check, not the steel. A bolt group with an eccentric load is checked as its weakest bolt against the most loaded one by the elastic method. The weld's base metal is checked at the most stressed point of the weld line, elastically. The plate redistributes past both. The model also pushes every bolt alike, so it does not test the eccentricity itself.
 
