@@ -399,9 +399,17 @@ EXEMPT: tuple[Exemption, ...] = (
     Exemption(("rows_plus_one",), "petra", ("beam_fit",), r"^(.*: bottom (edge|bolt hole) on the|beam web: the end "
               r"plate's welds within the) (beam's )?flat web", CAPACITY, FIT, "Another row lengthens the part down the web."),
     # Eccentricity that the change moves.
-    Exemption(("web_thicker",), "petra", ("bolts", "slip"), r"^support side: (most loaded bolt|slip at the most loaded "
-              r"bolt)", CAPACITY, SINGLE_ANGLE, "The beam web's centreline, where the load acts, moves off the support "
-              "leg's bolts."),
+    Exemption(("web_thicker",), "petra", ("slip",), r"^support side: slip at the most loaded bolt", CAPACITY,
+              SINGLE_ANGLE, "The beam web's centreline, where the load acts, moves off the support leg's bolts."),
+    Exemption(("web_thicker",), "petra", ("bolts",), r"^support side: the eccentric group by the instantaneous center",
+              NOTHING, SINGLE_ANGLE + f"; {MANUAL} Part 7, instantaneous centre of rotation",
+              "The beam web's centreline, where the load acts, moves off the support leg's bolts, and the coefficient C "
+              "falls as the eccentricity grows."),
+    Exemption(("plate_thicker", "web_thicker"), "petra", ("bolts",), r"^beam side: the eccentric group by the "
+              r"instantaneous center", NOTHING, f"{SINGLE_PLATE}, Table 10-9 and its conventional configuration",
+              "Table 10-9's eccentricity, a/2, holds only while the fillet is at least 5/8 of the plate's thickness and "
+              "the plate or the beam web is at most d/2 + 1/16 in thick. A thicker plate or web can leave that "
+              "configuration, and the group then takes its own eccentricity."),
     Exemption(("web_thicker",), "petra", ("block_shear", "flexural_yield", "flexural_rupture", "fatigue_bolted"),
               r"^angle outstanding( \(support side\))?: ", CAPACITY, SINGLE_ANGLE,
               "The moment on the support leg, V e, grows with e."),
@@ -460,10 +468,20 @@ EXEMPT: tuple[Exemption, ...] = (
               "The moment on the support leg, V e, grows with e."),
     Exemption(("rows_plus_one",), "twin", ("shear_rupture",), r"coped section", NOTHING, "AISC 360-22 J4.2(b)",
               "The coped web's depth is fixed, and each row takes a hole out of its net area."),
-    Exemption(("rows_plus_one",), "twin", ("plate_buckling",), r"^normal and flexural interaction, section B-B",
-              CAPACITY, f"{MANUAL} Part 15, Eqs 15-8 to 15-18",
-              "Another row deepens the plate, which lengthens section B-B and raises its slenderness and the normal "
-              "force on it, P cos(theta)."),
+    Exemption(("mirror",), "twin", ("edge_min", "bearing", "bolts"), r"^(edge distance along the force, beam web, |"
+              r"bearing and tearout, beam web, |bolt group effective strength, (beam side|beam leg|stem)$)", NOTHING,
+              "AISC 360-22 J3.11a, Eqs J3-6c and J3-6d, and J3.5",
+              "The twin reads the beam web's tearout toward the beam's top, and J3.5 at the edge that tearout reads. The "
+              "load acts down, so the bolts push the web up toward the top, which the reflection moves. The load is not "
+              "reflected."),
+    Exemption(("rows_plus_one",), "twin", ("edge_min",), r"^edge distance along the force, beam web, bottom cope$",
+              NOTHING, "AISC 360-22 J3.5, Table J3.4",
+              "The bottom cope stays where it is, and another row brings the bottom bolt nearer it."),
+    Exemption(("rows_plus_one",), "twin", ("block_shear",), r", partial path$", CAPACITY,
+              "AISC 360-22 J4.3, against the share of the demand on the block's rows",
+              "The partial path is the weakest block through fewer rows than the column has. Another row adds the block "
+              "through every old row to those blocks, and it carries more of the demand than any block the old column "
+              "had short of all of it."),
 )
 
 DEFECTS: tuple[Defect, ...] = (
@@ -474,6 +492,12 @@ DEFECTS: tuple[Defect, ...] = (
            "(inferred from their formulas), the least is Eq F11-3, which falls as Fy or the plate's depth rises. Past "
            "5.55 E/Fy it is negative, and the check reads its size, so a thicker plate reads weaker. Companion "
            "II.A-19A takes Mc as the plate's flexural yielding strength and checks lateral-torsional buckling apart."),
+    Defect(MORE_BOLTS, "petra", ("bolts",), r"^bracket bolts: the eccentric group by the instantaneous center",
+           "A bracket's eccentric group is held to C times its weakest bolt (checks.bolt_capacity), and each bolt's "
+           "tearout is read along that bolt's own force about the instantaneous center. Another row or column turns a "
+           "corner bolt's force toward a nearer edge, and that one bolt's tearout then sets every bolt's strength, so "
+           "a larger group can read weaker. Manual Part 7's coefficient C takes every bolt at one strength. The twin "
+           "scales the sum of each bolt's least strength by C/n instead."),
 )
 
 POSITIONAL = ("beam_fit",)
