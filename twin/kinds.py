@@ -476,24 +476,30 @@ def bolt_bracket(lines, out, demands):
     pts = bolt_grid(n, m, float(s), float(g))
     c = F(bolt_coefficient(pts, float(ex)))
     note = f"{MANUAL} Part 7 instantaneous center, C = {float(c):.4g} at ex = {float(ex):.4g} in."
-    edge = min(lev, leh)
-    clear = [edge - holes["plate"].along / 2]
+    hp, hs = holes["plate"], holes["support"]
+    # The bolt forces about the instantaneous center run from near vertical to near horizontal,
+    # so each lc is taken in both directions with the hole's own dimension in that direction, and
+    # a long slot either way lies across some bolt's force (J3.11a(2)).
+    long_p, long_s = (h.kind in ("lsl", "lsl_parallel") for h in (hp, hs))
+    clear = [lev - hp.along / 2, leh - hp.across / 2]
     if n > 1:
-        clear.append(s - holes["plate"].along)
+        clear.append(s - hp.along)
     if m > 1:
-        clear.append(g - holes["plate"].across)
+        clear.append(g - hp.across)
     lc = min(clear)
     rs = ck.bolt_shear(bolts.fnv, bolts.d)
-    rp = min(ck.bearing(bolts.d, tp, grade.fu, deformation), ck.tearout(lc, tp, grade.fu, deformation))
-    spacing = ([s - holes["support"].along] if n > 1 else []) + ([g - holes["support"].across] if m > 1 else [])
-    rsup = ck.bearing(bolts.d, t_sup, sup_grade.fu, deformation)
+    rp = min(ck.bearing(bolts.d, tp, grade.fu, deformation, long_p),
+             ck.tearout(lc, tp, grade.fu, deformation, long_p))
+    spacing = ([s - hs.along] if n > 1 else []) + ([g - hs.across] if m > 1 else [])
+    rsup = ck.bearing(bolts.d, t_sup, sup_grade.fu, deformation, long_s)
     if spacing:
-        rsup = min(rsup, ck.tearout(min(spacing), t_sup, sup_grade.fu, deformation))
+        rsup = min(rsup, ck.tearout(min(spacing), t_sup, sup_grade.fu, deformation, long_s))
     out.add("bolt shear", "bolts", "bolts", f"{SPEC} J3.7, Eq. J3-1; {note}", c * rs, "J3.6")
     out.add("bearing and tearout, plate", "bearing", "plate",
-            f"{SPEC} J3.11a at the least clear distance for every bolt (Example II.A-22); {note}", c * rp, "J3.11")
-    out.add(f"bearing and tearout, support {face}", "bearing", f"support {face}", f"{SPEC} J3.11a; {note}",
-            c * rsup, "J3.11")
+            f"{SPEC} J3.11a{'(2)' if long_p else ''} at the least clear distance for every bolt (Example II.A-22); "
+            f"{note}", c * rp, "J3.11")
+    out.add(f"bearing and tearout, support {face}", "bearing", f"support {face}",
+            f"{SPEC} J3.11a{'(2)' if long_s else ''}; {note}", c * rsup, "J3.11")
     out.add("bolt group effective strength", "bolts", "bolts", f"{SPEC} J3.7 User Note with J3.11a; {note}",
             c * min(rs, rp, rsup), "J3.6")
     e_aa = ex - F(m - 1, 2) * g
