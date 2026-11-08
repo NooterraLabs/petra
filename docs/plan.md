@@ -332,8 +332,8 @@ P8 is the cheap test of stage 3 in §5. It takes one AISC formula, block shear o
 ### The frontier track (after P8)
 
 [The frontier plan](frontier.md) sets the work after P8. In short:
-- **Before compute credits end on 2026-11-15.** Run the token-heavy experiments: an unaided failure-regime search, missing-obligation tasks, and a clean-room twin of the steel deck.
-- **Then the keystone experiment.** Petra, an LLM judge and floating-point finite elements each serve as the reward for the same optimisers. Judges that share nothing with Petra grade the results.
+- **Before compute credits end on 2026-11-15.** Run the token-heavy experiments: an unaided failure-regime search, missing-obligation tasks, a clean-room twin of the steel deck, and the keystone experiment's LLM arms.
+- **Then the rest of the keystone experiment.** Petra, an LLM judge and floating-point finite elements each serve as the reward for the same optimisers. Judges that share nothing with Petra grade the results.
 - **Then a 12-week core:**
   - false-FAIL fixes;
   - P8's one-column rows against coped-beam tests;
