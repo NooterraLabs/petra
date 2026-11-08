@@ -1871,11 +1871,15 @@ def _weld_bracket(ctx: _Ctx, modes: set[str]) -> None:
     weld: Weld = conn.attrs["weld"]
     length, e = ctx.need("weld_length"), ctx.need("eccentricity")
     ret = ctx.get("weld_return")
+    # The declared eccentricity is the load's distance from the weld group's centroid
+    # (docs/reference.md), xl = kl^2 / (2 kl + L) from a C-shaped weld's vertical line toward the load
+    # (Manual Part 8); e below is the load's distance from that line.
+    if ret is not None:
+        e = e + ret * ret / (length + 2 * ret)
     # Section A-A lies at the weld nearest the load (vocab flexural_yield): the weld line
     # for a plate square to the support, the returns' tips for a C-shaped weld, kl from
     # its vertical line (Companion II.A-23: e = 8-1/4 in to section A-A where the load is
-    # al + xl = 11-1/4 in from the vertical weld with kl = 3 in). The declared
-    # eccentricity is the load's distance from the weld group's vertical line.
+    # al + xl = 11-1/4 in from the vertical weld with kl = 3 in).
     e_aa = e if ret is None else e - ret
     shear_yield(ctx, "bracket plate", p, pfy, length * tp)
     ctx.check("flexural_yield", "bracket plate: flexural yielding of the gross section (J4.5)", p * e_aa,

@@ -785,6 +785,11 @@ def geometry_weld_bracket(ctx: Ctx) -> Geometry:
     tp = ctx.geo(plate.thickness, "plate.thickness")
     length, e, v = ctx.attr("weld_length"), ctx.attr("eccentricity"), ctx.load("shear")
     ret = ctx.attr("weld_return") if "weld_return" in conn.attrs else None
+    if ret is not None:
+        # e is the load's distance from the weld group's centroid (docs/reference.md). A
+        # C-shaped weld's centroid lies kl^2 / (L + 2 kl) from its vertical line toward the load (Manual
+        # Part 8), and the elastic method and section A-A read the load from that line.
+        e = add(e, div(sq(ret), add(length, mul(c(2), ret))))
     out = Geometry.empty()
     # Both fillets of a plate set on edge load it at one place; a lapped plate's single
     # C-shaped fillet runs along its edges.
