@@ -1,5 +1,5 @@
 """Instantaneous-center coefficients against the values the Companion examples read from the
-Manual's Tables 7-6, 7-8, 8-8 and 10-11.
+Manual's Tables 7-6, 7-8, 8-4, 8-8 and 10-11.
 
 Tolerance: 1 percent. The Companion prints C to three figures, interpolated from tables built by
 the same method on a coarser grid, so agreement to the third figure is the most the method can show.
@@ -57,6 +57,31 @@ class WeldGroupTest(unittest.TestCase):
 
     def test_ii_a_26_c_shape(self):
         self.check(weld_c(10.0, 5.0, 8.75), 1.88)
+
+
+class TwoLinesAtKZeroTest(unittest.TestCase):
+    """Manual Table 8-4 at k = 0: two parallel lines of length l that coincide, which is a plate
+    welded on both faces seen in its own plane. These are the values the Companion reads from it."""
+
+    def c(self, ex, angle_deg=0.0, length=10.0):
+        line = ((0.0, 0.0), (0.0, -length))
+        return weld_strength([line, line], ex, 1 / 16, 70.0, angle_deg) / length
+
+    def check(self, value, expected):
+        self.assertLess(abs(value / expected - 1), REL, f"{value:.4f} vs {expected}")
+
+    def test_concentric(self):
+        # Examples K.1 and K.2: a = 0 and k = 0, C = 3.71.
+        self.check(self.c(0.0), 3.71)
+
+    def test_concentric_at_30_degrees(self):
+        # Example II.A-11B: Angle = 30 degrees, special case k = a = 0, C = 4.37. A linear group loaded
+        # through its center of gravity takes Eq. J2-5's directional increase (J2.4 User Note).
+        self.check(self.c(0.0, 30.0), 4.37)
+
+    def test_ii_a_2a_welds_b(self):
+        # Example II.A-2A: k = 0, a = 4 / 23.5 = 0.170, C = 3.61 interpolated from Table 8-4.
+        self.check(self.c(4.0, length=23.5), 3.61)
 
 
 if __name__ == "__main__":

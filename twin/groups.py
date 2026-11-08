@@ -29,11 +29,12 @@ def _centered(points):
 
 
 def _solve(forces, e, guess_scale):
-    """Find the center (cx, cy) where the resisting forces balance a downward load on x = e.
+    """Find the center (cx, cy) where the resisting forces balance a downward load on x = e,
+    and return (P, cx, cy).
 
     forces(cx, cy) returns a list of (rx, ry, R) with r the vector from the center to the
-    element and R the element's force, perpendicular to r. The load P equals the resisting
-    moment about the center divided by the lever arm e - cx.
+    element and R the element's force on the loaded part, R (-ry, rx) / |r|. The load P equals
+    the resisting moment about the center divided by the lever arm e - cx.
     """
 
     def residual(cx, cy):
@@ -69,7 +70,7 @@ def _solve(forces, e, guess_scale):
         dx = (g1 * j22 - g2 * j12) / det
         dy = (j11 * g2 - j21 * g1) / det
         cx, cy = cx - dx, cy - dy
-    return residual(cx, cy)[2]
+    return residual(cx, cy)[2], cx, cy
 
 
 def bolt_coefficient(points, ex, angle_deg=0.0):
@@ -84,7 +85,27 @@ def bolt_coefficient(points, ex, angle_deg=0.0):
     e = abs(ex) * math.cos(theta)
     if e < 1e-9:
         return float(len(pts))
-    pts = _rotate(pts, theta)
+    return _bolt_center(_rotate(pts, theta), e)[0]
+
+
+def bolt_forces(points, ex):
+    """C and the unit direction of each bolt's force on the connected plate, for a downward load
+    ex from the centroid. Each force lies perpendicular to the bolt's radius from the
+    instantaneous center, and J3.11a measures that bolt's lc along it."""
+    pts = _centered(points)
+    e = abs(ex)
+    if e < 1e-9:
+        return float(len(pts)), [(0.0, 1.0)] * len(pts)
+    c, cx, cy = _bolt_center(pts, e)
+    pushes = []
+    for x, y in pts:
+        rx, ry = x - cx, y - cy
+        d = math.hypot(rx, ry)
+        pushes.append((-ry / d, rx / d))
+    return c, pushes
+
+
+def _bolt_center(pts, e):
     scale = max(1.0, max(math.hypot(x, y) for x, y in pts))
 
     def forces(cx, cy):
@@ -153,9 +174,15 @@ def weld_strength(segments, ex, w, fexx, angle_deg=0.0, elements=200):
             out.append((rx, ry, 0.6 * fexx * throat * dl * k))
         return out
 
-    return _solve(forces, e, scale)
+    return _solve(forces, e, scale)[0]
 
 
 def _concentric_weld(elems, throat, fexx):
-    """A load through the centroid, taken without the directional increase (J2.4, kds = 1.0)."""
-    return sum(0.6 * fexx * throat * dl for *_, dl in elems)
+    """A load through the centroid. A linear group, its lines all parallel, takes Eq. J2-5's
+    directional increase, which the J2.4 User Note allows when it is loaded through its center of
+    gravity. Any other group takes kds = 1.0. In the rotated frame the load is vertical, so the
+    sine of its angle to a line is that line's horizontal component."""
+    _, _, ux0, uy0, _ = elems[0]
+    linear = all(abs(ux * uy0 - uy * ux0) < 1e-9 for _, _, ux, uy, _ in elems)
+    kds = 1 + 0.5 * abs(ux0) ** 1.5 if linear else 1.0
+    return kds * sum(0.6 * fexx * throat * dl for *_, dl in elems)

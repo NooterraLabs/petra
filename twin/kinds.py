@@ -12,7 +12,8 @@ from fractions import Fraction as F
 from twin import checks as ck
 from twin.coped import OutOfRange, double_cope_moment, top_cope_moment
 from twin.fields import FieldError
-from twin.groups import bolt_coefficient, bolt_grid, weld_strength
+from twin.groups import bolt_coefficient, bolt_forces, bolt_grid, weld_strength
+from twin.tearout import clear_distances
 
 UNDERRUN = F(1, 4)  # Manual Part 10 beam-length underrun, as the Companion examples apply it
 ALLOWANCE = F(1, 16)  # B4.3b, added to a hole's nominal dimension for net areas
@@ -511,36 +512,29 @@ def bolt_bracket(lines, out, demands):
     holes = lines.holes(bolts.d, ["plate", "support"])
     depth = element_length(n, s, lev)
     pts = bolt_grid(n, m, float(s), float(g))
-    c = F(bolt_coefficient(pts, float(ex)))
+    c, pushes = bolt_forces(pts, float(ex))
+    c = F(c)
     note = f"{MANUAL} Part 7 instantaneous center, C = {float(c):.4g} at ex = {float(ex):.4g} in."
     hp, hs = holes["plate"], holes["support"]
-    # The bolt forces about the instantaneous center run from near vertical to near horizontal,
-    # so each lc is taken in both directions with the hole's own dimension in that direction, and
-    # a long slot either way lies across some bolt's force (J3.11a(2)).
+    # A long slot either way lies across some bolt's force about the center (J3.11a(2)).
     long_p, long_s = (h.kind in ("lsl", "lsl_parallel") for h in (hp, hs))
     edge_distance(out, "plate", hp, lev, "along")
     edge_distance(out, "plate", hp, leh, "across")
-    spans = [lev - hp.along / 2, leh - hp.across / 2]
-    if n > 1:
-        spans.append(s - hp.along)
-    if m > 1:
-        spans.append(g - hp.across)
-    lc = clear(min(spans))
+    plate = bracket_plate(n, m, s, g, lev, leh, lines.optional_length("free_edge"))
+    rp = [_bearing_or_tearout(bolts.d, tp, grade.fu, lc, deformation, long_p)
+          for lc in clear_distances(pts, pushes, hp, plate)]
+    rsup = [_bearing_or_tearout(bolts.d, t_sup, sup_grade.fu, lc, deformation, long_s)
+            for lc in clear_distances(pts, [(-x, -y) for x, y in pushes], hs)]
     rs = ck.bolt_shear(bolts.fnv, bolts.d)
-    rp = min(ck.bearing(bolts.d, tp, grade.fu, deformation, long_p),
-             ck.tearout(lc, tp, grade.fu, deformation, long_p))
-    spacing = ([s - hs.along] if n > 1 else []) + ([g - hs.across] if m > 1 else [])
-    rsup = ck.bearing(bolts.d, t_sup, sup_grade.fu, deformation, long_s)
-    if spacing:
-        rsup = min(rsup, ck.tearout(clear(min(spacing)), t_sup, sup_grade.fu, deformation, long_s))
+    share = c / len(pts)
+    along = "each bolt's lc along its own force about the center, (C/n) times the sum (Example II.A-17A)"
     out.add("bolt shear", "bolts", "bolts", f"{SPEC} J3.7, Eq. J3-1; {note}", c * rs, "J3.6")
     out.add("bearing and tearout, plate", "bearing", "plate",
-            f"{SPEC} J3.11a{'(2)' if long_p else ''} at the least clear distance for every bolt (Example II.A-22); "
-            f"{note}", c * rp, "J3.11")
+            f"{SPEC} J3.11a{'(2)' if long_p else ''}, {along}; {note}", share * sum(rp), "J3.11")
     out.add(f"bearing and tearout, support {face}", "bearing", f"support {face}",
-            f"{SPEC} J3.11a{'(2)' if long_s else ''}; {note}", c * rsup, "J3.11")
-    out.add("bolt group effective strength", "bolts", "bolts", f"{SPEC} J3.7 User Note with J3.11a; {note}",
-            c * min(rs, rp, rsup), "J3.6")
+            f"{SPEC} J3.11a{'(2)' if long_s else ''}, {along}; {note}", share * sum(rsup), "J3.11")
+    out.add("bolt group effective strength", "bolts", "bolts", f"{SPEC} J3.7 User Note with J3.11a, {along}; {note}",
+            share * sum(min(rs, a, b) for a, b in zip(rp, rsup)), "J3.6")
     if bolts.joint == "slip_critical":
         # A short slot across the shear lies along the horizontal bolt forces, so J3.9(b) applies.
         kinds = {"ssl_parallel" if h.kind == "ssl" else h.kind for h in (hp, hs)}
@@ -556,6 +550,28 @@ def bolt_bracket(lines, out, demands):
             grade.fu * znet, "flexural_rupture", moment, "kip-in")
     shear_element(out, "plate, section A-A", grade, tp, n, s, lev, holes["plate"])
     free_edge(out, lines, grade, tp, depth, e_aa)
+
+
+def bracket_plate(n, m, s, g, lev, leh, b):
+    """The bracket plate around bolt_grid's bolts as half-planes for twin.tearout. Lev lies above
+    the top row and below the bottom row, Leh behind the column farthest from the load, and the
+    plate runs on toward the load. A shaped bracket's free edge rises from the bottom of section
+    A-A, at the column nearest the load, to the top edge b further on (Manual Fig. 15-2)."""
+    top, bottom = float(lev), -float((n - 1) * s + lev)
+    edges = [(0.0, 1.0, top), (0.0, -1.0, -bottom), (-1.0, 0.0, float(leh))]
+    if b is not None:
+        a, x_aa = top - bottom, float((m - 1) * g)
+        a1 = math.hypot(a, float(b))
+        nx, ny = a / a1, -float(b) / a1
+        edges.append((nx, ny, nx * x_aa + ny * bottom))
+    return edges
+
+
+def _bearing_or_tearout(d, t, fu, lc, deformation, long_slot):
+    bear = ck.bearing(d, t, fu, deformation, long_slot)
+    if lc is None:
+        return bear
+    return min(bear, ck.tearout(clear(F(lc)), t, fu, deformation, long_slot))
 
 
 def free_edge(out, lines, grade, t, a, e):
@@ -602,11 +618,24 @@ def weld_bracket(lines, out, demands):
                 weld.sides * rn, "J2.4")
         e_aa = e + xbar - kl
     else:
-        throat_strength = F(3, 5) * weld.fexx * weld.w * F(math.sqrt(2)) / 2
-        ratio = ck.sqrt(1 + (6 * e / length) ** 2)
+        # In the plate's own plane the fillets on its faces lie on one line, loaded in that plane
+        # at e, so each is the k = 0 line of Manual Table 8-4.
+        _, face, sup_grade, t_sup = support_ply(lines)
+        rn = F(weld_strength([((0.0, 0.0), (0.0, -float(length)))], float(e), float(weld.w), float(weld.fexx)))
         out.add("fillet weld lines, load normal to the faying surface", "weld", "weld",
-                f"{SPEC} J2.4, kds = 1.0, elastic resultant of direct shear and bending on the weld lines",
-                weld.sides * throat_strength * length / ratio, "J2.4")
+                f"{SPEC} J2.4 with {MANUAL} Part 8 instantaneous center in the plate's plane, the fillets "
+                f"on its faces as one line (Table 8-4, k = 0, a = {float(e / length):.3g})",
+                weld.sides * rn, "J2.4")
+        effective = rn / ck.fillet_weld(weld.fexx, weld.w, F(1))
+        basis = "over the length the eccentric weld leaves effective, Rn / (0.60 FEXX Awe) per unit length"
+        out.add("plate shear rupture at the weld", "weld_base_metal", "plate",
+                f"{SPEC} J4.2(b), Eq. J4-4 {basis} (Manual Eq. 9-7 form with the size the weld needs, "
+                "as Example II.A-11B applies it)",
+                ck.shear_rupture(grade.fu, tp * effective), "J4.2b")
+        out.add(f"support {face} shear rupture at the weld", "weld_base_metal", f"support {face}",
+                f"{SPEC} J4.2(b), Eq. J4-4 on one plane per fillet {basis} (Manual Eq. 9-6 form, "
+                "as Example II.A-15 applies it)",
+                weld.sides * ck.shear_rupture(sup_grade.fu, t_sup * effective), "J4.2b")
         e_aa = e
     out.add("flexural yielding, section A-A", "flexural_yield", "plate", f"{MANUAL} Eqs. 15-1 and 15-2",
             grade.fy * ck.plastic_modulus(tp, length), "flexure", out.demand * e_aa, "kip-in")
