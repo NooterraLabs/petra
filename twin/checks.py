@@ -14,6 +14,7 @@ from twin.data import E
 FACTORS = {
     "J2.4": (F(3, 4), F(2)),
     "J3.6": (F(3, 4), F(2)),  # bolt tension and shear, J3.7's phi and Omega
+    "J3.5": (F(1), F(1)),  # a least edge distance, which carries no resistance or safety factor
     "J3.11": (F(3, 4), F(2)),
     "J4.1a": (F(9, 10), F(167, 100)),
     "J4.1b": (F(3, 4), F(2)),
@@ -30,6 +31,9 @@ FACTORS = {
     "slip_lsl": (F(7, 10), F(214, 100)),  # J3.9(c)
     "ratio": (F(1), F(1)),
 }
+
+# Detailing limits do not scale with the load, so one governs a report only when it fails.
+DETAILING = {"J3.5"}
 
 
 def sqrt(x):

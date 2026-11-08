@@ -5,6 +5,7 @@ from dataclasses import replace
 from fractions import Fraction as F
 
 from twin.card import parse
+from twin.checks import DETAILING
 from twin.fields import FieldError, Lines
 from twin.kinds import KINDS, Out
 
@@ -95,7 +96,8 @@ def check_component(component, loads, params=None):
     for extra in sorted(set(demands) - handled):
         out.unsupported.append(f"load field `{extra}` is not modeled; its checks are absent")
     rendered = [_render(c, out.lrfd) for c in out.checks]
-    governing = max((r for r in rendered if r["utilisation"] is not None),
+    governing = max((r for c, r in zip(out.checks, rendered) if r["utilisation"] is not None
+                     and (c.factor not in DETAILING or r["utilisation"] > 1)),
                     key=lambda r: r["utilisation"], default=None)
     return {
         **head,

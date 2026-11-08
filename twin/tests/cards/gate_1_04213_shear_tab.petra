@@ -1,0 +1,34 @@
+petra 0
+
+# Steel gate design gate-1-04213. The top bolt's vertical short slot in the beam web, 1-1/8 in.
+# long, centres 2.5 - 2 = 0.5 in. below the cope's cut, so it runs 1/16 in. past the cut.
+
+design "gate-1-04213" {
+  owner "gate@petra.dev"
+}
+
+shear_tab c1 {
+  basis asd
+  beam W16x26 grade steel.A992
+  support W12x40 web grade steel.A992
+  plate steel.A572_50 thickness 0.3125 inch
+  bolts bolt_group.120 diameter 0.875 inch threads excluded
+  holes beam ssl_parallel
+  top 2.5 inch
+  rows 2
+  pitch 3 inch
+  edge_vertical 1.25 inch
+  plate_edge 2 inch
+  bolt_line 3.5 inch
+  beam_edge 2 inch
+  weld electrode.E70 size 0.1875 inch sides 2
+  cope top depth 2 inch length 4 inch
+  deformation considered
+  setback 0.5 inch
+}
+
+load gate {
+  on c1 shear in [0 kip, 0.001 kip]
+  on c1 cycles in [100000000, 100000000]
+  signed "gate@petra.dev" source "steel gate generator"
+}
