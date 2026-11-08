@@ -22,12 +22,13 @@ Two routes to evidence:
 """
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass
 from fractions import Fraction as Q
 
 import numpy as np
 import scipy.sparse as sp
-from scipy.optimize import linprog
+from scipy.optimize import OptimizeWarning, linprog
 
 from ...kernel import Interval, enclose
 from ...kernel.rules.r1_linear import FarkasRay, FeasiblePoints
@@ -374,6 +375,12 @@ def _box(pilot: B.Pilot) -> dict:
     return {h.sym: Interval(h.lo, h.hi) for h in pilot.statement.hyps}
 
 
+NO_CROSSOVER = {"run_crossover": "off"}
+"""A HiGHS option that scipy passes on verbatim. The Airy program needs the optimum, not a
+basis. On the box's 4 x 2 plate with s = g = 3 in and Lev = Leh = 2 in, crossover came
+back imprecise and HiGHS handed the problem to a simplex clean-up that ran for hours."""
+
+
 def _sigma0(pilot: B.Pilot) -> Q:
     return pilot.flow.factor * (pilot.claim.fy if pilot.flow.prop == "fy" else pilot.claim.fu)
 
@@ -425,7 +432,10 @@ def airy_program(pilot: B.Pilot, field: Airy, S: sp.csr_matrix | None = None) ->
         bounds[var] = (0, None)
     c = np.zeros(total)
     c[lam] = -1
-    res = linprog(c, A_ub=A_ub, b_ub=np.array(rhs), A_eq=A_eq, b_eq=b_eq, bounds=bounds, method="highs-ipm")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", OptimizeWarning)
+        res = linprog(c, A_ub=A_ub, b_ub=np.array(rhs), A_eq=A_eq, b_eq=b_eq, bounds=bounds, method="highs-ipm",
+                      options=NO_CROSSOVER)
     if res.status != 0:
         raise RuntimeError(f"the Airy program failed: {res.message}")
     return Bound(float(res.x[lam]), z=res.x[:nz])

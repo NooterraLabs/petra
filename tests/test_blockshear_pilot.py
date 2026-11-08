@@ -1,5 +1,6 @@
 """The block shear pilot (docs/blockshear_pilot.md): the trusted builder's exact geometry,
-J4.3 by hand, the solver's HCT element, and the kernel's verdicts on a one-bolt plate.
+J4.3 by hand, the solver's HCT element, the kernel's verdicts on a one-bolt plate, and the
+runner's box and its --point mode.
 
 Hand values for the 3 x 1 group, s = 3 in, Lev = Leh = 1.5 in, 3/4 in bolts, A992:
   dn = 13/16 + 1/16 = 7/8 in
@@ -9,9 +10,13 @@ Hand values for the 3 x 1 group, s = 3 in, Lev = Leh = 1.5 in, 3/4 in bolts, A99
   J3.11: row 1 tearout 1.2 x (1.5 - 13/32) x 65 = 85.3125, rows 2-3 bearing 2.4 x 0.75 x 65 = 117,
   so the group's 319.3125 kip/in exceeds J4.3's 276.25 and J4.3 governs.
 """
+import contextlib
+import importlib.util
+import io
 import random
 import unittest
 from fractions import Fraction as Q
+from pathlib import Path
 
 from petra.kernel import Evidence, Refutation, Rejection, Theorem, check
 from petra.kernel.rules.r1_linear import FeasiblePoints
@@ -20,6 +25,7 @@ from petra.models.steel import blockshear_solve as S
 from petra.registry import build_registry
 from petra.units import CUSTOMARY
 
+ROOT = Path(__file__).resolve().parent.parent
 REGISTRY = build_registry()
 IN = B.INCH
 KSI = CUSTOMARY["ksi"][0]
@@ -204,6 +210,31 @@ class Verdicts(unittest.TestCase):
         x = list(points.x[0])
         x[pilot.pressure] *= Q(101, 100)
         self.assertIsInstance(check(pilot.statement, Evidence(FeasiblePoints((tuple(x),)))), Rejection)
+
+
+def runner():
+    spec = importlib.util.spec_from_file_location("blockshear_pilot", ROOT / "scripts" / "blockshear_pilot.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+class Runner(unittest.TestCase):
+    def test_the_box_is_48_geometries_and_144_points(self):
+        pilot = runner()
+        geometries = list(pilot.geometries())
+        self.assertEqual(len(geometries), 48)
+        self.assertEqual(len(geometries) * len(pilot.BOX["grade"]), 144)
+
+    def test_one_point_prints_the_kernels_verdict(self):
+        pilot = runner()
+        pilot.DISC = TINY
+        one = ["--point", "1", "1", "3", "3", "3/2", "3/2", "--grade", "A992"]
+        for flow, verdict in ((["--flow", "fu", "3"], "Theorem R1"), ([], "Refutation R1")):
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                self.assertEqual(pilot.main(one + flow), 0)
+            self.assertIn(f"kernel: {verdict}", out.getvalue())
 
 
 if __name__ == "__main__":

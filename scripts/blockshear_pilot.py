@@ -1,5 +1,7 @@
 """The block shear pilot (docs/plan.md §6 P8, docs/blockshear_pilot.md):
-`python scripts/blockshear_pilot.py [--contact bearing|confined] [--all] [--log FILE]`.
+`python scripts/blockshear_pilot.py [--contact bearing|confined] [--all] [--log FILE]`, or
+`python scripts/blockshear_pilot.py --point ROWS COLS S G LEV LEH [--grade G] [--flow fy|fu FACTOR]`
+for the kernel's verdict on one plate.
 
 Sweeps the box below in order. At each geometry one linear program gives the plate's
 lower-bound limit load per unit flow stress, so every grade's load factor follows from it.
@@ -87,20 +89,36 @@ def verdict(result) -> str:
     return f"Rejection: {result.reason}"
 
 
-def prove(p: B.Plate, registry, flow: B.Flow, contact: str):
+def prove(p: B.Plate, registry, flow: B.Flow, contact: str, margin: float = PROOF_MARGIN):
     pilot = B.statement(p, registry, DISC, flow, contact)
     field = S.airy(pilot)
     bound = S.airy_program(pilot, field)
-    if bound.factor < PROOF_MARGIN:
+    if bound.factor < margin:
         return bound.factor, None
     points = S.feasible_points(pilot, field, bound.z)
     return bound.factor, (None if points is None else check(pilot.statement, Evidence(points)))
 
 
-def refute(p: B.Plate, registry, contact: str):
-    pilot = B.statement(p, registry, DISC, B.Flow("fy", Q(1)), contact)
+def refute(p: B.Plate, registry, contact: str, flow: B.Flow = B.Flow("fy", Q(1))):
+    pilot = B.statement(p, registry, DISC, flow, contact)
     bound = S.statement_program(pilot)
     return bound.factor, check(pilot.statement, Evidence(S.farkas_ray(pilot, bound.y)))
+
+
+def one_point(args, registry) -> int:
+    """--point: the kernel's verdict on one plate at one flow stress. It tries a proof when
+    the Airy program clears J4.3's force at all, and a refutation otherwise."""
+    rows, cols, pitch, gauge, lev, leh = args.point
+    geometry = dict(rows=int(rows), cols=int(cols), pitch=Q(pitch), gauge=Q(gauge), lev=Q(lev), leh=Q(leh))
+    p = plate(geometry, args.grade)
+    flow = B.Flow(args.flow[0], Q(args.flow[1]))
+    lam, result = prove(p, registry, flow, args.contact, margin=1)
+    if result is None and lam < 1:
+        lam, result = refute(p, registry, args.contact, flow)
+    shown = verdict(result) if result is not None else "no proof: the rounded field left the yield surface"
+    print(f"{describe(geometry, args.grade)}, flow stress {flow.factor} {flow.prop}, contact {args.contact}: "
+          f"program {lam:.4f}, kernel: {shown}", flush=True)
+    return 0
 
 
 def premise(p: B.Plate, registry, claim: B.Claim, unit: float, contact: str) -> list[str]:
@@ -135,8 +153,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--contact", choices=B.CONTACTS, default="bearing")
     parser.add_argument("--all", action="store_true", help="sweep the whole box, without certificates past the first counterexample")
     parser.add_argument("--log", type=Path, help="write one JSON line per point")
+    parser.add_argument("--point", nargs=6, metavar=("ROWS", "COLS", "S", "G", "LEV", "LEH"),
+                        help="check one plate instead of sweeping the box, lengths in inches as fractions")
+    parser.add_argument("--grade", default="A36", help="the grade for --point")
+    parser.add_argument("--flow", nargs=2, metavar=("PROP", "FACTOR"), default=("fy", "1"),
+                        help="the flow stress for --point: fy or fu, times a fraction")
     args = parser.parse_args(argv)
     registry = build_registry()
+    if args.point:
+        return one_point(args, registry)
     print(f"box: {', '.join(f'{k} {[str(v) for v in vals]}' for k, vals in BOX.items())}; bolts {BOLT}, "
           f"standard holes, margin {MARGIN} in, contact {args.contact}", flush=True)
     print(f"model premise: model:{B.MODEL.id}@{B.MODEL.source_hash}", flush=True)
