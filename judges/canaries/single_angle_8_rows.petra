@@ -2,7 +2,8 @@ petra 0
 
 # violates: steel.beam_side.depth
 # The single-angle example with 8 rows at 3 in pitch on a W16x26 (d = 15.7 in): the angle
-# runs from 1.25 in to 24.75 in below the beam's top, past its 14.95 in of flat web.
+# runs from 1.25 in to 24.75 in below the beam's top, past the end of its flat web, 14.66 in
+# down ((d + T)/2).
 
 design "steel-single-angle" {
   owner "s.engineer@example.org"
