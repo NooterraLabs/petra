@@ -140,12 +140,13 @@ _ON = re.compile(r"^\s*on c1 (\w+) in \[0 kip, ([0-9.]+) kip\]")
 def tasks(seed: int, n: int, registry: Registry) -> Iterator[Task]:
     """The first `n` tasks of the generator's stream for `seed`: each design it draws with
     a load the deck passes, outside the detailer-free sample, with no toleranced line and
-    of a TASK_KINDS kind, becomes the task of its members and loads."""
+    of a TASK_KINDS kind, becomes the task of its members and loads. A task's loads carry
+    no cycles, so the stream is drawn without cyclic designs, as P2 froze it."""
     from .models.steel.generate import generate
 
     made, start = 0, 0
     while made < n:
-        for g in generate(11, seed, registry, start=start):
+        for g in generate(11, seed, registry, start=start, cyclic=False):
             if made == n:
                 return
             if g.kind not in TASK_KINDS or g.expected != "PASS" or g.target != "pass" or g.free or g.toleranced:

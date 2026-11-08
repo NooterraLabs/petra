@@ -642,15 +642,16 @@ def _encoded(text: str, registry: Registry) -> bool:
     return not set(required(calc.connection(design, "c1", registry), design)) & set(UNENCODED)
 
 
-def generate(n: int, seed: int, registry: Registry, start: int = 0) -> Iterator[Generated]:
+def generate(n: int, seed: int, registry: Registry, start: int = 0, cyclic: bool = True) -> Iterator[Generated]:
     """Designs `start` to `start + n - 1` of the stream for `seed`; each index has its own
-    random stream, so a slice is the same whoever draws it."""
+    random stream, so a slice is the same whoever draws it. With `cyclic` false no design
+    names cycles, and each is the one the stream drew before the cyclic designs came in."""
     kinds = tuple(SAMPLERS)
     for i in range(start, start + n):
         rng = random.Random(f"{seed}:{i}")
         cyc = random.Random(f"{seed}:{i}:cycles")
         drawn = cyc.choice(CYCLE_COUNTS)
-        wanted = (cyc.choice((0, drawn)), drawn) if cyc.random() < CYCLIC else None
+        wanted = (cyc.choice((0, drawn)), drawn) if cyc.random() < CYCLIC and cyclic else None
         kind = kinds[i % len(kinds)]
         name = f"gate-{seed}-{i:05d}"
         redraws = 0
