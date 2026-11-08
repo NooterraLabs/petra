@@ -177,10 +177,10 @@ A `.petra` file accepts these unit spellings.
 | area | `mm2`, `m2`, `inch2` |
 | force | `N`, `kN`, `MN`, `lbf`, `kip`, `kips` |
 | stress | `Pa`, `kPa`, `MPa`, `GPa`, `psi`, `ksi` |
-| current | `A`, `kA` |
+| current | `uA`, `mA`, `A`, `kA` |
 | voltage | `V`, `kV` |
-| resistance | `ohm`, `mohm` |
-| power | `W` |
+| resistance | `ohm`, `mohm`, `kohm`, `Mohm` |
+| power | `mW`, `W` |
 | energy, torque | `J`, `Nm`, `kip_in`, `kip_ft` |
 | time | `s`, `ms` |
 | temperature | `degC` |
@@ -615,6 +615,30 @@ In a claim, `<qoi>` is one of `bolts`, `bolt_tension`, `bolt_combined`, `slip`, 
 | `holes` | `<ply> std\|ovs\|ssl\|lsl\|ssl_parallel\|lsl_parallel [<ply> <type> ...]` | optional |  |  | hole types by ply (Table J3.3), plies flange, support; a ply it does not name has standard holes |
 | `weathering` | `no\|yes` | optional |  |  | whether the steel is unpainted weathering steel, whose spacing limits are tighter (Section J3.6); no unless stated |
 
+### Domain electronics
+
+Waivable modes: `dc.divider_output`, `dc.led_current`, `dc.led_rating`, `dc.rail_voltage`, `dc.regulator_current`, `dc.regulator_headroom`, `dc.regulator_input`, `dc.regulator_min_load`, `dc.regulator_thermal`, `dc.resistor_power`, `dc.resistor_voltage`, `dc.supply_current`.
+
+#### board
+
+A `board` component is written `board <name> { ... }`. `petra new board` prints its example, `examples/electronics/board.petra`.
+
+Load entries and claims on a `board` component take these forms:
+
+- Load entry: `on <board>.<sink> current in [<lo>, <hi>] [mean <value>]`
+- Claim: `claim <name>: <board>.<qoi> <=|>= <value> [margin <value>] [under <load>, ...]`
+
+In a claim, `<qoi>` is one of `voltage`, `output`, `current`, `power_utilisation`, `junction_temperature`.
+
+| line | form | needed | unit | ids | meaning |
+|---|---|---|---|---|---|
+| `supply` | `<name> voltage in [<lo>, <hi>] signed "<owner>" source "<source>" [capacity in [<lo>, <hi>] signed "<owner>" source "<source>"]` | required | voltage, current |  | a rail fed from outside the board, named by the supply; capacity is the most current it can deliver, and without it the supply-current check is UNKNOWN |
+| `regulator` | `<name> part <registry regulator id> from <rail> [top <resistor> bottom <resistor>]` | optional |  | `reg.*` | a linear regulator fed from a rail; its name is its output rail; an adjustable one names its feedback resistors, top from the output and bottom to ground |
+| `resistor` | `<name> part <registry resistor id> value <resistance> [from <rail>]` | optional | resistance | `res.*` | a chip resistor whose value is in its part's E24 or E96 series; with from, it runs from that rail to ground, and otherwise one divider, LED or regulator names it |
+| `divider` | `<name> from <rail> top <resistor> bottom <resistor>` | optional |  |  | two resistors in series from a rail to ground; its output is the node between them |
+| `led` | `<name> part <registry led id> from <rail> resistor <resistor> [count <n>]` | optional |  | `led.*` | a string of count LEDs (one by default) in series with its current-limit resistor, from a rail to ground |
+| `sink` | `<name> from <rail>` | optional |  |  | a load on a rail; each load case signs the current it draws |
+
 ## Registry
 
 The list below is the output of `petra registry list`. It gives every id a design can name, then the
@@ -651,6 +675,16 @@ bolt_group.200            bolt: ASTM F3043 and F3111 (Group 200); AISC's -N and 
 bolt_group.A307           bolt: ASTM A307 Grade A; AISC's -N and -X are `threads included` and `threads excluded`; also A307
 electrode.E70             electrode: AWS A5.1/A5.5 E70XX; also E70, E70XX
 electrode.E80             electrode: AWS A5.1/A5.5 E80XX; also E80, E80XX
+res.0603_1pct             resistor: Yageo RC series thick-film chip resistor datasheet: 0603 thick-film chip resistor, 1 % (E96); recalled and not checked against the published text
+res.0603_5pct             resistor: Yageo RC series thick-film chip resistor datasheet: 0603 thick-film chip resistor, 5 % (E24); recalled and not checked against the published text
+res.0805_1pct             resistor: Yageo RC series thick-film chip resistor datasheet: 0805 thick-film chip resistor, 1 % (E96); recalled and not checked against the published text
+res.1206_1pct             resistor: Yageo RC series thick-film chip resistor datasheet: 1206 thick-film chip resistor, 1 % (E96); recalled and not checked against the published text
+led.red_0603              led: typical 0603 chip LED datasheet: 0603 red AlInGaP LED; recalled and not checked against the published text
+led.white_0603            led: typical 0603 chip LED datasheet: 0603 white InGaN LED; recalled and not checked against the published text
+reg.lm317_to220           regulator_floating: TI LM317 datasheet (SLVS044), electrical characteristics: LM317 adjustable regulator, TO-220; recalled and not checked against the published text
+reg.ldo1117_3v3_sot223    regulator_fixed: TI LM1117 datasheet (SNOS412), electrical characteristics: 1117 fixed 3.3 V regulator, SOT-223; recalled and not checked against the published text
+reg.ldo1117_5v0_sot223    regulator_fixed: TI LM1117 datasheet (SNOS412), electrical characteristics: 1117 fixed 5.0 V regulator, SOT-223; recalled and not checked against the published text
+reg.ldo_adj_sot23_5       regulator_grounded: typical 150 mA adjustable low-dropout regulator in SOT-23-5 (MIC5205-ADJ datasheet): adjustable 150 mA low-dropout regulator, SOT-23-5; recalled and not checked against the published text
 chs.48_3x3_2              section: EN 10219-2 CHS 48.3 x 3.2
 chs.60_3x3_2              section: EN 10219-2 CHS 60.3 x 3.2
 chs.76_1x3_2              section: EN 10219-2 CHS 76.1 x 3.2

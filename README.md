@@ -26,6 +26,7 @@ petra check tab.petra
 - [Petra in a coding agent's loop](docs/in_the_loop.md)
 - [How the checker works](docs/design.md)
 - [Steel connections](docs/steel_connections.md)
+- [Electronics worst case](docs/electronics_dc.md)
 - [Roadmap and test results](docs/plan.md)
 
 ## License
