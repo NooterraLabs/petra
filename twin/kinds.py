@@ -177,10 +177,11 @@ def support_ply(lines):
 
 
 def beam_web_ply(lines, beam, grade, hole):
-    """The bolts push the beam web up. Uncoped, the web runs on into the flange; with a top
-    cope the edge is the cope's horizontal cut."""
+    """The bolts push the beam web up. J3.11's lc for the top bolt runs to the edge of the
+    material, the cope's horizontal cut or, uncoped, the beam's top. A card without `top` leaves
+    the uncoped top bolt an interior bolt, which is conservative."""
     cope = lines.cope()
-    edge = None
+    edge = lines.optional_length("top")
     if cope is not None:
         edge = lines.length("top") - cope.depth
     return Ply("beam web", beam.tw, grade.fu, hole, edge, "top")
