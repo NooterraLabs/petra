@@ -167,12 +167,8 @@ class KnownDefects(unittest.TestCase):
 
     HOLE_PAST_THE_COPE = 4213
     """A shear tab whose top bolt sits 1/2 in under a 2 in top cope in a short slot 1 1/8 in
-    long, so the twin reads the beam web's Lc for it as -1/16 in and its tearout as negative."""
+    long. The twin once read the beam web's Lc for it as -1/16 in and its tearout as negative."""
 
-    def test_the_twin_reads_a_hole_past_an_edge_as_a_negative_strength(self):
-        self.assertEqual([b.get("defect") for b in broken(self.HOLE_PAST_THE_COPE, "web_thicker", "twin")], [1])
-
-    @unittest.expectedFailure
     def test_the_twins_bolt_group_does_not_weaken_as_the_web_thickens(self):
         self.assertEqual(broken(self.HOLE_PAST_THE_COPE, "web_thicker", "twin"), [])
 

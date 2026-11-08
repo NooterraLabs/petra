@@ -470,13 +470,6 @@ DEFECTS: tuple[Defect, ...] = (
            "(inferred from their formulas), the least is Eq F11-3, which falls as Fy or the plate's depth rises. Past "
            "5.55 E/Fy it is negative, and the check reads its size, so a thicker plate reads weaker. Companion "
            "II.A-19A takes Mc as the plate's flexural yielding strength and checks lateral-torsional buckling apart."),
-    Defect(("rows_plus_one", "web_thicker"), "twin", ("block_shear", "bolts"),
-           r"^(block shear, angle, support leg|bolt group effective strength, beam side)$",
-           "Where a hole runs past an edge, the twin reads a negative strength (twin/kinds.py, block_shear and "
-           "_ply_nominal). Eq J4-5's Ant is negative once the edge across the force is under half the hole's width, "
-           "and Eq J3-6c's Lc once the edge along it is under half the hole's length. A thicker ply then reads weaker, "
-           "and another row can turn a negative block shear strength positive. J4.3 and J3.11a do not reach such a "
-           "hole, and J3.4's least edge distance, Petra's edge_min, refuses it."),
 )
 
 POSITIONAL = ("beam_fit",)
