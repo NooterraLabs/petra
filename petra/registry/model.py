@@ -155,6 +155,8 @@ class PartKind(Enum):
     BREAKER = "breaker"
     TERMINAL = "terminal"
     BOLT = "bolt"
+    SCREW = "screw"         # a machine or thread-forming screw by its geometry (docs/parts.md)
+    WASHER = "washer"
 
 
 class ProcessKind(Enum):
@@ -162,6 +164,12 @@ class ProcessKind(Enum):
     COATING = "coating"     # zinc plating, anodising: replaces the surface material
     WELD = "weld"           # heat-affected zone strength reduction
     CUT = "cut"
+    PRINT = "print"         # material extrusion (FDM): a build direction, a line width, supports
+    POWDER = "powder"       # powder-bed fusion (SLS, MJF): no supports, trapped powder
+    SHEET = "sheet"         # profile cut from flat stock: laser, waterjet, router
+    MILL = "mill"           # 3-axis milling: a tool deck reaching from setup directions
+    MOLD = "mold"           # injection molding: a pull direction, draft, side actions
+    PCB = "pcb"             # a printed circuit board's fabrication tolerances, for fit only
 
 
 class Corrosivity(Enum):
