@@ -1,7 +1,8 @@
 {"unexpected": {"name": "gate-1-01614", "kind": "bolt_bracket", "expected": "FAIL", "status": "PASS", "toleranced": true, "free": false}}
 {"unexpected": {"name": "gate-1-06124", "kind": "bolt_bracket", "expected": "FAIL", "status": "PASS", "toleranced": true, "free": false}}
+{"unexpected": {"name": "gate-1-06578", "kind": "shear_tab", "expected": "FAIL", "status": "PASS", "toleranced": true, "free": false}}
 {"unexpected": {"name": "gate-1-06696", "kind": "bolt_bracket", "expected": "FAIL", "status": "PASS", "toleranced": true, "free": false}}
-{"fault": {"fault": "missing weld", "base": "gate-101-00000", "kind": "shear_tab", "status": "FAIL", "named": ["fillet_size"], "others": ["ductility", "weld"]}}
+{"fault": {"fault": "missing weld", "base": "gate-101-00000", "kind": "shear_tab", "status": "FAIL", "named": ["fillet_size"], "others": ["ductility", "fatigue_weld", "fatigue_weld_end"]}}
 {"fault": {"fault": "missing weld", "base": "gate-101-00022", "kind": "shear_tab", "status": "FAIL", "named": ["fillet_size"], "others": ["ductility"]}}
 {"fault": {"fault": "missing weld", "base": "gate-101-00044", "kind": "shear_tab", "status": "FAIL", "named": ["fillet_size"], "others": ["ductility"]}}
 {"fault": {"fault": "missing weld", "base": "gate-101-00004", "kind": "shear_end_plate", "status": "FAIL", "named": ["fillet_size"], "others": ["weld"]}}
@@ -16,15 +17,15 @@
 {"fault": {"fault": "missing weld", "base": "gate-101-00012", "kind": "double_angle", "status": "FAIL", "named": ["fillet_size"], "others": ["weld"]}}
 {"fault": {"fault": "missing weld", "base": "gate-101-00005", "kind": "seated", "status": "FAIL", "named": ["fillet_size"], "others": ["weld"]}}
 {"fault": {"fault": "missing weld", "base": "gate-101-00038", "kind": "seated", "status": "FAIL", "named": ["fillet_size"], "others": ["weld"]}}
-{"fault": {"fault": "short edge", "base": "gate-101-00000", "kind": "shear_tab", "status": "FAIL", "named": ["edge_min"], "others": ["bolts", "flexural_rupture"]}}
+{"fault": {"fault": "short edge", "base": "gate-101-00000", "kind": "shear_tab", "status": "FAIL", "named": ["edge_min"], "others": ["bolts", "fatigue_bolted", "fatigue_weld_end"]}}
 {"fault": {"fault": "short edge", "base": "gate-101-00022", "kind": "shear_tab", "status": "FAIL", "named": ["edge_min"], "others": ["bolts", "flexural_rupture"]}}
 {"fault": {"fault": "short edge", "base": "gate-101-00044", "kind": "shear_tab", "status": "FAIL", "named": ["edge_min"], "others": ["bolts", "flexural_rupture"]}}
-{"fault": {"fault": "short edge", "base": "gate-101-00001", "kind": "double_angle", "status": "FAIL", "named": ["edge_min"], "others": []}}
+{"fault": {"fault": "short edge", "base": "gate-101-00001", "kind": "double_angle", "status": "FAIL", "named": ["edge_min"], "others": ["fatigue_bolted"]}}
 {"fault": {"fault": "short edge", "base": "gate-101-00012", "kind": "double_angle", "status": "FAIL", "named": ["edge_min"], "others": ["weld", "weld_base_metal"]}}
 {"fault": {"fault": "short edge", "base": "gate-101-00078", "kind": "double_angle", "status": "FAIL", "named": ["edge_min"], "others": ["block_shear", "bolts"]}}
 {"fault": {"fault": "short edge", "base": "gate-101-00024", "kind": "single_angle", "status": "FAIL", "named": ["edge_min"], "others": ["bolts"]}}
-{"fault": {"fault": "short edge", "base": "gate-101-00025", "kind": "shear_tee", "status": "FAIL", "named": ["edge_min"], "others": ["bolts", "flexural_rupture"]}}
-{"fault": {"fault": "short edge", "base": "gate-101-00036", "kind": "shear_tee", "status": "FAIL", "named": ["edge_min"], "others": ["bolts"]}}
+{"fault": {"fault": "short edge", "base": "gate-101-00025", "kind": "shear_tee", "status": "FAIL", "named": ["edge_min"], "others": ["bolts", "fatigue_bolted"]}}
+{"fault": {"fault": "short edge", "base": "gate-101-00036", "kind": "shear_tee", "status": "FAIL", "named": ["edge_min"], "others": ["bolts", "fatigue_bolted"]}}
 {"fault": {"fault": "short edge", "base": "gate-101-00004", "kind": "shear_end_plate", "status": "FAIL", "named": ["edge_min"], "others": ["shear_rupture", "weld", "weld_base_metal"]}}
 {"fault": {"fault": "short edge", "base": "gate-101-00015", "kind": "shear_end_plate", "status": "FAIL", "named": ["edge_min"], "others": ["weld"]}}
 {"fault": {"fault": "short edge", "base": "gate-101-00048", "kind": "shear_end_plate", "status": "FAIL", "named": ["edge_min"], "others": ["shear_rupture", "weld_base_metal"]}}
@@ -34,19 +35,19 @@
 {"fault": {"fault": "short edge", "base": "gate-101-00010", "kind": "hanger", "status": "FAIL", "named": ["edge_min"], "others": ["prying"]}}
 {"fault": {"fault": "short edge", "base": "gate-101-00032", "kind": "hanger", "status": "FAIL", "named": ["edge_min"], "others": ["prying"]}}
 {"fault": {"fault": "short edge", "base": "gate-101-00043", "kind": "hanger", "status": "FAIL", "named": ["edge_min"], "others": ["prying", "tension_yield"]}}
-{"fault": {"fault": "close holes", "base": "gate-101-00000", "kind": "shear_tab", "status": "FAIL", "named": ["spacing_min"], "others": ["block_shear", "bolts"]}}
+{"fault": {"fault": "close holes", "base": "gate-101-00000", "kind": "shear_tab", "status": "FAIL", "named": ["spacing_min"], "others": ["bolts", "fatigue_bolted", "fatigue_weld_end"]}}
 {"fault": {"fault": "close holes", "base": "gate-101-00022", "kind": "shear_tab", "status": "FAIL", "named": ["spacing_min"], "others": ["bolts"]}}
 {"fault": {"fault": "close holes", "base": "gate-101-00044", "kind": "shear_tab", "status": "FAIL", "named": ["spacing_min"], "others": ["bolts"]}}
-{"fault": {"fault": "close holes", "base": "gate-101-00001", "kind": "double_angle", "status": "FAIL", "named": ["spacing_min"], "others": ["block_shear", "bolts", "shear_rupture"]}}
+{"fault": {"fault": "close holes", "base": "gate-101-00001", "kind": "double_angle", "status": "FAIL", "named": ["spacing_min"], "others": ["block_shear", "fatigue_bolted"]}}
 {"fault": {"fault": "close holes", "base": "gate-101-00012", "kind": "double_angle", "status": "FAIL", "named": ["spacing_min"], "others": ["weld"]}}
 {"fault": {"fault": "close holes", "base": "gate-101-00078", "kind": "double_angle", "status": "FAIL", "named": ["spacing_min"], "others": ["block_shear", "bolts", "shear_rupture", "shear_yield"]}}
 {"fault": {"fault": "close holes", "base": "gate-101-00024", "kind": "single_angle", "status": "FAIL", "named": ["spacing_min"], "others": ["block_shear", "bolts", "shear_rupture"]}}
-{"fault": {"fault": "close holes", "base": "gate-101-00025", "kind": "shear_tee", "status": "FAIL", "named": ["spacing_min"], "others": ["bolts", "flexural_rupture"]}}
-{"fault": {"fault": "close holes", "base": "gate-101-00036", "kind": "shear_tee", "status": "FAIL", "named": ["spacing_min"], "others": ["bolts", "flexural_rupture"]}}
+{"fault": {"fault": "close holes", "base": "gate-101-00025", "kind": "shear_tee", "status": "FAIL", "named": ["spacing_min"], "others": ["bolts", "fatigue_bolted"]}}
+{"fault": {"fault": "close holes", "base": "gate-101-00036", "kind": "shear_tee", "status": "FAIL", "named": ["spacing_min"], "others": ["bolts", "fatigue_bolted"]}}
 {"fault": {"fault": "close holes", "base": "gate-101-00004", "kind": "shear_end_plate", "status": "FAIL", "named": ["spacing_min"], "others": ["block_shear", "bolts", "shear_rupture", "shear_yield", "weld", "weld_base_metal"]}}
 {"fault": {"fault": "close holes", "base": "gate-101-00015", "kind": "shear_end_plate", "status": "FAIL", "named": ["spacing_min"], "others": ["block_shear", "bolts", "shear_rupture", "shear_yield", "weld", "weld_base_metal"]}}
 {"fault": {"fault": "close holes", "base": "gate-101-00048", "kind": "shear_end_plate", "status": "FAIL", "named": ["spacing_min"], "others": ["block_shear", "bolts", "shear_rupture", "shear_yield", "weld", "weld_base_metal"]}}
-{"fault": {"fault": "close holes", "base": "gate-101-00019", "kind": "bolt_bracket", "status": "FAIL", "named": ["spacing_min"], "others": ["bolts", "slip"]}}
+{"fault": {"fault": "close holes", "base": "gate-101-00019", "kind": "bolt_bracket", "status": "FAIL", "named": ["spacing_min"], "others": ["bolts", "fatigue_bolted", "slip"]}}
 {"fault": {"fault": "close holes", "base": "gate-101-00074", "kind": "bolt_bracket", "status": "FAIL", "named": ["spacing_min"], "others": ["bolts"]}}
 {"fault": {"fault": "close holes", "base": "gate-101-00085", "kind": "bolt_bracket", "status": "FAIL", "named": ["spacing_min"], "others": ["bracket_edge", "slip"]}}
 {"fault": {"fault": "close holes", "base": "gate-101-00010", "kind": "hanger", "status": "FAIL", "named": ["spacing_min"], "others": ["prying"]}}
@@ -70,12 +71,12 @@
 {"fault": {"fault": "far holes", "base": "gate-101-00010", "kind": "hanger", "status": "FAIL", "named": ["spacing_max"], "others": []}}
 {"fault": {"fault": "far holes", "base": "gate-101-00032", "kind": "hanger", "status": "FAIL", "named": ["spacing_max"], "others": []}}
 {"fault": {"fault": "far holes", "base": "gate-101-00043", "kind": "hanger", "status": "FAIL", "named": ["spacing_max"], "others": []}}
-{"fault": {"fault": "wrong joint type", "base": "gate-101-00000", "kind": "shear_tab", "status": "FAIL", "named": ["hole_use"], "others": ["bolts"]}}
+{"fault": {"fault": "wrong joint type", "base": "gate-101-00000", "kind": "shear_tab", "status": "FAIL", "named": ["hole_use"], "others": []}}
 {"fault": {"fault": "wrong joint type", "base": "gate-101-00022", "kind": "shear_tab", "status": "FAIL", "named": ["hole_use"], "others": ["bolts"]}}
 {"fault": {"fault": "wrong joint type", "base": "gate-101-00044", "kind": "shear_tab", "status": "FAIL", "named": ["hole_use"], "others": ["bolts"]}}
 {"fault": {"fault": "wrong joint type", "base": "gate-101-00012", "kind": "double_angle", "status": "FAIL", "named": ["hole_use"], "others": []}}
 {"fault": {"fault": "wrong joint type", "base": "gate-101-00024", "kind": "single_angle", "status": "FAIL", "named": ["hole_use"], "others": ["bolts"]}}
-{"fault": {"fault": "wrong joint type", "base": "gate-101-00036", "kind": "shear_tee", "status": "FAIL", "named": ["hole_use"], "others": ["bolts"]}}
+{"fault": {"fault": "wrong joint type", "base": "gate-101-00036", "kind": "shear_tee", "status": "FAIL", "named": ["hole_use"], "others": ["fatigue_bolted"]}}
 {"fault": {"fault": "wrong joint type", "base": "gate-101-00004", "kind": "shear_end_plate", "status": "FAIL", "named": ["hole_use"], "others": ["shear_rupture"]}}
 {"fault": {"fault": "wrong joint type", "base": "gate-101-00048", "kind": "shear_end_plate", "status": "FAIL", "named": ["hole_use"], "others": []}}
 {"fault": {"fault": "wrong joint type", "base": "gate-101-00074", "kind": "bolt_bracket", "status": "FAIL", "named": ["hole_use"], "others": []}}
@@ -88,7 +89,7 @@
 {"fault": {"fault": "thick shear tab", "base": "gate-101-00000", "kind": "shear_tab", "status": "FAIL", "named": ["ductility"], "others": []}}
 {"fault": {"fault": "thick shear tab", "base": "gate-101-00022", "kind": "shear_tab", "status": "FAIL", "named": ["ductility"], "others": ["beam_fit"]}}
 {"fault": {"fault": "thick shear tab", "base": "gate-101-00044", "kind": "shear_tab", "status": "FAIL", "named": ["ductility"], "others": []}}
-{"fault": {"fault": "thin tab weld", "base": "gate-101-00000", "kind": "shear_tab", "status": "FAIL", "named": ["ductility"], "others": []}}
+{"fault": {"fault": "thin tab weld", "base": "gate-101-00000", "kind": "shear_tab", "status": "FAIL", "named": ["ductility"], "others": ["fatigue_weld_end"]}}
 {"fault": {"fault": "thin tab weld", "base": "gate-101-00022", "kind": "shear_tab", "status": "FAIL", "named": ["ductility"], "others": []}}
 {"fault": {"fault": "thin tab weld", "base": "gate-101-00044", "kind": "shear_tab", "status": "FAIL", "named": ["ductility"], "others": []}}
 {"fault": {"fault": "slender stiffener", "base": "gate-101-00006", "kind": "stiffened_seat", "status": "FAIL", "named": ["compression"], "others": ["flexural_yield", "weld_base_metal"]}}
@@ -101,26 +102,26 @@
 {"fault": {"fault": "bolts at the stem", "base": "gate-101-00010", "kind": "hanger", "status": "FAIL", "named": ["clearance"], "others": ["spacing_min"]}}
 {"fault": {"fault": "bolts at the stem", "base": "gate-101-00032", "kind": "hanger", "status": "FAIL", "named": ["clearance", "prying"], "others": ["flange_fit", "spacing_min"]}}
 {"fault": {"fault": "bolts at the stem", "base": "gate-101-00043", "kind": "hanger", "status": "FAIL", "named": ["clearance", "prying"], "others": ["flange_fit", "spacing_min"]}}
-{"fault": {"fault": "stiff tee", "base": "gate-101-00025", "kind": "shear_tee", "status": "FAIL", "named": ["tee_ductility"], "others": ["edge_max", "fillet_size", "weld"]}}
-{"fault": {"fault": "stiff tee", "base": "gate-101-00036", "kind": "shear_tee", "status": "FAIL", "named": ["tee_ductility"], "others": ["edge_max", "web_fit"]}}
+{"fault": {"fault": "stiff tee", "base": "gate-101-00025", "kind": "shear_tee", "status": "FAIL", "named": ["tee_ductility"], "others": ["edge_max", "fatigue_detail", "fatigue_weld", "fillet_size"]}}
+{"fault": {"fault": "stiff tee", "base": "gate-101-00036", "kind": "shear_tee", "status": "FAIL", "named": ["tee_ductility"], "others": ["edge_max", "fatigue_detail", "fatigue_weld", "web_fit"]}}
 {"fault": {"fault": "deep cope", "base": "gate-101-00000", "kind": "shear_tab", "status": "FAIL", "named": ["cope_buckling"], "others": ["beam_fit", "block_shear", "bolts", "edge_min"]}}
 {"fault": {"fault": "deep cope", "base": "gate-101-00022", "kind": "shear_tab", "status": "FAIL", "named": ["cope_buckling"], "others": ["beam_fit", "block_shear", "bolts", "edge_min"]}}
 {"fault": {"fault": "deep cope", "base": "gate-101-00044", "kind": "shear_tab", "status": "FAIL", "named": ["cope_buckling"], "others": ["beam_fit", "block_shear", "bolts", "edge_min"]}}
-{"fault": {"fault": "deep cope", "base": "gate-101-00001", "kind": "double_angle", "status": "FAIL", "named": ["cope_buckling"], "others": ["beam_fit", "block_shear", "bolts", "edge_min", "shear_rupture"]}}
+{"fault": {"fault": "deep cope", "base": "gate-101-00001", "kind": "double_angle", "status": "FAIL", "named": ["cope_buckling"], "others": ["beam_fit", "block_shear", "bolts", "edge_min", "fatigue_bolted", "shear_rupture"]}}
 {"fault": {"fault": "deep cope", "base": "gate-101-00012", "kind": "double_angle", "status": "FAIL", "named": ["cope_buckling"], "others": ["beam_fit", "block_shear", "bolts", "edge_min"]}}
 {"fault": {"fault": "deep cope", "base": "gate-101-00078", "kind": "double_angle", "status": "FAIL", "named": ["cope_buckling"], "others": ["beam_fit", "block_shear", "bolts", "edge_min", "shear_rupture", "shear_yield"]}}
 {"fault": {"fault": "deep cope", "base": "gate-101-00024", "kind": "single_angle", "status": "FAIL", "named": ["cope_buckling"], "others": ["beam_fit", "block_shear", "bolts", "edge_min"]}}
 {"fault": {"fault": "deep cope", "base": "gate-101-00025", "kind": "shear_tee", "status": "FAIL", "named": ["cope_buckling"], "others": ["beam_fit", "block_shear", "bolts", "edge_min"]}}
-{"fault": {"fault": "deep cope", "base": "gate-101-00036", "kind": "shear_tee", "status": "FAIL", "named": ["cope_buckling"], "others": ["beam_fit", "block_shear", "bolts", "edge_min", "shear_rupture"]}}
-{"fault": {"fault": "overload", "base": "gate-101-00000", "kind": "shear_tab", "status": "FAIL", "named": ["bolts"], "others": ["block_shear", "flexural_rupture"]}}
+{"fault": {"fault": "deep cope", "base": "gate-101-00036", "kind": "shear_tee", "status": "FAIL", "named": ["cope_buckling"], "others": ["beam_fit", "block_shear", "bolts", "edge_min", "fatigue_bolted", "shear_rupture"]}}
+{"fault": {"fault": "overload", "base": "gate-101-00000", "kind": "shear_tab", "status": "FAIL", "named": ["fatigue_weld_end"], "others": ["bolts", "fatigue_bolted"]}}
 {"fault": {"fault": "overload", "base": "gate-101-00022", "kind": "shear_tab", "status": "FAIL", "named": ["bolts"], "others": []}}
 {"fault": {"fault": "overload", "base": "gate-101-00044", "kind": "shear_tab", "status": "FAIL", "named": ["bolts"], "others": []}}
-{"fault": {"fault": "overload", "base": "gate-101-00001", "kind": "double_angle", "status": "FAIL", "named": ["block_shear"], "others": ["bolts", "shear_rupture"]}}
+{"fault": {"fault": "overload", "base": "gate-101-00001", "kind": "double_angle", "status": "FAIL", "named": ["fatigue_bolted"], "others": ["block_shear"]}}
 {"fault": {"fault": "overload", "base": "gate-101-00012", "kind": "double_angle", "status": "FAIL", "named": ["weld"], "others": ["weld_base_metal"]}}
 {"fault": {"fault": "overload", "base": "gate-101-00078", "kind": "double_angle", "status": "FAIL", "named": ["bolts"], "others": ["block_shear", "shear_rupture", "shear_yield", "slip"]}}
 {"fault": {"fault": "overload", "base": "gate-101-00024", "kind": "single_angle", "status": "FAIL", "named": ["bolts"], "others": ["block_shear"]}}
-{"fault": {"fault": "overload", "base": "gate-101-00025", "kind": "shear_tee", "status": "FAIL", "named": ["bolts"], "others": ["flexural_rupture"]}}
-{"fault": {"fault": "overload", "base": "gate-101-00036", "kind": "shear_tee", "status": "FAIL", "named": ["bolts"], "others": []}}
+{"fault": {"fault": "overload", "base": "gate-101-00025", "kind": "shear_tee", "status": "FAIL", "named": ["fatigue_bolted"], "others": []}}
+{"fault": {"fault": "overload", "base": "gate-101-00036", "kind": "shear_tee", "status": "FAIL", "named": ["fatigue_bolted"], "others": ["bolts"]}}
 {"fault": {"fault": "overload", "base": "gate-101-00004", "kind": "shear_end_plate", "status": "FAIL", "named": ["shear_rupture"], "others": ["block_shear", "bolts", "shear_yield", "weld", "weld_base_metal"]}}
 {"fault": {"fault": "overload", "base": "gate-101-00015", "kind": "shear_end_plate", "status": "FAIL", "named": ["weld"], "others": ["block_shear", "bolts", "shear_rupture", "shear_yield", "weld_base_metal"]}}
 {"fault": {"fault": "overload", "base": "gate-101-00048", "kind": "shear_end_plate", "status": "FAIL", "named": ["weld_base_metal"], "others": ["block_shear", "bolts", "shear_rupture", "shear_yield", "weld"]}}
@@ -145,7 +146,7 @@
 {"fault": {"fault": "rows past the depth", "base": "gate-101-00000", "kind": "shear_tab", "status": "FAIL", "named": ["beam_fit"], "others": []}}
 {"fault": {"fault": "rows past the depth", "base": "gate-101-00022", "kind": "shear_tab", "status": "FAIL", "named": ["beam_fit"], "others": []}}
 {"fault": {"fault": "rows past the depth", "base": "gate-101-00044", "kind": "shear_tab", "status": "FAIL", "named": ["beam_fit"], "others": []}}
-{"fault": {"fault": "rows past the depth", "base": "gate-101-00001", "kind": "double_angle", "status": "FAIL", "named": ["beam_fit"], "others": []}}
+{"fault": {"fault": "rows past the depth", "base": "gate-101-00001", "kind": "double_angle", "status": "FAIL", "named": ["beam_fit"], "others": ["fatigue_bolted"]}}
 {"fault": {"fault": "rows past the depth", "base": "gate-101-00012", "kind": "double_angle", "status": "FAIL", "named": ["beam_fit"], "others": []}}
 {"fault": {"fault": "rows past the depth", "base": "gate-101-00078", "kind": "double_angle", "status": "FAIL", "named": ["beam_fit"], "others": ["shear_rupture"]}}
 {"fault": {"fault": "rows past the depth", "base": "gate-101-00024", "kind": "single_angle", "status": "FAIL", "named": ["beam_fit"], "others": []}}
@@ -191,7 +192,7 @@
 {"fault": {"fault": "plate on the fillet", "base": "gate-101-00078", "kind": "double_angle", "status": "FAIL", "named": ["beam_fit"], "others": []}}
 {"fault": {"fault": "plate on the fillet", "base": "gate-101-00024", "kind": "single_angle", "status": "FAIL", "named": ["beam_fit"], "others": []}}
 {"fault": {"fault": "plate on the fillet", "base": "gate-101-00025", "kind": "shear_tee", "status": "FAIL", "named": ["beam_fit"], "others": []}}
-{"fault": {"fault": "plate on the fillet", "base": "gate-101-00036", "kind": "shear_tee", "status": "FAIL", "named": ["beam_fit"], "others": ["bolts"]}}
+{"fault": {"fault": "plate on the fillet", "base": "gate-101-00036", "kind": "shear_tee", "status": "FAIL", "named": ["beam_fit"], "others": []}}
 {"fault": {"fault": "columns off the flange", "base": "gate-101-00019", "kind": "bolt_bracket", "status": "FAIL", "named": ["flange_fit"], "others": ["clearance"]}}
 {"fault": {"fault": "columns off the flange", "base": "gate-101-00074", "kind": "bolt_bracket", "status": "FAIL", "named": ["flange_fit"], "others": ["clearance", "plate_buckling"]}}
 {"fault": {"fault": "columns off the flange", "base": "gate-101-00085", "kind": "bolt_bracket", "status": "FAIL", "named": ["flange_fit"], "others": ["bracket_edge", "clearance"]}}
@@ -219,7 +220,57 @@
 {"fault": {"fault": "cramped bracket bolts", "base": "gate-101-00019", "kind": "bolt_bracket", "status": "FAIL", "named": ["clearance"], "others": []}}
 {"fault": {"fault": "cramped bracket bolts", "base": "gate-101-00074", "kind": "bolt_bracket", "status": "FAIL", "named": ["clearance"], "others": []}}
 {"fault": {"fault": "cramped bracket bolts", "base": "gate-101-00085", "kind": "bolt_bracket", "status": "FAIL", "named": ["clearance"], "others": ["bracket_edge"]}}
-{"breaker": {"base": "gate-1001-00002", "kind": "single_angle", "seed": 1, "evaluations": 100, "accepted": 48, "best": 1.0, "best_mode": "edge_min", "best_hash": "8ba458ceb0b26328", "false_pass": []}}
+{"fault": {"fault": "snug joint under cycles", "base": "gate-101-00000", "kind": "shear_tab", "status": "FAIL", "named": ["joint_type"], "others": ["fatigue_weld_end"]}}
+{"fault": {"fault": "snug joint under cycles", "base": "gate-101-00022", "kind": "shear_tab", "status": "FAIL", "named": ["joint_type"], "others": ["fatigue_weld_end"]}}
+{"fault": {"fault": "snug joint under cycles", "base": "gate-101-00044", "kind": "shear_tab", "status": "FAIL", "named": ["joint_type"], "others": ["fatigue_weld_end"]}}
+{"fault": {"fault": "snug joint under cycles", "base": "gate-101-00001", "kind": "double_angle", "status": "FAIL", "named": ["joint_type"], "others": []}}
+{"fault": {"fault": "snug joint under cycles", "base": "gate-101-00012", "kind": "double_angle", "status": "FAIL", "named": ["joint_type"], "others": ["fatigue_detail", "fatigue_weld"]}}
+{"fault": {"fault": "snug joint under cycles", "base": "gate-101-00078", "kind": "double_angle", "status": "FAIL", "named": ["joint_type"], "others": ["hole_use"]}}
+{"fault": {"fault": "snug joint under cycles", "base": "gate-101-00024", "kind": "single_angle", "status": "FAIL", "named": ["joint_type"], "others": []}}
+{"fault": {"fault": "snug joint under cycles", "base": "gate-101-00025", "kind": "shear_tee", "status": "FAIL", "named": ["joint_type"], "others": []}}
+{"fault": {"fault": "snug joint under cycles", "base": "gate-101-00036", "kind": "shear_tee", "status": "FAIL", "named": ["joint_type"], "others": []}}
+{"fault": {"fault": "snug joint under cycles", "base": "gate-101-00004", "kind": "shear_end_plate", "status": "FAIL", "named": ["joint_type"], "others": ["fatigue_weld"]}}
+{"fault": {"fault": "snug joint under cycles", "base": "gate-101-00015", "kind": "shear_end_plate", "status": "FAIL", "named": ["joint_type"], "others": ["fatigue_weld"]}}
+{"fault": {"fault": "snug joint under cycles", "base": "gate-101-00048", "kind": "shear_end_plate", "status": "FAIL", "named": ["joint_type"], "others": ["fatigue_weld"]}}
+{"fault": {"fault": "snug joint under cycles", "base": "gate-101-00019", "kind": "bolt_bracket", "status": "FAIL", "named": ["joint_type"], "others": []}}
+{"fault": {"fault": "snug joint under cycles", "base": "gate-101-00074", "kind": "bolt_bracket", "status": "FAIL", "named": ["joint_type"], "others": []}}
+{"fault": {"fault": "snug joint under cycles", "base": "gate-101-00085", "kind": "bolt_bracket", "status": "FAIL", "named": ["joint_type"], "others": []}}
+{"fault": {"fault": "snug joint under cycles", "base": "gate-101-00010", "kind": "hanger", "status": "FAIL", "named": ["joint_type"], "others": ["fatigue_bolt_tension", "fatigue_detail"]}}
+{"fault": {"fault": "snug joint under cycles", "base": "gate-101-00032", "kind": "hanger", "status": "FAIL", "named": ["joint_type"], "others": ["fatigue_bolt_tension", "fatigue_detail"]}}
+{"fault": {"fault": "snug joint under cycles", "base": "gate-101-00043", "kind": "hanger", "status": "FAIL", "named": ["joint_type"], "others": ["fatigue_bolt_tension", "fatigue_detail"]}}
+{"fault": {"fault": "cyclic overload", "base": "gate-101-00000", "kind": "shear_tab", "status": "FAIL", "named": ["fatigue_bolted", "fatigue_weld_end"], "others": ["block_shear", "bolts", "flexural_rupture"]}}
+{"fault": {"fault": "cyclic overload", "base": "gate-101-00022", "kind": "shear_tab", "status": "FAIL", "named": ["fatigue_bolted", "fatigue_weld", "fatigue_weld_end"], "others": ["block_shear", "bolts", "flexural_rupture", "flexural_yield", "shear_rupture"]}}
+{"fault": {"fault": "cyclic overload", "base": "gate-101-00044", "kind": "shear_tab", "status": "FAIL", "named": ["fatigue_bolted", "fatigue_weld", "fatigue_weld_end"], "others": ["block_shear", "bolts", "flexural_rupture", "flexural_yield", "shear_rupture"]}}
+{"fault": {"fault": "cyclic overload", "base": "gate-101-00001", "kind": "double_angle", "status": "FAIL", "named": ["fatigue_bolted"], "others": ["block_shear", "bolts", "shear_rupture"]}}
+{"fault": {"fault": "cyclic overload", "base": "gate-101-00012", "kind": "double_angle", "status": "FAIL", "named": ["fatigue_bolted", "fatigue_weld"], "others": ["fatigue_detail", "weld", "weld_base_metal"]}}
+{"fault": {"fault": "cyclic overload", "base": "gate-101-00078", "kind": "double_angle", "status": "FAIL", "named": ["fatigue_bolted"], "others": ["block_shear", "bolts", "shear_rupture", "shear_yield", "slip"]}}
+{"fault": {"fault": "cyclic overload", "base": "gate-101-00024", "kind": "single_angle", "status": "FAIL", "named": ["fatigue_bolted"], "others": ["block_shear", "bolts", "shear_rupture", "shear_yield"]}}
+{"fault": {"fault": "cyclic overload", "base": "gate-101-00025", "kind": "shear_tee", "status": "FAIL", "named": ["fatigue_bolted"], "others": ["bolts"]}}
+{"fault": {"fault": "cyclic overload", "base": "gate-101-00036", "kind": "shear_tee", "status": "FAIL", "named": ["fatigue_bolted"], "others": ["bolts"]}}
+{"fault": {"fault": "cyclic overload", "base": "gate-101-00004", "kind": "shear_end_plate", "status": "FAIL", "named": ["fatigue_bolted", "fatigue_weld"], "others": ["block_shear", "bolts", "shear_rupture", "shear_yield", "weld", "weld_base_metal"]}}
+{"fault": {"fault": "cyclic overload", "base": "gate-101-00015", "kind": "shear_end_plate", "status": "FAIL", "named": ["fatigue_bolted", "fatigue_weld"], "others": ["block_shear", "bolts", "shear_rupture", "shear_yield", "weld", "weld_base_metal"]}}
+{"fault": {"fault": "cyclic overload", "base": "gate-101-00048", "kind": "shear_end_plate", "status": "FAIL", "named": ["fatigue_bolted", "fatigue_weld"], "others": ["block_shear", "bolts", "shear_rupture", "shear_yield", "weld", "weld_base_metal"]}}
+{"fault": {"fault": "cyclic overload", "base": "gate-101-00019", "kind": "bolt_bracket", "status": "FAIL", "named": ["fatigue_bolted"], "others": ["block_shear", "bolts", "slip"]}}
+{"fault": {"fault": "cyclic overload", "base": "gate-101-00074", "kind": "bolt_bracket", "status": "FAIL", "named": ["fatigue_bolted"], "others": ["block_shear", "bolts"]}}
+{"fault": {"fault": "cyclic overload", "base": "gate-101-00085", "kind": "bolt_bracket", "status": "FAIL", "named": ["fatigue_bolted"], "others": ["bolts", "bracket_edge", "slip"]}}
+{"fault": {"fault": "cyclic overload", "base": "gate-101-00010", "kind": "hanger", "status": "FAIL", "named": ["fatigue_bolt_tension"], "others": ["fatigue_detail", "prying", "tension_rupture", "tension_yield", "web_local_yielding"]}}
+{"fault": {"fault": "cyclic overload", "base": "gate-101-00032", "kind": "hanger", "status": "FAIL", "named": ["fatigue_bolt_tension"], "others": ["fatigue_detail", "prying", "tension_rupture", "tension_yield", "web_local_yielding"]}}
+{"fault": {"fault": "cyclic overload", "base": "gate-101-00043", "kind": "hanger", "status": "FAIL", "named": ["fatigue_bolt_tension"], "others": ["bolt_tension", "fatigue_detail", "prying", "shear_rupture", "shear_yield", "tension_rupture", "tension_yield", "web_local_yielding"]}}
+{"fault": {"fault": "cyclic overload", "base": "gate-101-00006", "kind": "stiffened_seat", "status": "FAIL", "named": ["fatigue_weld", "fatigue_weld_end"], "others": ["bearing", "compression", "flexural_yield", "shear_yield", "web_crippling", "web_local_yielding", "weld", "weld_base_metal"]}}
+{"fault": {"fault": "cyclic overload", "base": "gate-101-00017", "kind": "stiffened_seat", "status": "FAIL", "named": ["fatigue_weld", "fatigue_weld_end"], "others": ["bearing", "compression", "shear_yield", "web_crippling", "web_local_yielding", "weld", "weld_base_metal"]}}
+{"fault": {"fault": "cyclic overload", "base": "gate-101-00028", "kind": "stiffened_seat", "status": "FAIL", "named": ["fatigue_weld", "fatigue_weld_end"], "others": ["bearing", "compression", "web_crippling", "web_local_yielding", "weld", "weld_base_metal"]}}
+{"fault": {"fault": "cyclic overload", "base": "gate-101-00009", "kind": "weld_bracket", "status": "FAIL", "named": ["fatigue_weld"], "others": ["fatigue_detail", "weld"]}}
+{"fault": {"fault": "cyclic overload", "base": "gate-101-00020", "kind": "weld_bracket", "status": "FAIL", "named": ["fatigue_weld", "fatigue_weld_end"], "others": ["flexural_yield", "plate_buckling", "weld", "weld_base_metal"]}}
+{"fault": {"fault": "cyclic overload", "base": "gate-101-00042", "kind": "weld_bracket", "status": "FAIL", "named": ["fatigue_weld", "fatigue_weld_end"], "others": ["flexural_yield", "plate_buckling", "weld", "weld_base_metal"]}}
+{"fault": {"fault": "one-sided plate end", "base": "gate-101-00000", "kind": "shear_tab", "status": "FAIL", "named": ["fatigue_detail"], "others": ["ductility", "fatigue_bolted"]}}
+{"fault": {"fault": "one-sided plate end", "base": "gate-101-00022", "kind": "shear_tab", "status": "FAIL", "named": ["fatigue_detail"], "others": ["ductility", "joint_type"]}}
+{"fault": {"fault": "one-sided plate end", "base": "gate-101-00044", "kind": "shear_tab", "status": "FAIL", "named": ["fatigue_detail"], "others": ["ductility", "joint_type"]}}
+{"fault": {"fault": "one-sided plate end", "base": "gate-101-00006", "kind": "stiffened_seat", "status": "FAIL", "named": ["fatigue_detail"], "others": ["fatigue_weld", "weld"]}}
+{"fault": {"fault": "one-sided plate end", "base": "gate-101-00017", "kind": "stiffened_seat", "status": "FAIL", "named": ["fatigue_detail"], "others": ["fatigue_weld", "weld"]}}
+{"fault": {"fault": "one-sided plate end", "base": "gate-101-00028", "kind": "stiffened_seat", "status": "FAIL", "named": ["fatigue_detail"], "others": ["fatigue_weld", "weld"]}}
+{"fault": {"fault": "one-sided plate end", "base": "gate-101-00020", "kind": "weld_bracket", "status": "FAIL", "named": ["fatigue_detail"], "others": ["fatigue_weld", "weld"]}}
+{"fault": {"fault": "one-sided plate end", "base": "gate-101-00042", "kind": "weld_bracket", "status": "FAIL", "named": ["fatigue_detail"], "others": ["fatigue_weld", "weld"]}}
+{"breaker": {"base": "gate-1001-00002", "kind": "single_angle", "seed": 1, "evaluations": 100, "accepted": 48, "best": 1.0, "best_mode": "edge_min", "best_hash": "2f174611d3028e98", "false_pass": []}}
 {"breaker": {"base": "gate-1001-00003", "kind": "shear_tee", "seed": 1, "evaluations": 100, "accepted": 23, "best": 0.995653, "best_mode": "bolts", "best_hash": "1e80a1f9c97c7e5e", "false_pass": []}}
 {"breaker": {"base": "gate-1001-00006", "kind": "stiffened_seat", "seed": 1, "evaluations": 100, "accepted": 21, "best": 0.999828, "best_mode": "weld", "best_hash": "ddb06a05fc2ea53e", "false_pass": []}}
 {"breaker": {"base": "gate-1001-00008", "kind": "bolt_bracket", "seed": 1, "evaluations": 100, "accepted": 29, "best": 0.997157, "best_mode": "bolts", "best_hash": "193fa4bfd54f2f72", "false_pass": []}}
@@ -230,14 +281,14 @@
 {"breaker": {"base": "gate-1001-00018", "kind": "flange_force", "seed": 1, "evaluations": 100, "accepted": 49, "best": 0.995546, "best_mode": "flange_local_bending", "best_hash": "3a3ba6e98943857e", "false_pass": []}}
 {"breaker": {"base": "gate-1001-00020", "kind": "weld_bracket", "seed": 1, "evaluations": 100, "accepted": 16, "best": 0.999094, "best_mode": "weld", "best_hash": "5f68f2a7a49a1de3", "false_pass": []}}
 {"breaker": {"base": "gate-1001-00024", "kind": "single_angle", "seed": 1, "evaluations": 100, "accepted": 39, "best": 1.0, "best_mode": "beam_fit", "best_hash": "5728d8cc72407314", "false_pass": []}}
-{"breaker": {"base": "gate-1001-00026", "kind": "shear_end_plate", "seed": 1, "evaluations": 100, "accepted": 30, "best": 1.0, "best_mode": "edge_min", "best_hash": "0f34b170dab6098c", "false_pass": []}}
+{"breaker": {"base": "gate-1001-00026", "kind": "shear_end_plate", "seed": 1, "evaluations": 100, "accepted": 44, "best": 1.0, "best_mode": "joint_type", "best_hash": "c483e47d177acc4f", "false_pass": []}}
 {"breaker": {"base": "gate-1001-00028", "kind": "stiffened_seat", "seed": 1, "evaluations": 100, "accepted": 16, "best": 0.998593, "best_mode": "web_crippling", "best_hash": "771b02324ff7872c", "false_pass": []}}
 {"breaker": {"base": "gate-1001-00030", "kind": "bolt_bracket", "seed": 1, "evaluations": 100, "accepted": 14, "best": 0.999381, "best_mode": "bracket_edge", "best_hash": "b3e826fdbb0715b7", "false_pass": []}}
 {"breaker": {"base": "gate-1001-00033", "kind": "shear_tab", "seed": 1, "evaluations": 100, "accepted": 42, "best": 1.0, "best_mode": "ductility", "best_hash": "227263c03cab8b1b", "false_pass": []}}
 {"breaker": {"base": "gate-1001-00034", "kind": "double_angle", "seed": 1, "evaluations": 100, "accepted": 28, "best": 1.0, "best_mode": "edge_min", "best_hash": "ed5cf16c43b810f7", "false_pass": []}}
 {"breaker": {"base": "gate-1001-00035", "kind": "single_angle", "seed": 1, "evaluations": 100, "accepted": 33, "best": 1.0, "best_mode": "edge_min", "best_hash": "b14344502dac23cb", "false_pass": []}}
 {"breaker": {"base": "gate-1001-00036", "kind": "shear_tee", "seed": 1, "evaluations": 100, "accepted": 37, "best": 1.0, "best_mode": "edge_min", "best_hash": "94a971f4a70d8cb5", "false_pass": []}}
-{"breaker": {"base": "gate-1001-00037", "kind": "shear_end_plate", "seed": 1, "evaluations": 100, "accepted": 38, "best": 1.0, "best_mode": "fillet_size", "best_hash": "28d71517dc38c69d", "false_pass": []}}
+{"breaker": {"base": "gate-1001-00037", "kind": "shear_end_plate", "seed": 1, "evaluations": 100, "accepted": 48, "best": 1.0, "best_mode": "joint_type", "best_hash": "bb57f2bceef4b47f", "false_pass": []}}
 {"breaker": {"base": "gate-1001-00045", "kind": "double_angle", "seed": 1, "evaluations": 100, "accepted": 26, "best": 0.99981, "best_mode": "block_shear", "best_hash": "2d36e7a1dc8fdf21", "false_pass": []}}
 {"breaker": {"base": "gate-1001-00048", "kind": "shear_end_plate", "seed": 1, "evaluations": 100, "accepted": 35, "best": 0.995778, "best_mode": "weld_base_metal", "best_hash": "3b70b1474d255b0a", "false_pass": []}}
 {"breaker": {"base": "gate-1001-00050", "kind": "stiffened_seat", "seed": 1, "evaluations": 100, "accepted": 43, "best": 1.0, "best_mode": "fillet_size", "best_hash": "2b1b185e11e4eb74", "false_pass": []}}

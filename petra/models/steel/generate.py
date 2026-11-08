@@ -20,6 +20,15 @@ the sample can draw. Such a sample whose geometry the deck still fails is drawn 
 One sample in `FREE` (a "free" one) ignores the rules and keeps whatever geometry it
 draws, so some designs fail on geometry and their FAIL must carry a witness (§9 item 8).
 
+A design in `CYCLIC` (drawn from its own stream, so the rest of the sample is unchanged)
+names cycles in its gate case (Appendix 3): nSR from `CYCLE_COUNTS`, past and short of
+Section 3.1's 20,000 and the categories' thresholds, as [0, n] or [n, n]. Its loads are
+then the cyclic load as well, their width the range and their top the peak, and its bolts
+are pretensioned unless the sample is free (a snug-tight joint under a cyclic load fails
+joint_type). Only connections whose fatigue details all have an encoded category are
+cyclic: a detail that owes the unmodelled fatigue_detail would leave the design UNKNOWN,
+so such a draw keeps its static load alone.
+
 Loads carry a margin. The deck's own utilisations fix the scale: the governing check that
 the load changes lands at 1 - delta k (target "pass") or 1 + delta k (target "fail"), k
 drawn from [1, 4], delta = 0.02, found by secant steps because u is not linear in the
@@ -42,9 +51,10 @@ from ...registry import Registry
 from ...registry.steel import INCH
 from ..base import ComponentError
 from . import calc
-from .checks import GENERATORS
+from .cyclic import UNENCODED
 from .domain import required
-from .lower import KIND_SPECS, tee_parent
+from .fatigue import GENERATORS
+from .lower import CYCLES, KIND_SPECS, tee_parent
 
 DELTA = Fraction(1, 50)
 TOLERANCE = Fraction(1, 16)
@@ -63,6 +73,8 @@ PLATES = ("0.25", "0.3125", "0.375", "0.4375", "0.5")
 WELDS = ("0.1875", "0.25", "0.3125", "0.375")
 HOLES = ("std", "ovs", "ssl", "lsl", "ssl_parallel", "lsl_parallel")
 SIGNATURE = 'signed "gate@petra.dev" source "steel gate generator"'
+CYCLIC = 0.25
+CYCLE_COUNTS = (10_000, 20_000, 30_000, 100_000, 500_000, 2_000_000, 10_000_000, 100_000_000, 200_000_000)
 
 
 @dataclass(frozen=True)
@@ -78,6 +90,7 @@ class Generated:
     utilisation: float        # the deck's governing load-dependent utilisation, by enclosure
     governing: str            # its mode
     geometry: float           # the deck's governing utilisation over checks the load does not change
+    cycles: tuple[int, int] | None = None     # the gate case's cycles interval, when it is cyclic
 
 
 def _inch(x) -> str:
@@ -113,6 +126,7 @@ class _Sampler:
     def __init__(self, rng: random.Random, registry: Registry):
         self.rng, self.registry = rng, registry
         self.free = rng.random() < FREE
+        self.cyclic = False                                    # bolts pretensioned unless free
         self.lines: list[str] = []
         self.lengths: list[tuple[int, str, Fraction]] = []    # (line index, key, value) a tolerance may widen
         self.secondary: list[tuple[str, Fraction]] = []        # (load field, ratio to the primary)
@@ -149,6 +163,8 @@ class _Sampler:
             kind = "slip_critical"
         elif joint and (self.chance(0.3) or tension and group == "bolt_group.150" and not self.free):
             kind = "pretensioned"
+        if kind == "snug" and self.cyclic and not self.free:
+            kind = "pretensioned"       # a joint under a cyclic load is (J3.2, RCSC 4.2)
         extra = {"snug": "", "pretensioned": " joint pretensioned",
                  "slip_critical": f" joint slip_critical surface {self.pick(('class_a', 'class_b'))}"}[kind]
         if kind == "slip_critical" and self.chance(0.2):
@@ -540,10 +556,13 @@ def _decimal(x: Fraction) -> str:
 
 
 def source(name: str, kind: str, basis: str, lines: list[str], load: Fraction,
-           secondary: tuple[tuple[str, Fraction], ...] = ()) -> str:
-    """The design's text with the primary load [0, load] and each secondary [0, ratio load]."""
+           secondary: tuple[tuple[str, Fraction], ...] = (), cycles: tuple[int, int] | None = None) -> str:
+    """The design's text with the primary load [0, load], each secondary [0, ratio load],
+    and the cycles interval when the case is cyclic."""
     loads = [(KIND_SPECS[kind].loads[0], load), *((f, _load(float(r * load))) for f, r in secondary)]
     body, on = "\n".join(lines), "".join(f"  on c1 {f} in [0 kip, {_decimal(x)} kip]\n" for f, x in loads)
+    if cycles is not None:
+        on += f"  on c1 {CYCLES} in [{cycles[0]}, {cycles[1]}]\n"
     return (f'petra 0\n\ndesign "{name}" {{\n  owner "gate@petra.dev"\n}}\n\n{kind} c1 {{\n  basis {basis}\n{body}\n}}\n\n'
             f"load gate {{\n{on}  {SIGNATURE}\n}}\n")
 
@@ -617,17 +636,27 @@ def _widen(lines: list[str], s: _Sampler) -> bool:
     return True
 
 
+def _encoded(text: str, registry: Registry) -> bool:
+    """Every fatigue mode the cyclic design owes has checks (none is fatigue_detail)."""
+    design = parse_design(text, "gate.petra", registry)
+    return not set(required(calc.connection(design, "c1", registry), design)) & set(UNENCODED)
+
+
 def generate(n: int, seed: int, registry: Registry, start: int = 0) -> Iterator[Generated]:
     """Designs `start` to `start + n - 1` of the stream for `seed`; each index has its own
     random stream, so a slice is the same whoever draws it."""
     kinds = tuple(SAMPLERS)
     for i in range(start, start + n):
         rng = random.Random(f"{seed}:{i}")
+        cyc = random.Random(f"{seed}:{i}:cycles")
+        drawn = cyc.choice(CYCLE_COUNTS)
+        wanted = (cyc.choice((0, drawn)), drawn) if cyc.random() < CYCLIC else None
         kind = kinds[i % len(kinds)]
         name = f"gate-{seed}-{i:05d}"
         redraws = 0
         while True:
             s = _Sampler(rng, registry)
+            s.cyclic = wanted is not None
             SAMPLERS[kind](s)
             lines, secondary = list(s.lines), tuple(s.secondary)
             toleranced = _widen(lines, s)
@@ -636,7 +665,9 @@ def generate(n: int, seed: int, registry: Registry, start: int = 0) -> Iterator[
             k = Fraction(rng.randint(100, 400), 100)
             goal = 1 - DELTA * k if target == "pass" else 1 + DELTA * k
             try:
-                found = scale(lambda load: source(name, kind, basis, lines, load, secondary), goal, registry)
+                cycles = wanted if wanted and _encoded(source(name, kind, basis, lines, Fraction(10), secondary, wanted),
+                                                       registry) else None
+                found = scale(lambda load: source(name, kind, basis, lines, load, secondary, cycles), goal, registry)
             except ComponentError:
                 found = None
             ok = (found is not None and (found[1] <= 1 - DELTA if target == "pass" else found[1] >= 1 + DELTA)
@@ -646,6 +677,6 @@ def generate(n: int, seed: int, registry: Registry, start: int = 0) -> Iterator[
                 continue
             load, u, mode, geometry = found
             expected = "FAIL" if target == "fail" or geometry > 1 else "PASS"
-            yield Generated(name, kind, target, expected, source(name, kind, basis, lines, load, secondary), toleranced,
-                            s.free, redraws, u, mode, geometry)
+            yield Generated(name, kind, target, expected, source(name, kind, basis, lines, load, secondary, cycles),
+                            toleranced, s.free, redraws, u, mode, geometry, cycles)
             break
