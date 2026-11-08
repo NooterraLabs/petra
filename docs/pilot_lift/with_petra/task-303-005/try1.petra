@@ -1,0 +1,23 @@
+petra 0
+
+# Tee hanger under the bottom flange of a W16x31, ASD, 34.745 kip service tension.
+
+design "task-303-005-hanger" {
+  owner "task.owner@example.org"
+}
+
+hanger h1 {
+  basis asd
+  tee WT7x11 grade steel.A992
+  support W16x31 flange grade steel.A992
+  bolts bolt_group.120 diameter 0.75 inch threads included joint pretensioned
+  rows 3
+  pitch 3.25 inch
+  tee_gauge 3 inch
+  edge_vertical 1.625 inch
+}
+
+load service {
+  on h1 tension in [0 kip, 34.745 kip]
+  signed "task.owner@example.org" source "task 303-005"
+}

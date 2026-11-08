@@ -1,0 +1,36 @@
+petra 0
+
+# Conventional single-plate shear connection, ASD: a W18x35 beam framing into the web of a
+# W10x49 column (the 6 in beam flanges fit between the column flanges, T about 7-1/2 in).
+# 5/16 in A572 Gr 50 plate, 12-1/2 in long, four 3/4 in Group 150 bolts (A490-N, threads in
+# the shear plane, snug-tight, standard holes) at 3 in pitch, the plate fillet-welded to the
+# column web both sides with 1/4 in E70 (5/8 tp). Beam setback 1/2 in, so a = 2-1/2 in and
+# the bolt-group eccentricity is a/2 (Manual Table 10-9, n = 2 to 5, STD holes).
+# Governing: plate shear rupture 0.84, bolt shear 0.84 (C = 3.66), block shear 0.76.
+
+design "steel-shear-tab" {
+  owner "task.owner@example.org"
+}
+
+shear_tab st1 {
+  basis asd
+  beam W18x35 grade steel.A992
+  support W10x49 web grade steel.A992
+  plate steel.A572_50 thickness 0.3125 inch
+  bolts bolt_group.150 diameter 0.75 inch threads included
+  rows 4
+  pitch 3 inch
+  edge_vertical 1.75 inch
+  plate_edge 1.75 inch
+  bolt_line 2.5 inch
+  beam_edge 2 inch
+  top 3.5 inch
+  setback 0.5 inch
+  form conventional
+  weld electrode.E70 size 0.25 inch sides 2
+}
+
+load service {
+  on st1 shear in [0 kip, 45.988 kip]
+  signed "task.owner@example.org" source "task 303-006"
+}

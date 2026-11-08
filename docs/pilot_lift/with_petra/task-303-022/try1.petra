@@ -1,0 +1,19 @@
+petra 0
+
+design "task-303-022-weld-bracket" {
+  owner "task.owner@example.org"
+}
+
+weld_bracket wb1 {
+  basis asd
+  plate steel.A36 thickness 0.5 inch
+  support W12x40 flange grade steel.A992
+  weld electrode.E70 size 0.3125 inch sides 2
+  weld_length 14 inch
+  eccentricity 5 inch
+}
+
+load service {
+  on wb1 shear in [0 kip, 48.42 kip]
+  signed "task.owner@example.org" source "task 303-022"
+}

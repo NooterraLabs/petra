@@ -1,0 +1,29 @@
+petra 0
+
+# A shear end plate: a 1/4 in A572 Gr 50 plate, 7-1/2 in wide and 14-1/2 in long
+# (2 in end distances, three 3-1/2 in pitches), fillet-welded to both sides of the W21x44 web
+# with 1/4 in E70 welds and bolted to the W12x65 flange with two lines of four 3/4 in
+# Group 120 (A325-N) bolts at a 5-1/2 in gauge, standard holes, snug-tightened.
+
+design "steel-shear-end-plate" {
+  owner "task.owner@example.org"
+}
+
+shear_end_plate ep1 {
+  basis lrfd
+  beam W21x44 grade steel.A992
+  support W12x65 flange grade steel.A992
+  plate steel.A572_50 thickness 0.25 inch
+  plate_width 7.5 inch
+  bolts bolt_group.120 diameter 0.75 inch threads included
+  rows 4
+  pitch 3.5 inch
+  edge_vertical 2 inch
+  support_gauge 5.5 inch
+  weld electrode.E70 size 0.25 inch sides 2
+}
+
+load gravity {
+  on ep1 shear in [0 kip, 139.063 kip]
+  signed "task.owner@example.org" source "task 303-019"
+}

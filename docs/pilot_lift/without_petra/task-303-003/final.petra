@@ -1,0 +1,31 @@
+petra 0
+
+# An unstiffened seated connection, ASD: a W16x26 beam bearing on an L4x4x1/2 seat, 6 in long,
+# bolted to the web of a W10x49 column with one row of two 3/4 in A325-N bolts at a 3-1/2 in
+# gauge (bolt 2 in from the heel and 2 in from the toe of the vertical leg). An L4x4x1/4 top
+# angle holds the beam's top flange. The 6 in seat fits the W10x49 web's 7-1/2 in flat (T).
+
+design "steel-seated" {
+  owner "task.owner@example.org"
+}
+
+seated seat1 {
+  basis asd
+  beam W16x26 grade steel.A992
+  support W10x49 web grade steel.A992
+  angle L4x4x1_2 grade steel.A36 outstanding short
+  seat_length 6 inch
+  setback 0.5 inch
+  support_side bolted
+  bolts bolt_group.120 diameter 0.75 inch threads included
+  rows 1
+  pitch 3 inch
+  edge_vertical 2 inch
+  support_gauge 3.5 inch
+  top_angle L4x4x1_4 grade steel.A36 outstanding long
+}
+
+load gravity {
+  on seat1 shear in [0 kip, 15.843 kip]
+  signed "task.owner@example.org" source "task 303-003"
+}
