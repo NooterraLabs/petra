@@ -34,8 +34,9 @@ from .generate import Generated, generate
 SLACK = 1e-6
 """The twin computes in floats; the deck decides exactly. Within SLACK of 1 both readings stand."""
 CERTIFIED = {"weld": ic.WELD_LOSS, "weld_base_metal": ic.WELD_LOSS}
-"""Modes whose deck capacity on a weld line loaded out of its plane is the kernel-certified lower
-bound of the instantaneous center, which may give up ic.WELD_LOSS of the twin's C. A deck FAIL
+"""Modes whose deck capacity on a weld group by the instantaneous center (a line loaded out of its
+plane, or a lapped plate's C) is the kernel-certified lower bound, which may give up
+ic.WELD_LOSS of the twin's C. A deck FAIL
 with the twin that far below 1 is the certificate's margin, not a disagreement. A deck PASS is
 held to SLACK in every mode."""
 

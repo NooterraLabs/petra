@@ -9,21 +9,21 @@ instantaneous-centre coefficients C of a line of bolts.
 
 Reproduced: the bolt groups by the instantaneous centre (II.A-22's bolts, II.A-24), and
 the elastic method's coefficient (II.A-25), which the deck takes where it is the larger;
-Kulak's coefficients; the elastic C-shaped weld group (II.A-27); the bracket plates'
-section A-A (shear, flexural yielding) and their free-edge section B-B (shear, the normal
-force and moment with local buckling) (II.A-22, 23); the hanger's bolt tension, its flange
-in shear, and the flange thickness at which prying uses the bolt up (II.D-1).
+Kulak's coefficients; the C-shaped weld groups by the instantaneous centre (II.A-23's
+welds, II.A-26, Manual Table 8-8) and the elastic method's coefficient (II.A-27); the
+bracket plates' section A-A (shear, flexural yielding) and their free-edge section B-B
+(shear, the normal force and moment with local buckling) (II.A-22, 23); the hanger's bolt
+tension, its flange in shear, and the flange thickness at which prying uses the bolt up
+(II.D-1).
 
 Also reproduced: II.A-2A's Manual Table 8-4 coefficient at k = 0, the group a bracket plate
 on edge welded on both faces is, which the deck takes by the instantaneous centre.
 
-Bounded: the deck's C-shaped weld groups are elastic, and the Companion's
-instantaneous-centre groups carry more (II.A-23's welds, 26).
-
 The instantaneous centre's premises, measured: along the axis through the centroid across
 the load, the eccentricity a centre balances falls as the centre moves out, and the force
-the bolts or the welds hold rises (the certificates in checks.py and ic.py rest on it). No
-weld element's force along its line passes petra.weld_ic.along_peak.
+the bolts or the welds hold rises (the certificates in checks.py and ic.py rest on it). A
+C-shaped weld's C rises with its returns. No weld element's force along its line passes
+petra.weld_ic.along_peak.
 
 The P3 pilot's designs (docs/pilot_lift): the three the deck refused at 38cc6ba and now
 passes (303-003 in tests/test_steel_coverage.py, 303-006, 303-022), and a bracket from the
@@ -54,7 +54,7 @@ import petra
 from petra import mechanics as M
 from petra.kernel import Const, enclose
 from petra.lang import parse_design
-from petra.models.steel import calc, ic
+from petra.models.steel import calc, checks, ic
 from petra.models.steel import limits as L
 from petra.registry import build_registry
 from petra.units import CUSTOMARY
@@ -132,6 +132,12 @@ class IIA22(ex.Example):
             self.near(ratio, printed, f"{self.tag} {basis}", 0.012)
 
 
+TABLE_8_8 = 0.015
+"""How far a C-shaped weld's strength may lie from the Companion's: the deck certifies a bound
+up to ic.WELD_LOSS under the method's C, and the Companion interpolates Table 8-8 and rounds
+Rn to three figures."""
+
+
 class IIA23(ex.Example):
     """A welded bracket plate: two PL3/8 A572 Gr. 50 lapped on the column, each welded by a
     3/16 in E70 C-shaped fillet, 18 in long with 3 in returns, the load al = 10-7/8 in from
@@ -147,11 +153,11 @@ class IIA23(ex.Example):
     printed = {
         ("shear_yield", "bracket plate:"): ("405", "270"),
         ("flexural_yield", "bracket plate:"): ("2,740", "1,820"),
+        # Table 8-8: C = 1.46, C1 = 1.00, D = 3, l = 18 in, two plates: 0.75 C C1 D l and C C1 D l / 2.00
+        ("weld", "bracket weld:"): ("118", "78.8", TABLE_8_8),
     }
     moments = ("flexural_yield",)
     availables = {("bracket_edge", "bracket plate: shear yielding of the free-edge"): ("218", "145")}
-    # Table 8-8: C = 1.46, C1 = 1.00, D = 3, l = 18 in, two plates: 0.75 C C1 D l and C C1 D l / 2.00.
-    bounded = {("weld", "bracket weld:"): ("118", "78.8")}
 
     def test_normal_force_and_moment_on_the_free_edge(self):
         for basis, printed in (("lrfd", "0.630"), ("asd", "0.631")):
@@ -194,15 +200,22 @@ class IIA24And25(ex.Example):
 class IIA26And27(ex.Example):
     """A C-shaped 3/8 in E70 fillet, 10 in long with 5 in returns, a vertical load ex = 8.75
     in from the centroid, which lies 25 / 20 = 1.25 in inside the vertical weld, so 10 in
-    from that weld. II.A-27 is the elastic method; II.A-26 the instantaneous centre (C =
-    1.88)."""
+    from that weld. II.A-26 is the instantaneous centre (C = 1.88), which the deck takes;
+    II.A-27 the elastic method, whose coefficient the deck takes only where it is the
+    larger."""
 
-    tag, kind, loads = "II.A-27", "weld_bracket", ("40", "25")
+    tag, kind, loads = "II.A-26", "weld_bracket", ("40", "25")
     body = ("  plate steel.A36 thickness 0.5 inch\n  support W14x90 flange grade steel.A992\n"
             "  weld electrode.E70 size 0.375 inch sides 1\n  weld_length 10 inch\n  weld_return 5 inch\n"
             "  eccentricity 8.75 inch\n")
-    printed = {("weld", "bracket weld:"): ("47.2", "31.5")}
     bounded = {("weld", "bracket weld:"): ("84.8", "56.5")}
+
+    def test_the_elastic_coefficient_of_II_A_27(self):
+        fx, tip, heel = M.elastic_weld_c(L.c(1), inch(10), inch(10), inch(5))
+        peak = max(math.hypot(value(fx), value(f)) for f in (tip, heel))
+        line = value(L.fillet_per_length(const, L.c(70 * KSI), inch("0.375")))
+        for factor, printed in ((0.75, "47.2"), (1 / 2.00, "31.5")):
+            self.near(line * factor / peak / KIP, printed, "II.A-27")
 
 
 class IID1(ex.Example):
@@ -342,26 +355,65 @@ class TableTenNine(unittest.TestCase):
 
 
 class WeldInstantaneousCentrePremise(unittest.TestCase):
-    """The weld certificate's premises (checks.weld_coefficient, gen_weld_base_metal). A line
-    of unit length turns about a centre r from its midpoint on its normal; e(r) = M/V - r is
-    the eccentricity, over the length, that the centre balances. Measured with the deck's
-    curve: e falls as r grows, and V rises up to r = 0.81, the centre that balances a =
-    0.102, and falls past it, so it rises up to the centre for every a at least
-    petra.weld_ic.a_min = 1/8. An element's force along the line is at most max (1 + 0.50
+    """The weld certificate's premises (checks.weld_coefficient, gen_weld_base_metal). A
+    group turns about a centre r behind its centroid, on the line through the centroid
+    across the load; e(r) = M/V - r is the eccentricity, over the line's length, that the
+    centre balances. Measured with the deck's curve on the line (Table 8-4 with k = 0): e
+    falls as r grows, and V rises up to r = 0.81, the centre that balances a = 0.102, and
+    falls past it, so it rises up to the centre for every a at least petra.weld_ic.a_min =
+    1/8. On a C with returns k up to 5 (Table 8-8): e falls wherever V is positive, and V
+    peaks at a centre that balances at most a = 0.111 (k = 0.05). C rises with k up to
+    petra.weld_ic.k_max = 2 at every a from 1/8 to 10, and falls as a grows (it follows
+    from the two above). An element's force along its weld is at most max (1 + 0.50
     sin^1.5 theta) cos theta = 1.0337 times max f(p) = 1.0008, under
     petra.weld_ic.along_peak = 1.04."""
 
+    curve = ic.weld_curve(REGISTRY)
+    a_min = float(REGISTRY.constants["petra.weld_ic.a_min"].value.lo)
+
+    def group(self, k) -> tuple:
+        return ic.pieces(checks.turning_group(Fraction(k)))
+
     def test_e_falls_and_v_rises_up_to_the_centre(self):
-        curve = ic.weld_curve(REGISTRY)
         rs = np.geomspace(1e-5, 1e3, 1500)
-        sums = np.array([ic.weld_sums(r, curve) for r in rs])
+        sums = np.array([ic.weld_sums(r, self.curve, self.group(0)) for r in rs])
         e = sums[:, 1] / sums[:, 0] - rs
         self.assertTrue((np.diff(e) < 0).all())
-        for a, rises in ((0.103, True), (float(REGISTRY.constants["petra.weld_ic.a_min"].value.lo), True), (0.10, False)):
+        for a, rises in ((0.103, True), (self.a_min, True), (0.10, False)):
             with self.subTest(a=a):
-                far = ic.weld_balancing(a, curve)
+                far = ic.weld_balancing(a, self.curve, self.group(0))
                 self.assertIsNotNone(far)
                 self.assertEqual(bool((np.diff(sums[rs <= far, 0]) > 0).all()), rises)
+
+    def test_on_a_c_e_falls_and_v_rises_up_to_the_centre(self):
+        rs = np.geomspace(1e-4, 1e3, 600)
+        for k in ("1/20", "1/10", "1/5", "3/10", "1/2", "3/4", "1", "3/2", "2", "3", "5"):
+            with self.subTest(k=k):
+                sums = np.array([ic.weld_sums(r, self.curve, self.group(k)) for r in rs])
+                held = sums[:, 0] > 0
+                # V is positive from some centre out, and e falls there
+                self.assertTrue(held[np.argmax(held):].all())
+                e = sums[held, 1] / sums[held, 0] - rs[held]
+                self.assertTrue((np.diff(e) < 0).all())
+                peak = int(np.argmax(sums[:, 0]))
+                self.assertLess(sums[peak, 1] / sums[peak, 0] - rs[peak], 0.112)
+                far = ic.weld_balancing(self.a_min, self.curve, self.group(k))
+                self.assertTrue((np.diff(sums[rs <= far, 0]) > 0).all())
+
+    def test_c_rises_with_k_and_falls_with_a(self):
+        ks = [Fraction(i, 20) for i in range(41)]
+        k_max = REGISTRY.constants["petra.weld_ic.k_max"].value.lo
+        self.assertEqual(ks[-1], k_max)
+        table = []
+        for a in (self.a_min, 0.15, 0.2, 0.3, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 5.0, 10.0):
+            row = []
+            for k in ks:
+                group = self.group(k)
+                row.append(ic.weld_sums(ic.weld_balancing(a, self.curve, group), self.curve, group)[0])
+            table.append(row)
+        table = np.array(table)
+        self.assertTrue((np.diff(table, axis=1) > 0).all())
+        self.assertTrue((np.diff(table, axis=0) < 0).all())
 
     def test_the_force_along_the_weld(self):
         def k(name: str) -> float:
@@ -380,6 +432,17 @@ class WeldInstantaneousCentrePremise(unittest.TestCase):
 PILOT_022 = ROOT / "docs" / "pilot_lift" / "without_petra" / "task-303-022" / "final.petra"
 
 
+def certificate(segments: tuple, a: Fraction) -> tuple:
+    """(V_lo, gap_lo) of the deck's certificate on a weld group at a, in units of Fnw Aw per
+    unit of its line's length, its held constants each inside its bound."""
+    found = ic.weld_centre(ic.weld_curve(REGISTRY), segments, a)
+    assert found is not None
+    r, runs = found
+    v, gap, held = checks.weld_certificate(const, ic.weld_curve(REGISTRY), a, r, runs)
+    assert all(enclose(m, {}).lo > 0 for m in held)
+    return v, gap
+
+
 class TableEightFour(unittest.TestCase):
     """A bracket plate on edge, welded to its support on both faces with the load in its
     plane, is Manual Table 8-4's group at k = 0: two lines of length L at one place, the
@@ -395,11 +458,7 @@ class TableEightFour(unittest.TestCase):
     base metal, against the force along the weld, 0.873."""
 
     def test_the_certificate_reproduces_the_companion(self):
-        a = Fraction(4, 1) / Fraction(47, 2)
-        found = ic.weld_centre(ic.weld_curve(REGISTRY), a)
-        self.assertIsNotNone(found)
-        r, zs = found
-        v, gap = M.line_ic(r, a, zs, L.ic_weld_bounds(const, r, zs))
+        v, gap = certificate(checks.turning_group(Fraction(0)), Fraction(4, 1) / Fraction(47, 2))
         self.assertGreater(value(gap), 0)
         per_sixteenth = 2 * 0.6 * 70 * math.sqrt(2) / 2 / 16
         self.assertLessEqual(value(v) * per_sixteenth, 3.61 + 0.005)
@@ -421,7 +480,108 @@ class TableEightFour(unittest.TestCase):
     def test_a_short_lever_keeps_the_elastic_method(self):
         """At e = 1.5 in on 13 in, a = 0.115 is under a_min."""
         text = PILOT_022.read_text(encoding="utf-8").replace("eccentricity 5 inch", "eccentricity 1.5 inch")
-        self.assertTrue(all("elastic method" in w.what for w in self.values(text, "weld")))
+        welds = self.values(text, "weld")
+        self.assertTrue(welds and all("most stressed point" in w.what for w in welds))
+        self.assertFalse(any("instantaneous center" in w.what for w in welds))
+
+
+RETURNS = """petra 0
+
+design "gate-1-06114" {
+  owner "gate@petra.dev"
+}
+
+weld_bracket c1 {
+  basis lrfd
+  plate steel.A36 thickness 0.625 inch
+  support W10x49 flange grade steel.A992
+  weld electrode.E70 size 0.375 inch sides 1
+  weld_length 10 inch
+  weld_return 2 inch
+  eccentricity 5 inch
+  free_edge 8 inch
+}
+
+load gate {
+  on c1 shear in [0 kip, 47.784 kip]
+  signed "gate@petra.dev" source "steel gate generator"
+}
+"""
+
+
+class TableEightEight(unittest.TestCase):
+    """A plate lapped on its support and welded all round its edge but the free one is
+    Manual Table 8-8's C-shaped group: a line of length l along the load with returns kl at
+    both ends toward it, the load al from the group's centroid. C is in kips per sixteenth
+    of an E70 fillet per inch of l, so the deck's V per unit of Fnw Aw counts 0.6 x 70 x
+    (sqrt 2 / 2) / 16 = 1.856 times. The Companion interpolates the table: II.A-23 at k = 3 /
+    18, a = 10.875 / 18 for C = 1.46, II.A-26 at k = 0.5, a = 8.75 / 10 for C = 1.88. The
+    method's own C is 1.4569 and 1.8719 (measured, and the twin's quadrature agrees to
+    1e-14).
+
+    The gate's bracket gate-1-06114: a 5/8 in A36 plate on a 3/8 in E70 C, 10 in long with
+    2 in returns, the load 5 in from the centroid, 47.784 kips LRFD. At 48c8773 the deck
+    read the C by the elastic method alone, 1.015, and failed it; the clean-room twin's
+    instantaneous centre reads 0.592."""
+
+    per_sixteenth = 0.6 * 70 * math.sqrt(2) / 2 / 16
+
+    def test_the_certificate_reproduces_the_companion(self):
+        for tag, k, a, printed in (("II.A-23", Fraction(1, 6), Fraction(29, 48), 1.46),):
+            with self.subTest(tag):
+                v, gap = certificate(checks.turning_group(k), a)
+                self.assertGreater(value(gap), 0)
+                self.assertLessEqual(value(v) * self.per_sixteenth, printed + 0.005)
+                self.assertGreater(value(v) * self.per_sixteenth, printed * 0.99)
+
+    def test_the_gates_bracket_passes(self):
+        report = checked(RETURNS)
+        self.assertEqual(report["status"], "PASS")
+        found = obligation(report, "weld")
+        self.assertGreaterEqual(found["utilisation"], 0.592)
+        self.assertLessEqual(found["utilisation"], 0.592 / (1 - ic.WELD_LOSS) + 0.001)
+
+    def test_long_returns_keep_the_elastic_method(self):
+        """Returns 9 in on a 4 in line, kl / L = 2.25, lie past petra.weld_ic.k_max = 2."""
+        text = RETURNS.replace("weld_length 10 inch", "weld_length 4 inch").replace("weld_return 2 inch", "weld_return 9 inch")
+        d = parse_design(text, "gate.petra", REGISTRY)
+        welds = calc.values(calc.connection(d, "c1", REGISTRY), d, REGISTRY, "weld", "gate")
+        self.assertTrue(welds and all("most stressed point" in w.what for w in welds))
+        self.assertFalse(any("instantaneous center" in w.what for w in welds))
+
+
+class WeldSegmentLists(unittest.TestCase):
+    """ic's weld group is a list of straight welds (ic.Segment). Any group whose welds lie
+    along or across the load and that is its own mirror image in the line through its
+    centroid across the load runs the same search and certificate: two parallel lines 1/2
+    apart and a box 1/2 by 1 at a = 1/2, against the clean-room twin's two-dimensional
+    search over 2,000 elements a weld (twin/groups.py), to 1e-4 (measured 2e-5). The deck
+    feeds only the line and the C, whose premises WeldInstantaneousCentrePremise measures.
+    An L's centre leaves the line, and an inclined weld is not encoded: both are refused."""
+
+    def test_two_lines_and_a_box(self):
+        from twin import groups
+        half, quarter = Fraction(1, 2), Fraction(1, 4)
+        sides = (((-quarter, -half), (-quarter, half), Fraction(1)), ((quarter, -half), (quarter, half), Fraction(1)))
+        ends = (((-quarter, half), (quarter, half), Fraction(1)), ((-quarter, -half), (quarter, -half), Fraction(1)))
+        curve, a = ic.weld_curve(REGISTRY), Fraction(1, 2)
+        for name, segments in (("two lines", sides), ("box", sides + ends)):
+            with self.subTest(name):
+                group = ic.pieces(segments)
+                method = ic.weld_sums(ic.weld_balancing(float(a), curve, group), curve, group)[0]
+                lines = [((float(p[0]), float(p[1])), (float(q[0]), float(q[1]))) for p, q, _ in segments]
+                twin = groups.weld_strength(lines, float(a), 1.0, 70.0, elements=2000) / (0.6 * 70.0 * math.sqrt(2) / 2)
+                self.assertAlmostEqual(method / twin, 1.0, delta=1e-4)
+                v, gap = certificate(segments, a)
+                self.assertGreater(value(gap), 0)
+                self.assertLessEqual(value(v), method)
+                self.assertGreater(value(v), method * (1 - 2 * ic.WELD_LOSS))
+
+    def test_an_l_and_an_inclined_weld_are_refused(self):
+        half = Fraction(1, 2)
+        line = ((Fraction(0), -half), (Fraction(0), half), Fraction(1))
+        self.assertIsNone(ic.pieces((line, ((Fraction(0), -half), (half, -half), Fraction(1)))))
+        self.assertIsNone(ic.pieces((((Fraction(0), -half), (half, half), Fraction(1)),)))
 
 
 BACK_EDGE = """petra 0

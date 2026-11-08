@@ -403,6 +403,60 @@ def ic_weld_line(constants: tuple[float, ...], a: float) -> float:
     return held(r)[0]
 
 
+@functools.lru_cache(maxsize=4096)
+def ic_weld_c(constants: tuple[float, ...], a: float, k: float) -> float:
+    """Manual Part 8's instantaneous center method for a C-shaped weld in its plane (Table
+    8-8): a line of unit length along the force, with returns k long at both ends toward
+    the load, the force a from the group's centroid, which lies k^2 / (1 + 2 k) in front of
+    the line. C in units of 0.60 FEXX times the throat per unit of the line's length. The
+    centre lies on the normal through the line's middle, r behind the centroid. Each
+    element holds kds f(p) normal to its radius as in ic_weld_line, theta measured from its
+    own weld: for the line, sin theta = |y| / rho; for a return, |x - x_c| / rho. The
+    critical element has the least Delta_u / rho over the whole C."""
+    kds, kds_power, m0, m_offset, m_power, u0, u_offset, u_power, u_cap, curve_a, curve_b, curve_power = constants
+    xbar = k * k / (1 + 2 * k)
+    samples = [(0.0, i / 4000, True) for i in range(2001)] + [(k * i / 2000, 0.5, False) for i in range(2001)]
+
+    def held(r: float) -> tuple[float, float]:
+        cx = xbar - r
+
+        def place(x: float, y: float, along: bool) -> tuple[float, float, float]:
+            dx = x - cx
+            rho = math.hypot(dx, y)
+            theta = math.degrees(math.atan2(abs(y), abs(dx)) if along else math.atan2(abs(dx), abs(y)))
+            return dx, rho, theta
+
+        def delta_u(theta: float) -> float:
+            return min(u0 * (theta + u_offset) ** -u_power, u_cap)
+
+        critical = min(delta_u(theta) / rho for _, rho, theta in (place(*s) for s in samples))
+
+        def force(x: float, y: float, along: bool) -> tuple[float, float, float]:
+            dx, rho, theta = place(x, y, along)
+            p = rho * critical / (m0 * (theta + m_offset) ** -m_power)
+            sin = math.sin(math.radians(theta))
+            return (1 + kds * sin ** kds_power) * (p * (curve_a - curve_b * p)) ** curve_power, dx, rho
+
+        def integral(f, along: bool) -> float:
+            if along:
+                return quad(lambda y: f(*force(0.0, y, True)), 0, 0.5, epsabs=1e-13, epsrel=1e-12, limit=200)[0]
+            if not k:
+                return 0.0
+            kink = [cx] if 0 < cx < k else None
+            return quad(lambda x: f(*force(x, 0.5, False)), 0, k, points=kink, epsabs=1e-13, epsrel=1e-12, limit=200)[0]
+
+        v = 2 * sum(integral(lambda w, dx, rho: w * dx / rho, along) for along in (True, False))
+        m = 2 * sum(integral(lambda w, dx, rho: w * rho, along) for along in (True, False))
+        return v, m
+
+    def gap(r: float) -> float:
+        v, m = held(r)
+        return m - v * (a + r)
+
+    r = brentq(gap, 1e-9, 1e3, xtol=1e-14, rtol=1e-13, maxiter=500)
+    return held(r)[0]
+
+
 WELD_IC = ("aisc360.j2_4.kds", "aisc360.j2_4.kds_power", "aisc_manual.p8.ic_delta_m", "aisc_manual.p8.ic_delta_m_offset",
            "aisc_manual.p8.ic_delta_m_power", "aisc_manual.p8.ic_delta_u", "aisc_manual.p8.ic_delta_u_offset",
            "aisc_manual.p8.ic_delta_u_power", "aisc_manual.p8.ic_delta_u_cap", "aisc_manual.p8.ic_curve_a",
@@ -1871,6 +1925,8 @@ def _weld_bracket(ctx: _Ctx, modes: set[str]) -> None:
     weld: Weld = conn.attrs["weld"]
     length, e = ctx.need("weld_length"), ctx.need("eccentricity")
     ret = ctx.get("weld_return")
+    a = e / length
+    turns = a > ctx.reg.const("petra.weld_ic.a_min") * (1 + 1e-9)
     # The declared eccentricity is the load's distance from the weld group's centroid
     # (docs/reference.md), xl = kl^2 / (2 kl + L) from a C-shaped weld's vertical line toward the load
     # (Manual Part 8); e below is the load's distance from that line.
@@ -1885,12 +1941,26 @@ def _weld_bracket(ctx: _Ctx, modes: set[str]) -> None:
     ctx.check("flexural_yield", "bracket plate: flexural yielding of the gross section (J4.5)", p * e_aa,
               pfy * tp * length ** 2 / 4, "flexure_yield")
     q = fillet_capacity_per_inch(ctx, weld)
-    if ret is None and weld.sides == 2 and e / length > ctx.reg.const("petra.weld_ic.a_min") * (1 + 1e-9):
+    curve = tuple(ctx.reg.const(name) for name in WELD_IC)
+    if ret is not None and turns and ret / length < ctx.reg.const("petra.weld_ic.k_max") * (1 - 1e-9):
+        # vocab weld: a lapped plate turns in its plane on its C, Manual Table 8-8, for e / L
+        # past 1/8 and kl / L under k_max; the larger of its C and the elastic method's, and
+        # the base metal against the force along the weld, at most along_peak times P / (L C)
+        elastic = c_shape_in_plane(1.0, e, length, ret)
+        coefficient = max(ic_weld_c(curve, a, ret / length), 1 / (length * elastic))
+        ctx.add("weld", "bracket weld: the welds by the instantaneous center with Manual Table 8-8's C-shaped group "
+                "or the elastic method, the larger C times the lines' longitudinal strength (J2.4, Manual Part 8)",
+                _ratio(p, length * coefficient * q))
+        along = ctx.reg.const("petra.weld_ic.along_peak") * p / (length * coefficient)
+        base_metal(ctx, "bracket plate", along, pfu, tp, "bracket weld")
+        base_metal(ctx, f"support {face}", along, sfu, st, "bracket weld")
+        fatigue_throat(ctx, "bracket weld", elastic, weld)
+    elif ret is None and weld.sides == 2 and turns:
         # vocab weld: a plate set on edge with a fillet on each face turns about an axis
         # across its weld line, Manual Table 8-4 with k = 0, for e / L past 1/8; the base
         # metal against the force along the weld, at most along_peak times P / (2 L C) per
         # line (vocab weld_base_metal)
-        coefficient = ic_weld_line(tuple(ctx.reg.const(name) for name in WELD_IC), e / length)
+        coefficient = ic_weld_line(curve, a)
         ctx.add("weld", "bracket weld: the welds by the instantaneous center with Manual Table 8-4's k = 0, C times "
                 "the lines' longitudinal strength (J2.4, Manual Part 8)", _ratio(p, 2 * length * coefficient * q))
         along = ctx.reg.const("petra.weld_ic.along_peak") * p / (2 * length * coefficient)

@@ -10,17 +10,17 @@ magnitude peaks at a segment's end.
 By the instantaneous centre method the joined part turns about a centre, and each element
 of the weld deforms in proportion to its distance from it, normal to its radius. An
 element's force follows from its deformation and its angle by a code's curve, so the
-caller passes bounds on it in. `line_ic` gives lower bounds on the force and the moment a
-straight line holds for one centre; the code layer finds the centre that balances the
-load. tests/test_mechanics.py cuts each weld into short pieces, sums them, and holds these
+caller passes bounds on it in. `group_ic` gives lower bounds on the force and the moment
+a group of straight runs holds for one centre; the code layer finds the centre that
+balances the load. tests/test_mechanics.py cuts each weld into short pieces, sums them, and holds these
 formulas to the result.
 """
 from __future__ import annotations
 
 from fractions import Fraction
-from typing import Sequence
+from typing import Callable, NamedTuple, Sequence
 
-from ..kernel import Div, Expr, Ln, Pi, PowInt, Sqrt
+from ..kernel import Div, Expr, Ln, Neg, Pi, PowInt, Sqrt
 from .algebra import add, c, mul, sq, sub
 
 
@@ -117,46 +117,113 @@ def _floor(x: Fraction) -> int:
     return x.numerator // x.denominator
 
 
-def line_ic(r: Fraction, a: Fraction, zs: Sequence[Fraction], bounds: Sequence[tuple[Expr, Expr]]) -> tuple[Expr, Expr]:
-    """Lower bounds on (V, M - V (a + r)) for a straight weld line of unit length that
-    turns about a centre r > 0 from its midpoint, on its normal there. The load acts along
-    the line, at a from it on the far side of the centre.
+class Run(NamedTuple):
+    """A straight run of weld in a group that turns about a centre (group_ic). It lies d
+    from the centre, and its segments end at us along it, measured from the foot of its
+    normal through the centre, rising from 0 or more. A run along the load lies at x =
+    sign d; a run across it, a return, lies at y = d with its elements at x = sign u.
+    Sign 1 puts it on the load's side of the centre, -1 behind the centre. Its throat, over
+    the group's unit throat, scales its elements' force and deformation, which the bounds
+    the caller passes carry."""
+    d: Fraction
+    us: tuple[Fraction, ...]
+    across: bool
+    sign: int
+    throat: Fraction
 
-    The element at z along the line, rho = sqrt(z^2 + r^2) from the centre, carries a force
-    F(z) per unit length normal to its radius, so r / rho of it along the line, and a moment
-    F rho about the centre. By symmetry
-      V = 2 int_0^(1/2) F r / rho dz,   M = 2 int_0^(1/2) F rho dz,
-    and the line holds a load at a when M = V (a + r). The gap M - V (a + r) is
-    2 int F w dz with w = (z^2 - a r) / rho, which is negative below z0 = sqrt(a r) and
-    positive above it.
 
-    zs runs from 0 to 1/2, and bounds[k] = (lo, hi) bound F on [zs[k], zs[k + 1]]. Then
-    V >= 2 sum lo_k int r / rho, and over a piece of a segment above z0, int F w >= lo_k W,
-    below it hi_k W, with W = int w over the piece. The segment holding z0 is split there.
-    The integrals are exact:
-      int r / rho dz = r asinh(z / r),   int rho dz = (z rho + r^2 asinh(z / r)) / 2."""
-    assert zs[0] == 0 and zs[-1] == Fraction(1, 2) and all(p < q for p, q in zip(zs, zs[1:])) and r > 0
-    assert len(bounds) == len(zs) - 1
+def group_ic(arm: Fraction, runs: Sequence[Run], bounds: Sequence[Sequence[tuple[Expr, Expr]]]) -> tuple[Expr, Expr]:
+    """Lower bounds on (V, M - V arm) for a weld group that turns about a centre. The load
+    acts along y, at arm from the centre along x. The group is `runs` and their mirror
+    images in the x axis.
 
-    def ends(z: Fraction | None) -> tuple[Expr, Expr]:
-        # (int_0^z r / rho, int_0^z rho), z None for z0
-        if z is None:
-            ratio, z_e, rho = Sqrt(c(a / r)), Sqrt(c(a * r)), Sqrt(c(a * r + r * r))
-        else:
-            ratio, z_e, rho = c(z / r), c(z), Sqrt(c(z * z + r * r))
-        ash = Ln(add(ratio, Sqrt(add(c(1), sq(ratio)))))
-        return mul(c(r), ash), Div(add(mul(z_e, rho), mul(c(r * r), ash)), c(2))
+    An element at (x, y), rho from the centre, carries a force F per unit length normal to
+    its radius: x / rho of it along the load, and a moment F rho about the centre. On a run
+    rho = sqrt(u^2 + d^2), and x is sign d along the load or sign u across it, so
+      V = 2 sum int F x / rho du,   M = 2 sum int F rho du,
+    and the group holds a load at arm when M = V arm. The gap M - V arm is 2 sum int F w du
+    with w = (u^2 + d^2 - arm x) / rho. Its numerator is a quadratic in u with a leading
+    coefficient of 1, so it is positive past its last root and changes sign at each root.
+    Along the load it has one positive root, sqrt(arm sign d - d^2), where that is real
+    and positive. Across it, with sign 1 and arm > 2 d, it has two:
+    (arm -+ sqrt(arm^2 - 4 d^2)) / 2.
 
-    at = [ends(z) for z in zs]
-    split = ends(None)
+    bounds[i][k] = (lo, hi) bound F on run i's segment [us[k], us[k + 1]]. x keeps the
+    run's sign along it, so int F x / rho >= lo X in front of the centre and hi X behind
+    it, with X = int x / rho over the segment. Over a piece of a segment where w >= 0,
+    int F w >= lo W, and where w <= 0, hi W, with W = int w over the piece. A segment is
+    split at each root inside it. The integrals are exact, with asinh(u / d) =
+    ln(u / d + sqrt(1 + (u / d)^2)) = ln((u + rho) / d):
+      int d / rho du = d asinh(u / d),   int u / rho du = rho,
+      int rho du = (u rho + d^2 asinh(u / d)) / 2.
+
+    A straight line of unit length turning about a centre r from its midpoint, on its
+    normal there, with the load a from the line, is one run along the load: d = r, us
+    from 0 to 1/2, arm = a + r, and the root sqrt(a r)."""
+    assert arm > 0 and len(bounds) == len(runs)
     v_terms, g_terms = [], []
-    for k, (lo, hi) in enumerate(bounds):
-        p, q = zs[k], zs[k + 1]
-        v_terms.append(mul(lo, sub(at[k + 1][0], at[k][0])))
-        if p * p < a * r < q * q:
-            pieces = [(at[k], split, hi), (split, at[k + 1], lo)]
-        else:
-            pieces = [(at[k], at[k + 1], lo if p * p >= a * r else hi)]
-        for (v0, m0), (v1, m1), bound in pieces:
-            g_terms.append(mul(bound, sub(sub(m1, m0), mul(c(a + r), sub(v1, v0)))))
+    for run, segments in zip(runs, bounds):
+        d, us, s = run.d, run.us, run.sign
+        assert d > 0 and s in (1, -1) and us[0] >= 0 and all(p < q for p, q in zip(us, us[1:]))
+        assert len(segments) == len(us) - 1
+        roots = _roots(arm, run)
+        at = [_ends(run, u) for u in us]
+        for k, (lo, hi) in enumerate(segments):
+            p, q = us[k], us[k + 1]
+            v_terms.append(mul(lo if s > 0 else hi, sub(at[k + 1][0], at[k][0])))
+            # w's sign on a piece: + with an even count of roots past it
+            past = sum(1 for place, _ in roots if place(p) < 0)
+            points = [at[k], *(ends for place, ends in roots if place(p) < 0 < place(q)), at[k + 1]]
+            for j, ((v0, m0), (v1, m1)) in enumerate(zip(points, points[1:])):
+                bound = hi if (past - j) % 2 else lo
+                g_terms.append(mul(bound, sub(sub(m1, m0), mul(c(arm), sub(v1, v0)))))
     return mul(c(2), add(*v_terms)), mul(c(2), add(*g_terms))
+
+
+def _ends(run: Run, u: Fraction) -> tuple[Expr, Expr]:
+    """(int_0^u x / rho, int_0^u rho) up to a constant, at a rational u along the run."""
+    d, s = run.d, run.sign
+    ratio, rho = c(u / d), Sqrt(c(u * u + d * d))
+    ash = Ln(add(ratio, Sqrt(add(c(1), sq(ratio)))))
+    moment = Div(add(mul(c(u), rho), mul(c(d * d), ash)), c(2))
+    if run.across:
+        return (rho if s > 0 else Neg(rho)), moment
+    return mul(c(s * d), ash), moment
+
+
+def _roots(arm: Fraction, run: Run) -> list[tuple[Callable[[Fraction], int], tuple[Expr, Expr]]]:
+    """The positive roots of w's numerator on the run, rising: for each, the sign of
+    t - root at a rational t, and _ends at the root."""
+    d = run.d
+    if not run.across:
+        q = arm * run.sign * d - d * d
+        if q <= 0:
+            return []
+        ratio, rho = Sqrt(c(q / (d * d))), Sqrt(c(q + d * d))
+        ash = Ln(add(ratio, Sqrt(add(c(1), sq(ratio)))))
+        return [(lambda t: _sign(t * t - q), (mul(c(d), ash), Div(add(mul(Sqrt(c(q)), rho), mul(c(d * d), ash)), c(2))))]
+    disc = arm * arm - 4 * d * d
+    if run.sign < 0 or disc <= 0:
+        return []
+    out = []
+    for side in (-1, 1):
+        u = Div(add(c(arm), mul(c(side), Sqrt(c(disc)))), c(2))
+        # on the root u^2 + d^2 = arm u
+        rho = Sqrt(mul(c(arm), u))
+        ash = Ln(Div(add(u, rho), c(d)))
+        out.append((_place(arm, disc, side), (rho, Div(add(mul(u, rho), mul(c(d * d), ash)), c(2)))))
+    return out
+
+
+def _place(arm: Fraction, disc: Fraction, side: int) -> Callable[[Fraction], int]:
+    """The sign of t - (arm + side sqrt(disc)) / 2 at a rational t, decided in rationals."""
+    def place(t: Fraction) -> int:
+        w = 2 * t - arm
+        if side < 0:
+            return 1 if w >= 0 else _sign(disc - w * w)
+        return -1 if w <= 0 else _sign(w * w - disc)
+    return place
+
+
+def _sign(x: Fraction) -> int:
+    return (x > 0) - (x < 0)

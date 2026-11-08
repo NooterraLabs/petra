@@ -640,19 +640,25 @@ COEFFICIENTS: tuple[_F, ...] = (
      f"Delta_max = 0.34 in at its ultimate strength, the others in proportion to their distance; {RECALLED}"),
     *_weld_ic_rows(),
     ("petra.weld_ic.a_min", "1/8", "1", JUDGED, MAINTAINERS,
-     f"{MANUAL} Part 8, Table 8-4 with k = 0: the least ratio a = e / L at which the deck holds two fillets along one "
-     "line, loaded out of their plane, to the instantaneous center method. The deck's certificate needs the group's "
-     "V(r) to rise up to the balancing centre, which tests/test_steel_groups.py measures: V peaks at the centre that "
-     "balances a = 0.102; below 1/8 the elastic method stays; Petra's encoding, not checked against the published "
-     "text"),
+     f"{MANUAL} Part 8, Table 8-4 with k = 0 and Table 8-8: the least ratio a = e / L, e from the group's centroid, at "
+     "which the deck holds two fillets along one line, loaded out of their plane, or a lapped plate's C-shaped fillet "
+     "to the instantaneous center method. The deck's certificate needs the group's V(r) to rise up to the balancing "
+     "centre, which tests/test_steel_groups.py measures: V peaks at the centre that balances a = 0.102 on the line and "
+     "at most a = 0.111 on a C with k up to 5; below 1/8 the elastic method stays; Petra's encoding, not checked "
+     "against the published text"),
+    ("petra.weld_ic.k_max", "2", "1", JUDGED, MAINTAINERS,
+     f"{MANUAL} Part 8, Table 8-8: the largest ratio k = kl / L of a C-shaped fillet's returns to its line at which "
+     "the deck holds it to the instantaneous center method. The deck's certificate is stated at the box's least k, "
+     "and needs C to rise with k at each a from 1/8, which tests/test_steel_groups.py measures for k up to 2; past it "
+     "the elastic method stays; Petra's encoding, not checked against the published text"),
     ("petra.weld_ic.along_peak", "1.04", "1", JUDGED, MAINTAINERS,
      f"{MANUAL} Part 8, the instantaneous center method, with {AISC} Section J2.4, Eq. J2-5: no weld element's force "
      "along the weld exceeds 1.04 Fnw Aw, the peak of (1 + 0.50 sin^1.5 theta) cos theta, 1.0337 near 20 degrees, "
      "times the peak of f(p), 1.0008, which tests/test_steel_groups.py measures; the base metal's shear along the weld "
      "reads it; Petra's encoding, not checked against the published text"),
     ("petra.switch.length", "1/1000000000000000", "m", JUDGED, MAINTAINERS,
-     f"{MANUAL} Parts 7, 8 and 10, where a method holds only in its configuration (Table 10-9's, Table 8-4's a at "
-     "least 1/8): the length that turns a margin into the factor of a certificate's switch, min(C, margin / length): "
+     f"{MANUAL} Parts 7, 8 and 10, where a method holds only in its configuration (Table 10-9's, Tables 8-4's and "
+     "8-8's a at least 1/8, Table 8-8's k at most 2): the length that turns a margin into the factor of a certificate's switch, min(C, margin / length): "
      "C where the margin passes C times 10^-15 in, at most zero where it is negative; any positive length is sound, "
      "and a shorter one gives up less; Petra's encoding, not checked against the published text"),
     ("aisc_manual.t10_6.lever", "2.25", "1", JUDGED, MAINTAINERS,
