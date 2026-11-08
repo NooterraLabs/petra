@@ -75,6 +75,40 @@ class SlotPastTheCopeTest(EdgeTest):
         self.close(c["block shear, beam web, partial path"]["nominal"], 20.3125, "one-row block")
 
 
+class DoubleCopeTest(EdgeTest):
+    """gate-1-04213 coped 2 in. at the bottom too: hc = 15.7 - 2 - 2 = 11.7 in., and the bottom
+    bolt sits 11.7 - 0.5 - 3 = 8.2 in. above the bottom cope."""
+
+    BOTH = (("cope top depth 2 inch length 4 inch", "cope both depth 2 inch length 4 inch bottom_depth 2 inch"),)
+
+    def test_the_net_section_counts_no_steel_above_the_top_hole(self):
+        """With dh + 1/16 = 1-3/16 in., Anv = (0 + (3 - 1.1875) + (8.2 - 0.59375))(1/4)
+        = 2.3546875 in.^2, Rn = 0.6(65)(2.3546875) = 91.8328125 kips."""
+        c = by_name(component(TAB, self.BOTH))
+        self.close(c["shear rupture, coped section"]["nominal"], 91.8328125, "net section")
+        self.close(c["edge distance along the force, beam web, bottom cope"]["available"], 8.2, "bottom edge")
+
+    def test_a_bolt_line_past_the_bottom_cope_is_an_input_error(self):
+        """A 10.5 in. bottom cope leaves hc = 3.2 in., so the bottom bolt sits 0.3 in. inside it."""
+        deeper = (("cope top depth 2 inch length 4 inch", "cope both depth 2 inch length 4 inch bottom_depth 10.5 inch"),)
+        out = component(TAB, deeper)
+        self.assertEqual(out["status"], "input_error")
+        self.assertIn("beam web, bottom cope", out["reason"])
+        self.assertIn("0.3 in. past", out["reason"])
+
+
+class SatisfiedEdgeDistanceTest(EdgeTest):
+    def test_a_satisfied_edge_distance_does_not_govern(self):
+        """II.A-17A at a tenth of its reaction: Lev = 1.25 in. against d = 3/4 in. is 0.6, above
+        every strength utilisation, but a detailing limit does not grow with the load."""
+        out = component("ii_a_17a_shear_tab.petra", (("49.6 kip", "4.96 kip"),))
+        edge = by_name(out)["edge distance along the force, plate, beam side"]
+        self.close(edge["utilisation"], 0.6, "J3.5")
+        self.assertEqual(edge["mode"], "edge_min")
+        self.assertLess(out["governing"]["utilisation"], 0.6)
+        self.assertNotIn("edge distance", out["governing"]["name"])
+
+
 class BoltLinePastTheToeTest(EdgeTest):
     """gate-1-03786: support_gauge runs from the heel to the bolt line in the outstanding leg."""
 

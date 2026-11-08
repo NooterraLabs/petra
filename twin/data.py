@@ -50,15 +50,28 @@ _HOLES = {
 
 @dataclass(frozen=True)
 class Hole:
-    """A bolt hole's dimension along the shear force (vertical) and across it."""
+    """A hole for a bolt of diameter d, with its dimension along the shear force (vertical) and
+    across it."""
 
     kind: str
+    d: F
     along: F
     across: F
 
     @property
     def long_slot_across_force(self):
         return self.kind == "lsl"
+
+    def edge_increment(self, toward):
+        """Table J3.5's C2 at an edge the hole's `toward` dimension, "along" or "across", reaches.
+        A slot whose long axis lies parallel to that edge adds nothing."""
+        if self.kind == "ovs":
+            return F(1, 16) if self.d <= F(7, 8) else F(1, 8)
+        if self.kind == "std" or getattr(self, toward) < max(self.along, self.across):
+            return F(0)
+        if self.kind.startswith("lsl"):
+            return F(3, 4) * self.d
+        return F(1, 8) if self.d <= 1 else F(3, 16)
 
 
 def hole(d, kind="std"):
@@ -67,15 +80,15 @@ def hole(d, kind="std"):
     else:
         std, ovs, ssl, lsl = d + F(1, 8), d + F(5, 16), (d + F(1, 8), d + F(3, 8)), (d + F(1, 8), F(5, 2) * d)
     if kind == "std":
-        return Hole(kind, std, std)
+        return Hole(kind, d, std, std)
     if kind == "ovs":
-        return Hole(kind, ovs, ovs)
+        return Hole(kind, d, ovs, ovs)
     if kind in ("ssl", "lsl"):
         w, length = ssl if kind == "ssl" else lsl
-        return Hole(kind, w, length)
+        return Hole(kind, d, w, length)
     if kind in ("ssl_parallel", "lsl_parallel"):
         w, length = ssl if kind == "ssl_parallel" else lsl
-        return Hole(kind, length, w)
+        return Hole(kind, d, length, w)
     raise ValueError(f"unknown hole type {kind}")
 
 

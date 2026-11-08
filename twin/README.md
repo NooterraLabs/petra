@@ -33,6 +33,12 @@ Companion, and checked each against those documents first. Its author followed t
 Companion's design examples and the front matter of its design tables. It did not read Petra's code,
 tests, judges, scripts or other documents, and did not run Petra.
 
+A third revision fixed negative strengths that a metamorphic test found where a bolt hole runs past an
+edge, on two steel gate designs now in `tests/cards/gate_*.petra`. Its author followed the same rule.
+It read `twin/`, `docs/reference.md`, `docs/steel_glossary.md`, the Specification's J3.3 to J3.6,
+J3.11 and J4 with the Commentary on J3.5, and the Companion's design examples, and it ran the twin
+over `examples/steel/`. Readings 28 to 31 record its decisions.
+
 ## Use
 
 ```
@@ -42,8 +48,10 @@ py -3.11 -m unittest discover -s twin -t .
 
 The first prints one JSON report per card. Each steel component gets a status of `checked`,
 `unsupported` (a kind the twin does not model, or too many intervals) or `input_error` (a line it
-needs is missing or malformed). A checked component lists its checks, the governing one, notes, and the parts of the
-card the twin does not model.
+needs is missing or malformed, or the card puts a bolt line on or past its element's edge). A checked
+component lists its checks, the governing one, notes, and the parts of the card the twin does not
+model. The governing check has the highest utilisation, except that a detailing limit, which does not
+grow with the load, governs only when it fails.
 
 The demand is the largest magnitude over every load range on the component, for the field the kind
 carries (`shear`, or `tension` for a hanger). The basis line chooses LRFD (phi) or ASD (Omega).
@@ -66,7 +74,7 @@ intervals. A component with more than 8 intervals is reported as `unsupported`. 
 | `coped.py` | coped beam sections |
 | `kinds.py` | the limit states each connection kind carries |
 | `run.py` | load envelope, rendering and the JSON report |
-| `tests/` | parser tests, IC tests, the Companion examples restated as cards, and hand calculations |
+| `tests/` | parser tests, IC tests, the Companion examples restated as cards, hand calculations, and gate designs whose holes run past an edge |
 
 `shapes.json` keeps 289 W, 289 WT and 137 L shapes. Angle legs and thickness come exactly from the
 shape name, because the table rounds thickness to three decimals.
@@ -77,11 +85,13 @@ Every kind runs its checks against one demand. Bolt lines carry the same four ch
 appear. These are bolt shear (J3.7, Eq. J3-1), bearing and tearout of each ply (J3.11a, Eqs. J3-6a to
 J3-6f), the sum of each bolt's least strength (the J3.7 User Note), and slip (J3.9, Eq. J3-4) when the
 joint is slip-critical. An eccentric bolt line scales all four by C/n from the IC method of Manual
-Part 7.
+Part 7. Where a ply has an edge on the card, the line also checks that edge's distance along the force
+against J3.5 (reading 29).
 
 Every block shear check (J4.3) comes in two parts. One is the block through the whole bolt column.
 The other is the weakest block through fewer rows, the ones nearest the edge the bolts push toward,
-against those rows' share of the demand.
+against those rows' share of the demand. Each also checks its edge distance across the force against
+J3.5.
 
 | kind | limit states | clauses |
 |---|---|---|
@@ -115,7 +125,8 @@ against those rows' share of the demand.
 | | seat outstanding leg shear yielding | J4.2(a) |
 | | seat outstanding leg flexure | Manual Part 10 |
 | | bolt line, seat to support | J3.7, J3.11a |
-| `bolt_bracket` | bolt group, IC | J3.7, J3.11a, Manual Part 7 |
+| `bolt_bracket` | plate edge distances, vertical and horizontal | J3.5, Table J3.4 note [a] |
+| | bolt group, IC | J3.7, J3.11a, Manual Part 7 |
 | | slip of the group, IC, when slip-critical | J3.9, Manual Part 7 |
 | | section A-A flexural yielding and rupture | Manual Eqs. 15-1 to 15-3 |
 | | section A-A shear yielding and rupture | J4.2(a), J4.2(b) |
@@ -138,6 +149,7 @@ these checks.
 | either | web shear yielding on hc tw | J4.2(a) |
 | bolted, top | web block shear, Leh less the 1/4 in. underrun | J4.3 |
 | bolted, both | web shear rupture on the net section and web block shear | J4.2(b), J4.3 |
+| | edge distance from the bottom bolt to the bottom cope | J3.5, Table J3.4 note [a] |
 | welded | web shear rupture on hc tw | J4.2(b) |
 
 ## Not modeled
@@ -153,7 +165,8 @@ The report lists each of these under `unsupported` when a card asks for it.
   moment, and the documents read give no J4.3 demand for that. Example II.A-22 does not check it.
 - Coped sections with c/d or c/hc above 1.0, or with lambda above 2 lambda_p. The documents read
   do not give Manual Eqs. 9-12, 9-13, 9-19b or 9-20b.
-- Fit and geometry checks of every kind. The twin checks strength only.
+- Fit and geometry checks, except J3.5's least edge distance at the edges reading 29 names. Bolt
+  spacing (J3.4), the maxima of J3.6, and the edges of seats, hangers and supports are not checked.
 
 ## Companion examples reproduced
 
@@ -259,3 +272,28 @@ Each item says how the twin reads a point the documents leave open, and how sure
     available tension from F'nt of J3.8, as II.A-1B does.
 27. Interval lengths. The twin checks only the ends of each interval. A check whose worst case lies
     strictly inside an interval would be missed, and the twin does not prove that none does.
+28. Holes that overrun an edge. J3.11a's lc and the net areas of J4.2(b) and J4.3 measure the steel
+    between a hole and the next hole or edge. Where a hole runs past the edge or into the next hole,
+    the twin counts that span as zero, so no tearout or net area is negative (inferred, since a clear
+    distance or an area cannot be negative). Earlier revisions subtracted the overrun. On
+    gate-1-04213, whose top slot runs 1/16 in. past the cope's cut, its bolt group read 5.693 kips
+    ASD, and 5.595 kips with a web 1/16 in. thicker (measured). It now reads 6.082 kips at both
+    (measured). On the Companion cards in `tests/cards/` and on every card in `examples/steel/`, no
+    strength changed (measured).
+29. Least edge distance. Below Table J3.4's distance, the table's note [a] lets J3.11 and J4 govern
+    down to one bolt diameter, and J3.5 adds Table J3.5's C2 for an oversized or slotted hole.
+    Example II.A-30 accepts a tee flange edge below the table on that note. The twin checks d + C2 at
+    the edges its J3.11 and J4 checks read in the shear connections and the bracket. These are each
+    bolt line ply's edge along the force, each block shear check's edge across the force, a bracket
+    plate's two edges, and the bottom cope of a double-coped web. Each is taken at the value its
+    strength check uses, so the beam web's Leh is less the underrun. The check has mode `edge_min`
+    and no phi or Omega. That C2 adds to the note's floor of d, and not only to the table's value,
+    is inferred. The check does not grow with the load, so it governs a report only when it fails.
+    gate-1-04213's top slot centres 0.5 in. from the cut against d + C2 = 1 in., a utilisation of 2
+    (measured).
+30. A bolt line on or past its element's edge. The card then puts no hole in that element, so the
+    twin reports `input_error` rather than check a load path that is not there.
+31. Single angle support gauge. `docs/reference.md` measures `support_gauge` from the angle's heel,
+    at the beam web's face, to the bolt line in the outstanding leg, and the II.A-28A card follows
+    it. The twin reads it so. gate-1-03786 gives 5.5 in. on a 3.5 in. outstanding leg, which puts the
+    line 2 in. past the toe, so the card is refused under reading 30.
