@@ -423,4 +423,6 @@ All probes were throwaway scripts outside this repository. No optimisation ran. 
 
 ## Amendments
 
-None yet.
+### 2026-11-08, gap G1 fixed at cf9f814
+
+Commit cf9f814 fixes G1. Petra's truss models now lower a compression member's buckling resistance for its self-weight bending, by the member check of EN 1993-1-1 6.3.3 with Annex B. The bounds and recalled factors are listed in `petra/models/truss.py`. No premise discloses the gap any more (measured, `tests/test_truss.py`). The G1 card of §14 now fails at 1.0231 kN, and its witness names the top chord and 6.3.3 (measured). The largest load it passes is 0.7327 kN, where the probe's float code gives a 6.3.3 utilisation of 0.908 (measured). In the G1 table, Petra's capacity over the 6.3.3 limit falls to between 0.900 and 0.959 (computed). Commit 38cc6ba stays the planted-error baseline of item 5 of the Summary.

@@ -8,12 +8,14 @@ petra 0
 #
 # The truss is statically determinate, so the end diagonals carry
 # N_ad = 0.9375 P_D + 0.3125 P_E, 1.25 P of compression at the worst vertex, plus
-# 0.44 kN from the members' own weight (g = 9.84 m/s2, the top of the registry's
-# range). The strength claim factors the load and not the weight, so it needs
-# 1.5 x 1.25 P + 0.44 kN within the 54.69 kN EN 1993-1-1 flexural buckling resistance
-# (curve c) of a 2.5 m CHS 60.3x3.2 at E = 200 GPa: the box edge is 28.93 kN per node
-# (tests/test_bench.py). Without the weight it was 29.17 kN, and against the bare
-# Euler load of 74.12 kN, which v0 used before, 39.53 kN.
+# 0.45 kN from the members' own weight (the tops of the registry's ranges for g and
+# steel's density). The strength claim factors the load and not the weight, so it
+# needs 1.5 x 1.25 P + 0.45 kN within the 53.98 kN EN 1993-1-1 compression resistance
+# of a 2.5 m CHS 60.3x3.2 at E = 200 GPa. That is the 54.69 kN flexural buckling resistance
+# (curve c), lowered by the member check of 6.3.3 for the bending of the diagonal's
+# own weight. The box edge is 28.55 kN per node (tests/test_bench.py), so 28.5 kN
+# certifies. Before the 6.3.3 check it was 28.93 kN, without the weight 29.17 kN,
+# and against the bare Euler load of 74.12 kN, which v0 used before, 39.53 kN.
 
 design "family-warren-footbridge-panel" {
   owner "petra.library@example.org"
