@@ -250,6 +250,8 @@ Open items.
 - C-shaped weld groups stay elastic. So does an edge-on weld group below a = 1/8, and every fatigue check.
 - A bracket's support has no declared edges, so its tearout is bounded only by its holes.
 - The clean-room twin (`twin/`) takes an edge-on weld group by the elastic method, so it fails some designs the deck passes. The deck's tests hold its weld groups to Companion II.A-2A instead.
+- The clean-room twin takes a bracket bolt's tearout at its least clear distance in any direction, where J3.11a reads it in the direction of the force. So it fails three gate brackets the deck passes. A separate hand calculation of the method matches the deck on each, to 0.7% on the toleranced one (measured).
+- The gate's internal twin runs the weld method in floats. Where a weld check lies above 1 by less than the certificate gives up, the deck fails a design the twin passes. Two of the gate's 10,000 designs do this, by 0.87% and 0.70% (measured).
 
 ## 8. Ground truth and outside judges
 
