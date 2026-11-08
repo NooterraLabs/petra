@@ -98,12 +98,17 @@ def bolt_line(out, line, bolts, deformation=True):
     out.add(f"bolt group effective strength, {line.label}", "bolts", "bolts",
             f"{SPEC} J3.7 User Note with J3.11a{ecc}", k * effective, "J3.6")
     if bolts.joint == "slip_critical":
-        mu = F(1, 2) if bolts.surface == "class_b" else F(3, 10)
-        kinds = {ply.hole.kind for _, ply in line.plies}
-        factor = "slip_lsl" if kinds & {"lsl", "lsl_parallel"} else (
-            "slip_ovs" if kinds & {"ovs", "ssl_parallel"} else "slip_std")
-        out.add(f"slip, {line.label}", "slip", "bolts", f"{SPEC} J3.9, Eq. J3-4{ecc}",
-                k * n * ck.slip(mu, bolts.pretension, line.planes, bolts.fillers), factor)
+        slip(out, f"slip, {line.label}", bolts, {ply.hole.kind for _, ply in line.plies}, line.planes, k * n, ecc)
+
+
+def slip(out, name, bolts, hole_kinds, planes, bolt_count, ecc=""):
+    """J3.9 slip resistance of bolt_count bolts, with the phi and Omega of the most slip-prone
+    hole, J3.9(a) to (c)."""
+    mu = F(1, 2) if bolts.surface == "class_b" else F(3, 10)
+    factor = "slip_lsl" if hole_kinds & {"lsl", "lsl_parallel"} else (
+        "slip_ovs" if hole_kinds & {"ovs", "ssl_parallel"} else "slip_std")
+    out.add(name, "slip", "bolts", f"{SPEC} J3.9, Eq. J3-4{ecc}",
+            bolt_count * ck.slip(mu, bolts.pretension, planes, bolts.fillers), factor)
 
 
 def eccentric(points, ex):
@@ -502,6 +507,12 @@ def bolt_bracket(lines, out, demands):
             f"{SPEC} J3.11a{'(2)' if long_s else ''}; {note}", c * rsup, "J3.11")
     out.add("bolt group effective strength", "bolts", "bolts", f"{SPEC} J3.7 User Note with J3.11a; {note}",
             c * min(rs, rp, rsup), "J3.6")
+    if bolts.joint == "slip_critical":
+        # A short slot across the shear lies along the horizontal bolt forces, so J3.9(b) applies.
+        kinds = {"ssl_parallel" if h.kind == "ssl" else h.kind for h in (hp, hs)}
+        slip(out, "slip", bolts, kinds, 1, c, f"; {note}")
+    out.unsupported.append("bracket plate block shear: the eccentric group loads each block with a force and a "
+                           "moment, and the documents read give no J4.3 demand for that (Example II.A-22 omits it)")
     e_aa = ex - F(m - 1, 2) * g
     moment = out.demand * e_aa
     out.add("flexural yielding, section A-A", "flexural_yield", "plate", f"{MANUAL} Eqs. 15-1 and 15-2",
