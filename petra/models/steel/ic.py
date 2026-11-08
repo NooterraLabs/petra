@@ -181,10 +181,13 @@ WELD_ROWS = ("aisc360.j2_4.kds", "aisc360.j2_4.kds_power", "aisc_manual.p8.ic_de
              "aisc_manual.p8.ic_delta_u_power", "aisc_manual.p8.ic_delta_u_cap", "aisc_manual.p8.ic_curve_a",
              "aisc_manual.p8.ic_curve_b", "aisc_manual.p8.ic_curve_power")
 """The rows limits.ic_weld_bounds reads, in the order weld_curve gives them."""
-WELD_LOSS = 0.01
-"""The share of the method's C the segments may give up before the search cuts finer."""
-WELD_SEGMENTS = (32, 48, 64, 96, 128)
-"""The segment counts tried, fewest first: the kernel's work grows with them."""
+WELD_LOSS = 0.005
+"""The share of the method's C the segments may give up before the search cuts finer. At
+0.01 the certificate held II.A-26's C-shaped group 0.94 % under the method, 1.854 against
+the Companion's 1.88 read off Table 8-8, which lies 0.43 % over the method's 1.872."""
+WELD_SEGMENTS = (32, 48, 64, 96, 128, 192, 256, 384)
+"""The segment counts tried, fewest first: the kernel's work grows with them. A C-shaped
+group takes about 192, a line 64 to 128 (measured)."""
 WELD_FLOOR = 0.02
 """Part of the segments spread evenly along a weld, the rest where the bounds lose most."""
 WELD_SHORT = 1e-7
@@ -504,8 +507,9 @@ def _rational_grid(zs: np.ndarray, start: Fraction, end: Fraction) -> tuple[Frac
 def weld_centre(curve: tuple[float, ...], segments: tuple[Segment, ...], a: Fraction) -> tuple[Fraction, tuple[Run, ...]] | None:
     """(r, runs) for a load a from the group's centroid: the certificate's centre distance
     behind the centroid, a constant, and the group's runs cut into segments; None where
-    `pieces` refuses the group or no centre balances the load. Tries WELD_SEGMENTS in turn
-    and keeps the first whose bounds give up at most WELD_LOSS of the method's C, else the
+    `pieces` refuses the group or no centre balances the load. Tries WELD_SEGMENTS fewest
+    first, past the counts that the loss at the last one, falling as 1 / n, rules out, and
+    keeps the first whose bounds give up at most WELD_LOSS of the method's C, else the
     best."""
     group = pieces(segments)
     if group is None:
@@ -525,7 +529,10 @@ def weld_centre(curve: tuple[float, ...], segments: tuple[Segment, ...], a: Frac
         return at
 
     best: tuple[float, Fraction, tuple[Run, ...]] | None = None
+    least = 0
     for n in WELD_SEGMENTS:
+        if n < least and n != WELD_SEGMENTS[-1]:
+            continue
         cuts = tuple(_rational_grid(s, p.start, p.end) for s, p in zip(weld_grid(found, af, n, curve, group), group))
 
         def gap(r: float) -> float:
@@ -549,4 +556,6 @@ def weld_centre(curve: tuple[float, ...], segments: tuple[Segment, ...], a: Frac
             best = (v, r, runs)
         if v >= (1 - WELD_LOSS) * target:
             break
+        # the loss falls about as 1 / n: skip the counts that would still give up too much
+        least = math.ceil(n * (1 - v / target) / WELD_LOSS)
     return None if best is None else (best[1], best[2])

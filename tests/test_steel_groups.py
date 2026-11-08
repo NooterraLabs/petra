@@ -134,8 +134,9 @@ class IIA22(ex.Example):
 
 TABLE_8_8 = 0.015
 """How far a C-shaped weld's strength may lie from the Companion's: the deck certifies a bound
-up to ic.WELD_LOSS under the method's C, and the Companion interpolates Table 8-8 and rounds
-Rn to three figures."""
+up to ic.WELD_LOSS = 0.5 % under the method's C; the Companion interpolates Table 8-8, which
+reads II.A-26's C 0.43 % over the method's 1.872, and rounds Rn to three figures (113 kips for
+112.8)."""
 
 
 class IIA23(ex.Example):
@@ -208,7 +209,7 @@ class IIA26And27(ex.Example):
     body = ("  plate steel.A36 thickness 0.5 inch\n  support W14x90 flange grade steel.A992\n"
             "  weld electrode.E70 size 0.375 inch sides 1\n  weld_length 10 inch\n  weld_return 5 inch\n"
             "  eccentricity 8.75 inch\n")
-    bounded = {("weld", "bracket weld:"): ("84.8", "56.5")}
+    printed = {("weld", "bracket weld:"): ("84.8", "56.5", TABLE_8_8)}
 
     def test_the_elastic_coefficient_of_II_A_27(self):
         fx, tip, heel = M.elastic_weld_c(L.c(1), inch(10), inch(10), inch(5))
@@ -454,8 +455,9 @@ class TableEightFour(unittest.TestCase):
     The P3 pilot's task 303-022: two 3/16 in E70 fillets 13 in long on a 5/16 in A572 Gr. 50
     plate, the load 5 in out (a = 0.385), 48.4 kips ASD. At 38cc6ba the elastic method failed
     the welds (1.68) and the plate's base metal (1.54), reading the base metal against the
-    whole force at the weld's end. By the instantaneous centre the welds use 0.919 and the
-    base metal, against the force along the weld, 0.873."""
+    whole force at the weld's end. By the instantaneous centre the welds use 0.915 and the
+    base metal, against the force along the weld, 0.869 (the twin's quadrature 0.911 and
+    0.866)."""
 
     def test_the_certificate_reproduces_the_companion(self):
         v, gap = certificate(checks.turning_group(Fraction(0)), Fraction(4, 1) / Fraction(47, 2))
@@ -473,9 +475,9 @@ class TableEightFour(unittest.TestCase):
         text = PILOT_022.read_text(encoding="utf-8")
         (weld,) = self.values(text, "weld")
         self.assertIn("instantaneous center", weld.what)
-        self.assertAlmostEqual(weld.utilisation, 0.919, delta=0.001)
+        self.assertAlmostEqual(weld.utilisation, 0.915, delta=0.001)
         (base,) = self.values(text, "weld_base_metal")
-        self.assertAlmostEqual(base.utilisation, 0.873, delta=0.001)
+        self.assertAlmostEqual(base.utilisation, 0.869, delta=0.001)
 
     def test_a_short_lever_keeps_the_elastic_method(self):
         """At e = 1.5 in on 13 in, a = 0.115 is under a_min."""
@@ -527,7 +529,8 @@ class TableEightEight(unittest.TestCase):
     per_sixteenth = 0.6 * 70 * math.sqrt(2) / 2 / 16
 
     def test_the_certificate_reproduces_the_companion(self):
-        for tag, k, a, printed in (("II.A-23", Fraction(1, 6), Fraction(29, 48), 1.46),):
+        for tag, k, a, printed in (("II.A-23", Fraction(1, 6), Fraction(29, 48), 1.46),
+                                   ("II.A-26", Fraction(1, 2), Fraction(7, 8), 1.88)):
             with self.subTest(tag):
                 v, gap = certificate(checks.turning_group(k), a)
                 self.assertGreater(value(gap), 0)
