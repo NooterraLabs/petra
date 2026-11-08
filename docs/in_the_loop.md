@@ -50,7 +50,7 @@ Other clients take this entry in their MCP settings:
 
 The loop keeps a design only when Petra returns PASS for it. So every margin it keeps is certified by the kernel. A MARGINAL design is not kept.
 
-The outside judge in `judges/` reads every design the loop keeps. The judge computes the geometry on its own, so it can catch a design that Petra passes but that does not fit. The minimiser looks for the edge of the passing region, so it is the strongest breaker the project has.
+The outside judge in `judges/` reads every design the loop keeps. The judge computes the geometry on its own, so it can catch a design that Petra passes but that does not fit. The minimiser looks for the edge of the passing region, so it is the strongest breaker the project has. The [CalculiX spot check](calculix_check.md) models each kept optimum's governing element with finite elements and compares its capacity with Petra's.
 
 The mass is an estimate. Plates and stiffeners count as rectangles, angles and tees as their section over the connection's length, and each bolt as its shank over a 2 in grip with a head and a nut. It ranks the designs of one task against each other. It is not a bill of materials.
 

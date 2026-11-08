@@ -97,15 +97,212 @@ These predictions come from Petra's strengths and R_int alone, before any finite
 | bending | Half of a 6 in by 60 in plate in four-point bending. The moment at its plane of symmetry is constant and shear-free, and is read from the reactions there: Mp = Fy t d² / 4 = 162 kip-in |
 | cantilever | A plate 6 in deep and 24 in long, welded along one end, pushed down along the other: Mp / L = 6.75 kip |
 
-The pure-shear plate reads 0.977, 0.973 and 0.972 of its hand solution at element sizes of 0.5, 0.35 and 0.25 in. That 2.8% shortfall sets the band of the criterion. The rest of the validation is added with the sample's results.
+FE capacity over the hand solution, at three element sizes:
+
+| Case | Hand solution | 0.5 in | 0.25 in | 0.125 in |
+|---|---|---|---|---|
+| shear | 124.7 kip | 0.977 | 0.972 | 0.970 |
+| bending | 162.0 kip-in | 0.991 | 0.993 | 0.994 |
+| cantilever | 6.75 kip | 1.071 | 1.069 | 1.068 |
+
+Each run ends on a plateau: its load grows by less than 0.3% over the last fifth of the push.
+
+- **Bending** reaches Mp to within 0.7%. The plane of symmetry carries no shear, so this is the model's plastic moment alone.
+- **Shear** settles 3% under Fy/√3. The plate's held ends carry a moment of V L / 2, and its free edges carry no shear. A 0.35 in run reads 0.973. This 3% is the band of the criterion.
+- **The cantilever** reads 7% over Mp / L. Its welded edge cannot shrink sideways, so the steel along it yields in plane strain. There a bending stress of up to 2/√3 Fy = 1.155 Fy can develop. The gain is real for a plate held along a weld, and the model has it wherever an element is held along an edge: tabs, angles, tees, end plates and welded brackets. It raises the FE capacity, so it cannot cause a flag.
 
 ## Convergence
 
-To follow, with the sample's results.
+`python scripts/calculix_check.py converge 202-001 202-002 202-006 202-010` runs four optima, one of each topology, at three element sizes. The FE capacities are in kip.
+
+| Design | Run | 0.5 in | 0.35 in | 0.25 in | 0.5 to 0.25 in |
+|---|---|---|---|---|---|
+| 202-001 `shear_tab` | yield | 127.5 | 127.4 | 127.1 | −0.3% |
+| | rupture | 156.6 | 153.3 | 150.8 | −3.7% |
+| 202-002 `double_angle` | yield | 111.3 | 110.9 | 110.2 | −0.9% |
+| | rupture | 140.2 | 137.2 | 137.3 | −2.1% |
+| 202-006 `weld_bracket` | yield | 77.5 | 77.3 | 77.2 | −0.4% |
+| | rupture | 89.3 | 89.2 | 89.2 | −0.1% |
+| 202-010 `bolt_bracket` | yield | 59.2 | 59.1 | 59.0 | −0.3% |
+| | rupture | 62.0 | 61.4 | 61.1 | −1.5% |
+
+Every capacity falls as the mesh refines, by at most 3.7% from 0.5 to 0.25 in. So the 5% of the close-call rule covers the step from the screen to the judged size. The yield run is settled to 1%. The shear tab's rupture run still falls 1.6% from 0.35 to 0.25 in, because its capacity hangs on how the edge of a hole deforms. Its judged capacity may be a few percent high.
 
 ## Results
 
-To follow.
+`python scripts/calculix_check.py sample` checked all 68 loop optima the model covers: 15 `shear_tab`, 7 `double_angle`, 8 `single_angle`, 10 `shear_tee`, 6 `shear_end_plate`, 9 `bolt_bracket` and 13 `weld_bracket`. The other 32 tasks are seats, stiffened seats and hangers, or have no optimum. Six designs were close calls at 0.5 in and were run again at 0.25 in. Every run finished its push. The log is `docs/calculix_check_log.jsonl`, and `report` prints the tables below from it.
+
+- **32 flags.** All come from the yield run of an LRFD design, and all 32 point to the model.
+- **No rupture flag.** The least rupture FE capacity is 1.15 times its design strength.
+- **No ASD flag.** The least ASD yield FE capacity is 1.17 times Rn/Ω.
+- **No design falls below its own load.** Every FE capacity exceeds the factored or service load the design was sized for.
+
+The forecast held. It named 33 LRFD yield flags and got 32. The one it named and missed is 202-047, a welded bracket whose R_int sits at 0.997 of φRn. Its FE capacity came out 14% over R_int, as welded brackets do, and so above φRn.
+
+### The flags
+
+| Task | Kind | Governing yield state | FE / Rn | FE / φRn | FE / R_int | Points to |
+|---|---|---|---|---|---|---|
+| 202-001 | `shear_tab` | plate, J4.2(a) shear yielding | 0.939 | 0.939 | 0.995 | model |
+| 202-004 | `shear_tee` | tee stem, J4.5 flexural yielding | 0.762 | 0.847 | 1.138 | model |
+| 202-006 | `weld_bracket` | bracket plate, J4.5 flexural yielding | 0.829 | 0.921 | 1.094 | model |
+| 202-012 | `shear_tab` | plate, J4.2(a) shear yielding | 0.871 | 0.871 | 1.084 | model |
+| 202-014 | `single_angle` | outstanding leg, J4.2(a) shear yielding | 0.825 | 0.825 | 1.116 | model |
+| 202-019 | `shear_tab` | plate, J4.2(a) shear yielding | 0.913 | 0.913 | 1.033 | model |
+| 202-026 | `shear_end_plate` | end plate, J4.2(a) shear yielding | 0.871 | 0.871 | 1.023 | model |
+| 202-030 | `shear_tab` | plate, J4.2(a) shear yielding | 0.906 | 0.906 | 1.011 | model |
+| 202-031 | `double_angle` | angles, J4.2(a) shear yielding | 0.896 | 0.896 | 1.063 | model |
+| 202-032 | `shear_tee` | tee stem, J4.2(a) shear yielding | 0.876 | 0.876 | 1.057 | model |
+| 202-040 | `bolt_bracket` | bracket plate, J4.5 flexural yielding | 0.787 | 0.874 | 1.073 | model |
+| 202-041 | `weld_bracket` | bracket plate, J4.5 flexural yielding | 0.740 | 0.823 | 1.062 | model |
+| 202-045 | `shear_tee` | tee stem, J4.5 flexural yielding | 0.786 | 0.874 | 1.149 | model |
+| 202-049 | `shear_tab` | plate, J4.2(a) shear yielding | 0.928 | 0.928 | 1.004 | model |
+| 202-050 | `shear_end_plate` | end plate, J4.2(a) shear yielding | 0.886 | 0.886 | 1.002 | model |
+| 202-052 | `shear_tab` | plate, J4.2(a) shear yielding | 0.871 | 0.871 | 1.084 | model |
+| 202-053 | `double_angle` | angles, J4.2(a) shear yielding | 0.853 | 0.853 | 1.136 | model |
+| 202-054 | `shear_tee` | tee stem, J4.2(a) shear yielding | 0.833 | 0.833 | 1.076 | model |
+| 202-060 | `double_angle` | angles, J4.2(a) shear yielding | 0.900 | 0.900 | 1.054 | model |
+| 202-061 | `shear_tee` | tee stem, J4.2(a) shear yielding | 0.904 | 0.904 | 1.019 | model |
+| 202-063 | `bolt_bracket` | bracket plate, J4.5 flexural yielding | 0.674 | 0.749 | 1.028 | model |
+| 202-067 | `shear_end_plate` | end plate, J4.2(a) shear yielding | 0.838 | 0.838 | 1.043 | model |
+| 202-068 | `shear_tab` | plate, J4.2(a) shear yielding | 0.912 | 0.912 | 1.035 | model |
+| 202-070 | `shear_tee` | tee stem, J4.2(a) shear yielding | 0.857 | 0.857 | 1.077 | model |
+| 202-072 | `shear_tab` | plate, J4.2(a) shear yielding | 0.876 | 0.876 | 1.069 | model |
+| 202-077 | `bolt_bracket` | bracket plate, J4.2(a) shear yielding | 0.777 | 0.777 | 1.015 | model |
+| 202-079 | `shear_tab` | plate, J4.2(a) shear yielding | 0.901 | 0.901 | 1.037 | model |
+| 202-080 | `single_angle` | outstanding leg, J4.2(a) shear yielding | 0.872 | 0.872 | 1.100 | model |
+| 202-084 | `shear_tab` | plate, J4.2(a) shear yielding | 0.940 | 0.940 | 0.994 | model |
+| 202-085 | `shear_tee` | tee stem, J4.5 flexural yielding | 0.779 | 0.866 | 1.133 | model |
+| 202-095 | `double_angle` | angles, J4.2(a) shear yielding | 0.851 | 0.851 | 1.129 | model |
+| 202-097 | `weld_bracket` | bracket plate, J4.5 flexural yielding | 0.776 | 0.862 | 1.075 | model |
+
+**Which way they point.** Every flag reaches R_int: the least FE / R_int is 0.994, inside the 3% band, and the median is 1.077. So von Mises shear and the interaction of shear with moment account for each flag in full. None points to a strength Petra computed wrongly for its own geometry. They point to AISC's convention: φ = 1.00 on 0.6 Fy for shear yielding, and shear and flexural yielding checked apart. Petra follows that convention, as the deck should.
+
+The largest gaps are where one element runs high in both shear and flexure: bolted and welded brackets and tee stems. 202-063, a bolted bracket, reaches 0.749 of φRn. If the deck ever wants to be stricter than AISC there, the lever already exists. Petra checks the Eq 10-8 circle on extended shear tabs, and the same circle on brackets and tee stems would close these gaps. That is a choice for the deck, not a bug.
+
+R_int sits at or under the FE capacity for every kind, to within the 3% band. The model beats it by up to 17%. A held edge gives part of that, 7% in the cantilever validation. The rest is the circle itself, which is cautious for a short, deep plate.
+
+| Kind | n | FE / R_int, min | median | max |
+|---|---|---|---|---|
+| `shear_tab` | 15 | 0.994 | 1.033 | 1.084 |
+| `shear_end_plate` | 6 | 1.002 | 1.042 | 1.123 |
+| `shear_tee` | 10 | 1.019 | 1.077 | 1.149 |
+| `bolt_bracket` | 9 | 1.015 | 1.094 | 1.139 |
+| `double_angle` | 7 | 1.054 | 1.102 | 1.136 |
+| `single_angle` | 8 | 1.031 | 1.101 | 1.173 |
+| `weld_bracket` | 13 | 1.062 | 1.123 | 1.142 |
+
+### The ratios
+
+FE capacity over the governing state's Rn, for every design:
+
+| Run | Basis | Governing state | n | min | p10 | median | p90 | max |
+|---|---|---|---|---|---|---|---|---|
+| yield | all | all | 68 | 0.674 | 0.782 | 0.874 | 1.013 | 1.060 |
+| yield | ASD | flexural yielding | 13 | 0.752 | 0.791 | 0.893 | 1.020 | 1.033 |
+| yield | ASD | shear yielding | 18 | 0.783 | 0.842 | 0.871 | 0.913 | 0.939 |
+| yield | LRFD | flexural yielding | 13 | 0.674 | 0.745 | 0.787 | 1.040 | 1.060 |
+| yield | LRFD | shear yielding | 24 | 0.777 | 0.834 | 0.876 | 0.924 | 0.940 |
+| rupture | all | all | 68 | 0.864 | 0.965 | 1.265 | 2.093 | 2.774 |
+| rupture | ASD | block shear | 6 | 0.888 | 0.920 | 0.975 | 0.987 | 0.990 |
+| rupture | ASD | bolt group | 10 | 1.301 | 1.436 | 1.772 | 2.202 | 2.385 |
+| rupture | ASD | shear rupture | 6 | 1.087 | 1.092 | 1.123 | 1.135 | 1.139 |
+| rupture | ASD | weld base metal | 9 | 1.421 | 1.547 | 1.815 | 2.009 | 2.020 |
+| rupture | LRFD | block shear | 12 | 0.864 | 0.883 | 1.016 | 1.144 | 1.149 |
+| rupture | LRFD | bolt group | 12 | 1.229 | 1.389 | 1.716 | 2.558 | 2.774 |
+| rupture | LRFD | shear rupture | 9 | 1.062 | 1.101 | 1.134 | 1.217 | 1.218 |
+| rupture | LRFD | weld base metal | 4 | 1.402 | 1.421 | 1.512 | 1.872 | 2.006 |
+
+No yield ratio under shear yielding passes 0.940, under the 0.962 that von Mises allows. Where flexural yielding governs, the ratio reaches 1.06, with help from the held edge.
+
+Block shear has the lowest rupture ratios, down to 0.864 (202-030). Its shear planes are 0.962 of 0.6 Fu under von Mises, and the run stops at a hole stretch of 0.25 in, before the whole block has flowed. With φ = 0.75 that still leaves a margin of 1.15.
+
+The bolt-group and weld base metal ratios are high for a reason in the check, not the steel. A bolt group with an eccentric load is checked as its weakest bolt against the most loaded one by the elastic method. The weld's base metal is checked at the most stressed point of the weld line, elastically. The plate redistributes past both. The model also pushes every bolt alike, so it does not test the eccentricity itself.
+
+**A diagnostic, after the run.** This is outside the criterion. For the 22 designs whose rupture run is governed by an eccentric bolt group, the script also sums the element's bearing and tearout over its bolts, as a concentric group's are. Then bearing and tearout never govern: block shear or net shear rupture takes over, and the FE capacity is 0.82 to 1.21 times that Rn, median 1.09. The least is 202-054, a tee stem in net shear rupture, at 0.823. So the sample tests the holes' bearing and tearout only through those mechanisms.
+
+**The rupture ratios are lower bounds.** The rupture run's push ends at 0.4 in of bolt travel, or at 5% of the length for a welded bracket's edge. In 13 runs a hole stretched 0.25 in first, as the criterion means. In the other 55 the push ended first, with the load still rising, by a median 3.2% over the last fifth of the push. Their capacity is the load at the end of the push, so their ratios are low by a few percent or more. A lower bound can make a flag but cannot hide one, so the verdicts stand.
+
+### Every design
+
+FE capacity over the governing state's Rn, with the element size the result was judged at.
+
+| Task | Kind | Element | Basis | Size (in) | Yield state | Yield FE / Rn | Rupture state | Rupture FE / Rn | Flag |
+|---|---|---|---|---|---|---|---|---|---|
+| 202-001 | shear_tab | plate | LRFD | 0.25 | shear_yield | 0.939 | shear_rupture | 1.062 | yield, model |
+| 202-002 | double_angle | angles | ASD | 0.5 | shear_yield | 0.886 | shear_rupture | 1.131 |  |
+| 202-003 | single_angle | angle outstanding | ASD | 0.5 | flexural_yield | 0.789 | bolts | 2.182 |  |
+| 202-004 | shear_tee | tee stem | LRFD | 0.5 | flexural_yield | 0.762 | bolts | 2.330 | yield, model |
+| 202-006 | weld_bracket | bracket plate | LRFD | 0.5 | flexural_yield | 0.829 | weld_base_metal | 1.560 | yield, model |
+| 202-007 | single_angle | angle outstanding | ASD | 0.5 | shear_yield | 0.847 | bolts | 2.056 |  |
+| 202-010 | bolt_bracket | bracket plate | LRFD | 0.5 | flexural_yield | 1.028 | block_shear | 1.149 |  |
+| 202-011 | weld_bracket | bracket plate | ASD | 0.5 | flexural_yield | 1.033 | weld_base_metal | 2.020 |  |
+| 202-012 | shear_tab | plate | LRFD | 0.5 | shear_yield | 0.871 | bolts | 1.389 | yield, model |
+| 202-014 | single_angle | angle outstanding | LRFD | 0.5 | shear_yield | 0.825 | bolts | 2.526 | yield, model |
+| 202-017 | weld_bracket | bracket plate | ASD | 0.5 | flexural_yield | 0.949 | weld_base_metal | 1.815 |  |
+| 202-019 | shear_tab | plate | LRFD | 0.5 | shear_yield | 0.913 | shear_rupture | 1.125 | yield, model |
+| 202-023 | weld_bracket | bracket plate | ASD | 0.5 | flexural_yield | 1.023 | weld_base_metal | 2.006 |  |
+| 202-025 | shear_tee | tee stem | ASD | 0.5 | shear_yield | 0.868 | bolts | 1.776 |  |
+| 202-026 | shear_end_plate | end plate | LRFD | 0.5 | shear_yield | 0.871 | block_shear | 1.022 | yield, model |
+| 202-028 | weld_bracket | bracket plate | ASD | 0.5 | flexural_yield | 0.975 | weld_base_metal | 1.885 |  |
+| 202-030 | shear_tab | plate | LRFD | 0.25 | shear_yield | 0.906 | block_shear | 0.864 | yield, model |
+| 202-031 | double_angle | angles | LRFD | 0.5 | shear_yield | 0.896 | shear_rupture | 1.171 | yield, model |
+| 202-032 | shear_tee | tee stem | LRFD | 0.5 | shear_yield | 0.876 | bolts | 1.625 | yield, model |
+| 202-034 | weld_bracket | bracket plate | ASD | 0.5 | flexural_yield | 0.869 | weld_base_metal | 1.640 |  |
+| 202-035 | single_angle | angle outstanding | ASD | 0.5 | flexural_yield | 0.799 | bolts | 2.178 |  |
+| 202-036 | shear_tee | tee stem | ASD | 0.5 | shear_yield | 0.844 | bolts | 2.385 |  |
+| 202-037 | shear_end_plate | end plate | ASD | 0.5 | shear_yield | 0.783 | block_shear | 0.969 |  |
+| 202-040 | bolt_bracket | bracket plate | LRFD | 0.5 | flexural_yield | 0.787 | block_shear | 1.148 | yield, model |
+| 202-041 | weld_bracket | bracket plate | LRFD | 0.5 | flexural_yield | 0.740 | weld_base_metal | 1.402 | yield, model |
+| 202-043 | shear_tab | plate | ASD | 0.5 | shear_yield | 0.916 | shear_rupture | 1.097 |  |
+| 202-044 | single_angle | angle outstanding | ASD | 0.5 | shear_yield | 0.904 | bolts | 1.768 |  |
+| 202-045 | shear_tee | tee stem | LRFD | 0.5 | flexural_yield | 0.786 | bolts | 2.027 | yield, model |
+| 202-047 | weld_bracket | bracket plate | LRFD | 0.5 | flexural_yield | 1.025 | weld_base_metal | 2.006 |  |
+| 202-049 | shear_tab | plate | LRFD | 0.25 | shear_yield | 0.928 | shear_rupture | 1.134 | yield, model |
+| 202-050 | shear_end_plate | end plate | LRFD | 0.25 | shear_yield | 0.886 | block_shear | 0.880 | yield, model |
+| 202-051 | bolt_bracket | bracket plate | ASD | 0.5 | flexural_yield | 0.893 | block_shear | 0.981 |  |
+| 202-052 | shear_tab | plate | LRFD | 0.5 | shear_yield | 0.871 | bolts | 1.389 | yield, model |
+| 202-053 | double_angle | angles | LRFD | 0.5 | shear_yield | 0.853 | shear_rupture | 1.218 | yield, model |
+| 202-054 | shear_tee | tee stem | LRFD | 0.5 | shear_yield | 0.833 | bolts | 2.562 | yield, model |
+| 202-055 | shear_end_plate | end plate | ASD | 0.5 | shear_yield | 0.837 | block_shear | 0.888 |  |
+| 202-057 | bolt_bracket | bracket plate | LRFD | 0.5 | flexural_yield | 1.038 | block_shear | 0.928 |  |
+| 202-059 | shear_tab | plate | ASD | 0.5 | shear_yield | 0.939 | shear_rupture | 1.087 |  |
+| 202-060 | double_angle | angles | LRFD | 0.5 | shear_yield | 0.900 | shear_rupture | 1.119 | yield, model |
+| 202-061 | shear_tee | tee stem | LRFD | 0.5 | shear_yield | 0.904 | bolts | 1.529 | yield, model |
+| 202-063 | bolt_bracket | bracket plate | LRFD | 0.5 | flexural_yield | 0.674 | block_shear | 1.103 | yield, model |
+| 202-064 | weld_bracket | bracket plate | ASD | 0.5 | flexural_yield | 0.915 | weld_base_metal | 1.736 |  |
+| 202-065 | shear_tab | plate | ASD | 0.5 | shear_yield | 0.911 | block_shear | 0.984 |  |
+| 202-066 | double_angle | angles | ASD | 0.5 | shear_yield | 0.869 | shear_rupture | 1.129 |  |
+| 202-067 | shear_end_plate | end plate | LRFD | 0.5 | shear_yield | 0.838 | block_shear | 0.954 | yield, model |
+| 202-068 | shear_tab | plate | LRFD | 0.5 | shear_yield | 0.912 | shear_rupture | 1.138 | yield, model |
+| 202-069 | single_angle | angle outstanding | ASD | 0.5 | shear_yield | 0.889 | bolts | 1.471 |  |
+| 202-070 | shear_tee | tee stem | LRFD | 0.5 | shear_yield | 0.857 | bolts | 1.807 | yield, model |
+| 202-072 | shear_tab | plate | LRFD | 0.5 | shear_yield | 0.876 | bolts | 1.229 | yield, model |
+| 202-073 | double_angle | angles | ASD | 0.5 | shear_yield | 0.870 | shear_rupture | 1.117 |  |
+| 202-074 | single_angle | angle outstanding | ASD | 0.5 | shear_yield | 0.909 | bolts | 1.451 |  |
+| 202-075 | shear_tee | tee stem | ASD | 0.5 | shear_yield | 0.866 | bolts | 1.577 |  |
+| 202-077 | bolt_bracket | bracket plate | LRFD | 0.25 | shear_yield | 0.777 | block_shear | 1.030 | yield, model |
+| 202-078 | weld_bracket | bracket plate | ASD | 0.5 | flexural_yield | 1.009 | weld_base_metal | 1.981 |  |
+| 202-079 | shear_tab | plate | LRFD | 0.5 | shear_yield | 0.901 | shear_rupture | 1.110 | yield, model |
+| 202-080 | single_angle | angle outstanding | LRFD | 0.5 | shear_yield | 0.872 | bolts | 1.553 | yield, model |
+| 202-082 | bolt_bracket | bracket plate | LRFD | 0.5 | flexural_yield | 1.060 | block_shear | 0.912 |  |
+| 202-084 | shear_tab | plate | LRFD | 0.25 | shear_yield | 0.940 | block_shear | 1.011 | yield, model |
+| 202-085 | shear_tee | tee stem | LRFD | 0.5 | flexural_yield | 0.779 | bolts | 2.774 | yield, model |
+| 202-086 | bolt_bracket | bracket plate | ASD | 0.5 | flexural_yield | 0.890 | block_shear | 0.952 |  |
+| 202-087 | weld_bracket | bracket plate | ASD | 0.5 | flexural_yield | 0.836 | weld_base_metal | 1.578 |  |
+| 202-088 | shear_end_plate | end plate | ASD | 0.5 | shear_yield | 0.865 | block_shear | 0.990 |  |
+| 202-091 | bolt_bracket | bracket plate | LRFD | 0.5 | flexural_yield | 1.040 | block_shear | 1.104 |  |
+| 202-092 | weld_bracket | bracket plate | ASD | 0.5 | flexural_yield | 0.752 | weld_base_metal | 1.421 |  |
+| 202-094 | shear_tab | plate | ASD | 0.5 | shear_yield | 0.873 | bolts | 1.301 |  |
+| 202-095 | double_angle | angles | LRFD | 0.5 | shear_yield | 0.851 | shear_rupture | 1.217 | yield, model |
+| 202-097 | weld_bracket | bracket plate | LRFD | 0.5 | flexural_yield | 0.776 | weld_base_metal | 1.464 | yield, model |
+| 202-099 | shear_tab | plate | ASD | 0.5 | shear_yield | 0.899 | shear_rupture | 1.139 |  |
+
+## What would sharpen the check
+
+- **Push the rupture run until a hole stretches 0.25 in.** Then every rupture ratio is the criterion's capacity, not a lower bound.
+- **Turn an eccentric bolt group's bolts about the group's centre,** as the brackets already do. Then the model tests the elastic method's weakest-against-most-loaded rule, not only the holes.
+- **Model the out-of-plane kinds with shells.** Seats, stiffened seats and hangers are a third of the loop's tasks and are not checked here.
 
 ## Not checked, and why
 

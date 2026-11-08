@@ -88,6 +88,17 @@ class PetrasStrengths(unittest.TestCase):
         self.assertLess(max(tearout), 2.4 * 0.625 * 0.375 * 58 * 2 / 2.0)
         self.assertAlmostEqual(bolts.design, sum(tearout), places=6)
 
+    def test_an_eccentric_group_keeps_its_weakest_bolt_and_its_sum(self):
+        el = element("202-004")
+        bolts = next(s for s in el.states if s.mode == "bolts")
+        # the tee stem's four bolts by the elastic method: the weakest, tearout to the edge
+        # (12.852 kip), against the most loaded (12.333 kip at the design's 23.379 kip)
+        self.assertAlmostEqual(bolts.design, 23.379 * 12.852 / 12.333, delta=0.01)
+        # summed as a concentric group: three bolts bear (27.056 kip), the bottom one tears out
+        self.assertAlmostEqual(bolts.summed, (3 * 27.056 + 12.852) / 0.75, delta=0.01)
+        concentric = next(s for s in element("202-002").states if s.mode == "bolts")
+        self.assertAlmostEqual(concentric.summed, concentric.nominal, places=9)
+
     def test_kinds_that_bend_out_of_plane_have_no_element(self):
         for task, row in OPTIMA.items():
             if row["kind"] in ("seated", "stiffened_seat", "hanger") and row["optimum"]:

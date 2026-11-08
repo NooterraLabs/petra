@@ -119,7 +119,8 @@ class State:
     """One limit state of one element, as Petra checked it. `design` is phi Rn (LRFD) or
     Rn / Omega (ASD) and `nominal` is Rn, both as the connection load, in kip, at which the
     check reaches utilisation 1. Every steel demand is linear in the load, so that load is
-    the design's load over the check's utilisation."""
+    the design's load over the check's utilisation. For a bolt group, `summed` is the Rn of
+    the element's bearing and tearout summed over its bolts, as a concentric group's is."""
 
     mode: str
     what: str
@@ -127,6 +128,7 @@ class State:
     utilisation: float
     design: float
     nominal: float
+    summed: float | None = None
 
 
 @dataclass(frozen=True)
@@ -321,6 +323,10 @@ def _states(conn, design, registry, names: set[str], v_top: float) -> dict[str, 
             continue
         run, group, suffix = JUDGED[mode]
         factor = _factor(registry, group, suffix, lrfd)
+
+        def nominal(design_load: float, factor: float = factor) -> float:
+            return design_load / factor if lrfd else design_load * factor
+
         for case in design.loads:
             for value in calc.values(conn, design, registry, mode, case):
                 if value.excused or value.demand <= 0 or value.unit == "1":
@@ -332,18 +338,17 @@ def _states(conn, design, registry, names: set[str], v_top: float) -> dict[str, 
                         caps = [(k, cap) for k, cap in caps if cap is not None]
                         if not caps:
                             continue
-                        capacity = sum(k * cap for k, cap in caps) if concentric else min(cap for _, cap in caps)
+                        summed = sum(k * cap for k, cap in caps)
+                        capacity = summed if concentric else min(cap for _, cap in caps)
                         design_load = v_top * capacity / value.demand
                         out[name].append(State(mode, f"{value.what.split(':')[0]}: bearing and tearout of the {name}", run,
-                                               v_top / design_load, design_load,
-                                               design_load / factor if lrfd else design_load * factor))
+                                               v_top / design_load, design_load, nominal(design_load), nominal(summed)))
                     continue
                 name = _owner(mode, value.what)
                 if name not in out:
                     continue
                 design_load = v_top / value.utilisation
-                out[name].append(State(mode, value.what, run, value.utilisation, design_load,
-                                       design_load / factor if lrfd else design_load * factor))
+                out[name].append(State(mode, value.what, run, value.utilisation, design_load, nominal(design_load)))
     return out
 
 
@@ -1012,9 +1017,22 @@ def cmd_converge(args) -> int:
 
 
 def _spread(found: list[float]) -> str:
-    q = statistics.quantiles(found, n=10) if len(found) > 1 else [found[0]] * 9
+    q = statistics.quantiles(found, n=10, method="inclusive") if len(found) > 1 else [found[0]] * 9
     return (f"{len(found)} | {min(found):.3f} | {q[0]:.3f} | {statistics.median(found):.3f} | {q[-1]:.3f} | "
             f"{max(found):.3f}")
+
+
+def summed_bolts(row: dict, text: str) -> tuple[str, float] | None:
+    """For a design whose rupture run is governed by an eccentric bolt group: the state that
+    governs, and its Rn, when the group's bearing and tearout are summed over its bolts as a
+    concentric group's are. The model pushes every bolt alike, so this is the strength it
+    tests. A diagnostic after the fact, not part of the criterion."""
+    entry = row["runs"]["rupture"]
+    if entry.get("mode") != "bolts" or "summed over the group" in entry["governing"]:
+        return None
+    el = next(e for e in elements(text, row["task"]) if e.name == row["element"])
+    nominals = [(s.what, s.summed if s.mode == "bolts" else s.nominal) for s in el.states if s.run == "rupture"]
+    return min(nominals, key=lambda wn: wn[1])
 
 
 def cmd_report(args) -> int:
@@ -1044,15 +1062,39 @@ def cmd_report(args) -> int:
                     groups.setdefault(key, []).append(e["ratio"])
     for (run, basis, mode), found in sorted(groups.items(), key=lambda kv: (RUNS.index(kv[0][0]), kv[0][1] != "all", kv[0])):
         print(f"| {run} | {basis.upper() if basis != 'all' else 'all'} | {mode} | {_spread(found)} |")
-    print("\nEvery design\n")
-    print("| Task | Kind | Element | Basis | Size (in) | Run | Governing state | FE (kip) | Design (kip) | Rn (kip) | FE / Rn | Flag |")
-    print("|---|---|---|---|---|---|---|---|---|---|---|---|")
+
+    print("\nYield run: FE / R_int\n")
+    print("| Kind | n | min | p10 | median | p90 | max |")
+    print("|---|---|---|---|---|---|---|")
+    by_kind: dict[str, list[float]] = {}
     for row in rows:
-        for run, e in row["runs"].items():
-            if "governing" in e:
-                flag = e["direction"] if e["flagged"] else ""
-                print(f"| {row['task']} | {row['kind']} | {row['element']} | {row['basis'].upper()} | {row['size']} | {run} | "
-                      f"{e['governing']} | {e['fe']:.1f} | {e['design']:.1f} | {e['nominal']:.1f} | {e['ratio']:.3f} | {flag} |")
+        e = row["runs"]["yield"]
+        if "reference" in e:
+            for key in ("all", row["kind"]):
+                by_kind.setdefault(key, []).append(e["fe"] / e["reference"]["r_int"])
+    for kind, found in sorted(by_kind.items(), key=lambda kv: (kv[0] != "all", kv[0])):
+        print(f"| {kind} | {_spread(found)} |")
+
+    texts = dict(optima(Path(args.log)))
+    summed = [(row, summed_bolts(row, texts[row["task"]])) for row in rows]
+    summed = [(row, found) for row, found in summed if found]
+    if summed:
+        print("\nEccentric bolt groups: rupture FE against the bolts summed\n")
+        print("| Task | Kind | Basis | FE / Rn, eccentric | Governing state, bolts summed | FE / Rn, bolts summed |")
+        print("|---|---|---|---|---|---|")
+        for row, (what, rn) in summed:
+            e = row["runs"]["rupture"]
+            print(f"| {row['task']} | {row['kind']} | {row['basis'].upper()} | {e['ratio']:.3f} | {what} | {e['fe'] / rn:.3f} |")
+        print(f"\nFE / Rn, bolts summed: n | min | p10 | median | p90 | max = {_spread([r['runs']['rupture']['fe'] / f[1] for r, f in summed])}")
+
+    print("\nEvery design\n")
+    print("| Task | Kind | Element | Basis | Size (in) | Yield state | Yield FE / Rn | Rupture state | Rupture FE / Rn | Flag |")
+    print("|---|---|---|---|---|---|---|---|---|---|")
+    for row in rows:
+        y, r = row["runs"]["yield"], row["runs"]["rupture"]
+        flags = ", ".join(f"{run}, {e['direction']}" for run, e in row["runs"].items() if e.get("flagged"))
+        print(f"| {row['task']} | {row['kind']} | {row['element']} | {row['basis'].upper()} | {row['size']} | "
+              f"{y.get('mode', '')} | {y.get('ratio', math.nan):.3f} | {r.get('mode', '')} | {r.get('ratio', math.nan):.3f} | {flags} |")
     return 0
 
 
@@ -1077,9 +1119,10 @@ def main(argv: list[str] | None = None) -> int:
     p = sub_.add_parser("converge")
     p.add_argument("tasks", nargs="+")
     p.add_argument("--log", default=str(LOG))
-    p.add_argument("--sizes", type=float, nargs="+", default=[0.5, 0.25, 0.125])
+    p.add_argument("--sizes", type=float, nargs="+", default=[0.5, 0.35, 0.25])
     p = sub_.add_parser("report")
     p.add_argument("--out", default=str(OUT))
+    p.add_argument("--log", default=str(LOG))
     args = parser.parse_args(argv)
     return {"check": cmd_check, "sample": cmd_sample, "validate": cmd_validate, "converge": cmd_converge,
             "report": cmd_report}[args.command](args)
