@@ -1,0 +1,18 @@
+petra 0
+
+# Companion Example II.A-23. Welded bracket, one of the two plates with half the reaction.
+# The C-shaped weld is 18 in. long with 3 in. returns; the load is 10.875 in. from its centroid.
+
+weld_bracket ii_a_23 {
+  basis lrfd
+  plate steel.A572_50 thickness 0.375 inch
+  weld electrode.E70 size 0.1875 inch
+  weld_length 18 inch
+  weld_return 3 inch
+  eccentricity 10.875 inch
+  free_edge 11.5 inch
+}
+
+load reaction {
+  on ii_a_23 shear in [0 kip, 27 kip]
+}

@@ -1,0 +1,25 @@
+petra 0
+
+# Companion Example II.A-12A. Unstiffened seat, W16x50 beam on an 8 in. L6x4x5/8 (4 in.
+# outstanding leg) bolted to a W14x90 column web. The bolt layout only lets the card run; the
+# test compares the seat angle and the beam web.
+
+seated ii_a_12a {
+  basis lrfd
+  beam W16x50 grade steel.A992
+  support W14x90 web grade steel.A992
+  angle L6x4x5_8 grade steel.A572_50 outstanding short
+  seat_length 8 inch
+  setback 0.5 inch
+  support_side bolted
+  bolts bolt_group.120 diameter 0.75 inch threads included
+  rows 2
+  pitch 3 inch
+  edge_vertical 1.25 inch
+  support_gauge 5.5 inch
+  top_angle L4x4x1_4 grade steel.A572_50 outstanding long
+}
+
+load reaction {
+  on ii_a_12a shear in [0 kip, 54.8 kip]
+}

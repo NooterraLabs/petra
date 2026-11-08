@@ -1,0 +1,18 @@
+petra 0
+
+# Companion Example II.D-1. WT6x17.5 hanger, two rows of two bolts, under a W21x57 beam flange.
+
+hanger ii_d_1 {
+  basis lrfd
+  tee WT6x17_5 grade steel.A992
+  support W21x57 flange grade steel.A992
+  bolts bolt_group.120 diameter 0.75 inch threads included
+  rows 2
+  pitch 5 inch
+  tee_gauge 3.5 inch
+  edge_vertical 2 inch
+}
+
+load reaction {
+  on ii_d_1 tension in [0 kip, 60 kip]
+}

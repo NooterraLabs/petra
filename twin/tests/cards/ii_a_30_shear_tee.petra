@@ -1,0 +1,21 @@
+petra 0
+
+# Companion Example II.A-30. All-bolted tee, W16x50 beam to a W14x90 column flange.
+
+shear_tee ii_a_30 {
+  basis lrfd
+  beam W16x50 grade steel.A992
+  support W14x90 flange grade steel.A992
+  tee WT5x22_5 grade steel.A992
+  bolts bolt_group.120 diameter 0.75 inch threads included
+  rows 4
+  pitch 3 inch
+  edge_vertical 1.25 inch
+  bolt_line 3.8 inch
+  support_side bolted
+  support_gauge 5.5 inch
+}
+
+load reaction {
+  on ii_a_30 shear in [0 kip, 36 kip]
+}

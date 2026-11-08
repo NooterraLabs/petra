@@ -1,0 +1,22 @@
+petra 0
+
+# Companion Example II.A-1A. All-bolted double angle, W36x231 beam to a W14x90 column flange.
+# support_gauge is not given in the example's checks used here; 5.5 in. only lets the card run.
+
+double_angle ii_a_1a {
+  basis lrfd
+  beam W36x231 grade steel.A992
+  support W14x90 flange grade steel.A992
+  angles L5x3_1_2x5_16 grade steel.A572_50 outstanding long
+  bolts bolt_group.120 diameter 0.75 inch threads included
+  rows 8
+  pitch 3 inch
+  edge_vertical 1.25 inch
+  beam_gauge 2.125 inch
+  support_side bolted
+  support_gauge 5.5 inch
+}
+
+load reaction {
+  on ii_a_1a shear in [0 kip, 226 kip]
+}
