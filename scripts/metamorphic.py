@@ -348,8 +348,8 @@ STRONGER = ("grade_up", "fy_up")
 
 MANUAL = "AISC Steel Construction Manual, 16th ed."
 FIT = f"{MANUAL} Part 1 (d, tf, tw, T); docs/steel_connections.md section 5a"
-SINGLE_ANGLE = (f"{MANUAL} Part 10, single-angle connections: the support leg's eccentricity is the gauge plus tw/2 "
-                "(Companion II.A-28A; e = leg + tw/2 for its welds, II.A-29)")
+SINGLE_ANGLE = (f"{MANUAL} Part 10, single-angle connections, with the support leg's eccentricity the gauge plus tw/2 "
+                "(Companion II.A-28A, and the leg plus tw/2 for its welds, II.A-29)")
 SINGLE_PLATE = f"{MANUAL} Part 10, single-plate connections"
 
 EXEMPT: tuple[Exemption, ...] = (
@@ -460,10 +460,10 @@ DEFECTS: tuple[Defect, ...] = (
     Defect(("plate_thicker", "rows_plus_one") + STRONGER, ("flexural_yield",),
            r"^plate: shear and flexural yielding interaction \(Manual Eq 10-8\)",
            "An extended single plate's Mc in Eq 10-8 is the least of Mp and both F11 branches, each read outside its "
-           "own range (checks.gen_flexural_yield). Past Lb d/t^2 = 3.65 E/Fy the least is Eq F11-3, which falls as Fy "
-           "or the plate's depth rises. Past 5.55 E/Fy it is negative, and the check reads its size, so a thicker "
-           "plate reads weaker. Companion II.A-19A takes Mc as the plate's flexural yielding strength and checks "
-           "lateral-torsional buckling apart."),
+           "own range (checks.gen_flexural_yield). Past Lb d/t^2 = 3.65 E/Fy, where the two branches cross again "
+           "(inferred from their formulas), the least is Eq F11-3, which falls as Fy or the plate's depth rises. Past "
+           "5.55 E/Fy it is negative, and the check reads its size, so a thicker plate reads weaker. Companion "
+           "II.A-19A takes Mc as the plate's flexural yielding strength and checks lateral-torsional buckling apart."),
 )
 
 POSITIONAL = ("beam_fit",)
