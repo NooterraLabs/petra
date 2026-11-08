@@ -457,12 +457,13 @@ EXEMPT: tuple[Exemption, ...] = (
 )
 
 DEFECTS: tuple[Defect, ...] = (
-    Defect(STRONGER + ("rows_plus_one",), ("flexural_yield",),
+    Defect(("plate_thicker", "rows_plus_one") + STRONGER, ("flexural_yield",),
            r"^plate: shear and flexural yielding interaction \(Manual Eq 10-8\)",
            "An extended single plate's Mc in Eq 10-8 is the least of Mp and both F11 branches, each read outside its "
            "own range (checks.gen_flexural_yield). Past Lb d/t^2 = 3.65 E/Fy the least is Eq F11-3, which falls as Fy "
-           "or the plate's depth rises. Past 5.55 E/Fy it is negative, and the check reads its size. Companion "
-           "II.A-19A takes Mc as the plate's flexural yielding strength and checks lateral-torsional buckling apart."),
+           "or the plate's depth rises. Past 5.55 E/Fy it is negative, and the check reads its size, so a thicker "
+           "plate reads weaker. Companion II.A-19A takes Mc as the plate's flexural yielding strength and checks "
+           "lateral-torsional buckling apart."),
 )
 
 POSITIONAL = ("beam_fit",)

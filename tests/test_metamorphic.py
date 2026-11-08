@@ -156,6 +156,15 @@ class KnownDefects(unittest.TestCase):
     def test_eq_10_8_does_not_fall_as_fy_rises(self):
         self.assertEqual(broken(self.EXTENDED_PLATE, "fy_up"), [])
 
+    @unittest.expectedFailure
+    def test_eq_10_8_does_not_fall_as_a_slender_plate_thickens(self):
+        """The same plate at 3/16 in: Lb d/t^2 is 7.72 E/Fy, past 5.55 E/Fy, where Eq F11-3 is
+        negative and its size grows as the plate thins."""
+        g = design(self.EXTENDED_PLATE)
+        g = replace(g, text=g.text.replace("thickness 0.25 inch", "thickness 0.1875 inch"))
+        row = R.assess(g, REGISTRY, [R.BY_NAME["plate_thicker"]], with_twin=False)
+        self.assertEqual(row["relations"]["plate_thicker"]["petra"]["broken"], [])
+
 
 class Judging(unittest.TestCase):
     FILLET = ("ductility", "plate: fillet at least 5/8 of the plate thickness (Manual Part 10)", 0)
