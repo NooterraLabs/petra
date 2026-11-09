@@ -1,0 +1,14 @@
+{
+  "name": "petra",
+  "description": "Petra's design checks for coding agents",
+  "owner": {
+    "name": "Nooterra",
+    "url": "https://github.com/NooterraLabs"
+  },
+  "plugins": [
+    {
+      "name": "petra",
+      "source": "./plugins/petra"
+    }
+  ]
+}

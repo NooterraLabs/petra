@@ -1,0 +1,14 @@
+{
+  "name": "petra",
+  "displayName": "Petra",
+  "version": "0.1.2",
+  "description": "Petra's MCP server and skill. Check steel connections and other physical designs, and repair a design until it passes",
+  "author": {
+    "name": "Nooterra",
+    "url": "https://github.com/NooterraLabs"
+  },
+  "homepage": "https://github.com/NooterraLabs/petra",
+  "repository": "https://github.com/NooterraLabs/petra",
+  "license": "Apache-2.0",
+  "keywords": ["mcp", "engineering", "steel", "aisc", "verification"]
+}

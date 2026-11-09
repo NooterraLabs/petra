@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "petra": {
+      "command": "uvx",
+      "args": ["--from", "petra-lang==0.1.2", "petra", "mcp"]
+    }
+  }
+}
