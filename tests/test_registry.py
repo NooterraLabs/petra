@@ -96,6 +96,14 @@ class Lookups(unittest.TestCase):
         for p in coatings:
             self.assertEqual(REGISTRY.material(p.surface).props["anodic_index"].value, point("1.25"))
 
+    def test_every_metal_states_an_anodic_index(self):
+        """The galvanic rule reads a material with no anodic index as no electrode, so a
+        metal without one never pairs (petra/coverage.py). Only a polymer and the
+        electronics deck's components state none."""
+        not_electrodes = {"pvc", "led", "resistor", "regulator_fixed", "regulator_grounded", "regulator_floating"}
+        missing = [m.id for m in REGISTRY.materials.values() if m.family not in not_electrodes and "anodic_index" not in m.props]
+        self.assertEqual(missing, [])
+
     def test_a_coating_names_its_surface_and_no_other_process_does(self):
         self.assertEqual(Process("p.zn", ProcessKind.COATING, {}, surface="zinc.electroplate", source="ISO 2081").surface,
                          "zinc.electroplate")

@@ -215,6 +215,17 @@ class Galvanic(unittest.TestCase):
                                          ("zinc.electroplate", "steel.S355")])
         self.assertTrue(self.demanded(d))
 
+    def test_a_stainless_bolt_through_any_carbon_steel_grade_is_not_a_pass(self):
+        """A4 stainless 0.50 V against plain carbon and low-alloy steel 0.85 V: 0.35 V
+        apart in wet marine_c5, whichever grade the plates are. With bearing waived, the
+        galvanic demand is all that keeps the joint from PASS."""
+        waiver = 'waive bolt.plate_bearing on bracket by "m.engineer@example.org" reason "calc BC-3"\n'
+        for grade in ("steel.S355", "steel.A36", "steel.A572_50", "steel.A992"):
+            with self.subTest(grade):
+                d = joint(("plate aluminium.6061_T6", f"plate {grade}"), extra=waiver)
+                self.assertTrue(self.demanded(d))
+                self.assertNotIsInstance(check_design(d, REGISTRY, (SolverSource(),)).verdict, Pass)
+
     def test_a_cadmium_plated_stainless_bolt_in_aluminium_plates_removes_the_pair(self):
         """Cadmium 0.95 against 6061 0.90: 0.05 V apart. The bare A4 bolt is 0.50 against
         0.90, 0.40 V apart."""

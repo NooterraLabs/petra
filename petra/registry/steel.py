@@ -31,6 +31,7 @@ from typing import Callable, Mapping
 from ..kernel import Add, Const, Div, Expr, Interval, Mul, Neg, Pi, PowInt, Sym
 from ..premises import Tag
 from ..units import CUSTOMARY
+from .constants import STATED
 from .model import Constant, Derived, Material, Stated
 from .steel_shapes import constants as shape_constants
 
@@ -47,6 +48,16 @@ RCSC = "RCSC 2025 Specification for Structural Joints Using High-Strength Bolts"
 AISC = "AISC 360-22"
 MANUAL = "AISC Steel Construction Manual, 16th ed."
 COMPARISON = "AISC 360-22 vs 360-16 comparison (aisc.org, 2022-to-2016-spec-comparison.pdf)"
+
+
+def _carbon_steel(standard: str) -> Stated:
+    """The anodic index of a grade, bolt group or electrode, each plain carbon or low-alloy
+    steel by its designation. The galvanic rule (petra/coverage.py) reads a material with no
+    index as no electrode, so one without would never pair with a stainless or zinc-plated
+    bolt."""
+    index = STATED["anodic.carbon_steel"]
+    return Stated(index.value, index.unit, index.tag, index.owner,
+                  f"{standard} is plain carbon or low-alloy steel (the designation); {index.standard}", index.conditions)
 
 
 def _q(text: str) -> Fraction:
@@ -186,6 +197,7 @@ def _bolt_groups() -> dict[str, Material]:
             "Fnv_N": stated(fnv_n, "nominal shear stress Fnv, threads not excluded", True,
                             f"{AISC} Table J3.2, Group {group}: Fnv (N) = {fnv_n} ksi; {CHECKED}"
                             if group == "200" else f"{table}, Group {group}: Fnv = {fnv_n} ksi"),
+            "anodic_index": _carbon_steel(standard),
         }
         if fnv_x is not None:
             props["Fnv_X"] = stated(fnv_x, "nominal shear stress Fnv, threads excluded", True,
@@ -229,6 +241,7 @@ def _grades() -> dict[str, Material]:
             "fu": Stated(_iv(_q(fu) * KSI), "Pa", tag, owner,
                          f"{standard} specified minimum tensile strength Fu = {fu} ksi ({where})", f"{standard}: Fu >= {fu} ksi"),
             "E": Derived(Sym("const.aisc360.E"), "Pa", f"{AISC} Symbols list: E = 29,000 ksi"),
+            "anodic_index": _carbon_steel(standard),
         }
         mid = f"steel.{grade}"
         out[mid] = Material(mid, "steel", standard, props)
@@ -245,6 +258,7 @@ def _electrodes() -> dict[str, Material]:
                            f"AWS A5.1/A5.5 classification E{n}XX: the digits after E give the weld metal's minimum "
                            f"tensile strength, {n} ksi (the designation); {AISC} Section J2.6, Table J2.5 FEXX",
                            f"E{n}XX weld metal has tensile strength {n} ksi"),
+            "anodic_index": _carbon_steel(f"AWS A5.1/A5.5 E{n}XX"),
         })
         for n in ELECTRODES
     }
