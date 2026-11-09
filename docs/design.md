@@ -523,7 +523,7 @@ The kernel's answer for this file, which `python -m petra verify examples/bolt_t
 
 ## Module map and line budget
 
-Line counts do not include docstrings, comments or blank lines. `tests/test_kernel_budget.py` counts them and enforces [principles.md](principles.md) T2 from the manifest `tests/trusted_base.py`. The kernel's shared core holds at most 1,000 code lines, each rule has a manifest entry, and all trusted code holds at most 14,000. The kernel table and the trusted totals below were measured on 2026-11-08. The other tables are estimates from the v0 design.
+Line counts do not include docstrings, comments or blank lines. `tests/test_kernel_budget.py` counts them and enforces [principles.md](principles.md) T2 from the manifest `tests/trusted_base.py`. The kernel's shared core holds at most 1,000 code lines, each rule has a manifest entry, and all trusted code holds at most `TRUSTED_CEILING` in that manifest, set to the 17,727 measured when the parts and boards decks merged on 2026-11-09. The kernel table and the trusted totals below were measured on 2026-11-08. The other tables are estimates from the v0 design.
 
 ### Trusted kernel, mathematics only and standard library only (the Lean port target)
 

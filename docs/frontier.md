@@ -239,7 +239,7 @@ The null-space lemma and the pointwise yield check are kernel rules, so they wai
 
 ## 7. The kernel
 
-**The budget.** On 2026-11-08, [principles.md](principles.md) T2 replaced the kernel's fixed total of 1,500 code lines. The shared core holds 957 code lines under a cap of 1,000, and R1 to R6 hold 457 (measured with the counter in `tests/test_kernel_budget.py`). A new rule's lines count against the ceiling on the whole trusted base, 14,000 code lines, until Lean proves the rule sound. Every kernel line also costs one in the planned Lean port.
+**The budget.** On 2026-11-08, [principles.md](principles.md) T2 replaced the kernel's fixed total of 1,500 code lines. The shared core holds 957 code lines under a cap of 1,000, and R1 to R6 hold 457 (measured with the counter in `tests/test_kernel_budget.py`). A new rule's lines count against the ceiling on the whole trusted base, `TRUSTED_CEILING` in `tests/trusted_base.py`, until Lean proves the rule sound. Every kernel line also costs one in the planned Lean port.
 
 **The policy.**
 - No rule is added before a validated program needs it.
