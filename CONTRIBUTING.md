@@ -18,7 +18,7 @@ Some files are generated. Edit the source, then regenerate them:
 | File | Regenerate with |
 |---|---|
 | `docs/reference.md` and `petra/templates.py` | `python -m petra.teach --write` |
-| `docs/steel_traceability.md` | `python -m petra.models.steel.trace` |
+| `docs/steel_traceability.md` and the provision table in `docs/steel_connections.md` | `scripts/source_docs.py` |
 | `docs/absurd_gap.md`, `docs/canary_recall.md`, `docs/metamorphic.md`, `docs/steel_gate.md` | `scripts/absurd_gap.py`, `scripts/canary_recall.py`, `scripts/metamorphic.py`, `scripts/steel_gate.py` |
 | `docs/electronics_gate.md` | `scripts/electronics_gate.py`, about 7 minutes on six workers |
 

@@ -297,8 +297,8 @@ GENERATORS: Mapping[str, Callable[[Ctx, Geometry], list[Check]]] = {
 # --- Validity rows -------------------------------------------------------------------------
 
 def _row_no_prying(ctx: Ctx, geo: Geometry) -> tuple[tuple[Expr, ...], str]:
-    """Manual Eq 9-20a: a flange at least tmin = sqrt(4 T b' / (phi p Fu)) thick carries the
-    tension T per bolt with no prying. So T <= phi p Fu t^2 / (4 b'), the bound the prying
+    """Manual Eq 9-30a with the tension T per bolt for Tc: a flange at least
+    tmin = sqrt(4 T b' / (phi p Fu)) thick carries T with no prying. So T <= phi p Fu t^2 / (4 b'), the bound the prying
     check's no-prying branch takes, at each bolt's tributary length p, phi by the basis as
     the prying check takes it."""
     itf = next(i for i in geo.interfaces if i.prying)

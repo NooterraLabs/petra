@@ -4,7 +4,7 @@ This is the authoritative design for Petra v0. It began as candidate 1 in an are
 
 ## Problem
 
-Petra turns a `.petra` design into a verdict that is a theorem relative to named premises. Untrusted solvers produce certificates, and a small kernel checks them in exact rational arithmetic. [The frame](frame.md) asks for six certificate rules, four physics domains, a makeable set, coverage, port contracts, family certificates, a gym, and a kernel under about 1,500 lines that a Lean kernel can later replace.
+Petra turns a `.petra` design into a verdict that is a theorem relative to named premises. Untrusted solvers produce certificates, and a small kernel checks them in exact rational arithmetic. [The frame](frame.md) asks for six certificate rules, four physics domains, a makeable set, coverage, port contracts, family certificates, a gym, and a small kernel that a Lean kernel can later replace.
 
 This document uses the frame's terms. A premise is a fact a verdict assumes. Each premise has a tag, such as `sanctioned` for a value that a named standard fixes. A verdict's footprint is the set of premises it used, apart from `proved` ones. The makeable set is the registry of real materials, parts, processes and environments that a design may name. An obligation is one check the design owes. Coverage is the table that decides which obligations a design owes beyond its claims. A waiver is a `waive` line in the design that accepts one of those obligations and names who answers for it. R1 to R6 are the kernel's six certificate rules.
 
@@ -523,7 +523,7 @@ The kernel's answer for this file, which `python -m petra verify examples/bolt_t
 
 ## Module map and line budget
 
-Line counts do not include docstrings, comments or blank lines. The counter in `tests/test_kernel_budget.py` measures the kernel column and enforces the kernel total against `kernel.KERNEL_LINE_BUDGET = 1500`. The other tables are estimates.
+Line counts do not include docstrings, comments or blank lines. `tests/test_kernel_budget.py` counts them and enforces [principles.md](principles.md) T2 from the manifest `tests/trusted_base.py`. The kernel's shared core holds at most 1,000 code lines, each rule has a manifest entry, and all trusted code holds at most 14,000. The kernel table and the trusted totals below were measured on 2026-11-08. The other tables are estimates from the v0 design.
 
 ### Trusted kernel, mathematics only and standard library only (the Lean port target)
 
@@ -538,18 +538,22 @@ Line counts do not include docstrings, comments or blank lines. The counter in `
 | `petra/kernel/check.py` | `check`, well-formedness, registry dispatch, lemma handling, `Instance` checks and the family memo, issued results | 236 |
 | `petra/kernel/rules/base.py` | `RuleSpec`, `Lemma`, `Invalid`, `TooWeak` | 30 |
 | `petra/kernel/rules/__init__.py` | `_REGISTERED`, `_index`, derived tables, typing aliases | 92 |
+| `petra/kernel/__init__.py` | public re-exports | 58 |
+| **Shared core, capped at 1,000** | | **957** |
 | `petra/kernel/rules/r1_linear.py` | goal and evidence types, vertex feasibility, Farkas | 71 |
 | `petra/kernel/rules/r2_definite.py` | goal and evidence types, Loewner bound plus LDL^T, negative direction | 68 |
 | `petra/kernel/rules/r3_hypercircle.py` | `QuadraticProblem`, `MinimizerComponent`, hypercircle enclosure, `prove_defined` lemma | 150 |
 | `petra/kernel/rules/r4_enclosure.py` | goal and evidence types, partition walk, point witness | 64 |
 | `petra/kernel/rules/r5_moment.py` | goal and evidence types, moment dual with cell-wise domination | 60 |
 | `petra/kernel/rules/r6_scenario.py` | goal type, exact binomial tail | 44 |
-| `petra/kernel/__init__.py` | public re-exports | 58 |
-| **Total** | | **1,414** |
+| **Rules, one manifest entry each** | | **457** |
+| **Kernel total** | | **1,414** |
 
 ### Trusted outside the kernel
 
 These files decide what a statement means. A bug here can produce a wrong verdict, so they are trusted. The elaborators also appear in every footprint they touch as `validated_model` premises. The front end, IR, premises, coverage, verdict and pipeline are trusted without being premises, and [Open questions and risks](#open-questions-and-risks) asks whether they should be.
+
+`tests/trusted_base.py` lists every trusted module outside the kernel, each with the judge or twin that checks it or a dated debt. On 2026-11-08 the list held 48 modules and 12,116 code lines (measured), so the whole trusted base held 13,530. The table below is the v0 design's estimate for the files v0 began with, kept as history. The steel and electronics decks and the mechanics layer came later.
 
 | File | Owns | Estimate |
 |---|---|---|
@@ -571,7 +575,7 @@ These files decide what a statement means. A bug here can produce a wrong verdic
 | `petra/coverage.py` | cross-domain rules, requirement generation, waivers | 160 |
 | `petra/verdict.py` | verdict types, per-claim entries, assembly, JSON, rendering | 260 |
 | `petra/pipeline.py` | `lower_components`, `elaborate`, `check_design`, `explain`, `Report`, source protocol | 220 |
-| **Total** | | **about 4,500** |
+| **Total, v0 estimate** | | **about 4,500** |
 
 ### Untrusted
 
@@ -663,7 +667,7 @@ Both candidates chose canonical rational strings in certificate JSON, certificat
 
 ## Tradeoffs accepted
 
-- We accept a trusted base of about 4,500 lines outside the kernel (front end, elaborators, registry derivations, coverage, verdict, pipeline) in exchange for a kernel of about 1,500 lines with no physics in it. The Lean port moves only the kernel. The rest stays Python and stays trusted.
+- We accept a trusted base outside the kernel (front end, elaborators, registry derivations, coverage, verdict, pipeline) in exchange for a kernel with no physics in it. On 2026-11-08 it held 12,116 code lines against the kernel's 1,414 (measured), and T2 counts both under one ceiling. The Lean port moves only the kernel. The rest stays Python and stays trusted.
 - We accept that elaborators carry real physics risk in exchange for naming each one, by source hash, in every footprint it touches. A wrong heat-balance formula is visible as a premise, not hidden in a checker.
 - We accept bigger statements, because every model input is a hypothesis even when it is a point value, in exchange for a structural footprint and family matching by shape.
 - We accept conservative relaxations inside the rules in exchange for one simple theorem each. R1 evaluates bounds over the whole box. R2 checks a Loewner lower bound. Lemma ranges are quantified independently of each other. Each can turn a true PASS into UNKNOWN. None can produce a false PASS.
@@ -676,8 +680,8 @@ Both candidates chose canonical rational strings in certificate JSON, certificat
 
 ## Alternatives considered
 
-- **A physics-aware kernel.** This alternative is the closest to the frame's wording. The kernel builds equilibrium and heat-balance equations from the IR. Its interface is as small as this one (`check(design, certificate)`), but it hides physics inside the trusted core. Every v1 rule (continuum finite elements, reduced basis, neural surrogates) adds physics to the kernel, the 1,500-line budget breaks within one release, and a Lean port must formalise trusses and wires. It lost because the part that must be small and portable would grow with every domain.
-- **An LCF-style kernel.** The kernel has a handful of inference rules, and theorems are built by composing them, as in HOL Light. It is the closest match to Lean and would make lemma use first-class. It lost on size and solver burden. Solvers would have to emit proof terms, and six certificate checks plus their supporting lemmas would not fit in 1,500 lines.
+- **A physics-aware kernel.** This alternative is the closest to the frame's wording. The kernel builds equilibrium and heat-balance equations from the IR. Its interface is as small as this one (`check(design, certificate)`), but it hides physics inside the trusted core. Every v1 rule (continuum finite elements, reduced basis, neural surrogates) adds physics to the kernel, the kernel's 1,500-line budget of the time breaks within one release, and a Lean port must formalise trusses and wires. It lost because the part that must be small and portable would grow with every domain.
+- **An LCF-style kernel.** The kernel has a handful of inference rules, and theorems are built by composing them, as in HOL Light. It is the closest match to Lean and would make lemma use first-class. It lost on size and solver burden. Solvers would have to emit proof terms, and six certificate checks plus their supporting lemmas would not fit in the 1,500 lines the kernel was then allowed.
 - **Statements that carry solver-chosen lemma bounds.** They need a separate `discharge(theorem, sym, lemma)` kernel call. This alternative exposes one more kernel entry point and makes statements depend on solver output, and that dependence breaks binding by hash. `DefinedHyp` keeps one entry point and keeps statements a pure function of the design.
 - **Footprints listed by elaborators.** Each obligation would carry its footprint as a side list. That list is simpler to write, but it creates a second source of truth that an elaborator can forget to update. Deriving the footprint from hypothesis labels makes omissions impossible for numeric premises, and the unused-hypothesis rule makes padding impossible.
 - **A trusted result cache.** For family reuse, the library would store "the kernel checked this", and a query would do a containment check only. The cache is faster, but it makes the library part of the trusted base and needs signing or a ledger premise. The kernel's own per-process memo of family theorems it checked keeps the library untrusted and gives the same speed after the first query.

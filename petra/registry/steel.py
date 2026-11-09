@@ -360,7 +360,7 @@ FACTORS: tuple[_F, ...] = (
     ("aisc360.j4_4.omega", "1.67", "1", SANCTIONED, "AISC", f"{AISC} Section J4.4: compression, Lc/r <= 25, Omega = 1.67; {CHECKED}"),
     ("aisc360.j4_5.phi_y", "0.90", "1", SANCTIONED, "AISC", f"{AISC} Section F1(a), which Commentary Section J4.5 applies to connecting elements: flexural yielding "
      f"phi = 0.90; {CHECKED}"),
-    ("aisc360.j4_5.omega_y", "1.67", "1", SANCTIONED, "AISC", f"{AISC} Section F1(b), which Commentary Section J4.5 applies to connecting elements: flexural yielding "
+    ("aisc360.j4_5.omega_y", "1.67", "1", SANCTIONED, "AISC", f"{AISC} Section F1(a), which Commentary Section J4.5 applies to connecting elements: flexural yielding "
      f"Omega = 1.67; {CHECKED}"),
     ("aisc360.j4_5.phi_r", "0.75", "1", SANCTIONED, "AISC", f"{AISC} Commentary Section J4.5 (Fu Znet; Manual Eq. 9-8): flexural rupture phi = 0.75; {CHECKED}"),
     ("aisc360.j4_5.omega_r", "2.00", "1", SANCTIONED, "AISC", f"{AISC} Commentary Section J4.5 (Fu Znet; Manual Eq. 9-8): flexural rupture Omega = 2.00; {CHECKED}"),
@@ -505,19 +505,19 @@ COEFFICIENTS: tuple[_F, ...] = (
     ("aisc360.j3_10.ksc_asd", "1.5", "1", SANCTIONED, "AISC",
      f"{AISC} Section J3.10, Eq. J3-5b: ksc = 1 - 1.5 Ta / (Du Tb nb) (ASD); {CHECKED}"),
     ("aisc360.j3_11a.bearing_considered", "2.4", "1", SANCTIONED, "AISC",
-     f"{AISC} Section J3.11a(1)(i), Eq. J3-6a: bearing 2.4 d t Fu, deformation a design consideration; {CHECKED}"),
+     f"{AISC} Section J3.11a(1)(a)(i), Eq. J3-6a: bearing 2.4 d t Fu, deformation a design consideration; {CHECKED}"),
     ("aisc360.j3_11a.tearout_considered", "1.2", "1", SANCTIONED, "AISC",
-     f"{AISC} Section J3.11a(1)(i), Eq. J3-6c: tearout 1.2 lc t Fu, deformation a design consideration; {CHECKED}"),
+     f"{AISC} Section J3.11a(1)(b)(i), Eq. J3-6c: tearout 1.2 lc t Fu, deformation a design consideration; {CHECKED}"),
     ("aisc360.j3_11a.bearing_not_considered", "3.0", "1", SANCTIONED, "AISC",
-     f"{AISC} Section J3.11a(1)(ii), Eq. J3-6b: bearing 3.0 d t Fu, deformation not a design consideration; "
+     f"{AISC} Section J3.11a(1)(a)(ii), Eq. J3-6b: bearing 3.0 d t Fu, deformation not a design consideration; "
      f"{CHECKED}"),
     ("aisc360.j3_11a.tearout_not_considered", "1.5", "1", SANCTIONED, "AISC",
-     f"{AISC} Section J3.11a(1)(ii), Eq. J3-6d: tearout 1.5 lc t Fu, deformation not a design consideration; "
+     f"{AISC} Section J3.11a(1)(b)(ii), Eq. J3-6d: tearout 1.5 lc t Fu, deformation not a design consideration; "
      f"{CHECKED}"),
     ("aisc360.j3_11a.bearing_lsl_perpendicular", "2.0", "1", SANCTIONED, "AISC",
-     f"{AISC} Section J3.11a(2), Eq. J3-6e: bearing 2.0 d t Fu at a long slot perpendicular to the force; {CHECKED}"),
+     f"{AISC} Section J3.11a(2)(a), Eq. J3-6e: bearing 2.0 d t Fu at a long slot perpendicular to the force; {CHECKED}"),
     ("aisc360.j3_11a.tearout_lsl_perpendicular", "1.0", "1", SANCTIONED, "AISC",
-     f"{AISC} Section J3.11a(2), Eq. J3-6f: tearout 1.0 lc t Fu at a long slot perpendicular to the force; "
+     f"{AISC} Section J3.11a(2)(b), Eq. J3-6f: tearout 1.0 lc t Fu at a long slot perpendicular to the force; "
      f"{CHECKED}"),
     ("aisc360.j4_2.shear", "0.60", "1", SANCTIONED, "AISC",
      f"{AISC} Section J4.2, Eqs. J4-3 and J4-4: shear yielding 0.60 Fy Agv, shear rupture 0.60 Fu Anv; {CHECKED}"),

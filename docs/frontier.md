@@ -15,7 +15,7 @@ Every claim carries a label: **measured** (run or read while writing this plan),
 5. **The first build work is oracles that are not Petra.** These are a clean-room twin of the steel deck, metamorphic relations, and table-based differential tests. They address the weakest measured number. If one of Petra's own checks went missing, today's judges and breaker would expose the gap in only 22 of 199 cases, because the judges have no condition of their own for those modes (`docs/canary_recall.md`, measured).
 6. **Petra's own false FAILs cost users now.** It rejected 3 of 10 safe designs in P3 (measured). That alone meets the decision table's false-FAIL row (§4, computed). Fixing those comes before new physics.
 7. **The order follows what each step needs, not a date.** No compute deadline applies (plan §8 item 6). The oracles that are not Petra come first, because they judge the keystone experiment's steel arena (§4).
-8. **The kernel stays frozen until evidence asks for a rule.** It is at 1,414 of its 1,500 budgeted code lines (measured). Each new rule must first state its soundness conditions, then ship a mutation corpus and a check against an outside checker (§7).
+8. **The kernel stays frozen until evidence asks for a rule.** Its shared core holds 957 code lines under a cap of 1,000, and its six rules hold 457 (measured). Each new rule must first state its soundness conditions, then ship a mutation corpus and a check against an outside checker (§7). The rule's entry in the trusted-base manifest records each of these ([principles.md](principles.md) T2).
 9. **Each new design class ships its own judge, canaries and breaker first,** one class at a time. That is the plan's coverage rule (plan §4), applied to function, contracts and dynamics.
 10. **Some things stay out of reach.** Fracture with no declared flaw, rigid impact with friction, and complete knowledge of failure modes stay out of reach (§8). Petra answers UNKNOWN there, with what is missing.
 
@@ -65,7 +65,7 @@ These rules come from the reviews. Each one names a failure the first draft had.
 4. **Each new design class ships its judge, canaries and breaker before it ships a PASS.** That is the plan's coverage rule (plan §4). It applies to function, contracts, dynamics and assemblies, one class at a time.
 5. **Write a kernel rule's soundness conditions before writing the rule.** The reviews found three proposed proof shapes that accept a trivial or one-sided certificate (§6).
 6. **Run any lift test with at least 25 tasks per arm, and size it from a replicated rate.** Ten tasks bound nothing useful.
-7. **Keep an elaboration trust budget.** The kernel has a line budget, but elaboration, where every false PASS lived, has none. Each new elaborator states its size and passes a twin-elaborator check before release.
+7. **Keep an elaboration trust budget.** Every false PASS so far lived in elaboration. Since 2026-11-08, T2 counts elaboration against the same ceiling as the kernel, and each trusted module names the judge or twin that checks it, or a dated debt. Each new elaborator passes a twin-elaborator check before release.
 
 ## 4. Order of work
 
@@ -239,7 +239,7 @@ The null-space lemma and the pointwise yield check are kernel rules, so they wai
 
 ## 7. The kernel
 
-**The budget.** The kernel holds 1,414 code lines against a budget of 1,500 (measured with the counter in `tests/test_kernel_budget.py`). The earlier compiler notes set a ceiling of "under 2,000 lines, in two languages". So every line also costs one in the planned Lean port.
+**The budget.** On 2026-11-08, [principles.md](principles.md) T2 replaced the kernel's fixed total of 1,500 code lines. The shared core holds 957 code lines under a cap of 1,000, and R1 to R6 hold 457 (measured with the counter in `tests/test_kernel_budget.py`). A new rule's lines count against the ceiling on the whole trusted base, 14,000 code lines, until Lean proves the rule sound. Every kernel line also costs one in the planned Lean port.
 
 **The policy.**
 - No rule is added before a validated program needs it.
@@ -256,7 +256,7 @@ The null-space lemma and the pointwise yield check are kernel rules, so they wai
 | K-E | Exact integration of quadratic forms on simplices, for continuum stiffness bounds | Deflection claims, fracture mechanics | about 200 |
 | ∀-infeasible | One Farkas ray valid over a whole parameter box | F3 no-jam and self-locking | about 40 |
 
-The table sums to about 810 to 860 lines. All of it would take the kernel to about 2,250 lines, past the 2,000 ceiling (computed from the guesses). So the ceiling admits only some of these rules, and evidence picks which.
+The table sums to about 810 to 860 lines. All of it would take the kernel to about 2,250 lines (computed from the guesses). T2 sets no kernel total, so each rule must earn its lines through its manifest entry, and evidence picks which rules are written.
 
 Removed from the first draft:
 - **K-D's float path.** It moves to the producer.
@@ -265,7 +265,7 @@ Removed from the first draft:
 - **K-H, the Boolean proof checker.** It is not needed.
 - **K-I, Taylor-model flowpipes.** They are parked.
 
-**The maintainer's decision.** Raising the ceiling is the maintainer's call, and so is each rule. The likely first candidates are K-C (frames and frequency contracts) and the ∀-infeasible goal, at about 180 lines together. That keeps the kernel under 1,600 lines (inferred).
+**The maintainer's decision.** Each rule is the maintainer's call, and so is raising the trusted-base ceiling. The likely first candidates are K-C (frames and frequency contracts) and the ∀-infeasible goal, at about 180 lines together. They would take the kernel to about 1,600 lines (inferred).
 
 ## 8. What stays out of reach
 
@@ -282,7 +282,7 @@ Petra answers UNKNOWN on each of these and names what is missing.
 
 ## 9. Decisions only the maintainer can make
 
-1. **The kernel ceiling,** and each new rule. The recommendation is 2,000 code lines, with K-C and the ∀-infeasible goal first.
+1. **Each new rule.** On 2026-11-08 the maintainer replaced the kernel ceiling with T2, which caps the shared core and counts each rule against the trusted-base ceiling ([principles.md](principles.md) T2). The recommendation is K-C and the ∀-infeasible goal first.
 2. **Whether to configure a second model family** for twin formalisation and outside checks. If not, those checks stay labelled single-family.
 3. **The definition of truth for each limit state** in the keystone experiment, before it runs.
 4. **Whether the P8 one-column result, if the coped-beam check confirms it, goes public as an erratum.**
