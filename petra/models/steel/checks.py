@@ -178,7 +178,7 @@ class Interface:
     # whether the card fixes a direction in the plies' plane, the force's that plain and
     # `_parallel` slots are named against; a hanger pulls normal to its plies, so its slots
     # may run either way, and so may its shear
-    oriented: bool = True
+    oriented: bool
 
     @property
     def n(self) -> int:
@@ -378,14 +378,15 @@ class Geometry:
                         forces=[], seat=None, stiffener=None, single_plate=None, bracket=None, tee=None)
 
 
-def bolt_dims(ctx: Ctx, bolts: Bolts, hole: str, oriented: bool = True) -> tuple[Expr, Expr, Expr]:
+def bolt_dims(ctx: Ctx, bolts: Bolts, hole: str, oriented: bool) -> tuple[Expr, Expr, Expr]:
     """(d, hole dimension along the force, hole dimension across it), from Table J3.3. A
     slot in plies whose card fixes no direction (Interface.oriented) may run either way, so
     it takes its length both ways."""
     g = f"bolt_us.{bolts.size}"
     along, across = HOLE_DIMS[hole]
-    if not oriented and hole[:3] in ("ssl", "lsl"):
-        along = across = f"{hole[:3]}_l"
+    slot = hole.removesuffix("_parallel")
+    if not oriented and slot in ("ssl", "lsl"):
+        along = across = f"{slot}_l"
     return ctx.const(f"{g}.d"), ctx.const(f"{g}.{along}"), ctx.const(f"{g}.{across}")
 
 
@@ -514,12 +515,12 @@ def geometry_shear_tab(ctx: Ctx) -> Geometry:
     t_support = _face_t(support, _w(ctx, support))
     out = Geometry.empty()
     out.interfaces.append(Interface("beam side", bolts, rows, cols, s, g, 1, (plate_ply, _beam_web_ply(ctx, beam, bp, cols)),
-                                    v, e, clearances=(("support face", a),), tension=None, prying=(), outline=None))
+                                    v, e, clearances=(("support face", a),), tension=None, prying=(), outline=None, oriented=True))
     weld: Weld = conn.attrs["weld"]
     w = ctx.geo(weld.size, "weld.size")
     out.welds.append(WeldGroup("plate to support", weld, w, depth, weld.sides, v, None, Min((tp, t_support)),
                                (("plate", plate.grade, tp, weld.sides), (f"support {support.face}", support.grade, t_support, 1)), bearing=False, ret=None, edge=None, end_loaded=False, turns=False))
-    d_bolt, dh_v, _ = bolt_dims(ctx, bolts, ctx.hole("plate"))
+    d_bolt, dh_v, _ = bolt_dims(ctx, bolts, ctx.hole("plate"), oriented=True)
     out.flexures.append(Flexure("plate", plate.grade, tp, depth, mul(v, a), rows, s, L.hole_net(ctx.const, dh_v)))
     out.single_plate = SinglePlate(conn.get("form"), plate.grade, tp, bp["tw"], d_bolt, w, a, depth,
                                    rows, cols, s, g, bolts, v, leh, ctx.attr("beam_edge"), weld.sides)
@@ -554,7 +555,7 @@ def geometry_angles(ctx: Ctx) -> Geometry:
                     (("angle top and bottom", lev), ("angle toe", toe)), block=True, edges_far=())
     out = Geometry.empty()
     out.interfaces.append(Interface("beam side", bolts, rows, 1, s, None, n_ang, (angle_ply, _beam_web_ply(ctx, beam, bp, 1)),
-                                    v, None if double else gb, clearances=(("outstanding leg", sub(gb, ta)),), tension=None, prying=(), outline=None))
+                                    v, None if double else gb, clearances=(("outstanding leg", sub(gb, ta)),), tension=None, prying=(), outline=None, oriented=True))
     support: Member = conn.attrs["support"]
     sp = _w(ctx, support)
     if conn.attrs["support_side"] == "bolted":
@@ -567,10 +568,10 @@ def geometry_angles(ctx: Ctx) -> Geometry:
         ecc = None if double else add(gs, div(bp["tw"], c(2)))
         across = gs if double else mul(c(2), add(gs, div(bp["tw"], c(2))))
         out.interfaces.append(Interface("support side", bolts, rows, n_ang, s, gs if double else None, 1, (legs, _support_ply(ctx)),
-                                        v, ecc, clearances=_support_clearances(support, sp, across), tension=None, prying=(), outline=None))
+                                        v, ecc, clearances=_support_clearances(support, sp, across), tension=None, prying=(), outline=None, oriented=True))
         if not double:
             # One angle's support leg carries V at e from its bolt line: it bends (Manual Part 10).
-            _, dh_v, _ = bolt_dims(ctx, bolts, ctx.hole(key))
+            _, dh_v, _ = bolt_dims(ctx, bolts, ctx.hole(key), oriented=True)
             out.flexures.append(Flexure(f"{key} outstanding", angle.grade, ta, length, mul(v, ecc), rows, s, L.hole_net(ctx.const, dh_v)))
     else:
         weld: Weld = conn.attrs["support_weld"]
@@ -602,10 +603,10 @@ def geometry_tee(ctx: Ctx) -> Geometry:
                (("stem top and bottom", lev), ("stem toe", toe)), block=True, edges_far=())
     out = Geometry.empty()
     out.interfaces.append(Interface("beam side", bolts, rows, 1, s, None, 1, (stem, _beam_web_ply(ctx, beam, bp, 1)), v,
-                                    ctx.opt("eccentricity") or a, clearances=(("tee flange", sub(a, tp["tf"])),), tension=None, prying=(), outline=None))
+                                    ctx.opt("eccentricity") or a, clearances=(("tee flange", sub(a, tp["tf"])),), tension=None, prying=(), outline=None, oriented=True))
     support: Member = conn.attrs["support"]
     sp = _w(ctx, support)
-    d_bolt, _, _ = bolt_dims(ctx, bolts, ctx.hole("stem"))
+    d_bolt, _, _ = bolt_dims(ctx, bolts, ctx.hole("stem"), oriented=True)
     if conn.attrs["support_side"] == "bolted":
         gs = ctx.attr("support_gauge")
         out.tee = TeeFlex(tee.grade, tp["tf"], tp["tw"], tp["k1"], tp["bf"], length, bp["tw"], d_bolt, gs, None, rows, s, lev)
@@ -613,7 +614,7 @@ def geometry_tee(ctx: Ctx) -> Geometry:
         flange = Ply("tee flange", tee.grade, tp["tf"], 1, 2, ctx.hole("flange"), "up", lev, side, length, 1,
                      (("flange top and bottom", lev), ("flange side", side)), block=True, edges_far=())
         out.interfaces.append(Interface("support side", bolts, rows, 2, s, gs, 1, (flange, _support_ply(ctx)), v, None,
-                                        clearances=_support_clearances(support, sp, gs), tension=None, prying=(), outline=None))
+                                        clearances=_support_clearances(support, sp, gs), tension=None, prying=(), outline=None, oriented=True))
     else:
         weld: Weld = conn.attrs["support_weld"]
         w = ctx.geo(weld.size, "support_weld.size")
@@ -623,7 +624,7 @@ def geometry_tee(ctx: Ctx) -> Geometry:
         # carries R/2 at half the flange width from the stem.
         out.welds.append(WeldGroup("tee flange to support", weld, w, length, 2, v, div(tp["bf"], c(2)), Min((tp["tf"], t_sup)),
                                    (("tee flange", tee.grade, tp["tf"], 1), (f"support {support.face}", support.grade, t_sup, 1)), bearing=False, ret=None, edge=None, end_loaded=False, turns=False))
-    _, dh_v, _ = bolt_dims(ctx, bolts, ctx.hole("stem"))
+    _, dh_v, _ = bolt_dims(ctx, bolts, ctx.hole("stem"), oriented=True)
     out.flexures.append(Flexure("tee stem", tee.grade, tp["tw"], length, mul(v, a), rows, s, L.hole_net(ctx.const, dh_v)))
     _cope(ctx, out, beam, bp, v)
     return out
@@ -647,7 +648,7 @@ def geometry_end_plate(ctx: Ctx) -> Geometry:
     sp = _w(ctx, support)
     out = Geometry.empty()
     out.interfaces.append(Interface("support side", bolts, rows, 2, s, gs, 1, (plate_ply, _support_ply(ctx)), v, None,
-                                    clearances=_support_clearances(support, sp, gs), tension=None, prying=(), outline=None))
+                                    clearances=_support_clearances(support, sp, gs), tension=None, prying=(), outline=None, oriented=True))
     weld: Weld = conn.attrs["weld"]
     w = ctx.geo(weld.size, "weld.size")
     weld_length = sub(length, mul(c(2), w))
@@ -699,7 +700,7 @@ def geometry_seated(ctx: Ctx) -> Geometry:
         seat_ply = Ply("seat angle", angle.grade, ta, 1, 1, ctx.hole("angle"), "up", lev, None, None, 1,
                        (("seat leg top", lev), ("seat leg side", side)), block=False, edges_far=())
         out.interfaces.append(Interface("seat to support", bolts, rows, 2, s, gs, 1, (seat_ply, _support_ply(ctx)), v, None,
-                                        clearances=_support_clearances(support, sp, gs), tension=None, prying=(), outline=None))
+                                        clearances=_support_clearances(support, sp, gs), tension=None, prying=(), outline=None, oriented=True))
     else:
         weld: Weld = conn.attrs["support_weld"]
         w = ctx.geo(weld.size, "support_weld.size")
@@ -775,10 +776,10 @@ def geometry_bolt_bracket(ctx: Ctx) -> Geometry:
     out = Geometry.empty()
     out.interfaces.append(Interface("bracket bolts", bolts, rows, cols, s, g, 1, (ply, _support_ply(ctx)), v, e, tension=None,
                                     clearances=_bracket_clearances(ctx, bolts, cols, g), prying=(),
-                                    outline=Outline(ply.name, lev, leh, e, ctx.opt("free_edge"))))
+                                    outline=Outline(ply.name, lev, leh, e, ctx.opt("free_edge")), oriented=True))
     # Section A-A runs down the bolt column nearest the load (Manual Part 15).
     arm = sub(e, mul(c(Fraction(cols - 1, 2)), g))
-    _, dh_v, _ = bolt_dims(ctx, bolts, ply.hole)
+    _, dh_v, _ = bolt_dims(ctx, bolts, ply.hole, oriented=True)
     out.flexures.append(Flexure("bracket plate", plate.grade, tp, depth, mul(v, arm), rows, s, L.hole_net(ctx.const, dh_v)))
     out.bracket = Bracket(plate.grade, tp, depth, ctx.opt("free_edge"), arm, v)
     return out

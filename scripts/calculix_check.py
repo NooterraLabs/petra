@@ -238,7 +238,7 @@ def _geometries(task: str, conn, design, registry) -> list[Element]:
         plies = [(itf, ply, line) for itf, ply, line in plies if line is not None]
         exprs: dict[str, object] = {"v": v}
         for k, (itf, ply, line) in enumerate(plies):
-            _, along, across = bolt_dims(ctx, itf.bolts, ply.hole)
+            _, along, across = bolt_dims(ctx, itf.bolts, ply.hole, itf.oriented)
             exprs.update({f"{k}.t": ply.t, f"{k}.lev": ply.edge, f"{k}.side": ply.side, f"{k}.s": itf.pitch,
                           f"{k}.xb": line(ctx), f"{k}.g": itf.gauge if itf.gauge is not None else c(0),
                           f"{k}.along": along, f"{k}.across": across,
@@ -258,7 +258,7 @@ def _geometries(task: str, conn, design, registry) -> list[Element]:
     elif conn.kind == "bolt_bracket":
         itf = geo.interfaces[0]
         ply = itf.plies[0]
-        _, along, _ = bolt_dims(ctx, itf.bolts, ply.hole)
+        _, along, _ = bolt_dims(ctx, itf.bolts, ply.hole, itf.oriented)
         n = _numbers(ctx, {"t": ply.t, "lev": ply.edge, "side": ply.side, "s": itf.pitch, "g": itf.gauge, "e": ctx.attr("eccentricity"),
                            "along": along, "fy": ctx.mat(ply.grade, "fy"), "fu": ctx.mat(ply.grade, "fu"), "v": v})
         lev, s, g, e = (_inch(n[k]) for k in ("lev", "s", "g", "e"))
