@@ -64,7 +64,8 @@ RULES: tuple[Rule, ...] = (
     Rule("fit.gap", _A.GAP, _I, _G, "two parts keep the stated gap beyond their allowances and floats"),
     Rule("fit.fastener", _A.FASTEN, _I, _G,
          "the screw travels its axis from beyond every part through the clear holes, enters no part but the one "
-         "its thread enters and that one only past its hole's mouth, and meets no screw fastened before it, keeping "
+         "its thread enters and that one only past its hole's mouth, and meets no other screw on its path or in its "
+         "place, keeping "
          "each part's allowance with half its hole shrink and the shift of the hole its thread enters"),
     Rule("fit.seat", _A.FASTEN, _I, _G,
          "a socket head's bearing ring lies on a face of the first part and the head at its least diameter covers "

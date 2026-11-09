@@ -11,9 +11,10 @@ The assembly model (docs/parts.md, "Fit under tolerance"):
   also holds half its hole shrink, because holes come out smaller.
 - Bodies go in in place-line order. The first is the base; every other arrives along its
   insert axis from beyond every body placed before it, so its start is outside them, and
-  stops on the faces it touches there whose triangles lie wholly ahead of its own along
-  the travel (its stops). Its position along that axis then floats by
-  F = max over its stops of (F_stop + a_stop + a_self), and not at all across it.
+  stops on the faces it touches there that lie wholly ahead of its own along the travel
+  (its stops). A face is a flat region of triangles joined edge to edge, so how a face
+  is split into triangles does not change what stops. Its position along that axis then
+  floats by F = max over its stops of (F_stop + a_stop + a_self), and not at all across it.
 - A mover's path is swept from its start to its place and on by its float, back by it
   too. Every triangle pair but its stops must keep apart by the two allowances, and by
   the other body's float when the two floats run along different axes. Each edge-joined
@@ -728,17 +729,51 @@ def _in_plane(body: Body, idx: int, k: int, level: int, s: int) -> bool:
     return exact._sign(exact.normal(body.pts[idx])[k]) == s
 
 
+def faces(body: Body) -> list[int]:
+    """The flat face of each triangle, as the least triangle index in it: triangles joined
+    through shared edges to neighbours that lie in their plane and face the same way."""
+    parent = list(range(len(body)))
+
+    def root(i: int) -> int:
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    normals = [exact.normal(t) for t in body.pts]
+    owner: dict[frozenset, int] = {}
+    for i, t in enumerate(body.pts):
+        for m in range(3):
+            j = owner.setdefault(frozenset((t[m], t[(m + 1) % 3])), i)
+            n, o = normals[i], normals[j]
+            if j != i and exact._cross(n, o) == (0, 0, 0) and exact._dot(n, o) > 0:
+                a, b = root(i), root(j)
+                parent[max(a, b)] = min(a, b)
+    return [root(i) for i in range(len(body))]
+
+
+def _face_extremes(body: Body, k: int, s: int, pick) -> list[int]:
+    """Each triangle's face's least (`pick` min) or greatest (max) value of s * x_k."""
+    face = faces(body)
+    best: dict[int, int] = {}
+    for i, t in enumerate(body.pts):
+        v = pick(s * p[k] for p in t)
+        best[face[i]] = v if face[i] not in best else pick(best[face[i]], v)
+    return [best[face[i]] for i in range(len(body))]
+
+
 def _level_pairs(mover: Body, other: Body, k: int, s: int, pad: int) -> tuple[set, bool]:
-    """The triangle pairs (other index, mover index) within `pad` whose facing extremes
-    along axis k meet at one level, the mover's wholly behind (direction s), and whether
-    any of them touch: the mover rests on `other` when one does. Such pairs lie on the
-    contact plane, so the float along the axis moves the mover with it, never into it."""
+    """The triangle pairs (other index, mover index) within `pad` whose faces' facing
+    extremes along axis k meet at one level, the mover's face wholly behind (direction s),
+    and whether any of them touch: the mover rests on `other` when one does. Such pairs lie
+    on either side of the contact plane, so the float along the axis moves the mover with
+    it, never into it. Faces, not triangles, decide, so splitting a face changes nothing."""
+    low, high = _face_extremes(mover, k, s, min), _face_extremes(other, k, s, max)
     level, rests = set(), False
     for i, j in exact.candidates(mover.lo, mover.hi, other.lo, other.hi, pad).tolist():
-        t, u = mover.pts[i], other.pts[j]
-        if min(s * p[k] for p in t) == max(s * p[k] for p in u):
+        if low[i] == high[j]:
             level.add((j, i))
-            rests = rests or exact.tri_tri2(t, u) == 0
+            rests = rests or exact.tri_tri2(mover.pts[i], other.pts[j]) == 0
     return level, rests
 
 
@@ -883,25 +918,44 @@ def _press(asm: Assembly, p: Press, bodies: Mapping[str, Body], alw: Mapping[str
     # not level: a level face (a flush end) is never what a point inside the pin reaches
     # first going straight out from the axis.
     sides = [t for t in pin.pts if exact.normal(t)[i] != 0 or exact.normal(t)[j] != 0]
-    grip2 = None
+    pieces = []
     for idx in found.wall:
         poly = _clip_slab([tuple(Q(x) for x in q) for q in block.pts[idx]], k, z0 * den, z1 * den)
         if len(poly) < 3:
             continue
-        for m in range(1, len(poly) - 1):
-            piece = (poly[0], poly[m], poly[m + 1])
-            if exact.normal(piece) == (0, 0, 0):
-                continue
-            for t in sides:
-                d = exact.tri_tri2(piece, t)
-                grip2 = d if grip2 is None or d < grip2 else grip2
+        pieces += [t for t in ((poly[0], poly[m], poly[m + 1]) for m in range(1, len(poly) - 1))
+                   if exact.normal(t) != (0, 0, 0)]
         centroid = tuple(sum(q[m] for q in poly) / len(poly) for m in range(3))
         if _inside_scaled(pin, tuple(x / den for x in centroid)) is not True:
             return _unseated("the hole's wall does not lie inside the pin")
+    grip2 = _least2(pieces, sides)
     wall = frozenset(idx for idx in range(len(block.pts))
                      if _within_slab(block, idx, k, ends, den) and (exact.normal(block.pts[idx])[k] == 0 or
                                                                    _in_plane(block, idx, k, int(centre[k] * den), -s)))
     return PressFit("", (grip2 or Q(0)) / den ** 2, pin2 / den ** 2, found.lo2, wall, core)
+
+
+def _least2(pieces: list, tris: list) -> Q | None:
+    """The least squared distance from any of `pieces` (rational corners) to any of `tris`
+    (integer corners), exact: both scaled to integers over the pieces' common denominator,
+    each piece's partners taken in order of their boxes' distance until a box lies farther
+    than the best pair found."""
+    if not pieces or not tris:
+        return None
+    scale = lcm(*(Q(c).denominator for t in pieces for q in t for c in q))
+    ours = [tuple(tuple(int(c * scale) for c in q) for q in t) for t in pieces]
+    theirs = [tuple(tuple(c * scale for c in q) for q in t) for t in tris]
+    boxes = [(tuple(min(q[m] for q in t) for m in range(3)), tuple(max(q[m] for q in t) for m in range(3)))
+             for t in theirs]
+    best = None
+    for t in ours:
+        lo, hi = tuple(min(q[m] for q in t) for m in range(3)), tuple(max(q[m] for q in t) for m in range(3))
+        for gap, n in sorted((exact.box_dist2(lo, hi, *boxes[n]), n) for n in range(len(theirs))):
+            if best is not None and gap >= best:
+                break
+            d = exact.tri_tri2(t, theirs[n])
+            best = d if best is None or d < best else best
+    return Q(best, scale * scale)
 
 
 def _unseated(why: str) -> PressFit:

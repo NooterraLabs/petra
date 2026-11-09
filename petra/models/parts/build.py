@@ -599,8 +599,9 @@ def _masses(sb: StatementBuilder, model, registry: Registry, axis: int | None, b
     shell within its allowance of its surface, and a finish's coat weighs at most its
     density times twice that shell. Its centre moves along its insert axis by its float.
     Material added beyond the plane, or taken away before it, raises its moment by at most
-    the shell times the farthest the part reaches past the plane on that side. A printed part's mass needs its fill unless only an upper bound
-    is asked (fill then counts as 1); its centre, and a bought part's, needs a cg line.
+    the shell times the farthest the part reaches past the plane on that side. A printed
+    part's mass needs its fill unless only an upper bound is asked (fill then counts as 1);
+    its centre, and a bought part's, needs a cg line.
     Screws and inserts are uniform, their centres on their axes anywhere along their length
     and off it by the hole's shift."""
     asm = isinstance(model, Assembly)

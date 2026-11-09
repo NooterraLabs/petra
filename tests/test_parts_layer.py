@@ -44,8 +44,9 @@ class Enclosure(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def design(self, board_hi, at="(5 mm, 5 mm, 2 mm)", case=None, insert="insert board along bottom from 25 mm"):
-        board = write(self.tmp.name, "board", box((0, 0, 0), board_hi))
+    def design(self, board_hi, at="(5 mm, 5 mm, 2 mm)", case=None, insert="insert board along bottom from 25 mm",
+               board=None):
+        board = write(self.tmp.name, "board", board or box((0, 0, 0), board_hi))
         return (part("case", case or self.case) +
                 part("board", board, "polymer.pc", None, f"  tolerance in [0.1 mm, 0.1 mm] {SIGNED}\n"
                                                           f"  mass in [8 g, 9 g] {SIGNED}") +
@@ -57,6 +58,16 @@ class Enclosure(unittest.TestCase):
         self.assertEqual(got["box.board/fit.insert"][0], "certified", got["box.board/fit.insert"])
         self.assertEqual(got["box.board/fit.connected"][0], "certified")
         self.assertRegex(got["box.board/fit.insert"][1], "rests on case")
+
+    def test_splitting_a_face_changes_no_stop(self):
+        # The board's front face split at the midpoint of its diagonal leaves one triangle
+        # whose lowest corner is 0.8 mm above the floor, within the 0.6 mm float and both
+        # allowances; it is still part of a face that rests there (found by scripts/parts_gate.py).
+        tris = box((0, 0, 0), (30, 20, "1.6"))
+        (p0, p1, p5), (_, _, p4), m = tris[4], tris[5], (15, 0, "0.8")
+        split = tris[:4] + [(p5, m, p1), (m, p0, p1), (p0, m, p4), (m, p5, p4)] + tris[6:]
+        got = run(self.design(None, board=split), self.tmp.name)
+        self.assertEqual(got["box.board/fit.insert"][0], "certified", got["box.board/fit.insert"])
 
     def test_a_positive_gap_tolerance_can_close_fails(self):
         # 0.25 mm each side (measured), less than 0.5 + 0.1 mm of allowance plus the float.
