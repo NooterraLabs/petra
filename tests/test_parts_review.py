@@ -265,13 +265,11 @@ class F13F15Registry(Case):
 
 
 class FF1Sweeps(Case):
-    @unittest.expectedFailure
     def test_ff1_a_triangle_in_the_plane_of_a_swept_one_is_not_inside_the_sweep(self):
         u = ((0, 0, 0), (10, 0, 0), (0, 10, 0))
         t = ((100, 0, 0), (100, 10, 5), (110, 0, 5))
         self.assertEqual(exact.tri_prism2(t, u, (0, 0, 5)), 8100)
 
-    @unittest.expectedFailure
     def test_ff1_the_sweep_distance_agrees_with_dense_sampling(self):
         rng = random.Random(11)
         n = 6
@@ -292,7 +290,6 @@ class FF1Sweeps(Case):
             self.assertLessEqual(d, sampled, (t, u, v))
             self.assertLessEqual(float(sampled) ** 0.5 - float(d) ** 0.5, 30 / n, (t, u, v, d, sampled))
 
-    @unittest.expectedFailure
     def test_ff1_the_verdict_does_not_depend_on_how_a_wall_is_split(self):
         plain = tray((0, 0, 0), (40, 30, 20), 2, 2)
         p = (Fraction(2), Fraction(15), Fraction(3))

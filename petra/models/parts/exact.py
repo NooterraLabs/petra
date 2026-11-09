@@ -181,7 +181,7 @@ def prism_faces(u: T, v: V) -> list[T]:
 
 def _in_prism(p, u: T, v: V) -> bool:
     """p lies in the closed hull of u and u + v: the line through p along v meets u at a
-    point p - s v with 0 <= s <= 1."""
+    point p - s v with 0 <= s <= 1. v crosses u's plane, so the line test holds at s = 0 too."""
     n = normal(u)
     nv = _dot(n, v)
     if nv == 0:
@@ -189,7 +189,7 @@ def _in_prism(p, u: T, v: V) -> bool:
     s = Fraction(_dot(n, _sub(p, u[0])), nv)
     if not 0 <= s <= 1:
         return False
-    q = p if s == 0 else _add(p, v)
+    q = _add(p, v)
     s1, s2, s3 = orient(p, q, u[0], u[1]), orient(p, q, u[1], u[2]), orient(p, q, u[2], u[0])
     return (s1 >= 0 and s2 >= 0 and s3 >= 0) or (s1 <= 0 and s2 <= 0 and s3 <= 0)
 
