@@ -354,7 +354,7 @@ ROWS: Mapping[str, tuple[ValidityRow, ...]] = {
     "fatigue_bolt_tension": (
         _row("fatigue_bolt_tension", "no_prying", "each flange the bolts bend is at least tmin = sqrt(4 T b' / (phi p "
              "Fu)) thick under the peak cyclic tension per bolt T, at each bolt's tributary length p, so the bolts carry "
-             "no prying force", f"{MANUAL} Part 9, Eq 9-20a; {AISC} Appendix 3, Section 3.2 and Commentary 3.4 (the "
+             "no prying force", f"{MANUAL} Part 9, Eq 9-30a with T for Tc; {AISC} Appendix 3, Section 3.2 and Commentary 3.4 (the "
              "category holds only where prying is small)"),
     ),
 }

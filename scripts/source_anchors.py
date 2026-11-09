@@ -145,10 +145,7 @@ SHORTER = {
 }
 """A reader's words cut down to the rule, so no field runs long."""
 
-DIFFERS: dict[str, str] = {
-    "eq.manual.9-20a": "Petra's docstring gives tmin = sqrt(4 T b' / (phi p Fu)) as Manual Eq. 9-20a; the Companion "
-                       "labels that form Eq. 9-30a (tc), and 9-20a is the coped beam's f = 2(c/d)",
-}
+DIFFERS: dict[str, str] = {}
 """Items with no single number whose source reads otherwise than Petra: id -> the finding."""
 
 NOT_STATED = {
