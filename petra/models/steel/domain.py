@@ -54,8 +54,8 @@ REQUIRES = "steel.requires."
 def features(conn: Conn, design: Design, registry: Registry) -> tuple[Feature, ...]:
     """One feature per required mode (kind "steel.requires.<mode>"), naming the parts'
     materials, and one CONTACT_PAIR per bolt group and the steel it passes through. Steel
-    grades and bolt groups state no anodic index, so the galvanic rule finds no dissimilar
-    pair among them."""
+    grades and bolt groups are all plain carbon or low-alloy steel with one anodic index, so
+    the galvanic rule finds no dissimilar pair among them."""
     materials = tuple(dict.fromkeys(_materials(conn)))
     energy = frozenset({EnergyDomain.MECHANICAL})
     subject = (conn.name,)

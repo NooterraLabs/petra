@@ -2,6 +2,7 @@
 AISC 360-22 Chapter J and K provision and every Appendix 3 provision maps to exactly one
 check, rule, premise or exclusion; every mode the deck has is named by a provision; the
 published table is current."""
+import itertools
 import unittest
 from pathlib import Path
 
@@ -9,6 +10,7 @@ from petra.models.steel import trace
 from petra.models.steel.vocab import MODELS, MODES, UNMODELLED
 
 DOC = Path(__file__).resolve().parents[1] / "docs" / "steel_traceability.md"
+PLAN = DOC.parent / "steel_connections.md"
 
 
 class Traceability(unittest.TestCase):
@@ -44,6 +46,17 @@ class Traceability(unittest.TestCase):
                 for mode in p.modes:
                     spec = MODELS[MODES[mode]]
                     self.assertTrue(spec.validity or spec.unchecked, f"{p.section}: {mode}")
+
+    def test_the_clause_plan_calls_no_excluded_section_encoded_today(self):
+        """docs/steel_connections.md §4 marks a later version's work "(v1.1)" or "(v1.2)",
+        so a section this table excludes is never called encoded there without one."""
+        excluded = {p.section for p in trace.TABLE if p.treatment == "excluded"}
+        lines = PLAN.read_text(encoding="utf-8").split("\n## 4.", 1)[1].splitlines()[1:]
+        for line in itertools.takewhile(lambda line: not line.startswith("#"), lines):
+            cells = [c.strip() for c in line.strip().strip("|").split("|")]
+            if len(cells) == 3 and cells[0] in excluded:
+                with self.subTest(cells[0]):
+                    self.assertFalse("encoded" in cells[2].lower() and "(v1." not in cells[2], cells[2])
 
     def test_the_published_table_is_current(self):
         self.assertEqual(DOC.read_text(encoding="utf-8"), trace.render(),

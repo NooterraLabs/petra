@@ -215,6 +215,17 @@ class Galvanic(unittest.TestCase):
                                          ("zinc.electroplate", "steel.S355")])
         self.assertTrue(self.demanded(d))
 
+    def test_a_stainless_bolt_through_any_carbon_steel_grade_is_not_a_pass(self):
+        """A4 stainless 0.50 V against plain carbon and low-alloy steel 0.85 V: 0.35 V
+        apart in wet marine_c5, whichever grade the plates are. With bearing waived, the
+        galvanic demand is all that keeps the joint from PASS."""
+        waiver = 'waive bolt.plate_bearing on bracket by "m.engineer@example.org" reason "calc BC-3"\n'
+        for grade in ("steel.S355", "steel.A36", "steel.A572_50", "steel.A992"):
+            with self.subTest(grade):
+                d = joint(("plate aluminium.6061_T6", f"plate {grade}"), extra=waiver)
+                self.assertTrue(self.demanded(d))
+                self.assertNotIsInstance(check_design(d, REGISTRY, (SolverSource(),)).verdict, Pass)
+
     def test_a_cadmium_plated_stainless_bolt_in_aluminium_plates_removes_the_pair(self):
         """Cadmium 0.95 against 6061 0.90: 0.05 V apart. The bare A4 bolt is 0.50 against
         0.90, 0.40 V apart."""
@@ -314,6 +325,20 @@ class Separation(unittest.TestCase):
         self.assertEqual(point["pull.bracket.force"], 40000)
         self.assertAlmostEqual(at(claim.obligation.statement, 0, point), 40000 - 34212.214, places=2,
                                msg="the bolt carries the whole 40 kN once the joint opens")
+
+
+class Tightening(unittest.TestCase):
+    """VDI 2230 Part 1 R7: the thread torque twists the bolt while it is tightened, so the
+    bolt can yield below its axial proof load, and past yield its preload is no longer
+    T / (K d). Neither model checks it, since no input gives the thread friction."""
+
+    def test_every_bolt_premise_in_the_footprint_names_the_tightening_stress_as_not_checked(self):
+        report = check_design(load_design(EXAMPLE, REGISTRY), REGISTRY, (SolverSource(),))
+        bolt_models = [p for p in report.verdict.footprint.premises if p.label.startswith("model:bolt.")]
+        self.assertEqual(len(bolt_models), 2)
+        for premise in bolt_models:
+            unchecked = premise.statement.partition("; not checked: ")[2]
+            self.assertIn("tightened", unchecked, premise.label)
 
 
 class Lowering(unittest.TestCase):

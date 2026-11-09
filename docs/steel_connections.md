@@ -88,7 +88,7 @@ Coverage is complete when every "shall" in these sections maps to an encoded che
 | J6 | Splices | Encoded (v1.1) |
 | J7 | Bearing strength | Encoded |
 | J8 | Column bases and bearing on concrete | Encoded (v1.1) |
-| J9 | Anchor rods and embedments | Rod strength is encoded. Concrete breakout is a premise (ACI 318 Chapter 17, out of scope). |
+| J9 | Anchor rods and embedments | Rod strength is encoded (v1.1). Concrete breakout is a premise (ACI 318 Chapter 17, out of scope). |
 | J10.1 to J10.9 | Flanges and webs with concentrated forces | Encoded, with stiffener and doubler requirements as coverage triggers |
 | K1 | HSS parameters, effective width, chord-stress interaction, end distance, limits of applicability | Limits of applicability become validity rows (v1.2) |
 | K2 to K5 | Concentrated forces on HSS, truss connections, moment connections, and welds to HSS | Encoded (v1.2) |
