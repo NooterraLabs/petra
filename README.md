@@ -10,7 +10,7 @@ Petra checks the loads a design states. It does not choose them, and it does not
 pip install petra-lang
 ```
 
-In Claude Code, `/plugin marketplace add NooterraLabs/petra` and then `/plugin install petra@petra` give your agent Petra's tools and its skill.
+In Claude Code with [uv](https://docs.astral.sh/uv/) installed, `/plugin marketplace add NooterraLabs/petra` and then `/plugin install petra@petra` give your agent Petra's tools and its skill.
 
 ## Use
 
