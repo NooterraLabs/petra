@@ -212,6 +212,21 @@ class DeckFixes(unittest.TestCase):
                 pry = next(k for k in plain if k[0] == "prying" and flange in k[1])
                 self.assertGreater(plain[pry], std[pry])
 
+    @unittest.expectedFailure
+    def test_a_hanger_shear_across_the_tee_tears_its_flange_tip(self):
+        # The card gives a hanger's shear no direction in its plies' plane. Along the tee
+        # bolt shear holds each of the four 3/4 in Group 150-X bolts, 111.3 kips in all
+        # (LRFD). Across it a WT12x27.5's outer bolts tear out over 0.846 in to the flange
+        # tip, 25.0 kips each, so the group holds 105.7 kips (J3.11a).
+        lines = ["  tee WT12x27_5 grade steel.A992", "  support W14x90 flange grade steel.A992",
+                 "  bolts bolt_group.150 diameter 0.75 inch threads excluded joint pretensioned",
+                 "  rows 2", "  pitch 3 inch", "  tee_gauge 4.5 inch", "  edge_vertical 2 inch"]
+
+        def bolts(shear):
+            text = gen.source("h", "hanger", "lrfd", lines, Fraction(5), (("shear", Fraction(shear, 5)),))
+            return status(text)[1]["bolts"]
+        self.assertEqual([bolts(100), bolts(108)], ["pass", "fail"])
+
     def test_a_slotted_hanger_under_shear_needs_a_slip_critical_joint(self):
         # J3.3: in a bearing-type joint a slot lies normal to the load. The tension is normal
         # to every slot in the plies, but the card fixes no direction for the shear in their
