@@ -1,4 +1,4 @@
-"""The board as an exact solid, and the room a part keeps over its courtyard. Trusted.
+"""The board as an exact solid, and the room a part keeps over one board face. Trusted.
 
 A mesh cannot hold an arc, so each solid is built from the polygons of `plane.bounds` on one
 side of the drawn geometry, the side `Errs` names. OVER holds the true solid and UNDER lies
@@ -121,9 +121,10 @@ def board_solid(board: Board, errs: Errs, *, thickness: Fraction | None = None,
 
 def keepout(board: Board, footprint: Footprint, low: Fraction, high: Fraction, errs: Errs, *,
             face: Side | None = None, thickness: Fraction | None = None) -> tuple[Prism, ...]:
-    """The room over a footprint's courtyard from `low` to `high` mm out from a board face,
-    the footprint's own face unless `face` names the other: one prism per courtyard loop.
-    The heights are premises. A board file holds none."""
+    """The room a footprint keeps from `low` to `high` mm out from a board face, the
+    footprint's own face unless `face` names the other: one prism over the convex hull of the
+    face's courtyard and of every shape its Fab layer draws (`Courtyard.room`). The heights
+    are premises. A board file holds none."""
     face = face or footprint.side
     yard = footprint.courtyard(face)
     if not isinstance(yard, Courtyard):
@@ -133,15 +134,13 @@ def keepout(board: Board, footprint: Footprint, low: Fraction, high: Fraction, e
         raise ValueError(f"a keep-out runs from a height at least 0 to a greater one, not {low} to {high}")
     t = thickness_of(board, thickness)
     z0, z1 = (t + low, t + high) if face is Side.TOP else (-high, -low)
-    out = []
-    for k, b in enumerate(yard.board):
-        try:
-            mesh = _extrude(f"{board.path}#{footprint.reference}-{face.value}-{k}", board.sha256,
-                            b.outer if errs is Errs.OVER else b.inner, [], z0, z1)
-        except ShapeError as err:
-            raise BoardError(board.path, f"the keep-out of {footprint.reference}: {err}") from None
-        out.append(Prism(mesh, errs, z0, z1, b.deviation))
-    return tuple(out)
+    b = yard.room
+    try:
+        mesh = _extrude(f"{board.path}#{footprint.reference}-{face.value}", board.sha256,
+                        b.outer if errs is Errs.OVER else b.inner, [], z0, z1)
+    except ShapeError as err:
+        raise BoardError(board.path, f"the keep-out of {footprint.reference}: {err}") from None
+    return (Prism(mesh, errs, z0, z1, b.deviation),)
 
 
 # --- Extrusion --------------------------------------------------------------------------

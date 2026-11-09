@@ -38,6 +38,7 @@ class Side(Enum):
 
 _COPPER = {"F.Cu": Side.TOP, "B.Cu": Side.BOTTOM}
 _COURTYARD = {Side.TOP: "F.CrtYd", Side.BOTTOM: "B.CrtYd"}
+_FAB = {Side.TOP: "F.Fab", Side.BOTTOM: "B.Fab"}
 _BOARD_SHAPES = {"gr_line", "gr_arc", "gr_circle", "gr_rect", "gr_poly", "gr_curve", "bezier"}
 _FOOTPRINT_SHAPES = {"fp_line", "fp_arc", "fp_circle", "fp_rect", "fp_poly", "fp_curve"}
 
@@ -106,11 +107,13 @@ class Pad:
 @dataclass(frozen=True)
 class Courtyard:
     """A footprint's courtyard on one board face: its loops in the footprint's frame, exact,
-    and each loop's bounds on the board."""
+    each loop's bounds on the board, and the bounds on the board of the part's room on that
+    face, the convex hull of the courtyard and of every shape the face's Fab layer draws."""
 
     face: Side
     loops: tuple[Loop, ...]
     board: tuple[Bounds, ...]
+    room: Bounds
 
 
 @dataclass(frozen=True)
@@ -416,26 +419,33 @@ def _pad(e: Expr, properties: frozenset[str], placement: Placement, mount: bool,
                placement.spot(at.at), properties)
 
 
+def _drawn(e: Expr, layer: str, path: str) -> tuple[list[Item], list[tuple[Item, ...]]] | None:
+    """The open items and the closed runs a footprint draws on one layer, or None for none."""
+    shapes = [s for s in e.items if isinstance(s, Expr) and s.head in _FOOTPRINT_SHAPES and _layer(s) == layer]
+    drawn = [_shape(s, path) for s in shapes]
+    return ([i for items, _ in drawn for i in items], [r for _, runs in drawn for r in runs]) if shapes else None
+
+
 def _courtyard(e: Expr, face: Side, placement: Placement, path: str) -> Courtyard | NoCourtyard:
-    shapes = [s for s in e.items if isinstance(s, Expr) and s.head in _FOOTPRINT_SHAPES
-              and _layer(s) == _COURTYARD[face]]
-    if not shapes:
-        return NoCourtyard(face, "absent")
+    """The courtyard on one face, and the room: a part's body may reach past its courtyard,
+    as 37 of 4,057 footprints on real boards draw it on the Fab layer (measured,
+    docs/kicad_oracle.md's boards), so the room holds both."""
     try:
-        open_items: list[Item] = []
-        runs: list[tuple[Item, ...]] = []
-        for s in shapes:
-            items, closed = _shape(s, path)
-            open_items += items
-            runs += closed
+        drawn = _drawn(e, _COURTYARD[face], path)
+        if drawn is None:
+            return NoCourtyard(face, "absent")
+        open_items, runs = drawn
         loops = tuple(plane.loop(run) for run in plane.chain(open_items) + runs)
         problem = plane.meeting(loops) or next((f"a loop through {plane.show(plane.start(a))} lies inside another"
                                                 for a in loops for b in loops
                                                 if a is not b and plane.inside(plane.start(a), b)), None)
         if problem:
             raise ShapeError(problem)
-        board = tuple(plane.moved(plane.bounds(lp), placement.at, placement.angle) for lp in loops)
-        return Courtyard(face, loops, board)
+        local = [plane.bounds(lp) for lp in loops]
+        fab_items, fab_runs = _drawn(e, _FAB[face], path) or ([], [])
+        room = plane.enclose(local, fab_items + [i for run in fab_runs for i in run])
+        return Courtyard(face, loops, tuple(plane.moved(b, placement.at, placement.angle) for b in local),
+                         plane.moved(room, placement.at, placement.angle))
     except ShapeError as err:
         return NoCourtyard(face, str(err))
 

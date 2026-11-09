@@ -625,6 +625,45 @@ def polygons_meet(a, b) -> bool:
     return False
 
 
+def hull(points) -> tuple[Point, ...]:
+    """The corners of the points' convex hull, positively oriented, none on a line between two
+    others."""
+    pts = sorted(set(points))
+
+    def half(seq) -> list[Point]:
+        out: list[Point] = []
+        for p in seq:
+            while len(out) > 1 and _cross(_sub(out[-1], out[-2]), _sub(p, out[-1])) <= 0:
+                out.pop()
+            out.append(p)
+        return out[:-1]
+    return tuple(half(pts) + half(pts[::-1]))
+
+
+def enclose(regions, items, tolerance: Fraction = TOLERANCE) -> Bounds:
+    """Bounds of the convex hull of some regions, each given by its bounds, and of some drawn
+    items. `inner` is the hull of corners inside the regions and of points on the items, the
+    ends of segments and of an arc's bends, so it lies in the true hull. `outer` is the hull of
+    corners around the regions, of segment ends, and of each bend's ends with its tangent
+    path, which with the bend's chord bounds the bend, so it holds the true hull. The three
+    are convex and nested, so each one's boundary lies within d of the true hull's, d being
+    the furthest any corner of `outer` lies from `inner` (docs/boards.md, "Rooms")."""
+    inner = [p for b in regions for p in b.inner]
+    outer = [p for b in regions for p in b.outer]
+    for item in items:
+        if isinstance(item, Segment):
+            inner += [item.start, item.end]
+            outer += [item.start, item.end]
+            continue
+        for b in _bends(item):
+            inner += [b.start, b.end]
+            outer += [b.start, *_tangent(b, tolerance)[0], b.end]
+    lo, hi = hull(inner), hull(outer)
+    far = max([min(point_segment2(v, lo[i - 1], lo[i]) for i in range(len(lo))) for v in hi if where(v, lo) < 0],
+              default=Fraction(0))
+    return Bounds(lo, hi, sqrt_hi(far))
+
+
 # --- Turns ------------------------------------------------------------------------------
 
 _PI_LO = Fraction("3.1415926535897932384626433832795028841971")

@@ -58,7 +58,7 @@ Footprint    reference, value, library, side, placement (at, angle), attributes,
 Pad          number, kind, plated, shape, local, angle, size, drill | None, offset, at: Spot, properties
 Drill        width, height, oval
 Spot         point, error                 the true point lies within error of point
-Courtyard    face, loops (footprint frame, exact), board: (Bounds, ...)
+Courtyard    face, loops (footprint frame, exact), board: (Bounds, ...), room: Bounds
 NoCourtyard  face, reason                 "absent", or what is wrong with the drawn one
 Via          at, drill, through
 Prism        mesh, errs, low, high, deviation
@@ -94,6 +94,14 @@ The deviation bounds how far each polygon strays from its arc. A chord path keep
 
 A courtyard's bounds are turned with the decimal cosine c and sine s. If c and s are each within e of the true values, a point at local (x, y) lands within e (|x| + |y|) of its true place, because the error matrix is a scaled rotation. The outer polygon is then grown by more than that reach and the inner one shrunk. Exact checks confirm that each grown polygon is simple, holds the turned one, and keeps every edge further than the reach from the turned one's edges. A point of the true image lies within the reach of a point of the turned polygon, which lies further than the reach from the grown boundary, so it lies inside it. The same holds inward for the shrunk polygon.
 
+### Rooms
+
+A courtyard is the area a footprint's author keeps clear for the part, and it does not always hold the part. KiCad's StickHub demo draws the body of a JST SH connector 1.295 mm past its courtyard on the F.Fab layer, and a capacitor laid over the board's edge 11.5 mm past it. Over the boards of docs/kicad_oracle.md, 37 of 4,057 footprints draw a Fab body more than 0.01 mm outside the courtyard (measured, docs/kicad_oracle.md's boards).
+
+So a part's room on a face is the convex hull of the face's courtyard and of every line, arc, circle, rectangle and polygon the footprint draws on the face's Fab layer, F.Fab for the top and B.Fab for the bottom. The hull is one convex region that holds both. A concave courtyard grows to its hull, which an OVER keep-out may do. Text on the Fab layer is not a shape and is not read. A shape on the Fab layer that the reader cannot read makes the courtyard on that face a `NoCourtyard`.
+
+`plane.enclose` bounds the hull. Its inner polygon is the hull of the inner polygons' corners and of points on the Fab shapes: segment ends and the ends of each arc's quarter-turn bends, all exact. Each lies in the true hull, so the inner polygon does. Its outer polygon is the hull of the outer polygons' corners, of segment ends, and of each bend's ends with its tangent path. A bend lies between its chord and its tangent path along every ray from its centre through its wedge, so the outer polygon holds every bend and the true hull. The three regions are convex and nested. Let d be the furthest any corner of the outer polygon lies from the inner one. Then every point of the outer boundary lies within d of the inner polygon and so of the true boundary, and every point of the true boundary lies within d of the inner polygon's boundary, and the same holds outward along each supporting line. d is the room's deviation. `plane.moved` turns the room onto the board as it turns a courtyard.
+
 ### Holes
 
 A round hole of radius r whose centre is known within e has an inner convex polygon with every corner nearer than r - e to its centre, and an outer convex polygon whose every edge line lies further than r + e from it. An oval drill is a slot, the set of points within r of a segment, along the pad's x axis when it is wider than tall and along its y axis otherwise, turned by the pad's angle. The same two tests apply to the segment, because the points within a distance of a segment make a convex set.
@@ -102,7 +110,7 @@ A round hole of radius r whose centre is known within e has an inner convex poly
 
 `board_solid(board, errs)` builds the board as an exact mesh for the parts layer. `Errs.OVER` holds the drawn board, so it takes the outer polygon of the boundary less the inner polygons of the cutouts and holes. `Errs.UNDER` lies inside it, so it takes the inner polygon of the boundary less the outer polygons of the cutouts and holes. An UNDER solid cuts every hole, vias included. An OVER solid may leave holes uncut and still hold the board. It cuts no blind or micro via, since such a via ends inside the board. Both solids bound the drawn board, not the board as made. How far the made board strays is a premise (below).
 
-`keepout(board, footprint, low, high, errs)` sweeps each courtyard loop from `low` to `high` mm out from the footprint's face, or from the face named. A part's height is a premise, so the caller gives both heights.
+`keepout(board, footprint, low, high, errs)` sweeps the room on the footprint's face (above, "Rooms") from `low` to `high` mm out from that face, or from the face named, and returns one prism. A part's height is a premise, so the caller gives both heights.
 
 Each face is cut into triangles by joining every hole to the boundary with a bridge and clipping ears. The cut is not trusted. An exact check confirms that every triangle turns positively, that no edge is used twice in one direction, and that the edges left after opposite pairs cancel are exactly the region's boundary edges, each in its own direction. The triangles then form a 2-chain whose boundary is the region's boundary, so at each point their count equals the region's winding number, 1 inside and 0 outside. Positive triangles cannot cancel one another, so they cover each point of the region once and no point outside it. The mesh then passes the parts layer's own check of a solid's boundary (`petra/models/parts/mesh.py`), in which every edge has exactly one face in each direction.
 
@@ -120,11 +128,11 @@ Each refusal is a `BoardError` naming the file and, where it can, the line.
 - A footprint off F.Cu and B.Cu, a reference or value not written the way its version writes it or written with no text, a pad type outside smd, connect, thru_hole and np_thru_hole, a drilled pad with no drill, a pad with no size, and a via with no drill.
 - A stackup whose layers sum to a thickness other than the one in `(general ...)`. KiCad does not keep the two equal. Four of its own demo boards state 1.6002 mm in `(general ...)` and stackups that sum to 1.6 mm or 1.600198 mm, and KiCad 10 reports 1.6002 mm for all four (measured, docs/kicad_oracle.md). Neither number says which thickness the board is made to, so the reader refuses the file and names both.
 
-A courtyard Petra cannot read is not refused. It becomes `NoCourtyard` with the reason, and a keep-out on that face raises `BoardError`. A solid whose hole bounds meet each other or the edge's bounds is refused, as a hole cut by the board's edge is.
+A courtyard Petra cannot read, or a Fab shape on its face, is not refused. The courtyard becomes `NoCourtyard` with the reason, and a keep-out on that face raises `BoardError`. A solid whose hole bounds meet each other or the edge's bounds is refused, as a hole cut by the board's edge is.
 
 ## What the file cannot tell the enclosure deck
 
-A board file holds no part height, no mating direction and no light path. `features.py` names each fact it lacks as a `Premise`, and the enclosure deck must demand each as a signed line. The marks come from the reference's letters, the library nickname and a pad's test-point property. The table and its sources are `features.RULES`. Library prefixes are reported from kicad.github.io/footprints. Reference letters are recalled from IEEE 315 class letters, KiCad's symbol defaults and common use.
+A board file holds no part height, no mating direction and no light path. `features.py` names each fact it lacks as a `Premise`, and the enclosure deck must demand each as a signed line. The marks come from the reference's letters, the words of the library id and a pad's test-point property. The words are the runs of letters in the library's nickname and the footprint's name, split where a small letter meets a capital, so `kbd:ResetSW` gives kbd, reset and sw. The table and its sources are `features.RULES`. The words of KiCad's own library names are reported from kicad.github.io/footprints. The other words are measured, read off the library ids on the boards of docs/kicad_oracle.md. Reference letters are recalled from IEEE 315 class letters, KiCad's symbol defaults and common use.
 
 | feature | marked by | premise demanded |
 |---|---|---|
