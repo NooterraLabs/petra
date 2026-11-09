@@ -26,7 +26,7 @@ A design code is a thin layer on top. The code layer decides which mechanical qu
 | `algebra` | `c`, `add`, `sub`, `mul`, `div`, `sq`, `power` | (expression builders) |
 | `sections` | `circle_area`, `rectangle_plastic_modulus`, `rectangle_elastic_modulus`, `rectangle_elastic_thickness`, `rectangle_net_plastic_modulus`, `rectangle_net_elastic_modulus`, `rectangle_peak_shear_stress`, `tee_moduli`, `hex_corner`, `right_triangle` | strip integration, exact integrals of \|y\| over the net section, and polygon geometry |
 | `bolt_groups` | `polar_moment`, `corner_radius`, `elastic_bolt_force`, `elastic_block_force`, `elastic_centre`, `instantaneous_centre` | a sum over every bolt of the pattern |
-| `weld_groups` | `fillet_throat`, `elastic_weld_line`, `elastic_weld_c`, `element_angles`, `line_ic` | the weld cut into short segments |
+| `weld_groups` | `fillet_throat`, `elastic_weld_line`, `elastic_weld_c`, `element_angles`, `Run`, `group_ic` | the weld cut into short segments |
 | `stability` | `plate_buckling_stress` | a finite-difference solution of D âˆ‡â´w + N âˆ‚Â²w/âˆ‚xÂ² = 0 |
 
 ## What stays in a design code
@@ -52,8 +52,8 @@ This table gives the meaning of each parameter name in the layer. A name with tw
 
 | Parameter | Symbol | Meaning |
 |---|---|---|
-| `a`, `b` | | operands (algebra), the legs of a right triangle (sections), or a load's eccentricity over the length of the weld line it acts on (weld_groups) |
-| `x` | | the rational a constant holds (algebra) |
+| `a`, `b` | | operands (algebra), or the legs of a right triangle (sections) |
+| `x` | | the rational a constant holds (algebra), or whose sign is taken (weld_groups) |
 | `exponent` | | the power of `power(a, exponent)` |
 | `d` | d | a circle's diameter |
 | `t` | t | the rectangle's side parallel to the bending axis, which for a plate is its thickness |
@@ -75,9 +75,12 @@ This table gives the meaning of each parameter name in the layer. A name with tw
 | `curve` | R/Rult | a code's load-deformation curve: the fraction of its strength a bolt or a weld element holds at a fraction of the largest deformation |
 | `w` | w | fillet weld leg size |
 | `length` | L | length of a weld line |
-| `z` | | where an element lies along a weld line, from its midpoint, in units of the line's length |
-| `zs` | | the ends of the segments a weld line's half is cut into, from its midpoint (0) to its end (1/2) |
-| `bounds` | | a lower and an upper bound on a weld element's force per unit length over each segment |
+| `u` | | where an element lies along a weld run, from the foot of the run's normal through the instantaneous centre |
+| `zs` | | the ends of a weld run's segments, from the foot of its normal (0) out, at `r` from the centre (element_angles) |
+| `run`, `runs` | | a straight run of weld in a group that turns about a centre (`Run`): its distance from the centre, its segments' ends, whether it lies across the load, its side of the centre and its throat |
+| `arm` | | the load's distance from the instantaneous centre, across the load |
+| `disc`, `side` | | a quadratic's discriminant, and which of its two roots: -1 the lesser, 1 the greater |
+| `bounds` | | a lower and an upper bound on a weld element's force per unit length over each segment of each run |
 | `lines` | | parallel weld lines |
 | `ret` | kl | length of a weld return |
 | `nu` | Î½ | Poisson's ratio |

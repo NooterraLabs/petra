@@ -1,0 +1,223 @@
+"""The manifest of Petra's trusted base (docs/principles.md T2), read by tests/test_kernel_budget.py.
+
+It holds the kernel core's cap and the trusted total's ceiling, each with its reason, one entry
+per certificate rule, and every module under petra/ outside the kernel, trusted or not. It
+imports nothing from petra, so the test reads it without loading the kernel.
+
+A rule's entry records its code lines and three items: where the docs state its soundness, the
+mutation corpus it must reject, and its check against an outside checker. An item a rule lacks is
+a Debt, dated, saying what exists instead.
+
+Each trusted group names the judge or twin that checks it, or a Debt. A judge counts when it
+re-derives most of what its modules compute and a test or script compares it with Petra. A judge
+of a single condition is named in its group's debt instead.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import date
+
+
+@dataclass(frozen=True)
+class Limit:
+    lines: int
+    reason: str
+
+
+@dataclass(frozen=True)
+class Ref:
+    """A file or directory in the repository. A non-empty anchor names a markdown heading in a
+    .md file, or a top-level class or function in a .py file."""
+
+    path: str
+    anchor: str = ""
+
+
+@dataclass(frozen=True)
+class Debt:
+    since: date
+    what: str
+
+
+@dataclass(frozen=True)
+class Rule:
+    id: str
+    module: str
+    lines: int
+    soundness: Ref | Debt
+    mutations: tuple[Ref, ...] | Debt
+    outside: Ref | Debt
+
+
+@dataclass(frozen=True)
+class Judge:
+    code: Ref
+    compared_by: tuple[Ref, ...]
+    shares: str
+    """What the judge shares with Petra (docs/frontier.md §3 rule 2)."""
+
+
+@dataclass(frozen=True)
+class Group:
+    name: str
+    modules: tuple[str, ...]
+    checked_by: Judge | Debt
+
+
+CORE_CAP = Limit(1000, "Set on 2026-11-08 at 140f742, where the core measured 957 code lines. "
+                       "A new rule adds 3 to 5 lines to rules/__init__.py (inferred from its tables), so "
+                       "the headroom covers the registry entries of several rules.")
+
+TRUSTED_CEILING = Limit(14000, "Set on 2026-11-08 at 140f742, where the trusted base measured 13,530 "
+                               "code lines: core 957, rules 457, outside the kernel 12,116. Raise it in "
+                               "the commit that needs more and say why here.")
+
+T2_ADOPTED = date(2026, 11, 8)
+"""The day T2 took this form. Every debt found that day carries it."""
+
+
+def _argued_in_docstring(argument: str) -> Debt:
+    return Debt(T2_ADOPTED, f"The module docstring gives the argument ({argument}), and docs/frame.md "
+                            "'Certificate rules' gives one line. No doc states the rule's soundness conditions.")
+
+
+NO_OUTSIDE_CHECKER = Debt(T2_ADOPTED, "No outside checker reads this rule's certificates. T5 names the "
+                                      "planned Lean kernel as the second implementation, and this machine "
+                                      "has no Lean toolchain (docs/frame.md, Constraints).")
+
+MUTANTS = Ref("tests/test_kernel_mutations.py", "Mutants")
+
+RULES: tuple[Rule, ...] = (
+    Rule("R1", "petra/kernel/rules/r1_linear.py", 71,
+         _argued_in_docstring("convexity over the vertices of the load box, and Farkas's lemma for the refutation"),
+         (MUTANTS, Ref("tests/fixtures/r1_feasible.cert.json"), Ref("tests/fixtures/r1_farkas.cert.json")),
+         NO_OUTSIDE_CHECKER),
+    Rule("R2", "petra/kernel/rules/r2_definite.py", 68,
+         _argued_in_docstring("the Loewner order below the box, and Sylvester's law of inertia for the LDL^T factor"),
+         (MUTANTS, Ref("tests/fixtures/r2_ldl.cert.json"), Ref("tests/fixtures/r2_negative_direction.cert.json")),
+         NO_OUTSIDE_CHECKER),
+    Rule("R3", "petra/kernel/rules/r3_hypercircle.py", 150,
+         _argued_in_docstring("the Prager-Synge hypercircle identity, which also proves the MinimizerComponent lemma"),
+         (MUTANTS, Ref("tests/fixtures/r3_hypercircle.cert.json"), Ref("tests/fixtures/r3_violation.cert.json"),
+          Ref("tests/fixtures/r3_lemma.cert.json"), Ref("tests/fixtures/r3_lemma_witness.cert.json")),
+         NO_OUTSIDE_CHECKER),
+    Rule("R4", "petra/kernel/rules/r4_enclosure.py", 64,
+         _argued_in_docstring("the leaves of a split tree cover the box, and the natural interval extension encloses each leaf"),
+         (MUTANTS, Ref("tests/fixtures/r4_enclosure.cert.json"), Ref("tests/fixtures/r4_point_witness.cert.json")),
+         NO_OUTSIDE_CHECKER),
+    Rule("R5", "petra/kernel/rules/r5_moment.py", 60,
+         _argued_in_docstring("moment-problem duality, with domination checked cell by cell"),
+         (MUTANTS, Ref("tests/fixtures/r5_moment_dual.cert.json")),
+         NO_OUTSIDE_CHECKER),
+    Rule("R6", "petra/kernel/rules/r6_scenario.py", 44,
+         _argued_in_docstring("the binomial tail summed in exact rationals"),
+         Debt(T2_ADOPTED, "tests/fixtures/r6_binomial.cert.json is in the corpus of "
+                          "tests/test_kernel_mutations.py, but every operator that applies to it is stopped "
+                          "by the codec, the statement hash or dispatch, so no mutant reaches the tail check. "
+                          "BinomialTails in tests/test_rules.py and R6Degenerate in "
+                          "tests/test_kernel_redteam.py give it false statements by hand."),
+         NO_OUTSIDE_CHECKER),
+)
+
+TWIN = Ref("twin")
+IN_REPO_TWIN = Ref("petra/models/steel/twin.py")
+
+TRUSTED: tuple[Group, ...] = (
+    Group("front end",
+          ("petra/lang/__init__.py", "petra/lang/lexer.py", "petra/lang/parser.py", "petra/lang/syntax.py",
+           "petra/lang/lower.py", "petra/ir.py", "petra/units.py"),
+          Debt(T2_ADOPTED, "twin/card.py parses steel cards from the language reference with its own unit "
+                           "table, and scripts/twin_check.py compares the results on the steel gate stream. "
+                           "No judge parses the other decks' cards.")),
+    Group("registry",
+          ("petra/registry/__init__.py", "petra/registry/model.py", "petra/registry/constants.py",
+           "petra/registry/catalog.py"),
+          Debt(T2_ADOPTED, "petra/registry/consistency.py re-derives derivable records from physics "
+                           "relations (tests/test_registry_consistency.py), but it is Petra's own code and "
+                           "shares registry/model.py. No judge reads the constants from their sources.")),
+    Group("domain registry and shared types",
+          ("petra/models/__init__.py", "petra/models/base.py"),
+          Debt(T2_ADOPTED, "No judge or twin.")),
+    Group("truss",
+          ("petra/models/truss.py",),
+          Debt(T2_ADOPTED, "judges/truss.py re-solves the plastic collapse factor, with and without the "
+                           "members' weight, as its own linear program. Elastic forces, stability and member "
+                           "buckling have no judge.")),
+    Group("circuit",
+          ("petra/models/circuit.py",),
+          Debt(T2_ADOPTED, "judges/circuit.py checks only that each conductor fits its terminal. Ampacity, "
+                           "adiabatic heating, voltage drop and breaker coordination have no judge.")),
+    Group("bolt",
+          ("petra/models/bolt.py",),
+          Debt(T2_ADOPTED, "judges/bolt.py checks only whether a tension claim survives the joint opening.")),
+    Group("uncertainty",
+          ("petra/models/uncertainty.py",),
+          Debt(T2_ADOPTED, "judges/uncertainty.py recomputes the range-and-mean bound only to flag a claim "
+                           "that a tested failure below the stated capacity breaks. The scenario bound has no "
+                           "judge.")),
+    Group("port contracts",
+          ("petra/models/contracts.py",),
+          Debt(T2_ADOPTED, "No judge or twin.")),
+    Group("electronics",
+          ("petra/models/electronics/__init__.py", "petra/models/electronics/board.py",
+           "petra/models/electronics/network.py", "petra/models/electronics/domain.py",
+           "petra/registry/electronics.py"),
+          Debt(T2_ADOPTED, "No judge or twin. The deck's gate wants each of its planted faults caught "
+                           "(petra/models/electronics/gate.py, docs/electronics_gate.md), which tests the "
+                           "deck against known defects, not against a second implementation.")),
+    Group("steel strength",
+          ("petra/models/steel/__init__.py", "petra/models/steel/lower.py", "petra/models/steel/limits.py",
+           "petra/models/steel/checks.py", "petra/models/steel/build.py", "petra/models/steel/path.py",
+           "petra/models/steel/domain.py", "petra/mechanics/__init__.py", "petra/mechanics/algebra.py",
+           "petra/mechanics/bolt_groups.py", "petra/mechanics/sections.py", "petra/mechanics/stability.py",
+           "petra/mechanics/weld_groups.py", "petra/registry/steel.py", "petra/registry/steel_shapes.py"),
+          Judge(TWIN, (Ref("scripts/twin_check.py"), Ref("docs/twin_check.md", "The clean-room twin against Petra on the gate stream")),
+                "the .petra card format and the model family that wrote both, and no code, registry or "
+                "representation (twin/README.md). It does not model stiffened_seat, flange_force, fatigue "
+                "or fit beyond J3.5 edge distance.")),
+    Group("steel fatigue",
+          ("petra/models/steel/fatigue.py",),
+          Judge(IN_REPO_TWIN, (Ref("tests/test_steel_twin.py", "TwinAgreesWithTheDeck"),),
+                "the deck's lowering (lower.py), its load paths (path.py, cyclic.py), the registry and the "
+                "model family")),
+    Group("steel fatigue duty and data",
+          ("petra/models/steel/cyclic.py", "petra/registry/steel_fatigue.py"),
+          Debt(T2_ADOPTED, "The in-repo twin imports cyclic.py and reads these rows from the registry, so "
+                           "it shares them. twin/ does not model fatigue.")),
+    Group("steel geometry",
+          ("petra/models/steel/geometry.py",),
+          Judge(Ref("judges/steel.py"), (Ref("tests/test_steel_geometry.py", "JudgeReadings"), Ref("scripts/absurd_gap.py")),
+                "petra.ir, the shapes table through petra.registry.steel_shapes, and the model family")),
+    Group("steel vocabulary",
+          ("petra/models/steel/vocab.py",),
+          Debt(T2_ADOPTED, "No judge restates the validity rows or the model premises. The in-repo twin "
+                           "reads its method statements from this module.")),
+    Group("block shear pilot",
+          ("petra/models/steel/blockshear.py",),
+          Debt(T2_ADOPTED, "No judge or twin. docs/coped_beam_check.md sets the pilot's bound beside 25 "
+                           "published tests, which checks the method, not this builder.")),
+    Group("premises, coverage, verdict and pipeline",
+          ("petra/premises.py", "petra/coverage.py", "petra/verdict.py", "petra/pipeline.py"),
+          Debt(T2_ADOPTED, "No judge or twin. The absurd-design gap and canary recall score whole verdicts "
+                           "against the judges (docs/absurd_gap.md, docs/canary_recall.md), which is not a "
+                           "second implementation of these modules.")),
+)
+
+UNTRUSTED: tuple[str, ...] = (
+    "petra/__init__.py", "petra/__main__.py", "petra/cli.py", "petra/certs.py", "petra/envelope.py",
+    "petra/loop.py", "petra/mcp.py", "petra/readout.py", "petra/recall.py", "petra/repair.py",
+    "petra/teach.py", "petra/templates.py",
+    "petra/bench/__init__.py", "petra/bench/family.py",
+    "petra/gym/__init__.py", "petra/gym/agent.py", "petra/gym/env.py", "petra/gym/tasks.py",
+    "petra/library/__init__.py", "petra/library/family.py", "petra/library/store.py",
+    "petra/registry/consistency.py", "petra/registry/deck.py",
+    "petra/solvers/__init__.py", "petra/solvers/exact.py", "petra/solvers/r1_linear.py",
+    "petra/solvers/r2_definite.py", "petra/solvers/r3_hypercircle.py", "petra/solvers/r4_enclosure.py",
+    "petra/solvers/r5_moment.py", "petra/solvers/r6_scenario.py",
+    "petra/models/electronics/faults.py", "petra/models/electronics/gate.py",
+    "petra/models/electronics/generate.py",
+    "petra/models/steel/absent.py", "petra/models/steel/blockshear_solve.py", "petra/models/steel/breaker.py",
+    "petra/models/steel/calc.py", "petra/models/steel/faults.py", "petra/models/steel/gate.py",
+    "petra/models/steel/generate.py", "petra/models/steel/ic.py", "petra/models/steel/package.py",
+    "petra/models/steel/trace.py", "petra/models/steel/twin.py",
+)

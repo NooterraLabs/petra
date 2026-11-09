@@ -1107,12 +1107,14 @@ KNOWN: dict[tuple[str, str, str], str] = {}
 
 _WELD_IC = 0.01
 """A plate welded on both faces turns about an axis across its weld line (Manual Table 8-4,
-k = 0). The twin integrates the method by quadrature; the deck states a certified lower
-bound on C over segments of the line, which gives up at most ic.WELD_LOSS of it."""
+k = 0), and a lapped plate in its plane on its C-shaped weld (Table 8-8). The twin
+integrates the method by quadrature; the deck states a certified lower bound on C over
+segments of the welds, which gives up at most ic.WELD_LOSS of it."""
 BOUNDED: dict[tuple[str, str, str], float] = {
     (design, conn, mode): _WELD_IC
     for design, conn in (("weld_bracket.", "wb1"), ("weld_bracket_shaped", "wb2"), ("weld_bracket_rectangular", "wb5"),
-                         ("weld_bracket_cyclic", "wb7"))
+                         ("weld_bracket_cyclic", "wb7"), ("weld_bracket_lapped", "wb3"),
+                         ("weld_bracket_rectangular_lapped", "wb6"), ("weld_bracket_cyclic_lapped", "wb8"))
     for mode in ("weld", "weld_base_metal")}
 """(design, connection, mode) -> how far the deck's utilisation may lie above the twin's,
 relative to it, where the deck certifies a bound on a method the twin computes in floats.

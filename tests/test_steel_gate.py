@@ -124,8 +124,8 @@ class Comparison(unittest.TestCase):
         self.assertEqual(G.compare({}, {"slip": 0.2}), [("slip", "absent", 0.2)])
 
     def test_a_certified_weld_fail_may_lie_within_the_certificates_loss(self):
-        self.assertEqual(G.compare({"weld": "fail"}, {"weld": 0.995}), [])
-        self.assertEqual(G.compare({"weld_base_metal": "fail"}, {"weld_base_metal": 0.993}), [])
+        self.assertEqual(G.compare({"weld": "fail"}, {"weld": 0.997}), [])
+        self.assertEqual(G.compare({"weld_base_metal": "fail"}, {"weld_base_metal": 0.996}), [])
         self.assertEqual(G.compare({"weld": "fail"}, {"weld": 0.98}), [("weld", "fail", 0.98)])
         self.assertEqual(G.compare({"weld": "pass"}, {"weld": 1.005}), [("weld", "pass", 1.005)])
         self.assertEqual(G.compare({"block_shear": "fail"}, {"block_shear": 0.995}), [("block_shear", "fail", 0.995)])

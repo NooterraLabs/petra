@@ -112,7 +112,7 @@ Each item is a check you can run.
 
 - The machine runs Windows 10 and Python 3.11.9, with numpy 2.4, scipy 1.17, sympy 1.14 and mpmath 1.3 installed. It has no pytest, so tests use `unittest`. It has no Lean toolchain, and nothing may be installed from the network.
 - `petra/kernel` uses only the standard library (`fractions`, `math`, `dataclasses`, `hashlib`, `json`).
-- The trusted kernel stays small, under about 1,500 lines. Everything outside the kernel is untrusted and may use numpy and scipy.
+- The trusted kernel stays small. Its shared core has a fixed cap, each certificate rule earns its lines, and all trusted code counts against one ceiling ([principles.md](principles.md) T2). Untrusted code outside the kernel may use numpy and scipy.
 - Certificates serialise to JSON in a language-neutral format, so a Lean kernel can check the same files later.
 
 ## Out of scope for v0

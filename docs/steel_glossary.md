@@ -33,6 +33,7 @@ and plate buckling. Their names are in [mechanics.md](mechanics.md).
 | `coefficient` | | the J3.11a bearing or tearout coefficient, a registry row |
 | `cope_length` | c | length of a cope |
 | `cr` | Cr | J10.4's constant, 960,000 or 480,000 ksi |
+| `critical` | | rationals bounding the least Delta_u / rho over a weld group's elements, the ratio at which every element deforms (Manual Part 8) |
 | `d` | d | bolt diameter (J3, prying) or member depth (J10, Manual Part 9), by function |
 | `dc` | dc | column depth (J10.6) |
 | `dct` | dct | depth of the top cope (Manual Eq. 9-21) |
@@ -66,7 +67,7 @@ and plate buckling. Their names are in [mechanics.md](mechanics.md).
 | `phi` | φ | resistance factor, or 1/Ω in ASD (prying) |
 | `planes` | ns | number of shear or slip planes |
 | `pr`, `py` | Pr, Py | required axial strength and axial yield strength (J10.6) |
-| `r` | | the distance of a weld line's instantaneous center from its midpoint, over the line's length (Manual Part 8) |
+| `run`, `runs` | | a weld group's straight welds turning about an instantaneous center, each cut into segments at its distance from the centre (mechanics.Run, Manual Part 8) |
 | `restrained` | | true when the loaded flange is restrained against rotation (J10.4) |
 | `sc` | Sc | elastic section modulus of a coped section |
 | `t` | t | thickness |
@@ -74,13 +75,13 @@ and plate buckling. Their names are in [mechanics.md](mechanics.md).
 | `tb` | Tb | minimum bolt pretension |
 | `tension_per_bolt` | Tu/nb, Ta/nb | required tension on one bolt |
 | `tf`, `tw` | tf, tw | flange and web thickness |
+| `theta` | θ | a weld element's angle, in degrees, between its force and its weld's axis (Eq. J2-5) |
 | `ts` | ts | a tee's stem thickness |
 | `ubs` | Ubs | block shear tension-stress factor |
 | `v` | R, V | the force a group carries |
 | `w` | w | fillet weld leg size |
 | `x` | | F11's Lb d / t², or lb / d in J10.3 |
 | `z`, `znet` | Z, Znet | plastic section modulus, gross and net |
-| `zs` | | the ends of the segments a weld line's half is cut into, over its length, from its midpoint (0) to its end (1/2) |
 
 ## The grammar's length fields
 

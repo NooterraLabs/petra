@@ -30,7 +30,7 @@ from fractions import Fraction
 from typing import Callable, Sequence
 
 from ...kernel import Abs, Div, Exp, Expr, Ln, Max, Min, Neg, PowInt, Sqrt
-from ...mechanics import (add, c, circle_area, div, element_angles, fillet_throat, mul, plate_buckling_stress, power,
+from ...mechanics import (Run, add, c, circle_area, div, element_angles, fillet_throat, mul, plate_buckling_stress, power,
                           rectangle_elastic_modulus, rectangle_plastic_modulus, right_triangle, sq, sub)
 from ...units import CUSTOMARY
 
@@ -119,57 +119,85 @@ def ic_bolt_curve(k: K) -> Callable[[Expr], Expr]:
     return lambda q: power(sub(c(1), Exp(Neg(mul(exponent, q)))), lam)
 
 
-def ic_weld_bounds(k: K, r: Fraction, zs: Sequence[Fraction]) -> list[tuple[Expr, Expr]]:
-    """Bounds (lo, hi) on a weld element's force, in units of Fnw Aw per unit length, over
-    each segment [zs[i], zs[i + 1]] of a line of unit length turning about a centre r from
-    its midpoint (mechanics.line_ic). Manual Part 8's instantaneous center method (AISC
-    360-16 Eqs. J2-6 to J2-9; 360-22 Eq. J2-5 for kds): an element at theta degrees to its
-    force holds kds f(p), kds = 1.0 + 0.50 sin^1.5 theta, f(p) = [p (1.9 - 0.9 p)]^0.3,
-    p = Delta / Delta_m with Delta_m = 0.209 (theta + 2)^-0.32 w. The element at the line's
-    end is farthest from the centre at the largest theta, so it reaches its Delta_u =
-    1.087 (theta + 6)^-0.65 w (at most 0.17 w) first, and the element at z deforms
-    rho / rho_max of it: p = (rho / rho_max) Delta_u(theta_max) / Delta_m(theta).
+def ic_weld_critical(k: K, runs: Sequence[Run]) -> tuple[Expr, Expr]:
+    """(lo, hi) bounds on the least Delta_u / rho over a group's elements turning about a
+    centre (ic_weld_bounds): Delta_u at the largest and at the least angle each run's far
+    end can take, over its distance from the centre, the least over the runs."""
+    lo, hi = [], []
+    for run in runs:
+        theta_lo, theta_hi = element_angles(run.d, (Fraction(0), run.us[-1]))[-1]
+        rho = Sqrt(c(run.us[-1] ** 2 + run.d ** 2))
+        lo.append(div(_throat(run, _delta_u(k, theta_hi)), rho))
+        hi.append(div(_throat(run, _delta_u(k, theta_lo)), rho))
+    return (lo[0], hi[0]) if len(runs) == 1 else (Min(tuple(lo)), Min(tuple(hi)))
 
-    Along the segment, sin theta = z / rho and p rise with z (rho and theta rise, Delta_m
+
+def ic_weld_bounds(k: K, runs: Sequence[Run], critical: tuple[Fraction, Fraction]) -> list[list[tuple[Expr, Expr]]]:
+    """Bounds (lo, hi) on a weld element's force, in units of Fnw Aw per unit length, over
+    each segment of each run of a group turning about a centre (mechanics.group_ic). Manual
+    Part 8's instantaneous center method (AISC 360-16 Eqs. J2-6 to J2-9; 360-22 Eq. J2-5 for
+    kds): an element at theta degrees to its force holds kds f(p), kds = 1.0 + 0.50
+    sin^1.5 theta, f(p) = [p (1.9 - 0.9 p)]^0.3, p = Delta / Delta_m with Delta_m = 0.209
+    (theta + 2)^-0.32 w. Every element deforms in proportion to its distance from the
+    centre, and the critical one, with the least Delta_u / rho, reaches its Delta_u =
+    1.087 (theta + 6)^-0.65 w (at most 0.17 w). Along a run rho and theta rise from the
+    foot of its normal (tan theta = u / d), so Delta_u falls and Delta_u / rho with it: the
+    critical element is one of the runs' far ends, and the element at rho deforms
+    Delta = rho min over the ends c of Delta_u(theta_c) / rho_c. `critical` = (lo, hi)
+    are rationals that bound that least ratio, which the caller proves against
+    ic_weld_critical. A run's throat t, over the group's unit throat, scales its w: its
+    elements hold t kds f(p) with p = Delta / (t Delta_m(theta)), and its end's Delta_u is
+    t Delta_u(theta_c).
+
+    Along a run, sin theta = u / rho and p rise with u (rho and theta rise, Delta_m
     falls). f depends on p only through its distance from the peak p* = 1.9 / 1.8:
     p (1.9 - 0.9 p) = 0.9 (p*^2 - (p - p*)^2). So over a segment f is least at the end
     farthest from p* and largest at the point nearest it. With theta bounded by
     mechanics.element_angles, and p_lo at a segment's start and p_hi at its end,
-      lo = kds(z_i) f at max(|p_lo - p*|, |p_hi - p*|),
-      hi = kds(z_i+1) f at max(p_lo - p*, p* - p_hi, 0),
-    p_lo taking Delta_u at the largest theta_max and Delta_m at the least theta, p_hi the
+      lo = kds(u_i) f at max(|p_lo - p*|, |p_hi - p*|),
+      hi = kds(u_i+1) f at max(p_lo - p*, p* - p_hi, 0),
+    p_lo taking the critical ratio's lo and Delta_m at the least theta, p_hi the
     reverse."""
     kds, kds_power = k("aisc360.j2_4.kds"), k("aisc360.j2_4.kds_power")
-
-
-    def delta_m(theta: Expr) -> Expr:
-        return mul(k("aisc_manual.p8.ic_delta_m"), power(add(theta, k("aisc_manual.p8.ic_delta_m_offset")), Neg(k("aisc_manual.p8.ic_delta_m_power"))))
-
-    def delta_u(theta: Expr) -> Expr:
-        return Min((mul(k("aisc_manual.p8.ic_delta_u"), power(add(theta, k("aisc_manual.p8.ic_delta_u_offset")), Neg(k("aisc_manual.p8.ic_delta_u_power")))),
-                    k("aisc_manual.p8.ic_delta_u_cap")))
-
     peak = div(k("aisc_manual.p8.ic_curve_a"), mul(c(2), k("aisc_manual.p8.ic_curve_b")))
 
     def f(distance: Expr) -> Expr:
         # f at a distance from the peak, 0.9 (p*^2 - distance^2) to the power 0.3
         return power(mul(k("aisc_manual.p8.ic_curve_b"), sub(sq(peak), sq(distance))), k("aisc_manual.p8.ic_curve_power"))
 
-    angles = element_angles(r, zs)
-    end = zs[-1]
-    far = Sqrt(c(end * end + r * r))
-    u_lo, u_hi = delta_u(angles[-1][1]), delta_u(angles[-1][0])
-    points = []
-    for z, (theta_lo, theta_hi) in zip(zs, angles):
-        rho = Sqrt(c(z * z + r * r))
-        share = div(rho, far)
-        increase = c(1) if z == 0 else add(c(1), mul(kds, power(div(c(z), rho), kds_power)))
-        points.append((increase, *(_rounded(div(mul(share, u), delta_m(theta))) for u, theta in ((u_lo, theta_lo), (u_hi, theta_hi)))))
     out = []
-    for (k_a, p_a, _), (k_b, _, p_b) in zip(points, points[1:]):
-        out.append((mul(k_a, f(Max((Abs(sub(p_a, peak)), Abs(sub(p_b, peak)))))),
-                    mul(k_b, f(Max((sub(p_a, peak), sub(peak, p_b), c(0)))))))
+    for run in runs:
+        angles = element_angles(run.d, run.us) if run.us[0] == 0 else element_angles(run.d, (Fraction(0), *run.us))[1:]
+        points = []
+        for u, (theta_lo, theta_hi) in zip(run.us, angles):
+            rho = Sqrt(c(u * u + run.d * run.d))
+            increase = c(1) if u == 0 else add(c(1), mul(kds, power(div(c(u), rho), kds_power)))
+            lo_p, hi_p = (_rounded(div(mul(rho, c(ratio)), _throat(run, _delta_m(k, t))))
+                          for ratio, t in ((critical[0], theta_lo), (critical[1], theta_hi)))
+            points.append((increase, lo_p, hi_p))
+        out.append([(_throat(run, mul(k_a, f(Max((Abs(sub(p_a, peak)), Abs(sub(p_b, peak))))))),
+                     _throat(run, mul(k_b, f(Max((sub(p_a, peak), sub(peak, p_b), c(0)))))))
+                    for (k_a, p_a, _), (k_b, _, p_b) in zip(points, points[1:])])
     return out
+
+
+def _delta_m(k: K, theta: Expr) -> Expr:
+    """Delta_m = 0.209 (theta + 2)^-0.32, in units of w."""
+    return mul(k("aisc_manual.p8.ic_delta_m"),
+               power(add(theta, k("aisc_manual.p8.ic_delta_m_offset")), Neg(k("aisc_manual.p8.ic_delta_m_power"))))
+
+
+def _delta_u(k: K, theta: Expr) -> Expr:
+    """Delta_u = 1.087 (theta + 6)^-0.65, at most 0.17, in units of w."""
+    return Min((mul(k("aisc_manual.p8.ic_delta_u"),
+                    power(add(theta, k("aisc_manual.p8.ic_delta_u_offset")), Neg(k("aisc_manual.p8.ic_delta_u_power")))),
+                k("aisc_manual.p8.ic_delta_u_cap")))
+
+
+def _throat(run: Run, x: Expr) -> Expr:
+    """x times the run's throat over the group's unit throat."""
+    return x if run.throat == 1 else mul(c(run.throat), x)
+
 
 def _rounded(x: Expr) -> Expr:
     """x >= 0 as sqrt(x^2), which the kernel rounds outward to its grid: the same number, held

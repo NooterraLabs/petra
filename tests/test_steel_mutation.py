@@ -57,6 +57,9 @@ SURVIVORS: dict[str, str] = {
                               "take e = a/2",
     "petra.weld_ic.a_min": "no weld bracket here has e / L between 1/16 and 1/4, where the doubled or halved switch "
                            "would change the method; tests/test_steel_groups.py reads it at e / L = 0.115",
+    "petra.weld_ic.k_max": "no lapped weld bracket here has kl / L between 1 and 4, where the halved or doubled switch "
+                           "would change the method (theirs are 0.30 and 0.33); tests/test_steel_groups.py reads it at "
+                           "kl / L = 2.25",
     # a change smaller than the band the twin bounds the deck's weld certificate to (1 %)
     "aisc_manual.p8.ic_delta_m_offset": "doubled (4 degrees): it moves a weld line's C by at most 0.33 % for a from "
                                         "1/8 to 3 (measured)",
