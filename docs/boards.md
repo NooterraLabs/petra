@@ -118,7 +118,7 @@ Each refusal is a `BoardError` naming the file and, where it can, the line.
 - Edge.Cuts items in a footprint turned by an angle that is not a multiple of 90 degrees, since their board coordinates are not rational.
 - An arc that comes within 0.0001 mm of another edge, or two edges that meet at a zero angle, since no polygon can bound them. How often real outlines do this is not measured.
 - A footprint off F.Cu and B.Cu, a reference or value not written the way its version writes it or written with no text, a pad type outside smd, connect, thru_hole and np_thru_hole, a drilled pad with no drill, a pad with no size, and a via with no drill.
-- A stackup whose layers sum to a thickness other than the one in `(general ...)`. KiCad keeps the two equal (recalled), so a file where they differ is ambiguous.
+- A stackup whose layers sum to a thickness other than the one in `(general ...)`. KiCad does not keep the two equal. Four of its own demo boards state 1.6002 mm in `(general ...)` and stackups that sum to 1.6 mm or 1.600198 mm, and KiCad 10 reports 1.6002 mm for all four (measured, docs/kicad_oracle.md). Neither number says which thickness the board is made to, so the reader refuses the file and names both.
 
 A courtyard Petra cannot read is not refused. It becomes `NoCourtyard` with the reason, and a keep-out on that face raises `BoardError`. A solid whose hole bounds meet each other or the edge's bounds is refused, as a hole cut by the board's edge is.
 
@@ -148,7 +148,7 @@ The developer docs (dev-docs.kicad.org, "S-Expression Format" and "Board File Fo
 - **Pad angles.** The docs say a pad's `at` holds its "orientation angle" and not whether the footprint's angle is in it. The reader takes it as the pad's orientation on the board, with the footprint's angle in it.
 - **Bottom footprints.** The docs do not say whether a bottom footprint's children are stored mirrored. The reader takes them as stored mirrored.
 - **Drill offset.** The docs call `(offset x y)` in a drill the "drill offset from the pad center". The reader follows KiCad's pad model, in which the hole sits at the pad's place and the offset moves the copper (recalled). If the docs' words are literal, a pad with an offset has its hole in the wrong place. No test board here can decide it.
-- **Thickness.** The docs do not relate `(general (thickness ...))` to the stackup. The reader refuses a file where they differ.
+- **Thickness.** The docs do not relate `(general (thickness ...))` to the stackup. KiCad's own demo boards differ in the two by up to 0.2 um (measured, docs/kicad_oracle.md). The reader refuses a file where they differ.
 - **Arcs in polygons.** The docs describe `pts` as `xy` points only. The reader also reads `(arc (start ...) (mid ...) (end ...))` entries, as KiCad 7 and later write in polygons (recalled).
 
 ## Testing

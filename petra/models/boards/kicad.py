@@ -242,8 +242,8 @@ def _thickness(root: Expr, path: str) -> Thickness | None:
     if layers:
         total = sum(layers, Fraction(0))
         if value is not None and value != total:
-            raise BoardError(path, f"states a thickness of {value} mm in (general ...) and stackup layers that sum "
-                                   f"to {total} mm; KiCad keeps the two equal")
+            raise BoardError(path, f"states a thickness of {float(value)} mm in (general ...) and stackup layers that "
+                                   f"sum to {float(total)} mm, and Petra cannot tell which one the board is made to")
         return Thickness(total, "setup.stackup")
     return Thickness(value, "general.thickness") if value is not None else None
 
@@ -352,8 +352,8 @@ def _outline(root: Expr, path: str) -> Outline:
 
 def _field(e: Expr, kicad: int, name: str, path: str) -> str:
     """A footprint's reference or value: an (fp_text reference [locked] "J1" ...) in KiCad 6 and
-    7, whose parser takes a bare `locked` before the text (measured on two real boards,
-    docs/kicad_oracle.md), and a (property "Reference" "J1" ...) from KiCad 8 on (version
+    7, whose parser takes a bare `locked` before the text (measured on Sofle v2 and on a board
+    KiCad 7 wrote, docs/kicad_oracle.md), and a (property "Reference" "J1" ...) from KiCad 8 on (version
     20230620, "PCB Fields", reported)."""
     if kicad >= 8:
         texts = [p.args[1:] for p in e.lists("property") if p.args and p.args[0] == name]
