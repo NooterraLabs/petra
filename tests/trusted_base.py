@@ -68,7 +68,7 @@ CORE_CAP = Limit(1000, "Set on 2026-11-08 at 140f742, where the core measured 95
                        "A new rule adds 3 to 5 lines to rules/__init__.py (inferred from its tables), so "
                        "the headroom covers the registry entries of several rules.")
 
-TRUSTED_CEILING = Limit(16465, "Set on 2026-11-08 at 140f742, where the trusted base measured 13,530 "
+TRUSTED_CEILING = Limit(17727, "Set on 2026-11-08 at 140f742, where the trusted base measured 13,530 "
                                "code lines: core 957, rules 457, outside the kernel 12,116. Raised on "
                                "2026-11-08 on branch parts-core as the parts layer replaces its scaffold: "
                                "classifying the scaffold measured 14,269, and the mesh reader with its "
@@ -84,9 +84,16 @@ TRUSTED_CEILING = Limit(16465, "Set on 2026-11-08 at 140f742, where the trusted 
                                "measured 16,366. Stops read by flat face rather than by triangle, so "
                                "splitting a face changes no verdict, and a press read with its pairs "
                                "pruned by box, both found by scripts/parts_gate.py, measured 16,404. "
-                               "Merged on branch integration-merge with release 0.1.1's anodic indices "
-                               "and tightening note, hanger-slot's worse-way reads and an anodic index "
-                               "for the inserts' brass, measured 16,465. "
+                               "On branch kicad-reader, from parts-core's 15,796, the KiCad board reader "
+                               "(its s-expression parser, exact plane geometry with bounding polygons for "
+                               "arcs, feature table and reader) measured 16,795, and its exact solids of the "
+                               "board and of each part's keep-out, with the checked triangulation, 17,013. "
+                               "The fixes after its review on branch kicad-fix, marks from the words of a "
+                               "library id and a keep-out room over the courtyard and the Fab layer's "
+                               "shapes, measured 17,051, and a name for each solid's mesh that holds what "
+                               "defines it 17,058. Both branches merged on branch integration-merge, with "
+                               "release 0.1.1's anodic indices and tightening note, hanger-slot's worse-way "
+                               "reads and an anodic index for the inserts' brass, measured 17,727. "
                                "Raise it in the commit that needs more and say why here.")
 
 T2_ADOPTED = date(2026, 11, 8)
@@ -225,6 +232,14 @@ TRUSTED: tuple[Group, ...] = (
                            "designs to ten metamorphic relations and checks that planted faults never "
                            "pass, which tests the layer against itself. docs/parts.md 'Testing' plans a "
                            "clean-room twin of analytic assemblies, and it is not written yet.")),
+    Group("boards",
+          ("petra/models/boards/__init__.py", "petra/models/boards/sexpr.py", "petra/models/boards/plane.py",
+           "petra/models/boards/features.py", "petra/models/boards/kicad.py", "petra/models/boards/solid.py"),
+          Debt(T2_ADOPTED, "No judge or twin. tests/board_second_reading.py, written by an agent that never saw "
+                           "the reader, places every pad of every test board from first principles, and "
+                           "SecondReading in tests/test_boards_kicad.py compares the two. It judges pad places "
+                           "only, so it is named here and not as the group's judge. The outline, its bounds, "
+                           "courtyards, rooms, holes and solids have no second reading.")),
     Group("premises, coverage, verdict and pipeline",
           ("petra/premises.py", "petra/coverage.py", "petra/verdict.py", "petra/pipeline.py"),
           Debt(T2_ADOPTED, "No judge or twin. The absurd-design gap and canary recall score whole verdicts "
