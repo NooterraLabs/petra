@@ -19,6 +19,7 @@ Issues = "https://github.com/NooterraLabs/petra/issues"
 
 [project.scripts]
 petra = "petra.cli:main"
+petra-lang = "petra.cli:main"
 
 [tool.petra-build]
 include = ["petra/**/*.py", "petra/registry/aisc_shapes.json", "petra/docs/*.md"]
