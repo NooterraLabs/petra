@@ -178,6 +178,45 @@ def plate(lo, hi, centre, r, n=32, sink=None) -> list[Tri]:
     return out
 
 
+def tube(centre, r_in, r_out, z0, z1, n=32) -> list[Tri]:
+    """A closed annular prism along z: an outer n-gon of corner radius r_out about a hole of
+    corner radius r_in."""
+    z0, z1 = Fraction(str(z0)), Fraction(str(z1))
+    o, i = _ngon(centre, r_out, n), _ngon(centre, r_in, n)
+    out = []
+    for k in range(n):
+        a, b = o[k], o[(k + 1) % n]
+        p, q = i[k], i[(k + 1) % n]
+        out += [((*a, z0), (*b, z0), (*b, z1)), ((*a, z0), (*b, z1), (*a, z1))]
+        out += [((*p, z0), (*q, z1), (*q, z0)), ((*p, z0), (*p, z1), (*q, z1))]
+        out += [((*a, z1), (*b, z1), (*q, z1)), ((*a, z1), (*q, z1), (*p, z1))]
+        out += [((*a, z0), (*q, z0), (*b, z0)), ((*a, z0), (*p, z0), (*q, z0))]
+    return out
+
+
+def blind_block(lo, hi, centre, r, depth, n=32) -> list[Tri]:
+    """The block [lo, hi] with a blind n-gon hole of corner radius r, `depth` deep from the
+    top face: plate()'s top face and hole wall over that depth, a floor, and the block's
+    outer walls and bottom."""
+    (x0, y0, z0), (x1, y1, z1) = [tuple(Fraction(str(c)) for c in p) for p in (lo, hi)]
+    zb = z1 - Fraction(str(depth))
+    ring = _ngon(centre, r, n)
+    slab = plate((x0, y0, zb), (x1, y1, z1), centre, r, n)
+
+    def outer(t):
+        return any(all(v[k] == c for v in t) for k, c in ((0, x0), (0, x1), (1, y0), (1, y1)))
+
+    keep = [t for t in slab if not all(v[2] == zb for v in t) and not outer(t)]
+    floor = [((*ring[0], zb), (*ring[k], zb), (*ring[k + 1], zb)) for k in range(1, n - 1)]
+    corners = [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
+    walls = []
+    for k in range(4):
+        a, b = corners[k], corners[(k + 1) % 4]
+        walls += [((*a, z0), (*b, z0), (*b, z1)), ((*a, z0), (*b, z1), (*a, z1))]
+    bottom = [((x0, y0, z0), (x1, y1, z0), (x1, y0, z0)), ((x0, y0, z0), (x0, y1, z0), (x1, y1, z0))]
+    return keep + floor + walls + bottom
+
+
 def write(tmp, name, tris) -> tuple[str, str]:
     """An ASCII STL of exact decimals in `tmp`; returns its absolute path and sha256."""
     path, sha = ascii_stl(Path(tmp) / f"{name}.stl", [tuple(tuple(_decimal(c) for c in v) for v in t) for t in tris])
