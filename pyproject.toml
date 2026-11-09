@@ -5,7 +5,7 @@ backend-path = ["_build"]
 
 [project]
 name = "petra-lang"
-version = "0.1.1"
+version = "0.1.2"
 description = "Checks physical designs against their stated claims, with an exact-arithmetic certificate for every PASS and FAIL"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -19,6 +19,7 @@ Issues = "https://github.com/NooterraLabs/petra/issues"
 
 [project.scripts]
 petra = "petra.cli:main"
+petra-lang = "petra.cli:main"
 
 [tool.petra-build]
 include = ["petra/**/*.py", "petra/registry/aisc_shapes.json", "petra/docs/*.md"]

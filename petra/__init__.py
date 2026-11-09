@@ -33,7 +33,7 @@ from .registry import build_registry
 from .solvers import SolverSource
 from .verdict import Fail, Marginal, Pass, Unknown, Verdict
 
-__version__ = "0.1.1"
+__version__ = "0.1.2"
 
 
 def check(text: str, *, path: str = "<text>", repair: bool = True) -> dict:

@@ -7,7 +7,7 @@ description: Design, check and repair steel connections to AISC 360-22 (shear ta
 
 Petra checks a design written in a `.petra` file against the loads and claims written in it. It answers PASS, FAIL, UNKNOWN or MARGINAL. A small kernel re-checks every PASS and FAIL in exact arithmetic. The steel deck follows AISC 360-22 and works in kips, inches and ksi.
 
-Install it with `pip install petra-lang`. The command is `petra` and the Python import is `petra`.
+Install it with `pip install petra-lang`. The command is `petra` and the Python import is `petra`. If the `petra` MCP server is connected, call its tools `kinds`, `new` and `check` in place of the commands below. They take the same arguments and return the same text.
 
 ## Design a connection
 
@@ -46,13 +46,15 @@ The first line names the governing failed check and its utilisation. Each move c
 
 ## Use Petra from an MCP client
 
-`petra mcp` serves the tools `check`, `kinds`, `new`, `registry_list` and `docs` over stdio. The `check` tool takes the design as `text` or as a file `path`. It returns the text that `petra check` prints, and the JSON as structured content.
+`petra mcp` serves the tools `check`, `kinds`, `new`, `registry_list` and `docs` over stdio. The `check` tool takes the design as `text` or as the absolute `path` of a file. It returns the text that `petra check` prints, and the JSON as structured content.
 
-To add it to Claude Code, run `claude mcp add petra -- petra mcp`. Clients that read a JSON file take this entry:
+In Claude Code, `/plugin marketplace add NooterraLabs/petra` and then `/plugin install petra@petra` add the server and this skill. The server runs as `uvx --from petra-lang==0.1.2 petra mcp`, so it needs [uv](https://docs.astral.sh/uv/) and no other install. Clients that read a JSON file take this entry:
 
 ```json
-{"mcpServers": {"petra": {"command": "petra", "args": ["mcp"]}}}
+{"mcpServers": {"petra": {"command": "uvx", "args": ["--from", "petra-lang==0.1.2", "petra", "mcp"]}}}
 ```
+
+After `pip install petra-lang`, the command `petra mcp` serves the same tools without uv.
 
 ## Use Petra from Python
 
