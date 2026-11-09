@@ -16,8 +16,7 @@ live or listed in UNUSED with what reads it and why no check does, and fails whe
 key is live. A key is live when the footprint names it, or when it is a row of a CATALOGUES
 table or an environment, and the footprint names the same property of another row: a
 design that names the row reads it the same way. --check exits 1 when the committed file
-differs from what the corpus gives; it takes about 45 minutes on four busy cores (inferred
-from timing its parts).
+differs from what the corpus gives; it took 17 minutes on four busy cores (measured).
 """
 from __future__ import annotations
 
