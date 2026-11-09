@@ -510,10 +510,12 @@ def separable(t: T, u: T, k: int, s: int) -> bool:
 
 def surface_problem(mesh: Mesh) -> str | None:
     """The first defect of a mesh's surface its edge rules cannot see, or None: two
-    triangles that share no vertex and meet (the surface crosses or touches itself), two
-    that lie on each other facing opposite ways (a zero-thickness wall or an internal face
-    between two bodies that touch), two neighbours folded onto each other, or a piece whose
-    orientation disagrees with its nesting (a void facing outward, a body facing in)."""
+    triangles that share no vertex and meet, or share one vertex and meet anywhere else
+    (the surface crosses or touches itself), two that lie on each other facing opposite
+    ways (a zero-thickness wall or an internal face between two bodies that touch), two
+    neighbours folded onto each other, or a piece whose orientation disagrees with its
+    nesting (a void facing outward, a body facing in, a shell inside a shell that faces
+    the same way)."""
     body = body_of_mesh(mesh.path, mesh)
     tris = mesh.triangles.tolist()
     found = []
@@ -531,6 +533,8 @@ def surface_problem(mesh: Mesh) -> str | None:
                             "or an internal face where two bodies touch")
                 return f"triangles {i} and {j} lie on each other facing the same way: the surface overlaps itself"
             found.append(f"triangles {i} and {j} meet though they share no vertex: the surface crosses or touches itself")
+        if shared == 1 and _meet_beyond(t, u):
+            found.append(f"triangles {i} and {j} share one vertex and meet away from it: the surface crosses or touches itself")
         if shared == 2 and coplanar(t, u):
             a, b = (v for v in tris[i] if v in tris[j])
             ci = next(v for v in tris[i] if v not in (a, b))
@@ -545,25 +549,52 @@ def surface_problem(mesh: Mesh) -> str | None:
     return found[0] if found else _nesting_problem(mesh, body)
 
 
+def _meet_beyond(t: T, u: T) -> bool:
+    """Whether triangles t and u, which share exactly one vertex v, meet anywhere but v.
+    Near v each triangle is its corner, so they meet beyond v exactly when an edge of one
+    leaves v into the other's corner, or the edge of one opposite v meets the other."""
+    v = next(p for p in t if p in u)
+    p, q = (x for x in t if x != v)
+    r, s = (x for x in u if x != v)
+    return (_in_corner(p, v, r, s) or _in_corner(q, v, r, s) or _in_corner(r, v, p, q)
+            or _in_corner(s, v, p, q) or seg_meets_tri(p, q, u) or seg_meets_tri(r, s, t))
+
+
+def _in_corner(x: V, v: V, r: V, s: V) -> bool:
+    """Whether x - v points into the corner at v of the triangle (v, r, s), its closed
+    boundary included: x lies in that triangle's plane, on r's side of the line v s and on
+    s's side of the line v r."""
+    if orient(v, r, s, x) != 0:
+        return False
+    a, b, d = _sub(r, v), _sub(s, v), _sub(x, v)
+    n = _cross(a, b)
+    return _dot(_cross(a, d), n) >= 0 and _dot(_cross(d, b), n) >= 0
+
+
 def _nesting_problem(mesh: Mesh, body: Body) -> str | None:
+    """Each piece is probed at the centroid of its first triangle, which surface_problem
+    has shown lies on no other piece, so the piece is wholly inside or wholly outside each
+    other piece and its depth is the count of pieces holding the probe."""
     owner = pieces(mesh)
     groups: dict[int, list[int]] = {}
     for k, piece in enumerate(owner):
         groups.setdefault(piece, []).append(k)
     if len(groups) == 1:
         return None
+    thrice = scaled(body, 3)
     signed = {}
     for piece, idx in groups.items():
         signed[piece] = sum(orient((0, 0, 0), *body.pts[k]) for k in idx)
     for piece, idx in groups.items():
-        probe = body.pts[idx[0]][0]
+        probe = tuple(sum(p[m] for p in body.pts[idx[0]]) for m in range(3))
         depth = 0
         for other, oidx in groups.items():
             if other == piece:
                 continue
-            sub = make_body("piece", body.den, body.tris[oidx])
-            if inside(probe, sub):
-                depth += 1
+            found = inside(probe, make_body("piece", thrice.den, [thrice.pts[k] for k in oidx]))
+            if found is None:
+                return f"the piece holding triangle {idx[0]} touches the piece holding triangle {oidx[0]}"
+            depth += found
         if (depth % 2 == 0) != (signed[piece] > 0):
             return (f"the piece holding triangle {idx[0]} is nested {depth} deep and faces "
                     f"{'outward' if signed[piece] > 0 else 'inward'}: a void must face inward and a body outward")

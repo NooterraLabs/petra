@@ -208,7 +208,6 @@ class F7F8Arrival(Case):
 
 
 class F9Shells(Case):
-    @unittest.expectedFailure
     def test_f9_shells_joined_at_one_vertex_are_refused(self):
         v, x, y, z = (0, 0, 0), (10, 0, 0), (0, 10, 0), (0, 0, 10)
         a, b, c = (6, 2, 1), (2, 6, 1), (1, 1, 6)
@@ -217,7 +216,6 @@ class F9Shells(Case):
         self.assertIn("error", got)
         self.assertRegex(got["error"], "nested")
 
-    @unittest.expectedFailure
     def test_f9_an_inward_piece_hung_on_one_vertex_is_refused(self):
         corner = (10, 10, 10)
         tet = [(corner, (12, 11, 11), (11, 12, 11)), (corner, (11, 12, 11), (11, 11, 12)),
@@ -225,6 +223,15 @@ class F9Shells(Case):
         hung = self.mesh("hung", box((0, 0, 0), (10, 10, 10)) + tet)
         got = self.check(part("p", hung, AL, MILL) + "claim light: p.mass <= 10 g\n")
         self.assertIn("error", got)
+
+    def test_f9_triangles_that_share_one_vertex_meet_only_there(self):
+        t = ((0, 0, 0), (10, 0, 0), (0, 10, 0))
+        for u, meets in ((((0, 0, 0), (5, 5, -5), (5, 5, 5)), True), (((0, 0, 0), (-5, -5, -5), (-5, -5, 5)), False),
+                         (((0, 0, 0), (-10, 0, 0), (0, -10, 0)), False), (((0, 0, 0), (5, 1, 0), (1, 5, 0)), True),
+                         (((0, 0, 0), (5, 0, 0), (5, 0, 5)), True), (((0, 0, 0), (0, -5, 0), (5, -5, 0)), False),
+                         (((0, 0, 0), (20, -5, 5), (-5, 20, 5)), False), (((0, 0, 0), (20, -5, -5), (-5, 20, 5)), True)):
+            self.assertEqual(exact._meet_beyond(t, u), meets, u)
+            self.assertEqual(exact._meet_beyond(u, t), meets, u)
 
 
 class F10Mass(Case):

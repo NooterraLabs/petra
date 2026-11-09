@@ -6,11 +6,13 @@ direction, so the surface is closed, two-manifold and consistently oriented. Tha
 rule refuses an edge shared by four faces (two bodies meeting along an edge), a
 duplicated face, and an open boundary. Two triangles on the same three vertices are
 refused too, because a doubled wall drawn as a pair of opposite triangles passes the edge
-rule and bounds nothing. Every connected piece must enclose volume, and the whole mesh
-must enclose positive volume, so an inside-out file and a closed zero-thickness sheet are
-refused. Lowering (lower.py) adds the checks that need geometry: no triangles cross, no
-two triangles of the mesh lie on each other facing opposite ways (a zero-thickness wall
-or an internal face), and each piece's orientation agrees with its nesting.
+rule and bounds nothing. A piece is a set of triangles joined edge to edge, so shells
+that meet at one vertex are separate pieces. Every piece must enclose volume, and the
+whole mesh must enclose positive volume, so an inside-out file and a closed
+zero-thickness sheet are refused. Lowering (lower.py) adds the checks that need
+geometry: no triangles cross or touch away from the vertices they share, no two
+triangles of the mesh lie on each other facing opposite ways (a zero-thickness wall or
+an internal face), and each piece's orientation agrees with its nesting.
 
 Coordinates are exact. A float32 in a binary STL is read as the shortest decimal that
 round-trips to it (numpy's `format_float_positional` with `unique=True`), so a CAD export
@@ -286,8 +288,12 @@ def _check_volumes(path: str, mesh: Mesh) -> None:
 
 
 def _pieces(n: int, triangles: np.ndarray) -> list[int]:
-    """The connected piece of each triangle, as the root vertex of its union-find class."""
-    parent = list(range(n))
+    """The piece of each triangle, as the least triangle index in it. Two triangles are in
+    one piece when a chain of triangles joins them, each sharing an edge with the next.
+    Triangles that share only a vertex are not joined, so two shells that touch at a point
+    are two pieces, and each piece is closed because every edge has both its faces."""
+    m = len(triangles)
+    parent = list(range(m))
 
     def root(i: int) -> int:
         while parent[i] != i:
@@ -295,11 +301,16 @@ def _pieces(n: int, triangles: np.ndarray) -> list[int]:
             i = parent[i]
         return i
 
-    for a, b, c in triangles.tolist():
-        ra, rb, rc = root(a), root(b), root(c)
-        parent[rb] = ra
-        parent[root(rc)] = ra
-    return [root(t[0]) for t in triangles.tolist()]
+    heads = np.concatenate((triangles[:, 0], triangles[:, 1], triangles[:, 2]))
+    tails = np.concatenate((triangles[:, 1], triangles[:, 2], triangles[:, 0]))
+    codes = np.minimum(heads, tails) * n + np.maximum(heads, tails)
+    order = np.argsort(codes, kind="stable")
+    ranked = codes[order]
+    for k in np.flatnonzero(ranked[1:] == ranked[:-1]).tolist():
+        a, b = root(int(order[k]) % m), root(int(order[k + 1]) % m)
+        if a != b:
+            parent[max(a, b)] = min(a, b)
+    return [root(k) for k in range(m)]
 
 
 def _edge(vertices: np.ndarray, a: int, b: int) -> str:
@@ -307,6 +318,6 @@ def _edge(vertices: np.ndarray, a: int, b: int) -> str:
 
 
 def pieces(mesh: Mesh) -> list[int]:
-    """The connected piece of each triangle of `mesh` (lower.py checks each piece's
-    orientation against its nesting)."""
+    """The edge-connected piece of each triangle of `mesh` (exact.surface_problem checks
+    each piece's orientation against its nesting)."""
     return _pieces(len(mesh.vertices), mesh.triangles)
