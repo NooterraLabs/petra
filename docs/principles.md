@@ -15,10 +15,23 @@ One rule ranks above all the others. A rule that matters is enforced by a test, 
 | # | Rule | Why | Enforced by |
 |---|---|---|---|
 | T1 | The kernel knows maths only. It never interprets a label, unit or physical name. It imports only the standard library. | A Lean port and outside auditors must be able to read the whole trusted base (the de Bruijn criterion) | Import test and design.md |
-| T2 | The kernel stays small: at most `KERNEL_LINE_BUDGET` (1,500) lines of code, not counting blank lines, comments and docstrings, with every line justified | Every line is a possible false PASS | `tests/test_kernel_budget.py` |
+| T2 | The trusted base is counted. The kernel's shared core stays under a cap, each certificate rule earns its lines, and all trusted code, in the kernel or outside it, stays under one ceiling (§1.1) | Every trusted line is a possible false PASS. A cap on the kernel alone pushes logic into trusted modules outside it. | `tests/test_kernel_budget.py`, which reads the manifest `tests/trusted_base.py` |
 | T3 | No floats in the trusted path. Exact rationals and outward-rounded intervals only. Floats live in untrusted solvers. | A rounding error is a false PASS that no one can see | Kernel import test and review |
 | T4 | Solvers are never trusted. Every number a solver chooses is evidence the kernel checks. | Translation validation: check each output, don't prove the producer | Data flow (design.md decision 1) and the mutation suite |
 | T5 | Changing a rule needs a second implementation's agreement (later, Lean) and a full mutation-suite run | A kernel bug would break every verdict at once | Process, until the Lean kernel exists |
+
+### 1.1 How T2 counts the trusted base
+
+T2 replaced a fixed kernel total of 1,500 code lines on 2026-11-08. Each certificate rule costs 44 to 150 code lines (measured), and coming domains such as dynamics and stability need more rules. Every confirmed false PASS so far came from models, elaboration or premises, never from kernel arithmetic ([plan](plan.md) §1).
+
+`tests/test_kernel_budget.py` counts code lines, which leave out blank lines, comments and docstrings. It reads the manifest `tests/trusted_base.py`. T2 has four parts, and the test enforces the first three.
+
+1. **The shared core has a cap.** The core is the kernel without its rule modules. It holds terms, evaluation, interval arithmetic, the checker loop, the codec, evidence, linear algebra, the rule base and registry, and the package's re-exports. It measured 957 code lines on 2026-11-08, and `CORE_CAP` is 1,000.
+2. **Each rule earns its lines.** The manifest lists each rule module with its code lines and three items. These are the doc section that states the rule's soundness, the mutation corpus the rule must reject, and its check against an outside checker. An item a rule lacks is a dated `Debt` that says what exists instead. The test fails when a rule module has no entry, when an entry's count differs from the file, and when an entry points at a doc heading or a test that does not exist. R1 to R6 held 457 code lines on 2026-11-08 (measured).
+3. **The whole trusted base is counted.** The manifest puts every module under `petra/` outside the kernel in a trusted group or in the untrusted list, and the test fails on a module in neither. Each trusted group names the judge or twin that checks it and what that judge shares with Petra, or a dated debt. The 48 trusted modules outside the kernel held 12,116 code lines on 2026-11-08 (measured). With the core and the rules, the trusted base held 13,530 code lines against `TRUSTED_CEILING`, 14,000. The ceiling changes only by editing that constant, with the reason beside it.
+4. **A rule proved in Lean stops counting.** Once Lean proves a rule's soundness, the rule's lines leave the trusted total. The mechanism comes later.
+
+`python -m tests.test_kernel_budget` prints the three counts and every recorded debt.
 
 ## 2. Elaborators and decks, where every false PASS so far came from
 
@@ -57,7 +70,7 @@ Each test below makes CI fail when a rule from §1 to §3 is broken (encode less
 
 | Rule | Test |
 |---|---|
-| The kernel line budget (T2) | `tests/test_kernel_budget.py` |
+| The kernel core's cap, a manifest entry for every rule with each missing item as a dated debt, a trust class for every module under `petra/`, and the trusted total's ceiling (T2) | `tests/test_kernel_budget.py` |
 | Traceability: every clause row maps to a builder, a premise or an exclusion, and every builder maps to a clause row (D2) | `tests/test_steel_trace.py` |
 | Every `ModelSpec` a deck uses has at least one validity row, or an explicit "unbounded" note (D3) | `tests/test_steel_trace.py` |
 | No default argument values, and no numeric literals other than 0, 1 and 2, in deck builder modules (D4, D5) | `tests/test_steel_principles.py` |
