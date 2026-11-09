@@ -130,6 +130,30 @@ class Session(unittest.TestCase):
         self.assertEqual([t["name"] for t in result["tools"]], [t["name"] for t in self.by_id[2]["result"]["tools"]])
 
 
+class Handshake(unittest.TestCase):
+    """A client gives the server a limited time to answer initialize, so the handshake and
+    the tool list import none of the language, the domain models, the kernel, the solvers,
+    numpy or scipy. The first tool call that needs one imports it."""
+
+    HEAVY = ("petra.lang", "petra.models", "petra.kernel", "petra.solvers", "numpy", "scipy")
+
+    def test_the_handshake_imports_neither_the_language_the_models_nor_the_solvers(self):
+        lines = [request(1, "initialize", {"protocolVersion": "2025-06-18", "capabilities": {},
+                                           "clientInfo": {"name": "test", "version": "0"}}),
+                 {"jsonrpc": "2.0", "method": "notifications/initialized"}, request(2, "tools/list")]
+        stdin = "".join(json.dumps(m) + "\n" for m in lines)
+        done = subprocess.run([sys.executable, "-X", "importtime", "-m", "petra", "mcp"], input=stdin.encode("utf-8"),
+                              cwd=ROOT, capture_output=True, timeout=300)
+        replies = {r["id"]: r for r in map(json.loads, done.stdout.splitlines())}
+        self.assertEqual(replies[1]["result"]["serverInfo"]["name"], "petra")
+        self.assertEqual(len(replies[2]["result"]["tools"]), 5)
+        imported = {line.rsplit("|", 1)[1].strip() for line in done.stderr.decode("utf-8").splitlines()
+                    if line.startswith("import time:")}
+        self.assertIn("petra.mcp", imported, "the trace shows the server's own imports")
+        heavy = sorted(m for m in imported if any(m == h or m.startswith(h + ".") for h in self.HEAVY))
+        self.assertEqual(heavy, [])
+
+
 class Served:
     """serve() on queues: write() hands it a line, reply() waits for its next one."""
 
