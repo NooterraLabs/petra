@@ -27,6 +27,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
+from .. import __version__
 from ..certs import CertificateFile, decode_certificate, encode_certificate
 from ..kernel import Evidence, Instance, Interval, Leaf, RangeHyp, Split, Statement, canonical_text, encode_statement, statement_hash
 
@@ -145,8 +146,6 @@ class Library:
         self._misses = 0
 
     def add(self, entry: FamilyEntry) -> None:
-        from .. import __version__  # petra/__init__ imports this package before it is complete
-
         path = self._path(entry.shape_hash, entry.family_key)
         held = self._read(path) if path.exists() else None
         if held is not None and held.entry == entry:
