@@ -3,7 +3,7 @@
 One builder per rule. Each states an R4 goal over three kinds of premise: the exact
 geometry the engine measured, as design values labelled dsg:<design>.<name>; the
 registry rows and constants it compares them with, labelled reg:; and the design's signed
-bounds (tolerance, hole shrink, heat), labelled in:. The kernel then checks
+bounds (tolerance, hole shrink, fill, mass, heat), labelled in:. The kernel then checks
 the goal at every point of the box, so a check passes only at the worst-case extreme of
 every tolerance, and a refutation names that extreme.
 
@@ -17,7 +17,7 @@ from fractions import Fraction
 from typing import Callable, Mapping
 
 from ...ir import Design, Fixed, Input, ParamRef, Rel
-from ...kernel import Add, Const, Expr, Interval, Max, Mul, Neg, PowInt
+from ...kernel import Add, Const, Expr, Interval, Max, Mul, Neg, PowInt, enclose
 from ...kernel.rules.r4_enclosure import AllNonpositive
 from ...registry import Registry
 from ...units import AREA, DIMENSIONLESS, LENGTH, MASS, Dim, Quantity
@@ -48,6 +48,13 @@ MODELS: Mapping[Evaluator, ModelSpec] = {
                                   "the heat deflection temperature at the lower ISO 75-2 stress marks where a lightly "
                                   "loaded part softens; creep under sustained load is not checked", "petra-maintainers",
                                   "ISO 75-2 method B; docs/parts.md, What a verdict means"),
+    Evaluator.MASS: model_spec(sys.modules[__name__], "parts.mass",
+                               "mass is volume times density times fill, or a bought part's declared mass, plus every "
+                               "screw and insert; the centre of mass weighs each solid part's centroid, a declared cg "
+                               "line, and each screw and insert at the centre of its head and shank cylinders",
+                               "solid parts have uniform density; a printed part's infill only lowers its mass, so an "
+                               "unfilled printed part bounds mass from above and needs a cg line for its centre",
+                               "petra-maintainers", "docs/parts.md, What a verdict means"),
 }
 
 
@@ -412,12 +419,109 @@ def build_bridge(req: Requirement, part: PartDesign, design: Design, registry: R
                        f"{part.name} has {held} faces over air, each held on every edge and narrower than the bridge"),)
 
 
+# --- Mass ----------------------------------------------------------------------------
+
+
+def _printed(part: PartDesign) -> bool:
+    return part.kind is not None and part.kind.value == "print"
+
+
+def _masses(sb: StatementBuilder, model, registry: Registry, axis: int | None) -> tuple[list, list]:
+    """([(mass Expr, centre Expr or None, part or None)] for every part, screw and insert
+    of the model, the needs that stop it). A printed part's mass needs its fill unless
+    only an upper bound is asked (fill then counts as 1); its centre, and a bought part's,
+    needs a cg line. Screws and inserts are uniform, their centres on their axes."""
+    places = [(p.body, p.placement) for p in model.places] if isinstance(model, Assembly) else [(model, None)]
+    out, needs = [], []
+    for part, placement in places:
+        move = placement.apply if placement is not None else (lambda q: q)
+        if part.mass is not None:
+            m = sb.input(part.mass)
+        else:
+            m = Mul((_value(sb, f"{part.name}.volume", part.mesh.volume() * M ** 3, dim=VOLUME),
+                     sb.registry(part.material, "density")))
+            if part.fill is not None:
+                m = Mul((m, sb.input(part.fill)))
+        c = None
+        if axis is not None:
+            solid = part.mass is None and (not _printed(part) or (part.fill is not None and part.fill.range.value.lo == 1))
+            point = move(part.cg) if part.cg is not None else move(part.mesh.centroid()) if solid else None
+            if point is None:
+                needs.append(NeedsInputBound((part.name,), "cg", "mm"))
+            else:
+                c = _value(sb, f"{part.name}.cg_{'xyz'[axis]}", point[axis] * M)
+        out.append((m, c, part))
+        for h in part.holes:
+            if h.insert is not None:
+                cc = None
+                if axis is not None:
+                    length = registry.parts[h.insert].props["length"].value.hi * 1000
+                    mid = move(tuple(h.at[n] + length / 2 * h.along.value[n] for n in range(3)))
+                    cc = _value(sb, f"{part.name}.{h.id}.insert_{'xyz'[axis]}", mid[axis] * M)
+                out.append((sb.registry(h.insert, "mass"), cc, None))
+    if isinstance(model, Assembly):
+        for f in model.fastens:
+            cc = None
+            if axis is not None:
+                s = engine._screw(model, f, registry)
+                r2, h, length = s["head_r"] ** 2, s["head_h"], s["length"]
+                head, at = (r2 * h / 3, h / 4) if s["csk"] else (r2 * h, -h / 2)
+                shank = (s["r"] ** 2) * length
+                offset = (head * at + shank * length / 2) / (head + shank)
+                cc = _value(sb, f"{model.name}.{f.id}.screw_{'xyz'[axis]}",
+                            (s["mouth"][axis] + offset * s["axis"][axis]) * M)
+            out.append((sb.registry(f.screw, "mass"), cc, None))
+    return out, needs
+
+
+def build_mass(req: Requirement, model, design: Design, registry: Registry) -> tuple[Elaborated, ...]:
+    """Mass against a claim. A printed part with no fill line counts as solid, which only
+    bounds its mass from above: so a <= claim is stated only when it holds that way, and
+    otherwise, like any >= claim, needs the fill."""
+    criterion = req.criterion
+    if not isinstance(criterion, Criterion):
+        return (Gap(req, (NoRuleForQuantity(req.id, "a mass is checked against a claim's bound"),)),)
+    sb = StatementBuilder(design, registry)
+    terms, _ = _masses(sb, model, registry, axis=None)
+    unfilled = [p for _, _, p in terms if p is not None and _printed(p) and p.fill is None and p.mass is None]
+    bound = criterion.bound.value.lo
+    if unfilled:
+        box = sb.box()
+        upper = sum(enclose(t, box).hi for t, _, _ in terms)
+        if criterion.rel is not Rel.LE or upper > bound:
+            return (Gap(req, tuple(NeedsInputBound((p.name,), "fill", "1") for p in unfilled)),)
+    total = _sum([m for m, _, _ in terms])
+    expr = Add((total, Neg(Const(bound)))) if criterion.rel is Rel.LE else Add((Const(bound), Neg(total)))
+    solid = f", counting {', '.join(p.name for p in unfilled)} as solid" if unfilled else ""
+    return (Obligation(req, sb.finish(AllNonpositive((expr,))), MODELS[Evaluator.MASS],
+                       f"{model.name}'s mass, {len(terms)} items, is {criterion.rel.value} {float(bound) * 1000:g} g{solid}"),)
+
+
+def build_cg(req: Requirement, model: Assembly, design: Design, registry: Registry) -> tuple[Elaborated, ...]:
+    criterion = req.criterion
+    if not isinstance(criterion, Criterion) or req.qoi is None:
+        return (Gap(req, (NoRuleForQuantity(req.id, "a centre of mass is checked against a claim's bound"),)),)
+    axis = "xyz".index(req.qoi.name[-1])
+    sb = StatementBuilder(design, registry)
+    terms, needs = _masses(sb, model, registry, axis=axis)
+    needs += [NeedsInputBound((p.name,), "fill", "1") for _, _, p in terms
+              if p is not None and _printed(p) and p.fill is None and p.mass is None]
+    if needs:
+        return (Gap(req, tuple(dict.fromkeys(needs))),)
+    bound = Const(criterion.bound.value.lo)
+    le = criterion.rel is Rel.LE
+    parts = [Mul((m, Add((c, Neg(bound))) if le else Add((bound, Neg(c))))) for m, c, _ in terms]
+    return (Obligation(req, sb.finish(AllNonpositive((_sum(parts),))), MODELS[Evaluator.MASS],
+                       f"{model.name}'s centre of mass along {'xyz'[axis]} is {criterion.rel.value} "
+                       f"{float(criterion.bound.value.lo) * 1000:g} mm, weighing {len(terms)} items"),)
+
+
 BUILDERS: Mapping[str, Callable] = {
     "fit.insert": build_insert, "fit.connected": build_connected, "fit.gap": build_gap,
     "fit.fastener": build_fastener, "fit.seat": build_seat, "fit.grip": build_grip, "fit.press": build_press,
     "fit.hole": build_hole, "insert.hole_size": build_insert_hole, "insert.depth": build_insert_depth,
     "insert.boss_wall": build_boss, "part.temperature": build_temperature, "print.volume": build_extent,
-    "powder.volume": build_extent, "sheet.bed": build_extent, "sheet.prism": build_flat, "print.bridge": build_bridge,
+    "powder.volume": build_extent, "sheet.bed": build_extent, "sheet.prism": build_flat, "print.bridge": build_bridge, "parts.mass": build_mass, "parts.cg": build_cg,
 }
 if set(BUILDERS) != {r.id for r in RULE_BY_ID.values() if r.evaluator is not Evaluator.UNMODELLED}:
     raise RuntimeError("parts.build: every modelled rule has one builder")

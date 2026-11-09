@@ -45,8 +45,8 @@ class Hole:
 
 @dataclass(frozen=True)
 class PartDesign:
-    """One part: its mesh, its material and how it is made. A part with no process is
-    bought."""
+    """One part: its mesh, its material and how it is made. A part with a `mass` line is
+    bought: its mass is the signed bound, not its volume times a density."""
 
     name: str
     mesh: Mesh
@@ -55,7 +55,10 @@ class PartDesign:
     finish: str | None                 # registry coating id
     tolerance: Input | None            # signed profile tolerance, m; replaces the preset's row
     hole_shrink: Input | None          # signed diametral undersize of modelled holes, m
+    fill: Input | None                 # signed mass fraction of a solid part, for printed infill
+    mass: Input | None                 # signed mass of a bought part, kg
     heat: Input | None                 # signed rise above ambient at the part, degC
+    cg: Point | None                   # the stated centre of mass in the part's frame, mm
     holes: tuple[Hole, ...]
     span: Span
 
@@ -147,7 +150,10 @@ PART_GRAMMAR = Grammar(
               "a coating whose buildup every fit rule adds to the part's surfaces"),
         Field("tolerance", SIGNED_BOUND, "length", (), "the profile tolerance, replacing the process preset's"),
         Field("hole_shrink", SIGNED_BOUND, "length", (), "how much smaller modelled holes come out, diametral"),
+        Field("fill", SIGNED_BOUND, "dimensionless", (), "the part's mass over a solid part's, for printed infill"),
+        Field("mass", SIGNED_BOUND, "mass", (), "a bought part's mass; without it the mass is volume times density"),
         Field("heat", SIGNED_BOUND, "temperature", (), "how far a local heat source lifts the part above ambient"),
+        Field("cg", _POINT, "length", (), "the centre of mass of a bought or infilled part, in its own frame"),
         Field("hole", f"<id> at {_POINT} along {_AXIS} diameter <length> [depth <length>] "
               "[clear|tap|form|press|insert <registry insert id>] [countersink <length>]", "length", ("insert.",),
               "a hole and what it is for; through the part when no depth is given"),
@@ -174,8 +180,8 @@ ASSEMBLY_GRAMMAR = Grammar(
     loads=(),
 )
 
-PART_QOIS: dict[str, Dim] = {}
-ASSEMBLY_QOIS: dict[str, Dim] = {}
+PART_QOIS = {"mass": MASS}
+ASSEMBLY_QOIS = {"mass": MASS, "cg_x": LENGTH, "cg_y": LENGTH, "cg_z": LENGTH}
 
 Say = Callable[[str], None]
 
@@ -247,10 +253,10 @@ def lower_part(component: Component, design: Design, registry: Registry) -> Part
     one: dict[str, tuple[Arg, ...]] = {}
     holes: list[Hole] = []
     inputs: dict[str, Input] = {}
-    dims = {"tolerance": LENGTH, "hole_shrink": LENGTH, "heat": TEMPERATURE}
+    dims = {"tolerance": LENGTH, "hole_shrink": LENGTH, "fill": DIMENSIONLESS, "mass": MASS, "heat": TEMPERATURE}
     for attr in component.attrs:
         say = _say(problems, attr.span, f"{name}.{attr.key}")
-        if attr.key in ("mesh", "material", "process", "finish") or attr.key in dims:
+        if attr.key in ("mesh", "material", "process", "finish", "cg") or attr.key in dims:
             if attr.key in one:
                 say("is given twice")
                 continue
@@ -288,6 +294,11 @@ def lower_part(component: Component, design: Design, registry: Registry) -> Part
         found = registry.processes.get(finish)
         if found is None or found.kind is not ProcessKind.COATING or "buildup" not in found.props:
             here(f"finish {finish} is not a registry coating with a buildup row")
+    cg = _point(one["cg"][0]) if one.get("cg") and len(one["cg"]) == 1 else None
+    if "cg" in one and cg is None:
+        here("cg reads cg (<x>, <y>, <z>) in mm")
+    if "fill" in inputs and inputs["fill"].range.value.hi > 1:
+        here("a fill is a fraction of a solid part, at most 1")
     if mesh is not None:
         lo, hi = mesh.bounds()
         for h in holes:
@@ -297,7 +308,7 @@ def lower_part(component: Component, design: Design, registry: Registry) -> Part
     if problems:
         raise ComponentError(tuple(problems))
     part = PartDesign(name, mesh, material, preset, finish, inputs.get("tolerance"), inputs.get("hole_shrink"),
-                      inputs.get("heat"), tuple(holes), component.span)
+                      inputs.get("fill"), inputs.get("mass"), inputs.get("heat"), cg, tuple(holes), component.span)
     _PART_MEMO[key] = (design, part)
     return part
 
@@ -500,9 +511,7 @@ def _check_claims(name: str, qois: dict[str, Dim], design: Design, problems: lis
         if claim.qoi.path[0] != name:
             continue
         say = _say(problems, claim.span, f"claim {claim.name}")
-        if not qois:
-            say(f"v0 states no claim on {name}")
-        elif len(claim.qoi.path) != 1 or claim.qoi.name not in qois:
+        if len(claim.qoi.path) != 1 or claim.qoi.name not in qois:
             say(f"a claim on {name} names one of {', '.join(qois)}, as in {name}.mass")
         elif claim.bound.dim != qois[claim.qoi.name]:
             say(f"{claim.qoi.name} is bounded by a {'mass' if qois[claim.qoi.name] == MASS else 'length'}")

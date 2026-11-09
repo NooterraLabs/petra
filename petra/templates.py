@@ -544,6 +544,7 @@ TEMPLATES: dict[str, tuple[str, str, str]] = {
         '# A printed PETG tray, 60 x 40 x 20 mm with 2 mm walls. The mesh file sits beside this\n'
         '# design and is pinned by its hash. Coverage checks that the tray fits the printer, that\n'
         '# PETG keeps its shape in an indoor room, and that no face spans air past the bridge.\n'
+        '# The claim bounds its mass, counting the tray as solid, since no fill line says otherwise.\n'
         '# Five print rules have no model yet (min_feature, thin_wall, min_hole, overhang and\n'
         '# support_access), so the verdict is UNKNOWN until each is checked by hand and waived.\n'
         '\n'
@@ -557,6 +558,8 @@ TEMPLATES: dict[str, tuple[str, str, str]] = {
         '  material polymer.petg\n'
         '  process process.print.fdm_petg_0_4\n'
         '}\n'
+        '\n'
+        'claim light: case.mass <= 20 g\n'
     ),
     'assembly': (
         'examples/parts/assembly.petra',
@@ -567,6 +570,7 @@ TEMPLATES: dict[str, tuple[str, str, str]] = {
         '# outline tolerance. The assembly says where each part sits and how the board arrives:\n'
         '# straight down from 25 mm above its place. Coverage checks that it goes in at the worst\n'
         '# corner of both tolerances and that it rests on the tray.\n'
+        "# The claim bounds the mass of both, with the board's weighed mass.\n"
         '# Five print rules have no model yet (min_feature, thin_wall, min_hole, overhang and\n'
         '# support_access), so the verdict is UNKNOWN until each is checked by hand and waived.\n'
         '\n'
@@ -585,6 +589,7 @@ TEMPLATES: dict[str, tuple[str, str, str]] = {
         '  mesh "board.stl" sha256 "5ac82cbab420f0ee38ced9bf67fe64d51c576127b40fc7cae78cafdbaa36cd97" units mm\n'
         '  material polymer.pc\n'
         '  tolerance in [0.1 mm, 0.1 mm] signed "e.designer@example.org" source "board maker\'s outline drawing"\n'
+        '  mass in [8 g, 9 g] signed "e.designer@example.org" source "weighed, five boards"\n'
         '}\n'
         '\n'
         'assembly box {\n'
@@ -592,5 +597,7 @@ TEMPLATES: dict[str, tuple[str, str, str]] = {
         '  place board at (5 mm, 5 mm, 2 mm) facing top front\n'
         '  insert board along bottom from 25 mm\n'
         '}\n'
+        '\n'
+        'claim light: box.mass <= 30 g\n'
     ),
 }

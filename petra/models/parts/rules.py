@@ -1,4 +1,4 @@
-"""The one table of fit, fabrication and thermal checks. Trusted.
+"""The one table of fit, fabrication, thermal and mass checks. Trusted.
 
 Each row is one failure mode: the feature it is demanded on, what failing it means, the
 evaluator that measures it, and what it holds. Coverage rules and failure modes derive
@@ -21,6 +21,7 @@ class Evaluator(Enum):
     GEOMETRY = "geometry"       # exact rational geometry of the meshes (exact.py, engine.py)
     DECLARED = "declared"       # declared features and registry rows; the statement is the whole check
     THERMAL = "thermal"         # ambient plus a declared rise against a material limit
+    MASS = "mass"               # volumes, densities and declared masses, for claims only
     UNMODELLED = "unmodelled"   # demanded, and no builder yet: a Gap needing NoModel
 
 
@@ -39,6 +40,7 @@ class Applies(Enum):
     FASTEN = "parts.fasten"
     GAP = "parts.gap"
     PRESS = "parts.press"
+    CLAIM = "claim"                  # demanded by claims only
 
 
 @dataclass(frozen=True)
@@ -51,7 +53,7 @@ class Rule:
 
 
 _I, _W = Consequence.IMPOSSIBLE, Consequence.WORSE
-_G, _D, _T, _U = Evaluator.GEOMETRY, Evaluator.DECLARED, Evaluator.THERMAL, Evaluator.UNMODELLED
+_G, _D, _T, _M, _U = Evaluator.GEOMETRY, Evaluator.DECLARED, Evaluator.THERMAL, Evaluator.MASS, Evaluator.UNMODELLED
 _A = Applies
 
 RULES: tuple[Rule, ...] = (
@@ -106,6 +108,8 @@ RULES: tuple[Rule, ...] = (
     Rule("mill.reach", _A.MILL, _I, _U, "some tool reaches every stock point to remove"),
     Rule("mill.min_feature", _A.MILL, _I, _U, "every feature is at least the minimum feature"),
     # Mass properties, for claims.
+    Rule("parts.mass", _A.CLAIM, _I, _M, "the mass of the part or assembly, with every screw and insert"),
+    Rule("parts.cg", _A.CLAIM, _I, _M, "the centre of mass of the assembly along one axis"),
 )
 
 RULE_BY_ID: dict[str, Rule] = {r.id: r for r in RULES}

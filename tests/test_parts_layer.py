@@ -47,7 +47,8 @@ class Enclosure(unittest.TestCase):
     def design(self, board_hi, at="(5 mm, 5 mm, 2 mm)", case=None, insert="insert board along bottom from 25 mm"):
         board = write(self.tmp.name, "board", box((0, 0, 0), board_hi))
         return (part("case", case or self.case) +
-                part("board", board, "polymer.pc", None, f"  tolerance in [0.1 mm, 0.1 mm] {SIGNED}") +
+                part("board", board, "polymer.pc", None, f"  tolerance in [0.1 mm, 0.1 mm] {SIGNED}\n"
+                                                          f"  mass in [8 g, 9 g] {SIGNED}") +
                 "assembly box {\n  place case at (0 mm, 0 mm, 0 mm) facing top front\n"
                 f"  place board at {at} facing top front\n  {insert}\n}}\n")
 
@@ -105,6 +106,35 @@ class Enclosure(unittest.TestCase):
         self.assertEqual(got["bar/print.volume"][0], "refuted", "249.5 mm grown by 0.5 mm each side passes 250 mm")
         short = write(self.tmp.name, "short", box((0, 0, 0), (248, 10, 10)))
         self.assertEqual(run(part("bar", short), self.tmp.name)["bar/print.volume"][0], "certified")
+
+    def test_a_solid_assembly_states_its_centre_of_mass(self):
+        machined = part("case", self.case, "aluminium.6061_T6", "process.mill.al6061_3axis")
+        text = self.design((30, 20, "1.6")).replace(part("case", self.case), machined)
+        text = text.replace("  mass in [8 g, 9 g]", "  cg (15 mm, 10 mm, 0.8 mm)\n  mass in [8 g, 9 g]")
+        # The tray's centroid is at z = (24000 * 10 - 16848 * 11) / 7152 = 7.65 mm (measured); the
+        # board's at 2.8 mm. 19.3 g of aluminium (2700 kg/m3) and 8 to 9 g of board: 6.0 to 6.2 mm.
+        got = run(text + "claim low: box.cg_z <= 6.3 mm\nclaim lower: box.cg_z <= 5.9 mm\n", self.tmp.name)
+        self.assertEqual(got["box/parts.cg/low"][0], "certified", got["box/parts.cg/low"])
+        self.assertEqual(got["box/parts.cg/lower"][0], "refuted", got["box/parts.cg/lower"])
+
+    def test_a_solid_assembly_over_its_mass_budget_fails(self):
+        machined = part("case", self.case, "aluminium.6061_T6", "process.mill.al6061_3axis")
+        text = self.design((30, 20, "1.6")).replace(part("case", self.case), machined)
+        # 7152 mm3 (measured) of aluminium is 19.3 g (inferred), and the board 8 to 9 g (signed).
+        got = run(text + "claim under: box.mass <= 30 g\nclaim over: box.mass <= 25 g\n", self.tmp.name)
+        self.assertEqual(got["box/parts.mass/under"][0], "certified", got["box/parts.mass/under"])
+        self.assertEqual(got["box/parts.mass/over"][0], "refuted", got["box/parts.mass/over"])
+
+    def test_mass_and_centre_of_mass_claims(self):
+        text = self.design((30, 20, "1.6")) + "claim light: box.mass <= 20 g\nclaim heavy: box.mass >= 9 g\n" \
+                                              "claim low: box.cg_z <= 10 mm\n"
+        got = run(text, self.tmp.name)
+        # The tray is 7152 mm3 (measured) of PETG at 1.26 to 1.28 g/cm3 (guess): 9.01 to 9.15 g solid,
+        # plus the board's 8 to 9 g (signed).
+        self.assertEqual(got["box/parts.mass/light"][0], "certified", got["box/parts.mass/light"])
+        self.assertEqual(got["box/parts.mass/heavy"][0], "open", "a printed part's infill can only lower its mass")
+        self.assertEqual(got["box/parts.cg/low"][0], "open", "a printed tray's centre of mass needs its fill or a cg line")
+        self.assertIn("error", run(self.design((30, 20, "1.6")) + "claim bad: box.cg_x <= 10 g\n", self.tmp.name))
 
 
 class Fasteners(unittest.TestCase):

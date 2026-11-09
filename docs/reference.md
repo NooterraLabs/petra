@@ -643,7 +643,7 @@ In a claim, `<qoi>` is one of `voltage`, `output`, `current`, `power_utilisation
 
 ### Domain parts
 
-Waivable modes: `fit.connected`, `fit.driver`, `fit.fastener`, `fit.gap`, `fit.grip`, `fit.hole`, `fit.insert`, `fit.press`, `fit.seat`, `insert.boss_wall`, `insert.depth`, `insert.hole_size`, `mill.min_feature`, `mill.reach`, `part.temperature`, `powder.escape`, `powder.min_feature`, `powder.volume`, `print.bridge`, `print.min_feature`, `print.min_hole`, `print.overhang`, `print.support_access`, `print.thin_wall`, `print.volume`, `sheet.bed`, `sheet.min_web`, `sheet.prism`.
+Waivable modes: `fit.connected`, `fit.driver`, `fit.fastener`, `fit.gap`, `fit.grip`, `fit.hole`, `fit.insert`, `fit.press`, `fit.seat`, `insert.boss_wall`, `insert.depth`, `insert.hole_size`, `mill.min_feature`, `mill.reach`, `part.temperature`, `parts.cg`, `parts.mass`, `powder.escape`, `powder.min_feature`, `powder.volume`, `print.bridge`, `print.min_feature`, `print.min_hole`, `print.overhang`, `print.support_access`, `print.thin_wall`, `print.volume`, `sheet.bed`, `sheet.min_web`, `sheet.prism`.
 
 #### part
 
@@ -652,6 +652,9 @@ A `part` component is written `part <name> { ... }`. `petra new part` prints its
 Load entries and claims on a `part` component take these forms:
 
 - Load entry: `on <part>  in [<lo>, <hi>] [mean <value>]`
+- Claim: `claim <name>: <part>.<qoi> <=|>= <value> [margin <value>] [under <load>, ...]`
+
+In a claim, `<qoi>` is one of `mass`, `cg_x`, `cg_y`, `cg_z`.
 
 | line | form | needed | unit | ids | meaning |
 |---|---|---|---|---|---|
@@ -661,7 +664,10 @@ Load entries and claims on a `part` component take these forms:
 | `finish` | `<registry coating id>` | optional |  | `process.anodize_ii*`, `process.powder_coat*` | a coating whose buildup every fit rule adds to the part's surfaces |
 | `tolerance` | `in [<lo>, <hi>] signed "<owner>" source "<source>"` | optional | length |  | the profile tolerance, replacing the process preset's |
 | `hole_shrink` | `in [<lo>, <hi>] signed "<owner>" source "<source>"` | optional | length |  | how much smaller modelled holes come out, diametral |
+| `fill` | `in [<lo>, <hi>] signed "<owner>" source "<source>"` | optional | dimensionless |  | the part's mass over a solid part's, for printed infill |
+| `mass` | `in [<lo>, <hi>] signed "<owner>" source "<source>"` | optional | mass |  | a bought part's mass; without it the mass is volume times density |
 | `heat` | `in [<lo>, <hi>] signed "<owner>" source "<source>"` | optional | temperature |  | how far a local heat source lifts the part above ambient |
+| `cg` | `(<x>, <y>, <z>)` | optional | length |  | the centre of mass of a bought or infilled part, in its own frame |
 | `hole` | `<id> at (<x>, <y>, <z>) along <top\|bottom\|left\|right\|front\|back> diameter <length> [depth <length>] [clear\|tap\|form\|press\|insert <registry insert id>] [countersink <length>]` | optional | length | `insert.*` | a hole and what it is for; through the part when no depth is given |
 
 #### assembly
@@ -671,6 +677,9 @@ A `assembly` component is written `assembly <name> { ... }`. `petra new assembly
 Load entries and claims on a `assembly` component take these forms:
 
 - Load entry: `on <assembly>  in [<lo>, <hi>] [mean <value>]`
+- Claim: `claim <name>: <assembly>.<qoi> <=|>= <value> [margin <value>] [under <load>, ...]`
+
+In a claim, `<qoi>` is one of `mass`, `cg_x`, `cg_y`, `cg_z`.
 
 | line | form | needed | unit | ids | meaning |
 |---|---|---|---|---|---|
