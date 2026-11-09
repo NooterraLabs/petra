@@ -428,7 +428,7 @@ def _drawn(e: Expr, layer: str, path: str) -> tuple[list[Item], list[tuple[Item,
 
 def _courtyard(e: Expr, face: Side, placement: Placement, path: str) -> Courtyard | NoCourtyard:
     """The courtyard on one face, and the room: a part's body may reach past its courtyard,
-    as 37 of 4,057 footprints on real boards draw it on the Fab layer (measured,
+    as 37 of 4,119 footprints on real boards draw it on the Fab layer (measured,
     docs/kicad_oracle.md's boards), so the room holds both."""
     try:
         drawn = _drawn(e, _COURTYARD[face], path)
