@@ -3,7 +3,8 @@ circles in the outline, cutouts, a footprint at 0, 90, 37.5 and 270 degrees and 
 bottom face, a through-hole connector, mounting holes, a missing courtyard, a missing
 stackup and every refusal. Metamorphic relations move or flip the file and want the record
 to follow. An independent second reading (tests/board_second_reading.py) places every pad
-of every board here again.
+of every board here again. The solids are checked against exact volumes and the parts
+layer's own surface check.
 
 Run with `python -m unittest tests.test_boards_kicad`.
 """
@@ -23,6 +24,8 @@ from petra.models.boards.kicad import (FORMATS, Courtyard, NoCourtyard, PadKind,
                                        parse_board, read_board)
 from petra.models.boards.plane import Arc, Bounds, Circle, Segment, Spot
 from petra.models.boards.sexpr import BoardError
+from petra.models.boards.solid import Errs, board_solid, hole, keepout
+from petra.models.parts.exact import surface_problem
 from tests.board_second_reading import _parse as second_parse
 from tests.board_second_reading import _Quoted, pad_board_positions
 
@@ -403,6 +406,8 @@ class Outline(unittest.TestCase):
                          "both polygons pass through the ends of each quarter-turn bend")
         self.assertFalse(plane.inside((F(25), F("4.9")), board.outline.boundary))
         self.assertTrue(plane.inside((F(25), F("5.1")), board.outline.boundary))
+        solid = board_solid(board, Errs.UNDER)
+        self.assertLess(solid.mesh.volume(), (1500 - F(25, 2) * PI_HI) * F("1.6"))
 
     def test_a_round_board_and_kicads_rounded_mids(self):
         board = read(pcb(circle((0, 0), (20, 0))))
@@ -518,6 +523,8 @@ class Footprints(unittest.TestCase):
             '(pad "1" smd roundrect (at -0.825 0) (size 0.8 0.95) (layers "F.Cu" "F.Paste" "F.Mask"))']))
         fp = read(text).footprints[0]
         self.assertEqual(fp.courtyards, (NoCourtyard(Side.TOP, "absent"), NoCourtyard(Side.BOTTOM, "absent")))
+        with self.assertRaisesRegex(BoardError, "R1 has no courtyard on its top face: absent"):
+            keepout(read(text), fp, 0, 1, Errs.OVER)
 
     def test_a_broken_courtyard_is_no_courtyard(self):
         text = pcb(*box_outline(0, 0, 30, 30), footprint("Resistor_SMD:R_0603", "R1", "10k", (10, 10), 0, [
@@ -560,6 +567,13 @@ class Holes(unittest.TestCase):
         self.assertEqual(j1.features, {Feature.CONNECTOR})
         self.assertEqual({r.field for r in j1.marks}, {"library", "reference"})
         self.assertEqual([p.name for p in j1.missing], ["height", "lead protrusion", "mating direction"])
+
+    def test_an_oval_drill_is_a_slot_along_its_long_axis(self):
+        pad = part(read(rich()), "J1").pads[2]
+        b = hole(pad)
+        ends = [(F("13.08") + d, F(20)) for d in (F("-0.8"), F("0.8"))] + [(F("13.08"), F(20) + d) for d in (F("-0.5"), F("0.5"))]
+        holds(self, b, [Spot(p, F(0)) for p in ends], PI_LO / 4 + F("0.6"))
+        self.assertLess(PI_HI / 4 + F("0.6"), plane.area2(b.outer) / 2)
 
     def test_a_mounting_hole(self):
         for plated in (False, True):
@@ -634,6 +648,9 @@ class Thickness(unittest.TestCase):
         board = read(pcb(*box_outline(0, 0, 10, 10), thickness=None, stackup=None))
         self.assertIsNone(board.thickness)
         self.assertEqual(board.missing, (THICKNESS, EDGE))
+        with self.assertRaisesRegex(BoardError, "states no thickness"):
+            board_solid(board, Errs.OVER)
+        self.assertEqual(board_solid(board, Errs.OVER, thickness=F("1.2")).mesh.volume(), 120)
 
     def test_a_stackup_alone(self):
         board = read(pcb(*box_outline(0, 0, 10, 10), thickness=None))
@@ -736,6 +753,15 @@ class Metamorphic(unittest.TestCase):
                 spots = [plane.place(p, b.placement.at, b.placement.angle) for p in _yard_points()]
                 holds(self, yb.board[0], spots, F(18))
 
+    def test_the_solids_bracket_the_true_volume_after_a_motion(self):
+        area = 2300 - 24 - F("0.6")  # outline less the square cutout and the slot's straight part
+        pis = 25 - 4 - F(1, 2) - F(1, 4) - F("2.56") - F("0.0225")  # pi times: corners, round cutout, holes, via
+        for text in (rich(), move(rich(), 1, (0, 0)), move(rich(), 3, (7, 8))):
+            board = read(text)
+            over, under = board_solid(board, Errs.OVER), board_solid(board, Errs.UNDER)
+            self.assertLess(under.mesh.volume(), (area + pis * PI_LO) * F("1.6"))
+            self.assertLess((area + pis * PI_HI) * F("1.6"), over.mesh.volume())
+
     def test_flipping_twice_gives_back_the_original(self):
         base = read(rich())
         for ref in ("U1", "U2", "U3", "U4", "U5", "J1", "H1"):
@@ -800,6 +826,59 @@ class SecondReading(unittest.TestCase):
                     self.assertLessEqual(gap, float(spot.error) + 1e-9, key)
                     count += 1
         self.assertGreater(count, 250)
+
+
+class Solids(unittest.TestCase):
+    def test_a_polygon_board_with_a_cutout_is_exact(self):
+        board = read(pcb(*box_outline(0, 0, 40, 30), rect((15, 10), (20, 14))))
+        for errs in Errs:
+            with self.subTest(errs=errs):
+                solid = board_solid(board, errs)
+                self.assertEqual((solid.mesh.volume(), solid.deviation), (1888, 0))
+                self.assertEqual(solid.mesh.bounds(), ((0, -30, 0), (40, 0, F("1.6"))), "y flips; z runs up from the bottom face")
+                self.assertIsNone(surface_problem(solid.mesh))
+
+    def test_a_round_board_with_a_round_hole(self):
+        board = read(pcb(circle((0, 0), (20, 0)), mounting(where=(5, 0))))
+        over, under = board_solid(board, Errs.OVER), board_solid(board, Errs.UNDER)
+        true = (400 - F("2.56")) * F("1.6")
+        self.assertLess(under.mesh.volume(), true * PI_LO)
+        self.assertLess(true * PI_HI, over.mesh.volume())
+        self.assertLess(over.mesh.volume() - under.mesh.volume(), 2 * over.deviation * 2 * PI_HI * (20 + F("1.6")) * F("1.6"))
+        coarse = board_solid(board, Errs.UNDER, tolerance=F(1, 10))
+        self.assertIsNone(surface_problem(coarse.mesh))
+        self.assertGreater(board_solid(board, Errs.OVER, holes=False).mesh.volume(), over.mesh.volume())
+        with self.assertRaisesRegex(ValueError, "an UNDER solid cuts every hole"):
+            board_solid(board, Errs.UNDER, holes=False)
+
+    def test_keepouts(self):
+        board = read(rich())
+        for ref, face, z in (("U2", Side.TOP, (F("1.6"), F("6.6"))), ("U5", Side.BOTTOM, (-5, 0))):
+            with self.subTest(ref=ref):
+                (prism,) = keepout(board, part(board, ref), 0, 5, Errs.OVER)
+                self.assertEqual((prism.low, prism.high), z)
+                self.assertEqual(prism.mesh.volume(), 18 * 5)
+                self.assertIsNone(surface_problem(prism.mesh))
+        (prism,) = keepout(board, part(board, "U2"), 0, 5, Errs.UNDER)
+        self.assertEqual(prism.mesh.bounds(), ((29, F("-27.5"), F("1.6")), (33, -23, F("6.6"))),
+                         "the courtyard spans x 29 to 33 and y 23 to 27.5 on the board, and y flips")
+        (over,), (under,) = (keepout(board, part(board, "U3"), 1, 2, e) for e in (Errs.OVER, Errs.UNDER))
+        self.assertLess(under.mesh.volume(), 18)
+        self.assertLess(18, over.mesh.volume())
+        (j1,) = keepout(board, part(board, "J1"), 0, 3, Errs.OVER, face=Side.TOP)
+        self.assertEqual(j1.mesh.volume(), F("3.6") * F("8.7") * 3)
+        with self.assertRaisesRegex(BoardError, "no courtyard on its bottom face"):
+            keepout(board, part(board, "J1"), 0, 3, Errs.OVER, face=Side.BOTTOM)
+        with self.assertRaisesRegex(ValueError, "a keep-out runs"):
+            keepout(board, part(board, "U2"), 2, 1, Errs.OVER)
+
+    def test_voids_that_meet_are_refused(self):
+        edge = pcb(*box_outline(0, 0, 30, 30), mounting(where=("1.2", 15)))
+        with self.assertRaisesRegex(BoardError, "reach the bounds of the board's edge"):
+            board_solid(read(edge), Errs.UNDER)
+        two = pcb(*box_outline(0, 0, 30, 30), mounting("H1", where=(10, 10)), mounting("H2", where=(13, 10)))
+        with self.assertRaisesRegex(BoardError, "the hole of pad  of H1 and the hole of pad  of H2 meet"):
+            board_solid(read(two), Errs.OVER)
 
 
 if __name__ == "__main__":

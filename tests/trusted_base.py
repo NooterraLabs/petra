@@ -68,7 +68,7 @@ CORE_CAP = Limit(1000, "Set on 2026-11-08 at 140f742, where the core measured 95
                        "A new rule adds 3 to 5 lines to rules/__init__.py (inferred from its tables), so "
                        "the headroom covers the registry entries of several rules.")
 
-TRUSTED_CEILING = Limit(16800, "Set on 2026-11-08 at 140f742, where the trusted base measured 13,530 "
+TRUSTED_CEILING = Limit(17050, "Set on 2026-11-08 at 140f742, where the trusted base measured 13,530 "
                                "code lines: core 957, rules 457, outside the kernel 12,116. Raised on "
                                "2026-11-08 on branch parts-core as the parts layer replaces its scaffold: "
                                "classifying the scaffold measured 14,269, and the mesh reader with its "
@@ -79,7 +79,9 @@ TRUSTED_CEILING = Limit(16800, "Set on 2026-11-08 at 140f742, where the trusted 
                                "measured 15,696. Mass and centre-of-mass claims "
                                "measured 15,796. The KiCad board reader on branch kicad-reader (its "
                                "s-expression parser, exact plane geometry with bounding polygons for arcs, "
-                               "feature table and reader) measured 16,795. Raise it in the commit that needs "
+                               "feature table and reader) measured 16,795, and its exact solids of the board and "
+                               "of each part's keep-out, with the checked triangulation, 17,013. Raise it in "
+                               "the commit that needs "
                                "more and say why here.")
 
 T2_ADOPTED = date(2026, 11, 8)
@@ -219,7 +221,7 @@ TRUSTED: tuple[Group, ...] = (
                            "yet.")),
     Group("boards",
           ("petra/models/boards/__init__.py", "petra/models/boards/sexpr.py", "petra/models/boards/plane.py",
-           "petra/models/boards/features.py", "petra/models/boards/kicad.py"),
+           "petra/models/boards/features.py", "petra/models/boards/kicad.py", "petra/models/boards/solid.py"),
           Debt(T2_ADOPTED, "No judge or twin. tests/board_second_reading.py, written by an agent that never saw "
                            "the reader, places every pad of every test board from first principles, and "
                            "SecondReading in tests/test_boards_kicad.py compares the two. It judges pad places "
