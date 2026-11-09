@@ -29,7 +29,8 @@ from typing import Iterable, Sequence
 
 import numpy as np
 
-from .mesh import Mesh, pieces
+from ..base import ComponentError
+from .mesh import LIMIT, Mesh, pieces
 from .space import Solid
 
 V = tuple[int, int, int]
@@ -272,10 +273,32 @@ class Body:
         return tuple(int(x) for x in self.lo.min(axis=0)), tuple(int(x) for x in self.hi.max(axis=0))
 
 
-def make_body(name: str, den: int, tris: np.ndarray) -> Body:
-    tris = np.ascontiguousarray(tris, dtype=np.int64)
-    pts = tuple(tuple(tuple(int(c) for c in p) for p in t) for t in tris.tolist())
-    return Body(name, den, tris, pts, tris.min(axis=1), tris.max(axis=1))
+def make_body(name: str, den: int, tris) -> Body:
+    """A body from (m, 3, 3) integer coordinates: Python integers, or an int64 array that
+    is a sum of two arrays already held under LIMIT. Raises ComponentError when a
+    coordinate reaches LIMIT, so no int64 sum or difference of two coordinates, pads or
+    sweeps ever wraps."""
+    if isinstance(tris, np.ndarray):
+        rows = tris.astype(object).tolist()
+    else:
+        rows = [[[int(c) for c in p] for p in t] for t in tris]
+    big = max((abs(c) for t in rows for p in t for c in p), default=0)
+    if big >= LIMIT:
+        raise too_large(name, den, big)
+    arr = np.array(rows, dtype=np.int64).reshape(-1, 3, 3)
+    pts = tuple(tuple(tuple(p) for p in t) for t in rows)
+    return Body(name, den, arr, pts, arr.min(axis=1), arr.max(axis=1))
+
+
+def too_large(name: str, den: int, value: int) -> ComponentError:
+    return ComponentError((f"{name}: a coordinate, pad or sweep reaches {value} units of 1/{den} mm, past the 2^60 the "
+                           "exact evaluator holds in int64; write the meshes with fewer decimals or place the parts "
+                           "nearer the origin",))
+
+
+def scaled(body: Body, factor: int) -> Body:
+    """The same body over the denominator `factor` times finer, in Python integers."""
+    return make_body(body.name, body.den * factor, [[[c * factor for c in p] for p in t] for t in body.pts])
 
 
 def denominator(*values: Iterable[Fraction | int]) -> int:
@@ -293,12 +316,13 @@ def place(solid: Solid, den: int) -> Body:
     if den % mesh.scale:
         raise ValueError(f"denominator {den} does not hold the mesh scale {mesh.scale}")
     k = den // mesh.scale
-    rot = np.array(solid.placement.turn.rows, dtype=np.int64)
-    off = np.array([int(Fraction(c) * den) for c in solid.placement.offset], dtype=np.int64)
-    if any(Fraction(c) * den != int(Fraction(c) * den) for c in solid.placement.offset):
+    rows = solid.placement.turn.rows
+    off = [Fraction(c) * den for c in solid.placement.offset]
+    if any(c.denominator != 1 for c in off):
         raise ValueError("the denominator does not hold the placement offset")
-    verts = mesh.vertices @ rot.T * k + off
-    return make_body(solid.name, den, verts[mesh.triangles])
+    verts = [tuple(sum(r[m] * v[m] for m in range(3)) * k + int(off[n]) for n, r in enumerate(rows))
+             for v in mesh.vertices.tolist()]
+    return make_body(solid.name, den, [[verts[i] for i in t] for t in mesh.triangles.tolist()])
 
 
 def body_of_mesh(name: str, mesh: Mesh) -> Body:
@@ -311,6 +335,8 @@ def candidates(lo_a: np.ndarray, hi_a: np.ndarray, lo_b: np.ndarray, hi_b: np.nd
     a box that spans many cells is tested against every box of the other side."""
     if not len(lo_a) or not len(lo_b):
         return np.zeros((0, 2), dtype=np.int64)
+    if abs(pad) >= LIMIT:
+        raise too_large("the broad phase", 1, pad)
     la, ha = lo_a - pad, hi_a + pad
     ext = np.concatenate((ha - la, hi_b - lo_b)).max(axis=1)
     cell = max(int(np.percentile(ext, 75)), 1)
@@ -442,6 +468,9 @@ def nearest(a: Body, b: Body, within: int, skip=None, sweep: V | None = None) ->
     on the straight path from b to b + sweep. Pairs are taken in order of their boxes'
     distance and dropped once a box is farther than the best pair found."""
     lo_b, hi_b = b.lo, b.hi
+    reach = max([abs(within), *(abs(c) for c in sweep or ())])
+    if reach >= LIMIT:
+        raise too_large(b.name, b.den, reach)
     if sweep is not None:
         moved = b.tris + np.array(sweep, dtype=np.int64)
         lo_b, hi_b = np.minimum(b.lo, moved.min(axis=1)), np.maximum(b.hi, moved.max(axis=1))

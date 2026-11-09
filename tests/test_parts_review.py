@@ -75,7 +75,6 @@ class F1PressFits(Case):
 
 
 class F2Overflow(Case):
-    @unittest.expectedFailure
     def test_f2_a_placed_coordinate_never_wraps(self):
         path, sha = ascii_stl(Path(self.tmp) / "bar.stl", box(("0", "0", "0"), ("1000.0000000001", "10", "10")))
         m = read_mesh(path, sha, Unit.MM)
@@ -87,7 +86,6 @@ class F2Overflow(Case):
         lo, hi = exact.extent(body)
         self.assertEqual((lo[0], hi[0]), (6000, Fraction("7000.0000000001")))
 
-    @unittest.expectedFailure
     def test_f2_a_refuted_screw_stays_refuted_when_a_coordinate_gains_decimals(self):
         base = self.mesh("base", plate((0, 0, 0), (20, 20, 8), (10, 10), "1.3"))
         lid = self.mesh("lid", plate((0, 0, 0), (20, 20, 3), (10, 10), "1.8"))
@@ -313,7 +311,6 @@ def _points(t, n):
 
 
 class L1Cache(Case):
-    @unittest.expectedFailure
     def test_l1_a_mesh_changed_on_disk_is_refused_under_its_old_hash(self):
         path, sha = ascii_stl(Path(self.tmp) / "cube.stl", box(("0", "0", "0"), ("10", "10", "10")))
         read_mesh(path, sha, Unit.MM)

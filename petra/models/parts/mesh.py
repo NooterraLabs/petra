@@ -27,7 +27,6 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from enum import Enum
 from fractions import Fraction
-from functools import lru_cache
 from io import BytesIO
 from pathlib import Path
 
@@ -39,7 +38,9 @@ from ..base import ComponentError
 Point = tuple[Q, Q, Q]
 """Exact coordinates in millimetres. Statements convert to metres at their boundary (build.py)."""
 
-_LIMIT = 2 ** 62
+LIMIT = 2 ** 60
+"""Every integer coordinate Petra stores in int64 stays below this, so a sum or difference of
+two never wraps (exact.make_body)."""
 
 
 class Unit(Enum):
@@ -109,13 +110,10 @@ def read_mesh(path: Path, sha256: str, unit: Unit) -> Mesh:
     """Read a binary or ASCII STL (sniffed) or a 3MF (a zip with one object, its build
     transform applied exactly from the decimal text). Check the sha256 of the file bytes,
     convert to millimetres exactly (an inch is 127/5 mm), merge equal vertices, and require
-    the boundary of a solid as the module docstring states. Memoised on (path, sha256,
-    unit), so an assembly that places a part reads its file once. Raises MeshError."""
-    return _read(str(path), sha256.lower(), unit)
-
-
-@lru_cache(maxsize=64)
-def _read(path: str, sha256: str, unit: Unit) -> Mesh:
+    the boundary of a solid as the module docstring states. The bytes are read and hashed
+    on every call, and only the parse of bytes that match is memoised, so a file changed on
+    disk is refused under its old hash. Raises MeshError."""
+    path, sha256 = str(path), sha256.lower()
     try:
         data = Path(path).read_bytes()
     except OSError as exc:
@@ -123,6 +121,18 @@ def _read(path: str, sha256: str, unit: Unit) -> Mesh:
     found = hashlib.sha256(data).hexdigest()
     if found != sha256:
         raise MeshError(path, f"sha256 is {found}, not {sha256} as the design says")
+    key = (path, sha256, unit)
+    if key not in _PARSED:
+        if len(_PARSED) >= 64:
+            _PARSED.pop(next(iter(_PARSED)))
+        _PARSED[key] = _decode(path, sha256, unit, data)
+    return _PARSED[key]
+
+
+_PARSED: dict[tuple[str, str, Unit], Mesh] = {}
+
+
+def _decode(path: str, sha256: str, unit: Unit, data: bytes) -> Mesh:
     if data[:4] == b"PK\x03\x04":
         coords, faces = _three_mf(path, data, unit)
     elif _is_binary_stl(data):
@@ -210,7 +220,7 @@ def _solid(path: str, sha256: str, coords: list[Fraction], faces: np.ndarray, to
                 raise MeshError(path, f"a coordinate with denominator {d} is not a decimal Petra can hold exactly")
             scale *= 10
     ints = [int(c * scale) for c in mm]
-    if any(abs(i) >= _LIMIT for i in ints):
+    if any(abs(i) >= LIMIT for i in ints):
         raise MeshError(path, "a coordinate is too large at the file's precision")
     raw = np.array(ints, dtype=np.int64).reshape(-1, 3)
     vertices, inverse = np.unique(raw, axis=0, return_inverse=True)

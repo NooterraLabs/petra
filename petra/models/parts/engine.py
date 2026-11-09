@@ -127,10 +127,9 @@ def frustum(centre: Point, axis: tuple[int, int, int], top: tuple, bottom: tuple
 
 
 def body_of(name: str, den: int, tris: list) -> Body:
-    arr = np.array([[[int(c * den) for c in p] for p in t] for t in tris], dtype=np.int64)
     if any(c * den != int(c * den) for t in tris for p in t for c in p):
         raise ValueError("the denominator does not hold the polygon")
-    return make_body(name, den, arr)
+    return make_body(name, den, [[[int(c * den) for c in p] for p in t] for t in tris])
 
 
 @lru_cache(maxsize=None)
@@ -319,6 +318,8 @@ def _approach(mover: Body, other: Body, name: str, v, travel: Q, float_: Q, reac
     """The mover swept from `float_` past its place back to `travel + float_` before it,
     against the other body; pairs in `skip` (mover index, other index) are its stops."""
     ahead = tuple(int(c * float_ * den) for c in v)
+    if max(abs(c) for c in ahead) >= exact.LIMIT:
+        raise exact.too_large(mover.name, den, max(abs(c) for c in ahead))
     start = make_body(mover.name, den, mover.tris + np.array(ahead, dtype=np.int64)) if float_ else mover
     back = tuple(-int(c * (travel + 2 * float_) * den) for c in v)
     within = int(reach * den) + 1
@@ -454,8 +455,7 @@ def hole_facts(part: PartDesign, hole: Hole, a_hi: Q, insert_length: Q | None) -
         else:
             cone = frustum(hole.at, axis, circumscribed(top), circumscribed(bottom), top - bottom)
             d = exact.denominator([c for t in cone for p in t for c in p], [Q(1, den)])
-            scaled = exact.make_body(part.name, d, body.tris * (d // den))
-            near = exact.nearest(scaled, body_of("sink", d, cone), 1)
+            near = exact.nearest(exact.scaled(body, d // den), body_of("sink", d, cone), 1)
             sink = near.d2 is None
     return HoleFacts(inside is False, free2, wall2, sink)
 
@@ -563,8 +563,7 @@ def _seg_dist2(p: np.ndarray, segs: np.ndarray) -> float:
 
 def _inside_scaled(body: Body, point) -> bool | None:
     d = exact.denominator(point, [Q(1, body.den)])
-    scaled = exact.make_body(body.name, d, body.tris * (d // body.den))
-    return exact.inside(tuple(int(c * d) for c in point), scaled)
+    return exact.inside(tuple(int(c * d) for c in point), exact.scaled(body, d // body.den))
 
 
 def _radial2(body: Body, at: Point, k: int, i: int, j: int, z0: Q, z1: Q, exclude_r2: Q | None, den: int) -> Q:
