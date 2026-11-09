@@ -90,17 +90,21 @@ class Lookups(unittest.TestCase):
         with self.assertRaises(OutsideMakeableSet):
             REGISTRY.surface("steel.bolt_qt", "process.tin_plate")
 
-    def test_every_shipped_coating_exposes_a_material_with_an_anodic_index(self):
+    def test_every_shipped_metal_coating_exposes_a_material_with_an_anodic_index(self):
         coatings = [p for p in REGISTRY.processes.values() if p.kind is ProcessKind.COATING]
-        self.assertEqual([p.id for p in coatings], ["process.zinc_plate"])
-        for p in coatings:
-            self.assertEqual(REGISTRY.material(p.surface).props["anodic_index"].value, point("1.25"))
+        self.assertEqual([p.id for p in coatings], ["process.zinc_plate", "process.anodize_ii", "process.powder_coat"])
+        self.assertEqual(REGISTRY.material("zinc.electroplate").props["anodic_index"].value, point("1.25"))
+        for p in coatings[1:]:
+            surface = REGISTRY.material(p.surface)
+            self.assertIn(surface.family, ("oxide", "polymer"), "an insulating finish is no electrode")
+            self.assertNotIn("anodic_index", surface.props, "so the galvanic rule skips it")
 
     def test_every_metal_states_an_anodic_index(self):
         """The galvanic rule reads a material with no anodic index as no electrode, so a
-        metal without one never pairs (petra/coverage.py). Only a polymer and the
+        metal without one never pairs (petra/coverage.py). Only a polymer, an oxide and the
         electronics deck's components state none."""
-        not_electrodes = {"pvc", "led", "resistor", "regulator_fixed", "regulator_grounded", "regulator_floating"}
+        not_electrodes = {"pvc", "polymer", "oxide", "led", "resistor", "regulator_fixed", "regulator_grounded",
+                          "regulator_floating"}
         missing = [m.id for m in REGISTRY.materials.values() if m.family not in not_electrodes and "anodic_index" not in m.props]
         self.assertEqual(missing, [])
 

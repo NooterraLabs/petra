@@ -46,7 +46,8 @@ ELECTRONICS = (60, 7)
 GYM_SEEDS = 16
 
 CATALOGUES = (
-    "bolt.", "bolt_group.", "cable.", "electrode.", "led.", "mcb.", "reg.", "res.", "steel.", "terminal.",
+    "bolt.", "bolt_group.", "cable.", "electrode.", "insert.", "led.", "mcb.", "polymer.", "process.mill.",
+    "process.powder.", "process.print.", "process.sheet.", "reg.", "res.", "screw.", "steel.", "terminal.",
     "const.aisc_shapes_v16.", "const.bolt_us.", "const.en10219_2.", "const.iec60063.E24.", "const.iec60063.E96.",
     "const.iec60227_3.", "const.iec60228.", "const.iso261.", "const.shop_deck.plate.",
 )
@@ -69,6 +70,13 @@ _CONSISTENCY = "petra/registry/consistency.py"
 _STEEL_REGISTRY = "petra/registry/steel.py"
 _CHECKS = "petra/models/steel/checks.py"
 _FATIGUE = "petra/models/steel/fatigue.py"
+_PARTS = "petra/models/parts/build.py"
+_PARTS_ENGINE = "petra/models/parts/engine.py"
+_NO_SCREW = "fit.fastener and the thread's engagement read it; no corpus design has a screw"
+_NO_INSERT = "fit.insert reads it; no corpus design has a heat-set insert"
+_NO_FINISH = "a finish's rows; no corpus design names a finish"
+_NO_POWDER = "a powder bed's rows; no corpus design is sintered"
+_NO_SHEET = "a sheet cutter's rows; no corpus design is cut from sheet"
 _GALVANIC = Unused("petra/coverage.py", '.get("anodic_index")',
                    "coverage reads it to decide whether a contact pair is a galvanic mode; no check reads it")
 
@@ -89,6 +97,7 @@ UNUSED: dict[str, Unused] = {
                                             "premise is the size"),
     "aluminium.6061_T6.anodic_index": _GALVANIC,
     "bolt_group.*.anodic_index": _GALVANIC,
+    "brass.insert.anodic_index": _GALVANIC,
     "copper.cu_etp.anodic_index": _GALVANIC,
     "electrode.*.anodic_index": _GALVANIC,
     "stainless.A4.anodic_index": _GALVANIC,
@@ -122,6 +131,8 @@ UNUSED: dict[str, Unused] = {
     "aluminium.6061_T6.fu": Unused(_CONSISTENCY, '"material.yield_order"',
                                    "the bolted joint reads no property of its plates, and the truss takes steel"),
     # Read by nothing.
+    "polymer.*.tg": Unused("", "", "part.temperature takes the heat deflection temperature, and no rule reads a glass "
+                                   "transition"),
     "const.aluminium.density": Unused("", "", "the bolted joint reads no property of its plates, and the truss "
                                               "takes steel"),
     # Read by a check on a branch no corpus design reaches.
@@ -157,6 +168,51 @@ UNUSED: dict[str, Unused] = {
     "const.bolt_us.*.tpi": Unused(_FATIGUE, '.tpi"',
                                   "fatigue of bolts in tension; no cyclic corpus design loads its bolts in tension. "
                                   "bolt.pretension_g120 and _g150 in petra/registry/steel.py read it too"),
+    # The parts deck's rows, read on branches the two parts examples, a printed tray and a
+    # board dropped into it, do not reach.
+    "const.parts.engagement.form": Unused(_PARTS, 'sb.constant(f"parts.engagement.{last.role}")',
+                                          "a screw's least engagement in a formed hole; no corpus design has a screw"),
+    "const.parts.engagement.tap": Unused(_PARTS, 'sb.constant(f"parts.engagement.{last.role}")',
+                                         "a screw's least engagement in a tapped hole; no corpus design has a screw"),
+    "const.parts.engagement.insert": Unused(_PARTS, 'sb.constant("parts.engagement.insert")',
+                                            "a screw's least engagement in an insert; no corpus design has one"),
+    "screw.*.d": Unused(_PARTS, 'sb.registry(f.screw, "d")', _NO_SCREW),
+    "screw.*.thread_d": Unused(_PARTS, 'sb.registry(f.screw, "thread_d")', _NO_SCREW),
+    "screw.*.pitch": Unused(_PARTS, 'sb.registry(f.screw, "pitch")', _NO_SCREW),
+    "screw.*.head_d": Unused(_PARTS, 'sb.registry(f.screw, "head_d")', _NO_SCREW),
+    "screw.*.mass": Unused(_PARTS, 'sb.registry(f.screw, "mass")', _NO_SCREW),
+    "screw.*.head_h": Unused(_PARTS_ENGINE, 'props["head_h"]',
+                             "the engine places the head by it and no check premises it; no corpus design has a screw"),
+    "screw.*.length": Unused(_PARTS_ENGINE, 'props["length"]',
+                             "the engine places the tip by it and no check premises it; no corpus design has a screw"),
+    "screw.*.csk_angle": Unused(_PARTS_ENGINE, '"csk_angle" in props',
+                                "its presence marks a countersunk head, and no check reads the angle"),
+    "insert.*.thread_d": Unused(_PARTS, 'sb.registry(last.insert, "thread_d")', _NO_INSERT),
+    "insert.*.hole_min": Unused(_PARTS, 'sb.registry(hole.insert, "hole_min")', _NO_INSERT),
+    "insert.*.hole_max": Unused(_PARTS, 'sb.registry(hole.insert, "hole_max")', _NO_INSERT),
+    "insert.*.length": Unused(_PARTS, 'sb.registry(hole.insert, "length")', _NO_INSERT),
+    "insert.*.wall_min": Unused(_PARTS, 'sb.registry(hole.insert, "wall_min")', _NO_INSERT),
+    "insert.*.mass": Unused(_PARTS, 'sb.registry(h.insert, "mass")', _NO_INSERT),
+    "process.anodize_ii.buildup": Unused(_PARTS, 'sb.registry(part.finish, "buildup")', _NO_FINISH),
+    "process.anodize_ii.density": Unused(_PARTS, 'sb.registry(part.finish, "density")', _NO_FINISH),
+    "process.powder_coat.buildup": Unused(_PARTS, 'sb.registry(part.finish, "buildup")', _NO_FINISH),
+    "process.powder_coat.density": Unused(_PARTS, 'sb.registry(part.finish, "density")', _NO_FINISH),
+    "process.mill.*.tolerance": Unused(_PARTS, 'sb.registry(part.preset, "tolerance")',
+                                       "a milled part's profile tolerance; no corpus design is milled"),
+    "process.powder.*.build_x": Unused(_PARTS, "sb.registry(part.preset, row)", _NO_POWDER),
+    "process.powder.*.build_y": Unused(_PARTS, "sb.registry(part.preset, row)", _NO_POWDER),
+    "process.powder.*.build_z": Unused(_PARTS, "sb.registry(part.preset, row)", _NO_POWDER),
+    "process.powder.*.hole_shrink": Unused(_PARTS, 'sb.registry(part.preset, "hole_shrink")', _NO_POWDER),
+    "process.powder.*.tolerance": Unused(_PARTS, 'sb.registry(part.preset, "tolerance")', _NO_POWDER),
+    "process.powder.*.tolerance_rate": Unused(_PARTS, 'sb.registry(part.preset, "tolerance_rate")', _NO_POWDER),
+    "process.print.*.bridge": Unused(_PARTS, 'sb.registry(part.preset, "bridge")',
+                                     "print.bridge reads it for a face over air; the corpus's printed tray has none"),
+    "process.print.*.hole_shrink": Unused(_PARTS, 'sb.registry(part.preset, "hole_shrink")',
+                                          "a printed hole's shrink; no corpus design prints a modelled hole"),
+    "process.sheet.*.bed_x": Unused(_PARTS, "sb.registry(part.preset, row)", _NO_SHEET),
+    "process.sheet.*.bed_y": Unused(_PARTS, "sb.registry(part.preset, row)", _NO_SHEET),
+    "process.sheet.*.thickness": Unused(_PARTS, 'sb.registry(part.preset, "thickness")', _NO_SHEET),
+    "process.sheet.*.tolerance": Unused(_PARTS, 'sb.registry(part.preset, "tolerance")', _NO_SHEET),
 }
 """A registry key, or a family as family() writes it, -> what reads it and why no check
 does. Every entry is a finding: a value no check rests on, or a branch no corpus design

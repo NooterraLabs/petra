@@ -277,6 +277,8 @@ def _stated() -> dict[str, Stated]:
                                            "anodic index of the bare surface"),
         "anodic.copper": Stated(_iv("0.35"), "V", JUDGED, MAINTAINERS, "copper, solid or plated: " + anodic,
                                 "anodic index of the bare surface"),
+        "anodic.high_brass": Stated(_iv("0.45"), "V", JUDGED, MAINTAINERS, "high brasses and bronzes: " + anodic,
+                                    "anodic index of the bare surface"),
         "anodic.zinc_plate": Stated(_iv("1.25"), "V", JUDGED, MAINTAINERS, "zinc plated surfaces: " + anodic,
                                     "anodic index of the plated surface"),
         "weld.mig_6xxx_T6.haz_fy_factor": Stated(_iv("0.48"), "1", JUDGED, MAINTAINERS,

@@ -1,6 +1,6 @@
 {
  "corpus": {
-  "designs": 876,
+  "designs": 878,
   "steel": {
    "designs": 110,
    "seed": 1
@@ -554,6 +554,14 @@
   "mcb.B6.I2t": "circuit-000004 cb1.part=mcb.B6",
   "mcb.B6.Icn": "circuit-000004 cb1.part=mcb.B6",
   "mcb.B6.In": "circuit-000001 cb1.part=mcb.B6",
+  "polymer.pc.hdt": "examples/parts/assembly.petra",
+  "polymer.petg.density": "examples/parts/assembly.petra",
+  "polymer.petg.hdt": "examples/parts/assembly.petra",
+  "process.print.fdm_petg_0_4.build_x": "examples/parts/assembly.petra",
+  "process.print.fdm_petg_0_4.build_y": "examples/parts/assembly.petra",
+  "process.print.fdm_petg_0_4.build_z": "examples/parts/assembly.petra",
+  "process.print.fdm_petg_0_4.tolerance": "examples/parts/assembly.petra",
+  "process.print.fdm_petg_0_4.tolerance_rate": "examples/parts/assembly.petra",
   "reg.ldo1117_3v3_sot223.iout_max": "examples/electronics/board.petra",
   "reg.ldo1117_3v3_sot223.iq_max": "examples/electronics/board.petra",
   "reg.ldo1117_3v3_sot223.theta_ja": "examples/electronics/board.petra",

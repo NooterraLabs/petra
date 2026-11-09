@@ -246,6 +246,11 @@ _PROCESSES: Mapping[ProcessKind, str] = {
     ProcessKind.COATING: "coating",
     ProcessKind.WELD: "weld",
     ProcessKind.CUT: "cut",
+    ProcessKind.PRINT: "printing preset (material extrusion)",
+    ProcessKind.POWDER: "printing preset (powder-bed fusion)",
+    ProcessKind.SHEET: "sheet cutting preset",
+    ProcessKind.MILL: "milling preset",
+    ProcessKind.MOLD: "molding preset",
 }
 
 

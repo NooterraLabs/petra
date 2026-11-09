@@ -86,9 +86,12 @@ class Provenance(unittest.TestCase):
     def test_steel_constants_and_the_v0_constants_do_not_collide(self):
         from petra.registry.constants import CONSTANTS
         from petra.registry.electronics import electronics_constants
+        from petra.registry.parts import constants as parts_constants
         self.assertFalse(set(CONSTANTS) & set(steel_constants()))
         self.assertFalse((set(CONSTANTS) | set(steel_constants())) & set(electronics_constants()))
-        self.assertEqual(len(REGISTRY.constants), len(CONSTANTS) + len(steel_constants()) + len(electronics_constants()))
+        self.assertFalse((set(CONSTANTS) | set(steel_constants()) | set(electronics_constants())) & set(parts_constants()))
+        self.assertEqual(len(REGISTRY.constants), len(CONSTANTS) + len(steel_constants()) + len(electronics_constants())
+                         + len(parts_constants()))
 
 
 class Tables(unittest.TestCase):

@@ -137,10 +137,14 @@ def cite(source: str) -> tuple[str, str]:
 
 
 def origin(name: str, source: str) -> str:
+    """The parts deck labels each source "reported:", "inferred:" or "guess:"
+    (petra/registry/parts.py). An inferred or guessed value is Petra's own, and a reported
+    one that names no standard comes from a shop, maker or datasheet."""
     if name.startswith(("petra.", "rcsc2025.joint_level.")) or "Petra's encoding" in source \
-            or "judged by petra-maintainers" in source or "not taken from a standard" in source:
+            or "judged by petra-maintainers" in source or "not taken from a standard" in source \
+            or source.startswith(("inferred:", "guess:")):
         return "petra"
-    if "datasheet" in source:
+    if "datasheet" in source or (source.startswith("reported:") and not cite(source)[0]):
         return "datasheet"
     if "(the designation)" in source or "designation" in source.split(":")[0]:
         return "designation"

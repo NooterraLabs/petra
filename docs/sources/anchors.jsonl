@@ -123,6 +123,7 @@
 {"id": "bolt_group.A307.Fnv_N", "kind": "text", "doc": "A360-22W-ewr.pdf", "doc_sha256": "8be03ce94864a99737c523b7b5b73a2eb4516eb51d1b966c66882d1d046c9154", "page": 205, "span": [405, 450], "span_sha256": "d8e1cc2efb1b0e4c6030eec55b84b6de0244b4e08326e95ce926dfb0757b2d8a", "printed": "27", "value": "27", "cell": "A307 bolts / Fnv threads not excluded (N)", "agrees": true}
 {"id": "bolt_group.A307.anodic_index", "kind": "absent", "reason": "MIL-STD-889 is not on disk"}
 {"id": "bolt_group.A307.fu", "kind": "absent", "reason": "ASTM A307 Grade A is not on disk"}
+{"id": "brass.insert.anodic_index", "kind": "absent", "reason": "MIL-STD-889 is not on disk"}
 {"id": "cable.cu_pvc.rho20_max", "kind": "absent", "reason": "IEC 60228:2004 is not on disk"}
 {"id": "cable.cu_pvc_10.rho20_max", "kind": "absent", "reason": "IEC 60228:2004 is not on disk"}
 {"id": "cable.cu_pvc_16.rho20_max", "kind": "absent", "reason": "IEC 60228:2004 is not on disk"}
@@ -945,6 +946,9 @@
 {"id": "const.iso724.d3_coefficient", "kind": "absent", "reason": "ISO 898-1:2013 is not on disk"}
 {"id": "const.iso898_1.10_9.yield_ratio", "kind": "absent", "reason": "ISO 898-1:2013 is not on disk"}
 {"id": "const.iso898_1.8_8.yield_ratio", "kind": "absent", "reason": "ISO 898-1:2013 is not on disk"}
+{"id": "const.parts.engagement.form", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "const.parts.engagement.insert", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "const.parts.engagement.tap", "kind": "absent", "reason": "Petra's own value; no standard states it"}
 {"id": "const.petra.strict.length", "kind": "absent", "reason": "Petra's own value; no standard states it"}
 {"id": "const.petra.strict.ratio", "kind": "absent", "reason": "Petra's own value; no standard states it"}
 {"id": "const.petra.switch.length", "kind": "absent", "reason": "Petra's own value; no standard states it"}
@@ -1058,6 +1062,24 @@
 {"id": "eq.manual.9-30a", "kind": "text", "doc": "P901-23W.pdf", "doc_sha256": "ec25b52e1d7b6b9ec9e5eaccc27452153208784d7d715908daa2595dd8f92423", "page": 920, "span": [893, 932], "span_sha256": "ef82e3cd9605ae90dcc4e5e91de144744938a553596d0c12e2a737807ec8dbab", "printed": "tc = sqrt(4 Tc b' / (phi_b p Fu))", "value": null, "agrees": true}
 {"id": "eq.manual.9-51", "kind": "visual", "doc": "P901-23W.pdf", "doc_sha256": "ec25b52e1d7b6b9ec9e5eaccc27452153208784d7d715908daa2595dd8f92423", "page": 842, "span": [1252, 1444], "span_sha256": "131f7ee34133bf9a706820b6640b03f263bf59bfcc004513dc16ed4b585a4d02", "printed": "wmin = 0.0155 (Fy tf^2 / b)(b^2/l^2 + 2) <= (5/8) tsw", "value": null, "label": "Manual Eq. 9-51", "read": "wmin = 0.0155 (Fy tf^2 / b)(b^2/l^2 + 2) <= (5/8) tsw", "agrees": true}
 {"id": "eq.manual.9-52", "kind": "text", "doc": "P901-23W.pdf", "doc_sha256": "ec25b52e1d7b6b9ec9e5eaccc27452153208784d7d715908daa2595dd8f92423", "page": 835, "span": [121, 329], "span_sha256": "ed3fbb69e81926e415bd0d73e08bfb1f45350b221839d5b7dccaaadca1af80ba", "printed": "dmin = 0.0941 tf sqrt((Fy p / b)(b^2/l^2 + 2)) <= 0.115 sqrt(Fy tsw)", "value": null, "agrees": true}
+{"id": "insert.M3x4.hole_max", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "insert.M3x4.hole_min", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "insert.M3x4.length", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "insert.M3x4.mass", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "insert.M3x4.thread_d", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "insert.M3x4.wall_min", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "insert.M3x5_7.hole_max", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "insert.M3x5_7.hole_min", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "insert.M3x5_7.length", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "insert.M3x5_7.mass", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "insert.M3x5_7.thread_d", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "insert.M3x5_7.wall_min", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "insert.M4x8_1.hole_max", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "insert.M4x8_1.hole_min", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "insert.M4x8_1.length", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "insert.M4x8_1.mass", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "insert.M4x8_1.thread_d", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "insert.M4x8_1.wall_min", "kind": "absent", "reason": "Petra's own value; no standard states it"}
 {"id": "led.red_0603.i_min", "kind": "absent", "reason": "a manufacturer's datasheet, not on disk"}
 {"id": "led.red_0603.if_max", "kind": "absent", "reason": "a manufacturer's datasheet, not on disk"}
 {"id": "led.red_0603.rd_max", "kind": "absent", "reason": "a manufacturer's datasheet, not on disk"}
@@ -1099,6 +1121,53 @@
 {"id": "mcb.B6.I2t", "kind": "absent", "reason": "EN 60898-1 is not on disk"}
 {"id": "mcb.B6.Icn", "kind": "absent", "reason": "IEC 60898-1:2015 is not on disk"}
 {"id": "mcb.B6.In", "kind": "absent", "reason": "IEC 60898-1:2015 is not on disk"}
+{"id": "polymer.abs.density", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "polymer.abs.hdt", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "polymer.abs.tg", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "polymer.asa.density", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "polymer.asa.hdt", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "polymer.asa.tg", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "polymer.pa12.density", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "polymer.pa12.hdt", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "polymer.pa12.tg", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "polymer.pc.density", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "polymer.pc.hdt", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "polymer.pc.tg", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "polymer.petg.density", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "polymer.petg.hdt", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "polymer.petg.tg", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "polymer.pla.density", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "polymer.pla.hdt", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "polymer.pla.tg", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "process.anodize_ii.buildup", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "process.anodize_ii.density", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "process.mill.al6061_3axis.tolerance", "kind": "absent", "reason": "a manufacturer's datasheet, not on disk"}
+{"id": "process.powder.sls_pa12.build_x", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "process.powder.sls_pa12.build_y", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "process.powder.sls_pa12.build_z", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "process.powder.sls_pa12.hole_shrink", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "process.powder.sls_pa12.tolerance", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "process.powder.sls_pa12.tolerance_rate", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "process.powder_coat.buildup", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "process.powder_coat.density", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "process.print.fdm_petg_0_4.bridge", "kind": "absent", "reason": "a manufacturer's datasheet, not on disk"}
+{"id": "process.print.fdm_petg_0_4.build_x", "kind": "absent", "reason": "a manufacturer's datasheet, not on disk"}
+{"id": "process.print.fdm_petg_0_4.build_y", "kind": "absent", "reason": "a manufacturer's datasheet, not on disk"}
+{"id": "process.print.fdm_petg_0_4.build_z", "kind": "absent", "reason": "a manufacturer's datasheet, not on disk"}
+{"id": "process.print.fdm_petg_0_4.hole_shrink", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "process.print.fdm_petg_0_4.tolerance", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "process.print.fdm_petg_0_4.tolerance_rate", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "process.print.fdm_pla_0_4.bridge", "kind": "absent", "reason": "a manufacturer's datasheet, not on disk"}
+{"id": "process.print.fdm_pla_0_4.build_x", "kind": "absent", "reason": "a manufacturer's datasheet, not on disk"}
+{"id": "process.print.fdm_pla_0_4.build_y", "kind": "absent", "reason": "a manufacturer's datasheet, not on disk"}
+{"id": "process.print.fdm_pla_0_4.build_z", "kind": "absent", "reason": "a manufacturer's datasheet, not on disk"}
+{"id": "process.print.fdm_pla_0_4.hole_shrink", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "process.print.fdm_pla_0_4.tolerance", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "process.print.fdm_pla_0_4.tolerance_rate", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "process.sheet.laser_al_3.bed_x", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "process.sheet.laser_al_3.bed_y", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "process.sheet.laser_al_3.thickness", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "process.sheet.laser_al_3.tolerance", "kind": "absent", "reason": "a manufacturer's datasheet, not on disk"}
 {"id": "reg.ldo1117_3v3_sot223.iout_max", "kind": "absent", "reason": "a manufacturer's datasheet, not on disk"}
 {"id": "reg.ldo1117_3v3_sot223.iq_max", "kind": "absent", "reason": "a manufacturer's datasheet, not on disk"}
 {"id": "reg.ldo1117_3v3_sot223.theta_ja", "kind": "absent", "reason": "a manufacturer's datasheet, not on disk"}
@@ -1161,6 +1230,228 @@
 {"id": "res.1206_1pct.r_min", "kind": "absent", "reason": "a manufacturer's datasheet, not on disk"}
 {"id": "res.1206_1pct.steps", "kind": "absent", "reason": "a manufacturer's datasheet, not on disk"}
 {"id": "res.1206_1pct.tcr", "kind": "absent", "reason": "a manufacturer's datasheet, not on disk"}
+{"id": "screw.M2_5x10_shcs.d", "kind": "absent", "reason": "ISO 4762:2004 is not on disk"}
+{"id": "screw.M2_5x10_shcs.head_d", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M2_5x10_shcs.head_h", "kind": "absent", "reason": "ISO 4762:2004 is not on disk"}
+{"id": "screw.M2_5x10_shcs.length", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M2_5x10_shcs.mass", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M2_5x10_shcs.pitch", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M2_5x10_shcs.thread_d", "kind": "absent", "reason": "ISO 4762:2004 is not on disk"}
+{"id": "screw.M2_5x12_shcs.d", "kind": "absent", "reason": "ISO 4762:2004 is not on disk"}
+{"id": "screw.M2_5x12_shcs.head_d", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M2_5x12_shcs.head_h", "kind": "absent", "reason": "ISO 4762:2004 is not on disk"}
+{"id": "screw.M2_5x12_shcs.length", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M2_5x12_shcs.mass", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M2_5x12_shcs.pitch", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M2_5x12_shcs.thread_d", "kind": "absent", "reason": "ISO 4762:2004 is not on disk"}
+{"id": "screw.M2_5x16_shcs.d", "kind": "absent", "reason": "ISO 4762:2004 is not on disk"}
+{"id": "screw.M2_5x16_shcs.head_d", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M2_5x16_shcs.head_h", "kind": "absent", "reason": "ISO 4762:2004 is not on disk"}
+{"id": "screw.M2_5x16_shcs.length", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M2_5x16_shcs.mass", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M2_5x16_shcs.pitch", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M2_5x16_shcs.thread_d", "kind": "absent", "reason": "ISO 4762:2004 is not on disk"}
+{"id": "screw.M2_5x20_shcs.d", "kind": "absent", "reason": "ISO 4762:2004 is not on disk"}
+{"id": "screw.M2_5x20_shcs.head_d", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M2_5x20_shcs.head_h", "kind": "absent", "reason": "ISO 4762:2004 is not on disk"}
+{"id": "screw.M2_5x20_shcs.length", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M2_5x20_shcs.mass", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M2_5x20_shcs.pitch", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M2_5x20_shcs.thread_d", "kind": "absent", "reason": "ISO 4762:2004 is not on disk"}
+{"id": "screw.M2_5x6_shcs.d", "kind": "absent", "reason": "ISO 4762:2004 is not on disk"}
+{"id": "screw.M2_5x6_shcs.head_d", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M2_5x6_shcs.head_h", "kind": "absent", "reason": "ISO 4762:2004 is not on disk"}
+{"id": "screw.M2_5x6_shcs.length", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M2_5x6_shcs.mass", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M2_5x6_shcs.pitch", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M2_5x6_shcs.thread_d", "kind": "absent", "reason": "ISO 4762:2004 is not on disk"}
+{"id": "screw.M2_5x8_shcs.d", "kind": "absent", "reason": "ISO 4762:2004 is not on disk"}
+{"id": "screw.M2_5x8_shcs.head_d", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M2_5x8_shcs.head_h", "kind": "absent", "reason": "ISO 4762:2004 is not on disk"}
+{"id": "screw.M2_5x8_shcs.length", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M2_5x8_shcs.mass", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M2_5x8_shcs.pitch", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M2_5x8_shcs.thread_d", "kind": "absent", "reason": "ISO 4762:2004 is not on disk"}
+{"id": "screw.M3x10_csk.csk_angle", "kind": "absent", "reason": "ISO 10642:2004 is not on disk"}
+{"id": "screw.M3x10_csk.d", "kind": "absent", "reason": "ISO 10642:2004 is not on disk"}
+{"id": "screw.M3x10_csk.head_d", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M3x10_csk.head_h", "kind": "absent", "reason": "ISO 10642:2004 is not on disk"}
+{"id": "screw.M3x10_csk.length", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M3x10_csk.mass", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M3x10_csk.pitch", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M3x10_csk.thread_d", "kind": "absent", "reason": "ISO 10642:2004 is not on disk"}
+{"id": "screw.M3x10_shcs.d", "kind": "absent", "reason": "ISO 4762:2004 is not on disk"}
+{"id": "screw.M3x10_shcs.head_d", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M3x10_shcs.head_h", "kind": "absent", "reason": "ISO 4762:2004 is not on disk"}
+{"id": "screw.M3x10_shcs.length", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M3x10_shcs.mass", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M3x10_shcs.pitch", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M3x10_shcs.thread_d", "kind": "absent", "reason": "ISO 4762:2004 is not on disk"}
+{"id": "screw.M3x12_csk.csk_angle", "kind": "absent", "reason": "ISO 10642:2004 is not on disk"}
+{"id": "screw.M3x12_csk.d", "kind": "absent", "reason": "ISO 10642:2004 is not on disk"}
+{"id": "screw.M3x12_csk.head_d", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M3x12_csk.head_h", "kind": "absent", "reason": "ISO 10642:2004 is not on disk"}
+{"id": "screw.M3x12_csk.length", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M3x12_csk.mass", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M3x12_csk.pitch", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M3x12_csk.thread_d", "kind": "absent", "reason": "ISO 10642:2004 is not on disk"}
+{"id": "screw.M3x12_shcs.d", "kind": "absent", "reason": "ISO 4762:2004 is not on disk"}
+{"id": "screw.M3x12_shcs.head_d", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M3x12_shcs.head_h", "kind": "absent", "reason": "ISO 4762:2004 is not on disk"}
+{"id": "screw.M3x12_shcs.length", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M3x12_shcs.mass", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M3x12_shcs.pitch", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M3x12_shcs.thread_d", "kind": "absent", "reason": "ISO 4762:2004 is not on disk"}
+{"id": "screw.M3x16_csk.csk_angle", "kind": "absent", "reason": "ISO 10642:2004 is not on disk"}
+{"id": "screw.M3x16_csk.d", "kind": "absent", "reason": "ISO 10642:2004 is not on disk"}
+{"id": "screw.M3x16_csk.head_d", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M3x16_csk.head_h", "kind": "absent", "reason": "ISO 10642:2004 is not on disk"}
+{"id": "screw.M3x16_csk.length", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M3x16_csk.mass", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M3x16_csk.pitch", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M3x16_csk.thread_d", "kind": "absent", "reason": "ISO 10642:2004 is not on disk"}
+{"id": "screw.M3x16_shcs.d", "kind": "absent", "reason": "ISO 4762:2004 is not on disk"}
+{"id": "screw.M3x16_shcs.head_d", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M3x16_shcs.head_h", "kind": "absent", "reason": "ISO 4762:2004 is not on disk"}
+{"id": "screw.M3x16_shcs.length", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M3x16_shcs.mass", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M3x16_shcs.pitch", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M3x16_shcs.thread_d", "kind": "absent", "reason": "ISO 4762:2004 is not on disk"}
+{"id": "screw.M3x20_csk.csk_angle", "kind": "absent", "reason": "ISO 10642:2004 is not on disk"}
+{"id": "screw.M3x20_csk.d", "kind": "absent", "reason": "ISO 10642:2004 is not on disk"}
+{"id": "screw.M3x20_csk.head_d", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M3x20_csk.head_h", "kind": "absent", "reason": "ISO 10642:2004 is not on disk"}
+{"id": "screw.M3x20_csk.length", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M3x20_csk.mass", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M3x20_csk.pitch", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M3x20_csk.thread_d", "kind": "absent", "reason": "ISO 10642:2004 is not on disk"}
+{"id": "screw.M3x20_shcs.d", "kind": "absent", "reason": "ISO 4762:2004 is not on disk"}
+{"id": "screw.M3x20_shcs.head_d", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M3x20_shcs.head_h", "kind": "absent", "reason": "ISO 4762:2004 is not on disk"}
+{"id": "screw.M3x20_shcs.length", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M3x20_shcs.mass", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M3x20_shcs.pitch", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M3x20_shcs.thread_d", "kind": "absent", "reason": "ISO 4762:2004 is not on disk"}
+{"id": "screw.M3x6_csk.csk_angle", "kind": "absent", "reason": "ISO 10642:2004 is not on disk"}
+{"id": "screw.M3x6_csk.d", "kind": "absent", "reason": "ISO 10642:2004 is not on disk"}
+{"id": "screw.M3x6_csk.head_d", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M3x6_csk.head_h", "kind": "absent", "reason": "ISO 10642:2004 is not on disk"}
+{"id": "screw.M3x6_csk.length", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M3x6_csk.mass", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M3x6_csk.pitch", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M3x6_csk.thread_d", "kind": "absent", "reason": "ISO 10642:2004 is not on disk"}
+{"id": "screw.M3x6_shcs.d", "kind": "absent", "reason": "ISO 4762:2004 is not on disk"}
+{"id": "screw.M3x6_shcs.head_d", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M3x6_shcs.head_h", "kind": "absent", "reason": "ISO 4762:2004 is not on disk"}
+{"id": "screw.M3x6_shcs.length", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M3x6_shcs.mass", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M3x6_shcs.pitch", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M3x6_shcs.thread_d", "kind": "absent", "reason": "ISO 4762:2004 is not on disk"}
+{"id": "screw.M3x8_csk.csk_angle", "kind": "absent", "reason": "ISO 10642:2004 is not on disk"}
+{"id": "screw.M3x8_csk.d", "kind": "absent", "reason": "ISO 10642:2004 is not on disk"}
+{"id": "screw.M3x8_csk.head_d", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M3x8_csk.head_h", "kind": "absent", "reason": "ISO 10642:2004 is not on disk"}
+{"id": "screw.M3x8_csk.length", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M3x8_csk.mass", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M3x8_csk.pitch", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M3x8_csk.thread_d", "kind": "absent", "reason": "ISO 10642:2004 is not on disk"}
+{"id": "screw.M3x8_shcs.d", "kind": "absent", "reason": "ISO 4762:2004 is not on disk"}
+{"id": "screw.M3x8_shcs.head_d", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M3x8_shcs.head_h", "kind": "absent", "reason": "ISO 4762:2004 is not on disk"}
+{"id": "screw.M3x8_shcs.length", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M3x8_shcs.mass", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M3x8_shcs.pitch", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M3x8_shcs.thread_d", "kind": "absent", "reason": "ISO 4762:2004 is not on disk"}
+{"id": "screw.M4x10_csk.csk_angle", "kind": "absent", "reason": "ISO 10642:2004 is not on disk"}
+{"id": "screw.M4x10_csk.d", "kind": "absent", "reason": "ISO 10642:2004 is not on disk"}
+{"id": "screw.M4x10_csk.head_d", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M4x10_csk.head_h", "kind": "absent", "reason": "ISO 10642:2004 is not on disk"}
+{"id": "screw.M4x10_csk.length", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M4x10_csk.mass", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M4x10_csk.pitch", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M4x10_csk.thread_d", "kind": "absent", "reason": "ISO 10642:2004 is not on disk"}
+{"id": "screw.M4x10_shcs.d", "kind": "absent", "reason": "ISO 4762:2004 is not on disk"}
+{"id": "screw.M4x10_shcs.head_d", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M4x10_shcs.head_h", "kind": "absent", "reason": "ISO 4762:2004 is not on disk"}
+{"id": "screw.M4x10_shcs.length", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M4x10_shcs.mass", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M4x10_shcs.pitch", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M4x10_shcs.thread_d", "kind": "absent", "reason": "ISO 4762:2004 is not on disk"}
+{"id": "screw.M4x12_csk.csk_angle", "kind": "absent", "reason": "ISO 10642:2004 is not on disk"}
+{"id": "screw.M4x12_csk.d", "kind": "absent", "reason": "ISO 10642:2004 is not on disk"}
+{"id": "screw.M4x12_csk.head_d", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M4x12_csk.head_h", "kind": "absent", "reason": "ISO 10642:2004 is not on disk"}
+{"id": "screw.M4x12_csk.length", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M4x12_csk.mass", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M4x12_csk.pitch", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M4x12_csk.thread_d", "kind": "absent", "reason": "ISO 10642:2004 is not on disk"}
+{"id": "screw.M4x12_shcs.d", "kind": "absent", "reason": "ISO 4762:2004 is not on disk"}
+{"id": "screw.M4x12_shcs.head_d", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M4x12_shcs.head_h", "kind": "absent", "reason": "ISO 4762:2004 is not on disk"}
+{"id": "screw.M4x12_shcs.length", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M4x12_shcs.mass", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M4x12_shcs.pitch", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M4x12_shcs.thread_d", "kind": "absent", "reason": "ISO 4762:2004 is not on disk"}
+{"id": "screw.M4x16_csk.csk_angle", "kind": "absent", "reason": "ISO 10642:2004 is not on disk"}
+{"id": "screw.M4x16_csk.d", "kind": "absent", "reason": "ISO 10642:2004 is not on disk"}
+{"id": "screw.M4x16_csk.head_d", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M4x16_csk.head_h", "kind": "absent", "reason": "ISO 10642:2004 is not on disk"}
+{"id": "screw.M4x16_csk.length", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M4x16_csk.mass", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M4x16_csk.pitch", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M4x16_csk.thread_d", "kind": "absent", "reason": "ISO 10642:2004 is not on disk"}
+{"id": "screw.M4x16_shcs.d", "kind": "absent", "reason": "ISO 4762:2004 is not on disk"}
+{"id": "screw.M4x16_shcs.head_d", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M4x16_shcs.head_h", "kind": "absent", "reason": "ISO 4762:2004 is not on disk"}
+{"id": "screw.M4x16_shcs.length", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M4x16_shcs.mass", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M4x16_shcs.pitch", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M4x16_shcs.thread_d", "kind": "absent", "reason": "ISO 4762:2004 is not on disk"}
+{"id": "screw.M4x20_csk.csk_angle", "kind": "absent", "reason": "ISO 10642:2004 is not on disk"}
+{"id": "screw.M4x20_csk.d", "kind": "absent", "reason": "ISO 10642:2004 is not on disk"}
+{"id": "screw.M4x20_csk.head_d", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M4x20_csk.head_h", "kind": "absent", "reason": "ISO 10642:2004 is not on disk"}
+{"id": "screw.M4x20_csk.length", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M4x20_csk.mass", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M4x20_csk.pitch", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M4x20_csk.thread_d", "kind": "absent", "reason": "ISO 10642:2004 is not on disk"}
+{"id": "screw.M4x20_shcs.d", "kind": "absent", "reason": "ISO 4762:2004 is not on disk"}
+{"id": "screw.M4x20_shcs.head_d", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M4x20_shcs.head_h", "kind": "absent", "reason": "ISO 4762:2004 is not on disk"}
+{"id": "screw.M4x20_shcs.length", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M4x20_shcs.mass", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M4x20_shcs.pitch", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M4x20_shcs.thread_d", "kind": "absent", "reason": "ISO 4762:2004 is not on disk"}
+{"id": "screw.M4x6_csk.csk_angle", "kind": "absent", "reason": "ISO 10642:2004 is not on disk"}
+{"id": "screw.M4x6_csk.d", "kind": "absent", "reason": "ISO 10642:2004 is not on disk"}
+{"id": "screw.M4x6_csk.head_d", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M4x6_csk.head_h", "kind": "absent", "reason": "ISO 10642:2004 is not on disk"}
+{"id": "screw.M4x6_csk.length", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M4x6_csk.mass", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M4x6_csk.pitch", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M4x6_csk.thread_d", "kind": "absent", "reason": "ISO 10642:2004 is not on disk"}
+{"id": "screw.M4x6_shcs.d", "kind": "absent", "reason": "ISO 4762:2004 is not on disk"}
+{"id": "screw.M4x6_shcs.head_d", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M4x6_shcs.head_h", "kind": "absent", "reason": "ISO 4762:2004 is not on disk"}
+{"id": "screw.M4x6_shcs.length", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M4x6_shcs.mass", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M4x6_shcs.pitch", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M4x6_shcs.thread_d", "kind": "absent", "reason": "ISO 4762:2004 is not on disk"}
+{"id": "screw.M4x8_csk.csk_angle", "kind": "absent", "reason": "ISO 10642:2004 is not on disk"}
+{"id": "screw.M4x8_csk.d", "kind": "absent", "reason": "ISO 10642:2004 is not on disk"}
+{"id": "screw.M4x8_csk.head_d", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M4x8_csk.head_h", "kind": "absent", "reason": "ISO 10642:2004 is not on disk"}
+{"id": "screw.M4x8_csk.length", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M4x8_csk.mass", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M4x8_csk.pitch", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M4x8_csk.thread_d", "kind": "absent", "reason": "ISO 10642:2004 is not on disk"}
+{"id": "screw.M4x8_shcs.d", "kind": "absent", "reason": "ISO 4762:2004 is not on disk"}
+{"id": "screw.M4x8_shcs.head_d", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M4x8_shcs.head_h", "kind": "absent", "reason": "ISO 4762:2004 is not on disk"}
+{"id": "screw.M4x8_shcs.length", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M4x8_shcs.mass", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M4x8_shcs.pitch", "kind": "absent", "reason": "Petra's own value; no standard states it"}
+{"id": "screw.M4x8_shcs.thread_d", "kind": "absent", "reason": "ISO 4762:2004 is not on disk"}
 {"id": "stainless.A4.anodic_index", "kind": "absent", "reason": "MIL-STD-889 is not on disk"}
 {"id": "steel.A36.anodic_index", "kind": "absent", "reason": "MIL-STD-889 is not on disk"}
 {"id": "steel.A36.fu", "kind": "absent", "reason": "neither Companion volume names A36, and AISC 360-22 lists the grade without strengths"}

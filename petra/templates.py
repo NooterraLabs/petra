@@ -536,4 +536,70 @@ TEMPLATES: dict[str, tuple[str, str, str]] = {
         'claim adc_low:  psu.sense.output >= 2.5 V\n'
         'claim lit:      psu.d1.current >= 5 mA\n'
     ),
+    'part': (
+        'examples/parts/part.petra',
+        'case',
+        'petra 0\n'
+        '\n'
+        '# A printed PETG tray, 60 x 40 x 20 mm with 2 mm walls. The mesh file sits beside this\n'
+        '# design and is pinned by its hash. Coverage checks that the tray fits the printer, that\n'
+        '# PETG keeps its shape in an indoor room, and that no face spans air past the bridge.\n'
+        '# The claim bounds its mass, counting the tray as solid, since no fill line says otherwise,\n'
+        "# and its surface 0.5 mm out, the printer's tolerance.\n"
+        '# Five print rules have no model yet (min_feature, thin_wall, min_hole, overhang and\n'
+        '# support_access), so the verdict is UNKNOWN until each is checked by hand and waived.\n'
+        '\n'
+        'design "printed-case" {\n'
+        '  owner "e.designer@example.org"\n'
+        '  environment indoor_dry\n'
+        '}\n'
+        '\n'
+        'part case {\n'
+        '  mesh "case.stl" sha256 "b86411789c91981853e772444e368ef353ca9a5ce646b596202ed6dc4bc6dc5a" units mm\n'
+        '  material polymer.petg\n'
+        '  process process.print.fdm_petg_0_4\n'
+        '}\n'
+        '\n'
+        'claim light: case.mass <= 25 g\n'
+    ),
+    'assembly': (
+        'examples/parts/assembly.petra',
+        'box',
+        'petra 0\n'
+        '\n'
+        "# A bought 50 x 30 mm board dropped into the printed tray. The board's maker signs its\n"
+        '# outline tolerance. The assembly says where each part sits and how the board arrives:\n'
+        '# straight down from 25 mm above its place. Coverage checks that it goes in at the worst\n'
+        '# corner of both tolerances and that it rests on the tray.\n'
+        "# The claim bounds the mass of both, with the board's weighed mass and the tray counted\n"
+        "# solid with its surface 0.5 mm out, the printer's tolerance.\n"
+        '# Five print rules have no model yet (min_feature, thin_wall, min_hole, overhang and\n'
+        '# support_access), so the verdict is UNKNOWN until each is checked by hand and waived.\n'
+        '\n'
+        'design "board-in-case" {\n'
+        '  owner "e.designer@example.org"\n'
+        '  environment indoor_dry\n'
+        '}\n'
+        '\n'
+        'part case {\n'
+        '  mesh "case.stl" sha256 "b86411789c91981853e772444e368ef353ca9a5ce646b596202ed6dc4bc6dc5a" units mm\n'
+        '  material polymer.petg\n'
+        '  process process.print.fdm_petg_0_4\n'
+        '}\n'
+        '\n'
+        'part board {\n'
+        '  mesh "board.stl" sha256 "5ac82cbab420f0ee38ced9bf67fe64d51c576127b40fc7cae78cafdbaa36cd97" units mm\n'
+        '  material polymer.pc\n'
+        '  tolerance in [0.1 mm, 0.1 mm] signed "e.designer@example.org" source "board maker\'s outline drawing"\n'
+        '  mass in [8 g, 9 g] signed "e.designer@example.org" source "weighed, five boards"\n'
+        '}\n'
+        '\n'
+        'assembly box {\n'
+        '  place case at (0 mm, 0 mm, 0 mm) facing top front\n'
+        '  place board at (5 mm, 5 mm, 2 mm) facing top front\n'
+        '  insert board along bottom from 25 mm\n'
+        '}\n'
+        '\n'
+        'claim light: box.mass <= 35 g\n'
+    ),
 }
