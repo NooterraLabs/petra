@@ -11,8 +11,9 @@ degrees about z, when each mesh frame moves and its placement moves back, when t
 assembly moves, when flat edges of every mesh are split at their midpoints, when the
 triangles are reordered, when each triangle starts at its next corner, when every
 coordinate is written with six decimals, and when the first part's frame moves 10^5 mm
-with one corner 1e-13 mm out, near the 2^60 the exact evaluator holds. Turning by 90
-degrees leaves out the build-volume rules, whose machine axes do not turn with the part.
+with one corner 1e-13 mm out, near the 2^60 the exact evaluator holds, and when every
+length doubles where every bound is signed or linear in length. Turning by 90 degrees
+leaves out the build-volume rules, whose machine axes do not turn with the part.
 
 Planted: a mutation that breaks the design never comes back PASS, read as every modelled
 obligation certified. An unmodelled rule's gap is left out, since it is open whatever the
@@ -31,6 +32,7 @@ import argparse
 import json
 import math
 import random
+import re
 import sys
 import tempfile
 import time
@@ -414,6 +416,31 @@ def _each_mesh(d: Design, f) -> Design:
     return replace(d, parts=[replace(p, tris=f(p.tris)) for p in d.parts])
 
 
+def _scaled(d: Design) -> Design | None:
+    """Every length doubled: meshes, holes, places, travels, signed tolerances and every
+    length a line states, with each mass claim times 8. Defined only where every bound is
+    signed or linear in length, the press family and a bare solid block, whose mill's
+    0.13 mm becomes a signed 0.26 mm and whose mill rules, which have no model, drop out."""
+    if d.family == "solid" and d.parts[0].finish is None:
+        d = replace(d, parts=[replace(d.parts[0], process=None, tolerance=Q("0.13"))])
+    elif d.family != "press":
+        return None
+
+    def two(v):
+        return tuple(2 * c for c in v)
+
+    def lengths(text):
+        return re.sub(r"(-?\d+(?:\.\d+)?) mm", lambda m: f"{num(2 * Q(m.group(1)))} mm", text)
+
+    parts = [replace(p, tris=[tuple(two(v) for v in t) for t in p.tris],
+                     tolerance=None if p.tolerance is None else 2 * p.tolerance,
+                     holes=[replace(h, at=two(h.at), diameter=2 * h.diameter, extra=lengths(h.extra)) for h in p.holes],
+                     cg=None if p.cg is None else two(p.cg)) for p in d.parts]
+    claims = [re.sub(r"(-?\d+(?:\.\d+)?) g\b", lambda m: f"{num(8 * Q(m.group(1)))} g", c) for c in d.claims]
+    return replace(d, parts=parts, places=[(n, two(o)) for n, o in d.places],
+                   inserts=[(n, a, 2 * t) for n, a, t in d.inserts], lines=[lengths(x) for x in d.lines], claims=claims)
+
+
 # name -> (design, rng) -> (variant, decimals to write, rules left out) or None when it does not apply
 RELATIONS: dict[str, Callable] = {
     "turn_90": lambda d, rng: (_turned(d, lambda p: (-p[1], p[0], p[2])), 0, EXTENT),
@@ -426,6 +453,7 @@ RELATIONS: dict[str, Callable] = {
     "next_corner": lambda d, rng: (_each_mesh(d, lambda t: [(b, c, a) for a, b, c in t]), 0, frozenset()),
     "decimals": lambda d, rng: (d, 6, frozenset()),
     "far_frame": lambda d, rng: (_far(d), 0, frozenset()),
+    "scale_2": lambda d, rng: None if _scaled(d) is None else (_scaled(d), 0, UNMODELLED),
 }
 
 

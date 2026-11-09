@@ -219,7 +219,7 @@ TRUSTED: tuple[Group, ...] = (
                            "so the kernel re-checks the arithmetic over them and not the measures; "
                            "tests/test_parts_exact.py checks the integer primitives against dense sampling, "
                            "which is not a second implementation. scripts/parts_gate.py holds generated "
-                           "designs to nine metamorphic relations and checks that planted faults never "
+                           "designs to ten metamorphic relations and checks that planted faults never "
                            "pass, which tests the layer against itself. docs/parts.md 'Testing' plans a "
                            "clean-room twin of analytic assemblies, and it is not written yet.")),
     Group("premises, coverage, verdict and pipeline",

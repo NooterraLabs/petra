@@ -1,5 +1,5 @@
 """The parts gate (scripts/parts_gate.py) on a seeded slice: one design of each family keeps
-its outcomes under three relations, and no plant on it comes back PASS. Two faults patched
+its outcomes under four relations, and no plant on it comes back PASS. Two faults patched
 in here, and never shipped, show the gate catches the classes it was built for: stops read
 by triangle, which a split face breaks, and a thread hole with no wall measured, which a
 thinned base slips past."""
@@ -28,7 +28,7 @@ SEED = 1
 FAMILIES = 5
 """The stream deals the families in turn, so its first 5 designs are one of each."""
 ENCLOSURE, STACK = 0, 4
-RELATIONS = ("turn_90", "split_edges", "far_frame")
+RELATIONS = ("turn_90", "split_edges", "far_frame", "scale_2")
 
 
 class Slice(unittest.TestCase):
