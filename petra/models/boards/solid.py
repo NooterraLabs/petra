@@ -11,6 +11,12 @@ features.THICKNESS for the thickness as a range, and features.HOLES for the dril
 that builds OVER at the range's top and UNDER at its bottom bounds the made board's
 thickness.
 
+Each mesh is named `board.path#what`, where `what` says which solid it is: the board with its
+`Errs` side, its thickness and whether its holes are cut, or a keep-out with its footprint's
+place in the file, its face, its `Errs` side and its heights. Its sha256 digests that name, the board file's sha256 and the mesh's exact
+corners and faces. The mesh module has no public constructor for a mesh built in memory, so
+`_extrude` calls its private `_solid`.
+
 Mesh frame: x is the board's x, y is minus the board's y, and z points out of the top face,
 so the frame is right-handed and the top face seen from above looks as KiCad draws it. The
 board fills 0 <= z <= thickness.
@@ -23,6 +29,7 @@ of the region once and no point outside it (docs/boards.md, "Solids").
 """
 from __future__ import annotations
 
+import hashlib
 from collections import Counter
 from dataclasses import dataclass
 from enum import Enum
@@ -112,7 +119,8 @@ def board_solid(board: Board, errs: Errs, *, thickness: Fraction | None = None,
                   for v in board.vias if v.through or errs is Errs.UNDER]
     over = errs is Errs.OVER
     try:
-        mesh = _extrude(f"{board.path}#board-{errs.value}", board.sha256, edge.outer if over else edge.inner,
+        mesh = _extrude(board, f"board {errs.value} {t} mm thick{'' if holes else ' holes uncut'}",
+                        edge.outer if over else edge.inner,
                         [(name, b.inner if over else b.outer) for name, b in voids], Fraction(0), t)
     except ShapeError as err:
         raise BoardError(board.path, f"the {errs.value} solid: {err}") from None
@@ -125,6 +133,8 @@ def keepout(board: Board, footprint: Footprint, low: Fraction, high: Fraction, e
     footprint's own face unless `face` names the other: one prism over the convex hull of the
     face's courtyard and of every shape its Fab layer draws (`Courtyard.room`). The heights
     are premises. A board file holds none."""
+    if footprint not in board.footprints:
+        raise ValueError(f"{footprint.reference} is not a footprint of {board.path}")
     face = face or footprint.side
     yard = footprint.courtyard(face)
     if not isinstance(yard, Courtyard):
@@ -136,7 +146,8 @@ def keepout(board: Board, footprint: Footprint, low: Fraction, high: Fraction, e
     z0, z1 = (t + low, t + high) if face is Side.TOP else (-high, -low)
     b = yard.room
     try:
-        mesh = _extrude(f"{board.path}#{footprint.reference}-{face.value}", board.sha256,
+        n = board.footprints.index(footprint)
+        mesh = _extrude(board, f"footprint {n} {footprint.reference} keep-out {face.value} {errs.value} z {z0} to {z1} mm",
                         b.outer if errs is Errs.OVER else b.inner, [], z0, z1)
     except ShapeError as err:
         raise BoardError(board.path, f"the keep-out of {footprint.reference}: {err}") from None
@@ -146,8 +157,9 @@ def keepout(board: Board, footprint: Footprint, low: Fraction, high: Fraction, e
 # --- Extrusion --------------------------------------------------------------------------
 
 
-def _extrude(path: str, sha256: str, outer, voids, low: Fraction, high: Fraction) -> Mesh:
-    """The region inside `outer` and outside every void polygon, swept from low to high."""
+def _extrude(board: Board, what: str, outer, voids, low: Fraction, high: Fraction) -> Mesh:
+    """The region inside `outer` and outside every void polygon, swept from low to high, as
+    a mesh named as the module docstring says."""
     _apart(outer, voids)
     rings = [[(x, -y) for x, y in reversed(outer)]] + [[(x, -y) for x, y in v] for _, v in voids]
     pts, boundary, tris = _triangulate(rings)
@@ -155,8 +167,10 @@ def _extrude(path: str, sha256: str, outer, voids, low: Fraction, high: Fraction
     coords = [c for x, y in pts for c in (x, y, low)] + [c for x, y in pts for c in (x, y, high)]
     faces = [(a + n, b + n, c + n) for a, b, c in tris] + [(a, c, b) for a, b, c in tris]
     faces += [f for u, v in boundary for f in ((u, v, v + n), (u, v + n, u + n))]
+    path, faces = f"{board.path}#{what}", np.array(faces, dtype=np.int64)
+    text = "\n".join([path, board.sha256, " ".join(map(str, coords))]).encode("utf-8")
     try:
-        return _solid(path, sha256, coords, np.array(faces, dtype=np.int64), Fraction(1))
+        return _solid(path, hashlib.sha256(text + faces.astype("<i8").tobytes()).hexdigest(), coords, faces, Fraction(1))
     except MeshError as err:
         raise ShapeError(str(err)) from None
 

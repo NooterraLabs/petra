@@ -68,7 +68,7 @@ CORE_CAP = Limit(1000, "Set on 2026-11-08 at 140f742, where the core measured 95
                        "A new rule adds 3 to 5 lines to rules/__init__.py (inferred from its tables), so "
                        "the headroom covers the registry entries of several rules.")
 
-TRUSTED_CEILING = Limit(17051, "Set on 2026-11-08 at 140f742, where the trusted base measured 13,530 "
+TRUSTED_CEILING = Limit(17058, "Set on 2026-11-08 at 140f742, where the trusted base measured 13,530 "
                                "code lines: core 957, rules 457, outside the kernel 12,116. Raised on "
                                "2026-11-08 on branch parts-core as the parts layer replaces its scaffold: "
                                "classifying the scaffold measured 14,269, and the mesh reader with its "
@@ -83,7 +83,8 @@ TRUSTED_CEILING = Limit(17051, "Set on 2026-11-08 at 140f742, where the trusted 
                                "of each part's keep-out, with the checked triangulation, 17,013. The fixes "
                                "after its review on branch kicad-fix, marks from the words of a library id "
                                "and a keep-out room over the courtyard and the Fab layer's shapes, measured "
-                               "17,051. Raise it in "
+                               "17,051, and a name for each solid's mesh that holds what defines it 17,058. "
+                               "Raise it in "
                                "the commit that needs "
                                "more and say why here.")
 
