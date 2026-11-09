@@ -102,23 +102,22 @@ import re
 import sys
 import traceback
 from pathlib import Path
-from typing import Mapping, NoReturn
+from typing import TYPE_CHECKING, Mapping, NoReturn
 
-from . import kernel
-from .certs import CertificateError, CertStore, decode_certificate
-from .lang import LolaSyntaxError, LoweringError, load_design
-from .library import Library, certify_family
-from .models.base import ComponentError
-from .pipeline import explain
-from .registry import DeckError, build_deck, build_registry, check_deck, read_deck, write_deck
-from .repair import check_text
-from .solvers import SolverSource
-from .units import Quantity, UnitError, parse_quantity
-from .verdict import SEVERITY, Refuted
+if TYPE_CHECKING:
+    from .units import Quantity
 
 EXIT_CODES: Mapping[str, int] = {"PASS": 0, "FAIL": 1, "UNKNOWN": 2, "INPUT_ERROR": 3, "INTERNAL_ERROR": 4, "MARGINAL": 5}
 
-_INPUT_ERRORS = (LolaSyntaxError, LoweringError, ComponentError, DeckError, OSError)
+
+def _input_errors() -> tuple[type[Exception], ...]:
+    """The exceptions that are input errors. A command imports what it uses when it runs,
+    so that `petra mcp` starts without the language, the models, the kernel or the solvers."""
+    from .lang import LolaSyntaxError, LoweringError
+    from .models.base import ComponentError
+    from .registry import DeckError
+
+    return (LolaSyntaxError, LoweringError, ComponentError, DeckError, OSError)
 
 
 class _Parser(argparse.ArgumentParser):
@@ -216,13 +215,19 @@ def cmd_check(args: argparse.Namespace) -> int:
     """repair.check_text on the file, print its text() or json.dumps(to_json(),
     sort_keys=True). Returns EXIT_CODES[status], or EXIT_CODES["INPUT_ERROR"] when the file
     or the deck cannot be read or the design does not lower (message on stderr)."""
+    from .certs import CertStore
+    from .library import Library
+    from .registry import build_registry, read_deck
+    from .repair import check_text
+    from .solvers import SolverSource
+
     try:
         registry = build_registry()
         text = Path(args.file).read_text(encoding="utf-8")
         deck = read_deck(args.deck) if args.deck else None
         store = CertStore(args.certs) if args.certs else None
         library = Library(args.library) if args.library else None
-    except _INPUT_ERRORS as exc:
+    except _input_errors() as exc:
         return _input_error(exc)
     sources = tuple(s for s in (store, library, None if args.no_solve else SolverSource()) if s is not None)
     checked = check_text(text, args.file, registry, sources, sink=store, deck=deck, moves=not args.no_solve)
@@ -239,10 +244,14 @@ def cmd_mcp(args: argparse.Namespace) -> int:
 
 
 def cmd_explain(args: argparse.Namespace) -> int:
+    from .lang import load_design
+    from .pipeline import explain
+    from .registry import build_registry
+
     try:
         registry = build_registry()
         text = explain(load_design(args.file, registry), registry)
-    except _INPUT_ERRORS as exc:
+    except _input_errors() as exc:
         return _input_error(exc)
     print(text)
     return 0
@@ -250,6 +259,12 @@ def cmd_explain(args: argparse.Namespace) -> int:
 
 def cmd_envelope(args: argparse.Namespace) -> int:
     from .envelope import EnvelopeError, envelope, render, to_json
+    from .lang import load_design
+    from .library import Library
+    from .registry import build_registry
+    from .solvers import SolverSource
+    from .units import UnitError
+    from .verdict import SEVERITY
 
     try:
         registry = build_registry()
@@ -261,7 +276,7 @@ def cmd_envelope(args: argparse.Namespace) -> int:
         sources = tuple(s for s in (library, SolverSource()) if s is not None)
         found = envelope(design, registry, args.input, quantities[0], quantities[1], sources, at=quantities[2], resolution=quantities[3],
                          max_probes=args.max_probes, unit=unit)
-    except (*_INPUT_ERRORS, EnvelopeError, UnitError) as exc:
+    except (*_input_errors(), EnvelopeError, UnitError) as exc:
         return _input_error(exc)
     print(json.dumps(to_json(found), sort_keys=True) if args.json else render(found))
     if found.start.status not in SEVERITY:
@@ -275,6 +290,8 @@ _QUANTITY = re.compile(r"\s*([+-]?[0-9]+(?:\.[0-9]+|/[0-9]+)?)\s*(\S*)\s*")
 
 def _quantity(text: str) -> Quantity:
     """ "-20 degC", "-20degC", "1/2" or "30 %" as an exact quantity."""
+    from .units import UnitError, parse_quantity
+
     match = _QUANTITY.fullmatch(text)
     if match is None:
         raise UnitError(f"{text!r} is not a number with an optional unit")
@@ -285,6 +302,9 @@ def _quantity(text: str) -> Quantity:
 def cmd_verify(args: argparse.Namespace) -> int:
     """The statement comes from the file, so a pass says only that the evidence proves
     the statement written there; `petra check` is what ties a statement to a design."""
+    from . import kernel
+    from .certs import CertificateError
+
     worst = 0
     for path in args.certs:
         try:
@@ -304,6 +324,8 @@ def cmd_verify(args: argparse.Namespace) -> int:
 
 def _read_certificate(path: str):
     """A certificate envelope, or a library file (the envelope plus "models")."""
+    from .certs import CertificateError, decode_certificate
+
     def unique(pairs: list[tuple[str, object]]) -> dict:
         obj = dict(pairs)
         if len(obj) != len(pairs):
@@ -320,11 +342,16 @@ def _read_certificate(path: str):
 
 
 def cmd_certify_family(args: argparse.Namespace) -> int:
+    from .lang import load_design
+    from .library import Library, certify_family
+    from .registry import build_registry
+    from .verdict import Refuted
+
     try:
         registry = build_registry()
         design = load_design(args.file, registry)
         result = certify_family(design, registry, Library(args.library))
-    except (*_INPUT_ERRORS, ValueError) as exc:
+    except (*_input_errors(), ValueError) as exc:
         return _input_error(exc)
     for entry in result.stored:
         print(f"stored   {entry.family_key} (shape {entry.shape_hash})")
@@ -340,6 +367,8 @@ def cmd_certify_family(args: argparse.Namespace) -> int:
 
 
 def cmd_registry_build(args: argparse.Namespace) -> int:
+    from .registry import build_deck, write_deck
+
     try:
         write_deck(build_deck(), args.out)
     except OSError as exc:
@@ -351,6 +380,8 @@ def cmd_registry_build(args: argparse.Namespace) -> int:
 def cmd_registry_check(args: argparse.Namespace) -> int:
     """registry.check_deck on the given deck, or on registry.build_deck() when none is
     given. Prints each flagged relation."""
+    from .registry import DeckError, build_deck, check_deck, read_deck
+
     try:
         deck = read_deck(args.deck) if args.deck else build_deck()
     except (DeckError, OSError) as exc:
@@ -364,6 +395,7 @@ def cmd_registry_check(args: argparse.Namespace) -> int:
 
 def cmd_registry_recall(args: argparse.Namespace) -> int:
     from .recall import RecallError, recall, render, to_json
+    from .registry import build_registry
 
     try:
         found = recall(build_registry(), args.id, args.files)
@@ -443,17 +475,19 @@ def cmd_docs(args: argparse.Namespace) -> int:
 
 
 def cmd_new(args: argparse.Namespace) -> int:
+    from .registry import build_registry
     from .teach import TeachError, new_text
 
     try:
         text = new_text(args.kind, args.name, build_registry())
-    except (*_INPUT_ERRORS, TeachError) as exc:
+    except (*_input_errors(), TeachError) as exc:
         return _input_error(exc)
     print(text, end="")
     return 0
 
 
 def cmd_registry_list(args: argparse.Namespace) -> int:
+    from .registry import build_registry
     from .teach import TeachError, registry_text
 
     try:
@@ -484,7 +518,10 @@ def _join_negative(argv: list[str]) -> list[str]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(_join_negative(sys.argv[1:] if argv is None else list(argv)))
+    argv = _join_negative(sys.argv[1:] if argv is None else list(argv))
+    # The parser's help names every kind, which imports every model. An MCP client waits only
+    # so long for the handshake, so `petra mcp` skips the parser.
+    args = argparse.Namespace(run=cmd_mcp) if argv == ["mcp"] else build_parser().parse_args(argv)
     try:
         return args.run(args)
     except Exception:  # an uncaught crash would exit 1, which reads as FAIL
