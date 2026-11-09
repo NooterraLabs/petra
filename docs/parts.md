@@ -1,451 +1,219 @@
 # Parts and assemblies
 
-This page designs Petra's move from steel connections to physical parts that agents make. A part is a closed triangle mesh with a material and a process. An assembly places parts and circuit boards and says how they go together. Petra checks that the parts fit, that each can be made by its process, and says what it could not decide.
+Petra checks physical parts that agents make in code-CAD. A part is a closed triangle mesh with a material and, unless it is bought, a process preset. An assembly places parts, says how each one arrives at its place, and names the screws, gaps and press fits that join them. Each check proves its rule at the worst case of every declared tolerance, refutes it at the point that breaks it, or says what it needs to decide.
 
-The scaffold is on branch `parts-scaffold` under `petra/models/parts/` and `petra/registry/parts.py`. It has types, signatures and contracts, and every unwritten body raises `NotImplementedError`. It declares no `DOMAIN`, so nothing it holds reaches a verdict yet.
+The layer lives in `petra/models/parts/` and `petra/registry/parts.py`. The scaffold that came before it is on branch `parts-scaffold`. This page describes branch `parts-core`.
 
-Every number carries a label. **Measured** means run or counted while writing this page, or measured by one of the two design sketches on this machine. **Inferred** means reasoned from measured facts. **Guess** means a guess.
-
-## Problem
-
-Agents can now write meshes and board files. This design targets the mistakes that stop a part from being made or put together. A board does not slide into its case. A screw is too short for the stack it clamps. A USB plug hits the wall below its opening. A wall is thinner than two printed lines. An inside corner is sharper than any cutter can reach. Steel connections taught Petra to check strength against a code. Parts need it to check geometry against a process.
-
-Four constraints make the shape non-obvious.
-
-- **The kernel is frozen.** It holds 1,414 of its 1,500 budgeted code lines (measured with `tests/test_kernel_budget.py`). Rules R1 to R6 bound expressions over boxes of hypotheses. None quantifies over points of space.
-- **Statements take exact rationals only (T3).** An STL mesh holds float32 coordinates. A voxel test in floats cannot sit in the trusted path.
-- **Every premise number is a labelled `RangeHyp` (decision 2), and the statement is a pure function of the design (decision 1).** So a solver setting cannot quietly become a premise, and a premise cannot hide inside a solver.
-- **A grid can never prove touching contact.** A board resting on its standoffs touches them. Any cell that meets the contact face is unsure, so a grid-only fit check answers UNKNOWN on every seated part. Fit needs an exact evaluator.
+Every number carries a label. **Measured** means run or counted on this branch. **Reported** means a shop, maker or datasheet publishes it on the page named. **Inferred** means reasoned from measured or reported facts. **Guess** means nobody has signed it.
 
 ## Usage
 
-An agent writes three blocks beside its mesh and board files. Every number in this design is a guess. Every number in the verdict below is an illustration.
+An agent writes its meshes, then a design beside them. This is `examples/parts/assembly.petra`.
 
 ```
-petra 0
-
-design "sensor-box" {
-  owner "e.designer@example.org"
-}
-
-pcb main {
-  file "main.kicad_pcb" sha256 "41ab...e2"
-  process process.pcb.fr4_1_6
-  height J1 in [3.2 mm, 3.3 mm] signed "e.designer@example.org" source "USB-C receptacle drawing"
-  height others in [0 mm, 2.5 mm] signed "e.designer@example.org" source "every other part is SMD under 2.5 mm"
-}
-
 part case {
-  mesh "case.stl" sha256 "9f2c...07" units mm
-  material polymer.pla
-  process process.print.fdm_pla_0_4
-  build top
-  hole b1 at (4 mm, 4 mm, 6 mm) along bottom diameter 2.2 mm depth 5 mm form
-  hole c1 at (2 mm, 2 mm, 20 mm) along bottom diameter 2.2 mm depth 8 mm form
+  mesh "case.stl" sha256 "b864...dc5a" units mm
+  material polymer.petg
+  process process.print.fdm_petg_0_4
 }
 
-part lid {
-  mesh "lid.stl" sha256 "c3d1...9a" units mm
-  material polymer.pla
-  process process.print.fdm_pla_0_4
-  build bottom
-  hole l1 at (2 mm, 2 mm, 2 mm) along bottom diameter 2.8 mm clear
-  seat s1 at (2 mm, 2 mm, 2 mm) facing top ring screw.m2_5x8_pan_a2
+part board {
+  mesh "board.stl" sha256 "5ac8...cd97" units mm
+  material polymer.pc
+  tolerance in [0.1 mm, 0.1 mm] signed "e.designer@example.org" source "board maker's outline drawing"
+  mass in [8 g, 9 g] signed "e.designer@example.org" source "weighed, five boards"
 }
 
-assembly unit {
+assembly box {
   place case at (0 mm, 0 mm, 0 mm) facing top front
-  place main at (2 mm, 2 mm, 6 mm) facing top front
-  place lid at (0 mm, 0 mm, 20 mm) facing top front
-  insert main along bottom from 14 mm
-  fasten f1 screw.m2_5x5_pan_a2 through main.H1 into case.b1
-  fasten f2 screw.m2_5x8_pan_a2 through lid.l1 into case.c1
-  access usb box (9 mm, 3.4 mm) at (30 mm, 0 mm, 8 mm) along back
-  gap main lid
+  place board at (5 mm, 5 mm, 2 mm) facing top front
+  insert board along bottom from 25 mm
 }
+
+claim light: box.mass <= 30 g
 ```
 
-The parser already takes every line of it (measured by parsing this text with `petra.lang.parser.parse`). No language grammar changes. Each kind's lines are a `Grammar` in `lower.py`, so `petra kinds part`, `petra new` and `docs/reference.md` print them from one place.
-
-The agent checks it the way it checks steel.
+It is checked the way every design is.
 
 ```
-petra check sensor-box.petra
-petra check sensor-box.petra --json
+petra check examples/parts/assembly.petra
+petra check examples/parts/assembly.petra --json
 ```
 
-The MCP `check` tool is unchanged. Given `path`, mesh and board files resolve against the design's directory. Given `text`, they must be absolute paths.
+The run gives UNKNOWN with 13 obligations, 8 certified and 5 open (measured). The board goes in at the worst corner of both tolerances and rests on the tray. The tray fits the printer, nothing on it spans air, and PETG and polycarbonate keep their shape in an indoor room. The 5 open obligations are print rules with no model yet, and each names the waiver that would close it. `petra new part` and `petra new assembly` print the two examples, and `petra kinds part` prints every line a part takes.
 
-```
-sensor-box: FAIL
-entries    coverage FAIL
-checked    38 obligations, 33 certified, 1 refuted, 0 waived, 4 open
-governing  fit  unit.usb/fit.access: the plug enters case 0.35 mm below the opening's lower edge
-  unit.case.main/fit.overlap     coverage fit.overlap    R4  proved    exact     sha256:1e07..  validity 1 proved  no crossing, 4 seated contacts
-  unit.main.J1/fit.keepout       coverage fit.keepout    R4  proved    exact     sha256:8c3a..  validity 1 proved  0.42 mm clear
-  unit.usb/fit.access            coverage fit.access     R4  refuted   exact     sha256:5be1..  validity 1 proved  plug edge 3 crosses case face 18204
-  unit.f2/fit.grip               coverage fit.grip       R4  proved    declared  sha256:77d0..  engagement 5.2 mm, needs 4.5 mm
-  case/print.thin_wall           coverage print          R4  proved    grid      sha256:c90f..  validity 2 proved  thinnest wall 1.05 to 1.22 mm
-  case/print.min_hole            coverage print          --  open      grid      unresolved at 0.0625 mm cells, 12 unsure cells beside hole b1
-cost       case/print.overhang  support area 412 to 455 mm2 (no budget stated)
-footprint  57 premises
-  design           dsg:sensor-box.case.mesh   case.stl sha256:9f2c...07, 41,288 triangles, read exactly
-  assumed          in:sensor-box.main.height.J1   main.J1 height in [3.2, 3.3] mm   (e.designer@example.org; USB-C receptacle drawing)
-  assumed          in:sensor-box.main.height.others   main height of every other footprint in [0, 2.5] mm   (e.designer@example.org; ...)
-  judged           reg:process.print.fdm_pla_0_4.fit.clearance   [0.2, 0.3] mm   (petra-maintainers; typical FDM shop practice; version 1)
-  validated_model  model:parts.exact@<hash>   exact rational geometry of closed triangle meshes at one placement; valid when ...
-  validated_model  model:parts.grid@<hash>    three-valued cell grid over the part; valid when ...
-```
+A mesh path is read relative to the design's file. A design given as text must name absolute paths. The sha256 pins the file, so a changed mesh is an input error until the hash is updated.
 
-The JSON keeps today's keys and adds two. An obligation gets `witness`. The report gets `costs`.
+## The part block
 
-```json
-{"requirement": "unit.usb/fit.access/coverage.fit.access", "outcome": "refuted", "rule": "R4",
- "describe": "a 9 x 3.4 mm plug travels along back to (30, 0, 8) mm without entering a body",
- "witness": {"crossing": {"edge": [["usb", 3], ["usb", 7]], "face": ["case", 18204], "at": ["30.1", "-0.4", "4.65"]}},
- "needs": []}
-```
+| Line | Says |
+|---|---|
+| `mesh "<file>" sha256 "<hex>" units <mm\|inch>` | the part's closed surface, an STL or 3MF file, read exactly |
+| `material <id>` | what it is made of, a registry material |
+| `process <id>` | how it is made, a print, powder, sheet or mill preset; a bought part names none |
+| `finish <id>` | a coating whose buildup every fit rule adds to the part's surfaces |
+| `tolerance <bound>` | a signed profile tolerance that replaces the preset's |
+| `hole_shrink <bound>` | a signed diametral undersize of modelled holes that replaces the preset's |
+| `fill <bound>` | the part's mass over a solid part's, for printed infill |
+| `mass <bound>` | a bought part's signed mass |
+| `cg (<x>, <y>, <z>)` | the centre of mass of a bought or infilled part, in its own frame |
+| `heat <bound>` | a signed rise above ambient at the part, from a motor, a regulator or a lamp |
+| `hole <id> at <point> along <axis> diameter <length> [depth <length>] [clear\|tap\|form\|press\|insert <id>] [countersink <length>]` | a hole and what it is for |
 
-## Shape
+A hole is declared so that rules can read what the mesh cannot say. Its mouth is the point, and it runs along the axis into the part. `clear` lets a screw pass. `tap` and `form` take a screw's thread in metal and in plastic. `insert` takes a heat-set insert from the registry. `press` takes a pin.
 
-### Organizing structures
+## The assembly block
 
-- **Three component kinds.** `part` is a mesh, a material and an optional process. `pcb` is a KiCad file and a fit preset. `assembly` places parts and boards and declares fasteners, insert paths, access paths, gaps, guards and openings. A part without a process is checked for fit only, and the readout says so.
-- **One table.** `rules.RULES` holds every fit and fabrication check, 38 rows (measured). Each row names the feature it applies to, what failing means, the measure it reads, the query that measure needs, and the preset row it is held to. Failure modes, coverage rules, builders and the rows each preset must hold all derive from it (per `principle-model-the-domain`). A new check is a new row.
-- **Three evaluators.** EXACT answers questions about one placement in exact rational arithmetic. DECLARED answers questions about declared features alone, such as hole sizes and screw lengths, and the statement is the whole check. GRID answers questions about every placement on a three-valued cell grid.
-- **One query.** `space.Sweep` asks whether a mover can travel along an axis into its place without entering the obstacles, and how much sideways room it keeps. The engine picks the evaluator from the mover's placement, so no caller chooses one.
+| Line | Says |
+|---|---|
+| `place <part> at <point> facing <axis> <axis>` | where the part sits, its top and front turned to the two axes; the first place line is the base |
+| `insert <part> along <axis> from <length>` | the part arrives moving along the axis over that length; every part but the base has exactly one |
+| `fasten <id> <screw> through <part>.<hole> ... into <part>.<hole>` | a screw through clear holes, head side first, into the hole its thread enters |
+| `gap <part> <part> [<length>]` | two parts that keep apart by the length beyond their allowances |
+| `press <id> <part> into <part>.<hole> diameter <length> interference <length> to <length>` | a pin pressed into a press hole, with its diametral interference range |
 
-### Data shapes
+Claims bound `mass` on a part, and `mass`, `cg_x`, `cg_y` and `cg_z` on an assembly. Parts take no loads in v0, and lowering refuses a load on them.
 
-| Type | Module | What it holds |
-|---|---|---|
-| `Mesh` | `mesh.py` | integer vertices over one power-of-ten scale, triangles, path and sha256 |
-| `Board` | `kicad.py` | outline and cutout loops of segments and exact arcs, drills, courtyard keep-outs with heights |
-| `Turn`, `Placement`, `Solid` | `space.py` | the 24 axis rotations, an exact offset, a mesh where an assembly puts it |
-| `Profile`, `Placed`, `Everywhere` | `space.py` | a body of revolution as bands of semi-infinite cylinders, at one point or at every point |
-| `Sweep` | `space.py` | mover, direction, travel, obstacles, sideways clearance |
-| `Bracket`, `Overlap` | `space.py` | the answers. A Bracket is a measure's low and high ends and its witness. An Overlap is a crossing, a contained vertex, or proof of none |
-| `CellGrid` | `grid.py` | cell states IN, OUT and ON, the owner of each cell, the stock mask, the parent grid |
-| `Rule`, `QuerySpec` | `rules.py` | one row of the table |
-| `Deck`, `Row`, `Tool`, `Override` | `deck.py` | one preset's rows with the design's overrides merged, each row keeping its premise label |
-| `PartDesign`, `PcbDesign`, `Assembly` | `lower.py` | the typed models, with `Hole`, `Seat`, `Place`, `Fasten`, `Insert`, `Access`, `Apart`, `Guard`, `Opening` |
-| `Run`, `Cost`, `GridBudget` | `engine.py` | every answer for one model, the cost lines, the solver budget |
-| `UnresolvedGeometry` | `build.py` | the new gap need for an undecided geometric rule |
+## Rules
 
-### Data flow
+`rules.RULES` is the one table. Each row names the feature it is demanded on, what failing it means, and the evaluator that decides it. Failure modes, coverage rules and builders derive from the table. A row with no builder is still demanded, and its obligation stays open with a waiver line until a builder exists.
 
-```
-.petra  ──parse──▶ Component ──lower_part / lower_pcb / lower_assembly──▶ PartDesign, PcbDesign, Assembly
-                                   │ read_mesh, read_board (hash-pinned, memoised)
-                                   ▼
-                    deck(registry, preset, overrides) ──▶ Deck
-                                   ▼
-            engine(model, decks) ──ask(Sweep)──▶ exact.clearance        (one placement)
-                                   │             reach.reach on a grid   (every placement)
-                                   │             exact.overlap, gap, seat, slopes, prism, extent
-                                   ▼
-                    Run: answers by (rule, subject), costs
-                                   ▼
-            build(requirement, model) ──▶ Obligation (R4 main goal + validity lemmas) or Gap
-                                   ▼
-                    kernel check ──▶ verdict, readout, footprint
-```
-
-### Invariants and where they live
-
-- **Coordinates stay exact.** `read_mesh` reads each float32 as its shortest round-trip decimal, which has at most 9 significant digits (inferred from float32's 24-bit significand), and scales all of them to integers over one power of ten. Placements turn only by the 24 axis rotations and move by exact offsets. So every placed coordinate is an exact rational, and two faces the author made coplanar stay coplanar.
-- **A mesh is the oriented boundary of a solid.** `read_mesh` requires every edge to be used by exactly two triangles, once in each direction. An edge shared by four faces, a duplicated face and an open boundary all fail that rule. It refuses two triangles on the same three vertices, because a doubled wall drawn as two opposite triangles passes the edge rule and bounds nothing. Every connected piece must enclose volume, and the whole mesh positive volume. The scaffold's parity rule accepted all of these (audit rows D-152 and D-158). `exact.surface_problem` finds what the edge rules cannot see, and `lower_part` refuses the mesh with its message. Two triangles that share no vertex and meet mean the surface crosses or touches itself. Two coplanar triangles that overlap and face opposite ways are a wall of zero thickness, or the internal face where two bodies touch. Two neighbours folded onto each other fail too. A piece nested an even number of times must face outward and a piece nested an odd number of times inward, so a void is a void and not a second body.
-- **Profiles are monotone.** `Profile.__post_init__` refuses band depths that do not rise and radii that fall, so every profile is a union of semi-infinite cylinders and a height field decides where it fits. This is implemented in the scaffold.
-- **A Bracket's ends are ordered.** `Bracket.__post_init__` refuses lo above hi. Implemented.
-- **Rule ids are unique.** `rules.py` raises at import on a repeated id. Implemented.
-- **Only `deck()` merges presets and overrides,** and only `lower_part` builds an `Override`, after checking the preset holds the row and the bound has its unit (per `principle-type-system-discipline`).
-- **Every preset holds exactly the rows its kind's rules read.** `domain.check_presets` compares each preset with `rules.rows_read(kind)` and the registry's consistency check reports the difference at load.
-- **An impossible rule cannot be waived.** `lower_part` refuses the waiver.
-- **The grid's cell side is never a premise.** `engine.BUDGET` holds it in code, and `engine.py`'s source is hashed into the grid model.
-
-### Interface depth
-
-The caller's surface is the three block kinds and the verdict. It hides the mesh reader, the board reader, both evaluators, the refinement loop and the witness lemmas. Inside the package, `engine.engine` is the one entry point to geometry, every sweep goes through `engine.ask`, and `build.build` is the one builder for all 38 modes (measured). The surface stays this small because every per-rule difference is a row of data, not a function.
-
-## The fit layer
-
-Fit comes first in the build order. Every fit question below except one is exact on rational mesh coordinates with R4 alone.
-
-| Question | Rule | Evaluator | What the kernel checks | What stays trusted |
-|---|---|---|---|---|
-| Do two placed bodies overlap? | `fit.overlap` | exact | for FAIL, the crossing lemma, four signed volumes over the five vertices of an edge and a face (R4); for PASS, each seated contact as a coplanar, opposite-facing pair (R4) | broad-phase completeness, containment by parity, the zero count of crossings |
-| Does a component, its courtyard raised to its height, hit a body? | `fit.keepout` | exact | as overlap, with the height a signed `RangeHyp` | the board reader |
-| Do two bodies keep a clearance apart? | `fit.gap` | exact | the least squared distance against the squared clearance row. FAIL adds the near lemma, one squared distance from the two features' vertices | the closest-pair search |
-| Does a board travel its insertion path? | `fit.insert`, `fit.insert_clearance` | exact | the least sideways squared clearance against the row | the cross-section sweep |
-| Does a plug reach its connector? | `fit.access` | exact | as insert | as insert |
-| Does a pin of the hole's size, less the tolerance, pass the hole? | `fit.hole` | exact | as insert, with the pin radius from the declared diameter | as insert |
-| Does the screw head or washer bear on the face? | `fit.seat` | exact | the ring's widest point off the face union | the face-union containment |
-| Do hole patterns align across parts? | `fit.align` | declared | the squared offset of hole centres against the room the holes leave, over the tolerances | lowering |
-| Is the screw long enough and not too long? | `fit.grip` | declared | thread engagement and bottoming lengths through the stack | lowering |
-| Does a driver reach the screw head? | `fit.driver` | exact | sideways clearance of the driver's profile | the sweep |
-| Does a declared opening pass the guard's ball? | `fit.opening` | declared | the opening's width at its widest tolerance against the sphere | lowering |
-| Does any ball of the guard's size reach the hazard? | `fit.passage` | grid | the stencil and extreme lemmas | cell classification and the bottleneck search |
-
-The insert sweep is exact because a polyhedron swept along an axis is a polyhedron, and its cross-sections change only at the finitely many levels of vertices. The sideways clearance is a 2D distance between rational polygons at those levels (inferred). A seat is not a clash. The sweep measures clearance between open cross-sections at common levels, so faces that meet head on at the end of the travel are a seat.
-
-`fit.passage` needs the grid because "no ball anywhere reaches the hazard" quantifies over every placement of the ball. A guard made of declared bars, slots and holes uses `fit.opening` instead and stays exact.
-
-## One query for fit and reach
-
-`Sweep(mover, along, travel, obstacles, clearance)` serves both. The mover's placement picks the evaluator.
-
-| Mover | Placement | Evaluator | Used by |
+| Rule | Demanded on | Evaluator | Holds when |
 |---|---|---|---|
-| a board, a lid, a plug body | `Solid` | exact | `fit.insert`, `fit.access` |
-| a pin, a screw driver | `Placed` at a `Point` | exact | `fit.hole`, `fit.driver` |
-| a cutter, a router bit, a laser's beam | `Placed` `Everywhere` | grid | `mill.reach`, `sheet.corner` |
-| a ray along the pull | `Placed` `Everywhere`, radius 0 | grid | `mold.undercut`, `mold.side_actions` |
+| `fit.insert` | every placed part but the base | geometry | the part travels its insert path clear of every other part by both allowances, rests on something at its place, and lies inside nothing |
+| `fit.connected` | every placed part | geometry | the part touches, is fastened to or is pressed into a part placed before it |
+| `fit.gap` | each gap line | geometry | the two parts keep the stated gap beyond both allowances |
+| `fit.fastener` | each fasten line | geometry | the screw, as a body, reaches its hole clear of every part but the one it threads into |
+| `fit.seat` | each fasten line | geometry | a socket head bears on the first part's face, or a countersunk head sits in a declared countersink |
+| `fit.grip` | each fasten line | declared | the thread engages enough diameters and does not bottom in a blind hole |
+| `fit.press` | each press line | declared | the diametral interference stays in the declared range over both tolerances |
+| `fit.hole` | each declared hole | geometry | the mesh holds the hole as declared, and its countersink when one is declared |
+| `insert.hole_size` | each insert hole | declared | the hole as made, the declared diameter less its shrink, lies in the insert's catalogue range |
+| `insert.depth` | each insert hole | declared | the hole runs at least the insert's length |
+| `insert.boss_wall` | each insert hole | geometry | the wall around the insert is at least the catalogue's least wall |
+| `part.temperature` | each polymer part | thermal | ambient plus the declared local rise stays at or below the material's heat deflection temperature |
+| `print.volume`, `powder.volume`, `sheet.bed` | each made part | geometry | the mesh's extent, grown by its allowance on both sides, fits the machine |
+| `print.bridge` | each printed part | geometry | every face printed over air spans at most the preset's bridge between the edges that hold it |
+| `sheet.prism` | each sheet part | geometry | the part is a flat profile of the stock's thickness |
+| `parts.mass` | a mass claim | mass | the summed mass of parts, screws and inserts meets the claim |
+| `parts.cg` | a centre of mass claim | mass | the mass-weighted centre meets the claim along one axis |
+| `fit.driver`, `print.min_feature`, `print.thin_wall`, `print.min_hole`, `print.overhang`, `print.support_access`, `powder.min_feature`, `powder.escape`, `sheet.min_web`, `mill.reach`, `mill.min_feature` | as named | none yet | open, with a waiver line |
 
-The twin tests the seam. For one placement computed both ways, the exact answer must lie inside the grid's Bracket (metamorphic relation MR3 below).
+The table holds 30 rules, 19 with builders and 11 without (measured).
 
-## Process rows
+## Fit under tolerance
 
-Printing and flat cutting come before 3-axis milling, and molding comes last. Each preset holds exactly the rows its kind's rules read. Every value in these tables is a guess from typical shop pages and datasheets, judged by petra-maintainers until a maker signs its own preset or overrides a row with `measured`.
+A fit check that passes on nominal geometry proves little. A 0.25 mm gap passes at nominal and closes when a printed wall comes out 0.5 mm thick. So every fit rule holds at the worst case of the tolerances the design and its presets declare.
 
-**Material extrusion, `process.print.fdm_pla_0_4`.**
+- **Allowance.** Each part's true surface lies within its allowance `a` of the mesh, both ways. The allowance is the profile tolerance, from the preset or a signed `tolerance` line, plus a finish's buildup. Against a screw a printed part's allowance also holds half its hole shrink, because printed holes come out small.
+- **Order.** Parts go in in place-line order. The base is placed. Every other part arrives along its insert axis from the stated distance.
+- **Stops and float.** A part stops on the faces it touches at its place whose triangles lie wholly ahead of its own along the travel. It may then sit anywhere along its axis within its float, `F = max over its stops of (F_stop + a_stop + a_self)`. Across the axis it does not float.
+- **Path.** The part is swept from its start to its place and on past it by its float. Every triangle pair but its stops must keep apart by both allowances. When the other part floats along a different axis, that float joins the allowance.
+- **Resting and containment.** A part with no stop rests on nothing and fails. A part whose vertex lies inside another part by ray parity fails.
+- **Screws.** A screw is a body. Its shank is the circumscribed 32-sided prism of its major diameter, and a socket head adds the circumscribed prism of the head. Its axis is the declared axis of the hole its thread enters, and its head sits at the first hole's mouth. It may overlap only the part it threads into. A tip that runs past the stack into a battery fails `fit.fastener` and names the battery.
+- **Seats.** A socket head's bearing ring runs from the hole's radius plus the allowance to the head's radius plus the allowance. The ring must lie on the first part's face, and the head must not pass the hole. A countersunk head needs a declared countersink at least the head's catalogue diameter plus twice the allowance, and `fit.hole` checks that the mesh holds the cone.
+- **Grip.** The engaged length is the screw's length past the stack. It must reach `parts.engagement.<role>` diameters, a judged constant per hole role (1.5 for tap and insert, 2 for form, all guesses). In a blind hole it must stay inside the hole's depth.
+- **Press fits.** A pressed pair may overlap. The diametral interference at both ends of both tolerances must lie in the declared range, and the pair counts as a stop.
+- **Gaps.** A gap line's two parts keep the stated gap plus both allowances apart, swept over their floats when they float along one axis.
 
-| Row | Value (guess) | Worse end | Read by |
+Every distance is exact. `exact.py` decides triangle distances, sweeps, parity and coplanar overlap on integers, with every coordinate an exact rational. The statement squares both sides, so a distance `d` against an allowance sum `s` is stated as `s^2 - d^2 <= 0` with `d^2` an exact rational.
+
+## What a verdict means
+
+Each verdict is relative to its premises, and the footprint lists every one.
+
+- **PASS** means the rule holds at every point of the premise box. The box spans the declared tolerances, shrinks, buildups, masses and temperatures. So a fit that passes holds at the tightest corner.
+- **FAIL** means the kernel found a point of that box where the rule breaks, and the readout names the point and the triangles. A FAIL under tolerance means the declared tolerances allow the clash, not that every part made will clash.
+- **UNKNOWN** means a needed bound is missing, such as a part with no process and no tolerance line, or a rule has no model.
+
+Each rule adds premises of its own.
+
+- `fit.*` reads the mesh as the part, with its surface anywhere within its allowance. A screw is its circumscribed prism, so a PASS holds for the real screw, and a FAIL by less than the circumscription, about 0.5 % of the radius (inferred), is a FAIL of the model. A part does not float sideways. Rotations are the 24 axis turns, so placed coordinates stay exact.
+- `fit.hole` bounds the hole from below. A mesh hole larger than declared passes. Insert holes are read as the declared diameter less the shrink row, and the profile tolerance is not applied to them, because insert holes are sized to a printer's measured shrink.
+- `print.volume` and its kin read the mesh frame with +z up and the bed at the lowest vertex. A part that fits only when turned fails.
+- `print.bridge` treats a face over air as held on an edge where the face across it falls below it, and free where it rises. A face held on every edge and no wider than the bridge's low end passes, because lines laid across its narrower side span at most that side. A face with a point farther than half the bridge from all its edges fails, because every straight line through that point spans more. Any other face, and any face with a free edge, which is an overhang, leaves the rule open.
+- `sheet.prism` passes a mesh whose every vertex lies on its two level faces and whose every other face is upright. Faces in two upright planes meet only on upright edges, so every cross-section is the same. A bent part fails, because v0 reads no bend lines.
+- `part.temperature` reads the ambient from the design's `ambient` line or its environment class, and the heat deflection temperature at 0.45 MPa (ISO 75-2 method B). Creep under sustained load is not checked.
+- `parts.mass` counts a printed part with no `fill` line as solid, which bounds its mass from above only. So a `<=` claim is stated only when it holds that way, and a `>=` claim needs the fill. `parts.cg` weighs each solid part at its exact centroid, a bought or infilled part at its `cg` line, and screws and inserts at the centres of their head and shank cylinders.
+
+## The mesh is a solid
+
+`read_mesh` reads each float32 as its shortest round-trip decimal and scales every coordinate to an integer over one power of ten. It requires every edge to be used by exactly two triangles, once in each direction. An edge shared by four faces, a duplicated face and an open boundary all fail that rule. It refuses two triangles on the same three vertices, because a doubled wall drawn as two opposite triangles passes the edge rule and bounds nothing. Every connected piece must enclose volume, and the whole mesh positive volume. The scaffold's parity rule accepted all of these (audit rows D-152 and D-158).
+
+`exact.surface_problem` finds what the edge rules cannot see, and `lower_part` refuses the mesh with its message. Two triangles that share no vertex and meet mean the surface crosses or touches itself. Two coplanar triangles that overlap and face opposite ways are a wall of zero thickness, or the internal face where two bodies touch. Two neighbours folded onto each other fail too. A piece nested an even number of times must face outward and a piece nested an odd number of times inward, so a void is a void and not a second body.
+
+## Presets
+
+Every row is judged by petra-maintainers and labelled with its source. A design overrides a row with a signed line. `tests/test_parts_table.py` fails when a row's label does not start with reported, inferred or guess.
+
+| Preset | Row | Value | Label |
 |---|---|---|---|
-| `build` | 220 x 220 x 250 mm | low | `print.volume` |
-| `line_width` | 0.40 to 0.45 mm | high | `print.min_feature`, as a disk one line wide and one layer thick |
-| `layer` | 0.2 mm | high | the disk's height |
-| `wall` | 0.8 mm | high | `print.thin_wall` (worse) |
-| `hole_min` | 1.0 mm | high | `print.min_hole` |
-| `overhang` | slope ratio 1, 45 degrees from vertical | low | `print.overhang` (costlier, support area) |
-| `fit.clearance` | 0.2 to 0.3 mm | high | `fit.gap`, `fit.insert_clearance` |
-| `tolerance` | 0.2 mm | high | `fit.align`, `fit.hole`, `fit.opening` |
+| `process.print.fdm_pla_0_4`, `fdm_petg_0_4` | tolerance | 0.5 mm | reported, Hubs FDM design guide |
+| | hole_shrink | 0.1 to 0.2 mm | guess |
+| | bridge | 5 to 10 mm | reported, two Hubs pages (audit row E-010) |
+| | build | 250 x 210 x 220 mm | reported, Prusa MK4 |
+| `process.powder.sls_pa12` | tolerance | 0.3 mm | reported, Hubs SLS design guide |
+| | hole_shrink | 0 to 0.2 mm | guess |
+| | build | 340 x 340 x 600 mm | guess |
+| `process.sheet.laser_al_3` | tolerance | 0.127 mm | reported, SendCutSend |
+| | thickness | 3 mm | guess |
+| | bed | 1200 x 600 mm | guess |
+| `process.mill.al6061_3axis` | tolerance | 0.13 mm | reported, Hubs, Protolabs and SendCutSend (audit row E-138) |
+| `process.anodize_ii` | buildup | 0.005 to 0.0125 mm | guess |
+| `process.powder_coat` | buildup | 0.05 to 0.12 mm | guess |
 
-**Powder-bed fusion, `process.powder.sls_pa12`.**
+The scaffold's milling tolerance was 0.05 mm. Shops publish 0.1 to 0.13 mm for standard milling (reported, audit row E-138), so the preset now holds 0.13 mm.
 
-| Row | Value (guess) | Worse end | Read by |
-|---|---|---|---|
-| `build` | 300 x 300 x 300 mm | low | `powder.volume` |
-| `min_feature` | 0.8 mm | high | `powder.min_feature`, as a ball |
-| `wall` | 1.0 mm | high | `powder.thin_wall` (worse) |
-| `hole_min` | 1.5 mm | high | `powder.min_hole` |
-| `escape` | 3.5 mm | high | `powder.escape`, a ball from every closed void to outside |
-| `fit.clearance` | 0.3 mm | high | fit rules |
-| `tolerance` | 0.3 mm | high | fit rules |
+Polymers (PLA, PETG, ABS, ASA, PA12, polycarbonate) carry density, glass transition and heat deflection rows, all guesses from typical datasheets. Screws are ISO 4762 socket heads in M2.5, M3 and M4 and ISO 10642 countersunk heads in M3 and M4, each 6 to 20 mm long. Their head sizes are reported from the standards' tables as maker catalogues print them, and their masses are inferred from steel density and nominal volume. Heat-set inserts in M3 and M4 carry hole range, length, least wall and mass, all guesses from typical catalogues.
 
-**Profiles cut from sheet, `process.sheet.laser_s275_3` and `process.sheet.router_cf_3`.** `sheet.prism` first checks the part is an extrusion of the stock thickness along its declared normal, exactly. The corner rule is then the reach question in the sheet's plane.
+## Premises and certificates
 
-| Row | Laser, 3 mm S275 (guess) | Router, 3 mm carbon fibre (guess) | Read by |
-|---|---|---|---|
-| `thickness` | 2.85 to 3.15 mm | 2.9 to 3.1 mm | `sheet.prism` |
-| `bed` | 3000 x 1500 mm | 600 x 400 mm | `sheet.bed` |
-| tool | beam of radius 0.10 to 0.15 mm, half the kerf | `tool.t3`, flat, radius 1.5875 mm, reach 12 mm | `sheet.corner` |
-| `reach_tolerance` | 0.05 mm | 0.05 mm | `sheet.corner` |
-| `min_web` | 3 mm | 2 mm | `sheet.min_web` |
-| `min_hole` | 3 mm | 3.2 mm | `sheet.min_hole` |
-| `tolerance` | 0.1 mm | 0.1 mm | fit rules |
+The engine measures each geometric fact once per model, in exact rationals. `build.py` states each fact as a design value labelled `dsg:`, beside the registry rows (`reg:`) and the signed bounds (`in:`) it is compared with. The kernel checks the R4 goal over that box. So the kernel checks the arithmetic, and the engine's measures are trusted. Each evaluator is a validated model premise hashed over the module's source, `model:parts.geometry`, `model:parts.declared`, `model:parts.thermal` and `model:parts.mass`.
 
-**3-axis milling, `process.mill.al6061_t6_3axis`.** The rows are sketch B's.
-
-| Row | Value (guess) | Read by |
-|---|---|---|
-| `tool.t1` to `tool.t4` | flat end mills of radius 0.5, 1.5, 4 and 6 mm, reaching 3, 9, 24 and 36 mm below the holder | `mill.reach` |
-| `reach_tolerance` | 0.5 mm | `mill.reach`, `mill.special_tools` |
-| `min_feature` | 0.8 mm | `mill.min_feature` |
-| `chatter.ratio` | 8, free height over thickness | `mill.chatter` (worse) |
-| `setups.budget` | 2 | `mill.setups` (costlier) |
-| `tolerance` | 0.05 mm | fit rules |
-
-**Boards, `process.pcb.fr4_1_6`.** Thickness 1.44 to 1.76 mm, outline tolerance 0.2 mm, drill tolerance 0.08 mm (all guesses). It is read by fit rules only.
-
-**Molding** has rules in the table (`mold.undercut`, `mold.draft`, `mold.side_actions`, `mold.min_wall`, `mold.sink`) and no preset in v0. A mold shop's signed preset comes first.
-
-Consequences follow the synthesis. An **impossible** rule fails the design and refuses a waiver at lowering. A **worse** rule fails it, and its owner may waive it with a signature and a reason. A **costlier** rule always prints a cost line and fails only against a budget the design or the preset states. Coverage demands a costlier rule only where such a budget exists.
-
-## The circuit board reader
-
-`kicad.py` reads `.kicad_pcb` files from KiCad 6 on with the standard library only. It accepts file version 20211014 or newer, KiCad 6's version as recalled and not yet checked against KiCad's source (guess). The format is S-expressions, so the parser is small, about 60 lines (guess). It reads four things.
-
-- The outline. Edge.Cuts lines, arcs, circles, rectangles and polygons, chained into closed loops. The outermost loop is the outline and the rest are cutouts. A loop that does not close is refused.
-- The thickness, from `(general (thickness ...))`.
-- The holes. Every pad with a drill, plated or not, and every mounting hole. A fasten line names a board hole by its footprint reference, such as `main.H1`.
-- The keep-outs. Each footprint's courtyard on F.CrtYd or B.CrtYd, with its side.
-
-KiCad's y axis points down the screen, so the reader flips it to point up. A footprint turned by a multiple of 90 degrees is placed exactly. Any other angle is placed by a rational rotation within 2^-30 rad of it, and every affected edge moves by that bound toward the harder fit. Keep-outs grow and drills shrink. At 1,000 mm from the origin that bound is about 1e-6 mm (inferred).
-
-Component heights are a stated premise. The pcb block's signed `height <ref>` line comes first. Then a footprint's `Height` property, read as a design value when the board's author set one. Then the signed `height others` line. A footprint with none of these leaves `fit.keepout` a Gap needing `NeedsInputBound`. A footprint with no courtyard keeps an empty keep-out, and its keep-out check is a Gap until a waiver names it. Petra never invents a height.
-
-The reader is trusted, pinned by the design's sha256, and runs at check time. The board feeds the enclosure deck. Its outline, holes and keep-outs become a placed `Solid` the case's fit rules check against.
-
-## Certificates
-
-Every verdict has three layers, as in sketch B. The kernel checks the inequality and the geometric lemmas. A trusted evaluator, a validated_model premise hashed over its source, vouches for what the lemmas do not state. Premises carry the rest.
-
-| Evaluator | PASS | FAIL | UNKNOWN |
-|---|---|---|---|
-| exact | the measure's exact value against the bound row, R4 Enclosure. Seated contacts restated as R4 lemmas | the same goal refuted, beside a witness lemma that restates the crossing or the near pair from its vertex coordinates, R4 PointWitness | a contact the contact rule does not classify, such as edge on edge across a face. Gap needing `UnresolvedGeometry` |
-| declared | the inequality over declared sizes and signed tolerances, R4 Enclosure | the same refuted at a point of the tolerance box | none beyond a missing signed bound |
-| grid | the Bracket's hi end against the bound, beside the stencil and extreme lemmas | the Bracket's lo end refuted, beside the obstruction lemma for the witness cell | the Bracket straddles the bound at the solver's floor. Gap needing `UnresolvedGeometry`, naming the unsure cells |
-
-A straddling Bracket states nothing. Refuting its hi end would not refute the design, so the builder returns a Gap. Squares keep every goal rational. A distance d against a bound c is stated as d^2 - c^2, with d^2 an exact sum of squares.
-
-**What stays a premise.**
-
-- The mesh is the part. Its hash and its exact coordinates are design values. A tessellated cylinder is a polygon, and the check is about the polygon.
-- The board file is the board. Component heights are signed or read from the file.
-- Preset rows are judged, or overridden with an owner and a reason.
-- Each evaluator is a validated_model premise, `model:parts.exact`, `model:parts.declared` or `model:parts.grid`. Each hashes every module it trusts, as `electronics/domain.py` already does for its three.
-- The grid's cell side is not a premise. A sound grid at any side gives the same PASS and FAIL and differs only in how often it says UNKNOWN. Because `engine.BUDGET` sits in hashed source, the statement stays a pure function of the design.
-
-**No new kernel rule.** R4 carries every goal and lemma. Sketch A proposed R7, a cover-residual lemma. A PASS names a finite cover of tool poses, and a FAIL names a point of stock with a finite proof that no allowed pose cuts it. R7 would put reach under kernel check. It would cost about 465 lines (guess, sketch A) and take the kernel to about 1,880 of 1,500 (inferred, sketch A). It is rejected for now. Sketch B considered a cell-counting rule and rejected it too, because it would still trust the cell classification. Lemma variables, such as a tool centre's offset in the obstruction lemma, are labelled `dsg:` like the electronics domain's normalised spreads.
-
-## Mistake classes
-
-Each class below names the Petra checks that catch it and the mistakes no check catches yet.
-
-| Class | Caught by | Not caught yet |
-|---|---|---|
-| Intent | claims; `fit.hole` and `fit.seat` test declared features against the mesh, so a hole declared but not modelled fails; `fit.access` for every declared connector | a part that is valid and does the wrong job; a button not over its switch unless declared as access; a missing vent; the wrong board revision behind a correct hash |
-| Geometric validity | lowering refuses a hash mismatch, an open or non-manifold surface, a self-crossing surface, a hole or seat outside the mesh, a turn whose axes are parallel, a board outline that does not close | chord error, where a coarse tessellation makes holes and bosses smaller than their CAD model; the check is right about the mesh and the mesh is wrong about the intent |
-| Fit and interface | `fit.overlap`, `fit.keepout`, `fit.gap`, `fit.insert`, `fit.insert_clearance`, `fit.access`, `fit.hole`, `fit.seat`, `fit.align`, `fit.grip`, `fit.driver` | assembly order, since every sweep runs against every other placed body, so an order-dependent design is refused (a false FAIL, never a false PASS); cable routing; snap-fit engagement |
-| Fabrication | `print.*`, `powder.*`, `sheet.*`, `mill.*`, `mold.*`, 25 rules (measured) | warp and shrink, bridging, support removal access, fixturing and clamps, tool deflection, feeds and heat |
-| Strength and stiffness | the truss, bolt and steel connection domains for their own kinds | every parts load case in v0, such as boss splitting under a thread-forming screw, snap-fit strain, wall deflection, interlayer weakness of prints, creep of PLA |
-| Code compliance | steel's AISC 360 checks; electronics ratings; `fit.passage` and `fit.opening` against a signed probe sphere | creepage and clearance between conductors and the case (IEC 62368-1), flammability ratings (UL 94), water ingress, jointed test fingers |
-| Unstated premises | a missing height or courtyard is a Gap; a part without a process prints "fit only"; preset rows, overrides and models sit in the footprint; a grid UNKNOWN names its unsure cells | thermal expansion between PLA and FR4 (about 0.11 mm more growth for PLA over 100 mm and 20 K, inferred from expansion coefficients of 68e-6 and 14e-6 per K, both guesses); humidity swell of PA12; a board populated differently from its file |
-
-## Line budget
-
-The kernel gains no line (measured; the branch touches nothing under `petra/kernel/`).
-
-The scaffold adds 739 trusted code lines (measured with `tests/test_kernel_budget.code_lines`). The test adds 30 untrusted ones (measured).
-
-| File | Scaffold code lines (measured) | Lines the implementation adds (guess) |
-|---|---|---|
-| `petra/models/parts/mesh.py` | 25 | 150 |
-| `petra/models/parts/space.py` | 105 | 40 |
-| `petra/models/parts/kicad.py` | 61 | 330 |
-| `petra/models/parts/exact.py` | 23 | 600 |
-| `petra/models/parts/grid.py` | 23 | 300 |
-| `petra/models/parts/reach.py` | 34 | 650 |
-| `petra/models/parts/rules.py` | 150 | 20 |
-| `petra/models/parts/deck.py` | 41 | 60 |
-| `petra/models/parts/lower.py` | 166 | 400 |
-| `petra/models/parts/engine.py` | 31 | 220 |
-| `petra/models/parts/build.py` | 33 | 450 |
-| `petra/models/parts/domain.py` | 28 | 160 |
-| `petra/registry/parts.py` | 11 | 300 |
-| `petra/registry/model.py` | 8 | 0 |
-| shared modules (base, verdict, readout, templates, catalog, teach, models) | 0 | 130 |
-| **total** | **739** | **3,810** |
-
-So the implemented domain holds about 4,550 trusted code lines (inferred from the measured scaffold and the guessed additions). For scale, the electronics domain holds 1,533 code lines and the steel models 8,272 with their twin and generators (both measured).
+No kernel rule was added. R4 carries every goal.
 
 ## Testing
 
-A clean-room twin and metamorphic relations judge the evaluators, as they judge the steel deck.
-
-**The twin** generates assemblies whose answers are analytic. Boxes nest in boxes with known gaps. Round pins pass polygonal holes whose inscribed radius is known. Boards slide into slots of known width. Plates carry pockets with known corner radii and walls of known thickness. For each it computes the true answer in closed form.
-
-**The metamorphic relations.**
-
-- MR1. An axis rotation and a rational translation of a whole assembly leave every verdict unchanged.
-- MR2. Scaling every length and every bound by 2 leaves every verdict unchanged.
-- MR3. For one placement computed both ways, the exact answer lies inside the grid's Bracket.
-- MR4. Refining the grid never turns PASS into FAIL or FAIL into PASS.
-- MR5. Moving two bodies apart never turns a fit PASS into a FAIL.
-- MR6. Splitting a triangle into coplanar triangles changes nothing.
-- MR7. Shrinking a tool's radius never turns a reach PASS into a FAIL.
-
-**Done test for step 1, exact fit.** The sensor box above and 200 generated assemblies (guess) give zero wrong PASS and zero wrong FAIL against the twin, every relation holds on all of them, and UNKNOWN stays under 5 percent of fit obligations (guess).
-
-## Cost
-
-| Step | Cost | Label |
+| Module | What it proves | Tests |
 |---|---|---|
-| exact point-to-face squared distance, scaled integers | 4.3 µs | measured by sketch A |
-| the same in Python Fractions | 107.9 µs | measured by sketch A |
-| exact triangle-to-triangle test, about 15 sub-distances | about 75 µs | inferred |
-| one pair of 40,000-triangle bodies with 10,000 candidate pairs near contact | about 0.75 s | inferred from a guessed candidate count |
-| grid reach on a 155,200-triangle mesh at 0.25 mm cells | 21.1 s | measured by sketch B |
-| the same at 0.125 mm cells | 32.6 s | measured by sketch B |
-| reading a 2 MB board file | under 1 s | guess |
-| checking the sensor box | under a minute | guess |
+| `tests/test_parts_mesh.py` | the reader takes exact coordinates and refuses every non-solid surface | 15 |
+| `tests/test_parts_exact.py` | the integer primitives agree with dense sampling, and the surface rules catch crossings, zero-thickness walls and wrong nesting | 14 |
+| `tests/test_parts_layer.py` | each modelled rule passes a design worked by hand and fails a one-line mutation of it, end to end through `petra.check` | 31 |
+| `tests/test_parts_table.py` | the table, the builders and the registered domain agree, and every preset row is labelled | 6 |
 
-Scaled integers, not Fractions, set the exact evaluator's cost, which is why `Mesh` stores integer vertices over one scale. The exact predicates run on Python integers. The grid's separating-axis test runs on int64 while every product stays below 2^62, and on Python integers otherwise.
+Each FAIL test differs from a passing design in one thing, so it is the rule's own mutation test. `powder.volume` and `sheet.bed` share `print.volume`'s builder and have no test of their own.
 
-## Build order
+No outside checker judges the layer yet. The debt is recorded in `tests/trusted_base.py`. The plan is a clean-room twin of analytic assemblies, such as boxes in boxes with known gaps and pins in polygonal holes of known inscribed radius, with these metamorphic relations.
 
-The order follows what each step needs.
+- An axis turn and a rational shift of a whole assembly leave every verdict unchanged.
+- Scaling every length and bound by 2 leaves every verdict unchanged.
+- Moving two parts apart never turns a fit PASS into a FAIL.
+- Splitting a triangle into coplanar triangles changes nothing.
 
-1. **Exact fit.** `mesh`, `space`, `exact`, `kicad`, `deck`, `lower` for all three kinds, `build` for the exact and declared evaluators, the fit rows, registration with fit rules only. Done when the step 1 test above passes.
-2. **Printing and flat cutting.** `grid`, `reach.thickness`, `reach.passage`, the exact `slopes`, `prism` and `extent`, the print, powder and sheet presets. The sheet corner rule is the first reach question, in the sheet's plane. Done when generated prints and profiles with analytic walls, holes and corners pass the twin.
-3. **3-axis milling.** `reach.reach` with tool decks, `directions_needed`, `ratio`, the mill preset. Done when sketch B's bracket gives its stated verdicts and the twin's pockets pass.
-4. **Molding.** Pull reach and draft, once a shop signs a preset.
+## Not checked yet
 
-## Module map
+- **Circuit boards.** The scaffold's KiCad reader was deleted. Boards are meshes with a signed tolerance. Connectors, switches, LEDs and mounting holes do not yet create access, actuator, light path or keep-out obligations, and through-hole leads below a board are not keep-outs.
+- **Bent sheet.** `sheet.prism` fails a bent part. Flange length, hole-to-bend distance, bend relief and tab-and-slot need bend lines declared on the part, which is a grammar change.
+- **Printing.** Least feature, thin wall, least hole, overhang and support access have no model. Bridges are decided only when a face is narrow and held all round or plainly too wide. Warp and elephant's foot are not checked.
+- **Milling.** Tool reach and least feature have no model.
+- **Fit.** A driver's access to a screw head, washers, sideways float, assembly order beyond place-line order, and cable routing.
+- **Strength.** No parts load case is checked, such as a boss splitting under a thread-forming screw or a snap fit's strain.
 
-| File | Status | Change |
-|---|---|---|
-| `petra/models/parts/*.py` | new, scaffold | the twelve modules above |
-| `petra/registry/parts.py` | new, scaffold | presets, polymers, screws, washers |
-| `petra/registry/model.py` | changed | `PartKind` gains SCREW and WASHER; `ProcessKind` gains PRINT, POWDER, SHEET, MILL, MOLD and PCB |
-| `tests/test_parts_scaffold.py` | new | the scaffold loads; the package declares no DOMAIN; the rule table holds together |
-| `petra/registry/catalog.py` | step 1 | merges the parts deck |
-| `petra/teach.py` | step 1 | `_PROCESSES` entries for the new process kinds |
-| `petra/models/__init__.py` | step 1 | registers the parts DOMAIN |
-| `petra/models/base.py` | step 1 | `UnresolvedGeometry` joins `GapNeed` |
-| `petra/verdict.py` | step 1 | one match case for `UnresolvedGeometry` |
-| `petra/readout.py` | step 1 | witness lines and cost lines; `tests/test_readout.py` gains the two keys |
-| `petra/templates.py` | step 1 | `petra new part`, `pcb` and `assembly` |
-| `tests/test_structure.py` | step 1 | a fence so `petra/models/parts` imports only the standard library, numpy and petra |
-| `petra/pipeline.py` | none | `Design.path` already gives lowering the design's directory (read in `petra/ir.py`) |
+## Line budget
 
-## Red-flag screen
+The kernel gains no line (measured; the branch touches nothing under `petra/kernel/`). The parts modules hold 2,250 trusted code lines, counted with `tests/test_kernel_budget.code_lines` (measured).
 
-- **Shallow module.** `deck.py` is one function over three types. It stays, because it is the one place rows and overrides merge.
-- **Information leakage.** The integer scale and the int64 layout are known to `mesh`, `exact` and `grid` only. KiCad's format is known to `kicad` only.
-- **Temporal decomposition.** None. Lowering, engine and build split by data, and each runs once per model through a memo.
-- **Pass-through method.** `engine.ask` adds the dispatch and does not merely forward.
-- **Split ownership.** The registry owns preset rows, lowering owns overrides, and `RULES` owns checks. Nothing else writes them.
-- **Two ways to do one task.** Exact clearance and grid reach answer one query, and the mover's placement picks between them. A duplicate `exact.pin` was cut while sketching. PASS on a Bracket's hi end and FAIL on its lo end are the two certified directions of one measure, kept from sketch B.
-- **Importable internals.** The modules are importable, as in every Petra domain. The step 1 fence guards imports.
-- **Hand-synced list.** Every table derives from `RULES`. The test's module list is compared with the files on disk, so it cannot drift silently.
+| File | Code lines (measured) |
+|---|---|
+| `petra/models/parts/mesh.py` | 211 |
+| `petra/models/parts/space.py` | 40 |
+| `petra/models/parts/exact.py` | 385 |
+| `petra/models/parts/rules.py` | 86 |
+| `petra/models/parts/lower.py` | 431 |
+| `petra/models/parts/engine.py` | 456 |
+| `petra/models/parts/build.py` | 435 |
+| `petra/models/parts/domain.py` | 61 |
+| `petra/models/parts/__init__.py` | 2 |
+| `petra/registry/parts.py` | 143 |
 
-## Synthesis decision
-
-Sketch B is the base. It keeps the three-valued grid, R4 alone, no kernel rule and no language change, and its certificate story carries over whole. From sketch A this design takes exact rational coordinates and exact witnesses, and builds a new exact evaluator from them. That evaluator is the fit layer, which neither sketch had and which goes first. Sketch A's kernel rule R7 is rejected for now. The synthesis grafts four further changes. The grid's resolution is a solver budget, not a premise. A costlier rule is always a cost line and fails only against a stated budget. A worse rule fails and may be waived by signature, and an impossible one refuses waivers. Thin features are found by opening with a ball, or with a disk for printed lines.
-
-## Tradeoffs accepted
-
-- We accept an exact evaluator that trusts its broad phase and its parity count, in exchange for fit checks that can PASS a seated part. A grid cannot.
-- We accept that a grid rule near its bound answers UNKNOWN, in exchange for no resolution premise in any footprint.
-- We accept axis-aligned placements only in assemblies, in exchange for exact placed coordinates. KiCad's other rotations are handled inside the reader with a stated bound.
-- We accept that every sweep runs against every other placed body, in exchange for not modelling assembly order. An order-dependent design is a false FAIL, never a false PASS.
-- We accept judged preset values that are guesses, in exchange for a check an agent can run today. Each sits in the footprint with its label.
-- We accept no strength rules for parts in v0, in exchange for shipping fit and fabrication first.
-
-## Alternatives considered
-
-- **Sketch A's R7 cover-residual lemma in the kernel.** It would put reach itself under kernel check, with a pose cover for PASS and an infeasibility proof for FAIL. It costs about 465 kernel lines (guess, sketch A) and breaks the 1,500-line budget. Fit, which goes first, does not need it, and B's grid serves reach with R4 alone.
-- **A grid-only fit layer.** One evaluator is smaller, but it cannot prove touching contact, so every seated board would be UNKNOWN. It exposes resolution to the caller as the only way out.
-- **A separate fit engine beside the reach engine.** Two queries for one question, two dispatch paths, two sets of tests. One `Sweep` with dispatch by placement hides that choice.
-- **Converting meshes and boards to Petra files at import time.** It moves the trusted reader out of the check, but the converted file is then a second artefact to pin and keep in sync. Reading at check time behind a hash keeps one.
-
-## Open questions
-
-Each has a default the implementation follows until the maintainer answers.
-
-1. Should parts get a kernel rule, R7 or a geometry rule? **Default no.** Revisit if the grid's UNKNOWN rate on real parts stays above 10 percent at the floor (guess threshold).
-2. Should lemma variables get their own `var:` label namespace, about 10 trusted lines (guess)? **Default no.** They use `dsg:`.
-3. Should a worse rule FAIL with a signed waiver, or report MARGINAL through decision 10? **Default FAIL, waivable.**
-4. Should the MCP `check` tool take a base directory for relative file paths? **Default no.** Text designs name absolute paths.
-5. Should Petra ship code tables for guard probe sizes, such as IEC 60529's? **Default no** until licensing of code tables is decided. The owner signs the sphere.
-6. Should directions beyond the six axes come in, for 5-axis milling, angled pulls and turned placements? **Default later.**
-7. Should float32 meshes be read as shortest decimals, exactly, rather than snapped to a dyadic grid? **Default shortest decimals,** so no snap premise exists.
-8. Should KiCad files be read at check time? **Default yes,** trusted and hash-pinned.
-9. Who signs presets? **Default petra-maintainers, judged.** A maker's preset or `measured` overrides upgrade them.
-10. What height does a component get when the board file has none? **Default none.** A signed line is required, or the keep-out check is a Gap.
-11. Should the grid's floor be a CLI solver flag? **Default no.** It stays in `engine.py` so statements stay pure functions of the design.
-
-## Next implementation step
-
-Write `mesh.read_mesh` with the shortest-decimal reader, and test it on binary and ASCII STL files whose coordinates are known exactly.
+The whole trusted base holds 15,796 code lines (measured), against 13,530 before the parts work began (measured at 140f742).
