@@ -21,7 +21,7 @@ from fractions import Fraction
 from pathlib import Path
 
 from . import plane
-from .features import EDGE, HOLES, THICKNESS, Feature, Premise, Rule, classify, premises
+from .features import EDGE, HOLES, THICKNESS, Feature, Premise, Rule, classify, mounting, premises
 from .plane import Arc, Bounds, Circle, Item, Loop, Point, Segment, ShapeError, Spot
 from .sexpr import BoardError, Expr, Symbol, number, parse
 
@@ -382,15 +382,14 @@ def _footprint(e: Expr, kicad: int, path: str) -> Footprint:
     pad_lists = e.lists("pad")
     properties = [frozenset(w for p in pad.lists("property") for w in p.words()) for pad in pad_lists]
     marks = classify(reference, library, frozenset().union(*properties))
-    mounting = any(m.feature is Feature.MOUNTING_HOLE for m in marks)
-    pads = tuple(_pad(p, props, placement, mounting, path) for p, props in zip(pad_lists, properties))
+    pads = tuple(_pad(p, props, placement, mounting(marks), path) for p, props in zip(pad_lists, properties))
     courtyards = (_courtyard(e, Side.TOP, placement, path), _courtyard(e, Side.BOTTOM, placement, path))
     return Footprint(reference, value, library, _COPPER[layer], placement,
                      frozenset(attr.words()) if attr else frozenset(), pads, courtyards, marks,
                      premises(marks, bool(pads), any(p.drill for p in pads)))
 
 
-def _pad(e: Expr, properties: frozenset[str], placement: Placement, mounting: bool, path: str) -> Pad:
+def _pad(e: Expr, properties: frozenset[str], placement: Placement, mount: bool, path: str) -> Pad:
     if len(e.args) < 3:
         raise BoardError(path, f"line {e.line}: a pad needs a number, a type and a shape")
     kind, plated = _PAD_TYPES.get(str(e.args[1]), (None, False))
@@ -410,7 +409,7 @@ def _pad(e: Expr, properties: frozenset[str], placement: Placement, mounting: bo
             drill = Drill(sizes[0], sizes[-1], "oval" in stated.words())
     if kind in (PadKind.THROUGH_HOLE, PadKind.NPTH) and drill is None:
         raise BoardError(path, f"line {e.line}: a {e.args[1]} pad needs a (drill ...) of positive size")
-    if mounting and drill is not None:
+    if mount and drill is not None:
         kind = PadKind.MOUNTING_HOLE
     return Pad(str(e.args[0]), kind, plated, str(e.args[2]), at.at, at.angle,
                (number(size.args[0], path, size), number(size.args[1], path, size)), drill, offset,

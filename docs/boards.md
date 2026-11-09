@@ -128,11 +128,15 @@ A board file holds no part height, no mating direction and no light path. `featu
 
 | feature | marked by | premise demanded |
 |---|---|---|
-| mounting hole | library `MountingHole`, reference H, MH | fastener |
-| connector | library `Connector`, `TerminalBlock`, reference J, P, CN | mating direction and room |
-| switch | library `Button_Switch`, reference SW, S | actuator direction and travel |
-| LED | library `LED_`, reference LED, DS | light path |
-| test point | library `TestPoint`, reference TP, pad property `pad_prop_testpoint` | probe access |
+| mounting hole | library words mounting hole, reference H, MH | fastener |
+| connector | library words connector, connectors, terminal block, conn, connect, usb, header, pin socket, jack, jst, molex, hirose, idc, fpc, ffc, dsub, trrs, hdmi, rj, reference J, P, CN | mating direction and room |
+| switch | library words button, buttons, switch, sw, tactile, tact, spdt, spst, reference SW, S | actuator direction and travel |
+| LED | library words led, leds, reference LED, DS | light path |
+| test point | library words test point, testpoint, reference TP, pad property `pad_prop_testpoint` | probe access |
+
+Any mark adds its premise. Only the library id makes a footprint a mounting hole, and only when no other row marks it. Its drilled pads are then mounting holes, and it lacks no height. The letter H alone does not, since a standoff such as KiCad's `Mounting_Wuerth` parts stands 5 mm off the board under the same H (inferred from the H5mm in its name). A footprint with pads that no row marks lacks its **access**, whether light, a hand, a plug or a probe must reach it, so a part the rows miss still reaches the deck as a premise.
+
+On the boards of docs/kicad_oracle.md, the footprints whose library id or value names an LED, a switch or a connector, by patterns written apart from `RULES`, numbered 244, 227 and 471 when the rows read only library nicknames, and 139, 22 and 93 of them lacked that mark (measured). With the library words they number 247, 227 and 479, and 0, 0 and 40 lack the mark (measured). The counts grew because footprints with a locked reference now read their reference and match KiCad's list (inferred). Of the 40, 39 are LEDs, test points and packages the audit's own patterns catch by mistake, such as `Duo_LED` and `VQFN`, and one is a terminal block with reference TB, which carries the access premise (measured).
 
 Every footprint with pads that is not a mounting hole also lacks its **height** above its face, and one with drilled pads lacks its **lead protrusion** beyond the far face. Every board lacks its **thickness as made**, a range, its **edge tolerance**, the board maker's cut against the drawn outline, and, when it has holes, the **hole size as made**. A thickness the file states is the drawn one, so a slot sized to a stated 1.6 mm passes on the file alone and may not take a board made thicker. Board makers commonly quote 10% either way (recalled). Petra keeps no such figure, so the deck gives the range whether or not the file states a thickness, and builds the OVER solid at its top and the UNDER solid at its bottom with `board_solid(..., thickness=...)`.
 

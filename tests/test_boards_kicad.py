@@ -701,7 +701,7 @@ class Features(unittest.TestCase):
 
     def test_every_rule_names_its_source(self):
         for rule in RULES:
-            self.assertRegex(rule.source, r"^(reported|recalled), ")
+            self.assertRegex(rule.source, r"^(reported|recalled|measured), ")
 
 
 class Thickness(unittest.TestCase):
