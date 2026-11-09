@@ -8,12 +8,12 @@ Every number carries a label. **Measured** means run or counted while writing th
 
 ## Problem
 
-Agents can now write meshes and board files. The mistakes they make are mostly fit and fabrication mistakes. A board does not slide into its case. A screw is too short for the stack it clamps. A USB plug hits the wall below its opening. A wall is thinner than two printed lines. An inside corner is sharper than any cutter can reach. Steel connections taught Petra to check strength against a code. Parts need it to check geometry against a process.
+Agents can now write meshes and board files. This design targets the mistakes that stop a part from being made or put together. A board does not slide into its case. A screw is too short for the stack it clamps. A USB plug hits the wall below its opening. A wall is thinner than two printed lines. An inside corner is sharper than any cutter can reach. Steel connections taught Petra to check strength against a code. Parts need it to check geometry against a process.
 
 Four constraints make the shape non-obvious.
 
 - **The kernel is frozen.** It holds 1,414 of its 1,500 budgeted code lines (measured with `tests/test_kernel_budget.py`). Rules R1 to R6 bound expressions over boxes of hypotheses. None quantifies over points of space.
-- **Statements take exact rationals only (T3).** A mesh is float32 coordinates. A voxel test in floats cannot sit in the trusted path.
+- **Statements take exact rationals only (T3).** An STL mesh holds float32 coordinates. A voxel test in floats cannot sit in the trusted path.
 - **Every premise number is a labelled `RangeHyp` (decision 2), and the statement is a pure function of the design (decision 1).** So a solver setting cannot quietly become a premise, and a premise cannot hide inside a solver.
 - **A grid can never prove touching contact.** A board resting on its standoffs touches them. Any cell that meets the contact face is unsure, so a grid-only fit check answers UNKNOWN on every seated part. Fit needs an exact evaluator.
 
@@ -165,7 +165,7 @@ The JSON keeps today's keys and adds two. An obligation gets `witness`. The repo
 
 ### Interface depth
 
-The caller's surface is the three block kinds and the verdict. It hides the mesh reader, the board reader, both evaluators, the refinement loop and the witness lemmas. Inside the package, `engine.ask(sweep)` is the one entry point to geometry, and `build.build` is the one builder for all 38 modes (measured). The surface stays this small because every per-rule difference is a row of data, not a function.
+The caller's surface is the three block kinds and the verdict. It hides the mesh reader, the board reader, both evaluators, the refinement loop and the witness lemmas. Inside the package, `engine.engine` is the one entry point to geometry, every sweep goes through `engine.ask`, and `build.build` is the one builder for all 38 modes (measured). The surface stays this small because every per-rule difference is a row of data, not a function.
 
 ## The fit layer
 
@@ -173,7 +173,7 @@ Fit comes first in the build order. Every fit question below except one is exact
 
 | Question | Rule | Evaluator | What the kernel checks | What stays trusted |
 |---|---|---|---|---|
-| Do two placed bodies overlap? | `fit.overlap` | exact | FAIL: the crossing lemma, four signed volumes over the five vertices of an edge and a face (R4). PASS: each seated contact as a coplanar, opposite-facing pair (R4) | broad-phase completeness, containment by parity, the zero count of crossings |
+| Do two placed bodies overlap? | `fit.overlap` | exact | for FAIL, the crossing lemma, four signed volumes over the five vertices of an edge and a face (R4); for PASS, each seated contact as a coplanar, opposite-facing pair (R4) | broad-phase completeness, containment by parity, the zero count of crossings |
 | Does a component, its courtyard raised to its height, hit a body? | `fit.keepout` | exact | as overlap, with the height a signed `RangeHyp` | the board reader |
 | Do two bodies keep a clearance apart? | `fit.gap` | exact | the least squared distance against the squared clearance row. FAIL adds the near lemma, one squared distance from the two features' vertices | the closest-pair search |
 | Does a board travel its insertion path? | `fit.insert`, `fit.insert_clearance` | exact | the least sideways squared clearance against the row | the cross-section sweep |
@@ -263,7 +263,7 @@ Consequences follow the synthesis. An **impossible** rule fails the design and r
 
 ## The circuit board reader
 
-`kicad.py` reads `.kicad_pcb` files from KiCad 6 on (file version 20211014 or newer) with the standard library only. The format is S-expressions, so the parser is small, about 60 lines (guess). It reads four things.
+`kicad.py` reads `.kicad_pcb` files from KiCad 6 on with the standard library only. It accepts file version 20211014 or newer, KiCad 6's version as recalled and not yet checked against KiCad's source (guess). The format is S-expressions, so the parser is small, about 60 lines (guess). It reads four things.
 
 - The outline. Edge.Cuts lines, arcs, circles, rectangles and polygons, chained into closed loops. The outermost loop is the outline and the rest are cutouts. A loop that does not close is refused.
 - The thickness, from `(general (thickness ...))`.
@@ -272,7 +272,7 @@ Consequences follow the synthesis. An **impossible** rule fails the design and r
 
 KiCad's y axis points down the screen, so the reader flips it to point up. A footprint turned by a multiple of 90 degrees is placed exactly. Any other angle is placed by a rational rotation within 2^-30 rad of it, and every affected edge moves by that bound toward the harder fit. Keep-outs grow and drills shrink. At 1,000 mm from the origin that bound is about 1e-6 mm (inferred).
 
-Component heights are a stated premise. A footprint's `Height` property is read as a design value when the board's author set one. Otherwise the pcb block's `height <ref>` line signs it, then the `height others` line. A footprint with none of these leaves `fit.keepout` a Gap needing `NeedsInputBound`. A footprint with no courtyard keeps an empty keep-out, and its keep-out check is a Gap until a waiver names it. Petra never invents a height.
+Component heights are a stated premise. The pcb block's signed `height <ref>` line comes first. Then a footprint's `Height` property, read as a design value when the board's author set one. Then the signed `height others` line. A footprint with none of these leaves `fit.keepout` a Gap needing `NeedsInputBound`. A footprint with no courtyard keeps an empty keep-out, and its keep-out check is a Gap until a waiver names it. Petra never invents a height.
 
 The reader is trusted, pinned by the design's sha256, and runs at check time. The board feeds the enclosure deck. Its outline, holes and keep-outs become a placed `Solid` the case's fit rules check against.
 
@@ -293,7 +293,7 @@ A straddling Bracket states nothing. Refuting its hi end would not refute the de
 - The mesh is the part. Its hash and its exact coordinates are design values. A tessellated cylinder is a polygon, and the check is about the polygon.
 - The board file is the board. Component heights are signed or read from the file.
 - Preset rows are judged, or overridden with an owner and a reason.
-- Each evaluator is a validated_model: `model:parts.exact`, `model:parts.declared`, `model:parts.grid`. Each hashes every module it trusts, as `electronics/domain.py` already does for its three.
+- Each evaluator is a validated_model premise, `model:parts.exact`, `model:parts.declared` or `model:parts.grid`. Each hashes every module it trusts, as `electronics/domain.py` already does for its three.
 - The grid's cell side is not a premise. A sound grid at any side gives the same PASS and FAIL and differs only in how often it says UNKNOWN. Because `engine.BUDGET` sits in hashed source, the statement stays a pure function of the design.
 
 **No new kernel rule.** R4 carries every goal and lemma. Sketch A proposed R7, a cover-residual lemma. A PASS names a finite cover of tool poses, and a FAIL names a point of stock with a finite proof that no allowed pose cuts it. R7 would put reach under kernel check. It would cost about 465 lines (guess, sketch A) and take the kernel to about 1,880 of 1,500 (inferred, sketch A). It is rejected for now. Sketch B considered a cell-counting rule and rejected it too, because it would still trust the cell classification. Lemma variables, such as a tool centre's offset in the obstruction lemma, are labelled `dsg:` like the electronics domain's normalised spreads.
@@ -305,10 +305,10 @@ Each class below names the Petra checks that catch it and the mistakes no check 
 | Class | Caught by | Not caught yet |
 |---|---|---|
 | Intent | claims; `fit.hole` and `fit.seat` test declared features against the mesh, so a hole declared but not modelled fails; `fit.access` for every declared connector | a part that is valid and does the wrong job; a button not over its switch unless declared as access; a missing vent; the wrong board revision behind a correct hash |
-| Geometric validity | lowering refuses a hash mismatch, an open or non-manifold surface, a self-crossing surface, a hole or seat outside the mesh, a turn whose axes are parallel, a board outline that does not close | chord error, where a coarse tessellation makes a hole smaller or a boss larger than its CAD model; the check is right about the mesh and the mesh is wrong about the intent |
+| Geometric validity | lowering refuses a hash mismatch, an open or non-manifold surface, a self-crossing surface, a hole or seat outside the mesh, a turn whose axes are parallel, a board outline that does not close | chord error, where a coarse tessellation makes holes and bosses smaller than their CAD model; the check is right about the mesh and the mesh is wrong about the intent |
 | Fit and interface | `fit.overlap`, `fit.keepout`, `fit.gap`, `fit.insert`, `fit.insert_clearance`, `fit.access`, `fit.hole`, `fit.seat`, `fit.align`, `fit.grip`, `fit.driver` | assembly order, since every sweep runs against every other placed body, so an order-dependent design is refused (a false FAIL, never a false PASS); cable routing; snap-fit engagement |
 | Fabrication | `print.*`, `powder.*`, `sheet.*`, `mill.*`, `mold.*`, 25 rules (measured) | warp and shrink, bridging, support removal access, fixturing and clamps, tool deflection, feeds and heat |
-| Strength and stiffness | the truss, bolt and steel connection domains for their own kinds | every parts load case in v0: boss splitting under a thread-forming screw, snap-fit strain, wall deflection, interlayer weakness of prints, creep of PLA |
+| Strength and stiffness | the truss, bolt and steel connection domains for their own kinds | every parts load case in v0, such as boss splitting under a thread-forming screw, snap-fit strain, wall deflection, interlayer weakness of prints, creep of PLA |
 | Code compliance | steel's AISC 360 checks; electronics ratings; `fit.passage` and `fit.opening` against a signed probe sphere | creepage and clearance between conductors and the case (IEC 62368-1), flammability ratings (UL 94), water ingress, jointed test fingers |
 | Unstated premises | a missing height or courtyard is a Gap; a part without a process prints "fit only"; preset rows, overrides and models sit in the footprint; a grid UNKNOWN names its unsure cells | thermal expansion between PLA and FR4 (about 0.11 mm more growth for PLA over 100 mm and 20 K, inferred from expansion coefficients of 68e-6 and 14e-6 per K, both guesses); humidity swell of PA12; a board populated differently from its file |
 
@@ -370,7 +370,7 @@ A clean-room twin and metamorphic relations judge the evaluators, as they judge 
 | reading a 2 MB board file | under 1 s | guess |
 | checking the sensor box | under a minute | guess |
 
-Scaled integers are why `Mesh` stores int64 vertices over one scale. Exact predicates promote to Python integers only when a product could pass 2^62.
+Scaled integers, not Fractions, set the exact evaluator's cost, which is why `Mesh` stores integer vertices over one scale. The exact predicates run on Python integers. The grid's separating-axis test runs on int64 while every product stays below 2^62, and on Python integers otherwise.
 
 ## Build order
 
@@ -396,7 +396,7 @@ The order follows what each step needs.
 | `petra/verdict.py` | step 1 | one match case for `UnresolvedGeometry` |
 | `petra/readout.py` | step 1 | witness lines and cost lines; `tests/test_readout.py` gains the two keys |
 | `petra/templates.py` | step 1 | `petra new part`, `pcb` and `assembly` |
-| `tests/test_structure.py` | step 1 | a fence: `petra/models/parts` imports only the standard library, numpy and petra |
+| `tests/test_structure.py` | step 1 | a fence so `petra/models/parts` imports only the standard library, numpy and petra |
 | `petra/pipeline.py` | none | `Design.path` already gives lowering the design's directory (read in `petra/ir.py`) |
 
 ## Red-flag screen
