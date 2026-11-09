@@ -15,6 +15,9 @@ the folder .gitignore keeps out of the repository. For each anchor it checks:
      label there, and its `read` field records what the page image shows; a workbook cell
      displays the printed value.
 
+It also checks docs/sources/equations.json, the headings and equation labels of Chapters J
+and K, against AISC 360-22's pages (`equations`).
+
 The anchors hold fingerprints and numbers, never the documents' text. Exit 1 on any
 failure. Needs pypdf (5.1.0 made the anchors; another version may lay text out
 differently, and the fingerprints then fail).
@@ -279,6 +282,54 @@ def verify(anchors: list[dict], folder: Path) -> dict[str, list[str]]:
     return {a["id"]: p for a in anchors for p in [problems(a, folder)] if p}
 
 
+# --- Chapters J and K's headings and equations -----------------------------------------------
+
+EQUATIONS = ROOT / "docs" / "sources" / "equations.json"
+CHAPTER = re.compile(r"([JK]\d+)\. (.+)")
+SUBSECTION = re.compile(r"(\d+[a-z]?)\. [A-Z][a-z]")
+EQUATION = re.compile(r"\(([JK]\d+-\d+[a-z]?)\)")
+
+
+def equations(path: Path, first: int, last: int) -> dict:
+    """The headings and equation labels of Chapters J and K on pages first to last, in reading
+    order. `headings` gives each heading's number ("J3.11a") and page, and `equations` each
+    label with the number of the heading before it and its page. A chapter's heading is set in
+    capitals, which tells it from the contents list; a subsection's is its number and a word.
+    A table can print past the next chapter's heading, so a label outside the heading's
+    chapter takes its own chapter ("K2-1a" printed after K3's heading is K2's)."""
+    headings, found, seen, chapter, section = [], [], set(), None, None
+    for page in range(first, last + 1):
+        for line in page_text(path, page).split("\n"):
+            m = CHAPTER.fullmatch(line)
+            if m and m.group(2) == m.group(2).upper():
+                chapter = section = m.group(1)
+                headings.append([section, page])
+            elif chapter and (m := SUBSECTION.match(line)):
+                section = f"{chapter}.{m.group(1)}"
+                headings.append([section, page])
+            for label in EQUATION.findall(line):
+                if section and label not in seen:
+                    own = label.split("-")[0]
+                    seen.add(label)
+                    found.append([label, section if section.split(".")[0] == own else own, page])
+    return {"headings": headings, "equations": found}
+
+
+def read_equations(path: Path = EQUATIONS) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def equation_problems(stored: dict, folder: Path) -> list[str]:
+    """What fails for docs/sources/equations.json against the documents in folder."""
+    path = folder / stored["doc"]
+    if not path.exists():
+        return [f"{stored['doc']} is not in {folder}"]
+    if sha256(path) != stored["doc_sha256"]:
+        return [f"{stored['doc']} has sha256 {sha256(path)}, not {stored['doc_sha256']}"]
+    now = equations(path, *stored["pages"])
+    return [f"the document's {key} differ from equations.json's" for key in now if now[key] != stored[key]]
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--sources", help=f"folder holding the documents (default ${ENV}, else {DEFAULT_SOURCES})")
@@ -286,6 +337,8 @@ def main(argv: list[str] | None = None) -> int:
     folder = sources_dir(args.sources)
     anchors = read_anchors()
     failed = verify(anchors, folder)
+    if found := equation_problems(read_equations(), folder):
+        failed["equations.json"] = found
     for key, found in failed.items():
         for p in found:
             print(f"{key}: {p}")

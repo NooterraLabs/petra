@@ -14,8 +14,9 @@ numbers them, maps to exactly one treatment:
 Provisions from outside the Specification that the deck also encodes (RCSC installation,
 the Manual's tightening clearances, the shop deck's stock) close the table. The test
 tests/test_steel_trace.py fails when a provision is unmapped, mapped twice, or names a mode
-the deck does not have, when a mode of the deck is not named by any provision, and when
-docs/steel_traceability.md is not the table rendered.
+the deck does not have, and when a mode of the deck is not named by any provision.
+scripts/source_docs.py renders the table, with each provision's values, as
+docs/steel_traceability.md.
 """
 from __future__ import annotations
 
@@ -380,41 +381,3 @@ APPENDIX3: tuple[Provision, ...] = (
 ALL: tuple[Provision, ...] = (*TABLE, *APPENDIX3, *OTHER)
 """Every row the deck traces."""
 
-
-def render() -> str:
-    """docs/steel_traceability.md."""
-    lines = [
-        "# Clause traceability of the steel deck",
-        "",
-        "`python -m petra.models.steel.trace` generates this file from `petra/models/steel/trace.py`. "
-        "`tests/test_steel_trace.py` fails when this file is stale or a provision is unmapped.",
-        "",
-        "Each row gives its provision one treatment:",
-        "",
-        "- **check** means the checks of the modes in the row encode the provision.",
-        "- **rule** means the deck enforces the provision where it reads the design or factors the strength.",
-        "- **premise** means the deck states the provision as an assumption and does not check it.",
-        "- **excluded** means the provision is outside v1.0.",
-        "",
-        "| Provision | Title | Treatment | Modes | Note |",
-        "|---|---|---|---|---|",
-    ]
-    for p in ALL:
-        modes = ", ".join(f"`{m}`" for m in p.modes)
-        lines.append(f"| {p.section} | {p.title} | {p.treatment} | {modes} | {p.note} |")
-
-    def tally(rows: tuple[Provision, ...]) -> str:
-        counts = {t: sum(1 for p in rows if p.treatment == t) for t in TREATMENTS}
-        return ", ".join(f"{n} {t}" for t, n in counts.items())
-
-    lines += ["", f"The table maps {len(TABLE)} provisions of AISC 360-22 Chapters J and K: {tally(TABLE)}. "
-              f"It maps {len(APPENDIX3)} provisions of Appendix 3, Fatigue: {tally(APPENDIX3)}."]
-    return "\n".join(lines) + "\n"
-
-
-if __name__ == "__main__":
-    import pathlib
-
-    target = pathlib.Path(__file__).resolve().parents[3] / "docs" / "steel_traceability.md"
-    target.write_text(render(), encoding="utf-8", newline="\n")
-    print(f"wrote {target}")

@@ -118,6 +118,45 @@ class Documents(unittest.TestCase):
         failed = vs.verify(self.anchors, self.folder)
         self.assertEqual(failed, {}, "\n".join(f"{k}: {'; '.join(p)}" for k, p in failed.items()))
 
+    def test_chapters_j_and_k_number_what_equations_json_says(self):
+        """Its headings and equation labels are AISC 360-22's, page by page."""
+        self.assertEqual(vs.equation_problems(vs.read_equations(), self.folder), [])
+
+
+class Traceability(unittest.TestCase):
+    """docs/steel_traceability.md and docs/steel_connections.md §4 against their sources."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.docs = _script("source_docs")
+
+    def test_the_generated_docs_are_current(self):
+        connections = self.docs.CONNECTIONS.read_text(encoding="utf-8")
+        for path, text in ((self.docs.TRACEABILITY, self.docs.traceability()),
+                           (self.docs.CONNECTIONS, self.docs.connections(connections))):
+            self.assertEqual(path.read_text(encoding="utf-8"), text,
+                             f"{path.relative_to(ROOT)} is stale: run py -3.11 scripts/source_docs.py")
+
+    def test_the_trace_has_every_heading_of_chapters_j_and_k(self):
+        """trace.py's provisions are the standard's headings: none missing, none extra. A
+        heading the trace does not list is a chapter, a parent of listed parts (J3.11), or a
+        part of a listed provision (J2.1a, K3.2)."""
+        headings = [h for h, _ in vs.read_equations()["headings"]]
+        self.assertEqual([s for s in self.docs.JK if s not in headings], [], "provisions with no heading")
+        listed = set(self.docs.JK)
+        def parent(h: str) -> bool:
+            return any(s.startswith(h + ".") or (s.startswith(h) and s[len(h):].isalpha()) for s in listed)
+
+        extra = [h for h in headings if h not in listed and not parent(h) and not self.docs.resolve(h)]
+        self.assertEqual(extra, [], "headings the trace does not list")
+
+    def test_no_excluded_provision_has_values(self):
+        """A value whose clause names an excluded provision is data no check reads, or a wrong
+        citation."""
+        named, _ = self.docs.values_by_provision()
+        self.assertEqual({s: [x["id"] for x in named[s]] for s in self.docs.IDS
+                          if self.docs.TREATMENT[s] == "excluded" and named[s]}, {})
+
 
 class Findings(unittest.TestCase):
     """What the second reading found that the first did not: one test per finding."""

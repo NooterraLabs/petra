@@ -1,14 +1,11 @@
 """Clause traceability of the steel deck (docs/steel_connections.md §6, §9 item 1): every
 AISC 360-22 Chapter J and K provision and every Appendix 3 provision maps to exactly one
-check, rule, premise or exclusion; every mode the deck has is named by a provision; the
-published table is current."""
+check, rule, premise or exclusion; every mode the deck has is named by a provision.
+tests/test_sources.py checks that docs/steel_traceability.md is current."""
 import unittest
-from pathlib import Path
 
 from petra.models.steel import trace
 from petra.models.steel.vocab import MODELS, MODES, UNMODELLED
-
-DOC = Path(__file__).resolve().parents[1] / "docs" / "steel_traceability.md"
 
 
 class Traceability(unittest.TestCase):
@@ -44,10 +41,6 @@ class Traceability(unittest.TestCase):
                 for mode in p.modes:
                     spec = MODELS[MODES[mode]]
                     self.assertTrue(spec.validity or spec.unchecked, f"{p.section}: {mode}")
-
-    def test_the_published_table_is_current(self):
-        self.assertEqual(DOC.read_text(encoding="utf-8"), trace.render(),
-                         "docs/steel_traceability.md is stale: run python -m petra.models.steel.trace")
 
 
 if __name__ == "__main__":

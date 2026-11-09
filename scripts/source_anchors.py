@@ -2,7 +2,8 @@
 
 Writes docs/sources/anchors.jsonl, one anchor per item of docs/sources/inventory.jsonl, from
 a reading of the documents and the documents themselves (scripts/verify_sources.py says
-where they are looked for).
+where they are looked for). Writes docs/sources/equations.json, the headings and equation
+labels of AISC 360-22 Chapters J and K, from the document alone.
 
 A reading is what a reader took from the page with Petra's values hidden: DIR holds
 readings_*.jsonl, one object per value read, {task, doc, page, printed, span, kind, label,
@@ -140,10 +141,17 @@ SPANS: dict[str, tuple[str, int, str, str]] = {
 the whole column, since a size alone ("1/4 (6)") also matches a row label."""
 
 SHORTER = {
-    "code.j10_2_end": {"read": "J10-3 within d of the end, d included; J10-2 beyond"},
+    "code.j10_2_end": {"read": "J10-3 within d of the end, d included; J10-2 beyond", "label": "(b)"},
+    "code.j10_3_end": {"label": "(b)"},
     "code.section_stress": {"printed": "elastic analysis, no stress concentration factor"},
+    "code.bolt_area": {"printed": "Ab, the area of the bolt's unthreaded body"},
+    "code.fillet_throat": {"printed": "the throat, from the root to the weld's face"},
+    "const.aisc360.f11.inelastic_limit": {"label": "(b)"},
+    "const.aisc360.j2_2b.length_ratio": {"label": "four times", "read": "four (= 4) times the weld size"},
+    "const.aisc_manual.p10.underrun": {"read": "a 3/4 in. setback, 1/4 in. of it for mill underrun"},
 }
-"""A reader's words cut down to the rule, so no field runs long."""
+"""A reader's words cut down to the rule in Petra's words, so no field runs long or quotes the
+standard's prose. A label stays a few words of the span."""
 
 DIFFERS: dict[str, str] = {}
 """Items with no single number whose source reads otherwise than Petra: id -> the finding."""
@@ -200,7 +208,10 @@ def from_reading(folder: Path, item: dict, r: dict, stated: Fraction | None) -> 
     if r["kind"] == "visual":
         a["label"], a["read"] = r["label"], r["read"]
     if r.get("row") or r.get("col"):
-        row = r.get("row", "").split(",")[0] if r["task"] == "table.A-3.1" else r.get("row", "")
+        row = r.get("row", "")
+        if r["task"] == "table.A-3.1":  # the case number, and the radius that splits Case 1.3
+            case, _, rest = row.split(",")[0].partition(" ")
+            row = f"Case {case}" + (f" {rest}" if rest.startswith("R ") else "")
         a["cell"] = f"{row} / {r.get('col', '')}"
     a.update(SHORTER.get(item["id"], {}))
     return a
@@ -312,12 +323,27 @@ def anchors(readings: list[dict], folder: Path) -> list[dict]:
     return out
 
 
+JK_PAGES = (189, 241)
+"""AISC 360-22's pages from the start of Chapter J to the end of Chapter K."""
+
+
+def write_equations(folder: Path) -> dict:
+    """docs/sources/equations.json: Chapters J and K's headings and equation labels."""
+    path = folder / inv.A360
+    out = {"doc": inv.A360, "doc_sha256": vs.sha256(path), "pages": list(JK_PAGES), **vs.equations(path, *JK_PAGES)}
+    vs.EQUATIONS.write_text(json.dumps(out, indent=1) + "\n", encoding="utf-8", newline="\n")
+    print(f"wrote {vs.EQUATIONS.relative_to(ROOT)}: {len(out['headings'])} headings, "
+          f"{len(out['equations'])} equations")
+    return out
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--readings", required=True, help="folder of readings_*.jsonl")
     parser.add_argument("--sources", help=f"folder holding the documents (default ${vs.ENV})")
     args = parser.parse_args(argv)
     folder = vs.sources_dir(args.sources)
+    write_equations(folder)
     out = anchors(_readings(Path(args.readings)), folder)
     OUT.write_text("".join(json.dumps(a, ensure_ascii=False) + "\n" for a in out), encoding="utf-8", newline="\n")
     kinds: dict[str, int] = {}
