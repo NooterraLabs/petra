@@ -12,6 +12,7 @@ import csv
 import hashlib
 import importlib.util
 import io
+import json
 import os
 import re
 import shutil
@@ -97,7 +98,8 @@ class Packaging(unittest.TestCase):
         self.assertEqual(meta["License-Expression"], "Apache-2.0")
         self.assertEqual({d.split(">=")[0] for d in meta.get_all("Requires-Dist")}, {"numpy", "scipy"})
         self.assertEqual(self.files[f"{DIST_INFO}/licenses/LICENSE"], (ROOT / "LICENSE").read_bytes())
-        self.assertIn("petra = petra.cli:main", self.files[f"{DIST_INFO}/entry_points.txt"].decode("utf-8").splitlines())
+        scripts = self.files[f"{DIST_INFO}/entry_points.txt"].decode("utf-8").splitlines()
+        self.assertLess({"petra = petra.cli:main", "petra-lang = petra.cli:main"}, set(scripts))
         self.assertIn("Source, https://github.com/NooterraLabs/petra", meta.get_all("Project-URL"))
 
     def test_the_published_readme_links_into_the_repository_at_the_release_tag(self):
@@ -146,6 +148,17 @@ class Packaging(unittest.TestCase):
                            ("readme", backend().description(PROJECT))):
             with self.subTest(name):
                 self.assertEqual(ok(petra, "docs", name, cwd=self.outside), text)
+
+    def test_the_command_named_for_the_package_serves_mcp(self):
+        """`uvx petra-lang mcp` runs the executable named petra-lang. That is the command
+        a client builds from the MCP registry's entry, which names the package."""
+        command = shutil.which("petra-lang", path=str(self.scripts))
+        self.assertIsNotNone(command, "pip installed the petra-lang command")
+        hello = {"jsonrpc": "2.0", "id": 1, "method": "initialize",
+                 "params": {"protocolVersion": "2025-11-25", "capabilities": {}, "clientInfo": {"name": "test", "version": "0"}}}
+        done = subprocess.run([command, "mcp"], input=json.dumps(hello) + "\n", cwd=self.outside, env=ENV,
+                              capture_output=True, text=True, timeout=300)
+        self.assertEqual(json.loads(done.stdout)["result"]["serverInfo"], {"name": "petra", "version": PROJECT["version"]})
 
     def test_an_editable_install_imports_the_source_tree(self):
         python, _ = venv(self.tmp / "editable")
