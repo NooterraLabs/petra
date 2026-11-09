@@ -32,7 +32,7 @@ from .registry import build_registry
 from .solvers import SolverSource
 from .verdict import Fail, Marginal, Pass, Unknown, Verdict
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 
 def check_file(path: str | Path, *, certs: str | Path | None = None, library: Library | None = None, solve: bool = True) -> Report:
