@@ -189,6 +189,13 @@ class Handle(unittest.TestCase):
                 self.assertTrue(result["isError"])
                 self.assertTrue(result["content"][0]["text"])
 
+    def test_a_check_without_a_design_or_with_two_says_which(self):
+        def said(**args):
+            return mcp.handle(call(1, "check", **args))["result"]["content"][0]["text"]
+
+        self.assertNotIn("not both", said())
+        self.assertIn("not both", said(text="x", path="y"))
+
     def test_a_request_id_is_a_string_or_an_integer(self):
         for rid in (None, 1.5, True, [1]):
             with self.subTest(rid):

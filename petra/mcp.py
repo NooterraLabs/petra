@@ -94,7 +94,9 @@ def _check(args: Mapping[str, Any]) -> Result:
     from .solvers import SolverSource
 
     text, path = _string(args, "text"), _string(args, "path")
-    if (text is None) == (path is None):
+    if text is None and path is None:
+        raise ToolError("give the design as `text`, or as the absolute `path` of a .petra file")
+    if text is not None and path is not None:
         raise ToolError("give the design as `text` or as a file `path`, not both")
     if path is not None:
         try:
