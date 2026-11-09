@@ -177,7 +177,7 @@ class Interface:
     outline: Outline | None   # a bracket plate's edges: tearout runs along each bolt's force
     # whether the card fixes a direction in the plies' plane, the force's that plain and
     # `_parallel` slots are named against; a hanger pulls normal to its plies, so its slots
-    # may run either way
+    # may run either way, and so may its shear
     oriented: bool = True
 
     @property
@@ -833,7 +833,7 @@ def geometry_hanger(ctx: Ctx) -> Geometry:
     support: Member = conn.attrs["support"]
     sp = _w(ctx, support)
     b_s, a_s = div(sub(gt, sp["tw"]), c(2)), div(sub(sp["bf"], gt), c(2))
-    hold = Ply("support flange", support.grade, sp["tf"], 1, 1, ctx.hole("support"), "down", None, None, None, 1,
+    hold = Ply("support flange", support.grade, sp["tf"], 1, 1, ctx.hole("support"), "down", None, a_s, None, 1,
                (("flange side", a_s),), block=False, edges_far=())
     out = Geometry.empty()
     bolted = Interface("hanger bolts", bolts, rows, 2, s, gt, 1, (flange, hold), ctx.secondary("shear"),
@@ -961,6 +961,14 @@ def group_total(ctx: Ctx, itf: Interface) -> Expr:
     """Sum over the bolts of their available strengths (J3.7 with J3.11a)."""
     per_column = add(*(mul(c(k), _per_bolt(ctx, itf, r)) if k > 1 else _per_bolt(ctx, itf, r) for r, k in bolt_rows(itf)))
     return mul(c(itf.cols), per_column) if itf.cols > 1 else per_column
+
+
+def turned(itf: Interface) -> Interface:
+    """The group under its shear turned a quarter in the plies' plane, where the card fixes
+    no direction for it (Interface.oriented): its columns as rows, the gauge as the pitch,
+    and each ply's side edge as the edge its extreme line tears toward."""
+    assert itf.gauge is not None, "a turned group has columns a gauge apart"
+    return replace(itf, rows=itf.cols, cols=itf.rows, pitch=itf.gauge, plies=tuple(replace(p, edge=p.side) for p in itf.plies))
 
 
 def _gauge(itf: Interface) -> Expr:
@@ -1192,9 +1200,12 @@ def _table_10_9(ctx: Ctx, geo: Geometry, itf: Interface) -> tuple[Expr, Expr] | 
 
 def bolt_capacity(ctx: Ctx, geo: Geometry, itf: Interface) -> Expr:
     """What gen_bolts holds a group's shear to. A concentric group: the sum over its bolts
-    of their available strengths. An eccentric one: C times its weakest bolt's, the larger
+    of their available strengths, the lesser of the two ways a shear the card gives no
+    direction may run (turned). An eccentric one: C times its weakest bolt's, the larger
     C of the group's own eccentricity and, where Manual Table 10-9's configuration holds
     (switch factor at least 1), of the table's: C there times min(1, factor), since C >= 0."""
+    if itf.eccentricity is None and not itf.oriented:
+        return Min((group_total(ctx, itf), group_total(ctx, turned(itf))))
     if itf.eccentricity is None:
         return group_total(ctx, itf)
     if itf.outline is not None:

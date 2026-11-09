@@ -212,7 +212,6 @@ class DeckFixes(unittest.TestCase):
                 pry = next(k for k in plain if k[0] == "prying" and flange in k[1])
                 self.assertGreater(plain[pry], std[pry])
 
-    @unittest.expectedFailure
     def test_a_hanger_shear_across_the_tee_tears_its_flange_tip(self):
         # The card gives a hanger's shear no direction in its plies' plane. Along the tee
         # bolt shear holds each of the four 3/4 in Group 150-X bolts, 111.3 kips in all
@@ -222,10 +221,14 @@ class DeckFixes(unittest.TestCase):
                  "  bolts bolt_group.150 diameter 0.75 inch threads excluded joint pretensioned",
                  "  rows 2", "  pitch 3 inch", "  tee_gauge 4.5 inch", "  edge_vertical 2 inch"]
 
-        def bolts(shear):
-            text = gen.source("h", "hanger", "lrfd", lines, Fraction(5), (("shear", Fraction(shear, 5)),))
-            return status(text)[1]["bolts"]
-        self.assertEqual([bolts(100), bolts(108)], ["pass", "fail"])
+        def card(shear):
+            return gen.source("h", "hanger", "lrfd", lines, Fraction(5), (("shear", Fraction(shear, 5)),))
+        self.assertEqual([status(card(s))[1]["bolts"] for s in (100, 108)], ["pass", "fail"])
+        # The readout shows the weaker way's bolts, which sum to what the group holds.
+        report = check_design(parse_design(card(108), "t.petra", REGISTRY), REGISTRY, (SolverSource(),))
+        group = next(v for f in report.findings for v in f.values if v.parts)
+        self.assertAlmostEqual(group.capacity, sum(p.count * p.capacity for p in group.parts), places=6)
+        self.assertTrue(all("shear across the lines" in p.what for p in group.parts), [p.what for p in group.parts])
 
     def test_a_slotted_hanger_under_shear_needs_a_slip_critical_joint(self):
         # J3.3: in a bearing-type joint a slot lies normal to the load. The tension is normal

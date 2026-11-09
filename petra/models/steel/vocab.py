@@ -78,7 +78,9 @@ STRENGTH: tuple[tuple[str, str, str, str, tuple[ValidityRow, ...]], ...] = (
      "a bolt above the centroid and the front edge or a shaped plate's sloping edge from one below, along the "
      "force; the next hole above, below, behind or ahead, at the clear spacing; a long slot either way takes the "
      "perpendicular slot's coefficients; a hanger's card fixes no direction in its plies' plane, so a slot there "
-     "takes its length along the force and a long one the perpendicular slot's coefficients; through declared "
+     "takes its length along the force and a long one the perpendicular slot's coefficients, and its group holds "
+     "the lesser of its shear along the tee and across it, where each flange's outer line tears toward its side "
+     "edge; through declared "
      "fillers the shear strength times 0.85, J5.2(a)'s least "
      "factor, since the grammar gives no filler thickness",
      "bolts of one group, size and installation; holes of the declared type; threads included or excluded as "
