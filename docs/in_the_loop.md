@@ -45,6 +45,8 @@ uvx --from petra-lang==0.1.2 petra mcp
 
 so it needs [uv](https://docs.astral.sh/uv/) and no other install. On the first start uv fetches Petra, numpy and scipy into its cache, and later starts reuse them. The pin holds the server at the release whose skill the plugin carries, and each release moves it.
 
+Claude Code waits 30 s for a server to start (reported in its docs). The server answers once Python has imported Petra, which took 4.3 s to 5.4 s on a quiet PC and 28 s to 39 s on one busy with other jobs (measured), and the first start through uv also downloads the packages. If `/mcp` shows `petra` failed on its first start, set `MCP_TIMEOUT=120000` in the environment and start Claude Code again.
+
 The plugin runs uvx rather than a `petra` already on the PATH, because then the plugin is the only step. `petra mcp` from the PATH needs `pip install petra-lang` first, into a Python the client can find, and it serves whichever version is installed there, which may not match the skill. Without uv, take that route by hand:
 
 ```bash
