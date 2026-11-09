@@ -6,6 +6,7 @@ import dataclasses
 import io
 import json
 import re
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -233,8 +234,12 @@ class DidYouMean(unittest.TestCase):
 
 class PetraNew(unittest.TestCase):
     def test_every_kind_prints_a_design_that_checks_without_an_input_error(self):
+        """A template that names mesh files checks once its files sit beside it, and an
+        assembly's template carries the parts it places."""
         with tempfile.TemporaryDirectory() as tmp:
             for kind in models.KINDS:
+                for mesh in (ROOT / TEMPLATES[kind][0]).parent.glob("*.stl"):
+                    shutil.copy(mesh, tmp)
                 for name in (None, "renamed"):
                     with self.subTest(kind=kind, name=name):
                         code, out, err = run("new", kind, *(("--name", name) if name else ()))
@@ -244,9 +249,11 @@ class PetraNew(unittest.TestCase):
                         code, _, err = run("check", "--no-solve", str(path))
                         self.assertNotIn(code, (cli.EXIT_CODES["INPUT_ERROR"], cli.EXIT_CODES["INTERNAL_ERROR"]), err)
                         components = parse_design(out, str(path), REGISTRY).components
-                        self.assertEqual([c.kind for c in components.values()], [kind])
+                        kinds = [c.kind for c in components.values()]
+                        self.assertEqual(kinds.count(kind), 1)
+                        self.assertTrue(set(kinds) <= {kind, "part"}, kinds)
                         if name:
-                            self.assertEqual(list(components), [name])
+                            self.assertEqual(components[name].kind, kind)
 
     def test_a_renamed_design_gets_the_examples_verdict(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -36,6 +36,7 @@ STRESS = Dim(m=-1, kg=1, s=-2)
 CURRENT = Dim(A=1)
 VOLTAGE = Dim(m=2, kg=1, s=-3, A=-1)
 TEMPERATURE = Dim(degC=1)
+MASS = Dim(kg=1)
 ENERGY = Dim(m=2, kg=1, s=-2)
 TORQUE = ENERGY
 I2T = Dim(A=2, s=1)
@@ -92,6 +93,8 @@ UNITS: dict[str, tuple[Fraction, Dim]] = {
     "s": (_ONE, TIME),
     "ms": (_MILLI, TIME),
     "degC": (_ONE, TEMPERATURE),
+    "g": (_MILLI, MASS),
+    "kg": (_ONE, MASS),
     "A2s": (_ONE, I2T),
 }
 """Unit spelling -> (factor to SI, dimension). The one table of unit spellings. The .petra
@@ -123,6 +126,7 @@ _NAMED_DIMS: dict[Dim, str] = {
     DIMENSIONLESS: "dimensionless",
     LENGTH: "length",
     AREA: "area",
+    MASS: "mass",
     FORCE: "force",
     STRESS: "stress",
     CURRENT: "current",

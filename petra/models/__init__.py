@@ -13,11 +13,11 @@ from __future__ import annotations
 from types import MappingProxyType
 from typing import Mapping
 
-from . import bolt, circuit, electronics, steel, truss, uncertainty
+from . import bolt, circuit, electronics, parts, steel, truss, uncertainty
 from .base import CROSS_DOMAIN_MODES, CROSS_DOMAIN_UNMODELLED, CoverageRule, DomainSpec, FailureMode
 
 _REGISTERED: tuple[DomainSpec, ...] = (truss.DOMAIN, circuit.DOMAIN, bolt.DOMAIN, uncertainty.DOMAIN, steel.DOMAIN,
-                                       electronics.DOMAIN)
+                                       electronics.DOMAIN, parts.DOMAIN)
 
 
 def _index(registered: tuple[DomainSpec, ...]) -> tuple:

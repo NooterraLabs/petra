@@ -157,6 +157,7 @@ class PartKind(Enum):
     BOLT = "bolt"
     SCREW = "screw"         # a machine or thread-forming screw by its geometry (docs/parts.md)
     WASHER = "washer"
+    INSERT = "insert"       # a heat-set threaded insert by its catalogue hole (docs/parts.md)
 
 
 class ProcessKind(Enum):

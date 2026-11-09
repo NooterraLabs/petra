@@ -184,6 +184,7 @@ A `.petra` file accepts these unit spellings.
 | energy, torque | `J`, `Nm`, `kip_in`, `kip_ft` |
 | time | `s`, `ms` |
 | temperature | `degC` |
+| mass | `g`, `kg` |
 | I2t | `A2s` |
 
 ## Exit codes of `petra check`
@@ -640,6 +641,45 @@ In a claim, `<qoi>` is one of `voltage`, `output`, `current`, `power_utilisation
 | `led` | `<name> part <registry led id> from <rail> resistor <resistor> [count <n>]` | optional |  | `led.*` | a string of count LEDs (one by default) in series with its current-limit resistor, from a rail to ground |
 | `sink` | `<name> from <rail>` | optional |  |  | a load on a rail; each load case signs the current it draws |
 
+### Domain parts
+
+Waivable modes: `fit.connected`, `fit.driver`, `fit.fastener`, `fit.gap`, `fit.grip`, `fit.hole`, `fit.insert`, `fit.press`, `fit.seat`, `insert.boss_wall`, `insert.depth`, `insert.hole_size`, `mill.min_feature`, `mill.reach`, `part.temperature`, `powder.escape`, `powder.min_feature`, `powder.volume`, `print.bridge`, `print.min_feature`, `print.min_hole`, `print.overhang`, `print.support_access`, `print.thin_wall`, `print.volume`, `sheet.bed`, `sheet.min_web`, `sheet.prism`.
+
+#### part
+
+A `part` component is written `part <name> { ... }`. `petra new part` prints its example, `examples/parts/part.petra`.
+
+Load entries and claims on a `part` component take these forms:
+
+- Load entry: `on <part>  in [<lo>, <hi>] [mean <value>]`
+
+| line | form | needed | unit | ids | meaning |
+|---|---|---|---|---|---|
+| `mesh` | `"<file>" sha256 "<hex>" units <mm\|inch>` | required |  |  | the part's closed surface, an STL or 3MF file, pinned by its hash; coordinates are read exactly |
+| `material` | `<registry material id>` | required |  | `polymer.*`, `aluminium.*`, `steel.*`, `stainless.*` | what the part is made of |
+| `process` | `<registry process id>` | optional |  | `process.print.*`, `process.powder.*`, `process.sheet.*`, `process.mill.*` | how the part is made: its tolerance, hole shrink and build volume; a bought part names none |
+| `finish` | `<registry coating id>` | optional |  | `process.anodize_ii*`, `process.powder_coat*` | a coating whose buildup every fit rule adds to the part's surfaces |
+| `tolerance` | `in [<lo>, <hi>] signed "<owner>" source "<source>"` | optional | length |  | the profile tolerance, replacing the process preset's |
+| `hole_shrink` | `in [<lo>, <hi>] signed "<owner>" source "<source>"` | optional | length |  | how much smaller modelled holes come out, diametral |
+| `heat` | `in [<lo>, <hi>] signed "<owner>" source "<source>"` | optional | temperature |  | how far a local heat source lifts the part above ambient |
+| `hole` | `<id> at (<x>, <y>, <z>) along <top\|bottom\|left\|right\|front\|back> diameter <length> [depth <length>] [clear\|tap\|form\|press\|insert <registry insert id>] [countersink <length>]` | optional | length | `insert.*` | a hole and what it is for; through the part when no depth is given |
+
+#### assembly
+
+A `assembly` component is written `assembly <name> { ... }`. `petra new assembly` prints its example, `examples/parts/assembly.petra`.
+
+Load entries and claims on a `assembly` component take these forms:
+
+- Load entry: `on <assembly>  in [<lo>, <hi>] [mean <value>]`
+
+| line | form | needed | unit | ids | meaning |
+|---|---|---|---|---|---|
+| `place` | `<part> at (<x>, <y>, <z>) facing <top\|bottom\|left\|right\|front\|back> <top\|bottom\|left\|right\|front\|back>` | required | length |  | puts a part at a point, its top and front along the two axes; the first is the base |
+| `insert` | `<part> along <top\|bottom\|left\|right\|front\|back> from <length>` | optional | length |  | the part arrives at its place moving along the axis over the length; every part but the base has one |
+| `fasten` | `<id> <registry screw id> through <part>.<hole> [<part>.<hole> ...] into <part>.<hole>` | optional |  | `screw.*` | a screw through clear holes, head side first, into the hole its thread enters |
+| `gap` | `<part> <part> [<length>]` | optional | length |  | two parts that keep apart beyond their tolerances |
+| `press` | `<id> <part> into <part>.<hole> diameter <length> interference <length> to <length>` | optional | length |  | a pin part pressed into a press hole, with its diametral interference range |
+
 ## Registry
 
 The list below is the output of `petra registry list`. It gives every id a design can name, then the
@@ -659,189 +699,238 @@ AISC's thread suffixes are not part of a name. The `bolts` line states the threa
 On that line, `-N` is `threads included` and `-X` is `threads excluded`, so A325-N is `bolts bolt_group.120 ... threads included`.
 
 ```
-steel.S355                steel: EN 10025-2:2019
-aluminium.6061_T6         aluminium: EN 573-3 EN AW-6061, temper T6
-copper.cu_etp             copper: IEC 60028:1925
-pvc.general_70C           pvc: IEC 60227-1, insulation compound PVC/C
-steel.bolt_qt             steel: ISO 898-1:2013, quenched and tempered steel
-stainless.A4              stainless: ISO 3506-1:2020, austenitic grade A4
-zinc.electroplate         zinc: ISO 2081:2008, electroplated zinc on iron or steel
-steel.A992                steel: ASTM A992 (W shapes); also A992
-steel.A36                 steel: ASTM A36 (plates, angles, shapes); also A36
-steel.A572_50             steel: ASTM A572 Grade 50 (plates, shapes); also A572 Grade 50
-bolt_group.120            bolt: ASTM F3125 Grades A325 and F1852 (Group 120); AISC's -N and -X are `threads included` and `threads excluded`; also A325, F1852
-bolt_group.144            bolt: ASTM F3148 Grade 144 (Group 144); AISC's -N and -X are `threads included` and `threads excluded`; also F3148
-bolt_group.150            bolt: ASTM F3125 Grades A490 and F2280 (Group 150); AISC's -N and -X are `threads included` and `threads excluded`; also A490, F2280
-bolt_group.200            bolt: ASTM F3043 and F3111 (Group 200); AISC's -N and -X are `threads included` and `threads excluded`; also F3043, F3111
-bolt_group.A307           bolt: ASTM A307 Grade A; AISC's -N and -X are `threads included` and `threads excluded`; also A307
-electrode.E70             electrode: AWS A5.1/A5.5 E70XX; also E70, E70XX
-electrode.E80             electrode: AWS A5.1/A5.5 E80XX; also E80, E80XX
-res.0603_1pct             resistor: Yageo RC series thick-film chip resistor datasheet: 0603 thick-film chip resistor, 1 % (E96); recalled and not checked against the published text
-res.0603_5pct             resistor: Yageo RC series thick-film chip resistor datasheet: 0603 thick-film chip resistor, 5 % (E24); recalled and not checked against the published text
-res.0805_1pct             resistor: Yageo RC series thick-film chip resistor datasheet: 0805 thick-film chip resistor, 1 % (E96); recalled and not checked against the published text
-res.1206_1pct             resistor: Yageo RC series thick-film chip resistor datasheet: 1206 thick-film chip resistor, 1 % (E96); recalled and not checked against the published text
-led.red_0603              led: typical 0603 chip LED datasheet: 0603 red AlInGaP LED; recalled and not checked against the published text
-led.white_0603            led: typical 0603 chip LED datasheet: 0603 white InGaN LED; recalled and not checked against the published text
-reg.lm317_to220           regulator_floating: TI LM317 datasheet (SLVS044), electrical characteristics: LM317 adjustable regulator, TO-220; recalled and not checked against the published text
-reg.ldo1117_3v3_sot223    regulator_fixed: TI LM1117 datasheet (SNOS412), electrical characteristics: 1117 fixed 3.3 V regulator, SOT-223; recalled and not checked against the published text
-reg.ldo1117_5v0_sot223    regulator_fixed: TI LM1117 datasheet (SNOS412), electrical characteristics: 1117 fixed 5.0 V regulator, SOT-223; recalled and not checked against the published text
-reg.ldo_adj_sot23_5       regulator_grounded: typical 150 mA adjustable low-dropout regulator in SOT-23-5 (MIC5205-ADJ datasheet): adjustable 150 mA low-dropout regulator, SOT-23-5; recalled and not checked against the published text
-chs.48_3x3_2              section: EN 10219-2 CHS 48.3 x 3.2
-chs.60_3x3_2              section: EN 10219-2 CHS 60.3 x 3.2
-chs.76_1x3_2              section: EN 10219-2 CHS 76.1 x 3.2
-chs.88_9x3_2              section: EN 10219-2 CHS 88.9 x 3.2
-chs.88_9x4                section: EN 10219-2 CHS 88.9 x 4
-chs.114_3x3_6             section: EN 10219-2 CHS 114.3 x 3.6
-cable.cu_pvc              cable: copper conductor, IEC 60228 class 2, PVC insulated, single core
-cable.cu_pvc_1_5          cable: 1.5 mm2 copper, PVC insulated (type 60227 IEC 01)
-cable.cu_pvc_2_5          cable: 2.5 mm2 copper, PVC insulated (type 60227 IEC 01)
-cable.cu_pvc_4            cable: 4 mm2 copper, PVC insulated (type 60227 IEC 01)
-cable.cu_pvc_6            cable: 6 mm2 copper, PVC insulated (type 60227 IEC 01)
-cable.cu_pvc_10           cable: 10 mm2 copper, PVC insulated (type 60227 IEC 01)
-cable.cu_pvc_16           cable: 16 mm2 copper, PVC insulated (type 60227 IEC 01)
-mcb.B6                    breaker: IEC 60898-1 type B, 6 A, 6 kA
-mcb.B10                   breaker: IEC 60898-1 type B, 10 A, 6 kA
-mcb.B16                   breaker: IEC 60898-1 type B, 16 A, 6 kA
-mcb.B20                   breaker: IEC 60898-1 type B, 20 A, 6 kA
-mcb.B32                   breaker: IEC 60898-1 type B, 32 A, 6 kA
-terminal.lever_4mm2_75C   terminal: lever terminal, 0.2 to 4 mm2, 32 A, 75 degC
-terminal.screw_16mm2_75C  terminal: screw terminal, 1.5 to 16 mm2, 76 A, 75 degC
-bolt.M6_8_8               bolt: M6x1 property class 8.8
-bolt.M6_8_8_zn            bolt: M6x1 property class 8.8, zinc plated
-bolt.M6_10_9              bolt: M6x1 property class 10.9
-bolt.M6_10_9_zn           bolt: M6x1 property class 10.9, zinc plated
-bolt.M6_A4_70             bolt: M6x1 property class A4-70
-bolt.M8_8_8               bolt: M8x1.25 property class 8.8
-bolt.M8_8_8_zn            bolt: M8x1.25 property class 8.8, zinc plated
-bolt.M8_10_9              bolt: M8x1.25 property class 10.9
-bolt.M8_10_9_zn           bolt: M8x1.25 property class 10.9, zinc plated
-bolt.M8_A4_70             bolt: M8x1.25 property class A4-70
-bolt.M10_8_8              bolt: M10x1.5 property class 8.8
-bolt.M10_8_8_zn           bolt: M10x1.5 property class 8.8, zinc plated
-bolt.M10_10_9             bolt: M10x1.5 property class 10.9
-bolt.M10_10_9_zn          bolt: M10x1.5 property class 10.9, zinc plated
-bolt.M10_A4_70            bolt: M10x1.5 property class A4-70
-bolt.M12_8_8              bolt: M12x1.75 property class 8.8
-bolt.M12_8_8_zn           bolt: M12x1.75 property class 8.8, zinc plated
-bolt.M12_10_9             bolt: M12x1.75 property class 10.9
-bolt.M12_10_9_zn          bolt: M12x1.75 property class 10.9, zinc plated
-bolt.M12_A4_70            bolt: M12x1.75 property class A4-70
-bolt.M16_8_8              bolt: M16x2 property class 8.8
-bolt.M16_8_8_zn           bolt: M16x2 property class 8.8, zinc plated
-bolt.M16_10_9             bolt: M16x2 property class 10.9
-bolt.M16_10_9_zn          bolt: M16x2 property class 10.9, zinc plated
-bolt.M16_A4_70            bolt: M16x2 property class A4-70
-bolt.M20_8_8              bolt: M20x2.5 property class 8.8
-bolt.M20_8_8_zn           bolt: M20x2.5 property class 8.8, zinc plated
-bolt.M20_10_9             bolt: M20x2.5 property class 10.9
-bolt.M20_10_9_zn          bolt: M20x2.5 property class 10.9, zinc plated
-bolt.M20_A4_70            bolt: M20x2.5 property class A4-70
-bolt.M24_8_8              bolt: M24x3 property class 8.8
-bolt.M24_8_8_zn           bolt: M24x3 property class 8.8, zinc plated
-bolt.M24_10_9             bolt: M24x3 property class 10.9
-bolt.M24_10_9_zn          bolt: M24x3 property class 10.9, zinc plated
-bolt.M24_A4_70            bolt: M24x3 property class A4-70
-install.clipped_direct    cable installation method
-process.zinc_plate        coating, leaves zinc.electroplate exposed
-process.mig_weld_6xxx     weld; aluminium fy reduced within 30 mm of the weld for plates 6 mm < t <= 12 mm (EN 1999-1-1 6.1.6.3, not checked)
-indoor_dry                environment: corrosivity C1, dry, ambient air temperature from +5 to +40 degC
-outdoor_c3                environment: corrosivity C3, wet, ambient air temperature from -25 to +55 degC
-marine_c5                 environment: corrosivity C5, wet, ambient air temperature from -25 to +55 degC
-W36x231                   W shape: d 36.5 in, bf 16.5 in, tw 0.76 in, tf 1.26 in
-W30x99                    W shape: d 29.7 in, bf 10.5 in, tw 0.52 in, tf 0.67 in
-W30x90                    W shape: d 29.5 in, bf 10.4 in, tw 0.47 in, tf 0.61 in
-W27x84                    W shape: d 26.7 in, bf 10 in, tw 0.46 in, tf 0.64 in
-W24x76                    W shape: d 23.9 in, bf 8.99 in, tw 0.44 in, tf 0.68 in
-W24x55                    W shape: d 23.6 in, bf 7.01 in, tw 0.395 in, tf 0.505 in
-W21x73                    W shape: d 21.2 in, bf 8.3 in, tw 0.455 in, tf 0.74 in
-W21x62                    W shape: d 21 in, bf 8.24 in, tw 0.4 in, tf 0.615 in
-W21x57                    W shape: d 21.1 in, bf 6.56 in, tw 0.405 in, tf 0.65 in
-W21x50                    W shape: d 20.8 in, bf 6.53 in, tw 0.38 in, tf 0.535 in
-W21x44                    W shape: d 20.7 in, bf 6.5 in, tw 0.35 in, tf 0.45 in
-W18x50                    W shape: d 18 in, bf 7.5 in, tw 0.355 in, tf 0.57 in
-W18x35                    W shape: d 17.7 in, bf 6 in, tw 0.3 in, tf 0.425 in
-W16x50                    W shape: d 16.3 in, bf 7.07 in, tw 0.38 in, tf 0.63 in
-W16x40                    W shape: d 16 in, bf 7 in, tw 0.305 in, tf 0.505 in
-W16x36                    W shape: d 15.9 in, bf 6.99 in, tw 0.295 in, tf 0.43 in
-W16x31                    W shape: d 15.9 in, bf 5.53 in, tw 0.275 in, tf 0.44 in
-W16x26                    W shape: d 15.7 in, bf 5.5 in, tw 0.25 in, tf 0.345 in
-W14x90                    W shape: d 14 in, bf 14.5 in, tw 0.44 in, tf 0.71 in
-W14x61                    W shape: d 13.9 in, bf 10 in, tw 0.375 in, tf 0.645 in
-W14x53                    W shape: d 13.9 in, bf 8.06 in, tw 0.37 in, tf 0.66 in
-W14x38                    W shape: d 14.1 in, bf 6.77 in, tw 0.31 in, tf 0.515 in
-W14x22                    W shape: d 13.7 in, bf 5 in, tw 0.23 in, tf 0.335 in
-W12x65                    W shape: d 12.1 in, bf 12 in, tw 0.39 in, tf 0.605 in
-W12x50                    W shape: d 12.2 in, bf 8.08 in, tw 0.37 in, tf 0.64 in
-W12x40                    W shape: d 11.9 in, bf 8.01 in, tw 0.295 in, tf 0.515 in
-W12x35                    W shape: d 12.5 in, bf 6.56 in, tw 0.3 in, tf 0.52 in
-W12x26                    W shape: d 12.2 in, bf 6.49 in, tw 0.23 in, tf 0.38 in
-W10x49                    W shape: d 10 in, bf 10 in, tw 0.34 in, tf 0.56 in
-W10x45                    W shape: d 10.1 in, bf 8.02 in, tw 0.35 in, tf 0.62 in
-WT18x115_5                WT shape, cut from W36x231
-WT15x49_5                 WT shape, cut from W30x99
-WT15x45                   WT shape, cut from W30x90
-WT13_5x42                 WT shape, cut from W27x84
-WT12x38                   WT shape, cut from W24x76
-WT12x27_5                 WT shape, cut from W24x55
-WT10_5x36_5               WT shape, cut from W21x73
-WT10_5x31                 WT shape, cut from W21x62
-WT10_5x28_5               WT shape, cut from W21x57
-WT10_5x25                 WT shape, cut from W21x50
-WT10_5x22                 WT shape, cut from W21x44
-WT9x25                    WT shape, cut from W18x50
-WT9x17_5                  WT shape, cut from W18x35
-WT8x25                    WT shape, cut from W16x50
-WT8x20                    WT shape, cut from W16x40
-WT8x18                    WT shape, cut from W16x36
-WT8x15_5                  WT shape, cut from W16x31
-WT8x13                    WT shape, cut from W16x26
-WT7x45                    WT shape, cut from W14x90
-WT7x30_5                  WT shape, cut from W14x61
-WT7x26_5                  WT shape, cut from W14x53
-WT7x19                    WT shape, cut from W14x38
-WT7x11                    WT shape, cut from W14x22
-WT6x32_5                  WT shape, cut from W12x65
-WT6x25                    WT shape, cut from W12x50
-WT6x20                    WT shape, cut from W12x40
-WT6x17_5                  WT shape, cut from W12x35
-WT6x13                    WT shape, cut from W12x26
-WT5x24_5                  WT shape, cut from W10x49
-WT5x22_5                  WT shape, cut from W10x45
-L8x4x5_8                  angle: legs 8 in x 4 in, thickness 0.625 in
-L7x4x5_8                  angle: legs 7 in x 4 in, thickness 0.625 in
-L7x4x1_2                  angle: legs 7 in x 4 in, thickness 0.5 in
-L6x4x3_4                  angle: legs 6 in x 4 in, thickness 0.75 in
-L6x4x1_2                  angle: legs 6 in x 4 in, thickness 0.5 in
-L6x4x3_8                  angle: legs 6 in x 4 in, thickness 0.375 in
-L5x3_1_2x3_8              angle: legs 5 in x 3.5 in, thickness 0.375 in
-L5x3_1_2x5_16             angle: legs 5 in x 3.5 in, thickness 0.3125 in
-L5x3_1_2x1_4              angle: legs 5 in x 3.5 in, thickness 0.25 in
-L4x4x1_2                  angle: legs 4 in x 4 in, thickness 0.5 in
-L4x4x3_8                  angle: legs 4 in x 4 in, thickness 0.375 in
-L4x4x5_16                 angle: legs 4 in x 4 in, thickness 0.3125 in
-L4x4x1_4                  angle: legs 4 in x 4 in, thickness 0.25 in
-L4x3_1_2x3_8              angle: legs 4 in x 3.5 in, thickness 0.375 in
-L4x3_1_2x5_16             angle: legs 4 in x 3.5 in, thickness 0.3125 in
-L4x3x3_8                  angle: legs 4 in x 3 in, thickness 0.375 in
-shop_deck.plate.t3_16     plate 3/16 in is stocked
-shop_deck.plate.t1_4      plate 1/4 in is stocked
-shop_deck.plate.t5_16     plate 5/16 in is stocked
-shop_deck.plate.t3_8      plate 3/8 in is stocked
-shop_deck.plate.t7_16     plate 7/16 in is stocked
-shop_deck.plate.t1_2      plate 1/2 in is stocked
-shop_deck.plate.t9_16     plate 9/16 in is stocked
-shop_deck.plate.t5_8      plate 5/8 in is stocked
-shop_deck.plate.t3_4      plate 3/4 in is stocked
-shop_deck.plate.t7_8      plate 7/8 in is stocked
-shop_deck.plate.t1        plate 1 in is stocked
-shop_deck.plate.t1_1_8    plate 1-1/8 in is stocked
-shop_deck.plate.t1_1_4    plate 1-1/4 in is stocked
-shop_deck.plate.t1_3_8    plate 1-3/8 in is stocked
-shop_deck.plate.t1_1_2    plate 1-1/2 in is stocked
-shop_deck.plate.t1_3_4    plate 1-3/4 in is stocked
-shop_deck.plate.t2        plate 2 in is stocked
-shop_deck.plate.t2_1_4    plate 2-1/4 in is stocked
-shop_deck.plate.t2_1_2    plate 2-1/2 in is stocked
-shop_deck.plate.t2_3_4    plate 2-3/4 in is stocked
-shop_deck.plate.t3        plate 3 in is stocked
+steel.S355                  steel: EN 10025-2:2019
+aluminium.6061_T6           aluminium: EN 573-3 EN AW-6061, temper T6
+copper.cu_etp               copper: IEC 60028:1925
+pvc.general_70C             pvc: IEC 60227-1, insulation compound PVC/C
+steel.bolt_qt               steel: ISO 898-1:2013, quenched and tempered steel
+stainless.A4                stainless: ISO 3506-1:2020, austenitic grade A4
+zinc.electroplate           zinc: ISO 2081:2008, electroplated zinc on iron or steel
+steel.A992                  steel: ASTM A992 (W shapes); also A992
+steel.A36                   steel: ASTM A36 (plates, angles, shapes); also A36
+steel.A572_50               steel: ASTM A572 Grade 50 (plates, shapes); also A572 Grade 50
+bolt_group.120              bolt: ASTM F3125 Grades A325 and F1852 (Group 120); AISC's -N and -X are `threads included` and `threads excluded`; also A325, F1852
+bolt_group.144              bolt: ASTM F3148 Grade 144 (Group 144); AISC's -N and -X are `threads included` and `threads excluded`; also F3148
+bolt_group.150              bolt: ASTM F3125 Grades A490 and F2280 (Group 150); AISC's -N and -X are `threads included` and `threads excluded`; also A490, F2280
+bolt_group.200              bolt: ASTM F3043 and F3111 (Group 200); AISC's -N and -X are `threads included` and `threads excluded`; also F3043, F3111
+bolt_group.A307             bolt: ASTM A307 Grade A; AISC's -N and -X are `threads included` and `threads excluded`; also A307
+electrode.E70               electrode: AWS A5.1/A5.5 E70XX; also E70, E70XX
+electrode.E80               electrode: AWS A5.1/A5.5 E80XX; also E80, E80XX
+res.0603_1pct               resistor: Yageo RC series thick-film chip resistor datasheet: 0603 thick-film chip resistor, 1 % (E96); recalled and not checked against the published text
+res.0603_5pct               resistor: Yageo RC series thick-film chip resistor datasheet: 0603 thick-film chip resistor, 5 % (E24); recalled and not checked against the published text
+res.0805_1pct               resistor: Yageo RC series thick-film chip resistor datasheet: 0805 thick-film chip resistor, 1 % (E96); recalled and not checked against the published text
+res.1206_1pct               resistor: Yageo RC series thick-film chip resistor datasheet: 1206 thick-film chip resistor, 1 % (E96); recalled and not checked against the published text
+led.red_0603                led: typical 0603 chip LED datasheet: 0603 red AlInGaP LED; recalled and not checked against the published text
+led.white_0603              led: typical 0603 chip LED datasheet: 0603 white InGaN LED; recalled and not checked against the published text
+reg.lm317_to220             regulator_floating: TI LM317 datasheet (SLVS044), electrical characteristics: LM317 adjustable regulator, TO-220; recalled and not checked against the published text
+reg.ldo1117_3v3_sot223      regulator_fixed: TI LM1117 datasheet (SNOS412), electrical characteristics: 1117 fixed 3.3 V regulator, SOT-223; recalled and not checked against the published text
+reg.ldo1117_5v0_sot223      regulator_fixed: TI LM1117 datasheet (SNOS412), electrical characteristics: 1117 fixed 5.0 V regulator, SOT-223; recalled and not checked against the published text
+reg.ldo_adj_sot23_5         regulator_grounded: typical 150 mA adjustable low-dropout regulator in SOT-23-5 (MIC5205-ADJ datasheet): adjustable 150 mA low-dropout regulator, SOT-23-5; recalled and not checked against the published text
+polymer.pla                 polymer: PLA
+polymer.petg                polymer: PETG
+polymer.abs                 polymer: ABS
+polymer.asa                 polymer: ASA
+polymer.pa12                polymer: SLS PA12
+polymer.pc                  polymer: polycarbonate
+oxide.anodic_aluminium      oxide: anodic aluminium oxide
+polymer.powder_coat         polymer: polyester powder coat
+brass.insert                brass: CuZn39Pb3 free-cutting brass, EN 12164
+chs.48_3x3_2                section: EN 10219-2 CHS 48.3 x 3.2
+chs.60_3x3_2                section: EN 10219-2 CHS 60.3 x 3.2
+chs.76_1x3_2                section: EN 10219-2 CHS 76.1 x 3.2
+chs.88_9x3_2                section: EN 10219-2 CHS 88.9 x 3.2
+chs.88_9x4                  section: EN 10219-2 CHS 88.9 x 4
+chs.114_3x3_6               section: EN 10219-2 CHS 114.3 x 3.6
+cable.cu_pvc                cable: copper conductor, IEC 60228 class 2, PVC insulated, single core
+cable.cu_pvc_1_5            cable: 1.5 mm2 copper, PVC insulated (type 60227 IEC 01)
+cable.cu_pvc_2_5            cable: 2.5 mm2 copper, PVC insulated (type 60227 IEC 01)
+cable.cu_pvc_4              cable: 4 mm2 copper, PVC insulated (type 60227 IEC 01)
+cable.cu_pvc_6              cable: 6 mm2 copper, PVC insulated (type 60227 IEC 01)
+cable.cu_pvc_10             cable: 10 mm2 copper, PVC insulated (type 60227 IEC 01)
+cable.cu_pvc_16             cable: 16 mm2 copper, PVC insulated (type 60227 IEC 01)
+mcb.B6                      breaker: IEC 60898-1 type B, 6 A, 6 kA
+mcb.B10                     breaker: IEC 60898-1 type B, 10 A, 6 kA
+mcb.B16                     breaker: IEC 60898-1 type B, 16 A, 6 kA
+mcb.B20                     breaker: IEC 60898-1 type B, 20 A, 6 kA
+mcb.B32                     breaker: IEC 60898-1 type B, 32 A, 6 kA
+terminal.lever_4mm2_75C     terminal: lever terminal, 0.2 to 4 mm2, 32 A, 75 degC
+terminal.screw_16mm2_75C    terminal: screw terminal, 1.5 to 16 mm2, 76 A, 75 degC
+bolt.M6_8_8                 bolt: M6x1 property class 8.8
+bolt.M6_8_8_zn              bolt: M6x1 property class 8.8, zinc plated
+bolt.M6_10_9                bolt: M6x1 property class 10.9
+bolt.M6_10_9_zn             bolt: M6x1 property class 10.9, zinc plated
+bolt.M6_A4_70               bolt: M6x1 property class A4-70
+bolt.M8_8_8                 bolt: M8x1.25 property class 8.8
+bolt.M8_8_8_zn              bolt: M8x1.25 property class 8.8, zinc plated
+bolt.M8_10_9                bolt: M8x1.25 property class 10.9
+bolt.M8_10_9_zn             bolt: M8x1.25 property class 10.9, zinc plated
+bolt.M8_A4_70               bolt: M8x1.25 property class A4-70
+bolt.M10_8_8                bolt: M10x1.5 property class 8.8
+bolt.M10_8_8_zn             bolt: M10x1.5 property class 8.8, zinc plated
+bolt.M10_10_9               bolt: M10x1.5 property class 10.9
+bolt.M10_10_9_zn            bolt: M10x1.5 property class 10.9, zinc plated
+bolt.M10_A4_70              bolt: M10x1.5 property class A4-70
+bolt.M12_8_8                bolt: M12x1.75 property class 8.8
+bolt.M12_8_8_zn             bolt: M12x1.75 property class 8.8, zinc plated
+bolt.M12_10_9               bolt: M12x1.75 property class 10.9
+bolt.M12_10_9_zn            bolt: M12x1.75 property class 10.9, zinc plated
+bolt.M12_A4_70              bolt: M12x1.75 property class A4-70
+bolt.M16_8_8                bolt: M16x2 property class 8.8
+bolt.M16_8_8_zn             bolt: M16x2 property class 8.8, zinc plated
+bolt.M16_10_9               bolt: M16x2 property class 10.9
+bolt.M16_10_9_zn            bolt: M16x2 property class 10.9, zinc plated
+bolt.M16_A4_70              bolt: M16x2 property class A4-70
+bolt.M20_8_8                bolt: M20x2.5 property class 8.8
+bolt.M20_8_8_zn             bolt: M20x2.5 property class 8.8, zinc plated
+bolt.M20_10_9               bolt: M20x2.5 property class 10.9
+bolt.M20_10_9_zn            bolt: M20x2.5 property class 10.9, zinc plated
+bolt.M20_A4_70              bolt: M20x2.5 property class A4-70
+bolt.M24_8_8                bolt: M24x3 property class 8.8
+bolt.M24_8_8_zn             bolt: M24x3 property class 8.8, zinc plated
+bolt.M24_10_9               bolt: M24x3 property class 10.9
+bolt.M24_10_9_zn            bolt: M24x3 property class 10.9, zinc plated
+bolt.M24_A4_70              bolt: M24x3 property class A4-70
+screw.M2_5x6_shcs           screw: M2_5 x 6 ISO 4762 socket head cap screw
+screw.M2_5x8_shcs           screw: M2_5 x 8 ISO 4762 socket head cap screw
+screw.M2_5x10_shcs          screw: M2_5 x 10 ISO 4762 socket head cap screw
+screw.M2_5x12_shcs          screw: M2_5 x 12 ISO 4762 socket head cap screw
+screw.M2_5x16_shcs          screw: M2_5 x 16 ISO 4762 socket head cap screw
+screw.M2_5x20_shcs          screw: M2_5 x 20 ISO 4762 socket head cap screw
+screw.M3x6_shcs             screw: M3 x 6 ISO 4762 socket head cap screw
+screw.M3x8_shcs             screw: M3 x 8 ISO 4762 socket head cap screw
+screw.M3x10_shcs            screw: M3 x 10 ISO 4762 socket head cap screw
+screw.M3x12_shcs            screw: M3 x 12 ISO 4762 socket head cap screw
+screw.M3x16_shcs            screw: M3 x 16 ISO 4762 socket head cap screw
+screw.M3x20_shcs            screw: M3 x 20 ISO 4762 socket head cap screw
+screw.M4x6_shcs             screw: M4 x 6 ISO 4762 socket head cap screw
+screw.M4x8_shcs             screw: M4 x 8 ISO 4762 socket head cap screw
+screw.M4x10_shcs            screw: M4 x 10 ISO 4762 socket head cap screw
+screw.M4x12_shcs            screw: M4 x 12 ISO 4762 socket head cap screw
+screw.M4x16_shcs            screw: M4 x 16 ISO 4762 socket head cap screw
+screw.M4x20_shcs            screw: M4 x 20 ISO 4762 socket head cap screw
+screw.M3x6_csk              screw: M3 x 6 ISO 10642 countersunk screw
+screw.M3x8_csk              screw: M3 x 8 ISO 10642 countersunk screw
+screw.M3x10_csk             screw: M3 x 10 ISO 10642 countersunk screw
+screw.M3x12_csk             screw: M3 x 12 ISO 10642 countersunk screw
+screw.M3x16_csk             screw: M3 x 16 ISO 10642 countersunk screw
+screw.M3x20_csk             screw: M3 x 20 ISO 10642 countersunk screw
+screw.M4x6_csk              screw: M4 x 6 ISO 10642 countersunk screw
+screw.M4x8_csk              screw: M4 x 8 ISO 10642 countersunk screw
+screw.M4x10_csk             screw: M4 x 10 ISO 10642 countersunk screw
+screw.M4x12_csk             screw: M4 x 12 ISO 10642 countersunk screw
+screw.M4x16_csk             screw: M4 x 16 ISO 10642 countersunk screw
+screw.M4x20_csk             screw: M4 x 20 ISO 10642 countersunk screw
+insert.M3x5_7               insert: heat-set brass insert M3, 5.7 mm long
+insert.M3x4                 insert: heat-set brass insert M3, 4 mm long
+insert.M4x8_1               insert: heat-set brass insert M4, 8.1 mm long
+install.clipped_direct      cable installation method
+process.zinc_plate          coating, leaves zinc.electroplate exposed
+process.mig_weld_6xxx       weld; aluminium fy reduced within 30 mm of the weld for plates 6 mm < t <= 12 mm (EN 1999-1-1 6.1.6.3, not checked)
+process.print.fdm_pla_0_4   printing preset (material extrusion)
+process.print.fdm_petg_0_4  printing preset (material extrusion)
+process.powder.sls_pa12     printing preset (powder-bed fusion)
+process.sheet.laser_al_3    sheet cutting preset
+process.mill.al6061_3axis   milling preset
+process.anodize_ii          coating, leaves oxide.anodic_aluminium exposed
+process.powder_coat         coating, leaves polymer.powder_coat exposed
+indoor_dry                  environment: corrosivity C1, dry, ambient air temperature from +5 to +40 degC
+outdoor_c3                  environment: corrosivity C3, wet, ambient air temperature from -25 to +55 degC
+marine_c5                   environment: corrosivity C5, wet, ambient air temperature from -25 to +55 degC
+W36x231                     W shape: d 36.5 in, bf 16.5 in, tw 0.76 in, tf 1.26 in
+W30x99                      W shape: d 29.7 in, bf 10.5 in, tw 0.52 in, tf 0.67 in
+W30x90                      W shape: d 29.5 in, bf 10.4 in, tw 0.47 in, tf 0.61 in
+W27x84                      W shape: d 26.7 in, bf 10 in, tw 0.46 in, tf 0.64 in
+W24x76                      W shape: d 23.9 in, bf 8.99 in, tw 0.44 in, tf 0.68 in
+W24x55                      W shape: d 23.6 in, bf 7.01 in, tw 0.395 in, tf 0.505 in
+W21x73                      W shape: d 21.2 in, bf 8.3 in, tw 0.455 in, tf 0.74 in
+W21x62                      W shape: d 21 in, bf 8.24 in, tw 0.4 in, tf 0.615 in
+W21x57                      W shape: d 21.1 in, bf 6.56 in, tw 0.405 in, tf 0.65 in
+W21x50                      W shape: d 20.8 in, bf 6.53 in, tw 0.38 in, tf 0.535 in
+W21x44                      W shape: d 20.7 in, bf 6.5 in, tw 0.35 in, tf 0.45 in
+W18x50                      W shape: d 18 in, bf 7.5 in, tw 0.355 in, tf 0.57 in
+W18x35                      W shape: d 17.7 in, bf 6 in, tw 0.3 in, tf 0.425 in
+W16x50                      W shape: d 16.3 in, bf 7.07 in, tw 0.38 in, tf 0.63 in
+W16x40                      W shape: d 16 in, bf 7 in, tw 0.305 in, tf 0.505 in
+W16x36                      W shape: d 15.9 in, bf 6.99 in, tw 0.295 in, tf 0.43 in
+W16x31                      W shape: d 15.9 in, bf 5.53 in, tw 0.275 in, tf 0.44 in
+W16x26                      W shape: d 15.7 in, bf 5.5 in, tw 0.25 in, tf 0.345 in
+W14x90                      W shape: d 14 in, bf 14.5 in, tw 0.44 in, tf 0.71 in
+W14x61                      W shape: d 13.9 in, bf 10 in, tw 0.375 in, tf 0.645 in
+W14x53                      W shape: d 13.9 in, bf 8.06 in, tw 0.37 in, tf 0.66 in
+W14x38                      W shape: d 14.1 in, bf 6.77 in, tw 0.31 in, tf 0.515 in
+W14x22                      W shape: d 13.7 in, bf 5 in, tw 0.23 in, tf 0.335 in
+W12x65                      W shape: d 12.1 in, bf 12 in, tw 0.39 in, tf 0.605 in
+W12x50                      W shape: d 12.2 in, bf 8.08 in, tw 0.37 in, tf 0.64 in
+W12x40                      W shape: d 11.9 in, bf 8.01 in, tw 0.295 in, tf 0.515 in
+W12x35                      W shape: d 12.5 in, bf 6.56 in, tw 0.3 in, tf 0.52 in
+W12x26                      W shape: d 12.2 in, bf 6.49 in, tw 0.23 in, tf 0.38 in
+W10x49                      W shape: d 10 in, bf 10 in, tw 0.34 in, tf 0.56 in
+W10x45                      W shape: d 10.1 in, bf 8.02 in, tw 0.35 in, tf 0.62 in
+WT18x115_5                  WT shape, cut from W36x231
+WT15x49_5                   WT shape, cut from W30x99
+WT15x45                     WT shape, cut from W30x90
+WT13_5x42                   WT shape, cut from W27x84
+WT12x38                     WT shape, cut from W24x76
+WT12x27_5                   WT shape, cut from W24x55
+WT10_5x36_5                 WT shape, cut from W21x73
+WT10_5x31                   WT shape, cut from W21x62
+WT10_5x28_5                 WT shape, cut from W21x57
+WT10_5x25                   WT shape, cut from W21x50
+WT10_5x22                   WT shape, cut from W21x44
+WT9x25                      WT shape, cut from W18x50
+WT9x17_5                    WT shape, cut from W18x35
+WT8x25                      WT shape, cut from W16x50
+WT8x20                      WT shape, cut from W16x40
+WT8x18                      WT shape, cut from W16x36
+WT8x15_5                    WT shape, cut from W16x31
+WT8x13                      WT shape, cut from W16x26
+WT7x45                      WT shape, cut from W14x90
+WT7x30_5                    WT shape, cut from W14x61
+WT7x26_5                    WT shape, cut from W14x53
+WT7x19                      WT shape, cut from W14x38
+WT7x11                      WT shape, cut from W14x22
+WT6x32_5                    WT shape, cut from W12x65
+WT6x25                      WT shape, cut from W12x50
+WT6x20                      WT shape, cut from W12x40
+WT6x17_5                    WT shape, cut from W12x35
+WT6x13                      WT shape, cut from W12x26
+WT5x24_5                    WT shape, cut from W10x49
+WT5x22_5                    WT shape, cut from W10x45
+L8x4x5_8                    angle: legs 8 in x 4 in, thickness 0.625 in
+L7x4x5_8                    angle: legs 7 in x 4 in, thickness 0.625 in
+L7x4x1_2                    angle: legs 7 in x 4 in, thickness 0.5 in
+L6x4x3_4                    angle: legs 6 in x 4 in, thickness 0.75 in
+L6x4x1_2                    angle: legs 6 in x 4 in, thickness 0.5 in
+L6x4x3_8                    angle: legs 6 in x 4 in, thickness 0.375 in
+L5x3_1_2x3_8                angle: legs 5 in x 3.5 in, thickness 0.375 in
+L5x3_1_2x5_16               angle: legs 5 in x 3.5 in, thickness 0.3125 in
+L5x3_1_2x1_4                angle: legs 5 in x 3.5 in, thickness 0.25 in
+L4x4x1_2                    angle: legs 4 in x 4 in, thickness 0.5 in
+L4x4x3_8                    angle: legs 4 in x 4 in, thickness 0.375 in
+L4x4x5_16                   angle: legs 4 in x 4 in, thickness 0.3125 in
+L4x4x1_4                    angle: legs 4 in x 4 in, thickness 0.25 in
+L4x3_1_2x3_8                angle: legs 4 in x 3.5 in, thickness 0.375 in
+L4x3_1_2x5_16               angle: legs 4 in x 3.5 in, thickness 0.3125 in
+L4x3x3_8                    angle: legs 4 in x 3 in, thickness 0.375 in
+shop_deck.plate.t3_16       plate 3/16 in is stocked
+shop_deck.plate.t1_4        plate 1/4 in is stocked
+shop_deck.plate.t5_16       plate 5/16 in is stocked
+shop_deck.plate.t3_8        plate 3/8 in is stocked
+shop_deck.plate.t7_16       plate 7/16 in is stocked
+shop_deck.plate.t1_2        plate 1/2 in is stocked
+shop_deck.plate.t9_16       plate 9/16 in is stocked
+shop_deck.plate.t5_8        plate 5/8 in is stocked
+shop_deck.plate.t3_4        plate 3/4 in is stocked
+shop_deck.plate.t7_8        plate 7/8 in is stocked
+shop_deck.plate.t1          plate 1 in is stocked
+shop_deck.plate.t1_1_8      plate 1-1/8 in is stocked
+shop_deck.plate.t1_1_4      plate 1-1/4 in is stocked
+shop_deck.plate.t1_3_8      plate 1-3/8 in is stocked
+shop_deck.plate.t1_1_2      plate 1-1/2 in is stocked
+shop_deck.plate.t1_3_4      plate 1-3/4 in is stocked
+shop_deck.plate.t2          plate 2 in is stocked
+shop_deck.plate.t2_1_4      plate 2-1/4 in is stocked
+shop_deck.plate.t2_1_2      plate 2-1/2 in is stocked
+shop_deck.plate.t2_3_4      plate 2-3/4 in is stocked
+shop_deck.plate.t3          plate 3 in is stocked
 ```

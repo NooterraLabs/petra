@@ -1,0 +1,18 @@
+petra 0
+
+# A printed PETG tray, 60 x 40 x 20 mm with 2 mm walls. The mesh file sits beside this
+# design and is pinned by its hash. Coverage checks that the tray fits the printer, that
+# PETG keeps its shape in an indoor room, and that no face spans air past the bridge.
+# Five print rules have no model yet (min_feature, thin_wall, min_hole, overhang and
+# support_access), so the verdict is UNKNOWN until each is checked by hand and waived.
+
+design "printed-case" {
+  owner "e.designer@example.org"
+  environment indoor_dry
+}
+
+part case {
+  mesh "case.stl" sha256 "b86411789c91981853e772444e368ef353ca9a5ce646b596202ed6dc4bc6dc5a" units mm
+  material polymer.petg
+  process process.print.fdm_petg_0_4
+}

@@ -90,11 +90,14 @@ class Lookups(unittest.TestCase):
         with self.assertRaises(OutsideMakeableSet):
             REGISTRY.surface("steel.bolt_qt", "process.tin_plate")
 
-    def test_every_shipped_coating_exposes_a_material_with_an_anodic_index(self):
+    def test_every_shipped_metal_coating_exposes_a_material_with_an_anodic_index(self):
         coatings = [p for p in REGISTRY.processes.values() if p.kind is ProcessKind.COATING]
-        self.assertEqual([p.id for p in coatings], ["process.zinc_plate"])
-        for p in coatings:
-            self.assertEqual(REGISTRY.material(p.surface).props["anodic_index"].value, point("1.25"))
+        self.assertEqual([p.id for p in coatings], ["process.zinc_plate", "process.anodize_ii", "process.powder_coat"])
+        self.assertEqual(REGISTRY.material("zinc.electroplate").props["anodic_index"].value, point("1.25"))
+        for p in coatings[1:]:
+            surface = REGISTRY.material(p.surface)
+            self.assertIn(surface.family, ("oxide", "polymer"), "an insulating finish is no electrode")
+            self.assertNotIn("anodic_index", surface.props, "so the galvanic rule skips it")
 
     def test_a_coating_names_its_surface_and_no_other_process_does(self):
         self.assertEqual(Process("p.zn", ProcessKind.COATING, {}, surface="zinc.electroplate", source="ISO 2081").surface,

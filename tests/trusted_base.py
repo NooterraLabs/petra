@@ -68,13 +68,15 @@ CORE_CAP = Limit(1000, "Set on 2026-11-08 at 140f742, where the core measured 95
                        "A new rule adds 3 to 5 lines to rules/__init__.py (inferred from its tables), so "
                        "the headroom covers the registry entries of several rules.")
 
-TRUSTED_CEILING = Limit(14900, "Set on 2026-11-08 at 140f742, where the trusted base measured 13,530 "
+TRUSTED_CEILING = Limit(15700, "Set on 2026-11-08 at 140f742, where the trusted base measured 13,530 "
                                "code lines: core 957, rules 457, outside the kernel 12,116. Raised on "
                                "2026-11-08 on branch parts-core as the parts layer replaces its scaffold: "
                                "classifying the scaffold measured 14,269, and the mesh reader with its "
-                               "solid-boundary rules measured 14,461, and the exact evaluator 14,823. Raise it "
-                               "in the commit that needs more "
-                               "and say why here.")
+                               "solid-boundary rules measured 14,461, and the exact evaluator 14,823. "
+                               "Registering the parts layer, which deletes the grid, reach, deck and "
+                               "KiCad scaffold and adds the fit, fastener, insert, press, temperature, "
+                               "extent, flat-sheet and bridge builders with their registry rows, "
+                               "measured 15,696. Raise it in the commit that needs more and say why here.")
 
 T2_ADOPTED = date(2026, 11, 8)
 """The day T2 took this form. Every debt found that day carries it."""
@@ -202,12 +204,15 @@ TRUSTED: tuple[Group, ...] = (
                            "published tests, which checks the method, not this builder.")),
     Group("parts",
           ("petra/models/parts/__init__.py", "petra/models/parts/mesh.py", "petra/models/parts/space.py",
-           "petra/models/parts/kicad.py", "petra/models/parts/exact.py", "petra/models/parts/grid.py",
-           "petra/models/parts/reach.py", "petra/models/parts/rules.py", "petra/models/parts/deck.py",
-           "petra/models/parts/lower.py", "petra/models/parts/engine.py", "petra/models/parts/build.py",
-           "petra/models/parts/domain.py", "petra/registry/parts.py"),
-          Debt(T2_ADOPTED, "No judge or twin. docs/parts.md 'Testing' plans a clean-room twin of analytic "
-                           "assemblies and seven metamorphic relations, and none is written yet.")),
+           "petra/models/parts/exact.py", "petra/models/parts/rules.py", "petra/models/parts/lower.py",
+           "petra/models/parts/engine.py", "petra/models/parts/build.py", "petra/models/parts/domain.py",
+           "petra/registry/parts.py"),
+          Debt(T2_ADOPTED, "No judge or twin. The engine states its geometric measures as design values, "
+                           "so the kernel re-checks the arithmetic over them and not the measures; "
+                           "tests/test_parts_exact.py checks the integer primitives against dense sampling, "
+                           "which is not a second implementation. docs/parts.md 'Testing' plans a clean-room "
+                           "twin of analytic assemblies and seven metamorphic relations, and none is written "
+                           "yet.")),
     Group("premises, coverage, verdict and pipeline",
           ("petra/premises.py", "petra/coverage.py", "petra/verdict.py", "petra/pipeline.py"),
           Debt(T2_ADOPTED, "No judge or twin. The absurd-design gap and canary recall score whole verdicts "
