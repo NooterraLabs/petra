@@ -61,13 +61,11 @@ class F1PressFits(Case):
             f"  place peg at {at} facing top front\n  insert peg along bottom from 10 mm\n"
             "  press p peg into block.h diameter 3.02 mm interference 0.01 mm to 0.05 mm\n}\n")
 
-    @unittest.expectedFailure
     def test_f1_a_pin_in_the_air_is_not_pressed(self):
         got = self.design("(40 mm, 0 mm, 30 mm)")
         self.assertEqual(got["fit.p/fit.press"][0], "refuted", got["fit.p/fit.press"])
         self.assertEqual(got["fit.peg/fit.insert"][0], "refuted", got["fit.peg/fit.insert"])
 
-    @unittest.expectedFailure
     def test_f1_a_pin_buried_in_solid_material_fails(self):
         got = self.design("(-5 mm, -5 mm, 0 mm)")
         self.assertEqual(got["fit.peg/fit.insert"][0], "refuted", got["fit.peg/fit.insert"])
@@ -109,22 +107,18 @@ class F3Threads(Case):
                                 f"hole h at (10 mm, 10 mm, 3 mm) along bottom diameter {lid_d} mm clear", screw,
                                 base_material))
 
-    @unittest.expectedFailure
     def test_f3_an_m3_thread_meets_no_wall_in_a_5_mm_form_hole(self):
         got = self.design("2.5", "diameter 5 mm form", "screw.M3x10_shcs")
         self.assertEqual(got["stack.f/fit.grip"][0], "refuted", got["stack.f/fit.grip"])
 
-    @unittest.expectedFailure
     def test_f3_an_m3_thread_meets_no_wall_in_a_5_mm_tap_hole(self):
         got = self.design("2.5", "diameter 5 mm tap", "screw.M3x10_shcs")
         self.assertEqual(got["stack.f/fit.grip"][0], "refuted", got["stack.f/fit.grip"])
 
-    @unittest.expectedFailure
     def test_f3_a_4_mm_insert_cannot_give_4_5_mm_of_thread(self):
         got = self.design("2.1", "diameter 4.2 mm insert insert.M3x4", "screw.M3x10_shcs", ("polymer.petg", FDM))
         self.assertEqual(got["stack.f/fit.grip"][0], "refuted", got["stack.f/fit.grip"])
 
-    @unittest.expectedFailure
     def test_f3_an_m4_screw_does_not_thread_an_m3_insert(self):
         got = self.design("2.1", "diameter 4.2 mm insert insert.M3x5_7", "screw.M4x10_shcs", ("polymer.petg", FDM),
                           lid_r="2.6", lid_d="5.2")
@@ -135,13 +129,11 @@ INSERT_HOLE = "  hole h at (10 mm, 10 mm, {top} mm) along bottom diameter 4.2 mm
 
 
 class F4F5InsertHoles(Case):
-    @unittest.expectedFailure
     def test_f4_an_insert_hole_is_read_from_the_mesh(self):
         block = self.mesh("block", plate((0, 0, 0), (20, 20, 8), (10, 10), "2.3"))
         got = self.check(part("block", block, "polymer.petg", FDM, INSERT_HOLE.format(top=8)))
         self.assertEqual(got["block.h/insert.hole_size"][0], "refuted", got["block.h/insert.hole_size"])
 
-    @unittest.expectedFailure
     def test_f5_a_thin_standoff_wall_is_measured(self):
         standoff = self.mesh("standoff", tube((10, 10), "2.1", "2.5", 0, 20))
         got = self.check(part("standoff", standoff, "polymer.petg", FDM, INSERT_HOLE.format(top=20)))
@@ -149,7 +141,6 @@ class F4F5InsertHoles(Case):
 
 
 class F6F11F12F14Screws(Case):
-    @unittest.expectedFailure
     def test_f6_a_screw_that_must_cut_solid_to_reach_its_hole_fails(self):
         base = self.mesh("base", blind_block((0, 0, 0), (20, 20, 10), (10, 10), "1.3", 5))
         lid = self.mesh("lid", plate((0, 0, 0), (20, 20, 3), (10, 10), "1.8"))
@@ -161,7 +152,6 @@ class F6F11F12F14Screws(Case):
             "  fasten f screw.M3x16_shcs through lid.h into base.h\n}\n")
         self.assertEqual(got["stack.f/fit.fastener"][0], "refuted", got["stack.f/fit.fastener"])
 
-    @unittest.expectedFailure
     def test_f11_a_countersunk_head_sits_below_the_mouth_and_bottoms_out(self):
         base = self.mesh("base", blind_block((0, 0, 0), (20, 20, 8), (10, 10), "1.3", "7.1"))
         lid = self.mesh("lid", plate((0, 0, 0), (20, 20, 3), (10, 10), "1.8", sink="3.6"))
@@ -169,7 +159,6 @@ class F6F11F12F14Screws(Case):
                                LID_HOLE + " countersink 7.2 mm", "screw.M3x10_csk"))
         self.assertEqual(got["stack.f/fit.grip"][0], "refuted", got["stack.f/fit.grip"])
 
-    @unittest.expectedFailure
     def test_f12_two_screws_in_one_hole_fail(self):
         base = self.mesh("base", plate((0, 0, 0), (20, 20, 8), (10, 10), "1.3"))
         lid = self.mesh("lid", plate((0, 0, 0), (20, 20, 3), (10, 10), "1.8"))
@@ -178,7 +167,6 @@ class F6F11F12F14Screws(Case):
         self.assertEqual(got["stack.f/fit.fastener"][0], "refuted", got["stack.f/fit.fastener"])
         self.assertEqual(got["stack.g/fit.fastener"][0], "refuted", got["stack.g/fit.fastener"])
 
-    @unittest.expectedFailure
     def test_f14_the_tapped_hole_moves_the_screw_with_its_tolerance(self):
         base = self.mesh("base", plate((0, 0, 0), (20, 20, 8), (10, 10), "1.3"))
         lid = self.mesh("lid", plate((0, 0, 0), (20, 20, 3), (10, 10), "1.72"))
@@ -188,7 +176,6 @@ class F6F11F12F14Screws(Case):
 
 
 class F7F8Arrival(Case):
-    @unittest.expectedFailure
     def test_f7_a_board_that_starts_inside_a_closed_case_fails(self):
         case = self.mesh("closed", box((0, 0, 0), (40, 30, 20)) + flipped(box((2, 2, 2), (38, 28, 18))))
         board = self.mesh("board", box((0, 0, 0), (30, 20, "1.6")))
@@ -197,7 +184,6 @@ class F7F8Arrival(Case):
                          "  place board at (5 mm, 5 mm, 2 mm) facing top front\n  insert board along bottom from 1 mm\n}\n")
         self.assertEqual(got["box.board/fit.insert"][0], "refuted", got["box.board/fit.insert"])
 
-    @unittest.expectedFailure
     def test_f8_every_piece_of_a_mover_is_tested_for_containment(self):
         block = self.mesh("block", box((0, 0, 0), (40, 40, 40)))
         mover = self.mesh("mover", box((10, 10, 40), (20, 20, 50)) + box((10, 10, 10), (20, 20, 20)))
@@ -235,13 +221,11 @@ class F9Shells(Case):
 
 
 class F10Mass(Case):
-    @unittest.expectedFailure
     def test_f10_mass_is_bounded_over_the_tolerance(self):
         plate_ = self.mesh("plate", box((0, 0, 0), (10, 10, 1)))
         got = self.check(part("p", plate_, AL, MILL) + "claim light: p.mass <= 0.28 g\n")
         self.assertEqual(got["p/parts.mass/light"][0], "refuted", got["p/parts.mass/light"])
 
-    @unittest.expectedFailure
     def test_f10_mass_is_bounded_over_the_finish_buildup(self):
         plate_ = self.mesh("plate", box((0, 0, 0), (10, 10, 1)))
         got = self.check(part("p", plate_, AL, MILL, "  finish process.powder_coat") + "claim light: p.mass <= 0.4 g\n")
@@ -249,7 +233,6 @@ class F10Mass(Case):
 
 
 class F13F15Registry(Case):
-    @unittest.expectedFailure
     def test_f13_a_head_at_its_least_diameter_can_pass_the_hole(self):
         base = self.mesh("base", plate((0, 0, 0), (20, 20, 8), (10, 10), "1.3"))
         lid = self.mesh("lid", plate((0, 0, 0), (20, 20, 3), (10, 10), "2.69"))
@@ -262,7 +245,6 @@ class F13F15Registry(Case):
             "  fasten f screw.M3x10_shcs through lid.h into base.h\n}\n")
         self.assertEqual(got["stack.f/fit.seat"][0], "refuted", got["stack.f/fit.seat"])
 
-    @unittest.expectedFailure
     def test_f15_a_print_tolerance_grows_with_the_part(self):
         bar = self.mesh("bar", box((0, 0, 0), (248, 10, 10)))
         got = self.check(part("bar", bar, "polymer.pla", "process.print.fdm_pla_0_4"))

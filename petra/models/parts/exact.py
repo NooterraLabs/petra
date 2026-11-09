@@ -499,12 +499,6 @@ def touching(a: Body, b: Body) -> list[tuple[int, int]]:
     return [(i, j) for i, j in candidates(a.lo, a.hi, b.lo, b.hi, 0).tolist() if tri_tri2(a.pts[i], b.pts[j]) == 0]
 
 
-def separable(t: T, u: T, k: int, s: int) -> bool:
-    """Every point of t lies at or beyond every point of u along axis k in direction s
-    (s = 1 for +, -1 for -): moving t that way parts them."""
-    return min(s * p[k] for p in t) >= max(s * p[k] for p in u)
-
-
 # --- One mesh's own surface ------------------------------------------------------------------
 
 

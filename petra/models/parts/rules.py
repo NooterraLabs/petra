@@ -19,7 +19,6 @@ class Consequence(Enum):
 
 class Evaluator(Enum):
     GEOMETRY = "geometry"       # exact rational geometry of the meshes (exact.py, engine.py)
-    DECLARED = "declared"       # declared features and registry rows; the statement is the whole check
     THERMAL = "thermal"         # ambient plus a declared rise against a material limit
     MASS = "mass"               # volumes, densities and declared masses, for claims only
     UNMODELLED = "unmodelled"   # demanded, and no builder yet: a Gap needing NoModel
@@ -53,7 +52,7 @@ class Rule:
 
 
 _I, _W = Consequence.IMPOSSIBLE, Consequence.WORSE
-_G, _D, _T, _M, _U = Evaluator.GEOMETRY, Evaluator.DECLARED, Evaluator.THERMAL, Evaluator.MASS, Evaluator.UNMODELLED
+_G, _T, _M, _U = Evaluator.GEOMETRY, Evaluator.THERMAL, Evaluator.MASS, Evaluator.UNMODELLED
 _A = Applies
 
 RULES: tuple[Rule, ...] = (
@@ -64,21 +63,30 @@ RULES: tuple[Rule, ...] = (
     Rule("fit.connected", _A.BODY, _I, _G, "the part touches, is fastened to or is pressed into the parts placed before it"),
     Rule("fit.gap", _A.GAP, _I, _G, "two parts keep the stated gap beyond their allowances and floats"),
     Rule("fit.fastener", _A.FASTEN, _I, _G,
-         "the screw travels its axis through the clear holes and enters no part but the one its thread enters, "
-         "keeping each part's allowance with half its hole shrink"),
+         "the screw travels its axis from beyond every part through the clear holes, enters no part but the one "
+         "its thread enters and that one only past its hole's mouth, and meets no screw fastened before it, keeping "
+         "each part's allowance with half its hole shrink and the shift of the hole its thread enters"),
     Rule("fit.seat", _A.FASTEN, _I, _G,
-         "a socket head's bearing ring lies on a face of the first part; a countersunk head fits its countersink"),
-    Rule("fit.grip", _A.FASTEN, _I, _D,
-         "the thread engages the last part over its least engagement and does not bottom in a blind hole"),
-    Rule("fit.press", _A.PRESS, _I, _D, "the diametral interference stays in the declared range over both tolerances"),
+         "a socket head's bearing ring lies on a face of the first part and the head at its least diameter covers "
+         "the first hole; a countersunk head fits its countersink and the mesh's countersink stops it"),
+    Rule("fit.grip", _A.FASTEN, _I, _G,
+         "the thread engages the last part over its least engagement; a tap or form hole, read from the mesh, stays "
+         "inside the thread's pitch diameter with material past its crest, an insert takes the screw's size and "
+         "length, and the tip stops short of a blind hole's floor"),
+    Rule("fit.press", _A.PRESS, _I, _G,
+         "the pin sits in its hole, and the diametral interference read from the two meshes stays in the declared "
+         "range over both tolerances"),
     Rule("fit.hole", _A.HOLE, _I, _G,
          "the mesh holds the declared hole: its axis runs through empty space and no material comes nearer the "
          "axis than the declared radius less the tolerance; a countersink holds its cone"),
     Rule("fit.driver", _A.FASTEN, _I, _U, "a driver reaches the screw head along its axis from outside"),
     # Heat-set inserts in printed or moulded parts.
-    Rule("insert.hole_size", _A.INSERT_HOLE, _I, _D,
-         "the hole as made, its modelled diameter less its shrink, lies in the insert catalogue's range"),
-    Rule("insert.depth", _A.INSERT_HOLE, _I, _D, "the hole runs at least the insert's length"),
+    Rule("insert.hole_size", _A.INSERT_HOLE, _I, _G,
+         "the hole as made, read from the mesh over the insert's length with its allowance and shrink, lies in the "
+         "insert catalogue's range"),
+    Rule("insert.depth", _A.INSERT_HOLE, _I, _G,
+         "the hole's axis runs at least the insert's length and the allowance before it meets material, and a "
+         "through hole has a wall over that length"),
     Rule("insert.boss_wall", _A.INSERT_HOLE, _W, _G,
          "material outside the hole wall reaches at least the catalogue's least wall over the insert's length"),
     # Temperature.

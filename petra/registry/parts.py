@@ -9,15 +9,17 @@ overrides a row with a signed bound. Lengths are in metres, temperatures in degC
 densities in kg/m3, masses in kg.
 
 The rows the parts rules read:
-    process.<kind>.<id>   tolerance (each surface lies within it of nominal, both ways),
-                          hole_shrink (diametral undersize of a modelled hole, print and
+    process.<kind>.<id>   tolerance (each surface lies within it of nominal, both ways;
+                          with tolerance_rate, within the larger of it and the rate times
+                          the part's largest dimension), hole_shrink (diametral undersize of a modelled hole, print and
                           powder), build_x, build_y, build_z (print, powder) or bed_x, bed_y
                           (sheet), thickness (sheet: the stock the preset cuts), bridge (print:
                           the longest span over air)
-    process.<finish>      buildup (thickness a finish adds to each coated surface)
+    process.<finish>      buildup (thickness a finish adds to each coated surface), density
     polymer.<id>          density, tg, hdt (heat deflection at 0.45 MPa, ISO 75-2 method B)
-    screw.<id>            d (major diameter), head_d, head_h, length, mass; csk_angle on a
-                          countersunk head
+    screw.<id>            d (major diameter), thread_d (the nominal size), pitch, head_d
+                          (least to greatest), head_h, length (least to greatest), mass;
+                          csk_angle on a countersunk head
     insert.<id>           hole_min, hole_max (the catalogue's hole range), length, wall_min,
                           mass, and the screw thread it takes
 """
@@ -56,7 +58,11 @@ CNC_SHOPS = ("Hubs hubs.com/knowledge-base/how-design-parts-cnc-machining/, Prot
 def presets() -> Mapping[str, Process]:
     """Every parts process preset by id."""
     fdm = {
-        "tolerance": _s(_mm("0.5"), "m", f"reported: {HUBS_FDM} desktop FDM, +/-0.5 % with a lower limit of +/-0.5 mm"),
+        "tolerance": _s(_mm("0.5"), "m", f"guess: recalled, {HUBS_FDM} desktop FDM, +/-0.5 % with a lower limit of +/-0.5 mm; "
+                                         "not confirmed against a source on disk. This row is the lower limit"),
+        "tolerance_rate": _s(_iv("0.005"), "1", f"guess: recalled, {HUBS_FDM} desktop FDM, +/-0.5 %; not confirmed against a "
+                                                "source on disk. The rules apply it to the part's box diagonal, which no "
+                                                "dimension of the part exceeds"),
         "hole_shrink": _s(_mm("0.1", "0.2"), "m", "guess: modelled holes print 0.1 to 0.2 mm undersize on a tuned desktop FDM printer "
                                                   "(gap audit row E-006 reports tenths of a millimetre)"),
         "bridge": _s(_mm("5", "10"), "m", f"reported: {HUBS_FDM} and hubs.com/knowledge-base/key-design-considerations-"
@@ -66,7 +72,10 @@ def presets() -> Mapping[str, Process]:
         "build_z": _s(_mm("220"), "m", "reported: Prusa MK4 build volume 250 x 210 x 220 mm, prusa3d.com"),
     }
     sls = {
-        "tolerance": _s(_mm("0.3"), "m", f"reported: {HUBS_SLS} +/-0.3 % with a lower limit of +/-0.3 mm"),
+        "tolerance": _s(_mm("0.3"), "m", f"guess: recalled, {HUBS_SLS} +/-0.3 % with a lower limit of +/-0.3 mm; not "
+                                         "confirmed against a source on disk. This row is the lower limit"),
+        "tolerance_rate": _s(_iv("0.003"), "1", f"guess: recalled, {HUBS_SLS} +/-0.3 %; not confirmed against a source on disk. "
+                                                "The rules apply it to the part's box diagonal"),
         "hole_shrink": _s(_mm("0", "0.2"), "m", "guess: powder sinters into small holes; 0 to 0.2 mm diametral"),
         "build_x": _s(_mm("340"), "m", "guess: an EOS P 396 class machine, 340 x 340 x 600 mm"),
         "build_y": _s(_mm("340"), "m", "guess: an EOS P 396 class machine, 340 x 340 x 600 mm"),
@@ -101,9 +110,11 @@ def finishes() -> Mapping[str, Process]:
         "process.anodize_ii": Process("process.anodize_ii", ProcessKind.COATING, {
             "buildup": _s(_mm("0.005", "0.0125"), "m", "guess: MIL-A-8625 type II coatings run about 0.01 to 0.025 mm "
                                                      "thick and about half grows outward"),
+            "density": _s(_iv("2400", "4000"), "kg/m3", "guess: porous anodic alumina up to dense alumina, about 3.95 g/cm3"),
         }, surface="oxide.anodic_aluminium", source="type II sulphuric anodize on aluminium; rows labelled each"),
         "process.powder_coat": Process("process.powder_coat", ProcessKind.COATING, {
             "buildup": _s(_mm("0.05", "0.12"), "m", "guess: one coat of polyester powder, 0.05 to 0.12 mm"),
+            "density": _s(_iv("1100", "2000"), "kg/m3", "guess: cured polyester powder coats with fillers"),
         }, surface="polymer.powder_coat", source="polyester powder coat; rows labelled each"),
     }
 
@@ -132,12 +143,19 @@ def polymers() -> Mapping[str, Material]:
     ))
 
 
-# ISO 4762 socket head cap and ISO 10642 countersunk screws: (d, head_d max, head_h max), mm.
-_SHCS = {"M2_5": ("2.5", "4.5", "2.5"), "M3": ("3", "5.5", "3"), "M4": ("4", "7", "4")}
-_CSK = {"M3": ("3", "6.72", "1.86"), "M4": ("4", "8.96", "2.48")}
-_LENGTHS = ("6", "8", "10", "12", "16", "20")
+# ISO 4762 socket head cap and ISO 10642 countersunk screws: (d, head_d least, head_d greatest,
+# head_h max, pitch), mm. The least head diameters are recalled, not read from a source on
+# disk, and rounded down, so the seat and sink rules that read them err safe.
+_SHCS = {"M2_5": ("2.5", "4.3", "4.5", "2.5", "0.45"), "M3": ("3", "5.3", "5.5", "3", "0.5"),
+         "M4": ("4", "6.75", "7", "4", "0.7")}
+_CSK = {"M3": ("3", "5.5", "6.72", "1.86", "0.5"), "M4": ("4", "7.5", "8.96", "2.48", "0.7")}
+_DK_RECALLED = {"shcs": {"M2_5": "4.32", "M3": "5.32", "M4": "6.78"}, "csk": {"M3": "5.54", "M4": "7.53"}}
+# Nominal length and half its range, mm: the recalled ISO 4762 js15 length limits (0.24,
+# 0.29, 0.35 and 0.42 mm), rounded up, not read from a source on disk.
+_LENGTHS = (("6", "0.25"), ("8", "0.3"), ("10", "0.3"), ("12", "0.35"), ("16", "0.35"), ("20", "0.45"))
 ISO4762 = "reported: ISO 4762:2004 Table 1 dk max and k max, as printed in maker catalogues (e.g. bossard.com)"
 ISO10642 = "reported: ISO 10642:2004 Table 1 dk theoretical max and k max, as printed in maker catalogues"
+ISO261 = "guess: recalled, ISO 261 coarse pitch for the size, not confirmed against a source on disk"
 
 
 def fasteners() -> Mapping[str, Part]:
@@ -145,23 +163,30 @@ def fasteners() -> Mapping[str, Part]:
     Mass is inferred from the head and shank volumes, which over-counts the socket."""
     out: dict[str, Part] = {}
     for head, table, std in (("shcs", _SHCS, ISO4762), ("csk", _CSK, ISO10642)):
-        for size, (d, dk, k) in table.items():
-            for length in _LENGTHS:
+        for size, (d, dk_lo, dk, k, pitch) in table.items():
+            for length, half in _LENGTHS:
                 id = f"screw.{size}x{length}_{head}"
-                d_, dk_, k_, l_ = (Fraction(x) for x in (d, dk, k, length))
-                if head == "shcs":
-                    volume = (dk_ ** 2 * k_ + d_ ** 2 * l_) * Fraction(785398, 10**6)
-                else:
-                    volume = (dk_ ** 2 * k_ / 3 + d_ ** 2 * l_) * Fraction(785398, 10**6)
-                mass = Interval(volume * MM ** 3 * STEEL_DENSITY[0] * Fraction(85, 100), volume * MM ** 3 * STEEL_DENSITY[1])
+                d_, dk_, k_ = (Fraction(x) for x in (d, dk, k))
+                l_lo, l_hi = Fraction(length) - Fraction(half), Fraction(length) + Fraction(half)
+                cone = 1 if head == "shcs" else Fraction(1, 3)
+                lo_, hi_ = ((dk_ ** 2 * k_ * cone + d_ ** 2 * l) * Fraction(785398, 10**6) for l in (l_lo, l_hi))
+                mass = Interval(lo_ * MM ** 3 * STEEL_DENSITY[0] * Fraction(85, 100), hi_ * MM ** 3 * STEEL_DENSITY[1])
+                standard = "ISO 4762" if head == "shcs" else "ISO 10642"
                 props = {
                     "d": _s(_mm(d), "m", f"{std}; nominal major diameter"),
-                    "head_d": _s(_mm(dk), "m", std),
+                    "thread_d": _s(_mm(d), "m", f"{std}; the thread's nominal size"),
+                    "pitch": _s(_mm(pitch), "m", ISO261),
+                    "head_d": _s(_mm(dk_lo, dk), "m", f"guess: the least recalled, {standard} dk min about "
+                                                     f"{_DK_RECALLED[head][size]} mm, not confirmed against a source on "
+                                                     f"disk, rounded down to {dk_lo} mm; the greatest {std[10:]}"),
                     "head_h": _s(_mm(k), "m", std),
-                    "length": _s(_mm(length), "m", f"{std}; nominal length, the head's top to the tip for a "
-                                                   f"countersunk screw and the bearing face to the tip otherwise"),
-                    "mass": _s(mass, "kg", "inferred: steel density times nominal head and shank volume, less up "
-                                           "to 15 % for the socket and thread"),
+                    "length": _s(_mm(str(Fraction(length) - Fraction(half)), str(Fraction(length) + Fraction(half))), "m",
+                                 f"guess: recalled, ISO 4762 js15 length limits, not confirmed against a source on disk, rounded "
+                                 f"out to +/-{half} mm about {length} mm; the head's top to the tip for a countersunk "
+                                 f"screw and the bearing face to the tip otherwise"),
+                    "mass": _s(mass, "kg", "inferred: steel density times the head's and the shank's volume at "
+                                           "their least and greatest length, less up to 15 % for the socket and "
+                                           "thread"),
                 }
                 if head == "csk":
                     props["csk_angle"] = _s(_iv("90"), "1", f"{std}; included head angle", "degrees")

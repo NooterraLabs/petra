@@ -68,7 +68,7 @@ CORE_CAP = Limit(1000, "Set on 2026-11-08 at 140f742, where the core measured 95
                        "A new rule adds 3 to 5 lines to rules/__init__.py (inferred from its tables), so "
                        "the headroom covers the registry entries of several rules.")
 
-TRUSTED_CEILING = Limit(15800, "Set on 2026-11-08 at 140f742, where the trusted base measured 13,530 "
+TRUSTED_CEILING = Limit(16400, "Set on 2026-11-08 at 140f742, where the trusted base measured 13,530 "
                                "code lines: core 957, rules 457, outside the kernel 12,116. Raised on "
                                "2026-11-08 on branch parts-core as the parts layer replaces its scaffold: "
                                "classifying the scaffold measured 14,269, and the mesh reader with its "
@@ -77,7 +77,11 @@ TRUSTED_CEILING = Limit(15800, "Set on 2026-11-08 at 140f742, where the trusted 
                                "KiCad scaffold and adds the fit, fastener, insert, press, temperature, "
                                "extent, flat-sheet and bridge builders with their registry rows, "
                                "measured 15,696. Mass and centre-of-mass claims "
-                               "measured 15,796. Raise it in the commit that needs more and say why here.")
+                               "measured 15,796. Raised on branch parts-fix to close the parts-core "
+                               "review's false PASSes: holes, threads, presses and seats read from the "
+                               "mesh, every screw pair and the last body before its mouth, mass and "
+                               "centre-of-mass bounds over the tolerance, and per-piece containment "
+                               "measured 16,366. Raise it in the commit that needs more and say why here.")
 
 T2_ADOPTED = date(2026, 11, 8)
 """The day T2 took this form. Every debt found that day carries it."""
