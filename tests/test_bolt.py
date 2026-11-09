@@ -327,6 +327,20 @@ class Separation(unittest.TestCase):
                                msg="the bolt carries the whole 40 kN once the joint opens")
 
 
+class Tightening(unittest.TestCase):
+    """VDI 2230 Part 1 R7: the thread torque twists the bolt while it is tightened, so the
+    bolt can yield below its axial proof load, and past yield its preload is no longer
+    T / (K d). Neither model checks it, since no input gives the thread friction."""
+
+    def test_every_bolt_premise_in_the_footprint_names_the_tightening_stress_as_not_checked(self):
+        report = check_design(load_design(EXAMPLE, REGISTRY), REGISTRY, (SolverSource(),))
+        bolt_models = [p for p in report.verdict.footprint.premises if p.label.startswith("model:bolt.")]
+        self.assertEqual(len(bolt_models), 2)
+        for premise in bolt_models:
+            unchecked = premise.statement.partition("; not checked: ")[2]
+            self.assertIn("tightened", unchecked, premise.label)
+
+
 class Lowering(unittest.TestCase):
     def assertRejected(self, *edits, fragment: str, extra: str = ""):
         with self.assertRaises(ComponentError) as ctx:

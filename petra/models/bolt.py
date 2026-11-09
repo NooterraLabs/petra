@@ -307,6 +307,10 @@ _JOINT_DIAGRAM = ("concentric axial external load shared equally by the bolts; l
                   "factor Phi; no prying, bending, embedding loss or thermal change of preload; the nut factor covers "
                   "thread and bearing friction")
 
+_TIGHTENING = ("the bolt stays elastic while it is tightened, though the thread torque adds torsion to the preload's "
+               "axial stress (VDI 2230 Part 1:2015 R7); no input gives the thread friction, and F_V = T / (K d) holds "
+               "only below yield")
+
 TENSION_MODEL = model_spec(
     sys.modules[__name__], "bolt.tension",
     "the joint diagram's bolt force max(F_V + Phi F_A / n, F_A / n), F_V = T / (K d): the load share Phi while the "
@@ -314,6 +318,7 @@ TENSION_MODEL = model_spec(
     "strength) times the ISO 724 stress area",
     _JOINT_DIAGRAM,
     "petra-maintainers", "VDI 2230 Part 1:2015 (simplified joint diagram); ISO 898-1:2013; ISO 3506-1:2020; ISO 724",
+    unchecked=(_TIGHTENING,),
 )
 
 SEPARATION_MODEL = model_spec(
@@ -324,6 +329,7 @@ SEPARATION_MODEL = model_spec(
     "petra-maintainers",
     "VDI 2230 Part 1:2015 (simplified): the operating load splits by Phi only while the joint is clamped (R3), and "
     "the minimum assembly preload keeps the residual clamp load at least the required clamp load (R2, R5)",
+    unchecked=(_TIGHTENING,),
 )
 
 MODELS: Mapping[FailureMode, ModelSpec] = {TENSION: TENSION_MODEL, SEPARATION: SEPARATION_MODEL}
