@@ -43,16 +43,25 @@ class Turn:
     rows: tuple[tuple[int, int, int], tuple[int, int, int], tuple[int, int, int]]
 
     def apply(self, p: Point) -> Point:
-        raise NotImplementedError
+        return tuple(r[0] * p[0] + r[1] * p[1] + r[2] * p[2] for r in self.rows)
 
     def axis(self, a: Axis) -> Axis:
-        raise NotImplementedError
+        return Axis(self.apply(a.value))
 
 
 def turn(top: Axis, front: Axis) -> Turn:
     """The rotation that takes a body's own top to `top` and its own front to `front`.
-    Raises ValueError when the two are parallel."""
-    raise NotImplementedError
+    Raises ValueError when the two are parallel. Its columns are the images of +x, +y and
+    +z: +z goes to `top`, +y (the body's back) to the opposite of `front`, and +x to their
+    cross product, so the determinant is +1."""
+    t, b = top.value, front.opposite.value
+    if sum(i * j for i, j in zip(t, b)):
+        raise ValueError(f"a placement's top ({top.value}) and front ({front.value}) must be perpendicular")
+    x = (b[1] * t[2] - b[2] * t[1], b[2] * t[0] - b[0] * t[2], b[0] * t[1] - b[1] * t[0])
+    return Turn(tuple((x[k], b[k], t[k]) for k in range(3)))
+
+
+IDENTITY = Turn(((1, 0, 0), (0, 1, 0), (0, 0, 1)))
 
 
 @dataclass(frozen=True)
@@ -63,7 +72,8 @@ class Placement:
     offset: Point
 
     def apply(self, p: Point) -> Point:
-        raise NotImplementedError
+        q = self.turn.apply(p)
+        return (q[0] + self.offset[0], q[1] + self.offset[1], q[2] + self.offset[2])
 
 
 @dataclass(frozen=True)
