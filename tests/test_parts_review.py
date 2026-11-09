@@ -363,6 +363,40 @@ class HeldHeads(Case):
         self.assertEqual(got["stack.f/fit.fastener"][0], "refuted", got["stack.f/fit.fastener"])
         self.assertRegex(got["stack.f/fit.fastener"][1], "does not stop the head")
 
+    def test_a_countersunk_head_in_a_plain_hole_wider_than_it_bounds_no_reach(self):
+        # No countersink is declared, so the head is taken to sit at the mouth, and the
+        # plain 8 mm hole lets the 6.72 mm head through.
+        base = self.mesh("base", blind_block((0, 0, 0), (20, 20, 8), (10, 10), "1.3", "7.6"))
+        lid = self.mesh("lid", plate((0, 0, 0), (20, 20, 3), (10, 10), "4"))
+        hole = (f"tolerance in [0.02 mm, 0.02 mm] {SIGNED}\n"
+                "  hole h at (10 mm, 10 mm, 8 mm) along bottom diameter 2.6 mm depth 7.6 mm form")
+        got = self.check(stack(base, hole, lid, "hole h at (10 mm, 10 mm, 3 mm) along bottom diameter 8 mm clear",
+                               "screw.M3x10_csk", base_material=(AL, None)))
+        for rule in ("fit.grip", "fit.fastener"):
+            self.assertEqual(got[f"stack.f/{rule}"][0], "refuted", (rule, got[f"stack.f/{rule}"]))
+            self.assertRegex(got[f"stack.f/{rule}"][1], r"held while it overhangs lid\.h's mouth, 8 mm")
+
+
+class PressDepth(Case):
+    """A press read only to the declared depth missed the pin past it. Found by reading
+    _press after F1, not by the review."""
+
+    def test_a_pin_driven_past_a_blind_hole_floor_is_not_pressed(self):
+        # The hole is 4 mm deep in the mesh and as declared, and the pin runs 8 mm into the
+        # block, so its last 4 mm are in solid material.
+        block = self.mesh("block", blind_block((0, 0, 0), (20, 20, 10), (10, 10), "1.5", "4"))
+        peg = self.mesh("peg", pin((10, 10), "1.512", 2, 10))
+        signed = f"  tolerance in [0.0025 mm, 0.0025 mm] {SIGNED}"
+        got = self.check(
+            part("block", block, AL, None, signed + "\n  hole h at (10 mm, 10 mm, 10 mm) along bottom diameter 3 mm "
+                                                    "depth 4 mm press") +
+            part("peg", peg, AL, None, signed) +
+            "assembly fit {\n  place block at (0 mm, 0 mm, 0 mm) facing top front\n"
+            "  place peg at (0 mm, 0 mm, 0 mm) facing top front\n  insert peg along bottom from 10 mm\n"
+            "  press p peg into block.h diameter 3.02 mm interference 0.01 mm to 0.05 mm\n}\n")
+        self.assertEqual(got["fit.p/fit.press"][0], "refuted", got["fit.p/fit.press"])
+        self.assertRegex(got["fit.p/fit.press"][1], "axis meets the block's material")
+
 
 class L1Cache(Case):
     def test_l1_a_mesh_changed_on_disk_is_refused_under_its_old_hash(self):

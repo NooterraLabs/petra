@@ -884,7 +884,9 @@ def _placed_screw(s: dict, den: int, which: str, float_: Q) -> Body:
 
 
 def _press(asm: Assembly, p: Press, bodies: Mapping[str, Body], alw: Mapping[str, Q], den: int) -> PressFit:
-    """Read a press from the meshes over the length where the pin crosses the hole's slab."""
+    """Read a press from the meshes over the whole length where the pin crosses the part
+    from the hole's mouth. The hole's declared depth is not read, so a pin driven past a
+    blind hole's floor meets the floor's material."""
     pin, block = bodies[p.pin], bodies[p.body]
     hole = asm.hole(p.body, p.hole)
     centre, axis = _placed_hole(asm, p.body, hole)
@@ -895,7 +897,7 @@ def _press(asm: Assembly, p: Press, bodies: Mapping[str, Body], alw: Mapping[str
         return _unseated("the pin does not travel along the hole's axis")
     lo, hi = block.bounds()
     far = Q(hi[k] if s > 0 else lo[k], den)
-    ends = sorted((centre[k], centre[k] + s * hole.depth if hole.depth is not None else far))
+    ends = sorted((centre[k], far))
     plo, phi = pin.bounds()
     z0, z1 = max(ends[0], Q(plo[k], den)), min(ends[1], Q(phi[k], den))
     if z0 >= z1:

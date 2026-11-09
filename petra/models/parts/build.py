@@ -208,12 +208,13 @@ def build_gap(req: Requirement, asm: Assembly, design: Design, registry: Registr
 
 def _held(sb: StatementBuilder, asm: Assembly, f, lay, registry: Registry) -> tuple[list, list]:
     """(terms, notes) that keep the head at the seat the screw's reach is measured from: a
-    countersunk head stopped by the mesh's countersink, a socket head at its least diameter
-    wider than the first hole at its widest below the mouth, grown by the allowance and the
-    shift. A head that can pass its hole leaves the tip's reach unbounded."""
+    countersunk head stopped by the mesh's countersink, or any other head, which sits on the
+    mouth, at its least diameter wider than the first hole at its widest below the mouth,
+    grown by the allowance and the shift. A head that can pass its hole leaves the tip's
+    reach unbounded."""
     first, hid = f.stack[0]
     tag = f"{first}.{hid}"
-    if "csk_angle" in registry.parts[f.screw].props:
+    if "csk_angle" in registry.parts[f.screw].props and asm.hole(first, hid).countersink is not None:
         if lay.grips[f.id].engaged_hi is not None:
             return [], []
         return ([_value(sb, f"{tag}.head_unstopped", Q(1), dim=DIMENSIONLESS)],
