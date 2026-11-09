@@ -8,7 +8,9 @@ reading taken with Petra's values hidden. These tests hold the two together:
     constant fails here until someone reads it again;
   - with the documents (the folder PETRA_SOURCES names, else docs/research/sources), every
     anchor's document, span fingerprint and printed value must still be there. Public CI
-    has no documents, and those tests skip.
+    has no documents, and those tests skip;
+  - the traceability docs are what scripts/source_docs.py writes from these files;
+  - every registry value is read by some check, or is listed as unused with its reason.
 
 Each disagreement the second reading found is a test below with its finding in the
 docstring. A method question stays an expected failure until someone decides it.
@@ -16,7 +18,6 @@ docstring. A method question stays an expected failure until someone decides it.
 from __future__ import annotations
 
 import importlib.util
-import json
 import sys
 import unittest
 from pathlib import Path
@@ -156,6 +157,55 @@ class Traceability(unittest.TestCase):
         named, _ = self.docs.values_by_provision()
         self.assertEqual({s: [x["id"] for x in named[s]] for s in self.docs.IDS
                           if self.docs.TREATMENT[s] == "excluded" and named[s]}, {})
+
+
+class DeadData(unittest.TestCase):
+    """Every registry value is read by some check, or registry_footprint.UNUSED says why not.
+    docs/sources/footprint.json records the first corpus design whose verdict rests on each
+    key; scripts/registry_footprint.py --check re-derives it over the whole corpus."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.fp = _script("registry_footprint")
+        cls.registry = build_registry()
+        cls.keys = cls.fp.keys(cls.registry)
+        cls.read = cls.fp.read()["read"]
+
+    def test_every_registry_value_is_read_or_listed_unused(self):
+        live = self.fp.live(self.keys, self.read)
+        self.assertEqual([k for k in self.keys if k not in live and not self.fp.unused(k)], [],
+                         "no corpus design reads these: list each in UNUSED with its reason, or rerun "
+                         "py -3.11 scripts/registry_footprint.py")
+
+    def test_no_listed_value_is_read(self):
+        live = self.fp.live(self.keys, self.read)
+        self.assertEqual([k for k in self.keys if k in live and self.fp.unused(k)], [],
+                         "UNUSED lists keys a check reads")
+
+    def test_every_listing_names_a_registry_key(self):
+        named = set(self.keys) | {self.fp.family(k) for k in self.keys}
+        self.assertEqual([u for u in self.fp.UNUSED if u not in named], [])
+
+    def test_every_listed_reader_still_holds_its_needle(self):
+        """A listing says what reads the value; when that code goes, so must the listing."""
+        for listed, why in self.fp.UNUSED.items():
+            with self.subTest(listed):
+                self.assertTrue(why.why)
+                if why.reader:
+                    self.assertIn(why.needle, (ROOT / why.reader).read_text(encoding="utf-8"))
+
+    def test_the_footprint_names_registry_keys(self):
+        self.assertEqual(sorted(set(self.read) - set(self.keys)), [])
+
+    def test_the_examples_still_read_what_the_footprint_records(self):
+        """The examples' share of the footprint, re-derived: each key credited to an example
+        is still read by it, and nothing an example reads is missing from the file."""
+        for path in sorted(ROOT.glob("examples/**/*.petra")):
+            name = path.relative_to(ROOT).as_posix()
+            with self.subTest(name):
+                got = self.fp.read_by(path, name, self.registry)
+                self.assertEqual(sorted(k for k, first in self.read.items() if first == name and k not in got), [])
+                self.assertEqual(sorted(got - set(self.read)), [])
 
 
 class Findings(unittest.TestCase):

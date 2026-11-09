@@ -7,6 +7,7 @@ These files tie each value Petra takes from a standard to the page that states i
 - `inventory.jsonl` lists every constant, table row, equation, limit and resistance factor Petra encodes from a standard, with its module, symbol, value, clause and edition. `scripts/source_inventory.py` writes it from the registry, the steel limit-state docstrings and a short list of rules the code holds in its structure.
 - `anchors.jsonl` gives each item an anchor: the document's sha256, the page, the [start, end) offsets and sha256 of the text span that states it, and the value as printed. It holds fingerprints and numbers, never the documents' text.
 - `equations.json` lists the headings and equation numbers of AISC 360-22 Chapters J and K, each with its page. `scripts/source_docs.py` counts Petra's coverage of the chapters against it.
+- `footprint.json` names, for each registry key a check reads, the first design of a corpus whose verdict rests on it. `scripts/registry_footprint.py` writes it from the examples, samples of the steel and electronics gate streams, the gym tasks, and the steel designs again in the other design basis.
 
 An anchor's kind is one of:
 
@@ -33,6 +34,7 @@ Text is extracted with pypdf 5.1.0. Another version may lay text out differently
 - Without the documents, the registry must hold each anchor's value, and the inventory must match the code.
 - With the documents, every anchor's document hash, span fingerprint and printed value must still hold, and `equations.json` must hold the headings and equation numbers AISC 360-22 prints. These tests skip when the documents are absent, as in public CI.
 - `docs/steel_traceability.md` and the provision table in `docs/steel_connections.md` must be what `scripts/source_docs.py` writes from the inventory, the anchors and `petra/models/steel/trace.py`.
+- Every registry value must be in `footprint.json`, or be a catalogue row whose property the file names for another row. Otherwise `UNUSED` in `scripts/registry_footprint.py` must name what reads it and say why no check does. A listed value that a check reads fails, and so does a listing whose reader no longer holds the code it names. The examples are checked again each run. `py -3.11 scripts/registry_footprint.py --check` checks the whole corpus again.
 
 `py -3.11 scripts/verify_sources.py` runs the document checks alone.
 
