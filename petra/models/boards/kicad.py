@@ -23,7 +23,7 @@ from pathlib import Path
 from . import plane
 from .features import EDGE, HOLES, THICKNESS, Feature, Premise, Rule, classify, premises
 from .plane import Arc, Bounds, Circle, Item, Loop, Point, Segment, ShapeError, Spot
-from .sexpr import BoardError, Expr, number, parse
+from .sexpr import BoardError, Expr, Symbol, number, parse
 
 FORMATS: dict[int, int] = {20211014: 6, 20221018: 7, 20240108: 8, 20241229: 9}
 """The board file version each KiCad release series writes, and the series. Each is the last
@@ -351,18 +351,23 @@ def _outline(root: Expr, path: str) -> Outline:
 
 
 def _field(e: Expr, kicad: int, name: str, path: str) -> str:
-    """A footprint's reference or value: an (fp_text reference ...) in KiCad 6 and 7, a
-    (property "Reference" ...) from KiCad 8 on (version 20230620, "PCB Fields", reported)."""
+    """A footprint's reference or value: an (fp_text reference [locked] "J1" ...) in KiCad 6 and
+    7, whose parser takes a bare `locked` before the text (measured on two real boards,
+    docs/kicad_oracle.md), and a (property "Reference" "J1" ...) from KiCad 8 on (version
+    20230620, "PCB Fields", reported)."""
     if kicad >= 8:
-        found = [str(p.args[1]) for p in e.lists("property") if len(p.args) >= 2 and p.args[0] == name]
+        texts = [p.args[1:] for p in e.lists("property") if p.args and p.args[0] == name]
         form = f'(property "{name}" ...)'
     else:
-        found = [str(t.args[1]) for t in e.lists("fp_text") if len(t.args) >= 2 and t.args[0] == name.lower()]
+        texts = [t.args[1:] for t in e.lists("fp_text") if t.args and t.args[0] == name.lower()]
+        texts = [a[1:] if a and isinstance(a[0], Symbol) and a[0] == "locked" else a for a in texts]
         form = f"(fp_text {name.lower()} ...)"
-    if len(found) != 1:
+    if len(texts) != 1:
         raise BoardError(path, f"line {e.line}: a KiCad {kicad} footprint names its {name.lower()} in one {form}, "
-                               f"and this one has {len(found)}")
-    return found[0]
+                               f"and this one has {len(texts)}")
+    if not texts[0] or isinstance(texts[0][0], Expr):
+        raise BoardError(path, f"line {e.line}: a footprint names its {name.lower()} in a {form} with no text")
+    return str(texts[0][0])
 
 
 def _footprint(e: Expr, kicad: int, path: str) -> Footprint:

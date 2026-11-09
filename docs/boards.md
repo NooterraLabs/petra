@@ -26,10 +26,12 @@ Board files of KiCad 6, 7, 8 and 9. Each version below is the last of its develo
 
 | version | KiCad | reference and value |
 |---|---|---|
-| 20211014 | 6 | `(fp_text reference ...)` |
-| 20221018 | 7 | `(fp_text reference ...)` |
-| 20240108 | 8 | `(property "Reference" ...)`, since version 20230620, "PCB Fields" (reported, same header) |
-| 20241229 | 9 | `(property "Reference" ...)` |
+| 20211014 | 6 | `(fp_text reference "J1" ...)`, or `(fp_text reference locked "J1" ...)` for a locked text |
+| 20221018 | 7 | `(fp_text reference "J1" ...)`, or `(fp_text reference locked "J1" ...)` for a locked text |
+| 20240108 | 8 | `(property "Reference" "J1" ...)`, since version 20230620, "PCB Fields" (reported, same header) |
+| 20241229 | 9 | `(property "Reference" "J1" ...)` |
+
+KiCad 6 and 7 write a locked text's `locked` before the text. The reader skips that bare word, so the locked J1 of KiCad 7's rewrite of the pic_programmer demo and the locked U1 of Sofle v2 read as J1 and U1 (measured, docs/kicad_oracle.md). A quoted `"locked"` is a text like any other.
 
 Every length is an exact rational in millimetres, read from the file's decimals, so 2.54 is 127/50. The record holds these.
 
@@ -115,7 +117,7 @@ Each refusal is a `BoardError` naming the file and, where it can, the line.
 - A bezier curve on Edge.Cuts, an arc whose three points lie on one line, a circle of radius 0, a line of length 0, a rectangle with no area.
 - Edge.Cuts items in a footprint turned by an angle that is not a multiple of 90 degrees, since their board coordinates are not rational.
 - An arc that comes within 0.0001 mm of another edge, or two edges that meet at a zero angle, since no polygon can bound them. How often real outlines do this is not measured.
-- A footprint off F.Cu and B.Cu, a reference or value not written the way its version writes it, a pad type outside smd, connect, thru_hole and np_thru_hole, a drilled pad with no drill, a pad with no size, and a via with no drill.
+- A footprint off F.Cu and B.Cu, a reference or value not written the way its version writes it or written with no text, a pad type outside smd, connect, thru_hole and np_thru_hole, a drilled pad with no drill, a pad with no size, and a via with no drill.
 - A stackup whose layers sum to a thickness other than the one in `(general ...)`. KiCad keeps the two equal (recalled), so a file where they differ is ambiguous.
 
 A courtyard Petra cannot read is not refused. It becomes `NoCourtyard` with the reason, and a keep-out on that face raises `BoardError`. A solid whose hole bounds meet each other or the edge's bounds is refused, as a hole cut by the board's edge is.
