@@ -85,7 +85,8 @@ DEMANDED: dict[Feature, tuple[Premise, ...]] = {
     Feature.TEST_POINT: (Premise("probe access", "the direction a probe reaches the test point from"),),
 }
 
-THICKNESS = Premise("thickness", "the board's thickness, which the file does not state")
+THICKNESS = Premise("thickness as made", "the range the made board's thickness falls in, mm; a thickness the file "
+                                         "states is the drawn one, and a board maker makes it within a tolerance")
 EDGE = Premise("edge tolerance", "how far the board maker's cut edge may stray from the drawn outline")
 HOLES = Premise("hole size as made", "how far each drilled hole, plated or not, may differ from its drill size")
 

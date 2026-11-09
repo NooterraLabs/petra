@@ -4,8 +4,12 @@ A mesh cannot hold an arc, so each solid is built from the polygons of `plane.bo
 side of the drawn geometry, the side `Errs` names. OVER holds the true solid and UNDER lies
 inside it. The board's region is its boundary loop less its cutouts and drilled holes, so
 OVER takes the outer polygon of the boundary with the inner polygons of the cutouts and
-holes, and UNDER the reverse. Both bound the board the file draws. How far the board as made
-strays from it is a premise for the enclosure deck (features.EDGE, HOLES and THICKNESS).
+holes, and UNDER the reverse. Both bound the board the file draws, at the thickness it
+states or the one given. The board as made strays from it, and each way it strays is a
+premise every board carries for the enclosure deck: features.EDGE for the cut edge,
+features.THICKNESS for the thickness as a range, and features.HOLES for the drills. A deck
+that builds OVER at the range's top and UNDER at its bottom bounds the made board's
+thickness.
 
 Mesh frame: x is the board's x, y is minus the board's y, and z points out of the top face,
 so the frame is right-handed and the top face seen from above looks as KiCad draws it. The

@@ -206,7 +206,7 @@ def parse_board(text: str, path: str = "<text>", sha256: str = "") -> Board:
     thickness = _thickness(root, path)
     vias = tuple(_via(e, path) for e in root.lists("via"))
     drilled = vias or any(p.drill for f in footprints for p in f.pads)
-    missing = ((THICKNESS,) if thickness is None else ()) + (EDGE,) + ((HOLES,) if drilled else ())
+    missing = (THICKNESS, EDGE) + ((HOLES,) if drilled else ())
     return Board(path, sha256 or hashlib.sha256(text.encode("utf-8")).hexdigest(), version, kicad,
                  _outline(root, path), thickness, footprints, vias, missing)
 

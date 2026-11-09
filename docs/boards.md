@@ -134,7 +134,7 @@ A board file holds no part height, no mating direction and no light path. `featu
 | LED | library `LED_`, reference LED, DS | light path |
 | test point | library `TestPoint`, reference TP, pad property `pad_prop_testpoint` | probe access |
 
-Every footprint with pads that is not a mounting hole also lacks its **height** above its face, and one with drilled pads lacks its **lead protrusion** beyond the far face. The board as a whole lacks its **edge tolerance**, the board maker's cut against the drawn outline, and, when it has holes, the **hole size as made**. A board that states no thickness lacks its **thickness**.
+Every footprint with pads that is not a mounting hole also lacks its **height** above its face, and one with drilled pads lacks its **lead protrusion** beyond the far face. Every board lacks its **thickness as made**, a range, its **edge tolerance**, the board maker's cut against the drawn outline, and, when it has holes, the **hole size as made**. A thickness the file states is the drawn one, so a slot sized to a stated 1.6 mm passes on the file alone and may not take a board made thicker. Board makers commonly quote 10% either way (recalled). Petra keeps no such figure, so the deck gives the range whether or not the file states a thickness, and builds the OVER solid at its top and the UNDER solid at its bottom with `board_solid(..., thickness=...)`.
 
 Petra keeps no table of typical package heights. Every height is a premise.
 
