@@ -179,12 +179,6 @@ class DeckFixes(unittest.TestCase):
             for bolts in ("end bolts", "inner bolts"):
                 self.assertTrue(any(f"{flange} at the {bolts}" in w for w in whats), (flange, bolts, whats))
 
-    def test_a_parallel_slot_takes_its_length_in_pryings_delta(self):
-        # delta = 1 - d'/p, d' along the flange: a slot along the tee weakens it more than across
-        across, along = self.prying("ssl", 2), self.prying("ssl_parallel", 2)
-        tee = next(w for w in across if "tee flange" in w)
-        self.assertGreater(along[tee], across[tee])
-
     def slotted(self, holes, shear=None, joint=" joint pretensioned"):
         """Gate design 02606: a WT6x25 under a W24x76 on two rows of 3/4 in Group 150 bolts,
         56.145 kip ASD, with `holes` declared."""
@@ -194,7 +188,6 @@ class DeckFixes(unittest.TestCase):
         secondary = (("shear", Fraction(shear)),) if shear else ()
         return gen.source("h", "hanger", "asd", lines, Fraction("56.145"), secondary)
 
-    @unittest.expectedFailure
     def test_a_hanger_slot_that_fails_along_the_tee_is_not_passed_across_it(self):
         # A hanger pulls normal to its plies, so the card fixes no direction in their plane
         # for a slot. The 3/4 in bolts' 13/16 in holes pass prying; a short slot is 13/16 in
@@ -203,7 +196,6 @@ class DeckFixes(unittest.TestCase):
         verdict, modes = status(self.slotted("flange ssl"))
         self.assertEqual((verdict, modes["prying"]), ("FAIL", "fail"))
 
-    @unittest.expectedFailure
     def test_a_hanger_slot_reads_the_same_whichever_way_the_card_names_it(self):
         def checks(holes):
             return {(m, v.what): v.utilisation for (m, _), v in gen.checks(self.slotted(holes, shear="0.5"), REGISTRY).items()}
@@ -220,7 +212,6 @@ class DeckFixes(unittest.TestCase):
                 pry = next(k for k in plain if k[0] == "prying" and flange in k[1])
                 self.assertGreater(plain[pry], std[pry])
 
-    @unittest.expectedFailure
     def test_a_slotted_hanger_under_shear_needs_a_slip_critical_joint(self):
         # J3.3: in a bearing-type joint a slot lies normal to the load. The tension is normal
         # to every slot in the plies, but the card fixes no direction for the shear in their

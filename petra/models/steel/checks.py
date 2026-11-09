@@ -175,6 +175,10 @@ class Interface:
     clearances: tuple[tuple[str, Expr] | tuple[str, Expr, Expr], ...]
     prying: tuple[Prying, ...]
     outline: Outline | None   # a bracket plate's edges: tearout runs along each bolt's force
+    # whether the card fixes a direction in the plies' plane, the force's that plain and
+    # `_parallel` slots are named against; a hanger pulls normal to its plies, so its slots
+    # may run either way
+    oriented: bool = True
 
     @property
     def n(self) -> int:
@@ -374,10 +378,14 @@ class Geometry:
                         forces=[], seat=None, stiffener=None, single_plate=None, bracket=None, tee=None)
 
 
-def bolt_dims(ctx: Ctx, bolts: Bolts, hole: str) -> tuple[Expr, Expr, Expr]:
-    """(d, hole dimension along the force, hole dimension across it), from Table J3.3."""
+def bolt_dims(ctx: Ctx, bolts: Bolts, hole: str, oriented: bool = True) -> tuple[Expr, Expr, Expr]:
+    """(d, hole dimension along the force, hole dimension across it), from Table J3.3. A
+    slot in plies whose card fixes no direction (Interface.oriented) may run either way, so
+    it takes its length both ways."""
     g = f"bolt_us.{bolts.size}"
     along, across = HOLE_DIMS[hole]
+    if not oriented and hole[:3] in ("ssl", "lsl"):
+        along = across = f"{hole[:3]}_l"
     return ctx.const(f"{g}.d"), ctx.const(f"{g}.{along}"), ctx.const(f"{g}.{across}")
 
 
@@ -828,12 +836,12 @@ def geometry_hanger(ctx: Ctx) -> Geometry:
     hold = Ply("support flange", support.grade, sp["tf"], 1, 1, ctx.hole("support"), "down", None, None, None, 1,
                (("flange side", a_s),), block=False, edges_far=())
     out = Geometry.empty()
-    out.interfaces.append(Interface("hanger bolts", bolts, rows, 2, s, gt, 1, (flange, hold), ctx.secondary("shear"),
-                                    None, tension=t, clearances=(("tee stem", b),),
-                                    prying=(Prying("tee flange", b, a, _tributaries(ctx, rows, lev, s, b), tp["tf"], tee.grade,
-                                                   flange.hole),
-                                            Prying("support flange", b_s, a_s, _tributaries(ctx, rows, lev, s, b_s), sp["tf"],
-                                                   support.grade, hold.hole)), outline=None))
+    bolted = Interface("hanger bolts", bolts, rows, 2, s, gt, 1, (flange, hold), ctx.secondary("shear"),
+                       None, tension=t, clearances=(("tee stem", b),),
+                       prying=(Prying("tee flange", b, a, _tributaries(ctx, rows, lev, s, b), tp["tf"], tee.grade, flange.hole),
+                               Prying("support flange", b_s, a_s, _tributaries(ctx, rows, lev, s, b_s), sp["tf"],
+                                      support.grade, hold.hole)), outline=None, oriented=False)
+    out.interfaces.append(bolted)
     # The tension pulls the support's flange, which hands it to the support's web: J10.2's
     # web local yielding over lb, the bolt rows' extent (the force enters at the bolts). The
     # grammar gives no distance to the support's end, so the force is taken at it: Eq J10-3,
@@ -844,7 +852,7 @@ def geometry_hanger(ctx: Ctx) -> Geometry:
     out.tensions.append(Tension("tee stem", tee.grade, gross, gross, t))
     # The bolts' tension reaches the stem through the flange in shear either side of it:
     # two gross sections the flange's length long, and two net through the line of holes.
-    _, dh_v, _ = bolt_dims(ctx, bolts, flange.hole)
+    _, dh_v, _ = bolt_dims(ctx, bolts, flange.hole, bolted.oriented)
     out.web_shear.append(("tee flange", tee.grade, mul(c(2), length, tp["tf"]), t))
     out.net_shear.append(("tee flange", tee.grade, mul(c(2), sub(length, mul(c(rows), L.hole_net(ctx.const, dh_v))), tp["tf"]), t))
     return out
@@ -918,9 +926,9 @@ def bolt_strengths(ctx: Ctx, itf: Interface, row: str) -> tuple[BoltStrength, ..
     d = ctx.const(f"bolt_us.{itf.bolts.size}.d")
     out = [BoltStrength("bolt shear", None, ctx.available(L.bolt_shear(_fnv(ctx, itf.bolts), d, c(itf.planes)), "rcsc2025.s5_1", suffix=""))]
     for ply in itf.plies:
-        _, dh_v, _ = bolt_dims(ctx, itf.bolts, ply.hole)
+        _, dh_v, _ = bolt_dims(ctx, itf.bolts, ply.hole, itf.oriented)
         fu = ctx.mat(ply.grade, "fu")
-        kb, kt = _coefficients(ctx, ply.hole)
+        kb, kt = _coefficients(ctx, ply.hole) if itf.oriented else _either_way_coefficients(ctx, ply.hole)
         out.append(BoltStrength(f"bearing on the {ply.name}", None,
                                 ctx.available(mul(c(ply.count), L.bearing(d, ply.t, fu, kb)), "rcsc2025.s5_3", suffix="")))
         extreme = row == "only" or row == ("bottom" if ply.direction == "down" else "top")
@@ -1030,9 +1038,11 @@ def bracket_positions(ctx: Ctx, itf: Interface) -> tuple[tuple[str, tuple[BoltSt
     return bracket_bolts(ctx, itf, centres[0] if len(centres) == 1 else Min(tuple(centres)))
 
 
-def _bracket_coefficients(ctx: Ctx, hole: str) -> tuple[Expr, Expr]:
-    """J3.11a's coefficients for a bracket bolt, whose force turns with its place in the
-    group: a long slot either way takes the perpendicular slot's, the least of the cases."""
+def _either_way_coefficients(ctx: Ctx, hole: str) -> tuple[Expr, Expr]:
+    """J3.11a's coefficients for a bolt whose force may run either way along its slot (a
+    bracket bolt's turns with its place in the group, and a hanger's card fixes no direction
+    in its plies' plane): a long slot either way takes the perpendicular slot's, the least
+    of the cases."""
     return _coefficients(ctx, "lsl" if hole in ("lsl", "lsl_parallel") else hole)
 
 
@@ -1079,7 +1089,7 @@ def bracket_bolts(ctx: Ctx, itf: Interface, r: Expr) -> tuple[tuple[str, tuple[B
             rho_lo = Sqrt(add(sq(Max((lean, c(0)))), sq(y)))
             strengths = [shear]
             for ply in itf.plies:
-                _, along, across = bolt_dims(ctx, itf.bolts, ply.hole)
+                _, along, across = bolt_dims(ctx, itf.bolts, ply.hole, itf.oriented)
                 hy, hx = div(along, c(2)), div(across, c(2))
                 round_hole = ply.hole in ("std", "ovs")
 
@@ -1109,7 +1119,7 @@ def bracket_bolts(ctx: Ctx, itf: Interface, r: Expr) -> tuple[tuple[str, tuple[B
                     if below and o.slope is not None:
                         reach.append(_slope_reach(ctx, itf, o, depth, i, j, y, lean, hx if round_hole else Max((hx, hy)), round_hole))
                 fu = ctx.mat(ply.grade, "fu")
-                kb, kt = _bracket_coefficients(ctx, ply.hole)
+                kb, kt = _either_way_coefficients(ctx, ply.hole)
                 strengths.append(BoltStrength(f"bearing on the {ply.name}", None,
                                               ctx.available(mul(c(ply.count), L.bearing(d, ply.t, fu, kb)), "rcsc2025.s5_3", suffix="")))
                 if reach:
@@ -1212,11 +1222,22 @@ def gen_bolts(ctx: Ctx, geo: Geometry) -> list[Check]:
     return out
 
 
+def _along_slots(itf: Interface) -> tuple[str, tuple[Expr, ...]] | None:
+    """Why the bolts' shear may run along a plain slot, with the guards that excuse it where
+    it does not, or None where it runs across one: an eccentric bracket group's bolts above
+    and below its centroid push mostly across the depth axis, and a hanger's card fixes no
+    direction for its shear in the plies' plane, wherever it carries one."""
+    if itf.outline is not None and itf.eccentricity is not None:
+        return "in an eccentric bracket group, whose bolt forces run along the slots", ()
+    if not itf.oriented and itf.shear is not None:
+        return "under a shear the card gives no direction in the plies' plane, which may run along the slots", (itf.shear,)
+    return None
+
+
 def load_hole(itf: Interface, hole: str) -> str:
-    """The hole type as J3.3 and J3.9 read it against the bolts' force. An eccentric
-    bracket group's bolts above and below its centroid push mostly across the depth axis,
-    along a plain slot, so there a plain slot reads as a slot parallel to the load."""
-    if itf.outline is not None and itf.eccentricity is not None and hole in ("ssl", "lsl"):
+    """The hole type as J3.3 and J3.9 read it against the bolts' force: a plain slot reads
+    as a slot parallel to the load where the force may run along it (_along_slots)."""
+    if _along_slots(itf) is not None and hole in ("ssl", "lsl"):
         return f"{hole}_parallel"
     return hole
 
@@ -1307,7 +1328,7 @@ def gen_shear_rupture(ctx: Ctx, geo: Geometry) -> list[Check]:
     for itf, ply in _plies(geo):
         if ply.depth is None or itf.shear is None:
             continue
-        _, dh_v, _ = bolt_dims(ctx, itf.bolts, ply.hole)
+        _, dh_v, _ = bolt_dims(ctx, itf.bolts, ply.hole, itf.oriented)
         anv = mul(c(ply.sections), sub(ply.depth, mul(c(itf.rows), L.hole_net(ctx.const, dh_v))), ply.t)
         out.append(Check(f"{ply.name}: shear rupture of the net section (J4.2b)", (itf.shear,),
                          L.shear_rupture(ctx.const, ctx.mat(ply.grade, "fu"), anv), "aisc360.j4_2", "_r", guards=(), unit="kip"))
@@ -1330,7 +1351,7 @@ def gen_block_shear(ctx: Ctx, geo: Geometry) -> list[Check]:
     for itf, ply in _plies(geo):
         if not ply.block or ply.edge is None or ply.side is None or itf.shear is None:
             continue
-        _, dh_v, dh_h = bolt_dims(ctx, itf.bolts, ply.hole)
+        _, dh_v, dh_h = bolt_dims(ctx, itf.bolts, ply.hole, itf.oriented)
         net_v, net_h = L.hole_net(ctx.const, dh_v), L.hole_net(ctx.const, dh_h)
         fy, fu = ctx.mat(ply.grade, "fy"), ctx.mat(ply.grade, "fu")
         gauge = itf.gauge if itf.gauge is not None else c(0)
@@ -1605,8 +1626,9 @@ def _edge_axis(what: str) -> int | None:
 def edge_increment(ctx: Ctx, bolts: Bolts, hole: str, axis: int | None) -> Expr | None:
     """Table J3.5's C2 for a hole toward an edge reached along `axis`: an oversized hole's,
     or a slot's whose long axis runs toward the edge (a plain slot lies across the depth
-    axis, a `_parallel` one along it, and either runs partly toward a sloping edge); None
-    for a standard hole or a slot along the edge."""
+    axis, a `_parallel` one along it, and either runs partly toward a sloping edge, or
+    toward any edge of plies whose card fixes no direction, axis None); None for a standard
+    hole or a slot along the edge."""
     g = f"bolt_us.{bolts.size}"
     if hole == "ovs":
         return ctx.const(f"{g}.c2_ovs")
@@ -1623,7 +1645,7 @@ def gen_edge_min(ctx: Ctx, geo: Geometry) -> list[Check]:
         need = ctx.const(f"bolt_us.{itf.bolts.size}.edge_min")
         for ply in itf.plies:
             for what, e in ply.edges_min + ply.edges_far:
-                c2 = edge_increment(ctx, itf.bolts, ply.hole, _edge_axis(what))
+                c2 = edge_increment(ctx, itf.bolts, ply.hole, _edge_axis(what) if itf.oriented else None)
                 if c2 is None:
                     out.append(Check(f"{ply.name}: {what} edge distance at least Table J3.4's (J3.5)", (need,), e, unit="in", group=None, suffix="", guards=()))
                 else:
@@ -1673,13 +1695,15 @@ def gen_hole_use(ctx: Ctx, geo: Geometry) -> list[Check]:
     for itf in geo.interfaces:
         level = _joint_level(ctx, itf.bolts)
         for ply in itf.plies:
-            if load_hole(itf, ply.hole) != ply.hole:
+            along = _along_slots(itf)
+            if along is not None and load_hole(itf, ply.hole) != ply.hole:
                 # J3.3(e) and (f): in a bearing-type joint a slot lies normal to the loading,
-                # and a bracket's bolts push along a plain one, so only a slip-critical joint
-                # takes it.
-                out.append(Check(f"{ply.name}: {ply.hole} holes in an eccentric bracket group, whose bolt forces run along "
-                                 "the slots, only in a slip-critical joint (J3.3)",
-                                 (ctx.const("rcsc2025.joint_level.slip_critical"),), level, unit="1", group=None, suffix="", guards=()))
+                # and the bolts may push along a plain one, so only a slip-critical joint
+                # takes it. Where they do not, a plain slot needs a snug joint, which every
+                # joint is.
+                why, guards = along
+                out.append(Check(f"{ply.name}: {ply.hole} holes {why}, only in a slip-critical joint (J3.3)",
+                                 (ctx.const("rcsc2025.joint_level.slip_critical"),), level, unit="1", group=None, suffix="", guards=guards))
                 continue
             out.append(Check(f"{ply.name}: {ply.hole} holes in a joint of the type they need (J3.3)",
                              (ctx.const(f"rcsc2025.joint_level.{HOLE_LEVEL[ply.hole]}"),), level, unit="1", group=None, suffix="", guards=()))
@@ -2062,8 +2086,8 @@ def gen_prying(ctx: Ctx, geo: Geometry) -> list[Check]:
         phi = ctx.const("aisc360.j4_5.phi_y") if ctx.lrfd else div(c(1), ctx.const("aisc360.j4_5.omega_y"))
         for pr in itf.prying:
             # delta = 1 - d'/p: the hole takes its length along the flange, the direction p runs
-            # (a parallel slot's length)
-            _, dh_along, _ = bolt_dims(ctx, itf.bolts, pr.hole)
+            # (a slot's length, since the card fixes no direction for it in the flange's plane)
+            _, dh_along, _ = bolt_dims(ctx, itf.bolts, pr.hole, itf.oriented)
             for which, p in pr.p:
                 avail = L.prying_available(ctx.const, b_avail, d, dh_along, p, pr.b, pr.a, pr.t, ctx.mat(pr.grade, "fu"), phi)
                 out.append(Check(f"{itf.name}: bolt tension with prying of the {pr.name} at {which} (Manual Part 9, "

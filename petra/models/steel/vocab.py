@@ -77,7 +77,9 @@ STRENGTH: tuple[tuple[str, str, str, str, tuple[ValidityRow, ...]], ...] = (
      "the top edge and, where the force can point down, the bottom edge, at the edge distance; the back edge from "
      "a bolt above the centroid and the front edge or a shaped plate's sloping edge from one below, along the "
      "force; the next hole above, below, behind or ahead, at the clear spacing; a long slot either way takes the "
-     "perpendicular slot's coefficients; through declared fillers the shear strength times 0.85, J5.2(a)'s least "
+     "perpendicular slot's coefficients; a hanger's card fixes no direction in its plies' plane, so a slot there "
+     "takes its length along the force and a long one the perpendicular slot's coefficients; through declared "
+     "fillers the shear strength times 0.85, J5.2(a)'s least "
      "factor, since the grammar gives no filler thickness",
      "bolts of one group, size and installation; holes of the declared type; threads included or excluded as "
      "declared; both methods take the connected part as rigid, the elastic method rotating it about the group "
@@ -98,7 +100,8 @@ STRENGTH: tuple[tuple[str, str, str, str, tuple[ValidityRow, ...]], ...] = (
     ("slip",
      "slip resistance Rn = mu Du hf Tb ns ksc per bolt (Eqs J3-4, J3-5a/b), with the resistance factor of the hole type; "
      "in an eccentric bracket group, whose bolt forces turn across the depth along a plain slot, a plain slot takes "
-     "the factor of a slot parallel to the load",
+     "the factor of a slot parallel to the load, and so does a slot under a hanger's shear, which its card gives no "
+     "direction in the plies' plane",
      "faying surfaces prepared to the declared class; bolts pretensioned to at least Table J3.1; fillers as declared",
      f"{AISC} Sections J3.9 and J3.10; RCSC 2025 Section 5.4", ()),
     ("shear_yield",
@@ -108,7 +111,8 @@ STRENGTH: tuple[tuple[str, str, str, str, tuple[ValidityRow, ...]], ...] = (
      f"{AISC} Section J4.2(a)", ()),
     ("shear_rupture",
      "shear rupture of the net section of each connected element, Rn = 0.60 Fu Anv (Eq J4-4), holes 1/16 in wider "
-     "than nominal (B4.3b)",
+     "than nominal (B4.3b); a slot in a hanger's flange takes its length along the section, since the card fixes no "
+     "direction for it",
      "the net shear plane runs through one line of holes",
      f"{AISC} Sections J4.2(b) and B4.3b", ()),
     ("block_shear",
@@ -220,7 +224,9 @@ STRENGTH: tuple[tuple[str, str, str, str, tuple[ValidityRow, ...]], ...] = (
     ("prying",
      "bolt tension with prying action by the Struik-de Back T-stub model in the Manual's form: available tension per "
      "bolt B Q, B = phi F'nt Ab reduced for the group's shear by Eq J3-3 (F'nt = Fnt without it; Companion II.A-1B), "
-     "with Q from tc, alpha' and delta = 1 - d'/p (d' the hole's length along the flange), for the tee's flange and for the support's flange under the same bolts "
+     "with Q from tc, alpha' and delta = 1 - d'/p (d' the hole's length along the flange, a slot's length, since the "
+     "card fixes no direction for it in the flange's plane), for the tee's flange and for the support's flange under "
+     "the same bolts "
      "(each taken against a rigid partner, as the Companion checks a column flange in II.C-1); each bolt's tributary "
      "length p by Manual Figure 9-4, at most 1.75 b either side of it: an end bolt min(le, 1.75 b) + min(s/2, 1.75 b), "
      "an inner bolt 2 min(s/2, 1.75 b) (Companion II.D-1), the support's flange with the tee's le and s and its own b",
@@ -234,7 +240,8 @@ MAKEABILITY: tuple[tuple, ...] = (
      "declared sizes", f"{AISC} Section J3.4"),
     ("edge_min", "edge distance from each hole centre at least Table J3.4's value for the bolt size, plus Table J3.5's "
      "C2 for an oversized hole and for a slot whose length points at the edge (a slot along the edge adds none, and "
-     "a shaped bracket's sloping edge takes a slot's full C2)", "edges sheared or rolled as fabricated; measured to "
+     "a shaped bracket's sloping edge takes a slot's full C2, as does every edge of a hanger's plies, in whose plane "
+     "the card fixes no direction)", "edges sheared or rolled as fabricated; measured to "
      "the hole centre; slots of the full length Table J3.3 allows", f"{AISC} Section J3.5, Tables J3.4 and J3.5"),
     ("spacing_max", "longitudinal spacing of bolts, the pitch along a bolt line, at most 24 t and 12 in (14 t and 7 in "
      "for unpainted weathering steel); the gauge across the force is not limited, since J3.6 limits the longitudinal "
@@ -248,7 +255,8 @@ MAKEABILITY: tuple[tuple, ...] = (
       "face, and a weld between a column's flanges assumes the flanges leave the welder room",)),
     ("hole_use", "oversized holes and slots parallel to the force only in slip-critical joints; in an eccentric "
      "bracket group, whose bolt forces turn across the depth along a plain slot, any slot only in a slip-critical "
-     "joint (J3.3(e) and (f): in a bearing-type joint a slot lies normal to the load)", "holes as declared on "
+     "joint, and so under a hanger's shear, which its card gives no direction in the plies' plane (J3.3(e) and (f): "
+     "in a bearing-type joint a slot lies normal to the load)", "holes as declared on "
      "each ply", f"{AISC} Section J3.3; RCSC 2025 Section 3.3"),
     ("joint_type", "the joint's installation meets the RCSC requirements its use imposes: at least snug-tight, "
      "Group 150 and 200 bolts in tension pretensioned, and in a cyclic case every joint pretensioned, excused where "
