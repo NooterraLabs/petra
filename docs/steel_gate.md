@@ -8,7 +8,7 @@ Stream seed 1: 10000 generated connections across 11 kinds, 1289 with a toleranc
 | 5. Twins | 10000 of 10000 agree on every mode; 0 disagree; 0 twin errors |
 | 6. Manufactured faults | 260 of 260 caught, 260 named by the fault's mode |
 | 7. Breaker | 22 runs, 100 deck evaluations each; 0 found a false PASS |
-| 8. Makeability | 3112 of 3112 FAILs carry a witness |
+| 8. Makeability | 3114 of 3114 FAILs carry a witness |
 | 9. Report | 10000 of 10000 calculation packages re-check (every certificate accepted by the kernel, every cited statement present, the verdict reproduced from the certificates alone, no limit state that holds read above 1) |
 
 ## Verdicts by kind
@@ -22,12 +22,12 @@ Stream seed 1: 10000 generated connections across 11 kinds, 1289 with a toleranc
 | seated | 690 | 219 | 0 |
 | shear_end_plate | 601 | 308 | 0 |
 | shear_tab | 583 | 327 | 0 |
-| shear_tee | 596 | 313 | 0 |
-| single_angle | 612 | 297 | 0 |
+| shear_tee | 595 | 314 | 0 |
+| single_angle | 611 | 298 | 0 |
 | stiffened_seat | 637 | 272 | 0 |
 | weld_bracket | 655 | 254 | 0 |
 
-Expected (from the deck's own utilisations and geometry) against the verdict: FAIL as FAIL: 3112, PASS as PASS: 6888.
+Expected (from the deck's own utilisations and geometry) against the verdict: FAIL as FAIL: 3114, PASS as PASS: 6886.
 
 ## Manufactured faults
 
@@ -78,7 +78,7 @@ Expected (from the deck's own utilisations and geometry) against the verdict: FA
 | gate-1001-00014 | shear_tee | 100 | 23 | 0.9985 | bolts | 0 |
 | gate-1001-00015 | shear_end_plate | 100 | 42 | 1.0000 | fillet_size | 0 |
 | gate-1001-00018 | flange_force | 100 | 49 | 0.9955 | flange_local_bending | 0 |
-| gate-1001-00020 | weld_bracket | 100 | 16 | 0.9991 | weld | 0 |
+| gate-1001-00020 | weld_bracket | 100 | 5 | 0.9989 | bracket_edge | 0 |
 | gate-1001-00024 | single_angle | 100 | 39 | 1.0000 | beam_fit | 0 |
 | gate-1001-00026 | shear_end_plate | 100 | 58 | 1.0000 | joint_type | 0 |
 | gate-1001-00028 | stiffened_seat | 100 | 16 | 0.9986 | web_crippling | 0 |

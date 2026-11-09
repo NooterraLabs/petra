@@ -247,7 +247,7 @@
 {"fault": {"fault": "cyclic overload", "base": "gate-101-00006", "kind": "stiffened_seat", "status": "FAIL", "named": ["fatigue_weld", "fatigue_weld_end"], "others": ["bearing", "compression", "flexural_yield", "shear_yield", "web_crippling", "web_local_yielding", "weld", "weld_base_metal"]}}
 {"fault": {"fault": "cyclic overload", "base": "gate-101-00017", "kind": "stiffened_seat", "status": "FAIL", "named": ["fatigue_weld", "fatigue_weld_end"], "others": ["bearing", "compression", "shear_yield", "web_crippling", "web_local_yielding", "weld", "weld_base_metal"]}}
 {"fault": {"fault": "cyclic overload", "base": "gate-101-00028", "kind": "stiffened_seat", "status": "FAIL", "named": ["fatigue_weld", "fatigue_weld_end"], "others": ["bearing", "compression", "web_crippling", "web_local_yielding", "weld", "weld_base_metal"]}}
-{"fault": {"fault": "cyclic overload", "base": "gate-101-00009", "kind": "weld_bracket", "status": "FAIL", "named": ["fatigue_weld"], "others": ["fatigue_detail", "weld"]}}
+{"fault": {"fault": "cyclic overload", "base": "gate-101-00009", "kind": "weld_bracket", "status": "FAIL", "named": ["fatigue_weld"], "others": ["fatigue_detail", "shear_yield", "weld", "weld_base_metal"]}}
 {"fault": {"fault": "cyclic overload", "base": "gate-101-00020", "kind": "weld_bracket", "status": "FAIL", "named": ["fatigue_weld", "fatigue_weld_end"], "others": ["flexural_yield", "plate_buckling", "shear_yield", "weld", "weld_base_metal"]}}
 {"fault": {"fault": "cyclic overload", "base": "gate-101-00042", "kind": "weld_bracket", "status": "FAIL", "named": ["fatigue_weld", "fatigue_weld_end"], "others": ["flexural_yield", "plate_buckling", "shear_yield", "weld", "weld_base_metal"]}}
 {"fault": {"fault": "one-sided plate end", "base": "gate-101-00000", "kind": "shear_tab", "status": "FAIL", "named": ["fatigue_detail"], "others": ["ductility", "fatigue_bolted"]}}
@@ -267,7 +267,7 @@
 {"breaker": {"base": "gate-1001-00014", "kind": "shear_tee", "seed": 1, "evaluations": 100, "accepted": 23, "best": 0.998456, "best_mode": "bolts", "best_hash": "c6acc9b9a273aecd", "false_pass": []}}
 {"breaker": {"base": "gate-1001-00015", "kind": "shear_end_plate", "seed": 1, "evaluations": 100, "accepted": 42, "best": 1.0, "best_mode": "fillet_size", "best_hash": "a9c47d60313a79e4", "false_pass": []}}
 {"breaker": {"base": "gate-1001-00018", "kind": "flange_force", "seed": 1, "evaluations": 100, "accepted": 49, "best": 0.995546, "best_mode": "flange_local_bending", "best_hash": "3a3ba6e98943857e", "false_pass": []}}
-{"breaker": {"base": "gate-1001-00020", "kind": "weld_bracket", "seed": 1, "evaluations": 100, "accepted": 16, "best": 0.999094, "best_mode": "weld", "best_hash": "5f68f2a7a49a1de3", "false_pass": []}}
+{"breaker": {"base": "gate-1001-00020", "kind": "weld_bracket", "seed": 1, "evaluations": 100, "accepted": 5, "best": 0.998941, "best_mode": "bracket_edge", "best_hash": "ff1349a60d191c67", "false_pass": []}}
 {"breaker": {"base": "gate-1001-00024", "kind": "single_angle", "seed": 1, "evaluations": 100, "accepted": 39, "best": 1.0, "best_mode": "beam_fit", "best_hash": "5728d8cc72407314", "false_pass": []}}
 {"breaker": {"base": "gate-1001-00026", "kind": "shear_end_plate", "seed": 1, "evaluations": 100, "accepted": 58, "best": 1.0, "best_mode": "joint_type", "best_hash": "5b5c7df6094915ff", "false_pass": []}}
 {"breaker": {"base": "gate-1001-00028", "kind": "stiffened_seat", "seed": 1, "evaluations": 100, "accepted": 16, "best": 0.998593, "best_mode": "web_crippling", "best_hash": "771b02324ff7872c", "false_pass": []}}
