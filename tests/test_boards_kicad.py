@@ -340,6 +340,20 @@ class Versions(unittest.TestCase):
         with self.assertRaisesRegex(BoardError, r"KiCad 7 footprint names its reference in one \(fp_text reference"):
             read(pcb(*box_outline(0, 0, 30, 30), probe("U1", (10, 10), kicad=9), version=V7))
 
+    def test_a_locked_text_reads_its_text(self):
+        """KiCad 6 and 7 write a locked text with the word before the text, as in
+        (fp_text reference locked "J1" ...), and a quoted "locked" is a text like any other."""
+        for kicad in (6, 7):
+            with self.subTest(kicad=kicad):
+                locked = connector(kicad=kicad).replace('reference "J1"', 'reference locked "J1"')
+                locked = locked.replace('value "Conn_01x03"', 'value locked "Conn_01x03"')
+                (j1,) = read(pcb(*box_outline(0, 0, 30, 30), locked, version=VERSION[kicad])).footprints
+                self.assertEqual((j1.reference, j1.value), ("J1", "Conn_01x03"))
+                self.assertEqual(j1.marks, part(read(rich(kicad)), "J1").marks)
+                named = connector(kicad=kicad).replace('reference "J1"', 'reference "locked"')
+                (fp,) = read(pcb(*box_outline(0, 0, 30, 30), named, version=VERSION[kicad])).footprints
+                self.assertEqual(fp.reference, "locked")
+
 
 class Outline(unittest.TestCase):
     def test_arcs_are_kept_exact(self):
@@ -453,6 +467,23 @@ def _reversed(a: Arc) -> Arc:
 
 def _dist2(p, polygon):
     return min(plane.point_segment2(p, polygon[i - 1], polygon[i]) for i in range(len(polygon)))
+
+
+def _hull(points):
+    """The convex hull, counter-clockwise, by the gift-wrapping walk: written here apart from
+    the reader's own."""
+    pts = sorted(set(points))
+    hull, at = [], pts[0]
+    while True:
+        hull.append(at)
+        nxt = pts[0] if pts[0] != at else pts[1]
+        for q in pts:
+            turn = (nxt[0] - at[0]) * (q[1] - at[1]) - (nxt[1] - at[1]) * (q[0] - at[0])
+            if turn < 0 or (turn == 0 and plane.point_segment2(nxt, at, q) == 0 and q != at):
+                nxt = q
+        at = nxt
+        if at == hull[0]:
+            return tuple(hull)
 
 
 class Footprints(unittest.TestCase):
@@ -592,7 +623,7 @@ class Holes(unittest.TestCase):
         board = read(text)
         self.assertEqual([p.kind for p in board.footprints[0].pads], [PadKind.NPTH, PadKind.SMD])
         self.assertEqual(board.leads(), ())
-        self.assertEqual(board.missing, (EDGE, HOLES))
+        self.assertEqual(board.missing, (THICKNESS, EDGE, HOLES))
 
     def test_a_drill_offset_moves_the_copper_not_the_hole(self):
         (pad,) = read(EXTRA["offset drill"]).footprints[0].pads
@@ -625,9 +656,48 @@ class Features(unittest.TestCase):
                 "SW1": {Feature.SWITCH}, "R1": set(), "G1": set()}
         self.assertEqual({f.reference: set(f.features) for f in board.footprints}, want)
         self.assertEqual([p.name for p in part(board, "D1").missing], ["height", "light path"])
-        self.assertEqual(part(board, "R1").missing, (HEIGHT,))
+        self.assertEqual([p.name for p in part(board, "R1").missing], ["height", "access"],
+                         "nothing marks R1, so the deck must say it needs no way through the enclosure")
         self.assertEqual(part(board, "G1").missing, (), "a footprint with no pads has no body to measure")
         self.assertNotIn(PROTRUSION, part(board, "SW1").missing)
+
+    def test_the_library_id_marks_what_the_reference_misses(self):
+        """Footprint names from real boards (measured, docs/kicad_oracle.md's boards) whose
+        references carry no class letter Petra knows: an LED named D, reset and power switches
+        named RST, RSW, BUT and POWER, a USB socket named USB and headers named COM and UART."""
+        want = {
+            ("Daylight:LED_PLCC_2835_Handsoldering", "D1"): {Feature.LED},
+            ("OLIMEX_LEDs-FP:LED_0603_KA", "CHARGING1"): {Feature.LED},
+            ("kbd:SW_SPST_B3U-1000P", "RST1"): {Feature.SWITCH},
+            ("kbd:ResetSW", "RSW1"): {Feature.SWITCH},
+            ("OLIMEX_Buttons-FP:YTS-A016-X", "BUT1"): {Feature.SWITCH},
+            ("Kailh:SPDT_C128955", "POWER1"): {Feature.SWITCH},
+            ("SofleKeyboard-footprint:TACT_SWITCH_TVBP06", "RSW2"): {Feature.SWITCH},
+            ("OLIMEX_Connectors-FP:USB2.0_TYPE-C(A40-00119-A52-12)", "USB1"): {Feature.CONNECTOR},
+            ("kit-dev-coldfire:PinHeader_1x03_P2.54mm_Vertical", "COM1"): {Feature.CONNECTOR},
+            ("kit-dev-coldfire:PinHeader_2x04_P2.54mm_Vertical", "UART1"): {Feature.CONNECTOR},
+            ("ceoloide:battery_connector_jst_ph_2", "JST1"): {Feature.CONNECTOR},
+            ("Resistor_SMD:R_0603_1608Metric", "R1"): set(),
+            ("Package_DFN_QFN:VQFN-24-1EP_4x4mm_P0.5mm", "U1"): set(),
+        }
+        pad = '(pad "1" smd rect (at 0 0) (size 1 1) (layers "F.Cu" "F.Mask"))'
+        board = read(pcb(*box_outline(0, 0, 50, 50), *(footprint(lib, ref, "x", (25, 25), 0, [pad]) for lib, ref in want)))
+        self.assertEqual({(f.library, f.reference): set(f.features) for f in board.footprints}, want)
+        for f in board.footprints:
+            self.assertEqual("access" in [p.name for p in f.missing], not f.features, f.reference)
+
+    def test_a_reference_letter_alone_removes_no_premise(self):
+        """KiCad's MountingHole symbols are named H, and so is a standoff that stands 5 mm off
+        the board. The letter adds the fastener premise and takes away neither height nor lead
+        protrusion. The library id of a mounting hole takes them away."""
+        hole = '(pad "1" thru_hole circle (at 0 0) (size 6 6) (drill 3.2) (layers "*.Cu" "*.Mask"))'
+        board = read(pcb(*box_outline(0, 0, 30, 30),
+                         footprint("Mounting_Wuerth:Mounting_Wuerth_WA-SMSI-M3_H5mm_9774050360", "H1", "x", (8, 8), 0, [hole]),
+                         footprint("footprints:MountingHole_3.2mm_M3_Pad", "H2", "x", (20, 20), 0, [hole])))
+        standoff, mount = board.footprints
+        self.assertEqual([p.name for p in standoff.missing], ["height", "lead protrusion", "fastener"])
+        self.assertEqual([p.name for p in mount.missing], ["fastener"])
+        self.assertEqual([p.kind for p in mount.pads], [PadKind.MOUNTING_HOLE])
 
     def test_every_rule_names_its_source(self):
         for rule in RULES:
@@ -642,7 +712,15 @@ class Thickness(unittest.TestCase):
     def test_a_missing_stackup(self):
         board = read(pcb(*box_outline(0, 0, 10, 10), stackup=None))
         self.assertEqual((board.thickness.value, board.thickness.source), (F("1.6"), "general.thickness"))
-        self.assertNotIn(THICKNESS, board.missing)
+
+    def test_the_thickness_as_made_is_always_a_premise(self):
+        """A stated thickness is the drawn one. The board maker's is a range the deck must give,
+        so a slot sized to the stated 1.6 mm cannot pass on the file alone."""
+        for text in (rich(), pcb(*box_outline(0, 0, 10, 10), stackup=None),
+                     pcb(*box_outline(0, 0, 10, 10), thickness=None, stackup=None)):
+            board = read(text)
+            self.assertEqual(board.missing[:2], (THICKNESS, EDGE))
+            self.assertIn("range", THICKNESS.what)
 
     def test_no_thickness_at_all(self):
         board = read(pcb(*box_outline(0, 0, 10, 10), thickness=None, stackup=None))
@@ -655,6 +733,16 @@ class Thickness(unittest.TestCase):
     def test_a_stackup_alone(self):
         board = read(pcb(*box_outline(0, 0, 10, 10), thickness=None))
         self.assertEqual((board.thickness.value, board.thickness.source), (F("1.6"), "setup.stackup"))
+
+    def test_two_stated_thicknesses_are_refused_by_their_values(self):
+        """KiCad's own demo boards state 1.6002 mm in (general ...) and stackups that sum to
+        1.6 mm (measured, docs/kicad_oracle.md), so KiCad does not keep the two equal. The
+        refusal stands and names both values as the file writes them."""
+        with self.assertRaises(BoardError) as caught:
+            parse_board(pcb(*box_outline(0, 0, 10, 10), thickness="1.6002"), "demo.kicad_pcb")
+        message = str(caught.exception)
+        self.assertIn("1.6002 mm in (general ...) and stackup layers that sum to 1.6 mm", message)
+        self.assertNotIn("KiCad keeps", message)
 
 
 def refusals():
@@ -685,13 +773,15 @@ def refusals():
         "no reference": (pcb(*box, probe("U1", (10, 10)).replace('"Reference"', '"Ref"')), "names its reference"),
         "two references": (pcb(*box, probe("U1", (10, 10)).replace('(property "Value" "probe"', '(property "Reference" "U9"')),
                            "and this one has 2"),
+        "reference without text": (pcb(*box, probe("U1", (10, 10), kicad=7).replace('reference "U1" ', 'reference locked '),
+                                       version=V7), "names its reference"),
         "pad type": (pcb(*box, probe("U1", (10, 10)).replace("smd rect", "surface rect", 1)), "is none of smd"),
         "pad without drill": (pcb(*box, footprint("Connector:X", "J1", "x", (10, 10), 0, [
             '(pad "1" thru_hole circle (at 0 0) (size 1.7 1.7) (layers "*.Cu"))'])), "needs a (drill"),
         "pad without size": (pcb(*box, footprint("Connector:X", "J1", "x", (10, 10), 0, [
             '(pad "1" smd circle (at 0 0) (layers "F.Cu"))'])), "needs (size w h)"),
         "footprint without at": (pcb(*box, probe("U1", (10, 10)).replace("(at 10 10)", "", 1)), "needs (at x y)"),
-        "thickness disagrees": (pcb(*box, thickness="1.2"), "keeps the two equal"),
+        "thickness disagrees": (pcb(*box, thickness="1.2"), "1.2 mm in (general ...)"),
         "via without drill": (pcb(*box, '(via (at 5 5) (size 0.6) (layers "F.Cu" "B.Cu"))'), "a via needs (drill d)"),
     }
 
@@ -871,6 +961,70 @@ class Solids(unittest.TestCase):
             keepout(board, part(board, "J1"), 0, 3, Errs.OVER, face=Side.BOTTOM)
         with self.assertRaisesRegex(ValueError, "a keep-out runs"):
             keepout(board, part(board, "U2"), 2, 1, Errs.OVER)
+
+    BODY = (rect((-2, -2), (2, 2), "F.CrtYd", "fp"), rect((-1, -1), (1, 5), "F.Fab", "fp"),
+            circle((0, -3), (1, -3), "F.Fab", "fp"), arc((-2, 2), (-3, 3), (-2, 4), "F.Fab", "fp"),
+            line((-9, 0), (-8, 0), "B.Fab", "fp"))
+    """A part whose Fab body overhangs its courtyard, as the JST SH connectors and the board-edge
+    capacitor of KiCad's StickHub demo do (measured, docs/kicad_oracle.md's boards). The true
+    room on the top face spans x -3 to 2 and y -4 to 5 about the anchor. The B.Fab line belongs
+    to the bottom face."""
+
+    def test_a_keepout_holds_the_body_the_fab_layer_draws(self):
+        board = read(pcb(*box_outline(0, 0, 40, 40), footprint("Connector_JST:Body", "J1", "x", (20, 20), 0, self.BODY)))
+        for errs, sign in ((Errs.OVER, 1), (Errs.UNDER, -1)):
+            with self.subTest(errs=errs):
+                (prism,) = keepout(board, board.footprints[0], 0, 1, errs)
+                (x0, my0, z0), (x1, my1, z1) = prism.mesh.bounds()
+                beyond = (17 - x0, 16 + my1, x1 - 22, -my0 - 25)
+                self.assertTrue(all(0 <= sign * b <= prism.deviation for b in beyond), (beyond, prism.deviation))
+                self.assertEqual((z0, z1), (F("1.6"), F("2.6")))
+                self.assertIsNone(surface_problem(prism.mesh))
+
+    def test_a_turned_keepout_holds_the_body_the_fab_layer_draws(self):
+        """Exact points of the courtyard and the Fab shapes, placed with their error, lie inside
+        the OVER keep-out on its own face, turned and on the bottom face as KiCad stores it."""
+        on_circle = [(s * F(a, 5), t * F(b, 5)) for a, b in ((3, 4), (4, 3), (5, 0), (0, 5)) for s in (1, -1) for t in (1, -1)]
+        body = ([(F(x), F(y)) for x in (-2, 0, 2) for y in (-2, 0, 2)] + [(F(x), F(y)) for x in (-1, 1) for y in (-1, 5)]
+                + [(x, y - 3) for x, y in on_circle] + [(x - 2, y + 3) for x, y in on_circle if x <= 0])
+        base = pcb(*box_outline(0, 0, 40, 40), footprint("Connector_JST:Body", "J1", "x", (20, 20), "37.5", self.BODY))
+        for name, text, mirror, angle in (("37.5", base, 1, F("37.5")), ("flipped", flip(base, "J1"), -1, F("-37.5"))):
+            with self.subTest(name):
+                fp = read(text).footprints[0]
+                over, under = (keepout(read(text), fp, 0, 1, e)[0] for e in (Errs.OVER, Errs.UNDER))
+                room = _hull([(x, y) for x, y, _ in map(over.mesh.point, range(len(over.mesh.vertices)))])
+                for x, y in body:
+                    spot = plane.place((x, mirror * y), (F(20), F(20)), angle)
+                    p = (spot.point[0], -spot.point[1])
+                    self.assertEqual(plane.where(p, room), 1, (x, y))
+                    self.assertGreater(_dist2(p, room), spot.error ** 2)
+                for k in range(len(under.mesh.vertices)):
+                    self.assertGreaterEqual(plane.where(under.mesh.point(k)[:2], room), 0)
+
+    def test_each_solid_has_its_own_identity(self):
+        """A mesh's path and sha256 name it. Two solids that differ in height, face, footprint,
+        thickness or holes are two meshes, each with its own name."""
+        board = read(rich())
+        u2 = part(board, "U2")
+        meshes = [keepout(board, u2, 0, 5, Errs.OVER)[0].mesh, keepout(board, u2, 0, 10, Errs.OVER)[0].mesh,
+                  keepout(board, u2, 1, 6, Errs.OVER)[0].mesh, keepout(board, part(board, "U1"), 0, 5, Errs.OVER)[0].mesh,
+                  keepout(board, u2, 0, 5, Errs.OVER, thickness=2)[0].mesh, board_solid(board, Errs.OVER).mesh,
+                  board_solid(board, Errs.OVER, thickness=2).mesh, board_solid(board, Errs.OVER, holes=False).mesh]
+        self.assertEqual(len({m.path for m in meshes}), len(meshes), [m.path for m in meshes])
+        self.assertEqual(len({m.sha256 for m in meshes}), len(meshes))
+        again = keepout(read(rich()), u2, 0, 5, Errs.OVER)[0].mesh
+        self.assertEqual((again.path, again.sha256), (meshes[0].path, meshes[0].sha256), "the same solid, the same name")
+
+    def test_two_footprints_with_one_reference(self):
+        """Sofle v2 names 29 references twice, a reversible part drawn once per face (measured,
+        docs/kicad_oracle.md's boards). The record keeps both, and their keep-outs are two
+        meshes with two names."""
+        board = read(pcb(*box_outline(0, 0, 40, 40), probe("SW1", (10, 10)), probe("SW1", (30, 30)),
+                         probe("SW1", (10, 10), bottom=True)))
+        self.assertEqual([f.reference for f in board.footprints], ["SW1"] * 3)
+        meshes = [keepout(board, f, 0, 5, Errs.OVER)[0].mesh for f in board.footprints]
+        self.assertEqual(len({m.path for m in meshes}), 3, [m.path for m in meshes])
+        self.assertEqual(len({m.sha256 for m in meshes}), 3)
 
     def test_voids_that_meet_are_refused(self):
         edge = pcb(*box_outline(0, 0, 30, 30), mounting(where=("1.2", 15)))
