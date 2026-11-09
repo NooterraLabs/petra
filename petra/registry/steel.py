@@ -346,7 +346,7 @@ FACTORS: tuple[_F, ...] = (
     ("aisc360.j4_4.omega", "1.67", "1", SANCTIONED, "AISC", f"{AISC} Section J4.4: compression, Lc/r <= 25, Omega = 1.67; {CHECKED}"),
     ("aisc360.j4_5.phi_y", "0.90", "1", SANCTIONED, "AISC", f"{AISC} Section F1(a), which Commentary Section J4.5 applies to connecting elements: flexural yielding "
      f"phi = 0.90; {CHECKED}"),
-    ("aisc360.j4_5.omega_y", "1.67", "1", SANCTIONED, "AISC", f"{AISC} Section F1(b), which Commentary Section J4.5 applies to connecting elements: flexural yielding "
+    ("aisc360.j4_5.omega_y", "1.67", "1", SANCTIONED, "AISC", f"{AISC} Section F1(a), which Commentary Section J4.5 applies to connecting elements: flexural yielding "
      f"Omega = 1.67; {CHECKED}"),
     ("aisc360.j4_5.phi_r", "0.75", "1", SANCTIONED, "AISC", f"{AISC} Commentary Section J4.5 (Fu Znet; Manual Eq. 9-8): flexural rupture phi = 0.75; {CHECKED}"),
     ("aisc360.j4_5.omega_r", "2.00", "1", SANCTIONED, "AISC", f"{AISC} Commentary Section J4.5 (Fu Znet; Manual Eq. 9-8): flexural rupture Omega = 2.00; {CHECKED}"),
