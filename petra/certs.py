@@ -24,6 +24,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
+from . import __version__
 from .kernel import FORMAT, DecodeError, Evidence, Statement, canonical_text, decode_evidence, decode_statement, encode_evidence, encode_statement, statement_hash
 
 ENVELOPE_FORMAT = "petra-cert/0"
@@ -124,8 +125,6 @@ class CertStore:
         return (cert.evidence,)
 
     def record(self, statement: Statement, statement_hash: str, evidence: Evidence, source: str) -> None:
-        from . import __version__  # petra/__init__ imports this module before it is complete
-
         path = self._path(statement_hash)
         if path.exists():
             try:

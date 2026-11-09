@@ -45,7 +45,7 @@ uvx --from petra-lang==0.1.2 petra mcp
 
 so it needs [uv](https://docs.astral.sh/uv/) and no other install. On the first start uv fetches Petra, numpy and scipy into its cache, and later starts reuse them. The pin holds the server at the release whose skill the plugin carries, and each release moves it.
 
-Claude Code waits 30 s for a server to start (reported in its docs). The server answers once Python has imported Petra, which took 4.3 s to 5.4 s on a quiet PC and 28 s to 39 s on one busy with other jobs (measured), and the first start through uv also downloads the packages. If `/mcp` shows `petra` failed on its first start, set `MCP_TIMEOUT=120000` in the environment and start Claude Code again.
+Claude Code waits 30 s for a server to start (reported in its docs). The server answers the handshake before it imports Petra's language, models and solvers, and the first tool call that needs them imports them. Under full load on an 8-thread PC it answered in a median 2.9 s, where importing them first took 25.8 s (measured). The first start through uv also downloads the packages. If `/mcp` shows `petra` failed on its first start, set `MCP_TIMEOUT=120000` in the environment and start Claude Code again.
 
 The plugin runs uvx rather than a `petra` already on the PATH, because then the plugin is the only step. `petra mcp` from the PATH needs `pip install petra-lang` first, into a Python the client can find, and it serves whichever version is installed there, which may not match the skill. Without uv, take that route by hand:
 
@@ -79,7 +79,7 @@ args = ["--from", "petra-lang==0.1.2", "petra", "mcp"]
 startup_timeout_sec = 60
 ```
 
-Codex waits 10 s for a server to start unless `startup_timeout_sec` says otherwise (reported in Codex's docs). Petra's server took 4.3 s to 5.4 s to start once installed, and 14.2 s on its first start after install (measured on one Windows PC). A first start through uv also downloads the packages, so the entry allows a minute.
+Codex waits 10 s for a server to start unless `startup_timeout_sec` says otherwise (reported in Codex's docs). Petra's server answered its handshake in 0.14 s on a quiet Windows PC, once its files were compiled (measured). A first start through uv also downloads the packages, so the entry allows a minute.
 
 ### The MCP registry
 

@@ -23,17 +23,39 @@ Trust layout:
 """
 from __future__ import annotations
 
+import importlib
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
-from .certs import CertStore
-from .lang import load_design, parse_design
-from .library import Library, certify_family
-from .pipeline import Report, check_design, explain
-from .registry import build_registry
-from .solvers import SolverSource
-from .verdict import Fail, Marginal, Pass, Unknown, Verdict
+if TYPE_CHECKING:
+    from .library import Library
+    from .pipeline import Report
 
 __version__ = "0.1.2"
+
+_API = {"CertStore": "certs", "load_design": "lang", "parse_design": "lang", "Library": "library",
+        "certify_family": "library", "Report": "pipeline", "check_design": "pipeline", "explain": "pipeline",
+        "build_registry": "registry", "SolverSource": "solvers", "Fail": "verdict", "Marginal": "verdict",
+        "Pass": "verdict", "Unknown": "verdict", "Verdict": "verdict"}
+"""Each name of the API and the submodule that defines it. A name is imported when first
+read, and so is a submodule such as petra.kernel, so `petra mcp` answers its handshake
+without loading the language, the models, or the solvers with numpy and scipy."""
+
+__all__ = ["check", "check_file", *_API]
+
+
+def __getattr__(name: str) -> Any:
+    if name in _API:
+        value = getattr(importlib.import_module(f".{_API[name]}", __name__), name)
+    else:
+        try:
+            value = importlib.import_module(f".{name}", __name__)
+        except ModuleNotFoundError as exc:
+            if exc.name != f"{__name__}.{name}":
+                raise
+            raise AttributeError(f"module {__name__!r} has no attribute {name!r}") from None
+    globals()[name] = value
+    return value
 
 
 def check(text: str, *, path: str = "<text>", repair: bool = True) -> dict:
@@ -42,7 +64,9 @@ def check(text: str, *, path: str = "<text>", repair: bool = True) -> dict:
     "repair" key, which on a FAIL names the inputs that lower the governing check (repair.py)
     and is None otherwise, or with `repair=False`. A design that does not lower gives
     {"file", "status": "INPUT_ERROR", "error"} instead of raising."""
+    from .registry import build_registry
     from .repair import check_text
+    from .solvers import SolverSource
 
     return check_text(text, path, build_registry(), (SolverSource(),), moves=repair).to_json()
 
@@ -50,6 +74,12 @@ def check(text: str, *, path: str = "<text>", repair: bool = True) -> dict:
 def check_file(path: str | Path, *, certs: str | Path | None = None, library: Library | None = None, solve: bool = True) -> Report:
     """Convenience shell over check_design: default registry, evidence sources in the
     order certs -> library -> solvers, accepted evidence recorded into `certs` when given."""
+    from .certs import CertStore
+    from .lang import load_design
+    from .pipeline import check_design
+    from .registry import build_registry
+    from .solvers import SolverSource
+
     registry = build_registry()
     design = load_design(path, registry)
     store = CertStore(certs) if certs is not None else None
