@@ -116,7 +116,7 @@ def _ply_stress(ctx: Ctx, itf: Interface, ply: Ply, moment: Expr | None, v: Expr
     share = v if ply.sections == 1 else div(v, c(ply.sections))
     if not net:
         return section_stress(moment, share, ply.t, ply.depth, M.rectangle_elastic_modulus(ply.t, ply.depth))
-    _, dh_v, _ = C.bolt_dims(ctx, itf.bolts, ply.hole)
+    _, dh_v, _ = C.bolt_dims(ctx, itf.bolts, ply.hole, itf.oriented)
     hole = L.hole_net(ctx.const, dh_v)
     depth = sub(ply.depth, mul(c(itf.rows), hole))
     modulus = M.rectangle_net_elastic_modulus(ply.t, ply.depth, itf.rows, itf.pitch, hole)

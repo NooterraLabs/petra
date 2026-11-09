@@ -28,7 +28,7 @@ from ...solvers.r4_enclosure import _cut
 from ...units import AREA, CUSTOMARY, FORCE, LENGTH, STRESS, TORQUE, Dim
 from ..base import Criterion, Requirement, StatementBuilder
 from .build import load_cases, term
-from .checks import GEOMETRY, BoltStrength, Check, Ctx, Geometry, bolt_capacity, bolt_rows, bolt_strengths, bracket_positions
+from .checks import GEOMETRY, BoltStrength, Check, Ctx, Geometry, bolt_capacity, bolt_rows, bolt_strengths, bracket_positions, turned
 from .fatigue import GENERATORS
 from .lower import Conn, lower_conn
 
@@ -71,25 +71,31 @@ def _magnitude(check: Check) -> Expr:
 
 
 ROW_NAMES = {"only": "single row", "top": "top row", "bottom": "bottom row", "middle": "inner row"}
+TURNED_NAMES = {"only": "single line", "top": "line torn toward the next line", "bottom": "line torn toward its side edge",
+                "middle": "inner line"}
+"""A group's bolt lines under a shear across them (checks.turned)."""
 BOLT_MODE = "bolts"
 
 Positions = tuple[tuple[str, int, tuple[BoltStrength, ...]], ...]
 
 
-def _bolt_groups(ctx: Ctx, geo: Geometry) -> dict[Expr, Positions]:
+def _bolt_groups(ctx: Ctx, geo: Geometry) -> dict[Expr, tuple[Positions, ...]]:
     """The capacity checks.gen_bolts holds a bolt group to (C times its weakest bolt, or
-    the sum over its bolts) -> each row position of its bolts: its name, how many bolts sit
-    there, and the strengths whose least is each one's."""
-    out: dict[Expr, Positions] = {}
+    the sum over its bolts) -> each way its shear may run (two where the card fixes no
+    direction for it, checks.turned), and in each way each row position of its bolts: its
+    name, how many bolts sit there, and the strengths whose least is each one's."""
+    out: dict[Expr, tuple[Positions, ...]] = {}
     for itf in geo.interfaces:
         if itf.shear is None:
             continue
         bracket = bracket_positions(ctx, itf)
         if bracket is not None:
-            out[bolt_capacity(ctx, geo, itf)] = tuple((where, 1, found) for where, found in bracket)
+            out[bolt_capacity(ctx, geo, itf)] = (tuple((where, 1, found) for where, found in bracket),)
             continue
-        out[bolt_capacity(ctx, geo, itf)] = tuple((f"{ROW_NAMES[row]}{'s' if k > 1 else ''}", k * itf.cols,
-                                                   bolt_strengths(ctx, itf, row)) for row, k in bolt_rows(itf))
+        ways = ((itf, ROW_NAMES, ""),) + (() if itf.oriented else ((turned(itf), TURNED_NAMES, ", shear across the lines"),))
+        out[bolt_capacity(ctx, geo, itf)] = tuple(
+            tuple((f"{names[row]}{'s' if k > 1 else ''}{suffix}", k * way.cols, bolt_strengths(ctx, way, row)) for row, k in bolt_rows(way))
+            for way, names, suffix in ways)
     return out
 
 
@@ -119,12 +125,14 @@ def _evaluate(conn: Conn, design: Design, registry: Registry, mode: str, case: s
     point = at or {}
     box = {h.sym: Interval(point[h.label], point[h.label]) if h.label in point else Interval(h.lo, h.hi) for h in statement.hyps}
     out = []
-    for check, (demand, available, guards), rows in zip(checks, exprs, positions):
+    for check, (demand, available, guards), ways in zip(checks, exprs, positions):
         scale = UNITS[check.unit]
         found = _peak(demand, available, guards, box, bound)
         excused = found is None
         cell, d, a = found if found is not None else (box, enclose(demand, box), enclose(available, box))
-        parts = tuple(_part(row, count, strengths, cell, scale) for row, count, strengths in rows)
+        # A group whose shear may run two ways holds the lesser sum: show that way's bolts.
+        parts = min((tuple(_part(row, count, strengths, cell, scale) for row, count, strengths in way) for way in ways),
+                    key=lambda found: sum(p.count * p.capacity for p in found), default=())
         out.append(Value(check.what, check.unit, float(d.hi / scale), float(a.lo / scale), excused, True, None, parts))
     return out, ctx.sb.dims
 

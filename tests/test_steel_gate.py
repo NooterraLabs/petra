@@ -179,11 +179,65 @@ class DeckFixes(unittest.TestCase):
             for bolts in ("end bolts", "inner bolts"):
                 self.assertTrue(any(f"{flange} at the {bolts}" in w for w in whats), (flange, bolts, whats))
 
-    def test_a_parallel_slot_takes_its_length_in_pryings_delta(self):
-        # delta = 1 - d'/p, d' along the flange: a slot along the tee weakens it more than across
-        across, along = self.prying("ssl", 2), self.prying("ssl_parallel", 2)
-        tee = next(w for w in across if "tee flange" in w)
-        self.assertGreater(along[tee], across[tee])
+    def slotted(self, holes, shear=None, joint=" joint pretensioned"):
+        """Gate design 02606: a WT6x25 under a W24x76 on two rows of 3/4 in Group 150 bolts,
+        56.145 kip ASD, with `holes` declared."""
+        lines = ["  tee WT6x25 grade steel.A992", "  support W24x76 flange grade steel.A992",
+                 f"  bolts bolt_group.150 diameter 0.75 inch threads included{joint}", f"  holes {holes}",
+                 "  rows 2", "  pitch 3 inch", "  tee_gauge 4 inch", "  edge_vertical 1.5 inch"]
+        secondary = (("shear", Fraction(shear)),) if shear else ()
+        return gen.source("h", "hanger", "asd", lines, Fraction("56.145"), secondary)
+
+    def test_a_hanger_slot_that_fails_along_the_tee_is_not_passed_across_it(self):
+        # A hanger pulls normal to its plies, so the card fixes no direction in their plane
+        # for a slot. The 3/4 in bolts' 13/16 in holes pass prying; a short slot is 13/16 in
+        # wide and 1 in long, and run along the tee its length in delta = 1 - d'/p fails it.
+        self.assertEqual(status(self.slotted("flange std"))[0], "PASS")
+        verdict, modes = status(self.slotted("flange ssl"))
+        self.assertEqual((verdict, modes["prying"]), ("FAIL", "fail"))
+
+    def test_a_hanger_slot_reads_the_same_whichever_way_the_card_names_it(self):
+        def checks(holes):
+            return {(m, v.what): v.utilisation for (m, _), v in gen.checks(self.slotted(holes, shear="0.5"), REGISTRY).items()}
+
+        def worst(found, mode):
+            return max(u for (m, _), u in found.items() if m == mode)
+        for ply, flange in (("flange", "tee flange"), ("support", "support flange")):
+            for slot in ("ssl", "lsl"):
+                plain, parallel, std = (checks(f"{ply} {h}") for h in (slot, f"{slot}_parallel", "std"))
+                for mode in ("prying", "shear_rupture", "edge_min", "bolts"):
+                    with self.subTest(ply=ply, slot=slot, mode=mode):
+                        self.assertEqual(worst(plain, mode), worst(parallel, mode))
+                        self.assertGreaterEqual(worst(plain, mode), worst(std, mode))
+                pry = next(k for k in plain if k[0] == "prying" and flange in k[1])
+                self.assertGreater(plain[pry], std[pry])
+
+    def test_a_hanger_shear_across_the_tee_tears_its_flange_tip(self):
+        # The card gives a hanger's shear no direction in its plies' plane. Along the tee
+        # bolt shear holds each of the four 3/4 in Group 150-X bolts, 111.3 kips in all
+        # (LRFD). Across it a WT12x27.5's outer bolts tear out over 0.846 in to the flange
+        # tip, 25.0 kips each, so the group holds 105.7 kips (J3.11a).
+        lines = ["  tee WT12x27_5 grade steel.A992", "  support W14x90 flange grade steel.A992",
+                 "  bolts bolt_group.150 diameter 0.75 inch threads excluded joint pretensioned",
+                 "  rows 2", "  pitch 3 inch", "  tee_gauge 4.5 inch", "  edge_vertical 2 inch"]
+
+        def card(shear):
+            return gen.source("h", "hanger", "lrfd", lines, Fraction(5), (("shear", Fraction(shear, 5)),))
+        self.assertEqual([status(card(s))[1]["bolts"] for s in (100, 108)], ["pass", "fail"])
+        # The readout shows the weaker way's bolts, which sum to what the group holds.
+        report = check_design(parse_design(card(108), "t.petra", REGISTRY), REGISTRY, (SolverSource(),))
+        group = next(v for f in report.findings for v in f.values if v.parts)
+        self.assertAlmostEqual(group.capacity, sum(p.count * p.capacity for p in group.parts), places=6)
+        self.assertTrue(all("shear across the lines" in p.what for p in group.parts), [p.what for p in group.parts])
+
+    def test_a_slotted_hanger_under_shear_needs_a_slip_critical_joint(self):
+        # J3.3: in a bearing-type joint a slot lies normal to the load. The tension is normal
+        # to every slot in the plies, but the card fixes no direction for the shear in their
+        # plane, so a slot may lie along it.
+        slip = " joint slip_critical surface class_a"
+        found = [status(self.slotted("flange ssl", shear=s, joint=j))[1]["hole_use"]
+                 for s, j in ((None, " joint pretensioned"), ("0.1", " joint pretensioned"), ("0.1", slip))]
+        self.assertEqual(found, ["pass", "fail", "pass"])
 
     def test_a_seat_leg_tears_toward_its_top_edge(self):
         # the bolts hold the seat up, so its vertical leg tears up from the top row
