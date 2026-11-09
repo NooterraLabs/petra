@@ -299,6 +299,71 @@ def _points(t, n):
     return [tuple(Fraction(i * a + j * b + (n - i - j) * c, n) for a, b, c in zip(*t)) for i in range(n + 1) for j in range(n + 1 - i)]
 
 
+class L2L3L4Lesser(Case):
+    def test_l2_a_through_hole_is_as_deep_as_its_wall_not_its_part(self):
+        # A 3 mm plate and a separate 20 mm tower in one mesh. The part's box is 20 mm tall,
+        # and the hole, entering the plate from below, has wall over 3 mm of the 5.7 mm insert.
+        bracket = self.mesh("bracket", plate((0, 0, 0), (20, 20, 3), (10, 10), "2.08") + box((30, 0, 0), (35, 5, 20)))
+        hole = (f"  tolerance in [0.01 mm, 0.01 mm] {SIGNED}\n"
+                "  hole h at (10 mm, 10 mm, 0 mm) along top diameter 4.16 mm insert insert.M3x5_7")
+        got = self.check(part("bracket", bracket, "polymer.petg", FDM, hole))
+        self.assertEqual(got["bracket.h/insert.depth"][0], "refuted", got["bracket.h/insert.depth"])
+
+    def test_l3_a_screw_at_its_greatest_length_bottoms_out(self):
+        # M3 x 10 under a 3 mm lid reaches 7 mm into the base at its nominal length and
+        # 7.3 mm at its greatest (guess, recalled js15), against a 7.3 mm blind hole. The base
+        # is held to 0.02 mm (signed) so its 2.6 mm hole holds the thread.
+        base = self.mesh("base", blind_block((0, 0, 0), (20, 20, 8), (10, 10), "1.3", "7.3"))
+        lid = self.mesh("lid", plate((0, 0, 0), (20, 20, 3), (10, 10), "1.8"))
+        hole = (f"tolerance in [0.02 mm, 0.02 mm] {SIGNED}\n"
+                "  hole h at (10 mm, 10 mm, 8 mm) along bottom diameter 2.6 mm depth 7.3 mm form")
+        got = self.check(stack(base, hole, lid, LID_HOLE, "screw.M3x10_shcs", base_material=(AL, None)))
+        self.assertEqual(got["stack.f/fit.grip"][0], "refuted", got["stack.f/fit.grip"])
+        self.assertRegex(got["stack.f/fit.grip"][1], r"the tip reaches 7\.3 mm at the most")
+
+    def test_l4_an_insert_hole_takes_the_part_tolerance(self):
+        # The hole is right for the insert at nominal, and FDM's 0.5 mm (guess) moves it out
+        # of the catalogue's 0.2 mm range.
+        block = self.mesh("block", plate((0, 0, 0), (20, 20, 8), (10, 10), "2.08"))
+        hole = "  hole h at (10 mm, 10 mm, 8 mm) along bottom diameter 4.16 mm insert insert.M3x5_7"
+        got = self.check(part("block", block, "polymer.petg", FDM, hole))
+        self.assertEqual(got["block.h/insert.hole_size"][0], "refuted", got["block.h/insert.hole_size"])
+
+
+class HeldHeads(Case):
+    """The tip's reach is measured from the head's seat, so it holds only while something
+    holds the head there. Found by reading build_grip after F11, not by the review."""
+
+    def test_a_socket_head_that_passes_its_hole_bounds_no_reach(self):
+        # The lid's 6 mm hole lets a 5.3 mm (guess) M3 head through, so the screw can drop
+        # past the 7.3 mm it reaches when seated and meet the 7.6 mm floor.
+        base = self.mesh("base", blind_block((0, 0, 0), (20, 20, 8), (10, 10), "1.3", "7.6"))
+        lid = self.mesh("lid", plate((0, 0, 0), (20, 20, 3), (10, 10), "3"))
+        hole = (f"tolerance in [0.02 mm, 0.02 mm] {SIGNED}\n"
+                "  hole h at (10 mm, 10 mm, 8 mm) along bottom diameter 2.6 mm depth 7.6 mm form")
+        got = self.check(stack(base, hole, lid, "hole h at (10 mm, 10 mm, 3 mm) along bottom diameter 6 mm clear",
+                               "screw.M3x10_shcs", base_material=(AL, None)))
+        for rule in ("fit.grip", "fit.fastener"):
+            self.assertEqual(got[f"stack.f/{rule}"][0], "refuted", (rule, got[f"stack.f/{rule}"]))
+            self.assertRegex(got[f"stack.f/{rule}"][1], r"held while it overhangs lid\.h's mouth, 6 mm")
+
+    def test_a_countersunk_head_the_mesh_does_not_stop_reaches_the_battery(self):
+        # The declared 9 mm countersink is not in the mesh, whose 8 mm hole lets the
+        # 6.72 mm head through, so the screw is not held 1 mm down and can reach the battery
+        # 2 mm under the base.
+        base = self.mesh("base", plate((0, 0, 0), (20, 20, 8), (10, 10), "1.3"))
+        lid = self.mesh("lid", plate((0, 0, 0), (20, 20, 3), (10, 10), "4"))
+        battery = self.mesh("battery", box((0, 0, 0), (20, 20, 10)))
+        got = self.check(
+            part("battery", battery, AL, MILL) +
+            stack(base, "hole h at (10 mm, 10 mm, 8 mm) along bottom diameter 2.6 mm tap", lid,
+                  "hole h at (10 mm, 10 mm, 3 mm) along bottom diameter 8 mm clear countersink 9 mm",
+                  "screw.M3x10_csk",
+                  extra="  place battery at (0 mm, 0 mm, -12 mm) facing top front\n  insert battery along top from 20 mm\n"))
+        self.assertEqual(got["stack.f/fit.fastener"][0], "refuted", got["stack.f/fit.fastener"])
+        self.assertRegex(got["stack.f/fit.fastener"][1], "does not stop the head")
+
+
 class L1Cache(Case):
     def test_l1_a_mesh_changed_on_disk_is_refused_under_its_old_hash(self):
         path, sha = ascii_stl(Path(self.tmp) / "cube.stl", box(("0", "0", "0"), ("10", "10", "10")))

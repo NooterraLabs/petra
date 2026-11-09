@@ -687,7 +687,8 @@ def surface(mesh: Mesh) -> tuple[Q, Q, int]:
             edges.setdefault((min(a, b), max(a, b)), []).append(idx)
     ridge, corners = Q(0), set()
     for (a, b), owners in edges.items():
-        flat = len(owners) == 2 and exact._cross(normals[owners[0]], normals[owners[1]]) == (0, 0, 0)             and exact._dot(normals[owners[0]], normals[owners[1]]) > 0
+        n, o = normals[owners[0]], normals[owners[-1]]
+        flat = len(owners) == 2 and exact._cross(n, o) == (0, 0, 0) and exact._dot(n, o) > 0
         if not flat:
             d = exact._sub(v[b], v[a])
             ridge += root_up(Q(exact._dot(d, d), scale2))

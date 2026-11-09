@@ -206,11 +206,34 @@ def build_gap(req: Requirement, asm: Assembly, design: Design, registry: Registr
                        f"{a} and {b} keep {float(gap.least):g} mm apart beyond their allowances; {notes[0]}"),)
 
 
+def _held(sb: StatementBuilder, asm: Assembly, f, lay, registry: Registry) -> tuple[list, list]:
+    """(terms, notes) that keep the head at the seat the screw's reach is measured from: a
+    countersunk head stopped by the mesh's countersink, a socket head at its least diameter
+    wider than the first hole at its widest below the mouth, grown by the allowance and the
+    shift. A head that can pass its hole leaves the tip's reach unbounded."""
+    first, hid = f.stack[0]
+    tag = f"{first}.{hid}"
+    if "csk_angle" in registry.parts[f.screw].props:
+        if lay.grips[f.id].engaged_hi is not None:
+            return [], []
+        return ([_value(sb, f"{tag}.head_unstopped", Q(1), dim=DIMENSIONLESS)],
+                ["the countersink in the mesh does not stop the head, so the tip's reach is unbounded"])
+    b = engine.mouth_bore(asm.place(first).body, asm.hole(first, hid))
+    if b.hi2 is None or not b.open:
+        return ([_value(sb, f"{tag}.mouth_unbounded", Q(1), dim=DIMENSIONLESS)],
+                [f"nothing bounds {tag} under the head, so the tip's reach is unbounded"])
+    wide = engine.root_up(b.hi2)
+    grow = _sum([Mul((Const(Q(2)), allowance(sb, asm.place(first).body, registry))),
+                 Mul((Const(Q(2)), allowance(sb, asm.place(f.stack[-1][0]).body, registry, against_screw=True)))])
+    return ([_sum([_value(sb, f"{tag}.mouth_d", 2 * wide * M), grow, Neg(sb.registry(f.screw, "head_d"))])],
+            [f"the head is held while it overhangs {tag}'s mouth, {float(2 * wide):.4g} mm across in the mesh"])
+
+
 def build_fastener(req: Requirement, asm: Assembly, design: Design, registry: Registry) -> tuple[Elaborated, ...]:
     """The screw's path from beyond every body, against every body but the last, the last
-    before its hole's mouth, and every screw fastened before it. The screw's axis follows
-    the hole its thread enters, so it may sit off nominal by that body's allowance, which
-    adds to every clearance."""
+    before its hole's mouth, and every other screw. The screw's axis follows the hole its
+    thread enters, so it may sit off nominal by that body's allowance, which adds to every
+    clearance. Its tip's reach holds only while the head stays at its seat."""
     fid = req.subject[1]
     lay = engine.layout(asm, registry)
     arrival = lay.arrivals[fid]
@@ -239,6 +262,8 @@ def build_fastener(req: Requirement, asm: Assembly, design: Design, registry: Re
         notes.append(f"{last}'s material before {hole}'s mouth at {float(clear) ** 0.5:.4g} mm")
         if clear == 0:
             exprs.append(_value(sb, f"{tag}.{last}.before_met", Q(1), dim=DIMENSIONLESS))
+    held, why = _held(sb, asm, f, lay, registry)
+    exprs, notes = exprs + held, notes + why
     return (Obligation(req, sb.finish(AllNonpositive(tuple(exprs))), MODELS[Evaluator.GEOMETRY],
                        f"{f.screw} travels from outside into {hole} clear of every other part and screw; "
                        f"nearest: {'; '.join(notes)}"),)
@@ -295,7 +320,8 @@ def build_grip(req: Requirement, asm: Assembly, design: Design, registry: Regist
     length, stays inside the thread's basic pitch diameter (d - 0.6495 P, ISO 724, taken as
     d - 0.65 P) and solid material reaches past the crest; an insert must take the screw's
     size and be as long as the engagement. In a blind hole the tip, at the screw's
-    greatest length and deepest seat, stops short of the floor the mesh's axis meets."""
+    greatest length and deepest seat, stops short of the floor the mesh's axis meets, and
+    the head must be held at that seat."""
     fid = req.subject[1]
     lay = engine.layout(asm, registry)
     f = next(x for x in asm.fastens if x.id == fid)
@@ -338,10 +364,9 @@ def build_grip(req: Requirement, asm: Assembly, design: Design, registry: Regist
         notes.append(f"{last.insert} takes the thread over its length")
     if grip.run is not None:
         run = _value(sb, f"{last_body}.{last_id}.run", grip.run * M)
-        if grip.engaged_hi is None:
-            exprs.append(_value(sb, f"{tag}.seat_unbounded", Q(1), dim=DIMENSIONLESS))
-            notes.append("the countersink does not stop the head, so the tip's reach is unbounded")
-        else:
+        held, why = _held(sb, asm, f, lay, registry)
+        exprs, notes = exprs + held, notes + why
+        if grip.engaged_hi is not None:
             exprs.append(Add((_value(sb, f"{tag}.reach", grip.engaged_hi * M), a, Neg(run))))
             notes.append(f"the tip reaches {float(grip.engaged_hi):.4g} mm at the most, against a floor "
                          f"{float(grip.run):.4g} mm in")
