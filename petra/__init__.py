@@ -18,7 +18,7 @@ Trust layout:
     petra.lang, petra.ir, petra.units, petra.registry (model, constants, catalog),
     petra.premises, petra.coverage, petra.verdict, petra.pipeline     trusted plumbing
     everything else (solvers, library, certs, registry.deck and registry.consistency,
-    gym, bench, readout, envelope, cli) is untrusted: a bug there costs an UNKNOWN, never
+    readout, envelope, cli) is untrusted: a bug there costs an UNKNOWN, never
     a false PASS.
 """
 from __future__ import annotations

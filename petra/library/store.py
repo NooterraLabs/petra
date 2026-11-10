@@ -187,7 +187,7 @@ class Library:
         return tuple(sorted((h.entry for h in held if h is not None), key=lambda e: e.family_key))
 
     def stats(self) -> dict:
-        """hits, misses, families, total leaves: for the benchmark and the gym logs."""
+        """hits, misses, families, total leaves."""
         files = [f for d in self._dirs() for f in self._files(d)]
         held = [h for h in (self._read(p, s) for p, s in files) if h is not None]
         return {

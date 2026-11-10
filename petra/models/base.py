@@ -211,7 +211,7 @@ class Requirement:
 # --- What an open requirement needs ----------------------------------------------
 #
 # Every UNKNOWN names its open items, and each item names what it needs as typed data,
-# so a gym agent can act on it and a report can print it. An obligation closes when any
+# so an agent can act on it and a report can print it. An obligation closes when any
 # one certificate for its statement checks. A gap closes when every need it lists is met.
 
 

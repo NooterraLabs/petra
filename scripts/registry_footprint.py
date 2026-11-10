@@ -7,7 +7,7 @@ corpus, in order:
   - every design under examples/;
   - the first STEEL designs of the steel gate's stream (petra/models/steel/generate.py),
     cyclic designs among them, and the first ELECTRONICS of the electronics stream;
-  - gym tasks (petra/gym/tasks.py) for GYM_SEEDS seeds of each domain, each hole filled in
+  - generated tasks (bench/tasks.py) for GYM_SEEDS seeds of each domain, each hole filled in
     turn with each of its choices and the other holes with their first;
   - each steel example, and each design of the steel stream, again in the other design basis.
 
@@ -30,7 +30,7 @@ from typing import NamedTuple
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from petra.gym import tasks  # noqa: E402
+from bench import tasks  # noqa: E402
 from petra.lang import load_design, parse_design  # noqa: E402
 from petra.models.electronics import generate as electronics  # noqa: E402
 from petra.models.steel import generate as steel  # noqa: E402

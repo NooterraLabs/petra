@@ -17,10 +17,8 @@ from fractions import Fraction
 from pathlib import Path
 
 from petra.cli import EXIT_CODES, main
-from petra.gym.tasks import generate
 from petra.kernel import Evidence, Leaf, Split, encode_evidence
 from petra.kernel.rules.r4_enclosure import Enclosure
-from petra.registry import build_registry
 
 ROOT = Path(__file__).resolve().parents[1]
 EXAMPLES = ROOT / "examples"
@@ -91,7 +89,7 @@ class Check(Workspace):
             self.assertTrue(err, f"{argv} explains itself on stderr")
 
     def test_usage_errors_exit_3(self):
-        for argv in (("frobnicate",), ("check",), ("gym", "--episodes", "1", "--seed", "0", "--domain", "hydraulics")):
+        for argv in (("frobnicate",), ("check",)):
             self.assertEqual(run(*argv)[0], EXIT_CODES["INPUT_ERROR"], f"{argv} exits 3")
 
     def test_check_without_solvers_reuses_the_library(self):
@@ -207,17 +205,6 @@ class Registry(Workspace):
 
     def test_an_unreadable_deck_exits_3(self):
         self.assertEqual(run("registry", "check", self.write("deck.json", "{"))[0], EXIT_CODES["INPUT_ERROR"], "a deck that does not parse exits 3")
-
-
-class Gym(Workspace):
-    def test_gym_prints_the_summary_line(self):
-        registry = build_registry()
-        given = (dict(generate("circuit", s, registry).given) for s in range(500))
-        seed = next(s for s, g in enumerate(given) if int(g["current"]) <= 10 and int(g["length"]) <= 18)
-        code, out, _ = run("gym", "--episodes", "1", "--seed", str(seed), "--domain", "circuit", "--library", str(self.tmp / "library"))
-        self.assertEqual(code, 0, "gym exits 0")
-        self.assertRegex(out.strip(), r"^solved 1/1 episodes \(library hits \d+, families added [1-9]\d*\)$",
-                         "a task within circuit_pass's limits is solved and stored")
 
 
 if __name__ == "__main__":

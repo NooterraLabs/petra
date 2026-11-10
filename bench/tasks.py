@@ -1,13 +1,10 @@
 """Task generators from parametric requirements. Untrusted.
 
 A task is a .petra file with everything the requirement owner signs (loads, ambient,
-claims, environment, waivers) and holes the agent must fill with makeable-set choices.
-The kernel's verdict is the whole reward. v0 has no efficiency term: one would have to be
-a kernel-checked claim, and v0 has no design-limit claims (an open question in the
-rationale).
+claims, environment, waivers) and holes to fill with makeable-set choices.
 
 Domains are named by their petra.models.DOMAINS key. GENERATORS maps a domain name to its
-generator; a name outside models.DOMAINS is refused at import, so the gym cannot drift
+generator; a name outside models.DOMAINS is refused at import, so the tasks cannot drift
 from the domain registry.
 
 v0 generators:
@@ -32,9 +29,9 @@ from dataclasses import dataclass
 from fractions import Fraction
 from typing import Callable, Mapping
 
-from ..kernel import Interval, enclose, free_syms
-from ..models import DOMAINS
-from ..registry import PartKind, Registry
+from petra.kernel import Interval, enclose, free_syms
+from petra.models import DOMAINS
+from petra.registry import PartKind, Registry
 
 OWNER = "gym.owner@example.org"
 AGENT = "gym.agent@example.org"

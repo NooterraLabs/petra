@@ -4,7 +4,7 @@ This is the authoritative design for Petra v0. It began as candidate 1 in an are
 
 ## Problem
 
-Petra turns a `.petra` design into a verdict that is a theorem relative to named premises. Untrusted solvers produce certificates, and a small kernel checks them in exact rational arithmetic. [The frame](frame.md) asks for six certificate rules, four physics domains, a makeable set, coverage, port contracts, family certificates, a gym, and a small kernel that a Lean kernel can later replace.
+Petra turns a `.petra` design into a verdict that is a theorem relative to named premises. Untrusted solvers produce certificates, and a small kernel checks them in exact rational arithmetic. [The frame](frame.md) asks for six certificate rules, four physics domains, a makeable set, coverage, port contracts, family certificates, and a small kernel that a Lean kernel can later replace.
 
 This document uses the frame's terms. A premise is a fact a verdict assumes. Each premise has a tag, such as `sanctioned` for a value that a named standard fixes. A verdict's footprint is the set of premises it used, apart from `proved` ones. The makeable set is the registry of real materials, parts, processes and environments that a design may name. An obligation is one check the design owes. Coverage is the table that decides which obligations a design owes beyond its claims. A waiver is a `waive` line in the design that accepts one of those obligations and names who answers for it. R1 to R6 are the kernel's six certificate rules.
 
@@ -85,9 +85,8 @@ The other commands are these:
 | `petra registry build --out DECK` | exports the registry as a deck |
 | `petra registry check [DECK]` | checks a deck. With no deck, it checks the shipped registry and exits 0 when every relation holds. |
 | `petra registry recall ID [FILE ...]` | lists the designs whose verdicts rest on a registry entry ([registry.md](registry.md)) |
-| `petra gym --episodes N --seed S` | runs the gym and prints a `solved k/N` line |
 
-The family benchmark is `scripts/bench_family.py`, which prints a `reuse` line and a `recompute` line. `check` takes its exit code from the overall status: 0 for PASS, 1 for FAIL, 2 for UNKNOWN, 5 for MARGINAL, and 3 for an input error. `envelope` exits with the worse of its anchor's status and the status of the obligations that do not depend on the input.
+`check` takes its exit code from the overall status: 0 for PASS, 1 for FAIL, 2 for UNKNOWN, 5 for MARGINAL, and 3 for an input error. `envelope` exits with the worse of its anchor's status and the status of the obligations that do not depend on the input.
 
 ### Call site 1. A CI gate in a hardware repo
 
@@ -108,25 +107,6 @@ if any(p.owner not in APPROVED_SIGNERS for p in judged):
 ```
 
 `solve=False` makes CI check only committed certificates and the library. The gate reads the footprint as data, so a team can write policy about premises ("no judged premise from an unapproved signer") instead of reading reports.
-
-### Call site 2. An AI lab using the gym as a grader
-
-```python
-from petra import Library
-from petra.gym import BaselineAgent, LolaEnv
-
-library = Library("library/")
-env = LolaEnv("circuit", seed=7, library=library)   # a key of petra.models.DOMAINS with a gym generator
-agent = BaselineAgent(library)
-for _ in range(200):
-    task = env.reset()
-    submission = agent.act(task)
-    reward, report = env.step(submission)   # 1.0 PASS, 0.0 UNKNOWN or MARGINAL, -1.0 FAIL
-    agent.learn(task, submission, reward)   # on PASS, certify a widened family into the library
-print(agent.stats())
-```
-
-`env.step` never runs a solver for the agent. It checks the agent's certificates and the shared library with the kernel. The reward is a function of the kernel verdict alone.
 
 ### Call site 3. An independent checker, the future Lean kernel's test harness
 
@@ -378,7 +358,7 @@ The design has five central types and two registries. The registries say which r
 2. `kernel.Hyp` is either `RangeHyp(sym, lo, hi, label)` or `DefinedHyp(sym, definition)`. The label is an opaque string to the kernel. Outside the kernel it names a premise (`reg:`, `in:`), a scope parameter (`par:`) or a drawn design value (`dsg:`).
 3. `kernel.Evidence` (`petra/kernel/evidence.py`) holds only what a solver chose: feasible points, an LDL factor, hypercircle fields, a split tree, dual multipliers, or a counterexample point. The rule modules declare the body types. Evidence never holds a matrix or an expression from the model.
 4. `kernel.Theorem` and `kernel.Refutation` are issued, not constructed. Each is a bare handle with no fields. Its data lives in a kernel-private table keyed by the handle's identity, and `kernel.is_issued(x)` is true only for a handle `check` returned. Calling the class raises an exception. `object.__new__` gives a handle with no record. Assignment, even through `object.__setattr__`, has nothing to change. Copy, deepcopy, pickle and `dataclasses.replace` raise an exception. `tests/test_seal.py` tries each of these. A theorem exposes the statement, its hash, the rule, and `labels`, the exact set of hypothesis labels it rests on.
-5. `verdict.Pass | Fail | Unknown | Marginal` (`petra/verdict.py`) are the verdict types. A gym agent acts on the variant, and a report prints it.
+5. `verdict.Pass | Fail | Unknown | Marginal` (`petra/verdict.py`) are the verdict types. A report prints the variant.
    - `Pass` takes a `Scope`, a non-empty `Footprint` and a non-empty tuple of issued theorems. Every label of every theorem resolves to a footprint premise, a scope parameter or the design itself.
    - `Fail` takes an issued `Refutation` of the obligation's own statement, and a theorem for each validity row of its model, over the box or at the refutation's point. A validity row is a numeric limit of the model (decision 12).
    - `Marginal` takes at least one `WithinMargin` item and the `Scope` its theorems hold over. A `WithinMargin` item is an issued `Refutation` of a claim's margin statement together with the claim's own theorem.
@@ -462,12 +442,11 @@ Elaborators trust the IR, and rules trust the box that `check` hands them.
 - The kernel never interprets a label, a unit, or a physical name.
 - No part of Petra substitutes a default input bound. A missing bound is a `Gap` needing `NeedsInputBound`. Petra still checks a design with no environment class. Builders that need the class report `NeedsInputBound`, and the galvanic rule treats an undeclared environment as wet.
 - The library and the certificate directory are never trusted. The kernel checks what they offer on every use. It checks a library family once per process, and every query against that family.
-- `gym.LolaEnv.step` never runs a solver for the agent.
 - The consistency checker can only add open items needing `RegistryInconsistent`, never remove one.
 
 ### Shared state
 
-The only shared mutable state is the certificate directory and the library, which gym workers, CI and `certify-family` may write at once. Both name each file by the hash of the statement it proves, and both write by temporary file plus atomic rename. Two writers of one entry each write a complete, kernel-accepted file, and whichever rename happens last wins, with nothing lost. A crash leaves no partial file, and a second run finds the entry present and writes nothing (per separate-before-serializing-shared-state and make-operations-idempotent). Readers re-check everything, so a stale or foreign file costs a rejection, never a wrong verdict. Inside one process the kernel also keeps a bounded memo of the family theorems that `Instance` evidence used, keyed by the hashes of the family statement and evidence. Only a theorem `check` has just issued for exactly those hashes enters it, so the memo saves time and changes no verdict. Everything else is a pure function of the design and the registry.
+The only shared mutable state is the certificate directory and the library, which CI and `certify-family` may write at once. Both name each file by the hash of the statement it proves, and both write by temporary file plus atomic rename. Two writers of one entry each write a complete, kernel-accepted file, and whichever rename happens last wins, with nothing lost. A crash leaves no partial file, and a second run finds the entry present and writes nothing (per separate-before-serializing-shared-state and make-operations-idempotent). Readers re-check everything, so a stale or foreign file costs a rejection, never a wrong verdict. Inside one process the kernel also keeps a bounded memo of the family theorems that `Instance` evidence used, keyed by the hashes of the family statement and evidence. Only a theorem `check` has just issued for exactly those hashes enters it, so the memo saves time and changes no verdict. Everything else is a pure function of the design and the registry.
 
 ### Interface depth
 
@@ -594,8 +573,6 @@ A bug in any of these files costs an UNKNOWN or a slow run, never a false PASS, 
 | `petra/certs.py` | certificate envelope, `CertStore` | 120 |
 | `petra/library/store.py`, `family.py`, `__init__.py` | library, `Instance` offers, family certification | 270 |
 | `petra/registry/deck.py`, `consistency.py` | decks and the physics-consistency checker | 350 |
-| `petra/gym/tasks.py`, `env.py`, `agent.py`, `__init__.py` | gym and baseline agent | 450 |
-| `petra/bench/family.py`, `__init__.py`, `scripts/bench_family.py` | reuse benchmark | 220 |
 | `petra/envelope.py` | probe narrowing, bounded bisection, envelope reports | 410 |
 | `petra/cli.py`, `petra/__main__.py`, `petra/__init__.py` | shell | 250 |
 | **Total** | | **about 3,000** |
@@ -627,8 +604,8 @@ The sketch is the shared-types commit. Every type in it is complete, and only bo
 
 | Seam | Owns | Needs |
 |---|---|---|
-| F library, families, benchmark | `petra/library/*`, `petra/bench/*`, `examples/families/*`, `scripts/bench_family.py`, `tests/test_library.py`, `tests/test_bench.py` | I, C |
-| Y gym and CLI | `petra/gym/*`, `petra/cli.py`, `petra/__main__.py`, `tests/test_gym.py`, `tests/test_cli.py`, `tests/test_examples.py` | I, F |
+| F library, families | `petra/library/*`, `examples/families/*`, `tests/test_library.py` | I, C |
+| Y CLI | `petra/cli.py`, `petra/__main__.py`, `tests/test_cli.py`, `tests/test_examples.py` | I, F |
 
 The sketch ships `tests/test_structure.py`, `tests/test_seal.py`, `tests/test_domain_registry.py`, `tests/test_solver_registry.py`, `tests/test_premises.py` and `tests/test_verdict.py`, and they pass. `scripts/predicate.py`, which checks the definition of done, names `tests/test_kernel_mutations.py` (M) and `tests/test_registry_consistency.py` (G), and the sketch leaves both out on purpose. A placeholder would exit 0 without running a mutation or a corruption, and the predicate would count it as verified.
 
@@ -702,18 +679,15 @@ Both candidates chose canonical rational strings in certificate JSON, certificat
 - Should a FAIL that rests on a point admitted only by a spec range (yield at its guaranteed minimum) be reported differently from a FAIL at an owner-signed load corner? Both are refutations relative to premises, but they read differently to an owner.
 - When a claim and a coverage default address the same mode on the same subject, is "keep the stricter, keep both if incomparable" the rule the owner expects?
 - Independent lemma ranges lose correlation between member forces. On highly indeterminate trusses this may give UNKNOWN for global stability. Is v0 allowed to stay determinate-first?
-- The gym reward has no efficiency term because v0 has no design-limit claims. Is a pure PASS reward enough for the first baseline?
-- `scripts/predicate.py` accepts only exit codes 0 and 1 from `petra check --json` and raises on anything else, but this design exits 2 for UNKNOWN, and `examples/bolt_unknown.petra` is meant to be UNKNOWN. Either the predicate accepts 2, or `check --json` exits 0 whenever it printed a report and leaves the status to the JSON. The predicate's owner decides. This commit changes neither.
 - Who owns the galvanic thresholds (0.15 V for wet or C3 and above, from MIL-STD-889C), and the convection coefficient range for clipped-direct cables? Both are judged constants with a named owner in the sketch.
 - A claim whose peak sits exactly on its bound costs the claim search its whole cell budget before the margin search answers. On x(1 - x) <= 1/4 the R4 search spent all 20,000 cells (6 s in one dimension, 18 s in three) and gave up, then the margin statement was refuted in one cell, so the report is UNKNOWN with that point. A combined search that proves at B and witnesses at B - m in one pass would stop at once, but it would give up on the claim's proof, and a claim with less than m of slack would read UNKNOWN where it could have been MARGINAL. Is the cell budget the right place to pay for that?
 - `petra envelope` probes one input. A safe region over two inputs, such as ambient and load current together, needs a 2D partition of probe boxes, and an input with a mean is refused, since a probe interval need not contain it. Its probe limit counts checks, not time, and 64 checks of a design with a claim whose peak sits exactly on its bound can still take minutes. Should the limit be a time budget?
-- The gym rewards MARGINAL like UNKNOWN (0.0), although a MARGINAL claim is proved. A margin-aware reward could pay for slack, with full reward for "margin proved" and less for "margin undecided" and MARGINAL, but v0's gym tasks state no margins.
 - The kernel cannot defend against code that runs in its own process. The K3 red team reproduced three such attacks, none of them through data:
   - `object.__setattr__` on an issued theorem's `statement` left it issued with a false goal, and `verdict.Discharged` then accepted it for a false obligation. The bare handles of data structure 4 have since closed this attack, and `tests/test_seal.py` checks that the assignment raises and changes nothing.
   - Writing into the cached `i_pi()` interval makes `check` issue a theorem for a false statement. While the family memo holds a theorem checked in that window, it keeps lending that theorem after pi is restored.
   - A caller's `Fraction` subclass answers the canonical-form guard's equality, so a raw statement can compare equal to a theorem about its canonical copy.
 
-  Certificates and agent designs must therefore reach the kernel as data, through the codec, never as Python objects built by untrusted code. The gym already works this way. `LolaEnv.step` takes design choices as strings and certificates as JSON envelopes that the strict codec decodes. Untrusted code must still never run in the checker's process. The Lean kernel, or a kernel in its own process, removes the class of attack.
+  Certificates and agent designs must therefore reach the kernel as data, through the codec, never as Python objects built by untrusted code. Untrusted code must still never run in the checker's process. The Lean kernel, or a kernel in its own process, removes the class of attack.
 
 ## Next implementation step
 

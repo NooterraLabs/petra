@@ -251,8 +251,6 @@ UNTRUSTED: tuple[str, ...] = (
     "petra/__init__.py", "petra/__main__.py", "petra/cli.py", "petra/certs.py", "petra/envelope.py",
     "petra/loop.py", "petra/mcp.py", "petra/readout.py", "petra/recall.py", "petra/repair.py",
     "petra/teach.py", "petra/templates.py",
-    "petra/bench/__init__.py", "petra/bench/family.py",
-    "petra/gym/__init__.py", "petra/gym/agent.py", "petra/gym/env.py", "petra/gym/tasks.py",
     "petra/library/__init__.py", "petra/library/family.py", "petra/library/store.py",
     "petra/registry/consistency.py", "petra/registry/deck.py",
     "petra/solvers/__init__.py", "petra/solvers/exact.py", "petra/solvers/r1_linear.py",

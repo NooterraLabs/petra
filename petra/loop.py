@@ -21,7 +21,7 @@ the deck passes at that load (`reference`), which proves the job can be done.
    keeps is certified by the kernel, not estimated. MARGINAL is not kept.
 
 `judge`, when given, reads every design the loop keeps (each PASS of the repair, each
-step of the minimiser). scripts/in_the_loop.py passes the outside judge (judges/), which
+step of the minimiser). A caller can pass the outside judge (judges/), which
 computes the geometry independently, so the minimiser, which goes looking for the edge
 of the passing region, is also a breaker.
 

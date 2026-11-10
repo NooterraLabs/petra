@@ -2,8 +2,7 @@
 failing draft to PASS by petra.check's own repair moves, and the minimiser keeps only
 designs the checker passes.
 
-Tasks come from the development seed (scripts/in_the_loop.py DEV_SEED), never the
-held-out one.
+Tasks come from the development seed, DEV, never the held-out one.
 """
 import json
 import unittest

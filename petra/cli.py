@@ -83,17 +83,11 @@
     python -m petra mcp
         Serve check, kinds, new, registry_list and docs to an MCP client, JSON-RPC over
         stdin and stdout, until stdin closes (petra/mcp.py). Exit 0.
-    python -m petra gym --episodes N --seed S [--domain NAME ...] [--library DIR]
-        Run the baseline agent. Prints one summary line, AgentStats.render():
-        "solved k/N episodes (library hits h, families added f)". --domain takes names
-        from petra.models.DOMAINS that gym.tasks.GENERATORS covers; default all of them.
 
 A usage error (an unknown subcommand or flag) is an input error too and exits 3. A crash
 (an unimplemented elaborator, a bug) prints its traceback and exits 4, so it never reads
 as a verdict. When the reader closes stdout early, as `petra check FILE | head` does, the
 subcommand stops writing and exits 141 without a traceback.
-
-The family benchmark is scripts/bench_family.py, not a subcommand.
 """
 from __future__ import annotations
 
@@ -137,10 +131,8 @@ class _Parser(argparse.ArgumentParser):
 
 def build_parser() -> argparse.ArgumentParser:
     """Subcommands check, explain, envelope, verify, certify-family, registry (build,
-    check, recall, list), gym, kinds, new, docs and mcp, with the flags in the module
+    check, recall, list), kinds, new, docs and mcp, with the flags in the module
     docstring."""
-    from .gym.tasks import GENERATORS
-
     parser = _Parser(prog="petra", description="verdicts about physical designs as theorems relative to explicit premises",
                      formatter_class=argparse.RawDescriptionHelpFormatter,
                      epilog="Coding agents: `petra docs skill` prints a SKILL.md on designing, checking and repairing\n"
@@ -198,13 +190,6 @@ def build_parser() -> argparse.ArgumentParser:
     recall_cmd.add_argument("--json", action="store_true", help="print the recall as JSON")
     recall_cmd.set_defaults(run=cmd_registry_recall)
 
-    gym = commands.add_parser("gym", help="run the baseline agent")
-    gym.add_argument("--episodes", type=int, required=True)
-    gym.add_argument("--seed", type=int, required=True)
-    gym.add_argument("--domain", action="append", choices=sorted(GENERATORS), metavar="NAME",
-                     help=f"one of {', '.join(sorted(GENERATORS))}; repeat for several")
-    gym.add_argument("--library", metavar="DIR")
-    gym.set_defaults(run=cmd_gym)
     _add_teach_commands(commands, decks)
     serve = commands.add_parser("mcp", help="serve check, kinds, new, registry_list and docs to an MCP client over stdio",
                                 description="Run an MCP server on stdin and stdout, for a coding agent's client to "
@@ -410,16 +395,6 @@ def cmd_registry_recall(args: argparse.Namespace) -> int:
         return _input_error(exc)
     print(json.dumps(to_json(found), sort_keys=True) if args.json else render(found))
     return EXIT_CODES["INPUT_ERROR"] if found.errors else 0
-
-
-def cmd_gym(args: argparse.Namespace) -> int:
-    """gym.run_episodes(domains, args.episodes, args.seed, args.library) and print
-    stats.render(). Returns 0 when it ran, whatever the solve rate."""
-    from .gym import GENERATORS, run_episodes
-
-    domains = tuple(args.domain) if args.domain else tuple(sorted(GENERATORS))
-    print(run_episodes(domains, args.episodes, args.seed, args.library).render())
-    return 0
 
 
 # --- Teaching: kinds, new, registry list (petra/teach.py) --------------------------------

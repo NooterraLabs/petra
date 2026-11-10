@@ -1,6 +1,6 @@
 # CalculiX spot check of the loop's optima
 
-P2 of the [plan](plan.md) asks that every design the optimiser finds also be checked against CalculiX. The minimiser in [the loop](in_the_loop.md) keeps only designs Petra passes and pushes their mass down, so its optima sit near utilisation 1. An overstated capacity would hide there.
+P2 of the [plan](plan.md) asks that every design the optimiser finds also be checked against CalculiX. The minimiser in `petra/loop.py` keeps only designs Petra passes and pushes their mass down, so its optima sit near utilisation 1. An overstated capacity would hide there.
 
 `scripts/calculix_check.py` takes a passing steel design, models the connection element whose limit states govern as a plate with finite elements, runs CalculiX, and compares the element's finite-element capacity with the design strength Petra certified for it. This page fixes the criterion, shows that the model is credible, and reports the check of the loop's optima.
 
