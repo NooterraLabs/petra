@@ -1,0 +1,9 @@
+name = "petra-kernel"
+defaultTargets = ["petra-verify"]
+
+[[lean_lib]]
+name = "Petra"
+
+[[lean_exe]]
+name = "petra-verify"
+root = "Main"
