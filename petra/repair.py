@@ -25,7 +25,7 @@ from dataclasses import dataclass
 from fractions import Fraction
 from typing import Any, Callable, Iterator
 
-from . import models
+from . import models, wellformed
 from .lang import LolaSyntaxError, LoweringError, parse_design
 from .lang.lexer import Kind, tokenize
 from .lang.parser import NOT_UNITS
@@ -439,7 +439,9 @@ def check_text(text: str, path: str, registry: Any, sources: tuple, *, sink: Any
     """Check `text` against `registry` with `sources`, recording accepted evidence into
     `sink`. With `moves`, a FAIL gets its repair, probed with the same sources and no sink."""
     try:
-        report = check_design(parse_design(text, path, registry), registry, sources, sink=sink, deck=deck, path=path)
+        design = parse_design(text, path, registry)
+        wellformed.require(design, registry)
+        report = check_design(design, registry, sources, sink=sink, deck=deck, path=path)
     except INPUT_ERRORS as exc:
         return Checked(path, None, None, str(exc))
     found = repair(text, report, checker(registry, sources, path, deck), registry) if moves else None

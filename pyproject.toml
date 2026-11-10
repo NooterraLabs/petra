@@ -22,4 +22,4 @@ petra = "petra.cli:main"
 petra-lang = "petra.cli:main"
 
 [tool.petra-build]
-include = ["petra/**/*.py", "petra/registry/aisc_shapes.json", "petra/docs/*.md"]
+include = ["petra/**/*.py", "petra/registry/aisc_shapes.json", "petra/decks/*.json", "petra/docs/*.md"]

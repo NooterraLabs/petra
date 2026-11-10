@@ -74,6 +74,7 @@ def check(text: str, *, path: str = "<text>", repair: bool = True) -> dict:
 def check_file(path: str | Path, *, certs: str | Path | None = None, library: Library | None = None, solve: bool = True) -> Report:
     """Convenience shell over check_design: default registry, evidence sources in the
     order certs -> library -> solvers, accepted evidence recorded into `certs` when given."""
+    from . import wellformed
     from .certs import CertStore
     from .lang import load_design
     from .pipeline import check_design
@@ -82,6 +83,7 @@ def check_file(path: str | Path, *, certs: str | Path | None = None, library: Li
 
     registry = build_registry()
     design = load_design(path, registry)
+    wellformed.require(design, registry)
     store = CertStore(certs) if certs is not None else None
     sources = tuple(s for s in (store, library, SolverSource() if solve else None) if s is not None)
     return check_design(design, registry, sources, sink=store, path=str(path))

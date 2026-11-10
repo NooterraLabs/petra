@@ -11,8 +11,8 @@
 #   judges/canaries/     each is a design the outside judge rejects, so it must not pass.
 #   corpus/cases/pilot/  designs from the lift pilot that the steel tests reason about.
 #   corpus/cases/audit/  the audit of 2026-11-09. "re-ran" means the lead auditor reproduced
-#                        the verdict, "auditor" that one auditor reported it. NOT_PASS is the
-#                        expectation until phase 1 gives ill-formed designs their own verdict.
+#                        the verdict, "auditor" that one auditor reported it. A design the
+#                        type rules refuse must be an INPUT_ERROR.
 #
 # Not cases yet:
 #   audit F1 to F4       false FAILs whose truth is the auditor's memory of Manual tables.
@@ -20,19 +20,19 @@
 #   examples/families/   inputs to `petra certify-family`, not to `petra check`.
 #   three weld_bracket_support_side canaries, which FAIL after about 150 s, past the limit.
 corpus/cases/audit/b1_absurd_bolts.petra	NOT_PASS	PASS	audit B1, re-ran: 10^12 bolts through a 1 nm plate made of an LED
-corpus/cases/audit/c1_negative_current.petra	NOT_PASS	PASS	audit C1, re-ran: +12 A fails on drop and overload
-corpus/cases/audit/c2_negative_length.petra	NOT_PASS	PASS	audit C2, re-ran: a wire of -5000 m
-corpus/cases/audit/c3_below_absolute_zero.petra	NOT_PASS	PASS	audit C3, re-ran: an ambient of -1000 degC
+corpus/cases/audit/c1_negative_current.petra	INPUT_ERROR		audit C1, re-ran: +12 A fails on drop and overload
+corpus/cases/audit/c2_negative_length.petra	INPUT_ERROR		audit C2, re-ran: a wire of -5000 m
+corpus/cases/audit/c3_below_absolute_zero.petra	INPUT_ERROR		audit C3, re-ran: an ambient of -1000 degC
 corpus/cases/audit/c4_400kv_on_750v_cable.petra	NOT_PASS	PASS	audit C4, re-ran: 400 kV on 450/750 V cable, no voltage rating mode
-corpus/cases/audit/c5_negative_fault_current.petra	NOT_PASS	PASS	audit C5, auditor: a fault current of -50 kA on a 6 kA breaker
+corpus/cases/audit/c5_negative_fault_current.petra	INPUT_ERROR		audit C5, auditor: a fault current of -50 kA on a 6 kA breaker
 corpus/cases/audit/c6_huge_area.petra	NOT_PASS	PASS	audit C6, auditor: a cable outside its catalogue with no validity row
-corpus/cases/audit/c6_negative_area.petra	NOT_PASS	TIMEOUT	audit C6, auditor: a cable outside its catalogue with no validity row
-corpus/cases/audit/c6_negative_insulation.petra	NOT_PASS	PASS	audit C6, auditor: a cable outside its catalogue with no validity row
-corpus/cases/audit/c6_zero_insulation.petra	NOT_PASS	PASS	audit C6, auditor: a cable outside its catalogue with no validity row
+corpus/cases/audit/c6_negative_area.petra	INPUT_ERROR		audit C6, auditor: a cable outside its catalogue with no validity row
+corpus/cases/audit/c6_negative_insulation.petra	INPUT_ERROR		audit C6, auditor: a cable outside its catalogue with no validity row
+corpus/cases/audit/c6_zero_insulation.petra	INPUT_ERROR		audit C6, auditor: a cable outside its catalogue with no validity row
 corpus/cases/audit/c7_drop_at_assumed_temperature.petra	NOT_PASS	PASS	audit C7, auditor: the drop claim assumes 70 degC and the heat mode is waived
-corpus/cases/audit/e1_negative_rail.petra	NOT_PASS	PASS	audit E1, re-ran: +200 V on the same 75 V part fails at 2.67
+corpus/cases/audit/e1_negative_rail.petra	INPUT_ERROR		audit E1, re-ran: +200 V on the same 75 V part fails at 2.67
 corpus/cases/audit/e2_dropout_waived.petra	NOT_PASS	PASS	audit E2, re-ran: the rail claim leans on a waived sibling mode
-corpus/cases/audit/e3_negative_sink.petra	NOT_PASS	PASS	audit E3, auditor: the sign of the sink current is never checked
+corpus/cases/audit/e3_negative_sink.petra	INPUT_ERROR		audit E3, auditor: the sign of the sink current is never checked
 corpus/cases/audit/m_bad_transform.petra	INPUT_ERROR	INTERNAL_ERROR	a malformed 3MF is an input error
 corpus/cases/audit/m_bad_vertex.petra	INPUT_ERROR	INTERNAL_ERROR	a malformed 3MF is an input error
 corpus/cases/audit/m_nan_vertex.petra	INPUT_ERROR	INTERNAL_ERROR	a malformed 3MF is an input error
