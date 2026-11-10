@@ -50,6 +50,9 @@ _IDENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 _SEGMENT = re.compile(r"[A-Za-z0-9_]+")
 _NUMBER = re.compile(r"[+-]?[0-9]+(?:\.[0-9]+|/[0-9]+)?")
 _PUNCT2 = ("->", "--", "<=", ">=")
+LONGEST_NUMBER = 100
+"""The most characters a number has. No quantity is written longer, and exact arithmetic
+on a longer one costs more than a check should."""
 _PUNCT1 = "{}()[],:.>%"
 _OPEN, _CLOSE = "([", ")]"
 
@@ -95,6 +98,8 @@ def tokenize(text: str, path: str) -> tuple[Token, ...]:
             emit(Kind.PUNCT, text[i:i + 2], i)
             i += 2
         elif m := _NUMBER.match(text, i):
+            if len(m.group()) > LONGEST_NUMBER:
+                raise fail(i, f"a number has at most {LONGEST_NUMBER} characters, and this one has {len(m.group())}")
             if "/" in m.group() and int(m.group().split("/")[1]) == 0:
                 raise fail(i, f"zero denominator in {m.group()}")
             emit(Kind.NUMBER, m.group(), i)

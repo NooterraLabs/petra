@@ -379,6 +379,12 @@ class SyntaxErrors(Case):
         self.assertSyntax("t.card:6:19", card=HEADER + "claim c: x.member(m) <= 1\n")
         self.assertSyntax("t.card:6:17", card=HEADER + "claim c: x.y <= 1/0\n")
 
+    def test_a_number_is_at_most_a_hundred_characters(self):
+        self.assertSyntax("t.card:6:20", "at most 100", card=HEADER + CAPACITY.replace("36 kN", "3" * 101 + " kN"))
+        self.assertSyntax("t.petra:3:12", "at most 100", design="petra 0\ntruss frame {\n  anything " + "1" * 101 + "\n}\n")
+        longest = lower_text("", "truss frame {\n  anything " + "1" * 100 + "\n}\n")
+        self.assertEqual(longest.components["frame"].attrs[0].args[0].quantity.value.lo, int("1" * 100))
+
     def test_the_declaration_error_lists_what_the_file_takes(self):
         with self.assertRaises(LolaSyntaxError) as ctx:
             parse_design(HEADER + "requirement x\n", "petra 0\n", "t.petra", REGISTRY)

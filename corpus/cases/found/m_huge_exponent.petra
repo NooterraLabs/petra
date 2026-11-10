@@ -1,0 +1,10 @@
+petra 0
+
+# A mesh whose one coordinate is 1e999999999. Read exactly, that number alone would fill
+# memory, so the reader refuses the file.
+
+part p {
+  mesh "huge_exponent.stl" sha256 "c8a40b7787ac8416e481ca51d11f7672efae05d72cdab168ef2a173367d124f6" units mm
+  material aluminium.6061_T6
+  tolerance given tolerance
+}

@@ -165,6 +165,16 @@ def _binary_stl(path: str, data: bytes) -> tuple[list[Fraction], np.ndarray]:
 
 _NUMBER = r"([-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?)"
 _VERTEX = re.compile(rf"vertex\s+{_NUMBER}\s+{_NUMBER}\s+{_NUMBER}")
+_COORDINATE = re.compile(r"[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d{1,3})?")
+
+
+def _exact(text: str | None) -> Fraction:
+    """A coordinate written as a decimal, exactly. Raises ValueError for one that is
+    missing, is not a finite decimal, or is longer than a coordinate is: an exponent of
+    more than three digits would take the memory of the number it names."""
+    if text is None or len(text) > 64 or not _COORDINATE.fullmatch(text):
+        raise ValueError(text)
+    return Fraction(text)
 
 
 def _ascii_stl(path: str, data: bytes) -> tuple[list[Fraction], np.ndarray]:
@@ -174,7 +184,10 @@ def _ascii_stl(path: str, data: bytes) -> tuple[list[Fraction], np.ndarray]:
         raise MeshError(path, "is neither a binary STL of consistent length nor ASCII text") from None
     if not text.lstrip().startswith("solid"):
         raise MeshError(path, "is neither a binary STL, an ASCII STL nor a 3MF")
-    coords = [Fraction(n) for match in _VERTEX.finditer(text) for n in match.groups()]
+    try:
+        coords = [_exact(n) for match in _VERTEX.finditer(text) for n in match.groups()]
+    except ValueError:
+        raise MeshError(path, "holds a coordinate that is not a finite number") from None
     if len(coords) % 9 or text.count("facet normal") * 9 != len(coords):
         raise MeshError(path, "holds a facet that does not have exactly three vertices")
     return coords, np.arange(len(coords) // 3, dtype=np.int64).reshape(-1, 3)
@@ -196,9 +209,12 @@ def _three_mf(path: str, data: bytes, unit: Unit) -> tuple[list[Fraction], np.nd
     if len(objects) != 1 or len(items) != 1 or objects[0].find(q("mesh"), ns) is None:
         raise MeshError(path, "a 3MF holds exactly one mesh object, built once")
     mesh = objects[0].find(q("mesh"), ns)
-    vertices = [tuple(Fraction(v.get(k)) for k in "xyz") for v in mesh.find(q("vertices"), ns)]
-    faces = np.array([[int(t.get(k)) for k in ("v1", "v2", "v3")] for t in mesh.find(q("triangles"), ns)], dtype=np.int64)
-    m = [Fraction(x) for x in items[0].get("transform", "1 0 0 0 1 0 0 0 1 0 0 0").split()]
+    try:
+        vertices = [tuple(_exact(v.get(k)) for k in "xyz") for v in mesh.find(q("vertices"), ns)]
+        faces = np.array([[int(t.get(k)) for k in ("v1", "v2", "v3")] for t in mesh.find(q("triangles"), ns)], dtype=np.int64)
+        m = [_exact(x) for x in items[0].get("transform", "1 0 0 0 1 0 0 0 1 0 0 0").split()]
+    except (TypeError, ValueError):
+        raise MeshError(path, "a 3MF's vertices, triangles and build transform are finite numbers, and one is missing or is not") from None
     if len(m) != 12:
         raise MeshError(path, "a build transform has twelve numbers")
     placed = [tuple(x * m[k] + y * m[3 + k] + z * m[6 + k] + m[9 + k] for k in range(3)) for x, y, z in vertices]

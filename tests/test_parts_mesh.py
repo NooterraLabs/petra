@@ -54,6 +54,23 @@ class ReadsExactly(MeshCase):
             read_mesh(path, "0" * 64, Unit.MM)
 
 
+class RefusesWhatIsNotNumbers(MeshCase):
+    """A file whose numbers are missing, are not numbers, or would not fit in memory is a
+    MeshError, never a crash."""
+
+    def test_a_coordinate_with_a_huge_exponent_is_refused_before_it_is_read(self):
+        self.refused(box(("0", "0", "0"), ("1e999999999", "1", "1")), "not a finite number")
+        self.refused(box(("0", "0", "0"), ("1e-999999999", "1", "1")), "not a finite number")
+
+    def test_a_3mf_number_that_is_not_one_is_refused(self):
+        cube = box(("0", "0", "0"), ("1", "1", "1"))
+        for transform in ("a 0 0 0 1 0 0 0 1 0 0 0", "nan 0 0 0 1 0 0 0 1 0 0 0", "1e9999 0 0 0 1 0 0 0 1 0 0 0"):
+            with self.subTest(transform=transform), self.assertRaisesRegex(MeshError, "finite numbers"):
+                self.read(cube, name="part.3mf", writer=lambda p, t: three_mf(p, t, transform=transform))
+        with self.assertRaisesRegex(MeshError, "finite numbers"):
+            self.read(box(("0", "0", "0"), ("inf", "1", "1")), name="part.3mf", writer=three_mf)
+
+
 class RefusesWhatIsNotASolid(MeshCase):
     """Each case is a surface the parity reading of the scaffold accepted, or read as less
     material than the file draws."""

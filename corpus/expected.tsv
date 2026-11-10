@@ -15,6 +15,7 @@
 #                        type rules refuse must be an INPUT_ERROR.
 #                        A waiver there is one the designer wrote, so it is in the design
 #                        file, where the language refuses it.
+#   corpus/cases/found/  designs found while fixing others. The note says what each showed.
 #
 # Not cases yet:
 #   audit F1 to F4       false FAILs whose truth is the auditor's memory of Manual tables.
@@ -35,10 +36,10 @@ corpus/cases/audit/c7_drop_at_assumed_temperature.petra	NOT_PASS			audit C7, aud
 corpus/cases/audit/e1_negative_rail.petra	INPUT_ERROR			audit E1, re-ran: +200 V on the same 75 V part fails at 2.67
 corpus/cases/audit/e2_dropout_waived.petra	NOT_PASS			audit E2, re-ran: the rail claim leans on a waived sibling mode
 corpus/cases/audit/e3_negative_sink.petra	INPUT_ERROR			audit E3, auditor: the sign of the sink current is never checked
-corpus/cases/audit/m_bad_transform.petra	INPUT_ERROR	INTERNAL_ERROR	NO_FILES	a malformed 3MF is an input error
-corpus/cases/audit/m_bad_vertex.petra	INPUT_ERROR	INTERNAL_ERROR	NO_FILES	a malformed 3MF is an input error
-corpus/cases/audit/m_nan_vertex.petra	INPUT_ERROR	INTERNAL_ERROR	NO_FILES	a malformed 3MF is an input error
-corpus/cases/audit/m_no_vertices.petra	INPUT_ERROR	INTERNAL_ERROR	NO_FILES	a malformed 3MF is an input error
+corpus/cases/audit/m_bad_transform.petra	INPUT_ERROR			a malformed 3MF is an input error
+corpus/cases/audit/m_bad_vertex.petra	INPUT_ERROR			a malformed 3MF is an input error
+corpus/cases/audit/m_nan_vertex.petra	INPUT_ERROR			a malformed 3MF is an input error
+corpus/cases/audit/m_no_vertices.petra	INPUT_ERROR			a malformed 3MF is an input error
 corpus/cases/audit/p1_screw_in_narrowing_bore.petra	NOT_PASS			audit P1, re-ran: the bore narrows to 0.8 mm after 5 mm
 corpus/cases/audit/p2_dimple_as_through_hole.petra	NOT_PASS	PASS	PASS	audit P2, re-ran: a 0.1 mm dimple declared as a through hole
 corpus/cases/audit/p3_loose_cubes.petra	NOT_PASS	PASS	PASS	audit P3, auditor: one part made of two loose pieces
@@ -63,7 +64,7 @@ corpus/cases/audit/t2_load_through_param.petra	NOT_PASS			audit T2, re-ran: the 
 corpus/cases/audit/u1_one_trial.petra	NOT_PASS	PASS		audit U1, re-ran: one trial at 0 kN, a claim at 0.000001 % confidence
 corpus/cases/audit/w1_design_waives_its_own_checks.petra	NOT_PASS			audit fault 1: the design waives its own bolt and block shear checks
 corpus/cases/audit/w2_truss_waives_collapse.petra	NOT_PASS			audit fault 1: the design waives collapse, stability and buckling by "x"
-corpus/cases/audit/x1_number_over_4300_digits.petra	INPUT_ERROR	INTERNAL_ERROR	NO_FILES	audit, smaller items: a number over 4,300 digits is an input error
+corpus/cases/audit/x1_number_over_4300_digits.petra	INPUT_ERROR			audit, smaller items: a number over 4,300 digits is an input error
 corpus/cases/pilot/bracket_from_the_arm.petra	FAIL			tests/test_steel_groups.py: the moment arm is taken from the bolt group
 corpus/cases/pilot/seat_one_row.petra	PASS			tests/test_steel_coverage.py: one row has no pitch for J3.6 to limit
 corpus/cases/pilot/tab_half_a.petra	PASS			tests/test_steel_groups.py: the plate passes at half a
@@ -141,3 +142,4 @@ judges/canaries/single_angle_support_side_web_width.petra	NOT_PASS			the outside
 judges/canaries/stiffened_seat_beam_side_seat_bearing.petra	NOT_PASS			the outside judge rejects it
 judges/canaries/stiffened_seat_beam_vs_support_web_clearance.petra	NOT_PASS			the outside judge rejects it
 judges/canaries/truss_600m_span.petra	NOT_PASS			the outside judge rejects it
+corpus/cases/found/m_huge_exponent.petra	INPUT_ERROR			a mesh coordinate of 1e999999999, which read exactly would fill memory
