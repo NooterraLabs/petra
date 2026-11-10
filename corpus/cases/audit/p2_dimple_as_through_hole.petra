@@ -1,0 +1,12 @@
+petra 0
+design "dimple-top" {
+  owner "red@example.org"
+  environment indoor_dry
+}
+part base {
+  mesh "p1_dimple.stl" sha256 "52e17bbec9586f2c4c8b9cb7841124d7b74dfb4cdba4905d68cbb1e42c8f9c6f" units mm
+  material aluminium.6061_T6
+  tolerance in [0.05 mm, 0.05 mm] signed "red@example.org" source "x"
+  hole h1 at (0 mm, 0 mm, 5 mm) along top diameter 3 mm clear
+}
+claim m: base.mass <= 10 kg

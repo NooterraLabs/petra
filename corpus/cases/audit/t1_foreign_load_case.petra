@@ -1,0 +1,43 @@
+petra 0
+
+design "foreign-load" {
+  owner "a@example.org"
+  environment indoor_dry
+}
+
+truss frame {
+  material steel.S355
+  section chs.60_3x3_2
+  node A at (0 m, 0 m) support pinned
+  node B at (3 m, 0 m)
+  node C at (6 m, 0 m) support roller_x
+  node D at (1.5 m, 2 m)
+  node E at (4.5 m, 2 m)
+  member bottom_ab: A -- B
+  member bottom_bc: B -- C
+  member top_de:    D -- E section chs.76_1x3_2
+  member diag_ad:   A -- D
+  member diag_db:   D -- B
+  member diag_be:   B -- E
+  member diag_ec:   E -- C
+}
+
+demand hook {
+  capacity in [36 kN, 40 kN] measured "qa@example.org" source "x"
+}
+
+load lift {
+  on hook force in [0 kN, 40 kN] mean 10 kN
+  signed "ops@example.org" source "log"
+}
+
+claim strength:   frame.collapse_factor >= 1.5 under lift
+claim stability:  frame.stability_factor >= 3 under lift
+claim b1: frame.member(bottom_ab).buckling_utilisation <= 1 under lift
+claim b2: frame.member(bottom_bc).buckling_utilisation <= 1 under lift
+claim b3: frame.member(top_de).buckling_utilisation <= 1 under lift
+claim b4: frame.member(diag_ad).buckling_utilisation <= 1 under lift
+claim b5: frame.member(diag_db).buckling_utilisation <= 1 under lift
+claim b6: frame.member(diag_be).buckling_utilisation <= 1 under lift
+claim b7: frame.member(diag_ec).buckling_utilisation <= 1 under lift
+claim overload: P(hook.utilisation > 1) <= 3/10 under lift

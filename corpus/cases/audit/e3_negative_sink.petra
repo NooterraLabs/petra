@@ -1,0 +1,17 @@
+petra 0
+
+design "neg-sink" {
+  owner "e.designer@example.org"
+  environment indoor_dry
+}
+
+board power {
+  supply dc12 voltage in [11.4 V, 12.6 V] signed "e.designer@example.org" source "adapter datasheet" capacity in [1 A, 1 A] signed "e.designer@example.org" source "adapter datasheet"
+  regulator v3 part reg.ldo1117_3v3_sot223 from dc12
+  sink radio from v3
+}
+
+load transmit {
+  on power.radio current in [-10 A, -10 A]
+  signed "e.designer@example.org" source "radio module datasheet"
+}

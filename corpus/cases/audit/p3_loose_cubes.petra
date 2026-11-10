@@ -1,0 +1,12 @@
+petra 0
+design "islands-hole" {
+  owner "red@example.org"
+  environment indoor_dry
+}
+part p {
+  mesh "p3_islands.stl" sha256 "939f9eb7a2ffeed2e1a188a0218463825cf03fdb2724c3a01c46b4e5bd0f86a0" units mm
+  material aluminium.6061_T6
+  tolerance in [0.05 mm, 0.05 mm] signed "red@example.org" source "x"
+  hole h1 at (12.5 mm, 5 mm, 10 mm) along bottom diameter 4 mm clear
+}
+claim m: p.mass <= 100 kg

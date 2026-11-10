@@ -1,0 +1,26 @@
+petra 0
+
+design "neg-current" {
+  owner "e.designer@example.org"
+  environment indoor_dry
+}
+
+ambient in [10 degC, 30 degC] signed "site.manager@example.org" source "site survey"
+
+circuit lighting {
+  supply mains voltage 230 V fault_current in [0 kA, 6 kA] signed "dno@example.org" source "DNO letter"
+  breaker cb1 part mcb.B10
+  wire w1 cable cable.cu_pvc_2_5 length 400 m install install.clipped_direct
+  consumer lamps
+
+  connect mains.out -> cb1.in
+  connect cb1.out -> w1.a
+  connect w1.b -> lamps.in
+}
+
+load lamp_draw {
+  on lighting.lamps current in [-12 A, -12 A]
+  signed "e.designer@example.org" source "schedule"
+}
+
+claim drop: lighting.w1.voltage_drop <= 3 % under lamp_draw

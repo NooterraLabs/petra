@@ -50,7 +50,7 @@ class MaximumSpacing(unittest.TestCase):
         """A seat bolted to its support by one row of two bolts, the P3 pilot's task 303-003:
         its bolts sit side by side across the reaction, so J3.6 has no pitch to limit. It
         was left open for want of a spacing check; it is not owed, and says why."""
-        report = petra.check_file(ROOT / "docs" / "pilot_lift" / "without_petra" / "task-303-003" / "final.petra")
+        report = petra.check_file(ROOT / "corpus" / "cases" / "pilot" / "seat_one_row.petra")
         self.assertEqual(report.to_json()["status"], "PASS")
         why = [u["reason"] for u in report.to_json()["unchecked"] if u["mode"] == "steel.spacing_max"]
         self.assertEqual(len(why), 1)

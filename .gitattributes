@@ -1,0 +1,3 @@
+# Meshes are pinned by the hash of their bytes, so git must not change their line endings.
+*.stl -text
+*.3mf -text

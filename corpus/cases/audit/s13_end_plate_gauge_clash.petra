@@ -1,0 +1,21 @@
+petra 0
+design "t19_endplate_gauge_clash" {
+  owner "audit@example.org"
+}
+shear_end_plate c1 {
+  basis lrfd
+  beam W18x50 grade steel.A992
+  support W14x90 web grade steel.A992
+  plate steel.A36 thickness 0.25 inch
+  plate_width 4.5 inch
+  bolts bolt_group.120 diameter 0.75 inch threads included
+  rows 4
+  pitch 3 inch
+  edge_vertical 1.25 inch
+  support_gauge 2 inch
+  weld electrode.E70 size 0.25 inch sides 2
+}
+load gravity {
+  on c1 shear in [0 kip, 50 kip]
+  signed "audit@example.org" source "audit"
+}

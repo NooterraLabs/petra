@@ -1,0 +1,11 @@
+petra 0
+design "p6_metres" {
+  owner "red@example.org"
+  environment indoor_dry
+}
+part p {
+  mesh "p6_metres.stl" sha256 "6e8790f35a46904c8eb7391c9069b94845a80be2a28eb871ad01f0d540069a55" units mm
+  material aluminium.6061_T6
+  tolerance in [0.05 mm, 0.05 mm] signed "red@example.org" source "x"
+}
+claim m: p.mass <= 0.001 g

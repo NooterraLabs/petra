@@ -1,0 +1,23 @@
+petra 0
+design "t15_girder_uncoped" {
+  owner "audit@example.org"
+}
+double_angle c1 {
+  basis lrfd
+  beam W18x50 grade steel.A992
+  support W21x62 web grade steel.A992
+  angles L4x3_1_2x3_8 grade steel.A36 outstanding long
+  bolts bolt_group.120 diameter 0.75 inch threads excluded
+  rows 4
+  pitch 3 inch
+  edge_vertical 1.25 inch
+  beam_edge 1.75 inch
+  top 3 inch
+  beam_gauge 2.25 inch
+  support_side bolted
+  support_gauge 5.5 inch
+}
+load gravity {
+  on c1 shear in [0 kip, 95 kip]
+  signed "audit@example.org" source "audit"
+}

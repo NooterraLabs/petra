@@ -1,0 +1,11 @@
+petra 0
+design "p3_bad_transform" {
+  owner "red@example.org"
+  environment indoor_dry
+}
+part p {
+  mesh "p3_bad_transform.3mf" sha256 "e9fbc9c473b189646bd4efd068074d52d26f7cde4a3f341f376aca79f7e0ec3e" units mm
+  material aluminium.6061_T6
+  tolerance in [0.05 mm, 0.05 mm] signed "red@example.org" source "x"
+}
+claim m: p.mass <= 100 kg

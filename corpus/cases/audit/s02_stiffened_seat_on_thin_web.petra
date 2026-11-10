@@ -1,0 +1,20 @@
+petra 0
+design "t17b_stiffseat_thin_web" {
+  owner "audit@example.org"
+}
+stiffened_seat c1 {
+  basis lrfd
+  beam W21x44 grade steel.A992
+  support W16x26 web grade steel.A992
+  plate steel.A36 thickness 0.375 inch
+  stiffener steel.A36 thickness 0.5 inch
+  stiffener_width 7 inch
+  stiffener_length 20 inch
+  setback 0.5 inch
+  weld electrode.E70 size 0.25 inch sides 2
+  top_angle L4x4x1_4 grade steel.A36 outstanding long
+}
+load gravity {
+  on c1 shear in [0 kip, 60 kip]
+  signed "audit@example.org" source "audit"
+}

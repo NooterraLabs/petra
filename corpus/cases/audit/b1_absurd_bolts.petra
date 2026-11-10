@@ -1,0 +1,22 @@
+petra 0
+
+design "absurd-joint" {
+  owner "m.engineer@example.org"
+  environment indoor_dry
+}
+
+joint bracket {
+  bolt bolt.M6_8_8 count 1000000000000
+  plate led.red_0603 thickness 0.000001 mm
+  plate polymer.pla thickness 5 km
+  torque in [8 Nm, 9 Nm] signed "fitter" source "spec"
+  nut_factor in [0.16, 0.22] measured "lab" source "report"
+  load_share in [0.10, 0.25] signed "m.engineer" source "calc"
+}
+
+load wind {
+  on bracket force in [0 MN, 1000 MN]
+  signed "client" source "study"
+}
+
+waive bolt.plate_bearing on bracket by "m.engineer" reason "fine"

@@ -1,0 +1,32 @@
+petra 0
+
+design "param-load" {
+  owner "a@example.org"
+  environment indoor_dry
+}
+
+param p in [-1 N, 0 N]
+
+truss frame {
+  material steel.S355
+  section chs.60_3x3_2
+  node A at (0 m, 0 m) support pinned
+  node B at (3 m, 0 m)
+  node C at (6 m, 0 m) support roller_x
+  node D at (1.5 m, 2 m)
+  node E at (4.5 m, 2 m)
+  member bottom_ab: A -- B
+  member bottom_bc: B -- C
+  member top_de:    D -- E section chs.76_1x3_2
+  member diag_ad:   A -- D
+  member diag_db:   D -- B
+  member diag_be:   B -- E
+  member diag_ec:   E -- C
+}
+
+load crowd {
+  on frame.D fy param p
+  on frame.E fy param p
+}
+
+claim strength: frame.collapse_factor >= 1.5 under crowd

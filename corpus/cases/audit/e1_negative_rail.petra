@@ -1,0 +1,11 @@
+petra 0
+
+design "e_neg_rail" {
+  owner "e.designer@example.org"
+  environment indoor_dry
+}
+
+board bias {
+  supply hv voltage in [-200 V, -200 V] signed "e.designer@example.org" source "bias supply datasheet" capacity in [10 mA, 10 mA] signed "e.designer@example.org" source "bias supply datasheet"
+  resistor r1 part res.0603_1pct value 1 Mohm from hv
+}

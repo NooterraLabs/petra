@@ -25,7 +25,7 @@ the bolts or the welds hold rises (the certificates in checks.py and ic.py rest 
 C-shaped weld's C rises with its returns. No weld element's force along its line passes
 petra.weld_ic.along_peak.
 
-The P3 pilot's designs (docs/pilot_lift): the three the deck refused at 38cc6ba and now
+The P3 pilot's designs (corpus/cases/pilot): the three the deck refused at 38cc6ba and now
 passes (303-003 in tests/test_steel_coverage.py, 303-006, 303-022), and a bracket from the
 arm with Petra that the deck passed there and now fails by its tearout toward its back edge
 (303-021). A bracket's tearout, its edge distances with Table J3.5's C2, and its slots.
@@ -326,7 +326,7 @@ class TableTenNine(unittest.TestCase):
     303-006, four rows at a = 2-1/2 in, failed by the elastic method at e = a (1.08); by the
     instantaneous centre at a/2 it uses 0.84 of the group, at a 0.999."""
 
-    PILOT = ROOT / "docs" / "pilot_lift" / "without_petra" / "task-303-006" / "final.petra"
+    PILOT = ROOT / "corpus" / "cases" / "pilot" / "tab_half_a.petra"
 
     def bolts(self, *edits: tuple[str, str]) -> float:
         text = self.PILOT.read_text(encoding="utf-8")
@@ -430,7 +430,7 @@ class WeldInstantaneousCentrePremise(unittest.TestCase):
         self.assertLessEqual(along * peak, k("petra.weld_ic.along_peak"))
 
 
-PILOT_022 = ROOT / "docs" / "pilot_lift" / "without_petra" / "task-303-022" / "final.petra"
+PILOT_022 = ROOT / "corpus" / "cases" / "pilot" / "weld_bracket_thin_plate.petra"
 
 
 def certificate(segments: tuple, a: Fraction) -> tuple:
@@ -644,7 +644,7 @@ class BracketTearout(unittest.TestCase):
         centroid, inside the group, so the back column's top bolt pushes the plate 2.5
         degrees off straight back: lc = 0.908 in, 22.1 kips against 32.5 in shear, and C =
         3.08 times that holds 34.1 kips. The clean-room twin fails it too (1.17)."""
-        report = petra.check_file(ROOT / "docs" / "pilot_lift" / "with_petra" / "task-303-021" / "final.petra").to_json()
+        report = petra.check_file(ROOT / "corpus" / "cases" / "pilot" / "bracket_from_the_arm.petra").to_json()
         self.assertEqual(report["status"], "FAIL")
         self.assertAlmostEqual(obligation(report, "bolts")["utilisation"], 1.17, delta=0.005)
 

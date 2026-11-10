@@ -1,0 +1,23 @@
+petra 0
+design "t03_tee_weld_oversize" {
+  owner "audit@example.org"
+}
+shear_tee c1 {
+  basis lrfd
+  beam W18x50 grade steel.A992
+  support W14x90 flange grade steel.A992
+  tee WT6x25 grade steel.A992
+  bolts bolt_group.120 diameter 0.75 inch threads included
+  rows 4
+  pitch 3 inch
+  edge_vertical 1.25 inch
+  bolt_line 3 inch
+  beam_edge 1.75 inch
+  top 3 inch
+  support_side welded
+  support_weld electrode.E70 size 0.875 inch
+}
+load gravity {
+  on c1 shear in [0 kip, 40 kip]
+  signed "audit@example.org" source "audit"
+}

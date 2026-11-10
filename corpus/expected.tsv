@@ -1,0 +1,141 @@
+# The corpus. One design per line, tab-separated:
+#
+#   path    the verdict it must get    the wrong verdict it gets today, if any    why
+#
+# corpus/run.py explains the verdicts and what fails a run.
+#
+# Where the expected verdicts come from:
+#   examples/            what the example's name or header says it shows. For the passing
+#                        steel and electronics examples that is the verdict they ship with,
+#                        which nothing outside Petra has confirmed.
+#   judges/canaries/     each is a design the outside judge rejects, so it must not pass.
+#   corpus/cases/pilot/  designs from the lift pilot that the steel tests reason about.
+#   corpus/cases/audit/  the audit of 2026-11-09. "re-ran" means the lead auditor reproduced
+#                        the verdict, "auditor" that one auditor reported it. NOT_PASS is the
+#                        expectation until phase 1 gives ill-formed designs their own verdict.
+#
+# Not cases yet:
+#   audit F1 to F4       false FAILs whose truth is the auditor's memory of Manual tables.
+#   hook_uncertain       the audit disputes its PASS by analysis, with no run.
+#   examples/families/   inputs to `petra certify-family`, not to `petra check`.
+#   three weld_bracket_support_side canaries, which FAIL after about 150 s, past the limit.
+corpus/cases/audit/b1_absurd_bolts.petra	NOT_PASS	PASS	audit B1, re-ran: 10^12 bolts through a 1 nm plate made of an LED
+corpus/cases/audit/c1_negative_current.petra	NOT_PASS	PASS	audit C1, re-ran: +12 A fails on drop and overload
+corpus/cases/audit/c2_negative_length.petra	NOT_PASS	PASS	audit C2, re-ran: a wire of -5000 m
+corpus/cases/audit/c3_below_absolute_zero.petra	NOT_PASS	PASS	audit C3, re-ran: an ambient of -1000 degC
+corpus/cases/audit/c4_400kv_on_750v_cable.petra	NOT_PASS	PASS	audit C4, re-ran: 400 kV on 450/750 V cable, no voltage rating mode
+corpus/cases/audit/c5_negative_fault_current.petra	NOT_PASS	PASS	audit C5, auditor: a fault current of -50 kA on a 6 kA breaker
+corpus/cases/audit/c6_huge_area.petra	NOT_PASS	PASS	audit C6, auditor: a cable outside its catalogue with no validity row
+corpus/cases/audit/c6_negative_area.petra	NOT_PASS	TIMEOUT	audit C6, auditor: a cable outside its catalogue with no validity row
+corpus/cases/audit/c6_negative_insulation.petra	NOT_PASS	PASS	audit C6, auditor: a cable outside its catalogue with no validity row
+corpus/cases/audit/c6_zero_insulation.petra	NOT_PASS	PASS	audit C6, auditor: a cable outside its catalogue with no validity row
+corpus/cases/audit/c7_drop_at_assumed_temperature.petra	NOT_PASS	PASS	audit C7, auditor: the drop claim assumes 70 degC and the heat mode is waived
+corpus/cases/audit/e1_negative_rail.petra	NOT_PASS	PASS	audit E1, re-ran: +200 V on the same 75 V part fails at 2.67
+corpus/cases/audit/e2_dropout_waived.petra	NOT_PASS	PASS	audit E2, re-ran: the rail claim leans on a waived sibling mode
+corpus/cases/audit/e3_negative_sink.petra	NOT_PASS	PASS	audit E3, auditor: the sign of the sink current is never checked
+corpus/cases/audit/m_bad_transform.petra	INPUT_ERROR	INTERNAL_ERROR	a malformed 3MF is an input error
+corpus/cases/audit/m_bad_vertex.petra	INPUT_ERROR	INTERNAL_ERROR	a malformed 3MF is an input error
+corpus/cases/audit/m_nan_vertex.petra	INPUT_ERROR	INTERNAL_ERROR	a malformed 3MF is an input error
+corpus/cases/audit/m_no_vertices.petra	INPUT_ERROR	INTERNAL_ERROR	a malformed 3MF is an input error
+corpus/cases/audit/p1_screw_in_narrowing_bore.petra	NOT_PASS	PASS	audit P1, re-ran: the bore narrows to 0.8 mm after 5 mm
+corpus/cases/audit/p2_dimple_as_through_hole.petra	NOT_PASS	PASS	audit P2, re-ran: a 0.1 mm dimple declared as a through hole
+corpus/cases/audit/p3_loose_cubes.petra	NOT_PASS	PASS	audit P3, auditor: one part made of two loose pieces
+corpus/cases/audit/p4_metres_declared_mm.petra	NOT_PASS	PASS	audit P4, auditor: a mesh exported in metres and declared in mm
+corpus/cases/audit/p5_overlapping_cubes.petra	NOT_PASS	PASS	audit P5, auditor: the true mass is 0.229 g against a claim of at least 0.4 g
+corpus/cases/audit/s01_plate_on_thin_web.petra	NOT_PASS	PASS	audit S1, re-ran: nothing checks the web out of plane
+corpus/cases/audit/s02_stiffened_seat_on_thin_web.petra	NOT_PASS	PASS	audit S2, auditor: nothing checks the web out of plane
+corpus/cases/audit/s03_declared_eccentricity.petra	NOT_PASS	PASS	audit S3, re-ran: the declared eccentricity replaces the one the geometry gives
+corpus/cases/audit/s04_edge_distance_tearout.petra	NOT_PASS	PASS	audit S4, re-ran: tearout along the bolt force is 1.69, and the same group fails as a bracket
+corpus/cases/audit/s05_long_slots_snug.petra	NOT_PASS	PASS	audit S5, auditor: J3.3 wants a long slot normal to the load in a bearing joint
+corpus/cases/audit/s06_fillet_larger_than_angle_toe.petra	NOT_PASS	PASS	audit S6, re-ran: J2.2b caps the fillet at the toe thickness less 1/16 in
+corpus/cases/audit/s07_fillet_on_seat_angle.petra	NOT_PASS	PASS	audit S7, auditor: J2.2b on a flange tip or a seat angle
+corpus/cases/audit/s07_fillet_on_tee_flange_tip.petra	NOT_PASS	PASS	audit S7, auditor: J2.2b on a flange tip or a seat angle
+corpus/cases/audit/s08_two_column_tab_default_form.petra	NOT_PASS	PASS	audit S8, re-ran: two columns pass as a conventional tab and fail as an extended one
+corpus/cases/audit/s09_seat_longer_than_flange.petra	NOT_PASS	PASS	audit S9, auditor: the seat is longer than the flange that bears on it
+corpus/cases/audit/s10_girder_without_cope.petra	NOT_PASS	PASS	audit S10, auditor: a beam into a girder with no cope declared
+corpus/cases/audit/s11_slots_too_close.petra	NOT_PASS	PASS	audit S11, auditor: J3.4 wants a clear distance of one bolt diameter between slots
+corpus/cases/audit/s12_gauge_on_web_fillet.petra	NOT_PASS	PASS	audit S12, auditor: the hole sits on the web fillet
+corpus/cases/audit/s13_end_plate_gauge_clash.petra	NOT_PASS	PASS	audit S13, auditor: the bolt heads overlap the web weld
+corpus/cases/audit/t1_foreign_load_case.petra	NOT_PASS	PASS	audit T1, re-ran: the claims name a load case the truss is never checked under
+corpus/cases/audit/t2_load_through_param.petra	NOT_PASS	PASS	audit T2, re-ran: the only load comes through a param nobody signs
+corpus/cases/audit/u1_one_trial.petra	NOT_PASS	PASS	audit U1, re-ran: one trial at 0 kN, a claim at 0.000001 % confidence
+corpus/cases/audit/w1_design_waives_its_own_checks.petra	NOT_PASS	PASS	audit fault 1: the design waives its own bolt and block shear checks
+corpus/cases/audit/w2_truss_waives_collapse.petra	NOT_PASS	PASS	audit fault 1: the design waives collapse, stability and buckling by "x"
+corpus/cases/audit/x1_number_over_4300_digits.petra	INPUT_ERROR	INTERNAL_ERROR	audit, smaller items: a number over 4,300 digits is an input error
+corpus/cases/pilot/bracket_from_the_arm.petra	FAIL		tests/test_steel_groups.py: the moment arm is taken from the bolt group
+corpus/cases/pilot/seat_one_row.petra	PASS		tests/test_steel_coverage.py: one row has no pitch for J3.6 to limit
+corpus/cases/pilot/tab_half_a.petra	PASS		tests/test_steel_groups.py: the plate passes at half a
+corpus/cases/pilot/weld_bracket_thin_plate.petra	PASS		tests/test_steel_groups.py: 3/16 in fillets on a 5/16 in plate
+examples/bolt_unknown.petra	UNKNOWN		shipped example
+examples/circuit_pass.petra	PASS		shipped example
+examples/electronics/adjustable.petra	PASS		shipped example
+examples/electronics/board.petra	PASS		shipped example
+examples/electronics/cold_unknown.petra	UNKNOWN		shipped example
+examples/electronics/led_fail.petra	FAIL		shipped example
+examples/electronics/regulator_fail.petra	FAIL		shipped example
+examples/parts/assembly.petra	UNKNOWN		shipped example
+examples/parts/part.petra	UNKNOWN		shipped example
+examples/steel/bolt_bracket.petra	PASS		shipped example
+examples/steel/double_angle.petra	PASS		shipped example
+examples/steel/flange_force.petra	UNKNOWN		shipped example
+examples/steel/hanger.petra	PASS		shipped example
+examples/steel/seated.petra	PASS		shipped example
+examples/steel/shear_end_plate.petra	PASS		shipped example
+examples/steel/shear_tab.petra	PASS		shipped example
+examples/steel/shear_tab_cyclic.petra	PASS		shipped example
+examples/steel/shear_tee.petra	PASS		shipped example
+examples/steel/single_angle.petra	PASS		shipped example
+examples/steel/stiffened_seat.petra	PASS		shipped example
+examples/steel/weld_bracket.petra	PASS		shipped example
+examples/truss_fail.petra	FAIL		shipped example
+examples/truss_pass.petra	PASS		shipped example
+judges/canaries/bolt_bracket_gauge_10.petra	NOT_PASS		the outside judge rejects it
+judges/canaries/bolt_bracket_support_side_web_fillet.petra	NOT_PASS		the outside judge rejects it
+judges/canaries/bolt_bracket_support_side_web_width.petra	NOT_PASS		the outside judge rejects it
+judges/canaries/circuit_16mm2_in_4mm2_terminal.petra	NOT_PASS		the outside judge rejects it
+judges/canaries/demand_failed_below_capacity.petra	NOT_PASS		the outside judge rejects it
+judges/canaries/double_angle_beam_side_bolts_in_web.petra	NOT_PASS		the outside judge rejects it
+judges/canaries/double_angle_beam_side_depth.petra	NOT_PASS		the outside judge rejects it
+judges/canaries/double_angle_beam_side_fillet.petra	NOT_PASS		the outside judge rejects it
+judges/canaries/double_angle_beam_vs_support_beam_end.petra	NOT_PASS		the outside judge rejects it
+judges/canaries/double_angle_support_side_flange_width.petra	NOT_PASS		the outside judge rejects it
+judges/canaries/double_angle_support_side_web_fillet.petra	NOT_PASS		the outside judge rejects it
+judges/canaries/double_angle_support_side_web_width.petra	NOT_PASS		the outside judge rejects it
+judges/canaries/double_angle_w36_into_w10_web.petra	NOT_PASS		the outside judge rejects it
+judges/canaries/hanger_support_side_flange_width.petra	NOT_PASS		the outside judge rejects it
+judges/canaries/joint_opens_under_load.petra	NOT_PASS		the outside judge rejects it
+judges/canaries/seated_6_rows.petra	NOT_PASS		the outside judge rejects it
+judges/canaries/seated_beam_side_seat_bearing.petra	NOT_PASS		the outside judge rejects it
+judges/canaries/seated_beam_vs_support_web_clearance.petra	NOT_PASS		the outside judge rejects it
+judges/canaries/seated_support_side_flange_width.petra	NOT_PASS		the outside judge rejects it
+judges/canaries/seated_support_side_web_fillet.petra	NOT_PASS		the outside judge rejects it
+judges/canaries/seated_support_side_web_width.petra	NOT_PASS		the outside judge rejects it
+judges/canaries/shear_end_plate_8_rows.petra	NOT_PASS		the outside judge rejects it
+judges/canaries/shear_end_plate_beam_side_fillet.petra	NOT_PASS		the outside judge rejects it
+judges/canaries/shear_end_plate_beam_vs_support_web_clearance.petra	NOT_PASS		the outside judge rejects it
+judges/canaries/shear_end_plate_support_side_flange_width.petra	NOT_PASS		the outside judge rejects it
+judges/canaries/shear_end_plate_support_side_web_fillet.petra	NOT_PASS		the outside judge rejects it
+judges/canaries/shear_end_plate_support_side_web_width.petra	NOT_PASS		the outside judge rejects it
+judges/canaries/shear_tab_8_rows.petra	NOT_PASS		the outside judge rejects it
+judges/canaries/shear_tab_beam_side_bolts_in_web.petra	NOT_PASS		the outside judge rejects it
+judges/canaries/shear_tab_beam_side_fillet.petra	NOT_PASS		the outside judge rejects it
+judges/canaries/shear_tab_beam_vs_support_beam_end.petra	NOT_PASS		the outside judge rejects it
+judges/canaries/shear_tab_w36_into_w10_web.petra	NOT_PASS		the outside judge rejects it
+judges/canaries/shear_tee_beam_side_bolts_in_web.petra	NOT_PASS		the outside judge rejects it
+judges/canaries/shear_tee_beam_side_depth.petra	NOT_PASS		the outside judge rejects it
+judges/canaries/shear_tee_beam_side_fillet.petra	NOT_PASS		the outside judge rejects it
+judges/canaries/shear_tee_beam_vs_support_beam_end.petra	NOT_PASS		the outside judge rejects it
+judges/canaries/shear_tee_beam_vs_support_web_clearance.petra	NOT_PASS		the outside judge rejects it
+judges/canaries/shear_tee_support_side_flange_width.petra	NOT_PASS		the outside judge rejects it
+judges/canaries/shear_tee_support_side_web_fillet.petra	NOT_PASS		the outside judge rejects it
+judges/canaries/shear_tee_support_side_web_width.petra	NOT_PASS		the outside judge rejects it
+judges/canaries/single_angle_8_rows.petra	NOT_PASS		the outside judge rejects it
+judges/canaries/single_angle_beam_side_bolts_in_web.petra	NOT_PASS		the outside judge rejects it
+judges/canaries/single_angle_beam_side_fillet.petra	NOT_PASS		the outside judge rejects it
+judges/canaries/single_angle_beam_vs_support_beam_end.petra	NOT_PASS		the outside judge rejects it
+judges/canaries/single_angle_beam_vs_support_web_clearance.petra	NOT_PASS		the outside judge rejects it
+judges/canaries/single_angle_support_side_flange_width.petra	NOT_PASS		the outside judge rejects it
+judges/canaries/single_angle_support_side_web_width.petra	NOT_PASS		the outside judge rejects it
+judges/canaries/stiffened_seat_beam_side_seat_bearing.petra	NOT_PASS		the outside judge rejects it
+judges/canaries/stiffened_seat_beam_vs_support_web_clearance.petra	NOT_PASS		the outside judge rejects it
+judges/canaries/truss_600m_span.petra	NOT_PASS		the outside judge rejects it
