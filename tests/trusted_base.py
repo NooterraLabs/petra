@@ -252,7 +252,7 @@ TRUSTED: tuple[Group, ...] = (
 )
 
 UNTRUSTED: tuple[str, ...] = (
-    "petra/__init__.py", "petra/__main__.py", "petra/cli.py", "petra/certs.py", "petra/envelope.py", "petra/export.py", "petra/files.py",
+    "petra/__init__.py", "petra/__main__.py", "petra/cli.py", "petra/certs.py", "petra/deck.py", "petra/envelope.py", "petra/export.py", "petra/files.py",
     "petra/loop.py", "petra/mcp.py", "petra/readout.py", "petra/recall.py", "petra/repair.py",
     "petra/teach.py", "petra/templates.py", "petra/verify.py", "petra/wellformed.py",
     "petra/library/__init__.py", "petra/library/family.py", "petra/library/store.py",

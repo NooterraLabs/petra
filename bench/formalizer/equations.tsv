@@ -1,0 +1,26 @@
+# The equations of the first formalizer run, from ANSI/AISC 360-22. Each was transcribed twice from
+# the standard by transcribers that saw neither each other's rows nor any worked example.
+#
+# a.json and b.json are the two transcriptions as made, but for `jumps`, which was rewritten from each
+# transcriber's sentence into the per-pair form the format gained after the run. examples.json is the
+# worked examples as a third agent collected them from the Design Examples v16.0, but for the area unit,
+# now spelled inch2. No agent could view a page, since this machine renders no PDF pages: each read the
+# text and the drawing instructions of the PDF. The examples are not checked against the printed page.
+# J2-5 needs a sine, which the language lacks, and both transcribers left it out and said so.
+#
+# id	clause	equations	what the row gives
+aisc360-22/J3-1	J3.7	J3-1	nominal tensile or shear strength of a bolt
+aisc360-22/J3-3a	J3.8	J3-3a	nominal tensile stress of a bolt modified for shear, LRFD
+aisc360-22/J3-6a	J3.11a	J3-6a	bearing strength at a bolt hole when deformation at service load is a design consideration
+aisc360-22/J3-6c	J3.11a	J3-6c	tearout strength at a bolt hole when deformation at service load is a design consideration
+aisc360-22/J4-1	J4.1	J4-1	tensile yielding of a connecting element
+aisc360-22/J4-2	J4.1	J4-2	tensile rupture of a connecting element
+aisc360-22/J4-3	J4.2	J4-3	shear yielding of a connecting element
+aisc360-22/J4-4	J4.2	J4-4	shear rupture of a connecting element
+aisc360-22/J4-5	J4.3	J4-5	block shear strength
+aisc360-22/E3-2	E3	E3-2 and E3-3	critical stress for flexural buckling, both cases, taking the elastic buckling stress as an input
+aisc360-22/E3-4	E3	E3-4	elastic buckling stress
+aisc360-22/G2-3	G2.1	G2-3 and G2-4	web shear strength coefficient Cv1 of G2.1(b), both cases
+aisc360-22/J10-2	J10.2	J10-2 and J10-3	web local yielding, both cases; name the distance from the member end to the force x
+aisc360-22/J10-4	J10.3	J10-4, J10-5a and J10-5b	web local crippling, all three cases; name the distance from the member end to the force x
+aisc360-22/J2-5	J2.4	J2-5	nominal stress of a fillet weld loaded at an angle to its axis

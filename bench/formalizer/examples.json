@@ -1,0 +1,403 @@
+{
+ "examples": {
+  "aisc360-22/J3-1": [
+   {
+    "anchor": "Design Examples v16.0, Example J.5, p. J-18",
+    "given": {
+     "Fn": "90 ksi",
+     "Ab": "0.442 inch2"
+    },
+    "gives": "39.8 kip"
+   },
+   {
+    "anchor": "Design Examples v16.0, Example II.A-1C, p. IIA-36",
+    "given": {
+     "Fn": "90 ksi",
+     "Ab": "0.601 inch2"
+    },
+    "gives": "54.1 kip"
+   }
+  ],
+  "aisc360-22/J3-3a": [
+   {
+    "anchor": "Design Examples v16.0, Example J.3, p. J-12",
+    "given": {
+     "Fnt": "90 ksi",
+     "Fnv": "54 ksi",
+     "frv": "18.1 ksi"
+    },
+    "gives": "76.8 ksi"
+   },
+   {
+    "anchor": "Design Examples v16.0, Example II.A-1B, p. IIA-20",
+    "given": {
+     "Fnt": "90 ksi",
+     "Fnv": "54 ksi",
+     "frv": "12.5 ksi"
+    },
+    "gives": "89.2 ksi"
+   },
+   {
+    "anchor": "Design Examples v16.0, Example II.C-1, p. IIC-8",
+    "given": {
+     "Fnt": "90 ksi",
+     "Fnv": "54 ksi",
+     "frv": "17.6 ksi"
+    },
+    "gives": "77.9 ksi"
+   }
+  ],
+  "aisc360-22/J3-6a": [
+   {
+    "anchor": "Design Examples v16.0, Example II.A-1A, p. IIA-10",
+    "given": {
+     "d": "3/4 inch",
+     "t": "0.760 inch",
+     "Fu": "65 ksi"
+    },
+    "gives": "88.9 kip"
+   },
+   {
+    "anchor": "Design Examples v16.0, Example II.A-1B, p. IIA-18",
+    "given": {
+     "d": "7/8 inch",
+     "t": "0.355 inch",
+     "Fu": "65 ksi"
+    },
+    "gives": "48.5 kip"
+   },
+   {
+    "anchor": "Design Examples v16.0, Example II.B-1, p. IIB-11",
+    "given": {
+     "d": "7/8 inch",
+     "t": "0.570 inch",
+     "Fu": "65 ksi"
+    },
+    "gives": "77.8 kip"
+   }
+  ],
+  "aisc360-22/J3-6c": [
+   {
+    "anchor": "Design Examples v16.0, Example II.A-1A, p. IIA-10",
+    "given": {
+     "lc": "2.19 inch",
+     "t": "0.760 inch",
+     "Fu": "65 ksi"
+    },
+    "gives": "130 kip"
+   },
+   {
+    "anchor": "Design Examples v16.0, Example II.A-1B, p. IIA-19",
+    "given": {
+     "lc": "1.93 inch",
+     "t": "0.355 inch",
+     "Fu": "65 ksi"
+    },
+    "gives": "53.4 kip"
+   },
+   {
+    "anchor": "Design Examples v16.0, Example II.B-1, p. IIB-11",
+    "given": {
+     "lc": "1.03 inch",
+     "t": "0.570 inch",
+     "Fu": "65 ksi"
+    },
+    "gives": "45.8 kip"
+   }
+  ],
+  "aisc360-22/J4-1": [
+   {
+    "anchor": "Design Examples v16.0, Example II.A-1B, p. IIA-24",
+    "given": {
+     "Fy": "50 ksi",
+     "Ag": "18.1 inch2"
+    },
+    "gives": "905 kip"
+   },
+   {
+    "anchor": "Design Examples v16.0, Example II.C-1, p. IIC-14",
+    "given": {
+     "Fy": "50 ksi",
+     "Ag": "6.60 inch2"
+    },
+    "gives": "330 kip"
+   },
+   {
+    "anchor": "Design Examples v16.0, Example II.C-3, p. IIC-27",
+    "given": {
+     "Fy": "50 ksi",
+     "Ag": "14.6 inch2"
+    },
+    "gives": "730 kip"
+   }
+  ],
+  "aisc360-22/J4-2": [
+   {
+    "anchor": "Design Examples v16.0, Example II.A-1B, p. IIA-24",
+    "given": {
+     "Fu": "65 ksi",
+     "Ae": "11.9 inch2"
+    },
+    "gives": "774 kip"
+   },
+   {
+    "anchor": "Design Examples v16.0, Example II.A-2B, p. IIA-62",
+    "given": {
+     "Fu": "65 ksi",
+     "Ae": "8.66 inch2"
+    },
+    "gives": "563 kip"
+   },
+   {
+    "anchor": "Design Examples v16.0, Example II.B-1, p. IIB-13",
+    "given": {
+     "Fu": "65 ksi",
+     "Ae": "3.75 inch2"
+    },
+    "gives": "244 kip"
+   }
+  ],
+  "aisc360-22/J4-3": [
+   {
+    "anchor": "Design Examples v16.0, Example K.1, p. K-5",
+    "given": {
+     "Fy": "50 ksi",
+     "Agv": "3.91 inch2"
+    },
+    "gives": "117 kip"
+   },
+   {
+    "anchor": "Design Examples v16.0, Example II.A-1A, p. IIA-7",
+    "given": {
+     "Fy": "50 ksi",
+     "Agv": "14.7 inch2"
+    },
+    "gives": "441 kip"
+   },
+   {
+    "anchor": "Design Examples v16.0, Example II.C-2, p. IIC-18",
+    "given": {
+     "Fy": "50 ksi",
+     "Agv": "3.53 inch2"
+    },
+    "gives": "106 kip"
+   }
+  ],
+  "aisc360-22/J4-4": [
+   {
+    "anchor": "Design Examples v16.0, Example K.7, p. K-38",
+    "given": {
+     "Fu": "62 ksi",
+     "Anv": "1.97 inch2"
+    },
+    "gives": "73.3 kip"
+   },
+   {
+    "anchor": "Design Examples v16.0, Example K.1, p. K-6",
+    "given": {
+     "Fu": "65 ksi",
+     "Anv": "2.72 inch2"
+    },
+    "gives": "106 kip"
+   },
+   {
+    "anchor": "Design Examples v16.0, Example II.A-11A, p. IIA-126",
+    "given": {
+     "Fu": "65 ksi",
+     "Anv": "2.94 inch2"
+    },
+    "gives": "115 kip"
+   }
+  ],
+  "aisc360-22/J4-5": [
+   {
+    "anchor": "Design Examples v16.0, Example II.A-1A, p. IIA-8",
+    "given": {
+     "Fu": "65 ksi",
+     "Fy": "50 ksi",
+     "Anv": "9.80 inch2",
+     "Ant": "0.586 inch2",
+     "Agv": "13.9 inch2",
+     "Ubs": "1.0"
+    },
+    "gives": "420 kip"
+   },
+   {
+    "anchor": "Design Examples v16.0, Example II.A-2B, p. IIA-61",
+    "given": {
+     "Fu": "65 ksi",
+     "Fy": "50 ksi",
+     "Anv": "1.95 inch2",
+     "Ant": "5.15 inch2",
+     "Agv": "1.95 inch2",
+     "Ubs": "1.0"
+    },
+    "gives": "393 kip"
+   },
+   {
+    "anchor": "Design Examples v16.0, Example II.A-19A, p. IIA-209",
+    "given": {
+     "Fu": "65 ksi",
+     "Fy": "50 ksi",
+     "Anv": "3.72 inch2",
+     "Ant": "1.47 inch2",
+     "Agv": "5.25 inch2",
+     "Ubs": "0.5"
+    },
+    "gives": "193 kip"
+   }
+  ],
+  "aisc360-22/E3-2": [
+   {
+    "anchor": "Design Examples v16.0, Example E.1D, p. E-12",
+    "given": {
+     "Fy": "50 ksi",
+     "Fe": "83.3 ksi",
+     "E": "29000 ksi",
+     "Lc": "30.0 ft",
+     "r": "6.14 inch"
+    },
+    "gives": "38.9 ksi"
+   },
+   {
+    "anchor": "Design Examples v16.0, Example E.11, p. E-68",
+    "given": {
+     "Fy": "35 ksi",
+     "Fe": "29.9 ksi",
+     "E": "29000 ksi",
+     "Lc": "30.0 ft",
+     "r": "3.68 inch"
+    },
+    "gives": "21.4 ksi"
+   },
+   {
+    "anchor": "Design Examples v16.0, Example E.1E, p. E-18",
+    "given": {
+     "Fy": "50 ksi",
+     "Fe": "12.1 ksi",
+     "E": "29000 ksi",
+     "Lc": "15 ft",
+     "r": "1.17 inch"
+    },
+    "gives": "10.6 ksi"
+   }
+  ],
+  "aisc360-22/E3-4": [
+   {
+    "anchor": "Design Examples v16.0, Example E.1D, p. E-11",
+    "given": {
+     "E": "29000 ksi",
+     "Lc": "30.0 ft",
+     "r": "6.14 inch"
+    },
+    "gives": "83.3 ksi"
+   },
+   {
+    "anchor": "Design Examples v16.0, Example E.14B, p. E-90",
+    "given": {
+     "E": "29000 ksi",
+     "Lc": "60.0 inch",
+     "r": "0.863 inch"
+    },
+    "gives": "59.3 ksi"
+   },
+   {
+    "anchor": "Design Examples v16.0, Example E.11, p. E-68",
+    "given": {
+     "E": "29000 ksi",
+     "Lc": "30.0 ft",
+     "r": "3.68 inch"
+    },
+    "gives": "29.9 ksi"
+   }
+  ],
+  "aisc360-22/G2-3": [
+   {
+    "anchor": "Design Examples v16.0, Example G.8A, p. G-18",
+    "given": {
+     "h": "33.0 inch",
+     "tw": "5/16 inch",
+     "kv": "5.34",
+     "E": "29000 ksi",
+     "Fy": "50 ksi"
+    },
+    "gives": "0.577"
+   },
+   {
+    "anchor": "Design Examples v16.0, Example G.8B, p. G-22",
+    "given": {
+     "h": "33.0 inch",
+     "tw": "5/16 inch",
+     "kv": "8.09",
+     "E": "29000 ksi",
+     "Fy": "50 ksi"
+    },
+    "gives": "0.710"
+   },
+   {
+    "anchor": "Design Examples v16.0, Example F.14, p. F-72",
+    "given": {
+     "h": "62 inch",
+     "tw": "1/2 inch",
+     "kv": "5.34",
+     "E": "29000 ksi",
+     "Fy": "50 ksi"
+    },
+    "gives": "0.494"
+   }
+  ],
+  "aisc360-22/J10-2": [
+   {
+    "anchor": "Design Examples v16.0, Example J.7, p. J-25",
+    "given": {
+     "Fyw": "50 ksi",
+     "tw": "0.395 inch",
+     "k": "1.01 inch",
+     "lb": "7.50 inch",
+     "x": "8 ft",
+     "d": "23.6 inch"
+    },
+    "gives": "248 kip"
+   }
+  ],
+  "aisc360-22/J10-4": [
+   {
+    "anchor": "Design Examples v16.0, Example J.7, p. J-26",
+    "given": {
+     "E": "29000 ksi",
+     "Fyw": "50 ksi",
+     "tw": "0.395 inch",
+     "tf": "0.505 inch",
+     "d": "23.6 inch",
+     "lb": "7.50 inch",
+     "Qf": "1.0",
+     "x": "8 ft"
+    },
+    "gives": "282 kip"
+   }
+  ],
+  "aisc360-22/J2-5": [
+   {
+    "anchor": "Design Examples v16.0, Example J.1, p. J-3",
+    "given": {
+     "theta": "0 deg"
+    },
+    "gives": "1.0"
+   },
+   {
+    "anchor": "Design Examples v16.0, Example J.2A, p. J-5",
+    "given": {
+     "theta": "60 deg"
+    },
+    "gives": "1.40"
+   },
+   {
+    "anchor": "Design Examples v16.0, Example II.B-1, p. IIB-16",
+    "given": {
+     "theta": "90 deg"
+    },
+    "gives": "1.50"
+   }
+  ]
+ }
+}

@@ -1,0 +1,1187 @@
+{
+ "rows": [
+  {
+   "id": "aisc360-22/J3-1",
+   "anchor": {
+    "standard": "ANSI/AISC 360-22",
+    "clause": "J3.7",
+    "equation": "J3-1",
+    "page": "16.1-141"
+   },
+   "gives": {
+    "name": "Rn",
+    "dim": "force",
+    "what": "nominal tensile or shear strength of one snug-tightened or pretensioned high-strength bolt or threaded part, for tension rupture or shear rupture"
+   },
+   "takes": [
+    {
+     "name": "Fn",
+     "dim": "stress",
+     "what": "nominal stress of the fastener: the nominal tensile stress Fnt or the nominal shear stress Fnv of Table J3.2",
+     "range": [
+      "22 ksi",
+      "150 ksi"
+     ]
+    },
+    {
+     "name": "Ab",
+     "dim": "area",
+     "what": "nominal area of the unthreaded body of the bolt or threaded part",
+     "range": [
+      "0.19 inch2",
+      "7.1 inch2"
+     ]
+    }
+   ],
+   "is": [
+    "mul",
+    "Fn",
+    "Ab"
+   ]
+  },
+  {
+   "id": "aisc360-22/J3-3a",
+   "anchor": {
+    "standard": "ANSI/AISC 360-22",
+    "clause": "J3.8",
+    "equation": "J3-3a",
+    "page": "16.1-141"
+   },
+   "gives": {
+    "name": "Fnt_prime",
+    "dim": "stress",
+    "what": "nominal tensile stress of a bolt in a bearing-type connection, reduced for the shear stress that acts with the tension, LRFD; the standard writes it as Fnt with a prime on the F"
+   },
+   "takes": [
+    {
+     "name": "Fnt",
+     "dim": "stress",
+     "what": "nominal tensile stress of the fastener from Table J3.2",
+     "range": [
+      "40 ksi",
+      "150 ksi"
+     ]
+    },
+    {
+     "name": "Fnv",
+     "dim": "stress",
+     "what": "nominal shear stress of the fastener from Table J3.2",
+     "range": [
+      "22 ksi",
+      "113 ksi"
+     ]
+    },
+    {
+     "name": "frv",
+     "dim": "stress",
+     "what": "required shear stress in the bolt under LRFD load combinations; the clause requires it to be no more than the available shear stress, 0.75 Fnv",
+     "range": [
+      "1 ksi",
+      "60 ksi"
+     ]
+    }
+   ],
+   "is": [
+    "min",
+    [
+     "sub",
+     [
+      "mul",
+      "1.3",
+      "Fnt"
+     ],
+     [
+      "mul",
+      [
+       "div",
+       "Fnt",
+       [
+        "mul",
+        "0.75",
+        "Fnv"
+       ]
+      ],
+      "frv"
+     ]
+    ],
+    "Fnt"
+   ]
+  },
+  {
+   "id": "aisc360-22/J3-6a",
+   "anchor": {
+    "standard": "ANSI/AISC 360-22",
+    "clause": "J3.11a",
+    "equation": "J3-6a",
+    "page": "16.1-143"
+   },
+   "gives": {
+    "name": "Rn",
+    "dim": "force",
+    "what": "nominal bearing strength of the connected material at one bolt hole, where deformation of the hole at service load is a design consideration; for standard, oversized and short-slotted holes, and long-slotted holes with the slot parallel to the bearing force"
+   },
+   "takes": [
+    {
+     "name": "d",
+     "dim": "length",
+     "what": "nominal diameter of the fastener",
+     "range": [
+      "0.5 inch",
+      "1.5 inch"
+     ]
+    },
+    {
+     "name": "t",
+     "dim": "length",
+     "what": "thickness of the connected material",
+     "range": [
+      "0.125 inch",
+      "4 inch"
+     ]
+    },
+    {
+     "name": "Fu",
+     "dim": "stress",
+     "what": "specified minimum tensile strength of the connected material",
+     "range": [
+      "45 ksi",
+      "110 ksi"
+     ]
+    }
+   ],
+   "is": [
+    "mul",
+    "2.4",
+    "d",
+    "t",
+    "Fu"
+   ]
+  },
+  {
+   "id": "aisc360-22/J3-6c",
+   "anchor": {
+    "standard": "ANSI/AISC 360-22",
+    "clause": "J3.11a",
+    "equation": "J3-6c",
+    "page": "16.1-144"
+   },
+   "gives": {
+    "name": "Rn",
+    "dim": "force",
+    "what": "nominal tearout strength of the connected material at one bolt hole, where deformation of the hole at service load is a design consideration; for standard, oversized and short-slotted holes, and long-slotted holes with the slot parallel to the bearing force"
+   },
+   "takes": [
+    {
+     "name": "lc",
+     "dim": "length",
+     "what": "clear distance, in the direction of the force, from the edge of the hole to the edge of the next hole or to the edge of the material",
+     "range": [
+      "0.4 inch",
+      "6 inch"
+     ]
+    },
+    {
+     "name": "t",
+     "dim": "length",
+     "what": "thickness of the connected material",
+     "range": [
+      "0.125 inch",
+      "4 inch"
+     ]
+    },
+    {
+     "name": "Fu",
+     "dim": "stress",
+     "what": "specified minimum tensile strength of the connected material",
+     "range": [
+      "45 ksi",
+      "110 ksi"
+     ]
+    }
+   ],
+   "is": [
+    "mul",
+    "1.2",
+    "lc",
+    "t",
+    "Fu"
+   ]
+  },
+  {
+   "id": "aisc360-22/J4-1",
+   "anchor": {
+    "standard": "ANSI/AISC 360-22",
+    "clause": "J4.1",
+    "equation": "J4-1",
+    "page": "16.1-145"
+   },
+   "gives": {
+    "name": "Rn",
+    "dim": "force",
+    "what": "nominal strength of an affected or connecting element loaded in tension, for the limit state of tensile yielding"
+   },
+   "takes": [
+    {
+     "name": "Fy",
+     "dim": "stress",
+     "what": "specified minimum yield stress of the element",
+     "range": [
+      "33 ksi",
+      "100 ksi"
+     ]
+    },
+    {
+     "name": "Ag",
+     "dim": "area",
+     "what": "gross area of the element",
+     "range": [
+      "0.5 inch2",
+      "100 inch2"
+     ]
+    }
+   ],
+   "is": [
+    "mul",
+    "Fy",
+    "Ag"
+   ]
+  },
+  {
+   "id": "aisc360-22/J4-2",
+   "anchor": {
+    "standard": "ANSI/AISC 360-22",
+    "clause": "J4.1",
+    "equation": "J4-2",
+    "page": "16.1-145"
+   },
+   "gives": {
+    "name": "Rn",
+    "dim": "force",
+    "what": "nominal strength of an affected or connecting element loaded in tension, for the limit state of tensile rupture"
+   },
+   "takes": [
+    {
+     "name": "Fu",
+     "dim": "stress",
+     "what": "specified minimum tensile strength of the element",
+     "range": [
+      "45 ksi",
+      "110 ksi"
+     ]
+    },
+    {
+     "name": "Ae",
+     "dim": "area",
+     "what": "effective net area of the element as Section D3 defines it",
+     "range": [
+      "0.3 inch2",
+      "100 inch2"
+     ]
+    }
+   ],
+   "is": [
+    "mul",
+    "Fu",
+    "Ae"
+   ]
+  },
+  {
+   "id": "aisc360-22/J4-3",
+   "anchor": {
+    "standard": "ANSI/AISC 360-22",
+    "clause": "J4.2",
+    "equation": "J4-3",
+    "page": "16.1-145"
+   },
+   "gives": {
+    "name": "Rn",
+    "dim": "force",
+    "what": "nominal strength of an affected or connecting element in shear, for the limit state of shear yielding"
+   },
+   "takes": [
+    {
+     "name": "Fy",
+     "dim": "stress",
+     "what": "specified minimum yield stress of the element",
+     "range": [
+      "33 ksi",
+      "100 ksi"
+     ]
+    },
+    {
+     "name": "Agv",
+     "dim": "area",
+     "what": "gross area subjected to shear",
+     "range": [
+      "0.5 inch2",
+      "100 inch2"
+     ]
+    }
+   ],
+   "is": [
+    "mul",
+    "0.60",
+    "Fy",
+    "Agv"
+   ]
+  },
+  {
+   "id": "aisc360-22/J4-4",
+   "anchor": {
+    "standard": "ANSI/AISC 360-22",
+    "clause": "J4.2",
+    "equation": "J4-4",
+    "page": "16.1-146"
+   },
+   "gives": {
+    "name": "Rn",
+    "dim": "force",
+    "what": "nominal strength of an affected or connecting element in shear, for the limit state of shear rupture"
+   },
+   "takes": [
+    {
+     "name": "Fu",
+     "dim": "stress",
+     "what": "specified minimum tensile strength of the element",
+     "range": [
+      "45 ksi",
+      "110 ksi"
+     ]
+    },
+    {
+     "name": "Anv",
+     "dim": "area",
+     "what": "net area subjected to shear",
+     "range": [
+      "0.3 inch2",
+      "100 inch2"
+     ]
+    }
+   ],
+   "is": [
+    "mul",
+    "0.60",
+    "Fu",
+    "Anv"
+   ]
+  },
+  {
+   "id": "aisc360-22/J4-5",
+   "anchor": {
+    "standard": "ANSI/AISC 360-22",
+    "clause": "J4.3",
+    "equation": "J4-5",
+    "page": "16.1-146"
+   },
+   "gives": {
+    "name": "Rn",
+    "dim": "force",
+    "what": "nominal strength for block shear rupture along a shear failure path or paths and a perpendicular tension failure path"
+   },
+   "takes": [
+    {
+     "name": "Fu",
+     "dim": "stress",
+     "what": "specified minimum tensile strength of the material",
+     "range": [
+      "45 ksi",
+      "110 ksi"
+     ]
+    },
+    {
+     "name": "Fy",
+     "dim": "stress",
+     "what": "specified minimum yield stress of the material",
+     "range": [
+      "33 ksi",
+      "100 ksi"
+     ]
+    },
+    {
+     "name": "Anv",
+     "dim": "area",
+     "what": "net area subjected to shear",
+     "range": [
+      "0.3 inch2",
+      "60 inch2"
+     ]
+    },
+    {
+     "name": "Agv",
+     "dim": "area",
+     "what": "gross area subjected to shear",
+     "range": [
+      "0.5 inch2",
+      "60 inch2"
+     ]
+    },
+    {
+     "name": "Ant",
+     "dim": "area",
+     "what": "net area subjected to tension",
+     "range": [
+      "0.1 inch2",
+      "30 inch2"
+     ]
+    },
+    {
+     "name": "Ubs",
+     "dim": "dimensionless",
+     "what": "factor for the tension stress on the tension path: 1 where that stress is uniform, 0.5 where it is not",
+     "range": [
+      "0.5",
+      "1"
+     ]
+    }
+   ],
+   "is": [
+    "min",
+    [
+     "add",
+     [
+      "mul",
+      "0.60",
+      "Fu",
+      "Anv"
+     ],
+     [
+      "mul",
+      "Ubs",
+      "Fu",
+      "Ant"
+     ]
+    ],
+    [
+     "add",
+     [
+      "mul",
+      "0.60",
+      "Fy",
+      "Agv"
+     ],
+     [
+      "mul",
+      "Ubs",
+      "Fu",
+      "Ant"
+     ]
+    ]
+   ]
+  },
+  {
+   "id": "aisc360-22/E3-2",
+   "anchor": {
+    "standard": "ANSI/AISC 360-22",
+    "clause": "E3",
+    "equation": "E3-2, E3-3",
+    "page": "16.1-40"
+   },
+   "gives": {
+    "name": "Fn",
+    "dim": "stress",
+    "what": "nominal stress of a compression member without slender elements for the limit state of flexural buckling; the critical stress"
+   },
+   "takes": [
+    {
+     "name": "Fy",
+     "dim": "stress",
+     "what": "specified minimum yield stress of the steel",
+     "range": [
+      "33 ksi",
+      "100 ksi"
+     ]
+    },
+    {
+     "name": "Fe",
+     "dim": "stress",
+     "what": "elastic buckling stress, from Equation E3-4, from Appendix 7 or from an elastic buckling analysis",
+     "range": [
+      "7 ksi",
+      "320 ksi"
+     ]
+    }
+   ],
+   "cases": [
+    {
+     "when": [
+      "le",
+      [
+       "div",
+       "Fy",
+       "Fe"
+      ],
+      "2.25"
+     ],
+     "is": [
+      "mul",
+      [
+       "pow",
+       "0.658",
+       [
+        "div",
+        "Fy",
+        "Fe"
+       ]
+      ],
+      "Fy"
+     ]
+    },
+    {
+     "when": [
+      "gt",
+      [
+       "div",
+       "Fy",
+       "Fe"
+      ],
+      "2.25"
+     ],
+     "is": [
+      "mul",
+      "0.877",
+      "Fe"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "aisc360-22/E3-4",
+   "anchor": {
+    "standard": "ANSI/AISC 360-22",
+    "clause": "E3",
+    "equation": "E3-4",
+    "page": "16.1-41"
+   },
+   "gives": {
+    "name": "Fe",
+    "dim": "stress",
+    "what": "elastic buckling stress for flexural buckling"
+   },
+   "takes": [
+    {
+     "name": "Lc",
+     "dim": "length",
+     "what": "effective length of the member, the effective length factor times the laterally unbraced length",
+     "range": [
+      "24 inch",
+      "720 inch"
+     ]
+    },
+    {
+     "name": "r",
+     "dim": "length",
+     "what": "radius of gyration",
+     "range": [
+      "0.3 inch",
+      "8 inch"
+     ]
+    }
+   ],
+   "is": [
+    "div",
+    [
+     "mul",
+     [
+      "pow",
+      "pi",
+      "2"
+     ],
+     [
+      "q",
+      "29000",
+      "ksi"
+     ]
+    ],
+    [
+     "pow",
+     [
+      "div",
+      "Lc",
+      "r"
+     ],
+     "2"
+    ]
+   ]
+  },
+  {
+   "id": "aisc360-22/G2-3",
+   "anchor": {
+    "standard": "ANSI/AISC 360-22",
+    "clause": "G2.1",
+    "equation": "G2-3, G2-4",
+    "page": "16.1-76"
+   },
+   "gives": {
+    "name": "Cv1",
+    "dim": "dimensionless",
+    "what": "web shear strength coefficient of Section G2.1(b), for I-shaped members and channels that Section G2.1(a) does not cover"
+   },
+   "takes": [
+    {
+     "name": "h",
+     "dim": "length",
+     "what": "clear depth of the web: between flanges less the fillets for a rolled shape, between flanges for a welded built-up section, between fastener lines for a bolted built-up section",
+     "range": [
+      "4 inch",
+      "120 inch"
+     ]
+    },
+    {
+     "name": "tw",
+     "dim": "length",
+     "what": "thickness of the web",
+     "range": [
+      "0.15 inch",
+      "2 inch"
+     ]
+    },
+    {
+     "name": "kv",
+     "dim": "dimensionless",
+     "what": "web plate shear buckling coefficient: 5.34 without transverse stiffeners, from Equation G2-5 with them",
+     "range": [
+      "5.34",
+      "30"
+     ]
+    },
+    {
+     "name": "Fy",
+     "dim": "stress",
+     "what": "specified minimum yield stress of the steel",
+     "range": [
+      "33 ksi",
+      "100 ksi"
+     ]
+    }
+   ],
+   "cases": [
+    {
+     "when": [
+      "le",
+      [
+       "div",
+       "h",
+       "tw"
+      ],
+      [
+       "mul",
+       "1.10",
+       [
+        "sqrt",
+        [
+         "div",
+         [
+          "mul",
+          "kv",
+          [
+           "q",
+           "29000",
+           "ksi"
+          ]
+         ],
+         "Fy"
+        ]
+       ]
+      ]
+     ],
+     "is": "1.0"
+    },
+    {
+     "when": [
+      "gt",
+      [
+       "div",
+       "h",
+       "tw"
+      ],
+      [
+       "mul",
+       "1.10",
+       [
+        "sqrt",
+        [
+         "div",
+         [
+          "mul",
+          "kv",
+          [
+           "q",
+           "29000",
+           "ksi"
+          ]
+         ],
+         "Fy"
+        ]
+       ]
+      ]
+     ],
+     "is": [
+      "div",
+      [
+       "mul",
+       "1.10",
+       [
+        "sqrt",
+        [
+         "div",
+         [
+          "mul",
+          "kv",
+          [
+           "q",
+           "29000",
+           "ksi"
+          ]
+         ],
+         "Fy"
+        ]
+       ]
+      ],
+      [
+       "div",
+       "h",
+       "tw"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "id": "aisc360-22/J10-2",
+   "anchor": {
+    "standard": "ANSI/AISC 360-22",
+    "clause": "J10.2",
+    "equation": "J10-2, J10-3",
+    "page": "16.1-151"
+   },
+   "gives": {
+    "name": "Rn",
+    "dim": "force",
+    "what": "nominal strength of the web for the limit state of web local yielding under a concentrated force applied normal to the flange"
+   },
+   "takes": [
+    {
+     "name": "Fyw",
+     "dim": "stress",
+     "what": "specified minimum yield stress of the web material",
+     "range": [
+      "33 ksi",
+      "100 ksi"
+     ]
+    },
+    {
+     "name": "tw",
+     "dim": "length",
+     "what": "thickness of the web",
+     "range": [
+      "0.15 inch",
+      "3.1 inch"
+     ]
+    },
+    {
+     "name": "k",
+     "dim": "length",
+     "what": "distance from the outer face of the flange to the web toe of the fillet",
+     "range": [
+      "0.3 inch",
+      "5.5 inch"
+     ]
+    },
+    {
+     "name": "lb",
+     "dim": "length",
+     "what": "length of bearing",
+     "range": [
+      "0.5 inch",
+      "24 inch"
+     ]
+    },
+    {
+     "name": "x",
+     "dim": "length",
+     "what": "distance from the member end to the point where the concentrated force is applied",
+     "range": [
+      "0.5 inch",
+      "120 inch"
+     ]
+    },
+    {
+     "name": "d",
+     "dim": "length",
+     "what": "full nominal depth of the member",
+     "range": [
+      "4 inch",
+      "72 inch"
+     ]
+    }
+   ],
+   "cases": [
+    {
+     "when": [
+      "gt",
+      "x",
+      "d"
+     ],
+     "is": [
+      "mul",
+      "Fyw",
+      "tw",
+      [
+       "add",
+       [
+        "mul",
+        "5",
+        "k"
+       ],
+       "lb"
+      ]
+     ]
+    },
+    {
+     "when": [
+      "le",
+      "x",
+      "d"
+     ],
+     "is": [
+      "mul",
+      "Fyw",
+      "tw",
+      [
+       "add",
+       [
+        "mul",
+        "2.5",
+        "k"
+       ],
+       "lb"
+      ]
+     ]
+    }
+   ],
+   "jumps": [
+    {
+     "cases": [
+      1,
+      2
+     ],
+     "why": "The standard gives one formula for a force farther than d from the member end and another for a force within d of it, and switches between them at x = d by a step. Away from the end the yielding spreads along the web to both sides of the force and the length counted through k is 5k; near the end it can spread to one side only and the standard counts 2.5k."
+    }
+   ]
+  },
+  {
+   "id": "aisc360-22/J10-4",
+   "anchor": {
+    "standard": "ANSI/AISC 360-22",
+    "clause": "J10.3",
+    "equation": "J10-4, J10-5a, J10-5b",
+    "page": "16.1-151 to 16.1-152"
+   },
+   "gives": {
+    "name": "Rn",
+    "dim": "force",
+    "what": "nominal strength of the web for the limit state of web local crippling under a concentrated compressive force applied normal to the flange"
+   },
+   "takes": [
+    {
+     "name": "tw",
+     "dim": "length",
+     "what": "thickness of the web",
+     "range": [
+      "0.15 inch",
+      "3.1 inch"
+     ]
+    },
+    {
+     "name": "tf",
+     "dim": "length",
+     "what": "thickness of the flange",
+     "range": [
+      "0.2 inch",
+      "5 inch"
+     ]
+    },
+    {
+     "name": "lb",
+     "dim": "length",
+     "what": "length of bearing",
+     "range": [
+      "0.5 inch",
+      "24 inch"
+     ]
+    },
+    {
+     "name": "d",
+     "dim": "length",
+     "what": "full nominal depth of the member",
+     "range": [
+      "4 inch",
+      "72 inch"
+     ]
+    },
+    {
+     "name": "x",
+     "dim": "length",
+     "what": "distance from the member end to the point where the concentrated compressive force is applied",
+     "range": [
+      "0.5 inch",
+      "120 inch"
+     ]
+    },
+    {
+     "name": "Fyw",
+     "dim": "stress",
+     "what": "specified minimum yield stress of the web material",
+     "range": [
+      "33 ksi",
+      "100 ksi"
+     ]
+    },
+    {
+     "name": "Qf",
+     "dim": "dimensionless",
+     "what": "chord-stress interaction parameter: 1.0 for wide-flange sections, channels, box sections and HSS with the connecting surface in tension, otherwise from Section K1.3",
+     "range": [
+      "0.4",
+      "1.0"
+     ]
+    }
+   ],
+   "cases": [
+    {
+     "when": [
+      "ge",
+      "x",
+      [
+       "div",
+       "d",
+       "2"
+      ]
+     ],
+     "is": [
+      "mul",
+      "0.80",
+      [
+       "pow",
+       "tw",
+       "2"
+      ],
+      [
+       "add",
+       "1",
+       [
+        "mul",
+        "3",
+        [
+         "div",
+         "lb",
+         "d"
+        ],
+        [
+         "pow",
+         [
+          "div",
+          "tw",
+          "tf"
+         ],
+         "1.5"
+        ]
+       ]
+      ],
+      [
+       "sqrt",
+       [
+        "div",
+        [
+         "mul",
+         [
+          "q",
+          "29000",
+          "ksi"
+         ],
+         "Fyw",
+         "tf"
+        ],
+        "tw"
+       ]
+      ],
+      "Qf"
+     ]
+    },
+    {
+     "when": [
+      "and",
+      [
+       "lt",
+       "x",
+       [
+        "div",
+        "d",
+        "2"
+       ]
+      ],
+      [
+       "le",
+       [
+        "div",
+        "lb",
+        "d"
+       ],
+       "0.2"
+      ]
+     ],
+     "is": [
+      "mul",
+      "0.40",
+      [
+       "pow",
+       "tw",
+       "2"
+      ],
+      [
+       "add",
+       "1",
+       [
+        "mul",
+        "3",
+        [
+         "div",
+         "lb",
+         "d"
+        ],
+        [
+         "pow",
+         [
+          "div",
+          "tw",
+          "tf"
+         ],
+         "1.5"
+        ]
+       ]
+      ],
+      [
+       "sqrt",
+       [
+        "div",
+        [
+         "mul",
+         [
+          "q",
+          "29000",
+          "ksi"
+         ],
+         "Fyw",
+         "tf"
+        ],
+        "tw"
+       ]
+      ],
+      "Qf"
+     ]
+    },
+    {
+     "when": [
+      "and",
+      [
+       "lt",
+       "x",
+       [
+        "div",
+        "d",
+        "2"
+       ]
+      ],
+      [
+       "gt",
+       [
+        "div",
+        "lb",
+        "d"
+       ],
+       "0.2"
+      ]
+     ],
+     "is": [
+      "mul",
+      "0.40",
+      [
+       "pow",
+       "tw",
+       "2"
+      ],
+      [
+       "add",
+       "1",
+       [
+        "mul",
+        [
+         "sub",
+         [
+          "div",
+          [
+           "mul",
+           "4",
+           "lb"
+          ],
+          "d"
+         ],
+         "0.2"
+        ],
+        [
+         "pow",
+         [
+          "div",
+          "tw",
+          "tf"
+         ],
+         "1.5"
+        ]
+       ]
+      ],
+      [
+       "sqrt",
+       [
+        "div",
+        [
+         "mul",
+         [
+          "q",
+          "29000",
+          "ksi"
+         ],
+         "Fyw",
+         "tf"
+        ],
+        "tw"
+       ]
+      ],
+      "Qf"
+     ]
+    }
+   ],
+   "jumps": [
+    {
+     "cases": [
+      1,
+      2
+     ],
+     "why": "The standard gives one formula for a force at least d/2 from the member end, with the coefficient 0.80, and two for a force nearer the end, with the coefficient 0.40, and switches between them at x = d/2 by a step: a force near the end has web on one side only to resist crippling. The two end formulas meet at lb/d = 0.2."
+    },
+    {
+     "cases": [
+      1,
+      3
+     ],
+     "why": "The standard gives one formula for a force at least d/2 from the member end, with the coefficient 0.80, and two for a force nearer the end, with the coefficient 0.40, and switches between them at x = d/2 by a step: a force near the end has web on one side only to resist crippling. The two end formulas meet at lb/d = 0.2."
+    }
+   ]
+  }
+ ],
+ "not_written": [
+  {
+   "id": "aisc360-22/J2-5",
+   "why": "Equation J2-5 of the 2022 standard (Section J2.4, p. 16.1-130) gives the directional strength increase factor kds of a fillet weld, not a stress: 1.0 plus 0.50 times the sine of theta raised to the power 1.5, where theta is the angle in degrees between the line of action of the required force and the weld's longitudinal axis. The expression language has no sine, so the row cannot be written without approximating the sine or replacing the standard's input theta by its sine."
+  }
+ ]
+}
