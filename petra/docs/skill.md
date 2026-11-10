@@ -46,7 +46,7 @@ The first line names the governing failed check and its utilisation. Each move c
 
 ## Use Petra from an MCP client
 
-`petra mcp` serves the tools `check`, `kinds`, `new`, `registry_list` and `docs` over stdio. The `check` tool takes the design as `text` or as the absolute `path` of a file. It returns the text that `petra check` prints, and the JSON as structured content.
+`petra mcp` serves the tools `check`, `kinds`, `new`, `registry_list` and `docs` over stdio. The `check` tool takes the design as `text` or as the absolute `path` of a `.petra` file on the server's machine. It returns the text that `petra check` prints, and the JSON as structured content. The server stops a call that runs longer than 120 s and says so. `petra mcp --budget SECONDS` sets another limit.
 
 In Claude Code, `/plugin marketplace add NooterraLabs/petra` and then `/plugin install petra@petra` add the server and this skill. The server runs as `uvx --from petra-lang==0.1.2 petra mcp`, so it needs [uv](https://docs.astral.sh/uv/) and no other install. Clients that read a JSON file take this entry:
 

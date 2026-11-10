@@ -21,7 +21,7 @@ A move is a suggestion from a search, not a verdict. Only a check of the edited 
 
 ## Use from an MCP client
 
-`petra mcp` runs a Model Context Protocol server on stdin and stdout. It uses only the Python standard library. Its tools are `check`, `kinds`, `new`, `registry_list` and `docs`. `check` returns the text that `petra check` prints, and the data of `petra.check` as structured content. The server speaks protocol revision 2026-07-28, in which each request names its revision, and answers `initialize` for clients of 2025-11-25 back to 2024-11-05.
+`petra mcp` runs a Model Context Protocol server on stdin and stdout. It uses only the Python standard library. Its tools are `check`, `kinds`, `new`, `registry_list` and `docs`. `check` returns the text that `petra check` prints, and the data of `petra.check` as structured content. Its `path` argument reads a `.petra` file on the server's machine and nothing else. Tool calls run in a second process, so the server can stop a call that the client cancels or that runs past 120 s. `petra mcp --budget SECONDS` sets another limit. The server speaks protocol revision 2026-07-28, in which each request names its revision, and answers `initialize` for clients of 2025-11-25 back to 2024-11-05.
 
 `petra docs skill` prints a SKILL.md for coding agents. It says how to start from `petra new`, how to read a FAIL and its moves, and what an agent must never change to reach a PASS. Those are the loads, the claims and the waivers.
 

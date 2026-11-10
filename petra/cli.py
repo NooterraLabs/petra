@@ -80,9 +80,12 @@
         Print the document NAME: readme, reference (the language), api (the Python API
         and the JSON) or skill (a SKILL.md for coding agents). With no NAME, list them.
         3 for an unknown name.
-    python -m petra mcp
+    python -m petra mcp [--budget SECONDS]
         Serve check, kinds, new, registry_list and docs to an MCP client, JSON-RPC over
-        stdin and stdout, until stdin closes (petra/mcp.py). Exit 0.
+        stdin and stdout, until stdin closes (petra/mcp.py). A tool call that runs longer
+        than the budget is stopped and says so. Exit 0.
+    python -m petra --version
+        Print the version.
 
 A usage error (an unknown subcommand or flag) is an input error too and exits 3. A crash
 (an unimplemented elaborator, a bug) prints its traceback and exits 4, so it never reads
@@ -133,12 +136,15 @@ def build_parser() -> argparse.ArgumentParser:
     """Subcommands check, explain, envelope, verify, certify-family, registry (build,
     check, recall, list), kinds, new, docs and mcp, with the flags in the module
     docstring."""
+    from . import __version__
+
     parser = _Parser(prog="petra", description="verdicts about physical designs as theorems relative to explicit premises",
                      formatter_class=argparse.RawDescriptionHelpFormatter,
                      epilog="Coding agents: `petra docs skill` prints a SKILL.md on designing, checking and repairing\n"
                             "with Petra, and `petra mcp` serves Petra's tools to an MCP client over stdio.\n"
                             "The README, the language reference, the Python API and that skill come with Petra:\n"
                             "`petra docs` lists them, and `petra docs NAME` prints one.")
+    parser.add_argument("--version", action="version", version=f"petra {__version__}")
     commands = parser.add_subparsers(dest="command", required=True, parser_class=_Parser)
 
     check = commands.add_parser("check", help="check a design and print its verdicts")
@@ -191,10 +197,29 @@ def build_parser() -> argparse.ArgumentParser:
     recall_cmd.set_defaults(run=cmd_registry_recall)
 
     _add_teach_commands(commands, decks)
-    serve = commands.add_parser("mcp", help="serve check, kinds, new, registry_list and docs to an MCP client over stdio",
-                                description="Run an MCP server on stdin and stdout, for a coding agent's client to "
-                                            "start. `petra docs skill` shows how to add it to a client.")
-    serve.set_defaults(run=cmd_mcp)
+    _mcp_arguments(commands.add_parser(
+        "mcp", help="serve check, kinds, new, registry_list and docs to an MCP client over stdio",
+        description="Run an MCP server on stdin and stdout, for a coding agent's client to "
+                    "start. `petra docs skill` shows how to add it to a client."))
+    return parser
+
+
+def _seconds(text: str) -> float:
+    value = float(text)
+    if not value > 0:
+        raise argparse.ArgumentTypeError("the budget is more than 0 seconds")
+    return value
+
+
+def _mcp_arguments(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
+    """What `petra mcp` takes. main() parses these on their own parser, because
+    build_parser imports every model for its help and a client waits for the handshake."""
+    from .mcp import BUDGET_S
+
+    parser.add_argument("--budget", type=_seconds, default=BUDGET_S, metavar="SECONDS",
+                        help="stop a tool call that runs longer than this (default %(default)g)")
+    parser.add_argument("--worker", action="store_true", help=argparse.SUPPRESS)
+    parser.set_defaults(run=cmd_mcp)
     return parser
 
 
@@ -208,6 +233,7 @@ def cmd_check(args: argparse.Namespace) -> int:
     sort_keys=True). Returns EXIT_CODES[status], or EXIT_CODES["INPUT_ERROR"] when the file
     or the deck cannot be read or the design does not lower (message on stderr)."""
     from .certs import CertStore
+    from .files import read_design
     from .library import Library
     from .registry import build_registry, read_deck
     from .repair import check_text
@@ -215,7 +241,7 @@ def cmd_check(args: argparse.Namespace) -> int:
 
     try:
         registry = build_registry()
-        text = Path(args.file).read_text(encoding="utf-8")
+        text = read_design(args.file)
         deck = read_deck(args.deck) if args.deck else None
         store = CertStore(args.certs) if args.certs else None
         library = Library(args.library) if args.library else None
@@ -232,7 +258,7 @@ def cmd_check(args: argparse.Namespace) -> int:
 def cmd_mcp(args: argparse.Namespace) -> int:
     from .mcp import main as serve
 
-    return serve()
+    return serve(args.budget, args.worker)
 
 
 def cmd_explain(args: argparse.Namespace) -> int:
@@ -502,9 +528,8 @@ def _join_negative(argv: list[str]) -> list[str]:
 def main(argv: list[str] | None = None) -> int:
     try:
         argv = _join_negative(sys.argv[1:] if argv is None else list(argv))
-        # The parser's help names every kind, which imports every model. An MCP client waits only
-        # so long for the handshake, so `petra mcp` skips the parser.
-        args = argparse.Namespace(run=cmd_mcp) if argv == ["mcp"] else build_parser().parse_args(argv)
+        mcp = argv[:1] == ["mcp"]
+        args = _mcp_arguments(_Parser(prog="petra mcp")).parse_args(argv[1:]) if mcp else build_parser().parse_args(argv)
         code = args.run(args)
         sys.stdout.flush()
         return code

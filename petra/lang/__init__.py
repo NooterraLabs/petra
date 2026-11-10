@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from ..files import read_design
 from ..ir import Design
 from ..registry import build_registry
 from .lexer import LolaSyntaxError
@@ -17,7 +18,5 @@ def parse_design(text: str, path: str, registry: object) -> Design:
 
 
 def load_design(path: str | Path, registry: object | None = None) -> Design:
-    """Read a .petra file (UTF-8) and parse it against the default registry when none is
-    given."""
-    text = Path(path).read_text(encoding="utf-8")
-    return parse_design(text, str(path), build_registry() if registry is None else registry)
+    """Read a .petra file and parse it against the default registry when none is given."""
+    return parse_design(read_design(path), str(path), build_registry() if registry is None else registry)

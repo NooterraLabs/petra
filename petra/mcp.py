@@ -1,6 +1,6 @@
 """An MCP server over Petra's Python API, on stdio, with the standard library only.
 
-    petra mcp                  (or python -m petra.mcp)
+    petra mcp [--budget SECONDS]
 
 The client starts the server and writes JSON-RPC 2.0 messages to its stdin, one per line;
 the server writes one response per request to stdout, one per line, and nothing else
@@ -25,15 +25,25 @@ a design that does not lower) answers with isError true and the reason, so the m
 reads it and can try again. An unknown tool, a malformed request or a bug in a tool
 answers with a JSON-RPC error, and the server keeps serving. A thread reads stdin ahead
 of the requests being answered, so that notifications/cancelled reaches a request still
-in the queue, which is then never answered, or one in progress, whose answer is dropped.
+in the queue, which is then never answered, or one in progress, which is stopped.
+
+Tool calls run in a second process, the worker. A call that is cancelled, or that runs past
+the budget, ends with that process, and the server starts another. The server itself never
+imports the language, the models or the solvers.
+
+The `path` of a check comes from a model, so it reads a .petra file on this machine and
+nothing else, and it gives the same answer for a file that is missing, unreadable or of
+another kind.
 Untrusted: it only calls the API, so a bug here costs a reply, never a verdict.
 """
 from __future__ import annotations
 
 import json
 import queue
+import subprocess
 import sys
 import threading
+import time
 import traceback
 from pathlib import Path
 from typing import Any, BinaryIO, Callable, Iterable, Mapping
@@ -99,14 +109,28 @@ def _check(args: Mapping[str, Any]) -> Result:
     if text is not None and path is not None:
         raise ToolError("give the design as `text` or as a file `path`, not both")
     if path is not None:
-        try:
-            text = Path(path).read_text(encoding="utf-8")
-        except OSError as exc:
-            raise ToolError(f"cannot read {path}: {exc}") from None
+        text = _design_at(path)
     checked = check_text(text, path or "<text>", build_registry(), (SolverSource(),))
     if checked.report is None:
         raise ToolError(checked.text())
     return checked.text(), checked.to_json()
+
+
+def _design_at(path: str) -> str:
+    """The text of the .petra file at `path`. A network path is refused before anything
+    touches it, because opening one sends the user's credentials to the host it names."""
+    from .files import read_design
+
+    try:
+        if path.startswith(("\\\\", "//")):
+            raise OSError
+        real = Path(path).resolve(strict=True)
+        if real.suffix != ".petra" or not real.is_file():
+            raise OSError
+        return read_design(real)
+    except (OSError, ValueError):
+        raise ToolError(f"cannot read {path}: `path` takes a .petra file on this machine. "
+                        "Give the design as `text` instead.") from None
 
 
 def _taught(call: Callable[[], str]) -> str:
@@ -248,8 +272,9 @@ def _request_id(message: Any) -> str | int | None:
     return None
 
 
-def handle(message: Any) -> dict[str, Any] | None:
-    """The response to one JSON-RPC message, or None for a notification."""
+def handle(message: Any, call: Callable[[Mapping[str, Any]], dict[str, Any]] = _call) -> dict[str, Any] | None:
+    """The response to one JSON-RPC message, or None for a notification. `call` runs a
+    tools/call: here, or in the worker."""
     if not isinstance(message, dict) or message.get("jsonrpc") != "2.0" or not isinstance(message.get("method"), str):
         if isinstance(message, dict) and "method" not in message and ("result" in message or "error" in message):
             return None
@@ -268,7 +293,7 @@ def handle(message: Any) -> dict[str, Any] | None:
             raise RpcError(INVALID_PARAMS, f"server/discover takes _meta with {VERSION} and {CLIENT_CAPABILITIES}")
         if method not in METHODS:
             raise RpcError(METHOD_NOT_FOUND, f"unknown method {method!r}")
-        result = METHODS[method](params)
+        result = call(params) if method == "tools/call" else METHODS[method](params)
     except RpcError as exc:
         return _error(rid, exc.code, str(exc), exc.data)
     except Exception as exc:
@@ -288,10 +313,103 @@ def _error(rid: Any, code: int, message: str, data: Any = None) -> dict[str, Any
     return {"jsonrpc": "2.0", "id": rid, "error": error}
 
 
-def serve(stdin: Iterable[bytes], stdout: BinaryIO) -> int:
+BUDGET_S = 120.0
+"""How long a tool call may run before the server stops it. The slowest shipped example
+checks in about 10 s on a busy desktop, and the slowest design in corpus/ that finishes
+takes 28 s."""
+
+
+def _tool_error(text: str) -> dict[str, Any]:
+    return {"content": [{"type": "text", "text": text}], "isError": True}
+
+
+class Worker:
+    """The process that runs tool calls, so that a call can be stopped by ending it.
+
+    It also keeps numpy out of the server. On Windows a library that loads while another
+    thread waits on stdin can block until the client writes again. numpy's did, and the
+    first tool call got no answer."""
+
+    COMMAND = (sys.executable, "-m", "petra", "mcp", "--worker")
+
+    def __init__(self, budget: float = BUDGET_S) -> None:
+        self.budget = budget
+        self._start()
+
+    def _start(self) -> None:
+        self.process = subprocess.Popen(self.COMMAND, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+        self.replies: queue.Queue[bytes] = queue.Queue()
+        self.reader = threading.Thread(target=self._read, args=(self.process, self.replies), name="petra-mcp-worker", daemon=True)
+        self.reader.start()
+
+    @staticmethod
+    def _read(process: subprocess.Popen, replies: queue.Queue[bytes]) -> None:
+        for line in process.stdout:
+            replies.put(line)
+        replies.put(b"")
+
+    def stop(self) -> None:
+        self.process.kill()
+        self.process.wait()
+        self.reader.join()
+        for pipe in (self.process.stdin, self.process.stdout):
+            try:
+                pipe.close()
+            except OSError:
+                pass  # a line the worker never read is still in the pipe's buffer
+
+    def call(self, params: Mapping[str, Any], cancelled: Callable[[], bool]) -> dict[str, Any]:
+        """The result of one tools/call. Once `cancelled()` is true the call is stopped,
+        and what this returns is not sent."""
+        try:
+            self.process.stdin.write(json.dumps(params).encode("ascii") + b"\n")
+            self.process.stdin.flush()
+        except OSError:
+            pass  # the worker has ended, and its last line says so below
+        deadline = time.monotonic() + self.budget
+        while True:
+            try:
+                line = self.replies.get(timeout=0.05)
+            except queue.Empty:
+                if not cancelled() and time.monotonic() < deadline:
+                    continue
+                why = f"stopped after {self.budget:g} s with no verdict. `petra mcp --budget SECONDS` sets the limit."
+            else:
+                if line:
+                    reply = json.loads(line)
+                    if "error" in reply:
+                        raise RpcError(*reply["error"])
+                    return reply["result"]
+                why = "the checker ended before it answered. Its error is on the server's stderr."
+            self.stop()
+            self._start()
+            return _tool_error(why)
+
+
+def work(stdin: Iterable[bytes], stdout: BinaryIO) -> int:
+    """The worker: answer each line of `stdin`, the params of one tools/call, with a line
+    that holds its result or its JSON-RPC error. What a tool call imports is imported
+    first, while the client is still shaking hands with the server."""
+    from . import build_registry, repair, solvers, teach  # noqa: F401
+
+    for raw in stdin:
+        try:
+            reply: dict[str, Any] = {"result": _call(json.loads(raw))}
+        except RpcError as exc:
+            reply = {"error": [exc.code, str(exc), exc.data]}
+        except Exception as exc:
+            traceback.print_exc(file=sys.stderr)
+            reply = {"error": [INTERNAL_ERROR, f"{type(exc).__name__}: {exc}", None]}
+        stdout.write(json.dumps(reply).encode("ascii") + b"\n")
+        stdout.flush()
+    return 0
+
+
+def serve(stdin: Iterable[bytes], stdout: BinaryIO, worker: Worker | None = None) -> int:
     """Answer each line of `stdin` until it closes. A line holds one message, or a batch
     as a JSON array, which gets an array of the responses. A reader thread takes each
-    notifications/cancelled as it arrives; this thread answers the rest in order."""
+    notifications/cancelled as it arrives; this thread answers the rest in order. Tool
+    calls run in `worker`, or in this process when there is none."""
     inbox: queue.Queue[Any] = queue.Queue()
     closed = object()
     lock = threading.Lock()
@@ -329,12 +447,15 @@ def serve(stdin: Iterable[bytes], stdout: BinaryIO) -> int:
             reply = item
         else:
             rid, message = item
-            with lock:
-                skip = rid in cancelled
+            def is_cancelled(rid: Any = rid) -> bool:
+                with lock:
+                    return rid in cancelled
+
+            run = _call if worker is None else lambda params: worker.call(params, is_cancelled)
             if isinstance(message, list):
-                reply = [r for r in map(handle, message) if r is not None] or None
+                reply = [r for r in (handle(m, run) for m in message) if r is not None] or None
             else:
-                reply = None if skip else handle(message)
+                reply = None if is_cancelled() else handle(message, run)
             with lock:
                 if rid in cancelled:
                     reply = None
@@ -343,15 +464,20 @@ def serve(stdin: Iterable[bytes], stdout: BinaryIO) -> int:
         if reply is not None:
             stdout.write(json.dumps(reply).encode("ascii") + b"\n")
             stdout.flush()
+    if worker is not None:
+        worker.stop()
     return 0
 
 
-def main() -> int:
-    """Serve on the process's stdin and stdout. Anything else that prints goes to stderr,
-    so that stdout carries only the protocol."""
+def main(budget: float = BUDGET_S, worker: bool = False) -> int:
+    """Serve on the process's stdin and stdout, or be the worker of a server. Anything else
+    that prints goes to stderr, so that stdout carries only the protocol. The server starts
+    its worker before the thread that reads stdin."""
     out = sys.stdout.buffer
     sys.stdout = sys.stderr
-    return serve(sys.stdin.buffer, out)
+    if worker:
+        return work(sys.stdin.buffer, out)
+    return serve(sys.stdin.buffer, out, Worker(budget))
 
 
 if __name__ == "__main__":

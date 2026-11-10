@@ -157,9 +157,9 @@ class Handshake(unittest.TestCase):
 class Served:
     """serve() on queues: write() hands it a line, reply() waits for its next one."""
 
-    def __init__(self):
+    def __init__(self, worker=None):
         self.lines, self.out = queue.Queue(), queue.Queue()
-        self.thread = threading.Thread(target=lambda: mcp.serve(iter(self.lines.get, None), self), daemon=True)
+        self.thread = threading.Thread(target=lambda: mcp.serve(iter(self.lines.get, None), self, worker), daemon=True)
         self.thread.start()
 
     def send(self, *messages):
@@ -197,6 +197,83 @@ class Cancel(unittest.TestCase):
         served.send(cancel(7), cancel("unknown"), request(7, "ping"))
         self.assertEqual(served.reply(), {"jsonrpc": "2.0", "id": 7, "result": {}})
         served.close()
+
+
+class Waiting(unittest.TestCase):
+    def test_a_call_is_answered_while_the_client_keeps_stdin_open_and_silent(self):
+        """A client writes a request and waits. On Windows the server once answered only
+        after the client wrote again."""
+        server = subprocess.Popen([sys.executable, "-m", "petra", "mcp"], cwd=ROOT, stdin=subprocess.PIPE,
+                                  stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        replies = queue.Queue()
+        reader = threading.Thread(target=lambda: [replies.put(json.loads(line)) for line in server.stdout], daemon=True)
+        reader.start()
+        server.stdin.write(json.dumps(call(1, "check", path=str(SHEAR_TAB))).encode("utf-8") + b"\n")
+        server.stdin.flush()
+        try:
+            self.assertTrue(replies.get(timeout=120)["result"]["content"][0]["text"].splitlines()[0].endswith(": PASS"))
+        finally:
+            server.stdin.close()
+            self.assertEqual(server.wait(timeout=60), 0, "the server exits once stdin closes")
+            reader.join()
+            server.stdout.close()
+
+
+class Sleeper(mcp.Worker):
+    """A worker that reads a call and never answers."""
+
+    COMMAND = (sys.executable, "-c", "import sys, time\nfor line in sys.stdin.buffer: time.sleep(600)")
+
+
+class Gone(mcp.Worker):
+    """A worker that ends before it answers."""
+
+    COMMAND = (sys.executable, "-c", "import sys; sys.stdin.buffer.readline()")
+
+
+class Stopped(unittest.TestCase):
+    PARAMS = {"name": "docs", "arguments": {}}
+
+    def test_a_call_past_the_budget_is_stopped_and_says_so(self):
+        worker = Sleeper(budget=0.3)
+        self.addCleanup(worker.stop)
+        result = worker.call(self.PARAMS, lambda: False)
+        self.assertTrue(result["isError"])
+        self.assertIn("stopped after 0.3 s", result["content"][0]["text"])
+        self.assertIsNone(worker.process.poll(), "another worker is running")
+
+    def test_a_cancelled_call_is_stopped_before_its_budget(self):
+        worker = Sleeper(budget=600)
+        self.addCleanup(worker.stop)
+        first = worker.process
+        worker.call(self.PARAMS, lambda: True)
+        self.assertIsNotNone(first.poll(), "the worker that ran the call has ended")
+
+    def test_a_worker_that_ends_is_an_error_the_model_reads(self):
+        worker = Gone(budget=600)
+        self.addCleanup(worker.stop)
+        self.assertIn("ended before it answered", worker.call(self.PARAMS, lambda: False)["content"][0]["text"])
+
+    def test_the_server_answers_after_a_call_is_stopped(self):
+        served = Served(Sleeper(budget=0.3))
+        served.send(call(1, "docs"), request(2, "ping"))
+        self.assertTrue(served.reply()["result"]["isError"])
+        self.assertEqual(served.reply()["id"], 2)
+        served.close()
+
+
+class Paths(unittest.TestCase):
+    """A model picks the path, so `check` reads a .petra file on this machine and nothing else."""
+
+    def text(self, path) -> str:
+        result = mcp.handle(call(1, "check", path=str(path)))["result"]
+        self.assertTrue(result["isError"])
+        return result["content"][0]["text"].replace(str(path), "PATH")
+
+    def test_a_missing_file_another_kind_of_file_and_a_network_path_read_alike(self):
+        answers = {self.text(p) for p in (ROOT / "README.md", ROOT / "nonesuch.petra", r"\\nonesuch-host\share\design.petra")}
+        self.assertEqual(len(answers), 1, answers)
+        self.assertIn("takes a .petra file on this machine", answers.pop())
 
 
 class Handle(unittest.TestCase):

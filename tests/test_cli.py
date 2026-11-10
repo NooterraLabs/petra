@@ -16,6 +16,7 @@ import unittest
 from fractions import Fraction
 from pathlib import Path
 
+import petra
 from petra.cli import EXIT_CODES, main
 from petra.kernel import Evidence, Leaf, Split, encode_evidence
 from petra.kernel.rules.r4_enclosure import Enclosure
@@ -89,7 +90,7 @@ class Check(Workspace):
             self.assertTrue(err, f"{argv} explains itself on stderr")
 
     def test_usage_errors_exit_3(self):
-        for argv in (("frobnicate",), ("check",)):
+        for argv in (("frobnicate",), ("check",), ("mcp", "--budget", "0")):
             self.assertEqual(run(*argv)[0], EXIT_CODES["INPUT_ERROR"], f"{argv} exits 3")
 
     def test_check_without_solvers_reuses_the_library(self):
@@ -117,6 +118,33 @@ class Check(Workspace):
             proc.stderr.close()
             self.assertEqual(proc.wait(timeout=300), EXIT_CODES["BROKEN_PIPE"], f"{argv} exits 141, not 4")
             self.assertEqual(err, "", f"{argv} prints no traceback")
+
+
+class Encodings(Workspace):
+    """Windows PowerShell 5.1 writes UTF-8 with a byte order mark from `Out-File -Encoding
+    utf8` and UTF-16 from `>`. The README's quickstart redirects `petra new` into a file."""
+
+    TEXT = (ROOT / "examples" / "circuit_pass.petra").read_text(encoding="utf-8")
+
+    def check(self, data: bytes) -> int:
+        path = self.tmp / "design.petra"
+        path.write_bytes(data)
+        return run("check", str(path))[0]
+
+    def test_a_design_with_a_byte_order_mark_checks(self):
+        self.assertEqual(self.check(self.TEXT.encode("utf-8-sig")), EXIT_CODES["PASS"])
+
+    def test_a_utf16_design_checks(self):
+        self.assertEqual(self.check(self.TEXT.replace("\n", "\r\n").encode("utf-16")), EXIT_CODES["PASS"])
+
+    def test_bytes_that_are_not_text_are_an_input_error(self):
+        self.assertEqual(self.check(b"petra 0\n\xff\xfe\xfd"), EXIT_CODES["INPUT_ERROR"])
+
+
+class Version(unittest.TestCase):
+    def test_version_prints_the_version_and_exits_0(self):
+        code, out, _ = run("--version")
+        self.assertEqual((code, out.strip()), (0, f"petra {petra.__version__}"))
 
 
 class Explain(Workspace):
