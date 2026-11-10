@@ -46,6 +46,12 @@ The kernel checks every piece of evidence. When `certs` is given, `check_file` r
 
 `petra.check_design(design, registry, sources, sink=None, deck=None, path="") -> Report` does the same check for a design and registry that you already hold. `petra.parse_design(card, design, path, registry)` and `petra.load_design(path, registry, card=None)` return a design, and `petra.build_registry` returns a registry.
 
+## The card's hash and the kernel
+
+A status is about one card and one design. `hashes` names each by the SHA-256 of its text, so a reader can tell that a PASS was against the card they issued: for a file saved as UTF-8 with LF line ends it is what `sha256sum` prints. `petra check` prints the two on its `card` and `design` lines.
+
+`kernel` is the word of `petra-verify`, the small checker in `kernel/` that is written in Lean. `petra.check` and `petra check` run it on the report when there is one to run: the file the environment variable `PETRA_VERIFY` names, else the one `lake build` put in a source tree's `kernel/`. An installed package carries none yet, and `kernel` is then null. The kernel checks again each proof it has a rule for, and `checked` of `proofs` counts them. For the rest the Python checker's word stands alone, and the kernel's own `verdict` is then UNKNOWN where the status is PASS. A proof the kernel rejects after the Python checker accepted it is a bug in one of the two: `petra.check` raises `petra.verify.Disagreement`, and `petra check` exits 4. `petra.check_file` and `petra.check_design` return the Python checker's report and run no kernel.
+
 ## Report
 
 `petra.pipeline.Report` is a frozen dataclass with these fields.
@@ -194,10 +200,18 @@ With `--no-solve`, `petra check` computes no repair.
 
 ```
 {"file": FILE, "design": NAME, "status": "PASS" | "FAIL" | "UNKNOWN" | "MARGINAL",
+ "card": FILE,                                 the card the design was checked against
+ "hashes": {"card": HASH, "design": HASH},     "sha256:HEX" of each text as UTF-8 with LF line ends
+ "kernel": KERNEL | null,                      the kernel's word; null when no kernel ran
  "governing": {"strength": GOVERNING | null, "detailing": GOVERNING | null},
  "verdicts": [ENTRY, ...],                     one per claim, then "coverage"
  "unchecked": [UNCHECKED, ...],                each mode of a component's domain no requirement names, design order
  "repair": REPAIR | null}                      a FAIL's moves; null for any other status
+
+KERNEL = {"verdict": "PASS" | "FAIL" | "UNKNOWN",   the kernel's own verdict on the files it read
+          "checked": N,                        the proofs and refutations the kernel checked and accepted
+          "proofs": N,                         the proofs and refutations the status rests on
+          "hashes": {"card", "design", "deck"}}   of the JSON files the kernel read (docs/format.md)
 
 REPAIR = {"check": REQUIREMENT,                the governing check: the refuted obligation that ranks first
           "utilisation": NUMBER | null,        its utilisation

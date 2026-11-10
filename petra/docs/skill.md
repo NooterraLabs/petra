@@ -15,7 +15,7 @@ Install it with `pip install petra-lang`. The command is `petra` and the Python 
 2. Run `petra new shear_tab --card > tab.card` and `petra new shear_tab > tab.petra`. They write a card and a complete design that passes it.
 3. Edit the card to what the user asked: the load range in the `load` block, signed with the user's name and the source of the numbers. If the user gave a card, use it as it is.
 4. Edit the design to the user's job. Set the `beam` and `support` lines, the support's face (`flange` or `web`) and the `basis` (`lrfd` or `asd`).
-5. Run `petra check tab.petra`. It reads `tab.card` beside the design, and `--card FILE` names another card. The first line is the status. The exit code is 0 for PASS, 1 for FAIL, 2 for UNKNOWN, 5 for MARGINAL and 3 for an input error.
+5. Run `petra check tab.petra`. It reads `tab.card` beside the design, and `--card FILE` names another card. The first line is the status. The `kernel` line says how many of the proofs a second, smaller checker confirmed. The exit code is 0 for PASS, 1 for FAIL, 2 for UNKNOWN, 5 for MARGINAL and 3 for an input error.
 6. On a FAIL, apply a move from the `repair` lines, as the next section describes, and check again.
 7. Stop at PASS. Tell the user the governing strength check and its utilisation from the `governing` line.
 
@@ -43,6 +43,7 @@ The first line names the governing failed check and its utilisation. Each move c
 
 - The card is the user's. Write into it only the loads and claims the user gave, signed with the user's name and the source of the numbers. Never lower a load, edit a claim, or add a `waive` line to reach PASS. Those belong to the person who signs them.
 - A design cannot state a load, a claim, a waiver or a signature, and Petra refuses one that does. A line reads a signed bound the card states with `given NAME`.
+- With a PASS, give the user the `card` line. Its hash says which card the design was checked against, so the user can see it is theirs.
 - Report PASS only when `petra check` prints PASS. A PASS covers the checks in its table, for the stated loads. The `not checked` lines say what it does not cover.
 - Petra checks a design. It does not choose the loads, and it does not replace the engineer who signs the design.
 

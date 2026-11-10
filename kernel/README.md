@@ -21,6 +21,10 @@ kernel/.lake/build/bin/petra-verify --card out/card.json --design out/design.jso
 
 The second command prints the verdict as JSON and exits 0 for PASS, 1 for FAIL, 2 for UNKNOWN and 3 for ILL-FORMED.
 
+## With petra check
+
+`petra check` runs the kernel on its own report when it finds one. It looks for the file the environment variable `PETRA_VERIFY` names, then for `.lake/build/bin/petra-verify` here. Its `kernel` line says how many of the proofs behind the status the kernel checked, and `python corpus/run.py --kernel BINARY` gives the kernel's own verdict on every corpus design.
+
 ## Layout
 
 | File | Holds |
@@ -32,4 +36,4 @@ The second command prints the verdict as JSON and exits 0 for PASS, 1 for FAIL, 
 | `Petra/Check.lean` | The rules in order, and the verdict |
 | `Main.lean` | The command line and the printed JSON |
 
-Nothing here is proved yet. The arithmetic gives the same interval ends as `petra/kernel/interval.py` on every root tried.
+Nothing here is proved yet. The arithmetic gives the same interval ends as `petra/kernel/interval.py` on every root tried. The Windows build and a Linux build on aarch64 print the same verdict on 115 exported corpus designs.

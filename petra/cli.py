@@ -10,8 +10,12 @@
         registry. Under each refuted obligation the text gives the governing term's demand,
         capacity and utilisation in the design's units, and its counterexample as decimals
         in those units. On a FAIL, unless --no-solve, the lines after the governing lines
-        name the moves that lower the governing check, best first (petra/repair.py). --json
-        prints pipeline.Report.to_json() with "repair", the moves or null (`petra docs api`):
+        name the moves that lower the governing check, best first (petra/repair.py). The
+        `card` and `design` lines give the SHA-256 of each text, and the `kernel` line the
+        word of petra-verify (petra/verify.py): how many of the proofs it checked, or that
+        none is here to run. A proof it rejects exits 4. --json prints
+        pipeline.Report.to_json() with "card", "hashes", "kernel" and "repair", the moves
+        or null (`petra docs api`):
             {"file": FILE, "design": NAME, "status": OVERALL, "repair": REPAIR | null, "verdicts": [
                 {"claim": NAME, "status": "PASS" | "FAIL" | "UNKNOWN" | "MARGINAL",
                  "footprint": [{"tag", "label", "owner", "source", "version"?}, ...],

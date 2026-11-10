@@ -137,17 +137,21 @@ def _partition(node: Any, index: dict[str, int]) -> Any:
     return {"input": index[node.sym], "at": number(node.at), "below": _partition(node.left, index), "above": _partition(node.right, index)}
 
 
-class _Proofs:
-    """The evidence the Python kernel accepted, by statement hash."""
+class Proofs:
+    """The evidence the Python kernel accepted, by statement hash. An evidence sink that
+    also passes each piece on to `sink`, when there is one."""
 
-    def __init__(self) -> None:
+    def __init__(self, sink: Any = None) -> None:
         self.items: dict[str, tuple[Any, Any]] = {}
+        self.sink = sink
 
     def record(self, statement: Any, statement_hash: str, evidence: Any, source: str) -> None:
         self.items[statement_hash] = (statement, evidence)
+        if self.sink is not None:
+            self.sink.record(statement, statement_hash, evidence, source)
 
 
-def cells(report: Any, proofs: _Proofs) -> list[dict[str, Any]]:
+def cells(report: Any, proofs: Proofs) -> list[dict[str, Any]]:
     """One cell per obligation the coverage rules demand, and one per mode they excuse."""
     from .kernel.rules.r4_enclosure import Enclosure, PointWitness
 
@@ -189,7 +193,24 @@ def text(body: dict[str, Any]) -> str:
 
 
 def sha256(data: str) -> str:
-    return "sha256:" + hashlib.sha256(data.encode("utf-8")).hexdigest()
+    """The hash of a text as UTF-8 with LF line ends, so a file's hash does not change
+    with the line ends a checkout gave it."""
+    return "sha256:" + hashlib.sha256(data.replace("\r\n", "\n").encode("utf-8")).hexdigest()
+
+
+def bundle(design: Design, registry: Any, report: Any = None, proofs: Proofs | None = None) -> dict[str, str]:
+    """The text of each file the kernel reads, by its name in docs/format.md: `card`,
+    `design` and `deck`, and `proofs` when there is a report with the evidence behind it."""
+    from .pipeline import lower_components, signed_inputs
+
+    inputs = sorted(signed_inputs(design, lower_components(design, registry)), key=lambda i: i.name)
+    card_text = text(card(design, inputs))
+    out = {"card": card_text, "design": text(design_file(design, sha256(card_text)))}
+    found = [] if report is None else cells(report, proofs)
+    out["deck"] = text(deck(registry, found))
+    if report is not None:
+        out["proofs"] = text({"format": "petra-proofs/0", "cells": found})
+    return out
 
 
 def export(path: str, out: Path, physics: bool = True, card_path: str | None = None) -> None:
@@ -197,26 +218,17 @@ def export(path: str, out: Path, physics: bool = True, card_path: str | None = N
     first three need no solver, so the kernel can refuse an ill-formed design before any
     physics runs."""
     from .lang import load_design
-    from .pipeline import check_design, lower_components, signed_inputs
+    from .pipeline import check_design
     from .registry import build_registry
     from .solvers import SolverSource
 
-    def write(name: str, body: str) -> None:
-        (out / name).write_text(body, encoding="utf-8", newline="\n")
-
     registry = build_registry()
     design = load_design(path, registry, card_path)
-    inputs = sorted(signed_inputs(design, lower_components(design, registry)), key=lambda i: i.name)
+    proofs = Proofs()
+    report = check_design(design, registry, (SolverSource(),), sink=proofs, path=path) if physics else None
     out.mkdir(parents=True, exist_ok=True)
-    card_text = text(card(design, inputs))
-    write("card.json", card_text)
-    write("design.json", text(design_file(design, sha256(card_text))))
-    found: list[dict[str, Any]] = []
-    if physics:
-        proofs = _Proofs()
-        found = cells(check_design(design, registry, (SolverSource(),), sink=proofs, path=path), proofs)
-        write("proofs.json", text({"format": "petra-proofs/0", "cells": found}))
-    write("deck.json", text(deck(registry, found)))
+    for name, body in bundle(design, registry, report, proofs).items():
+        (out / f"{name}.json").write_text(body, encoding="utf-8", newline="\n")
 
 
 def main(argv: list[str] | None = None) -> int:

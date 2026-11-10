@@ -115,7 +115,7 @@ def main() -> int:
     args = parser.parse_args()
     chosen = [c for c in cases() if args.only in c.path]
     with ThreadPoolExecutor(args.jobs) as pool:
-        got = list(pool.map(partial(by_kernel, args.kernel) if args.kernel else by_petra, chosen))
+        got = list(pool.map(partial(by_kernel, str(Path(args.kernel).resolve())) if args.kernel else by_petra, chosen))
     known, fixed, wrong = [], [], []
     for case, found in zip(chosen, got):
         marked = case.kernel if args.kernel else case.today

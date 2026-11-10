@@ -23,9 +23,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from fractions import Fraction
-from typing import Any, Callable, Iterator
+from typing import Any, Callable, Iterator, Mapping
 
-from . import models, wellformed
+from . import export, models, verify, wellformed
+from .files import card_of
 from .lang import LolaSyntaxError, LoweringError, parse_design
 from .lang.lexer import Kind, tokenize
 from .lang.parser import NOT_UNITS
@@ -406,43 +407,61 @@ def _ratio(x: float | None) -> str:
 @dataclass(frozen=True)
 class Checked:
     """A design checked from its text: its report and, on a FAIL, its repair; or, for a
-    design that does not lower, the input error and no report."""
+    design that does not lower, the input error and no report. `card` names the card it
+    was checked against, `hashes` holds the hash of the card's text and of the design's
+    (export.sha256), and `kernel` is the kernel's word on the report, None when no kernel
+    ran."""
 
     path: str
     report: Report | None
     repair: Repair | None
     error: str | None
+    card: str = ""
+    hashes: Mapping[str, str] | None = None
+    kernel: verify.Kernel | None = None
 
     @property
     def status(self) -> str:
         return "INPUT_ERROR" if self.report is None else STATUS[type(self.report.verdict)]
 
     def to_json(self) -> dict[str, Any]:
-        """The report's JSON with "repair", or {"file", "status": "INPUT_ERROR", "error"}."""
+        """The report's JSON with "card", "hashes", "kernel" and "repair", or
+        {"file", "status": "INPUT_ERROR", "error"}."""
         if self.report is None:
             return {"file": self.path, "status": "INPUT_ERROR", "error": self.error}
-        return {**self.report.to_json(), "repair": None if self.repair is None else self.repair.to_json()}
+        return {**self.report.to_json(), "card": self.card, "hashes": dict(self.hashes),
+                "kernel": None if self.kernel is None else self.kernel.to_json(),
+                "repair": None if self.repair is None else self.repair.to_json()}
 
     def text(self) -> str:
-        """What `petra check` prints: the report, with the repair after its governing lines."""
+        """What `petra check` prints: the report, with what it was checked against and the
+        kernel's word after its scope, and the repair after its governing lines."""
         if self.report is None:
             return f"{self.path}: INPUT_ERROR\n{self.error}"
         out = self.report.render().split("\n")
         at = max((i + 1 for i, line in enumerate(out[:8]) if line.startswith("governing  ")), default=min(2, len(out)))
-        return "\n".join(out[:at] + ([] if self.repair is None else self.repair.lines()) + out[at:])
+        out = out[:at] + ([] if self.repair is None else self.repair.lines()) + out[at:]
+        kernel = verify.NO_KERNEL if self.kernel is None else self.kernel.line(self.status)
+        against = [f"card       {self.hashes['card']}  {self.card}", f"design     {self.hashes['design']}  {self.path}", f"kernel     {kernel}"]
+        at = next((i + 1 for i, line in enumerate(out[:4]) if line.startswith("scope  ")), min(2, len(out)))
+        return "\n".join(out[:at] + against + out[at:])
 
 
 def check_text(card: str, text: str, path: str, registry: Any, sources: tuple, *, sink: Any = None, deck: Any = None,
                moves: bool = True, card_path: str | None = None) -> Checked:
     """Check the design `text` against the card and `registry` with `sources`, recording
-    accepted evidence into `sink`. `path` names the design in messages, and `card_path`
-    the card when it is not the file beside it. With `moves`, a FAIL gets its repair,
-    probed with the same card and sources and no sink."""
+    accepted evidence into `sink`, and have the kernel check the report when there is one
+    to run (verify.py). `path` names the design in messages, and `card_path` the card
+    when it is not the file beside it. With `moves`, a FAIL gets its repair, probed with
+    the same card and sources, no sink and no kernel: a move is a suggestion."""
     try:
         design = parse_design(card, text, path, registry, card_path)
         wellformed.require(design, registry)
-        report = check_design(design, registry, sources, sink=sink, deck=deck, path=path)
+        proofs = export.Proofs(sink)
+        report = check_design(design, registry, sources, sink=proofs, deck=deck, path=path)
+        kernel = verify.verify(design, registry, report, proofs)
     except INPUT_ERRORS as exc:
         return Checked(path, None, None, str(exc))
     found = repair(text, report, checker(card, registry, sources, path, deck), registry) if moves else None
-    return Checked(path, report, found, None)
+    hashes = {"card": export.sha256(card), "design": export.sha256(text)}
+    return Checked(path, report, found, None, card_path or card_of(path), hashes, kernel)

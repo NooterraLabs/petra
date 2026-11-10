@@ -178,7 +178,8 @@ class CommonNames(unittest.TestCase):
                 code, out, err = run("check", "--json", str(path))
                 self.assertEqual(code, 0, err)
                 report = json.loads(out)
-                report.pop("file")
+                for named in ("file", "card", "hashes"):    # the two designs are two files of different text
+                    report.pop(named)
                 reports.append(report)
         self.assertEqual(reports[0], reports[1])
         labels = {p["label"] for v in reports[1]["verdicts"] for p in v["footprint"]}

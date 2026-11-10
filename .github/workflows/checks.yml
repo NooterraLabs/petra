@@ -1,6 +1,7 @@
 name: checks
 
-# The test suite and the corpus run on every push, and on a pull request from a fork. The
+# The kernel is built, and the test suite and the corpus run with it, on every push and on a
+# pull request from a fork. The corpus runs twice: by `petra check`, and by the kernel alone. The
 # absurd-design gap with one job per seed, canary recall, and the metamorphic relations over
 # the steel gate's stream run when the workflow is started by hand. The steel gate stays off
 # CI because it reads the full AISC shapes workbook, which is not in the repository.
@@ -42,8 +43,14 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install numpy==2.4.6 scipy==1.17.1
+      - name: Build the kernel
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -o elan-init.sh
+          sh elan-init.sh -y --default-toolchain none
+          cd kernel && "$HOME/.elan/bin/lake" build
       - run: nproc && python -m unittest discover -s tests
       - run: python corpus/run.py
+      - run: python corpus/run.py --kernel kernel/.lake/build/bin/petra-verify
 
   gap:
     if: ${{ github.event_name == 'workflow_dispatch' }}

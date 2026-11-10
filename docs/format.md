@@ -6,6 +6,8 @@
 petra-verify --card card.json --design design.json --deck deck.json [--proofs proofs.json]
 ```
 
+`petra check` writes the four files for its report and runs the kernel on them when it finds one: the file the environment variable `PETRA_VERIFY` names, else `kernel/.lake/build/bin/petra-verify` in a source tree. It prints how many of the proofs behind its status the kernel checked, and exits 4 if the kernel rejects one that the Python checker accepted.
+
 The kernel trusts none of the four. It checks that they agree with each other and that each proof holds. Who wrote each file is outside the kernel: the verdict prints the SHA-256 of the card, the design and the deck, and a reader compares the card's hash with the card they issued.
 
 `python -m petra.export FILE.petra [--card FILE.card] --out DIR` writes the four files from a design and its card, the `.card` file beside the design unless `--card` names another. It exits 3 and writes nothing when the language refuses the pair, as it does for a design that states a load, a claim, a waiver or a signature.
@@ -135,4 +137,6 @@ The kernel stops work that would not end. A tape has at least one root. A partit
 - A tape's formula comes from Python's models. The kernel checks its arithmetic and its `in:` and `reg:` inputs, not that the formula is the standard's.
 - Inputs labelled `dsg:` are the design's values as the models resolved them. The kernel does not tie them to `quantities`, and the verdict counts them.
 - A `not_applicable` cell is the model's word.
-- Proofs by the other five rules have no tape.
+- Proofs by the other five rules have no tape, and neither has an interval proof that leans on a defined quantity.
+- A cell holds the proof of its own statement. The proofs that its model applies there (its validity rows) and the proof of a claim's margin are not in the file. `petra check` counts them among the proofs the kernel has no rule for.
+- `card.json` is not a function of the card's text alone: an input that a component reads with `given` takes its name from the component. So the hash of `card.json` identifies a card together with a design, and the hash `petra check` prints on its `card` line, of the card's text, is the one to compare with the card that was issued.
