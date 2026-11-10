@@ -1,6 +1,8 @@
 """Command line. Untrusted shell: parses arguments, builds evidence sources, prints.
 
-    python -m petra check FILE [--json] [--certs DIR] [--library DIR] [--no-solve] [--deck FILE]
+    python -m petra check FILE [--card CARD] [--json] [--certs DIR] [--library DIR] [--no-solve] [--deck FILE]
+        FILE is a design and CARD the card it answers, the .card file beside FILE when
+        --card is left out; explain, envelope and certify-family take the same two.
         Elaborate, gather evidence (certs, then library, then solvers unless --no-solve),
         kernel-check, print one verdict per claim plus the "coverage" entry, with each
         footprint. Accepted evidence is written to --certs when given. --deck checks the
@@ -147,8 +149,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--version", action="version", version=f"petra {__version__}")
     commands = parser.add_subparsers(dest="command", required=True, parser_class=_Parser)
 
-    check = commands.add_parser("check", help="check a design and print its verdicts")
-    check.add_argument("file")
+    def design_file(command: argparse.ArgumentParser) -> None:
+        command.add_argument("file", help="the design, a .petra file")
+        command.add_argument("--card", metavar="FILE", help="the card the design answers; default the .card file beside the design")
+
+    check = commands.add_parser("check", help="check a design against its card and print its verdicts")
+    design_file(check)
     check.add_argument("--json", action="store_true", help="print the report as JSON")
     check.add_argument("--certs", metavar="DIR", help="certificate directory: read first, accepted evidence written back")
     check.add_argument("--library", metavar="DIR", help="family library to reuse evidence from")
@@ -157,11 +163,11 @@ def build_parser() -> argparse.ArgumentParser:
     check.set_defaults(run=cmd_check)
 
     explain_cmd = commands.add_parser("explain", help="print the elaborated statements")
-    explain_cmd.add_argument("file")
+    design_file(explain_cmd)
     explain_cmd.set_defaults(run=cmd_explain)
 
     env = commands.add_parser("envelope", help="find the widest proved interval of one input")
-    env.add_argument("file")
+    design_file(env)
     env.add_argument("--input", required=True, metavar="NAME", help="an input's label stem (ambient, lighting.supply.fault_current, lamp_draw.lighting.lamps.current) or a param")
     env.add_argument("--from", dest="lo", required=True, metavar="QTY", help='the low end of the probe range, such as "-20 degC"')
     env.add_argument("--to", dest="hi", required=True, metavar="QTY", help="the high end of the probe range")
@@ -177,7 +183,7 @@ def build_parser() -> argparse.ArgumentParser:
     verify.set_defaults(run=cmd_verify)
 
     family = commands.add_parser("certify-family", help="certify a family design into a library")
-    family.add_argument("file")
+    design_file(family)
     family.add_argument("--library", metavar="DIR", required=True)
     family.set_defaults(run=cmd_certify_family)
 
@@ -233,7 +239,7 @@ def cmd_check(args: argparse.Namespace) -> int:
     sort_keys=True). Returns EXIT_CODES[status], or EXIT_CODES["INPUT_ERROR"] when the file
     or the deck cannot be read or the design does not lower (message on stderr)."""
     from .certs import CertStore
-    from .files import read_design
+    from .files import read_pair
     from .library import Library
     from .registry import build_registry, read_deck
     from .repair import check_text
@@ -241,14 +247,14 @@ def cmd_check(args: argparse.Namespace) -> int:
 
     try:
         registry = build_registry()
-        text = read_design(args.file)
+        card, text = read_pair(args.file, args.card)
         deck = read_deck(args.deck) if args.deck else None
         store = CertStore(args.certs) if args.certs else None
         library = Library(args.library) if args.library else None
     except _input_errors() as exc:
         return _input_error(exc)
     sources = tuple(s for s in (store, library, None if args.no_solve else SolverSource()) if s is not None)
-    checked = check_text(text, args.file, registry, sources, sink=store, deck=deck, moves=not args.no_solve)
+    checked = check_text(card, text, args.file, registry, sources, sink=store, deck=deck, moves=not args.no_solve, card_path=args.card)
     if checked.report is None:
         return _input_error(checked.error)
     print(json.dumps(checked.to_json(), sort_keys=True) if args.json else checked.text())
@@ -268,7 +274,7 @@ def cmd_explain(args: argparse.Namespace) -> int:
 
     try:
         registry = build_registry()
-        text = explain(load_design(args.file, registry), registry)
+        text = explain(load_design(args.file, registry, args.card), registry)
     except _input_errors() as exc:
         return _input_error(exc)
     print(text)
@@ -286,7 +292,7 @@ def cmd_envelope(args: argparse.Namespace) -> int:
 
     try:
         registry = build_registry()
-        design = load_design(args.file, registry)
+        design = load_design(args.file, registry, args.card)
         quantities = [None if text is None else _quantity(text) for text in (args.lo, args.hi, args.at, args.resolution)]
         written = (_QUANTITY.fullmatch(text).group(2) for text in (args.lo, args.hi, args.at) if text is not None)
         unit = next((u for u in written if u), None)
@@ -367,7 +373,7 @@ def cmd_certify_family(args: argparse.Namespace) -> int:
 
     try:
         registry = build_registry()
-        design = load_design(args.file, registry)
+        design = load_design(args.file, registry, args.card)
         result = certify_family(design, registry, Library(args.library))
     except (*_input_errors(), ValueError) as exc:
         return _input_error(exc)
@@ -439,11 +445,13 @@ def _add_teach_commands(commands: argparse._SubParsersAction, decks: argparse._S
     kinds.add_argument("--all", action="store_true", help="print the lines of every kind")
     kinds.add_argument("--json", action="store_true", help="print the kinds as JSON: every kind unless DOMAIN|KIND is given")
     kinds.set_defaults(run=cmd_kinds)
-    new = commands.add_parser("new", help="print a complete design of one kind to start from",
-                              description="Print a complete design of KIND, its canonical example, to edit. "
-                                          "`petra kinds KIND` lists every line a KIND takes.")
+    new = commands.add_parser("new", help="print a complete design of one kind, or its card, to start from",
+                              description="Print a complete design of KIND, its canonical example, to edit, or with "
+                                          "--card the card that design answers. `petra kinds KIND` lists every line "
+                                          "a KIND takes.")
     new.add_argument("kind", metavar="KIND", help=f"the component kind: {', '.join(models.KINDS)}")
     new.add_argument("--name", metavar="NAME", help="the component's name; default the example's")
+    new.add_argument("--card", action="store_true", help="print the card in place of the design")
     new.set_defaults(run=cmd_new)
     docs = commands.add_parser("docs", help="print the README, the language reference or the API",
                                description="Print a document that comes with Petra, or list them.")
@@ -487,10 +495,10 @@ def cmd_new(args: argparse.Namespace) -> int:
     from .teach import TeachError, new_text
 
     try:
-        text = new_text(args.kind, args.name, build_registry())
+        card, design = new_text(args.kind, args.name, build_registry())
     except (*_input_errors(), TeachError) as exc:
         return _input_error(exc)
-    print(text, end="")
+    print(card if args.card else design, end="")
     return 0
 
 

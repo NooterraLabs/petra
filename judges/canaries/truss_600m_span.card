@@ -1,0 +1,16 @@
+petra 0
+
+card "warren-footbridge-panel" {
+  owner "a.reviewer@example.org"
+  environment indoor_dry
+}
+
+load crowd {
+  on frame.D fy in [-2 N, -1 N]
+  on frame.E fy in [-2 N, -1 N]
+  signed "client.structures@example.org" source "brief rev B, section 3.2"
+}
+
+claim strength:   frame.collapse_factor >= 1.5 under crowd
+claim stability:  frame.stability_factor >= 3 under crowd
+claim stress:     frame.member(diag_ad).stress <= 235 MPa under crowd

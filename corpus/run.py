@@ -4,13 +4,15 @@
 
 Each line of expected.tsv names a design by its path from the repository root, the verdict
 it must get, the wrong verdict `petra check` gives today when it gives one, the wrong
-verdict the kernel gives today when it gives one, and a note. NOT_PASS stands for any of
-FAIL, UNKNOWN, MARGINAL and INPUT_ERROR.
+verdict the kernel gives today when it gives one, and a note. The card a design answers
+is the .card file beside it. NOT_PASS stands for any of FAIL, UNKNOWN, MARGINAL and
+INPUT_ERROR.
 
-Without --kernel the verdict is the one `petra check` exits with. With it, the design is
+Without --kernel the verdict is the one `petra check` exits with. With it, the pair is
 exported (petra/export.py) and the verdict is the one that petra-verify binary exits
-with, where ILL-FORMED reads as INPUT_ERROR. The kernel sees the card and the design
-before any physics runs, and the proofs only for a design it found well formed.
+with, where ILL-FORMED reads as INPUT_ERROR. A pair the language refuses is INPUT_ERROR
+too: the kernel reads files, and that text gives it none. The kernel sees the card and
+the design before any physics runs, and the proofs only for a design it found well formed.
 
 A run fails when a design gets a verdict that is neither the expected one nor the known
 wrong one. It also fails when a known wrong verdict has come right, so that the line loses
@@ -81,21 +83,23 @@ def by_petra(case: Case) -> str:
 
 
 def by_kernel(binary: str, case: Case) -> str:
-    """NO_FILES when the exporter cannot write the files, which a design that does not
-    parse or lower gives."""
+    """INPUT_ERROR when the language refuses the pair, and NO_FILES when the exporter
+    fails any other way."""
+    refused = EXIT_CODES["INPUT_ERROR"]
     with tempfile.TemporaryDirectory() as tmp:
         def verify(*names: str) -> str:
             return _verdict(_run([binary, *(part for name in names for part in (f"--{name}", str(Path(tmp, f"{name}.json"))))]))
 
         export = [sys.executable, "-m", "petra.export", case.path, "--out", tmp]
-        if _run([*export, "--no-physics"]) != 0:
-            return "NO_FILES"
+        code = _run([*export, "--no-physics"])
+        if code != 0:
+            return "INPUT_ERROR" if code == refused else "NO_FILES"
         typed = verify("card", "design", "deck")
         if typed == "INPUT_ERROR":
             return typed
         code = _run(export)
         if code != 0:
-            return "TIMEOUT" if code is None else "NO_FILES"
+            return "TIMEOUT" if code is None else "INPUT_ERROR" if code == refused else "NO_FILES"
         return verify("card", "design", "deck", "proofs")
 
 

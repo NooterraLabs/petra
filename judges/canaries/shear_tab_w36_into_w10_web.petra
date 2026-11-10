@@ -4,10 +4,6 @@ petra 0
 # A W36x231 beam (flange 16.5 in) framed by a shear tab into the web of a W10x45 column,
 # whose flanges stand 8.86 in apart (d - 2 tf): the beam cannot pass between them.
 
-design "steel-shear-tab" {
-  owner "s.engineer@example.org"
-}
-
 shear_tab st1 {
   basis lrfd
   beam W36x231 grade steel.A992
@@ -22,9 +18,4 @@ shear_tab st1 {
   beam_edge 1.75 inch
   top 3 inch
   weld electrode.E70 size 0.25 inch sides 2
-}
-
-load gravity {
-  on st1 shear in [0 kip, 45 kip]
-  signed "s.engineer@example.org" source "beam reaction, LRFD 1.2D + 1.6L, calc SC-3"
 }

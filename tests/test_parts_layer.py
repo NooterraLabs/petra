@@ -9,7 +9,8 @@ import unittest
 import petra
 from tests.parts_meshes import box, bracket, flipped, pin, plate, tray, upright, write
 
-HEAD = 'petra 0\ndesign "t" {\n  owner "a@b.c"\n  environment indoor_dry\n}\n'
+CARD = 'petra 0\ncard "t" {\n  owner "a@b.c"\n  environment indoor_dry\n}\n'
+DESIGN = "petra 0\n"
 SIGNED = 'signed "a@b.c" source "test"'
 
 
@@ -20,8 +21,10 @@ def part(name, mesh, material="polymer.petg", process="process.print.fdm_petg_0_
     return f"part {name} {{\n" + "\n".join(lines) + ("\n" + extra if extra else "") + "\n}\n"
 
 
-def run(text: str, tmp: str) -> dict:
-    out = petra.check(HEAD + text, path=f"{tmp}/t.petra", repair=False)
+def run(asked: str, text: str, tmp: str) -> dict:
+    """The outcomes of the components in `text` against a card that states `asked`, its given
+    bounds and its claims."""
+    out = petra.check(CARD + asked, DESIGN + text, path=f"{tmp}/t.petra", repair=False)
     if out["status"] == "INPUT_ERROR":
         return {"error": out["error"]}
     got = {}
@@ -37,6 +40,8 @@ class Enclosure(unittest.TestCase):
     """A board dropped into a printed tray. The tray's pocket is 36 x 26 mm (measured from
     the mesh); PETG's tolerance is 0.5 mm (reported), the board's 0.1 mm (signed)."""
 
+    GIVEN = f"given tolerance in [0.1 mm, 0.1 mm] {SIGNED}\ngiven mass in [8 g, 9 g] {SIGNED}\n"
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.case = write(self.tmp.name, "case", tray((0, 0, 0), (40, 30, 20), 2, 2))
@@ -48,13 +53,12 @@ class Enclosure(unittest.TestCase):
                board=None):
         board = write(self.tmp.name, "board", board or box((0, 0, 0), board_hi))
         return (part("case", case or self.case) +
-                part("board", board, "polymer.pc", None, f"  tolerance in [0.1 mm, 0.1 mm] {SIGNED}\n"
-                                                          f"  mass in [8 g, 9 g] {SIGNED}") +
+                part("board", board, "polymer.pc", None, "  tolerance given tolerance\n  mass given mass") +
                 "assembly box {\n  place case at (0 mm, 0 mm, 0 mm) facing top front\n"
                 f"  place board at {at} facing top front\n  {insert}\n}}\n")
 
     def test_a_board_with_room_goes_in(self):
-        got = run(self.design((30, 20, "1.6")), self.tmp.name)
+        got = run(self.GIVEN, self.design((30, 20, "1.6")), self.tmp.name)
         self.assertEqual(got["box.board/fit.insert"][0], "certified", got["box.board/fit.insert"])
         self.assertEqual(got["box.board/fit.connected"][0], "certified")
         self.assertRegex(got["box.board/fit.insert"][1], "rests on case")
@@ -66,69 +70,71 @@ class Enclosure(unittest.TestCase):
         tris = box((0, 0, 0), (30, 20, "1.6"))
         (p0, p1, p5), (_, _, p4), m = tris[4], tris[5], (15, 0, "0.8")
         split = tris[:4] + [(p5, m, p1), (m, p0, p1), (p0, m, p4), (m, p5, p4)] + tris[6:]
-        got = run(self.design(None, board=split), self.tmp.name)
+        got = run(self.GIVEN, self.design(None, board=split), self.tmp.name)
         self.assertEqual(got["box.board/fit.insert"][0], "certified", got["box.board/fit.insert"])
 
     def test_a_positive_gap_tolerance_can_close_fails(self):
         # 0.25 mm each side (measured), less than 0.5 + 0.1 mm of allowance plus the float.
-        got = run(self.design(("35.5", 20, "1.6"), at="(2.25 mm, 5 mm, 2 mm)"), self.tmp.name)
+        got = run(self.GIVEN, self.design(("35.5", 20, "1.6"), at="(2.25 mm, 5 mm, 2 mm)"), self.tmp.name)
         self.assertEqual(got["box.board/fit.insert"][0], "refuted", got["box.board/fit.insert"])
         self.assertRegex(got["box.board/fit.insert"][1], r"case at 0\.25 mm")
 
     def test_a_board_sealed_in_a_closed_case_fails(self):
         closed = write(self.tmp.name, "closed", box((0, 0, 0), (40, 30, 20)) + flipped(box((2, 2, 2), (38, 28, 18))))
-        got = run(self.design((30, 20, "1.6"), case=closed), self.tmp.name)
+        got = run(self.GIVEN, self.design((30, 20, "1.6"), case=closed), self.tmp.name)
         self.assertEqual(got["box.board/fit.insert"][0], "refuted", "its path down crosses the lid")
 
     def test_every_body_but_the_base_says_how_it_arrives(self):
-        got = run(self.design((30, 20, "1.6"), insert=""), self.tmp.name)
+        got = run(self.GIVEN, self.design((30, 20, "1.6"), insert=""), self.tmp.name)
         self.assertRegex(got["error"], "board needs exactly one insert line")
 
     def test_a_board_floating_in_the_pocket_rests_on_nothing(self):
-        got = run(self.design((30, 20, "1.6"), at="(5 mm, 5 mm, 6 mm)"), self.tmp.name)
+        got = run(self.GIVEN, self.design((30, 20, "1.6"), at="(5 mm, 5 mm, 6 mm)"), self.tmp.name)
         self.assertEqual(got["box.board/fit.insert"][0], "refuted")
         self.assertRegex(got["box.board/fit.insert"][1], "rests on nothing")
         self.assertEqual(got["box.board/fit.connected"][0], "refuted")
 
     def two_boards(self, second_x, least):
+        """The card's given bounds and the design: a case with two boards, each tolerance signed."""
         a = write(self.tmp.name, "a", box((0, 0, 0), (10, 20, "1.6")))
         b = write(self.tmp.name, "b", box((0, 0, 0), (10, 20, "1.6")))
-        signed = f"  tolerance in [0.1 mm, 0.1 mm] {SIGNED}"
-        return (part("case", self.case) + part("a", a, "polymer.pc", None, signed) + part("b", b, "polymer.pc", None, signed) +
-                "assembly box {\n  place case at (0 mm, 0 mm, 0 mm) facing top front\n"
-                "  place a at (5 mm, 5 mm, 2 mm) facing top front\n"
-                f"  place b at ({second_x} mm, 5 mm, 2 mm) facing top front\n"
-                "  insert a along bottom from 25 mm\n  insert b along bottom from 25 mm\n"
-                f"  gap a b {least} mm\n}}\n")
+        given = "".join(f"given {name}_tolerance in [0.1 mm, 0.1 mm] {SIGNED}\n" for name in "ab")
+        return given, (part("case", self.case) + part("a", a, "polymer.pc", None, "  tolerance given a_tolerance") +
+                       part("b", b, "polymer.pc", None, "  tolerance given b_tolerance") +
+                       "assembly box {\n  place case at (0 mm, 0 mm, 0 mm) facing top front\n"
+                       "  place a at (5 mm, 5 mm, 2 mm) facing top front\n"
+                       f"  place b at ({second_x} mm, 5 mm, 2 mm) facing top front\n"
+                       "  insert a along bottom from 25 mm\n  insert b along bottom from 25 mm\n"
+                       f"  gap a b {least} mm\n}}\n")
 
     def test_a_declared_gap_holds_beyond_allowances(self):
         # 1 mm plus 0.1 mm of each board's tolerance is 1.2 mm. Both boards float along z
         # on the case floor, across the gap, so their floats add nothing to it.
-        got = run(self.two_boards(18, 1), self.tmp.name)
+        got = run(*self.two_boards(18, 1), self.tmp.name)
         self.assertEqual(got["box.a~b/fit.gap"][0], "certified", got["box.a~b/fit.gap"])
         self.assertRegex(got["box.a~b/fit.gap"][1], "a beyond")
-        got = run(self.two_boards("16.1", 1), self.tmp.name)
+        got = run(*self.two_boards("16.1", 1), self.tmp.name)
         self.assertEqual(got["box.a~b/fit.gap"][0], "refuted", got["box.a~b/fit.gap"])
         self.assertRegex(got["box.a~b/fit.gap"][1], r"a at 1\.1 mm")
 
     def test_a_part_larger_than_the_build_volume_fails(self):
         long = write(self.tmp.name, "long", box((0, 0, 0), ("249.5", 10, 10)))
-        got = run(part("bar", long), self.tmp.name)
+        got = run("", part("bar", long), self.tmp.name)
         self.assertEqual(got["bar/print.volume"][0], "refuted", "249.5 mm grown by 1.25 mm each side passes 250 mm")
         # 0.5 % (guess) of the 245.4 mm diagonal (measured) is 1.23 mm each side: 247.5 mm.
         short = write(self.tmp.name, "short", box((0, 0, 0), (245, 10, 10)))
-        self.assertEqual(run(part("bar", short), self.tmp.name)["bar/print.volume"][0], "certified")
+        self.assertEqual(run("", part("bar", short), self.tmp.name)["bar/print.volume"][0], "certified")
 
     def test_a_solid_assembly_states_its_centre_of_mass(self):
         machined = part("case", self.case, "aluminium.6061_T6", "process.mill.al6061_3axis")
         text = self.design((30, 20, "1.6")).replace(part("case", self.case), machined)
-        text = text.replace("  mass in [8 g, 9 g]", "  cg (15 mm, 10 mm, 0.8 mm)\n  mass in [8 g, 9 g]")
+        text = text.replace("  mass given mass", "  cg (15 mm, 10 mm, 0.8 mm)\n  mass given mass")
         # The tray's centroid is at z = (24000 * 10 - 16848 * 11) / 7152 = 7.65 mm (measured); the
         # board's at 2.8 mm. 19.3 g of aluminium (2700 kg/m3) and 8 to 9 g of board: 6.0 to 6.2 mm
         # nominal. Over the mill's 0.13 mm the tray's walls may gain or lose 1012 mm3 (measured)
         # anywhere on its 20 mm height, and the board floats 0.23 mm, so the bound is coarse: 8.5 mm
         # holds and 8 mm does not (measured).
-        got = run(text + "claim low: box.cg_z <= 8.5 mm\nclaim lower: box.cg_z <= 5.9 mm\n", self.tmp.name)
+        got = run(self.GIVEN + "claim low: box.cg_z <= 8.5 mm\nclaim lower: box.cg_z <= 5.9 mm\n", text, self.tmp.name)
         self.assertEqual(got["box/parts.cg/low"][0], "certified", got["box/parts.cg/low"])
         self.assertEqual(got["box/parts.cg/lower"][0], "refuted", got["box/parts.cg/lower"])
 
@@ -138,21 +144,20 @@ class Enclosure(unittest.TestCase):
         # 7152 mm3 (measured) of aluminium is 19.3 g (inferred), and the board 8 to 9 g (signed).
         # The tray's 7432 mm2 of surface (measured) at the mill's 0.13 mm adds up to 1012 mm3, or
         # 2.7 g (inferred): at most 31.04 g in all.
-        got = run(text + "claim under: box.mass <= 32 g\nclaim over: box.mass <= 31 g\n", self.tmp.name)
+        got = run(self.GIVEN + "claim under: box.mass <= 32 g\nclaim over: box.mass <= 31 g\n", text, self.tmp.name)
         self.assertEqual(got["box/parts.mass/under"][0], "certified", got["box/parts.mass/under"])
         self.assertEqual(got["box/parts.mass/over"][0], "refuted", got["box/parts.mass/over"])
 
     def test_mass_and_centre_of_mass_claims(self):
-        text = self.design((30, 20, "1.6")) + "claim light: box.mass <= 24 g\nclaim heavy: box.mass >= 9 g\n" \
-                                              "claim low: box.cg_z <= 10 mm\n"
-        got = run(text, self.tmp.name)
+        claims = "claim light: box.mass <= 24 g\nclaim heavy: box.mass >= 9 g\nclaim low: box.cg_z <= 10 mm\n"
+        got = run(self.GIVEN + claims, self.design((30, 20, "1.6")), self.tmp.name)
         # The tray is 7152 mm3 (measured) of PETG at 1.26 to 1.28 g/cm3 (guess): 9.15 g solid at
         # most, and its surface at FDM's 0.5 mm (guess) may add 4406 mm3 (inferred), 5.64 g. With
         # the board's 8 to 9 g (signed) that is at most 23.8 g.
         self.assertEqual(got["box/parts.mass/light"][0], "certified", got["box/parts.mass/light"])
         self.assertEqual(got["box/parts.mass/heavy"][0], "open", "a printed part's infill can only lower its mass")
         self.assertEqual(got["box/parts.cg/low"][0], "open", "a printed tray's centre of mass needs its fill or a cg line")
-        self.assertIn("error", run(self.design((30, 20, "1.6")) + "claim bad: box.cg_x <= 10 g\n", self.tmp.name))
+        self.assertIn("error", run(self.GIVEN + "claim bad: box.cg_x <= 10 g\n", self.design((30, 20, "1.6")), self.tmp.name))
 
 
 class Fasteners(unittest.TestCase):
@@ -160,6 +165,8 @@ class Fasteners(unittest.TestCase):
     is 0.13 mm (reported); the base is held to 0.02 mm (signed), since at the mill's 0.13 mm
     its 2.6 mm hole could open past the M3 thread's 2.675 mm pitch diameter (inferred). The
     screw is ISO 4762 M3, its shank 3 mm across."""
+
+    GIVEN = f"given tolerance in [0.02 mm, 0.02 mm] {SIGNED}\n"
 
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -175,7 +182,7 @@ class Fasteners(unittest.TestCase):
     def design(self, screw, top=None, top_hole="hole h at (10 mm, 10 mm, 3 mm) along bottom diameter 3.6 mm clear"):
         mill = "process.mill.al6061_3axis"
         return (part("base", self.base, "aluminium.6061_T6", None,
-                     f"  tolerance in [0.02 mm, 0.02 mm] {SIGNED}\n"
+                     "  tolerance given tolerance\n"
                      "  hole h at (10 mm, 10 mm, 10 mm) along bottom diameter 2.6 mm form") +
                 part("battery", self.battery, "aluminium.6061_T6", mill) +
                 part("lid", top or self.plate, "aluminium.6061_T6", mill, f"  {top_hole}") +
@@ -185,7 +192,7 @@ class Fasteners(unittest.TestCase):
                 f"  fasten f {screw} through lid.h into base.h\n}}\n")
 
     def test_a_screw_that_fits(self):
-        got = run(self.design("screw.M3x10_shcs"), self.tmp.name)
+        got = run(self.GIVEN, self.design("screw.M3x10_shcs"), self.tmp.name)
         for rule in ("fit.fastener", "fit.seat", "fit.grip"):
             self.assertEqual(got[f"stack.f/{rule}"][0], "certified", (rule, got[f"stack.f/{rule}"]))
         self.assertEqual(got["base.h/fit.hole"][0], "certified", got["base.h/fit.hole"])
@@ -193,34 +200,34 @@ class Fasteners(unittest.TestCase):
         self.assertRegex(got["stack.f/fit.grip"][1], "engages 6.7 mm")
 
     def test_a_screw_too_long_reaches_the_battery(self):
-        got = run(self.design("screw.M3x16_shcs"), self.tmp.name)
+        got = run(self.GIVEN, self.design("screw.M3x16_shcs"), self.tmp.name)
         self.assertEqual(got["stack.f/fit.fastener"][0], "refuted", got["stack.f/fit.fastener"])
         self.assertRegex(got["stack.f/fit.fastener"][1], "battery at 0 mm")
 
     def test_a_screw_too_short_does_not_grip(self):
-        got = run(self.design("screw.M3x6_shcs"), self.tmp.name)
+        got = run(self.GIVEN, self.design("screw.M3x6_shcs"), self.tmp.name)
         self.assertEqual(got["stack.f/fit.grip"][0], "refuted", "2.7 mm engaged against 2 diameters")
 
     def test_a_hole_smaller_than_declared_fails(self):
-        got = run(self.design("screw.M3x10_shcs", top_hole="hole h at (10 mm, 10 mm, 3 mm) along bottom diameter 4.2 mm clear"),
-                  self.tmp.name)
+        hole = "hole h at (10 mm, 10 mm, 3 mm) along bottom diameter 4.2 mm clear"
+        got = run(self.GIVEN, self.design("screw.M3x10_shcs", top_hole=hole), self.tmp.name)
         self.assertEqual(got["lid.h/fit.hole"][0], "refuted", "the mesh's hole is 3.6 mm at its corners")
 
     def test_a_countersunk_screw_needs_its_countersink(self):
-        got = run(self.design("screw.M3x10_csk"), self.tmp.name)
+        got = run(self.GIVEN, self.design("screw.M3x10_csk"), self.tmp.name)
         self.assertEqual(got["stack.f/fit.seat"][0], "refuted")
         self.assertRegex(got["stack.f/fit.seat"][1], "declares no countersink")
 
     def test_a_countersunk_seat_is_accepted(self):
         hole = "hole h at (10 mm, 10 mm, 3 mm) along bottom diameter 3.6 mm clear countersink 7.4 mm"
-        got = run(self.design("screw.M3x10_csk", top=self.sunk, top_hole=hole), self.tmp.name)
+        got = run(self.GIVEN, self.design("screw.M3x10_csk", top=self.sunk, top_hole=hole), self.tmp.name)
         self.assertEqual(got["stack.f/fit.seat"][0], "certified", got["stack.f/fit.seat"])
         self.assertEqual(got["lid.h/fit.hole"][0], "certified", got["lid.h/fit.hole"])
         self.assertEqual(got["stack.f/fit.fastener"][0], "certified", got["stack.f/fit.fastener"])
 
     def test_a_countersink_the_mesh_lacks_fails(self):
         hole = "hole h at (10 mm, 10 mm, 3 mm) along bottom diameter 3.6 mm clear countersink 7.2 mm"
-        got = run(self.design("screw.M3x10_csk", top_hole=hole), self.tmp.name)
+        got = run(self.GIVEN, self.design("screw.M3x10_csk", top_hole=hole), self.tmp.name)
         self.assertEqual(got["lid.h/fit.hole"][0], "refuted", got["lid.h/fit.hole"])
 
 
@@ -233,8 +240,9 @@ class Inserts(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             block = write(tmp, "block", plate((0, 0, 0), (20, 20, thick), centre, f"{diameter / 2}"))
             hole = f"  hole h at ({centre[0]} mm, {centre[1]} mm, {thick} mm) along bottom diameter {diameter} mm insert insert.M3x5_7"
-            signed = f"  tolerance in [0.01 mm, 0.01 mm] {SIGNED}\n"
-            return run(part("block", block, "polymer.petg", "process.print.fdm_petg_0_4", signed + hole), tmp)
+            given = f"given tolerance in [0.01 mm, 0.01 mm] {SIGNED}\n"
+            return run(given, part("block", block, "polymer.petg", "process.print.fdm_petg_0_4",
+                                   "  tolerance given tolerance\n" + hole), tmp)
 
     def test_a_hole_sized_for_shrink_suits_the_insert(self):
         # The 32-gon's corners at 2.08 mm put its sides 2.07 mm from the axis (measured): 4.14
@@ -266,7 +274,7 @@ class Sheet(unittest.TestCase):
 
     def check(self, tris):
         mesh = write(self.tmp.name, "sheet", tris)
-        return run(part("blank", mesh, "aluminium.6061_T6", "process.sheet.laser_al_3"), self.tmp.name)["blank/sheet.prism"]
+        return run("", part("blank", mesh, "aluminium.6061_T6", "process.sheet.laser_al_3"), self.tmp.name)["blank/sheet.prism"]
 
     def test_a_flat_plate_is_a_profile(self):
         got = self.check(plate((0, 0, 0), (40, 30, 3), (20, 15), 2))
@@ -292,7 +300,7 @@ class Bridges(unittest.TestCase):
 
     def check(self, tris):
         mesh = write(self.tmp.name, "printed", tris)
-        return run(part("p", mesh, "polymer.pla", "process.print.fdm_pla_0_4"), self.tmp.name)["p/print.bridge"]
+        return run("", part("p", mesh, "polymer.pla", "process.print.fdm_pla_0_4"), self.tmp.name)["p/print.bridge"]
 
     def test_a_closed_box_bridges_its_whole_ceiling(self):
         # The void's ceiling is 36 x 26 mm (measured); its centre is 13 mm from every edge.
@@ -318,11 +326,11 @@ class Temperature(unittest.TestCase):
     def test_pla_beside_a_motor_softens(self):
         with tempfile.TemporaryDirectory() as tmp:
             block = write(tmp, "block", box((0, 0, 0), (10, 10, 10)))
-            heat = f"  heat in [10 degC, 20 degC] {SIGNED}"
-            got = run(part("mount", block, "polymer.pla", "process.print.fdm_pla_0_4", heat), tmp)
+            given, heat = f"given heat in [10 degC, 20 degC] {SIGNED}\n", "  heat given heat"
+            got = run(given, part("mount", block, "polymer.pla", "process.print.fdm_pla_0_4", heat), tmp)
             # indoor_dry is 5 to 40 degC (IEC 60364-5-51 AA5); PLA's HDT is 50 to 56 degC (guess).
             self.assertEqual(got["mount/part.temperature"][0], "refuted")
-            got = run(part("mount", block, "polymer.petg", "process.print.fdm_petg_0_4", heat), tmp)
+            got = run(given, part("mount", block, "polymer.petg", "process.print.fdm_petg_0_4", heat), tmp)
             self.assertEqual(got["mount/part.temperature"][0], "certified", "40 + 20 against PETG's 64 degC")
 
 
@@ -334,14 +342,14 @@ class Press(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             block = write(tmp, "block", plate((0, 0, 0), (20, 20, 8), (10, 10), "1.5"))
             peg = write(tmp, "peg", pin((10, 10), "1.512", 0, 8))
-            signed = f"  tolerance in [{tol} mm, {tol} mm] {SIGNED}"
+            given = "".join(f"given {name}_tolerance in [{tol} mm, {tol} mm] {SIGNED}\n" for name in ("block", "peg"))
             text = (part("block", block, "aluminium.6061_T6", None,
-                         signed + "\n  hole h at (10 mm, 10 mm, 8 mm) along bottom diameter 3 mm press") +
-                    part("peg", peg, "aluminium.6061_T6", None, signed) +
+                         "  tolerance given block_tolerance\n  hole h at (10 mm, 10 mm, 8 mm) along bottom diameter 3 mm press") +
+                    part("peg", peg, "aluminium.6061_T6", None, "  tolerance given peg_tolerance") +
                     "assembly fit {\n  place block at (0 mm, 0 mm, 0 mm) facing top front\n"
                     "  place peg at (0 mm, 0 mm, 0 mm) facing top front\n  insert peg along bottom from 10 mm\n"
                     "  press p peg into block.h diameter 3.02 mm interference 0.01 mm to 0.05 mm\n}\n")
-            return run(text, tmp)
+            return run(given, text, tmp)
 
     def test_an_interference_fit_is_its_range_not_a_clash(self):
         got = self.design("0.0025")

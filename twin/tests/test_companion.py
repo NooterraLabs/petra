@@ -1,13 +1,14 @@
 """Companion design examples (AISC Design Examples, v16.0) reproduced through the twin.
 
-Each card in cards/ restates one example's given data. The test runs it under LRFD and under ASD
-and compares each available strength with the value the example prints.
+Each pair in cards/ restates one example's given data, its reaction in the card and its connection
+in the design. The test runs it under LRFD and under ASD and compares each available strength with
+the value the example prints.
 
 Tolerance: 1 percent. The Companion prints three significant figures and carries rounded
 intermediate values (table lookups, Zc and Sc, per-bolt strengths), so a closed-form value can
 differ from the printed one in the third figure. Measured on the frozen twin, the largest deviation
-among the 88 card comparisons is 0.92 percent, the ASD interaction sum of Example II.A-22, where the
-example carries Fcr, b' and Nr rounded to three figures.
+among the 88 comparisons on those pairs is 0.92 percent, the ASD interaction sum of Example II.A-22,
+where the example carries Fcr, b' and Nr rounded to three figures.
 """
 
 import unittest
@@ -24,7 +25,7 @@ CARDS = Path(__file__).parent / "cards"
 REL = 0.01
 LRFD_PHI_B, ASD_OMEGA_B = F(9, 10), F(167, 100)
 
-# card, LRFD demand, ASD demand
+# design, LRFD demand, ASD demand
 DEMANDS = {
     "ii_a_17a_shear_tab.petra": ("49.6", "33.0"),
     "ii_a_1a_double_angle.petra": ("226", "151"),
@@ -38,7 +39,7 @@ DEMANDS = {
     "ii_a_12a_seated.petra": ("54.8", "36.5"),
 }
 
-# card, check name, printed LRFD available, printed ASD available (None where not printed)
+# design, check name, printed LRFD available, printed ASD available (None where not printed)
 AVAILABLE = [
     ("ii_a_17a_shear_tab.petra", "bolt group effective strength, beam side", 58.5, 38.9),
     ("ii_a_17a_shear_tab.petra", "shear yielding, plate", 86.4, 57.6),
@@ -85,23 +86,29 @@ AVAILABLE = [
     ("ii_d_1_hanger.petra", "shear rupture, tee flange", 221, 147),
 ]
 
-# card, check name, printed LRFD and ASD utilisation (the bracket interaction sums)
+# design, check name, printed LRFD and ASD utilisation (the bracket interaction sums)
 UTILISATION = [
     ("ii_a_22_bolt_bracket.petra", "normal and flexural interaction, section B-B", 0.864, 0.862),
     ("ii_a_23_weld_bracket.petra", "normal and flexural interaction, section B-B", 0.630, 0.631),
 ]
 
 
-def run(card, basis, replace=()):
-    text = (CARDS / card).read_text(encoding="utf-8")
-    lrfd, asd = DEMANDS[card]
+def run(design, basis, replace=(), asked=()):
+    """The checks of a design in cards/ against the card beside it, under one basis. `replace`
+    changes the design's text and `asked` the card's."""
+    card = (CARDS / design).with_suffix(".card").read_text(encoding="utf-8")
+    text = (CARDS / design).read_text(encoding="utf-8")
+    lrfd, asd = DEMANDS[design]
     if basis == "asd":
-        text = text.replace("basis lrfd", "basis asd").replace(f"{lrfd} kip]", f"{asd} kip]")
+        text = text.replace("basis lrfd", "basis asd")
+        card = card.replace(f"{lrfd} kip]", f"{asd} kip]")
     for old, new in replace:
         text = text.replace(old, new)
-    [component] = check_text(text)["components"]
+    for old, new in asked:
+        card = card.replace(old, new)
+    [component] = check_text(card, text)["components"]
     if component["status"] != "checked":
-        raise AssertionError(f"{card}: {component}")
+        raise AssertionError(f"{design}: {component}")
     return {c["name"]: c for c in component["checks"]}
 
 
@@ -110,18 +117,18 @@ class CompanionTest(unittest.TestCase):
         self.assertLess(abs(value / expected - 1), REL, f"{label}: twin {value:.4g}, Companion {expected}")
 
     def test_available_strengths(self):
-        for card, name, lrfd, asd in AVAILABLE:
+        for design, name, lrfd, asd in AVAILABLE:
             for basis, expected in (("lrfd", lrfd), ("asd", asd)):
                 if expected is None:
                     continue
-                with self.subTest(card=card, check=name, basis=basis):
-                    self.close(run(card, basis)[name]["available"], expected, f"{card} {name} {basis}")
+                with self.subTest(design=design, check=name, basis=basis):
+                    self.close(run(design, basis)[name]["available"], expected, f"{design} {name} {basis}")
 
     def test_bracket_interactions(self):
-        for card, name, lrfd, asd in UTILISATION:
+        for design, name, lrfd, asd in UTILISATION:
             for basis, expected in (("lrfd", lrfd), ("asd", asd)):
-                with self.subTest(card=card, basis=basis):
-                    self.close(run(card, basis)[name]["utilisation"], expected, f"{card} {basis}")
+                with self.subTest(design=design, basis=basis):
+                    self.close(run(design, basis)[name]["utilisation"], expected, f"{design} {basis}")
 
     def test_ii_a_23_weld_group_nominal(self):
         # C = 1.46 for a 3/16 in. E70 weld 18 in. long: Rn = C C1 D l = 1.46 (1.0)(3)(18) = 78.8 kips.
@@ -135,7 +142,7 @@ class CompanionTest(unittest.TestCase):
 
     def test_ii_a_28a_beam_web_bolts_at_the_examples_edge(self):
         # The example's bolt check takes the top bolt 1-1/4 in. below the cope (top 3.25 in.); its
-        # block shear takes 1-1/2 in. as given. The card carries the given 1-1/2 in.
+        # block shear takes 1-1/2 in. as given. The design carries the given 1-1/2 in.
         for basis, expected in (("lrfd", 68.5), ("asd", 45.6)):
             checks = run("ii_a_28a_single_angle.petra", basis, (("top 3.5 inch", "top 3.25 inch"),))
             self.close(checks["bolt group effective strength, beam leg"]["available"], expected, f"II.A-28A bolts {basis}")
@@ -149,7 +156,7 @@ class CompanionTest(unittest.TestCase):
         # A demand whose J10.2 bearing length is exactly 1-1/8 in. puts the twin's reaction there.
         for basis, demand, expected in (("lrfd", "70.3", 113), ("asd", "46.8666667", 74.9)):
             text_demand = DEMANDS["ii_a_12a_seated.petra"][0 if basis == "lrfd" else 1]
-            checks = run("ii_a_12a_seated.petra", basis, ((f"{text_demand} kip]", f"{demand} kip]"),))
+            checks = run("ii_a_12a_seated.petra", basis, asked=((f"{text_demand} kip]", f"{demand} kip]"),))
             seat = checks["seat outstanding leg flexural yielding"]
             self.close(float(demand) / seat["utilisation"], expected, f"II.A-12A seat {basis}")
 
@@ -160,7 +167,7 @@ class CompanionTest(unittest.TestCase):
 
 
 class FormulaTest(unittest.TestCase):
-    """Examples whose numbers sit below a card: coped sections, prying and the J10 constants."""
+    """Examples whose numbers sit below a design: coped sections, prying and the J10 constants."""
 
     def close(self, value, expected, label):
         self.assertLess(abs(float(value) / expected - 1), REL, f"{label}: twin {float(value):.4g}, Companion {expected}")

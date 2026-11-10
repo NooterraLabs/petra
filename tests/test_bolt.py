@@ -23,6 +23,7 @@ from fractions import Fraction
 from pathlib import Path
 
 from petra import coverage, models
+from petra.files import read_pair
 from petra.kernel import Interval, Refutation, Rejection, Theorem, check, decode_evidence, decode_statement, statement_hash
 from petra.lang import load_design, parse_design
 from petra.models import bolt
@@ -57,12 +58,13 @@ CANARY = Path(__file__).resolve().parents[1] / "judges" / "canaries" / "joint_op
 
 
 def joint(*edits: tuple[str, str], extra: str = ""):
-    text = EXAMPLE.read_text(encoding="utf-8")
+    """The example with each edit made in the file that holds its text, and `extra` added to the card."""
+    card, text = read_pair(EXAMPLE)
     for old, new in edits:
-        if old not in text:
-            raise AssertionError(f"{old!r} is not in bolt_unknown.petra")
-        text = text.replace(old, new)
-    return parse_design(text + extra, "joint.petra", REGISTRY)
+        if old not in card and old not in text:
+            raise AssertionError(f"{old!r} is not in bolt_unknown.card or bolt_unknown.petra")
+        card, text = card.replace(old, new), text.replace(old, new)
+    return parse_design(card + extra, text, "joint.petra", REGISTRY)
 
 
 def lowered(design) -> dict:
@@ -229,12 +231,12 @@ class Galvanic(unittest.TestCase):
     def test_a_cadmium_plated_stainless_bolt_in_aluminium_plates_removes_the_pair(self):
         """Cadmium 0.95 against 6061 0.90: 0.05 V apart. The bare A4 bolt is 0.50 against
         0.90, 0.40 V apart."""
-        text = EXAMPLE.read_text(encoding="utf-8")
-        plated = parse_design(text.replace("bolt.M12_A4_70", "bolt.M12_A4_70_cd"), "joint.petra", CADMIUM)
+        card, text = read_pair(EXAMPLE)
+        plated = parse_design(card, text.replace("bolt.M12_A4_70", "bolt.M12_A4_70_cd"), "joint.petra", CADMIUM)
         self.assertEqual(self.pairs(plated, CADMIUM), [("cadmium.electroplate", "aluminium.6061_T6"),
                                                         ("aluminium.6061_T6", "aluminium.6061_T6")])
         self.assertFalse(self.demanded(plated, CADMIUM))
-        bare = parse_design(text, "joint.petra", CADMIUM)
+        bare = parse_design(card, text, "joint.petra", CADMIUM)
         self.assertTrue(self.demanded(bare, CADMIUM))
 
 
@@ -272,7 +274,8 @@ class Tension(unittest.TestCase):
         self.assertAlmostEqual(at(ob.statement, 0, {**WORST, "bracket.torque": 10}), 12000 - 34127.948, places=2)
 
     def test_a_missing_input_is_a_gap_naming_it(self):
-        gap = tension(joint(('  torque in [40 Nm, 50 Nm] signed "fitter.lead@example.org" source "assembly spec AS-12 rev C"\n', "")))
+        gap = tension(joint(('given torque in [40 Nm, 50 Nm] signed "fitter.lead@example.org" source "assembly spec AS-12 rev C"\n', ""),
+                            ("  torque given torque\n", "")))
         self.assertIsInstance(gap, Gap)
         self.assertEqual(gap.needs, (NeedsInputBound(("bracket",), "torque", "Nm"),))
 
@@ -308,7 +311,8 @@ class Separation(unittest.TestCase):
         self.assertEqual({k: point[k] for k in LEAST}, {**LEAST, "bracket.torque": 5})
 
     def test_a_missing_input_is_a_gap_naming_it(self):
-        (gap,) = separation(joint(('  torque in [40 Nm, 50 Nm] signed "fitter.lead@example.org" source "assembly spec AS-12 rev C"\n', "")))
+        (gap,) = separation(joint(('given torque in [40 Nm, 50 Nm] signed "fitter.lead@example.org" source "assembly spec AS-12 rev C"\n', ""),
+                                  ("  torque given torque\n", "")))
         self.assertEqual(gap.needs, (NeedsInputBound(("bracket",), "torque", "Nm"),))
 
     def test_a_counterexample_where_the_joint_stays_closed_is_a_fail(self):

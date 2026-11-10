@@ -68,7 +68,7 @@ CORE_CAP = Limit(1000, "Set on 2026-11-08 at 140f742, where the core measured 95
                        "A new rule adds 3 to 5 lines to rules/__init__.py (inferred from its tables), so "
                        "the headroom covers the registry entries of several rules.")
 
-TRUSTED_CEILING = Limit(17727, "Set on 2026-11-08 at 140f742, where the trusted base measured 13,530 "
+TRUSTED_CEILING = Limit(17766, "Set on 2026-11-08 at 140f742, where the trusted base measured 13,530 "
                                "code lines: core 957, rules 457, outside the kernel 12,116. Raised on "
                                "2026-11-08 on branch parts-core as the parts layer replaces its scaffold: "
                                "classifying the scaffold measured 14,269, and the mesh reader with its "
@@ -94,6 +94,8 @@ TRUSTED_CEILING = Limit(17727, "Set on 2026-11-08 at 140f742, where the trusted 
                                "defines it 17,058. Both branches merged on branch integration-merge, with "
                                "release 0.1.1's anodic indices and tightening note, hanger-slot's worse-way "
                                "reads and an anodic index for the inserts' brass, measured 17,727. "
+                               "On branch rework a design's card became a file of its own: the grammar of "
+                               "each file, the `given` declaration and lowering the two trees measured 17,766. "
                                "Raise it in the commit that needs more and say why here.")
 
 T2_ADOPTED = date(2026, 11, 8)

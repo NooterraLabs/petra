@@ -4,10 +4,6 @@ petra 0
 # Design 327 of `python scripts/absurd_gap.py --seed 1` at commit b9e9792 (docs/absurd_gap.md):
 # angle top edge 1.25 in below the W30x90's top, on its fillet, off the flat web (1.26 in).
 
-design "absurd-00327" {
-  owner "gate@petra.dev"
-}
-
 single_angle c1 {
   basis lrfd
   beam W30x90 grade steel.A992
@@ -22,9 +18,4 @@ single_angle c1 {
   beam_gauge 2.75 inch
   support_side bolted
   support_gauge 2.25 inch
-}
-
-load gate {
-  on c1 shear in [0 kip, 4.872 kip]
-  signed "gate@petra.dev" source "steel gate generator"
 }

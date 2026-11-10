@@ -1,0 +1,10 @@
+petra 0
+
+card "steel-seated" {
+  owner "task.owner@example.org"
+}
+
+load gravity {
+  on seat1 shear in [0 kip, 15.843 kip]
+  signed "task.owner@example.org" source "task 303-003"
+}

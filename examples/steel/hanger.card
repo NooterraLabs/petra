@@ -1,0 +1,10 @@
+petra 0
+
+card "steel-hanger" {
+  owner "s.engineer@example.org"
+}
+
+load gravity {
+  on h1 tension in [0 kip, 40 kip]
+  signed "s.engineer@example.org" source "beam reaction, LRFD 1.2D + 1.6L, calc SC-3"
+}

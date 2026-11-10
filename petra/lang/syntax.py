@@ -1,17 +1,24 @@
-"""Untyped syntax tree for .petra, close to the grammar. Internal to petra.lang.
+"""Untyped syntax tree for the two files of a design, close to the grammar. Internal to
+petra.lang.
+
+A card (NAME.card) is what the asker owns: the name, the environment, every signed bound,
+the load cases, the claims and the waivers. A design (NAME.petra) is what the designer
+owns: the components and the params of a family. A design signs nothing and waives
+nothing; it reads a bound the card states with `given NAME`.
 
 Grammar (EBNF; NL is a NEWLINE token). The parser in parser.py follows it rule for rule.
 The grammar knows no component kind and no attribute name: those belong to the domain
 that registers the kind (petra/models), so adding a domain never edits this file.
 
-    file      = "petra" INT NL { decl NL } EOF ;
-    decl      = design | param | ambient | load | tests | claim | waive | component ;
-    design    = "design" STRING "{" NL { ( "owner" STRING | "environment" IDENT ) NL } "}" ;
+    card file   = "petra" INT NL { ( card | param | ambient | given | load | tests | claim | waive ) NL } EOF ;
+    design file = "petra" INT NL { ( param | component ) NL } EOF ;
+    card      = "card" STRING "{" NL { ( "owner" STRING | "environment" IDENT ) NL } "}" ;
     param     = "param" IDENT "in" range ;
     ambient   = "ambient" bound ;
+    given     = "given" IDENT "in" range [ "mean" qty ] [ signature ] ;
     component = KIND IDENT "{" NL { attr NL } "}" ;    KIND: an IDENT not in DECLS
     attr      = IDENT { arg } ;
-    arg       = bound | qty | tuple | ref | STRING | ":" | "--" | "->" ;
+    arg       = "given" IDENT | "param" IDENT | qty | tuple | ref | STRING | ":" | "--" | "->" ;
     tuple     = "(" qty { "," qty } ")" ;
     bound     = "in" range [ "mean" qty ] [ signature ] | "param" IDENT ;
     signature = ( "signed" | "measured" ) STRING "source" STRING ;
@@ -32,9 +39,9 @@ that registers the kind (petra/models), so adding a domain never edits this file
                                         a port (w1.b) or a failure-mode id
     rel       = "<=" | ">=" ;
 
-Every load entry and tests record carries a signature, its own or its block's. The names
-"in", "mean", "signed", "measured", "source" and "param" start a bound or a signature
-inside an attribute line, so they cannot be refs there.
+Every given, load entry and tests record carries a signature, its own or its block's. The
+names "in", "mean", "signed", "measured", "source", "param" and "given" cannot be refs in an
+attribute line.
 """
 from __future__ import annotations
 

@@ -1,0 +1,10 @@
+petra 0
+
+card "counterweight" {
+  owner "red@example.org"
+  environment indoor_dry
+}
+
+given tolerance in [0.01 mm, 0.01 mm] signed "red@example.org" source "x"
+
+claim heavy: p.mass >= 0.4 g

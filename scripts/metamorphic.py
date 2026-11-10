@@ -78,7 +78,7 @@ class Check:
 
 @dataclass(frozen=True)
 class Read:
-    """One oracle's reading of one card. Petra's status is its verdict and `failing` the
+    """One oracle's reading of one design. Petra's status is its verdict and `failing` the
     modes the kernel did not discharge; the twin's status is checked, unsupported or
     input_error."""
 
@@ -89,9 +89,10 @@ class Read:
 
 @dataclass(frozen=True)
 class Variant:
-    """A changed design: its card, the registry Petra reads it with, and a context that
-    patches the twin's tables while the twin reads it."""
+    """A changed design: its card's text and its own, the registry Petra reads it with, and a
+    context that patches the twin's tables while the twin reads it."""
 
+    card: str
     text: str
     registry: Registry
     twin: Callable[[], ContextManager] = contextlib.nullcontext
@@ -99,10 +100,13 @@ class Variant:
 
 @dataclass(frozen=True)
 class Relation:
+    """`make` takes a design's card, its text and the registry. A change to a component's line
+    is made in the text, and a restated load in the card."""
+
     name: str
     kind: str
     change: str
-    make: Callable[[str, Registry], Variant | None]
+    make: Callable[[str, str, Registry], Variant | None]
 
 
 CAPACITY, NOTHING = "capacity", "nothing"
@@ -140,10 +144,10 @@ class Defect:
 
 # --- Readers ---------------------------------------------------------------------------
 
-def petra_read(text: str, registry: Registry) -> Read:
+def petra_read(card: str, text: str, registry: Registry) -> Read:
     """Every check Petra generates for c1 under the gate case, as its readout prints them,
     and the kernel's verdict."""
-    design = parse_design(text, "metamorphic.petra", registry)
+    design = parse_design(card, text, "metamorphic.petra", registry)
     conn = calc.connection(design, "c1", registry)
     checks: dict[Key, Check] = {}
     for mode in required(conn, design):
@@ -158,9 +162,9 @@ def petra_read(text: str, registry: Registry) -> Read:
     return Read(STATUS[type(report.verdict)], checks, tuple(sorted(m for m, s in modes.items() if s != "pass")))
 
 
-def twin_read(text: str) -> Read:
+def twin_read(card: str, text: str) -> Read:
     try:
-        components = twin.run.check_text(text)["components"]
+        components = twin.run.check_text(card, text)["components"]
     except twin.card.CardError as e:
         return Read(f"input_error: {e}", {})
     found = next(c for c in components if c["name"] == "c1")
@@ -211,15 +215,16 @@ def _sub(text: str, m: re.Match, line: str) -> str:
 STOCK = sorted(_mixed(t) for t in STOCK_PLATES)
 
 
-def _thicker_plate(line: str) -> Callable[[str, Registry], Variant | None]:
-    def make(text: str, registry: Registry) -> Variant | None:
+def _thicker_plate(line: str) -> Callable[[str, str, Registry], Variant | None]:
+    def make(card: str, text: str, registry: Registry) -> Variant | None:
         m = re.search(rf"^  {line} (\S+) thickness ([0-9.]+) inch$", text, re.M)
         up = next((s for s in STOCK if s > Fraction(m.group(2))), None) if m else None
-        return None if up is None else Variant(_sub(text, m, f"  {line} {m.group(1)} thickness {_decimal(up)} inch"), registry)
+        return None if up is None else Variant(card, _sub(text, m, f"  {line} {m.group(1)} thickness {_decimal(up)} inch"),
+                                               registry)
     return make
 
 
-def angle_thicker(text: str, registry: Registry) -> Variant | None:
+def angle_thicker(card: str, text: str, registry: Registry) -> Variant | None:
     m = re.search(r"^  (angles?) (L\S+) grade", text, re.M)
     if m is None:
         return None
@@ -229,19 +234,19 @@ def angle_thicker(text: str, registry: Registry) -> Variant | None:
     thicker = sorted((dims(s)[2], s) for s in shapes if dims(s)[:2] == (d, b) and dims(s)[2] > t)
     if not thicker:
         return None
-    return Variant(text[:m.start(2)] + thicker[0][1] + text[m.end(2):], registry)
+    return Variant(card, text[:m.start(2)] + thicker[0][1] + text[m.end(2):], registry)
 
 
-def _count(key: str) -> Callable[[str, Registry], Variant | None]:
-    def make(text: str, registry: Registry) -> Variant | None:
+def _count(key: str) -> Callable[[str, str, Registry], Variant | None]:
+    def make(card: str, text: str, registry: Registry) -> Variant | None:
         m = re.search(rf"^  {key} (\d+)$", text, re.M)
-        return None if m is None else Variant(_sub(text, m, f"  {key} {int(m.group(1)) + 1}"), registry)
+        return None if m is None else Variant(card, _sub(text, m, f"  {key} {int(m.group(1)) + 1}"), registry)
     return make
 
 
-def grade_up(text: str, registry: Registry) -> Variant | None:
+def grade_up(card: str, text: str, registry: Registry) -> Variant | None:
     raised = re.sub(r"\bsteel\.A36\b", "steel.A572_50", text)
-    return None if raised == text else Variant(raised, registry)
+    return None if raised == text else Variant(card, raised, registry)
 
 
 def _members(text: str) -> tuple[set[str], set[str]]:
@@ -254,9 +259,9 @@ def _members(text: str) -> tuple[set[str], set[str]]:
 SIXTEENTH = Fraction(1, 16)
 
 
-def _thicker_members(prop: str) -> Callable[[str, Registry], Variant | None]:
+def _thicker_members(prop: str) -> Callable[[str, str, Registry], Variant | None]:
     """Every W shape's `prop` (tw or tf) 1/16 in more, each tee's with its parent's."""
-    def make(text: str, registry: Registry) -> Variant | None:
+    def make(card: str, text: str, registry: Registry) -> Variant | None:
         shapes, tees = _members(text)
         if not shapes:
             return None
@@ -267,7 +272,7 @@ def _thicker_members(prop: str) -> Callable[[str, Registry], Variant | None]:
         table = dict(twin.data._table())
         for name in (shapes | tees) & set(table):
             table[name] = {**table[name], prop: str(Fraction(table[name][prop]) + SIXTEENTH)}
-        return Variant(text, replace(registry, constants=constants),
+        return Variant(card, text, replace(registry, constants=constants),
                        lambda: mock.patch.object(twin.data, "_table", lambda: table))
     return make
 
@@ -276,7 +281,7 @@ FY_STEP = 4
 GRADES = ("steel.A36", "steel.A572_50", "steel.A992")
 
 
-def fy_up(text: str, registry: Registry) -> Variant:
+def fy_up(card: str, text: str, registry: Registry) -> Variant:
     """Every grade's Fy FY_STEP ksi more, its Fu held."""
     step = FY_STEP * CUSTOMARY["ksi"][0]
     materials = dict(registry.materials)
@@ -285,7 +290,7 @@ def fy_up(text: str, registry: Registry) -> Variant:
         fy = m.props["fy"]
         materials[grade] = replace(m, props={**m.props, "fy": replace(fy, value=Interval(fy.value.lo + step, fy.value.hi + step))})
     grades = {g: (fy + FY_STEP, fu) for g, (fy, fu) in twin.data.GRADES.items()}
-    return Variant(text, replace(registry, materials=materials), lambda: mock.patch.dict(twin.data.GRADES, grades))
+    return Variant(card, text, replace(registry, materials=materials), lambda: mock.patch.dict(twin.data.GRADES, grades))
 
 
 _QUANTITY = re.compile(r"(?<![\w.])(-?\d+(?:\.\d+)?) (inch|kip)\b")
@@ -295,11 +300,12 @@ KN_PER_KIP = Fraction("4.4482216152605")
 
 
 def _units(length: str, of_inch: Callable[[Fraction], str], force: str, of_kip: Callable[[Fraction], str]):
-    def make(text: str, registry: Registry) -> Variant:
+    """Every length and force restated, the card's loads and given bounds with the design's lines."""
+    def make(card: str, text: str, registry: Registry) -> Variant:
         def restate(m: re.Match) -> str:
             x = Fraction(m.group(1))
             return f"{of_inch(x)} {length}" if m.group(2) == "inch" else f"{of_kip(x)} {force}"
-        return Variant(_QUANTITY.sub(restate, text), registry)
+        return Variant(_QUANTITY.sub(restate, card), _QUANTITY.sub(restate, text), registry)
     return make
 
 
@@ -307,7 +313,7 @@ MIRRORED = ("shear_tab", "double_angle", "single_angle", "shear_tee")
 """The kinds whose bolt group sits at `top` on the beam web."""
 
 
-def mirror(text: str, registry: Registry) -> Variant | None:
+def mirror(card: str, text: str, registry: Registry) -> Variant | None:
     """The bolt group reflected about an uncoped beam's mid-depth: top becomes d - top -
     (rows - 1) pitch. A coped beam has no mirror the grammar states, since only its top
     flange may be coped alone."""
@@ -321,7 +327,7 @@ def mirror(text: str, registry: Registry) -> Variant | None:
         return None
     d = registry.constants[f"aisc_shapes_v16.{beam.group(1)}.d"].value.lo / INCH
     flipped = d - Fraction(top.group(1)) - (int(rows.group(1)) - 1) * Fraction(pitch.group(1))
-    return Variant(_sub(text, top, f"  top {_decimal(flipped)} inch"), registry) if flipped > 0 else None
+    return Variant(card, _sub(text, top, f"  top {_decimal(flipped)} inch"), registry) if flipped > 0 else None
 
 
 RELATIONS: tuple[Relation, ...] = (
@@ -619,17 +625,17 @@ def _slack(relation: Relation, toleranced: bool) -> float:
 def assess(g: Generated, registry: Registry, relations: Iterable[Relation], with_twin: bool = True) -> dict:
     """One log row: the design, and for each relation that applies, what Petra and the twin
     did under it."""
-    base = petra_read(g.text, registry)
-    twin_base = twin_read(g.text) if with_twin else None
+    base = petra_read(g.card, g.text, registry)
+    twin_base = twin_read(g.card, g.text) if with_twin else None
     row = {"name": g.name, "kind": g.kind, "status": base.status, "toleranced": g.toleranced, "free": g.free,
            "twin": None if twin_base is None else twin_base.status, "relations": {}}
     for relation in relations:
-        variant = relation.make(g.text, registry)
+        variant = relation.make(g.card, g.text, registry)
         if variant is None:
             continue
         found: dict = {}
         try:
-            new = petra_read(variant.text, variant.registry)
+            new = petra_read(variant.card, variant.text, variant.registry)
         except ValueError as e:
             broken = [{"mode": "", "check": "", "what": "rejected", "base": base.status, "new": str(e)[:300]}]
             found["petra"] = {"status": "REJECTED", "broken": broken if relation.kind != MONOTONE else [], "exempt": {},
@@ -639,7 +645,7 @@ def assess(g: Generated, registry: Registry, relations: Iterable[Relation], with
             found["petra"] = {"status": new.status, "broken": j.broken, "exempt": dict(j.exempt), "flip": j.flip}
         if twin_base is not None and twin_base.status == "checked":
             with variant.twin():
-                twin_new = twin_read(variant.text)
+                twin_new = twin_read(variant.card, variant.text)
             if twin_new.status != "checked":
                 broken = [{"mode": "", "check": "", "what": "unread", "base": "checked", "new": twin_new.status}]
                 found["twin"] = {"status": twin_new.status, "broken": broken if relation.kind != MONOTONE else [],
@@ -762,7 +768,7 @@ def render(rows: list[dict], names: tuple[str, ...], args: argparse.Namespace, s
     twin = (f"The clean-room twin in `twin/` is read through its JSON report, with its shape and grade tables patched "
             f"in memory for the relations that change them. It read {read} of the {n} designs (measured). It does not "
             f"model {' or '.join(sorted(set(unmodelled))) or 'every kind'} ({len(unmodelled)} designs). It refused "
-            f"{sum(refused.values())} cards."
+            f"{sum(refused.values())} designs."
             + "".join(f" The reason it gave was \"{_cell(why)}\" for {k} of them." for why, k in refused.most_common())
             if not args.no_twin else "The clean-room twin was not run.")
     lines = [

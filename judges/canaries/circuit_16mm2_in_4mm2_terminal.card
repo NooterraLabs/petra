@@ -1,0 +1,18 @@
+petra 0
+
+card "workshop-lighting-radial" {
+  owner "e.designer@example.org"
+  environment indoor_dry
+}
+
+ambient in [10 degC, 40 degC] signed "site.manager@example.org" source "site survey 2026-09"
+
+given fault_current in [0 kA, 6 kA] signed "dno.liaison@example.org" source "DNO letter 2026-08-14"
+
+load lamp_draw {
+  on lighting.lamps current in [0 A, 10 A]
+  signed "e.designer@example.org" source "luminaire schedule rev 3"
+}
+
+claim hot:  lighting.w1.temperature <= 70 degC under lamp_draw
+claim drop: lighting.w1.voltage_drop <= 3 % under lamp_draw

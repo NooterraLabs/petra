@@ -3,10 +3,6 @@ petra 0
 # Steel gate design gate-1-04213. The top bolt's vertical short slot in the beam web, 1-1/8 in.
 # long, centres 2.5 - 2 = 0.5 in. below the cope's cut, so it runs 1/16 in. past the cut.
 
-design "gate-1-04213" {
-  owner "gate@petra.dev"
-}
-
 shear_tab c1 {
   basis asd
   beam W16x26 grade steel.A992
@@ -25,10 +21,4 @@ shear_tab c1 {
   cope top depth 2 inch length 4 inch
   deformation considered
   setback 0.5 inch
-}
-
-load gate {
-  on c1 shear in [0 kip, 0.001 kip]
-  on c1 cycles in [100000000, 100000000]
-  signed "gate@petra.dev" source "steel gate generator"
 }

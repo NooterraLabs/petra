@@ -1,0 +1,10 @@
+petra 0
+
+card "t15_girder_uncoped" {
+  owner "audit@example.org"
+}
+
+load gravity {
+  on c1 shear in [0 kip, 95 kip]
+  signed "audit@example.org" source "audit"
+}

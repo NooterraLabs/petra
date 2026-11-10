@@ -1,7 +1,7 @@
 """Brackets: a plate welded on both faces with the load in its plane, and bolt tearout about the
 instantaneous center.
 
-A comparison over generated designs found the twin failing nine bracket cards, now in
+A comparison over generated designs found the twin failing nine bracket designs, now in
 cards/gate_1_*_bracket.petra. On the six weld brackets the twin read the weld lines by the
 elastic method; Manual Table 8-4 at k = 0 reads them by the instantaneous center method. On the
 three bolt brackets it took every bolt's tearout at the least clear distance in any direction;
@@ -31,6 +31,13 @@ GOVERNING = {
     "gate_1_08786_bolt_bracket.petra": "bolt shear",
 }
 
+WELDS_B_CARD = """petra 0
+
+load reaction {
+  on welds_b shear in [0 kip, 100 kip]
+}
+"""
+
 WELDS_B = """petra 0
 
 weld_bracket welds_b {{
@@ -41,26 +48,22 @@ weld_bracket welds_b {{
   weld_length {length} inch
   eccentricity 4 inch
 }}
-
-load reaction {{
-  on welds_b shear in [0 kip, 100 kip]
-}}
 """
 
 
 class GateBracketTest(unittest.TestCase):
     def test_verdicts_and_governing_checks(self):
-        for card, name in GOVERNING.items():
-            with self.subTest(card=card):
-                out = component(card)
+        for design, name in GOVERNING.items():
+            with self.subTest(design=design):
+                out = component(design)
                 self.assertEqual(out["status"], "checked", out)
                 self.assertEqual(out["governing"]["name"], name)
                 self.assertLess(out["governing"]["utilisation"], 1.0)
 
     def test_least_distance_tearout_no_longer_governs(self):
-        for card in [c for c in GOVERNING if "bolt_bracket" in c]:
-            with self.subTest(card=card):
-                c = checks(card)
+        for design in [d for d in GOVERNING if "bolt_bracket" in d]:
+            with self.subTest(design=design):
+                c = checks(design)
                 self.assertLess(c["bearing and tearout, plate"]["utilisation"],
                                 c["bolt group effective strength"]["utilisation"])
 
@@ -68,12 +71,12 @@ class GateBracketTest(unittest.TestCase):
 class WeldsBTest(unittest.TestCase):
     """Manual Table 8-4 at k = 0 with al = 4 in., as Example II.A-2A applies it to welds B, a weld
     line on each angle's outstanding leg. Part A of that example reads the same 318 and 212 kips
-    from Table 10-2, so Tables 10-2 and 10-3 read welds B this way (inferred). The card restates
+    from Table 10-2, so Tables 10-2 and 10-3 read welds B this way (inferred). The design restates
     the line as a weld bracket with the load 4 in. off it."""
 
     def available(self, basis, w, length):
         text = WELDS_B.format(basis=basis, w=w, length=length)
-        [out] = check_text(text)["components"]
+        [out] = check_text(WELDS_B_CARD, text)["components"]
         return {c["name"]: c for c in out["checks"]}[WELD]["available"]
 
     def test_companion_values(self):
@@ -101,10 +104,10 @@ class WeldBaseMetalTest(unittest.TestCase):
     2 (70)(0.375)(sqrt 2 / 2) / 58 = 0.64002 in. and the flange's is half that at Fu = 65.
     """
 
-    CARD = "gate_1_00042_weld_bracket.petra"
+    DESIGN = "gate_1_00042_weld_bracket.petra"
 
     def test_base_metal_is_the_weld_times_t_over_tmin(self):
-        c = checks(self.CARD)
+        c = checks(self.DESIGN)
         weld = c[WELD]["nominal"]
         throat = 0.375 * math.sqrt(2) / 2
         plate_tmin = 2 * 70 * throat / 58
@@ -117,7 +120,7 @@ class WeldBaseMetalTest(unittest.TestCase):
     def test_a_plate_thinner_than_tmin_governs(self):
         """At 3/8 in. the plate is 0.375 / 0.64002 = 0.586 of Eq. 9-7's tmin, so its rupture at the
         weld governs, ahead of the weld and of section A-A."""
-        out = component(self.CARD, (("thickness 0.75 inch", "thickness 0.375 inch"),))
+        out = component(self.DESIGN, (("thickness 0.75 inch", "thickness 0.375 inch"),))
         self.assertEqual(out["governing"]["name"], "plate shear rupture at the weld")
         self.assertGreater(out["governing"]["utilisation"], 1.0)
 

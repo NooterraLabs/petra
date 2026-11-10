@@ -1,0 +1,15 @@
+petra 0
+
+card "param-load" {
+  owner "a@example.org"
+  environment indoor_dry
+}
+
+param p in [-1 N, 0 N]
+
+load crowd {
+  on frame.D fy param p
+  on frame.E fy param p
+}
+
+claim strength: frame.collapse_factor >= 1.5 under crowd

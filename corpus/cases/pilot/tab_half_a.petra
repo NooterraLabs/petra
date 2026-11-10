@@ -8,10 +8,6 @@ petra 0
 # the bolt-group eccentricity is a/2 (Manual Table 10-9, n = 2 to 5, STD holes).
 # Governing: plate shear rupture 0.84, bolt shear 0.84 (C = 3.66), block shear 0.76.
 
-design "steel-shear-tab" {
-  owner "task.owner@example.org"
-}
-
 shear_tab st1 {
   basis asd
   beam W18x35 grade steel.A992
@@ -28,9 +24,4 @@ shear_tab st1 {
   setback 0.5 inch
   form conventional
   weld electrode.E70 size 0.25 inch sides 2
-}
-
-load service {
-  on st1 shear in [0 kip, 45.988 kip]
-  signed "task.owner@example.org" source "task 303-006"
 }

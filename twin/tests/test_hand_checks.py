@@ -1,7 +1,7 @@
 """Hand calculations for the limit states a comparison against the documents found wrong or missing.
 
-Each test restates a Companion card with one change and compares the twin with the arithmetic in its
-docstring. Hole sizes are Table J3.3's, and net areas add B4.3b's 1/16 in.
+Each test restates a Companion example's card and design with one change and compares the twin with
+the arithmetic in its docstring. Hole sizes are Table J3.3's, and net areas add B4.3b's 1/16 in.
 """
 
 import itertools
@@ -19,20 +19,25 @@ CARDS = Path(__file__).parent / "cards"
 REL = 1e-9
 
 
-def component(card, replace=()):
-    text = (CARDS / card).read_text(encoding="utf-8")
-    for old, new in replace:
-        if old not in text:
-            raise AssertionError(f"{card}: no {old!r} to replace")
-        text = text.replace(old, new)
-    [out] = check_text(text)["components"]
+def component(design, replace=(), asked=()):
+    """The twin's reading of a design in cards/ against the card beside it. `replace` changes the
+    design's text and `asked` the card's."""
+    texts = []
+    for path, changes in (((CARDS / design).with_suffix(".card"), asked), (CARDS / design, replace)):
+        text = path.read_text(encoding="utf-8")
+        for old, new in changes:
+            if old not in text:
+                raise AssertionError(f"{path.name}: no {old!r} to replace")
+            text = text.replace(old, new)
+        texts.append(text)
+    [out] = check_text(*texts)["components"]
     return out
 
 
-def checks(card, replace=()):
-    out = component(card, replace)
+def checks(design, replace=(), asked=()):
+    out = component(design, replace, asked)
     if out["status"] != "checked":
-        raise AssertionError(f"{card}: {out}")
+        raise AssertionError(f"{design}: {out}")
     return {c["name"]: c for c in out["checks"]}
 
 
@@ -75,8 +80,8 @@ class HangerPryingWithShearTest(HandTest):
         = 0.6002 with t = 0.52 in., Q = (t/tc)^2 (1 + delta alpha') = 0.8251.
         Available tension with prying = 4 Q Tc = 86.69 kips. With Fnt it would be 95.3 kips.
         """
-        c = checks("ii_d_1_hanger.petra", (("on ii_d_1 tension in [0 kip, 60 kip]",
-                                            "on ii_d_1 tension in [0 kip, 60 kip]\n  on ii_d_1 shear in [0 kip, 30 kip]"),))
+        c = checks("ii_d_1_hanger.petra", asked=(("on ii_d_1 tension in [0 kip, 60 kip]",
+                                                  "on ii_d_1 tension in [0 kip, 60 kip]\n  on ii_d_1 shear in [0 kip, 30 kip]"),))
         self.assertLess(abs(c["bolt tension with prying, tee flange"]["available"] / 86.6887 - 1), 1e-4)
 
 
@@ -178,24 +183,25 @@ SIGNED = 'signed "detailer@example.org" source "fabrication tolerance"'
 
 
 class IntervalLengthTest(HandTest):
-    """A length may be a signed bound or a param. Each check reports its worst case over every
-    end of every interval."""
+    """A length may be a bound the card gives or a param. Each check reports its worst case over
+    every end of every interval."""
 
-    def assert_worst(self, interval_card, point_cards):
-        got = checks("ii_a_30_shear_tee.petra", interval_card)
-        points = [checks("ii_a_30_shear_tee.petra", r) for r in point_cards]
+    def assert_worst(self, interval_design, point_designs, asked=()):
+        got = checks("ii_a_30_shear_tee.petra", interval_design, asked)
+        points = [checks("ii_a_30_shear_tee.petra", r) for r in point_designs]
         self.assertEqual(set(got), set(points[0]))
         for name, check in got.items():
             worst = max(p[name]["utilisation"] for p in points)
             self.assertAlmostEqual(check["utilisation"], worst, places=12, msg=name)
 
-    def test_signed_bounds(self):
+    def test_given_bounds(self):
         ends = {"edge_vertical": ("1.125", "1.375"), "bolt_line": ("3.6", "4.0")}
-        given = {"edge_vertical": "1.25", "bolt_line": "3.8"}
-        interval = [(f"{k} {given[k]} inch", f"{k} in [{lo} inch, {hi} inch] {SIGNED}") for k, (lo, hi) in ends.items()]
-        corners = [[(f"{k} {given[k]} inch", f"{k} {v} inch") for k, v in zip(ends, pick)]
+        point = {"edge_vertical": "1.25", "bolt_line": "3.8"}
+        interval = [(f"{k} {point[k]} inch", f"{k} given {k}_range") for k in ends]
+        bounds = "".join(f"\ngiven {k}_range in [{lo} inch, {hi} inch] {SIGNED}" for k, (lo, hi) in ends.items())
+        corners = [[(f"{k} {point[k]} inch", f"{k} {v} inch") for k, v in zip(ends, pick)]
                    for pick in itertools.product(*ends.values())]
-        self.assert_worst(interval, corners)
+        self.assert_worst(interval, corners, asked=[("petra 0", "petra 0" + bounds)])
 
     def test_param(self):
         interval = [("petra 0", "petra 0\nparam a in [3.6 inch, 4.0 inch]"), ("bolt_line 3.8 inch", "bolt_line param a")]

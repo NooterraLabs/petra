@@ -1,0 +1,19 @@
+petra 0
+
+card "two-regulators-wrong" {
+  owner "e.designer@example.org"
+  environment indoor_dry
+}
+
+given usb_voltage in [4.75 V, 5.25 V] signed "e.designer@example.org" source "USB 2.0 port voltage"
+given usb_capacity in [500 mA, 500 mA] signed "e.designer@example.org" source "USB 2.0 port current"
+given dc12_voltage in [11.4 V, 12.6 V] signed "e.designer@example.org" source "adapter datasheet"
+given dc12_capacity in [1 A, 1 A] signed "e.designer@example.org" source "adapter datasheet"
+
+load transmit {
+  on power.sensor current in [1 mA, 20 mA]
+  on power.radio current in [100 mA, 300 mA]
+  signed "e.designer@example.org" source "radio module datasheet, transmit burst"
+}
+
+claim cool: power.v3.junction_temperature <= 100 degC

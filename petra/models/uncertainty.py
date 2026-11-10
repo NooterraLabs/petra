@@ -45,7 +45,7 @@ from ..registry import Registry
 from ..units import DIMENSIONLESS, FORCE, Dim, Quantity, format_quantity
 from .base import (
     NO_PORTS,
-    SIGNED_BOUND,
+    GIVEN_BOUND,
     ComponentError,
     DomainSpec,
     Elaborated,
@@ -78,7 +78,7 @@ class Demand:
 
 GRAMMAR = Grammar(
     required=(
-        Field("capacity", SIGNED_BOUND, "force", (),
+        Field("capacity", GIVEN_BOUND, "force", (),
               "the capacity the demand is compared with, exactly one line: a positive force range with no mean"),
     ),
     optional=(),

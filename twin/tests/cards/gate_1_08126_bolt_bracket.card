@@ -1,0 +1,12 @@
+petra 0
+
+card "gate-1-08126" {
+  owner "gate@petra.dev"
+}
+
+given plate_edge in [1.4375 inch, 1.5625 inch] signed "gate@petra.dev" source "steel gate generator"
+
+load gate {
+  on c1 shear in [0 kip, 48.727 kip]
+  signed "gate@petra.dev" source "steel gate generator"
+}

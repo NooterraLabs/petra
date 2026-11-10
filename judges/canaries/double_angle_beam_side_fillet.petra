@@ -4,10 +4,6 @@ petra 0
 # Design 209 of `python scripts/absurd_gap.py --seed 1` at commit b9e9792 (docs/absurd_gap.md):
 # angles top edge 1 in below the W27x84's top, on its fillet, off the flat web (1.24 in).
 
-design "absurd-00209" {
-  owner "gate@petra.dev"
-}
-
 double_angle c1 {
   basis asd
   beam W27x84 grade steel.A992
@@ -23,9 +19,4 @@ double_angle c1 {
   support_side welded
   support_weld electrode.E70 size 0.375 inch
   deformation considered
-}
-
-load gate {
-  on c1 shear in [0 kip, 1.971 kip]
-  signed "gate@petra.dev" source "steel gate generator"
 }

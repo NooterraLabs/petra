@@ -20,8 +20,8 @@ part case {
 part board {
   mesh "board.stl" sha256 "5ac8...cd97" units mm
   material polymer.pc
-  tolerance in [0.1 mm, 0.1 mm] signed "e.designer@example.org" source "board maker's outline drawing"
-  mass in [8 g, 9 g] signed "e.designer@example.org" source "weighed, five boards"
+  tolerance given tolerance
+  mass given mass
 }
 
 assembly box {
@@ -29,6 +29,13 @@ assembly box {
   place board at (5 mm, 5 mm, 2 mm) facing top front
   insert board along bottom from 25 mm
 }
+```
+
+The card it answers, `examples/parts/assembly.card`, states the bought board's two signed bounds and the claim.
+
+```
+given tolerance in [0.1 mm, 0.1 mm] signed "e.designer@example.org" source "board maker's outline drawing"
+given mass in [8 g, 9 g] signed "e.designer@example.org" source "weighed, five boards"
 
 claim light: box.mass <= 35 g
 ```

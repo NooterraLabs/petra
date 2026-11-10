@@ -28,7 +28,8 @@ class Tasks(unittest.TestCase):
     def test_generation_is_deterministic_in_the_seed(self):
         for domain in GENERATORS:
             self.assertEqual(generate(domain, 5, REGISTRY), generate(domain, 5, REGISTRY), f"{domain} seed 5 repeats")
-            self.assertGreater(len({generate(domain, s, REGISTRY).template for s in range(10)}), 1, f"{domain} seeds vary the task")
+            tasks = [generate(domain, s, REGISTRY) for s in range(10)]
+            self.assertGreater(len({(t.card, t.template) for t in tasks}), 1, f"{domain} seeds vary the task")
 
     def test_an_unknown_domain_is_refused(self):
         with self.assertRaises(KeyError):
@@ -38,7 +39,7 @@ class Tasks(unittest.TestCase):
         for domain in GENERATORS:
             for seed in range(3):
                 task = generate(domain, seed, REGISTRY)
-                design = parse_design(fill(task, {h.name: h.choices[-1] for h in task.holes}), "filled.petra", REGISTRY)
+                design = parse_design(task.card, fill(task, {h.name: h.choices[-1] for h in task.holes}), "filled.petra", REGISTRY)
                 self.assertTrue(design.claims, f"{task.id} keeps its claims")
 
     def test_choices_are_registry_parts_cheapest_first(self):
@@ -60,7 +61,7 @@ class Tasks(unittest.TestCase):
     def test_a_family_text_widens_the_owner_inputs(self):
         task = generate("circuit", SMALL, REGISTRY)
         box = {"draw": (Fraction(0), Fraction(10)), "run": (Fraction(0), Fraction(18)), "amb": (Fraction(5), Fraction(40))}
-        design = parse_design(family_text(task, PASSING, box), "family.petra", REGISTRY)
+        design = parse_design(*family_text(task, PASSING, box), "family.petra", REGISTRY)
         self.assertTrue(design.is_family, "the widened design is a family")
         self.assertEqual(set(design.params), {"draw", "run", "amb"}, "with one param per widened input")
         with self.assertRaises(ValueError):

@@ -68,8 +68,8 @@ class Cope:
 
 @dataclass(frozen=True)
 class Interval:
-    """A length given as a range, a signed bound or a param. var names the range: the line's key
-    for a bound, shared by every line that reads the same param."""
+    """A length given as a range, a bound the card gives or a param. var names the range: the
+    line's key for a bound, shared by every line that reads the same param."""
 
     var: str
     lo: F
@@ -88,7 +88,7 @@ class Lines:
         self._lines = {key: self._collapse(key, args, params or {}) for key, args in component.lines.items()}
 
     def _collapse(self, key, args, params):
-        """Replace each `in [lo, hi] [mean q] [signed|measured "s" source "s"]` and each
+        """Replace each bound the card gives, a ("bound", (lo, hi)) token, and each
         `param NAME` in a line with one ("interval", Interval) token."""
         args, out, i = list(args), [], 0
         while i < len(args):
@@ -99,17 +99,10 @@ class Lines:
                 out.append(("interval", self._interval(f"param {name}", *params[name], key)))
                 i += 2
                 continue
-            if args[i] == ("ident", "in") and args[i + 1:i + 2] == [("punct", "[")]:
-                lo, comma, hi, close = (args[i + 2:i + 6] + [None] * 4)[:4]
-                if None in (lo, hi) or lo[0] != "qty" or hi[0] != "qty" or comma != ("punct", ",") or close != ("punct", "]"):
-                    raise FieldError(f"{self.name}: `{key}` has a malformed range")
+            if args[i][0] == "bound":
                 count = sum(1 for kind, _ in out if kind == "interval")
-                out.append(("interval", self._interval(key if count == 0 else f"{key} {count + 1}", lo[1], hi[1], key)))
-                i += 6
-                if args[i:i + 1] == [("ident", "mean")]:
-                    i += 2
-                if i < len(args) and args[i] in (("ident", "signed"), ("ident", "measured")):
-                    i += 4
+                out.append(("interval", self._interval(key if count == 0 else f"{key} {count + 1}", *args[i][1], key)))
+                i += 1
                 continue
             out.append(args[i])
             i += 1

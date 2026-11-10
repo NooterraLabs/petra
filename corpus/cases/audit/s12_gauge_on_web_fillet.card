@@ -1,0 +1,10 @@
+petra 0
+
+card "t25_gauge_on_fillet" {
+  owner "audit@example.org"
+}
+
+load gravity {
+  on c1 shear in [0 kip, 60 kip]
+  signed "audit@example.org" source "audit"
+}

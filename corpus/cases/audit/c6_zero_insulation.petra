@@ -1,14 +1,7 @@
 petra 0
 
-design "c_series_zero_ins" {
-  owner "e.designer@example.org"
-  environment indoor_dry
-}
-
-ambient in [10 degC, 30 degC] signed "site.manager@example.org" source "site survey"
-
 circuit lighting {
-  supply mains voltage 230 V fault_current in [0 kA, 6 kA] signed "dno@example.org" source "DNO letter"
+  supply mains voltage 230 V fault_current given fault_current
   breaker cb1 part mcb.B32
   wire w1 cable cable.cu_pvc length 18 m install install.clipped_direct area 16 mm2 insulation 0 mm
   consumer lamps
@@ -16,9 +9,4 @@ circuit lighting {
   connect mains.out -> cb1.in
   connect cb1.out -> w1.a
   connect w1.b -> lamps.in
-}
-
-load lamp_draw {
-  on lighting.lamps current in [0 A, 32 A]
-  signed "e.designer@example.org" source "schedule"
 }

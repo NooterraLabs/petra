@@ -4,15 +4,8 @@ petra 0
 # The lighting radial with its 2.5 mm2 cable replaced by 16 mm2, still landed in a lever
 # terminal that clamps 0.2 to 4 mm2: the conductor does not fit the terminal.
 
-design "workshop-lighting-radial" {
-  owner "e.designer@example.org"
-  environment indoor_dry
-}
-
-ambient in [10 degC, 40 degC] signed "site.manager@example.org" source "site survey 2026-09"
-
 circuit lighting {
-  supply mains voltage 230 V fault_current in [0 kA, 6 kA] signed "dno.liaison@example.org" source "DNO letter 2026-08-14"
+  supply mains voltage 230 V fault_current given fault_current
   breaker cb1 part mcb.B10
   wire w1 cable cable.cu_pvc_16 length 18 m install install.clipped_direct
   terminal t1 part terminal.lever_4mm2_75C
@@ -23,11 +16,3 @@ circuit lighting {
   connect w1.b -> t1.wire
   connect t1.out -> lamps.in
 }
-
-load lamp_draw {
-  on lighting.lamps current in [0 A, 10 A]
-  signed "e.designer@example.org" source "luminaire schedule rev 3"
-}
-
-claim hot:  lighting.w1.temperature <= 70 degC under lamp_draw
-claim drop: lighting.w1.voltage_drop <= 3 % under lamp_draw

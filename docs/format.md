@@ -8,7 +8,7 @@ petra-verify --card card.json --design design.json --deck deck.json [--proofs pr
 
 The kernel trusts none of the four. It checks that they agree with each other and that each proof holds. Who wrote each file is outside the kernel: the verdict prints the SHA-256 of the card, the design and the deck, and a reader compares the card's hash with the card they issued.
 
-`python -m petra.export FILE.petra --out DIR` writes the four files from a `.petra` design.
+`python -m petra.export FILE.petra [--card FILE.card] --out DIR` writes the four files from a design and its card, the `.card` file beside the design unless `--card` names another. It exits 3 and writes nothing when the language refuses the pair, as it does for a design that states a load, a claim, a waiver or a signature.
 
 ## Numbers
 
@@ -24,7 +24,7 @@ What the asker owns.
 | `name` | The design's name. A premise label `in:NAME.INPUT` names an input of this card. |
 | `environment` | A registry id, or null |
 | `cases` | The names of the load cases |
-| `inputs` | Every signed bound: `name`, `dim`, `lo`, `hi`, `by`, and `case` for a load |
+| `inputs` | Every bound: `name`, `dim`, `lo`, `hi`, `by`, and `case` for a load. An input with no `by` is one nobody signed, and the kernel refuses the card. The exporter writes one for a load or an ambient that reads a param. |
 | `claims` | Each claim: `name`, `subject`, `quantity`, `rel`, `cases`, `bound` |
 | `waivers` | Each waiver the asker allows: `subject`, `mechanism`, `by`, `reason` |
 
@@ -40,7 +40,7 @@ What the designer owns.
 | `quantities` | Every number written in a component block: `type`, `entity`, `line`, `field`, `role`, `dim`, `lo`, `hi`. The role is `size` for a number alone and `position` for a number in a tuple. |
 | `params` | Each parameter of a family: `name`, `dim`, `lo`, `hi` |
 
-A design has no other key. The exporter writes `waivers`, `loads` or `ambient` when a `.petra` file states a waiver, or a load or an ambient that nobody signed, and the kernel refuses the design.
+A design has no other key, and the kernel refuses one that has. The language refuses the same design earlier: a `.petra` file that states a waiver, a load or an ambient does not parse.
 
 ## deck.json
 

@@ -1,11 +1,7 @@
 petra 0
-design "p3_no_vertices" {
-  owner "red@example.org"
-  environment indoor_dry
-}
+
 part p {
   mesh "p3_no_vertices.3mf" sha256 "4798ab5cf512f50b87f7896fc9fc76000d3bb302ce8e4ec5b8cc046abb8b3a97" units mm
   material aluminium.6061_T6
-  tolerance in [0.05 mm, 0.05 mm] signed "red@example.org" source "x"
+  tolerance given tolerance
 }
-claim m: p.mass <= 100 kg

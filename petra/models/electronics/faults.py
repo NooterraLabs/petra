@@ -41,6 +41,7 @@ from .generate import (
     check,
     fact,
     generate,
+    render,
     resistor_line,
     series_value,
     significant,
@@ -236,10 +237,10 @@ FAULTS: tuple[Fault, ...] = (
 
 # --- Seeding ------------------------------------------------------------------------------------
 
-def status_and_modes(text: str, registry: Registry) -> tuple[str, tuple[str, ...], tuple[str, ...]]:
+def status_and_modes(card: str, text: str, registry: Registry) -> tuple[str, tuple[str, ...], tuple[str, ...]]:
     """The verdict, the refuted modes and the open modes, each mode without its "dc." prefix."""
     try:
-        report = check(text, registry, "fault.petra")
+        report = check(card, text, registry, "fault.petra")
     except ComponentError:
         return "REJECTED", (), ()
     refuted, open_ = set(), set()
@@ -258,7 +259,7 @@ def bases(registry: Registry, per_kind: int, seed: int) -> dict[str, list[Genera
     for g in generate(per_kind * len(KINDS) * 20, seed, registry):
         if len(out[g.kind]) < per_kind:
             bare = replace(g, claims=())
-            if status_and_modes(bare.text, registry)[0] == "PASS":
+            if status_and_modes(*render(bare), registry)[0] == "PASS":
                 out[g.kind].append(bare)
         if all(len(v) >= per_kind for v in out.values()):
             break
@@ -273,12 +274,12 @@ def seed_faults(registry: Registry, per_kind: int = 2, seed: int = 101) -> Itera
         for kind in fault.kinds:
             for g in pool[kind]:
                 base = replace(g, claims=fault.claims(g))
-                if base.claims and status_and_modes(base.text, registry)[0] != "PASS":
+                if base.claims and status_and_modes(*render(base), registry)[0] != "PASS":
                     continue
                 faulty = fault.edit(base, registry)
-                if faulty is None or faulty.text == base.text:
+                if faulty is None or render(faulty) == render(base):
                     continue
-                status, refuted, open_ = status_and_modes(faulty.text, registry)
+                status, refuted, open_ = status_and_modes(*render(faulty), registry)
                 named = tuple(m for m in refuted if m in fault.modes)
                 others = tuple(m for m in (*refuted, *open_) if m not in named)
                 yield Caught(fault.name, g.name, kind, status, named, others)

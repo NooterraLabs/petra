@@ -1,7 +1,5 @@
 petra 0
-design "t05e_conv_2col_34" {
-  owner "audit@example.org"
-}
+
 shear_tab c1 {
   basis lrfd
   beam W24x55 grade steel.A992
@@ -18,8 +16,4 @@ shear_tab c1 {
   beam_edge 1.75 inch
   top 4 inch
   weld electrode.E70 size 0.5 inch sides 2
-}
-load gravity {
-  on c1 shear in [0 kip, 90 kip]
-  signed "audit@example.org" source "audit"
 }

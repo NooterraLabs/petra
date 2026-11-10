@@ -540,8 +540,8 @@ class Field:
     meaning: str
 
 
-SIGNED_BOUND = 'in [<lo>, <hi>] signed "<owner>" source "<source>"'
-"""The form of a signed bound on an attribute line (`measured` may stand for `signed`)."""
+GIVEN_BOUND = "given <name>"
+"""The form of a signed bound on an attribute line: the name of one the card states."""
 
 
 @dataclass(frozen=True)

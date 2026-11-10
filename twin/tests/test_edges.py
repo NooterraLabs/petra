@@ -4,7 +4,7 @@ J3.11a's lc and J4.3's net areas measure the steel between a hole and the next h
 hole that overruns an edge leaves zero there, never less. Below Table J3.4's edge distance, Table
 J3.4 note [a] lets the J3.11 and J4 checks govern down to one bolt diameter, and J3.5 adds Table
 J3.5's C2 for oversized and slotted holes. A bolt line on or past its element's edge puts no hole
-in the element, so the card is refused.
+in the element, so the design is refused.
 """
 
 import unittest
@@ -101,7 +101,7 @@ class SatisfiedEdgeDistanceTest(EdgeTest):
     def test_a_satisfied_edge_distance_does_not_govern(self):
         """II.A-17A at a tenth of its reaction: Lev = 1.25 in. against d = 3/4 in. is 0.6, above
         every strength utilisation, but a detailing limit does not grow with the load."""
-        out = component("ii_a_17a_shear_tab.petra", (("49.6 kip", "4.96 kip"),))
+        out = component("ii_a_17a_shear_tab.petra", asked=(("49.6 kip", "4.96 kip"),))
         edge = by_name(out)["edge distance along the force, plate, beam side"]
         self.close(edge["utilisation"], 0.6, "J3.5")
         self.assertEqual(edge["mode"], "edge_min")
@@ -136,12 +136,12 @@ class BoltLinePastTheToeTest(EdgeTest):
 
 
 class NoNegativeStrengthTest(EdgeTest):
-    def assert_none_negative(self, card, replace):
-        out = component(card, replace)
+    def assert_none_negative(self, design, replace):
+        out = component(design, replace)
         if out["status"] == "input_error":
             return out
         for check in by_name(out).values():
-            self.assertGreaterEqual(check["available"], 0, f"{card} {replace}: {check['name']}")
+            self.assertGreaterEqual(check["available"], 0, f"{design} {replace}: {check['name']}")
         return out
 
     def test_the_cope_cut_swept_across_the_top_hole(self):
@@ -179,10 +179,10 @@ class MonotoneTest(EdgeTest):
         self.assert_not_lower(component(ANGLE, INSIDE_TOE), component(ANGLE, thicker), "angle 1/2 in.")
 
     def test_one_more_row(self):
-        for card, change in ((TAB, ()), (ANGLE, INSIDE_TOE)):
-            with self.subTest(card=card):
-                after = component(card, change + (("rows 2", "rows 3"),))
-                self.assert_not_lower(component(card, change), after, f"{card} rows 3")
+        for design, change in ((TAB, ()), (ANGLE, INSIDE_TOE)):
+            with self.subTest(design=design):
+                after = component(design, change + (("rows 2", "rows 3"),))
+                self.assert_not_lower(component(design, change), after, f"{design} rows 3")
 
     def test_the_refused_design_stays_refused(self):
         with thicker_web("W12x26"):

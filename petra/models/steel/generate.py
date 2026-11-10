@@ -2,11 +2,12 @@
 8). Tooling: nothing here changes a verdict.
 
 `generate(n, seed, registry)` yields designs across the eleven kinds, round-robin, each a
-.petra source with one connection named c1 and one load case "gate". Geometry is drawn
+card with one load case "gate" and a design with one connection named c1. Geometry is drawn
 from the registry's shapes, the shop deck's stock plates and the grammar's options (slotted
 and oversized holes, two bolt columns, copes at one or both flanges, welded or bolted
 support sides, forces near a member's end, deformation and weathering). About one design
-in five states one length as a toleranced bound (+-1/16 in), so the claim covers a box.
+in five reads one length as a toleranced bound (+-1/16 in) the card gives, so the claim
+covers a box.
 
 Most samples follow a detailer's rules: edges from 1-1/4 in, gauges that fit the flange,
 fillets no smaller than Table J2.4's minimum for the thinner part, a shear tab no thicker
@@ -83,7 +84,8 @@ class Generated:
     kind: str
     target: str               # "pass" | "fail": the load margin's side
     expected: str             # "PASS" | "FAIL": FAIL as well when a geometry check fails
-    text: str
+    card: str                 # the card's text
+    text: str                 # the design's text
     toleranced: bool
     free: bool                # drawn without the detailer's rules
     redraws: int
@@ -560,20 +562,23 @@ def _decimal(x: Fraction) -> str:
 
 
 def source(name: str, kind: str, basis: str, lines: list[str], load: Fraction,
-           secondary: tuple[tuple[str, Fraction], ...] = (), cycles: tuple[int, int] | None = None) -> str:
-    """The design's text with the primary load [0, load], each secondary [0, ratio load],
-    and the cycles interval when the case is cyclic."""
+           secondary: tuple[tuple[str, Fraction], ...] = (), cycles: tuple[int, int] | None = None,
+           given: tuple[str, ...] = ()) -> tuple[str, str]:
+    """The card's text and the design's. The card states the primary load [0, load], each
+    secondary [0, ratio load], the cycles interval when the case is cyclic, and each
+    `given` line, a bound one of `lines` reads."""
     loads = [(KIND_SPECS[kind].loads[0], load), *((f, _load(float(r * load))) for f, r in secondary)]
     body, on = "\n".join(lines), "".join(f"  on c1 {f} in [0 kip, {_decimal(x)} kip]\n" for f, x in loads)
     if cycles is not None:
         on += f"  on c1 {CYCLES} in [{cycles[0]}, {cycles[1]}]\n"
-    return (f'petra 0\n\ndesign "{name}" {{\n  owner "gate@petra.dev"\n}}\n\n{kind} c1 {{\n  basis {basis}\n{body}\n}}\n\n'
-            f"load gate {{\n{on}  {SIGNATURE}\n}}\n")
+    stated = "".join(f"{line}\n" for line in given) + ("\n" if given else "")
+    return (f'petra 0\n\ncard "{name}" {{\n  owner "gate@petra.dev"\n}}\n\n{stated}load gate {{\n{on}  {SIGNATURE}\n}}\n',
+            f"petra 0\n\n{kind} c1 {{\n  basis {basis}\n{body}\n}}\n")
 
 
-def checks(text: str, registry: Registry) -> dict[tuple[str, int], calc.Value]:
+def checks(card: str, text: str, registry: Registry) -> dict[tuple[str, int], calc.Value]:
     """Every check of c1 the deck generates, by (mode, index), with its numbers."""
-    design = parse_design(text, "gate.petra", registry)
+    design = parse_design(card, text, "gate.petra", registry)
     conn = calc.connection(design, "c1", registry)
     out = {}
     for mode in required(conn, design):
@@ -592,7 +597,7 @@ def _load(x: float) -> Fraction:
     return max(Fraction(1, 1000), Fraction(round(x * 1000), 1000))
 
 
-def scale(build: Callable[[Fraction], str], goal: Fraction, registry: Registry):
+def scale(build: Callable[[Fraction], tuple[str, str]], goal: Fraction, registry: Registry):
     """The load at which the deck's governing load-dependent check reaches `goal`, found
     by secant steps on log u against log P: u is not linear in P (a seat's moment arm
     grows with its bearing length, and is nil until the bearing passes the critical
@@ -607,7 +612,7 @@ def scale(build: Callable[[Fraction], str], goal: Fraction, registry: Registry):
 
     def at(p: Fraction) -> tuple[float, str]:
         if p not in seen:
-            seen[p] = checks(build(p), registry)
+            seen[p] = checks(*build(p), registry)
         return _worst(seen[p], loaded())
 
     at(ref)
@@ -631,18 +636,20 @@ def scale(build: Callable[[Fraction], str], goal: Fraction, registry: Registry):
     return p1, u1, mode, _worst(seen[p1], fixed)[0]
 
 
-def _widen(lines: list[str], s: _Sampler) -> bool:
+def _widen(lines: list[str], s: _Sampler) -> tuple[str, ...]:
+    """The card's line for the one length a toleranced draw widens, which its line of the
+    design then reads; nothing for the other draws."""
     if not s.lengths or s.rng.random() >= 0.2:
-        return False
+        return ()
     index, key, value = s.pick(s.lengths)
     lo, hi = value - TOLERANCE, value + TOLERANCE
-    lines[index] = f"  {key} in [{_inch(lo)}, {_inch(hi)}] {SIGNATURE}"
-    return True
+    lines[index] = f"  {key} given {key}"
+    return (f"given {key} in [{_inch(lo)}, {_inch(hi)}] {SIGNATURE}",)
 
 
-def _encoded(text: str, registry: Registry) -> bool:
+def _encoded(card: str, text: str, registry: Registry) -> bool:
     """Every fatigue mode the cyclic design owes has checks (none is fatigue_detail)."""
-    design = parse_design(text, "gate.petra", registry)
+    design = parse_design(card, text, "gate.petra", registry)
     return not set(required(calc.connection(design, "c1", registry), design)) & set(UNENCODED)
 
 
@@ -664,15 +671,15 @@ def generate(n: int, seed: int, registry: Registry, start: int = 0, cyclic: bool
             s.cyclic = wanted is not None
             SAMPLERS[kind](s)
             lines, secondary = list(s.lines), tuple(s.secondary)
-            toleranced = _widen(lines, s)
+            given = _widen(lines, s)
             basis = rng.choice(("lrfd", "asd"))
             target = "pass" if rng.random() < 0.75 else "fail"
             k = Fraction(rng.randint(100, 400), 100)
             goal = 1 - DELTA * k if target == "pass" else 1 + DELTA * k
             try:
-                cycles = wanted if wanted and _encoded(source(name, kind, basis, lines, Fraction(10), secondary, wanted),
-                                                       registry) else None
-                found = scale(lambda load: source(name, kind, basis, lines, load, secondary, cycles), goal, registry)
+                cycles = wanted if wanted and _encoded(*source(name, kind, basis, lines, Fraction(10), secondary, wanted,
+                                                               given), registry) else None
+                found = scale(lambda load: source(name, kind, basis, lines, load, secondary, cycles, given), goal, registry)
             except ComponentError:
                 found = None
             ok = (found is not None and (found[1] <= 1 - DELTA if target == "pass" else found[1] >= 1 + DELTA)
@@ -682,6 +689,6 @@ def generate(n: int, seed: int, registry: Registry, start: int = 0, cyclic: bool
                 continue
             load, u, mode, geometry = found
             expected = "FAIL" if target == "fail" or geometry > 1 else "PASS"
-            yield Generated(name, kind, target, expected, source(name, kind, basis, lines, load, secondary, cycles),
-                            toleranced, s.free, redraws, u, mode, geometry, cycles)
+            yield Generated(name, kind, target, expected, *source(name, kind, basis, lines, load, secondary, cycles, given),
+                            bool(given), s.free, redraws, u, mode, geometry, cycles)
             break

@@ -5,10 +5,6 @@ petra 0
 # gauge (bolt 2 in from the heel and 2 in from the toe of the vertical leg). An L4x4x1/4 top
 # angle holds the beam's top flange. The 6 in seat fits the W10x49 web's 7-1/2 in flat (T).
 
-design "steel-seated" {
-  owner "task.owner@example.org"
-}
-
 seated seat1 {
   basis asd
   beam W16x26 grade steel.A992
@@ -23,9 +19,4 @@ seated seat1 {
   edge_vertical 2 inch
   support_gauge 3.5 inch
   top_angle L4x4x1_4 grade steel.A36 outstanding long
-}
-
-load gravity {
-  on seat1 shear in [0 kip, 15.843 kip]
-  signed "task.owner@example.org" source "task 303-003"
 }

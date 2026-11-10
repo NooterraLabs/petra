@@ -9,10 +9,6 @@ petra 0
 # (Table A-3.1 Case 2.2), the welds' throats (Case 8.2), the plate's welded end (Case 5.7)
 # and the bottom cope's corner (Case 1.3).
 
-design "steel-shear-tab-cyclic" {
-  owner "s.engineer@example.org"
-}
-
 shear_tab st1 {
   basis lrfd
   beam W18x50 grade steel.A992
@@ -29,15 +25,4 @@ shear_tab st1 {
   setback 0.5 inch
   cope both depth 1.5 inch length 5 inch bottom_depth 2 inch
   weld electrode.E70 size 0.25 inch sides 2
-}
-
-load gravity {
-  on st1 shear in [0 kip, 40 kip]
-  signed "s.engineer@example.org" source "beam reaction, LRFD 1.2D + 1.6L, calc SC-3"
-}
-
-load crane {
-  on st1 shear in [2 kip, 10 kip]
-  on st1 cycles in [0, 500000]
-  signed "s.engineer@example.org" source "runway reaction under the crane, service loads, 500,000 cycles, calc SC-7"
 }

@@ -8,13 +8,8 @@ petra 0
 # capacity. Every value holds at the worst corner of every part's tolerance, its
 # temperature coefficient and the ambient range of an indoor room.
 
-design "sensor-board-power" {
-  owner "e.designer@example.org"
-  environment indoor_dry
-}
-
 board psu {
-  supply vin voltage in [11.4 V, 12.6 V] signed "e.designer@example.org" source "adapter datasheet, 12 V +-5 %" capacity in [1 A, 1 A] signed "e.designer@example.org" source "adapter datasheet, 1 A"
+  supply vin voltage given voltage capacity given capacity
   regulator v3 part reg.ldo1117_3v3_sot223 from vin
   sink logic from v3
   led d1 part led.red_0603 from v3 resistor r1
@@ -23,12 +18,3 @@ board psu {
   resistor r2 part res.0603_1pct value 33.2 kohm
   resistor r3 part res.0603_1pct value 10 kohm
 }
-
-load run {
-  on psu.logic current in [5 mA, 80 mA]
-  signed "e.designer@example.org" source "logic power budget rev 2"
-}
-
-claim adc_high: psu.sense.output <= 3 V
-claim adc_low:  psu.sense.output >= 2.5 V
-claim lit:      psu.d1.current >= 5 mA

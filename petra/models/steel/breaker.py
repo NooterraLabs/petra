@@ -7,8 +7,9 @@ loads, nudges one length by 1/16 to 1/2 in, or swaps a fillet or plate size, kee
 when the deck still passes and the oracle's worst utilisation does not fall, and records
 any point where the oracle's utilisation passes 1 while the deck says PASS. The oracle is
 the twin elaborator by default (twin.py, written apart from the deck), any function from a
-design's text to utilisations by mode otherwise. The budget is fixed in deck evaluations,
-and every run is logged: its start, its steps, its best point and what it found.
+card's text and a design's to utilisations by mode otherwise. A raised load is an edit to
+the card, and every other move an edit to the design. The budget is fixed in deck
+evaluations, and every run is logged: its start, its steps, its best point and what it found.
 """
 from __future__ import annotations
 
@@ -27,7 +28,8 @@ from ...verdict import STATUS
 from ..base import ComponentError
 from .generate import PLATES, WELDS, Generated
 
-Oracle = Callable[[str], dict[str, float]]
+Oracle = Callable[[str, str], dict[str, float]]
+"""(card, design) -> utilisation by mode."""
 SLACK = 1e-6
 """The oracle computes in floats: past 1 + SLACK is a fail."""
 
@@ -47,7 +49,7 @@ class Run:
     best: float = 0.0                    # the oracle's worst utilisation at the best passing point
     best_mode: str = ""
     best_hash: str = ""
-    found: list[dict] = field(default_factory=list)   # false PASSes: the text, the oracle's modes past 1
+    found: list[dict] = field(default_factory=list)   # false PASSes: the card, the text, the oracle's modes past 1
 
     def log(self) -> dict:
         return {"base": self.base, "kind": self.kind, "seed": self.seed, "evaluations": self.evaluations,
@@ -58,31 +60,33 @@ class Run:
 def twin_oracle(registry: Registry) -> Oracle:
     from . import twin
 
-    def oracle(text: str) -> dict[str, float]:
-        return twin.utilisations_of(parse_design(text, "breaker.petra", registry), registry, "gate")["c1"]
+    def oracle(card: str, text: str) -> dict[str, float]:
+        return twin.utilisations_of(parse_design(card, text, "breaker.petra", registry), registry, "gate")["c1"]
     return oracle
 
 
-def deck_status(text: str, registry: Registry) -> str:
+def deck_status(card: str, text: str, registry: Registry) -> str:
     try:
-        return STATUS[type(check_design(parse_design(text, "breaker.petra", registry), registry, (SolverSource(),)).verdict)]
+        design = parse_design(card, text, "breaker.petra", registry)
+        return STATUS[type(check_design(design, registry, (SolverSource(),)).verdict)]
     except ComponentError:
         return "REJECTED"
 
 
-def _digest(text: str) -> str:
-    return hashlib.sha256(text.encode()).hexdigest()[:16]
+def _digest(card: str, text: str) -> str:
+    return hashlib.sha256(card.encode() + b"\0" + text.encode()).hexdigest()[:16]
 
 
-def _move(text: str, rng: random.Random) -> str | None:
-    """One random move from `text`, or None when the move does not apply."""
+def _move(card: str, text: str, rng: random.Random) -> tuple[str, str] | None:
+    """One random move from the card and the design `text`, or None when the move does not
+    apply."""
     roll = rng.random()
     if roll < 0.45:
         factor = Fraction(rng.randint(101, 108), 100)
 
         def raised(m: re.Match) -> str:
             return f"  on c1 {m.group(1)} in [0 kip, {float(Fraction(m.group(2)) * factor):.3f} kip]"
-        return re.sub(r"^  on c1 (\w+) in \[0 kip, ([0-9.]+) kip\]$", raised, text, flags=re.M)
+        return re.sub(r"^  on c1 (\w+) in \[0 kip, ([0-9.]+) kip\]$", raised, card, flags=re.M), text
     if roll < 0.85:
         keys = [k for k in NUDGED if re.search(rf"^  {k} [0-9.]+ inch$", text, re.M)]
         if not keys:
@@ -92,42 +96,42 @@ def _move(text: str, rng: random.Random) -> str | None:
         new = old + rng.choice(STEPS) * rng.choice((-1, 1))
         if new <= 0:
             return None
-        return re.sub(rf"^  {key} [0-9.]+ inch$", f"  {key} {float(new):g} inch", text, count=1, flags=re.M)
+        return card, re.sub(rf"^  {key} [0-9.]+ inch$", f"  {key} {float(new):g} inch", text, count=1, flags=re.M)
     if roll < 0.93:
         m = re.search(r"^  (weld|support_weld) (.*)size ([0-9.]+) inch(.*)$", text, re.M)
         if not m:
             return None
-        return text.replace(m.group(0), f"  {m.group(1)} {m.group(2)}size {rng.choice(WELDS)} inch{m.group(4)}", 1)
+        return card, text.replace(m.group(0), f"  {m.group(1)} {m.group(2)}size {rng.choice(WELDS)} inch{m.group(4)}", 1)
     m = re.search(r"^  (plate|stiffener) (\S+) thickness ([0-9.]+) inch$", text, re.M)
     if not m:
         return None
-    return text.replace(m.group(0), f"  {m.group(1)} {m.group(2)} thickness {rng.choice(PLATES)} inch", 1)
+    return card, text.replace(m.group(0), f"  {m.group(1)} {m.group(2)} thickness {rng.choice(PLATES)} inch", 1)
 
 
 def run(g: Generated, registry: Registry, oracle: Oracle, budget: int, seed: int) -> Run:
     """Climb from `g` for `budget` deck evaluations."""
     rng = random.Random(f"breaker:{seed}:{g.name}")
     out = Run(g.name, g.kind, seed)
-    text = g.text
-    u = oracle(text)
+    at = (g.card, g.text)
+    u = oracle(*at)
     out.best, out.best_mode = max(((v, m) for m, v in u.items()), default=(0.0, ""))
-    out.best_hash = _digest(text)
+    out.best_hash = _digest(*at)
     while out.evaluations < budget:
-        moved = _move(text, rng)
-        if moved is None or moved == text:
+        moved = _move(*at, rng)
+        if moved is None or moved == at:
             continue
         out.evaluations += 1
-        if deck_status(moved, registry) != "PASS":
+        if deck_status(*moved, registry) != "PASS":
             continue
         try:
-            u = oracle(moved)
+            u = oracle(*moved)
         except (ComponentError, KeyError, ValueError, ZeroDivisionError):
             continue
         past = sorted(m for m, v in u.items() if v > 1 + SLACK)
         if past:
-            out.found.append({"hash": _digest(moved), "modes": past, "text": moved})
+            out.found.append({"hash": _digest(*moved), "modes": past, "card": moved[0], "text": moved[1]})
         worst, mode = max(((v, m) for m, v in u.items()), default=(0.0, ""))
         if worst >= out.best:
-            text, out.best, out.best_mode, out.best_hash = moved, worst, mode, _digest(moved)
+            at, out.best, out.best_mode, out.best_hash = moved, worst, mode, _digest(*moved)
             out.accepted += 1
     return out

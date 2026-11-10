@@ -1,0 +1,18 @@
+petra 0
+
+card "sensor-board-power" {
+  owner "e.designer@example.org"
+  environment indoor_dry
+}
+
+given voltage in [11.4 V, 12.6 V] signed "e.designer@example.org" source "adapter datasheet, 12 V +-5 %"
+given capacity in [1 A, 1 A] signed "e.designer@example.org" source "adapter datasheet, 1 A"
+
+load run {
+  on psu.logic current in [5 mA, 80 mA]
+  signed "e.designer@example.org" source "logic power budget rev 2"
+}
+
+claim adc_high: psu.sense.output <= 3 V
+claim adc_low:  psu.sense.output >= 2.5 V
+claim lit:      psu.d1.current >= 5 mA

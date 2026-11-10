@@ -6,10 +6,6 @@ petra 0
 # Values NOT in the brief, chosen here: beam grade A992, column W14x90 A992,
 # Lev 1.5 in, plate Leh 1.5 in, bolt line a = 3 in, beam Leh 1.75 in, top row 3 in below beam top.
 
-design "job5-shear-tab-60k" {
-  owner "coldstart-agent"
-}
-
 shear_tab tab {
   basis lrfd
   beam W16x31 grade steel.A992
@@ -24,9 +20,4 @@ shear_tab tab {
   beam_edge 1.75 inch
   top 3 inch
   weld electrode.E70 size 0.25 inch sides 2
-}
-
-load reaction {
-  on tab shear in [0 kip, 60 kip]
-  signed "coldstart-agent" source "user brief: raised to 60 kips for the repair job"
 }

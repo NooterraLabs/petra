@@ -4,10 +4,6 @@ petra 0
 # Design 4784 of `python scripts/absurd_gap.py --seed 1` at commit b9e9792 (docs/absurd_gap.md):
 # bottom bolt hole reaches 11.906 in below the W12x40's top, past its flat web, which ends at 10.4 in.
 
-design "absurd-04784" {
-  owner "gate@petra.dev"
-}
-
 shear_tab c1 {
   basis asd
   beam W12x40 grade steel.A992
@@ -24,9 +20,4 @@ shear_tab c1 {
   weld electrode.E70 size 0.3125 inch sides 2
   cope both depth 1 inch length 4 inch bottom_depth 1.5 inch
   setback 0.5 inch
-}
-
-load gate {
-  on c1 shear in [0 kip, 4.835 kip]
-  signed "gate@petra.dev" source "steel gate generator"
 }

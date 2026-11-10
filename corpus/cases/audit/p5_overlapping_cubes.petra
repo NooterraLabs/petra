@@ -1,11 +1,7 @@
 petra 0
-design "counterweight" {
-  owner "red@example.org"
-  environment indoor_dry
-}
+
 part p {
   mesh "p4_two_cubes.stl" sha256 "2506f8df1d4f93433a1b6d610b5cd9ef3d4ee4508fed6662ae8ae89a04a6a9d5" units mm
   material aluminium.6061_T6
-  tolerance in [0.01 mm, 0.01 mm] signed "red@example.org" source "x"
+  tolerance given tolerance
 }
-claim heavy: p.mass >= 0.4 g

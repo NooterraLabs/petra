@@ -1,0 +1,10 @@
+petra 0
+
+card "t17_weldbracket_thin_web" {
+  owner "audit@example.org"
+}
+
+load gravity {
+  on c1 shear in [0 kip, 30 kip]
+  signed "audit@example.org" source "audit"
+}

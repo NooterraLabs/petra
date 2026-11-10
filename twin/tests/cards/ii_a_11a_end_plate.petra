@@ -15,7 +15,3 @@ shear_end_plate ii_a_11a {
   support_gauge 5.5 inch
   weld electrode.E70 size 0.1875 inch sides 2
 }
-
-load reaction {
-  on ii_a_11a shear in [0 kip, 60 kip]
-}

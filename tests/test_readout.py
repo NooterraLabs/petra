@@ -25,6 +25,7 @@ from unittest import mock
 
 import petra
 from petra import readout, verdict
+from petra.files import read_pair
 from petra.kernel.rules.r4_enclosure import AllNonpositive
 from petra.lang import parse_design
 from petra.models.steel import calc
@@ -129,10 +130,11 @@ class SteelFailure(unittest.TestCase):
         self.assertIn("also over  plate: block of 2 row(s)", text)
 
     def test_a_claim_on_a_check_reads_its_utilisation_against_the_claimed_bound(self):
-        source = JOB5.read_text(encoding="utf-8") + "\nclaim tight: tab.bolts <= 0.95 under reaction\n"
+        card, source = read_pair(JOB5)
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "job5_claim.petra"
             path.write_text(source, encoding="utf-8", newline="\n")
+            path.with_suffix(".card").write_text(card + "\nclaim tight: tab.bolts <= 0.95 under reaction\n", encoding="utf-8", newline="\n")
             report = petra.check_file(path)
             text = report.render()
         (f,) = [f for f in refuted(report) if f.requirement == "tab/steel.bolts/claim.tight"]
@@ -403,7 +405,7 @@ class ToleranceBox(unittest.TestCase):
 
     def test_the_box_reads_its_worst_corner_within_the_tolerance(self):
         registry = build_registry()
-        design = parse_design(BRACKET.read_text(encoding="utf-8"), BRACKET.name, registry)
+        design = parse_design(*read_pair(BRACKET), BRACKET.name, registry)
         conn = calc.connection(design, "c1", registry)
         edge, shear = "in:gate-1-01614.c1.edge_vertical", "in:gate-1-01614.gate.c1.shear"
         boxed = calc.values(conn, design, registry, "bracket_edge", "gate")

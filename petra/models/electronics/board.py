@@ -32,7 +32,7 @@ from ...registry import Registry
 from ...registry.electronics import neighbours, preferred
 from ...kernel import Interval
 from ...units import CURRENT, DIMENSIONLESS, RESISTANCE, TEMPERATURE, VOLTAGE, Dim, Quantity, readable_text
-from ..base import SIGNED_BOUND, ComponentError, Field, Grammar
+from ..base import GIVEN_BOUND, ComponentError, Field, Grammar
 
 # --- Typed model ------------------------------------------------------------------------
 
@@ -221,9 +221,9 @@ def _supply(path: str, name: str, args, design: Design, registry: Registry, say:
     voltage = _signed(opts.get("voltage"), f"{path}.voltage", VOLTAGE, design)
     capacity = _signed(opts.get("capacity"), f"{path}.capacity", CURRENT, design)
     if voltage is None:
-        say(f"needs voltage {SIGNED_BOUND} in V, or param <name>")
+        say(f"needs voltage {GIVEN_BOUND} in V, or param <name>")
     if "capacity" in opts and capacity is None:
-        say(f"capacity needs {SIGNED_BOUND} in A, or param <name>")
+        say(f"capacity needs {GIVEN_BOUND} in A, or param <name>")
     if voltage is None or "capacity" in opts and capacity is None:
         return None
     return Supply(name, voltage, capacity)
@@ -323,7 +323,7 @@ _READERS = {"supply": _supply, "regulator": _regulator, "resistor": _resistor, "
 
 GRAMMAR = Grammar(
     required=(
-        Field("supply", f"<name> voltage {SIGNED_BOUND} [capacity {SIGNED_BOUND}]", "voltage, current", (),
+        Field("supply", f"<name> voltage {GIVEN_BOUND} [capacity {GIVEN_BOUND}]", "voltage, current", (),
               "a rail fed from outside the board, named by the supply; capacity is the most current it can "
               "deliver, and without it the supply-current check is UNKNOWN"),
     ),

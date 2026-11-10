@@ -2,7 +2,7 @@
 
 This page shows how to call Petra from an agent or a script.
 
-- `petra.check(text)` returns plain data, and a FAIL names the inputs that would move it most.
+- `petra.check(card, design)` returns plain data, and a FAIL names the inputs of the design that would move it most.
 - `petra mcp` serves Petra's tools to an MCP client, and `petra docs skill` prints a SKILL.md for coding agents.
 
 ## Check from Python
@@ -10,20 +10,20 @@ This page shows how to call Petra from an agent or a script.
 ```python
 import petra
 
-result = petra.check(open("tab.petra").read())
+result = petra.check(open("tab.card").read(), open("tab.petra").read())
 result["status"]            # "PASS", "FAIL", "UNKNOWN", "MARGINAL" or "INPUT_ERROR"
 result["repair"]["moves"]   # on a FAIL: the inputs to change, best first
 ```
 
-The result is the same JSON that `petra check --json` prints. On a FAIL, the `repair` key holds the moves. A move changes one number in the design, such as `tab.rows` or `tab.plate thickness`, by one step up or down. Petra re-checks each step and sorts the moves by the utilisation of the governing check after the step, lowest first. For the top three moves it also searches further in the same direction for a value at which the governing check holds, and reports that value and the design's status there. When no number lowers the check, the moves swap an angle or tee for another shape of its family instead. `petra check` prints the same moves as text under the governing check. The [Python API](../petra/docs/api.md#repair) gives the exact shape.
+The result is the same JSON that `petra check --json` prints. On a FAIL, the `repair` key holds the moves. A move changes one number in the design, such as `tab.rows` or `tab.plate thickness`, by one step up or down. No move changes the card. Petra re-checks each step and sorts the moves by the utilisation of the governing check after the step, lowest first. For the top three moves it also searches further in the same direction for a value at which the governing check holds, and reports that value and the design's status there. When no number lowers the check, the moves swap an angle or tee for another shape of its family instead. `petra check` prints the same moves as text under the governing check. The [Python API](../petra/docs/api.md#repair) gives the exact shape.
 
 A move is a suggestion from a search, not a verdict. Only a check of the edited design says whether it passes.
 
 ## Use from an MCP client
 
-`petra mcp` runs a Model Context Protocol server on stdin and stdout. It uses only the Python standard library. Its tools are `check`, `kinds`, `new`, `registry_list` and `docs`. `check` returns the text that `petra check` prints, and the data of `petra.check` as structured content. Its `path` argument reads a `.petra` file on the server's machine and nothing else. Tool calls run in a second process, so the server can stop a call that the client cancels or that runs past 120 s. `petra mcp --budget SECONDS` sets another limit. The server speaks protocol revision 2026-07-28, in which each request names its revision, and answers `initialize` for clients of 2025-11-25 back to 2024-11-05.
+`petra mcp` runs a Model Context Protocol server on stdin and stdout. It uses only the Python standard library. Its tools are `check`, `kinds`, `new`, `registry_list` and `docs`. `check` returns the text that `petra check` prints, and the data of `petra.check` as structured content. It takes the design as `design` or `path` and the card as `card` or `card_path`. A path reads a `.petra` or a `.card` file on the server's machine and nothing else, and with `path` alone the card is the `.card` file beside the design. Tool calls run in a second process, so the server can stop a call that the client cancels or that runs past 120 s. `petra mcp --budget SECONDS` sets another limit. The server speaks protocol revision 2026-07-28, in which each request names its revision, and answers `initialize` for clients of 2025-11-25 back to 2024-11-05.
 
-`petra docs skill` prints a SKILL.md for coding agents. It says how to start from `petra new`, how to read a FAIL and its moves, and what an agent must never change to reach a PASS. Those are the loads, the claims and the waivers.
+`petra docs skill` prints a SKILL.md for coding agents. It says how to start from `petra new`, how to read a FAIL and its moves, and what an agent must never change to reach a PASS. That is the card: the loads, the claims and the waivers.
 
 ### Claude Code
 

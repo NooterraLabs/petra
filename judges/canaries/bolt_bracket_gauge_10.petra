@@ -4,10 +4,6 @@ petra 0
 # A bolted bracket whose two bolt columns stand 10 in apart on the flange of a W10x45, which
 # is 8.02 in wide: wherever the group is placed, a column of bolts is off the flange.
 
-design "steel-bolt-bracket" {
-  owner "s.engineer@example.org"
-}
-
 bolt_bracket bb1 {
   basis lrfd
   plate steel.A36 thickness 0.5 inch
@@ -20,9 +16,4 @@ bolt_bracket bb1 {
   eccentricity 8 inch
   edge_vertical 1.5 inch
   plate_edge 1.5 inch
-}
-
-load gravity {
-  on bb1 shear in [0 kip, 40 kip]
-  signed "s.engineer@example.org" source "beam reaction, LRFD 1.2D + 1.6L, calc SC-3"
 }

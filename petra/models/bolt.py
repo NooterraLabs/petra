@@ -52,7 +52,7 @@ from ..units import DIMENSIONLESS, FORCE, LENGTH, TORQUE, Dim, Quantity
 from .base import (
     CONTACT_PAIR,
     NO_PORTS,
-    SIGNED_BOUND,
+    GIVEN_BOUND,
     ComponentError,
     CoverageRule,
     Criterion,
@@ -115,11 +115,11 @@ GRAMMAR = Grammar(
               "or its strength"),
     ),
     optional=(
-        Field("torque", SIGNED_BOUND, "torque", (),
+        Field("torque", GIVEN_BOUND, "torque", (),
               "the tightening torque; without it the tension check is UNKNOWN"),
-        Field("nut_factor", SIGNED_BOUND, "dimensionless", (),
+        Field("nut_factor", GIVEN_BOUND, "dimensionless", (),
               "the nut factor K of the torque-tension relation, positive; without it the tension check is UNKNOWN"),
-        Field("load_share", SIGNED_BOUND, "dimensionless", (),
+        Field("load_share", GIVEN_BOUND, "dimensionless", (),
               "the joint load factor Phi, the share of the external force the bolts take, within [0, 1]; without "
               "it the tension check is UNKNOWN"),
     ),

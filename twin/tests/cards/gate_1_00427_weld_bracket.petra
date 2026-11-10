@@ -1,9 +1,5 @@
 petra 0
 
-design "gate-1-00427" {
-  owner "gate@petra.dev"
-}
-
 weld_bracket c1 {
   basis asd
   plate steel.A36 thickness 0.75 inch
@@ -11,9 +7,4 @@ weld_bracket c1 {
   weld electrode.E70 size 0.375 inch sides 2
   weld_length 8 inch
   eccentricity 5 inch
-}
-
-load gate {
-  on c1 shear in [0 kip, 43.432 kip]
-  signed "gate@petra.dev" source "steel gate generator"
 }

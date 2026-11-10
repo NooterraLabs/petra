@@ -31,6 +31,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from bench import tasks  # noqa: E402
+from petra.files import read_pair  # noqa: E402
 from petra.lang import load_design, parse_design  # noqa: E402
 from petra.models.electronics import generate as electronics  # noqa: E402
 from petra.models.steel import generate as steel  # noqa: E402
@@ -256,11 +257,12 @@ def unused(key: str) -> Unused | None:
 
 
 def read_by(design, name: str, registry: Registry) -> set[str]:
-    """The registry keys the verdicts of one design rest on; `design` is a path or a text."""
+    """The registry keys the verdicts of one design rest on; `design` is a path, read with
+    the card beside it, or the texts (card, design)."""
     if isinstance(design, Path):
         lowered = load_design(design, registry)
     else:
-        lowered = parse_design(design, f"{name}.petra", registry)
+        lowered = parse_design(*design, f"{name}.petra", registry)
     body = check_design(lowered, registry, (SolverSource(),), path=f"{name}.petra").to_json()
     return {p["label"][len("reg:"):] for v in body["verdicts"] for p in v["footprint"] if p["label"].startswith("reg:")}
 
@@ -276,17 +278,17 @@ def gym(registry: Registry):
                     pick = {**first, hole.name: choice}
                     if tuple(sorted(pick.items())) not in done:
                         done.add(tuple(sorted(pick.items())))
-                        yield f"{task.id} {hole.name}={choice}", tasks.fill(task, pick)
+                        yield f"{task.id} {hole.name}={choice}", (task.card, tasks.fill(task, pick))
 
 
 def corpus(registry: Registry):
-    """(name, design path or text) of every corpus design, in order."""
+    """(name, design path or the texts (card, design)) of every corpus design, in order."""
     for path in sorted(ROOT.glob("examples/**/*.petra")):
         yield path.relative_to(ROOT).as_posix(), path
     for g in steel.generate(*STEEL, registry):
-        yield g.name, g.text
+        yield g.name, (g.card, g.text)
     for g in electronics.generate(*ELECTRONICS, registry):
-        yield g.name, g.text
+        yield g.name, electronics.render(g)
     yield from tail(registry)
 
 
@@ -300,9 +302,10 @@ def tail(registry: Registry):
     steel stream in the other design basis."""
     yield from gym(registry)
     for path in sorted(ROOT.glob("examples/steel/*.petra")):
-        yield f"{path.relative_to(ROOT).as_posix()} in the other basis", other_basis(path.read_text(encoding="utf-8"))
+        card, text = read_pair(path)
+        yield f"{path.relative_to(ROOT).as_posix()} in the other basis", (card, other_basis(text))
     for g in steel.generate(*STEEL, registry):
-        yield f"{g.name} in the other basis", other_basis(g.text)
+        yield f"{g.name} in the other basis", (g.card, other_basis(g.text))
 
 
 def footprint(registry: Registry, log=None, designs=None) -> dict:

@@ -1,0 +1,10 @@
+petra 0
+
+card "task-303-021-bolt-bracket" {
+  owner "task.owner@example.org"
+}
+
+load service {
+  on bb1 shear in [0 kip, 39.889 kip]
+  signed "task.owner@example.org" source "task 303-021"
+}

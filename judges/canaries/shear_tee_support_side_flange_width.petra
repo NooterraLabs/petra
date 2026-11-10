@@ -4,10 +4,6 @@ petra 0
 # Design 1147 of `python scripts/absurd_gap.py --seed 1` at commit b9e9792 (docs/absurd_gap.md):
 # support bolt lines: 6.312 in across, wider than the W14x22's 5 in flange.
 
-design "absurd-01147" {
-  owner "gate@petra.dev"
-}
-
 shear_tee c1 {
   basis asd
   beam W18x50 grade steel.A992
@@ -22,9 +18,4 @@ shear_tee c1 {
   top 3 inch
   support_side bolted
   support_gauge 5.5 inch
-}
-
-load gate {
-  on c1 shear in [0 kip, 2.421 kip]
-  signed "gate@petra.dev" source "steel gate generator"
 }

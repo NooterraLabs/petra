@@ -158,7 +158,7 @@ def _geo(conn: str, field: str, arg: Arg | None, design: Design, say: Say) -> Ge
             say("needs a positive length range")
             return None
         return Input(f"{conn}.{field}", arg.range, arg.signature, arg.kind, arg.span, arg.mean)
-    say("needs a positive length, a signed bound `in [lo, hi] signed ... source ...`, or `param NAME`")
+    say("needs a positive length, `given NAME` for a bound the card states, or `param NAME`")
     return None
 
 

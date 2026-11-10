@@ -1,0 +1,10 @@
+petra 0
+
+card "pilot-M3x16" {
+  owner "red@example.org"
+  environment indoor_dry
+}
+
+given tolerance in [0.05 mm, 0.05 mm] signed "red@example.org" source "shop drawing"
+
+claim m: box.mass <= 10 kg

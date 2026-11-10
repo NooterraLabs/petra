@@ -122,20 +122,20 @@ def climb(hole: Hole, starts: list[dict], budget: int, seed: int) -> dict:
     for n, start in enumerate(starts):
         share = (budget - spent) // (len(starts) - n)
         rng = random.Random(f"recall:{seed}:{hole.name}:{start['index']}")
-        text, best, used, tries = start["text"], _score(start, hole), 0, 0
+        at, best, used, tries = (start["card"], start["text"]), _score(start, hole), 0, 0
         while used < share and tries < MOVE_TRIES * share:
             tries += 1
-            moved = _move(text, rng)
-            if moved is None or moved == text:
+            moved = _move(*at, rng)
+            if moved is None or moved == at:
                 continue
             used += 1
-            row = A.assess(A.Sample(start["index"], hole.kind, "breaker", (), moved), A._REGISTRY)
+            row = A.assess(A.Sample(start["index"], hole.kind, "breaker", (), *moved), A._REGISTRY)
             if exposes(row, hole):
                 return {"found_by": "breaker", "after": spent + used, "start": start["index"], "status": row["status"],
-                        "conditions": sorted({v[0] for v in row["violations"]}), "text": moved,
-                        "hash": hashlib.sha256(moved.encode()).hexdigest()[:16]}
+                        "conditions": sorted({v[0] for v in row["violations"]}), "card": moved[0], "text": moved[1],
+                        "hash": hashlib.sha256("\0".join(moved).encode()).hexdigest()[:16]}
             if A.holed_status(row, hole.modes) == "PASS" and _score(row, hole) >= best:
-                text, best = moved, _score(row, hole)
+                at, best = moved, _score(row, hole)
         spent += used
     return {"found_by": None, "after": spent}
 
@@ -284,8 +284,8 @@ def render(results: list[dict], stats: dict, args, wall: float, provenance: dict
     out += ["", "## Cost", "",
             f"{stats['designs']} generated designs in {stats['generator_s'] / 60:.1f} minutes; {stats['climbs']} breaker "
             f"climbs, {stats['evaluations']} Petra evaluations, in {stats['breaker_s'] / 60:.1f} minutes. Every hole, and the "
-            "text of every design the breaker found, is in `docs/canary_recall_log.jsonl`; `python scripts/absurd_gap.py "
-            f"--seeds {args.seed} --show INDEX` prints a generated one.", ""]
+            "card and text of every design the breaker found, is in `docs/canary_recall_log.jsonl`; `python "
+            f"scripts/absurd_gap.py --seeds {args.seed} --show INDEX` prints a generated one.", ""]
     return "\n".join(out) + "\n"
 
 

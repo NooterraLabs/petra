@@ -11,6 +11,7 @@ import unittest
 from pathlib import Path
 
 from judges import CONDITIONS, judge
+from petra.files import read_pair
 from petra.lang import load_design, parse_design
 from petra.registry import build_registry
 
@@ -54,13 +55,13 @@ class Canaries(unittest.TestCase):
 
 
 class Counterparts(unittest.TestCase):
-    """The new domains' canaries with the one fact that makes them absurd taken back: the judge
-    still reads them and finds nothing."""
+    """The new domains' canaries with the one fact that makes them absurd taken back, each time
+    in the card: the judge still reads them and finds nothing."""
 
     def _found(self, name: str, old: str, new: str):
-        text = (ROOT / "judges" / "canaries" / f"{name}.petra").read_text(encoding="utf-8")
-        self.assertIn(old, text)
-        found = judge(parse_design(text.replace(old, new), f"{name}.petra", REGISTRY), REGISTRY)
+        card, text = read_pair(ROOT / "judges" / "canaries" / f"{name}.petra")
+        self.assertIn(old, card)
+        found = judge(parse_design(card.replace(old, new), text, f"{name}.petra", REGISTRY), REGISTRY)
         self.assertEqual(found.undecided, ())
         return [(v.id, v.reason) for v in found.violations]
 
@@ -109,7 +110,7 @@ class Generator(unittest.TestCase):
         self.assertEqual({r["kind"] for r in first}, set(self.A.SCHEDULE))
 
     def test_designs_are_drawn_from_their_own_stream(self):
-        texts = lambda seed: [self.A.sample(seed, i, REGISTRY).text for i in (0, 5, 40)]
+        texts = lambda seed: [(s.card, s.text) for s in (self.A.sample(seed, i, REGISTRY) for i in (0, 5, 40))]
         self.assertEqual(texts(3), texts(3))
         self.assertNotEqual(texts(3), texts(4))
 

@@ -1,0 +1,11 @@
+petra 0
+
+card "usb-status-led" {
+  owner "e.designer@example.org"
+  environment indoor_dry
+}
+
+given voltage in [4.75 V, 5.25 V] signed "e.designer@example.org" source "USB 2.0 port voltage"
+given capacity in [500 mA, 500 mA] signed "e.designer@example.org" source "USB 2.0 port current"
+
+claim visible: panel.d1.current >= 5 mA

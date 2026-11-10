@@ -27,6 +27,7 @@ import unittest
 from fractions import Fraction
 from pathlib import Path
 
+from petra.files import read_pair
 from petra.lang import load_design, parse_design
 from petra.models.steel import calc
 from petra.models.steel import generate as gen
@@ -85,19 +86,20 @@ def _literals(module: str) -> list[tuple[int, str, str]]:
             continue
         out.append((n.lineno, repr(n.value), where))
     return out
-CYCLIC_HANGER = (EXAMPLES / "hanger.petra").read_text(encoding="utf-8") + """
+HANGER_CARD, HANGER = read_pair(EXAMPLES / "hanger.petra")
+CYCLIC_HANGER = HANGER_CARD + """
 load crane {
   on h1 tension in [2 kip, 10 kip]
   on h1 cycles in [0, 2000000]
   signed "s.engineer@example.org" source "hoist, service loads"
 }
 """
-"""The hanger example under a cyclic tension: it owes fatigue_bolt_tension."""
+"""The hanger example's card with a cyclic tension: under it the hanger owes fatigue_bolt_tension."""
 
 
 def _cyclic_designs():
     yield load_design(EXAMPLES / "shear_tab_cyclic.petra", REGISTRY)
-    yield parse_design(CYCLIC_HANGER, "hanger_cyclic.petra", REGISTRY)
+    yield parse_design(CYCLIC_HANGER, HANGER, "hanger_cyclic.petra", REGISTRY)
 
 
 CITATION = re.compile(r"\(((?:[^()]|\([^()]*\))*)\)\s*$")
@@ -125,7 +127,7 @@ class EveryBuilderCitesItsClause(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.checks = {(mode, v.what) for g in gen.generate(110, 3, REGISTRY)
-                      for (mode, _), v in gen.checks(g.text, REGISTRY).items()}
+                      for (mode, _), v in gen.checks(g.card, g.text, REGISTRY).items()}
         for design in _cyclic_designs():
             for name in design.components:
                 conn = calc.connection(design, name, REGISTRY)

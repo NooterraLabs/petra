@@ -4,10 +4,6 @@ petra 0
 # Design 383 of `python scripts/absurd_gap.py --seed 1` at commit b9e9792 (docs/absurd_gap.md):
 # beam end 6 in off the support face, past the stiffener, which projects 5 in.
 
-design "absurd-00383" {
-  owner "gate@petra.dev"
-}
-
 stiffened_seat c1 {
   basis asd
   beam W21x44 grade steel.A992
@@ -19,9 +15,4 @@ stiffened_seat c1 {
   setback 6 inch
   weld electrode.E70 size 0.375 inch sides 2
   top_angle L4x4x1_4 grade steel.A36 outstanding long
-}
-
-load gate {
-  on c1 shear in [0 kip, 1.422 kip]
-  signed "gate@petra.dev" source "steel gate generator"
 }

@@ -23,8 +23,8 @@ FIELDS = {
 OUT = Path(__file__).resolve().parent.parent / "shapes.json"
 
 
-def card_name(label):
-    """AISC label to the card spelling: L4X3-1/2X3/8 is L4x3_1_2x3_8, WT5X22.5 is WT5x22_5."""
+def design_name(label):
+    """AISC label to a design's spelling: L4X3-1/2X3/8 is L4x3_1_2x3_8, WT5X22.5 is WT5x22_5."""
     return re.sub(r"[-/.]", "_", label.replace("X", "x"))
 
 
@@ -60,9 +60,9 @@ def build(path):
         kind = cells.get("A")
         if kind not in FIELDS:
             continue
-        name = card_name(cells[imperial["AISC_Manual_Label"]])
+        name = design_name(cells[imperial["AISC_Manual_Label"]])
         if name in shapes:
-            raise SystemExit(f"duplicate card name {name}")
+            raise SystemExit(f"duplicate name {name}")
         entry = {}
         for field in FIELDS[kind]:
             raw = cells.get(imperial[field])

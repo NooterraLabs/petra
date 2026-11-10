@@ -52,6 +52,7 @@ import numpy as np
 
 import petra
 from petra import mechanics as M
+from petra.files import read_pair
 from petra.kernel import Const, enclose
 from petra.lang import parse_design
 from petra.models.steel import calc, checks, ic
@@ -80,11 +81,12 @@ def value(expr, per=1) -> float:
     return float(enclose(expr, {}).lo / per)
 
 
-def checked(text: str) -> dict:
-    """The deck's report on a design given as text."""
+def checked(card: str, text: str) -> dict:
+    """The deck's report on a design against a card, both given as text."""
     with tempfile.TemporaryDirectory() as tmp:
         target = Path(tmp) / "design.petra"
         target.write_text(text, encoding="utf-8", newline="\n")
+        target.with_suffix(".card").write_text(card, encoding="utf-8", newline="\n")
         return petra.check_file(target).to_json()
 
 
@@ -329,11 +331,11 @@ class TableTenNine(unittest.TestCase):
     PILOT = ROOT / "corpus" / "cases" / "pilot" / "tab_half_a.petra"
 
     def bolts(self, *edits: tuple[str, str]) -> float:
-        text = self.PILOT.read_text(encoding="utf-8")
+        card, text = read_pair(self.PILOT)
         for old, new in edits:
             self.assertIn(old, text)
             text = text.replace(old, new)
-        d = parse_design(text, "303-006.petra", REGISTRY)
+        d = parse_design(card, text, "303-006.petra", REGISTRY)
         (found,) = calc.values(calc.connection(d, "st1", REGISTRY), d, REGISTRY, "bolts", "service")
         return found.utilisation
 
@@ -466,32 +468,40 @@ class TableEightFour(unittest.TestCase):
         self.assertLessEqual(value(v) * per_sixteenth, 3.61 + 0.005)
         self.assertGreater(value(v) * per_sixteenth, 3.61 * 0.99)
 
-    def values(self, text: str, mode: str) -> list:
-        d = parse_design(text, "303-022.petra", REGISTRY)
+    def values(self, card: str, text: str, mode: str) -> list:
+        d = parse_design(card, text, "303-022.petra", REGISTRY)
         return calc.values(calc.connection(d, "wb1", REGISTRY), d, REGISTRY, mode, "service")
 
     def test_the_pilots_bracket_passes(self):
         self.assertEqual(petra.check_file(PILOT_022).to_json()["status"], "PASS")
-        text = PILOT_022.read_text(encoding="utf-8")
-        (weld,) = self.values(text, "weld")
+        card, text = read_pair(PILOT_022)
+        (weld,) = self.values(card, text, "weld")
         self.assertIn("instantaneous center", weld.what)
         self.assertAlmostEqual(weld.utilisation, 0.915, delta=0.001)
-        (base,) = self.values(text, "weld_base_metal")
+        (base,) = self.values(card, text, "weld_base_metal")
         self.assertAlmostEqual(base.utilisation, 0.869, delta=0.001)
 
     def test_a_short_lever_keeps_the_elastic_method(self):
         """At e = 1.5 in on 13 in, a = 0.115 is under a_min."""
-        text = PILOT_022.read_text(encoding="utf-8").replace("eccentricity 5 inch", "eccentricity 1.5 inch")
-        welds = self.values(text, "weld")
+        card, text = read_pair(PILOT_022)
+        welds = self.values(card, text.replace("eccentricity 5 inch", "eccentricity 1.5 inch"), "weld")
         self.assertTrue(welds and all("most stressed point" in w.what for w in welds))
         self.assertFalse(any("instantaneous center" in w.what for w in welds))
 
 
-RETURNS = """petra 0
+RETURNS_CARD = """petra 0
 
-design "gate-1-06114" {
+card "gate-1-06114" {
   owner "gate@petra.dev"
 }
+
+load gate {
+  on c1 shear in [0 kip, 47.784 kip]
+  signed "gate@petra.dev" source "steel gate generator"
+}
+"""
+
+RETURNS = """petra 0
 
 weld_bracket c1 {
   basis lrfd
@@ -502,11 +512,6 @@ weld_bracket c1 {
   weld_return 2 inch
   eccentricity 5 inch
   free_edge 8 inch
-}
-
-load gate {
-  on c1 shear in [0 kip, 47.784 kip]
-  signed "gate@petra.dev" source "steel gate generator"
 }
 """
 
@@ -538,7 +543,7 @@ class TableEightEight(unittest.TestCase):
                 self.assertGreater(value(v) * self.per_sixteenth, printed * 0.99)
 
     def test_the_gates_bracket_passes(self):
-        report = checked(RETURNS)
+        report = checked(RETURNS_CARD, RETURNS)
         self.assertEqual(report["status"], "PASS")
         found = obligation(report, "weld")
         self.assertGreaterEqual(found["utilisation"], 0.592)
@@ -547,7 +552,7 @@ class TableEightEight(unittest.TestCase):
     def test_long_returns_keep_the_elastic_method(self):
         """Returns 9 in on a 4 in line, kl / L = 2.25, lie past petra.weld_ic.k_max = 2."""
         text = RETURNS.replace("weld_length 10 inch", "weld_length 4 inch").replace("weld_return 2 inch", "weld_return 9 inch")
-        d = parse_design(text, "gate.petra", REGISTRY)
+        d = parse_design(RETURNS_CARD, text, "gate.petra", REGISTRY)
         welds = calc.values(calc.connection(d, "c1", REGISTRY), d, REGISTRY, "weld", "gate")
         self.assertTrue(welds and all("most stressed point" in w.what for w in welds))
         self.assertFalse(any("instantaneous center" in w.what for w in welds))
@@ -587,11 +592,19 @@ class WeldSegmentLists(unittest.TestCase):
         self.assertIsNone(ic.pieces((((Fraction(0), -half), (half, half), Fraction(1)),)))
 
 
-BACK_EDGE = """petra 0
+BACK_EDGE_CARD = """petra 0
 
-design "tearout-back-edge" {
+card "tearout-back-edge" {
   owner "twin@petra.dev"
 }
+
+load gate {
+  on c1 shear in [0 kip, 16 kip]
+  signed "twin@petra.dev" source "twin check"
+}
+"""
+
+BACK_EDGE = """petra 0
 
 bolt_bracket c1 {
   basis lrfd
@@ -605,11 +618,6 @@ bolt_bracket c1 {
   eccentricity 6 inch
   edge_vertical 2 inch
   plate_edge 1.5 inch
-}
-
-load gate {
-  on c1 shear in [0 kip, 16 kip]
-  signed "twin@petra.dev" source "twin check"
 }
 """
 
@@ -627,13 +635,13 @@ class BracketTearout(unittest.TestCase):
     C = 1 / math.hypot(0.5, 6 * 1.5 / (2 * 1.5 ** 2))
 
     def test_the_top_bolt_tears_toward_the_back_edge(self):
-        found = obligation(checked(BACK_EDGE), "bolts")
+        found = obligation(checked(BACK_EDGE_CARD, BACK_EDGE), "bolts")
         self.assertEqual(found["outcome"], "refuted")
         lc = 1.5 * math.hypot(1.5, 0.375) / 1.5 - 1.125 / 2
         self.assertAlmostEqual(found["utilisation"], 16 / (0.75 * self.C * 1.2 * lc * 0.5 * 58), places=6)
 
     def test_with_room_behind_it_the_top_edge_governs(self):
-        found = obligation(checked(BACK_EDGE.replace("plate_edge 1.5 inch", "plate_edge 2.5 inch")), "bolts")
+        found = obligation(checked(BACK_EDGE_CARD, BACK_EDGE.replace("plate_edge 1.5 inch", "plate_edge 2.5 inch")), "bolts")
         self.assertEqual(found["outcome"], "certified")
         self.assertAlmostEqual(found["utilisation"], 16 / (0.75 * self.C * 1.2 * 1.4375 * 0.5 * 58), places=6)
 
@@ -649,11 +657,19 @@ class BracketTearout(unittest.TestCase):
         self.assertAlmostEqual(obligation(report, "bolts")["utilisation"], 1.17, delta=0.005)
 
 
-SLOTTED = """petra 0
+SLOTTED_CARD = """petra 0
 
-design "gate-1-01460" {
+card "gate-1-01460" {
   owner "gate@petra.dev"
 }
+
+load gate {
+  on c1 shear in [0 kip, 21.044 kip]
+  signed "gate@petra.dev" source "steel gate generator"
+}
+"""
+
+SLOTTED = """petra 0
 
 bolt_bracket c1 {
   basis lrfd
@@ -670,11 +686,6 @@ bolt_bracket c1 {
   plate_edge 1.5 inch
   free_edge 6 inch
 }
-
-load gate {
-  on c1 shear in [0 kip, 21.044 kip]
-  signed "gate@petra.dev" source "steel gate generator"
-}
 """
 
 
@@ -689,7 +700,7 @@ class BracketHoles(unittest.TestCase):
     joint. The deck passed it at 38cc6ba."""
 
     def edges(self, text: str) -> dict[str, float]:
-        return {c["check"]: c["utilisation"] for c in obligation(checked(text), "edge_min")["checks"]}
+        return {c["check"]: c["utilisation"] for c in obligation(checked(SLOTTED_CARD, text), "edge_min")["checks"]}
 
     def test_the_edges_take_c2(self):
         found = self.edges(SLOTTED)
@@ -706,16 +717,24 @@ class BracketHoles(unittest.TestCase):
                                places=6)
 
     def test_the_slots_need_a_slip_critical_joint(self):
-        self.assertEqual(obligation(checked(SLOTTED), "hole_use")["outcome"], "refuted")
+        self.assertEqual(obligation(checked(SLOTTED_CARD, SLOTTED), "hole_use")["outcome"], "refuted")
         slip = SLOTTED.replace("joint pretensioned", "joint slip_critical surface class_a")
-        self.assertEqual(obligation(checked(slip), "hole_use")["outcome"], "certified")
+        self.assertEqual(obligation(checked(SLOTTED_CARD, slip), "hole_use")["outcome"], "certified")
 
 
-SLOT_SLIP = """petra 0
+SLOT_SLIP_CARD = """petra 0
 
-design "gate-1-01042" {
+card "gate-1-01042" {
   owner "gate@petra.dev"
 }
+
+load gate {
+  on c1 shear in [0 kip, 9.474 kip]
+  signed "gate@petra.dev" source "steel gate generator"
+}
+"""
+
+SLOT_SLIP = """petra 0
 
 bolt_bracket c1 {
   basis asd
@@ -731,11 +750,6 @@ bolt_bracket c1 {
   edge_vertical 1.5 inch
   plate_edge 2 inch
 }
-
-load gate {
-  on c1 shear in [0 kip, 9.474 kip]
-  signed "gate@petra.dev" source "steel gate generator"
-}
 """
 
 
@@ -749,7 +763,7 @@ class BracketSlip(unittest.TestCase):
     it. The deck passed it at 97407e3 against Omega = 1.50, at 0.886."""
 
     def test_a_plain_short_slot_in_a_bracket_takes_the_parallel_factor(self):
-        report = checked(SLOT_SLIP)
+        report = checked(SLOT_SLIP_CARD, SLOT_SLIP)
         self.assertEqual(report["status"], "FAIL")
         found = obligation(report, "slip")
         self.assertEqual(found["outcome"], "refuted")
@@ -760,18 +774,26 @@ class BracketSlip(unittest.TestCase):
         """Manual Part 10 details a shear tab's short slots horizontal, normal to its
         reaction, so a slip-critical tab keeps Omega = 1.50: four 3/4 in Group 120 bolts,
         class A, 0.30 x 1.13 x 1.0 x 28 = 9.49 kips each."""
-        text = (ROOT / "examples" / "steel" / "shear_tab.petra").read_text(encoding="utf-8")
+        card, text = read_pair(ROOT / "examples" / "steel" / "shear_tab.petra")
         text = text.replace("threads included", "threads included joint slip_critical surface class_a")
         text = text.replace("  rows 4\n", "  holes plate ssl\n  rows 4\n").replace("basis lrfd", "basis asd")
-        found = obligation(checked(text), "slip")
+        found = obligation(checked(card, text), "slip")
         self.assertAlmostEqual(found["capacity"], 0.30 * 1.13 * 1.0 * 28 / 1.50, places=6)
 
 
-WELD_ARM = """petra 0
+WELD_ARM_CARD = """petra 0
 
-design "gate-1-00009" {
+card "gate-1-00009" {
   owner "gate@petra.dev"
 }
+
+load gate {
+  on c1 shear in [0 kip, 30.515 kip]
+  signed "gate@petra.dev" source "steel gate generator"
+}
+"""
+
+WELD_ARM = """petra 0
 
 weld_bracket c1 {
   basis asd
@@ -782,11 +804,6 @@ weld_bracket c1 {
   weld_return 3 inch
   eccentricity 8 inch
   free_edge 6 inch
-}
-
-load gate {
-  on c1 shear in [0 kip, 30.515 kip]
-  signed "gate@petra.dev" source "steel gate generator"
 }
 """
 
@@ -802,7 +819,7 @@ class WeldBracketArm(unittest.TestCase):
     The deck read the arm from the vertical line, 5.00 in, and passed it at 03a6fbf at 0.927."""
 
     def test_the_arm_runs_from_the_centroid(self):
-        report = checked(WELD_ARM)
+        report = checked(WELD_ARM_CARD, WELD_ARM)
         self.assertEqual(report["status"], "FAIL")
         found = obligation(report, "bracket_edge")
         self.assertEqual(found["outcome"], "refuted")

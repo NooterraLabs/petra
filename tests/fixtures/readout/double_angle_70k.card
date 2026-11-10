@@ -1,0 +1,10 @@
+petra 0
+
+card "job2-double-angle" {
+  owner "engineer@example.org"
+}
+
+load reaction {
+  on da1 shear in [0 kip, 70 kip]
+  signed "engineer@example.org" source "beam end reaction, LRFD factored, given"
+}

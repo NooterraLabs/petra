@@ -1,12 +1,14 @@
 """The absurd-design gap (docs/plan.md P0 item 2): `python scripts/absurd_gap.py [--n 18000]
-[--seeds 1,2,3] [--workers 7] [--out docs]`, or `--seeds S --show INDEX` to print one design.
+[--seeds 1,2,3] [--workers 7] [--out docs]`, or `--seeds S --show INDEX` to print one design
+under its card.
 
 Generates designs across the eleven steel kinds, the circuit, the truss, the bolted joint
 and the demand, mutated along the dimensions that decide whether parts fit or a model's
 premise holds: rows, pitch, top, edge distances, gauges, setback, beam and support swaps,
 web or flange, copes, angle and tee swaps, conductor size against terminal, truss span and
 load scale, a joint's preload against its pull, a demand's tests against its capacity.
-Checks each design with Petra and with the outside judge (judges/), and writes
+Each design is drawn with its card, so a mutation may change either file. Checks each
+design against its card with Petra and with the outside judge (judges/), and writes
 docs/absurd_gap.md and docs/absurd_gap_log.jsonl. The canaries in judges/canaries run
 every time. The gap is the designs the judge rejects that Petra passes; P1 drives it to
 zero.
@@ -40,6 +42,7 @@ if str(ROOT) not in sys.path:
 
 from judges import CONDITIONS, judge  # noqa: E402
 from judges.steel import UNDRAWN  # noqa: E402
+from petra.files import read_pair  # noqa: E402
 from petra.lang import LolaSyntaxError, LoweringError, parse_design  # noqa: E402
 from petra.models.base import ComponentError  # noqa: E402
 from petra.models.steel import generate as G  # noqa: E402
@@ -90,7 +93,8 @@ class Sample:
     kind: str
     origin: str               # "sampler" | "example" | "canary"
     mutations: tuple[str, ...]
-    text: str
+    card: str                 # the card's text
+    text: str                 # the design's text
 
 
 class Lines:
@@ -186,21 +190,34 @@ def _steel(index: int, kind: str, rng: random.Random, registry) -> Sample:
     top = 200 if kind == "flange_force" else 40
     load = G._load(math.exp(rng.uniform(0, math.log(top))))
     basis = rng.choice(("lrfd", "asd"))
-    text = G.source(f"absurd-{index:05d}", kind, basis, lines.render(), load, secondary)
-    return Sample(index, kind, origin, labels, text)
+    card, text = G.source(f"absurd-{index:05d}", kind, basis, lines.render(), load, secondary)
+    return Sample(index, kind, origin, labels, card, text)
 
 
-CIRCUIT = """petra 0
+CIRCUIT_CARD = """petra 0
 
-design "absurd-{index:05d}" {{
+card "absurd-{index:05d}" {{
   owner "gate@petra.dev"
   environment indoor_dry
 }}
 
 ambient in [10 degC, 40 degC] signed "gate@petra.dev" source "absurd gap generator"
 
+given fault_current in [0 kA, 6 kA] signed "gate@petra.dev" source "absurd gap generator"
+
+load lamp_draw {{
+  on lighting.lamps current in [0 A, {current} A]
+  signed "gate@petra.dev" source "absurd gap generator"
+}}
+
+claim hot:  lighting.w1.temperature <= 70 degC under lamp_draw
+claim drop: lighting.w1.voltage_drop <= 3 % under lamp_draw
+"""
+
+CIRCUIT = """petra 0
+
 circuit lighting {{
-  supply mains voltage 230 V fault_current in [0 kA, 6 kA] signed "gate@petra.dev" source "absurd gap generator"
+  supply mains voltage 230 V fault_current given fault_current
   breaker cb1 part {breaker}
   wire w1 cable {cable} length {length} m install install.clipped_direct
   terminal t1 part {terminal}
@@ -211,14 +228,6 @@ circuit lighting {{
   connect w1.b -> t1.wire
   connect t1.out -> lamps.in
 }}
-
-load lamp_draw {{
-  on lighting.lamps current in [0 A, {current} A]
-  signed "gate@petra.dev" source "absurd gap generator"
-}}
-
-claim hot:  lighting.w1.temperature <= 70 degC under lamp_draw
-claim drop: lighting.w1.voltage_drop <= 3 % under lamp_draw
 """
 
 
@@ -237,15 +246,29 @@ def _circuit(index: int, rng: random.Random, registry) -> Sample:
     for field in rng.sample(sorted(choices), rng.choice(MUTATIONS)):
         fields[field] = rng.choice(choices[field])
         labels.append(f"{field}={fields[field]}")
-    return Sample(index, "circuit", "example", tuple(labels), CIRCUIT.format(index=index, **fields))
+    return Sample(index, "circuit", "example", tuple(labels), CIRCUIT_CARD.format(index=index, **fields),
+                  CIRCUIT.format(**fields))
 
 
-TRUSS = """petra 0
+TRUSS_CARD = """petra 0
 
-design "absurd-{index:05d}" {{
+card "absurd-{index:05d}" {{
   owner "gate@petra.dev"
   environment indoor_dry
 }}
+
+load crowd {{
+  on frame.D fy in [{lo} N, {hi} N]
+  on frame.E fy in [{lo} N, {hi} N]
+  signed "gate@petra.dev" source "absurd gap generator"
+}}
+
+claim strength:   frame.collapse_factor >= 1.5 under crowd
+claim stability:  frame.stability_factor >= 3 under crowd
+claim stress:     frame.member(diag_ad).stress <= 235 MPa under crowd
+"""
+
+TRUSS = """petra 0
 
 truss frame {{
   material steel.S355
@@ -265,16 +288,6 @@ truss frame {{
   member diag_be:   B -- E
   member diag_ec:   E -- C
 }}
-
-load crowd {{
-  on frame.D fy in [{lo} N, {hi} N]
-  on frame.E fy in [{lo} N, {hi} N]
-  signed "gate@petra.dev" source "absurd gap generator"
-}}
-
-claim strength:   frame.collapse_factor >= 1.5 under crowd
-claim stability:  frame.stability_factor >= 3 under crowd
-claim stress:     frame.member(diag_ad).stress <= 235 MPa under crowd
 """
 
 
@@ -295,28 +308,23 @@ def _truss(index: int, rng: random.Random, registry) -> Sample:
         fields[field] = rng.choice(choices[field])
         labels.append(f"{field}={fields[field] if field != 'load' else _decimal(fields[field])}")
     k, f = fields["span"], fields["load"]
-    text = TRUSS.format(index=index, section=fields["section"], top=fields["top"],
+    card = TRUSS_CARD.format(index=index, lo=_decimal(-24000 * f), hi=_decimal(-16000 * f))
+    text = TRUSS.format(section=fields["section"], top=fields["top"],
                         b=_decimal(Fraction(3 * k)), c=_decimal(Fraction(6 * k)), d=_decimal(Fraction(3 * k, 2)),
-                        e=_decimal(Fraction(9 * k, 2)), h=_decimal(Fraction(2 * k)),
-                        lo=_decimal(-24000 * f), hi=_decimal(-16000 * f))
-    return Sample(index, "truss", "example", tuple(labels), text)
+                        e=_decimal(Fraction(9 * k, 2)), h=_decimal(Fraction(2 * k)))
+    return Sample(index, "truss", "example", tuple(labels), card, text)
 
 
-JOINT = """petra 0
+JOINT_CARD = """petra 0
 
-design "absurd-{index:05d}" {{
+card "absurd-{index:05d}" {{
   owner "gate@petra.dev"
   environment indoor_dry
 }}
 
-joint bracket {{
-  bolt {bolt} count {count}
-  plate {plate} thickness {thickness} mm
-  plate steel.S355 thickness 10 mm
-  torque in [{torque}] signed "gate@petra.dev" source "absurd gap generator"
-  nut_factor in [{nut_factor}] signed "gate@petra.dev" source "absurd gap generator"
-  load_share in [{load_share}] signed "gate@petra.dev" source "absurd gap generator"
-}}
+given torque in [{torque}] signed "gate@petra.dev" source "absurd gap generator"
+given nut_factor in [{nut_factor}] signed "gate@petra.dev" source "absurd gap generator"
+given load_share in [{load_share}] signed "gate@petra.dev" source "absurd gap generator"
 
 load pull {{
   on bracket force in [0 kN, {force} kN]
@@ -328,9 +336,21 @@ claim tension: bracket.tension_utilisation <= {u} under pull
 waive bolt.plate_bearing on bracket by "gate@petra.dev" reason "not modelled; the generator tests the tension check"
 """
 
+JOINT = """petra 0
+
+joint bracket {{
+  bolt {bolt} count {count}
+  plate {plate} thickness {thickness} mm
+  plate steel.S355 thickness 10 mm
+  torque given torque
+  nut_factor given nut_factor
+  load_share given load_share
+}}
+"""
+
 
 def _joint(index: int, rng: random.Random, registry) -> Sample:
-    """examples/bolt_unknown.petra indoors, its bearing waived, so the tension check decides.
+    """examples/bolt_unknown.petra indoors, its card waiving bearing, so the tension check decides.
     The pull is drawn log-uniform from 0.05 to 3 times the bolts' rough proof load, 0.35 kN
     per mm2 of d^2 each, the way steel loads are drawn; a mutation moves the bolt, the
     preload (a fraction of the torque that would reach that load at K = 0.2), the load
@@ -355,20 +375,18 @@ def _joint(index: int, rng: random.Random, registry) -> Sample:
     proof = 0.35 * d * d                                              # kN for one bolt, d in mm
     torque = float(fields.pop("preload")) * 0.2 * proof * d           # N m = K F d, in kN and mm
     force = int(fields["count"]) * proof * math.exp(rng.uniform(math.log(0.05), math.log(3)))
-    return Sample(index, "joint", "example", tuple(labels), JOINT.format(
-        index=index, torque=f"{0.8 * torque:.2f} Nm, {torque:.2f} Nm", force=f"{force:.3f}", **fields))
+    card = JOINT_CARD.format(index=index, torque=f"{0.8 * torque:.2f} Nm, {torque:.2f} Nm", force=f"{force:.3f}", **fields)
+    return Sample(index, "joint", "example", tuple(labels), card, JOINT.format(**fields))
 
 
-DEMAND = """petra 0
+DEMAND_CARD = """petra 0
 
-design "absurd-{index:05d}" {{
+card "absurd-{index:05d}" {{
   owner "gate@petra.dev"
   environment indoor_dry
 }}
 
-demand hook {{
-  capacity in [{capacity}] measured "gate@petra.dev" source "absurd gap generator"
-}}
+given capacity in [{capacity}] measured "gate@petra.dev" source "absurd gap generator"
 
 load lift {{
   on hook force in [{lo} kN, {hi} kN] mean {mean} kN
@@ -384,10 +402,17 @@ claim overload: P(hook.utilisation > {u}) <= {p} under lift
 claim tested:   P(fail hook at {level} kN) <= 1/100 confidence 95 % from proof
 """
 
+DEMAND = """petra 0
+
+demand hook {
+  capacity given capacity
+}
+"""
+
 
 def _demand(index: int, rng: random.Random, registry) -> Sample:
-    """examples/hook_uncertain.petra with its capacity, load, tests and overload claim drawn
-    against each other; the tested claim sits at the tested level."""
+    """examples/hook_uncertain.petra, whose card's capacity, load, tests and overload claim are
+    drawn against each other; the tested claim sits at the tested level."""
     choices = {
         "capacity": ("20 kN, 25 kN", "36 kN, 40 kN", "50 kN, 60 kN"),
         "load": ("0 40 10", "0 40 20", "0 30 5", "5 60 15"),
@@ -402,9 +427,9 @@ def _demand(index: int, rng: random.Random, registry) -> Sample:
     lo, hi, mean = fields["load"].split()
     trials, failures, level = fields["tests"].split()
     u, p = fields["overload"].split()
-    text = DEMAND.format(index=index, capacity=fields["capacity"], lo=lo, hi=hi, mean=mean, trials=trials,
-                         failures=failures, level=level, u=u, p=p)
-    return Sample(index, "demand", "example", tuple(labels), text)
+    card = DEMAND_CARD.format(index=index, capacity=fields["capacity"], lo=lo, hi=hi, mean=mean, trials=trials,
+                              failures=failures, level=level, u=u, p=p)
+    return Sample(index, "demand", "example", tuple(labels), card, DEMAND)
 
 
 def sample(seed: int, index: int, registry) -> Sample:
@@ -458,7 +483,7 @@ def assess(s: Sample, registry) -> dict:
     start = time.perf_counter()
     status, note, violations, undecided, refused, checked = "PASS", None, [], [], {}, []
     try:
-        design = parse_design(s.text, f"{s.kind}.petra", registry)
+        design = parse_design(s.card, s.text, f"{s.kind}.petra", registry)
     except (LolaSyntaxError, LoweringError) as e:
         design, status, note = None, "REJECTED", str(e).splitlines()[0][:200]
     if design is not None:
@@ -509,9 +534,10 @@ def run(seeds: tuple[int, ...], n: int, workers: int, step: int = 30) -> list[di
 
 
 def stream_hash(rows: list[dict]) -> str:
-    """A hash of every design text in order: two runs drew the same designs exactly when it agrees."""
+    """A hash of every card and design text in order: two runs drew the same designs exactly when it agrees."""
     h = hashlib.sha256()
     for row in rows:
+        h.update(row["card"].encode("utf-8"))
         h.update(row["text"].encode("utf-8"))
     return h.hexdigest()[:12]
 
@@ -530,11 +556,11 @@ def commit(paths: tuple[str, ...]) -> str:
 def canaries(registry) -> list[dict]:
     out = []
     for i, path in enumerate(sorted(CANARIES.glob("*.petra"))):
-        text = path.read_text(encoding="utf-8")
+        card, text = read_pair(path)
         condition = next(line.split(":", 1)[1].strip() for line in text.splitlines() if line.startswith("# violates:"))
-        design = parse_design(text, path.name, registry)
+        design = parse_design(card, text, path.name, registry)
         kind = next(iter(design.components.values())).kind
-        row = assess(Sample(-1 - i, kind, "canary", (), text), registry)
+        row = assess(Sample(-1 - i, kind, "canary", (), card, text), registry)
         out.append({**row, "name": path.stem, "condition": condition})
     return out
 
@@ -599,8 +625,8 @@ def render(rows: list[dict], canary_rows: list[dict], args, wall: float, provena
         f"| The generator: `{'`, `'.join(GENERATOR)}` | {provenance['generator']} |",
         "",
         "A gap count compares with another run's only at the same generator commit and seeds, and only when each seed's "
-        "stream hash agrees: the hash covers every design text, so it also shows a registry or sampler change that "
-        "moved the stream.",
+        "stream hash agrees: the hash covers every card and design text, so it also shows a registry or sampler change "
+        "that moved the stream.",
         "",
         "Each design is a sample from the steel deck's own samplers (`petra/models/steel/generate.py`) or an example, "
         "mutated 0 to 3 times along the dimensions that decide whether parts fit, with its load drawn log-uniform "
@@ -652,7 +678,8 @@ def render(rows: list[dict], canary_rows: list[dict], args, wall: float, provena
         if not any(k in cond.kinds for cond in CONDITIONS.values()):
             out.append(f"| {k} | none | | | {UNDRAWN.get(k, '')} |")
     out += ["", "## Canaries", "",
-            "Each file in `judges/canaries` is a design the judge rejects for the condition its `# violates:` line names, "
+            "Each design in `judges/canaries`, with the card beside it, is one the judge rejects for the condition its "
+            "`# violates:` line names, "
             "run in every run: the false PASSes found by hand on 2026-11-06, and one design for each kind and condition the "
             "seed-1 run of 2026-11-06 raised. **Refused by** lists the modes that keep Petra from passing it, the hole "
             "`scripts/canary_recall.py` plants. **Re-found** means some seed produced a design of the same kind, with the "
@@ -693,7 +720,8 @@ def render(rows: list[dict], canary_rows: list[dict], args, wall: float, provena
         "- The truss judge cannot decide out-of-plane bracing, which the truss model assumes and never states.",
         "- The circuit judge reads the terminal's conductor range from the registry, whose rows are tagged judged.",
         "- A joint's lines draw no bolt length, hole, edge distance or washer, so grip, edge and pull-through fit are not "
-        "judged. Every generated joint waives plate bearing, which Petra does not model, so its tension check decides.",
+        "judged. Every generated joint's card waives plate bearing, which Petra does not model, so its tension check "
+        "decides.",
         "- A demand's lines draw no part. The judge takes its capacity against its own tests only.",
         "",
         "## Examples, one per gap cell",
@@ -704,7 +732,8 @@ def render(rows: list[dict], canary_rows: list[dict], args, wall: float, provena
         if row is None:
             continue
         out += [f"### {_name(row)}", "", f"{k}, `{cid}`: {_reason(row, cid)}. Mutations: "
-                f"{', '.join(row['mutations']) or 'none'}. Origin: {row['origin']}.", "", "```", row["text"].rstrip(), "```", ""]
+                f"{', '.join(row['mutations']) or 'none'}. Origin: {row['origin']}. Its card, then the design.", "",
+                "```", row["card"].rstrip(), "```", "", "```", row["text"].rstrip(), "```", ""]
     return "\n".join(out) + "\n"
 
 
@@ -729,16 +758,16 @@ def _seed_rows(rows: list[dict], seeds: tuple[int, ...]) -> list[str]:
 
 
 def log_lines(rows: list[dict], canary_rows: list[dict]) -> list[str]:
-    """Every canary with its text, and every generated design the judge flags or leaves
-    undecided or Petra rejects, without its text: `--seeds S --show INDEX` regenerates any
+    """Every canary with its card and its text, and every generated design the judge flags or
+    leaves undecided or Petra rejects, without them: `--seeds S --show INDEX` regenerates any
     design. Per-design times are left out, so a seed's log is the same on every run."""
     out = []
     for row in canary_rows + rows:
         if row["origin"] != "canary" and not (row["violations"] or row["undecided"] or row["status"] in ("REJECTED", "ERROR")):
             continue
-        keep = {k: v for k, v in row.items() if k not in ("seconds", "text", "checked")}
+        keep = {k: v for k, v in row.items() if k not in ("seconds", "card", "text", "checked")}
         if row["origin"] == "canary":
-            keep["text"] = row["text"]
+            keep["card"], keep["text"] = row["card"], row["text"]
         out.append(json.dumps(keep, sort_keys=True))
     return out
 
@@ -753,10 +782,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--seeds", type=seeds, default=(1,), help="comma-separated, as in 1,2,3")
     parser.add_argument("--workers", type=int, default=7)
     parser.add_argument("--out", type=Path, default=ROOT / "docs")
-    parser.add_argument("--show", type=int, metavar="INDEX", help="print design INDEX of the first seed and stop")
+    parser.add_argument("--show", type=int, metavar="INDEX",
+                        help="print the card and the design of design INDEX of the first seed and stop")
     args = parser.parse_args(argv)
     if args.show is not None:
-        print(sample(args.seeds[0], args.show, build_registry()).text)
+        shown = sample(args.seeds[0], args.show, build_registry())
+        print(shown.card)
+        print(shown.text)
         return 0
     started = time.time()
     rows = run(args.seeds, args.n, args.workers)

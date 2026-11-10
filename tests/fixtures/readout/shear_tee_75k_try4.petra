@@ -6,10 +6,6 @@ petra 0
 # A shear tee: a WT6x25 bolted to the beam web through its stem and to the column flange
 # through its flange.
 
-design "shear-tee-t7-rev-a" {
-  owner "s.engineer@example.org"
-}
-
 shear_tee tee1 {
   basis lrfd
   beam W18x50 grade steel.A992
@@ -24,9 +20,4 @@ shear_tee tee1 {
   top 3 inch
   support_side bolted
   support_gauge 5.5 inch
-}
-
-load gravity {
-  on tee1 shear in [0 kip, 75 kip]
-  signed "s.engineer@example.org" source "beam reaction, LRFD 1.2D + 1.6L, calc SC-3"
 }

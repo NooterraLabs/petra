@@ -42,12 +42,13 @@ strengths calc.py encloses over each design's box.
     downward reaction that fixes which edge is the tearout edge (the bolts push the plate
     down and the beam web up), so a vertical flip is a different design, not a symmetry,
     and nothing in the grammar names a left or right side. What the grammar does let a
-    designer write two ways is tested instead: attribute lines in another order, keyword
-    pairs within a line in another order, standard holes and other defaults stated
-    explicitly, the connection and load case renamed, load entries in another order, and
-    the declarations in another order. Verdicts, outcomes and utilisations must be
-    identical. One ordering cannot be written: a bare count must end its line (`weld ...
-    sides 2 size 0.25 inch` reads `size` as the unit of 2), so `sides` stays last.
+    card and a design be written two ways is tested instead: the design's attribute lines
+    in another order, keyword pairs within a line in another order, standard holes and
+    other defaults stated explicitly, the connection and load case renamed in both files,
+    and the card's load entries and its declarations in another order. Verdicts, outcomes
+    and utilisations must be identical. One ordering cannot be written: a bare count must
+    end its line (`weld ... sides 2 size 0.25 inch` reads `size` as the unit of 2), so
+    `sides` stays last.
 
 What limits each sample: the stream draws the eleven kinds in turn, 8 of each (88 designs);
 SAMPLE is the first PER_KIND = 3 of each kind (33), among them toleranced (+-1/16 in) and
@@ -128,10 +129,10 @@ Checks = dict[tuple[str, str], list[calc.Value]]
 
 
 @functools.cache
-def checks_of(text: str, conn: str, case: str) -> Checks:
+def checks_of(card: str, text: str, conn: str, case: str) -> Checks:
     """Every check the deck owes `conn` under `case`, by (mode, what), in the deck's order.
     Cached: callers only read it."""
-    design = parse_design(text, "t.petra", REGISTRY)
+    design = parse_design(card, text, "t.petra", REGISTRY)
     lowered = calc.connection(design, conn, REGISTRY)
     out: Checks = defaultdict(list)
     for mode in required(lowered, design):
@@ -142,9 +143,9 @@ def checks_of(text: str, conn: str, case: str) -> Checks:
 
 
 @functools.cache
-def verdict_of(text: str) -> tuple[str, dict[str, str]]:
+def verdict_of(card: str, text: str) -> tuple[str, dict[str, str]]:
     """The kernel's verdict and each mode's outcome ("pass", "fail" or "open")."""
-    report = check_design(parse_design(text, "t.petra", REGISTRY), REGISTRY, (SolverSource(),))
+    report = check_design(parse_design(card, text, "t.petra", REGISTRY), REGISTRY, (SolverSource(),))
     return STATUS[type(report.verdict)], G.deck_outcomes(report)[0]
 
 
@@ -154,7 +155,7 @@ def numbers(found: Checks) -> dict[tuple[str, str], list[tuple[float, float, flo
 
 
 def number(x: Fraction) -> str:
-    """x >= 0 exactly as .petra reads numbers: a terminating decimal where there is one, p/q otherwise."""
+    """x >= 0 exactly as Petra reads numbers: a terminating decimal where there is one, p/q otherwise."""
     for places in range(40):
         if (x * 10**places).denominator == 1:
             whole, frac = divmod(int(x * 10**places), 10**places)
@@ -255,12 +256,12 @@ WIDER = (Fraction(3, 2), Fraction(4))
 """Factors on a FAIL's load's upper end."""
 
 
-def loads(text: str) -> list[re.Match]:
-    return list(LOAD.finditer(text))
+def loads(card: str) -> list[re.Match]:
+    return list(LOAD.finditer(card))
 
 
-def with_box(text: str, entry: re.Match, lo: Fraction, hi: Fraction) -> str:
-    return splice(splice(text, entry.span("hi"), number(hi)), entry.span("lo"), number(lo))
+def with_box(card: str, entry: re.Match, lo: Fraction, hi: Fraction) -> str:
+    return splice(splice(card, entry.span("hi"), number(hi)), entry.span("lo"), number(lo))
 
 
 def narrower(lo: Fraction, hi: Fraction) -> tuple[tuple[str, Fraction, Fraction], ...]:
@@ -291,26 +292,32 @@ def in_units(text: str, length: str, force: str) -> str:
 
 # --- The same design written another way ---------------------------------------------------------
 
-def parts(text: str) -> tuple[str, str, list[str], list[str], str]:
-    """(`petra 0`, the design block, the component block's lines, the load block's lines, the
-    kind) of a generated design."""
-    head, design, component, load = text.strip("\n").split("\n\n")
-    return head, design, component.split("\n"), load.split("\n"), component.split(" ", 1)[0]
+def parts(text: str) -> tuple[str, list[str], str]:
+    """(`petra 0`, the component block's lines, the kind) of a generated design."""
+    head, component = text.strip("\n").split("\n\n")
+    return head, component.split("\n"), component.split(" ", 1)[0]
 
 
-def join(head: str, design: str, component: list[str], load: list[str]) -> str:
-    return "\n\n".join((head, design, "\n".join(component), "\n".join(load))) + "\n"
+def card_parts(card: str) -> tuple[str, list[str], list[str]]:
+    """(`petra 0`, the card block and the given lines where there are any, the load block's
+    lines) of a generated card."""
+    head, *stated, load = card.strip("\n").split("\n\n")
+    return head, stated, load.split("\n")
+
+
+def join(head: str, *blocks: str) -> str:
+    return "\n\n".join((head, *blocks)) + "\n"
 
 
 def with_attributes(text: str, attributes: list[str]) -> str | None:
     """The design with its component's attribute lines replaced; None if nothing changed."""
-    head, design, comp, load, _ = parts(text)
-    out = join(head, design, [comp[0], *attributes, comp[-1]], load)
+    head, comp, _ = parts(text)
+    out = join(head, "\n".join([comp[0], *attributes, comp[-1]]))
     return None if out == text else out
 
 
 def attributes_of(text: str) -> list[str]:
-    return parts(text)[2][1:-1]
+    return parts(text)[1][1:-1]
 
 
 def attributes_reversed(text: str) -> str | None:
@@ -331,7 +338,7 @@ a number as the number's unit."""
 
 def _pairs_reversed(line: str) -> str:
     words = line.split()
-    if words[0] not in PAIRED or "[" in line:
+    if words[0] not in PAIRED or "given" in words:
         return line
     pairs, rest = [], words[2:]
     while rest:
@@ -350,7 +357,7 @@ def keywords_reversed(text: str) -> str | None:
 def holes_stated(text: str) -> str | None:
     """Every ply's hole type stated, standard where the design left it unnamed, the plies in
     reverse order. None for a kind or design without bolts."""
-    kind = parts(text)[4]
+    kind = parts(text)[2]
     attrs = attributes_of(text)
     if not KIND_SPECS[kind].plies or not any(x.split()[0] == "bolts" for x in attrs):
         return None
@@ -373,7 +380,7 @@ DEFAULT_KEYWORDS = {"bolts": (("joint", "snug"), ("fillers", "none")), "weld": (
 
 def defaults_stated(text: str) -> str | None:
     """Every default the kind allows written out: the optional lines and the keywords."""
-    kind = parts(text)[4]
+    kind = parts(text)[2]
     attrs = attributes_of(text)
     given = {x.split()[0] for x in attrs}
     out = []
@@ -385,41 +392,44 @@ def defaults_stated(text: str) -> str | None:
     return with_attributes(text, out)
 
 
-def renamed(text: str, conn: str, case: str) -> str:
-    text = re.sub(r"^(\w+) c1 \{", rf"\1 {conn} {{", text, flags=re.M)
-    text = re.sub(r"^  on c1 ", f"  on {conn} ", text, flags=re.M)
-    return re.sub(r"^load gate \{", f"load {case} {{", text, flags=re.M)
+def renamed(card: str, text: str, conn: str, case: str) -> tuple[str, str]:
+    card = re.sub(r"^  on c1 ", f"  on {conn} ", card, flags=re.M)
+    card = re.sub(r"^load gate \{", f"load {case} {{", card, flags=re.M)
+    return card, re.sub(r"^(\w+) c1 \{", rf"\1 {conn} {{", text, flags=re.M)
 
 
-def loads_reversed(text: str) -> str | None:
-    head, design, comp, load, _ = parts(text)
+def loads_reversed(card: str) -> str | None:
+    head, stated, load = card_parts(card)
     entries = [x for x in load if x.startswith("  on ")]
     if len(entries) < 2:
         return None
     rest = [x for x in load if not x.startswith("  on ")]
-    return join(head, design, comp, [rest[0], *reversed(entries), *rest[1:]])
+    return join(head, *stated, "\n".join([rest[0], *reversed(entries), *rest[1:]]))
 
 
-def declarations_reordered(text: str) -> str:
-    """The load case first, then the connection, then the design block."""
-    head, design, comp, load, _ = parts(text)
-    return "\n\n".join((head, "\n".join(load), "\n".join(comp), design)) + "\n"
+def declarations_reordered(card: str) -> str:
+    """The card with its load case first, then the given lines, then the card block."""
+    head, stated, load = card_parts(card)
+    return join(head, "\n".join(load), *reversed(stated))
 
 
 CONN, CASE = "beam_end", "service"
 
 
-def rewritings(text: str) -> list[tuple[str, str, str, str]]:
-    """(what, text, connection name, load case name) for each way of writing the same design
-    that applies to it."""
-    out = [("connection and load case renamed", renamed(text, CONN, CASE), CONN, CASE),
-           ("declarations reordered", declarations_reordered(text), "c1", "gate")]
+def rewritings(card: str, text: str) -> list[tuple[str, str, str, str, str]]:
+    """(what, card, design, connection name, load case name) for each way of writing the same
+    card and design that applies to them."""
+    out = [("connection and load case renamed", *renamed(card, text, CONN, CASE), CONN, CASE),
+           ("declarations reordered", declarations_reordered(card), text, "c1", "gate")]
     for what, rewrite in (("attribute lines reversed", attributes_reversed), ("attribute lines shuffled", attributes_shuffled),
                           ("keyword pairs reversed", keywords_reversed), ("standard holes stated", holes_stated),
-                          ("defaults stated", defaults_stated), ("load entries reversed", loads_reversed)):
+                          ("defaults stated", defaults_stated)):
         found = rewrite(text)
         if found is not None:
-            out.append((what, found, "c1", "gate"))
+            out.append((what, card, found, "c1", "gate"))
+    found = loads_reversed(card)
+    if found is not None:
+        out.append(("load entries reversed", found, text, "c1", "gate"))
     return out
 
 
@@ -446,10 +456,10 @@ class Monotonicity(unittest.TestCase):
 
     def test_adding_material_never_lowers_a_strength(self):
         for g in SAMPLE:
-            before = checks_of(g.text, "c1", "gate")
+            before = checks_of(g.card, g.text, "c1", "gate")
             keys = sorted(k for k in before if k[0] in STRENGTH)
             for what, text in thickenings(g.text):
-                after = checks_of(text, "c1", "gate")
+                after = checks_of(g.card, text, "c1", "gate")
                 with self.subTest(g.name, kind=g.kind, change=what):
                     self.assertEqual(keys, sorted(k for k in after if k[0] in STRENGTH))
                     for key in keys:
@@ -483,26 +493,27 @@ class LoadBox(unittest.TestCase):
 
     def test_a_wider_load_box_keeps_a_fail_a_fail(self):
         for g in self.picks("FAIL"):
-            self.assertEqual(verdict_of(g.text)[0], "FAIL", g.name)
-            for entry in loads(g.text):
+            self.assertEqual(verdict_of(g.card, g.text)[0], "FAIL", g.name)
+            for entry in loads(g.card):
                 lo, hi = Fraction(entry["lo"]), Fraction(entry["hi"])
                 for times in WIDER:
                     with self.subTest(g.name, kind=g.kind, load=entry["field"], times=str(times)):
-                        self.assertEqual(verdict_of(with_box(g.text, entry, lo, hi * times))[0], "FAIL")
+                        self.assertEqual(verdict_of(with_box(g.card, entry, lo, hi * times), g.text)[0], "FAIL")
 
     def test_a_narrower_load_box_keeps_a_pass_a_pass(self):
         for g in self.picks("PASS"):
-            self.assertEqual(verdict_of(g.text)[0], "PASS", g.name)
-            for entry in loads(g.text):
+            self.assertEqual(verdict_of(g.card, g.text)[0], "PASS", g.name)
+            for entry in loads(g.card):
                 for what, lo, hi in narrower(Fraction(entry["lo"]), Fraction(entry["hi"])):
                     with self.subTest(g.name, kind=g.kind, load=entry["field"], box=what):
-                        self.assertEqual(verdict_of(with_box(g.text, entry, lo, hi))[0], "PASS")
+                        self.assertEqual(verdict_of(with_box(g.card, entry, lo, hi), g.text)[0], "PASS")
 
     def test_a_wider_load_box_never_lowers_a_utilisation(self):
         for g in SAMPLE:
-            before = checks_of(g.text, "c1", "gate")
-            for entry in loads(g.text):
-                after = checks_of(with_box(g.text, entry, Fraction(entry["lo"]), Fraction(entry["hi"]) * WIDER[0]), "c1", "gate")
+            before = checks_of(g.card, g.text, "c1", "gate")
+            for entry in loads(g.card):
+                wider = with_box(g.card, entry, Fraction(entry["lo"]), Fraction(entry["hi"]) * WIDER[0])
+                after = checks_of(wider, g.text, "c1", "gate")
                 with self.subTest(g.name, kind=g.kind, load=entry["field"]):
                     self.assertEqual(sorted(before), sorted(after))
                     for key in before:
@@ -514,24 +525,25 @@ class LoadBox(unittest.TestCase):
 class Units(unittest.TestCase):
     def test_lengths_and_loads_in_other_units_change_nothing(self):
         for g in SAMPLE:
-            verdict, expected = verdict_of(g.text), numbers(checks_of(g.text, "c1", "gate"))
+            verdict, expected = verdict_of(g.card, g.text), numbers(checks_of(g.card, g.text, "c1", "gate"))
             for length, force in SPELLINGS:
-                text = in_units(g.text, length, force)
+                card, text = in_units(g.card, length, force), in_units(g.text, length, force)
                 with self.subTest(g.name, kind=g.kind, units=f"{length}, {force}"):
+                    self.assertNotRegex(card, r"\b(inch|kip)\b")
                     self.assertNotRegex(text, r"\b(inch|kip)\b")
-                    self.assertEqual(verdict_of(text), verdict)
-                    self.assertEqual(numbers(checks_of(text, "c1", "gate")), expected)
+                    self.assertEqual(verdict_of(card, text), verdict)
+                    self.assertEqual(numbers(checks_of(card, text, "c1", "gate")), expected)
 
 
 class Mirroring(unittest.TestCase):
     def test_a_design_written_another_way_is_checked_the_same(self):
         for g in SAMPLE:
-            verdict, expected = verdict_of(g.text), numbers(checks_of(g.text, "c1", "gate"))
-            for what, text, conn, case in rewritings(g.text):
+            verdict, expected = verdict_of(g.card, g.text), numbers(checks_of(g.card, g.text, "c1", "gate"))
+            for what, card, text, conn, case in rewritings(g.card, g.text):
                 with self.subTest(g.name, kind=g.kind, rewriting=what):
-                    self.assertNotEqual(text, g.text)
-                    self.assertEqual(verdict_of(text), verdict)
-                    self.assertEqual(numbers(checks_of(text, conn, case)), expected)
+                    self.assertNotEqual((card, text), (g.card, g.text))
+                    self.assertEqual(verdict_of(card, text), verdict)
+                    self.assertEqual(numbers(checks_of(card, text, conn, case)), expected)
 
 
 if __name__ == "__main__":

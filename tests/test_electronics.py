@@ -11,6 +11,7 @@ from dataclasses import replace
 from fractions import Fraction
 from pathlib import Path
 
+from petra.files import read_pair
 from petra.lang import parse_design
 from petra.models.base import ComponentError
 from petra.models.electronics import board, domain
@@ -28,16 +29,19 @@ EXAMPLES = ROOT / "examples" / "electronics"
 PACKAGE = ROOT / "petra" / "models" / "electronics"
 REGISTRY = build_registry()
 SIGNED = 'signed "t@example.org" source "test"'
-HEADER = 'petra 0\n\ndesign "t" {\n  owner "t@example.org"\n  environment indoor_dry\n}\n\n'
-SUPPLY = f"  supply vin voltage in [11.4 V, 12.6 V] {SIGNED} capacity in [1 A, 1 A] {SIGNED}\n"
+HEADER = 'petra 0\n\ncard "t" {\n  owner "t@example.org"\n  environment indoor_dry\n}\n\n'
+VOLTAGE = f"given voltage in [11.4 V, 12.6 V] {SIGNED}\n"
+GIVEN = f"{VOLTAGE}given capacity in [1 A, 1 A] {SIGNED}\n"
+SUPPLY = "  supply vin voltage given voltage capacity given capacity\n"
 
 
-def written(lines: str, after: str = "", header: str = HEADER, supply: str = SUPPLY) -> str:
-    return f"{header}board b {{\n{supply}{lines}}}\n{after}"
+def written(lines: str, after: str = "", header: str = HEADER, supply: str = SUPPLY, given: str = GIVEN) -> tuple[str, str]:
+    """A card and a design: the card gives what the supply line reads, and `after` goes in the card."""
+    return f"{header}{given}{after}", f"petra 0\n\nboard b {{\n{supply}{lines}}}\n"
 
 
-def check(text: str):
-    return check_design(parse_design(text, "t.petra", REGISTRY), REGISTRY, (SolverSource(),))
+def check(card: str, text: str):
+    return check_design(parse_design(card, text, "t.petra", REGISTRY), REGISTRY, (SolverSource(),))
 
 
 def modes(report, kind: str) -> set[str]:
@@ -64,7 +68,7 @@ class Examples(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.reports = {name: check((EXAMPLES / f"{name}.petra").read_text(encoding="utf-8")) for name in cls.EXPECTED}
+        cls.reports = {name: check(*read_pair(EXAMPLES / f"{name}.petra")) for name in cls.EXPECTED}
 
     def test_each_example_gets_its_verdict_and_names_the_failing_mode(self):
         self.assertEqual(sorted(p.stem for p in EXAMPLES.glob("*.petra")), sorted(self.EXPECTED))
@@ -96,13 +100,13 @@ class Examples(unittest.TestCase):
     def test_each_example_rechecks_from_its_certificates(self):
         for name, (status, _) in self.EXPECTED.items():
             with self.subTest(name):
-                self.assertEqual(G.certificates((EXAMPLES / f"{name}.petra").read_text(encoding="utf-8"), REGISTRY, status), "ok")
+                self.assertEqual(G.certificates(*read_pair(EXAMPLES / f"{name}.petra"), REGISTRY, status), "ok")
 
     def test_coverage_reads_every_rating_of_every_part_in_the_board_example(self):
         report = self.reports["board"]
         owed = {("/".join(o.obligation.requirement.subject), o.obligation.requirement.mode.id) for o in report.outcomes
                 if type(o).__name__ == "Discharged"}
-        design = parse_design((EXAMPLES / "board.petra").read_text(encoding="utf-8"), "t.petra", REGISTRY)
+        design = parse_design(*read_pair(EXAMPLES / "board.petra"), "t.petra", REGISTRY)
         lowered = board.lower_board(design.components["psu"], design, REGISTRY)
         for element in lowered.elements.values():
             part = getattr(element, "part", None)
@@ -116,7 +120,7 @@ class Examples(unittest.TestCase):
 class Grammar(unittest.TestCase):
     def rejects(self, lines: str, fragment: str, after: str = "") -> None:
         with self.assertRaises(ComponentError) as ctx:
-            check(written(lines, after))
+            check(*written(lines, after))
         self.assertIn(fragment, str(ctx.exception))
 
     def test_a_value_outside_the_parts_series_is_refused_with_its_neighbours(self):
@@ -217,17 +221,17 @@ class Parts(unittest.TestCase):
 
 class Coverage(unittest.TestCase):
     def test_coverage_demands_every_rating_with_no_claim(self):
-        report = check(written("  resistor r1 part res.0603_1pct value 2.21 kohm\n"
-                               "  led d1 part led.red_0603 from vin resistor r1\n"))
+        report = check(*written("  resistor r1 part res.0603_1pct value 2.21 kohm\n"
+                                "  led d1 part led.red_0603 from vin resistor r1\n"))
         demanded = {o.obligation.requirement.mode.id.split(".", 1)[1] for o in report.outcomes
                     if type(o).__name__ in ("Discharged", "Refuted")}
         self.assertEqual(demanded, {"led_rating", "resistor_power", "resistor_voltage", "supply_current"})
         self.assertEqual(STATUS[type(report.verdict)], "PASS")
 
     def test_a_regulator_owes_each_of_its_ratings(self):
-        report = check(written("  resistor r1 part res.0603_1pct value 237 ohm\n  resistor r2 part res.0603_1pct value 715 ohm\n"
-                               "  regulator v1 part reg.lm317_to220 from vin top r1 bottom r2\n  sink s1 from v1\n",
-                               after=f"\nload run {{\n  on b.s1 current in [10 mA, 100 mA]\n  {SIGNED}\n}}\n"))
+        report = check(*written("  resistor r1 part res.0603_1pct value 237 ohm\n  resistor r2 part res.0603_1pct value 715 ohm\n"
+                                "  regulator v1 part reg.lm317_to220 from vin top r1 bottom r2\n  sink s1 from v1\n",
+                                after=f"\nload run {{\n  on b.s1 current in [10 mA, 100 mA]\n  {SIGNED}\n}}\n"))
         owed = {o.obligation.requirement.mode.id.split(".", 1)[1] for o in report.outcomes
                 if type(o).__name__ in ("Discharged", "Refuted") and o.obligation.requirement.subject[-1] == "v1"}
         self.assertEqual(owed, {"regulator_headroom", "regulator_input", "regulator_current", "regulator_min_load",
@@ -236,27 +240,27 @@ class Coverage(unittest.TestCase):
 
 class Validity(unittest.TestCase):
     def test_an_led_below_its_fitted_current_is_unknown_not_pass(self):
-        report = check(written("  resistor r1 part res.0603_1pct value 100 kohm\n"
-                               "  led d1 part led.red_0603 from vin resistor r1\n",
-                               after="\nclaim lit: b.d1.current >= 1 uA\n"))
+        report = check(*written("  resistor r1 part res.0603_1pct value 100 kohm\n"
+                                "  led d1 part led.red_0603 from vin resistor r1\n",
+                                after="\nclaim lit: b.d1.current >= 1 uA\n"))
         self.assertEqual(STATUS[type(report.verdict)], "UNKNOWN")
         self.assertIn("dc.led_range", needs(report))
         self.assertIn("led_current", modes(report, "Open"))
 
     def test_no_ambient_is_a_gap_naming_it(self):
         header = HEADER.replace("  environment indoor_dry\n", "")
-        report = check(written("  resistor r1 part res.0603_1pct value 10 kohm from vin\n", header=header))
+        report = check(*written("  resistor r1 part res.0603_1pct value 10 kohm from vin\n", header=header))
         self.assertEqual(STATUS[type(report.verdict)], "UNKNOWN")
         self.assertIn("ambient", needs(report))
 
     def test_no_capacity_leaves_the_supply_check_open(self):
-        supply = f"  supply vin voltage in [11.4 V, 12.6 V] {SIGNED}\n"
-        report = check(written("  resistor r1 part res.0603_1pct value 10 kohm from vin\n", supply=supply))
+        supply = "  supply vin voltage given voltage\n"
+        report = check(*written("  resistor r1 part res.0603_1pct value 10 kohm from vin\n", supply=supply, given=VOLTAGE))
         self.assertEqual(modes(report, "Open"), {"supply_current"})
         self.assertIn("capacity", needs(report))
 
     def test_a_sink_with_no_current_leaves_what_reads_it_open(self):
-        report = check(written("  regulator v1 part reg.ldo1117_3v3_sot223 from vin\n  sink s1 from v1\n"))
+        report = check(*written("  regulator v1 part reg.ldo1117_3v3_sot223 from vin\n  sink s1 from v1\n"))
         self.assertEqual(STATUS[type(report.verdict)], "UNKNOWN")
         self.assertIn("current", needs(report))
         self.assertIn("regulator_current", modes(report, "Open"))
@@ -327,7 +331,8 @@ class Gate(unittest.TestCase):
         cls.rows = [G.assess(g, REGISTRY, False) for g in cls.sample]
 
     def test_a_slice_is_the_same_whoever_draws_it(self):
-        self.assertEqual([g.text for g in gen.generate(2, 7, REGISTRY, start=4)], [g.text for g in self.sample[4:6]])
+        again = [gen.render(g) for g in gen.generate(2, 7, REGISTRY, start=4)]
+        self.assertEqual(again, [gen.render(g) for g in self.sample[4:6]])
 
     def test_every_kind_is_drawn(self):
         self.assertEqual({g.kind for g in self.sample}, set(gen.KINDS))
@@ -357,9 +362,9 @@ class Gate(unittest.TestCase):
                     faulty = fault.edit(base, REGISTRY)
                     if fault.name in seen or faulty is None:
                         continue
-                    if base.claims and F.status_and_modes(base.text, REGISTRY)[0] != "PASS":
+                    if base.claims and F.status_and_modes(base.card, base.text, REGISTRY)[0] != "PASS":
                         continue
-                    status, refuted, _ = F.status_and_modes(faulty.text, REGISTRY)
+                    status, refuted, _ = F.status_and_modes(faulty.card, faulty.text, REGISTRY)
                     with self.subTest(fault.name, base=g.name):
                         self.assertEqual(status, "FAIL")
                         self.assertTrue(set(refuted) & fault.modes, refuted)

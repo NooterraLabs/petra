@@ -8,10 +8,6 @@ petra 0
 # both: add `on ff1 panel_shear in [...]` and `on ff1 axial in [...]`, or a panel_shear of
 # zero where the force is no flange of a moment connection.
 
-design "steel-flange-force" {
-  owner "s.engineer@example.org"
-}
-
 flange_force ff1 {
   basis lrfd
   member W14x90 grade steel.A992
@@ -21,9 +17,4 @@ flange_force ff1 {
   flange_restrained yes
   unbraced_length 144 inch
   moment_at_force below_yield
-}
-
-load gravity {
-  on ff1 force in [0 kip, 150 kip]
-  signed "s.engineer@example.org" source "beam reaction, LRFD 1.2D + 1.6L, calc SC-3"
 }

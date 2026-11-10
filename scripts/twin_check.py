@@ -6,13 +6,14 @@ Petra and with the clean-room twin in twin/, which never imports petra. It compa
 connection (verdict and governing limit state) and per limit state (outcome and
 utilisation), gives every disagreement a cause, writes docs/twin_check_log.jsonl (one compact
 row per design) and prints the measured tables of docs/twin_check.md. `--full` also keeps each
-card and both full readings. `--rows` reads a log written earlier instead of running the
-stream again; given a `--full` log it rewrites the compact one. Untrusted tooling: it never
-changes a verdict.
+design, its card and both full readings. `--rows` reads a log written earlier instead of
+running the stream again; given a `--full` log it rewrites the compact one. Untrusted tooling:
+it never changes a verdict.
 
-The twin reads one value per length. A toleranced design states one length as an interval,
-which the twin's parser rejects, so the twin is also run at each end of that interval and
-its worst reading of each check kept (`corners`). Every count says which reading it uses.
+A toleranced design reads one length as `given NAME`, a bound its card gives. Where the twin
+refuses such a design, it is also run at each end of that bound, the length stated in the
+design and the bound gone from the card, and its worst reading of each check kept (`corners`).
+Every count says which reading it uses.
 """
 from __future__ import annotations
 
@@ -46,13 +47,14 @@ SLACK = 1e-9
 """Both sides compute exactly; floats carry their ratios here, so 1 + SLACK still reads as 1."""
 CLOSE = 0.01
 """Two utilisations of one limit state agree when they differ by at most 1% of the larger."""
-INTERVAL = re.compile(r"^(\s*)(\w+) in \[([0-9.]+) inch, ([0-9.]+) inch\] signed .*$", re.M)
+GIVEN = re.compile(r"^given (\w+) in \[([0-9.]+) inch, ([0-9.]+) inch\] signed .*\n\n?", re.M)
+"""The toleranced length of a gate design, as its card gives it."""
 
 
-def petra_reading(text: str, registry) -> dict:
+def petra_reading(card: str, text: str, registry) -> dict:
     """Petra's verdict, each required mode's outcome, and each mode's largest utilisation over
     the design's box (calc.values, the numbers the gate's generator scales its loads by)."""
-    design = parse_design(text, "gate.petra", registry)
+    design = parse_design(card, text, "gate.petra", registry)
     report = check_design(design, registry, (SolverSource(),))
     states, _ = deck_outcomes(report)
     conn = calc.connection(design, "c1", registry)
@@ -66,28 +68,32 @@ def petra_reading(text: str, registry) -> dict:
     return {"status": STATUS[type(report.verdict)], "modes": modes}
 
 
-def corners(text: str) -> list[str]:
-    """The card with its one toleranced length at each end of its interval."""
-    m = INTERVAL.search(text)
+def corners(card: str, text: str) -> list[tuple[str, str]]:
+    """The card and the design with the one toleranced length at each end of its interval: the
+    card gives the bound no longer, and the line that read it states the length."""
+    m = GIVEN.search(card)
     if m is None:
         return []
-    indent, key, lo, hi = m.groups()
-    return [text[:m.start()] + f"{indent}{key} {x} inch" + text[m.end():] for x in (lo, hi)]
+    name, lo, hi = m.groups()
+    line = re.search(rf"^(\s*)(\w+) given {name}$", text, re.M)
+    indent, key = line.groups()
+    return [(card[:m.start()] + card[m.end():], text[:line.start()] + f"{indent}{key} {x} inch" + text[line.end():])
+            for x in (lo, hi)]
 
 
-def twin_reading(text: str) -> dict:
-    """The twin's status and checks for c1, from the card as written or, when the twin rejects a
+def twin_reading(card: str, text: str) -> dict:
+    """The twin's status and checks for c1, from the design as written or, when the twin rejects a
     toleranced length, from its worst reading at the interval's two ends."""
-    def run(card: str) -> dict:
+    def run(card: str, text: str) -> dict:
         try:
-            return check_text(card)["components"][0]
+            return check_text(card, text)["components"][0]
         except CardError as e:
-            return {"status": "input_error", "reason": f"card: {e}"}
+            return {"status": "input_error", "reason": f"reader: {e}"}
 
-    raw = run(text)
-    via = "card"
-    if raw["status"] == "input_error" and corners(text):
-        ends = [run(c) for c in corners(text)]
+    raw = run(card, text)
+    via = "design"
+    if raw["status"] == "input_error" and corners(card, text):
+        ends = [run(*c) for c in corners(card, text)]
         if all(e["status"] == "checked" for e in ends):
             via = "corners"
             worst: dict[str, dict] = {}
@@ -110,12 +116,12 @@ def twin_reading(text: str) -> dict:
 
 def assess(g, registry) -> dict:
     t0 = time.perf_counter()
-    petra = petra_reading(g.text, registry)
+    petra = petra_reading(g.card, g.text, registry)
     t1 = time.perf_counter()
-    twin = twin_reading(g.text)
+    twin = twin_reading(g.card, g.text)
     t2 = time.perf_counter()
     return {"name": g.name, "kind": g.kind, "expected": g.expected, "free": g.free, "toleranced": g.toleranced,
-            "cyclic": g.cycles is not None, "text": g.text, "petra": petra, "twin": twin,
+            "cyclic": g.cycles is not None, "card": g.card, "text": g.text, "petra": petra, "twin": twin,
             "seconds": {"petra": t1 - t0, "twin": t2 - t1}}
 
 
@@ -200,8 +206,8 @@ apart; the twin fails it and Petra holds it; the twin holds it and Petra fails i
 # --- Why they disagree ---------------------------------------------------------------------
 #
 # Each limit state on opposite sides of 1 (twin_fail, petra_fail) gets one cause below. The
-# rules read the card and both readings; each cause was settled by the hand checks that
-# docs/twin_check.md lists. A disagreement no rule claims is "unclassified".
+# rules read the design, its card and both readings; each cause was settled by the hand checks
+# that docs/twin_check.md lists. A disagreement no rule claims is "unclassified".
 
 PETRA_UNSAFE, PETRA_SAFE = "Petra error, unsafe", "Petra error, conservative"
 TWIN_UNSAFE, TWIN_SAFE = "twin error, unsafe", "twin error, conservative"
@@ -217,7 +223,7 @@ CAUSES = {
     "bracket-least-edge": (TWIN_SAFE, "every bracket bolt given II.A-22's least edge distance"),
     "slot-in-tearout": (TWIN_SAFE, "a bracket's parallel slot length taken into the back edge's clear distance"),
     "web-end-bolt": (TWIN_SAFE, "a continuous web's end bolt taken as an interior bolt"),
-    "hanger-slot": (AMBIGUITY, "a slot in a hanger flange, whose orientation the card does not fix"),
+    "hanger-slot": (AMBIGUITY, "a slot in a hanger flange, whose orientation the design does not fix"),
     "filler-thickness": (AMBIGUITY, "fillers declared without a thickness"),
     "impossible-layout": (COVERAGE, "a bolt line off its angle leg, which only Petra's geometry modes see"),
     "petra-only": (COVERAGE, "a limit state Petra checks and the twin does not"),
@@ -255,12 +261,12 @@ def _instantaneous_centre(pts: list[tuple[float, float]], e: float) -> tuple[flo
     return lo, terms(lo)[1]
 
 
-def bracket_tearout(text: str) -> float | None:
+def bracket_tearout(card: str, text: str) -> float | None:
     """A bolt bracket's worst bolt by the IC method, each bolt's tearout clear distance taken
     along its own force (J3.11a) to the plate's back, top or bottom edge or the next hole; the
     plate runs on toward the load. Round holes only; None for a slotted plate."""
-    if corners(text):
-        found = [bracket_tearout(card) for card in corners(text)]
+    if corners(card, text):
+        found = [bracket_tearout(*corner) for corner in corners(card, text)]
         return None if None in found else max(found)
     m = re.search(r"^\s*holes .*\bplate (\w+)", text, re.M)
     kind = m.group(1) if m else "std"
@@ -275,7 +281,7 @@ def bracket_tearout(text: str) -> float | None:
     rows, cols = int(_number(text, "rows")), int(_number(text, "columns"))
     s, g, e = _number(text, "pitch"), _number(text, "gauge"), _number(text, "eccentricity")
     lev, leh = _number(text, "edge_vertical"), _number(text, "plate_edge")
-    load = float(re.search(r"shear in \[0 kip, ([0-9.]+) kip\]", text).group(1))
+    load = float(re.search(r"shear in \[0 kip, ([0-9.]+) kip\]", card).group(1))
     pts = [(j * g - (cols - 1) * g / 2, (rows - 1) * s / 2 - i * s) for i in range(rows) for j in range(cols)]
     back, top, bottom = -(cols - 1) * g / 2 - leh, (rows - 1) * s / 2 + lev, -(rows - 1) * s / 2 - lev
     x0, share = _instantaneous_centre(pts, e)
@@ -316,14 +322,14 @@ def cause_of(row: dict, mode: dict) -> str:
         if kind in ("shear_tab", "shear_tee", "single_angle", "bolt_bracket", "weld_bracket"):
             return "eccentric-method"
     if kind == "bolt_bracket" and name == "bolts" and outcome == "twin_fail":
-        u = bracket_tearout(text)
+        u = bracket_tearout(row["card"], text)
         if u is None:
             return "slot-in-tearout"
         return "tearout-direction" if fails(u) else "bracket-least-edge"
     if kind == "weld_bracket" and name == "bracket_edge" and outcome == "twin_fail" and "weld_return" in text:
         return "weld-arm"
     if kind == "hanger" and name == "prying":
-        if outcome == "petra_fail" and "shear in" in text:
+        if outcome == "petra_fail" and "shear in" in row["card"]:
             return "prying-shear"
         if re.search(r"^\s*holes .*\b(ssl|lsl)\b(?!_)", text, re.M):
             return "hanger-slot"
@@ -334,7 +340,7 @@ def cause_of(row: dict, mode: dict) -> str:
 
 def compact(row: dict) -> dict:
     """One design's line of the committed log: both verdicts, each shared limit state, and the
-    cause of every disagreement. The card itself is left out; the seed regenerates it."""
+    cause of every disagreement. The design and its card are left out; the seed regenerates them."""
     c = compare(row)
     out = {k: c[k] for k in ("name", "kind", "petra", "twin", "via", "free", "toleranced", "cyclic")}
     out["expected"] = row["expected"]
@@ -431,7 +437,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--workers", type=int, default=6)
     parser.add_argument("--rows", type=Path, help="a log this script wrote, compact or --full; print its tables without running")
     parser.add_argument("--log", type=Path, default=ROOT / "docs" / "twin_check_log.jsonl")
-    parser.add_argument("--full", type=Path, help="also write each design's card and both readings here")
+    parser.add_argument("--full", type=Path, help="also write each design, its card and both readings here")
     args = parser.parse_args(argv)
     if args.rows:
         rows = [json.loads(line) for line in args.rows.read_text(encoding="utf-8").splitlines() if line.strip()]

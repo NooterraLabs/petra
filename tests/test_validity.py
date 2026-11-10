@@ -27,6 +27,7 @@ from fractions import Fraction
 from pathlib import Path
 
 from petra import models
+from petra.files import read_pair
 from petra.kernel import RangeHyp, Refutation, Statement, Theorem, check, statement_hash
 from petra.lang import load_design, parse_design
 from petra.library import Library, certify_family
@@ -48,7 +49,7 @@ from petra.verdict import Discharged, Fail, Open, Pass, Refuted, Unknown, at_poi
 
 REGISTRY = build_registry()
 ROOT = Path(__file__).resolve().parents[1]
-PASS = (ROOT / "examples" / "truss_pass.petra").read_text(encoding="utf-8")
+CARD, PASS = read_pair(ROOT / "examples" / "truss_pass.petra")
 CROWD = "  on frame.D fy in [-24 kN, -16 kN]\n  on frame.E fy in [-24 kN, -16 kN]"
 CLAIMS = """claim strength:   frame.collapse_factor >= 1.5 under crowd
 claim stability:  frame.stability_factor >= 3 under crowd
@@ -59,9 +60,9 @@ LIMIT = re.compile(r"(<=?|>=?|≤|≥|\bwithin\b|\bat most\b|\bat least\b|\bup t
 
 
 def footbridge(lo_kn: int, hi_kn: int, claims: str):
-    assert CROWD in PASS and CLAIMS in PASS, "truss_pass.petra changed shape"
-    text = PASS.replace(CROWD, f"  on frame.D fy in [{lo_kn} kN, {hi_kn} kN]\n  on frame.E fy in [{lo_kn} kN, {hi_kn} kN]")
-    return parse_design(text.replace(CLAIMS, claims), "t.petra", REGISTRY)
+    assert CROWD in CARD and CLAIMS in CARD, "truss_pass.card changed shape"
+    card = CARD.replace(CROWD, f"  on frame.D fy in [{lo_kn} kN, {hi_kn} kN]\n  on frame.E fy in [{lo_kn} kN, {hi_kn} kN]")
+    return parse_design(card.replace(CLAIMS, claims), PASS, "t.petra", REGISTRY)
 
 
 def obligations(design) -> tuple[Obligation, ...]:
@@ -274,7 +275,7 @@ class Verdicts(unittest.TestCase):
 class Lowering(unittest.TestCase):
     def test_a_member_of_another_family_than_its_section_is_refused(self):
         text = PASS.replace("member diag_ad:   A -- D", "member diag_ad:   A -- D material aluminium.6061_T6")
-        design = parse_design(text, "t.petra", REGISTRY)
+        design = parse_design(CARD, text, "t.petra", REGISTRY)
         with self.assertRaisesRegex(ComponentError, "buckling curve does not hold"):
             lower_components(design, REGISTRY)
 
@@ -321,12 +322,12 @@ class Family(unittest.TestCase):
                     self.assertIsInstance(verdict, Pass, "the claim and every row it rests on come from the family")
 
     def test_a_family_claim_refuted_where_its_rows_hold_is_reported_refuted(self):
-        text = (ROOT / "examples" / "families" / "warren_truss.petra").read_text(encoding="utf-8")
-        text = text.replace("[-28.5 kN, 0 kN]", "[-170 kN, -100 kN]")
-        text = "\n".join(line for line in text.splitlines() if not line.startswith("claim "))
-        text += "\nclaim stress: frame.member(diag_db).stress <= 30 MPa under crowd\n"
+        card, text = read_pair(ROOT / "examples" / "families" / "warren_truss.petra")
+        card = card.replace("[-28.5 kN, 0 kN]", "[-170 kN, -100 kN]")
+        card = "\n".join(line for line in card.splitlines() if not line.startswith("claim "))
+        card += "\nclaim stress: frame.member(diag_db).stress <= 30 MPa under crowd\n"
         with tempfile.TemporaryDirectory() as root:
-            certified = certify_family(parse_design(text, "f.petra", REGISTRY), REGISTRY, Library(root))
+            certified = certify_family(parse_design(card, text, "f.petra", REGISTRY), REGISTRY, Library(root))
         (skipped,) = certified.skipped
         self.assertIn("refuted by R4", skipped, "the rows are proved at the counterexample, as in a design")
 

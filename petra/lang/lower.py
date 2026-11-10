@@ -1,5 +1,8 @@
-"""Syntax tree -> Design IR. The parse boundary: every check that makes the IR
-trustworthy happens here and nowhere downstream.
+"""The syntax trees of a card and a design -> Design IR. The parse boundary: every check
+that makes the IR trustworthy happens here and nowhere downstream.
+
+The IR is one Design, as the models read it. What the card states and what the design
+states is settled by the grammar: a design's tree holds only params and components.
 
 Checks here (design level; the language knows no domain):
 - every component kind is a key of models.KINDS, so a typo is an input error naming the
@@ -7,16 +10,19 @@ Checks here (design level; the language knows no domain):
 - component, load, tests, param and claim names are unique; "coverage" is reserved as a
   claim name because the report uses it for the requirements no claim made;
 - every load entry, tests record and claim path starts with a declared component; every
-  `under` and `from` names a declared load or tests block; a ParamRef names a param;
+  `under` and `from` names a declared load or tests block; a ParamRef names a param, and
+  in the card a param of the card, so no design sets a load or the ambient;
+- every `given` a component reads is one the card states, and the design reads every
+  given the card states, so no design leaves a condition out;
 - every quantity parses to an exact Quantity (units.parse_quantity); every bound outside
   a family carries a signature;
 - every waiver mode is a key of models.MODES;
 - probability-claim method and event agree (RangeMean with Exceeds, FromTests with
   FailsAt).
-All problems in one file are collected and raised together as a LoweringError.
+All problems in the two files are collected and raised together as a LoweringError.
 
 Also checked here, because they are design-level facts rather than domain physics: the
-design block names one owner and at most one environment, which must be a key of
+card block names one owner and at most one environment, which must be a key of
 registry.environments; a range's ends share a dimension and lo <= hi; a mean shares its
 range's dimension and lies inside it; the ambient is a temperature; every signature,
 owner and reason is non-empty; a load case gives each (target, field) once; a tests
@@ -87,22 +93,29 @@ _CLAIM_HEADS = ("claim", "prob_exceeds", "prob_fails")
 Located = Token | Node
 
 
-def lower(file: File, registry: object) -> Design:
-    return _Lowering(file, registry).design()
+def lower(card: File, design: File, registry: object) -> Design:
+    return _Lowering(card, design, registry).design()
 
 
 class _Lowering:
-    """One pass over one file. Names are indexed before anything is lowered, so a
-    declaration that fails to lower does not also make every reference to it fail."""
+    """One pass over the two files. Names are indexed before anything is lowered, so a
+    declaration that fails to lower does not also make every reference to it fail.
+    `path` is the file being read: a problem and a span are in that file."""
 
-    def __init__(self, file: File, registry: object) -> None:
-        self.file = file
-        self.path = file.path
+    def __init__(self, card: File, design: File, registry: object) -> None:
+        self.card = card
+        self.file = design
+        self.path = card.path
         self.registry = registry
-        self.problems: list[tuple[int, int, str]] = []
+        self.problems: list[tuple[str, int, int, str]] = []
 
     def problem(self, at: Located, message: str) -> None:
-        self.problems.append((at.line, at.col, message))
+        self.problems.append((self.path, at.line, at.col, message))
+
+    def read(self, file: File, *heads: str) -> list[Node]:
+        """The file's declarations of these kinds, and `file` as the one being read."""
+        self.path = file.path
+        return [d for d in file.decls if d.head in heads]
 
     def span(self, at: Located) -> Span:
         return Span(self.path, at.line, at.col)
@@ -110,34 +123,46 @@ class _Lowering:
     # --- the design -------------------------------------------------------------
 
     def design(self) -> Design:
-        decls = self.file.decls
-        by_head = {head: [d for d in decls if d.head == head] for head in {d.head for d in decls}}
-        self.params_by_name = self.index(by_head.get("param", ()), "param", lambda n: n.args[0])
-        self.components_by_name = self.index(by_head.get("component", ()), "component", lambda n: n.args[1])
-        self.loads_by_name = self.index(by_head.get("load", ()), "load case", lambda n: n.args[0])
-        self.tests_by_name = self.index(by_head.get("tests", ()), "tests block", lambda n: n.args[0])
-        claim_nodes = [d for d in decls if d.head in _CLAIM_HEADS]
+        card, design = self.card, self.file
+        own = self.index(self.read(design, "param"), "param", lambda n: n.args[0])
+        self.components_by_name = self.index(self.read(design, "component"), "component", lambda n: n.args[1])
+        self.params_by_name = self.index(self.read(card, "param"), "param", lambda n: n.args[0])
+        self.loads_by_name = self.index(self.read(card, "load"), "load case", lambda n: n.args[0])
+        self.tests_by_name = self.index(self.read(card, "tests"), "tests block", lambda n: n.args[0])
+        claim_nodes = self.read(card, *_CLAIM_HEADS)
         self.index(claim_nodes, "claim", lambda n: n.args[0])
         for node in claim_nodes:
             if node.args[0].text in RESERVED_CLAIMS:
                 self.problem(node.args[0], f"claim name '{node.args[0].text}' is reserved for the report entry of requirements no claim made")
 
-        name, owner, environment = self.header(by_head.get("design", ()))
+        name, owner, environment = self.header(self.read(card, "card"))
         params = self.lowered(self.params_by_name, self.param)
-        ambient = self.ambient(by_head.get("ambient", ()), params)
-        components = self.lowered(self.components_by_name, self.component)
+        ambient = self.ambient(self.read(card, "ambient"), params)
+        self.givens_by_name = self.index(self.read(card, "given"), "given", lambda n: n.args[0])
+        self.givens = self.lowered(self.givens_by_name, self.given)
         loads = self.lowered(self.loads_by_name, self.load)
         tests = self.lowered(self.tests_by_name, self.tests)
         claims = tuple(self.claim(n) for n in claim_nodes if n.head == "claim")
         probability_claims = tuple(self.probability_claim(n) for n in claim_nodes if n.head != "claim")
-        waivers = tuple(self.waiver(n) for n in by_head.get("waive", ()))
+        waivers = tuple(self.waiver(n) for n in self.read(card, "waive"))
+
+        self.path = design.path
+        for twice in own.keys() & self.params_by_name.keys():
+            self.problem(own[twice].args[0], f"param '{twice}' is declared in the card too")
+        self.params_by_name |= own
+        params = self.lowered(own, self.param) | params
+        self.unread = set(self.givens_by_name)
+        components = self.lowered(self.components_by_name, self.component)
+        for unread in self.unread:
+            at = self.givens_by_name[unread].args[0]
+            self.problems.append((card.path, at.line, at.col, f"the card gives '{unread}' and no component reads it; a component's line reads it as 'given {unread}'"))
 
         if self.problems:
-            raise LoweringError(tuple(f"{self.path}:{line}:{col}: {message}" for line, col, message in sorted(self.problems)))
+            raise LoweringError(tuple(f"{path}:{line}:{col}: {message}" for path, line, col, message in sorted(self.problems)))
         return Design(
             name=name,
             owner=owner,
-            path=self.path,
+            path=design.path,
             environment=environment,
             ambient=ambient,
             components=MappingProxyType(components),
@@ -172,21 +197,21 @@ class _Lowering:
 
     def header(self, nodes: list[Node]) -> tuple[str, str, str | None]:
         if not nodes:
-            self.problems.append((1, 1, 'no design block: add design "<name>" { owner "<who>" }'))
+            self.problems.append((self.path, 1, 1, 'no card block: add card "<name>" { owner "<who>" }'))
             return "", "", None
         for extra in nodes[1:]:
-            self.problem(extra, "a file declares one design; this is a second design block")
+            self.problem(extra, "a file declares one card; this is a second card block")
         name_tok, items = nodes[0].args
-        self.nonempty(name_tok, "the design name")
+        self.nonempty(name_tok, "the card's name")
         owners = [i for i in items if i.head == "owner"]
         envs = [i for i in items if i.head == "environment"]
         if not owners:
-            self.problem(nodes[0], f"design '{name_tok.text}' names no owner")
+            self.problem(nodes[0], f"card '{name_tok.text}' names no owner")
         for extra in owners[1:] + envs[1:]:
-            self.problem(extra, f"the design's {extra.head} is given twice")
+            self.problem(extra, f"the card's {extra.head} is given twice")
         owner = owners[0].args[0].text if owners else ""
         if owners:
-            self.nonempty(owners[0].args[0], "the design owner")
+            self.nonempty(owners[0].args[0], "the card's owner")
         environment = envs[0].args[0].text if envs else None
         known = self.registry.environments
         if environment is not None and environment not in known:
@@ -300,6 +325,11 @@ class _Lowering:
             self.dimensioned(params[value.name].range, TEMPERATURE, f"ambient (param {value.name})", bound)
         return value
 
+    def given(self, node: Node) -> Bound | None:
+        name, bound = node.args
+        parts = self.signed_range(bound, None, f"given {name.text}")
+        return None if parts is None else Bound(*parts)
+
     def component(self, node: Node) -> Component:
         kind, name, attrs = node.args
         if kind.text not in models.KINDS:
@@ -317,12 +347,12 @@ class _Lowering:
             case "qty":
                 q = self.qty(node)
                 return None if q is None else Fixed(q)
-            case "bound":
-                parts = self.signed_range(node, None, what)
-                if parts is None:
-                    return None
-                rng, signature, kind, span, mean = parts
-                return Bound(rng, signature, kind, span, mean)
+            case "given":
+                name = node.args[0].text
+                if name not in self.givens_by_name:
+                    self.problem(node, f"{what}: the card gives no '{name}'; it gives: {', '.join(sorted(self.givens_by_name)) or 'nothing'}")
+                self.unread.discard(name)
+                return self.givens.get(name)
             case "paramref":
                 return self.paramref(node)
             case "tuple":

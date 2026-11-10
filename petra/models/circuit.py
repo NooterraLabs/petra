@@ -69,7 +69,7 @@ from .base import (
     EnergyDomain,
     FailureMode,
     Feature,
-    SIGNED_BOUND,
+    GIVEN_BOUND,
     FeatureKind,
     Field,
     Gap,
@@ -308,7 +308,7 @@ _READERS = {"supply": _supply, "breaker": _breaker, "wire": _wire, "terminal": _
 
 GRAMMAR = Grammar(
     required=(
-        Field("supply", f"<name> voltage <voltage> [fault_current {SIGNED_BOUND}]", "voltage, current", (),
+        Field("supply", f"<name> voltage <voltage> [fault_current {GIVEN_BOUND}]", "voltage, current", (),
               "the source a radial path starts from; without a signed prospective fault current the short-circuit "
               "check is UNKNOWN"),
         Field("consumer", "<name>", "", (),

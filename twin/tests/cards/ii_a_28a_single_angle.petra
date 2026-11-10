@@ -20,7 +20,3 @@ single_angle ii_a_28a {
   cope top depth 2 inch length 4 inch
   setback 0.75 inch
 }
-
-load reaction {
-  on ii_a_28a shear in [0 kip, 39.8 kip]
-}

@@ -4,10 +4,6 @@ petra 0
 # Design 6477 of `python scripts/absurd_gap.py --seed 1` at commit b9e9792 (docs/absurd_gap.md):
 # tee flange: 8.02 in across, wider than the W10x49's 7.88 in flat web.
 
-design "absurd-06477" {
-  owner "gate@petra.dev"
-}
-
 shear_tee c1 {
   basis lrfd
   beam W18x50 grade steel.A992
@@ -24,9 +20,4 @@ shear_tee c1 {
   support_gauge 4 inch
   cope top depth 1 inch length 4 inch
   setback 0.5 inch
-}
-
-load gate {
-  on c1 shear in [0 kip, 7.130 kip]
-  signed "gate@petra.dev" source "steel gate generator"
 }

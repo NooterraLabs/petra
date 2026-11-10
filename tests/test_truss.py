@@ -1,4 +1,4 @@
-"""Pin-jointed trusses from .petra text to kernel results. Owner: T.
+"""Pin-jointed trusses from the text of a card and a design to kernel results. Owner: T.
 
 Statements are built from the lowered example IR, evidence comes from the truss solvers
 (R1, R2; R4 goals over the R3 force lemmas through SolverSource), and the kernel decides.
@@ -34,6 +34,7 @@ from fractions import Fraction
 from pathlib import Path
 
 from petra import coverage
+from petra.files import read_pair
 from petra.ir import Design
 from petra.kernel import Const, Evidence, Matrix, Refutation, Rejection, Statement, Theorem, TooWeak, check, is_issued, statement_hash
 from petra.kernel.rules.r1_linear import FarkasRay, FeasiblePoints, LinearFeasible
@@ -50,16 +51,27 @@ from petra.verdict import Fail, Pass, Unknown
 
 REGISTRY = build_registry()
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples"
-PASS = (EXAMPLES / "truss_pass.petra").read_text(encoding="utf-8")
-FAIL = (EXAMPLES / "truss_fail.petra").read_text(encoding="utf-8")
+# Each design below is a pair: its card's text, then its own.
+PASS = read_pair(EXAMPLES / "truss_pass.petra")
+FAIL = read_pair(EXAMPLES / "truss_fail.petra")
 KN = 1000
 
-HANGER = """petra 0
+HANGER = ("""petra 0
 
-design "three-bar-hanger" {
+card "three-bar-hanger" {
   owner "a.reviewer@example.org"
   environment indoor_dry
 }
+
+load hang {
+  on frame.D fy in [-100 kN, -80 kN]
+  signed "client.structures@example.org" source "hanger brief"
+}
+
+claim strength:  frame.collapse_factor >= 4 under hang
+claim stability: frame.stability_factor >= 3 under hang
+claim stress:    frame.member(middle).stress <= 235 MPa under hang
+""", """petra 0
 
 truss frame {
   material steel.S355
@@ -74,16 +86,7 @@ truss frame {
   member middle: M -- D
   member right:  R -- D
 }
-
-load hang {
-  on frame.D fy in [-100 kN, -80 kN]
-  signed "client.structures@example.org" source "hanger brief"
-}
-
-claim strength:  frame.collapse_factor >= 4 under hang
-claim stability: frame.stability_factor >= 3 under hang
-claim stress:    frame.member(middle).stress <= 235 MPa under hang
-"""
+""")
 """Three bars from pinned supports at (-3, 4), (0, 4), (3, 4) m to one free node: two
 free DOFs, three members, so one degree of indeterminacy. Compatibility with equal E A:
 the middle bar stretches by the drop d, the 5 m sides by 0.8 d, so N_m / N_s = (1/4) /
@@ -91,14 +94,24 @@ the middle bar stretches by the drop d, the 5 m sides by 0.8 d, so N_m / N_s = (
 CHS 48.3x3.2 weighs 35.02 N/m at g = 9.84, so D carries W_D = 35.02 (4 + 5 + 5) / 2 =
 245.2 N of the bars' weight on top of P."""
 
-G1 = """petra 0
+G1 = ("""petra 0
 
-design "keystone-gap-g1" {{
+card "keystone-gap-g1" {{
   owner "task.owner@example.org"
   environment indoor_dry
 }}
 
-truss frame {{
+load crowd {{
+  on frame.D fy in [-{p} kN, -{p} kN]
+  on frame.E fy in [-{p} kN, -{p} kN]
+  signed "task.owner@example.org" source "keystone probe"
+}}
+
+claim strength:  frame.collapse_factor >= 1.5 under crowd
+claim stability: frame.stability_factor >= 1.5 under crowd
+""", """petra 0
+
+truss frame {
   material steel.S355
   section chs.114_3x3_6
 
@@ -115,17 +128,8 @@ truss frame {{
   member diag_db:   D -- B
   member diag_be:   B -- E
   member diag_ec:   E -- C
-}}
-
-load crowd {{
-  on frame.D fy in [-{p} kN, -{p} kN]
-  on frame.E fy in [-{p} kN, -{p} kN]
-  signed "task.owner@example.org" source "keystone probe"
-}}
-
-claim strength:  frame.collapse_factor >= 1.5 under crowd
-claim stability: frame.stability_factor >= 1.5 under crowd
-"""
+}
+""")
 """Registered gap G1 of docs/keystone_protocol.md: a 12 m Warren girder of two panels whose
 top chord D-E is one horizontal 6 m CHS 48.3x3.2, every other member CHS 114.3x3.6, under P
 at D and E. Statics: N_de = -2 P, plus 2.721 kN of compression from the members' weight at
@@ -134,17 +138,26 @@ EN 1993-1-1 6.3.1 resistance is N_b = 5.791 kN (lambda = 5.03, chi = 0.0360). It
 35.71 N/m, bends it by M = 160.7 N m at midspan, M / (W_el fy) = 0.0944 with W_el = 4.797 cm3.
 The 6.3.3 member check by Annex B, N / N_b + 0.95 (1 + 0.8 N / N_b) M / (W_el fy) <= 1, holds
 up to N = 0.8494 N_b = 4.919 kN, so the claimed factor 1.5 holds up to
-P = (4.919 - 2.721) / (1.5 x 2) = 0.733 kN. Without the bending it held up to 1.023 kN."""
+P = (4.919 - 2.721) / (1.5 x 2) = 0.733 kN. Without the bending it held up to 1.023 kN.
+The card's text is a template that g1 fills with P."""
 
 SOLVERS = {LinearFeasible: r1_linear.solve, GramPositiveDefinite: r2_definite.solve}
 
 
-def design(text: str, *edits: tuple[str, str]) -> Design:
+def g1(p: str) -> tuple[str, str]:
+    """G1 under p kN at D and E."""
+    card, text = G1
+    return card.format(p=p), text
+
+
+def design(pair: tuple[str, str], *edits: tuple[str, str], extra: str = "") -> Design:
+    """The pair with each edit made in the file that holds its text, and `extra` added to the card."""
+    card, text = pair
     for old, new in edits:
-        if old not in text:
+        if old not in card and old not in text:
             raise AssertionError(f"edit target {old!r} is not in the text")
-        text = text.replace(old, new)
-    return parse_design(text, "t.petra", REGISTRY)
+        card, text = card.replace(old, new), text.replace(old, new)
+    return parse_design(card + extra, text, "t.petra", REGISTRY)
 
 
 def lowered(d: Design) -> truss.Truss:
@@ -328,9 +341,9 @@ class Footbridge(unittest.TestCase):
     def test_the_buckling_check_carries_the_weight_and_its_gradient(self):
         """diag_ad at 24 kN: 30 kN of load, 405.2 N of weight and 45.2 N along the member at the
         registry's top density, against N_c = 53.979 kN with the self-weight bending (6.3.3)."""
-        found = solved(claimed(design(PASS + "claim slender: frame.member(diag_ad).buckling_utilisation <= 0.565 under crowd\n"), "slender").statement)
+        found = solved(claimed(design(PASS, extra="claim slender: frame.member(diag_ad).buckling_utilisation <= 0.565 under crowd\n"), "slender").statement)
         self.assertIsInstance(found, Theorem, "30.450 kN / 53.979 kN = 0.5641")
-        found = solved(claimed(design(PASS + "claim slender: frame.member(diag_ad).buckling_utilisation <= 0.563 under crowd\n"), "slender").statement)
+        found = solved(claimed(design(PASS, extra="claim slender: frame.member(diag_ad).buckling_utilisation <= 0.563 under crowd\n"), "slender").statement)
         self.assertIsInstance(found, Refutation, "30.450 kN against 0.563 x 53.979 kN = 30.390 kN; without the weight 30 kN would pass")
 
     def test_lemma_ranges_hold_the_hand_forces(self):
@@ -388,18 +401,18 @@ class Footbridge(unittest.TestCase):
 
     def test_a_too_strict_buckling_claim_is_not_proved(self):
         slender = "claim slender: frame.member(diag_ad).buckling_utilisation <= 0.5 under crowd\n"
-        obligation = claimed(design(PASS + slender), "slender")
+        obligation = claimed(design(PASS, extra=slender), "slender")
         result = decide(obligation.statement)
         self.assertIsInstance(result, Refutation, "diag_ad: 30.45 kN / 53.98 kN = 0.564 > 0.5")
 
     def test_a_generous_buckling_claim_is_proved(self):
         slender = "claim slender: frame.member(diag_ad).buckling_utilisation <= 0.57 under crowd\n"
-        result = decide(claimed(design(PASS + slender), "slender").statement)
+        result = decide(claimed(design(PASS, extra=slender), "slender").statement)
         self.assertIsInstance(result, Theorem, "diag_ad: 30.45 kN / 53.98 kN = 0.564 <= 0.57")
 
     def test_the_bare_euler_load_would_have_passed_a_claim_the_buckling_curve_refutes(self):
         slender = "claim slender: frame.member(diag_ad).buckling_utilisation <= 0.41 under crowd\n"
-        result = solved(claimed(design(PASS + slender), "slender").statement)
+        result = solved(claimed(design(PASS, extra=slender), "slender").statement)
         self.assertIsInstance(result, Refutation, "30 kN / 74.12 kN = 0.405 passed the bare Euler load; 30.45 / 53.98 = 0.564 > 0.41")
 
     def test_the_footbridge_is_statically_determinate(self):
@@ -443,11 +456,12 @@ class Mechanism(unittest.TestCase):
     """The footbridge without diag_be: 6 members over 7 free DOFs, a mechanism."""
 
     def test_a_mechanism_has_no_self_stress_and_does_not_pass(self):
-        text = PASS.replace("  member diag_be:   B -- E\n", "")
-        self.assertNotEqual(text, PASS)
-        strength = claimed(design(text), "strength")
+        card, text = PASS
+        cut = text.replace("  member diag_be:   B -- E\n", "")
+        self.assertNotEqual(cut, text)
+        strength = claimed(design((card, cut)), "strength")
         self.assertIsInstance(solved(validity(strength, truss.NO_SELF_STRESS)), Theorem, "6 independent members, no self-stress")
-        verdict = check_design(design(text), REGISTRY, (SolverSource(),))
+        verdict = check_design(design((card, cut)), REGISTRY, (SolverSource(),))
         self.assertNotIsInstance(verdict.verdict, Pass, "a mechanism is refused by collapse or by global stability")
 
 
@@ -493,9 +507,9 @@ class Hanger(unittest.TestCase):
     def test_compliance_takes_the_softest_modulus(self):
         hand = ("C = P^2 / k, k = E A (1/4 + 2 x 0.8^2 / 5) = 253 E A / 500: 217.9 J at P = 100 kN, E = 200 GPa, "
                 "A = 453.4 mm2; with the 245.2 N of weight at D, 219.0 J")
-        held = decide(claimed(design(HANGER + "claim stiffness: frame.compliance <= 220 J under hang\n"), "stiffness").statement)
+        held = decide(claimed(design(HANGER, extra="claim stiffness: frame.compliance <= 220 J under hang\n"), "stiffness").statement)
         self.assertIsInstance(held, Theorem, f"{hand} <= 220 J")
-        broken = decide(claimed(design(HANGER + "claim stiffness: frame.compliance <= 210 J under hang\n"), "stiffness").statement)
+        broken = decide(claimed(design(HANGER, extra="claim stiffness: frame.compliance <= 210 J under hang\n"), "stiffness").statement)
         self.assertIsInstance(broken, Refutation, f"{hand} > 210 J, though only 208.6 J at E = 210 GPa")
 
 
@@ -504,7 +518,7 @@ class SelfWeight(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.design = design((Path(__file__).resolve().parents[1] / "judges" / "canaries" / "truss_600m_span.petra").read_text(encoding="utf-8"))
+        cls.design = design(read_pair(Path(__file__).resolve().parents[1] / "judges" / "canaries" / "truss_600m_span.petra"))
 
     def test_a_truss_that_cannot_carry_its_own_weight_fails_collapse(self):
         """250 m diagonals of CHS 60.3x3.2 weigh 11.1 kN each, and N_ad(weight) = 39.7 kN of
@@ -531,19 +545,19 @@ class SelfWeightBending(unittest.TestCase):
     weight's bending."""
 
     def test_the_chord_fails_where_its_bending_lowers_its_buckling_resistance(self):
-        result = decide(claimed(design(G1.format(p="1.0231")), "strength").statement)
+        result = decide(claimed(design(g1("1.0231")), "strength").statement)
         self.assertIsInstance(result, Refutation, "1.5 x 2 x 1.0231 + 2.721 = 5.790 kN against the 4.919 kN that 6.3.3 leaves")
 
     def test_the_failure_names_the_chord_and_the_interaction(self):
-        report = check_design(design(G1.format(p="1.0231")), REGISTRY, (SolverSource(),))
+        report = check_design(design(g1("1.0231")), REGISTRY, (SolverSource(),))
         self.assertEqual(type(report.verdict), Fail)
         (collapse,) = [f for f in report.findings if f.requirement == "frame/truss.plastic_collapse/claim.strength"]
         self.assertIn("top_de", collapse.governing.what)
         self.assertIn("6.3.3", collapse.governing.what)
 
     def test_the_claim_holds_up_to_the_hand_limit(self):
-        self.assertIsInstance(decide(claimed(design(G1.format(p="0.73")), "strength").statement), Theorem, "0.73 kN < 0.733 kN")
-        self.assertIsInstance(decide(claimed(design(G1.format(p="0.74")), "strength").statement), Refutation, "0.74 kN > 0.733 kN")
+        self.assertIsInstance(decide(claimed(design(g1("0.73")), "strength").statement), Theorem, "0.73 kN < 0.733 kN")
+        self.assertIsInstance(decide(claimed(design(g1("0.74")), "strength").statement), Refutation, "0.74 kN > 0.733 kN")
 
 
 class Solvers(unittest.TestCase):
@@ -578,7 +592,7 @@ class Gaps(unittest.TestCase):
                 self.assertIsInstance(out[0].needs[0], NoRuleForQuantity)
 
     def test_an_unloaded_truss_needs_a_signed_load(self):
-        unloaded = PASS.split("load crowd")[0]
+        unloaded = (PASS[0].split("load crowd")[0], PASS[1])
         built = elaborate(design(unloaded))
         self.assertTrue(built, "coverage still demands every mode")
         for requirement, (out,) in built.items():

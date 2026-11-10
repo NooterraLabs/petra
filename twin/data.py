@@ -174,7 +174,7 @@ def angle_shape(name):
 
 
 def _dimension(part):
-    """`3_1_2` is 3-1/2 and `3_8` is 3/8 in the card's spelling of an angle size."""
+    """`3_1_2` is 3-1/2 and `3_8` is 3/8 in a design's spelling of an angle size."""
     pieces = [int(p) for p in part.split("_")]
     if len(pieces) == 1:
         return F(pieces[0])

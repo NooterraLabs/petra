@@ -1,0 +1,15 @@
+petra 0
+
+card "absurd-joint" {
+  owner "m.engineer@example.org"
+  environment indoor_dry
+}
+
+given torque in [8 Nm, 9 Nm] signed "fitter" source "spec"
+given nut_factor in [0.16, 0.22] measured "lab" source "report"
+given load_share in [0.10, 0.25] signed "m.engineer" source "calc"
+
+load wind {
+  on bracket force in [0 MN, 1000 MN]
+  signed "client" source "study"
+}

@@ -1,0 +1,18 @@
+petra 0
+
+card "job3-cable-2-5-30m" {
+  owner "coldstart-agent"
+  environment indoor_dry
+}
+
+ambient in [30 degC, 30 degC] signed "coldstart-agent" source "user brief: 30 degC ambient"
+
+given fault_current in [0 kA, 6 kA] signed "coldstart-agent" source "assumed: typical 6 kA MCB rating, not in brief"
+
+load draw {
+  on feed.load current in [16 A, 20 A]
+  signed "coldstart-agent" source "user brief: 16 to 20 A"
+}
+
+claim hot:  feed.w1.temperature <= 70 degC under draw
+claim drop: feed.w1.voltage_drop <= 3 % under draw

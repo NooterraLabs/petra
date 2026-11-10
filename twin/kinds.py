@@ -75,7 +75,7 @@ def edge_distance(out, element, hole, distance, toward, line=""):
     where = f"{element}, {line}" if line else element
     if distance <= 0:
         past = "on" if distance == 0 else f"{float(-distance):.4g} in. past"
-        raise FieldError(f"{where}: the card puts the bolt line {past} its edge {direction}, "
+        raise FieldError(f"{where}: the design puts the bolt line {past} its edge {direction}, "
                          "so no hole lies in the element")
     c2 = hole.edge_increment(toward)
     least = f"d + C2 = {float(hole.d):.4g} + {float(c2):.4g} in. (Table J3.5)" if c2 else f"d = {float(hole.d):.4g} in."
@@ -214,7 +214,7 @@ def support_ply(lines):
 
 def beam_web_ply(lines, beam, grade, hole):
     """The bolts push the beam web up. J3.11's lc for the top bolt runs to the edge of the
-    material, the cope's horizontal cut or, uncoped, the beam's top. A card without `top` leaves
+    material, the cope's horizontal cut or, uncoped, the beam's top. A design without `top` leaves
     the uncoped top bolt an interior bolt, which is conservative."""
     cope = lines.cope()
     edge = lines.optional_length("top")
@@ -233,7 +233,7 @@ def cope_checks(out, lines, beam, grade, rows=None, pitch=None, hole=None):
     label = "beam web, coped section"
     setback = lines.optional_length("setback")
     if setback is None:
-        out.unsupported.append("coped flexure: no setback on the card, so e = c + setback is unknown")
+        out.unsupported.append("coped flexure: no setback in the design, so e = c + setback is unknown")
     else:
         e = cope.length + setback
         try:
@@ -267,7 +267,7 @@ def cope_checks(out, lines, beam, grade, rows=None, pitch=None, hole=None):
         out.notes.append("top cope only: web shear rupture does not apply, block shear covers it (Example II.A-4)")
     leh = lines.optional_length("beam_edge")
     if leh is None:
-        out.unsupported.append("coped web block shear: no beam_edge on the card")
+        out.unsupported.append("coped web block shear: no beam_edge in the design")
         return
     block_shear(out, "beam web", grade, beam.tw, lev, pitch, leh - UNDERRUN, rows, hole)
 

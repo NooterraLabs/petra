@@ -48,8 +48,7 @@ SHAPE_PARTS = ("angles", "angle", "top_angle", "tee")
 
 @dataclass(frozen=True)
 class Site:
-    """A number written on a component's attribute line, outside any bound: one input a
-    move edits. `input` names it as `<component>.<key>`, with the word before the number
+    """A number written on a component's attribute line: one input a move edits. `input` names it as `<component>.<key>`, with the word before the number
     when that word is not the key, as in `tab.plate thickness`. A shape site (shape_sites)
     holds the shape named on an angle or tee line instead, and has no value."""
 
@@ -64,9 +63,9 @@ class Site:
 
 
 def sites(text: str) -> tuple[Site, ...]:
-    """Every number on a component's lines, in the order written. Numbers in a bound or a
-    tuple, and every number outside a component block, are not sites: the bound is a
-    signed input, and the tuples are coordinates the design is drawn on."""
+    """Every number on a component's lines of a design, in the order written. A number in
+    a tuple is not a site: the tuples are coordinates the design is drawn on. Nothing in
+    the card is a site: a repair changes the design and never what was asked of it."""
     return tuple(site for component, line in _component_lines(text) for site in _line_sites(component, line))
 
 
@@ -118,8 +117,6 @@ def _line_sites(component: str, line: list) -> list[Site]:
     out = []
     depth = 0
     for i, tok in enumerate(line):
-        if tok.kind is Kind.IDENT and tok.text == "in" and depth == 0:
-            break
         if tok.kind is Kind.PUNCT and tok.text in "([":
             depth += 1
         elif tok.kind is Kind.PUNCT and tok.text in ")]":
@@ -190,14 +187,15 @@ Checker = Callable[[str], "Report | None"]
 """A design's text -> its report, or None when the design does not lower."""
 
 
-def checker(registry: Any, sources: tuple, path: str, deck: Any = None) -> Checker:
-    """check_design over edited texts, each checked once. No sink: a probe records nothing."""
+def checker(card: str, registry: Any, sources: tuple, path: str, deck: Any = None) -> Checker:
+    """check_design over edited designs against the one card, each checked once. No sink: a
+    probe records nothing."""
     seen: dict[str, Report | None] = {}
 
     def run(text: str) -> Report | None:
         if text not in seen:
             try:
-                report = check_design(parse_design(text, path, registry), registry, sources, deck=deck, path=path)
+                report = check_design(parse_design(card, text, path, registry), registry, sources, deck=deck, path=path)
                 report.findings
             except INPUT_ERRORS:
                 report = None
@@ -434,15 +432,17 @@ class Checked:
         return "\n".join(out[:at] + ([] if self.repair is None else self.repair.lines()) + out[at:])
 
 
-def check_text(text: str, path: str, registry: Any, sources: tuple, *, sink: Any = None, deck: Any = None,
-               moves: bool = True) -> Checked:
-    """Check `text` against `registry` with `sources`, recording accepted evidence into
-    `sink`. With `moves`, a FAIL gets its repair, probed with the same sources and no sink."""
+def check_text(card: str, text: str, path: str, registry: Any, sources: tuple, *, sink: Any = None, deck: Any = None,
+               moves: bool = True, card_path: str | None = None) -> Checked:
+    """Check the design `text` against the card and `registry` with `sources`, recording
+    accepted evidence into `sink`. `path` names the design in messages, and `card_path`
+    the card when it is not the file beside it. With `moves`, a FAIL gets its repair,
+    probed with the same card and sources and no sink."""
     try:
-        design = parse_design(text, path, registry)
+        design = parse_design(card, text, path, registry, card_path)
         wellformed.require(design, registry)
         report = check_design(design, registry, sources, sink=sink, deck=deck, path=path)
     except INPUT_ERRORS as exc:
         return Checked(path, None, None, str(exc))
-    found = repair(text, report, checker(registry, sources, path, deck), registry) if moves else None
+    found = repair(text, report, checker(card, registry, sources, path, deck), registry) if moves else None
     return Checked(path, report, found, None)

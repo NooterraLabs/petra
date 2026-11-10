@@ -1,0 +1,10 @@
+petra 0
+
+card "t18_ext_leh_min" {
+  owner "audit@example.org"
+}
+
+load gravity {
+  on c1 shear in [0 kip, 25 kip]
+  signed "audit@example.org" source "audit"
+}

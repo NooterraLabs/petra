@@ -1,0 +1,14 @@
+petra 0
+
+card "neg-sink" {
+  owner "e.designer@example.org"
+  environment indoor_dry
+}
+
+given voltage in [11.4 V, 12.6 V] signed "e.designer@example.org" source "adapter datasheet"
+given capacity in [1 A, 1 A] signed "e.designer@example.org" source "adapter datasheet"
+
+load transmit {
+  on power.radio current in [-10 A, -10 A]
+  signed "e.designer@example.org" source "radio module datasheet"
+}

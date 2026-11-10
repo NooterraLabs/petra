@@ -4,10 +4,6 @@ petra 0
 # Design 2657 of `python scripts/absurd_gap.py --seed 1` at commit b9e9792 (docs/absurd_gap.md):
 # the W14x90's 14.5 in flange is wider than the 12.58 in between the W14x90's flanges, and its end, 0.5 in out, lies inside their tips at 7.03 in.
 
-design "absurd-02657" {
-  owner "gate@petra.dev"
-}
-
 seated c1 {
   basis asd
   beam W14x90 grade steel.A992
@@ -22,9 +18,4 @@ seated c1 {
   edge_vertical 1.25 inch
   support_gauge 5.5 inch
   top_angle L4x4x1_4 grade steel.A36 outstanding long
-}
-
-load gate {
-  on c1 shear in [0 kip, 1.377 kip]
-  signed "gate@petra.dev" source "steel gate generator"
 }

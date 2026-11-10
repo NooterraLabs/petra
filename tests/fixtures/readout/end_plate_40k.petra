@@ -5,10 +5,6 @@ petra 0
 # 8 in wide, three rows of bolts at 3 in pitch, 1.25 in vertical edge distance,
 # 5.5 in gauge, 3/16 in E70 fillet both sides of the web.
 
-design "job2-shear-end-plate" {
-  owner "engineer@example.org"
-}
-
 shear_end_plate ep1 {
   basis lrfd
   beam W18x35 grade steel.A992
@@ -21,9 +17,4 @@ shear_end_plate ep1 {
   edge_vertical 1.25 inch
   support_gauge 5.5 inch
   weld electrode.E70 size 0.1875 inch sides 2
-}
-
-load gravity {
-  on ep1 shear in [0 kip, 40 kip]
-  signed "engineer@example.org" source "beam reaction, LRFD, 40 kip given"
 }

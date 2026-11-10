@@ -32,6 +32,12 @@ def stack(base, base_hole, lid, lid_hole, screw, base_material=(AL, MILL), lid_e
 
 
 LID_HOLE = "hole h at (10 mm, 10 mm, 3 mm) along bottom diameter 3.6 mm clear"
+TOLERANCE = "tolerance given tolerance"
+
+
+def tolerance(mm: str) -> str:
+    """The card's line that signs a tolerance of `mm` either way. A part's TOLERANCE line reads it."""
+    return f"given tolerance in [{mm} mm, {mm} mm] {SIGNED}\n"
 
 
 class Case(unittest.TestCase):
@@ -45,21 +51,22 @@ class Case(unittest.TestCase):
     def mesh(self, name, tris):
         return write(self.tmp, name, tris)
 
-    def check(self, text):
-        return run(text, self.tmp)
+    def check(self, text, card=""):
+        """Check the design's components against a card that holds these declarations."""
+        return run(card, text, self.tmp)
 
 
 class F1PressFits(Case):
     def design(self, at):
         block = self.mesh("block", plate((0, 0, 0), (20, 20, 8), (10, 10), "1.51"))
         peg = self.mesh("peg", pin((10, 10), "1.51", 0, 8))
-        signed = f"  tolerance in [0.0025 mm, 0.0025 mm] {SIGNED}"
+        signed = f"  {TOLERANCE}"
         return self.check(
             part("block", block, AL, None, signed + "\n  hole h at (10 mm, 10 mm, 8 mm) along bottom diameter 3 mm press") +
             part("peg", peg, AL, None, signed) +
             "assembly fit {\n  place block at (0 mm, 0 mm, 0 mm) facing top front\n"
             f"  place peg at {at} facing top front\n  insert peg along bottom from 10 mm\n"
-            "  press p peg into block.h diameter 3.02 mm interference 0.01 mm to 0.05 mm\n}\n")
+            "  press p peg into block.h diameter 3.02 mm interference 0.01 mm to 0.05 mm\n}\n", tolerance("0.0025"))
 
     def test_f1_a_pin_in_the_air_is_not_pressed(self):
         got = self.design("(40 mm, 0 mm, 30 mm)")
@@ -179,9 +186,10 @@ class F7F8Arrival(Case):
     def test_f7_a_board_that_starts_inside_a_closed_case_fails(self):
         case = self.mesh("closed", box((0, 0, 0), (40, 30, 20)) + flipped(box((2, 2, 2), (38, 28, 18))))
         board = self.mesh("board", box((0, 0, 0), (30, 20, "1.6")))
-        got = self.check(part("case", case) + part("board", board, "polymer.pc", None, f"  tolerance in [0.1 mm, 0.1 mm] {SIGNED}") +
+        got = self.check(part("case", case) + part("board", board, "polymer.pc", None, f"  {TOLERANCE}") +
                          "assembly box {\n  place case at (0 mm, 0 mm, 0 mm) facing top front\n"
-                         "  place board at (5 mm, 5 mm, 2 mm) facing top front\n  insert board along bottom from 1 mm\n}\n")
+                         "  place board at (5 mm, 5 mm, 2 mm) facing top front\n  insert board along bottom from 1 mm\n}\n",
+                         tolerance("0.1"))
         self.assertEqual(got["box.board/fit.insert"][0], "refuted", got["box.board/fit.insert"])
 
     def test_f8_every_piece_of_a_mover_is_tested_for_containment(self):
@@ -198,7 +206,7 @@ class F9Shells(Case):
         v, x, y, z = (0, 0, 0), (10, 0, 0), (0, 10, 0), (0, 0, 10)
         a, b, c = (6, 2, 1), (2, 6, 1), (1, 1, 6)
         shells = self.mesh("shells", [(v, y, x), (v, x, z), (v, z, y), (x, y, z), (v, b, a), (v, a, c), (v, c, b), (a, b, c)])
-        got = self.check(part("p", shells, AL, MILL) + "claim heavy: p.mass >= 0.5 g\n")
+        got = self.check(part("p", shells, AL, MILL), "claim heavy: p.mass >= 0.5 g\n")
         self.assertIn("error", got)
         self.assertRegex(got["error"], "nested")
 
@@ -207,7 +215,7 @@ class F9Shells(Case):
         tet = [(corner, (12, 11, 11), (11, 12, 11)), (corner, (11, 12, 11), (11, 11, 12)),
                (corner, (11, 11, 12), (12, 11, 11)), ((12, 11, 11), (11, 11, 12), (11, 12, 11))]
         hung = self.mesh("hung", box((0, 0, 0), (10, 10, 10)) + tet)
-        got = self.check(part("p", hung, AL, MILL) + "claim light: p.mass <= 10 g\n")
+        got = self.check(part("p", hung, AL, MILL), "claim light: p.mass <= 10 g\n")
         self.assertIn("error", got)
 
     def test_f9_triangles_that_share_one_vertex_meet_only_there(self):
@@ -223,12 +231,12 @@ class F9Shells(Case):
 class F10Mass(Case):
     def test_f10_mass_is_bounded_over_the_tolerance(self):
         plate_ = self.mesh("plate", box((0, 0, 0), (10, 10, 1)))
-        got = self.check(part("p", plate_, AL, MILL) + "claim light: p.mass <= 0.28 g\n")
+        got = self.check(part("p", plate_, AL, MILL), "claim light: p.mass <= 0.28 g\n")
         self.assertEqual(got["p/parts.mass/light"][0], "refuted", got["p/parts.mass/light"])
 
     def test_f10_mass_is_bounded_over_the_finish_buildup(self):
         plate_ = self.mesh("plate", box((0, 0, 0), (10, 10, 1)))
-        got = self.check(part("p", plate_, AL, MILL, "  finish process.powder_coat") + "claim light: p.mass <= 0.4 g\n")
+        got = self.check(part("p", plate_, AL, MILL, "  finish process.powder_coat"), "claim light: p.mass <= 0.4 g\n")
         self.assertEqual(got["p/parts.mass/light"][0], "refuted", got["p/parts.mass/light"])
 
 
@@ -238,11 +246,11 @@ class F13F15Registry(Case):
         lid = self.mesh("lid", plate((0, 0, 0), (20, 20, 3), (10, 10), "2.69"))
         got = self.check(
             part("base", base, AL, MILL, "  hole h at (10 mm, 10 mm, 8 mm) along bottom diameter 2.6 mm tap") +
-            part("lid", lid, AL, None, f"  tolerance in [0.01 mm, 0.01 mm] {SIGNED}\n"
+            part("lid", lid, AL, None, f"  {TOLERANCE}\n"
                                         "  hole h at (10 mm, 10 mm, 3 mm) along bottom diameter 5.37 mm clear") +
             "assembly stack {\n  place base at (0 mm, 0 mm, 0 mm) facing top front\n"
             "  place lid at (0 mm, 0 mm, 8 mm) facing top front\n  insert lid along bottom from 20 mm\n"
-            "  fasten f screw.M3x10_shcs through lid.h into base.h\n}\n")
+            "  fasten f screw.M3x10_shcs through lid.h into base.h\n}\n", tolerance("0.01"))
         self.assertEqual(got["stack.f/fit.seat"][0], "refuted", got["stack.f/fit.seat"])
 
     def test_f15_a_print_tolerance_grows_with_the_part(self):
@@ -288,9 +296,10 @@ class FF1Sweeps(Case):
         verdicts = []
         for name, tris in (("plain", plain), ("split", split)):
             case = self.mesh(name, tris)
-            got = self.check(part("case", case) + part("board", board, "polymer.pc", None, f"  tolerance in [0.1 mm, 0.1 mm] {SIGNED}") +
+            got = self.check(part("case", case) + part("board", board, "polymer.pc", None, f"  {TOLERANCE}") +
                              "assembly box {\n  place case at (0 mm, 0 mm, 0 mm) facing top front\n"
-                             "  place board at (3 mm, 3 mm, 2 mm) facing top front\n  insert board along bottom from 25 mm\n}\n")
+                             "  place board at (3 mm, 3 mm, 2 mm) facing top front\n  insert board along bottom from 25 mm\n}\n",
+                             tolerance("0.1"))
             verdicts.append(got["box.board/fit.insert"][0])
         self.assertEqual(verdicts[0], verdicts[1])
 
@@ -304,9 +313,9 @@ class L2L3L4Lesser(Case):
         # A 3 mm plate and a separate 20 mm tower in one mesh. The part's box is 20 mm tall,
         # and the hole, entering the plate from below, has wall over 3 mm of the 5.7 mm insert.
         bracket = self.mesh("bracket", plate((0, 0, 0), (20, 20, 3), (10, 10), "2.08") + box((30, 0, 0), (35, 5, 20)))
-        hole = (f"  tolerance in [0.01 mm, 0.01 mm] {SIGNED}\n"
+        hole = (f"  {TOLERANCE}\n"
                 "  hole h at (10 mm, 10 mm, 0 mm) along top diameter 4.16 mm insert insert.M3x5_7")
-        got = self.check(part("bracket", bracket, "polymer.petg", FDM, hole))
+        got = self.check(part("bracket", bracket, "polymer.petg", FDM, hole), tolerance("0.01"))
         self.assertEqual(got["bracket.h/insert.depth"][0], "refuted", got["bracket.h/insert.depth"])
 
     def test_l3_a_screw_at_its_greatest_length_bottoms_out(self):
@@ -315,9 +324,9 @@ class L2L3L4Lesser(Case):
         # is held to 0.02 mm (signed) so its 2.6 mm hole holds the thread.
         base = self.mesh("base", blind_block((0, 0, 0), (20, 20, 8), (10, 10), "1.3", "7.3"))
         lid = self.mesh("lid", plate((0, 0, 0), (20, 20, 3), (10, 10), "1.8"))
-        hole = (f"tolerance in [0.02 mm, 0.02 mm] {SIGNED}\n"
+        hole = (f"{TOLERANCE}\n"
                 "  hole h at (10 mm, 10 mm, 8 mm) along bottom diameter 2.6 mm depth 7.3 mm form")
-        got = self.check(stack(base, hole, lid, LID_HOLE, "screw.M3x10_shcs", base_material=(AL, None)))
+        got = self.check(stack(base, hole, lid, LID_HOLE, "screw.M3x10_shcs", base_material=(AL, None)), tolerance("0.02"))
         self.assertEqual(got["stack.f/fit.grip"][0], "refuted", got["stack.f/fit.grip"])
         self.assertRegex(got["stack.f/fit.grip"][1], r"the tip reaches 7\.3 mm at the most")
 
@@ -339,10 +348,10 @@ class HeldHeads(Case):
         # past the 7.3 mm it reaches when seated and meet the 7.6 mm floor.
         base = self.mesh("base", blind_block((0, 0, 0), (20, 20, 8), (10, 10), "1.3", "7.6"))
         lid = self.mesh("lid", plate((0, 0, 0), (20, 20, 3), (10, 10), "3"))
-        hole = (f"tolerance in [0.02 mm, 0.02 mm] {SIGNED}\n"
+        hole = (f"{TOLERANCE}\n"
                 "  hole h at (10 mm, 10 mm, 8 mm) along bottom diameter 2.6 mm depth 7.6 mm form")
         got = self.check(stack(base, hole, lid, "hole h at (10 mm, 10 mm, 3 mm) along bottom diameter 6 mm clear",
-                               "screw.M3x10_shcs", base_material=(AL, None)))
+                               "screw.M3x10_shcs", base_material=(AL, None)), tolerance("0.02"))
         for rule in ("fit.grip", "fit.fastener"):
             self.assertEqual(got[f"stack.f/{rule}"][0], "refuted", (rule, got[f"stack.f/{rule}"]))
             self.assertRegex(got[f"stack.f/{rule}"][1], r"held while it overhangs lid\.h's mouth, 6 mm")
@@ -368,10 +377,10 @@ class HeldHeads(Case):
         # plain 8 mm hole lets the 6.72 mm head through.
         base = self.mesh("base", blind_block((0, 0, 0), (20, 20, 8), (10, 10), "1.3", "7.6"))
         lid = self.mesh("lid", plate((0, 0, 0), (20, 20, 3), (10, 10), "4"))
-        hole = (f"tolerance in [0.02 mm, 0.02 mm] {SIGNED}\n"
+        hole = (f"{TOLERANCE}\n"
                 "  hole h at (10 mm, 10 mm, 8 mm) along bottom diameter 2.6 mm depth 7.6 mm form")
         got = self.check(stack(base, hole, lid, "hole h at (10 mm, 10 mm, 3 mm) along bottom diameter 8 mm clear",
-                               "screw.M3x10_csk", base_material=(AL, None)))
+                               "screw.M3x10_csk", base_material=(AL, None)), tolerance("0.02"))
         for rule in ("fit.grip", "fit.fastener"):
             self.assertEqual(got[f"stack.f/{rule}"][0], "refuted", (rule, got[f"stack.f/{rule}"]))
             self.assertRegex(got[f"stack.f/{rule}"][1], r"held while it overhangs lid\.h's mouth, 8 mm")
@@ -386,14 +395,14 @@ class PressDepth(Case):
         # block, so its last 4 mm are in solid material.
         block = self.mesh("block", blind_block((0, 0, 0), (20, 20, 10), (10, 10), "1.5", "4"))
         peg = self.mesh("peg", pin((10, 10), "1.512", 2, 10))
-        signed = f"  tolerance in [0.0025 mm, 0.0025 mm] {SIGNED}"
+        signed = f"  {TOLERANCE}"
         got = self.check(
             part("block", block, AL, None, signed + "\n  hole h at (10 mm, 10 mm, 10 mm) along bottom diameter 3 mm "
                                                     "depth 4 mm press") +
             part("peg", peg, AL, None, signed) +
             "assembly fit {\n  place block at (0 mm, 0 mm, 0 mm) facing top front\n"
             "  place peg at (0 mm, 0 mm, 0 mm) facing top front\n  insert peg along bottom from 10 mm\n"
-            "  press p peg into block.h diameter 3.02 mm interference 0.01 mm to 0.05 mm\n}\n")
+            "  press p peg into block.h diameter 3.02 mm interference 0.01 mm to 0.05 mm\n}\n", tolerance("0.0025"))
         self.assertEqual(got["fit.p/fit.press"][0], "refuted", got["fit.p/fit.press"])
         self.assertRegex(got["fit.p/fit.press"][1], "axis meets the block's material")
 

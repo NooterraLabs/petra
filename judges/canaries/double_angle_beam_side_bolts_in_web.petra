@@ -4,10 +4,6 @@ petra 0
 # Design 1886 of `python scripts/absurd_gap.py --seed 1` at commit b9e9792 (docs/absurd_gap.md):
 # bottom bolt hole reaches 22.062 in below the W18x50's top, past its flat web, which ends at 16 in.
 
-design "absurd-01886" {
-  owner "gate@petra.dev"
-}
-
 double_angle c1 {
   basis lrfd
   beam W18x50 grade steel.A992
@@ -24,9 +20,4 @@ double_angle c1 {
   support_gauge 4.75 inch
   setback 0.5 inch
   cope both depth 2 inch length 4 inch
-}
-
-load gate {
-  on c1 shear in [0 kip, 29.097 kip]
-  signed "gate@petra.dev" source "steel gate generator"
 }

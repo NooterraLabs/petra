@@ -26,7 +26,7 @@ TOLERANCE = 1e-6
 DOUBLED = re.compile(r"\b(\w+) \1\b")
 """A word printed twice in a row, as in "flange edge edge distance"."""
 
-_HEAD = 'petra 0\n\ndesign "steel-twin-{name}" {{\n  owner "s.engineer@example.org"\n}}\n\n'
+_HEAD = 'petra 0\n\ncard "steel-twin-{name}" {{\n  owner "s.engineer@example.org"\n}}'
 _SIGN = '  signed "s.engineer@example.org" source "twin variant"\n}}\n'
 
 
@@ -34,13 +34,14 @@ def _case(name: str, loads: str) -> str:
     return f"\n\nload {name} {{\n" + loads.rstrip() + "\n" + _SIGN.format()
 
 
-def _variant(name: str, body: str, loads: str, cyclic: str = "") -> str:
-    """A design of one connection: its strength case, and a cyclic case (Appendix 3) when
-    `cyclic` names one's loads."""
-    return _HEAD.format(name=name) + body.strip() + _case("gravity", loads) + (_case("cyclic", cyclic) if cyclic else "")
+def _variant(name: str, body: str, loads: str, cyclic: str = "") -> tuple[str, str]:
+    """The card and the design of one connection. The card holds its strength case, and a
+    cyclic case (Appendix 3) when `cyclic` names one's loads."""
+    card = _HEAD.format(name=name) + _case("gravity", loads) + (_case("cyclic", cyclic) if cyclic else "")
+    return card, "petra 0\n\n" + body.strip() + "\n"
 
 
-VARIANTS: dict[str, str] = {
+VARIANTS: dict[str, tuple[str, str]] = {
     # a coped beam (top flange), three rows, short slots across the force, deformation not considered
     "tab_coped": _variant("tab_coped", """
 shear_tab st2 {
@@ -1125,8 +1126,8 @@ def _designs(registry):
     out = []
     for path in sorted(glob.glob(os.path.join(ROOT, "examples", "steel", "*.petra"))):
         out.append((os.path.basename(path)[:-5], load_design(path, registry)))
-    for name, text in VARIANTS.items():
-        out.append((name, parse_design(text, f"<twin:{name}>", registry)))
+    for name, (card, text) in VARIANTS.items():
+        out.append((name, parse_design(card, text, f"<twin:{name}>", registry)))
     return out
 
 

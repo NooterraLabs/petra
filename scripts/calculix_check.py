@@ -3,13 +3,13 @@ model of a passing steel design's governing element carry the design strength Pe
 certified for it? Untrusted tooling: nothing here changes a verdict.
 
     python scripts/calculix_check.py check FILE.petra [--size 0.25]
-        Model the element of the design whose in-scope limit state governs, run CalculiX
-        twice (yield and rupture) and print the comparison.
+        Model the element of the design whose in-scope limit state governs under the card
+        beside it, FILE.card, run CalculiX twice (yield and rupture) and print the comparison.
     python scripts/calculix_check.py sample [--log docs/in_the_loop_log.jsonl]
                                             [--out docs/calculix_check_log.jsonl]
         The same for each loop optimum the plane model covers, first at --screen 0.5 in,
-        then again at --size 0.25 in for a close call. Resumable: a task already in --out
-        is skipped.
+        then again at --size 0.25 in for a close call. Each row of --log holds a task's
+        `card` and its `optimum`, the design. Resumable: a task already in --out is skipped.
     python scripts/calculix_check.py validate
         Three plain plates against their hand solutions: pure shear, four-point bending
         and a cantilever.
@@ -74,6 +74,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from petra import build_registry  # noqa: E402
+from petra.files import read_pair  # noqa: E402
 from petra.kernel import Interval, enclose  # noqa: E402
 from petra.kernel.rules.r4_enclosure import AllNonpositive  # noqa: E402
 from petra.lang import parse_design  # noqa: E402
@@ -357,11 +358,11 @@ def _states(conn, design, registry, names: set[str], v_top: float) -> dict[str, 
     return out
 
 
-def elements(text: str, task: str = "design") -> list[Element]:
+def elements(card: str, text: str, task: str = "design") -> list[Element]:
     """Every element of the design's connection that the plane model covers, with the
-    in-scope limit states Petra checked on it, most utilised first."""
+    in-scope limit states Petra checked on it under the card's loads, most utilised first."""
     registry = _registry()
-    design = parse_design(text, f"<{task}>", registry)
+    design = parse_design(card, text, f"<{task}>", registry)
     out = []
     for name in design.components:
         conn = calc.connection(design, name, registry)
@@ -896,7 +897,7 @@ def close_call(row: dict) -> bool:
 
 
 def cmd_check(args) -> int:
-    found = elements(Path(args.file).read_text(encoding="utf-8"), Path(args.file).stem)
+    found = elements(*read_pair(args.file), Path(args.file).stem)
     if not found:
         print("no element of this design is in the plane model's scope")
         return 1
@@ -906,19 +907,20 @@ def cmd_check(args) -> int:
     return 0
 
 
-def optima(path: Path) -> list[tuple[str, str]]:
+def optima(path: Path) -> dict[str, tuple[str, str]]:
+    """Each solved task of the loop's log -> its card's text and its optimum, the design's."""
     rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
-    return [(r["task"], r["optimum"]) for r in rows if r.get("optimum")]
+    return {r["task"]: (r["card"], r["optimum"]) for r in rows if r.get("optimum")}
 
 
 def cmd_sample(args) -> int:
     out = Path(args.out)
     done = {json.loads(line)["task"] for line in out.read_text(encoding="utf-8").splitlines()} if out.exists() else set()
     todo = []
-    for task, text in optima(Path(args.log)):
+    for task, (card, text) in optima(Path(args.log)).items():
         if task in done or (args.tasks and task not in args.tasks):
             continue
-        found = elements(text, task)
+        found = elements(card, text, task)
         if found:
             todo.append(found[0])
     print(f"{len(todo)} designs to check, {len(done)} already in {out}")
@@ -1009,11 +1011,11 @@ def cmd_validate(args) -> int:
 
 def cmd_converge(args) -> int:
     ccx = Ccx(args.host, args.workers)
-    texts = dict(optima(Path(args.log)))
+    texts = optima(Path(args.log))
     print("| Task | Element | Size (in) | Nodes | Yield FE (kip) | Rupture FE (kip) |")
     print("|---|---|---|---|---|---|")
     for task in args.tasks:
-        el = elements(texts[task], task)[0]
+        el = elements(*texts[task], task)[0]
         for size in args.sizes:
             row = check_elements([el], ccx, size)[0]
             y, r = row["runs"]["yield"], row["runs"]["rupture"]
@@ -1027,7 +1029,7 @@ def _spread(found: list[float]) -> str:
             f"{max(found):.3f}")
 
 
-def summed_bolts(row: dict, text: str) -> tuple[str, float] | None:
+def summed_bolts(row: dict, card: str, text: str) -> tuple[str, float] | None:
     """For a design whose rupture run is governed by an eccentric bolt group: the state that
     governs, and its Rn, when the group's bearing and tearout are summed over its bolts as a
     concentric group's are. The model pushes every bolt alike, so this is the strength it
@@ -1035,7 +1037,7 @@ def summed_bolts(row: dict, text: str) -> tuple[str, float] | None:
     entry = row["runs"]["rupture"]
     if entry.get("mode") != "bolts" or "summed over the group" in entry["governing"]:
         return None
-    el = next(e for e in elements(text, row["task"]) if e.name == row["element"])
+    el = next(e for e in elements(card, text, row["task"]) if e.name == row["element"])
     nominals = [(s.what, s.summed if s.mode == "bolts" else s.nominal) for s in el.states if s.run == "rupture"]
     return min(nominals, key=lambda wn: wn[1])
 
@@ -1080,8 +1082,8 @@ def cmd_report(args) -> int:
     for kind, found in sorted(by_kind.items(), key=lambda kv: (kv[0] != "all", kv[0])):
         print(f"| {kind} | {_spread(found)} |")
 
-    texts = dict(optima(Path(args.log)))
-    summed = [(row, summed_bolts(row, texts[row["task"]])) for row in rows]
+    texts = optima(Path(args.log))
+    summed = [(row, summed_bolts(row, *texts[row["task"]])) for row in rows]
     summed = [(row, found) for row, found in summed if found]
     if summed:
         print("\nEccentric bolt groups: rupture FE against the bolts summed\n")

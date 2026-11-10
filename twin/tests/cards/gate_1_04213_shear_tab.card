@@ -1,0 +1,11 @@
+petra 0
+
+card "gate-1-04213" {
+  owner "gate@petra.dev"
+}
+
+load gate {
+  on c1 shear in [0 kip, 0.001 kip]
+  on c1 cycles in [100000000, 100000000]
+  signed "gate@petra.dev" source "steel gate generator"
+}

@@ -59,7 +59,7 @@ class Holes(unittest.TestCase):
         result = self.R.climb(hole, [{**start, "index": 0}], 5, seed=1)
         self.assertEqual(result["found_by"], "breaker", result)
         self.assertLessEqual(result["after"], 5)
-        row = self.A.assess(self.A.Sample(0, "hanger", "breaker", (), result["text"]), REGISTRY)
+        row = self.A.assess(self.A.Sample(0, "hanger", "breaker", (), result["card"], result["text"]), REGISTRY)
         self.assertTrue(self.R.exposes(row, hole))
 
     def test_a_hole_reads_as_kind_modes_and_condition(self):

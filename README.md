@@ -1,8 +1,8 @@
 # Petra
 
-Petra checks a physical design against the claims written in it. A design is a short `.petra` file that describes a steel connection, a truss, a wire circuit or a bolted joint. Petra answers pass, fail, marginal or unknown, and backs every pass and fail with a certificate that a small kernel re-checks in exact arithmetic.
+Petra checks a physical design against what was asked of it. A card is a short file that states the loads and the claims, each with who signs it. A design is a short `.petra` file that describes a steel connection, a truss, a wire circuit or a bolted joint, and it cannot change the card. Petra answers pass, fail, marginal or unknown, and backs every pass and fail with a certificate that a small kernel re-checks in exact arithmetic.
 
-Petra checks the loads a design states. It does not choose them, and it does not replace the engineer who signs the design.
+Petra checks the loads a card states. It does not choose them, and it does not replace the engineer who signs the design.
 
 ## Install
 
@@ -15,11 +15,12 @@ In Claude Code with [uv](https://docs.astral.sh/uv/) installed, `/plugin marketp
 ## Use
 
 ```bash
+petra new shear_tab --card > tab.card
 petra new shear_tab > tab.petra
 petra check tab.petra
 ```
 
-`petra new` prints an example design to edit. `petra check` prints the verdict, the check that governs it, and every check behind it. `petra kinds` lists what Petra can check, and `petra docs` lists the documents that ship with it.
+`petra new` prints an example design to edit, and with `--card` the card it answers. `petra check` prints the verdict, the check that governs it, and every check behind it. `petra kinds` lists what Petra can check, and `petra docs` lists the documents that ship with it.
 
 ## Learn more
 

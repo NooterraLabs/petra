@@ -3,10 +3,6 @@ petra 0
 # An eccentrically loaded welded bracket: a 5/16 in A572 Gr 50 plate fillet-welded both sides
 # (3/16 in E70) to the W12x40 column flange over 13 in, loaded 5 in from the weld line. ASD.
 
-design "steel-weld-bracket-303-022" {
-  owner "task.owner@example.org"
-}
-
 weld_bracket wb1 {
   basis asd
   plate steel.A572_50 thickness 0.3125 inch
@@ -14,9 +10,4 @@ weld_bracket wb1 {
   weld electrode.E70 size 0.1875 inch sides 2
   weld_length 13 inch
   eccentricity 5 inch
-}
-
-load service {
-  on wb1 shear in [0 kip, 48.42 kip]
-  signed "task.owner@example.org" source "task 303-022"
 }

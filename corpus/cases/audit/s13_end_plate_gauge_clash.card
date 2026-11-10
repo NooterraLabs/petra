@@ -1,0 +1,10 @@
+petra 0
+
+card "t19_endplate_gauge_clash" {
+  owner "audit@example.org"
+}
+
+load gravity {
+  on c1 shear in [0 kip, 50 kip]
+  signed "audit@example.org" source "audit"
+}

@@ -17,14 +17,6 @@ petra 0
 # certifies. Before the 6.3.3 check it was 28.93 kN, without the weight 29.17 kN,
 # and against the bare Euler load of 74.12 kN, which v0 used before, 39.53 kN.
 
-design "family-warren-footbridge-panel" {
-  owner "petra.library@example.org"
-  environment indoor_dry
-}
-
-param load_d in [-28.5 kN, 0 kN]
-param load_e in [-28.5 kN, 0 kN]
-
 truss frame {
   material steel.S355
   section chs.60_3x3_2
@@ -43,13 +35,3 @@ truss frame {
   member diag_be:   B -- E
   member diag_ec:   E -- C
 }
-
-load crowd {
-  on frame.D fy param load_d
-  on frame.E fy param load_e
-  signed "petra.library@example.org" source "family definition"
-}
-
-claim strength:   frame.collapse_factor >= 1.5 under crowd
-claim stability:  frame.stability_factor >= 3 under crowd
-claim stress:     frame.member(diag_ad).stress <= 235 MPa under crowd

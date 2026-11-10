@@ -1,0 +1,10 @@
+petra 0
+
+card "t06c_ext_ecc_declared_pass" {
+  owner "audit@example.org"
+}
+
+load gravity {
+  on c1 shear in [0 kip, 35 kip]
+  signed "audit@example.org" source "audit"
+}

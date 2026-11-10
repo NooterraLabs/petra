@@ -3,12 +3,12 @@
 A load case that names cycles on a connection is cyclic. Coverage then demands the fatigue
 check of every detail on the load path, each a stress range against Table A-3.1's allowable
 range and a peak stress against 0.66 Fy, excused at 20,000 cycles or fewer. A detail whose
-category the deck does not encode leaves the verdict UNKNOWN. A design with no cyclic case
-owes no fatigue check, and the readout says a cyclic load would demand them.
+category the deck does not encode leaves the verdict UNKNOWN. A design whose card has no
+cyclic case owes no fatigue check, and the readout says a cyclic load would demand them.
 
-Hand values for examples/steel/shear_tab_cyclic.petra (plate 3/8 x 12 in, four 3/4 in bolts
-at 3 in, a = 3 in, W18x50 coped 1.5 in top and 2 in bottom over 5 in, setback 1/2 in; the
-shear range 8 kip, peak 10 kip):
+Hand values for examples/steel/shear_tab_cyclic.petra and its card (plate 3/8 x 12 in, four
+3/4 in bolts at 3 in, a = 3 in, W18x50 coped 1.5 in top and 2 in bottom over 5 in, setback
+1/2 in; the shear range 8 kip, peak 10 kip):
     plate end   S = 0.375 x 12^2 / 6 = 9 in^3; 8 x 3 / 9 + 3 x 8 / (2 x 0.375 x 12) = 5.333 ksi
     category C  1000 (4.4 / 500,000)^0.333 = 20.73 ksi
     category E' 1000 (0.39 / 500,000)^0.333 = 9.248 ksi
@@ -19,6 +19,7 @@ shear range 8 kip, peak 10 kip):
 import unittest
 from pathlib import Path
 
+from petra.files import read_pair
 from petra.lang import load_design, parse_design
 from petra.models.steel import calc, domain
 from petra.models.steel.cyclic import NOT_CYCLIC
@@ -30,15 +31,20 @@ from petra.verdict import STATUS
 
 REGISTRY = build_registry()
 STEEL = Path(__file__).resolve().parents[1] / "examples" / "steel"
-EXAMPLE = (STEEL / "shear_tab_cyclic.petra").read_text(encoding="utf-8")
+CARD, EXAMPLE = read_pair(STEEL / "shear_tab_cyclic.petra")
 ENCODED = {"fatigue_bolted", "fatigue_weld", "fatigue_weld_end", "fatigue_cope"}
 
 
-def variant(*edits: tuple[str, str], text: str = EXAMPLE):
+def edited(text: str, *edits: tuple[str, str]) -> str:
     for old, new in edits:
         assert old in text, old
         text = text.replace(old, new)
-    return parse_design(text, "variant.petra", REGISTRY)
+    return text
+
+
+def variant(*edits: tuple[str, str], card: str = CARD):
+    """The example with `edits` made to its design, against `card`."""
+    return parse_design(card, edited(EXAMPLE, *edits), "variant.petra", REGISTRY)
 
 
 def status(d) -> tuple[str, dict[str, str]]:
@@ -90,8 +96,8 @@ class CyclicCoverage(unittest.TestCase):
         self.assertGreater(what.utilisation, 1)
 
     def test_a_snug_tight_joint_under_a_static_load_alone_passes(self):
-        static = EXAMPLE[:EXAMPLE.index("load crane")]
-        verdict, _ = status(variant((" joint pretensioned", ""), text=static))
+        static = CARD[:CARD.index("load crane")]
+        verdict, _ = status(variant((" joint pretensioned", ""), card=static))
         self.assertEqual(verdict, "PASS")
 
 
@@ -112,14 +118,14 @@ class AllowableRanges(unittest.TestCase):
                                28.95, places=1)
 
     def test_past_its_knee_each_category_holds_at_its_threshold(self):
-        d = variant(("cycles in [0, 500000]", "cycles in [0, 200000000]"))
+        d = variant(card=edited(CARD, ("cycles in [0, 500000]", "cycles in [0, 200000000]")))
         self.assertEqual(float(one(values(d, "fatigue_bolted"), "plate (beam side): stress range").capacity), 16)
         self.assertEqual(float(one(values(d, "fatigue_weld_end"), "weld toe").capacity), 10)
         self.assertEqual(float(one(values(d, "fatigue_cope"), "category E'").capacity), 2.6)
         self.assertEqual(float(one(values(d, "fatigue_weld"), "category F").capacity), 8)
 
     def test_at_20000_cycles_every_fatigue_check_is_excused(self):
-        d = variant(("cycles in [0, 500000]", "cycles in [0, 20000]"))
+        d = variant(card=edited(CARD, ("cycles in [0, 500000]", "cycles in [0, 20000]")))
         for mode in ENCODED:
             with self.subTest(mode):
                 self.assertTrue(all(v.excused for v in values(d, mode).values()))
@@ -147,19 +153,19 @@ class AllowableRanges(unittest.TestCase):
 
 
 class BoltsInTension(unittest.TestCase):
-    HANGER = (STEEL / "hanger.petra").read_text(encoding="utf-8") + (
-        '\nload hoist {\n  on h1 tension in [2 kip, 10 kip]\n  on h1 cycles in [0, 500000]\n'
-        '  signed "s.engineer@example.org" source "hoist, service loads"\n}\n')
+    CARD, HANGER = read_pair(STEEL / "hanger.petra")
+    CARD += ('\nload hoist {\n  on h1 tension in [2 kip, 10 kip]\n  on h1 cycles in [0, 500000]\n'
+             '  signed "s.engineer@example.org" source "hoist, service loads"\n}\n')
 
     def test_pretensioned_bolts_carry_a_fifth_of_the_peak_on_their_tensile_stress_area(self):
-        d = parse_design(self.HANGER, "hanger.petra", REGISTRY)
+        d = parse_design(self.CARD, self.HANGER, "hanger.petra", REGISTRY)
         check = one(values(d, "fatigue_bolt_tension", "hoist", "h1"), "category G")
         at = 3.14159265 / 4 * (0.75 - 0.9743 / 10) ** 2           # Eq A-3-7, 10 threads per inch
         self.assertAlmostEqual(float(check.demand), 0.2 * 10 / 4 / at, places=3)
         self.assertAlmostEqual(float(check.capacity), 1000 * (0.39 / 5e5) ** 0.333, places=2)     # 9.25 ksi > FTH 7
 
     def test_a_cyclic_hanger_is_unknown_for_its_tee(self):
-        verdict, modes = status(parse_design(self.HANGER, "hanger.petra", REGISTRY))
+        verdict, modes = status(parse_design(self.CARD, self.HANGER, "hanger.petra", REGISTRY))
         self.assertEqual(verdict, "UNKNOWN")
         self.assertEqual(modes["fatigue_detail"], {"Open"})
         self.assertEqual(modes["fatigue_bolt_tension"], {"Discharged"})

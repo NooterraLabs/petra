@@ -1,6 +1,6 @@
 # Contributing to Petra
 
-Petra takes issues and pull requests at [NooterraLabs/petra](https://github.com/NooterraLabs/petra). A bug report is most useful with the `.petra` file, the command you ran, and what Petra printed.
+Petra takes issues and pull requests at [NooterraLabs/petra](https://github.com/NooterraLabs/petra). A bug report is most useful with the card and the design, the command you ran, and what Petra printed.
 
 ## Run the tests
 

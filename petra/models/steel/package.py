@@ -1,9 +1,11 @@
 """Calculation packages for the steel deck (docs/steel_connections.md §9 item 9). Tooling:
 nothing here changes a verdict.
 
-`write_package(text, out, registry)` checks a design and leaves in `out`:
+`write_package(card, text, out, registry)` checks a design against its card and leaves in
+`out`:
 
-  design.petra   the design as checked;
+  design.card   the card as checked;
+  design.petra  the design as checked;
   certs/        one kernel certificate per obligation the deck settled (the theorem's or
                 the refutation's evidence, with the statement it proves), named by the
                 statement's hash;
@@ -14,9 +16,10 @@ nothing here changes a verdict.
 
 Two commands re-check a package without trusting it. `petra verify certs/*.json` has the
 kernel re-check every certificate on its own. `petra check --certs certs --no-solve
-design.petra` re-elaborates the design, finds each obligation's certificate by the hash of
-the fresh statement and reproduces the verdict from the package alone: that ties the
-statements to the design, so neither the report's numbers nor its hashes are trusted.
+design.petra` re-elaborates the design against design.card beside it, finds each
+obligation's certificate by the hash of the fresh statement and reproduces the verdict
+from the package alone: that ties the statements to the card and the design, so neither
+the report's numbers nor its hashes are trusted.
 """
 from __future__ import annotations
 
@@ -25,7 +28,7 @@ from pathlib import Path
 
 from ... import kernel
 from ...certs import CertStore, load_certificate
-from ...lang import parse_design
+from ...lang import load_design, parse_design
 from ...pipeline import Report, check_design
 from ...registry import Registry
 from ...solvers import SolverSource
@@ -62,7 +65,7 @@ def _number(x: float) -> str:
     return "inf" if x == float("inf") else f"{x:.4g}"
 
 
-def render(design, report: Report, registry: Registry, text: str) -> tuple[str, tuple[str, ...], tuple[str, ...]]:
+def render(design, report: Report, registry: Registry, card: str, text: str) -> tuple[str, tuple[str, ...], tuple[str, ...]]:
     outcomes = {}
     for o in report.outcomes:
         req = o.requirement if type(o).__name__ in ("Open", "Waived") else o.obligation.requirement
@@ -73,8 +76,9 @@ def render(design, report: Report, registry: Registry, text: str) -> tuple[str, 
              f"Verdict: **{STATUS[type(report.verdict)]}**, by the Petra kernel over every load case and every value in each "
              "stated range.", "",
              "Re-check it without trusting this file: `petra verify certs/*.json` re-checks each certificate; `petra check "
-             "--certs certs --no-solve design.petra` re-derives every statement from the design and reproduces the verdict "
-             "from the certificates alone.", "",
+             "--certs certs --no-solve design.petra` re-derives every statement from the card and the design and reproduces "
+             "the verdict from the certificates alone.", "",
+             "## Card", "", "```", card.rstrip(), "```", "",
              "## Design", "", "```", text.rstrip(), "```", ""]
     for name, component in design.components.items():
         if component.kind not in KIND_SPECS:
@@ -128,14 +132,15 @@ def render(design, report: Report, registry: Registry, text: str) -> tuple[str, 
     return "\n".join(lines) + "\n", tuple(dict.fromkeys(cited)), tuple(over)
 
 
-def write_package(text: str, out: Path, registry: Registry) -> Package:
+def write_package(card: str, text: str, out: Path, registry: Registry) -> Package:
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
     path = out / "design.petra"
+    (out / "design.card").write_text(card, encoding="utf-8", newline="\n")
     path.write_text(text, encoding="utf-8", newline="\n")
-    design = parse_design(text, str(path), registry)
+    design = parse_design(card, text, str(path), registry)
     report = check_design(design, registry, (SolverSource(),), sink=CertStore(out / "certs"), path=str(path))
-    body, cited, over = render(design, report, registry, text)
+    body, cited, over = render(design, report, registry, card, text)
     (out / "report.md").write_text(body, encoding="utf-8", newline="\n")
     return Package(out, STATUS[type(report.verdict)], cited, report, over)
 
@@ -165,6 +170,5 @@ def recheck(package: Package, registry: Registry) -> Recheck:
     names = {p.stem for p in store.paths()}
     missing = tuple(h for h in package.hashes if h.split(":", 1)[1] not in names)
     path = package.root / "design.petra"
-    design = parse_design(path.read_text(encoding="utf-8"), str(path), registry)
-    again = check_design(design, registry, (store,), path=str(path))
+    again = check_design(load_design(path, registry), registry, (store,), path=str(path))
     return Recheck(len(names), tuple(rejected), missing, STATUS[type(again.verdict)])

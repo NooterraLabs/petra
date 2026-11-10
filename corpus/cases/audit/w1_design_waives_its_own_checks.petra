@@ -1,7 +1,5 @@
 petra 0
-design "t14_waive" {
-  owner "audit@example.org"
-}
+
 shear_tab c1 {
   basis lrfd
   beam W24x55 grade steel.A992
@@ -18,9 +16,6 @@ shear_tab c1 {
   top 4 inch
   weld electrode.E70 size 0.1875 inch sides 2
 }
-load gravity {
-  on c1 shear in [0 kip, 35 kip]
-  signed "audit@example.org" source "audit"
-}
+
 waive steel.bolts on c1 by "audit@example.org" reason "agent says fine"
 waive steel.block_shear on c1 by "audit@example.org" reason "agent says fine"

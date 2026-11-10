@@ -1,7 +1,8 @@
 """Task generators from parametric requirements. Untrusted.
 
-A task is a .petra file with everything the requirement owner signs (loads, ambient,
-claims, environment, waivers) and holes to fill with makeable-set choices.
+A task is a card with everything the requirement owner signs (loads, ambient, given
+bounds, claims, environment, waivers) and a design with holes to fill with makeable-set
+choices.
 
 Domains are named by their petra.models.DOMAINS key. GENERATORS maps a domain name to its
 generator; a name outside models.DOMAINS is refused at import, so the tasks cannot drift
@@ -48,9 +49,10 @@ class Hole:
 class Task:
     id: str                   # "circuit-000042", seed-derived, stable
     domain: str               # a key of petra.models.DOMAINS
-    template: str             # .petra text with {{hole}} markers
+    card: str                 # the card's text
+    template: str             # the design's text with {{hole}} markers
     holes: tuple[Hole, ...]
-    given: tuple[tuple[str, str], ...] = ()   # the owner's numbers and ids, as written in the template
+    given: tuple[tuple[str, str], ...] = ()   # the owner's numbers and ids, as written in the card and the template
 
 
 Generator = Callable[[int, Registry], Task]
@@ -94,7 +96,7 @@ def generate_circuit(seed: int, registry: Registry) -> Task:
                                                       lambda p: registry.parts[p].series is not None)),
         Hole("t1.part", PartKind.TERMINAL.value, _parts(registry, PartKind.TERMINAL, lambda p: registry_value(registry, p, "current_max").lo)),
     )
-    return Task(given["task"], "circuit", _circuit_text(given, {h.name: f"{{{{{h.name}}}}}" for h in holes}, None), holes, tuple(given.items()))
+    return Task(given["task"], "circuit", *_circuit_text(given, {h.name: f"{{{{{h.name}}}}}" for h in holes}, None), holes, tuple(given.items()))
 
 
 def generate_truss(seed: int, registry: Registry) -> Task:
@@ -122,7 +124,7 @@ def generate_bolt(seed: int, registry: Registry) -> Task:
         Hole("j.bolt", PartKind.BOLT.value, _parts(registry, PartKind.BOLT, capacity, lambda p: not p.endswith("_zn"))),
         Hole("j.count", "count", BOLT_COUNTS),
     )
-    return Task(given["task"], "bolt", _bolt_text(given, {h.name: f"{{{{{h.name}}}}}" for h in holes}, None), holes, tuple(given.items()))
+    return Task(given["task"], "bolt", *_bolt_text(given, {h.name: f"{{{{{h.name}}}}}" for h in holes}, None), holes, tuple(given.items()))
 
 
 GENERATORS: Mapping[str, Generator] = {
@@ -142,8 +144,8 @@ def generate(domain: str, seed: int, registry: Registry) -> Task:
 
 
 def fill(task: Task, choices: Mapping[str, str]) -> str:
-    """Substitute choices into the template. Rejects a missing or extra hole and a choice
-    outside the hole's list."""
+    """Substitute choices into the template: the design's text, which answers `task.card`.
+    Rejects a missing or extra hole and a choice outside the hole's list."""
     _check(task, choices)
     text = task.template
     for hole in task.holes:
@@ -151,10 +153,10 @@ def fill(task: Task, choices: Mapping[str, str]) -> str:
     return text
 
 
-def family_text(task: Task, choices: Mapping[str, str], box: Box) -> str:
-    """A family design around a solved task: the holes fixed to `choices`, the owner's
-    widenable inputs replaced by params over `box`, everything else as the task has it.
-    Circuit params: draw (A), run (m), amb (degC). Bolt params: fa (kN)."""
+def family_text(task: Task, choices: Mapping[str, str], box: Box) -> tuple[str, str]:
+    """A family around a solved task, as (card, design): the holes fixed to `choices`, the
+    owner's widenable inputs replaced by params over `box`, everything else as the task
+    has it. Circuit params: draw (A), run (m), amb (degC). Bolt params: fa (kN)."""
     _check(task, choices)
     params = _FAMILY_PARAMS[task.domain]
     if set(box) != set(params):
@@ -177,33 +179,52 @@ def _number(q: Fraction) -> str:
     return str(q.numerator)
 
 
-def _params(box: Box, units: Mapping[str, str]) -> list[str]:
-    return [f"param {name} in [{_number(lo)} {units[name]}, {_number(hi)} {units[name]}]" for name, (lo, hi) in sorted(box.items())]
+def _params(box: Box, units: Mapping[str, str]) -> dict[str, str]:
+    """Each family param's declaration, by its name."""
+    return {name: f"param {name} in [{_number(lo)} {units[name]}, {_number(hi)} {units[name]}]" for name, (lo, hi) in box.items()}
 
 
-def _circuit_text(g: Mapping[str, str], parts: Mapping[str, str], box: Box | None) -> str:
+def _circuit_text(g: Mapping[str, str], parts: Mapping[str, str], box: Box | None) -> tuple[str, str]:
+    """The card's text and the design's. A family's card declares the params its ambient
+    and its load read, and its design the one its wire reads."""
     source = f'source "gym task {g["task"]}"'
     if box is None:
-        params = []
+        asked, own = [], []
         ambient = f'ambient in [{g["ambient_lo"]} degC, {g["ambient_hi"]} degC] signed "{OWNER}" {source}'
         length, draw, owner = f'length {g["length"]} m', f'current in [0 A, {g["current"]} A]', OWNER
     else:
-        params = [*_params(box, _FAMILY_PARAMS["circuit"]), ""]
+        params = _params(box, _FAMILY_PARAMS["circuit"])
+        asked, own = [params["amb"], params["draw"], ""], [params["run"], ""]
         ambient, length, draw, owner = "ambient param amb", "length param run", "current param draw", AGENT
     title = g["task"] if box is None else f'family-{g["task"]}'
-    return "\n".join([
+    card = "\n".join([
         "petra 0",
         "",
-        f'design "gym-{title}" {{',
+        f'card "gym-{title}" {{',
         f'  owner "{owner}"',
         f'  environment {g["environment"]}',
         "}",
         "",
-        *params,
+        *asked,
         ambient,
         "",
+        f'given fault_current in [0 kA, {g["fault"]} kA] signed "{OWNER}" {source}',
+        "",
+        "load demand {",
+        f"  on c.load {draw}",
+        f'  signed "{owner}" {source}',
+        "}",
+        "",
+        "claim hot:  c.w1.temperature <= 70 degC under demand",
+        "claim drop: c.w1.voltage_drop <= 3 % under demand",
+        "",
+    ])
+    design = "\n".join([
+        "petra 0",
+        "",
+        *own,
         "circuit c {",
-        f'  supply mains voltage {g["voltage"]} V fault_current in [0 kA, {g["fault"]} kA] signed "{OWNER}" {source}',
+        f'  supply mains voltage {g["voltage"]} V fault_current given fault_current',
         f'  breaker cb1 part {parts["cb1.part"]}',
         f'  wire w1 cable {parts["w1.cable"]} {length} install install.clipped_direct',
         f'  terminal t1 part {parts["t1.part"]}',
@@ -215,42 +236,31 @@ def _circuit_text(g: Mapping[str, str], parts: Mapping[str, str], box: Box | Non
         "  connect t1.out -> load.in",
         "}",
         "",
-        "load demand {",
-        f"  on c.load {draw}",
-        f'  signed "{owner}" {source}',
-        "}",
-        "",
-        "claim hot:  c.w1.temperature <= 70 degC under demand",
-        "claim drop: c.w1.voltage_drop <= 3 % under demand",
-        "",
     ])
+    return card, design
 
 
-def _bolt_text(g: Mapping[str, str], parts: Mapping[str, str], box: Box | None) -> str:
+def _bolt_text(g: Mapping[str, str], parts: Mapping[str, str], box: Box | None) -> tuple[str, str]:
+    """The card's text and the design's. A family's card declares the param its load reads."""
     source = f'source "gym task {g["task"]}"'
     if box is None:
         params, force, owner = [], f'force in [0 kN, {g["force"]} kN]', OWNER
     else:
-        params, force, owner = [*_params(box, _FAMILY_PARAMS["bolt"]), ""], "force param fa", AGENT
+        params, force, owner = [_params(box, _FAMILY_PARAMS["bolt"])["fa"], ""], "force param fa", AGENT
     title = g["task"] if box is None else f'family-{g["task"]}'
     plate = f'  plate {g["plate"]} thickness {g["thickness"]} mm'
-    return "\n".join([
+    card = "\n".join([
         "petra 0",
         "",
-        f'design "gym-{title}" {{',
+        f'card "gym-{title}" {{',
         f'  owner "{owner}"',
         f'  environment {g["environment"]}',
         "}",
         "",
         *params,
-        "joint j {",
-        f'  bolt {parts["j.bolt"]} count {parts["j.count"]}',
-        plate,
-        plate,
-        f'  torque in [{g["torque_lo"]} Nm, {g["torque_hi"]} Nm] signed "{OWNER}" {source}',
-        f'  nut_factor in [0.16, 0.22] measured "{OWNER}" {source}',
-        f'  load_share in [0.10, 0.25] signed "{OWNER}" {source}',
-        "}",
+        f'given torque in [{g["torque_lo"]} Nm, {g["torque_hi"]} Nm] signed "{OWNER}" {source}',
+        f'given nut_factor in [0.16, 0.22] measured "{OWNER}" {source}',
+        f'given load_share in [0.10, 0.25] signed "{OWNER}" {source}',
         "",
         "load service {",
         f"  on j {force}",
@@ -262,6 +272,20 @@ def _bolt_text(g: Mapping[str, str], parts: Mapping[str, str], box: Box | None) 
         "claim tension: j.tension_utilisation <= 0.9 under service",
         "",
     ])
+    design = "\n".join([
+        "petra 0",
+        "",
+        "joint j {",
+        f'  bolt {parts["j.bolt"]} count {parts["j.count"]}',
+        plate,
+        plate,
+        "  torque given torque",
+        "  nut_factor given nut_factor",
+        "  load_share given load_share",
+        "}",
+        "",
+    ])
+    return card, design
 
 
 _FAMILY_PARAMS: Mapping[str, Mapping[str, str]] = {

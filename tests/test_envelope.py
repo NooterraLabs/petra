@@ -21,7 +21,7 @@ from petra.models.base import ComponentError
 from petra.premises import Tag
 from petra.units import DIMENSIONLESS, FORCE, TEMPERATURE, Quantity
 from petra.verdict import Pass
-from tests.test_pipeline import CAPACITY, REGISTRY, WAIVE_WEAR, GadgetDomain, Solver, gadget, point
+from tests.test_pipeline import CAPACITY, GIVEN, REGISTRY, WAIVE_WEAR, GadgetDomain, Solver, card, gadget, point
 
 ROOT = Path(__file__).resolve().parent.parent
 KN = Fraction(1000)
@@ -34,7 +34,7 @@ def kn(x) -> Quantity:
 
 
 class Envelopes(GadgetDomain):
-    BODY = (gadget(CAPACITY), PUSH, CLAIM, WAIVE_WEAR)
+    BODY = (card(GIVEN, PUSH, CLAIM, WAIVE_WEAR), gadget(CAPACITY))
 
     def run_envelope(self, *body, name="push.g.force", lo=kn(0), hi=kn(30), **kwargs):
         return envelope(self.design(*(body or self.BODY)), REGISTRY, name, lo, hi, (Solver(),), **kwargs)
@@ -77,7 +77,7 @@ class Envelopes(GadgetDomain):
     def test_a_failing_middle_re_anchors_at_the_low_end(self):
         # The load is stated up to 30 kN, so its middle, 15 kN, is past the 10 kN the
         # gadget carries; the envelope still exists from the low end.
-        env = self.run_envelope(gadget(CAPACITY), PUSH.replace("6 kN", "30 kN"), CLAIM, WAIVE_WEAR, resolution=kn(1))
+        env = self.run_envelope(card(GIVEN, PUSH.replace("6 kN", "30 kN"), CLAIM, WAIVE_WEAR), gadget(CAPACITY), resolution=kn(1))
         first = env.probes[0]
         self.assertEqual((first.lo, first.hi, first.status), (15 * KN, 15 * KN, "FAIL"))
         self.assertEqual((env.anchor, env.start.status), (0, "PASS"))
@@ -89,12 +89,12 @@ class Envelopes(GadgetDomain):
         self.assertLessEqual(len(env.probes), envelope_module.DEFAULT_MAX_PROBES)
 
     def test_a_given_anchor_is_never_moved(self):
-        env = self.run_envelope(gadget(CAPACITY), PUSH.replace("6 kN", "30 kN"), CLAIM, WAIVE_WEAR, at=kn(15))
+        env = self.run_envelope(card(GIVEN, PUSH.replace("6 kN", "30 kN"), CLAIM, WAIVE_WEAR), gadget(CAPACITY), at=kn(15))
         self.assertIsNone(env.safe)
         self.assertEqual((env.anchor, len(env.probes)), (15 * KN, 1))
 
     def test_when_the_low_end_fails_too_both_are_named(self):
-        body = (gadget(CAPACITY), PUSH.replace("[0 kN, 6 kN]", "[20 kN, 30 kN]"), CLAIM, WAIVE_WEAR)
+        body = (card(GIVEN, PUSH.replace("[0 kN, 6 kN]", "[20 kN, 30 kN]"), CLAIM, WAIVE_WEAR), gadget(CAPACITY))
         env = self.run_envelope(*body, lo=kn(20), hi=kn(30))
         self.assertIsNone(env.safe)
         self.assertEqual(env.anchor, 25 * KN)
@@ -110,7 +110,7 @@ class Envelopes(GadgetDomain):
             self.run_envelope(unit="degC")
 
     def test_a_param_is_probed_by_its_scope_parameter(self):
-        body = (gadget("  capacity param cap\n"), "param cap in [20 kN, 25 kN]\n", PUSH.replace("6 kN", "9 kN"), CLAIM, WAIVE_WEAR)
+        body = (card(PUSH.replace("6 kN", "9 kN"), CLAIM, WAIVE_WEAR), "param cap in [20 kN, 25 kN]\n" + gadget("  capacity param cap\n"))
         env = self.run_envelope(*body, name="cap", lo=kn(10), hi=kn(40), resolution=kn(1))
         lo, hi = env.safe
         self.assertEqual(hi, 40 * KN)
@@ -120,7 +120,8 @@ class Envelopes(GadgetDomain):
     def test_obligations_that_do_not_depend_on_the_input_are_set_aside(self):
         other = 'load pull {\n  on h force in [0 kN, 5 kN]\n  signed "client@example.org" source "brief rev A"\n}\n'
         waive_h = 'waive gadget.wear on h by "o@example.org" reason "no sliding contact"\n'
-        env = self.run_envelope(gadget(CAPACITY), gadget(CAPACITY, name="h"), PUSH, other, CLAIM, WAIVE_WEAR, waive_h, resolution=kn(2))
+        env = self.run_envelope(card(GIVEN, PUSH, other, CLAIM, WAIVE_WEAR, waive_h), gadget(CAPACITY) + gadget(CAPACITY, name="h"),
+                                resolution=kn(2))
         self.assertEqual((env.elsewhere, env.elsewhere_open), ("PASS", ()))
         self.assertIn("do not depend on push.g.force are PASS", render(env))
 
@@ -154,8 +155,14 @@ class Envelopes(GadgetDomain):
     def test_an_input_with_a_mean_is_refused(self):
         mean = PUSH.replace("[0 kN, 6 kN]", "[0 kN, 6 kN] mean 4 kN")
         with self.assertRaises(EnvelopeError) as ctx:
-            self.run_envelope(gadget(CAPACITY), mean, CLAIM, WAIVE_WEAR)
+            self.run_envelope(card(GIVEN, mean, CLAIM, WAIVE_WEAR), gadget(CAPACITY))
         self.assertIn("mean", str(ctx.exception))
+
+    def test_a_bound_that_two_lines_read_is_refused(self):
+        body = (card(GIVEN, PUSH, CLAIM, WAIVE_WEAR), gadget(CAPACITY) + gadget(CAPACITY, name="h"))
+        with self.assertRaises(EnvelopeError) as ctx:
+            self.run_envelope(*body, name="g.capacity", lo=kn(10), hi=kn(40))
+        self.assertIn("is read 2 times", str(ctx.exception))
 
     def test_narrowing_replaces_one_bound_and_signs_it_as_a_probe(self):
         design = self.design(*self.BODY)
@@ -231,13 +238,13 @@ class CommandLine(unittest.TestCase):
         # middle of the stated range fails and the search anchors at the low end
         out = io.StringIO()
         fixture = ROOT / "tests" / "fixtures" / "readout" / "job5_fail_60k.petra"
-        source = fixture.read_text(encoding="utf-8").replace("[0 kip, 60 kip]", "[0 kip, 120 kip]")
+        source = fixture.with_suffix(".card").read_text(encoding="utf-8").replace("[0 kip, 60 kip]", "[0 kip, 120 kip]")
         with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "job5_120k.petra"
+            path = Path(tmp) / "job5_120k.card"
             path.write_text(source, encoding="utf-8", newline="\n")
             with contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
-                code = cli.main(["envelope", str(path), "--input", "reaction.tab.shear", "--from", "0 kip", "--to", "120 kip",
-                                 "--max-probes", "4"])
+                code = cli.main(["envelope", str(fixture), "--card", str(path), "--input", "reaction.tab.shear", "--from", "0 kip",
+                                 "--to", "120 kip", "--max-probes", "4"])
         text = out.getvalue()
         self.assertEqual(code, 0, text)
         self.assertIn("at reaction.tab.shear = 60 kip, the middle, the design is FAIL", text)

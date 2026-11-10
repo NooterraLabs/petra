@@ -1,0 +1,10 @@
+petra 0
+
+card "t14_waive" {
+  owner "audit@example.org"
+}
+
+load gravity {
+  on c1 shear in [0 kip, 35 kip]
+  signed "audit@example.org" source "audit"
+}

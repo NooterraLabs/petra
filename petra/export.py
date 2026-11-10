@@ -1,16 +1,18 @@
-"""A design as the kernel reads it: `python -m petra.export FILE.petra --out DIR`.
+"""A card and a design as the kernel reads them:
+`python -m petra.export FILE.petra [--card FILE.card] --out DIR`.
 
 Writes four files into DIR (docs/format.md):
 
-    card.json     what the asker owns: the load cases, every signed bound, the claims
+    card.json     what the asker owns: the load cases, every bound, the claims, the waivers
     design.json   what the designer owns: every quantity written in a component block
     deck.json     the registry values the proofs read, and the domains of petra/decks/core.json
     proofs.json   one cell per obligation, with the proof of each that has one
 
-Untrusted. It reads a .petra file through the language and the models, so a bug here
+Untrusted. It reads the two files through the language and the models, so a bug here
 gives the kernel the wrong files, and the kernel's verdict is about the files it was given.
-A waiver, a load or an ambient that nobody signed is the designer's, and goes into
-design.json under a key the kernel refuses.
+A load or an ambient that reads a param is an input nobody signed, and goes into card.json
+with no `by`, which the kernel refuses. Exits 3 when the language or a model refuses the
+pair, as `petra check` does, and then writes nothing.
 """
 from __future__ import annotations
 
@@ -22,7 +24,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any, Iterator
 
-from .ir import Bound, Component, Design, Fixed, Input, ParamRef, Ref, Vec
+from .ir import Component, Design, Fixed, Input, ParamRef, Ref, Vec
 from .kernel import Interval
 from .units import Quantity, dimension_name
 
@@ -59,32 +61,30 @@ def written(component: Component) -> Iterator[dict[str, Any]]:
 
 
 def card(design: Design, inputs: list[Input]) -> dict[str, Any]:
-    """The signed part of the file. An input's name is the stem of its premise label, and
-    `inputs` is every signed bound the models hold (pipeline.signed_inputs)."""
+    """What the card states. An input's name is the stem of its premise label, and `inputs`
+    is every signed bound the models hold (pipeline.signed_inputs). A load or an ambient
+    that reads a param is an input with no `by`."""
     cases = {id(e.value): load.name for load in design.loads.values() for e in load.entries}
     claims = [{"name": c.name, "subject": ".".join(c.qoi.path), "quantity": c.qoi.name, "rel": c.rel.value,
                "cases": list(c.under), "bound": _quantity(c.bound)} for c in design.claims]
+    unsigned = [(f"{load.name}.{'.'.join(e.target)}.{e.field}", load.name, e.value)
+                for load in design.loads.values() for e in load.entries if isinstance(e.value, ParamRef)]
+    if isinstance(design.ambient, ParamRef):
+        unsigned.append(("ambient", None, design.ambient))
     return {"format": "petra-card/0", "name": design.name, "environment": design.environment, "cases": sorted(design.loads),
             "inputs": [{"name": i.name, **({"case": cases[id(i)]} if id(i) in cases else {}), "by": i.signature.owner, **_quantity(i.range)}
-                       for i in inputs],
-            "claims": claims, "waivers": []}
+                       for i in inputs]
+                      + [{"name": name, **({"case": case} if case else {}), **_quantity(design.params[ref.name].range)}
+                         for name, case, ref in unsigned],
+            "claims": claims,
+            "waivers": [{"subject": ".".join(w.subject), "mechanism": w.mode, "by": w.owner, "reason": w.reason} for w in design.waivers]}
 
 
 def design_file(design: Design, card_hash: str) -> dict[str, Any]:
-    """What the designer wrote. `waivers`, `loads` and `ambient` appear only when the file
-    states one that nobody signed, and the kernel refuses a design that has any of them."""
-    out: dict[str, Any] = {"format": "petra-design/0", "name": design.name, "card": card_hash,
-                           "quantities": [q for c in design.components.values() for q in written(c)],
-                           "params": [{"name": p.name, **_quantity(p.range)} for p in design.params.values()]}
-    if design.waivers:
-        out["waivers"] = [{"subject": ".".join(w.subject), "mechanism": w.mode, "by": w.owner, "reason": w.reason} for w in design.waivers]
-    loads = [{"case": load.name, "target": ".".join(e.target), "field": e.field, "param": e.value.name}
-             for load in design.loads.values() for e in load.entries if isinstance(e.value, ParamRef)]
-    if loads:
-        out["loads"] = loads
-    if isinstance(design.ambient, ParamRef):
-        out["ambient"] = {"param": design.ambient.name}
-    return out
+    """What the designer wrote: every number in a component block, and the params."""
+    return {"format": "petra-design/0", "name": design.name, "card": card_hash,
+            "quantities": [q for c in design.components.values() for q in written(c)],
+            "params": [{"name": p.name, **_quantity(p.range)} for p in design.params.values()]}
 
 
 def tape(statement: Any) -> dict[str, Any] | None:
@@ -151,7 +151,7 @@ def cells(report: Any, proofs: _Proofs) -> list[dict[str, Any]]:
     """One cell per obligation the coverage rules demand, and one per mode they excuse."""
     from .kernel.rules.r4_enclosure import Enclosure, PointWitness
 
-    states = {"certified": "proved", "refuted": "refuted"}
+    states = {"certified": "proved", "refuted": "refuted", "waived": "waived"}
     out: list[dict[str, Any]] = []
     body = report.to_json()
     for verdict in body["verdicts"]:
@@ -192,12 +192,11 @@ def sha256(data: str) -> str:
     return "sha256:" + hashlib.sha256(data.encode("utf-8")).hexdigest()
 
 
-def export(path: str, out: Path, physics: bool = True) -> None:
+def export(path: str, out: Path, physics: bool = True, card_path: str | None = None) -> None:
     """Write card.json, design.json and deck.json, then proofs.json when `physics`. The
     first three need no solver, so the kernel can refuse an ill-formed design before any
     physics runs."""
-    from .files import read_design
-    from .lang import parse_design
+    from .lang import load_design
     from .pipeline import check_design, lower_components, signed_inputs
     from .registry import build_registry
     from .solvers import SolverSource
@@ -206,7 +205,7 @@ def export(path: str, out: Path, physics: bool = True) -> None:
         (out / name).write_text(body, encoding="utf-8", newline="\n")
 
     registry = build_registry()
-    design = parse_design(read_design(path), path, registry)
+    design = load_design(path, registry, card_path)
     inputs = sorted(signed_inputs(design, lower_components(design, registry)), key=lambda i: i.name)
     out.mkdir(parents=True, exist_ok=True)
     card_text = text(card(design, inputs))
@@ -222,11 +221,18 @@ def export(path: str, out: Path, physics: bool = True) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m petra.export", description=__doc__.split("\n")[0])
-    parser.add_argument("file")
+    parser.add_argument("file", help="the design, a .petra file")
+    parser.add_argument("--card", metavar="FILE", help="the card the design answers; default the .card file beside the design")
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--no-physics", action="store_true", help="write no proofs.json")
     args = parser.parse_args(argv)
-    export(args.file, args.out, physics=not args.no_physics)
+    from .repair import INPUT_ERRORS
+
+    try:
+        export(args.file, args.out, physics=not args.no_physics, card_path=args.card)
+    except (*INPUT_ERRORS, OSError) as exc:
+        print(f"petra: {exc}", file=sys.stderr)
+        return 3
     return 0
 
 

@@ -5,10 +5,6 @@ petra 0
 # runs from 1.25 in to 24.75 in below the beam's top, past the end of its flat web, 14.66 in
 # down ((d + T)/2).
 
-design "steel-single-angle" {
-  owner "s.engineer@example.org"
-}
-
 single_angle sa1 {
   basis lrfd
   beam W16x26 grade steel.A992
@@ -23,9 +19,4 @@ single_angle sa1 {
   beam_gauge 2.5 inch
   support_side bolted
   support_gauge 2.5 inch
-}
-
-load gravity {
-  on sa1 shear in [0 kip, 20 kip]
-  signed "s.engineer@example.org" source "beam reaction, LRFD 1.2D + 1.6L, calc SC-3"
 }

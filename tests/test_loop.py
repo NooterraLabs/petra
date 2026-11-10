@@ -10,6 +10,7 @@ from pathlib import Path
 
 import petra
 from petra import loop
+from petra.files import read_pair
 from petra.registry import build_registry
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -30,23 +31,25 @@ class Tasks(unittest.TestCase):
         for task in self.tasks:
             with self.subTest(task.id):
                 self.assertIn(task.kind, loop.TASK_KINDS)
-                self.assertEqual(task.faithful(task.draft(), REGISTRY), [])
-                self.assertEqual(task.faithful(task.reference, REGISTRY), [])
+                self.assertEqual(task.faithful(*task.draft(), REGISTRY), [])
+                self.assertEqual(task.faithful(*task.reference, REGISTRY), [])
 
     def test_the_reference_passes_so_the_job_can_be_done(self):
         for task in self.tasks[:3]:
             with self.subTest(task.id):
-                self.assertEqual(petra.check(task.reference, repair=False)["status"], "PASS")
+                self.assertEqual(petra.check(*task.reference, repair=False)["status"], "PASS")
 
     def test_a_design_that_changes_the_job_is_named(self):
         task = self.tasks[0]
-        top = task.draft()
+        card, top = task.draft()
         load = loop._kip(task.loads[0][1])
-        self.assertTrue(task.faithful(top.replace(f"{load} kip]", "1 kip]"), REGISTRY), "a lowered load")
+        self.assertTrue(task.faithful(card.replace(f"{load} kip]", "1 kip]"), top, REGISTRY), "a lowered load")
         beam = next(g for g in task.given if g.startswith("beam"))
-        self.assertTrue(task.faithful(top.replace(beam, beam.replace("W21x44", "W21x62")), REGISTRY), "another beam")
-        waived = top + '\nwaive steel.weld on st1 by "x" reason "y"\n'
-        self.assertIn("the design waives a requirement", task.faithful(waived, REGISTRY))
+        self.assertTrue(task.faithful(card, top.replace(beam, beam.replace("W21x44", "W21x62")), REGISTRY), "another beam")
+        waiver = '\nwaive steel.weld on st1 by "x" reason "y"\n'
+        self.assertIn("the card waives a requirement", task.faithful(card + waiver, top, REGISTRY))
+        (refused,) = task.faithful(card, top + waiver, REGISTRY)
+        self.assertIn("'waive' belongs in the card", refused, "a design cannot waive")
 
     def test_the_brief_names_the_kind_the_members_and_the_loads(self):
         brief = self.tasks[0].brief()
@@ -61,20 +64,20 @@ class Solve(unittest.TestCase):
     def setUpClass(cls):
         cls.task = next(t for t in loop.tasks(DEV, 5, REGISTRY) if t.id == "101-005")
         cls.judged = []
-        cls.solved = loop.solve(cls.task, REGISTRY, judge=lambda text: cls.judged.append(text) or [])
+        cls.solved = loop.solve(cls.task, REGISTRY, judge=lambda card, text: cls.judged.append(text) or [])
 
     def test_the_draft_fails_and_the_loop_reaches_pass_within_the_budget(self):
         self.assertEqual(self.solved.attempts[0].status, "FAIL")
         self.assertIsNotNone(self.solved.attempts[0].move, "the loop took a move from the repair")
         self.assertIsNotNone(self.solved.checks_to_pass)
         self.assertLessEqual(self.solved.checks_to_pass, 10)
-        self.assertEqual(petra.check(self.solved.passed, repair=False)["status"], "PASS")
+        self.assertEqual(petra.check(self.solved.card, self.solved.passed, repair=False)["status"], "PASS")
 
     def test_the_optimum_passes_keeps_the_job_and_weighs_less(self):
-        self.assertEqual(petra.check(self.solved.optimum, repair=False)["status"], "PASS")
-        self.assertEqual(self.task.faithful(self.solved.optimum, REGISTRY), [])
+        self.assertEqual(petra.check(self.solved.card, self.solved.optimum, repair=False)["status"], "PASS")
+        self.assertEqual(self.task.faithful(self.solved.card, self.solved.optimum, REGISTRY), [])
         self.assertLess(self.solved.mass_optimum, self.solved.mass_passed)
-        self.assertAlmostEqual(self.solved.mass_optimum, loop.mass(self.solved.optimum, REGISTRY))
+        self.assertAlmostEqual(self.solved.mass_optimum, loop.mass(self.solved.card, self.solved.optimum, REGISTRY))
 
     def test_the_judge_reads_every_design_the_loop_keeps(self):
         self.assertEqual(len(self.judged), 1 + self.solved.kept)
@@ -94,20 +97,20 @@ class Fixed(unittest.TestCase):
         solved = loop.solve(task, REGISTRY)
         self.assertLess(solved.mass_optimum, solved.mass_passed)
         self.assertIn("  eccentricity 12 inch\n", solved.optimum)
-        self.assertEqual(task.faithful(solved.optimum, REGISTRY), [])
+        self.assertEqual(task.faithful(solved.card, solved.optimum, REGISTRY), [])
 
 
 class Mass(unittest.TestCase):
     def test_a_thicker_plate_and_more_rows_weigh_more(self):
-        text = (ROOT / "examples" / "steel" / "shear_tab.petra").read_text(encoding="utf-8")
-        base = loop.mass(text, REGISTRY)
-        self.assertGreater(loop.mass(text.replace("thickness 0.375 inch", "thickness 0.5 inch"), REGISTRY), base)
-        self.assertGreater(loop.mass(text.replace("rows 4", "rows 5"), REGISTRY), base)
+        card, text = read_pair(ROOT / "examples" / "steel" / "shear_tab.petra")
+        base = loop.mass(card, text, REGISTRY)
+        self.assertGreater(loop.mass(card, text.replace("thickness 0.375 inch", "thickness 0.5 inch"), REGISTRY), base)
+        self.assertGreater(loop.mass(card, text.replace("rows 4", "rows 5"), REGISTRY), base)
 
     def test_every_kind_has_an_estimate(self):
         for kind in loop.TASK_KINDS:
             with self.subTest(kind):
-                self.assertGreater(loop.mass((ROOT / "examples" / "steel" / f"{kind}.petra").read_text(encoding="utf-8"), REGISTRY), 0)
+                self.assertGreater(loop.mass(*read_pair(ROOT / "examples" / "steel" / f"{kind}.petra"), REGISTRY), 0)
 
 
 if __name__ == "__main__":

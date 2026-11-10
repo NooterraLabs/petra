@@ -1,0 +1,19 @@
+petra 0
+
+card "family-cu-pvc-clipped-direct" {
+  owner "petra.library@example.org"
+  environment indoor_dry
+}
+
+param draw       in [0 A, 13 A]
+param amb        in [10 degC, 40 degC]
+
+ambient param amb
+
+load demand {
+  on c.load current param draw
+  signed "petra.library@example.org" source "family definition"
+}
+
+claim hot:  c.w1.temperature <= 70 degC under demand
+claim drop: c.w1.voltage_drop <= 3 % under demand

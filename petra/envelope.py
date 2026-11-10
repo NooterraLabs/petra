@@ -1,7 +1,7 @@
 """Safe envelopes: the widest interval of one input, around an anchor value, over which
 every obligation that depends on that input is proved.
 
-    petra envelope FILE --input NAME --from LO --to HI [--at X] [--resolution R] [--max-probes N]
+    petra envelope FILE [--card CARD] --input NAME --from LO --to HI [--at X] [--resolution R] [--max-probes N]
 
 Untrusted. This module only chooses which designs to check. Each probe is the design with
 the one input's range replaced by an interval, checked by pipeline.check_design like any
@@ -18,9 +18,10 @@ search stops growing there at once. None of this needs the design to be monotone
 input.
 
 The input is replaced by an assumption that names this command as its owner, never by
-the owner's signature: the owner signed the range the design states, not the one being
+the owner's signature: the owner signed the range the card states, not the one being
 probed. A probe range may run past the signed one; that is how the envelope tells how
-much headroom the design has.
+much headroom the design has. A bound the card gives and two lines of the design read
+is refused: it is two inputs, and an envelope probes one.
 
 Obligations whose statements do not mention the input cannot change from probe to probe,
 so they are set aside and reported once ("elsewhere"). The probe statuses, and the
@@ -78,7 +79,8 @@ class EnvelopeError(ValueError):
 
 @dataclass(frozen=True)
 class Target:
-    """The input or param being probed, as the design states it."""
+    """The input or param being probed, as the card states it, or the design for a param of
+    its own."""
 
     name: str
     label: str
@@ -143,8 +145,8 @@ class Envelope:
 
 def find_target(design: Design, registry: Registry, name: str) -> Target:
     """A param by its name, or a signed input by its label stem: "ambient", a component
-    field such as "lighting.supply.fault_current", or a load entry such as
-    "lamp_draw.lighting.lamps.current"."""
+    field that reads a bound the card gives, such as "lighting.mains.fault_current", or a
+    load entry such as "lamp_draw.lighting.lamps.current"."""
     if name in design.params:
         p = design.params[name]
         return Target(name, param_label(design.name, name), p.range.dim, p.range.value, None)
@@ -187,7 +189,8 @@ def narrow(design: Design, target: Target, lo: Fraction, hi: Fraction) -> Design
         for name, c in design.components.items()
     }
     if hits != 1:
-        raise EnvelopeError(f"the bound of {target.name} was found {hits} times in {design.name}, not once")
+        raise EnvelopeError(f"the bound of {target.name} is read {hits} times in {design.name}, not once; "
+                            "an envelope probes a bound that one line reads")
     return dataclasses.replace(design, ambient=ambient, loads=MappingProxyType(loads), components=MappingProxyType(components))
 
 

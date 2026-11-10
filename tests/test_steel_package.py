@@ -32,7 +32,7 @@ class Packages(unittest.TestCase):
         shutil.rmtree(self.root, ignore_errors=True)
 
     def package(self, g):
-        return write_package(g.text, self.root / g.name, REGISTRY)
+        return write_package(g.card, g.text, self.root / g.name, REGISTRY)
 
     def test_passing_failing_and_toleranced_designs_recheck(self):
         for g in (pick(lambda g: g.expected == "PASS" and not g.toleranced), pick(lambda g: g.expected == "FAIL"),
@@ -48,7 +48,7 @@ class Packages(unittest.TestCase):
         g = pick(lambda g: g.kind == "shear_tab" and g.expected == "PASS")
         pkg = self.package(g)
         text = (pkg.root / "report.md").read_text(encoding="utf-8")
-        d = parse_design(g.text, "t.petra", REGISTRY)
+        d = parse_design(g.card, g.text, "t.petra", REGISTRY)
         for mode in required(calc.connection(d, "c1", REGISTRY), d):
             self.assertIn(f"### {mode}: holds", text)
         for h in pkg.hashes:

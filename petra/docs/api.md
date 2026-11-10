@@ -21,22 +21,22 @@ for f in report.findings:
                 print("  at", c.symbol, "=", c.shown, "exact", c.exact, c.si_unit)
 ```
 
-`petra check --json examples/truss_fail.petra` gives the same report as JSON, and so does `petra.check(text)`. `report.to_json()` gives it without the `repair` key.
+`petra check --json examples/truss_fail.petra` gives the same report as JSON, and so does `petra.check(card, design)`. `report.to_json()` gives it without the `repair` key.
 
 ## Check functions
 
-`petra.check(text, *, path="<text>", repair=True) -> dict` checks a design given as text, with the shipped registry and the solvers. It returns plain data that `json.dumps` takes as it is: the JSON that `petra check --json` prints, described in the JSON section. A FAIL's `repair` key names the inputs that lower the governing check, as Repair describes. With `repair=False`, `repair` is null and the call runs one check. A design that does not lower returns `{"file": path, "status": "INPUT_ERROR", "error": TEXT}` and does not raise. `path` is the name that error messages and `file` give the text.
+`petra.check(card, design, *, path="<design>", repair=True) -> dict` checks a design against a card, both given as text, with the shipped registry and the solvers. It returns plain data that `json.dumps` takes as it is: the JSON that `petra check --json` prints, described in the JSON section. A FAIL's `repair` key names the inputs that lower the governing check, as Repair describes. With `repair=False`, `repair` is null and the call runs one check. A pair that does not lower returns `{"file": path, "status": "INPUT_ERROR", "error": TEXT}` and does not raise. So does a card whose load or ambient reads a param, which is a family and goes to `petra.certify_family`. `path` is the name that error messages and `file` give the design, and the card's messages say `path` with `.card` in place of `.petra`.
 
 ```python
 import petra
 
-result = petra.check(open("tab.petra", encoding="utf-8").read())
+result = petra.check(open("tab.card", encoding="utf-8").read(), open("tab.petra", encoding="utf-8").read())
 if result["status"] == "FAIL":
     move = result["repair"]["moves"][0]
     print(move["direction"], move["input"], "on line", move["line"], "from", move["from"], "to", move["to"])
 ```
 
-`petra.check_file(path, *, certs=None, library=None, solve=True) -> Report` loads a `.petra` file with the shipped registry and checks it. It gathers evidence from these sources, in this order:
+`petra.check_file(path, *, card=None, certs=None, library=None, solve=True) -> Report` loads the design at `path` and its card with the shipped registry and checks the pair. The card is the `.card` file beside the design unless `card` names another. It gathers evidence from these sources, in this order:
 
 1. The certificate store `certs`, a directory.
 2. `library`, a `petra.Library`.
@@ -44,7 +44,7 @@ if result["status"] == "FAIL":
 
 The kernel checks every piece of evidence. When `certs` is given, `check_file` records accepted evidence there. A syntax error raises `petra.lang.LolaSyntaxError`. A design that cannot be lowered raises `petra.lang.LoweringError` or `petra.models.base.ComponentError`. The CLI reports each of these errors as exit code 3.
 
-`petra.check_design(design, registry, sources, sink=None, deck=None, path="") -> Report` does the same check for a design and registry that you already hold. `petra.parse_design` and `petra.load_design` return a design, and `petra.build_registry` returns a registry.
+`petra.check_design(design, registry, sources, sink=None, deck=None, path="") -> Report` does the same check for a design and registry that you already hold. `petra.parse_design(card, design, path, registry)` and `petra.load_design(path, registry, card=None)` return a design, and `petra.build_registry` returns a registry.
 
 ## Report
 

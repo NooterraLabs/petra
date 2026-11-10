@@ -1,7 +1,5 @@
 petra 0
-design "t19_endplate_gauge_clash" {
-  owner "audit@example.org"
-}
+
 shear_end_plate c1 {
   basis lrfd
   beam W18x50 grade steel.A992
@@ -14,8 +12,4 @@ shear_end_plate c1 {
   edge_vertical 1.25 inch
   support_gauge 2 inch
   weld electrode.E70 size 0.25 inch sides 2
-}
-load gravity {
-  on c1 shear in [0 kip, 50 kip]
-  signed "audit@example.org" source "audit"
 }

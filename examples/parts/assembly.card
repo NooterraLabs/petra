@@ -1,0 +1,11 @@
+petra 0
+
+card "board-in-case" {
+  owner "e.designer@example.org"
+  environment indoor_dry
+}
+
+given tolerance in [0.1 mm, 0.1 mm] signed "e.designer@example.org" source "board maker's outline drawing"
+given mass in [8 g, 9 g] signed "e.designer@example.org" source "weighed, five boards"
+
+claim light: box.mass <= 35 g

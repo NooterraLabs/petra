@@ -1,4 +1,5 @@
-"""Run every steel component of a card through its kind's limit states and report JSON."""
+"""Run every steel component of a design through its kind's limit states, under the loads of
+the card it answers, and report JSON."""
 
 import itertools
 from dataclasses import replace
@@ -45,7 +46,7 @@ def _render(check, lrfd):
 
 
 def worst(runs):
-    """One Out from the runs at every end of the card's intervals: each check where its
+    """One Out from the runs at every end of the component's intervals: each check where its
     utilisation is highest (its available strength lowest under no demand), with the notes and
     unsupported entries of every run."""
     if len(runs) == 1:
@@ -112,7 +113,8 @@ def check_component(component, loads, params=None):
     }
 
 
-def check_text(text):
-    card = parse(text)
+def check_text(card, design):
+    """The report for the text of a card and of the design that answers it."""
+    pair = parse(card, design)
     return {"twin": "clean-room AISC 360-22 connection twin",
-            "components": [check_component(c, card.loads, card.params) for c in card.components]}
+            "components": [check_component(c, pair.loads, pair.params) for c in pair.components]}

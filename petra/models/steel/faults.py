@@ -19,6 +19,9 @@ plate's end welded on one face, whose detail the deck does not encode. `seed_fau
 applies each fault to passing designs from the generator; the deck catches a fault when
 its verdict is not PASS, and names it when a refuted or open requirement is one of the
 fault's modes. The gate wants every fault caught and named.
+
+A fault in a part or a length is an edit to the design's text. A fault in a load (one
+raised, left out or cycled) is an edit to the card's.
 """
 from __future__ import annotations
 
@@ -38,13 +41,17 @@ from .lower import CYCLES, KIND_SPECS
 
 BOLTED = ("shear_tab", "double_angle", "single_angle", "shear_tee", "shear_end_plate", "bolt_bracket", "hanger")
 
+Edit = Callable[[str, str, Generated], tuple[str, str] | None]
+"""(card, design, the base) -> the defective card and design, or None where the fault does
+not apply."""
+
 
 @dataclass(frozen=True)
 class Fault:
     name: str
     defect: str
     kinds: tuple[str, ...]
-    edit: Callable[[str, Generated], str | None]    # the defective text, or None where it does not apply
+    edit: Edit
     modes: frozenset[str]                           # the deck names the fault by one of these
 
 
@@ -72,7 +79,7 @@ def _field(text: str, key: str) -> str | None:
 
 
 def _set(text: str, key: str, value: str) -> str | None:
-    """Replace the whole `key` line (fixed or toleranced) with `key value`."""
+    """Replace the whole `key` line with `key value`."""
     if _field(text, key) is None:
         return None
     return re.sub(rf"^  {key} .*$", f"  {key} {value}", text, count=1, flags=re.M)
@@ -80,7 +87,7 @@ def _set(text: str, key: str, value: str) -> str | None:
 
 def _inches(text: str, key: str) -> Fraction | None:
     raw = _field(text, key)
-    m = re.match(r"(?:in \[)?([0-9.]+) inch", raw or "")
+    m = re.match(r"([0-9.]+) inch", raw or "")
     return Fraction(m.group(1)) if m else None
 
 
@@ -91,27 +98,39 @@ def _weld_size(text: str, key: str, size: str) -> str | None:
     return _set(text, key, re.sub(r"size [0-9.]+ inch", f"size {size} inch", raw))
 
 
+def _design(edit: Callable[[str, Generated], str | None]) -> Edit:
+    """A fault in the design alone: `edit` gives the defective design, and the card stays."""
+    def both(card: str, text: str, g: Generated) -> tuple[str, str] | None:
+        out = edit(text, g)
+        return None if out is None else (card, out)
+    return both
+
+
+@_design
 def _missing_weld(text: str, g: Generated) -> str | None:
     key = "weld" if _field(text, "weld") is not None else "support_weld"
     return _weld_size(text, key, "0.0625")
 
 
+@_design
 def _short_edge(text: str, g: Generated) -> str | None:
     return _set(text, "edge_vertical", "0.625 inch")
 
 
+@_design
 def _close_holes(text: str, g: Generated) -> str | None:
     rows = _field(text, "rows")
     return _set(text, "pitch", "1.5 inch") if rows and int(rows) > 1 else None
 
 
-def _drop_load(field: str) -> Callable[[str, Generated], str | None]:
-    """The design with its `field` load left out of the load case."""
-    def edit(text: str, g: Generated) -> str | None:
-        return re.sub(rf"^  on c1 {field} in .*\n", "", text, count=1, flags=re.M)
+def _drop_load(field: str) -> Edit:
+    """The card with its `field` load left out of the load case."""
+    def edit(card: str, text: str, g: Generated) -> tuple[str, str] | None:
+        return re.sub(rf"^  on c1 {field} in .*\n", "", card, count=1, flags=re.M), text
     return edit
 
 
+@_design
 def _free_end(text: str, g: Generated) -> str | None:
     """The force at a member end free to twist about its axis, which J10.7 stiffens: an
     end force's end_twist set free, or an interior force moved 16 in from a free end."""
@@ -120,11 +139,13 @@ def _free_end(text: str, g: Generated) -> str | None:
     return _set(text, "location", "end\n  distance 16 inch\n  end_twist free")
 
 
+@_design
 def _far_holes(text: str, g: Generated) -> str | None:
     rows = _field(text, "rows")
     return _set(text, "pitch", "13 inch") if rows and int(rows) > 1 else None
 
 
+@_design
 def _oversized_in_bearing(text: str, g: Generated) -> str | None:
     bolts = _field(text, "bolts")
     if bolts is None or "slip_critical" in bolts or _field(text, "holes") is not None:
@@ -134,6 +155,7 @@ def _oversized_in_bearing(text: str, g: Generated) -> str | None:
     return text.replace(f"  bolts {bolts}\n", f"  bolts {bolts}\n  holes {ply} ovs\n", 1)
 
 
+@_design
 def _snug_in_tension(text: str, g: Generated) -> str | None:
     bolts = _field(text, "bolts")
     if bolts is None:
@@ -142,6 +164,7 @@ def _snug_in_tension(text: str, g: Generated) -> str | None:
     return text.replace(f"  bolts {bolts}\n", f"  bolts {snug}\n", 1)
 
 
+@_design
 def _thin_tab_weld(text: str, g: Generated) -> str | None:
     if _field(text, "form") == "extended":
         return None
@@ -150,6 +173,7 @@ def _thin_tab_weld(text: str, g: Generated) -> str | None:
     return _weld_size(text, "weld", "0.1875") if Fraction(5, 8) * tp > Fraction(3, 16) else None
 
 
+@_design
 def _slender_stiffener(text: str, g: Generated) -> str | None:
     st = _field(text, "stiffener")
     thin = re.sub(r"thickness [0-9.]+ inch", "thickness 0.25 inch", st)
@@ -157,7 +181,7 @@ def _slender_stiffener(text: str, g: Generated) -> str | None:
     return _set(out, "stiffener_width", "6 inch")
 
 
-def _soft_seat_plate(text: str, g: Generated) -> str | None:
+def _soft_seat_plate(card: str, text: str, g: Generated) -> tuple[str, str] | None:
     """An A36 seat plate on a 5 x 1/2 in A572 Grade 50 stiffener, loaded to 1.15 times the
     plate's available bearing on the stiffener's fitted edge (J7), 1.8 (36 ksi)(5 in - 1/2
     in)(1/2 in) = 145.8 kip nominal, and to 0.83 times the stiffener's."""
@@ -168,7 +192,7 @@ def _soft_seat_plate(text: str, g: Generated) -> str | None:
     out = re.sub(r"^  stiffener .*$", "  stiffener steel.A572_50 thickness 0.5 inch", out, count=1, flags=re.M)
     out = _set(out, "stiffener_width", "5 inch")
     load = float(available * Fraction(115, 100))
-    return re.sub(r"^  on c1 shear in .*$", f"  on c1 shear in [0 kip, {load:.3f} kip]", out, count=1, flags=re.M)
+    return re.sub(r"^  on c1 shear in .*$", f"  on c1 shear in [0 kip, {load:.3f} kip]", card, count=1, flags=re.M), out
 
 
 def _available(text: str, nominal: Fraction, phi: Fraction, omega: Fraction) -> Fraction:
@@ -176,11 +200,11 @@ def _available(text: str, nominal: Fraction, phi: Fraction, omega: Fraction) -> 
     return nominal * phi if _field(text, "basis") == "lrfd" else nominal / omega
 
 
-def _loaded(text: str, field: str, load: Fraction) -> str:
-    return re.sub(rf"^  on c1 {field} in .*$", f"  on c1 {field} in [0 kip, {float(load):.3f} kip]", text, count=1, flags=re.M)
+def _loaded(card: str, field: str, load: Fraction) -> str:
+    return re.sub(rf"^  on c1 {field} in .*$", f"  on c1 {field} in [0 kip, {float(load):.3f} kip]", card, count=1, flags=re.M)
 
 
-def _short_stiffener(text: str, g: Generated) -> str | None:
+def _short_stiffener(card: str, text: str, g: Generated) -> tuple[str, str] | None:
     """A 6 x 1/2 in A36 seat stiffener only 4 in long, bent at its weld line by the reaction
     at 0.8 W = 4.8 in: Mn = Fy t L^2 / 4 = 36 (0.5)(16) / 4 = 72 kip-in, loaded to 1.25 times
     the reaction that reaches it (J4.5; phi 0.90, Omega 1.67)."""
@@ -190,20 +214,20 @@ def _short_stiffener(text: str, g: Generated) -> str | None:
     if out is None:
         return None
     reaction = _available(text, Fraction(72), Fraction(9, 10), Fraction(167, 100)) / Fraction(48, 10)
-    return _loaded(out, "shear", reaction * Fraction(125, 100))
+    return _loaded(card, "shear", reaction * Fraction(125, 100)), out
 
 
-def _seated_web_in_shear(text: str, g: Generated) -> str | None:
+def _seated_web_in_shear(card: str, text: str, g: Generated) -> tuple[str, str] | None:
     """A W12x26 (d 12.2 in, tw 0.230 in) on its seat, loaded to 1.2 times its web's shear
     yielding at the end, 0.6 (50 ksi)(12.2 in)(0.230 in) = 84.18 kip (J4.2(a); phi 1.00,
     Omega 1.50)."""
     out = _set(text, "beam", "W12x26 grade steel.A992")
     if out is None:
         return None
-    return _loaded(out, "shear", _available(text, Fraction(8418, 100), Fraction(1), Fraction(3, 2)) * Fraction(12, 10))
+    return _loaded(card, "shear", _available(text, Fraction(8418, 100), Fraction(1), Fraction(3, 2)) * Fraction(12, 10)), out
 
 
-def _thin_support_web(text: str, g: Generated) -> str | None:
+def _thin_support_web(card: str, text: str, g: Generated) -> tuple[str, str] | None:
     """A hanger from a W16x26 (tw 0.250 in, kdes 0.747 in) with two rows 3 in apart, pulled
     to 1.25 times its web's local yielding at the member end, 50 ksi (0.250 in)(2.5 (0.747
     in) + 3 in) = 60.84 kip (J10-3; phi 1.00, Omega 1.50)."""
@@ -212,9 +236,11 @@ def _thin_support_web(text: str, g: Generated) -> str | None:
     out = out and _set(out, "pitch", "3 inch")
     if out is None:
         return None
-    return _loaded(out, "tension", _available(text, Fraction(6084375, 100000), Fraction(1), Fraction(3, 2)) * Fraction(125, 100))
+    load = _available(text, Fraction(6084375, 100000), Fraction(1), Fraction(3, 2)) * Fraction(125, 100)
+    return _loaded(card, "tension", load), out
 
 
+@_design
 def _cramped_bracket(text: str, g: Generated) -> str | None:
     """Two columns of 3/4 in bolts 2-1/2 in apart on a W12x26's flange (bf 6.49 in, tw
     0.230 in). On one side of the web the outer hole on the flange leaves 3.13 - 2.5 - 0.41 =
@@ -230,6 +256,7 @@ def _cramped_bracket(text: str, g: Generated) -> str | None:
     return _set(out, "bolts", re.sub(r"diameter [0-9.]+ inch", "diameter 0.75 inch", bolts))
 
 
+@_design
 def _thick_lap_fillet(text: str, g: Generated) -> str | None:
     if _field(text, "weld_return") is None:
         return None
@@ -238,10 +265,12 @@ def _thick_lap_fillet(text: str, g: Generated) -> str | None:
     return _weld_size(text, "weld", tp)
 
 
+@_design
 def _bolts_at_stem(text: str, g: Generated) -> str | None:
     return _set(text, "tee_gauge", "1.25 inch")
 
 
+@_design
 def _deep_cope(text: str, g: Generated) -> str | None:
     beam = _field(text, "beam")
     depth = Fraction(re.match(r"W(\d+)x", beam).group(1))
@@ -253,26 +282,26 @@ def _deep_cope(text: str, g: Generated) -> str | None:
     return out if _field(out, "setback") is not None else out.replace("  top ", "  setback 0.5 inch\n  top ", 1)
 
 
-def _overload(text: str, g: Generated) -> str | None:
+def _overload(card: str, text: str, g: Generated) -> tuple[str, str] | None:
     """Every load raised in proportion so the governing check reaches about 1.3 at least,
     for u growing at least as the square root of the load."""
     factor = (Fraction(13, 10) / Fraction(g.utilisation)) ** 2
 
     def raised(m: re.Match) -> str:
         return f"  on c1 {m.group(1)} in [0 kip, {float(Fraction(m.group(2)) * factor):.3f} kip]"
-    return re.sub(r"^  on c1 (\w+) in \[0 kip, ([0-9.]+) kip\]$", raised, text, flags=re.M)
+    return re.sub(r"^  on c1 (\w+) in \[0 kip, ([0-9.]+) kip\]$", raised, card, flags=re.M), text
 
 
-def _cyclic_case(text: str, g: Generated, factor: int, cycles: int) -> str | None:
-    """The design with a second load case, cyclic: its gate case's primary load, `factor`
-    times over, as the range [0, factor P] for `cycles` cycles."""
+def _cyclic_case(card: str, text: str, g: Generated, factor: int, cycles: int) -> tuple[str, str] | None:
+    """The design, and the card with a second load case, cyclic: its gate case's primary
+    load, `factor` times over, as the range [0, factor P] for `cycles` cycles."""
     field = KIND_SPECS[g.kind].loads[0]
-    m = re.search(rf"^  on c1 {field} in \[0 kip, ([0-9.]+) kip\]$", text, re.M)
+    m = re.search(rf"^  on c1 {field} in \[0 kip, ([0-9.]+) kip\]$", card, re.M)
     if m is None:
         return None
     top = Fraction(m.group(1)) * factor
-    return (f"{text}\nload cycled {{\n  on c1 {field} in [0 kip, {float(top):.3f} kip]\n"
-            f"  on c1 {CYCLES} in [0, {cycles}]\n  {SIGNATURE}\n}}\n")
+    return (f"{card}\nload cycled {{\n  on c1 {field} in [0 kip, {float(top):.3f} kip]\n"
+            f"  on c1 {CYCLES} in [0, {cycles}]\n  {SIGNATURE}\n}}\n", text)
 
 
 def _bolts_as(text: str, joint: str) -> str | None:
@@ -286,27 +315,28 @@ def _bolts_as(text: str, joint: str) -> str | None:
     return text.replace(f"  bolts {bolts}\n", f"  bolts {plain}{'' if joint == 'snug' else ' joint ' + joint}\n", 1)
 
 
-def _snug_under_cycles(text: str, g: Generated) -> str | None:
+def _snug_under_cycles(card: str, text: str, g: Generated) -> tuple[str, str] | None:
     """Snug-tight bolts under the design's own load, cycled two million times."""
     out = _bolts_as(text, "snug")
-    return _cyclic_case(out, g, 1, 2_000_000) if out else None
+    return _cyclic_case(card, out, g, 1, 2_000_000) if out else None
 
 
-def _cyclic_overload(text: str, g: Generated) -> str | None:
+def _cyclic_overload(card: str, text: str, g: Generated) -> tuple[str, str] | None:
     """A pretensioned joint under three times the design's load, cycled 200 million times:
     every detail's range far past its threshold."""
     out = _bolts_as(text, "pretensioned") if _field(text, "bolts") is not None else text
-    return _cyclic_case(out, g, 3, 200_000_000) if out else None
+    return _cyclic_case(card, out, g, 3, 200_000_000) if out else None
 
 
-def _one_sided_end(text: str, g: Generated) -> str | None:
+def _one_sided_end(card: str, text: str, g: Generated) -> tuple[str, str] | None:
     """A plate's end welded on one face under the design's load, cycled two million times."""
     weld = _field(text, "weld")
     if weld is None or " sides 2" not in weld or _field(text, "weld_return") is not None:
         return None
-    return _cyclic_case(_set(text, "weld", weld.replace(" sides 2", " sides 1")), g, 1, 2_000_000)
+    return _cyclic_case(card, _set(text, "weld", weld.replace(" sides 2", " sides 1")), g, 1, 2_000_000)
 
 
+@_design
 def _thick_tab(text: str, g: Generated) -> str | None:
     """Neither part thin enough to rotate: a 3/4 in plate on a W30x90 (tw 0.470 in) with
     3/4 in bolts, both past d/2 + 1/16 = 7/16 in."""
@@ -319,6 +349,7 @@ def _thick_tab(text: str, g: Generated) -> str | None:
     return _weld_size(out, "weld", "0.5")
 
 
+@_design
 def _stiff_tee(text: str, g: Generated) -> str | None:
     """A tee too stiff to rotate: a WT10.5x36.5 (stem 0.455 in, flange 0.740 in) on a
     W30x90 (web 0.470 in) with 3/4 in bolts, both past d/2 + 1/16 = 7/16 in, its flange
@@ -333,6 +364,7 @@ def _stiff_tee(text: str, g: Generated) -> str | None:
     return _set(out, "support_side", "welded\n  support_weld electrode.E70 size 0.1875 inch")
 
 
+@_design
 def _rows_past_depth(text: str, g: Generated) -> str | None:
     """Rows at the pitch drawn to reach 3 pitches past the beam's nominal depth."""
     beam, pitch = _field(text, "beam"), _inches(text, "pitch")
@@ -342,17 +374,20 @@ def _rows_past_depth(text: str, g: Generated) -> str | None:
     return _set(text, "rows", str(int(nominal // pitch) + 4))
 
 
+@_design
 def _rows_off_leg(text: str, g: Generated) -> str | None:
     """A bolted seat's leg with six rows: the bottom hole runs past the leg."""
     return _set(text, "rows", "6") if _field(text, "support_side") == "bolted" else None
 
 
+@_design
 def _gauge_off_face(text: str, g: Generated) -> str | None:
     """Support bolt lines 20 in apart: wider than every support's flange and web."""
     key = "tee_gauge" if g.kind == "hanger" else "support_gauge"
     return _set(text, key, "20 inch")
 
 
+@_design
 def _beam_too_wide(text: str, g: Generated) -> str | None:
     """A W24x76 (flange 8.99 in) framed into the web of a W10x49, whose flanges stand 8.86 in
     apart, its end inside their tips."""
@@ -360,6 +395,7 @@ def _beam_too_wide(text: str, g: Generated) -> str | None:
     return _set(out, "support", "W10x49 web grade steel.A992") if out else None
 
 
+@_design
 def _plate_on_fillet(text: str, g: Generated) -> str | None:
     """The top row a quarter inch more than the edge distance below the beam's top: the
     part's top edge is on the flange's fillet, which reaches (d - T)/2 down (at least 0.665 in
@@ -370,6 +406,7 @@ def _plate_on_fillet(text: str, g: Generated) -> str | None:
     return _set(text, "top", f"{float(lev + Fraction(1, 4)):g} inch")
 
 
+@_design
 def _columns_off_flange(text: str, g: Generated) -> str | None:
     """Two bracket bolt columns 16 in apart: no flange of the catalogue's supports is that wide."""
     out = _set(text, "columns", "2")
@@ -458,9 +495,9 @@ def bases(registry: Registry, per_kind: int, seed: int) -> dict[str, list[Genera
     return out
 
 
-def status_and_modes(text: str, registry: Registry) -> tuple[str, tuple[str, ...]]:
+def status_and_modes(card: str, text: str, registry: Registry) -> tuple[str, tuple[str, ...]]:
     try:
-        report = check_design(parse_design(text, "fault.petra", registry), registry, (SolverSource(),))
+        report = check_design(parse_design(card, text, "fault.petra", registry), registry, (SolverSource(),))
     except ComponentError:
         return "REJECTED", ()
     modes = []
@@ -478,10 +515,10 @@ def seed_faults(registry: Registry, per_kind: int = 3, seed: int = 101) -> Itera
     for fault in FAULTS:
         for kind in fault.kinds:
             for g in pool.get(kind, []):
-                text = fault.edit(g.text, g)
-                if text is None or text == g.text:
+                made = fault.edit(g.card, g.text, g)
+                if made is None or made == (g.card, g.text):
                     continue
-                status, modes = status_and_modes(text, registry)
+                status, modes = status_and_modes(*made, registry)
                 expect = fault.modes or frozenset({g.governing})
                 named = tuple(m for m in modes if m in expect)
                 yield Caught(fault.name, g.name, kind, status, named, tuple(m for m in modes if m not in expect))

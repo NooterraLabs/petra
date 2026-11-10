@@ -1,7 +1,5 @@
 petra 0
-design "t25_gauge_on_fillet" {
-  owner "audit@example.org"
-}
+
 double_angle c1 {
   basis lrfd
   beam W18x50 grade steel.A992
@@ -16,8 +14,4 @@ double_angle c1 {
   beam_gauge 2 inch
   support_side bolted
   support_gauge 3 inch
-}
-load gravity {
-  on c1 shear in [0 kip, 60 kip]
-  signed "audit@example.org" source "audit"
 }

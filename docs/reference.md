@@ -1,21 +1,34 @@
-# The .petra language
+# The Petra language
 
 `petra docs reference` prints this page. On the command line, `petra kinds [DOMAIN|KIND]`,
-`petra new KIND [--name NAME]`, and `petra registry list [PREFIX]` print the same tables.
+`petra new KIND [--name NAME] [--card]`, and `petra registry list [PREFIX]` print the same tables.
 
 `python -m petra.teach --write` generates this page from the grammars that the lowerers read, the
 registry, and the examples. Do not edit it by hand. tests/test_teach.py fails when the page is stale.
 
 ## File layout and syntax
 
-A `.petra` file has this layout.
+A check reads two files. The card, `NAME.card`, holds what is asked: the name, the environment, every
+signed bound, the load cases, the claims, and the waivers. The design, `NAME.petra`, holds the answer:
+the components. Whoever asks writes the card, and a designer or an agent writes the design. A design
+cannot state a load, a claim, a waiver, or a signature, so it cannot change what is asked of it.
+`petra check NAME.petra` reads `NAME.card` beside the design, and `--card FILE` names another card.
 
 ```
 petra 0
 
-design "steel-shear-tab" {
+card "steel-shear-tab" {
   owner "s.engineer@example.org"
 }
+
+load reaction {
+  on st1 shear in [0 kip, 45 kip]
+  signed "s.engineer@example.org" source "frame analysis rev 2"
+}
+```
+
+```
+petra 0
 
 shear_tab st1 {
   basis lrfd
@@ -23,12 +36,12 @@ shear_tab st1 {
 }
 ```
 
-These rules apply to every file.
+These rules apply to both files.
 
 - The first line is `petra 0`, the language version.
-- The rest of the file holds one `design` block, the components, and the `param`, `ambient`, `load`,
-  `tests`, `claim`, and `waive` declarations. Each component, load, tests, param, and claim name is
-  declared once.
+- The rest of a card holds one `card` block and the `param`, `ambient`, `given`, `load`, `tests`,
+  `claim`, and `waive` declarations. The rest of a design holds the components and the `param`
+  declarations. Each component, load, tests, param, given, and claim name is declared once.
 - Inside a block, each line holds one attribute. A comment runs from `#` to the end of the line.
 - A name consists of letters, digits, and `_`, and starts with a letter or `_`. A `-` is never part of a
   name. Write `L4x3-1/2x3/8` as `L4x3_1_2x3_8`, and write `WT5x22.5` as `WT5x22_5`.
@@ -41,19 +54,19 @@ These rules apply to every file.
 - A string is written `"..."`. Its only escapes are `\"` and `\\`.
 - A bound is a range with its provenance, written
   `in [<lo>, <hi>] [mean <value>] signed "<owner>" source "<source>"`. A measured value has
-  `measured` in place of `signed`. Outside a family design every bound carries a signature. In a family,
-  `param NAME` stands where a bound would.
-- `in`, `mean`, `signed`, `measured`, `source`, and `param` start a bound or a signature, so they cannot
-  be names inside a line. No declared name can be a declaration word.
+  `measured` in place of `signed`. Only a card states a bound, and outside a family every bound carries
+  a signature. In a family, `param NAME` stands where a bound would.
+- `in`, `mean`, `signed`, `measured`, `source`, `param`, and `given` cannot be names inside a line. No
+  declared name can be a declaration word.
 
 ## Declarations
 
-### design
+### card
 
-A file has one `design` block. `owner` is required. `environment` is optional and names a registry environment from the registry list at the end of this page.
+A card has one `card` block, which names what is asked. `owner` is required. `environment` is optional and names a registry environment from the registry list at the end of this page.
 
 ```
-design "warren-footbridge-panel" {
+card "warren-footbridge-panel" {
   owner "a.reviewer@example.org"
   environment indoor_dry
 }
@@ -61,7 +74,7 @@ design "warren-footbridge-panel" {
 
 ### param
 
-`param` declares a family. The design holds for every value in the param's range. An attribute line or a load names the param by writing `param NAME` in place of a bound.
+`param` declares a family. The design holds for every value in the param's range. A line names the param by writing `param NAME` in place of a value. A param is declared in the card or in the design. A load and the ambient read only the card's params, and `petra check` refuses a load or an ambient that reads one, because nobody signed it: a family goes to `petra certify-family`.
 
 ```
 param run in [0 m, 20 m]
@@ -75,13 +88,21 @@ param run in [0 m, 20 m]
 ambient in [10 degC, 40 degC] signed "site.manager@example.org" source "site survey 2026-09"
 ```
 
+### given
+
+`given` states a signed bound under a name. A component's line in the design reads it by writing `given NAME` where the value goes. The design reads every given the card states.
+
+```
+given capacity in [36 kN, 40 kN] measured "qa.lab@example.org" source "proof-load report PL-0917"
+```
+
 ### component
 
-A component is written `KIND NAME { ... }`, with one attribute per line. The Component kinds section lists every kind and its lines.
+A component is written `KIND NAME { ... }` in the design, with one attribute per line. The Component kinds section lists every kind and its lines.
 
 ```
 demand hook {
-  capacity in [36 kN, 40 kN] measured "qa.lab@example.org" source "proof-load report PL-0917"
+  capacity given capacity
 }
 ```
 
@@ -126,7 +147,7 @@ claim tested:   P(fail hook at 36 kN) <= 1/100 confidence 95 % from proof
 
 ### waive
 
-`waive` accepts an open coverage demand on a component. It names the failure mode, who answers for it, and the reason. The Component kinds section lists the failure modes of each domain. Petra reports a waived demand as waived, never as proved.
+`waive` accepts an open coverage demand on a component. Only the card can waive. It names the failure mode, who answers for it, and the reason. The Component kinds section lists the failure modes of each domain. Petra reports a waived demand as waived, never as proved.
 
 ```
 waive bolt.plate_bearing on bracket by "m.engineer@example.org" reason "bearing checked by test PB-3"
@@ -137,14 +158,15 @@ waive bolt.plate_bearing on bracket by "m.engineer@example.org" reason "bearing 
 The grammar below is EBNF, and `NL` is a line end. Component kinds and their lines are not in the grammar. Each domain declares its own, as the Component kinds section shows.
 
 ```
-file      = "petra" INT NL { decl NL } EOF ;
-decl      = design | param | ambient | load | tests | claim | waive | component ;
-design    = "design" STRING "{" NL { ( "owner" STRING | "environment" IDENT ) NL } "}" ;
+card file   = "petra" INT NL { ( card | param | ambient | given | load | tests | claim | waive ) NL } EOF ;
+design file = "petra" INT NL { ( param | component ) NL } EOF ;
+card      = "card" STRING "{" NL { ( "owner" STRING | "environment" IDENT ) NL } "}" ;
 param     = "param" IDENT "in" range ;
 ambient   = "ambient" bound ;
+given     = "given" IDENT "in" range [ "mean" qty ] [ signature ] ;
 component = KIND IDENT "{" NL { attr NL } "}" ;    KIND: an IDENT not in DECLS
 attr      = IDENT { arg } ;
-arg       = bound | qty | tuple | ref | STRING | ":" | "--" | "->" ;
+arg       = "given" IDENT | "param" IDENT | qty | tuple | ref | STRING | ":" | "--" | "->" ;
 tuple     = "(" qty { "," qty } ")" ;
 bound     = "in" range [ "mean" qty ] [ signature ] | "param" IDENT ;
 signature = ( "signed" | "measured" ) STRING "source" STRING ;
@@ -168,7 +190,7 @@ rel       = "<=" | ">=" ;
 
 ## Units
 
-A `.petra` file accepts these unit spellings.
+A card and a design accept these unit spellings.
 
 | dimension | spellings |
 |---|---|
@@ -202,7 +224,7 @@ A `.petra` file accepts these unit spellings.
 ## Component kinds
 
 A component is written `KIND NAME { ... }`, with one line per attribute. A required line appears at
-least once. In a form, `<length>` stands for a length, a signed bound, or `param NAME`. These
+least once. In a form, `<length>` stands for a length, `given NAME`, or `param NAME`. These
 cross-domain modes can be waived on any component: `port.contract`, `corrosion.galvanic`.
 
 ### Domain truss
@@ -244,7 +266,7 @@ In a claim, `<qoi>` is one of `temperature`, `voltage_drop`, `fault_withstand`, 
 
 | line | form | needed | unit | ids | meaning |
 |---|---|---|---|---|---|
-| `supply` | `<name> voltage <voltage> [fault_current in [<lo>, <hi>] signed "<owner>" source "<source>"]` | required | voltage, current |  | the source a radial path starts from; without a signed prospective fault current the short-circuit check is UNKNOWN |
+| `supply` | `<name> voltage <voltage> [fault_current given <name>]` | required | voltage, current |  | the source a radial path starts from; without a signed prospective fault current the short-circuit check is UNKNOWN |
 | `consumer` | `<name>` | required |  |  | the load at the end of a path; load cases draw current from it |
 | `connect` | `<element>.<port> -> <element>.<port>` | required |  |  | joins a downstream port to the next upstream port (supply out, breaker in and out, wire a and b, terminal wire and out, consumer in); every element lies on one path from a supply to a consumer |
 | `breaker` | `<name> part <registry breaker id>` | optional |  | `mcb.*` | the protective device of a path, upstream of its wires; at most one per path |
@@ -270,9 +292,9 @@ In a claim, `<qoi>` is one of `bolt_tension`, `tension_utilisation`.
 |---|---|---|---|---|---|
 | `bolt` | `<registry bolt id> count <n>` | required | count | `bolt.*` | the bolts, exactly one line: a metric bolt (thread, property class, coating) and how many share the load |
 | `plate` | `<registry material id> thickness <length> [process <registry process id>]` | required | length | `aluminium.*`, `steel.*`, `stainless.*`, `process.*` | a clamped plate, one line per plate, at least two; a coating, weld or cut process changes its surface or its strength |
-| `torque` | `in [<lo>, <hi>] signed "<owner>" source "<source>"` | optional | torque |  | the tightening torque; without it the tension check is UNKNOWN |
-| `nut_factor` | `in [<lo>, <hi>] signed "<owner>" source "<source>"` | optional | dimensionless |  | the nut factor K of the torque-tension relation, positive; without it the tension check is UNKNOWN |
-| `load_share` | `in [<lo>, <hi>] signed "<owner>" source "<source>"` | optional | dimensionless |  | the joint load factor Phi, the share of the external force the bolts take, within [0, 1]; without it the tension check is UNKNOWN |
+| `torque` | `given <name>` | optional | torque |  | the tightening torque; without it the tension check is UNKNOWN |
+| `nut_factor` | `given <name>` | optional | dimensionless |  | the nut factor K of the torque-tension relation, positive; without it the tension check is UNKNOWN |
+| `load_share` | `given <name>` | optional | dimensionless |  | the joint load factor Phi, the share of the external force the bolts take, within [0, 1]; without it the tension check is UNKNOWN |
 
 ### Domain uncertainty
 
@@ -290,7 +312,7 @@ Load entries and claims on a `demand` component take these forms:
 
 | line | form | needed | unit | ids | meaning |
 |---|---|---|---|---|---|
-| `capacity` | `in [<lo>, <hi>] signed "<owner>" source "<source>"` | required | force |  | the capacity the demand is compared with, exactly one line: a positive force range with no mean |
+| `capacity` | `given <name>` | required | force |  | the capacity the demand is compared with, exactly one line: a positive force range with no mean |
 
 ### Domain steel
 
@@ -634,7 +656,7 @@ In a claim, `<qoi>` is one of `voltage`, `output`, `current`, `power_utilisation
 
 | line | form | needed | unit | ids | meaning |
 |---|---|---|---|---|---|
-| `supply` | `<name> voltage in [<lo>, <hi>] signed "<owner>" source "<source>" [capacity in [<lo>, <hi>] signed "<owner>" source "<source>"]` | required | voltage, current |  | a rail fed from outside the board, named by the supply; capacity is the most current it can deliver, and without it the supply-current check is UNKNOWN |
+| `supply` | `<name> voltage given <name> [capacity given <name>]` | required | voltage, current |  | a rail fed from outside the board, named by the supply; capacity is the most current it can deliver, and without it the supply-current check is UNKNOWN |
 | `regulator` | `<name> part <registry regulator id> from <rail> [top <resistor> bottom <resistor>]` | optional |  | `reg.*` | a linear regulator fed from a rail; its name is its output rail; an adjustable one names its feedback resistors, top from the output and bottom to ground |
 | `resistor` | `<name> part <registry resistor id> value <resistance> [from <rail>]` | optional | resistance | `res.*` | a chip resistor whose value is in its part's E24 or E96 series; with from, it runs from that rail to ground, and otherwise one divider, LED or regulator names it |
 | `divider` | `<name> from <rail> top <resistor> bottom <resistor>` | optional |  |  | two resistors in series from a rail to ground; its output is the node between them |
@@ -662,11 +684,11 @@ In a claim, `<qoi>` is one of `mass`, `cg_x`, `cg_y`, `cg_z`.
 | `material` | `<registry material id>` | required |  | `polymer.*`, `aluminium.*`, `steel.*`, `stainless.*` | what the part is made of |
 | `process` | `<registry process id>` | optional |  | `process.print.*`, `process.powder.*`, `process.sheet.*`, `process.mill.*` | how the part is made: its tolerance, hole shrink and build volume; a bought part names none |
 | `finish` | `<registry coating id>` | optional |  | `process.anodize_ii*`, `process.powder_coat*` | a coating whose buildup every fit rule adds to the part's surfaces |
-| `tolerance` | `in [<lo>, <hi>] signed "<owner>" source "<source>"` | optional | length |  | the profile tolerance, replacing the process preset's |
-| `hole_shrink` | `in [<lo>, <hi>] signed "<owner>" source "<source>"` | optional | length |  | how much smaller modelled holes come out, diametral |
-| `fill` | `in [<lo>, <hi>] signed "<owner>" source "<source>"` | optional | dimensionless |  | the part's mass over a solid part's, for printed infill |
-| `mass` | `in [<lo>, <hi>] signed "<owner>" source "<source>"` | optional | mass |  | a bought part's mass; without it the mass is volume times density |
-| `heat` | `in [<lo>, <hi>] signed "<owner>" source "<source>"` | optional | temperature |  | how far a local heat source lifts the part above ambient |
+| `tolerance` | `given <name>` | optional | length |  | the profile tolerance, replacing the process preset's |
+| `hole_shrink` | `given <name>` | optional | length |  | how much smaller modelled holes come out, diametral |
+| `fill` | `given <name>` | optional | dimensionless |  | the part's mass over a solid part's, for printed infill |
+| `mass` | `given <name>` | optional | mass |  | a bought part's mass; without it the mass is volume times density |
+| `heat` | `given <name>` | optional | temperature |  | how far a local heat source lifts the part above ambient |
 | `cg` | `(<x>, <y>, <z>)` | optional | length |  | the centre of mass of a bought or infilled part, in its own frame |
 | `hole` | `<id> at (<x>, <y>, <z>) along <top\|bottom\|left\|right\|front\|back> diameter <length> [depth <length>] [clear\|tap\|form\|press\|insert <registry insert id>] [countersink <length>]` | optional | length | `insert.*` | a hole and what it is for; through the part when no depth is given |
 

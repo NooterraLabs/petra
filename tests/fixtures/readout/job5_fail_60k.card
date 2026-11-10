@@ -1,0 +1,10 @@
+petra 0
+
+card "job5-shear-tab-60k" {
+  owner "coldstart-agent"
+}
+
+load reaction {
+  on tab shear in [0 kip, 60 kip]
+  signed "coldstart-agent" source "user brief: raised to 60 kips for the repair job"
+}

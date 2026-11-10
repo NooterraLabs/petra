@@ -7,25 +7,11 @@ petra 0
 # load, against the 70 % claimed. Petra once counted only Phi F = 8 kN of it; it now
 # states the bolt force clamped or open and checks bolt.separation on its own.
 
-design "joint-opens" {
-  owner "m.engineer@example.org"
-  environment indoor_dry
-}
-
 joint bracket {
   bolt bolt.M12_8_8 count 1
   plate steel.S355 thickness 10 mm
   plate steel.S355 thickness 10 mm
-  torque in [5 Nm, 10 Nm] signed "fitter.lead@example.org" source "assembly spec AS-12 rev C"
-  nut_factor in [0.16, 0.2] measured "test.lab@example.org" source "torque-tension report TT-2026-031"
-  load_share in [0.1, 0.2] signed "m.engineer@example.org" source "joint diagram calc JD-7"
+  torque given torque
+  nut_factor given nut_factor
+  load_share given load_share
 }
-
-load pull {
-  on bracket force in [0 kN, 40 kN]
-  signed "client.structures@example.org" source "lifting study LS-2"
-}
-
-claim tension: bracket.tension_utilisation <= 0.7 under pull
-
-waive bolt.plate_bearing on bracket by "m.engineer@example.org" reason "plates checked by hand, calc PB-3"

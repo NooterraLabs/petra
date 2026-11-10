@@ -17,7 +17,7 @@ from typing import Callable, Literal
 from ...ir import Arg, Bound, Component, Design, Fixed, Input, Ref, Rel, Span, Text, Vec
 from ...registry import OutsideMakeableSet, PartKind, ProcessKind, Registry
 from ...units import DIMENSIONLESS, LENGTH, MASS, TEMPERATURE, Dim
-from ..base import SIGNED_BOUND, ComponentError, Field, Grammar
+from ..base import GIVEN_BOUND, ComponentError, Field, Grammar
 from . import exact
 from .mesh import Mesh, MeshError, Point, Unit, read_mesh
 from .space import Axis, Placement, turn
@@ -148,11 +148,11 @@ PART_GRAMMAR = Grammar(
               "how the part is made: its tolerance, hole shrink and build volume; a bought part names none"),
         Field("finish", "<registry coating id>", "", ("process.anodize_ii", "process.powder_coat"),
               "a coating whose buildup every fit rule adds to the part's surfaces"),
-        Field("tolerance", SIGNED_BOUND, "length", (), "the profile tolerance, replacing the process preset's"),
-        Field("hole_shrink", SIGNED_BOUND, "length", (), "how much smaller modelled holes come out, diametral"),
-        Field("fill", SIGNED_BOUND, "dimensionless", (), "the part's mass over a solid part's, for printed infill"),
-        Field("mass", SIGNED_BOUND, "mass", (), "a bought part's mass; without it the mass is volume times density"),
-        Field("heat", SIGNED_BOUND, "temperature", (), "how far a local heat source lifts the part above ambient"),
+        Field("tolerance", GIVEN_BOUND, "length", (), "the profile tolerance, replacing the process preset's"),
+        Field("hole_shrink", GIVEN_BOUND, "length", (), "how much smaller modelled holes come out, diametral"),
+        Field("fill", GIVEN_BOUND, "dimensionless", (), "the part's mass over a solid part's, for printed infill"),
+        Field("mass", GIVEN_BOUND, "mass", (), "a bought part's mass; without it the mass is volume times density"),
+        Field("heat", GIVEN_BOUND, "temperature", (), "how far a local heat source lifts the part above ambient"),
         Field("cg", _POINT, "length", (), "the centre of mass of a bought or infilled part, in its own frame"),
         Field("hole", f"<id> at {_POINT} along {_AXIS} diameter <length> [depth <length>] "
               "[clear|tap|form|press|insert <registry insert id>] [countersink <length>]", "length", ("insert.",),

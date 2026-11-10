@@ -71,9 +71,9 @@ class Recall:
 
 
 def recall(registry: Registry, id: str, paths: Iterable[str | Path] = ()) -> Recall:
-    """Recall ID over `paths`: .petra files are checked with the solvers, .json files are
-    read as saved reports, and directories are searched for .petra files. With no paths,
-    examples/ in the working directory."""
+    """Recall ID over `paths`: .petra files are checked with the solvers, each against the
+    .card file beside it, .json files are read as saved reports, and directories are
+    searched for .petra files. With no paths, examples/ in the working directory."""
     id = registry.canonical(id)
     entries = covered(registry, id)
     files = _files(paths)
@@ -209,7 +209,8 @@ def _files(paths: Iterable[str | Path]) -> list[Path]:
 
 
 def _report(registry: Registry, path: Path) -> Mapping[str, Any]:
-    """The `petra check --json` body of a .petra file (checked now) or of a saved report."""
+    """The `petra check --json` body of a .petra file (checked now, against the card beside
+    it) or of a saved report."""
     if path.suffix != ".json":
         report = check_design(load_design(path, registry), registry, (SolverSource(),), path=path.as_posix())
         return report.to_json()

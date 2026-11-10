@@ -1,0 +1,10 @@
+petra 0
+
+card "steel-weld-bracket-303-022" {
+  owner "task.owner@example.org"
+}
+
+load service {
+  on wb1 shear in [0 kip, 48.42 kip]
+  signed "task.owner@example.org" source "task 303-022"
+}

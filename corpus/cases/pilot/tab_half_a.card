@@ -1,0 +1,10 @@
+petra 0
+
+card "steel-shear-tab" {
+  owner "task.owner@example.org"
+}
+
+load service {
+  on st1 shear in [0 kip, 45.988 kip]
+  signed "task.owner@example.org" source "task 303-006"
+}

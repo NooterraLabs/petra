@@ -1,17 +1,5 @@
 petra 0
 
-design "tested-at-nothing" {
-  owner "m.engineer@example.org"
-  environment indoor_dry
-}
-
 demand hook {
-  capacity in [36 kN, 40 kN] measured "qa.lab@example.org" source "proof-load report"
+  capacity given capacity
 }
-
-tests proof {
-  on hook trials 1 failures 0 at 0 kN
-  signed "qa.lab@example.org" source "we looked at it"
-}
-
-claim tested:   P(fail hook at -5 kN) <= 1/100 confidence 1/1000000 % from proof

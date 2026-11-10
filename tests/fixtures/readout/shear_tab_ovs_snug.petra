@@ -7,10 +7,6 @@ petra 0
 # shear plane), the plate fillet-welded to the column both sides. Coverage demands every
 # limit state the kind carries; each is checked over the signed reaction range.
 
-design "steel-shear-tab-ovs" {
-  owner "s.engineer@example.org"
-}
-
 shear_tab st1 {
   basis lrfd
   beam W18x50 grade steel.A992
@@ -26,9 +22,4 @@ shear_tab st1 {
   top 3 inch
   holes plate ovs
   weld electrode.E70 size 0.25 inch sides 2
-}
-
-load gravity {
-  on st1 shear in [0 kip, 45 kip]
-  signed "s.engineer@example.org" source "beam reaction, LRFD 1.2D + 1.6L, calc SC-3"
 }

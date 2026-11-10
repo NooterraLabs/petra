@@ -12,7 +12,3 @@ weld_bracket ii_a_23 {
   eccentricity 10.875 inch
   free_edge 11.5 inch
 }
-
-load reaction {
-  on ii_a_23 shear in [0 kip, 27 kip]
-}

@@ -12,8 +12,8 @@ from the registry's rows through petra.models.steel.limits, LRFD:
     tearout of a 3/4 in bolt in a standard hole, edge 1 1/4 in, Fu = 58 ksi: 44.0 kips/in
     E70 fillet weld, per sixteenth of an inch of leg, per inch of length: 1.392 kips/in
 
-Hand values for examples/steel/shear_tab.petra (W18x50 beam, 3/8 in A36 plate, four 3/4 in
-Group 120 bolts at 3 in, a = 3 in, V = 45 kips):
+Hand values for examples/steel/shear_tab.petra and its card (W18x50 beam, 3/8 in A36 plate,
+four 3/4 in Group 120 bolts at 3 in, a = 3 in, V = 45 kips):
     elastic method, e = a: Ip = 4 (15 x 9) / 12 = 45 in2, M = 135 kip-in,
         corner bolt fx = 135 x 4.5 / 45 = 13.5, fy = 45 / 4 = 11.25 -> 17.573 kips,
         which the plate's one-row block carries
@@ -30,6 +30,7 @@ from fractions import Fraction
 from pathlib import Path
 
 from petra import mechanics as M
+from petra.files import read_pair
 from petra.kernel import enclose
 from petra.lang import load_design, parse_design
 from petra.models.base import NeedsInputBound
@@ -58,13 +59,19 @@ def value(expr, per=KIP) -> float:
     return float(enclose(expr, {}).lo / per)
 
 
-def design(name: str, *edits: tuple[str, str], extra: str = ""):
-    text = (STEEL / f"{name}.petra").read_text(encoding="utf-8")
+def edited(text: str, edits: tuple[tuple[str, str], ...], file: str) -> str:
     for old, new in edits:
         if old not in text:
-            raise AssertionError(f"{old!r} is not in {name}.petra")
+            raise AssertionError(f"{old!r} is not in {file}")
         text = text.replace(old, new)
-    return parse_design(text + extra, f"{name}.petra", REGISTRY)
+    return text
+
+
+def design(name: str, *edits: tuple[str, str], card: tuple[tuple[str, str], ...] = (), extra: str = ""):
+    """The example with `edits` made to its design and `card` to its card, and `extra` added to the card."""
+    card_text, text = read_pair(STEEL / f"{name}.petra")
+    return parse_design(edited(card_text, card, f"{name}.card") + extra, edited(text, edits, f"{name}.petra"),
+                        f"{name}.petra", REGISTRY)
 
 
 def outcomes(d) -> dict[str, str]:
@@ -166,7 +173,7 @@ class ShearTabHandValues(unittest.TestCase):
         self.assertAlmostEqual(found["plate: block of 4 row(s) and 1 column(s) (J4.3)"].capacity, 81.12, places=2)
 
     def test_asd_divides_by_omega(self):
-        d = design("shear_tab", ("basis lrfd", "basis asd"), ("[0 kip, 45 kip]", "[0 kip, 30 kip]"))
+        d = design("shear_tab", ("basis lrfd", "basis asd"), card=(("[0 kip, 45 kip]", "[0 kip, 30 kip]"),))
         (bolts,) = checks(d, "st1", "bolts").values()
         self.assertAlmostEqual(bolts.parts[0].capacity, 17.892 / 0.75 / 2.00, places=3)
         self.assertAlmostEqual(bolts.capacity, 3.5564 * 17.892 / 0.75 / 2.00, places=2)
@@ -237,7 +244,7 @@ class J10Guards(unittest.TestCase):
 
 class Verdicts(unittest.TestCase):
     def test_every_example_connection_passes(self):
-        # flange_force.petra declares no panel_shear or axial load, which its panel zone reads (build.NEEDS)
+        # flange_force.card states no panel_shear or axial load, which the panel zone reads (build.NEEDS)
         left_open = {"flange_force.petra": {"ff1/steel.panel_zone/coverage.steel.panel_zone"}}
         for path in sorted(STEEL.glob("*.petra")):
             with self.subTest(example=path.name):
@@ -264,7 +271,7 @@ class Verdicts(unittest.TestCase):
         self.assertEqual(found["st1/steel.block_shear/claim.loose"], "Discharged")
 
     def test_a_load_case_without_the_shear_leaves_every_check_open(self):
-        d = design("shear_tab", ("on st1 shear in [0 kip, 45 kip]", "on st1 axial in [0 kip, 5 kip]"))
+        d = design("shear_tab", card=(("on st1 shear in [0 kip, 45 kip]", "on st1 axial in [0 kip, 5 kip]"),))
         report = check_design(d, REGISTRY, (SolverSource(),))
         self.assertTrue(report.outcomes)
         for o in report.outcomes:
@@ -273,11 +280,19 @@ class Verdicts(unittest.TestCase):
                 self.assertIn(NeedsInputBound(("st1",), "shear", "kip"), o.needs, o.requirement.id)
 
 
-BOTTOM_COPE = """petra 0
+BOTTOM_COPE_CARD = """petra 0
 
-design "gate-1-05546" {
+card "gate-1-05546" {
   owner "gate@petra.dev"
 }
+
+load gate {
+  on c1 shear in [0 kip, 10.728 kip]
+  signed "gate@petra.dev" source "steel gate generator"
+}
+"""
+
+BOTTOM_COPE = """petra 0
 
 single_angle c1 {
   basis asd
@@ -297,11 +312,6 @@ single_angle c1 {
   cope both depth 1.5 inch length 3 inch bottom_depth 2 inch
   setback 0.5 inch
 }
-
-load gate {
-  on c1 shear in [0 kip, 10.728 kip]
-  signed "gate@petra.dev" source "steel gate generator"
-}
 """
 
 
@@ -314,7 +324,7 @@ class BottomCopeEdge(unittest.TestCase):
     The deck passed it at 03a6fbf."""
 
     def test_a_bolt_near_the_bottom_cope_fails_the_minimum_edge_distance(self):
-        d = parse_design(BOTTOM_COPE, "gate.petra", REGISTRY)
+        d = parse_design(BOTTOM_COPE_CARD, BOTTOM_COPE, "gate.petra", REGISTRY)
         self.assertEqual(outcomes(d)["c1/steel.edge_min/coverage.steel.edge_min"], "Refuted")
         found = checks(d, "c1", "edge_min", "gate")["beam web: bottom cope edge distance at least Table J3.4's (J3.5)"]
         self.assertAlmostEqual(found.demand, 1.125, places=9)
@@ -327,7 +337,7 @@ class BottomCopeEdge(unittest.TestCase):
         18.0 - 2 - 9.5 = 6.5 in below the bottom bolt, past J3.6's 6 in."""
         text = BOTTOM_COPE.replace("W12x26", "W18x50").replace("holes angle ssl", "holes beam ovs")
         text = text.replace("threads included", "threads included joint slip_critical surface class_a")
-        d = parse_design(text, "gate.petra", REGISTRY)
+        d = parse_design(BOTTOM_COPE_CARD, text, "gate.petra", REGISTRY)
         found = checks(d, "c1", "edge_min", "gate")
         near = found["beam web: bottom cope edge distance at least Table J3.4's plus Table J3.5's C2 for its ovs holes (J3.5)"]
         self.assertAlmostEqual(near.demand, 1.125 + 0.0625, places=9)

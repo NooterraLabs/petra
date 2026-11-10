@@ -47,18 +47,19 @@ def help_text(*argv: str) -> str:
     raise AssertionError(f"petra {' '.join(argv)} --help did not exit")
 
 
-def lowering_errors(text: str) -> str:
-    """The input error a design raises while it lowers, or "" when it lowers."""
+def lowering_errors(kind: str, text: str) -> str:
+    """The input error a design raises while it lowers against the card of the kind's
+    canonical example, or "" when it lowers."""
     try:
-        lower_components(parse_design(text, "t.petra", REGISTRY), REGISTRY)
+        lower_components(parse_design(TEMPLATES[kind][2], text, "t.petra", REGISTRY), REGISTRY)
     except (ComponentError, LolaSyntaxError, LoweringError) as exc:
         return "\n".join(exc.problems) if isinstance(exc, ComponentError) else str(exc)
     return ""
 
 
 def example(kind: str) -> tuple[str, str]:
-    """(component name, text) of the kind's canonical example."""
-    return TEMPLATES[kind][1], TEMPLATES[kind][2]
+    """(component name, the design's text) of the kind's canonical example."""
+    return TEMPLATES[kind][1], TEMPLATES[kind][3]
 
 
 def with_line(kind: str, line: str) -> str:
@@ -83,18 +84,18 @@ class OneGrammarPerKind(unittest.TestCase):
     def test_every_kind_names_every_line_when_one_is_unknown(self):
         for kind, spec in models.KINDS.items():
             with self.subTest(kind):
-                problems = lowering_errors(with_line(kind, "bogus_line 1"))
+                problems = lowering_errors(kind, with_line(kind, "bogus_line 1"))
                 self.assertIn("bogus_line", problems)
                 for name in spec.grammars[kind].names:
                     self.assertIn(name, problems)
 
     def test_a_missing_steel_line_prints_its_form(self):
         name, text = example("shear_tab")
-        problems = lowering_errors(re.sub(r"\n  pitch [^\n]*", "", text))
+        problems = lowering_errors("shear_tab", re.sub(r"\n  pitch [^\n]*", "", text))
         self.assertIn("a shear_tab needs pitch: `pitch <length>`", problems)
 
     def test_a_steel_usage_error_prints_its_form(self):
-        problems = lowering_errors(example("shear_tab")[1].replace("  rows 4", "  rows four"))
+        problems = lowering_errors("shear_tab", example("shear_tab")[1].replace("  rows 4", "  rows four"))
         self.assertIn("reads `rows <n>`", problems)
 
 
@@ -142,7 +143,7 @@ class KindReadings(unittest.TestCase):
         for kind, reading in (("single_angle", "from the angle's heel"), ("double_angle", "between the two bolt lines")):
             with self.subTest(kind):
                 self.assertIn("  support_side bolted\n", example(kind)[1])
-                problems = lowering_errors(re.sub(r"\n  support_gauge [^\n]*", "", example(kind)[1]))
+                problems = lowering_errors(kind, re.sub(r"\n  support_gauge [^\n]*", "", example(kind)[1]))
                 self.assertIn(f"a bolted support side names support_gauge, {reading}", problems)
 
 
@@ -173,6 +174,7 @@ class CommonNames(unittest.TestCase):
             for i, body in enumerate((text, aliased)):
                 path = Path(tmp) / f"d{i}.petra"
                 path.write_text(body, encoding="utf-8")
+                path.with_suffix(".card").write_text(TEMPLATES["shear_tab"][2], encoding="utf-8")
                 code, out, err = run("check", "--json", str(path))
                 self.assertEqual(code, 0, err)
                 report = json.loads(out)
@@ -185,19 +187,19 @@ class CommonNames(unittest.TestCase):
 
     def test_a_quoted_name_with_spaces_resolves(self):
         text = example("shear_tab")[1].replace("beam W18x50 grade steel.A992", 'beam W18x50 grade "A572 Gr 50"')
-        conn = lower_components(parse_design(text, "t.petra", REGISTRY), REGISTRY)["st1"]
+        conn = lower_components(parse_design(TEMPLATES["shear_tab"][2], text, "t.petra", REGISTRY), REGISTRY)["st1"]
         self.assertEqual(conn.attrs["beam"].grade, "steel.A572_50")
 
     def test_the_thread_suffix_is_explained(self):
         for written, group, threads in (("A325N", "bolt_group.120", "included"), ("A325_X", "bolt_group.120", "excluded"),
                                         ("A490X", "bolt_group.150", "excluded")):
             with self.subTest(written):
-                problems = lowering_errors(example("shear_tab")[1].replace("bolts bolt_group.120", f"bolts {written}"))
+                problems = lowering_errors("shear_tab", example("shear_tab")[1].replace("bolts bolt_group.120", f"bolts {written}"))
                 self.assertIn("-N means threads included", problems)
                 self.assertIn(f"`bolts {group} diameter <length> threads {threads}`", problems)
 
     def test_a_hyphen_in_a_name_says_to_write_an_underscore(self):
-        problems = lowering_errors(example("shear_tab")[1].replace("bolts bolt_group.120", "bolts A325-N"))
+        problems = lowering_errors("shear_tab", example("shear_tab")[1].replace("bolts bolt_group.120", "bolts A325-N"))
         self.assertIn("unexpected character '-' after A325", problems)
         self.assertIn("write _", problems)
 
@@ -224,16 +226,16 @@ class DidYouMean(unittest.TestCase):
         text = example("shear_tab")[1]
         for wrong, right in (("plate steel.A36", "plate steel.A35"), ("W18x50", "W18x51")):
             with self.subTest(right):
-                problems = lowering_errors(text.replace(wrong, right))
+                problems = lowering_errors("shear_tab", text.replace(wrong, right))
                 self.assertIn(f"{right.split()[-1]} is not a registry", problems)
                 self.assertIn(f"did you mean {wrong.split()[-1]}", problems)
-        problems = lowering_errors(example("joint")[1].replace("aluminium.6061_T6 thickness 10 mm\n",
-                                                                "aluminium.6061_T6 thickness 10 mm process zinc_plate\n", 1))
+        problems = lowering_errors("joint", example("joint")[1].replace("aluminium.6061_T6 thickness 10 mm\n",
+                                                                         "aluminium.6061_T6 thickness 10 mm process zinc_plate\n", 1))
         self.assertIn("did you mean process.zinc_plate", problems)
 
 
 class PetraNew(unittest.TestCase):
-    def test_every_kind_prints_a_design_that_checks_without_an_input_error(self):
+    def test_every_kind_prints_a_card_and_a_design_that_check_without_an_input_error(self):
         """A template that names mesh files checks once its files sit beside it, and an
         assembly's template carries the parts it places."""
         with tempfile.TemporaryDirectory() as tmp:
@@ -242,13 +244,17 @@ class PetraNew(unittest.TestCase):
                     shutil.copy(mesh, tmp)
                 for name in (None, "renamed"):
                     with self.subTest(kind=kind, name=name):
-                        code, out, err = run("new", kind, *(("--name", name) if name else ()))
+                        named = ("--name", name) if name else ()
+                        code, out, err = run("new", kind, *named)
+                        self.assertEqual(code, 0, err)
+                        code, card, err = run("new", kind, *named, "--card")
                         self.assertEqual(code, 0, err)
                         path = Path(tmp) / f"{kind}.petra"
                         path.write_text(out, encoding="utf-8")
+                        path.with_suffix(".card").write_text(card, encoding="utf-8")
                         code, _, err = run("check", "--no-solve", str(path))
                         self.assertNotIn(code, (cli.EXIT_CODES["INPUT_ERROR"], cli.EXIT_CODES["INTERNAL_ERROR"]), err)
-                        components = parse_design(out, str(path), REGISTRY).components
+                        components = parse_design(card, out, str(path), REGISTRY).components
                         kinds = [c.kind for c in components.values()]
                         self.assertEqual(kinds.count(kind), 1)
                         self.assertTrue(set(kinds) <= {kind, "part"}, kinds)
@@ -259,6 +265,7 @@ class PetraNew(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "tab.petra"
             path.write_text(run("new", "shear_tab", "--name", "tab7")[1], encoding="utf-8")
+            path.with_suffix(".card").write_text(run("new", "shear_tab", "--name", "tab7", "--card")[1], encoding="utf-8")
             code, out, err = run("check", str(path))
         self.assertEqual(code, cli.EXIT_CODES["PASS"], err)
         self.assertIn("tab7/steel.block_shear", out)
@@ -274,7 +281,7 @@ class PetraNew(unittest.TestCase):
         code, _, err = run("new", "truss", "--name", "x-y")
         self.assertEqual(code, cli.EXIT_CODES["INPUT_ERROR"])
         self.assertIn("is not a name", err)
-        code, _, err = run("new", "truss", "--name", "design")
+        code, _, err = run("new", "truss", "--name", "load")
         self.assertEqual(code, cli.EXIT_CODES["INPUT_ERROR"], "a declaration word is not a component name")
 
     def test_the_help_names_every_kind(self):
@@ -435,13 +442,16 @@ class Generated(unittest.TestCase):
                          "docs/reference.md is stale: run python -m petra.teach --write")
 
     def test_the_reference_examples_parse(self):
-        text = "petra 0\n" + "\n".join(example for _, _, example in teach.SNIPPETS) + "\n"
-        decls = parse(text, "reference.petra").decls
-        self.assertEqual(len(decls), len(teach.SNIPPETS) + 3, "one declaration per example, and four claims")
+        design = {"param", "component"}
+        card = "petra 0\n" + "\n".join(example for decl, _, example in teach.SNIPPETS if decl != "component") + "\n"
+        text = "petra 0\n" + "\n".join(example for decl, _, example in teach.SNIPPETS if decl in design) + "\n"
+        self.assertEqual(len(parse(card, "reference.card", True).decls), len(teach.SNIPPETS) - 1 + 3,
+                         "one declaration per example of the card's, and four claims")
+        self.assertEqual(len(parse(text, "reference.petra", False).decls), len(design))
 
     def test_the_reference_covers_the_language(self):
         text = teach.REFERENCE.read_text(encoding="utf-8")
-        for decl in ("design", "param", "ambient", "load", "tests", "claim", "waive"):
+        for decl in ("card", "param", "ambient", "given", "component", "load", "tests", "claim", "waive"):
             self.assertIn(f"### {decl}\n", text)
         for kind, spec in models.KINDS.items():
             self.assertIn(f"#### {kind}\n", text)

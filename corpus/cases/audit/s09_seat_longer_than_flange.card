@@ -1,0 +1,10 @@
+petra 0
+
+card "t07c_seat_long" {
+  owner "audit@example.org"
+}
+
+load gravity {
+  on c1 shear in [0 kip, 62 kip]
+  signed "audit@example.org" source "audit"
+}

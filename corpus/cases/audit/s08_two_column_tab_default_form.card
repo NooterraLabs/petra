@@ -1,0 +1,10 @@
+petra 0
+
+card "t05e_conv_2col_34" {
+  owner "audit@example.org"
+}
+
+load gravity {
+  on c1 shear in [0 kip, 90 kip]
+  signed "audit@example.org" source "audit"
+}

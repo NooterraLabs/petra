@@ -15,7 +15,3 @@ shear_tee ii_a_30 {
   support_side bolted
   support_gauge 5.5 inch
 }
-
-load reaction {
-  on ii_a_30 shear in [0 kip, 36 kip]
-}

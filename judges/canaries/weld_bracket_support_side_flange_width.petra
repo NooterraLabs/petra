@@ -4,10 +4,6 @@ petra 0
 # Design 100 of `python scripts/absurd_gap.py --seed 1` at commit b9e9792 (docs/absurd_gap.md):
 # C-shaped weld's returns: 12.375 in across, wider than the W10x49's 10 in flange.
 
-design "absurd-00100" {
-  owner "gate@petra.dev"
-}
-
 weld_bracket c1 {
   basis asd
   plate steel.A36 thickness 0.75 inch
@@ -16,9 +12,4 @@ weld_bracket c1 {
   weld_length 12 inch
   weld_return 12 inch
   eccentricity 6 inch
-}
-
-load gate {
-  on c1 shear in [0 kip, 24.647 kip]
-  signed "gate@petra.dev" source "steel gate generator"
 }

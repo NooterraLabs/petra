@@ -53,7 +53,8 @@ from petra.models.parts.rules import RULE_BY_ID, Evaluator  # noqa: E402
 from tests.parts_meshes import ascii_stl, blind_block, box, flipped, pin, plate, tray, tube  # noqa: E402
 
 Q = Fraction
-HEAD = 'petra 0\ndesign "t" {\n  owner "a@b.c"\n  environment indoor_dry\n}\n'
+CARD = 'petra 0\ncard "t" {\n  owner "a@b.c"\n  environment indoor_dry\n}\n'
+DESIGN = "petra 0\n"
 SIGNED = 'signed "a@b.c" source "gate"'
 AL, PETG, PC = "aluminium.6061_T6", "polymer.petg", "polymer.pc"
 MILL, FDM = "process.mill.al6061_3axis", "process.print.fdm_petg_0_4"
@@ -125,8 +126,10 @@ def _point(p) -> str:
     return f"({num(p[0])} mm, {num(p[1])} mm, {num(p[2])} mm)"
 
 
-def render(d: Design, tmp: str, places: int = 0) -> str:
-    out = []
+def render(d: Design, tmp: str, places: int = 0) -> tuple[str, str]:
+    """The card's text and the design's. The card gives each part's signed tolerance and mass
+    under the part's name and holds the claims; the design holds the parts and the assembly."""
+    given, out = [], []
     for p in d.parts:
         path, sha = ascii_stl(Path(tmp) / f"{p.name}.stl", [tuple(tuple(num(c, places) for c in v) for v in t)
                                                             for t in p.tris])
@@ -134,11 +137,13 @@ def render(d: Design, tmp: str, places: int = 0) -> str:
         if p.process:
             lines.append(f"  process {p.process}")
         if p.tolerance is not None:
-            lines.append(f"  tolerance in [{num(p.tolerance)} mm, {num(p.tolerance)} mm] {SIGNED}")
+            given.append(f"given {p.name}_tolerance in [{num(p.tolerance)} mm, {num(p.tolerance)} mm] {SIGNED}")
+            lines.append(f"  tolerance given {p.name}_tolerance")
         if p.cg is not None:
             lines.append(f"  cg {_point(p.cg)}")
         if p.mass is not None:
-            lines.append(f"  mass in [{num(p.mass[0])} g, {num(p.mass[1])} g] {SIGNED}")
+            given.append(f"given {p.name}_mass in [{num(p.mass[0])} g, {num(p.mass[1])} g] {SIGNED}")
+            lines.append(f"  mass given {p.name}_mass")
         if p.finish:
             lines.append(f"  finish {p.finish}")
         for h in p.holes:
@@ -149,13 +154,12 @@ def render(d: Design, tmp: str, places: int = 0) -> str:
         body += [f"  insert {n} along {a} from {num(t)} mm" for n, a, t in d.inserts]
         body += [f"  {line}" for line in d.lines]
         out.append("assembly a {\n" + "\n".join(body) + "\n}\n")
-    out += [c + "\n" for c in d.claims]
-    return "".join(out)
+    return CARD + "".join(line + "\n" for line in given + d.claims), DESIGN + "".join(out)
 
 
-def outcomes(text: str, tmp: str) -> dict | str:
+def outcomes(card: str, text: str, tmp: str) -> dict | str:
     """Each obligation's outcome by requirement, or the input error."""
-    out = petra.check(HEAD + text, path=f"{tmp}/t.petra", repair=False)
+    out = petra.check(card, text, path=f"{tmp}/t.petra", repair=False)
     if out["status"] == "INPUT_ERROR":
         return "error: " + str(out["error"])
     return {ob["requirement"]: ob["outcome"] for v in out["verdicts"] for ob in v["obligations"]}
@@ -568,7 +572,7 @@ def _check(design: Design, places: int = 0):
     thousands of designs and each memo holds its meshes."""
     try:
         with tempfile.TemporaryDirectory() as tmp:
-            return outcomes(render(design, tmp, places), tmp)
+            return outcomes(*render(design, tmp, places), tmp)
     finally:
         for memo in (engine._BORES, engine._LAYOUTS, engine._SURFACES, lower._PART_MEMO, lower._SURFACE, mesh._PARSED):
             memo.clear()

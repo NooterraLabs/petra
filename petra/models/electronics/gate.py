@@ -72,13 +72,14 @@ def outcomes(report) -> tuple[dict[str, str], dict[str, str], bool, list[str]]:
     return modes, claims, witnessed, needs
 
 
-def certificates(text: str, registry: Registry, status: str) -> str:
-    """Check the design writing its certificates to a temporary directory, verify each with
-    the kernel, re-check the design from them alone, and say "ok" or what failed."""
+def certificates(card: str, text: str, registry: Registry, status: str) -> str:
+    """Check the design against its card writing its certificates to a temporary directory,
+    verify each with the kernel, re-check the design from them alone, and say "ok" or what
+    failed."""
     root = tempfile.mkdtemp(prefix="electronics-certs-")
     try:
         store = CertStore(root)
-        design = parse_design(text, "gate.petra", registry)
+        design = parse_design(card, text, "gate.petra", registry)
         check_design(design, registry, (SolverSource(),), sink=store)
         paths = store.paths()
         if not paths:
@@ -94,13 +95,13 @@ def certificates(text: str, registry: Registry, status: str) -> str:
 
 
 def assess(g: Generated, registry: Registry, with_certificates: bool) -> Assessed:
-    report = check_design(parse_design(g.text, "gate.petra", registry), registry, (SolverSource(),))
+    report = check_design(parse_design(g.card, g.text, "gate.petra", registry), registry, (SolverSource(),))
     status = STATUS[type(report.verdict)]
     modes, claims, witnessed, needs = outcomes(report)
     out = Assessed(g.name, g.kind, status, g.redraws, witnessed, modes,
                    {c.name: (c.target, claims.get(c.name, "absent")) for c in g.claims}, needs)
     if with_certificates:
-        out.certificates = certificates(g.text, registry, status)
+        out.certificates = certificates(g.card, g.text, registry, status)
     return out
 
 

@@ -111,8 +111,9 @@ class Punct:
 
 @dataclass(frozen=True, slots=True)
 class Bound:
-    """`in [lo, hi] unit [mean q] signed|measured "owner" source "where"` inside a component
-    block. The owning domain names it and turns it into an Input."""
+    """`given NAME` inside a component block: the bound the card states under that name,
+    `in [lo, hi] unit [mean q] signed|measured "owner" source "where"`. The owning domain
+    names it and turns it into an Input."""
 
     range: Quantity
     signature: Signature

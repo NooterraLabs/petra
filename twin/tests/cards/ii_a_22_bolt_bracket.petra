@@ -17,7 +17,3 @@ bolt_bracket ii_a_22 {
   plate_edge 2 inch
   free_edge 15.25 inch
 }
-
-load reaction {
-  on ii_a_22 shear in [0 kip, 36 kip]
-}

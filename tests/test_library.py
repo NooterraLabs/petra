@@ -26,6 +26,7 @@ from pathlib import Path
 
 from petra.kernel import Add, Const, Evidence, Instance, Leaf, Matrix, Neg, RangeHyp, Rejection, Split, Statement, Sym, Theorem, check, decode_statement, statement_hash
 from petra.kernel.rules.r1_linear import FeasiblePoints, LinearFeasible
+from petra.files import read_pair
 from petra.kernel.rules.r4_enclosure import AllNonpositive, Enclosure
 from petra.lang import parse_design
 from petra.library import Library, canonical_renaming, certify_family, claim_obligations, family_entry, shape_hash
@@ -35,32 +36,35 @@ from petra.verdict import Discharged, Open
 from tests import mutations
 
 ROOT = Path(__file__).resolve().parents[1]
-FAMILY = (ROOT / "examples" / "families" / "cu_pvc_clipped.petra").read_text(encoding="utf-8")
-CIRCUIT = (ROOT / "examples" / "circuit_pass.petra").read_text(encoding="utf-8")
+FAMILY = read_pair(ROOT / "examples" / "families" / "cu_pvc_clipped.petra")
+CIRCUIT = read_pair(ROOT / "examples" / "circuit_pass.petra")
+"""Each a card's text and its design's."""
 REGISTRY = build_registry()
 DRAW = "param draw       in [0 A, 13 A]"
 
 
-def family_with_draw(amps: str) -> str:
-    assert DRAW in FAMILY, "the shipped family declares its draw as the tests expect"
-    return FAMILY.replace(DRAW, f"param draw       in [0 A, {amps} A]")
+def family_with_draw(amps: str) -> tuple[str, str]:
+    card, text = FAMILY
+    assert DRAW in card, "the shipped family declares its draw as the tests expect"
+    return card.replace(DRAW, f"param draw       in [0 A, {amps} A]"), text
 
 
-def circuit_with_draw(amps: str) -> str:
-    return CIRCUIT.replace("current in [0 A, 10 A]", f"current in [0 A, {amps} A]")
+def circuit_with_draw(amps: str) -> tuple[str, str]:
+    card, text = CIRCUIT
+    return card.replace("current in [0 A, 10 A]", f"current in [0 A, {amps} A]"), text
 
 
-def claims(text: str) -> dict:
-    design = parse_design(text, "test.petra", REGISTRY)
+def claims(card: str, text: str) -> dict:
+    design = parse_design(card, text, "test.petra", REGISTRY)
     return {o.requirement.id.rsplit(".", 1)[-1]: o for o in claim_obligations(design, REGISTRY)}
 
 
-def certify(text: str, root: str):
-    return certify_family(parse_design(text, "family.petra", REGISTRY), REGISTRY, Library(root))
+def certify(card: str, text: str, root: str):
+    return certify_family(parse_design(card, text, "family.petra", REGISTRY), REGISTRY, Library(root))
 
 
-def library_outcomes(text: str, library: Library) -> dict:
-    report = check_design(parse_design(text, "query.petra", REGISTRY), REGISTRY, (library,))
+def library_outcomes(card: str, text: str, library: Library) -> dict:
+    report = check_design(parse_design(card, text, "query.petra", REGISTRY), REGISTRY, (library,))
     return {o.requirement.id.rsplit(".", 1)[-1]: o for o in report.outcomes if isinstance(o, Open)} | {
         o.obligation.requirement.id.rsplit(".", 1)[-1]: o for o in report.outcomes if isinstance(o, Discharged)
     }
@@ -69,13 +73,13 @@ def library_outcomes(text: str, library: Library) -> dict:
 class FamilyBox(unittest.TestCase):
     def test_shipped_box_certifies_both_claims(self):
         with tempfile.TemporaryDirectory() as root:
-            result = certify(FAMILY, root)
+            result = certify(*FAMILY, root)
             self.assertEqual(result.skipped, (), "the hand check puts the hottest corner of the 13 A box at 68.84 degC")
             self.assertEqual(len(result.stored), 2, "hot and drop each store one entry")
 
     def test_the_16_A_box_is_refuted_on_temperature_only(self):
         with tempfile.TemporaryDirectory() as root:
-            result = certify(family_with_draw("16"), root)
+            result = certify(*family_with_draw("16"), root)
             self.assertEqual(len(result.skipped), 1, "only the hot claim fails at 16 A (86.19 degC by hand)")
             self.assertIn("claim.hot", result.skipped[0], "the skipped claim is hot")
             self.assertIn("refuted", result.skipped[0], "the solver refutes it rather than giving up")
@@ -83,16 +87,16 @@ class FamilyBox(unittest.TestCase):
 
     def test_the_box_edge_sits_where_the_hand_check_puts_it(self):
         with tempfile.TemporaryDirectory() as root:
-            self.assertEqual(certify(family_with_draw("13.2"), root).skipped, (), "69.83 degC at 13.2 A is within 70 degC")
+            self.assertEqual(certify(*family_with_draw("13.2"), root).skipped, (), "69.83 degC at 13.2 A is within 70 degC")
         with tempfile.TemporaryDirectory() as root:
-            skipped = certify(family_with_draw("13.3"), root).skipped
+            skipped = certify(*family_with_draw("13.3"), root).skipped
             self.assertTrue(any("claim.hot" in s and "refuted" in s for s in skipped), "70.34 degC at 13.3 A is refuted")
 
     def test_certifying_twice_stores_nothing_new(self):
         with tempfile.TemporaryDirectory() as root:
-            certify(FAMILY, root)
+            certify(*FAMILY, root)
             files = sorted(p.relative_to(root) for p in Path(root).rglob("*") if p.is_file())
-            certify(FAMILY, root)
+            certify(*FAMILY, root)
             again = sorted(p.relative_to(root) for p in Path(root).rglob("*") if p.is_file())
             self.assertEqual(files, again, "the second certification leaves the same files")
             self.assertEqual(Library(root).stats()["families"], 2, "two families after two runs")
@@ -100,17 +104,17 @@ class FamilyBox(unittest.TestCase):
     def test_a_concrete_design_is_not_a_family(self):
         with tempfile.TemporaryDirectory() as root:
             with self.assertRaises(ValueError):
-                certify(CIRCUIT, root)
+                certify(*CIRCUIT, root)
 
 
 class ShapeMatching(unittest.TestCase):
     def test_a_concrete_claim_has_its_family_claims_shape(self):
-        family, concrete = claims(FAMILY), claims(CIRCUIT)
+        family, concrete = claims(*FAMILY), claims(*CIRCUIT)
         for name in ("hot", "drop"):
             self.assertEqual(shape_hash(family[name].statement), shape_hash(concrete[name].statement), f"{name} shapes match across symbol names")
 
     def test_different_claims_have_different_shapes(self):
-        concrete = claims(CIRCUIT)
+        concrete = claims(*CIRCUIT)
         self.assertNotEqual(shape_hash(concrete["hot"].statement), shape_hash(concrete["drop"].statement), "temperature and drop differ in shape")
 
     def test_ranges_and_labels_do_not_change_the_shape_but_constants_do(self):
@@ -122,7 +126,7 @@ class ShapeMatching(unittest.TestCase):
         self.assertNotEqual(shape_hash(base), shape_hash(statement("x", 10, 11, "a")), "a different constant changes the shape")
 
     def test_canonical_renaming_is_consistent(self):
-        family, concrete = claims(FAMILY)["hot"].statement, claims(CIRCUIT)["hot"].statement
+        family, concrete = claims(*FAMILY)["hot"].statement, claims(*CIRCUIT)["hot"].statement
         self.assertEqual(sorted(canonical_renaming(family).values()), sorted(canonical_renaming(concrete).values()), "both use the same canonical names")
         self.assertEqual(len(set(canonical_renaming(family).values())), len(family.hyps), "every hypothesis gets its own canonical name")
 
@@ -130,9 +134,9 @@ class ShapeMatching(unittest.TestCase):
 class Lookup(unittest.TestCase):
     def test_a_query_inside_the_box_reuses_the_family(self):
         with tempfile.TemporaryDirectory() as root:
-            certify(FAMILY, root)
+            certify(*FAMILY, root)
             library = Library(root)
-            outcomes = library_outcomes(CIRCUIT, library)
+            outcomes = library_outcomes(*CIRCUIT, library)
             for name in ("hot", "drop"):
                 self.assertIsInstance(outcomes[name], Discharged, f"{name} is proved from the library")
                 self.assertEqual(outcomes[name].source, "library", f"{name} evidence came from the library")
@@ -140,19 +144,19 @@ class Lookup(unittest.TestCase):
 
     def test_a_query_outside_the_box_is_not_offered(self):
         with tempfile.TemporaryDirectory() as root:
-            certify(FAMILY, root)
+            certify(*FAMILY, root)
             library = Library(root)
-            outcomes = library_outcomes(circuit_with_draw("14"), library)
+            outcomes = library_outcomes(*circuit_with_draw("14"), library)
             self.assertIsInstance(outcomes["hot"], Open, "14 A lies outside the 13 A box")
             self.assertGreaterEqual(library.stats()["misses"], 1, "the lookup missed")
-            self.assertIsNone(library.lookup(claims(circuit_with_draw("14"))["hot"].statement), "lookup finds no containing family")
+            self.assertIsNone(library.lookup(claims(*circuit_with_draw("14"))["hot"].statement), "lookup finds no containing family")
 
     def test_a_false_family_planted_in_the_library_never_passes(self):
-        planted = claims(family_with_draw("16"))["hot"]
+        planted = claims(*family_with_draw("16"))["hot"]
         with tempfile.TemporaryDirectory() as root:
             library = Library(root)
             library.add(family_entry(planted.statement, Evidence(Enclosure(Leaf())), ("planted",)))
-            outcomes = library_outcomes(circuit_with_draw("15"), library)
+            outcomes = library_outcomes(*circuit_with_draw("15"), library)
             self.assertIsInstance(outcomes["hot"], Open, "the kernel rejects the planted evidence, so 15 A stays open")
             self.assertTrue(outcomes["hot"].rejections, "the rejection is recorded")
 
@@ -176,8 +180,8 @@ class Offers(unittest.TestCase):
         return tuple(self.library.offer(statement, statement_hash(statement)))
 
     def test_an_offer_is_an_instance_under_the_canonical_renaming(self):
-        certify(FAMILY, self.dir.name)
-        query = claims(CIRCUIT)["hot"].statement
+        certify(*FAMILY, self.dir.name)
+        query = claims(*CIRCUIT)["hot"].statement
         (evidence,) = self.offer(query)
         self.assertIsInstance(evidence.body, Instance, "the library offers an Instance")
         entry = self.library.lookup(query)
@@ -239,7 +243,7 @@ class Store(unittest.TestCase):
     def setUp(self):
         self.dir = tempfile.TemporaryDirectory()
         self.root = Path(self.dir.name)
-        certify(FAMILY, self.dir.name)
+        certify(*FAMILY, self.dir.name)
 
     def tearDown(self):
         self.dir.cleanup()
@@ -277,7 +281,7 @@ class Store(unittest.TestCase):
             path.write_text(json.dumps(obj, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8", newline="\n")
         library = Library(self.root)
         self.assertEqual(library.stats()["families"], 0, "a consistent envelope with an edited box no longer hashes to its file name")
-        self.assertIsInstance(library_outcomes(CIRCUIT, library)["hot"], Open, "nothing is offered from an edited file")
+        self.assertIsInstance(library_outcomes(*CIRCUIT, library)["hot"], Open, "nothing is offered from an edited file")
 
     def test_a_corrupt_file_is_counted_not_fatal(self):
         self.files()[0].write_text("{not json", encoding="utf-8")

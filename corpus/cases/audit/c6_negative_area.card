@@ -1,0 +1,15 @@
+petra 0
+
+card "c_series_negarea" {
+  owner "e.designer@example.org"
+  environment indoor_dry
+}
+
+ambient in [10 degC, 30 degC] signed "site.manager@example.org" source "site survey"
+
+given fault_current in [0 kA, 6 kA] signed "dno@example.org" source "DNO letter"
+
+load lamp_draw {
+  on lighting.lamps current in [0 A, 10 A]
+  signed "e.designer@example.org" source "schedule"
+}

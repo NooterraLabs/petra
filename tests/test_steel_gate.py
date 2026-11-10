@@ -30,15 +30,15 @@ DOC = Path(__file__).resolve().parents[1] / "docs" / "steel_gate.md"
 SAMPLE = list(gen.generate(44, 5, REGISTRY))
 
 
-def status(text: str) -> tuple[str, dict[str, str]]:
-    report = check_design(parse_design(text, "t.petra", REGISTRY), REGISTRY, (SolverSource(),))
+def status(card: str, text: str) -> tuple[str, dict[str, str]]:
+    report = check_design(parse_design(card, text, "t.petra", REGISTRY), REGISTRY, (SolverSource(),))
     return STATUS[type(report.verdict)], G.deck_outcomes(report)[0]
 
 
 class Generator(unittest.TestCase):
     def test_a_slice_is_the_same_whoever_draws_it(self):
         again = list(gen.generate(4, 5, REGISTRY, start=20))
-        self.assertEqual([g.text for g in again], [g.text for g in SAMPLE[20:24]])
+        self.assertEqual([(g.card, g.text) for g in again], [(g.card, g.text) for g in SAMPLE[20:24]])
 
     def test_every_kind_is_drawn(self):
         self.assertEqual({g.kind for g in SAMPLE}, set(gen.SAMPLERS))
@@ -59,15 +59,15 @@ class Generator(unittest.TestCase):
         # so a load aimed to fail by that reading passed.
         lines = ["  plate steel.A36 thickness 0.625 inch", "  support W12x40 flange grade steel.A992",
                  "  bolts bolt_group.120 diameter 0.875 inch threads excluded", "  rows 2", "  columns 2",
-                 "  pitch 3 inch", "  gauge 4 inch", "  eccentricity 6 inch",
-                 '  edge_vertical in [1.9375 inch, 2.0625 inch] signed "gate@petra.dev" source "steel gate generator"',
+                 "  pitch 3 inch", "  gauge 4 inch", "  eccentricity 6 inch", "  edge_vertical given edge_vertical",
                  "  plate_edge 2 inch", "  free_edge 6 inch"]
-        build = lambda load: gen.source("aim", "bolt_bracket", "lrfd", lines, load)
+        given = ('given edge_vertical in [1.9375 inch, 2.0625 inch] signed "gate@petra.dev" source "steel gate generator"',)
+        build = lambda load: gen.source("aim", "bolt_bracket", "lrfd", lines, load, given=given)
         for goal, expected in ((Fraction(104, 100), "FAIL"), (Fraction(96, 100), "PASS")):
             with self.subTest(goal=goal):
                 load, u, mode, _ = gen.scale(build, goal, REGISTRY)
                 self.assertEqual(mode, "bracket_edge")
-                self.assertEqual(status(build(load))[0], expected)
+                self.assertEqual(status(*build(load))[0], expected)
 
     def test_min_fillet_follows_table_j2_4(self):
         self.assertEqual([gen.min_fillet(Fraction(t)) for t in ("0.25", "0.5", "0.75", "1")],
@@ -99,9 +99,9 @@ class Breaker(unittest.TestCase):
         self.base = next(g for g in SAMPLE if g.kind == "shear_tab" and g.expected == "PASS" and not g.toleranced)
 
     def test_an_oracle_that_agrees_finds_nothing(self):
-        def deck(text):
+        def deck(card, text):
             out = {}
-            for (mode, _), v in gen.checks(text, REGISTRY).items():
+            for (mode, _), v in gen.checks(card, text, REGISTRY).items():
                 out[mode] = max(out.get(mode, 0.0), v.utilisation)
             return out
         run = B.run(self.base, REGISTRY, deck, 6, 0)
@@ -110,7 +110,7 @@ class Breaker(unittest.TestCase):
         self.assertLessEqual(run.best, 1 + B.SLACK)
 
     def test_an_oracle_that_disagrees_is_found_and_logged(self):
-        run = B.run(self.base, REGISTRY, lambda text: {"bolts": 1.5}, 3, 0)
+        run = B.run(self.base, REGISTRY, lambda card, text: {"bolts": 1.5}, 3, 0)
         self.assertTrue(run.found)
         self.assertEqual(run.log()["false_pass"][0]["modes"], ["bolts"])
 
@@ -144,15 +144,14 @@ class DeckFixes(unittest.TestCase):
 
     def test_a_thinner_support_flange_is_checked_for_prying_not_left_open(self):
         # WT7x26.5 (tf 0.660 in) under a W21x57 (tf 0.650 in): the support flange is the thinner.
-        text = self.hanger("WT7x26_5", "W21x57")
-        verdict, modes = status(text)
+        pair = self.hanger("WT7x26_5", "W21x57")
+        verdict, modes = status(*pair)
         self.assertIn(verdict, ("PASS", "FAIL"))
-        whats = [v.what for (m, _), v in gen.checks(text, REGISTRY).items() if m == "prying"]
+        whats = [v.what for (m, _), v in gen.checks(*pair, REGISTRY).items() if m == "prying"]
         self.assertTrue(any("support flange" in w for w in whats) and any("tee flange" in w for w in whats), whats)
 
     def test_a_slip_critical_hanger_with_shear_checks_combined_tension_and_shear(self):
-        text = self.hanger("WT9x25", "W21x62", " joint slip_critical surface class_a", shear="0.3")
-        verdict, modes = status(text)
+        verdict, modes = status(*self.hanger("WT9x25", "W21x62", " joint slip_critical surface class_a", shear="0.3"))
         self.assertIn(verdict, ("PASS", "FAIL"))
         self.assertIn(modes.get("bolt_combined"), ("pass", "fail"))
         self.assertIn(modes.get("slip"), ("pass", "fail"))
@@ -162,14 +161,14 @@ class DeckFixes(unittest.TestCase):
                  "  plate steel.A36 thickness 0.375 inch", "  stiffener steel.A36 thickness 0.375 inch",
                  "  stiffener_width 6 inch", "  stiffener_length 12 inch", "  setback 0.75 inch",
                  "  weld electrode.E70 size 0.3125 inch sides 2", "  top_angle L4x4x1_4 grade steel.A36 outstanding long"]
-        verdict, modes = status(gen.source("s", "stiffened_seat", "lrfd", lines, Fraction(20)))
+        verdict, modes = status(*gen.source("s", "stiffened_seat", "lrfd", lines, Fraction(20)))
         self.assertEqual((verdict, modes["compression"]), ("FAIL", "fail"))
 
     def prying(self, holes, rows):
         lines = [x.format(tee="WT9x25", support="W21x62", joint="") for x in HANGER]
         lines = [x.replace("rows 2", f"rows {rows}") for x in lines] + [f"  holes flange {holes}"]
-        text = gen.source("h", "hanger", "lrfd", lines, Fraction(20))
-        return {v.what: v.utilisation for (m, _), v in gen.checks(text, REGISTRY).items() if m == "prying"}
+        pair = gen.source("h", "hanger", "lrfd", lines, Fraction(20))
+        return {v.what: v.utilisation for (m, _), v in gen.checks(*pair, REGISTRY).items() if m == "prying"}
 
     def test_prying_takes_each_bolts_tributary_length_by_figure_9_4(self):
         # Companion II.D-1: an end bolt min(le, 1.75 b) + min(s/2, 1.75 b), an inner bolt
@@ -192,13 +191,13 @@ class DeckFixes(unittest.TestCase):
         # A hanger pulls normal to its plies, so the card fixes no direction in their plane
         # for a slot. The 3/4 in bolts' 13/16 in holes pass prying; a short slot is 13/16 in
         # wide and 1 in long, and run along the tee its length in delta = 1 - d'/p fails it.
-        self.assertEqual(status(self.slotted("flange std"))[0], "PASS")
-        verdict, modes = status(self.slotted("flange ssl"))
+        self.assertEqual(status(*self.slotted("flange std"))[0], "PASS")
+        verdict, modes = status(*self.slotted("flange ssl"))
         self.assertEqual((verdict, modes["prying"]), ("FAIL", "fail"))
 
-    def test_a_hanger_slot_reads_the_same_whichever_way_the_card_names_it(self):
+    def test_a_hanger_slot_reads_the_same_whichever_way_the_design_names_it(self):
         def checks(holes):
-            return {(m, v.what): v.utilisation for (m, _), v in gen.checks(self.slotted(holes, shear="0.5"), REGISTRY).items()}
+            return {(m, v.what): v.utilisation for (m, _), v in gen.checks(*self.slotted(holes, shear="0.5"), REGISTRY).items()}
 
         def worst(found, mode):
             return max(u for (m, _), u in found.items() if m == mode)
@@ -221,11 +220,11 @@ class DeckFixes(unittest.TestCase):
                  "  bolts bolt_group.150 diameter 0.75 inch threads excluded joint pretensioned",
                  "  rows 2", "  pitch 3 inch", "  tee_gauge 4.5 inch", "  edge_vertical 2 inch"]
 
-        def card(shear):
+        def sheared(shear):
             return gen.source("h", "hanger", "lrfd", lines, Fraction(5), (("shear", Fraction(shear, 5)),))
-        self.assertEqual([status(card(s))[1]["bolts"] for s in (100, 108)], ["pass", "fail"])
+        self.assertEqual([status(*sheared(s))[1]["bolts"] for s in (100, 108)], ["pass", "fail"])
         # The readout shows the weaker way's bolts, which sum to what the group holds.
-        report = check_design(parse_design(card(108), "t.petra", REGISTRY), REGISTRY, (SolverSource(),))
+        report = check_design(parse_design(*sheared(108), "t.petra", REGISTRY), REGISTRY, (SolverSource(),))
         group = next(v for f in report.findings for v in f.values if v.parts)
         self.assertAlmostEqual(group.capacity, sum(p.count * p.capacity for p in group.parts), places=6)
         self.assertTrue(all("shear across the lines" in p.what for p in group.parts), [p.what for p in group.parts])
@@ -235,7 +234,7 @@ class DeckFixes(unittest.TestCase):
         # to every slot in the plies, but the card fixes no direction for the shear in their
         # plane, so a slot may lie along it.
         slip = " joint slip_critical surface class_a"
-        found = [status(self.slotted("flange ssl", shear=s, joint=j))[1]["hole_use"]
+        found = [status(*self.slotted("flange ssl", shear=s, joint=j))[1]["hole_use"]
                  for s, j in ((None, " joint pretensioned"), ("0.1", " joint pretensioned"), ("0.1", slip))]
         self.assertEqual(found, ["pass", "fail", "pass"])
 
@@ -248,8 +247,8 @@ class DeckFixes(unittest.TestCase):
                      "  bolts bolt_group.150 diameter 0.75 inch threads excluded", "  rows 2", "  pitch 3 inch",
                      f"  edge_vertical {lev} inch", "  support_gauge 3.5 inch",
                      "  top_angle L4x4x1_4 grade steel.A36 outstanding long"]
-            text = gen.source("s", "seated", "lrfd", lines, Fraction(20))
-            return max(v.utilisation for (m, _), v in gen.checks(text, REGISTRY).items() if m == "bolts")
+            pair = gen.source("s", "seated", "lrfd", lines, Fraction(20))
+            return max(v.utilisation for (m, _), v in gen.checks(*pair, REGISTRY).items() if m == "bolts")
         self.assertGreater(bolts(1), bolts(2))
 
     def test_a_long_stiffener_weld_counts_its_end_loaded_length(self):
@@ -261,14 +260,14 @@ class DeckFixes(unittest.TestCase):
                      "  stiffener_width 6 inch", f"  stiffener_length {length} inch", "  setback 0.75 inch",
                      "  weld electrode.E70 size 0.1875 inch sides 2",
                      "  top_angle L4x4x1_4 grade steel.A36 outstanding long"]
-            text = gen.source("s", "stiffened_seat", "lrfd", lines, Fraction(40))
-            return {v.what: v.utilisation for (m, _), v in gen.checks(text, REGISTRY).items() if m == "weld"}
+            pair = gen.source("s", "stiffened_seat", "lrfd", lines, Fraction(40))
+            return {v.what: v.utilisation for (m, _), v in gen.checks(*pair, REGISTRY).items() if m == "weld"}
         short, long = weld(14), weld(24)
         end_loaded = next(w for w in long if "end-loaded" in w)
         self.assertEqual(short[end_loaded], 0.0)
         self.assertGreater(long[end_loaded], max(u for w, u in long.items() if w != end_loaded))
 
-    def tab(self, *edits: tuple[str, str]) -> str:
+    def tab(self, *edits: tuple[str, str]) -> tuple[str, str]:
         lines = ["  beam W16x26 grade steel.A992", "  support W14x90 web grade steel.A992",
                  "  plate steel.A36 thickness 0.375 inch", "  bolts bolt_group.120 diameter 0.75 inch threads included",
                  "  rows 3", "  pitch 3 inch", "  edge_vertical 1.5 inch", "  plate_edge 1.5 inch", "  bolt_line 3 inch",
@@ -279,8 +278,8 @@ class DeckFixes(unittest.TestCase):
         return gen.source("t", "shear_tab", "lrfd", lines, Fraction(30))
 
     @staticmethod
-    def values(text: str, mode: str) -> dict[str, float]:
-        return {v.what: v.utilisation for (m, _), v in gen.checks(text, REGISTRY).items() if m == mode}
+    def values(pair: tuple[str, str], mode: str) -> dict[str, float]:
+        return {v.what: v.utilisation for (m, _), v in gen.checks(*pair, REGISTRY).items() if m == mode}
 
     def test_prying_under_shear_works_from_the_tension_j3_8_leaves(self):
         # Companion II.A-1B: B = phi F'nt Ab. A WT7x45 under 78 kip of tension and 44 kip of
@@ -305,7 +304,7 @@ class DeckFixes(unittest.TestCase):
         self.assertAlmostEqual(u["plate: horizontal edge distance at least 2d (Manual Part 10)"], 4 / 3, places=6)
 
     def test_a_plate_welded_on_one_face_is_outside_the_single_plate_method(self):
-        verdict, modes = status(self.tab(("  weld electrode.E70 size 0.25 inch sides 2", "  weld electrode.E70 size 0.25 inch sides 1")))
+        verdict, modes = status(*self.tab(("  weld electrode.E70 size 0.25 inch sides 2", "  weld electrode.E70 size 0.25 inch sides 1")))
         self.assertNotEqual(verdict, "PASS")
         self.assertNotIn(modes.get("ductility"), ("pass", "fail"))
 
@@ -353,16 +352,16 @@ class DeckFixes(unittest.TestCase):
                  "  bolts bolt_group.120 diameter 0.75 inch threads included", "  rows 6", "  columns 2",
                  "  pitch 3 inch", "  gauge 3 inch", "  eccentricity 16.5 inch", "  edge_vertical 1.5 inch",
                  "  plate_edge 1.5 inch"]
-        text = gen.source("b", "bolt_bracket", "lrfd", lines, Fraction(10))
+        pair = gen.source("b", "bolt_bracket", "lrfd", lines, Fraction(10))
         fcr = 1.9 * 29000 / (15 * 18 / 0.25 ** 2)
-        self.assertAlmostEqual(max(self.values(text, "plate_buckling").values()), 150 / (0.9 * fcr * 0.25 * 18 ** 2 / 6),
+        self.assertAlmostEqual(max(self.values(pair, "plate_buckling").values()), 150 / (0.9 * fcr * 0.25 * 18 ** 2 / 6),
                                places=4)
-        self.assertLess(max(self.values(text, "flexural_yield").values()), 0.25)
+        self.assertLess(max(self.values(pair, "flexural_yield").values()), 0.25)
 
     def test_a_hanger_hangs_from_a_flange(self):
-        text = self.hanger("WT9x25", "W21x62").replace("W21x62 flange", "W21x62 web")
+        card, text = self.hanger("WT9x25", "W21x62")
         with self.assertRaises(Exception):
-            status(text)
+            status(card, text.replace("W21x62 flange", "W21x62 web"))
 
 
 class Published(unittest.TestCase):

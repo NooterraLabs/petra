@@ -5,10 +5,6 @@ petra 0
 # W16x31 (d = 15.9 in): the plate runs to 25.5 in and the bottom bolt sits 24 in below the
 # beam's top, past the end of its flat web, 14.76 in down ((d + T)/2). Found 2026-11-06 (docs/plan.md §1).
 
-design "steel-shear-tab" {
-  owner "s.engineer@example.org"
-}
-
 shear_tab st1 {
   basis lrfd
   beam W16x31 grade steel.A992
@@ -23,9 +19,4 @@ shear_tab st1 {
   beam_edge 1.75 inch
   top 3 inch
   weld electrode.E70 size 0.25 inch sides 2
-}
-
-load gravity {
-  on st1 shear in [0 kip, 45 kip]
-  signed "s.engineer@example.org" source "beam reaction, LRFD 1.2D + 1.6L, calc SC-3"
 }

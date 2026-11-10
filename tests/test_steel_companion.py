@@ -163,11 +163,19 @@ class J5CombinedTensionAndShearSlipCritical(Published):
                 self.published(value(L.mul(per_bolt, ksc, L.c(8))), printed[1], "available slip of the group")
 
 
-GIRDER = """petra 0
+GIRDER_CARD = """petra 0
 
-design "companion-j7" {{
+card "companion-j7" {{
   owner "s.engineer@example.org"
 }}
+
+load reaction {{
+  on girder force in [0 kip, {force} kip]
+  signed "s.engineer@example.org" source "Companion Example J.7"
+}}
+"""
+
+GIRDER = """petra 0
 
 flange_force girder {{
   basis {basis}
@@ -178,11 +186,6 @@ flange_force girder {{
   flange_restrained yes
   unbraced_length 240 inch
   moment_at_force below_yield
-}}
-
-load reaction {{
-  on girder force in [0 kip, {force} kip]
-  signed "s.engineer@example.org" source "Companion Example J.7"
 }}
 """
 
@@ -198,7 +201,7 @@ class J7ConcentratedForcesOnAGirder(Published):
     1 % there and checks the printed value from the rounded r directly."""
 
     def available(self, basis: str, force: str) -> dict[str, float]:
-        d = parse_design(GIRDER.format(basis=basis, force=force), "j7.petra", REGISTRY)
+        d = parse_design(GIRDER_CARD.format(force=force), GIRDER.format(basis=basis), "j7.petra", REGISTRY)
         conn = calc.connection(d, "girder", REGISTRY)
         found = {}
         for mode in ("web_local_yielding", "web_crippling", "web_sidesway_buckling"):

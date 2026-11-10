@@ -1,11 +1,7 @@
 petra 0
-design "p3_nan_vertex" {
-  owner "red@example.org"
-  environment indoor_dry
-}
+
 part p {
   mesh "p3_nan_vertex.3mf" sha256 "4331291f4c83a23f14c1d79e49b15428525c3fee2d417cf1a3804d3a125995bd" units mm
   material aluminium.6061_T6
-  tolerance in [0.05 mm, 0.05 mm] signed "red@example.org" source "x"
+  tolerance given tolerance
 }
-claim m: p.mass <= 100 kg

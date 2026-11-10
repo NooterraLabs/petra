@@ -1,7 +1,7 @@
 """The command line: exit codes, the JSON report, and each subcommand. Owner: Y.
 
 Expected verdicts: examples/circuit_pass.petra passes and examples/bolt_unknown.petra is
-UNKNOWN (their own headers say why). With a 16 A draw the circuit_pass design breaks
+UNKNOWN (their own headers say why). Under a card that asks for a 16 A draw the circuit_pass design breaks
 the overload condition I_B <= I_n of its B10 breaker (IEC 60364-4-43 433.1), so it
 fails. A stress area of 1.5 x 84.267 mm2 for M12 contradicts ISO 724, so a deck holding
 it fails the consistency check.
@@ -18,6 +18,7 @@ from pathlib import Path
 
 import petra
 from petra.cli import EXIT_CODES, main
+from petra.files import read_pair
 from petra.kernel import Evidence, Leaf, Split, encode_evidence
 from petra.kernel.rules.r4_enclosure import Enclosure
 
@@ -74,20 +75,41 @@ class Check(Workspace):
         self.assertTrue(unknown, "some entry is UNKNOWN")
         self.assertTrue(all(v["needs"] for v in unknown), "each UNKNOWN entry says what it needs")
 
-    def test_a_refuted_design_exits_1(self):
-        path = self.write("overloaded.petra", CIRCUIT.read_text(encoding="utf-8").replace("[0 A, 10 A]", "[0 A, 16 A]"))
-        code, out, _ = run("check", path)
+    def test_a_design_refuted_under_another_card_exits_1(self):
+        card = self.write("overloaded.card", read_pair(CIRCUIT)[0].replace("[0 A, 10 A]", "[0 A, 16 A]"))
+        code, out, _ = run("check", str(CIRCUIT), "--card", card)
         self.assertEqual(code, EXIT_CODES["FAIL"], "16 A on a B10 exits 1")
         self.assertIn("FAIL", out.splitlines()[0], "the first line gives the overall status")
 
     def test_input_errors_exit_3_and_print_nothing(self):
-        syntax = self.write("broken.petra", "petra 0\ndesign {\n")
+        card, design = read_pair(CIRCUIT)
+        self.write("broken.card", card)
+        syntax = self.write("broken.petra", "petra 0\ncircuit {\n")
+        lone = self.write("lone.petra", design)
         deck = self.write("deck.json", "not a deck")
-        for argv in (("check", syntax), ("check", str(self.tmp / "missing.petra")), ("check", str(CIRCUIT), "--deck", deck)):
+        for argv in (("check", syntax), ("check", str(self.tmp / "missing.petra")), ("check", lone), ("check", str(CIRCUIT), "--card", syntax),
+                     ("check", str(CIRCUIT), "--deck", deck)):
             code, out, err = run(*argv)
             self.assertEqual(code, EXIT_CODES["INPUT_ERROR"], f"{argv} exits 3")
             self.assertEqual(out, "", f"{argv} prints nothing to stdout")
             self.assertTrue(err, f"{argv} explains itself on stderr")
+        self.assertIn("broken.petra:2:1", run("check", syntax)[2], "a syntax error names the design and the place")
+        self.assertIn("lone.card", run("check", lone)[2], "a design with no card beside it names the card it looked for")
+
+    def test_a_design_cannot_state_what_is_asked_of_it(self):
+        card, design = read_pair(CIRCUIT)
+        self.write("own.card", card)
+        for line in ("load easy {\n  on lighting.lamps current in [0 A, 1 A]\n  signed \"me\" source \"me\"\n}\n",
+                     "claim hot: lighting.w1.temperature <= 500 degC\n",
+                     "waive wire.short_circuit on lighting.w1 by \"me\" reason \"fine\"\n"):
+            code, out, err = run("check", self.write("own.petra", design + line))
+            self.assertEqual((code, out), (EXIT_CODES["INPUT_ERROR"], ""), line)
+            self.assertIn("belongs in the card", err, line)
+
+    def test_a_family_is_not_a_design_to_check(self):
+        code, _, err = run("check", str(FAMILY))
+        self.assertEqual(code, EXIT_CODES["INPUT_ERROR"], "a load that reads a param is one nobody signed")
+        self.assertIn("certify-family", err)
 
     def test_usage_errors_exit_3(self):
         for argv in (("frobnicate",), ("check",), ("mcp", "--budget", "0")):
@@ -124,21 +146,23 @@ class Encodings(Workspace):
     """Windows PowerShell 5.1 writes UTF-8 with a byte order mark from `Out-File -Encoding
     utf8` and UTF-16 from `>`. The README's quickstart redirects `petra new` into a file."""
 
-    TEXT = (ROOT / "examples" / "circuit_pass.petra").read_text(encoding="utf-8")
+    CARD, TEXT = read_pair(ROOT / "examples" / "circuit_pass.petra")
 
-    def check(self, data: bytes) -> int:
+    def check(self, card: bytes, design: bytes) -> int:
+        (self.tmp / "design.card").write_bytes(card)
         path = self.tmp / "design.petra"
-        path.write_bytes(data)
+        path.write_bytes(design)
         return run("check", str(path))[0]
 
-    def test_a_design_with_a_byte_order_mark_checks(self):
-        self.assertEqual(self.check(self.TEXT.encode("utf-8-sig")), EXIT_CODES["PASS"])
+    def test_a_pair_with_a_byte_order_mark_checks(self):
+        self.assertEqual(self.check(self.CARD.encode("utf-8-sig"), self.TEXT.encode("utf-8-sig")), EXIT_CODES["PASS"])
 
-    def test_a_utf16_design_checks(self):
-        self.assertEqual(self.check(self.TEXT.replace("\n", "\r\n").encode("utf-16")), EXIT_CODES["PASS"])
+    def test_a_utf16_pair_checks(self):
+        self.assertEqual(self.check(*(text.replace("\n", "\r\n").encode("utf-16") for text in (self.CARD, self.TEXT))), EXIT_CODES["PASS"])
 
     def test_bytes_that_are_not_text_are_an_input_error(self):
-        self.assertEqual(self.check(b"petra 0\n\xff\xfe\xfd"), EXIT_CODES["INPUT_ERROR"])
+        self.assertEqual(self.check(self.CARD.encode("utf-8"), b"petra 0\n\xff\xfe\xfd"), EXIT_CODES["INPUT_ERROR"])
+        self.assertEqual(self.check(b"petra 0\n\xff\xfe\xfd", self.TEXT.encode("utf-8")), EXIT_CODES["INPUT_ERROR"])
 
 
 class Version(unittest.TestCase):
@@ -154,7 +178,8 @@ class Explain(Workspace):
         self.assertIn("obligation", out, "it lists the obligations")
 
     def test_explain_refuses_a_broken_file(self):
-        self.assertEqual(run("explain", self.write("broken.petra", "petra 0\ndesign {\n"))[0], EXIT_CODES["INPUT_ERROR"], "a syntax error exits 3")
+        self.write("broken.card", read_pair(CIRCUIT)[0])
+        self.assertEqual(run("explain", self.write("broken.petra", "petra 0\ncircuit {\n"))[0], EXIT_CODES["INPUT_ERROR"], "a syntax error exits 3")
 
 
 class Verify(Workspace):
@@ -200,8 +225,8 @@ class CertifyFamily(Workspace):
         self.assertEqual(out.count("stored "), 2, "one line per stored claim")
 
     def test_a_false_family_exits_1(self):
-        path = self.write("too_hot.petra", FAMILY.read_text(encoding="utf-8").replace("[0 A, 13 A]", "[0 A, 16 A]"))
-        code, out, _ = run("certify-family", path, "--library", str(self.tmp / "library"))
+        card = self.write("too_hot.card", read_pair(FAMILY)[0].replace("[0 A, 13 A]", "[0 A, 16 A]"))
+        code, out, _ = run("certify-family", str(FAMILY), "--card", card, "--library", str(self.tmp / "library"))
         self.assertEqual(code, EXIT_CODES["FAIL"], "the hot claim is refuted at 16 A")
         self.assertIn("skipped", out, "the refuted claim is listed")
 

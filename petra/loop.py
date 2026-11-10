@@ -3,12 +3,14 @@ tooling: every verdict it acts on comes from the checker, and it changes none.
 
 A Task is a job a user would give: a connection kind, the design basis, the members and
 any line the job fixes (`beam`, `support`, a bracket's `eccentricity`), and the loads.
-`tasks` draws them from the steel deck's design generator, so each comes with a design
-the deck passes at that load (`reference`), which proves the job can be done.
+`tasks` draws them from the steel deck's design generator, so each comes with a card and
+a design the deck passes at that load (`reference`), which proves the job can be done.
 
 `solve` runs the loop on one task:
 
-1. Draft. Start from `petra new KIND` and write the task's lines and loads into it.
+1. Draft. Start from `petra new KIND` and write the task's loads into its card and the
+   task's lines into its design. The card stays as drafted: every later step edits the
+   design alone.
 2. Repair. Check the design with petra.check. On a FAIL, take a move from its repair, as an
    agent reading the output would: a move whose `clears` value passes the design, else
    the clearing move that leaves the fewest failed checks, else the first move's step.
@@ -66,7 +68,7 @@ class Task:
     basis: str
     given: tuple[str, ...]                   # attribute lines as written, "beam W18x35 grade steel.A992"
     loads: tuple[tuple[str, Fraction], ...]  # (field, the range's top in kip); each range starts at 0 kip
-    reference: str
+    reference: tuple[str, str]               # a card and a design the deck passes, as text
 
     def load_lines(self, component: str) -> list[str]:
         return [f"  on {component} {f} in [0 kip, {_kip(top)} kip]" for f, top in self.loads]
@@ -78,28 +80,28 @@ class Task:
         return (f"Design a steel `{self.kind}` connection, {self.basis.upper()} (`basis {self.basis}`).\n\n"
                 f"These lines are fixed by the job:\n\n{members}\n\n"
                 f"Loads ({'factored' if self.basis == 'lrfd' else 'service'}), on the connection:\n\n{loads}\n\n"
-                f'Sign the loads as "{SIGNER}" with source "task {self.id}".\n')
+                f'The card states the loads, signed "{SIGNER}" with source "task {self.id}".\n')
 
-    def faithful(self, text: str, registry: Registry) -> list[str]:
-        """What `text` changes of the job, empty when it keeps it: one component of the
-        task's kind, its basis and given lines as the job states them (read through the
-        deck's lowering, so A992 and steel.A992 agree), each load range reaching from 0 to
-        at least the job's top, and no waiver."""
+    def faithful(self, card: str, text: str, registry: Registry) -> list[str]:
+        """What the card and the design `text` change of the job, empty when they keep it:
+        one component of the task's kind, its basis and given lines as the job states them
+        (read through the deck's lowering, so A992 and steel.A992 agree), each load range
+        of the card reaching from 0 to at least the job's top, and no waiver."""
         from .models.steel import calc
 
         try:
-            design = parse_design(text, "<faithful>", registry)
+            design = parse_design(card, text, "<faithful>", registry)
             mine = [c for c in design.components.values()]
             if len(mine) != 1 or mine[0].kind != self.kind:
                 return [f"the design must hold one {self.kind}, not {', '.join(c.kind for c in mine) or 'nothing'}"]
             ours = calc.connection(design, mine[0].name, registry)
-            job = parse_design(self.reference, "<reference>", registry)
+            job = parse_design(*self.reference, "<reference>", registry)
             theirs = calc.connection(job, "c1", registry)
         except (*INPUT_ERRORS, KeyError) as exc:
             return [f"the design does not lower: {exc}"]
         out = [f"{key} differs from the job's" for key in ("basis", *GIVEN) if ours.get(key) != theirs.get(key)]
         if design.waivers:
-            out.append("the design waives a requirement")
+            out.append("the card waives a requirement")
         kip = parse_quantity("1", "kip").value.lo
         entries = {e.field: e.value for case in design.loads.values() for e in case.entries}
         for f, top in self.loads:
@@ -109,21 +111,22 @@ class Task:
                 out.append(f"the {f} load does not reach from 0 to {_kip(top)} kip")
         return out
 
-    def draft(self) -> str:
-        """`petra new KIND` with the task's basis, given lines and loads written in."""
+    def draft(self) -> tuple[str, str]:
+        """`petra new KIND` as (card, design), with the task's loads written into the card
+        and its basis and given lines into the design."""
         from .templates import TEMPLATES
 
-        _, component, text = TEMPLATES[self.kind]
+        _, component, card, text = TEMPLATES[self.kind]
         lines = text.split("\n")
         start = next(i for i, line in enumerate(lines) if line.startswith(f"{self.kind} {component} {{"))
         end = next(i for i in range(start, len(lines)) if lines[i].strip() == "}")
         body = [line for line in lines[start + 1:end] if _key(line) not in (*GIVEN, "basis")]
         body = [f"  basis {self.basis}", *(f"  {g}" for g in self.given), *body]
-        load = next(i for i, line in enumerate(lines) if line.startswith("load "))
-        load_end = next(i for i in range(load, len(lines)) if lines[i].strip() == "}")
+        asked = card.split("\n")
+        load = next(i for i, line in enumerate(asked) if line.startswith("load "))
+        load_end = next(i for i in range(load, len(asked)) if asked[i].strip() == "}")
         loads = ["load task {", *self.load_lines(component), f'  signed "{SIGNER}" source "task {self.id}"', "}"]
-        out = lines[:start + 1] + body + lines[end:load] + loads + lines[load_end + 1:]
-        return "\n".join(out)
+        return "\n".join(asked[:load] + loads + asked[load_end + 1:]), "\n".join(lines[:start + 1] + body + lines[end:])
 
 
 def _key(line: str) -> str:
@@ -154,20 +157,21 @@ def tasks(seed: int, n: int, registry: Registry) -> Iterator[Task]:
             body = [line.strip() for line in g.text.split("\n") if line.startswith("  ")]
             basis = next(line.split()[1] for line in body if _key(line) == "basis")
             given = tuple(line for line in body if _key(line) in GIVEN)
-            loads = tuple((m[1], Fraction(m[2])) for line in g.text.split("\n") if (m := _ON.match(line)))
+            loads = tuple((m[1], Fraction(m[2])) for line in g.card.split("\n") if (m := _ON.match(line)))
             made += 1
-            yield Task(f"{seed}-{made:03d}", g.kind, basis, given, loads, g.text)
+            yield Task(f"{seed}-{made:03d}", g.kind, basis, given, loads, (g.card, g.text))
         start += 11
 
 
 # --- Mass ---------------------------------------------------------------------------------------
 
 
-def mass(text: str, registry: Registry) -> float:
-    """The estimated weight of the connection's own steel, in lb (see the module docstring)."""
+def mass(card: str, text: str, registry: Registry) -> float:
+    """The estimated weight of the connection's own steel, in lb (see the module docstring).
+    The card is read for the bounds the design's lines take from it."""
     from .models.steel import calc
 
-    design = parse_design(text, "<mass>", registry)
+    design = parse_design(card, text, "<mass>", registry)
     (name,) = [n for n, c in design.components.items()]
     c = calc.connection(design, name, registry)
     get = c.get
@@ -255,6 +259,7 @@ class Attempt:
 @dataclass
 class Run:
     task: Task
+    card: str                          # the draft's card, which every design of the run answers
     attempts: list[Attempt] = field(default_factory=list)
     passed: str | None = None          # the first design that passed
     optimum: str | None = None         # the minimiser's design
@@ -275,17 +280,18 @@ class Run:
                 "kept": self.kept, "judged": [{"design": d, "violations": v} for d, v in self.judged]}
 
 
-Judge = Callable[[str], list[str]]
-"""A design's text -> the conditions an outside judge finds it violates (empty: none)."""
+Judge = Callable[[str, str], list[str]]
+"""A card's text and a design's -> the conditions an outside judge finds the design
+violates (empty: none)."""
 
 
 def solve(task: Task, registry: Registry, *, budget: int = 10, judge: Judge | None = None, minimise: bool = True) -> Run:
-    run = Run(task)
+    card, text = task.draft()
+    run = Run(task, card)
     sources = (SolverSource(),)
-    text = task.draft()
     seen = {text}
     for _ in range(budget):
-        checked = check_text(text, f"task-{task.id}.petra", registry, sources)
+        checked = check_text(card, text, f"task-{task.id}.petra", registry, sources)
         if checked.status != "FAIL":
             run.attempts.append(Attempt(checked.status, None, None))
             break
@@ -299,7 +305,7 @@ def solve(task: Task, registry: Registry, *, budget: int = 10, judge: Judge | No
     if run.checks_to_pass is None:
         return run
     run.passed = text
-    run.mass_passed = mass(text, registry)
+    run.mass_passed = mass(card, text, registry)
     _judge(run, text, judge)
     if minimise:
         _minimise(run, text, registry, sources, judge)
@@ -329,25 +335,25 @@ def _choose(text: str, checked: Checked, seen: set[str]) -> tuple[str, str] | No
 
 def _judge(run: Run, text: str, judge: Judge | None) -> None:
     if judge is not None:
-        found = judge(text)
+        found = judge(run.card, text)
         if found:
             run.judged.append((text, found))
 
 
 def _passes(text: str, registry: Registry, sources: tuple, run: Run) -> bool:
     run.probes += 1
-    return check_text(text, "<minimise>", registry, sources, moves=False).status == "PASS"
+    return check_text(run.card, text, "<minimise>", registry, sources, moves=False).status == "PASS"
 
 
 def _minimise(run: Run, text: str, registry: Registry, sources: tuple, judge: Judge | None) -> None:
-    current, weight = text, mass(text, registry)
+    current, weight = text, mass(run.card, text, registry)
     improved = True
     while improved:
         improved = False
-        for candidate in _lighter(current, registry, weight):
+        for candidate in _lighter(run.card, current, registry, weight):
             better = _farthest(candidate, current, weight, registry, sources, run)
             if better is not None:
-                current, weight = better, mass(better, registry)
+                current, weight = better, mass(run.card, better, registry)
                 run.kept += 1
                 _judge(run, current, judge)
                 improved = True
@@ -365,25 +371,25 @@ class _Edit:
     shapes: tuple[str, ...] = ()
 
 
-def _lighter(text: str, registry: Registry, weight: float) -> Iterator[_Edit]:
+def _lighter(card: str, text: str, registry: Registry, weight: float) -> Iterator[_Edit]:
     for site in sites(text):
         if _fixed(site):
             continue
         for direction in (-1, 1):
-            first = next(_accepted(text, site, direction, registry), None)
+            first = next(_accepted(card, text, site, direction, registry), None)
             if first is not None and first[1] < weight - 1e-9:
                 yield _Edit(site, direction)
                 break
     for site in shape_sites(text, registry):
         swaps = sorted((m, shape) for shape in family(site.text, registry)
-                       if (m := _mass_or_none(edit(text, site, shape), registry)) is not None and m < weight - 1e-9)
+                       if (m := _mass_or_none(card, edit(text, site, shape), registry)) is not None and m < weight - 1e-9)
         if swaps:
             yield _Edit(site, shapes=tuple(shape for _, shape in swaps))
 
 
-def _mass_or_none(text: str, registry: Registry) -> float | None:
+def _mass_or_none(card: str, text: str, registry: Registry) -> float | None:
     try:
-        return mass(text, registry)
+        return mass(card, text, registry)
     except (*INPUT_ERRORS, KeyError, AttributeError, TypeError, ValueError):
         return None
 
@@ -394,7 +400,7 @@ def _farthest(e: _Edit, text: str, weight: float, registry: Registry, sources: t
     if e.shapes:
         return next((c for shape in e.shapes if _passes(c := edit(text, e.site, shape), registry, sources, run)), None)
     best, tried = None, 0
-    for i, (candidate, m) in enumerate(_accepted(text, e.site, e.direction, registry)):
+    for i, (candidate, m) in enumerate(_accepted(run.card, text, e.site, e.direction, registry)):
         if i != tried:
             continue
         if m >= weight - 1e-9 or not _passes(candidate, registry, sources, run):
@@ -403,10 +409,10 @@ def _farthest(e: _Edit, text: str, weight: float, registry: Registry, sources: t
     return best
 
 
-def _accepted(text: str, site: Site, direction: int, registry: Registry) -> Iterator[tuple[str, float]]:
+def _accepted(card: str, text: str, site: Site, direction: int, registry: Registry) -> Iterator[tuple[str, float]]:
     """The site's ladder in `direction`, kept to the designs that lower, with their mass."""
     for _, number in ladder(site, direction):
         candidate = edit(text, site, number)
-        m = _mass_or_none(candidate, registry)
+        m = _mass_or_none(card, candidate, registry)
         if m is not None:
             yield candidate, m

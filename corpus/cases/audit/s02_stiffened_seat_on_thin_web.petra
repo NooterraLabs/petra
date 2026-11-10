@@ -1,7 +1,5 @@
 petra 0
-design "t17b_stiffseat_thin_web" {
-  owner "audit@example.org"
-}
+
 stiffened_seat c1 {
   basis lrfd
   beam W21x44 grade steel.A992
@@ -13,8 +11,4 @@ stiffened_seat c1 {
   setback 0.5 inch
   weld electrode.E70 size 0.25 inch sides 2
   top_angle L4x4x1_4 grade steel.A36 outstanding long
-}
-load gravity {
-  on c1 shear in [0 kip, 60 kip]
-  signed "audit@example.org" source "audit"
 }

@@ -16,7 +16,3 @@ double_angle ii_a_1a {
   support_side bolted
   support_gauge 5.5 inch
 }
-
-load reaction {
-  on ii_a_1a shear in [0 kip, 226 kip]
-}

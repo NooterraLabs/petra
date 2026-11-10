@@ -1,0 +1,16 @@
+petra 0
+
+card "outdoor-logger-rail" {
+  owner "e.designer@example.org"
+  environment outdoor_c3
+}
+
+given voltage in [11 V, 14.4 V] signed "e.designer@example.org" source "12 V lead-acid battery, charging"
+given capacity in [2 A, 2 A] signed "e.designer@example.org" source "battery fuse"
+
+load log {
+  on logger.logger current in [2 mA, 60 mA]
+  signed "e.designer@example.org" source "logger power budget"
+}
+
+claim rail: logger.v5.voltage <= 5.4 V

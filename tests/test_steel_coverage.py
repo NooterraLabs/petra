@@ -1,21 +1,23 @@
 """Steel coverage from the physics (docs/plan.md P1 item 5): what a connection's parts can
-fail by is demanded, or its reason for not arising is recorded, whatever loads the design
-declares.
+fail by is demanded, or its reason for not arising is recorded, whatever loads the card
+states.
 """
 import tempfile
 import unittest
 from pathlib import Path
 
 import petra
+from petra.files import read_pair
 
 ROOT = Path(__file__).resolve().parents[1]
 STEEL = ROOT / "examples" / "steel"
 
 
-def written(text: str):
+def written(card: str, text: str):
     with tempfile.TemporaryDirectory() as tmp:
         target = Path(tmp) / "design.petra"
         target.write_text(text, encoding="utf-8", newline="\n")
+        target.with_suffix(".card").write_text(card, encoding="utf-8", newline="\n")
         return petra.check_file(target)
 
 
@@ -34,16 +36,16 @@ class MaximumSpacing(unittest.TestCase):
     and 12 in; it says nothing of the gauge across the force (Commentary J3.6). A 1/4 in end
     plate allows 6 in."""
 
-    END_PLATE = (STEEL / "shear_end_plate.petra").read_text(encoding="utf-8")
+    CARD, END_PLATE = read_pair(STEEL / "shear_end_plate.petra")
 
     def test_a_gauge_past_24_t_is_not_held_to_it(self):
-        wide = written(self.END_PLATE.replace("support_gauge 5.5 inch", "support_gauge 6.5 inch").replace(
+        wide = written(self.CARD, self.END_PLATE.replace("support_gauge 5.5 inch", "support_gauge 6.5 inch").replace(
             "plate_width 8 inch", "plate_width 9 inch"))
         self.assertEqual(outcome(wide, "spacing_max"), "certified")
         self.assertFalse([c for c in checks(wide, "spacing_max") if "gauge" in c])
 
     def test_a_pitch_past_24_t_fails(self):
-        tall = written(self.END_PLATE.replace("pitch 3 inch", "pitch 6.5 inch").replace("rows 4", "rows 2"))
+        tall = written(self.CARD, self.END_PLATE.replace("pitch 3 inch", "pitch 6.5 inch").replace("rows 4", "rows 2"))
         self.assertEqual(outcome(tall, "spacing_max"), "refuted")
 
     def test_one_row_has_no_pitch_to_limit(self):
@@ -55,23 +57,23 @@ class MaximumSpacing(unittest.TestCase):
         why = [u["reason"] for u in report.to_json()["unchecked"] if u["mode"] == "steel.spacing_max"]
         self.assertEqual(len(why), 1)
         self.assertIn("no pitch", why[0])
-        two = written((STEEL / "seated.petra").read_text(encoding="utf-8"))
+        two = written(*read_pair(STEEL / "seated.petra"))
         self.assertEqual(outcome(two, "spacing_max"), "certified")
 
 
 class PanelZone(unittest.TestCase):
     """A flange force may be one flange of a moment connection's couple, which shears the
-    column's panel zone (J10.6) whatever loads the design declares. The check reads the
+    column's panel zone (J10.6) whatever loads the card states. The check reads the
     panel's required shear and the column's axial force, neither of which the force gives:
     left out, each leaves the panel zone open by name, never unchecked or taken as zero."""
 
-    FORCE = (STEEL / "flange_force.petra").read_text(encoding="utf-8")
+    CARD, FORCE = read_pair(STEEL / "flange_force.petra")
 
     def loaded(self, *lines: str):
-        return written(self.FORCE.replace("  signed ", "".join(f"  {line}\n" for line in lines) + "  signed ", 1))
+        return written(self.CARD.replace("  signed ", "".join(f"  {line}\n" for line in lines) + "  signed ", 1), self.FORCE)
 
     def test_a_force_with_neither_load_leaves_the_panel_zone_open_naming_both(self):
-        report = written(self.FORCE)
+        report = written(self.CARD, self.FORCE)
         self.assertIsInstance(report.verdict, petra.Unknown)
         self.assertEqual(outcome(report, "panel_zone"), "open")
         text = report.render()
@@ -108,26 +110,27 @@ class SeatPlate(unittest.TestCase):
     bearing strength of the surfaces in contact, so the plate is checked at its own Fy as
     the stiffener is at its: an A36 plate on a Grade 50 stiffener governs."""
 
-    SEAT = (STEEL / "stiffened_seat.petra").read_text(encoding="utf-8")
+    CARD, SEAT = read_pair(STEEL / "stiffened_seat.petra")
 
-    def bearing(self, text: str) -> dict[str, float]:
-        report = written(text)
+    def bearing(self, card: str, text: str) -> dict[str, float]:
+        report = written(card, text)
         return {c["check"]: c["utilisation"] for v in report.to_json()["verdicts"] for o in v["obligations"]
                 if "/steel.bearing/" in o["requirement"] for c in o["checks"]}
 
     def test_the_seat_plate_and_the_stiffener_each_bear_at_their_own_yield_stress(self):
-        found = self.bearing(self.SEAT.replace("stiffener steel.A36", "stiffener steel.A572_50"))
+        found = self.bearing(self.CARD, self.SEAT.replace("stiffener steel.A36", "stiffener steel.A572_50"))
         plate, stiffener = (found[f"{part}: bearing on {edge} fitted top edge (J7)"]
                             for part, edge in (("seat plate", "the stiffener's"), ("stiffener", "its")))
         self.assertAlmostEqual(plate, 60 / (0.75 * 1.8 * 36 * (5 - 0.5) * 0.5), places=4)
         self.assertAlmostEqual(plate / stiffener, 50 / 36, places=6)
 
     def test_a_soft_seat_plate_fails_where_the_stiffener_would_not(self):
-        soft = self.SEAT.replace("stiffener steel.A36", "stiffener steel.A572_50").replace("[0 kip, 60 kip]", "[0 kip, 120 kip]")
-        found = self.bearing(soft)
+        heavy = self.CARD.replace("[0 kip, 60 kip]", "[0 kip, 120 kip]")
+        soft = self.SEAT.replace("stiffener steel.A36", "stiffener steel.A572_50")
+        found = self.bearing(heavy, soft)
         self.assertGreater(found["seat plate: bearing on the stiffener's fitted top edge (J7)"], 1)
         self.assertLess(found["stiffener: bearing on its fitted top edge (J7)"], 1)
-        self.assertEqual(outcome(written(soft), "bearing"), "refuted")
+        self.assertEqual(outcome(written(heavy, soft), "bearing"), "refuted")
 
 
 def demand(report, mode: str) -> float:
@@ -143,13 +146,13 @@ class TeeDuctility(unittest.TestCase):
     them. The Companion's tee is a WT5x22.5 on a beam with a 0.380 in web, four rows at
     3 in, 1-1/4 in end distances, a 5-1/2 in gauge."""
 
-    TEE = (STEEL / "shear_tee.petra").read_text(encoding="utf-8")
+    CARD, TEE = read_pair(STEEL / "shear_tee.petra")
     COMPANION = TEE.replace("WT6x25", "WT5x22_5").replace("beam W18x50", "beam W16x50")
 
     def test_the_bolted_tee_needs_the_companions_least_bolt(self):
         # II.A-30: b = 2-3/4 - 0.350/2 - 0.380/2 - 13/16 = 1.57 in, p = s = 3 in, l = 11-1/2 in;
         # 0.0941 tf sqrt(...) = 0.810 in, capped at 0.115 sqrt(Fy ts) = 0.481 in.
-        report = written(self.COMPANION)
+        report = written(self.CARD, self.COMPANION)
         self.assertAlmostEqual(demand(report, "tee_ductility"), 0.481, places=3)
         self.assertEqual(outcome(report, "tee_ductility"), "certified")
 
@@ -158,14 +161,14 @@ class TeeDuctility(unittest.TestCase):
         welded = self.COMPANION.replace("support_side bolted\n  support_gauge 5.5 inch",
                                         "support_side welded\n  support_weld electrode.E70 size 0.25 inch")
         # The Companion rounds b to 3.20 in; at 3.1975 in wmin is 0.1935 in.
-        self.assertAlmostEqual(demand(written(welded), "tee_ductility"), 0.193, delta=0.001)
+        self.assertAlmostEqual(demand(written(self.CARD, welded), "tee_ductility"), 0.193, delta=0.001)
 
     def test_a_stiff_welded_tee_fails(self):
         # A WT10.5x36.5 (stem 0.455 in, flange 0.740 in) on a W30x90 (web 0.470 in): both past
         # d/2 + 1/16 = 7/16 in, so Eq 9-53 does not excuse; wmin is about 0.28 in.
         stiff = self.TEE.replace("WT6x25", "WT10_5x36_5").replace("beam W18x50", "beam W30x90").replace(
             "support_side bolted\n  support_gauge 5.5 inch", "support_side welded\n  support_weld electrode.E70 size 0.25 inch")
-        self.assertEqual(outcome(written(stiff), "tee_ductility"), "refuted")
+        self.assertEqual(outcome(written(self.CARD, stiff), "tee_ductility"), "refuted")
 
 
 class EveryModeOwedOrExplained(unittest.TestCase):
@@ -201,9 +204,9 @@ class EveryModeOwedOrExplained(unittest.TestCase):
                     secondary.append(("axial", Fraction(1, 5)))
                 lines = [line.replace("end_twist restrained", "end_twist free") if rng.random() < 0.5 else line
                          for line in s.lines]
-                text = gen.source(f"absent-{kind}-{i}", kind, rng.choice(("lrfd", "asd")), lines, Fraction(10), tuple(secondary))
+                card, text = gen.source(f"absent-{kind}-{i}", kind, rng.choice(("lrfd", "asd")), lines, Fraction(10), tuple(secondary))
                 try:
-                    design = parse_design(text, "<absent>", registry)
+                    design = parse_design(card, text, "<absent>", registry)
                     conn = lower_components(design, registry)["c1"]
                 except ComponentError:
                     continue
@@ -228,26 +231,26 @@ class SeatShear(unittest.TestCase):
     welded on edge to the support like a bracket plate: its section along the weld carries
     the reaction in shear and, at Table 10-8's 0.8 W from the face, in flexure (J4.5)."""
 
-    SEAT = (STEEL / "seated.petra").read_text(encoding="utf-8")
-    STIFFENED = (STEEL / "stiffened_seat.petra").read_text(encoding="utf-8")
+    SEAT_CARD, SEAT = read_pair(STEEL / "seated.petra")
+    STIFFENED_CARD, STIFFENED = read_pair(STEEL / "stiffened_seat.petra")
     WEB = "beam web: shear yielding of the gross section (J4.2a)"
 
     def test_a_seated_beams_web_yields_in_shear(self):
         # W16x26: 0.6 (50 ksi)(15.7 in)(0.250 in) = 117.75 kip against 30 kip
-        self.assertAlmostEqual(utilisations(written(self.SEAT), "shear_yield")[self.WEB], 30 / 117.75, places=6)
+        self.assertAlmostEqual(utilisations(written(self.SEAT_CARD, self.SEAT), "shear_yield")[self.WEB], 30 / 117.75, places=6)
 
     def test_a_stiffened_seats_beam_web_and_stiffener_yield_in_shear(self):
-        found = utilisations(written(self.STIFFENED), "shear_yield")
+        found = utilisations(written(self.STIFFENED_CARD, self.STIFFENED), "shear_yield")
         self.assertAlmostEqual(found[self.WEB], 60 / (0.6 * 50 * 20.7 * 0.35), places=6)          # W21x44
         self.assertAlmostEqual(found["stiffener: shear yielding of the gross section (J4.2a)"], 60 / (0.6 * 36 * 12 * 0.5), places=6)
 
     def test_the_stiffener_bends_at_its_weld_line(self):
         # M = 60 kip (0.8)(5 in) = 240 kip-in against 0.9 (36 ksi)(0.5 in)(12 in)^2 / 4
-        (u,) = utilisations(written(self.STIFFENED), "flexural_yield").values()
+        (u,) = utilisations(written(self.STIFFENED_CARD, self.STIFFENED), "flexural_yield").values()
         self.assertAlmostEqual(u, 240 / (0.9 * 36 * 0.5 * 144 / 4), places=6)
 
     def test_a_short_stiffener_fails_in_flexure(self):
-        short = written(self.STIFFENED.replace("stiffener_length 12 inch", "stiffener_length 5 inch"))
+        short = written(self.STIFFENED_CARD, self.STIFFENED.replace("stiffener_length 12 inch", "stiffener_length 5 inch"))
         self.assertEqual(outcome(short, "flexural_yield"), "refuted")
 
 
@@ -256,16 +259,17 @@ class HangerSupportWeb(unittest.TestCase):
     J10.2's web local yielding over the bolt rows' extent. The grammar gives no distance to
     the support's end, so Eq J10-3, the lesser, is taken: it holds wherever the hanger is."""
 
-    HANGER = (STEEL / "hanger.petra").read_text(encoding="utf-8")
+    CARD, HANGER = read_pair(STEEL / "hanger.petra")
 
     def test_the_support_web_yields_under_the_hangers_tension_at_the_end_formula(self):
         # W18x50: 50 ksi (0.355 in)(2.5 (0.972 in) + 3 in) = 96.38 kip against 40 kip
-        found = utilisations(written(self.HANGER), "web_local_yielding")
+        found = utilisations(written(self.CARD, self.HANGER), "web_local_yielding")
         self.assertAlmostEqual(max(found.values()), 40 / (50 * 0.355 * (2.5 * 0.972 + 3)), places=6)
         self.assertTrue(all(name.startswith("support web: ") for name in found), found)
 
     def test_a_thin_support_web_fails(self):
-        thin = written(self.HANGER.replace("support W18x50 flange", "support W16x26 flange").replace("[0 kip, 40 kip]", "[0 kip, 70 kip]"))
+        thin = written(self.CARD.replace("[0 kip, 40 kip]", "[0 kip, 70 kip]"),
+                       self.HANGER.replace("support W18x50 flange", "support W16x26 flange"))
         self.assertEqual(outcome(thin, "web_local_yielding"), "refuted")
 
 
@@ -275,29 +279,29 @@ class BracketClearance(unittest.TestCase):
     flanges; on a flange, all on one side of the web, or split across it where that fits. A
     socket on a 7/8 in heavy hex nut needs 1.4375 / sqrt 3 + 1/2 = 1.330 in."""
 
-    BRACKET = (STEEL / "bolt_bracket.petra").read_text(encoding="utf-8")
+    CARD, BRACKET = read_pair(STEEL / "bolt_bracket.petra")
     NEED = 1.4375 / 3 ** 0.5 + 0.5
 
     def test_one_side_of_a_wide_flange(self):
         # W14x90: (14.5 - 0.44) / 2 - 3 - 15/32 = 3.561 in to the web
-        (u,) = utilisations(written(self.BRACKET), "clearance").values()
+        (u,) = utilisations(written(self.CARD, self.BRACKET), "clearance").values()
         self.assertAlmostEqual(u, self.NEED / ((14.5 - 0.44) / 2 - 3 - 15 / 32), places=6)
 
     def test_a_split_across_the_web_that_leaves_room_excuses_the_one_sided_check(self):
         # W12x50 (bf 8.08, tw 0.37): split at 4 in leaves (4 - 0.37) / 2 = 1.815 in
-        report = written(self.BRACKET.replace("support W14x90", "support W12x50").replace("gauge 3 inch", "gauge 4 inch"))
+        report = written(self.CARD, self.BRACKET.replace("support W14x90", "support W12x50").replace("gauge 3 inch", "gauge 4 inch"))
         self.assertEqual(outcome(report, "clearance"), "certified")
         self.assertIn("excused    bb1/steel.clearance: bracket bolts: room to tighten, clear of the support web", report.render())
 
     def test_columns_that_fit_the_flange_but_leave_no_room_fail(self):
         # at 3 in the split fits the flange but leaves (3 - 0.37) / 2 = 1.315 in, under 1.330 in
-        report = written(self.BRACKET.replace("support W14x90", "support W12x50"))
+        report = written(self.CARD, self.BRACKET.replace("support W14x90", "support W12x50"))
         self.assertEqual(outcome(report, "flange_fit"), "certified")
         self.assertEqual(outcome(report, "clearance"), "refuted")
 
     def test_on_a_web_the_columns_are_centred_between_the_flanges(self):
         # W14x90 web: (14.0 - 2 (0.71) - 3) / 2 = 4.79 in to each flange
-        (u,) = utilisations(written(self.BRACKET.replace("W14x90 flange", "W14x90 web")), "clearance").values()
+        (u,) = utilisations(written(self.CARD, self.BRACKET.replace("W14x90 flange", "W14x90 web")), "clearance").values()
         self.assertAlmostEqual(u, self.NEED / ((14.0 - 2 * 0.71 - 3) / 2), places=6)
 
 
@@ -306,11 +310,21 @@ class UnframedEnd(unittest.TestCase):
     restrained against twisting about its axis. A force at a member end says which its end
     is; the deck draws no stiffeners, so a free end stays open, never passed."""
 
-    END = """petra 0
+    CARD = """petra 0
 
-design "flange-force-at-an-end" {
+card "flange-force-at-an-end" {
   owner "s.engineer@example.org"
 }
+
+load gravity {
+  on ff1 force in [0 kip, 100 kip]
+  on ff1 panel_shear in [0 kip, 50 kip]
+  on ff1 axial in [0 kip, 100 kip]
+  signed "s.engineer@example.org" source "beam reaction"
+}
+"""
+
+    END = """petra 0
 
 flange_force ff1 {
   basis lrfd
@@ -324,34 +338,27 @@ flange_force ff1 {
   unbraced_length 144 inch
   moment_at_force below_yield
 }
-
-load gravity {
-  on ff1 force in [0 kip, 100 kip]
-  on ff1 panel_shear in [0 kip, 50 kip]
-  on ff1 axial in [0 kip, 100 kip]
-  signed "s.engineer@example.org" source "beam reaction"
-}
 """
 
     def test_a_restrained_end_passes_without_stiffeners(self):
-        report = written(self.END)
+        report = written(self.CARD, self.END)
         self.assertIsInstance(report.verdict, petra.Pass)
         self.assertFalse([o for v in report.to_json()["verdicts"] for o in v["obligations"] if "/steel.j10_stiffeners/" in o["requirement"]])
 
     def test_a_free_end_stays_open_for_its_stiffeners(self):
-        report = written(self.END.replace("end_twist restrained", "end_twist free"))
+        report = written(self.CARD, self.END.replace("end_twist restrained", "end_twist free"))
         self.assertIsInstance(report.verdict, petra.Unknown)
         self.assertEqual(outcome(report, "j10_stiffeners"), "open")
 
     def test_an_end_force_must_say_whether_its_end_can_twist(self):
         with self.assertRaisesRegex(Exception, r"end_twist restrained\|free.*J10\.7"):
-            written(self.END.replace("  end_twist restrained\n", ""))
+            written(self.CARD, self.END.replace("  end_twist restrained\n", ""))
 
     def test_an_interior_force_takes_no_end_twist(self):
         interior = self.END.replace("location end", "location interior").replace("  distance 20 inch\n", "")
-        self.assertIsInstance(written(interior.replace("  end_twist restrained\n", "")).verdict, petra.Pass)
+        self.assertIsInstance(written(self.CARD, interior.replace("  end_twist restrained\n", "")).verdict, petra.Pass)
         with self.assertRaisesRegex(Exception, "an interior force takes no end_twist"):
-            written(interior)
+            written(self.CARD, interior)
 
 
 if __name__ == "__main__":

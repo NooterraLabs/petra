@@ -1,0 +1,10 @@
+petra 0
+
+card "steel-shear-tab-ovs" {
+  owner "s.engineer@example.org"
+}
+
+load gravity {
+  on st1 shear in [0 kip, 45 kip]
+  signed "s.engineer@example.org" source "beam reaction, LRFD 1.2D + 1.6L, calc SC-3"
+}

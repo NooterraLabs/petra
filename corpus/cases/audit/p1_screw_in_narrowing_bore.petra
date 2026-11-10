@@ -1,18 +1,15 @@
 petra 0
-design "pilot-M3x16" {
-  owner "red@example.org"
-  environment indoor_dry
-}
+
 part base {
   mesh "p2_base_pilot.stl" sha256 "acbbe58b60bac83f8aacd635a3b5fca88b80ff8551f62216efaa69931135c461" units mm
   material aluminium.6061_T6
-  tolerance in [0.05 mm, 0.05 mm] signed "red@example.org" source "shop drawing"
+  tolerance given tolerance
   hole t1 at (0 mm, 0 mm, 10 mm) along bottom diameter 2.45 mm depth 4.9 mm tap
 }
 part lid {
   mesh "p2_lid.stl" sha256 "80acc5db4f932ebaf4c0336409b12a2585bd224adef2bfe2220d6bf14b88d969" units mm
   material aluminium.6061_T6
-  tolerance in [0.05 mm, 0.05 mm] signed "red@example.org" source "shop drawing"
+  tolerance given tolerance
   hole h1 at (0 mm, 0 mm, 2 mm) along bottom diameter 3.51 mm clear
 }
 assembly box {
@@ -21,5 +18,5 @@ assembly box {
   insert lid along bottom from 20 mm
   fasten s1 screw.M3x16_shcs through lid.h1 into base.t1
 }
-claim m: box.mass <= 10 kg
+
 waive fit.driver on box.s1 by "red@example.org" reason "hex key reaches from above"

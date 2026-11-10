@@ -1,0 +1,10 @@
+petra 0
+
+card "absurd-04623" {
+  owner "gate@petra.dev"
+}
+
+load gate {
+  on c1 shear in [0 kip, 14.747 kip]
+  signed "gate@petra.dev" source "steel gate generator"
+}

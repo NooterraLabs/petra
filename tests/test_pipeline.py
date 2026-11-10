@@ -173,11 +173,18 @@ def registry() -> Registry:
 
 
 REGISTRY = registry()
-HEADER = 'petra 0\ndesign "rig" {\n  owner "o@example.org"\n  environment dry\n}\n'
-CAPACITY = '  capacity in [20 kN, 25 kN] measured "lab@example.org" source "proof report P-1"\n'
+HEADER = 'petra 0\ncard "rig" {\n  owner "o@example.org"\n  environment dry\n}\n'
+GIVEN = 'given capacity in [20 kN, 25 kN] measured "lab@example.org" source "proof report P-1"\n'
+CAPACITY = "  capacity given capacity\n"
+
+
+def card(*blocks: str) -> str:
+    """The text of the rig's card: the header and these declarations."""
+    return HEADER + "".join(blocks)
 
 
 def gadget(*lines: str, name: str = "g") -> str:
+    """One component of the design's text. CAPACITY reads the bound the card states as GIVEN."""
     return f"gadget {name} {{\n  material metal.M1\n" + "".join(lines) + "}\n"
 
 
@@ -248,11 +255,12 @@ class GadgetDomain(unittest.TestCase):
         self.enterContext(mock.patch.object(models, "UNMODELLED", frozenset({WEAR}) | CROSS_DOMAIN_UNMODELLED))
         self.enterContext(mock.patch.object(coverage, "KINDS", {"gadget": GADGET}))
 
-    def design(self, *blocks: str, registry: Registry = REGISTRY):
-        return parse_design(HEADER + "".join(blocks), "rig.petra", registry)
+    def design(self, card: str, text: str, registry: Registry = REGISTRY):
+        """The card's text, from card(...), and the design's components, from gadget(...)."""
+        return parse_design(card, "petra 0\n" + text, "rig.petra", registry)
 
-    def check(self, *blocks: str, sources=(Solver(),), **kwargs):
-        return check_design(self.design(*blocks), REGISTRY, tuple(sources), **kwargs)
+    def check(self, card: str, text: str, sources=(Solver(),), **kwargs):
+        return check_design(self.design(card, text), REGISTRY, tuple(sources), **kwargs)
 
     def entry(self, report, claim):
         return next(e.verdict for e in report.entries if e.claim == claim)
@@ -263,7 +271,7 @@ class GadgetDomain(unittest.TestCase):
 
 class Verdicts(GadgetDomain):
     def test_a_claim_that_holds_passes_with_its_whole_footprint(self):
-        report = self.check(gadget(CAPACITY), push("10"), CLAIM, WAIVE_WEAR)
+        report = self.check(card(GIVEN, push("10"), CLAIM, WAIVE_WEAR), gadget(CAPACITY))
         self.assertIsInstance(report.verdict, Pass, report.render())
         footprint = report.verdict.footprint
         expected = {
@@ -286,34 +294,34 @@ class Verdicts(GadgetDomain):
         self.assertEqual(report.verdict.scope.environment, "dry")
 
     def test_a_load_beyond_the_claim_fails_at_its_worst_corner(self):
-        report = self.check(gadget(CAPACITY), push("30"), CLAIM, WAIVE_WEAR)
+        report = self.check(card(GIVEN, push("30"), CLAIM, WAIVE_WEAR), gadget(CAPACITY))
         self.assertIsInstance(report.verdict, Fail, report.render())
         at = dict(report.verdict.refutation.point)
         self.assertEqual((at["push.g.force"], at["g.capacity"]), (30000, 20000), "30 kN against half of 20 kN")
         self.assertIn("in:rig.push.g.force", report.verdict.footprint.labels)
 
     def test_without_evidence_the_claim_is_unknown_and_names_its_statement(self):
-        report = self.check(gadget(CAPACITY), push("10"), CLAIM, WAIVE_WEAR, sources=())
+        report = self.check(card(GIVEN, push("10"), CLAIM, WAIVE_WEAR), gadget(CAPACITY), sources=())
         self.assertIsInstance(report.verdict, Unknown)
         (need,) = self.needs(report.verdict)
-        discharged = self.check(gadget(CAPACITY), push("10"), CLAIM, WAIVE_WEAR).outcomes[0]
+        discharged = self.check(card(GIVEN, push("10"), CLAIM, WAIVE_WEAR), gadget(CAPACITY)).outcomes[0]
         self.assertEqual(need, NeedsCertificate(discharged.theorem.statement_hash, "R4", discharged.obligation.describe))
 
     def test_an_unmodelled_mode_without_a_waiver_holds_the_coverage_entry_open(self):
-        report = self.check(gadget(CAPACITY), push("10"), CLAIM)
+        report = self.check(card(GIVEN, push("10"), CLAIM), gadget(CAPACITY))
         self.assertIsInstance(self.entry(report, "fits"), Pass)
         self.assertEqual(self.needs(self.entry(report, "coverage")), [NoModel(WEAR, ("g",))])
         self.assertIsInstance(report.verdict, Unknown)
 
     def test_a_builder_that_states_nothing_cannot_make_its_claim_vanish(self):
-        report = self.check(gadget(CAPACITY), push("10"), CLAIM, WAIVE_WEAR, "claim quiet: g.silence <= 1\n")
+        report = self.check(card(GIVEN, push("10"), CLAIM, WAIVE_WEAR, "claim quiet: g.silence <= 1\n"), gadget(CAPACITY))
         self.assertEqual([e.claim for e in report.entries], ["fits", "quiet"])
         (need,) = self.needs(self.entry(report, "quiet"))
         self.assertIsInstance(need, NoRuleForQuantity)
         self.assertIsInstance(report.verdict, Unknown)
 
     def test_a_probability_claim_passes_on_its_tested_counts(self):
-        report = self.check(gadget(CAPACITY), push("10"), CLAIM, WAIVE_WEAR, PROOF.format(n=300), TESTED_CLAIM)
+        report = self.check(card(GIVEN, push("10"), CLAIM, WAIVE_WEAR, PROOF.format(n=300), TESTED_CLAIM), gadget(CAPACITY))
         tested = self.entry(report, "tested")
         self.assertIsInstance(tested, Pass, "0.99^300 = 0.049 <= 0.05")
         trials = next(p for p in tested.footprint.premises if p.label == "in:rig.tests.proof.trials")
@@ -321,14 +329,14 @@ class Verdicts(GadgetDomain):
         self.assertIn("in:rig.tests.proof.failures", tested.footprint.labels)
 
     def test_too_few_tests_leave_the_probability_claim_open_as_too_weak(self):
-        report = self.check(gadget(CAPACITY), push("10"), CLAIM, WAIVE_WEAR, PROOF.format(n=200), TESTED_CLAIM)
+        report = self.check(card(GIVEN, push("10"), CLAIM, WAIVE_WEAR, PROOF.format(n=200), TESTED_CLAIM), gadget(CAPACITY))
         (need,) = self.needs(self.entry(report, "tested"))
         self.assertIsInstance(need, CertificateTooWeak, "0.99^200 = 0.134 > 0.05")
         self.assertEqual((need.rule, need.source), ("R6", "testsolver"))
 
     def test_a_scope_parameter_bounds_the_pass_and_stays_out_of_the_footprint(self):
         param = "param cap in [20 kN, 25 kN]\n"
-        report = self.check(param, gadget("  capacity param cap\n"), push("10"), CLAIM, WAIVE_WEAR)
+        report = self.check(card(push("10"), CLAIM, WAIVE_WEAR), param + gadget("  capacity param cap\n"))
         self.assertIsInstance(report.verdict, Pass, report.render())
         self.assertEqual(report.verdict.scope.params, (ScopeParam("par:rig.cap", "cap", Interval(Fraction(20000), Fraction(25000)), "N"),))
         self.assertFalse(any(label.startswith("par:") for label in report.verdict.footprint.labels))
@@ -336,7 +344,7 @@ class Verdicts(GadgetDomain):
 
 
 class EvidenceSources(GadgetDomain):
-    BODY = (gadget(CAPACITY), push("10"), CLAIM, WAIVE_WEAR)
+    BODY = (card(GIVEN, push("10"), CLAIM, WAIVE_WEAR), gadget(CAPACITY))
 
     def test_invalid_evidence_is_rejected_and_names_its_source(self):
         forged = Offers("forger", Evidence(Enclosure(Split("push.g.force", Fraction(50000), Leaf(), Leaf()))))
@@ -346,7 +354,7 @@ class EvidenceSources(GadgetDomain):
         self.assertEqual((need.source, need.rule), ("forger", "R4"))
 
     def test_evidence_that_proves_too_little_is_too_weak(self):
-        report = self.check(gadget(CAPACITY), push("30"), CLAIM, WAIVE_WEAR, sources=(Offers("leafy", Evidence(Enclosure(Leaf()))),))
+        report = self.check(card(GIVEN, push("30"), CLAIM, WAIVE_WEAR), gadget(CAPACITY), sources=(Offers("leafy", Evidence(Enclosure(Leaf()))),))
         (need,) = self.needs(report.verdict)
         self.assertIsInstance(need, CertificateTooWeak)
         self.assertEqual(need.source, "leafy")
@@ -383,7 +391,7 @@ class EvidenceSources(GadgetDomain):
 
 
 class StoredCertificates(GadgetDomain):
-    BODY = (gadget(CAPACITY), push("10"), CLAIM, WAIVE_WEAR)
+    BODY = (card(GIVEN, push("10"), CLAIM, WAIVE_WEAR), gadget(CAPACITY))
 
     def setUp(self):
         super().setUp()
@@ -406,7 +414,7 @@ class StoredCertificates(GadgetDomain):
         self.assertIn("certs", report.warnings[0])
 
     def test_a_certificate_for_an_earlier_design_does_not_discharge_a_changed_one(self):
-        report = self.check(gadget(CAPACITY), push("8"), CLAIM, WAIVE_WEAR, sources=(self.store,))
+        report = self.check(card(GIVEN, push("8"), CLAIM, WAIVE_WEAR), gadget(CAPACITY), sources=(self.store,))
         self.assertIsInstance(self.needs(report.verdict)[0], NeedsCertificate)
         self.assertEqual(report.warnings, ())
 
@@ -424,8 +432,8 @@ class PremiseBook(GadgetDomain):
     def setUp(self):
         super().setUp()
         ambient = 'ambient in [10 degC, 40 degC] signed "site@example.org" source "survey"\n'
-        blocks = (ambient, "param span in [1 m, 2 m]\n", gadget(CAPACITY), push("10"), CLAIM, WAIVE_WEAR, PROOF.format(n=300), TESTED_CLAIM)
-        self.design_ = self.design(*blocks)
+        blocks = (ambient, GIVEN, push("10"), CLAIM, WAIVE_WEAR, PROOF.format(n=300), TESTED_CLAIM)
+        self.design_ = self.design(card(*blocks), "param span in [1 m, 2 m]\n" + gadget(CAPACITY))
         report = check_design(self.design_, REGISTRY, (Solver(),))
         self.assertIsInstance(report.verdict, Pass, report.render())
         self.book = build_premise_book(self.design_, REGISTRY, report.outcomes)
@@ -458,24 +466,24 @@ class NothingToCheck(GadgetDomain):
     def test_a_design_whose_every_requirement_is_waived_is_an_input_error(self):
         waive_strength = 'waive gadget.strength on g by "o@example.org" reason "test rig only"\n'
         with self.assertRaises(ComponentError):
-            self.check(gadget(CAPACITY), push("10"), WAIVE_WEAR, waive_strength)
+            self.check(card(GIVEN, push("10"), WAIVE_WEAR, waive_strength), gadget(CAPACITY))
 
     def test_a_design_that_demands_nothing_is_an_input_error(self):
         with self.assertRaises(ComponentError):
-            self.check(gadget(CAPACITY, "  inert\n"), push("10"))
+            self.check(card(GIVEN, push("10")), gadget(CAPACITY, "  inert\n"))
 
     def test_one_requirement_left_is_enough_for_a_verdict(self):
-        report = self.check(gadget(CAPACITY, "  inert\n"), push("10"), CLAIM)
+        report = self.check(card(GIVEN, push("10"), CLAIM), gadget(CAPACITY, "  inert\n"))
         self.assertIsInstance(report.verdict, Pass)
 
 
 class Waivers(GadgetDomain):
     def test_a_waiver_that_matches_no_coverage_requirement_is_a_warning(self):
         on_claim = 'waive gadget.strength on g by "o@example.org" reason "claimed already"\n'
-        report = self.check(gadget(CAPACITY), push("10"), CLAIM, WAIVE_WEAR, on_claim)
+        report = self.check(card(GIVEN, push("10"), CLAIM, WAIVE_WEAR, on_claim), gadget(CAPACITY))
         self.assertEqual(len(report.warnings), 1)
         self.assertIn("gadget.strength on g", report.warnings[0])
-        self.assertEqual(self.check(gadget(CAPACITY), push("10"), CLAIM, WAIVE_WEAR).warnings, ())
+        self.assertEqual(self.check(card(GIVEN, push("10"), CLAIM, WAIVE_WEAR), gadget(CAPACITY)).warnings, ())
 
 
 class PortContracts(GadgetDomain):
@@ -491,7 +499,7 @@ class PortContracts(GadgetDomain):
         self.enterContext(mock.patch("petra.pipeline.contract_obligations", self.contracts))
 
     def test_every_components_ports_reach_the_contracts_and_their_obligations_are_checked(self):
-        report = self.check(gadget(CAPACITY, "  port a\n", "  port b\n"), push("10"), CLAIM, WAIVE_WEAR)
+        report = self.check(card(GIVEN, push("10"), CLAIM, WAIVE_WEAR), gadget(CAPACITY, "  port a\n", "  port b\n"))
         connections, specs = self.seen
         self.assertEqual(set(specs), {PortRef("g", "g", "a"), PortRef("g", "g", "b")})
         self.assertEqual(len(connections), 1)
@@ -499,7 +507,7 @@ class PortContracts(GadgetDomain):
 
     def test_a_waiver_on_a_port_contract_waives_it(self):
         waive = 'waive port.contract on g.g.a by "o@example.org" reason "bench supply"\n'
-        report = self.check(gadget(CAPACITY, "  port a\n", "  port b\n"), push("10"), CLAIM, WAIVE_WEAR, waive)
+        report = self.check(card(GIVEN, push("10"), CLAIM, WAIVE_WEAR, waive), gadget(CAPACITY, "  port a\n", "  port b\n"))
         self.assertIsInstance(report.verdict, Pass, report.render())
         self.assertEqual(report.warnings, ())
 
@@ -508,7 +516,7 @@ class Lowering(GadgetDomain):
     def test_every_lowering_problem_is_reported_in_one_input_error(self):
         broken = gadget(CAPACITY, "  colour red\n") + "gadget h {\n  material metal.M9\n}\n"
         with self.assertRaises(ComponentError) as raised:
-            self.check(broken, push("10"), CLAIM)
+            self.check(card(GIVEN, push("10"), CLAIM), broken)
         self.assertEqual(len(raised.exception.problems), 2)
 
 
@@ -520,20 +528,20 @@ class Decks(GadgetDomain):
 
     def test_an_obligation_that_reads_a_flagged_entry_stays_open_without_asking_a_source(self):
         asked = Offers("asked", Evidence(Enclosure(Leaf())))
-        report = self.check(gadget(CAPACITY), push("10"), CLAIM, WAIVE_WEAR, sources=(asked,), deck=self.deck(500, 400))
+        report = self.check(card(GIVEN, push("10"), CLAIM, WAIVE_WEAR), gadget(CAPACITY), sources=(asked,), deck=self.deck(500, 400))
         (need,) = self.needs(report.verdict)
         self.assertIsInstance(need, RegistryInconsistent)
         self.assertEqual((need.entry, need.relation), ("metal.M1", "material.yield_order"))
         self.assertEqual(asked.asked, 0)
 
     def test_a_consistent_deck_changes_nothing(self):
-        report = self.check(gadget(CAPACITY), push("10"), CLAIM, WAIVE_WEAR, deck=self.deck(300, 400))
+        report = self.check(card(GIVEN, push("10"), CLAIM, WAIVE_WEAR), gadget(CAPACITY), deck=self.deck(300, 400))
         self.assertIsInstance(report.verdict, Pass)
 
 
 class Reports(GadgetDomain):
     def test_the_json_report_has_one_verdict_per_claim_then_coverage(self):
-        report = self.check(gadget(CAPACITY), push("10"), CLAIM)
+        report = self.check(card(GIVEN, push("10"), CLAIM), gadget(CAPACITY))
         body = json.loads(json.dumps(report.to_json()))
         self.assertEqual((body["file"], body["design"], body["status"]), ("rig.petra", "rig", "UNKNOWN"))
         self.assertEqual([(v["claim"], v["status"]) for v in body["verdicts"]], [("fits", "PASS"), ("coverage", "UNKNOWN")])
@@ -541,7 +549,7 @@ class Reports(GadgetDomain):
         self.assertEqual(body["verdicts"][0]["rules"], ["R4"])
 
     def test_the_text_report_names_the_design_each_entry_and_each_warning(self):
-        text = self.check(gadget(CAPACITY), push("10"), CLAIM, sources=(Broken(), Solver())).render()
+        text = self.check(card(GIVEN, push("10"), CLAIM), gadget(CAPACITY), sources=(Broken(), Solver())).render()
         first, second = text.split("\n")[:2]
         self.assertEqual(first, "rig: UNKNOWN")
         self.assertEqual(second, "entries    fits PASS, coverage UNKNOWN")
@@ -550,14 +558,14 @@ class Reports(GadgetDomain):
 
 class Explain(GadgetDomain):
     def test_explain_prints_every_statement_with_its_labels_and_every_gap(self):
-        text = explain(self.design(gadget(CAPACITY), push("10"), CLAIM), REGISTRY)
+        text = explain(self.design(card(GIVEN, push("10"), CLAIM), gadget(CAPACITY)), REGISTRY)
         for fragment in ("obligation g/gadget.strength/claim.fits", "in:rig.push.g.force", "in:rig.g.capacity",
                          "reg:metal.M1.scale", "reg:const.g.half", "all_nonpositive", "gap g/gadget.wear/coverage.gadget.part",
                          "no model for gadget.wear on g"):
             self.assertIn(fragment, text)
 
     def test_explain_shows_a_waived_requirement_instead_of_its_gap(self):
-        text = explain(self.design(gadget(CAPACITY), push("10"), CLAIM, WAIVE_WEAR), REGISTRY)
+        text = explain(self.design(card(GIVEN, push("10"), CLAIM, WAIVE_WEAR), gadget(CAPACITY)), REGISTRY)
         self.assertIn("waived g/gadget.wear/coverage.gadget.part", text)
         self.assertNotIn("gap ", text)
 

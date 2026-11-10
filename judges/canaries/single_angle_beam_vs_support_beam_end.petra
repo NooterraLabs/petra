@@ -4,10 +4,6 @@ petra 0
 # Design 2134 of `python scripts/absurd_gap.py --seed 1` at commit b9e9792 (docs/absurd_gap.md):
 # beam end -0.25 in out from the support face, inside the support face, which reaches 0 in.
 
-design "absurd-02134" {
-  owner "gate@petra.dev"
-}
-
 single_angle c1 {
   basis lrfd
   beam W21x62 grade steel.A992
@@ -22,9 +18,4 @@ single_angle c1 {
   beam_gauge 2.25 inch
   support_side bolted
   support_gauge 3.75 inch
-}
-
-load gate {
-  on c1 shear in [0 kip, 25.571 kip]
-  signed "gate@petra.dev" source "steel gate generator"
 }

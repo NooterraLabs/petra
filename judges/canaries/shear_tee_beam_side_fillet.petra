@@ -4,10 +4,6 @@ petra 0
 # Design 55 of `python scripts/absurd_gap.py --seed 1` at commit b9e9792 (docs/absurd_gap.md):
 # tee stem top edge 1 in below the W24x55's top, on its fillet, off the flat web (1.01 in).
 
-design "absurd-00055" {
-  owner "gate@petra.dev"
-}
-
 shear_tee c1 {
   basis lrfd
   beam W24x55 grade steel.A992
@@ -22,9 +18,4 @@ shear_tee c1 {
   beam_edge 1.75 inch
   support_side welded
   support_weld electrode.E70 size 0.25 inch
-}
-
-load gate {
-  on c1 shear in [0 kip, 9.663 kip]
-  signed "gate@petra.dev" source "steel gate generator"
 }

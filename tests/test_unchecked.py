@@ -16,7 +16,11 @@ from pathlib import Path
 
 import petra
 from petra import models, readout
-from petra.pipeline import Report
+from petra.files import read_pair
+from petra.lang import load_design
+from petra.pipeline import Report, check_design
+from petra.registry import build_registry
+from petra.solvers import SolverSource
 
 ROOT = Path(__file__).resolve().parents[1]
 STEEL = ROOT / "examples" / "steel"
@@ -24,6 +28,7 @@ FLANGE_FORCE = STEEL / "flange_force.petra"
 SHEAR_TEE = STEEL / "shear_tee.petra"
 HANGER = STEEL / "hanger.petra"
 TRUSS_PASS = ROOT / "examples" / "truss_pass.petra"
+FAMILIES = ROOT / "examples" / "families"
 DESIGNS = sorted([*(ROOT / "examples").rglob("*.petra"), *(ROOT / "judges" / "canaries").glob("*.petra"),
                   *(ROOT / "tests" / "fixtures").rglob("*.petra")])
 SIDESWAY = "member web: web sidesway buckling where its slenderness ratio makes it apply (J10.4)"
@@ -35,8 +40,14 @@ _REPORTS: dict[Path, Report] = {}
 
 
 def check(path: Path) -> Report:
+    """The report of the design at `path`. petra.check_file refuses a family, whose card
+    leaves a load to a param, so a family goes to check_design."""
     if path not in _REPORTS:
-        _REPORTS[path] = petra.check_file(path)
+        if path.parent == FAMILIES:
+            registry = build_registry()
+            _REPORTS[path] = check_design(load_design(path, registry), registry, (SolverSource(),), path=str(path))
+        else:
+            _REPORTS[path] = petra.check_file(path)
     return _REPORTS[path]
 
 
@@ -45,40 +56,29 @@ def edge(text: str, head: str) -> list[str]:
 
 
 def with_load(path: Path, line: str) -> Report:
-    """The design at `path` with one more entry in its load block."""
-    text = path.read_text(encoding="utf-8")
-    added = re.sub(r"^(\s*)signed ", rf"\g<1>{line}\n\g<1>signed ", text, count=1, flags=re.M)
-    with tempfile.TemporaryDirectory() as tmp:
-        target = Path(tmp) / path.name
-        target.write_text(added, encoding="utf-8", newline="\n")
-        return petra.check_file(target)
+    """The design at `path` with one more entry in its card's load block."""
+    card, text = read_pair(path)
+    added = re.sub(r"^(\s*)signed ", rf"\g<1>{line}\n\g<1>signed ", card, count=1, flags=re.M)
+    return written(added, text, path.name)
 
 
-def written(text: str) -> Report:
+def written(card: str, text: str, name: str = "design.petra") -> Report:
+    """The report of a design's text against a card's, written as two files."""
     with tempfile.TemporaryDirectory() as tmp:
-        target = Path(tmp) / "design.petra"
+        target = Path(tmp) / name
         target.write_text(text, encoding="utf-8", newline="\n")
+        target.with_suffix(".card").write_text(card, encoding="utf-8", newline="\n")
         return petra.check_file(target)
 
 
-END_FORCE = """petra 0
+# A card's text and the text of the design that answers it.
+END_FORCE = ("""petra 0
 
-design "flange-force-near-the-end" {
+card "flange-force-near-the-end" {
   owner "s.engineer@example.org"
 }
 
-flange_force ff1 {
-  basis lrfd
-  member W14x90 grade steel.A992
-  bearing_length 0.5 inch
-  location end
-  distance in [16 inch, 30 inch] signed "s.engineer@example.org" source "framing plan"
-  end_twist restrained
-  force_kind compressive
-  flange_restrained yes
-  unbraced_length 144 inch
-  moment_at_force below_yield
-}
+given distance in [16 inch, 30 inch] signed "s.engineer@example.org" source "framing plan"
 
 load gravity {
   on ff1 force in [0 kip, 400 kip]
@@ -86,7 +86,21 @@ load gravity {
   on ff1 axial in [0 kip, 100 kip]
   signed "s.engineer@example.org" source "beam reaction"
 }
-"""
+""", """petra 0
+
+flange_force ff1 {
+  basis lrfd
+  member W14x90 grade steel.A992
+  bearing_length 0.5 inch
+  location end
+  distance given distance
+  end_twist restrained
+  force_kind compressive
+  flange_restrained yes
+  unbraced_length 144 inch
+  moment_at_force below_yield
+}
+""")
 
 
 class Excused(unittest.TestCase):
@@ -116,7 +130,7 @@ class Excused(unittest.TestCase):
         self.assertGreater(seen, 10, "the examples excuse checks")
 
     def test_an_excuse_is_read_at_the_counterexample(self):
-        report = written(END_FORCE)
+        report = written(*END_FORCE)
         self.assertIsInstance(report.verdict, petra.Fail)
         (f,) = [f for f in report.findings if f.requirement.startswith("ff1/steel.web_local_yielding/")]
         self.assertEqual((f.outcome, f.at), ("refuted", "point"))
@@ -127,7 +141,8 @@ class Excused(unittest.TestCase):
                                          f">= W14x90.d + strict.length = 14 inch")
 
     def test_over_the_box_an_excuse_gives_the_range(self):
-        report = written(END_FORCE.replace("[0 kip, 400 kip]", "[0 kip, 100 kip]"))
+        card, text = END_FORCE
+        report = written(card.replace("[0 kip, 400 kip]", "[0 kip, 100 kip]"), text)
         self.assertIsInstance(report.verdict, petra.Pass)
         (f,) = [f for f in report.findings if f.requirement.startswith("ff1/steel.web_crippling/")]
         (excused,) = [v for v in f.values if v.excused]
@@ -196,11 +211,11 @@ class NotChecked(unittest.TestCase):
                 self.assertEqual(report.to_json()["unchecked"], [u.to_json() for u in report.unchecked])
 
     def test_components_alike_share_a_line(self):
-        text = FLANGE_FORCE.read_text(encoding="utf-8")
+        card, text = read_pair(FLANGE_FORCE)
         block = text[text.index("flange_force ff1 {"):text.index("}", text.index("flange_force ff1 {")) + 1]
-        twice = text.replace(block, f"{block}\n\n{block.replace('ff1', 'ff2')}").replace(
-            "  signed ", "  on ff2 force in [0 kip, 150 kip]\n  signed ")
-        lines = edge(written(twice).render(), "not checked  ")
+        twice = text.replace(block, f"{block}\n\n{block.replace('ff1', 'ff2')}")
+        both = card.replace("  signed ", "  on ff2 force in [0 kip, 150 kip]\n  signed ")
+        lines = edge(written(both, twice).render(), "not checked  ")
         self.assertTrue(lines)
         for line in lines:
             self.assertRegex(line, r" on ff1, ff2: ")

@@ -1,0 +1,8 @@
+petra 0
+
+card "printed-case" {
+  owner "e.designer@example.org"
+  environment indoor_dry
+}
+
+claim light: case.mass <= 25 g

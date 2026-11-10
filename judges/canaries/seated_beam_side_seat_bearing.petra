@@ -4,10 +4,6 @@ petra 0
 # Design 369 of `python scripts/absurd_gap.py --seed 1` at commit b9e9792 (docs/absurd_gap.md):
 # beam end 6 in off the support face, past the seat's outstanding leg, which projects 4 in.
 
-design "absurd-00369" {
-  owner "gate@petra.dev"
-}
-
 seated c1 {
   basis lrfd
   beam W14x90 grade steel.A992
@@ -22,9 +18,4 @@ seated c1 {
   edge_vertical 1.25 inch
   support_gauge 3.5 inch
   top_angle L4x4x1_4 grade steel.A36 outstanding long
-}
-
-load gate {
-  on c1 shear in [0 kip, 1.268 kip]
-  signed "gate@petra.dev" source "steel gate generator"
 }

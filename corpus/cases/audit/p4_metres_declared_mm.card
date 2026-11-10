@@ -1,0 +1,10 @@
+petra 0
+
+card "p6_metres" {
+  owner "red@example.org"
+  environment indoor_dry
+}
+
+given tolerance in [0.05 mm, 0.05 mm] signed "red@example.org" source "x"
+
+claim m: p.mass <= 0.001 g

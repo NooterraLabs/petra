@@ -1,0 +1,14 @@
+petra 0
+
+card "warren-footbridge-panel-rev-c" {
+  owner "a.reviewer@example.org"
+  environment indoor_dry
+}
+
+load crowd {
+  on frame.D fy in [-60 kN, -40 kN]
+  on frame.E fy in [-60 kN, -40 kN]
+  signed "client.structures@example.org" source "brief rev C, section 3.2"
+}
+
+claim strength: frame.collapse_factor >= 1.5 under crowd

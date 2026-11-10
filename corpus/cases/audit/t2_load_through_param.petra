@@ -1,12 +1,5 @@
 petra 0
 
-design "param-load" {
-  owner "a@example.org"
-  environment indoor_dry
-}
-
-param p in [-1 N, 0 N]
-
 truss frame {
   material steel.S355
   section chs.60_3x3_2
@@ -23,10 +16,3 @@ truss frame {
   member diag_be:   B -- E
   member diag_ec:   E -- C
 }
-
-load crowd {
-  on frame.D fy param p
-  on frame.E fy param p
-}
-
-claim strength: frame.collapse_factor >= 1.5 under crowd

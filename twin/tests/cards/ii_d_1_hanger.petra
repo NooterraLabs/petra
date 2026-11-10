@@ -12,7 +12,3 @@ hanger ii_d_1 {
   tee_gauge 3.5 inch
   edge_vertical 2 inch
 }
-
-load reaction {
-  on ii_d_1 tension in [0 kip, 60 kip]
-}

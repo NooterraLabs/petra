@@ -1,7 +1,7 @@
-"""The shared form of a Companion connection example: a design built from the example's
-lines, the strength each check gives, and the comparison with the printed number. The
-test modules subclass `Example`; this module is not a test module itself, so the base
-class is not collected."""
+"""The shared form of a Companion connection example: a card and a design built from the
+example's lines, the strength each check gives, and the comparison with the printed
+number. The test modules subclass `Example`; this module is not a test module itself, so
+the base class is not collected."""
 import unittest
 from decimal import Decimal
 
@@ -18,20 +18,23 @@ ROUNDED = 0.005
 prints as 2.88, so 0.60 Fy Agv as 86.4 kips, not 86.25), and an ASD value is often the
 rounded Rn over Omega: printed values move by up to 1/2 % from the exact ones."""
 
-TEMPLATE = """petra 0
+CARD = """petra 0
 
-design "companion-{tag}" {{
+card "companion-{tag}" {{
   owner "s.engineer@example.org"
 }}
-
-{kind} c1 {{
-  basis {basis}
-{body}}}
 
 load reaction {{
   on c1 {field} in [0 kip, {load} kip]
   signed "s.engineer@example.org" source "Companion Example {tag}"
 }}
+"""
+
+DESIGN = """petra 0
+
+{kind} c1 {{
+  basis {basis}
+{body}}}
 """
 
 BOLTS = "  bolts bolt_group.120 diameter 0.75 inch threads included\n"
@@ -55,8 +58,9 @@ class Example(Published):
 
     def values(self, basis: str, mode: str, body: str | None = None):
         load = self.loads[0 if basis == "lrfd" else 1]
-        text = TEMPLATE.format(tag=self.tag, kind=self.kind, basis=basis, body=body or self.body, load=load, field=self.field)
-        d = parse_design(text, f"{self.tag}.petra", REGISTRY)
+        card = CARD.format(tag=self.tag, load=load, field=self.field)
+        text = DESIGN.format(kind=self.kind, basis=basis, body=body or self.body)
+        d = parse_design(card, text, f"{self.tag}.petra", REGISTRY)
         return calc.values(calc.connection(d, "c1", REGISTRY), d, REGISTRY, mode, "reaction"), float(load)
 
     def strength(self, basis: str, mode: str, prefix: str, body: str | None = None) -> float:

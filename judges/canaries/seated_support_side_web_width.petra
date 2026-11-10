@@ -4,10 +4,6 @@ petra 0
 # Design 941 of `python scripts/absurd_gap.py --seed 1` at commit b9e9792 (docs/absurd_gap.md):
 # seat angle: 12 in across, wider than the 10.89 in between the W12x65's flanges.
 
-design "absurd-00941" {
-  owner "gate@petra.dev"
-}
-
 seated c1 {
   basis asd
   beam W16x31 grade steel.A992
@@ -22,9 +18,4 @@ seated c1 {
   edge_vertical 1.5 inch
   support_gauge 3.5 inch
   top_angle L4x4x1_4 grade steel.A36 outstanding long
-}
-
-load gate {
-  on c1 shear in [0 kip, 9.275 kip]
-  signed "gate@petra.dev" source "steel gate generator"
 }

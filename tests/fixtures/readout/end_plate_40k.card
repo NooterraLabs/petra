@@ -1,0 +1,10 @@
+petra 0
+
+card "job2-shear-end-plate" {
+  owner "engineer@example.org"
+}
+
+load gravity {
+  on ep1 shear in [0 kip, 40 kip]
+  signed "engineer@example.org" source "beam reaction, LRFD, 40 kip given"
+}

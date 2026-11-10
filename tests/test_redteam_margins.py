@@ -15,9 +15,10 @@ from pathlib import Path
 
 from petra import cli
 from petra.certs import CertStore
+from petra.files import read_pair
 from petra.kernel import Evidence, Refutation, Theorem, check, statement_hash
 from petra.kernel.rules.r4_enclosure import PointWitness
-from petra.lang import parse_design
+from petra.lang import load_design, parse_design
 from petra.library import Library, certify_family
 from petra.models.base import ClaimOrigin
 from petra.pipeline import _prepare, check_design
@@ -29,15 +30,17 @@ ROOT = Path(__file__).resolve().parent.parent
 REGISTRY = build_registry()
 
 
-def edited(example: str, *subs: tuple[str, str]) -> str:
-    text = (ROOT / example).read_text(encoding="utf-8")
+def edited(example: str, *subs: tuple[str, str]) -> tuple[str, str]:
+    """The example's card and design, each substitution made in the file that holds its
+    text. A substitution of "" adds to the card."""
+    card, text = read_pair(ROOT / example)
     for old, new in subs:
         if old:
-            assert old in text, old
-            text = text.replace(old, new)
+            assert old in card or old in text, old
+            card, text = card.replace(old, new), text.replace(old, new)
         else:
-            text += new
-    return text
+            card += new
+    return card, text
 
 
 def run_cli(*argv: str) -> tuple[int, str, str]:
@@ -54,9 +57,12 @@ class _Files(unittest.TestCase):
     def setUp(self):
         self.dir = Path(self.enterContext(tempfile.TemporaryDirectory()))
 
-    def write(self, name: str, text: str) -> str:
+    def write(self, name: str, pair: tuple[str, str]) -> str:
+        """Write the design as `name` and its card beside it. Returns the design's path."""
+        card, text = pair
         path = self.dir / name
         path.write_text(text, encoding="utf-8")
+        path.with_suffix(".card").write_text(card, encoding="utf-8")
         return str(path)
 
 
@@ -83,7 +89,7 @@ class MarginWitnessHidesFail(_Files):
     def setUp(self):
         super().setUp()
         self.path = self.write("ol.petra", edited("examples/circuit_pass.petra", *HOT_OVERLOAD))
-        design = parse_design(Path(self.path).read_text(encoding="utf-8"), self.path, REGISTRY)
+        design = load_design(self.path, REGISTRY)
         prepared = _prepare(design, REGISTRY)
         (i,) = [k for k, e in enumerate(prepared.elaborated) if e.requirement.origin == ClaimOrigin("ol")]
         self.claim, self.margin = prepared.elaborated[i], prepared.margins[i]
@@ -134,13 +140,13 @@ class UndecidedMarginPasses(_Files):
     HUGE = "1000000000000000000000000000000"
 
     def report(self, claim: str):
-        text = edited("examples/truss_pass.petra", ("claim stability:  frame.stability_factor >= 3 under crowd", claim))
-        return check_design(parse_design(text, "t.petra", REGISTRY), REGISTRY, (SolverSource(),))
+        pair = edited("examples/truss_pass.petra", ("claim stability:  frame.stability_factor >= 3 under crowd", claim))
+        return check_design(parse_design(*pair, "t.petra", REGISTRY), REGISTRY, (SolverSource(),))
 
     def test_a_stress_margin_prints_in_a_readable_unit(self):
-        text = edited("examples/truss_pass.petra", ("claim stress:     frame.member(diag_ad).stress <= 235 MPa under crowd",
+        pair = edited("examples/truss_pass.petra", ("claim stress:     frame.member(diag_ad).stress <= 235 MPa under crowd",
                                                      "claim stress: frame.member(diag_ad).stress <= 235 MPa margin 300 MPa under crowd"))
-        report = check_design(parse_design(text, "t.petra", REGISTRY), REGISTRY, (SolverSource(),))
+        report = check_design(parse_design(*pair, "t.petra", REGISTRY), REGISTRY, (SolverSource(),))
         self.assertIn("300 MPa", report.render())
         self.assertNotIn("300000000 Pa", report.render())
 
@@ -167,7 +173,7 @@ class MarginProofDiscarded(_Files):
         plain = self.write("p.petra", edited("examples/circuit_pass.petra", ("<= 70 degC under lamp_draw", "<= 58 degC under lamp_draw")))
         self.assertEqual(run_cli("check", plain, "--certs", certs)[0], 0)
         path = self.write("m.petra", edited("examples/circuit_pass.petra", ("<= 70 degC under lamp_draw", "<= 60 degC margin 2 degC under lamp_draw")))
-        design = parse_design(Path(path).read_text(encoding="utf-8"), path, REGISTRY)
+        design = load_design(path, REGISTRY)
         prepared = _prepare(design, REGISTRY)
         (i,) = [k for k, e in enumerate(prepared.elaborated) if e.requirement.origin == ClaimOrigin("hot")]
         claim, margin = prepared.elaborated[i], prepared.margins[i]
@@ -189,7 +195,7 @@ class MarginProofDiscarded(_Files):
 
 class MispairedWithinMargin(unittest.TestCase):
     def test_within_margin_refuses_a_margin_obligation_of_another_load_case(self):
-        text = edited(
+        pair = edited(
             "examples/truss_pass.petra",
             ("claim strength:   frame.collapse_factor >= 1.5 under crowd\n", ""),
             ("claim stability:  frame.stability_factor >= 3 under crowd\n", ""),
@@ -197,7 +203,7 @@ class MispairedWithinMargin(unittest.TestCase):
              "claim stress: frame.member(diag_ad).stress <= 235 MPa margin 300 MPa"),
             ("", 'load gust {\n  on frame.E fx in [1 kN, 2 kN]\n  signed "c@example.org" source "s"\n}\n'),
         )
-        prepared = _prepare(parse_design(text, "t.petra", REGISTRY), REGISTRY)
+        prepared = _prepare(parse_design(*pair, "t.petra", REGISTRY), REGISTRY)
         (crowd, _), (gust, gust_margin) = [(e, m) for e, m in zip(prepared.elaborated, prepared.margins) if m is not None]
         self.assertIn("crowd", crowd.describe)
         self.assertIn("gust", gust_margin.describe)
@@ -212,13 +218,13 @@ class MispairedWithinMargin(unittest.TestCase):
 
 class FamilyMarginMessage(_Files):
     def test_a_proved_claim_with_a_margin_point_is_not_called_unproved(self):
-        text = edited(
+        pair = edited(
             "examples/families/cu_pvc_clipped.petra",
             ("claim hot:  c.w1.temperature <= 70 degC under demand",
              "claim hot:  c.w1.temperature <= 70 degC margin 20 degC under demand\n"
              "claim hot50: c.w1.temperature <= 50 degC under demand"),
         )
-        design = parse_design(text, "f.petra", REGISTRY)
+        design = parse_design(*pair, "f.petra", REGISTRY)
         result = certify_family(design, REGISTRY, Library(self.dir / "lib"))
         near = [o for o in result.report.outcomes if isinstance(o, WithinMargin)]
         self.assertTrue(near and near[0].theorem is not None, "precondition: hot is proved and within its margin")

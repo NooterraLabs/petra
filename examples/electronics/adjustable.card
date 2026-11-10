@@ -1,0 +1,20 @@
+petra 0
+
+card "two-rail-adjustable" {
+  owner "e.designer@example.org"
+  environment indoor_dry
+}
+
+given voltage in [11.4 V, 12.6 V] signed "e.designer@example.org" source "bench supply setting"
+given capacity in [500 mA, 500 mA] signed "e.designer@example.org" source "bench supply limit"
+
+load run {
+  on power.motor current in [5 mA, 100 mA]
+  on power.mcu current in [5 mA, 50 mA]
+  signed "e.designer@example.org" source "power budget rev 4"
+}
+
+claim five_high:  power.v5.voltage <= 5.4 V
+claim five_low:   power.v5.voltage >= 4.7 V
+claim three_high: power.v3.voltage <= 3.5 V
+claim three_low:  power.v3.voltage >= 3.1 V

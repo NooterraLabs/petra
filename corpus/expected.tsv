@@ -1,4 +1,4 @@
-# The corpus. One design per line, tab-separated:
+# The corpus. One design per line, tab-separated. Its card is the .card file beside it.
 #
 #   path    the verdict it must get    what `petra check` gives today, if wrong    what the kernel gives today, if wrong    why
 #
@@ -13,13 +13,15 @@
 #   corpus/cases/audit/  the audit of 2026-11-09. "re-ran" means the lead auditor reproduced
 #                        the verdict, "auditor" that one auditor reported it. A design the
 #                        type rules refuse must be an INPUT_ERROR.
+#                        A waiver there is one the designer wrote, so it is in the design
+#                        file, where the language refuses it.
 #
 # Not cases yet:
 #   audit F1 to F4       false FAILs whose truth is the auditor's memory of Manual tables.
 #   hook_uncertain       the audit disputes its PASS by analysis, with no run.
 #   examples/families/   inputs to `petra certify-family`, not to `petra check`.
 #   three weld_bracket_support_side canaries, which FAIL after about 150 s, past the limit.
-corpus/cases/audit/b1_absurd_bolts.petra	NOT_PASS	PASS		audit B1, re-ran: 10^12 bolts through a 1 nm plate made of an LED
+corpus/cases/audit/b1_absurd_bolts.petra	NOT_PASS			audit B1, re-ran: 10^12 bolts through a 1 nm plate made of an LED
 corpus/cases/audit/c1_negative_current.petra	INPUT_ERROR			audit C1, re-ran: +12 A fails on drop and overload
 corpus/cases/audit/c2_negative_length.petra	INPUT_ERROR			audit C2, re-ran: a wire of -5000 m
 corpus/cases/audit/c3_below_absolute_zero.petra	INPUT_ERROR			audit C3, re-ran: an ambient of -1000 degC
@@ -29,15 +31,15 @@ corpus/cases/audit/c6_huge_area.petra	NOT_PASS	PASS	PASS	audit C6, auditor: a ca
 corpus/cases/audit/c6_negative_area.petra	INPUT_ERROR			audit C6, auditor: a cable outside its catalogue with no validity row
 corpus/cases/audit/c6_negative_insulation.petra	INPUT_ERROR			audit C6, auditor: a cable outside its catalogue with no validity row
 corpus/cases/audit/c6_zero_insulation.petra	INPUT_ERROR			audit C6, auditor: a cable outside its catalogue with no validity row
-corpus/cases/audit/c7_drop_at_assumed_temperature.petra	NOT_PASS	PASS		audit C7, auditor: the drop claim assumes 70 degC and the heat mode is waived
+corpus/cases/audit/c7_drop_at_assumed_temperature.petra	NOT_PASS			audit C7, auditor: the drop claim assumes 70 degC and the heat mode is waived
 corpus/cases/audit/e1_negative_rail.petra	INPUT_ERROR			audit E1, re-ran: +200 V on the same 75 V part fails at 2.67
-corpus/cases/audit/e2_dropout_waived.petra	NOT_PASS	PASS		audit E2, re-ran: the rail claim leans on a waived sibling mode
+corpus/cases/audit/e2_dropout_waived.petra	NOT_PASS			audit E2, re-ran: the rail claim leans on a waived sibling mode
 corpus/cases/audit/e3_negative_sink.petra	INPUT_ERROR			audit E3, auditor: the sign of the sink current is never checked
 corpus/cases/audit/m_bad_transform.petra	INPUT_ERROR	INTERNAL_ERROR	NO_FILES	a malformed 3MF is an input error
 corpus/cases/audit/m_bad_vertex.petra	INPUT_ERROR	INTERNAL_ERROR	NO_FILES	a malformed 3MF is an input error
 corpus/cases/audit/m_nan_vertex.petra	INPUT_ERROR	INTERNAL_ERROR	NO_FILES	a malformed 3MF is an input error
 corpus/cases/audit/m_no_vertices.petra	INPUT_ERROR	INTERNAL_ERROR	NO_FILES	a malformed 3MF is an input error
-corpus/cases/audit/p1_screw_in_narrowing_bore.petra	NOT_PASS	PASS		audit P1, re-ran: the bore narrows to 0.8 mm after 5 mm
+corpus/cases/audit/p1_screw_in_narrowing_bore.petra	NOT_PASS			audit P1, re-ran: the bore narrows to 0.8 mm after 5 mm
 corpus/cases/audit/p2_dimple_as_through_hole.petra	NOT_PASS	PASS	PASS	audit P2, re-ran: a 0.1 mm dimple declared as a through hole
 corpus/cases/audit/p3_loose_cubes.petra	NOT_PASS	PASS	PASS	audit P3, auditor: one part made of two loose pieces
 corpus/cases/audit/p4_metres_declared_mm.petra	NOT_PASS	PASS	PASS	audit P4, auditor: a mesh exported in metres and declared in mm
@@ -57,10 +59,10 @@ corpus/cases/audit/s11_slots_too_close.petra	NOT_PASS	PASS	PASS	audit S11, audit
 corpus/cases/audit/s12_gauge_on_web_fillet.petra	NOT_PASS	PASS	PASS	audit S12, auditor: the hole sits on the web fillet
 corpus/cases/audit/s13_end_plate_gauge_clash.petra	NOT_PASS	PASS	PASS	audit S13, auditor: the bolt heads overlap the web weld
 corpus/cases/audit/t1_foreign_load_case.petra	NOT_PASS	PASS		audit T1, re-ran: the claims name a load case the truss is never checked under
-corpus/cases/audit/t2_load_through_param.petra	NOT_PASS	PASS		audit T2, re-ran: the only load comes through a param nobody signs
+corpus/cases/audit/t2_load_through_param.petra	NOT_PASS			audit T2, re-ran: the only load comes through a param nobody signs
 corpus/cases/audit/u1_one_trial.petra	NOT_PASS	PASS		audit U1, re-ran: one trial at 0 kN, a claim at 0.000001 % confidence
-corpus/cases/audit/w1_design_waives_its_own_checks.petra	NOT_PASS	PASS		audit fault 1: the design waives its own bolt and block shear checks
-corpus/cases/audit/w2_truss_waives_collapse.petra	NOT_PASS	PASS		audit fault 1: the design waives collapse, stability and buckling by "x"
+corpus/cases/audit/w1_design_waives_its_own_checks.petra	NOT_PASS			audit fault 1: the design waives its own bolt and block shear checks
+corpus/cases/audit/w2_truss_waives_collapse.petra	NOT_PASS			audit fault 1: the design waives collapse, stability and buckling by "x"
 corpus/cases/audit/x1_number_over_4300_digits.petra	INPUT_ERROR	INTERNAL_ERROR	NO_FILES	audit, smaller items: a number over 4,300 digits is an input error
 corpus/cases/pilot/bracket_from_the_arm.petra	FAIL			tests/test_steel_groups.py: the moment arm is taken from the bolt group
 corpus/cases/pilot/seat_one_row.petra	PASS			tests/test_steel_coverage.py: one row has no pitch for J3.6 to limit

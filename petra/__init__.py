@@ -1,8 +1,8 @@
 """Petra: verdicts about physical designs as theorems relative to explicit premises.
 
     import petra
-    result = petra.check(text)  # plain data; a FAIL's "repair" names the inputs to change
-    report = petra.check_file("examples/truss_pass.petra")
+    result = petra.check(card, design)  # plain data; a FAIL's "repair" names the inputs to change
+    report = petra.check_file("examples/truss_pass.petra")  # against examples/truss_pass.card
     print(report.render())
     report.verdict            # petra.Pass | petra.Fail | petra.Unknown | petra.Marginal
     report.verdict.footprint  # every non-proved premise the verdict used
@@ -58,22 +58,25 @@ def __getattr__(name: str) -> Any:
     return value
 
 
-def check(text: str, *, path: str = "<text>", repair: bool = True) -> dict:
-    """Check a design given as text, with the shipped registry and the solvers, and return
-    plain data that json.dumps takes as it is: the report's JSON (petra/docs/api.md) with a
-    "repair" key, which on a FAIL names the inputs that lower the governing check (repair.py)
-    and is None otherwise, or with `repair=False`. A design that does not lower gives
-    {"file", "status": "INPUT_ERROR", "error"} instead of raising."""
+def check(card: str, design: str, *, path: str = "<design>", repair: bool = True) -> dict:
+    """Check a design against a card, both given as text, with the shipped registry and the
+    solvers, and return plain data that json.dumps takes as it is: the report's JSON
+    (petra/docs/api.md) with a "repair" key, which on a FAIL names the inputs that lower
+    the governing check (repair.py) and is None otherwise, or with `repair=False`. A pair
+    that does not lower gives {"file", "status": "INPUT_ERROR", "error"} instead of
+    raising."""
     from .registry import build_registry
     from .repair import check_text
     from .solvers import SolverSource
 
-    return check_text(text, path, build_registry(), (SolverSource(),), moves=repair).to_json()
+    return check_text(card, design, path, build_registry(), (SolverSource(),), moves=repair).to_json()
 
 
-def check_file(path: str | Path, *, certs: str | Path | None = None, library: Library | None = None, solve: bool = True) -> Report:
-    """Convenience shell over check_design: default registry, evidence sources in the
-    order certs -> library -> solvers, accepted evidence recorded into `certs` when given."""
+def check_file(path: str | Path, *, card: str | Path | None = None, certs: str | Path | None = None,
+               library: Library | None = None, solve: bool = True) -> Report:
+    """Convenience shell over check_design: the design at `path` against `card`, the .card
+    file beside it when none is named, with the default registry, evidence sources in the
+    order certs -> library -> solvers, and accepted evidence recorded into `certs` when given."""
     from . import wellformed
     from .certs import CertStore
     from .lang import load_design
@@ -82,7 +85,7 @@ def check_file(path: str | Path, *, certs: str | Path | None = None, library: Li
     from .solvers import SolverSource
 
     registry = build_registry()
-    design = load_design(path, registry)
+    design = load_design(path, registry, card)
     wellformed.require(design, registry)
     store = CertStore(certs) if certs is not None else None
     sources = tuple(s for s in (store, library, SolverSource() if solve else None) if s is not None)

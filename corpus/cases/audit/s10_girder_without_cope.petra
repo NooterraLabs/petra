@@ -1,7 +1,5 @@
 petra 0
-design "t15_girder_uncoped" {
-  owner "audit@example.org"
-}
+
 double_angle c1 {
   basis lrfd
   beam W18x50 grade steel.A992
@@ -16,8 +14,4 @@ double_angle c1 {
   beam_gauge 2.25 inch
   support_side bolted
   support_gauge 5.5 inch
-}
-load gravity {
-  on c1 shear in [0 kip, 95 kip]
-  signed "audit@example.org" source "audit"
 }

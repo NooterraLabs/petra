@@ -4,6 +4,8 @@
 
 Every number carries a label. **Measured** means run or read on 2026-11-08 for this page. **Inferred** means reasoned from measured facts. **Guess** means neither. The twin is frozen at commit 457f36a, and this page changes nothing in it or in Petra.
 
+The run predates the split of a design into a card and a design. Where this page says card, outside the two examples, it means a design together with its load, as one file held them then.
+
 ## Outcome
 
 1. **Petra passes bolt brackets that tear out toward the plate's back edge.** Petra runs a bracket bolt's tearout clear distance vertically only. Under an eccentric load the top and bottom bolts push almost horizontally toward the plate's back edge, and J3.11a takes lc in the direction of the force. 8 designs in the stream pass in Petra and fail this way, at utilisations from 1.0003 to 1.299 (measured). The first card below is gate-1-06718 cut to its essentials.
@@ -12,16 +14,14 @@ Every number carries a label. **Measured** means run or read on 2026-11-08 for t
 4. **Most verdict disagreements are Petra checking more or checking more conservatively.** Of 1,545 designs that Petra fails and the twin passes, 969 fail a limit state the twin does not check, mostly geometry, fit and fatigue (measured). 613 fail an eccentric bolt or weld group that Petra checks by the elastic method and the twin by the instantaneous centre (IC) (measured).
 5. **A hand check found a shared false PASS that the comparison cannot see.** Petra's minimum edge distance omits J3.5's increment C2 for oversized and slotted holes, and the twin checks no geometry. Two bracket plates in the stream with long slots and a 1-1/2 in back edge pass both (measured).
 
-## Petra false PASS cards
+## Petra false PASS designs
 
 ### Tearout toward a bracket's back edge
 
+The design:
+
 ```
 petra 0
-
-design "tearout-back-edge" {
-  owner "twin@petra.dev"
-}
 
 bolt_bracket c1 {
   basis lrfd
@@ -35,6 +35,16 @@ bolt_bracket c1 {
   eccentricity 6 inch
   edge_vertical 2 inch
   plate_edge 1.5 inch
+}
+```
+
+Its card:
+
+```
+petra 0
+
+card "tearout-back-edge" {
+  owner "twin@petra.dev"
 }
 
 load gate {
@@ -50,16 +60,14 @@ Petra passes it, with the bolt group at 0.879 and edge distances at 0.833 (measu
 - J3.11a, Eq. J3-6c, gives φrn = 0.75 x 1.2 x 0.984 x 0.5 x 58 = 25.67 kips. Bolt shear (J3.7, Fnv 84 ksi from Table J3.2) is 49.5 kips and bearing (Eq. J3-6a) 52.2 kips.
 - u = 32.98 / 25.67 = 1.285 (measured). The elastic method gives the same top-bolt force here, so the instantaneous-centre fix of the false-FAIL branch does not close this gap (measured).
 
-Petra's tearout for this bolt runs vertically to the top edge, lc = 2 − 0.5625 = 1.4375 in, which gives 37.5 kips (measured). The twin fails the card at 1.373, because it takes II.A-22's least edge distance for every bolt (measured).
+Petra's tearout for this bolt runs vertically to the top edge, lc = 2 − 0.5625 = 1.4375 in, which gives 37.5 kips (measured). The twin fails the design at 1.373, because it takes II.A-22's least edge distance for every bolt (measured).
 
 ### A weld bracket's moment arm
 
+The design:
+
 ```
 petra 0
-
-design "bracket-arm" {
-  owner "twin@petra.dev"
-}
 
 weld_bracket c1 {
   basis asd
@@ -71,6 +79,16 @@ weld_bracket c1 {
   eccentricity 8 inch
   free_edge 6 inch
 }
+```
+
+Its card:
+
+```
+petra 0
+
+card "bracket-arm" {
+  owner "twin@petra.dev"
+}
 
 load gate {
   on c1 shear in [0 kip, 30 kip]
@@ -78,7 +96,7 @@ load gate {
 }
 ```
 
-Petra passes it, with section B-B at 0.911 (measured). The weld group's centroid lies x̄ = kl² / (2kl + l) = 9 / 20 = 0.45 in from the vertical weld (Manual Part 8). With e measured from the centroid as `docs/reference.md` defines it, the arm to section A-A is 8 + 0.45 − 3 = 5.45 in. Petra uses 8 − 3 = 5.00 in. At the gate's design gate-1-00009, the hand check of Manual Part 15's free-edge section gives θ = 23.2 degrees, λ = 0.354 so Q = 1, and u = 1.038 at the 5.45 in arm against 0.927 at 5.00 in (measured). This card, at 30 kips, gives 1.021 in the twin (measured).
+Petra passes it, with section B-B at 0.911 (measured). The weld group's centroid lies x̄ = kl² / (2kl + l) = 9 / 20 = 0.45 in from the vertical weld (Manual Part 8). With e measured from the centroid as `docs/reference.md` defines it, the arm to section A-A is 8 + 0.45 − 3 = 5.45 in. Petra uses 8 − 3 = 5.00 in. At the gate's design gate-1-00009, the hand check of Manual Part 15's free-edge section gives θ = 23.2 degrees, λ = 0.354 so Q = 1, and u = 1.038 at the 5.45 in arm against 0.927 at 5.00 in (measured). This design, at 30 kips, gives 1.021 in the twin (measured).
 
 All 31 of the twin's B-B failures on weld brackets come back exactly when Petra is rerun with the eccentricity moved out by x̄ (measured). So the arm is the whole cause. II.A-23 states its load 11-1/4 in from the vertical weld, which matches Petra's code. Its table quantity al = 10.9 in is measured from the centroid, which matches the reference.
 

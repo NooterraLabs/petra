@@ -1,0 +1,16 @@
+petra 0
+
+card "dropout-waived" {
+  owner "e.designer@example.org"
+  environment indoor_dry
+}
+
+given voltage in [4.75 V, 5.25 V] signed "e.designer@example.org" source "USB 2.0 port voltage"
+given capacity in [500 mA, 500 mA] signed "e.designer@example.org" source "USB 2.0 port current"
+
+load run {
+  on power.sensor current in [1 mA, 20 mA]
+  signed "e.designer@example.org" source "sensor datasheet"
+}
+
+claim rail_ok: power.v5.voltage >= 4.9 V

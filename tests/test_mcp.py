@@ -9,11 +9,13 @@ import json
 import queue
 import subprocess
 import sys
+import tempfile
 import threading
 import unittest
 from pathlib import Path
 
 from petra import mcp
+from petra.files import read_pair
 
 ROOT = Path(__file__).resolve().parents[1]
 FAILING = ROOT / "tests" / "fixtures" / "readout" / "job5_fail_60k.petra"
@@ -44,13 +46,13 @@ class Session(unittest.TestCase):
                                       "clientInfo": {"name": "test", "version": "0"}}),
             {"jsonrpc": "2.0", "method": "notifications/initialized"},
             request(2, "tools/list"),
-            call(3, "check", text=FAILING.read_text(encoding="utf-8")),
+            call(3, "check", **dict(zip(("card", "design"), read_pair(FAILING)))),
             call(4, "new", kind="shear_tab", name="tab"),
             call(5, "kinds", name="nonesuché"),
             call(6, "registry_list", prefix="A325"),
             call(7, "docs", name="skill"),
             call(8, "check", path=str(SHEAR_TAB)),
-            call(9, "check", text="petra 0\ndesign {\n"),
+            call(9, "check", card=read_pair(SHEAR_TAB)[0], design="petra 0\nshear_tab {\n"),
             request(10, "frobnicate"),
             request(11, "ping"),
             call(12, "check", path=str(SHEAR_TAB)),
@@ -92,7 +94,7 @@ class Session(unittest.TestCase):
         self.assertFalse(result["isError"])
         text = result["content"][0]["text"]
         self.assertTrue(text.startswith("job5-shear-tab-60k: FAIL"))
-        self.assertIn("increase  tab.rows (line 19) from 3 to 4", text)
+        self.assertIn("increase  tab.rows (line 15) from 3 to 4", text)
         self.assertEqual(result["structuredContent"]["status"], "FAIL")
         self.assertEqual(result["structuredContent"]["repair"]["moves"][0]["input"], "tab.rows")
 
@@ -104,9 +106,12 @@ class Session(unittest.TestCase):
         self.assertTrue(result["isError"])
         self.assertIn("INPUT_ERROR", result["content"][0]["text"])
 
-    def test_new_prints_a_design_that_checks(self):
-        text = self.by_id[4]["result"]["content"][0]["text"]
-        self.assertIn("shear_tab tab {", text)
+    def test_new_returns_a_card_and_a_design_under_the_name_asked_for(self):
+        result = self.by_id[4]["result"]
+        self.assertIn("shear_tab tab {", result["content"][0]["text"])
+        self.assertIn("on tab shear", result["content"][0]["text"])
+        self.assertIn("shear_tab tab {", result["structuredContent"]["design"])
+        self.assertIn("on tab shear", result["structuredContent"]["card"])
 
     def test_an_unknown_kind_is_a_tool_error_that_suggests(self):
         result = self.by_id[5]["result"]
@@ -263,17 +268,40 @@ class Stopped(unittest.TestCase):
 
 
 class Paths(unittest.TestCase):
-    """A model picks the path, so `check` reads a .petra file on this machine and nothing else."""
+    """A model picks the paths, so `check` reads a .petra file and a .card file on this
+    machine and nothing else."""
 
-    def text(self, path) -> str:
-        result = mcp.handle(call(1, "check", path=str(path)))["result"]
+    def text(self, path, **more) -> str:
+        result = mcp.handle(call(1, "check", **{"path": str(path), **more}))["result"]
         self.assertTrue(result["isError"])
-        return result["content"][0]["text"].replace(str(path), "PATH")
+        return result["content"][0]["text"]
 
     def test_a_missing_file_another_kind_of_file_and_a_network_path_read_alike(self):
-        answers = {self.text(p) for p in (ROOT / "README.md", ROOT / "nonesuch.petra", r"\\nonesuch-host\share\design.petra")}
+        answers = {self.text(p).replace(str(p), "PATH") for p in (ROOT / "README.md", ROOT / "nonesuch.petra", r"\\nonesuch-host\share\design.petra")}
         self.assertEqual(len(answers), 1, answers)
         self.assertIn("takes a .petra file on this machine", answers.pop())
+
+    def test_a_card_path_reads_a_card_file_and_nothing_else(self):
+        answers = {self.text(SHEAR_TAB, card_path=str(p)).replace(str(p), "PATH")
+                   for p in (SHEAR_TAB, ROOT / "nonesuch.card", r"\\nonesuch-host\share\design.card")}
+        self.assertEqual(len(answers), 1, answers)
+        self.assertIn("takes a .card file on this machine", answers.pop())
+
+    def test_a_design_with_no_card_beside_it_says_which_card_it_looked_for(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            lone = Path(tmp, "lone.petra")
+            lone.write_text(read_pair(SHEAR_TAB)[1], encoding="utf-8")
+            self.assertIn("lone.card", self.text(lone))
+
+    def test_a_card_named_by_text_or_by_path_stands_in_for_the_one_beside_the_design(self):
+        card = read_pair(SHEAR_TAB)[0].replace("[0 kip, 45 kip]", "[0 kip, 450 kip]")
+        self.assertIn("[0 kip, 450 kip]", card)
+        self.assertEqual(mcp.handle(call(1, "check", path=str(SHEAR_TAB), card=card))["result"]["structuredContent"]["status"], "FAIL")
+        with tempfile.TemporaryDirectory() as tmp:
+            heavy = Path(tmp, "heavy.card")
+            heavy.write_text(card, encoding="utf-8")
+            result = mcp.handle(call(1, "check", path=str(SHEAR_TAB), card_path=str(heavy)))["result"]
+            self.assertEqual(result["structuredContent"]["status"], "FAIL")
 
 
 class Handle(unittest.TestCase):
@@ -283,8 +311,9 @@ class Handle(unittest.TestCase):
                 self.assertEqual(mcp.handle(message)["error"]["code"], mcp.INVALID_PARAMS)
 
     def test_a_bad_argument_is_a_tool_error_the_model_can_correct(self):
-        for message in (call(1, "kinds", flavour="steel"), call(2, "check"), call(3, "check", text=5),
-                        call(4, "check", text="x", path="y"), call(5, "new")):
+        for message in (call(1, "kinds", flavour="steel"), call(2, "check"), call(3, "check", design=5, card="x"),
+                        call(4, "check", design="x", path="y"), call(5, "new"), call(6, "check", design="x"),
+                        call(7, "check", path=str(SHEAR_TAB), card="x", card_path="y"), call(8, "check", text="x")):
             with self.subTest(message["params"]):
                 result = mcp.handle(message)["result"]
                 self.assertTrue(result["isError"])
@@ -295,7 +324,8 @@ class Handle(unittest.TestCase):
             return mcp.handle(call(1, "check", **args))["result"]["content"][0]["text"]
 
         self.assertNotIn("not both", said())
-        self.assertIn("not both", said(text="x", path="y"))
+        self.assertIn("not both", said(design="x", path="y"))
+        self.assertIn("card", said(design="x"))
 
     def test_a_request_id_is_a_string_or_an_integer(self):
         for rid in (None, 1.5, True, [1]):

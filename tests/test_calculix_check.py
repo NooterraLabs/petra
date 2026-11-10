@@ -1,8 +1,8 @@
 """The CalculiX spot check (scripts/calculix_check.py, docs/calculix_check.md).
 
-The offline tests read loop optima from docs/in_the_loop_log.jsonl. The test that runs
-CalculiX needs `ccx` on PATH, or a host in $PETRA_CCX_HOST that runs it over ssh, and is
-skipped when it has neither.
+The offline tests read loop optima from docs/in_the_loop_log.jsonl: each row's `card`, the
+task's card, and its `optimum`, the design. The test that runs CalculiX needs `ccx` on PATH,
+or a host in $PETRA_CCX_HOST that runs it over ssh, and is skipped when it has neither.
 """
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ OPTIMA = {json.loads(line)["task"]: json.loads(line) for line in (ROOT / "docs" 
 
 
 def element(task: str):
-    return cc.elements(OPTIMA[task]["optimum"], task)[0]
+    return cc.elements(OPTIMA[task]["card"], OPTIMA[task]["optimum"], task)[0]
 
 
 def node_set(inp: str, name: str) -> list[int]:
@@ -65,8 +65,8 @@ class TheMesh(unittest.TestCase):
 
 class PetrasStrengths(unittest.TestCase):
     def test_the_governing_state_is_the_capacity_petra_check_reports(self):
-        text = OPTIMA["202-001"]["optimum"]
-        governing = petra.check(text)["governing"]["strength"]
+        row = OPTIMA["202-001"]
+        governing = petra.check(row["card"], row["optimum"])["governing"]["strength"]
         el = element("202-001")
         state = min((s for s in el.states if s.run == "rupture"), key=lambda s: s.design)
         self.assertEqual(state.what, governing["check"])
@@ -103,7 +103,7 @@ class PetrasStrengths(unittest.TestCase):
     def test_kinds_that_bend_out_of_plane_have_no_element(self):
         for task, row in OPTIMA.items():
             if row["kind"] in ("seated", "stiffened_seat", "hanger") and row["optimum"]:
-                self.assertEqual(cc.elements(row["optimum"], task), [])
+                self.assertEqual(cc.elements(row["card"], row["optimum"], task), [])
                 break
 
 

@@ -12,6 +12,7 @@ is rejected at lowering.
 import unittest
 from pathlib import Path
 
+from petra.files import read_pair
 from petra.lang import load_design, parse_design
 from petra.models.steel import calc, cyclic
 from petra.models.base import ComponentError
@@ -27,13 +28,18 @@ REGISTRY = build_registry()
 STEEL = Path(__file__).resolve().parents[1] / "examples" / "steel"
 
 
-def variant(name: str, *edits: tuple[str, str]):
-    text = (STEEL / f"{name}.petra").read_text(encoding="utf-8")
+def edited(text: str, edits: tuple[tuple[str, str], ...], file: str) -> str:
     for old, new in edits:
         if old not in text:
-            raise AssertionError(f"{old!r} is not in {name}.petra")
+            raise AssertionError(f"{old!r} is not in {file}")
         text = text.replace(old, new)
-    return parse_design(text, f"{name}.petra", REGISTRY)
+    return text
+
+
+def variant(name: str, *edits: tuple[str, str], card: tuple[tuple[str, str], ...] = ()):
+    """The example with `edits` made to its design and `card` to its card."""
+    card_text, text = read_pair(STEEL / f"{name}.petra")
+    return parse_design(edited(card_text, card, f"{name}.card"), edited(text, edits, f"{name}.petra"), f"{name}.petra", REGISTRY)
 
 
 VARIANTS = {
@@ -123,7 +129,8 @@ class LoadPath(unittest.TestCase):
 
 class AxialForce(unittest.TestCase):
     def test_an_axial_force_on_a_shear_connection_stays_unknown(self):
-        d = variant("shear_tab", ("  on st1 shear in [0 kip, 45 kip]\n", "  on st1 shear in [0 kip, 45 kip]\n  on st1 axial in [0 kip, 10 kip]\n"))
+        d = variant("shear_tab", card=(("  on st1 shear in [0 kip, 45 kip]\n",
+                                        "  on st1 shear in [0 kip, 45 kip]\n  on st1 axial in [0 kip, 10 kip]\n"),))
         report = check_design(d, REGISTRY, (SolverSource(),))
         found = {(o.obligation.requirement if hasattr(o, "obligation") else o.requirement).id: type(o).__name__ for o in report.outcomes}
         self.assertEqual(found.pop("st1/steel.load_path/coverage.steel.load_path"), "Open")

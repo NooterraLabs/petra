@@ -1,16 +1,17 @@
 """Recursive-descent parser for the grammar in syntax.py. Trusted front end.
 
 One function per grammar rule. No backtracking beyond one token of lookahead, except the
-claim rule, which looks for "P" "(" to pick the probability form. A leading IDENT that is
-not in DECLS starts a component block; whether it names a registered kind is checked by
-lower.py against models.KINDS, so the parser knows no component kind.
+claim rule, which looks for "P" "(" to pick the probability form. In a design, a leading
+IDENT that is not in DECLS starts a component block; whether it names a registered kind is
+checked by lower.py against models.KINDS, so the parser knows no component kind.
 
 The tree it builds (lower.py reads it; leaves are lexer Tokens, so every name keeps its
 position):
 
-    design      (name, items)             items: owner (STRING) | environment (IDENT)
+    card        (name, items)             items: owner (STRING) | environment (IDENT)
     param       (name, range)
     ambient     (bound | paramref)
+    given       (name, bound)             in a card; (name,) as an argument in a design
     component   (kind, name, attrs)       attr: (key, args)
     load        (name, entries, sig?)     entry: (path, field, bound | paramref)
     tests       (name, path, trials, failures, level, sig?, block sig?)
@@ -28,12 +29,15 @@ from __future__ import annotations
 from .lexer import Kind, LolaSyntaxError, Token, tokenize
 from .syntax import File, Node
 
-DECLS: tuple[str, ...] = ("design", "param", "ambient", "load", "tests", "claim", "waive")
-"""Design-level keywords. Component kinds are not here: they belong to the domains."""
+DECLS: tuple[str, ...] = ("card", "param", "ambient", "given", "load", "tests", "claim", "waive")
+"""What a card declares. Component kinds are not here: they belong to the domains."""
+
+IN_DESIGN: tuple[str, ...] = ("param",)
+"""The keywords of DECLS a design also takes. The rest of a design is component blocks."""
 
 LANGUAGE_VERSION = 0
 
-NOT_UNITS: frozenset[str] = frozenset({"in", "mean", "signed", "measured", "source", "param", "under", "from", "margin"})
+NOT_UNITS: frozenset[str] = frozenset({"in", "mean", "signed", "measured", "source", "param", "given", "under", "from", "margin"})
 """Words the grammar puts right after a quantity, so an IDENT after a NUMBER is its unit
 unless it is one of these."""
 
@@ -59,9 +63,10 @@ def _node(head: str, at: Token, *args: object, **props: object) -> Node:
 
 
 class Parser:
-    def __init__(self, tokens: tuple[Token, ...], path: str) -> None:
+    def __init__(self, tokens: tuple[Token, ...], path: str, card: bool) -> None:
         self.tokens = tokens
         self.path = path
+        self.card = card
         self.pos = 0
 
     # --- token access ------------------------------------------------------------
@@ -126,19 +131,26 @@ class Parser:
         return File(self.path, version, tuple(decls))
 
     def decl(self) -> Node:
-        """Dispatch on the leading keyword through DECLS; any other IDENT followed by an
-        IDENT and "{" is a component block. Anything else raises LolaSyntaxError listing
-        the keywords DECLS accepts."""
+        """A card takes every keyword of DECLS and a design the ones of IN_DESIGN. Any
+        other IDENT followed by an IDENT and "{" is a component block, which only a design
+        holds. Anything else raises LolaSyntaxError saying which file takes it."""
         tok = self._peek()
-        if tok.kind is Kind.IDENT and tok.text in DECLS:
+        word = tok.kind is Kind.IDENT and tok.text in DECLS
+        if word and (self.card or tok.text in IN_DESIGN):
             return getattr(self, f"_{tok.text}")()
-        if tok.kind is Kind.IDENT and self._is(Kind.IDENT, ahead=1) and self._is(Kind.PUNCT, "{", ahead=2):
+        block = tok.kind is Kind.IDENT and self._is(Kind.IDENT, ahead=1) and self._is(Kind.PUNCT, "{", ahead=2)
+        if self.card:
+            raise self._error(tok, f"a card holds no component block: '{tok.text} {self._peek(1).text}' belongs in the design" if block
+                              else f"expected a declaration ({', '.join(DECLS)}), found {_describe(tok)}")
+        if word or self._is(Kind.IDENT, "design"):
+            raise self._error(tok, f"'{tok.text}' belongs in the card: a design holds component blocks and params")
+        if block:
             return self._component()
-        raise self._error(tok, f"expected a declaration ({', '.join(DECLS)}) or a component block '<kind> <name> {{', found {_describe(tok)}")
+        raise self._error(tok, f"expected 'param' or a component block '<kind> <name> {{', found {_describe(tok)}")
 
-    def _design(self) -> Node:
-        kw = self._word("design")
-        name = self._string("the design name")
+    def _card(self) -> Node:
+        kw = self._word("card")
+        name = self._string("the card's name")
         self._open_block()
         items = []
         while not self._is(Kind.PUNCT, "}"):
@@ -153,7 +165,7 @@ class Parser:
                 raise self._error(tok, f"expected 'owner', 'environment' or '}}', found {_describe(tok)}")
             self._newline()
         self._next()
-        return _node("design", kw, name, tuple(items))
+        return _node("card", kw, name, tuple(items))
 
     def _param(self) -> Node:
         kw = self._word("param")
@@ -164,6 +176,13 @@ class Parser:
     def _ambient(self) -> Node:
         kw = self._word("ambient")
         return _node("ambient", kw, self._bound())
+
+    def _given(self) -> Node:
+        kw = self._word("given")
+        name = self._ident("a name for the given bound")
+        if not self._is(Kind.IDENT, "in"):
+            raise self._error(self._peek(), f"expected a bound 'in [lo, hi]', found {_describe(self._peek())}")
+        return _node("given", kw, name, self._bound())
 
     def _component(self) -> Node:
         kind = self._ident("a component kind")
@@ -281,10 +300,14 @@ class Parser:
 
     def _arg(self) -> Node:
         tok = self._peek()
-        if tok.kind is Kind.IDENT and tok.text in ("in", "param"):
+        if self._is(Kind.IDENT, "param"):
             return self._bound()
-        if tok.kind is Kind.IDENT and tok.text in _AFTER_RANGE:
-            raise self._error(tok, f"'{tok.text}' must follow a range 'in [lo, hi]'")
+        if self._is(Kind.IDENT, "given"):
+            self._next()
+            return _node("given", tok, self._ident("the name of a bound the card gives"))
+        if tok.kind is Kind.IDENT and tok.text in ("in", *_AFTER_RANGE):
+            raise self._error(tok, "a design signs no bound: the card states it as 'given NAME in [lo, hi] signed ...', "
+                                   "and this line reads it as 'given NAME'")
         if tok.kind is Kind.IDENT:
             return self._ref()
         if tok.kind is Kind.NUMBER:
@@ -383,5 +406,6 @@ class Parser:
         return _node("qoi", first, tuple(tok for tok, _ in parts[:-1]), name)
 
 
-def parse(text: str, path: str) -> File:
-    return Parser(tokenize(text, path), path).file()
+def parse(text: str, path: str, card: bool) -> File:
+    """The tree of a card's text, or of a design's."""
+    return Parser(tokenize(text, path), path, card).file()

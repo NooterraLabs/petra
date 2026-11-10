@@ -4,10 +4,6 @@ petra 0
 # Design 498 of `python scripts/absurd_gap.py --seed 1` at commit b9e9792 (docs/absurd_gap.md):
 # end plate: 12 in across, wider than the 8.88 in between the W10x49's flanges.
 
-design "absurd-00498" {
-  owner "gate@petra.dev"
-}
-
 shear_end_plate c1 {
   basis asd
   beam W18x50 grade steel.A992
@@ -21,9 +17,4 @@ shear_end_plate c1 {
   support_gauge 3.5 inch
   weld electrode.E70 size 0.3125 inch sides 2
   weathering yes
-}
-
-load gate {
-  on c1 shear in [0 kip, 6.421 kip]
-  signed "gate@petra.dev" source "steel gate generator"
 }

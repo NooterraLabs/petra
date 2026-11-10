@@ -1,0 +1,19 @@
+petra 0
+
+card "family-warren-footbridge-panel" {
+  owner "petra.library@example.org"
+  environment indoor_dry
+}
+
+param load_d in [-28.5 kN, 0 kN]
+param load_e in [-28.5 kN, 0 kN]
+
+load crowd {
+  on frame.D fy param load_d
+  on frame.E fy param load_e
+  signed "petra.library@example.org" source "family definition"
+}
+
+claim strength:   frame.collapse_factor >= 1.5 under crowd
+claim stability:  frame.stability_factor >= 3 under crowd
+claim stress:     frame.member(diag_ad).stress <= 235 MPa under crowd

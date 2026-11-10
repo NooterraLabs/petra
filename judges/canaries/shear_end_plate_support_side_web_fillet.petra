@@ -4,10 +4,6 @@ petra 0
 # Design 472 of `python scripts/absurd_gap.py --seed 1` at commit b9e9792 (docs/absurd_gap.md):
 # end plate: 8 in across, wider than the W10x49's 7.88 in flat web.
 
-design "absurd-00472" {
-  owner "gate@petra.dev"
-}
-
 shear_end_plate c1 {
   basis lrfd
   beam W16x31 grade steel.A992
@@ -22,9 +18,4 @@ shear_end_plate c1 {
   weld electrode.E70 size 0.1875 inch sides 2
   deformation considered
   setback 0.5 inch
-}
-
-load gate {
-  on c1 shear in [0 kip, 14.850 kip]
-  signed "gate@petra.dev" source "steel gate generator"
 }

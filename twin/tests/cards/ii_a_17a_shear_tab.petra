@@ -15,7 +15,3 @@ shear_tab ii_a_17a {
   bolt_line 3 inch
   weld electrode.E70 size 0.1875 inch sides 2
 }
-
-load reaction {
-  on ii_a_17a shear in [0 kip, 49.6 kip]
-}

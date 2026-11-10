@@ -1,8 +1,11 @@
-"""Parse a .petra design card into components and load entries.
+"""Parse a card and the design that answers it into components and load entries.
 
-The twin's own reader, written from the language reference and the example cards. It keeps
-what the steel checks need: each component's attribute lines and each load entry's range.
-Quantities are exact fractions in inches, kips and ksi.
+The twin's own reader, written from the language reference and the example pairs. The card
+(NAME.card) holds what is asked: the load cases, each `given` bound, and the params a load
+reads. The design (NAME.petra) holds the components and its own params, and a component's
+line reads a bound the card gives as `given NAME`. The reader keeps what the steel checks
+need: each component's attribute lines and each load entry's range. Quantities are exact
+fractions in inches, kips and ksi.
 """
 
 import re
@@ -47,7 +50,7 @@ UNITS = {
 
 
 class CardError(ValueError):
-    pass
+    """A card or a design the reader cannot read. The message names the file and the line."""
 
 
 @dataclass(frozen=True)
@@ -74,10 +77,12 @@ class LoadEntry:
 
 
 @dataclass(frozen=True)
-class Card:
+class Pair:
+    """A card and the design that answers it: the design's components, the card's loads."""
+
     components: tuple
     loads: tuple
-    params: dict  # name -> (lo, hi) Quantities of each `param NAME in [lo, hi]`
+    params: dict  # name -> (lo, hi) Quantities of each `param NAME in [lo, hi]`, in either file
 
 
 _TOKEN = re.compile(
@@ -91,8 +96,10 @@ _TOKEN = re.compile(
 )
 
 _SIGNATURE_WORDS = {"signed", "measured"}
-_IGNORED_BLOCKS = {"design", "tests"}
+_BOUND_WORDS = {"in", "mean", "source"} | _SIGNATURE_WORDS
+_IGNORED_BLOCKS = {"card", "tests"}
 _IGNORED_LINES = {"ambient", "claim", "waive"}
+_CARD_WORDS = {"load", "given"} | _IGNORED_BLOCKS | _IGNORED_LINES
 
 
 def _strip_comment(line):
@@ -116,13 +123,13 @@ def _strip_comment(line):
     return "".join(out)
 
 
-def _tokens(text, lineno):
+def _tokens(text, at):
     pos, out = 0, []
     text = text.rstrip()
     while pos < len(text):
         m = _TOKEN.match(text, pos)
         if not m or m.end() == pos:
-            raise CardError(f"line {lineno}: cannot read {text[pos:]!r}")
+            raise CardError(f"{at}: cannot read {text[pos:]!r}")
         pos = m.end()
         if m.group("string") is not None:
             out.append(("string", m.group("string")[1:-1]))
@@ -155,43 +162,73 @@ def _attach_units(tokens):
     return out
 
 
-def _bound(tokens, lineno):
+def _bound(tokens, at):
     """Read `in [lo, hi]` from the front of tokens and return (lo, hi)."""
     if len(tokens) < 6 or tokens[0] != ("ident", "in") or tokens[1] != ("punct", "["):
-        raise CardError(f"line {lineno}: expected a bound `in [lo, hi]`")
+        raise CardError(f"{at}: expected a bound `in [lo, hi]`")
     lo, comma, hi, close = tokens[2], tokens[3], tokens[4], tokens[5]
     if lo[0] != "qty" or hi[0] != "qty" or comma != ("punct", ",") or close != ("punct", "]"):
-        raise CardError(f"line {lineno}: malformed range")
+        raise CardError(f"{at}: malformed range")
     return lo[1], hi[1]
 
 
-def parse(text):
-    components, loads, params = [], [], {}
+def _args(tokens, given, read, at):
+    """A component line's arguments, with each `given NAME` as one ("bound", (lo, hi)) token:
+    the bound the card gives under that name. A design states no bound of its own."""
+    out, i = [], 0
+    while i < len(tokens):
+        if tokens[i] == ("ident", "given"):
+            name = tokens[i + 1][1] if i + 1 < len(tokens) and tokens[i + 1][0] == "ident" else None
+            if name is None:
+                raise CardError(f"{at}: `given` is followed by the name of a bound the card gives")
+            if name not in given:
+                raise CardError(f"{at}: the card gives no bound named {name}")
+            read.add(name)
+            out.append(("bound", given[name]))
+            i += 2
+            continue
+        if tokens[i][0] == "ident" and tokens[i][1] in _BOUND_WORDS:
+            raise CardError(f"{at}: a design states no bound; the card gives it and the line reads `given NAME`")
+        out.append(tokens[i])
+        i += 1
+    return tuple(out)
+
+
+def _read(text, file, given=None):
+    """One file's components, load entries, params and given bounds. `file` is "card" or
+    "design" and settles which of them the file may hold. `given` is what the card gives a
+    design, which reads every one of them."""
+    components, loads, params, givens, read = [], [], {}, {}, set()
     block = None
     for lineno, raw in enumerate(text.splitlines(), 1):
-        toks = _tokens(_strip_comment(raw), lineno)
+        at = f"{file} line {lineno}"
+        toks = _tokens(_strip_comment(raw), at)
         if not toks:
             continue
         if block is None:
             if toks[0] == ("ident", "petra"):
                 continue
             head = toks[0][1]
+            if file == "design" and head in _CARD_WORDS:
+                raise CardError(f"{at}: `{head}` belongs in the card")
             if toks[-1] == ("punct", "{"):
                 if head in _IGNORED_BLOCKS:
                     block = ("ignored", None)
                 elif head == "load":
                     block = ("load", toks[1][1])
+                elif file == "card":
+                    raise CardError(f"{at}: a card holds no component block; `{head}` belongs in the design")
                 else:
                     if len(toks) != 3 or toks[1][0] != "ident":
-                        raise CardError(f"line {lineno}: expected `KIND NAME {{`")
+                        raise CardError(f"{at}: expected `KIND NAME {{`")
                     block = ("component", Component(head, toks[1][1], {}, {}))
                 continue
             if head in _IGNORED_LINES:
                 continue
-            if head == "param" and len(toks) > 2 and toks[1][0] == "ident":
-                params[toks[1][1]] = _bound(toks[2:], lineno)
+            if head in ("param", "given") and len(toks) > 2 and toks[1][0] == "ident":
+                (params if head == "param" else givens)[toks[1][1]] = _bound(toks[2:], at)
                 continue
-            raise CardError(f"line {lineno}: unexpected {head!r} outside a block")
+            raise CardError(f"{at}: unexpected {head!r} outside a block")
         if toks == [("punct", "}")]:
             if block[0] == "component":
                 components.append(block[1])
@@ -204,15 +241,28 @@ def parse(text):
             if toks[0][1] in _SIGNATURE_WORDS:
                 continue
             if toks[0] != ("ident", "on") or len(toks) < 4:
-                raise CardError(f"line {lineno}: a load entry starts with `on TARGET FIELD`")
-            lo, hi = _bound(toks[3:], lineno)
+                raise CardError(f"{at}: a load entry starts with `on TARGET FIELD`")
+            lo, hi = _bound(toks[3:], at)
             loads.append(LoadEntry(owner, toks[1][1], toks[2][1], lo, hi))
             continue
         key = toks[0][1]
         if key in owner.lines:
-            raise CardError(f"line {lineno}: `{key}` appears twice in {owner.name}")
-        owner.lines[key] = tuple(toks[1:])
+            raise CardError(f"{at}: `{key}` appears twice in {owner.name}")
+        owner.lines[key] = _args(toks[1:], given or {}, read, at)
         owner.line_numbers[key] = lineno
     if block is not None:
-        raise CardError("unclosed block at end of file")
-    return Card(tuple(components), tuple(loads), params)
+        raise CardError(f"{file}: unclosed block at end of file")
+    unread = sorted(set(given or ()) - read)
+    if unread:
+        raise CardError(f"card: no component reads the given {', '.join(unread)}")
+    return components, loads, params, givens
+
+
+def parse(card, design):
+    """Read the text of a card and of the design that answers it."""
+    _, loads, params, givens = _read(card, "card")
+    components, _, own, _ = _read(design, "design", givens)
+    twice = sorted(params.keys() & own.keys())
+    if twice:
+        raise CardError(f"design: param {twice[0]} is declared in the card too")
+    return Pair(tuple(components), tuple(loads), {**params, **own})

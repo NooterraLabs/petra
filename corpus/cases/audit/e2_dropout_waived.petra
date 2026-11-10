@@ -1,20 +1,9 @@
 petra 0
 
-design "dropout-waived" {
-  owner "e.designer@example.org"
-  environment indoor_dry
-}
-
 board power {
-  supply usb voltage in [4.75 V, 5.25 V] signed "e.designer@example.org" source "USB 2.0 port voltage" capacity in [500 mA, 500 mA] signed "e.designer@example.org" source "USB 2.0 port current"
+  supply usb voltage given voltage capacity given capacity
   regulator v5 part reg.ldo1117_5v0_sot223 from usb
   sink sensor from v5
 }
 
-load run {
-  on power.sensor current in [1 mA, 20 mA]
-  signed "e.designer@example.org" source "sensor datasheet"
-}
-
-claim rail_ok: power.v5.voltage >= 4.9 V
 waive dc.regulator_headroom on power.v5 by "e.designer@example.org" reason "USB is close enough to 5 V"

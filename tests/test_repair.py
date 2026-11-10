@@ -1,5 +1,5 @@
-"""petra.check(text) returns plain data, and a FAIL names the input that lowers its governing
-check the most and the way to move it (petra/repair.py).
+"""petra.check(card, design) returns plain data, and a FAIL names the input of the design
+that lowers its governing check the most and the way to move it (petra/repair.py).
 
 The 60 kip shear tab of tests/fixtures/readout/job5_fail_60k.petra fails on its block shear
 and its bolts. The plate's one-row block takes the elastic method's resultant on its bolt,
@@ -16,6 +16,7 @@ from pathlib import Path
 
 import petra
 from petra.cli import EXIT_CODES, main
+from petra.files import read_pair
 from petra.repair import sites, written
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -38,8 +39,8 @@ def obligation(result: dict, requirement: str) -> dict:
 class Failing(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.text = FAILING.read_text(encoding="utf-8")
-        cls.result = petra.check(cls.text)
+        cls.card, cls.text = read_pair(FAILING)
+        cls.result = petra.check(cls.card, cls.text)
 
     def test_the_result_is_plain_json(self):
         self.assertEqual(json.loads(json.dumps(self.result)), self.result, "json round-trips the result unchanged")
@@ -66,7 +67,7 @@ class Failing(unittest.TestCase):
 
     def test_a_move_reads_what_checking_the_edited_design_reads(self):
         for m in self.result["repair"]["moves"][:2]:
-            after = petra.check(set_number(self.text, m["line"], m["from"], m["to"]), repair=False)
+            after = petra.check(self.card, set_number(self.text, m["line"], m["from"], m["to"]), repair=False)
             self.assertAlmostEqual(obligation(after, self.result["repair"]["check"])["utilisation"], m["utilisation"], msg=m["input"])
             self.assertEqual(after["status"], m["status"], m["input"])
 
@@ -74,31 +75,36 @@ class Failing(unittest.TestCase):
         cleared = [m for m in self.result["repair"]["moves"] if m["clears"] is not None]
         self.assertTrue(cleared, "some move clears the block shear")
         m = cleared[0]
-        after = petra.check(set_number(self.text, m["line"], m["from"], m["clears"]["to"]), repair=False)
+        after = petra.check(self.card, set_number(self.text, m["line"], m["from"], m["clears"]["to"]), repair=False)
         self.assertEqual(obligation(after, self.result["repair"]["check"])["outcome"], "certified")
         self.assertEqual(after["status"], m["clears"]["status"])
 
 
 class Others(unittest.TestCase):
     def test_a_pass_has_no_repair(self):
-        result = petra.check(PASSING.read_text(encoding="utf-8"))
+        result = petra.check(*read_pair(PASSING))
         self.assertEqual((result["status"], result["repair"]), ("PASS", None))
 
     def test_an_input_error_is_data_not_an_exception(self):
-        result = petra.check("petra 0\ndesign {\n")
+        card = read_pair(PASSING)[0]
+        result = petra.check(card, "petra 0\nshear_tab {\n")
         self.assertEqual(result["status"], "INPUT_ERROR")
-        self.assertIn("<text>:2", result["error"], "the error names the line")
+        self.assertIn("<design>:2", result["error"], "the error names the design and the line")
+        result = petra.check("petra 0\ncard {\n", read_pair(PASSING)[1])
+        self.assertEqual(result["status"], "INPUT_ERROR")
+        self.assertIn("<design>.card:2", result["error"], "the error names the card and the line")
 
     def test_a_step_is_the_next_value_the_design_accepts(self):
         """A 1/4 in plate bears on 3/4 in bolts at 40 kip: the plate's next stocked thickness
         is 5/16 in, and the next RCSC Table 5.2 bolt below 3/4 in is 5/8 in."""
-        text = FAILING.read_text(encoding="utf-8").replace("thickness 0.375 inch", "thickness 0.25 inch") \
-            .replace("60 kip]", "40 kip]").replace("threads included", "threads excluded")
-        moves = {(m["input"], m["direction"]): m for m in petra.check(text)["repair"]["moves"]}
+        card, text = read_pair(FAILING)
+        card = card.replace("60 kip]", "40 kip]")
+        text = text.replace("thickness 0.375 inch", "thickness 0.25 inch").replace("threads included", "threads excluded")
+        moves = {(m["input"], m["direction"]): m for m in petra.check(card, text)["repair"]["moves"]}
         self.assertEqual(moves[("tab.plate thickness", "increase")]["to"], "0.3125")
         self.assertEqual(moves[("tab.bolts diameter", "decrease")]["to"], "0.625")
         for m in moves.values():
-            self.assertNotEqual(petra.check(set_number(text, m["line"], m["from"], m["to"]), repair=False)["status"], "INPUT_ERROR", m["input"])
+            self.assertNotEqual(petra.check(card, set_number(text, m["line"], m["from"], m["to"]), repair=False)["status"], "INPUT_ERROR", m["input"])
 
 
 class Swaps(unittest.TestCase):
@@ -108,9 +114,9 @@ class Swaps(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.text = (ROOT / "examples" / "steel" / "shear_tee.petra").read_text(encoding="utf-8") \
-            .replace("support W14x90 flange", "support W10x49 web")
-        cls.result = petra.check(cls.text)
+        cls.card, text = read_pair(ROOT / "examples" / "steel" / "shear_tee.petra")
+        cls.text = text.replace("support W14x90 flange", "support W10x49 web")
+        cls.result = petra.check(cls.card, cls.text)
 
     def test_when_no_number_lowers_the_check_the_moves_swap_the_tee(self):
         self.assertEqual(self.result["repair"]["check"], "tee1/steel.web_fit/coverage.steel.web_fit")
@@ -120,7 +126,7 @@ class Swaps(unittest.TestCase):
 
     def test_a_swap_reads_what_checking_the_swapped_design_reads(self):
         for m in self.result["repair"]["moves"][:3]:
-            after = petra.check(self.text.replace("tee WT6x25", f"tee {m['to']}"), repair=False)
+            after = petra.check(self.card, self.text.replace("tee WT6x25", f"tee {m['to']}"), repair=False)
             self.assertAlmostEqual(obligation(after, self.result["repair"]["check"])["utilisation"], m["utilisation"], msg=m["to"])
             self.assertLess(m["utilisation"], self.result["repair"]["utilisation"], m["to"])
             self.assertEqual(after["status"], m["status"], m["to"])
@@ -134,13 +140,16 @@ class Swaps(unittest.TestCase):
 
 
 class Sites(unittest.TestCase):
-    def test_numbers_in_a_bound_or_outside_a_component_are_not_sites(self):
-        text = FAILING.read_text(encoding="utf-8").replace("  rows 3\n", "  rows 3\n  top in [3 inch, 3.125 inch] signed \"x\" source \"y\"\n")
+    def test_a_bound_the_card_gives_and_a_coordinate_are_not_sites(self):
+        text = read_pair(FAILING)[1].replace("  rows 3\n", "  rows 3\n  top given top\n  at (1 inch, 2 inch)\n")
         names = [s.input for s in sites(text)]
         self.assertIn("tab.rows", names)
         self.assertEqual(len(names), len(set(names)), "each site once")
-        self.assertFalse(any("reaction" in n for n in names), "the load is signed by its owner, not an input to move")
-        self.assertEqual(names.count("tab.top"), 1, "the toleranced top is a bound, not a site")
+        self.assertEqual(names.count("tab.top"), 1, "the top the card gives is a bound, not a site")
+        self.assertNotIn("tab.at", names, "a tuple is where the design is drawn")
+
+    def test_nothing_in_a_card_is_a_site(self):
+        self.assertEqual(sites(read_pair(FAILING)[0]), (), "a repair changes the design and never what was asked of it")
 
     def test_a_number_is_written_as_the_design_wrote_its_neighbour(self):
         from fractions import Fraction
@@ -163,7 +172,7 @@ class Cli(unittest.TestCase):
         lines = out.splitlines()
         at = next(i for i, line in enumerate(lines) if line.startswith("repair "))
         self.assertTrue(lines[at - 1].startswith("governing  "), "the repair follows the governing lines")
-        self.assertIn("increase  tab.rows (line 19) from 3 to 4", lines[at + 1])
+        self.assertIn("increase  tab.rows (line 15) from 3 to 4", lines[at + 1])
 
     def test_the_json_carries_the_repair(self):
         code, out = self.run_cli("check", str(FAILING), "--json")

@@ -7,11 +7,6 @@ petra 0
 # and the kernel checks the Farkas ray.
 # Expected verdict: FAIL on frame/truss.plastic_collapse.
 
-design "warren-footbridge-panel-rev-c" {
-  owner "a.reviewer@example.org"
-  environment indoor_dry
-}
-
 truss frame {
   material steel.S355
   section chs.60_3x3_2
@@ -30,11 +25,3 @@ truss frame {
   member diag_be:   B -- E
   member diag_ec:   E -- C
 }
-
-load crowd {
-  on frame.D fy in [-60 kN, -40 kN]
-  on frame.E fy in [-60 kN, -40 kN]
-  signed "client.structures@example.org" source "brief rev C, section 3.2"
-}
-
-claim strength: frame.collapse_factor >= 1.5 under crowd

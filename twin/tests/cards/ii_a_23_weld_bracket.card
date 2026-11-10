@@ -1,0 +1,5 @@
+petra 0
+
+load reaction {
+  on ii_a_23 shear in [0 kip, 27 kip]
+}

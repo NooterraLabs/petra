@@ -1,0 +1,17 @@
+petra 0
+
+card "mast-bracket-coastal" {
+  owner "m.engineer@example.org"
+  environment marine_c5
+}
+
+given torque in [40 Nm, 50 Nm] signed "fitter.lead@example.org" source "assembly spec AS-12 rev C"
+given nut_factor in [0.16, 0.22] measured "test.lab@example.org" source "torque-tension report TT-2026-031"
+given load_share in [0.10, 0.25] signed "m.engineer@example.org" source "joint diagram calc JD-7"
+
+load wind {
+  on bracket force in [0 kN, 12 kN]
+  signed "client.structures@example.org" source "wind study WS-4, 50-year return"
+}
+
+claim tension: bracket.tension_utilisation <= 0.9 under wind

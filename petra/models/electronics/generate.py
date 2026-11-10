@@ -2,8 +2,9 @@
 Tooling: nothing here changes a verdict.
 
 `generate(n, seed, registry, start)` yields designs round-robin over KINDS. Each is a
-.petra source with one board named b, fed by one supply named vin, in environment
-indoor_dry, with one load case named run when the board has a sink:
+design with one board named b, fed by one supply named vin, and a card in environment
+indoor_dry that gives the supply's voltage and capacity, with one load case named run
+when the board has a sink:
 
     divider    a divider from the supply, with a window claim on its output
     led        a string of LEDs and its resistor, with a claim on the least current
@@ -128,25 +129,30 @@ class Generated:
     redraws: int
 
     @property
+    def card(self) -> str:
+        return render(self)[0]
+
+    @property
     def text(self) -> str:
-        return render(self)
+        return render(self)[1]
 
 
-def render(g: Generated) -> str:
+def render(g: Generated) -> tuple[str, str]:
+    """The card's text and the design's."""
     lo, hi, capacity = g.supply
-    out = ["petra 0", "", f'design "{g.name}" {{', '  owner "gate@petra.dev"', "  environment indoor_dry", "}", "",
-           "board b {",
-           f"  supply vin voltage in [{decimal(lo)} V, {decimal(hi)} V] {SIGNATURE} "
-           f"capacity in [{decimal(capacity)} A, {decimal(capacity)} A] {SIGNATURE}"]
+    card = ["petra 0", "", f'card "{g.name}" {{', '  owner "gate@petra.dev"', "  environment indoor_dry", "}", "",
+            f"given voltage in [{decimal(lo)} V, {decimal(hi)} V] {SIGNATURE}",
+            f"given capacity in [{decimal(capacity)} A, {decimal(capacity)} A] {SIGNATURE}"]
+    if g.loads:
+        card += ["", "load run {"]
+        card += [f"  on b.{sink} current in [{decimal(a / MILLI)} mA, {decimal(b / MILLI)} mA]" for sink, a, b in g.loads]
+        card += [f"  {SIGNATURE}", "}"]
+    if g.claims:
+        card += [""] + [c.line() for c in g.claims]
+    out = ["petra 0", "", "board b {", "  supply vin voltage given voltage capacity given capacity"]
     out += [f"  {line}" for _, line in g.lines]
     out.append("}")
-    if g.loads:
-        out += ["", "load run {"]
-        out += [f"  on b.{sink} current in [{decimal(a / MILLI)} mA, {decimal(b / MILLI)} mA]" for sink, a, b in g.loads]
-        out += [f"  {SIGNATURE}", "}"]
-    if g.claims:
-        out += [""] + [c.line() for c in g.claims]
-    return "\n".join(out) + "\n"
+    return "\n".join(card) + "\n", "\n".join(out) + "\n"
 
 
 def fact(registry: Registry, part: str, prop: str) -> Fraction:
@@ -338,8 +344,8 @@ BUILDERS: Mapping[str, Callable[[_Draw], None]] = {
 }
 
 
-def check(text: str, registry: Registry, name: str = "gate.petra"):
-    return check_design(parse_design(text, name, registry), registry, (SolverSource(),))
+def check(card: str, text: str, registry: Registry, name: str = "gate.petra"):
+    return check_design(parse_design(card, text, name, registry), registry, (SolverSource(),))
 
 
 def extremes_of(g: Generated, probes: list[tuple[str, str, str]], registry: Registry) -> dict[tuple[str, str], Fraction]:
@@ -347,7 +353,7 @@ def extremes_of(g: Generated, probes: list[tuple[str, str, str]], registry: Regi
     claim it cannot meet; a probe the deck does not refute is left out."""
     claims = tuple(Claim(f"probe{j}", subject, side, IMPOSSIBLE[(side, unit)], unit, "fail")
                    for j, (subject, side, unit) in enumerate(probes))
-    report = check(render(replace(g, claims=claims)), registry)
+    report = check(*render(replace(g, claims=claims)), registry)
     out: dict[tuple[str, str], Fraction] = {}
     for c in claims:
         found = [f.governing for f in report.findings if f.entry == c.name and f.outcome == "refuted" and f.governing]

@@ -3,10 +3,6 @@ petra 0
 # Steel gate design gate-1-03786. support_gauge runs from the angle's heel to the bolt line in the
 # outstanding leg, so 5.5 in. on the 3.5 in. short leg puts that line 2 in. past the leg's toe.
 
-design "gate-1-03786" {
-  owner "gate@petra.dev"
-}
-
 single_angle c1 {
   basis asd
   beam W12x26 grade steel.A992
@@ -21,9 +17,4 @@ single_angle c1 {
   beam_gauge 2 inch
   support_side bolted
   support_gauge 5.5 inch
-}
-
-load gate {
-  on c1 shear in [0 kip, 0.001 kip]
-  signed "gate@petra.dev" source "steel gate generator"
 }

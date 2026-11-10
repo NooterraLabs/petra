@@ -16,7 +16,7 @@ python scripts/calculix_check.py sample                    # every loop optimum 
 python scripts/calculix_check.py report                    # the tables on this page, from the log
 ```
 
-`sample` reads `docs/in_the_loop_log.jsonl` and appends one JSON line per design to `docs/calculix_check_log.jsonl`. It skips designs already in the log, so a stopped run resumes.
+`sample` reads `docs/in_the_loop_log.jsonl` and appends one JSON line per design to `docs/calculix_check_log.jsonl`. Each row of the loop log holds the task's `card` and the `optimum` design that answered it. The log's rows were one text each when the loop ran, and were split into the two without a re-run. It skips designs already in the log, so a stopped run resumes.
 
 ## The model
 

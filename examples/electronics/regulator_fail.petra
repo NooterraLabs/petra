@@ -6,24 +6,11 @@ petra 0
 # maximum temperature. Coverage demands both checks of every regulator, so neither
 # needs a claim; the claim below bounds the junction temperature tighter still.
 
-design "two-regulators-wrong" {
-  owner "e.designer@example.org"
-  environment indoor_dry
-}
-
 board power {
-  supply usb voltage in [4.75 V, 5.25 V] signed "e.designer@example.org" source "USB 2.0 port voltage" capacity in [500 mA, 500 mA] signed "e.designer@example.org" source "USB 2.0 port current"
-  supply dc12 voltage in [11.4 V, 12.6 V] signed "e.designer@example.org" source "adapter datasheet" capacity in [1 A, 1 A] signed "e.designer@example.org" source "adapter datasheet"
+  supply usb voltage given usb_voltage capacity given usb_capacity
+  supply dc12 voltage given dc12_voltage capacity given dc12_capacity
   regulator v5 part reg.ldo1117_5v0_sot223 from usb
   regulator v3 part reg.ldo1117_3v3_sot223 from dc12
   sink sensor from v5
   sink radio from v3
 }
-
-load transmit {
-  on power.sensor current in [1 mA, 20 mA]
-  on power.radio current in [100 mA, 300 mA]
-  signed "e.designer@example.org" source "radio module datasheet, transmit burst"
-}
-
-claim cool: power.v3.junction_temperature <= 100 degC

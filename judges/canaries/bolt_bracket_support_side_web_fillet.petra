@@ -4,10 +4,6 @@ petra 0
 # Design 4623 of `python scripts/absurd_gap.py --seed 1` at commit b9e9792 (docs/absurd_gap.md):
 # bracket plate: 12 in across, wider than the W14x90's 11.38 in flat web.
 
-design "absurd-04623" {
-  owner "gate@petra.dev"
-}
-
 bolt_bracket c1 {
   basis asd
   plate steel.A36 thickness 0.5 inch
@@ -20,9 +16,4 @@ bolt_bracket c1 {
   eccentricity 8 inch
   edge_vertical 3 inch
   plate_edge 1.5 inch
-}
-
-load gate {
-  on c1 shear in [0 kip, 14.747 kip]
-  signed "gate@petra.dev" source "steel gate generator"
 }

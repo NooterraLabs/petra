@@ -134,7 +134,7 @@ from petra.registry import build_registry
 
 registry = build_registry()
 library = petra.Library("library/")
-family = petra.load_design("examples/families/cu_pvc_clipped.petra", registry)
+family = petra.load_design("examples/families/cu_pvc_clipped.petra", registry)   # and cu_pvc_clipped.card beside it
 petra.certify_family(family, registry, library)          # R4 partitions over the whole box, stored
 report = petra.check_file("examples/circuit_pass.petra", library=library)
 # the `hot` and `drop` obligations show source "library": an Instance of the family theorem, checked by the kernel
@@ -201,13 +201,31 @@ These examples ship in `examples/` with the sketch. The sketch is the first comm
 
 `truss_pass.petra` expects PASS. `truss_fail.petra` raises the load to 60 kN per node and expects FAIL by a collapse mechanism on the end diagonal.
 
+The card, `truss_pass.card`:
+
 ```petra
 petra 0
 
-design "warren-footbridge-panel" {
+card "warren-footbridge-panel" {
   owner "a.reviewer@example.org"
   environment indoor_dry
 }
+
+load crowd {
+  on frame.D fy in [-24 kN, -16 kN]
+  on frame.E fy in [-24 kN, -16 kN]
+  signed "client.structures@example.org" source "brief rev B, section 3.2"
+}
+
+claim strength:   frame.collapse_factor >= 1.5 under crowd
+claim stability:  frame.stability_factor >= 3 under crowd
+claim stress:     frame.member(diag_ad).stress <= 235 MPa under crowd
+```
+
+The design, `truss_pass.petra`:
+
+```petra
+petra 0
 
 truss frame {
   material steel.S355
@@ -227,16 +245,6 @@ truss frame {
   member diag_be:   B -- E
   member diag_ec:   E -- C
 }
-
-load crowd {
-  on frame.D fy in [-24 kN, -16 kN]
-  on frame.E fy in [-24 kN, -16 kN]
-  signed "client.structures@example.org" source "brief rev B, section 3.2"
-}
-
-claim strength:   frame.collapse_factor >= 1.5 under crowd
-claim stability:  frame.stability_factor >= 3 under crowd
-claim stress:     frame.member(diag_ad).stress <= 235 MPa under crowd
 ```
 
 A hand calculation gives the margins. At factor 1.5, the end diagonal carries 45 kN of compression against an EN 1993-1-1 compression resistance of 54.0 kN. That is the flexural buckling resistance of 54.7 kN (CHS 60.3x3.2, L = 2.5 m, curve c, relative slenderness 1.66, reduction factor 0.27, at E = 200 GPa), lowered 1.3% by the member check of 6.3.3 for the bending of the diagonal's own weight. The members' own weight adds 0.44 kN, which the factor does not scale. Every load case carries the weight of each member, computed from its section area and steel's density, with gravity at the top of the registry's 9.76 to 9.84 m/s2. The bare Euler load would be 74.1 kN. With the rev C load of 60 kN, the end diagonal needs 112.5 kN, which fails.
@@ -245,18 +253,36 @@ A hand calculation gives the margins. At factor 1.5, the end diagonal carries 45
 
 `circuit_pass.petra` expects PASS, with two obligations reused from the family.
 
+The card, `circuit_pass.card`:
+
 ```petra
 petra 0
 
-design "workshop-lighting-radial" {
+card "workshop-lighting-radial" {
   owner "e.designer@example.org"
   environment indoor_dry
 }
 
 ambient in [10 degC, 40 degC] signed "site.manager@example.org" source "site survey 2026-09"
 
+given fault_current in [0 kA, 6 kA] signed "dno.liaison@example.org" source "DNO letter 2026-08-14"
+
+load lamp_draw {
+  on lighting.lamps current in [0 A, 10 A]
+  signed "e.designer@example.org" source "luminaire schedule rev 3"
+}
+
+claim hot:  lighting.w1.temperature <= 70 degC under lamp_draw
+claim drop: lighting.w1.voltage_drop <= 3 % under lamp_draw
+```
+
+The design, `circuit_pass.petra`:
+
+```petra
+petra 0
+
 circuit lighting {
-  supply mains voltage 230 V fault_current in [0 kA, 6 kA] signed "dno.liaison@example.org" source "DNO letter 2026-08-14"
+  supply mains voltage 230 V fault_current given fault_current
   breaker cb1 part mcb.B10
   wire w1 cable cable.cu_pvc_2_5 length 18 m install install.clipped_direct
   terminal t1 part terminal.lever_4mm2_75C
@@ -267,14 +293,6 @@ circuit lighting {
   connect w1.b -> t1.wire
   connect t1.out -> lamps.in
 }
-
-load lamp_draw {
-  on lighting.lamps current in [0 A, 10 A]
-  signed "e.designer@example.org" source "luminaire schedule rev 3"
-}
-
-claim hot:  lighting.w1.temperature <= 70 degC under lamp_draw
-claim drop: lighting.w1.voltage_drop <= 3 % under lamp_draw
 ```
 
 Coverage adds three obligations:
@@ -289,22 +307,19 @@ The `w1.b -> t1.wire` connection adds three port contracts. The wire's steady-te
 
 `bolt_unknown.petra` expects UNKNOWN.
 
+The card, `bolt_unknown.card`:
+
 ```petra
 petra 0
 
-design "mast-bracket-coastal" {
+card "mast-bracket-coastal" {
   owner "m.engineer@example.org"
   environment marine_c5
 }
 
-joint bracket {
-  bolt bolt.M12_A4_70 count 1
-  plate aluminium.6061_T6 thickness 10 mm
-  plate aluminium.6061_T6 thickness 10 mm
-  torque in [40 Nm, 50 Nm] signed "fitter.lead@example.org" source "assembly spec AS-12 rev C"
-  nut_factor in [0.16, 0.22] measured "test.lab@example.org" source "torque-tension report TT-2026-031"
-  load_share in [0.10, 0.25] signed "m.engineer@example.org" source "joint diagram calc JD-7"
-}
+given torque in [40 Nm, 50 Nm] signed "fitter.lead@example.org" source "assembly spec AS-12 rev C"
+given nut_factor in [0.16, 0.22] measured "test.lab@example.org" source "torque-tension report TT-2026-031"
+given load_share in [0.10, 0.25] signed "m.engineer@example.org" source "joint diagram calc JD-7"
 
 load wind {
   on bracket force in [0 kN, 12 kN]
@@ -314,23 +329,38 @@ load wind {
 claim tension: bracket.tension_utilisation <= 0.9 under wind
 ```
 
+The design, `bolt_unknown.petra`:
+
+```petra
+petra 0
+
+joint bracket {
+  bolt bolt.M12_A4_70 count 1
+  plate aluminium.6061_T6 thickness 10 mm
+  plate aluminium.6061_T6 thickness 10 mm
+  torque given torque
+  nut_factor given nut_factor
+  load_share given load_share
+}
+```
+
 The tension claim is certified, with a worst case of 29.0 kN against 0.9 x 450 MPa x 84.3 mm2 = 34.1 kN. The bolt force is the larger of two shares. While the plates stay clamped, the bolt carries F_V + Phi F / n. Once the joint opens, the bolt carries the whole share, F / n = 12 kN. The claim therefore holds whether or not the plates stay clamped. Coverage demands `bolt.separation`, which is certified too. The least preload, 40 Nm / (0.22 x 12 mm) = 15.2 kN, exceeds the plates' share of the force, 0.9 x 12 kN = 10.8 kN, so the joint stays clamped. Coverage also demands `corrosion.galvanic` (A4 stainless against 6061 aluminium in a wet C5 environment) and `bolt.plate_bearing`. v0 has no model for either, and no waiver names them, so the verdict is UNKNOWN. The report lists both, with what each needs.
 
 #### Uncertain loads
 
 `hook_uncertain.petra` expects PASS. The demand domain compares a demand with a capacity and knows nothing about bolts, so this example depends on no other domain's model.
 
+The card, `hook_uncertain.card`:
+
 ```petra
 petra 0
 
-design "hoist-hook" {
+card "hoist-hook" {
   owner "m.engineer@example.org"
   environment indoor_dry
 }
 
-demand hook {
-  capacity in [36 kN, 40 kN] measured "qa.lab@example.org" source "proof-load report PL-0917, minimum of 12 samples"
-}
+given capacity in [36 kN, 40 kN] measured "qa.lab@example.org" source "proof-load report PL-0917, minimum of 12 samples"
 
 load lift {
   on hook force in [0 kN, 40 kN] mean 10 kN
@@ -344,6 +374,16 @@ tests proof {
 
 claim overload: P(hook.utilisation > 1) <= 3/10 under lift
 claim tested:   P(fail hook at 36 kN) <= 1/100 confidence 95 % from proof
+```
+
+The design, `hook_uncertain.petra`:
+
+```petra
+petra 0
+
+demand hook {
+  capacity given capacity
+}
 ```
 
 R5 checks `overload`. Over every distribution on [0, 40] kN with mean 10 kN, the load exceeds a capacity of at least 36 kN with probability at most 10/36 = 0.278 <= 0.3, with no distribution assumed. The dual function is h(x) = x/36. R6 checks `tested`. The claimed level equals the tested level, and 0.99^300 = 0.049 <= 0.05.
@@ -371,7 +411,7 @@ The domain registry is `petra/models/__init__.py`. Each domain module ends with 
 ### How data flows
 
 ```text
-.petra text  --lang.parse_design-->      ir.Design             trusted front end: names, units, signatures; generic components
+card, design --lang.parse_design-->      ir.Design             trusted front end: names, units, signatures; generic components
 ir.Design   --pipeline.lower_components--> typed models       each kind's lowerer (models.KINDS): attributes, registry ids
 models      --coverage.generate-->      Requirement[]         claims plus the coverage table, minus waivers
 Requirement --pipeline.elaborate-->     Obligation | Gap      the owning domain's builder: Statement plus ModelSpec

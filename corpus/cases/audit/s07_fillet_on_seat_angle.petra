@@ -1,7 +1,5 @@
 petra 0
-design "t04_seat_weld_oversize" {
-  owner "audit@example.org"
-}
+
 seated c1 {
   basis lrfd
   beam W16x26 grade steel.A992
@@ -12,8 +10,4 @@ seated c1 {
   support_side welded
   support_weld electrode.E70 size 0.625 inch
   top_angle L4x4x1_4 grade steel.A36 outstanding long
-}
-load gravity {
-  on c1 shear in [0 kip, 15 kip]
-  signed "audit@example.org" source "audit"
 }

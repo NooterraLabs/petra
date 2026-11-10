@@ -10,7 +10,7 @@ petra's own commands make:
     check           repair.check_text: the text `petra check` prints, and the JSON as
                     structured content
     kinds           teach.kinds_summary, or teach.kinds_text for a domain or a kind
-    new             teach.new_text: a complete design of a kind to edit
+    new             teach.new_text: a card and a complete design of a kind to edit
     registry_list   teach.registry_text: the registry ids a design can name
     docs            teach.docs_text: the skill, the API, the language reference
 
@@ -31,9 +31,9 @@ Tool calls run in a second process, the worker. A call that is cancelled, or tha
 the budget, ends with that process, and the server starts another. The server itself never
 imports the language, the models or the solvers.
 
-The `path` of a check comes from a model, so it reads a .petra file on this machine and
-nothing else, and it gives the same answer for a file that is missing, unreadable or of
-another kind.
+The `path` and `card_path` of a check come from a model, so they read a .petra and a
+.card file on this machine and nothing else, and they give the same answer for a file that
+is missing, unreadable or of another kind.
 Untrusted: it only calls the API, so a bug here costs a reply, never a verdict.
 """
 from __future__ import annotations
@@ -103,34 +103,45 @@ def _check(args: Mapping[str, Any]) -> Result:
     from .repair import check_text
     from .solvers import SolverSource
 
-    text, path = _string(args, "text"), _string(args, "path")
+    from .files import card_of
+
+    text, path = _string(args, "design"), _string(args, "path")
+    card, card_path = _string(args, "card"), _string(args, "card_path")
     if text is None and path is None:
-        raise ToolError("give the design as `text`, or as the absolute `path` of a .petra file")
+        raise ToolError("give the design as `design`, its text, or as the absolute `path` of a .petra file")
     if text is not None and path is not None:
-        raise ToolError("give the design as `text` or as a file `path`, not both")
+        raise ToolError("give the design as `design`, its text, or as a file `path`, not both")
+    if card is not None and card_path is not None:
+        raise ToolError("give the card as `card`, its text, or as a file `card_path`, not both")
+    if card is None and card_path is None and path is None:
+        raise ToolError("give the card the design answers as `card`, its text, or as the absolute `card_path` of a .card file")
     if path is not None:
-        text = _design_at(path)
-    checked = check_text(text, path or "<text>", build_registry(), (SolverSource(),))
+        text = _file_at(path, "path", ".petra")
+    if card is None:
+        card_path = card_path or card_of(path)
+        card = _file_at(card_path, "card_path", ".card")
+    checked = check_text(card, text, path or "<design>", build_registry(), (SolverSource(),), card_path=card_path or "<card>")
     if checked.report is None:
         raise ToolError(checked.text())
     return checked.text(), checked.to_json()
 
 
-def _design_at(path: str) -> str:
-    """The text of the .petra file at `path`. A network path is refused before anything
-    touches it, because opening one sends the user's credentials to the host it names."""
-    from .files import read_design
+def _file_at(path: str, argument: str, suffix: str) -> str:
+    """The text of the file at `path`, which has `suffix`. A network path is refused
+    before anything touches it, because opening one sends the user's credentials to the
+    host it names."""
+    from .files import read_text
 
     try:
         if path.startswith(("\\\\", "//")):
             raise OSError
         real = Path(path).resolve(strict=True)
-        if real.suffix != ".petra" or not real.is_file():
+        if real.suffix != suffix or not real.is_file():
             raise OSError
-        return read_design(real)
+        return read_text(real)
     except (OSError, ValueError):
-        raise ToolError(f"cannot read {path}: `path` takes a .petra file on this machine. "
-                        "Give the design as `text` instead.") from None
+        raise ToolError(f"cannot read {path}: `{argument}` takes a {suffix} file on this machine. "
+                        "Give its text instead.") from None
 
 
 def _taught(call: Callable[[], str]) -> str:
@@ -155,7 +166,8 @@ def _new(args: Mapping[str, Any]) -> Result:
     from .teach import new_text
 
     kind, name = _string(args, "kind", required=True), _string(args, "name")
-    return _taught(lambda: new_text(kind, name, build_registry())), None
+    card, design = _taught(lambda: new_text(kind, name, build_registry()))
+    return f"The card, {kind}.card:\n\n{card}\nThe design, {kind}.petra:\n\n{design}", {"card": card, "design": design}
 
 
 def _registry_list(args: Mapping[str, Any]) -> Result:
@@ -180,17 +192,22 @@ def _schema(properties: Mapping[str, str], required: tuple[str, ...] = ()) -> di
 
 
 TOOLS: Mapping[str, tuple[str, dict[str, Any], Callable[[Mapping[str, Any]], Result]]] = {
-    "check": ("Check a .petra design and return its verdict: PASS, FAIL, UNKNOWN or MARGINAL, the governing checks "
-              "with demand, capacity and utilisation, and every obligation. On a FAIL, the repair lists the moves that "
-              "lower the governing check, best first: one number on a component's line, which way, and a value at "
-              "which the check holds. The structured content is the JSON `petra check --json` prints.",
-              _schema({"text": "the design, the full text of a .petra file",
-                       "path": "the absolute path of a .petra file to read instead of text"}),
+    "check": ("Check a design against the card it answers and return its verdict: PASS, FAIL, UNKNOWN or MARGINAL, "
+              "the governing checks with demand, capacity and utilisation, and every obligation. The card holds what "
+              "was asked: the loads, the signed bounds, the claims and the waivers. The design holds the components "
+              "and cannot change the card. On a FAIL, the repair lists the moves that lower the governing check, best "
+              "first: one number on a component's line, which way, and a value at which the check holds. The "
+              "structured content is the JSON `petra check --json` prints.",
+              _schema({"design": "the design, the full text of a .petra file",
+                       "path": "the absolute path of a .petra file to read instead of `design`",
+                       "card": "the card, the full text of a .card file",
+                       "card_path": "the absolute path of a .card file to read instead of `card`; "
+                                    "with `path` and no card, the .card file beside the design"}),
               _check),
     "kinds": ("List the component kinds Petra can check. With a domain (steel) or a kind (shear_tab), print each "
               "kind's lines, required and optional, with units, registry ids and meanings.",
               _schema({"name": "a domain or a component kind; leave out to list them all"}), _kinds),
-    "new": ("Return a complete design of one kind, which passes, to edit into the design you need.",
+    "new": ("Return a card and a complete design of one kind, which passes, to edit into the pair you need.",
             _schema({"kind": "the component kind, such as shear_tab or double_angle", "name": "the component's name"},
                     ("kind",)), _new),
     "registry_list": ("List the registry ids a design can name: shapes, grades, bolt groups, electrodes, stocked plates, "

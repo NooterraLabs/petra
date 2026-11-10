@@ -88,7 +88,7 @@ def compare(deck: dict[str, str], twin: dict[str, float]) -> list[tuple[str, str
 
 
 def assess(g: Generated, registry: Registry, with_twin: bool = True) -> Assessed:
-    design = parse_design(g.text, "gate.petra", registry)
+    design = parse_design(g.card, g.text, "gate.petra", registry)
     report = check_design(design, registry, (SolverSource(),))
     deck, witnessed = deck_outcomes(report)
     out = Assessed(g.name, g.kind, g.expected, STATUS[type(report.verdict)], g.toleranced, g.free, witnessed, deck,
@@ -110,7 +110,7 @@ def packaged(g: Generated, registry: Registry, status: str) -> str:
     included."""
     root = tempfile.mkdtemp(prefix="steel-package-")
     try:
-        pkg = P.write_package(g.text, root, registry)
+        pkg = P.write_package(g.card, g.text, root, registry)
         again = P.recheck(pkg, registry)
         if pkg.status != status:
             return f"packaged as {pkg.status}, checked as {status}"

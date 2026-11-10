@@ -46,9 +46,9 @@ def findings(card: Mapping[str, Any], design: Mapping[str, Any], deck: Mapping[s
 
 
 def require(design: Any, registry: Any) -> None:
-    """Raise ComponentError for a parsed design that breaks a domain rule. `petra check`
-    calls this before any physics runs. The rules on waivers and loads wait until a card
-    is a file of its own, since a .petra file still holds both."""
+    """Raise ComponentError for a parsed design that breaks a domain rule, or whose card
+    leaves a load or the ambient to a param. `petra check` calls this before any physics
+    runs. A family's card does leave them to params, and `petra certify-family` takes it."""
     import json
 
     from . import export
@@ -57,6 +57,9 @@ def require(design: Any, registry: Any) -> None:
 
     inputs = list(signed_inputs(design, lower_components(design, registry)))
     deck = json.loads(export.CORE.read_text(encoding="utf-8"))
-    found = domains(export.card(design, inputs), export.design_file(design, ""), deck)
+    card = export.card(design, inputs)
+    found = [f"card: {i['name']} reads a param, so nobody signed it; `petra certify-family` takes a family"
+             for i in card["inputs"] if "by" not in i]
+    found += domains(card, export.design_file(design, ""), deck)
     if found:
         raise ComponentError(tuple(f"{design.path}: {line}" for line in found))

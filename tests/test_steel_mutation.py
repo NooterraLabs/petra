@@ -87,7 +87,7 @@ SURVIVORS: dict[str, str] = {
 """Row -> which mutant survives, and why the comparison cannot see it."""
 
 
-def _tab(extra: str, rows: int, pitch: str, beam: str) -> str:
+def _tab(extra: str, rows: int, pitch: str, beam: str) -> tuple[str, str]:
     return _variant("boundary", f"""
 shear_tab st9 {{
   basis lrfd
@@ -117,12 +117,13 @@ BOUNDARIES = {
     "aisc_manual.p10.conventional_rows": ("steel.ductility.conventional_rows", _tab("  bolt_line 3 inch", 12, "2.5", "W36x231"),
                                           _tab("  bolt_line 3 inch", 13, "2.5", "W36x231")),
 }
-"""A validity row's number -> (row id, a design just inside the row, one just past it)."""
+"""A validity row's number -> (row id, a design just inside the row, one just past it), each
+design as the texts (card, design)."""
 
 
-def _holds(text: str, registry, row: str) -> bool:
+def _holds(pair: tuple[str, str], registry, row: str) -> bool:
     """Whether the validity row holds over the design's box."""
-    design = parse_design(text, "<boundary>", registry)
+    design = parse_design(*pair, "<boundary>", registry)
     conn = calc.connection(design, "st9", registry)
     ctx = Ctx(conn, design, registry, next(iter(design.loads)))
     exprs, _ = ROWS[row](ctx, GEOMETRY[conn.kind](ctx))

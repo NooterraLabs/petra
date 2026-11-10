@@ -21,6 +21,7 @@ from fractions import Fraction as F
 from pathlib import Path
 
 from petra import coverage
+from petra.files import read_pair
 from petra.ir import Input, InputKind, Signature
 from petra.kernel import Const, Evidence, Leaf, RangeHyp, Rejection, Split, Theorem, TooWeak, check
 from petra.kernel.rules.r5_moment import MomentDual
@@ -44,13 +45,15 @@ TRIALS = "trials 300 failures 0"
 MARKOV = MomentDual(F(0), (F(1, 36000),), Split("hook.force", F(36000), Leaf(), Leaf()))
 
 
-def hook(*edits: tuple[str, str], extra: str = ""):
-    text = EXAMPLE.read_text(encoding="utf-8")
+def hook(*edits: tuple[str, str], extra: str = "", components: str = ""):
+    """The example with each edit made in the file that holds its text, `extra` added to
+    the card and `components` to the design."""
+    card, text = read_pair(EXAMPLE)
     for old, new in edits:
-        if old not in text:
-            raise AssertionError(f"{old!r} is not in hook_uncertain.petra")
-        text = text.replace(old, new)
-    return parse_design(text + extra, "hook.petra", REGISTRY)
+        if old not in card and old not in text:
+            raise AssertionError(f"{old!r} is not in hook_uncertain.card or hook_uncertain.petra")
+        card, text = card.replace(old, new), text.replace(old, new)
+    return parse_design(card + extra, text + components, "hook.petra", REGISTRY)
 
 
 def elaborated(design, claim: str):
@@ -145,8 +148,9 @@ class RangeAndMean(unittest.TestCase):
         self.assertIsInstance(verdicts(self, hook((" mean 10 kN", "")))["overload"], Unknown)
 
     def test_a_load_case_without_a_force_on_the_demand_is_a_gap(self):
-        latch = 'demand latch {\n  capacity in [5 kN, 6 kN] measured "qa.lab@example.org" source "PL-0918"\n}\n'
-        gap = elaborated(hook(extra=latch + "claim latched: P(latch.utilisation > 1) <= 1/10 under lift\n"), "latched")
+        given = 'given latch_capacity in [5 kN, 6 kN] measured "qa.lab@example.org" source "PL-0918"\n'
+        latch = "demand latch {\n  capacity given latch_capacity\n}\n"
+        gap = elaborated(hook(extra=given + "claim latched: P(latch.utilisation > 1) <= 1/10 under lift\n", components=latch), "latched")
         self.assertEqual(gap.needs, (NeedsInputBound(("lift", "latch"), "force", "N"),))
 
 
@@ -236,11 +240,12 @@ class Lowering(unittest.TestCase):
         self.assertEqual(capacity.signature, Signature("qa.lab@example.org", "proof-load report PL-0917, minimum of 12 samples"))
 
     def test_malformed_demands_and_references_are_component_errors(self):
-        capacity = 'capacity in [36 kN, 40 kN] measured "qa.lab@example.org" source "proof-load report PL-0917, minimum of 12 samples"'
+        capacity = "capacity given capacity"
+        given = 'given capacity in [36 kN, 40 kN] measured "qa.lab@example.org" source "proof-load report PL-0917, minimum of 12 samples"\n'
         cases = {
-            "missing capacity": [(capacity, "")],
+            "missing capacity": [(capacity, ""), (given, "")],
             "repeated capacity": [(capacity, capacity + "\n  " + capacity)],
-            "unknown attribute": [(capacity, capacity + "\n  " + capacity.replace("capacity", "strength"))],
+            "unknown attribute": [(capacity, capacity + "\n  strength given capacity")],
             "capacity not a force": [("capacity in [36 kN, 40 kN]", "capacity in [36 m, 40 m]")],
             "capacity not positive": [("capacity in [36 kN", "capacity in [0 kN")],
             "load field not force": [("on hook force", "on hook pull")],

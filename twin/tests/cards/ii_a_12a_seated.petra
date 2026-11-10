@@ -19,7 +19,3 @@ seated ii_a_12a {
   support_gauge 5.5 inch
   top_angle L4x4x1_4 grade steel.A572_50 outstanding long
 }
-
-load reaction {
-  on ii_a_12a shear in [0 kip, 54.8 kip]
-}

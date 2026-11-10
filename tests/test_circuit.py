@@ -59,14 +59,21 @@ RHO = "cable.cu_pvc.rho20_max"
 RHO_2_5 = Fraction("18.525e-9")   # IEC 60228: 7.41 ohm/km times 2.5 mm2, the top of the series span
 WORST = {CURRENT: 10, AMBIENT: 40, H: 5, RHO: RHO_2_5}
 
-RADIAL = """petra 0
-design "radial" {
+# Each template is a card's text and the text of the design that answers it.
+RADIAL = ("""petra 0
+card "radial" {
   owner "e.designer@example.org"
   environment indoor_dry
 }
 ambient in [10 degC, 40 degC] signed "site.manager@example.org" source "survey"
+given fault_current in [0 kA, 6 kA] signed "dno@example.org" source "letter"
+load lamp_draw {
+  on lighting.lamps current in [0 A, 10 A]
+  signed "e.designer@example.org" source "schedule"
+}
+""", """petra 0
 circuit lighting {
-  supply mains voltage 230 V fault_current in [0 kA, 6 kA] signed "dno@example.org" source "letter"
+  supply mains voltage 230 V fault_current given fault_current
   breaker cb1 part mcb.B10
   wire w1 cable cable.cu_pvc_2_5 length 18 m install install.clipped_direct
   terminal t1 part terminal.lever_4mm2_75C
@@ -76,17 +83,18 @@ circuit lighting {
   connect w1.b -> t1.wire
   connect t1.out -> lamps.in
 }
+""")
+
+TWO_WIRES = ("""petra 0
+card "two-runs" {
+  owner "e.designer@example.org"
+  environment indoor_dry
+}
 load lamp_draw {
   on lighting.lamps current in [0 A, 10 A]
   signed "e.designer@example.org" source "schedule"
 }
-"""
-
-TWO_WIRES = """petra 0
-design "two-runs" {
-  owner "e.designer@example.org"
-  environment indoor_dry
-}
+""", """petra 0
 circuit lighting {
   supply mains voltage 230 V
   breaker cb1 part mcb.B10
@@ -100,21 +108,22 @@ circuit lighting {
   connect t1.out -> w2.a
   connect w2.b -> lamps.in
 }
-load lamp_draw {
-  on lighting.lamps current in [0 A, 10 A]
-  signed "e.designer@example.org" source "schedule"
-}
-"""
+""")
 
-FAMILY = """petra 0
-design "family" {
+FAMILY = ("""petra 0
+card "family" {
   owner "petra.library@example.org"
 }
-param size in [2.5 mm2, 16 mm2]
-param ins in [0.8 mm, 1.0 mm]
 param draw in [0 A, 10 A]
 param amb in [10 degC, 40 degC]
 ambient param amb
+load demand {
+  on c.load current param draw
+  signed "petra.library@example.org" source "family definition"
+}
+""", """petra 0
+param size in [2.5 mm2, 16 mm2]
+param ins in [0.8 mm, 1.0 mm]
 circuit c {
   supply mains voltage 230 V
   wire w1 cable cable.cu_pvc area param size insulation param ins length 10 m install install.clipped_direct
@@ -122,19 +131,17 @@ circuit c {
   connect mains.out -> w1.a
   connect w1.b -> load.in
 }
-load demand {
-  on c.load current param draw
-  signed "petra.library@example.org" source "family definition"
-}
-"""
+""")
 
 
-def radial(*edits: tuple[str, str], text: str = RADIAL, extra: str = ""):
+def radial(*edits: tuple[str, str], pair: tuple[str, str] = RADIAL, extra: str = ""):
+    """The template with each edit made in the file that holds its text, and `extra` added to the card."""
+    card, text = pair
     for old, new in edits:
-        if old not in text:
+        if old not in card and old not in text:
             raise AssertionError(f"{old!r} is not in the template")
-        text = text.replace(old, new)
-    return parse_design(text + extra, "radial.petra", REGISTRY)
+        card, text = card.replace(old, new), text.replace(old, new)
+    return parse_design(card + extra, text, "radial.petra", REGISTRY)
 
 
 def lowered(design) -> dict:
@@ -314,7 +321,8 @@ class ShortCircuit(unittest.TestCase):
                          "reg:mcb.B10.I2t", "reg:mcb.B10.Icn"} <= labels(ob.statement))
 
     def test_without_a_signed_fault_current_it_is_a_gap(self):
-        gap = one(radial((' fault_current in [0 kA, 6 kA] signed "dno@example.org" source "letter"', "")), circuit.SHORT_CIRCUIT)
+        gap = one(radial(('given fault_current in [0 kA, 6 kA] signed "dno@example.org" source "letter"\n', ""),
+                         (" fault_current given fault_current", "")), circuit.SHORT_CIRCUIT)
         self.assertEqual(gap.needs, (NeedsInputBound(("lighting", "mains"), "fault_current", "A"),))
 
     def test_without_a_breaker_nothing_limits_the_energy(self):
@@ -339,7 +347,7 @@ class VoltageDrop(unittest.TestCase):
     def test_a_downstream_wire_carries_the_drop_of_every_wire_before_it(self):
         claims = ("claim near: lighting.w1.voltage_drop <= 2 % under lamp_draw\n"
                   "claim far: lighting.w2.voltage_drop <= 2 % under lamp_draw\n")
-        d = radial(text=TWO_WIRES, extra=claims)
+        d = radial(pair=TWO_WIRES, extra=claims)
         near, far = one(d, circuit.VOLTAGE_DROP, "near"), one(d, circuit.VOLTAGE_DROP, "far")
         self.assertAlmostEqual(at(near.statement, 0, WORST), 3.191783 - 4.6, places=5)
         self.assertAlmostEqual(at(far.statement, 0, WORST), 2 * 3.191783 - 4.6, places=5)
@@ -392,7 +400,8 @@ class Family(unittest.TestCase):
     its span, theta 56.3632 degC."""
 
     def obligation(self, limit: str) -> Obligation:
-        d = parse_design(FAMILY + f"claim hot: c.w1.temperature <= {limit} degC under demand\n", "family.petra", REGISTRY)
+        card, text = FAMILY
+        d = parse_design(card + f"claim hot: c.w1.temperature <= {limit} degC under demand\n", text, "family.petra", REGISTRY)
         return one(d, circuit.STEADY_TEMPERATURE, "hot")
 
     def test_a_claim_just_above_the_worst_corner_needs_a_partition(self):
@@ -427,8 +436,8 @@ class Lowering(unittest.TestCase):
         self.assertEqual((draw.case, draw.current.name), ("lamp_draw", CURRENT))
         self.assertEqual(circuit.topology(model), (circuit.SeriesPath("mains", "cb1", ("w1", "t1"), "lamps"),))
 
-    def assertRejected(self, *edits, extra: str = "", fragment: str, text: str = RADIAL):
-        d = radial(*edits, text=text, extra=extra)
+    def assertRejected(self, *edits, extra: str = "", fragment: str, pair: tuple[str, str] = RADIAL):
+        d = radial(*edits, pair=pair, extra=extra)
         with self.assertRaises(ComponentError) as ctx:
             lowered(d)
         self.assertTrue(any(fragment in p for p in ctx.exception.problems), ctx.exception.problems)
@@ -533,7 +542,7 @@ class TerminalFit(unittest.TestCase):
 
     def test_a_terminal_clamps_a_wire_at_its_out_port_too(self):
         found = self.contracts(radial(("cable.cu_pvc_2_5 length 18 m install install.clipped_direct\n  consumer",
-                                       "cable.cu_pvc_16 length 18 m install install.clipped_direct\n  consumer"), text=TWO_WIRES))
+                                       "cable.cu_pvc_16 length 18 m install install.clipped_direct\n  consumer"), pair=TWO_WIRES))
         self.assertIsInstance(solved(found[("lighting.t1.wire", self.FIT)])[0], Theorem, "w1 is 2.5 mm2")
         result, _ = solved(found[("lighting.t1.out", self.FIT)])
         self.assertIsInstance(result, Refutation, "w2 is 16 mm2")
@@ -545,11 +554,12 @@ class TerminalFit(unittest.TestCase):
         self.assertFalse([key for key in found if key[0] == "lighting.t1.out"], "t1.out joins the consumer, not a wire")
 
     def test_a_conductor_below_the_clamp_fails_at_the_small_end(self):
-        family = FAMILY.replace("param size in [2.5 mm2, 16 mm2]", "param size in [1 mm2, 16 mm2]").replace(
+        card, text = FAMILY
+        family = text.replace("param size in [2.5 mm2, 16 mm2]", "param size in [1 mm2, 16 mm2]").replace(
             "  consumer load\n  connect mains.out -> w1.a\n  connect w1.b -> load.in\n",
             "  terminal t1 part terminal.screw_16mm2_75C\n  consumer load\n  connect mains.out -> w1.a\n"
             "  connect w1.b -> t1.wire\n  connect t1.out -> load.in\n")
-        ob = self.contracts(parse_design(family, "f.petra", REGISTRY))[("c.t1.wire", self.FIT)]
+        ob = self.contracts(parse_design(card, family, "f.petra", REGISTRY))[("c.t1.wire", self.FIT)]
         result, evidence = solved(ob)
         self.assertIsInstance(result, Refutation)
         self.assertEqual(evidence.body.which, 1, "the lower end of the clamp's range")

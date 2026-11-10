@@ -1,4 +1,4 @@
-"""The twin's own card reader and shape table."""
+"""The twin's own reader of a card and its design, and its shape table."""
 
 import re
 import unittest
@@ -14,15 +14,10 @@ EXAMPLES = TWIN.parent / "examples" / "steel"
 
 CARD = """petra 0
 # a comment line
-design "d" {
+card "d" {
   owner "someone"
 }
-shear_tab st1 {
-  basis lrfd
-  plate steel.A36 thickness 9.525 mm   # 3/8 in.
-  rows 4
-  pitch 3 inch
-}
+given plate_edge in [1.4375 inch, 1.5625 inch] signed "someone" source "calc"
 load gravity {
   on st1 shear in [-10 kip, 44.482216152605 kN]
   signed "someone" source "calc"
@@ -32,11 +27,25 @@ load wind {
 }
 """
 
+DESIGN = """petra 0
+# a comment line
+shear_tab st1 {
+  basis lrfd
+  plate steel.A36 thickness 9.525 mm   # 3/8 in.
+  rows 4
+  pitch 3 inch
+  plate_edge given plate_edge
+}
+"""
+
+NOTHING = "petra 0\n"
+"""A card that asks nothing, and a design with no component."""
+
 
 class CardTest(unittest.TestCase):
     def test_components_and_units(self):
-        card = parse(CARD)
-        [st] = card.components
+        pair = parse(CARD, DESIGN)
+        [st] = pair.components
         self.assertEqual((st.kind, st.name), ("shear_tab", "st1"))
         kind, qty = st.lines["plate"][2]
         self.assertEqual(qty.dim, "length")
@@ -44,34 +53,70 @@ class CardTest(unittest.TestCase):
         self.assertEqual(st.lines["rows"][0][1].dim, "count")
 
     def test_load_envelope_takes_the_largest_magnitude(self):
-        card = parse(CARD)
-        self.assertEqual(len(card.loads), 2)
-        self.assertEqual(envelope(card.loads, "st1"), {"shear": F(12)})
-        self.assertEqual(card.loads[0].hi.value, F(10))
+        pair = parse(CARD, DESIGN)
+        self.assertEqual(len(pair.loads), 2)
+        self.assertEqual(envelope(pair.loads, "st1"), {"shear": F(12)})
+        self.assertEqual(pair.loads[0].hi.value, F(10))
+
+    def test_a_line_reads_the_bound_the_card_gives(self):
+        [st] = parse(CARD, DESIGN).components
+        [(kind, (lo, hi))] = st.lines["plate_edge"]
+        self.assertEqual((kind, lo.dim, lo.value, hi.value), ("bound", "length", F(23, 16), F(25, 16)))
+
+    def test_a_given_the_card_does_not_state_is_an_error(self):
+        with self.assertRaisesRegex(CardError, "design line 8: the card gives no bound named edge"):
+            parse(CARD, DESIGN.replace("given plate_edge", "given edge"))
+
+    def test_a_given_no_component_reads_is_an_error(self):
+        with self.assertRaisesRegex(CardError, "no component reads the given plate_edge"):
+            parse(CARD, DESIGN.replace("plate_edge given plate_edge", "plate_edge 1.5 inch"))
+
+    def test_a_design_states_no_bound(self):
+        bound = 'plate_edge in [1.4375 inch, 1.5625 inch] signed "someone" source "calc"'
+        with self.assertRaisesRegex(CardError, "design line 8: a design states no bound"):
+            parse(NOTHING, DESIGN.replace("plate_edge given plate_edge", bound))
+
+    def test_a_design_states_no_load(self):
+        for line in ("load wind {\n  on st1 shear in [0 kip, 1 kip]\n}\n", "given plate_edge in [1 inch, 2 inch]\n",
+                     'waive steel.bolts on st1 by "someone" reason "none"\n'):
+            with self.subTest(line=line.split()[0]):
+                with self.assertRaisesRegex(CardError, "belongs in the card"):
+                    parse(CARD, DESIGN + line)
+
+    def test_a_card_holds_no_component(self):
+        with self.assertRaisesRegex(CardError, "card line 3: a card holds no component block"):
+            parse(DESIGN.replace("plate_edge given plate_edge", "plate_edge 1.5 inch"), NOTHING)
+
+    def test_a_param_is_declared_in_one_file(self):
+        param = "param a in [3 inch, 4 inch]\n"
+        self.assertEqual(set(parse(CARD + param, DESIGN).params), {"a"})
+        self.assertEqual(set(parse(CARD, DESIGN + param).params), {"a"})
+        with self.assertRaisesRegex(CardError, "param a is declared in the card too"):
+            parse(CARD + param, DESIGN + param)
 
     def test_duplicate_line_is_an_error(self):
         with self.assertRaises(CardError):
-            parse("shear_tab a {\n  rows 2\n  rows 3\n}\n")
+            parse(NOTHING, "shear_tab a {\n  rows 2\n  rows 3\n}\n")
 
     def test_unclosed_block_is_an_error(self):
         with self.assertRaises(CardError):
-            parse("shear_tab a {\n  rows 2\n")
+            parse(NOTHING, "shear_tab a {\n  rows 2\n")
 
-    def test_every_example_card_parses_and_runs(self):
-        cards = sorted(EXAMPLES.glob("*.petra"))
-        self.assertTrue(cards)
-        for path in cards:
-            with self.subTest(card=path.name):
-                report = check_text(path.read_text(encoding="utf-8"))
+    def test_every_example_pair_parses_and_runs(self):
+        designs = sorted(EXAMPLES.glob("*.petra"))
+        self.assertTrue(designs)
+        for path in designs:
+            with self.subTest(design=path.name):
+                report = check_text(path.with_suffix(".card").read_text(encoding="utf-8"), path.read_text(encoding="utf-8"))
                 for component in report["components"]:
                     self.assertIn(component["status"], ("checked", "unsupported"))
 
     def test_unknown_kind_is_reported_not_guessed(self):
-        report = check_text("stiffened_seat s {\n  basis lrfd\n}\n")
+        report = check_text(NOTHING, "stiffened_seat s {\n  basis lrfd\n}\n")
         self.assertEqual(report["components"][0]["status"], "unsupported")
 
     def test_missing_line_is_an_input_error(self):
-        report = check_text("shear_tab s {\n  basis lrfd\n}\n")
+        report = check_text(NOTHING, "shear_tab s {\n  basis lrfd\n}\n")
         self.assertEqual(report["components"][0]["status"], "input_error")
 
 

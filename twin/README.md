@@ -1,16 +1,17 @@
 # twin
 
 A clean-room second implementation of the strength checks for steel connections to AISC 360-22.
-It reads Petra design cards and reports, for each connection, the limit states it checks with their
-clauses, available strengths and utilisations. Where it disagrees with Petra, the disagreement is
-evidence about one of the two.
+It reads a Petra card and the design that answers it and reports, for each connection, the limit
+states it checks with their clauses, available strengths and utilisations. Where it disagrees with
+Petra, the disagreement is evidence about one of the two.
 
 ## What it shares with Petra and what it does not
 
 The twin shares two things with Petra.
 
-- The input format. It reads the same `.petra` cards. Its parser was written from the language
-  reference, the steel glossary and the example cards in `examples/steel/`.
+- The input format. It reads the same two files: the card, `NAME.card`, and the design,
+  `NAME.petra`. Its parser was written from the language reference, the steel glossary and the
+  examples in `examples/steel/`.
 - The model family that wrote it. A Claude model wrote the twin, as Claude models wrote Petra. Errors
   of reading that the family makes in common can survive in both.
 
@@ -43,39 +44,54 @@ A fourth revision fixed nine bracket designs that a comparison over generated de
 `tests/cards/gate_1_*_bracket.petra`. On six weld brackets the twin read the weld lines by the elastic
 method, and on three bolt brackets it gave every bolt the least clear distance in any direction. Its
 author followed the same rule. It read `twin/`, `docs/reference.md`, `docs/steel_glossary.md`,
-`examples/steel/`, the nine cards, the Specification, the Companion's design examples and its design
+`examples/steel/`, the nine designs, the Specification, the Companion's design examples and its design
 tables, each read in place and none copied. It did not read Petra's code, tests, judges, scripts or
 other documents, and did not run Petra. It rewrote readings 5 and 24, and readings 32 to 34 record its
 other decisions.
 
+A fifth revision taught the reader the two files, when Petra split its one design file into a card
+and a design. It changed `card.py`, the one branch of `fields.py` that read a bound on a component's
+line, the entry points in `run.py` and `__main__.py`, and the wording of three messages. It changed no
+check: on the 21 pairs in `tests/cards/` and the 12 in `examples/steel/` every report is the same as
+the fourth revision's on the one-file designs (measured). Its author did not follow the rule above.
+The same author ported Petra's own callers to the two files and had read Petra's parser, so the
+reader's rules are restated from `docs/reference.md` and are not an independent reading of it.
+
 ## Use
 
 ```
-py -3.11 -m twin CARD.petra [CARD.petra ...]
+py -3.11 -m twin DESIGN.petra [DESIGN.petra ...]
 py -3.11 -m unittest discover -s twin -t .
 ```
 
-The first prints one JSON report per card. Each steel component gets a status of `checked`,
-`unsupported` (a kind the twin does not model, or too many intervals) or `input_error` (a line it
-needs is missing or malformed, or the card puts a bolt line on or past its element's edge). A checked
-component lists its checks, the governing one, notes, and the parts of the card the twin does not
-model. The governing check has the highest utilisation, except that a detailing limit, which does not
-grow with the load, governs only when it fails.
+The first reads each design against the card beside it, `DESIGN.card`, and prints one JSON report per
+design. Each steel component gets a status of `checked`, `unsupported` (a kind the twin does not
+model, or too many intervals) or `input_error` (a line it needs is missing or malformed, or the design
+puts a bolt line on or past its element's edge). A checked component lists its checks, the governing
+one, notes, and what the twin does not model of the design and its loads. The governing check has the
+highest utilisation, except that a detailing limit, which does not grow with the load, governs only
+when it fails.
+
+The card holds the load cases, each `given NAME in [lo, hi] ...` bound and the params a load reads.
+The design holds the components and its own params. The reader refuses a card that holds a component
+and a design that states a load, a bound or anything else the card owns. It also refuses a line that
+reads a given the card does not state, a given no component reads, and a param both files declare.
+The report of a refused pair is its error.
 
 The demand is the largest magnitude over every load range on the component, for the field the kind
 carries (`shear`, or `tension` for a hanger). The basis line chooses LRFD (phi) or ASD (Omega).
 
-A length may be an interval, a signed bound `in [lo, hi] ...` or `param NAME`. The twin runs the
+A length may be an interval: `given NAME`, a bound the card gives, or `param NAME`. The twin runs the
 component at both ends of every interval and reports each check where its utilisation is highest,
-with a note naming those ends. Lines that read one param share its end. The report lists the
-intervals. A component with more than 8 intervals is reported as `unsupported`. A load given as
-`param NAME` is not read.
+with a note naming those ends. Lines that read one param share its end, and each line that reads a
+given bound takes its own. The report lists the intervals. A component with more than 8 intervals is
+reported as `unsupported`. A load given as `param NAME` is not read.
 
 ## Files
 
 | file | holds |
 |---|---|
-| `card.py` | the card parser and unit table |
+| `card.py` | the parser of a card and its design, and the unit table |
 | `data.py` | material grades, bolt groups, Tables J3.1 to J3.3, shape lookup |
 | `shapes.json` | W, WT and L properties, values only, generated by `tools/build_shapes.py` from SHAPE160.xlsx read in place |
 | `checks.py` | the limit-state equations as functions of exact inputs, and the phi and Omega of each clause |
@@ -84,7 +100,7 @@ intervals. A component with more than 8 intervals is reported as `unsupported`. 
 | `coped.py` | coped beam sections |
 | `kinds.py` | the limit states each connection kind carries |
 | `run.py` | load envelope, rendering and the JSON report |
-| `tests/` | parser tests, IC tests, the Companion examples restated as cards, hand calculations, and the gate designs the comparisons raised |
+| `tests/` | parser tests, IC tests, the Companion examples restated as a card and a design each, hand calculations, and the gate designs the comparisons raised |
 
 `shapes.json` keeps 289 W, 289 WT and 137 L shapes. Angle legs and thickness come exactly from the
 shape name, because the table rounds thickness to three decimals.
@@ -96,7 +112,7 @@ appear. These are bolt shear (J3.7, Eq. J3-1), bearing and tearout of each ply (
 J3-6f), the sum of each bolt's least strength (the J3.7 User Note), and slip (J3.9, Eq. J3-4) when the
 joint is slip-critical. An eccentric bolt line scales all four by C/n from the IC method of Manual
 Part 7. A bracket's bolt group also takes each bolt's tearout along that bolt's own force about the
-instantaneous center (reading 24). Where a ply has an edge on the card, the line also checks that
+instantaneous center (reading 24). Where a ply has an edge in the design, the line also checks that
 edge's distance along the force against J3.5 (reading 29).
 
 Every block shear check (J4.3) comes in two parts. One is the block through the whole bolt column.
@@ -167,7 +183,7 @@ these checks.
 
 ## Not modeled
 
-The report lists each of these under `unsupported` when a card asks for it.
+The report lists each of these under `unsupported` when a design or its card asks for it.
 
 - The kinds `stiffened_seat` and `flange_force`, and every kind outside the nine above.
 - Any load field other than the kind's own. Axial load on a shear connection is the common case.
@@ -183,12 +199,13 @@ The report lists each of these under `unsupported` when a card asks for it.
 
 ## Companion examples reproduced
 
-`tests/test_companion.py` restates each example's given data as a card or a call and compares the
-twin's available strengths with the printed ones under both LRFD and ASD. The tolerance is 1
-percent. Measured, the largest of the 88 card comparisons is 0.92 percent, the ASD interaction sum
-of II.A-22. `tests/test_groups.py` compares IC coefficients at the same tolerance, and
-`tests/test_brackets.py` compares a weld bracket's line without returns with the strengths the
-Companion gives for welds B. The largest of those is 0.51 percent, II.A-3 under ASD (measured).
+`tests/test_companion.py` restates each example's given data as a card and a design, or as a call,
+and compares the twin's available strengths with the printed ones under both LRFD and ASD. The
+tolerance is 1 percent. Measured, the largest of the 88 comparisons on those pairs is 0.92 percent,
+the ASD interaction sum of II.A-22. `tests/test_groups.py` compares IC coefficients at the same
+tolerance, and `tests/test_brackets.py` compares a weld bracket's line without returns with the
+strengths the Companion gives for welds B. The largest of those is 0.51 percent, II.A-3 under ASD
+(measured).
 
 | example | what is compared |
 |---|---|
@@ -224,8 +241,8 @@ Each item says how the twin reads a point the documents leave open, and how sure
    The twin is less conservative here by design.
 3. Beam web tearout. The bolts push the web up. J3.11 measures lc in that direction to the next
    hole or the edge of the material, so the top bolt's lc runs to the cope's cut or, uncoped, to the
-   beam's top less half the hole. A card without `top` leaves the uncoped top bolt an interior bolt,
-   as II.A-1A treats it, which is conservative. A support ply has no edge on the card and keeps every
+   beam's top less half the hole. A design without `top` leaves the uncoped top bolt an interior bolt,
+   as II.A-1A treats it, which is conservative. A support ply has no edge in the design and keeps every
    bolt interior.
 4. Bracket flexural rupture. II.A-22 takes Znet from Manual Table 15-2, which assumes lev = 1-1/2 in.
    The twin uses the plate's actual depth. For II.A-22 its rupture strength is 1,396 kip-in. against
@@ -252,7 +269,7 @@ Each item says how the twin reads a point the documents leave open, and how sure
    10-5's 113 and 74.9 kips at lb,req = 1-1/8 in. (measured).
 7. Steel grades. The A36 values (Fy 36 ksi, Fu 58 ksi) come from ASTM A36, not from the documents read.
 8. Hanger stem. The twin yields the stem over the tee's full length. II.D-1 uses a Whitmore width set
-   by the welded member, which the card does not describe. The twin is less conservative there
+   by the welded member, which the design does not describe. The twin is less conservative there
    (measured, 121.5 against 104 kips LRFD for II.D-1).
 9. Hanger prying. The twin computes the available bolt tension with prying, Q times B per row, by
    Manual Eqs. 9-23 to 9-30. II.D-1 checks a minimum thickness instead. At that thickness the twin's
@@ -261,8 +278,8 @@ Each item says how the twin reads a point the documents leave open, and how sure
     weld line, the form of Manual Eq. 9-6 (inferred).
 11. End plate. The twin checks the beam web in shear yielding and rupture over the weld length
     (inferred from the minimum web thickness II.A-11A states).
-12. Coped lever arm. The twin takes e = c + setback with the setback as the card states it, as II.A-4
-    and II.A-28A do. A coped card without a setback gets no coped flexure check.
+12. Coped lever arm. The twin takes e = c + setback with the setback as the design states it, as II.A-4
+    and II.A-28A do. A coped design without a setback gets no coped flexure check.
 13. Coped web shear rupture. For a bolted top cope it does not apply, as II.A-4 states. For a bolted
     double cope the twin checks the net section (inferred). For a welded web it checks hc tw (II.A-6).
 14. Coped branch for lambda at most lambda_p. The twin takes Mn = Mp, where Eq. 9-11 meets Mp
@@ -272,7 +289,7 @@ Each item says how the twin reads a point the documents leave open, and how sure
     which gives 2.59 and overstates Mn wherever lateral-torsional buckling governs. Mp governs II.A-7
     either way.
 16. II.A-28A edge distance. The example's bolt check takes the top bolt 1-1/4 in. below the cope and
-    its block shear takes 1-1/2 in., as given. The card carries 1-1/2 in. and a test covers both.
+    its block shear takes 1-1/2 in., as given. The design carries 1-1/2 in. and a test covers both.
 17. Underrun. Beam web Leh loses 1/4 in. and a seat's setback gains 1/4 in., as II.A-4 and II.A-12A
     do. The steel glossary states the same rule, so this is a reading the twin may share with Petra.
 18. Seat bearing length. The twin bears the beam over the outstanding leg less the setback and the
@@ -285,7 +302,7 @@ Each item says how the twin reads a point the documents leave open, and how sure
     card format, where ranges can be signed).
 22. Partial block shear. J4.3 holds on every failure path. A block through the k rows nearest the
     edge carries k/n of the demand, the equal share per bolt the whole-column block also assumes
-    (inferred). On the cards in `tests/cards/` and `examples/steel/` no partial path governs. On
+    (inferred). On the designs in `tests/cards/` and `examples/steel/` no partial path governs. On
     II.A-1A, II.A-28A and II.A-30 it comes within 0.25 percent of the whole column (measured, LRFD).
 23. Eccentric bolt groups. The twin keeps C/n times the sum of the bolts' least strengths. II.A-17A
     and II.A-30 apply exactly that to a shear tab and a tee stem. II.A-28A and II.A-19B take C times
@@ -298,8 +315,8 @@ Each item says how the twin reads a point the documents leave open, and how sure
     lc runs from the edge of its hole along its own force to the first edge of the plate or of another
     hole (inferred). The plate's edges are Lev above the top row and below the bottom row, Leh behind
     the column farthest from the load, and on a shaped bracket the free edge, which rises from the
-    bottom of section A-A to b beyond it at the top (inferred from Manual Fig. 15-2 and the card's
-    `free_edge`). The plate is open toward the load. A support ply has no edge on the card, so its
+    bottom of section A-A to b beyond it at the top (inferred from Manual Fig. 15-2 and the design's
+    `free_edge`). The plate is open toward the load. A support ply has no edge in the design, so its
     bolts, pushed the other way, meet only other holes. The group takes C/n times the sum of each
     bolt's least strength, as reading 23 does. C times the least single bolt, Manual Eq. 7-15, would
     read gate-1-08126's group at 0.945 instead of 0.854 and leave the other two bolt brackets as they
@@ -325,7 +342,7 @@ Each item says how the twin reads a point the documents leave open, and how sure
     distance or an area cannot be negative). Earlier revisions subtracted the overrun. On
     gate-1-04213, whose top slot runs 1/16 in. past the cope's cut, its bolt group read 5.693 kips
     ASD, and 5.595 kips with a web 1/16 in. thicker (measured). It now reads 6.082 kips at both
-    (measured). On the Companion cards in `tests/cards/` and on every card in `examples/steel/`, no
+    (measured). On the Companion designs in `tests/cards/` and on every design in `examples/steel/`, no
     strength changed (measured).
 29. Least edge distance. Below Table J3.4's distance, the table's note [a] lets J3.11 and J4 govern
     down to one bolt diameter, and J3.5 adds Table J3.5's C2 for an oversized or slotted hole.
@@ -338,12 +355,12 @@ Each item says how the twin reads a point the documents leave open, and how sure
     is inferred. The check does not grow with the load, so it governs a report only when it fails.
     gate-1-04213's top slot centres 0.5 in. from the cut against d + C2 = 1 in., a utilisation of 2
     (measured).
-30. A bolt line on or past its element's edge. The card then puts no hole in that element, so the
+30. A bolt line on or past its element's edge. The design then puts no hole in that element, so the
     twin reports `input_error` rather than check a load path that is not there.
 31. Single angle support gauge. `docs/reference.md` measures `support_gauge` from the angle's heel,
-    at the beam web's face, to the bolt line in the outstanding leg, and the II.A-28A card follows
+    at the beam web's face, to the bolt line in the outstanding leg, and the II.A-28A design follows
     it. The twin reads it so. gate-1-03786 gives 5.5 in. on a 3.5 in. outstanding leg, which puts the
-    line 2 in. past the toe, so the card is refused under reading 30.
+    line 2 in. past the toe, so the design is refused under reading 30.
 32. Weld bracket base metal. Table J2.5 leaves a fillet weld's base metal to J4, so the twin checks
     J4.2(b) shear rupture of the plate and of the support's face along a weld without returns. Manual
     Eq. 9-7, tmin = 6.19D/Fu, is that rupture for a plate with a fillet on each face, and Example
@@ -357,7 +374,7 @@ Each item says how the twin reads a point the documents leave open, and how sure
 33. Linear weld groups loaded through their center. J2.4 and its User Note let a group whose
     elements all lie in a line or are parallel take Eq. J2-5's kds when the load passes through its
     center of gravity. The twin's concentric weld group takes kds for such a group and 1.0 for any
-    other. Example II.A-11B's C = 4.37 at 30 degrees, k = a = 0, needs it (measured, 4.369). No card
+    other. Example II.A-11B's C = 4.37 at 30 degrees, k = a = 0, needs it (measured, 4.369). No design
     in `tests/cards/` or `examples/steel/` changed (measured).
 34. Clear distance on the force's line. J3.11a does not say whether a hole beside the force's line
     but within the bolt's width bounds lc. The twin measures lc on the line through the bolt's
