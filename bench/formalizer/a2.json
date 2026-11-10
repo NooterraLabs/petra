@@ -1,0 +1,216 @@
+{
+  "rows": [
+    {
+      "id": "iso286-1/table-1",
+      "anchor": {"standard": "ISO 286-1:2010", "clause": "4.3.2.2", "table": "1", "page": "20"},
+      "gives": {"name": "IT", "dim": "length", "what": "standard tolerance value"},
+      "takes": [
+        {"name": "D", "dim": "length", "what": "nominal size", "range": ["1 mm", "3150 mm"]},
+        {"name": "grade", "one_of": ["IT01", "IT0", "IT1", "IT2", "IT3", "IT4", "IT5", "IT6", "IT7", "IT8", "IT9", "IT10", "IT11", "IT12", "IT13", "IT14", "IT15", "IT16", "IT17", "IT18"], "what": "standard tolerance grade"}
+      ],
+      "table": {
+        "down": {
+          "by": "D",
+          "bands": [
+            ["0 mm", "3 mm"],
+            ["3 mm", "6 mm"],
+            ["6 mm", "10 mm"],
+            ["10 mm", "18 mm"],
+            ["18 mm", "30 mm"],
+            ["30 mm", "50 mm"],
+            ["50 mm", "80 mm"],
+            ["80 mm", "120 mm"],
+            ["120 mm", "180 mm"],
+            ["180 mm", "250 mm"],
+            ["250 mm", "315 mm"],
+            ["315 mm", "400 mm"],
+            ["400 mm", "500 mm"],
+            ["500 mm", "630 mm"],
+            ["630 mm", "800 mm"],
+            ["800 mm", "1000 mm"],
+            ["1000 mm", "1250 mm"],
+            ["1250 mm", "1600 mm"],
+            ["1600 mm", "2000 mm"],
+            ["2000 mm", "2500 mm"],
+            ["2500 mm", "3150 mm"]
+          ],
+          "closed": "upper"
+        },
+        "across": {"by": "grade"},
+        "unit": "um",
+        "cells": [
+          ["0.3", "0.5", "0.8", "1.2", "2", "3", "4", "6", "10", "14", "25", "40", "60", "0.1 mm", "0.14 mm", "0.25 mm", "0.4 mm", "0.6 mm", "1 mm", "1.4 mm"],
+          ["0.4", "0.6", "1", "1.5", "2.5", "4", "5", "8", "12", "18", "30", "48", "75", "0.12 mm", "0.18 mm", "0.3 mm", "0.48 mm", "0.75 mm", "1.2 mm", "1.8 mm"],
+          ["0.4", "0.6", "1", "1.5", "2.5", "4", "6", "9", "15", "22", "36", "58", "90", "0.15 mm", "0.22 mm", "0.36 mm", "0.58 mm", "0.9 mm", "1.5 mm", "2.2 mm"],
+          ["0.5", "0.8", "1.2", "2", "3", "5", "8", "11", "18", "27", "43", "70", "110", "0.18 mm", "0.27 mm", "0.43 mm", "0.7 mm", "1.1 mm", "1.8 mm", "2.7 mm"],
+          ["0.6", "1", "1.5", "2.5", "4", "6", "9", "13", "21", "33", "52", "84", "130", "0.21 mm", "0.33 mm", "0.52 mm", "0.84 mm", "1.3 mm", "2.1 mm", "3.3 mm"],
+          ["0.6", "1", "1.5", "2.5", "4", "7", "11", "16", "25", "39", "62", "100", "160", "0.25 mm", "0.39 mm", "0.62 mm", "1 mm", "1.6 mm", "2.5 mm", "3.9 mm"],
+          ["0.8", "1.2", "2", "3", "5", "8", "13", "19", "30", "46", "74", "120", "190", "0.3 mm", "0.46 mm", "0.74 mm", "1.2 mm", "1.9 mm", "3 mm", "4.6 mm"],
+          ["1", "1.5", "2.5", "4", "6", "10", "15", "22", "35", "54", "87", "140", "220", "0.35 mm", "0.54 mm", "0.87 mm", "1.4 mm", "2.2 mm", "3.5 mm", "5.4 mm"],
+          ["1.2", "2", "3.5", "5", "8", "12", "18", "25", "40", "63", "100", "160", "250", "0.4 mm", "0.63 mm", "1 mm", "1.6 mm", "2.5 mm", "4 mm", "6.3 mm"],
+          ["2", "3", "4.5", "7", "10", "14", "20", "29", "46", "72", "115", "185", "290", "0.46 mm", "0.72 mm", "1.15 mm", "1.85 mm", "2.9 mm", "4.6 mm", "7.2 mm"],
+          ["2.5", "4", "6", "8", "12", "16", "23", "32", "52", "81", "130", "210", "320", "0.52 mm", "0.81 mm", "1.3 mm", "2.1 mm", "3.2 mm", "5.2 mm", "8.1 mm"],
+          ["3", "5", "7", "9", "13", "18", "25", "36", "57", "89", "140", "230", "360", "0.57 mm", "0.89 mm", "1.4 mm", "2.3 mm", "3.6 mm", "5.7 mm", "8.9 mm"],
+          ["4", "6", "8", "10", "15", "20", "27", "40", "63", "97", "155", "250", "400", "0.63 mm", "0.97 mm", "1.55 mm", "2.5 mm", "4 mm", "6.3 mm", "9.7 mm"],
+          [null, null, "9", "11", "16", "22", "32", "44", "70", "110", "175", "280", "440", "0.7 mm", "1.1 mm", "1.75 mm", "2.8 mm", "4.4 mm", "7 mm", "11 mm"],
+          [null, null, "10", "13", "18", "25", "36", "50", "80", "125", "200", "320", "500", "0.8 mm", "1.25 mm", "2 mm", "3.2 mm", "5 mm", "8 mm", "12.5 mm"],
+          [null, null, "11", "15", "21", "28", "40", "56", "90", "140", "230", "360", "560", "0.9 mm", "1.4 mm", "2.3 mm", "3.6 mm", "5.6 mm", "9 mm", "14 mm"],
+          [null, null, "13", "18", "24", "33", "47", "66", "105", "165", "260", "420", "660", "1.05 mm", "1.65 mm", "2.6 mm", "4.2 mm", "6.6 mm", "10.5 mm", "16.5 mm"],
+          [null, null, "15", "21", "29", "39", "55", "78", "125", "195", "310", "500", "780", "1.25 mm", "1.95 mm", "3.1 mm", "5 mm", "7.8 mm", "12.5 mm", "19.5 mm"],
+          [null, null, "18", "25", "35", "46", "65", "92", "150", "230", "370", "600", "920", "1.5 mm", "2.3 mm", "3.7 mm", "6 mm", "9.2 mm", "15 mm", "23 mm"],
+          [null, null, "22", "30", "41", "55", "78", "110", "175", "280", "440", "700", "1100", "1.75 mm", "2.8 mm", "4.4 mm", "7 mm", "11 mm", "17.5 mm", "28 mm"],
+          [null, null, "26", "36", "50", "68", "96", "135", "210", "330", "540", "860", "1350", "2.1 mm", "3.3 mm", "5.4 mm", "8.6 mm", "13.5 mm", "21 mm", "33 mm"]
+        ],
+        "rises": ["D", "grade"]
+      }
+    },
+    {
+      "id": "aisc360-22/table-J2.4",
+      "anchor": {"standard": "ANSI/AISC 360-22", "clause": "J2.2b", "table": "J2.4", "page": "16.1-128"},
+      "gives": {"name": "w", "dim": "length", "what": "minimum size of a fillet weld, as its leg dimension"},
+      "takes": [
+        {"name": "t", "dim": "length", "what": "material thickness of the thinner part joined", "range": ["1/8 inch", "4 inch"]}
+      ],
+      "table": {
+        "down": {
+          "by": "t",
+          "bands": [
+            ["0 inch", "1/4 inch"],
+            ["1/4 inch", "1/2 inch"],
+            ["1/2 inch", "3/4 inch"],
+            ["3/4 inch", null]
+          ],
+          "closed": "upper"
+        },
+        "unit": "inch",
+        "cells": ["1/8", "3/16", "1/4", "5/16"],
+        "rises": ["t"]
+      }
+    },
+    {
+      "id": "aisc360-22/table-J3.2",
+      "anchor": {"standard": "ANSI/AISC 360-22", "clause": "J3.7", "table": "J3.2", "page": "16.1-137"},
+      "gives": {"name": "Fn", "dim": "stress", "what": "nominal stress of a fastener: the tensile stress Fnt, or the shear stress Fnv in a bearing-type connection"},
+      "takes": [
+        {"name": "fastener", "one_of": ["A307", "Group 120", "Group 144", "Group 150", "Group 200"], "what": "description of the fastener: A307 bolts, then the bolt strength groups"},
+        {"name": "stress", "one_of": ["Fnt", "Fnv_N", "Fnv_X"], "what": "which stress: tensile, shear with threads not excluded from the shear planes (N), shear with threads excluded (X)"}
+      ],
+      "table": {
+        "down": {"by": "fastener"},
+        "across": {"by": "stress"},
+        "unit": "ksi",
+        "cells": [
+          ["45", "27", "27"],
+          ["90", "54", "68"],
+          ["108", "65", "81"],
+          ["113", "68", "84"],
+          ["150", "90", "113"]
+        ],
+        "rises": ["fastener"]
+      }
+    },
+    {
+      "id": "aisc360-22/table-J3.3",
+      "anchor": {"standard": "ANSI/AISC 360-22", "clause": "J3.3", "table": "J3.3", "page": "16.1-137"},
+      "gives": {"name": "dh", "dim": "length", "what": "nominal diameter of a standard or an oversize hole"},
+      "takes": [
+        {"name": "d", "dim": "length", "what": "bolt diameter", "range": ["1/2 inch", "1 inch"]},
+        {"name": "hole", "one_of": ["standard", "oversize"], "what": "hole type"}
+      ],
+      "table": {
+        "down": {"by": "d", "at": ["1/2 inch", "5/8 inch", "3/4 inch", "7/8 inch", "1 inch"]},
+        "across": {"by": "hole"},
+        "unit": "inch",
+        "cells": [
+          ["9/16", "5/8"],
+          ["11/16", "13/16"],
+          ["13/16", "15/16"],
+          ["15/16", "17/16"],
+          ["9/8", "5/4"]
+        ],
+        "rises": ["d", "hole"]
+      }
+    },
+    {
+      "id": "aisc360-22/table-J3.4",
+      "anchor": {"standard": "ANSI/AISC 360-22", "clause": "J3.5", "table": "J3.4", "page": "16.1-139"},
+      "gives": {"name": "e", "dim": "length", "what": "minimum edge distance from the centre of a standard hole to the edge of the connected part"},
+      "takes": [
+        {"name": "d", "dim": "length", "what": "bolt diameter", "range": ["1/2 inch", "5/4 inch"]}
+      ],
+      "table": {
+        "down": {"by": "d", "at": ["1/2 inch", "5/8 inch", "3/4 inch", "7/8 inch", "1 inch", "9/8 inch", "5/4 inch"]},
+        "unit": "inch",
+        "cells": ["3/4", "7/8", "1", "9/8", "5/4", "3/2", "13/8"],
+        "rises": ["d"]
+      }
+    }
+  ],
+  "not_written": [
+    {
+      "id": "aisc360-22/table-J2.4",
+      "what": "the SI value printed in parentheses beside every US customary value: thickness limits (6), (13), (19) mm and weld sizes (3), (5), (6), (8) mm",
+      "why": "two numbers in one cell. The SI numbers are rounded sizes, not conversions of the fractions, so the row holds the US customary values alone."
+    },
+    {
+      "id": "aisc360-22/table-J2.4",
+      "what": "footnote [a] on the size column: the size is the leg dimension, and a weld made with electrodes that are not low-hydrogen has to be a single-pass weld",
+      "why": "a requirement on how the weld is made. It is not a value and not a comparison of quantities, so a row has no place for it."
+    },
+    {
+      "id": "aisc360-22/table-J3.2",
+      "what": "the MPa value printed in parentheses in every cell, line by line: (310) (190) (190); (620) (370) (470); (750) (450) (560); (780) (470) (580); (1000) (620) (780)",
+      "why": "two numbers in one cell. The row holds the ksi values."
+    },
+    {
+      "id": "aisc360-22/table-J3.2",
+      "what": "the sixth and last line, threaded parts meeting Section A3.4: 0.75Fu for Fnt, 0.450Fu for Fnv (N), 0.563Fu for Fnv (X)",
+      "why": "a formula in Fu in place of a number. The line is left out, so the fastener key has five names, not six."
+    },
+    {
+      "id": "aisc360-22/table-J3.2",
+      "what": "footnote [b] on the Fnt column: for tensile strength the tensile stress area times the specified minimum tensile stress of the material may be used in place of the tabulated value, which rests on a stress area of 0.75 times the gross area",
+      "why": "a permitted alternative to every Fnt cell, taken by a choice the row cannot read. The plain values are transcribed."
+    },
+    {
+      "id": "aisc360-22/table-J3.2",
+      "what": "footnote [c] on both Fnv columns: Fnv is reduced to 83.3% of the tabulated value in an end-loaded connection whose fastener pattern is longer than 38 in. (950 mm)",
+      "why": "a footnote that changes the value under a condition on a length the row does not take. The plain values are transcribed."
+    },
+    {
+      "id": "aisc360-22/table-J3.2",
+      "what": "footnote [d] on both shear cells of the A307 line: the value is reduced by 1% for each 1/16 in. (2 mm) of grip length over five diameters",
+      "why": "a footnote that changes the value by a formula in the grip length and the diameter. The plain value 27 is transcribed."
+    },
+    {
+      "id": "aisc360-22/table-J3.2",
+      "what": "footnotes [a], [e] and [f]: [a] on the Fnt column sends high-strength bolts under tensile fatigue loading to Appendix 3; [e] on the (N) column says threads are assumed and permitted in the shear planes in all cases; [f] on both shear cells of the Group 200 line says the transition area of those bolts counts as threaded",
+      "why": "conditions of use, not values. None is a comparison of quantities."
+    },
+    {
+      "id": "aisc360-22/table-J3.3",
+      "what": "the sixth and last line, bolt diameter 1 1/8 and larger: d + 1/8 for a standard hole, d + 5/16 for an oversize hole",
+      "why": "a formula in d in place of a number, and a line that is a range of d where the others are listed sizes. The line is left out."
+    },
+    {
+      "id": "aisc360-22/table-J3.3",
+      "what": "the short-slot and long-slot columns of every line",
+      "why": "two numbers in one cell, a width and a length, and in the last line two formulas. Left out as tables.tsv says."
+    },
+    {
+      "id": "aisc360-22/table-J3.4",
+      "what": "the eighth and last line, bolt diameter over 1 1/4: 1 1/4 times d",
+      "why": "a formula in d in place of a number. The line is left out."
+    },
+    {
+      "id": "aisc360-22/table-J3.4",
+      "what": "footnote [a] on the title: a lesser edge distance is permitted where Sections J3.11 and J4 are satisfied, but one under one bolt diameter needs the approval of the engineer of record",
+      "why": "a footnote that changes the minimum under a condition that is not a comparison of the row's quantities. The plain values are transcribed."
+    },
+    {
+      "id": "aisc360-22/table-J3.4",
+      "what": "footnote [b] on the title: oversized and slotted holes are sent to Table J3.5",
+      "why": "a pointer. The row holds standard holes only and cannot state that as a condition."
+    }
+  ]
+}

@@ -1,13 +1,14 @@
 """Rules as data: a row of a deck, what it means, and whether to admit it. Untrusted.
 
-A row is one equation of a standard written as data (docs/deck.md): what it gives, what it
-takes, each with a dimension, and its expression, by case where the standard splits it.
-This module reads a row, checks its dimensions, evaluates it exactly, and runs the
-acceptance check a row passes before it enters a deck:
+A row is one equation or one table of a standard written as data (docs/deck.md): what it
+gives, what it takes, each with a dimension, and either its expression, by case where the
+standard splits it, or its cells. This module reads a row, checks its dimensions,
+evaluates it exactly, and runs the acceptance check a row passes before it enters a deck:
 
-    units        every sum, comparison and result has one dimension
+    units        every sum, comparison, result and cell has one dimension
     examples     the row reproduces each worked example given with it
     continuity   where two cases meet they give one value, unless the row says those two jump
+    shape        for a table: it rises or falls along each side the row says it does
     second       a transcription made without sight of this one gives the same values
 
     python -m petra.deck ROWS.json [--examples FILE.json] [--second ROWS.json]
@@ -18,6 +19,7 @@ deck will bind a proof to.
 from __future__ import annotations
 
 import argparse
+import collections
 import itertools
 import json
 import random
@@ -40,7 +42,7 @@ NAMED: Mapping[str, Dim] = {"dimensionless": DIMENSIONLESS, "length": LENGTH, "a
                             "voltage": VOLTAGE, "power": POWER, "resistance": RESISTANCE}
 """The dimension names a row may write. `moment` is a force times a length, as energy is."""
 
-ROW_KEYS = frozenset({"id", "anchor", "gives", "takes", "is", "cases", "jumps"})
+ROW_KEYS = frozenset({"id", "anchor", "gives", "takes", "is", "cases", "jumps", "table"})
 SAMPLES = 96
 """How many points the continuity and second checks try. A row of a standard has a handful
 of inputs, and two different formulas of that size agree on this many points by accident
@@ -91,8 +93,16 @@ def show(v: Vector) -> str:
 
 
 def quantity(text: str, what: str) -> tuple[Fraction, Vector]:
-    """`0.75 inch` as an exact SI value and its dimension. A number alone has none."""
+    """`0.75 inch` as an exact SI value and its dimension. A number alone has none. A comma
+    is read only between thousands, as in 29,000: a decimal is written with a point. A
+    whole number and a fraction, `1 1/8 inch`, is their sum, as a standard prints it."""
+    mixed = re.fullmatch(r"(\d+) (\d+)/(\d+)( .*)?", str(text).strip())
+    if mixed and int(mixed[3]):
+        whole, top, bottom = (int(mixed[n]) for n in (1, 2, 3))
+        text = f"{whole * bottom + top}/{bottom}{mixed[4] or ''}"
     number, _, unit = str(text).strip().partition(" ")
+    if "," in number and not re.fullmatch(r"[+-]?\d{1,3}(,\d{3})+(\.\d+)?", number):
+        raise RowError(f"{what}: {number!r} has a comma that is not between thousands; write a decimal with a point")
     try:
         q = parse_quantity(number.replace(",", ""), unit.strip() or None)
     except UnitError as exc:
@@ -109,14 +119,87 @@ class Case:
 
 @dataclass(frozen=True)
 class Input:
-    dim: Vector
-    lo: Fraction
-    hi: Fraction
+    """A quantity with its dimension and the range a design's value falls in, or a key:
+    one of a few names, such as a grade or a hole type, which only a table reads."""
+
+    dim: Vector | None = None
+    lo: Fraction = Fraction(0)
+    hi: Fraction = Fraction(0)
+    keys: tuple[str, ...] = ()
+
+    @property
+    def kind(self) -> tuple:
+        """What another transcription's input must share to be this one: the dimension, or
+        for a key how many names it has. Two transcribers name a key's values in their own
+        words, so a key's names are matched by their order, which is the standard's."""
+        return ("key", len(self.keys)) if self.keys else ("quantity", self.dim)
+
+
+@dataclass(frozen=True)
+class Axis:
+    """One side of a table: the input it reads and the places along it. A key has one
+    place for each of its names. A quantity is read in `bands`, each holding its upper end
+    and not its lower when `upper`, and the other way round when not, or at the listed
+    values `at` and nowhere else. The last band has no upper end when the standard gives
+    it none."""
+
+    by: str
+    keys: tuple[str, ...] = ()
+    bands: tuple[tuple[Fraction, Fraction | None], ...] = ()
+    upper: bool = True
+    at: tuple[Fraction, ...] = ()
+
+    @property
+    def places(self) -> int:
+        return len(self.keys or self.at or self.bands)
+
+    def place(self, x: Any) -> int | None:
+        if self.keys or self.at:
+            listed = self.keys or self.at
+            return listed.index(x) if x in listed else None
+        for n, (lo, hi) in enumerate(self.bands):
+            if (lo < x if self.upper else lo <= x) and (hi is None or (x <= hi if self.upper else x < hi)):
+                return n
+        return None
+
+    def probes(self) -> list[Any]:
+        """Values that reach every place and each side of every band's ends, and for a
+        list of values one between each two, where the table gives nothing."""
+        if self.keys:
+            return list(self.keys)
+        if self.at:
+            return [*self.at, *((a + b) / 2 for a, b in zip(self.at, self.at[1:]))]
+        out: list[Fraction] = []
+        for lo, hi in self.bands:
+            width = (hi - lo) if hi is not None else abs(lo) or Fraction(1)
+            out += [lo, lo + width / 1000, lo + width / 2, *([hi - width / 1000, hi] if hi is not None else [lo + 3 * width])]
+        return list(dict.fromkeys(out))
+
+
+@dataclass(frozen=True)
+class Table:
+    """Cells by place: `cells[down][across]`, with one column when the table has one side.
+    None is a cell the standard leaves empty."""
+
+    axes: tuple[Axis, ...]
+    cells: tuple[tuple[Fraction | None, ...], ...]
+    rises: frozenset
+    falls: frozenset
+
+    def cell(self, point: Mapping[str, Any]) -> Fraction | None:
+        at = [axis.place(point[axis.by]) for axis in self.axes]
+        return None if None in at else self.cells[at[0]][at[1] if len(at) == 2 else 0]
+
+    def lines(self, side: int) -> list[tuple[Fraction | None, ...]]:
+        """The cells in the lines that run along one side: columns along the first, rows
+        along the second."""
+        return list(self.cells) if side == 1 else list(zip(*self.cells))
 
 
 @dataclass(frozen=True)
 class Row:
-    """One equation. `problems` are its dimension errors, found when it was read."""
+    """One equation, with `cases`, or one table. `problems` are its dimension errors,
+    found when it was read."""
 
     id: str
     anchor: Mapping[str, str]
@@ -126,6 +209,7 @@ class Row:
     cases: tuple[Case, ...]
     jumps: Mapping[frozenset, str]      # two case numbers, from 0, to why they do not meet
     problems: tuple[str, ...]
+    table: Table | None = None
 
 
 @dataclass(frozen=True)
@@ -134,7 +218,7 @@ class Example:
     reproduction must come, all in SI, with the result as printed for messages."""
 
     anchor: str
-    given: Mapping[str, Fraction]
+    given: Mapping[str, Any]      # a quantity in SI, or a key's name
     gives: Fraction
     within: Fraction
     printed: str
@@ -171,6 +255,8 @@ class _Reader:
             if node == "pi":
                 return Pi(), NONE
             if node in self.takes:
+                if self.takes[node].keys:
+                    raise RowError(f"{node} is a key, and only a table reads a key")
                 return Sym(node), self.takes[node].dim
             try:
                 return Const(Fraction(node)), NONE
@@ -248,12 +334,18 @@ def read(body: Any) -> Row:
         raise RowError("a row is an object with an id")
     where = body["id"]
     unknown = sorted(set(body) - ROW_KEYS)
-    if unknown or ("is" in body) == ("cases" in body):
-        raise RowError(f"{where}: a row has {', '.join(sorted(ROW_KEYS))}, with one of `is` and `cases`" + (f"; not {', '.join(unknown)}" if unknown else ""))
+    if unknown or sum(key in body for key in ("is", "cases", "table")) != 1:
+        raise RowError(f"{where}: a row has {', '.join(sorted(ROW_KEYS))}, with one of `is`, `cases` and `table`" + (f"; not {', '.join(unknown)}" if unknown else ""))
     try:
         anchor, gives = dict(body["anchor"]), body["gives"]
         takes = {}
         for t in body["takes"]:
+            if "one_of" in t:
+                keys = tuple(str(k) for k in t["one_of"])
+                if len(set(keys)) != len(keys) or not keys or "dim" in t or "range" in t:
+                    raise RowError(f"{t['name']} is a key: it has `one_of`, a list of different names, and no `dim` or `range`")
+                takes[t["name"]] = Input(keys=keys)
+                continue
             dim = dimension(t["dim"])
             (lo, lo_dim), (hi, hi_dim) = (quantity(end, f"the range of {t['name']}") for end in t["range"])
             if {lo_dim, hi_dim} != {dim} or not lo <= hi:
@@ -261,6 +353,14 @@ def read(body: Any) -> Row:
             takes[t["name"]] = Input(dim, lo, hi)
         if len(takes) != len(body["takes"]) or not anchor.get("standard") or not anchor.get("clause"):
             raise RowError("an input is named twice, or the anchor lacks its standard or its clause")
+        if "table" in body:
+            if "jumps" in body:
+                raise RowError("a table has no jumps: it steps at every band")
+            problems: list[str] = []
+            table = _table(body["table"], takes, dimension(gives["dim"]), problems)
+            return Row(where, anchor, str(gives["name"]), dimension(gives["dim"]), takes, (), {}, tuple(dict.fromkeys(problems)), table)
+        if any(i.keys for i in takes.values()):
+            raise RowError("an equation takes no key: only a table reads one")
         reader = _Reader(takes)
         written = body["cases"] if "cases" in body else [{"is": body["is"]}]
         cases = []
@@ -279,6 +379,59 @@ def read(body: Any) -> Row:
         raise RowError(f"{where}: {exc}") from None
     except (KeyError, TypeError, ValueError) as exc:
         raise RowError(f"{where}: not a row ({type(exc).__name__}: {exc})") from None
+
+
+def _table(body: Mapping[str, Any], takes: Mapping[str, Input], out: Vector, problems: list[str]) -> Table:
+    """A table from its JSON: `down` and, for a table with two sides, `across`, each an
+    axis; `cells`; the `unit` of a cell that states none; and `rises` and `falls`."""
+    if set(body) - {"down", "across", "cells", "unit", "rises", "falls"}:
+        raise RowError("a table has down, across, cells, unit, rises and falls")
+
+    def axis(a: Mapping[str, Any]) -> Axis:
+        name, i = a["by"], takes[a["by"]]
+        if i.keys:
+            if set(a) != {"by"}:
+                raise RowError(f"{name} is a key, so its side of the table has `by` alone")
+            return Axis(name, keys=i.keys)
+        if set(a) - {"by", "bands", "closed", "at"} or ("bands" in a) == ("at" in a) or a.get("closed", "upper") not in ("upper", "lower"):
+            raise RowError(f"the side that reads {name} has `bands` with `closed` upper or lower, or `at`")
+        written = [x for band in a.get("bands", [a.get("at")]) for x in band]
+        ends = [None if x is None else quantity(x, f"the side that reads {name}") for x in written]
+        if any(end is not None and end[1] != i.dim for end in ends):
+            problems.append(f"the side that reads {name} is not all {show(i.dim)}")
+        values = [None if end is None else end[0] for end in ends]
+        if "at" in a:
+            if None in values or values != sorted(set(values)):
+                raise RowError(f"the values {name} is read at are in order, each once")
+            return Axis(name, at=tuple(values))
+        bands = tuple(zip(values[::2], values[1::2]))
+        open_end = None in values[:-1] or any(len(band) != 2 for band in a["bands"])
+        if open_end or any(hi is not None and lo >= hi for lo, hi in bands) or any(a_hi > b_lo for (_, a_hi), (b_lo, _) in zip(bands, bands[1:])):
+            raise RowError(f"the bands of {name} are pairs, the lower end first, in order and none over another; only the last may have no upper end")
+        return Axis(name, bands=bands, upper=a.get("closed", "upper") == "upper")
+
+    axes = (axis(body["down"]), *([axis(body["across"])] if "across" in body else []))
+    if sorted(a.by for a in axes) != sorted(takes):
+        raise RowError("each input of a table is read by one of its sides, and by one only")
+    unit = body.get("unit")
+
+    def cell(text: Any) -> Fraction | None:
+        if text is None:
+            return None
+        written = str(text).strip()
+        value, dim = quantity(written if " " in written or unit is None else f"{written} {unit}", "a cell")
+        if dim != out:
+            problems.append(f"a cell is a {show(dim)}, and the row gives a {show(out)}")
+        return value
+
+    lines = body["cells"] if len(axes) == 2 else [[c] for c in body["cells"]]
+    cells = tuple(tuple(cell(c) for c in line) for line in lines)
+    if len(cells) != axes[0].places or any(len(line) != (axes[1].places if len(axes) == 2 else 1) for line in cells):
+        raise RowError(f"the cells are {axes[0].places} lines" + (f" of {axes[1].places}" if len(axes) == 2 else "") + ", one for each place")
+    rises, falls = frozenset(body.get("rises", [])), frozenset(body.get("falls", []))
+    if not (rises | falls) <= {a.by for a in axes} or rises & falls:
+        raise RowError("`rises` and `falls` name sides of the table, and no side is in both")
+    return Table(axes, cells, rises, falls)
 
 
 # --- what a row means ------------------------------------------------------------------------------
@@ -317,9 +470,12 @@ def active(row: Row, point: Mapping[str, Fraction]) -> int | None:
     return None
 
 
-def value(row: Row, point: Mapping[str, Fraction], case: int | None = None) -> Fraction | None:
+def value(row: Row, point: Mapping[str, Any], case: int | None = None) -> Fraction | None:
     """What the row gives at the point, by `case` or by the one that holds there. None where
-    it gives nothing: no case holds, or the expression is undefined."""
+    it gives nothing: no case holds, the expression is undefined, or a table has no cell
+    there or an empty one."""
+    if row.table is not None:
+        return row.table.cell(point)
     n = active(row, point) if case is None else case
     if n is None:
         return None
@@ -335,8 +491,11 @@ def close(a: Fraction | None, b: Fraction | None, within: Fraction = CLOSE) -> b
     return abs(a - b) <= within * max(abs(a), abs(b))
 
 
-def points(row: Row, seed: int, count: int = SAMPLES) -> list[dict[str, Fraction]]:
-    """Points inside the ranges of the row's inputs, spread evenly on a log scale."""
+def points(row: Row, seed: int, count: int = SAMPLES) -> list[dict[str, Any]]:
+    """Points inside the ranges of the row's inputs, spread evenly on a log scale. For a
+    table, every place of it instead, with each side of every band's ends."""
+    if row.table is not None:
+        return [dict(zip((a.by for a in row.table.axes), at)) for at in itertools.product(*(a.probes() for a in row.table.axes))]
     rng = random.Random(f"{seed}/{row.id}")
 
     def draw(i: Input) -> Fraction:
@@ -352,6 +511,8 @@ def meetings(row: Row, seed: int) -> Iterator[tuple[int, int, dict[str, Fraction
     points that different cases hold at: (the case on one side, the case on the other,
     a point on the first side, a point on the other side), the two points next to each
     other."""
+    if row.table is not None:
+        return
     sample = [(p, active(row, p)) for p in points(row, seed)]
     seen: dict[tuple[int, int], int] = {}
     for (p, i), (q, j) in itertools.combinations(sample, 2):
@@ -384,10 +545,15 @@ def example(body: Mapping[str, Any], row: Row) -> Example:
     A quantity the source states and the row does not read is left out: the row then
     reproduces the result only if it was right not to read it."""
     try:
-        given = {}
+        given: dict[str, Any] = {}
         for name, i in row.takes.items():
             if name not in body["given"]:
                 raise RowError(f"it does not give {name}, which the row reads")
+            if i.keys:
+                given[name] = str(body["given"][name])
+                if given[name] not in i.keys:
+                    raise RowError(f"{name} = {given[name]} is not one of {', '.join(i.keys)}")
+                continue
             given[name], dim = quantity(body["given"][name], name)
             if dim != i.dim:
                 raise RowError(f"{name} = {body['given'][name]} is not a {show(i.dim)}")
@@ -435,41 +601,71 @@ def continuous(row: Row, seed: int = 0) -> Check:
     return Check("continuity", "fail" if unsaid else "pass", "; ".join(said))
 
 
+def shape(row: Row) -> Check:
+    """Whether a table runs as its row says: never down along a side it rises on, never up
+    along one it falls on. A cell misread by a digit or taken from the next line often
+    breaks the run."""
+    table = row.table
+    if not (table.rises or table.falls):
+        return Check("shape", "none", "the row does not say how the table runs")
+    for side, axis in enumerate(table.axes):
+        sign = 1 if axis.by in table.rises else -1 if axis.by in table.falls else 0
+        for n, line in enumerate(table.lines(side)):
+            filled = [(place, x) for place, x in enumerate(line) if x is not None]
+            for (a, x), (b, y) in zip(filled, filled[1:]):
+                if sign * (y - x) < 0:
+                    return Check("shape", "fail", f"along {axis.by} the table {'rises' if sign > 0 else 'falls'}, and in line {n + 1} place {b + 1} "
+                                                  f"is {'under' if sign > 0 else 'over'} place {a + 1}")
+    return Check("shape", "pass", f"runs as said along {', '.join(sorted(table.rises | table.falls))}")
+
+
 def second(row: Row, other: Row, seed: int = 0) -> Check:
     """Whether `other` gives what `row` gives at every sample point and on both sides of
     every meeting of either's cases, under some renaming of its inputs that keeps their
     dimensions."""
-    if row.dim != other.dim or sorted(i.dim for i in row.takes.values()) != sorted(i.dim for i in other.takes.values()):
+    kinds = collections.Counter(i.kind for i in row.takes.values())
+    if row.dim != other.dim or kinds != collections.Counter(i.kind for i in other.takes.values()) or (row.table is None) != (other.table is None):
         return Check("second", "fail", f"it takes {', '.join(row.takes)} and gives a {show(row.dim)}; the other takes {', '.join(other.takes)} and gives a {show(other.dim)}")
     here = points(row, seed) + [p for _, _, lo, hi in meetings(row, seed) for p in (lo, hi)]
-    there = [p for _, _, lo, hi in meetings(other, seed) for p in (lo, hi)]
+    there = [p for _, _, lo, hi in meetings(other, seed) for p in (lo, hi)] + (points(other, seed) if other.table is not None else [])
     first_miss = ""
     for renaming in _renamings(row, other):
         back = {b: a for a, b in renaming.items()}
-        at = here + [{back[name]: x for name, x in p.items()} for p in there]
+        at = here + [_carried(p, back, other, row) for p in there]
         mine = [value(row, p) for p in at]
-        miss = next((p for p, v in zip(at, mine) if not close(v, value(other, {renaming[name]: x for name, x in p.items()}))), None)
+        miss = next((p for p, v in zip(at, mine) if not close(v, value(other, _carried(p, renaming, row, other)))), None)
         if miss is None:
             renamed = {a: b for a, b in renaming.items() if a != b}
             return Check("second", "pass", f"{len(at)} points" + (f", reading {', '.join(f'{a} as {b}' for a, b in renamed.items())}" if renamed else ""))
         if not first_miss:
-            theirs = value(other, {renaming[name]: x for name, x in miss.items()})
+            theirs = value(other, _carried(miss, renaming, row, other))
             mine_there = value(row, miss)
             ratio = "one of them gives nothing" if theirs is None or mine_there is None or not mine_there else f"the other gives {float(theirs / mine_there):.4f} of it"
-            first_miss = f"at {', '.join(f'{k}={float(v):.5g}' for k, v in miss.items())} (SI) {ratio}"
+            where = ", ".join(f"{k}={v}" if isinstance(v, str) else f"{k}={float(v):.5g}" for k, v in miss.items())
+            first_miss = f"at {where} (SI) {ratio}"
     return Check("second", "fail", first_miss)
+
+
+def _carried(point: Mapping[str, Any], names: Mapping[str, str], src: Row, dst: Row) -> dict[str, Any]:
+    """A point of `src` as a point of `dst`: each input under its name there, and each key's
+    name as the name in the same place of the other's list."""
+    out = {}
+    for name, x in point.items():
+        keys = src.takes[name].keys
+        out[names[name]] = dst.takes[names[name]].keys[keys.index(x)] if keys else x
+    return out
 
 
 def _renamings(row: Row, other: Row) -> Iterator[dict[str, str]]:
     """Each way to read the other's inputs as this row's that keeps every dimension: the
     one that keeps the names first, when they are the same names."""
-    if set(row.takes) == set(other.takes) and all(row.takes[n].dim == other.takes[n].dim for n in row.takes):
+    if set(row.takes) == set(other.takes) and all(row.takes[n].kind == other.takes[n].kind for n in row.takes):
         yield {name: name for name in row.takes}
         return
-    by_dim: dict[Vector, list[str]] = {}
+    by_dim: dict[tuple, list[str]] = {}
     for name, i in other.takes.items():
-        by_dim.setdefault(i.dim, []).append(name)
-    groups = [[n for n, i in row.takes.items() if i.dim == dim] for dim in by_dim]
+        by_dim.setdefault(i.kind, []).append(name)
+    groups = [[n for n, i in row.takes.items() if i.kind == kind] for kind in by_dim]
     for choice in itertools.islice(itertools.product(*(itertools.permutations(names) for names in by_dim.values())), 5040):
         yield {a: b for mine, theirs in zip(groups, choice) for a, b in zip(mine, theirs)}
 
@@ -477,7 +673,7 @@ def _renamings(row: Row, other: Row) -> Iterator[dict[str, str]]:
 def accept(row: Row, examples: list[Example], other: Row | None = None, seed: int = 0) -> list[Check]:
     """The acceptance check on one row. A row is admitted when no part fails; the parts
     that are `none` say how much stands behind it."""
-    checks = [units(row), reproduces(row, examples), continuous(row, seed)]
+    checks = [units(row), reproduces(row, examples), continuous(row, seed) if row.table is None else shape(row)]
     return checks + [second(row, other, seed) if other is not None else Check("second", "none", "no second transcription")]
 
 

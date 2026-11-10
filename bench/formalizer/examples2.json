@@ -1,0 +1,221 @@
+{
+ "examples": {
+  "iso286-1/table-1": [
+   {
+    "anchor": "ISO 286-1:2010, 4.3.2.2, Example 1 (hole 90 F7 and shaft 90 f7), p. 15",
+    "given": {
+     "D": "90 mm",
+     "grade": "IT7"
+    },
+    "gives": "35 um"
+   },
+   {
+    "anchor": "ISO 286-1:2010, 4.3.2.2, Example 2 (hole 28 P9), p. 15",
+    "given": {
+     "D": "28 mm",
+     "grade": "IT9"
+    },
+    "gives": "52 um"
+   },
+   {
+    "anchor": "ISO 286-1:2010, 4.3.2.5, Example 1 (hole 20 K7), p. 16",
+    "given": {
+     "D": "20 mm",
+     "grade": "IT7"
+    },
+    "gives": "21 um"
+   },
+   {
+    "anchor": "ISO 286-1:2010, 4.3.2.5, Example 2 (hole 40 U6), p. 16",
+    "given": {
+     "D": "40 mm",
+     "grade": "IT6"
+    },
+    "gives": "16 um"
+   },
+   {
+    "anchor": "ISO 286-1:2010, Annex B, B.4.1, Example (first standard tolerance), p. 34",
+    "given": {
+     "D": "40 mm",
+     "grade": "IT7"
+    },
+    "gives": "25 um"
+   },
+   {
+    "anchor": "ISO 286-1:2010, Annex B, B.4.1, Example (second standard tolerance), p. 34",
+    "given": {
+     "D": "40 mm",
+     "grade": "IT8"
+    },
+    "gives": "39 um"
+   }
+  ],
+  "aisc360-22/table-J2.4": [
+   {
+    "anchor": "AISC Design Examples v16.0, Example J.1, p. J-2",
+    "given": {
+     "t": "1/4 inch"
+    },
+    "gives": "1/8 inch"
+   },
+   {
+    "anchor": "AISC Design Examples v16.0, Example K.2, p. K-12",
+    "given": {
+     "t": "0.233 inch"
+    },
+    "gives": "1/8 inch"
+   },
+   {
+    "anchor": "AISC Design Examples v16.0, Example II.C-2, welds for member U1L1, p. IIC-18",
+    "given": {
+     "t": "5/16 inch"
+    },
+    "gives": "3/16 inch"
+   },
+   {
+    "anchor": "AISC Design Examples v16.0, Example II.C-2, welds for member U0L1, p. IIC-19",
+    "given": {
+     "t": "3/8 inch"
+    },
+    "gives": "3/16 inch"
+   },
+   {
+    "anchor": "AISC Design Examples v16.0, Example F.14, flange-to-web fillet weld, p. F-73",
+    "given": {
+     "t": "1/2 inch"
+    },
+    "gives": "3/16 inch"
+   },
+   {
+    "anchor": "AISC Design Examples v16.0, Example J.2A, p. J-5",
+    "given": {
+     "t": "3/4 inch"
+    },
+    "gives": "1/4 inch"
+   }
+  ],
+  "aisc360-22/table-J3.2": [
+   {
+    "anchor": "AISC Design Examples v16.0, Example J.3, p. J-11",
+    "given": {
+     "fastener": "Group 120",
+     "stress": "Fnt"
+    },
+    "gives": "90 ksi"
+   },
+   {
+    "anchor": "AISC Design Examples v16.0, Example J.3, p. J-11",
+    "given": {
+     "fastener": "Group 120",
+     "stress": "Fnv_N"
+    },
+    "gives": "54 ksi"
+   },
+   {
+    "anchor": "AISC Design Examples v16.0, Example II.A-1C, bolt shear, p. IIA-34",
+    "given": {
+     "fastener": "Group 120",
+     "stress": "Fnv_N"
+    },
+    "gives": "54 ksi"
+   },
+   {
+    "anchor": "AISC Design Examples v16.0, Example II.A-1C, bolt tension, p. IIA-34 (thread condition stated in the bolt shear check on the same page)",
+    "given": {
+     "fastener": "Group 120",
+     "stress": "Fnt"
+    },
+    "gives": "90 ksi"
+   },
+   {
+    "anchor": "AISC Design Examples v16.0, Example II.A-19A, maximum plate thickness, p. IIA-207 (bolt group and thread condition stated on p. IIA-206)",
+    "given": {
+     "fastener": "Group 120",
+     "stress": "Fnv_N"
+    },
+    "gives": "54 ksi"
+   },
+   {
+    "anchor": "AISC Design Examples v16.0, Example II.C-1, p. IIC-8 (bolt group and thread condition stated on p. IIC-6)",
+    "given": {
+     "fastener": "Group 120",
+     "stress": "Fnt"
+    },
+    "gives": "90 ksi"
+   }
+  ],
+  "aisc360-22/table-J3.3": [
+   {
+    "anchor": "AISC Design Examples v16.0, Example D.1, p. D-3",
+    "given": {
+     "d": "3/4 inch",
+     "hole": "standard"
+    },
+    "gives": "13/16 inch"
+   },
+   {
+    "anchor": "AISC Design Examples v16.0, Example II.D-3, p. IID-22",
+    "given": {
+     "d": "3/4 inch",
+     "hole": "standard"
+    },
+    "gives": "13/16 inch"
+   },
+   {
+    "anchor": "AISC Design Examples v16.0, Example II.D-3, p. IID-22",
+    "given": {
+     "d": "3/4 inch",
+     "hole": "oversize"
+    },
+    "gives": "15/16 inch"
+   },
+   {
+    "anchor": "AISC Design Examples v16.0, Example II.A-1C, p. IIA-34",
+    "given": {
+     "d": "7/8 inch",
+     "hole": "standard"
+    },
+    "gives": "15/16 inch"
+   },
+   {
+    "anchor": "AISC Design Examples v16.0, Example II.A-19B, p. IIA-214 (printed as the mixed number 1 1/8 in.)",
+    "given": {
+     "d": "1 inch",
+     "hole": "standard"
+    },
+    "gives": "9/8 inch"
+   },
+   {
+    "anchor": "AISC Design Examples v16.0, Example II.C-3, p. IIC-25 (printed as the mixed number 1 1/8 in.)",
+    "given": {
+     "d": "1 inch",
+     "hole": "standard"
+    },
+    "gives": "9/8 inch"
+   }
+  ],
+  "aisc360-22/table-J3.4": [
+   {
+    "anchor": "AISC Design Examples v16.0, Example K.1, edge distance check, p. K-3 (the table value is printed as the limit of the check; bolt diameter stated on the same page)",
+    "given": {
+     "d": "3/4 inch"
+    },
+    "gives": "1 inch"
+   },
+   {
+    "anchor": "AISC Design Examples v16.0, Example II.A-17A, vertical bolt edge distance on the plate, p. IIA-175",
+    "given": {
+     "d": "3/4 inch"
+    },
+    "gives": "1 inch"
+   },
+   {
+    "anchor": "AISC Design Examples v16.0, Example II.D-1, flange width check, p. IID-6",
+    "given": {
+     "d": "3/4 inch"
+    },
+    "gives": "1 inch"
+   }
+  ]
+ }
+}

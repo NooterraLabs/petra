@@ -5,8 +5,14 @@
 # transcriber's sentence into the per-pair form the format gained after the run. examples.json is the
 # worked examples as a third agent collected them from the Design Examples v16.0, but for the area unit,
 # now spelled inch2. No agent could view a page, since this machine renders no PDF pages: each read the
-# text and the drawing instructions of the PDF. The examples are not checked against the printed page.
-# J2-5 needs a sine, which the language lacks, and both transcribers left it out and said so.
+# text and the drawing instructions of the PDF.
+# J2-5 needs a sine, which the language lacks, and both transcribers left it out and said so. The list
+# first called J2-5 a nominal stress, as the 2016 edition has it; in this edition it gives a factor.
+#
+# The examples were later checked against images of the printed pages, all 40: no number differs.
+# Three are weaker than they look. The place taken for J3-1 on p. IIA-36 does not cite J3-1, and the
+# x of the two J10 examples is read off a figure, where the text says only that the force is farther
+# from the member end than d. Five results are printed per bolt and the file says kip.
 #
 # id	clause	equations	what the row gives
 aisc360-22/J3-1	J3.7	J3-1	nominal tensile or shear strength of a bolt
@@ -23,4 +29,4 @@ aisc360-22/E3-4	E3	E3-4	elastic buckling stress
 aisc360-22/G2-3	G2.1	G2-3 and G2-4	web shear strength coefficient Cv1 of G2.1(b), both cases
 aisc360-22/J10-2	J10.2	J10-2 and J10-3	web local yielding, both cases; name the distance from the member end to the force x
 aisc360-22/J10-4	J10.3	J10-4, J10-5a and J10-5b	web local crippling, all three cases; name the distance from the member end to the force x
-aisc360-22/J2-5	J2.4	J2-5	nominal stress of a fillet weld loaded at an angle to its axis
+aisc360-22/J2-5	J2.4	J2-5	directional strength increase factor of a fillet weld loaded at an angle to its axis

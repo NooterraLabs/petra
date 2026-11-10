@@ -35,6 +35,37 @@ STRUT = {
 }
 
 
+GRADES = {
+    "id": "example/tolerance",
+    "anchor": {"standard": "a textbook", "clause": "3.1", "table": "3"},
+    "gives": {"name": "T", "dim": "length", "what": "tolerance on a size"},
+    "takes": [
+        {"name": "D", "dim": "length", "what": "nominal size", "range": ["1 mm", "30 mm"]},
+        {"name": "grade", "one_of": ["fine", "medium", "coarse"], "what": "tolerance grade"},
+    ],
+    "table": {
+        "down": {"by": "D", "bands": [["0 mm", "6 mm"], ["6 mm", "18 mm"], ["18 mm", "30 mm"]], "closed": "upper"},
+        "across": {"by": "grade"},
+        "unit": "um",
+        "cells": [["8", "12", "0.1 mm"], ["11", "18", "0.12 mm"], ["13", "21", None]],
+        "rises": ["D", "grade"],
+    },
+}
+DRILL = {
+    "id": "example/drill",
+    "anchor": {"standard": "a textbook", "clause": "3.2", "table": "4"},
+    "gives": {"name": "dh", "dim": "length", "what": "hole diameter"},
+    "takes": [{"name": "d", "dim": "length", "what": "screw diameter", "range": ["3 mm", "6 mm"]}],
+    "table": {"down": {"by": "d", "at": ["3 mm", "4 mm", "5 mm", "6 mm"]}, "cells": ["3.4 mm", "4.5 mm", "5.5 mm", "6.6 mm"], "rises": ["d"]},
+}
+
+
+def table(body: dict, **parts) -> dict:
+    out = copy.deepcopy(body)
+    out["table"].update(parts)
+    return out
+
+
 def changed(body: dict, **parts) -> dict:
     out = copy.deepcopy(body)
     out.update(parts)
@@ -61,6 +92,14 @@ class Reading(unittest.TestCase):
                 deck.read(broken)
         with self.assertRaisesRegex(deck.RowError, "range of r"):
             deck.read(changed(HOOP, takes=[HOOP["takes"][0], {**HOOP["takes"][1], "range": ["2 m", "50 mm"]}, HOOP["takes"][2]]))
+
+    def test_a_whole_number_and_a_fraction_read_as_printed(self):
+        self.assertEqual(deck.quantity("1 1/8 inch", "x")[0], Fraction(9, 8) * Fraction(127, 5000))
+        self.assertEqual(deck.quantity("1 1/8", "x"), (Fraction(9, 8), deck.NONE))
+        self.assertEqual(deck.quantity("29,000 ksi", "x")[0], deck.quantity("29000 ksi", "x")[0])
+        for wrong in ("0,3 mm", "1 1/0 inch", "1 1 inch"):
+            with self.subTest(wrong=wrong), self.assertRaises(deck.RowError):
+                deck.quantity(wrong, "x")
 
     def test_powers_roots_and_constants_with_units(self):
         body = changed(HOOP, **{"is": ["mul", ["sqrt", ["mul", "p", ["q", "200", "GPa"]]], ["pow", ["div", "t", "r"], "3/2"]]})
@@ -161,6 +200,86 @@ class Second(unittest.TestCase):
         moved = copy.deepcopy(STRUT)
         moved["cases"][0]["when"][2] = "101"
         self.assertEqual(deck.second(deck.read(STRUT), deck.read(moved)).outcome, "fail", "the meeting points fall between 100 and 101")
+
+
+class Tables(unittest.TestCase):
+    MM = Fraction(1, 1000)
+
+    def test_a_cell_is_read_by_band_and_key_with_its_own_unit_or_the_tables(self):
+        row = deck.read(GRADES)
+        at = lambda size, grade: deck.value(row, {"D": size * self.MM, "grade": grade})  # noqa: E731
+        self.assertEqual(at(10, "medium"), Fraction(18, 10 ** 6))
+        self.assertEqual(at(10, "coarse"), Fraction(12, 10 ** 5), "a cell with its own unit keeps it")
+        self.assertEqual((at(6, "fine"), at(Fraction(601, 100), "fine")), (Fraction(8, 10 ** 6), Fraction(11, 10 ** 6)), "a band holds its upper end")
+        self.assertEqual((at(0, "fine"), at(31, "fine"), at(20, "coarse")), (None, None, None), "outside the bands, and an empty cell")
+        lower = deck.read(table(GRADES, down={**GRADES["table"]["down"], "closed": "lower"}))
+        self.assertEqual(deck.value(lower, {"D": 6 * self.MM, "grade": "fine"}), Fraction(11, 10 ** 6))
+
+    def test_the_last_band_may_have_no_upper_end(self):
+        open_top = deck.read(table(GRADES, down={"by": "D", "bands": [["0 mm", "6 mm"], ["6 mm", "18 mm"], ["18 mm", None]]}))
+        self.assertEqual(deck.value(open_top, {"D": 5000 * self.MM, "grade": "fine"}), Fraction(13, 10 ** 6))
+        self.assertEqual(deck.second(open_top, deck.read(GRADES)).outcome, "fail", "one stops at 30 mm and the other does not")
+        with self.assertRaisesRegex(deck.RowError, "only the last"):
+            deck.read(table(GRADES, down={"by": "D", "bands": [["0 mm", None], ["6 mm", "18 mm"], ["18 mm", "30 mm"]]}))
+
+    def test_a_table_read_at_listed_values_gives_nothing_between_them(self):
+        row = deck.read(DRILL)
+        self.assertEqual(deck.value(row, {"d": 4 * self.MM}), Fraction(45, 10 ** 4))
+        self.assertIsNone(deck.value(row, {"d": Fraction(9, 2) * self.MM}))
+
+    def test_data_that_is_not_a_table_is_refused(self):
+        for broken, why in ((table(GRADES, cells=GRADES["table"]["cells"][:2]), "3 lines of 3"),
+                            (table(GRADES, down={"by": "D", "bands": [["0 mm", "6 mm"], ["5 mm", "18 mm"], ["18 mm", "30 mm"]]}), "none over another"),
+                            (table(GRADES, across={"by": "grade", "at": ["1 mm"]}), "`by` alone"), (table(GRADES, rises=["D"], falls=["D"]), "no side is in both"),
+                            (table(DRILL, down={"by": "d", "at": ["4 mm", "3 mm", "5 mm", "6 mm"]}), "in order"),
+                            (changed(GRADES, jumps=[]), "no jumps"), (table(GRADES, cells=[["8", "12", "0,1 mm"], ["11", "18", "1"], ["13", "21", None]]), "comma"),
+                            (changed(HOOP, takes=[*HOOP["takes"], {"name": "k", "one_of": ["a", "b"]}]), "takes no key")):
+            with self.subTest(why=why), self.assertRaisesRegex(deck.RowError, why):
+                deck.read(broken)
+
+    def test_units_reads_every_cell_and_every_band(self):
+        self.assertEqual(deck.units(deck.read(GRADES)).outcome, "pass")
+        force = deck.units(deck.read(table(GRADES, cells=[["8", "12", "0.1 kN"], ["11", "18", "0.12 mm"], ["13", "21", None]])))
+        self.assertEqual(force.outcome, "fail")
+        self.assertIn("a cell is a force", force.detail)
+        bands = deck.units(deck.read(table(GRADES, down={"by": "D", "bands": [["0 kN", "6 kN"], ["6 kN", "18 kN"], ["18 kN", "30 kN"]]})))
+        self.assertIn("the side that reads D is not all length", bands.detail)
+
+    def test_shape_catches_a_cell_that_breaks_the_run(self):
+        self.assertEqual(deck.shape(deck.read(GRADES)).outcome, "pass")
+        slipped = deck.shape(deck.read(table(GRADES, cells=[["8", "12", "0.1 mm"], ["11", "81", "0.12 mm"], ["13", "21", None]])))
+        self.assertEqual(slipped.outcome, "fail")
+        self.assertIn("along D the table rises, and in line 2 place 3 is under place 2", slipped.detail)
+        self.assertEqual(deck.shape(deck.read(table(GRADES, rises=[]))).outcome, "none")
+
+    def test_a_second_transcription_is_compared_cell_by_cell_and_at_every_band_end(self):
+        row = deck.read(GRADES)
+        self.assertEqual(deck.second(row, deck.read(GRADES)).outcome, "pass")
+        one_cell = deck.second(row, deck.read(table(GRADES, cells=[["8", "12", "0.1 mm"], ["11", "19", "0.12 mm"], ["13", "21", None]])))
+        self.assertEqual(one_cell.outcome, "fail")
+        self.assertIn("grade=medium", one_cell.detail)
+        for other in (table(GRADES, down={**GRADES["table"]["down"], "closed": "lower"}),
+                      table(GRADES, down={"by": "D", "bands": [["0 mm", "6 mm"], ["6 mm", "20 mm"], ["20 mm", "30 mm"]]}),
+                      table(GRADES, cells=[["8", "12", "0.1 mm"], ["11", "18", "0.12 mm"], ["13", "21", "0.2 mm"]])):
+            self.assertEqual(deck.second(row, deck.read(other)).outcome, "fail")
+        self.assertEqual(deck.second(row, deck.read(DRILL)).outcome, "fail", "another table altogether")
+
+    def test_a_keys_names_are_matched_by_their_order(self):
+        row = deck.read(GRADES)
+        takes = [GRADES["takes"][0], {"name": "class", "one_of": ["f", "m", "c"], "what": "tolerance class"}]
+        renamed = changed(table(GRADES, rises=["D", "class"], across={"by": "class"}), takes=takes)
+        self.assertEqual(deck.second(row, deck.read(renamed)).outcome, "pass")
+        reordered = changed(table(GRADES, rises=["D", "class"], across={"by": "class"}), takes=[takes[0], {**takes[1], "one_of": ["m", "f", "c"]}])
+        self.assertEqual(deck.second(row, deck.read(reordered)).outcome, "pass", "the cells are in the printed order whatever a column is called")
+        fewer = changed(table(GRADES, rises=["D", "class"], across={"by": "class"}, cells=[["8", "12"], ["11", "18"], ["13", "21"]]), takes=[takes[0], {**takes[1], "one_of": ["f", "m"]}])
+        self.assertEqual(deck.second(row, deck.read(fewer)).outcome, "fail")
+
+    def test_an_example_names_its_key(self):
+        row = deck.read(GRADES)
+        worked = {"anchor": "the textbook, Example 3.2", "given": {"D": "10 mm", "grade": "medium"}, "gives": "18 um"}
+        self.assertEqual([c.outcome for c in deck.accept(row, [deck.example(worked, row)], row)], ["pass"] * 4)
+        with self.assertRaisesRegex(deck.RowError, "not one of"):
+            deck.example({**worked, "given": {"D": "10 mm", "grade": "rough"}}, row)
 
 
 class Accepting(unittest.TestCase):

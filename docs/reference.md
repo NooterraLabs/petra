@@ -195,7 +195,7 @@ A card and a design accept these unit spellings.
 | dimension | spellings |
 |---|---|
 | dimensionless | `%` |
-| length | `m`, `mm`, `cm`, `km`, `inch`, `ft` |
+| length | `m`, `mm`, `um`, `cm`, `km`, `inch`, `ft` |
 | area | `mm2`, `m2`, `inch2` |
 | force | `N`, `kN`, `MN`, `lbf`, `kip`, `kips` |
 | stress | `Pa`, `kPa`, `MPa`, `GPa`, `psi`, `ksi` |

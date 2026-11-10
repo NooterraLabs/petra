@@ -68,7 +68,7 @@ CORE_CAP = Limit(1000, "Set on 2026-11-08 at 140f742, where the core measured 95
                        "A new rule adds 3 to 5 lines to rules/__init__.py (inferred from its tables), so "
                        "the headroom covers the registry entries of several rules.")
 
-TRUSTED_CEILING = Limit(17780, "Set on 2026-11-08 at 140f742, where the trusted base measured 13,530 "
+TRUSTED_CEILING = Limit(17781, "Set on 2026-11-08 at 140f742, where the trusted base measured 13,530 "
                                "code lines: core 957, rules 457, outside the kernel 12,116. Raised on "
                                "2026-11-08 on branch parts-core as the parts layer replaces its scaffold: "
                                "classifying the scaffold measured 14,269, and the mesh reader with its "
@@ -98,6 +98,7 @@ TRUSTED_CEILING = Limit(17780, "Set on 2026-11-08 at 140f742, where the trusted 
                                "each file, the `given` declaration and lowering the two trees measured 17,766. "
                                "Refusing a mesh number that is missing, not finite or longer than a coordinate, "
                                "and a design number of more than 100 characters, measured 17,780. "
+                               "The micrometre, the unit ISO 286 prints its tolerances in, measured 17,781. "
                                "Raise it in the commit that needs more and say why here.")
 
 T2_ADOPTED = date(2026, 11, 8)

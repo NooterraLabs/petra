@@ -63,6 +63,7 @@ UNITS: dict[str, tuple[Fraction, Dim]] = {
     "%": (Fraction(1, 100), DIMENSIONLESS),
     "m": (_ONE, LENGTH),
     "mm": (_MILLI, LENGTH),
+    "um": (Fraction(1, 10**6), LENGTH),
     "cm": (Fraction(1, 100), LENGTH),
     "km": (_KILO, LENGTH),
     "mm2": (Fraction(1, 10**6), AREA),
