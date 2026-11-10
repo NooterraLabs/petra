@@ -1,11 +1,13 @@
 name: checks
 
-# The checks that close a phase, run on GitHub's machines: the test suite, the absurd-design
-# gap with one job per seed, canary recall, and the metamorphic relations over the steel
-# gate's stream. The steel gate stays off CI because it reads the full AISC shapes workbook,
-# which is not in the repository.
+# The test suite and the corpus run on every push, and on a pull request from a fork. The
+# absurd-design gap with one job per seed, canary recall, and the metamorphic relations over
+# the steel gate's stream run when the workflow is started by hand. The steel gate stays off
+# CI because it reads the full AISC shapes workbook, which is not in the repository.
 
 on:
+  push:
+  pull_request:
   workflow_dispatch:
     inputs:
       n:
@@ -28,6 +30,8 @@ permissions:
 
 jobs:
   suite:
+    # A pull request from a branch of this repository already ran on its push.
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
@@ -39,14 +43,16 @@ jobs:
           python-version: "3.11"
       - run: pip install numpy==2.4.6 scipy==1.17.1
       - run: nproc && python -m unittest discover -s tests
+      - run: python corpus/run.py
 
   gap:
+    if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     timeout-minutes: 360
     strategy:
       fail-fast: false
       matrix:
-        seed: ${{ fromJSON(inputs.seeds) }}
+        seed: ${{ fromJSON(inputs.seeds || '[1]') }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -62,7 +68,7 @@ jobs:
           path: out/
 
   recall:
-    if: ${{ inputs.recall }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.recall }}
     runs-on: ubuntu-latest
     timeout-minutes: 360
     steps:
@@ -80,7 +86,7 @@ jobs:
           path: out/
 
   metamorphic:
-    if: ${{ inputs.metamorphic }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.metamorphic }}
     runs-on: ubuntu-latest
     timeout-minutes: 360
     steps:
