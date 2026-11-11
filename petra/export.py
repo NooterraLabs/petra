@@ -222,8 +222,18 @@ def export(path: str, out: Path, physics: bool = True, card_path: str | None = N
     from .registry import build_registry
     from .solvers import SolverSource
 
+    from . import grid
+
     registry = build_registry()
     design = load_design(path, registry, card_path)
+    rules = grid.owner(design)
+    if rules is not None:
+        files = grid.check(design, rules)[1]
+        out.mkdir(parents=True, exist_ok=True)
+        for name, body in files.items():
+            if physics or name != "proofs":
+                (out / f"{name}.json").write_text(body, encoding="utf-8", newline="\n")
+        return
     proofs = Proofs()
     report = check_design(design, registry, (SolverSource(),), sink=proofs, path=path) if physics else None
     out.mkdir(parents=True, exist_ok=True)

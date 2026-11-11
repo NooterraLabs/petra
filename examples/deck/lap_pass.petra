@@ -1,0 +1,32 @@
+petra 0
+
+# Two A36 plates joined by three 3/4 inch Group 120 bolts in one line, pulled along it.
+# The AISC deck has rules for the strength of the bolts and their holes, the end distance
+# and the yielding of each plate, and each is proved. The grid asks eight more mechanisms
+# that the deck has no rule for yet. The card waives each one, signed and with its reason,
+# and the report lists them. So the verdict is PASS.
+
+plate tab {
+  thickness 0.375 inch
+  width 6 inch
+  Fy given tab.Fy
+  Fu given tab.Fu
+}
+
+plate strap {
+  thickness 0.375 inch
+  width 6 inch
+  Fy given strap.Fy
+  Fu given strap.Fu
+}
+
+lap splice {
+  fastener "Group 120"
+  threads included
+  diameter 0.75 inch
+  holes standard
+  count 3
+  pitch 3 inch
+  end 1.5 inch
+  joins tab strap
+}

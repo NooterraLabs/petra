@@ -29,8 +29,9 @@ SHEAR_TEE = STEEL / "shear_tee.petra"
 HANGER = STEEL / "hanger.petra"
 TRUSS_PASS = ROOT / "examples" / "truss_pass.petra"
 FAMILIES = ROOT / "examples" / "families"
-DESIGNS = sorted([*(ROOT / "examples").rglob("*.petra"), *(ROOT / "judges" / "canaries").glob("*.petra"),
-                  *(ROOT / "tests" / "fixtures").rglob("*.petra")])
+DESIGNS = sorted(p for p in [*(ROOT / "examples").rglob("*.petra"), *(ROOT / "judges" / "canaries").glob("*.petra"),
+                             *(ROOT / "tests" / "fixtures").rglob("*.petra")] if p.parent.name != "deck")
+"""The designs of the models' kinds. A design of a deck's types has cells and no excused checks (tests/test_grid.py)."""
 SIDESWAY = "member web: web sidesway buckling where its slenderness ratio makes it apply (J10.4)"
 
 # A W14x90 (AISC Shapes Database v16.0) as flange_force.petra loads it, Lb = 144 in.

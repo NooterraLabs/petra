@@ -31,6 +31,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from bench import tasks  # noqa: E402
+from petra import grid  # noqa: E402
 from petra.files import read_pair  # noqa: E402
 from petra.lang import load_design, parse_design  # noqa: E402
 from petra.models.electronics import generate as electronics  # noqa: E402
@@ -263,6 +264,8 @@ def read_by(design, name: str, registry: Registry) -> set[str]:
         lowered = load_design(design, registry)
     else:
         lowered = parse_design(*design, f"{name}.petra", registry)
+    if grid.owner(lowered) is not None:
+        return set()      # a design of a deck's types reads no registry entry
     body = check_design(lowered, registry, (SolverSource(),), path=f"{name}.petra").to_json()
     return {p["label"][len("reg:"):] for v in body["verdicts"] for p in v["footprint"] if p["label"].startswith("reg:")}
 

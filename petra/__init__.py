@@ -77,7 +77,7 @@ def check_file(path: str | Path, *, card: str | Path | None = None, certs: str |
     """Convenience shell over check_design: the design at `path` against `card`, the .card
     file beside it when none is named, with the default registry, evidence sources in the
     order certs -> library -> solvers, and accepted evidence recorded into `certs` when given."""
-    from . import wellformed
+    from . import grid, wellformed
     from .certs import CertStore
     from .lang import load_design
     from .pipeline import check_design
@@ -86,6 +86,9 @@ def check_file(path: str | Path, *, card: str | Path | None = None, certs: str |
 
     registry = build_registry()
     design = load_design(path, registry, card)
+    rules = grid.owner(design)
+    if rules is not None:
+        return grid.check(design, rules)[0]
     wellformed.require(design, registry)
     store = CertStore(certs) if certs is not None else None
     sources = tuple(s for s in (store, library, SolverSource() if solve else None) if s is not None)

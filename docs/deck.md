@@ -1,6 +1,15 @@
-# How a rule is written
+# How a deck is written
 
-A deck holds the rules Petra checks a design against. A rule is a row: one equation or one table of a standard, written as data. This page describes a row, the acceptance check that a row passes before it enters a deck, and how to run the check. `petra/deck.py` reads rows and runs the check.
+A deck holds what Petra checks a design against, as data. It has four parts.
+
+| Part | Holds |
+|---|---|
+| Rows | Each equation and each table of a standard |
+| Types | The kinds of part a design may have, and the fields of each |
+| The grid | For each type, every mechanism a part of that type must answer for |
+| Rules | The answers: each binds rows to the fields of a part and states an inequality |
+
+This page describes a row first, with the acceptance check that a row passes before it enters a deck. Then it describes types, the grid and rules, and what `petra check` does with a design whose parts are of a deck's types. `petra/deck.py` reads rows and runs the acceptance check. `petra/grid.py` reads the rest and checks a design.
 
 Rows are written by transcription, and the transcriber is not trusted. The acceptance check is what stands between a wrong transcription and a deck.
 
@@ -165,6 +174,170 @@ The command prints each row as admitted or refused with the four parts, and exit
 - A transcription that is wrong in a way that keeps the dimensions, where no worked example exercises the error and a second transcriber makes the same mistake.
 - An equation used outside the conditions its clause sets, when the row leaves those conditions out. A condition that is not a comparison of quantities, such as a hole type or a design method, cannot be written in a row at all.
 - A single cell of a table read one digit off, or taken from the line below, where the table still rises as it should and no example reads that cell. In the second run the check with no second transcription refused 52% of damaged tables: nearly all of the cells read ten times too large or taken from the next column, and about one in ten of those one digit off. A table rests on its second transcription, which compares every cell.
-- Whether the row is the right equation for a design. A deck binds rows to the parts of a design, and that binding is not a row.
+- Whether the row is the right equation for a design. A rule binds rows to the parts of a design, and the acceptance check does not cover rules.
 
-The kernel does not read rows yet, so a row proves nothing by itself.
+A row proves nothing by itself. A rule puts it to work.
+
+## A deck
+
+A deck is one JSON file in `petra/decks`.
+
+| Key | Holds |
+|---|---|
+| `format` | `"petra-rules/0"` |
+| `name` | The deck's name |
+| `about` | What the deck covers |
+| `rows` | The rows, each as described above |
+| `types` | The types |
+| `grid` | The lines of the grid |
+| `rules` | The rules |
+
+A design names a type as the kind of a component block: `lap splice { ... }` is a part named `splice` of type `lap`. The parts of one design are all of one deck's types, or all of the built-in models' kinds.
+
+`petra/decks/aisc360.json` is the first deck. It holds 18 rows of AISC 360-22, the types `plate` and `lap`, a grid of 15 lines for a lap, and 4 rules.
+
+### A type
+
+```json
+{"type": "plate", "what": "a flat steel plate that a joint connects",
+ "fields": [
+  {"name": "thickness", "dim": "length", "what": "its thickness"},
+  {"name": "Fy", "dim": "stress", "signed": true, "what": "the specified minimum yield stress of its steel"}]}
+```
+
+A field is one line of the part's block. It is one of three things.
+
+| A field with | Is | A design writes |
+|---|---|---|
+| `dim` | A quantity of that dimension, more than zero | `thickness 0.375 inch`, or `Fy given tab.Fy` |
+| `one_of` | A key: one of the listed names | `threads included`, and in quotes when the name has a space: `fastener "Group 120"` |
+| `type` | The parts of that type it joins, one for each name in `as` | `joins tab strap` |
+
+A quantity may also have these.
+
+| Key | Means |
+|---|---|
+| `signed` | Only the card states it, and the design reads it with `given`. A design that writes a number for it is refused. A material strength is signed. |
+| `whole` | It is a count, and the design writes a whole number |
+| `least` | The least value it may take |
+
+A part has every field of its type once, and no other line. A part is joined by at most one other: a plate that two laps join would be checked under each lap's load alone, so the pair is refused.
+
+`petra kinds lap` prints the lines of a type and what the grid asks of it, and `petra new lap` prints a design to start from, with its card under `--card`.
+
+A part reads only the bound the card gives under the part's name and the field's. On the part `tab`, the line `Fy given tab.Fy` reads `given tab.Fy in [36 ksi, 36 ksi] signed ...` from the card, and `Fy given tab.Fu` is refused. So a design cannot read the bound for one field into another.
+
+`as` gives each joined part the name a rule calls it by. With `"as": ["a", "b"]`, a rule reads `a.thickness` and `b.Fu`.
+
+`loads` lists what a card may put on a part of the type. Each has a `name`, a `dim`, `what` it is, and a `least` when it has a floor. A card states one in a load case: `on splice pull in [0 kip, 45 kip]`.
+
+### The grid
+
+```json
+{"type": "lap", "mechanism": "lap.spacing", "what": "minimum spacing of the holes",
+ "anchor": {"standard": "AISC 360-22", "clause": "J3.4"}}
+```
+
+A line of the grid names one mechanism that every part of a type answers for, and the clause that raises it. The grid is written from the standard's own list of sections, and a line is there whether or not the deck has a rule for it. A line with no rule leaves its cell open, so a design cannot pass until the deck gets the rule or the card waives the mechanism.
+
+A line may say that the mechanism cannot arise, and why:
+
+```json
+"unless": {"why": "a lap is a bearing-type joint, which claims no slip resistance"}
+"unless": {"when": ["is", "fit", "close"], "why": "a close fit leaves no room for one"}
+```
+
+With no `when`, it never arises for the type. A condition is `["is", FIELD, NAME]` on a key field, `["loaded", LOAD]`, or `and`, `or` and `not` of these.
+
+### A rule
+
+A rule answers one line of the grid with an inequality.
+
+```json
+{"id": "aisc360-22/lap-yield-a", "type": "lap", "mechanism": "lap.ply_yield",
+ "anchor": {"standard": "AISC 360-22", "clause": "J4.1", "equation": "J4-1"},
+ "says": "the pull is at most 0.90 of the yield strength of the gross section of the first plate",
+ "le": [["load", "pull"],
+        ["mul", "0.90", ["row", "aisc360-22/J4-1", {"Fy": "a.Fy", "Ag": ["mul", "a.width", "a.thickness"]}]]]}
+```
+
+| Key | Holds |
+|---|---|
+| `id`, `type`, `mechanism` | The rule's name, and the line of the grid it answers |
+| `anchor` | The clause the inequality comes from |
+| `says` | The inequality in words |
+| `le` | Two expressions. The rule holds when the first is at most the second. |
+| `let` | Names for expressions the rule uses more than once |
+| `where` | The range the rule holds in: a list of `{"le": [a, b], "why": "..."}` |
+| `when` | A condition on the part, as in the grid. The rule answers only for the parts it holds for. |
+
+An expression is written as a row's is. A name in it is a quantity field of the part, `NAME.FIELD` for a part it joins, or a name from `let`. It has two more forms.
+
+| Written | Means |
+|---|---|
+| `["load", NAME]` | A load the card puts on the part |
+| `["row", ID, {INPUT: ...}]` | A row of the deck, with each of its inputs bound |
+
+A quantity that a row takes is bound to an expression of its dimension. A key that a row takes is bound in one of three ways: to a key field whose names are all names of the row's key, to `["key", NAME]`, or to `["by", FIELD, {NAME OF THE FIELD: NAME OF THE ROW'S KEY}]`.
+
+A factor that the clause fixes for the inequality, such as a resistance factor, is a number in the rule.
+
+Reading a deck checks every rule. Each input of each row is bound once and to its dimension. Both sides of `le` have one dimension. The rule answers a line of the grid that can arise. A deck that fails any of these does not load.
+
+## A design checked against a deck
+
+`petra check` makes one cell for each answer and writes the files of [format.md](format.md). A cell has one of five states.
+
+| State | When |
+|---|---|
+| `proved` | A rule's inequality holds for every value the card and the design allow |
+| `refuted` | It fails at a point they allow |
+| `not applicable` | The grid says the mechanism cannot arise for this part |
+| `waived` | The card waives the mechanism on the part |
+| `open` | Anything else |
+
+No cell has a default. The verdict is FAIL with a refuted cell, UNKNOWN with an open cell or with nothing proved, and PASS otherwise. A proved or refuted cell carries a tape, and `petra-verify` checks it.
+
+These cases are open:
+
+- The grid has a line and the deck has no rule for it, or none that holds for this part.
+- A rule reads a load and the card puts none on the part.
+- A rule's `where` is not proved. Outside its range a rule says nothing, so its cell is never refuted there.
+- A table has no value where the rule reads it: between the listed values of a table read at listed values, outside every band, or in an empty cell.
+- The inequality is neither proved over the ranges the card gives nor refuted at a corner or the middle of them.
+- No rule and no line of the grid reads a quantity or a key of a part. A value nothing reads is a value nothing checks, so a plate that no lap joins has an open cell for each of its fields, named `unread`.
+
+A rule that reads a load has a cell for each load case that puts the load on the part. A rule with `where` has one more cell, named with `/where`, that proves its range.
+
+A quantity on the end of a band reads the band that holds that end, exactly. Over a range that reaches into two bands or two cases, the inequality must hold in both.
+
+```bash
+petra check examples/deck/lap_unknown.petra
+```
+
+```
+lap-splice: UNKNOWN
+deck       sha256:d80024f8...  aisc360-22
+card       sha256:b0372d69...  examples/deck/lap_unknown.card
+design     sha256:ba2b35d4...  examples/deck/lap_unknown.petra
+kernel     petra-verify checked 5 of 5 proofs and gives the same verdict
+cells      5 proved, 0 refuted, 4 not applicable, 0 waived, 8 open
+  splice/lap.spacing             open                    the deck has no rule for it (AISC 360-22 J3.4)
+  splice/lap.end_distance        proved           0.667  lap-end-distance (AISC 360-22 J3.5, Table J3.4)
+  splice/lap.strength            proved           0.838  lap-strength/gravity (AISC 360-22 J3.7 and J3.11, equation J3-1, J3-6a, J3-6c, Table J3.2, J3.3)
+  splice/lap.slip                not applicable          a lap is a bearing-type joint, which claims no slip resistance (AISC 360-22 J3.9)
+  ...
+```
+
+The number on a proved or refuted line is the most the left side of the rule reaches over the least the right side does. `examples/deck` has the same lap passing, with a card that waives the eight open mechanisms, and failing under a larger pull.
+
+## What a deck does not check yet
+
+- Types, grid lines and rules are written once, by hand. No second transcription and no worked example stands behind them, as they do behind a row.
+- The kernel checks the arithmetic of every tape and gives its own verdict on the cells. It does not check that the cells are the ones the grid asks for, or that a tape is the rule it claims to be. `petra/grid.py` is trusted for both until the kernel reads decks.
+- A key picks a table's line when the tape is written, and the tape does not record the key.
+- A `not applicable` cell is the deck's word.
+- The `range` of a row's input is where the acceptance check samples the row. It is not enforced as the range the row holds in. A rule's `where` is.
+- A type with no line in the grid gets no cell of its own. A `plate` has none: the lap that joins it asks about it, and a plate that nothing joins has only its `unread` cells.
+- A card's claims, tests and ambient, a family's params, and the repair that `petra check` suggests on a FAIL are not read for a design of a deck's types. A card or a design that states one is refused.
+- The first deck has rules for 3 of the 15 lines of a lap's grid, all by LRFD. Four lines cannot arise for a lap, and eight are open: tightening, hole use, spacing, side distance, maximum spacing, tensile rupture, block shear and flexure of the plates.

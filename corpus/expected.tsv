@@ -143,3 +143,18 @@ judges/canaries/stiffened_seat_beam_side_seat_bearing.petra	NOT_PASS			the outsi
 judges/canaries/stiffened_seat_beam_vs_support_web_clearance.petra	NOT_PASS			the outside judge rejects it
 judges/canaries/truss_600m_span.petra	NOT_PASS			the outside judge rejects it
 corpus/cases/found/m_huge_exponent.petra	INPUT_ERROR			a mesh coordinate of 1e999999999, which read exactly would fill memory
+examples/deck/lap_pass.petra	PASS			four answers proved by rules of the AISC deck, and the card waives the eight it has no rule for
+examples/deck/lap_fail.petra	FAIL			the pull is 60 kip and three bolts carry 53.7
+examples/deck/lap_unknown.petra	UNKNOWN			the grid asks eight mechanisms the deck has no rule for, and the card waives none
+corpus/cases/deck/d01_short_end.petra	FAIL			the end distance is 3/4 inch, under the 1 inch Table J3.4 asks of a 3/4 inch bolt, and every other answer holds or is waived
+corpus/cases/deck/d02_long_line.petra	UNKNOWN			14 bolts at 3 inch make a line of 39 inch, past the 38 inch the strength rule holds to, so its cell is open and not proved
+corpus/cases/deck/d03_unlisted_bolt.petra	UNKNOWN			Tables J3.3 and J3.4 list no 0.7 inch bolt, so two cells are open
+corpus/cases/deck/d04_oversize_holes.petra	UNKNOWN			the end distance rule is for standard holes, and the deck has none for oversize ones
+corpus/cases/deck/d05_swapped_given.petra	INPUT_ERROR			the yield stress of a plate reads the bound the card gives for its tensile strength
+corpus/cases/deck/d06_design_states_strength.petra	INPUT_ERROR			the design writes a plate's yield stress, which only the card may state
+corpus/cases/deck/d07_push.petra	INPUT_ERROR			the card's pull goes below zero, and a lap takes a pull
+corpus/cases/deck/d08_no_load.petra	UNKNOWN			the card puts no pull on the lap, so the rules that read one are open
+corpus/cases/deck/d09_thin_plate.petra	FAIL			a 1/8 inch plate yields at 24.3 kip and tears out at its bolts, under a pull of 45 kip
+corpus/cases/deck/d10_one_waiver_short.petra	UNKNOWN			the card waives seven of the eight mechanisms the deck has no rule for, and block shear stays open
+corpus/cases/deck/d11_stray_plate.petra	UNKNOWN			a plate 1 nm thick that no lap joins: nothing reads it, so it has open cells
+corpus/cases/deck/d12_shared_plates.petra	INPUT_ERROR			two laps join the same plates, and each would be checked as if it alone loaded them

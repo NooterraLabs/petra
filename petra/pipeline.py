@@ -186,6 +186,10 @@ def lower_components(design: Design, registry: Registry) -> dict[str, Any]:
     lowered: dict[str, Any] = {}
     problems: list[str] = []
     for name, component in design.components.items():
+        if component.kind not in domains.KINDS:
+            problems.append(f"{component.span.path}:{component.span.line}:{component.span.col}: {name}: a {component.kind} is a part of a deck, "
+                            "which `petra check` reads and this command does not yet")
+            continue
         lower = domains.KINDS[component.kind].kinds[component.kind]
         try:
             lowered[name] = lower(component, design, registry)

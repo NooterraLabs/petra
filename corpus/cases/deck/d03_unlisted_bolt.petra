@@ -1,0 +1,28 @@
+petra 0
+
+# Tables J3.3 and J3.4 list no 0.7 inch bolt, so two cells are open.
+
+plate tab {
+  thickness 0.375 inch
+  width 6 inch
+  Fy given tab.Fy
+  Fu given tab.Fu
+}
+
+plate strap {
+  thickness 0.375 inch
+  width 6 inch
+  Fy given strap.Fy
+  Fu given strap.Fu
+}
+
+lap splice {
+  fastener "Group 120"
+  threads included
+  diameter 0.7 inch
+  holes standard
+  count 3
+  pitch 3 inch
+  end 1.5 inch
+  joins tab strap
+}

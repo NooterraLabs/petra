@@ -52,6 +52,7 @@ A design has no other key, and the kernel refuses one that has. The language ref
 | `domains.size` | `min` and `strict`: the least value a size may take |
 | `domains.input` | For each dimension that has a floor, `min` and `strict`. A dimension that is not listed has none. |
 | `constants` | Each registry value a proof reads: `label` (`reg:KEY`), `lo`, `hi` |
+| `rules` | For a design checked against a deck of rules ([deck.md](deck.md)): the `name` of that deck and the `hash` of its file. The kernel does not read it. It is in the file so that the hash the kernel prints for the deck covers the rules. |
 
 `petra/decks/core.json` holds the domains.
 
@@ -62,7 +63,7 @@ A design has no other key, and the kernel refuses one that has. The language ref
 | `format` | `"petra-proofs/0"` |
 | `cells` | One cell per obligation |
 
-A cell has `subject`, `mechanism`, `entry` and `state`. The state is one of `proved`, `refuted`, `not_applicable`, `waived` and `open`. A `not_applicable` or `open` cell has `why`. A cell may carry a tape.
+A cell has `subject`, `mechanism`, `entry` and `state`. The state is one of `proved`, `refuted`, `not_applicable`, `waived` and `open`. A `not_applicable` or `open` cell has `why`. A cell may carry a tape. A cell that a rule of a deck answers carries `rule`, the rule's id, which the kernel does not read.
 
 ### Tapes
 
@@ -87,6 +88,13 @@ A node is a list whose first item names it.
 | `["sqrt", i]`, `["ln", i]`, `["exp", i]` | The function of node `i` |
 | `["div", i, j]` | Node `i` over node `j` |
 | `["pow", i, n]` | Node `i` to the integer power `n` |
+| `["pick", [[COND, i], ...]]` | Node `i` of the first case whose condition holds |
+
+A `pick` is how a tape writes a table or an equation with cases. Each case is a condition and a node, and the pick's value is the node of the first case whose condition holds. A condition is `["le", i, j]` (node `i` is at most node `j`), `["lt", i, j]` (node `i` is less than node `j`), `["and", [COND, ...]]`, `["or", [COND, ...]]` or `["not", COND]`. The last case may have `null` for its condition, and then it holds when no case before it does. A pick has at least one case, and an `and` or an `or` has at least one member.
+
+On a box the kernel may not know the order of two nodes that a condition compares, so it tries every order their enclosures allow. For nodes `a` and `b` with enclosures `[a.lo, a.hi]` and `[b.lo, b.hi]`, `a` can be below `b` when `a.lo < b.hi`, equal to it when `a.lo <= b.hi` and `b.lo <= a.hi`, and above it when `a.hi > b.lo`. A node compared with itself is equal. The kernel takes each pair of compared nodes once, and goes through every way of choosing one allowed order for each pair. In one way every condition is true or false, so at most one case is the first to hold. The pick's enclosure is the least range that contains the enclosure of every case that is first in some way. So a thickness exactly on the end of a band takes one band, the one whose condition holds at the end, and a range that straddles the end takes both. Each pair is chosen on its own, which can add a case that no point of the box takes and never drops one that a point takes.
+
+A pick has no value on a box when some way leaves no case that holds, and when there are more than 4,096 ways. A node with no value on a box, such as that pick or a division by a range that contains zero, fails the proof only where a root reads it. A root reads through arithmetic, through the nodes a pick compares and through the cases that are first in some way. So a case that is never first may have no value there. A refutation reads a pick by the same rule, with its point as the box.
 
 A `proved` cell with a tape has a `partition`: the string `"leaf"`, or `{"input": k, "at": x, "below": P, "above": P}`, which splits input `k` at `x`. The value `x` lies strictly inside the range the input has at that point of the tree.
 
@@ -114,7 +122,7 @@ The kernel applies the rules in this order. A design that breaks a rule of the f
 4. `waived` holds only when the card lists a waiver with the same `subject` and `mechanism`. Otherwise it is open.
 5. `not_applicable` is taken as stated, and counted.
 
-The interval rule is the one in `petra/kernel/interval.py` and `petra/kernel/evaluate.py`: exact rational intervals, with `sqrt`, `ln`, `exp` and pi rounded outward on a grid of 2^-96. The two kernels give the same ends for every root.
+The interval rule is the one in `petra/kernel/interval.py` and `petra/kernel/evaluate.py`: exact rational intervals, with `sqrt`, `ln`, `exp` and pi rounded outward on a grid of 2^-96. The two kernels give the same ends for every root. The Python kernel has no `pick`: `petra/grid.py`, which writes the tapes that have one, reads a pick by the same rule a second time.
 
 ## The verdict
 
@@ -129,14 +137,14 @@ The kernel prints one JSON object: `verdict`, the three `hashes`, `findings` (ea
 
 ## Limits
 
-The kernel stops work that would not end. A tape has at least one root. A partition is at most 64 deep, and a `pow` exponent at most 64 in magnitude. A value with more than 65,536 bits, or an `exp` of a number beyond 65,536, leaves its cell open. A file's JSON nests at most 128 deep, and a number outside a string has at most 32 digits and no fraction or exponent.
+The kernel stops work that would not end. A tape has at least one root. A partition is at most 64 deep, and a `pow` exponent at most 64 in magnitude. A condition of a pick nests at most 16 deep, where `le` or `lt` alone is 1 deep. A value with more than 65,536 bits, or an `exp` of a number beyond 65,536, leaves its cell open. A pick has no value on a box where it has more than 4,096 ways to order the nodes it compares. A file's JSON nests at most 128 deep, and a number outside a string has at most 32 digits and no fraction or exponent.
 
 ## What the kernel does not check yet
 
-- The list of cells comes from Python's coverage rules. The kernel checks each cell and not that the list is complete.
+- The list of cells comes from Python: from the models' coverage rules, or for a design of a deck's types from the deck's grid as `petra/grid.py` reads it. The kernel checks each cell and not that the list is complete.
 - A tape's formula comes from Python's models. The kernel checks its arithmetic and its `in:` and `reg:` inputs, not that the formula is the standard's.
 - Inputs labelled `dsg:` are the design's values as the models resolved them. The kernel does not tie them to `quantities`, and the verdict counts them.
 - A `not_applicable` cell is the model's word.
 - Proofs by the other five rules have no tape, and neither has an interval proof that leans on a defined quantity.
 - A cell holds the proof of its own statement. The proofs that its model applies there (its validity rows) and the proof of a claim's margin are not in the file. `petra check` counts them among the proofs the kernel has no rule for.
-- `card.json` is not a function of the card's text alone: an input that a component reads with `given` takes its name from the component. So the hash of `card.json` identifies a card together with a design, and the hash `petra check` prints on its `card` line, of the card's text, is the one to compare with the card that was issued.
+- For a design of the models' kinds, `card.json` is not a function of the card's text alone: an input that a component reads with `given` takes its name from the component. A part of a deck's type reads only the given named for it, `given PART.FIELD`, and that name is the input's. So the hash of `card.json` identifies a card together with a design, and the hash `petra check` prints on its `card` line, of the card's text, is the one to compare with the card that was issued.

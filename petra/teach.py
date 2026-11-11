@@ -24,7 +24,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Mapping
 
-from . import models
+from . import deck as deck_rows
+from . import grid, models
 from .files import card_of
 from .ir import FromTests, RangeMean
 from .lang import parse_design, syntax
@@ -45,9 +46,10 @@ CANONICAL: Mapping[str, str] = {
     "circuit": "examples/circuit_pass.petra",
     "joint": "examples/bolt_unknown.petra",
     "demand": "examples/hook_uncertain.petra",
+    "lap": "examples/deck/lap_pass.petra",
 }
 """Kind -> its canonical example, for the kinds whose example predates the rule that a
-kind's example is examples/<domain>/<kind>.petra."""
+kind's example is examples/<domain>/<kind>.petra, and for each type of a deck that has one."""
 
 _NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
@@ -58,7 +60,7 @@ class TeachError(ValueError):
 
 
 def example_of(kind: str) -> str:
-    return CANONICAL.get(kind, f"examples/{models.KINDS[kind].name}/{kind}.petra")
+    return CANONICAL[kind] if kind in CANONICAL else f"examples/{models.KINDS[kind].name}/{kind}.petra"
 
 
 def _unknown(name: str, what: str, known: list[str]) -> TeachError:
@@ -78,7 +80,47 @@ def _select(name: str | None) -> list[tuple[DomainSpec, tuple[str, ...]]]:
         return [(models.DOMAINS[name], tuple(models.DOMAINS[name].kinds))]
     if name in models.KINDS:
         return [(models.KINDS[name], (name,))]
-    raise _unknown(name, "a domain or component kind", [*models.DOMAINS, *models.KINDS])
+    if _decks(name):
+        return []
+    raise _unknown(name, "a domain, a deck or a component kind", [*models.DOMAINS, *models.KINDS, *(d.name for d in grid.decks()), *grid.kinds()])
+
+
+def _decks(name: str | None) -> list[tuple[grid.Deck, tuple[str, ...]]]:
+    """(deck, the types to print) for every deck, one deck, or one type of a deck."""
+    return [(d, tuple(d.types) if name in (None, d.name) else (name,)) for d in grid.decks() if name in (None, d.name) or name in d.types]
+
+
+def _deck_text(deck: grid.Deck, types: tuple[str, ...]) -> str:
+    """What a design writes for a part of each type, what a card may put on it, and what
+    the grid asks of it, as `petra kinds` prints a kind."""
+    lines = [f"deck {deck.name}: {', '.join(deck.types)}", ""]
+    for kind in (deck.types[name] for name in types):
+        lines.append(f"{kind.name} <name> {{ one line each }}    {kind.what}")
+        if kind.name in CANONICAL:
+            lines.append(f"  `petra new {kind.name}` prints {CANONICAL[kind.name]}")
+        lines += [f"  load entry: on <{kind.name}> {f.name} in [<lo>, <hi>]    {f.what}" for f in kind.loads.values()]
+        asks = [a for a in deck.asks if a.type == kind.name]
+        if asks:
+            lines.append(f"  waive <mechanism> on <{kind.name}> by \"<owner>\" reason \"<reason>\"")
+        lines.append("  lines, each once:")
+        for f in kind.fields.values():
+            if f.type is not None:
+                form = " ".join(f"<{f.type}>" for _ in f.names)
+            elif f.keys:
+                form = "<" + " | ".join(f'"{k}"' if " " in k else k for k in f.keys) + ">"
+            else:
+                form = f"given <name>.{f.name}" if f.signed else "<whole number>" if f.whole else f"<{deck_rows.show(f.dim)}>"
+            note = "; the card states it: given <name>." + f.name + " in [<lo>, <hi>] signed ..." if f.signed else ""
+            lines += [f"    {f.name} {form}", f"        {f.what}{note}"]
+        if asks:
+            lines.append("  the grid asks:")
+            for a in asks:
+                rules = [r.id for r in deck.rules if (r.type, r.mechanism) == (a.type, a.mechanism)]
+                answer = (f"cannot arise{' for some parts' if a.unless else ''}: {a.excused}" if a.excused and not rules
+                          else f"rule {', '.join(rules)}" if rules else "no rule yet, so its cell is open until the card waives it")
+                lines += [f"    {a.mechanism}    {a.what} ({grid._anchor(a.anchor)})", f"        {answer}"]
+        lines.append("")
+    return "\n".join(lines)
 
 
 def _component(domain: DomainSpec, kind: str) -> str:
@@ -119,6 +161,7 @@ def kinds_summary() -> str:
     """Each domain with its kinds, then how to print a kind's lines."""
     lines = [textwrap.fill(f"domain {d.name}: {', '.join(d.kinds)}", width=100, subsequent_indent="  ")
              for d in models.DOMAINS.values()]
+    lines += ["", *(f"deck {d.name}: {', '.join(d.types)}" for d in grid.decks())]
     return "\n".join([*lines, "",
                       "`petra kinds KIND` prints the lines a kind takes, each with its meaning; `petra kinds DOMAIN`",
                       "prints them for every kind of a domain, and `petra kinds --all` for every kind.",
@@ -146,6 +189,7 @@ def kinds_text(name: str | None) -> str:
                     for f in fields:
                         lines += [f"    {f.name} {f.form}", f"        {f.meaning}{_facts(f)}"]
             lines.append("")
+    lines += [_deck_text(deck, types) for deck, types in _decks(name)]
     return "\n".join(lines)
 
 
@@ -180,8 +224,10 @@ def new_text(kind: str, name: str | None, registry: Registry) -> tuple[str, str]
     design cannot take is an error (LolaSyntaxError or LoweringError), never a broken file."""
     from .templates import TEMPLATES
 
-    if kind not in models.KINDS:
-        raise _unknown(kind, "a component kind", list(models.KINDS))
+    if kind not in TEMPLATES:
+        if kind in grid.kinds():
+            raise TeachError(f"a {kind} is written with the part that joins it; `petra kinds {kind}` lists its lines")
+        raise _unknown(kind, "a component kind", list(TEMPLATES))
     source, component, card, text = TEMPLATES[kind]
     if name is not None:
         if not _NAME.fullmatch(name):
@@ -216,7 +262,7 @@ def render_templates() -> str:
              'the text of its card, the text of its design). tests/test_teach.py fails when this file is stale."""',
              "",
              "TEMPLATES: dict[str, tuple[str, str, str, str]] = {"]
-    for kind in models.KINDS:
+    for kind in (*models.KINDS, *(k for k in grid.kinds() if k in CANONICAL)):
         source = example_of(kind)
         card, text = (ROOT / card_of(source)).read_text(encoding="utf-8"), (ROOT / source).read_text(encoding="utf-8")
         design = parse_design(card, text, source, registry)
@@ -335,7 +381,8 @@ SNIPPETS: tuple[tuple[str, str, str], ...] = (
     ("ambient", "`ambient` declares the ambient temperature range, with a signature.",
      'ambient in [10 degC, 40 degC] signed "site.manager@example.org" source "site survey 2026-09"'),
     ("given", "`given` states a signed bound under a name. A component's line in the design reads it by writing "
-     "`given NAME` where the value goes. The design reads every given the card states.",
+     "`given NAME` where the value goes. The design reads every given the card states. A name may be `PART.FIELD`. "
+     "A part of a deck's type reads only the given named for it: `Fy given tab.Fy` on the part `tab`.",
      'given capacity in [36 kN, 40 kN] measured "qa.lab@example.org" source "proof-load report PL-0917"'),
     ("component", "A component is written `KIND NAME { ... }` in the design, with one attribute per line. The "
      "Component kinds section lists every kind and its lines.",

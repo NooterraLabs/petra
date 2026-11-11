@@ -41,7 +41,7 @@ from fractions import Fraction
 from types import MappingProxyType
 from typing import Callable, Iterable
 
-from .. import models
+from .. import grid, models
 from ..ir import (
     Arg,
     Attr,
@@ -328,12 +328,12 @@ class _Lowering:
     def given(self, node: Node) -> Bound | None:
         name, bound = node.args
         parts = self.signed_range(bound, None, f"given {name.text}")
-        return None if parts is None else Bound(*parts)
+        return None if parts is None else Bound(*parts, name.text)
 
     def component(self, node: Node) -> Component:
         kind, name, attrs = node.args
-        if kind.text not in models.KINDS:
-            self.problem(kind, f"unknown component kind '{kind.text}'; registered kinds: {', '.join(sorted(models.KINDS))}")
+        if kind.text not in models.KINDS and kind.text not in grid.kinds():
+            self.problem(kind, f"unknown component kind '{kind.text}'; registered kinds: {', '.join(sorted({*models.KINDS, *grid.kinds()}))}")
         lowered = []
         for attr in attrs:
             key, args = attr.args
@@ -478,8 +478,8 @@ class _Lowering:
     def waiver(self, node: Node) -> Waiver:
         mode, subject, owner, reason = node.args
         mode_id = ".".join(t.text for t in mode.args)
-        if mode_id not in models.MODES:
-            self.problem(mode, f"unknown failure mode '{mode_id}'; known modes: {', '.join(sorted(models.MODES))}")
+        if mode_id not in models.MODES and mode_id not in grid.mechanisms():
+            self.problem(mode, f"unknown failure mode '{mode_id}'; known modes: {', '.join(sorted({*models.MODES, *grid.mechanisms()}))}")
         self.nonempty(owner, "the waiver's owner")
         self.nonempty(reason, "the waiver's reason")
         return Waiver(mode_id, tuple(t.text for t in subject.args), owner.text, reason.text, self.span(node))

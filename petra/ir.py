@@ -113,13 +113,15 @@ class Punct:
 class Bound:
     """`given NAME` inside a component block: the bound the card states under that name,
     `in [lo, hi] unit [mean q] signed|measured "owner" source "where"`. The owning domain
-    names it and turns it into an Input."""
+    names it and turns it into an Input. `name` is the card's name for it, which a deck
+    holds to the part and the field that read it."""
 
     range: Quantity
     signature: Signature
     kind: InputKind
     span: Span
     mean: Quantity | None = None
+    name: str = ""
 
 
 Arg = Union[Fixed, ParamRef, Bound, Ref, Text, Vec, Punct]

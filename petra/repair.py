@@ -25,7 +25,7 @@ from dataclasses import dataclass
 from fractions import Fraction
 from typing import Any, Callable, Iterator, Mapping
 
-from . import export, models, verify, wellformed
+from . import export, grid, models, verify, wellformed
 from .files import card_of
 from .lang import LolaSyntaxError, LoweringError, parse_design
 from .lang.lexer import Kind, tokenize
@@ -453,9 +453,15 @@ def check_text(card: str, text: str, path: str, registry: Any, sources: tuple, *
     accepted evidence into `sink`, and have the kernel check the report when there is one
     to run (verify.py). `path` names the design in messages, and `card_path` the card
     when it is not the file beside it. With `moves`, a FAIL gets its repair, probed with
-    the same card and sources, no sink and no kernel: a move is a suggestion."""
+    the same card and sources, no sink and no kernel: a move is a suggestion.
+
+    A design whose parts are of a deck's types goes to the grid (grid.py) and not to the
+    models: its cells need no solver and get no repair yet."""
     try:
         design = parse_design(card, text, path, registry, card_path)
+        rules = grid.owner(design)
+        if rules is not None:
+            return grid.checked(design, rules, card, text, card_path or card_of(path))
         wellformed.require(design, registry)
         proofs = export.Proofs(sink)
         report = check_design(design, registry, sources, sink=proofs, deck=deck, path=path)

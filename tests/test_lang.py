@@ -5,7 +5,7 @@ import unittest
 from fractions import Fraction
 from pathlib import Path
 
-from petra import models
+from petra import grid, models
 from petra.ir import (
     Attr,
     Bound,
@@ -117,7 +117,7 @@ class Examples(Case):
                 self.assertTrue(design.name and design.owner)
                 self.assertTrue(design.components, "every example draws a component")
                 for component in design.components.values():
-                    self.assertIn(component.kind, models.KINDS)
+                    self.assertIn(component.kind, {*models.KINDS, *grid.kinds()})
 
     def test_every_example_is_rejected_once_its_component_kind_is_misspelt(self):
         for path in self.paths():
@@ -155,7 +155,7 @@ class Examples(Case):
         self.assertEqual(attr(d, "bracket", "bolt"), (Ref(("bolt", "M12_A4_70")), Ref(("count",)), Fixed(q(1, DIMENSIONLESS))))
         self.assertEqual(attr(d, "bracket", "plate"), (Ref(("aluminium", "6061_T6")), Ref(("thickness",)), Fixed(q(Fraction(1, 100), LENGTH))))
         (torque,) = attr(d, "bracket", "torque")
-        self.assertEqual(unspanned(torque), Bound(rng(40, 50, TORQUE), Signature("fitter.lead@example.org", "assembly spec AS-12 rev C"), InputKind.ASSUMED, None))
+        self.assertEqual(unspanned(torque), Bound(rng(40, 50, TORQUE), Signature("fitter.lead@example.org", "assembly spec AS-12 rev C"), InputKind.ASSUMED, None, None, "torque"))
         self.assertEqual(torque.span.path, str(EXAMPLES / "bolt_unknown.card"), "a bound is where the card states it")
         (nut_factor,) = attr(d, "bracket", "nut_factor")
         self.assertEqual((nut_factor.range, nut_factor.kind), (rng(Fraction(4, 25), Fraction(11, 50), DIMENSIONLESS), InputKind.MEASURED))
@@ -205,7 +205,7 @@ class Lowering(Case):
         self.assertEqual((hook.span, hook.attrs[0].span), (Span("t.petra", 2, 1), Span("t.petra", 3, 3)))
         self.assertEqual(
             hook.attrs[0].args,
-            (Bound(rng(36000, 40000, FORCE), Signature("qa@example.org", "PL-1"), InputKind.MEASURED, Span("t.card", 6, 16)),),
+            (Bound(rng(36000, 40000, FORCE), Signature("qa@example.org", "PL-1"), InputKind.MEASURED, Span("t.card", 6, 16), None, "capacity"),),
         )
 
     def test_any_attribute_line_of_a_registered_kind_reaches_its_domain_typed(self):

@@ -168,6 +168,31 @@ def readFloor (j : Json) : Except String Floor := do
 def readConstant (j : Json) : Except String Constant := do
   return { label := ← text j "label", range := ← range j }
 
+/-- A condition of a pick that nests at most `depth` deep. -/
+def readCond : Nat → Json → Except String Cond
+  | 0, _ => throw s!"a condition nests deeper than {MAX_COND_DEPTH}"
+  | depth + 1, j => do
+    let members (name : String) (a : Array Json) : Except String (Array Cond) :=
+      if a.isEmpty then throw s!"{name} of no conditions" else a.mapM (readCond depth)
+    match (← j.getArr?).toList with
+    | [.str "le", i, k] => return .le (← i.getNat?) (← k.getNat?)
+    | [.str "lt", i, k] => return .lt (← i.getNat?) (← k.getNat?)
+    | [.str "and", .arr a] => return .and (← members "and" a)
+    | [.str "or", .arr a] => return .or (← members "or" a)
+    | [.str "not", c] => return .not (← readCond depth c)
+    | _ => throw "not a condition of this format"
+
+/-- The cases of a pick: at least one, each a condition and a node, where only the last may
+have null for its condition. -/
+def readCases (cases : Array Json) : Except String (Array (Option Cond × Nat)) := do
+  if cases.isEmpty then throw "a pick of no cases"
+  cases.mapIdxM fun n case => do
+    let [cond, value] := (← case.getArr?).toList | throw "a case of a pick is not a condition and a node"
+    if cond.isNull then
+      unless n + 1 == cases.size do throw "null is the condition of a case that is not the last"
+      return (none, ← value.getNat?)
+    return (some (← readCond MAX_COND_DEPTH cond), ← value.getNat?)
+
 def readNode (j : Json) : Except String Node := do
   let ids (a : Array Json) : Except String (Array Nat) := a.mapM (·.getNat?)
   match (← j.getArr?).toList with
@@ -188,6 +213,7 @@ def readNode (j : Json) : Except String Node := do
     let n ← n.getInt?
     if n.natAbs > MAX_EXPONENT then throw s!"a pow exponent of {n} is over the budget of {MAX_EXPONENT}"
     return .pow (← i.getNat?) n
+  | [.str "pick", .arr cases] => return .pick (← readCases cases)
   | _ => throw "not a node of this format"
 
 def readTape (j : Json) : Except String Tape := do

@@ -1,0 +1,15 @@
+petra 0
+
+card "lap-splice" {
+  owner "s.engineer@example.org"
+}
+
+given tab.Fy in [36 ksi, 36 ksi] signed "s.engineer@example.org" source "ASTM A36, specified minimum"
+given tab.Fu in [58 ksi, 58 ksi] signed "s.engineer@example.org" source "ASTM A36, specified minimum"
+given strap.Fy in [36 ksi, 36 ksi] signed "s.engineer@example.org" source "ASTM A36, specified minimum"
+given strap.Fu in [58 ksi, 58 ksi] signed "s.engineer@example.org" source "ASTM A36, specified minimum"
+
+load gravity {
+  on splice pull in [0 kip, 45 kip]
+  signed "s.engineer@example.org" source "calculation C-12, LRFD combination 1.2D + 1.6L"
+}

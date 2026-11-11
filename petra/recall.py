@@ -24,6 +24,7 @@ from typing import Any, Iterable, Mapping
 
 from .lang import LolaSyntaxError, LoweringError, load_design
 from .models.base import ComponentError
+from . import grid
 from .pipeline import check_design
 from .registry import OutsideMakeableSet, Provenance, Registry
 from .solvers import SolverSource
@@ -212,7 +213,10 @@ def _report(registry: Registry, path: Path) -> Mapping[str, Any]:
     """The `petra check --json` body of a .petra file (checked now, against the card beside
     it) or of a saved report."""
     if path.suffix != ".json":
-        report = check_design(load_design(path, registry), registry, (SolverSource(),), path=path.as_posix())
+        design = load_design(path, registry)
+        if grid.owner(design) is not None:
+            return {"design": design.name, "status": "UNKNOWN", "verdicts": []}      # a deck's design reads no registry entry
+        report = check_design(design, registry, (SolverSource(),), path=path.as_posix())
         return report.to_json()
     body = json.loads(path.read_text(encoding="utf-8"))
     if not (isinstance(body, dict) and isinstance(body.get("design"), str) and isinstance(body.get("status"), str)

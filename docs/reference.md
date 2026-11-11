@@ -90,7 +90,7 @@ ambient in [10 degC, 40 degC] signed "site.manager@example.org" source "site sur
 
 ### given
 
-`given` states a signed bound under a name. A component's line in the design reads it by writing `given NAME` where the value goes. The design reads every given the card states.
+`given` states a signed bound under a name. A component's line in the design reads it by writing `given NAME` where the value goes. The design reads every given the card states. A name may be `PART.FIELD`. A part of a deck's type reads only the given named for it: `Fy given tab.Fy` on the part `tab`.
 
 ```
 given capacity in [36 kN, 40 kN] measured "qa.lab@example.org" source "proof-load report PL-0917"
@@ -163,10 +163,11 @@ design file = "petra" INT NL { ( param | component ) NL } EOF ;
 card      = "card" STRING "{" NL { ( "owner" STRING | "environment" IDENT ) NL } "}" ;
 param     = "param" IDENT "in" range ;
 ambient   = "ambient" bound ;
-given     = "given" IDENT "in" range [ "mean" qty ] [ signature ] ;
+given     = "given" name "in" range [ "mean" qty ] [ signature ] ;
+name      = IDENT { "." IDENT } ;              PART.FIELD names the bound on one field of one part
 component = KIND IDENT "{" NL { attr NL } "}" ;    KIND: an IDENT not in DECLS
 attr      = IDENT { arg } ;
-arg       = "given" IDENT | "param" IDENT | qty | tuple | ref | STRING | ":" | "--" | "->" ;
+arg       = "given" name | "param" IDENT | qty | tuple | ref | STRING | ":" | "--" | "->" ;
 tuple     = "(" qty { "," qty } ")" ;
 bound     = "in" range [ "mean" qty ] [ signature ] | "param" IDENT ;
 signature = ( "signed" | "measured" ) STRING "source" STRING ;

@@ -1,0 +1,28 @@
+petra 0
+
+# The design writes a plate's yield stress, which only the card may state.
+
+plate tab {
+  thickness 0.375 inch
+  width 6 inch
+  Fy 50 ksi
+  Fu given tab.Fu
+}
+
+plate strap {
+  thickness 0.375 inch
+  width 6 inch
+  Fy given strap.Fy
+  Fu given strap.Fu
+}
+
+lap splice {
+  fastener "Group 120"
+  threads included
+  diameter 0.75 inch
+  holes standard
+  count 3
+  pitch 3 inch
+  end 1.5 inch
+  joins tab strap
+}

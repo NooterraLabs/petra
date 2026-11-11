@@ -179,10 +179,19 @@ class Parser:
 
     def _given(self) -> Node:
         kw = self._word("given")
-        name = self._ident("a name for the given bound")
+        name = self._bound_name("a name for the given bound")
         if not self._is(Kind.IDENT, "in"):
             raise self._error(self._peek(), f"expected a bound 'in [lo, hi]', found {_describe(self._peek())}")
         return _node("given", kw, name, self._bound())
+
+    def _bound_name(self, what: str) -> Token:
+        """`NAME`, or `PART.FIELD` for the bound on one field of one part, as one token."""
+        first = self._ident(what)
+        text = first.text
+        while self._is(Kind.PUNCT, "."):
+            self._next()
+            text += "." + self._ident("a name after '.'").text
+        return Token(first.kind, text, first.line, first.col)
 
     def _component(self) -> Node:
         kind = self._ident("a component kind")
@@ -304,7 +313,7 @@ class Parser:
             return self._bound()
         if self._is(Kind.IDENT, "given"):
             self._next()
-            return _node("given", tok, self._ident("the name of a bound the card gives"))
+            return _node("given", tok, self._bound_name("the name of a bound the card gives"))
         if tok.kind is Kind.IDENT and tok.text in ("in", *_AFTER_RANGE):
             raise self._error(tok, "a design signs no bound: the card states it as 'given NAME in [lo, hi] signed ...', "
                                    "and this line reads it as 'given NAME'")

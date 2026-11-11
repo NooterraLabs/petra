@@ -297,6 +297,30 @@ The example below is the bolts obligation of the 60 kip shear tab in `tests/fixt
  "margin_point": null, "needs": [], "note": null}
 ```
 
+## A design checked against a deck
+
+`petra kinds` lists each deck after the domains. A design whose parts are of a deck's types is checked against that deck's grid and not by the models, and its JSON has another shape. `docs/deck.md` in the repository describes a deck and the states of a cell.
+
+```
+{"file": FILE, "design": NAME, "status": "PASS" | "FAIL" | "UNKNOWN",
+ "deck": {"name": NAME, "hash": "sha256:HEX"},
+ "counts": {"proved": N, "refuted": N, "not_applicable": N, "waived": N, "open": N},
+ "cells": [CELL, ...],                         one per answer, in the order of the grid
+ "card": FILE, "hashes": {"card": HASH, "design": HASH},
+ "kernel": {"verdict": STATUS, "checked": N, "hashes": {...}} | null,
+ "repair": null}
+
+CELL = {"subject": PART, "mechanism": NAME, "entry": TEXT,
+        "state": "proved" | "refuted" | "not_applicable" | "waived" | "open",
+        "what": TEXT,                          what the rule states, or what the grid asks
+        "anchor": TEXT,                        the clause
+        "why": TEXT,                           for an open, a not applicable and a waived cell
+        "rule": ID | null,
+        "ratio": NUMBER | null}                the left side of the rule over the right, at its worst
+```
+
+`petra.check_file` returns a `petra.grid.Report` for such a design, with `status`, `cells`, `to_json()` and `render()`. A FAIL has no repair yet, and a card's claims are refused.
+
 ## Envelopes
 
 `petra envelope FILE --input NAME --from LO --to HI` finds the widest interval of one input over which every obligation that depends on that input is proved. `petra/envelope.py` holds the search and its report, in `envelope`, `render`, and `to_json`. Without `--at`, the search starts from the middle of the input's stated range. If the design does not pass there, the search starts again from the low end of the probe range. The text output prints values in the unit of `--from`, and `--json` prints exact rationals in SI base units.
