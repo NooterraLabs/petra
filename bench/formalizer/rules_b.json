@@ -1,0 +1,85 @@
+{
+  "transcriber": "second transcription of the lap's rules, written before reading the `le`, `let`, `where`, `when` and `says` of the four rules in petra/decks/aisc360.json",
+  "source": "memory of ANSI/AISC 360-22 and the rows' own descriptions. No page of the standard was read, so this is weaker than a transcription from the page.",
+  "rules": [
+    {
+      "id": "aisc360-22/lap-bolts",
+      "type": "lap",
+      "mechanism": "lap.strength",
+      "anchor": {"standard": "AISC 360-22", "clause": "J3.7 and J3.11", "equation": "J3-1, J3-6a, J3-6c", "table": "J3.2, J3.3"},
+      "says": "the pull is at most 0.75 of the sum, over the bolts, of the least of a bolt's shear strength and the bearing and tearout strengths at its hole in each plate",
+      "let": {
+        "dh": ["row", "aisc360-22/table-J3.3", {"d": "diameter", "hole": "holes"}],
+        "Ab": ["mul", ["div", "pi", "4"], ["pow", "diameter", "2"]],
+        "Fnv": ["row", "aisc360-22/table-J3.2", {"fastener": "fastener", "stress": ["by", "threads", {"included": "Fnv_N", "excluded": "Fnv_X"}]}],
+        "shear": ["row", "aisc360-22/J3-1", {"Fn": "Fnv", "Ab": "Ab"}],
+        "bear_a": ["row", "aisc360-22/J3-6a", {"d": "diameter", "t": "a.thickness", "Fu": "a.Fu"}],
+        "bear_b": ["row", "aisc360-22/J3-6a", {"d": "diameter", "t": "b.thickness", "Fu": "b.Fu"}],
+        "lc_end": ["sub", "end", ["div", "dh", "2"]],
+        "lc_in": ["sub", "pitch", "dh"],
+        "tear_a_end": ["row", "aisc360-22/J3-6c", {"lc": "lc_end", "t": "a.thickness", "Fu": "a.Fu"}],
+        "tear_a_in": ["row", "aisc360-22/J3-6c", {"lc": "lc_in", "t": "a.thickness", "Fu": "a.Fu"}],
+        "tear_b_end": ["row", "aisc360-22/J3-6c", {"lc": "lc_end", "t": "b.thickness", "Fu": "b.Fu"}],
+        "tear_b_in": ["row", "aisc360-22/J3-6c", {"lc": "lc_in", "t": "b.thickness", "Fu": "b.Fu"}],
+        "first": ["min", "shear", "bear_a", "bear_b", "tear_a_end", "tear_b_in"],
+        "last": ["min", "shear", "bear_a", "bear_b", "tear_a_in", "tear_b_end"],
+        "inner": ["min", "shear", "bear_a", "bear_b", "tear_a_in", "tear_b_in"]
+      },
+      "where": [
+        {"le": [["mul", ["sub", "count", "1"], "pitch"], ["q", "38", "inch"]],
+         "why": "the line of bolts is at most 38 inch long: over that, note c of Table J3.2 lowers the shear stress of an end-loaded joint, and this rule does not"}
+      ],
+      "le": [["load", "pull"], ["mul", "0.75", ["add", "first", "last", ["mul", ["sub", "count", "2"], "inner"]]]]
+    },
+    {
+      "id": "aisc360-22/lap-end",
+      "type": "lap",
+      "mechanism": "lap.end_distance",
+      "anchor": {"standard": "AISC 360-22", "clause": "J3.5", "table": "J3.4"},
+      "says": "the end distance is at least the minimum edge distance of Table J3.4 for the bolt's diameter, for standard holes",
+      "when": ["is", "holes", "standard"],
+      "le": [["row", "aisc360-22/table-J3.4", {"d": "diameter"}], "end"]
+    },
+    {
+      "id": "aisc360-22/lap-gross-yield",
+      "type": "lap",
+      "mechanism": "lap.ply_yield",
+      "anchor": {"standard": "AISC 360-22", "clause": "J4.1", "equation": "J4-1"},
+      "says": "the pull is at most 0.90 of the yield strength of the gross section of the weaker plate",
+      "le": [["load", "pull"],
+             ["mul", "0.90", ["min",
+               ["row", "aisc360-22/J4-1", {"Fy": "a.Fy", "Ag": ["mul", "a.width", "a.thickness"]}],
+               ["row", "aisc360-22/J4-1", {"Fy": "b.Fy", "Ag": ["mul", "b.width", "b.thickness"]}]]]]
+    }
+  ],
+  "unless": [
+    {"type": "lap", "mechanism": "lap.tension_with_shear",
+     "why": "the pull runs along the line of bolts and shears them; the type puts no tension on a bolt"},
+    {"type": "lap", "mechanism": "lap.slip",
+     "why": "the type is a bearing-type joint, and slip resistance is asked only of a slip-critical one"},
+    {"type": "lap", "mechanism": "lap.ply_shear",
+     "why": "the plates carry a pull along the line; the shear on their planes beside the holes is tearout and block shear, which have their own lines"},
+    {"type": "lap", "mechanism": "lap.ply_compression",
+     "why": "the only load of the type is a pull of at least zero"}
+  ],
+  "left_out": [
+    {"type": "lap", "mechanism": "lap.tightening",
+     "why": "Section J3.2 decides by what the joint is for, not by a comparison of quantities, and the type has no field that says it"},
+    {"type": "lap", "mechanism": "lap.hole_use",
+     "why": "as I recall Section J3.3, an oversize hole is allowed only in a slip-critical joint, so a lap with oversize holes should fail here. That is a ban on a key's name and not an inequality, and I would not write it as a made-up inequality"},
+    {"type": "lap", "mechanism": "lap.spacing",
+     "why": "the task's rows hold no row for the minimum spacing of Section J3.4"},
+    {"type": "lap", "mechanism": "lap.side_distance",
+     "why": "the type has no field for the distance from the line of holes to a side edge"},
+    {"type": "lap", "mechanism": "lap.spread",
+     "why": "the task's rows hold no row for the maximum spacing and edge distance of Section J3.6"},
+    {"type": "lap", "mechanism": "lap.ply_rupture",
+     "why": "the net area needs the hole width of Section B4.3b and the shear lag factor of Section D3, and the task's rows hold neither"},
+    {"type": "lap", "mechanism": "lap.block_shear",
+     "why": "the tension path runs from the line of holes to a side edge, and the type has no field for that distance; the net areas also need Section B4.3b"},
+    {"type": "lap", "mechanism": "lap.ply_flexure",
+     "why": "the task's rows hold no row of Section J4.5"},
+    {"type": "lap", "mechanism": "lap.end_distance",
+     "why": "answered for standard holes only: an oversize hole adds the increment C2 of Table J3.5, which the task's rows do not hold"}
+  ]
+}

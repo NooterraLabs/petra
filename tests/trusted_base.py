@@ -279,13 +279,15 @@ TRUSTED: tuple[Group, ...] = (
                                    "open, and what a report says of a cell beyond its state. The kernel's reader is a "
                                    "port of these modules by one hand, not a reading made without sight of them, so it "
                                    "is named here and not as the group's judge. A row passes the acceptance check of "
-                                   "docs/deck.md, which a second transcription backs. Nothing second-transcribes a "
-                                   "type, a grid line or a rule.")),
+                                   "docs/deck.md, which a second transcription backs. A rule has an acceptance check "
+                                   "there too (petra/rule.py), and the first deck's four rules agree with a second "
+                                   "transcription, which was written from memory of the standard and not from its "
+                                   "pages. Nothing second-transcribes a type or a grid line.")),
 )
 
 UNTRUSTED: tuple[str, ...] = (
     "petra/__init__.py", "petra/__main__.py", "petra/cli.py", "petra/certs.py", "petra/envelope.py", "petra/export.py", "petra/files.py",
-    "petra/loop.py", "petra/mcp.py", "petra/readout.py", "petra/recall.py", "petra/repair.py",
+    "petra/loop.py", "petra/mcp.py", "petra/readout.py", "petra/recall.py", "petra/repair.py", "petra/rule.py",
     "petra/teach.py", "petra/templates.py", "petra/verify.py", "petra/wellformed.py",
     "petra/library/__init__.py", "petra/library/family.py", "petra/library/store.py",
     "petra/registry/consistency.py", "petra/registry/deck.py",
