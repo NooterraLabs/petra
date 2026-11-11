@@ -118,7 +118,7 @@ theorem Node.enclose_sound {node : Node} {box v : Array Iv} {ρ : Nat → ℝ}
     (hs : ∀ k, node = .s k → k < box.size)
     (hval : ∀ i ∈ node.reads, ∃ x, val i = some x ∧ v[i]!.Holds x)
     (hc : c.Valid)
-    (h : node.enclose box v c = .ok (r, c')) :
+    {extra : Nat} (h : node.enclose box v extra c = .ok (r, c')) :
     c'.Valid ∧ ∃ x, node.value box.size ρ val = some x ∧ r.Holds x := by
   cases node with
   | c q =>
@@ -218,7 +218,7 @@ theorem Node.enclose_sound {node : Node} {box v : Array Iv} {ρ : Nat → ℝ}
     rw [if_pos hx0]
   | ln i =>
     obtain ⟨x, hx, hxv⟩ := hval i (by simp [Node.reads])
-    have h' : iLn v[i]! c = .ok (r, c') := h
+    have h' : iLn v[i]! extra c = .ok (r, c') := h
     obtain ⟨hc', hpos, hr⟩ := iLn_sound hc hxv h'
     refine ⟨hc', Real.log x, ?_, hr⟩
     show (val i).bind (fun x => if 0 < x then some (Real.log x) else none) = some (Real.log x)
@@ -263,7 +263,7 @@ theorem Node.enclose_sound {node : Node} {box v : Array Iv} {ρ : Nat → ℝ}
 
 /-- A step keeps the caches right, with or without a point in the box. -/
 theorem Node.enclose_valid {node : Node} {box v : Array Iv} {c c' : Caches} {r : Iv}
-    (hc : c.Valid) (h : node.enclose box v c = .ok (r, c')) :
+    {extra : Nat} (hc : c.Valid) (h : node.enclose box v extra c = .ok (r, c')) :
     c'.Valid := by
   cases node with
   | c q =>
@@ -317,7 +317,7 @@ theorem Node.enclose_valid {node : Node} {box v : Array Iv} {c c' : Caches} {r :
     obtain ⟨-, rfl⟩ := M.lift_ok (e := iSqrt v[i]!) h
     exact hc
   | ln i =>
-    have h' : iLn v[i]! c = .ok (r, c') := h
+    have h' : iLn v[i]! extra c = .ok (r, c') := h
     exact iLn_valid hc h'
   | exp i =>
     simp only [Node.enclose] at h
@@ -351,8 +351,8 @@ def Node.Exact : Node → Prop
 
 /-- The step of an exact node does not read the caches and does not change them. -/
 theorem Node.enclose_exact {node : Node} {box v : Array Iv} {c c' : Caches} {r : Iv}
-    (hex : node.Exact) (h : node.enclose box v c = .ok (r, c')) (c₀ : Caches) :
-    node.enclose box v c₀ = .ok (r, c₀) := by
+    {extra : Nat} (hex : node.Exact) (h : node.enclose box v extra c = .ok (r, c')) (c₀ : Caches) :
+    node.enclose box v extra c₀ = .ok (r, c₀) := by
   cases node with
   | c q =>
     obtain ⟨hr, -⟩ := M.pure_ok (a := Iv.pt q) h
@@ -436,7 +436,7 @@ theorem Node.enclose_exact {node : Node} {box v : Array Iv} {c c' : Caches} {r :
 /-- The step of `node` keeps the property `V` of the caches, and from caches with `V` it is
 sound: the statement of `Node.enclose_sound`. -/
 def Node.StepSound (V : Caches → Prop) (node : Node) : Prop :=
-  ∀ (box v : Array Iv) (c c' : Caches) (r : Iv), V c → node.enclose box v c = .ok (r, c') →
+  ∀ (box v : Array Iv) (extra : Nat) (c c' : Caches) (r : Iv), V c → node.enclose box v extra c = .ok (r, c') →
     V c' ∧ ∀ (ρ : Nat → ℝ) (val : Nat → Option ℝ), InBox box ρ →
       (∀ k, node = .s k → k < box.size) →
       (∀ i ∈ node.reads, ∃ x, val i = some x ∧ v[i]!.Holds x) →
@@ -444,13 +444,13 @@ def Node.StepSound (V : Caches → Prop) (node : Node) : Prop :=
 
 /-- Any node, from valid caches. -/
 theorem Node.stepSound (node : Node) : node.StepSound Caches.Valid :=
-  fun _ _ _ _ _ hc he => ⟨Node.enclose_valid hc he, fun _ _ hbox hs hval =>
+  fun _ _ _ _ _ _ hc he => ⟨Node.enclose_valid hc he, fun _ _ hbox hs hval =>
     (Node.enclose_sound hbox hs hval hc he).2⟩
 
 /-- An exact node, from any caches. -/
 theorem Node.Exact.stepSound {node : Node} (h : node.Exact) :
     node.StepSound (fun _ => True) :=
-  fun _ _ _ _ _ _ he => ⟨True.intro, fun _ _ hbox hs hval =>
+  fun _ _ _ _ _ _ _ he => ⟨True.intro, fun _ _ hbox hs hval =>
     (Node.enclose_sound hbox hs hval Caches.valid_empty
       (Node.enclose_exact h he {})).2⟩
 

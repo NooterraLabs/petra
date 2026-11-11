@@ -2,7 +2,15 @@
 The tape of docs/format.md: a statement that every root is at most zero for all values of
 the inputs in their ranges. A partition proves one and a point refutes one, as `prove` and
 `refute` do in petra/kernel/rules/r4_enclosure.py.
+
+A proof pays for what it does, in units of work, from what the verdict has left. It pays
+for its tape on every leaf before it starts, and each step then pays for the numbers it
+handles. A step that cannot pay is not taken, and its node has no value. So the time one
+verdict takes is bounded by `MAX_WORK`, whatever the files hold. The kernel walks the
+leaves one at a time and gives up each enclosure after the last node that reads it, and it
+holds at most `MAX_HELD` words of them at once.
 -/
+import Std.Data.HashSet
 import Petra.Num
 
 namespace Petra
@@ -23,6 +31,26 @@ def MAX_CHOICES : Nat := 4096
 
 /-- The deepest a condition of a pick may nest, where an order alone is 1 deep. -/
 def MAX_COND_DEPTH : Nat := 16
+
+/-- The most orders the conditions of one pick may hold between them. -/
+def MAX_ORDERS : Nat := 1024
+
+/-- The most work the kernel spends on the proofs of one verdict. A unit is about what one
+operation on one 64-bit word of a number costs: a nanosecond or so on a desktop. -/
+def MAX_WORK : Nat := 20000000000
+
+/-- The most 64-bit words of enclosures the kernel holds at once while it walks one leaf:
+128 MB. -/
+def MAX_HELD : Nat := 16777216
+
+/-- What the kernel says of a proof it does not try because the work left does not pay for
+its tape on its leaves. -/
+def SPENT : String :=
+  s!"this proof would take the kernel past the {MAX_WORK} units of work it spends on one verdict, so it is not tried"
+
+/-- What the kernel says of a step it does not take because the work left does not pay for it. -/
+def COSTLY : String :=
+  s!"this step would take the kernel past the {MAX_WORK} units of work it spends on one verdict, so it is not taken"
 
 /-- The condition of a case of a pick: an order between two nodes, or conditions joined. -/
 inductive Cond where
@@ -66,6 +94,16 @@ def Cond.pairs : Cond → Array (Nat × Nat)
 def compared (cases : Array (Option Cond × Nat)) : Array (Nat × Nat) :=
   let pairs := cases.flatMap fun (cond, _) => (cond.map Cond.pairs).getD #[]
   pairs.foldl (fun out p => if out.contains p then out else out.push p) #[]
+
+/-- How many orders a condition holds. -/
+def Cond.orders : Cond → Nat
+  | .le _ _ | .lt _ _ => 1
+  | .and cs | .or cs => cs.foldl (fun n c => n + c.orders) 0
+  | .not c => c.orders
+
+/-- How many orders the conditions of a pick hold between them. -/
+def orders (cases : Array (Option Cond × Nat)) : Nat :=
+  cases.foldl (fun n (cond, _) => n + (cond.map Cond.orders).getD 0) 0
 
 /-- The condition with each node it compares renamed. -/
 def Cond.map (f : Nat → Nat) : Cond → Cond
@@ -126,8 +164,10 @@ def fits (x : Iv) : Except String Iv :=
   else .error s!"a value has more than {MAX_BITS} bits"
 
 /-- One step of the interval rule: the enclosure of a node from the enclosures `v` of the
-nodes before it. A pick has its own step, `pick`, which also reads which nodes failed. -/
-def Node.enclose (box v : Array Iv) : Node → M Iv
+nodes before it. `sqrt`, `ln`, `exp` and pi round to the grid, `ln` and `exp` from an
+enclosure with `extra` bits more than the grid has. A pick has its own step, `pick`, which
+also reads which nodes failed. -/
+def Node.enclose (box v : Array Iv) (extra : Nat) : Node → M Iv
   | .c x => pure (Iv.pt x)
   | .s k => pure box[k]!
   | .pi => liftM (m := Except String) piIv
@@ -142,13 +182,135 @@ def Node.enclose (box v : Array Iv) : Node → M Iv
   | .neg i => pure v[i]!.neg
   | .abs i => pure v[i]!.abs
   | .sqrt i => liftM (m := Except String) (iSqrt v[i]!)
-  | .ln i => iLn v[i]!
+  | .ln i => iLn v[i]! extra
   | .exp i =>
     if v[i]!.lo < -(MAX_BITS : Rat) || v[i]!.hi > (MAX_BITS : Rat) then throw s!"exp of a value beyond {MAX_BITS}"
-    else iExp v[i]!
+    else iExp v[i]! extra
   | .div i j => liftM (m := Except String) (v[i]!.div v[j]!)
   | .pow i n => liftM (m := Except String) (powInt v[i]! n)
   | .pick _ => throw "a pick is not enclosed by this step"
+
+-- What a step costs.
+--
+-- Each formula below is an upper estimate of the time its step takes, in units of about a
+-- nanosecond on a desktop, from the 64-bit words of the numbers the step reads. They were
+-- fitted to the kernel's own functions at 32 to 65,000 bits (docs/format.md, "Limits").
+-- No theorem reads them: a wrong estimate moves the time a verdict takes and nothing else.
+
+/-- The 64-bit words of a number: of its numerator and its denominator together. -/
+def ratWords (q : Rat) : Nat := (bitlen q.num.natAbs + bitlen q.den) / 64 + 1
+
+/-- The 64-bit words of an enclosure: of both its ends. -/
+def Iv.words (x : Iv) : Nat := ratWords x.lo + ratWords x.hi
+
+/-- One term of a sum, when the sum so far has `p` words and the term `w`. -/
+def addWork (p w : Nat) : Nat := 8000 + 60 * (p + w) + p * w / 8
+
+/-- One factor of a product or one quotient: the four products of the ends are compared
+with each other, which multiplies them across. -/
+def mulWork (p w : Nat) : Nat := 30000 + 120 * (p + w) + (p + w) * (p + w) / 4
+
+/-- One comparison of two enclosures, as `min`, `max` and the orders of a pick make. -/
+def orderWork (p w : Nat) : Nat := 3500 + 4 * (p + w) + p * w / 8
+
+/-- A least or a greatest of the nodes `a`: each is compared with the one kept so far, which
+is as long as the longest before it. -/
+def leastWork (v : Array Iv) (a : Array Nat) : Nat :=
+  (a.foldl (fun (cost, p) i =>
+    let w := v[i]!.words
+    (cost + orderWork p w, Nat.max p w)) (0, 2)).1
+
+/-- The square root of an enclosure: Newton's iteration on the whole part of each end times
+`GRID` squared, which has the bits the end's numerator has more than its denominator and
+192 more. -/
+def sqrtWork (x : Iv) : Nat :=
+  let whole (q : Rat) : Nat := (bitlen q.num.natAbs + 256 - bitlen q.den) / 64
+  let v := whole x.lo + whole x.hi
+  45000 + 100 * x.words + v * v * 3 / 4
+
+/-- The logarithm of one end `x` from an enclosure of `PREC + extra` bits. The series is of
+`(m - 1) / (m + 1)` for `x` scaled to `m` between a half and two, a number as long as
+the longer of the numerator and the denominator of `x`, whatever `x` is near: reducing it
+costs the square of its words, and each term of the series, of which there are as many as
+bits, multiplies that many bits by it. The kernel keeps ln 2 for the first enclosure and
+sums it again for the others. -/
+def lnWork (extra : Nat) (x : Rat) : Nat :=
+  let p := PREC + extra
+  let w := Nat.max (bitlen x.num.natAbs) (bitlen x.den) / 64 + 1
+  (if extra == 32 then 4000 else 7000) * p + 3400 * w + 5 * w * w + p * p * w / 150
+
+/-- The exponential of one end `x` from an enclosure of `PREC + extra` bits. `expPos` works
+with `q` bits, which grow with the size of `x`, sums about `2 q / log2 q` terms of that
+length, and then squares. -/
+def expWork (extra : Nat) (x : Rat) : Nat :=
+  let c := (if x < 0 then -x else x).ceil.toNat
+  let s := bitlen c + 1
+  let q := PREC + extra + 2 * s + 2 * c
+  let wide := q / 64 + 1
+  let terms := Nat.max 32 (2 * q / bitlen q)
+  let w := ratWords x
+  terms * (10000 + 54 * wide + 20 * w + wide * w / 3) + (s + 16) * wide * wide / 4
+
+/-- A whole power: `k` products, the `j`-th of a number `j` times as long. -/
+def powWork (k w : Nat) : Nat := k * 10000 + 60 * w * (k * (k + 1) / 2) + w * w * (k * (k - 1) / 2) / 4
+
+/-- The work of the step `Node.enclose` for a node other than a pick, a sum and a product,
+which pay as they go (`pickPriced`, `folded`). An `ln` or an `exp` of an end the caches
+hold costs a look at them, and the step may copy a cache's table of `MAX_CACHED` entries. -/
+def Node.work (v : Array Iv) (extra : Nat) (caches : Caches) : Node → Nat
+  | .c x => 500 + 4 * ratWords x
+  | .s _ => 1500
+  | .pi => 2500
+  | .add _ | .mul _ => 200
+  | .min a | .max a => 200 + leastWork v a
+  | .neg i | .abs i => 2500 + 4 * v[i]!.words
+  | .sqrt i => sqrtWork v[i]!
+  | .ln i =>
+    let x := v[i]!
+    let one (x : Rat) : Nat :=
+      if x == 1 || caches.ln.contains (x.num, x.den) then 500 + 4 * ratWords x else lnWork extra x
+    25000 + one x.lo + (if x.lo == x.hi then 500 + 4 * ratWords x.hi else one x.hi)
+  | .exp i =>
+    let x := v[i]!
+    if x.lo < -(MAX_BITS : Rat) || x.hi > (MAX_BITS : Rat) then 1000 else
+    let one (x : Rat) : Nat :=
+      if x == 0 || caches.exp.contains (x.num, x.den) then 500 + 4 * ratWords x else expWork extra x
+    25000 + one x.lo + (if x.lo == x.hi then 500 + 4 * ratWords x.hi else one x.hi)
+  | .div i j => mulWork v[i]!.words v[j]!.words
+  | .pow i n => 200 + powWork n.natAbs v[i]!.words
+  | .pick _ => 200
+
+/-- How many distinct pairs the conditions of a pick compare: the size of `compared`, counted
+through a table and so without the comparisons `compared` makes. -/
+def pairsOf (cases : Array (Option Cond × Nat)) : Nat :=
+  (cases.foldl (fun seen (cond, _) => ((cond.map Cond.pairs).getD #[]).foldl (·.insert ·) seen)
+    ({} : Std.HashSet (Nat × Nat))).size
+
+/-- What a tape costs to read once, whatever its numbers: each node and each node it reads.
+A pick finds the distinct pairs among its orders by comparing each order with the pairs
+found before it, so it reads its orders times its pairs. -/
+def Node.size : Node → Nat
+  | .c _ | .s _ | .pi => 60
+  | .add a | .mul a | .min a | .max a => 60 + 15 * a.size
+  | .neg _ | .abs _ | .sqrt _ | .ln _ | .exp _ | .pow _ _ => 75
+  | .div _ _ => 90
+  | .pick cases => 60 + 15 * cases.size + 2 * orders cases * (pairsOf cases + 1)
+
+def Tape.size (t : Tape) : Nat := t.nodes.foldl (fun n node => n + node.size) 0
+
+/-- What one split of a partition costs beyond its tape: the cut is compared with both ends
+of a range, and each is a number of the files, at most `MAX_NUMBER_CHARS` long. -/
+def SPLIT : Nat := 20000
+
+/-- What a proof pays before its first step: for reading its tape three times, to check it
+and to mark what the roots read and where each node is last read, and once more for each
+leaf, with the split that made the leaf and a copy of the box. -/
+def Tape.fee (t : Tape) (leaves : Nat) : Nat := t.size * (3 + leaves) + leaves * (SPLIT + 8 * t.inputs.size)
+
+/-- The leaves of a partition. -/
+def Partition.count : Partition → Nat
+  | .leaf => 1
+  | .split _ _ below above => below.count + above.count
 
 /-- Why a node has no enclosure on a box: the node where the evaluation failed, and what
 failed there. A node that reads a failed node has the same failure, so a reason names the
@@ -234,67 +396,210 @@ def pick (v : Array Iv) (bad : Array (Option Failure)) (self : Nat) (cases : Arr
   | [] => throw ⟨self, "no case of the pick holds somewhere in the box"⟩
   | first :: rest => return rest.foldl (fun hull k => ⟨rmin hull.lo v[k]!.lo, rmax hull.hi v[k]!.hi⟩) v[first]!
 
-/-- The enclosure of every needed node over the box, in tape order, and the failure of each
-node that has none. A failure stops nothing here. It matters where a root reads it, through
-arithmetic and the cases a pick found. -/
-def Tape.eval (t : Tape) (box : Array Iv) (need : Array Bool) : M (Array Iv × Array (Option Failure)) := do
-  let mut v : Array Iv := Array.mkEmpty t.nodes.size
-  let mut bad : Array (Option Failure) := Array.mkEmpty t.nodes.size
-  for (node, i) in t.nodes.zipIdx do
-    let mut x : Except Failure Iv := .ok default
-    if need[i]! then
-      if let .pick cases := node then x := pick v bad i cases
-      else if let some f := earliest bad node.reads then x := .error f
-      else
-        try
-          x := .ok (← fits (← node.enclose box v))
-        catch why => x := .error ⟨i, why⟩
-    match x with
-    | .ok y =>
-      v := v.push y
-      bad := bad.push none
-    | .error f =>
-      v := v.push default
-      bad := bad.push (some f)
-  return (v, bad)
+/-- The work of a pick's step: the orders its enclosures leave possible for each pair, then
+every way of taking one for each pair, in which each order of each condition is looked up
+among the pairs, and the hull of the cases found, of which there is at most one for each
+way. None when the work left does not pay for looking at the pairs. -/
+def pickWork (v : Array Iv) (cases : Array (Option Cond × Nat)) (work : Nat) : Option Nat :=
+  let pairs := compared cases
+  let look := pairs.foldl (fun n p => n + 2 * orderWork v[p.1]!.words v[p.2]!.words) 0
+  if work < look then none else
+    let ways := (pairs.map (outcomes v)).foldl (fun n os => if n > MAX_CHOICES then n else n * os.size) 1
+    let each := 300 + 30 * pairs.size + 30 * cases.size + orders cases * (40 + 2 * pairs.size)
+    let long := cases.foldl (fun n (_, k) => Nat.max n v[k]!.words) 2
+    let hull := Nat.min ways cases.size * orderWork long long
+    some (look + (if ways > MAX_CHOICES then 0 else ways * each + hull))
 
-/-- The cells of a partition, below before above. A split replaces its cell by the halves at
-or below and at or above the cut, whose union is the cell, so the leaves cover the box. -/
-def Partition.leaves : Partition → Array Iv → Nat → Except String (Array (Array Iv))
-  | .leaf, box, _ => pure #[box]
+/-- A pick's step with its price: the step when the work left pays for it, and then what is
+left. -/
+def pickPriced (v : Array Iv) (bad : Array (Option Failure)) (self : Nat) (cases : Array (Option Cond × Nat))
+    (work : Nat) : Except Failure Iv × Nat :=
+  match pickWork v cases work with
+  | none => (.error ⟨self, COSTLY⟩, work)
+  | some cost => if work < cost then (.error ⟨self, COSTLY⟩, work) else (pick v bad self cases, work - cost)
+
+/-- The step of a node other than a pick, with its price. A step that rounds to the grid
+does it from the first enclosure of `extras` that separates its value from the grid, and
+pays for each one it asks for before it asks. Gives the enclosure, or why the node has
+none, and the work left. -/
+def Node.tries (box v : Array Iv) (self : Nat) (node : Node) : List Nat → Nat → M (Except Failure Iv × Nat)
+  | [], work => pure (.error ⟨self, UNSEPARATED⟩, work)
+  | extra :: rest, work => do
+    let cost := node.work v extra (← get)
+    if work < cost then pure (.error ⟨self, COSTLY⟩, work)
+    else
+      tryCatch (do
+        let y ← fits (← node.enclose box v extra)
+        pure (.ok y, work - cost))
+        fun why =>
+          if why == UNSEPARATED then node.tries box v self rest (work - cost)
+          else pure (.error ⟨self, why⟩, work - cost)
+
+/-- The step of a sum or a product with its price: `Node.enclose` folds `op` over the nodes
+and holds each sum so far to `fits`, and this is that fold with each term paid for before it
+is taken, by the words the sum so far has and the words of the term. So a sum of many
+terms costs what its numbers come to, and not what they could. Gives the enclosure, or why
+there is none, and the work left. -/
+def folded (op : Iv → Iv → Iv) (price : Nat → Nat → Nat) (v : Array Iv) : List Nat → Iv → Nat → Except String Iv × Nat
+  | [], acc, work => (.ok acc, work)
+  | i :: rest, acc, work =>
+    let cost := price acc.words v[i]!.words
+    if work < cost then (.error COSTLY, work) else
+      match fits (op acc v[i]!) with
+      | .error why => (.error why, work - cost)
+      | .ok next => folded op price v rest next (work - cost)
+
+/-- One step of a tape with its price. A node that reads a failed node has that failure and
+costs nothing. -/
+def Node.priced (box v : Array Iv) (bad : Array (Option Failure)) (self : Nat) (node : Node) (work : Nat) :
+    M (Except Failure Iv × Nat) :=
+  match node with
+  | .pick cases => pure (pickPriced v bad self cases work)
+  | node =>
+    match earliest bad node.reads with
+    | some f => pure (.error f, work)
+    | none =>
+      let named (r : Except String Iv × Nat) : Except Failure Iv × Nat := (r.1.mapError (⟨self, ·⟩), r.2)
+      match node with
+      | .add a => pure (named (folded Iv.add addWork v a.toList (Iv.pt 0) work))
+      | .mul a => pure (named (folded Iv.mul mulWork v a.toList (Iv.pt 1) work))
+      | node => node.tries box v self EXTRAS work
+
+/-- The walk over one box so far: the enclosure of each node walked and the failure of each
+that has none, the words of the enclosures it holds, and the work left. -/
+structure Walk where
+  v : Array Iv
+  bad : Array (Option Failure)
+  held : Nat
+  work : Nat
+
+/-- Why a node has no enclosure once the last node that reads it is walked. -/
+def GONE : String := "its enclosure was given up after the last node that reads it"
+
+def HELD : String := s!"the tape holds more than {MAX_HELD} words of enclosures at once"
+
+/-- The walk with the outcome of node `self` added. An enclosure that would take the walk
+past `MAX_HELD` words is not kept, and the node has none. -/
+def Walk.keep (w : Walk) (self : Nat) : Except Failure Iv → Walk
+  | .ok y =>
+    if w.held + y.words > MAX_HELD then { w with v := w.v.push default, bad := w.bad.push (some ⟨self, HELD⟩) }
+    else { w with v := w.v.push y, bad := w.bad.push none, held := w.held + y.words }
+  | .error f => { w with v := w.v.push default, bad := w.bad.push (some f) }
+
+/-- The walk with the enclosures given up that node `self` read last. `last[k]` is the last
+node that reads node `k`. A node given up is marked as failed, so a node that read it
+afterwards would fail and not read `[0, 0]`: what is given up never reaches a root. -/
+def Walk.release (w : Walk) (last : Array Nat) (self : Nat) (ids : Array Nat) : Walk :=
+  ids.foldl (fun w k =>
+    if last[k]! == self && w.bad[k]!.isNone then
+      let held := w.held - w.v[k]!.words
+      { w with v := w.v.setIfInBounds k default, bad := w.bad.setIfInBounds k (some ⟨k, GONE⟩), held }
+    else w) w
+
+/-- For each node, the last needed node that reads it. A root is never given up: it is read
+after the last node. -/
+def Tape.last (t : Tape) (roots : Array Nat) (need : Array Bool) : Array Nat := Id.run do
+  let mut last := Array.replicate t.nodes.size 0
+  for (node, i) in t.nodes.zipIdx do
+    if need[i]! then last := node.reads.foldl (fun last k => last.setIfInBounds k i) last
+  return roots.foldl (fun last r => last.setIfInBounds r t.nodes.size) last
+
+/-- One node of the walk: its step when a root reads it, and then the enclosures it read
+last are given up. A node no root reads has no step. -/
+def Tape.visit (box : Array Iv) (need : Array Bool) (last : Array Nat) (node : Node) (i : Nat) (w : Walk) : M Walk :=
+  if need[i]! then do
+    let (x, work) ← node.priced box w.v w.bad i w.work
+    pure (({ w with work }.keep i x).release last i node.reads)
+  else pure { w with v := w.v.push default, bad := w.bad.push none }
+
+/-- The walk over the box, in tape order: the enclosure of every needed node that is still
+held, the failure of each node that has none, and the work left. A failure stops nothing
+here. It matters where a root reads it, through arithmetic and the cases a pick found. -/
+def Tape.eval (t : Tape) (box : Array Iv) (need : Array Bool) (last : Array Nat) (work : Nat) : M Walk := do
+  let mut w : Walk := { v := Array.mkEmpty t.nodes.size, bad := Array.mkEmpty t.nodes.size, held := 0, work }
+  for (node, i) in t.nodes.zipIdx do
+    w ← Tape.visit box need last node i w
+  return w
+
+/-- What is wrong with a partition of the box, or nothing: it is at most `MAX_DEPTH` deep,
+and each split is of an input of the tape, strictly inside the range the input has there. -/
+def Partition.shape : Partition → Array Iv → Nat → Except String Unit
+  | .leaf, _, _ => pure ()
   | .split k cut below above, box, depth => do
     if depth ≥ MAX_DEPTH then throw s!"the partition is deeper than {MAX_DEPTH}"
     let some r := box[k]? | throw s!"the partition splits input {k}, and the tape has {box.size} inputs"
     unless r.lo < cut && cut < r.hi do throw s!"a split of input {k} is not strictly inside its range"
-    let lower ← below.leaves (box.setIfInBounds k ⟨r.lo, cut⟩) (depth + 1)
-    let upper ← above.leaves (box.setIfInBounds k ⟨cut, r.hi⟩) (depth + 1)
-    return lower ++ upper
+    below.shape (box.setIfInBounds k ⟨r.lo, cut⟩) (depth + 1)
+    above.shape (box.setIfInBounds k ⟨cut, r.hi⟩) (depth + 1)
 
-/-- The leaves cover the box, and an enclosure contains a root's value at every point of its
-leaf. So a root whose upper end is at most zero on every leaf is at most zero on the box.
-An enclosure also shows the root is defined there, since a root that reads an undefined
+/-- The walk over the leaves of a partition, below before above, one leaf at a time. `n` is
+how many leaves are walked already. Gives why the first leaf that fails does, or nothing
+when every root has an upper end of at most zero on every leaf, with the leaves walked and
+the work left.
+
+A split replaces its box by the halves at or below and at or above the cut, whose union is
+the box, so the leaves cover the box. An enclosure contains a root's value at every point of
+its leaf. So a root whose upper end is at most zero on every leaf is at most zero on the
+box. An enclosure also shows the root is defined there, since a root that reads an undefined
 step has none. -/
-def Tape.proved (t : Tape) (partition : Partition) : M Unit := do
-  t.wellFormed
-  let need := t.needed t.roots
-  for (cell, n) in (← partition.leaves (t.inputs.map (·.range)) 0).zipIdx do
-    try
-      let (v, bad) ← t.eval cell need
-      if let some f := earliest bad t.roots then throw f.text
-      for (root, k) in t.roots.zipIdx do
-        if v[root]!.hi > 0 then throw s!"root {k} is above zero"
-    catch why => throw s!"leaf {n}: {why}"
+def Tape.walk (t : Tape) (need : Array Bool) (last : Array Nat) :
+    Partition → Array Iv → Nat → Nat → M (Option String × Nat × Nat)
+  | .leaf, box, n, work => do
+    let w ← t.eval box need last work
+    let why : Option String :=
+      match earliest w.bad t.roots with
+      | some f => some f.text
+      | none =>
+        if t.roots.all (fun root => decide (w.v[root]!.hi ≤ 0)) then none
+        else some s!"root {(t.roots.findIdx? fun root => w.v[root]!.hi > 0).getD 0} is above zero"
+    pure (why.map (s!"leaf {n}: " ++ ·), n + 1, w.work)
+  | .split k cut below above, box, n, work => do
+    let r := box[k]!
+    let (why, n, work) ← t.walk need last below (box.setIfInBounds k ⟨r.lo, cut⟩) n work
+    match why with
+    | some why => pure (some why, n, work)
+    | none => t.walk need last above (box.setIfInBounds k ⟨cut, r.hi⟩) n work
 
-/-- The enclosure of a root at a point contains its value there. So a lower end above zero
-means the root is above zero at a point of the box, and the statement is false. -/
-def Tape.refuted (t : Tape) (point : Array Rat) (which : Nat) : M Unit := do
-  t.wellFormed
-  let some root := t.roots[which]? | throw s!"the tape has no root {which}"
-  unless point.size == t.inputs.size do throw "the point does not hold one value for each input"
-  for ((x, input), i) in (point.zip t.inputs).zipIdx do
-    unless input.range.has x do throw s!"the point is outside the range of input {i}"
-  let (v, bad) ← t.eval (point.map Iv.pt) (t.needed #[root])
-  if let some f := bad[root]! then throw f.text
-  unless v[root]!.lo > 0 do throw s!"root {which} is not above zero at the point"
+/-- A proof by a partition. Gives nothing when every root is at most zero on the box, or why
+the proof fails, and the work left. A proof pays `Tape.fee` first, and one that cannot is
+not tried. -/
+def Tape.proved (t : Tape) (partition : Partition) (work : Nat) : M (Option String × Nat) :=
+  let fee := t.fee partition.count
+  if work < fee then pure (some SPENT, work) else
+  match t.wellFormed with
+  | .error why => pure (some why, work - fee)
+  | .ok () =>
+    let box := t.inputs.map (·.range)
+    match partition.shape box 0 with
+    | .error why => pure (some why, work - fee)
+    | .ok () => do
+      let need := t.needed t.roots
+      let (why, _, work) ← t.walk need (t.last t.roots need) partition box 0 (work - fee)
+      pure (why, work)
+
+/-- A refutation by a point. Gives nothing when root `which` is above zero at the point,
+which lies in the box, or why the refutation fails, and the work left. The enclosure of a
+root at a point contains its value there. So a lower end above zero means the root is above
+zero at a point of the box, and the statement is false. -/
+def Tape.refuted (t : Tape) (point : Array Rat) (which : Nat) (work : Nat) : M (Option String × Nat) :=
+  let fee := t.fee 1 + SPLIT * t.inputs.size
+  if work < fee then pure (some SPENT, work) else
+  match t.wellFormed with
+  | .error why => pure (some why, work - fee)
+  | .ok () =>
+    match t.roots[which]? with
+    | none => pure (some s!"the tape has no root {which}", work - fee)
+    | some root =>
+      if point.size != t.inputs.size then pure (some "the point does not hold one value for each input", work - fee)
+      else if !(point.zip t.inputs).all (fun p => p.2.range.has p.1) then
+        pure (some s!"the point is outside the range of input {((point.zip t.inputs).findIdx? fun p => !p.2.range.has p.1).getD 0}", work - fee)
+      else do
+        let need := t.needed #[root]
+        let w ← t.eval (point.map Iv.pt) need (t.last #[root] need) (work - fee)
+        match w.bad[root]! with
+        | some f => pure (some f.text, w.work)
+        | none =>
+          if w.v[root]!.lo > 0 then pure (none, w.work)
+          else pure (some s!"root {which} is not above zero at the point", w.work)
 
 end Petra

@@ -10,6 +10,7 @@ import hashlib
 import json
 import time
 import unittest
+from fractions import Fraction
 from unittest import mock
 
 import petra
@@ -274,7 +275,10 @@ class Waivers(Kernel):
         self.assertLess(size, 3 * len(json.dumps(cells, separators=(",", ":"))))
 
 
-SPENT = "this proof would take the kernel past the 20000000 evaluations it spends on one verdict, so it is not tried"
+SPENT = "this proof would take the kernel past the 20000000000 units of work it spends on one verdict, so it is not tried"
+COSTLY = "this step would take the kernel past the 20000000000 units of work it spends on one verdict, so it is not taken"
+MAX_WORK, MAX_ORDERS = 20_000_000_000, 1024
+"""The limits as kernel/Petra/Tape.lean sets them."""
 
 
 def halves(label, lo: int, hi: int):
@@ -285,39 +289,74 @@ def halves(label, lo: int, hi: int):
     return {"input": label, "at": str(mid), "below": halves(label, lo, mid), "above": halves(label, mid, hi)}
 
 
-@unittest.skipUnless(verify.binary(), "no petra-verify is built here and PETRA_VERIFY names none")
-class Evaluations(Kernel):
-    """The proofs of one verdict get 20,000,000 evaluations: the length of each tape times the
-    leaves of its partition, added up in the order of the cells. A long tape with many hints,
-    or with a partition of many leaves, ran for over ten minutes from under 1 MB."""
+def proved(tape: dict, entry: str, partition="leaf") -> dict:
+    return {"subject": "a", "mechanism": "m", "entry": entry, "state": "proved", "tape": tape, "partition": partition}
 
-    def test_a_proof_past_the_budget_is_not_tried_and_its_cell_is_open(self):
-        """Each cell costs 30,003 evaluations a leaf and has 256 leaves: 7.7 million. Two fit."""
-        tape = {"inputs": [{"label": "dsg:x", "lo": "0", "hi": "256"}], "nodes": [["c", "-1"]] + [["neg", 0]] * 10000, "roots": [0]}
-        cells = [{"subject": "a", "mechanism": "m", "entry": str(i), "state": "proved", "tape": tape, "partition": halves(0, 0, 256)} for i in range(3)]
+
+SHORT = {"inputs": [{"label": "dsg:x", "lo": "0", "hi": "1"}], "nodes": [["c", "-1"]], "roots": [0]}
+
+
+@unittest.skipUnless(verify.binary(), "no petra-verify is built here and PETRA_VERIFY names none")
+class Work(Kernel):
+    """The proofs of one verdict get 20,000,000,000 units of work (docs/format.md, "Work"). A
+    proof pays for its tape on its leaves before it starts, and each step then pays for the
+    numbers it handles. So a tape of long numbers, of many `exp`, of wide picks or of many
+    leaves stops when the work is spent, and its cell is open."""
+
+    def test_a_proof_that_cannot_pay_for_its_tape_on_its_leaves_is_not_tried_and_a_small_one_after_it_is(self):
+        """A tape of 60,000 nodes is 4.5 million units a leaf, and 8,192 leaves are 37 billion."""
+        long = {"inputs": [{"label": "dsg:x", "lo": "0", "hi": "8192"}], "nodes": [["c", "-1"]] + [["neg", 0]] * 60000, "roots": [0]}
         start = time.perf_counter()
-        said = ask(old_path(cells, []))
-        self.assertEqual([(c["state"], c.get("reason")) for c in said["cells"]], [("proved", None), ("proved", None), ("open", SPENT)])
+        said = ask(old_path([proved(long, "long", halves(0, 0, 8192)), proved(SHORT, "short")], []))
+        self.assertEqual([(c["state"], c.get("reason")) for c in said["cells"]], [("open", SPENT), ("proved", None)])
         self.assertEqual(said["verdict"], "UNKNOWN")
+        self.assertLess(said["work"], 100_000, "a proof that is not tried costs nothing")
         self.assertLess(time.perf_counter() - start, 30)
 
-    def test_a_small_proof_after_a_proof_that_was_not_tried_is_tried(self):
-        long = {"inputs": [{"label": "dsg:x", "lo": "0", "hi": "1024"}], "nodes": [["c", "-1"]] + [["neg", 0]] * 10000, "roots": [0]}
-        short = {"inputs": [{"label": "dsg:x", "lo": "0", "hi": "1"}], "nodes": [["c", "-1"]], "roots": [0]}
-        cells = [{"subject": "a", "mechanism": "m", "entry": "long", "state": "proved", "tape": long, "partition": halves(0, 0, 1024)},
-                 {"subject": "a", "mechanism": "m", "entry": "short", "state": "proved", "tape": short, "partition": "leaf"}]
-        said = ask(old_path(cells, []))
-        self.assertEqual([(c["state"], c.get("reason")) for c in said["cells"]], [("open", SPENT), ("proved", None)])
+    def test_the_same_tape_on_fewer_leaves_is_tried(self):
+        long = {"inputs": [{"label": "dsg:x", "lo": "0", "hi": "64"}], "nodes": [["c", "-1"]] + [["neg", 0]] * 60000, "roots": [0]}
+        said = ask(old_path([proved(long, "long", halves(0, 0, 64))], []))
+        self.assertEqual((said["verdict"], said["cells"][0]["state"]), ("PASS", "proved"))
+        self.assertGreater(said["work"], 60000 * 75 * 64, "it paid for every node on every leaf")
+
+    def test_a_step_that_costs_more_than_the_work_left_is_not_taken_and_a_small_proof_after_it_is_tried(self):
+        """One `exp` of a number near 65,000 with 65,000 bits a side would sum 15,000 terms of
+        130,000 bits, each times that number: more than a verdict has. The steps before it are
+        paid for, and it is not."""
+        x = Fraction((1 << 6550) - 1, (1 << 6549) + 1)
+        nodes = [["c", export.number(x)], ["mul", [0] * 10], ["c", "64000"], ["add", [1, 2]], ["exp", 3], ["neg", 4]]
+        start = time.perf_counter()
+        said = ask(old_path([proved({"inputs": [], "nodes": nodes, "roots": [5]}, "costly"), proved(SHORT, "short")], []))
+        self.assertEqual([(c["state"], c.get("reason")) for c in said["cells"]], [("open", f"leaf 0: node 4: {COSTLY}"), ("proved", None)])
+        self.assertLess(said["work"], MAX_WORK // 100, "the step that was not taken was not paid for")
+        self.assertLess(time.perf_counter() - start, 30)
+
+    def test_work_that_runs_out_leaves_the_cell_open_and_the_verdict_says_what_was_spent(self):
+        """A chain of 4,000 small products costs about 250 million units a leaf, so the work
+        runs out near leaf 80 of 128."""
+        nodes = [["c", "3/8"], ["c", "8/3"], ["s", 0]]
+        for k in range(4000):
+            nodes.append(["mul", [len(nodes) - 1, k % 2]])
+        nodes += [["c", "-1000"], ["add", [len(nodes) - 1, len(nodes)]]]
+        tape = {"inputs": [{"label": "dsg:x", "lo": "0", "hi": "128"}], "nodes": nodes, "roots": [len(nodes) - 1]}
+        start = time.perf_counter()
+        said = ask(old_path([proved(tape, "costly", halves(0, 0, 128))], []))
+        (cell,) = said["cells"]
+        self.assertEqual(cell["state"], "open")
+        self.assertRegex(cell["reason"], r"^leaf \d+: node \d+: " + COSTLY + "$")
+        self.assertLessEqual(said["work"], MAX_WORK)
+        self.assertGreater(said["work"], MAX_WORK * 9 // 10)
+        self.assertLess(time.perf_counter() - start, 60)
 
     def test_a_hint_past_the_budget_is_not_tried_and_the_other_cells_are_settled(self):
-        """A rule with a sum of 9,000 terms and a hint with 512 leaves for its cell."""
+        """A rule with a sum of 20,000 terms and a hint with 8,192 leaves for its cell."""
         def long_rule(r: dict) -> None:
             r["grid"].append({"type": "pad", "mechanism": "pad.sum", "what": "made up", "anchor": TEST})
             r["rules"].append({"id": "test/sum", "type": "pad", "mechanism": "pad.sum", "anchor": TEST, "says": "made up",
-                               "le": [["add"] + [["mul", "area", f"{i}.5"] for i in range(9000)], ["q", "1", "m2"]]})
+                               "le": [["add"] + [["mul", "area", f"{i}.5"] for i in range(20000)], ["q", "1", "m2"]]})
         files = with_rules(strips(), long_rule)
         honest = ask(strips())
-        hint = {"subject": "p1", "mechanism": "pad.sum", "entry": "sum", "state": "proved", "partition": halves("dsg:strips.p1.area", 0, 512)}
+        hint = {"subject": "p1", "mechanism": "pad.sum", "entry": "sum", "state": "proved", "partition": halves("dsg:strips.p1.area", 0, 8192)}
         start = time.perf_counter()
         said = ask(changed(files, "proofs", lambda b: b["cells"].insert(0, hint)))
         self.assertLess(time.perf_counter() - start, 30)
@@ -325,6 +364,48 @@ class Evaluations(Kernel):
         self.assertEqual((cells["p1", "pad.sum", "sum"]["state"], cells["p1", "pad.sum", "sum"]["reason"]), ("open", SPENT))
         self.assertEqual(cells["p2", "pad.sum", "sum"]["reason"], "proofs.json has no partition and no point for it")
         self.assertEqual([c for c in states(said) if c[0] == "s"], states(honest), "the cells of the strip are settled as before")
+
+    def test_the_verdict_says_how_much_work_its_proofs_took(self):
+        self.assertGreater(ask(strips())["work"], 0)
+        self.assertEqual(ask(strips(), without=("proofs",))["work"], 0, "with no hint there is no proof to pay for")
+        self.assertEqual(ask(old_path([], []))["work"], 0)
+
+    def test_a_long_sum_of_short_numbers_costs_what_its_numbers_come_to(self):
+        """Nine thousand terms with one denominator: the sum stays short, and each term pays for a short sum."""
+        nodes = [["c", f"{2 * i + 1}/2"] for i in range(9000)] + [["add", list(range(9000))], ["neg", 9000]]
+        said = ask(old_path([proved({"inputs": [], "nodes": nodes, "roots": [9001]}, "sum")], []))
+        self.assertEqual(said["cells"][0]["state"], "proved")
+        self.assertLess(said["work"], 9000 * 20_000)
+
+
+@unittest.skipUnless(verify.binary(), "no petra-verify is built here and PETRA_VERIFY names none")
+class Orders(Kernel):
+    """The conditions of one pick hold at most 1,024 orders between them. The kernel tests
+    every order in each way it tries, so a wide condition is work that the count of cases
+    does not show."""
+
+    @staticmethod
+    def wide(orders: int) -> dict:
+        nodes = [["s", 0], ["c", "1"], ["c", "-1"], ["pick", [[["and", [["le", 0, 1]] * orders], 2], [None, 2]]]]
+        return {"inputs": [{"label": "dsg:x", "lo": "0", "hi": "1"}], "nodes": nodes, "roots": [3]}
+
+    def test_a_pick_that_a_file_carries_holds_1024_orders_and_no_more(self):
+        at = ask(old_path([proved(self.wide(MAX_ORDERS), "at")], []))
+        self.assertEqual((at["verdict"], at["cells"][0]["state"]), ("PASS", "proved"))
+        over = ask(old_path([proved(self.wide(MAX_ORDERS + 1), "over")], []))
+        self.assertEqual((over["verdict"], over["cells"]), ("ILL-FORMED", []))
+        self.assertIn("the conditions of a pick hold 1025 orders, over the budget of 1024", over["findings"][0]["why"])
+
+    def test_a_pick_the_kernel_would_write_from_a_deck_holds_no_more_and_its_cell_is_open(self):
+        """The row's first case compares its input 1,100 times, and its second once."""
+        def wide(r: dict) -> None:
+            row = next(x for x in r["rows"] if x["id"] == "test/derate")
+            row["cases"][0]["when"] = ["and"] + [["le", "T", ["q", "40", "degC"]]] * 1100
+        said = ask(with_rules(strips(), wide))
+        cells = {(c["subject"], c["mechanism"], c["entry"]): c for c in said["cells"]}
+        self.assertEqual(cells["s", "strip.heat", "heat/run"]["state"], "open")
+        self.assertIn("compares 1101 orders here, over the budget of 1024 for one pick", cells["s", "strip.heat", "heat/run"]["reason"])
+        self.assertEqual(cells["s", "strip.hole", "hole"]["state"], "proved", "the other cells are settled as before")
 
 
 if __name__ == "__main__":

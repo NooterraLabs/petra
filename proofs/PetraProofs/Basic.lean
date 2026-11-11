@@ -67,6 +67,11 @@ theorem M.lift_ok {α : Type} {e : Except String α} {c c' : Caches} {b : α}
     cases h'
     exact ⟨rfl, rfl⟩
 
+theorem M.get_ok {c s c' : Caches} (h : (get : M Caches) c = .ok (s, c')) : s = c ∧ c' = c := by
+  have h' : (Except.ok (c, c) : Except String (Caches × Caches)) = .ok (s, c') := h
+  cases h'
+  exact ⟨rfl, rfl⟩
+
 theorem M.throw_not_ok {α : Type} {s : String} {c c' : Caches} {b : α}
     (h : (throw s : M α) c = .ok (b, c')) : False := by
   have h' : (Except.error s : Except String (α × Caches)) = .ok (b, c') := h

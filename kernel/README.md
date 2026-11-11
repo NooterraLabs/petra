@@ -34,7 +34,7 @@ The verdict says which of the two it did, in `cells_from`, and prints the hash o
 | File | Holds |
 |---|---|
 | `Petra/Num.lean` | Exact rationals, intervals, and `sqrt`, `ln`, `exp` and pi rounded outward |
-| `Petra/Tape.lean` | The interval rule: a partition proves a tape, a point refutes one |
+| `Petra/Tape.lean` | The interval rule: a partition proves a tape, a point refutes one, and each step pays for its work |
 | `Petra/Sha256.lean` | The hash of a file's bytes |
 | `Petra/Files.lean` | The files as structures |
 | `Petra/Quantity.lean` | Dimensions, the unit table, and the text of a quantity |
@@ -45,7 +45,7 @@ The verdict says which of the two it did, in `cells_from`, and prints the hash o
 
 ## What is proved
 
-The interval rule is proved, for `Petra/Num.lean` and `Petra/Tape.lean` as they stand: a tape that `Tape.proved` accepts has every root at most zero at every point of its box, and a point that `Tape.refuted` accepts has its root above zero. The proofs are in `../proofs`, a second package that depends on Mathlib, and [docs/proved.md](../docs/proved.md) lists them. Nothing in this folder depends on that package.
+The interval rule is proved, for `Petra/Num.lean` and `Petra/Tape.lean` as they stand: a tape that `Tape.proved` accepts has every root at most zero at every point of its box, and a point that `Tape.refuted` accepts has its root above zero. Both hold whatever work the proof is given: a proof that runs out of work is not accepted. The proofs are in `../proofs`, a second package that depends on Mathlib, and [docs/proved.md](../docs/proved.md) lists them. Nothing in this folder depends on that package.
 
 For the logic to read them, no definition in those two files is a `partial def` or runs a `while`: each loop is a recursion that Lean checks to end.
 

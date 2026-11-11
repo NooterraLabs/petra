@@ -178,17 +178,26 @@ def expAt (x : Rat) (p : Nat) : Iv :=
 def piAt (p : Nat) : Iv :=
   ((Iv.pt 16).mul (oddSeries (mkRat 1 5) (-1) p)).sub ((Iv.pt 4).mul (oddSeries (mkRat 1 239) (-1) p))
 
-/-- The grid points just below and just above the real that `enc p` encloses. Every caller
-passes an irrational value, so a fine enough enclosure separates it from the grid. -/
-def grid (enc : Nat → Iv) : Except String (Rat × Rat) := Id.run do
-  for extra in [32, 128, 512, 2048] do
-    let e := enc (PREC + extra)
-    let lo := (e.lo * qi GRID).floor
-    let hi := (e.hi * qi GRID).ceil
-    if hi - lo ≤ 1 then return .ok (qd lo GRID, qd hi GRID)
-  return .error "no enclosure separated the value from the rounding grid"
+/-- What `grid` says of an enclosure that has a grid point inside it. -/
+def UNSEPARATED : String := "no enclosure separated the value from the rounding grid"
 
-def piIv : Except String Iv := (grid piAt).map fun (lo, hi) => ⟨lo, hi⟩
+/-- How many bits more than the grid an enclosure has, in the order the kernel tries them.
+`Tape.lean` asks for the next only when `grid` could not round from the one before, and
+pays for each as it asks. -/
+def EXTRAS : List Nat := [32, 128, 512, 2048]
+
+/-- The grid points just below and just above the real that `enc p` encloses, read from the
+enclosure with `extra` bits more than the grid. Every caller passes an irrational value, so
+a fine enough enclosure separates it from the grid, and every enclosure that does gives the
+same two points. -/
+def grid (enc : Nat → Iv) (extra : Nat) : Except String (Rat × Rat) :=
+  let e := enc (PREC + extra)
+  let lo := (e.lo * qi GRID).floor
+  let hi := (e.hi * qi GRID).ceil
+  if hi - lo ≤ 1 then .ok (qd lo GRID, qd hi GRID) else .error UNSEPARATED
+
+/-- Pi on the grid. The first enclosure separates it. -/
+def piIv : Except String Iv := (grid piAt 32).map fun (lo, hi) => ⟨lo, hi⟩
 
 abbrev Cache := Std.HashMap (Int × Nat) (Rat × Rat)
 
@@ -198,32 +207,42 @@ structure Caches where
 
 abbrev M := StateT Caches (Except String)
 
-def lnPoint (x : Rat) : M (Rat × Rat) := do
+/-- The most entries a cache holds. A step that may fail keeps the caches it started from,
+to go back to them, so the step's first new entry copies the cache's table. A cache of
+bounded size bounds that copy, and what the caches hold. -/
+def MAX_CACHED : Nat := 1024
+
+/-- The cache with one entry more. A full cache starts again from the new entry: the ends of
+the leaf before, which the next leaf reads again, are the entries that were added last. -/
+def cached (cache : Cache) (key : Int × Nat) (v : Rat × Rat) : Cache :=
+  (if cache.size < MAX_CACHED then cache else {}).insert key v
+
+def lnPoint (x : Rat) (extra : Nat) : M (Rat × Rat) := do
   if x == 1 then return (0, 0)
   let key := (x.num, x.den)
   match (← get).ln.get? key with
   | some v => return v
   | none =>
-    let v ← liftM (m := Except String) (grid (lnAt x))
-    modify fun c => { c with ln := c.ln.insert key v }
+    let v ← liftM (m := Except String) (grid (lnAt x) extra)
+    modify fun c => { c with ln := cached c.ln key v }
     return v
 
-def expPoint (x : Rat) : M (Rat × Rat) := do
+def expPoint (x : Rat) (extra : Nat) : M (Rat × Rat) := do
   if x == 0 then return (1, 1)
   let key := (x.num, x.den)
   match (← get).exp.get? key with
   | some v => return v
   | none =>
-    let v ← liftM (m := Except String) (grid (expAt x))
-    modify fun c => { c with exp := c.exp.insert key v }
+    let v ← liftM (m := Except String) (grid (expAt x) extra)
+    modify fun c => { c with exp := cached c.exp key v }
     return v
 
-def iLn (x : Iv) : M Iv := do
+def iLn (x : Iv) (extra : Nat) : M Iv := do
   if x.lo ≤ 0 then throw "ln over an interval with non-positive values"
-  return ⟨(← lnPoint x.lo).1, (← lnPoint x.hi).2⟩
+  return ⟨(← lnPoint x.lo extra).1, (← lnPoint x.hi extra).2⟩
 
-def iExp (x : Iv) : M Iv := do
-  return ⟨(← expPoint x.lo).1, (← expPoint x.hi).2⟩
+def iExp (x : Iv) (extra : Nat) : M Iv := do
+  return ⟨(← expPoint x.lo extra).1, (← expPoint x.hi extra).2⟩
 
 /-- The longest string the kernel reads as a number. -/
 def MAX_NUMBER_CHARS : Nat := 4000

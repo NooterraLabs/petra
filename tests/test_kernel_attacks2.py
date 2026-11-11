@@ -1,21 +1,28 @@
 """The second hostile review of petra-verify (kernel/), one test per confirmed finding.
 
-Each test asserts the behaviour the kernel should have, and each fails against the kernel at
-438057d, where the review was made. The review found no false PASS, no false proof and no
-false refutation. Its findings are inputs under 1 MB that keep the kernel busy for far more
-than a minute, hold more than a gigabyte, or print more than 5 MB, though the evaluation
-budget and the limits of docs/format.md were meant to stop them. The tests are skipped when
-no kernel is built.
+Each test asserts the behaviour the kernel should have. All five failed against the kernel at
+438057d, where the review was made, and the first four pass now that the kernel charges
+a proof for the work it does (docs/format.md, "Limits"). The fifth still fails. The review
+found no false PASS, no false proof and no false refutation. Its findings were inputs under
+1 MB that kept the kernel busy for far more than a minute, held more than a gigabyte, or
+printed more than 5 MB, though the evaluation budget and the limits of docs/format.md were
+meant to stop them. The tests are skipped when no kernel is built.
 
-  1  An exp of a number near 45,000 takes about 0.3 seconds and costs 3 evaluations.
-  2  A pick costs 1 + 2 per case, but the kernel tests every condition in each of up to 4,096
-     orders, and a condition may be as wide as the file allows.
-  3  Tape.eval keeps the enclosure of every node of a leaf, and an enclosure may have ends of
-     65,536 bits: a chain of negations of one long value holds over a gigabyte.
-  4  Partition.leaves builds the box of every leaf before it evaluates one, each a copy of
-     every input: inputs times leaves, while the budget counts the leaves alone.
+  1  An exp of a number near 45,000 took about 0.3 seconds and cost 3 evaluations. Closed: an
+     exp pays for its terms times the bits it works in, about 900 million units for this one.
+  2  A pick cost 1 + 2 per case, but the kernel tests every condition in each of up to 4,096
+     orders, and a condition could be as wide as the file allowed. Closed: the conditions of
+     a pick hold at most 1,024 orders, and a pick pays for its ways times its orders.
+  3  Tape.eval kept the enclosure of every node of a leaf, and an enclosure may have ends of
+     65,536 bits: a chain of negations of one long value held over a gigabyte. Closed: an
+     enclosure is given up after the last node that reads it, and a leaf holds 128 MB of them.
+  4  Partition.leaves built the box of every leaf before it evaluated one, each a copy of
+     every input: inputs times leaves, while the budget counted the leaves alone. Closed:
+     the leaves are walked one at a time, and each pays for its copy of the box.
   5  Cells made from a deck of rules are the parts times the lines of the grid, so 89 KB
-     prints 5.1 MB.
+     print 5.1 MB.
+
+tests/test_kernel_limits.py holds each limit one by one (Work, Orders).
 """
 import json
 import os

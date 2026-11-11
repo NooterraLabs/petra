@@ -52,27 +52,21 @@ private theorem grid_le_hi (a : ℚ) : a ≤ qd (a * qi GRID).ceil GRID := by
   rw [qd_eq _ _ GRID_pos.le, qi_eq, le_div_iff₀ GRIDq_pos]
   exact Rat.le_ceil
 
-/-- What `grid` returns is the pair of grid points around one of the enclosures it asked
-for. -/
-private theorem grid_ok {enc : Nat → Iv} {lo hi : ℚ} (h : grid enc = .ok (lo, hi)) :
-    ∃ p, lo = qd ((enc p).lo * qi GRID).floor GRID ∧ hi = qd ((enc p).hi * qi GRID).ceil GRID := by
+/-- What `grid` returns is the pair of grid points around the enclosure it asked for. -/
+private theorem grid_ok {enc : Nat → Iv} {extra : Nat} {lo hi : ℚ} (h : grid enc extra = .ok (lo, hi)) :
+    lo = qd ((enc (PREC + extra)).lo * qi GRID).floor GRID ∧
+      hi = qd ((enc (PREC + extra)).hi * qi GRID).ceil GRID := by
   unfold grid at h
-  simp only [List.forIn_cons, List.forIn_nil] at h
-  -- Four tests, so sixteen cases. In each, the loop returns the pair of the first test that
-  -- passed. When none passed it returns the error, and `split_ifs` closes that case.
-  split_ifs at h <;>
-    first
-    | exact ⟨PREC + 32, (Prod.mk.inj (Except.ok.inj h)).1.symm, (Prod.mk.inj (Except.ok.inj h)).2.symm⟩
-    | exact ⟨PREC + 128, (Prod.mk.inj (Except.ok.inj h)).1.symm, (Prod.mk.inj (Except.ok.inj h)).2.symm⟩
-    | exact ⟨PREC + 512, (Prod.mk.inj (Except.ok.inj h)).1.symm, (Prod.mk.inj (Except.ok.inj h)).2.symm⟩
-    | exact ⟨PREC + 2048, (Prod.mk.inj (Except.ok.inj h)).1.symm, (Prod.mk.inj (Except.ok.inj h)).2.symm⟩
+  dsimp only at h
+  split_ifs at h
+  exact ⟨(Prod.mk.inj (Except.ok.inj h)).1.symm, (Prod.mk.inj (Except.ok.inj h)).2.symm⟩
 
 /-- If every enclosure `enc p` holds `x`, the pair of grid points that `grid` returns has
-`x` between them. -/
-theorem grid_sound {enc : Nat → Iv} {x : ℝ} {lo hi : ℚ} (henc : ∀ p, (enc p).Holds x)
-    (h : grid enc = .ok (lo, hi)) : (lo : ℝ) ≤ x ∧ x ≤ (hi : ℝ) := by
-  obtain ⟨p, rfl, rfl⟩ := grid_ok h
-  obtain ⟨h1, h2⟩ := henc p
+`x` between them, whichever enclosure it rounded from. -/
+theorem grid_sound {enc : Nat → Iv} {extra : Nat} {x : ℝ} {lo hi : ℚ} (henc : ∀ p, (enc p).Holds x)
+    (h : grid enc extra = .ok (lo, hi)) : (lo : ℝ) ≤ x ∧ x ≤ (hi : ℝ) := by
+  obtain ⟨rfl, rfl⟩ := grid_ok h
+  obtain ⟨h1, h2⟩ := henc (PREC + extra)
   exact ⟨le_trans (Rat.cast_le.2 (grid_lo_le _)) h1, le_trans h2 (Rat.cast_le.2 (grid_le_hi _))⟩
 
 /-! ## The square root
@@ -207,7 +201,7 @@ private theorem piAt_sound (p : ℕ) : (piAt p).Holds Real.pi := by
 pi. -/
 theorem piIv_sound {r : Iv} (h : piIv = .ok r) : r.Holds Real.pi := by
   unfold piIv at h
-  cases hg : grid piAt with
+  cases hg : grid piAt 32 with
   | error e =>
     rw [hg] at h
     cases h
@@ -384,12 +378,6 @@ theorem Caches.valid_empty : ({} : Caches).Valid := by
     rw [Std.HashMap.get?_eq_getElem?, Std.HashMap.getElem?_empty] at h'
     cases h'
 
-private theorem get_ok {c s c' : Caches} (h : (get : M Caches) c = .ok (s, c')) :
-    s = c ∧ c' = c := by
-  have h' : (Except.ok (c, c) : Except String (Caches × Caches)) = .ok (s, c') := h
-  cases h'
-  exact ⟨rfl, rfl⟩
-
 private theorem modify_ok {f : Caches → Caches} {c c' : Caches} {u : PUnit}
     (h : (modify f : M PUnit) c = .ok (u, c')) : c' = f c := by
   have h' : (Except.ok (PUnit.unit, f c) : Except String (PUnit × Caches)) = .ok (u, c') := h
@@ -400,13 +388,31 @@ private theorem key_eq {q x : ℚ} (h : ((q.num, q.den) == (x.num, x.den)) = tru
   have h' := beq_iff_eq.mp h
   exact Rat.ext (congrArg Prod.fst h') (congrArg Prod.snd h')
 
+/-- An entry of a cache that gained one is the new entry or an entry it had before: a full
+cache starts again from the new entry, and loses entries but gains no other. -/
+private theorem cached_get? {cache : Cache} {q x : ℚ} {v w : ℚ × ℚ}
+    (h : (cached cache (q.num, q.den) v).get? (x.num, x.den) = some w) :
+    (q = x ∧ w = v) ∨ cache.get? (x.num, x.den) = some w := by
+  unfold cached at h
+  rw [Std.HashMap.get?_insert] at h
+  by_cases hk : ((q.num, q.den) == (x.num, x.den)) = true
+  · rw [if_pos hk] at h
+    cases h
+    exact Or.inl ⟨key_eq hk, rfl⟩
+  · rw [if_neg hk] at h
+    split_ifs at h
+    · exact Or.inr h
+    · have h' : (∅ : Cache).get? (x.num, x.den) = some w := h
+      rw [Std.HashMap.get?_eq_getElem?, Std.HashMap.getElem?_empty] at h'
+      cases h'
+
 /-- The three ways `lnPoint` returns: the argument is 1, the cache has it, or `grid` computes
 it and the cache gains it. -/
 private theorem lnPoint_cases {q : ℚ} {c c' : Caches} {v : ℚ × ℚ}
-    (h : lnPoint q c = .ok (v, c')) :
+    {extra : Nat} (h : lnPoint q extra c = .ok (v, c')) :
     (q = 1 ∧ v = (0, 0) ∧ c' = c) ∨
     (c.ln.get? (q.num, q.den) = some v ∧ c' = c) ∨
-    (grid (lnAt q) = .ok v ∧ c' = { c with ln := c.ln.insert (q.num, q.den) v }) := by
+    (grid (lnAt q) extra = .ok v ∧ c' = { c with ln := cached c.ln (q.num, q.den) v }) := by
   unfold lnPoint at h
   dsimp only at h
   by_cases h1 : (q == 1) = true
@@ -417,7 +423,7 @@ private theorem lnPoint_cases {q : ℚ} {c c' : Caches} {v : ℚ × ℚ}
     obtain ⟨u, c1, h2, h3⟩ := M.bind_ok h
     rw [(M.pure_ok h2).2] at h3
     obtain ⟨s, c2, h4, h5⟩ := M.bind_ok h3
-    obtain ⟨hs1, hs2⟩ := get_ok h4
+    obtain ⟨hs1, hs2⟩ := M.get_ok h4
     rw [hs1, hs2] at h5
     cases hget : c.ln.get? (q.num, q.den) with
     | some w =>
@@ -436,45 +442,36 @@ private theorem lnPoint_cases {q : ℚ} {c c' : Caches} {v : ℚ × ℚ}
       exact Or.inr (Or.inr ⟨hg, hc'⟩)
 
 private theorem lnPoint_sound {q : ℚ} {c c' : Caches} {v : ℚ × ℚ}
-    (hc : c.Valid) (hq : 0 < q) (h : lnPoint q c = .ok (v, c')) :
+    (hc : c.Valid) (hq : 0 < q) {extra : Nat} (h : lnPoint q extra c = .ok (v, c')) :
     c'.Valid ∧ (v.1 : ℝ) ≤ Real.log (q : ℝ) ∧ Real.log (q : ℝ) ≤ (v.2 : ℝ) := by
   rcases lnPoint_cases h with ⟨rfl, rfl, rfl⟩ | ⟨hget, rfl⟩ | ⟨hg, rfl⟩
   · refine ⟨hc, ?_, ?_⟩ <;> simp
   · exact ⟨hc, hc.1 q v hget hq⟩
   · have hb := grid_sound (lnAt_sound hq) hg
     refine ⟨⟨fun x w hget hx => ?_, hc.2⟩, hb⟩
-    have hget' : (c.ln.insert (q.num, q.den) v).get? (x.num, x.den) = some w := hget
-    rw [Std.HashMap.get?_insert] at hget'
-    by_cases hk : ((q.num, q.den) == (x.num, x.den)) = true
-    · rw [if_pos hk] at hget'
-      cases hget'
-      rw [← key_eq hk]
+    obtain hnew | hold := cached_get? hget
+    · rw [← hnew.1, hnew.2]
       exact hb
-    · rw [if_neg hk] at hget'
-      exact hc.1 x w hget' hx
+    · exact hc.1 x w hold hx
 
 /-- `lnPoint` keeps the caches valid, whatever its argument: an entry under a key that is
 not positive is never read as a logarithm. -/
 private theorem lnPoint_valid {q : ℚ} {c c' : Caches} {v : ℚ × ℚ}
-    (hc : c.Valid) (h : lnPoint q c = .ok (v, c')) : c'.Valid := by
+    (hc : c.Valid) {extra : Nat} (h : lnPoint q extra c = .ok (v, c')) : c'.Valid := by
   rcases lnPoint_cases h with ⟨-, -, rfl⟩ | ⟨-, rfl⟩ | ⟨hg, rfl⟩
   · exact hc
   · exact hc
   · refine ⟨fun x w hget hx => ?_, hc.2⟩
-    have hget' : (c.ln.insert (q.num, q.den) v).get? (x.num, x.den) = some w := hget
-    rw [Std.HashMap.get?_insert] at hget'
-    by_cases hk : ((q.num, q.den) == (x.num, x.den)) = true
-    · rw [if_pos hk] at hget'
-      cases hget'
-      have hqx := key_eq hk
+    obtain hnew | hold := cached_get? hget
+    · obtain ⟨hqx, hvw⟩ := hnew
       subst hqx
+      rw [hvw]
       exact grid_sound (lnAt_sound hx) hg
-    · rw [if_neg hk] at hget'
-      exact hc.1 x w hget' hx
+    · exact hc.1 x w hold hx
 
 /-- `iLn` keeps the caches valid, on any interval. -/
 theorem iLn_valid {a r : Iv} {c c' : Caches} (hc : c.Valid)
-    (h : iLn a c = .ok (r, c')) : c'.Valid := by
+    {extra : Nat} (h : iLn a extra c = .ok (r, c')) : c'.Valid := by
   unfold iLn at h
   dsimp only at h
   by_cases hneg : a.lo ≤ 0
@@ -494,7 +491,7 @@ theorem iLn_valid {a r : Iv} {c c' : Caches} (hc : c.Valid)
 of positive numbers, its result holds the logarithm of every real the interval holds, and
 it keeps the caches valid. -/
 theorem iLn_sound {a r : Iv} {x : ℝ} {c c' : Caches} (hc : c.Valid)
-    (ha : a.Holds x) (h : iLn a c = .ok (r, c')) : c'.Valid ∧ 0 < x ∧ r.Holds (Real.log x) := by
+    (ha : a.Holds x) {extra : Nat} (h : iLn a extra c = .ok (r, c')) : c'.Valid ∧ 0 < x ∧ r.Holds (Real.log x) := by
   obtain ⟨hlo, hhi⟩ := ha
   unfold iLn at h
   dsimp only at h
@@ -522,10 +519,10 @@ theorem iLn_sound {a r : Iv} {x : ℝ} {c c' : Caches} (hc : c.Valid)
 /-! ## exp -/
 
 private theorem expPoint_cases {q : ℚ} {c c' : Caches} {v : ℚ × ℚ}
-    (h : expPoint q c = .ok (v, c')) :
+    {extra : Nat} (h : expPoint q extra c = .ok (v, c')) :
     (q = 0 ∧ v = (1, 1) ∧ c' = c) ∨
     (c.exp.get? (q.num, q.den) = some v ∧ c' = c) ∨
-    (grid (expAt q) = .ok v ∧ c' = { c with exp := c.exp.insert (q.num, q.den) v }) := by
+    (grid (expAt q) extra = .ok v ∧ c' = { c with exp := cached c.exp (q.num, q.den) v }) := by
   unfold expPoint at h
   dsimp only at h
   by_cases h1 : (q == 0) = true
@@ -536,7 +533,7 @@ private theorem expPoint_cases {q : ℚ} {c c' : Caches} {v : ℚ × ℚ}
     obtain ⟨u, c1, h2, h3⟩ := M.bind_ok h
     rw [(M.pure_ok h2).2] at h3
     obtain ⟨s, c2, h4, h5⟩ := M.bind_ok h3
-    obtain ⟨hs1, hs2⟩ := get_ok h4
+    obtain ⟨hs1, hs2⟩ := M.get_ok h4
     rw [hs1, hs2] at h5
     cases hget : c.exp.get? (q.num, q.den) with
     | some w =>
@@ -555,27 +552,22 @@ private theorem expPoint_cases {q : ℚ} {c c' : Caches} {v : ℚ × ℚ}
       exact Or.inr (Or.inr ⟨hg, hc'⟩)
 
 private theorem expPoint_sound {q : ℚ} {c c' : Caches} {v : ℚ × ℚ}
-    (hc : c.Valid) (h : expPoint q c = .ok (v, c')) :
+    (hc : c.Valid) {extra : Nat} (h : expPoint q extra c = .ok (v, c')) :
     c'.Valid ∧ (v.1 : ℝ) ≤ Real.exp (q : ℝ) ∧ Real.exp (q : ℝ) ≤ (v.2 : ℝ) := by
   rcases expPoint_cases h with ⟨rfl, rfl, rfl⟩ | ⟨hget, rfl⟩ | ⟨hg, rfl⟩
   · refine ⟨hc, ?_, ?_⟩ <;> simp
   · exact ⟨hc, hc.2 q v hget⟩
   · have hb := grid_sound (Loops.expAt_spec q) hg
     refine ⟨⟨hc.1, fun x w hget => ?_⟩, hb⟩
-    have hget' : (c.exp.insert (q.num, q.den) v).get? (x.num, x.den) = some w := hget
-    rw [Std.HashMap.get?_insert] at hget'
-    by_cases hk : ((q.num, q.den) == (x.num, x.den)) = true
-    · rw [if_pos hk] at hget'
-      cases hget'
-      rw [← key_eq hk]
+    obtain hnew | hold := cached_get? hget
+    · rw [← hnew.1, hnew.2]
       exact hb
-    · rw [if_neg hk] at hget'
-      exact hc.2 x w hget'
+    · exact hc.2 x w hold
 
 /-- If `expAt` holds exp, the result of `iExp` holds the exponential of every real the
 interval holds, and `iExp` keeps the caches valid. -/
 theorem iExp_sound {a r : Iv} {x : ℝ} {c c' : Caches} (hc : c.Valid)
-    (ha : a.Holds x) (h : iExp a c = .ok (r, c')) : c'.Valid ∧ r.Holds (Real.exp x) := by
+    (ha : a.Holds x) {extra : Nat} (h : iExp a extra c = .ok (r, c')) : c'.Valid ∧ r.Holds (Real.exp x) := by
   obtain ⟨hlo, hhi⟩ := ha
   unfold iExp at h
   obtain ⟨va, c2, h3, h4⟩ := M.bind_ok h
@@ -588,7 +580,7 @@ theorem iExp_sound {a r : Iv} {x : ℝ} {c c' : Caches} (hc : c.Valid)
 
 /-- `iExp` keeps the caches valid, on any interval. -/
 theorem iExp_valid {a r : Iv} {c c' : Caches} (hc : c.Valid)
-    (h : iExp a c = .ok (r, c')) : c'.Valid := by
+    {extra : Nat} (h : iExp a extra c = .ok (r, c')) : c'.Valid := by
   unfold iExp at h
   obtain ⟨va, c2, h3, h4⟩ := M.bind_ok h
   obtain ⟨vb, c3, h5, h6⟩ := M.bind_ok h4

@@ -125,15 +125,25 @@ def Step.reads : Step → Array Nat
   | .table _ down across => down.reads ++ (across.map Chosen.reads).getD #[]
   | .row binds value => binds.push value
 
+/-- What a step costs to write for one part: itself and each step it reads. A pick renames
+every order of its conditions, and a table looks at every cell. -/
+def Step.weight : Step → Nat
+  | .node (.pick cases) => 1 + cases.size + 2 * orders cases
+  | .node n => 1 + n.reads.size
+  | .field .. | .load _ => 1
+  | .table grid _ _ => 1 + grid.down.places + grid.cells.foldl (fun n line => n + line.size) 0
+  | .row binds _ => 1 + binds.size
+
 /-- An answer to one line of the grid: `low <= high`, read where every pair of `ranges` is
 in order. `fields` and `loads` are what its roots read, through its names and its rows, each
-once. -/
+once. `weight` is what its steps cost to write for one part. -/
 structure Rule where
   id : String
   kind : String
   mechanism : String
   condition : Option Static
   steps : Array Step
+  weight : Nat
   ranges : Array (Nat × Nat)
   low : Nat
   high : Nat
@@ -677,7 +687,8 @@ def readRule (kinds : Array Kind) (rows : Std.HashMap String Row) (asks : Array 
     let loads := used.filterMap fun
       | .load name => some name
       | _ => none
-    return { id, kind := name, mechanism, condition, steps := draft.steps, ranges, low, high,
+    return { id, kind := name, mechanism, condition, steps := draft.steps,
+             weight := draft.steps.foldl (fun n step => n + step.weight) 0, ranges, low, high,
              fields := once (fields ++ ((condition.map Static.keys).getD #[]).map (none, ·)), loads := once loads }
   rule.mapError (s!"rule {id}: " ++ ·)
 
@@ -714,11 +725,13 @@ structure Site where
   load : String → Option TapeInput
 
 /-- A tape being written. `seen` finds a node that is there already, so one quantity is one
-node, and a pick that compares it twice orders it once. -/
+node, and a pick that compares it twice orders it once. `labelled` finds an input by its
+label. -/
 structure Writing where
   inputs : Array TapeInput := #[]
   nodes : Array Node := #[]
   seen : Std.HashMap Node Nat := {}
+  labelled : Std.HashMap String Nat := {}
 
 abbrev Write := StateT Writing (Except String)
 
@@ -733,20 +746,23 @@ def node (n : Node) : Write Nat := modifyGet fun w =>
 
 def input (i : TapeInput) : Write Nat := do
   let k ← modifyGet fun w =>
-    match w.inputs.findIdx? (·.label == i.label) with
+    match w.labelled.get? i.label with
     | some k => (k, w)
     | none =>
       let k := w.inputs.size
-      (k, { w with inputs := w.inputs.push i })
+      (k, { w with inputs := w.inputs.push i, labelled := w.labelled.insert i.label k })
   node (.s k)
 
 /-- The first case that holds, or none when there is no case. One case that holds otherwise
-is its value. -/
+is its value. A pick holds at most `MAX_ORDERS` orders, as one that a file carries. -/
 def pickOf (cases : Array (Option Cond × Nat)) : Write (Option Nat) :=
   match cases[0]? with
   | none => pure none
   | some (none, value) => pure (some value)
-  | some _ => some <$> node (.pick cases)
+  | some _ =>
+    if orders cases > MAX_ORDERS then
+      throw s!"an equation or a table compares {orders cases} orders here, over the budget of {MAX_ORDERS} for one pick"
+    else some <$> node (.pick cases)
 
 /-- The places of one side that the part can be at, each with the condition that it is
 there: one place for a key, every listed value, every band. -/

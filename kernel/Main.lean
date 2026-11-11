@@ -38,7 +38,8 @@ def render (r : Report) : String :=
     ("findings", rows (r.findings.kept.map finding)),
     ("more_findings", toString r.findings.more),
     ("counts", object (State.all.toList.map count)),
-    ("dsg_inputs", toString r.dsgInputs)]
+    ("dsg_inputs", toString r.dsgInputs),
+    ("work", toString r.work)]
     ++ (r.ignored.map fun n => ("ignored_hints", toString n)).toList ++ [
     ("waived", rows (waivers.map waived)),
     ("cells", rows (r.cells.map cell))]
