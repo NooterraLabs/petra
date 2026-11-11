@@ -213,7 +213,7 @@ def _field(body: Mapping[str, Any], load: bool = False) -> Field:
         return Field(name, body["what"], keys=keys)
     if "type" in body:
         names = tuple(body.get("as", [name]))
-        if not names or len(set(names)) != len(names) or not all(map(_name, names)):
+        if not names or not all(map(_name, names)) or len(set(names)) != len(names):
             raise DeckError(f"field {name}: `as` names each part once, in letters, digits and _")
         return Field(name, body["what"], type=str(body["type"]), names=names)
     dim = dimension(body["dim"])
@@ -294,7 +294,7 @@ class _Binder(rows._Reader):
         if isinstance(node, list) and node[:1] == ["key"] and len(node) == 2 and node[1] in known:
             return ("field", None, {None: node[1]})
         if isinstance(node, list) and node[:1] == ["by"] and len(node) == 3 and isinstance(node[2], dict):
-            if set(node[2]) != set(of(node[1])) or not set(node[2].values()) <= set(known):
+            if set(node[2]) != set(of(node[1])) or not all(isinstance(its, str) for its in node[2].values()) or not set(node[2].values()) <= set(known):
                 raise RowError(f"{what}: `by` gives one of the row's names for each name of {node[1]}")
             return ("field", node[1], dict(node[2]))
         raise RowError(f"{what}: a key is bound to a key field, to [\"key\", NAME] with one of {', '.join(known)}, or to [\"by\", FIELD, {{...}}]")
@@ -368,6 +368,8 @@ def read_deck(text: str) -> Deck:
         deck_rows = _named(found, "rows", lambda r: r.id)
         for t in body["types"]:
             only(t, ("type", "what", "fields", "loads"), f"type {t.get('type')!r}")
+            if not isinstance(t.get("type"), str):
+                raise DeckError(f"type {t.get('type')!r}: the name of a type is a text")
         types = _named([Type(t["type"], t["what"], _named([_field(f) for f in t["fields"]], "fields", lambda f: f.name),
                              _named([_field(f, True) for f in t.get("loads", [])], "loads", lambda f: f.name)) for t in body["types"]],
                        "types", lambda t: t.name)
@@ -383,7 +385,7 @@ def read_deck(text: str) -> Deck:
             anchor = anchored(a["anchor"], f"grid {a.get('mechanism')}: anchor")
             if unless is not None:
                 only(unless, ("why", "when"), f"grid {a.get('mechanism')}: unless")
-            if a["type"] not in types or _long(a["mechanism"]) or a["mechanism"] == UNREAD:
+            if not isinstance(a["type"], str) or not isinstance(a["mechanism"], str) or a["type"] not in types or _long(a["mechanism"]) or a["mechanism"] == UNREAD:
                 raise DeckError(f"grid {a.get('mechanism')}: a line has a type of the deck, mechanism, of at most {MAX_NAME} characters and not `{UNREAD}`, what, anchor and may have unless")
             when = _Binder(deck_rows, types[a["type"]], types).static(unless["when"]) if unless is not None and "when" in unless else None
             asks.append(Ask(a["type"], a["mechanism"], a["what"], anchor, when, str(unless["why"]) if unless is not None else None))
@@ -398,10 +400,12 @@ def read_deck(text: str) -> Deck:
         if len({(r.type, r.mechanism, r.id.rpartition("/")[2]) for r in rules}) != len(rules):
             raise DeckError("two rules for one line of the grid have ids that end alike after the last /, so their cells would have one entry")
         return Deck(str(body["name"]), export.sha256(text), deck_rows, types, tuple(asks), rules, text)
-    except RowError as exc:
+    except (RowError, DeckError) as exc:
         raise DeckError(str(exc)) from None
-    except (KeyError, TypeError, AttributeError, json.JSONDecodeError) as exc:
-        raise DeckError(f"not a deck ({type(exc).__name__}: {exc})") from None
+    except (KeyError, TypeError, AttributeError, ValueError) as exc:
+        # A ValueError that is none of the two above is the JSON reader's: text that is not
+        # JSON, or a whole number of more digits than Python turns into a number.
+        raise DeckError(f"not a deck ({type(exc).__name__}: {str(exc)[:200]})") from None
 
 
 @lru_cache(maxsize=None)

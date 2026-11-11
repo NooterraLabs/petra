@@ -404,6 +404,105 @@ class TheGridReadsInTime(unittest.TestCase):
         grid.read_deck(json.dumps(body))
         self.assertLess(time.process_time() - started, PROCESSOR_SECONDS, "the values are read in about a processor second")
 
+    def test_dimensions_that_share_a_hash_in_python_are_compared_in_time(self):
+        """Finding 5 again, in `same` (petra/deck.py), which put the dimensions of a sum in a
+        set. A dimension is its exponents, and a deck writes one as `length^N` with any whole
+        N. 12,000 fields of dimensions length^(1 + k (2^61 - 1)) under one `add`, 0.98 MB:
+        grid.read_deck took 54 processor seconds to refuse the sum, and takes 1.4."""
+        names = [f"x{k}" for k in range(12_000)]
+        kind = {"type": "t", "what": "w", "fields": [{"name": name, "dim": f"length^{1 + k * PYTHON_STEP}", "what": "w"} for k, name in enumerate(names)]}
+        rule = {"id": "r/x", "type": "t", "mechanism": "m", "anchor": ANCHOR, "says": "s", "le": [["add", *names], "1"]}
+        body = json.dumps(dict(BARE, types=[kind], grid=[{"type": "t", "mechanism": "m", "what": "w", "anchor": ANCHOR}], rules=[rule]))
+        self.assertLess(len(body), MB)
+        started = time.process_time()
+        with self.assertRaisesRegex(grid.DeckError, "rule r/x: add of length and m\\^2305843009213693952"):
+            grid.read_deck(body)
+        self.assertLess(time.process_time() - started, PROCESSOR_SECONDS, "the sum is refused in about a processor second")
+
+
+PYTHON_STEP = 2 ** 61 - 1
+"""Whole numbers that differ by a multiple of this have one hash in Python."""
+BARE = {"format": "petra-rules/0", "name": "collide", "about": "a", "rows": [], "types": [], "grid": [], "rules": []}
+PLAIN = {"type": "t", "what": "w", "fields": [{"name": "f", "dim": "dimensionless", "what": "w"}]}
+
+
+def row_of(**more) -> dict:
+    return {"id": "h", "anchor": ANCHOR, "gives": {"name": "y", "dim": "dimensionless", "what": "w"},
+            "takes": [{"name": "x", "dim": "dimensionless", "what": "w", "range": ["1", "2"]}], **more}
+
+
+class NoTableOfTheGridIsKeyedByANumberOfTheFile(unittest.TestCase):
+    """petra/grid.py and petra/deck.py key their tables by texts, which Python hashes with a
+    key no file knows, and by no number a deck writes. A deck that writes a whole number
+    where a name goes is refused before the number keys anything, as the kernel refuses it:
+    there a name is a JSON string."""
+
+    SAME = [1 + k * PYTHON_STEP for k in range(12_000)]
+    DECKS = {
+        "the name of a type": (dict(BARE, types=[{"type": v, "what": "w", "fields": []} for v in SAME]), "the name of a type is a text"),
+        "the name of a mechanism": (dict(BARE, types=[PLAIN], grid=[{"type": "t", "mechanism": v, "what": "w", "anchor": ANCHOR} for v in SAME]),
+                                    "a line has a type of the deck, mechanism"),
+        "the name of an input of a row": (dict(BARE, types=[PLAIN], rows=[dict(row_of(**{"is": "1"}), takes=[
+            {"name": v, "dim": "dimensionless", "what": "w", "range": ["1", "2"]} for v in SAME])]), "an input has a name, a text"),
+        "the cases of a jump": (dict(BARE, types=[PLAIN], rows=[row_of(cases=[{"when": ["le", "x", "1"], "is": "1"}, {"is": "2"}],
+                                                                       jumps=[{"cases": [v, 2], "why": "w"} for v in SAME])]),
+                                "a jump names two of the row's cases by number"),
+        "the sides a table rises along": (dict(BARE, types=[PLAIN], rows=[row_of(table={"down": {"by": "x", "at": ["1"]}, "cells": ["1"], "rises": SAME})]),
+                                          "`rises` and `falls` name sides of the table"),
+        "the names of joined parts": (dict(BARE, types=[{"type": "t", "what": "w", "fields": [{"name": "f", "type": "u", "as": SAME, "what": "w"}]},
+                                                        {"type": "u", "what": "w", "fields": []}]), "`as` names each part once"),
+    }
+
+    def test_a_deck_with_whole_numbers_that_share_a_hash_where_names_go_is_refused_in_time(self):
+        for what, (body, why) in self.DECKS.items():
+            with self.subTest(what):
+                text = json.dumps(body)
+                started = time.process_time()
+                with self.assertRaisesRegex(grid.DeckError, why):
+                    grid.read_deck(text)
+                self.assertLess(time.process_time() - started, PROCESSOR_SECONDS / 10, "the deck is refused in a fraction of a processor second")
+
+    @unittest.skipUnless(verify.binary(), "no petra-verify is built here and PETRA_VERIFY names none")
+    def test_the_kernel_refuses_the_same_decks(self):
+        for what, (body, _) in self.DECKS.items():
+            with self.subTest(what):
+                said, seconds, _ = measured(with_rules(body, empty_card(), []))
+                self.assertEqual((said["verdict"], [f["file"] for f in said["findings"]]), ("ILL-FORMED", ["rules"]))
+                self.assertLess(seconds, PROCESSOR_SECONDS)
+
+    def test_a_map_of_a_by_with_whole_numbers_for_the_rows_names_is_refused(self):
+        names = [f"k{k}" for k in range(12_000)]
+        row = dict(row_of(table={"down": {"by": "g"}, "cells": ["1", "2"]}), takes=[{"name": "g", "one_of": ["a", "b"], "what": "w"}])
+        rule = {"id": "r/x", "type": "t", "mechanism": "m", "anchor": ANCHOR, "says": "s",
+                "le": [["row", "h", {"g": ["by", "key", dict(zip(names, self.SAME))]}], "1"]}
+        body = dict(BARE, rows=[row], types=[{"type": "t", "what": "w", "fields": [{"name": "key", "one_of": names, "what": "w"}]}],
+                    grid=[{"type": "t", "mechanism": "m", "what": "w", "anchor": ANCHOR}], rules=[rule])
+        started = time.process_time()
+        with self.assertRaisesRegex(grid.DeckError, "`by` gives one of the row's names for each name of key"):
+            grid.read_deck(json.dumps(body))
+        self.assertLess(time.process_time() - started, PROCESSOR_SECONDS / 10)
+
+    def test_a_whole_number_too_long_for_python_to_read_is_a_deck_that_does_not_hold_together(self):
+        """Python reads no whole number of more than 4,300 digits, and its JSON reader raises
+        a ValueError for one. grid.read_deck let that through as it was."""
+        with self.assertRaisesRegex(grid.DeckError, "not a deck"):
+            grid.read_deck('{"format": "petra-rules/0", "name": ' + "1" * 5000 + "}")
+
+    def test_the_caches_of_ln_and_exp_are_keyed_by_the_text_of_an_end(self):
+        """petra/kernel/interval.py kept the ends it had rounded under the ends themselves,
+        which are fractions a tape computes from a file's numbers. Two ends that share a hash
+        are two entries, and each has its own value."""
+        from petra.kernel import interval
+
+        ends = [Fraction(1 + k * PYTHON_STEP, 3) for k in (1, 2, 4)]
+        self.assertEqual(len({hash(x) for x in ends}), 1, "the three ends share a hash")
+        for cached, point, at in ((interval._ln_cached, interval._ln_point, interval._ln_at), (interval._exp_cached, interval._exp_point, interval._exp_at)):
+            ends_here = ends if point is interval._ln_point else [x / 10 ** 18 for x in ends]
+            before = cached.cache_info().currsize
+            self.assertEqual([point(x) for x in ends_here], [interval._grid(at, x) for x in ends_here])
+            self.assertEqual(cached.cache_info().currsize - before, 3)
+            self.assertEqual({type(key) for key in map(interval._text, ends_here)}, {str})
+
 
 if __name__ == "__main__":
     unittest.main()
