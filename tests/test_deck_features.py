@@ -380,12 +380,16 @@ class AKeyOfAJoinedPart(unittest.TestCase):
             with self.subTest(new):
                 no_deck(self, swapped(LINKS, old, new))
 
-    def test_a_load_is_one_of_the_types_own(self):
-        """`loaded` asks about a load on the part itself, as before: a rule reads no load of a part its part joins."""
-        reads(self, swapped(LINKS, '["is", "duty", "heavy"]', '["loaded", "pull"]'))
-        ended = swapped(json.loads(json.dumps(LINKS).replace('"type": "end", "what": "a end"', '"type": "end", "what": "a end", "loads": [{"name": "push", "dim": "force", "what": "a push"}]')),
-                        '["is", "duty", "heavy"]', '["loaded", "near.push"]')
-        no_deck(self, ended)
+    def test_a_condition_asks_about_no_load(self):
+        """A condition is over keys, which are the same under every load case. `loaded` is refused wherever it stands, whatever it names."""
+        ended = json.loads(json.dumps(LINKS).replace('"type": "end", "what": "a end"', '"type": "end", "what": "a end", "loads": [{"name": "push", "dim": "force", "what": "a push"}]'))
+        for old, new in (('["is", "duty", "heavy"]', '["loaded", "pull"]'), ('["is", "duty", "heavy"]', '["loaded", "near.push"]'), ('["is", "duty", "heavy"]', '["loaded"]'),
+                         ('["is", "duty", "heavy"]', '["loaded", "pull", "more"]'), ('["is", "near.shape", "round"]', '["not", ["loaded", "pull"]]'),
+                         ('["is", "far.stiff", "yes"]', '["or", ["is", "far.stiff", "yes"], ["loaded", "pull"]]'), ('["is", "far.stiff", "yes"]', '["loaded", "nobody"]')):
+            with self.subTest(new):
+                mine, its = no_deck(self, swapped(ended, old, new))
+                self.assertIn(grid.LOADED, mine)
+                self.assertIn("`loaded` is no condition: a condition is over keys, which are the same under every load case", its)
 
     def test_a_field_called_like_a_join_is_not_the_joined_part(self):
         """The link has a key of its own named `near`, as the first of the parts it joins is.
@@ -514,8 +518,8 @@ class ARuleThatRequires(unittest.TestCase):
             with self.subTest(body):
                 no_deck(self, made_up([LUG, HOIST], [asks("hoist.category", "hoist")], [rule("r", "hoist", "hoist.category", **body)]))
         mine, its = no_deck(self, made_up([LUG, HOIST], [asks("hoist.category", "hoist")], [rule("r", "hoist", "hoist.category", requires=["loaded", "lift"])]))
-        self.assertIn("`requires` is a condition over keys", mine)
-        self.assertIn("`requires` is a condition over keys", its)
+        self.assertIn(grid.LOADED, mine)
+        self.assertIn("requires: `loaded` is no condition", its)
 
     def test_its_cell_shares_a_key_with_no_other_rules(self):
         """A requirement is entered as any rule is, under its id from after the last `/`."""

@@ -24,6 +24,20 @@ ones marked "hostile deck" pass their own deck of rules with --rules.
   4  The card's environment is read by nothing for a design of a deck's types (docs/format.md
      says so), and nothing refuses it: the lap of examples/deck in marine C5 gets the PASS it
      gets indoors, while grid.read_parts refuses an `ambient` as a thing a deck does not read.
+
+All four are closed. What was decided for each:
+
+  1  `loaded` is taken out of the condition language. A rule that reads a load has a cell for
+     each load case and a card states the load in every case, as zero where there is none, so
+     "is the load there" has no meaning left. A deck that asks it anywhere is refused. The
+     review's two tests asked that `loaded` be read under each case. They now hold decks A
+     and B to the refusal, and hold the same decks with the condition taken out to FAIL
+     whatever case is added.
+  2, 3  A message lists at most four names and says how many there are, one message is
+     printed once with how many times it arose, at most 100 problems are printed for a pair
+     and the rest are counted, and a card or a design over 1 MB is refused before it is read.
+  4  A card that names an environment is refused for a design of a deck's types, as an
+     ambient is, in petra/grid.py and in the kernel under --rules.
 """
 import json
 import os
@@ -104,6 +118,13 @@ def with_calm(rules: dict, calm: str) -> tuple[dict, dict[str, str]]:
     return ask(alone), {**both, "proofs": alone["proofs"]}
 
 
+def unconditioned(rules: dict) -> dict:
+    """The deck with every `when` and every `unless` that asks `loaded` taken out: what is
+    left of decks A and B once the condition is gone."""
+    return {**rules, "grid": [{k: v for k, v in a.items() if k != "unless"} for a in rules["grid"]],
+            "rules": [{k: v for k, v in r.items() if k != "when"} for r in rules["rules"]]}
+
+
 def measured_check(card: str, design: str, timeout: float = 120) -> tuple[int | None, int, float, int]:
     """`python -m petra check` on the pair, written to a folder of its own: the exit code (None
     when stopped at `timeout` on the clock), the bytes it printed, its processor seconds and the
@@ -141,43 +162,61 @@ def measured_check(card: str, design: str, timeout: float = 120) -> tuple[int | 
 
 
 @unittest.skipUnless(verify.binary(), "no petra-verify is built here and PETRA_VERIFY names none")
-class LoadedIsAskedOfEachCase(unittest.TestCase):
-    """Finding 1. A `when` or an `unless` that asks `loaded` is asked of the part under each
-    case, as the cells of a rule that reads loads are made under each case."""
+class LoadedIsNoCondition(unittest.TestCase):
+    """Finding 1, as decided: `loaded` is no condition. The review found that it was asked once
+    of a part over every case, so that one case switched a line or a rule off under every
+    other: deck B went from FAIL to PASS, and deck A from FAIL to UNKNOWN, when a case that
+    puts a tension of zero on the joint was added. The kernel now refuses both decks, and a
+    condition is over keys alone, which no load case changes."""
 
     def test_a_case_that_carries_no_tension_does_not_excuse_the_shear_of_another(self):
-        """Finding 1, hostile deck B. Case gravity alone: shear/gravity refuted, FAIL. With case
-        calm, T in [0 N, 0 N], beside it the kernel makes two cells, ("", not_applicable) and
-        (size, proved), and says PASS: 100 N of shear on a joint that carries 10 N is checked
-        by no cell, and no `unread` cell stands for V, which the line's rules read."""
-        alone, files = with_calm(EXCUSED, CALM)
+        """Finding 1, hostile deck B, whose line joint.shear has `unless loaded T`. At 495f2b7:
+        case gravity alone gave shear/gravity refuted and FAIL, and with case calm, T in
+        [0 N, 0 N], beside it the kernel made ("", not_applicable) and (size, proved) and said
+        PASS. Now the deck is refused. With the `unless` taken out, the two cases together
+        are FAIL: shear/gravity is refuted whatever calm states."""
+        said = ask({**strips(HEAD + GRAVITY + CALM, DESIGN, unconditioned(EXCUSED)), "rules": json.dumps(EXCUSED)})
+        self.assertEqual((said["verdict"], [f["file"] for f in said["findings"]]), ("ILL-FORMED", ["rules"]))
+        self.assertIn("grid joint.shear: `loaded` is no condition", said["findings"][0]["why"])
+        alone, files = with_calm(unconditioned(EXCUSED), CALM)
         self.assertEqual((alone["verdict"], entries(alone)[:1]), ("FAIL", [("shear/gravity", "refuted")]))
         said = ask(files)
-        self.assertNotEqual(said["verdict"], "PASS", f"case calm excuses the shear of case gravity: {entries(said)}")
-        self.assertEqual(said["verdict"], "FAIL", "the point that refutes shear/gravity is still a point of the card")
+        self.assertEqual(said["verdict"], "FAIL", f"the point that refutes shear/gravity is still a point of the card: {entries(said)}")
+        self.assertEqual(entries(said)[:4], [("shear/calm", "open"), ("shear/gravity", "refuted"), ("tension/calm", "open"), ("tension/gravity", "open")],
+                         "the hints are those of gravity alone, so nothing proves the tension of case calm")
 
     def test_a_case_that_carries_no_tension_keeps_the_rule_for_no_tension_in_another(self):
-        """Finding 1, hostile deck A. Case gravity alone: alone/gravity refuted, FAIL. With case
-        calm, V in [0 N, 1 N] and T in [0 N, 0 N], beside it the rule `when not loaded T` gives
-        no cell at all, `combined/gravity` is open, as gravity puts no T on the joint, and the
-        verdict is UNKNOWN."""
-        alone, files = with_calm(NATURAL, CALM_V)
-        self.assertEqual((alone["verdict"], entries(alone)), ("FAIL", [("alone/gravity", "refuted")]))
+        """Finding 1, hostile deck A, with `when not loaded T` beside `when loaded T`. At
+        495f2b7 case calm, V in [0 N, 1 N] and T in [0 N, 0 N], turned FAIL into UNKNOWN. Now
+        the deck is refused. With the two `when` taken out both rules answer under each case,
+        and the verdict is FAIL with and without case calm."""
+        said = ask({**strips(HEAD + GRAVITY + CALM_V, DESIGN, unconditioned(NATURAL)), "rules": json.dumps(NATURAL)})
+        self.assertEqual((said["verdict"], [f["file"] for f in said["findings"]]), ("ILL-FORMED", ["rules"]))
+        self.assertIn("rule pc/alone: `loaded` is no condition", said["findings"][0]["why"])
+        alone, files = with_calm(unconditioned(NATURAL), CALM_V)
+        self.assertEqual((alone["verdict"], entries(alone)), ("FAIL", [("alone/gravity", "refuted"), ("combined/gravity", "open")]))
         said = ask(files)
-        self.assertEqual(said["verdict"], "FAIL", f"case calm takes away the rule that refutes case gravity: {entries(said)}")
+        self.assertEqual(said["verdict"], "FAIL", f"case calm takes nothing away from case gravity: {entries(said)}")
+        self.assertIn(("alone/gravity", "refuted"), entries(said))
 
 
-class TheGridAsksLoadedOfEachCase(unittest.TestCase):
-    """Finding 1 in petra/grid.py, the second reading: `_static` asks whether any case puts the
-    load on the part."""
+class TheGridRefusesLoaded(unittest.TestCase):
+    """Finding 1 in petra/grid.py, the second reading: it refuses the same two decks, and gives
+    the decks without the condition the same FAIL with and without case calm."""
 
     def test_the_grid_does_not_excuse_the_shear_of_case_gravity(self):
-        self.assertEqual(grid_status(HEAD + GRAVITY, EXCUSED), "FAIL")
-        self.assertNotEqual(grid_status(HEAD + GRAVITY + CALM, EXCUSED), "PASS", "case calm excuses the shear of case gravity")
+        with self.assertRaises(grid.DeckError) as refused:
+            grid.read_deck(json.dumps(EXCUSED))
+        self.assertIn(grid.LOADED, str(refused.exception))
+        self.assertEqual(grid_status(HEAD + GRAVITY, unconditioned(EXCUSED)), "FAIL")
+        self.assertEqual(grid_status(HEAD + GRAVITY + CALM, unconditioned(EXCUSED)), "FAIL", "case calm excuses nothing of case gravity")
 
     def test_the_grid_keeps_the_rule_for_no_tension_in_case_gravity(self):
-        self.assertEqual(grid_status(HEAD + GRAVITY, NATURAL), "FAIL")
-        self.assertEqual(grid_status(HEAD + GRAVITY + CALM_V, NATURAL), "FAIL", "case calm takes away the rule that refutes case gravity")
+        with self.assertRaises(grid.DeckError) as refused:
+            grid.read_deck(json.dumps(NATURAL))
+        self.assertIn(grid.LOADED, str(refused.exception))
+        self.assertEqual(grid_status(HEAD + GRAVITY, unconditioned(NATURAL)), "FAIL")
+        self.assertEqual(grid_status(HEAD + GRAVITY + CALM_V, unconditioned(NATURAL)), "FAIL", "case calm takes nothing away from case gravity")
 
 
 def givens(names: int, references: int) -> tuple[str, str]:

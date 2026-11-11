@@ -44,7 +44,8 @@ For each design that the language reads, the files are written without asking th
 `--decks N` also makes N damaged decks. Each is one of the three decks with one or two
 changes: a text swapped for another text of the deck or for an odd one, a key or an item
 dropped, doubled, moved or renamed, a `where` with no item, two rules of one line whose
-ids end alike, a line named `unread`, or a wide row that a rule applies 9 times or 1,000
+ids end alike, a line named `unread`, a `when`, an `unless` or a `requires` that asks
+`loaded`, which is no condition, or a wide row that a rule applies 9 times or 1,000
 times, which is within the steps a deck may take to read or over them. An honest design
 of that deck is then checked against it. The grid's `read_deck` must refuse exactly the decks the kernel finds ill formed, and
 where both read the deck they must agree on the design as above.
@@ -126,7 +127,7 @@ OPS = {
                    {"le": [["div", ["sub", "right.t", ["q", "100", "mm"]], "b"], ["div", "r", "1/1000"]], "why": "made up: a quotient by a field"}]}],
     "grid": [{"type": "bar", "mechanism": f"bar.{name}", "what": name, "anchor": MADE_UP, **more} for name, more in (
         ("cases", {}), ("roots", {}), ("exp", {}), ("table", {}), ("key", {}), ("moment", {}), ("caps", {}), ("drag", {}),
-        ("idle", {"unless": {"when": ["or", ["not", ["loaded", "push"]], ["and", ["is", "grade", "hard"], ["loaded", "twist"]]], "why": "made up"}}),
+        ("idle", {"unless": {"when": ["or", ["not", ["is", "left.finish", "low"]], ["and", ["is", "grade", "hard"], ["is", "right.finish", "high"]]], "why": "made up"}}),
         ("named", {}), ("cased", {}), ("left", {}), ("alike", {}), ("modulus", {}),
         ("right", {"unless": {"when": ["and", ["is", "right.finish", "low"], ["not", ["is", "left.finish", "low"]]], "why": "made up: a key of a joined part"}}))],
     "rules": [
@@ -137,7 +138,7 @@ OPS = {
         {"id": "ops/exp", "type": "bar", "mechanism": "bar.exp", "anchor": MADE_UP, "says": "made up", "where": [{"le": ["s", "4"], "why": "made up"}],
          "le": [["row", "ops/exp", {"r": "r", "s": "s"}], "5.2"]},
         {"id": "ops/table", "type": "bar", "mechanism": "bar.table", "anchor": MADE_UP, "says": "made up",
-         "when": ["or", ["is", "grade", "soft"], ["not", ["loaded", "twist"]]],
+         "when": ["or", ["is", "grade", "soft"], ["not", ["is", "right.finish", "low"]]],
          "le": [["abs", ["load", "push"]], ["row", "ops/table", {"x": "a", "grade": ["by", "grade", {"soft": "low", "hard": "high"}]}]]},
         {"id": "ops/key", "type": "bar", "mechanism": "bar.key", "anchor": MADE_UP, "says": "made up",
          "where": [{"le": [["abs", ["load", "push"]], ["q", "6.5", "kN"]], "why": "made up"}, {"le": ["a", ["q", "40", "mm"]], "why": "made up"}],
@@ -148,7 +149,7 @@ OPS = {
         {"id": "ops/moment", "type": "bar", "mechanism": "bar.moment", "anchor": MADE_UP, "says": "made up",
          "le": [["load", "twist"], ["mul", ["load", "push"], "a"]]},
         {"id": "ops/drag", "type": "bar", "mechanism": "bar.drag", "anchor": MADE_UP, "says": "made up",
-         "when": ["and", ["is", "grade", "hard"], ["loaded", "drag"]], "le": [["load", "drag"], ["q", "2", "kN"]]},
+         "when": ["is", "grade", "hard"], "le": [["load", "drag"], ["q", "2", "kN"]]},
         # A key of a table that a row names by the bands of two quantities, and the expression of that name.
         {"id": "ops/named", "type": "bar", "mechanism": "bar.named", "anchor": MADE_UP, "says": "made up",
          "le": [["abs", ["load", "push"]], ["row", "ops/table", {"x": "b", "grade": ["row", "ops/class", {"x": "a", "i": "left.i"}]}]]},
@@ -513,7 +514,7 @@ def damaged(rng: random.Random, body: dict) -> list[str]:
         lists = [v for _, v in nodes if isinstance(v, list) and v]
         way = rng.choice(["another text", "another text", "another text", "an odd text", "an odd text", "a key less", "an item less", "an item twice",
                           "items in another order", "a key renamed", "a key more", "a where with no item", "two rules that end alike", "a line named unread",
-                          "a wide row applied"])
+                          "a wide row applied", "a condition that asks loaded"])
         rules = [r for r in body["rules"] if isinstance(r, dict)] if isinstance(body.get("rules"), list) else []
         if way == "a wide row applied" and rules and isinstance(body.get("rows"), list):
             # A row of 1,000 names, about 2,000 steps, that names of `let` apply and nothing reads, so the steps to read the deck are all that
@@ -538,7 +539,19 @@ def damaged(rng: random.Random, body: dict) -> list[str]:
             for item in [*rules, *(a for a in body.get("grid", []) if isinstance(a, dict))]:
                 if item.get("mechanism") == old:
                     item["mechanism"] = "unread"
-        elif way in ("a where with no item", "two rules that end alike", "a line named unread"):
+        elif way == "a condition that asks loaded" and rules:
+            # `loaded` is no condition any more: alone, joined to the condition that was there, in a `requires` or in an `unless`.
+            asks = ["loaded", rng.choice(["push", "twist", "drag", "current", "pull", "nobody"])]
+            lines = [a for a in body.get("grid", []) if isinstance(a, dict)] if isinstance(body.get("grid"), list) else []
+            where = rng.choice(["when", "when", "requires", "unless"])
+            if where == "unless" and lines:
+                rng.choice(lines)["unless"] = {"when": asks, "why": "made up"}
+            else:
+                chosen = rng.choice(rules)
+                key = "requires" if where == "requires" and "requires" in chosen else "when"
+                old = chosen.get(key)
+                chosen[key] = asks if old is None else rng.choice([asks, ["and", old, asks], ["or", ["not", asks], old], ["not", asks]])
+        elif way in ("a where with no item", "two rules that end alike", "a line named unread", "a condition that asks loaded"):
             continue
         elif way == "another text":
             put(rng.choice(texts)[0], rng.choice(texts)[1])
@@ -578,9 +591,9 @@ def _decks() -> dict[str, grid.Deck]:
         _STATE["strips"] = grid.read_deck(json.dumps(STRIPS))
         _STATE["ops"] = grid.read_deck(json.dumps(OPS))
         _STATE["honest"] = {"lap": (path.with_suffix(".card").read_text(encoding="utf-8"), path.read_text(encoding="utf-8")),
-                            # The first seed whose bar keeps every need and has a load, so that each line the bar's
-                            # rules answer is proved or refuted, and a damaged deck has something to change.
-                            "strips": (CARD, DESIGN), "ops": ops(random.Random(151), 0).texts()}
+                            # A seed whose bar keeps every need and carries its loads, so that nine of the ten lines its
+                            # rules answer are proved or refuted, and a damaged deck has something to change.
+                            "strips": (CARD, DESIGN), "ops": ops(random.Random(101), 0).texts()}
     return _STATE      # type: ignore[return-value]
 
 

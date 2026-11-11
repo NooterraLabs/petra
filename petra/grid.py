@@ -62,6 +62,11 @@ MAX_READ = 1_000_000
 """The most steps reading a deck may take, as in kernel/Petra/Files.lean."""
 MAX_TITLE = 200
 """The most bytes the name of a card may print in, for a design checked against a deck."""
+LOADED = ("`loaded` is no condition: a condition is over keys, which are the same under every load case. "
+          "A card states a load in each case, as zero where there is none, and a rule reads it there")
+"""What a deck that asks `loaded` is refused with, as in kernel/Petra/Deck.lean. The condition
+held when some load case of the card put the load on the part, and a rule that reads loads
+has a cell for each case: so one case could switch a rule or a line off under every other."""
 
 
 class DeckError(ValueError):
@@ -372,25 +377,23 @@ class _Binder(rows._Reader):
             return ("field", node[1], dict(node[2]))
         raise RowError(f"{what}: a key is bound to a key field, to [\"key\", NAME] with one of {', '.join(known)}, or to [\"by\", FIELD, {{...}}]")
 
-    def static(self, node: Any, loads: bool = True) -> tuple:
-        """A condition on what a part is, not on how large: `["is", FIELD, NAME]`,
-        `["loaded", LOAD]`, and `and`, `or`, `not` of these. FIELD is a key field of the
-        type, or `PART.FIELD` for a key field of a part the type joins, by the name its `as`
-        gives that part. The name of a field that joins several parts is no part's name.
-        Without `loads` it is a condition over keys alone, as a rule's `requires` is."""
+    def static(self, node: Any) -> tuple:
+        """A condition on what a part is, not on how large: `["is", FIELD, NAME]`, and `and`,
+        `or`, `not` of these. FIELD is a key field of the type, or `PART.FIELD` for a key
+        field of a part the type joins, by the name its `as` gives that part. The name of a
+        field that joins several parts is no part's name. A condition is over keys alone,
+        which are the same under every load case: one that asks `loaded` is refused."""
         if isinstance(node, list) and node[:1] == ["is"] and len(node) == 3:
             if not isinstance(node[1], str) or node[1] not in self.takes or node[2] not in self.takes[node[1]].keys:
                 raise RowError(f"{node!r}: `is` names a key field of the type, or of one part it joins by the name `as` gives it, and one of the key's names")
             return ("is", node[1], node[2])
-        if isinstance(node, list) and node[:1] == ["loaded"] and len(node) == 2 and node[1] in self.loads:
-            if not loads:
-                raise RowError(f"{node!r}: `requires` is a condition over keys: `loaded` asks about a load, and stands in a `when`")
-            return ("loaded", node[1])
+        if isinstance(node, list) and node[:1] == ["loaded"]:
+            raise RowError(LOADED)
         if isinstance(node, list) and node[:1] == ["not"] and len(node) == 2:
-            return ("not", self.static(node[1], loads))
+            return ("not", self.static(node[1]))
         if isinstance(node, list) and node[:1] in (["and"], ["or"]) and len(node) > 1:
-            return (node[0], *(self.static(n, loads) for n in node[1:]))
-        raise RowError(f"{node!r} is not a condition on a part: write is, loaded, and, or, not")
+            return (node[0], *(self.static(n) for n in node[1:]))
+        raise RowError(f"{node!r} is not a condition on a part: write is, and, or, not")
 
 
 def _exact(node: Any, takes: Mapping[str, rows.Input]) -> tuple[tuple, Vector]:
@@ -475,7 +478,7 @@ def _rule(body: Mapping[str, Any], deck_rows: Mapping[str, rows.Row], types: Map
             if {"le", "let", "where"} & set(body):
                 raise RowError("a rule with `requires` has no `le`, no `let` and no `where`: it states a condition over keys, and no inequality")
             when = binder.static(body["when"]) if "when" in body else None
-            return Rule(where, body["type"], body["mechanism"], anchor, body["says"], when, {}, (), None, None, {}, binder.static(body["requires"], loads=False))
+            return Rule(where, body["type"], body["mechanism"], anchor, body["says"], when, {}, (), None, None, {}, binder.static(body["requires"]))
         lets = {}
         for name, node in body.get("let", {}).items():
             if name in binder.takes or not _name(name) or name == "pi":
@@ -1100,13 +1103,12 @@ class Cell:
 
 def _static(cond: tuple | None, part: Part, parts: Mapping[str, Part]) -> bool:
     """Whether a condition holds for a part. An `is` reads a key of the part, or of the
-    part it joins under a name."""
+    part it joins under a name. The answer rests on the keys of the design alone, so it is
+    the same under every load case of the card."""
     if cond is None:
         return True
     if cond[0] == "is":
         return _field_of(part, parts, cond[1]) == cond[2]
-    if cond[0] == "loaded":
-        return bool(part.loads.get(cond[1]))
     if cond[0] == "not":
         return not _static(cond[1], part, parts)
     return (all if cond[0] == "and" else any)(_static(c, part, parts) for c in cond[1:])
@@ -1123,7 +1125,7 @@ def _keys(cond: tuple | None) -> Iterator[str]:
     """The key fields a condition on a part reads."""
     if cond is not None and cond[0] == "is":
         yield cond[1]
-    elif cond is not None and cond[0] != "loaded":
+    elif cond is not None:
         for inner in cond[1:]:
             yield from _keys(inner)
 
@@ -1265,8 +1267,7 @@ def _unread(deck: Deck, found: Parts) -> list[Cell]:
     part. A value nothing reads is a value nothing checks: a plate that no joint joins
     would pass at any thickness, and a joint whose rules read its shear alone would pass
     under any tension. A load is read by an expression of a rule that applies to the part
-    it is on. A `loaded` in a `when` or an `unless` asks whether it is there, and reads
-    nothing of it. The cells are listed part by part: the part's fields in the order of
+    it is on, and by nothing else. The cells are listed part by part: the part's fields in the order of
     its type, and then its loads in the order of their names and of their cases' names."""
     read: set[tuple[str, str]] = set()
     for part in found.parts.values():

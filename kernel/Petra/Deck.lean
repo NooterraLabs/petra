@@ -140,29 +140,23 @@ structure Kind where
   deriving Inhabited
 
 /-- A condition on what a part is, not on how large. An `is` holds when a key field has a
-name: a key of the part itself, or of the part it joins under the name `part`. -/
+name: a key of the part itself, or of the part it joins under the name `part`. A condition
+is over keys alone. It asks about no load: a part's keys are the same under every load
+case, and what a card puts on a part is not. -/
 inductive Static where
-  | is (part : Option String) (field name : String) | loaded (load : String)
+  | is (part : Option String) (field name : String)
   | and (cs : Array Static) | or (cs : Array Static) | not (c : Static)
 
 /-- The key fields a condition on a part reads, each with the joined part it is a key of, or
 none for a key of the part itself. -/
 def Static.keys : Static → Array (Option String × String)
   | .is part field _ => #[(part, field)]
-  | .loaded _ => #[]
   | .and cs | .or cs => cs.foldl (fun out c => out ++ c.keys) #[]
   | .not c => c.keys
 
-/-- Whether a condition asks about a load anywhere in it. -/
-def Static.loads : Static → Bool
-  | .is .. => false
-  | .loaded _ => true
-  | .and cs | .or cs => cs.foldl (fun so c => so || c.loads) false
-  | .not c => c.loads
-
 /-- How many parts a condition has: what looking at it for one part costs, in steps. -/
 def Static.size : Static → Nat
-  | .is .. | .loaded _ => 1
+  | .is .. => 1
   | .and cs | .or cs => cs.foldl (fun n c => n + c.size) 1
   | .not c => 1 + c.size
 
@@ -706,12 +700,21 @@ def naming (scope : Scope) : Nat → Json → Reading (Array String × Array (Na
 
 end
 
-/-- A condition on a part: `["is", FIELD, NAME]`, `["loaded", LOAD]`, and `and`, `or`, `not`
-of these. `FIELD` is a key field of the type itself, or `PART.FIELD` for a key field of a
-part the type joins, by the name its `as` gives that part, as an expression reads `a.Fy`.
-Such a name is one part. The name of a field that joins several parts is no part's name,
-so a condition on it has no meaning and is refused: it could hold for one and not for
-another. A load is one of the type's own. -/
+/-- What the kernel says of a deck that asks `loaded`. The condition once held when some load
+case of the card put the load on the part. A rule that reads loads has a cell for each load
+case, so one case could then switch a rule or a line off under every other case: the fifth
+review turned a FAIL into a PASS with a case that put a load of zero on a joint. Whether a
+load is there is no longer asked. A card states every load a rule reads in every case, as
+zero where it means none. -/
+def LOADED : String :=
+  "`loaded` is no condition: a condition is over keys, which are the same under every load case. A card states a load in each case, as zero where there is none, and a rule reads it there"
+
+/-- A condition on a part: `["is", FIELD, NAME]`, and `and`, `or`, `not` of these. `FIELD`
+is a key field of the type itself, or `PART.FIELD` for a key field of a part the type
+joins, by the name its `as` gives that part, as an expression reads `a.Fy`. Such a name is
+one part. The name of a field that joins several parts is no part's name, so a condition on
+it has no meaning and is refused: it could hold for one and not for another. A condition
+that asks `loaded`, in any form, is refused with `LOADED`. -/
 def static (scope : Scope) : Nat → Json → Except String Static
   | 0, _ => throw "a condition nests too deep"
   | fuel + 1, j => do
@@ -729,13 +732,11 @@ def static (scope : Scope) : Nat → Json → Except String Static
           let .parts _ names := (← kind.field.get? join).kind | none
           some s!": {join} joins {names.size} parts, and a condition names one of them, {", ".intercalate names.toList}"
         throw s!"{clip field} is not a key field of the type or of a part it joins{several.getD ""}"
-    | [.str "loaded", .str load] =>
-      unless scope.kind.any (·.load.contains load) do throw s!"the type takes no load {clip load}"
-      return .loaded load
+    | .str "loaded" :: _ => throw LOADED
     | .str "and" :: c :: rest => return .and (← (c :: rest).toArray.mapM (static scope fuel))
     | .str "or" :: c :: rest => return .or (← (c :: rest).toArray.mapM (static scope fuel))
     | [.str "not", c] => return .not (← static scope fuel c)
-    | _ => throw "not a condition on a part: write is, loaded, and, or, not"
+    | _ => throw "not a condition on a part: write is, and, or, not"
 
 /-- The deepest an expression may nest, counted through the names of `let` it reads and the
 rows it applies. A file nests at most `MAX_NESTING` deep, so a row or a rule alone is within
@@ -1098,8 +1099,6 @@ def readRule (kinds : Std.TreeMap String Kind) (rows : Std.TreeMap String Row) (
         throw "a rule with `requires` has no `le`, no `let` and no `where`: it states a condition over keys, and no inequality"
       let condition ← (j.getObjVal? "when").toOption.mapM (static scope MAX_EXPRESSION)
       let required ← (static scope MAX_EXPRESSION (← need j "requires")).mapError ("requires: " ++ ·)
-      if required.loads then
-        throw "`requires` is a condition over keys: `loaded` asks about a load, and stands in a `when`"
       return { id, kind := name, mechanism, condition, steps := #[], weight := 0,
                look := 1 + (condition.map Static.size).getD 0 + required.size, ranges := #[], low := 0, high := 0,
                fields := once ((condition.map Static.keys).getD #[] ++ required.keys), loads := #[], requires := some required }

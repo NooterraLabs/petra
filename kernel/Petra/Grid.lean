@@ -37,14 +37,12 @@ def Part.joined (part : Part) (called : String) : Option String := do
 
 /-- The loads the card puts on the parts. `on` finds the card's input by the part, the load
 and the load case. `put` holds, for a part, each load the card puts on it with the case
-that does, in the order of the loads' names and then of the cases'. `carried` holds each
-part with each load that some case puts on it. `cases` holds the load cases of the card,
-each once, in the order of their names: the names its `cases` lists and the case of each
-of its loads. -/
+that does, in the order of the loads' names and then of the cases'. `cases` holds the load
+cases of the card, each once, in the order of their names: the names its `cases` lists and
+the case of each of its loads. -/
 structure Loads where
   on : Std.TreeMap (String × String × String) TapeInput := {}
   put : Std.TreeMap String (Array (String × String)) := {}
-  carried : Std.TreeSet (String × String) := {}
   cases : Array String := #[]
 
 /-- The items under each key, in their order. -/
@@ -201,9 +199,8 @@ def readParts (rules : Rules) (card : Card) (design : Design) : StateM Findings 
     table.alter part fun
       | some found => some (found.push (load, under))
       | none => some #[(load, under)]
-  let carried : Std.TreeSet (String × String) := on.foldl (init := {}) fun found (part, load, _) _ => found.insert (part, load)
   let cases : Std.TreeSet String := on.foldl (init := setOf card.caseNames) fun found (_, _, under) _ => found.insert under
-  return (parts, { on, put, carried, cases := cases.toArray })
+  return (parts, { on, put, cases := cases.toArray })
 
 /-- The parts that `part` joins, each under the name a rule calls it by. A condition finds a
 joined part here, among the names of one part's type, and not among every part of the
@@ -219,8 +216,10 @@ def Part.fellows (named : Std.TreeMap String Part) (part : Part) : Std.TreeMap S
     | _ => found
 
 /-- Whether a condition holds for a part. An `is` reads a key of the part, or of the one
-part it joins under a name, which `fellows` holds. A key that is not there holds no name. -/
-def Static.holds (loads : Loads) (part : Part) (fellows : Std.TreeMap String Part) : Static → Bool
+part it joins under a name, which `fellows` holds. A key that is not there holds no name.
+The answer rests on the keys of the design alone, so it is the same under every load case
+of the card, and no case can switch a rule or a line off for another. -/
+def Static.holds (part : Part) (fellows : Std.TreeMap String Part) : Static → Bool
   | .is called field name =>
     let owner := match called with
       | none => some part
@@ -228,10 +227,9 @@ def Static.holds (loads : Loads) (part : Part) (fellows : Std.TreeMap String Par
     match owner.bind (·.slot field) with
     | some (.key mine) => mine == name
     | _ => false
-  | .loaded load => loads.carried.contains (part.name, load)
-  | .and cs => cs.foldl (fun so c => so && c.holds loads part fellows) true
-  | .or cs => cs.foldl (fun so c => so || c.holds loads part fellows) false
-  | .not c => !c.holds loads part fellows
+  | .and cs => cs.foldl (fun so c => so && c.holds part fellows) true
+  | .or cs => cs.foldl (fun so c => so || c.holds part fellows) false
+  | .not c => !c.holds part fellows
 
 /-- A computation that pays for each step, in units of work, from what is left, before it
 takes the step. What is left is kept when the computation fails. -/
@@ -474,10 +472,10 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hi
       let pending (entry reason : String) : Settled := cell part.name ask.mechanism entry .undecided reason
       if let some (waiver, k) := waivers.get? (part.name, ask.mechanism) then
         out := out.push (cell part.name ask.mechanism "" .waived "" (some (k, waiver)))
-      else if ask.excuse.any fun condition => condition.all (·.holds loads part fellows) then
+      else if ask.excuse.any fun condition => condition.all (·.holds part fellows) then
         out := out.push (cell part.name ask.mechanism "" .notApplicable)
       else
-        let answers := (rulesOf.getD (ask.kind, ask.mechanism) #[]).filter fun r => r.condition.all (·.holds loads part fellows)
+        let answers := (rulesOf.getD (ask.kind, ask.mechanism) #[]).filter fun r => r.condition.all (·.holds part fellows)
         if answers.isEmpty then
           let other := if answered.contains ask.mechanism then " on a part like this one" else ""
           out := out.push (pending "" s!"the deck has no rule for it{other}")
@@ -488,7 +486,7 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hi
           -- key it names and the name the part has for it.
           if let some required := rule.requires then
             if out.size > MAX_CELLS then return .error over
-            if required.holds loads part fellows then out := out.push (cell part.name ask.mechanism tail .proved)
+            if required.holds part fellows then out := out.push (cell part.name ask.mechanism tail .proved)
             else
               let has := (once required.keys).map fun (called, field) =>
                 let owner := match called with
@@ -554,8 +552,7 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hi
   -- What a rule or a line of the grid reads of each part. Every rule of a part's type is
   -- looked at here, whatever the card waives, so the look is counted again. The look of a
   -- rule holds a step for each load it reads. A load is read by an expression of a rule
-  -- that applies to the part it is on. A `loaded` in a `when` or an `unless` asks whether
-  -- the load is there and reads nothing of it, so it is no reader.
+  -- that applies to the part it is on, and by nothing else.
   let rulesOfKind := grouped rules.rules (·.kind)
   let readOf : Std.TreeMap String Nat := rulesOfKind.map fun _ line => line.foldl (fun n r => n + r.look + r.fields.size) 0
   let mut read : Std.TreeSet (String × String) := {}
@@ -569,7 +566,7 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hi
         | none => read := read.insert (part.name, field)
         | some called => if let some other := fellows.get? called then read := read.insert (other.name, field)
     for rule in rulesOfKind.getD part.kind.name #[] do
-      if rule.condition.all (·.holds loads part fellows) then
+      if rule.condition.all (·.holds part fellows) then
         for load in rule.loads do readLoads := readLoads.insert (part.name, load)
         for (called, field) in rule.fields do
           match called with

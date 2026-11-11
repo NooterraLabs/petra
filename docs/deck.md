@@ -368,7 +368,7 @@ A line may say that the mechanism cannot arise, and why:
 "unless": {"when": ["is", "fit", "close"], "why": "a close fit leaves no room for one"}
 ```
 
-With no `when`, it never arises for the type. A condition is `["is", FIELD, NAME]`, `["loaded", LOAD]`, or `and`, `or` and `not` of these. An `unless` has `why`, a text, which may be empty. An `unless` with no `why` is refused. A line whose `unless` is `null` is read as a line with none.
+With no `when`, it never arises for the type. A condition is `["is", FIELD, NAME]`, or `and`, `or` and `not` of these. An `unless` has `why`, a text, which may be empty. An `unless` with no `why` is refused. A line whose `unless` is `null` is read as a line with none.
 
 An `is` holds when a key has the name `NAME`, which is one of the key's names. `FIELD` says which key, in one of two ways.
 
@@ -379,7 +379,7 @@ Each name of `as` is one part, so a condition is about one part. A field with no
 
 A line and a rule are for one part of their type, and each is asked once of that part. Nothing is asked once for each part it joins: a rule that is to answer for each of two lugs is two rules, as the first deck has one for each plate.
 
-A `loaded` holds when some load case of the card puts the load on the part. The load is one of the type's own: a condition asks about no load of a joined part. It asks whether the load is there and reads nothing of it, so a load that only a `loaded` names is a load nothing reads.
+A condition is over keys and asks about no load. The keys of a part are the same under every load case of the card, so a condition holds for a part or it does not, and no case can switch a line or a rule off for another case. The condition `["loaded", LOAD]`, which held when some case put the load on the part, is gone, and a deck that writes `loaded` in a `when`, an `unless` or a `requires` is refused, alone or inside `and`, `or` and `not`, whatever follows the word. It did exactly that switching: a rule that reads a load has a cell for each load case, and a case that put a load of zero on a joint made a line not applicable under the case that broke it. A deck that means "where the part carries tension" reads the tension in its rule, and the card states the tension in every case, as zero where there is none.
 
 ### A rule
 
@@ -401,7 +401,7 @@ A rule answers one line of the grid with an inequality.
 | `le` | Two expressions. The rule holds when the first is at most the second. A rule that states no inequality has `requires` in its place ([A rule that requires](#a-rule-that-requires)). |
 | `let` | Names for expressions the rule uses more than once. A name is letters, digits and `_`, and is no field's name. An expression reads the names before it. |
 | `where` | The range the rule holds in: a list of `{"le": [a, b], "why": "..."}` with at least one item. Each item has `why`, a text, which may be empty. A rule that holds everywhere leaves `where` out: `"where": []` is refused. |
-| `when` | A condition on the part, as in the grid: on its own keys, on the keys of the parts it joins, and on its loads. The rule answers only for the parts it holds for. |
+| `when` | A condition on the part, as in the grid: on its own keys and on the keys of the parts it joins. The rule answers only for the parts it holds for. |
 
 An expression is written as a row's is. A name in it is a quantity field of the part, `NAME.FIELD` for a part it joins, or a name from `let`. It has two more forms.
 
@@ -457,7 +457,7 @@ Some clauses ask no inequality. They say what a part must be: a lifter of one ca
 | `requires` | A condition over keys that must hold: `["is", FIELD, NAME]` on a key of the part or of a part it joins, and `and`, `or` and `not` of these, as a `when` writes them |
 | `when` | As for any rule: the parts the rule answers for |
 
-A rule has `le` or `requires`, and never both. A rule with `requires` has no `let` and no `where`, which are for an inequality. Its condition holds no `loaded`: a rule requires something of what a part is, and whether a load is there is for a `when` to ask. A deck that breaks any of these does not load.
+A rule has `le` or `requires`, and never both. A rule with `requires` has no `let` and no `where`, which are for an inequality. Its condition is over keys, as every condition is: a rule requires something of what a part is. A deck that breaks any of these does not load.
 
 For a part that its `when` holds for, the rule gives one cell, entered as any rule's cell is. The cell is `proved` when the condition holds for the part and `refuted` when it does not. It has no tape, it needs no hint and no search, and it takes no work. A refuted cell makes the verdict FAIL as any refuted cell does. Its reason names each key the condition names, in the order it names them and each once, with the name the part has for it: `the part is not what the rule requires: top.bore is machined, bottom.bore is cut`.
 
@@ -489,7 +489,7 @@ These cases are open:
 - A table has no value where the rule reads it: between the listed values of a table read at listed values, outside every band, or in an empty cell.
 - The inequality is neither proved over the ranges the card gives nor refuted at a corner or the middle of them.
 - No rule and no line of the grid reads a quantity or a key of a part. A value nothing reads is a value nothing checks, so a plate that no lap joins has an open cell for each of its fields, named `unread`.
-- No rule reads a load that the card puts on a part. A rule reads a load in an expression: a side of its `le` or of its `where`, or a name of `let` that one of them reads. A `loaded` in a `when` or an `unless` does not read it. The load has an open cell named `unread` for each load case that puts it on the part, entered as `LOAD/CASE`.
+- No rule reads a load that the card puts on a part. A rule reads a load in an expression: a side of its `le` or of its `where`, or a name of `let` that one of them reads. The load has an open cell named `unread` for each load case that puts it on the part, entered as `LOAD/CASE`.
 
 The cells named `unread` come after every other cell, part by part: a part's fields in the order of its type's fields, and then its loads in the order of their names and of their cases' names.
 
@@ -605,7 +605,7 @@ The check tries parts as points: each key a name, each quantity and each load on
 
 An answer that holds or fails has a ratio: the largest, over its rules, of the left side over the right. It is the number `petra check` prints on a line.
 
-For each mechanism the check tries 96 parts. They take every combination of the type's keys in turn, with and without a load that a `when` or an `unless` asks about. A quantity is spread over its range on a log scale, and a count over its whole numbers. A quantity that a rule binds straight to the side of a table sits on the values the table lists, and on and beside the ends of its bands. The first 32 parts each have a partner: the same part with other sizes and loads. Where a transcription treats a part and its partner differently, by another case of a row, another band of a table or the other side of a range, the check halves the way between them 24 times and tries the part on each side of the change.
+For each mechanism the check tries 96 parts. They take every combination of the type's keys in turn, and each carries every load of its type. A quantity is spread over its range on a log scale, and a count over its whole numbers. A quantity that a rule binds straight to the side of a table sits on the values the table lists, and on and beside the ends of its bands. The first 32 parts each have a partner: the same part with other sizes and loads. Where a transcription treats a part and its partner differently, by another case of a row, another band of a table or the other side of a range, the check halves the way between them 24 times and tries the part on each side of the change.
 
 ### The parts of the check
 
@@ -684,7 +684,7 @@ The run then damages each rule, one change at a time, and counts the damaged rul
 
 The check refused 115 of 157 wrong rules, 73%. `alike` alone refused 86 of them. A lap joins two like plates, so its rules write each term twice, and one change damages one of the two. A transcriber who errs the same way for both plates is not seen by `alike`. The last column is then the fairer measure: 29 of 157, or 18%. A lap takes one load, so no rule was damaged by the load of another kind.
 
-A number a tenth off, a key bound to another column, a range left out and a `when` turned round pass almost every time. A worked example or a second transcription is what catches those. On the deck made up for the tests, with one or two made-up examples for each rule, the check with no second transcription refused 43 of 49 wrong rules. With no example it refused 19.
+A number a tenth off, a key bound to another column, a range left out and a `when` turned round pass almost every time. A worked example or a second transcription is what catches those. On the deck made up for the tests, with one or two made-up examples for each rule, the check with no second transcription refused 43 of 49 wrong rules. With no example it refused 21.
 
 ### The second run
 

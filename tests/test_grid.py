@@ -69,7 +69,7 @@ STRIPS = {
         {"id": "test/bow", "type": "strip", "mechanism": "strip.bow", "anchor": TEST, "says": "the gap times what is left of 4 mm is at most 4.2 mm2",
          "le": [["mul", "gap", ["sub", ["q", "4", "mm"], "gap"]], ["q", "4.2", "mm2"]]},
         {"id": "test/spark", "type": "strip", "mechanism": "strip.spark", "anchor": TEST, "says": "the hole is at least 0.1 mm over the screw",
-         "when": ["loaded", "current"], "le": [["add", "screw", ["q", "0.1", "mm"]], "hole"]},
+         "when": ["is", "fit", "free"], "le": [["add", "screw", ["q", "0.1", "mm"]], "hole"]},
     ],
 }
 
@@ -200,8 +200,20 @@ class Cells(unittest.TestCase):
         self.assertEqual(cell(free, "strip.spark")["state"], "proved")
         idle = checked(swap=[("fit close", "fit free"), ("hole 3.2 mm", "hole 3.6 mm")],
                        card_swap=[('load run {\n  on s current in [0 A, 2 A]\n  signed "t@example.org" source "test"\n}\n', "")])
-        self.assertEqual(cell(idle, "strip.spark")["state"], "open")
-        self.assertIn("no rule for it on a part like this one", cell(idle, "strip.spark")["why"])
+        self.assertEqual(cell(idle, "strip.spark")["state"], "proved", "the rule reads no load, so it answers the same with no load case")
+        other = deck(lambda body: body["rules"][3].update(when=["is", "fit", "close"]))
+        unanswered = checked(swap=[("fit close", "fit free"), ("hole 3.2 mm", "hole 3.6 mm")], rules=other)
+        self.assertEqual(cell(unanswered, "strip.spark")["state"], "open")
+        self.assertIn("no rule for it on a part like this one", cell(unanswered, "strip.spark")["why"])
+
+    def test_a_deck_that_asks_whether_a_load_is_there_is_refused(self):
+        """`loaded` held when some load case put the load on the part, so one case could switch
+        a rule or a line off under every other (the fifth review). A condition is over keys."""
+        for edit in (lambda body: body["rules"][3].update(when=["loaded", "current"]),
+                     lambda body: body["grid"][4]["unless"].update(when=["or", ["is", "fit", "close"], ["not", ["loaded", "current"]]])):
+            with self.assertRaises(grid.DeckError) as refused:
+                deck(edit)
+            self.assertIn(grid.LOADED, str(refused.exception))
 
     def test_a_value_that_no_rule_reads_is_an_open_cell(self):
         stray = checked(swap=[("strip s {", "pad p3 {\n  area 1 mm2\n}\n\nstrip s {")])
