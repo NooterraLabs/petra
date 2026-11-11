@@ -3,10 +3,7 @@ The axioms each main theorem rests on. `lake build PetraProofs.Axioms` prints th
 docs/proved.md holds the output. `propext`, `Classical.choice` and `Quot.sound` are Lean's
 standard three. Any other name here is a finding.
 -/
-import PetraProofs.Rule
-import PetraProofs.Provable.Isqrt
-import PetraProofs.Provable.OddSeries
-import PetraProofs.Provable.ExpAt
+import PetraProofs.Closing
 
 -- the exact interval operations
 #print axioms Petra.Iv.add_sound
@@ -38,3 +35,5 @@ import PetraProofs.Provable.ExpAt
 #print axioms Petra.Provable.isqrt_spec
 #print axioms Petra.Provable.oddSeries_spec
 #print axioms Petra.Provable.expAt_spec
+#print axioms Petra.Tape.proved_sound_of_swap
+#print axioms Petra.Tape.refuted_sound_of_swap

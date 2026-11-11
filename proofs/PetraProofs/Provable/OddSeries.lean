@@ -8,7 +8,9 @@ below is the same computation, with the loop written as a recursion. It meets
 What was kept the same: the fixed point `one = 2 ^ p`, the first term `scale one one x`, the
 step `sign * x * x`, the two calls of `scale` in each round, the test
 `3 ^ (2 * k + 1) ≤ 2 * one` that keeps the loop going, and the tail
-`(9/8) / 3 ^ (2 * k + 1)`. So the two return the same interval on every input when run.
+`(9/8) / 3 ^ (2 * k + 1)`. So the two should return the same interval on every input when
+run. That is not proved, and cannot be while the kernel's is a `while`. They agreed on every
+input tried: docs/proved.md.
 -/
 import Mathlib.Analysis.SpecialFunctions.Complex.Arctan
 import Mathlib.Analysis.SpecialFunctions.Log.Deriv

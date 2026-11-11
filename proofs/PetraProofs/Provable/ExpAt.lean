@@ -13,8 +13,9 @@ added to the upper sum, the `s` squarings rounded outward, and `1 / exp (-x)` fo
 
 What differs: the loop is given `q + 1` rounds. The kernel's loop never runs more, since
 `2 ^ n ≤ 2 ^ n * fact ≤ 2 ^ q` needs `n ≤ q`. `expGo_stops` proves that the rounds do not
-run out before the test ends the loop. So the two return the same interval on every input
-when run.
+run out before the test ends the loop. So the two should return the same interval on every
+input when run. That is not proved, and cannot be while the kernel's is a `partial def`.
+They agreed on every input tried: docs/proved.md.
 -/
 import Mathlib.Analysis.Complex.Exponential
 import Mathlib.Analysis.SpecialFunctions.Exp

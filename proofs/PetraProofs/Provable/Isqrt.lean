@@ -7,7 +7,8 @@ value, which goes down at every step. It meets `IsqrtSpecOf`.
 
 What was kept the same: the test for zero, the start `2 ^ (Nat.log2 n / 2 + 1)`, the step
 `(x + n / x) / 2`, and the rule to stop at the first step that does not go down. So the two
-return the same number on every input when run.
+should return the same number on every input when run. That is not proved, and cannot be
+while the kernel's is a `while`. They agreed on every input tried: docs/proved.md.
 -/
 import PetraProofs.Trust
 
