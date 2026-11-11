@@ -254,7 +254,7 @@ A quantity may also have these.
 | `whole` | It is a count, and the design writes a whole number |
 | `least` | The least value it may take |
 
-The name of a field, of a load and of a joined part in `as` is letters, digits and `_`, as the language writes a name. So a rule's `a.Fy` is always a field of a joined part, and no name reads as a number. The kernel holds these names, a name of `let`, a mechanism and a rule's id to 64 characters, and a design to 10,000 cells ([format.md](format.md), "Limits").
+The name of a field, of a load and of a joined part in `as` is letters, digits and `_`, as the language writes a name. So a rule's `a.Fy` is always a field of a joined part, and no name reads as a number. The kernel holds these names, a name of `let`, a mechanism and a rule's id to 64 bytes as printed, and a design to 10,000 cells ([format.md](format.md), "Limits").
 
 A part has every field of its type once, and no other line. A part is joined by at most one other: a plate that two laps join would be checked under each lap's load alone, so the pair is refused.
 

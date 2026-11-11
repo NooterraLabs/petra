@@ -6,7 +6,12 @@
 //
 // Prints one JSON object {verdict, findings, cells} and exits 0 PASS, 1 FAIL, 2 UNKNOWN,
 // 3 ILL-FORMED, 64 for a command line it cannot read. --explain adds a reason to each cell,
-// the counts and the number of ignored hints.
+// the counts, the number of ignored hints, the steps to read the deck and the steps to make
+// the cells.
+//
+// Of the limits format.md states, the budget of work (20,000,000,000 units), the words of
+// enclosures held on a leaf and the caches of ln and exp are left out: they are counted in the
+// reference kernel's own costs. So are the limits on what is printed. See AMBIGUITIES.md, I.
 
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
@@ -85,7 +90,8 @@ export function parseFileNumber(s) {
   return null;
 }
 
-// A number alone of a deck: digits with an optional sign, then a decimal part or a denominator.
+// A number alone of a deck (in an expression or an exponent): digits with an optional sign, then
+// a decimal part or a denominator. No comma, no whole number with a fraction, no space.
 export function parseNumberAlone(s) {
   if (typeof s !== 'string' || s.length > MAXLEN) return null;
   const m = /^([+-]?)([0-9]+)(?:\.([0-9]+)|\/([0-9]+))?$/.exec(s);
@@ -125,8 +131,6 @@ const dmul = (a, b) => a.map((x, i) => qadd(x, b[i]));
 const ddiv = (a, b) => a.map((x, i) => qsub(x, b[i]));
 const dpow = (a, q) => a.map((x) => qmul(x, q));
 const deq = (a, b) => a.every((x, i) => qcmp(x, b[i]) === 0);
-// A file names a dimension, and two names are one dimension when their exponents are equal (moment and energy).
-const sameDim = (name, dim) => { const d = parseDim(name); return d !== null && deq(d, dim); };
 const dstr = (a) => `[${a.map(String).join(',')}]`;
 
 // `length`, `length^3`, `force/length`, `force*length`: left to right, integer powers.
@@ -143,6 +147,33 @@ export function parseDim(s) {
   }
   return acc;
 }
+
+// A dim of card.json, design.json or deck.json (format.md, Numbers): one of sixteen names, or the
+// exponents of metre, kilogram, second, ampere and degree Celsius that are not zero, as in
+// `m^3 s^-1`, each a base, `^` and a whole number, one space between two (AMBIGUITIES.md, H1).
+const FILE_DIMS = Object.assign(Object.create(null), BASE_DIMS, {
+  I2t: dvec(0, 0, 1, 2, 0),
+  'resistance per length': ddiv(BASE_DIMS.resistance, BASE_DIMS.length),
+});
+const FILE_BASES = ['m', 'kg', 's', 'A', 'degC'];
+export function parseFileDim(s) {
+  if (typeof s !== 'string' || s.length > MAXLEN) return null;
+  if (FILE_DIMS[s]) return FILE_DIMS[s];
+  if (s.length === 0) return null;
+  const e = [0n, 0n, 0n, 0n, 0n];
+  let last = -1;
+  for (const p of s.split(' ')) {
+    const m = /^(m|kg|s|A|degC)\^(-?[1-9][0-9]*)$/.exec(p);
+    if (!m) return null;
+    const k = FILE_BASES.indexOf(m[1]);
+    if (k <= last) return null;
+    last = k;
+    e[k] = BigInt(m[2]);
+  }
+  return e.map((x) => R(x));
+}
+// Wherever the kernel compares two dimensions it does so by the exponents (format.md, Numbers).
+const sameFileDim = (name, dim) => { const d = parseFileDim(name); return d !== null && deq(d, dim); };
 
 const IN = R(127n, 5000n);
 const LBF = qmul(R(45359237n, 100000000n), R(980665n, 100000n));
@@ -172,45 +203,64 @@ export const UNITS = Object.assign(Object.create(null), {
   A2s: { f: Q1, dim: dmul(dmul(BASE_DIMS.current, BASE_DIMS.current), BASE_DIMS.time) },
 });
 
-// A quantity of a deck: `0.75 inch`, `3/4 inch`, `1 1/8 inch`, `29,000 ksi`, or a number alone.
+// A value of a deck (deck.md, "A value with its unit"): a number, one space and a unit, or a
+// number alone, which is a plain number of no dimension. The number is digits with an optional
+// sign and a decimal part or a denominator that is not zero, or a whole number and a fraction
+// with one space between them and no sign. A comma is read between thousands and nowhere else.
+// Spaces, tabs and line ends around the value and around the unit are dropped (H5).
 // Returns {v (SI), dim, hasUnit} or null.
-export function parseQuantity(s) {
+const INTC = '(?:[0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)';
+const VALUE_RE = new RegExp(
+  `^(?:(${INTC}) ([0-9]+)/([0-9]+)|([+-]?)(${INTC})(?:\\.([0-9]+)|/([0-9]+))?)` +
+  '(?:[ \\t\\r\\n]* [ \\t\\r\\n]*([^ \\t\\r\\n]+))?$');
+export function parseValue(s) {
   if (typeof s !== 'string' || s.length > MAXLEN) return null;
-  const m = /^([+-]?)([0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)(?:\.([0-9]+)|\/([0-9]+)| ([0-9]+)\/([0-9]+))?(?: ?([A-Za-z%][A-Za-z0-9_]*))?$/.exec(s);
+  const m = VALUE_RE.exec(s.replace(/^[ \t\r\n]+|[ \t\r\n]+$/g, ''));
   if (!m) return null;
-  const [, sign, ip, dec, den, mn, md, unit] = m;
-  const hasComma = ip.includes(',');
-  const ints = ip.replace(/,/g, '');
+  const [, mi, mn, md, sign, ip, dec, den, unit] = m;
   let v;
-  if (dec !== undefined) v = R(BigInt(ints + dec), 10n ** BigInt(dec.length));
-  else if (den !== undefined) {
-    if (BigInt(den) === 0n) return null;
-    v = R(BigInt(ints), BigInt(den));
-  } else if (mn !== undefined) {
-    if (BigInt(md) === 0n || unit === undefined) return null;
-    v = qadd(R(BigInt(ints)), R(BigInt(mn), BigInt(md)));
-  } else v = R(BigInt(ints));
-  if (sign === '-') v = qneg(v);
-  if (unit === undefined) {
-    if (hasComma) return null;
-    return { v, dim: DL, hasUnit: false };
+  if (mi !== undefined) {
+    if (BigInt(md) === 0n) return null;
+    v = qadd(R(BigInt(mi.replace(/,/g, ''))), R(BigInt(mn), BigInt(md)));
+  } else {
+    const ints = ip.replace(/,/g, '');
+    if (dec !== undefined) v = R(BigInt(ints + dec), 10n ** BigInt(dec.length));
+    else if (den !== undefined) {
+      if (BigInt(den) === 0n) return null;
+      v = R(BigInt(ints), BigInt(den));
+    } else v = R(BigInt(ints));
+    if (sign === '-') v = qneg(v);
   }
+  if (unit === undefined) return { v, dim: DL, hasUnit: false };
   const u = UNITS[unit];
   if (!u) return null;
   return { v: qmul(v, u.f), dim: u.dim, hasUnit: true };
 }
-// A quantity that must have the dimension `dim`; a bare zero is the zero of any dimension.
+// A value that must have the dimension `dim`. A bare `0` is the plain number zero and not the
+// zero of every dimension (deck.md): a length that is zero is written `0 mm`.
 function quantityOf(s, dim) {
-  const q = parseQuantity(s);
-  if (!q) return null;
-  if (deq(q.dim, dim)) return q.v;
-  if (!q.hasUnit && q.v.n === 0n) return q.v;
-  return null;
+  const q = parseValue(s);
+  return q && deq(q.dim, dim) ? q.v : null;
 }
+// `["q", NUMBER, UNIT]`: its two halves joined with one space and read as one value (H4).
+const qValue = (e) => parseValue(`${e[1]} ${e[2]}`);
 
 // ============================================================ JSON
 
 class JsonErr extends Error {}
+// format.md, Texts: no text and no key holds U+FFFD, and a reader that keeps half a surrogate
+// pair as it is refuses a text with half a pair in it.
+function badText(s) {
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    if (c < 0xd800 || (c > 0xdfff && c !== 0xfffd)) continue;
+    if (c === 0xfffd || c >= 0xdc00) return true;
+    const d = s.charCodeAt(i + 1);
+    if (!(d >= 0xdc00 && d <= 0xdfff)) return true;
+    i++;
+  }
+  return false;
+}
 export function parseJson(text) {
   let i = 0;
   const n = text.length;
@@ -230,7 +280,12 @@ export function parseJson(text) {
     for (;;) {
       if (i >= n) err('unterminated string');
       const c = text.charCodeAt(i);
-      if (c === 34) { out += text.slice(start, i); i++; return out; }
+      if (c === 34) {
+        out += text.slice(start, i);
+        if (badText(out)) err('a text holds U+FFFD or half a surrogate pair');
+        i++;
+        return out;
+      }
       if (c === 92) {
         out += text.slice(start, i);
         const e = text[i + 1];
@@ -328,6 +383,68 @@ const short = (x) => {
   if (s === undefined) s = String(x);
   return s.length > 80 ? s.slice(0, 77) + '...' : s;
 };
+
+// format.md, Limits: the bytes a name prints in. A character outside ASCII prints in up to four
+// (its UTF-8), a quote, a backslash and a line end in two, any other control character in six
+// (H3: a line end is LF or CR).
+export function printedBytes(s) {
+  let n = 0;
+  for (const ch of s) {
+    const c = ch.codePointAt(0);
+    if (c === 0x22 || c === 0x5c || c === 0x0a || c === 0x0d) n += 2;
+    else if (c < 0x20) n += 6;
+    else if (c < 0x80) n += 1;
+    else if (c < 0x800) n += 2;
+    else if (c < 0x10000) n += 3;
+    else n += 4;
+  }
+  return n;
+}
+const NAME_BYTES = 64;
+const LABEL_NAME_BYTES = 200;
+
+// deck.md, "The size of a deck": the steps to read a deck, counted from its JSON alone.
+// 1. A number, true, false and null are 1; a text is 2 and 1 more for each 8 code points; a list
+//    is 1 more than its items and an object 1 more than its values; a key is not counted.
+// 2. Each list ["row", ID, BINDS] (three items, the first the text row, the second a text)
+//    inside an item of `rules` counts the size of the first item of `rows` that is an object
+//    with that id, and nothing when there is none.
+// 3. The steps are the size of the whole file and what rule 2 counts.
+export const DECK_STEPS = 1_000_000;
+const codePoints = (s) => {
+  let n = s.length;
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    if (c >= 0xd800 && c <= 0xdbff) { const d = s.charCodeAt(i + 1); if (d >= 0xdc00 && d <= 0xdfff) { n--; i++; } }
+  }
+  return n;
+};
+function jsonSize(v) {
+  if (typeof v === 'string') return 2 + Math.floor(codePoints(v) / 8);
+  if (Array.isArray(v)) { let s = 1; for (const x of v) s += jsonSize(x); return s; }
+  if (isObj(v)) { let s = 1; for (const k of Object.keys(v)) s += jsonSize(v[k]); return s; }
+  return 1;
+}
+export function deckSteps(D) {
+  let total = jsonSize(D);
+  if (!isObj(D) || !Array.isArray(D.rules)) return total;
+  const rows = Array.isArray(D.rows) ? D.rows : [];
+  const firstRow = new Map();
+  for (const r of rows) if (isObj(r) && isStr(r.id) && !firstRow.has(r.id)) firstRow.set(r.id, r);
+  const sizeOf = new Map();
+  const walk = (v) => {
+    if (Array.isArray(v)) {
+      if (v.length === 3 && v[0] === 'row' && isStr(v[1]) && firstRow.has(v[1])) {
+        let s = sizeOf.get(v[1]);
+        if (s === undefined) { s = jsonSize(firstRow.get(v[1])); sizeOf.set(v[1], s); }
+        total += s;
+      }
+      for (const x of v) walk(x);
+    } else if (isObj(v)) for (const k of Object.keys(v)) walk(v[k]);
+  };
+  for (const item of D.rules) walk(item);
+  return total;
+}
 
 // ============================================================ transcendentals
 
@@ -514,6 +631,7 @@ export class Tape {
     const k = JSON.stringify(node);
     let i = this.keys.get(k);
     if (i === undefined) {
+      if (this.onNode) this.onNode();
       i = this.nodes.length;
       this.nodes.push(node);
       this.keys.set(k, i);
@@ -759,6 +877,11 @@ export function refutes(tape, point) {
 class DeckErr extends Error {}
 const DE = (m) => new DeckErr(m);
 class CannotWrite extends Error {}
+// A limit of format.md, Limits, passed while the cells are made.
+class LimitErr extends Error {}
+export const CELL_STEPS = 10_000_000;
+export const CELL_LIMIT = 10_000;
+export const MAX_ORDERS = 1024;
 
 const MAX_EXPR_DEPTH = 1024;
 
@@ -778,6 +901,21 @@ function checkAnchor(a, what) {
 }
 function checkName(s, what) {
   if (!isStr(s) || !NAME_RE.test(s)) throw DE(`${what} ${short(s)} is not a name of letters, digits and _`);
+}
+// A text the deck must have: `what` of a type, a line; `why` of an unless, an item of where.
+function needText(o, k, what) {
+  if (!Object.hasOwn(o, k)) throw DE(`${what} has no ${k}`);
+  if (!isStr(o[k])) throw DE(`${what}.${k} is not a text`);
+}
+// A text the deck must have and that is not empty: `what` of a field, a load; `says`; `why` of a jump.
+function needFullText(o, k, what) {
+  needText(o, k, what);
+  if (o[k].length === 0) throw DE(`${what}.${k} is the empty text`);
+}
+// format.md, Limits: in a deck of rules the name of a field, a load, a joined part and a let,
+// the name of a mechanism and the id of a rule print in at most 64 bytes.
+function checkNameBytes(s, what) {
+  if (printedBytes(s) > NAME_BYTES) throw DE(`${what} ${short(s)} prints in more than 64 bytes`);
 }
 
 // The dimension and the nesting depth of an expression, in a scope that resolves names.
@@ -803,10 +941,9 @@ function checkExpr0(e, sc) {
   switch (op) {
     case 'q': {
       if (args.length !== 2 || !isStr(args[0]) || !isStr(args[1])) throw DE(`${short(e)} is not a constant with a unit`);
-      if (!parseNumberAlone(args[0])) throw DE(`${short(args[0])} is not a number`);
-      const u = UNITS[args[1]];
-      if (!u) throw DE(`${short(args[1])} is not a unit`);
-      return { dim: u.dim, depth: 2 };
+      const v = qValue(e);
+      if (!v) throw DE(`${short(e)} is not a value with its unit`);
+      return { dim: v.dim, depth: 2 };
     }
     case 'add': case 'mul': case 'min': case 'max': {
       if (args.length < 1) throw DE(`${op} has no argument`);
@@ -817,7 +954,9 @@ function checkExpr0(e, sc) {
         dim = rs[0].dim;
         for (const r of rs) if (!deq(r.dim, dim)) throw DE(`the arguments of ${op} are of different dimensions`);
       }
-      return { dim, depth: 1 + Math.max(...rs.map((r) => r.depth)) };
+      let depth = 0;
+      for (const r of rs) if (r.depth > depth) depth = r.depth;
+      return { dim, depth: 1 + depth };
     }
     case 'sub': case 'div': {
       if (args.length !== 2) throw DE(`${op} takes two arguments`);
@@ -871,9 +1010,12 @@ function checkRowCond(c, sc) {
       if (!deq(a.dim, b.dim)) throw DE(`the two sides of ${c[0]} are of different dimensions`);
       return 1 + Math.max(a.depth, b.depth);
     }
-    case 'and': case 'or':
+    case 'and': case 'or': {
       if (args.length < 1) throw DE(`${c[0]} has no member`);
-      return 1 + Math.max(...args.map((x) => checkRowCond(x, sc)));
+      let depth = 0;
+      for (const x of args) { const d = checkRowCond(x, sc); if (d > depth) depth = d; }
+      return 1 + depth;
+    }
     case 'not':
       if (args.length !== 1) throw DE('not takes one condition');
       return 1 + checkRowCond(args[0], sc);
@@ -941,14 +1083,22 @@ function loadTable(t, row) {
   }
   const down = loadSide(t.down, row, 'down');
   const across = Object.hasOwn(t, 'across') ? loadSide(t.across, row, 'across') : null;
+  // deck.md: each text of rises and falls is the `by` of a side of this table, a name may stand
+  // twice in a list, and no name is in both lists.
+  const sides = new Set([down.by, ...(across ? [across.by] : [])]);
+  for (const k of ['rises', 'falls']) {
+    for (const nm of t[k] ?? []) if (!sides.has(nm)) throw DE(`table.${k} names ${short(nm)}, which is the by of no side of this table`);
+  }
+  if (t.rises && t.falls && t.rises.some((nm) => t.falls.includes(nm))) throw DE('a name is in both rises and falls');
+  // deck.md: a cell that holds a space is read as stating its own unit; any other cell is a
+  // number, read in the table's unit when it has one.
   const cell = (c, where) => {
     if (c === null) return null;
-    const q = parseQuantity(c);
+    let q = parseValue(c);
+    if (q && unit && !c.includes(' ')) q = { v: qmul(q.v, unit.f), dim: unit.dim, hasUnit: true };
     if (!q) throw DE(`cell ${where} ${short(c)} is not a value`);
-    let v = q.v, dim = q.dim;
-    if (!q.hasUnit && unit) { v = qmul(v, unit.f); dim = unit.dim; }
-    if (!deq(dim, row.gives.dim) && !(q.v.n === 0n && !q.hasUnit)) throw DE(`cell ${where} is not of the row's dimension`);
-    return v;
+    if (!deq(q.dim, row.gives.dim)) throw DE(`cell ${where} is not of the row's dimension`);
+    return q.v;
   };
   if (!Array.isArray(t.cells) || t.cells.length !== down.count) throw DE(`table.cells does not have one line for each of the ${down.count} places of down`);
   const cells = t.cells.map((line, i) => {
@@ -981,18 +1131,17 @@ function loadRow(r, rowsSoFar) {
       if (row.inputs.has(t.name)) throw DE(`the row takes ${t.name} twice`);
       row.inputs.set(t.name, { kind: 'k', names: t.one_of.slice() });
     } else {
-      checkKeys(t, ['name', 'dim', 'what', 'range'], ['name', 'dim'], 'an input');
+      // deck.md: every quantity a row takes has a range, each end with its unit.
+      checkKeys(t, ['name', 'dim', 'what', 'range'], ['name', 'dim', 'range'], 'an input');
       checkName(t.name, 'the input');
       if (t.name === 'pi') throw DE('an input is named pi');
       optText(t, 'what', 'the input');
       const dim = parseDim(t.dim);
       if (!dim) throw DE(`the input ${t.name} has the dimension ${short(t.dim)}, which is not one`);
-      if (Object.hasOwn(t, 'range')) {
-        if (!Array.isArray(t.range) || t.range.length !== 2) throw DE(`the range of ${t.name} is not two values`);
-        const lo = quantityOf(t.range[0], dim), hi = quantityOf(t.range[1], dim);
-        if (!lo || !hi) throw DE(`the range of ${t.name} is not two quantities of its dimension`);
-        if (qcmp(lo, hi) > 0) throw DE(`the range of ${t.name} has its lower value second`);
-      }
+      if (!Array.isArray(t.range) || t.range.length !== 2) throw DE(`the range of ${t.name} is not two values`);
+      const lo = quantityOf(t.range[0], dim), hi = quantityOf(t.range[1], dim);
+      if (!lo || !hi) throw DE(`the range of ${t.name} is not two values of its dimension`);
+      if (qcmp(lo, hi) > 0) throw DE(`the range of ${t.name} has its lower value second`);
       if (row.inputs.has(t.name)) throw DE(`the row takes ${t.name} twice`);
       row.inputs.set(t.name, { kind: 'q', dim });
     }
@@ -1035,10 +1184,21 @@ function loadRow(r, rowsSoFar) {
     for (const j of r.jumps) {
       checkKeys(j, ['cases', 'why'], ['cases'], 'a jump');
       if (!Array.isArray(j.cases) || !j.cases.every((x) => typeof x === 'bigint')) throw DE('a jump has no list of case numbers');
-      optText(j, 'why', 'a jump');
+      needFullText(j, 'why', 'a jump');
     }
   }
+  // The orders of the pick a row with cases is written as: every comparison of its conditions.
+  row.orders = 0;
+  if (row.kind === 'cases') for (const cs of row.cases) if (cs.when !== undefined) row.orders += condOrders(cs.when);
   return row;
+}
+function condOrders(c) {
+  if (c[0] === 'and' || c[0] === 'or' || c[0] === 'not') {
+    let n = 0;
+    for (let i = 1; i < c.length; i++) n += condOrders(c[i]);
+    return n;
+  }
+  return 1;
 }
 
 // Depth of a row's expression when each input stands for an expression of the given depth.
@@ -1053,7 +1213,11 @@ function exprDepth(e, leaf) {
   return 1 + m;
 }
 function condDepth(c, leaf) {
-  if (c[0] === 'and' || c[0] === 'or' || c[0] === 'not') return 1 + Math.max(...c.slice(1).map((x) => condDepth(x, leaf)));
+  if (c[0] === 'and' || c[0] === 'or' || c[0] === 'not') {
+    let m = 0;
+    for (let i = 1; i < c.length; i++) m = Math.max(m, condDepth(c[i], leaf));
+    return 1 + m;
+  }
   return 1 + Math.max(exprDepth(c[1], leaf), exprDepth(c[2], leaf));
 }
 function rowDepth(row, bd) {
@@ -1073,16 +1237,19 @@ function rowDepth(row, bd) {
 }
 
 function loadType(t, seenTypes) {
-  checkKeys(t, ['type', 'what', 'fields', 'loads'], ['type', 'fields'], 'the type');
+  // deck.md: a type has `type`, `what`, a text that may be empty, and `fields`.
+  checkKeys(t, ['type', 'what', 'fields', 'loads'], ['type', 'what', 'fields'], 'the type');
   checkName(t.type, 'the type');
   if (seenTypes.has(t.type)) throw DE(`two types are named ${t.type}`);
-  optText(t, 'what', 'the type');
+  needText(t, 'what', 'the type');
   const T = { name: t.type, fields: [], fieldMap: new Map(), loads: new Map(), joins: [], asMap: new Map() };
   if (!Array.isArray(t.fields)) throw DE('fields is not a list');
   for (const f of t.fields) {
-    checkKeys(f, ['name', 'what', 'dim', 'one_of', 'type', 'as', 'signed', 'whole', 'least'], ['name'], 'a field');
+    // deck.md: a field has `name`, `what`, a text that is not empty, and one of dim, one_of and type.
+    checkKeys(f, ['name', 'what', 'dim', 'one_of', 'type', 'as', 'signed', 'whole', 'least'], ['name', 'what'], 'a field');
     checkName(f.name, 'the field');
-    optText(f, 'what', `the field ${f.name}`);
+    checkNameBytes(f.name, 'the field');
+    needFullText(f, 'what', `the field ${f.name}`);
     if (T.fieldMap.has(f.name)) throw DE(`two fields are named ${f.name}`);
     const kinds = ['dim', 'one_of', 'type'].filter((k) => Object.hasOwn(f, k));
     if (kinds.length !== 1) throw DE(`the field ${f.name} has not exactly one of dim, one_of and type`);
@@ -1108,6 +1275,7 @@ function loadType(t, seenTypes) {
       if (!Array.isArray(f.as) || f.as.length === 0) throw DE(`the field ${f.name} has no as`);
       for (const a of f.as) {
         checkName(a, 'a joined part');
+        checkNameBytes(a, 'a joined part');
         if (T.asMap.has(a)) throw DE(`two joined parts are called ${a}`);
         T.asMap.set(a, { field: f.name, type: f.type });
       }
@@ -1120,9 +1288,11 @@ function loadType(t, seenTypes) {
   if (Object.hasOwn(t, 'loads')) {
     if (!Array.isArray(t.loads)) throw DE('loads is not a list');
     for (const l of t.loads) {
-      checkKeys(l, ['name', 'dim', 'what', 'least'], ['name', 'dim'], 'a load');
+      // deck.md: a load has a name, a dim, `what` it is, a text that is not empty, and a least.
+      checkKeys(l, ['name', 'dim', 'what', 'least'], ['name', 'dim', 'what'], 'a load');
       checkName(l.name, 'the load');
-      optText(l, 'what', `the load ${l.name}`);
+      checkNameBytes(l.name, 'the load');
+      needFullText(l, 'what', `the load ${l.name}`);
       if (T.loads.has(l.name)) throw DE(`two loads are named ${l.name}`);
       const dim = parseDim(l.dim);
       if (!dim) throw DE(`the load ${l.name} has the dimension ${short(l.dim)}, which is not one`);
@@ -1189,19 +1359,22 @@ function mergeReads(into, from) {
 }
 
 function loadRule(r, deck) {
-  checkKeys(r, ['id', 'type', 'mechanism', 'anchor', 'says', 'le', 'let', 'where', 'when'], ['id', 'type', 'mechanism', 'le'], 'the rule');
+  // deck.md: a rule's `says` is a text that is not empty, and a rule with no `says` is refused.
+  checkKeys(r, ['id', 'type', 'mechanism', 'anchor', 'says', 'le', 'let', 'where', 'when'], ['id', 'type', 'mechanism', 'says', 'le'], 'the rule');
   if (!isStr(r.id) || r.id.length === 0) throw DE('the rule has no id');
+  checkNameBytes(r.id, 'the id');
   checkAnchor(r.anchor, 'the rule');
-  optText(r, 'says', 'the rule');
+  needFullText(r, 'says', 'the rule');
   const T = deck.types.get(r.type);
   if (!T) throw DE(`the rule's type ${short(r.type)} is not a type of the deck`);
-  const line = deck.grid.find((g) => g.type === r.type && g.mechanism === r.mechanism);
+  const line = isStr(r.mechanism) ? deck.lineOf.get(`${r.type}\u0000${r.mechanism}`) : undefined;
   if (!line) throw DE(`the rule answers ${short(r.mechanism)}, which is no line of the grid for ${r.type}`);
   if (line.unless && line.unless.when === undefined) throw DE(`the rule answers ${r.mechanism}, which cannot arise`);
   const lets = Object.hasOwn(r, 'let') ? r.let : Object.create(null);
   if (!isObj(lets)) throw DE('let is not an object');
   for (const k of Object.keys(lets)) {
     checkName(k, 'the let name');
+    checkNameBytes(k, 'the let name');
     if (T.fieldMap.has(k)) throw DE(`the let name ${k} is a field's name`);
   }
   const letMemo = new Map();
@@ -1277,6 +1450,8 @@ function loadRule(r, deck) {
         if (!kf.names.includes(k)) throw DE(`${short(k)} is not a name of ${v[1]}`);
         if (!isStr(v[2][k]) || !inp.names.includes(v[2][k])) throw DE(`${short(v[2][k])} is not a name of the key ${nm} of ${row.id}`);
       }
+      // deck.md: the map of a `by` has one entry for each name of the field.
+      for (const k of kf.names) if (!Object.hasOwn(v[2], k)) throw DE(`the map of by leaves out the name ${short(k)} of ${v[1]}`);
       addRead(reads, kf);
       return;
     }
@@ -1301,12 +1476,15 @@ function loadRule(r, deck) {
   if (!Array.isArray(r.le) || r.le.length !== 2) throw DE('le is not two expressions');
   const a = checkExpr(r.le[0], sc), b = checkExpr(r.le[1], sc);
   if (!deq(a.dim, b.dim)) throw DE('the two sides of le are of different dimensions');
+  // deck.md: a `where` is a list with at least one item, and each item has `why`, a text that
+  // may be empty: `"where": []` is refused.
   let where;
   if (Object.hasOwn(r, 'where')) {
     if (!Array.isArray(r.where)) throw DE('where is not a list');
+    if (r.where.length === 0) throw DE('where is there and has no item');
     where = r.where.map((w, i) => {
-      checkKeys(w, ['le', 'why'], ['le'], `where ${i + 1}`);
-      optText(w, 'why', `where ${i + 1}`);
+      checkKeys(w, ['le', 'why'], ['le', 'why'], `where ${i + 1}`);
+      needText(w, 'why', `where ${i + 1}`);
       if (!Array.isArray(w.le) || w.le.length !== 2) throw DE(`where ${i + 1} is not two expressions`);
       const x = checkExpr(w.le[0], sc), y = checkExpr(w.le[1], sc);
       if (!deq(x.dim, y.dim)) throw DE(`the two sides of where ${i + 1} are of different dimensions`);
@@ -1319,10 +1497,93 @@ function loadRule(r, deck) {
     when = r.when;
   }
   const slash = r.id.lastIndexOf('/');
+  // For the steps of the cells (format.md, Steps): the weight of the rule, the size of its
+  // `when`, the loads it reads and the fields it reads.
+  let weight = 0;
+  const W = (e) => stepWeight(e, deck);
+  for (const k of Object.keys(lets)) weight += W(lets[k]);
+  weight += 5 + W(r.le[0]) + W(r.le[1]);
+  if (where) for (const w of where) weight += 5 + W(w[0]) + W(w[1]);
   return {
     id: r.id, tail: slash >= 0 ? r.id.slice(slash + 1) : r.id, type: r.type, mechanism: r.mechanism,
     le: r.le, lets, where, when, reads: ruleReads,
+    weight, whenSize: condSize(when), fieldsRead: ruleReads.own.size + ruleReads.joined.size,
   };
+}
+
+// format.md, Steps: the size of a condition on a part is 1 for an `is` and a `loaded`, 1 more
+// than its members for an `and` and an `or`, and 1 more than its member for a `not`.
+function condSize(c) {
+  if (c === undefined) return 0;
+  if (c[0] === 'and' || c[0] === 'or' || c[0] === 'not') {
+    let n = 1;
+    for (let i = 1; i < c.length; i++) n += condSize(c[i]);
+    return n;
+  }
+  return 1;
+}
+
+// format.md, Steps: the weight of an expression of a rule. A step is one name or one operator
+// and weighs 1 and 1 for each thing the operator reads; a difference is a negation and a sum; a
+// power is up to four steps; a pick weighs 1, 1 for each case and 2 for each order; a table 1,
+// 1 for each place down, 1 for each cell and 1 for each entry of a `by` that reads it. What the
+// page leaves open is taken as AMBIGUITIES.md, H8 says. The expression has been checked.
+function stepWeight(e, deck) {
+  const W = (x) => stepWeight(x, deck);
+  if (isStr(e)) return 1;
+  const op = e[0];
+  switch (op) {
+    case 'q': case 'load': return 1;
+    case 'add': case 'mul': case 'min': case 'max': {
+      let s = e.length;
+      for (let i = 1; i < e.length; i++) s += W(e[i]);
+      return s;
+    }
+    case 'neg': case 'abs': case 'sqrt': case 'exp': case 'ln': return 2 + W(e[1]);
+    case 'div': return 3 + W(e[1]) + W(e[2]);
+    case 'sub': return 5 + W(e[1]) + W(e[2]);
+    case 'pow': {
+      const x = e[2];
+      if (isStr(x) && looksNumeric(x)) {
+        const n = parseNumberAlone(x);
+        const twice = qmul(n, R(2n));
+        if (twice.d !== 1n) return 8 + W(e[1]); // a constant, a logarithm, a product, an exponential
+        const neg = n.n < 0n, half = twice.n % 2n !== 0n;
+        return (half ? 2 : 0) + 2 + (neg ? 4 : 0) + W(e[1]); // a root, a power, a one and a quotient
+      }
+      return 7 + W(e[1]) + W(x); // a logarithm, a product, an exponential
+    }
+    case 'row': {
+      const R0 = deck.rows.get(e[1]);
+      const b = e[2];
+      let s = 0;
+      let byEntries = 0;
+      for (const [nm, inp] of R0.inputs) {
+        if (inp.kind === 'q') s += W(b[nm]);
+        else {
+          s += 1;
+          if (Array.isArray(b[nm]) && b[nm][0] === 'by') byEntries += Object.keys(b[nm][2]).length;
+        }
+      }
+      return s + rowBodyWeight(R0, byEntries);
+    }
+  }
+  throw new Error(`unexpected operator ${op}`);
+}
+function rowBodyWeight(row, byEntries) {
+  const W = (x) => stepWeight(x, null); // a row reads no row and no load
+  if (row.kind === 'is') return W(row.is);
+  if (row.kind === 'cases') {
+    const condW = (c) => {
+      if (c[0] === 'and' || c[0] === 'or' || c[0] === 'not') { let s = 0; for (let i = 1; i < c.length; i++) s += condW(c[i]); return s; }
+      return W(c[1]) + W(c[2]);
+    };
+    let s = 1 + row.cases.length + 2 * row.orders;
+    for (const cs of row.cases) s += W(cs.is) + (cs.when === undefined ? 0 : condW(cs.when));
+    return s;
+  }
+  const T = row.table;
+  return 1 + T.down.count + T.down.count * (T.across ? T.across.count : 1) + byEntries;
 }
 
 export function loadDeck(D, find) {
@@ -1338,7 +1599,7 @@ export function loadDeck(D, find) {
     for (const k of ['rows', 'types', 'grid', 'rules']) if (!Array.isArray(D[k])) throw DE(`${k} is not a list`);
   }, '');
   if (errs0.length) return null;
-  const deck = { rows: new Map(), types: new Map(), grid: [], rules: [] };
+  const deck = { rows: new Map(), types: new Map(), grid: [], rules: [], lineOf: new Map() };
   D.rows.forEach((r, i) => {
     const item = `rows[${i}]${isObj(r) && isStr(r.id) ? ' ' + r.id : ''}`;
     const row = top(() => loadRow(r, deck.rows), item);
@@ -1356,34 +1617,42 @@ export function loadDeck(D, find) {
   D.grid.forEach((g, i) => {
     const item = `grid[${i}]${isObj(g) && isStr(g.mechanism) ? ' ' + g.mechanism : ''}`;
     const line = top(() => {
-      checkKeys(g, ['type', 'mechanism', 'what', 'anchor', 'unless'], ['type', 'mechanism'], 'the line');
+      // deck.md: a line has `type`, `mechanism`, `anchor` and `what`, a text that may be empty.
+      checkKeys(g, ['type', 'mechanism', 'what', 'anchor', 'unless'], ['type', 'mechanism', 'what'], 'the line');
       const T = deck.types.get(g.type);
       if (!T) throw DE(`the line's type ${short(g.type)} is not a type of the deck`);
       if (!isStr(g.mechanism) || g.mechanism.length === 0) throw DE('the line names no mechanism');
+      checkNameBytes(g.mechanism, 'the mechanism');
+      // deck.md: no mechanism is named `unread`, the name of the cells for the fields nothing reads.
+      if (g.mechanism === 'unread') throw DE('a line of the grid is named unread');
       if (mechs.has(g.mechanism)) throw DE(`two lines are named ${g.mechanism}`);
-      optText(g, 'what', 'the line');
+      needText(g, 'what', 'the line');
       checkAnchor(g.anchor, 'the line');
+      // deck.md: an `unless` has `why`, a text that may be empty; an `unless` that is null is none.
       let unless;
-      if (Object.hasOwn(g, 'unless')) {
-        checkKeys(g.unless, ['why', 'when'], [], 'unless');
-        optText(g.unless, 'why', 'unless');
+      if (Object.hasOwn(g, 'unless') && g.unless !== null) {
+        checkKeys(g.unless, ['why', 'when'], ['why'], 'unless');
+        needText(g.unless, 'why', 'unless');
         const reads = newReads();
         if (Object.hasOwn(g.unless, 'when')) checkPartCond(g.unless.when, T, deck.types, reads);
         unless = { when: g.unless.when, why: g.unless.why, reads };
       }
-      return { type: g.type, mechanism: g.mechanism, unless };
+      return { type: g.type, mechanism: g.mechanism, unless, unlessSize: unless ? condSize(unless.when) : 0 };
     }, item);
-    if (line) { deck.grid.push(line); mechs.add(line.mechanism); }
+    if (line) { deck.grid.push(line); mechs.add(line.mechanism); deck.lineOf.set(`${line.type}\u0000${line.mechanism}`, line); }
   });
   const ids = new Set();
+  const tails = new Set();
   D.rules.forEach((r, i) => {
     const item = `rules[${i}]${isObj(r) && isStr(r.id) ? ' ' + r.id : ''}`;
     const rule = top(() => {
       const x = loadRule(r, deck);
       if (ids.has(x.id)) throw DE(`two rules have the id ${x.id}`);
+      // deck.md: two rules for one type and one mechanism have ids that differ after their last `/`.
+      if (tails.has(`${x.type}\u0000${x.mechanism}\u0000${x.tail}`)) throw DE(`two rules for ${x.mechanism} have ids that end in ${short(x.tail)} after their last /`);
       return x;
     }, item);
-    if (rule) { deck.rules.push(rule); ids.add(rule.id); }
+    if (rule) { deck.rules.push(rule); ids.add(rule.id); tails.add(`${rule.type}\u0000${rule.mechanism}\u0000${rule.tail}`); }
   });
   return errs0.length ? null : deck;
 }
@@ -1435,8 +1704,17 @@ export function verifyTexts(texts, opts = {}) {
     return o[k];
   };
 
+  // format.md, Shape and Limits: with --rules the name of the card and the name of the design
+  // print in at most 200 bytes; a part's name and the name of a load case that puts a load on a
+  // part in at most 64, and the case's name holds no `/` (Parts 6).
+  const withRules = texts.rules !== undefined;
+  const nameLimit = (file, item, s, limit, what) => {
+    if (isStr(s) && printedBytes(s) > limit) find(file, item, `${what} prints in more than ${limit} bytes`);
+  };
+
   // card
   if (!isStr(cardJ.name)) find('card', 'name', 'the card has no name');
+  else if (withRules) nameLimit('card', 'name', cardJ.name, LABEL_NAME_BYTES, 'the name of the card');
   const inputs = [];
   list('card', cardJ, 'inputs', false).forEach((x, i) => {
     const item = `inputs[${i}]${isObj(x) && isStr(x.name) ? ' ' + x.name : ''}`;
@@ -1444,6 +1722,10 @@ export function verifyTexts(texts, opts = {}) {
     if (!isStr(x.name)) find('card', item, 'the input has no name');
     if (!isStr(x.dim)) find('card', item, 'the input has no dim');
     for (const k of ['case', 'on', 'field']) if (Object.hasOwn(x, k) && !isStr(x[k])) find('card', item, `${k} is not a text`);
+    if (isStr(x.case) && Object.hasOwn(x, 'on')) {
+      nameLimit('card', item, x.case, NAME_BYTES, `the name of the case ${short(x.case)}`);
+      if (x.case.includes('/')) find('card', item, `the name of the case ${short(x.case)} holds a /`);
+    }
     const rg = range('card', item, x);
     inputs.push({ item, name: x.name, dim: x.dim, lo: rg?.[0], hi: rg?.[1], by: x.by, case: x.case, on: x.on, field: x.field });
   });
@@ -1459,6 +1741,7 @@ export function verifyTexts(texts, opts = {}) {
 
   // design
   if (!isStr(designJ.name)) find('design', 'name', 'the design has no name');
+  else if (withRules) nameLimit('design', 'name', designJ.name, LABEL_NAME_BYTES, 'the name of the design');
   if (!isStr(designJ.card)) find('design', 'card', 'the design names no card');
   const quantities = [];
   list('design', designJ, 'quantities', false).forEach((x, i) => {
@@ -1472,6 +1755,7 @@ export function verifyTexts(texts, opts = {}) {
   const hasParts = Object.hasOwn(designJ, 'parts');
   const partsJ = hasParts ? list('design', designJ, 'parts', true) : [];
   partsJ.forEach((p, i) => {
+    if (isObj(p)) nameLimit('design', `parts[${i}]`, p.name, NAME_BYTES, `the name of the part ${short(p.name)}`);
     if (!isObj(p) || !Array.isArray(p.lines)) return;
     p.lines.forEach((l, j) => {
       if (!isObj(l) || !Array.isArray(l.args)) return;
@@ -1490,12 +1774,22 @@ export function verifyTexts(texts, opts = {}) {
     const m = num('deck', 'domains.size.min', s.min);
     if (typeof s.strict !== 'boolean') find('deck', 'domains.size.strict', 'strict is not true or false');
     sizeDomain = m ? { min: m, strict: s.strict === true } : null;
+    // format.md, deck.json: each key names a dimension, and a key that names none is a shape
+    // finding; `about` is prose and is not read. Two keys of one dimension give it one floor: the
+    // higher, and the strict one when both are at one height. Floors are kept by the exponents.
     for (const k of Object.keys(deckJ.domains.input)) {
+      if (k === 'about') continue;
+      const dim = parseFileDim(k);
+      if (!dim) { find('deck', `domains.input.${k}`, `${short(k)} names no dimension`); continue; }
       const d = deckJ.domains.input[k];
-      if (!isObj(d)) continue; // `about` and other texts
+      if (!isObj(d)) { find('deck', `domains.input.${k}`, 'the floor has no min and strict'); continue; }
       const dm = num('deck', `domains.input.${k}.min`, d.min);
       if (typeof d.strict !== 'boolean') find('deck', `domains.input.${k}.strict`, 'strict is not true or false');
-      if (dm) inputDomains.set(k, { min: dm, strict: d.strict === true });
+      if (!dm) continue;
+      const key = dstr(dim), was = inputDomains.get(key);
+      const c = was ? qcmp(dm, was.min) : 1;
+      if (c > 0) inputDomains.set(key, { min: dm, strict: d.strict === true, name: k });
+      else if (c === 0 && d.strict === true) was.strict = true;
     }
   }
   list('deck', deckJ, 'constants', false).forEach((c, i) => { if (isObj(c)) range('deck', `constants[${i}]`, c); else find('deck', `constants[${i}]`, 'not an object'); });
@@ -1534,20 +1828,42 @@ export function verifyTexts(texts, opts = {}) {
       if (c < 0 || (c === 0 && sizeDomain.strict)) find('design', q.item, `a size is ${q.lo}, at or below the least a size may take`);
     }
   }
+  // Types 4: every input's dim names a dimension, and its floor is found by the exponents.
   for (const x of inputs) {
-    const d = isStr(x.dim) ? inputDomains.get(x.dim) : undefined;
+    x.dimVec = parseFileDim(x.dim);
+    if (!x.dimVec) { if (isStr(x.dim)) find('card', x.item, `${short(x.dim)} names no dimension`); continue; }
+    const d = inputDomains.get(dstr(x.dimVec));
     if (d && x.lo) {
       const c = qcmp(x.lo, d.min);
-      if (c < 0 || (c === 0 && d.strict)) find('card', x.item, `lo is ${x.lo}, below the floor of ${x.dim}`);
+      if (c < 0 || (c === 0 && d.strict)) find('card', x.item, `lo is ${x.lo}, below the floor of ${d.name}`);
     }
-    if (!isStr(x.by) || x.by.length === 0) find('card', x.item, 'the input names no by: nobody signed it');
   }
+  // Types 5: every input and every waiver names a `by` that is not the empty text.
+  for (const x of inputs) if (!isStr(x.by) || x.by.length === 0) find('card', x.item, 'the input names no by: nobody signed it');
   for (const w of waivers) if (!isStr(w.by) || w.by.length === 0) find('card', w.item, 'the waiver names no by');
-  if (!hasParts) return { out: null, code: 64, message: 'a design with no parts is outside what this kernel reads' };
-  if (!rulesJ) find('design', 'parts', 'a design with parts comes with --rules');
+  // Types 6 and 7: parts come with --rules, and the marks of a file for a deck of rules come
+  // with parts and --rules: an input with `on` or `field`, `tests` or `probability_claims` in
+  // the card, `rules` in deck.json.
+  if (hasParts && !rulesJ) find('design', 'parts', 'a design with parts comes with --rules');
+  if (!hasParts || !rulesJ) {
+    const why = !hasParts ? 'is a mark of a design checked against a deck of rules, and the design has no parts' : 'is a mark of a design checked against a deck of rules, and --rules names no deck';
+    for (const x of inputs) if (x.on !== undefined || x.field !== undefined) find('card', x.item, `an input with on or field ${why}`);
+    for (const k of ['tests', 'probability_claims']) if (Object.hasOwn(cardJ, k)) find('card', k, `the key ${k} ${why}`);
+    if (Object.hasOwn(deckJ, 'rules')) find('deck', 'rules', `the key rules ${why}`);
+  }
   if (findings.length) return ill();
+  // A design with no parts that breaks no rule this kernel reads: its cells are the tapes of
+  // proofs.json, which this kernel does not check (AMBIGUITIES.md, C8).
+  if (!hasParts) return { out: null, code: 64, message: 'a design with no parts is outside what this kernel reads' };
 
   // ---------------------------------------------------------------- the deck of rules
+  // deck.md, "The size of a deck": a deck that takes more than 1,000,000 steps to read is
+  // refused before a row of it is read.
+  const deckStepCount = deckSteps(rulesJ);
+  if (deckStepCount > DECK_STEPS) {
+    find('rules', '', `reading the deck takes ${deckStepCount} steps, more than 1,000,000`);
+    return ill();
+  }
   const deck = loadDeck(rulesJ, find);
   if (!deck || findings.length) return ill();
 
@@ -1591,7 +1907,7 @@ export function verifyTexts(texts, opts = {}) {
         let lo, hi, label;
         if (k === 'number' && isObj(a.number)) {
           if (f.signed) { LF(`${f.name} is signed: only the card states it`); return; }
-          if (!sameDim(a.number.dim, f.dim)) { LF(`${f.name} is of ${f.dimName}, and the number is of ${short(a.number.dim)}`); return; }
+          if (!sameFileDim(a.number.dim, f.dim)) { LF(`${f.name} is of ${f.dimName}, and the number is of ${short(a.number.dim)}`); return; }
           lo = parseFileNumber(a.number.lo); hi = parseFileNumber(a.number.hi);
           if (!lo || !hi) return; // reported under shape
           if (f.whole && (qcmp(lo, hi) !== 0 || lo.d !== 1n)) { LF(`${f.name} is a whole number`); return; }
@@ -1602,7 +1918,7 @@ export function verifyTexts(texts, opts = {}) {
           const x = inputByName.get(a.given);
           if (!x) { LF(`the card has no input ${a.given}`); return; }
           if (!x.isGiven) { LF(`the input ${a.given} is a load`); return; }
-          if (!sameDim(x.dim, f.dim)) { LF(`${f.name} is of ${f.dimName}, and the card's ${a.given} is of ${short(x.dim)}`); return; }
+          if (!sameFileDim(x.dim, f.dim)) { LF(`${f.name} is of ${f.dimName}, and the card's ${a.given} is of ${short(x.dim)}`); return; }
           givensRead.add(a.given);
           lo = x.lo; hi = x.hi;
           if (!lo || !hi) return;
@@ -1653,7 +1969,7 @@ export function verifyTexts(texts, opts = {}) {
       if (!part) { find('card', x.item, `the load is on ${short(x.on)}, which is no part`); continue; }
       const L = part.type.loads.get(x.field);
       if (!L) { find('card', x.item, `${short(x.field)} is not a load of ${part.type.name}`); continue; }
-      if (!sameDim(x.dim, L.dim)) { find('card', x.item, `the load ${L.name} is of ${L.dimName}, and the input is of ${short(x.dim)}`); continue; }
+      if (!sameFileDim(x.dim, L.dim)) { find('card', x.item, `the load ${L.name} is of ${L.dimName}, and the input is of ${short(x.dim)}`); continue; }
       if (L.least && x.lo && qcmp(x.lo, L.least) < 0) find('card', x.item, `the load is below its least ${L.least}`);
       const k = `${x.case}\u0000${x.on}\u0000${x.field}`;
       if (loadKeys.has(k)) find('card', x.item, `the case ${x.case} puts ${x.field} on ${x.on} twice`);
@@ -1665,7 +1981,7 @@ export function verifyTexts(texts, opts = {}) {
   for (const w of waivers) {
     const part = partByName.get(w.subject);
     if (!part) { find('card', w.item, `the waiver names ${w.subject}, which is no part`); continue; }
-    if (!deck.grid.some((g) => g.type === part.type.name && g.mechanism === w.mechanism)) find('card', w.item, `the grid asks no ${w.mechanism} of a ${part.type.name}`);
+    if (!deck.lineOf.has(`${part.type.name}\u0000${w.mechanism}`)) find('card', w.item, `the grid asks no ${w.mechanism} of a ${part.type.name}`);
   }
   if (claims.length) find('card', 'claims', 'a card for a deck of rules has no claim');
   if (tests.length) find('card', 'tests', 'a card for a deck of rules has no tests record');
@@ -1674,8 +1990,29 @@ export function verifyTexts(texts, opts = {}) {
   if (findings.length) return ill();
 
   // ---------------------------------------------------------------- cells
+  // format.md, Limits: at most 10,000 cells and 10,000,000 steps to make them and write their
+  // tapes; past either, or with one key twice, the design is ILL-FORMED with a finding of the
+  // rule `limits`. Each limit is tested before the step it bounds (format.md, Steps).
+  let steps = 0;
+  const charge = (n) => {
+    if (steps + n > CELL_STEPS) throw new LimitErr('making the cells and writing their tapes takes more than 10,000,000 steps');
+    steps += n;
+  };
   const loadInputs = inputs.filter((x) => x.isLoad);
-  const loadInput = (cs, partName, field) => loadInputs.find((x) => x.case === cs && x.on === partName && x.field === field);
+  // The loads on each part, by field and then by case; the lines and the rules, by type.
+  const loadsOn = new Map();
+  for (const x of loadInputs) {
+    if (!loadsOn.has(x.on)) loadsOn.set(x.on, new Map());
+    const m = loadsOn.get(x.on);
+    if (!m.has(x.field)) m.set(x.field, new Map());
+    m.get(x.field).set(x.case, x);
+  }
+  const loadInput = (cs, partName, field) => loadsOn.get(partName).get(field).get(cs);
+  const waivedLines = new Set(waivers.map((w) => `${w.subject}\u0000${w.mechanism}`));
+  const linesOf = new Map(), rulesOfType = new Map(), rulesOfLine = new Map();
+  const addTo = (m, k, v) => { if (!m.has(k)) m.set(k, []); m.get(k).push(v); };
+  for (const g of deck.grid) addTo(linesOf, g.type, g);
+  for (const r of deck.rules) { addTo(rulesOfType, r.type, r); addTo(rulesOfLine, `${r.type}\u0000${r.mechanism}`, r); }
   const keyValue = (part, ref) => {
     const dot = ref.indexOf('.');
     if (dot < 0 || part.type.fieldMap.has(ref)) return part.values.get(ref).value;
@@ -1684,7 +2021,7 @@ export function verifyTexts(texts, opts = {}) {
   const partCond = (c, part) => {
     switch (c[0]) {
       case 'is': return keyValue(part, c[1]) === c[2];
-      case 'loaded': return loadInputs.some((x) => x.on === part.name && x.field === c[1]);
+      case 'loaded': return loadsOn.get(part.name)?.has(c[1]) ?? false;
       case 'and': return c.slice(1).every((x) => partCond(x, part));
       case 'or': return c.slice(1).some((x) => partCond(x, part));
       case 'not': return !partCond(c[1], part);
@@ -1692,9 +2029,11 @@ export function verifyTexts(texts, opts = {}) {
     return false;
   };
 
-  // A tape from a rule for a part (and a case), with the roots of le or of where.
+  // A tape from a rule for a part (and a case), with the roots of le or of where. Each node
+  // written is one step of the cells.
   const writeTape = (rule, part, cs, which) => {
     const t = new Tape();
+    t.onNode = () => charge(1);
     const letNodes = new Map();
     const quantityNode = (name) => {
       let v;
@@ -1737,7 +2076,7 @@ export function verifyTexts(texts, opts = {}) {
         if (looksNumeric(e)) return t.c(parseNumberAlone(e));
         return qin(e);
       }
-      if (e[0] === 'q') return t.c(qmul(parseNumberAlone(e[1]), UNITS[e[2]].f));
+      if (e[0] === 'q') return t.c(qValue(e).v);
       return op(e, (a) => rowExpr(a, qin));
     };
     const rowCond = (c, qin) => {
@@ -1767,11 +2106,33 @@ export function verifyTexts(texts, opts = {}) {
       const c1 = ['le', L, x];
       return hi === null ? c1 : ['and', [c1, ['lt', x, t.c(hi)]]];
     };
+    // The orders of a pick over a side: two for a band or a listed value, one for a last band
+    // with no upper end.
+    const sideOrders = (side, idx) => {
+      let n = 0;
+      for (const i of idx) n += side.kind === 'bands' && side.bands[i][1] === null ? 1 : 2;
+      return n;
+    };
+    const tooManyOrders = (row) => new CannotWrite(`${row.id} would be a pick of more than 1,024 orders`);
     const table = (row, qin, key) => {
       const T = row.table;
-      const sel = (side) => (side.kind === 'key' ? { fixed: side.names.indexOf(key(side.by)) } : { side, x: qin(side.by) });
-      const d = sel(T.down);
-      const a = T.across ? sel(T.across) : null;
+      // The keys and the cases of each pick, found before any node of the table is written.
+      const dFix = T.down.kind === 'key' ? T.down.names.indexOf(key(T.down.by)) : undefined;
+      const aFix = T.across && T.across.kind === 'key' ? T.across.names.indexOf(key(T.across.by)) : undefined;
+      const cellAt = (i, j) => (T.across ? T.cells[i][j] : T.cells[i]);
+      const downIdx = dFix !== undefined ? [dFix] : [...Array(T.down.count).keys()];
+      const acrossIdx = !T.across ? [null] : aFix !== undefined ? [aFix] : [...Array(T.across.count).keys()];
+      const lines = [];
+      for (const i of downIdx) {
+        const cols = acrossIdx.filter((j) => cellAt(i, j) !== null);
+        if (cols.length) lines.push({ i, cols });
+      }
+      if (!lines.length) throw new CannotWrite(`every cell ${row.id} could read is empty`);
+      if (T.across && aFix === undefined) for (const l of lines) if (sideOrders(T.across, l.cols) > MAX_ORDERS) throw tooManyOrders(row);
+      if (dFix === undefined && sideOrders(T.down, lines.map((l) => l.i)) > MAX_ORDERS) throw tooManyOrders(row);
+      const sel = (side, fixed) => (side.kind === 'key' ? { fixed } : { side, x: qin(side.by) });
+      const d = sel(T.down, dFix);
+      const a = T.across ? sel(T.across, aFix) : null;
       const cellNode = (i, j) => {
         const v = a ? T.cells[i][j] : T.cells[i];
         return v === null ? null : t.c(v);
@@ -1790,7 +2151,6 @@ export function verifyTexts(texts, opts = {}) {
       else if (d.fixed !== undefined) node = pickOver(a, (j) => cellNode(d.fixed, j));
       else if (a.fixed !== undefined) node = pickOver(d, (i) => cellNode(i, a.fixed));
       else node = pickOver(d, (i) => pickOver(a, (j) => cellNode(i, j)));
-      if (node === null) throw new CannotWrite(`every cell ${row.id} could read is empty`);
       return node;
     };
     const applyRow = (row, binding) => {
@@ -1803,6 +2163,8 @@ export function verifyTexts(texts, opts = {}) {
       const key = (nm) => resolveKey(binding[nm]);
       if (row.kind === 'is') return rowExpr(row.is, qin);
       if (row.kind === 'cases') {
+        // format.md, Cells 7: an equation that would be a pick of more than 1,024 orders.
+        if (row.orders > MAX_ORDERS) throw tooManyOrders(row);
         const cases = row.cases.map((cs2) => {
           const c = cs2.when === undefined ? null : rowCond(cs2.when, qin);
           return [c, rowExpr(cs2.is, qin)];
@@ -1823,7 +2185,7 @@ export function verifyTexts(texts, opts = {}) {
         return quantityNode(e);
       }
       switch (e[0]) {
-        case 'q': return t.c(qmul(parseNumberAlone(e[1]), UNITS[e[2]].f));
+        case 'q': return t.c(qValue(e).v);
         case 'load': {
           const x = loadInput(cs, part.name, e[1]);
           return t.input(`in:${CN}.${x.name}`, x.lo, x.hi);
@@ -1840,8 +2202,15 @@ export function verifyTexts(texts, opts = {}) {
 
   const usedHints = new Set();
   const cells = [];
+  const cellKeys = new Set();
   const unread = [];
-  const push = (subject, mechanism, entry, state, reason) => cells.push({ subject, mechanism, entry, state, reason });
+  const push = (subject, mechanism, entry, state, reason) => {
+    if (cells.length >= CELL_LIMIT) throw new LimitErr('the design has more than 10,000 cells');
+    const k = hintKey(subject, mechanism, entry);
+    if (cellKeys.has(k)) throw new LimitErr(`two cells have the subject ${short(subject)}, the mechanism ${short(mechanism)} and the entry ${short(entry)}`);
+    cellKeys.add(k);
+    cells.push({ subject, mechanism, entry, state, reason });
+  };
   const hintsFor = (s, m, e) => {
     const k = hintKey(s, m, e);
     usedHints.add(k);
@@ -1852,17 +2221,26 @@ export function verifyTexts(texts, opts = {}) {
   };
 
   const ruleCells = (rule, part, line) => {
-    const loads = [...rule.reads.loads];
+    const loads = rule.reads.loads;
     let caseList = [null];
-    if (loads.length) {
-      const mine = loadInputs.filter((x) => x.on === part.name);
-      const missing = loads.find((l) => !mine.some((x) => x.field === l));
+    if (loads.size) {
+      const mine = loadsOn.get(part.name) ?? new Map();
+      // format.md, Steps: one step for each case that puts one of the rule's loads on the part,
+      // for each such load.
+      let n = 0;
+      for (const l of loads) n += mine.get(l)?.size ?? 0;
+      charge(n);
+      const missing = [...loads].find((l) => !mine.has(l));
       if (missing) { push(part.name, line.mechanism, rule.tail, 'open', `the card puts no ${missing} on ${part.name}, which the rule reads`); return; }
-      const names = [...new Set(mine.map((x) => x.case))].filter((c) => loads.every((l) => mine.some((x) => x.case === c && x.field === l)));
+      const [first, ...rest] = [...loads];
+      const names = [...mine.get(first).keys()].filter((c) => rest.every((l) => mine.get(l).has(c)));
       if (!names.length) { push(part.name, line.mechanism, rule.tail, 'open', 'no case puts every load the rule reads on the part'); return; }
       caseList = names.sort(nameCmp);
     }
     for (const cs of caseList) {
+      // format.md, Steps: the weight of the rule each time it is written for a part and a load
+      // case, twice for a rule with where.
+      charge(rule.where !== undefined ? 2 * rule.weight : rule.weight);
       const entry = cs === null ? rule.tail : `${rule.tail}/${cs}`;
       if (rule.where !== undefined) {
         const w = tryWrite(rule, part, cs, 'where');
@@ -1895,40 +2273,57 @@ export function verifyTexts(texts, opts = {}) {
     }
   };
   for (const part of parts) {
-    for (const rule of deck.rules) if (rule.type === part.type.name && (rule.when === undefined || partCond(rule.when, part))) markReads(part, rule.reads);
-    for (const g of deck.grid) if (g.type === part.type.name && g.unless) markReads(part, g.unless.reads);
+    for (const rule of rulesOfType.get(part.type.name) ?? []) if (rule.when === undefined || partCond(rule.when, part)) markReads(part, rule.reads);
+    for (const g of linesOf.get(part.type.name) ?? []) if (g.unless) markReads(part, g.unless.reads);
   }
 
-  for (const part of parts) {
-    for (const line of deck.grid) {
-      if (line.type !== part.type.name) continue;
-      if (waivers.some((w) => w.subject === part.name && w.mechanism === line.mechanism)) {
-        hintsFor(part.name, line.mechanism, '');
-        push(part.name, line.mechanism, '', 'waived', 'the card waives it');
-        continue;
+  try {
+    for (const part of parts) {
+      for (const line of linesOf.get(part.type.name) ?? []) {
+        // format.md, Steps: a line of the grid, for a part: one step and the size of its unless.
+        charge(1 + line.unlessSize);
+        if (waivedLines.has(`${part.name}\u0000${line.mechanism}`)) {
+          hintsFor(part.name, line.mechanism, '');
+          push(part.name, line.mechanism, '', 'waived', 'the card waives it');
+          continue;
+        }
+        if (line.unless && (line.unless.when === undefined || partCond(line.unless.when, part))) {
+          hintsFor(part.name, line.mechanism, '');
+          push(part.name, line.mechanism, '', 'not_applicable', line.unless.why ?? 'the grid says it cannot arise');
+          continue;
+        }
+        // format.md, Steps: a rule of the line, for the part: one step, the size of its when and
+        // one for each load it reads, whether its when holds or not.
+        const lineRules = rulesOfLine.get(`${part.type.name}\u0000${line.mechanism}`) ?? [];
+        for (const r of lineRules) charge(1 + r.whenSize + r.reads.loads.size);
+        const rules = lineRules.filter((r) => r.when === undefined || partCond(r.when, part));
+        if (!rules.length) {
+          hintsFor(part.name, line.mechanism, '');
+          push(part.name, line.mechanism, '', 'open', 'the deck has no rule for it that holds for the part');
+          continue;
+        }
+        for (const rule of rules) ruleCells(rule, part, line);
       }
-      if (line.unless && (line.unless.when === undefined || partCond(line.unless.when, part))) {
-        hintsFor(part.name, line.mechanism, '');
-        push(part.name, line.mechanism, '', 'not_applicable', line.unless.why ?? 'the grid says it cannot arise');
-        continue;
+      for (const f of part.type.fields) {
+        if (f.kind === 'j') continue;
+        if (!readSets.get(part.name).has(f.name)) unread.push([part.name, f.name]);
       }
-      const rules = deck.rules.filter((r) => r.type === part.type.name && r.mechanism === line.mechanism && (r.when === undefined || partCond(r.when, part)));
-      if (!rules.length) {
-        hintsFor(part.name, line.mechanism, '');
-        push(part.name, line.mechanism, '', 'open', 'the deck has no rule for it that holds for the part');
-        continue;
-      }
-      for (const rule of rules) ruleCells(rule, part, line);
     }
-    for (const f of part.type.fields) {
-      if (f.kind === 'j') continue;
-      if (!readSets.get(part.name).has(f.name)) unread.push([part.name, f.name]);
+    // Values that nothing reads come after every other cell, part by part (docs/deck.md).
+    for (const [name, fieldName] of unread) {
+      hintsFor(name, 'unread', fieldName);
+      push(name, 'unread', fieldName, 'open', 'no rule and no line of the grid reads it');
     }
-  }
-  // Values that nothing reads come after every other cell, part by part (docs/deck.md).
-  for (const [name, fieldName] of unread) {
-    hintsFor(name, 'unread', fieldName);
-    push(name, 'unread', fieldName, 'open', 'no rule and no line of the grid reads it');
+    // format.md, Steps: what a rule reads. For each part one step, and for each rule of its type
+    // the steps of the rule above and one for each field the rule reads.
+    for (const part of parts) {
+      charge(1);
+      for (const r of rulesOfType.get(part.type.name) ?? []) charge(1 + r.whenSize + r.reads.loads.size + r.fieldsRead);
+    }
+  } catch (e) {
+    if (!(e instanceof LimitErr)) throw e;
+    findings.push({ file: 'design', item: 'limits', why: e.message, rule: 'limits' });
+    return ill();
   }
 
   const counts = Object.fromEntries(STATES.map((s) => [s, cells.filter((c) => c.state === s).length]));
@@ -1943,7 +2338,7 @@ export function verifyTexts(texts, opts = {}) {
     findings: [],
     cells: cells.map((c) => (opts.explain ? { ...c } : { subject: c.subject, mechanism: c.mechanism, entry: c.entry, state: c.state })),
   };
-  if (opts.explain) { out.counts = counts; out.ignored_hints = ignored; }
+  if (opts.explain) { out.counts = counts; out.ignored_hints = ignored; out.deck_steps = deckStepCount; out.steps = steps; }
   return { out, code };
 }
 

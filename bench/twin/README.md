@@ -18,7 +18,23 @@ Five changes, each after the specification gained the sentence that settles the 
 - Bands are refused when one has its lower end at or above its upper end, or starts before the one before it ends. The reading had taken them in any order.
 - Listed values of `at` are refused unless each is above the one before it. The reading had taken them in any order.
 
-The last three were written by the agent that changed the kernel, which had seen the kernel. Nothing else was edited.
+The last three were written by the agent that changed the kernel, which had seen the kernel. Nothing else was edited, until the update below.
+
+## The update of 2026-11-11
+
+The pages changed a great deal after the reading was written: a deck of 15 rules, limits on names and on the steps to read a deck, and the refusals a third hostile review asked for. A second agent, again on another model than the kernel's author, brought the reading up to them. It worked in a folder that held the two pages as they stood, what had changed in them, the units list, the shipped deck, the core domains, this reading and three exported designs with the result each must get. It was told to open nothing else and to run nothing but Node on this file. It reports that it opened nothing else. Its session did show it the titles of the owner's notes and the state of a repository, which it did not ask for, and it ran a few shell commands to count lines before it kept to Node.
+
+What it changed, each from a sentence of the pages:
+
+- How a value is written: the space before a unit, a comma between thousands only, no sign on a mixed number, and a bare `0` as the plain number zero.
+- The keys a deck must have: a `range` for every input of a row, `why` on a jump and on an `unless`, `says` on a rule, `what` where the pages ask it.
+- The refusals: a mechanism named `unread`, a `where` with no item, two rules of one line whose ids end alike, a map of a `by` that leaves a name out, `rises` or `falls` that names no side of its table, a text with U+FFFD or half a surrogate pair.
+- Dimensions written as exponents, and compared by them.
+- The limits that decide a verdict: 64 bytes for a name, 200 for the name of a card or a design, a million steps to read a deck, 10,000 cells and ten million steps to make them, 1,024 orders in a pick.
+
+It left out the budget of work, the memory of enclosures and the caches, which are counted in the kernel's own costs. So where the kernel runs out of work and leaves a cell open, this reading may still prove it. It also left out the limits that change only what is printed.
+
+`AMBIGUITIES.md` gained 19 entries, H1 to H19, and 14 of its old entries are now settled by a sentence of the pages. Three of the new ones were sentences at odds between the two pages, and the pages are corrected: a name is held to 64 bytes as printed, a cell's entry is the id from after its last `/`, and a part's number is checked by the exponents of its dimension. The other 16 are places where the pages are silent and the reading it took is the kernel's on every case below.
 
 ## How it is used
 
@@ -99,6 +115,17 @@ Measured with `--count 6000 --decks 3000 --seed 7`, after the bench's generator 
 
 The last kind is new to these runs. The damage put the 112 characters of a row's `what` where the id of a rule was. The kernel and the grid hold an id to 64 bytes, and this reading applies none of the kernel's limits on size, as the next section says. Every other kind is in the table above.
 
+### After the update of 2026-11-11
+
+Measured with `--count 6000 --decks 3000 --seed 7`, against the kernel and the grid at 5714d9c. The damage now also makes a line named `unread`, a `where` with no item, two rules that end alike, and a wide row applied 9 or 1,000 times.
+
+| Compared | Result |
+|---|---|
+| Generated designs, 5,881 compared | The same verdict and the same cells on every one |
+| Damaged decks, 3,000 compared | The same on every one: 2,563 refused by all three, 188 PASS, 159 FAIL, 89 UNKNOWN, and one design refused |
+
+The reading as it was before the update differs from the kernel on 7 of the first 49 of these decks, so the comparison does see a difference when there is one.
+
 ## What it is not
 
-It does not read a design of the models' kinds, hash a file, or apply the kernel's limits on size. It is a reading of the rules path only.
+It does not read a design of the models' kinds or hash a file. It applies the limits that decide a verdict and not the budget of work, the memory of enclosures or the limits on what is printed. It is a reading of the rules path only.
