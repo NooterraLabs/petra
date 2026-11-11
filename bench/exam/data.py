@@ -140,6 +140,25 @@ def manifest(folder: Path) -> dict | None:
     return json.loads(path.read_text(encoding="utf-8")) if path.is_file() else None
 
 
+def changed(folder: Path) -> list[str]:
+    """The fetched files that are missing or no longer have the hash SOURCE.json records.
+    A grader runs a model's code beside these files, so a run checks them before it starts."""
+    found = manifest(folder)
+    return [f["path"] for f in (found or {}).get("files", [])
+            if not (folder / f["path"]).is_file() or sha256((folder / f["path"]).read_bytes()) != f["sha256"]]
+
+
+KEPT = ("PATH", "PATHEXT", "SYSTEMROOT", "SYSTEMDRIVE", "WINDIR", "COMSPEC", "TEMP", "TMP", "TMPDIR", "HOME", "USERPROFILE", "HOMEDRIVE",
+        "HOMEPATH", "APPDATA", "LOCALAPPDATA", "PROGRAMDATA", "NUMBER_OF_PROCESSORS", "PROCESSOR_ARCHITECTURE", "LANG", "LC_ALL")
+
+
+def plain_env(**more: str) -> dict[str, str]:
+    """The environment a grader runs in: what a program needs to start, and `more`. A
+    grader runs code a model wrote, and a key or a token in this process's environment is
+    none of that code's business."""
+    return {**{name: os.environ[name] for name in KEPT if name in os.environ}, **more}
+
+
 def venv_python(name: str) -> Path:
     """The interpreter of the grader environment of that name, whether or not it exists yet."""
     return VENV / name / ("Scripts/python.exe" if os.name == "nt" else "bin/python")

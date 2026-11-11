@@ -9,6 +9,7 @@ no task.
 """
 import io
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -451,6 +452,31 @@ class Adapters(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "not inside"):
                 data.fetch(folder, [data.Source(source.as_uri(), "../outside.txt")], {})
             self.assertFalse((Path(tmp) / "outside.txt").exists())
+
+    def test_a_run_refuses_files_that_are_not_as_they_were_fetched(self):
+        """A grader runs a model's code beside the benchmark's files, so a run checks them first."""
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "source.txt"
+            source.write_bytes(b"one\n")
+            folder = Path(tmp) / "bench"
+            data.fetch(folder, [data.Source(source.as_uri(), "tasks/a.txt")], {})
+            self.assertEqual(data.changed(folder), [])
+            (folder / "tasks" / "a.txt").write_bytes(b"two\n")
+            self.assertEqual(data.changed(folder), ["tasks/a.txt"])
+            with self.assertRaisesRegex(SystemExit, "not as they were fetched"):
+                exam.run(TOY, folder, Path(tmp) / "runs" / "x.jsonl", exam.Settings(model="fake"), call=scripted, say=lambda line: None)
+            self.assertFalse((Path(tmp) / "runs").exists())
+            (folder / "tasks" / "a.txt").unlink()
+            self.assertEqual(data.changed(folder), ["tasks/a.txt"])
+            self.assertEqual(data.changed(Path(tmp) / "never-fetched"), [])
+
+    def test_a_grader_gets_none_of_the_environment_but_what_a_program_needs(self):
+        with mock.patch.dict(os.environ, {"SOME_API_KEY": "a secret", "PATH": os.environ.get("PATH", "")}):
+            env = data.plain_env(EXTRA="1")
+        self.assertNotIn("SOME_API_KEY", env)
+        self.assertEqual(env["EXTRA"], "1")
+        self.assertIn("PATH", env)
+        self.assertTrue(set(env) <= {*data.KEPT, "EXTRA"})
 
     def test_an_archive_leaves_on_disk_only_what_the_patterns_name(self):
         with tempfile.TemporaryDirectory() as tmp:

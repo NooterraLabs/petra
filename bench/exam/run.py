@@ -103,6 +103,8 @@ def same(a: str | None, b: str | None) -> bool:
 def run(adapter: Adapter, folder: Path, out: Path, settings: Settings,
         call: Callable[[str, str, float], models.Reply] = models.call, say: Callable[[str], None] = print) -> int:
     """Sit the chosen tasks and append the records to `out`. Returns the exit code."""
+    if differ := data.changed(folder):
+        raise SystemExit(f"{len(differ)} of the benchmark's files are missing or not as they were fetched; run with --fetch")
     tasks = chosen(adapter, folder, settings.tasks, settings.seed)
     version = adapter.version(folder)
     mine = [r for r in records.read(out) if (r["benchmark"], r["seed"], r["model"], bool(r.get("shakedown")))

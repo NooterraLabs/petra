@@ -15,7 +15,6 @@ sandbox: the script runs as this user, held only by the time limit.
 from __future__ import annotations
 
 import json
-import os
 import subprocess
 import tempfile
 import time
@@ -62,9 +61,10 @@ Write the model as one Python file that uses CadQuery (`import cadquery as cq`).
 
 def in_venv(name: str, arguments: list[str], timeout: float, cwd: Path | None = None) -> subprocess.CompletedProcess:
     """Run the helper in a grader environment: isolated, UTF-8, offline for Hugging Face,
-    and with that library's cache under the exam folder."""
-    env = {**os.environ, "PYTHONUTF8": "1", "HF_HOME": str(data.HOME / "cache" / "hf"), "HF_HUB_OFFLINE": "1",
-           "HF_DATASETS_OFFLINE": "1", "HF_HUB_DISABLE_TELEMETRY": "1"}
+    with that library's cache under the exam folder, and with none of this process's
+    environment beyond what a program needs to start."""
+    env = data.plain_env(PYTHONUTF8="1", HF_HOME=str(data.HOME / "cache" / "hf"), HF_HUB_OFFLINE="1", HF_DATASETS_OFFLINE="1",
+                         HF_HUB_DISABLE_TELEMETRY="1")
     return subprocess.run([str(data.venv_python(name)), "-I", "-X", "utf8", str(HELPER), *arguments], capture_output=True, text=True,
                           encoding="utf-8", errors="replace", stdin=subprocess.DEVNULL, timeout=timeout, env=env, cwd=cwd)
 

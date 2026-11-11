@@ -34,7 +34,7 @@ from bench.exam.adapters.cadtestbench import in_venv
 
 COMMIT = "c95d9ebedd5a3ce0c36513cb41768cdc63ef1369"
 ARCHIVE = f"https://codeload.github.com/rodriguescarson/cad-silent-failure-bench/zip/{COMMIT}"
-VERSION = {"repository": f"github rodriguescarson/cad-silent-failure-bench at {COMMIT}", "suite": "v1.1",
+VERSION = {"repository": f"github rodriguescarson/cad-silent-failure-bench at {COMMIT}", "release": "v1.1, with the task suite of v1.0",
            "licence": "MIT for the code, CC BY 4.0 for the tasks"}
 KEEP = ["tasks/*.json", "benchmark/*.py", "LICENSE", "LICENSE-DATA", "README.md", "ERRATA.md", "requirements.txt", "docs/HARNESS.md",
         "scripts/regrade.py"]
@@ -61,7 +61,9 @@ class CadSilentFailure(Adapter):
         return manifest
 
     def tasks(self, folder: Path) -> list[str]:
-        return sorted(path.stem for path in (folder / "tasks").glob("*.json"))
+        """The task files that were fetched. A file that turned up in the folder since is no task."""
+        fetched = (data.manifest(folder) or {}).get("files", [])
+        return sorted(Path(f["path"]).stem for f in fetched if f["path"].startswith("tasks/") and f["path"].endswith(".json"))
 
     def _system(self, folder: Path) -> str:
         """The value of SYSTEM in the benchmark's agent module, read from its source."""
