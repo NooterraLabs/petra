@@ -313,7 +313,7 @@ theorem folded_ok {op : Iv → Iv → Iv} {price : Nat → Nat → Nat} {v : Arr
     intro acc work y h
     unfold folded at h
     dsimp only at h
-    by_cases hw : work < price acc.words v[i]!.words
+    by_cases hw : work < price acc.bits v[i]!.bits
     · rw [if_pos hw] at h
       dsimp only at h
       cases h

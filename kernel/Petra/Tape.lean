@@ -35,8 +35,8 @@ def MAX_COND_DEPTH : Nat := 16
 /-- The most orders the conditions of one pick may hold between them. -/
 def MAX_ORDERS : Nat := 1024
 
-/-- The most work the kernel spends on the proofs of one verdict. A unit is about what one
-operation on one 64-bit word of a number costs: a nanosecond or so on a desktop. -/
+/-- The most work the kernel spends on the proofs of one verdict. A unit is about 0.4
+nanoseconds on the desktop the costs below were fitted on, so this is about 8 seconds. -/
 def MAX_WORK : Nat := 20000000000
 
 /-- The most 64-bit words of enclosures the kernel holds at once while it walks one leaf:
@@ -192,52 +192,93 @@ def Node.enclose (box v : Array Iv) (extra : Nat) : Node → M Iv
 
 -- What a step costs.
 --
--- Each formula below is an upper estimate of the time its step takes, in units of about a
--- nanosecond on a desktop, from the 64-bit words of the numbers the step reads. They were
--- fitted to the kernel's own functions at 32 to 65,000 bits (docs/format.md, "Limits").
--- No theorem reads them: a wrong estimate moves the time a verdict takes and nothing else.
+-- Each formula below is an estimate of the time its step takes, in units of work, from the
+-- bits of the numbers the step reads. A unit is a little under half a nanosecond on the
+-- desktop the formulas were fitted on, whatever the step and however long its numbers:
+-- bench/work_sweep.py measures that, and docs/format.md, "Work", holds its table. No theorem
+-- reads the formulas: a wrong estimate moves the time a verdict takes and nothing else.
+--
+-- Three things shape them. A number under 32 bits is kept in a machine word and a longer
+-- one on the heap, and a step on heap numbers takes several times as long whatever their
+-- length, so each formula has a floor that rises between a few bits and 32. A fraction is
+-- kept in lowest terms, so a sum and a product each take greatest common divisors, which
+-- cost more than the products do. And the library multiplies and divides long numbers
+-- faster than the schoolbook, so the cost of two `n`-bit numbers grows about as `n` to the
+-- power one and a half, and not as its square.
 
 /-- The 64-bit words of a number: of its numerator and its denominator together. -/
 def ratWords (q : Rat) : Nat := (bitlen q.num.natAbs + bitlen q.den) / 64 + 1
 
-/-- The 64-bit words of an enclosure: of both its ends. -/
+/-- The 64-bit words of an enclosure: of both its ends. The walk counts what it holds in
+these (`MAX_HELD`). -/
 def Iv.words (x : Iv) : Nat := ratWords x.lo + ratWords x.hi
 
-/-- One term of a sum, when the sum so far has `p` words and the term `w`. -/
-def addWork (p w : Nat) : Nat := 8000 + 60 * (p + w) + p * w / 8
+/-- The bits of the longer of a number's numerator and denominator. -/
+def ratBits (q : Rat) : Nat := Nat.max (bitlen q.num.natAbs) (bitlen q.den)
 
-/-- One factor of a product or one quotient: the four products of the ends are compared
-with each other, which multiplies them across. -/
-def mulWork (p w : Nat) : Nat := 30000 + 120 * (p + w) + (p + w) * (p + w) / 4
+/-- The bits of the longest of the four numbers of an enclosure. A step is charged as if
+all four were that long. -/
+def Iv.bits (x : Iv) : Nat := Nat.max (ratBits x.lo) (ratBits x.hi)
 
-/-- One comparison of two enclosures, as `min`, `max` and the orders of a pick make. -/
-def orderWork (p w : Nat) : Nat := 3500 + 4 * (p + w) + p * w / 8
+/-- How far `n` is from `lo` towards `hi`: nothing at `lo` and under, and `hi - lo` from `hi` on. -/
+def ramp (n lo hi : Nat) : Nat := Nat.min n hi - Nat.min n lo
 
-/-- A least or a greatest of the nodes `a`: each is compared with the one kept so far, which
-is as long as the longest before it. -/
+/-- `n` to the power one and a half. -/
+def pow32 (n : Nat) : Nat := n * isqrt n
+
+/-- One term of a sum, when the longest number of the sum so far has `p` bits and the
+longest of the term `w`: a greatest common divisor of the two denominators, and three
+products. -/
+def addWork (p w : Nat) : Nat :=
+  let floor := 4000 + 875 * ramp (Nat.max p w) 16 32
+  if p + w < 64 then floor else floor + (p + w) * 11 / 10 + pow32 (isqrt (p * w))
+
+/-- One factor of a product: four products of fractions, each with two greatest common
+divisors, and then the four are compared with each other, which multiplies them across. -/
+def mulWork (p w : Nat) : Nat :=
+  let floor := 12000 + 1500 * ramp (Nat.max p w) 8 32
+  if p + w < 64 then floor else floor + pow32 (p + w) * 26 / 100 + pow32 (isqrt (p * w)) * 27 / 10
+
+/-- A quotient: a product by the two ends of the divisor turned over. -/
+def divWork (p w : Nat) : Nat := mulWork p w + (if w < 32 then 6000 else 14000 + w / 2)
+
+/-- One comparison of two enclosures, as `min`, `max` and a pick make: two comparisons of
+fractions, each of which multiplies across. -/
+def orderWork (p w : Nat) : Nat :=
+  let floor := 550 + 1625 * ramp (Nat.max p w) 12 20
+  if p + w < 64 then floor else floor + pow32 (p + w) / 30
+
+/-- A step that copies its number or hands it on: a negation, an absolute value, an input
+and a constant. `small` is its cost on numbers under 32 bits, and `heap` on longer ones. -/
+def copyWork (small heap per n : Nat) : Nat := if n < 32 then small else heap + n / per
+
+/-- A least or a greatest of the nodes `a`: the first is handed on, and each after it is
+compared with the one kept so far, which is as long as the longest before it. -/
 def leastWork (v : Array Iv) (a : Array Nat) : Nat :=
-  (a.foldl (fun (cost, p) i =>
-    let w := v[i]!.words
-    (cost + orderWork p w, Nat.max p w)) (0, 2)).1
+  match a.toList with
+  | [] => 0
+  | first :: rest =>
+    (rest.foldl (fun (cost, p) i =>
+      let w := v[i]!.bits
+      (cost + orderWork p w, Nat.max p w)) (copyWork 800 3000 16 v[first]!.bits, v[first]!.bits)).1
 
 /-- The square root of an enclosure: Newton's iteration on the whole part of each end times
 `GRID` squared, which has the bits the end's numerator has more than its denominator and
-192 more. -/
+192 more, and costs their square. -/
 def sqrtWork (x : Iv) : Nat :=
-  let whole (q : Rat) : Nat := (bitlen q.num.natAbs + 256 - bitlen q.den) / 64
-  let v := whole x.lo + whole x.hi
-  45000 + 100 * x.words + v * v * 3 / 4
+  let whole (q : Rat) : Nat := bitlen q.num.natAbs + 256 - bitlen q.den
+  62000 + 4 * x.bits + (whole x.lo * whole x.lo + whole x.hi * whole x.hi) / 900
 
 /-- The logarithm of one end `x` from an enclosure of `PREC + extra` bits. The series is of
 `(m - 1) / (m + 1)` for `x` scaled to `m` between a half and two, a number as long as
 the longer of the numerator and the denominator of `x`, whatever `x` is near: reducing it
-costs the square of its words, and each term of the series, of which there are as many as
+takes greatest common divisors, and each term of the series, of which there are as many as
 bits, multiplies that many bits by it. The kernel keeps ln 2 for the first enclosure and
 sums it again for the others. -/
 def lnWork (extra : Nat) (x : Rat) : Nat :=
   let p := PREC + extra
-  let w := Nat.max (bitlen x.num.natAbs) (bitlen x.den) / 64 + 1
-  (if extra == 32 then 4000 else 7000) * p + 3400 * w + 5 * w * w + p * p * w / 150
+  let n := ratBits x
+  (if extra == 32 then (if n < 32 then 5000 else 7000) else 17000) * p + p * n * 4 / 5 + pow32 n * 3 / 5
 
 /-- The exponential of one end `x` from an enclosure of `PREC + extra` bits. `expPos` works
 with `q` bits, which grow with the size of `x`, sums about `2 q / log2 q` terms of that
@@ -249,36 +290,43 @@ def expWork (extra : Nat) (x : Rat) : Nat :=
   let wide := q / 64 + 1
   let terms := Nat.max 32 (2 * q / bitlen q)
   let w := ratWords x
-  terms * (10000 + 54 * wide + 20 * w + wide * w / 3) + (s + 16) * wide * wide / 4
+  (terms * (10000 + 54 * wide + 20 * w + wide * w / 3) + (s + 16) * wide * wide / 4) * 17 / 10
 
-/-- A whole power: `k` products, the `j`-th of a number `j` times as long. -/
-def powWork (k w : Nat) : Nat := k * 10000 + 60 * w * (k * (k + 1) / 2) + w * w * (k * (k - 1) / 2) / 4
+/-- A whole power `k` of an enclosure whose longest number has `n` bits: `k` products for
+each end, the `j`-th by a number `j` times as long. Each takes greatest common divisors
+of `n` bits, and from the third on a division of the longer number by the shorter. -/
+def powWork (k n : Nat) : Nat :=
+  let each := if n * k < 32 then 4700 else if n < 32 then 14500 else 31000
+  k * (each + n / 2) + (k - 1) * (pow32 n * 31 / 20) + ((k - 1) * (k - 2) / 2) * (n * n / 300 + 4 * n)
+
+/-- An `ln` or an `exp` of an end the caches hold: a look at them, which reads the number. -/
+def cachedWork (x : Rat) : Nat := 1500 + ratBits x / 8
 
 /-- The work of the step `Node.enclose` for a node other than a pick, a sum and a product,
 which pay as they go (`pickPriced`, `folded`). An `ln` or an `exp` of an end the caches
 hold costs a look at them, and the step may copy a cache's table of `MAX_CACHED` entries. -/
-def Node.work (v : Array Iv) (extra : Nat) (caches : Caches) : Node → Nat
-  | .c x => 500 + 4 * ratWords x
-  | .s _ => 1500
-  | .pi => 2500
-  | .add _ | .mul _ => 200
-  | .min a | .max a => 200 + leastWork v a
-  | .neg i | .abs i => 2500 + 4 * v[i]!.words
+def Node.work (box v : Array Iv) (extra : Nat) (caches : Caches) : Node → Nat
+  | .c x => copyWork 800 8000 8 (ratBits x)
+  | .s k => copyWork 700 4000 12 box[k]!.bits
+  | .pi => 2800
+  | .add _ | .mul _ => 500
+  | .min a | .max a => 500 + leastWork v a
+  | .neg i | .abs i => copyWork 1100 7000 3 v[i]!.bits
   | .sqrt i => sqrtWork v[i]!
   | .ln i =>
     let x := v[i]!
     let one (x : Rat) : Nat :=
-      if x == 1 || caches.ln.contains (x.num, x.den) then 500 + 4 * ratWords x else lnWork extra x
-    25000 + one x.lo + (if x.lo == x.hi then 500 + 4 * ratWords x.hi else one x.hi)
+      if x == 1 || caches.ln.contains (x.num, x.den) then cachedWork x else lnWork extra x
+    25000 + one x.lo + (if x.lo == x.hi then cachedWork x.hi else one x.hi)
   | .exp i =>
     let x := v[i]!
-    if x.lo < -(MAX_BITS : Rat) || x.hi > (MAX_BITS : Rat) then 1000 else
+    if x.lo < -(MAX_BITS : Rat) || x.hi > (MAX_BITS : Rat) then 3000 else
     let one (x : Rat) : Nat :=
-      if x == 0 || caches.exp.contains (x.num, x.den) then 500 + 4 * ratWords x else expWork extra x
-    25000 + one x.lo + (if x.lo == x.hi then 500 + 4 * ratWords x.hi else one x.hi)
-  | .div i j => mulWork v[i]!.words v[j]!.words
-  | .pow i n => 200 + powWork n.natAbs v[i]!.words
-  | .pick _ => 200
+      if x == 0 || caches.exp.contains (x.num, x.den) then cachedWork x else expWork extra x
+    25000 + one x.lo + (if x.lo == x.hi then cachedWork x.hi else one x.hi)
+  | .div i j => divWork v[i]!.bits v[j]!.bits
+  | .pow i n => 2800 + v[i]!.bits / 8 + powWork n.natAbs v[i]!.bits
+  | .pick _ => 500
 
 /-- How many distinct pairs the conditions of a pick compare: the size of `compared`, counted
 through a table and so without the comparisons `compared` makes. -/
@@ -290,11 +338,11 @@ def pairsOf (cases : Array (Option Cond × Nat)) : Nat :=
 A pick finds the distinct pairs among its orders by comparing each order with the pairs
 found before it, so it reads its orders times its pairs. -/
 def Node.size : Node → Nat
-  | .c _ | .s _ | .pi => 60
-  | .add a | .mul a | .min a | .max a => 60 + 15 * a.size
-  | .neg _ | .abs _ | .sqrt _ | .ln _ | .exp _ | .pow _ _ => 75
-  | .div _ _ => 90
-  | .pick cases => 60 + 15 * cases.size + 2 * orders cases * (pairsOf cases + 1)
+  | .c _ | .s _ | .pi => 200
+  | .add a | .mul a | .min a | .max a => 200 + 40 * a.size
+  | .neg _ | .abs _ | .sqrt _ | .ln _ | .exp _ | .pow _ _ => 240
+  | .div _ _ => 280
+  | .pick cases => 200 + 40 * cases.size + 20 * orders cases * (pairsOf cases + 1)
 
 def Tape.size (t : Tape) : Nat := t.nodes.foldl (fun n node => n + node.size) 0
 
@@ -302,10 +350,15 @@ def Tape.size (t : Tape) : Nat := t.nodes.foldl (fun n node => n + node.size) 0
 of a range, and each is a number of the files, at most `MAX_NUMBER_CHARS` long. -/
 def SPLIT : Nat := 20000
 
-/-- What a proof pays before its first step: for reading its tape three times, to check it
-and to mark what the roots read and where each node is last read, and once more for each
-leaf, with the split that made the leaf and a copy of the box. -/
-def Tape.fee (t : Tape) (leaves : Nat) : Nat := t.size * (3 + leaves) + leaves * (SPLIT + 8 * t.inputs.size)
+/-- What a proof pays before its first step, for a tape of this size with this many inputs
+on this many leaves: for reading the tape three times, to check it and to mark what the
+roots read and where each node is last read, and once more for each leaf, with the split
+that made the leaf and a copy of the box. -/
+def feeOf (size inputs leaves : Nat) : Nat := size * (3 + leaves) + leaves * (SPLIT + 8 * inputs)
+
+/-- What a proof of the tape pays before its first step. Finding the size reads the tape, so
+a caller that asks for the fee of one tape many times keeps the size and asks `feeOf`. -/
+def Tape.fee (t : Tape) (leaves : Nat) : Nat := feeOf t.size t.inputs.size leaves
 
 /-- The leaves of a partition. -/
 def Partition.count : Partition → Nat
@@ -402,11 +455,11 @@ among the pairs, and the hull of the cases found, of which there is at most one 
 way. None when the work left does not pay for looking at the pairs. -/
 def pickWork (v : Array Iv) (cases : Array (Option Cond × Nat)) (work : Nat) : Option Nat :=
   let pairs := compared cases
-  let look := pairs.foldl (fun n p => n + 2 * orderWork v[p.1]!.words v[p.2]!.words) 0
+  let look := pairs.foldl (fun n p => n + 2 * orderWork v[p.1]!.bits v[p.2]!.bits) 0
   if work < look then none else
     let ways := (pairs.map (outcomes v)).foldl (fun n os => if n > MAX_CHOICES then n else n * os.size) 1
-    let each := 300 + 30 * pairs.size + 30 * cases.size + orders cases * (40 + 2 * pairs.size)
-    let long := cases.foldl (fun n (_, k) => Nat.max n v[k]!.words) 2
+    let each := 200 + 20 * pairs.size + 30 * cases.size + orders cases * (150 + 6 * pairs.size)
+    let long := cases.foldl (fun n (_, k) => Nat.max n v[k]!.bits) 1
     let hull := Nat.min ways cases.size * orderWork long long
     some (look + (if ways > MAX_CHOICES then 0 else ways * each + hull))
 
@@ -425,7 +478,7 @@ none, and the work left. -/
 def Node.tries (box v : Array Iv) (self : Nat) (node : Node) : List Nat → Nat → M (Except Failure Iv × Nat)
   | [], work => pure (.error ⟨self, UNSEPARATED⟩, work)
   | extra :: rest, work => do
-    let cost := node.work v extra (← get)
+    let cost := node.work box v extra (← get)
     if work < cost then pure (.error ⟨self, COSTLY⟩, work)
     else
       tryCatch (do
@@ -437,13 +490,13 @@ def Node.tries (box v : Array Iv) (self : Nat) (node : Node) : List Nat → Nat 
 
 /-- The step of a sum or a product with its price: `Node.enclose` folds `op` over the nodes
 and holds each sum so far to `fits`, and this is that fold with each term paid for before it
-is taken, by the words the sum so far has and the words of the term. So a sum of many
+is taken, by the bits of the sum so far and the bits of the term. So a sum of many
 terms costs what its numbers come to, and not what they could. Gives the enclosure, or why
 there is none, and the work left. -/
 def folded (op : Iv → Iv → Iv) (price : Nat → Nat → Nat) (v : Array Iv) : List Nat → Iv → Nat → Except String Iv × Nat
   | [], acc, work => (.ok acc, work)
   | i :: rest, acc, work =>
-    let cost := price acc.words v[i]!.words
+    let cost := price acc.bits v[i]!.bits
     if work < cost then (.error COSTLY, work) else
       match fits (op acc v[i]!) with
       | .error why => (.error why, work - cost)

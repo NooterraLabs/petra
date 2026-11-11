@@ -38,7 +38,7 @@ from typing import Any, Callable, Iterator, Mapping
 
 from . import deck as rows
 from . import export
-from .deck import ANCHOR_KEYS, NONE, RowError, Vector, dimension, only, quantity, show
+from .deck import NONE, RowError, Vector, anchored, dimension, only, quantity, replaced, show
 from .ir import Bound, Component, Design, Fixed, ParamRef, Ref, Span, Text
 from .kernel import (Abs, Add, Const, Div, Exp, Interval, KernelArithmeticError, Ln, Max, Min, Mul, Neg, Pi, PowInt, Sqrt, Sym,
                      enclose)
@@ -56,6 +56,12 @@ MAX_CORNERS = 6
 MAX_NAME = 64
 """The most bytes a name may print in that a cell prints whole, as in kernel/Petra/Files.lean:
 the name of a part, a load case, a mechanism, a field, a load, a joined part and a `let`, and a rule's id."""
+UNREAD = "unread"
+"""The mechanism of the cell of a field that nothing reads. No line of the grid has this name."""
+MAX_READ = 1_000_000
+"""The most steps reading a deck may take, as in kernel/Petra/Files.lean."""
+MAX_TITLE = 200
+"""The most bytes the name of a card may print in, for a design checked against a deck."""
 
 
 class DeckError(ValueError):
@@ -152,11 +158,37 @@ def _anchor(a: Mapping[str, str]) -> str:
     return " ".join(parts[:2]) + "".join(f", {p}" for p in parts[2:])
 
 
-def _long(name: Any) -> bool:
-    """Whether the kernel would print this name in more than MAX_NAME bytes, counted as
+def _long(name: Any, most: int = MAX_NAME) -> bool:
+    """Whether the kernel would print this name in more than `most` bytes, counted as
     `printed` in kernel/Petra/Files.lean counts them: two for a quote, a backslash and a
     line end, six for any other control character, and the bytes of its UTF-8 otherwise."""
-    return isinstance(name, str) and sum(2 if c in '"\\\n\r' else 6 if c < " " else len(c.encode("utf-8", "surrogatepass")) for c in name) > MAX_NAME
+    return isinstance(name, str) and sum(2 if c in '"\\\n\r' else 6 if c < " " else len(c.encode("utf-8", "surrogatepass")) for c in name) > most
+
+
+def _size(value: Any) -> int:
+    """The size of a JSON value: one, for a list or an object the sizes of what it holds as
+    well, and for a text two, and one more for each 8 characters."""
+    if isinstance(value, str):
+        return 2 + len(value) // 8
+    return 1 + sum(map(_size, value.values() if isinstance(value, dict) else value)) if isinstance(value, (dict, list)) else 1
+
+
+def _steps(body: Mapping[str, Any]) -> int:
+    """The steps reading the deck takes, as `readingSteps` in kernel/Petra/Deck.lean counts
+    them (docs/deck.md, "The size of a deck"): the size of the file, and the size of a row
+    again for each `["row", ID, ...]` inside a rule, which reads the row again."""
+    sizes: dict[str, int] = {}
+    for row in body["rows"] if isinstance(body.get("rows"), list) else []:
+        if isinstance(row, dict) and isinstance(row.get("id"), str):
+            sizes.setdefault(row["id"], _size(row))
+
+    def again(value: Any) -> int:
+        if isinstance(value, list):
+            own = sizes.get(value[1], 0) if len(value) == 3 and value[0] == "row" and isinstance(value[1], str) else 0
+            return own + sum(map(again, value))
+        return sum(map(again, value.values())) if isinstance(value, dict) else 0
+
+    return _size(body) + (sum(map(again, body["rules"])) if isinstance(body.get("rules"), list) else 0)
 
 
 def _name(name: Any) -> bool:
@@ -289,12 +321,11 @@ def _rule(body: Mapping[str, Any], deck_rows: Mapping[str, rows.Row], types: Map
         only(body, ("id", "type", "mechanism", "anchor", "says", "when", "let", "where", "le"), "a rule")
         if not isinstance(where, str) or _long(where):
             raise RowError(f"a rule has id, of at most {MAX_NAME} characters, type, mechanism, anchor, says, le, and may have when, let and where")
-        anchor = dict(body["anchor"])
-        only(anchor, ANCHOR_KEYS, "anchor")
+        anchor = anchored(body["anchor"], "anchor")
         for w in body.get("where", []):
             only(w, ("le", "why"), "where")
-        if not anchor.get("standard") or not anchor.get("clause") or not body.get("says"):
-            raise RowError("a rule says what it states, and its anchor has a standard and a clause")
+        if not body.get("says") or "where" in body and not body["where"]:
+            raise RowError("a rule says what it states, and a `where` has at least one item")
         binder = _Binder(deck_rows, types[body["type"]], types)
         lets = {}
         for name, node in body.get("let", {}).items():
@@ -326,8 +357,10 @@ def read_deck(text: str) -> Deck:
     try:
         body = json.loads(text)
         only(body, ("format", "name", "about", "rows", "types", "grid", "rules"), "a deck")
-        if body.get("format") != FORMAT:
-            raise DeckError(f"a deck has format {FORMAT}, name, about, rows, types, grid and rules")
+        if body.get("format") != FORMAT or replaced(body):
+            raise DeckError(f"a deck has format {FORMAT}, name, about, rows, types, grid and rules, and no text of it holds U+FFFD or half a surrogate pair")
+        if _steps(body) > MAX_READ:
+            raise DeckError(f"reading this deck takes {_steps(body)} steps, over the budget of {MAX_READ}: a value of the file is one step, a text two or more, and a rule that applies a row takes the row's steps again")
         found = [rows.read(r) for r in body["rows"]]
         wrong = [f"{r.id}: {p}" for r in found for p in r.problems]
         if wrong:
@@ -345,14 +378,13 @@ def read_deck(text: str) -> Deck:
                     raise DeckError(f"{t.name}.{f.name}: it names parts of a type the deck has, whose own fields name no parts, each by a name of its own")
         asks = []
         for a in body["grid"]:
-            anchor, unless = dict(a["anchor"]), a.get("unless")
+            unless = a.get("unless")
             only(a, ("type", "mechanism", "what", "anchor", "unless"), f"grid {a.get('mechanism')}")
-            only(anchor, ANCHOR_KEYS, f"grid {a.get('mechanism')}: anchor")
+            anchor = anchored(a["anchor"], f"grid {a.get('mechanism')}: anchor")
             if unless is not None:
                 only(unless, ("why", "when"), f"grid {a.get('mechanism')}: unless")
-            if not anchor.get("standard") or not anchor.get("clause") or a["type"] not in types \
-                    or _long(a["mechanism"]):
-                raise DeckError(f"grid {a.get('mechanism')}: a line has a type of the deck, mechanism, of at most {MAX_NAME} characters, what, anchor and may have unless")
+            if a["type"] not in types or _long(a["mechanism"]) or a["mechanism"] == UNREAD:
+                raise DeckError(f"grid {a.get('mechanism')}: a line has a type of the deck, mechanism, of at most {MAX_NAME} characters and not `{UNREAD}`, what, anchor and may have unless")
             when = _Binder(deck_rows, types[a["type"]], types).static(unless["when"]) if unless is not None and "when" in unless else None
             asks.append(Ask(a["type"], a["mechanism"], a["what"], anchor, when, str(unless["why"]) if unless is not None else None))
         if len({(a.type, a.mechanism) for a in asks}) != len(asks):
@@ -363,6 +395,8 @@ def read_deck(text: str) -> Deck:
             if (r.type, r.mechanism) not in asked or asked[r.type, r.mechanism].unless is None and asked[r.type, r.mechanism].excused is not None:
                 raise DeckError(f"rule {r.id}: the grid does not ask {r.mechanism} of {r.type}, or says it never arises")
         _named(list(rules), "rules", lambda r: r.id)
+        if len({(r.type, r.mechanism, r.id.rpartition("/")[2]) for r in rules}) != len(rules):
+            raise DeckError("two rules for one line of the grid have ids that end alike after the last /, so their cells would have one entry")
         return Deck(str(body["name"]), export.sha256(text), deck_rows, types, tuple(asks), rules, text)
     except RowError as exc:
         raise DeckError(str(exc)) from None
@@ -475,6 +509,8 @@ def read_parts(design: Design, deck: Deck) -> Parts:
     parts: dict[str, Part] = {}
     problems += [f"{_at(x.span)}: the name of a part and of a load case is at most {MAX_NAME} characters, and {x.name[:MAX_NAME]}... is longer"
                  for x in (*design.components.values(), *design.loads.values()) if _long(x.name)]
+    problems += [f"{_at(x.span)}: the name of a load case holds no /, and {x.name} has one" for x in design.loads.values() if "/" in x.name]
+    problems += [f"{design.path}: the name of the card is at most {MAX_TITLE} characters for a design checked against a deck"] * _long(design.name, MAX_TITLE)
     for c in design.components.values():
         kind, values = deck.types[c.kind], {}
         for attr in c.attrs:

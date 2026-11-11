@@ -77,6 +77,25 @@ def only(body: Any, allowed: tuple[str, ...], what: str) -> None:
 ANCHOR_KEYS = ("standard", "clause", "equation", "table", "page")
 
 
+def anchored(body: Any, what: str) -> dict[str, str]:
+    """The anchor of a row, a grid line or a rule: `standard` and `clause`, each a text that
+    is not empty, and `equation`, `table` and `page` where given, each a text."""
+    only(body, ANCHOR_KEYS, what)
+    if not all(isinstance(v, str) for v in body.values()) or not body.get("standard") or not body.get("clause"):
+        raise RowError(f"{what} names its standard and its clause, and what it names is text")
+    return dict(body)
+
+
+def replaced(body: Any) -> bool:
+    """Whether a text or a key holds U+FFFD or half a surrogate pair. The kernel's JSON
+    reader reads the half as U+FFFD, so it refuses a file that holds either (docs/format.md)."""
+    if isinstance(body, str):
+        return any(c == "�" or "\ud800" <= c <= "\udfff" for c in body)
+    if isinstance(body, dict):
+        return any(replaced(k) or replaced(v) for k, v in body.items())
+    return isinstance(body, list) and any(map(replaced, body))
+
+
 def _vector(dim: Dim) -> Vector:
     return tuple(Fraction(getattr(dim, base)) for base in BASES)
 
@@ -93,7 +112,7 @@ def dimension(text: str) -> Vector:
             sign = 1 if token == "*" else -1
             continue
         name, _, power = token.partition("^")
-        if name not in NAMED or not re.fullmatch(r"-?\d+", power or "1"):
+        if name not in NAMED or not re.fullmatch(r"-?[0-9]+", power or "1"):
             raise RowError(f"{text!r} is not a dimension: it is {', '.join(NAMED)}, with ^N, * and /")
         out = tuple(a + sign * int(power or 1) * b for a, b in zip(out, _vector(NAMED[name])))
     return out
@@ -106,19 +125,23 @@ def show(v: Vector) -> str:
     return " ".join(f"{base}^{power}" for base, power in zip(BASES, v) if power)
 
 
+BLANK = " \t\r\n"
+"""What is dropped around a value and around its unit, as the kernel drops it (kernel/Petra/Quantity.lean, `strip`)."""
+
+
 def quantity(text: str, what: str) -> tuple[Fraction, Vector]:
     """`0.75 inch` as an exact SI value and its dimension. A number alone has none. A comma
     is read only between thousands, as in 29,000: a decimal is written with a point. A
     whole number and a fraction, `1 1/8 inch`, is their sum, as a standard prints it."""
-    mixed = re.fullmatch(r"(\d+) (\d+)/(\d+)( .*)?", str(text).strip())
+    mixed = re.fullmatch(r"([0-9]+) ([0-9]+)/([0-9]+)( .*)?", str(text).strip(BLANK), re.DOTALL)
     if mixed and int(mixed[3]):
         whole, top, bottom = (int(mixed[n]) for n in (1, 2, 3))
         text = f"{whole * bottom + top}/{bottom}{mixed[4] or ''}"
-    number, _, unit = str(text).strip().partition(" ")
-    if "," in number and not re.fullmatch(r"[+-]?\d{1,3}(,\d{3})+(\.\d+)?", number):
+    number, _, unit = str(text).strip(BLANK).partition(" ")
+    if "," in number and not re.fullmatch(r"[+-]?[0-9]{1,3}(,[0-9]{3})+(\.[0-9]+)?", number):
         raise RowError(f"{what}: {number!r} has a comma that is not between thousands; write a decimal with a point")
     try:
-        q = parse_quantity(number.replace(",", ""), unit.strip() or None)
+        q = parse_quantity(number.replace(",", ""), unit.strip(BLANK) or None)
     except UnitError as exc:
         raise RowError(f"{what}: {exc}") from None
     return q.value.lo, _vector(q.dim)
@@ -354,8 +377,7 @@ def read(body: Any) -> Row:
     if unknown or sum(key in body for key in ("is", "cases", "table")) != 1:
         raise RowError(f"{where}: a row has {', '.join(sorted(ROW_KEYS))}, with one of `is`, `cases` and `table`" + (f"; not {', '.join(unknown)}" if unknown else ""))
     try:
-        anchor, gives = dict(body["anchor"]), body["gives"]
-        only(anchor, ANCHOR_KEYS, "anchor")
+        anchor, gives = anchored(body["anchor"], "anchor"), body["gives"]
         only(gives, ("name", "dim", "what"), "gives")
         takes = {}
         for t in body["takes"]:
@@ -371,8 +393,8 @@ def read(body: Any) -> Row:
             if {lo_dim, hi_dim} != {dim} or not lo <= hi:
                 raise RowError(f"the range of {t['name']} is two {show(dim)} values, the lower first")
             takes[t["name"]] = Input(dim, lo, hi)
-        if len(takes) != len(body["takes"]) or not anchor.get("standard") or not anchor.get("clause"):
-            raise RowError("an input is named twice, or the anchor lacks its standard or its clause")
+        if len(takes) != len(body["takes"]):
+            raise RowError("an input is named twice")
         if "table" in body:
             if "jumps" in body:
                 raise RowError("a table has no jumps: it steps at every band")
@@ -440,7 +462,7 @@ def _table(body: Mapping[str, Any], takes: Mapping[str, Input], out: Vector, pro
     def cell(text: Any) -> Fraction | None:
         if text is None:
             return None
-        written = str(text).strip()
+        written = str(text).strip(BLANK)
         value, dim = quantity(written if " " in written or unit is None else f"{written} {unit}", "a cell")
         if dim != out:
             problems.append(f"a cell is a {show(dim)}, and the row gives a {show(out)}")

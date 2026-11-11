@@ -92,6 +92,54 @@ def peak_bytes(files: dict[str, str], timeout: float = 120) -> int:
             timer.cancel()
 
 
+def measured(files: dict[str, str], timeout: float = 300) -> tuple[dict, float, int]:
+    """What the kernel says of the files, the processor seconds its process took, and the
+    most memory it held. Processor seconds do not grow with what else the machine is doing
+    as the clock's do, so a test may hold the kernel to them with a wide margin. A kernel
+    that runs past `timeout` on the clock is stopped, and the test fails with no verdict."""
+    with tempfile.TemporaryDirectory() as tmp:
+        command = [verify.binary()]
+        for name, body in files.items():
+            Path(tmp, f"{name}.json").write_text(body, encoding="utf-8", newline="\n")
+            command += [f"--{name}", str(Path(tmp, f"{name}.json"))]
+        with open(Path(tmp, "out"), "wb") as out:
+            p = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.DEVNULL)
+            timer = threading.Timer(timeout, p.kill)
+            timer.start()
+            try:
+                if os.name == "nt":
+                    import ctypes
+                    from ctypes import wintypes
+
+                    class Counters(ctypes.Structure):
+                        _fields_ = [("cb", wintypes.DWORD), ("PageFaultCount", wintypes.DWORD)] + [
+                            (n, ctypes.c_size_t) for n in ("PeakWorkingSetSize", "WorkingSetSize", "QuotaPeakPagedPoolUsage",
+                                                           "QuotaPagedPoolUsage", "QuotaPeakNonPagedPoolUsage",
+                                                           "QuotaNonPagedPoolUsage", "PagefileUsage", "PeakPagefileUsage")]
+                    p.wait()
+                    handle = wintypes.HANDLE(int(p._handle))
+                    counters = Counters()
+                    counters.cb = ctypes.sizeof(Counters)
+                    times = [wintypes.FILETIME() for _ in range(4)]
+                    if not ctypes.windll.psapi.GetProcessMemoryInfo(handle, ctypes.byref(counters), counters.cb) \
+                            or not ctypes.windll.kernel32.GetProcessTimes(handle, *(ctypes.byref(t) for t in times)):
+                        raise OSError("the process gave no counters")
+                    seconds = sum((t.dwHighDateTime << 32) | t.dwLowDateTime for t in times[2:]) / 1e7
+                    peak = counters.PeakWorkingSetSize
+                else:
+                    _, _, usage = os.wait4(p.pid, 0)
+                    p.returncode = 0
+                    seconds = usage.ru_utime + usage.ru_stime
+                    peak = usage.ru_maxrss * (1 if sys.platform == "darwin" else 1024)
+            finally:
+                timer.cancel()
+        printed = Path(tmp, "out").read_bytes()
+    try:
+        return json.loads(printed), seconds, peak
+    except ValueError:
+        raise AssertionError(f"no verdict after {seconds:.0f} processor seconds for an input of {total(files) / MB:.3f} MB") from None
+
+
 def bare(cells: list[dict]) -> dict[str, str]:
     """A design with no parts whose proofs.json lists `cells`."""
     return old_path(cells, [])

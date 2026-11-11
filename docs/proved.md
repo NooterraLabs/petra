@@ -161,6 +161,20 @@ The caches hold at most 1,024 entries each, and a full one starts again. A cache
 
 The change moved no result that was looked at. The kernel built before the change and the kernel built after it printed the same bytes, apart from the new line `work`, and exited with the same code, on every bundle the corpus exports: 244 runs, of which 26 read a deck of rules.
 
+## How the costs came to be fitted again
+
+A review of 2026-11-11 found that a unit of work took up to sixteen times as long on long fractions as on short numbers, so the budget of work did not bound the time. The costs now read the bits of the numbers a step reads and no longer their 64-bit words, and `bench/work_sweep.py` measures what a unit takes for each step and each length ([format.md](format.md), "Work").
+
+Three functions that the proofs unfold changed what they hand to a cost, and nothing else:
+
+| Change | In the proofs |
+|---|---|
+| `folded` prices a term by the bits of the sum so far and of the term. Before, by their words. | One line of the proof of `folded_ok` names the new price. Its statement holds for any price and did not change. |
+| `Node.work` takes the box, for the length of an input's range, and reads the bits of what the node reads. | None. `Node.tries_sound` holds whatever `Node.work` returns. |
+| `Tape.fee` is `feeOf` of the tape's size, its inputs and the leaves, so that a caller with the size in hand does not read the tape again. | None. The two main theorems hold whatever the fee is. |
+
+No statement of a theorem changed, and the axioms are the same. The kernel built before the change and the kernel built after it printed the same bytes, apart from the line `work`, and exited with the same code, on the same 244 runs.
+
 ## What is not proved
 
 - Anything in `Petra/Check.lean`, `Petra/Files.lean`, `Petra/Deck.lean`, `Petra/Grid.lean`, `Petra/Quantity.lean`, `Petra/Sha256.lean` and `Main.lean`: reading the files, the test on the labels and ranges of a tape's inputs, writing a tape from a rule of a deck, the list of cells, the hash, and the verdict. The theorems start at a tape, a partition and a point.

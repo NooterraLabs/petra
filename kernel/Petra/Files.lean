@@ -4,6 +4,7 @@ format, every number parses, and every range has lo <= hi. The deck of rules is 
 -/
 import Lean.Data.Json
 import Petra.Tape
+import Petra.Quantity
 
 namespace Petra
 open Lean (Json)
@@ -22,10 +23,21 @@ def MAX_NAME : Nat := 64
 /-- The most cells the kernel makes from a deck of rules. -/
 def MAX_CELLS : Nat := 10000
 
-/-- The most steps the kernel takes to write the tapes of one design from a deck of rules.
-A step is one name or one operator of a rule and each thing the operator reads, each time
-the rule is written for a part and a load case, or one node of a tape. -/
+/-- The most steps the kernel takes to make the cells of one design from a deck of rules and
+to write their tapes. A step is one name or one operator of a rule and each thing the
+operator reads, each time the rule is written for a part and a load case, or one node of
+a tape. Looking at a line of the grid or at a rule for a part is a step and one more for
+each part of its condition, and so is each load case looked at for each load a rule reads. -/
 def MAX_STEPS : Nat := 10000000
+
+/-- The most steps reading one deck of rules takes (docs/deck.md, "The size of a deck"):
+the size of its JSON, and the size of a row again for each time a rule applies it. The
+kernel counts them from the file before it reads a row. -/
+def MAX_READ : Nat := 1000000
+
+/-- The most bytes the name of the card and the name of the design may print in, for a
+design with parts. The label of every input of a tape holds one of them. -/
+def MAX_TITLE : Nat := 200
 
 /-- The most bytes the verdict prints of the reasons of the cells it makes from a deck of
 rules. Those cells are the parts times the lines of the grid, so their reasons are not held
@@ -161,7 +173,9 @@ structure Constant where
 
 structure Deck where
   size : Floor
-  input : Array (String × Floor)
+  /-- The floor of each dimension that has one, found by the dimension's exponents
+  (`Dim.key`), with the name deck.json gives it. -/
+  input : Std.HashMap (Array (Int × Nat)) (String × Floor)
   constants : Array Constant
   /-- Whether deck.json has `rules`, the name and the hash of a deck of rules. The exporter
   writes it for a design checked against one, and the kernel reads only that it is there. -/
@@ -407,13 +421,26 @@ def readDesign (j : Json) : Read Design := do
            quantities := ← items "design" j "quantities" readQuantity,
            params := ← items "design" j "params" readParam, parts }
 
-/-- `about` in `domains.input` is prose, as petra/decks/core.json writes it, and not a dimension. -/
+/-- Of two floors of one dimension, whether the first admits less: it is the higher, or of
+two at one height the strict one. A value the tighter one admits, the other admits too. -/
+def Floor.tighter (f g : Floor) : Bool := g.min < f.min || (f.min == g.min && f.strict && !g.strict)
+
+/-- `about` in `domains.input` is prose, as petra/decks/core.json writes it, and not a
+dimension. Every other key names a dimension, and its floor is kept by the dimension's
+exponents: `m^1` and `length` are one dimension with one floor, the tighter of the two. So
+type rule 4 finds the floor of an input however the card spells its dimension, and tests
+an input against one floor, whatever the file holds. -/
 def readDeck (j : Json) : Read Deck := do
   let domains ← j.getObjVal? "domains"
-  let mut input := #[]
-  for (dim, x) in (← (← domains.getObjVal? "input").getObj?).toArray do
-    if dim != "about" then
-      if let some floor ← found "deck" s!"domains.input.{dim}" (readFloor x) then input := input.push (dim, floor)
+  let mut input : Std.HashMap (Array (Int × Nat)) (String × Floor) := {}
+  for (name, x) in (← (← domains.getObjVal? "input").getObj?).toArray do
+    if name != "about" then
+      let floor : Except String (Dim × Floor) := do
+        let some dim := dimNamed name | throw "is not a dimension"
+        return (dim, ← readFloor x)
+      if let some (dim, floor) ← found "deck" s!"domains.input.{name}" floor then
+        unless (input.get? dim.key).any fun held => !floor.tighter held.2 do
+          input := input.insert dim.key (name, floor)
   return { size := ← readFloor (← domains.getObjVal? "size"), input,
            constants := ← items "deck" j "constants" readConstant, rules := (j.getObjVal? "rules").toOption.isSome }
 
@@ -463,6 +490,21 @@ def bounded (bytes : ByteArray) : Except String Unit := do
         if depth > MAX_NESTING then throw s!"nested deeper than {MAX_NESTING}"
       else if c == ']' || c == '}' then depth := depth - 1
 
+/-- U+FFFD, the replacement character. -/
+def REPLACEMENT : Char := Char.ofNat 0xFFFD
+
+/-- Whether a text of the file, or a key of one of its objects, holds U+FFFD. The JSON reader
+gives that character for an escape of half a surrogate pair, so once a file is read, a name
+written with the escape of one half, with the escape of the other half, or with U+FFFD
+itself is one text, and a waiver for one name would rest a cell of another. A file that
+holds it is refused whole. A pair of escapes that is one character reads as that
+character. The file nests at most `MAX_NESTING` deep. -/
+partial def replaced : Json → Bool
+  | .str s => s.contains REPLACEMENT
+  | .arr items => items.any replaced
+  | .obj members => members.toArray.any fun (key, value) => key.contains REPLACEMENT || replaced value
+  | _ => false
+
 /-- A file as its structure, or none with a finding when it is not JSON with its format. -/
 def load (file format : String) (content : Except String ByteArray) (read : Json → Read α) :
     StateM Findings (Option α) := do
@@ -471,6 +513,8 @@ def load (file format : String) (content : Except String ByteArray) (read : Json
     bounded bytes
     let some source := String.fromUTF8? bytes | throw "not UTF-8"
     let j ← (Json.parse source).mapError ("not JSON: " ++ ·)
+    if replaced j then
+      throw "a text or a key holds U+FFFD, the replacement character, which an escape of half a surrogate pair also reads as"
     unless (text j "format").toOption == some format do throw s!"format is not {format}"
     read j
   found file "" (← whole.run)
