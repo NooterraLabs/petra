@@ -64,6 +64,19 @@ class RowError(ValueError):
     a name the row does not take."""
 
 
+def only(body: Any, allowed: tuple[str, ...], what: str) -> None:
+    """Refuse a key that an object of a deck does not have. A key that was skipped would be a
+    misspelled one, read as if it were left out, so its default would stand in its place."""
+    if not isinstance(body, dict):
+        raise RowError(f"{what} is not an object")
+    unknown = sorted(set(body) - set(allowed))
+    if unknown:
+        raise RowError(f"{what}: {', '.join(unknown)} is not a key here: it has {', '.join(allowed)}")
+
+
+ANCHOR_KEYS = ("standard", "clause", "equation", "table", "page")
+
+
 def _vector(dim: Dim) -> Vector:
     return tuple(Fraction(getattr(dim, base)) for base in BASES)
 
@@ -342,8 +355,11 @@ def read(body: Any) -> Row:
         raise RowError(f"{where}: a row has {', '.join(sorted(ROW_KEYS))}, with one of `is`, `cases` and `table`" + (f"; not {', '.join(unknown)}" if unknown else ""))
     try:
         anchor, gives = dict(body["anchor"]), body["gives"]
+        only(anchor, ANCHOR_KEYS, "anchor")
+        only(gives, ("name", "dim", "what"), "gives")
         takes = {}
         for t in body["takes"]:
+            only(t, ("name", "what", "one_of") if "one_of" in t else ("name", "what", "dim", "range"), str(t.get("name")))
             if "one_of" in t:
                 keys = tuple(str(k) for k in t["one_of"])
                 if len(set(keys)) != len(keys) or not keys or "dim" in t or "range" in t:
@@ -369,10 +385,13 @@ def read(body: Any) -> Row:
         written = body["cases"] if "cases" in body else [{"is": body["is"]}]
         cases = []
         for n, case in enumerate(written):
-            if set(case) - {"when", "is"} or "is" not in case or ("when" not in case and n != len(written) - 1):
+            only(case, ("when", "is"), f"case {n + 1}")
+            if "is" not in case or ("when" not in case and n != len(written) - 1):
                 raise RowError("a case has `when` and `is`, and only the last may leave `when` out")
             when = reader.cond(case["when"]) if "when" in case else None
             cases.append(Case(when, *reader.expr(case["is"])))
+        for j in body.get("jumps", []):
+            only(j, ("cases", "why"), "a jump")
         jumps = {frozenset(n - 1 for n in j["cases"]): str(j["why"]) for j in body.get("jumps", [])}
         if any(len(pair) != 2 or not pair <= set(range(len(cases))) for pair in jumps) or not all(jumps.values()):
             raise RowError("a jump names two of the row's cases by number, from 1, and says why")
@@ -388,16 +407,15 @@ def read(body: Any) -> Row:
 def _table(body: Mapping[str, Any], takes: Mapping[str, Input], out: Vector, problems: list[str]) -> Table:
     """A table from its JSON: `down` and, for a table with two sides, `across`, each an
     axis; `cells`; the `unit` of a cell that states none; and `rises` and `falls`."""
-    if set(body) - {"down", "across", "cells", "unit", "rises", "falls"}:
-        raise RowError("a table has down, across, cells, unit, rises and falls")
+    only(body, ("down", "across", "cells", "unit", "rises", "falls"), "table")
 
     def axis(a: Mapping[str, Any]) -> Axis:
         name, i = a["by"], takes[a["by"]]
         if i.keys:
-            if set(a) != {"by"}:
-                raise RowError(f"{name} is a key, so its side of the table has `by` alone")
+            only(a, ("by",), f"{name} is a key, so its side of the table has `by` alone")
             return Axis(name, keys=i.keys)
-        if set(a) - {"by", "bands", "closed", "at"} or ("bands" in a) == ("at" in a) or a.get("closed", "upper") not in ("upper", "lower"):
+        only(a, ("by", "bands", "closed") if "bands" in a else ("by", "at"), f"the side that reads {name}")
+        if ("bands" in a) == ("at" in a) or a.get("closed", "upper") not in ("upper", "lower"):
             raise RowError(f"the side that reads {name} has `bands` with `closed` upper or lower, or `at`")
         written = [x for band in a.get("bands", [a.get("at")]) for x in band]
         ends = [None if x is None else quantity(x, f"the side that reads {name}") for x in written]

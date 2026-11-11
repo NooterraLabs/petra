@@ -125,15 +125,25 @@ def Step.reads : Step → Array Nat
   | .table _ down across => down.reads ++ (across.map Chosen.reads).getD #[]
   | .row binds value => binds.push value
 
+/-- What a step costs to write for one part: itself and each step it reads. A pick renames
+every order of its conditions, and a table looks at every cell. -/
+def Step.weight : Step → Nat
+  | .node (.pick cases) => 1 + cases.size + 2 * orders cases
+  | .node n => 1 + n.reads.size
+  | .field .. | .load _ => 1
+  | .table grid _ _ => 1 + grid.down.places + grid.cells.foldl (fun n line => n + line.size) 0
+  | .row binds _ => 1 + binds.size
+
 /-- An answer to one line of the grid: `low <= high`, read where every pair of `ranges` is
 in order. `fields` and `loads` are what its roots read, through its names and its rows, each
-once. -/
+once. `weight` is what its steps cost to write for one part. -/
 structure Rule where
   id : String
   kind : String
   mechanism : String
   condition : Option Static
   steps : Array Step
+  weight : Nat
   ranges : Array (Nat × Nat)
   low : Nat
   high : Nat
@@ -196,9 +206,12 @@ def filled (j : Json) (key : String) : Bool :=
 
 def members (j : Json) : Except String (Array (String × Json)) := do return (← j.getObj?).toArray
 
+/-- Refuses a key that an object of a deck does not have. A deck holds no key the kernel
+does not read: a key it skipped would be a misspelled one, read as if it were left out. The
+key is cut to `MAX_TEXT`, as a finding is. -/
 def within (j : Json) (allowed : List String) : Except String Unit := do
   for (key, _) in ← members j do
-    unless allowed.contains key do throw s!"{key} is not a key here: it has {", ".intercalate allowed}"
+    unless allowed.contains key do throw s!"{clip key} is not a key here: it has {", ".intercalate allowed}"
 
 def distinct (names : Array String) : Bool :=
   (names.foldl (fun (seen, so) name => (seen.insert name, so && !seen.contains name)) (({} : Std.HashSet String), true)).2
@@ -429,9 +442,10 @@ def MAX_EXPRESSION : Nat := 1024
 
 -- Reading a deck.
 
-/-- An anchor names its standard and its clause. -/
+/-- An anchor names its standard and its clause, and may name an equation, a table and a page. -/
 def anchored (j : Json) : Except String Unit := do
   let anchor ← j.getObjVal? "anchor"
+  (within anchor ["standard", "clause", "equation", "table", "page"]).mapError ("anchor: " ++ ·)
   unless filled anchor "standard" && filled anchor "clause" do throw "the anchor lacks its standard or its clause"
 
 /-- A list a key may leave out. -/
@@ -447,7 +461,7 @@ def readTable (j : Json) (takes : Array (String × Taken)) (gives : Dim) : Excep
       within a ["by"]
       return .named input names
     | some (_, .quantity dim) =>
-      within a ["by", "bands", "closed", "at"]
+      within a (if has a "bands" then ["by", "bands", "closed"] else ["by", "at"])
       if has a "bands" == has a "at" then throw s!"the side that reads {input} has `bands` or `at`"
       let upper ← match a.getObjVal? "closed" with
         | .error _ | .ok (.str "upper") => pure true
@@ -510,6 +524,7 @@ def readRow (j : Json) : Except String Row := do
     unless (["is", "cases", "table"].filter (has j)).length == 1 do throw "a row has one of `is`, `cases` and `table`"
     anchored j
     let gives ← j.getObjVal? "gives"
+    (within gives ["name", "dim", "what"]).mapError ("gives: " ++ ·)
     let _ ← text gives "name"
     let dim ← dimension (← text gives "dim")
     let mut takes : Array (String × Taken) := #[]
@@ -520,8 +535,10 @@ def readRow (j : Json) : Except String Row := do
         let names ← texts t "one_of"
         if names.isEmpty || !distinct names || has t "dim" || has t "range" then
           throw s!"{name} is a key: it has `one_of`, a list of different names, and no `dim` or `range`"
+        (within t ["name", "what", "one_of"]).mapError (s!"{name}: " ++ ·)
         takes := takes.push (name, .key names)
       else
+        (within t ["name", "what", "dim", "range"]).mapError (s!"{name}: " ++ ·)
         let its ← dimension (← text t "dim")
         match ← (← texts t "range").toList.mapM amount with
         | [(lo, loDim), (hi, hiDim)] =>
@@ -545,6 +562,7 @@ def readRow (j : Json) : Except String Row := do
       if let .quantity its := taken then names := names.insert name (.bound its n)
     let _ ← (cases { names } dim MAX_EXPRESSION found).run { steps := takes.map fun t => .field none t.1 }
     for jump in ← listed j "jumps" do
+      (within jump ["cases", "why"]).mapError ("a jump: " ++ ·)
       let ends := (← (← list jump "cases").mapM (·.getNat?)).toList.eraseDups
       unless ends.length == 2 && ends.all (fun n => 1 ≤ n && n ≤ found.size) && filled jump "why" do
         throw "a jump names two of the row's cases by number, from 1, and says why"
@@ -559,14 +577,17 @@ def readField (load : Bool) (j : Json) : Except String Field := do
       throw "it has `what` and one of `dim`, `one_of` and `type`"
     identifier name
     if has j "one_of" then
+      within j ["name", "what", "one_of"]
       let names ← texts j "one_of"
       if names.isEmpty || !distinct names then throw "`one_of` is a list of different names"
       return { name, kind := .key names }
     if has j "type" then
+      within j ["name", "what", "type", "as"]
       let names ← if has j "as" then texts j "as" else pure #[name]
       if names.isEmpty || !distinct names then throw "`as` names each part once"
       names.forM identifier
       return { name, kind := .parts (← text j "type") names }
+    within j ["name", "what", "dim", "least", "signed", "whole"]
     let dim ← dimension (← text j "dim")
     let least ← if has j "least" then do
         let (x, its) ← amount (← text j "least")
@@ -586,6 +607,7 @@ def readField (load : Bool) (j : Json) : Except String Field := do
 def readKind (j : Json) : Except String Kind := do
   let name ← text j "type"
   let kind : Except String Kind := do
+    within j ["type", "what", "fields", "loads"]
     let _ ← j.getObjVal? "what"
     let fields ← (← list j "fields").mapM (readField false)
     let loads ← (← listed j "loads").mapM (readField true)
@@ -626,6 +648,7 @@ def readAsk (kinds : Array Kind) (rows : Std.HashMap String Row) (j : Json) : Ex
     let excuse ← match j.getObjVal? "unless" with
       | .error _ | .ok .null => pure none
       | .ok said => do
+        (within said ["why", "when"]).mapError ("unless: " ++ ·)
         let _ ← text said "why"
         pure (some (← (said.getObjVal? "when").toOption.mapM (static (scopeOf kind kinds rows) MAX_EXPRESSION)))
     return { kind := name, mechanism, excuse }
@@ -659,6 +682,7 @@ def readRule (kinds : Array Kind) (rows : Std.HashMap String Row) (asks : Array 
     let read : Reading ((Nat × Nat) × Array (Nat × Nat)) := do
       let main ← pair (← j.getObjVal? "le") "`le`"
       let ranges ← (← listed j "where").mapM fun range => do
+        (within range ["le", "why"]).mapError ("where: " ++ ·)
         let _ ← text range "why"
         pair (← range.getObjVal? "le") "`where`"
       for (name, _) in lets do
@@ -677,7 +701,8 @@ def readRule (kinds : Array Kind) (rows : Std.HashMap String Row) (asks : Array 
     let loads := used.filterMap fun
       | .load name => some name
       | _ => none
-    return { id, kind := name, mechanism, condition, steps := draft.steps, ranges, low, high,
+    return { id, kind := name, mechanism, condition, steps := draft.steps,
+             weight := draft.steps.foldl (fun n step => n + step.weight) 0, ranges, low, high,
              fields := once (fields ++ ((condition.map Static.keys).getD #[]).map (none, ·)), loads := once loads }
   rule.mapError (s!"rule {id}: " ++ ·)
 
@@ -714,11 +739,13 @@ structure Site where
   load : String → Option TapeInput
 
 /-- A tape being written. `seen` finds a node that is there already, so one quantity is one
-node, and a pick that compares it twice orders it once. -/
+node, and a pick that compares it twice orders it once. `labelled` finds an input by its
+label. -/
 structure Writing where
   inputs : Array TapeInput := #[]
   nodes : Array Node := #[]
   seen : Std.HashMap Node Nat := {}
+  labelled : Std.HashMap String Nat := {}
 
 abbrev Write := StateT Writing (Except String)
 
@@ -733,20 +760,23 @@ def node (n : Node) : Write Nat := modifyGet fun w =>
 
 def input (i : TapeInput) : Write Nat := do
   let k ← modifyGet fun w =>
-    match w.inputs.findIdx? (·.label == i.label) with
+    match w.labelled.get? i.label with
     | some k => (k, w)
     | none =>
       let k := w.inputs.size
-      (k, { w with inputs := w.inputs.push i })
+      (k, { w with inputs := w.inputs.push i, labelled := w.labelled.insert i.label k })
   node (.s k)
 
 /-- The first case that holds, or none when there is no case. One case that holds otherwise
-is its value. -/
+is its value. A pick holds at most `MAX_ORDERS` orders, as one that a file carries. -/
 def pickOf (cases : Array (Option Cond × Nat)) : Write (Option Nat) :=
   match cases[0]? with
   | none => pure none
   | some (none, value) => pure (some value)
-  | some _ => some <$> node (.pick cases)
+  | some _ =>
+    if orders cases > MAX_ORDERS then
+      throw s!"an equation or a table compares {orders cases} orders here, over the budget of {MAX_ORDERS} for one pick"
+    else some <$> node (.pick cases)
 
 /-- The places of one side that the part can be at, each with the condition that it is
 there: one place for a key, every listed value, every band. -/

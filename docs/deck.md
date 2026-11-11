@@ -46,7 +46,7 @@ A name is the standard's own symbol, written in plain letters: `Fu`, `Agv`, `lc`
 
 A factor that the standard fixes as a number in the equation, such as a resistance factor, is written as that number and is not an input. So is a property the standard fixes with a unit, such as the modulus of elasticity of steel: it is a constant with its unit.
 
-In the anchor, `page` is the page number as printed, and `equation` lists every equation number the row holds.
+An anchor has `standard` and `clause`, each a text that is not empty, and may have `equation`, `table` and `page`. `page` is the page number as printed, and `equation` lists every equation number the row holds. A row with no anchor, or with an anchor that lacks its standard or its clause, is refused. So is a line of the grid and a rule.
 
 A `range` is two values, the lower first, between which a real design's value would fall. The check draws its sample points from the ranges, so a row with cases needs ranges wide enough for each case to hold somewhere.
 
@@ -125,7 +125,9 @@ An input of a table is a quantity, as in an equation, or a key. A key is one of 
 A side that reads a key has `by` alone, and its places are the key's names in order. A side that reads a quantity has one of two forms.
 
 - `bands`: pairs of values, the lower end first, in order. `closed` says which end a band holds: `upper` for "above 6 mm up to and including 18 mm", which is the default, and `lower` for "6 mm and over, under 18 mm". A first band that the standard prints as "up to 6 mm" starts at `0`. A last band that the standard prints as "over 18 mm" has `null` for its upper end.
-- `at`: the listed values, in order, for a table that gives a line for each standard size and nothing between them.
+- `at`: the listed values, in order and each once, for a table that gives a line for each standard size and nothing between them.
+
+A band's lower end is under its upper end, and no band starts before the one before it ends. A side whose bands are out of order or lie over one another is refused, and so is a side whose listed values are out of order. A side with `at` has no `closed`: it has no band to close.
 
 A value is written as the standard prints it, with a decimal point where the standard prints a decimal comma, and with no space or comma inside a number: `1100`, not `1 100`. A whole number and a fraction are written as printed, with one space: `1 1/8 inch`. Where a cell prints one value in two systems of units, the row holds the first, and the anchor says which.
 
@@ -191,6 +193,8 @@ A deck is one JSON file in `petra/decks`.
 | `types` | The types |
 | `grid` | The lines of the grid |
 | `rules` | The rules |
+
+Each object of a deck has the keys this page gives it, and no other. A key the page does not give is refused wherever it stands: in the deck, a row, an `anchor`, `gives`, an input of `takes`, a case, a jump, a table, a side of a table, a type, a field, a load, a line of the grid, `unless`, a rule and an item of `where`. So is a key where it does not belong: `signed`, `whole` or `least` on a field that is no quantity, `as` on a field that joins no part, and `closed` on a side with no `bands`. The refusal names the key. A misspelled key is then an error, and never a key left out with its default in its place: `close` for `closed` would leave every band closed at its upper end.
 
 A design names a type as the kind of a component block: `lap splice { ... }` is a part named `splice` of type `lap`. The parts of one design are all of one deck's types, or all of the built-in models' kinds.
 

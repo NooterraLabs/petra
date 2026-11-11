@@ -24,9 +24,10 @@ def types (cardHash : String) (card : Card) (design : Design) (deck : Deck) : St
   for q in design.quantities do
     if q.role == "size" && !deck.size.admits q.range.lo then
       say "types.3" "design" s!"{q.entity}.{q.line}.{q.field}" (deck.size.broken "size" q.range.lo)
+  let floors := grouped deck.input (·.1)
   for i in card.inputs do
-    for (dim, floor) in deck.input do
-      if dim == i.dim && !floor.admits i.range.lo then
+    for (dim, floor) in floors.getD i.dim #[] do
+      if !floor.admits i.range.lo then
         say "types.4" "card" i.name (floor.broken dim i.range.lo)
   for w in card.waivers do
     if w.signer.isEmpty then
@@ -48,62 +49,89 @@ def marks (card : Card) (design : Design) (deck : Deck) (deckOfRules : Bool) : S
   for key in card.keyed do say "card" key "is a key of the card"
   if deck.rules then say "deck" "rules" "names a deck of rules"
 
-/-- What the card or the deck signs for a tape's input. A `dsg:` input has no signed range:
-the kernel does not tie it to the design yet. -/
-def signed (card : Card) (deck : Deck) (label : String) : Except String (Array Iv) :=
-  let among (ranges : Array Iv) (file : String) : Except String (Array Iv) :=
-    if ranges.isEmpty then throw s!"the {file} has no {label}" else pure ranges
+/-- What the card and the deck sign, found by name: the ranges of the card's inputs of each
+name, the label every one of them starts with, the ranges of the deck's constants of each
+label, and the first waiver of each subject and mechanism with its place in the card's
+list. So the tests on a cell cost what the cell holds, and not that times the card. -/
+structure Signed where
+  lead : String
+  inputs : Std.HashMap String (Array Iv)
+  constants : Std.HashMap String (Array Iv)
+  waivers : Std.HashMap (String × String) (Waiver × Nat)
+
+def Signed.of (card : Card) (deck : Deck) : Signed :=
+  { lead := s!"in:{card.name}.",
+    inputs := (grouped card.inputs (·.name)).map fun _ found => found.map (·.range),
+    constants := (grouped deck.constants (·.label)).map fun _ found => found.map (·.range),
+    waivers := firsts card.waivers.zipIdx fun w => (w.1.subject, w.1.mechanism) }
+
+/-- What the card or the deck signs for a tape's input: the ranges of the card's inputs
+named `INPUT` for the label `in:CARD.INPUT`, and of the deck's constants of a `reg:` label.
+A `dsg:` input has no signed range: the kernel does not tie it to the design yet. -/
+def Signed.ranges (signed : Signed) (label : String) : Except String (Array Iv) :=
+  let among (ranges : Option (Array Iv)) (file : String) : Except String (Array Iv) :=
+    match ranges with
+    | some ranges => pure ranges
+    | none => throw s!"the {file} has no {label}"
   if label.startsWith "in:" then
-    among ((card.inputs.filter fun i => s!"in:{card.name}.{i.name}" == label).map (·.range)) "card"
-  else if label.startsWith "reg:" then
-    among ((deck.constants.filter (·.label == label)).map (·.range)) "deck"
+    among (if label.startsWith signed.lead then signed.inputs.get? (String.ofList (label.toList.drop signed.lead.length)) else none) "card"
+  else if label.startsWith "reg:" then among (signed.constants.get? label) "deck"
   else if label.startsWith "dsg:" then pure #[]
   else throw s!"input {label} is not labelled in:, reg: or dsg:"
 
 /-- The test on labels: every `in:` input is the card's, every `reg:` input is the deck's,
 and the tape's range contains theirs. Gives the signed ranges of each input. -/
-def premises (card : Card) (deck : Deck) (tape : Tape) : Except String (Array (Array Iv)) :=
+def premises (signed : Signed) (tape : Tape) : Except String (Array (Array Iv)) :=
   tape.inputs.mapM fun input => do
-    let ranges ← signed card deck input.label
+    let ranges ← signed.ranges input.label
     unless ranges.all (·.within input.range) do
       throw s!"the tape's range for {input.label} does not contain the signed one"
     return ranges
 
 /-- The cell rules, 1 to 5. A refuting point must also lie in the signed ranges and give
 one value to each label: a point outside what the card signs, or one that sets an input to
-two values at once, says nothing about the design. `spent` is the evaluations the proofs
-before this one took, and the result holds it with this one's. A proof that would take it
-past `MAX_EVALS` is not tried, and its cell is open. -/
-def settle (card : Card) (deck : Deck) (cell : Cell) (spent : Nat) : StateM Caches (Settled × Nat) := do
-  let test (cost : Nat) (proof : M Unit) : StateM Caches (Settled × Nat) := do
-    if spent + cost > MAX_EVALS then return ({ cell, state := .undecided, reason := SPENT }, spent)
-    match proof.run (← get) with
-    | .ok (_, caches) =>
-      set caches
-      return ({ cell, state := cell.state }, spent + cost)
-    | .error reason => return ({ cell, state := .undecided, reason := clip reason }, spent + cost)
+two values at once, says nothing about the design. `left` is the work the proofs before this
+one left of `MAX_WORK`, and the result holds what this one leaves. A proof that cannot pay
+for its tape is not tried, a step that cannot pay is not taken, and either way the cell is
+open. The caches keep what a proof that holds computed. -/
+def settle (signed : Signed) (cell : Cell) (left : Nat) : StateM Caches (Settled × Nat) := do
+  let undecided (reason : String) (left : Nat) : Settled × Nat := ({ cell, state := .undecided, reason := clip reason }, left)
+  let test (ready : Except String (Nat → M (Option String × Nat))) : StateM Caches (Settled × Nat) := do
+    match ready with
+    | .error reason => return undecided reason left
+    | .ok proof =>
+      match (proof left).run (← get) with
+      | .ok ((none, left), caches) =>
+        set caches
+        return ({ cell, state := cell.state }, left)
+      | .ok ((some reason, left), _) => return undecided reason left
+      | .error reason => return undecided reason left
   match cell.state, cell.tape with
-  | .proved, some tape => test (tape.cost * (cell.partition.map Partition.count).getD 1) do
-    let _ ← premises card deck tape
+  | .proved, some tape => test do
+    let _ ← premises signed tape
     let some partition := cell.partition | throw "a proved cell with a tape has no partition"
-    tape.proved partition
-  | .refuted, some tape => test tape.cost do
-    let ranges ← premises card deck tape
+    return tape.proved partition
+  | .refuted, some tape => test do
+    let ranges ← premises signed tape
     let some point := cell.point | throw "a refuted cell with a tape has no point"
     let some which := cell.which | throw "a refuted cell with a tape has no which"
-    tape.refuted point which
-    for ((x, among), i) in (point.zip ranges).zipIdx do
-      unless among.all (·.has x) do throw s!"the point is outside the signed range of input {i}"
-    let valued := (tape.inputs.map (·.label)).zip point
-    unless valued.all (fun (l, x) => valued.all fun (m, y) => l != m || x == y) do
-      throw "the point gives two values to one label"
+    return fun left => do
+      let (why, left) ← tape.refuted point which left
+      if why.isSome then return (why, left)
+      if let some i := (point.zip ranges).findIdx? fun (x, among) => !among.all (·.has x) then
+        return (some s!"the point is outside the signed range of input {i}", left)
+      let (_, twice) := (tape.inputs.zip point).foldl (init := (({} : Std.HashMap String Rat), false)) fun (seen, twice) (input, x) =>
+        match seen.get? input.label with
+        | some y => (seen, twice || x != y)
+        | none => (seen.insert input.label x, twice)
+      return (if twice then some "the point gives two values to one label" else none, left)
   | .proved, none | .refuted, none =>
-    return ({ cell, state := .undecided, reason := "the kernel has no rule yet for a proof with no tape" }, spent)
+    return undecided "the kernel has no rule yet for a proof with no tape" left
   | .waived, _ =>
-    match card.waivers.findIdx? fun w => w.subject == cell.subject && w.mechanism == cell.mechanism with
-    | some k => return ({ cell, state := .waived, waiver := card.waivers[k]?.map (k, ·) }, spent)
-    | none => return ({ cell, state := .undecided, reason := "the card lists no waiver with this subject and mechanism" }, spent)
-  | state, _ => return ({ cell, state }, spent)
+    match signed.waivers.get? (cell.subject, cell.mechanism) with
+    | some (w, k) => return ({ cell, state := .waived, waiver := some (k, w) }, left)
+    | none => return undecided "the card lists no waiver with this subject and mechanism" left
+  | state, _ => return ({ cell, state }, left)
 
 inductive Verdict where
   | pass | fail | unknown | illFormed
@@ -134,6 +162,8 @@ structure Report where
   the numbers the design's parts write. Without one the kernel takes their ranges as the
   tape states them. -/
   dsgInputs : Nat
+  /-- The work the proofs took, of `MAX_WORK`. -/
+  work : Nat
 
 /-- The distinct `dsg:` inputs that the tapes of the proved and the refuted cells read. -/
 def dsgInputs (cells : Array Settled) : Nat :=
@@ -149,6 +179,7 @@ structure Found where
   cells : Array Settled := #[]
   ignored : Option Nat := none
   dsgInputs : Nat := 0
+  work : Nat := 0
 
 /-- Shape, then types, then the deck of rules and the parts when `--rules` names a deck,
 then the cells. A broken rule of a group before the cells is a finding, and with a finding
@@ -178,13 +209,14 @@ def rules (cardHash : String) (card design deck : Except String ByteArray)
     | none => pure #[]
   if !(← get).isEmpty then return {}
   let some rules := rules? |
-    let settled : StateM Caches (Array Settled × Nat) := (cells?.getD #[]).foldlM (init := (#[], 0)) fun (out, spent) cell => do
-      let (found, spent) ← settle card deck cell spent
-      return (out.push found, spent)
-    let cells := (Id.run (settled.run' {})).1
-    return { cells, dsgInputs := dsgInputs cells }
+    let signed := Signed.of card deck
+    let settled : StateM Caches (Array Settled × Nat) := (cells?.getD #[]).foldlM (init := (#[], MAX_WORK)) fun (out, left) cell => do
+      let (found, left) ← settle signed cell left
+      return (out.push found, left)
+    let (cells, left) := Id.run (settled.run' {})
+    return { cells, dsgInputs := dsgInputs cells, work := MAX_WORK - left }
   match Id.run ((cells rules card parts (hints?.getD #[])).run' {}) with
-  | .ok made => return { cells := made.cells, ignored := some made.ignored, dsgInputs := made.dsgInputs }
+  | .ok made => return { cells := made.cells, ignored := some made.ignored, dsgInputs := made.dsgInputs, work := made.work }
   | .error why =>
     modify (·.push ⟨"limits", "design", "parts", why⟩)
     return {}
@@ -204,6 +236,6 @@ def check (card design deck : Except String ByteArray) (deckOfRules proofs : Opt
     else .pass
   let hashes := [("card", hash card), ("design", hash design), ("deck", hash deck), ("rules", deckOfRules.bind hash)]
   { verdict, hashes, findings, cells, cellsFrom := if deckOfRules.isSome then "rules" else "proofs",
-    ignored := found.ignored, dsgInputs := found.dsgInputs }
+    ignored := found.ignored, dsgInputs := found.dsgInputs, work := found.work }
 
 end Petra

@@ -35,11 +35,15 @@ import PetraProofs.Rule
 #print axioms Petra.Node.enclose_sound
 #print axioms Petra.Node.enclose_valid
 #print axioms Petra.pick_sound
+-- one step with its price
+#print axioms Petra.pickPriced_ok
+#print axioms Petra.folded_ok
+#print axioms Petra.Node.tries_sound
 -- the walk and the rule
 #print axioms Petra.Tape.wellFormed_ok
 #print axioms Petra.Tape.needed_spec
 #print axioms Petra.Tape.eval_sound
-#print axioms Petra.Partition.leaves_cover
+#print axioms Petra.Tape.walk_sound
 #print axioms Petra.Tape.proved_sound_exact
 #print axioms Petra.Tape.refuted_sound_exact
 #print axioms Petra.Tape.proved_sound

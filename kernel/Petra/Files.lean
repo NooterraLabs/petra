@@ -23,29 +23,17 @@ def MAX_NAME : Nat := 64
 def MAX_CELLS : Nat := 10000
 
 /-- The most steps the kernel takes to write the tapes of one design from a deck of rules.
-A step is one name or one operator of a rule, each time the rule is written for a part and
-a load case, or one node of a tape. -/
+A step is one name or one operator of a rule and each thing the operator reads, each time
+the rule is written for a part and a load case, or one node of a tape. -/
 def MAX_STEPS : Nat := 10000000
 
-/-- The most evaluations the kernel spends on the proofs of one verdict. An evaluation is one
-node of a tape, or one node it reads, on one leaf of a partition or at one point. -/
-def MAX_EVALS : Nat := 20000000
+/-- The most bytes the verdict prints of the reasons of the cells it makes from a deck of
+rules. Those cells are the parts times the lines of the grid, so their reasons are not held
+by the size of the files as the cells of proofs.json are. -/
+def MAX_REASONS : Nat := 500000
 
-/-- What the kernel says of a proof it does not try because the budget is spent. -/
-def SPENT : String :=
-  s!"this proof would take the kernel past the {MAX_EVALS} evaluations it spends on one verdict, so it is not tried"
-
-/-- The leaves of a partition. -/
-def Partition.count : Partition → Nat
-  | .leaf => 1
-  | .split _ _ below above => below.count + above.count
-
-/-- The evaluations one leaf or one point costs: each node, and each node it reads. -/
-def Tape.cost (t : Tape) : Nat :=
-  t.nodes.foldl (init := 0) fun n node => n + 1 + match node with
-    | .add a | .mul a | .min a | .max a => a.size
-    | .pick cases => 2 * cases.size
-    | _ => 2
+/-- What a cell says in place of its reason once the reasons before it took `MAX_REASONS`. -/
+def UNSAID : String := "past what the verdict prints of reasons"
 
 /-- The bytes the verdict prints for a text, between its quotes. -/
 def printed (s : String) : Nat := (Json.str s).compress.utf8ByteSize - 2
@@ -314,15 +302,17 @@ def readCond : Nat → Json → Except String Cond
     | _ => throw "not a condition of this format"
 
 /-- The cases of a pick: at least one, each a condition and a node, where only the last may
-have null for its condition. -/
+have null for its condition. Their conditions hold at most `MAX_ORDERS` orders between them. -/
 def readCases (cases : Array Json) : Except String (Array (Option Cond × Nat)) := do
   if cases.isEmpty then throw "a pick of no cases"
-  cases.mapIdxM fun n case => do
+  let found ← cases.mapIdxM fun n case => do
     let [cond, value] := (← case.getArr?).toList | throw "a case of a pick is not a condition and a node"
     if cond.isNull then
       unless n + 1 == cases.size do throw "null is the condition of a case that is not the last"
       return (none, ← value.getNat?)
     return (some (← readCond MAX_COND_DEPTH cond), ← value.getNat?)
+  if orders found > MAX_ORDERS then throw s!"the conditions of a pick hold {orders found} orders, over the budget of {MAX_ORDERS}"
+  return found
 
 def readNode (j : Json) : Except String Node := do
   let ids (a : Array Json) : Except String (Array Nat) := a.mapM (·.getNat?)

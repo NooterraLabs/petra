@@ -38,7 +38,7 @@ from typing import Any, Callable, Iterator, Mapping
 
 from . import deck as rows
 from . import export
-from .deck import NONE, RowError, Vector, dimension, quantity, show
+from .deck import ANCHOR_KEYS, NONE, RowError, Vector, dimension, only, quantity, show
 from .ir import Bound, Component, Design, Fixed, ParamRef, Ref, Span, Text
 from .kernel import (Abs, Add, Const, Div, Exp, Interval, KernelArithmeticError, Ln, Max, Min, Mul, Neg, Pi, PowInt, Sqrt, Sym,
                      enclose)
@@ -168,9 +168,12 @@ def _name(name: Any) -> bool:
 
 def _field(body: Mapping[str, Any], load: bool = False) -> Field:
     allowed = {"name", "what", "dim", "least"} if load else {"name", "what", "dim", "least", "one_of", "type", "as", "signed", "whole"}
-    if set(body) - allowed or sum(key in body for key in ("dim", "one_of", "type")) != 1 or not (isinstance(body.get("what"), str) and body["what"]) or not _name(body.get("name")):
+    only(body, tuple(sorted(allowed)), f"field {body.get('name')!r}")
+    if sum(key in body for key in ("dim", "one_of", "type")) != 1 or not (isinstance(body.get("what"), str) and body["what"]) or not _name(body.get("name")):
         raise DeckError(f"field {body.get('name')!r}: it has a name of letters, digits and _, `what`, a text, and one of `dim`, `one_of` and `type`, and may have {', '.join(sorted(allowed))}")
     name = body["name"]
+    only(body, ("name", "what", "one_of") if "one_of" in body else ("name", "what", "type", "as") if "type" in body
+         else ("name", "what", "dim", "least", "signed", "whole"), f"field {name}")
     if "one_of" in body:
         keys = tuple(str(k) for k in body["one_of"])
         if not keys or len(set(keys)) != len(keys):
@@ -283,9 +286,13 @@ class _Binder(rows._Reader):
 def _rule(body: Mapping[str, Any], deck_rows: Mapping[str, rows.Row], types: Mapping[str, Type]) -> Rule:
     where = body.get("id")
     try:
-        if set(body) - {"id", "type", "mechanism", "anchor", "says", "when", "let", "where", "le"} or not isinstance(where, str) or _long(where):
+        only(body, ("id", "type", "mechanism", "anchor", "says", "when", "let", "where", "le"), "a rule")
+        if not isinstance(where, str) or _long(where):
             raise RowError(f"a rule has id, of at most {MAX_NAME} characters, type, mechanism, anchor, says, le, and may have when, let and where")
         anchor = dict(body["anchor"])
+        only(anchor, ANCHOR_KEYS, "anchor")
+        for w in body.get("where", []):
+            only(w, ("le", "why"), "where")
         if not anchor.get("standard") or not anchor.get("clause") or not body.get("says"):
             raise RowError("a rule says what it states, and its anchor has a standard and a clause")
         binder = _Binder(deck_rows, types[body["type"]], types)
@@ -318,13 +325,16 @@ def read_deck(text: str) -> Deck:
     """A deck from the text of its file. Raises DeckError for one that does not hold together."""
     try:
         body = json.loads(text)
-        if body.get("format") != FORMAT or set(body) - {"format", "name", "about", "rows", "types", "grid", "rules"}:
+        only(body, ("format", "name", "about", "rows", "types", "grid", "rules"), "a deck")
+        if body.get("format") != FORMAT:
             raise DeckError(f"a deck has format {FORMAT}, name, about, rows, types, grid and rules")
         found = [rows.read(r) for r in body["rows"]]
         wrong = [f"{r.id}: {p}" for r in found for p in r.problems]
         if wrong:
             raise DeckError("; ".join(wrong))
         deck_rows = _named(found, "rows", lambda r: r.id)
+        for t in body["types"]:
+            only(t, ("type", "what", "fields", "loads"), f"type {t.get('type')!r}")
         types = _named([Type(t["type"], t["what"], _named([_field(f) for f in t["fields"]], "fields", lambda f: f.name),
                              _named([_field(f, True) for f in t.get("loads", [])], "loads", lambda f: f.name)) for t in body["types"]],
                        "types", lambda t: t.name)
@@ -336,7 +346,11 @@ def read_deck(text: str) -> Deck:
         asks = []
         for a in body["grid"]:
             anchor, unless = dict(a["anchor"]), a.get("unless")
-            if set(a) - {"type", "mechanism", "what", "anchor", "unless"} or not anchor.get("standard") or not anchor.get("clause") or a["type"] not in types \
+            only(a, ("type", "mechanism", "what", "anchor", "unless"), f"grid {a.get('mechanism')}")
+            only(anchor, ANCHOR_KEYS, f"grid {a.get('mechanism')}: anchor")
+            if unless is not None:
+                only(unless, ("why", "when"), f"grid {a.get('mechanism')}: unless")
+            if not anchor.get("standard") or not anchor.get("clause") or a["type"] not in types \
                     or _long(a["mechanism"]):
                 raise DeckError(f"grid {a.get('mechanism')}: a line has a type of the deck, mechanism, of at most {MAX_NAME} characters, what, anchor and may have unless")
             when = _Binder(deck_rows, types[a["type"]], types).static(unless["when"]) if unless is not None and "when" in unless else None

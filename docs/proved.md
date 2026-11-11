@@ -6,10 +6,12 @@
 
 A tape states that every root is at most zero for all values of the inputs in their ranges ([format.md](format.md)).
 
-- If `Tape.proved` succeeds from valid caches, then at every point of the box every root has a value, and the value is at most zero. This is `Tape.proved_sound`.
-- If `Tape.refuted` succeeds from valid caches, the point lies in the box and the root it names has a value above zero there. This is `Tape.refuted_sound`.
+- If `Tape.proved` returns no failure from valid caches, then at every point of the box every root has a value, and the value is at most zero. This is `Tape.proved_sound`.
+- If `Tape.refuted` returns no failure from valid caches, the point lies in the box and the root it names has a value above zero there. This is `Tape.refuted_sound`.
 
 Both hold for any tape, with `sqrt`, `pi`, `ln` and `exp` nodes or without. Neither takes a hypothesis about the kernel, and no proof uses `sorry` or an axiom beyond Lean's standard three.
+
+`Tape.proved` and `Tape.refuted` take the work their verdict has left, and give back what is left with the failure, if there is one ([format.md](format.md), "Work"). Both theorems hold for any amount of work. A step that cannot pay returns a failure. An enclosure the walk gave up is marked as a failure. So neither can stand behind a root that is proved, and the theorems need nothing of the costs or of the bookkeeping.
 
 A box is one range for each input. A point of the box is one real number for each input, inside its range. A cache is valid when every pair it stores for a number holds that number's logarithm, or its exponential. The kernel starts from the empty caches, which are valid, and each theorem also says that the caches stay valid.
 
@@ -67,7 +69,7 @@ In `proofs/PetraProofs/Rounded.lean`.
 
 | Theorem | Says |
 |---|---|
-| `grid_sound` | If every enclosure `enc p` holds `x`, the two grid points that `grid enc` returns have `x` between them. |
+| `grid_sound` | If every enclosure `enc p` holds `x`, the two grid points that `grid enc extra` returns have `x` between them, whichever enclosure `extra` names. |
 | `iSqrt_sound` | If `iSqrt a` returns `r`, then `x` is at least zero and `r` holds the square root of `x`. |
 | `piIv_sound` | If `piIv` returns `r`, then `r` holds pi. |
 | `iLn_sound` | If `iLn a` returns `r`, then `x` is above zero, `r` holds ln `x`, and the caches stay valid. |
@@ -84,6 +86,20 @@ In `proofs/PetraProofs/Step.lean`.
 | `Node.enclose_sound` | Take a point of the box. If the enclosure of every node that this node reads holds that node's value at the point, and `Node.enclose` returns `r` from valid caches, then this node has a value at the point and `r` holds it. |
 | `Node.enclose_valid` | A step keeps the caches valid. |
 | `Node.enclose_exact` | The step of a node other than `sqrt`, `pi`, `ln` and `exp` does not read the caches and does not change them. |
+
+A step of `ln` or `exp` rounds from the enclosure its `extra` names. Each theorem above holds for any `extra`.
+
+### One step with its price
+
+In `proofs/PetraProofs/Eval.lean`. The walk does not call `Node.enclose` and `pick` alone: it calls them through functions that take the work left, charge the step, and give back what is left.
+
+| Theorem | Says |
+|---|---|
+| `Node.tries_sound` | `Node.tries` asks for one enclosure after another until the grid can round, and pays for each. If it returns an enclosure, some call of `Node.enclose` returned it, so it holds the node's value. It keeps the caches valid whatever it returns. |
+| `folded_ok` | `folded` is the fold of a sum or a product with each term paid for. If it returns an enclosure, the fold of `Node.enclose` returns the same one. |
+| `pickPriced_ok` | If `pickPriced` returns an enclosure, `pick` returns the same one. |
+
+Running out of work returns a failure in each of the three, so none of them says anything of that case.
 
 ### The pick node
 
@@ -104,10 +120,10 @@ In `proofs/PetraProofs/Eval.lean` and `proofs/PetraProofs/Rule.lean`.
 |---|---|
 | `Tape.wellFormed_ok` | A tape that `Tape.wellFormed` accepts has nodes that read only earlier nodes, input nodes that name an input, and roots that name a node. |
 | `Tape.needed_spec` | `Tape.needed` marks every root, and with a marked node every node it reads. |
-| `Tape.eval_sound` | After `Tape.eval`, the enclosure of every marked node that did not fail holds that node's value at every point of the box. |
-| `Partition.leaves_cover` | Every point of the box lies in some leaf of the partition. |
-| `Tape.proved_sound` | For any tape, from valid caches: if `Tape.proved` succeeds, every root has a value at most zero at every point of the box, and the caches stay valid. |
-| `Tape.refuted_sound` | For any tape, from valid caches: if `Tape.refuted` succeeds, the point lies in the box and the root it names has a value above zero there, and the caches stay valid. |
+| `Tape.eval_sound` | After `Tape.eval`, the enclosure of every marked node that has no failure holds that node's value at every point of the box. A node whose enclosure was given up has a failure. |
+| `Tape.walk_sound` | If the walk over the leaves of a partition returns no failure, every root has a value at most zero at every point of the box. A split hands the points at or below its cut to one half and the points at or above it to the other, so every point is walked. |
+| `Tape.proved_sound` | For any tape, from valid caches and with any work: if `Tape.proved` returns no failure, every root has a value at most zero at every point of the box, and the caches stay valid. |
+| `Tape.refuted_sound` | For any tape, from valid caches and with any work: if `Tape.refuted` returns no failure, the point lies in the box and the root it names has a value above zero there, and the caches stay valid. |
 | `Tape.proved_sound_exact`, `Tape.refuted_sound_exact` | The same two for a tape with no `sqrt`, `pi`, `ln` or `exp` node, from any caches. Such a tape reads no cache. |
 
 ## How the loops came to be proved
@@ -130,10 +146,27 @@ The change moved no result that was looked at:
 
 That the old and the new agree on every input cannot be proved, for the reason above, and does not need to be: the theorems are about the functions the kernel has now.
 
+## How the walk came to pay for its work
+
+Until 2026-11-11 `Tape.proved` listed every leaf of a partition before it walked one, `Tape.eval` kept every enclosure of a leaf, and nothing counted the size of the numbers a step read. A file under 1 MB could keep the kernel busy for minutes or make it hold over a gigabyte. The functions the theorems are about changed in four ways, and the proofs changed with them.
+
+| Change | In the proofs |
+|---|---|
+| `grid` rounds from one enclosure a call, and `Node.tries` asks for the next when the grid cannot round, paying for each. Before, `grid` tried all four itself. | `grid_sound` is about one enclosure. `Node.tries_sound` is new. |
+| `Tape.eval` charges each step before it takes it, gives up an enclosure after the last node that reads it, and holds at most `MAX_HELD` words. | `Tape.eval_sound` says nothing of a node with a failure, and a node that was given up, or that could not pay, has one. |
+| `Tape.proved` walks the leaves one at a time (`Tape.walk`). `Partition.leaves` is gone. | `Tape.walk_sound` replaces `Partition.leaves_cover`. |
+| `Tape.proved` and `Tape.refuted` return their failure as a value, with the work left. Before, they threw it, and the work a failed proof had spent was lost with the rest of its state. | The two theorems are about the calls that return no failure. |
+
+The caches hold at most 1,024 entries each, and a full one starts again. A cache was valid when every entry was right, and still is: `lnPoint` and `expPoint` add right entries and drop others.
+
+The change moved no result that was looked at. The kernel built before the change and the kernel built after it printed the same bytes, apart from the new line `work`, and exited with the same code, on every bundle the corpus exports: 244 runs, of which 26 read a deck of rules.
+
 ## What is not proved
 
 - Anything in `Petra/Check.lean`, `Petra/Files.lean`, `Petra/Deck.lean`, `Petra/Grid.lean`, `Petra/Quantity.lean`, `Petra/Sha256.lean` and `Main.lean`: reading the files, the test on the labels and ranges of a tape's inputs, writing a tape from a rule of a deck, the list of cells, the hash, and the verdict. The theorems start at a tape, a partition and a point.
 - That the program computes what the definitions say. The theorems are about the definitions as the logic reads them. Lean's compiler and its runtime, with their arithmetic on large numbers, arrays and hash maps, turn the definitions into the program, and they are trusted. `proofs/check_axioms.py` holds the two kernel files to no attribute that would give a definition other code to run.
+- That a verdict takes no longer than its work allows. The costs in `Petra/Tape.lean` are estimates fitted to measurements. No theorem reads them, and a wrong one changes how long a verdict takes and nothing else.
+- That `Tape.last` names the last node that reads each node. A wrong entry would give an enclosure up early. The node is then marked as failed, a node that reads it afterwards fails, and the cell is open. The theorems hold whatever `Tape.last` returns.
 - That the kernel and the Python kernel give the same ends.
 - That a tape's formula is the one a standard states. [format.md](format.md) lists this among what the kernel does not check.
 
@@ -146,6 +179,7 @@ No case was found where an operation returns an interval that fails to hold the 
 - `iLn` calls `lnPoint` on the upper end without a test that it is above zero. For an interval with its ends the wrong way round, the cache gains an entry under a key that is not positive. No number lies in such an interval, and nothing reads the entry as a logarithm.
 - In `compared`, the removal of duplicate pairs is not needed for the result to be right. In `order`, the branch `none => .eq` is never reached for a condition of the same pick.
 - `grid` tests `hi - lo ≤ 1`. The test makes the result tight. It plays no part in whether the result holds the value.
+- `Partition.shape` checks that a partition is at most 64 deep and that each split is of an input of the tape, strictly inside its range. The walk covers the box without any of it: a split of an input the tape lacks leaves both halves the whole box, and a cut outside the range leaves one half with no point in it.
 
 ## The axioms
 
@@ -177,10 +211,13 @@ No case was found where an operation returns an interval that fails to hold the 
 'Petra.Node.enclose_sound' depends on axioms: [propext, Classical.choice, Quot.sound]
 'Petra.Node.enclose_valid' depends on axioms: [propext, Classical.choice, Quot.sound]
 'Petra.pick_sound' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Petra.pickPriced_ok' depends on axioms: [propext, Quot.sound]
+'Petra.folded_ok' depends on axioms: [propext, Quot.sound]
+'Petra.Node.tries_sound' depends on axioms: [propext, Classical.choice, Quot.sound]
 'Petra.Tape.wellFormed_ok' depends on axioms: [propext, Quot.sound]
 'Petra.Tape.needed_spec' depends on axioms: [propext, Classical.choice, Quot.sound]
 'Petra.Tape.eval_sound' depends on axioms: [propext, Classical.choice, Quot.sound]
-'Petra.Partition.leaves_cover' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Petra.Tape.walk_sound' depends on axioms: [propext, Classical.choice, Quot.sound]
 'Petra.Tape.proved_sound_exact' depends on axioms: [propext, Classical.choice, Quot.sound]
 'Petra.Tape.refuted_sound_exact' depends on axioms: [propext, Classical.choice, Quot.sound]
 'Petra.Tape.proved_sound' depends on axioms: [propext, Classical.choice, Quot.sound]
@@ -218,7 +255,7 @@ On Linux for aarch64, the build of this toolchain that the build machine has shi
 | `PetraProofs/Rounded.lean` | `grid`, `iSqrt`, `piIv`, `iLn`, `iExp` and the caches |
 | `PetraProofs/Step.lean` | One step of a tape |
 | `PetraProofs/Pick.lean` | The pick node |
-| `PetraProofs/Eval.lean` | `wellFormed`, `needed` and `eval` |
-| `PetraProofs/Rule.lean` | Partitions, `proved` and `refuted` |
+| `PetraProofs/Eval.lean` | `wellFormed`, `needed`, one step with its price, and `eval` |
+| `PetraProofs/Rule.lean` | The walk over the leaves, `proved` and `refuted` |
 | `PetraProofs/Axioms.lean` | The `#print axioms` lines |
 | `check_axioms.py` | The build, the check of the axioms, and the check of the sources |

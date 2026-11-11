@@ -213,36 +213,41 @@ def Split.partition (labels : Array String) : Split → Except String Partition
 /-- The state the hints settle a tape on: proved by the first partition that proves every
 root, or refuted by the first point that refutes root 0 when `refutable`, and open with the
 first reason otherwise. The tape is the kernel's, with the ranges the card and the design
-give, so a point is inside them or refutes nothing. `spent` is the evaluations the proofs
-before this one took, and the result holds it with this one's. A try that would take it
-past `MAX_EVALS` is not made. -/
-def byHints (tape : Tape) (hints : Array Hint) (refutable : Bool) (spent : Nat) : StateM Caches (State × String × Nat) := do
+give, so a point is inside them or refutes nothing. `left` is the work the proofs before
+this one left of `MAX_WORK`, and the result holds what this one leaves. A try pays for
+itself as it goes, and one that cannot pay for the tape once is not made. -/
+def byHints (tape : Tape) (hints : Array Hint) (refutable : Bool) (left : Nat) : StateM Caches (State × String × Nat) := do
   let labels := tape.inputs.map (·.label)
+  let least := tape.fee 1
   let mut reason := ""
-  let mut spent := spent
+  let mut left := left
   for hint in hints do
-    let mut tries : Array (State × Nat × M Unit) := #[]
+    let mut tries : Array (State × (Nat → M (Option String × Nat))) := #[]
     if let some split := hint.partition then
       match split.partition labels with
-      | .ok partition => tries := tries.push (.proved, tape.cost * partition.count, tape.proved partition)
+      | .ok partition => tries := tries.push (.proved, tape.proved partition)
       | .error why => if reason.isEmpty then reason := why
     if let (some point, true) := (hint.point, refutable) then
-      tries := tries.push (.refuted, tape.cost, do
-        let values ← tape.inputs.mapM fun input => match point.find? (·.1 == input.label) with
-          | some (_, x) => pure x
-          | none => throw s!"the point has no value for {input.label}"
-        tape.refuted values 0)
-    for (state, cost, proof) in tries do
-      if spent + cost > MAX_EVALS then
+      tries := tries.push (.refuted, fun left =>
+        let given := Std.HashMap.ofList point.toList
+        match tape.inputs.mapM fun input => given.get? input.label with
+        | some values => tape.refuted values 0 left
+        | none =>
+          let lacks := (tape.inputs.find? fun input => !given.contains input.label).map (·.label)
+          pure (some s!"the point has no value for {lacks.getD ""}", left))
+    for (state, proof) in tries do
+      if left < least then
         if reason.isEmpty then reason := SPENT
       else
-        spent := spent + cost
-        match proof.run (← get) with
-        | .ok (_, caches) =>
+        match (proof left).run (← get) with
+        | .ok ((none, after), caches) =>
           set caches
-          return (state, "", spent)
+          return (state, "", after)
+        | .ok ((some why, after), _) =>
+          left := after
+          if reason.isEmpty then reason := why
         | .error why => if reason.isEmpty then reason := why
-  return (.undecided, if reason.isEmpty then "proofs.json has no partition and no point for it" else reason, spent)
+  return (.undecided, if reason.isEmpty then "proofs.json has no partition and no point for it" else reason, left)
 
 /-- What `cells` gives: every cell, how many hints name no cell the kernel has, and how many
 distinct `dsg:` inputs the tapes of the proved and the refuted cells read. -/
@@ -250,6 +255,16 @@ structure Made where
   cells : Array Settled
   ignored : Nat
   dsgInputs : Nat
+  /-- The work the proofs took, of `MAX_WORK`. -/
+  work : Nat
+
+/-- The cells with their reasons held to `MAX_REASONS` bytes between them: a reason that
+would go past it is replaced by `UNSAID`. -/
+def said (cells : Array Settled) : Array Settled :=
+  (cells.foldl (fun (out, room) s =>
+    if s.reason.isEmpty then (out.push s, room)
+    else if printed s.reason ≤ room then (out.push s, room - printed s.reason)
+    else (out.push { s with reason := UNSAID }, 0)) (#[], MAX_REASONS)).1
 
 /-- Every cell of the design, in the order petra/grid.py lists them: for each part, each
 mechanism the grid asks of its type, and then each field that nothing reads. An error when
@@ -264,6 +279,7 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (hints : Array Hint
   let asksOf := grouped rules.asks (·.kind)
   let rulesOf := grouped rules.rules (·.kind)
   let named := firsts parts (·.name)
+  let answered : Std.HashSet String := rules.rules.foldl (fun found r => found.insert r.mechanism) {}
   let cell (subject mechanism entry : String) (state : State) (reason : String := "") (waiver : Option (Nat × Waiver) := none) : Settled :=
     let claims := hintsFor subject mechanism entry
     { cell := { subject, mechanism, entry, state := (claims[0]?.map (·.state)).getD .undecided, tape := none,
@@ -275,7 +291,7 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (hints : Array Hint
   let mut ranges : Std.HashSet (String × String × String) := {}
   let mut dsg : Std.HashSet String := {}
   let mut steps := 0
-  let mut evals := 0
+  let mut left := MAX_WORK
   for part in parts do
     for ask in asksOf.getD part.kind.name #[] do
       if out.size > MAX_CELLS then return .error over
@@ -287,7 +303,7 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (hints : Array Hint
       else
         let answers := (rulesOf.getD ask.kind #[]).filter fun r => r.mechanism == ask.mechanism && r.condition.all (·.holds part)
         if answers.isEmpty then
-          let other := if rules.rules.any (·.mechanism == ask.mechanism) then " on a part like this one" else ""
+          let other := if answered.contains ask.mechanism then " on a part like this one" else ""
           out := out.push (pending "" s!"the deck has no rule for it{other}")
         for rule in answers do
           let tail := (rule.id.splitOn "/").getLast!
@@ -303,7 +319,7 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (hints : Array Hint
           if unders.isEmpty then out := out.push (pending tail s!"no load case puts every load the rule reads on {part.name}")
           for under in unders do
             if out.size > MAX_CELLS then return .error over
-            steps := steps + rule.steps.size * (if rule.ranges.isEmpty then 1 else 2)
+            steps := steps + rule.weight * (if rule.ranges.isEmpty then 1 else 2)
             if steps > MAX_STEPS then return .error long
             let entry := match under with
               | some under => s!"{tail}/{under}"
@@ -317,8 +333,8 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (hints : Array Hint
               | .ok tape =>
                 steps := steps + tape.nodes.size
                 ranges := ranges.insert (part.name, ask.mechanism, entry ++ "/where")
-                let (state, reason, spent) ← byHints tape (hintsFor part.name ask.mechanism (entry ++ "/where")) false evals
-                evals := spent
+                let (state, reason, after) ← byHints tape (hintsFor part.name ask.mechanism (entry ++ "/where")) false left
+                left := after
                 if state == .proved then
                   out := out.push (cell part.name ask.mechanism (entry ++ "/where") .proved)
                   dsg := dsgOf tape dsg
@@ -329,8 +345,8 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (hints : Array Hint
             | .error why => out := out.push (pending entry why)
             | .ok tape =>
               steps := steps + tape.nodes.size
-              let (state, reason, spent) ← byHints tape (hintsFor part.name ask.mechanism entry) true evals
-              evals := spent
+              let (state, reason, after) ← byHints tape (hintsFor part.name ask.mechanism entry) true left
+              left := after
               out := out.push (cell part.name ask.mechanism entry state reason)
               if state == .proved || state == .refuted then dsg := dsgOf tape dsg
   let mut read : Std.HashSet (String × String) := {}
@@ -350,6 +366,7 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (hints : Array Hint
         out := out.push (cell part.name "unread" field.name .undecided s!"no rule of the deck reads {part.name}.{field.name}, so nothing checks it")
   if out.size > MAX_CELLS then return .error over
   let made := out.foldl (fun made s => made.insert (s.cell.subject, s.cell.mechanism, s.cell.entry)) ranges
-  return .ok { cells := out, ignored := (hints.filter fun h => !made.contains (h.subject, h.mechanism, h.entry)).size, dsgInputs := dsg.size }
+  return .ok { cells := said out, ignored := (hints.filter fun h => !made.contains (h.subject, h.mechanism, h.entry)).size,
+               dsgInputs := dsg.size, work := MAX_WORK - left }
 
 end Petra
