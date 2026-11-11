@@ -53,6 +53,9 @@ MAX_LEAVES = 256
 """The most leaves a partition may have before the search for a proof stops."""
 MAX_CORNERS = 6
 """A refuting point is looked for at the corners of the box while no more inputs than this have a range."""
+MAX_NAME = 64
+"""The most bytes a name may print in that a cell prints whole, as in kernel/Petra/Files.lean:
+the name of a part, a load case, a mechanism, a field, a load, a joined part and a `let`, and a rule's id."""
 
 
 class DeckError(ValueError):
@@ -149,11 +152,18 @@ def _anchor(a: Mapping[str, str]) -> str:
     return " ".join(parts[:2]) + "".join(f", {p}" for p in parts[2:])
 
 
+def _long(name: Any) -> bool:
+    """Whether the kernel would print this name in more than MAX_NAME bytes, counted as
+    `printed` in kernel/Petra/Files.lean counts them: two for a quote, a backslash and a
+    line end, six for any other control character, and the bytes of its UTF-8 otherwise."""
+    return isinstance(name, str) and sum(2 if c in '"\\\n\r' else 6 if c < " " else len(c.encode("utf-8", "surrogatepass")) for c in name) > MAX_NAME
+
+
 def _name(name: Any) -> bool:
     """Whether this can name a field, a load, a joined part or a `let`: letters, digits and
-    `_`, as the language writes a name. So `a.Fy` is always a field of a joined part, and
-    no name reads as a number, a load or a row."""
-    return isinstance(name, str) and name.isascii() and name.isidentifier()
+    `_`, as the language writes a name, and at most MAX_NAME of them. So `a.Fy` is always a
+    field of a joined part, and no name reads as a number, a load or a row."""
+    return isinstance(name, str) and name.isascii() and name.isidentifier() and not _long(name)
 
 
 def _field(body: Mapping[str, Any], load: bool = False) -> Field:
@@ -273,8 +283,8 @@ class _Binder(rows._Reader):
 def _rule(body: Mapping[str, Any], deck_rows: Mapping[str, rows.Row], types: Mapping[str, Type]) -> Rule:
     where = body.get("id")
     try:
-        if set(body) - {"id", "type", "mechanism", "anchor", "says", "when", "let", "where", "le"} or not isinstance(where, str):
-            raise RowError("a rule has id, type, mechanism, anchor, says, le, and may have when, let and where")
+        if set(body) - {"id", "type", "mechanism", "anchor", "says", "when", "let", "where", "le"} or not isinstance(where, str) or _long(where):
+            raise RowError(f"a rule has id, of at most {MAX_NAME} characters, type, mechanism, anchor, says, le, and may have when, let and where")
         anchor = dict(body["anchor"])
         if not anchor.get("standard") or not anchor.get("clause") or not body.get("says"):
             raise RowError("a rule says what it states, and its anchor has a standard and a clause")
@@ -326,8 +336,9 @@ def read_deck(text: str) -> Deck:
         asks = []
         for a in body["grid"]:
             anchor, unless = dict(a["anchor"]), a.get("unless")
-            if set(a) - {"type", "mechanism", "what", "anchor", "unless"} or not anchor.get("standard") or not anchor.get("clause") or a["type"] not in types:
-                raise DeckError(f"grid {a.get('mechanism')}: a line has a type of the deck, mechanism, what, anchor and may have unless")
+            if set(a) - {"type", "mechanism", "what", "anchor", "unless"} or not anchor.get("standard") or not anchor.get("clause") or a["type"] not in types \
+                    or _long(a["mechanism"]):
+                raise DeckError(f"grid {a.get('mechanism')}: a line has a type of the deck, mechanism, of at most {MAX_NAME} characters, what, anchor and may have unless")
             when = _Binder(deck_rows, types[a["type"]], types).static(unless["when"]) if unless is not None and "when" in unless else None
             asks.append(Ask(a["type"], a["mechanism"], a["what"], anchor, when, str(unless["why"]) if unless is not None else None))
         if len({(a.type, a.mechanism) for a in asks}) != len(asks):
@@ -448,6 +459,8 @@ def read_parts(design: Design, deck: Deck) -> Parts:
     not take, and anything of the card a deck does not read yet."""
     problems: list[str] = []
     parts: dict[str, Part] = {}
+    problems += [f"{_at(x.span)}: the name of a part and of a load case is at most {MAX_NAME} characters, and {x.name[:MAX_NAME]}... is longer"
+                 for x in (*design.components.values(), *design.loads.values()) if _long(x.name)]
     for c in design.components.values():
         kind, values = deck.types[c.kind], {}
         for attr in c.attrs:

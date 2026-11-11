@@ -5,13 +5,18 @@ with no verdict. Each test builds files that would do one of those without a lim
 reads the bounded answer. Most start from STRIPS, the deck made up for tests/test_grid.py.
 The tests are skipped when no kernel is built.
 """
+import copy
 import hashlib
 import json
 import time
 import unittest
+from unittest import mock
 
-from petra import export, verify
-from tests.test_grid import STRIPS, TEST
+import petra
+from petra import export, grid, verify
+from petra.models.base import ComponentError
+from petra.registry import build_registry
+from tests.test_grid import CARD, DESIGN, STRIPS, TEST
 from tests.test_kernel_attacks import run_raw
 from tests.test_kernel_grid import Kernel, ask, changed, findings, part, states, strips
 
@@ -122,6 +127,54 @@ class Names(Kernel):
         self.assertIllFormed(changed(strips(), "card", under("c" * (MAX_NAME + 1))), "shape card run.s.current: the name of a load case prints in at most 64 bytes")
         self.assertIn(("s", "strip.heat", "heat/" + "c" * MAX_NAME, "open"), states(ask(changed(strips(), "card", under("c" * MAX_NAME)))),
                       "a case of 64 characters is read, and no hint is for its cell")
+
+
+class TheGridsNames(unittest.TestCase):
+    """petra/grid.py holds a name to the same 64 bytes, counted the same way, so the grid and
+    the kernel refuse the same decks and the same designs (bench/kernel_grid.py)."""
+
+    def test_the_grid_refuses_a_deck_with_a_name_over_the_limit(self):
+        long = "m" * (MAX_NAME + 1)
+        line = {"type": "pad", "mechanism": long, "what": "made up", "anchor": TEST}
+        cases = {
+            "a mechanism": lambda r: r["grid"].append(line),
+            "a mechanism of eleven control characters, which print in 66 bytes": lambda r: r["grid"].append({**line, "mechanism": "\u0001" * 11}),
+            "a mechanism of 22 letters of two bytes and 21 of one": lambda r: r["grid"].append({**line, "mechanism": "\u00e9" * 22 + "a" * 21}),
+            "the id of a rule": lambda r: r["rules"][0].update(id="test/" + "m" * 60),
+            "a field": lambda r: r["types"][0]["fields"].append({"name": long, "dim": "length", "what": "made up"}),
+            "a name of let": lambda r: r["rules"][0].update({"let": {long: "1"}}),
+        }
+        for what, change in cases.items():
+            with self.subTest(what=what):
+                body = copy.deepcopy(STRIPS)
+                change(body)
+                with self.assertRaises(grid.DeckError):
+                    grid.read_deck(json.dumps(body))
+        at = copy.deepcopy(STRIPS)
+        at["grid"].append({**line, "mechanism": "\u00e9" * 22 + "a" * 20})
+        at["rules"][0]["id"] = "test/" + "m" * 59
+        self.assertEqual(grid.read_deck(json.dumps(at)).rules[0].id, "test/" + "m" * 59, "64 bytes are within the limit")
+
+    def test_the_grid_refuses_a_part_and_a_load_case_with_a_name_over_the_limit(self):
+        deck = grid.read_deck(json.dumps(STRIPS))
+
+        def check(card: str, design: str):
+            with mock.patch.object(grid, "decks", lambda: (deck,)):
+                return grid.check(petra.lang.parse_design(card, design, "strips.petra", build_registry()), deck)
+
+        self.assertEqual(check(CARD, DESIGN.replace("p1", "p" * MAX_NAME))[0].status, check(CARD, DESIGN)[0].status)
+        says = "the name of a part and of a load case is at most 64 characters"
+        with self.assertRaisesRegex(ComponentError, says):
+            check(CARD, DESIGN.replace("p1", "p" * (MAX_NAME + 1)))
+        with self.assertRaisesRegex(ComponentError, says):
+            check(CARD.replace("load run", "load " + "r" * (MAX_NAME + 1)), DESIGN)
+
+    @unittest.skipUnless(verify.binary(), "no petra-verify is built here and PETRA_VERIFY names none")
+    def test_the_kernel_refuses_the_same_two_designs(self):
+        said = ask(strips(design=DESIGN.replace("p1", "p" * (MAX_NAME + 1))))
+        self.assertIn("the name of a part prints in at most 64 bytes", findings(said))
+        said = ask(strips(card=CARD.replace("load run", "load " + "r" * (MAX_NAME + 1))))
+        self.assertIn("the name of a load case prints in at most 64 bytes", findings(said))
 
 
 @unittest.skipUnless(verify.binary(), "no petra-verify is built here and PETRA_VERIFY names none")

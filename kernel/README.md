@@ -23,6 +23,8 @@ The second command prints the verdict as JSON and exits 0 for PASS, 1 for FAIL, 
 
 For a design whose parts are of a deck of rules, such as `examples/deck/lap_pass.petra`, the export also writes `rules.json`, the deck's own file, and the kernel takes it as `--rules out/rules.json`. It then works out every cell from the deck itself.
 
+The verdict says which of the two it did, in `cells_from`, and prints the hash of each file it read. A PASS is about a deck of rules only when `hashes.rules` is the hash of the deck the reader trusts, and about the asker's card only when `hashes.card` is the asker's. [docs/format.md](../docs/format.md) says how to check both, under "Reading a verdict" and "The asker's card".
+
 ## With petra check
 
 `petra check` runs the kernel on its own report when it finds one. It looks for the file the environment variable `PETRA_VERIFY` names, then for `.lake/build/bin/petra-verify` here. Its `kernel` line says how many of the proofs behind the status the kernel checked, and `python corpus/run.py --kernel BINARY` gives the kernel's own verdict on every corpus design.

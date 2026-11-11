@@ -68,7 +68,7 @@ CORE_CAP = Limit(1000, "Set on 2026-11-08 at 140f742, where the core measured 95
                        "A new rule adds 3 to 5 lines to rules/__init__.py (inferred from its tables), so "
                        "the headroom covers the registry entries of several rules.")
 
-TRUSTED_CEILING = Limit(19122, "Set on 2026-11-08 at 140f742, where the trusted base measured 13,530 "
+TRUSTED_CEILING = Limit(19128, "Set on 2026-11-08 at 140f742, where the trusted base measured 13,530 "
                                "code lines: core 957, rules 457, outside the kernel 12,116. Raised on "
                                "2026-11-08 on branch parts-core as the parts layer replaces its scaffold: "
                                "classifying the scaffold measured 14,269, and the mesh reader with its "
@@ -113,6 +113,9 @@ TRUSTED_CEILING = Limit(19122, "Set on 2026-11-08 at 140f742, where the trusted 
                                "card and compare its hash with the one the kernel prints, and keeping the card's "
                                "givens in the design for the exporter to read, measured 19,122: seven lines in "
                                "petra/lang and petra/ir.py. "
+                               "The kernel holds a name that a cell prints whole to 64 bytes, so that its verdict "
+                               "stays small. The grid holds the same names to the same 64, counted the same way, so "
+                               "that the two refuse the same decks and designs: six lines in petra/grid.py, 19,128. "
                                "Raise it in the commit that needs more and say why here.")
 
 T2_ADOPTED = date(2026, 11, 8)

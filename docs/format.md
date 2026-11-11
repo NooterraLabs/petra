@@ -277,7 +277,7 @@ A name of 64 characters in ASCII prints in 64 bytes. A character outside ASCII p
 
 An evaluation is one node of a tape, or one node it reads, on one leaf of a partition or at one point. A proof costs the length of its tape counted that way, times its leaves, and the kernel adds up the proofs in the order of the cells. The largest design of the corpus takes 32,380. The budget bounds the count of evaluations and not their time: one evaluation of numbers of 65,536 bits takes far longer than one of small numbers.
 
-So a cell made from a deck of rules prints in at most about 600 bytes, and all of them in about 6 MB. A cell that proofs.json lists prints once, in under three times its own bytes. `petra/grid.py` has none of these limits. `petra check` reports a design past one as an input error, in the kernel's words.
+So a cell made from a deck of rules prints in at most about 600 bytes, and all of them in about 6 MB. A cell that proofs.json lists prints once, in under three times its own bytes. `petra/grid.py` holds a name to the same 64 bytes, counted the same way, so it refuses the same decks and designs. It has none of the other limits. `petra check` reports a design past the limit on cells or on steps as an input error, in the kernel's words. A proof the kernel does not try for the budget of evaluations leaves a cell open that the grid proved, and `petra check` stops with exit code 4 and the kernel's reason.
 
 ## What the kernel does not check yet
 
