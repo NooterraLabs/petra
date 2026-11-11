@@ -3,6 +3,7 @@
 Everything is under ~/.petra/exam, which is outside the repository and outside any synced
 folder. A fetched file is held to a pinned SHA-256 when the adapter states one, and the
 folder keeps SOURCE.json: each file's URL, its hash, and the version it was taken at.
+A grader's environment is made where the grader runs, which host.py knows.
 
 A request carries nothing of this machine: the user agent is a fixed word, and a URL holds
 only what the adapter pins.
@@ -12,18 +13,16 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import subprocess
-import sys
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 HOME = Path(os.environ.get("PETRA_EXAM_HOME") or Path.home() / ".petra" / "exam")
-"""Benchmark files, grader environments and run records. PETRA_EXAM_HOME names another place."""
+"""Benchmark files and run records, and on Linux the grader environments and a fetched
+sandbox too (host.py says where those are on Windows). PETRA_EXAM_HOME names another place."""
 DATA = HOME / "data"
 RUNS = HOME / "runs"
-VENV = HOME / "venv"
 AGENT = "benchmark-harness"
 LIMIT = 200 * 1024 * 1024
 """The largest file a fetch takes, in bytes."""
@@ -153,22 +152,8 @@ KEPT = ("PATH", "PATHEXT", "SYSTEMROOT", "SYSTEMDRIVE", "WINDIR", "COMSPEC", "TE
 
 
 def plain_env(**more: str) -> dict[str, str]:
-    """The environment a grader runs in: what a program needs to start, and `more`. A
-    grader runs code a model wrote, and a key or a token in this process's environment is
-    none of that code's business."""
+    """The environment of a command that leads to a grader: what a program needs to start,
+    and `more`. A grader runs code a model wrote, and a key or a token in this process's
+    environment is none of that code's business. In the sandbox the grader gets less
+    still (sandbox.PLAIN)."""
     return {**{name: os.environ[name] for name in KEPT if name in os.environ}, **more}
-
-
-def venv_python(name: str) -> Path:
-    """The interpreter of the grader environment of that name, whether or not it exists yet."""
-    return VENV / name / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
-
-
-def make_venv(name: str, packages: list[str]) -> Path:
-    """Create the grader environment and install the pinned packages into it. The system
-    Python and the repository's requirements are left alone."""
-    python = venv_python(name)
-    if not python.is_file():
-        subprocess.run([sys.executable, "-m", "venv", str(VENV / name)], check=True)
-    subprocess.run([str(python), "-m", "pip", "install", "--disable-pip-version-check", "--quiet", *packages], check=True)
-    return python
