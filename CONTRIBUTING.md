@@ -38,7 +38,9 @@ Each report in the third row takes 40 minutes or more to regenerate on four core
 
 ## Releases
 
-A release is a tag `v<version>` whose version matches `pyproject.toml`. Pushing the tag runs `.github/workflows/release.yml`, which builds the wheel and sdist, runs the suite, and publishes both to PyPI through trusted publishing. Links in the README that PyPI shows point into the repository at that tag.
+A release is a tag `v<version>` whose version matches `pyproject.toml`. Pushing the tag runs `.github/workflows/release.yml`, which builds the sdist and one wheel for each of five platforms, runs the suite, and publishes the six files to PyPI through trusted publishing. Links in the README that PyPI shows point into the repository at that tag.
+
+Each wheel carries the Lean kernel for its platform, so Petra installed from PyPI has the kernel check its verdicts. `.github/workflows/wheels.yml` builds each wheel on a runner of its platform, installs it in a fresh environment and has it check two designs. The `checks` workflow runs the same jobs on every push and keeps the wheels as artifacts. [kernel/README.md](kernel/README.md#in-a-wheel) lists the platforms, what each wheel asks of a machine, and how to build one yourself. The sdist carries no kernel.
 
 ## Changes to the kernel
 
