@@ -23,10 +23,21 @@ def MAX_NAME : Nat := 64
 /-- The most cells the kernel makes from a deck of rules. -/
 def MAX_CELLS : Nat := 10000
 
-/-- The most steps the kernel takes to write the tapes of one design from a deck of rules.
-A step is one name or one operator of a rule and each thing the operator reads, each time
-the rule is written for a part and a load case, or one node of a tape. -/
+/-- The most steps the kernel takes to make the cells of one design from a deck of rules and
+to write their tapes. A step is one name or one operator of a rule and each thing the
+operator reads, each time the rule is written for a part and a load case, or one node of
+a tape. Looking at a line of the grid or at a rule for a part is a step and one more for
+each part of its condition, and so is each load case looked at for each load a rule reads. -/
 def MAX_STEPS : Nat := 10000000
+
+/-- The most steps reading one deck of rules takes (docs/deck.md, "The size of a deck"):
+the size of its JSON, and the size of a row again for each time a rule applies it. The
+kernel counts them from the file before it reads a row. -/
+def MAX_READ : Nat := 1000000
+
+/-- The most bytes the name of the card and the name of the design may print in, for a
+design with parts. The label of every input of a tape holds one of them. -/
+def MAX_TITLE : Nat := 200
 
 /-- The most bytes the verdict prints of the reasons of the cells it makes from a deck of
 rules. Those cells are the parts times the lines of the grid, so their reasons are not held

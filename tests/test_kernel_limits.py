@@ -461,5 +461,86 @@ class Reasons(Kernel):
         self.assertEqual({c["reason"] for c in said["cells"]}, {"the kernel has no rule yet for a proof with no tape"})
 
 
+MAX_READ, MAX_TITLE = 1_000_000, 200
+"""The limits as kernel/Petra/Files.lean sets them."""
+
+
+def padded(steps: int) -> dict:
+    """STRIPS with a row of 1,000 names that one more rule applies 400 times, and a type with
+    a key of as many names as bring the deck to exactly `steps` steps to read: a name of
+    under 8 characters is 2 steps, and one of 8 characters is 3."""
+    body = copy.deepcopy(STRIPS)
+    body["rows"].append({"id": "test/wide", "anchor": TEST, "gives": {"name": "y", "dim": "area"},
+                         "takes": [{"name": "x", "dim": "area", "range": ["1 mm2", "2 mm2"]}], "is": ["add"] + ["x"] * 1000})
+    body["grid"].append({"type": "pad", "mechanism": "pad.wide", "what": "made up", "anchor": TEST})
+    body["rules"].append({"id": "test/wide", "type": "pad", "mechanism": "pad.wide", "anchor": TEST, "says": "made up",
+                          "let": {f"v{i}": ["row", "test/wide", {"x": "area"}] for i in range(400)}, "le": ["area", "v0"]})
+    body["types"].append({"type": "filler", "what": "made up", "fields": [{"name": "k", "what": "made up", "one_of": []}]})
+    names = body["types"][-1]["fields"][0]["one_of"]
+    gap = steps - grid._steps(body)
+    names.extend(["n" * 8] * (gap % 2) + [f"n{i}" for i in range((gap - 3 * (gap % 2)) // 2)])
+    assert names and grid._steps(body) == steps, grid._steps(body)
+    return body
+
+
+class Reading(Kernel):
+    """Reading a deck takes at most 1,000,000 steps (docs/deck.md, "The size of a deck"): the
+    size of its JSON, and the size of a row again each time a rule applies it. The kernel
+    and petra/grid.py make the count from the file and refuse the same decks."""
+
+    def test_the_grid_counts_the_first_deck_far_under_the_limit(self):
+        deck = next(d for d in grid.decks() if "lap" in d.types)
+        body = json.loads(deck.text)
+        self.assertEqual((grid._size(body), grid._steps(body)), (3874, 5500), "its file, and with the 14 times its rules apply a row")
+        self.assertLess(grid._steps(body) * 180, MAX_READ)
+
+    def test_the_count_is_the_size_of_the_file_and_of_a_row_for_each_time_a_rule_applies_it(self):
+        self.assertEqual([grid._size(t) for t in ("", "n" * 7, "n" * 8, "n" * 15, "n" * 16, "é" * 8, "𝄞" * 8)], [2, 2, 3, 3, 4, 3, 3],
+                         "a text is two, and one more for each eight characters, whatever bytes they take")
+        self.assertEqual([grid._size(v) for v in (0, 1.5, True, None, [], {}, [[]], {"key": []})], [1, 1, 1, 1, 1, 1, 2, 2], "a key is not counted")
+        row = {"id": "r", "is": ["add", "x", "x"]}
+        self.assertEqual(grid._size(row), 10, "the object, a text, and a list of three texts")
+        rule = {"id": "q", "le": [["row", "r", {"x": "f"}], ["row", "none", {}]], "let": {"a": ["mul", ["row", "r", {"x": "f"}], "2"]}}
+        body = {"format": "petra-rules/0", "rows": [row, {**row, "is": "x"}], "rules": [rule], "about": ["row", "r", {}]}
+        self.assertEqual(grid._steps(body), grid._size(body) + 2 * 10, "the first row of the id, for each list in a rule, and nowhere else")
+
+    def test_the_grid_reads_a_deck_of_a_million_steps_and_no_more(self):
+        self.assertEqual(grid.read_deck(json.dumps(padded(MAX_READ))).name, "test-strips")
+        with self.assertRaisesRegex(grid.DeckError, "reading this deck takes 1000001 steps, over the budget of 1000000"):
+            grid.read_deck(json.dumps(padded(MAX_READ + 1)))
+
+    @unittest.skipUnless(verify.binary(), "no petra-verify is built here and PETRA_VERIFY names none")
+    def test_the_kernel_reads_a_deck_of_a_million_steps_and_no_more(self):
+        honest = ask(strips())
+        at = ask({**strips(), "rules": json.dumps(padded(MAX_READ))})
+        self.assertEqual(at["findings"], [])
+        self.assertEqual([c for c in states(at) if c[1] != "pad.wide"], states(honest), "the deck is read, and the other cells are as before")
+        over = ask({**strips(), "rules": json.dumps(padded(MAX_READ + 1))})
+        self.assertEqual((over["verdict"], over["cells"]), ("ILL-FORMED", []))
+        self.assertEqual([(f["rule"], f["file"]) for f in over["findings"]], [("shape", "rules")])
+        self.assertIn("reading this deck takes 1000001 steps, over the budget of 1000000", over["findings"][0]["why"])
+
+    def test_the_name_of_a_card_is_at_most_200_bytes_for_a_design_with_parts(self):
+        deck = grid.read_deck(json.dumps(STRIPS))
+
+        def check(name: str):
+            with mock.patch.object(grid, "decks", lambda: (deck,)):
+                return grid.check(petra.lang.parse_design(CARD.replace('card "strips"', f'card "{name}"'), DESIGN, "strips.petra", build_registry()), deck)
+
+        self.assertEqual(check("n" * MAX_TITLE)[0].status, "PASS")
+        with self.assertRaisesRegex(ComponentError, "the name of the card is at most 200 characters"):
+            check("n" * (MAX_TITLE + 1))
+
+    @unittest.skipUnless(verify.binary(), "no petra-verify is built here and PETRA_VERIFY names none")
+    def test_the_kernel_holds_the_two_names_to_the_same_200_bytes(self):
+        """The label of each input of a tape holds the name of the card or of the design. A
+        name of 250,000 characters and 3,000 numbers made the kernel hold 0.8 GB."""
+        at = ask(strips(card=CARD.replace('card "strips"', 'card "' + "n" * MAX_TITLE + '"')))
+        self.assertEqual((at["verdict"], at["findings"]), ("PASS", []))
+        over = ask(strips(card=CARD.replace('card "strips"', 'card "' + "n" * (MAX_TITLE + 1) + '"')))
+        self.assertEqual([(f["rule"], f["file"], f["item"]) for f in over["findings"]], [("shape", "card", "name"), ("shape", "design", "name")])
+        self.assertIn("the name of the card prints in at most 200 bytes for a design with parts, and this one in 201", over["findings"][0]["why"])
+
+
 if __name__ == "__main__":
     unittest.main()

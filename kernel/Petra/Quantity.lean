@@ -38,10 +38,27 @@ def NAMED : List (String × Dim) := [
   ("energy", ENERGY), ("moment", ENERGY), ("current", { a := 1 }), ("voltage", { m := 2, kg := 1, s := -3, a := -1 }),
   ("power", { m := 2, kg := 1, s := -3 }), ("resistance", RESISTANCE)]
 
-/-- The digits of a natural number. A leading zero is allowed here: a deck writes `0.60`. -/
+/-- Ten to the eighteenth, which is under 2^63: `digits` reads eighteen digits into a machine
+word before it puts them on the number. -/
+def PIECE : Nat := 1000000000000000000
+
+/-- The number that the digits `cs` continue. `n` is the number so far without its last
+digits, `piece` is those digits and `scale` is ten to their count, so the number so far is
+`n * scale + piece`. A piece of eighteen digits is put on `n` with one product and one sum. -/
+def digitsGo : List Char → Nat → Nat → Nat → Nat
+  | [], n, piece, scale => n * scale + piece
+  | c :: cs, n, piece, scale =>
+    let piece := 10 * piece + (c.toNat - '0'.toNat)
+    let scale := 10 * scale
+    if scale == PIECE then digitsGo cs (n * PIECE + piece) 0 1 else digitsGo cs n piece scale
+
+/-- The digits of a natural number. A leading zero is allowed here: a deck writes `0.60`.
+
+The digits are read eighteen at a time, so a long number costs one step on long numbers for
+each eighteen digits and not one for each digit. A rule that applies a row reads the row's
+numbers again, and a digit at a time took a microsecond a digit. -/
 def digits (cs : List Char) : Option Nat :=
-  if cs.isEmpty || !cs.all Char.isDigit then none
-  else some (cs.foldl (fun n c => 10 * n + (c.toNat - '0'.toNat)) 0)
+  if cs.isEmpty || !cs.all Char.isDigit then none else some (digitsGo cs 0 0 1)
 
 def integer : List Char → Option Int
   | '-' :: cs => (digits cs).map fun n => -Int.ofNat n

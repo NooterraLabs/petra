@@ -76,6 +76,18 @@ A wheel is a little over 30 MB, and the kernel in it is 100 to 120 MB unpacked. 
 | `Petra/Check.lean` | The rules in order, and the verdict |
 | `Main.lean` | The command line and the printed JSON |
 
+## Time and memory
+
+A verdict's time and memory are bounded whatever the files hold. [docs/format.md](../docs/format.md) lists the limits under "Limits": each is tested before the work it bounds, and each name is looked up in a table.
+
+The bound on the time of the proofs is a budget of work, and it holds only while a unit of work takes about the same time for every step. This command measures that on the machine it runs on, for each step and for numbers of 64 to 64,000 bits, and fails when a step takes over three times the yardstick:
+
+```bash
+python bench/work_sweep.py
+```
+
+It takes about ten minutes. Run it again after a change to a cost in `Petra/Tape.lean` or to the Lean toolchain, whose library the costs are fitted to.
+
 ## What is proved
 
 The interval rule is proved, for `Petra/Num.lean` and `Petra/Tape.lean` as they stand: a tape that `Tape.proved` accepts has every root at most zero at every point of its box, and a point that `Tape.refuted` accepts has its root above zero. Both hold whatever work the proof is given: a proof that runs out of work is not accepted. The proofs are in `../proofs`, a second package that depends on Mathlib, and [docs/proved.md](../docs/proved.md) lists them. Nothing in this folder depends on that package.

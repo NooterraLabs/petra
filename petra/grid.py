@@ -58,6 +58,10 @@ MAX_NAME = 64
 the name of a part, a load case, a mechanism, a field, a load, a joined part and a `let`, and a rule's id."""
 UNREAD = "unread"
 """The mechanism of the cell of a field that nothing reads. No line of the grid has this name."""
+MAX_READ = 1_000_000
+"""The most steps reading a deck may take, as in kernel/Petra/Files.lean."""
+MAX_TITLE = 200
+"""The most bytes the name of a card may print in, for a design checked against a deck."""
 
 
 class DeckError(ValueError):
@@ -154,11 +158,37 @@ def _anchor(a: Mapping[str, str]) -> str:
     return " ".join(parts[:2]) + "".join(f", {p}" for p in parts[2:])
 
 
-def _long(name: Any) -> bool:
-    """Whether the kernel would print this name in more than MAX_NAME bytes, counted as
+def _long(name: Any, most: int = MAX_NAME) -> bool:
+    """Whether the kernel would print this name in more than `most` bytes, counted as
     `printed` in kernel/Petra/Files.lean counts them: two for a quote, a backslash and a
     line end, six for any other control character, and the bytes of its UTF-8 otherwise."""
-    return isinstance(name, str) and sum(2 if c in '"\\\n\r' else 6 if c < " " else len(c.encode("utf-8", "surrogatepass")) for c in name) > MAX_NAME
+    return isinstance(name, str) and sum(2 if c in '"\\\n\r' else 6 if c < " " else len(c.encode("utf-8", "surrogatepass")) for c in name) > most
+
+
+def _size(value: Any) -> int:
+    """The size of a JSON value: one, for a list or an object the sizes of what it holds as
+    well, and for a text two, and one more for each 8 characters."""
+    if isinstance(value, str):
+        return 2 + len(value) // 8
+    return 1 + sum(map(_size, value.values() if isinstance(value, dict) else value)) if isinstance(value, (dict, list)) else 1
+
+
+def _steps(body: Mapping[str, Any]) -> int:
+    """The steps reading the deck takes, as `readingSteps` in kernel/Petra/Deck.lean counts
+    them (docs/deck.md, "The size of a deck"): the size of the file, and the size of a row
+    again for each `["row", ID, ...]` inside a rule, which reads the row again."""
+    sizes: dict[str, int] = {}
+    for row in body["rows"] if isinstance(body.get("rows"), list) else []:
+        if isinstance(row, dict) and isinstance(row.get("id"), str):
+            sizes.setdefault(row["id"], _size(row))
+
+    def again(value: Any) -> int:
+        if isinstance(value, list):
+            own = sizes.get(value[1], 0) if len(value) == 3 and value[0] == "row" and isinstance(value[1], str) else 0
+            return own + sum(map(again, value))
+        return sum(map(again, value.values())) if isinstance(value, dict) else 0
+
+    return _size(body) + (sum(map(again, body["rules"])) if isinstance(body.get("rules"), list) else 0)
 
 
 def _name(name: Any) -> bool:
@@ -329,6 +359,8 @@ def read_deck(text: str) -> Deck:
         only(body, ("format", "name", "about", "rows", "types", "grid", "rules"), "a deck")
         if body.get("format") != FORMAT or replaced(body):
             raise DeckError(f"a deck has format {FORMAT}, name, about, rows, types, grid and rules, and no text of it holds U+FFFD or half a surrogate pair")
+        if _steps(body) > MAX_READ:
+            raise DeckError(f"reading this deck takes {_steps(body)} steps, over the budget of {MAX_READ}: a value of the file is one step, a text two or more, and a rule that applies a row takes the row's steps again")
         found = [rows.read(r) for r in body["rows"]]
         wrong = [f"{r.id}: {p}" for r in found for p in r.problems]
         if wrong:
@@ -478,6 +510,7 @@ def read_parts(design: Design, deck: Deck) -> Parts:
     problems += [f"{_at(x.span)}: the name of a part and of a load case is at most {MAX_NAME} characters, and {x.name[:MAX_NAME]}... is longer"
                  for x in (*design.components.values(), *design.loads.values()) if _long(x.name)]
     problems += [f"{_at(x.span)}: the name of a load case holds no /, and {x.name} has one" for x in design.loads.values() if "/" in x.name]
+    problems += [f"{design.path}: the name of the card is at most {MAX_TITLE} characters for a design checked against a deck"] * _long(design.name, MAX_TITLE)
     for c in design.components.values():
         kind, values = deck.types[c.kind], {}
         for attr in c.attrs:

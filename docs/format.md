@@ -166,7 +166,7 @@ A hint names an input by its label, because the tape is the kernel's. Its partit
 
 The kernel applies the rules in this order. A design that breaks a rule of the first four groups is ILL-FORMED, and the kernel settles no cell.
 
-**Shape.** Each file is JSON with its `format`, and none of its texts and keys holds U+FFFD ([Texts](#texts)). Every number parses, and every range has `lo <= hi`. A cell has its keys and a state from the list, and a node is one from the table. A part's name is within the limit below. A tape that reads a node ahead of itself, or lacks its `partition`, `point` or `which`, leaves its cell open.
+**Shape.** Each file is JSON with its `format`, and none of its texts and keys holds U+FFFD ([Texts](#texts)). Every number parses, and every range has `lo <= hi`. A cell has its keys and a state from the list, and a node is one from the table. A part's name is within the limit below, and with `--rules` so are the name of the card and the name of the design. A tape that reads a node ahead of itself, or lacks its `partition`, `point` or `which`, leaves its cell open.
 
 **Types.**
 
@@ -214,7 +214,7 @@ Rule 7 is what stops a downgrade. Without it, a card issued for a deck of rules 
 
 A hint for a cell that the kernel does not have is ignored and counted. So proofs.json can leave a cell open that a better search would settle, and it can do nothing else: it cannot add a cell, drop one, or change what a cell says.
 
-No two of these cells have the same subject, mechanism and entry, so a hint names one cell and a reader finds one cell under a key. Here is why. Two parts have two names. A line of the grid gives a part cells of its own mechanism, and a type has a mechanism once. Within one line, the cells with an empty entry come one to a part, and only where no rule gives a cell. Two rules of the line have different entries, because their ids differ after the last `/`, and an entry has no `/` in it before the case. A case has no `/` either, so `RULE/CASE` and `RULE/CASE/where` are never the entry of another case or of another rule. The cells named `unread` share their mechanism with no line of the grid. The kernel also checks the finished list, and a design that would have one key twice is ILL-FORMED with a finding of the rule `limits`.
+No two of these cells have the same subject, mechanism and entry, so a hint names one cell and a reader finds one cell under a key. Here is why. Two parts have two names. A line of the grid gives a part cells of its own mechanism, and a type has a mechanism once. Within one line, a cell that no rule gives has the empty entry, and a part has one such cell at most, only where no rule of the line gives it a cell. Two rules of the line have different entries, because their ids differ after the last `/`, and an entry has no `/` in it before the case. An id that ends in `/` gives the empty entry, and no other rule of the line has it. A case has no `/` either, so `RULE/CASE` and `RULE/CASE/where` are never the entry of another case or of another rule. The cells named `unread` share their mechanism with no line of the grid. The kernel also checks the finished list, and a design that would have one key twice is ILL-FORMED with a finding of the rule `limits`.
 
 This holds for the cells the kernel makes. Without `--rules` the cells are the list of proofs.json, which the kernel takes as it comes, and that list may hold one key twice.
 
@@ -268,25 +268,39 @@ The comparison holds for a design with parts only. For a design of the models' k
 
 The kernel stops work that would not end. A tape has at least one root. A partition is at most 64 deep, and a `pow` exponent at most 64 in magnitude. A condition of a pick in a tape that a file carries nests at most 16 deep, where `le` or `lt` alone is 1 deep. The conditions of one pick hold at most 1,024 orders between them, in a tape that a file carries and in one the kernel writes. A value with more than 65,536 bits, or an `exp` of a number beyond 65,536, leaves its cell open. A pick has no value on a box where it has more than 4,096 ways to order the nodes it compares. A file's JSON nests at most 128 deep, and a number outside a string has at most 32 digits and no fraction or exponent.
 
-A deck of rules has three more. A quantity or a number is at most 4,000 characters. A whole or a half power has an exponent of at most 64 in magnitude. An expression nests at most 1,024 deep, counted through the names of `let` it reads and the rows it applies, so a name of `let` that reads itself, or a chain of names longer than that, is refused. `petra/grid.py` has the second of these and not the other two.
+A deck of rules has four more. A quantity or a number is at most 4,000 characters. A whole or a half power has an exponent of at most 64 in magnitude. An expression nests at most 1,024 deep, counted through the names of `let` it reads and the rows it applies, so a name of `let` that reads itself, or a chain of names longer than that, is refused. Reading the deck takes at most 1,000,000 steps, counted from its file before a row is read ([deck.md](deck.md), "The size of a deck"). `petra/grid.py` has the second and the fourth of these and not the other two.
 
-The time a verdict takes, what the kernel holds while it works and what it prints are each bounded, whatever the files hold. Eleven limits see to that.
+The time a verdict takes, what the kernel holds while it works and what it prints are each bounded, whatever the files hold. Thirteen limits see to that.
 
 | Limit | Value | Past it |
 |---|---|---|
 | Findings in `findings` | 100 | The kernel keeps the first 100, and `more_findings` counts the rest. |
 | The item or the reason of a finding, and the reason of a cell | 200 bytes as printed | The text is cut, and ends with how many characters were left out. |
 | The name of a part, and of a load case that puts a load on a part | 64 bytes as printed | A shape finding |
+| The name of the card and the name of the design, for a design checked against a deck of rules | 200 bytes as printed | A shape finding |
 | In a deck of rules: the name of a field, a load, a joined part and a `let`, the name of a mechanism, and the id of a rule | 64 bytes as printed | The deck does not hold together |
+| Steps to read a deck of rules | 1,000,000 | The deck does not hold together, and no row of it is read |
 | Cells made from a deck of rules | 10,000 | A finding of the rule `limits`, and the design is ILL-FORMED |
 | Reasons of the cells made from a deck of rules, together | 500,000 bytes as printed | The kernel keeps the first reasons, in the order of the cells. Each cell after them says `past what the verdict prints of reasons` in place of its own. |
-| Steps to write the tapes of a design from a deck of rules | 10,000,000 | A finding of the rule `limits`, and the design is ILL-FORMED |
+| Steps to make the cells of a design from a deck of rules and to write their tapes | 10,000,000 | A finding of the rule `limits`, and the design is ILL-FORMED |
 | Work for the proofs of one verdict | 20,000,000,000 units | A proof that cannot pay for its tape is not tried, and a step that cannot pay is not taken. The cell is open, and the reason says so. |
 | Enclosures held at once while one leaf is walked | 16,777,216 words of 64 bits, which is 128 MB | The node whose enclosure would go past it has no value. |
 | Entries in the cache of `ln` and in the cache of `exp` | 1,024 each | The cache starts again from the new entry. |
 | Times a waiver is printed in `waived` | 1 | Cells that rest on one waiver print it once. |
 
-A name of 64 characters in ASCII prints in 64 bytes. A character outside ASCII prints in up to four, a quote, a backslash and a line end in two, and any other control character in six. A cell prints these names whole, so they are refused and not cut. A step is one name or one operator of a rule and each thing the operator reads, each time the rule is written for a part and a load case, or one node of the tape. A pick counts each order of its conditions, and a table each of its cells.
+A name of 64 characters in ASCII prints in 64 bytes. A character outside ASCII prints in up to four, a quote, a backslash and a line end in two, and any other control character in six. A cell prints these names whole, so they are refused and not cut. The label of every input of a tape holds the name of the card or of the design, which is why those two are held to 200 bytes.
+
+Every limit is tested before the work it bounds, and never after. The kernel counts a deck's steps from its file before it reads a row. It counts a step of the cells before it takes the step. It takes the cost of a step of a proof from the work left before it takes the step. And wherever it looks for a name, among the parts, the fields, the loads, the rows, the rules or the labels of a tape, it looks in a table, so the look costs the same however many names there are.
+
+### Steps
+
+Making the cells of a design is counted in steps, 10,000,000 at most. The work is the deck times the design, so it is not held by the size of the files alone.
+
+- **A line of the grid, for a part.** One step, and the size of the condition of its `unless`. The size of a condition is 1 for an `is` and for a `loaded`, 1 more than the sizes of its members for an `and` and an `or`, and 1 more than its member for a `not`.
+- **A rule of the line, for the part.** One step, the size of its `when`, and one for each load it reads. Every rule of the line is counted, whether its `when` holds for the part or not.
+- **The load cases.** For a rule that answers and reads loads: one step for each case that puts one of those loads on the part, for each such load.
+- **A tape.** The weight of the rule each time it is written for a part and a load case, twice for a rule with `where`, and one step for each node of each tape written. The weight of a rule is the sum over its steps, read or not. A step is one name or one operator of the rule, and weighs 1 and 1 for each thing the operator reads. A difference is two steps, a negation and a sum, and a power is up to four: a root, a power, a one and a quotient, or a constant, a logarithm, a product and an exponential. A pick weighs 1, 1 for each case and 2 for each order of its conditions. A table weighs 1, 1 for each place down, 1 for each cell, and 1 for each entry of a `by` that reads it.
+- **What a rule reads.** After the cells, for each part: one step, and for each rule of the part's type the steps of the rule above and one for each field the rule reads.
 
 ### Work
 
@@ -375,15 +389,17 @@ A step on whole numbers, or on fractions with a short numerator or denominator, 
 
 The heaviest design of the corpus, `weld_bracket`, takes 5.4 billion units in two processor seconds: a little over a quarter of the budget. The next takes 0.13 billion, and a lap of the first deck of rules 2.6 million.
 
-A proof made to spend all twenty billion units took between 4 and 9 processor seconds on the same desktop, whatever step it spent them on. A busy machine takes longer in proportion. `tests/test_kernel_limits.py`, `tests/test_kernel_attacks2.py` and `tests/test_kernel_attacks3.py` hold the limits one by one.
+Files of 1 MB made to take as long as they can took 11.7 processor seconds on the same desktop. They hold three rules for one part. One applies a row of 5,000 numbers as often as the million steps to read a deck allow, which took 1.5 seconds alone. One sums 1,400 fields and is written for as many load cases as the ten million steps of the cells allow, 1.8 seconds. And one has a hinted proof that spends the twenty billion units on `exp` of fractions of 250 bits, 8.3 seconds. With products or quotients in place of `exp` the proof took 5 to 6 seconds. A busy machine takes longer in proportion. `tests/test_kernel_limits.py`, `tests/test_kernel_attacks2.py` and `tests/test_kernel_attacks3.py` hold the limits one by one.
 
 ### What the kernel holds and prints
 
-The kernel walks the leaves of a partition one at a time. On a leaf it gives up the enclosure of a node after the last node that reads it, and it holds at most 128 MB of enclosures at once. So what it holds is the files as it read them, the enclosures of one leaf, and two caches of at most 1,024 entries each.
+The kernel walks the leaves of a partition one at a time. On a leaf it gives up the enclosure of a node after the last node that reads it, and it holds at most 128 MB of enclosures at once. For a design with parts it also holds the deck of rules as it read it, which the million steps bound, and one tape: it writes the tape of a cell, settles the cell and gives the tape up. So what it holds is the files as it read them, the deck, one tape, the enclosures of one leaf, and two caches of at most 1,024 entries each.
+
+Files of 1 MB made to hold as much of all of these at once as they can took 264 MB on the desktop the costs were fitted on. They hold a deck that takes just under the million steps to read, each two of them a number that the kernel keeps, a proof that keeps 4,080 enclosures whose numbers have 65,400 bits, and the rest of the megabyte in lists nested 120 deep, which the kernel parses and does not read. Alone, the kernel with an empty design takes 28 MB, with such a deck 97 MB, with the enclosures at their limit 186 MB, and with a megabyte of nested lists 68 MB.
 
 A cell made from a deck of rules prints in at most about 370 bytes beside its reason: three names of at most 64, 64 and 135 bytes, and its states. All the cells print in at most 3.7 MB, their reasons in 0.5 MB more, and the cells past those reasons say so in at most 0.4 MB: 4.6 MB, whatever the files hold. The cells are the parts times the lines of the grid, so a small deck can reach most of that: 100 parts and 100 lines with names of 64 bytes are 89 KB of files and print 3.7 MB. A cell that proofs.json lists prints once, in under three times its own bytes.
 
-`petra/grid.py` holds a name to the same 64 bytes, counted the same way, so it refuses the same decks and designs. It has none of the other limits. `petra check` reports a design past the limit on cells or on steps as an input error, in the kernel's words. A proof the kernel does not finish for the budget of work, or does not write for the limit on a pick's orders, leaves a cell open that the grid proved, and `petra check` stops with exit code 4 and the kernel's reason.
+`petra/grid.py` holds a name to the same 64 bytes and the name of a card to the same 200, counted the same way, and counts the steps to read a deck as the kernel does, so it refuses the same decks and designs. It has none of the other limits. `petra check` reports a design past the limit on cells or on steps as an input error, in the kernel's words. A proof the kernel does not finish for the budget of work, or does not write for the limit on a pick's orders, leaves a cell open that the grid proved, and `petra check` stops with exit code 4 and the kernel's reason.
 
 ## What the kernel does not check yet
 

@@ -51,42 +51,55 @@ def marks (card : Card) (design : Design) (deck : Deck) (deckOfRules : Bool) : S
   for key in card.keyed do say "card" key "is a key of the card"
   if deck.rules then say "deck" "rules" "names a deck of rules"
 
-/-- What the card and the deck sign, found by name: the ranges of the card's inputs of each
-name, the label every one of them starts with, the ranges of the deck's constants of each
-label, and the first waiver of each subject and mechanism with its place in the card's
-list. So the tests on a cell cost what the cell holds, and not that times the card. -/
+/-- What the ranges signed under one name ask between them. A range contains every one of
+them when it contains `hull`, the least range that holds them all, and a point lies in
+every one when it lies in `core`, what they have in common, which may hold no number. So a
+name the card gives many times costs an input of a tape one test, and not one for each. -/
+structure Bounds where
+  hull : Iv
+  core : Iv
+
+def Bounds.of (ranges : Array Iv) : Option Bounds :=
+  ranges[0]?.map fun first => ranges.foldl (init := ⟨first, first⟩) fun b r =>
+    ⟨⟨rmin b.hull.lo r.lo, rmax b.hull.hi r.hi⟩, ⟨rmax b.core.lo r.lo, rmin b.core.hi r.hi⟩⟩
+
+/-- What the card and the deck sign, found by name: what the ranges of the card's inputs of
+each name ask, the label every one of them starts with, what the ranges of the deck's
+constants of each label ask, and the first waiver of each subject and mechanism with its
+place in the card's list. So the tests on a cell cost what the cell holds, and not that
+times the card. -/
 structure Signed where
   lead : String
-  inputs : Std.HashMap String (Array Iv)
-  constants : Std.HashMap String (Array Iv)
+  inputs : Std.HashMap String Bounds
+  constants : Std.HashMap String Bounds
   waivers : Std.HashMap (String × String) (Waiver × Nat)
 
 def Signed.of (card : Card) (deck : Deck) : Signed :=
   { lead := s!"in:{card.name}.",
-    inputs := (grouped card.inputs (·.name)).map fun _ found => found.map (·.range),
-    constants := (grouped deck.constants (·.label)).map fun _ found => found.map (·.range),
+    inputs := (grouped card.inputs (·.name)).filterMap fun _ found => Bounds.of (found.map (·.range)),
+    constants := (grouped deck.constants (·.label)).filterMap fun _ found => Bounds.of (found.map (·.range)),
     waivers := firsts card.waivers.zipIdx fun w => (w.1.subject, w.1.mechanism) }
 
 /-- What the card or the deck signs for a tape's input: the ranges of the card's inputs
 named `INPUT` for the label `in:CARD.INPUT`, and of the deck's constants of a `reg:` label.
 A `dsg:` input has no signed range: the kernel does not tie it to the design yet. -/
-def Signed.ranges (signed : Signed) (label : String) : Except String (Array Iv) :=
-  let among (ranges : Option (Array Iv)) (file : String) : Except String (Array Iv) :=
+def Signed.ranges (signed : Signed) (label : String) : Except String (Option Bounds) :=
+  let among (ranges : Option Bounds) (file : String) : Except String (Option Bounds) :=
     match ranges with
-    | some ranges => pure ranges
+    | some ranges => pure (some ranges)
     | none => throw s!"the {file} has no {label}"
   if label.startsWith "in:" then
     among (if label.startsWith signed.lead then signed.inputs.get? (String.ofList (label.toList.drop signed.lead.length)) else none) "card"
   else if label.startsWith "reg:" then among (signed.constants.get? label) "deck"
-  else if label.startsWith "dsg:" then pure #[]
+  else if label.startsWith "dsg:" then pure none
   else throw s!"input {label} is not labelled in:, reg: or dsg:"
 
 /-- The test on labels: every `in:` input is the card's, every `reg:` input is the deck's,
-and the tape's range contains theirs. Gives the signed ranges of each input. -/
-def premises (signed : Signed) (tape : Tape) : Except String (Array (Array Iv)) :=
+and the tape's range contains theirs. Gives what is signed for each input. -/
+def premises (signed : Signed) (tape : Tape) : Except String (Array (Option Bounds)) :=
   tape.inputs.mapM fun input => do
     let ranges ← signed.ranges input.label
-    unless ranges.all (·.within input.range) do
+    unless ranges.all (·.hull.within input.range) do
       throw s!"the tape's range for {input.label} does not contain the signed one"
     return ranges
 
@@ -120,7 +133,7 @@ def settle (signed : Signed) (cell : Cell) (left : Nat) : StateM Caches (Settled
     return fun left => do
       let (why, left) ← tape.refuted point which left
       if why.isSome then return (why, left)
-      if let some i := (point.zip ranges).findIdx? fun (x, among) => !among.all (·.has x) then
+      if let some i := (point.zip ranges).findIdx? fun (x, among) => !among.all (·.core.has x) then
         return (some s!"the point is outside the signed range of input {i}", left)
       let (_, twice) := (tape.inputs.zip point).foldl (init := (({} : Std.HashMap String Rat), false)) fun (seen, twice) (input, x) =>
         match seen.get? input.label with
@@ -206,9 +219,9 @@ def rules (cardHash : String) (card design deck : Except String ByteArray)
   if design.parts.isSome && deckOfRules.isNone then
     modify (·.push ⟨"types.6", "design", "parts", "a design with parts is checked against a deck of rules, and --rules names none"⟩)
   marks card design deck deckOfRules.isSome
-  let parts ← match rules? with
+  let (parts, loads) ← match rules? with
     | some rules => readParts rules card design
-    | none => pure #[]
+    | none => pure (#[], {})
   if !(← get).isEmpty then return {}
   let some rules := rules? |
     let signed := Signed.of card deck
@@ -217,7 +230,7 @@ def rules (cardHash : String) (card design deck : Except String ByteArray)
       return (out.push found, left)
     let (cells, left) := Id.run (settled.run' {})
     return { cells, dsgInputs := dsgInputs cells, work := MAX_WORK - left }
-  match Id.run ((cells rules card parts (hints?.getD #[])).run' {}) with
+  match Id.run ((cells rules card parts loads (hints?.getD #[])).run' {}) with
   | .ok made => return { cells := made.cells, ignored := some made.ignored, dsgInputs := made.dsgInputs, work := made.work }
   | .error why =>
     modify (·.push ⟨"limits", "design", "parts", why⟩)

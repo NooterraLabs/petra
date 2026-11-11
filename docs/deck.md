@@ -215,6 +215,18 @@ A design names a type as the kind of a component block: `lap splice { ... }` is 
 
 `petra/decks/aisc360.json` is the first deck. It holds 18 rows of AISC 360-22, the types `plate` and `lap`, a grid of 15 lines for a lap, and 4 rules.
 
+### The size of a deck
+
+Reading a deck takes steps, and a deck that takes more than 1,000,000 is refused before a row of it is read. The count is made from the deck's JSON alone, by three rules.
+
+1. The size of a JSON value is 1 for a number, `true`, `false` and `null`. The size of a text is 2, and 1 more for each 8 characters it holds: 2 for a text of up to 7 characters, 3 from 8, 4 from 16. A character is one code point of Unicode, however many bytes it takes. The size of a list is 1 more than the sizes of its items. The size of an object is 1 more than the sizes of its values. A key is not counted.
+2. A rule applies a row at each list `["row", ID, BINDS]`: a list of exactly three items whose first is the text `row` and whose second is a text. Every such list inside an item of `rules` counts, wherever in the item it stands. It counts the size of the first item of `rows` that is an object with that text as its `id`, and nothing when no row has that `id`.
+3. The steps of a deck are the size of its whole file and what rule 2 counts.
+
+The count follows the work. A rule reads a row again each time it applies it, with the row's inputs bound to the rule's expressions, and it reads everything else in the file once. A text of an expression is a name or a number. The kernel goes through it character by character each time it reads it, and a number becomes a step of the rule that the kernel keeps: so a text counts for its length, and for two where a list counts for one. A name is found through a table whatever the deck holds, and a type that joins many parts costs a rule only the names the rule writes.
+
+The first deck takes 5,500 steps: 3,874 for its file and 1,626 for the 14 times its rules apply a row. That is under a hundred-and-eightieth of the limit. A file under 1 MB whose rules apply no row is always within it: a text of `n` characters takes `n` and three bytes with its quotes and its comma, and any other value two or more, so a megabyte holds under 700,000 steps. So the limit refuses one kind of deck: a long row applied many times. `petra/grid.py` makes the same count and refuses the same decks.
+
 ### A type
 
 ```json
@@ -270,7 +282,7 @@ A line may say that the mechanism cannot arise, and why:
 "unless": {"when": ["is", "fit", "close"], "why": "a close fit leaves no room for one"}
 ```
 
-With no `when`, it never arises for the type. A condition is `["is", FIELD, NAME]` on a key field, `["loaded", LOAD]`, or `and`, `or` and `not` of these. An `unless` has `why`, a text, which may be empty. An `unless` with no `why` is refused.
+With no `when`, it never arises for the type. A condition is `["is", FIELD, NAME]` on a key field, `["loaded", LOAD]`, or `and`, `or` and `not` of these. An `unless` has `why`, a text, which may be empty. An `unless` with no `why` is refused. A line whose `unless` is `null` is read as a line with none.
 
 ### A rule
 

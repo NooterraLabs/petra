@@ -16,7 +16,9 @@ values and the edges of their cases and ranges, and from near them. Its loads ar
 points or ranges, in no, one or two load cases, and its card waives some mechanisms or none.
 About two designs in five of the first two decks are then damaged in a way the grid
 refuses: a missing or unknown line, a wrong unit, a strength the design writes, a given
-of another part, a load the type does not take, and so on.
+of another part, a load the type does not take, and so on. Of the others, one in forty
+has a load case with a `/` in its name, which both refuse, and one in forty a card whose
+name is 200 bytes, the most both take for a design with parts, or 201.
 
 For each design that the language reads, the files are written without asking the grid
 (grid.bundle with no answers), so the kernel sees a refused design too. Then:
@@ -28,8 +30,10 @@ For each design that the language reads, the files are written without asking th
 
 `--decks N` also makes N damaged decks. Each is one of the three decks with one or two
 changes: a text swapped for another text of the deck or for an odd one, a key or an item
-dropped, doubled, moved or renamed. An honest design of that deck is then checked against
-it. The grid's `read_deck` must refuse exactly the decks the kernel finds ill formed, and
+dropped, doubled, moved or renamed, a `where` with no item, two rules of one line whose
+ids end alike, a line named `unread`, or a wide row that a rule applies 9 times or 1,000
+times, which is within the steps a deck may take to read or over them. An honest design
+of that deck is then checked against it. The grid's `read_deck` must refuse exactly the decks the kernel finds ill formed, and
 where both read the deck they must agree on the design as above.
 
 Exits 0 when no case differs, and 1 otherwise. `--keep DIR` writes the texts and the files
@@ -425,9 +429,22 @@ def damaged(rng: random.Random, body: dict) -> list[str]:
         dicts = [v for _, v in nodes if isinstance(v, dict) and v]
         lists = [v for _, v in nodes if isinstance(v, list) and v]
         way = rng.choice(["another text", "another text", "another text", "an odd text", "an odd text", "a key less", "an item less", "an item twice",
-                          "items in another order", "a key renamed", "a key more", "a where with no item", "two rules that end alike", "a line named unread"])
+                          "items in another order", "a key renamed", "a key more", "a where with no item", "two rules that end alike", "a line named unread",
+                          "a wide row applied"])
         rules = [r for r in body["rules"] if isinstance(r, dict)] if isinstance(body.get("rules"), list) else []
-        if way == "a where with no item" and rules:
+        if way == "a wide row applied" and rules and isinstance(body.get("rows"), list):
+            # A row of 1,000 names, about 2,000 steps, that names of `let` apply and nothing reads, so the steps to read the deck are all that
+            # changes: 9 times is far within the million, and 1,000 times is over it.
+            times = rng.choice([9, 1000])
+            body["rows"].append({"id": "bench/wide", "anchor": MADE_UP, "gives": {"name": "y", "dim": "dimensionless"},
+                                 "takes": [{"name": "x", "dim": "dimensionless", "range": ["1", "2"]}], "is": ["add"] + ["x"] * 1000})
+            chosen = rng.choice(rules)
+            chosen["let"] = {**(chosen["let"] if isinstance(chosen.get("let"), dict) else {}),
+                             **{f"wide{i}": ["row", "bench/wide", {"x": "1"}] for i in range(times)}}
+            way = f"a wide row applied {times} times"
+        elif way == "a wide row applied":
+            continue
+        elif way == "a where with no item" and rules:
             rng.choice(rules)["where"] = []
         elif way == "two rules that end alike" and rules:
             chosen = copy.deepcopy(rng.choice(rules))
@@ -576,8 +593,14 @@ def compare(seed: int, n: int, decks: bool, keep: str | None = None) -> tuple[st
     else:
         d = draft(seed, n)
         (card, design), name, done, rules = d.texts(), d.name, d.damage, None
-    # One undamaged design in forty has a load case with a `/` in its name.
+    # One undamaged design in forty has a load case with a `/` in its name, and one in forty a card whose name is as
+    # long as the kernel takes for a design with parts, 200 bytes, or one byte longer.
     slash = not decks and not done and bool(d.loads) and random.Random(f"slash/{seed}/{n}").randrange(40) == 0
+    title = random.Random(f"title/{seed}/{n}")
+    if not decks and not done and title.randrange(40) == 0:
+        long = title.choice([200, 201])
+        card = card.replace(f'card "{d.name}"', f'card "{d.name}{"n" * (long - len(d.name))}"', 1)
+        done = [f"a card named in {long} bytes"]
     done = [*done, *(["a case named with a /"] if slash else [])]
     outcome, detail, kinds, files, said = judge(card, design, name, rules, slash)
     if keep and outcome.startswith("DIFFER"):
