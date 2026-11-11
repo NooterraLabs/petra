@@ -2,7 +2,8 @@
 
 How the sandbox's command line is built is tested anywhere. The gate is tested with the toy benchmark of
 tests/exam_toy.py: a run whose grader executes the model's code stops before its first model call when there is no
-sandbox, `--no-sandbox` lets it through, and every record says how its grade was made.
+sandbox, `--no-sandbox` lets it through, and every record says how its grade was made. So is the regrade, which
+grades recorded answers again and prints totals.
 
 The probe runs wherever the grader host has a sandbox, and is skipped elsewhere. It runs one small fixed program
 inside and holds what the program could reach to what the sandbox promises. The same program is run outside as
@@ -23,9 +24,9 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from bench.exam import data, host, records, run as exam, sandbox
+from bench.exam import data, host, records, regrade, run as exam, sandbox
 from bench.exam.adapters import Adapter, cadtestbench
-from tests.exam_toy import TOY, TOY_RUNS
+from tests.exam_toy import TASKS, TOY, TOY_FEEDBACK, TOY_RUNS
 from tests.test_exam import Sitting, saying
 
 BOX = sandbox.Box("/somewhere/bwrap", "0.9.0", covered=("/usr/lib/mounted",))
@@ -440,6 +441,65 @@ class Gate(Sitting):
         code, printed = self.run_main("--seed", "2", box=BOX)
         self.assertEqual(code, 0, printed)
         self.assertNotIn("no sandbox", printed.split("toyruns, model echo, seed 2")[1])
+
+
+class Again(Sitting):
+    """Grading recorded answers again, on the toy benchmark."""
+
+    def test_the_same_grader_gives_the_same_classes_and_calls_no_model(self):
+        self.sit(TOY_FEEDBACK, tasks=3, call=saying("NOTHING"))
+        with mock.patch.object(exam.models, "call", side_effect=AssertionError("a regrade called a model")):
+            row = regrade.again(TOY_FEEDBACK, Path(self.tmp.name) / "data" / "toyfeedback", self.records(), 5)
+        self.assertEqual((row["grades"], row["same_class"], row["another_class"], row["same_class_another_score"]), (12, 12, 0, 0))
+        self.assertEqual(row["pairs"], [{"recorded": "pass", "now": "pass", "grades": 6}, {"recorded": "wrong", "now": "wrong", "grades": 6}])
+        self.assertEqual((row["made_then"], row["made_now"]), ({"not needed": 12}, "not needed"))
+        self.assertEqual(row["errors_where_the_class_changed"], {})
+
+    def test_a_grade_of_another_class_is_counted_by_the_pair_of_classes_and_by_the_error_named(self):
+        self.sit(TOY_FEEDBACK, tasks=2, arms=("alone",))
+        found = self.records()
+        found[0]["grade"] = {**found[0]["grade"], "outcome": "invalid"}
+        found[1]["grade"] = {**found[1]["grade"], "score": 0.5}
+        found.append({**found[0], "grade": None, "model_ok": False})
+
+        class Breaking(type(TOY_FEEDBACK)):
+            def grade(self, folder, task, answer, timeout):
+                grade = super().grade(folder, task, answer, timeout)
+                return type(grade)(grade.outcome, grade.score, {"said": "ModuleNotFoundError: No module named 'x', then a BracketTooThinError"})
+
+        row = regrade.again(Breaking(), Path(self.tmp.name) / "data" / "toyfeedback", found, 5)
+        self.assertEqual((row["grades"], row["same_class"], row["another_class"], row["same_class_another_score"]), (4, 3, 1, 1))
+        self.assertIn({"recorded": "invalid", "now": "wrong", "grades": 1}, row["pairs"])
+        self.assertEqual(row["errors_where_the_class_changed"], {"ModuleNotFoundError": 1}, "only the name of a built-in error is counted")
+        self.assertNotIn("Bracket", regrade.show(row))
+        self.assertIn("same outcome class 3, another 1; of the same class, another score 1", regrade.show(row))
+        self.assertIn("where the class changed, the grader named: ModuleNotFoundError 1", regrade.show(row))
+
+    def test_a_regrade_refuses_with_no_sandbox_as_a_run_does(self):
+        self.sit(TOY_FEEDBACK, tasks=1, arms=("alone",))
+        with mock.patch.object(sandbox, "look", return_value=(None, "a made-up reason")), mock.patch.object(host, "named", return_value=[]):
+            with self.assertRaisesRegex(SystemExit, "a made-up reason"):
+                regrade.again(TOY_RUNS, Path(self.tmp.name), self.records(), 5)
+            self.assertEqual(regrade.again(TOY_RUNS, Path(self.tmp.name), self.records(), 5, sandboxed=False)["made_now"], "none")
+
+    def test_the_command_line_prints_totals_that_name_no_task_and_exits_1_when_a_class_changed(self):
+        self.sit(TOY_FEEDBACK, call=saying("NOTHING"))
+        printed = io.StringIO()
+        with mock.patch.object(regrade, "load", return_value=TOY_FEEDBACK), contextlib.redirect_stdout(printed):
+            self.assertEqual(regrade.main([str(self.out), "--data", str(Path(self.tmp.name) / "data")]), 0)
+        text = printed.getvalue()
+        self.assertIn("toyfeedback: 16 grades made again, in not needed (recorded as made in: not needed 16)", text)
+        self.assertIn("  recorded pass, now pass: 8\n  recorded wrong, now wrong: 8\n", text)
+        self.assertRegex(text, r"seconds a grade: \d+\.\d recorded, \d+\.\d now")
+        for record in self.records():
+            for held in (record["task"], record["prompt"], record["feedback"] or record["task"]):
+                self.assertNotIn(held, text)
+        for name in TASKS:
+            self.assertNotIn(name, text)
+        found = self.records()
+        self.out.write_text(json.dumps({**found[0], "grade": {**found[0]["grade"], "outcome": "pass"}}) + "\n", encoding="utf-8")
+        with mock.patch.object(regrade, "load", return_value=TOY_FEEDBACK), contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(regrade.main([str(self.out), "--json"]), 1)
 
 
 class Probe(unittest.TestCase):
