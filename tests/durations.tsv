@@ -20,6 +20,7 @@ tests.test_domain_registry	1.7
 tests.test_electronics	17.5
 tests.test_envelope	3.3
 tests.test_evaluate	0.7
+tests.test_exam	21.0
 tests.test_examples	6.4
 tests.test_export_card	4.1
 tests.test_grid	10.6
