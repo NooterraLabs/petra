@@ -452,7 +452,7 @@ Two transcriptions mean the same when they give every part the same answer. The 
 |---|---|
 | The names in `let`, the order of a sum or a product, the words of `says`, the ids | the same |
 | One rule for each of two plates, against one rule with a `min` over the plates | the same. The mechanism fails when either rule fails, and the larger ratio of the two rules is the ratio of the one. |
-| Both sides times one factor, as a force against a stress | the same. The ratio does not change. |
+| Both sides times one factor above zero, as a force against a stress | the same. The ratio does not change. |
 | `a <= b` against `a - b <= 0` | the same answer. The detail says the two are in different forms. |
 | What leaves a part open: no `when` that holds in one, a `where` or a table with no value in the other | the same. The cell is open in both. |
 | A `where` in one and none in the other | different. Outside the range one is open and the other answers. |
