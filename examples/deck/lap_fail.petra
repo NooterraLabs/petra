@@ -1,7 +1,9 @@
 petra 0
 
 # The lap of lap_pass under a pull of up to 60 kip, with no waivers. Three bolts carry
-# 53.7 kip, so the strength cell is refuted at 60 kip and the verdict is FAIL.
+# 53.7 kip, so the strength cell is refuted at 60 kip. The plates hold: each yields at
+# 72.9 kip, ruptures at 83.6 and tears out as a block at 87.4. One refuted cell is enough,
+# and the verdict is FAIL.
 
 plate tab {
   thickness 0.375 inch
@@ -25,5 +27,7 @@ lap splice {
   count 3
   pitch 3 inch
   end 1.5 inch
+  side 3 inch
+  surface protected
   joins tab strap
 }

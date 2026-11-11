@@ -4,8 +4,10 @@ of its rules, worked examples, and what the check says of each mechanism.
 Most tests use the deck STRIPS of tests/test_grid.py, made up for tests: it is no standard,
 and its numbers mean nothing. The task gives its types a range for each quantity, calls the
 current adverse and the two pads of a strip alike. The first transcription is the deck's
-own rules. The worked examples are made up too. The last class runs the check on the deck
-that ships, with bench/formalizer/rules_b.json as its second transcription.
+own rules. The worked examples are made up too. The last class runs the check on the files
+of the first run: bench/formalizer/rules_a.json, the deck as it shipped then, with
+rules_b.json as its second transcription. tests/test_deck_rules.py runs the check on the
+deck that ships now.
 """
 import collections
 import copy
@@ -375,7 +377,7 @@ class Parts(unittest.TestCase):
         """rule._values is a second way to evaluate a tape at a point. It must give what grid.enclosures gives."""
         aisc = rule.read_task(json.loads((BENCH / "rules_task.json").read_text(encoding="utf-8")), BENCH)
         compared = 0
-        for of, mine in ((TASK, FIRST), (aisc, rule.load(aisc, str(grid.DECKS / "aisc360.json")))):
+        for of, mine in ((TASK, FIRST), (aisc, rule.load(aisc, str(BENCH / "rules_a.json")))):
             for mechanism in of.mechanisms:
                 for found in mine.rules[mechanism]:
                     for point in rule.parts(of, mechanism, [mine]).base[:24]:
@@ -514,28 +516,36 @@ class CommandLine(unittest.TestCase):
         self.assertEqual(code, 3, out)
 
 
-class Shipped(unittest.TestCase):
-    """The first run for rules: the four rules of petra/decks/aisc360.json and a second transcription of them."""
+class FirstRun(unittest.TestCase):
+    """The first run for rules: the four rules the deck shipped then, written by hand, and a second transcription of them.
+    bench/formalizer/rules_a.json is that deck's file. The deck that ships now has none of the four."""
+
+    FIRST = str(BENCH / "rules_a.json")
 
     @classmethod
     def setUpClass(cls):
         cls.body = json.loads((BENCH / "rules_task.json").read_text(encoding="utf-8"))
         cls.task = rule.read_task(cls.body, BENCH)
-        cls.deck = json.loads((grid.DECKS / "aisc360.json").read_text(encoding="utf-8"))
+        cls.deck = json.loads(Path(cls.FIRST).read_text(encoding="utf-8"))
 
-    def test_the_task_has_the_decks_types_and_asks_what_its_grid_asks(self):
+    def test_the_task_has_the_types_of_the_deck_of_the_time_and_asks_what_its_grid_asked(self):
         self.assertEqual(self.task.body["types"], [{**t, "loads": t.get("loads", [])} for t in self.deck["types"]])
         self.assertEqual(self.task.body["grid"], [{k: v for k, v in a.items() if k != "unless"} for a in self.deck["grid"]])
         self.assertEqual(self.task.body["rows"], self.deck["rows"])
+        self.assertEqual((len(self.deck["rows"]), len(self.deck["grid"]), len(self.deck["rules"])), (18, 15, 4))
+
+    def test_the_deck_that_ships_has_none_of_the_first_runs_rules(self):
+        shipped = json.loads((grid.DECKS / "aisc360.json").read_text(encoding="utf-8"))
+        self.assertEqual([r for r in self.deck["rules"] if r in shipped["rules"]], [], "the four were written by hand, and a deck's rules come from the page")
 
     def test_a_task_may_take_its_rows_from_several_files(self):
-        """The third run's 14 rows are in no deck yet. A task for the rules that would use them names both files."""
+        """The task of the second run named two files: the deck of the time, and the 14 rows of the third formalizer run."""
         wider = rule.read_task({**self.body, "rows_from": [self.body["rows_from"], "a3.json"]}, BENCH)
         self.assertEqual(len(wider.deck.rows), len(self.deck["rows"]) + 14)
         self.assertIn("aisc360-22/J3.4-spacing", wider.deck.rows)
 
     def test_the_two_transcriptions_agree_on_every_mechanism_either_answers(self):
-        first, other = rule.load(self.task, str(grid.DECKS / "aisc360.json")), rule.load(self.task, str(BENCH / "rules_b.json"))
+        first, other = rule.load(self.task, self.FIRST), rule.load(self.task, str(BENCH / "rules_b.json"))
         lines, whole = rule.accept(first, {}, other)
         self.assertEqual((first.stray, other.stray, whole.outcome), ([], [], "pass"))
         states = {line.mechanism: line.state for line in lines}
@@ -548,10 +558,10 @@ class Shipped(unittest.TestCase):
         self.assertEqual({c.outcome for line in lines for c in line.checks if c.name == "examples"}, {"none"}, "this run has no worked example")
 
     def second(self, mechanism: str, edit) -> rule.Check:
-        """The deck's rules against the second transcription after an edit of it."""
+        """The four rules of the first run against the second transcription after an edit of it."""
         body = json.loads((BENCH / "rules_b.json").read_text(encoding="utf-8"))
         edit(body["rules"])
-        first, other = rule.load(self.task, str(grid.DECKS / "aisc360.json")), rule.Reading(self.task, rule.read_transcription(body))
+        first, other = rule.load(self.task, self.FIRST), rule.Reading(self.task, rule.read_transcription(body))
         return rule.second(first, other, mechanism, rule.parts(self.task, mechanism, [first, other]))
 
     def test_a_second_transcription_that_reads_the_clauses_another_way_is_told_apart(self):

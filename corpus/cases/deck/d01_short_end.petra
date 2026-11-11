@@ -1,6 +1,9 @@
 petra 0
 
-# The end distance is 3/4 inch, under the 1 inch Table J3.4 asks of a 3/4 inch bolt, and every other answer holds or is waived.
+# The end distance is 3/4 inch. Table J3.4 asks 1 inch of a 3/4 inch bolt, so it fails.
+# The end bolts also tear out. The clear distance to the end is 0.75 - 13/32 = 0.344 inch, so an
+# end hole carries 0.75 x 1.2 x 0.344 x 0.375 x 58 = 6.73 kip, and the three bolts carry
+# 6.73 + 6.73 + 17.89 = 31.4 kip under a pull of 45.
 
 plate tab {
   thickness 0.375 inch
@@ -24,5 +27,7 @@ lap splice {
   count 3
   pitch 3 inch
   end 0.75 inch
+  side 3 inch
+  surface protected
   joins tab strap
 }

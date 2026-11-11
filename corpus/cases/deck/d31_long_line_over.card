@@ -1,0 +1,20 @@
+petra 0
+
+card "d31_long_line_over" {
+  owner "s.engineer@example.org"
+}
+
+given tab.Fy in [36 ksi, 36 ksi] signed "s.engineer@example.org" source "ASTM A36, specified minimum"
+given tab.Fu in [58 ksi, 58 ksi] signed "s.engineer@example.org" source "ASTM A36, specified minimum"
+given strap.Fy in [36 ksi, 36 ksi] signed "s.engineer@example.org" source "ASTM A36, specified minimum"
+given strap.Fu in [58 ksi, 58 ksi] signed "s.engineer@example.org" source "ASTM A36, specified minimum"
+
+load gravity {
+  on splice pull in [0 kip, 215 kip]
+  signed "s.engineer@example.org" source "calculation C-12, LRFD combination 1.2D + 1.6L"
+}
+
+waive lap.tightening on splice by "s.engineer@example.org" reason "snug-tight bolts: a bearing-type joint under static load, J3.2 (a)(1)"
+waive lap.hole_use on splice by "s.engineer@example.org" reason "standard holes, which J3.3 allows in every joint"
+waive lap.max_edge_distance on splice by "s.engineer@example.org" reason "no hole is over 5 inch from the nearest edge of either plate, and J3.6 allows 6 inch"
+waive lap.ply_flexure on splice by "s.engineer@example.org" reason "the members the plates belong to hold them against rotation"

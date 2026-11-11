@@ -283,9 +283,10 @@ TRUSTED: tuple[Group, ...] = (
                                    "port of these modules by one hand, not a reading made without sight of them, so it "
                                    "is named here and not as the group's judge. A row passes the acceptance check of "
                                    "docs/deck.md, which a second transcription backs. A rule has an acceptance check "
-                                   "there too (petra/rule.py), and the first deck's four rules agree with a second "
-                                   "transcription, which was written from memory of the standard and not from its "
-                                   "pages. Nothing second-transcribes a type or a grid line.")),
+                                   "there too (petra/rule.py). The first deck's 15 rules are one of two transcriptions "
+                                   "from the pages of the standard: the second gives every sampled part the same "
+                                   "answer, and eight worked examples are reproduced (tests/test_deck_rules.py). "
+                                   "Nothing second-transcribes a type or a grid line.")),
 )
 
 UNTRUSTED: tuple[str, ...] = (

@@ -1,0 +1,33 @@
+petra 0
+
+# 3/8 inch plates 10 inch wide, with the holes on the centre line, 5 inch from each side. J3.6
+# allows 12 thicknesses, 4.5 inch, from a hole to the nearest edge, so an engineer refuses
+# this lap. The deck has no rule for that line, and nobody can honestly waive it.
+# Every rule holds at 45 kip, and the one open cell keeps the verdict from PASS.
+
+plate tab {
+  thickness 0.375 inch
+  width 10 inch
+  Fy given tab.Fy
+  Fu given tab.Fu
+}
+
+plate strap {
+  thickness 0.375 inch
+  width 10 inch
+  Fy given strap.Fy
+  Fu given strap.Fu
+}
+
+lap splice {
+  fastener "Group 120"
+  threads included
+  diameter 0.75 inch
+  holes standard
+  count 3
+  pitch 3 inch
+  end 1.5 inch
+  side 5 inch
+  surface protected
+  joins tab strap
+}

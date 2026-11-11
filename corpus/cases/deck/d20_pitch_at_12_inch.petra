@@ -1,0 +1,31 @@
+petra 0
+
+# Painted 3/4 inch plates with a pitch of 12 inch, the most J3.6(a) allows and not over it.
+# 24 thicknesses are 18 inch.
+
+plate tab {
+  thickness 0.75 inch
+  width 6 inch
+  Fy given tab.Fy
+  Fu given tab.Fu
+}
+
+plate strap {
+  thickness 0.75 inch
+  width 6 inch
+  Fy given strap.Fy
+  Fu given strap.Fu
+}
+
+lap splice {
+  fastener "Group 120"
+  threads included
+  diameter 0.75 inch
+  holes standard
+  count 3
+  pitch 12 inch
+  end 1.5 inch
+  side 3 inch
+  surface protected
+  joins tab strap
+}

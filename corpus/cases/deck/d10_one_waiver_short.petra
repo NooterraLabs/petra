@@ -1,6 +1,6 @@
 petra 0
 
-# The card waives seven of the eight mechanisms the deck has no rule for, and block shear stays open.
+# The card waives three of the four mechanisms the deck has no rule for, and the bending of the plates stays open.
 
 plate tab {
   thickness 0.375 inch
@@ -24,5 +24,7 @@ lap splice {
   count 3
   pitch 3 inch
   end 1.5 inch
+  side 3 inch
+  surface protected
   joins tab strap
 }

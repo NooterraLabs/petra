@@ -381,12 +381,13 @@ class Shipped(unittest.TestCase):
         spec = importlib.util.spec_from_file_location("formalizer_run", ROOT / "bench" / "formalizer" / "run.py")
         run = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(run)
-        first, second = formalizer("a.json") | formalizer("a2.json"), formalizer("b.json") | formalizer("b2.json")
+        first = formalizer("a.json") | formalizer("a2.json") | formalizer("a3.json")
+        second = formalizer("b.json") | formalizer("b2.json") | formalizer("b3.json")
         examples = {}
-        for name in ("examples.json", "examples2.json"):
+        for name in ("examples.json", "examples2.json", "examples3.json"):
             examples |= json.loads((ROOT / "bench" / "formalizer" / name).read_text(encoding="utf-8"))["examples"]
         body = json.loads((grid.DECKS / "aisc360.json").read_text(encoding="utf-8"))
-        self.assertGreaterEqual(len(body["rows"]), 18)
+        self.assertEqual(len(body["rows"]), 32, "the 18 of the first two runs and the 14 of the third")
         for written in body["rows"]:
             with self.subTest(row=written["id"]):
                 self.assertEqual(written, first[written["id"]], "the row is the transcription, unedited")
@@ -402,29 +403,49 @@ class Shipped(unittest.TestCase):
         with mock.patch.object(verify, "binary", lambda: None):
             return petra.check(*read_pair(path), path=str(path), repair=False)
 
+    NO_RULE = ["lap.tightening", "lap.hole_use", "lap.max_edge_distance", "lap.ply_flexure"]
+
     def test_the_lap_that_waives_nothing_is_unknown_with_its_rules_proved(self):
         result = self.check("lap_unknown")
         self.assertEqual(result["status"], "UNKNOWN")
-        self.assertEqual(result["counts"], {"proved": 5, "refuted": 0, "not_applicable": 4, "waived": 0, "open": 8})
+        self.assertEqual(result["counts"], {"proved": 12, "refuted": 0, "not_applicable": 4, "waived": 0, "open": 4})
+        self.assertEqual([c["mechanism"] for c in result["cells"] if c["state"] == "open"], self.NO_RULE)
+        self.assertEqual({c["why"] for c in result["cells"] if c["state"] == "open"}, {"the deck has no rule for it"})
+        # Each ratio is worked out here from the clause, with the numbers of the design.
         # Three 3/4 inch Group 120 bolts with threads in the shear plane: 0.75 x 54 ksi x 0.4418 inch2 is 17.9 kip a bolt, the
         # shear strength Design Examples v16.0 prints for this bolt, and bearing and tearout on 3/8 inch A36 are above it.
         self.assertAlmostEqual(cell(result, "lap.strength", "lap-strength/gravity")["ratio"], 45 / (3 * 17.892), places=3)
-        self.assertAlmostEqual(cell(result, "lap.ply_yield", "lap-yield-a/gravity")["ratio"], 45 / (0.9 * 36 * 6 * 0.375), places=6)
+        self.assertAlmostEqual(cell(result, "lap.ply_yield", "lap-ply-yield-a/gravity")["ratio"], 45 / (0.9 * 36 * 6 * 0.375), places=6)
         self.assertAlmostEqual(cell(result, "lap.end_distance")["ratio"], 1 / 1.5, places=6)
+        self.assertAlmostEqual(cell(result, "lap.side_distance")["ratio"], 1 / 3, places=6)
+        # J3.4: 2 2/3 diameters between centres, and one diameter clear between holes of 13/16 inch.
+        self.assertAlmostEqual(cell(result, "lap.spacing", "lap-spacing-centres")["ratio"], (8 / 3 * 0.75) / 3, places=6)
+        self.assertAlmostEqual(cell(result, "lap.spacing", "lap-spacing-clear")["ratio"], 0.75 / (3 - 13 / 16), places=6)
+        # J3.6(a): 24 thicknesses of a painted plate, 9 inch, which is under 12 inch.
+        self.assertAlmostEqual(cell(result, "lap.spread")["ratio"], 3 / (24 * 0.375), places=6)
+        # J4.1(b) and B4.3b: the net section has one hole, taken 13/16 + 1/16 inch wide.
+        self.assertAlmostEqual(cell(result, "lap.ply_rupture", "lap-ply-rupture-b/gravity")["ratio"], 45 / (0.75 * 58 * (6 - 7 / 8) * 0.375), places=6)
+        # J4.3: 7.5 inch in shear, less 2.5 holes for the net, and 3 inch less half a hole in tension. Yielding of the gross shear area governs.
+        block = 0.75 * (min(0.6 * 58 * (7.5 - 2.5 * 7 / 8) * 0.375, 0.6 * 36 * 7.5 * 0.375) + 58 * (3 - 7 / 16) * 0.375)
+        self.assertAlmostEqual(block, 87.363, places=3)
+        self.assertAlmostEqual(cell(result, "lap.block_shear", "lap-block-shear-a/gravity")["ratio"], 45 / block, places=6)
 
     def test_the_overloaded_lap_fails_and_the_waived_one_passes(self):
-        self.assertEqual(self.check("lap_fail")["status"], "FAIL")
+        failed = self.check("lap_fail")
+        self.assertEqual((failed["status"], [c["mechanism"] for c in failed["cells"] if c["state"] == "refuted"]), ("FAIL", ["lap.strength"]))
         waived = self.check("lap_pass")
-        self.assertEqual((waived["status"], waived["counts"]["waived"], waived["counts"]["open"]), ("PASS", 8, 0))
+        self.assertEqual((waived["status"], waived["counts"]["waived"], waived["counts"]["open"]), ("PASS", 4, 0))
+        self.assertEqual([c["mechanism"] for c in waived["cells"] if c["state"] == "waived"], self.NO_RULE, "the card waives the lines with no rule, and no line that has one")
 
-    def variant(self, *swap: tuple[str, str]) -> dict:
+    def variant(self, *swap: tuple[str, str], pull: str = "45 kip") -> dict:
         path = ROOT / "examples" / "deck" / "lap_unknown.petra"
         card, design = read_pair(path)
         for old, new in swap:
             assert old in design, old
             design = design.replace(old, new)
+        assert "[0 kip, 45 kip]" in card
         with mock.patch.object(verify, "binary", lambda: None):
-            return petra.check(card, design, path=str(path), repair=False)
+            return petra.check(card.replace("[0 kip, 45 kip]", f"[0 kip, {pull}]"), design, path=str(path), repair=False)
 
     def test_tearout_governs_a_short_end_and_the_table_refuses_it(self):
         short = self.variant(("end 1.5 inch", "end 0.75 inch"))
@@ -436,11 +457,83 @@ class Shipped(unittest.TestCase):
     def test_what_the_tables_do_not_list_is_open(self):
         odd = self.variant(("diameter 0.75 inch", "diameter 0.7 inch"))
         self.assertEqual({cell(odd, "lap.strength", "lap-strength/gravity")["state"], cell(odd, "lap.end_distance")["state"]}, {"open"})
-        long = self.variant(("count 3", "count 14"))
-        self.assertIn("at most 38 inch long", cell(long, "lap.strength")["why"])
-        oversize = self.variant(("holes standard", "holes oversize"))
-        self.assertIn("no rule for it on a part like this one", cell(oversize, "lap.end_distance")["why"])
+        self.assertEqual(cell(odd, "lap.spacing", "lap-spacing-centres")["state"], "proved", "2 2/3 diameters is no table")
         self.assertEqual(self.variant(("count 3", "count 1"))["status"], "INPUT_ERROR", "the rule sums over two end bolts")
+
+    def test_a_bolt_of_an_inch_and_an_eighth_leaves_four_lines_open(self):
+        """Table J3.3 lists holes for bolts to 1 inch and gives a formula for larger ones. A rule cannot choose between
+        the two by the size of the bolt, so the rules read the table, and the four lines that need a hole are open."""
+        large = self.variant(("diameter 0.75 inch", "diameter 1.125 inch"), ("pitch 3 inch", "pitch 3.5 inch"), ("end 1.5 inch", "end 2 inch"))
+        opened = [c for c in large["cells"] if c["state"] == "open" and c["mechanism"] not in self.NO_RULE]
+        self.assertEqual([c["entry"] for c in opened], ["lap-spacing-clear", "lap-strength/gravity", "lap-ply-rupture-a/gravity", "lap-ply-rupture-b/gravity",
+                                                        "lap-block-shear-a/gravity", "lap-block-shear-b/gravity"])
+        self.assertEqual({c["mechanism"] for c in opened}, {"lap.spacing", "lap.strength", "lap.ply_rupture", "lap.block_shear"})
+        for c in opened:
+            self.assertIn("aisc360-22/table-J3.3 gives no value at what splice has", c["why"])
+        self.assertEqual((large["status"], large["counts"]["refuted"]), ("UNKNOWN", 0))
+        # Table J3.4 lists this bolt, at 1 1/2 inch, so the end and the side distances are answered.
+        self.assertAlmostEqual(cell(large, "lap.end_distance")["ratio"], 1.5 / 2, places=6)
+        self.assertAlmostEqual(cell(large, "lap.side_distance")["ratio"], 1.5 / 3, places=6)
+
+    def test_each_limit_of_the_clauses_turns_where_the_clause_puts_it(self):
+        """A lap on each side of a limit: the first holds, at the limit or just inside it, and the second fails."""
+        def states(mechanism: str, entry: str | None, *laps: dict) -> list[str]:
+            return [cell(found, mechanism, entry)["state"] for found in laps]
+
+        turned = ["proved", "refuted"]
+        # J3.4: 2 2/3 diameters of a 3/4 inch bolt are 2 inch.
+        self.assertEqual(states("lap.spacing", "lap-spacing-centres", self.variant(("pitch 3 inch", "pitch 2 inch")), self.variant(("pitch 3 inch", "pitch 1.999 inch"))), turned)
+        # Table J3.4: 1 inch from a 3/4 inch bolt to a side edge.
+        self.assertEqual(states("lap.side_distance", None, self.variant(("side 3 inch", "side 1 inch")), self.variant(("side 3 inch", "side 0.999 inch"))), turned)
+        # J3.6(a): 24 thicknesses of 3/8 inch, 9 inch. J3.6(b): 14 thicknesses, 5.25 inch.
+        self.assertEqual(states("lap.spread", None, self.variant(("pitch 3 inch", "pitch 9 inch")), self.variant(("pitch 3 inch", "pitch 9.001 inch"))), turned)
+        weathering = ("surface protected", "surface weathering")
+        self.assertEqual(states("lap.spread", None, self.variant(weathering, ("pitch 3 inch", "pitch 5.25 inch")), self.variant(weathering, ("pitch 3 inch", "pitch 5.251 inch"))), turned)
+        # J3.6: the caps of 12 inch and 7 inch, on plates of 3/4 inch, where 24 and 14 thicknesses are more.
+        thick = ("thickness 0.375 inch", "thickness 0.75 inch")
+        self.assertEqual(states("lap.spread", None, self.variant(thick, ("pitch 3 inch", "pitch 12 inch")), self.variant(thick, ("pitch 3 inch", "pitch 12.001 inch"))), turned)
+        self.assertEqual(states("lap.spread", None, self.variant(thick, weathering, ("pitch 3 inch", "pitch 7 inch")),
+                                self.variant(thick, weathering, ("pitch 3 inch", "pitch 7.001 inch"))), turned)
+        # J4.1(b): the net section of a 6 inch plate ruptures at 0.75 x 58 x 5.125 x 0.375 = 83.602 kip.
+        self.assertEqual(states("lap.ply_rupture", "lap-ply-rupture-a/gravity", self.variant(pull="83.6 kip"), self.variant(pull="83.61 kip")), turned)
+        # J4.3: with the holes 1.25 inch from a side edge, a block tears out at 0.75 x (60.75 + 58 x 0.8125 x 0.375) = 58.816 kip.
+        near = ("side 3 inch", "side 1.25 inch")
+        self.assertEqual(states("lap.block_shear", "lap-block-shear-b/gravity", self.variant(near, pull="58.81 kip"), self.variant(near, pull="58.82 kip")), turned)
+
+    def test_an_oversize_hole_adds_the_increment_of_table_j3_5_to_the_end_and_the_side(self):
+        oversize = ("holes standard", "holes oversize")
+        at = self.variant(oversize, ("end 1.5 inch", "end 1.0625 inch"), ("side 3 inch", "side 1.0625 inch"))
+        self.assertEqual([(cell(at, m)["entry"], cell(at, m)["state"], cell(at, m)["ratio"]) for m in ("lap.end_distance", "lap.side_distance")],
+                         [("lap-end-distance-oversize", "proved", 1.0), ("lap-side-distance-oversize", "proved", 1.0)], "1 inch and 1/16 inch more, for a 3/4 inch bolt")
+        under = self.variant(oversize, ("end 1.5 inch", "end 1 inch"), ("side 3 inch", "side 1 inch"))
+        self.assertEqual([cell(under, m)["state"] for m in ("lap.end_distance", "lap.side_distance")], ["refuted", "refuted"], "what is enough for a standard hole")
+        self.assertAlmostEqual(cell(under, "lap.end_distance")["ratio"], 1.0625, places=6)
+        # A 1 inch bolt: 1 1/4 inch of Table J3.4 and 1/8 inch of Table J3.5.
+        inch = self.variant(oversize, ("diameter 0.75 inch", "diameter 1 inch"), ("end 1.5 inch", "end 1.375 inch"))
+        self.assertEqual((cell(inch, "lap.end_distance")["state"], cell(inch, "lap.end_distance")["ratio"]), ("proved", 1.0))
+        self.assertEqual(cell(at, "lap.hole_use")["state"], "open", "whether a bearing-type joint may have such holes is a line with no rule")
+
+    def test_a_line_of_bolts_over_38_inch_takes_the_shear_stress_at_83_3_percent(self):
+        """Note c of Table J3.2. The rule the deck had before, written by hand, said nothing of such a line, and its cell was open."""
+        bolt = 0.75 * 54 * 3.141592653589793 / 4 * 0.75 ** 2
+        long = self.variant(("count 3", "count 14"))      # 13 x 3 inch = 39 inch
+        self.assertEqual(cell(long, "lap.strength")["state"], "proved")
+        self.assertAlmostEqual(cell(long, "lap.strength")["ratio"], 45 / (14 * 0.833 * bolt), places=6)
+        at = self.variant(("count 3", "count 20"), ("pitch 3 inch", "pitch 2 inch"))      # 19 x 2 inch = 38 inch, which is not over 38
+        self.assertAlmostEqual(cell(at, "lap.strength")["ratio"], 45 / (20 * bolt), places=6)
+        over = self.variant(("count 3", "count 20"), ("pitch 3 inch", "pitch 2.0001 inch"))
+        self.assertAlmostEqual(cell(over, "lap.strength")["ratio"], 45 / (20 * 0.833 * bolt), places=6)
+
+    def test_a_waiver_takes_the_whole_line_and_its_rules_are_not_run(self):
+        """A card may waive a line that has rules. The line is then one waived cell, and the report says who signed it.
+        So a card written when the deck had four rules, which waived the lines that had none then, would hide the rules they have now."""
+        path = ROOT / "examples" / "deck" / "lap_unknown.petra"
+        card, design = read_pair(path)
+        card += 'waive lap.block_shear on splice by "s.engineer@example.org" reason "calculation C-12 sheet 4"\n'
+        with mock.patch.object(verify, "binary", lambda: None):
+            found = petra.check(card.replace("45 kip", "200 kip"), design, path=str(path), repair=False)
+        self.assertEqual((cell(found, "lap.block_shear")["state"], cell(found, "lap.block_shear")["rule"]), ("waived", None))
+        self.assertEqual(cell(found, "lap.ply_rupture", "lap-ply-rupture-a/gravity")["state"], "refuted", "a line the card does not waive is still answered")
 
 
 @unittest.skipIf(verify.binary() is None, "no petra-verify is built here")
@@ -453,7 +546,24 @@ class Kernel(unittest.TestCase):
             with self.subTest(design=name):
                 path = ROOT / "examples" / "deck" / f"{name}.petra"
                 result = petra.check(*read_pair(path), path=str(path), repair=False)
-                self.assertEqual((result["status"], result["kernel"]["verdict"], result["kernel"]["checked"]), (status, status, 5))
+                self.assertEqual((result["status"], result["kernel"]["verdict"], result["kernel"]["checked"]), (status, status, 12))
+
+    def test_the_kernel_agrees_on_every_lap_of_the_corpus_and_each_gets_the_verdict_worked_out_by_hand(self):
+        """corpus/expected.tsv gives each lap of corpus/cases/deck the verdict a hand calculation from AISC 360-22 gives it,
+        and the header of each design shows the arithmetic. The grid and the kernel must both give that verdict."""
+        expected = {}
+        for line in (ROOT / "corpus" / "expected.tsv").read_text(encoding="utf-8").splitlines():
+            path, _, rest = line.partition("\t")
+            if path.startswith("corpus/cases/deck/"):
+                expected[path] = rest.split("\t")[0]
+        self.assertGreaterEqual(len(expected), 37)
+        self.assertLessEqual({"PASS", "FAIL", "UNKNOWN", "INPUT_ERROR"}, set(expected.values()))
+        for path, verdict in expected.items():
+            with self.subTest(design=path):
+                result = petra.check(*read_pair(ROOT / path), path=path, repair=False)
+                self.assertEqual(result["status"], verdict)
+                if verdict != "INPUT_ERROR":      # a pair the grid refuses is not sent to the kernel
+                    self.assertEqual(result["kernel"]["verdict"], verdict)
 
     def test_the_kernel_agrees_on_bands_cases_listed_values_and_a_split_proof(self):
         cards = {"at the end of a band": [], "over the band": [("[0 A, 2 A]", "[0 A, 2.01 A]")],

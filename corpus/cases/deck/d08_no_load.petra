@@ -1,6 +1,7 @@
 petra 0
 
-# The card puts no pull on the lap, so the rules that read one are open.
+# The card puts no pull on the lap, so the rules that read one are open: the strength of the
+# bolts and their holes, and the yielding, rupture and block shear of each plate.
 
 plate tab {
   thickness 0.375 inch
@@ -24,5 +25,7 @@ lap splice {
   count 3
   pitch 3 inch
   end 1.5 inch
+  side 3 inch
+  surface protected
   joins tab strap
 }

@@ -1,7 +1,7 @@
 {
  "format": "petra-rules/0",
  "name": "aisc360-22",
- "about": "Rows of AISC 360-22 as two transcribers each wrote them (bench/formalizer), and the first types, grid and rules over them. The rules use LRFD. A grid line with no rule leaves its cell open.",
+ "about": "Rows of AISC 360-22 as two transcribers each wrote them (bench/formalizer), the types and the grid of a lap, written by hand, and the rules of a lap as the first of two transcribers wrote them from the pages (bench/formalizer/rules2_a.json), where the second agrees. The rules use LRFD. A grid line with no rule leaves its cell open.",
  "rows": [
   {
    "id": "aisc360-22/J3-1",
@@ -1440,6 +1440,570 @@
      "d"
     ]
    }
+  },
+  {
+   "id": "aisc360-22/J3.4-spacing",
+   "anchor": {
+    "standard": "ANSI/AISC 360-22",
+    "clause": "J3.4",
+    "page": "16.1-138"
+   },
+   "gives": {
+    "name": "s_min",
+    "dim": "length",
+    "what": "least distance between the centres of standard, oversized or slotted holes"
+   },
+   "takes": [
+    {
+     "name": "d",
+     "dim": "length",
+     "what": "nominal diameter of the fastener",
+     "range": [
+      "1/2 inch",
+      "1 1/2 inch"
+     ]
+    }
+   ],
+   "is": [
+    "mul",
+    "8/3",
+    "d"
+   ]
+  },
+  {
+   "id": "aisc360-22/J3.4-clear",
+   "anchor": {
+    "standard": "ANSI/AISC 360-22",
+    "clause": "J3.4",
+    "page": "16.1-138"
+   },
+   "gives": {
+    "name": "clear_min",
+    "dim": "length",
+    "what": "least clear distance between bolt holes or slots"
+   },
+   "takes": [
+    {
+     "name": "d",
+     "dim": "length",
+     "what": "nominal diameter of the fastener",
+     "range": [
+      "1/2 inch",
+      "1 1/2 inch"
+     ]
+    }
+   ],
+   "is": "d"
+  },
+  {
+   "id": "aisc360-22/J3.6-edge",
+   "anchor": {
+    "standard": "ANSI/AISC 360-22",
+    "clause": "J3.6, first sentence (U.S. customary value)",
+    "page": "16.1-140"
+   },
+   "gives": {
+    "name": "edge_max",
+    "dim": "length",
+    "what": "greatest distance from the centre of a bolt hole to the nearest edge of elements in contact"
+   },
+   "takes": [
+    {
+     "name": "t",
+     "dim": "length",
+     "what": "thickness of the connected element under consideration",
+     "range": [
+      "1/8 inch",
+      "2 inch"
+     ]
+    }
+   ],
+   "is": [
+    "min",
+    [
+     "mul",
+     "12",
+     "t"
+    ],
+    [
+     "q",
+     "6",
+     "inch"
+    ]
+   ]
+  },
+  {
+   "id": "aisc360-22/J3.6-spacing-a",
+   "anchor": {
+    "standard": "ANSI/AISC 360-22",
+    "clause": "J3.6(a) (U.S. customary value)",
+    "page": "16.1-140"
+   },
+   "gives": {
+    "name": "s_max",
+    "dim": "length",
+    "what": "greatest longitudinal spacing of bolt holes, painted members or unpainted members not subject to atmospheric corrosion"
+   },
+   "takes": [
+    {
+     "name": "t",
+     "dim": "length",
+     "what": "thickness of the thinner part",
+     "range": [
+      "1/8 inch",
+      "2 inch"
+     ]
+    }
+   ],
+   "is": [
+    "min",
+    [
+     "mul",
+     "24",
+     "t"
+    ],
+    [
+     "q",
+     "12",
+     "inch"
+    ]
+   ]
+  },
+  {
+   "id": "aisc360-22/J3.6-spacing-b",
+   "anchor": {
+    "standard": "ANSI/AISC 360-22",
+    "clause": "J3.6(b) (U.S. customary value)",
+    "page": "16.1-140"
+   },
+   "gives": {
+    "name": "s_max",
+    "dim": "length",
+    "what": "greatest longitudinal spacing of bolt holes, unpainted members of weathering steel subject to atmospheric corrosion"
+   },
+   "takes": [
+    {
+     "name": "t",
+     "dim": "length",
+     "what": "thickness of the thinner part",
+     "range": [
+      "1/8 inch",
+      "2 inch"
+     ]
+    }
+   ],
+   "is": [
+    "min",
+    [
+     "mul",
+     "14",
+     "t"
+    ],
+    [
+     "q",
+     "7",
+     "inch"
+    ]
+   ]
+  },
+  {
+   "id": "aisc360-22/B4.3b-hole",
+   "anchor": {
+    "standard": "ANSI/AISC 360-22",
+    "clause": "B4.3b (U.S. customary value)",
+    "page": "16.1-24"
+   },
+   "gives": {
+    "name": "hole_width",
+    "dim": "length",
+    "what": "width of a bolt hole to take in computing a net area for tension and shear"
+   },
+   "takes": [
+    {
+     "name": "dh",
+     "dim": "length",
+     "what": "nominal dimension of the hole",
+     "range": [
+      "9/16 inch",
+      "1 13/16 inch"
+     ]
+    }
+   ],
+   "is": [
+    "add",
+    "dh",
+    [
+     "q",
+     "1/16",
+     "inch"
+    ]
+   ]
+  },
+  {
+   "id": "aisc360-22/D3-1",
+   "anchor": {
+    "standard": "ANSI/AISC 360-22",
+    "clause": "D3",
+    "equation": "D3-1",
+    "page": "16.1-33"
+   },
+   "gives": {
+    "name": "Ae",
+    "dim": "area",
+    "what": "effective net area of a tension member"
+   },
+   "takes": [
+    {
+     "name": "An",
+     "dim": "area",
+     "what": "net area of the member",
+     "range": [
+      "1/2 inch2",
+      "50 inch2"
+     ]
+    },
+    {
+     "name": "U",
+     "dim": "dimensionless",
+     "what": "shear lag factor",
+     "range": [
+      "0.5",
+      "1"
+     ]
+    }
+   ],
+   "is": [
+    "mul",
+    "An",
+    "U"
+   ]
+  },
+  {
+   "id": "aisc360-22/table-J3.2-note-c",
+   "anchor": {
+    "standard": "ANSI/AISC 360-22",
+    "clause": "J3.7",
+    "table": "J3.2, note c (U.S. customary value)",
+    "page": "16.1-137"
+   },
+   "gives": {
+    "name": "Fnv_factor",
+    "dim": "dimensionless",
+    "what": "factor on the tabulated nominal shear stress Fnv of a fastener in an end-loaded connection"
+   },
+   "takes": [
+    {
+     "name": "L",
+     "dim": "length",
+     "what": "fastener pattern length",
+     "range": [
+      "3 inch",
+      "60 inch"
+     ]
+    }
+   ],
+   "cases": [
+    {
+     "when": [
+      "gt",
+      "L",
+      [
+       "q",
+       "38",
+       "inch"
+      ]
+     ],
+     "is": "0.833"
+    },
+    {
+     "is": "1"
+    }
+   ],
+   "jumps": [
+    {
+     "cases": [
+      1,
+      2
+     ],
+     "why": "the note reduces Fnv to 83.3% of the tabulated value in one step once the pattern length is over 38 in., and gives no transition"
+    }
+   ]
+  },
+  {
+   "id": "aisc360-22/table-J3.3-large-standard",
+   "anchor": {
+    "standard": "ANSI/AISC 360-22",
+    "clause": "J3.3",
+    "table": "J3.3, last line",
+    "page": "16.1-137"
+   },
+   "gives": {
+    "name": "dh",
+    "dim": "length",
+    "what": "nominal diameter of a standard hole"
+   },
+   "takes": [
+    {
+     "name": "d",
+     "dim": "length",
+     "what": "bolt diameter",
+     "range": [
+      "1 1/8 inch",
+      "1 1/2 inch"
+     ]
+    }
+   ],
+   "is": [
+    "add",
+    "d",
+    [
+     "q",
+     "1/8",
+     "inch"
+    ]
+   ]
+  },
+  {
+   "id": "aisc360-22/table-J3.3-large-oversize",
+   "anchor": {
+    "standard": "ANSI/AISC 360-22",
+    "clause": "J3.3",
+    "table": "J3.3, last line",
+    "page": "16.1-137"
+   },
+   "gives": {
+    "name": "dh",
+    "dim": "length",
+    "what": "nominal diameter of an oversize hole"
+   },
+   "takes": [
+    {
+     "name": "d",
+     "dim": "length",
+     "what": "bolt diameter",
+     "range": [
+      "1 1/8 inch",
+      "1 1/2 inch"
+     ]
+    }
+   ],
+   "is": [
+    "add",
+    "d",
+    [
+     "q",
+     "5/16",
+     "inch"
+    ]
+   ]
+  },
+  {
+   "id": "aisc360-22/table-J3.4-large",
+   "anchor": {
+    "standard": "ANSI/AISC 360-22",
+    "clause": "J3.5",
+    "table": "J3.4, last line",
+    "page": "16.1-139"
+   },
+   "gives": {
+    "name": "edge_min",
+    "dim": "length",
+    "what": "minimum distance from the centre of a standard hole to an edge of a connected part"
+   },
+   "takes": [
+    {
+     "name": "d",
+     "dim": "length",
+     "what": "bolt diameter",
+     "range": [
+      "1 1/4 inch",
+      "1 1/2 inch"
+     ]
+    }
+   ],
+   "is": [
+    "mul",
+    "5/4",
+    "d"
+   ]
+  },
+  {
+   "id": "aisc360-22/table-J3.5",
+   "anchor": {
+    "standard": "ANSI/AISC 360-22",
+    "clause": "J3.5",
+    "table": "J3.5",
+    "page": "16.1-140"
+   },
+   "gives": {
+    "name": "C2",
+    "dim": "length",
+    "what": "edge distance increment for an oversized or slotted hole"
+   },
+   "takes": [
+    {
+     "name": "d",
+     "dim": "length",
+     "what": "nominal diameter of the fastener",
+     "range": [
+      "1/2 inch",
+      "1 1/2 inch"
+     ]
+    },
+    {
+     "name": "hole",
+     "one_of": [
+      "oversized",
+      "short slot, long axis perpendicular to edge",
+      "slot, long axis parallel to edge"
+     ],
+     "what": "kind of hole"
+    }
+   ],
+   "table": {
+    "down": {
+     "by": "d",
+     "bands": [
+      [
+       "0 inch",
+       "7/8 inch"
+      ],
+      [
+       "7/8 inch",
+       "1 inch"
+      ],
+      [
+       "1 inch",
+       null
+      ]
+     ],
+     "closed": "upper"
+    },
+    "across": {
+     "by": "hole"
+    },
+    "unit": "inch",
+    "cells": [
+     [
+      "1/16",
+      "1/8",
+      "0"
+     ],
+     [
+      "1/8",
+      "1/8",
+      "0"
+     ],
+     [
+      "1/8",
+      "3/16",
+      "0"
+     ]
+    ],
+    "rises": [
+     "d"
+    ]
+   }
+  },
+  {
+   "id": "aisc360-22/J3-6b",
+   "anchor": {
+    "standard": "ANSI/AISC 360-22",
+    "clause": "J3.11a",
+    "equation": "J3-6b",
+    "page": "16.1-143"
+   },
+   "gives": {
+    "name": "Rn",
+    "dim": "force",
+    "what": "nominal bearing strength at a bolt hole, deformation at service load not a design consideration"
+   },
+   "takes": [
+    {
+     "name": "d",
+     "dim": "length",
+     "what": "nominal diameter of the fastener",
+     "range": [
+      "1/2 inch",
+      "1 1/2 inch"
+     ]
+    },
+    {
+     "name": "t",
+     "dim": "length",
+     "what": "thickness of the connected material",
+     "range": [
+      "1/8 inch",
+      "2 inch"
+     ]
+    },
+    {
+     "name": "Fu",
+     "dim": "stress",
+     "what": "specified minimum tensile strength of the connected material",
+     "range": [
+      "58 ksi",
+      "100 ksi"
+     ]
+    }
+   ],
+   "is": [
+    "mul",
+    "3.0",
+    "d",
+    "t",
+    "Fu"
+   ]
+  },
+  {
+   "id": "aisc360-22/J3-6d",
+   "anchor": {
+    "standard": "ANSI/AISC 360-22",
+    "clause": "J3.11a",
+    "equation": "J3-6d",
+    "page": "16.1-144"
+   },
+   "gives": {
+    "name": "Rn",
+    "dim": "force",
+    "what": "nominal tearout strength at a bolt hole, deformation at service load not a design consideration"
+   },
+   "takes": [
+    {
+     "name": "lc",
+     "dim": "length",
+     "what": "clear distance, in the direction of the force, from the edge of the hole to the edge of the next hole or of the material",
+     "range": [
+      "1/4 inch",
+      "3 inch"
+     ]
+    },
+    {
+     "name": "t",
+     "dim": "length",
+     "what": "thickness of the connected material",
+     "range": [
+      "1/8 inch",
+      "2 inch"
+     ]
+    },
+    {
+     "name": "Fu",
+     "dim": "stress",
+     "what": "specified minimum tensile strength of the connected material",
+     "range": [
+      "58 ksi",
+      "100 ksi"
+     ]
+    }
+   ],
+   "is": [
+    "mul",
+    "1.5",
+    "lc",
+    "t",
+    "Fu"
+   ]
   }
  ],
  "types": [
@@ -1523,6 +2087,19 @@
      "what": "the least distance from the centre of an end hole to the end of either plate, along the line"
     },
     {
+     "name": "side",
+     "dim": "length",
+     "what": "the least distance from the centre of a hole to a side edge of either plate, across the line"
+    },
+    {
+     "name": "surface",
+     "one_of": [
+      "protected",
+      "weathering"
+     ],
+     "what": "whether the plates are painted or otherwise not open to atmospheric corrosion, or are unpainted weathering steel open to it"
+    },
+    {
      "name": "joins",
      "type": "plate",
      "as": [
@@ -1593,7 +2170,16 @@
   {
    "type": "lap",
    "mechanism": "lap.spread",
-   "what": "maximum spacing and edge distance",
+   "what": "maximum spacing of the holes",
+   "anchor": {
+    "standard": "AISC 360-22",
+    "clause": "J3.6"
+   }
+  },
+  {
+   "type": "lap",
+   "mechanism": "lap.max_edge_distance",
+   "what": "maximum distance from a hole to the nearest edge of each plate, by that plate's thickness",
    "anchor": {
     "standard": "AISC 360-22",
     "clause": "J3.6"
@@ -1695,222 +2281,59 @@
  ],
  "rules": [
   {
-   "id": "aisc360-22/lap-strength",
+   "id": "aisc360-22/lap-spacing-centres",
    "type": "lap",
-   "mechanism": "lap.strength",
+   "mechanism": "lap.spacing",
    "anchor": {
     "standard": "AISC 360-22",
-    "clause": "J3.7 and J3.11",
-    "equation": "J3-1, J3-6a, J3-6c",
-    "table": "J3.2, J3.3"
+    "clause": "J3.4"
    },
-   "says": "the pull is at most 0.75 of the sum over the bolts of the least of a bolt's shear strength and the bearing and tearout strengths at its two holes",
-   "let": {
-    "Ab": [
-     "div",
-     [
-      "mul",
-      "pi",
-      [
-       "pow",
-       "diameter",
-       "2"
-      ]
-     ],
-     "4"
-    ],
-    "rv": [
-     "row",
-     "aisc360-22/J3-1",
-     {
-      "Ab": "Ab",
-      "Fn": [
-       "row",
-       "aisc360-22/table-J3.2",
-       {
-        "fastener": "fastener",
-        "stress": [
-         "by",
-         "threads",
-         {
-          "included": "Fnv_N",
-          "excluded": "Fnv_X"
-         }
-        ]
-       }
-      ]
-     }
-    ],
-    "dh": [
-     "row",
-     "aisc360-22/table-J3.3",
-     {
-      "d": "diameter",
-      "hole": "holes"
-     }
-    ],
-    "lc_end": [
-     "sub",
-     "end",
-     [
-      "div",
-      "dh",
-      "2"
-     ]
-    ],
-    "lc_in": [
-     "sub",
-     "pitch",
-     "dh"
-    ],
-    "a_end": [
-     "min",
-     [
-      "row",
-      "aisc360-22/J3-6a",
-      {
-       "d": "diameter",
-       "t": "a.thickness",
-       "Fu": "a.Fu"
-      }
-     ],
-     [
-      "row",
-      "aisc360-22/J3-6c",
-      {
-       "lc": "lc_end",
-       "t": "a.thickness",
-       "Fu": "a.Fu"
-      }
-     ]
-    ],
-    "a_in": [
-     "min",
-     [
-      "row",
-      "aisc360-22/J3-6a",
-      {
-       "d": "diameter",
-       "t": "a.thickness",
-       "Fu": "a.Fu"
-      }
-     ],
-     [
-      "row",
-      "aisc360-22/J3-6c",
-      {
-       "lc": "lc_in",
-       "t": "a.thickness",
-       "Fu": "a.Fu"
-      }
-     ]
-    ],
-    "b_end": [
-     "min",
-     [
-      "row",
-      "aisc360-22/J3-6a",
-      {
-       "d": "diameter",
-       "t": "b.thickness",
-       "Fu": "b.Fu"
-      }
-     ],
-     [
-      "row",
-      "aisc360-22/J3-6c",
-      {
-       "lc": "lc_end",
-       "t": "b.thickness",
-       "Fu": "b.Fu"
-      }
-     ]
-    ],
-    "b_in": [
-     "min",
-     [
-      "row",
-      "aisc360-22/J3-6a",
-      {
-       "d": "diameter",
-       "t": "b.thickness",
-       "Fu": "b.Fu"
-      }
-     ],
-     [
-      "row",
-      "aisc360-22/J3-6c",
-      {
-       "lc": "lc_in",
-       "t": "b.thickness",
-       "Fu": "b.Fu"
-      }
-     ]
-    ]
-   },
-   "where": [
-    {
-     "le": [
-      [
-       "mul",
-       [
-        "sub",
-        "count",
-        "1"
-       ],
-       "pitch"
-      ],
-      [
-       "q",
-       "38",
-       "inch"
-      ]
-     ],
-     "why": "the line of bolts is at most 38 inch long (note c of Table J3.2 lowers the shear stress of a longer one, and this rule does not)"
-    }
-   ],
+   "says": "the least distance between the centres of holes, 2 2/3 times the bolt's diameter, is at most the pitch",
    "le": [
     [
-     "load",
-     "pull"
+     "row",
+     "aisc360-22/J3.4-spacing",
+     {
+      "d": "diameter"
+     }
+    ],
+    "pitch"
+   ]
+  },
+  {
+   "id": "aisc360-22/lap-spacing-clear",
+   "type": "lap",
+   "mechanism": "lap.spacing",
+   "anchor": {
+    "standard": "AISC 360-22",
+    "clause": "J3.4",
+    "table": "J3.3"
+   },
+   "says": "the least clear distance between holes, one bolt diameter, is at most the pitch less the nominal diameter of a hole",
+   "le": [
+    [
+     "row",
+     "aisc360-22/J3.4-clear",
+     {
+      "d": "diameter"
+     }
     ],
     [
-     "mul",
-     "0.75",
+     "sub",
+     "pitch",
      [
-      "add",
-      [
-       "min",
-       "rv",
-       "a_end",
-       "b_in"
-      ],
-      [
-       "min",
-       "rv",
-       "a_in",
-       "b_end"
-      ],
-      [
-       "mul",
-       [
-        "sub",
-        "count",
-        "2"
-       ],
-       [
-        "min",
-        "rv",
-        "a_in",
-        "b_in"
-       ]
-      ]
+      "row",
+      "aisc360-22/table-J3.3",
+      {
+       "d": "diameter",
+       "hole": "holes"
+      }
      ]
     ]
    ]
   },
   {
-   "id": "aisc360-22/lap-end-distance",
+   "id": "aisc360-22/lap-end-distance-standard",
    "type": "lap",
    "mechanism": "lap.end_distance",
    "anchor": {
@@ -1918,7 +2341,7 @@
     "clause": "J3.5",
     "table": "J3.4"
    },
-   "says": "the distance from the centre of an end hole to the end of a plate is at least the table's value for the bolt diameter",
+   "says": "with standard holes, the least edge distance of Table J3.4 for the bolt's diameter is at most the distance from the centre of an end hole to the end of a plate",
    "when": [
     "is",
     "holes",
@@ -1936,15 +2359,393 @@
    ]
   },
   {
-   "id": "aisc360-22/lap-yield-a",
+   "id": "aisc360-22/lap-end-distance-oversize",
+   "type": "lap",
+   "mechanism": "lap.end_distance",
+   "anchor": {
+    "standard": "AISC 360-22",
+    "clause": "J3.5",
+    "table": "J3.4, J3.5"
+   },
+   "says": "with oversize holes, the least edge distance of Table J3.4 for the bolt's diameter plus the increment C2 of Table J3.5 for an oversized hole is at most the distance from the centre of an end hole to the end of a plate",
+   "when": [
+    "is",
+    "holes",
+    "oversize"
+   ],
+   "le": [
+    [
+     "add",
+     [
+      "row",
+      "aisc360-22/table-J3.4",
+      {
+       "d": "diameter"
+      }
+     ],
+     [
+      "row",
+      "aisc360-22/table-J3.5",
+      {
+       "d": "diameter",
+       "hole": [
+        "key",
+        "oversized"
+       ]
+      }
+     ]
+    ],
+    "end"
+   ]
+  },
+  {
+   "id": "aisc360-22/lap-side-distance-standard",
+   "type": "lap",
+   "mechanism": "lap.side_distance",
+   "anchor": {
+    "standard": "AISC 360-22",
+    "clause": "J3.5",
+    "table": "J3.4"
+   },
+   "says": "with standard holes, the least edge distance of Table J3.4 for the bolt's diameter is at most the distance from the centre of a hole to a side edge of a plate",
+   "when": [
+    "is",
+    "holes",
+    "standard"
+   ],
+   "le": [
+    [
+     "row",
+     "aisc360-22/table-J3.4",
+     {
+      "d": "diameter"
+     }
+    ],
+    "side"
+   ]
+  },
+  {
+   "id": "aisc360-22/lap-side-distance-oversize",
+   "type": "lap",
+   "mechanism": "lap.side_distance",
+   "anchor": {
+    "standard": "AISC 360-22",
+    "clause": "J3.5",
+    "table": "J3.4, J3.5"
+   },
+   "says": "with oversize holes, the least edge distance of Table J3.4 for the bolt's diameter plus the increment C2 of Table J3.5 for an oversized hole is at most the distance from the centre of a hole to a side edge of a plate",
+   "when": [
+    "is",
+    "holes",
+    "oversize"
+   ],
+   "le": [
+    [
+     "add",
+     [
+      "row",
+      "aisc360-22/table-J3.4",
+      {
+       "d": "diameter"
+      }
+     ],
+     [
+      "row",
+      "aisc360-22/table-J3.5",
+      {
+       "d": "diameter",
+       "hole": [
+        "key",
+        "oversized"
+       ]
+      }
+     ]
+    ],
+    "side"
+   ]
+  },
+  {
+   "id": "aisc360-22/lap-spread-pitch-protected",
+   "type": "lap",
+   "mechanism": "lap.spread",
+   "anchor": {
+    "standard": "AISC 360-22",
+    "clause": "J3.6(a)"
+   },
+   "says": "where the plates are painted or not open to atmospheric corrosion, the pitch is at most 24 times the thickness of the thinner plate and at most 12 inch",
+   "when": [
+    "is",
+    "surface",
+    "protected"
+   ],
+   "le": [
+    "pitch",
+    [
+     "row",
+     "aisc360-22/J3.6-spacing-a",
+     {
+      "t": [
+       "min",
+       "a.thickness",
+       "b.thickness"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "id": "aisc360-22/lap-spread-pitch-weathering",
+   "type": "lap",
+   "mechanism": "lap.spread",
+   "anchor": {
+    "standard": "AISC 360-22",
+    "clause": "J3.6(b)"
+   },
+   "says": "where the plates are unpainted weathering steel open to atmospheric corrosion, the pitch is at most 14 times the thickness of the thinner plate and at most 7 inch",
+   "when": [
+    "is",
+    "surface",
+    "weathering"
+   ],
+   "le": [
+    "pitch",
+    [
+     "row",
+     "aisc360-22/J3.6-spacing-b",
+     {
+      "t": [
+       "min",
+       "a.thickness",
+       "b.thickness"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "id": "aisc360-22/lap-strength",
+   "type": "lap",
+   "mechanism": "lap.strength",
+   "anchor": {
+    "standard": "AISC 360-22",
+    "clause": "J3.7 and J3.11a",
+    "equation": "J3-1, J3-6a, J3-6c",
+    "table": "J3.2 with its note c, J3.3"
+   },
+   "says": "the pull is at most the sum over the bolts of what each can carry: the least of 0.75 of its shear strength and 0.75 of the lesser of the bearing and the tearout strength of each plate at its hole, with deformation of the hole a design consideration. The shear stress is 83.3% of the tabulated value where the line of bolts is over 38 inch long. In each plate the bolt nearest that plate's end tears out to the end, and every other bolt to the next hole, and the two plates end at opposite ends of the line.",
+   "let": {
+    "dh": [
+     "row",
+     "aisc360-22/table-J3.3",
+     {
+      "d": "diameter",
+      "hole": "holes"
+     }
+    ],
+    "Fnv": [
+     "mul",
+     [
+      "row",
+      "aisc360-22/table-J3.2-note-c",
+      {
+       "L": [
+        "mul",
+        [
+         "sub",
+         "count",
+         "1"
+        ],
+        "pitch"
+       ]
+      }
+     ],
+     [
+      "row",
+      "aisc360-22/table-J3.2",
+      {
+       "fastener": "fastener",
+       "stress": [
+        "by",
+        "threads",
+        {
+         "included": "Fnv_N",
+         "excluded": "Fnv_X"
+        }
+       ]
+      }
+     ]
+    ],
+    "shear": [
+     "mul",
+     "0.75",
+     [
+      "row",
+      "aisc360-22/J3-1",
+      {
+       "Fn": "Fnv",
+       "Ab": [
+        "mul",
+        [
+         "div",
+         "pi",
+         "4"
+        ],
+        [
+         "pow",
+         "diameter",
+         "2"
+        ]
+       ]
+      }
+     ]
+    ],
+    "lc_end": [
+     "sub",
+     "end",
+     [
+      "div",
+      "dh",
+      "2"
+     ]
+    ],
+    "lc_next": [
+     "sub",
+     "pitch",
+     "dh"
+    ],
+    "bearing_a": [
+     "row",
+     "aisc360-22/J3-6a",
+     {
+      "d": "diameter",
+      "t": "a.thickness",
+      "Fu": "a.Fu"
+     }
+    ],
+    "bearing_b": [
+     "row",
+     "aisc360-22/J3-6a",
+     {
+      "d": "diameter",
+      "t": "b.thickness",
+      "Fu": "b.Fu"
+     }
+    ],
+    "end_a": [
+     "mul",
+     "0.75",
+     [
+      "min",
+      "bearing_a",
+      [
+       "row",
+       "aisc360-22/J3-6c",
+       {
+        "lc": "lc_end",
+        "t": "a.thickness",
+        "Fu": "a.Fu"
+       }
+      ]
+     ]
+    ],
+    "next_a": [
+     "mul",
+     "0.75",
+     [
+      "min",
+      "bearing_a",
+      [
+       "row",
+       "aisc360-22/J3-6c",
+       {
+        "lc": "lc_next",
+        "t": "a.thickness",
+        "Fu": "a.Fu"
+       }
+      ]
+     ]
+    ],
+    "end_b": [
+     "mul",
+     "0.75",
+     [
+      "min",
+      "bearing_b",
+      [
+       "row",
+       "aisc360-22/J3-6c",
+       {
+        "lc": "lc_end",
+        "t": "b.thickness",
+        "Fu": "b.Fu"
+       }
+      ]
+     ]
+    ],
+    "next_b": [
+     "mul",
+     "0.75",
+     [
+      "min",
+      "bearing_b",
+      [
+       "row",
+       "aisc360-22/J3-6c",
+       {
+        "lc": "lc_next",
+        "t": "b.thickness",
+        "Fu": "b.Fu"
+       }
+      ]
+     ]
+    ]
+   },
+   "le": [
+    [
+     "load",
+     "pull"
+    ],
+    [
+     "add",
+     [
+      "min",
+      "shear",
+      "end_a",
+      "next_b"
+     ],
+     [
+      "min",
+      "shear",
+      "next_a",
+      "end_b"
+     ],
+     [
+      "mul",
+      [
+       "sub",
+       "count",
+       "2"
+      ],
+      [
+       "min",
+       "shear",
+       "next_a",
+       "next_b"
+      ]
+     ]
+    ]
+   ]
+  },
+  {
+   "id": "aisc360-22/lap-ply-yield-a",
    "type": "lap",
    "mechanism": "lap.ply_yield",
    "anchor": {
     "standard": "AISC 360-22",
-    "clause": "J4.1",
+    "clause": "J4.1(a)",
     "equation": "J4-1"
    },
-   "says": "the pull is at most 0.90 of the yield strength of the gross section of the first plate",
+   "says": "the pull is at most 0.90 of the yield strength of the gross section of plate a, its width times its thickness",
    "le": [
     [
      "load",
@@ -1969,15 +2770,15 @@
    ]
   },
   {
-   "id": "aisc360-22/lap-yield-b",
+   "id": "aisc360-22/lap-ply-yield-b",
    "type": "lap",
    "mechanism": "lap.ply_yield",
    "anchor": {
     "standard": "AISC 360-22",
-    "clause": "J4.1",
+    "clause": "J4.1(a)",
     "equation": "J4-1"
    },
-   "says": "the pull is at most 0.90 of the yield strength of the gross section of the second plate",
+   "says": "the pull is at most 0.90 of the yield strength of the gross section of plate b, its width times its thickness",
    "le": [
     [
      "load",
@@ -1996,6 +2797,324 @@
         "b.width",
         "b.thickness"
        ]
+      }
+     ]
+    ]
+   ]
+  },
+  {
+   "id": "aisc360-22/lap-ply-rupture-a",
+   "type": "lap",
+   "mechanism": "lap.ply_rupture",
+   "anchor": {
+    "standard": "AISC 360-22",
+    "clause": "J4.1(b), with D3 and B4.3b",
+    "equation": "J4-2, D3-1",
+    "table": "D3.1 case 1, J3.3"
+   },
+   "says": "the pull is at most 0.75 of the rupture strength of the effective net section of plate a: its width less one hole, taken 1/16 inch wider than its nominal diameter, times its thickness, with a shear lag factor of 1",
+   "let": {
+    "hole_width": [
+     "row",
+     "aisc360-22/B4.3b-hole",
+     {
+      "dh": [
+       "row",
+       "aisc360-22/table-J3.3",
+       {
+        "d": "diameter",
+        "hole": "holes"
+       }
+      ]
+     }
+    ]
+   },
+   "le": [
+    [
+     "load",
+     "pull"
+    ],
+    [
+     "mul",
+     "0.75",
+     [
+      "row",
+      "aisc360-22/J4-2",
+      {
+       "Fu": "a.Fu",
+       "Ae": [
+        "row",
+        "aisc360-22/D3-1",
+        {
+         "An": [
+          "mul",
+          [
+           "sub",
+           "a.width",
+           "hole_width"
+          ],
+          "a.thickness"
+         ],
+         "U": "1"
+        }
+       ]
+      }
+     ]
+    ]
+   ]
+  },
+  {
+   "id": "aisc360-22/lap-ply-rupture-b",
+   "type": "lap",
+   "mechanism": "lap.ply_rupture",
+   "anchor": {
+    "standard": "AISC 360-22",
+    "clause": "J4.1(b), with D3 and B4.3b",
+    "equation": "J4-2, D3-1",
+    "table": "D3.1 case 1, J3.3"
+   },
+   "says": "the pull is at most 0.75 of the rupture strength of the effective net section of plate b: its width less one hole, taken 1/16 inch wider than its nominal diameter, times its thickness, with a shear lag factor of 1",
+   "let": {
+    "hole_width": [
+     "row",
+     "aisc360-22/B4.3b-hole",
+     {
+      "dh": [
+       "row",
+       "aisc360-22/table-J3.3",
+       {
+        "d": "diameter",
+        "hole": "holes"
+       }
+      ]
+     }
+    ]
+   },
+   "le": [
+    [
+     "load",
+     "pull"
+    ],
+    [
+     "mul",
+     "0.75",
+     [
+      "row",
+      "aisc360-22/J4-2",
+      {
+       "Fu": "b.Fu",
+       "Ae": [
+        "row",
+        "aisc360-22/D3-1",
+        {
+         "An": [
+          "mul",
+          [
+           "sub",
+           "b.width",
+           "hole_width"
+          ],
+          "b.thickness"
+         ],
+         "U": "1"
+        }
+       ]
+      }
+     ]
+    ]
+   ]
+  },
+  {
+   "id": "aisc360-22/lap-block-shear-a",
+   "type": "lap",
+   "mechanism": "lap.block_shear",
+   "anchor": {
+    "standard": "AISC 360-22",
+    "clause": "J4.3, with B4.3b",
+    "equation": "J4-5",
+    "table": "J3.3"
+   },
+   "says": "the pull is at most 0.75 of the block shear strength of plate a, for the block that shears along the line of holes from the end of the plate to the farthest hole and tears from that hole across to the side edge. The shear length is the end distance plus the pitch for each bolt after the first; the net shear length is less by the count less a half of holes; the net tension length is the side distance less half a hole; a hole is taken 1/16 inch wider than its nominal diameter; the tension stress is uniform",
+   "let": {
+    "hole_width": [
+     "row",
+     "aisc360-22/B4.3b-hole",
+     {
+      "dh": [
+       "row",
+       "aisc360-22/table-J3.3",
+       {
+        "d": "diameter",
+        "hole": "holes"
+       }
+      ]
+     }
+    ],
+    "shear_length": [
+     "add",
+     "end",
+     [
+      "mul",
+      [
+       "sub",
+       "count",
+       "1"
+      ],
+      "pitch"
+     ]
+    ],
+    "Agv": [
+     "mul",
+     "shear_length",
+     "a.thickness"
+    ],
+    "Anv": [
+     "mul",
+     [
+      "sub",
+      "shear_length",
+      [
+       "mul",
+       [
+        "sub",
+        "count",
+        "1/2"
+       ],
+       "hole_width"
+      ]
+     ],
+     "a.thickness"
+    ],
+    "Ant": [
+     "mul",
+     [
+      "sub",
+      "side",
+      [
+       "div",
+       "hole_width",
+       "2"
+      ]
+     ],
+     "a.thickness"
+    ]
+   },
+   "le": [
+    [
+     "load",
+     "pull"
+    ],
+    [
+     "mul",
+     "0.75",
+     [
+      "row",
+      "aisc360-22/J4-5",
+      {
+       "Fu": "a.Fu",
+       "Fy": "a.Fy",
+       "Anv": "Anv",
+       "Agv": "Agv",
+       "Ant": "Ant",
+       "Ubs": "1"
+      }
+     ]
+    ]
+   ]
+  },
+  {
+   "id": "aisc360-22/lap-block-shear-b",
+   "type": "lap",
+   "mechanism": "lap.block_shear",
+   "anchor": {
+    "standard": "AISC 360-22",
+    "clause": "J4.3, with B4.3b",
+    "equation": "J4-5",
+    "table": "J3.3"
+   },
+   "says": "the pull is at most 0.75 of the block shear strength of plate b, for the block that shears along the line of holes from the end of the plate to the farthest hole and tears from that hole across to the side edge. The shear length is the end distance plus the pitch for each bolt after the first; the net shear length is less by the count less a half of holes; the net tension length is the side distance less half a hole; a hole is taken 1/16 inch wider than its nominal diameter; the tension stress is uniform",
+   "let": {
+    "hole_width": [
+     "row",
+     "aisc360-22/B4.3b-hole",
+     {
+      "dh": [
+       "row",
+       "aisc360-22/table-J3.3",
+       {
+        "d": "diameter",
+        "hole": "holes"
+       }
+      ]
+     }
+    ],
+    "shear_length": [
+     "add",
+     "end",
+     [
+      "mul",
+      [
+       "sub",
+       "count",
+       "1"
+      ],
+      "pitch"
+     ]
+    ],
+    "Agv": [
+     "mul",
+     "shear_length",
+     "b.thickness"
+    ],
+    "Anv": [
+     "mul",
+     [
+      "sub",
+      "shear_length",
+      [
+       "mul",
+       [
+        "sub",
+        "count",
+        "1/2"
+       ],
+       "hole_width"
+      ]
+     ],
+     "b.thickness"
+    ],
+    "Ant": [
+     "mul",
+     [
+      "sub",
+      "side",
+      [
+       "div",
+       "hole_width",
+       "2"
+      ]
+     ],
+     "b.thickness"
+    ]
+   },
+   "le": [
+    [
+     "load",
+     "pull"
+    ],
+    [
+     "mul",
+     "0.75",
+     [
+      "row",
+      "aisc360-22/J4-5",
+      {
+       "Fu": "b.Fu",
+       "Fy": "b.Fy",
+       "Anv": "Anv",
+       "Agv": "Agv",
+       "Ant": "Ant",
+       "Ubs": "1"
       }
      ]
     ]

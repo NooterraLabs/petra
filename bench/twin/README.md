@@ -75,6 +75,30 @@ No deck with bands out of order came up under this seed.
 
 The pages now say that an anchor names its standard and its clause, and that bands and listed values are in order ([deck.md](../../docs/deck.md)). This reading then gained those three refusals, and with them it differs from the kernel on 51 of the 3,000 decks: the rows of the table from `what` down.
 
+### After the shipped deck took its rules from the page
+
+On 2026-11-11 the shipped deck changed: 32 rows for 18, 15 rules for 4, a grid of 16 lines for 15, and two more fields on a lap. This reading is the same file. It reads the new deck, and gives the three designs of `examples/deck` the kernel's verdict and cells.
+
+Measured with `--count 6000 --decks 3000 --seed 7`, after the bench's generator of laps was changed to fill the new fields and to reach the new rules. The designs and the damaged decks are therefore not the ones of the runs above.
+
+| Compared | Result |
+|---|---|
+| Generated designs, 5,881 compared | The same verdict and the same cells on every one |
+| Damaged decks, 3,000 compared | They differ on 46 |
+
+| On the deck | Decks |
+|---|---|
+| The kernel and the grid refuse a field, a type or a line with no `what`, a rule with no `says`, and an `unless` with no `why`. This reading takes each as left out. | 19 |
+| They refuse an input of a row with no `range`, and this reading takes it | 13 |
+| They refuse `rises` or `falls` that names no side of its table, and this reading does not look | 5 |
+| They refuse a `by` that leaves out a name of its field, and this reading leaves the cell open | 1 |
+| They refuse a range that starts at `-0` with no unit, and this reading takes a bare zero for any dimension | 1 |
+| This reading refuses `1 1/2` with no unit, and they read it as a number | 1 |
+| Both read the deck, and a rule's `where` is an empty list: they prove the rule's cell, and this reading leaves it open | 5 |
+| They refuse a rule whose id prints in more than 64 bytes, and this reading has no such limit | 1 |
+
+The last kind is new to these runs. The damage put the 112 characters of a row's `what` where the id of a rule was. The kernel and the grid hold an id to 64 bytes, and this reading applies none of the kernel's limits on size, as the next section says. Every other kind is in the table above.
+
 ## What it is not
 
 It does not read a design of the models' kinds, hash a file, or apply the kernel's limits on size. It is a reading of the rules path only.

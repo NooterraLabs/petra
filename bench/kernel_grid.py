@@ -166,11 +166,16 @@ def lap(rng: random.Random, n: int) -> Draft:
         tab, strap, splice = f"tab{suffix}", f"strap{suffix}", f"splice{suffix}"
         diameter = rng.choice([0.5, 0.625, 0.75, 0.75, 0.875, 1, 1.125, 1.25, 0.7, 0.7501])
         count = rng.choice([2, 3, 3, 4, 6, 14, 20])
-        # Table J3.4 asks this end distance of the bolt, and the range of the strength rule ends at a line of 38 inch.
+        holes = rng.choice(["standard", "standard", "standard", "oversize"])
+        surface = rng.choice(["protected", "protected", "weathering"])
+        # Table J3.4 asks this end and side distance of the bolt, and Table J3.5 adds to it for an oversize hole.
         asked = {0.5: 0.75, 0.625: 0.875, 0.75: 1, 0.875: 1.125, 1: 1.25, 1.125: 1.5, 1.25: 1.625}.get(diameter, 1)
-        pitch = rng.choice([near(rng, 3, "inch"), near(rng, 2.5, "inch"), near(rng, 38 / (count - 1), "inch"), f"{38 / (count - 1):.12g} inch"])
+        asked += 0 if holes == "standard" else 0.0625 if diameter <= 0.875 else 0.125
+        thin = 1.0
         for plate in (tab, strap):
-            thickness = near(rng, rng.choice([0.125, 0.25, 0.375, 0.375, 0.5, 0.75, 1]), "inch")
+            nominal = rng.choice([0.125, 0.25, 0.375, 0.375, 0.5, 0.75, 1])
+            thin = min(thin, nominal)
+            thickness = near(rng, nominal, "inch")
             lines = [["thickness", thickness], ["width", near(rng, rng.choice([4, 6, 8]), "inch")],
                      ["Fy", f"given {plate}.Fy"], ["Fu", f"given {plate}.Fu"]]
             if rng.random() < 0.2:      # a thickness the card bounds, so a proof holds over a range
@@ -179,23 +184,39 @@ def lap(rng: random.Random, n: int) -> Draft:
             d.parts.append(("plate", plate, lines))
             d.givens[f"{plate}.Fy"] = rng.choice(["[36 ksi, 36 ksi]", "[36 ksi, 50 ksi]", "[50 ksi, 50 ksi]"])
             d.givens[f"{plate}.Fu"] = rng.choice(["[58 ksi, 58 ksi]", "[58 ksi, 65 ksi]", "[65 ksi, 65 ksi]"])
-        d.parts.append(("lap", splice, [
+        # The pitch sits on and near what the rules turn on: 2 2/3 diameters (J3.4), the greatest spacing of the thinner
+        # plate and its cap (J3.6: 24 thicknesses and 12 inch, or 14 and 7 for weathering steel), and a line of 38 inch,
+        # past which note c of Table J3.2 lowers the shear stress.
+        most = min(24 * thin, 12) if surface == "protected" else min(14 * thin, 7)
+        pitch = rng.choice([near(rng, 3, "inch"), near(rng, 2.5, "inch"), near(rng, 38 / (count - 1), "inch"), f"{38 / (count - 1):.12g} inch",
+                            near(rng, 8 / 3 * diameter, "inch"), f"{8 * diameter / 3:.12g} inch", near(rng, most, "inch"), f"{most:g} inch"])
+        lines = [
             ["fastener", rng.choice(['"Group 120"', '"Group 120"', '"Group 144"', '"Group 150"'])],
             ["threads", rng.choice(["included", "excluded", '"included"'])],
             ["diameter", f"{diameter:g} inch"],
-            ["holes", rng.choice(["standard", "standard", "standard", "oversize"])],
+            ["holes", holes],
             ["count", str(count)],
             ["pitch", pitch],
             ["end", rng.choice([near(rng, asked, "inch"), near(rng, 1.5, "inch"), f"{asked:g} inch"])],
-            ["joins", f"{tab} {strap}"]]))
-        # 0.9 Fy Ag of a 6 inch by 3/8 inch A36 plate is 72.9 kip, and three 3/4 inch Group 120 bolts carry 53.68 kip.
+            ["side", rng.choice([near(rng, asked, "inch"), near(rng, 1.5, "inch"), near(rng, 3, "inch"), f"{asked:g} inch"])],
+            ["surface", surface],
+            ["joins", f"{tab} {strap}"]]
+        for at in (5, 7):      # a pitch or a side distance the card bounds: a range may reach over a limit, or over the two cases of note c
+            if rng.random() < 0.12:
+                d.givens[f"{splice}.{lines[at][0]}"] = spread(rng, lines[at][1])
+                lines[at][1] = f"given {splice}.{lines[at][0]}"
+        d.parts.append(("lap", splice, lines))
+        # Of a 6 inch by 3/8 inch A36 plate with one 13/16 inch hole 3 inch from its side: 0.9 Fy Ag is 72.9 kip, its net
+        # section ruptures at 83.6 kip and a block tears out at 87.4 kip. Three 3/4 inch Group 120 bolts carry 53.68 kip.
         for case in rng.choice([[], ["gravity"], ["gravity"], ["gravity"], ["gravity", "wind"]]):
-            top = rng.choice([near(rng, 72.9, "kip"), near(rng, 53.676, "kip"), near(rng, 45, "kip"), near(rng, 20, "kip"), near(rng, 150, "kip")])
+            top = rng.choice([near(rng, 72.9, "kip"), near(rng, 53.676, "kip"), near(rng, 45, "kip"), near(rng, 20, "kip"), near(rng, 150, "kip"),
+                              near(rng, 83.6, "kip"), near(rng, 87.36, "kip")])
             bound = f"[{top}, {top}]" if rng.random() < 0.3 else f"[0 kip, {top}]"
             d.loads.setdefault(case, []).append(f"on {splice} pull in {bound}")
-        open_lines = ["lap.tightening", "lap.hole_use", "lap.spacing", "lap.side_distance", "lap.spread", "lap.ply_rupture",
-                      "lap.block_shear", "lap.ply_flexure"]
-        waived = rng.choice([[], open_lines, open_lines, rng.sample(open_lines, 4), ["lap.strength", "lap.slip"], open_lines + ["lap.end_distance"]])
+        # The lines the deck has no rule for, which a card waives to pass, and some lines that have rules, which a waiver hides.
+        open_lines = ["lap.tightening", "lap.hole_use", "lap.max_edge_distance", "lap.ply_flexure"]
+        waived = rng.choice([[], open_lines, open_lines, open_lines, rng.sample(open_lines, 2), ["lap.strength", "lap.slip"], open_lines + ["lap.end_distance"],
+                             open_lines + ["lap.spread", "lap.block_shear"]])
         d.waivers += [(m, splice) for m in waived]
     return d
 
@@ -317,7 +338,7 @@ def damage(rng: random.Random, d: Draft) -> None:
             d.givens[name] = rng.choice([f"[0 {unit_of}, 5 {unit_of}]", f"[-2 {unit_of}, 5 {unit_of}]", "[1 kg, 2 kg]"])
 
     def bad_key() -> None:
-        keys = [l for _, _, ls in d.parts for l in ls if l[0] in ("fastener", "threads", "holes", "fit")]
+        keys = [l for _, _, ls in d.parts for l in ls if l[0] in ("fastener", "threads", "holes", "surface", "fit")]
         if keys:
             rng.choice(keys)[1] = rng.choice(["huge", '"Group 200"', "A307", "a.b", "3 mm", "close free", "(1 mm, 2 mm)", "tab"])
 

@@ -1,0 +1,31 @@
+petra 0
+
+# The lap of d31 under a pull of 205 kip. At 83.3% of the shear stress the 14 bolts carry
+# 14 x 14.90 = 208.7 kip, so the strength holds.
+
+plate tab {
+  thickness 1 inch
+  width 10 inch
+  Fy given tab.Fy
+  Fu given tab.Fu
+}
+
+plate strap {
+  thickness 1 inch
+  width 10 inch
+  Fy given strap.Fy
+  Fu given strap.Fu
+}
+
+lap splice {
+  fastener "Group 120"
+  threads included
+  diameter 0.75 inch
+  holes standard
+  count 14
+  pitch 3 inch
+  end 1.5 inch
+  side 5 inch
+  surface protected
+  joins tab strap
+}

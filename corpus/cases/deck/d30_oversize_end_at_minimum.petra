@@ -1,0 +1,34 @@
+petra 0
+
+# Oversize holes and an end distance of 1 1/16 inch: the 1 inch of Table J3.4 and the 1/16 inch
+# of Table J3.5, and not under them. Every rule holds at 30 kip, and the bolts carry
+# 11.62 + 11.62 + 17.89 = 41.1 kip.
+# J3.3 bars oversized holes from a bearing-type joint. The deck has no rule for that line and
+# the card does not waive it, so it stays open.
+
+plate tab {
+  thickness 0.375 inch
+  width 6 inch
+  Fy given tab.Fy
+  Fu given tab.Fu
+}
+
+plate strap {
+  thickness 0.375 inch
+  width 6 inch
+  Fy given strap.Fy
+  Fu given strap.Fu
+}
+
+lap splice {
+  fastener "Group 120"
+  threads included
+  diameter 0.75 inch
+  holes oversize
+  count 3
+  pitch 3 inch
+  end 1.0625 inch
+  side 3 inch
+  surface protected
+  joins tab strap
+}

@@ -1,0 +1,32 @@
+petra 0
+
+# The pitch is 2 inch: 2 2/3 diameters of a 3/4 inch bolt, the least J3.4 allows and not under
+# it. The clear distance is 2 - 13/16 = 1.19 inch, over one diameter.
+# At 45 kip the bolts carry 53.7, and each plate tears out as a block at 74.2.
+
+plate tab {
+  thickness 0.375 inch
+  width 6 inch
+  Fy given tab.Fy
+  Fu given tab.Fu
+}
+
+plate strap {
+  thickness 0.375 inch
+  width 6 inch
+  Fy given strap.Fy
+  Fu given strap.Fu
+}
+
+lap splice {
+  fastener "Group 120"
+  threads included
+  diameter 0.75 inch
+  holes standard
+  count 3
+  pitch 2 inch
+  end 1.5 inch
+  side 3 inch
+  surface protected
+  joins tab strap
+}

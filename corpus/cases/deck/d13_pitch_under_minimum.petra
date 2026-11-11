@@ -1,0 +1,34 @@
+petra 0
+
+# The pitch is 1.75 inch. J3.4 asks 2 2/3 diameters between centres: 2 inch for a 3/4 inch bolt.
+# 1.75 < 2, so the spacing fails. The clear distance holds: 1.75 - 13/16 = 0.94 inch, and J3.4
+# asks one diameter, 0.75.
+# Everything else holds at 45 kip: the bolts carry 53.7, and each plate yields at 72.9,
+# ruptures at 83.6 and tears out as a block at 69.3.
+
+plate tab {
+  thickness 0.375 inch
+  width 6 inch
+  Fy given tab.Fy
+  Fu given tab.Fu
+}
+
+plate strap {
+  thickness 0.375 inch
+  width 6 inch
+  Fy given strap.Fy
+  Fu given strap.Fu
+}
+
+lap splice {
+  fastener "Group 120"
+  threads included
+  diameter 0.75 inch
+  holes standard
+  count 3
+  pitch 1.75 inch
+  end 1.5 inch
+  side 3 inch
+  surface protected
+  joins tab strap
+}

@@ -1,6 +1,8 @@
 petra 0
 
-# Tables J3.3 and J3.4 list no 0.7 inch bolt, so two cells are open.
+# Tables J3.3 and J3.4 list no 0.7 inch bolt. Every rule that reads the hole or the least edge
+# distance of one is open, on six lines: the clear spacing, the end and side distances, the
+# strength of the bolts and their holes, and the rupture and block shear of each plate.
 
 plate tab {
   thickness 0.375 inch
@@ -24,5 +26,7 @@ lap splice {
   count 3
   pitch 3 inch
   end 1.5 inch
+  side 3 inch
+  surface protected
   joins tab strap
 }

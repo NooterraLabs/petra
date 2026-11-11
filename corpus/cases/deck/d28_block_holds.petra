@@ -1,0 +1,31 @@
+petra 0
+
+# The lap of d27 under a pull of 58 kip. Each plate tears out as a block at
+# 0.75 x (60.75 + 17.67) = 58.82 kip, so block shear holds, and the bolts carry 65.35.
+
+plate tab {
+  thickness 0.375 inch
+  width 6 inch
+  Fy given tab.Fy
+  Fu given tab.Fu
+}
+
+plate strap {
+  thickness 0.375 inch
+  width 6 inch
+  Fy given strap.Fy
+  Fu given strap.Fu
+}
+
+lap splice {
+  fastener "Group 120"
+  threads excluded
+  diameter 0.75 inch
+  holes standard
+  count 3
+  pitch 3 inch
+  end 1.5 inch
+  side 1.25 inch
+  surface protected
+  joins tab strap
+}

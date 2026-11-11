@@ -1,6 +1,10 @@
 petra 0
 
-# A 1/8 inch plate yields at 24.3 kip and tears out at its bolts, under a pull of 45 kip.
+# The strap is 1/8 inch thick. Under a pull of 45 kip it yields at 0.9 x 36 x 6 x 0.125 = 24.3 kip,
+# ruptures at 0.75 x 58 x 5.125 x 0.125 = 27.9 and tears out as a block at 29.1, and at its
+# holes the three bolts carry 7.14 + 9.79 + 9.79 = 26.7.
+# Its middle hole is also 3 inch from the nearest edge, over the 12 thicknesses, 1.5 inch, of
+# J3.6. No rule checks that, and the card does not waive it.
 
 plate tab {
   thickness 0.375 inch
@@ -24,5 +28,7 @@ lap splice {
   count 3
   pitch 3 inch
   end 1.5 inch
+  side 3 inch
+  surface protected
   joins tab strap
 }

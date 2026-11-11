@@ -1,0 +1,32 @@
+petra 0
+
+# Painted plates of 3/4 and 3/8 inch, with a pitch of 9.5 inch. J3.6(a) allows 24 times the
+# thinner plate, 9 inch, and at most 12 inch. 9.5 > 9, so the spacing fails.
+# Of the thicker plate alone it would allow 12 inch.
+
+plate tab {
+  thickness 0.75 inch
+  width 6 inch
+  Fy given tab.Fy
+  Fu given tab.Fu
+}
+
+plate strap {
+  thickness 0.375 inch
+  width 6 inch
+  Fy given strap.Fy
+  Fu given strap.Fu
+}
+
+lap splice {
+  fastener "Group 120"
+  threads included
+  diameter 0.75 inch
+  holes standard
+  count 3
+  pitch 9.5 inch
+  end 1.5 inch
+  side 3 inch
+  surface protected
+  joins tab strap
+}

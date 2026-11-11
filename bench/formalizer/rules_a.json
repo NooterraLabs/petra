@@ -1,0 +1,2005 @@
+{
+ "format": "petra-rules/0",
+ "name": "aisc360-22",
+ "about": "Rows of AISC 360-22 as two transcribers each wrote them (bench/formalizer), and the first types, grid and rules over them. The rules use LRFD. A grid line with no rule leaves its cell open.",
+ "rows": [
+  {
+   "id": "aisc360-22/J3-1",
+   "anchor": {
+    "standard": "ANSI/AISC 360-22",
+    "clause": "J3.7",
+    "equation": "J3-1",
+    "page": "16.1-141"
+   },
+   "gives": {
+    "name": "Rn",
+    "dim": "force",
+    "what": "nominal tensile or shear strength of one snug-tightened or pretensioned high-strength bolt or threaded part, for tension rupture or shear rupture"
+   },
+   "takes": [
+    {
+     "name": "Fn",
+     "dim": "stress",
+     "what": "nominal stress of the fastener: the nominal tensile stress Fnt or the nominal shear stress Fnv of Table J3.2",
+     "range": [
+      "22 ksi",
+      "150 ksi"
+     ]
+    },
+    {
+     "name": "Ab",
+     "dim": "area",
+     "what": "nominal area of the unthreaded body of the bolt or threaded part",
+     "range": [
+      "0.19 inch2",
+      "7.1 inch2"
+     ]
+    }
+   ],
+   "is": [
+    "mul",
+    "Fn",
+    "Ab"
+   ]
+  },
+  {
+   "id": "aisc360-22/J3-3a",
+   "anchor": {
+    "standard": "ANSI/AISC 360-22",
+    "clause": "J3.8",
+    "equation": "J3-3a",
+    "page": "16.1-141"
+   },
+   "gives": {
+    "name": "Fnt_prime",
+    "dim": "stress",
+    "what": "nominal tensile stress of a bolt in a bearing-type connection, reduced for the shear stress that acts with the tension, LRFD; the standard writes it as Fnt with a prime on the F"
+   },
+   "takes": [
+    {
+     "name": "Fnt",
+     "dim": "stress",
+     "what": "nominal tensile stress of the fastener from Table J3.2",
+     "range": [
+      "40 ksi",
+      "150 ksi"
+     ]
+    },
+    {
+     "name": "Fnv",
+     "dim": "stress",
+     "what": "nominal shear stress of the fastener from Table J3.2",
+     "range": [
+      "22 ksi",
+      "113 ksi"
+     ]
+    },
+    {
+     "name": "frv",
+     "dim": "stress",
+     "what": "required shear stress in the bolt under LRFD load combinations; the clause requires it to be no more than the available shear stress, 0.75 Fnv",
+     "range": [
+      "1 ksi",
+      "60 ksi"
+     ]
+    }
+   ],
+   "is": [
+    "min",
+    [
+     "sub",
+     [
+      "mul",
+      "1.3",
+      "Fnt"
+     ],
+     [
+      "mul",
+      [
+       "div",
+       "Fnt",
+       [
+        "mul",
+        "0.75",
+        "Fnv"
+       ]
+      ],
+      "frv"
+     ]
+    ],
+    "Fnt"
+   ]
+  },
+  {
+   "id": "aisc360-22/J3-6a",
+   "anchor": {
+    "standard": "ANSI/AISC 360-22",
+    "clause": "J3.11a",
+    "equation": "J3-6a",
+    "page": "16.1-143"
+   },
+   "gives": {
+    "name": "Rn",
+    "dim": "force",
+    "what": "nominal bearing strength of the connected material at one bolt hole, where deformation of the hole at service load is a design consideration; for standard, oversized and short-slotted holes, and long-slotted holes with the slot parallel to the bearing force"
+   },
+   "takes": [
+    {
+     "name": "d",
+     "dim": "length",
+     "what": "nominal diameter of the fastener",
+     "range": [
+      "0.5 inch",
+      "1.5 inch"
+     ]
+    },
+    {
+     "name": "t",
+     "dim": "length",
+     "what": "thickness of the connected material",
+     "range": [
+      "0.125 inch",
+      "4 inch"
+     ]
+    },
+    {
+     "name": "Fu",
+     "dim": "stress",
+     "what": "specified minimum tensile strength of the connected material",
+     "range": [
+      "45 ksi",
+      "110 ksi"
+     ]
+    }
+   ],
+   "is": [
+    "mul",
+    "2.4",
+    "d",
+    "t",
+    "Fu"
+   ]
+  },
+  {
+   "id": "aisc360-22/J3-6c",
+   "anchor": {
+    "standard": "ANSI/AISC 360-22",
+    "clause": "J3.11a",
+    "equation": "J3-6c",
+    "page": "16.1-144"
+   },
+   "gives": {
+    "name": "Rn",
+    "dim": "force",
+    "what": "nominal tearout strength of the connected material at one bolt hole, where deformation of the hole at service load is a design consideration; for standard, oversized and short-slotted holes, and long-slotted holes with the slot parallel to the bearing force"
+   },
+   "takes": [
+    {
+     "name": "lc",
+     "dim": "length",
+     "what": "clear distance, in the direction of the force, from the edge of the hole to the edge of the next hole or to the edge of the material",
+     "range": [
+      "0.4 inch",
+      "6 inch"
+     ]
+    },
+    {
+     "name": "t",
+     "dim": "length",
+     "what": "thickness of the connected material",
+     "range": [
+      "0.125 inch",
+      "4 inch"
+     ]
+    },
+    {
+     "name": "Fu",
+     "dim": "stress",
+     "what": "specified minimum tensile strength of the connected material",
+     "range": [
+      "45 ksi",
+      "110 ksi"
+     ]
+    }
+   ],
+   "is": [
+    "mul",
+    "1.2",
+    "lc",
+    "t",
+    "Fu"
+   ]
+  },
+  {
+   "id": "aisc360-22/J4-1",
+   "anchor": {
+    "standard": "ANSI/AISC 360-22",
+    "clause": "J4.1",
+    "equation": "J4-1",
+    "page": "16.1-145"
+   },
+   "gives": {
+    "name": "Rn",
+    "dim": "force",
+    "what": "nominal strength of an affected or connecting element loaded in tension, for the limit state of tensile yielding"
+   },
+   "takes": [
+    {
+     "name": "Fy",
+     "dim": "stress",
+     "what": "specified minimum yield stress of the element",
+     "range": [
+      "33 ksi",
+      "100 ksi"
+     ]
+    },
+    {
+     "name": "Ag",
+     "dim": "area",
+     "what": "gross area of the element",
+     "range": [
+      "0.5 inch2",
+      "100 inch2"
+     ]
+    }
+   ],
+   "is": [
+    "mul",
+    "Fy",
+    "Ag"
+   ]
+  },
+  {
+   "id": "aisc360-22/J4-2",
+   "anchor": {
+    "standard": "ANSI/AISC 360-22",
+    "clause": "J4.1",
+    "equation": "J4-2",
+    "page": "16.1-145"
+   },
+   "gives": {
+    "name": "Rn",
+    "dim": "force",
+    "what": "nominal strength of an affected or connecting element loaded in tension, for the limit state of tensile rupture"
+   },
+   "takes": [
+    {
+     "name": "Fu",
+     "dim": "stress",
+     "what": "specified minimum tensile strength of the element",
+     "range": [
+      "45 ksi",
+      "110 ksi"
+     ]
+    },
+    {
+     "name": "Ae",
+     "dim": "area",
+     "what": "effective net area of the element as Section D3 defines it",
+     "range": [
+      "0.3 inch2",
+      "100 inch2"
+     ]
+    }
+   ],
+   "is": [
+    "mul",
+    "Fu",
+    "Ae"
+   ]
+  },
+  {
+   "id": "aisc360-22/J4-3",
+   "anchor": {
+    "standard": "ANSI/AISC 360-22",
+    "clause": "J4.2",
+    "equation": "J4-3",
+    "page": "16.1-145"
+   },
+   "gives": {
+    "name": "Rn",
+    "dim": "force",
+    "what": "nominal strength of an affected or connecting element in shear, for the limit state of shear yielding"
+   },
+   "takes": [
+    {
+     "name": "Fy",
+     "dim": "stress",
+     "what": "specified minimum yield stress of the element",
+     "range": [
+      "33 ksi",
+      "100 ksi"
+     ]
+    },
+    {
+     "name": "Agv",
+     "dim": "area",
+     "what": "gross area subjected to shear",
+     "range": [
+      "0.5 inch2",
+      "100 inch2"
+     ]
+    }
+   ],
+   "is": [
+    "mul",
+    "0.60",
+    "Fy",
+    "Agv"
+   ]
+  },
+  {
+   "id": "aisc360-22/J4-4",
+   "anchor": {
+    "standard": "ANSI/AISC 360-22",
+    "clause": "J4.2",
+    "equation": "J4-4",
+    "page": "16.1-146"
+   },
+   "gives": {
+    "name": "Rn",
+    "dim": "force",
+    "what": "nominal strength of an affected or connecting element in shear, for the limit state of shear rupture"
+   },
+   "takes": [
+    {
+     "name": "Fu",
+     "dim": "stress",
+     "what": "specified minimum tensile strength of the element",
+     "range": [
+      "45 ksi",
+      "110 ksi"
+     ]
+    },
+    {
+     "name": "Anv",
+     "dim": "area",
+     "what": "net area subjected to shear",
+     "range": [
+      "0.3 inch2",
+      "100 inch2"
+     ]
+    }
+   ],
+   "is": [
+    "mul",
+    "0.60",
+    "Fu",
+    "Anv"
+   ]
+  },
+  {
+   "id": "aisc360-22/J4-5",
+   "anchor": {
+    "standard": "ANSI/AISC 360-22",
+    "clause": "J4.3",
+    "equation": "J4-5",
+    "page": "16.1-146"
+   },
+   "gives": {
+    "name": "Rn",
+    "dim": "force",
+    "what": "nominal strength for block shear rupture along a shear failure path or paths and a perpendicular tension failure path"
+   },
+   "takes": [
+    {
+     "name": "Fu",
+     "dim": "stress",
+     "what": "specified minimum tensile strength of the material",
+     "range": [
+      "45 ksi",
+      "110 ksi"
+     ]
+    },
+    {
+     "name": "Fy",
+     "dim": "stress",
+     "what": "specified minimum yield stress of the material",
+     "range": [
+      "33 ksi",
+      "100 ksi"
+     ]
+    },
+    {
+     "name": "Anv",
+     "dim": "area",
+     "what": "net area subjected to shear",
+     "range": [
+      "0.3 inch2",
+      "60 inch2"
+     ]
+    },
+    {
+     "name": "Agv",
+     "dim": "area",
+     "what": "gross area subjected to shear",
+     "range": [
+      "0.5 inch2",
+      "60 inch2"
+     ]
+    },
+    {
+     "name": "Ant",
+     "dim": "area",
+     "what": "net area subjected to tension",
+     "range": [
+      "0.1 inch2",
+      "30 inch2"
+     ]
+    },
+    {
+     "name": "Ubs",
+     "dim": "dimensionless",
+     "what": "factor for the tension stress on the tension path: 1 where that stress is uniform, 0.5 where it is not",
+     "range": [
+      "0.5",
+      "1"
+     ]
+    }
+   ],
+   "is": [
+    "min",
+    [
+     "add",
+     [
+      "mul",
+      "0.60",
+      "Fu",
+      "Anv"
+     ],
+     [
+      "mul",
+      "Ubs",
+      "Fu",
+      "Ant"
+     ]
+    ],
+    [
+     "add",
+     [
+      "mul",
+      "0.60",
+      "Fy",
+      "Agv"
+     ],
+     [
+      "mul",
+      "Ubs",
+      "Fu",
+      "Ant"
+     ]
+    ]
+   ]
+  },
+  {
+   "id": "aisc360-22/E3-2",
+   "anchor": {
+    "standard": "ANSI/AISC 360-22",
+    "clause": "E3",
+    "equation": "E3-2, E3-3",
+    "page": "16.1-40"
+   },
+   "gives": {
+    "name": "Fn",
+    "dim": "stress",
+    "what": "nominal stress of a compression member without slender elements for the limit state of flexural buckling; the critical stress"
+   },
+   "takes": [
+    {
+     "name": "Fy",
+     "dim": "stress",
+     "what": "specified minimum yield stress of the steel",
+     "range": [
+      "33 ksi",
+      "100 ksi"
+     ]
+    },
+    {
+     "name": "Fe",
+     "dim": "stress",
+     "what": "elastic buckling stress, from Equation E3-4, from Appendix 7 or from an elastic buckling analysis",
+     "range": [
+      "7 ksi",
+      "320 ksi"
+     ]
+    }
+   ],
+   "cases": [
+    {
+     "when": [
+      "le",
+      [
+       "div",
+       "Fy",
+       "Fe"
+      ],
+      "2.25"
+     ],
+     "is": [
+      "mul",
+      [
+       "pow",
+       "0.658",
+       [
+        "div",
+        "Fy",
+        "Fe"
+       ]
+      ],
+      "Fy"
+     ]
+    },
+    {
+     "when": [
+      "gt",
+      [
+       "div",
+       "Fy",
+       "Fe"
+      ],
+      "2.25"
+     ],
+     "is": [
+      "mul",
+      "0.877",
+      "Fe"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "aisc360-22/E3-4",
+   "anchor": {
+    "standard": "ANSI/AISC 360-22",
+    "clause": "E3",
+    "equation": "E3-4",
+    "page": "16.1-41"
+   },
+   "gives": {
+    "name": "Fe",
+    "dim": "stress",
+    "what": "elastic buckling stress for flexural buckling"
+   },
+   "takes": [
+    {
+     "name": "Lc",
+     "dim": "length",
+     "what": "effective length of the member, the effective length factor times the laterally unbraced length",
+     "range": [
+      "24 inch",
+      "720 inch"
+     ]
+    },
+    {
+     "name": "r",
+     "dim": "length",
+     "what": "radius of gyration",
+     "range": [
+      "0.3 inch",
+      "8 inch"
+     ]
+    }
+   ],
+   "is": [
+    "div",
+    [
+     "mul",
+     [
+      "pow",
+      "pi",
+      "2"
+     ],
+     [
+      "q",
+      "29000",
+      "ksi"
+     ]
+    ],
+    [
+     "pow",
+     [
+      "div",
+      "Lc",
+      "r"
+     ],
+     "2"
+    ]
+   ]
+  },
+  {
+   "id": "aisc360-22/G2-3",
+   "anchor": {
+    "standard": "ANSI/AISC 360-22",
+    "clause": "G2.1",
+    "equation": "G2-3, G2-4",
+    "page": "16.1-76"
+   },
+   "gives": {
+    "name": "Cv1",
+    "dim": "dimensionless",
+    "what": "web shear strength coefficient of Section G2.1(b), for I-shaped members and channels that Section G2.1(a) does not cover"
+   },
+   "takes": [
+    {
+     "name": "h",
+     "dim": "length",
+     "what": "clear depth of the web: between flanges less the fillets for a rolled shape, between flanges for a welded built-up section, between fastener lines for a bolted built-up section",
+     "range": [
+      "4 inch",
+      "120 inch"
+     ]
+    },
+    {
+     "name": "tw",
+     "dim": "length",
+     "what": "thickness of the web",
+     "range": [
+      "0.15 inch",
+      "2 inch"
+     ]
+    },
+    {
+     "name": "kv",
+     "dim": "dimensionless",
+     "what": "web plate shear buckling coefficient: 5.34 without transverse stiffeners, from Equation G2-5 with them",
+     "range": [
+      "5.34",
+      "30"
+     ]
+    },
+    {
+     "name": "Fy",
+     "dim": "stress",
+     "what": "specified minimum yield stress of the steel",
+     "range": [
+      "33 ksi",
+      "100 ksi"
+     ]
+    }
+   ],
+   "cases": [
+    {
+     "when": [
+      "le",
+      [
+       "div",
+       "h",
+       "tw"
+      ],
+      [
+       "mul",
+       "1.10",
+       [
+        "sqrt",
+        [
+         "div",
+         [
+          "mul",
+          "kv",
+          [
+           "q",
+           "29000",
+           "ksi"
+          ]
+         ],
+         "Fy"
+        ]
+       ]
+      ]
+     ],
+     "is": "1.0"
+    },
+    {
+     "when": [
+      "gt",
+      [
+       "div",
+       "h",
+       "tw"
+      ],
+      [
+       "mul",
+       "1.10",
+       [
+        "sqrt",
+        [
+         "div",
+         [
+          "mul",
+          "kv",
+          [
+           "q",
+           "29000",
+           "ksi"
+          ]
+         ],
+         "Fy"
+        ]
+       ]
+      ]
+     ],
+     "is": [
+      "div",
+      [
+       "mul",
+       "1.10",
+       [
+        "sqrt",
+        [
+         "div",
+         [
+          "mul",
+          "kv",
+          [
+           "q",
+           "29000",
+           "ksi"
+          ]
+         ],
+         "Fy"
+        ]
+       ]
+      ],
+      [
+       "div",
+       "h",
+       "tw"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "id": "aisc360-22/J10-2",
+   "anchor": {
+    "standard": "ANSI/AISC 360-22",
+    "clause": "J10.2",
+    "equation": "J10-2, J10-3",
+    "page": "16.1-151"
+   },
+   "gives": {
+    "name": "Rn",
+    "dim": "force",
+    "what": "nominal strength of the web for the limit state of web local yielding under a concentrated force applied normal to the flange"
+   },
+   "takes": [
+    {
+     "name": "Fyw",
+     "dim": "stress",
+     "what": "specified minimum yield stress of the web material",
+     "range": [
+      "33 ksi",
+      "100 ksi"
+     ]
+    },
+    {
+     "name": "tw",
+     "dim": "length",
+     "what": "thickness of the web",
+     "range": [
+      "0.15 inch",
+      "3.1 inch"
+     ]
+    },
+    {
+     "name": "k",
+     "dim": "length",
+     "what": "distance from the outer face of the flange to the web toe of the fillet",
+     "range": [
+      "0.3 inch",
+      "5.5 inch"
+     ]
+    },
+    {
+     "name": "lb",
+     "dim": "length",
+     "what": "length of bearing",
+     "range": [
+      "0.5 inch",
+      "24 inch"
+     ]
+    },
+    {
+     "name": "x",
+     "dim": "length",
+     "what": "distance from the member end to the point where the concentrated force is applied",
+     "range": [
+      "0.5 inch",
+      "120 inch"
+     ]
+    },
+    {
+     "name": "d",
+     "dim": "length",
+     "what": "full nominal depth of the member",
+     "range": [
+      "4 inch",
+      "72 inch"
+     ]
+    }
+   ],
+   "cases": [
+    {
+     "when": [
+      "gt",
+      "x",
+      "d"
+     ],
+     "is": [
+      "mul",
+      "Fyw",
+      "tw",
+      [
+       "add",
+       [
+        "mul",
+        "5",
+        "k"
+       ],
+       "lb"
+      ]
+     ]
+    },
+    {
+     "when": [
+      "le",
+      "x",
+      "d"
+     ],
+     "is": [
+      "mul",
+      "Fyw",
+      "tw",
+      [
+       "add",
+       [
+        "mul",
+        "2.5",
+        "k"
+       ],
+       "lb"
+      ]
+     ]
+    }
+   ],
+   "jumps": [
+    {
+     "cases": [
+      1,
+      2
+     ],
+     "why": "The standard gives one formula for a force farther than d from the member end and another for a force within d of it, and switches between them at x = d by a step. Away from the end the yielding spreads along the web to both sides of the force and the length counted through k is 5k; near the end it can spread to one side only and the standard counts 2.5k."
+    }
+   ]
+  },
+  {
+   "id": "aisc360-22/J10-4",
+   "anchor": {
+    "standard": "ANSI/AISC 360-22",
+    "clause": "J10.3",
+    "equation": "J10-4, J10-5a, J10-5b",
+    "page": "16.1-151 to 16.1-152"
+   },
+   "gives": {
+    "name": "Rn",
+    "dim": "force",
+    "what": "nominal strength of the web for the limit state of web local crippling under a concentrated compressive force applied normal to the flange"
+   },
+   "takes": [
+    {
+     "name": "tw",
+     "dim": "length",
+     "what": "thickness of the web",
+     "range": [
+      "0.15 inch",
+      "3.1 inch"
+     ]
+    },
+    {
+     "name": "tf",
+     "dim": "length",
+     "what": "thickness of the flange",
+     "range": [
+      "0.2 inch",
+      "5 inch"
+     ]
+    },
+    {
+     "name": "lb",
+     "dim": "length",
+     "what": "length of bearing",
+     "range": [
+      "0.5 inch",
+      "24 inch"
+     ]
+    },
+    {
+     "name": "d",
+     "dim": "length",
+     "what": "full nominal depth of the member",
+     "range": [
+      "4 inch",
+      "72 inch"
+     ]
+    },
+    {
+     "name": "x",
+     "dim": "length",
+     "what": "distance from the member end to the point where the concentrated compressive force is applied",
+     "range": [
+      "0.5 inch",
+      "120 inch"
+     ]
+    },
+    {
+     "name": "Fyw",
+     "dim": "stress",
+     "what": "specified minimum yield stress of the web material",
+     "range": [
+      "33 ksi",
+      "100 ksi"
+     ]
+    },
+    {
+     "name": "Qf",
+     "dim": "dimensionless",
+     "what": "chord-stress interaction parameter: 1.0 for wide-flange sections, channels, box sections and HSS with the connecting surface in tension, otherwise from Section K1.3",
+     "range": [
+      "0.4",
+      "1.0"
+     ]
+    }
+   ],
+   "cases": [
+    {
+     "when": [
+      "ge",
+      "x",
+      [
+       "div",
+       "d",
+       "2"
+      ]
+     ],
+     "is": [
+      "mul",
+      "0.80",
+      [
+       "pow",
+       "tw",
+       "2"
+      ],
+      [
+       "add",
+       "1",
+       [
+        "mul",
+        "3",
+        [
+         "div",
+         "lb",
+         "d"
+        ],
+        [
+         "pow",
+         [
+          "div",
+          "tw",
+          "tf"
+         ],
+         "1.5"
+        ]
+       ]
+      ],
+      [
+       "sqrt",
+       [
+        "div",
+        [
+         "mul",
+         [
+          "q",
+          "29000",
+          "ksi"
+         ],
+         "Fyw",
+         "tf"
+        ],
+        "tw"
+       ]
+      ],
+      "Qf"
+     ]
+    },
+    {
+     "when": [
+      "and",
+      [
+       "lt",
+       "x",
+       [
+        "div",
+        "d",
+        "2"
+       ]
+      ],
+      [
+       "le",
+       [
+        "div",
+        "lb",
+        "d"
+       ],
+       "0.2"
+      ]
+     ],
+     "is": [
+      "mul",
+      "0.40",
+      [
+       "pow",
+       "tw",
+       "2"
+      ],
+      [
+       "add",
+       "1",
+       [
+        "mul",
+        "3",
+        [
+         "div",
+         "lb",
+         "d"
+        ],
+        [
+         "pow",
+         [
+          "div",
+          "tw",
+          "tf"
+         ],
+         "1.5"
+        ]
+       ]
+      ],
+      [
+       "sqrt",
+       [
+        "div",
+        [
+         "mul",
+         [
+          "q",
+          "29000",
+          "ksi"
+         ],
+         "Fyw",
+         "tf"
+        ],
+        "tw"
+       ]
+      ],
+      "Qf"
+     ]
+    },
+    {
+     "when": [
+      "and",
+      [
+       "lt",
+       "x",
+       [
+        "div",
+        "d",
+        "2"
+       ]
+      ],
+      [
+       "gt",
+       [
+        "div",
+        "lb",
+        "d"
+       ],
+       "0.2"
+      ]
+     ],
+     "is": [
+      "mul",
+      "0.40",
+      [
+       "pow",
+       "tw",
+       "2"
+      ],
+      [
+       "add",
+       "1",
+       [
+        "mul",
+        [
+         "sub",
+         [
+          "div",
+          [
+           "mul",
+           "4",
+           "lb"
+          ],
+          "d"
+         ],
+         "0.2"
+        ],
+        [
+         "pow",
+         [
+          "div",
+          "tw",
+          "tf"
+         ],
+         "1.5"
+        ]
+       ]
+      ],
+      [
+       "sqrt",
+       [
+        "div",
+        [
+         "mul",
+         [
+          "q",
+          "29000",
+          "ksi"
+         ],
+         "Fyw",
+         "tf"
+        ],
+        "tw"
+       ]
+      ],
+      "Qf"
+     ]
+    }
+   ],
+   "jumps": [
+    {
+     "cases": [
+      1,
+      2
+     ],
+     "why": "The standard gives one formula for a force at least d/2 from the member end, with the coefficient 0.80, and two for a force nearer the end, with the coefficient 0.40, and switches between them at x = d/2 by a step: a force near the end has web on one side only to resist crippling. The two end formulas meet at lb/d = 0.2."
+    },
+    {
+     "cases": [
+      1,
+      3
+     ],
+     "why": "The standard gives one formula for a force at least d/2 from the member end, with the coefficient 0.80, and two for a force nearer the end, with the coefficient 0.40, and switches between them at x = d/2 by a step: a force near the end has web on one side only to resist crippling. The two end formulas meet at lb/d = 0.2."
+    }
+   ]
+  },
+  {
+   "id": "aisc360-22/table-J2.4",
+   "anchor": {
+    "standard": "ANSI/AISC 360-22",
+    "clause": "J2.2b",
+    "table": "J2.4",
+    "page": "16.1-128"
+   },
+   "gives": {
+    "name": "w",
+    "dim": "length",
+    "what": "minimum size of a fillet weld, as its leg dimension"
+   },
+   "takes": [
+    {
+     "name": "t",
+     "dim": "length",
+     "what": "material thickness of the thinner part joined",
+     "range": [
+      "1/8 inch",
+      "4 inch"
+     ]
+    }
+   ],
+   "table": {
+    "down": {
+     "by": "t",
+     "bands": [
+      [
+       "0 inch",
+       "1/4 inch"
+      ],
+      [
+       "1/4 inch",
+       "1/2 inch"
+      ],
+      [
+       "1/2 inch",
+       "3/4 inch"
+      ],
+      [
+       "3/4 inch",
+       null
+      ]
+     ],
+     "closed": "upper"
+    },
+    "unit": "inch",
+    "cells": [
+     "1/8",
+     "3/16",
+     "1/4",
+     "5/16"
+    ],
+    "rises": [
+     "t"
+    ]
+   }
+  },
+  {
+   "id": "aisc360-22/table-J3.2",
+   "anchor": {
+    "standard": "ANSI/AISC 360-22",
+    "clause": "J3.7",
+    "table": "J3.2",
+    "page": "16.1-137"
+   },
+   "gives": {
+    "name": "Fn",
+    "dim": "stress",
+    "what": "nominal stress of a fastener: the tensile stress Fnt, or the shear stress Fnv in a bearing-type connection"
+   },
+   "takes": [
+    {
+     "name": "fastener",
+     "one_of": [
+      "A307",
+      "Group 120",
+      "Group 144",
+      "Group 150",
+      "Group 200"
+     ],
+     "what": "description of the fastener: A307 bolts, then the bolt strength groups"
+    },
+    {
+     "name": "stress",
+     "one_of": [
+      "Fnt",
+      "Fnv_N",
+      "Fnv_X"
+     ],
+     "what": "which stress: tensile, shear with threads not excluded from the shear planes (N), shear with threads excluded (X)"
+    }
+   ],
+   "table": {
+    "down": {
+     "by": "fastener"
+    },
+    "across": {
+     "by": "stress"
+    },
+    "unit": "ksi",
+    "cells": [
+     [
+      "45",
+      "27",
+      "27"
+     ],
+     [
+      "90",
+      "54",
+      "68"
+     ],
+     [
+      "108",
+      "65",
+      "81"
+     ],
+     [
+      "113",
+      "68",
+      "84"
+     ],
+     [
+      "150",
+      "90",
+      "113"
+     ]
+    ],
+    "rises": [
+     "fastener"
+    ]
+   }
+  },
+  {
+   "id": "aisc360-22/table-J3.3",
+   "anchor": {
+    "standard": "ANSI/AISC 360-22",
+    "clause": "J3.3",
+    "table": "J3.3",
+    "page": "16.1-137"
+   },
+   "gives": {
+    "name": "dh",
+    "dim": "length",
+    "what": "nominal diameter of a standard or an oversize hole"
+   },
+   "takes": [
+    {
+     "name": "d",
+     "dim": "length",
+     "what": "bolt diameter",
+     "range": [
+      "1/2 inch",
+      "1 inch"
+     ]
+    },
+    {
+     "name": "hole",
+     "one_of": [
+      "standard",
+      "oversize"
+     ],
+     "what": "hole type"
+    }
+   ],
+   "table": {
+    "down": {
+     "by": "d",
+     "at": [
+      "1/2 inch",
+      "5/8 inch",
+      "3/4 inch",
+      "7/8 inch",
+      "1 inch"
+     ]
+    },
+    "across": {
+     "by": "hole"
+    },
+    "unit": "inch",
+    "cells": [
+     [
+      "9/16",
+      "5/8"
+     ],
+     [
+      "11/16",
+      "13/16"
+     ],
+     [
+      "13/16",
+      "15/16"
+     ],
+     [
+      "15/16",
+      "17/16"
+     ],
+     [
+      "9/8",
+      "5/4"
+     ]
+    ],
+    "rises": [
+     "d",
+     "hole"
+    ]
+   }
+  },
+  {
+   "id": "aisc360-22/table-J3.4",
+   "anchor": {
+    "standard": "ANSI/AISC 360-22",
+    "clause": "J3.5",
+    "table": "J3.4",
+    "page": "16.1-139"
+   },
+   "gives": {
+    "name": "e",
+    "dim": "length",
+    "what": "minimum edge distance from the centre of a standard hole to the edge of the connected part"
+   },
+   "takes": [
+    {
+     "name": "d",
+     "dim": "length",
+     "what": "bolt diameter",
+     "range": [
+      "1/2 inch",
+      "5/4 inch"
+     ]
+    }
+   ],
+   "table": {
+    "down": {
+     "by": "d",
+     "at": [
+      "1/2 inch",
+      "5/8 inch",
+      "3/4 inch",
+      "7/8 inch",
+      "1 inch",
+      "9/8 inch",
+      "5/4 inch"
+     ]
+    },
+    "unit": "inch",
+    "cells": [
+     "3/4",
+     "7/8",
+     "1",
+     "9/8",
+     "5/4",
+     "3/2",
+     "13/8"
+    ],
+    "rises": [
+     "d"
+    ]
+   }
+  }
+ ],
+ "types": [
+  {
+   "type": "plate",
+   "what": "a flat steel plate that a joint connects",
+   "fields": [
+    {
+     "name": "thickness",
+     "dim": "length",
+     "what": "its thickness"
+    },
+    {
+     "name": "width",
+     "dim": "length",
+     "what": "its gross width, across the force it carries"
+    },
+    {
+     "name": "Fy",
+     "dim": "stress",
+     "signed": true,
+     "what": "the specified minimum yield stress of its steel"
+    },
+    {
+     "name": "Fu",
+     "dim": "stress",
+     "signed": true,
+     "what": "the specified minimum tensile strength of its steel"
+    }
+   ]
+  },
+  {
+   "type": "lap",
+   "what": "one line of two or more bolts in single shear through two plates, in a bearing-type joint that is pulled along the line",
+   "fields": [
+    {
+     "name": "fastener",
+     "one_of": [
+      "Group 120",
+      "Group 144",
+      "Group 150"
+     ],
+     "what": "the strength group of the bolts, as Section J3.2 names it"
+    },
+    {
+     "name": "threads",
+     "one_of": [
+      "included",
+      "excluded"
+     ],
+     "what": "whether threads are in the shear plane"
+    },
+    {
+     "name": "diameter",
+     "dim": "length",
+     "what": "the nominal diameter of a bolt"
+    },
+    {
+     "name": "holes",
+     "one_of": [
+      "standard",
+      "oversize"
+     ],
+     "what": "the type of the holes in both plates"
+    },
+    {
+     "name": "count",
+     "dim": "dimensionless",
+     "whole": true,
+     "least": "2",
+     "what": "the number of bolts in the line"
+    },
+    {
+     "name": "pitch",
+     "dim": "length",
+     "what": "the distance between the centres of neighbouring holes"
+    },
+    {
+     "name": "end",
+     "dim": "length",
+     "what": "the least distance from the centre of an end hole to the end of either plate, along the line"
+    },
+    {
+     "name": "joins",
+     "type": "plate",
+     "as": [
+      "a",
+      "b"
+     ],
+     "what": "the two plates"
+    }
+   ],
+   "loads": [
+    {
+     "name": "pull",
+     "dim": "force",
+     "least": "0 kip",
+     "what": "the force the lap carries from one plate to the other along the line, as a required strength by LRFD load combinations"
+    }
+   ]
+  }
+ ],
+ "grid": [
+  {
+   "type": "lap",
+   "mechanism": "lap.tightening",
+   "what": "whether the bolts must be pretensioned or the joint slip-critical",
+   "anchor": {
+    "standard": "AISC 360-22",
+    "clause": "J3.2"
+   }
+  },
+  {
+   "type": "lap",
+   "mechanism": "lap.hole_use",
+   "what": "whether this type of hole may be used in this joint",
+   "anchor": {
+    "standard": "AISC 360-22",
+    "clause": "J3.3"
+   }
+  },
+  {
+   "type": "lap",
+   "mechanism": "lap.spacing",
+   "what": "minimum spacing of the holes",
+   "anchor": {
+    "standard": "AISC 360-22",
+    "clause": "J3.4"
+   }
+  },
+  {
+   "type": "lap",
+   "mechanism": "lap.end_distance",
+   "what": "minimum distance from an end hole to the end of a plate",
+   "anchor": {
+    "standard": "AISC 360-22",
+    "clause": "J3.5",
+    "table": "J3.4"
+   }
+  },
+  {
+   "type": "lap",
+   "mechanism": "lap.side_distance",
+   "what": "minimum distance from a hole to the side edge of a plate",
+   "anchor": {
+    "standard": "AISC 360-22",
+    "clause": "J3.5",
+    "table": "J3.4"
+   }
+  },
+  {
+   "type": "lap",
+   "mechanism": "lap.spread",
+   "what": "maximum spacing and edge distance",
+   "anchor": {
+    "standard": "AISC 360-22",
+    "clause": "J3.6"
+   }
+  },
+  {
+   "type": "lap",
+   "mechanism": "lap.strength",
+   "what": "shear of the bolts with bearing and tearout at their holes",
+   "anchor": {
+    "standard": "AISC 360-22",
+    "clause": "J3.7 and J3.11"
+   }
+  },
+  {
+   "type": "lap",
+   "mechanism": "lap.tension_with_shear",
+   "what": "tension on the bolts together with shear",
+   "anchor": {
+    "standard": "AISC 360-22",
+    "clause": "J3.8"
+   },
+   "unless": {
+    "why": "a lap carries a pull along its line, which shears its bolts and puts no tension on them"
+   }
+  },
+  {
+   "type": "lap",
+   "mechanism": "lap.slip",
+   "what": "slip of a slip-critical joint",
+   "anchor": {
+    "standard": "AISC 360-22",
+    "clause": "J3.9"
+   },
+   "unless": {
+    "why": "a lap is a bearing-type joint, which claims no slip resistance"
+   }
+  },
+  {
+   "type": "lap",
+   "mechanism": "lap.ply_yield",
+   "what": "tensile yielding of each plate",
+   "anchor": {
+    "standard": "AISC 360-22",
+    "clause": "J4.1"
+   }
+  },
+  {
+   "type": "lap",
+   "mechanism": "lap.ply_rupture",
+   "what": "tensile rupture of each plate through its holes",
+   "anchor": {
+    "standard": "AISC 360-22",
+    "clause": "J4.1"
+   }
+  },
+  {
+   "type": "lap",
+   "mechanism": "lap.ply_shear",
+   "what": "shear of a plate as an element loaded in shear",
+   "anchor": {
+    "standard": "AISC 360-22",
+    "clause": "J4.2"
+   },
+   "unless": {
+    "why": "the plates of a lap are pulled along its line; shear on their planes beside the bolts is tearout and block shear"
+   }
+  },
+  {
+   "type": "lap",
+   "mechanism": "lap.block_shear",
+   "what": "block shear rupture of each plate",
+   "anchor": {
+    "standard": "AISC 360-22",
+    "clause": "J4.3"
+   }
+  },
+  {
+   "type": "lap",
+   "mechanism": "lap.ply_compression",
+   "what": "yielding and buckling of a plate in compression",
+   "anchor": {
+    "standard": "AISC 360-22",
+    "clause": "J4.4"
+   },
+   "unless": {
+    "why": "the load on a lap is a pull, which the card signs as at least zero"
+   }
+  },
+  {
+   "type": "lap",
+   "mechanism": "lap.ply_flexure",
+   "what": "bending of the plates, which a lap in single shear sets apart",
+   "anchor": {
+    "standard": "AISC 360-22",
+    "clause": "J4.5"
+   }
+  }
+ ],
+ "rules": [
+  {
+   "id": "aisc360-22/lap-strength",
+   "type": "lap",
+   "mechanism": "lap.strength",
+   "anchor": {
+    "standard": "AISC 360-22",
+    "clause": "J3.7 and J3.11",
+    "equation": "J3-1, J3-6a, J3-6c",
+    "table": "J3.2, J3.3"
+   },
+   "says": "the pull is at most 0.75 of the sum over the bolts of the least of a bolt's shear strength and the bearing and tearout strengths at its two holes",
+   "let": {
+    "Ab": [
+     "div",
+     [
+      "mul",
+      "pi",
+      [
+       "pow",
+       "diameter",
+       "2"
+      ]
+     ],
+     "4"
+    ],
+    "rv": [
+     "row",
+     "aisc360-22/J3-1",
+     {
+      "Ab": "Ab",
+      "Fn": [
+       "row",
+       "aisc360-22/table-J3.2",
+       {
+        "fastener": "fastener",
+        "stress": [
+         "by",
+         "threads",
+         {
+          "included": "Fnv_N",
+          "excluded": "Fnv_X"
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "dh": [
+     "row",
+     "aisc360-22/table-J3.3",
+     {
+      "d": "diameter",
+      "hole": "holes"
+     }
+    ],
+    "lc_end": [
+     "sub",
+     "end",
+     [
+      "div",
+      "dh",
+      "2"
+     ]
+    ],
+    "lc_in": [
+     "sub",
+     "pitch",
+     "dh"
+    ],
+    "a_end": [
+     "min",
+     [
+      "row",
+      "aisc360-22/J3-6a",
+      {
+       "d": "diameter",
+       "t": "a.thickness",
+       "Fu": "a.Fu"
+      }
+     ],
+     [
+      "row",
+      "aisc360-22/J3-6c",
+      {
+       "lc": "lc_end",
+       "t": "a.thickness",
+       "Fu": "a.Fu"
+      }
+     ]
+    ],
+    "a_in": [
+     "min",
+     [
+      "row",
+      "aisc360-22/J3-6a",
+      {
+       "d": "diameter",
+       "t": "a.thickness",
+       "Fu": "a.Fu"
+      }
+     ],
+     [
+      "row",
+      "aisc360-22/J3-6c",
+      {
+       "lc": "lc_in",
+       "t": "a.thickness",
+       "Fu": "a.Fu"
+      }
+     ]
+    ],
+    "b_end": [
+     "min",
+     [
+      "row",
+      "aisc360-22/J3-6a",
+      {
+       "d": "diameter",
+       "t": "b.thickness",
+       "Fu": "b.Fu"
+      }
+     ],
+     [
+      "row",
+      "aisc360-22/J3-6c",
+      {
+       "lc": "lc_end",
+       "t": "b.thickness",
+       "Fu": "b.Fu"
+      }
+     ]
+    ],
+    "b_in": [
+     "min",
+     [
+      "row",
+      "aisc360-22/J3-6a",
+      {
+       "d": "diameter",
+       "t": "b.thickness",
+       "Fu": "b.Fu"
+      }
+     ],
+     [
+      "row",
+      "aisc360-22/J3-6c",
+      {
+       "lc": "lc_in",
+       "t": "b.thickness",
+       "Fu": "b.Fu"
+      }
+     ]
+    ]
+   },
+   "where": [
+    {
+     "le": [
+      [
+       "mul",
+       [
+        "sub",
+        "count",
+        "1"
+       ],
+       "pitch"
+      ],
+      [
+       "q",
+       "38",
+       "inch"
+      ]
+     ],
+     "why": "the line of bolts is at most 38 inch long (note c of Table J3.2 lowers the shear stress of a longer one, and this rule does not)"
+    }
+   ],
+   "le": [
+    [
+     "load",
+     "pull"
+    ],
+    [
+     "mul",
+     "0.75",
+     [
+      "add",
+      [
+       "min",
+       "rv",
+       "a_end",
+       "b_in"
+      ],
+      [
+       "min",
+       "rv",
+       "a_in",
+       "b_end"
+      ],
+      [
+       "mul",
+       [
+        "sub",
+        "count",
+        "2"
+       ],
+       [
+        "min",
+        "rv",
+        "a_in",
+        "b_in"
+       ]
+      ]
+     ]
+    ]
+   ]
+  },
+  {
+   "id": "aisc360-22/lap-end-distance",
+   "type": "lap",
+   "mechanism": "lap.end_distance",
+   "anchor": {
+    "standard": "AISC 360-22",
+    "clause": "J3.5",
+    "table": "J3.4"
+   },
+   "says": "the distance from the centre of an end hole to the end of a plate is at least the table's value for the bolt diameter",
+   "when": [
+    "is",
+    "holes",
+    "standard"
+   ],
+   "le": [
+    [
+     "row",
+     "aisc360-22/table-J3.4",
+     {
+      "d": "diameter"
+     }
+    ],
+    "end"
+   ]
+  },
+  {
+   "id": "aisc360-22/lap-yield-a",
+   "type": "lap",
+   "mechanism": "lap.ply_yield",
+   "anchor": {
+    "standard": "AISC 360-22",
+    "clause": "J4.1",
+    "equation": "J4-1"
+   },
+   "says": "the pull is at most 0.90 of the yield strength of the gross section of the first plate",
+   "le": [
+    [
+     "load",
+     "pull"
+    ],
+    [
+     "mul",
+     "0.90",
+     [
+      "row",
+      "aisc360-22/J4-1",
+      {
+       "Fy": "a.Fy",
+       "Ag": [
+        "mul",
+        "a.width",
+        "a.thickness"
+       ]
+      }
+     ]
+    ]
+   ]
+  },
+  {
+   "id": "aisc360-22/lap-yield-b",
+   "type": "lap",
+   "mechanism": "lap.ply_yield",
+   "anchor": {
+    "standard": "AISC 360-22",
+    "clause": "J4.1",
+    "equation": "J4-1"
+   },
+   "says": "the pull is at most 0.90 of the yield strength of the gross section of the second plate",
+   "le": [
+    [
+     "load",
+     "pull"
+    ],
+    [
+     "mul",
+     "0.90",
+     [
+      "row",
+      "aisc360-22/J4-1",
+      {
+       "Fy": "b.Fy",
+       "Ag": [
+        "mul",
+        "b.width",
+        "b.thickness"
+       ]
+      }
+     ]
+    ]
+   ]
+  }
+ ]
+}

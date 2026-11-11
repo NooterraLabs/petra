@@ -1,0 +1,32 @@
+petra 0
+
+# Unpainted A588 weathering steel, 3/8 inch thick, with a pitch of 5.25 inch: 14 thicknesses,
+# the most J3.6(b) allows and not over it.
+# At 45 kip the bolts carry 53.7, and each plate yields at 101.3 and ruptures at 100.9.
+
+plate tab {
+  thickness 0.375 inch
+  width 6 inch
+  Fy given tab.Fy
+  Fu given tab.Fu
+}
+
+plate strap {
+  thickness 0.375 inch
+  width 6 inch
+  Fy given strap.Fy
+  Fu given strap.Fu
+}
+
+lap splice {
+  fastener "Group 120"
+  threads included
+  diameter 0.75 inch
+  holes standard
+  count 3
+  pitch 5.25 inch
+  end 1.5 inch
+  side 3 inch
+  surface weathering
+  joins tab strap
+}
