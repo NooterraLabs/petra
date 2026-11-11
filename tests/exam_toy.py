@@ -3,7 +3,7 @@
 The four tasks are made up here and copied from no benchmark: each asks for a whole number
 in a range, and the grader reads the last whole number of the answer. TOY shows the agent
 nothing between attempts, as most benchmarks do. TOY_FEEDBACK shows it the number that was
-read, which is not the grade.
+read, which is not the grade. TOY_RUNS says that its grader executes the model's code.
 
 Run as a command, this file is the fake model: it reads a prompt on stdin and prints a
 reply. tests/test_exam.py says what the reply is.
@@ -36,6 +36,8 @@ FORM = " Reply with the number alone on the last line."
 class Toy(Adapter):
     name = "toy"
     about = "a made-up question in, a whole number out"
+    executes = False
+    """The grader reads a number. It runs nothing the model wrote, so it needs no sandbox."""
 
     def fetch(self, folder: Path) -> dict:
         folder.mkdir(parents=True, exist_ok=True)
@@ -65,8 +67,17 @@ class ToyFeedback(Toy):
         return f"Your number was read as {answer}."
 
 
+class ToyRuns(Toy):
+    """The same benchmark, said to execute the model's code as the real ones do. The grader still only reads a
+    number: what the tests want of it is the harness's refusal to grade with no sandbox."""
+
+    name = "toyruns"
+    executes = True
+
+
 TOY = Toy()
 TOY_FEEDBACK = ToyFeedback()
+TOY_RUNS = ToyRuns()
 
 DESIGN = (ROOT / "examples" / "deck" / "lap_pass.petra").read_text(encoding="utf-8")
 CARD = (ROOT / "examples" / "deck" / "lap_pass.card").read_text(encoding="utf-8")

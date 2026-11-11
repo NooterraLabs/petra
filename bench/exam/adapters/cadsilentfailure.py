@@ -15,8 +15,8 @@ The benchmark defines feedback between attempts, in its tool-use condition: the 
 properties of the agent's own solid, or the error its code raised. `feedback` gives the
 same six properties. It never gives a check or its result.
 
-The grader executes the model's code. That is how the benchmark grades, and it is not a
-sandbox: the code runs as this user, held only by the time limit.
+The grader executes the model's code. That is how the benchmark grades, so it runs in
+the sandbox (bench/exam/sandbox.py), on the grader host (bench/exam/host.py).
 """
 from __future__ import annotations
 
@@ -24,13 +24,12 @@ import ast
 import json
 import re
 import subprocess
-import tempfile
 import time
 from pathlib import Path
 
-from bench.exam import data
+from bench.exam import data, host
 from bench.exam.adapters import Adapter, Grade
-from bench.exam.adapters.cadtestbench import in_venv
+from bench.exam.adapters.cadtestbench import given, in_venv
 
 COMMIT = "c95d9ebedd5a3ce0c36513cb41768cdc63ef1369"
 ARCHIVE = f"https://codeload.github.com/rodriguescarson/cad-silent-failure-bench/zip/{COMMIT}"
@@ -57,7 +56,8 @@ class CadSilentFailure(Adapter):
 
     def fetch(self, folder: Path) -> dict:
         manifest = data.fetch_archive(folder, ARCHIVE, KEEP, VERSION, DIGEST)
-        data.make_venv(self.name, PACKAGES)
+        host.mirror(folder, self.name)
+        host.make_env(self.name, PACKAGES)
         return manifest
 
     def tasks(self, folder: Path) -> list[str]:
@@ -86,17 +86,15 @@ class CadSilentFailure(Adapter):
         grade read the same run."""
         key = (task, data.text_hash(answer))
         if key not in self._ran:
-            with tempfile.TemporaryDirectory() as work:
-                code, out = Path(work) / "answer.py", Path(work) / "out.json"
-                code.write_text(answer, encoding="utf-8", newline="\n")
-                arguments = ["cadsilentfailure", str(folder), str(folder / "tasks" / f"{task}.json"), str(code), str(out), str(timeout)]
-                try:
-                    done = in_venv(self.name, arguments, timeout + 30)
-                except subprocess.TimeoutExpired:
-                    return {"harness_error": f"the grader did not finish within {timeout + 30:.0f} s"}
-                if done.returncode != 0 or not out.is_file():
-                    return {"harness_error": "the grader wrote no result", "exit": done.returncode, "said": (done.stdout + done.stderr)[-2000:]}
-                self._ran[key] = json.loads(out.read_text(encoding="utf-8"))
+            try:
+                done = in_venv(self.name, folder, "cadsilentfailure", {"task": task, "answer": answer, "seconds": timeout}, timeout + 30, self.sandboxed)
+            except subprocess.TimeoutExpired:
+                done = subprocess.CompletedProcess([], 124, "", "")
+            if done.returncode == 124:
+                return {"harness_error": f"the grader did not finish within {timeout + 30:.0f} s"}
+            if done.returncode != 0 or given(done) is None:
+                return {"harness_error": "the grader wrote no result", "exit": done.returncode, "said": done.stderr[-2000:]}
+            self._ran[key] = given(done)
         return self._ran[key]
 
     def feedback(self, folder: Path, task: str, answer: str | None, timeout: float) -> str | None:

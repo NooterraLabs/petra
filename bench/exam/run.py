@@ -1,7 +1,7 @@
 """Sit a benchmark: an agent alone, and the same agent with Petra's reports fed back.
 
     python -m bench.exam.run --benchmark NAME [--arm alone|petra|both] [--tasks N] [--seed S] [--model CMD]
-                             [--attempts K] [--max-calls N] [--fetch] [--shakedown]
+                             [--attempts K] [--max-calls N] [--fetch] [--shakedown] [--no-sandbox]
 
 Both arms get the same tasks, drawn by the seed, the same model command and the same number
 of attempts, K.
@@ -17,6 +17,10 @@ of attempts, K.
 
 The grader's result is never shown to the model. Every attempt is graded and recorded, and
 the last attempt's answer is the one that counts.
+
+A grader that executes the model's code runs in the sandbox (sandbox.py). A run stops
+before its first model call when there is none, and `--no-sandbox` is the only way past
+that. Every record says how its grade was made.
 
 One record is written for each model call, to a file in the runs folder (records.py says
 what it holds). A rerun reads the file and skips what is recorded, so a run that was
@@ -45,7 +49,7 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from bench.exam import checker, data, model as models, records  # noqa: E402
+from bench.exam import checker, data, host, model as models, records, sandbox  # noqa: E402
 from bench.exam.adapters import Adapter, load  # noqa: E402
 
 FAILURES = 3
@@ -65,6 +69,7 @@ class Settings:
     grade_timeout: float = 300.0
     petra_timeout: float = 180.0
     shakedown: bool = False
+    sandbox: bool = True
     guides: list[Path] = field(default_factory=lambda: [checker.GUIDE])
 
 
@@ -103,8 +108,7 @@ def same(a: str | None, b: str | None) -> bool:
 def run(adapter: Adapter, folder: Path, out: Path, settings: Settings,
         call: Callable[[str, str, float], models.Reply] = models.call, say: Callable[[str], None] = print) -> int:
     """Sit the chosen tasks and append the records to `out`. Returns the exit code."""
-    if differ := data.changed(folder):
-        raise SystemExit(f"{len(differ)} of the benchmark's files are missing or not as they were fetched; run with --fetch")
+    how, hidden = ready(adapter, folder, settings.sandbox)
     tasks = chosen(adapter, folder, settings.tasks, settings.seed)
     version = adapter.version(folder)
     mine = [r for r in records.read(out) if (r["benchmark"], r["seed"], r["model"], bool(r.get("shakedown")))
@@ -128,7 +132,7 @@ def run(adapter: Adapter, folder: Path, out: Path, settings: Settings,
                     "model": settings.model, "command": models.describe(settings.model),
                     "prompt": prompt, "prompt_sha256": data.text_hash(prompt), "reply": reply.text, "reply_sha256": data.text_hash(reply.text),
                     "answer": None, "answer_sha256": None, "model_ok": reply.ok, "model_error": reply.error,
-                    "feedback": None, "petra": None, "changed": None, "grade": None,
+                    "feedback": None, "petra": None, "changed": None, "grade": None, "sandbox": how,
                     "chars": {"prompt": len(prompt), "reply": len(reply.text)},
                     "seconds": {"model": round(reply.seconds, 2), "petra": 0.0, "feedback": 0.0, "grade": 0.0, "attempt": 0.0},
                 }
@@ -151,7 +155,7 @@ def run(adapter: Adapter, folder: Path, out: Path, settings: Settings,
                 if more:
                     mark = time.monotonic()
                     feedback = adapter.feedback(folder, task, answer, settings.grade_timeout)
-                    record["feedback"] = checker.scrub(feedback, data.HOME) if feedback is not None else None
+                    record["feedback"] = checker.scrub(feedback, data.HOME, *hidden) if feedback is not None else None
                     record["seconds"]["feedback"] = round(time.monotonic() - mark, 2)
                 again = more and (record["feedback"] is not None or bool(record["petra"] and record["petra"]["handed_in"]))
                 grade = adapter.grade(folder, task, answer, settings.grade_timeout)
@@ -166,6 +170,22 @@ def run(adapter: Adapter, folder: Path, out: Path, settings: Settings,
                 previous = record
     say("every chosen task has its final answer")
     return 0
+
+
+def ready(adapter: Adapter, folder: Path, sandboxed: bool = True) -> tuple[str, list]:
+    """Check, before anything is graded, that the benchmark's files are as they were fetched and that the grader has
+    its sandbox or was told to do without. Returns how the grades will be made, for the records, and the folders of
+    the grader host to take out of a text that goes to a model. Stops the program otherwise."""
+    if differ := data.changed(folder):
+        raise SystemExit(f"{len(differ)} of the benchmark's files are missing or not as they were fetched; run with --fetch")
+    adapter.sandboxed = sandboxed
+    try:
+        how = sandbox.how(adapter.executes, sandboxed)
+        if adapter.executes and (differ := host.changed(folder, adapter.name)):
+            raise SystemExit(f"{len(differ)} of the benchmark's files are missing from WSL or not as they were fetched; run with --fetch")
+    except (sandbox.Missing, host.Down) as stop:
+        raise SystemExit(str(stop)) from None
+    return how, host.named() if adapter.executes else []
 
 
 def finish(out: Path, record: dict, began: float) -> None:
@@ -198,21 +218,29 @@ def main(argv: list[str] | None = None) -> int:
                         help=f"what the petra arm is given to read; default {checker.GUIDE.relative_to(ROOT).as_posix()}")
     parser.add_argument("--data", type=Path, default=data.DATA, help=f"where benchmark files are; default {data.DATA}")
     parser.add_argument("--runs", type=Path, default=data.RUNS, help=f"where records are written; default {data.RUNS}")
-    parser.add_argument("--fetch", action="store_true", help="fetch the benchmark and make its grader's environment first")
+    parser.add_argument("--fetch", action="store_true", help="fetch the benchmark, and make its grader's environment and the sandbox, first")
     parser.add_argument("--shakedown", action="store_true", help="mark the records as a test of the plumbing, whose numbers mean nothing")
+    parser.add_argument("--no-sandbox", action="store_true",
+                        help="grade outside the sandbox: the model's code then runs as the user, with the user's files and the network in reach")
     args = parser.parse_args(argv)
     for folder in (args.data, args.runs):
         if why := data.refused(folder):
             parser.error(f"{folder} is {why}, and benchmark files and records stay out of it")
     adapter = load(args.benchmark)
+    adapter.sandboxed = not args.no_sandbox
     folder = args.data / adapter.name
     if args.fetch:
-        adapter.fetch(folder)
+        try:
+            if adapter.executes and adapter.sandboxed:
+                sandbox.fetch()
+            adapter.fetch(folder)
+        except (sandbox.Missing, host.Down) as stop:
+            raise SystemExit(str(stop)) from None
         print(f"fetched {adapter.name}: {len(adapter.tasks(folder))} tasks")
     settings = Settings(arms=records.ARMS if args.arm == "both" else (args.arm,), tasks=args.tasks, seed=args.seed, model=args.model,
                         attempts=args.attempts, max_calls=args.max_calls, call_timeout=args.call_timeout,
                         grade_timeout=args.grade_timeout, petra_timeout=args.petra_timeout, shakedown=args.shakedown,
-                        guides=args.guide or [checker.GUIDE])
+                        sandbox=not args.no_sandbox, guides=args.guide or [checker.GUIDE])
     out = run_file(args.runs, adapter.name, args.seed, args.model, args.shakedown)
     code = run(adapter, folder, out, settings, say=lambda line: print(line, flush=True))
     print()

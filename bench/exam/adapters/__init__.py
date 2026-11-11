@@ -2,6 +2,8 @@
 
 An adapter knows a benchmark's file format and how its grader is called. It knows nothing
 of what a task asks: no task id, no task text and no expected value is written in one.
+It says whether its grader executes code the model wrote (`executes`), and such a grader
+is started through bench/exam/sandbox.py and no other way.
 
 A grade has the benchmark's own score and pass condition, and one of these outcomes, which
 are the only thing of a grade that a summary prints:
@@ -53,6 +55,11 @@ class Adapter:
     name: str = ""
     about: str = ""
     """One general line: what goes in and what comes back."""
+    executes: bool = True
+    """Whether the grader executes code the model wrote. Such a grader runs in the sandbox (bench/exam/sandbox.py), and
+    a run refuses to start when there is none. An adapter that says nothing is taken to execute it."""
+    sandboxed: bool = True
+    """False when the run was told to grade outside the sandbox (--no-sandbox). A run sets it before it fetches or grades."""
 
     def fetch(self, folder: Path) -> dict:
         """Bring the benchmark's files into the folder, and make its grader's environment.

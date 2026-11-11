@@ -9,18 +9,17 @@ and then each test of that sample on the solid it made, in its own process and i
 empty folder. The benchmark's pass condition is that every test passes, and its score is
 the share of tests that pass. The benchmark defines no feedback between attempts.
 
-The grader executes the model's script. That is how the benchmark grades, and it is not a
-sandbox: the script runs as this user, held only by the time limit.
+The grader executes the model's script. That is how the benchmark grades, so it runs in
+the sandbox (bench/exam/sandbox.py), on the grader host (bench/exam/host.py).
 """
 from __future__ import annotations
 
 import json
 import subprocess
-import tempfile
 import time
 from pathlib import Path
 
-from bench.exam import data
+from bench.exam import data, host, sandbox
 from bench.exam.adapters import Adapter, Grade, code_block
 
 DATASET = "https://huggingface.co/datasets/dimitrismallis/CADTestBench/resolve/2b9a4a972d142d2bc634d072e9d4485f171ced06"
@@ -59,14 +58,23 @@ Write the model as one Python file that uses CadQuery (`import cadquery as cq`).
 """How the benchmark's README says an answer is written."""
 
 
-def in_venv(name: str, arguments: list[str], timeout: float, cwd: Path | None = None) -> subprocess.CompletedProcess:
-    """Run the helper in a grader environment: isolated, UTF-8, offline for Hugging Face,
-    with that library's cache under the exam folder, and with none of this process's
-    environment beyond what a program needs to start."""
-    env = data.plain_env(PYTHONUTF8="1", HF_HOME=str(data.HOME / "cache" / "hf"), HF_HUB_OFFLINE="1", HF_DATASETS_OFFLINE="1",
-                         HF_HUB_DISABLE_TELEMETRY="1")
-    return subprocess.run([str(data.venv_python(name)), "-I", "-X", "utf8", str(HELPER), *arguments], capture_output=True, text=True,
-                          encoding="utf-8", errors="replace", stdin=subprocess.DEVNULL, timeout=timeout, env=env, cwd=cwd)
+def in_venv(name: str, folder: Path, mode: str, request: dict, timeout: float, sandboxed: bool = True) -> subprocess.CompletedProcess:
+    """Run one mode of the helper in a grader environment on the host, in the sandbox unless the run was told to do
+    without: isolated, UTF-8, offline for Hugging Face, with the benchmark's folder to read, and with the request sent
+    in on stdin with the helper itself. What it prints on stdout is the mode's result as JSON."""
+    program = HELPER.read_text(encoding="utf-8") + f"\nsys.exit(main({mode!r}, json.loads({json.dumps(request)!r})))\n"
+    env = {"EXAM_DATA": sandbox.DATA, "PYTHONUTF8": "1", "HF_HUB_OFFLINE": "1", "HF_DATASETS_OFFLINE": "1", "HF_HUB_DISABLE_TELEMETRY": "1"}
+    return sandbox.run([f"{sandbox.ENV}/bin/python", "-I", "-X", "utf8", "-"], {sandbox.ENV: host.env(name), sandbox.DATA: host.where(folder, name)},
+                       env, timeout, input=program, sandboxed=sandboxed)
+
+
+def given(done: subprocess.CompletedProcess) -> dict | None:
+    """What a mode of the helper gave back, or None when it printed no JSON object."""
+    try:
+        found = json.loads(done.stdout)
+    except (ValueError, RecursionError):
+        return None
+    return found if isinstance(found, dict) else None
 
 
 class CadTestBench(Adapter):
@@ -76,10 +84,12 @@ class CadTestBench(Adapter):
     def fetch(self, folder: Path) -> dict:
         sources = [data.Source(f"{base}/{path}", f"{part}/{path}", digest) for base, part, path, digest in FILES]
         manifest = data.fetch(folder, sources, VERSION)
-        data.make_venv(self.name, PACKAGES)
-        done = in_venv(self.name, ["samples", str(folder / "dataset"), str(folder / "samples.json")], 300)
-        if done.returncode != 0:
+        host.mirror(folder, self.name)
+        host.make_env(self.name, PACKAGES)
+        done = in_venv(self.name, folder, "samples", {}, 300, self.sandboxed)
+        if done.returncode != 0 or given(done) is None:
             raise RuntimeError(f"could not read the prompts: {done.stderr.strip()[-500:]}")
+        (folder / "samples.json").write_text(json.dumps(given(done), indent=0, sort_keys=True), encoding="utf-8")
         return manifest
 
     def _samples(self, folder: Path) -> dict[str, dict[str, str]]:
@@ -100,22 +110,17 @@ class CadTestBench(Adapter):
             return Grade("no_answer", 0.0, {"why": "the reply has no fenced python block"})
         partition, sample = task.split("/")
         began = time.monotonic()
-        with tempfile.TemporaryDirectory() as work:
-            model = Path(work) / "run" / "generated_models" / sample
-            model.mkdir(parents=True)
-            (model / "gpt_generated.py").write_text(answer, encoding="utf-8", newline="\n")
-            arguments = ["cadtestbench", str(folder / "grader" / "src"), "evaluate", str(Path(work) / "run"), "--partition", partition,
-                         "--dataset", str(folder / "dataset"), "--eval-root", str(Path(work) / "eval"), "--sample-ids", sample]
-            try:
-                done = in_venv(self.name, arguments, timeout, cwd=Path(work))
-            except subprocess.TimeoutExpired:
-                return Grade("grader_error", 0.0, {"why": f"the grader did not finish within {timeout:.0f} s"}, time.monotonic() - began)
-            found = sorted((Path(work) / "eval").glob(f"*/samples/{sample}/summary.json"))
-            if done.returncode != 0 or not found:
-                return Grade("grader_error", 0.0, {"why": "the grader wrote no result", "exit": done.returncode,
-                                                   "said": (done.stdout + done.stderr)[-2000:]}, time.monotonic() - began)
-            result = json.loads(found[-1].read_text(encoding="utf-8"))
-        return read(result, time.monotonic() - began)
+        try:
+            done = in_venv(self.name, folder, "cadtestbench", {"partition": partition, "sample": sample, "answer": answer}, timeout, self.sandboxed)
+        except subprocess.TimeoutExpired:
+            done = subprocess.CompletedProcess([], 124, "", "")
+        if done.returncode == 124:
+            return Grade("grader_error", 0.0, {"why": f"the grader did not finish within {timeout:.0f} s"}, time.monotonic() - began)
+        found = given(done) or {}
+        if done.returncode != 0 or found.get("exit") or not found.get("summary"):
+            return Grade("grader_error", 0.0, {"why": "the grader wrote no result", "exit": found.get("exit") or done.returncode,
+                                               "said": done.stderr[-2000:]}, time.monotonic() - began)
+        return read(found["summary"], time.monotonic() - began)
 
 
 def read(result: dict, seconds: float = 0.0) -> Grade:

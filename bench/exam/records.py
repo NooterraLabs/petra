@@ -16,6 +16,9 @@ A record has:
     petra                             the petra arm's report (checker.Report), or null
     changed                           whether the answer differs from the attempt before, or null
     grade                             the grader's result (adapters.Grade), never shown to the model
+    sandbox                           how the grade was made: "bwrap VERSION", "none" when the model's code ran with
+                                      no sandbox, or "not needed" when the grader executes nothing the model wrote.
+                                      A record from before the sandbox has no such field, and counts as "none"
     chars                             prompt and reply lengths in characters
     seconds                           model, petra, feedback, grade, and the whole attempt
     at                                when the record was written, UTC
@@ -32,10 +35,12 @@ from pathlib import Path
 
 from bench.exam.adapters import OUTCOMES
 from bench.exam.checker import SAID, STATUSES
+from bench.exam.sandbox import NONE
 
 FORMAT = "petra-exam/0"
 ARMS = ("alone", "petra")
 NOTE = "This was a shakedown. It shows that the plumbing runs. Its numbers mean nothing and compare nothing."
+BARE = "{n} of {of} grades were made with no sandbox: the model's code ran as the user."
 
 
 def read(path: Path) -> list[dict]:
@@ -76,6 +81,8 @@ def totals(records: list[dict]) -> list[dict]:
             "benchmark": benchmark, "model": model, "seed": seed, "shakedown": shakedown, "arm": arm,
             "tasks_answered": len(done), "tasks_unfinished": len(by_task) - len(done),
             "calls": len(group), "calls_failed": len(group) - len(ok),
+            "grades": sum(bool(r.get("grade")) for r in ok),
+            "grades_with_no_sandbox": sum(bool(r.get("grade")) and r.get("sandbox", NONE) == NONE for r in ok),
             "passed": sum(r["grade"]["passed"] for r in finals),
             "mean_score": round(sum(r["grade"]["score"] for r in finals) / len(finals), 4) if finals else None,
             "outcomes": {name: n for name in OUTCOMES if (n := Counter(r["grade"]["outcome"] for r in finals)[name])},
@@ -110,7 +117,10 @@ def show(rows: list[dict]) -> str:
         lines.append(f"{benchmark}, model {model}, seed {seed}")
         if shakedown:
             lines.append(f"  {NOTE}")
-        for row in (r for r in rows if (r["benchmark"], r["model"], r["seed"], r["shakedown"]) == key):
+        mine = [r for r in rows if (r["benchmark"], r["model"], r["seed"], r["shakedown"]) == key]
+        if bare := sum(r["grades_with_no_sandbox"] for r in mine):
+            lines.append("  " + BARE.format(n=bare, of=sum(r["grades"] for r in mine)))
+        for row in mine:
             outcomes = ", ".join(f"{name} {n}" for name, n in row["outcomes"].items()) or "none"
             score = "-" if row["mean_score"] is None else f"{row['mean_score']:.3f}"
             lines.append(f"  {row['arm']:<6} tasks answered {row['tasks_answered']}, unfinished {row['tasks_unfinished']}; "

@@ -401,7 +401,7 @@ class Adapters(unittest.TestCase):
             load("no-such-benchmark")
 
     def test_the_default_folders_are_outside_the_repository(self):
-        for folder in (data.DATA, data.RUNS, data.VENV):
+        for folder in (data.DATA, data.RUNS):
             self.assertNotIn(ROOT, folder.resolve().parents)
         self.assertEqual(data.DATA.parent, data.HOME)
 
