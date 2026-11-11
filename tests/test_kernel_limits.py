@@ -489,10 +489,14 @@ class Reading(Kernel):
     and petra/grid.py make the count from the file and refuse the same decks."""
 
     def test_the_grid_counts_the_first_deck_far_under_the_limit(self):
+        """The deck with four rules takes 5,500 steps: 3,874 for its file, and 1,626 for the
+        14 times its rules apply a row. The deck with fifteen rules that the branch `rework`
+        has in its place takes 10,019: 6,238, and 3,781 for 37 times. Ten decks of that size
+        would be a tenth of the limit."""
         deck = next(d for d in grid.decks() if "lap" in d.types)
         body = json.loads(deck.text)
-        self.assertEqual((grid._size(body), grid._steps(body)), (3874, 5500), "its file, and with the 14 times its rules apply a row")
-        self.assertLess(grid._steps(body) * 180, MAX_READ)
+        self.assertIn((len(body["rules"]), grid._size(body), grid._steps(body)), [(4, 3874, 5500), (15, 6238, 10019)])
+        self.assertLess(grid._steps(body) * 99, MAX_READ)
 
     def test_the_count_is_the_size_of_the_file_and_of_a_row_for_each_time_a_rule_applies_it(self):
         self.assertEqual([grid._size(t) for t in ("", "n" * 7, "n" * 8, "n" * 15, "n" * 16, "é" * 8, "𝄞" * 8)], [2, 2, 3, 3, 4, 3, 3],

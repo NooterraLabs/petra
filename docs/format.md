@@ -304,7 +304,7 @@ Making the cells of a design is counted in steps, 10,000,000 at most. The work i
 
 ### Work
 
-A proof pays for what it does, in units of work, from what its verdict has left. The kernel finds the cost of a step from the lengths of the numbers the step reads, and takes it from the work left before it takes the step. So the count is a bound on the time, set before the time is spent, and not a measure of it. The costs are fitted so that a unit takes about the same time whatever the step and however long its numbers: about 0.4 nanoseconds on the desktop they were fitted on, a four-core machine of 2017.
+A proof pays for what it does, in units of work, from what its verdict has left. The kernel finds the cost of a step from the lengths of the numbers the step reads, and takes it from the work left before it takes the step. So the count is a bound on the time, set before the time is spent, and not a measure of it. The costs are fitted so that a unit takes about the same time whatever the step and however long its numbers: 0.3 to 0.4 nanoseconds on the desktop they were fitted on, a four-core machine of 2017.
 
 A cost is a whole number. In the formulas below:
 
@@ -366,30 +366,30 @@ A step that rounds to the grid pays for each enclosure it asks for, before it as
 
 | Step | 64 bits | 250 | 1,000 | 4,000 | 16,000 | 64,000 |
 |---|---|---|---|---|---|---|
-| A constant | 0.30 | 0.23 | 0.44 | 0.35 | 0.29 | 0.24 |
-| `pi` | 0.33 | | | | | |
-| `neg` | 0.33 | 0.41 | 0.38 | 0.32 | 0.48 | 0.44 |
-| `abs` | 0.23 | 0.29 | 0.35 | 0.30 | 0.29 | 0.33 |
-| `add` | 0.30 | 0.28 | 0.26 | 0.22 | 0.24 | 0.24 |
-| `mul` | 0.29 | 0.32 | 0.31 | 0.41 | 0.33 | 0.35 |
-| `div` | 0.42 | 0.40 | 0.46 | 0.35 | 0.32 | 0.32 |
-| `min` | 0.27 | 0.27 | 0.28 | 0.29 | 0.39 | 0.30 |
-| `max` | 0.30 | 0.27 | 0.24 | 0.29 | 0.31 | 0.27 |
-| A pick of one order | 0.23 | 0.21 | 0.24 | 0.33 | 0.43 | 0.33 |
-| `sqrt` | 0.40 | 0.31 | 0.32 | 0.32 | 0.31 | 0.20 |
-| `pow` by 2 | 0.19 | 0.29 | 0.26 | 0.32 | 0.29 | 0.34 |
-| `pow` by 3 | 0.20 | 0.25 | 0.32 | 0.36 | 0.27 | 0.27 |
-| `pow` by 8 | 0.18 | 0.30 | 0.44 | 0.36 | 0.31 | 0.21 |
-| `ln` | 0.34 | 0.37 | 0.41 | 0.35 | 0.34 | 0.44 |
-| `exp` | 0.49 | 0.43 | 0.53 | 0.54 | 0.48 | 0.55 |
+| A constant | 0.24 | 0.26 | 0.22 | 0.21 | 0.27 | 0.23 |
+| `pi` | 0.24 | | | | | |
+| `neg` | 0.36 | 0.33 | 0.40 | 0.32 | 0.39 | 0.43 |
+| `abs` | 0.25 | 0.23 | 0.27 | 0.26 | 0.30 | 0.26 |
+| `add` | 0.27 | 0.30 | 0.30 | 0.21 | 0.23 | 0.22 |
+| `mul` | 0.30 | 0.29 | 0.35 | 0.36 | 0.29 | 0.32 |
+| `div` | 0.28 | 0.31 | 0.38 | 0.36 | 0.31 | 0.30 |
+| `min` | 0.22 | 0.21 | 0.21 | 0.24 | 0.29 | 0.28 |
+| `max` | 0.22 | 0.24 | 0.21 | 0.25 | 0.29 | 0.28 |
+| A pick of one order | 0.19 | 0.20 | 0.20 | 0.31 | 0.34 | 0.30 |
+| `sqrt` | 0.30 | 0.29 | 0.31 | 0.29 | 0.26 | 0.21 |
+| `pow` by 2 | 0.17 | 0.20 | 0.25 | 0.27 | 0.27 | 0.28 |
+| `pow` by 3 | 0.16 | 0.19 | 0.25 | 0.32 | 0.23 | 0.25 |
+| `pow` by 8 | 0.15 | 0.22 | 0.37 | 0.32 | 0.23 | 0.17 |
+| `ln` | 0.28 | 0.29 | 0.46 | 0.40 | 0.33 | 0.43 |
+| `exp` | 0.32 | 0.36 | 0.33 | 0.33 | 0.32 | 0.41 |
 
-The chain took 0.38 in that run, so the most, 0.55, is 1.5 times it. A figure moves by about a quarter from one run to the next. A constant of a file has at most 4,000 characters, so its last two columns are for one of 6,000 bits. A product of two numbers of 64,000 bits and a power of a long number have too many bits for a value, and their figures are for steps that paid and had none. Before the costs were fitted again the same sweep gave between 0.15 and 2.34 against a chain at 0.15, which is 16 times.
+The chain took 0.34 in that run, so the most, 0.46, is 1.4 times it. A figure moves by about a quarter from one run to the next: in a run on a busier machine the most was 0.55 against a chain at 0.38. A constant of a file has at most 4,000 characters, so its last two columns are for one of 6,000 bits. A product of two numbers of 64,000 bits and a power of a long number have too many bits for a value, and their figures are for steps that paid and had none. Before the costs were fitted again the same sweep gave between 0.15 and 2.34 against a chain at 0.15, which is 16 times.
 
 A step on whole numbers, or on fractions with a short numerator or denominator, is charged as the same step on fractions with no pattern and takes less, down to a tenth of the time for long numbers. So the count does not run far under the time, and for such numbers it runs well over it.
 
 The heaviest design of the corpus, `weld_bracket`, takes 5.4 billion units in two processor seconds: a little over a quarter of the budget. The next takes 0.13 billion, and a lap of the first deck of rules 2.6 million.
 
-Files of 1 MB made to take as long as they can took 11.7 processor seconds on the same desktop. They hold three rules for one part. One applies a row of 5,000 numbers as often as the million steps to read a deck allow, which took 1.5 seconds alone. One sums 1,400 fields and is written for as many load cases as the ten million steps of the cells allow, 1.8 seconds. And one has a hinted proof that spends the twenty billion units on `exp` of fractions of 250 bits, 8.3 seconds. With products or quotients in place of `exp` the proof took 5 to 6 seconds. A busy machine takes longer in proportion. `tests/test_kernel_limits.py`, `tests/test_kernel_attacks2.py` and `tests/test_kernel_attacks3.py` hold the limits one by one.
+Files of 1 MB made to take as long as they can took 10.7 processor seconds on the same desktop in one run and 11.7 in another. They hold three rules for one part. One applies a row of 5,000 numbers as often as the million steps to read a deck allow, which took 1.4 to 1.5 seconds alone. One sums 1,400 fields and is written for as many load cases as the ten million steps of the cells allow, 1.7 to 1.8 seconds. And one has a hinted proof that spends the twenty billion units on `exp` of fractions of 250 bits, 7.8 to 8.3 seconds. With products or quotients in place of `exp` the proof took 5 to 6 seconds. A busy machine takes longer in proportion. `tests/test_kernel_limits.py`, `tests/test_kernel_attacks2.py` and `tests/test_kernel_attacks3.py` hold the limits one by one.
 
 ### What the kernel holds and prints
 
