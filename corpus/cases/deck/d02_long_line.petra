@@ -1,6 +1,8 @@
 petra 0
 
-# 14 bolts at 3 inch make a line of 39 inch, past the 38 inch the strength rule holds to, so its cell is open and not proved.
+# 14 bolts at 3 inch make a line of 39 inch, over 38. Note c of Table J3.2 then takes the shear
+# stress at 83.3%: a bolt carries 0.75 x 0.833 x 54 x 0.4418 = 14.90 kip, and the 14 carry 208.7.
+# The pull is 45 kip, and every other answer holds or is waived.
 
 plate tab {
   thickness 0.375 inch
@@ -24,5 +26,7 @@ lap splice {
   count 14
   pitch 3 inch
   end 1.5 inch
+  side 3 inch
+  surface protected
   joins tab strap
 }

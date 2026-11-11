@@ -4,8 +4,10 @@ of its rules, worked examples, and what the check says of each mechanism.
 Most tests use the deck STRIPS of tests/test_grid.py, made up for tests: it is no standard,
 and its numbers mean nothing. The task gives its types a range for each quantity, calls the
 current adverse and the two pads of a strip alike. The first transcription is the deck's
-own rules. The worked examples are made up too. The last class runs the check on the deck
-that ships, with bench/formalizer/rules_b.json as its second transcription.
+own rules. The worked examples are made up too. The last class runs the check on the files
+of the first run: bench/formalizer/rules_a.json, the deck as it shipped then, with
+rules_b.json as its second transcription. tests/test_deck_rules.py runs the check on the
+deck that ships now.
 """
 import collections
 import copy
@@ -231,6 +233,30 @@ class Examples(unittest.TestCase):
         found = check(reads_more, "strip.bow", "examples", examples=EXAMPLES)
         self.assertEqual((found.outcome, found.detail), ("fail", "made up, 4: the rules read hole, which the example does not give"))
 
+    def test_an_example_of_one_of_two_like_parts_is_held_against_the_rules_it_gives_every_field_of(self):
+        """A source that works one pad of two gives that pad's fields alone. The rule for that pad must reproduce it, and the
+        rule for the other pad is not tested by it. Two strips take 40 mm2 of each pad: 0.80 of a pad of 50 mm2, and all of one of 40."""
+        near = {"strip.creep": [{"anchor": "made up, 6", "given": {"turns": "2", "near.area": "50 mm2"}, "side": "ratio", "gives": "0.80"}]}
+        more = ["mul", "turns", ["q", "25", "mm2"]]
+
+        def by_pad(near_rule: dict = BY_PAD[0], far_rule: dict = BY_PAD[1]) -> rule.Reading:
+            return reading(lambda b: b["rules"].extend([near_rule, far_rule]))
+
+        found = check(by_pad(), "strip.creep", "examples", examples=near)
+        self.assertEqual((found.outcome, found.detail), ("pass", "1 reproduced"), "the rule for the far pad reads far.area, which the example does not give, and is set aside")
+        wrong_near = check(by_pad(near_rule={**BY_PAD[0], "le": [more, "near.area"]}), "strip.creep", "examples", examples=near)
+        self.assertEqual((wrong_near.outcome, wrong_near.detail), ("fail", "made up, 6: prints 0.80 for the ratio, and test/creep-near gives 1.2500 of it"))
+        wrong_far = by_pad(far_rule={**BY_PAD[1], "le": [more, "far.area"]})
+        self.assertEqual(check(wrong_far, "strip.creep", "examples", examples=near).outcome, "pass", "a wrong rule for the far pad is not tested by an example of the near one")
+        # One rule with the lesser of the two pads reads both, so the example gives no rule every field, and none reproduces it.
+        joined = check(reading(lambda b: b["rules"].extend(BY_MIN)), "strip.creep", "examples", examples=near)
+        self.assertEqual((joined.outcome, joined.detail), ("fail", "made up, 6: the rules read far.area, which the example does not give"))
+        # An example that gives both pads is held against both rules, and the smaller pad governs.
+        both = {"strip.creep": [{"anchor": "made up, 7", "given": {"turns": "2", "near.area": "50 mm2", "far.area": "40 mm2"}, "side": "ratio", "gives": "1.00"}]}
+        self.assertEqual(check(by_pad(), "strip.creep", "examples", examples=both).outcome, "pass")
+        found = check(wrong_far, "strip.creep", "examples", examples=both)
+        self.assertEqual((found.outcome, found.detail), ("fail", "made up, 7: prints 1.00 for the ratio, and test/creep-far gives 1.2500 of it"))
+
     def test_a_side_that_reads_no_load_needs_none(self):
         no_load = {"strip.heat": [{**EXAMPLES["strip.heat"][0], "loads": {}}]}
         self.assertEqual(check(FIRST, "strip.heat", "examples", examples=no_load).outcome, "pass")
@@ -351,7 +377,7 @@ class Parts(unittest.TestCase):
         """rule._values is a second way to evaluate a tape at a point. It must give what grid.enclosures gives."""
         aisc = rule.read_task(json.loads((BENCH / "rules_task.json").read_text(encoding="utf-8")), BENCH)
         compared = 0
-        for of, mine in ((TASK, FIRST), (aisc, rule.load(aisc, str(grid.DECKS / "aisc360.json")))):
+        for of, mine in ((TASK, FIRST), (aisc, rule.load(aisc, str(BENCH / "rules_a.json")))):
             for mechanism in of.mechanisms:
                 for found in mine.rules[mechanism]:
                     for point in rule.parts(of, mechanism, [mine]).base[:24]:
@@ -490,28 +516,36 @@ class CommandLine(unittest.TestCase):
         self.assertEqual(code, 3, out)
 
 
-class Shipped(unittest.TestCase):
-    """The first run for rules: the four rules of petra/decks/aisc360.json and a second transcription of them."""
+class FirstRun(unittest.TestCase):
+    """The first run for rules: the four rules the deck shipped then, written by hand, and a second transcription of them.
+    bench/formalizer/rules_a.json is that deck's file. The deck that ships now has none of the four."""
+
+    FIRST = str(BENCH / "rules_a.json")
 
     @classmethod
     def setUpClass(cls):
         cls.body = json.loads((BENCH / "rules_task.json").read_text(encoding="utf-8"))
         cls.task = rule.read_task(cls.body, BENCH)
-        cls.deck = json.loads((grid.DECKS / "aisc360.json").read_text(encoding="utf-8"))
+        cls.deck = json.loads(Path(cls.FIRST).read_text(encoding="utf-8"))
 
-    def test_the_task_has_the_decks_types_and_asks_what_its_grid_asks(self):
+    def test_the_task_has_the_types_of_the_deck_of_the_time_and_asks_what_its_grid_asked(self):
         self.assertEqual(self.task.body["types"], [{**t, "loads": t.get("loads", [])} for t in self.deck["types"]])
         self.assertEqual(self.task.body["grid"], [{k: v for k, v in a.items() if k != "unless"} for a in self.deck["grid"]])
         self.assertEqual(self.task.body["rows"], self.deck["rows"])
+        self.assertEqual((len(self.deck["rows"]), len(self.deck["grid"]), len(self.deck["rules"])), (18, 15, 4))
+
+    def test_the_deck_that_ships_has_none_of_the_first_runs_rules(self):
+        shipped = json.loads((grid.DECKS / "aisc360.json").read_text(encoding="utf-8"))
+        self.assertEqual([r for r in self.deck["rules"] if r in shipped["rules"]], [], "the four were written by hand, and a deck's rules come from the page")
 
     def test_a_task_may_take_its_rows_from_several_files(self):
-        """The third run's 14 rows are in no deck yet. A task for the rules that would use them names both files."""
+        """The task of the second run named two files: the deck of the time, and the 14 rows of the third formalizer run."""
         wider = rule.read_task({**self.body, "rows_from": [self.body["rows_from"], "a3.json"]}, BENCH)
         self.assertEqual(len(wider.deck.rows), len(self.deck["rows"]) + 14)
         self.assertIn("aisc360-22/J3.4-spacing", wider.deck.rows)
 
     def test_the_two_transcriptions_agree_on_every_mechanism_either_answers(self):
-        first, other = rule.load(self.task, str(grid.DECKS / "aisc360.json")), rule.load(self.task, str(BENCH / "rules_b.json"))
+        first, other = rule.load(self.task, self.FIRST), rule.load(self.task, str(BENCH / "rules_b.json"))
         lines, whole = rule.accept(first, {}, other)
         self.assertEqual((first.stray, other.stray, whole.outcome), ([], [], "pass"))
         states = {line.mechanism: line.state for line in lines}
@@ -524,10 +558,10 @@ class Shipped(unittest.TestCase):
         self.assertEqual({c.outcome for line in lines for c in line.checks if c.name == "examples"}, {"none"}, "this run has no worked example")
 
     def second(self, mechanism: str, edit) -> rule.Check:
-        """The deck's rules against the second transcription after an edit of it."""
+        """The four rules of the first run against the second transcription after an edit of it."""
         body = json.loads((BENCH / "rules_b.json").read_text(encoding="utf-8"))
         edit(body["rules"])
-        first, other = rule.load(self.task, str(grid.DECKS / "aisc360.json")), rule.Reading(self.task, rule.read_transcription(body))
+        first, other = rule.load(self.task, self.FIRST), rule.Reading(self.task, rule.read_transcription(body))
         return rule.second(first, other, mechanism, rule.parts(self.task, mechanism, [first, other]))
 
     def test_a_second_transcription_that_reads_the_clauses_another_way_is_told_apart(self):

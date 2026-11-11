@@ -1,0 +1,33 @@
+petra 0
+
+# The holes are 1 inch from a side edge: the least Table J3.4 allows a 3/4 inch bolt, and not
+# under it.
+# Block shear is then the nearest of the plates' limits: 0.75 x (60.75 + 58 x 0.211) = 54.7 kip
+# against a pull of 45.
+
+plate tab {
+  thickness 0.375 inch
+  width 6 inch
+  Fy given tab.Fy
+  Fu given tab.Fu
+}
+
+plate strap {
+  thickness 0.375 inch
+  width 6 inch
+  Fy given strap.Fy
+  Fu given strap.Fu
+}
+
+lap splice {
+  fastener "Group 120"
+  threads included
+  diameter 0.75 inch
+  holes standard
+  count 3
+  pitch 3 inch
+  end 1.5 inch
+  side 1 inch
+  surface protected
+  joins tab strap
+}

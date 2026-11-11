@@ -1,0 +1,31 @@
+petra 0
+
+# The lap of d25 under a pull of 34 kip. The 3 inch strap ruptures through its hole at
+# 0.75 x 58 x (3 - 7/8) x 0.375 = 34.66 kip and yields at 36.45, so both hold.
+
+plate tab {
+  thickness 0.375 inch
+  width 6 inch
+  Fy given tab.Fy
+  Fu given tab.Fu
+}
+
+plate strap {
+  thickness 0.375 inch
+  width 3 inch
+  Fy given strap.Fy
+  Fu given strap.Fu
+}
+
+lap splice {
+  fastener "Group 120"
+  threads included
+  diameter 0.75 inch
+  holes standard
+  count 3
+  pitch 3 inch
+  end 1.5 inch
+  side 1.5 inch
+  surface protected
+  joins tab strap
+}

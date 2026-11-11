@@ -198,7 +198,7 @@ Each object of a deck has the keys this page gives it, and no other. A key the p
 
 A design names a type as the kind of a component block: `lap splice { ... }` is a part named `splice` of type `lap`. The parts of one design are all of one deck's types, or all of the built-in models' kinds.
 
-`petra/decks/aisc360.json` is the first deck. It holds 18 rows of AISC 360-22, the types `plate` and `lap`, a grid of 15 lines for a lap, and 4 rules.
+`petra/decks/aisc360.json` is the first deck. It holds 32 rows of AISC 360-22, the types `plate` and `lap`, a grid of 16 lines for a lap, and 15 rules. The rules answer 8 of the lines. [What the first deck covers](#what-the-first-deck-covers) lists every line, what answers it, and what the deck leaves open.
 
 ### A type
 
@@ -260,9 +260,9 @@ With no `when`, it never arises for the type. A condition is `["is", FIELD, NAME
 A rule answers one line of the grid with an inequality.
 
 ```json
-{"id": "aisc360-22/lap-yield-a", "type": "lap", "mechanism": "lap.ply_yield",
- "anchor": {"standard": "AISC 360-22", "clause": "J4.1", "equation": "J4-1"},
- "says": "the pull is at most 0.90 of the yield strength of the gross section of the first plate",
+{"id": "aisc360-22/lap-ply-yield-a", "type": "lap", "mechanism": "lap.ply_yield",
+ "anchor": {"standard": "AISC 360-22", "clause": "J4.1(a)", "equation": "J4-1"},
+ "says": "the pull is at most 0.90 of the yield strength of the gross section of plate a, its width times its thickness",
  "le": [["load", "pull"],
         ["mul", "0.90", ["row", "aisc360-22/J4-1", {"Fy": "a.Fy", "Ag": ["mul", "a.width", "a.thickness"]}]]]}
 ```
@@ -304,6 +304,8 @@ Reading a deck checks every rule. Each input of each row is bound once and to it
 
 No cell has a default. The verdict is FAIL with a refuted cell, UNKNOWN with an open cell or with nothing proved, and PASS otherwise.
 
+A waiver takes the whole line. A line the card waives on a part is one `waived` cell, and no rule for that line is run on the part, whether or not it would hold. The report prints each waiver with who signed it and why.
+
 `petra-verify` reads the same three files and makes the cells again, each with the tape of its rule. It takes nothing of a cell from `petra check` but a hint: the partition that proved it, or the point that refuted it. The kernel tries the hint on its own tape, and the state it settles on is its own. `petra check` then compares the two lists cell by cell, and stops with exit code 4 if they differ.
 
 These cases are open:
@@ -325,20 +327,22 @@ petra check examples/deck/lap_unknown.petra
 
 ```
 lap-splice: UNKNOWN
-rules      sha256:d80024f8...  aisc360-22
+rules      sha256:d959367e...  aisc360-22
 card       sha256:b0372d69...  examples/deck/lap_unknown.card
-design     sha256:1ba41e3e...  examples/deck/lap_unknown.petra
-kernel     petra-verify checked 5 of 5 proofs and gives the same verdict
+design     sha256:3fd22401...  examples/deck/lap_unknown.petra
+kernel     petra-verify checked 12 of 12 proofs and gives the same verdict
 path       rules: the kernel worked out every cell from the rules deck
-cells      5 proved, 0 refuted, 4 not applicable, 0 waived, 8 open
-  splice/lap.spacing             open                    the deck has no rule for it (AISC 360-22 J3.4)
-  splice/lap.end_distance        proved           0.667  lap-end-distance (AISC 360-22 J3.5, Table J3.4)
-  splice/lap.strength            proved           0.838  lap-strength/gravity (AISC 360-22 J3.7 and J3.11, equation J3-1, J3-6a, J3-6c, Table J3.2, J3.3)
+cells      12 proved, 0 refuted, 4 not applicable, 0 waived, 4 open
+  splice/lap.tightening          open                    the deck has no rule for it (AISC 360-22 J3.2)
+  splice/lap.spacing             proved           0.667  lap-spacing-centres (AISC 360-22 J3.4)
+  splice/lap.spacing             proved           0.343  lap-spacing-clear (AISC 360-22 J3.4, Table J3.3)
+  splice/lap.end_distance        proved           0.667  lap-end-distance-standard (AISC 360-22 J3.5, Table J3.4)
   splice/lap.slip                not applicable          a lap is a bearing-type joint, which claims no slip resistance (AISC 360-22 J3.9)
+  splice/lap.ply_yield           proved           0.617  lap-ply-yield-a/gravity (AISC 360-22 J4.1(a), equation J4-1)
   ...
 ```
 
-The `rules` line is the hash of the deck's file, which the kernel prints as `hashes.rules`. A verdict is "checked against this deck" only when that hash is the one the reader trusts ([format.md](format.md), "Reading a verdict"). The number on a proved or refuted line is the most the left side of the rule reaches over the least the right side does. `examples/deck` has the same lap passing, with a card that waives the eight open mechanisms, and failing under a larger pull.
+The `rules` line is the hash of the deck's file, which the kernel prints as `hashes.rules`. A verdict is "checked against this deck" only when that hash is the one the reader trusts ([format.md](format.md), "Reading a verdict"). The number on a proved or refuted line is the most the left side of the rule reaches over the least the right side does. `examples/deck` has the same lap passing, with a card that waives the four open mechanisms, and failing under a larger pull.
 
 ## The acceptance check for a rule
 
@@ -468,7 +472,7 @@ The check cannot try every part, so at each part where both hold or both fail it
 
 Where the ratios differ, the two may still be one inequality in two forms. From each of the first 32 such parts the check moves one load, or failing that one size, until either answer turns, and tries the part on each side of the turn. One inequality in two forms turns at the same place. The two are refused when fewer than half of these parts have such a place: nothing then tells them apart, and nothing tells them the same.
 
-When `second` fails, its detail says how many parts get another answer, what the two differ on, and one part with what each says of it. This is the first deck's rule for the bolts against a transcription with no `where`:
+When `second` fails, its detail says how many parts get another answer, what the two differ on, and one part with what each says of it. This is the rule the first deck once had for the bolts, against a transcription with no `where`:
 
 ```
 the two give another answer at 18 of 132 parts, 18 on the range a rule holds in. At fastener=Group 144, threads=excluded,
@@ -479,11 +483,11 @@ the line of bolts is at most 38 inch long ...) and the other fails at 1.47451 (a
 
 ### The first run
 
-`python bench/formalizer/rules.py` runs the check on the first deck. The task is the lap. The first transcription is the four rules the deck ships. The second is `bench/formalizer/rules_b.json`. It answers the three mechanisms the deck has rules for, says the same four cannot arise, and leaves out the same eight.
+`python bench/formalizer/rules.py` runs the check on the first deck as it shipped until 2026-11-11. `bench/formalizer/rules_a.json` keeps that file: 18 rows, a grid of 15 lines for a lap, and four rules that were written by hand. The task is the lap of that deck. The first transcription is those four rules. The second is `bench/formalizer/rules_b.json`. It answers the three mechanisms that deck had rules for, says the same four cannot arise, and leaves out the same eight.
 
 The two agree at every part tried: 128 parts for each mechanism, and 136 for the strength of the bolts. One writes a rule for the yielding of each plate, and the other one rule with the lesser of the two.
 
-That says less than two transcriptions from the page would. The second was written by a language model from its memory of AISC 360-22 and from the rows' own descriptions, with no copy of the standard. Its writer had read this page, which shows one of the four rules and names the rows that two others read, and had read the deck's grid, with its four `unless`. Nothing in the run tells whether the two share one wrong reading of a clause. The run has no worked example.
+That says less than two transcriptions from the page would. The second was written by a language model from its memory of AISC 360-22 and from the rows' own descriptions, with no copy of the standard. Its writer had read this page, which then showed one of the four rules and named the rows that two others read, and had read the deck's grid, with its four `unless`. Nothing in the run tells whether the two share one wrong reading of a clause. The run has no worked example. The deck no longer has any of the four rules.
 
 The run then damages each rule, one change at a time, and counts the damaged rules that the check refuses with no second transcription. A damaged rule that gives every part tried the answer the rule gives is not a wrong rule, and is left out.
 
@@ -506,24 +510,100 @@ The check refused 115 of 157 wrong rules, 73%. `alike` alone refused 86 of them.
 
 A number a tenth off, a key bound to another column, a range left out and a `when` turned round pass almost every time. A worked example or a second transcription is what catches those. On the deck made up for the tests, with one or two made-up examples for each rule, the check with no second transcription refused 43 of 49 wrong rules. With no example it refused 19.
 
+### The second run
+
+The rules the first deck ships come from the second run. Two transcribers each wrote the rules for every line of a lap's grid from the pages of AISC 360-22. They were two different models, and neither saw the other's rules or the rules the deck then shipped. A third agent collected eight worked examples from the AISC Design Examples v16.0 without seeing any rule. `bench/formalizer/rules2.md` describes the run. `rules2_a.json` and `rules2_b.json` are the two transcriptions as handed in, and `rules2_examples.json` the examples.
+
+The two give every part tried the same answer on seven lines: the least spacing, the end and side distances, the strength of the bolts and their holes, and the yielding, rupture and block shear of each plate. Both say the same four lines cannot arise, and both leave out tightening and bending of the plates. On the use of a hole type, one says it cannot arise for standard holes and the other says nothing, and neither wrote a rule: Section J3.3 bars oversize holes from a bearing-type joint, which is no inequality between quantities. The deck keeps that line with no rule.
+
+They differed on Section J3.6, which the task asked as one line. The section limits two things. For the greatest spacing the two wrote the same inequality. For the greatest edge distance the section reads each plate's own distance and thickness, and the lap states only the least distance over both plates. One transcriber wrote a rule from that least distance, and the other refused to and said why. So the deck asks Section J3.6 on two lines. `lap.spread` is the greatest spacing and has the rules both wrote. `lap.max_edge_distance` has no rule until a lap has a field for it.
+
+The deck's 15 rules are the first transcription's, unedited. The 14 rows they read that the deck lacked are from the third run of rows, where two transcribers agreed on every value. `tests/test_deck_rules.py` holds the deck to those files, so a rule or a row edited in one place alone fails a test. It also runs the check on the deck itself, with the second transcription less its two rules for the edge distance.
+
+| Line | Parts tried | Both hold or fail at | Worked examples reproduced |
+|---|---|---|---|
+| `lap.spacing` | 132 | 125 | 1 |
+| `lap.end_distance` | 128 | 103 | 2 |
+| `lap.side_distance` | 128 | 106 | none found |
+| `lap.spread` | 128 | 128 | none found |
+| `lap.strength` | 140 | 125 | 2 |
+| `lap.ply_yield` | 128 | 128 | 1 |
+| `lap.ply_rupture` | 128 | 116 | 1 |
+| `lap.block_shear` | 128 | 116 | 1 |
+
+The two agree at every part on each of the eight lines, with the same ratio wherever both hold or fail.
+
+The run says less than that table may seem to.
+
+- All eight examples use a 3/4 inch Group 120 bolt with threads included, in 50 ksi steel. None tells another size, group or grade apart.
+- The source works no lap of two plates whole. Each example is a part of another connection: one line of bolts, or one plate. The three for a plate give that plate's fields alone, so each is held against the rule for one plate.
+- No example was found for the side distance or the greatest spacing. Those rules rest on two transcribers agreeing.
+- Each transcriber had seen one rule of the first run on this page, and a sample report that named two more by their equations.
+- The types and the grid were given to both, so nothing here checks them.
+
 ### What the check for a rule cannot see
 
 - An error that both transcribers make, and a shortcut that both choose. Two who read a clause the same wrong way agree.
 - Whether the second transcription was made without sight of the first, and from the standard.
 - A difference that no tried part shows. The check tries 96 parts and their partners. It sits a quantity on the ends of a table's bands only where a rule binds a field straight to the table. Where the input of a band or of a case is an expression, it tries a part on each side of the end, and not the part on the end.
-- Whether the task is right. The types, their ranges, `adverse`, `alike` and the lines of the grid are given, and nothing checks them. A field that a clause needs and the type lacks is not found: a lap has no distance from its holes to a side edge.
+- Whether the task is right. The types, their ranges, `adverse`, `alike` and the lines of the grid are given, and nothing checks them. A field that a clause needs and the type lacks is not found by the check: the lap of the first run had no distance from its holes to a side edge. A transcriber may find it. In the second run one refused to write the greatest edge distance from a field that was the wrong one for the clause.
 - Whether a mechanism that both say cannot arise can arise. The check compares the two `unless`, and not their reasons.
 - The words of a rule. `says` and `anchor` are not compared, so a rule may say one thing and state another.
 - The ratio of a rule in another form. `a - b <= 0` gives the answers of `a <= b`, and `petra check` prints no ratio for it.
 - Whether a rule can be proved. The check tries points. `petra check` proves a rule over ranges, and may leave a cell open that holds at every point of them.
 
+## What the first deck covers
+
+`petra/decks/aisc360.json` checks one kind of joint: a `lap`, which is one line of two or more bolts in single shear through two plates, in a bearing-type joint that is pulled along the line. The holes are standard or oversize. The rules use LRFD. The grid has 16 lines for a lap.
+
+| Line | Section | What answers it |
+|---|---|---|
+| `lap.tightening` | J3.2 | No rule |
+| `lap.hole_use` | J3.3 | No rule |
+| `lap.spacing` | J3.4 | 2 rules: 2 2/3 diameters between centres, and one diameter clear between holes |
+| `lap.end_distance` | J3.5 | 2 rules: Table J3.4 for standard holes, and with the increment of Table J3.5 for oversize ones |
+| `lap.side_distance` | J3.5 | 2 rules, as for the end distance |
+| `lap.spread` | J3.6 | 2 rules for the greatest spacing: 24 thicknesses of the thinner plate and 12 inch where the plates are painted or protected, 14 and 7 inch for unpainted weathering steel |
+| `lap.max_edge_distance` | J3.6 | No rule |
+| `lap.strength` | J3.7, J3.11 | 1 rule: the sum over the bolts of the least of a bolt's shear strength and the bearing and tearout strengths at its two holes. Note c of Table J3.2 takes the shear stress at 83.3% for a line over 38 inch. |
+| `lap.tension_with_shear` | J3.8 | Cannot arise: the pull shears the bolts |
+| `lap.slip` | J3.9 | Cannot arise: the joint is bearing-type |
+| `lap.ply_yield` | J4.1 | 2 rules, one for each plate |
+| `lap.ply_rupture` | J4.1 | 2 rules, one for each plate: the net section less one hole, taken 1/16 inch wider (B4.3b), with a shear lag factor of 1 |
+| `lap.ply_shear` | J4.2 | Cannot arise: the plates are pulled |
+| `lap.block_shear` | J4.3 | 2 rules, one for each plate: shear along the line of holes from the end of the plate, and tension across to the side edge |
+| `lap.ply_compression` | J4.4 | Cannot arise: the load is a pull |
+| `lap.ply_flexure` | J4.5 | No rule |
+
+So 8 lines have rules, 4 cannot arise, and 4 have no rule. A line with no rule is open on every lap, and a lap passes only when its card waives each of the four.
+
+| Line with no rule | Why |
+|---|---|
+| `lap.tightening` | Section J3.2 asks for pretensioned bolts by what the joint is for, which is no comparison of quantities |
+| `lap.hole_use` | Section J3.3 bars oversize holes from a bearing-type joint, which a lap is. That is a ban on a kind of hole and no inequality, and no transcriber wrote it. So the deck does not refuse a lap with oversize holes. It leaves the line open. |
+| `lap.max_edge_distance` | Section J3.6 limits the distance from each hole to the nearest edge of each plate by that plate's thickness. A lap states `side`, the least distance over both plates, and has no field for each plate's own. |
+| `lap.ply_flexure` | Section J4.5 gives no equation, and a lap takes no load that is a moment |
+
+On the lines that have rules, the deck leaves three things out on purpose. Both transcribers left out the same three.
+
+- **A bolt of 1 1/8 inch or more.** Table J3.3 lists a hole for each bolt to 1 inch and gives a formula for larger ones. A rule cannot choose between a table and a formula by the size of the bolt, so the rules read the table. For a larger bolt the four lines whose rules read the hole are open: the clear spacing, the strength of the bolts and their holes, and the rupture and block shear of each plate. The end and side distances are open over 1 1/4 inch, where Table J3.4 ends the same way. The deck holds the formulas as rows, and no rule reads them.
+- **A joint where deformation of the hole at service load is not a design consideration.** Equations J3-6b and J3-6d give such a joint more bearing and tearout strength. A lap has no key that says so, and the strength rule reads J3-6a and J3-6c for every lap, which give less.
+- **Note a of Table J3.4**, which permits a lesser edge distance under conditions that are not quantities. The rules hold the table's values, so a lap that leans on the note has a refuted cell unless its card waives the line.
+
+A bolt of a size the tables do not list, such as 0.7 inch, has no value in them. Every rule that reads a table at that size is open.
+
+The deck has no rule by ASD, none for slotted holes, and none for more than one line of bolts or more than two plates. Fifteen of its 32 rows are read by no rule.
+
+Nothing compares the fields of a lap with one another. A lap may state a `side` of more than half the width of a plate, which no plate can have. It is not refused, and the block shear of each plate is then worked out from that `side`.
+
 ## What a deck does not check yet
 
-- Types and grid lines are written once, by hand, and nothing second-transcribes them. A rule has the acceptance check above. The four rules of the first deck agree with a second transcription that was written from memory of the standard and not from its pages, and no worked example stands behind them.
+- Types and grid lines are written once, by hand, and nothing second-transcribes them. A rule has the acceptance check above. The 15 rules of the first deck are one of two transcriptions from the pages that agree at every part tried, and eight worked examples stand behind six of its eight lines with rules ([The second run](#the-second-run)).
 - The kernel makes the cells and the tapes from the deck's file, and does not know whether that file is the standard's. It prints the file's hash.
 - The kernel does not search. The partition or the point for a cell comes from `petra/grid.py`, so a cell that search does not settle is open, though a better search might prove it.
 - A `not applicable` cell is the deck's word. The kernel checks that the line's `unless` holds for the part, and not that the mechanism cannot arise.
 - The `range` of a row's input is where the acceptance check samples the row. It is not enforced as the range the row holds in. A rule's `where` is.
 - A type with no line in the grid gets no cell of its own. A `plate` has none: the lap that joins it asks about it, and a plate that nothing joins has only its `unread` cells.
 - A card's claims, tests and ambient, a family's params, and the repair that `petra check` suggests on a FAIL are not read for a design of a deck's types. A card or a design that states one is refused.
-- The first deck has rules for 3 of the 15 lines of a lap's grid, all by LRFD. Four lines cannot arise for a lap, and eight are open: tightening, hole use, spacing, side distance, maximum spacing, tensile rupture, block shear and flexure of the plates.
+- The first deck has rules for 8 of the 16 lines of a lap's grid, all by LRFD. Four lines cannot arise for a lap, and four are open: tightening, hole use, the greatest edge distance and flexure of the plates. [What the first deck covers](#what-the-first-deck-covers) says what else it leaves open.
+- A waiver is not checked against the rules. A card may waive a line that has rules, and the rules are then not run.

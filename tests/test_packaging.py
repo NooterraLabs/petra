@@ -200,7 +200,7 @@ class Packaging(unittest.TestCase):
         self.assertEqual(Path(ran).name, BUILT.name)
         lap, circuit = report(self.scripts, LAP, self.outside), report(self.scripts, CIRCUIT, self.outside)
         self.assertEqual(lap[0], "lap-splice-waived: PASS")
-        self.assertIn("kernel     petra-verify checked 5 of 5 proofs and gives the same verdict", lap)
+        self.assertIn("kernel     petra-verify checked 12 of 12 proofs and gives the same verdict", lap)
         self.assertIn("path       rules: the kernel worked out every cell from the rules deck", lap)
         self.assertEqual(circuit[0], "workshop-lighting-radial: PASS")
         self.assertIn("kernel     petra-verify checked 8 of 8 proofs and agrees", circuit)

@@ -297,12 +297,12 @@ class ChangedDesign(Kernel):
         self.assertEqual(line(json.loads(thin["design"]), "tab", "thickness")["args"][0]["number"]["lo"], export.number(Fraction(127, 40000)))
         self.assertEqual(ask(thin)["verdict"], "FAIL")
         stale = ask({**files, "design": thin["design"]})
-        self.assertEqual((stale["verdict"], cell(stale, "lap.ply_yield", "lap-yield-a/gravity")["state"]), ("UNKNOWN", "open"), "the old partition proves nothing now")
-        self.assertEqual(cell(stale, "lap.ply_yield", "lap-yield-b/gravity")["state"], "proved", "the other plate is as it was")
+        self.assertEqual((stale["verdict"], cell(stale, "lap.ply_yield", "lap-ply-yield-a/gravity")["state"]), ("UNKNOWN", "open"), "the old partition proves nothing now")
+        self.assertEqual(cell(stale, "lap.ply_yield", "lap-ply-yield-b/gravity")["state"], "proved", "the other plate is as it was")
         self.assertEqual(cell(stale, "lap.strength", "lap-strength/gravity")["state"], "open")
-        point = hint(json.loads(thin["proofs"]), "lap.ply_yield", "lap-yield-a/gravity")["point"]
-        refuted = ask(changed({**files, "design": thin["design"]}, "proofs", lambda b: hint(b, "lap.ply_yield", "lap-yield-a/gravity").update(point=point)))
-        self.assertEqual((refuted["verdict"], cell(refuted, "lap.ply_yield", "lap-yield-a/gravity")["state"]), ("FAIL", "refuted"), "a point refutes it, whoever gives it")
+        point = hint(json.loads(thin["proofs"]), "lap.ply_yield", "lap-ply-yield-a/gravity")["point"]
+        refuted = ask(changed({**files, "design": thin["design"]}, "proofs", lambda b: hint(b, "lap.ply_yield", "lap-ply-yield-a/gravity").update(point=point)))
+        self.assertEqual((refuted["verdict"], cell(refuted, "lap.ply_yield", "lap-ply-yield-a/gravity")["state"]), ("FAIL", "refuted"), "a point refutes it, whoever gives it")
 
     def test_a_smaller_hole_turns_its_proof_open(self):
         files = strips()

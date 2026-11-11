@@ -1,8 +1,8 @@
 {
   "format": "petra-rule-task/0",
   "name": "aisc360-22/lap",
-  "about": "The rules of a lap: the types and the grid of petra/decks/aisc360.json, over the rows of that deck. A type is as the deck has it, with a range for each quantity. The ranges are where the acceptance check samples parts, and are not limits of the standard.",
-  "rows_from": "../../petra/decks/aisc360.json",
+  "about": "The rules of a lap, as the first run asked for them: the types and the grid of the deck as it shipped until 2026-11-11, which rules_a.json keeps, over the 18 rows of that deck. A type is as that deck had it, with a range for each quantity. The ranges are where the acceptance check samples parts, and are not limits of the standard.",
+  "rows_from": "rules_a.json",
   "types": [
     {"type": "plate", "what": "a flat steel plate that a joint connects",
      "fields": [

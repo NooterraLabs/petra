@@ -1,0 +1,33 @@
+petra 0
+
+# 20 bolts of 5/8 inch at 2 inch: a line of 38 inch exactly. Note c of Table J3.2 is for a line
+# over 38 inch, so the shear stress is the full one. A bolt carries 0.75 x 54 x 0.3068 = 12.43 kip
+# and the 20 carry 248.5. The pull is 230 kip, so the strength holds.
+# At 83.3% the bolts would carry 207.0 kip and fail.
+
+plate tab {
+  thickness 1 inch
+  width 10 inch
+  Fy given tab.Fy
+  Fu given tab.Fu
+}
+
+plate strap {
+  thickness 1 inch
+  width 10 inch
+  Fy given strap.Fy
+  Fu given strap.Fu
+}
+
+lap splice {
+  fastener "Group 120"
+  threads included
+  diameter 0.625 inch
+  holes standard
+  count 20
+  pitch 2 inch
+  end 1.5 inch
+  side 5 inch
+  surface protected
+  joins tab strap
+}

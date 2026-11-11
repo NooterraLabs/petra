@@ -16,9 +16,4 @@ load gravity {
 
 waive lap.tightening on splice by "s.engineer@example.org" reason "snug-tight bolts: a bearing-type joint under static load, J3.2 (a)(1)"
 waive lap.hole_use on splice by "s.engineer@example.org" reason "standard holes, which J3.3 allows in every joint"
-waive lap.spacing on splice by "s.engineer@example.org" reason "3 inch between centres is 4 diameters, above the 2 2/3 of J3.4"
-waive lap.side_distance on splice by "s.engineer@example.org" reason "the holes are on the centre line of a 6 inch plate, 3 inch from each side"
-waive lap.spread on splice by "s.engineer@example.org" reason "the pitch is under 24 thicknesses and the edge distances under 12, J3.6"
-waive lap.ply_rupture on splice by "s.engineer@example.org" reason "calculation C-12 sheet 3: net section rupture is 83.6 kip"
-waive lap.block_shear on splice by "s.engineer@example.org" reason "calculation C-12 sheet 4"
 waive lap.ply_flexure on splice by "s.engineer@example.org" reason "the members the plates belong to hold them against rotation"

@@ -1,0 +1,33 @@
+petra 0
+
+# The lap of examples/deck/lap_pass.petra, with a card that waives three mechanisms and not the
+# greatest edge distance of J3.6. The deck has no rule for it: a lap states the least distance
+# to a side edge over both plates, and J3.6 limits each plate's own. So that one cell is open.
+# By hand it holds: no hole is over 3 inch from an edge, and 12 x 0.375 = 4.5 inch.
+
+plate tab {
+  thickness 0.375 inch
+  width 6 inch
+  Fy given tab.Fy
+  Fu given tab.Fu
+}
+
+plate strap {
+  thickness 0.375 inch
+  width 6 inch
+  Fy given strap.Fy
+  Fu given strap.Fu
+}
+
+lap splice {
+  fastener "Group 120"
+  threads included
+  diameter 0.75 inch
+  holes standard
+  count 3
+  pitch 3 inch
+  end 1.5 inch
+  side 3 inch
+  surface protected
+  joins tab strap
+}

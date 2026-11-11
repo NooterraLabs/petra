@@ -1,0 +1,33 @@
+petra 0
+
+# The holes are 7/8 inch from a side edge. Table J3.4 asks 1 inch of a 3/4 inch bolt, so the
+# side distance fails.
+# The block still holds. Its tension length is 0.875 - 7/16 inch, so it tears out at
+# 0.75 x (60.75 + 58 x 0.164) = 52.7 kip, over the pull of 45.
+
+plate tab {
+  thickness 0.375 inch
+  width 6 inch
+  Fy given tab.Fy
+  Fu given tab.Fu
+}
+
+plate strap {
+  thickness 0.375 inch
+  width 6 inch
+  Fy given strap.Fy
+  Fu given strap.Fu
+}
+
+lap splice {
+  fastener "Group 120"
+  threads included
+  diameter 0.75 inch
+  holes standard
+  count 3
+  pitch 3 inch
+  end 1.5 inch
+  side 0.875 inch
+  surface protected
+  joins tab strap
+}

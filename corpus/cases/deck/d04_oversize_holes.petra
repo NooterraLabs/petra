@@ -1,6 +1,10 @@
 petra 0
 
-# The end distance rule is for standard holes, and the deck has none for oversize ones.
+# Oversize holes. Every rule holds at 45 kip. Table J3.4 with the 1/16 inch of Table J3.5 asks
+# 1 1/16 inch at the end and at the side. The bolts carry 53.7 kip. With a hole taken 1 inch
+# wide, each plate ruptures at 81.6 kip and tears out as a block at 86.3.
+# J3.3 bars oversized holes from a bearing-type joint. The deck has no rule for that line and
+# the card does not waive it, so it stays open.
 
 plate tab {
   thickness 0.375 inch
@@ -24,5 +28,7 @@ lap splice {
   count 3
   pitch 3 inch
   end 1.5 inch
+  side 3 inch
+  surface protected
   joins tab strap
 }

@@ -1,0 +1,38 @@
+petra 0
+
+# Threads excluded, and the holes 1.25 inch from a side edge. The block shears along the line
+# of holes and tears across to that edge. Its shear length is 1.5 + 2 x 3 = 7.5 inch, and a hole
+# is taken 7/8 inch wide.
+#   gross shear    7.5 x 0.375 = 2.8125 inch2                  0.60 x 36 x 2.8125 = 60.75 kip
+#   net shear      (7.5 - 2.5 x 7/8) x 0.375 = 1.992 inch2     0.60 x 58 x 1.992 = 69.33 kip
+#   net tension    (1.25 - 7/16) x 0.375 = 0.3047 inch2        58 x 0.3047 = 17.67 kip
+# 0.75 x (60.75 + 17.67) = 58.82 kip, under the pull of 60, so block shear fails.
+# The bolts carry 21.41 + 21.41 + 22.53 = 65.35 kip: the end holes tear out before the bolts
+# shear. Each plate yields at 72.9 kip and ruptures at 83.6.
+
+plate tab {
+  thickness 0.375 inch
+  width 6 inch
+  Fy given tab.Fy
+  Fu given tab.Fu
+}
+
+plate strap {
+  thickness 0.375 inch
+  width 6 inch
+  Fy given strap.Fy
+  Fu given strap.Fu
+}
+
+lap splice {
+  fastener "Group 120"
+  threads excluded
+  diameter 0.75 inch
+  holes standard
+  count 3
+  pitch 3 inch
+  end 1.5 inch
+  side 1.25 inch
+  surface protected
+  joins tab strap
+}

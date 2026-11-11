@@ -1,7 +1,7 @@
 """A formalizer run for rules: two transcriptions of the rules for a task, the worked
 examples, and how much of a wrong rule the acceptance check catches.
 
-    python bench/formalizer/rules.py [--task rules_task.json] [--rules DECK.json] [--second rules_b.json] [--examples FILE.json] [--no-damage]
+    python bench/formalizer/rules.py [--task rules_task.json] [--rules rules_a.json] [--second rules_b.json] [--examples FILE.json] [--no-damage]
 
 It prints the acceptance check of petra/rule.py on the first transcription with the other
 as its second. Then it damages each admitted rule one change at a time, as `mutations`
@@ -14,19 +14,24 @@ What is here is the damage and the tally, which only a measurement needs.
 RULES_TRANSCRIBE.md briefs a transcriber of rules, and RULES_COLLECT.md a collector of
 worked examples.
 
-The files default to the first run's, of 2026-11-11. The task, rules_task.json, is the lap
-of AISC 360-22: the types and the grid of petra/decks/aisc360.json over that deck's rows.
-The first transcription is the four rules that deck ships. The second, rules_b.json, was
-written by a language model from its memory of the standard and from the rows' own
-descriptions, with no copy of the standard, before it read the first: it had seen the
-deck's types, grid and rows, and what docs/deck.md shows of the rules. The run has no
-worked example, since it had no source to take one from.
+The files default to the first run's, of 2026-11-11. Its first transcription, rules_a.json,
+is petra/decks/aisc360.json as it shipped until that day: 18 rows, a grid of 15 lines for
+a lap, and four rules that were written by hand. The task, rules_task.json, is the lap of
+that deck: its types and its grid over its rows. The second, rules_b.json, was written by
+a language model from its memory of the standard and from the rows' own descriptions, with
+no copy of the standard, before it read the first: it had seen the deck's types, grid and
+rows, and what docs/deck.md then showed of the rules. The run has no worked example, since
+it had no source to take one from.
 
 The two agree at every part tried, on the three mechanisms with rules, the four that
 cannot arise and the eight left out. Of 157 wrong rules made by one change the check with
 no second transcription refused 115: 86 of them by `alike` alone, which sees a change to
 one of the lap's two plates and not to the other, and 29 by another part of the check.
 docs/deck.md, "The first run", has the table.
+
+The deck no longer ships those four rules. Its rules are now the ones of the second run,
+which two transcribers wrote from the pages (rules2.md), and tests/test_deck_rules.py
+holds the deck to that run.
 """
 from __future__ import annotations
 
@@ -205,7 +210,7 @@ def table(kinds: Mapping[str, collections.Counter]) -> list[str]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0].replace("\n", " "))
     parser.add_argument("--task", default=str(HERE / "rules_task.json"))
-    parser.add_argument("--rules", default=str(HERE.parent.parent / "petra" / "decks" / "aisc360.json"), help="the first transcription, or a deck")
+    parser.add_argument("--rules", default=str(HERE / "rules_a.json"), help="the first transcription, or a deck")
     parser.add_argument("--second", default=str(HERE / "rules_b.json"))
     parser.add_argument("--examples")
     parser.add_argument("--no-damage", action="store_true", help="run the acceptance check and stop")

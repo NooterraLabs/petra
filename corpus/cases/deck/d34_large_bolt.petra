@@ -1,0 +1,36 @@
+petra 0
+
+# Three 1 1/8 inch bolts. Table J3.3 lists holes for bolts to 1 inch and gives a formula for
+# larger ones, which the rules do not read. So four lines are open: the clear spacing, the
+# strength of the bolts and their holes, and the rupture and the block shear of each plate.
+# By hand, with a hole of 1 1/8 + 1/8 inch, all four hold at 45 kip: the bolts carry
+# 35.89 + 35.89 + 40.26 = 112.0 kip, and each plate ruptures at 145.4 and tears out at 145.6.
+# The rules that read no hole are proved: 3 inch between centres, 1.5 inch to an end and to a
+# side (Table J3.4), 12 inch at most between holes, and yielding at 129.6 kip.
+
+plate tab {
+  thickness 0.5 inch
+  width 8 inch
+  Fy given tab.Fy
+  Fu given tab.Fu
+}
+
+plate strap {
+  thickness 0.5 inch
+  width 8 inch
+  Fy given strap.Fy
+  Fu given strap.Fu
+}
+
+lap splice {
+  fastener "Group 120"
+  threads included
+  diameter 1.125 inch
+  holes standard
+  count 3
+  pitch 3.5 inch
+  end 2 inch
+  side 4 inch
+  surface protected
+  joins tab strap
+}
