@@ -19,7 +19,7 @@ There are two kinds of design, and the kernel does more for the second.
 
 ## Numbers
 
-Every number is a string that holds an exact rational: an integer such as `"18"` or a fraction such as `"-5463/20"`. A fraction is in lowest terms with a denominator above 1, and no number has a leading zero or is `-0`. A string longer than 4,000 characters is refused. A range is a pair `lo`, `hi` with `lo <= hi`.
+Every number is a string that holds an exact rational: an integer such as `"18"` or a fraction such as `"-5463/20"`. A fraction is in lowest terms with a denominator above 1, and no number has a leading zero or is `-0`. A string longer than 4,000 characters is refused. A range is a pair `lo`, `hi` with `lo <= hi`. A `dim` names a dimension, and two names are one dimension when their exponents are equal, as `moment` and `energy` are.
 
 A deck of rules writes its own numbers another way, with units. [The rules file](#rulesjson) says how the kernel reads them.
 

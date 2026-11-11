@@ -309,7 +309,7 @@ These cases are open:
 - A rule's `where` is not proved. Outside its range a rule says nothing, so its cell is never refuted there.
 - A table has no value where the rule reads it: between the listed values of a table read at listed values, outside every band, or in an empty cell.
 - The inequality is neither proved over the ranges the card gives nor refuted at a corner or the middle of them.
-- No rule and no line of the grid reads a quantity or a key of a part. A value nothing reads is a value nothing checks, so a plate that no lap joins has an open cell for each of its fields, named `unread`.
+- No rule and no line of the grid reads a quantity or a key of a part. A value nothing reads is a value nothing checks, so a plate that no lap joins has an open cell for each of its fields, named `unread`. These cells come after every other cell, part by part, each part's in the order of its type's fields.
 
 A rule that reads a load has a cell for each load case that puts the load on the part. A rule with `where` has one more cell, named with `/where`, that proves its range.
 

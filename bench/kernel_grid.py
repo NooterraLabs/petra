@@ -38,6 +38,8 @@ of each case that differs.
 from __future__ import annotations
 
 import argparse
+import tempfile
+import subprocess
 import collections
 import copy
 import json
@@ -491,6 +493,9 @@ def judge(card: str, design: str, name: str, rules: str | None = None) -> tuple[
         except Exception as exc:      # noqa: BLE001: a crash of the grid is a difference to report, not the end of the run
             return f"DIFFER: the grid crashes on {'the design' if isinstance(deck, grid.Deck) and deck.text == rules else 'the deck'}", f"{type(exc).__name__}: {exc}", [], files, {}
     said = verify.ask(_STATE["kernel"], files)      # type: ignore[arg-type]
+    third = twin(files, said)
+    if third:
+        return f"DIFFER: {third[0]}", third[1], [], files, said
     its = "the deck" if any(f["file"] == "rules" for f in said["findings"]) else "the design"
     if report is None and said["verdict"] == "ILL-FORMED":
         outcome, detail = (f"both refuse {mine}", "") if mine == its else (f"DIFFER: the grid refuses {mine} and the kernel {its}", refusal)
@@ -504,6 +509,37 @@ def judge(card: str, design: str, name: str, rules: str | None = None) -> tuple[
     kinds = [] if report is None else [f"{c.mechanism if c.mechanism == 'unread' else c.mechanism + ('/where' if c.entry.endswith('/where') else '')} {c.state}"
                                        + (" split" if isinstance(c.proof.get("partition"), dict) else "") for c in report.cells]
     return outcome, detail, kinds, files, said
+
+
+def twin(files: dict[str, str], said: dict) -> tuple[str, str] | None:
+    """What differs between the kernel and the third reading named by PETRA_TWIN, a checker
+    written from docs/format.md and docs/deck.md alone (bench/twin/verify.mjs), or None when
+    they agree or no third reading is named. They must give one verdict, and for a design
+    both read, the same cells in the same order."""
+    script = os.environ.get("PETRA_TWIN")
+    if not script:
+        return None
+    with tempfile.TemporaryDirectory() as tmp:
+        command = ["node", script]
+        for name, body in files.items():
+            Path(tmp, f"{name}.json").write_text(body, encoding="utf-8", newline="\n")
+            command += [f"--{name}", str(Path(tmp, f"{name}.json"))]
+        done = subprocess.run(command, capture_output=True, text=True, encoding="utf-8", stdin=subprocess.DEVNULL)
+    try:
+        its = json.loads(done.stdout)
+    except ValueError:
+        return "the third reading gives no verdict", (done.stderr or done.stdout)[-300:]
+    if its["verdict"] != said["verdict"]:
+        why = "; ".join(str(f.get("why", f)) for f in its.get("findings", []))[:300] or "; ".join(f"{f['item']}: {f['why']}" for f in said["findings"])[:300]
+        return f"the kernel gives {said['verdict']} and the third reading {its['verdict']}", why
+    if said["verdict"] == "ILL-FORMED":
+        return None
+    mine = [(c["subject"], c["mechanism"], c["entry"], c["state"]) for c in said["cells"]]
+    theirs = [(c["subject"], c["mechanism"], c["entry"], c["state"]) for c in its["cells"]]
+    if mine != theirs:
+        first = next((f"kernel {a}, third reading {b}" for a, b in zip(mine, theirs) if a != b), f"{len(mine)} cells against {len(theirs)}")
+        return "the kernel's cells and the third reading's differ", first
+    return None
 
 
 def compare(seed: int, n: int, decks: bool, keep: str | None = None) -> tuple[str, str, list[str], list[str]]:
