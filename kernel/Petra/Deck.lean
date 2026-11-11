@@ -95,21 +95,23 @@ structure Kind where
   called : Std.TreeMap String (String × String × Nat) := {}
   deriving Inhabited
 
-/-- A condition on what a part is, not on how large. -/
+/-- A condition on what a part is, not on how large. An `is` holds when a key field has a
+name: a key of the part itself, or of the part it joins under the name `part`. -/
 inductive Static where
-  | is (field name : String) | loaded (load : String)
+  | is (part : Option String) (field name : String) | loaded (load : String)
   | and (cs : Array Static) | or (cs : Array Static) | not (c : Static)
 
-/-- The key fields a condition on a part reads. -/
-def Static.keys : Static → Array String
-  | .is field _ => #[field]
+/-- The key fields a condition on a part reads, each with the joined part it is a key of, or
+none for a key of the part itself. -/
+def Static.keys : Static → Array (Option String × String)
+  | .is part field _ => #[(part, field)]
   | .loaded _ => #[]
   | .and cs | .or cs => cs.foldl (fun out c => out ++ c.keys) #[]
   | .not c => c.keys
 
 /-- How many parts a condition has: what looking at it for one part costs, in steps. -/
 def Static.size : Static → Nat
-  | .is _ _ | .loaded _ => 1
+  | .is .. | .loaded _ => 1
   | .and cs | .or cs => cs.foldl (fun n c => n + c.size) 1
   | .not c => 1 + c.size
 
@@ -544,18 +546,29 @@ def cases (scope : Scope) (dim : Dim) : Nat → Array (Option Json × Json) → 
 
 end
 
-/-- A condition on a part: `["is", FIELD, NAME]` on a key field of the type itself,
-`["loaded", LOAD]`, and `and`, `or`, `not` of these. -/
+/-- A condition on a part: `["is", FIELD, NAME]`, `["loaded", LOAD]`, and `and`, `or`, `not`
+of these. `FIELD` is a key field of the type itself, or `PART.FIELD` for a key field of a
+part the type joins, by the name its `as` gives that part, as an expression reads `a.Fy`.
+Such a name is one part. The name of a field that joins several parts is no part's name,
+so a condition on it has no meaning and is refused: it could hold for one and not for
+another. A load is one of the type's own. -/
 def static (scope : Scope) : Nat → Json → Except String Static
   | 0, _ => throw "a condition nests too deep"
   | fuel + 1, j => do
     match (← j.getArr?).toList with
     | [.str "is", .str field, .str name] =>
       match scope.find field with
-      | some (.key _ known none _) =>
+      | some (.key _ known part inner) =>
         unless known.contains name do throw s!"{clip name} is not a name of {field}"
-        return .is field name
-      | _ => throw s!"{clip field} is not a key field of the type"
+        return .is part inner name
+      | _ =>
+        let several : Option String := do
+          let [join, _] := field.splitOn "." | none
+          let kind ← scope.kind
+          if kind.called.contains join then none
+          let .parts _ names := (← kind.field.get? join).kind | none
+          some s!": {join} joins {names.size} parts, and a condition names one of them, {", ".intercalate names.toList}"
+        throw s!"{clip field} is not a key field of the type or of a part it joins{several.getD ""}"
     | [.str "loaded", .str load] =>
       unless scope.kind.any (·.load.contains load) do throw s!"the type takes no load {clip load}"
       return .loaded load
@@ -843,7 +856,7 @@ def readRule (kinds : Std.TreeMap String Kind) (rows : Std.TreeMap String Row) (
     return { id, kind := name, mechanism, condition, steps := draft.steps,
              weight := draft.steps.foldl (fun n step => n + step.weight) 0,
              look := 1 + (condition.map Static.size).getD 0 + loads.size, ranges, low, high,
-             fields := once (fields ++ ((condition.map Static.keys).getD #[]).map (none, ·)), loads }
+             fields := once (fields ++ (condition.map Static.keys).getD #[]), loads }
   rule.mapError (s!"rule {clip id}: " ++ ·)
 
 /-- How many characters of a text are one step to read. -/

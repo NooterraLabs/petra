@@ -291,7 +291,18 @@ A line may say that the mechanism cannot arise, and why:
 "unless": {"when": ["is", "fit", "close"], "why": "a close fit leaves no room for one"}
 ```
 
-With no `when`, it never arises for the type. A condition is `["is", FIELD, NAME]` on a key field, `["loaded", LOAD]`, or `and`, `or` and `not` of these. A `loaded` holds when some load case of the card puts the load on the part. It asks whether the load is there and reads nothing of it, so a load that only a `loaded` names is a load nothing reads. An `unless` has `why`, a text, which may be empty. An `unless` with no `why` is refused. A line whose `unless` is `null` is read as a line with none.
+With no `when`, it never arises for the type. A condition is `["is", FIELD, NAME]`, `["loaded", LOAD]`, or `and`, `or` and `not` of these. An `unless` has `why`, a text, which may be empty. An `unless` with no `why` is refused. A line whose `unless` is `null` is read as a line with none.
+
+An `is` holds when a key has the name `NAME`, which is one of the key's names. `FIELD` says which key, in one of two ways.
+
+- A key field of the type itself: `["is", "fit", "close"]`.
+- `PART.FIELD`, a key field of a part the type joins. `PART` is the name that the `as` of the joining field gives the part, as an expression of a rule reads `a.Fy`. With `"as": ["top", "bottom"]`, `["is", "top.stiffened", "yes"]` holds for a beam whose part `top` is stiffened.
+
+Each name of `as` is one part, so a condition is about one part. A field with no `as` joins one part, under the field's own name. A field whose `as` gives several names is no part's name: with `lugs` joining `top` and `bottom`, `["is", "lugs.stiffened", "yes"]` could hold for one lug and not for the other, so it has no meaning and the deck is refused. A condition that is to hold for both says so: `["and", ["is", "top.stiffened", "yes"], ["is", "bottom.stiffened", "yes"]]`. A name reaches one part and no further: `top.pin.finish` is refused. A field named as a joined part is, as `top` beside the part `top`, is still that field: `top` alone is the type's own key, and `top.stiffened` the key of the part.
+
+A line and a rule are for one part of their type, and each is asked once of that part. Nothing is asked once for each part it joins: a rule that is to answer for each of two lugs is two rules, as the first deck has one for each plate.
+
+A `loaded` holds when some load case of the card puts the load on the part. The load is one of the type's own: a condition asks about no load of a joined part. It asks whether the load is there and reads nothing of it, so a load that only a `loaded` names is a load nothing reads.
 
 ### A rule
 
@@ -313,7 +324,7 @@ A rule answers one line of the grid with an inequality.
 | `le` | Two expressions. The rule holds when the first is at most the second. |
 | `let` | Names for expressions the rule uses more than once. A name is letters, digits and `_`, and is no field's name. An expression reads the names before it. |
 | `where` | The range the rule holds in: a list of `{"le": [a, b], "why": "..."}` with at least one item. Each item has `why`, a text, which may be empty. A rule that holds everywhere leaves `where` out: `"where": []` is refused. |
-| `when` | A condition on the part, as in the grid. The rule answers only for the parts it holds for. |
+| `when` | A condition on the part, as in the grid: on its own keys, on the keys of the parts it joins, and on its loads. The rule answers only for the parts it holds for. |
 
 An expression is written as a row's is. A name in it is a quantity field of the part, `NAME.FIELD` for a part it joins, or a name from `let`. It has two more forms.
 

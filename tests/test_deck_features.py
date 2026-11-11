@@ -292,5 +292,123 @@ class UnitsWithAPower(unittest.TestCase):
         reads(self, made_up([kind("beam", size("Ix", "length^4"))]))
 
 
+# --- 2. a condition on a key of a joined part -----------------------------------------------------------
+
+END = kind("end", size("t"), key("shape", "straight", "round"), key("stiff", "no", "yes"))
+LINK = kind("link", size("w"), key("duty", "light", "heavy"), {"name": "ends", "type": "end", "as": ["near", "far"], "what": "its two ends"},
+            loads=[{"name": "pull", "dim": "force", "least": "0 N", "what": "a pull"}])
+LINKS = made_up(
+    [END, LINK],
+    [asks("link.round", "link"), asks("link.buckle", "link", unless={"when": ["is", "far.stiff", "yes"], "why": "a stiff far end does not buckle"}),
+     asks("link.both", "link")],
+    [rule("round", "link", "link.round", when=["is", "near.shape", "round"], le=["near.t", "w"]),
+     rule("buckle", "link", "link.buckle", le=["far.t", "w"]),
+     rule("both", "link", "link.both", when=["and", ["is", "duty", "heavy"], ["or", ["is", "near.stiff", "yes"], ["not", ["is", "far.shape", "round"]]]],
+          le=["near.t", "far.t"])])
+E1 = part("end", "e1", t="5 mm", shape="round", stiff="no")
+E2 = part("end", "e2", t="6 mm", shape="straight", stiff="yes")
+
+
+def link(ends: str = "e1 e2", duty: str = "heavy") -> str:
+    return design(E1, E2, part("link", "l", w="10 mm", duty=duty, ends=ends))
+
+
+def swapped(rules: dict, old: str, new: str) -> dict:
+    text = json.dumps(rules)
+    assert old in text, old
+    return json.loads(text.replace(old, new, 1))
+
+
+class AKeyOfAJoinedPart(unittest.TestCase):
+    def test_a_rule_answers_when_the_part_it_joins_has_the_key_at_the_value(self):
+        found, verdict, _ = cells(self, LINKS, link())
+        self.assertEqual(found, {("l", "link.round", "round"): "proved", ("l", "link.buckle", ""): "not_applicable", ("l", "link.both", "both"): "proved"})
+        self.assertEqual(verdict, "PASS")
+
+    def test_each_name_of_a_join_is_one_part(self):
+        """With the two ends the other way round, `near` is the straight, stiff end."""
+        found, verdict, said = cells(self, LINKS, link("e2 e1"))
+        self.assertEqual(found["l", "link.round", ""], "open", "the near end is straight, so the rule for a round one does not answer")
+        self.assertEqual(reason(said, "link.round"), "the deck has no rule for it on a part like this one")
+        self.assertEqual(found["l", "link.buckle", "buckle"], "proved", "the far end is not stiff, so the line asks")
+        self.assertEqual((found["l", "link.both", "both"], verdict), ("refuted", "FAIL"), "the near end is stiff, and 6 mm is over 5 mm")
+
+    def test_a_condition_joins_keys_of_the_part_and_of_the_parts_it_joins(self):
+        light, _, _ = cells(self, LINKS, link(duty="light"))
+        self.assertEqual(light["l", "link.both", ""], "open", "a light link has no rule for the line")
+        soft = design(E1, part("end", "e2", t="6 mm", shape="round", stiff="yes"), part("link", "l", w="10 mm", duty="heavy", ends="e1 e2"))
+        found, _, _ = cells(self, LINKS, soft)
+        self.assertEqual(found["l", "link.both", ""], "open", "the near end is not stiff and the far end is round")
+
+    def test_a_key_that_a_condition_reads_is_read(self):
+        found, _, _ = cells(self, LINKS, link())
+        self.assertFalse([k for k in found if k[1] == "unread"], "every key of both ends is read by a condition that holds or by an unless")
+        other, _, said = cells(self, LINKS, link("e2 e1"))
+        self.assertEqual([k for k in other if k[1] == "unread"], [("e2", "unread", "shape")],
+                         "the rule that reads the near end's shape does not apply to this link, and nothing else reads it")
+        self.assertIn("no rule of the deck reads e2.shape", reason(said, "unread", "shape"))
+
+    def test_an_unless_reads_the_key_whether_or_not_it_holds(self):
+        only = made_up([END, LINK], [asks("link.buckle", "link", unless={"when": ["is", "far.stiff", "yes"], "why": "made up"})])
+        for ends in ("e1 e2", "e2 e1"):
+            found, _, _ = cells(self, only, link(ends))
+            far = ends.split()[1]
+            self.assertNotIn((far, "unread", "stiff"), found)
+            self.assertIn((ends.split()[0], "unread", "stiff"), found, "the near end's key is read by nothing")
+
+    def test_a_join_with_no_as_is_one_part_under_the_name_of_its_field(self):
+        cap = made_up([END, kind("post", size("h"), {"name": "cap", "type": "end", "what": "its cap"})], [asks("post.cap", "post")],
+                      [rule("cap", "post", "post.cap", when=["is", "cap.shape", "round"], le=["cap.t", "h"])])
+        found, verdict, _ = cells(self, cap, design(E1, part("post", "p", h="10 mm", cap="e1")))
+        self.assertEqual((found["p", "post.cap", "cap"], verdict), ("proved", "UNKNOWN"), "the cap's stiff is read by nothing")
+
+    def test_the_name_of_a_field_that_joins_several_parts_names_no_part(self):
+        mine, its = no_deck(self, swapped(LINKS, '["is", "near.shape", "round"]', '["is", "ends.shape", "round"]'))
+        self.assertIn("ends.shape", mine)
+        self.assertIn("ends joins 2 parts, and a condition names one of them, near, far", its)
+        mine, its = no_deck(self, swapped(LINKS, '["is", "far.stiff", "yes"]', '["is", "ends.stiff", "yes"]'))
+        self.assertIn("grid link.buckle", its)
+
+    def test_a_condition_names_a_key_that_is_there_and_one_of_its_names(self):
+        for old, new in (('["is", "near.shape", "round"]', '["is", "nobody.shape", "round"]'), ('["is", "near.shape", "round"]', '["is", "near.colour", "round"]'),
+                         ('["is", "near.shape", "round"]', '["is", "near.shape", "square"]'), ('["is", "near.shape", "round"]', '["is", "near.t", "round"]'),
+                         ('["is", "near.shape", "round"]', '["is", "near.near.shape", "round"]'), ('["is", "near.shape", "round"]', '["is", "near.", "round"]'),
+                         ('["is", "near.shape", "round"]', '["is", ".shape", "round"]'), ('["is", "near.shape", "round"]', '["is", "end.shape", "round"]'),
+                         ('["is", "far.stiff", "yes"]', '["is", "far.stiff", "maybe"]'), ('["is", "far.stiff", "yes"]', '["is", "far.w", "yes"]'),
+                         ('["is", "duty", "heavy"]', '["is", "near.duty", "heavy"]'), ('["is", "duty", "heavy"]', '["is", "l.duty", "heavy"]')):
+            with self.subTest(new):
+                no_deck(self, swapped(LINKS, old, new))
+
+    def test_a_load_is_one_of_the_types_own(self):
+        """`loaded` asks about a load on the part itself, as before: a rule reads no load of a part its part joins."""
+        reads(self, swapped(LINKS, '["is", "duty", "heavy"]', '["loaded", "pull"]'))
+        ended = swapped(json.loads(json.dumps(LINKS).replace('"type": "end", "what": "a end"', '"type": "end", "what": "a end", "loads": [{"name": "push", "dim": "force", "what": "a push"}]')),
+                        '["is", "duty", "heavy"]', '["loaded", "near.push"]')
+        no_deck(self, ended)
+
+    def test_a_field_called_like_a_join_is_not_the_joined_part(self):
+        """The link has a key of its own named `near`, as the first of the parts it joins is.
+        `near` alone is the link's key, and `near.shape` the key of the part it joins."""
+        twin = kind("link", size("w"), key("near", "straight", "round"), key("shape", "straight", "round"),
+                    {"name": "ends", "type": "end", "as": ["near", "far"], "what": "its two ends"})
+        deck = made_up([END, twin], [asks("link.own", "link"), asks("link.joined", "link"), asks("link.shape", "link")],
+                       [rule("own", "link", "link.own", when=["is", "near", "round"], le=["w", "w"]),
+                        rule("joined", "link", "link.joined", when=["is", "near.shape", "round"], le=["w", "w"]),
+                        rule("shape", "link", "link.shape", when=["is", "shape", "round"], le=["w", "w"])])
+        for own, shape, joined in (("round", "straight", "straight"), ("straight", "round", "straight"), ("straight", "straight", "round")):
+            with self.subTest(own=own, shape=shape, joined=joined):
+                text = design(part("end", "e1", t="5 mm", shape=joined, stiff="no"), E2, part("link", "l", w="10 mm", near=own, shape=shape, ends="e1 e2"))
+                found, _, _ = cells(self, deck, text)
+                self.assertEqual([found.get(("l", f"link.{m}", m)) for m in ("own", "shape", "joined")],
+                                 ["proved" if x == "round" else None for x in (own, shape, joined)])
+                unread = sorted(k for k in found if k[1] == "unread" and k[2] in ("near", "shape"))
+                self.assertEqual(unread, sorted([("e2", "unread", "shape")] + ([] if joined == "round" else [("e1", "unread", "shape")])
+                                                + ([] if own == "round" else [("l", "unread", "near")]) + ([] if shape == "round" else [("l", "unread", "shape")])))
+
+    def test_a_design_that_joins_no_such_part_is_ill_formed_before_a_condition_is_asked(self):
+        mine, its = ill_formed(self, LINKS, design(E1, part("link", "l", w="10 mm", duty="heavy", ends="e1 nobody")))
+        self.assertIn("parts.5 design l.ends: names 2 different end parts of this design", its)
+
+
 if __name__ == "__main__":
     unittest.main()

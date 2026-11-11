@@ -301,10 +301,12 @@ class _Binder(rows._Reader):
 
     def static(self, node: Any) -> tuple:
         """A condition on what a part is, not on how large: `["is", FIELD, NAME]`,
-        `["loaded", LOAD]`, and `and`, `or`, `not` of these."""
+        `["loaded", LOAD]`, and `and`, `or`, `not` of these. FIELD is a key field of the
+        type, or `PART.FIELD` for a key field of a part the type joins, by the name its `as`
+        gives that part. The name of a field that joins several parts is no part's name."""
         if isinstance(node, list) and node[:1] == ["is"] and len(node) == 3:
-            if node[1] not in self.takes or node[2] not in self.takes[node[1]].keys or "." in node[1]:
-                raise RowError(f"{node!r}: `is` names a key field of the type and one of its names")
+            if not isinstance(node[1], str) or node[1] not in self.takes or node[2] not in self.takes[node[1]].keys:
+                raise RowError(f"{node!r}: `is` names a key field of the type, or of one part it joins by the name `as` gives it, and one of the key's names")
             return ("is", node[1], node[2])
         if isinstance(node, list) and node[:1] == ["loaded"] and len(node) == 2 and node[1] in self.loads:
             return ("loaded", node[1])
@@ -687,18 +689,24 @@ class _Tape:
         return self.pick([(c, line(i)) for i, c in places(table.axes[0]) if line(i) is not None], row.id)
 
 
+def _field_of(part: Part, parts: Mapping[str, Part], name: str) -> Any:
+    """What the part has for a field as a rule names it: `width`, or `a.Fy` for a field of
+    the part it joins under the name `a`."""
+    if "." not in name:
+        return part.values[name]
+    alias, _, inner = name.partition(".")
+    for f in part.type.fields.values():
+        if alias in f.names and f.type is not None:
+            return parts[part.values[f.name][f.names.index(alias)]].values[inner]
+    raise KeyError(name)
+
+
 def _env(tape: _Tape, rule: Rule, part: Part, parts: Mapping[str, Part], case: str | None) -> Callable[[str], int]:
     """What each name of a rule's expressions is on the tape, for one part and one load case."""
     memo: dict[str, int] = {}
 
     def field_of(name: str) -> Any:
-        if "." not in name:
-            return part.values[name]
-        alias, _, inner = name.partition(".")
-        for f in part.type.fields.values():
-            if alias in f.names and f.type is not None:
-                return parts[part.values[f.name][f.names.index(alias)]].values[inner]
-        raise KeyError(name)
+        return _field_of(part, parts, name)
 
     def find(name: str) -> int:
         if name not in memo:
@@ -871,16 +879,18 @@ class Cell:
         return {**out, **({"why": self.why} if self.state in ("open", "not_applicable") else {}), **({"rule": self.rule} if self.rule else {})}
 
 
-def _static(cond: tuple | None, part: Part) -> bool:
+def _static(cond: tuple | None, part: Part, parts: Mapping[str, Part]) -> bool:
+    """Whether a condition holds for a part. An `is` reads a key of the part, or of the
+    part it joins under a name."""
     if cond is None:
         return True
     if cond[0] == "is":
-        return part.values[cond[1]] == cond[2]
+        return _field_of(part, parts, cond[1]) == cond[2]
     if cond[0] == "loaded":
         return bool(part.loads.get(cond[1]))
     if cond[0] == "not":
-        return not _static(cond[1], part)
-    return (all if cond[0] == "and" else any)(_static(c, part) for c in cond[1:])
+        return not _static(cond[1], part, parts)
+    return (all if cond[0] == "and" else any)(_static(c, part, parts) for c in cond[1:])
 
 
 def _names(term: Any) -> Iterator[str]:
@@ -998,10 +1008,10 @@ def cells(design: Design, deck: Deck, found: Parts) -> list[Cell]:
             if (part.name, ask.mechanism) in waived:
                 w = waived[part.name, ask.mechanism]
                 out.append(Cell(part.name, ask.mechanism, "", "waived", ask.what, anchor, f"by {w.owner}: {w.reason}"))
-            elif ask.excused is not None and _static(ask.unless, part):
+            elif ask.excused is not None and _static(ask.unless, part, found.parts):
                 out.append(Cell(part.name, ask.mechanism, "", "not_applicable", ask.what, anchor, ask.excused))
             else:
-                rules = [r for r in deck.rules if (r.type, r.mechanism) == (ask.type, ask.mechanism) and _static(r.when, part)]
+                rules = [r for r in deck.rules if (r.type, r.mechanism) == (ask.type, ask.mechanism) and _static(r.when, part, found.parts)]
                 out += [c for r in rules for c in _answers(r, ask, part, found.parts, found.cases)]
                 if not rules:
                     out.append(Cell(part.name, ask.mechanism, "", "open", ask.what, anchor,
@@ -1022,7 +1032,7 @@ def _unread(deck: Deck, found: Parts) -> list[Cell]:
     for part in found.parts.values():
         names = {alias: part.values[f.name][n] for f in part.type.fields.values() if f.type is not None for n, alias in enumerate(f.names)}
         fields = {name for a in deck.asks if a.type == part.type.name for name in _keys(a.unless)}
-        fields |= {name for r in deck.rules if r.type == part.type.name and _static(r.when, part) for name in _reads(r)}
+        fields |= {name for r in deck.rules if r.type == part.type.name and _static(r.when, part, found.parts) for name in _reads(r)}
         for name in fields:
             alias, dot, inner = name.partition(".")
             read.add((names[alias], inner) if dot else (part.name, name))

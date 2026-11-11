@@ -68,7 +68,7 @@ CORE_CAP = Limit(1000, "Set on 2026-11-08 at 140f742, where the core measured 95
                        "A new rule adds 3 to 5 lines to rules/__init__.py (inferred from its tables), so "
                        "the headroom covers the registry entries of several rules.")
 
-TRUSTED_CEILING = Limit(19233, "Set on 2026-11-08 at 140f742, where the trusted base measured 13,530 "
+TRUSTED_CEILING = Limit(19235, "Set on 2026-11-08 at 140f742, where the trusted base measured 13,530 "
                                "code lines: core 957, rules 457, outside the kernel 12,116. Raised on "
                                "2026-11-08 on branch parts-core as the parts layer replaces its scaffold: "
                                "classifying the scaffold measured 14,269, and the mesh reader with its "
@@ -150,6 +150,9 @@ TRUSTED_CEILING = Limit(19233, "Set on 2026-11-08 at 140f742, where the trusted 
                                "states a section modulus or a moment of inertia: the units read it, the lexer and the "
                                "parser take it after a number, and a volume or a fourth power prints in such a unit, "
                                "10 lines in petra/units.py and 9 in petra/lang, 19,233. "
+                               "The second is a condition on a key of a part that a part joins, so that a rule of a "
+                               "beam answers only for a lug that is stiffened: the grid finds the joined part's key "
+                               "as the kernel does, 2 lines in petra/grid.py, 19,235. "
                                "Raise it in the commit that needs more and say why here.")
 
 T2_ADOPTED = date(2026, 11, 8)
