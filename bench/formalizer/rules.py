@@ -167,7 +167,8 @@ def measure(first: rule.Reading, examples: Mapping[str, list[rule.Worked]], admi
                     counts["same"] += 1
                     continue
                 found = rule.checks(wrong, mechanism, examples.get(mechanism, []), rule.parts(task, mechanism, [wrong], seed), unused=False)
-                failed = {c.name for c in found if c.outcome == "fail"} | ({"reads"} if rule.reads(wrong).outcome == "fail" else set())
+                # A rule that does not load reads nothing, so `reads` is asked only of one that loads.
+                failed = {c.name for c in found if c.outcome == "fail"} | ({"reads"} if mechanism not in wrong.wrong and rule.reads(wrong).outcome == "fail" else set())
                 for tally in (counts, kinds[kind]):
                     tally.update(["wrong", *failed, *(["any"] if failed else []), *(f"only {name}" for name in failed if len(failed) == 1)])
                 if not failed:

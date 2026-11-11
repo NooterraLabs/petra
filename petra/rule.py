@@ -135,15 +135,17 @@ def _names(deck: grid.Deck, kind: str) -> tuple[dict[str, tuple[str, ...]], dict
 
 
 def read_task(body: Mapping[str, Any], folder: Path | None = None) -> Task:
-    """A task from its JSON: `format`, `name`, `about`, `rows` or `rows_from`, a file beside
-    the task that holds rows, `types` and `asks`. A type is written as in a deck, and each
-    quantity and each load has a `range` besides. A load may be `adverse`, and a type may
-    list the joined parts that are `alike`. An ask is a line of the grid with no `unless`.
-    Raises DeckError."""
+    """A task from its JSON: `format`, `name`, `about`, `rows` or `rows_from`, the path or
+    the paths of files that hold rows, from the task's folder, `types` and `asks`. A type is
+    written as in a deck, and each quantity and each load has a `range` besides. A load may
+    be `adverse`, and a type may list the joined parts that are `alike`. An ask is a line of
+    the grid with no `unless`. Raises DeckError."""
     try:
         if body.get("format") != TASK or set(body) - {"format", "name", "about", "rows", "rows_from", "types", "asks"} or ("rows" in body) == ("rows_from" in body):
             raise DeckError(f"a task has format {TASK}, name, about, types, asks, and one of rows and rows_from")
-        found = body["rows"] if "rows" in body else json.loads(((folder or Path()) / body["rows_from"]).read_text(encoding="utf-8"))["rows"]
+        files = body.get("rows_from", [])
+        found = body["rows"] if "rows" in body else [row for name in ([files] if isinstance(files, str) else files)
+                                                     for row in json.loads(((folder or Path()) / name).read_text(encoding="utf-8"))["rows"]]
         types = [{**{k: v for k, v in t.items() if k != "alike"},
                   "fields": [{k: v for k, v in f.items() if k != "range"} for f in t["fields"]],
                   "loads": [{k: v for k, v in f.items() if k not in ("range", "adverse")} for f in t.get("loads", [])]} for t in body["types"]]
@@ -200,6 +202,8 @@ def read_transcription(body: Mapping[str, Any]) -> Transcription:
         if "grid" in body:
             return Transcription(tuple(body["rules"]), {a["mechanism"]: dict(a["unless"]) for a in body["grid"] if "unless" in a}, {})
         unless = {u["mechanism"]: {k: u[k] for k in ("why", "when") if k in u} for u in body.get("unless", [])}
+        if not all(isinstance(u.get("why"), str) and u["why"] for u in unless.values()):
+            raise DeckError("not a transcription: each `unless` says why, in words")
         return Transcription(tuple(body["rules"]), unless, {x["mechanism"]: str(x["why"]) for x in body.get("left_out", [])})
     except (KeyError, TypeError, AttributeError) as exc:
         raise DeckError(f"not a transcription ({type(exc).__name__}: {exc})") from None
@@ -270,7 +274,7 @@ def _values(tape: _Tape, box: list[Fraction]) -> tuple[list[Any], dict[int, int]
     """Each node of the tape at a point, and the case each pick chose. A value is a Fraction
     while it is exact, an Interval once a root, a logarithm, an exponential or pi encloses
     it, and a string, the reason, where it has none. It is what grid.enclosures gives over
-    a box of points, about ten times sooner; tests/test_rules_accept.py compares the two."""
+    a box of points, about three times sooner; tests/test_rules_accept.py compares the two."""
     v: list[Any] = []
     chose: dict[int, int] = {}
 

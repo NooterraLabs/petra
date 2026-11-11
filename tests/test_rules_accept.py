@@ -41,7 +41,8 @@ EXAMPLES = {
 }
 
 
-def task(edit=lambda body: None) -> rule.Task:
+def task_body() -> dict:
+    """The task as JSON: the types of STRIPS with a range for each quantity, its rows, and its grid with no `unless`."""
     types = copy.deepcopy(STRIPS["types"])
     for t in types:
         for f in (*t["fields"], *t.get("loads", [])):
@@ -49,8 +50,12 @@ def task(edit=lambda body: None) -> rule.Task:
                 f["range"] = RANGES[f["name"]]
     types[1]["alike"] = [["near", "far"]]
     types[1]["loads"][0]["adverse"] = True
-    body = {"format": rule.TASK, "name": "test-strips", "about": "Made up for the tests.", "rows": copy.deepcopy(STRIPS["rows"]), "types": types,
+    return {"format": rule.TASK, "name": "test-strips", "about": "Made up for the tests.", "rows": copy.deepcopy(STRIPS["rows"]), "types": types,
             "asks": [{k: v for k, v in a.items() if k != "unless"} for a in STRIPS["grid"]]}
+
+
+def task(edit=lambda body: None) -> rule.Task:
+    body = task_body()
     edit(body)
     return rule.read_task(body)
 
@@ -430,14 +435,14 @@ class Measurement(unittest.TestCase):
     def test_the_tally_by_kind_of_damage(self):
         total = sum((tally for tally in self.kinds.values()), start=collections.Counter())
         self.assertEqual((total["wrong"], total["any"]), (49, 43), "the samples come from a fixed seed, so the tally is the same each time")
-        self.assertEqual([total[name] for name in self.bench.PARTS], [3, 34, 5, 1, 2, 13], "every rule of STRIPS has a made-up example, and an example catches most damage")
+        self.assertEqual([total[name] for name in self.bench.PARTS], [3, 34, 5, 1, 2, 10], "every rule of STRIPS has a made-up example, and an example catches most damage")
         self.assertEqual((self.kinds["factor"]["wrong"], self.kinds["factor"]["any"]), (8, 2), "an example whose part is inside a range cannot tell where the range ends")
         self.assertEqual(self.kinds["sides swapped"]["wrong"], self.kinds["sides swapped"]["any"], "an example or the direction of the load refuses each swap")
         self.assertEqual(self.kinds["other part"]["alike"], self.kinds["other part"]["wrong"], "a field of the other pad breaks what the task calls alike")
         text = self.bench.table(self.kinds)
         self.assertEqual(text[0].split(), ["damage", "wrong", "refused", *self.bench.PARTS])
         self.assertEqual(text[-3].split()[:3], ["all", str(total["wrong"]), str(total["any"])])
-        self.assertEqual(text[-2:], ["  refused by one part of the check and no other: examples 24, reach 1, reads 3", "  refused by a part other than `alike`: 43 (88%)"])
+        self.assertEqual(text[-2:], ["  refused by one part of the check and no other: units 3, examples 24, reach 1, reads 3", "  refused by a part other than `alike`: 43 (88%)"])
 
     def test_damage_that_changes_no_answer_is_not_counted_as_wrong(self):
         """Two rows with one formula: reading the other changes no answer, so it is no wrong rule."""
@@ -459,8 +464,7 @@ class CommandLine(unittest.TestCase):
     def run_main(self, first: dict, second: dict | None = None, examples: dict | None = None) -> tuple[int, str]:
         with tempfile.TemporaryDirectory() as folder:
             paths = {}
-            body = {"format": rule.TASK, "name": TASK.name, "about": "", "rows": STRIPS["rows"], "types": task_types(), "asks": TASK.body["grid"]}
-            for name, data in (("task", body), ("first", first), ("second", second), ("examples", {"examples": examples} if examples else None)):
+            for name, data in (("task", task_body()), ("first", first), ("second", second), ("examples", {"examples": examples} if examples else None)):
                 if data is not None:
                     paths[name] = str(Path(folder) / f"{name}.json")
                     Path(paths[name]).write_text(json.dumps(data), encoding="utf-8")
@@ -486,15 +490,6 @@ class CommandLine(unittest.TestCase):
         self.assertEqual(code, 3, out)
 
 
-def task_types() -> list:
-    types = copy.deepcopy(STRIPS["types"])
-    for t in types:
-        for f in (*t["fields"], *t.get("loads", [])):
-            if "dim" in f:
-                f["range"] = RANGES[f["name"]]
-    return types
-
-
 class Shipped(unittest.TestCase):
     """The first run for rules: the four rules of petra/decks/aisc360.json and a second transcription of them."""
 
@@ -508,6 +503,12 @@ class Shipped(unittest.TestCase):
         self.assertEqual(self.task.body["types"], [{**t, "loads": t.get("loads", [])} for t in self.deck["types"]])
         self.assertEqual(self.task.body["grid"], [{k: v for k, v in a.items() if k != "unless"} for a in self.deck["grid"]])
         self.assertEqual(self.task.body["rows"], self.deck["rows"])
+
+    def test_a_task_may_take_its_rows_from_several_files(self):
+        """The third run's 14 rows are in no deck yet. A task for the rules that would use them names both files."""
+        wider = rule.read_task({**self.body, "rows_from": [self.body["rows_from"], "a3.json"]}, BENCH)
+        self.assertEqual(len(wider.deck.rows), len(self.deck["rows"]) + 14)
+        self.assertIn("aisc360-22/J3.4-spacing", wider.deck.rows)
 
     def test_the_two_transcriptions_agree_on_every_mechanism_either_answers(self):
         first, other = rule.load(self.task, str(grid.DECKS / "aisc360.json")), rule.load(self.task, str(BENCH / "rules_b.json"))

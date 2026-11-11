@@ -354,7 +354,7 @@ A task is a JSON file. `bench/formalizer/rules_task.json` is the task of the fir
 |---|---|
 | `format` | `"petra-rule-task/0"` |
 | `name`, `about` | The task's name, and what it covers |
-| `rows`, or `rows_from` | The rows, or the path of a file beside the task that holds them: a deck, or a file of rows |
+| `rows`, or `rows_from` | The rows, or where they are: the path of a deck or of a file of rows, from the task's folder, or a list of such paths |
 | `types` | The types, as a deck holds them, with the three keys below |
 | `asks` | The lines of the grid to answer, each with no `unless` |
 
@@ -410,7 +410,7 @@ An example gives what its source states and no more. A rule that reads a field t
 
 ### What a transcription says of a part
 
-The check tries parts as points: each key a name, each quantity and each load one value. For one part, a transcription gives a mechanism one of four answers. They are the states a cell can have at a point.
+The check tries parts as points: each key a name, each quantity and each load one value. For one part, a transcription gives a mechanism one of four answers. They are what a deck makes of a cell for a part with no ranges: not applicable, refuted, open and proved.
 
 | Answer | When |
 |---|---|
