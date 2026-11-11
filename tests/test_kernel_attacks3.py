@@ -40,6 +40,7 @@ import copy
 import hashlib
 import json
 import random
+import re
 import unittest
 from collections import Counter
 from fractions import Fraction
@@ -47,12 +48,16 @@ from fractions import Fraction
 from petra import export, grid, verify
 from tests.test_grid import STRIPS
 from tests.test_kernel_attacks import export_lap, run_raw
-from tests.test_kernel_attacks2 import MB, answered_within, halves, num, peak_bytes, total
+from tests.test_kernel_attacks2 import MB, answered_within, halves, measured, num, peak_bytes, total
 from tests.test_kernel_grid import ask, findings, strips
-from tests.test_kernel_limits import old_path
+from tests.test_kernel_limits import COSTLY, MAX_WORK, old_path
 from tests.test_kernel_limits import with_rules as with_deck
 
 HALF_GB = 512_000_000
+PROCESSOR_SECONDS = 30
+"""The most processor seconds the kernel may take on an input under 1 MB. A test holds the
+kernel to it by the processor time of its process, which a busy machine does not stretch as
+it stretches the clock, and each input here takes a fraction of it."""
 
 
 def text(body) -> str:
@@ -127,7 +132,14 @@ class Time(unittest.TestCase):
         tape = {"inputs": [{"label": "dsg:x", "lo": "0", "hi": "1024"}], "nodes": nodes, "roots": roots}
         files = old_path([cell(tape) | {"partition": halves(0, Fraction(0), Fraction(1024), 1024)}], [])
         self.assertLess(total(files), 70_000)
-        answered_within(self, files, 30)
+        said, seconds, _ = measured(files)
+        (found,) = said["cells"]
+        self.assertEqual(found["state"], "open")
+        leaf = re.fullmatch(r"leaf (\d+): node \d+: " + re.escape(COSTLY), found["reason"])
+        self.assertTrue(leaf, found["reason"])
+        self.assertGreater(said["work"], MAX_WORK * 9 // 10, "the proof stopped because the work ran out")
+        self.assertLess(int(leaf[1]), 250, "a leaf of fifty such products is charged at least 80 million units, where it was charged 29 million")
+        self.assertLess(seconds, PROCESSOR_SECONDS, "the work is spent in 6 to 8 processor seconds")
 
     def test_the_tapes_of_a_type_with_many_fields_are_written_in_time(self):
         """Finding 4, hostile deck. One rule sums 2,800 fields of 64-byte names that share a

@@ -305,7 +305,7 @@ class Work(Kernel):
     leaves stops when the work is spent, and its cell is open."""
 
     def test_a_proof_that_cannot_pay_for_its_tape_on_its_leaves_is_not_tried_and_a_small_one_after_it_is(self):
-        """A tape of 60,000 nodes is 4.5 million units a leaf, and 8,192 leaves are 37 billion."""
+        """A tape of 60,000 nodes is 14 million units a leaf, and 8,192 leaves are 118 billion."""
         long = {"inputs": [{"label": "dsg:x", "lo": "0", "hi": "8192"}], "nodes": [["c", "-1"]] + [["neg", 0]] * 60000, "roots": [0]}
         start = time.perf_counter()
         said = ask(old_path([proved(long, "long", halves(0, 0, 8192)), proved(SHORT, "short")], []))
@@ -318,7 +318,7 @@ class Work(Kernel):
         long = {"inputs": [{"label": "dsg:x", "lo": "0", "hi": "64"}], "nodes": [["c", "-1"]] + [["neg", 0]] * 60000, "roots": [0]}
         said = ask(old_path([proved(long, "long", halves(0, 0, 64))], []))
         self.assertEqual((said["verdict"], said["cells"][0]["state"]), ("PASS", "proved"))
-        self.assertGreater(said["work"], 60000 * 75 * 64, "it paid for every node on every leaf")
+        self.assertGreater(said["work"], 60000 * 240 * 64, "it paid for every node on every leaf")
 
     def test_a_step_that_costs_more_than_the_work_left_is_not_taken_and_a_small_proof_after_it_is_tried(self):
         """One `exp` of a number near 65,000 with 65,000 bits a side would sum 15,000 terms of
@@ -333,15 +333,17 @@ class Work(Kernel):
         self.assertLess(time.perf_counter() - start, 30)
 
     def test_work_that_runs_out_leaves_the_cell_open_and_the_verdict_says_what_was_spent(self):
-        """A chain of 4,000 small products costs about 250 million units a leaf, so the work
-        runs out near leaf 80 of 128."""
+        """A chain of 4,000 small products costs about 97 million units a leaf, so the work
+        runs out near leaf 205 of 256. This is the yardstick of bench/work_sweep.py: its
+        numbers fit a machine word, and a unit of every other step is held to three times
+        the time a unit of this one takes."""
         nodes = [["c", "3/8"], ["c", "8/3"], ["s", 0]]
         for k in range(4000):
             nodes.append(["mul", [len(nodes) - 1, k % 2]])
         nodes += [["c", "-1000"], ["add", [len(nodes) - 1, len(nodes)]]]
-        tape = {"inputs": [{"label": "dsg:x", "lo": "0", "hi": "128"}], "nodes": nodes, "roots": [len(nodes) - 1]}
+        tape = {"inputs": [{"label": "dsg:x", "lo": "0", "hi": "256"}], "nodes": nodes, "roots": [len(nodes) - 1]}
         start = time.perf_counter()
-        said = ask(old_path([proved(tape, "costly", halves(0, 0, 128))], []))
+        said = ask(old_path([proved(tape, "costly", halves(0, 0, 256))], []))
         (cell,) = said["cells"]
         self.assertEqual(cell["state"], "open")
         self.assertRegex(cell["reason"], r"^leaf \d+: node \d+: " + COSTLY + "$")

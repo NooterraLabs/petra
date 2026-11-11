@@ -290,15 +290,92 @@ A name of 64 characters in ASCII prints in 64 bytes. A character outside ASCII p
 
 ### Work
 
-A proof pays for what it does, in units of work, from what its verdict has left. A unit is about what one operation on one 64-bit word of a number costs: a nanosecond or so on a desktop. The kernel counts the words of the numbers a step reads and charges the step before it takes it. So the count is a bound on the time, set before the time is spent, and not a measure of it.
+A proof pays for what it does, in units of work, from what its verdict has left. The kernel finds the cost of a step from the lengths of the numbers the step reads, and takes it from the work left before it takes the step. So the count is a bound on the time, set before the time is spent, and not a measure of it. The costs are fitted so that a unit takes about the same time whatever the step and however long its numbers: about 0.4 nanoseconds on the desktop they were fitted on, a four-core machine of 2017.
 
-- **The fee.** Before its first step a proof pays for its tape: the size of the tape three times, and once more for each leaf of its partition, with 20,000 units and 8 for each input for the split that made the leaf. The size of a tape is 60 units for each node and 15 for each node it reads, and for a pick 2 for each of its orders times each distinct pair of nodes it compares. A refutation pays as a proof with one leaf, and 20,000 for each input. A proof whose fee is more than the work left is not tried and pays nothing.
-- **The steps.** Each step then pays by the 64-bit words of the numbers it reads. A term of a sum pays for the words of the sum so far times the words of the term. A factor of a product and a quotient pay for the square of the words of both, because the kernel compares the four products of the ends with each other. A least, a greatest and each pair a pick compares pay for the product of the words of the two. A square root pays for the square of the words of its whole part. A power pays for its exponent squared times its words squared. An `ln` pays for the square of its words, and for the square of the bits of its enclosure times its words. An `exp` of `x` works with about twice `x` bits, sums about that many terms over their logarithm, and pays for the terms times the bits times its words. An `ln` or an `exp` of a number the cache holds pays for the look. A pick pays for each way it tries times its orders times its pairs. A step that costs more than the work left is not taken, and its node has no value, as a node that divides by zero has none.
-- **The count.** The kernel takes the work of each proof from what is left, in the order of the cells. A proof that fails has spent what its steps took. The verdict prints the work its proofs took as `work`.
+A cost is a whole number. In the formulas below:
 
-A step that rounds to the grid pays for each enclosure it asks for, before it asks. So an `ln` or an `exp` whose value lies close to a point of the grid pays for the finer enclosures too, and one that does not pays for the first alone.
+- The **bits** of a number are the bits of its numerator or of its denominator in lowest terms, whichever has more. Zero has a numerator of no bits and a denominator of one bit. The bits of an enclosure are the bits of its longer end.
+- `root(n)` is the square root of `n` rounded down, and `h(n)` is `n × root(n)`.
+- `ramp(n, a, b)` is 0 for `n` up to `a`, then `n − a`, and `b − a` from `b` on.
+- A division rounds down, and a formula is worked from left to right. A difference that would be below zero is zero.
 
-The heaviest design of the corpus, `weld_bracket`, takes 3.2 billion units in under three seconds: a sixth of the budget. The next takes 0.1 billion, and a lap of the first deck of rules 2.5 million. Files under 1 MB made to spend all 20 billion on one kind of step took between 4 and 15 seconds on the desktop the costs were fitted on, a four-core machine of 2017, and held at most 220 MB. The slowest was one pick of 1,024 orders over twelve inputs on 2,000 leaves, in 116 KB of files. A busy machine takes longer in proportion. `tests/test_kernel_limits.py` and `tests/test_kernel_attacks2.py` hold the limits one by one.
+**The fee.** Before its first step a proof pays for its tape: `size × (3 + leaves) + leaves × (20,000 + 8 × inputs)`, with the leaves of its partition and the inputs of its tape. The size of a tape is the sum of the sizes of its nodes.
+
+| Node | Size |
+|---|---|
+| A constant, an input, `pi` | 200 |
+| `add`, `mul`, `min`, `max` | 200, and 40 for each node it reads |
+| `neg`, `abs`, `sqrt`, `ln`, `exp`, `pow` | 240 |
+| `div` | 280 |
+| A pick | 200, 40 for each case, and 20 × its orders × (its pairs + 1) |
+
+The orders of a pick are every `le` and `lt` of its conditions. Its pairs are the distinct pairs of nodes that they compare, where `a` against `b` and `b` against `a` are one pair. A refutation pays as a proof with one leaf, and 20,000 more for each input. A proof whose fee is more than the work left is not tried and pays nothing.
+
+**The steps.** On each leaf the kernel takes the steps of the nodes that a root reads, in the order of the tape. A node that no root reads has no step. A node other than a pick that reads a node with no value has none either, and pays nothing. A step that costs more than the work left is not taken and pays nothing, and its node has no value, as a node that divides by zero has none. A step that is taken and then has no value, because its value has too many bits or is not defined, has paid.
+
+Three costs come back in many steps. They are for two numbers of `p` and of `w` bits, of which the longer has `m`:
+
+- `sum(p, w)` is `4,000 + 875 × ramp(m, 16, 32)`, and `(p + w) × 11 / 10 + h(root(p × w))` more when `p + w` is 64 or more.
+- `product(p, w)` is `12,000 + 1,500 × ramp(m, 8, 32)`, and `h(p + w) × 26 / 100 + h(root(p × w)) × 27 / 10` more when `p + w` is 64 or more.
+- `order(p, w)` is `550 + 1,625 × ramp(m, 12, 20)`, and `h(p + w) / 30` more when `p + w` is 64 or more.
+
+In the table, `n` is the bits of the enclosure the step reads.
+
+| Step | Units |
+|---|---|
+| A constant | 800 when its bits `n` are under 32, and `8,000 + n / 8` otherwise |
+| An input | 700 when the bits `n` of its range on the leaf, or of its value at the point of a refutation, are under 32, and `4,000 + n / 12` otherwise |
+| `pi` | 2,800 |
+| `neg`, `abs` | 1,100 when `n` is under 32, and `7,000 + n / 3` otherwise |
+| `add` | For each term in turn, `sum(p, w)`. `p` is the bits of the sum of the terms before it, which is 1 before the first, and `w` the bits of the term. |
+| `mul` | For each factor in turn, `product(p, w)`, in the same way |
+| `div` | `product(p, w)` for a numerator of `p` bits and a divisor of `w`, and 6,000 more when `w` is under 32, `14,000 + w / 2` more otherwise |
+| `min`, `max` | 500. For the first node it reads, 800 when its bits `n` are under 32, and `3,000 + n / 16` otherwise. For each node after it, `order(p, w)`, where `p` is the most bits of the nodes before it and `w` its own. |
+| `sqrt` | `62,000 + 4 × n + (a × a + b × b) / 900`. `a` is the bits of the numerator of the lower end and 256, less the bits of its denominator, and `b` is the same for the upper end. |
+| `pow` by `k` or by `−k` | `2,800 + n / 8 + k × (e + n / 2) + (k − 1) × (h(n) × 31 / 20) + ((k − 1) × (k − 2) / 2) × (n × n / 300 + 4 × n)`. `e` is 4,700 when `n × k` is under 32, 14,500 when `n` alone is, and 31,000 otherwise. |
+| `ln` | 25,000, and for each end what is below. An upper end equal to the lower pays a look. |
+| `exp` | 3,000 when the enclosure reaches below −65,536 or above 65,536, and the node has no value. Otherwise 25,000, and for each end what is below. An upper end equal to the lower pays a look. |
+| A pick | What is below |
+
+**An end of `ln` and of `exp`.** The kernel keeps the ends it has rounded in two caches, one for each of the two steps. A look is `1,500 + n / 8` for an end of `n` bits. An end of `ln` pays a look when it is 1 or the cache of `ln` holds it, and an end of `exp` when it is 0 or the cache of `exp` holds it. Any other end pays for an enclosure of `p` bits. The first enclosure the kernel asks for has 128 bits, and the next ones 224, 608 and 2,144.
+
+- For `ln`, of an end of `n` bits: `f × p + p × n × 4 / 5 + h(n) × 3 / 5`. `f` is 17,000, but for the first enclosure it is 5,000 when `n` is under 32 and 7,000 otherwise.
+- For `exp`, of an end `x`: let `c` be the size of `x` rounded up to a whole number, `s` the bits of `c` and 1, `q` be `p + 2 × s + 2 × c`, `wide` be `q / 64 + 1`, `terms` the larger of 32 and `2 × q / b` for the bits `b` of `q`, and `v` be 1 and the bits of the numerator and of the denominator of `x` together over 64. The cost is `(terms × (10,000 + 54 × wide + 20 × v + wide × v / 3) + (s + 16) × wide × wide / 4) × 17 / 10`.
+
+A step that rounds to the grid pays for each enclosure it asks for, before it asks. So an `ln` or an `exp` whose value lies close to a point of the grid pays for the finer enclosures too, and one that does not pays for the first alone. The cost is found from the caches as they are before the step. A cache gains an end when the step that rounded it has a value, and a proof that fails leaves both caches as they were before it. A cache holds 1,024 ends, and one more starts it again from that end.
+
+**A pick.** A pick first looks at its pairs: twice `order(p, w)` for each pair, for the bits of its two nodes. A node with no value counts as zero here, which has 1 bit. A pick that cannot pay for the look is not taken. Its ways are the product, over its pairs, of how many of below, equal and above the two enclosures leave possible. With more than 4,096 ways the pick pays for the look alone and has no value. Otherwise it pays `ways × (200 + 20 × pairs + 30 × cases + orders × (150 + 6 × pairs))` more, and `order(L, L)` for each way or for each case, whichever are fewer, where `L` is the most bits of the nodes its cases give, and at least 1.
+
+**The count.** The kernel takes the work of each proof from what is left, in the order of the cells. A proof that fails has spent what its steps took. The verdict prints the work its proofs took as `work`.
+
+`bench/work_sweep.py` measures what a unit costs, for each step and for numbers of 64 to 64,000 bits with no pattern in them, and compares it with a chain of small products. It fails when a unit of any step costs over three times a unit of the chain. On the desktop the costs were fitted on it prints, in nanoseconds a unit:
+
+| Step | 64 bits | 250 | 1,000 | 4,000 | 16,000 | 64,000 |
+|---|---|---|---|---|---|---|
+| A constant | 0.30 | 0.23 | 0.44 | 0.35 | 0.29 | 0.24 |
+| `pi` | 0.33 | | | | | |
+| `neg` | 0.33 | 0.41 | 0.38 | 0.32 | 0.48 | 0.44 |
+| `abs` | 0.23 | 0.29 | 0.35 | 0.30 | 0.29 | 0.33 |
+| `add` | 0.30 | 0.28 | 0.26 | 0.22 | 0.24 | 0.24 |
+| `mul` | 0.29 | 0.32 | 0.31 | 0.41 | 0.33 | 0.35 |
+| `div` | 0.42 | 0.40 | 0.46 | 0.35 | 0.32 | 0.32 |
+| `min` | 0.27 | 0.27 | 0.28 | 0.29 | 0.39 | 0.30 |
+| `max` | 0.30 | 0.27 | 0.24 | 0.29 | 0.31 | 0.27 |
+| A pick of one order | 0.23 | 0.21 | 0.24 | 0.33 | 0.43 | 0.33 |
+| `sqrt` | 0.40 | 0.31 | 0.32 | 0.32 | 0.31 | 0.20 |
+| `pow` by 2 | 0.19 | 0.29 | 0.26 | 0.32 | 0.29 | 0.34 |
+| `pow` by 3 | 0.20 | 0.25 | 0.32 | 0.36 | 0.27 | 0.27 |
+| `pow` by 8 | 0.18 | 0.30 | 0.44 | 0.36 | 0.31 | 0.21 |
+| `ln` | 0.34 | 0.37 | 0.41 | 0.35 | 0.34 | 0.44 |
+| `exp` | 0.49 | 0.43 | 0.53 | 0.54 | 0.48 | 0.55 |
+
+The chain took 0.38 in that run, so the most, 0.55, is 1.5 times it. A figure moves by about a quarter from one run to the next. A constant of a file has at most 4,000 characters, so its last two columns are for one of 6,000 bits. A product of two numbers of 64,000 bits and a power of a long number have too many bits for a value, and their figures are for steps that paid and had none. Before the costs were fitted again the same sweep gave between 0.15 and 2.34 against a chain at 0.15, which is 16 times.
+
+A step on whole numbers, or on fractions with a short numerator or denominator, is charged as the same step on fractions with no pattern and takes less, down to a tenth of the time for long numbers. So the count does not run far under the time, and for such numbers it runs well over it.
+
+The heaviest design of the corpus, `weld_bracket`, takes 5.4 billion units in two processor seconds: a little over a quarter of the budget. The next takes 0.13 billion, and a lap of the first deck of rules 2.6 million.
+
+A proof made to spend all twenty billion units took between 4 and 9 processor seconds on the same desktop, whatever step it spent them on. A busy machine takes longer in proportion. `tests/test_kernel_limits.py`, `tests/test_kernel_attacks2.py` and `tests/test_kernel_attacks3.py` hold the limits one by one.
 
 ### What the kernel holds and prints
 
