@@ -524,6 +524,22 @@ class Reading(Kernel):
         self.assertEqual([(f["rule"], f["file"]) for f in over["findings"]], [("shape", "rules")])
         self.assertIn("reading this deck takes 1000001 steps, over the budget of 1000000", over["findings"][0]["why"])
 
+    @unittest.skipUnless(verify.binary(), "no petra-verify is built here and PETRA_VERIFY names none")
+    def test_the_kernel_and_the_grid_count_a_text_by_its_characters_whatever_bytes_they_take(self):
+        """A deck over the limit, so that each says what it counted. Its `about` holds 36
+        characters of one, two, three and four bytes. The file writes them as themselves or
+        as escapes, and a character outside the first 65,536 as a pair of escapes."""
+        body = padded(MAX_READ + 50)
+        body["about"] = "a" * 9 + "\u00e9" * 9 + "\u20ac" * 9 + "\U0001d11e" * 9
+        self.assertEqual(grid._size(body["about"]), 2 + 36 // 8)
+        count = grid._steps(body)
+        self.assertGreater(count, MAX_READ)
+        for text in (json.dumps(body), json.dumps(body, ensure_ascii=False)):
+            with self.assertRaisesRegex(grid.DeckError, f"reading this deck takes {count} steps"):
+                grid.read_deck(text)
+            over = ask({**strips(), "rules": text})
+            self.assertIn(f"reading this deck takes {count} steps, over the budget of 1000000", over["findings"][0]["why"])
+
     def test_the_name_of_a_card_is_at_most_200_bytes_for_a_design_with_parts(self):
         deck = grid.read_deck(json.dumps(STRIPS))
 
