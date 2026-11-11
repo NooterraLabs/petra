@@ -927,11 +927,11 @@ def second(mine: Reading, other: Reading, mechanism: str, tried: Parts) -> Check
 
     points = [*tried.base, *tried.partners, *(p for f in ask for p in turns(f, tried.pairs))]
     differ, forms = compared(points)
+    settled = sum(ask[0](p).settled and ask[1](p).settled for p in points)
     said = f"{len(points)} parts{tried.said}"
     counts = len(mine.rules[mechanism]), len(other.rules[mechanism])
-    if counts[0] != counts[1]:
-        said += f", {counts[0]} rule{'s' if counts[0] != 1 else ''} against {counts[1]}"
-    ratios = f"another ratio at {len(forms)} of {said}"
+    passed = said + (f", which hold or fail at {settled}" if settled else "") + (f", {counts[0]} rule{'s' if counts[0] != 1 else ''} against {counts[1]}" if counts[0] != counts[1] else "")
+    ratios = f"another ratio at {len(forms)} of the {settled} parts that hold or fail"
     if not differ and forms:
         spans = mine.task.spans[tried.kind]
         axes = [n for n in names if n.startswith("load ")] + [n for n in names if n in spans and not n.startswith("load ") and n not in tried.fixed]
@@ -946,7 +946,7 @@ def second(mine: Reading, other: Reading, mechanism: str, tried: Parts) -> Check
             return Check("second", "fail", f"the two give {ratios}, and from {turned} of the first {min(TRIED, len(forms))} a load or a size was found that turns either answer, "
                                            f"too few to tell whether the two are one inequality: {shown}")
         if not differ:
-            return Check("second", "pass", f"{said}; the two write the inequality in different forms: they give {ratios}, "
+            return Check("second", "pass", f"{passed}; the two write the inequality in different forms: they give {ratios}, "
                                            f"and from {turned} of the first {min(TRIED, len(forms))} each turns at the same place: {shown}")
     if differ:
         kinds = collections.Counter(d[0] for d in differ)
@@ -954,7 +954,7 @@ def second(mine: Reading, other: Reading, mechanism: str, tried: Parts) -> Check
         count = f"{len(differ)} part{'s' if len(differ) != 1 else ''}" if forms else f"{len(differ)} of {said}"
         return Check("second", "fail", f"the two give another answer at {count}, " + ", ".join(f"{n} on {kind}" for kind, n in kinds.most_common()) + (f", and {ratios}" if forms else "")
                      + f". At {_shown(p, names)} this one {_told(a)} and the other {_told(b)}")
-    return Check("second", "pass", said)
+    return Check("second", "pass", passed)
 
 
 def reads(mine: Reading) -> Check:
@@ -1007,9 +1007,9 @@ def accept(mine: Reading, examples: Mapping[str, list[Worked]] | None = None, ot
         found = checks(mine, mechanism, (examples or {}).get(mechanism, []), tried)
         if mechanism not in mine.wrong:
             found.append(second(mine, other, mechanism, tried) if other is not None else Check("second", "none", "no second transcription"))
-        excused = mine.asks[mechanism].excused
-        lines.append(Line(mechanism, "refused" if any(c.outcome == "fail" for c in found) else "admitted", ids, tuple(found),
-                          "" if excused is None else f"cannot arise{' for some parts' if mine.asks[mechanism].unless is not None else ''}: {excused}"))
+        excused, partly = mine.asks[mechanism].excused, mine.said.left_out.get(mechanism)
+        notes = [f"cannot arise{' for some parts' if mine.asks[mechanism].unless is not None else ''}: {excused}"] if excused is not None else []
+        lines.append(Line(mechanism, "refused" if any(c.outcome == "fail" for c in found) else "admitted", ids, tuple(found), "; ".join([*notes, *([f"left out: {partly}"] if partly else [])])))
     return lines, reads(mine)
 
 

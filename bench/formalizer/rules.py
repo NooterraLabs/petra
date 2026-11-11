@@ -3,10 +3,6 @@ examples, and how much of a wrong rule the acceptance check catches.
 
     python bench/formalizer/rules.py [--task rules_task.json] [--rules DECK.json] [--second rules_b.json] [--examples FILE.json] [--no-damage]
 
-The files default to the first run's. The task is the lap of AISC 360-22: the types and
-the grid of petra/decks/aisc360.json over that deck's rows. The first transcription is the
-four rules that deck ships, and the second is rules_b.json. This run has no worked examples.
-
 It prints the acceptance check of petra/rule.py on the first transcription with the other
 as its second. Then it damages each admitted rule one change at a time, as `mutations`
 lists, and counts the damaged rules that the check refuses with no second transcription,
@@ -15,6 +11,22 @@ gives every sampled part the answer the original gives is not a wrong rule and i
 
 The check is petra/rule.py and not this script, so that a deck's own tests can run it.
 What is here is the damage and the tally, which only a measurement needs.
+RULES_TRANSCRIBE.md briefs a transcriber of rules, and RULES_COLLECT.md a collector of
+worked examples.
+
+The files default to the first run's, of 2026-11-11. The task, rules_task.json, is the lap
+of AISC 360-22: the types and the grid of petra/decks/aisc360.json over that deck's rows.
+The first transcription is the four rules that deck ships. The second, rules_b.json, was
+written by a language model from its memory of the standard and from the rows' own
+descriptions, with no copy of the standard, before it read the first: it had seen the
+deck's types, grid and rows, and what docs/deck.md shows of the rules. The run has no
+worked example, since it had no source to take one from.
+
+The two agree at every part tried, on the three mechanisms with rules, the four that
+cannot arise and the eight left out. Of 157 wrong rules made by one change the check with
+no second transcription refused 115: 86 of them by `alike` alone, which sees a change to
+one of the lap's two plates and not to the other, and 29 by another part of the check.
+docs/deck.md, "The first run", has the table.
 """
 from __future__ import annotations
 

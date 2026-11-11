@@ -123,7 +123,8 @@ class Agreement(unittest.TestCase):
         heat = with_rule(0, le=[["sub", ["load", "current"], ["mul", "turns", ["row", "test/limit", {"w": "width"}], ["row", "test/derate", {"T": "T"}]]], ["q", "0", "A"]])
         found = self.second("strip.heat", heat)
         self.assertEqual(found.outcome, "pass", found.detail)
-        self.assertIn("the two write the inequality in different forms: they give another ratio at 180 of 208 parts, and from 32 of the first 32 each turns at the same place", found.detail)
+        self.assertIn("208 parts, which hold or fail at 180; the two write the inequality in different forms: they give another ratio at 180 of the 180 parts that hold or fail, "
+                      "and from 32 of the first 32 each turns at the same place", found.detail)
         self.assertIn("this one holds at 0.20443 (test/heat: 0.61329 against 3) and the other holds (test/heat: -2.38671 against 0)", found.detail)
         spark = with_rule(3, le=[["sub", ["add", "screw", ["q", "0.1", "mm"]], "hole"], ["q", "0", "mm"]])
         found = self.second("strip.spark", spark)
@@ -149,7 +150,8 @@ class Agreement(unittest.TestCase):
         answer, and only the ratio differs. The check finds no place where either turns, and refuses."""
         found = self.second("strip.bow", with_rule(2, le=[["mul", "gap", ["sub", ["q", "4", "mm"], "gap"]], ["q", "4.3", "mm2"]]))
         self.assertEqual(found.outcome, "fail")
-        self.assertIn("the two give another ratio at 128 of 128 parts, and from 0 of the first 32 a load or a size was found that turns either answer, too few to tell whether the two are one inequality", found.detail)
+        self.assertIn("the two give another ratio at 128 of the 128 parts that hold or fail, and from 0 of the first 32 a load or a size was found that turns either answer, "
+                      "too few to tell whether the two are one inequality", found.detail)
         self.assertIn("this one holds at 0.67", found.detail)
         self.assertIn("the other holds at 0.65", found.detail)
 
@@ -519,6 +521,33 @@ class Shipped(unittest.TestCase):
             self.assertEqual([c.outcome for c in line.checks if c.name == "second"], ["pass"] if line.state == "admitted" else [], line.mechanism)
             self.assertEqual(line.state == "left out", not other.answers(line.mechanism), line.mechanism)
         self.assertEqual({c.outcome for line in lines for c in line.checks if c.name == "examples"}, {"none"}, "this run has no worked example")
+
+    def second(self, mechanism: str, edit) -> rule.Check:
+        """The deck's rules against the second transcription after an edit of it."""
+        body = json.loads((BENCH / "rules_b.json").read_text(encoding="utf-8"))
+        edit(body["rules"])
+        first, other = rule.load(self.task, str(grid.DECKS / "aisc360.json")), rule.Reading(self.task, rule.read_transcription(body))
+        return rule.second(first, other, mechanism, rule.parts(self.task, mechanism, [first, other]))
+
+    def test_a_second_transcription_that_reads_the_clauses_another_way_is_told_apart(self):
+        def weakest_bolt(rules: list) -> None:
+            rules[0]["let"]["least"] = ["min", "shear", "bear_a", "bear_b", "tear_a_end", "tear_b_end", "tear_a_in", "tear_b_in"]
+            rules[0]["le"][1] = ["mul", "0.75", "count", "least"]
+
+        found = self.second("lap.strength", weakest_bolt)
+        self.assertEqual(found.outcome, "fail", "the count times the weakest bolt is safe, and it is another rule")
+        self.assertIn("on whether the inequality holds, and another ratio at", found.detail)
+        found = self.second("lap.strength", lambda rules: rules[0].pop("where"))
+        self.assertIn("the two give another answer at 18 of 132 parts, 18 on the range a rule holds in", found.detail)
+        found = self.second("lap.strength", lambda rules: rules[0]["let"].__setitem__("lc_end", ["sub", "end", ["div", ["add", "dh", ["q", "1/16", "inch"]], "2"]]))
+        self.assertEqual(found.outcome, "fail", "a hole a sixteenth of an inch wider, as for a net area")
+        found = self.second("lap.end_distance", lambda rules: rules[1].pop("when"))
+        self.assertIn("on which parts a rule answers for", found.detail)
+
+    def test_the_same_inequality_in_another_form_is_not(self):
+        found = self.second("lap.strength", lambda rules: rules[0].__setitem__("le", [["sub", ["load", "pull"], rules[0]["le"][1]], ["q", "0", "kip"]]))
+        self.assertEqual(found.outcome, "pass", found.detail)
+        self.assertIn("the two write the inequality in different forms: they give another ratio at 107 of the 107 parts that hold or fail, and from 32 of the first 32 each turns at the same place", found.detail)
 
 
 if __name__ == "__main__":

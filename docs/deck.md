@@ -9,9 +9,9 @@ A deck holds what Petra checks a design against, as data. It has four parts.
 | The grid | For each type, every mechanism a part of that type must answer for |
 | Rules | The answers: each binds rows to the fields of a part and states an inequality |
 
-This page describes a row first, with the acceptance check that a row passes before it enters a deck. Then it describes types, the grid and rules, and what `petra check` does with a design whose parts are of a deck's types. `petra/deck.py` reads rows and runs the acceptance check. `petra/grid.py` reads the rest and checks a design. The kernel reads the whole deck a second time, in `kernel/Petra/Deck.lean`, and makes the cells of a design itself.
+This page describes a row first, with the acceptance check that a row passes before it enters a deck. Then it describes types, the grid and rules, what `petra check` does with a design whose parts are of a deck's types, and the acceptance check that a rule passes. `petra/deck.py` reads rows and runs their acceptance check. `petra/grid.py` reads the rest and checks a design. `petra/rule.py` runs the acceptance check for rules. The kernel reads the whole deck a second time, in `kernel/Petra/Deck.lean`, and makes the cells of a design itself.
 
-Rows are written by transcription, and the transcriber is not trusted. The acceptance check is what stands between a wrong transcription and a deck.
+Rows and rules are written by transcription, and the transcriber is not trusted. An acceptance check is what stands between a wrong transcription and a deck.
 
 ## A row
 
@@ -174,7 +174,7 @@ The command prints each row as admitted or refused with the four parts, and exit
 - A transcription that is wrong in a way that keeps the dimensions, where no worked example exercises the error and a second transcriber makes the same mistake.
 - An equation used outside the conditions its clause sets, when the row leaves those conditions out. A condition that is not a comparison of quantities, such as a hole type or a design method, cannot be written in a row at all.
 - A single cell of a table read one digit off, or taken from the line below, where the table still rises as it should and no example reads that cell. In the second run the check with no second transcription refused 52% of damaged tables: nearly all of the cells read ten times too large or taken from the next column, and about one in ten of those one digit off. A table rests on its second transcription, which compares every cell.
-- Whether the row is the right equation for a design. A rule binds rows to the parts of a design, and the acceptance check does not cover rules.
+- Whether the row is the right equation for a design. A rule binds rows to the parts of a design, and a rule has an acceptance check of its own, described below.
 
 A row proves nothing by itself. A rule puts it to work.
 
@@ -336,9 +336,186 @@ cells      5 proved, 0 refuted, 4 not applicable, 0 waived, 8 open
 
 The `rules` line is the hash of the deck's file, which the kernel prints as `hashes.rules`. A verdict is "checked against this deck" only when that hash is the one the reader trusts ([format.md](format.md), "Reading a verdict"). The number on a proved or refuted line is the most the left side of the rule reaches over the least the right side does. `examples/deck` has the same lap passing, with a card that waives the eight open mechanisms, and failing under a larger pull.
 
+## The acceptance check for a rule
+
+A rule passes an acceptance check before it enters a deck, as a row does. The check reads three things.
+
+| | Holds |
+|---|---|
+| A task | The types, the rows a rule may use, and the mechanisms to answer. Every transcriber gets the same task. |
+| A transcription | The rules one transcriber wrote for the task, and the mechanisms it says cannot arise |
+| Worked examples | For a mechanism: a part, and a number that a published source prints for it |
+
+### A task
+
+A task is a JSON file. `bench/formalizer/rules_task.json` is the task of the first run: the rules of a lap.
+
+| Key | Holds |
+|---|---|
+| `format` | `"petra-rule-task/0"` |
+| `name`, `about` | The task's name, and what it covers |
+| `rows`, or `rows_from` | The rows, or the path of a file beside the task that holds them: a deck, or a file of rows |
+| `types` | The types, as a deck holds them, with the three keys below |
+| `asks` | The lines of the grid to answer, each with no `unless` |
+
+The types are given, and not left to the transcriber, because two transcribers must mean the same part by `a.thickness`. A task adds three keys to a type.
+
+```json
+{"name": "pitch", "dim": "length", "what": "...", "range": ["1 inch", "6 inch"]}
+{"name": "pull", "dim": "force", "least": "0 kip", "what": "...", "range": ["1 kip", "1000 kip"], "adverse": true}
+"alike": [["a", "b"]]
+```
+
+| Key | On | Means |
+|---|---|---|
+| `range` | Each quantity and each load | Two values between which a real part's value falls. The check samples parts from the ranges. A range is not a limit of the standard. |
+| `adverse` | A load | More of it never helps: no part fails under less of it and holds under more |
+| `alike` | A type | Joined parts, by their names in `as`, that may change places and leave the part what it was |
+
+The ranges must be wide enough for each rule to hold for one part and fail for another.
+
+### A transcription
+
+```json
+{"rules": [],
+ "unless": [{"mechanism": "lap.slip", "why": "a lap is a bearing-type joint, which claims no slip resistance"}],
+ "left_out": [{"mechanism": "lap.spacing", "why": "the task's rows hold no row of Section J3.4"}]}
+```
+
+| Key | Holds |
+|---|---|
+| `rules` | The rules, each as a deck holds a rule |
+| `unless` | Each mechanism that cannot arise: `mechanism`, `why`, and `when` if it cannot arise for some parts only |
+| `left_out` | Each mechanism the transcriber did not answer, or answered in part, and why |
+
+Any other key is the transcriber's note. A deck's own file is read as a transcription too: its rules, and the `unless` of its grid.
+
+### A worked example of a mechanism
+
+The numbers here are made up.
+
+```json
+{"examples": {"lap.ply_yield": [
+  {"anchor": "a design guide, Example 3, p. 41",
+   "given": {"a.thickness": "3/8 inch", "a.width": "6 inch", "a.Fy": "36 ksi",
+             "b.thickness": "1/2 inch", "b.width": "6 inch", "b.Fy": "36 ksi"},
+   "loads": {"pull": "45 kip"},
+   "side": "right", "gives": "72.9 kip"}
+]}}
+```
+
+`given` holds each field the source states, by the name a rule reads it under, and `loads` each load. `side` says which number the source prints: `left` or `right` for one side of the inequality, or `ratio` for the left side over the right. The check compares it with the rule that has the largest ratio for the part, which is the rule that governs. So an example does not depend on how a transcriber split a mechanism into rules: the one above is reproduced by a rule for each plate and by one rule with the lesser of the two. The bound is a row example's: 0.5%, or half a unit of the last printed digit, or `within`.
+
+An example gives what its source states and no more. A rule that reads a field the example does not give does not reproduce it. A load is the exception. Where the source prints a strength and no load, the side is worked out under two loads, and it is reproduced if it is the same under both.
+
+### What a transcription says of a part
+
+The check tries parts as points: each key a name, each quantity and each load one value. For one part, a transcription gives a mechanism one of four answers. They are the states a cell can have at a point.
+
+| Answer | When |
+|---|---|
+| `cannot arise` | The mechanism's `unless` holds for the part |
+| `fails` | A rule whose `when` holds for the part fails |
+| `open` | No rule's `when` holds for the part. Or none fails and one says nothing: the part is outside its `where`, a row gives no value there, or the part carries no load the rule reads. |
+| `holds` | Every rule whose `when` holds for the part holds |
+
+An answer that holds or fails has a ratio: the largest, over its rules, of the left side over the right. It is the number `petra check` prints on a line.
+
+For each mechanism the check tries 96 parts. They take every combination of the type's keys in turn, with and without a load that a `when` or an `unless` asks about. A quantity is spread over its range on a log scale, and a count over its whole numbers. A quantity that a rule binds straight to the side of a table sits on the values the table lists, and on and beside the ends of its bands. The first 32 parts each have a partner: the same part with other sizes and loads. Where a transcription treats a part and its partner differently, by another case of a row, another band of a table or the other side of a range, the check halves the way between them 24 times and tries the part on each side of the change.
+
+### The parts of the check
+
+| Part | Passes when | Is `none` when |
+|---|---|---|
+| `units` | The rules load as a deck's rules do: each input of each row bound once and to its dimension, both sides of one dimension, a line of the grid that can arise | never |
+| `examples` | The rules reproduce every worked example given for the mechanism | no example is given |
+| `reach` | Every rule answers a sampled part and fails at one, the mechanism holds at one, every `where` fails at one, and every argument of a `min` or a `max` decides an answer at one | a rule fails at no part, a `where` fails at no part, or an argument decides at none. The detail says which. |
+| `direction` | More of an adverse load turns no failing part into a holding one. Two sides that changed places do that. | the rules read no adverse load |
+| `alike` | The answer and the ratio stay when two alike parts change places. A rule that reads one plate's thickness with the other plate's strength does not pass. | the rules read no alike parts |
+| `second` | A second transcription, made without sight of the first, gives every part tried the same answer | no second transcription is given, or it leaves the mechanism out |
+
+`reach` fails when a rule answers no sampled part, or the mechanism fails at every part it answers. A rule that no part in the task's ranges can meet is wrong, or the ranges are.
+
+A mechanism is admitted when no part of its check fails. A part that is `none` says the mechanism has less behind it. One more line is about the transcription as a whole: `reads` passes when a rule or an `unless` reads every key, every quantity and every load of the types. `petra check` leaves a design open at a field nothing reads.
+
+```bash
+python -m petra.rule task.json rules.json --second other_rules.json --examples examples.json
+```
+
+The command prints each mechanism as admitted, refused or left out, with the parts of its check. It exits 0 when no mechanism is refused and `reads` passes, 1 otherwise, and 3 when a file does not hold what it should.
+
+### What two transcriptions must agree on
+
+Two transcriptions mean the same when they give every part the same answer. The verdict of a design rests on the states of its cells and on nothing else of a rule. So two transcriptions that give every part the same answer give every design the same verdict, however each is written. The check compares answers, and never the text of two rules.
+
+| The two differ in | Counts as |
+|---|---|
+| The names in `let`, the order of a sum or a product, the words of `says`, the ids | the same |
+| One rule for each of two plates, against one rule with a `min` over the plates | the same. The mechanism fails when either rule fails, and the larger ratio of the two rules is the ratio of the one. |
+| Both sides times one factor, as a force against a stress | the same. The ratio does not change. |
+| `a <= b` against `a - b <= 0` | the same answer. The detail says the two are in different forms. |
+| What leaves a part open: no `when` that holds in one, a `where` or a table with no value in the other | the same. The cell is open in both. |
+| A `where` in one and none in the other | different. Outside the range one is open and the other answers. |
+| A safe shortcut, as the count times the weakest bolt for the sum over the bolts | different. Some part fails by one and holds by the other. |
+| A rule for a kind of part the other has no rule for | different |
+| An `unless` in one and a rule in the other | different |
+
+The check cannot try every part, so at each part where both hold or both fail it compares the ratios too. Equal ratios say more than equal answers: the two inequalities are then as near to turning at that part, and not only on the same side of it. A factor that one transcriber got wrong changes the ratio at every part, and the answer at few.
+
+Where the ratios differ, the two may still be one inequality in two forms. From each of the first 32 such parts the check moves one load, or failing that one size, until either answer turns, and tries the part on each side of the turn. One inequality in two forms turns at the same place. The two are refused when fewer than half of these parts have such a place: nothing then tells them apart, and nothing tells them the same.
+
+When `second` fails, its detail says how many parts get another answer, what the two differ on, and one part with what each says of it. This is the first deck's rule for the bolts against a transcription with no `where`:
+
+```
+the two give another answer at 18 of 132 parts, 18 on the range a rule holds in. At fastener=Group 144, threads=excluded,
+holes=standard, diameter=0.0127, count=12, pitch=0.10932, end=0.014041, a.thickness=0.03101, a.Fu=4.8251e+08,
+b.thickness=0.0065213, b.Fu=4.5298e+08, pull=887640 (SI) this one says nothing (aisc360-22/lap-strength: outside its range:
+the line of bolts is at most 38 inch long ...) and the other fails at 1.47451 (aisc360-22/lap-bolts: 887640 against 601991)
+```
+
+### The first run
+
+`python bench/formalizer/rules.py` runs the check on the first deck. The task is the lap. The first transcription is the four rules the deck ships. The second is `bench/formalizer/rules_b.json`. It answers the three mechanisms the deck has rules for, says the same four cannot arise, and leaves out the same eight.
+
+The two agree at every part tried: 128 parts for each mechanism, and 136 for the strength of the bolts. One writes a rule for the yielding of each plate, and the other one rule with the lesser of the two.
+
+That says less than two transcriptions from the page would. The second was written by a language model from its memory of AISC 360-22 and from the rows' own descriptions, with no copy of the standard. Its writer had read this page, which shows one of the four rules and names the rows that two others read, and had read the deck's grid, with its four `unless`. Nothing in the run tells whether the two share one wrong reading of a clause. The run has no worked example.
+
+The run then damages each rule, one change at a time, and counts the damaged rules that the check refuses with no second transcription. A damaged rule that gives every part tried the answer the rule gives is not a wrong rule, and is left out.
+
+| Damage | Wrong rules | Refused | By `alike` alone | By another part |
+|---|---|---|---|---|
+| A field of the other joined part | 22 | 22 | 18 | 4 |
+| The wrong one of two fields of one dimension, as `Fy` for `Fu` | 44 | 34 | 26 | 8 |
+| A number a tenth off, or a power one off | 15 | 5 | 4 | 1 |
+| A `min` for a `max` | 7 | 6 | 6 | 0 |
+| An argument of a sum, a product, a `min` or a `max` left out | 36 | 30 | 20 | 10 |
+| A `where` left out | 1 | 0 | 0 | 0 |
+| A key bound to another column of a table | 5 | 0 | 0 | 0 |
+| The row of another equation with the same kinds of input | 15 | 12 | 12 | 0 |
+| A `when` turned into its opposite | 1 | 0 | 0 | 0 |
+| The two sides of an inequality or of a range changed places | 5 | 3 | 0 | 3 |
+| A difference or a quotient turned round | 6 | 3 | 0 | 3 |
+| All | 157 | 115 | 86 | 29 |
+
+The check refused 115 of 157 wrong rules, 73%. `alike` alone refused 86 of them. A lap joins two like plates, so its rules write each term twice, and one change damages one of the two. A transcriber who errs the same way for both plates is not seen by `alike`. The last column is then the fairer measure: 29 of 157, or 18%. A lap takes one load, so no rule was damaged by the load of another kind.
+
+A number a tenth off, a key bound to another column, a range left out and a `when` turned round pass almost every time. A worked example or a second transcription is what catches those. On the deck made up for the tests, with one or two made-up examples for each rule, the check with no second transcription refused 43 of 49 wrong rules. With no example it refused 19.
+
+### What the check for a rule cannot see
+
+- An error that both transcribers make, and a shortcut that both choose. Two who read a clause the same wrong way agree.
+- Whether the second transcription was made without sight of the first, and from the standard.
+- A difference that no tried part shows. The check tries 96 parts and their partners. It sits a quantity on the ends of a table's bands only where a rule binds a field straight to the table. Where the input of a band or of a case is an expression, it tries a part on each side of the end, and not the part on the end.
+- Whether the task is right. The types, their ranges, `adverse`, `alike` and the lines of the grid are given, and nothing checks them. A field that a clause needs and the type lacks is not found: a lap has no distance from its holes to a side edge.
+- Whether a mechanism that both say cannot arise can arise. The check compares the two `unless`, and not their reasons.
+- The words of a rule. `says` and `anchor` are not compared, so a rule may say one thing and state another.
+- The ratio of a rule in another form. `a - b <= 0` gives the answers of `a <= b`, and `petra check` prints no ratio for it.
+- Whether a rule can be proved. The check tries points. `petra check` proves a rule over ranges, and may leave a cell open that holds at every point of them.
+
 ## What a deck does not check yet
 
-- Types, grid lines and rules are written once, by hand. No second transcription and no worked example stands behind them, as they do behind a row.
+- Types and grid lines are written once, by hand, and nothing second-transcribes them. A rule has the acceptance check above. The four rules of the first deck agree with a second transcription that was written from memory of the standard and not from its pages, and no worked example stands behind them.
 - The kernel makes the cells and the tapes from the deck's file, and does not know whether that file is the standard's. It prints the file's hash.
 - The kernel does not search. The partition or the point for a cell comes from `petra/grid.py`, so a cell that search does not settle is open, though a better search might prove it.
 - A `not applicable` cell is the deck's word. The kernel checks that the line's `unless` holds for the part, and not that the mechanism cannot arise.
