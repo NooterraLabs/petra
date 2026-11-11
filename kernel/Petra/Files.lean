@@ -27,6 +27,26 @@ A step is one name or one operator of a rule, each time the rule is written for 
 a load case, or one node of a tape. -/
 def MAX_STEPS : Nat := 10000000
 
+/-- The most evaluations the kernel spends on the proofs of one verdict. An evaluation is one
+node of a tape, or one node it reads, on one leaf of a partition or at one point. -/
+def MAX_EVALS : Nat := 20000000
+
+/-- What the kernel says of a proof it does not try because the budget is spent. -/
+def SPENT : String :=
+  s!"this proof would take the kernel past the {MAX_EVALS} evaluations it spends on one verdict, so it is not tried"
+
+/-- The leaves of a partition. -/
+def Partition.count : Partition → Nat
+  | .leaf => 1
+  | .split _ _ below above => below.count + above.count
+
+/-- The evaluations one leaf or one point costs: each node, and each node it reads. -/
+def Tape.cost (t : Tape) : Nat :=
+  t.nodes.foldl (init := 0) fun n node => n + 1 + match node with
+    | .add a | .mul a | .min a | .max a => a.size
+    | .pick cases => 2 * cases.size
+    | _ => 2
+
 /-- The bytes the verdict prints for a text, between its quotes. -/
 def printed (s : String) : Nat := (Json.str s).compress.utf8ByteSize - 2
 

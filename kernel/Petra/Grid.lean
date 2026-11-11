@@ -213,27 +213,36 @@ def Split.partition (labels : Array String) : Split → Except String Partition
 /-- The state the hints settle a tape on: proved by the first partition that proves every
 root, or refuted by the first point that refutes root 0 when `refutable`, and open with the
 first reason otherwise. The tape is the kernel's, with the ranges the card and the design
-give, so a point is inside them or refutes nothing. -/
-def byHints (tape : Tape) (hints : Array Hint) (refutable : Bool) : StateM Caches (State × String) := do
+give, so a point is inside them or refutes nothing. `spent` is the evaluations the proofs
+before this one took, and the result holds it with this one's. A try that would take it
+past `MAX_EVALS` is not made. -/
+def byHints (tape : Tape) (hints : Array Hint) (refutable : Bool) (spent : Nat) : StateM Caches (State × String × Nat) := do
   let labels := tape.inputs.map (·.label)
   let mut reason := ""
+  let mut spent := spent
   for hint in hints do
-    let mut tries : Array (State × M Unit) := #[]
+    let mut tries : Array (State × Nat × M Unit) := #[]
     if let some split := hint.partition then
-      tries := tries.push (.proved, do tape.proved (← split.partition labels))
+      match split.partition labels with
+      | .ok partition => tries := tries.push (.proved, tape.cost * partition.count, tape.proved partition)
+      | .error why => if reason.isEmpty then reason := why
     if let (some point, true) := (hint.point, refutable) then
-      tries := tries.push (.refuted, do
+      tries := tries.push (.refuted, tape.cost, do
         let values ← tape.inputs.mapM fun input => match point.find? (·.1 == input.label) with
           | some (_, x) => pure x
           | none => throw s!"the point has no value for {input.label}"
         tape.refuted values 0)
-    for (state, proof) in tries do
-      match proof.run (← get) with
-      | .ok (_, caches) =>
-        set caches
-        return (state, "")
-      | .error why => if reason.isEmpty then reason := why
-  return (.undecided, if reason.isEmpty then "proofs.json has no partition and no point for it" else reason)
+    for (state, cost, proof) in tries do
+      if spent + cost > MAX_EVALS then
+        if reason.isEmpty then reason := SPENT
+      else
+        spent := spent + cost
+        match proof.run (← get) with
+        | .ok (_, caches) =>
+          set caches
+          return (state, "", spent)
+        | .error why => if reason.isEmpty then reason := why
+  return (.undecided, if reason.isEmpty then "proofs.json has no partition and no point for it" else reason, spent)
 
 /-- What `cells` gives: every cell, how many hints name no cell the kernel has, and how many
 distinct `dsg:` inputs the tapes of the proved and the refuted cells read. -/
@@ -266,6 +275,7 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (hints : Array Hint
   let mut ranges : Std.HashSet (String × String × String) := {}
   let mut dsg : Std.HashSet String := {}
   let mut steps := 0
+  let mut evals := 0
   for part in parts do
     for ask in asksOf.getD part.kind.name #[] do
       if out.size > MAX_CELLS then return .error over
@@ -307,7 +317,8 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (hints : Array Hint
               | .ok tape =>
                 steps := steps + tape.nodes.size
                 ranges := ranges.insert (part.name, ask.mechanism, entry ++ "/where")
-                let (state, reason) ← byHints tape (hintsFor part.name ask.mechanism (entry ++ "/where")) false
+                let (state, reason, spent) ← byHints tape (hintsFor part.name ask.mechanism (entry ++ "/where")) false evals
+                evals := spent
                 if state == .proved then
                   out := out.push (cell part.name ask.mechanism (entry ++ "/where") .proved)
                   dsg := dsgOf tape dsg
@@ -318,7 +329,8 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (hints : Array Hint
             | .error why => out := out.push (pending entry why)
             | .ok tape =>
               steps := steps + tape.nodes.size
-              let (state, reason) ← byHints tape (hintsFor part.name ask.mechanism entry) true
+              let (state, reason, spent) ← byHints tape (hintsFor part.name ask.mechanism entry) true evals
+              evals := spent
               out := out.push (cell part.name ask.mechanism entry state reason)
               if state == .proved || state == .refuted then dsg := dsgOf tape dsg
   let mut read : Std.HashSet (String × String) := {}

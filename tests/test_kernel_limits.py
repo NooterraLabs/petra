@@ -188,16 +188,17 @@ class Cells(Kernel):
         self.assertLess(size, 20_000)
 
 
+def old_path(cells: list[dict], waivers: list[dict]) -> dict[str, str]:
+    """Files of a design with no parts: a card with the waivers and nothing else, and the cells."""
+    card = export.text({"format": "petra-card/0", "name": "c", "environment": None, "cases": [], "inputs": [], "claims": [], "waivers": waivers})
+    design = {"format": "petra-design/0", "name": "d", "card": "sha256:" + hashlib.sha256(card.encode()).hexdigest(), "quantities": [], "params": []}
+    domains = json.loads(export.CORE.read_text(encoding="utf-8"))["domains"]
+    return {"card": card, "design": export.text(design), "deck": export.text({"format": "petra-deck/0", "domains": domains, "constants": []}),
+            "proofs": json.dumps({"format": "petra-proofs/0", "cells": cells}, separators=(",", ":"))}
+
+
 @unittest.skipUnless(verify.binary(), "no petra-verify is built here and PETRA_VERIFY names none")
 class Waivers(Kernel):
-    def old_path(self, cells: list[dict], waivers: list[dict]) -> dict[str, str]:
-        """Files of a design with no parts: a card with the waivers and nothing else, and the cells."""
-        card = export.text({"format": "petra-card/0", "name": "c", "environment": None, "cases": [], "inputs": [], "claims": [], "waivers": waivers})
-        design = {"format": "petra-design/0", "name": "d", "card": "sha256:" + hashlib.sha256(card.encode()).hexdigest(), "quantities": [], "params": []}
-        domains = json.loads(export.CORE.read_text(encoding="utf-8"))["domains"]
-        return {"card": card, "design": export.text(design), "deck": export.text({"format": "petra-deck/0", "domains": domains, "constants": []}),
-                "proofs": json.dumps({"format": "petra-proofs/0", "cells": cells}, separators=(",", ":"))}
-
     def test_a_waiver_that_many_cells_rest_on_is_printed_once(self):
         """9,000 waived cells under one waiver with a reason of 400,000 characters made the
         kernel hold over 3 GB: it wrote the waiver out for each cell."""
@@ -205,7 +206,7 @@ class Waivers(Kernel):
         other = {"subject": "a", "mechanism": "n", "by": "c", "reason": "another"}
         cells = [{"subject": "a", "mechanism": "m", "entry": str(i), "state": "waived"} for i in range(9000)]
         cells.insert(5, {"subject": "a", "mechanism": "n", "entry": "", "state": "waived"})
-        files = self.old_path(cells, [waiver, other])
+        files = old_path(cells, [waiver, other])
         self.assertLess(sum(len(text.encode()) for text in files.values()), 1_000_000)
         said, size = printed(files)
         self.assertEqual((said["verdict"], said["counts"]["waived"]), ("UNKNOWN", 9001))
@@ -214,10 +215,63 @@ class Waivers(Kernel):
 
     def test_the_cells_of_proofs_json_print_in_under_three_times_their_bytes(self):
         cells = [{"subject": "", "mechanism": "", "entry": "", "state": "proved"}] * 17000
-        files = self.old_path(cells, [])
+        files = old_path(cells, [])
         said, size = printed(files)
         self.assertEqual((said["verdict"], len(said["cells"])), ("UNKNOWN", 17000))
         self.assertLess(size, 3 * len(json.dumps(cells, separators=(",", ":"))))
+
+
+SPENT = "this proof would take the kernel past the 20000000 evaluations it spends on one verdict, so it is not tried"
+
+
+def halves(label, lo: int, hi: int):
+    """A partition that splits the range of the input into ranges of length 1."""
+    if hi - lo == 1:
+        return "leaf"
+    mid = (lo + hi) // 2
+    return {"input": label, "at": str(mid), "below": halves(label, lo, mid), "above": halves(label, mid, hi)}
+
+
+@unittest.skipUnless(verify.binary(), "no petra-verify is built here and PETRA_VERIFY names none")
+class Evaluations(Kernel):
+    """The proofs of one verdict get 20,000,000 evaluations: the length of each tape times the
+    leaves of its partition, added up in the order of the cells. A long tape with many hints,
+    or with a partition of many leaves, ran for over ten minutes from under 1 MB."""
+
+    def test_a_proof_past_the_budget_is_not_tried_and_its_cell_is_open(self):
+        """Each cell costs 30,003 evaluations a leaf and has 256 leaves: 7.7 million. Two fit."""
+        tape = {"inputs": [{"label": "dsg:x", "lo": "0", "hi": "256"}], "nodes": [["c", "-1"]] + [["neg", 0]] * 10000, "roots": [0]}
+        cells = [{"subject": "a", "mechanism": "m", "entry": str(i), "state": "proved", "tape": tape, "partition": halves(0, 0, 256)} for i in range(3)]
+        start = time.perf_counter()
+        said = ask(old_path(cells, []))
+        self.assertEqual([(c["state"], c.get("reason")) for c in said["cells"]], [("proved", None), ("proved", None), ("open", SPENT)])
+        self.assertEqual(said["verdict"], "UNKNOWN")
+        self.assertLess(time.perf_counter() - start, 30)
+
+    def test_a_small_proof_after_a_proof_that_was_not_tried_is_tried(self):
+        long = {"inputs": [{"label": "dsg:x", "lo": "0", "hi": "1024"}], "nodes": [["c", "-1"]] + [["neg", 0]] * 10000, "roots": [0]}
+        short = {"inputs": [{"label": "dsg:x", "lo": "0", "hi": "1"}], "nodes": [["c", "-1"]], "roots": [0]}
+        cells = [{"subject": "a", "mechanism": "m", "entry": "long", "state": "proved", "tape": long, "partition": halves(0, 0, 1024)},
+                 {"subject": "a", "mechanism": "m", "entry": "short", "state": "proved", "tape": short, "partition": "leaf"}]
+        said = ask(old_path(cells, []))
+        self.assertEqual([(c["state"], c.get("reason")) for c in said["cells"]], [("open", SPENT), ("proved", None)])
+
+    def test_a_hint_past_the_budget_is_not_tried_and_the_other_cells_are_settled(self):
+        """A rule with a sum of 9,000 terms and a hint with 512 leaves for its cell."""
+        def long_rule(r: dict) -> None:
+            r["grid"].append({"type": "pad", "mechanism": "pad.sum", "what": "made up", "anchor": TEST})
+            r["rules"].append({"id": "test/sum", "type": "pad", "mechanism": "pad.sum", "anchor": TEST, "says": "made up",
+                               "le": [["add"] + [["mul", "area", f"{i}.5"] for i in range(9000)], ["q", "1", "m2"]]})
+        files = with_rules(strips(), long_rule)
+        honest = ask(strips())
+        hint = {"subject": "p1", "mechanism": "pad.sum", "entry": "sum", "state": "proved", "partition": halves("dsg:strips.p1.area", 0, 512)}
+        start = time.perf_counter()
+        said = ask(changed(files, "proofs", lambda b: b["cells"].insert(0, hint)))
+        self.assertLess(time.perf_counter() - start, 30)
+        cells = {(c["subject"], c["mechanism"], c["entry"]): c for c in said["cells"]}
+        self.assertEqual((cells["p1", "pad.sum", "sum"]["state"], cells["p1", "pad.sum", "sum"]["reason"]), ("open", SPENT))
+        self.assertEqual(cells["p2", "pad.sum", "sum"]["reason"], "proofs.json has no partition and no point for it")
+        self.assertEqual([c for c in states(said) if c[0] == "s"], states(honest), "the cells of the strip are settled as before")
 
 
 if __name__ == "__main__":

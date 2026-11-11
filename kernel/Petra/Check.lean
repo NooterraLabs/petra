@@ -71,20 +71,23 @@ def premises (card : Card) (deck : Deck) (tape : Tape) : Except String (Array (A
 
 /-- The cell rules, 1 to 5. A refuting point must also lie in the signed ranges and give
 one value to each label: a point outside what the card signs, or one that sets an input to
-two values at once, says nothing about the design. -/
-def settle (card : Card) (deck : Deck) (cell : Cell) : StateM Caches Settled := do
-  let test (proof : M Unit) : StateM Caches Settled := do
+two values at once, says nothing about the design. `spent` is the evaluations the proofs
+before this one took, and the result holds it with this one's. A proof that would take it
+past `MAX_EVALS` is not tried, and its cell is open. -/
+def settle (card : Card) (deck : Deck) (cell : Cell) (spent : Nat) : StateM Caches (Settled × Nat) := do
+  let test (cost : Nat) (proof : M Unit) : StateM Caches (Settled × Nat) := do
+    if spent + cost > MAX_EVALS then return ({ cell, state := .undecided, reason := SPENT }, spent)
     match proof.run (← get) with
     | .ok (_, caches) =>
       set caches
-      return { cell, state := cell.state }
-    | .error reason => return { cell, state := .undecided, reason := clip reason }
+      return ({ cell, state := cell.state }, spent + cost)
+    | .error reason => return ({ cell, state := .undecided, reason := clip reason }, spent + cost)
   match cell.state, cell.tape with
-  | .proved, some tape => test do
+  | .proved, some tape => test (tape.cost * (cell.partition.map Partition.count).getD 1) do
     let _ ← premises card deck tape
     let some partition := cell.partition | throw "a proved cell with a tape has no partition"
     tape.proved partition
-  | .refuted, some tape => test do
+  | .refuted, some tape => test tape.cost do
     let ranges ← premises card deck tape
     let some point := cell.point | throw "a refuted cell with a tape has no point"
     let some which := cell.which | throw "a refuted cell with a tape has no which"
@@ -95,12 +98,12 @@ def settle (card : Card) (deck : Deck) (cell : Cell) : StateM Caches Settled := 
     unless valued.all (fun (l, x) => valued.all fun (m, y) => l != m || x == y) do
       throw "the point gives two values to one label"
   | .proved, none | .refuted, none =>
-    return { cell, state := .undecided, reason := "the kernel has no rule yet for a proof with no tape" }
+    return ({ cell, state := .undecided, reason := "the kernel has no rule yet for a proof with no tape" }, spent)
   | .waived, _ =>
     match card.waivers.findIdx? fun w => w.subject == cell.subject && w.mechanism == cell.mechanism with
-    | some k => return { cell, state := .waived, waiver := card.waivers[k]?.map (k, ·) }
-    | none => return { cell, state := .undecided, reason := "the card lists no waiver with this subject and mechanism" }
-  | state, _ => return { cell, state }
+    | some k => return ({ cell, state := .waived, waiver := card.waivers[k]?.map (k, ·) }, spent)
+    | none => return ({ cell, state := .undecided, reason := "the card lists no waiver with this subject and mechanism" }, spent)
+  | state, _ => return ({ cell, state }, spent)
 
 inductive Verdict where
   | pass | fail | unknown | illFormed
@@ -175,7 +178,10 @@ def rules (cardHash : String) (card design deck : Except String ByteArray)
     | none => pure #[]
   if !(← get).isEmpty then return {}
   let some rules := rules? |
-    let cells := Id.run (((cells?.getD #[]).mapM (settle card deck)).run' {})
+    let settled : StateM Caches (Array Settled × Nat) := (cells?.getD #[]).foldlM (init := (#[], 0)) fun (out, spent) cell => do
+      let (found, spent) ← settle card deck cell spent
+      return (out.push found, spent)
+    let cells := (Id.run (settled.run' {})).1
     return { cells, dsgInputs := dsgInputs cells }
   match Id.run ((cells rules card parts (hints?.getD #[])).run' {}) with
   | .ok made => return { cells := made.cells, ignored := some made.ignored, dsgInputs := made.dsgInputs }

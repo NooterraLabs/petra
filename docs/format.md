@@ -260,7 +260,7 @@ The kernel stops work that would not end. A tape has at least one root. A partit
 
 A deck of rules has three more. A quantity or a number is at most 4,000 characters. A whole or a half power has an exponent of at most 64 in magnitude. An expression nests at most 1,024 deep, counted through the names of `let` it reads and the rows it applies, so a name of `let` that reads itself, or a chain of names longer than that, is refused. `petra/grid.py` has the second of these and not the other two.
 
-What the kernel prints and holds does not grow faster than the files it reads. Seven limits see to that.
+What the kernel prints and holds does not grow faster than the files it reads, and the work the proofs ask of it has a budget. Eight limits see to that.
 
 | Limit | Value | Past it |
 |---|---|---|
@@ -270,9 +270,12 @@ What the kernel prints and holds does not grow faster than the files it reads. S
 | In a deck of rules: the name of a field, a load, a joined part and a `let`, the name of a mechanism, and the id of a rule | 64 bytes as printed | The deck does not hold together |
 | Cells made from a deck of rules | 10,000 | A finding of the rule `limits`, and the design is ILL-FORMED |
 | Steps to write the tapes of a design from a deck of rules | 10,000,000 | The same |
+| Evaluations for the proofs of one verdict | 20,000,000 | A proof that would go past it is not tried. Its cell is open, and the reason says so. |
 | Times a waiver is printed in `waived` | 1 | Cells that rest on one waiver print it once. |
 
 A name of 64 characters in ASCII prints in 64 bytes. A character outside ASCII prints in up to four, and a control character in six. A cell prints these names whole, so they are refused and not cut. A step is one name or one operator of a rule, each time the rule is written for a part and a load case, or one node of the tape.
+
+An evaluation is one node of a tape, or one node it reads, on one leaf of a partition or at one point. A proof costs the length of its tape counted that way, times its leaves, and the kernel adds up the proofs in the order of the cells. The largest design of the corpus takes 32,380. The budget bounds the count of evaluations and not their time: one evaluation of numbers of 65,536 bits takes far longer than one of small numbers.
 
 So a cell made from a deck of rules prints in at most about 600 bytes, and all of them in about 6 MB. A cell that proofs.json lists prints once, in under three times its own bytes. `petra/grid.py` has none of these limits. `petra check` reports a design past one as an input error, in the kernel's words.
 
