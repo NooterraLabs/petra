@@ -17,10 +17,14 @@ answer and writes the files of docs/format.md:
                     a value outside a rule's range, or an inequality neither proved nor refuted
 
 No cell has a default. The verdict is PASS only when no cell is refuted or open and at
-least one is proved. A proved or refuted cell carries its tape, which petra-verify checks.
+least one is proved.
 
-What this module decides and the kernel does not check yet: which cells there are, and that
-a tape is the rule it claims to be. It is trusted for both until the kernel reads decks.
+petra-verify reads the deck's file, the card and the design and works out every cell and
+every tape again (kernel/Petra/Deck.lean and Grid.lean). proofs.json carries no tape: for a
+proved cell it holds the partition this module found, and for a refuted one the point, each
+input named by its label. `checked` compares the kernel's cells with this module's, one by
+one, so what this module decides alone is what a report says of a cell beyond its state:
+the reason, the ratio and the words.
 """
 from __future__ import annotations
 
@@ -35,7 +39,7 @@ from typing import Any, Callable, Iterator, Mapping
 from . import deck as rows
 from . import export
 from .deck import NONE, RowError, Vector, dimension, quantity, show
-from .ir import Bound, Component, Design, Fixed, Input, ParamRef, Ref, Span, Text
+from .ir import Bound, Component, Design, Fixed, ParamRef, Ref, Span, Text
 from .kernel import (Abs, Add, Const, Div, Exp, Interval, KernelArithmeticError, Ln, Max, Min, Mul, Neg, Pi, PowInt, Sqrt, Sym,
                      enclose)
 from .models.base import ComponentError
@@ -129,12 +133,15 @@ class Rule:
 
 @dataclass(frozen=True, eq=False)
 class Deck:
+    """`text` is the deck's file as it was read, which the kernel reads again, and `hash` its hash."""
+
     name: str
     hash: str
     rows: Mapping[str, rows.Row]
     types: Mapping[str, Type]
     asks: tuple[Ask, ...]
     rules: tuple[Rule, ...]
+    text: str = ""
 
 
 def _anchor(a: Mapping[str, str]) -> str:
@@ -142,11 +149,18 @@ def _anchor(a: Mapping[str, str]) -> str:
     return " ".join(parts[:2]) + "".join(f", {p}" for p in parts[2:])
 
 
+def _name(name: Any) -> bool:
+    """Whether this can name a field, a load, a joined part or a `let`: letters, digits and
+    `_`, as the language writes a name. So `a.Fy` is always a field of a joined part, and
+    no name reads as a number, a load or a row."""
+    return isinstance(name, str) and name.isascii() and name.isidentifier()
+
+
 def _field(body: Mapping[str, Any], load: bool = False) -> Field:
     allowed = {"name", "what", "dim", "least"} if load else {"name", "what", "dim", "least", "one_of", "type", "as", "signed", "whole"}
-    if set(body) - allowed or sum(key in body for key in ("dim", "one_of", "type")) != 1 or not body.get("what"):
-        raise DeckError(f"field {body.get('name')!r}: it has `what` and one of `dim`, `one_of` and `type`, and may have {', '.join(sorted(allowed))}")
-    name = str(body["name"])
+    if set(body) - allowed or sum(key in body for key in ("dim", "one_of", "type")) != 1 or not body.get("what") or not _name(body.get("name")):
+        raise DeckError(f"field {body.get('name')!r}: it has a name of letters, digits and _, `what` and one of `dim`, `one_of` and `type`, and may have {', '.join(sorted(allowed))}")
+    name = body["name"]
     if "one_of" in body:
         keys = tuple(str(k) for k in body["one_of"])
         if not keys or len(set(keys)) != len(keys):
@@ -154,8 +168,8 @@ def _field(body: Mapping[str, Any], load: bool = False) -> Field:
         return Field(name, body["what"], keys=keys)
     if "type" in body:
         names = tuple(body.get("as", [name]))
-        if not names or len(set(names)) != len(names):
-            raise DeckError(f"field {name}: `as` names each part once")
+        if not names or len(set(names)) != len(names) or not all(map(_name, names)):
+            raise DeckError(f"field {name}: `as` names each part once, in letters, digits and _")
         return Field(name, body["what"], type=str(body["type"]), names=names)
     dim = dimension(body["dim"])
     least = None
@@ -267,8 +281,8 @@ def _rule(body: Mapping[str, Any], deck_rows: Mapping[str, rows.Row], types: Map
         binder = _Binder(deck_rows, types[body["type"]], types)
         lets = {}
         for name, node in body.get("let", {}).items():
-            if name in binder.takes:
-                raise RowError(f"`let` names {name}, which is a field or an earlier name")
+            if name in binder.takes or not _name(name) or name == "pi":
+                raise RowError(f"`let` names {name}, which is a field, an earlier name or no name of letters, digits and _")
             lets[name], dim = binder.expr(node)
             binder.takes[name] = rows.Input(dim=dim)
 
@@ -305,25 +319,26 @@ def read_deck(text: str) -> Deck:
                              _named([_field(f, True) for f in t.get("loads", [])], "loads", lambda f: f.name)) for t in body["types"]],
                        "types", lambda t: t.name)
         for t in types.values():
+            joined = [name for f in t.fields.values() for name in f.names]
             for f in t.fields.values():
-                if f.type is not None and (f.type not in types or any(g.type for g in types[f.type].fields.values())):
-                    raise DeckError(f"{t.name}.{f.name}: it names parts of a type the deck has, whose own fields name no parts")
+                if f.type is not None and (f.type not in types or any(g.type for g in types[f.type].fields.values()) or len(set(joined)) != len(joined)):
+                    raise DeckError(f"{t.name}.{f.name}: it names parts of a type the deck has, whose own fields name no parts, each by a name of its own")
         asks = []
         for a in body["grid"]:
             anchor, unless = dict(a["anchor"]), a.get("unless")
-            if set(a) - {"type", "mechanism", "what", "anchor", "unless"} or not anchor.get("standard") or not anchor.get("clause"):
-                raise DeckError(f"grid {a.get('mechanism')}: a line has type, mechanism, what, anchor and may have unless")
-            when = _Binder(deck_rows, types[a["type"]], types).static(unless["when"]) if unless and "when" in unless else None
-            asks.append(Ask(a["type"], a["mechanism"], a["what"], anchor, when, str(unless["why"]) if unless else None))
+            if set(a) - {"type", "mechanism", "what", "anchor", "unless"} or not anchor.get("standard") or not anchor.get("clause") or a["type"] not in types:
+                raise DeckError(f"grid {a.get('mechanism')}: a line has a type of the deck, mechanism, what, anchor and may have unless")
+            when = _Binder(deck_rows, types[a["type"]], types).static(unless["when"]) if unless is not None and "when" in unless else None
+            asks.append(Ask(a["type"], a["mechanism"], a["what"], anchor, when, str(unless["why"]) if unless is not None else None))
         if len({(a.type, a.mechanism) for a in asks}) != len(asks):
             raise DeckError("the grid asks one mechanism of one type twice")
         rules = tuple(_rule(r, deck_rows, types) for r in body["rules"])
         asked = {(a.type, a.mechanism): a for a in asks}
         for r in rules:
-            if (r.type, r.mechanism) not in asked or asked[r.type, r.mechanism].unless is None and asked[r.type, r.mechanism].excused:
+            if (r.type, r.mechanism) not in asked or asked[r.type, r.mechanism].unless is None and asked[r.type, r.mechanism].excused is not None:
                 raise DeckError(f"rule {r.id}: the grid does not ask {r.mechanism} of {r.type}, or says it never arises")
         _named(list(rules), "rules", lambda r: r.id)
-        return Deck(str(body["name"]), export.sha256(text), deck_rows, types, tuple(asks), rules)
+        return Deck(str(body["name"]), export.sha256(text), deck_rows, types, tuple(asks), rules, text)
     except RowError as exc:
         raise DeckError(str(exc)) from None
     except (KeyError, TypeError, AttributeError, json.JSONDecodeError) as exc:
@@ -395,14 +410,13 @@ class Part:
 @dataclass(frozen=True)
 class Parts:
     parts: Mapping[str, Part]
-    inputs: tuple[Input, ...]      # every signed bound a part reads, for card.json
 
 
 def _at(span: Span) -> str:
     return f"{span.path}:{span.line}:{span.col}"
 
 
-def _quantity(f: Field, kind: str, arg: Any, name: str, design: Design, say: Callable[[str], None], inputs: list[Input]) -> Value | None:
+def _quantity(f: Field, kind: str, arg: Any, name: str, design: Design, say: Callable[[str], None]) -> Value | None:
     if isinstance(arg, ParamRef):
         return say("reads a param, and a family is not checked against a deck yet")
     if not isinstance(arg, (Fixed, Bound)):
@@ -419,7 +433,6 @@ def _quantity(f: Field, kind: str, arg: Any, name: str, design: Design, say: Cal
             return say("is a count, which the design writes as a whole number")
         if arg.name != name:
             return say(f"reads `given {arg.name}`, and a part reads only the bound the card gives for it: `given {name}`")
-        inputs.append(Input(name, arg.range, arg.signature, arg.kind, arg.span, arg.mean))
         return Value(f"in:{design.name}.{name}", q.value)
     if f.signed:
         return say(f"is for the card to state: write `{f.name} given {name}`, with `given {name} in [...] signed ...` in the card")
@@ -434,7 +447,6 @@ def read_parts(design: Design, deck: Deck) -> Parts:
     field, a wrong unit or name, a quantity only the card may state, a load the type does
     not take, and anything of the card a deck does not read yet."""
     problems: list[str] = []
-    inputs: list[Input] = []
     parts: dict[str, Part] = {}
     for c in design.components.values():
         kind, values = deck.types[c.kind], {}
@@ -464,7 +476,7 @@ def read_parts(design: Design, deck: Deck) -> Parts:
                 else:
                     values[attr.key] = word
             else:
-                found = _quantity(f, kind.name, attr.args[0], f"{c.name}.{attr.key}", design, say, inputs)
+                found = _quantity(f, kind.name, attr.args[0], f"{c.name}.{attr.key}", design, say)
                 if found is not None:
                     values[attr.key] = found
         missing = [name for name in kind.fields if name not in values and not any(a.key == name for a in c.attrs)]
@@ -487,7 +499,6 @@ def read_parts(design: Design, deck: Deck) -> Parts:
                 problems.append(f"{where} is at least {float(f.least):g} in SI units: {f.what}")
             else:
                 loads[part.name].setdefault(e.field, {})[case.name] = Value(f"in:{design.name}.{e.value.name}", e.value.range.value)
-                inputs.append(e.value)
     joined: dict[str, list[str]] = {}
     for p in parts.values():
         for f in p.type.fields.values():
@@ -506,7 +517,7 @@ def read_parts(design: Design, deck: Deck) -> Parts:
     problems += [f"{design.path}: the card or the design states {what}, which a deck does not read yet" for what, there in unread if there]
     if problems:
         raise ComponentError(tuple(problems))
-    return Parts({name: Part(name, p.type, p.values, loads[name]) for name, p in parts.items()}, tuple(sorted(inputs, key=lambda i: i.name)))
+    return Parts({name: Part(name, p.type, p.values, loads[name]) for name, p in parts.items()})
 
 
 # --- a tape ----------------------------------------------------------------------------------------
@@ -730,9 +741,10 @@ def enclosures(nodes: list[list], box: list[Interval]) -> list[Any]:
     return v
 
 
-def _partition(nodes: list[list], roots: list[int], box: list[Interval], budget: list[int]) -> Any:
+def _partition(nodes: list[list], roots: list[int], box: list[Interval], budget: list[int], labels: list[str]) -> Any:
     """A partition on whose every leaf every root is at most zero, or None when the search
-    finds none within its budget. Splits the input with the widest range, at its middle."""
+    finds none within its budget. Splits the input with the widest range, at its middle,
+    and names it by its label, as proofs.json does for the kernel."""
     v = enclosures(nodes, box)
     if all(isinstance(v[r], Interval) and v[r].hi <= 0 for r in roots):
         return "leaf"
@@ -743,11 +755,11 @@ def _partition(nodes: list[list], roots: list[int], box: list[Interval], budget:
     cut = box[widest].midpoint()
     halves = []
     for half in (Interval(box[widest].lo, cut), Interval(cut, box[widest].hi)):
-        found = _partition(nodes, roots, [*box[:widest], half, *box[widest + 1:]], budget)
+        found = _partition(nodes, roots, [*box[:widest], half, *box[widest + 1:]], budget, labels)
         if found is None:
             return None
         halves.append(found)
-    return {"input": widest, "at": export.number(cut), "below": halves[0], "above": halves[1]}
+    return {"input": labels[widest], "at": export.number(cut), "below": halves[0], "above": halves[1]}
 
 
 def _refuting(nodes: list[list], root: int, box: list[Interval]) -> list[Fraction] | None:
@@ -766,9 +778,10 @@ def _refuting(nodes: list[list], root: int, box: list[Interval]) -> list[Fractio
 
 @dataclass(frozen=True)
 class Cell:
-    """One answer. `body` is the cell as proofs.json holds it. `ratio` is the most the
-    left side of the rule reaches over the least the right side does, when both are
-    known and the right side is above zero."""
+    """One answer. `body` is the cell as proofs.json holds it: a hint, which the kernel
+    tries on the tape it writes itself. `proof` is the partition of a proved cell or the
+    point of a refuted one. `ratio` is the most the left side of the rule reaches over the
+    least the right side does, when both are known and the right side is above zero."""
 
     subject: str
     mechanism: str
@@ -856,10 +869,6 @@ def _answers(rule: Rule, ask: Ask, part: Part, parts: Mapping[str, Part]) -> Ite
         sides = [(tape.emit(low, env), tape.emit(high, env)) for low, high in pairs]
         return tape, [tape.node("add", [low, tape.node("neg", high)]) for low, high in sides], sides
 
-    def body(tape: _Tape, roots: list[int]) -> dict[str, Any]:
-        return {"inputs": [{"label": i.label, "lo": export.number(i.range.lo), "hi": export.number(i.range.hi)} for i in tape.inputs],
-                "nodes": tape.nodes, "roots": roots}
-
     reads = {name[5:] for name in _reads(rule) if name.startswith("load ")}
     missing = sorted(name for name in reads if not part.loads.get(name))
     if missing:
@@ -873,29 +882,29 @@ def _answers(rule: Rule, ask: Ask, part: Part, parts: Mapping[str, Part]) -> Ite
         try:
             if rule.where:
                 tape, roots, _ = tape_of([w[:2] for w in rule.where], case)
-                box = [i.range for i in tape.inputs]
-                partition = _partition(tape.nodes, roots, box, [MAX_LEAVES])
+                box, labels = [i.range for i in tape.inputs], [i.label for i in tape.inputs]
+                partition = _partition(tape.nodes, roots, box, [MAX_LEAVES], labels)
                 if partition is None:
                     v = enclosures(tape.nodes, box)
                     outside = next(why for (_, _, why), r in zip(rule.where, roots) if not (isinstance(v[r], Interval) and v[r].hi <= 0))
                     yield cell(entry, "open", f"the rule holds only where {outside}, and that is not proved for {part.name}")
                     continue
                 yield Cell(part.name, rule.mechanism, f"{entry}/where", "proved", "; ".join(w[2] for w in rule.where), anchor, "", rule.id,
-                           proof={"tape": body(tape, roots), "partition": partition})
+                           proof={"partition": partition})
             tape, roots, sides = tape_of([(rule.low, rule.high)], case)
         except NoValue as exc:
             yield cell(entry, "open", str(exc))
             continue
-        box = [i.range for i in tape.inputs]
-        partition = _partition(tape.nodes, roots, box, [1])
+        box, labels = [i.range for i in tape.inputs], [i.label for i in tape.inputs]
+        partition = _partition(tape.nodes, roots, box, [1], labels)
         point = None if partition is not None else _refuting(tape.nodes, roots[0], box)
         if partition is None and point is None:
-            partition = _partition(tape.nodes, roots, box, [MAX_LEAVES])
+            partition = _partition(tape.nodes, roots, box, [MAX_LEAVES], labels)
         if partition is not None:
-            yield cell(entry, "proved", ratio=_ratio(tape.nodes, *sides[0], box), proof={"tape": body(tape, roots), "partition": partition})
+            yield cell(entry, "proved", ratio=_ratio(tape.nodes, *sides[0], box), proof={"partition": partition})
         elif point is not None:
             yield cell(entry, "refuted", ratio=_ratio(tape.nodes, *sides[0], [Interval.point(x) for x in point]),
-                       proof={"tape": body(tape, roots), "point": [export.number(x) for x in point], "which": 0})
+                       proof={"point": {label: export.number(x) for label, x in zip(labels, point)}})
         else:
             v = enclosures(tape.nodes, box)
             if isinstance(v[roots[0]], str):
@@ -945,14 +954,17 @@ def _unread(deck: Deck, found: Parts) -> list[Cell]:
 # --- the files, the kernel and the report ------------------------------------------------------------
 
 
-def bundle(design: Design, deck: Deck, found: Parts, answers: list[Cell]) -> dict[str, str]:
-    """The text of the four files of docs/format.md. The deck file names the rules deck by
-    its hash, so the hash the kernel prints for the deck covers the rules."""
-    card = export.text(export.card(design, list(found.inputs)))
+def bundle(design: Design, deck: Deck, answers: list[Cell] | None = None) -> dict[str, str]:
+    """The text of the files of docs/format.md: the card, the design with its parts as
+    written, the deck of domains, `rules`, which is the deck's own file, and with `answers`
+    the hints of proofs.json. None of the first four needs this module to have accepted
+    the design: the kernel reads the parts from them itself."""
+    card = export.text(export.card(design, export.read_inputs(design), placed=True))
     core = json.loads(export.CORE.read_text(encoding="utf-8"))["domains"]
-    return {"card": card, "design": export.text(export.design_file(design, export.sha256(card))),
+    return {"card": card, "design": export.text(export.design_file(design, export.sha256(card), deck=True)),
             "deck": export.text({"format": "petra-deck/0", "domains": core, "constants": [], "rules": {"name": deck.name, "hash": deck.hash}}),
-            "proofs": export.text({"format": "petra-proofs/0", "cells": [c.body for c in answers]})}
+            "rules": deck.text,
+            **({} if answers is None else {"proofs": export.text({"format": "petra-proofs/0", "cells": [c.body for c in answers]})})}
 
 
 def verdict(answers: list[Cell]) -> str:
@@ -1027,8 +1039,8 @@ class Checked:
     def text(self) -> str:
         from . import verify
 
-        tapes = sum("tape" in c.proof for c in self.report.cells)
-        kernel = verify.NO_KERNEL if self.kernel is None else f"petra-verify checked {tapes} of {tapes} proofs and gives the same verdict"
+        proofs = sum(bool(c.proof) for c in self.report.cells)
+        kernel = verify.NO_KERNEL if self.kernel is None else f"petra-verify checked {proofs} of {proofs} proofs and gives the same verdict"
         out = self.report.lines()
         return "\n".join([*out[:2], f"card       {self.hashes['card']}  {self.card}", f"design     {self.hashes['design']}  {self.path}",
                           f"kernel     {kernel}", *out[2:]])
@@ -1036,9 +1048,9 @@ class Checked:
 
 def checked(design: Design, deck: Deck, card: str, text: str, card_path: str) -> Checked:
     """Check the design against the deck and have the kernel check the files, when there is
-    a kernel to run. The kernel takes every cell as this module states it or leaves it
-    open, so the two agree on every cell or one of them has a bug: that raises
-    verify.Disagreement, which no caller catches."""
+    a kernel to run. The kernel reads the deck's file and works out every cell itself, so
+    the two list the same cells in the same order with the same states, or one of them has
+    a bug: that raises verify.Disagreement, which no caller catches."""
     from . import verify
 
     report, files = check(design, deck)
@@ -1047,10 +1059,10 @@ def checked(design: Design, deck: Deck, card: str, text: str, card_path: str) ->
         said = verify.ask(kernel, files)
         if said["verdict"] == "ILL-FORMED":
             raise ComponentError(tuple(f"{design.path}: petra-verify refuses the {f['file']}: {f['item']}: {f['why']}" for f in said["findings"]))
-        differ = [f"{c.subject}/{c.mechanism}/{c.entry}: {its.get('reason', its['state'])}" for c, its in zip(report.cells, said["cells"]) if its["state"] != c.state]
-        if differ or len(said["cells"]) != len(report.cells) or said["verdict"] != report.status:
-            raise verify.Disagreement(f"{design.path}: petra-verify gives {said['verdict']} and the grid {report.status}: {'; '.join(differ) or 'other cells'}")
-        said = {"verdict": said["verdict"], "checked": sum("tape" in c.proof for c in report.cells), "hashes": said["hashes"]}
+        differ = verify.differs([(c.subject, c.mechanism, c.entry, c.state) for c in report.cells], report.status, deck.hash, said)
+        if differ:
+            raise verify.Disagreement(f"{design.path}: petra-verify gives {said['verdict']} and the grid {report.status}: {differ}")
+        said = {"verdict": said["verdict"], "checked": sum(bool(c.proof) for c in report.cells), "hashes": said["hashes"]}
     return Checked(design.path, report, card_path, {"card": export.sha256(card), "design": export.sha256(text)}, said)
 
 
@@ -1061,7 +1073,7 @@ def check(design: Design, deck: Deck) -> tuple[Report, dict[str, str]]:
 
     found = read_parts(design, deck)
     answers = cells(design, deck, found)
-    files = bundle(design, deck, found, answers)
+    files = bundle(design, deck, answers)
     broken = wellformed.findings(*(json.loads(files[name]) for name in ("card", "design", "deck")))
     if broken:
         raise ComponentError(tuple(f"{design.path}: {b}" for b in broken))

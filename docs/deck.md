@@ -9,7 +9,7 @@ A deck holds what Petra checks a design against, as data. It has four parts.
 | The grid | For each type, every mechanism a part of that type must answer for |
 | Rules | The answers: each binds rows to the fields of a part and states an inequality |
 
-This page describes a row first, with the acceptance check that a row passes before it enters a deck. Then it describes types, the grid and rules, and what `petra check` does with a design whose parts are of a deck's types. `petra/deck.py` reads rows and runs the acceptance check. `petra/grid.py` reads the rest and checks a design.
+This page describes a row first, with the acceptance check that a row passes before it enters a deck. Then it describes types, the grid and rules, and what `petra check` does with a design whose parts are of a deck's types. `petra/deck.py` reads rows and runs the acceptance check. `petra/grid.py` reads the rest and checks a design. The kernel reads the whole deck a second time, in `kernel/Petra/Deck.lean`, and makes the cells of a design itself.
 
 Rows are written by transcription, and the transcriber is not trusted. The acceptance check is what stands between a wrong transcription and a deck.
 
@@ -62,7 +62,7 @@ An expression is a number, a name, or a list that starts with an operator.
 
 | Written | Means |
 |---|---|
-| `"2.4"`, `"3/4"` | An exact number. A decimal is the decimal the standard prints. |
+| `"2.4"`, `"3/4"` | An exact number: digits, and then a decimal part or a denominator. A decimal is the decimal the standard prints. |
 | `"pi"` | Pi |
 | `"Fu"` | An input of the row |
 | `["q", "29000", "ksi"]` | A constant with a unit |
@@ -70,7 +70,7 @@ An expression is a number, a name, or a list that starts with an operator.
 | `["sub", a, b]`, `["div", a, b]` | A difference, a quotient |
 | `["neg", a]`, `["abs", a]`, `["sqrt", a]` | The negative, the absolute value, the square root |
 | `["min", a, b, ...]`, `["max", a, b, ...]` | The least, the greatest |
-| `["pow", a, "2"]`, `["pow", a, "3/2"]` | A power with a fixed exponent |
+| `["pow", a, "2"]`, `["pow", a, "3/2"]` | A power with a fixed exponent. A whole or a half power is at most 64. |
 | `["pow", a, b]` | A power with an exponent that varies. Both must be plain numbers. |
 | `["exp", a]`, `["ln", a]` | The exponential and the natural logarithm of a plain number |
 
@@ -221,6 +221,8 @@ A quantity may also have these.
 | `whole` | It is a count, and the design writes a whole number |
 | `least` | The least value it may take |
 
+The name of a field, of a load and of a joined part in `as` is letters, digits and `_`, as the language writes a name. So a rule's `a.Fy` is always a field of a joined part, and no name reads as a number.
+
 A part has every field of its type once, and no other line. A part is joined by at most one other: a plate that two laps join would be checked under each lap's load alone, so the pair is refused.
 
 `petra kinds lap` prints the lines of a type and what the grid asks of it, and `petra new lap` prints a design to start from, with its card under `--card`.
@@ -238,7 +240,7 @@ A part reads only the bound the card gives under the part's name and the field's
  "anchor": {"standard": "AISC 360-22", "clause": "J3.4"}}
 ```
 
-A line of the grid names one mechanism that every part of a type answers for, and the clause that raises it. The grid is written from the standard's own list of sections, and a line is there whether or not the deck has a rule for it. A line with no rule leaves its cell open, so a design cannot pass until the deck gets the rule or the card waives the mechanism.
+A line of the grid names one mechanism that every part of a type answers for, and the clause that raises it. The type is one of the deck's. The grid is written from the standard's own list of sections, and a line is there whether or not the deck has a rule for it. A line with no rule leaves its cell open, so a design cannot pass until the deck gets the rule or the card waives the mechanism.
 
 A line may say that the mechanism cannot arise, and why:
 
@@ -267,7 +269,7 @@ A rule answers one line of the grid with an inequality.
 | `anchor` | The clause the inequality comes from |
 | `says` | The inequality in words |
 | `le` | Two expressions. The rule holds when the first is at most the second. |
-| `let` | Names for expressions the rule uses more than once |
+| `let` | Names for expressions the rule uses more than once. A name is letters, digits and `_`, and is no field's name. An expression reads the names before it. |
 | `where` | The range the rule holds in: a list of `{"le": [a, b], "why": "..."}` |
 | `when` | A condition on the part, as in the grid. The rule answers only for the parts it holds for. |
 
@@ -282,11 +284,11 @@ A quantity that a row takes is bound to an expression of its dimension. A key th
 
 A factor that the clause fixes for the inequality, such as a resistance factor, is a number in the rule.
 
-Reading a deck checks every rule. Each input of each row is bound once and to its dimension. Both sides of `le` have one dimension. The rule answers a line of the grid that can arise. A deck that fails any of these does not load.
+Reading a deck checks every rule. Each input of each row is bound once and to its dimension. Both sides of `le` have one dimension. The rule answers a line of the grid that can arise. A deck that fails any of these does not load, and the kernel finds a design checked against it ill formed.
 
 ## A design checked against a deck
 
-`petra check` makes one cell for each answer and writes the files of [format.md](format.md). A cell has one of five states.
+`petra check` makes one cell for each answer and writes the files of [format.md](format.md): the card, the design with its parts as written, and the deck's own file. A cell has one of five states.
 
 | State | When |
 |---|---|
@@ -296,7 +298,9 @@ Reading a deck checks every rule. Each input of each row is bound once and to it
 | `waived` | The card waives the mechanism on the part |
 | `open` | Anything else |
 
-No cell has a default. The verdict is FAIL with a refuted cell, UNKNOWN with an open cell or with nothing proved, and PASS otherwise. A proved or refuted cell carries a tape, and `petra-verify` checks it.
+No cell has a default. The verdict is FAIL with a refuted cell, UNKNOWN with an open cell or with nothing proved, and PASS otherwise.
+
+`petra-verify` reads the same three files and makes the cells again, each with the tape of its rule. It takes nothing of a cell from `petra check` but a hint: the partition that proved it, or the point that refuted it. The kernel tries the hint on its own tape, and the state it settles on is its own. `petra check` then compares the two lists cell by cell, and stops with exit code 4 if they differ.
 
 These cases are open:
 
@@ -334,9 +338,9 @@ The number on a proved or refuted line is the most the left side of the rule rea
 ## What a deck does not check yet
 
 - Types, grid lines and rules are written once, by hand. No second transcription and no worked example stands behind them, as they do behind a row.
-- The kernel checks the arithmetic of every tape and gives its own verdict on the cells. It does not check that the cells are the ones the grid asks for, or that a tape is the rule it claims to be. `petra/grid.py` is trusted for both until the kernel reads decks.
-- A key picks a table's line when the tape is written, and the tape does not record the key.
-- A `not applicable` cell is the deck's word.
+- The kernel makes the cells and the tapes from the deck's file, and does not know whether that file is the standard's. It prints the file's hash.
+- The kernel does not search. The partition or the point for a cell comes from `petra/grid.py`, so a cell that search does not settle is open, though a better search might prove it.
+- A `not applicable` cell is the deck's word. The kernel checks that the line's `unless` holds for the part, and not that the mechanism cannot arise.
 - The `range` of a row's input is where the acceptance check samples the row. It is not enforced as the range the row holds in. A rule's `where` is.
 - A type with no line in the grid gets no cell of its own. A `plate` has none: the lap that joins it asks about it, and a plate that nothing joins has only its `unread` cells.
 - A card's claims, tests and ambient, a family's params, and the repair that `petra check` suggests on a FAIL are not read for a design of a deck's types. A card or a design that states one is refused.

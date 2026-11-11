@@ -293,10 +293,25 @@ class Decks(unittest.TestCase):
     def test_a_rule_answers_a_line_of_the_grid_that_can_arise(self):
         self.wrong("the grid does not ask strip.melt of strip", lambda b: b["rules"][0].__setitem__("mechanism", "strip.melt"))
         self.wrong("the grid does not ask strip.tide of strip, or says it never arises", lambda b: b["rules"][0].__setitem__("mechanism", "strip.tide"))
+        self.wrong("the grid does not ask strip.tide of strip, or says it never arises",
+                   lambda b: [b["grid"][5]["unless"].__setitem__("why", ""), b["rules"][0].__setitem__("mechanism", "strip.tide")])
         self.wrong("two rules have one name", lambda b: b["rules"].append(b["rules"][0]))
 
     def test_a_row_of_a_deck_has_no_dimension_error(self):
         self.wrong("test/derate", lambda b: b["rows"][1]["cases"][0].__setitem__("is", ["q", "1", "mm"]))
+
+    def test_a_name_is_one_the_language_writes_and_a_number_has_no_exponent(self):
+        # A field named `load current` would read as the load, and `near.area` as a field of a joined part.
+        self.wrong("it has a name of letters, digits and _", lambda b: b["types"][0]["fields"][0].__setitem__("name", "load current"))
+        self.wrong("it has a name of letters, digits and _", lambda b: b["types"][1]["fields"][0].__setitem__("name", "near.area"))
+        self.wrong("`as` names each part once, in letters, digits and _", lambda b: b["types"][1]["fields"][7].__setitem__("as", ["near", "@0"]))
+        self.wrong("no name of letters, digits and _", lambda b: b["rules"][2].__setitem__("let", {"load current": "gap"}))
+        self.wrong("'4e0' is not a number", lambda b: b["rules"][2]["le"][0].__setitem__(1, ["sub", "4e0", "gap"]))
+        self.wrong("'1_0' is not a number", lambda b: b["rules"][2]["le"][0].__setitem__(1, ["pow", "gap", "1_0"]))
+
+    def test_a_line_of_the_grid_names_a_type_of_the_deck(self):
+        self.wrong("grid strip.creep: a line has a type of the deck", lambda b: b["grid"][3].__setitem__("type", "strap"))
+        self.wrong("not a deck (KeyError: 'why')", lambda b: b["grid"][5].__setitem__("unless", {}))
 
 
 def formalizer(name: str) -> dict:
@@ -374,7 +389,8 @@ class Shipped(unittest.TestCase):
 
 @unittest.skipIf(verify.binary() is None, "no petra-verify is built here")
 class Kernel(unittest.TestCase):
-    """The kernel checks every tape the grid writes, and gives the same verdict."""
+    """The kernel works out every cell the grid makes, and gives the same verdict. petra.check
+    compares the two lists cell by cell and raises on a difference."""
 
     def test_the_kernel_agrees_on_the_shipped_examples(self):
         for name, status in (("lap_unknown", "UNKNOWN"), ("lap_fail", "FAIL"), ("lap_pass", "PASS")):

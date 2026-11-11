@@ -321,6 +321,8 @@ CELL = {"subject": PART, "mechanism": NAME, "entry": TEXT,
 
 `petra.check_file` returns a `petra.grid.Report` for such a design, with `status`, `cells`, `to_json()` and `render()`. A FAIL has no repair yet, and a card's claims are refused.
 
+For such a design the kernel reads the deck's own file and makes every cell itself. `petra.check` compares its cells with these, one by one, and raises `petra.verify.Disagreement` if they differ. `kernel.hashes` then also has `rules`, the hash of the deck's file, which is `deck.hash`.
+
 ## Envelopes
 
 `petra envelope FILE --input NAME --from LO --to HI` finds the widest interval of one input over which every obligation that depends on that input is proved. `petra/envelope.py` holds the search and its report, in `envelope`, `render`, and `to_json`. Without `--at`, the search starts from the middle of the input's stated range. If the design does not pass there, the search starts again from the low end of the probe range. The text output prints values in the unit of `--from`, and `--json` prints exact rationals in SI base units.

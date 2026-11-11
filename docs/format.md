@@ -1,20 +1,27 @@
 # What the kernel reads
 
-`petra-verify` reads four JSON files and prints one verdict. This page describes the files, the rules the kernel applies to them, and the verdict. The format is version 0 and will change.
+`petra-verify` reads four JSON files, and a fifth for a design checked against a deck of rules, and prints one verdict. This page describes the files, the rules the kernel applies to them, and the verdict. The format is version 0 and will change.
 
 ```
-petra-verify --card card.json --design design.json --deck deck.json [--proofs proofs.json]
+petra-verify --card card.json --design design.json --deck deck.json [--rules rules.json] [--proofs proofs.json]
 ```
 
-`petra check` writes the four files for its report and runs the kernel on them when it finds one: the file the environment variable `PETRA_VERIFY` names, else `kernel/.lake/build/bin/petra-verify` in a source tree. It prints how many of the proofs behind its status the kernel checked, and exits 4 if the kernel rejects one that the Python checker accepted.
+`petra check` writes the files for its report and runs the kernel on them when it finds one: the file the environment variable `PETRA_VERIFY` names, else `kernel/.lake/build/bin/petra-verify` in a source tree. It prints how many of the proofs behind its status the kernel checked, and exits 4 if the kernel rejects one that the Python checker accepted.
 
-The kernel trusts none of the four. It checks that they agree with each other and that each proof holds. Who wrote each file is outside the kernel: the verdict prints the SHA-256 of the card, the design and the deck, and a reader compares the card's hash with the card they issued.
+The kernel trusts none of the files. It checks that they agree with each other and that each proof holds. Who wrote each file is outside the kernel: the verdict prints the SHA-256 of the card, the design, the deck and the rules, and a reader compares the card's hash with the card they issued and the rules' hash with the deck of rules they mean.
 
-`python -m petra.export FILE.petra [--card FILE.card] --out DIR` writes the four files from a design and its card, the `.card` file beside the design unless `--card` names another. It exits 3 and writes nothing when the language refuses the pair, as it does for a design that states a load, a claim, a waiver or a signature.
+`python -m petra.export FILE.petra [--card FILE.card] --out DIR` writes the files from a design and its card, the `.card` file beside the design unless `--card` names another. It exits 3 and writes nothing when the language refuses the pair, as it does for a design that states a load, a claim, a waiver or a signature. With `--no-physics` it writes no proofs.json, and a design with parts is then written as it stands, for the kernel to say whether the deck's types take it.
+
+There are two kinds of design, and the kernel does more for the second.
+
+- A design of the built-in models' kinds has no `parts`. The kernel checks each cell that proofs.json lists, with the tape the cell carries.
+- A design whose parts are of a deck of rules ([deck.md](deck.md)) has `parts`, and goes with `--rules`. The kernel reads the deck of rules, works out every cell and every tape itself, and takes from proofs.json only hints: a partition or a point to try.
 
 ## Numbers
 
 Every number is a string that holds an exact rational: an integer such as `"18"` or a fraction such as `"-5463/20"`. A fraction is in lowest terms with a denominator above 1, and no number has a leading zero or is `-0`. A string longer than 4,000 characters is refused. A range is a pair `lo`, `hi` with `lo <= hi`.
+
+A deck of rules writes its own numbers another way, with units. [The rules file](#rulesjson) says how the kernel reads them.
 
 ## card.json
 
@@ -30,6 +37,8 @@ What the asker owns.
 | `claims` | Each claim: `name`, `subject`, `quantity`, `rel`, `cases`, `bound` |
 | `waivers` | Each waiver the asker allows: `subject`, `mechanism`, `by`, `reason` |
 
+For a design with parts, a load's input also has `on`, the part the load is on, and `field`, which of the loads of the part's type it is. An input with none of `case`, `on` and `field` is a given, and its name is `PART.FIELD`, the part and the field that read it. The card also has `tests` and `probability_claims`, the names of its tests records and its probability claims. A deck of rules reads neither yet, so the kernel refuses a card that has one.
+
 ## design.json
 
 What the designer owns.
@@ -41,8 +50,30 @@ What the designer owns.
 | `card` | `"sha256:HEX"`, the hash of the bytes of the card this design answers |
 | `quantities` | Every number written in a component block: `type`, `entity`, `line`, `field`, `role`, `dim`, `lo`, `hi`. The role is `size` for a number alone and `position` for a number in a tuple. |
 | `params` | Each parameter of a family: `name`, `dim`, `lo`, `hi` |
+| `parts` | For a design checked against a deck of rules: each component block as written |
 
 A design has no other key, and the kernel refuses one that has. The language refuses the same design earlier: a `.petra` file that states a waiver, a load or an ambient does not parse.
+
+### Parts
+
+```json
+{"name": "tab", "type": "plate", "lines": [
+  {"field": "thickness", "args": [{"number": {"dim": "length", "lo": "381/40000", "hi": "381/40000"}}]},
+  {"field": "Fy", "args": [{"given": "tab.Fy"}]}]}
+```
+
+A part has its `name`, its `type` and its `lines` in the order the design writes them. A line has the `field` it gives and its `args`. An argument is one of four things.
+
+| Argument | Is |
+|---|---|
+| `{"number": {"dim", "lo", "hi"}}` | A number the design writes, in SI |
+| `{"given": NAME}` | The bound the card gives under that name |
+| `{"word": WORD}` | A bare word |
+| `{"text": TEXT}` | A text in quotes |
+
+The exporter that writes `parts` knows no deck. It writes each line as it stands, and anything else a line holds, such as a tuple, as `{"other": KIND}`, which the kernel refuses. The kernel reads what a line means from the field of that name in the deck of rules: a quantity takes one number or one given, a key takes one word or one text, and a field that joins parts takes words that name them.
+
+A tape names what it reads of a part by label. A number that part `P` writes for field `F` is `dsg:DESIGN.P.F`, with the design's name. A given is `in:CARD.P.F` and a load is `in:CARD.INPUT`, with the card's name and the name of the input.
 
 ## deck.json
 
@@ -52,9 +83,22 @@ A design has no other key, and the kernel refuses one that has. The language ref
 | `domains.size` | `min` and `strict`: the least value a size may take |
 | `domains.input` | For each dimension that has a floor, `min` and `strict`. A dimension that is not listed has none. |
 | `constants` | Each registry value a proof reads: `label` (`reg:KEY`), `lo`, `hi` |
-| `rules` | For a design checked against a deck of rules ([deck.md](deck.md)): the `name` of that deck and the `hash` of its file. The kernel does not read it. It is in the file so that the hash the kernel prints for the deck covers the rules. |
+| `rules` | For a design checked against a deck of rules: the `name` of that deck and the `hash` of its file. The kernel does not read it. It reads the deck of rules itself, from `--rules`. |
 
 `petra/decks/core.json` holds the domains.
+
+## rules.json
+
+The deck of rules a design with parts is checked against: the file of `petra/decks` as it ships, with `"format": "petra-rules/0"`. [deck.md](deck.md) describes it. `petra check` and `petra.export` hand the kernel the file's own text, so the hash the kernel prints for it is the hash of the deck.
+
+The kernel reads the whole deck and refuses one that does not hold together, as `petra/grid.py` does when it loads one. It reads these itself, and takes none of them from Python:
+
+- A dimension, such as `force/length` or `length^3`, as five exponents of metre, kilogram, second, ampere and degree Celsius. They are rational, because a square root halves them.
+- A quantity with its unit, such as `0.75 inch`, `3/4 inch`, `1 1/8 inch` or `29,000 ksi`, as an exact rational in SI. It has the unit table of `petra/units.py` with the same exact factors: an inch is 127/5000 m, and a pound-force is 0.45359237 kg times 9.80665 m/s2.
+- A number alone, such as `0.90` or `3/2`: digits with an optional sign, and then a decimal part or a denominator. It takes no exponent, no space and no underscore.
+- An expression, as a list of tape nodes. A whole power is a `pow`, a half power is a `pow` of a `sqrt`, a negative one is 1 over it, and any other power is `exp` of the exponent times `ln`. Cases and tables are a `pick`.
+
+The kernel is stricter than `petra/grid.py` in three ways. A name, a unit and a text are JSON strings, and a flag is `true` or `false`: Python also takes a number where a text goes. The names of `let` may be read in any order, because the kernel's JSON reader keeps no order of keys, where Python reads them in the order of the file. And the limits below apply.
 
 ## proofs.json
 
@@ -63,7 +107,11 @@ A design has no other key, and the kernel refuses one that has. The language ref
 | `format` | `"petra-proofs/0"` |
 | `cells` | One cell per obligation |
 
-A cell has `subject`, `mechanism`, `entry` and `state`. The state is one of `proved`, `refuted`, `not_applicable`, `waived` and `open`. A `not_applicable` or `open` cell has `why`. A cell may carry a tape. A cell that a rule of a deck answers carries `rule`, the rule's id, which the kernel does not read.
+A cell has `subject`, `mechanism`, `entry` and `state`. The state is one of `proved`, `refuted`, `not_applicable`, `waived` and `open`.
+
+For a design with no parts a cell is what the kernel checks. A `not_applicable` or `open` cell has `why`, and a cell may carry a tape.
+
+For a design with parts a cell is a hint for the kernel's own cell of the same subject, mechanism and entry. It carries no tape, and the kernel reads none: it writes the tape from the deck of rules. A `proved` hint has a `partition`, and a `refuted` one a `point`. A hint may also carry `why` and `rule`, the rule's id, which the kernel does not read.
 
 ### Tapes
 
@@ -96,25 +144,45 @@ On a box the kernel may not know the order of two nodes that a condition compare
 
 A pick has no value on a box when some way leaves no case that holds, and when there are more than 4,096 ways. A node with no value on a box, such as that pick or a division by a range that contains zero, fails the proof only where a root reads it. A root reads through arithmetic, through the nodes a pick compares and through the cases that are first in some way. So a case that is never first may have no value there. A refutation reads a pick by the same rule, with its point as the box.
 
+The kernel writes a tape from a rule with one node for each distinct quantity. Two cases that compare the same quantity with the same value then compare the same pair of nodes, and the cases of a table meet.
+
+### Partitions and points
+
 A `proved` cell with a tape has a `partition`: the string `"leaf"`, or `{"input": k, "at": x, "below": P, "above": P}`, which splits input `k` at `x`. The value `x` lies strictly inside the range the input has at that point of the tree.
 
 A `refuted` cell with a tape has a `point`, one value per input and inside its range, and `which`, the index into `roots` of the root that is more than zero there.
 
+A hint names an input by its label, because the tape is the kernel's. Its partition is `"leaf"` or `{"input": "in:NAME.x", "at": x, "below": P, "above": P}`. Its point is an object with a value for each label, `{"in:NAME.x": "3/2", ...}`, and it has no `which`: a rule's cell has one root.
+
 ## The rules
 
-The kernel applies the rules in this order. A design that breaks a rule of the first two groups is ILL-FORMED, and the kernel reads no proof.
+The kernel applies the rules in this order. A design that breaks a rule of the first four groups is ILL-FORMED, and the kernel settles no cell.
 
 **Shape.** Each file is JSON with its `format`. Every number parses, and every range has `lo <= hi`. A cell has its keys and a state from the list, and a node is one from the table. A tape that reads a node ahead of itself, or lacks its `partition`, `point` or `which`, leaves its cell open.
 
 **Types.**
 
 1. The design's `card` is the SHA-256 of the card file's bytes.
-2. The design has no key but `format`, `name`, `card`, `quantities` and `params`.
+2. The design has no key but `format`, `name`, `card`, `quantities`, `params` and `parts`.
 3. Every quantity of role `size` has `lo` above `domains.size.min`, or at it when `strict` is false.
 4. Every input whose dimension is in `domains.input` has `lo` at or above that floor, or above it when `strict` is true.
 5. Every waiver of the card names a `by`.
+6. A design with `parts` comes with `--rules`.
 
-**Cells.** For each cell:
+**The deck of rules.** With `--rules`, the file is a deck that holds together, as [deck.md](deck.md) describes: it has no unknown key, every rule names rows, fields and loads that exist, every input of a row is bound once and to its dimension, both sides of every inequality have one dimension, every sum and comparison inside a row or a rule is of one dimension, every rule answers a line of the grid that can arise, and no two rows, types, lines or rules have one name. A name of a field, a load, a joined part or a `let` is letters, digits and `_`.
+
+**Parts.** With `--rules`, the design and the card are parts of the deck's types:
+
+1. Every part has a type of the deck and a name no other part has.
+2. A part has every field of its type once, and no other line.
+3. A quantity is one number or one given, of the field's dimension, more than zero and at least the field's `least`. A `whole` field is one whole number that the design writes. A `signed` field is a given. A given is named `PART.FIELD` for the part and the field that read it, and the card has one input of that name, which is no load.
+4. A key is one word or one text, and one of the field's names.
+5. A field that joins parts has one word for each name in its `as`, and they name different parts of the field's type. No part is joined more than once.
+6. Every input of the card has a name of its own, and is a load or a given that a part reads. A load has `case`, `on` and `field`: it is on a part, it is one of the loads of that part's type, of its dimension and at least its `least`, and no case puts one load on one part twice.
+7. Every waiver names a part and a mechanism that the grid asks of that part's type.
+8. The card has no claim, no tests record and no probability claim, and the design has no param.
+
+**Cells.** For each cell of a design with no parts:
 
 1. `proved` with a tape: every input is labelled `in:`, `reg:` or `dsg:`. An input labelled `in:NAME.INPUT` is input `INPUT` of the card named `NAME`, and every input labelled `reg:` is a constant of the deck. The tape's range for it contains the card's or the deck's. The kernel evaluates every root on every leaf of the partition by the interval rule, and the upper end of each is at most zero. A cell that meets all of this is proved. Otherwise it is open, and the verdict says which test failed.
 2. `refuted` with a tape: the same test on labels. Each value of the point lies in its input's range and in the card's or the deck's range for that label, and two inputs with one label have one value. The lower end of root `which` at the point is above zero. A cell that meets this is refuted. Otherwise it is open.
@@ -122,29 +190,61 @@ The kernel applies the rules in this order. A design that breaks a rule of the f
 4. `waived` holds only when the card lists a waiver with the same `subject` and `mechanism`. Otherwise it is open.
 5. `not_applicable` is taken as stated, and counted.
 
-The interval rule is the one in `petra/kernel/interval.py` and `petra/kernel/evaluate.py`: exact rational intervals, with `sqrt`, `ln`, `exp` and pi rounded outward on a grid of 2^-96. The two kernels give the same ends for every root. The Python kernel has no `pick`: `petra/grid.py`, which writes the tapes that have one, reads a pick by the same rule a second time.
+**Cells from a deck of rules.** With `--rules` the kernel makes the cells itself, in this order: for each part in the design's order, each line the grid has for its type in the deck's order, and then each field that nothing reads.
+
+1. A line whose mechanism the card waives on the part is one `waived` cell.
+2. Otherwise, a line whose `unless` holds for the part, or that has an `unless` with no condition, is one `not_applicable` cell.
+3. Otherwise, each rule for the line whose `when` holds for the part gives cells, and a line with no such rule is one `open` cell. These three have an empty `entry`.
+4. A rule that reads no load gives one cell. Its `entry` is the rule's id from its last `/` on, so `lap-yield-a` for `aisc360-22/lap-yield-a`. A rule that reads loads gives one cell for each load case that puts every load it reads on the part, in the order of the cases' names, and the `entry` then ends in `/CASE`. It gives one `open` cell when the card puts one of its loads on the part in no case, or no case has them all.
+5. A rule with `where` needs its range first. The kernel writes a tape with one root for each inequality of `where` and looks for a hint with the cell's entry and `/where`. When a partition of such a hint proves every root, that is a `proved` cell with that entry, and the rule's cell follows. When none does, the rule's cell is `open` and there is no `/where` cell: outside its range a rule proves and refutes nothing, whatever the hints say.
+6. The rule's cell has a tape with one root, the left side of `le` less the right. The kernel tries each hint for the cell in the file's order. A partition that proves the root makes the cell `proved`. A point that has a value for every input, each inside the range the card or the design gives it, with the root above zero there, makes it `refuted`. The first hint that does either settles the cell. With none it is `open`. The state a hint claims decides nothing.
+7. A tape that cannot be written leaves the cell `open`: a table has no line for the part's key, or every cell it could read is empty.
+8. A quantity or a key of a part is read by a rule that applies to the part, by a rule that applies to the part that joins it, or by an `unless` of the grid's lines for its type. Each one that nothing reads is one `open` cell, with mechanism `unread` and the field as its `entry`.
+
+A hint for a cell that the kernel does not have is ignored and counted. So proofs.json can leave a cell open that a better search would settle, and it can do nothing else: it cannot add a cell, drop one, or change what a cell says.
+
+The interval rule is the one in `petra/kernel/interval.py` and `petra/kernel/evaluate.py`: exact rational intervals, with `sqrt`, `ln`, `exp` and pi rounded outward on a grid of 2^-96. The two kernels give the same ends for every root. The Python kernel has no `pick`: `petra/grid.py`, which searches for the partitions and the points, reads a pick by the same rule a second time.
 
 ## The verdict
 
 | Verdict | When | Exit code |
 |---|---|---|
-| ILL-FORMED | A shape or type rule is broken | 3 |
+| ILL-FORMED | A rule of the first four groups is broken | 3 |
 | FAIL | A cell is refuted | 1 |
 | UNKNOWN | No cell is refuted, and a cell is open or no cell is proved | 2 |
 | PASS | Every cell is proved, waived or not applicable, and at least one is proved | 0 |
 
-The kernel prints one JSON object: `verdict`, the three `hashes`, `findings` (each broken rule, with the file and the item), `counts` (the cells in each state), `dsg_inputs` (the distinct `dsg:` labels the settled proofs read), `waived` (each waiver a PASS rests on) and `cells` (for each cell the state the file claimed, the state the kernel settled on, and the reason when they differ). A command line it cannot read prints the usage and exits 64.
+The kernel prints one JSON object: `verdict`, the `hashes` of the files, with `rules` when `--rules` names one, `findings` (each broken rule, with the file and the item), `counts` (the cells in each state), `dsg_inputs` (the distinct `dsg:` labels the settled proofs read), `waived` (each waiver a PASS rests on) and `cells`. With `--rules` it also prints `ignored_hints`. A cell has its subject, mechanism and entry, `claimed`, `state`, the state the kernel settled on, and `reason` when the kernel left it open. `claimed` is the state the file claims for the cell. With `--rules` it is the state of the first hint for the cell, and null when there is none. A command line it cannot read prints the usage and exits 64.
+
+For a design with parts, `petra check` compares the kernel's cells with the ones `petra/grid.py` made: the same count, and at each place the same subject, mechanism, entry and state. Any difference raises `petra.verify.Disagreement`, and `petra check` exits 4. `python bench/kernel_grid.py` makes that comparison on generated designs.
 
 ## Limits
 
-The kernel stops work that would not end. A tape has at least one root. A partition is at most 64 deep, and a `pow` exponent at most 64 in magnitude. A condition of a pick nests at most 16 deep, where `le` or `lt` alone is 1 deep. A value with more than 65,536 bits, or an `exp` of a number beyond 65,536, leaves its cell open. A pick has no value on a box where it has more than 4,096 ways to order the nodes it compares. A file's JSON nests at most 128 deep, and a number outside a string has at most 32 digits and no fraction or exponent.
+The kernel stops work that would not end. A tape has at least one root. A partition is at most 64 deep, and a `pow` exponent at most 64 in magnitude. A condition of a pick in a tape that a file carries nests at most 16 deep, where `le` or `lt` alone is 1 deep. A value with more than 65,536 bits, or an `exp` of a number beyond 65,536, leaves its cell open. A pick has no value on a box where it has more than 4,096 ways to order the nodes it compares. A file's JSON nests at most 128 deep, and a number outside a string has at most 32 digits and no fraction or exponent.
+
+A deck of rules has three more. A quantity or a number is at most 4,000 characters. A whole or a half power has an exponent of at most 64 in magnitude. An expression nests at most 1,024 deep, counted through the names of `let` it reads and the rows it applies, so a name of `let` that reads itself, or a chain of names longer than that, is refused. `petra/grid.py` has the second of these and not the other two.
 
 ## What the kernel does not check yet
 
-- The list of cells comes from Python: from the models' coverage rules, or for a design of a deck's types from the deck's grid as `petra/grid.py` reads it. The kernel checks each cell and not that the list is complete.
+For every design:
+
+- The numbers in card.json and design.json are in SI, and the Python front end converted them from the units the card and the design write. The kernel reads the units of a deck of rules itself, and not those of a card or a design. It checks that a part's number has the dimension its field asks, by the name of the dimension that the file states.
+- card.json is not a function of the card's text alone for a design of the models' kinds: an input that a component reads with `given` takes its name from the component. So the hash of card.json identifies a card together with a design, and the hash `petra check` prints on its `card` line, of the card's text, is the one to compare with the card that was issued.
+- Nothing here is proved in Lean. The kernel is a second implementation of the rules on this page, and `bench/kernel_grid.py` and the corpus compare it with the first.
+
+For a design with no parts:
+
+- The list of cells comes from Python, from the models' coverage rules. The kernel checks each cell and not that the list is complete.
 - A tape's formula comes from Python's models. The kernel checks its arithmetic and its `in:` and `reg:` inputs, not that the formula is the standard's.
 - Inputs labelled `dsg:` are the design's values as the models resolved them. The kernel does not tie them to `quantities`, and the verdict counts them.
 - A `not_applicable` cell is the model's word.
 - Proofs by the other five rules have no tape, and neither has an interval proof that leans on a defined quantity.
 - A cell holds the proof of its own statement. The proofs that its model applies there (its validity rows) and the proof of a claim's margin are not in the file. `petra check` counts them among the proofs the kernel has no rule for.
-- For a design of the models' kinds, `card.json` is not a function of the card's text alone: an input that a component reads with `given` takes its name from the component. A part of a deck's type reads only the given named for it, `given PART.FIELD`, and that name is the input's. So the hash of `card.json` identifies a card together with a design, and the hash `petra check` prints on its `card` line, of the card's text, is the one to compare with the card that was issued.
+
+For a design with parts:
+
+- The deck of rules is the one `--rules` names. The kernel prints its hash and does not know whether it is the deck a reader means, or whether its rows are the standard's. [deck.md](deck.md) says what stands behind a row, and that nothing yet stands behind a type, a grid line or a rule but the hand that wrote it.
+- The search for a partition or a point is Python's. A search that finds nothing leaves a cell open that may be provable. It cannot make a cell proved or refuted.
+- A design that has `parts` removed and comes without `--rules` is a design with no parts, and the kernel checks what proofs.json lists for it, as above. The verdict then has no `rules` hash. A verdict against a deck of rules is one that prints it.
+- `quantities` repeats the numbers of `parts` for the size rule. The kernel reads a part's numbers from `parts` and does not compare the two.
+- The card's `cases` and `environment` are not read for a design with parts. A load case is the `case` of a load.

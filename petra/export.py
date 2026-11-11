@@ -8,6 +8,11 @@ Writes four files into DIR (docs/format.md):
     deck.json     the registry values the proofs read, and the domains of petra/decks/core.json
     proofs.json   one cell per obligation, with the proof of each that has one
 
+For a design whose parts are of a deck of rules it writes a fifth, rules.json, the deck's
+file as it ships. design.json then holds the parts as written, and proofs.json holds hints.
+With --no-physics such a design is written as it stands, without asking the grid whether
+the deck's types take it: the kernel reads the parts itself and says.
+
 Untrusted. It reads the two files through the language and the models, so a bug here
 gives the kernel the wrong files, and the kernel's verdict is about the files it was given.
 A load or an ambient that reads a param is an input nobody signed, and goes into card.json
@@ -24,7 +29,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any, Iterator
 
-from .ir import Component, Design, Fixed, Input, ParamRef, Ref, Vec
+from .ir import Bound, Component, Design, Fixed, Input, ParamRef, Ref, Text, Vec
 from .kernel import Interval
 from .units import Quantity, dimension_name
 
@@ -60,31 +65,65 @@ def written(component: Component) -> Iterator[dict[str, Any]]:
                     yield {**where, "role": "position", **_quantity(item)}
 
 
-def card(design: Design, inputs: list[Input]) -> dict[str, Any]:
+def parts(design: Design) -> list[dict[str, Any]]:
+    """Every component block as written, for a design checked against a deck of rules: its
+    name, its type and its lines in order. An argument is a number in SI, the name of a
+    given, a word or a quoted text. This knows no deck: the kernel reads what each line
+    means from the field of the deck that it names. An argument of any other kind is
+    written as `other`, which no field takes."""
+    def arg(a: Any) -> dict[str, Any]:
+        if isinstance(a, Fixed):
+            return {"number": _quantity(a.quantity)}
+        if isinstance(a, Bound):
+            return {"given": a.name}
+        if isinstance(a, Ref) and len(a.parts) == 1:
+            return {"word": a.parts[0]}
+        return {"text": a.value} if isinstance(a, Text) else {"other": type(a).__name__}
+
+    return [{"name": c.name, "type": c.kind, "lines": [{"field": attr.key, "args": [arg(a) for a in attr.args]} for attr in c.attrs]}
+            for c in design.components.values()]
+
+
+def read_inputs(design: Design) -> list[Input]:
+    """Every signed bound of the card of a design of a deck's types, by name: each given a
+    line of a part reads, under the name the card gives it, each load, and the ambient.
+    This knows no deck."""
+    given = [Input(a.name, a.range, a.signature, a.kind, a.span, a.mean)
+             for c in design.components.values() for attr in c.attrs for a in attr.args if isinstance(a, Bound)]
+    loads = [e.value for case in design.loads.values() for e in case.entries if isinstance(e.value, Input)]
+    return sorted(given + loads + ([design.ambient] if isinstance(design.ambient, Input) else []), key=lambda i: i.name)
+
+
+def card(design: Design, inputs: list[Input], placed: bool = False) -> dict[str, Any]:
     """What the card states. An input's name is the stem of its premise label, and `inputs`
     is every signed bound the models hold (pipeline.signed_inputs). A load or an ambient
-    that reads a param is an input with no `by`."""
-    cases = {id(e.value): load.name for load in design.loads.values() for e in load.entries}
+    that reads a param is an input with no `by`. With `placed`, for a design checked
+    against a deck of rules, a load also says the part it is `on` and which `field` it is,
+    and the card names its tests records and its probability claims, which the other
+    designs' cards leave out."""
+    cases = {id(e.value): {"case": load.name, **({"on": ".".join(e.target), "field": e.field} if placed else {})}
+             for load in design.loads.values() for e in load.entries}
     claims = [{"name": c.name, "subject": ".".join(c.qoi.path), "quantity": c.qoi.name, "rel": c.rel.value,
                "cases": list(c.under), "bound": _quantity(c.bound)} for c in design.claims]
-    unsigned = [(f"{load.name}.{'.'.join(e.target)}.{e.field}", load.name, e.value)
+    unsigned = [(f"{load.name}.{'.'.join(e.target)}.{e.field}", cases[id(e.value)], e.value)
                 for load in design.loads.values() for e in load.entries if isinstance(e.value, ParamRef)]
     if isinstance(design.ambient, ParamRef):
-        unsigned.append(("ambient", None, design.ambient))
+        unsigned.append(("ambient", {}, design.ambient))
     return {"format": "petra-card/0", "name": design.name, "environment": design.environment, "cases": sorted(design.loads),
-            "inputs": [{"name": i.name, **({"case": cases[id(i)]} if id(i) in cases else {}), "by": i.signature.owner, **_quantity(i.range)}
-                       for i in inputs]
-                      + [{"name": name, **({"case": case} if case else {}), **_quantity(design.params[ref.name].range)}
-                         for name, case, ref in unsigned],
+            "inputs": [{"name": i.name, **cases.get(id(i), {}), "by": i.signature.owner, **_quantity(i.range)} for i in inputs]
+                      + [{"name": name, **case, **_quantity(design.params[ref.name].range)} for name, case, ref in unsigned],
             "claims": claims,
+            **({"tests": sorted(design.tests), "probability_claims": [c.name for c in design.probability_claims]} if placed else {}),
             "waivers": [{"subject": ".".join(w.subject), "mechanism": w.mode, "by": w.owner, "reason": w.reason} for w in design.waivers]}
 
 
-def design_file(design: Design, card_hash: str) -> dict[str, Any]:
-    """What the designer wrote: every number in a component block, and the params."""
+def design_file(design: Design, card_hash: str, deck: bool = False) -> dict[str, Any]:
+    """What the designer wrote: every number in a component block, and the params. For a
+    design checked against a deck of rules, also the parts as written."""
     return {"format": "petra-design/0", "name": design.name, "card": card_hash,
             "quantities": [q for c in design.components.values() for q in written(c)],
-            "params": [{"name": p.name, **_quantity(p.range)} for p in design.params.values()]}
+            "params": [{"name": p.name, **_quantity(p.range)} for p in design.params.values()],
+            **({"parts": parts(design)} if deck else {})}
 
 
 def tape(statement: Any) -> dict[str, Any] | None:
@@ -216,7 +255,7 @@ def bundle(design: Design, registry: Any, report: Any = None, proofs: Proofs | N
 def export(path: str, out: Path, physics: bool = True, card_path: str | None = None) -> None:
     """Write card.json, design.json and deck.json, then proofs.json when `physics`. The
     first three need no solver, so the kernel can refuse an ill-formed design before any
-    physics runs."""
+    physics runs. A design of a deck of rules gets rules.json too."""
     from .lang import load_design
     from .pipeline import check_design
     from .registry import build_registry
@@ -228,7 +267,8 @@ def export(path: str, out: Path, physics: bool = True, card_path: str | None = N
     design = load_design(path, registry, card_path)
     rules = grid.owner(design)
     if rules is not None:
-        files = grid.check(design, rules)[1]
+        # Without physics the files are the design as written, and the kernel says whether the deck's types take it.
+        files = grid.check(design, rules)[1] if physics else grid.bundle(design, rules)
         out.mkdir(parents=True, exist_ok=True)
         for name, body in files.items():
             if physics or name != "proofs":

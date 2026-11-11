@@ -13,6 +13,8 @@ exported (petra/export.py) and the verdict is the one that petra-verify binary e
 with, where ILL-FORMED reads as INPUT_ERROR. A pair the language refuses is INPUT_ERROR
 too: the kernel reads files, and that text gives it none. The kernel sees the card and
 the design before any physics runs, and the proofs only for a design it found well formed.
+For a design of a deck of rules the export also writes rules.json, the deck's own file,
+and the kernel gets it as --rules and works out the cells itself.
 
 A run fails when a design gets a verdict that is neither the expected one nor the known
 wrong one. It also fails when a known wrong verdict has come right, so that the line loses
@@ -88,7 +90,8 @@ def by_kernel(binary: str, case: Case) -> str:
     refused = EXIT_CODES["INPUT_ERROR"]
     with tempfile.TemporaryDirectory() as tmp:
         def verify(*names: str) -> str:
-            return _verdict(_run([binary, *(part for name in names for part in (f"--{name}", str(Path(tmp, f"{name}.json"))))]))
+            there = [*names, *(["rules"] if Path(tmp, "rules.json").is_file() else [])]
+            return _verdict(_run([binary, *(part for name in there for part in (f"--{name}", str(Path(tmp, f"{name}.json"))))]))
 
         export = [sys.executable, "-m", "petra.export", case.path, "--out", tmp]
         code = _run([*export, "--no-physics"])

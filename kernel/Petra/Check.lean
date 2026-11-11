@@ -2,7 +2,7 @@
 The rules of docs/format.md in its order, and the verdict.
 -/
 import Std.Data.HashSet
-import Petra.Files
+import Petra.Grid
 import Petra.Sha256
 
 namespace Petra
@@ -13,13 +13,13 @@ def Floor.broken (f : Floor) (what : String) (x : Rat) : String :=
   let relation := if f.strict then "above" else "at least"
   s!"a {what} is {relation} {f.min}, and this one goes down to {x}"
 
-/-- The type rules, 1 to 5. -/
+/-- The type rules, 1 to 5. Rule 6 is in `rules`: it reads the command line. -/
 def types (cardHash : String) (card : Card) (design : Design) (deck : Deck) : Array Finding := Id.run do
   let mut out : Array Finding := #[]
   if design.card != cardHash then
     out := out.push ⟨"types.1", "design", "card", s!"is not the hash of the card file, {cardHash}"⟩
   for key in design.keys do
-    unless ["format", "name", "card", "quantities", "params"].contains key do
+    unless ["format", "name", "card", "quantities", "params", "parts"].contains key do
       out := out.push ⟨"types.2", "design", key, "a design has no such key"⟩
   for q in design.quantities do
     if q.role == "size" && !deck.size.admits q.range.lo then
@@ -53,14 +53,6 @@ def premises (card : Card) (deck : Deck) (tape : Tape) : Except String (Array (A
     unless ranges.all (·.within input.range) do
       throw s!"the tape's range for {input.label} does not contain the signed one"
     return ranges
-
-/-- A cell, the state the kernel settles on, and the test that failed when that is not the
-state the file claims. -/
-structure Settled where
-  cell : Cell
-  state : State
-  reason : String := ""
-  waiver : Option Waiver := none
 
 /-- The cell rules, 1 to 5. A refuting point must also lie in the signed ranges and give
 one value to each label: a point outside what the card signs, or one that sets an input to
@@ -115,8 +107,11 @@ structure Report where
   hashes : List (String × Option String)
   findings : Array Finding
   cells : Array Settled
+  /-- With a deck of rules: how many hints of proofs.json name no cell the kernel has. -/
+  ignored : Option Nat
 
-/-- The `dsg:` inputs the settled proofs read. The kernel takes their ranges as stated. -/
+/-- The `dsg:` inputs the settled proofs read. With a deck of rules they are the numbers the
+design's parts write. Without one the kernel takes their ranges as the tape states them. -/
 def Report.dsgInputs (r : Report) : Nat :=
   let labels : Std.HashSet String := r.cells.foldl (init := {}) fun seen s =>
     match s.state, s.cell.tape with
@@ -125,33 +120,49 @@ def Report.dsgInputs (r : Report) : Nat :=
     | _, _ => seen
   labels.size
 
-/-- Shape, then types, then the cells. A broken rule of the first two groups is a finding,
-and with a finding the kernel settles no cell. -/
+/-- Shape, then types, then the deck of rules and the parts when `--rules` names a deck,
+then the cells. A broken rule of a group before the cells is a finding, and with a finding
+the kernel settles no cell. With a deck of rules the cells are the ones the kernel works out
+from it, and proofs.json holds hints. Without one the cells are the ones proofs.json lists. -/
 def rules (cardHash : String) (card design deck : Except String ByteArray)
-    (proofs : Option (Except String ByteArray)) : StateM (Array Finding) (Array Settled) := do
+    (deckOfRules proofs : Option (Except String ByteArray)) : StateM (Array Finding) (Array Settled × Option Nat) := do
   let card? ← load "card" "petra-card/0" card readCard
   let design? ← load "design" "petra-design/0" design readDesign
   let deck? ← load "deck" "petra-deck/0" deck readDeck
-  let cells? ← match proofs with
-    | some bytes => load "proofs" "petra-proofs/0" bytes readProofs
+  let rules? ← match deckOfRules with
+    | some bytes => load "rules" "petra-rules/0" bytes fun j => do return ← readRules j
     | none => pure none
-  let (some card, some design, some deck) := (card?, design?, deck?) | return #[]
+  let cells? ← match proofs, deckOfRules with
+    | some bytes, none => load "proofs" "petra-proofs/0" bytes readProofs
+    | _, _ => pure none
+  let hints? ← match proofs, deckOfRules with
+    | some bytes, some _ => load "proofs" "petra-proofs/0" bytes readHints
+    | _, _ => pure none
+  let (some card, some design, some deck) := (card?, design?, deck?) | return (#[], none)
   modify (· ++ types cardHash card design deck)
-  if !(← get).isEmpty then return #[]
-  return Id.run (((cells?.getD #[]).mapM (settle card deck)).run' {})
+  if design.parts.isSome && deckOfRules.isNone then
+    modify (·.push ⟨"types.6", "design", "parts", "a design with parts is checked against a deck of rules, and --rules names none"⟩)
+  let parts ← match rules? with
+    | some rules => readParts rules card design
+    | none => pure #[]
+  if !(← get).isEmpty then return (#[], none)
+  let some rules := rules? | return (Id.run (((cells?.getD #[]).mapM (settle card deck)).run' {}), none)
+  let (cells, ignored) := Id.run ((cells rules card parts (hints?.getD #[])).run' {})
+  return (cells, some ignored)
 
 /-- ILL-FORMED with a finding, FAIL with a refuted cell, PASS when every cell is proved,
 waived or not applicable and one is proved, and UNKNOWN otherwise: with an open cell, or
 with nothing proved. -/
-def check (card design deck : Except String ByteArray) (proofs : Option (Except String ByteArray)) : Report :=
+def check (card design deck : Except String ByteArray) (deckOfRules proofs : Option (Except String ByteArray)) : Report :=
   let hash (bytes : Except String ByteArray) : Option String := bytes.toOption.map fun b => "sha256:" ++ sha256 b
-  let (cells, findings) := Id.run ((rules ((hash card).getD "") card design deck proofs).run #[])
+  let ((cells, ignored), findings) := Id.run ((rules ((hash card).getD "") card design deck deckOfRules proofs).run #[])
   let has (state : State) : Bool := cells.any (·.state == state)
   let verdict :=
     if !findings.isEmpty then .illFormed
     else if has .refuted then .fail
     else if has .undecided || !has .proved then .unknown
     else .pass
-  { verdict, hashes := [("card", hash card), ("design", hash design), ("deck", hash deck)], findings, cells }
+  let hashes := [("card", hash card), ("design", hash design), ("deck", hash deck)] ++ (deckOfRules.map fun b => ("rules", hash b)).toList
+  { verdict, hashes, findings, cells, ignored }
 
 end Petra

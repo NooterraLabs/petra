@@ -10,7 +10,7 @@ from __future__ import annotations
 from fractions import Fraction
 from typing import Any, Mapping
 
-DESIGN_KEYS = frozenset({"format", "name", "card", "quantities", "params"})
+DESIGN_KEYS = frozenset({"format", "name", "card", "quantities", "params", "parts"})
 
 
 def _under(value: str, floor: Mapping[str, Any]) -> bool:

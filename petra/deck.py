@@ -13,8 +13,9 @@ evaluates it exactly, and runs the acceptance check a row passes before it enter
 
     python -m petra.deck ROWS.json [--examples FILE.json] [--second ROWS.json]
 
-The kernel does not read rows yet, so a row proves nothing by itself: it is the formula a
-deck will bind a proof to.
+A row proves nothing by itself. A rule of a deck binds it to the parts of a design
+(petra/grid.py), and the kernel reads the deck's rows a second time to write the tape of
+each rule itself (kernel/Petra/Deck.lean).
 """
 from __future__ import annotations
 
@@ -259,8 +260,8 @@ class _Reader:
                     raise RowError(f"{node} is a key, and only a table reads a key")
                 return Sym(node), self.takes[node].dim
             try:
-                return Const(Fraction(node)), NONE
-            except (ValueError, ZeroDivisionError):
+                return Const(parse_quantity(node, None).value.lo), NONE
+            except ValueError:
                 raise RowError(f"{node!r} is not a number, and the row does not take it") from None
         if not isinstance(node, list) or not node or not isinstance(node[0], str):
             raise RowError(f"{node!r} is not an expression: write a number, a name or [operator, ...]")
@@ -293,15 +294,18 @@ class _Reader:
 
     def power(self, base: Any, exponent: Any) -> tuple[Any, Vector]:
         """A whole power, a half power as a power of the root, and any other as
-        exp(exponent ln base), which needs a base that is a plain number."""
+        exp(exponent ln base), which needs a base that is a plain number. A whole or a half
+        power is at most 64, the largest the kernel raises a node to (kernel/Petra/Tape.lean)."""
         term, dim = self.expr(base)
         if isinstance(exponent, str) and exponent not in self.takes and exponent != "pi":
             try:
-                n = Fraction(exponent)
-            except (ValueError, ZeroDivisionError):
+                n = parse_quantity(exponent, None).value.lo
+            except ValueError:
                 raise RowError(f"{exponent!r} is not a number, and the row does not take it") from None
             scaled = tuple(a * n for a in dim)
             if n.denominator <= 2:
+                if abs(n.numerator) > 64:
+                    raise RowError(f"the power {n} is over 64, the largest whole or half power")
                 root = term if n.denominator == 1 else Sqrt(term)
                 raised = PowInt(root, abs(n.numerator))
                 return (raised if n > 0 else Div(Const(Fraction(1)), raised)), scaled

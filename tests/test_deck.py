@@ -108,6 +108,26 @@ class Reading(unittest.TestCase):
         got = deck.value(row, {"p": Fraction(2 * 10 ** 6), "r": Fraction(4), "t": Fraction(1)})
         self.assertAlmostEqual(float(got), (2e6 * 200e9) ** 0.5 * 0.25 ** 1.5, delta=1e-3)
 
+    def test_a_whole_or_a_half_power_is_at_most_64_as_in_the_kernel(self):
+        for exponent, taken in (("64", True), ("-64", True), ("64/2", True), ("65", False), ("-65", False), ("129/2", False), ("1000000000", False)):
+            body = changed(HOOP, **{"is": ["mul", "p", ["pow", ["div", "t", "r"], exponent]]})
+            with self.subTest(exponent=exponent):
+                if taken:
+                    self.assertEqual(deck.read(body).problems, ())
+                else:
+                    with self.assertRaises(deck.RowError):
+                        deck.read(body)
+
+    def test_a_number_is_digits_with_a_decimal_part_or_a_denominator(self):
+        for number, taken in (("2.4", True), ("3/4", True), ("-0.5", True), ("+7", True), ("1e3", False), (" 5", False), ("1_000", False), ("5.", False), (".5", False), ("1/0", False)):
+            body = changed(HOOP, **{"is": ["mul", "p", ["div", "r", "t"], number]})
+            with self.subTest(number=number):
+                if taken:
+                    self.assertEqual(deck.read(body).problems, ())
+                else:
+                    with self.assertRaises(deck.RowError):
+                        deck.read(body)
+
 
 class Units(unittest.TestCase):
     def test_each_dimension_error_is_named(self):

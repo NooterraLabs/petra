@@ -28,7 +28,7 @@ def MAX_COND_DEPTH : Nat := 16
 inductive Cond where
   | le (i j : Nat) | lt (i j : Nat)
   | and (cs : Array Cond) | or (cs : Array Cond) | not (c : Cond)
-  deriving Inhabited
+  deriving Inhabited, BEq, Hashable
 
 inductive Node where
   | c (x : Rat) | s (k : Nat) | pi
@@ -38,7 +38,7 @@ inductive Node where
   /-- The value of the first case whose condition holds. A case is its condition and the
   node that is then the pick's value. A case with no condition holds otherwise. -/
   | pick (cases : Array (Option Cond × Nat))
-  deriving Inhabited
+  deriving Inhabited, BEq, Hashable
 
 structure TapeInput where
   label : String
@@ -66,6 +66,32 @@ def Cond.pairs : Cond → Array (Nat × Nat)
 def compared (cases : Array (Option Cond × Nat)) : Array (Nat × Nat) :=
   let pairs := cases.flatMap fun (cond, _) => (cond.map Cond.pairs).getD #[]
   pairs.foldl (fun out p => if out.contains p then out else out.push p) #[]
+
+/-- The condition with each node it compares renamed. -/
+def Cond.map (f : Nat → Nat) : Cond → Cond
+  | .le i j => .le (f i) (f j)
+  | .lt i j => .lt (f i) (f j)
+  | .and cs => .and (cs.map (·.map f))
+  | .or cs => .or (cs.map (·.map f))
+  | .not c => .not (c.map f)
+
+/-- The node with each node it reads renamed. An input and a constant read none. -/
+def Node.map (f : Nat → Nat) : Node → Node
+  | .c x => .c x
+  | .s k => .s k
+  | .pi => .pi
+  | .add a => .add (a.map f)
+  | .mul a => .mul (a.map f)
+  | .min a => .min (a.map f)
+  | .max a => .max (a.map f)
+  | .neg i => .neg (f i)
+  | .abs i => .abs (f i)
+  | .sqrt i => .sqrt (f i)
+  | .ln i => .ln (f i)
+  | .exp i => .exp (f i)
+  | .div i j => .div (f i) (f j)
+  | .pow i n => .pow (f i) n
+  | .pick cases => .pick (cases.map fun (cond, value) => (cond.map (·.map f), f value))
 
 def Node.reads : Node → Array Nat
   | .c _ | .s _ | .pi => #[]

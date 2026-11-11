@@ -1,6 +1,6 @@
 /-
-The four files of docs/format.md as structures, and the shape rule: each file is JSON with
-its format, every number parses, and every range has lo <= hi.
+The files of docs/format.md as structures, and the shape rule: each file is JSON with its
+format, every number parses, and every range has lo <= hi. The deck of rules is in Deck.lean.
 -/
 import Lean.Data.Json
 import Petra.Tape
@@ -21,6 +21,9 @@ structure Input where
   range : Iv
   signer : String
   caseName : Option String
+  /-- For a load on a part of a deck's type: the part, and which of its type's loads it is. -/
+  on : Option String
+  field : Option String
 
 structure Claim where
   name : String
@@ -44,6 +47,8 @@ structure Card where
   inputs : Array Input
   claims : Array Claim
   waivers : Array Waiver
+  /-- Which of `tests` and `probability_claims` the card states. A deck of rules reads neither. -/
+  stated : Array String
 
 structure Quantity where
   kind : String
@@ -59,12 +64,31 @@ structure Param where
   dim : String
   range : Iv
 
+/-- One argument of a line of a part: a written number, the name of a bound the card gives,
+a bare word or a quoted text. The rules deck says what the line's field makes of it. -/
+inductive Arg where
+  | number (dim : String) (range : Iv)
+  | given (name : String)
+  | word (word : String)
+  | text (text : String)
+
+structure Line where
+  field : String
+  args : Array Arg
+
+/-- A part as the design writes it: its name, its type and its lines in order. -/
+structure Block where
+  name : String
+  kind : String
+  lines : Array Line
+
 structure Design where
   keys : Array String
   name : String
   card : String
   quantities : Array Quantity
   params : Array Param
+  parts : Option (Array Block)
 
 structure Floor where
   min : Rat
@@ -103,6 +127,21 @@ structure Cell where
   point : Option (Array Rat)
   which : Option Nat
 
+/-- A partition that names each input it splits by its label. -/
+inductive Split where
+  | leaf
+  | split (label : String) (cut : Rat) (below above : Split)
+
+/-- What proofs.json says of a cell the kernel works out from a deck of rules: the state it
+claims, and a partition or a point to try. The kernel trusts neither. -/
+structure Hint where
+  subject : String
+  mechanism : String
+  entry : String
+  state : State
+  partition : Option Split
+  point : Option (Array (String × Rat))
+
 def text (j : Json) (key : String) : Except String String :=
   match j.getObjVal? key with
   | .ok (.str s) => pure s
@@ -138,7 +177,8 @@ def numbered (what : String) (read : Json → Except String α) (a : Array Json)
 
 def readInput (j : Json) : Except String Input := do
   return { name := ← text j "name", dim := ← text j "dim", range := ← range j, signer := ← text j "by",
-           caseName := ← maybe j "case" (·.getStr?) }
+           caseName := ← maybe j "case" (·.getStr?), on := ← maybe j "on" (·.getStr?),
+           field := ← maybe j "field" (·.getStr?) }
 
 def readClaim (j : Json) : Except String Claim := do
   let bound ← j.getObjVal? "bound"
@@ -156,6 +196,19 @@ def readQuantity (j : Json) : Except String Quantity := do
   unless role == "size" || role == "position" do throw s!"role {role} is not size or position"
   return { kind := ← text j "type", entity := ← text j "entity", line := ← text j "line",
            field := ← text j "field", role, dim := ← text j "dim", range := ← range j }
+
+def readArg (j : Json) : Except String Arg := do
+  match (← j.getObj?).toArray.toList with
+  | [("number", n)] => return .number (← text n "dim") (← range n)
+  | [("given", .str name)] => return .given name
+  | [("word", .str word)] => return .word word
+  | [("text", .str quoted)] => return .text quoted
+  | _ => throw "not a number, a given, a word or a text"
+
+def readBlock (j : Json) : Except String Block := do
+  let line (l : Json) : Except String Line := do
+    return { field := ← text l "field", args := ← numbered "arg" readArg (← list l "args") }
+  return { name := ← text j "name", kind := ← text j "type", lines := ← numbered "line" line (← list j "lines") }
 
 def readParam (j : Json) : Except String Param := do
   return { name := ← text j "name", dim := ← text j "dim", range := ← range j }
@@ -228,6 +281,14 @@ partial def readPartition : Json → Except String Partition
     return .split (← (← j.getObjVal? "input").getNat?) (← number j "at")
       (← readPartition (← j.getObjVal? "below")) (← readPartition (← j.getObjVal? "above"))
 
+/-- A partition by labels that nests at most `depth` deep. -/
+def readSplit : Nat → Json → Except String Split
+  | _, .str "leaf" => pure .leaf
+  | 0, _ => throw "a partition nests too deep"
+  | depth + 1, j => do
+    return .split (← text j "input") (← number j "at")
+      (← readSplit depth (← j.getObjVal? "below")) (← readSplit depth (← j.getObjVal? "above"))
+
 def readCell (j : Json) : Except String Cell := do
   let name ← text j "state"
   let some state := State.all.find? (·.name == name) | throw s!"state {name} is not a state of this format"
@@ -263,14 +324,19 @@ def readCard (j : Json) : Read Card := do
     | .ok (.str s) => pure (some s)
     | .ok .null => pure none
     | _ => throw "environment is not a string or null"
+  let stated := #["tests", "probability_claims"].filter fun key => match j.getObjVal? key with
+    | .ok (.arr a) => !a.isEmpty
+    | .ok _ => true
+    | .error _ => false
   return { name := ← text j "name", environment, caseNames := ← texts j "cases",
            inputs := ← items "card" j "inputs" readInput, claims := ← items "card" j "claims" readClaim,
-           waivers := ← items "card" j "waivers" readWaiver }
+           waivers := ← items "card" j "waivers" readWaiver, stated }
 
 def readDesign (j : Json) : Read Design := do
+  let parts ← if (j.getObjVal? "parts").toOption.isSome then some <$> items "design" j "parts" readBlock else pure none
   return { keys := (← j.getObj?).keysArray, name := ← text j "name", card := ← text j "card",
            quantities := ← items "design" j "quantities" readQuantity,
-           params := ← items "design" j "params" readParam }
+           params := ← items "design" j "params" readParam, parts }
 
 /-- `about` in `domains.input` is prose, as petra/decks/core.json writes it, and not a dimension. -/
 def readDeck (j : Json) : Read Deck := do
@@ -286,6 +352,18 @@ def readProofs (j : Json) : Read (Array Cell) := items "proofs" j "cells" readCe
 
 /-- The deepest a file's JSON may nest. A partition of depth `MAX_DEPTH` fits. -/
 def MAX_NESTING : Nat := 128
+
+/-- A hint has a state of the list. Its partition names inputs by label, and its point gives
+a value to each label. A tape in it is not read. -/
+def readHint (j : Json) : Except String Hint := do
+  let name ← text j "state"
+  let some state := State.all.find? (·.name == name) | throw s!"state {name} is not a state of this format"
+  let value (x : String × Json) : Except String (String × Rat) := do return (x.1, ← parseRat (← x.2.getStr?))
+  return { subject := ← text j "subject", mechanism := ← text j "mechanism", entry := ← text j "entry", state,
+           partition := ← maybe j "partition" (readSplit MAX_NESTING),
+           point := ← maybe j "point" (fun p => do (← p.getObj?).toArray.mapM value) }
+
+def readHints (j : Json) : Read (Array Hint) := items "proofs" j "cells" readHint
 
 /-- The most digits a number outside a string may have. -/
 def MAX_DIGITS : Nat := 32

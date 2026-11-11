@@ -105,6 +105,10 @@ TRUSTED_CEILING = Limit(19115, "Set on 2026-11-08 at 140f742, where the trusted 
                                "writes each tape from rows that petra/deck.py reads, so both are trusted until the "
                                "kernel reads decks: with them the base measured 19,115. The count takes all of "
                                "deck.py, though the acceptance check in it writes no tape. "
+                               "The kernel reads decks since 2026-11-10 (kernel/Petra/Deck.lean): the grid then sends "
+                               "it hints and no tapes, and holds a deck's names to letters, digits and _, a grid line "
+                               "to a type of the deck and a whole power to 64, as the kernel does. With that the base "
+                               "measured 19,115 again. "
                                "Raise it in the commit that needs more and say why here.")
 
 T2_ADOPTED = date(2026, 11, 8)
@@ -258,12 +262,17 @@ TRUSTED: tuple[Group, ...] = (
                            "second implementation of these modules.")),
     Group("decks as data",
           ("petra/deck.py", "petra/grid.py"),
-          Debt(date(2026, 11, 10), "petra-verify checks the arithmetic of every tape the grid writes and gives its own "
-                                   "verdict on the cells (tests/test_grid.py, Kernel). It does not check that the cells "
-                                   "are the ones the deck asks for, or that a tape is the rule it claims to be: the "
-                                   "kernel does not read decks yet. A row passes the acceptance check of docs/deck.md, "
-                                   "which a second transcription backs. Nothing second-transcribes a type, a grid line "
-                                   "or a rule.")),
+          Debt(date(2026, 11, 10), "petra-verify reads the deck's own file and works out every cell and every tape "
+                                   "itself (kernel/Petra/Deck.lean, Grid.lean), and `petra check` compares its cells with "
+                                   "the grid's one by one: tests/test_grid.py (Kernel), tests/test_kernel_grid.py, and "
+                                   "bench/kernel_grid.py on generated designs and damaged decks. So the kernel's verdict "
+                                   "no longer rests on these two modules for the cells or the tapes. What is left to "
+                                   "them alone is the search for a partition or a point, which can only leave a cell "
+                                   "open, and what a report says of a cell beyond its state. The kernel's reader is a "
+                                   "port of these modules by one hand, not a reading made without sight of them, so it "
+                                   "is named here and not as the group's judge. A row passes the acceptance check of "
+                                   "docs/deck.md, which a second transcription backs. Nothing second-transcribes a "
+                                   "type, a grid line or a rule.")),
 )
 
 UNTRUSTED: tuple[str, ...] = (

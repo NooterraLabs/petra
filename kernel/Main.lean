@@ -1,5 +1,5 @@
 /-
-petra-verify --card card.json --design design.json --deck deck.json [--proofs proofs.json]
+petra-verify --card card.json --design design.json --deck deck.json [--rules rules.json] [--proofs proofs.json]
 
 Prints one JSON object, the verdict of docs/format.md with the state of each cell, and
 exits 0 for PASS, 1 for FAIL, 2 for UNKNOWN and 3 for ILL-FORMED. A command line it cannot
@@ -24,7 +24,7 @@ def render (r : Report) : String :=
     object [("subject", str w.subject), ("mechanism", str w.mechanism), ("by", str w.signer), ("reason", str w.reason)]
   let cell (s : Settled) : String :=
     object ([("subject", str s.cell.subject), ("mechanism", str s.cell.mechanism), ("entry", str s.cell.entry),
-             ("claimed", str s.cell.state.name), ("state", str s.state.name)]
+             ("claimed", if s.hinted then str s.cell.state.name else "null"), ("state", str s.state.name)]
             ++ if s.reason.isEmpty then [] else [("reason", str s.reason)])
   let count (state : State) : String × String := (state.name, toString (r.cells.filter (·.state == state)).size)
   let fields : List (String × String) := [
@@ -32,18 +32,19 @@ def render (r : Report) : String :=
     ("hashes", object (r.hashes.map fun (file, hash) => (file, hash.elim "null" str))),
     ("findings", rows (r.findings.map finding)),
     ("counts", object (State.all.toList.map count)),
-    ("dsg_inputs", toString r.dsgInputs),
+    ("dsg_inputs", toString r.dsgInputs)]
+    ++ (r.ignored.map fun n => ("ignored_hints", toString n)).toList ++ [
     ("waived", rows (r.cells.filterMap waived)),
     ("cells", rows (r.cells.map cell))]
   "{" ++ ",\n ".intercalate (fields.map fun (key, value) => s!"{str key}: {value}") ++ "}"
 
 def usage : String :=
-  "usage: petra-verify --card card.json --design design.json --deck deck.json [--proofs proofs.json]"
+  "usage: petra-verify --card card.json --design design.json --deck deck.json [--rules rules.json] [--proofs proofs.json]"
 
 def flags : List String → Option (List (String × String))
   | [] => some []
   | flag :: path :: rest =>
-    if ["--card", "--design", "--deck", "--proofs"].contains flag then (flags rest).map ((flag, path) :: ·)
+    if ["--card", "--design", "--deck", "--rules", "--proofs"].contains flag then (flags rest).map ((flag, path) :: ·)
     else none
   | _ => none
 
@@ -60,6 +61,7 @@ def main (args : List String) : IO UInt32 := do
   let some given := flags args | refuse
   let (some card, some design, some deck) := (given.lookup "--card", given.lookup "--design", given.lookup "--deck")
     | refuse
-  let report := check (← slurp card) (← slurp design) (← slurp deck) (← (given.lookup "--proofs").mapM slurp)
+  let report := check (← slurp card) (← slurp design) (← slurp deck) (← (given.lookup "--rules").mapM slurp)
+    (← (given.lookup "--proofs").mapM slurp)
   IO.println (render report)
   return report.verdict.exitCode
