@@ -133,6 +133,31 @@ def UNITS : List (String × Rat × Dim) :=
    ("psi", LBF / (INCH * INCH), stress), ("ksi", KIP / (INCH * INCH), stress),
    ("kip_in", KIP * INCH, ENERGY), ("kip_ft", KIP * 12 * INCH, ENERGY)]
 
+/-- The powers a unit of length may be raised to, each as it is written. One power has one
+spelling: `inch^4`, and not `inch^04` or `inch^+4`. -/
+def UNIT_POWERS : List (String × Nat) := [("2", 2), ("3", 3), ("4", 4)]
+
+/-- A unit as a value writes it (`_unit` in petra/units.py): a spelling of `UNITS`, or a unit
+of length, `^` and 2, 3 or 4, as in `mm^3` and `inch^4`. The factor is the unit's own factor
+to that power, exactly, and the dimension is a length to that power. So `mm^2` is `mm2` and
+`inch^2` is `inch2`. Only a unit of length takes a power: a section's area, modulus and
+moment of inertia are lengths to a power, and a power of a unit that is itself a product or
+a quotient, as `ohm/km` and `kip_in` are, could be read two ways. -/
+def unitOf (unit : String) : Except String (Rat × Dim) :=
+  match unit.splitOn "^" with
+  | [name] =>
+    match UNITS.lookup name with
+    | some found => pure found
+    | none => throw s!"{unit} is not a unit"
+  | [name, power] =>
+    match UNITS.lookup name, UNIT_POWERS.lookup power with
+    | some (factor, dim), some n =>
+      if dim == ({ m := 1 } : Dim) then pure (rpow factor n, dim.times (qi (Int.ofNat n)))
+      else throw s!"{unit} is not a unit: only a unit of length takes a power"
+    | none, _ => throw s!"{unit} is not a unit"
+    | some _, none => throw s!"{unit} is not a unit: the power of a unit is 2, 3 or 4, as in inch^4"
+  | _ => throw s!"{unit} is not a unit"
+
 /-- A number as petra/units.py reads one: digits with an optional sign, and then a decimal
 part or a denominator that is not zero. No exponent, no space and no other digit. -/
 def decimal (text : List Char) : Option Rat := do
@@ -185,7 +210,7 @@ def amount (text : String) : Except String (Rat × Dim) := do
   let some number := if number.contains ',' then thousands number else some number | bad
   let some x := decimal number | bad
   let unit := String.ofList (strip (unit.drop 1))
-  let some (factor, dim) := UNITS.lookup (if unit.isEmpty then "1" else unit) | throw s!"{text}: {unit} is not a unit"
+  let (factor, dim) ← (unitOf (if unit.isEmpty then "1" else unit)).mapError (s!"{text}: " ++ ·)
   return (x * factor, dim)
 
 end Petra

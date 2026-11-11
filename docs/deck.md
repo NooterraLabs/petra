@@ -58,6 +58,15 @@ A `dim` is one of `dimensionless`, `length`, `area`, `force`, `stress`, `moment`
 
 A row carries no units. A value with a unit appears in two places: a range, and a constant that the standard gives with a unit. Every unit the language reference lists is allowed, such as `inch`, `inch2`, `kip`, `ksi`, `mm`, `mm2`, `kN` and `MPa`.
 
+A unit of length may be raised to a power: the unit, `^` and the power, with no space, as in `mm^3` and `inch^4`. The units of length are `m`, `mm`, `um`, `cm`, `km`, `inch` and `ft`. The power is `2`, `3` or `4`, written as that one digit. The factor is the unit's own factor to that power, exactly, and the dimension is `length^2`, `length^3` or `length^4`: `1 inch^4` is (127/5000)^4 m^4. So a section modulus is written `20 inch^3` and a moment of inertia `100 inch^4`.
+
+- An area has two spellings and one meaning: `mm^2` is `mm2`, `m^2` is `m2` and `inch^2` is `inch2`. Both are accepted wherever a value stands.
+- No other unit takes a power. `kN^2`, `ksi^2`, `mm2^2` and `1^2` are refused. A power of a unit that is itself a product or a quotient, as `ohm/km` and `kip_in` are, could be read two ways, and no quantity of a deck needs one.
+- Any other power is refused, and so is any other spelling of these three: `inch^0`, `inch^1`, `inch^5`, `inch^3/2`, `inch^04`, `inch^+4` and `inch^2^2`.
+- A power is part of a unit. It stands in no number: `"2^2"` and `"2 mm^2"` are no numbers alone, and a `dim` is `length^4`, never `mm^4`.
+
+A power works wherever a value is read: a `range`, a `least`, the end of a band, a listed value of `at`, a cell, the `unit` of a table, a `["q", NUMBER, UNIT]`, a number of a design and a bound of a card.
+
 ### A value with its unit
 
 A value is a text: a number, one space, and a unit. It stands in a `range`, a `least`, the end of a band, a listed value of `at` and a cell of a table. `["q", NUMBER, UNIT]` holds its two halves, which are joined with one space and read as one value.

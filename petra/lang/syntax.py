@@ -33,6 +33,7 @@ that registers the kind (petra/models), so adding a domain never edits this file
     waive     = "waive" ref "on" path "by" STRING "reason" STRING ;
     range     = "[" qty "," qty "]" ;
     qty       = NUMBER [ unit ] ;     an IDENT or "%" right after a NUMBER is its unit
+    unit      = IDENT [ "^" INT ] | "%" ;         inch^4: a unit of length to the power 2, 3 or 4, with no space
     qoi       = segment { "." segment } ;          last segment is the quantity name
     segment   = IDENT [ "(" IDENT ")" ] ;          member(diag_ad) names element diag_ad
     path      = IDENT { "." IDENT } ;

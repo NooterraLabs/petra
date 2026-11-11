@@ -70,7 +70,7 @@ class Parse(unittest.TestCase):
                 self.assertIs(type(q.value.hi), Fraction, "a float never appears")
 
     def test_an_unknown_unit_is_rejected(self):
-        for unit in ("kNN", "K", "mm^2", "in", ""):
+        for unit in ("kNN", "K", "mm^5", "kN^2", "in", ""):
             with self.subTest(unit=unit), self.assertRaisesRegex(UnitError, "unknown unit"):
                 parse_quantity("1", unit)
 

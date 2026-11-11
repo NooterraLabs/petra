@@ -6,7 +6,9 @@ punctuation { } ( ) [ ] , : . -> -- <= >= > %, and NEWLINE. Line ends are tokens
 because a component block is a list of attribute lines; runs of blank lines and comment
 lines collapse into one NEWLINE, and a NEWLINE inside ( ) or [ ] is dropped. Other
 whitespace separates tokens. Comments run from # to end of line. Units are IDENTs (kN,
-mm2, degC, Nm) or "%".
+mm2, degC, Nm) or "%". A "^" written directly after a name, with digits directly after it,
+is the power of a unit, as in inch^4, and lexes as IDENT "^" NUMBER. A "^" anywhere else
+is an error.
 
 A "." written directly between two names continues a dotted name, and the segment after
 it may start with a digit, so registry ids such as aluminium.6061_T6 and chs.60_3x3_2
@@ -49,6 +51,9 @@ class LolaSyntaxError(ValueError):
 _IDENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 _SEGMENT = re.compile(r"[A-Za-z0-9_]+")
 _NUMBER = re.compile(r"[+-]?[0-9]+(?:\.[0-9]+|/[0-9]+)?")
+_POWER = re.compile(r"[0-9]{1,3}(?![0-9./])")
+"""The power of a unit: digits right after the `^` that follows a name, with no sign, point
+or `/`. Which powers a unit takes is for units.py to say."""
 _PUNCT2 = ("->", "--", "<=", ">=")
 LONGEST_NUMBER = 100
 """The most characters a number has. No quantity is written longer, and exact arithmetic
@@ -111,6 +116,13 @@ def tokenize(text: str, path: str) -> tuple[Token, ...]:
                 emit(Kind.PUNCT, ".", i)
                 emit(Kind.IDENT, seg.group(), i + 1)
                 i = seg.end()
+            if text.startswith("^", i):
+                power = _POWER.match(text, i + 1)
+                if not power:
+                    raise fail(i, "a power is written right after its unit, as in inch^4: '^' and a whole number")
+                emit(Kind.PUNCT, "^", i)
+                emit(Kind.NUMBER, power.group(), i + 1)
+                i = power.end()
         elif ch in _PUNCT1:
             if ch in _OPEN:
                 depth += 1

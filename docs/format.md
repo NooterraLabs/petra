@@ -102,7 +102,7 @@ The deck of rules a design with parts is checked against: the file of `petra/dec
 The kernel reads the whole deck and refuses one that does not hold together, as `petra/grid.py` does when it loads one. It reads these itself, and takes none of them from Python:
 
 - A dimension, such as `force/length` or `length^3`, as five exponents of metre, kilogram, second, ampere and degree Celsius. They are rational, because a square root halves them.
-- A quantity with its unit, such as `0.75 inch`, `3/4 inch`, `1 1/8 inch` or `29,000 ksi`, as an exact rational in SI. It has the unit table of `petra/units.py` with the same exact factors: an inch is 127/5000 m, and a pound-force is 0.45359237 kg times 9.80665 m/s2.
+- A quantity with its unit, such as `0.75 inch`, `3/4 inch`, `1 1/8 inch` or `29,000 ksi`, as an exact rational in SI. It has the unit table of `petra/units.py` with the same exact factors: an inch is 127/5000 m, and a pound-force is 0.45359237 kg times 9.80665 m/s2. A unit of length may be raised to the power 2, 3 or 4, as in `mm^3` and `inch^4`, and its factor is then the unit's own to that power ([deck.md](deck.md), "Dimensions"). A number of a design in such a unit reaches the kernel in SI, with the `dim` `m^3` or `m^4`.
 - A number alone, such as `0.90` or `3/2`: digits with an optional sign, and then a decimal part or a denominator. It takes no exponent, no space and no underscore.
 - An expression, as a list of tape nodes. A whole power is a `pow`, a half power is a `pow` of a `sqrt`, a negative one is 1 over it, and any other power is `exp` of the exponent times `ln`. Cases and tables are a `pick`.
 
