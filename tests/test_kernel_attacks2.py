@@ -1,12 +1,12 @@
 """The second hostile review of petra-verify (kernel/), one test per confirmed finding.
 
 Each test asserts the behaviour the kernel should have. All five failed against the kernel at
-438057d, where the review was made, and the first four pass now that the kernel charges
-a proof for the work it does (docs/format.md, "Limits"). The fifth still fails. The review
-found no false PASS, no false proof and no false refutation. Its findings were inputs under
-1 MB that kept the kernel busy for far more than a minute, held more than a gigabyte, or
-printed more than 5 MB, though the evaluation budget and the limits of docs/format.md were
-meant to stop them. The tests are skipped when no kernel is built.
+438057d, where the review was made, and pass now that the kernel charges a proof for the work
+it does (docs/format.md, "Limits"). The review found no false PASS, no false proof and no
+false refutation. Its findings were inputs under 1 MB that kept the kernel busy for far more
+than a minute, held more than a gigabyte, or printed more than 5 MB, though the evaluation
+budget and the limits of docs/format.md were meant to stop them. The tests are skipped when
+no kernel is built.
 
   1  An exp of a number near 45,000 took about 0.3 seconds and cost 3 evaluations. Closed: an
      exp pays for its terms times the bits it works in, about 900 million units for this one.
@@ -20,9 +20,10 @@ meant to stop them. The tests are skipped when no kernel is built.
      every input: inputs times leaves, while the budget counted the leaves alone. Closed:
      the leaves are walked one at a time, and each pays for its copy of the box.
   5  Cells made from a deck of rules are the parts times the lines of the grid, so 89 KB
-     print 5.1 MB.
+     printed 5.1 MB. Closed in part: their reasons print in 500,000 bytes together, and the
+     same files print 3.7 MB. The names of 10,000 cells are 2.8 MB of that.
 
-tests/test_kernel_limits.py holds each limit one by one (Work, Orders).
+tests/test_kernel_limits.py holds each limit one by one (Work, Orders, Reasons).
 """
 import json
 import os

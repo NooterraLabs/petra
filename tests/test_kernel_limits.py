@@ -277,8 +277,9 @@ class Waivers(Kernel):
 
 SPENT = "this proof would take the kernel past the 20000000000 units of work it spends on one verdict, so it is not tried"
 COSTLY = "this step would take the kernel past the 20000000000 units of work it spends on one verdict, so it is not taken"
-MAX_WORK, MAX_ORDERS = 20_000_000_000, 1024
-"""The limits as kernel/Petra/Tape.lean sets them."""
+UNSAID = "past what the verdict prints of reasons"
+MAX_WORK, MAX_ORDERS, MAX_REASONS = 20_000_000_000, 1024, 500_000
+"""The limits as kernel/Petra/Tape.lean and Files.lean set them."""
 
 
 def halves(label, lo: int, hi: int):
@@ -406,6 +407,56 @@ class Orders(Kernel):
         self.assertEqual(cells["s", "strip.heat", "heat/run"]["state"], "open")
         self.assertIn("compares 1101 orders here, over the budget of 1024 for one pick", cells["s", "strip.heat", "heat/run"]["reason"])
         self.assertEqual(cells["s", "strip.hole", "hole"]["state"], "proved", "the other cells are settled as before")
+
+
+@unittest.skipUnless(verify.binary(), "no petra-verify is built here and PETRA_VERIFY names none")
+class Reasons(Kernel):
+    """The cells made from a deck of rules are the parts times the lines of the grid, so their
+    reasons are not held by the size of the files. The verdict prints 500,000 bytes of them."""
+
+    @staticmethod
+    def loud(parts: int, lines: int) -> dict[str, str]:
+        """A deck of one type with `lines` lines of the grid, each with a rule that reads four
+        loads of 64-byte names, and `parts` parts that the card puts no load on: every cell
+        is open, with the longest reason the kernel writes."""
+        def name(prefix: str, k: int, width: int = 64) -> str:
+            return f"{prefix}{k}".ljust(width, "q")
+        loads = [name(f"L{j}_", 0) for j in range(4)]
+        kind = {"type": "t", "what": "w", "fields": [{"name": "x", "dim": "force", "what": "w"}],
+                "loads": [{"name": n, "dim": "force", "what": "w"} for n in loads]}
+        rules = {"format": "petra-rules/0", "name": "loud", "about": "a", "rows": [], "types": [kind],
+                 "grid": [{"type": "t", "mechanism": name("m", k), "what": "w", "anchor": TEST} for k in range(lines)],
+                 "rules": [{"id": "r/" + name("i", k, 62), "type": "t", "mechanism": name("m", k), "anchor": TEST, "says": "s",
+                            "le": [["add"] + [["load", n] for n in loads], "x"]} for k in range(lines)]}
+        card = export.text({"format": "petra-card/0", "name": "c", "environment": None, "cases": [], "inputs": [], "claims": [],
+                            "waivers": [], "tests": [], "probability_claims": []})
+        made = [{"name": name("p", i), "type": "t", "lines": [{"field": "x", "args": [{"number": {"dim": "force", "lo": "1", "hi": "1"}}]}]}
+                for i in range(parts)]
+        design = {"format": "petra-design/0", "name": "c", "card": export.sha256(card), "quantities": [], "params": [], "parts": made}
+        return {"card": card, "design": json.dumps(design, separators=(",", ":")), "deck": strips()["deck"],
+                "rules": json.dumps(rules, separators=(",", ":")), "proofs": '{"format":"petra-proofs/0","cells":[]}'}
+
+    def test_a_few_cells_keep_their_reasons_whole(self):
+        said, _ = printed(self.loud(3, 3))
+        self.assertEqual(len(said["cells"]), 9)
+        self.assertTrue(all(c["reason"].startswith("the card puts no L0_0q") for c in said["cells"]))
+
+    def test_ten_thousand_cells_print_half_a_megabyte_of_reasons_and_then_say_so(self):
+        said, size = printed(self.loud(100, 100))
+        reasons = [c["reason"] for c in said["cells"]]
+        self.assertEqual(len(reasons), 10_000)
+        kept = [r for r in reasons if r != UNSAID]
+        self.assertEqual(reasons, kept + [UNSAID] * (len(reasons) - len(kept)), "the first reasons are kept, in the order of the cells")
+        self.assertGreater(len(kept), 2000)
+        self.assertLessEqual(sum(len(json.dumps(r)) - 2 for r in kept), MAX_REASONS)
+        self.assertGreater(sum(len(json.dumps(r)) - 2 for r in kept), MAX_REASONS - 300)
+        self.assertLess(size, 4_000_000)
+
+    def test_the_cells_of_proofs_json_keep_every_reason(self):
+        """Each is in the file once, so its reason prints in a few times the cell's own bytes."""
+        cells = [{"subject": "", "mechanism": "", "entry": "", "state": "proved"}] * 17000
+        said, _ = printed(old_path(cells, []))
+        self.assertEqual({c["reason"] for c in said["cells"]}, {"the kernel has no rule yet for a proof with no tape"})
 
 
 if __name__ == "__main__":

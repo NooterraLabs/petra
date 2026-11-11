@@ -27,6 +27,14 @@ A step is one name or one operator of a rule and each thing the operator reads, 
 the rule is written for a part and a load case, or one node of a tape. -/
 def MAX_STEPS : Nat := 10000000
 
+/-- The most bytes the verdict prints of the reasons of the cells it makes from a deck of
+rules. Those cells are the parts times the lines of the grid, so their reasons are not held
+by the size of the files as the cells of proofs.json are. -/
+def MAX_REASONS : Nat := 500000
+
+/-- What a cell says in place of its reason once the reasons before it took `MAX_REASONS`. -/
+def UNSAID : String := "past what the verdict prints of reasons"
+
 /-- The bytes the verdict prints for a text, between its quotes. -/
 def printed (s : String) : Nat := (Json.str s).compress.utf8ByteSize - 2
 

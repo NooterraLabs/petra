@@ -258,6 +258,14 @@ structure Made where
   /-- The work the proofs took, of `MAX_WORK`. -/
   work : Nat
 
+/-- The cells with their reasons held to `MAX_REASONS` bytes between them: a reason that
+would go past it is replaced by `UNSAID`. -/
+def said (cells : Array Settled) : Array Settled :=
+  (cells.foldl (fun (out, room) s =>
+    if s.reason.isEmpty then (out.push s, room)
+    else if printed s.reason ≤ room then (out.push s, room - printed s.reason)
+    else (out.push { s with reason := UNSAID }, 0)) (#[], MAX_REASONS)).1
+
 /-- Every cell of the design, in the order petra/grid.py lists them: for each part, each
 mechanism the grid asks of its type, and then each field that nothing reads. An error when
 there are more than `MAX_CELLS` of them, or when writing their tapes takes more than
@@ -358,7 +366,7 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (hints : Array Hint
         out := out.push (cell part.name "unread" field.name .undecided s!"no rule of the deck reads {part.name}.{field.name}, so nothing checks it")
   if out.size > MAX_CELLS then return .error over
   let made := out.foldl (fun made s => made.insert (s.cell.subject, s.cell.mechanism, s.cell.entry)) ranges
-  return .ok { cells := out, ignored := (hints.filter fun h => !made.contains (h.subject, h.mechanism, h.entry)).size,
+  return .ok { cells := said out, ignored := (hints.filter fun h => !made.contains (h.subject, h.mechanism, h.entry)).size,
                dsgInputs := dsg.size, work := MAX_WORK - left }
 
 end Petra

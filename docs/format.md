@@ -260,7 +260,7 @@ The kernel stops work that would not end. A tape has at least one root. A partit
 
 A deck of rules has three more. A quantity or a number is at most 4,000 characters. A whole or a half power has an exponent of at most 64 in magnitude. An expression nests at most 1,024 deep, counted through the names of `let` it reads and the rows it applies, so a name of `let` that reads itself, or a chain of names longer than that, is refused. `petra/grid.py` has the second of these and not the other two.
 
-The time a verdict takes, what the kernel holds while it works and what it prints are each bounded, whatever the files hold. Ten limits see to that.
+The time a verdict takes, what the kernel holds while it works and what it prints are each bounded, whatever the files hold. Eleven limits see to that.
 
 | Limit | Value | Past it |
 |---|---|---|
@@ -269,6 +269,7 @@ The time a verdict takes, what the kernel holds while it works and what it print
 | The name of a part, and of a load case that puts a load on a part | 64 bytes as printed | A shape finding |
 | In a deck of rules: the name of a field, a load, a joined part and a `let`, the name of a mechanism, and the id of a rule | 64 bytes as printed | The deck does not hold together |
 | Cells made from a deck of rules | 10,000 | A finding of the rule `limits`, and the design is ILL-FORMED |
+| Reasons of the cells made from a deck of rules, together | 500,000 bytes as printed | The kernel keeps the first reasons, in the order of the cells. Each cell after them says `past what the verdict prints of reasons` in place of its own. |
 | Steps to write the tapes of a design from a deck of rules | 10,000,000 | A finding of the rule `limits`, and the design is ILL-FORMED |
 | Work for the proofs of one verdict | 20,000,000,000 units | A proof that cannot pay for its tape is not tried, and a step that cannot pay is not taken. The cell is open, and the reason says so. |
 | Enclosures held at once while one leaf is walked | 16,777,216 words of 64 bits, which is 128 MB | The node whose enclosure would go past it has no value. |
@@ -293,7 +294,7 @@ The heaviest design of the corpus, `weld_bracket`, takes 3.2 billion units in un
 
 The kernel walks the leaves of a partition one at a time. On a leaf it gives up the enclosure of a node after the last node that reads it, and it holds at most 128 MB of enclosures at once. So what it holds is the files as it read them, the enclosures of one leaf, and two caches of at most 1,024 entries each.
 
-A cell made from a deck of rules prints in at most about 600 bytes, and all of them in about 6 MB. A cell that proofs.json lists prints once, in under three times its own bytes.
+A cell made from a deck of rules prints in at most about 370 bytes beside its reason: three names of at most 64, 64 and 135 bytes, and its states. All the cells print in at most 3.7 MB, their reasons in 0.5 MB more, and the cells past those reasons say so in at most 0.4 MB: 4.6 MB, whatever the files hold. The cells are the parts times the lines of the grid, so a small deck can reach most of that: 100 parts and 100 lines with names of 64 bytes are 89 KB of files and print 3.7 MB. A cell that proofs.json lists prints once, in under three times its own bytes.
 
 `petra/grid.py` holds a name to the same 64 bytes, counted the same way, so it refuses the same decks and designs. It has none of the other limits. `petra check` reports a design past the limit on cells or on steps as an input error, in the kernel's words. A proof the kernel does not finish for the budget of work, or does not write for the limit on a pick's orders, leaves a cell open that the grid proved, and `petra check` stops with exit code 4 and the kernel's reason.
 
