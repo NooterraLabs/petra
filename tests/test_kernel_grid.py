@@ -23,7 +23,7 @@ from petra import export, grid, verify
 from petra.files import read_pair
 from petra.registry import build_registry
 from petra.units import CUSTOMARY, UNITS
-from tests.test_grid import CARD, DESIGN, STRIPS
+from tests.test_grid import CARD, DESIGN, STRIPS, UNKNOWN_KEYS
 
 ROOT = Path(__file__).resolve().parents[1]
 NO_WAIVER = CARD.replace('waive strip.creep on s by "t@example.org" reason "it is a test"\n', "")
@@ -577,6 +577,29 @@ class ChangedRules(Kernel):
             with self.subTest(what=what):
                 self.assertIllFormed({**files, "rules": json.dumps(self.rules(edit[0]))}, edit[1])
         self.assertIllFormed({**files, "rules": "{"}, "shape rules : not JSON")
+
+    def test_a_key_the_deck_does_not_know_is_refused_wherever_it_stands(self):
+        """The same places and keys as the grid's test, and the finding names the key."""
+        files = strips()
+        for what, (edit, key) in UNKNOWN_KEYS.items():
+            with self.subTest(what=what):
+                self.assertIllFormed({**files, "rules": json.dumps(self.rules(edit))}, f"{key} is not a key here")
+
+    def test_an_anchor_names_its_standard_and_its_clause(self):
+        files = strips()
+        for place in ("rows", "grid", "rules"):
+            for anchor in ({"standard": "made up"}, {"clause": "1"}, {"standard": "", "clause": "1"}):
+                with self.subTest(place=place, anchor=anchor):
+                    rules = self.rules(lambda b: b[place][0].__setitem__("anchor", anchor))
+                    self.assertIllFormed({**files, "rules": json.dumps(rules)}, "the anchor lacks its standard or its clause")
+
+    def test_bands_are_in_order_and_none_lies_over_another(self):
+        files = strips()
+        for bands in ([["1 mm", "2 mm"], ["0 mm", "1 mm"], ["2 mm", None]], [["0 mm", "1.5 mm"], ["1 mm", "2 mm"], ["2 mm", None]],
+                      [["1 mm", "0 mm"], ["1 mm", "2 mm"], ["2 mm", None]]):
+            with self.subTest(bands=bands):
+                rules = self.rules(lambda b: b["rows"][0]["table"]["down"].__setitem__("bands", bands))
+                self.assertIllFormed({**files, "rules": json.dumps(rules)}, "row test/limit: the bands of w are pairs, the lower end first, in order and none over another")
 
     def test_the_kernels_unit_table_is_the_one_of_petra_units(self):
         # For each unit, two rules with no input: 1 of the unit is at most, and at least, its SI factor as Python has it.

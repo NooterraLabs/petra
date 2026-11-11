@@ -272,11 +272,60 @@ class Refused(unittest.TestCase):
         self.refused("a design is checked against one deck", design=mixed)
 
 
+UNKNOWN_KEYS = {
+    "the anchor of a row": (lambda b: b["rows"][0].__setitem__("anchor", {**TEST, "claus": "2"}), "claus"),
+    "what a row gives": (lambda b: b["rows"][0]["gives"].update(unit="A"), "unit"),
+    "an input of a row": (lambda b: b["rows"][0]["takes"][0].update(rnge=["1 mm", "2 mm"]), "rnge"),
+    "a key a row takes": (lambda b: b["rows"][2]["takes"][1].update(least="1"), "least"),
+    "a case": (lambda b: b["rows"][1]["cases"][0].update(then="1"), "then"),
+    "a jump": (lambda b: b["rows"][1]["jumps"][0].update(because="made up"), "because"),
+    "a table": (lambda b: b["rows"][0]["table"].update(units="A"), "units"),
+    "a side with bands": (lambda b: b["rows"][0]["table"]["down"].update(close="lower"), "close"),
+    "a side read at listed values, which has no bands to close": (lambda b: b["rows"][2]["table"]["down"].update(closed="upper"), "closed"),
+    "a side that reads a key": (lambda b: b["rows"][2]["table"]["across"].update(closed="upper"), "closed"),
+    "a type": (lambda b: b["types"][0].update(note="made up"), "note"),
+    "a field": (lambda b: b["types"][0]["fields"][0].update(lest="1 mm2"), "lest"),
+    "a key field, which has no least value": (lambda b: b["types"][1]["fields"][5].update(least="1"), "least"),
+    "a field that joins parts, which is no count": (lambda b: b["types"][1]["fields"][7].update(whole=True), "whole"),
+    "a quantity, which joins no part": (lambda b: b["types"][1]["fields"][0].update({"as": ["a"]}), "as"),
+    "a load": (lambda b: b["types"][1]["loads"][0].update(signed=True), "signed"),
+    "a line of the grid": (lambda b: b["grid"][0].update(note="made up"), "note"),
+    "the anchor of a line of the grid": (lambda b: b["grid"][0].__setitem__("anchor", {**TEST, "note": "made up"}), "note"),
+    "unless": (lambda b: b["grid"][4]["unless"].update(wen=["is", "fit", "free"]), "wen"),
+    "a rule": (lambda b: b["rules"][0].update(unless="made up"), "unless"),
+    "the anchor of a rule": (lambda b: b["rules"][0].__setitem__("anchor", {**TEST, "pages": "12"}), "pages"),
+    "an item of where": (lambda b: b["rules"][0]["where"][0].update(because="made up"), "because"),
+    "the deck": (lambda b: b.update(notes="made up"), "notes"),
+}
+"""Each place of a deck where a key may stand, with a key the deck does not have there. The
+grid and the kernel refuse every one, and name the key (tests/test_kernel_grid.py)."""
+
+
 class Decks(unittest.TestCase):
     def wrong(self, says: str, edit) -> None:
         with self.assertRaises(grid.DeckError) as ctx:
             deck(edit)
         self.assertIn(says, str(ctx.exception))
+
+    def test_a_key_the_deck_does_not_know_is_refused_wherever_it_stands(self):
+        """A key that was skipped would be a misspelled one read as left out: `close` for
+        `closed` would leave a band closed at its upper end."""
+        for what, (edit, key) in UNKNOWN_KEYS.items():
+            with self.subTest(what=what):
+                self.wrong(f"{key} is not a key here", edit)
+
+    def test_an_anchor_names_its_standard_and_its_clause(self):
+        for place in ("rows", "grid", "rules"):
+            for anchor in ({"standard": "made up"}, {"clause": "1"}, {"standard": "", "clause": "1"}):
+                with self.subTest(place=place, anchor=anchor), self.assertRaises(grid.DeckError):
+                    deck(lambda b: b[place][0].__setitem__("anchor", anchor))
+
+    def test_bands_are_in_order_and_none_lies_over_another(self):
+        for bands in ([["1 mm", "2 mm"], ["0 mm", "1 mm"], ["2 mm", None]], [["0 mm", "1.5 mm"], ["1 mm", "2 mm"], ["2 mm", None]],
+                      [["1 mm", "0 mm"], ["1 mm", "2 mm"], ["2 mm", None]]):
+            with self.subTest(bands=bands):
+                self.wrong("the bands of w are pairs, the lower end first, in order and none over another",
+                           lambda b: b["rows"][0]["table"]["down"].__setitem__("bands", bands))
 
     def test_a_rule_binds_each_input_of_a_row_to_its_dimension(self):
         self.wrong("w is a length, and the rule binds a temperature", lambda b: b["rules"][0]["le"][1][2][2].__setitem__("w", "T"))

@@ -206,9 +206,12 @@ def filled (j : Json) (key : String) : Bool :=
 
 def members (j : Json) : Except String (Array (String × Json)) := do return (← j.getObj?).toArray
 
+/-- Refuses a key that an object of a deck does not have. A deck holds no key the kernel
+does not read: a key it skipped would be a misspelled one, read as if it were left out. The
+key is cut to `MAX_TEXT`, as a finding is. -/
 def within (j : Json) (allowed : List String) : Except String Unit := do
   for (key, _) in ← members j do
-    unless allowed.contains key do throw s!"{key} is not a key here: it has {", ".intercalate allowed}"
+    unless allowed.contains key do throw s!"{clip key} is not a key here: it has {", ".intercalate allowed}"
 
 def distinct (names : Array String) : Bool :=
   (names.foldl (fun (seen, so) name => (seen.insert name, so && !seen.contains name)) (({} : Std.HashSet String), true)).2
@@ -439,9 +442,10 @@ def MAX_EXPRESSION : Nat := 1024
 
 -- Reading a deck.
 
-/-- An anchor names its standard and its clause. -/
+/-- An anchor names its standard and its clause, and may name an equation, a table and a page. -/
 def anchored (j : Json) : Except String Unit := do
   let anchor ← j.getObjVal? "anchor"
+  (within anchor ["standard", "clause", "equation", "table", "page"]).mapError ("anchor: " ++ ·)
   unless filled anchor "standard" && filled anchor "clause" do throw "the anchor lacks its standard or its clause"
 
 /-- A list a key may leave out. -/
@@ -457,7 +461,7 @@ def readTable (j : Json) (takes : Array (String × Taken)) (gives : Dim) : Excep
       within a ["by"]
       return .named input names
     | some (_, .quantity dim) =>
-      within a ["by", "bands", "closed", "at"]
+      within a (if has a "bands" then ["by", "bands", "closed"] else ["by", "at"])
       if has a "bands" == has a "at" then throw s!"the side that reads {input} has `bands` or `at`"
       let upper ← match a.getObjVal? "closed" with
         | .error _ | .ok (.str "upper") => pure true
@@ -520,6 +524,7 @@ def readRow (j : Json) : Except String Row := do
     unless (["is", "cases", "table"].filter (has j)).length == 1 do throw "a row has one of `is`, `cases` and `table`"
     anchored j
     let gives ← j.getObjVal? "gives"
+    (within gives ["name", "dim", "what"]).mapError ("gives: " ++ ·)
     let _ ← text gives "name"
     let dim ← dimension (← text gives "dim")
     let mut takes : Array (String × Taken) := #[]
@@ -530,8 +535,10 @@ def readRow (j : Json) : Except String Row := do
         let names ← texts t "one_of"
         if names.isEmpty || !distinct names || has t "dim" || has t "range" then
           throw s!"{name} is a key: it has `one_of`, a list of different names, and no `dim` or `range`"
+        (within t ["name", "what", "one_of"]).mapError (s!"{name}: " ++ ·)
         takes := takes.push (name, .key names)
       else
+        (within t ["name", "what", "dim", "range"]).mapError (s!"{name}: " ++ ·)
         let its ← dimension (← text t "dim")
         match ← (← texts t "range").toList.mapM amount with
         | [(lo, loDim), (hi, hiDim)] =>
@@ -555,6 +562,7 @@ def readRow (j : Json) : Except String Row := do
       if let .quantity its := taken then names := names.insert name (.bound its n)
     let _ ← (cases { names } dim MAX_EXPRESSION found).run { steps := takes.map fun t => .field none t.1 }
     for jump in ← listed j "jumps" do
+      (within jump ["cases", "why"]).mapError ("a jump: " ++ ·)
       let ends := (← (← list jump "cases").mapM (·.getNat?)).toList.eraseDups
       unless ends.length == 2 && ends.all (fun n => 1 ≤ n && n ≤ found.size) && filled jump "why" do
         throw "a jump names two of the row's cases by number, from 1, and says why"
@@ -569,14 +577,17 @@ def readField (load : Bool) (j : Json) : Except String Field := do
       throw "it has `what` and one of `dim`, `one_of` and `type`"
     identifier name
     if has j "one_of" then
+      within j ["name", "what", "one_of"]
       let names ← texts j "one_of"
       if names.isEmpty || !distinct names then throw "`one_of` is a list of different names"
       return { name, kind := .key names }
     if has j "type" then
+      within j ["name", "what", "type", "as"]
       let names ← if has j "as" then texts j "as" else pure #[name]
       if names.isEmpty || !distinct names then throw "`as` names each part once"
       names.forM identifier
       return { name, kind := .parts (← text j "type") names }
+    within j ["name", "what", "dim", "least", "signed", "whole"]
     let dim ← dimension (← text j "dim")
     let least ← if has j "least" then do
         let (x, its) ← amount (← text j "least")
@@ -596,6 +607,7 @@ def readField (load : Bool) (j : Json) : Except String Field := do
 def readKind (j : Json) : Except String Kind := do
   let name ← text j "type"
   let kind : Except String Kind := do
+    within j ["type", "what", "fields", "loads"]
     let _ ← j.getObjVal? "what"
     let fields ← (← list j "fields").mapM (readField false)
     let loads ← (← listed j "loads").mapM (readField true)
@@ -636,6 +648,7 @@ def readAsk (kinds : Array Kind) (rows : Std.HashMap String Row) (j : Json) : Ex
     let excuse ← match j.getObjVal? "unless" with
       | .error _ | .ok .null => pure none
       | .ok said => do
+        (within said ["why", "when"]).mapError ("unless: " ++ ·)
         let _ ← text said "why"
         pure (some (← (said.getObjVal? "when").toOption.mapM (static (scopeOf kind kinds rows) MAX_EXPRESSION)))
     return { kind := name, mechanism, excuse }
@@ -669,6 +682,7 @@ def readRule (kinds : Array Kind) (rows : Std.HashMap String Row) (asks : Array 
     let read : Reading ((Nat × Nat) × Array (Nat × Nat)) := do
       let main ← pair (← j.getObjVal? "le") "`le`"
       let ranges ← (← listed j "where").mapM fun range => do
+        (within range ["le", "why"]).mapError ("where: " ++ ·)
         let _ ← text range "why"
         pair (← range.getObjVal? "le") "`where`"
       for (name, _) in lets do
