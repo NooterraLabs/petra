@@ -194,7 +194,8 @@ class Waivers(Kernel):
         """Files of a design with no parts: a card with the waivers and nothing else, and the cells."""
         card = export.text({"format": "petra-card/0", "name": "c", "environment": None, "cases": [], "inputs": [], "claims": [], "waivers": waivers})
         design = {"format": "petra-design/0", "name": "d", "card": "sha256:" + hashlib.sha256(card.encode()).hexdigest(), "quantities": [], "params": []}
-        return {"card": card, "design": export.text(design), "deck": strips()["deck"],
+        domains = json.loads(export.CORE.read_text(encoding="utf-8"))["domains"]
+        return {"card": card, "design": export.text(design), "deck": export.text({"format": "petra-deck/0", "domains": domains, "constants": []}),
                 "proofs": json.dumps({"format": "petra-proofs/0", "cells": cells}, separators=(",", ":"))}
 
     def test_a_waiver_that_many_cells_rest_on_is_printed_once(self):

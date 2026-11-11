@@ -99,6 +99,9 @@ structure Card where
   waivers : Array Waiver
   /-- Which of `tests` and `probability_claims` the card states. A deck of rules reads neither. -/
   stated : Array String
+  /-- Which of `tests` and `probability_claims` the card has as a key, stated or empty. Only
+  the card of a design checked against a deck of rules has them. -/
+  keyed : Array String
 
 structure Quantity where
   kind : String
@@ -152,6 +155,9 @@ structure Deck where
   size : Floor
   input : Array (String × Floor)
   constants : Array Constant
+  /-- Whether deck.json has `rules`, the name and the hash of a deck of rules. The exporter
+  writes it for a design checked against one, and the kernel reads only that it is there. -/
+  rules : Bool
 
 /-- The state of a cell. The files write `undecided` as "open". -/
 inductive State where
@@ -380,9 +386,10 @@ def readCard (j : Json) : Read Card := do
     | .ok (.arr a) => !a.isEmpty
     | .ok _ => true
     | .error _ => false
+  let keyed := #["tests", "probability_claims"].filter fun key => (j.getObjVal? key).toOption.isSome
   return { name := ← text j "name", environment, caseNames := ← texts j "cases",
            inputs := ← items "card" j "inputs" readInput, claims := ← items "card" j "claims" readClaim,
-           waivers := ← items "card" j "waivers" readWaiver, stated }
+           waivers := ← items "card" j "waivers" readWaiver, stated, keyed }
 
 def readDesign (j : Json) : Read Design := do
   let parts ← if (j.getObjVal? "parts").toOption.isSome then some <$> items "design" j "parts" readBlock else pure none
@@ -398,7 +405,7 @@ def readDeck (j : Json) : Read Deck := do
     if dim != "about" then
       if let some floor ← found "deck" s!"domains.input.{dim}" (readFloor x) then input := input.push (dim, floor)
   return { size := ← readFloor (← domains.getObjVal? "size"), input,
-           constants := ← items "deck" j "constants" readConstant }
+           constants := ← items "deck" j "constants" readConstant, rules := (j.getObjVal? "rules").toOption.isSome }
 
 def readProofs (j : Json) : Read (Array Cell) := items "proofs" j "cells" readCell
 

@@ -156,7 +156,8 @@ class TheKernelsOwnCells(Kernel):
         self.assertNotIn("parts", json.loads(files["design"]))
         self.assertTrue(all("on" not in i and "field" not in i for i in json.loads(files["card"])["inputs"]))
         said = ask(files)
-        self.assertEqual((said["findings"], set(said["hashes"]), "ignored_hints" in said), ([], {"card", "design", "deck"}, False))
+        self.assertEqual((said["findings"], set(said["hashes"]), "ignored_hints" in said), ([], {"card", "design", "deck", "rules"}, False))
+        self.assertEqual((said["hashes"]["rules"], said["cells_from"]), (None, "proofs"), "it read no deck of rules, and says so")
 
 
 class Exported(Kernel):
@@ -357,7 +358,86 @@ class ChangedDesign(Kernel):
         self.assertIllFormed(bare, "parts.6 card run.s.current: a load is put on a part, and s is not one")
         self.assertIllFormed(bare, "parts.6 card s.gap: is no load, and no part reads it")
         nothing = changed(changed(bare, "card", lambda b: b.update(inputs=[], waivers=[], cases=[])), "proofs", lambda b: b.update(cells=[]))
-        self.assertEqual((ask(nothing)["verdict"], ask(nothing)["cells"]), ("UNKNOWN", []), "with no part there is no cell, and nothing is proved")
+        self.assertIllFormed(nothing, "types.7 card tests: is a key of the card, which only a design checked against a deck of rules has, and the design has no parts")
+        unmarked = changed(changed(nothing, "card", lambda b: [b.pop("tests"), b.pop("probability_claims")]), "deck", lambda b: b.pop("rules"))
+        self.assertEqual((ask(unmarked)["verdict"], ask(unmarked)["cells"]), ("UNKNOWN", []), "with no part there is no cell, and nothing is proved")
+
+
+class Downgrade(Kernel):
+    """A card that was issued for a deck of rules is not checked as a design of the models'
+    kinds (type rule 7). The files of a deck design carry marks, and each mark is refused
+    with a design that has no parts or with no --rules. What is left is a card.json written
+    without the marks, which has another hash, and a verdict that says where its cells came from."""
+
+    FORGED = {"inputs": [{"label": "dsg:x", "lo": "0", "hi": "1"}], "nodes": [["c", "-1"]], "roots": [0]}
+
+    def forged(self, files: dict[str, str]) -> dict[str, str]:
+        """The files with `parts` removed and with proofs.json saying what the designer likes:
+        one cell proved by a tape that reads nothing of the card, and the rest not applicable."""
+        cells = [{"subject": "s", "mechanism": "strip.heat", "entry": "", "state": "proved", "tape": self.FORGED, "partition": "leaf"},
+                 {"subject": "s", "mechanism": "strip.hole", "entry": "", "state": "not_applicable", "why": "forged"}]
+        return {**changed(files, "design", lambda b: b.pop("parts")), "proofs": export.text({"format": "petra-proofs/0", "cells": cells})}
+
+    def test_the_cells_come_from_the_rules_and_the_verdict_says_so(self):
+        files = strips()
+        said = ask(files)
+        self.assertEqual((said["cells_from"], said["hashes"]["rules"]), ("rules", "sha256:" + hashlib.sha256(files["rules"].encode("utf-8")).hexdigest()))
+        self.assertEqual(list(said)[:3], ["verdict", "hashes", "cells_from"], "printed with the verdict, before anything else")
+
+    def test_an_honest_card_with_no_parts_and_no_rules_is_ill_formed(self):
+        files = self.forged(strips(card=OVER))
+        self.assertEqual(ask(strips(card=OVER))["verdict"], "FAIL", "the honest files, with the deck, fail")
+        said = ask(files, without=("rules",))
+        self.assertEqual((said["verdict"], said["cells"], said["cells_from"], said["hashes"]["rules"]), ("ILL-FORMED", [], "proofs", None))
+        lacks = "which only a design checked against a deck of rules has, and the design has no parts and --rules names none"
+        self.assertEqual([(f["rule"], f["file"], f["item"], f["why"]) for f in said["findings"]], [
+            ("types.7", "card", "run.s.current", f"is a load on a part, {lacks}"),
+            ("types.7", "card", "tests", f"is a key of the card, {lacks}"),
+            ("types.7", "card", "probability_claims", f"is a key of the card, {lacks}"),
+            ("types.7", "deck", "rules", f"names a deck of rules, {lacks}")])
+
+    def test_each_mark_alone_is_refused(self):
+        files = self.forged(strips())
+
+        def only(mark: str) -> dict[str, str]:
+            """The forged files with every mark but `mark` taken out, by a designer who rewrites the card."""
+            def card(body: dict) -> None:
+                if mark != "load":
+                    body["inputs"] = [{k: v for k, v in i.items() if k not in ("on", "field")} for i in body["inputs"]]
+                for key in ("tests", "probability_claims"):
+                    if mark != key:
+                        body.pop(key)
+            out = changed(files, "card", card)
+            return out if mark == "rules" else changed(out, "deck", lambda b: b.pop("rules"))
+
+        for mark, says in (("load", "types.7 card run.s.current: is a load on a part"), ("tests", "types.7 card tests: is a key of the card"),
+                           ("probability_claims", "types.7 card probability_claims: is a key of the card"), ("rules", "types.7 deck rules: names a deck of rules")):
+            with self.subTest(mark=mark):
+                self.assertIllFormed(only(mark), says, without=("rules",))
+        self.assertIllFormed(strips(), "types.7 card tests: is a key of the card, which only a design checked against a deck of rules has, and --rules names none",
+                             without=("rules",))
+
+    def test_a_card_that_only_waives_is_marked_too(self):
+        """The exporter writes `tests` and `probability_claims` into every card of a deck
+        design, so a card with no load is refused as well."""
+        files = changed(self.forged(strips()), "card", lambda b: b.update(inputs=[i for i in b["inputs"] if "on" not in i]))
+        self.assertIllFormed(files, "types.7 card tests", without=("rules",))
+
+    def test_with_every_mark_removed_the_card_has_another_hash_and_the_verdict_says_proofs(self):
+        """What the files cannot close. A card.json with no mark and a design with no parts
+        are a design of the models' kinds to the kernel, and the forged cells pass. The
+        reader sees it in three places: the card's hash is not the asker's, `cells_from` is
+        `proofs`, and the hash of the rules is null."""
+        honest = strips(card=OVER)
+        files = self.forged(honest)
+
+        def unmark(body: dict) -> None:
+            body["inputs"] = [{k: v for k, v in i.items() if k not in ("on", "field")} for i in body["inputs"]]
+            body.pop("tests"), body.pop("probability_claims")
+        files = changed(changed(files, "card", unmark), "deck", lambda b: b.pop("rules"))
+        said = ask(files, without=("rules",))
+        self.assertEqual((said["verdict"], said["cells_from"], said["hashes"]["rules"]), ("PASS", "proofs", None))
+        self.assertNotEqual(said["hashes"]["card"], ask(honest)["hashes"]["card"])
 
 
 class ChangedCard(Kernel):

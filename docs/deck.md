@@ -321,9 +321,9 @@ petra check examples/deck/lap_unknown.petra
 
 ```
 lap-splice: UNKNOWN
-deck       sha256:d80024f8...  aisc360-22
+rules      sha256:d80024f8...  aisc360-22
 card       sha256:b0372d69...  examples/deck/lap_unknown.card
-design     sha256:ba2b35d4...  examples/deck/lap_unknown.petra
+design     sha256:1ba41e3e...  examples/deck/lap_unknown.petra
 kernel     petra-verify checked 5 of 5 proofs and gives the same verdict
 cells      5 proved, 0 refuted, 4 not applicable, 0 waived, 8 open
   splice/lap.spacing             open                    the deck has no rule for it (AISC 360-22 J3.4)
@@ -333,7 +333,7 @@ cells      5 proved, 0 refuted, 4 not applicable, 0 waived, 8 open
   ...
 ```
 
-The number on a proved or refuted line is the most the left side of the rule reaches over the least the right side does. `examples/deck` has the same lap passing, with a card that waives the eight open mechanisms, and failing under a larger pull.
+The `rules` line is the hash of the deck's file, which the kernel prints as `hashes.rules`. A verdict is "checked against this deck" only when that hash is the one the reader trusts ([format.md](format.md), "Reading a verdict"). The number on a proved or refuted line is the most the left side of the rule reaches over the least the right side does. `examples/deck` has the same lap passing, with a card that waives the eight open mechanisms, and failing under a larger pull.
 
 ## What a deck does not check yet
 

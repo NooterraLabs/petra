@@ -1001,7 +1001,7 @@ class Report:
     def lines(self) -> list[str]:
         counts = self.counts()
         out = [f"{self.name}: {self.status}",
-               f"deck       {self.deck.hash}  {self.deck.name}",
+               f"rules      {self.deck.hash}  {self.deck.name}",
                "cells      " + ", ".join(f"{counts[s]} {s.replace('_', ' ')}" for s in STATES)]
         wide = max((len(f"{c.subject}/{c.mechanism}") for c in self.cells), default=0)
         for c in self.cells:
@@ -1062,7 +1062,7 @@ def checked(design: Design, deck: Deck, card: str, text: str, card_path: str) ->
         differ = verify.differs([(c.subject, c.mechanism, c.entry, c.state) for c in report.cells], report.status, deck.hash, said)
         if differ:
             raise verify.Disagreement(f"{design.path}: petra-verify gives {said['verdict']} and the grid {report.status}: {differ}")
-        said = {"verdict": said["verdict"], "checked": sum(bool(c.proof) for c in report.cells), "hashes": said["hashes"]}
+        said = {"verdict": said["verdict"], "checked": sum(bool(c.proof) for c in report.cells), "hashes": said["hashes"], "cells_from": said["cells_from"]}
     return Checked(design.path, report, card_path, {"card": export.sha256(card), "design": export.sha256(text)}, said)
 
 

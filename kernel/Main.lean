@@ -2,7 +2,8 @@
 petra-verify --card card.json --design design.json --deck deck.json [--rules rules.json] [--proofs proofs.json]
 
 Prints one JSON object, the verdict of docs/format.md with the state of each cell, and
-exits 0 for PASS, 1 for FAIL, 2 for UNKNOWN and 3 for ILL-FORMED. A command line it cannot
+exits 0 for PASS, 1 for FAIL, 2 for UNKNOWN and 3 for ILL-FORMED. `cells_from` says whether
+the cells are the kernel's own, made from the deck of rules, or the list of proofs.json. A command line it cannot
 read prints the usage and exits 64.
 -/
 import Petra.Check
@@ -33,6 +34,7 @@ def render (r : Report) : String :=
   let fields : List (String × String) := [
     ("verdict", str r.verdict.name),
     ("hashes", object (r.hashes.map fun (file, hash) => (file, hash.elim "null" str))),
+    ("cells_from", str r.cellsFrom),
     ("findings", rows (r.findings.kept.map finding)),
     ("more_findings", toString r.findings.more),
     ("counts", object (State.all.toList.map count)),

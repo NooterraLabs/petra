@@ -13,7 +13,7 @@ def Floor.broken (f : Floor) (what : String) (x : Rat) : String :=
   let relation := if f.strict then "above" else "at least"
   s!"a {what} is {relation} {f.min}, and this one goes down to {x}"
 
-/-- The type rules, 1 to 5. Rule 6 is in `rules`: it reads the command line. -/
+/-- The type rules, 1 to 5. Rules 6 and 7 are in `rules` and `marks`: they read the command line. -/
 def types (cardHash : String) (card : Card) (design : Design) (deck : Deck) : StateM Findings Unit := do
   let say (rule file item why : String) : StateM Findings Unit := modify (·.push ⟨rule, file, item, why⟩)
   if design.card != cardHash then
@@ -31,6 +31,22 @@ def types (cardHash : String) (card : Card) (design : Design) (deck : Deck) : St
   for w in card.waivers do
     if w.signer.isEmpty then
       say "types.5" "card" s!"{w.subject}/{w.mechanism}" "the waiver names no by"
+
+/-- Type rule 7. What only the files of a design checked against a deck of rules have: an
+input of the card that puts a load on a part, the keys `tests` and `probability_claims` of
+the card, and `rules` in deck.json. Each is a finding when the design has no parts or
+`--rules` names no deck. Without this a card that was issued for a deck of rules would be
+checked with the cells that proofs.json lists, which the kernel takes as they come. -/
+def marks (card : Card) (design : Design) (deck : Deck) (deckOfRules : Bool) : StateM Findings Unit := do
+  let lacks := " and ".intercalate ((if design.parts.isNone then ["the design has no parts"] else [])
+    ++ (if deckOfRules then [] else ["--rules names none"]))
+  if lacks.isEmpty then return
+  let say (file item what : String) : StateM Findings Unit :=
+    modify (·.push ⟨"types.7", file, item, s!"{what}, which only a design checked against a deck of rules has, and {lacks}"⟩)
+  for i in card.inputs do
+    if i.on.isSome || i.field.isSome then say "card" i.name "is a load on a part"
+  for key in card.keyed do say "card" key "is a key of the card"
+  if deck.rules then say "deck" "rules" "names a deck of rules"
 
 /-- What the card or the deck signs for a tape's input. A `dsg:` input has no signed range:
 the kernel does not tie it to the design yet. -/
@@ -106,6 +122,9 @@ structure Report where
   hashes : List (String × Option String)
   findings : Findings
   cells : Array Settled
+  /-- Where the cells came from: `rules` when `--rules` named a deck and the kernel made them
+  from it, and `proofs` when it took the list that proofs.json holds. -/
+  cellsFrom : String
   /-- With a deck of rules: how many hints of proofs.json name no cell the kernel has. -/
   ignored : Option Nat
   /-- How many distinct `dsg:` inputs the settled proofs read. With a deck of rules they are
@@ -150,6 +169,7 @@ def rules (cardHash : String) (card design deck : Except String ByteArray)
   types cardHash card design deck
   if design.parts.isSome && deckOfRules.isNone then
     modify (·.push ⟨"types.6", "design", "parts", "a design with parts is checked against a deck of rules, and --rules names none"⟩)
+  marks card design deck deckOfRules.isSome
   let parts ← match rules? with
     | some rules => readParts rules card design
     | none => pure #[]
@@ -176,7 +196,8 @@ def check (card design deck : Except String ByteArray) (deckOfRules proofs : Opt
     else if has .refuted then .fail
     else if has .undecided || !has .proved then .unknown
     else .pass
-  let hashes := [("card", hash card), ("design", hash design), ("deck", hash deck)] ++ (deckOfRules.map fun b => ("rules", hash b)).toList
-  { verdict, hashes, findings, cells, ignored := found.ignored, dsgInputs := found.dsgInputs }
+  let hashes := [("card", hash card), ("design", hash design), ("deck", hash deck), ("rules", deckOfRules.bind hash)]
+  { verdict, hashes, findings, cells, cellsFrom := if deckOfRules.isSome then "rules" else "proofs",
+    ignored := found.ignored, dsgInputs := found.dsgInputs }
 
 end Petra

@@ -8,7 +8,7 @@ petra-verify --card card.json --design design.json --deck deck.json [--rules rul
 
 `petra check` writes the files for its report and runs the kernel on them when it finds one: the file the environment variable `PETRA_VERIFY` names, else `kernel/.lake/build/bin/petra-verify` in a source tree. It prints how many of the proofs behind its status the kernel checked, and exits 4 if the kernel rejects one that the Python checker accepted.
 
-The kernel trusts none of the files. It checks that they agree with each other and that each proof holds. Who wrote each file is outside the kernel: the verdict prints the SHA-256 of the card, the design, the deck and the rules, and a reader compares the card's hash with the card they issued and the rules' hash with the deck of rules they mean.
+The kernel trusts none of the files. It checks that they agree with each other and that each proof holds. Who wrote each file is outside the kernel: the verdict prints the SHA-256 of the card, the design, the deck and the rules, and a reader compares the card's hash with the card they issued and the rules' hash with the deck of rules they mean. [Reading a verdict](#reading-a-verdict) says what a PASS means without that comparison: very little.
 
 `python -m petra.export FILE.petra [--card FILE.card] --out DIR` writes the files from a design and its card, the `.card` file beside the design unless `--card` names another. It exits 3 and writes nothing when the language refuses the pair, as it does for a design that states a load, a claim, a waiver or a signature. With `--no-physics` it writes no proofs.json, and a design with parts is then written as it stands, for the kernel to say whether the deck's types take it.
 
@@ -38,6 +38,8 @@ What the asker owns.
 | `waivers` | Each waiver the asker allows: `subject`, `mechanism`, `by`, `reason` |
 
 For a design with parts, a load's input also has `on`, the part the load is on, and `field`, which of the loads of the part's type it is. An input with none of `case`, `on` and `field` is a given, and its name is `PART.FIELD`, the part and the field that read it. The card also has `tests` and `probability_claims`, the names of its tests records and its probability claims. A deck of rules reads neither yet, so the kernel refuses a card that has one.
+
+Only the card of a design with parts has `on`, `field`, `tests` and `probability_claims`, and the exporter writes the last two into every such card, as empty lists when the card states none. So the kernel takes each as a mark of a card for a deck of rules, and refuses the card with a design that has no parts or with no `--rules` (type rule 7).
 
 ## design.json
 
@@ -83,7 +85,7 @@ A tape names what it reads of a part by label. A number that part `P` writes for
 | `domains.size` | `min` and `strict`: the least value a size may take |
 | `domains.input` | For each dimension that has a floor, `min` and `strict`. A dimension that is not listed has none. |
 | `constants` | Each registry value a proof reads: `label` (`reg:KEY`), `lo`, `hi` |
-| `rules` | For a design checked against a deck of rules: the `name` of that deck and the `hash` of its file. The kernel does not read it. It reads the deck of rules itself, from `--rules`. |
+| `rules` | For a design checked against a deck of rules: the `name` of that deck and the `hash` of its file. The kernel reads only that the key is there (type rule 7). It reads the deck of rules itself, from `--rules`. |
 
 `petra/decks/core.json` holds the domains.
 
@@ -168,6 +170,9 @@ The kernel applies the rules in this order. A design that breaks a rule of the f
 4. Every input whose dimension is in `domains.input` has `lo` at or above that floor, or above it when `strict` is true.
 5. Every waiver of the card names a `by`.
 6. A design with `parts` comes with `--rules`.
+7. A file that only a design checked against a deck of rules has comes with `parts` in the design and with `--rules`. There are three such marks: an input of the card with `on` or `field`, the key `tests` or `probability_claims` in the card, and the key `rules` in deck.json. Each mark is a finding when the design has no `parts` or `--rules` names no deck.
+
+Rule 7 is what stops a downgrade. Without it, a card issued for a deck of rules could be handed to the kernel with a design stripped of its `parts` and with no `--rules`. The kernel would then check the cells that proofs.json lists, and a `not_applicable` cell there is taken as stated.
 
 **The deck of rules.** With `--rules`, the file is a deck that holds together, as [deck.md](deck.md) describes: it has no unknown key, every rule names rows, fields and loads that exist, every input of a row is bound once and to its dimension, both sides of every inequality have one dimension, every sum and comparison inside a row or a rule is of one dimension, every rule answers a line of the grid that can arise, and no two rows, types, lines or rules have one name. A name of a field, a load, a joined part or a `let` is letters, digits and `_`. These names, the name of a mechanism and the id of a rule are within the limit below.
 
@@ -214,9 +219,23 @@ The interval rule is the one in `petra/kernel/interval.py` and `petra/kernel/eva
 | UNKNOWN | No cell is refuted, and a cell is open or no cell is proved | 2 |
 | PASS | Every cell is proved, waived or not applicable, and at least one is proved | 0 |
 
-The kernel prints one JSON object: `verdict`, the `hashes` of the files, with `rules` when `--rules` names one, `findings` (the first 100 broken rules, each with the file and the item), `more_findings` (how many more there were), `counts` (the cells in each state), `dsg_inputs` (the distinct `dsg:` labels the settled proofs read), `waived` (each waiver a PASS rests on, once) and `cells`. With `--rules` it also prints `ignored_hints`. A cell has its subject, mechanism and entry, `claimed`, `state`, the state the kernel settled on, and `reason` when the kernel left it open. `claimed` is the state the file claims for the cell. With `--rules` it is the state of the first hint for the cell, and null when there is none. A command line it cannot read prints the usage and exits 64.
+The kernel prints one JSON object: `verdict`, the `hashes` of the files, where `rules` is null when `--rules` names no deck, `cells_from` (`rules` when the kernel made the cells from a deck of rules, and `proofs` when it took the list of proofs.json), `findings` (the first 100 broken rules, each with the file and the item), `more_findings` (how many more there were), `counts` (the cells in each state), `dsg_inputs` (the distinct `dsg:` labels the settled proofs read), `waived` (each waiver a PASS rests on, once) and `cells`. With `--rules` it also prints `ignored_hints`. A cell has its subject, mechanism and entry, `claimed`, `state`, the state the kernel settled on, and `reason` when the kernel left it open. `claimed` is the state the file claims for the cell. With `--rules` it is the state of the first hint for the cell, and null when there is none. A command line it cannot read prints the usage and exits 64.
 
-For a design with parts, `petra check` compares the kernel's cells with the ones `petra/grid.py` made: the same count, and at each place the same subject, mechanism, entry and state. Any difference raises `petra.verify.Disagreement`, and `petra check` exits 4. `python bench/kernel_grid.py` makes that comparison on generated designs.
+For a design with parts, `petra check` compares the kernel's cells with the ones `petra/grid.py` made: the same count, and at each place the same subject, mechanism, entry and state. It also holds the kernel to `cells_from` at `rules` and to the hash of the deck it used itself. Any difference raises `petra.verify.Disagreement`, and `petra check` exits 4. `python bench/kernel_grid.py` makes that comparison on generated designs. The report of `petra check` prints the hash of the deck of rules on its `rules` line.
+
+## Reading a verdict
+
+A verdict is about the files the kernel was given. Three things in it say which files those were. A reader checks all three before taking a PASS.
+
+| In the verdict | Says | The reader checks |
+|---|---|---|
+| `cells_from` | `rules`: `--rules` named a deck of rules, and the kernel made every cell from it. `proofs`: there was no deck of rules, and the kernel checked the cells that proofs.json lists. | That it is `rules`, for a design that was to be checked against a deck of rules. |
+| `hashes.rules` | The hash of the deck of rules the kernel read, or null when it read none. | That it is the hash of the deck the reader trusts. |
+| `hashes.card` | The hash of card.json. | That it is the hash of the card.json that the asker's own card gives. |
+
+A PASS means "checked against a deck of rules" only when `hashes.rules` is the hash of the reader's trusted deck. The kernel cannot know which deck that is. A deck with a rule left out, or with a limit raised, holds together like any other, and the kernel reads it and prints its hash. A PASS with `cells_from` at `proofs`, with null for the rules, or with the hash of some other deck, says nothing about the reader's deck.
+
+A PASS is about the asker's card only when `hashes.card` is the asker's. A designer who lowers a signed load in card.json gets a PASS from a kernel that did its work, under the same card name, and only the hash shows it.
 
 ## Limits
 
@@ -261,6 +280,6 @@ For a design with parts:
 
 - The deck of rules is the one `--rules` names. The kernel prints its hash and does not know whether it is the deck a reader means, or whether its rows are the standard's. [deck.md](deck.md) says what stands behind a row, and that nothing yet stands behind a type, a grid line or a rule but the hand that wrote it.
 - The search for a partition or a point is Python's. A search that finds nothing leaves a cell open that may be provable. It cannot make a cell proved or refuted.
-- A design that has `parts` removed and comes without `--rules` is a design with no parts, and the kernel checks what proofs.json lists for it, as above. The verdict then has no `rules` hash. A verdict against a deck of rules is one that prints it.
+- The card that `petra.export` writes for a design with parts is refused without `parts` or without `--rules` (type rule 7). A card.json written by hand without the marks of rule 7 is not. With a design that has no `parts` it is checked as a design of the models' kinds, by the cells that proofs.json lists. That card.json has another hash than the asker's, and the verdict prints `cells_from` as `proofs` and null for the rules. What remains open is a reader who compares none of the three ([Reading a verdict](#reading-a-verdict)).
 - `quantities` repeats the numbers of `parts` for the size rule. The kernel reads a part's numbers from `parts` and does not compare the two.
 - The card's `cases` and `environment` are not read for a design with parts. A load case is the `case` of a load.

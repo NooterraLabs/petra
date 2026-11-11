@@ -40,7 +40,8 @@ class Disagreement(RuntimeError):
 class Kernel:
     """What the kernel said of one report. `checked` of the `proofs` the report's verdict
     rests on went through the kernel, which accepted each. `hashes` are of the files it
-    read, by the names docs/format.md gives them."""
+    read, by the names docs/format.md gives them. A design of the models' kinds has no
+    deck of rules, and the kernel's null for it is left out."""
 
     verdict: str
     checked: int
@@ -120,6 +121,8 @@ def differs(mine: list[tuple[str, str, str, str]], status: str, rules: str, said
         found.append(f"the grid gives {status} and petra-verify {said['verdict']}")
     if said["hashes"].get("rules") != rules:
         found.append(f"petra-verify read the rules {said['hashes'].get('rules')}, and the deck is {rules}")
+    if said.get("cells_from") != "rules":
+        found.append(f"petra-verify took its cells from {said.get('cells_from')} and not from the deck of rules")
     return "; ".join(found)
 
 
@@ -137,4 +140,4 @@ def verify(design: Any, registry: Any, report: Any, proofs: export.Proofs) -> Ke
                 for mine, its in zip(cells, said["cells"]) if ("tape" in mine or mine["state"] == "waived") and its["state"] != mine["state"]]
     if rejected or len(cells) != len(said["cells"]):
         raise Disagreement(f"{design.path}: petra-verify does not accept what the Python checker did: {'; '.join(rejected) or 'it read other cells'}")
-    return Kernel(said["verdict"], sum("tape" in cell for cell in cells), behind(report), said["hashes"])
+    return Kernel(said["verdict"], sum("tape" in cell for cell in cells), behind(report), {name: h for name, h in said["hashes"].items() if h is not None})
