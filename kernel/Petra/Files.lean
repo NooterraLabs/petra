@@ -174,8 +174,9 @@ structure Constant where
 structure Deck where
   size : Floor
   /-- The floor of each dimension that has one, found by the dimension's exponents
-  (`Dim.key`), with the name deck.json gives it. -/
-  input : Std.HashMap (Array (Int × Nat)) (String × Floor)
+  (`Dim.key`), with the name deck.json gives it. The table is kept in the order of the
+  exponents themselves, which a file writes as whole numbers of any length. -/
+  input : Std.TreeMap (Array (Int × Nat)) (String × Floor)
   constants : Array Constant
   /-- Whether deck.json has `rules`, the name and the hash of a deck of rules. The exporter
   writes it for a design checked against one, and the kernel reads only that it is there. -/
@@ -432,7 +433,7 @@ type rule 4 finds the floor of an input however the card spells its dimension, a
 an input against one floor, whatever the file holds. -/
 def readDeck (j : Json) : Read Deck := do
   let domains ← j.getObjVal? "domains"
-  let mut input : Std.HashMap (Array (Int × Nat)) (String × Floor) := {}
+  let mut input : Std.TreeMap (Array (Int × Nat)) (String × Floor) := {}
   for (name, x) in (← (← domains.getObjVal? "input").getObj?).toArray do
     if name != "about" then
       let floor : Except String (Dim × Floor) := do

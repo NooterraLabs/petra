@@ -270,7 +270,7 @@ The kernel stops work that would not end. A tape has at least one root. A partit
 
 A deck of rules has four more. A quantity or a number is at most 4,000 characters. A whole or a half power has an exponent of at most 64 in magnitude. An expression nests at most 1,024 deep, counted through the names of `let` it reads and the rows it applies, so a name of `let` that reads itself, or a chain of names longer than that, is refused. Reading the deck takes at most 1,000,000 steps, counted from its file before a row is read ([deck.md](deck.md), "The size of a deck"). `petra/grid.py` has the second and the fourth of these and not the other two.
 
-The time a verdict takes, what the kernel holds while it works and what it prints are each bounded, whatever the files hold. Thirteen limits see to that.
+The time a verdict takes, what the kernel holds while it works and what it prints are each bounded, whatever the files hold. Thirteen limits see to that, and one rule about tables.
 
 | Limit | Value | Past it |
 |---|---|---|
@@ -290,7 +290,15 @@ The time a verdict takes, what the kernel holds while it works and what it print
 
 A name of 64 characters in ASCII prints in 64 bytes. A character outside ASCII prints in up to four, a quote, a backslash and a line end in two, and any other control character in six. A cell prints these names whole, so they are refused and not cut. The label of every input of a tape holds the name of the card or of the design, which is why those two are held to 200 bytes.
 
-Every limit is tested before the work it bounds, and never after. The kernel counts a deck's steps from its file before it reads a row. It counts a step of the cells before it takes the step. It takes the cost of a step of a proof from the work left before it takes the step. And wherever it looks for a name, among the parts, the fields, the loads, the rows, the rules or the labels of a tape, it looks in a table, so the look costs the same however many names there are.
+Every limit is tested before the work it bounds, and never after. The kernel counts a deck's steps from its file before it reads a row. It counts a step of the cells before it takes the step. It takes the cost of a step of a proof from the work left before it takes the step.
+
+### Tables
+
+Wherever the kernel looks for a name or a number, it looks in a table kept in the order of its keys. That holds for the parts, the fields, the loads, the load cases, the rows, the rules, the inputs of the card, the hints, the nodes and the constants of a tape it writes, the exponents of a dimension, and the ends in the caches of `ln` and `exp`. Such a table is a balanced tree: neither side of a key holds more than three times as many keys as the other. So a look compares the key with at most five keys for each two bits of the table's count, and with about one for each bit as a rule. A comparison of two texts or of two whole numbers reads them from their start to where they differ, so it reads no more than the shorter is long. A pair is in order by its first member and then by its second, and a fraction by its numerator and then by its denominator.
+
+No table of the kernel is kept by a hash of its keys. A file chooses the keys: its names, its labels and its numbers. A hash that the file can work out can be made to send many keys to one place of a table, and a look there walks them all. The hash of a whole number that the kernel's language provides is the number's last 64 bits, so the numbers `1 + k × 2^63` all share one. The fourth review found two tables kept by it: the constants of a tape the kernel writes, and the two caches. 30,000 such values in one table of a deck took 45 to 50 processor seconds to write for two parts, and 1,024 such ends in a cache took 85 to 90 seconds for a proof charged as 18 billion units. In a table kept in order the same files take 0.7 and 6 seconds, and no choice of keys does more than make every comparison read to the end of the shorter key.
+
+A rule reads a field or a load in one step, however often it names it: a second mention is a step that hands on the first and weighs the same. So writing a tape adds one input for each field and each load without looking for it among the inputs before.
 
 ### Steps
 
@@ -351,7 +359,7 @@ In the table, `n` is the bits of the enclosure the step reads.
 | `exp` | 3,000 when the enclosure reaches below −65,536 or above 65,536, and the node has no value. Otherwise 25,000, and for each end what is below. An upper end equal to the lower pays a look. |
 | A pick | What is below |
 
-**An end of `ln` and of `exp`.** The kernel keeps the ends it has rounded in two caches, one for each of the two steps. A look is `1,500 + n / 8` for an end of `n` bits. An end of `ln` pays a look when it is 1 or the cache of `ln` holds it, and an end of `exp` when it is 0 or the cache of `exp` holds it. Any other end pays for an enclosure of `p` bits. The first enclosure the kernel asks for has 128 bits, and the next ones 224, 608 and 2,144.
+**An end of `ln` and of `exp`.** The kernel keeps the ends it has rounded in two caches, one for each of the two steps. A cache is kept in the order of its ends, by numerator and then by denominator ([Tables](#tables)), so a look compares the end with at most 25 of the 1,024 ends a cache holds, and with 10 or 11 as a rule, and each comparison reads no more than the end has bits. A look is `1,500 + n / 8` for an end of `n` bits. An end of `ln` pays a look when it is 1 or the cache of `ln` holds it, and an end of `exp` when it is 0 or the cache of `exp` holds it. Any other end pays for an enclosure of `p` bits. The first enclosure the kernel asks for has 128 bits, and the next ones 224, 608 and 2,144.
 
 - For `ln`, of an end of `n` bits: `f × p + p × n × 4 / 5 + h(n) × 3 / 5`. `f` is 17,000, but for the first enclosure it is 5,000 when `n` is under 32 and 7,000 otherwise.
 - For `exp`, of an end `x`: let `c` be the size of `x` rounded up to a whole number, `s` the bits of `c` and 1, `q` be `p + 2 × s + 2 × c`, `wide` be `q / 64 + 1`, `terms` the larger of 32 and `2 × q / b` for the bits `b` of `q`, and `v` be 1 and the bits of the numerator and of the denominator of `x` together over 64. The cost is `(terms × (10,000 + 54 × wide + 20 × v + wide × v / 3) + (s + 16) × wide × wide / 4) × 17 / 10`.
@@ -362,7 +370,7 @@ A step that rounds to the grid pays for each enclosure it asks for, before it as
 
 **The count.** The kernel takes the work of each proof from what is left, in the order of the cells. A proof that fails has spent what its steps took. The verdict prints the work its proofs took as `work`.
 
-`bench/work_sweep.py` measures what a unit costs, for each step and for numbers of 64 to 64,000 bits with no pattern in them, and compares it with a chain of small products. It fails when a unit of any step costs over three times a unit of the chain. On the desktop the costs were fitted on it prints, in nanoseconds a unit:
+`bench/work_sweep.py` measures what a unit costs, for each step and for numbers of 64 to 64,000 bits with no pattern in them, and compares it with a chain of small products. It fails when a unit of any step costs over three times a unit of the chain. It also measures a look, as `lnheld` and `expheld`: an `ln` and an `exp` of an end that its cache holds, when the cache is full of 1,022 ends that have one denominator and numerators that differ in one word in the middle. A unit of such a look took 0.19 to 0.28 nanoseconds in a run where the chain took 0.34, on the same desktop while it did other work. In the kernel before the fourth review, whose caches were kept by a hash, it took 1.8 to 3.5 against a chain at 0.33, which is ten times, and the sweep fails on that. On the desktop the costs were fitted on it prints, in nanoseconds a unit:
 
 | Step | 64 bits | 250 | 1,000 | 4,000 | 16,000 | 64,000 |
 |---|---|---|---|---|---|---|
@@ -389,7 +397,9 @@ A step on whole numbers, or on fractions with a short numerator or denominator, 
 
 The heaviest design of the corpus, `weld_bracket`, takes 5.4 billion units in two processor seconds: a little over a quarter of the budget. The next takes 0.13 billion, and a lap of the first deck of rules 6.0 million.
 
-Files of 1 MB made to take as long as they can took 10.7 processor seconds on the same desktop in one run and 11.7 in another. They hold three rules for one part. One applies a row of 5,000 numbers as often as the million steps to read a deck allow, which took 1.4 to 1.5 seconds alone. One sums 1,400 fields and is written for as many load cases as the ten million steps of the cells allow, 1.7 to 1.8 seconds. And one has a hinted proof that spends the twenty billion units on `exp` of fractions of 250 bits, 7.8 to 8.3 seconds. With products or quotients in place of `exp` the proof took 5 to 6 seconds. A busy machine takes longer in proportion. `tests/test_kernel_limits.py`, `tests/test_kernel_attacks2.py` and `tests/test_kernel_attacks3.py` hold the limits one by one.
+Files of 1 MB made to take as long as they can took 10.0 to 10.2 processor seconds in three runs on the same desktop, and 14.0 in a run while it did more other work. They hold three rules for one part. One applies a row of 5,000 numbers as often as the million steps to read a deck allow, which took 1.5 seconds alone. One sums 1,400 fields and is written for as many load cases as the ten million steps of the cells allow, 1.0 seconds. And one has a hinted proof that spends the twenty billion units on `exp` of fractions of 250 bits, 7.8 seconds. With products or quotients in place of `exp` the proof took 5 to 6 seconds. Before the tables were kept in order ([Tables](#tables)) the same files took 10.7 to 11.7 seconds.
+
+Three more kinds of file are made to cost the tables the most. Numbers that share the hash the tables were once kept by, 30,000 in one table of a deck or 1,024 in a cache: 0.7 seconds and 5.8 to 6.1, where they took 45 to 50 and 85 to 90. Names of 64 characters that are alike to their last characters, for 1,400 fields of a joined part under 1,150 load cases: 0.7 to 0.8. And tapes of 40,000 different nodes for 70 parts, the shape that a table kept in order costs most beside one kept by a hash: 2.2, where they took 1.3. A busy machine takes longer in proportion. `tests/test_kernel_limits.py`, `tests/test_kernel_attacks2.py`, `tests/test_kernel_attacks3.py` and `tests/test_kernel_attacks4.py` hold the limits one by one.
 
 ### What the kernel holds and prints
 

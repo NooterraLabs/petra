@@ -78,7 +78,7 @@ A wheel is a little over 30 MB, and the kernel in it is 100 to 120 MB unpacked. 
 
 ## Time and memory
 
-A verdict's time and memory are bounded whatever the files hold. [docs/format.md](../docs/format.md) lists the limits under "Limits": each is tested before the work it bounds, and each name is looked up in a table.
+A verdict's time and memory are bounded whatever the files hold. [docs/format.md](../docs/format.md) lists the limits under "Limits": each is tested before the work it bounds, and each name and each number is looked up in a table kept in the order of its keys, never by a hash.
 
 The bound on the time of the proofs is a budget of work, and it holds only while a unit of work takes about the same time for every step. This command measures that on the machine it runs on, for each step and for numbers of 64 to 64,000 bits, and fails when a step takes over three times the yardstick:
 

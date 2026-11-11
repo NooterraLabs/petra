@@ -12,9 +12,10 @@ refuses a deck of more than `MAX_READ`. The reader then does a bounded amount of
 each value it reads: every name is found through a table, and no table is built for the
 names a rule could use but does not. So the time and the memory of reading follow that
 count, and with it the bytes of the file.
+
+Every table here is kept in the order of its keys (`Num.lean`), so no name and no number of
+a file can make a look cost more than the logarithm of the table.
 -/
-import Std.Data.HashMap
-import Std.Data.HashSet
 import Petra.Quantity
 import Petra.Files
 
@@ -49,7 +50,7 @@ structure Table where
 the names of a key again, to find one without going through the list. -/
 inductive Taken where
   | quantity (dim : Dim)
-  | key (names : Array String) (known : Std.HashSet String)
+  | key (names : Array String) (known : Std.TreeSet String)
 
 /-- An equation keeps its cases as written, each a condition and an expression: a rule that
 applies the row reads them again with the row's inputs bound. -/
@@ -67,7 +68,7 @@ structure Row where
 for each name in `names`. A load is a quantity. `known` holds the names of a key again. -/
 inductive FieldKind where
   | quantity (dim : Dim) (signed whole : Bool) (least : Option Rat)
-  | key (names : Array String) (known : Std.HashSet String)
+  | key (names : Array String) (known : Std.TreeSet String)
   | parts (kind : String) (names : Array String)
 
 /-- A field of a type. `oneOf` is what the kernel says of a part that gives a key a name
@@ -89,9 +90,9 @@ structure Kind where
   name : String
   fields : Array Field
   loads : Array Field
-  field : Std.HashMap String Field := {}
-  load : Std.HashMap String Field := {}
-  called : Std.HashMap String (String × String × Nat) := {}
+  field : Std.TreeMap String Field := {}
+  load : Std.TreeMap String Field := {}
+  called : Std.TreeMap String (String × String × Nat) := {}
   deriving Inhabited
 
 /-- A condition on what a part is, not on how large. -/
@@ -206,7 +207,7 @@ def reach (steps : Array Step) (roots : Array Nat) : Array Bool := Id.run do
 part it joins. In a row: an input, bound to a step. -/
 inductive Meaning where
   | field (dim : Dim) (part : Option String) (name : String)
-  | key (names : Array String) (known : Std.HashSet String) (part : Option String) (name : String)
+  | key (names : Array String) (known : Std.TreeSet String) (part : Option String) (name : String)
   | bound (dim : Dim) (step : Nat)
 
 inductive Named where
@@ -216,10 +217,10 @@ inductive Named where
 a row has no loads, no rows and no `let`. In a rule, `kind` is the type the rule is for, and
 `kinds` every type by its name. -/
 structure Scope where
-  bound : Std.HashMap String Meaning := {}
+  bound : Std.TreeMap String Meaning := {}
   kind : Option Kind := none
-  kinds : Std.HashMap String Kind := {}
-  rows : Std.HashMap String Row := {}
+  kinds : Std.TreeMap String Kind := {}
+  rows : Std.TreeMap String Row := {}
 
 def Scope.rule (scope : Scope) : Bool := scope.kind.isSome
 
@@ -246,9 +247,23 @@ def Scope.find (scope : Scope) (name : String) : Option Meaning :=
         meaning (← (← scope.kinds.get? other).field.get? inner) (some part)
       | _ => none
 
+/-- What a rule reads of a part, as the rule names it: a field of the part, a field of the
+part it calls `part`, or a load. -/
+inductive Source where
+  | field (part : Option String) (name : String)
+  | load (name : String)
+
+/-- The source as a key of a table: which of the three it is, and its names. -/
+def Source.key : Source → Nat × String × String
+  | .field none name => (0, "", name)
+  | .field (some part) name => (1, part, name)
+  | .load name => (2, name, "")
+
+/-- A rule as it is read. `sources` finds the step that reads a field or a load. -/
 structure Draft where
   steps : Array Step := #[]
-  lets : Std.HashMap String Named := {}
+  lets : Std.TreeMap String Named := {}
+  sources : Std.TreeMap (Nat × String × String) Nat := {}
 
 abbrev Reading := StateT Draft (Except String)
 
@@ -263,9 +278,28 @@ def push (step : Step) : Reading Nat := do
 
 def put (node : Node) (dim : Dim) : Reading (Nat × Dim) := do return (← push (.node node), dim)
 
-/-- What a name of `let` stands at, in a rule. The table of the names is looked at and let
-go here: a reader that kept hold of it while it read on would have it copied at the next
-name it adds. -/
+/-- The step that reads this source already, if one does. The rule is looked at and let go
+here: a reader that kept hold of it while it read on would have its list of steps copied
+at the next step it adds. -/
+def sourceOf (key : Nat × String × String) : Reading (Option Nat) := do return (← get).sources.get? key
+
+/-- The step that reads a field or a load. One step of a rule reads one source: where the
+rule names it again, the step hands on the first, as a row hands on its value, and weighs
+what a step that read it would. So a tape has one input for each field and each load,
+whatever the rule names twice, and writing it looks for none of them. -/
+def source (what : Source) : Reading Nat := do
+  let key := what.key
+  match ← sourceOf key with
+  | some first => push (.row #[] first)
+  | none =>
+    let place ← push (match what with
+      | .field part name => .field part name
+      | .load name => .load name)
+    modify fun d => { d with sources := d.sources.insert key place }
+    return place
+
+/-- What a name of `let` stands at, in a rule. The rule is looked at and let go here, as
+in `sourceOf`. -/
 def letOf (scope : Scope) (name : String) : Reading (Option Named) := do
   if scope.rule then return (← get).lets.get? name else return none
 
@@ -285,19 +319,17 @@ def within (j : Json) (allowed : List String) : Except String Unit := do
   for (key, _) in ← members j do
     unless allowed.contains key do throw s!"{clip key} is not a key here: it has {", ".intercalate allowed}"
 
-/-- The first item that is in the list a second time, or none when each is there once. The
-table is asked whether it holds the item before the item is put in, and never while: a
-table that is still being asked is copied whole when it is added to, and a list of many
-names would then cost the square of its length. -/
-def twice [BEq α] [Hashable α] (items : Array α) : Option α :=
+/-- The first item that is in the list a second time, or none when each is there once: each
+item is looked for among the ones before it, in a table kept in their order. -/
+def twice [Ord α] (items : Array α) : Option α :=
   (items.foldl (fun (seen, found) x =>
     if found.isSome then (seen, found) else if seen.contains x then (seen, some x) else (seen.insert x, none))
-    (({} : Std.HashSet α), (none : Option α))).2
+    (({} : Std.TreeSet α), (none : Option α))).2
 
-def distinct [BEq α] [Hashable α] (names : Array α) : Bool := (twice names).isNone
+def distinct [Ord α] (names : Array α) : Bool := (twice names).isNone
 
 /-- The names as a table. -/
-def setOf (names : Array String) : Std.HashSet String := names.foldl (·.insert ·) {}
+def setOf (names : Array String) : Std.TreeSet String := names.foldl (·.insert ·) {}
 
 /-- The value of a key that an object of a deck must have. -/
 def need (j : Json) (key : String) : Except String Json :=
@@ -309,9 +341,9 @@ def need (j : Json) (key : String) : Except String Json :=
   | _ => throw "it is not an object"
 
 /-- Each item once, in the order of its first place. -/
-def once [BEq α] [Hashable α] (items : Array α) : Array α :=
+def once [Ord α] (items : Array α) : Array α :=
   (items.foldl (fun (seen, out) x => if seen.contains x then (seen, out) else (seen.insert x, out.push x))
-    (({} : Std.HashSet α), #[])).2
+    (({} : Std.TreeSet α), #[])).2
 
 /-- A name a deck gives a field, a load, a joined part or a `let`: letters, digits and `_`,
 not starting with a digit, and at most `MAX_NAME` of them. So `a.Fy` is always a field of a
@@ -327,7 +359,7 @@ def identifier (name : String) : Except String Unit :=
 row's key, to `["key", NAME]`, or to `["by", FIELD, {its name: the row's name}]`. A field
 with more names than the row's key has one the key lacks, so the names of a field are
 gone through only when they are no more than the key's, which the row holds. -/
-def chosen (scope : Scope) (known : Std.HashSet String) (j : Json) : Except String Chosen := do
+def chosen (scope : Scope) (known : Std.TreeSet String) (j : Json) : Except String Chosen := do
   let keyField (name : String) : Except String (Array String × Option String × String) :=
     match scope.find name with
     | some (.key names _ part field) => pure (names, part, field)
@@ -364,7 +396,7 @@ def expr (scope : Scope) : Nat → Json → Reading (Nat × Dim)
   | fuel + 1, .str name => do
     if name == "pi" then return (← put .pi {})
     match scope.find name with
-    | some (.field dim part field) => return (← push (.field part field), dim)
+    | some (.field dim part field) => return (← source (.field part field), dim)
     | some (.bound dim step) => return (step, dim)
     | some (.key ..) => throw s!"{name} is a key, and only a table reads a key"
     | none =>
@@ -392,8 +424,6 @@ def expr (scope : Scope) : Nat → Json → Reading (Nat × Dim)
       let (x, dim) ← expr scope fuel base
       let number ← match exponent with
         | .str written =>
-          -- The names of `let` are asked for here and not kept from before the base was read:
-          -- a table that is held twice is copied when the base adds a name to it.
           if written == "pi" || (scope.find written).isSome || (← letOf scope written).isSome then pure none
           else match if written.length ≤ MAX_NUMBER_CHARS then decimal written.toList else none with
             | some n => pure (some n)
@@ -420,19 +450,19 @@ def expr (scope : Scope) : Nat → Json → Reading (Nat × Dim)
     | "load", [.str name] =>
       let some kind := scope.kind | throw "a row reads no load"
       match (kind.load.get? name).bind Field.dim with
-      | some dim => return (← push (.load name), dim)
+      | some dim => return (← source (.load name), dim)
       | none => throw s!"the type takes no load {clip name}"
     | "row", [.str id, binds] =>
       unless scope.rule do throw "a row applies no row"
       let some row := scope.rows.get? id | throw s!"{clip id} is not a row of the deck"
       -- Each input is bound once: as many names as the row takes, and each of them given.
       let written ← members binds
-      let given : Std.HashMap String Json := written.foldl (fun table (name, value) => table.insert name value) {}
+      let given : Std.TreeMap String Json := written.foldl (fun table (name, value) => table.insert name value) {}
       unless written.size == row.takes.size && row.takes.all (fun t => given.contains t.1) do
         throw s!"{id} takes {", ".intercalate (row.takes.map (·.1)).toList}, and the rule binds {", ".intercalate (written.map (·.1)).toList}"
-      let mut names : Std.HashMap String Meaning := {}
+      let mut names : Std.TreeMap String Meaning := {}
       let mut bound : Array Nat := #[]
-      let mut keys : Std.HashMap String Chosen := {}
+      let mut keys : Std.TreeMap String Chosen := {}
       for (name, taken) in row.takes do
         let some value := given.get? name | throw s!"{id}: {name} is not bound"
         match taken with
@@ -633,7 +663,7 @@ def readRow (j : Json) : Except String Row := do
     let _ ← text gives "name"
     let dim ← dimension (← text gives "dim")
     let mut takes : Array (String × Taken) := #[]
-    let mut seen : Std.HashSet String := {}
+    let mut seen : Std.TreeSet String := {}
     for t in ← list j "takes" do
       let name ← text t "name"
       if seen.contains name then throw s!"{clip name} is taken twice"
@@ -664,7 +694,7 @@ def readRow (j : Json) : Except String Row := do
       if condition.isNone && n + 1 != written.size then throw "only the last case may leave `when` out"
       found := found.push (condition, ← need entry "is")
     -- Read the cases once with each input as a step of its own, for their names and dimensions.
-    let mut names : Std.HashMap String Meaning := {}
+    let mut names : Std.TreeMap String Meaning := {}
     for ((name, taken), n) in takes.zipIdx do
       if let .quantity its := taken then names := names.insert name (.bound its n)
     let _ ← (cases { bound := names } dim MAX_EXPRESSION found).run { steps := takes.map fun t => .field none t.1 }
@@ -725,7 +755,7 @@ def readKind (j : Json) : Except String Kind := do
       | _ => #[]
     unless distinct (fields.map (·.name)) && distinct (loads.map (·.name)) && distinct joined do
       throw "two fields, two loads or two joined parts have one name"
-    let called : Std.HashMap String (String × String × Nat) := fields.foldl (init := {}) fun table f =>
+    let called : Std.TreeMap String (String × String × Nat) := fields.foldl (init := {}) fun table f =>
       match f.kind with
       | .parts other names => names.zipIdx.foldl (fun table (part, k) => table.insert part (other, f.name, k)) table
       | _ => table
@@ -734,16 +764,16 @@ def readKind (j : Json) : Except String Kind := do
              load := loads.foldl (fun table f => table.insert f.name f) {} }
   kind.mapError (s!"type {clip name}: " ++ ·)
 
-/-- The mechanism of the cell the kernel makes for a field that nothing reads. No line of
-the grid has this name, so no cell of a rule has the key of such a cell. -/
+/-- The mechanism of the cell the kernel makes for a field or a load that nothing reads. No
+line of the grid has this name, so no cell of a rule has the key of such a cell. -/
 def UNREAD : String := "unread"
 
-def readAsk (kinds : Std.HashMap String Kind) (rows : Std.HashMap String Row) (j : Json) : Except String Ask := do
+def readAsk (kinds : Std.TreeMap String Kind) (rows : Std.TreeMap String Row) (j : Json) : Except String Ask := do
   let mechanism ← text j "mechanism"
   let ask : Except String Ask := do
     short "the name of a mechanism" mechanism
     within j ["type", "mechanism", "what", "anchor", "unless"]
-    if mechanism == UNREAD then throw s!"no mechanism is named {UNREAD}: the cell of a field that nothing reads has that name"
+    if mechanism == UNREAD then throw s!"no mechanism is named {UNREAD}: the cell of a field or a load that nothing reads has that name"
     anchored j
     let _ ← (text j "what").mapError fun _ => "it has `what`, a text"
     let name ← text j "type"
@@ -757,7 +787,7 @@ def readAsk (kinds : Std.HashMap String Kind) (rows : Std.HashMap String Row) (j
     return { kind := name, mechanism, excuse }
   ask.mapError (s!"grid {clip mechanism}: " ++ ·)
 
-def readRule (kinds : Std.HashMap String Kind) (rows : Std.HashMap String Row) (asks : Std.HashMap (String × String) Ask) (j : Json) :
+def readRule (kinds : Std.TreeMap String Kind) (rows : Std.TreeMap String Row) (asks : Std.TreeMap (String × String) Ask) (j : Json) :
     Except String Rule := do
   let id ← text j "id"
   let rule : Except String Rule := do
@@ -797,7 +827,7 @@ def readRule (kinds : Std.HashMap String Kind) (rows : Std.HashMap String Row) (
       for (name, _) in lets do
         let _ ← expr scope MAX_EXPRESSION (.str name)
       return (main, ranges)
-    let (((low, high), ranges), draft) ← read.run { lets := Std.HashMap.ofList (lets.map fun (name, body) => (name, Named.pending body)).toList }
+    let (((low, high), ranges), draft) ← read.run { lets := lets.foldl (fun table (name, body) => table.insert name (Named.pending body)) {} }
     let condition ← (j.getObjVal? "when").toOption.mapM (static scope MAX_EXPRESSION)
     let need := reach draft.steps (#[low, high] ++ ranges.flatMap fun (a, b) => #[a, b])
     let used := ((draft.steps.zip need).filter (·.2)).map (·.1)
@@ -837,7 +867,7 @@ partial def valueSize (j : Json) : Nat :=
 
 /-- The sizes of the rows that the lists `["row", ID, ...]` inside a value name, one for
 each such list: what reading the rows again costs a rule that applies them. -/
-partial def applied (rows : Std.HashMap String Nat) (j : Json) : Nat :=
+partial def applied (rows : Std.TreeMap String Nat) (j : Json) : Nat :=
   match j with
   | .arr items =>
     let own := if items.size == 3 then
@@ -855,7 +885,7 @@ size of the first row of the deck whose `id` is `ID`. A rule reads a row again e
 applies it, and everything else once. The count is of the file as it stands, read or not:
 `petra/grid.py` makes the same count, so the two refuse the same decks. -/
 def readingSteps (j : Json) : Nat :=
-  let rows : Std.HashMap String Nat := ((list j "rows").toOption.getD #[]).foldl (init := {}) fun table row =>
+  let rows : Std.TreeMap String Nat := ((list j "rows").toOption.getD #[]).foldl (init := {}) fun table row =>
     match text row "id" with
     | .ok id => if table.contains id then table else table.insert id (valueSize row)
     | .error _ => table
@@ -870,10 +900,10 @@ def readRules (j : Json) : Except String Rules := do
   let name ← text j "name"
   let found ← (← list j "rows").mapM readRow
   unless distinct (found.map (·.id)) do throw "two rows have one id"
-  let rows := Std.HashMap.ofList (found.map fun r => (r.id, r)).toList
+  let rows : Std.TreeMap String Row := found.foldl (fun table r => table.insert r.id r) {}
   let read ← (← list j "types").mapM readKind
   unless distinct (read.map (·.name)) do throw "two types have one name"
-  let kinds : Std.HashMap String Kind := read.foldl (fun table kind => table.insert kind.name kind) {}
+  let kinds : Std.TreeMap String Kind := read.foldl (fun table kind => table.insert kind.name kind) {}
   for kind in read do
     for f in kind.fields do
       if let .parts other _ := f.kind then
@@ -884,7 +914,7 @@ def readRules (j : Json) : Except String Rules := do
         | none => throw s!"{kind.name}.{f.name}: {clip other} is not a type of the deck"
   let asks ← (← list j "grid").mapM (readAsk kinds rows)
   unless distinct (asks.map fun a => (a.kind, a.mechanism)) do throw "the grid asks one mechanism of one type twice"
-  let asked : Std.HashMap (String × String) Ask := asks.foldl (fun table a => table.insert (a.kind, a.mechanism) a) {}
+  let asked : Std.TreeMap (String × String) Ask := asks.foldl (fun table a => table.insert (a.kind, a.mechanism) a) {}
   let rules ← (← list j "rules").mapM (readRule kinds rows asked)
   unless distinct (rules.map (·.id)) do throw "two rules have one id"
   if let some (kind, mechanism, entry) := twice (rules.map fun r => (r.kind, r.mechanism, r.entry)) then
@@ -900,34 +930,85 @@ structure Site where
   key : Option String → String → Option String
   load : String → Option TapeInput
 
+/-- A condition as whole numbers, added to `out`: its kind, the two nodes of an order, how
+many members an `and` or an `or` has, and then the members. Each kind says how many numbers
+follow it, so two conditions with one list are one condition. -/
+def Cond.code (out : Array Nat) : Cond → Array Nat
+  | .le i j => ((out.push 0).push i).push j
+  | .lt i j => ((out.push 1).push i).push j
+  | .and cs => cs.foldl (fun out c => c.code out) ((out.push 2).push cs.size)
+  | .or cs => cs.foldl (fun out c => c.code out) ((out.push 3).push cs.size)
+  | .not c => c.code (out.push 4)
+
+/-- What a table of nodes keeps a node under: a list of whole numbers that only that node
+has. The first is the kind, and the kind says what follows: the nodes it reads, or for a
+constant its sign, the size of its numerator and its denominator, and for a power its node,
+the sign of the exponent and its size. A case of a pick is a mark, its condition when it
+has one, and its node. A constant is kept by its numbers themselves, and no key is a hash. -/
+def Node.key : Node → Array Nat
+  | .c x => #[0, if x.num < 0 then 1 else 0, x.num.natAbs, x.den]
+  | .s k => #[1, k]
+  | .pi => #[2]
+  | .add a => #[3] ++ a
+  | .mul a => #[4] ++ a
+  | .min a => #[5] ++ a
+  | .max a => #[6] ++ a
+  | .neg i => #[7, i]
+  | .abs i => #[8, i]
+  | .sqrt i => #[9, i]
+  | .ln i => #[10, i]
+  | .exp i => #[11, i]
+  | .div i j => #[12, i, j]
+  | .pow i n => #[13, i, if n < 0 then 1 else 0, n.natAbs]
+  | .pick cases => cases.foldl (fun out (cond, value) =>
+      (match cond with
+        | some cond => cond.code (out.push 1)
+        | none => out.push 0).push value) #[14]
+
+/-- Two keys from place `i` on, when they are of one length: the one with the lesser number
+at the first place where they differ comes first. -/
+def keyOrderFrom (a b : Array Nat) (i : Nat) : Ordering :=
+  if h : i < a.size then
+    if a[i] < b[i]! then .lt else if b[i]! < a[i] then .gt else keyOrderFrom a b (i + 1)
+  else .eq
+termination_by a.size - i
+
+/-- The order a table of nodes is kept in: a shorter key first, and of two keys of one
+length the one with the lesser number at the first place where they differ. A comparison
+reads the two keys to that place and no further. -/
+def keyOrder (a b : Array Nat) : Ordering :=
+  if a.size < b.size then .lt else if b.size < a.size then .gt else keyOrderFrom a b 0
+
 /-- A tape being written. `seen` finds a node that is there already, so one quantity is one
-node, and a pick that compares it twice orders it once. `labelled` finds an input by its
-label. -/
+node, and a pick that compares it twice orders it once. It is kept in the order of its
+keys, so a look compares the key with a number of keys that grows as the logarithm of the
+count of the nodes, whatever numbers a deck lists. An input needs no table: one step of a
+rule reads one field or one load (`source`), and a part gives each a label of its own. -/
 structure Writing where
   inputs : Array TapeInput := #[]
   nodes : Array Node := #[]
-  seen : Std.HashMap Node Nat := {}
-  labelled : Std.HashMap String Nat := {}
+  seen : Std.TreeMap (Array Nat) Nat keyOrder := {}
 
 abbrev Write := StateT Writing (Except String)
 
 /-- The place of a node, written once. The tape is taken and given back in one step, so
 adding a node does not copy the nodes before it. -/
 def node (n : Node) : Write Nat := modifyGet fun w =>
-  match w.seen.get? n with
+  let key := n.key
+  match w.seen.get? key with
   | some i => (i, w)
   | none =>
     let i := w.nodes.size
-    (i, { w with nodes := w.nodes.push n, seen := w.seen.insert n i })
+    (i, { w with nodes := w.nodes.push n, seen := w.seen.insert key i })
 
-def input (i : TapeInput) : Write Nat := do
-  let k ← modifyGet fun w =>
-    match w.labelled.get? i.label with
-    | some k => (k, w)
-    | none =>
-      let k := w.inputs.size
-      (k, { w with inputs := w.inputs.push i, labelled := w.labelled.insert i.label k })
-  node (.s k)
+/-- An input and its node, added to the tape. The step of a rule that reads a field or a
+load is written once for a tape, so this is the one input of its label. The tape is taken
+and given back in one step, as in `node`, and the count of the inputs is read before one is
+added: a list that is still to be read is copied whole when it is added to. -/
+def input (i : TapeInput) : Write Nat := modifyGet fun w =>
+  let place := w.nodes.size
+  let k := w.inputs.size
+  (place, { w with inputs := w.inputs.push i, nodes := w.nodes.push (.s k) })
 
 /-- The first case that holds, or none when there is no case. One case that holds otherwise
 is its value. A pick holds at most `MAX_ORDERS` orders, as one that a file carries. -/

@@ -10,7 +10,6 @@ verdict takes is bounded by `MAX_WORK`, whatever the files hold. The kernel walk
 leaves one at a time and gives up each enclosure after the last node that reads it, and it
 holds at most `MAX_HELD` words of them at once.
 -/
-import Std.Data.HashSet
 import Petra.Num
 
 namespace Petra
@@ -56,7 +55,7 @@ def COSTLY : String :=
 inductive Cond where
   | le (i j : Nat) | lt (i j : Nat)
   | and (cs : Array Cond) | or (cs : Array Cond) | not (c : Cond)
-  deriving Inhabited, BEq, Hashable
+  deriving Inhabited, BEq
 
 inductive Node where
   | c (x : Rat) | s (k : Nat) | pi
@@ -66,7 +65,7 @@ inductive Node where
   /-- The value of the first case whose condition holds. A case is its condition and the
   node that is then the pick's value. A case with no condition holds otherwise. -/
   | pick (cases : Array (Option Cond × Nat))
-  deriving Inhabited, BEq, Hashable
+  deriving Inhabited, BEq
 
 structure TapeInput where
   label : String
@@ -299,7 +298,9 @@ def powWork (k n : Nat) : Nat :=
   let each := if n * k < 32 then 4700 else if n < 32 then 14500 else 31000
   k * (each + n / 2) + (k - 1) * (pow32 n * 31 / 20) + ((k - 1) * (k - 2) / 2) * (n * n / 300 + 4 * n)
 
-/-- An `ln` or an `exp` of an end the caches hold: a look at them, which reads the number. -/
+/-- An `ln` or an `exp` of an end the caches hold: a look at them. A cache is kept in the
+order of its ends, so a look compares the end with at most 25 of the 1,024 a cache holds,
+and with 10 or 11 as a rule, and each comparison reads no more than the end has bits. -/
 def cachedWork (x : Rat) : Nat := 1500 + ratBits x / 8
 
 /-- The work of the step `Node.enclose` for a node other than a pick, a sum and a product,
@@ -329,10 +330,10 @@ def Node.work (box v : Array Iv) (extra : Nat) (caches : Caches) : Node → Nat
   | .pick _ => 500
 
 /-- How many distinct pairs the conditions of a pick compare: the size of `compared`, counted
-through a table and so without the comparisons `compared` makes. -/
+through a table kept in order and so without the comparisons `compared` makes. -/
 def pairsOf (cases : Array (Option Cond × Nat)) : Nat :=
   (cases.foldl (fun seen (cond, _) => ((cond.map Cond.pairs).getD #[]).foldl (·.insert ·) seen)
-    ({} : Std.HashSet (Nat × Nat))).size
+    ({} : Std.TreeSet (Nat × Nat))).size
 
 /-- What a tape costs to read once, whatever its numbers: each node and each node it reads.
 A pick finds the distinct pairs among its orders by comparing each order with the pairs

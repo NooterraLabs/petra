@@ -10,9 +10,20 @@ No definition here is a `partial def` or runs a `while`: each loop is a recursio
 checks to end. So the logic can read every one, and proofs/ proves what each returns
 (docs/proved.md).
 -/
-import Std.Data.HashMap
+import Std.Data.TreeMap
+import Std.Data.TreeSet
 
 namespace Petra
+
+/-- A pair is ordered by its first member, and then by its second.
+
+Every table of the kernel is kept in the order of its keys, and none by a hash. A file
+chooses the keys: its names, its labels and its numbers. A hash of them can be made to send
+many keys to one place of a table, where a look then walks them all. A table kept in
+order is a balanced tree: neither side of a key holds more than three times the keys of the
+other. So a look compares the key with at most five keys for each two bits of the table's
+count, and it reads no more of each than the key is long, whatever the file holds. -/
+scoped instance [Ord α] [Ord β] : Ord (α × β) := lexOrd
 
 structure Iv where
   lo : Rat
@@ -199,7 +210,12 @@ def grid (enc : Nat → Iv) (extra : Nat) : Except String (Rat × Rat) :=
 /-- Pi on the grid. The first enclosure separates it. -/
 def piIv : Except String Iv := (grid piAt 32).map fun (lo, hi) => ⟨lo, hi⟩
 
-abbrev Cache := Std.HashMap (Int × Nat) (Rat × Rat)
+/-- The ends a step has rounded, each under its numerator and its denominator, in the order
+of the numerators and then of the denominators. A look compares the end it asks for with at
+most 25 of the 1,024 ends a full cache holds, and with 10 or 11 of them as a rule. Each
+comparison reads the two numbers from their top down to where they differ, so it costs no
+more than the end has bits. -/
+abbrev Cache := Std.TreeMap (Int × Nat) (Rat × Rat) lexOrd.compare
 
 structure Caches where
   ln : Cache := {}
@@ -207,9 +223,8 @@ structure Caches where
 
 abbrev M := StateT Caches (Except String)
 
-/-- The most entries a cache holds. A step that may fail keeps the caches it started from,
-to go back to them, so the step's first new entry copies the cache's table. A cache of
-bounded size bounds that copy, and what the caches hold. -/
+/-- The most entries a cache holds, which bounds what the caches hold and how many ends a
+look compares. -/
 def MAX_CACHED : Nat := 1024
 
 /-- The cache with one entry more. A full cache starts again from the new entry: the ends of

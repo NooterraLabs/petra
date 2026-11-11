@@ -13,6 +13,15 @@ kernel walk the tape on enough leaves to take `--seconds` of processor time, and
 processor nanoseconds by the `work` the verdict prints. Beside them it runs the yardstick: the
 chain of 4,000 small products of tests/test_kernel_limits.py, whose numbers fit a machine word.
 
+Two more steps are a look in a cache: `lnheld` and `expheld`, an `ln` and an `exp` of an end
+that the cache holds, when the cache is full of ends that are alike. The 1,022 ends have one
+denominator, and their numerators differ in one word in the middle: the same first words,
+the same last word. A table that found an end by a hash of its last words, as the caches
+did until the fourth review, kept all of these in one place, and a look walked them all for
+the price of one. These two lines are there so that a cache that does that again fails the
+sweep. A look is of an end of 16,000 bits at most: filling a cache with longer ends takes
+most of the work a verdict has.
+
 Prints one line for each step with the nanoseconds a unit at each length, and exits 1 when
 the most of them is over three times the yardstick's. The time is the processor's and not
 the clock's, less what the kernel takes to start and to read the files, so a busy machine
@@ -21,6 +30,7 @@ moves the numbers less than it moves the clock, and it moves the yardstick with 
 from __future__ import annotations
 
 import argparse
+import math
 import os
 import random
 import sys
@@ -115,10 +125,37 @@ def step(kind: str, t: Tape, bits: int):
         return [], lambda: t.add("c", num(x))
     if kind == "pi":
         return [], lambda: t.add("pi")
+    if kind in ("lnheld", "expheld"):
+        ends = alike(t, min(bits, 16_000))
+        held = [t.add(kind[:-4], x) for x in ends]
+        return held, lambda: t.add(kind[:-4], ends[0])
     raise SystemExit(f"{kind} is not a step")
 
 
-STEPS = ("c", "pi", "neg", "abs", "add", "mul", "div", "min", "max", "pick", "sqrt", "pow2", "pow3", "pow8", "ln", "exp")
+FILLED = 1022
+"""How many ends the tape of a look puts in a cache, of the 1,024 it holds."""
+LOOKS = 60_000
+"""The most looks a tape makes on one leaf."""
+
+
+def alike(t: Tape, bits: int) -> list[int]:
+    """The nodes of FILLED ends near 3/2 that are alike: 3/2 + k 2^s / Q for Q = 2^bits - 1,
+    with `s` the bits of the words below the middle one, and k with no factor in common with
+    Q, so that each is in lowest terms over 2 Q. They have one denominator, and their
+    numerators have the same words but one. They are near 3/2 and not near 1: the logarithm
+    of a number that close to 1 is too close to zero, a point of the grid, to be rounded."""
+    q = (1 << bits) - 1
+    shift = 64 * (bits // 128)
+    unit = t.add("div", t.whole(1 << shift), t.whole(q))
+    base, ends, k = t.add("c", "3/2"), [], 0
+    while len(ends) < FILLED:
+        k += 1
+        if math.gcd(k, q) == 1:
+            ends.append(t.add("add", [base, t.add("mul", [t.add("c", str(k)), unit])]))
+    return ends
+
+
+STEPS = ("c", "pi", "neg", "abs", "add", "mul", "div", "min", "max", "pick", "sqrt", "pow2", "pow3", "pow8", "ln", "exp", "lnheld", "expheld")
 
 
 def bundle(kind: str, bits: int, copies: int, leaves: int) -> dict[str, str]:
@@ -200,7 +237,16 @@ def main() -> int:
             if kind == "pi" and b != bits[0]:
                 cells.append(None)
                 continue
-            found, _, _ = rate(lambda copies, leaves, b=b: bundle(kind, b, copies, leaves), args.seconds, start, most=min(4096, HELD // b))
+            # Filling a cache takes seconds for long ends, and a look microseconds. So for a look, what is
+            # taken off each run as its start is the tape with no look on one leaf, which fills the cache.
+            # The looks are then measured for at least twice as long as the filling took, and for 2.5 seconds
+            # at most, which the work of one verdict pays for: both runs fill the cache, and what a busy
+            # machine adds to that would otherwise be as large as the looks themselves.
+            before = measured(bundle(kind, b, 0, 1), timeout=900)[1] if kind.endswith("held") else start
+            # A look gives a number of the grid, which is short, so a tape keeps many of them: enough to outweigh
+            # the making of the 1,022 long ends, which each leaf does again.
+            found, _, _ = rate(lambda copies, leaves, b=b: bundle(kind, b, copies, leaves), max(args.seconds, min(2 * (before - start), 2.5)), before,
+                               most=LOOKS if kind.endswith("held") else min(4096, HELD // b))
             cells.append(found)
             if found > worst:
                 worst, where = found, f"{kind} at {b:,} bits"

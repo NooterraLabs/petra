@@ -1,7 +1,6 @@
 /-
 The rules of docs/format.md in its order, and the verdict.
 -/
-import Std.Data.HashSet
 import Petra.Grid
 import Petra.Sha256
 
@@ -70,9 +69,9 @@ place in the card's list. So the tests on a cell cost what the cell holds, and n
 times the card. -/
 structure Signed where
   lead : String
-  inputs : Std.HashMap String Bounds
-  constants : Std.HashMap String Bounds
-  waivers : Std.HashMap (String × String) (Waiver × Nat)
+  inputs : Std.TreeMap String Bounds
+  constants : Std.TreeMap String Bounds
+  waivers : Std.TreeMap (String × String) (Waiver × Nat)
 
 def Signed.of (card : Card) (deck : Deck) : Signed :=
   { lead := s!"in:{card.name}.",
@@ -135,7 +134,7 @@ def settle (signed : Signed) (cell : Cell) (left : Nat) : StateM Caches (Settled
       if why.isSome then return (why, left)
       if let some i := (point.zip ranges).findIdx? fun (x, among) => !among.all (·.core.has x) then
         return (some s!"the point is outside the signed range of input {i}", left)
-      let (_, twice) := (tape.inputs.zip point).foldl (init := (({} : Std.HashMap String Rat), false)) fun (seen, twice) (input, x) =>
+      let (_, twice) := (tape.inputs.zip point).foldl (init := (({} : Std.TreeMap String Rat), false)) fun (seen, twice) (input, x) =>
         match seen.get? input.label with
         | some y => (seen, twice || x != y)
         | none => (seen.insert input.label x, twice)
@@ -182,7 +181,7 @@ structure Report where
 
 /-- The distinct `dsg:` inputs that the tapes of the proved and the refuted cells read. -/
 def dsgInputs (cells : Array Settled) : Nat :=
-  let labels : Std.HashSet String := cells.foldl (init := {}) fun seen s =>
+  let labels : Std.TreeSet String := cells.foldl (init := {}) fun seen s =>
     match s.state, s.cell.tape with
     | .proved, some tape | .refuted, some tape =>
       tape.inputs.foldl (fun seen i => if i.label.startsWith "dsg:" then seen.insert i.label else seen) seen
