@@ -211,22 +211,25 @@ theorem EvalInv.push_err {t : Tape} {box : Array Iv} {need : Array Bool} {k : Na
   · rw [← h2, getElem!_push_eq] at hb
     cases hb
 
+/-- After `Tape.eval`, the enclosure of every marked node that did not fail holds that
+node's value at every point of the box. `V` is a property of the caches that every step of
+the tape keeps: see `Node.StepSound`. -/
 theorem Tape.eval_sound {t : Tape} {box : Array Iv} {need : Array Bool} {c c' : Caches}
-    {v : Array Iv} {bad : Array (Option Failure)}
-    (hwf : t.WF) (htrust : ∀ node ∈ t.nodes, node.Trusted)
+    {v : Array Iv} {bad : Array (Option Failure)} {V : Caches → Prop}
+    (hwf : t.WF) (hstep : ∀ node ∈ t.nodes, node.StepSound V)
     (hneed : ∀ i (hi : i < t.nodes.size), need[i]! = true →
       ∀ j ∈ t.nodes[i].reads, need[j]! = true)
-    (hsize : box.size = t.inputs.size) (hc : c.Valid)
+    (hsize : box.size = t.inputs.size) (hc : V c)
     (h : t.eval box need c = .ok ((v, bad), c')) :
-    c'.Valid ∧ ∀ ρ, InBox box ρ → ∀ i, i < t.nodes.size → need[i]! = true → bad[i]! = none →
+    V c' ∧ ∀ ρ, InBox box ρ → ∀ i, i < t.nodes.size → need[i]! = true → bad[i]! = none →
       ∃ x, t.value ρ i = some x ∧ v[i]!.Holds x := by
   unfold Tape.eval at h
   dsimp only at h
   obtain ⟨r, c1, hloop, hret⟩ := M.bind_ok h
-  have hinv : c1.Valid ∧ EvalInv t box need t.nodes.zipIdx.size r.1 r.2 := by
+  have hinv : V c1 ∧ EvalInv t box need t.nodes.zipIdx.size r.1 r.2 := by
     refine M.forIn_array_inv _
       (fun k (r : MProd (Array (Option Failure)) (Array Iv)) c =>
-        c.Valid ∧ EvalInv t box need k r.1 r.2) t.nodes.zipIdx _ r c c1 ?_ ?_ hloop
+        V c ∧ EvalInv t box need k r.1 r.2) t.nodes.zipIdx _ r c c1 ?_ ?_ hloop
     · exact ⟨hc, by simp [EvalInv]⟩
     · intro j hj b c s c' hP hf
       have hj' : j < t.nodes.size := by simpa using hj
@@ -243,7 +246,7 @@ theorem Tape.eval_sound {t : Tape} {box : Array Iv} {need : Array Bool} {c c' : 
         show (if _h : i < j then t.value ρ i else none) = some x
         rw [dif_pos hlt]
         exact hx
-      have htr := htrust t.nodes[j] (Array.mem_of_getElem (h := hj') rfl)
+      have htr := hstep t.nodes[j] (Array.mem_of_getElem (h := hj') rfl)
       have hin : ∀ k, t.nodes[j] = .s k → k < box.size := fun k hk => by
         rw [hsize]
         exact hwf.input j hj' k hk
@@ -292,10 +295,11 @@ theorem Tape.eval_sound {t : Tape} {box : Array Iv} {need : Array Bool} {c c' : 
                 (a := (MProd.mk PUnit.unit (Except.ok y) : MProd PUnit (Except Failure Iv))) hok3
               obtain ⟨rfl, rfl⟩ := M.pure_ok
                 (a := ForInStep.yield (MProd.mk (b.fst.push none) (b.snd.push y))) hrest
-              refine ⟨_, rfl, Node.enclose_valid htr hcv henc, hE.push_ok (fun _ ρ hρ => ?_)⟩
+              obtain ⟨hV, hsound⟩ := htr _ _ _ _ _ hcv henc
+              refine ⟨_, rfl, hV, hE.push_ok (fun _ ρ hρ => ?_)⟩
               have hbad := earliest_none hearly
-              obtain ⟨-, x, hx, hxv⟩ := Node.enclose_sound htr hρ hin
-                (fun i hi => hreads hn ρ hρ i hi (hbad i hi)) hcv henc
+              obtain ⟨x, hx, hxv⟩ := hsound ρ _ hρ hin
+                (fun i hi => hreads hn ρ hρ i hi (hbad i hi))
               rw [hsize] at hx
               exact ⟨x, by rw [hval ρ]; exact hx, hxv⟩
             · obtain ⟨rfl, rfl⟩ := M.pure_ok

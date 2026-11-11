@@ -333,4 +333,129 @@ theorem Node.enclose_valid {node : Node} {box v : Array Iv} {c c' : Caches} {r :
   | pick cases =>
     exact (M.throw_not_ok (s := "a pick is not enclosed by this step") h).elim
 
+/-! ## What the walk needs of a step
+
+The walk over a tape needs one fact of each node: its step is sound. It is stated for any
+property `V` of the caches that the step keeps, so that it has two readings. For any node,
+`V` is `Caches.Valid` and the fact needs the node's assumption. For a node the kernel
+computes exactly, `V` is true of every cache and the fact needs nothing. -/
+
+/-- A node the kernel computes with exact rational arithmetic: every node but `sqrt`, `pi`,
+`ln` and `exp`. -/
+def Node.Exact : Node → Prop
+  | .sqrt _ => False
+  | .pi => False
+  | .ln _ => False
+  | .exp _ => False
+  | _ => True
+
+theorem Node.Exact.trusted {node : Node} (h : node.Exact) : node.Trusted := by
+  cases node <;> first | exact True.intro | exact False.elim h
+
+/-- The step of an exact node does not read the caches and does not change them. -/
+theorem Node.enclose_exact {node : Node} {box v : Array Iv} {c c' : Caches} {r : Iv}
+    (hex : node.Exact) (h : node.enclose box v c = .ok (r, c')) (c₀ : Caches) :
+    node.enclose box v c₀ = .ok (r, c₀) := by
+  cases node with
+  | c q =>
+    obtain ⟨hr, -⟩ := M.pure_ok (a := Iv.pt q) h
+    rw [hr]
+    rfl
+  | s k =>
+    obtain ⟨hr, -⟩ := M.pure_ok (a := box[k]!) h
+    rw [hr]
+    rfl
+  | pi => exact False.elim hex
+  | add a =>
+    obtain ⟨hf, -⟩ :=
+      M.lift_ok (e := a.foldlM (fun acc i => fits (acc.add v[i]!)) (Iv.pt 0)) h
+    show (liftM (m := Except String)
+      (a.foldlM (fun acc i => fits (acc.add v[i]!)) (Iv.pt 0)) : M Iv) c₀ = .ok (r, c₀)
+    rw [hf]
+    rfl
+  | mul a =>
+    obtain ⟨hf, -⟩ :=
+      M.lift_ok (e := a.foldlM (fun acc i => fits (acc.mul v[i]!)) (Iv.pt 1)) h
+    show (liftM (m := Except String)
+      (a.foldlM (fun acc i => fits (acc.mul v[i]!)) (Iv.pt 1)) : M Iv) c₀ = .ok (r, c₀)
+    rw [hf]
+    rfl
+  | min a =>
+    have h' : (match a.toList with
+      | [] => (throw "min of no nodes" : M Iv)
+      | i :: rest => pure (rest.foldl (fun acc k => acc.min v[k]!) v[i]!)) c = .ok (r, c') := h
+    show (match a.toList with
+      | [] => (throw "min of no nodes" : M Iv)
+      | i :: rest => pure (rest.foldl (fun acc k => acc.min v[k]!) v[i]!)) c₀ = .ok (r, c₀)
+    cases hl : a.toList with
+    | nil =>
+      rw [hl] at h'
+      exact (M.throw_not_ok h').elim
+    | cons i rest =>
+      rw [hl] at h'
+      obtain ⟨hr, -⟩ := M.pure_ok h'
+      rw [hr]
+      rfl
+  | max a =>
+    have h' : (match a.toList with
+      | [] => (throw "max of no nodes" : M Iv)
+      | i :: rest => pure (rest.foldl (fun acc k => acc.max v[k]!) v[i]!)) c = .ok (r, c') := h
+    show (match a.toList with
+      | [] => (throw "max of no nodes" : M Iv)
+      | i :: rest => pure (rest.foldl (fun acc k => acc.max v[k]!) v[i]!)) c₀ = .ok (r, c₀)
+    cases hl : a.toList with
+    | nil =>
+      rw [hl] at h'
+      exact (M.throw_not_ok h').elim
+    | cons i rest =>
+      rw [hl] at h'
+      obtain ⟨hr, -⟩ := M.pure_ok h'
+      rw [hr]
+      rfl
+  | neg i =>
+    obtain ⟨hr, -⟩ := M.pure_ok (a := v[i]!.neg) h
+    rw [hr]
+    rfl
+  | abs i =>
+    obtain ⟨hr, -⟩ := M.pure_ok (a := v[i]!.abs) h
+    rw [hr]
+    rfl
+  | sqrt i => exact False.elim hex
+  | ln i => exact False.elim hex
+  | exp i => exact False.elim hex
+  | div i j =>
+    obtain ⟨hq, -⟩ := M.lift_ok (e := v[i]!.div v[j]!) h
+    show (liftM (m := Except String) (v[i]!.div v[j]!) : M Iv) c₀ = .ok (r, c₀)
+    rw [hq]
+    rfl
+  | pow i n =>
+    obtain ⟨hq, -⟩ := M.lift_ok (e := powInt v[i]! n) h
+    show (liftM (m := Except String) (powInt v[i]! n) : M Iv) c₀ = .ok (r, c₀)
+    rw [hq]
+    rfl
+  | pick cases =>
+    exact (M.throw_not_ok (s := "a pick is not enclosed by this step") h).elim
+
+/-- The step of `node` keeps the property `V` of the caches, and from caches with `V` it is
+sound: the statement of `Node.enclose_sound`. -/
+def Node.StepSound (V : Caches → Prop) (node : Node) : Prop :=
+  ∀ (box v : Array Iv) (c c' : Caches) (r : Iv), V c → node.enclose box v c = .ok (r, c') →
+    V c' ∧ ∀ (ρ : Nat → ℝ) (val : Nat → Option ℝ), InBox box ρ →
+      (∀ k, node = .s k → k < box.size) →
+      (∀ i ∈ node.reads, ∃ x, val i = some x ∧ v[i]!.Holds x) →
+      ∃ x, node.value box.size ρ val = some x ∧ r.Holds x
+
+/-- Any node, from valid caches, given what the node assumes. -/
+theorem Node.Trusted.stepSound {node : Node} (h : node.Trusted) :
+    node.StepSound Caches.Valid :=
+  fun _ _ _ _ _ hc he => ⟨Node.enclose_valid h hc he, fun _ _ hbox hs hval =>
+    (Node.enclose_sound h hbox hs hval hc he).2⟩
+
+/-- An exact node, from any caches, with nothing assumed. -/
+theorem Node.Exact.stepSound {node : Node} (h : node.Exact) :
+    node.StepSound (fun _ => True) :=
+  fun _ _ _ _ _ _ he => ⟨True.intro, fun _ _ hbox hs hval =>
+    (Node.enclose_sound h.trusted hbox hs hval Caches.valid_empty
+      (Node.enclose_exact h he {})).2⟩
+
 end Petra

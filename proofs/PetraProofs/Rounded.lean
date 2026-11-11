@@ -12,6 +12,7 @@ import Mathlib.Analysis.SpecialFunctions.Trigonometric.Arctan
 import Mathlib.Analysis.SpecialFunctions.Log.Basic
 import Mathlib.Data.Rat.Floor
 import PetraProofs.Trust
+import PetraProofs.Arith
 
 namespace Petra
 
@@ -38,47 +39,6 @@ private theorem GRID_pos : 0 < GRID := by
   positivity
 
 private theorem GRIDq_pos : (0 : ℚ) < (GRID : ℚ) := by exact_mod_cast GRID_pos
-
-/-! ## Interval steps used here -/
-
-private theorem pt_holds (q : ℚ) : (Iv.pt q).Holds (q : ℝ) := ⟨le_refl _, le_refl _⟩
-
-private theorem add_holds {a b : Iv} {x y : ℝ} (hx : a.Holds x) (hy : b.Holds y) :
-    (a.add b).Holds (x + y) := by
-  obtain ⟨h1, h2⟩ := hx
-  obtain ⟨h3, h4⟩ := hy
-  show ((a.lo + b.lo : ℚ) : ℝ) ≤ x + y ∧ x + y ≤ ((a.hi + b.hi : ℚ) : ℝ)
-  push_cast
-  exact ⟨by linarith, by linarith⟩
-
-private theorem sub_holds {a b : Iv} {x y : ℝ} (hx : a.Holds x) (hy : b.Holds y) :
-    (a.sub b).Holds (x - y) := by
-  obtain ⟨h1, h2⟩ := hx
-  obtain ⟨h3, h4⟩ := hy
-  show ((a.lo - b.hi : ℚ) : ℝ) ≤ x - y ∧ x - y ≤ ((a.hi - b.lo : ℚ) : ℝ)
-  push_cast
-  exact ⟨by linarith, by linarith⟩
-
-private theorem mul_between {a b x y : ℝ} (h1 : a ≤ x) (h2 : x ≤ b) :
-    min (a * y) (b * y) ≤ x * y ∧ x * y ≤ max (a * y) (b * y) := by
-  rcases le_total 0 y with hy | hy
-  · exact ⟨(min_le_left _ _).trans (mul_le_mul_of_nonneg_right h1 hy),
-      (mul_le_mul_of_nonneg_right h2 hy).trans (le_max_right _ _)⟩
-  · exact ⟨(min_le_right _ _).trans (mul_le_mul_of_nonpos_right h2 hy),
-      (mul_le_mul_of_nonpos_right h1 hy).trans (le_max_left _ _)⟩
-
-private theorem mul_holds {a b : Iv} {x y : ℝ} (hx : a.Holds x) (hy : b.Holds y) :
-    (a.mul b).Holds (x * y) := by
-  obtain ⟨h1, h2⟩ := hx
-  obtain ⟨h3, h4⟩ := hy
-  obtain ⟨l1, u1⟩ := mul_between (y := y) h1 h2
-  obtain ⟨l2, u2⟩ := mul_between (y := (a.lo : ℝ)) h3 h4
-  obtain ⟨l3, u3⟩ := mul_between (y := (a.hi : ℝ)) h3 h4
-  rw [mul_comm (b.lo : ℝ), mul_comm (b.hi : ℝ), mul_comm y] at l2 u2 l3 u3
-  show ((rmin (rmin (a.lo * b.lo) (a.lo * b.hi)) (rmin (a.hi * b.lo) (a.hi * b.hi)) : ℚ) : ℝ) ≤ x * y ∧
-    x * y ≤ ((rmax (rmax (a.lo * b.lo) (a.lo * b.hi)) (rmax (a.hi * b.lo) (a.hi * b.hi)) : ℚ) : ℝ)
-  simp only [rmin_eq, rmax_eq, Rat.cast_min, Rat.cast_max, Rat.cast_mul]
-  exact ⟨(min_le_min l2 l3).trans l1, u1.trans (max_le_max u2 u3)⟩
 
 /-! ## The grid -/
 
@@ -233,7 +193,7 @@ private theorem piAt_sound (hs : OddSeriesSpec) (p : ℕ) : (piAt p).Holds Real.
     norm_num
   rw [e5] at a5
   rw [e239] at a239
-  have hm := sub_holds (mul_holds (pt_holds 16) a5) (mul_holds (pt_holds 4) a239)
+  have hm := Iv.sub_sound (Iv.mul_sound (Iv.pt_sound 16) a5) (Iv.mul_sound (Iv.pt_sound 4) a239)
   have hpi : Real.pi = ((16 : ℚ) : ℝ) * Real.arctan 5⁻¹ - ((4 : ℚ) : ℝ) * Real.arctan 239⁻¹ := by
     have := Real.four_mul_arctan_inv_5_sub_arctan_inv_239
     push_cast
@@ -347,7 +307,7 @@ private theorem ln2At_sound (hs : OddSeriesSpec) (p : ℕ) : (ln2At p).Holds (Re
     rw [Rat.mkRat_eq_div]
     norm_num
   rw [e] at a
-  have hm := mul_holds (pt_holds 2) a
+  have hm := Iv.mul_sound (Iv.pt_sound 2) a
   have e2 : ((2 : ℚ) : ℝ) * (Real.log 2 / 2) = Real.log 2 := by
     push_cast
     ring
@@ -386,7 +346,7 @@ private theorem lnAt_sound (hs : OddSeriesSpec) {x : ℚ} (hx : 0 < x) (p : ℕ)
     split_ifs
     · exact ln2At_sound hs 128
     · exact ln2At_sound hs p
-  have hsum := add_holds (mul_holds (pt_holds 2) hser) (mul_holds (pt_holds (qi (lnE x))) hl2)
+  have hsum := Iv.add_sound (Iv.mul_sound (Iv.pt_sound 2) hser) (Iv.mul_sound (Iv.pt_sound (qi (lnE x))) hl2)
   have hxm : (x : ℝ) = (lnM x : ℝ) * (2 : ℝ) ^ (lnE x) := by
     have h2 : ((2 : ℚ) ^ (lnE x)) ≠ 0 := zpow_ne_zero _ (by norm_num)
     have : x = lnM x * (2 : ℚ) ^ (lnE x) := by
