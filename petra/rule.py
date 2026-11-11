@@ -388,15 +388,22 @@ class Said:
 
 @dataclass(frozen=True)
 class Answer:
-    """What a transcription says of one mechanism for one part: it `cannot arise`, there is
-    `no rule` for a part like this, or what each rule that holds for the part says. The
-    answer `fails` if one of them fails, is `nothing` if none fails and one says nothing,
-    and `holds` if all hold: `petra check` gives each a cell, and a refuted cell outweighs
-    an open one."""
+    """What a transcription says of one mechanism for one part, as one of the four things a
+    design can get from it: the mechanism `cannot arise`; it `fails`, when a rule that holds
+    for the part fails; it is `open`, when none fails and one says nothing, or no rule is
+    for a part like this; it `holds`, when every rule does. `petra check` gives each rule a
+    cell, and a refuted cell outweighs an open one. `kind` is why it is open: `no rule`, or
+    the kind of nothing its first silent rule says."""
 
     state: str
     why: str = ""
     said: tuple[Said, ...] = ()
+    kind: str = ""
+
+    @property
+    def label(self) -> str:
+        """The state for a count, with an open answer by its kind."""
+        return {"": self.state, "no rule": "no rule", "range": "out of range", "value": "no value", "load": "no load"}[self.kind]
 
     @property
     def settled(self) -> bool:
@@ -558,11 +565,11 @@ class Reading:
                 said = tuple(self.says(r, point) for r in self.rules[mechanism] if _is(r.when, point))
                 silent = next((s for s in said if s.state == "nothing"), None)
                 if not said:
-                    found = Answer("no rule", "no rule answers for a part like this one")
+                    found = Answer("open", "no rule answers for a part like this one", (), "no rule")
                 elif any(s.state == "fails" for s in said):
                     found = Answer("fails", "", said)
                 else:
-                    found = Answer("nothing", silent.why, said) if silent is not None else Answer("holds", "", said)
+                    found = Answer("open", silent.why, said, silent.kind) if silent is not None else Answer("holds", "", said)
             if not keep:
                 return found
             self._answers[at] = found
@@ -722,16 +729,17 @@ def turns(answer: Callable[..., Answer], pairs: list[tuple[Mapping[str, Any], Ma
 
 
 def _shown(point: Mapping[str, Any], names: list[str]) -> str:
-    return ", ".join(f"{name.removeprefix('load ')}={point[name]}" if isinstance(point[name], str) else f"{name.removeprefix('load ')}={float(point[name]):.6g}"
-                     for name in names if name in point) + " (SI)"
+    """A part for a message: what the mechanism reads of it, in SI, and `no pull` for a load it does not carry."""
+    return ", ".join(f"no {name[5:]}" if name not in point else f"{name.removeprefix('load ')}={point[name]}" if isinstance(point[name], str)
+                     else f"{name.removeprefix('load ')}={float(point[name]):.6g}" for name in names if name in point or name.startswith("load ")) + " (SI)"
 
 
 def _told(found: Answer) -> str:
     if found.state == "cannot arise":
         return f"says it cannot arise ({found.why})"
-    if found.state == "no rule":
+    if found.kind == "no rule":
         return "has no rule for a part like it"
-    if found.state == "nothing":
+    if found.state == "open":
         silent = next(s for s in found.said if s.state == "nothing")
         return f"says nothing ({silent.rule}: {silent.why})"
     g = found.governing
@@ -817,7 +825,7 @@ def reach(mine: Reading, mechanism: str, tried: Parts, unused: bool = True) -> C
     a rule holds at every part, a range holds at every part, or an argument of a min or a
     max never decides: the task's ranges are then too narrow to show what that is for."""
     found = [mine.answer(mechanism, p) for p in tried.base]
-    states = collections.Counter(a.state for a in found)
+    states = collections.Counter(a.label for a in found)
     count = f"{len(found)} parts{tried.said}: " + ", ".join(f"{n} {state}" for state, n in sorted(states.items()))
     if not mine.rules[mechanism]:
         return Check("reach", "pass", count)
@@ -877,30 +885,28 @@ def alike(mine: Reading, mechanism: str, tried: Parts) -> Check:
 
 def _differs(a: Answer, b: Answer) -> str:
     """What two answers differ on, in the order a reader would look."""
-    states = {a.state, b.state}
-    if "cannot arise" in states:
+    if "cannot arise" in (a.state, b.state):
         return "whether it can arise"
-    if "no rule" in states:
-        return "which parts a rule answers for"
-    if "nothing" in states:
-        kinds = {s.kind for found in (a, b) if found.state == "nothing" for s in found.said}
-        return "the range a rule holds in" if "range" in kinds else "the load a rule reads" if "load" in kinds else "where a row gives a value"
-    return "whether the inequality holds"
+    kind = a.kind or b.kind
+    return {"": "whether the inequality holds", "no rule": "which parts a rule answers for", "range": "the range a rule holds in", "load": "the load a rule reads",
+            "value": "where a row gives a value"}[kind]
 
 
 def second(mine: Reading, other: Reading, mechanism: str, tried: Parts) -> Check:
     """Whether the other transcription gives each part the same answer for the mechanism:
-    that it cannot arise, that no rule answers, that a rule says nothing, or that the
-    inequality holds or fails. Parts are the sampled ones, their partners, and the parts on
-    each side of every place found where either transcription's answer changes.
+    that it cannot arise, that it is open, or that the inequality holds or fails. Why an
+    answer is open is not compared: a part that one leaves to no rule and the other puts
+    outside a rule's range gets an open cell from both. Parts are the sampled ones, their
+    partners, and the parts on each side of every place found where either transcription
+    treats a part another way.
 
     Where both hold or both fail, the largest ratio of each is compared too, or the two
     sides where neither states a ratio. Equal ratios at every part mean one inequality.
     Unequal ratios may still be one inequality written two ways, as `a <= b` and
     `a - b <= 0` are. So from each of the first TRIED such parts the check moves one load,
     or failing that one size, until either transcription stops holding or stops failing,
-    and asks that the other do so at the same place. It fails the two when one of these
-    parts has no such place: they cannot be told the same."""
+    and asks that the other do so at the same place. It fails the two when fewer than half
+    of these parts have such a place: they cannot be told the same."""
     if mechanism in other.wrong:
         return Check("second", "fail", f"the other transcription does not load: {other.wrong[mechanism]}")
     if not other.answers(mechanism):
@@ -925,24 +931,28 @@ def second(mine: Reading, other: Reading, mechanism: str, tried: Parts) -> Check
     counts = len(mine.rules[mechanism]), len(other.rules[mechanism])
     if counts[0] != counts[1]:
         said += f", {counts[0]} rule{'s' if counts[0] != 1 else ''} against {counts[1]}"
+    ratios = f"another ratio at {len(forms)} of {said}"
     if not differ and forms:
         spans = mine.task.spans[tried.kind]
         axes = [n for n in names if n.startswith("load ")] + [n for n in names if n in spans and not n.startswith("load ") and n not in tried.fixed]
-        p, a, b = forms[0]
-        ratios = f"at {_shown(p, names)} this one {_told(a)} and the other {_told(b)}"
+        turned = 0
         for p, _, _ in forms[:TRIED]:
-            beside = next((found for name in axes if name in p for far in (spans[name][1] * FAR, spans[name][0] / FAR) for f in ask if (found := _along(f, p, name, far))), None)
-            if beside is None:
-                return Check("second", "fail", f"the ratios differ at {len(forms)} of {said}, and from one of them no load or size was found that turns either answer, "
-                                               f"so the two cannot be told the same: {ratios}")
+            beside = next((found for name in axes if name in p for far in (spans[name][1] * FAR, spans[name][0] / FAR) for f in ask if (found := _along(f, p, name, far))), [])
+            turned += bool(beside)
             differ += compared(beside)[0]
+        p, a, b = forms[0]
+        shown = f"at {_shown(p, names)} this one {_told(a)} and the other {_told(b)}"
+        if not differ and 2 * turned < min(TRIED, len(forms)):
+            return Check("second", "fail", f"the two give {ratios}, and from {turned} of the first {min(TRIED, len(forms))} a load or a size was found that turns either answer, "
+                                           f"too few to tell whether the two are one inequality: {shown}")
         if not differ:
-            return Check("second", "pass", f"{said}; the two write the inequality in different forms, and from {min(TRIED, len(forms))} parts each turns at the same place: {ratios}")
-        said += f" and {2 * min(TRIED, len(forms))} beside the places where one turns"
+            return Check("second", "pass", f"{said}; the two write the inequality in different forms: they give {ratios}, "
+                                           f"and from {turned} of the first {min(TRIED, len(forms))} each turns at the same place: {shown}")
     if differ:
         kinds = collections.Counter(d[0] for d in differ)
         what, p, a, b = next(d for d in differ if d[0] == kinds.most_common(1)[0][0])
-        return Check("second", "fail", f"they differ at {len(differ)} of {said}: " + ", ".join(f"{n} on {kind}" for kind, n in kinds.most_common())
+        count = f"{len(differ)} part{'s' if len(differ) != 1 else ''}" if forms else f"{len(differ)} of {said}"
+        return Check("second", "fail", f"the two give another answer at {count}, " + ", ".join(f"{n} on {kind}" for kind, n in kinds.most_common()) + (f", and {ratios}" if forms else "")
                      + f". At {_shown(p, names)} this one {_told(a)} and the other {_told(b)}")
     return Check("second", "pass", said)
 

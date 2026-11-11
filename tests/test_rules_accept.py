@@ -123,7 +123,8 @@ class Agreement(unittest.TestCase):
         heat = with_rule(0, le=[["sub", ["load", "current"], ["mul", "turns", ["row", "test/limit", {"w": "width"}], ["row", "test/derate", {"T": "T"}]]], ["q", "0", "A"]])
         found = self.second("strip.heat", heat)
         self.assertEqual(found.outcome, "pass", found.detail)
-        self.assertIn("the two write the inequality in different forms, and from 32 parts each turns at the same place", found.detail)
+        self.assertIn("the two write the inequality in different forms: they give another ratio at 180 of 208 parts, and from 32 of the first 32 each turns at the same place", found.detail)
+        self.assertIn("this one holds at 0.20443 (test/heat: 0.61329 against 3) and the other holds (test/heat: -2.38671 against 0)", found.detail)
         spark = with_rule(3, le=[["sub", ["add", "screw", ["q", "0.1", "mm"]], "hole"], ["q", "0", "mm"]])
         found = self.second("strip.spark", spark)
         self.assertEqual((found.outcome, "different forms" in found.detail), ("pass", True), "it reads no load, so a size is moved: " + found.detail)
@@ -134,12 +135,21 @@ class Agreement(unittest.TestCase):
         spark = with_rule(3, le=[["sub", ["add", "screw", ["q", "0.11", "mm"]], "hole"], ["q", "0", "mm"]])
         self.assertEqual(self.second("strip.spark", spark).outcome, "fail")
 
+    def test_open_is_open_whatever_leaves_it_open(self):
+        """The deck's rule for a spark holds only for a strip that carries a current, so an idle strip has no rule. This one has
+        no `when` and a range that reads the current, so on an idle strip it says nothing. The cell is open either way."""
+        ranged = with_rule(3, when=None, where=[{"le": [["q", "0", "A"], ["load", "current"]], "why": "it carries a current"}])
+        self.assertEqual(self.second("strip.spark", ranged).outcome, "pass")
+        idle = next(p for p in rule.parts(TASK, "strip.spark", [FIRST]).base if p["fit"] == "free" and "load current" not in p)
+        mine, theirs = FIRST.answer("strip.spark", idle), reading(ranged).answer("strip.spark", idle)
+        self.assertEqual([(a.state, a.kind) for a in (mine, theirs)], [("open", "no rule"), ("open", "load")])
+
     def test_two_inequalities_that_no_part_fails_cannot_be_told_the_same(self):
         """The made-up rule for bowing never fails: gap (4 mm - gap) is at most 4 mm2. With 4.3 for 4.2 no part gets another
         answer, and only the ratio differs. The check finds no place where either turns, and refuses."""
         found = self.second("strip.bow", with_rule(2, le=[["mul", "gap", ["sub", ["q", "4", "mm"], "gap"]], ["q", "4.3", "mm2"]]))
         self.assertEqual(found.outcome, "fail")
-        self.assertIn("no load or size was found that turns either answer, so the two cannot be told the same", found.detail)
+        self.assertIn("the two give another ratio at 128 of 128 parts, and from 0 of the first 32 a load or a size was found that turns either answer, too few to tell whether the two are one inequality", found.detail)
         self.assertIn("this one holds at 0.67", found.detail)
         self.assertIn("the other holds at 0.65", found.detail)
 
@@ -424,8 +434,8 @@ class Measurement(unittest.TestCase):
         self.assertEqual(self.kinds["other part"]["alike"], self.kinds["other part"]["wrong"], "a field of the other pad breaks what the task calls alike")
         text = self.bench.table(self.kinds)
         self.assertEqual(text[0].split(), ["damage", "wrong", "refused", *self.bench.PARTS])
-        self.assertEqual(text[-2].split()[:3], ["all", str(total["wrong"]), str(total["any"])])
-        self.assertEqual(text[-1], "  refused by one part of the check and no other: examples 24, reach 1, reads 3")
+        self.assertEqual(text[-3].split()[:3], ["all", str(total["wrong"]), str(total["any"])])
+        self.assertEqual(text[-2:], ["  refused by one part of the check and no other: examples 24, reach 1, reads 3", "  refused by a part other than `alike`: 43 (88%)"])
 
     def test_damage_that_changes_no_answer_is_not_counted_as_wrong(self):
         """Two rows with one formula: reading the other changes no answer, so it is no wrong rule."""

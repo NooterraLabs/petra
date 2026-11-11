@@ -168,7 +168,10 @@ def measure(first: rule.Reading, examples: Mapping[str, list[rule.Worked]], admi
 
 
 def table(kinds: Mapping[str, collections.Counter]) -> list[str]:
-    """The tally as a table: a line for each kind of damage that made a wrong rule, and the total."""
+    """The tally as a table: a line for each kind of damage that made a wrong rule, and the
+    total. `alike` sees a change made to one of two like parts and not to the other, which
+    is what one change at a time makes. A transcriber who errs the same way for both is not
+    seen by it, so the last line counts what the other parts refuse."""
     total: collections.Counter = collections.Counter()
     for tally in kinds.values():
         total.update(tally)
@@ -179,7 +182,9 @@ def table(kinds: Mapping[str, collections.Counter]) -> list[str]:
         return f"  {name:<14} {tally['wrong']:>5} {share:>12} " + " ".join(f"{tally[part]:>9}" for part in PARTS)
 
     alone = ", ".join(f"{name} {total[f'only {name}']}" for name in PARTS if total[f"only {name}"])
-    return [head, *(line(kind, tally) for kind, tally in kinds.items() if tally["wrong"]), line("all", total), f"  refused by one part of the check and no other: {alone or 'none'}"]
+    others = total["any"] - total["only alike"]
+    return [head, *(line(kind, tally) for kind, tally in kinds.items() if tally["wrong"]), line("all", total), f"  refused by one part of the check and no other: {alone or 'none'}",
+            f"  refused by a part other than `alike`: {others}" + (f" ({others / total['wrong']:.0%})" if total["wrong"] else "")]
 
 
 def main(argv: list[str] | None = None) -> int:
