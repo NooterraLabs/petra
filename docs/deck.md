@@ -46,15 +46,30 @@ A name is the standard's own symbol, written in plain letters: `Fu`, `Agv`, `lc`
 
 A factor that the standard fixes as a number in the equation, such as a resistance factor, is written as that number and is not an input. So is a property the standard fixes with a unit, such as the modulus of elasticity of steel: it is a constant with its unit.
 
-An anchor has `standard` and `clause`, each a text that is not empty, and may have `equation`, `table` and `page`. `page` is the page number as printed, and `equation` lists every equation number the row holds. A row with no anchor, or with an anchor that lacks its standard or its clause, is refused. So is a line of the grid and a rule.
+An anchor has `standard` and `clause`, each a text that is not empty, and may have `equation`, `table` and `page`, each a text. `page` is the page number as printed, and `equation` lists every equation number the row holds. A row with no anchor, or with an anchor that lacks its standard or its clause, is refused. So is a line of the grid and a rule.
 
-A `range` is two values, the lower first, between which a real design's value would fall. The check draws its sample points from the ranges, so a row with cases needs ranges wide enough for each case to hold somewhere.
+A `range` is two values, the lower first, between which a real design's value would fall. The check draws its sample points from the ranges, so a row with cases needs ranges wide enough for each case to hold somewhere. Every quantity a row takes has a `range`, and a row whose input has none is refused. Each end states its unit, as every value of a dimension does ([A value with its unit](#a-value-with-its-unit)).
+
+A row has `id`, `anchor`, `gives`, `takes` and one of `is`, `cases` and `table`. `gives` has `name` and `dim`, each a text, and an input has `name`. The `what` of `gives` and of an input may be left out. A jump has `why`, a text that is not empty.
 
 ### Dimensions
 
 A `dim` is one of `dimensionless`, `length`, `area`, `force`, `stress`, `moment`, `mass`, `time`, `temperature`, `energy`, `current`, `voltage`, `power` and `resistance`. A power is written `length^3`, and a product or a quotient `force/length`.
 
 A row carries no units. A value with a unit appears in two places: a range, and a constant that the standard gives with a unit. Every unit the language reference lists is allowed, such as `inch`, `inch2`, `kip`, `ksi`, `mm`, `mm2`, `kN` and `MPa`.
+
+### A value with its unit
+
+A value is a text: a number, one space, and a unit. It stands in a `range`, a `least`, the end of a band, a listed value of `at` and a cell of a table. `["q", NUMBER, UNIT]` holds its two halves, which are joined with one space and read as one value.
+
+- The number is digits with an optional sign, and then a decimal part or a denominator that is not zero: `0.75`, `-3`, `3/4`. The digits are `0` to `9`.
+- A whole number and a fraction with one space between them are their sum: `1 1/8 inch` is 9/8 inch. This form takes no sign.
+- A comma is read between thousands and nowhere else: `29,000 ksi` is 29000 ksi, and `2,90` is refused. The digits before the first comma are one to three, and each group after a comma is three.
+- A value with no unit is a plain number, of no dimension. So `1 1/2` alone is the number 3/2, and `1,000` alone is the number 1000.
+- `0` and `-0` alone are the plain number zero. They are not the zero of every dimension: a length that is zero is written `0 mm`, and a range, a band or a `least` of a length that starts at a bare `0` is refused for its dimension.
+- Spaces, tabs and line ends around the value are dropped, and so are those around the unit. No other character is.
+
+A number alone in an expression, such as `"2.4"`, is the first form only. It takes no comma and no whole number with a fraction.
 
 ### Expressions
 
@@ -119,12 +134,12 @@ An input of a table is a quantity, as in an equation, or a key. A key is one of 
 | `down` | The side that picks the line. `by` names the input it reads. |
 | `across` | The side that picks the column, for a table with two sides. A table with one side leaves it out, and `cells` is then a plain list. |
 | `cells` | One line for each place of `down`, each with one cell for each place of `across`, as printed. `null` is a cell the standard leaves empty. |
-| `unit` | The unit of a cell that states none. A cell may state its own, as `"0.1 mm"` does above. |
-| `rises`, `falls` | The sides along which the printed values never go down, or never go up |
+| `unit` | The unit of a cell that states none. A cell may state its own, as `"0.1 mm"` does above. A cell that holds a space is read as stating its own. So `"1,000"` under `"unit": "um"` is 1000 um, and a whole number with a fraction in a cell is written with its unit, `"1 1/8 inch"`: `"1 1/8"` alone is the plain number 9/8, whatever `unit` says. |
+| `rises`, `falls` | The sides along which the printed values never go down, or never go up. Each is a list of texts, and each text is the `by` of a side of this table. A name may stand twice in a list. No name is in both lists. A list that names anything else is refused. |
 
 A side that reads a key has `by` alone, and its places are the key's names in order. A side that reads a quantity has one of two forms.
 
-- `bands`: pairs of values, the lower end first, in order. `closed` says which end a band holds: `upper` for "above 6 mm up to and including 18 mm", which is the default, and `lower` for "6 mm and over, under 18 mm". A first band that the standard prints as "up to 6 mm" starts at `0`. A last band that the standard prints as "over 18 mm" has `null` for its upper end.
+- `bands`: pairs of values, the lower end first, in order. `closed` says which end a band holds: `upper` for "above 6 mm up to and including 18 mm", which is the default, and `lower` for "6 mm and over, under 18 mm". A first band that the standard prints as "up to 6 mm" starts at zero, written with its unit: `0 mm`. A last band that the standard prints as "over 18 mm" has `null` for its upper end.
 - `at`: the listed values, in order and each once, for a table that gives a line for each standard size and nothing between them.
 
 A band's lower end is under its upper end, and no band starts before the one before it ends. A side whose bands are out of order or lie over one another is refused, and so is a side whose listed values are out of order. A side with `at` has no `closed`: it has no band to close.
@@ -209,7 +224,9 @@ A design names a type as the kind of a component block: `lap splice { ... }` is 
   {"name": "Fy", "dim": "stress", "signed": true, "what": "the specified minimum yield stress of its steel"}]}
 ```
 
-A field is one line of the part's block. It is one of three things.
+A type has `type`, its name, `what`, a text, and `fields`. Its `what` may be the empty text.
+
+A field is one line of the part's block. It has `name`, `what`, a text that is not empty, and one of `dim`, `one_of` and `type`. It is one of three things.
 
 | A field with | Is | A design writes |
 |---|---|---|
@@ -235,7 +252,7 @@ A part reads only the bound the card gives under the part's name and the field's
 
 `as` gives each joined part the name a rule calls it by. With `"as": ["a", "b"]`, a rule reads `a.thickness` and `b.Fu`.
 
-`loads` lists what a card may put on a part of the type. Each has a `name`, a `dim`, `what` it is, and a `least` when it has a floor. A card states one in a load case: `on splice pull in [0 kip, 45 kip]`.
+`loads` lists what a card may put on a part of the type. Each has a `name`, a `dim`, `what` it is, a text that is not empty, and a `least` when it has a floor. A card states one in a load case: `on splice pull in [0 kip, 45 kip]`.
 
 ### The grid
 
@@ -244,7 +261,7 @@ A part reads only the bound the card gives under the part's name and the field's
  "anchor": {"standard": "AISC 360-22", "clause": "J3.4"}}
 ```
 
-A line of the grid names one mechanism that every part of a type answers for, and the clause that raises it. The type is one of the deck's. The grid is written from the standard's own list of sections, and a line is there whether or not the deck has a rule for it. A line with no rule leaves its cell open, so a design cannot pass until the deck gets the rule or the card waives the mechanism.
+A line of the grid names one mechanism that every part of a type answers for, and the clause that raises it. The type is one of the deck's. A line has `type`, `mechanism`, `anchor` and `what`, a text, which may be empty. No mechanism is named `unread`: that is the name of the cells for the fields that nothing reads, and a line of that name is refused. The grid is written from the standard's own list of sections, and a line is there whether or not the deck has a rule for it. A line with no rule leaves its cell open, so a design cannot pass until the deck gets the rule or the card waives the mechanism.
 
 A line may say that the mechanism cannot arise, and why:
 
@@ -253,7 +270,7 @@ A line may say that the mechanism cannot arise, and why:
 "unless": {"when": ["is", "fit", "close"], "why": "a close fit leaves no room for one"}
 ```
 
-With no `when`, it never arises for the type. A condition is `["is", FIELD, NAME]` on a key field, `["loaded", LOAD]`, or `and`, `or` and `not` of these.
+With no `when`, it never arises for the type. A condition is `["is", FIELD, NAME]` on a key field, `["loaded", LOAD]`, or `and`, `or` and `not` of these. An `unless` has `why`, a text, which may be empty. An `unless` with no `why` is refused.
 
 ### A rule
 
@@ -269,12 +286,12 @@ A rule answers one line of the grid with an inequality.
 
 | Key | Holds |
 |---|---|
-| `id`, `type`, `mechanism` | The rule's name, and the line of the grid it answers |
+| `id`, `type`, `mechanism` | The rule's name, and the line of the grid it answers. A cell is entered under the id from after its last `/`, so two rules for one type and one mechanism have ids that differ there: `a/x` and `b/x` together are refused. |
 | `anchor` | The clause the inequality comes from |
-| `says` | The inequality in words |
+| `says` | The inequality in words: a text that is not empty. A rule with no `says` is refused. |
 | `le` | Two expressions. The rule holds when the first is at most the second. |
 | `let` | Names for expressions the rule uses more than once. A name is letters, digits and `_`, and is no field's name. An expression reads the names before it. |
-| `where` | The range the rule holds in: a list of `{"le": [a, b], "why": "..."}` |
+| `where` | The range the rule holds in: a list of `{"le": [a, b], "why": "..."}` with at least one item. Each item has `why`, a text, which may be empty. A rule that holds everywhere leaves `where` out: `"where": []` is refused. |
 | `when` | A condition on the part, as in the grid. The rule answers only for the parts it holds for. |
 
 An expression is written as a row's is. A name in it is a quantity field of the part, `NAME.FIELD` for a part it joins, or a name from `let`. It has two more forms.
@@ -284,7 +301,7 @@ An expression is written as a row's is. A name in it is a quantity field of the 
 | `["load", NAME]` | A load the card puts on the part |
 | `["row", ID, {INPUT: ...}]` | A row of the deck, with each of its inputs bound |
 
-A quantity that a row takes is bound to an expression of its dimension. A key that a row takes is bound in one of three ways: to a key field whose names are all names of the row's key, to `["key", NAME]`, or to `["by", FIELD, {NAME OF THE FIELD: NAME OF THE ROW'S KEY}]`.
+A quantity that a row takes is bound to an expression of its dimension. A key that a row takes is bound in one of three ways: to a key field whose names are all names of the row's key, to `["key", NAME]`, or to `["by", FIELD, {NAME OF THE FIELD: NAME OF THE ROW'S KEY}]`. The map of a `by` has one entry for each name of the field and no other entry, and each of its values is a name of the row's key. A map that leaves a name of the field out is refused.
 
 A factor that the clause fixes for the inequality, such as a resistance factor, is a number in the rule.
 

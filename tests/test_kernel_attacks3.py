@@ -252,7 +252,38 @@ class Types(unittest.TestCase):
         and docs/format.md refuses an input with no `by`; an input with `by: ""` is PASS."""
         files = with_card([cell(TRUE)], inputs=[{"name": "x", "dim": "length", "lo": "0", "hi": "1", "by": ""}])
         _, out = run_raw(files)
-        self.assertEqual(json.loads(out)["verdict"], "ILL-FORMED")
+        said = json.loads(out)
+        self.assertEqual(said["verdict"], "ILL-FORMED")
+        self.assertEqual([(f["rule"], f["item"], f["why"]) for f in said["findings"]], [("types.5", "x", "the input names no by")])
+
+    def test_an_input_whose_dim_names_no_dimension_is_refused(self):
+        """A floor is found by exponents, so a `dim` the kernel cannot read as exponents has
+        no floor to be held to. It is a finding, where it was taken as a dimension with none."""
+        for dim in ("lenght", "m", "m^1  s^1", ""):
+            with self.subTest(dim=dim):
+                files = with_card([cell(TRUE)], inputs=[{"name": "x", "dim": dim, "lo": "-5", "hi": "1", "by": "b"}])
+                said = json.loads(run_raw(files)[1])
+                self.assertEqual((said["verdict"], [f["rule"] for f in said["findings"]]), ("ILL-FORMED", ["types.4"]))
+                self.assertIn("is not a dimension", said["findings"][0]["why"])
+
+    def test_two_keys_of_one_dimension_give_it_the_tighter_floor(self):
+        """deck.json may list `length` and `m^1`. They are one dimension, and an input is held
+        to the higher of the two floors, however it spells its own."""
+        def said(lo: str, dim: str, floors: dict) -> dict:
+            files = with_card([cell(TRUE)], inputs=[{"name": "x", "dim": dim, "lo": lo, "hi": "9", "by": "b"}])
+            deck = json.loads(files["deck"])
+            deck["domains"]["input"] = {"about": "made up", **floors}
+            return json.loads(run_raw({**files, "deck": text(deck)})[1])
+        floors = {"length": {"min": "0", "strict": False}, "m^1": {"min": "5", "strict": False}, "m^1 kg^0": {"min": "5", "strict": True}}
+        for dim in ("length", "m^1", "kg^0 m^1"):
+            with self.subTest(dim=dim):
+                self.assertEqual(said("6", dim, floors)["verdict"], "PASS")
+                under = said("5", dim, floors)
+                self.assertEqual((under["verdict"], [f["rule"] for f in under["findings"]]), ("ILL-FORMED", ["types.4"]),
+                                 "5 is at the floor of 5, and one of the two floors at 5 is strict")
+        named = said("6", "length", {"lenght": {"min": "0", "strict": False}})
+        self.assertEqual([(f["rule"], f["file"], f["item"], f["why"]) for f in named["findings"]],
+                         [("shape", "deck", "domains.input.lenght", "is not a dimension")])
 
 
 @unittest.skipUnless(verify.binary(), "no petra-verify is built here and PETRA_VERIFY names none")
@@ -265,7 +296,32 @@ class Names(unittest.TestCase):
                           waivers=[{"subject": "a\udfff", "mechanism": "m", "by": "b", "reason": "r"}])
         self.assertIn("\\ud800", files["proofs"])
         _, out = run_raw(files)
-        self.assertNotEqual(json.loads(out)["verdict"], "PASS")
+        said = json.loads(out)
+        self.assertEqual((said["verdict"], sorted(f["file"] for f in said["findings"])), ("ILL-FORMED", ["card", "proofs"]))
+        self.assertIn("holds U+FFFD", said["findings"][0]["why"])
+
+    def test_a_text_with_the_replacement_character_is_refused_wherever_it_stands(self):
+        """A file is refused for U+FFFD in a name, in prose and in a key, written as itself or
+        as an escape. A pair of escapes that is one character is read as that character."""
+        honest = strips()
+        for name, change in (("card", lambda b: b["waivers"][0].update(reason="a reason�")),
+                             ("design", lambda b: b["parts"][0].update(name="p�")),
+                             ("rules", lambda b: b["types"][0].update(what="a pad�")),
+                             ("rules", lambda b: b["rules"][0].update({"let": {"k�": "1"}})),
+                             ("proofs", lambda b: b["cells"][0].update({"note�": "x"}))):
+            for write in (text, lambda b: json.dumps(b, ensure_ascii=False)):
+                with self.subTest(file=name, escaped=write is text):
+                    body = json.loads(honest[name])
+                    change(body)
+                    said = ask({**honest, name: write(body)})
+                    self.assertIn(f"shape {name} : a text or a key holds U+FFFD", findings(said))
+        pair = json.loads(honest["card"])
+        pair["waivers"][0]["reason"] = "a face \U0001F600"
+        self.assertIn("\\ud83d\\ude00", text(pair))
+        card = text(pair)
+        design = json.loads(honest["design"])
+        design["card"] = sha(card)
+        self.assertEqual(ask({**honest, "card": card, "design": text(design)})["verdict"], ask(honest)["verdict"])
 
     def test_no_two_cells_print_one_key(self):
         """Finding 9. The lap design with a second load case named `gravity/where`: its main
@@ -293,6 +349,20 @@ class Names(unittest.TestCase):
         keys = Counter((c["subject"], c["mechanism"], c["entry"]) for c in said["cells"])
         twice = [k for k, n in keys.items() if n > 1]
         self.assertTrue(said["verdict"] == "ILL-FORMED" or not twice, f"{said['verdict']} with {twice} printed twice")
+        self.assertEqual([(f["rule"], f["file"], f["item"]) for f in said["findings"]], [("shape", "card", "gravity/where.splice.pull")])
+        self.assertIn("the name of a load case holds no /", said["findings"][0]["why"])
+
+    def test_no_line_of_the_grid_is_named_as_the_cells_of_unread_fields_are(self):
+        """A rule `x/area` for a mechanism `unread` of a pad would give the cell p1/unread/area,
+        which is also the cell of the pad's area when nothing reads it."""
+        def unread(rules: dict) -> None:
+            rules["grid"].append({"type": "pad", "mechanism": "unread", "what": "made up", "anchor": ANCHOR})
+        said = ask(with_deck(strips(), unread))
+        self.assertIn("grid unread: no mechanism is named unread", findings(said))
+        body = copy.deepcopy(STRIPS)
+        unread(body)
+        with self.assertRaises(grid.DeckError):
+            grid.read_deck(json.dumps(body))
 
 
 def empty_where(rules: dict) -> None:
@@ -319,21 +389,61 @@ class TheGridRefusesTheSameDecks(unittest.TestCase):
     def test_the_grid_refuses_two_rules_of_one_line_with_one_entry(self):
         self.refused(one_entry_twice)
 
+    def test_the_grid_refuses_a_text_with_the_replacement_character_or_half_a_pair(self):
+        self.refused(lambda b: b["types"][0].update(what="a pad�"))
+        self.refused(lambda b: b["types"][0].update(what="a pad\ud800"))
+        self.refused(lambda b: b["rules"][0].update({"let": {"k\udfff": "1"}}))
+        body = copy.deepcopy(STRIPS)
+        body["types"][0]["what"] = "a face \U0001F600"
+        self.assertEqual(grid.read_deck(json.dumps(body)).name, "test-strips", "a pair that is one character is read")
+
+    def test_the_grid_refuses_an_anchor_that_names_something_that_is_no_text(self):
+        self.refused(lambda b: b["rules"][0]["anchor"].update(equation=5))
+        self.refused(lambda b: b["grid"][0]["anchor"].update(page=["12"]))
+        self.refused(lambda b: b["rows"][0]["anchor"].update(table=None))
+
+    def test_the_grid_reads_a_values_digits_and_blanks_as_the_kernel_does(self):
+        """Digits are 0 to 9, and what is dropped around a value is space, tab and line end."""
+        def ranged(value: str):
+            return lambda b: b["rows"][0]["takes"][0].update(range=[value, "5 mm"])
+        for value in ("١ ١/٢ mm", "0.5 mm ", " 0.5 mm"):
+            with self.subTest(value=value):
+                self.refused(ranged(value))
+        self.refused(lambda b: b["rows"][0]["takes"][0].update(dim="length^١"))
+        body = copy.deepcopy(STRIPS)
+        ranged(" \t0.5 mm \r\n")(body)
+        self.assertEqual(grid.read_deck(json.dumps(body)).name, "test-strips")
+
 
 @unittest.skipUnless(verify.binary(), "no petra-verify is built here and PETRA_VERIFY names none")
 class Decks(unittest.TestCase):
     def test_a_where_that_is_there_has_an_item(self):
         """Item 11. With `where: []` the kernel wrote no range cell and proved the rule's cell."""
         said = ask(with_deck(strips(), empty_where))
-        self.assertIn("rule test/heat", findings(said))
+        self.assertIn("rule test/heat: `where` has at least one item", findings(said))
         self.assertEqual(said["findings"][0]["file"], "rules")
 
     def test_two_rules_of_one_line_have_two_entries(self):
         """Item 12. `test/hole` and `other/hole` both answer strip.hole of a strip, and both
         cells were s/strip.hole/hole."""
         said = ask(with_deck(strips(), one_entry_twice))
-        self.assertIn("hole", findings(said))
+        self.assertIn("two rules answer strip.hole of strip with ids that end in hole after the last /", findings(said))
         self.assertEqual(said["findings"][0]["file"], "rules")
+
+    def test_what_an_anchor_names_is_text_and_a_rule_with_none_is_refused_in_plain_words(self):
+        said = ask(with_deck(strips(), lambda r: r["rules"][0]["anchor"].update(equation=5)))
+        self.assertIn("rule test/heat: the anchor's equation is not a text", findings(said))
+        said = ask(with_deck(strips(), lambda r: r["rules"][0].pop("anchor")))
+        self.assertIn("rule test/heat: it has no `anchor`", findings(said))
+        self.assertNotIn("property not found", findings(said))
+
+    def test_the_kernel_reads_a_values_digits_and_blanks_as_the_grid_does(self):
+        def ranged(value: str):
+            return lambda r: r["rows"][0]["takes"][0].update(range=[value, "5 mm"])
+        for value in ("١ ١/٢ mm", "0.5 mm ", " 0.5 mm"):
+            with self.subTest(value=value):
+                self.assertIn("row test/limit", findings(ask(with_deck(strips(), ranged(value)))))
+        self.assertEqual(ask(with_deck(strips(), ranged(" \t0.5 mm \r\n")))["verdict"], ask(strips())["verdict"])
 
 
 if __name__ == "__main__":

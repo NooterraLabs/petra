@@ -24,11 +24,13 @@ def types (cardHash : String) (card : Card) (design : Design) (deck : Deck) : St
   for q in design.quantities do
     if q.role == "size" && !deck.size.admits q.range.lo then
       say "types.3" "design" s!"{q.entity}.{q.line}.{q.field}" (deck.size.broken "size" q.range.lo)
-  let floors := grouped deck.input (·.1)
   for i in card.inputs do
-    for (dim, floor) in floors.getD i.dim #[] do
-      if !floor.admits i.range.lo then
-        say "types.4" "card" i.name (floor.broken dim i.range.lo)
+    match dimNamed i.dim with
+    | none => say "types.4" "card" i.name s!"{i.dim} is not a dimension"
+    | some dim =>
+      if let some (name, floor) := deck.input.get? dim.key then
+        if !floor.admits i.range.lo then say "types.4" "card" i.name (floor.broken name i.range.lo)
+    if i.signer.isEmpty then say "types.5" "card" i.name "the input names no by"
   for w in card.waivers do
     if w.signer.isEmpty then
       say "types.5" "card" s!"{w.subject}/{w.mechanism}" "the waiver names no by"

@@ -22,6 +22,9 @@ def zip (f : Rat → Rat → Rat) (x y : Dim) : Dim := ⟨f x.m y.m, f x.kg y.kg
 instance : Add Dim := ⟨zip (· + ·)⟩
 instance : Sub Dim := ⟨zip (· - ·)⟩
 def times (x : Dim) (c : Rat) : Dim := zip (fun e _ => e * c) x x
+/-- The five exponents, each as its numerator and its denominator: what a table of
+dimensions is keyed by. Two dimensions have one key when their exponents are equal. -/
+def key (x : Dim) : Array (Int × Nat) := #[x.m, x.kg, x.s, x.a, x.k].map fun e => (e.num, e.den)
 end Dim
 
 def ENERGY : Dim := { m := 2, kg := 1, s := -2 }

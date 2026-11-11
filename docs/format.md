@@ -19,7 +19,13 @@ There are two kinds of design, and the kernel does more for the second.
 
 ## Numbers
 
-Every number is a string that holds an exact rational: an integer such as `"18"` or a fraction such as `"-5463/20"`. A fraction is in lowest terms with a denominator above 1, and no number has a leading zero or is `-0`. A string longer than 4,000 characters is refused. A range is a pair `lo`, `hi` with `lo <= hi`. A `dim` names a dimension, and two names are one dimension when their exponents are equal, as `moment` and `energy` are.
+Every number is a string that holds an exact rational: an integer such as `"18"` or a fraction such as `"-5463/20"`. A fraction is in lowest terms with a denominator above 1, and no number has a leading zero or is `-0`. A string longer than 4,000 characters is refused. A range is a pair `lo`, `hi` with `lo <= hi`.
+
+A `dim` names a dimension. In card.json, design.json and deck.json it is one of `dimensionless`, `length`, `area`, `force`, `stress`, `mass`, `time`, `temperature`, `energy`, `moment`, `current`, `voltage`, `power`, `resistance`, `I2t` and `resistance per length`, or the exponents of metre, kilogram, second, ampere and degree Celsius that are not zero, as in `m^3 s^-1`: each a base, `^` and a whole number, with one space between two. Two names are one dimension when their exponents are equal, as `moment` and `energy` are, and `length` and `m^1`. Wherever the kernel compares two dimensions or looks one up, it does so by the exponents and never by the spelling.
+
+### Texts
+
+No text of a file and no key of an object holds U+FFFD, the replacement character, and the kernel refuses a file that has one anywhere. The reason is the escape `\uXXXX`. A character outside the first 65,536 is written as two escapes, a surrogate pair, and the kernel reads the pair as that character. Half a pair alone is no character, and the kernel's JSON reader reads it as U+FFFD. So once a file is read, `"a\ud800"`, `"a\udfff"` and `"a�"` are the same text, and the kernel cannot tell which the file wrote. Three names that differ in the file would be one name, and a waiver for one would rest a cell of another. A reader that keeps half a pair as it is refuses a text with half a pair in it, and a text with U+FFFD, to refuse what the kernel does.
 
 A deck of rules writes its own numbers another way, with units. [The rules file](#rulesjson) says how the kernel reads them.
 
@@ -33,7 +39,7 @@ What the asker owns.
 | `name` | The design's name. A premise label `in:NAME.INPUT` names an input of this card. |
 | `environment` | A registry id, or null |
 | `cases` | The names of the load cases |
-| `inputs` | Every bound: `name`, `dim`, `lo`, `hi`, `by`, and `case` for a load. An input with no `by` is one nobody signed, and the kernel refuses the card. The exporter writes one for a load or an ambient that reads a param. |
+| `inputs` | Every bound: `name`, `dim`, `lo`, `hi`, `by`, and `case` for a load. An input with no `by` is one nobody signed, and the kernel refuses the card. The exporter writes one for a load or an ambient that reads a param. An input whose `by` is the empty text is refused too (type rule 5). |
 | `claims` | Each claim: `name`, `subject`, `quantity`, `rel`, `cases`, `bound` |
 | `waivers` | Each waiver the asker allows: `subject`, `mechanism`, `by`, `reason` |
 
@@ -83,7 +89,7 @@ A tape names what it reads of a part by label. A number that part `P` writes for
 |---|---|
 | `format` | `"petra-deck/0"` |
 | `domains.size` | `min` and `strict`: the least value a size may take |
-| `domains.input` | For each dimension that has a floor, `min` and `strict`. A dimension that is not listed has none. |
+| `domains.input` | For each dimension that has a floor, `min` and `strict`. A dimension that is not listed has none. Each key names a dimension, and a key that names none is a shape finding. The key `about` is prose and is not read. Two keys of one dimension, as `length` and `m^1`, give it one floor: the higher of the two, and the strict one when both are at one height. |
 | `constants` | Each registry value a proof reads: `label` (`reg:KEY`), `lo`, `hi` |
 | `rules` | For a design checked against a deck of rules: the `name` of that deck and the `hash` of its file. The kernel reads only that the key is there (type rule 7). It reads the deck of rules itself, from `--rules`. |
 
@@ -160,21 +166,21 @@ A hint names an input by its label, because the tape is the kernel's. Its partit
 
 The kernel applies the rules in this order. A design that breaks a rule of the first four groups is ILL-FORMED, and the kernel settles no cell.
 
-**Shape.** Each file is JSON with its `format`. Every number parses, and every range has `lo <= hi`. A cell has its keys and a state from the list, and a node is one from the table. A part's name is within the limit below. A tape that reads a node ahead of itself, or lacks its `partition`, `point` or `which`, leaves its cell open.
+**Shape.** Each file is JSON with its `format`, and none of its texts and keys holds U+FFFD ([Texts](#texts)). Every number parses, and every range has `lo <= hi`. A cell has its keys and a state from the list, and a node is one from the table. A part's name is within the limit below. A tape that reads a node ahead of itself, or lacks its `partition`, `point` or `which`, leaves its cell open.
 
 **Types.**
 
 1. The design's `card` is the SHA-256 of the card file's bytes.
 2. The design has no key but `format`, `name`, `card`, `quantities`, `params` and `parts`.
 3. Every quantity of role `size` has `lo` above `domains.size.min`, or at it when `strict` is false.
-4. Every input whose dimension is in `domains.input` has `lo` at or above that floor, or above it when `strict` is true.
-5. Every waiver of the card names a `by`.
+4. Every input's `dim` names a dimension. Every input whose dimension has a floor in `domains.input` has `lo` at or above that floor, or above it when `strict` is true. The floor is found by the exponents of the dimension, so an input written as `m^1` or as `moment` meets the floor of `length` or of `energy`.
+5. Every input and every waiver of the card names a `by` that is not the empty text.
 6. A design with `parts` comes with `--rules`.
 7. A file that only a design checked against a deck of rules has comes with `parts` in the design and with `--rules`. There are three such marks: an input of the card with `on` or `field`, the key `tests` or `probability_claims` in the card, and the key `rules` in deck.json. Each mark is a finding when the design has no `parts` or `--rules` names no deck.
 
 Rule 7 is what stops a downgrade. Without it, a card issued for a deck of rules could be handed to the kernel with a design stripped of its `parts` and with no `--rules`. The kernel would then check the cells that proofs.json lists, and a `not_applicable` cell there is taken as stated.
 
-**The deck of rules.** With `--rules`, the file is a deck that holds together, as [deck.md](deck.md) describes: it has no unknown key, wherever a key may stand, every anchor names its standard and its clause, the bands of a table are in order and none lies over another, every rule names rows, fields and loads that exist, every input of a row is bound once and to its dimension, both sides of every inequality have one dimension, every sum and comparison inside a row or a rule is of one dimension, every rule answers a line of the grid that can arise, and no two rows, types, lines or rules have one name. A name of a field, a load, a joined part or a `let` is letters, digits and `_`. These names, the name of a mechanism and the id of a rule are within the limit below.
+**The deck of rules.** With `--rules`, the file is a deck that holds together, as [deck.md](deck.md) describes: it has no unknown key, wherever a key may stand, every anchor names its standard and its clause, the bands of a table are in order and none lies over another, every rule names rows, fields and loads that exist, every input of a row is bound once and to its dimension, both sides of every inequality have one dimension, every sum and comparison inside a row or a rule is of one dimension, every rule answers a line of the grid that can arise, and no two rows, types, lines or rules have one name. A name of a field, a load, a joined part or a `let` is letters, digits and `_`. These names, the name of a mechanism and the id of a rule are within the limit below. Three more keep the cells apart: no mechanism is named `unread`, a `where` that is there has at least one item, and no two rules for one type and one mechanism have ids that are the same after their last `/`.
 
 **Parts.** With `--rules`, the design and the card are parts of the deck's types:
 
@@ -183,7 +189,7 @@ Rule 7 is what stops a downgrade. Without it, a card issued for a deck of rules 
 3. A quantity is one number or one given, of the field's dimension, more than zero and at least the field's `least`. A `whole` field is one whole number that the design writes. A `signed` field is a given. A given is named `PART.FIELD` for the part and the field that read it, and the card has one input of that name, which is no load.
 4. A key is one word or one text, and one of the field's names.
 5. A field that joins parts has one word for each name in its `as`, and they name different parts of the field's type. No part is joined more than once.
-6. Every input of the card has a name of its own, and is a load or a given that a part reads. A load has `case`, `on` and `field`: it is on a part, it is one of the loads of that part's type, of its dimension and at least its `least`, and no case puts one load on one part twice. The name of its case is within the limit below.
+6. Every input of the card has a name of its own, and is a load or a given that a part reads. A load has `case`, `on` and `field`: it is on a part, it is one of the loads of that part's type, of its dimension and at least its `least`, and no case puts one load on one part twice. The name of its case is within the limit below and holds no `/`. A case that breaks either is a shape finding.
 7. Every waiver names a part and a mechanism that the grid asks of that part's type.
 8. The card has no claim, no tests record and no probability claim, and the design has no param.
 
@@ -207,6 +213,10 @@ Rule 7 is what stops a downgrade. Without it, a card issued for a deck of rules 
 8. A quantity or a key of a part is read by a rule that applies to the part, by a rule that applies to the part that joins it, or by an `unless` of the grid's lines for its type. Each one that nothing reads is one `open` cell, with mechanism `unread` and the field as its `entry`.
 
 A hint for a cell that the kernel does not have is ignored and counted. So proofs.json can leave a cell open that a better search would settle, and it can do nothing else: it cannot add a cell, drop one, or change what a cell says.
+
+No two of these cells have the same subject, mechanism and entry, so a hint names one cell and a reader finds one cell under a key. Here is why. Two parts have two names. A line of the grid gives a part cells of its own mechanism, and a type has a mechanism once. Within one line, the cells with an empty entry come one to a part, and only where no rule gives a cell. Two rules of the line have different entries, because their ids differ after the last `/`, and an entry has no `/` in it before the case. A case has no `/` either, so `RULE/CASE` and `RULE/CASE/where` are never the entry of another case or of another rule. The cells named `unread` share their mechanism with no line of the grid. The kernel also checks the finished list, and a design that would have one key twice is ILL-FORMED with a finding of the rule `limits`.
+
+This holds for the cells the kernel makes. Without `--rules` the cells are the list of proofs.json, which the kernel takes as it comes, and that list may hold one key twice.
 
 The interval rule is the one in `petra/kernel/interval.py` and `petra/kernel/evaluate.py`: exact rational intervals, with `sqrt`, `ln`, `exp` and pi rounded outward on a grid of 2^-96. An `ln` or an `exp` is rounded from an enclosure of 128 bits, and from one of 224, 608 and then 2,144 bits when the one before has a point of the grid inside it. The two kernels give the same ends for every root. The Python kernel has no `pick`: `petra/grid.py`, which searches for the partitions and the points, reads a pick by the same rule a second time.
 

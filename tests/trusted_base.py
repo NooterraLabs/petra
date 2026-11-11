@@ -68,7 +68,7 @@ CORE_CAP = Limit(1000, "Set on 2026-11-08 at 140f742, where the core measured 95
                        "A new rule adds 3 to 5 lines to rules/__init__.py (inferred from its tables), so "
                        "the headroom covers the registry entries of several rules.")
 
-TRUSTED_CEILING = Limit(19156, "Set on 2026-11-08 at 140f742, where the trusted base measured 13,530 "
+TRUSTED_CEILING = Limit(19169, "Set on 2026-11-08 at 140f742, where the trusted base measured 13,530 "
                                "code lines: core 957, rules 457, outside the kernel 12,116. Raised on "
                                "2026-11-08 on branch parts-core as the parts layer replaces its scaffold: "
                                "classifying the scaffold measured 14,269, and the mesh reader with its "
@@ -120,6 +120,14 @@ TRUSTED_CEILING = Limit(19156, "Set on 2026-11-08 at 140f742, where the trusted 
                                "A deck is refused for a key it does not know wherever the key stands, and not only at "
                                "the top of a row, a type, a grid line or a rule, and the refusal names the key: 26 lines "
                                "in petra/deck.py and petra/grid.py, 19,156. "
+                               "The third hostile review of the kernel found names that two texts could share and "
+                               "cells that two rules could share. The kernel now refuses them, and the grid refuses "
+                               "the same decks and designs: a text with U+FFFD or half a surrogate pair, a mechanism "
+                               "named `unread`, a `where` with no item, two rules of one line whose ids end alike, a "
+                               "load case with a / in its name, and an anchor that names something that is no text. "
+                               "It also reads a value's digits and blanks as the kernel does, 0 to 9 and space, tab "
+                               "and line end, where it took any digit and any blank of Unicode: 13 lines in "
+                               "petra/deck.py and petra/grid.py, 19,169. "
                                "Raise it in the commit that needs more and say why here.")
 
 T2_ADOPTED = date(2026, 11, 8)

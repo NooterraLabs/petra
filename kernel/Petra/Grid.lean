@@ -151,6 +151,7 @@ def readParts (rules : Rules) (card : Card) (design : Design) : StateM Findings 
           else if least.any (input.range.lo < ·) then say "parts.6" "card" input.name s!"is under the least {field} may take"
           else if put.contains (k, field, under) then say "parts.6" "card" input.name s!"{under} puts {field} on {on} twice"
           else if let .error why := short "the name of a load case" under then say "shape" "card" input.name why
+          else if under.contains '/' then say "shape" "card" input.name "the name of a load case holds no /: an entry is a rule and a case with a / between them"
           else
             put := put.insert (k, field, under)
             parts := parts.modify k fun p => { p with loads := p.loads.push (field, under, ⟨s!"in:{card.name}.{input.name}", input.range⟩) }
@@ -306,7 +307,7 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (hints : Array Hint
           let other := if answered.contains ask.mechanism then " on a part like this one" else ""
           out := out.push (pending "" s!"the deck has no rule for it{other}")
         for rule in answers do
-          let tail := (rule.id.splitOn "/").getLast!
+          let tail := rule.entry
           let casesOf (load : String) : Array String := (part.loads.filter (·.1 == load)).map (·.2.1)
           let missing := rule.loads.filter fun load => (casesOf load).isEmpty
           if !missing.isEmpty then
@@ -363,8 +364,12 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (hints : Array Hint
     for field in part.kind.fields do
       if out.size > MAX_CELLS then return .error over
       unless (field.kind matches .parts ..) || read.contains (part.name, field.name) do
-        out := out.push (cell part.name "unread" field.name .undecided s!"no rule of the deck reads {part.name}.{field.name}, so nothing checks it")
+        out := out.push (cell part.name UNREAD field.name .undecided s!"no rule of the deck reads {part.name}.{field.name}, so nothing checks it")
   if out.size > MAX_CELLS then return .error over
+  -- No two cells have one key: `readRules` and `readParts` refuse what could make two, and
+  -- this holds the list to it whatever they let through.
+  unless distinct (out.map fun s => (s.cell.subject, s.cell.mechanism, s.cell.entry)) do
+    return .error "two cells of this design would have one subject, mechanism and entry, and the kernel prints no key twice"
   let made := out.foldl (fun made s => made.insert (s.cell.subject, s.cell.mechanism, s.cell.entry)) ranges
   return .ok { cells := said out, ignored := (hints.filter fun h => !made.contains (h.subject, h.mechanism, h.entry)).size,
                dsgInputs := dsg.size, work := MAX_WORK - left }

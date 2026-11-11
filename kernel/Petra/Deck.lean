@@ -150,6 +150,9 @@ structure Rule where
   fields : Array (Option String × String)
   loads : Array String
 
+/-- What the rule's cells are entered under: its id from after its last `/`. -/
+def Rule.entry (rule : Rule) : String := (rule.id.splitOn "/").getLast!
+
 structure Rules where
   name : String
   kinds : Array Kind
@@ -213,8 +216,23 @@ def within (j : Json) (allowed : List String) : Except String Unit := do
   for (key, _) in ← members j do
     unless allowed.contains key do throw s!"{clip key} is not a key here: it has {", ".intercalate allowed}"
 
-def distinct (names : Array String) : Bool :=
-  (names.foldl (fun (seen, so) name => (seen.insert name, so && !seen.contains name)) (({} : Std.HashSet String), true)).2
+def distinct [BEq α] [Hashable α] (names : Array α) : Bool :=
+  (names.foldl (fun (seen, so) name => (seen.insert name, so && !seen.contains name)) (({} : Std.HashSet α), true)).2
+
+/-- The first item that is in the list a second time, or none when each is there once. -/
+def twice [BEq α] [Hashable α] (items : Array α) : Option α :=
+  (items.foldl (fun (seen, found) x =>
+    if found.isSome then (seen, found) else if seen.contains x then (seen, some x) else (seen.insert x, none))
+    (({} : Std.HashSet α), (none : Option α))).2
+
+/-- The value of a key that an object of a deck must have. -/
+def need (j : Json) (key : String) : Except String Json :=
+  match j with
+  | .obj members =>
+    match members.get? key with
+    | some value => pure value
+    | none => throw s!"it has no `{key}`"
+  | _ => throw "it is not an object"
 
 /-- Each item once, in the order of its first place. -/
 def once [BEq α] [Hashable α] (items : Array α) : Array α :=
@@ -442,11 +460,14 @@ def MAX_EXPRESSION : Nat := 1024
 
 -- Reading a deck.
 
-/-- An anchor names its standard and its clause, and may name an equation, a table and a page. -/
+/-- An anchor names its standard and its clause, and may name an equation, a table and a
+page. Each is a text. -/
 def anchored (j : Json) : Except String Unit := do
-  let anchor ← j.getObjVal? "anchor"
+  let anchor ← need j "anchor"
   (within anchor ["standard", "clause", "equation", "table", "page"]).mapError ("anchor: " ++ ·)
   unless filled anchor "standard" && filled anchor "clause" do throw "the anchor lacks its standard or its clause"
+  for key in ["equation", "table", "page"] do
+    if has anchor key && (text anchor key).toOption.isNone then throw s!"the anchor's {key} is not a text"
 
 /-- A list a key may leave out. -/
 def listed (j : Json) (key : String) : Except String (Array Json) := if has j key then list j key else pure #[]
@@ -489,7 +510,7 @@ def readTable (j : Json) (takes : Array (String × Taken)) (gives : Dim) : Excep
         unless inOrder do
           throw s!"the bands of {input} are pairs, the lower end first, in order and none over another; only the last may have no upper end"
       return .banded input bands upper
-  let down ← side (← j.getObjVal? "down")
+  let down ← side (← need j "down")
   let across ← (j.getObjVal? "across").toOption.mapM side
   let sides := #[down.input] ++ (across.map (·.input)).toArray
   unless sides.size == takes.size && takes.all (fun t => sides.contains t.1) do
@@ -523,7 +544,7 @@ def readRow (j : Json) : Except String Row := do
     within j ["id", "anchor", "gives", "takes", "is", "cases", "jumps", "table"]
     unless (["is", "cases", "table"].filter (has j)).length == 1 do throw "a row has one of `is`, `cases` and `table`"
     anchored j
-    let gives ← j.getObjVal? "gives"
+    let gives ← need j "gives"
     (within gives ["name", "dim", "what"]).mapError ("gives: " ++ ·)
     let _ ← text gives "name"
     let dim ← dimension (← text gives "dim")
@@ -547,15 +568,15 @@ def readRow (j : Json) : Except String Row := do
         takes := takes.push (name, .quantity its)
     if has j "table" then
       if has j "jumps" then throw "a table has no jumps: it steps at every band"
-      return { id, dim, takes, body := .table (← readTable (← j.getObjVal? "table") takes dim) }
+      return { id, dim, takes, body := .table (← readTable (← need j "table") takes dim) }
     if takes.any (fun t => t.2 matches .key _) then throw "an equation takes no key: only a table reads one"
-    let written ← if has j "cases" then list j "cases" else do pure #[Json.mkObj [("is", ← j.getObjVal? "is")]]
+    let written ← if has j "cases" then list j "cases" else do pure #[Json.mkObj [("is", ← need j "is")]]
     let mut found : Array (Option Json × Json) := #[]
     for (entry, n) in written.zipIdx do
       within entry ["when", "is"]
       let condition := (entry.getObjVal? "when").toOption
       if condition.isNone && n + 1 != written.size then throw "only the last case may leave `when` out"
-      found := found.push (condition, ← entry.getObjVal? "is")
+      found := found.push (condition, ← need entry "is")
     -- Read the cases once with each input as a step of its own, for their names and dimensions.
     let mut names : Std.HashMap String Meaning := {}
     for ((name, taken), n) in takes.zipIdx do
@@ -608,7 +629,7 @@ def readKind (j : Json) : Except String Kind := do
   let name ← text j "type"
   let kind : Except String Kind := do
     within j ["type", "what", "fields", "loads"]
-    let _ ← j.getObjVal? "what"
+    let _ ← (text j "what").mapError fun _ => "it has `what`, a text"
     let fields ← (← list j "fields").mapM (readField false)
     let loads ← (← listed j "loads").mapM (readField true)
     let joined := fields.flatMap fun f => match f.kind with
@@ -636,13 +657,18 @@ def scopeOf (kind : Kind) (kinds : Array Kind) (rows : Std.HashMap String Row) :
           if let some m := meaning g (some part) then names := names.insert s!"{part}.{g.name}" m
   return { names, loads := kind.loads, rows, rule := true }
 
+/-- The mechanism of the cell the kernel makes for a field that nothing reads. No line of
+the grid has this name, so no cell of a rule has the key of such a cell. -/
+def UNREAD : String := "unread"
+
 def readAsk (kinds : Array Kind) (rows : Std.HashMap String Row) (j : Json) : Except String Ask := do
   let mechanism ← text j "mechanism"
   let ask : Except String Ask := do
     short "the name of a mechanism" mechanism
     within j ["type", "mechanism", "what", "anchor", "unless"]
+    if mechanism == UNREAD then throw s!"no mechanism is named {UNREAD}: the cell of a field that nothing reads has that name"
     anchored j
-    let _ ← j.getObjVal? "what"
+    let _ ← (text j "what").mapError fun _ => "it has `what`, a text"
     let name ← text j "type"
     let some kind := kinds.find? (·.name == name) | throw s!"{name} is not a type of the deck"
     let excuse ← match j.getObjVal? "unless" with
@@ -669,7 +695,7 @@ def readRule (kinds : Array Kind) (rows : Std.HashMap String Row) (asks : Array 
     | some (some none) => throw s!"the grid says {mechanism} never arises for {name}"
     | _ => pure ()
     let scope := scopeOf kind kinds rows
-    let lets ← if has j "let" then members (← j.getObjVal? "let") else pure #[]
+    let lets ← if has j "let" then members (← need j "let") else pure #[]
     for (name, _) in lets do
       identifier name
       if name == "pi" || scope.names.contains name then throw s!"`let` names {name}, which has a meaning already"
@@ -680,11 +706,14 @@ def readRule (kinds : Array Kind) (rows : Std.HashMap String Row) (asks : Array 
       unless dx == dy do throw s!"{what} compares two dimensions"
       return (x, y)
     let read : Reading ((Nat × Nat) × Array (Nat × Nat)) := do
-      let main ← pair (← j.getObjVal? "le") "`le`"
-      let ranges ← (← listed j "where").mapM fun range => do
+      let main ← pair (← need j "le") "`le`"
+      let written ← listed j "where"
+      if has j "where" && written.isEmpty then
+        throw "`where` has at least one item: a rule that holds everywhere leaves it out"
+      let ranges ← written.mapM fun range => do
         (within range ["le", "why"]).mapError ("where: " ++ ·)
         let _ ← text range "why"
-        pair (← range.getObjVal? "le") "`where`"
+        pair (← need range "le") "`where`"
       for (name, _) in lets do
         let _ ← expr scope MAX_EXPRESSION (.str name)
       return (main, ranges)
@@ -724,9 +753,11 @@ def readRules (j : Json) : Except String Rules := do
             throw s!"{kind.name}.{f.name}: it names parts of {other}, whose own fields name parts"
         | none => throw s!"{kind.name}.{f.name}: {other} is not a type of the deck"
   let asks ← (← list j "grid").mapM (readAsk kinds rows)
-  unless distinct (asks.map fun a => a.kind ++ "\n" ++ a.mechanism) do throw "the grid asks one mechanism of one type twice"
+  unless distinct (asks.map fun a => (a.kind, a.mechanism)) do throw "the grid asks one mechanism of one type twice"
   let rules ← (← list j "rules").mapM (readRule kinds rows asks)
   unless distinct (rules.map (·.id)) do throw "two rules have one id"
+  if let some (kind, mechanism, entry) := twice (rules.map fun r => (r.kind, r.mechanism, r.entry)) then
+    throw s!"two rules answer {mechanism} of {kind} with ids that end in {entry} after the last /, so their cells would have one entry"
   return { name, kinds, asks, rules }
 
 -- A rule as a tape.
