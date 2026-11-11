@@ -410,5 +410,147 @@ class AKeyOfAJoinedPart(unittest.TestCase):
         self.assertIn("parts.5 design l.ends: names 2 different end parts of this design", its)
 
 
+# --- 3. a rule that requires something of a key ---------------------------------------------------------
+
+LUG = kind("lug", size("t"), key("bore", "machined", "cut"))
+HOIST = kind("hoist", size("span"), key("category", "A", "B", "C"), key("service", "0", "1", "2", "3", "4"),
+             {"name": "lugs", "type": "lug", "as": ["top", "bottom"], "what": "its two lugs"},
+             loads=[{"name": "lift", "dim": "force", "least": "0 N", "what": "the lift"}])
+A_ONLY_0 = rule("category-a", "hoist", "hoist.category", when=["is", "category", "A"], requires=["is", "service", "0"])
+BORES = rule("bores", "hoist", "hoist.bore", requires=["and", ["is", "top.bore", "machined"], ["is", "bottom.bore", "machined"]])
+HOISTS = made_up(
+    [LUG, HOIST],
+    [asks("hoist.category", "hoist"), asks("hoist.bore", "hoist", unless={"when": ["is", "service", "0"], "why": "the finish is asked of service classes 1 to 4"}),
+     asks("hoist.span", "hoist")],
+    [A_ONLY_0, BORES, rule("span", "hoist", "hoist.span", le=[["add", "top.t", "bottom.t"], "span"])])
+
+
+def hoist(category: str = "A", service: str = "0", top: str = "machined", bottom: str = "machined") -> str:
+    return design(part("lug", "up", t="1 inch", bore=top), part("lug", "down", t="1 inch", bore=bottom),
+                  part("hoist", "h", span="10 inch", category=category, service=f'"{service}"', lugs="up down"))
+
+
+class ARuleThatRequires(unittest.TestCase):
+    def test_its_cell_is_proved_when_the_condition_holds(self):
+        found, verdict, said = cells(self, HOISTS, hoist())
+        self.assertEqual(found, {("h", "hoist.category", "category-a"): "proved", ("h", "hoist.bore", ""): "not_applicable", ("h", "hoist.span", "span"): "proved"})
+        self.assertEqual((verdict, reason(said, "hoist.category")), ("PASS", ""))
+
+    def test_its_cell_is_refuted_when_the_condition_does_not_hold_and_the_verdict_fails(self):
+        found, verdict, said = cells(self, HOISTS, hoist("A", "2"))
+        self.assertEqual((found["h", "hoist.category", "category-a"], verdict), ("refuted", "FAIL"))
+        self.assertEqual(reason(said, "hoist.category"), "the part is not what the rule requires: service is 2")
+
+    def test_the_reason_names_each_key_the_condition_names_with_the_name_the_part_has(self):
+        found, verdict, said = cells(self, HOISTS, hoist("B", "3", "machined", "cut"))
+        self.assertEqual((found["h", "hoist.bore", "bores"], verdict), ("refuted", "FAIL"))
+        self.assertEqual(reason(said, "hoist.bore"), "the part is not what the rule requires: top.bore is machined, bottom.bore is cut")
+        deck, read = parsed(HOISTS, hoist("B", "3", "machined", "cut"))
+        report, _ = grid.check(read, deck)
+        (line,) = [text for text in report.lines() if "hoist.bore" in text]
+        self.assertIn("refuted", line)
+        self.assertIn("bores: bores: the part is not what the rule requires: top.bore is machined, bottom.bore is cut", line)
+
+    def test_it_has_a_when_like_any_rule(self):
+        found, verdict, said = cells(self, HOISTS, hoist("B", "2"))
+        self.assertEqual(found["h", "hoist.category", ""], "open", "a hoist of category B has no rule for the line")
+        self.assertEqual(reason(said, "hoist.category"), "the deck has no rule for it on a part like this one")
+        self.assertEqual((found["h", "hoist.bore", "bores"], verdict), ("proved", "UNKNOWN"))
+
+    def test_it_reads_the_keys_it_names(self):
+        found, _, _ = cells(self, HOISTS, hoist("A", "0"))
+        self.assertEqual(sorted(k for k in found if k[1] == "unread"), [], "the rules read the category, the service class and both bores, though the line of the bores cannot arise")
+        found, _, _ = cells(self, HOISTS, hoist("B", "2"))
+        self.assertEqual(sorted(k for k in found if k[1] == "unread"), [("h", "unread", "category")],
+                         "the rule for category A does not apply to a hoist of category B, and nothing else reads the category")
+        bare = made_up([LUG, HOIST], [asks("hoist.bore", "hoist")], [rule("top", "hoist", "hoist.bore", requires=["is", "top.bore", "machined"])])
+        found, _, _ = cells(self, bare, hoist())
+        self.assertNotIn(("up", "unread", "bore"), found)
+        self.assertIn(("down", "unread", "bore"), found, "the rule names the top lug's bore alone")
+
+    def test_a_waiver_and_an_unless_take_its_line_as_any_other(self):
+        waived = HEAD + 'waive hoist.category on h by "t@example.org" reason "made up"\n'
+        found, verdict, _ = cells(self, HOISTS, hoist("A", "3"), waived)
+        self.assertEqual((found["h", "hoist.category", ""], verdict), ("waived", "PASS"))
+
+    @KERNEL
+    def test_it_needs_no_hint_and_no_work_and_no_hint_changes_it(self):
+        for service, state in (("0", "proved"), ("2", "refuted")):
+            deck, read = parsed(HOISTS, hoist("A", service))
+            files = grid.check(read, deck)[1]
+            alone = ask(files, without=("proofs",))
+            mine = [c for c in alone["cells"] if c["mechanism"] == "hoist.category"]
+            self.assertEqual([(c["entry"], c["state"], c["claimed"]) for c in mine], [("category-a", state, None)])
+            for claimed, more in (("proved", {"partition": "leaf"}), ("refuted", {"point": {}}), ("open", {"why": "x"}), ("not_applicable", {"why": "x"}), ("waived", {})):
+                hints = json.loads(files["proofs"])
+                hints["cells"] = [{"subject": "h", "mechanism": "hoist.category", "entry": "category-a", "state": claimed, **more}]
+                said = ask({**files, "proofs": export.text(hints)})
+                mine = [c for c in said["cells"] if c["mechanism"] == "hoist.category"]
+                self.assertEqual([(c["state"], c["claimed"]) for c in mine], [(state, claimed)])
+                self.assertEqual(said["ignored_hints"], 0, "the hint names a cell the kernel has")
+        only = made_up([LUG, HOIST], [asks("hoist.category", "hoist")], [A_ONLY_0])
+        deck, read = parsed(only, hoist())
+        said = ask(grid.check(read, deck)[1], without=("proofs",))
+        self.assertEqual((said["verdict"], said["work"], said["counts"]["proved"]), ("UNKNOWN", 0, 1), "its proof took no work, and the fields nothing reads are open")
+
+    def test_a_design_passes_on_what_it_requires_alone(self):
+        small = made_up([kind("hoist", key("category", "A", "B", "C"), key("service", "0", "1", "2", "3", "4"))], [asks("hoist.category", "hoist")],
+                        [rule("category-a", "hoist", "hoist.category", requires=["or", ["not", ["is", "category", "A"]], ["is", "service", "0"]])])
+        for category, service, verdict in (("A", "0", "PASS"), ("A", "1", "FAIL"), ("B", "4", "PASS"), ("C", "0", "PASS")):
+            with self.subTest(category=category, service=service):
+                found, said, _ = cells(self, small, design(part("hoist", "h", category=category, service=f'"{service}"')))
+                self.assertEqual(said, verdict)
+                self.assertEqual(found, {("h", "hoist.category", "category-a"): "proved" if verdict == "PASS" else "refuted"})
+
+    def test_a_rule_has_an_inequality_or_a_requirement_and_not_both(self):
+        le = ["span", "span"]
+        for body in ({"requires": ["is", "service", "0"], "le": le}, {"requires": ["is", "service", "0"], "let": {"x": "span"}},
+                     {"requires": ["is", "service", "0"], "where": [{"le": le, "why": "x"}]}, {}, {"requires": None}, {"requires": []}, {"requires": "service"},
+                     {"requires": ["is", "service"]}, {"requires": ["is", "service", "5"]}, {"requires": ["is", "span", "0"]}, {"requires": ["is", "nobody.bore", "cut"]},
+                     {"requires": ["is", "lugs.bore", "cut"]}, {"requires": ["loaded", "lift"]}, {"requires": ["and", ["is", "service", "0"], ["loaded", "lift"]]},
+                     {"requires": ["not", ["loaded", "lift"]]}, {"requires": ["le", "span", "span"]}, {"requires": ["and"]}, {"requires": {"is": ["service", "0"]}},
+                     {"requires": ["is", "service", "0"], "tape": []}):
+            with self.subTest(body):
+                no_deck(self, made_up([LUG, HOIST], [asks("hoist.category", "hoist")], [rule("r", "hoist", "hoist.category", **body)]))
+        mine, its = no_deck(self, made_up([LUG, HOIST], [asks("hoist.category", "hoist")], [rule("r", "hoist", "hoist.category", requires=["loaded", "lift"])]))
+        self.assertIn("`requires` is a condition over keys", mine)
+        self.assertIn("`requires` is a condition over keys", its)
+
+    def test_its_cell_shares_a_key_with_no_other_rules(self):
+        """A requirement is entered as any rule is, under its id from after the last `/`."""
+        twice = made_up([LUG, HOIST], [asks("hoist.category", "hoist")], [A_ONLY_0, rule("category-a", "hoist", "hoist.category", le=["span", "span"]) | {"id": "other/category-a"}])
+        mine, its = no_deck(self, twice)
+        self.assertIn("ids that end in category-a after the last /", its)
+        # A rule with a range gives the cells `span` and `span/where`. A requirement whose id ends in `span/where` is entered as `where`.
+        ranged = rule("span", "hoist", "hoist.span", le=["top.t", "span"], where=[{"le": ["bottom.t", "span"], "why": "made up"}])
+        near = made_up([LUG, HOIST], [asks("hoist.span", "hoist")], [ranged, rule("span/where", "hoist", "hoist.span", requires=["is", "service", "0"]),
+                                                                    rule("", "hoist", "hoist.span", requires=["is", "category", "A"]) | {"says": "an id that ends in /"}])
+        found, verdict, _ = cells(self, near, hoist())
+        self.assertEqual({k: v for k, v in found.items() if k[1] == "hoist.span"},
+                         {("h", "hoist.span", "span/where"): "proved", ("h", "hoist.span", "span"): "proved", ("h", "hoist.span", "where"): "proved", ("h", "hoist.span", ""): "proved"})
+        found, verdict, said = cells(self, near, hoist("B", "1"))
+        self.assertEqual({k: v for k, v in found.items() if k[1] == "hoist.span"},
+                         {("h", "hoist.span", "span/where"): "proved", ("h", "hoist.span", "span"): "proved", ("h", "hoist.span", "where"): "refuted", ("h", "hoist.span", ""): "refuted"})
+        self.assertEqual([c.get("reason") or None for c in said["cells"] if c["mechanism"] == "hoist.span"],
+                         [None, None, "the part is not what the rule requires: service is 1", "the part is not what the rule requires: category is B"])
+
+    def test_the_acceptance_check_for_rules_tries_a_requirement_as_it_holds_or_fails(self):
+        from petra import rule as rules
+
+        task = rules.read_task({"format": "petra-rule-task/0", "name": "made-up", "about": "made up", "rows": [],
+                                "types": [{**LUG, "fields": [{**LUG["fields"][0], "range": ["1 mm", "100 mm"]}, LUG["fields"][1]]},
+                                          {**HOIST, "fields": [{**HOIST["fields"][0], "range": ["1 mm", "100 mm"]}, *HOIST["fields"][1:]],
+                                           "loads": [{**HOIST["loads"][0], "range": ["0 N", "10 N"]}]}],
+                                "asks": [asks("hoist.category", "hoist"), asks("hoist.bore", "hoist")]})
+        mine = rules.Reading(task, rules.read_transcription({"rules": [A_ONLY_0, BORES]}))
+        other = rules.Reading(task, rules.read_transcription({"rules": [
+            rule("x", "hoist", "hoist.category", requires=["or", ["not", ["is", "category", "A"]], ["is", "service", "0"]]),
+            rule("y", "hoist", "hoist.bore", requires=["not", ["or", ["is", "top.bore", "cut"], ["is", "bottom.bore", "cut"]]])]}))
+        lines, _ = rules.accept(mine, None, other)
+        outcome = {line.mechanism: {c.name: c.outcome for c in line.checks} for line in lines}
+        self.assertEqual(outcome["hoist.bore"]["second"], "pass", "one says both are machined, and the other that neither is cut")
+        self.assertEqual(outcome["hoist.category"]["second"], "fail", "one answers for category A alone, and the other for every hoist")
+
+
 if __name__ == "__main__":
     unittest.main()

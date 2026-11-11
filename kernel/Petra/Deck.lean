@@ -109,6 +109,13 @@ def Static.keys : Static → Array (Option String × String)
   | .and cs | .or cs => cs.foldl (fun out c => out ++ c.keys) #[]
   | .not c => c.keys
 
+/-- Whether a condition asks about a load anywhere in it. -/
+def Static.loads : Static → Bool
+  | .is .. => false
+  | .loaded _ => true
+  | .and cs | .or cs => cs.foldl (fun so c => so || c.loads) false
+  | .not c => c.loads
+
 /-- How many parts a condition has: what looking at it for one part costs, in steps. -/
 def Static.size : Static → Nat
   | .is .. | .loaded _ => 1
@@ -170,7 +177,11 @@ def Step.weight : Step → Nat
 /-- An answer to one line of the grid: `low <= high`, read where every pair of `ranges` is
 in order. `fields` and `loads` are what its roots read, through its names and its rows, each
 once. `weight` is what its steps cost to write for one part, and `look` what it costs to
-see whether the rule is for a part and which loads the part must carry. -/
+see whether the rule is for a part and which loads the part must carry.
+
+A rule with `requires` states no inequality. It holds for a part when that condition over
+keys holds, and it has no steps, no tape and no loads: `look` holds the size of the
+condition, and `fields` the keys it names. -/
 structure Rule where
   id : String
   kind : String
@@ -184,6 +195,7 @@ structure Rule where
   high : Nat
   fields : Array (Option String × String)
   loads : Array String
+  requires : Option Static := none
 
 /-- What the rule's cells are entered under: its id from after its last `/`. -/
 def Rule.entry (rule : Rule) : String := (rule.id.splitOn "/").getLast!
@@ -805,7 +817,7 @@ def readRule (kinds : Std.TreeMap String Kind) (rows : Std.TreeMap String Row) (
   let id ← text j "id"
   let rule : Except String Rule := do
     short "the id of a rule" id
-    within j ["id", "type", "mechanism", "anchor", "says", "when", "let", "where", "le"]
+    within j ["id", "type", "mechanism", "anchor", "says", "when", "let", "where", "le", "requires"]
     anchored j
     unless filled j "says" do throw "a rule says what it states"
     let name ← text j "type"
@@ -816,6 +828,20 @@ def readRule (kinds : Std.TreeMap String Kind) (rows : Std.TreeMap String Row) (
     | some (some none) => throw s!"the grid says {mechanism} never arises for {name}"
     | _ => pure ()
     let scope : Scope := { kind := some kind, kinds, rows }
+    unless has j "le" || has j "requires" do
+      throw "a rule has `le`, an inequality, or `requires`, a condition over keys"
+    -- A rule that requires states a condition over keys and no inequality. It has nothing
+    -- that an inequality has: no sides, no names of `let` and no range.
+    if has j "requires" then
+      if has j "le" || has j "let" || has j "where" then
+        throw "a rule with `requires` has no `le`, no `let` and no `where`: it states a condition over keys, and no inequality"
+      let condition ← (j.getObjVal? "when").toOption.mapM (static scope MAX_EXPRESSION)
+      let required ← (static scope MAX_EXPRESSION (← need j "requires")).mapError ("requires: " ++ ·)
+      if required.loads then
+        throw "`requires` is a condition over keys: `loaded` asks about a load, and stands in a `when`"
+      return { id, kind := name, mechanism, condition, steps := #[], weight := 0,
+               look := 1 + (condition.map Static.size).getD 0 + required.size, ranges := #[], low := 0, high := 0,
+               fields := once ((condition.map Static.keys).getD #[] ++ required.keys), loads := #[], requires := some required }
     let lets ← if has j "let" then members (← need j "let") else pure #[]
     for (name, _) in lets do
       identifier name

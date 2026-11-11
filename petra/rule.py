@@ -536,6 +536,8 @@ class Reading:
         return self._tapes[at]
 
     def says(self, rule: grid.Rule, point: Mapping[str, Any]) -> Said:
+        if rule.requires is not None:      # a condition over keys: it holds or fails, and states no two sides
+            return Said(rule.id, "holds" if _is(rule.requires, point) else "fails")
         missing = [name[5:] for name in self._loads_of(rule) if name not in point]
         if missing:
             return Said(rule.id, "nothing", f"the part carries no {' and no '.join(missing)}, which the rule reads", "load")
@@ -752,7 +754,8 @@ def _told(found: Answer) -> str:
         silent = next(s for s in found.said if s.state == "nothing")
         return f"says nothing ({silent.rule}: {silent.why})"
     g = found.governing
-    return found.state + (f" at {float(found.ratio):.6g}" if found.ratio is not None else "") + f" ({g.rule}: {float(g.low):.6g} against {float(g.high):.6g})"
+    sides = "what it requires of the keys" if g.low is None else f"{float(g.low):.6g} against {float(g.high):.6g}"
+    return found.state + (f" at {float(found.ratio):.6g}" if found.ratio is not None else "") + f" ({g.rule}: {sides})"
 
 
 def _order(reading: Reading, mechanism: str, *others: Reading) -> list[str]:
@@ -807,6 +810,8 @@ def reproduces(mine: Reading, mechanism: str, examples: list[Worked]) -> Check:
         governing = found[0].governing
         if governing is None:
             misses.append(f"{e.anchor}: for this part the transcription {_told(found[0])}")
+        elif "requires" in bodies[governing.rule]:
+            misses.append(f"{e.anchor}: {governing.rule} requires a condition over keys, and has no side and no ratio for an example to print")
         elif e.side != "ratio" and _side_dim(mine, bodies[governing.rule]) != e.dim:
             misses.append(f"{e.anchor}: prints a {show(e.dim)}, and the sides of {governing.rule} are a {show(_side_dim(mine, bodies[governing.rule]))}")
         elif got[0] is None or abs(got[0] - e.gives) > e.within * abs(e.gives):

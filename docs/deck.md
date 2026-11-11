@@ -321,7 +321,7 @@ A rule answers one line of the grid with an inequality.
 | `id`, `type`, `mechanism` | The rule's name, and the line of the grid it answers. A cell is entered under the id from after its last `/`, so two rules for one type and one mechanism have ids that differ there: `a/x` and `b/x` together are refused. |
 | `anchor` | The clause the inequality comes from |
 | `says` | The inequality in words: a text that is not empty. A rule with no `says` is refused. |
-| `le` | Two expressions. The rule holds when the first is at most the second. |
+| `le` | Two expressions. The rule holds when the first is at most the second. A rule that states no inequality has `requires` in its place ([A rule that requires](#a-rule-that-requires)). |
 | `let` | Names for expressions the rule uses more than once. A name is letters, digits and `_`, and is no field's name. An expression reads the names before it. |
 | `where` | The range the rule holds in: a list of `{"le": [a, b], "why": "..."}` with at least one item. Each item has `why`, a text, which may be empty. A rule that holds everywhere leaves `where` out: `"where": []` is refused. |
 | `when` | A condition on the part, as in the grid: on its own keys, on the keys of the parts it joins, and on its loads. The rule answers only for the parts it holds for. |
@@ -339,14 +339,38 @@ A factor that the clause fixes for the inequality, such as a resistance factor, 
 
 Reading a deck checks every rule. Each input of each row is bound once and to its dimension. Both sides of `le` have one dimension. The rule answers a line of the grid that can arise. A deck that fails any of these does not load, and the kernel finds a design checked against it ill formed.
 
+### A rule that requires
+
+Some clauses ask no inequality. They say what a part must be: a lifter of one category is of one service class, a pinhole is machined. Such a rule has `requires` in place of `le`.
+
+```json
+{"id": "made-up/category-a", "type": "hoist", "mechanism": "hoist.category",
+ "anchor": {"standard": "a standard", "clause": "2.1(b)"},
+ "says": "a hoist of category A is of service class 0",
+ "when": ["is", "category", "A"],
+ "requires": ["is", "service", "0"]}
+```
+
+| Key | Holds |
+|---|---|
+| `id`, `type`, `mechanism`, `anchor`, `says` | As for any rule |
+| `requires` | A condition over keys that must hold: `["is", FIELD, NAME]` on a key of the part or of a part it joins, and `and`, `or` and `not` of these, as a `when` writes them |
+| `when` | As for any rule: the parts the rule answers for |
+
+A rule has `le` or `requires`, and never both. A rule with `requires` has no `let` and no `where`, which are for an inequality. Its condition holds no `loaded`: a rule requires something of what a part is, and whether a load is there is for a `when` to ask. A deck that breaks any of these does not load.
+
+For a part that its `when` holds for, the rule gives one cell, entered as any rule's cell is. The cell is `proved` when the condition holds for the part and `refuted` when it does not. It has no tape, it needs no hint and no search, and it takes no work. A refuted cell makes the verdict FAIL as any refuted cell does. Its reason names each key the condition names, in the order it names them and each once, with the name the part has for it: `the part is not what the rule requires: top.bore is machined, bottom.bore is cut`.
+
+The rule reads the keys that its `requires` and its `when` name, so those keys have no `unread` cell on a part the rule applies to. It reads no load, so it has one cell whatever load cases the card has.
+
 ## A design checked against a deck
 
 `petra check` makes one cell for each answer and writes the files of [format.md](format.md): the card, the design with its parts as written, and the deck's own file. A cell has one of five states.
 
 | State | When |
 |---|---|
-| `proved` | A rule's inequality holds for every value the card and the design allow |
-| `refuted` | It fails at a point they allow |
+| `proved` | A rule's inequality holds for every value the card and the design allow, or what a rule requires of the keys holds |
+| `refuted` | The inequality fails at a point they allow, or what a rule requires does not hold |
 | `not applicable` | The grid says the mechanism cannot arise for this part |
 | `waived` | The card waives the mechanism on the part |
 | `open` | Anything else |

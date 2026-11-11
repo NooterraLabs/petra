@@ -392,6 +392,24 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hi
           out := out.push (pending "" s!"the deck has no rule for it{other}")
         for rule in answers do
           let tail := rule.entry
+          -- A rule that requires has one cell, with no tape and no hint: proved when its
+          -- condition over keys holds for the part, and refuted when it does not, with each
+          -- key it names and the name the part has for it.
+          if let some required := rule.requires then
+            if out.size > MAX_CELLS then return .error over
+            if required.holds loads part fellows then out := out.push (cell part.name ask.mechanism tail .proved)
+            else
+              let has := (once required.keys).map fun (called, field) =>
+                let owner := match called with
+                  | none => some part
+                  | some called => fellows.get? called
+                let name := match owner.bind (·.slot field) with
+                  | some (.key mine) => mine
+                  | _ => "nothing"
+                s!"{(called.map (· ++ ".")).getD ""}{field} is {name}"
+              out := out.push (cell part.name ask.mechanism tail .refuted
+                s!"the part is not what the rule requires: {", ".intercalate has.toList}")
+            continue
           let mut unders : Array (Option String) := #[none]
           if !rule.loads.isEmpty then
             -- A card with no load case at all puts none of the rule's loads on the part.

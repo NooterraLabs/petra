@@ -125,7 +125,8 @@ class Applied:
 class Rule:
     """An answer to one mechanism of one type: `low <= high`, read where every `where`
     holds. The expressions are kernel terms over names: a field, `part.field`, a `let`
-    name, `load NAME`, or `@n` for the n-th row the rule applies."""
+    name, `load NAME`, or `@n` for the n-th row the rule applies. A rule with `requires`
+    states that condition over keys and no inequality: it has no sides, no names and no range."""
 
     id: str
     type: str
@@ -138,6 +139,7 @@ class Rule:
     low: Any
     high: Any
     applied: Mapping[str, Applied]
+    requires: tuple | None = None
 
 
 @dataclass(frozen=True, eq=False)
@@ -299,36 +301,44 @@ class _Binder(rows._Reader):
             return ("field", node[1], dict(node[2]))
         raise RowError(f"{what}: a key is bound to a key field, to [\"key\", NAME] with one of {', '.join(known)}, or to [\"by\", FIELD, {{...}}]")
 
-    def static(self, node: Any) -> tuple:
+    def static(self, node: Any, loads: bool = True) -> tuple:
         """A condition on what a part is, not on how large: `["is", FIELD, NAME]`,
         `["loaded", LOAD]`, and `and`, `or`, `not` of these. FIELD is a key field of the
         type, or `PART.FIELD` for a key field of a part the type joins, by the name its `as`
-        gives that part. The name of a field that joins several parts is no part's name."""
+        gives that part. The name of a field that joins several parts is no part's name.
+        Without `loads` it is a condition over keys alone, as a rule's `requires` is."""
         if isinstance(node, list) and node[:1] == ["is"] and len(node) == 3:
             if not isinstance(node[1], str) or node[1] not in self.takes or node[2] not in self.takes[node[1]].keys:
                 raise RowError(f"{node!r}: `is` names a key field of the type, or of one part it joins by the name `as` gives it, and one of the key's names")
             return ("is", node[1], node[2])
         if isinstance(node, list) and node[:1] == ["loaded"] and len(node) == 2 and node[1] in self.loads:
+            if not loads:
+                raise RowError(f"{node!r}: `requires` is a condition over keys: `loaded` asks about a load, and stands in a `when`")
             return ("loaded", node[1])
         if isinstance(node, list) and node[:1] == ["not"] and len(node) == 2:
-            return ("not", self.static(node[1]))
+            return ("not", self.static(node[1], loads))
         if isinstance(node, list) and node[:1] in (["and"], ["or"]) and len(node) > 1:
-            return (node[0], *(self.static(n) for n in node[1:]))
+            return (node[0], *(self.static(n, loads) for n in node[1:]))
         raise RowError(f"{node!r} is not a condition on a part: write is, loaded, and, or, not")
 
 
 def _rule(body: Mapping[str, Any], deck_rows: Mapping[str, rows.Row], types: Mapping[str, Type]) -> Rule:
     where = body.get("id")
     try:
-        only(body, ("id", "type", "mechanism", "anchor", "says", "when", "let", "where", "le"), "a rule")
+        only(body, ("id", "type", "mechanism", "anchor", "says", "when", "let", "where", "le", "requires"), "a rule")
         if not isinstance(where, str) or _long(where):
-            raise RowError(f"a rule has id, of at most {MAX_NAME} characters, type, mechanism, anchor, says, le, and may have when, let and where")
+            raise RowError(f"a rule has id, of at most {MAX_NAME} characters, type, mechanism, anchor, says, le or requires, and may have when, let and where")
         anchor = anchored(body["anchor"], "anchor")
         for w in body.get("where", []):
             only(w, ("le", "why"), "where")
         if not body.get("says") or "where" in body and not body["where"]:
             raise RowError("a rule says what it states, and a `where` has at least one item")
         binder = _Binder(deck_rows, types[body["type"]], types)
+        if "requires" in body:
+            if {"le", "let", "where"} & set(body):
+                raise RowError("a rule with `requires` has no `le`, no `let` and no `where`: it states a condition over keys, and no inequality")
+            when = binder.static(body["when"]) if "when" in body else None
+            return Rule(where, body["type"], body["mechanism"], anchor, body["says"], when, {}, (), None, None, {}, binder.static(body["requires"], loads=False))
         lets = {}
         for name, node in body.get("let", {}).items():
             if name in binder.takes or not _name(name) or name == "pi":
@@ -912,8 +922,8 @@ def _keys(cond: tuple | None) -> Iterator[str]:
 def _reads(rule: Rule) -> set[str]:
     """What a rule reads, through the rows it applies and the names it defines: each field
     as the rule names it, `width` or `a.Fy`, and each load as `load NAME`."""
-    found, seen = set(_keys(rule.when)), set()
-    todo = [name for term in (rule.low, rule.high, *(t for w in rule.where for t in w[:2])) for name in _names(term)]
+    found, seen = {*_keys(rule.when), *_keys(rule.requires)}, set()
+    todo = [name for term in (rule.low, rule.high, *(t for w in rule.where for t in w[:2])) if term is not None for name in _names(term)]
     while todo:
         name = todo.pop()
         if name in seen:
@@ -946,6 +956,12 @@ def _answers(rule: Rule, ask: Ask, part: Part, parts: Mapping[str, Part], cases:
 
     def cell(entry: str, state: str, why: str = "", **more: Any) -> Cell:
         return Cell(part.name, rule.mechanism, entry, state, rule.says, anchor, why, rule.id, **more)
+
+    if rule.requires is not None:
+        # One cell, with no tape and no hint: proved when the condition over keys holds for the part, and refuted when not.
+        has = ", ".join(f"{name} is {_field_of(part, parts, name)}" for name in dict.fromkeys(_keys(rule.requires)))
+        yield cell(tail, "proved") if _static(rule.requires, part, parts) else cell(tail, "refuted", f"the part is not what the rule requires: {has}")
+        return
 
     def tape_of(pairs: list[tuple[Any, Any]], case: str | None) -> tuple[_Tape, list[int], list[tuple[int, int]]]:
         tape = _Tape()
@@ -1101,7 +1117,8 @@ class Report:
         wide = max((len(f"{c.subject}/{c.mechanism}") for c in self.cells), default=0)
         for c in self.cells:
             ratio = "" if c.ratio is None else f"{c.ratio:.3g}"
-            said = c.why if c.state in ("open", "not_applicable", "waived") else c.what if c.state == "refuted" or c.entry.endswith("/where") else ""
+            said = (c.why if c.state in ("open", "not_applicable", "waived") else ": ".join(filter(None, (c.what, c.why))) if c.state == "refuted"
+                    else c.what if c.entry.endswith("/where") else "")
             out.append(f"  {f'{c.subject}/{c.mechanism}':<{wide}}  {c.state.replace('_', ' '):<14}  {ratio:>6}  "
                        + ": ".join(part for part in (c.entry, said) if part) + (f" ({c.anchor})" if c.anchor else ""))
         pending = [c for c in self.cells if c.state == "open"]
