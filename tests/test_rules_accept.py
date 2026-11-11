@@ -231,6 +231,30 @@ class Examples(unittest.TestCase):
         found = check(reads_more, "strip.bow", "examples", examples=EXAMPLES)
         self.assertEqual((found.outcome, found.detail), ("fail", "made up, 4: the rules read hole, which the example does not give"))
 
+    def test_an_example_of_one_of_two_like_parts_is_held_against_the_rules_it_gives_every_field_of(self):
+        """A source that works one pad of two gives that pad's fields alone. The rule for that pad must reproduce it, and the
+        rule for the other pad is not tested by it. Two strips take 40 mm2 of each pad: 0.80 of a pad of 50 mm2, and all of one of 40."""
+        near = {"strip.creep": [{"anchor": "made up, 6", "given": {"turns": "2", "near.area": "50 mm2"}, "side": "ratio", "gives": "0.80"}]}
+        more = ["mul", "turns", ["q", "25", "mm2"]]
+
+        def by_pad(near_rule: dict = BY_PAD[0], far_rule: dict = BY_PAD[1]) -> rule.Reading:
+            return reading(lambda b: b["rules"].extend([near_rule, far_rule]))
+
+        found = check(by_pad(), "strip.creep", "examples", examples=near)
+        self.assertEqual((found.outcome, found.detail), ("pass", "1 reproduced"), "the rule for the far pad reads far.area, which the example does not give, and is set aside")
+        wrong_near = check(by_pad(near_rule={**BY_PAD[0], "le": [more, "near.area"]}), "strip.creep", "examples", examples=near)
+        self.assertEqual((wrong_near.outcome, wrong_near.detail), ("fail", "made up, 6: prints 0.80 for the ratio, and test/creep-near gives 1.2500 of it"))
+        wrong_far = by_pad(far_rule={**BY_PAD[1], "le": [more, "far.area"]})
+        self.assertEqual(check(wrong_far, "strip.creep", "examples", examples=near).outcome, "pass", "a wrong rule for the far pad is not tested by an example of the near one")
+        # One rule with the lesser of the two pads reads both, so the example gives no rule every field, and none reproduces it.
+        joined = check(reading(lambda b: b["rules"].extend(BY_MIN)), "strip.creep", "examples", examples=near)
+        self.assertEqual((joined.outcome, joined.detail), ("fail", "made up, 6: the rules read far.area, which the example does not give"))
+        # An example that gives both pads is held against both rules, and the smaller pad governs.
+        both = {"strip.creep": [{"anchor": "made up, 7", "given": {"turns": "2", "near.area": "50 mm2", "far.area": "40 mm2"}, "side": "ratio", "gives": "1.00"}]}
+        self.assertEqual(check(by_pad(), "strip.creep", "examples", examples=both).outcome, "pass")
+        found = check(wrong_far, "strip.creep", "examples", examples=both)
+        self.assertEqual((found.outcome, found.detail), ("fail", "made up, 7: prints 1.00 for the ratio, and test/creep-far gives 1.2500 of it"))
+
     def test_a_side_that_reads_no_load_needs_none(self):
         no_load = {"strip.heat": [{**EXAMPLES["strip.heat"][0], "loads": {}}]}
         self.assertEqual(check(FIRST, "strip.heat", "examples", examples=no_load).outcome, "pass")
