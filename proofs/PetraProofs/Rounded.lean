@@ -491,6 +491,43 @@ private theorem lnPoint_sound (hs : OddSeriesSpec) {q : ℚ} {c c' : Caches} {v 
     · rw [if_neg hk] at hget'
       exact hc.1 x w hget' hx
 
+/-- `lnPoint` keeps the caches valid, whatever its argument: an entry under a key that is
+not positive is never read as a logarithm. -/
+private theorem lnPoint_valid (hs : OddSeriesSpec) {q : ℚ} {c c' : Caches} {v : ℚ × ℚ}
+    (hc : c.Valid) (h : lnPoint q c = .ok (v, c')) : c'.Valid := by
+  rcases lnPoint_cases h with ⟨-, -, rfl⟩ | ⟨-, rfl⟩ | ⟨hg, rfl⟩
+  · exact hc
+  · exact hc
+  · refine ⟨fun x w hget hx => ?_, hc.2⟩
+    have hget' : (c.ln.insert (q.num, q.den) v).get? (x.num, x.den) = some w := hget
+    rw [Std.HashMap.get?_insert] at hget'
+    by_cases hk : ((q.num, q.den) == (x.num, x.den)) = true
+    · rw [if_pos hk] at hget'
+      cases hget'
+      have hqx := key_eq hk
+      subst hqx
+      exact grid_sound (lnAt_sound hs hx) hg
+    · rw [if_neg hk] at hget'
+      exact hc.1 x w hget' hx
+
+/-- `iLn` keeps the caches valid, on any interval. -/
+theorem iLn_valid (hs : OddSeriesSpec) {a r : Iv} {c c' : Caches} (hc : c.Valid)
+    (h : iLn a c = .ok (r, c')) : c'.Valid := by
+  unfold iLn at h
+  dsimp only at h
+  by_cases hneg : a.lo ≤ 0
+  · rw [if_pos hneg] at h
+    obtain ⟨u, c1, h1, -⟩ := M.bind_ok h
+    exact (M.throw_not_ok h1).elim
+  · rw [if_neg hneg] at h
+    obtain ⟨u, c1, h1, h2⟩ := M.bind_ok h
+    rw [(M.pure_ok h1).2] at h2
+    obtain ⟨va, c2, h3, h4⟩ := M.bind_ok h2
+    obtain ⟨vb, c3, h5, h6⟩ := M.bind_ok h4
+    obtain ⟨-, hc'⟩ := M.pure_ok h6
+    rw [hc']
+    exact lnPoint_valid hs (lnPoint_valid hs hc h3) h5
+
 /-- If `oddSeries` holds the sums it is written to hold, `iLn` succeeds only on an interval
 of positive numbers, its result holds the logarithm of every real the interval holds, and
 it keeps the caches valid. -/
@@ -586,5 +623,15 @@ theorem iExp_sound (hs : ExpAtSpec) {a r : Iv} {x : ℝ} {c c' : Caches} (hc : c
   obtain ⟨hc3, -, hlb⟩ := expPoint_sound hs hc2 h5
   rw [hr, hc']
   exact ⟨hc3, le_trans hla (Real.exp_le_exp.2 hlo), le_trans (Real.exp_le_exp.2 hhi) hlb⟩
+
+/-- `iExp` keeps the caches valid, on any interval. -/
+theorem iExp_valid (hs : ExpAtSpec) {a r : Iv} {c c' : Caches} (hc : c.Valid)
+    (h : iExp a c = .ok (r, c')) : c'.Valid := by
+  unfold iExp at h
+  obtain ⟨va, c2, h3, h4⟩ := M.bind_ok h
+  obtain ⟨vb, c3, h5, h6⟩ := M.bind_ok h4
+  obtain ⟨-, hc'⟩ := M.pure_ok h6
+  rw [hc']
+  exact (expPoint_sound hs (expPoint_sound hs hc h3).1 h5).1
 
 end Petra
