@@ -204,24 +204,42 @@ class Time(unittest.TestCase):
     def test_the_cases_that_carry_every_load_of_a_rule_are_found_in_time(self):
         """Finding 2, hostile deck. 1,000 rules each read loads A and B of one part; the card
         puts A on it in 3,000 cases and B in 3,000 others. For each case of A the kernel
-        filters the part's 6,000 loads again to see whether B is there too, so each rule
-        costs about 27 million steps of that before it makes its one open cell, and none is
-        counted: 0.69 MB, 449 s and 434 CPU seconds, work 0."""
-        N, R = 3000, 1000
+        filtered the part's 6,000 loads again to see whether B is there too, so each rule
+        cost about 27 million steps of that before it made its one open cell, and none was
+        counted: 0.69 MB, 449 s and 434 CPU seconds, work 0.
+
+        The fourth review changed what these files ask (docs/format.md, "Cells from a deck of
+        rules", item 4): a rule that reads loads has a cell for each load case of the card,
+        open under a case that does not put every load it reads on the part. So the 1,000
+        rules ask 6,000 cells each, which is past the 10,000 the kernel makes, and it refuses
+        the design at once. One such rule asks 6,000, and each is open."""
+        N = 3000
         kind = {"type": "t", "what": "w", "fields": [{"name": "f", "dim": "length", "what": "w"}],
                 "loads": [{"name": n, "dim": "length", "what": "w"} for n in ("A", "B")]}
-        rules = {"format": "petra-rules/0", "name": "big", "about": "a", "rows": [], "types": [kind],
-                 "grid": [{"type": "t", "mechanism": "m", "what": "w", "anchor": ANCHOR}],
-                 "rules": [{"id": f"r/{i}", "type": "t", "mechanism": "m", "anchor": ANCHOR, "says": "s",
-                            "le": [["load", "A"], ["load", "B"]]} for i in range(R)]}
         inputs = [{"name": f"{x}{c}", "dim": "length", "lo": "0", "hi": "1", "by": "b", "case": f"{x}{c}", "on": "p",
                    "field": x.upper()} for x in ("a", "b") for c in range(N)]
         part = {"name": "p", "type": "t", "lines": [{"field": "f", "args": [{"number": {"dim": "length", "lo": "1", "hi": "1"}}]}]}
-        files = with_rules(rules, empty_card(inputs), [part])
+
+        def files_of(count: int) -> dict[str, str]:
+            rules = {"format": "petra-rules/0", "name": "big", "about": "a", "rows": [], "types": [kind],
+                     "grid": [{"type": "t", "mechanism": "m", "what": "w", "anchor": ANCHOR}],
+                     "rules": [{"id": f"r/{i}", "type": "t", "mechanism": "m", "anchor": ANCHOR, "says": "s",
+                                "le": [["load", "A"], ["load", "B"]]} for i in range(count)]}
+            return with_rules(rules, empty_card(inputs), [part])
+
+        files = files_of(1000)
         self.assertLess(total(files), 0.7 * MB)
         said, seconds, _ = measured(files)
-        self.assertEqual((said["verdict"], len(said["cells"])), ("UNKNOWN", R + 1), "an open cell for each rule, and one for the field nothing reads")
-        self.assertEqual({c["reason"] for c in said["cells"][:R]}, {"no load case puts every load the rule reads on p"})
+        self.assertEqual((said["verdict"], len(said["cells"])), ("ILL-FORMED", 0), "6,000 cells for each of 1,000 rules are past the limit")
+        self.assertEqual([(f["rule"], f["item"]) for f in said["findings"]], [("limits", "parts")])
+        self.assertIn("asks more than 10000 cells", said["findings"][0]["why"])
+        self.assertLess(seconds, PROCESSOR_SECONDS, "the design is refused in under a processor second")
+        said, seconds, _ = measured(files_of(1))
+        self.assertEqual((said["verdict"], len(said["cells"])), ("UNKNOWN", 2 * N + 1), "an open cell for each case, and one for the field nothing reads")
+        self.assertEqual({c["state"] for c in said["cells"]}, {"open"})
+        self.assertEqual([c["reason"] for c in said["cells"][:2]] + [said["cells"][N]["reason"]],
+                         ["case a0 puts no B on p, which the rule reads", "case a1 puts no B on p, which the rule reads",
+                          "case b0 puts no A on p, which the rule reads"])
         self.assertLess(seconds, PROCESSOR_SECONDS, "the cases are found in under a processor second")
 
 

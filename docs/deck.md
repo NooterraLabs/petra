@@ -282,7 +282,7 @@ A line may say that the mechanism cannot arise, and why:
 "unless": {"when": ["is", "fit", "close"], "why": "a close fit leaves no room for one"}
 ```
 
-With no `when`, it never arises for the type. A condition is `["is", FIELD, NAME]` on a key field, `["loaded", LOAD]`, or `and`, `or` and `not` of these. An `unless` has `why`, a text, which may be empty. An `unless` with no `why` is refused. A line whose `unless` is `null` is read as a line with none.
+With no `when`, it never arises for the type. A condition is `["is", FIELD, NAME]` on a key field, `["loaded", LOAD]`, or `and`, `or` and `not` of these. A `loaded` holds when some load case of the card puts the load on the part. It asks whether the load is there and reads nothing of it, so a load that only a `loaded` names is a load nothing reads. An `unless` has `why`, a text, which may be empty. An `unless` with no `why` is refused. A line whose `unless` is `null` is read as a line with none.
 
 ### A rule
 
@@ -310,7 +310,7 @@ An expression is written as a row's is. A name in it is a quantity field of the 
 
 | Written | Means |
 |---|---|
-| `["load", NAME]` | A load the card puts on the part |
+| `["load", NAME]` | A load the card puts on the part. It is a load of the rule's own type: a rule reads no load of a part its part joins. |
 | `["row", ID, {INPUT: ...}]` | A row of the deck, with each of its inputs bound |
 
 A quantity that a row takes is bound to an expression of its dimension. A key that a row takes is bound in one of three ways: to a key field whose names are all names of the row's key, to `["key", NAME]`, or to `["by", FIELD, {NAME OF THE FIELD: NAME OF THE ROW'S KEY}]`. The map of a `by` has one entry for each name of the field and no other entry, and each of its values is a name of the row's key. A map that leaves a name of the field out is refused.
@@ -340,13 +340,16 @@ A waiver takes the whole line. A line the card waives on a part is one `waived` 
 These cases are open:
 
 - The grid has a line and the deck has no rule for it, or none that holds for this part.
-- A rule reads a load and the card puts none on the part.
+- A rule reads a load, and a load case of the card does not put it on the part. No load is taken as zero: a card that means none in a case states a load of zero there.
 - A rule's `where` is not proved. Outside its range a rule says nothing, so its cell is never refuted there.
 - A table has no value where the rule reads it: between the listed values of a table read at listed values, outside every band, or in an empty cell.
 - The inequality is neither proved over the ranges the card gives nor refuted at a corner or the middle of them.
-- No rule and no line of the grid reads a quantity or a key of a part. A value nothing reads is a value nothing checks, so a plate that no lap joins has an open cell for each of its fields, named `unread`. These cells come after every other cell, part by part, each part's in the order of its type's fields.
+- No rule and no line of the grid reads a quantity or a key of a part. A value nothing reads is a value nothing checks, so a plate that no lap joins has an open cell for each of its fields, named `unread`.
+- No rule reads a load that the card puts on a part. A rule reads a load in an expression: a side of its `le` or of its `where`, or a name of `let` that one of them reads. A `loaded` in a `when` or an `unless` does not read it. The load has an open cell named `unread` for each load case that puts it on the part, entered as `LOAD/CASE`.
 
-A rule that reads a load has a cell for each load case that puts the load on the part. A rule with `where` has one more cell, named with `/where`, that proves its range.
+The cells named `unread` come after every other cell, part by part: a part's fields in the order of its type's fields, and then its loads in the order of their names and of their cases' names.
+
+A rule that reads a load has a cell for each load case of the card, entered as `RULE/CASE`. The load cases of the card are every `load` block it has, whether the block puts a load on this part, on another, or on none. Under a case that puts every load the rule reads on the part, the cell is proved, refuted or open as the inequality is. Under a case that leaves one of them out, the cell is open and names the case and the load. So a card with a case `wind` that puts a shear on a joint and no tension leaves every rule that reads the tension open under `wind`, until the card states the tension there, as zero if that is what it means. A card with no `load` block leaves one open cell for the rule. A rule with `where` has one more cell for each case, named with `/where`, that proves its range.
 
 A quantity on the end of a band reads the band that holds that end, exactly. Over a range that reaches into two bands or two cases, the inequality must hold in both.
 

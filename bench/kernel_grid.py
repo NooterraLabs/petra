@@ -10,10 +10,16 @@ A design is of one of three decks: the deck that ships, with its `lap` and `plat
 STRIPS, the deck made up for tests/test_grid.py, or OPS, made up here so that every
 operator of the rule language is in a rule: powers, roots, exp and ln, conditions joined
 by and, or and not, a table with bands closed at the lower end, every way to bind a key,
-a key of a joined part, and a range that reads a load. A design's numbers are drawn from
+a key of a joined part, and a range that reads a load. Its bar takes three loads and its cap
+one: a rule that reads two of them, a rule that reads the third for some bars and not for
+others, and a load on a cap that no rule reads. A design's numbers are drawn from
 the ends of the decks' bands, their listed
 values and the edges of their cases and ranges, and from near them. Its loads are
 points or ranges, in no, one or two load cases, and its card waives some mechanisms or none.
+A case may put some of the loads a rule reads on a part and not the others, put a load on
+one part and none on another, or put none on any: each rule that reads a load then has an
+open cell under that case. And a card may put a load on a part that no rule reads there,
+which is an open cell named `unread`.
 About two designs in five of the first two decks are then damaged in a way the grid
 refuses: a missing or unknown line, a wrong unit, a strength the design writes, a given
 of another part, a load the type does not take, and so on. Of the others, one in forty
@@ -91,14 +97,16 @@ OPS = {
     ],
     "types": [
         {"type": "cap", "what": "an end of a bar", "fields": [
-            {"name": "t", "dim": "length", "what": "its thickness"}, {"name": "finish", "one_of": ["low", "high"], "what": "a key whose names are the table's"}]},
+            {"name": "t", "dim": "length", "what": "its thickness"}, {"name": "finish", "one_of": ["low", "high"], "what": "a key whose names are the table's"}],
+         "loads": [{"name": "press", "dim": "force", "least": "0 N", "what": "a force that no rule reads"}]},
         {"type": "bar", "what": "a bar", "fields": [
             {"name": "a", "dim": "length", "what": "a length"}, {"name": "b", "dim": "length", "what": "another"},
             {"name": "r", "dim": "dimensionless", "signed": True, "what": "a ratio the card states"}, {"name": "s", "dim": "dimensionless", "what": "an exponent"},
             {"name": "grade", "one_of": ["soft", "hard"], "what": "a key"}, {"name": "caps", "type": "cap", "as": ["left", "right"], "what": "its two ends"}],
-         "loads": [{"name": "push", "dim": "force", "what": "a force of either sign"}, {"name": "twist", "dim": "moment", "least": "0 Nm", "what": "a moment"}]}],
+         "loads": [{"name": "push", "dim": "force", "what": "a force of either sign"}, {"name": "twist", "dim": "moment", "least": "0 Nm", "what": "a moment"},
+                   {"name": "drag", "dim": "force", "least": "0 N", "what": "a force that a rule reads for a hard bar and none for a soft one"}]}],
     "grid": [{"type": "bar", "mechanism": f"bar.{name}", "what": name, "anchor": MADE_UP, **more} for name, more in (
-        ("cases", {}), ("roots", {}), ("exp", {}), ("table", {}), ("key", {}), ("moment", {}), ("caps", {}),
+        ("cases", {}), ("roots", {}), ("exp", {}), ("table", {}), ("key", {}), ("moment", {}), ("caps", {}), ("drag", {}),
         ("idle", {"unless": {"when": ["or", ["not", ["loaded", "push"]], ["and", ["is", "grade", "hard"], ["loaded", "twist"]]], "why": "made up"}}))],
     "rules": [
         {"id": "ops/cases", "type": "bar", "mechanism": "bar.cases", "anchor": MADE_UP, "says": "made up",
@@ -118,6 +126,8 @@ OPS = {
                                   ["row", "ops/table", {"x": ["add", "right.t", "b"], "grade": ["by", "right.finish", {"low": "high", "high": "mid"}]}]]]},
         {"id": "ops/moment", "type": "bar", "mechanism": "bar.moment", "anchor": MADE_UP, "says": "made up",
          "le": [["load", "twist"], ["mul", ["load", "push"], "a"]]},
+        {"id": "ops/drag", "type": "bar", "mechanism": "bar.drag", "anchor": MADE_UP, "says": "made up",
+         "when": ["and", ["is", "grade", "hard"], ["loaded", "drag"]], "le": [["load", "drag"], ["q", "2", "kN"]]},
     ],
 }
 
@@ -218,6 +228,8 @@ def lap(rng: random.Random, n: int) -> Draft:
                               near(rng, 83.6, "kip"), near(rng, 87.36, "kip")])
             bound = f"[{top}, {top}]" if rng.random() < 0.3 else f"[0 kip, {top}]"
             d.loads.setdefault(case, []).append(f"on {splice} pull in {bound}")
+        if rng.random() < 0.08:      # a case of the card that puts no pull on this lap, or on any
+            d.loads.setdefault("storm", [])
         # The lines the deck has no rule for, which a card waives to pass, and some lines that have rules, which a waiver hides.
         open_lines = ["lap.tightening", "lap.hole_use", "lap.max_edge_distance", "lap.ply_flexure"]
         waived = rng.choice([[], open_lines, open_lines, open_lines, rng.sample(open_lines, 2), ["lap.strength", "lap.slip"], open_lines + ["lap.end_distance"],
@@ -249,6 +261,8 @@ def strips(rng: random.Random, n: int) -> Draft:
     for case in rng.choice([[], ["run"], ["run"], ["run"], ["run", "surge"]]):
         top = rng.choice(["0.5 A", "1 A", "1.5 A", "2 A", "2 A", "2.01 A", "3 A", "4 A", "6 A", near(rng, 2, "A")])
         d.loads[case] = [f"on s current in {f'[{top}, {top}]' if rng.random() < 0.3 else f'[0 A, {top}]'}"]
+    if rng.random() < 0.08:      # a case of the card that puts no current on the strip
+        d.loads["idle"] = []
     d.waivers = [(m, "s") for m in rng.choice([["strip.creep"], ["strip.creep"], [], ["strip.creep", "strip.heat"], ["strip.creep", "strip.tide", "strip.spark"]])]
     return d
 
@@ -272,8 +286,12 @@ def ops(rng: random.Random, n: int) -> Draft:
         if rng.random() < 0.85:
             entries.append(f"on bar push in {rng.choice(['[0 kN, 1 kN]', '[-2 kN, 2 kN]', '[3 kN, 3 kN]', '[-6 kN, -6 kN]', '[0 kN, 6.001 kN]', '[4 kN, 5 kN]', '[7 kN, 9 kN]'])}")
         if rng.random() < 0.5:
-            entries.append(f"on bar twist in {rng.choice(['[0 Nm, 5 Nm]', '[30 Nm, 30 Nm]', '[0 Nm, 100 Nm]', '[20 Nm, 60 Nm]'])}")
-        if entries:
+            entries.append(f"on bar twist in {rng.choice(['[0 Nm, 5 Nm]', '[30 Nm, 30 Nm]', '[0 Nm, 100 Nm]', '[20 Nm, 60 Nm]', '[0 Nm, 0 Nm]'])}")
+        if rng.random() < 0.3:      # read by ops/drag for a hard bar, and by nothing for a soft one
+            entries.append(f"on bar drag in {rng.choice(['[0 kN, 1 kN]', '[2 kN, 2 kN]', '[0 kN, 3 kN]', '[0 N, 0 N]'])}")
+        if rng.random() < 0.15:      # no rule reads a load on a cap
+            entries.append(f"on {rng.choice(['c1', 'c2'])} press in {rng.choice(['[0 N, 1 N]', '[5 kN, 5 kN]'])}")
+        if entries or rng.random() < 0.5:      # a case with no load in it is still a case of the card
             d.loads[case] = entries
     d.waivers = [(m, "bar") for m in rng.choice([[], [], ["bar.idle"], ["bar.exp", "bar.cases"]])]
     return d

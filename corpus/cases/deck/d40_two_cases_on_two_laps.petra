@@ -1,0 +1,58 @@
+petra 0
+
+# The two laps of d39 under a card that states the pull on each of them in each of its two
+# cases, one of them a pull of zero. Every rule that reads the pull is proved under both.
+
+plate tab {
+  thickness 0.375 inch
+  width 6 inch
+  Fy given tab.Fy
+  Fu given tab.Fu
+}
+
+plate strap {
+  thickness 0.375 inch
+  width 6 inch
+  Fy given strap.Fy
+  Fu given strap.Fu
+}
+
+lap splice {
+  fastener "Group 120"
+  threads included
+  diameter 0.75 inch
+  holes standard
+  count 3
+  pitch 3 inch
+  end 1.5 inch
+  side 3 inch
+  surface protected
+  joins tab strap
+}
+
+plate web {
+  thickness 0.375 inch
+  width 6 inch
+  Fy given web.Fy
+  Fu given web.Fu
+}
+
+plate cover {
+  thickness 0.375 inch
+  width 6 inch
+  Fy given cover.Fy
+  Fu given cover.Fu
+}
+
+lap joint {
+  fastener "Group 120"
+  threads included
+  diameter 0.75 inch
+  holes standard
+  count 3
+  pitch 3 inch
+  end 1.5 inch
+  side 3 inch
+  surface protected
+  joins web cover
+}

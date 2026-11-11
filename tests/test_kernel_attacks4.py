@@ -27,7 +27,12 @@ kernel is built. The ones marked "hostile deck" pass their own deck of rules wit
      `axis` (petra/deck.py) puts the values of a table's side in a set: 30,000 values that
      share a hash, 0.90 MB, take grid.read_deck 312 processor seconds. The kernel answers the
      same files in 1.2.
+
+The classes after the review's own hold what was decided for 1 and 2 (docs/format.md, "Cells
+from a deck of rules", items 4 and 8), case by case, and hold the kernel and petra/grid.py to
+the same cells in each.
 """
+import copy
 import json
 import math
 import time
@@ -40,7 +45,7 @@ from petra import grid, verify
 from petra.registry import build_registry
 from tests.test_kernel_attacks2 import MB, halves, measured, total
 from tests.test_kernel_attacks3 import ANCHOR, PROCESSOR_SECONDS, empty_card, with_card, with_rules
-from tests.test_kernel_grid import ask, strips
+from tests.test_kernel_grid import ask, changed, findings, strips
 
 RULES = {
     "format": "petra-rules/0", "name": "pc", "about": "made up",
@@ -106,6 +111,205 @@ class TheGridChecksTheSameCases(unittest.TestCase):
     def test_the_grid_leaves_open_a_load_that_no_rule_reads(self):
         """Finding 2 in petra/grid.py, `_unread`: it goes through the fields of a type alone."""
         self.assertNotEqual(grid_status(HEAD + TENSION, SHEAR), "PASS", "no cell reads T")
+
+
+def both(test: unittest.TestCase, card: str, rules: dict = RULES, design: str = DESIGN) -> tuple[list[tuple[str, str, str, str]], str, dict]:
+    """The cells of the pair as the kernel lists them and its verdict, after the test holds
+    petra/grid.py to the same cells in the same order and to the same verdict. Also what the
+    kernel said, for its reasons."""
+    deck = grid.read_deck(json.dumps(rules))
+    with mock.patch.object(grid, "decks", lambda: (deck,)):
+        parsed = petra.lang.parse_design(card, design, "pc.petra", build_registry())
+        report, files = grid.check(parsed, deck)
+    said = ask(files)
+    cells = [(c["subject"], c["mechanism"], c["entry"], c["state"]) for c in said["cells"]]
+    test.assertEqual(said["findings"], [])
+    test.assertEqual(cells, [(c.subject, c.mechanism, c.entry, c.state) for c in report.cells], "the kernel and the grid list the same cells")
+    test.assertEqual(said["verdict"], report.status)
+    return cells, said["verdict"], said
+
+
+def reason(said: dict, entry: str, subject: str = "p") -> str:
+    """Why the kernel left the part's cell of this entry open."""
+    (found,) = [c for c in said["cells"] if (c["subject"], c["entry"]) == (subject, entry)]
+    return found.get("reason", "")
+
+
+def load(case: str, *lines: str) -> str:
+    return f"\nload {case} {{\n" + "".join(f"  on {line}\n" for line in lines) + '  signed "t@example.org" source "test"\n}\n'
+
+
+COMBINED = "joint.combined"
+TWO = dict(RULES, rules=[
+    {"id": "pc/shear", "type": "joint", "mechanism": COMBINED, "anchor": ANCHOR, "says": "the shear is at most what the joint carries",
+     "le": [["load", "V"], "cap"]},
+    {"id": "pc/tension", "type": "joint", "mechanism": COMBINED, "anchor": ANCHOR, "says": "the tension is at most what the joint carries",
+     "le": [["load", "T"], "cap"]}])
+"""The line answered by two rules, one for each load."""
+
+
+@unittest.skipUnless(verify.binary(), "no petra-verify is built here and PETRA_VERIFY names none")
+class ACellForEachCase(unittest.TestCase):
+    """docs/format.md, "Cells from a deck of rules", item 4: a rule that reads loads has one
+    cell for each load case of the card, and under a case that does not put every load it
+    reads on the part the cell is open. petra/grid.py lists the same cells."""
+
+    def test_a_case_that_puts_every_load_on_the_part_is_a_cell_as_before(self):
+        cells, verdict, _ = both(self, HEAD + GRAVITY)
+        self.assertEqual((cells, verdict), ([("p", COMBINED, "sum/gravity", "proved")], "PASS"))
+
+    def test_two_cases_that_put_every_load_on_the_part_are_two_cells_in_the_order_of_their_names(self):
+        cells, verdict, _ = both(self, HEAD + load("wind", "p V in [0 N, 2 N]", "p T in [0 N, 3 N]") + GRAVITY)
+        self.assertEqual((cells, verdict), ([("p", COMBINED, "sum/gravity", "proved"), ("p", COMBINED, "sum/wind", "proved")], "PASS"))
+
+    def test_a_case_that_puts_some_of_the_loads_on_the_part_is_an_open_cell_that_names_the_case_and_the_load(self):
+        cells, verdict, said = both(self, HEAD + GRAVITY + WIND)
+        self.assertEqual((cells, verdict), ([("p", COMBINED, "sum/gravity", "proved"), ("p", COMBINED, "sum/wind", "open")], "UNKNOWN"))
+        self.assertEqual(reason(said, "sum/wind"), "case wind puts no T on p, which the rule reads")
+
+    def test_a_case_that_puts_none_of_the_loads_on_the_part_is_an_open_cell_that_names_them(self):
+        """Case wind is a case of the card, and puts nothing on the joint: an empty block in
+        the card, or loads on another part alone."""
+        for wind in (load("wind"), load("wind", "q V in [0 N, 1 N]", "q T in [0 N, 1 N]")):
+            design = DESIGN + ("\njoint q {\n  cap 10 N\n}\n" if "on q" in wind else "")
+            cells, verdict, said = both(self, HEAD + GRAVITY + wind, design=design)
+            self.assertEqual(cells[:2], [("p", COMBINED, "sum/gravity", "proved"), ("p", COMBINED, "sum/wind", "open")])
+            self.assertEqual(verdict, "UNKNOWN")
+            self.assertEqual(reason(said, "sum/wind"), "case wind puts no V and no T on p, which the rule reads")
+            if "on q" in wind:
+                self.assertEqual(cells[2:], [("q", COMBINED, "sum/gravity", "open"), ("q", COMBINED, "sum/wind", "proved")])
+
+    def test_a_load_of_zero_that_the_card_states_is_read_and_proved(self):
+        """A card that means no tension in wind says so, and the cell is proved."""
+        cells, verdict, _ = both(self, HEAD + GRAVITY + load("wind", "p V in [0 N, 9 N]", "p T in [0 N, 0 N]"))
+        self.assertEqual((cells, verdict), ([("p", COMBINED, "sum/gravity", "proved"), ("p", COMBINED, "sum/wind", "proved")], "PASS"))
+        cells, verdict, _ = both(self, HEAD + GRAVITY + load("wind", "p V in [0 N, 100 N]", "p T in [0 N, 0 N]"))
+        self.assertEqual((cells, verdict), ([("p", COMBINED, "sum/gravity", "proved"), ("p", COMBINED, "sum/wind", "refuted")], "FAIL"))
+
+    def test_two_rules_that_read_different_loads_each_have_a_cell_for_each_case(self):
+        cells, verdict, said = both(self, HEAD + GRAVITY + WIND, TWO)
+        self.assertEqual(cells, [("p", COMBINED, "shear/gravity", "proved"), ("p", COMBINED, "shear/wind", "refuted"),
+                                 ("p", COMBINED, "tension/gravity", "proved"), ("p", COMBINED, "tension/wind", "open")])
+        self.assertEqual(verdict, "FAIL")
+        self.assertEqual(reason(said, "tension/wind"), "case wind puts no T on p, which the rule reads")
+
+    def test_a_card_with_no_load_case_leaves_one_open_cell_with_no_case_in_its_entry(self):
+        cells, verdict, said = both(self, HEAD)
+        self.assertEqual((cells, verdict), ([("p", COMBINED, "sum", "open")], "UNKNOWN"))
+        self.assertEqual(reason(said, "sum"), "the card puts no V and no T on p, which the rule reads")
+
+    def test_a_rule_with_a_range_has_no_range_cell_under_a_case_that_lacks_a_load(self):
+        ranged = dict(RULES, rules=[dict(RULES["rules"][0], where=[{"le": [["load", "V"], ["q", "50", "N"]], "why": "the shear is at most 50 N"}])])
+        cells, verdict, _ = both(self, HEAD + GRAVITY + WIND, ranged)
+        self.assertEqual(cells, [("p", COMBINED, "sum/gravity/where", "proved"), ("p", COMBINED, "sum/gravity", "proved"), ("p", COMBINED, "sum/wind", "open")])
+        self.assertEqual(verdict, "UNKNOWN")
+
+    def test_a_name_in_cases_that_no_load_has_is_a_load_case_of_the_card(self):
+        """card.json lists `storm` in `cases` and has no load in it. The kernel reads the
+        name as a case, as petra/grid.py reads an empty block of the card."""
+        files = strips(HEAD + GRAVITY, DESIGN, RULES)
+        said = ask(changed(files, "card", lambda card: card["cases"].append("storm")))
+        self.assertEqual([(c["entry"], c["state"]) for c in said["cells"]], [("sum/gravity", "proved"), ("sum/storm", "open")])
+        self.assertEqual(said["verdict"], "UNKNOWN")
+
+    def test_the_case_of_a_load_is_a_load_case_whether_cases_lists_it_or_not(self):
+        files = strips(HEAD + GRAVITY + WIND, DESIGN, RULES)
+        said = ask(changed(files, "card", lambda card: card.update(cases=[])))
+        self.assertEqual([(c["entry"], c["state"]) for c in said["cells"]], [("sum/gravity", "proved"), ("sum/wind", "open")])
+        said = ask(changed(files, "card", lambda card: card.update(cases=["wind", "gravity", "wind"])))
+        self.assertEqual([(c["entry"], c["state"]) for c in said["cells"]], [("sum/gravity", "proved"), ("sum/wind", "open")])
+
+    def test_a_name_in_cases_is_held_to_what_the_case_of_a_load_is(self):
+        files = strips(HEAD + GRAVITY, DESIGN, RULES)
+        said = ask(changed(files, "card", lambda card: card["cases"].append("a/b")))
+        self.assertIn("shape card cases: the name of a load case holds no /", findings(said))
+        said = ask(changed(files, "card", lambda card: card["cases"].append("x" * 65)))
+        self.assertIn("shape card cases: the name of a load case prints in at most 64 bytes", findings(said))
+        with self.assertRaises(grid.ComponentError):
+            grid_status(HEAD + GRAVITY + load("x" * 65))
+
+
+JOINED = {
+    "format": "petra-rules/0", "name": "pc", "about": "made up", "rows": [],
+    "types": [RULES["types"][0],
+              {"type": "holder", "what": "what holds a joint", "fields": [{"name": "grip", "dim": "force", "what": "what it grips with"},
+                                                                         {"name": "holds", "type": "joint", "as": ["j"], "what": "its joint"}]}],
+    "grid": [{"type": "holder", "mechanism": "holder.grip", "what": "the grip", "anchor": ANCHOR}],
+    "rules": [{"id": "pc/grip", "type": "holder", "mechanism": "holder.grip", "anchor": ANCHOR, "says": "the joint carries at most the grip",
+               "le": ["j.cap", "grip"]}],
+}
+"""A holder joins a joint and its one rule reads the joint's `cap`. The grid asks nothing of a joint."""
+
+
+@unittest.skipUnless(verify.binary(), "no petra-verify is built here and PETRA_VERIFY names none")
+class ALoadThatNothingReads(unittest.TestCase):
+    """docs/format.md, item 8: a load the card puts on a part is read by an expression of a
+    rule that applies to the part. Each one that nothing reads is an open cell named
+    `unread`, with the entry LOAD/CASE. petra/grid.py lists the same cells."""
+
+    def test_a_load_that_no_rule_reads_is_an_open_cell_for_each_case_that_puts_it_on_the_part(self):
+        cells, verdict, said = both(self, HEAD + TENSION + load("wind", "p V in [0 N, 2 N]", "p T in [0 N, 3 N]"), SHEAR)
+        self.assertEqual(cells, [("p", COMBINED, "shear/gravity", "proved"), ("p", COMBINED, "shear/wind", "proved"),
+                                 ("p", "unread", "T/gravity", "open"), ("p", "unread", "T/wind", "open")])
+        self.assertEqual(verdict, "UNKNOWN")
+        self.assertEqual(reason(said, "T/wind"), "no rule of the deck reads the load T that case wind puts on p, so nothing checks it")
+
+    def test_a_load_that_only_a_when_asks_about_with_loaded_is_not_read(self):
+        asked = dict(RULES, rules=[dict(SHEAR["rules"][0], when=["loaded", "T"])])
+        cells, verdict, _ = both(self, HEAD + TENSION, asked)
+        self.assertEqual((cells, verdict), ([("p", COMBINED, "shear/gravity", "proved"), ("p", "unread", "T/gravity", "open")], "UNKNOWN"))
+
+    def test_a_load_that_only_an_unless_asks_about_with_loaded_is_not_read(self):
+        """The line cannot arise for a joint under tension, the deck says, and the joint is
+        under tension. No rule reads the tension, so it is an open cell."""
+        excused = dict(SHEAR, grid=[dict(RULES["grid"][0], unless={"when": ["loaded", "T"], "why": "made up"})])
+        cells, verdict, _ = both(self, HEAD + TENSION, excused)
+        self.assertEqual(cells, [("p", COMBINED, "", "not_applicable"), ("p", "unread", "T/gravity", "open")])
+        self.assertEqual(verdict, "UNKNOWN")
+
+    def test_the_loads_of_a_part_whose_line_is_waived_are_read_by_the_rule_of_the_line(self):
+        """A waiver takes the whole line, and the rule of the line still reads the loads, as
+        it reads the fields: the waiver is what a reader sees, and no cell is named unread."""
+        waived = HEAD.replace("}\n", '}\n\nwaive joint.combined on p by "t@example.org" reason "it is a test"\n', 1)
+        cells, verdict, _ = both(self, waived + GRAVITY + WIND)
+        self.assertEqual((cells, verdict), ([("p", COMBINED, "", "waived")], "UNKNOWN"))
+
+    def test_the_loads_of_a_part_whose_line_is_not_applicable_are_read_by_the_rule_of_the_line(self):
+        excused = dict(RULES, grid=[dict(RULES["grid"][0], unless={"when": ["loaded", "T"], "why": "made up"})])
+        cells, verdict, _ = both(self, HEAD + GRAVITY + WIND, excused)
+        self.assertEqual((cells, verdict), ([("p", COMBINED, "", "not_applicable")], "UNKNOWN"))
+
+    def test_the_loads_of_a_part_that_a_rule_does_not_apply_to_are_not_read_by_it(self):
+        """The one rule holds for a joint with no tension, and this joint has tension: the
+        line has no rule for it, and nothing reads its field or its two loads."""
+        slack = dict(RULES, rules=[dict(RULES["rules"][0], when=["not", ["loaded", "T"]])])
+        cells, verdict, _ = both(self, HEAD + GRAVITY, slack)
+        self.assertEqual(cells, [("p", COMBINED, "", "open"), ("p", "unread", "cap", "open"),
+                                 ("p", "unread", "T/gravity", "open"), ("p", "unread", "V/gravity", "open")])
+        self.assertEqual(verdict, "UNKNOWN")
+
+    def test_a_rule_of_the_part_that_joins_a_part_reads_its_fields_and_not_its_loads(self):
+        """A rule names a load of its own type alone, so a load on a joined part is read by a
+        rule of that part's type or by none."""
+        design = DESIGN + "\nholder h {\n  grip 20 N\n  holds p\n}\n"
+        cells, verdict, _ = both(self, HEAD + GRAVITY, JOINED, design)
+        self.assertEqual(cells, [("h", "holder.grip", "grip", "proved"), ("p", "unread", "T/gravity", "open"), ("p", "unread", "V/gravity", "open")])
+        self.assertEqual(verdict, "UNKNOWN")
+        reaching = copy.deepcopy(JOINED)
+        reaching["rules"][0]["le"] = [["load", "V"], "grip"]
+        with self.assertRaises(grid.DeckError):
+            grid.read_deck(json.dumps(reaching))
+        self.assertIn("the type takes no load V", findings(ask(strips(HEAD + GRAVITY, design, JOINED) | {"rules": json.dumps(reaching)})))
+
+    def test_the_cells_of_unread_fields_and_unread_loads_have_different_keys(self):
+        """A type with a field and a load of one name, V, and no rule: the field's cell has
+        the entry V and the load's V/gravity, and the kernel prints no key twice."""
+        twin = {"format": "petra-rules/0", "name": "pc", "about": "made up", "rows": [],
+                "types": [{"type": "joint", "what": "a joint", "fields": [{"name": "V", "dim": "force", "what": "a field"}],
+                           "loads": [{"name": "V", "dim": "force", "least": "0 N", "what": "a load"}]}],
+                "grid": [], "rules": []}
+        cells, verdict, _ = both(self, HEAD + load("gravity", "p V in [0 N, 1 N]"), twin, "petra 0\n\njoint p {\n  V 10 N\n}\n")
+        self.assertEqual((cells, verdict), ([("p", "unread", "V", "open"), ("p", "unread", "V/gravity", "open")], "UNKNOWN"))
 
 
 STEP = 2 ** 63

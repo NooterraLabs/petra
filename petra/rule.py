@@ -491,12 +491,15 @@ class Reading:
         """Whether the transcription says anything of the mechanism: a rule, or that it cannot arise."""
         return bool(self.rules[mechanism]) or self.asks[mechanism].excused is not None or mechanism in self.wrong
 
-    def reads(self, mechanism: str) -> set[str]:
-        """Every name the mechanism's rules and its `unless` read: fields, and loads as `load NAME`."""
+    def reads(self, mechanism: str, asked: bool = True) -> set[str]:
+        """Every name the mechanism's rules and its `unless` read: fields, and loads as
+        `load NAME`. With `asked`, also each load that a `when` or an `unless` asks about
+        with `loaded`. Such a test says whether the load is there and reads nothing of it,
+        so `petra check` does not count it as a reader, and neither does this without `asked`."""
         ask = self.asks[mechanism]
-        found = set(grid._keys(ask.unless)) | set(_loaded(ask.unless))
+        found = set(grid._keys(ask.unless)) | (set(_loaded(ask.unless)) if asked else set())
         for rule in self.rules[mechanism]:
-            found |= grid._reads(rule) | set(_loaded(rule.when))
+            found |= grid._reads(rule) | (set(_loaded(rule.when)) if asked else set())
         return found
 
     def _loads_of(self, rule: grid.Rule) -> tuple[str, ...]:
@@ -974,10 +977,12 @@ def second(mine: Reading, other: Reading, mechanism: str, tried: Parts) -> Check
 def reads(mine: Reading) -> Check:
     """Whether something reads every key, every quantity and every load of each type the
     task asks about, in the names a rule reads them under. `petra check` leaves a design
-    open at a field nothing reads."""
+    open at a field nothing reads and at a load nothing reads. A load is read by an
+    expression of a rule: a `let`, a side of `le` or a `where`. A `loaded` in a `when` or
+    an `unless` does not read it, here as in `petra check`."""
     unread = []
     for kind in dict.fromkeys(a.type for a in mine.task.deck.asks):
-        read = set().union(*(mine.reads(m) for m in mine.task.mechanisms if mine.asks[m].type == kind))
+        read = set().union(*(mine.reads(m, asked=False) for m in mine.task.mechanisms if mine.asks[m].type == kind))
         unread += [f"{kind}.{name.removeprefix('load ')}" for group in _names(mine.task.deck, kind) for name in group if name not in read]
     if not unread:
         return Check("reads", "pass", "every field and every load is read")
