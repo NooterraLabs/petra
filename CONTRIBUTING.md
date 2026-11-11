@@ -8,8 +8,20 @@ You need Python 3.11 or later with `numpy` and `scipy`. From a clone, install Pe
 
 ```bash
 pip install -e .
-python -m unittest discover -s tests -t .
+python tests/parallel.py
 ```
+
+`tests/parallel.py` runs one process for each test module, several at a time. On a 4-core desktop the suite took 12 minutes this way and 32 one after another. `python -m unittest discover -s tests -t .` still runs it the plain way.
+
+| Command | Runs |
+|---|---|
+| `python tests/parallel.py --fast` | Every module that took a minute or less when last recorded: nine tests in ten, in under 5 minutes on that desktop |
+| `python tests/parallel.py tests.test_grid tests.test_deck` | The modules you name |
+| `python tests/parallel.py --record` | The suite, and rewrites `tests/durations.tsv`, which orders the modules longest first |
+
+To spread a run over more machines, list them in `~/.petra/test-hosts`, one a line: `USER@HOST slots=4 python=PATH lake=PATH`. Each gets the working tree over ssh before the run, and every free slot takes the longest module left. With a second 4-core machine the suite took 8 minutes, and `--fast` under 2. The head of `tests/parallel.py` describes the file.
+
+Run the whole suite before you open a pull request. The `checks` workflow runs it on every push, as six jobs side by side, with the corpus beside them.
 
 Tests that need the full AISC Shapes Database skip unless `PETRA_SHAPES_XLSX` names your copy of the workbook. Never commit the workbook, a standard's PDF, or text copied from a standard. Petra cites clauses and encodes methods. It does not reproduce them.
 

@@ -39,6 +39,16 @@ The first line names the governing failed check and its utilisation. Each move c
 - If no move holds, combine moves, or change a part that is not a number: a stronger grade, or `threads excluded`.
 - UNKNOWN is not a FAIL. Its `needs` lines say what is missing, such as a load or a line.
 
+## Design a part of a deck's type
+
+`petra kinds` lists each deck after the domains, and `petra kinds lap` prints a type's lines and what the deck's grid asks of it. `petra new lap` prints a design to start from, and `petra new lap --card` its card.
+
+The report has one line for each mechanism the grid asks of a part. A line is proved, refuted, not applicable, waived or open, and the design passes only when none is refuted or open.
+
+- A refuted line names its rule and its clause. Change the design until it is proved.
+- An open line means the deck has no rule for that mechanism, or the card gives no load, or a value is outside a table. It is not yours to close. Report UNKNOWN and list the open lines: a waiver belongs to the person who signs the card.
+- A line such as `Fy given tab.Fy` reads a value only the card states. If the card lacks it, ask the user for it.
+
 ## Rules
 
 - The card is the user's. Write into it only the loads and claims the user gave, signed with the user's name and the source of the numbers. Never lower a load, edit a claim, or add a `waive` line to reach PASS. Those belong to the person who signs them.

@@ -18,8 +18,8 @@ certified for it? Untrusted tooling: nothing here changes a verdict.
     python scripts/calculix_check.py report [--out docs/calculix_check_log.jsonl]
         The tables docs/calculix_check.md quotes, from the sample's log.
 
-CalculiX runs where `ccx` is on PATH, else over ssh on --host (default $PETRA_CCX_HOST,
-then ubuntu@oracle-vm), in batches, --workers jobs at a time.
+CalculiX runs where `ccx` is on PATH, else over ssh on --host (default $PETRA_CCX_HOST),
+in batches, --workers jobs at a time.
 
 The model. The element is a flat plate in its own plane: a shear tab, one angle leg, a
 tee stem, half a tee flange or end plate, or a bracket plate. It is meshed as one layer
@@ -95,7 +95,7 @@ SCREEN = 0.5                # in: the sample's first pass; a close call is run a
 NEAR = 0.05                 # a close call: an FE capacity this near a line that decides a verdict
 VON_MISES = 1 / (0.6 * math.sqrt(3))   # Fy / sqrt(3), von Mises yield in shear, over AISC's 0.6 Fy
 BAND = 0.03                 # the model's own shortfall in pure shear, from the validation
-HOST = os.environ.get("PETRA_CCX_HOST", "ubuntu@oracle-vm")
+HOST = os.environ.get("PETRA_CCX_HOST")
 LOG = ROOT / "docs" / "in_the_loop_log.jsonl"
 OUT = ROOT / "docs" / "calculix_check_log.jsonl"
 
