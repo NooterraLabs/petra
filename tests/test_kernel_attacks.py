@@ -1,17 +1,21 @@
 """A hostile reviewer's findings against petra-verify (kernel/), one test per confirmed one.
 
-Each test asserts the behaviour the kernel should have, so it fails against the kernel as it
-stands today and passes once the hole is closed. The tests are skipped when no kernel is built.
-They reuse the helpers of tests/test_kernel_grid.py: `strips`, `ask`, `base` bundles are built
-by exporting an honest design and then changing the bytes a designer would hand over.
+Each test asserts the behaviour the kernel should have. Both failed against the kernel as it
+stood at ca2e042, when the review was made, and pass now that the holes are closed. The tests
+are skipped when no kernel is built. They reuse the helpers of tests/test_kernel_grid.py:
+`strips`, `ask`, `base` bundles are built by exporting an honest design and then changing the
+bytes a designer would hand over.
 
 Findings, by the classes of the review brief:
-  6  the findings list is unbounded: one part with a long name and many bad lines makes the
+  6  the findings list was unbounded: one part with a long name and many bad lines made the
      kernel emit hundreds of megabytes and use over a gigabyte, from an input under 1 MB.
-  5  the documented downgrade is total: a card that places loads on parts, with `parts`
-     stripped from the design and no --rules, is read as a models'-kinds design and can be
+     Closed by the limits of docs/format.md, which tests/test_kernel_limits.py holds one by one.
+  5  the documented downgrade was total: a card that places loads on parts, with `parts`
+     stripped from the design and no --rules, was read as a models'-kinds design and could be
      driven to PASS with forged not-applicable and trivial proved cells, under the honest
-     card's own hash.
+     card's own hash. Closed by type rule 7 (tests/test_kernel_grid.py, Downgrade).
+  4  a dishonest card.json under the asker's card name is still a card the kernel finds well
+     formed. The asker's own hash of their card shows it (tests/test_export_card.py).
 """
 import hashlib
 import json
