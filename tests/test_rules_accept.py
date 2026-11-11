@@ -26,8 +26,8 @@ ROOT = Path(__file__).resolve().parents[1]
 BENCH = ROOT / "bench" / "formalizer"
 RANGES = {"area": ["10 mm2", "100 mm2"], "width": ["0.5 mm", "5 mm"], "T": ["10 degC", "100 degC"], "gap": ["0.1 mm", "3.9 mm"], "screw": ["3 mm", "4 mm"],
           "hole": ["3 mm", "5 mm"], "turns": ["1", "4"], "current": ["0.1 A", "12 A"]}
+# Two ways to write one made-up rule for the line of STRIPS that has none: a rule for each pad, and one rule with their minimum.
 CREEP = {"id": "test/creep", "type": "strip", "mechanism": "strip.creep", "anchor": TEST, "says": "each pad has 20 mm2 for each strip"}
-"""Two ways to write one made-up rule for the line of STRIPS that has none: a rule for each pad, and one rule with their minimum."""
 BY_PAD = [{**CREEP, "id": f"test/creep-{pad}", "le": [["mul", "turns", ["q", "20", "mm2"]], f"{pad}.area"]} for pad in ("near", "far")]
 BY_MIN = [{**CREEP, "le": [["mul", "turns", ["q", "20", "mm2"]], ["min", "near.area", "far.area"]]}]
 EXAMPLES = {
