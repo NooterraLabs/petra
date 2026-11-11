@@ -273,7 +273,7 @@ What the kernel prints and holds does not grow faster than the files it reads, a
 | Evaluations for the proofs of one verdict | 20,000,000 | A proof that would go past it is not tried. Its cell is open, and the reason says so. |
 | Times a waiver is printed in `waived` | 1 | Cells that rest on one waiver print it once. |
 
-A name of 64 characters in ASCII prints in 64 bytes. A character outside ASCII prints in up to four, and a control character in six. A cell prints these names whole, so they are refused and not cut. A step is one name or one operator of a rule, each time the rule is written for a part and a load case, or one node of the tape.
+A name of 64 characters in ASCII prints in 64 bytes. A character outside ASCII prints in up to four, a quote, a backslash and a line end in two, and any other control character in six. A cell prints these names whole, so they are refused and not cut. A step is one name or one operator of a rule, each time the rule is written for a part and a load case, or one node of the tape.
 
 An evaluation is one node of a tape, or one node it reads, on one leaf of a partition or at one point. A proof costs the length of its tape counted that way, times its leaves, and the kernel adds up the proofs in the order of the cells. The largest design of the corpus takes 32,380. The budget bounds the count of evaluations and not their time: one evaluation of numbers of 65,536 bits takes far longer than one of small numbers.
 
