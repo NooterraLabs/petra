@@ -126,7 +126,8 @@ def Step.reads : Step → Array Nat
   | .row binds value => binds.push value
 
 /-- An answer to one line of the grid: `low <= high`, read where every pair of `ranges` is
-in order. `fields` and `loads` are what its roots read, through its names and its rows. -/
+in order. `fields` and `loads` are what its roots read, through its names and its rows, each
+once. -/
 structure Rule where
   id : String
   kind : String
@@ -202,13 +203,18 @@ def within (j : Json) (allowed : List String) : Except String Unit := do
 def distinct (names : Array String) : Bool :=
   (names.foldl (fun (seen, so) name => (seen.insert name, so && !seen.contains name)) (({} : Std.HashSet String), true)).2
 
+/-- Each item once, in the order of its first place. -/
+def once [BEq α] [Hashable α] (items : Array α) : Array α :=
+  (items.foldl (fun (seen, out) x => if seen.contains x then (seen, out) else (seen.insert x, out.push x))
+    (({} : Std.HashSet α), #[])).2
+
 /-- A name a deck gives a field, a load, a joined part or a `let`: letters, digits and `_`,
-not starting with a digit. So `a.Fy` is always a field of a joined part and a name is never
-a number. -/
+not starting with a digit, and at most `MAX_NAME` of them. So `a.Fy` is always a field of a
+joined part and a name is never a number. -/
 def identifier (name : String) : Except String Unit :=
   match name.toList with
   | c :: rest =>
-    if (c.isAlpha || c == '_') && rest.all (fun c => c.isAlphanum || c == '_') then pure ()
+    if (c.isAlpha || c == '_') && rest.all (fun c => c.isAlphanum || c == '_') then short "a name" name
     else throw s!"{name} is not a name: write letters, digits and _"
   | [] => throw "a name is empty"
 
@@ -611,6 +617,7 @@ def scopeOf (kind : Kind) (kinds : Array Kind) (rows : Std.HashMap String Row) :
 def readAsk (kinds : Array Kind) (rows : Std.HashMap String Row) (j : Json) : Except String Ask := do
   let mechanism ← text j "mechanism"
   let ask : Except String Ask := do
+    short "the name of a mechanism" mechanism
     within j ["type", "mechanism", "what", "anchor", "unless"]
     anchored j
     let _ ← j.getObjVal? "what"
@@ -627,6 +634,7 @@ def readAsk (kinds : Array Kind) (rows : Std.HashMap String Row) (j : Json) : Ex
 def readRule (kinds : Array Kind) (rows : Std.HashMap String Row) (asks : Array Ask) (j : Json) : Except String Rule := do
   let id ← text j "id"
   let rule : Except String Rule := do
+    short "the id of a rule" id
     within j ["id", "type", "mechanism", "anchor", "says", "when", "let", "where", "le"]
     anchored j
     unless filled j "says" do throw "a rule says what it states"
@@ -670,7 +678,7 @@ def readRule (kinds : Array Kind) (rows : Std.HashMap String Row) (asks : Array 
       | .load name => some name
       | _ => none
     return { id, kind := name, mechanism, condition, steps := draft.steps, ranges, low, high,
-             fields := fields ++ ((condition.map Static.keys).getD #[]).map (none, ·), loads := loads.toList.eraseDups.toArray }
+             fields := once (fields ++ ((condition.map Static.keys).getD #[]).map (none, ·)), loads := once loads }
   rule.mapError (s!"rule {id}: " ++ ·)
 
 /-- A deck of rules from its file, as `read_deck` in petra/grid.py. -/
@@ -714,21 +722,23 @@ structure Writing where
 
 abbrev Write := StateT Writing (Except String)
 
-def node (n : Node) : Write Nat := do
-  let w ← get
+/-- The place of a node, written once. The tape is taken and given back in one step, so
+adding a node does not copy the nodes before it. -/
+def node (n : Node) : Write Nat := modifyGet fun w =>
   match w.seen.get? n with
-  | some i => return i
+  | some i => (i, w)
   | none =>
-    set { w with nodes := w.nodes.push n, seen := w.seen.insert n w.nodes.size }
-    return w.nodes.size
+    let i := w.nodes.size
+    (i, { w with nodes := w.nodes.push n, seen := w.seen.insert n i })
 
 def input (i : TapeInput) : Write Nat := do
-  let w ← get
-  match w.inputs.findIdx? (·.label == i.label) with
-  | some k => node (.s k)
-  | none =>
-    set { w with inputs := w.inputs.push i }
-    node (.s w.inputs.size)
+  let k ← modifyGet fun w =>
+    match w.inputs.findIdx? (·.label == i.label) with
+    | some k => (k, w)
+    | none =>
+      let k := w.inputs.size
+      (k, { w with inputs := w.inputs.push i })
+  node (.s k)
 
 /-- The first case that holds, or none when there is no case. One case that holds otherwise
 is its value. -/

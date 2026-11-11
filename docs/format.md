@@ -158,7 +158,7 @@ A hint names an input by its label, because the tape is the kernel's. Its partit
 
 The kernel applies the rules in this order. A design that breaks a rule of the first four groups is ILL-FORMED, and the kernel settles no cell.
 
-**Shape.** Each file is JSON with its `format`. Every number parses, and every range has `lo <= hi`. A cell has its keys and a state from the list, and a node is one from the table. A tape that reads a node ahead of itself, or lacks its `partition`, `point` or `which`, leaves its cell open.
+**Shape.** Each file is JSON with its `format`. Every number parses, and every range has `lo <= hi`. A cell has its keys and a state from the list, and a node is one from the table. A part's name is within the limit below. A tape that reads a node ahead of itself, or lacks its `partition`, `point` or `which`, leaves its cell open.
 
 **Types.**
 
@@ -169,7 +169,7 @@ The kernel applies the rules in this order. A design that breaks a rule of the f
 5. Every waiver of the card names a `by`.
 6. A design with `parts` comes with `--rules`.
 
-**The deck of rules.** With `--rules`, the file is a deck that holds together, as [deck.md](deck.md) describes: it has no unknown key, every rule names rows, fields and loads that exist, every input of a row is bound once and to its dimension, both sides of every inequality have one dimension, every sum and comparison inside a row or a rule is of one dimension, every rule answers a line of the grid that can arise, and no two rows, types, lines or rules have one name. A name of a field, a load, a joined part or a `let` is letters, digits and `_`.
+**The deck of rules.** With `--rules`, the file is a deck that holds together, as [deck.md](deck.md) describes: it has no unknown key, every rule names rows, fields and loads that exist, every input of a row is bound once and to its dimension, both sides of every inequality have one dimension, every sum and comparison inside a row or a rule is of one dimension, every rule answers a line of the grid that can arise, and no two rows, types, lines or rules have one name. A name of a field, a load, a joined part or a `let` is letters, digits and `_`. These names, the name of a mechanism and the id of a rule are within the limit below.
 
 **Parts.** With `--rules`, the design and the card are parts of the deck's types:
 
@@ -178,7 +178,7 @@ The kernel applies the rules in this order. A design that breaks a rule of the f
 3. A quantity is one number or one given, of the field's dimension, more than zero and at least the field's `least`. A `whole` field is one whole number that the design writes. A `signed` field is a given. A given is named `PART.FIELD` for the part and the field that read it, and the card has one input of that name, which is no load.
 4. A key is one word or one text, and one of the field's names.
 5. A field that joins parts has one word for each name in its `as`, and they name different parts of the field's type. No part is joined more than once.
-6. Every input of the card has a name of its own, and is a load or a given that a part reads. A load has `case`, `on` and `field`: it is on a part, it is one of the loads of that part's type, of its dimension and at least its `least`, and no case puts one load on one part twice.
+6. Every input of the card has a name of its own, and is a load or a given that a part reads. A load has `case`, `on` and `field`: it is on a part, it is one of the loads of that part's type, of its dimension and at least its `least`, and no case puts one load on one part twice. The name of its case is within the limit below.
 7. Every waiver names a part and a mechanism that the grid asks of that part's type.
 8. The card has no claim, no tests record and no probability claim, and the design has no param.
 
@@ -209,12 +209,12 @@ The interval rule is the one in `petra/kernel/interval.py` and `petra/kernel/eva
 
 | Verdict | When | Exit code |
 |---|---|---|
-| ILL-FORMED | A rule of the first four groups is broken | 3 |
+| ILL-FORMED | A rule of the first four groups is broken, or the design is past a limit on its cells | 3 |
 | FAIL | A cell is refuted | 1 |
 | UNKNOWN | No cell is refuted, and a cell is open or no cell is proved | 2 |
 | PASS | Every cell is proved, waived or not applicable, and at least one is proved | 0 |
 
-The kernel prints one JSON object: `verdict`, the `hashes` of the files, with `rules` when `--rules` names one, `findings` (each broken rule, with the file and the item), `counts` (the cells in each state), `dsg_inputs` (the distinct `dsg:` labels the settled proofs read), `waived` (each waiver a PASS rests on) and `cells`. With `--rules` it also prints `ignored_hints`. A cell has its subject, mechanism and entry, `claimed`, `state`, the state the kernel settled on, and `reason` when the kernel left it open. `claimed` is the state the file claims for the cell. With `--rules` it is the state of the first hint for the cell, and null when there is none. A command line it cannot read prints the usage and exits 64.
+The kernel prints one JSON object: `verdict`, the `hashes` of the files, with `rules` when `--rules` names one, `findings` (the first 100 broken rules, each with the file and the item), `more_findings` (how many more there were), `counts` (the cells in each state), `dsg_inputs` (the distinct `dsg:` labels the settled proofs read), `waived` (each waiver a PASS rests on, once) and `cells`. With `--rules` it also prints `ignored_hints`. A cell has its subject, mechanism and entry, `claimed`, `state`, the state the kernel settled on, and `reason` when the kernel left it open. `claimed` is the state the file claims for the cell. With `--rules` it is the state of the first hint for the cell, and null when there is none. A command line it cannot read prints the usage and exits 64.
 
 For a design with parts, `petra check` compares the kernel's cells with the ones `petra/grid.py` made: the same count, and at each place the same subject, mechanism, entry and state. Any difference raises `petra.verify.Disagreement`, and `petra check` exits 4. `python bench/kernel_grid.py` makes that comparison on generated designs.
 
@@ -223,6 +223,22 @@ For a design with parts, `petra check` compares the kernel's cells with the ones
 The kernel stops work that would not end. A tape has at least one root. A partition is at most 64 deep, and a `pow` exponent at most 64 in magnitude. A condition of a pick in a tape that a file carries nests at most 16 deep, where `le` or `lt` alone is 1 deep. A value with more than 65,536 bits, or an `exp` of a number beyond 65,536, leaves its cell open. A pick has no value on a box where it has more than 4,096 ways to order the nodes it compares. A file's JSON nests at most 128 deep, and a number outside a string has at most 32 digits and no fraction or exponent.
 
 A deck of rules has three more. A quantity or a number is at most 4,000 characters. A whole or a half power has an exponent of at most 64 in magnitude. An expression nests at most 1,024 deep, counted through the names of `let` it reads and the rows it applies, so a name of `let` that reads itself, or a chain of names longer than that, is refused. `petra/grid.py` has the second of these and not the other two.
+
+What the kernel prints and holds does not grow faster than the files it reads. Seven limits see to that.
+
+| Limit | Value | Past it |
+|---|---|---|
+| Findings in `findings` | 100 | The kernel keeps the first 100, and `more_findings` counts the rest. |
+| The item or the reason of a finding, and the reason of a cell | 200 bytes as printed | The text is cut, and ends with how many characters were left out. |
+| The name of a part, and of a load case that puts a load on a part | 64 bytes as printed | A shape finding |
+| In a deck of rules: the name of a field, a load, a joined part and a `let`, the name of a mechanism, and the id of a rule | 64 bytes as printed | The deck does not hold together |
+| Cells made from a deck of rules | 10,000 | A finding of the rule `limits`, and the design is ILL-FORMED |
+| Steps to write the tapes of a design from a deck of rules | 10,000,000 | The same |
+| Times a waiver is printed in `waived` | 1 | Cells that rest on one waiver print it once. |
+
+A name of 64 characters in ASCII prints in 64 bytes. A character outside ASCII prints in up to four, and a control character in six. A cell prints these names whole, so they are refused and not cut. A step is one name or one operator of a rule, each time the rule is written for a part and a load case, or one node of the tape.
+
+So a cell made from a deck of rules prints in at most about 600 bytes, and all of them in about 6 MB. A cell that proofs.json lists prints once, in under three times its own bytes. `petra/grid.py` has none of these limits. `petra check` reports a design past one as an input error, in the kernel's words.
 
 ## What the kernel does not check yet
 

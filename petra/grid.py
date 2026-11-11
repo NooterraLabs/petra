@@ -1058,7 +1058,7 @@ def checked(design: Design, deck: Deck, card: str, text: str, card_path: str) ->
     if kernel is not None:
         said = verify.ask(kernel, files)
         if said["verdict"] == "ILL-FORMED":
-            raise ComponentError(tuple(f"{design.path}: petra-verify refuses the {f['file']}: {f['item']}: {f['why']}" for f in said["findings"]))
+            raise ComponentError(verify.refusal(design.path, said))
         differ = verify.differs([(c.subject, c.mechanism, c.entry, c.state) for c in report.cells], report.status, deck.hash, said)
         if differ:
             raise verify.Disagreement(f"{design.path}: petra-verify gives {said['verdict']} and the grid {report.status}: {differ}")

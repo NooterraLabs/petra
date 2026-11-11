@@ -97,6 +97,14 @@ def ask(kernel: str, files: Mapping[str, str]) -> dict[str, Any]:
         raise RuntimeError(f"{kernel} exited {done.returncode} with no verdict: {done.stderr.decode('utf-8', 'replace')[-300:]}") from None
 
 
+def refusal(path: str, said: Mapping[str, Any]) -> tuple[str, ...]:
+    """Why the kernel finds the files of the design at `path` ill formed: each finding it
+    kept, and how many more it counted (docs/format.md, "Limits")."""
+    more = said.get("more_findings", 0)
+    return (*(f"{path}: petra-verify refuses the {f['file']}: {f['item']}: {f['why']}" for f in said["findings"]),
+            *([f"{path}: petra-verify refuses it for {more} more reasons"] if more else []))
+
+
 def differs(mine: list[tuple[str, str, str, str]], status: str, rules: str, said: Mapping[str, Any]) -> str:
     """Where the kernel's answer to a design checked against a deck of rules differs from
     the grid's (grid.py). `mine` is the grid's cells in order, each its subject, mechanism,
@@ -123,7 +131,7 @@ def verify(design: Any, registry: Any, report: Any, proofs: export.Proofs) -> Ke
     files = export.bundle(design, registry, report, proofs)
     said = ask(kernel, files)
     if said["verdict"] == "ILL-FORMED":
-        raise ComponentError(tuple(f"{design.path}: petra-verify refuses the {f['file']}: {f['item']}: {f['why']}" for f in said["findings"]))
+        raise ComponentError(refusal(design.path, said))
     cells = json.loads(files["proofs"])["cells"]
     rejected = [f"{mine['subject']}/{mine['mechanism']}/{mine['entry']}: {its.get('reason', its['state'])}"
                 for mine, its in zip(cells, said["cells"]) if ("tape" in mine or mine["state"] == "waived") and its["state"] != mine["state"]]

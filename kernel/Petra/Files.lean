@@ -8,12 +8,62 @@ import Petra.Tape
 namespace Petra
 open Lean (Json)
 
+/-- The most findings a verdict holds. The kernel counts the ones after them. -/
+def MAX_FINDINGS : Nat := 100
+
+/-- The most bytes the verdict prints of a text it did not write: the item and the reason of
+a finding, and the reason of a cell. A longer text is cut. -/
+def MAX_TEXT : Nat := 200
+
+/-- The most bytes a name may print in that a cell made from a deck of rules prints whole:
+the name of a part, of a load case, of a mechanism, of a field, and the id of a rule. -/
+def MAX_NAME : Nat := 64
+
+/-- The most cells the kernel makes from a deck of rules. -/
+def MAX_CELLS : Nat := 10000
+
+/-- The most steps the kernel takes to write the tapes of one design from a deck of rules.
+A step is one name or one operator of a rule, each time the rule is written for a part and
+a load case, or one node of a tape. -/
+def MAX_STEPS : Nat := 10000000
+
+/-- The bytes the verdict prints for a text, between its quotes. -/
+def printed (s : String) : Nat := (Json.str s).compress.utf8ByteSize - 2
+
+/-- The text when it prints in at most `MAX_TEXT` bytes. Otherwise its longest start that
+does, and how many characters were left out. -/
+def clip (s : String) : String :=
+  if printed s ≤ MAX_TEXT then s else
+    let kept := (s.foldl (fun (kept, room) c =>
+      if room == 0 then (kept, 0) else
+        let size := printed (String.singleton c)
+        if size ≤ room then (kept.push c, room - size) else (kept, 0)) ("", MAX_TEXT)).1
+    kept ++ s!"... ({s.length - kept.length} more characters)"
+
+/-- Refuses a name that a cell would print in more than `MAX_NAME` bytes. -/
+def short (what name : String) : Except String Unit :=
+  if printed name ≤ MAX_NAME then pure ()
+  else throw s!"{what} prints in at most {MAX_NAME} bytes, and this one in {printed name}: {clip name}"
+
 /-- A broken rule: the rule, the file, the item of the file, and what is wrong with it. -/
 structure Finding where
   rule : String
   file : String
   item : String
   why : String
+
+/-- The first `MAX_FINDINGS` findings, each with its item and its reason cut to `MAX_TEXT`,
+and how many more there were. So what the kernel holds and prints of the findings does not
+grow with the files. -/
+structure Findings where
+  kept : Array Finding := #[]
+  more : Nat := 0
+
+def Findings.push (found : Findings) (f : Finding) : Findings :=
+  if found.kept.size < MAX_FINDINGS then { found with kept := found.kept.push { f with item := clip f.item, why := clip f.why } }
+  else { found with more := found.more + 1 }
+
+def Findings.isEmpty (found : Findings) : Bool := found.kept.isEmpty
 
 structure Input where
   name : String
@@ -208,7 +258,9 @@ def readArg (j : Json) : Except String Arg := do
 def readBlock (j : Json) : Except String Block := do
   let line (l : Json) : Except String Line := do
     return { field := ← text l "field", args := ← numbered "arg" readArg (← list l "args") }
-  return { name := ← text j "name", kind := ← text j "type", lines := ← numbered "line" line (← list j "lines") }
+  let name ← text j "name"
+  short "the name of a part" name
+  return { name, kind := ← text j "type", lines := ← numbered "line" line (← list j "lines") }
 
 def readParam (j : Json) : Except String Param := do
   return { name := ← text j "name", dim := ← text j "dim", range := ← range j }
@@ -301,10 +353,10 @@ def readCell (j : Json) : Except String Cell := do
            which := ← maybe j "which" (·.getNat?) }
 
 /-- Reads a file and keeps the shape findings. A failure of the whole file is the error. -/
-abbrev Read := ExceptT String (StateM (Array Finding))
+abbrev Read := ExceptT String (StateM Findings)
 
 /-- The value, or a shape finding that says why there is none. -/
-def found (file item : String) (x : Except String α) : StateM (Array Finding) (Option α) := do
+def found (file item : String) (x : Except String α) : StateM Findings (Option α) := do
   match x with
   | .ok y => return some y
   | .error why =>
@@ -396,7 +448,7 @@ def bounded (bytes : ByteArray) : Except String Unit := do
 
 /-- A file as its structure, or none with a finding when it is not JSON with its format. -/
 def load (file format : String) (content : Except String ByteArray) (read : Json → Read α) :
-    StateM (Array Finding) (Option α) := do
+    StateM Findings (Option α) := do
   let whole : Read α := do
     let bytes ← content
     bounded bytes

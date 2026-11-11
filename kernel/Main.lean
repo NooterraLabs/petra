@@ -20,8 +20,11 @@ def rows (items : Array String) : String :=
 def render (r : Report) : String :=
   let finding (f : Finding) : String :=
     object [("rule", str f.rule), ("file", str f.file), ("item", str f.item), ("why", str f.why)]
-  let waived (s : Settled) : Option String := s.waiver.map fun w =>
+  let waived (w : Waiver) : String :=
     object [("subject", str w.subject), ("mechanism", str w.mechanism), ("by", str w.signer), ("reason", str w.reason)]
+  -- Each waiver once, in the order the cells first rest on it: many cells may rest on one.
+  let waivers : Array Waiver := ((r.cells.filterMap (·.waiver)).foldl (fun (seen, out) (k, w) =>
+    if seen.contains k then (seen, out) else (seen.insert k, out.push w)) (({} : Std.HashSet Nat), #[])).2
   let cell (s : Settled) : String :=
     object ([("subject", str s.cell.subject), ("mechanism", str s.cell.mechanism), ("entry", str s.cell.entry),
              ("claimed", if s.hinted then str s.cell.state.name else "null"), ("state", str s.state.name)]
@@ -30,11 +33,12 @@ def render (r : Report) : String :=
   let fields : List (String × String) := [
     ("verdict", str r.verdict.name),
     ("hashes", object (r.hashes.map fun (file, hash) => (file, hash.elim "null" str))),
-    ("findings", rows (r.findings.map finding)),
+    ("findings", rows (r.findings.kept.map finding)),
+    ("more_findings", toString r.findings.more),
     ("counts", object (State.all.toList.map count)),
     ("dsg_inputs", toString r.dsgInputs)]
     ++ (r.ignored.map fun n => ("ignored_hints", toString n)).toList ++ [
-    ("waived", rows (r.cells.filterMap waived)),
+    ("waived", rows (waivers.map waived)),
     ("cells", rows (r.cells.map cell))]
   "{" ++ ",\n ".intercalate (fields.map fun (key, value) => s!"{str key}: {value}") ++ "}"
 
