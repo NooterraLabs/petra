@@ -1,0 +1,144 @@
+{"rows": [
+  {
+    "id": "aisc360-22/J3.4-spacing",
+    "anchor": {"standard": "ANSI/AISC 360-22", "clause": "J3.4", "page": "16.1-138"},
+    "gives": {"name": "s_min", "dim": "length", "what": "least distance between the centres of standard, oversized or slotted holes"},
+    "takes": [
+      {"name": "d", "dim": "length", "what": "nominal diameter of the fastener", "range": ["1/2 inch", "1 1/2 inch"]}
+    ],
+    "is": ["mul", "8/3", "d"]
+  },
+  {
+    "id": "aisc360-22/J3.4-clear",
+    "anchor": {"standard": "ANSI/AISC 360-22", "clause": "J3.4", "page": "16.1-138"},
+    "gives": {"name": "clear_min", "dim": "length", "what": "least clear distance between bolt holes or slots"},
+    "takes": [
+      {"name": "d", "dim": "length", "what": "nominal diameter of the fastener", "range": ["1/2 inch", "1 1/2 inch"]}
+    ],
+    "is": "d"
+  },
+  {
+    "id": "aisc360-22/J3.6-edge",
+    "anchor": {"standard": "ANSI/AISC 360-22", "clause": "J3.6", "page": "16.1-140"},
+    "gives": {"name": "edge_max", "dim": "length", "what": "greatest distance from the centre of a bolt hole to the nearest edge of elements in contact"},
+    "takes": [
+      {"name": "t", "dim": "length", "what": "thickness of the connected element under consideration", "range": ["1/8 inch", "2 inch"]}
+    ],
+    "is": ["min", ["mul", "12", "t"], ["q", "6", "inch"]]
+  },
+  {
+    "id": "aisc360-22/J3.6-spacing-a",
+    "anchor": {"standard": "ANSI/AISC 360-22", "clause": "J3.6(a)", "page": "16.1-140"},
+    "gives": {"name": "s_max", "dim": "length", "what": "greatest longitudinal spacing of bolt holes between a plate and a shape, or two plates, in continuous contact, painted or not subject to atmospheric corrosion"},
+    "takes": [
+      {"name": "t", "dim": "length", "what": "thickness of the thinner part", "range": ["1/8 inch", "2 inch"]}
+    ],
+    "is": ["min", ["mul", "24", "t"], ["q", "12", "inch"]]
+  },
+  {
+    "id": "aisc360-22/J3.6-spacing-b",
+    "anchor": {"standard": "ANSI/AISC 360-22", "clause": "J3.6(b)", "page": "16.1-140"},
+    "gives": {"name": "s_max", "dim": "length", "what": "greatest longitudinal spacing of bolt holes between a plate and a shape, or two plates, in continuous contact, unpainted weathering steel subject to atmospheric corrosion"},
+    "takes": [
+      {"name": "t", "dim": "length", "what": "thickness of the thinner part", "range": ["1/8 inch", "2 inch"]}
+    ],
+    "is": ["min", ["mul", "14", "t"], ["q", "7", "inch"]]
+  },
+  {
+    "id": "aisc360-22/B4.3b-hole",
+    "anchor": {"standard": "ANSI/AISC 360-22", "clause": "B4.3b", "page": "16.1-24"},
+    "gives": {"name": "hole_width", "dim": "length", "what": "width of a bolt hole taken in computing net area for tension and shear"},
+    "takes": [
+      {"name": "dh", "dim": "length", "what": "nominal dimension of the hole", "range": ["9/16 inch", "3 3/4 inch"]}
+    ],
+    "is": ["add", "dh", ["q", "1/16", "inch"]]
+  },
+  {
+    "id": "aisc360-22/D3-1",
+    "anchor": {"standard": "ANSI/AISC 360-22", "clause": "D3", "equation": "D3-1", "page": "16.1-33"},
+    "gives": {"name": "Ae", "dim": "area", "what": "effective net area of a tension member"},
+    "takes": [
+      {"name": "An", "dim": "area", "what": "net area, by Section B4.3", "range": ["0.5 inch2", "100 inch2"]},
+      {"name": "U", "dim": "dimensionless", "what": "shear lag factor, by Table D3.1", "range": ["0.5", "1"]}
+    ],
+    "is": ["mul", "An", "U"]
+  },
+  {
+    "id": "aisc360-22/table-J3.2-note-c",
+    "anchor": {"standard": "ANSI/AISC 360-22", "clause": "J3.7", "table": "J3.2", "page": "16.1-137"},
+    "gives": {"name": "Fnv_factor", "dim": "dimensionless", "what": "factor on the tabulated nominal shear stress Fnv of a fastener in an end-loaded connection"},
+    "takes": [
+      {"name": "L", "dim": "length", "what": "fastener pattern length, parallel to the line of force", "range": ["3 inch", "90 inch"]}
+    ],
+    "cases": [
+      {"when": ["gt", "L", ["q", "38", "inch"]], "is": "0.833"},
+      {"is": "1"}
+    ],
+    "jumps": [{"cases": [1, 2], "why": "the note reduces Fnv only where the pattern length exceeds 38 in., so the factor steps from 1 to 0.833 there"}]
+  },
+  {
+    "id": "aisc360-22/table-J3.3-large-standard",
+    "anchor": {"standard": "ANSI/AISC 360-22", "clause": "J3.3", "table": "J3.3", "page": "16.1-137"},
+    "gives": {"name": "dh", "dim": "length", "what": "nominal diameter of a standard hole, for a bolt of 1 1/8 in. diameter or more"},
+    "takes": [
+      {"name": "d", "dim": "length", "what": "bolt diameter", "range": ["1 1/8 inch", "1 1/2 inch"]}
+    ],
+    "is": ["add", "d", ["q", "1/8", "inch"]]
+  },
+  {
+    "id": "aisc360-22/table-J3.3-large-oversize",
+    "anchor": {"standard": "ANSI/AISC 360-22", "clause": "J3.3", "table": "J3.3", "page": "16.1-137"},
+    "gives": {"name": "dh", "dim": "length", "what": "nominal diameter of an oversize hole, for a bolt of 1 1/8 in. diameter or more"},
+    "takes": [
+      {"name": "d", "dim": "length", "what": "bolt diameter", "range": ["1 1/8 inch", "1 1/2 inch"]}
+    ],
+    "is": ["add", "d", ["q", "5/16", "inch"]]
+  },
+  {
+    "id": "aisc360-22/table-J3.4-large",
+    "anchor": {"standard": "ANSI/AISC 360-22", "clause": "J3.5", "table": "J3.4", "page": "16.1-139"},
+    "gives": {"name": "edge_min", "dim": "length", "what": "minimum distance from the centre of a standard hole to an edge of a connected part, for a bolt over 1 1/4 in. diameter"},
+    "takes": [
+      {"name": "d", "dim": "length", "what": "bolt diameter", "range": ["1 1/4 inch", "1 1/2 inch"]}
+    ],
+    "is": ["mul", "5/4", "d"]
+  },
+  {
+    "id": "aisc360-22/table-J3.5",
+    "anchor": {"standard": "ANSI/AISC 360-22", "clause": "J3.5", "table": "J3.5", "page": "16.1-140"},
+    "gives": {"name": "C2", "dim": "length", "what": "edge distance increment for an oversized or slotted hole"},
+    "takes": [
+      {"name": "d", "dim": "length", "what": "nominal diameter of the fastener", "range": ["1/2 inch", "1 1/2 inch"]},
+      {"name": "hole", "one_of": ["oversized", "short slot, long axis perpendicular to edge", "slot, long axis parallel to edge"], "what": "kind of hole"}
+    ],
+    "table": {
+      "down": {"by": "d", "bands": [["0 inch", "7/8 inch"], ["7/8 inch", "1 inch"], ["1 inch", null]], "closed": "upper"},
+      "across": {"by": "hole"},
+      "unit": "inch",
+      "cells": [["1/16", "1/8", "0"], ["1/8", "1/8", "0"], ["1/8", "3/16", "0"]],
+      "rises": ["d"]
+    }
+  },
+  {
+    "id": "aisc360-22/J3-6b",
+    "anchor": {"standard": "ANSI/AISC 360-22", "clause": "J3.11a", "equation": "J3-6b", "page": "16.1-143"},
+    "gives": {"name": "Rn", "dim": "force", "what": "nominal bearing strength of the connected material at a bolt hole, deformation at service load not a design consideration"},
+    "takes": [
+      {"name": "d", "dim": "length", "what": "nominal diameter of the fastener", "range": ["1/2 inch", "1 1/2 inch"]},
+      {"name": "t", "dim": "length", "what": "thickness of the connected material", "range": ["1/8 inch", "2 inch"]},
+      {"name": "Fu", "dim": "stress", "what": "specified minimum tensile strength of the connected material", "range": ["58 ksi", "130 ksi"]}
+    ],
+    "is": ["mul", "3.0", "d", "t", "Fu"]
+  },
+  {
+    "id": "aisc360-22/J3-6d",
+    "anchor": {"standard": "ANSI/AISC 360-22", "clause": "J3.11a", "equation": "J3-6d", "page": "16.1-144"},
+    "gives": {"name": "Rn", "dim": "force", "what": "nominal tearout strength of the connected material at a bolt hole, deformation at service load not a design consideration"},
+    "takes": [
+      {"name": "lc", "dim": "length", "what": "clear distance, in the direction of the force, from the edge of the hole to the edge of the adjacent hole or of the material", "range": ["1/4 inch", "4 inch"]},
+      {"name": "t", "dim": "length", "what": "thickness of the connected material", "range": ["1/8 inch", "2 inch"]},
+      {"name": "Fu", "dim": "stress", "what": "specified minimum tensile strength of the connected material", "range": ["58 ksi", "130 ksi"]}
+    ],
+    "is": ["mul", "1.5", "lc", "t", "Fu"]
+  }
+]}

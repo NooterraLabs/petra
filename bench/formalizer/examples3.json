@@ -1,0 +1,65 @@
+{"examples": {
+  "aisc360-22/J3.4-spacing": [
+    {"anchor": "Design Examples v16.0, Example K.1, p. K-4",
+     "given": {"d": "3/4 inch"},
+     "gives": "2.00 inch"}
+  ],
+  "aisc360-22/J3.4-clear": [],
+  "aisc360-22/J3.6-edge": [],
+  "aisc360-22/J3.6-spacing-a": [
+    {"anchor": "Design Examples v16.0, Example II.C-3, p. IIC-30",
+     "given": {"t": "3/8 inch"},
+     "gives": "9.00 inch"}
+  ],
+  "aisc360-22/J3.6-spacing-b": [],
+  "aisc360-22/B4.3b-hole": [
+    {"anchor": "Design Examples v16.0, Example D.9, p. D-27",
+     "given": {"dh": "13/16 inch"},
+     "gives": "0.875 inch"}
+  ],
+  "aisc360-22/J4.1-splice": [],
+  "aisc360-22/D3-1": [
+    {"anchor": "Design Examples v16.0, Example D.1, p. D-4",
+     "given": {"An": "4.76 inch2", "U": "0.908"},
+     "gives": "4.32 inch2"},
+    {"anchor": "Design Examples v16.0, Example D.2, p. D-6",
+     "given": {"An": "3.31 inch2", "U": "0.869"},
+     "gives": "2.88 inch2"},
+    {"anchor": "Design Examples v16.0, Example D.3, p. D-9",
+     "given": {"An": "5.84 inch2", "U": "0.860"},
+     "gives": "5.02 inch2"},
+    {"anchor": "Design Examples v16.0, Example II.A-1B, p. IIA-31",
+     "given": {"An": "12.9 inch2", "U": "0.407"},
+     "gives": "5.25 inch2"}
+  ],
+  "aisc360-22/table-J3.2-note-c": [],
+  "aisc360-22/table-J3.3-large-standard": [],
+  "aisc360-22/table-J3.3-large-oversize": [],
+  "aisc360-22/table-J3.4-large": [],
+  "aisc360-22/table-J3.5": [],
+  "aisc360-22/J3-6b": [
+    {"anchor": "Design Examples v16.0, Example II.A-17B, p. IIA-182",
+     "given": {"d": "7/8 inch", "t": "0.355 inch", "Fu": "65 ksi"},
+     "gives": "60.6 kip"},
+    {"anchor": "Design Examples v16.0, Example II.A-19B, p. IIA-215",
+     "given": {"d": "1 inch", "t": "0.415 inch", "Fu": "65 ksi"},
+     "gives": "80.9 kip"},
+    {"anchor": "Design Examples v16.0, Example II.A-19B, p. IIA-216",
+     "given": {"d": "1 inch", "t": "3/4 inch", "Fu": "65 ksi"},
+     "gives": "146 kip"}
+  ],
+  "aisc360-22/J3-6d": [
+    {"anchor": "Design Examples v16.0, Example II.A-17B, p. IIA-182",
+     "given": {"lc": "1.03 inch", "t": "0.355 inch", "Fu": "65 ksi"},
+     "gives": "35.7 kip"},
+    {"anchor": "Design Examples v16.0, Example II.A-17B, p. IIA-182",
+     "given": {"lc": "0.781 inch", "t": "1/2 inch", "Fu": "65 ksi"},
+     "gives": "38.1 kip"},
+    {"anchor": "Design Examples v16.0, Example II.A-19B, p. IIA-216",
+     "given": {"lc": "1.19 inch", "t": "0.415 inch", "Fu": "65 ksi"},
+     "gives": "48.2 kip"},
+    {"anchor": "Design Examples v16.0, Example II.A-19B, p. IIA-216",
+     "given": {"lc": "0.938 inch", "t": "3/4 inch", "Fu": "65 ksi"},
+     "gives": "68.6 kip"}
+  ]
+}}

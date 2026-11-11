@@ -1,0 +1,39 @@
+# The rows of the third formalizer run, from ANSI/AISC 360-22: requirements the standard states in
+# prose, lines of tables that are formulas, one footnote that changes a tabulated value, one table,
+# and three equations. Each was transcribed twice from images of the printed pages, by transcribers
+# that saw neither each other's rows nor any worked example.
+#
+# a3.json and b3.json are the two transcriptions as made, and examples3.json the worked examples as a
+# third agent collected them from the Design Examples v16.0. The two transcribers were two different
+# models this time (the first two runs used one model for both), and the collector did not see the
+# rows.
+#
+# The list named 15 rows. Both transcribers left out aisc360-22/J4.1-splice and said why: this edition
+# states no limit on the effective net area of a bolted splice plate. The list had it from an earlier
+# edition, so its line is gone from the list below. Both also left out the long-slot column of
+# Table J3.5, whose cell is a formula, and the conditions a row cannot hold: the type of hole, whether
+# the steel is painted, and whether deformation at service load is a design consideration.
+#
+# The 14 rows agree in every value. 6 of them have worked examples, 14 in all, and all reproduce.
+# The other 8 have none: the Design Examples never state those limits with numbers.
+# Of 100 wrong rows made by one change, the check with no second transcription refused 46. Five of
+# the six rows with an example refused every wrong version, 22 in all, and the sixth 6 of 9. The rows
+# with no example refused only what the units or a table's shape catch. So a requirement in prose
+# rests on its second transcription. `python bench/formalizer/run.py --rows a3.json --second b3.json --examples examples3.json`
+# prints this.
+#
+# id	where	what the row gives	its inputs, by the standard's symbols
+aisc360-22/J3.4-spacing	Section J3.4	the least distance between the centres of standard, oversized or slotted holes	d
+aisc360-22/J3.4-clear	Section J3.4	the least clear distance between bolt holes or slots	d
+aisc360-22/J3.6-edge	Section J3.6, first sentence	the greatest distance from the centre of a bolt hole to the nearest edge of elements in contact	t
+aisc360-22/J3.6-spacing-a	Section J3.6 (a)	the greatest longitudinal spacing of bolt holes, for painted members or unpainted members not subject to atmospheric corrosion	t, the thickness of the thinner part
+aisc360-22/J3.6-spacing-b	Section J3.6 (b)	the greatest longitudinal spacing of bolt holes, for unpainted members of weathering steel subject to atmospheric corrosion	t, the thickness of the thinner part
+aisc360-22/B4.3b-hole	Section B4.3b	the width of a bolt hole to take in computing a net area	dh, the nominal dimension of the hole
+aisc360-22/D3-1	Section D3, Equation D3-1	the effective net area of a tension member	An, U
+aisc360-22/table-J3.2-note-c	Table J3.2, note c	the factor on the tabulated shear stress Fnv of a fastener in an end-loaded connection, by the length of its fastener pattern	L, the fastener pattern length
+aisc360-22/table-J3.3-large-standard	Table J3.3 (US customary), the last line	the nominal diameter of a standard hole for a bolt of the last line's diameters	d
+aisc360-22/table-J3.3-large-oversize	Table J3.3 (US customary), the last line	the nominal diameter of an oversize hole for a bolt of the last line's diameters	d
+aisc360-22/table-J3.4-large	Table J3.4 (US customary), the last line	the minimum edge distance for a bolt of the last line's diameters	d
+aisc360-22/table-J3.5	Table J3.5 (US customary)	the edge distance increment C2	the nominal diameter of the fastener, and the kind of hole
+aisc360-22/J3-6b	Section J3.11a, Equation J3-6b	the nominal bearing strength at a bolt hole where deformation at service load is not a design consideration	d, t, Fu
+aisc360-22/J3-6d	Section J3.11a, Equation J3-6d	the nominal tearout strength at a bolt hole where deformation at service load is not a design consideration	lc, t, Fu
