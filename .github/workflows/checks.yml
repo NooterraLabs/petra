@@ -3,7 +3,9 @@ name: checks
 # The kernel is built, and the test suite and the corpus run with it, on every push and on a
 # pull request from a fork. The suite runs as six jobs, each a share of the test modules
 # (tests/parallel.py --shard), so a push has its answer in about the time of the longest
-# module. The corpus runs twice: by `petra check`, and by the kernel alone. The
+# module. The corpus runs twice: by `petra check`, and by the kernel alone. The proofs of
+# the kernel's interval rule (docs/proved.md) are built against Mathlib and held to Lean's
+# three standard axioms. The
 # absurd-design gap with one job per seed, canary recall, and the metamorphic relations over
 # the steel gate's stream run when the workflow is started by hand. The steel gate stays off
 # CI because it reads the full AISC shapes workbook, which is not in the repository.
@@ -56,6 +58,44 @@ jobs:
         with:
           name: petra-verify
           path: kernel/.lake/build/bin/petra-verify
+
+  proofs:
+    # proofs/ depends on Mathlib and on kernel/ by path. `lake exe cache get` fetches Mathlib's
+    # prebuilt files, so nothing of Mathlib compiles here: without them the build would take
+    # hours, and the timeout stops it. proofs/check_axioms.py then builds the proofs and
+    # fails on a `sorry`, on an axiom beyond propext, Classical.choice and Quot.sound in a
+    # main theorem, and on a docs/proved.md that holds other lines than it prints.
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      # The toolchain, and the archives `lake exe cache get` downloads, which it keeps in
+      # ~/.cache/mathlib. Both change only with the pinned toolchain and the pinned Mathlib.
+      # The unpacked files, about 7 GB under proofs/.lake, are not kept: unpacking them
+      # again takes less time than restoring them would.
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.elan
+            ~/.cache/mathlib
+          key: proofs-${{ runner.os }}-${{ hashFiles('proofs/lean-toolchain', 'proofs/lake-manifest.json') }}
+      - name: Install elan
+        run: |
+          if [ ! -x "$HOME/.elan/bin/lake" ]; then
+            curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -o elan-init.sh
+            sh elan-init.sh -y --default-toolchain none
+          fi
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+      - name: Fetch Mathlib's prebuilt files
+        working-directory: proofs
+        run: lake exe cache get
+      - name: Build the proofs and check their axioms
+        working-directory: proofs
+        run: python check_axioms.py
 
   suite:
     needs: kernel
