@@ -10,7 +10,7 @@ petra-verify --card card.json --design design.json --deck deck.json [--rules rul
 
 The kernel trusts none of the files. It checks that they agree with each other and that each proof holds. Who wrote each file is outside the kernel: the verdict prints the SHA-256 of the card, the design, the deck and the rules, and a reader compares the card's hash with the card they issued and the rules' hash with the deck of rules they mean. [Reading a verdict](#reading-a-verdict) says what a PASS means without that comparison: very little.
 
-`python -m petra.export FILE.petra [--card FILE.card] --out DIR` writes the files from a design and its card, the `.card` file beside the design unless `--card` names another. It exits 3 and writes nothing when the language refuses the pair, as it does for a design that states a load, a claim, a waiver or a signature. With `--no-physics` it writes no proofs.json, and a design with parts is then written as it stands, for the kernel to say whether the deck's types take it.
+`python -m petra.export FILE.petra [--card FILE.card] --out DIR` writes the files from a design and its card, the `.card` file beside the design unless `--card` names another. It exits 3 and writes nothing when the language refuses the pair, as it does for a design that states a load, a claim, a waiver or a signature. With `--no-physics` it writes no proofs.json, and a design with parts is then written as it stands, for the kernel to say whether the deck's types take it. With `--card-only FILE.card` and no design it writes card.json alone and prints its hash ([The asker's card](#the-askers-card)).
 
 There are two kinds of design, and the kernel does more for the second.
 
@@ -237,6 +237,23 @@ A PASS means "checked against a deck of rules" only when `hashes.rules` is the h
 
 A PASS is about the asker's card only when `hashes.card` is the asker's. A designer who lowers a signed load in card.json gets a PASS from a kernel that did its work, under the same card name, and only the hash shows it.
 
+## The asker's card
+
+For a design with parts, card.json is a function of the card's text alone. It holds each given under the name the card gives it, each load with the part and the field the card puts it on, and each waiver. Nothing in it comes from the design. So the asker can work out its hash with no design, with their own copy of Petra:
+
+```
+python -m petra.export --card-only CARD.card --out DIR
+```
+
+The command writes `DIR/card.json` and prints its hash. It reads no design, so what the card says of a part is not checked against any. It exits 3 and writes nothing for a card the language refuses.
+
+The asker runs it on the card they issued, and compares the hash it prints with `hashes.card` in the kernel's verdict.
+
+- The two are the same: the verdict is about the asker's card.
+- They differ: the card.json the kernel read states something else. It may give a load another range, waive a mechanism the asker did not, or hold a bound the asker never gave.
+
+The comparison holds for a design with parts only. For a design of the models' kinds card.json takes names from the design, so its hash is not the one this command prints. `tests/test_export_card.py` compares the two files, byte for byte, for every pair of `examples/deck` and `corpus/cases/deck`.
+
 ## Limits
 
 The kernel stops work that would not end. A tape has at least one root. A partition is at most 64 deep, and a `pow` exponent at most 64 in magnitude. A condition of a pick in a tape that a file carries nests at most 16 deep, where `le` or `lt` alone is 1 deep. A value with more than 65,536 bits, or an `exp` of a number beyond 65,536, leaves its cell open. A pick has no value on a box where it has more than 4,096 ways to order the nodes it compares. A file's JSON nests at most 128 deep, and a number outside a string has at most 32 digits and no fraction or exponent.
@@ -264,7 +281,7 @@ So a cell made from a deck of rules prints in at most about 600 bytes, and all o
 For every design:
 
 - The numbers in card.json and design.json are in SI, and the Python front end converted them from the units the card and the design write. The kernel reads the units of a deck of rules itself, and not those of a card or a design. It checks that a part's number has the dimension its field asks, by the name of the dimension that the file states.
-- card.json is not a function of the card's text alone for a design of the models' kinds: an input that a component reads with `given` takes its name from the component. So the hash of card.json identifies a card together with a design, and the hash `petra check` prints on its `card` line, of the card's text, is the one to compare with the card that was issued.
+- card.json is not a function of the card's text alone for a design of the models' kinds: an input that a component reads with `given` takes its name from the component. So the hash of card.json identifies a card together with a design, and the hash `petra check` prints on its `card` line, of the card's text, is the one to compare with the card that was issued. For a design with parts card.json is a function of the card alone ([The asker's card](#the-askers-card)).
 - Nothing here is proved in Lean. The kernel is a second implementation of the rules on this page, and `bench/kernel_grid.py` and the corpus compare it with the first.
 
 For a design with no parts:

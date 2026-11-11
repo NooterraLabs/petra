@@ -19,7 +19,7 @@ Invariants encoded here:
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from fractions import Fraction
 from typing import Mapping, Union
@@ -282,6 +282,7 @@ class Design:
     tests: Mapping[str, Tests]
     waivers: tuple[Waiver, ...]
     params: Mapping[str, Param]
+    givens: Mapping[str, Bound] = field(default_factory=dict)      # every `given` of the card, by its name
 
     @property
     def is_family(self) -> bool:

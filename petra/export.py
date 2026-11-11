@@ -13,6 +13,10 @@ file as it ships. design.json then holds the parts as written, and proofs.json h
 With --no-physics such a design is written as it stands, without asking the grid whether
 the deck's types take it: the kernel reads the parts itself and says.
 
+`python -m petra.export --card-only FILE.card --out DIR` writes card.json from the card
+with no design, and prints its hash. For a design of a deck's types card.json holds nothing
+the design chooses, so this is how an asker works out the hash of their own card.
+
 Untrusted. It reads the two files through the language and the models, so a bug here
 gives the kernel the wrong files, and the kernel's verdict is about the files it was given.
 A load or an ambient that reads a param is an input nobody signed, and goes into card.json
@@ -85,11 +89,11 @@ def parts(design: Design) -> list[dict[str, Any]]:
 
 
 def read_inputs(design: Design) -> list[Input]:
-    """Every signed bound of the card of a design of a deck's types, by name: each given a
-    line of a part reads, under the name the card gives it, each load, and the ambient.
-    This knows no deck."""
-    given = [Input(a.name, a.range, a.signature, a.kind, a.span, a.mean)
-             for c in design.components.values() for attr in c.attrs for a in attr.args if isinstance(a, Bound)]
+    """Every signed bound of the card of a design of a deck's types, by name: each given
+    under the name the card gives it, each load, and the ambient. It reads them from what
+    the card states and from no component, so card.json is the same for every design that
+    answers the card. This knows no deck."""
+    given = [Input(a.name, a.range, a.signature, a.kind, a.span, a.mean) for a in design.givens.values()]
     loads = [e.value for case in design.loads.values() for e in case.entries if isinstance(e.value, Input)]
     return sorted(given + loads + ([design.ambient] if isinstance(design.ambient, Input) else []), key=lambda i: i.name)
 
@@ -281,17 +285,38 @@ def export(path: str, out: Path, physics: bool = True, card_path: str | None = N
         (out / f"{name}.json").write_text(body, encoding="utf-8", newline="\n")
 
 
+def card_only(card_path: str, out: Path) -> str:
+    """Write card.json from a card with no design, and give its hash: the hash the kernel
+    prints for the card of any design of a deck's types that answers this card. Such a
+    card.json holds nothing a design chooses: each given under the card's own name for it,
+    and each load with the part and the field the card puts it on. For a design of the
+    models' kinds card.json takes names from the design, and its hash is another."""
+    from .lang import load_card
+
+    design = load_card(card_path)
+    body = text(card(design, read_inputs(design), placed=True))
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "card.json").write_text(body, encoding="utf-8", newline="\n")
+    return sha256(body)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m petra.export", description=__doc__.split("\n")[0])
-    parser.add_argument("file", help="the design, a .petra file")
+    parser.add_argument("file", nargs="?", help="the design, a .petra file")
     parser.add_argument("--card", metavar="FILE", help="the card the design answers; default the .card file beside the design")
+    parser.add_argument("--card-only", metavar="FILE", help="a card with no design: write its card.json alone and print its hash")
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--no-physics", action="store_true", help="write no proofs.json")
     args = parser.parse_args(argv)
+    if (args.file is None) == (args.card_only is None) or (args.card_only and (args.card or args.no_physics)):
+        parser.error("give a design, or --card-only FILE with no design, no --card and no --no-physics")
     from .repair import INPUT_ERRORS
 
     try:
-        export(args.file, args.out, physics=not args.no_physics, card_path=args.card)
+        if args.card_only:
+            print(card_only(args.card_only, args.out))
+        else:
+            export(args.file, args.out, physics=not args.no_physics, card_path=args.card)
     except (*INPUT_ERRORS, OSError) as exc:
         print(f"petra: {exc}", file=sys.stderr)
         return 3

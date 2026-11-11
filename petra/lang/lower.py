@@ -97,16 +97,25 @@ def lower(card: File, design: File, registry: object) -> Design:
     return _Lowering(card, design, registry).design()
 
 
+def lower_card(card: File, registry: object) -> Design:
+    """A card with no design, as a design of no component. Every check of the card itself
+    is made. The two that need a design are not: that a load, a tests record or a claim
+    names a component, and that a component reads each given."""
+    return _Lowering(card, File(card.path, card.version, ()), registry, alone=True).design()
+
+
 class _Lowering:
     """One pass over the two files. Names are indexed before anything is lowered, so a
     declaration that fails to lower does not also make every reference to it fail.
-    `path` is the file being read: a problem and a span are in that file."""
+    `path` is the file being read: a problem and a span are in that file. `alone` is a
+    card lowered with no design."""
 
-    def __init__(self, card: File, design: File, registry: object) -> None:
+    def __init__(self, card: File, design: File, registry: object, alone: bool = False) -> None:
         self.card = card
         self.file = design
         self.path = card.path
         self.registry = registry
+        self.alone = alone
         self.problems: list[tuple[str, int, int, str]] = []
 
     def problem(self, at: Located, message: str) -> None:
@@ -151,7 +160,7 @@ class _Lowering:
             self.problem(own[twice].args[0], f"param '{twice}' is declared in the card too")
         self.params_by_name |= own
         params = self.lowered(own, self.param) | params
-        self.unread = set(self.givens_by_name)
+        self.unread = set() if self.alone else set(self.givens_by_name)
         components = self.lowered(self.components_by_name, self.component)
         for unread in self.unread:
             at = self.givens_by_name[unread].args[0]
@@ -172,6 +181,7 @@ class _Lowering:
             tests=MappingProxyType(tests),
             waivers=waivers,
             params=MappingProxyType(params),
+            givens=MappingProxyType(self.givens),
         )
 
     def index(self, nodes: Iterable[Node], what: str, name_of: Callable[[Node], Token]) -> dict[str, Node]:
@@ -369,7 +379,7 @@ class _Lowering:
     def rooted(self, path: tuple[str, ...], at: Located, what: str) -> None:
         if not path:
             self.problem(at, f"{what}: the path must start with a declared component, as in frame.collapse_factor")
-        elif path[0] not in self.components_by_name:
+        elif path[0] not in self.components_by_name and not self.alone:
             self.problem(at, f"{what}: '{path[0]}' is not a declared component")
 
     def load(self, node: Node) -> LoadCase:
