@@ -781,8 +781,8 @@ def _unmet(part: Part, parts: Mapping[str, Part]) -> Iterator[str]:
     for n, need in enumerate(part.type.needs, 1):
         (low, most), (least, high) = (_span(side, lambda name: _field_of(part, parts, name).range) for side in (need.low, need.high))
         if not (most < least if need.strict else most <= least):
-            yield (f"breaks need {n} of a {part.type.name}: its left side {'is' if low == most else 'reaches'} {most} and its right side "
-                   f"{'is' if least == high else 'goes down to'} {least}, in SI units, and the left is to be {'under' if need.strict else 'at most'} the right: {need.why}")
+            yield (f"breaks need {n} of a {part.type.name}: its left side, {'' if low == most else 'up to '}{most}, is not {'under' if need.strict else 'at most'} "
+                   f"its right side, {'' if least == high else 'down to '}{least}, in SI units: {need.why}")
 
 
 # --- a tape ----------------------------------------------------------------------------------------

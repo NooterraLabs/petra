@@ -312,10 +312,10 @@ def needs (parts : Array Part) : StateM Findings Nat := do
       match found with
       | .ok (low, high) =>
         unless (if need.strict then low.hi < high.lo else low.hi ≤ high.lo) do
-          let most := if low.lo == low.hi then s!"is {low.hi}" else s!"reaches {low.hi}"
-          let least := if high.lo == high.hi then s!"is {high.lo}" else s!"goes down to {high.lo}"
+          let most := if low.lo == low.hi then s!"{low.hi}" else s!"up to {low.hi}"
+          let least := if high.lo == high.hi then s!"{high.lo}" else s!"down to {high.lo}"
           modify (·.push ⟨"parts.9", "design", part.name,
-            s!"breaks need {k + 1} of a {part.kind.name}: its left side {most} and its right side {least}, in SI units, and the left is to be {if need.strict then "under" else "at most"} the right: {need.why}"⟩)
+            s!"breaks need {k + 1} of a {part.kind.name}: its left side, {most}, is not {if need.strict then "under" else "at most"} its right side, {least}, in SI units: {need.why}"⟩)
       | .error why =>
         if why == NEEDS_SPENT then
           modify (·.push ⟨"limits", "design", part.name, why⟩)

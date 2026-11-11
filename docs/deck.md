@@ -345,10 +345,10 @@ A need is asked of every part of the type, and it must hold for every value the 
 A part that breaks a need makes the design ILL-FORMED, as a missing field does. The finding names the part, the need by its number from 1 and its type, the two values in SI units, and the `why`:
 
 ```
-e: breaks need 1 of a eye: its left side is 23/1000 and its right side is 11/500, in SI units, and the left is to be under the right: a pin passes through its hole
+e: breaks need 1 of a eye: its left side, 23/1000, is not under its right side, 11/500, in SI units: a pin passes through its hole
 ```
 
-Where a side has a range, the finding says `reaches` for the most of the left side and `goes down to` for the least of the right. The needs are asked last, of a design that breaks no other rule of its files, so each field is there and each quantity is more than zero when a need reads it.
+For `le` it says `is not at most`. Where a side has a range, the finding gives the most of the left side as `up to 21/1000` and the least of the right as `down to 7/200`. The kernel cuts a finding at 200 bytes, so a long `why` loses its end. The needs are asked last, of a design that breaks no other rule of its files, so each field is there and each quantity is more than zero when a need reads it.
 
 A need reads nothing in the sense of the `unread` cells. A field that only a need names is still a field that no rule checks, and has its open cell.
 
