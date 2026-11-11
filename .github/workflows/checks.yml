@@ -5,7 +5,8 @@ name: checks
 # (tests/parallel.py --shard), so a push has its answer in about the time of the longest
 # module. The corpus runs twice: by `petra check`, and by the kernel alone. The proofs of
 # the kernel's interval rule (docs/proved.md) are built against Mathlib and held to Lean's
-# three standard axioms. The
+# three standard axioms. A wheel with the kernel inside is built and tested for each of five
+# platforms (wheels.yml), and each is kept as an artifact of the run. The
 # absurd-design gap with one job per seed, canary recall, and the metamorphic relations over
 # the steel gate's stream run when the workflow is started by hand. The steel gate stays off
 # CI because it reads the full AISC shapes workbook, which is not in the repository.
@@ -137,6 +138,12 @@ jobs:
       - run: chmod +x kernel/.lake/build/bin/petra-verify
       - run: python corpus/run.py
       - run: python corpus/run.py --kernel kernel/.lake/build/bin/petra-verify
+
+  wheels:
+    # The wheels a release would publish: one job for each platform, on a runner of that
+    # platform. The artifacts are named wheel-<platform tag>.
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository }}
+    uses: ./.github/workflows/wheels.yml
 
   gap:
     if: ${{ github.event_name == 'workflow_dispatch' }}

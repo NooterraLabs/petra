@@ -1,0 +1,103 @@
+name: wheels
+
+# One wheel for each platform, with the kernel inside. `checks` calls this workflow on every
+# push, and `release` calls it before it publishes, so a release ships wheels that were
+# built and tested the same way as on every push.
+#
+# Each job runs on a GitHub-hosted runner of its platform. It builds the kernel with elan
+# and lake, and builds the wheel from the tree, which then carries the kernel
+# (_build/petra_build.py). The backend reads the wheel's platform tag from the kernel
+# binary, and the job fails unless that is the tag its row names here. So a toolchain that
+# starts to ask for a newer glibc or a newer macOS fails the job until someone changes the
+# row. Then scripts/wheel_check.py installs the wheel in a fresh virtual environment outside
+# the repository and runs `petra check` on two designs, and fails unless the kernel in the
+# wheel checked both.
+#
+# Linux: lake links the kernel against the glibc that the Lean toolchain carries, not the
+# runner's, and the kernel asks for no symbol newer than glibc 2.17. auditwheel reads the
+# wheel again and must name the same tag.
+# macOS: the linker writes the macOS version it is told, so scripts/macos_target.py first
+# finds the newest version that any object in the toolchain's static libraries was compiled
+# for, and the kernel is linked for that one. otool must read the same version back.
+# Windows: the backend refuses a kernel that imports a DLL outside its list of DLLs that
+# Windows carries. A Windows tag names no version of Windows, so petra/verify.py starts the
+# kernel once before it relies on it.
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  wheel:
+    name: ${{ matrix.platform }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            platform: manylinux_2_17_x86_64
+          - runner: ubuntu-24.04-arm
+            platform: manylinux_2_17_aarch64
+          - runner: macos-latest
+            platform: macosx_15_0_arm64
+          - runner: macos-15-intel
+            platform: macosx_15_0_x86_64
+          - runner: windows-latest
+            platform: win_amd64
+    defaults:
+      run:
+        shell: bash
+    env:
+      KERNEL: kernel/.lake/build/bin/petra-verify
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install elan
+        run: curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none
+      - name: Link for the newest macOS that the toolchain's own libraries ask for
+        if: runner.os == 'macOS'
+        working-directory: kernel
+        run: |
+          target=$(python ../scripts/macos_target.py "$("$HOME/.elan/bin/lean" --print-prefix)")
+          echo "MACOSX_DEPLOYMENT_TARGET=$target" | tee -a "$GITHUB_ENV"
+      - name: Build the kernel
+        working-directory: kernel
+        run: |
+          "$HOME/.elan/bin/lake" build
+      # macOS runs no unsigned arm64 code. The linker signs what it links, and this signs
+      # the kernel ad hoc if that signature is missing or does not hold.
+      - name: The arm64 kernel carries a valid signature
+        if: runner.os == 'macOS' && runner.arch == 'ARM64'
+        run: codesign --verify --strict "$KERNEL" || codesign --force --sign - "$KERNEL"
+      - name: Build the wheel
+        run: python -m pip wheel --disable-pip-version-check --no-index --no-deps -w dist .
+      - name: The wheel carries the tag this row names
+        run: |
+          ls dist
+          ls dist/*-py3-none-${{ matrix.platform }}.whl
+      - name: auditwheel reads the same tag from the wheel
+        if: runner.os == 'Linux'
+        run: |
+          python -m pip install --disable-pip-version-check auditwheel
+          said=$(auditwheel show dist/*.whl)
+          echo "$said"
+          echo "$said" | tr '\n' ' ' | grep -cF 'consistent with the following platform tag: "${{ matrix.platform }}"'
+      - name: otool reads the same macOS version from the kernel
+        if: runner.os == 'macOS'
+        run: |
+          otool -L "$KERNEL"
+          minos=$(otool -l "$KERNEL" | awk '$1 == "minos" && !seen++ { print $2 }')
+          test "macosx_${minos//./_}_$(uname -m)" = "${{ matrix.platform }}"
+      - name: The wheel installs outside the repository, and its kernel checks two designs
+        run: python scripts/wheel_check.py dist/*.whl numpy==2.4.6 scipy==1.17.1 --platform "${{ matrix.platform }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel-${{ matrix.platform }}
+          path: dist/*.whl
+          if-no-files-found: error

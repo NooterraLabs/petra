@@ -1,8 +1,10 @@
 name: release
 
-# Publishes Petra to PyPI when a tag v<version> is pushed. PyPI trusts this workflow
-# through trusted publishing, so the repository stores no token. The upload carries
-# Sigstore attestations for both files.
+# Publishes Petra to PyPI when a tag v<version> is pushed: the sdist, and one wheel for each
+# of five platforms with the kernel inside. The wheels are built and tested by wheels.yml,
+# as on every push. The sdist holds no kernel, so Petra installed from it says in each report
+# that no kernel ran. PyPI trusts this workflow through trusted publishing, so the
+# repository stores no token. The upload carries a Sigstore attestation for each file.
 
 on:
   push:
@@ -24,12 +26,15 @@ jobs:
           version=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
           test "v$version" = "$GITHUB_REF_NAME" || { echo "tag $GITHUB_REF_NAME does not match version $version"; exit 1; }
       - run: pip install build twine
-      - run: python -m build
+      - run: python -m build --sdist
       - run: twine check --strict dist/*
       - uses: actions/upload-artifact@v4
         with:
-          name: dist
+          name: sdist
           path: dist/
+
+  wheels:
+    uses: ./.github/workflows/wheels.yml
 
   test:
     needs: build
@@ -42,18 +47,15 @@ jobs:
           python-version: "3.11"
       - uses: actions/download-artifact@v4
         with:
-          name: dist
+          name: sdist
           path: dist/
       - run: pip install numpy==2.4.6 scipy==1.17.1
       - run: python tests/parallel.py --local -j "$(nproc)"
-      - name: The built wheel installs and runs outside the repository
-        run: |
-          python -m venv /tmp/fresh
-          /tmp/fresh/bin/pip install dist/*.whl
-          cd /tmp && /tmp/fresh/bin/petra check "$GITHUB_WORKSPACE/examples/steel/shear_tab.petra" | head -n 1
+      - name: The sdist installs and runs outside the repository, and says that no kernel ran
+        run: python scripts/wheel_check.py dist/*.tar.gz numpy==2.4.6 scipy==1.17.1 --no-kernel
 
   publish:
-    needs: [build, test]
+    needs: [build, wheels, test]
     runs-on: ubuntu-latest
     environment:
       name: pypi
@@ -63,6 +65,17 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: dist
+          name: sdist
           path: dist/
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: wheel-*
+          path: dist/
+          merge-multiple: true
+      - name: The release is the sdist and the five wheels
+        run: |
+          ls -l dist
+          test "$(ls dist/*.tar.gz | wc -l)" -eq 1
+          test "$(ls dist/*.whl | wc -l)" -eq 5
+          test "$(ls dist | wc -l)" -eq 6
       - uses: pypa/gh-action-pypi-publish@release/v1
