@@ -50,7 +50,7 @@ An anchor has `standard` and `clause`, each a text that is not empty, and may ha
 
 A `range` is two values, the lower first, between which a real design's value would fall. The check draws its sample points from the ranges, so a row with cases needs ranges wide enough for each case to hold somewhere. Every quantity a row takes has a `range`, and a row whose input has none is refused. Each end states its unit, as every value of a dimension does ([A value with its unit](#a-value-with-its-unit)).
 
-A row has `id`, `anchor`, `gives`, `takes` and one of `is`, `cases` and `table`. `gives` has `name` and `dim`, each a text, and an input has `name`. The `what` of `gives` and of an input may be left out. A jump has `why`, a text that is not empty.
+A row has `id`, `anchor`, `gives`, `takes` and one of `is`, `cases` and `table`. `gives` has `name` and `dim`, each a text, and an input has `name`. A table that gives a name has `one_of` in place of `dim` ([A table that gives a name](#a-table-that-gives-a-name)). The `what` of `gives` and of an input may be left out. A jump has `why`, a text that is not empty.
 
 ### Dimensions
 
@@ -161,6 +161,37 @@ A table cannot hold everything a printed table does. A line whose cells are form
 
 Say `rises` or `falls` only where it holds for the whole table. It is what lets the check catch a cell that was misread.
 
+### A table that gives a name
+
+Some tables of a standard give no quantity. They sort a part into a category by its sizes, and other tables are then read at that category. Such a table is a row whose `gives` has `one_of` in place of `dim`, and whose cells are names.
+
+```json
+{
+  "id": "example/category",
+  "anchor": {"standard": "a textbook", "clause": "4.2", "table": "7", "page": "90"},
+  "gives": {"name": "category", "one_of": ["B", "C", "D", "E"], "what": "the category of an attachment"},
+  "takes": [
+    {"name": "a", "dim": "length", "what": "its length", "range": ["1 mm", "300 mm"]},
+    {"name": "t", "dim": "length", "what": "its thickness", "range": ["1 mm", "100 mm"]}
+  ],
+  "table": {
+    "down": {"by": "a", "bands": [["0 mm", "50 mm"], ["50 mm", "100 mm"], ["100 mm", "200 mm"]], "closed": "upper"},
+    "across": {"by": "t", "bands": [["0 mm", "25 mm"], ["25 mm", null]], "closed": "upper"},
+    "cells": [["B", "B"], ["C", "D"], ["E", null]]
+  }
+}
+```
+
+- `gives` has `name`, `one_of` and perhaps `what`. `one_of` is the names the table can give, in the standard's order: a list of texts that is not empty, each once. `gives` has `dim` or `one_of`, and never both.
+- The row is a table. A row that gives a name with `is` or `cases` is refused.
+- It takes quantities and no key, so each side reads a quantity, in `bands` or `at`, exactly as a side of any table does. A table with one side derives the name from one quantity, and a table with two sides from two.
+- A cell is one of the names of `one_of`, as a text, or `null` where the standard gives none. Any text of `one_of` is a name, whatever it looks like: the text `"null"` is a name and `null` is an empty cell. A cell that holds anything else is refused. A name of `one_of` that no cell holds is allowed.
+- The table has `down`, `cells` and perhaps `across`, and no other key: no `unit`, no `rises` and no `falls`.
+
+The bands say what the table covers. A value in no band, between two listed values, or at an empty cell has no name. Nothing is assumed there: a rule that reads the name has no value, and its cell is open. A value on the end of a band is in the band that holds that end.
+
+A name is read in two ways, both in a rule: as a key of a row, and by a `case` ([A rule](#a-rule)). It is no quantity, so `["row", "example/category", {...}]` in a sum, a product or a side of `le` is refused. A row applies no row, so no row reads a name.
+
 ## A worked example
 
 A worked example is a use of the equation that a published source prints: the value of every input and the result. Examples are kept apart from the rows, in a file that names each row by its id.
@@ -188,6 +219,8 @@ A worked example is a use of the equation that a published source prints: the va
 A row is admitted when no part fails. A part that is `none` is not a failure. It says the row has less behind it: a row with no worked example rests on its dimensions and on two transcribers agreeing.
 
 The second transcription may name its inputs differently. The check tries each renaming that keeps the dimensions, and says which one it used. It may also name a key's values differently: they are matched by their order, which is the standard's.
+
+A table that gives a name passes the same check. `units` holds every band to its input's dimension. `shape` is `none`, since a name neither rises nor falls. A worked example gives the name the source prints, as `"gives": "D"`. `second` compares the name in every cell and on each side of every band's ends, and matches the names of the two transcriptions by their order in `one_of`.
 
 ```bash
 python -m petra.deck rows.json --examples examples.json --second other_rows.json
@@ -331,9 +364,32 @@ An expression is written as a row's is. A name in it is a quantity field of the 
 | Written | Means |
 |---|---|
 | `["load", NAME]` | A load the card puts on the part. It is a load of the rule's own type: a rule reads no load of a part its part joins. |
-| `["row", ID, {INPUT: ...}]` | A row of the deck, with each of its inputs bound |
+| `["row", ID, {INPUT: ...}]` | A row of the deck that gives a quantity, with each of its inputs bound |
+| `["case", ["row", ID, {INPUT: ...}], {NAME: ...}]` | The expression of the name that a row gives |
 
-A quantity that a row takes is bound to an expression of its dimension. A key that a row takes is bound in one of three ways: to a key field whose names are all names of the row's key, to `["key", NAME]`, or to `["by", FIELD, {NAME OF THE FIELD: NAME OF THE ROW'S KEY}]`. The map of a `by` has one entry for each name of the field and no other entry, and each of its values is a name of the row's key. A map that leaves a name of the field out is refused.
+A quantity that a row takes is bound to an expression of its dimension. A key that a row takes is bound in one of four ways.
+
+- To a key field whose names are all names of the row's key.
+- To `["key", NAME]`, one name of the row's key.
+- To `["by", FIELD, {NAME OF THE FIELD: NAME OF THE ROW'S KEY}]`. The map of a `by` has one entry for each name of the field and no other entry, and each of its values is a name of the row's key. A map that leaves a name of the field out is refused.
+- To `["row", ID, {INPUT: ...}]`, where the row `ID` gives a name ([A table that gives a name](#a-table-that-gives-a-name)) and each quantity it takes is bound to an expression of its dimension. The key then has the name that row gives for the part's sizes. Every name of that row's `one_of` is a name of the key, or the deck is refused. A `by` takes a field and no row, so the names are not mapped: the row that gives the name writes the names of the key it feeds.
+
+```json
+["row", "example/allowed", {"category": ["row", "example/category", {"a": "length", "t": "thickness"}], "service": "service"}]
+```
+
+A key bound this way is still a key of the table it is bound in. The name comes from the row and from nothing else: a key field of the part with the same names, or a name of the part's own, has no say in it.
+
+A `case` picks an expression by a name that a row gives. Its first item is `["row", ID, {INPUT: ...}]` with a row that gives a name, and its second has an expression for each name of that row's `one_of` and for no other name, all of one dimension. Its value is the expression of the name the row gives. It is how a formula that changes with a category is written. A `case` is read in a rule and in no row.
+
+```json
+["case", ["row", "example/category", {"a": "length", "t": "thickness"}],
+ {"B": "1", "C": ["div", "length", ["q", "50", "mm"]], "D": "3", "E": ["row", "example/reduction", {"x": "length"}]}]
+```
+
+Where the row gives no name, the table read at it and the `case` have no value, and the rule's cell is open. A `case` writes every one of its expressions for the part: if one of them has no value that can be written for the part, as a table with no line for the part's key, the cell is open whatever name the row gives.
+
+A formula whose case goes by the size of one of its own inputs needs none of this: it is an equation with `cases`, and its conditions are the bands.
 
 A factor that the clause fixes for the inequality, such as a resistance factor, is a number in the rule.
 

@@ -113,12 +113,30 @@ class Ask:
 
 
 @dataclass(frozen=True)
+class Named:
+    """A row that gives a name, with each quantity it takes bound to an expression."""
+
+    row: rows.Row
+    quantities: Mapping[str, Any]
+
+
+@dataclass(frozen=True)
 class Applied:
-    """A row with its inputs bound: a quantity to an expression, a key to a selector."""
+    """A row with its inputs bound: a quantity to an expression, and a key to a selector,
+    which is `("field", FIELD, {its name: the row's})` or `("named", Named)`."""
 
     row: rows.Row
     quantities: Mapping[str, Any]
     keys: Mapping[str, tuple]
+
+
+@dataclass(frozen=True)
+class Cased:
+    """`["case", ["row", ID, {...}], {NAME: ...}]`: for each name the row gives, the
+    expression that is the value where the row gives that name."""
+
+    named: Named
+    branches: Mapping[str, Any]
 
 
 @dataclass(frozen=True)
@@ -263,12 +281,46 @@ class _Binder(rows._Reader):
             return Sym(f"load {node[1]}"), self.loads[node[1]].dim
         if isinstance(node, list) and node[:1] == ["row"] and len(node) == 3:
             return self.apply(*node[1:])
+        if isinstance(node, list) and node[:1] == ["case"] and len(node) == 3 and isinstance(node[2], dict):
+            return self.case(node[1], node[2])
         return super().expr(node)
+
+    def named(self, node: Any, what: str) -> Named:
+        """`["row", ID, {INPUT: ...}]` with a row that gives a name, each of its quantities bound."""
+        if not (isinstance(node, list) and node[:1] == ["row"] and len(node) == 3 and isinstance(node[1], str) and node[1] in self.rows and isinstance(node[2], dict)):
+            raise RowError(f"{what}: a name comes from [\"row\", ID, {{...}}] with a row of the deck that gives a name")
+        row = self.rows[node[1]]
+        if not row.names:
+            raise RowError(f"{what}: {node[1]} gives a quantity, and a name comes from a row that gives a name")
+        if set(node[2]) != set(row.takes):
+            raise RowError(f"{node[1]} takes {', '.join(row.takes)}, and the rule binds {', '.join(node[2]) or 'nothing'}")
+        quantities = {}
+        for name, takes in row.takes.items():
+            quantities[name], dim = self.expr(node[2][name])
+            if dim != takes.dim:
+                self.problems.append(f"{node[1]}: {name} is a {show(takes.dim)}, and the rule binds a {show(dim)}")
+        return Named(row, quantities)
+
+    def case(self, key: Any, branches: Mapping[str, Any]) -> tuple[Any, Vector]:
+        """The expression of the name that a row gives, with an expression for each name the
+        row gives and for no other."""
+        named = self.named(key, "`case`")
+        if set(branches) != set(named.row.names):
+            raise RowError(f"`case` has an expression for each of {', '.join(named.row.names)}, and for no other name")
+        found = {name: self.expr(branches[name]) for name in named.row.names}
+        dims = [dim for _, dim in found.values()]
+        if any(dim != dims[0] for dim in dims[1:]):
+            self.problems.append("`case` of different dimensions")
+        name = f"@{len(self.applied)}"
+        self.applied[name] = Cased(named, {n: term for n, (term, _) in found.items()})
+        return Sym(name), dims[0]
 
     def apply(self, row_id: Any, binds: Any) -> tuple[Any, Vector]:
         if row_id not in self.rows or not isinstance(binds, dict):
             raise RowError(f"{row_id!r} is not a row of the deck, or its inputs are not an object")
         row = self.rows[row_id]
+        if row.names:
+            raise RowError(f"{row_id} gives a name, and a name is read by a key of a row or by a `case`")
         if set(binds) != set(row.takes):
             raise RowError(f"{row_id} takes {', '.join(row.takes)}, and the rule binds {', '.join(binds) or 'nothing'}")
         quantities, keys = {}, {}
@@ -289,6 +341,11 @@ class _Binder(rows._Reader):
                 raise RowError(f"{what}: {name!r} is not a key field")
             return self.takes[name].keys
 
+        if isinstance(node, list) and node[:1] == ["row"]:      # the name that a row gives: each of its names is a name of the key
+            named = self.named(node, what)
+            if not set(named.row.names) <= set(known):
+                raise RowError(f"{what}: {named.row.id} gives names the key lacks: {', '.join(sorted(set(named.row.names) - set(known)))}")
+            return ("named", named)
         if isinstance(node, str):
             if not set(of(node)) <= set(known):
                 raise RowError(f"{what}: {node} has names the row lacks: {', '.join(sorted(set(of(node)) - set(known)))}")
@@ -671,8 +728,31 @@ class _Tape:
         self.picks.setdefault(at, what)
         return at
 
-    def row(self, row: rows.Row, quantities: Mapping[str, int], keys: Mapping[str, str]) -> int:
-        """The row's value with each quantity it takes at a node and each key at a name."""
+    def places(self, axis: rows.Axis, x: int) -> list[tuple[int, Any]]:
+        """Each place of a side that a quantity reads, with the condition that node `x` is there."""
+        if axis.at:
+            return [(n, ["and", [["le", x, self.const(v)], ["le", self.const(v), x]]]) for n, v in enumerate(axis.at)]
+        out = []
+        for n, (lo, hi) in enumerate(axis.bands):
+            ends = [["lt" if axis.upper else "le", self.const(lo), x], *([["le" if axis.upper else "lt", x, self.const(hi)]] if hi is not None else [])]
+            out.append((n, ends[0] if len(ends) == 1 else ["and", ends]))
+        return out
+
+    def named(self, row: rows.Row, quantities: Mapping[str, int]) -> list[tuple[str, Any]]:
+        """For a row that gives a name: each cell that holds one, in order, with the
+        condition that the quantities are at the cell. An empty cell gives nothing, so at
+        such a cell and outside every band no condition holds."""
+        sides = [self.places(axis, quantities[axis.by]) for axis in row.table.axes]
+        out = []
+        for i, down in sides[0]:
+            for j, across in (sides[1] if len(sides) == 2 else [(0, None)]):
+                if row.table.cells[i][j] is not None:
+                    out.append((row.table.cells[i][j], down if across is None else ["and", [down, across]]))
+        return out
+
+    def row(self, row: rows.Row, quantities: Mapping[str, int], keys: Mapping[str, Any]) -> int:
+        """The row's value with each quantity it takes at a node, and each key at a name or,
+        for a key that a row names, at each name that row can give with its condition."""
         if row.table is None:
             return self.pick([(None if c.when is None else self.cond(c.when, quantities.__getitem__), self.emit(c.expr, quantities.__getitem__))
                               for c in row.cases], row.id)
@@ -680,15 +760,9 @@ class _Tape:
 
         def places(axis: rows.Axis) -> list[tuple[int, Any]]:
             if axis.keys:
-                return [(axis.keys.index(keys[axis.by]), None)]
-            x = quantities[axis.by]
-            if axis.at:
-                return [(n, ["and", [["le", x, self.const(v)], ["le", self.const(v), x]]]) for n, v in enumerate(axis.at)]
-            out = []
-            for n, (lo, hi) in enumerate(axis.bands):
-                ends = [["lt" if axis.upper else "le", self.const(lo), x], *([["le" if axis.upper else "lt", x, self.const(hi)]] if hi is not None else [])]
-                out.append((n, ends[0] if len(ends) == 1 else ["and", ends]))
-            return out
+                at = keys[axis.by]
+                return [(axis.keys.index(at), None)] if isinstance(at, str) else [(axis.keys.index(name), cond) for name, cond in at]
+            return self.places(axis, quantities[axis.by])
 
         across = places(table.axes[1]) if len(table.axes) == 2 else [(0, None)]
 
@@ -724,8 +798,18 @@ def _env(tape: _Tape, rule: Rule, part: Part, parts: Mapping[str, Part], case: s
                 memo[name] = tape.input(part.loads[name[5:]][case])
             elif name in rule.applied:
                 a = rule.applied[name]
-                keys = {k: by[field_of(f) if f is not None else None] for k, (_, f, by) in a.keys.items()}
-                memo[name] = tape.row(a.row, {q: tape.emit(e, find) for q, e in a.quantities.items()}, keys)
+
+                def named(n: Named) -> list[tuple[str, Any]]:
+                    return tape.named(n.row, {q: tape.emit(e, find) for q, e in n.quantities.items()})
+
+                if isinstance(a, Cased):
+                    found = named(a.named)
+                    values = {n: tape.emit(e, find) for n, e in a.branches.items()}
+                    memo[name] = tape.pick([(cond, values[n]) for n, cond in found], a.named.row.id)
+                else:
+                    quantities = {q: tape.emit(e, find) for q, e in a.quantities.items()}
+                    keys = {k: named(how[1]) if how[0] == "named" else how[2][field_of(how[1]) if how[1] is not None else None] for k, how in a.keys.items()}
+                    memo[name] = tape.row(a.row, quantities, keys)
             elif name in rule.lets:
                 memo[name] = tape.emit(rule.lets[name], find)
             else:
@@ -919,6 +1003,18 @@ def _keys(cond: tuple | None) -> Iterator[str]:
             yield from _keys(inner)
 
 
+def _tables(applied: Applied | Cased) -> Iterator[tuple[rows.Row, Mapping[str, Any]]]:
+    """Each row that one use of a row or of a `case` reads, with the expressions its
+    quantities are bound to: the row itself, and each row that gives one of its keys a name."""
+    if isinstance(applied, Cased):
+        yield applied.named.row, applied.named.quantities
+        return
+    yield applied.row, applied.quantities
+    for how in applied.keys.values():
+        if how[0] == "named":
+            yield how[1].row, how[1].quantities
+
+
 def _reads(rule: Rule) -> set[str]:
     """What a rule reads, through the rows it applies and the names it defines: each field
     as the rule names it, `width` or `a.Fy`, and each load as `load NAME`."""
@@ -930,8 +1026,11 @@ def _reads(rule: Rule) -> set[str]:
             continue
         seen.add(name)
         if name in rule.applied:
-            todo += [n for e in rule.applied[name].quantities.values() for n in _names(e)]
-            found |= {f for _, f, _ in rule.applied[name].keys.values() if f is not None}
+            todo += [n for _, quantities in _tables(rule.applied[name]) for e in quantities.values() for n in _names(e)]
+            if isinstance(rule.applied[name], Cased):
+                todo += [n for e in rule.applied[name].branches.values() for n in _names(e)]
+            else:
+                found |= {how[1] for how in rule.applied[name].keys.values() if how[0] == "field" and how[1] is not None}
         elif name in rule.lets:
             todo += list(_names(rule.lets[name]))
         else:

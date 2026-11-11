@@ -552,5 +552,216 @@ class ARuleThatRequires(unittest.TestCase):
         self.assertEqual(outcome["hoist.category"]["second"], "fail", "one answers for category A alone, and the other for every hoist")
 
 
+# --- 4. a key that a row picks by the size of a quantity ------------------------------------------------
+
+LENGTH_RANGE = ["1 mm", "300 mm"]
+CATEGORY = {"id": "made-up/category", "anchor": ANCHOR, "gives": {"name": "category", "one_of": ["B", "C", "D", "E"], "what": "the category of an attachment"},
+            "takes": [{"name": "a", "dim": "length", "what": "its length", "range": LENGTH_RANGE}, {"name": "t", "dim": "length", "what": "its thickness", "range": LENGTH_RANGE}],
+            "table": {"down": {"by": "a", "bands": [["10 mm", "50 mm"], ["50 mm", "100 mm"], ["100 mm", "200 mm"]], "closed": "upper"},
+                      "across": {"by": "t", "bands": [["0 mm", "25 mm"], ["25 mm", None]], "closed": "upper"},
+                      "cells": [["B", "B"], ["C", "D"], ["E", None]]}}
+ALLOWED = {"id": "made-up/allowed", "anchor": ANCHOR, "gives": {"name": "Fsr", "dim": "stress", "what": "the allowed range of stress"},
+           "takes": [{"name": "category", "one_of": ["A", "B", "C", "D", "E"], "what": "the category"}, {"name": "service", "one_of": ["1", "2"], "what": "the service class"}],
+           "table": {"down": {"by": "category"}, "across": {"by": "service"}, "unit": "MPa",
+                     "cells": [["160", "100"], ["125", "80"], ["90", "60"], ["70", "45"], ["50", None]]}}
+SIZE = {"id": "made-up/size", "anchor": ANCHOR, "gives": {"name": "size", "one_of": ["small", "large"]},
+        "takes": [{"name": "d", "dim": "length", "range": ["10 mm", "20 mm"]}], "table": {"down": {"by": "d", "at": ["10 mm", "20 mm"]}, "cells": ["small", "large"]}}
+HALVE = {"id": "made-up/halve", "anchor": ANCHOR, "gives": {"name": "y", "dim": "dimensionless"}, "takes": [{"name": "x", "dim": "length", "range": LENGTH_RANGE}],
+         "is": ["div", "x", ["q", "200", "mm"]]}
+NAMED = ["row", "made-up/category", {"a": "a", "t": "t"}]
+WELD = kind("weld", size("a"), size("t"), size("range", "stress"), key("service", "1", "2"), key("category", "A", "B", "C", "D", "E"))
+FATIGUE = rule("fatigue", "weld", "weld.fatigue", le=["range", ["row", "made-up/allowed", {"category": NAMED, "service": "service"}]])
+OWN = rule("own", "weld", "weld.own", le=["range", ["row", "made-up/allowed", {"category": "category", "service": "service"}]])
+FACTOR = rule("factor", "weld", "weld.factor",
+              le=[["mul", "range", ["case", NAMED, {"B": "1", "C": ["div", "a", ["q", "50", "mm"]], "D": "3", "E": ["row", "made-up/halve", {"x": "a"}]}]], ["q", "400", "MPa"]])
+WELDS = made_up([WELD], [asks("weld.fatigue", "weld"), asks("weld.own", "weld"), asks("weld.factor", "weld")], [FATIGUE, OWN, FACTOR], [CATEGORY, ALLOWED, SIZE, HALVE])
+
+
+def weld(a: str = "30 mm", t: str = "10 mm", stress: str = "100 MPa", service: str = "1", category: str = "B") -> str:
+    return design(part("weld", "w", a=a, t=t, range=stress, service=f'"{service}"', category=category))
+
+
+class AKeyPickedBySize(unittest.TestCase):
+    def test_a_table_is_read_at_the_name_that_the_sizes_give(self):
+        """30 mm by 10 mm is category B, which allows 125 MPa in service class 1 and 80 in class 2."""
+        for stress, service, state in (("125 MPa", "1", "proved"), ("125.01 MPa", "1", "refuted"), ("80 MPa", "2", "proved"), ("80.01 MPa", "2", "refuted")):
+            with self.subTest(stress=stress, service=service):
+                found, _, _ = cells(self, WELDS, weld(stress=stress, service=service))
+                self.assertEqual(found["w", "weld.fatigue", "fatigue"], state)
+
+    def test_each_band_is_closed_as_the_table_says(self):
+        """Up to and including 50 mm is B, and over it C or D by the thickness, up to and including 25 mm."""
+        for a, t, allowed in (("50 mm", "10 mm", 125), ("50.001 mm", "10 mm", 90), ("100 mm", "25 mm", 90), ("100 mm", "25.001 mm", 70), ("50 mm", "400 mm", 125),
+                              ("100.001 mm", "25 mm", 50), ("200 mm", "0.001 mm", 50), ("10.001 mm", "1 mm", 125)):
+            with self.subTest(a=a, t=t):
+                on, _, _ = cells(self, WELDS, weld(a, t, f"{allowed} MPa"))
+                over, _, _ = cells(self, WELDS, weld(a, t, f"{allowed}.001 MPa"))
+                self.assertEqual((on["w", "weld.fatigue", "fatigue"], over["w", "weld.fatigue", "fatigue"]), ("proved", "refuted"))
+
+    def test_a_value_in_no_band_leaves_the_cell_open_and_takes_no_default(self):
+        for a, t in (("10 mm", "10 mm"), ("5 mm", "10 mm"), ("200.001 mm", "10 mm"), ("1000 mm", "30 mm")):
+            with self.subTest(a=a, t=t):
+                for stress in ("1 MPa", "1000 MPa"):
+                    found, verdict, _ = cells(self, WELDS, weld(a, t, stress))
+                    self.assertEqual((found["w", "weld.fatigue", "fatigue"], found["w", "weld.factor", "factor"]), ("open", "open"))
+                deck, read = parsed(WELDS, weld(a, t))
+                (cell,) = [c for c in grid.check(read, deck)[0].cells if c.mechanism == "weld.fatigue"]
+                self.assertEqual(cell.why, "made-up/allowed gives no value at what w has: no case of the pick holds somewhere in the box")
+
+    def test_an_empty_cell_gives_no_name(self):
+        """Over 100 mm long and over 25 mm thick the table of categories has no name."""
+        found, verdict, _ = cells(self, WELDS, weld("150 mm", "30 mm", "1 MPa"))
+        self.assertEqual((found["w", "weld.fatigue", "fatigue"], found["w", "weld.factor", "factor"], verdict), ("open", "open", "UNKNOWN"))
+        found, _, _ = cells(self, WELDS, weld("150 mm", "20 mm", "50 MPa", "2"))
+        self.assertEqual(found["w", "weld.fatigue", "fatigue"], "open", "category E has no value in service class 2")
+
+    @KERNEL
+    def test_no_hint_proves_or_refutes_a_rule_outside_the_bands(self):
+        deck, read = parsed(WELDS, weld("5 mm", "10 mm", "1000 MPa"))
+        files = grid.check(read, deck)[1]
+        for more in ({"state": "proved", "partition": "leaf"}, {"state": "refuted", "point": {"dsg:made-up.w.a": "1/200", "dsg:made-up.w.t": "1/100", "dsg:made-up.w.range": "1000000000"}}):
+            hints = json.loads(files["proofs"])
+            hints["cells"] = [{"subject": "w", "mechanism": "weld.fatigue", "entry": "fatigue", **more}]
+            said = ask({**files, "proofs": export.text(hints)})
+            (cell,) = [c for c in said["cells"] if c["mechanism"] == "weld.fatigue"]
+            self.assertEqual(cell["state"], "open")
+            self.assertIn("no case of the pick holds", cell["reason"])
+
+    def test_a_range_that_reaches_into_two_bands_must_hold_in_both(self):
+        card = HEAD + given("w.a", "40 mm", "60 mm")
+        found, _, _ = cells(self, WELDS, weld("given w.a", stress="90 MPa"), card)
+        self.assertEqual(found["w", "weld.fatigue", "fatigue"], "proved", "B allows 125 MPa and C 90")
+        found, verdict, _ = cells(self, WELDS, weld("given w.a", stress="91 MPa"), card)
+        self.assertEqual((found["w", "weld.fatigue", "fatigue"], verdict), ("refuted", "FAIL"), "at 60 mm it is C, which allows 90 MPa")
+        out = HEAD + given("w.a", "5 mm", "60 mm")
+        found, _, _ = cells(self, WELDS, weld("given w.a", stress="1 MPa"), out)
+        self.assertEqual(found["w", "weld.fatigue", "fatigue"], "open", "under 10 mm the row gives no name")
+
+    def test_a_name_from_a_row_and_a_key_of_the_part_are_kept_apart(self):
+        """The part says its own key is C, and its sizes make it B. The rule that reads the
+        part's key reads C, and the rule that reads the row's name reads B."""
+        found, verdict, _ = cells(self, WELDS, weld(stress="100 MPa", category="C"))
+        self.assertEqual((found["w", "weld.fatigue", "fatigue"], found["w", "weld.own", "own"], verdict), ("proved", "refuted", "FAIL"))
+        found, _, _ = cells(self, WELDS, weld("60 mm", stress="100 MPa", category="B"))
+        self.assertEqual((found["w", "weld.fatigue", "fatigue"], found["w", "weld.own", "own"]), ("refuted", "proved"))
+
+    def test_a_case_gives_the_expression_of_the_name(self):
+        """B gives 1, C the length over 50 mm, D 3 and E the length over 200 mm, and the stress times it is at most 400 MPa."""
+        for a, t, most in (("30 mm", "10 mm", "400"), ("75 mm", "10 mm", "800/3"), ("75 mm", "30 mm", "400/3"), ("150 mm", "10 mm", "1600/3")):
+            with self.subTest(a=a, t=t):
+                top = Fraction(most)
+                on, _, _ = cells(self, WELDS, weld(a, t, f"{top.numerator}/{top.denominator} MPa" if top.denominator > 1 else f"{top} MPa"))
+                over, _, _ = cells(self, WELDS, weld(a, t, f"{top.numerator + 1}/{top.denominator} MPa"))
+                self.assertEqual((on["w", "weld.factor", "factor"], over["w", "weld.factor", "factor"]), ("proved", "refuted"))
+
+    def test_what_a_row_that_gives_a_name_reads_is_read(self):
+        only = made_up([WELD], [asks("weld.fatigue", "weld")], [FATIGUE], [CATEGORY, ALLOWED])
+        found, _, _ = cells(self, only, weld())
+        self.assertEqual(sorted(k for k in found if k[1] == "unread"), [("w", "unread", "category")], "the row reads the length and the thickness, and nothing reads the part's own key")
+
+    def test_a_table_read_at_listed_values_gives_a_name_at_them_and_nowhere_else(self):
+        bolt = kind("bolt", size("d"), size("grip"))
+        limit = {"id": "made-up/grip", "anchor": ANCHOR, "gives": {"name": "g", "dim": "length"}, "takes": [{"name": "size", "one_of": ["small", "large"]}],
+                 "table": {"down": {"by": "size"}, "cells": ["30 mm", "60 mm"]}}
+        deck = made_up([bolt], [asks("bolt.grip", "bolt")],
+                       [rule("grip", "bolt", "bolt.grip", le=["grip", ["row", "made-up/grip", {"size": ["row", "made-up/size", {"d": "d"}]}]])], [SIZE, limit])
+        for d, grip, state in (("10 mm", "30 mm", "proved"), ("10 mm", "31 mm", "refuted"), ("20 mm", "60 mm", "proved"), ("15 mm", "1 mm", "open"), ("20.001 mm", "1 mm", "open")):
+            with self.subTest(d=d, grip=grip):
+                found, _, _ = cells(self, deck, design(part("bolt", "b", d=d, grip=grip)))
+                self.assertEqual(found["b", "bolt.grip", "grip"], state)
+
+    def test_a_name_is_a_text_whatever_it_looks_like(self):
+        """Names that read as a number, a unit, a value, an operator and the word null. A cell
+        that is the text `null` is that name, and a cell that is null is empty."""
+        odd = ["null", "2", "inch", "1 mm", "pi", "row", ""]
+        naming = {**CATEGORY, "gives": {"name": "category", "one_of": odd},
+                  "table": {"down": {"by": "a", "bands": [[f"{10 * k} mm", f"{10 * k + 10} mm"] for k in range(1, 9)]}, "across": {"by": "t", "bands": [["0 mm", None]]},
+                            "cells": [[name] for name in odd] + [[None]]}}
+        table = {**ALLOWED, "takes": [{"name": "category", "one_of": odd}, ALLOWED["takes"][1]],
+                 "table": {"down": {"by": "category"}, "across": {"by": "service"}, "unit": "MPa", "cells": [[str(10 * (k + 1)), None] for k in range(len(odd))]}}
+        deck = made_up([WELD], [asks("weld.fatigue", "weld")], [FATIGUE], [naming, table])
+        for k, name in enumerate(odd):
+            with self.subTest(name):
+                on, _, _ = cells(self, deck, weld(f"{10 * k + 15} mm", stress=f"{10 * (k + 1)} MPa"))
+                over, _, _ = cells(self, deck, weld(f"{10 * k + 15} mm", stress=f"{10 * (k + 1) + 1} MPa"))
+                self.assertEqual((on["w", "weld.fatigue", "fatigue"], over["w", "weld.fatigue", "fatigue"]), ("proved", "refuted"))
+        found, _, _ = cells(self, deck, weld("85 mm", stress="1 MPa"))
+        self.assertEqual(found["w", "weld.fatigue", "fatigue"], "open", "the last cell is null, and gives no name")
+
+    def test_a_row_gives_a_quantity_or_a_name_and_a_name_comes_from_a_table_of_names(self):
+        def changed(**more) -> dict:
+            return made_up([WELD], rows=[{**CATEGORY, **more}])
+
+        def table(**more) -> dict:
+            body = {**CATEGORY["table"], **more}
+            return changed(table={k: v for k, v in body.items() if v is not ...})
+
+        reads(self, changed())
+        for bad in (changed(gives={"name": "category", "one_of": ["B", "C", "D", "E"], "dim": "length"}), changed(gives={"name": "category"}),
+                    changed(gives={"name": "category", "one_of": []}), changed(gives={"name": "category", "one_of": ["B", "C", "D", "E", "B"]}),
+                    changed(gives={"name": "category", "one_of": ["B", "C", "D", 5]}), changed(gives={"name": "category", "one_of": "BCDE"}),
+                    changed(gives={"name": "category", "one_of": ["B", "C", "D"]}), changed(gives={"name": "category", "one_of": None}),
+                    table(cells=[["B", "B"], ["C", "D"], ["E", "F"]]), table(cells=[["B", "B"], ["C", "D"], ["E", 5]]), table(cells=[["B", "B"], ["C", "D"], ["E", ["E"]]]),
+                    table(cells=[["B", "B"], ["C", "D"]]), table(cells=[["B", "B"], ["C", "D"], ["E"]]), table(cells=["B", "C", "E"]), table(cells=[["B", "B"], ["C", "D"], ["E", "b"]]),
+                    table(unit="mm"), table(rises=["a"]), table(falls=[]), table(across=...), table(down={"by": "a", "bands": [["10 kN", "50 kN"], ["50 kN", "100 kN"], ["100 kN", "200 kN"]]}),
+                    table(down={"by": "a", "bands": [["10 mm", "50 mm"], ["40 mm", "100 mm"], ["100 mm", "200 mm"]]}), table(note="x"),
+                    {**changed(), "rows": [{k: v for k, v in CATEGORY.items() if k != "table"} | {"is": "a"}]},
+                    {**changed(), "rows": [{k: v for k, v in CATEGORY.items() if k != "table"} | {"cases": [{"is": "a"}]}]},
+                    changed(jumps=[{"cases": [1, 2], "why": "x"}]),
+                    changed(takes=[CATEGORY["takes"][0], {"name": "t", "one_of": ["thin", "thick"]}], table={**CATEGORY["table"], "across": {"by": "t"}})):
+            with self.subTest(json.dumps(bad["rows"])[:150]):
+                no_deck(self, bad)
+
+    def test_a_name_is_read_by_a_key_or_by_a_case_and_by_nothing_else(self):
+        def ruled(le: list) -> dict:
+            return made_up([WELD], [asks("weld.fatigue", "weld")], [rule("fatigue", "weld", "weld.fatigue", le=le)], [CATEGORY, ALLOWED, SIZE, HALVE])
+
+        def keyed(binding) -> dict:
+            return ruled(["range", ["row", "made-up/allowed", {"category": binding, "service": "service"}]])
+
+        def cased(key, branches) -> dict:
+            return ruled([["mul", "range", ["case", key, branches]], ["q", "400", "MPa"]])
+
+        whole = {"B": "1", "C": "2", "D": "3", "E": "4"}
+        reads(self, keyed(NAMED))
+        reads(self, cased(NAMED, whole))
+        for bad in (ruled([NAMED, "range"]), ruled([["mul", "range", NAMED], ["q", "400", "MPa"]]), ruled(["range", ["mul", ["q", "1", "MPa"], NAMED]]),
+                    keyed(["row", "made-up/halve", {"x": "a"}]), keyed(["row", "made-up/nobody", {"a": "a", "t": "t"}]), keyed(["row", "made-up/category"]),
+                    keyed(["row", "made-up/category", {"a": "a"}]), keyed(["row", "made-up/category", {"a": "a", "t": "t", "u": "t"}]),
+                    keyed(["row", "made-up/category", {"a": "a", "t": "range"}]), keyed(["row", "made-up/category", {"a": "a", "t": "service"}]),
+                    keyed(["row", "made-up/category", ["a", "t"]]), keyed(["row", ["made-up/category"], {"a": "a", "t": "t"}]),
+                    keyed(["by", NAMED, {"B": "B", "C": "C", "D": "D", "E": "E"}]), keyed(["key", NAMED]), keyed(["row", "made-up/size", {"d": "a"}]),
+                    keyed(["row", "made-up/allowed", {"category": "category", "service": "service"}]),
+                    cased(NAMED, {"B": "1", "C": "2", "D": "3"}), cased(NAMED, {**whole, "F": "5"}), cased(NAMED, {**whole, "E": "a"}), cased(NAMED, {}),
+                    cased("category", whole), cased(["key", "B"], whole), cased(["row", "made-up/halve", {"x": "a"}], whole), cased(NAMED, ["1", "2", "3", "4"]),
+                    cased(["row", "made-up/category", {"a": "a", "t": "range"}], whole), cased(NAMED, {**whole, "E": NAMED})):
+            with self.subTest(json.dumps(bad["rules"][0]["le"])[:160]):
+                no_deck(self, bad)
+        mine, its = no_deck(self, keyed(["row", "made-up/size", {"d": "a"}]))
+        self.assertIn("gives names the key lacks", mine)
+        self.assertIn("gives names the key lacks", its)
+
+    def test_a_row_takes_no_name_and_no_case(self):
+        inside = {**HALVE, "is": ["case", NAMED, {"B": "1", "C": "2", "D": "3", "E": "4"}]}
+        no_deck(self, made_up([WELD], rows=[CATEGORY, inside]))
+
+    def test_the_acceptance_check_for_a_row_reads_a_table_of_names(self):
+        from petra import deck as rows
+
+        mine = rows.read(CATEGORY)
+        self.assertEqual((mine.names, mine.dim, rows.value(mine, {"a": Fraction(3, 100), "t": Fraction(1, 100)})), (("B", "C", "D", "E"), None, "B"))
+        other = rows.read({**CATEGORY, "gives": {"name": "cat", "one_of": ["two", "three", "four", "five"]},
+                           "takes": [{**CATEGORY["takes"][0], "name": "length"}, {**CATEGORY["takes"][1], "name": "thick"}],
+                           "table": {"down": {**CATEGORY["table"]["down"], "by": "length"}, "across": {**CATEGORY["table"]["across"], "by": "thick"},
+                                     "cells": [["two", "two"], ["three", "four"], ["five", None]]}})
+        said = {c.name: c for c in rows.accept(mine, [rows.example({"anchor": "made up", "given": {"a": "75 mm", "t": "30 mm"}, "gives": "D"}, mine)], other)}
+        self.assertEqual({name: c.outcome for name, c in said.items()}, {"units": "pass", "examples": "pass", "shape": "none", "second": "pass"}, said)
+        wrong = rows.read({**CATEGORY, "table": {**CATEGORY["table"], "cells": [["B", "B"], ["D", "D"], ["E", None]]}})
+        said = {c.name: c for c in rows.accept(mine, [rows.example({"anchor": "made up", "given": {"a": "75 mm", "t": "30 mm"}, "gives": "C"}, mine)], wrong)}
+        self.assertEqual((said["examples"].outcome, said["second"].outcome), ("fail", "fail"), said)
+        self.assertIn("this one gives C and the other D", said["second"].detail)
+        self.assertRaises(rows.RowError, rows.example, {"anchor": "made up", "given": {"a": "75 mm", "t": "30 mm"}, "gives": "F"}, mine)
+
+
 if __name__ == "__main__":
     unittest.main()

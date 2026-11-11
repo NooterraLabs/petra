@@ -632,9 +632,9 @@ def _marks(readings: list[Reading], mechanism: str) -> dict[str, tuple[tuple[Fra
     beside: dict[str, set[Fraction]] = collections.defaultdict(set)
     for reading in readings:
         for rule in reading.rules[mechanism]:
-            for applied in rule.applied.values():
-                for axis in applied.row.table.axes if applied.row.table is not None else ():
-                    term = applied.quantities.get(axis.by)
+            for row, quantities in (found for applied in rule.applied.values() for found in grid._tables(applied)):
+                for axis in row.table.axes if row.table is not None else ():
+                    term = quantities.get(axis.by)
                     while isinstance(term, Sym) and term.name in rule.lets:
                         term = rule.lets[term.name]
                     if isinstance(term, Sym) and not term.name.startswith(("@", "load ")):
