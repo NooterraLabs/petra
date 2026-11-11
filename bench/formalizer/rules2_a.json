@@ -1,0 +1,284 @@
+{
+ "transcriber": "Claude (claude-fable-5-2), transcriber a, from images of the printed pages",
+ "source": "ANSI/AISC 360-22, Specification for Structural Steel Buildings, August 1, 2022. Read: pages 16.1-24 and 16.1-25 (B4.3), 16.1-32 to 16.1-35 (D1 to D3, Table D3.1), 16.1-134 to 16.1-146 (J3.1 to J4.5); and, for what the clauses mean, Commentary pages 16.1-495 to 16.1-498 and 16.1-504 to 16.1-508",
+ "rules": [
+  {
+   "id": "aisc360-22/lap-spacing-centres",
+   "type": "lap",
+   "mechanism": "lap.spacing",
+   "anchor": {"standard": "AISC 360-22", "clause": "J3.4"},
+   "says": "the least distance between the centres of holes, 2 2/3 times the bolt's diameter, is at most the pitch",
+   "le": [
+    ["row", "aisc360-22/J3.4-spacing", {"d": "diameter"}],
+    "pitch"
+   ]
+  },
+  {
+   "id": "aisc360-22/lap-spacing-clear",
+   "type": "lap",
+   "mechanism": "lap.spacing",
+   "anchor": {"standard": "AISC 360-22", "clause": "J3.4", "table": "J3.3"},
+   "says": "the least clear distance between holes, one bolt diameter, is at most the pitch less the nominal diameter of a hole",
+   "le": [
+    ["row", "aisc360-22/J3.4-clear", {"d": "diameter"}],
+    ["sub", "pitch", ["row", "aisc360-22/table-J3.3", {"d": "diameter", "hole": "holes"}]]
+   ]
+  },
+  {
+   "id": "aisc360-22/lap-end-distance-standard",
+   "type": "lap",
+   "mechanism": "lap.end_distance",
+   "anchor": {"standard": "AISC 360-22", "clause": "J3.5", "table": "J3.4"},
+   "says": "with standard holes, the least edge distance of Table J3.4 for the bolt's diameter is at most the distance from the centre of an end hole to the end of a plate",
+   "when": ["is", "holes", "standard"],
+   "le": [
+    ["row", "aisc360-22/table-J3.4", {"d": "diameter"}],
+    "end"
+   ]
+  },
+  {
+   "id": "aisc360-22/lap-end-distance-oversize",
+   "type": "lap",
+   "mechanism": "lap.end_distance",
+   "anchor": {"standard": "AISC 360-22", "clause": "J3.5", "table": "J3.4, J3.5"},
+   "says": "with oversize holes, the least edge distance of Table J3.4 for the bolt's diameter plus the increment C2 of Table J3.5 for an oversized hole is at most the distance from the centre of an end hole to the end of a plate",
+   "when": ["is", "holes", "oversize"],
+   "le": [
+    ["add",
+     ["row", "aisc360-22/table-J3.4", {"d": "diameter"}],
+     ["row", "aisc360-22/table-J3.5", {"d": "diameter", "hole": ["key", "oversized"]}]],
+    "end"
+   ]
+  },
+  {
+   "id": "aisc360-22/lap-side-distance-standard",
+   "type": "lap",
+   "mechanism": "lap.side_distance",
+   "anchor": {"standard": "AISC 360-22", "clause": "J3.5", "table": "J3.4"},
+   "says": "with standard holes, the least edge distance of Table J3.4 for the bolt's diameter is at most the distance from the centre of a hole to a side edge of a plate",
+   "when": ["is", "holes", "standard"],
+   "le": [
+    ["row", "aisc360-22/table-J3.4", {"d": "diameter"}],
+    "side"
+   ]
+  },
+  {
+   "id": "aisc360-22/lap-side-distance-oversize",
+   "type": "lap",
+   "mechanism": "lap.side_distance",
+   "anchor": {"standard": "AISC 360-22", "clause": "J3.5", "table": "J3.4, J3.5"},
+   "says": "with oversize holes, the least edge distance of Table J3.4 for the bolt's diameter plus the increment C2 of Table J3.5 for an oversized hole is at most the distance from the centre of a hole to a side edge of a plate",
+   "when": ["is", "holes", "oversize"],
+   "le": [
+    ["add",
+     ["row", "aisc360-22/table-J3.4", {"d": "diameter"}],
+     ["row", "aisc360-22/table-J3.5", {"d": "diameter", "hole": ["key", "oversized"]}]],
+    "side"
+   ]
+  },
+  {
+   "id": "aisc360-22/lap-spread-pitch-protected",
+   "type": "lap",
+   "mechanism": "lap.spread",
+   "anchor": {"standard": "AISC 360-22", "clause": "J3.6(a)"},
+   "says": "where the plates are painted or not open to atmospheric corrosion, the pitch is at most 24 times the thickness of the thinner plate and at most 12 inch",
+   "when": ["is", "surface", "protected"],
+   "le": [
+    "pitch",
+    ["row", "aisc360-22/J3.6-spacing-a", {"t": ["min", "a.thickness", "b.thickness"]}]
+   ]
+  },
+  {
+   "id": "aisc360-22/lap-spread-pitch-weathering",
+   "type": "lap",
+   "mechanism": "lap.spread",
+   "anchor": {"standard": "AISC 360-22", "clause": "J3.6(b)"},
+   "says": "where the plates are unpainted weathering steel open to atmospheric corrosion, the pitch is at most 14 times the thickness of the thinner plate and at most 7 inch",
+   "when": ["is", "surface", "weathering"],
+   "le": [
+    "pitch",
+    ["row", "aisc360-22/J3.6-spacing-b", {"t": ["min", "a.thickness", "b.thickness"]}]
+   ]
+  },
+  {
+   "id": "aisc360-22/lap-strength",
+   "type": "lap",
+   "mechanism": "lap.strength",
+   "anchor": {"standard": "AISC 360-22", "clause": "J3.7 and J3.11a", "equation": "J3-1, J3-6a, J3-6c", "table": "J3.2 with its note c, J3.3"},
+   "says": "the pull is at most the sum over the bolts of what each can carry: the least of 0.75 of its shear strength and 0.75 of the lesser of the bearing and the tearout strength of each plate at its hole, with deformation of the hole a design consideration. The shear stress is 83.3% of the tabulated value where the line of bolts is over 38 inch long. In each plate the bolt nearest that plate's end tears out to the end, and every other bolt to the next hole, and the two plates end at opposite ends of the line.",
+   "let": {
+    "dh": ["row", "aisc360-22/table-J3.3", {"d": "diameter", "hole": "holes"}],
+    "Fnv": ["mul",
+     ["row", "aisc360-22/table-J3.2-note-c", {"L": ["mul", ["sub", "count", "1"], "pitch"]}],
+     ["row", "aisc360-22/table-J3.2", {"fastener": "fastener", "stress": ["by", "threads", {"included": "Fnv_N", "excluded": "Fnv_X"}]}]],
+    "shear": ["mul", "0.75", ["row", "aisc360-22/J3-1", {"Fn": "Fnv", "Ab": ["mul", ["div", "pi", "4"], ["pow", "diameter", "2"]]}]],
+    "lc_end": ["sub", "end", ["div", "dh", "2"]],
+    "lc_next": ["sub", "pitch", "dh"],
+    "bearing_a": ["row", "aisc360-22/J3-6a", {"d": "diameter", "t": "a.thickness", "Fu": "a.Fu"}],
+    "bearing_b": ["row", "aisc360-22/J3-6a", {"d": "diameter", "t": "b.thickness", "Fu": "b.Fu"}],
+    "end_a": ["mul", "0.75", ["min", "bearing_a", ["row", "aisc360-22/J3-6c", {"lc": "lc_end", "t": "a.thickness", "Fu": "a.Fu"}]]],
+    "next_a": ["mul", "0.75", ["min", "bearing_a", ["row", "aisc360-22/J3-6c", {"lc": "lc_next", "t": "a.thickness", "Fu": "a.Fu"}]]],
+    "end_b": ["mul", "0.75", ["min", "bearing_b", ["row", "aisc360-22/J3-6c", {"lc": "lc_end", "t": "b.thickness", "Fu": "b.Fu"}]]],
+    "next_b": ["mul", "0.75", ["min", "bearing_b", ["row", "aisc360-22/J3-6c", {"lc": "lc_next", "t": "b.thickness", "Fu": "b.Fu"}]]]
+   },
+   "le": [
+    ["load", "pull"],
+    ["add",
+     ["min", "shear", "end_a", "next_b"],
+     ["min", "shear", "next_a", "end_b"],
+     ["mul", ["sub", "count", "2"], ["min", "shear", "next_a", "next_b"]]]
+   ]
+  },
+  {
+   "id": "aisc360-22/lap-ply-yield-a",
+   "type": "lap",
+   "mechanism": "lap.ply_yield",
+   "anchor": {"standard": "AISC 360-22", "clause": "J4.1(a)", "equation": "J4-1"},
+   "says": "the pull is at most 0.90 of the yield strength of the gross section of plate a, its width times its thickness",
+   "le": [
+    ["load", "pull"],
+    ["mul", "0.90", ["row", "aisc360-22/J4-1", {"Fy": "a.Fy", "Ag": ["mul", "a.width", "a.thickness"]}]]
+   ]
+  },
+  {
+   "id": "aisc360-22/lap-ply-yield-b",
+   "type": "lap",
+   "mechanism": "lap.ply_yield",
+   "anchor": {"standard": "AISC 360-22", "clause": "J4.1(a)", "equation": "J4-1"},
+   "says": "the pull is at most 0.90 of the yield strength of the gross section of plate b, its width times its thickness",
+   "le": [
+    ["load", "pull"],
+    ["mul", "0.90", ["row", "aisc360-22/J4-1", {"Fy": "b.Fy", "Ag": ["mul", "b.width", "b.thickness"]}]]
+   ]
+  },
+  {
+   "id": "aisc360-22/lap-ply-rupture-a",
+   "type": "lap",
+   "mechanism": "lap.ply_rupture",
+   "anchor": {"standard": "AISC 360-22", "clause": "J4.1(b), with D3 and B4.3b", "equation": "J4-2, D3-1", "table": "D3.1 case 1, J3.3"},
+   "says": "the pull is at most 0.75 of the rupture strength of the effective net section of plate a: its width less one hole, taken 1/16 inch wider than its nominal diameter, times its thickness, with a shear lag factor of 1",
+   "let": {
+    "hole_width": ["row", "aisc360-22/B4.3b-hole", {"dh": ["row", "aisc360-22/table-J3.3", {"d": "diameter", "hole": "holes"}]}]
+   },
+   "le": [
+    ["load", "pull"],
+    ["mul", "0.75", ["row", "aisc360-22/J4-2", {"Fu": "a.Fu", "Ae": ["row", "aisc360-22/D3-1", {"An": ["mul", ["sub", "a.width", "hole_width"], "a.thickness"], "U": "1"}]}]]
+   ]
+  },
+  {
+   "id": "aisc360-22/lap-ply-rupture-b",
+   "type": "lap",
+   "mechanism": "lap.ply_rupture",
+   "anchor": {"standard": "AISC 360-22", "clause": "J4.1(b), with D3 and B4.3b", "equation": "J4-2, D3-1", "table": "D3.1 case 1, J3.3"},
+   "says": "the pull is at most 0.75 of the rupture strength of the effective net section of plate b: its width less one hole, taken 1/16 inch wider than its nominal diameter, times its thickness, with a shear lag factor of 1",
+   "let": {
+    "hole_width": ["row", "aisc360-22/B4.3b-hole", {"dh": ["row", "aisc360-22/table-J3.3", {"d": "diameter", "hole": "holes"}]}]
+   },
+   "le": [
+    ["load", "pull"],
+    ["mul", "0.75", ["row", "aisc360-22/J4-2", {"Fu": "b.Fu", "Ae": ["row", "aisc360-22/D3-1", {"An": ["mul", ["sub", "b.width", "hole_width"], "b.thickness"], "U": "1"}]}]]
+   ]
+  },
+  {
+   "id": "aisc360-22/lap-block-shear-a",
+   "type": "lap",
+   "mechanism": "lap.block_shear",
+   "anchor": {"standard": "AISC 360-22", "clause": "J4.3, with B4.3b", "equation": "J4-5", "table": "J3.3"},
+   "says": "the pull is at most 0.75 of the block shear strength of plate a, for the block that shears along the line of holes from the end of the plate to the farthest hole and tears from that hole across to the side edge. The shear length is the end distance plus the pitch for each bolt after the first; the net shear length is less by the count less a half of holes; the net tension length is the side distance less half a hole; a hole is taken 1/16 inch wider than its nominal diameter; the tension stress is uniform",
+   "let": {
+    "hole_width": ["row", "aisc360-22/B4.3b-hole", {"dh": ["row", "aisc360-22/table-J3.3", {"d": "diameter", "hole": "holes"}]}],
+    "shear_length": ["add", "end", ["mul", ["sub", "count", "1"], "pitch"]],
+    "Agv": ["mul", "shear_length", "a.thickness"],
+    "Anv": ["mul", ["sub", "shear_length", ["mul", ["sub", "count", "1/2"], "hole_width"]], "a.thickness"],
+    "Ant": ["mul", ["sub", "side", ["div", "hole_width", "2"]], "a.thickness"]
+   },
+   "le": [
+    ["load", "pull"],
+    ["mul", "0.75", ["row", "aisc360-22/J4-5", {"Fu": "a.Fu", "Fy": "a.Fy", "Anv": "Anv", "Agv": "Agv", "Ant": "Ant", "Ubs": "1"}]]
+   ]
+  },
+  {
+   "id": "aisc360-22/lap-block-shear-b",
+   "type": "lap",
+   "mechanism": "lap.block_shear",
+   "anchor": {"standard": "AISC 360-22", "clause": "J4.3, with B4.3b", "equation": "J4-5", "table": "J3.3"},
+   "says": "the pull is at most 0.75 of the block shear strength of plate b, for the block that shears along the line of holes from the end of the plate to the farthest hole and tears from that hole across to the side edge. The shear length is the end distance plus the pitch for each bolt after the first; the net shear length is less by the count less a half of holes; the net tension length is the side distance less half a hole; a hole is taken 1/16 inch wider than its nominal diameter; the tension stress is uniform",
+   "let": {
+    "hole_width": ["row", "aisc360-22/B4.3b-hole", {"dh": ["row", "aisc360-22/table-J3.3", {"d": "diameter", "hole": "holes"}]}],
+    "shear_length": ["add", "end", ["mul", ["sub", "count", "1"], "pitch"]],
+    "Agv": ["mul", "shear_length", "b.thickness"],
+    "Anv": ["mul", ["sub", "shear_length", ["mul", ["sub", "count", "1/2"], "hole_width"]], "b.thickness"],
+    "Ant": ["mul", ["sub", "side", ["div", "hole_width", "2"]], "b.thickness"]
+   },
+   "le": [
+    ["load", "pull"],
+    ["mul", "0.75", ["row", "aisc360-22/J4-5", {"Fu": "b.Fu", "Fy": "b.Fy", "Anv": "Anv", "Agv": "Agv", "Ant": "Ant", "Ubs": "1"}]]
+   ]
+  }
+ ],
+ "unless": [
+  {
+   "mechanism": "lap.hole_use",
+   "when": ["is", "holes", "standard"],
+   "why": "a standard hole is the hole Section J3.3 asks for, and it may be used in every joint"
+  },
+  {
+   "mechanism": "lap.tension_with_shear",
+   "why": "a lap takes one load, a pull along the line of bolts, which the bolts carry in shear; no load of the type puts a bolt in tension"
+  },
+  {
+   "mechanism": "lap.slip",
+   "why": "a lap is a bearing-type joint, and Section J3.9 is for a slip-critical one"
+  },
+  {
+   "mechanism": "lap.ply_shear",
+   "why": "a lap takes one load, a pull along the line, which puts each plate in tension; no load of the type shears a plate, and tearing along the line of holes is tearout and block shear"
+  },
+  {
+   "mechanism": "lap.ply_compression",
+   "why": "a lap is pulled: its one load is a pull of zero or more, so neither plate is in compression"
+  }
+ ],
+ "left_out": [
+  {
+   "mechanism": "lap.tightening",
+   "why": "Section J3.2 asks for pretensioned bolts or a slip-critical joint by what the joint is for: where the RCSC Specification asks for one, under vibration where loosening matters, at the ends of some built-up members and at partial-length cover plates. None of these is a comparison of quantities or a key of the type, so there is no inequality to write"
+  },
+  {
+   "mechanism": "lap.hole_use",
+   "why": "a lap with oversize holes: Section J3.3(d) bans oversize holes in a bearing-type joint, which every lap is, and J3.3(b) asks for the approval of the engineer of record. A ban on one name of the key `holes` and an approval are not inequalities between quantities"
+  },
+  {
+   "mechanism": "lap.spacing",
+   "why": "the clear distance for a bolt of 1 1/8 inch or more. The hole of such a bolt is the last line of Table J3.3, which the task holds as two separate rows. A rule that read them would hold only from 1 1/8 inch; a `when` cannot read a diameter, and a second rule with that range would say nothing of every smaller bolt and leave it open. So the clear-distance rule reads the table's listed sizes, to 1 inch, and says nothing above"
+  },
+  {
+   "mechanism": "lap.end_distance",
+   "why": "two things. Note a of Table J3.4 permits a lesser distance if necessary, where Sections J3.11 and J4 are met, down to one bolt diameter, and less with approval: need and approval are neither a comparison of quantities nor a key, and they would have changed both rules of this mechanism. And a bolt over 1 1/4 inch: the last line of Table J3.4 is a separate row of the task, and a rule that read it would leave every smaller bolt open, so the rules say nothing over 1 1/4 inch"
+  },
+  {
+   "mechanism": "lap.side_distance",
+   "why": "the same two things as for the end distance: note a of Table J3.4, which would have changed both rules of this mechanism, and a bolt over 1 1/4 inch"
+  },
+  {
+   "mechanism": "lap.spread",
+   "why": "the greatest edge distance, the first sentence of Section J3.6. It limits the distance from each hole to the nearest edge of a plate by 12 times that plate's own thickness and by 6 inch. That needs, for each plate, the distance from a hole to the nearest edge of that plate. The type has `side` and `end`, each the least over both plates, so the distance of the plate with the greater one is not known, and a least distance cannot show that a greatest is met. The two rules written here answer the spacing only"
+  },
+  {
+   "mechanism": "lap.strength",
+   "why": "two things. A joint where deformation of the hole at service load is not a design consideration reads Equations J3-6b and J3-6d: that is a choice by what the joint is for, the type has no key for it, and it would have changed aisc360-22/lap-strength, which reads J3-6a and J3-6c. And a bolt of 1 1/8 inch or more, whose hole is the last line of Table J3.3: the rule reads the table's listed sizes, to 1 inch, and says nothing above"
+  },
+  {
+   "mechanism": "lap.ply_rupture",
+   "why": "a bolt of 1 1/8 inch or more, whose hole is the last line of Table J3.3: the rules read the table's listed sizes, to 1 inch, and say nothing above"
+  },
+  {
+   "mechanism": "lap.block_shear",
+   "why": "a bolt of 1 1/8 inch or more, whose hole is the last line of Table J3.3: the rules read the table's listed sizes, to 1 inch, and say nothing above"
+  },
+  {
+   "mechanism": "lap.ply_flexure",
+   "why": "Section J4.5 names four limit states and gives no equation for any of them, and the task has no row for the flexural strength of a plate. The standard gives no equation either for the moment that the offset of the two plates puts on them, and the type has no load that is a moment"
+  }
+ ]
+}

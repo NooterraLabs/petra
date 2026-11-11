@@ -1,0 +1,308 @@
+{
+ "format": "petra-rule-task/0",
+ "name": "aisc360-22/lap-2",
+ "about": "Every line of a lap's grid, to be answered from the pages of AISC 360-22 by two transcribers who see neither each other's rules nor the rules of the deck. The rows are the deck's and the 14 of the third formalizer run. The lap has two fields the deck's type lacks, which Sections J3.5 and J3.6 read: the distance to a side edge, and whether the steel is weathering steel open to the weather. A range is where the acceptance check samples parts, and is not a limit of the standard.",
+ "rows_from": [
+  "../../petra/decks/aisc360.json",
+  "a3.json"
+ ],
+ "types": [
+  {
+   "type": "plate",
+   "what": "a flat steel plate that a joint connects",
+   "fields": [
+    {
+     "name": "thickness",
+     "dim": "length",
+     "what": "its thickness",
+     "range": [
+      "1/8 inch",
+      "2 inch"
+     ]
+    },
+    {
+     "name": "width",
+     "dim": "length",
+     "what": "its gross width, across the force it carries",
+     "range": [
+      "2 inch",
+      "24 inch"
+     ]
+    },
+    {
+     "name": "Fy",
+     "dim": "stress",
+     "signed": true,
+     "what": "the specified minimum yield stress of its steel",
+     "range": [
+      "36 ksi",
+      "65 ksi"
+     ]
+    },
+    {
+     "name": "Fu",
+     "dim": "stress",
+     "signed": true,
+     "what": "the specified minimum tensile strength of its steel",
+     "range": [
+      "58 ksi",
+      "90 ksi"
+     ]
+    }
+   ]
+  },
+  {
+   "type": "lap",
+   "what": "one line of two or more bolts in single shear through two plates, in a bearing-type joint that is pulled along the line",
+   "alike": [
+    [
+     "a",
+     "b"
+    ]
+   ],
+   "fields": [
+    {
+     "name": "fastener",
+     "one_of": [
+      "Group 120",
+      "Group 144",
+      "Group 150"
+     ],
+     "what": "the strength group of the bolts, as Section J3.2 names it"
+    },
+    {
+     "name": "threads",
+     "one_of": [
+      "included",
+      "excluded"
+     ],
+     "what": "whether threads are in the shear plane"
+    },
+    {
+     "name": "diameter",
+     "dim": "length",
+     "what": "the nominal diameter of a bolt",
+     "range": [
+      "1/2 inch",
+      "1 1/4 inch"
+     ]
+    },
+    {
+     "name": "holes",
+     "one_of": [
+      "standard",
+      "oversize"
+     ],
+     "what": "the type of the holes in both plates"
+    },
+    {
+     "name": "count",
+     "dim": "dimensionless",
+     "whole": true,
+     "least": "2",
+     "what": "the number of bolts in the line",
+     "range": [
+      "2",
+      "12"
+     ]
+    },
+    {
+     "name": "pitch",
+     "dim": "length",
+     "what": "the distance between the centres of neighbouring holes",
+     "range": [
+      "1 inch",
+      "6 inch"
+     ]
+    },
+    {
+     "name": "end",
+     "dim": "length",
+     "what": "the least distance from the centre of an end hole to the end of either plate, along the line",
+     "range": [
+      "1/2 inch",
+      "4 inch"
+     ]
+    },
+    {
+     "name": "side",
+     "dim": "length",
+     "what": "the least distance from the centre of a hole to a side edge of either plate, across the line",
+     "range": [
+      "0.5 inch",
+      "8 inch"
+     ]
+    },
+    {
+     "name": "surface",
+     "one_of": [
+      "protected",
+      "weathering"
+     ],
+     "what": "whether the plates are painted or otherwise not open to atmospheric corrosion, or are unpainted weathering steel open to it"
+    },
+    {
+     "name": "joins",
+     "type": "plate",
+     "as": [
+      "a",
+      "b"
+     ],
+     "what": "the two plates"
+    }
+   ],
+   "loads": [
+    {
+     "name": "pull",
+     "dim": "force",
+     "least": "0 kip",
+     "adverse": true,
+     "range": [
+      "1 kip",
+      "1000 kip"
+     ],
+     "what": "the force the lap carries from one plate to the other along the line, as a required strength by LRFD load combinations"
+    }
+   ]
+  }
+ ],
+ "asks": [
+  {
+   "type": "lap",
+   "mechanism": "lap.tightening",
+   "what": "whether the bolts must be pretensioned or the joint slip-critical",
+   "anchor": {
+    "standard": "AISC 360-22",
+    "clause": "J3.2"
+   }
+  },
+  {
+   "type": "lap",
+   "mechanism": "lap.hole_use",
+   "what": "whether this type of hole may be used in this joint",
+   "anchor": {
+    "standard": "AISC 360-22",
+    "clause": "J3.3"
+   }
+  },
+  {
+   "type": "lap",
+   "mechanism": "lap.spacing",
+   "what": "minimum spacing of the holes",
+   "anchor": {
+    "standard": "AISC 360-22",
+    "clause": "J3.4"
+   }
+  },
+  {
+   "type": "lap",
+   "mechanism": "lap.end_distance",
+   "what": "minimum distance from an end hole to the end of a plate",
+   "anchor": {
+    "standard": "AISC 360-22",
+    "clause": "J3.5",
+    "table": "J3.4"
+   }
+  },
+  {
+   "type": "lap",
+   "mechanism": "lap.side_distance",
+   "what": "minimum distance from a hole to the side edge of a plate",
+   "anchor": {
+    "standard": "AISC 360-22",
+    "clause": "J3.5",
+    "table": "J3.4"
+   }
+  },
+  {
+   "type": "lap",
+   "mechanism": "lap.spread",
+   "what": "maximum spacing and edge distance",
+   "anchor": {
+    "standard": "AISC 360-22",
+    "clause": "J3.6"
+   }
+  },
+  {
+   "type": "lap",
+   "mechanism": "lap.strength",
+   "what": "shear of the bolts with bearing and tearout at their holes",
+   "anchor": {
+    "standard": "AISC 360-22",
+    "clause": "J3.7 and J3.11"
+   }
+  },
+  {
+   "type": "lap",
+   "mechanism": "lap.tension_with_shear",
+   "what": "tension on the bolts together with shear",
+   "anchor": {
+    "standard": "AISC 360-22",
+    "clause": "J3.8"
+   }
+  },
+  {
+   "type": "lap",
+   "mechanism": "lap.slip",
+   "what": "slip of a slip-critical joint",
+   "anchor": {
+    "standard": "AISC 360-22",
+    "clause": "J3.9"
+   }
+  },
+  {
+   "type": "lap",
+   "mechanism": "lap.ply_yield",
+   "what": "tensile yielding of each plate",
+   "anchor": {
+    "standard": "AISC 360-22",
+    "clause": "J4.1"
+   }
+  },
+  {
+   "type": "lap",
+   "mechanism": "lap.ply_rupture",
+   "what": "tensile rupture of each plate through its holes",
+   "anchor": {
+    "standard": "AISC 360-22",
+    "clause": "J4.1"
+   }
+  },
+  {
+   "type": "lap",
+   "mechanism": "lap.ply_shear",
+   "what": "shear of a plate as an element loaded in shear",
+   "anchor": {
+    "standard": "AISC 360-22",
+    "clause": "J4.2"
+   }
+  },
+  {
+   "type": "lap",
+   "mechanism": "lap.block_shear",
+   "what": "block shear rupture of each plate",
+   "anchor": {
+    "standard": "AISC 360-22",
+    "clause": "J4.3"
+   }
+  },
+  {
+   "type": "lap",
+   "mechanism": "lap.ply_compression",
+   "what": "yielding and buckling of a plate in compression",
+   "anchor": {
+    "standard": "AISC 360-22",
+    "clause": "J4.4"
+   }
+  },
+  {
+   "type": "lap",
+   "mechanism": "lap.ply_flexure",
+   "what": "bending of the plates, which a lap in single shear sets apart",
+   "anchor": {
+    "standard": "AISC 360-22",
+    "clause": "J4.5"
+   }
+  }
+ ]
+}

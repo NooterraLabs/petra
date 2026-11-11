@@ -1,0 +1,320 @@
+{
+ "source": "AISC, Companion to the AISC Steel Construction Manual, Volume 1: Design Examples, Version 16.0 (2023; the file P901-23W.pdf). Its preface says it goes with the 2022 AISC Specification, ANSI/AISC 360-22, and the 16th Edition Manual. Every number here is from an LRFD column.",
+ "examples": {
+  "lap.tightening": [],
+  "lap.hole_use": [],
+  "lap.spacing": [
+   {
+    "anchor": "AISC Design Examples V16.0, Example K.1, p. K-4: the minimum spacing of Section J3.4 for the 3/4 in. bolts, checked against s = 3 in. on the line through the tee's stem and the beam's web",
+    "given": {
+     "fastener": "Group 120",
+     "threads": "included",
+     "diameter": "3/4 inch",
+     "holes": "standard",
+     "count": "4",
+     "pitch": "3 inch",
+     "end": "1 1/4 inch",
+     "a.thickness": "0.340 inch",
+     "a.Fy": "50 ksi",
+     "a.Fu": "65 ksi",
+     "b.thickness": "0.380 inch",
+     "b.Fy": "50 ksi",
+     "b.Fu": "65 ksi"
+    },
+    "loads": {},
+    "side": "left",
+    "gives": "2.00 inch"
+   }
+  ],
+  "lap.end_distance": [
+   {
+    "anchor": "AISC Design Examples V16.0, Example K.1, p. K-3: the minimum edge distance of Table J3.4, checked against lev = 1 1/4 in. at the end of the tee's stem",
+    "given": {
+     "fastener": "Group 120",
+     "threads": "included",
+     "diameter": "3/4 inch",
+     "holes": "standard",
+     "count": "4",
+     "pitch": "3 inch",
+     "end": "1 1/4 inch",
+     "a.thickness": "0.340 inch",
+     "a.Fy": "50 ksi",
+     "a.Fu": "65 ksi",
+     "b.thickness": "0.380 inch",
+     "b.Fy": "50 ksi",
+     "b.Fu": "65 ksi"
+    },
+    "loads": {},
+    "side": "left",
+    "gives": "1 inch",
+    "within": "0.5 %"
+   },
+   {
+    "anchor": "AISC Design Examples V16.0, Example II.A-17A, Part B, p. IIA-175: the minimum edge distance of Table J3.4 for a 3/4 in. bolt, checked against the vertical lev = 1 1/4 in. of the single plate",
+    "given": {
+     "fastener": "Group 120",
+     "threads": "included",
+     "diameter": "3/4 inch",
+     "holes": "standard",
+     "count": "4",
+     "pitch": "3 inch",
+     "end": "1 1/4 inch",
+     "side": "1 1/2 inch",
+     "a.thickness": "1/4 inch",
+     "a.Fy": "50 ksi",
+     "a.Fu": "65 ksi",
+     "b.thickness": "0.380 inch",
+     "b.Fy": "50 ksi",
+     "b.Fu": "65 ksi"
+    },
+    "loads": {},
+    "side": "left",
+    "gives": "1 inch",
+    "within": "0.5 %"
+   }
+  ],
+  "lap.side_distance": [],
+  "lap.spread": [],
+  "lap.strength": [
+   {
+    "anchor": "AISC Design Examples V16.0, Example II.A-28A, p. IIA-269: strength of the bolted connection at the W18x35 beam's web, the line of four bolts through the 4 in. leg of the angle, for which p. IIA-267 sets the eccentricity aside; LRFD",
+    "given": {
+     "fastener": "Group 120",
+     "threads": "included",
+     "diameter": "3/4 inch",
+     "holes": "standard",
+     "count": "4",
+     "pitch": "3 inch",
+     "end": "1 1/4 inch",
+     "side": "1 1/2 inch",
+     "a.thickness": "3/8 inch",
+     "a.Fy": "50 ksi",
+     "a.Fu": "65 ksi",
+     "b.thickness": "0.300 inch",
+     "b.Fy": "50 ksi",
+     "b.Fu": "65 ksi"
+    },
+    "loads": {
+     "pull": "39.8 kip"
+    },
+    "side": "right",
+    "gives": "68.5 kip"
+   },
+   {
+    "anchor": "AISC Design Examples V16.0, Example II.A-29, Part B, p. IIA-291 (the same number in Part A, p. IIA-287): available shear transfer strength at the bolt holes, the line of four bolts through the 4 in. leg of the angle and the W16x50 beam's web, for which p. IIA-288 sets the eccentricity aside; LRFD",
+    "given": {
+     "fastener": "Group 120",
+     "threads": "included",
+     "diameter": "3/4 inch",
+     "holes": "standard",
+     "count": "4",
+     "pitch": "3 inch",
+     "end": "1 1/4 inch",
+     "a.thickness": "3/8 inch",
+     "a.Fy": "50 ksi",
+     "a.Fu": "65 ksi",
+     "b.thickness": "0.380 inch",
+     "b.Fy": "50 ksi",
+     "b.Fu": "65 ksi"
+    },
+    "loads": {
+     "pull": "54.0 kip"
+    },
+    "side": "right",
+    "gives": "71.6 kip"
+   }
+  ],
+  "lap.tension_with_shear": [],
+  "lap.slip": [],
+  "lap.ply_yield": [
+   {
+    "anchor": "AISC Design Examples V16.0, Example II.D-3, p. IID-26: tensile yielding of the 1/2 in. plate by Section J4.1(a). The plate governs: the two angles on the other side of the joint carry 160 kips (p. IID-24). LRFD",
+    "given": {
+     "fastener": "Group 120",
+     "threads": "included",
+     "diameter": "3/4 inch",
+     "holes": "oversize",
+     "count": "6",
+     "pitch": "3 inch",
+     "end": "1 1/2 inch",
+     "side": "3 inch",
+     "a.thickness": "1/2 inch",
+     "a.width": "6 inch",
+     "a.Fy": "50 ksi",
+     "a.Fu": "65 ksi"
+    },
+    "loads": {
+     "pull": "90.0 kip"
+    },
+    "side": "right",
+    "gives": "135 kip"
+   }
+  ],
+  "lap.ply_rupture": [
+   {
+    "anchor": "AISC Design Examples V16.0, Example II.D-3, p. IID-26: tensile rupture of the 1/2 in. plate through one oversized hole by Section J4.1(b). The plate governs: the two angles carry 139 kips (p. IID-25). LRFD",
+    "given": {
+     "fastener": "Group 120",
+     "threads": "included",
+     "diameter": "3/4 inch",
+     "holes": "oversize",
+     "count": "6",
+     "pitch": "3 inch",
+     "end": "1 1/2 inch",
+     "side": "3 inch",
+     "a.thickness": "1/2 inch",
+     "a.width": "6 inch",
+     "a.Fy": "50 ksi",
+     "a.Fu": "65 ksi"
+    },
+    "loads": {
+     "pull": "90.0 kip"
+    },
+    "side": "right",
+    "gives": "122 kip"
+   }
+  ],
+  "lap.ply_shear": [],
+  "lap.block_shear": [
+   {
+    "anchor": "AISC Design Examples V16.0, Example II.D-3, p. IID-27: block shear rupture of the 1/2 in. plate by Section J4.3. The plate governs: the two angles carry 238 kips (p. IID-25). LRFD",
+    "given": {
+     "fastener": "Group 120",
+     "threads": "included",
+     "diameter": "3/4 inch",
+     "holes": "oversize",
+     "count": "6",
+     "pitch": "3 inch",
+     "end": "1 1/2 inch",
+     "side": "3 inch",
+     "a.thickness": "1/2 inch",
+     "a.width": "6 inch",
+     "a.Fy": "50 ksi",
+     "a.Fu": "65 ksi"
+    },
+    "loads": {
+     "pull": "90.0 kip"
+    },
+    "side": "right",
+    "gives": "222 kip"
+   }
+  ],
+  "lap.ply_compression": [],
+  "lap.ply_flexure": []
+ },
+ "left_out": [
+  {
+   "anchor": "Example II.B-1, pp. IIB-4 to IIB-6: the single-plate web connection, three 7/8 in. bolts in one line through a 3/8 in. plate and the 0.355 in. web of a W18x50, with no eccentricity; bolt group 71.2 kips against 42.0 kips",
+   "why": "The sum has one end bolt. The source says the beam's web has no edge bolt, and the web is the thinner ply. A lap has an end on each plate, and its one `end` field cannot say that a plate has none, so the number is not that of a part the type can be. It is the nearest example in the source in which tearout governs a bolt of the line, apart from II.A-28A."
+  },
+  {
+   "anchor": "Example II.B-1, pp. IIB-7 and IIB-8: the web plate in shear yielding 101 kips, shear rupture 65.9 kips and block shear 82.2 kips",
+   "why": "A plate welded along one side that carries shear across it. The lap's plate is pulled in tension."
+  },
+  {
+   "anchor": "Example II.B-1, pp. IIB-9 to IIB-17: the flange plates, 3/4 in. by 7 in. with eight bolts; bolt group 194 kips, tensile yielding 237 kips, tensile rupture 183 kips, block shear 381 and 300 kips, compression by Section J4.4 237 kips",
+   "why": "Two lines of four bolts."
+  },
+  {
+   "anchor": "Example II.D-3, p. IID-22 and pp. IID-23 to IID-24: slip resistance 16.1 kips per bolt; strength of the bolt group 197 kips",
+   "why": "Double shear: the plate is between two angles. The joint is slip-critical, with oversized holes in the plate and standard holes in the angles."
+  },
+  {
+   "anchor": "Example II.D-3, pp. IID-24 and IID-25: the angles in tensile yielding 160 kips, tensile rupture 139 kips and block shear 238 kips",
+   "why": "Two angles, not a plate: the area is the shapes' own and the rupture has a shear lag factor."
+  },
+  {
+   "anchor": "Example K.1, pp. K-3 to K-8: the tee's stem on the beam's web; required bolt coefficient 2.20 against C = 2.81, stem shear yielding 117 kips, shear rupture 79.5 kips, block shear 97.3 kips, flexure by Section J4.5",
+   "why": "The source loads the line with an eccentricity of 3 in. and answers with a coefficient C; it prints no strength of the line pulled along itself. The stem carries shear across it, and its bending comes from that eccentricity, not from the offset of two lapped plates. Only the two detailing limits are taken."
+  },
+  {
+   "anchor": "Example II.A-17A, pp. IIA-172 to IIA-179: the single plate; strength at the bolt holes 58.5 kips with C/n = 0.885, shear yielding 86.4 kips, shear rupture 58.5 kips, block shear 65.3 kips",
+   "why": "The bolt strength carries a factor for eccentricity. The plate is welded along one side and carries shear. Its block has the shape of a lap plate's (n = 4, lev = 1 1/4 in., leh = 1 1/2 in., 1/4 in. plate), so a person may admit the 65.3 kips; I did not."
+  },
+  {
+   "anchor": "Example II.A-17A, p. IIA-175: horizontal edge distance at least 2d = 1.50 in.",
+   "why": "A rule of the Manual for a single-plate connection, not the minimum of Section J3.5."
+  },
+  {
+   "anchor": "Examples K.6 (p. K-28), K.7 (p. K-33), II.A-18 (p. IIA-200), II.A-19A (p. IIA-205), II.A-19B (p. IIA-213): single plates in shear",
+   "why": "Each bolt strength carries a factor for eccentricity (C/n = 0.823, 0.823, 0.885; C = 2.33, 3.53). II.A-19B also has an axial force across the line."
+  },
+  {
+   "anchor": "Example II.A-21, pp. IIA-238 and IIA-239: a bolted and welded shear splice, one line of four bolts through a 3/8 in. plate and a W16x50 web, designed for shear only",
+   "why": "It prints the number of bolts needed, 2.68 against 4, and no strength of the line."
+  },
+  {
+   "anchor": "Example II.A-28A, p. IIA-268: the 3 in. leg on the girder, 55.0 kips with C = 3.07; pp. IIA-269 to IIA-272: the angle in shear, block shear and flexure",
+   "why": "That leg is loaded with an eccentricity. The angle carries shear across it."
+  },
+  {
+   "anchor": "Example II.A-29, pp. IIA-289 and IIA-290: the angle in shear yielding 129 kips, shear rupture 87.8 kips and block shear 93.8 kips",
+   "why": "An angle's leg that carries shear across it, not a plate in tension."
+  },
+  {
+   "anchor": "Examples II.A-30 (p. IIA-293) and II.A-31 (p. IIA-301): tee connections",
+   "why": "The stem's bolts carry C = 2.45 for eccentricity. The flange of II.A-30 has eight bolts in two lines, and that of II.A-31 is welded."
+  },
+  {
+   "anchor": "Example II.A-17B, pp. IIA-180 ff.: a single plate under shear and an axial force; plate tensile yielding 327 kips and tensile rupture through five holes",
+   "why": "The tension runs across the line of bolts, so the net section crosses every hole. A lap is pulled along its line."
+  },
+  {
+   "anchor": "Examples II.A-1C, II.A-11C, II.A-12B, II.A-17C, II.A-28B: structural integrity checks",
+   "why": "Nominal strengths under Section B3.9, not LRFD design strengths, and the force is an axial one, across the bolt lines or along the bolts."
+  },
+  {
+   "anchor": "Examples II.A-1A, 1B, 2A, 2B, 4, 5, 8, 9 and K.3: double angles; II.A-10: two bent plates; II.A-11A and 11B: end plates",
+   "why": "Two angles or plates: double shear at the beam's web where it is bolted, and two lines of bolts at the support."
+  },
+  {
+   "anchor": "Examples II.A-12A to II.A-16 (seats), II.A-20, II.A-22, II.A-24, II.A-25 (bolt groups under an eccentric force)",
+   "why": "Not one line pulled along itself: seats bear, and the groups carry a coefficient C."
+  },
+  {
+   "anchor": "Example II.C-3, p. IIC-30: maximum spacing 24t = 9.00 in. for a 3/8 in. gusset on members not subject to corrosion",
+   "why": "The only number of Section J3.6 in the source (it cites J3.5(a), the clause's number in the 2016 Specification). The joint is slip-critical with two lines of 1 in. bolts on each of two gussets, at uneven spacings in the row (Fig. II.C-3-4 prints 8 1/4 in. and 7 in.), so it has no one pitch, and no edge distance of the row is printed. The fields the mechanism reads cannot all be read off."
+  },
+  {
+   "anchor": "Example II.C-3, pp. IIC-26 to IIC-29: slip 17.3 kips per bolt, gusset tensile yielding 657 kips, block shear 538 kips, bolt group 635 kips",
+   "why": "Two lines on each of two gussets; slip-critical; the yielding is on a Whitmore width."
+  },
+  {
+   "anchor": "Example II.D-1, p. IID-6: minimum edge distance 1 in. for 3/4 in. bolts by Table J3.4, against 1.53 in. to the tip of a tee's flange",
+   "why": "A hanger: four bolts in tension in two lines through the flanges of a tee and a beam. Not a lap, though the distance is to a side edge."
+  },
+  {
+   "anchor": "Example K.5, p. K-27: seat plate width 7 1/2 in. from Table J3.4 for two bolts on a 5 1/2 in. gage",
+   "why": "It prints a width, not the limit, and the two bolts are side by side through a beam's flange."
+  },
+  {
+   "anchor": "Example II.A-30, p. IIA-300: an edge distance of 0.895 in. accepted under footnote [a] of Table J3.4",
+   "why": "No number of the limit is printed, and the bolts are in a tee's flange."
+  },
+  {
+   "anchor": "Example J.3, p. J-11: one 3/4 in. bolt under tension 23.4 kips and shear 8.00 kips; available tension 25.5 kips",
+   "why": "One bolt, with a tension that the lap has no load for."
+  },
+  {
+   "anchor": "Examples J.4A (p. J-13) and J.4B (p. J-15): slip-critical splices",
+   "why": "Two connection plates, so two slip planes; slotted holes; more than one line of bolts."
+  },
+  {
+   "anchor": "Example J.5, p. J-17: slip of eight bolts under tension and shear, 54.4 kips",
+   "why": "A group of eight bolts with a tension on them."
+  },
+  {
+   "anchor": "Example D.9, p. D-27: net area of a 14 in. by 1/2 in. plate with staggered holes",
+   "why": "Four holes on two staggered lines, and it prints areas, not a strength."
+  },
+  {
+   "anchor": "Examples D.1 (p. D-2), D.2 (p. D-5), D.6 (p. D-17): bolted tension members",
+   "why": "A W-shape and angles, not plates, and each sets its connection aside."
+  },
+  {
+   "anchor": "Examples II.B-2 (p. IIB-20), II.C-1 (p. IIC-2), II.C-2 (p. IIC-16), II.D-1 (p. IID-2): flange plates, gussets and a tee's stem in tension",
+   "why": "The tension enters by welds. Where there are bolts (II.C-1, II.D-1) they are in two lines with tension on them. The yielding of a gusset or stem is on a Whitmore width, which the type has no field for."
+  }
+ ],
+ "notes": "The source has no lap of two plates worked whole. Each example here is a sub-part that the type describes: a line of bolts through two plies, one flat plate with one line of holes, or a detailing limit for a bolt. What I took as the plates: in K.1, a = the stem of a WT5x24.5 and b = the web of a W16x50; in II.A-17A, a = the single plate and b = the web of a W16x50; in II.A-28A, a = the 4 in. leg of an L4x3x3/8 and b = the coped web of a W18x35; in II.A-29, a = the 4 in. leg of an L4x3x3/8 and b = the web of a W16x50; in II.D-3, a = the 1/2 in. plate, and no b is given because the other ply is a pair of angles in double shear. So a rule that reads b.* will not reproduce the three II.D-3 examples, and that is for a person to settle. In II.D-3 `holes` and `side` are the plate's own (the angles have standard holes and 1 1/4 in.). `end` is the least printed distance along the line: in II.A-28A the angle has 1 1/4 in. and the coped web 1 1/2 in., and the source itself works the web's end bolt with 1 1/4 in.; in II.A-29, II.A-17A and K.1 the beam is not coped and its web has no end near the line. In II.A-28A the printed sum counts the bolts' shear and the web's bearing and tearout; the angle's own bearing and tearout are printed on p. IIA-268 (18.5 and 32.9 kips per bolt) and are above a bolt's 17.9 kips. No load is given for K.1 and II.A-17A: their shears act with an eccentricity. `within` on the two 1 inch examples: 1 in. is an entry of Table J3.4, exact as printed, and half a unit of its one digit would be half an inch. No example gives `surface`, and only II.D-3 gives a width. Left sides are not taken as examples: where the source prints one it is the load, given under `loads`. K.1 prints its spacing check as '2.00 in. > s = 3 in.', with the sign the wrong way round; the numbers are as printed. Mechanisms with no example in the source: lap.tightening, lap.hole_use, lap.side_distance, lap.spread, lap.tension_with_shear, lap.slip, lap.ply_shear, lap.ply_compression, lap.ply_flexure. See notes.md."
+}

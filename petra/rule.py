@@ -777,13 +777,21 @@ def _side_dim(mine: Reading, body: Mapping[str, Any]) -> Vector:
 def reproduces(mine: Reading, mechanism: str, examples: list[Worked]) -> Check:
     """Whether the mechanism's rules reproduce each worked example: the left or the right
     side of the rule with the largest ratio, or that ratio. An example gives what its
-    source states, so a rule that reads a field the example lacks does not reproduce it."""
+    source states, so a rule that reads a field the example lacks does not reproduce it.
+    A source that works one of several like parts, such as one plate of two, gives the
+    fields of that part alone: it is then held against the rules it gives every field of,
+    and the other rules are not tested by it."""
     if not examples:
         return Check("examples", "none", "no worked example")
     bodies = {r["id"]: r for r in mine.said.rules if r.get("mechanism") == mechanism}
     rules, spans = mine.rules[mechanism], mine.task.spans[mine.asks[mechanism].type]
     misses = []
+    whole_reading, every = mine, rules
     for e in examples:
+        mine, rules = whole_reading, every
+        given = [r for r in every if {n for n in grid._reads(r) if not n.startswith("load ")} | set(grid._keys(r.when)) <= set(e.part)]
+        if given and len(given) < len(every) and not set(grid._keys(mine.asks[mechanism].unless)) - set(e.part):
+            mine, rules = whole_reading.with_rules(mechanism, [bodies[r.id] for r in given], whole_reading.said.unless.get(mechanism)), given
         lacks = (set(grid._keys(mine.asks[mechanism].unless)) | {n for r in rules for n in grid._keys(r.when)}) - set(e.part)
         lacks = lacks or {n for r in rules if _is(r.when, e.part) for n in grid._reads(r)} - set(e.part)
         # A source may print a strength and no load. The side it prints is then worked out under two loads, and must not move.
