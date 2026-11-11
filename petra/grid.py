@@ -1047,7 +1047,7 @@ class Checked:
         return self.report.status
 
     def to_json(self) -> dict[str, Any]:
-        return {**self.report.to_json(), "card": self.card, "hashes": dict(self.hashes), "kernel": self.kernel, "repair": None}
+        return {**self.report.to_json(), "card": self.card, "hashes": dict(self.hashes), "path": "rules", "kernel": self.kernel, "repair": None}
 
     def text(self) -> str:
         from . import verify
@@ -1055,8 +1055,10 @@ class Checked:
         proofs = sum(bool(c.proof) for c in self.report.cells)
         kernel = verify.NO_KERNEL if self.kernel is None else f"petra-verify checked {proofs} of {proofs} proofs and gives the same verdict"
         out = self.report.lines()
-        return "\n".join([*out[:2], f"card       {self.hashes['card']}  {self.card}", f"design     {self.hashes['design']}  {self.path}",
-                          f"kernel     {kernel}", *out[2:]])
+        path = ("rules: the kernel worked out every cell from the rules deck" if self.kernel is not None
+                else "rules: the Python grid worked out every cell from the rules deck, and no kernel checked it")
+        return "\n".join([*out[:2], f"card      {self.hashes['card']}  {self.card}", f"design     {self.hashes['design']}  {self.path}",
+                          f"kernel     {kernel}", f"path       {path}", *out[2:]])
 
 
 def checked(design: Design, deck: Deck, card: str, text: str, card_path: str) -> Checked:

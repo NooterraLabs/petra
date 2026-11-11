@@ -203,6 +203,7 @@ With `--no-solve`, `petra check` computes no repair.
  "card": FILE,                                 the card the design was checked against
  "hashes": {"card": HASH, "design": HASH},     "sha256:HEX" of each text as UTF-8 with LF line ends
  "kernel": KERNEL | null,                      the kernel's word; null when no kernel ran
+ "path": "legacy",                             Python's models chose the checks; "rules" for a design of a deck's types
  "governing": {"strength": GOVERNING | null, "detailing": GOVERNING | null},
  "verdicts": [ENTRY, ...],                     one per claim, then "coverage"
  "unchecked": [UNCHECKED, ...],                each mode of a component's domain no requirement names, design order
@@ -307,6 +308,7 @@ The example below is the bolts obligation of the 60 kip shear tab in `tests/fixt
  "counts": {"proved": N, "refuted": N, "not_applicable": N, "waived": N, "open": N},
  "cells": [CELL, ...],                         one per answer, in the order of the grid
  "card": FILE, "hashes": {"card": HASH, "design": HASH},
+ "path": "rules",                              the kernel or the grid worked out the cells from the rules deck
  "kernel": {"verdict": STATUS, "checked": N, "hashes": {...}} | null,
  "repair": null}
 

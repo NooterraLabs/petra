@@ -325,6 +325,7 @@ rules      sha256:d80024f8...  aisc360-22
 card       sha256:b0372d69...  examples/deck/lap_unknown.card
 design     sha256:1ba41e3e...  examples/deck/lap_unknown.petra
 kernel     petra-verify checked 5 of 5 proofs and gives the same verdict
+path       rules: the kernel worked out every cell from the rules deck
 cells      5 proved, 0 refuted, 4 not applicable, 0 waived, 8 open
   splice/lap.spacing             open                    the deck has no rule for it (AISC 360-22 J3.4)
   splice/lap.end_distance        proved           0.667  lap-end-distance (AISC 360-22 J3.5, Table J3.4)

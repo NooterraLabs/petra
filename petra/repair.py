@@ -36,6 +36,10 @@ from .readout import Finding
 from .verdict import SEVERITY, STATUS
 
 INPUT_ERRORS = (LolaSyntaxError, LoweringError, ComponentError)
+
+LEGACY = "legacy: Python's models chose the checks and wrote the formulas, and no rules deck stands behind this verdict"
+"""What a report says of a design of the models' kinds. A design of a deck's types says the
+kernel worked out its cells (grid.Checked). The models go as their kinds move to decks."""
 """What a design that does not lower raises: the edit is not a step."""
 
 INCH_STEP = Fraction(1, 16)
@@ -429,7 +433,7 @@ class Checked:
         {"file", "status": "INPUT_ERROR", "error"}."""
         if self.report is None:
             return {"file": self.path, "status": "INPUT_ERROR", "error": self.error}
-        return {**self.report.to_json(), "card": self.card, "hashes": dict(self.hashes),
+        return {**self.report.to_json(), "card": self.card, "hashes": dict(self.hashes), "path": "legacy",
                 "kernel": None if self.kernel is None else self.kernel.to_json(),
                 "repair": None if self.repair is None else self.repair.to_json()}
 
@@ -442,7 +446,8 @@ class Checked:
         at = max((i + 1 for i, line in enumerate(out[:8]) if line.startswith("governing  ")), default=min(2, len(out)))
         out = out[:at] + ([] if self.repair is None else self.repair.lines()) + out[at:]
         kernel = verify.NO_KERNEL if self.kernel is None else self.kernel.line(self.status)
-        against = [f"card       {self.hashes['card']}  {self.card}", f"design     {self.hashes['design']}  {self.path}", f"kernel     {kernel}"]
+        against = [f"card       {self.hashes['card']}  {self.card}", f"design     {self.hashes['design']}  {self.path}", f"kernel     {kernel}",
+                   f"path       {LEGACY}"]
         at = next((i + 1 for i, line in enumerate(out[:4]) if line.startswith("scope  ")), min(2, len(out)))
         return "\n".join(out[:at] + against + out[at:])
 

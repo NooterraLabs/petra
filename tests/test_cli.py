@@ -58,7 +58,7 @@ class Check(Workspace):
         code, out, _ = run("check", str(CIRCUIT), "--json")
         self.assertEqual(code, EXIT_CODES["PASS"], "circuit_pass exits 0")
         report = json.loads(out)
-        self.assertEqual(set(report), {"file", "card", "hashes", "kernel", "design", "status", "governing", "verdicts", "unchecked", "repair"},
+        self.assertEqual(set(report), {"file", "card", "hashes", "kernel", "path", "design", "status", "governing", "verdicts", "unchecked", "repair"},
                          "the report has the documented keys")
         self.assertEqual(report["file"], str(CIRCUIT), "the file is named as given")
         for verdict in report["verdicts"]:
