@@ -280,11 +280,18 @@ class Checker(unittest.TestCase):
         self.assertIn("design.card", report.text)
 
     def test_a_crash_is_not_taken_for_a_verdict(self):
-        crashed = subprocess.CompletedProcess([], 1, "", "Traceback (most recent call last):\n  ...\nKeyError: 'x'\n")
-        with mock.patch.object(checker.subprocess, "run", return_value=crashed):
-            self.assertEqual(checker.check(DESIGN, CARD, 5).status, "ERROR")
+        """Petra's exit code 4 is any internal error, and a crash of the interpreter exits 1."""
+        trace = "Traceback (most recent call last):\n  ...\n"
+        for code, printed, status in ((1, trace + "KeyError: 'x'\n", "ERROR"), (4, trace + "ModuleNotFoundError: No module named 'x'\n", "ERROR"),
+                                      (4, trace + "petra.verify.Disagreement: design.petra: petra-verify gives FAIL\n", "DISAGREE"),
+                                      (3, "usage: petra check\n", "ERROR"), (3, "petra: design.petra:1:1: expected the header\n", "REFUSED"),
+                                      (0, "lap: FAIL\n", "ERROR"), (2, "lap: UNKNOWN\nneeds ...\n", "UNKNOWN"), (77, "", "ERROR")):
+            with mock.patch.object(checker.subprocess, "run", return_value=subprocess.CompletedProcess([], code, "", printed)):
+                self.assertEqual(checker.check(DESIGN, CARD, 5).status, status, (code, printed))
         with mock.patch.object(checker.subprocess, "run", side_effect=subprocess.TimeoutExpired("petra", 5)):
             self.assertEqual(checker.check(DESIGN, CARD, 5).status, "ERROR")
+        self.assertNotIn("ERROR", checker.SAID)
+        self.assertNotIn("DISAGREE", checker.SAID)
 
     def test_paths_are_taken_out_however_they_are_spelt(self):
         folder = Path.home() / "a-made-up-folder"

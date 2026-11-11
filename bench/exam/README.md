@@ -66,7 +66,7 @@ Every reply of the petra arm is counted once:
 |---|---|
 | PASS, FAIL, UNKNOWN, MARGINAL | Petra read the design and gave that status |
 | REFUSED | Petra read it and refused it as an input error |
-| DISAGREE | The kernel rejected a proof the Python checker took |
+| DISAGREE | The kernel and the Python checker differed |
 | ERROR | `petra check` crashed or ran past its time limit |
 | NONE | The agent handed in no design, so Petra said nothing |
 

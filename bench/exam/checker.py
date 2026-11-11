@@ -9,8 +9,10 @@ Every reply of the petra arm is counted as one of:
 
     PASS FAIL UNKNOWN MARGINAL   Petra read the design and gave that status
     REFUSED                      Petra read it and refused it as an input error (exit code 3)
-    DISAGREE                     the kernel rejected a proof the Python checker took (exit code 4)
-    ERROR                        `petra check` crashed or ran past its time limit
+    DISAGREE                     the kernel and the Python checker differed (exit code 4, with
+                                 petra.verify.Disagreement in what was printed)
+    ERROR                        `petra check` crashed (exit code 4 otherwise, or a status code
+                                 with no report) or ran past its time limit
     NONE                         the agent handed in no design, so Petra said nothing
 
 Petra "said something" on the first five. Nothing here knows any benchmark.
@@ -31,7 +33,7 @@ from bench.exam.data import ROOT
 GUIDE = ROOT / "petra" / "docs" / "skill.md"
 SAID = ("PASS", "FAIL", "UNKNOWN", "MARGINAL", "REFUSED")
 STATUSES = (*SAID, "DISAGREE", "ERROR", "NONE")
-BY_EXIT = {0: "PASS", 1: "FAIL", 2: "UNKNOWN", 5: "MARGINAL", 3: "REFUSED", 4: "DISAGREE"}
+BY_EXIT = {0: "PASS", 1: "FAIL", 2: "UNKNOWN", 5: "MARGINAL", 3: "REFUSED"}
 LONGEST = 20000
 """A report longer than this, in characters, is cut before it goes back to the agent."""
 
@@ -110,6 +112,10 @@ def check(design: str | None, card: str | None, timeout: float) -> Report:
     first = text.splitlines()[0] if text else ""
     if status in ("PASS", "FAIL", "UNKNOWN", "MARGINAL") and not first.endswith(f": {status}"):
         status = "ERROR"      # an exit code a crash can give too: only a report's own first line makes it a status
+    if status == "REFUSED" and not first.startswith("petra:"):
+        status = "ERROR"
+    if done.returncode == 4 and "petra.verify.Disagreement" in text:
+        status = "DISAGREE"   # 4 is any internal error, and this is the one that is the kernel's
     if len(text) > LONGEST:
         text = text[:LONGEST] + f"\n[the report goes on for {len(text) - LONGEST} more characters]"
     return Report(status, True, design, card, done.returncode, text, time.monotonic() - began)
