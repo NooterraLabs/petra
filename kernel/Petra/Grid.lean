@@ -3,13 +3,12 @@ A design against a deck of rules: its parts, and one cell for each answer the gr
 as `read_parts`, `cells`, `_answers` and `_unread` in petra/grid.py work them out. The cells
 are the kernel's own. proofs.json gives only hints: a partition or a point to try.
 
-Everything here that is found by name is found through a table, so the work grows with the
-files and not with their product. Where a part meets the deck, the work is the product of
-the two, and it is counted in steps before it is done: a design past `MAX_CELLS` cells or
-`MAX_STEPS` steps is refused there.
+Everything here that is found by name is found through a table kept in the order of its
+keys, so the work grows with the files and not with their product, whatever names a file
+holds. Where a part meets the deck, the work is the product of the two, and it is counted
+in steps before it is done: a design past `MAX_CELLS` cells or `MAX_STEPS` steps is refused
+there.
 -/
-import Std.Data.HashMap
-import Std.Data.HashSet
 import Petra.Deck
 
 namespace Petra
@@ -25,7 +24,7 @@ inductive Slot where
 structure Part where
   name : String
   kind : Kind
-  slots : Std.HashMap String Slot
+  slots : Std.TreeMap String Slot
   deriving Inhabited
 
 def Part.slot (part : Part) (field : String) : Option Slot := part.slots.get? field
@@ -37,21 +36,26 @@ def Part.joined (part : Part) (called : String) : Option String := do
   joined[k]?
 
 /-- The loads the card puts on the parts. `on` finds the card's input by the part, the load
-and the load case. `cases` holds, for a part and a load, the cases that put the load on the
-part, in the order of their names. -/
+and the load case. `put` holds, for a part, each load the card puts on it with the case
+that does, in the order of the loads' names and then of the cases'. `carried` holds each
+part with each load that some case puts on it. `cases` holds the load cases of the card,
+each once, in the order of their names: the names its `cases` lists and the case of each
+of its loads. -/
 structure Loads where
-  on : Std.HashMap (String × String × String) TapeInput := {}
-  cases : Std.HashMap (String × String) (Array String) := {}
+  on : Std.TreeMap (String × String × String) TapeInput := {}
+  put : Std.TreeMap String (Array (String × String)) := {}
+  carried : Std.TreeSet (String × String) := {}
+  cases : Array String := #[]
 
 /-- The items under each key, in their order. -/
-def grouped [BEq κ] [Hashable κ] (items : Array α) (key : α → κ) : Std.HashMap κ (Array α) :=
+def grouped [Ord κ] (items : Array α) (key : α → κ) : Std.TreeMap κ (Array α) :=
   items.foldl (init := {}) fun table x => table.alter (key x) fun
     | some found => some (found.push x)
     | none => some #[x]
 
 /-- The first item under each key. -/
-def firsts [BEq κ] [Hashable κ] (items : Array α) (key : α → κ) : Std.HashMap κ α :=
-  items.foldl (init := {}) fun table x => if table.contains (key x) then table else table.insert (key x) x
+def firsts [Ord κ] (items : Array α) (key : α → κ) : Std.TreeMap κ α :=
+  items.foldl (init := {}) fun table x => table.insertIfNew (key x) x
 
 /-- A quantity is of its field's dimension, more than zero and at least the field's least. -/
 def sized (dim : Dim) (least : Option Rat) (its : String) (range : Iv) : Except (String × String) Unit := do
@@ -62,8 +66,8 @@ def sized (dim : Dim) (least : Option Rat) (its : String) (range : Iv) : Except 
 /-- What a line gives its field, or the rule it breaks and why. `typed` holds each part of
 the design by its name and its type, `inputs` the card's inputs of each name, and `card` and
 `design` the two names as the labels of a tape hold them. -/
-def slotOf (card design : String) (typed : Std.HashSet (String × String))
-    (inputs : Std.HashMap String (Array Input)) (part : String) (field : Field) (args : Array Arg) :
+def slotOf (card design : String) (typed : Std.TreeSet (String × String))
+    (inputs : Std.TreeMap String (Array Input)) (part : String) (field : Field) (args : Array Arg) :
     Except (String × String) Slot := do
   match field.kind, args.toList with
   | .parts kind names, args =>
@@ -110,19 +114,19 @@ def readParts (rules : Rules) (card : Card) (design : Design) : StateM Findings 
   let cardName ← title "card" card.name
   let designName ← title "design" design.name
   let blocks := design.parts.getD #[]
-  let typed : Std.HashSet (String × String) := blocks.foldl (fun seen b => seen.insert (b.name, b.kind)) {}
+  let typed : Std.TreeSet (String × String) := blocks.foldl (fun seen b => seen.insert (b.name, b.kind)) {}
   let inputsNamed := grouped card.inputs (·.name)
   let kinds := firsts rules.kinds (·.name)
   let mut parts : Array Part := #[]
-  let mut names : Std.HashSet String := {}
+  let mut names : Std.TreeSet String := {}
   for block in blocks do
     if names.contains block.name then say "parts.1" "design" block.name "two parts have this name"
     names := names.insert block.name
     match kinds.get? block.kind with
     | none => say "parts.1" "design" block.name s!"{block.kind} is not a type of the deck of rules"
     | some kind =>
-      let mut slots : Std.HashMap String Slot := {}
-      let mut given : Std.HashSet String := {}
+      let mut slots : Std.TreeMap String Slot := {}
+      let mut given : Std.TreeSet String := {}
       let mut known := 0
       for line in block.lines do
         let item := s!"{block.name}.{line.field}"
@@ -144,19 +148,26 @@ def readParts (rules : Rules) (card : Card) (design : Design) : StateM Findings 
           unless given.contains field.name do say "parts.2" "design" block.name s!"lacks {field.name}"
       else modify fun found => { found with more := found.more + (kind.fields.size - known) }
       parts := parts.push { name := block.name, kind, slots }
-  let joins : Std.HashMap String Nat := parts.foldl (init := {}) fun table part => part.slots.fold (init := table) fun table _ slot =>
+  let joins : Std.TreeMap String Nat := parts.foldl (init := {}) fun table part => part.slots.foldl (init := table) fun table _ slot =>
     match slot with
     | .parts names => names.foldl (fun table name => table.insert name (table.getD name 0 + 1)) table
     | _ => table
   for part in parts do
     if joins.getD part.name 0 > 1 then say "parts.5" "design" part.name "is joined more than once, and a deck has no rule yet for a part that two others load"
-  let read : Std.HashSet String := blocks.foldl (init := {}) fun read block => block.lines.foldl (init := read) fun read line =>
+  let read : Std.TreeSet String := blocks.foldl (init := {}) fun read block => block.lines.foldl (init := read) fun read line =>
     line.args.foldl (init := read) fun read arg => match arg with
       | .given name => read.insert name
       | _ => read
-  let place : Std.HashMap String Part := firsts parts (·.name)
-  let mut on : Std.HashMap (String × String × String) TapeInput := {}
-  let mut cases : Std.HashMap (String × String) (Array String) := {}
+  let place : Std.TreeMap String Part := firsts parts (·.name)
+  let mut on : Std.TreeMap (String × String × String) TapeInput := {}
+  -- A name of the card's `cases` is the name of a load case, whether a load has it or not,
+  -- and a cell prints it. The case of a load is held to its limits below, where the load is
+  -- read, and a case that no load has is held to them here.
+  let ofLoads := setOf (card.inputs.filterMap (·.caseName))
+  for under in card.caseNames do
+    unless ofLoads.contains under do
+      if let .error why := short "the name of a load case" under then say "shape" "card" "cases" why
+      else if under.contains '/' then say "shape" "card" "cases" "the name of a load case holds no /: an entry is a rule and a case with a / between them"
   for input in card.inputs do
     if (inputsNamed.getD input.name #[]).size > 1 then say "parts.6" "card" input.name "two inputs have this name"
     match input.caseName, input.on, input.field with
@@ -173,36 +184,38 @@ def readParts (rules : Rules) (card : Card) (design : Design) : StateM Findings 
           else if on.contains (part, field, under) then say "parts.6" "card" input.name s!"{under} puts {field} on {part} twice"
           else if let .error why := short "the name of a load case" under then say "shape" "card" input.name why
           else if under.contains '/' then say "shape" "card" input.name "the name of a load case holds no /: an entry is a rule and a case with a / between them"
-          else
-            on := on.insert (part, field, under) ⟨s!"in:{cardName}.{input.name}", input.range⟩
-            cases := cases.alter (part, field) fun
-              | some found => some (found.push under)
-              | none => some #[under]
+          else on := on.insert (part, field, under) ⟨s!"in:{cardName}.{input.name}", input.range⟩
         | _ => say "parts.6" "card" input.name s!"a {its.kind.name} takes no load {field}"
     | _, _, _ => say "parts.6" "card" input.name "a load has its case, the part it is on and its field"
-  let asked : Std.HashSet (String × String) := rules.asks.foldl (fun asked ask => asked.insert (ask.kind, ask.mechanism)) {}
+  let asked : Std.TreeSet (String × String) := rules.asks.foldl (fun asked ask => asked.insert (ask.kind, ask.mechanism)) {}
   for w in card.waivers do
     unless (place.get? w.subject).any fun part => asked.contains (part.kind.name, w.mechanism) do
       say "parts.7" "card" s!"{w.subject}/{w.mechanism}" "the grid asks no such mechanism of a part of this name"
   unless card.claims.isEmpty do say "parts.8" "card" "claims" "a deck of rules does not read a claim yet"
   for key in card.stated do say "parts.8" "card" key "a deck of rules does not read these yet"
   unless design.params.isEmpty do say "parts.8" "design" "params" "a deck of rules does not read a param yet"
-  -- The cases of each load in the order of their names. A merge sort takes the same time
-  -- whatever order the card lists them in.
-  let sorted := cases.map fun _ found => (found.toList.mergeSort (fun a b => decide (a ≤ b))).toArray
-  return (parts, { on, cases := sorted })
+  -- `on` is kept in the order of the part, then the load, then the case. So going through
+  -- it gives each part its loads in the order of their names, and each load its cases in
+  -- the order of theirs, whatever order the card lists them in.
+  let put : Std.TreeMap String (Array (String × String)) := on.foldl (init := {}) fun table (part, load, under) _ =>
+    table.alter part fun
+      | some found => some (found.push (load, under))
+      | none => some #[(load, under)]
+  let carried : Std.TreeSet (String × String) := on.foldl (init := {}) fun found (part, load, _) _ => found.insert (part, load)
+  let cases : Std.TreeSet String := on.foldl (init := setOf card.caseNames) fun found (_, _, under) _ => found.insert under
+  return (parts, { on, put, carried, cases := cases.toArray })
 
 def Static.holds (loads : Loads) (part : Part) : Static → Bool
   | .is field name => match part.slot field with
     | some (.key mine) => mine == name
     | _ => false
-  | .loaded load => loads.cases.contains (part.name, load)
+  | .loaded load => loads.carried.contains (part.name, load)
   | .and cs => cs.foldl (fun so c => so && c.holds loads part) true
   | .or cs => cs.foldl (fun so c => so || c.holds loads part) false
   | .not c => !c.holds loads part
 
 /-- What a tape reads of `part` under a load case. `named` finds a part by its name. -/
-def site (named : Std.HashMap String Part) (loads : Loads) (part : Part) (under : Option String) : Site :=
+def site (named : Std.TreeMap String Part) (loads : Loads) (part : Part) (under : Option String) : Site :=
   let slot (called : Option String) (field : String) : Option Slot :=
     match called with
     | none => part.slot field
@@ -229,11 +242,12 @@ structure Settled where
   hinted : Bool := true
 
 /-- The partition with each label as the tape's input of that label. `place` finds the
-first input of a label. -/
-def Split.partition (place : Std.HashMap String Nat) : Split → Except String Partition
+first input of a label. It is made when the partition first splits, so a partition of one
+leaf, which names no input, costs no table. -/
+def Split.partition (place : Thunk (Std.TreeMap String Nat)) : Split → Except String Partition
   | .leaf => pure .leaf
   | .split label cut below above => do
-    let some k := place.get? label | throw s!"the partition splits {label}, which the tape does not read"
+    let some k := place.get.get? label | throw s!"the partition splits {label}, which the tape does not read"
     return .split k cut (← below.partition place) (← above.partition place)
 
 /-- The state the hints settle a tape on: proved by the first partition that proves every
@@ -248,7 +262,7 @@ then costs its own length to look at, however long the tape is: only a try that 
 the tape. -/
 def byHints (tape : Tape) (hints : Array Hint) (refutable : Bool) (left : Nat) : StateM Caches (State × String × Nat) := do
   if hints.isEmpty then return (.undecided, "proofs.json has no partition and no point for it", left)
-  let place : Std.HashMap String Nat :=
+  let place : Thunk (Std.TreeMap String Nat) := Thunk.mk fun _ =>
     tape.inputs.zipIdx.foldl (fun table (input, k) => if table.contains input.label then table else table.insert input.label k) {}
   let size := tape.size
   let fee (leaves : Nat) : Nat := feeOf size tape.inputs.size leaves
@@ -262,7 +276,7 @@ def byHints (tape : Tape) (hints : Array Hint) (refutable : Bool) (left : Nat) :
       | .error why => if reason.isEmpty then reason := why
     if let (some point, true) := (hint.point, refutable) then
       tries := tries.push (.refuted, fee 1, fun left =>
-        let given := Std.HashMap.ofList point.toList
+        let given : Std.TreeMap String Rat := point.foldl (fun table (label, x) => table.insert label x) {}
         match tape.inputs.mapM fun input => given.get? input.label with
         | some values =>
           if left < fee 1 + SPLIT * tape.inputs.size then pure (some SPENT, left) else tape.refuted values 0 left
@@ -301,15 +315,19 @@ def said (cells : Array Settled) : Array Settled :=
     else (out.push { s with reason := UNSAID }, 0)) (#[], MAX_REASONS)).1
 
 /-- Every cell of the design, in the order petra/grid.py lists them: for each part, each
-mechanism the grid asks of its type, and then each field that nothing reads. An error when
-there are more than `MAX_CELLS` of them, or when making them takes more than `MAX_STEPS`
-steps: the kernel stops there and settles none.
+mechanism the grid asks of its type, and then for each part each field and each load that
+nothing reads. An error when there are more than `MAX_CELLS` of them, or when making them
+takes more than `MAX_STEPS` steps: the kernel stops there and settles none.
+
+A rule that reads loads answers once for each load case of the card. Under a case that does
+not put every load the rule reads on the part, its cell is open: a load the card does not
+state is not taken as zero.
 
 A step is counted before the work it stands for. A line of the grid for a part is a step
 and one for each part of its `unless`. A rule of the line is a step, one for each part of
-its `when` and one for each load it reads. For a rule that answers, each case that puts a
-load it reads on the part is a step, for each such load. Writing a tape is the weight of
-its rule, and a tape is a step for each node. Then every rule of a part's type is looked
+its `when` and one for each load it reads. For a rule that answers and reads loads, each
+load case of the card is a step for each load the rule reads. Writing a tape is the weight
+of its rule, and a tape is a step for each node. Then every rule of a part's type is looked
 at once more for what it reads of the part: its look, and a step for each field it reads. -/
 def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hints : Array Hint) : StateM Caches (Except String Made) := do
   let over := s!"the deck of rules asks more than {MAX_CELLS} cells of this design, and the kernel makes no more"
@@ -319,19 +337,22 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hi
   let waivers := firsts card.waivers.zipIdx fun w => (w.1.subject, w.1.mechanism)
   let asksOf := grouped rules.asks (·.kind)
   let rulesOf := grouped rules.rules fun r => (r.kind, r.mechanism)
-  let lookOf : Std.HashMap (String × String) Nat := rulesOf.map fun _ line => line.foldl (fun n r => n + r.look) 0
+  let lookOf : Std.TreeMap (String × String) Nat := rulesOf.map fun _ line => line.foldl (fun n r => n + r.look) 0
   let named := firsts parts (·.name)
-  let answered : Std.HashSet String := rules.rules.foldl (fun found r => found.insert r.mechanism) {}
+  let answered : Std.TreeSet String := rules.rules.foldl (fun found r => found.insert r.mechanism) {}
   let cell (subject mechanism entry : String) (state : State) (reason : String := "") (waiver : Option (Nat × Waiver) := none) : Settled :=
     let claims := hintsFor subject mechanism entry
     { cell := { subject, mechanism, entry, state := (claims[0]?.map (·.state)).getD .undecided, tape := none,
                 partition := none, point := none, which := none },
       state, reason := clip reason, waiver, hinted := !claims.isEmpty }
-  let dsgOf (tape : Tape) (seen : Std.HashSet String) : Std.HashSet String :=
+  let dsgOf (tape : Tape) (seen : Std.TreeSet String) : Std.TreeSet String :=
     tape.inputs.foldl (fun seen i => if i.label.startsWith "dsg:" then seen.insert i.label else seen) seen
+  -- The loads of a list, for a reason: the first four by name, and how many more.
+  let listed (names : Array String) : String :=
+    " and no ".intercalate (names.toList.take 4) ++ (if names.size > 4 then s!" and {names.size - 4} more" else "")
   let mut out : Array Settled := #[]
-  let mut ranges : Std.HashSet (String × String × String) := {}
-  let mut dsg : Std.HashSet String := {}
+  let mut ranges : Std.TreeSet (String × String × String) := {}
+  let mut dsg : Std.TreeSet String := {}
   let mut steps := 0
   let mut left := MAX_WORK
   for part in parts do
@@ -351,30 +372,31 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hi
           out := out.push (pending "" s!"the deck has no rule for it{other}")
         for rule in answers do
           let tail := rule.entry
-          let casesOf (load : String) : Array String := loads.cases.getD (part.name, load) #[]
-          let missing := rule.loads.filter fun load => (casesOf load).isEmpty
-          if !missing.isEmpty then
-            let rest := if missing.size > 4 then s!" and {missing.size - 4} more" else ""
-            out := out.push (pending tail s!"the card puts no {" and no ".intercalate (missing.toList.take 4)}{rest} on {part.name}, which the rule reads")
-            continue
           let mut unders : Array (Option String) := #[none]
           if !rule.loads.isEmpty then
-            -- The cases that carry every load the rule reads, in the order of their names: the
-            -- cases of the load with the fewest, each looked up for every other load. That is
-            -- at most a look for each case of each load, which is what is counted.
-            let found := rule.loads.map casesOf
-            steps := steps + found.foldl (fun n among => n + among.size) 0
+            -- A card with no load case at all puts none of the rule's loads on the part.
+            if loads.cases.isEmpty then
+              out := out.push (pending tail s!"the card puts no {listed rule.loads} on {part.name}, which the rule reads")
+              continue
+            -- One cell for each load case of the card, in the order of their names. Each case
+            -- is looked up for each load the rule reads, which is what is counted.
+            steps := steps + loads.cases.size * rule.loads.size
             if steps > MAX_STEPS then return .error long
-            let fewest := found.foldl (fun least among => if among.size < least.size then among else least) found[0]!
-            unders := (fewest.filter fun c => rule.loads.all fun load => loads.on.contains (part.name, load, c)).map some
-          if unders.isEmpty then out := out.push (pending tail s!"no load case puts every load the rule reads on {part.name}")
+            unders := loads.cases.map some
           for under in unders do
             if out.size > MAX_CELLS then return .error over
-            steps := steps + rule.weight * (if rule.ranges.isEmpty then 1 else 2)
-            if steps > MAX_STEPS then return .error long
             let entry := match under with
               | some under => s!"{tail}/{under}"
               | none => tail
+            -- A case that does not put every load the rule reads on the part leaves the cell
+            -- open. No load is taken as zero: a card that means none states a load of zero.
+            if let some c := under then
+              let missing := rule.loads.filter fun load => !loads.on.contains (part.name, load, c)
+              if !missing.isEmpty then
+                out := out.push (pending entry s!"case {c} puts no {listed missing} on {part.name}, which the rule reads")
+                continue
+            steps := steps + rule.weight * (if rule.ranges.isEmpty then 1 else 2)
+            if steps > MAX_STEPS then return .error long
             let here := site named loads part under
             if !rule.ranges.isEmpty then
               match rule.tape here rule.ranges with
@@ -401,10 +423,14 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hi
               out := out.push (cell part.name ask.mechanism entry state reason)
               if state == .proved || state == .refuted then dsg := dsgOf tape dsg
   -- What a rule or a line of the grid reads of each part. Every rule of a part's type is
-  -- looked at here, whatever the card waives, so the look is counted again.
+  -- looked at here, whatever the card waives, so the look is counted again. The look of a
+  -- rule holds a step for each load it reads. A load is read by an expression of a rule
+  -- that applies to the part it is on. A `loaded` in a `when` or an `unless` asks whether
+  -- the load is there and reads nothing of it, so it is no reader.
   let rulesOfKind := grouped rules.rules (·.kind)
-  let readOf : Std.HashMap String Nat := rulesOfKind.map fun _ line => line.foldl (fun n r => n + r.look + r.fields.size) 0
-  let mut read : Std.HashSet (String × String) := {}
+  let readOf : Std.TreeMap String Nat := rulesOfKind.map fun _ line => line.foldl (fun n r => n + r.look + r.fields.size) 0
+  let mut read : Std.TreeSet (String × String) := {}
+  let mut readLoads : Std.TreeSet (String × String) := {}
   for part in parts do
     steps := steps + 1 + readOf.getD part.kind.name 0
     if steps > MAX_STEPS then return .error long
@@ -412,6 +438,7 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hi
       for field in ((ask.excuse.bind id).map Static.keys).getD #[] do read := read.insert (part.name, field)
     for rule in rulesOfKind.getD part.kind.name #[] do
       if rule.condition.all (·.holds loads part) then
+        for load in rule.loads do readLoads := readLoads.insert (part.name, load)
         for (called, field) in rule.fields do
           match called with
           | none => read := read.insert (part.name, field)
@@ -421,6 +448,13 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hi
       if out.size > MAX_CELLS then return .error over
       unless (field.kind matches .parts ..) || read.contains (part.name, field.name) do
         out := out.push (cell part.name UNREAD field.name .undecided s!"no rule of the deck reads {part.name}.{field.name}, so nothing checks it")
+    -- A load that nothing reads, once for each case that puts it on the part. Its entry is
+    -- `LOAD/CASE`, which no field's entry is: the name of a field holds no `/`.
+    for (load, under) in loads.put.getD part.name #[] do
+      if out.size > MAX_CELLS then return .error over
+      unless readLoads.contains (part.name, load) do
+        out := out.push (cell part.name UNREAD s!"{load}/{under}" .undecided
+          s!"no rule of the deck reads the load {load} that case {under} puts on {part.name}, so nothing checks it")
   if out.size > MAX_CELLS then return .error over
   -- No two cells have one key: `readRules` and `readParts` refuse what could make two, and
   -- this holds the list to it whatever they let through.

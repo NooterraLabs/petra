@@ -364,19 +364,32 @@ private theorem lnAt_sound {x : ℚ} (hx : 0 < x) (p : ℕ) :
 /-! ## The caches
 
 `lnPoint` and `expPoint` keep what they computed, under the numerator and the denominator
-of the argument. A cache is valid when every entry is right, and each call keeps it so. -/
+of the argument. A cache is valid when every entry is right, and each call keeps it so.
+
+A cache is a table kept in the order of its keys: by the numerator, and then by the
+denominator. The two facts below are what the table's own theorems ask of that order. It
+is an order, and two keys that it puts in one place are one key. -/
+
+private instance keyOrder : Std.TransCmp (lexOrd : Ord (Int × Nat)).compare :=
+  letI : Ord (Int × Nat) := lexOrd
+  (inferInstance : Std.TransOrd (Int × Nat))
+
+private theorem key_eq {q x : ℚ} (h : (lexOrd : Ord (Int × Nat)).compare (q.num, q.den) (x.num, x.den) = .eq) : q = x := by
+  letI : Ord (Int × Nat) := lexOrd
+  have h' : (q.num, q.den) = (x.num, x.den) := Std.LawfulEqOrd.eq_of_compare h
+  exact Rat.ext (congrArg Prod.fst h') (congrArg Prod.snd h')
+
+private theorem empty_get? {k : Int × Nat} {v : ℚ × ℚ} (h : (∅ : Cache).get? k = some v) : False := by
+  rw [Std.TreeMap.get?_eq_getElem?, Std.TreeMap.getElem?_emptyc] at h
+  cases h
 
 /-- The empty caches, which the kernel starts from, are valid. -/
 theorem Caches.valid_empty : ({} : Caches).Valid := by
   constructor
   · intro x v h _
-    have h' : (∅ : Cache).get? (x.num, x.den) = some v := h
-    rw [Std.HashMap.get?_eq_getElem?, Std.HashMap.getElem?_empty] at h'
-    cases h'
+    exact (empty_get? h).elim
   · intro x v h
-    have h' : (∅ : Cache).get? (x.num, x.den) = some v := h
-    rw [Std.HashMap.get?_eq_getElem?, Std.HashMap.getElem?_empty] at h'
-    cases h'
+    exact (empty_get? h).elim
 
 private theorem modify_ok {f : Caches → Caches} {c c' : Caches} {u : PUnit}
     (h : (modify f : M PUnit) c = .ok (u, c')) : c' = f c := by
@@ -384,27 +397,21 @@ private theorem modify_ok {f : Caches → Caches} {c c' : Caches} {u : PUnit}
   cases h'
   rfl
 
-private theorem key_eq {q x : ℚ} (h : ((q.num, q.den) == (x.num, x.den)) = true) : q = x := by
-  have h' := beq_iff_eq.mp h
-  exact Rat.ext (congrArg Prod.fst h') (congrArg Prod.snd h')
-
 /-- An entry of a cache that gained one is the new entry or an entry it had before: a full
 cache starts again from the new entry, and loses entries but gains no other. -/
 private theorem cached_get? {cache : Cache} {q x : ℚ} {v w : ℚ × ℚ}
     (h : (cached cache (q.num, q.den) v).get? (x.num, x.den) = some w) :
     (q = x ∧ w = v) ∨ cache.get? (x.num, x.den) = some w := by
   unfold cached at h
-  rw [Std.HashMap.get?_insert] at h
-  by_cases hk : ((q.num, q.den) == (x.num, x.den)) = true
+  rw [Std.TreeMap.get?_eq_getElem?, Std.TreeMap.getElem?_insert] at h
+  by_cases hk : (lexOrd : Ord (Int × Nat)).compare (q.num, q.den) (x.num, x.den) = .eq
   · rw [if_pos hk] at h
     cases h
     exact Or.inl ⟨key_eq hk, rfl⟩
   · rw [if_neg hk] at h
     split_ifs at h
     · exact Or.inr h
-    · have h' : (∅ : Cache).get? (x.num, x.den) = some w := h
-      rw [Std.HashMap.get?_eq_getElem?, Std.HashMap.getElem?_empty] at h'
-      cases h'
+    · exact (empty_get? h).elim
 
 /-- The three ways `lnPoint` returns: the argument is 1, the cache has it, or `grid` computes
 it and the cache gains it. -/

@@ -187,3 +187,6 @@ corpus/cases/deck/d34_large_bolt.petra	UNKNOWN			1 1/8 inch bolts: Table J3.3 li
 corpus/cases/deck/d35_edge_distance_unanswered.petra	UNKNOWN			the card waives the other three mechanisms with no rule, and the greatest edge distance of J3.6 stays open: the deck has no rule for it
 corpus/cases/deck/d36_far_from_an_edge.petra	NOT_PASS			holes 5 inch from the nearest edge of a 3/8 inch plate, over the 4.5 inch of J3.6: the deck has no rule for it, and the open cell keeps the lap from passing
 corpus/cases/deck/d37_no_side_or_surface.petra	INPUT_ERROR			a lap with no side and no surface, as one was written before the deck had those fields
+corpus/cases/deck/d38_case_without_the_pull.petra	UNKNOWN			the card of lap_pass with a second load case that states no pull: each rule that reads the pull is open under it, where it was passed on the first case alone
+corpus/cases/deck/d39_case_on_one_of_two_laps.petra	UNKNOWN			two laps, and a load case that puts the pull on one of them: the rules of the other are open under that case
+corpus/cases/deck/d40_two_cases_on_two_laps.petra	PASS			the laps of d39 with the pull stated on both in both cases, one of them zero: every rule is proved under each case

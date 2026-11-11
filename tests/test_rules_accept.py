@@ -346,6 +346,13 @@ class Alone(unittest.TestCase):
         idle = rule.reads(reading(lambda b: [b["rules"].pop(3), b["rules"].pop(0)]))
         self.assertIn("nothing reads strip.width, strip.T, strip.turns, strip.near.area, strip.far.area, strip.current", idle.detail)
 
+    def test_reads_does_not_count_a_load_that_only_a_when_asks_about(self):
+        """test/spark answers `when` the strip carries a current, and reads nothing of the
+        current. With test/heat gone no expression reads it, and `petra check` would leave a
+        design open at it (docs/format.md, "Cells from a deck of rules", item 8)."""
+        asked = rule.reads(reading(lambda b: b["rules"].pop(0)))
+        self.assertIn("nothing reads strip.width, strip.T, strip.turns, strip.near.area, strip.far.area, strip.current", asked.detail)
+
 
 class Parts(unittest.TestCase):
     def test_every_combination_of_keys_with_and_without_a_load_a_condition_asks_about(self):

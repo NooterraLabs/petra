@@ -57,7 +57,7 @@ MAX_NAME = 64
 """The most bytes a name may print in that a cell prints whole, as in kernel/Petra/Files.lean:
 the name of a part, a load case, a mechanism, a field, a load, a joined part and a `let`, and a rule's id."""
 UNREAD = "unread"
-"""The mechanism of the cell of a field that nothing reads. No line of the grid has this name."""
+"""The mechanism of the cell of a field or a load that nothing reads. No line of the grid has this name."""
 MAX_READ = 1_000_000
 """The most steps reading a deck may take, as in kernel/Petra/Files.lean."""
 MAX_TITLE = 200
@@ -213,7 +213,7 @@ def _field(body: Mapping[str, Any], load: bool = False) -> Field:
         return Field(name, body["what"], keys=keys)
     if "type" in body:
         names = tuple(body.get("as", [name]))
-        if not names or len(set(names)) != len(names) or not all(map(_name, names)):
+        if not names or not all(map(_name, names)) or len(set(names)) != len(names):
             raise DeckError(f"field {name}: `as` names each part once, in letters, digits and _")
         return Field(name, body["what"], type=str(body["type"]), names=names)
     dim = dimension(body["dim"])
@@ -294,7 +294,7 @@ class _Binder(rows._Reader):
         if isinstance(node, list) and node[:1] == ["key"] and len(node) == 2 and node[1] in known:
             return ("field", None, {None: node[1]})
         if isinstance(node, list) and node[:1] == ["by"] and len(node) == 3 and isinstance(node[2], dict):
-            if set(node[2]) != set(of(node[1])) or not set(node[2].values()) <= set(known):
+            if set(node[2]) != set(of(node[1])) or not all(isinstance(its, str) for its in node[2].values()) or not set(node[2].values()) <= set(known):
                 raise RowError(f"{what}: `by` gives one of the row's names for each name of {node[1]}")
             return ("field", node[1], dict(node[2]))
         raise RowError(f"{what}: a key is bound to a key field, to [\"key\", NAME] with one of {', '.join(known)}, or to [\"by\", FIELD, {{...}}]")
@@ -368,6 +368,8 @@ def read_deck(text: str) -> Deck:
         deck_rows = _named(found, "rows", lambda r: r.id)
         for t in body["types"]:
             only(t, ("type", "what", "fields", "loads"), f"type {t.get('type')!r}")
+            if not isinstance(t.get("type"), str):
+                raise DeckError(f"type {t.get('type')!r}: the name of a type is a text")
         types = _named([Type(t["type"], t["what"], _named([_field(f) for f in t["fields"]], "fields", lambda f: f.name),
                              _named([_field(f, True) for f in t.get("loads", [])], "loads", lambda f: f.name)) for t in body["types"]],
                        "types", lambda t: t.name)
@@ -383,7 +385,7 @@ def read_deck(text: str) -> Deck:
             anchor = anchored(a["anchor"], f"grid {a.get('mechanism')}: anchor")
             if unless is not None:
                 only(unless, ("why", "when"), f"grid {a.get('mechanism')}: unless")
-            if a["type"] not in types or _long(a["mechanism"]) or a["mechanism"] == UNREAD:
+            if not isinstance(a["type"], str) or not isinstance(a["mechanism"], str) or a["type"] not in types or _long(a["mechanism"]) or a["mechanism"] == UNREAD:
                 raise DeckError(f"grid {a.get('mechanism')}: a line has a type of the deck, mechanism, of at most {MAX_NAME} characters and not `{UNREAD}`, what, anchor and may have unless")
             when = _Binder(deck_rows, types[a["type"]], types).static(unless["when"]) if unless is not None and "when" in unless else None
             asks.append(Ask(a["type"], a["mechanism"], a["what"], anchor, when, str(unless["why"]) if unless is not None else None))
@@ -398,10 +400,12 @@ def read_deck(text: str) -> Deck:
         if len({(r.type, r.mechanism, r.id.rpartition("/")[2]) for r in rules}) != len(rules):
             raise DeckError("two rules for one line of the grid have ids that end alike after the last /, so their cells would have one entry")
         return Deck(str(body["name"]), export.sha256(text), deck_rows, types, tuple(asks), rules, text)
-    except RowError as exc:
+    except (RowError, DeckError) as exc:
         raise DeckError(str(exc)) from None
-    except (KeyError, TypeError, AttributeError, json.JSONDecodeError) as exc:
-        raise DeckError(f"not a deck ({type(exc).__name__}: {exc})") from None
+    except (KeyError, TypeError, AttributeError, ValueError) as exc:
+        # A ValueError that is none of the two above is the JSON reader's: text that is not
+        # JSON, or a whole number of more digits than Python turns into a number.
+        raise DeckError(f"not a deck ({type(exc).__name__}: {str(exc)[:200]})") from None
 
 
 @lru_cache(maxsize=None)
@@ -468,7 +472,11 @@ class Part:
 
 @dataclass(frozen=True)
 class Parts:
+    """The parts, and the load cases of the card in the order of their names: every case
+    the card states, whether it puts a load on a part or not."""
+
     parts: Mapping[str, Part]
+    cases: tuple[str, ...] = ()
 
 
 def _at(span: Span) -> str:
@@ -580,7 +588,7 @@ def read_parts(design: Design, deck: Deck) -> Parts:
     problems += [f"{design.path}: the card or the design states {what}, which a deck does not read yet" for what, there in unread if there]
     if problems:
         raise ComponentError(tuple(problems))
-    return Parts({name: Part(name, p.type, p.values, loads[name]) for name, p in parts.items()})
+    return Parts({name: Part(name, p.type, p.values, loads[name]) for name, p in parts.items()}, tuple(sorted(design.loads)))
 
 
 # --- a tape ----------------------------------------------------------------------------------------
@@ -918,9 +926,12 @@ def _ratio(nodes: list[list], low: int, high: int, box: list[Interval]) -> float
     return None
 
 
-def _answers(rule: Rule, ask: Ask, part: Part, parts: Mapping[str, Part]) -> Iterator[Cell]:
-    """The cells of one rule on one part: one for each load case the rule reads a load of,
-    and before it one that proves the rule's range, where it has one."""
+def _answers(rule: Rule, ask: Ask, part: Part, parts: Mapping[str, Part], cases: tuple[str, ...] = ()) -> Iterator[Cell]:
+    """The cells of one rule on one part. A rule that reads no load has one. A rule that
+    reads loads has one for each of `cases`, the load cases of the card, and under a case
+    that does not put every load it reads on the part its cell is open: a load the card
+    does not state is not taken as zero. Before a cell comes one that proves the rule's
+    range, where it has one."""
     tail, anchor = rule.id.rpartition("/")[2], _anchor(rule.anchor)
 
     def cell(entry: str, state: str, why: str = "", **more: Any) -> Cell:
@@ -932,16 +943,16 @@ def _answers(rule: Rule, ask: Ask, part: Part, parts: Mapping[str, Part]) -> Ite
         sides = [(tape.emit(low, env), tape.emit(high, env)) for low, high in pairs]
         return tape, [tape.node("add", [low, tape.node("neg", high)]) for low, high in sides], sides
 
-    reads = {name[5:] for name in _reads(rule) if name.startswith("load ")}
-    missing = sorted(name for name in reads if not part.loads.get(name))
-    if missing:
-        yield cell(tail, "open", f"the card puts no {' and no '.join(missing)} on {part.name}, which the rule reads")
+    reads = sorted(name[5:] for name in _reads(rule) if name.startswith("load "))
+    if reads and not cases:
+        yield cell(tail, "open", f"the card puts no {' and no '.join(reads)} on {part.name}, which the rule reads")
         return
-    cases = sorted(set.intersection(*(set(part.loads[name]) for name in reads))) if reads else [None]
-    if not cases:
-        yield cell(tail, "open", f"no load case puts {' and '.join(sorted(reads))} on {part.name} together")
-    for case in cases:
+    for case in cases if reads else [None]:
         entry = tail if case is None else f"{tail}/{case}"
+        missing = [name for name in reads if case not in part.loads.get(name, {})]
+        if missing:
+            yield cell(entry, "open", f"case {case} puts no {' and no '.join(missing)} on {part.name}, which the rule reads")
+            continue
         try:
             if rule.where:
                 tape, roots, _ = tape_of([w[:2] for w in rule.where], case)
@@ -991,7 +1002,7 @@ def cells(design: Design, deck: Deck, found: Parts) -> list[Cell]:
                 out.append(Cell(part.name, ask.mechanism, "", "not_applicable", ask.what, anchor, ask.excused))
             else:
                 rules = [r for r in deck.rules if (r.type, r.mechanism) == (ask.type, ask.mechanism) and _static(r.when, part)]
-                out += [c for r in rules for c in _answers(r, ask, part, found.parts)]
+                out += [c for r in rules for c in _answers(r, ask, part, found.parts, found.cases)]
                 if not rules:
                     out.append(Cell(part.name, ask.mechanism, "", "open", ask.what, anchor,
                                     f"the deck has no rule for it{' on a part like this one' if any(r.mechanism == ask.mechanism for r in deck.rules) else ''}"))
@@ -1000,8 +1011,13 @@ def cells(design: Design, deck: Deck, found: Parts) -> list[Cell]:
 
 def _unread(deck: Deck, found: Parts) -> list[Cell]:
     """An open cell for each quantity and each key that no rule or grid line reads for its
+    part, and for each load that no rule reads, once for each case that puts it on the
     part. A value nothing reads is a value nothing checks: a plate that no joint joins
-    would pass at any thickness."""
+    would pass at any thickness, and a joint whose rules read its shear alone would pass
+    under any tension. A load is read by an expression of a rule that applies to the part
+    it is on. A `loaded` in a `when` or an `unless` asks whether it is there, and reads
+    nothing of it. The cells are listed part by part: the part's fields in the order of
+    its type, and then its loads in the order of their names and of their cases' names."""
     read: set[tuple[str, str]] = set()
     for part in found.parts.values():
         names = {alias: part.values[f.name][n] for f in part.type.fields.values() if f.type is not None for n, alias in enumerate(f.names)}
@@ -1010,8 +1026,14 @@ def _unread(deck: Deck, found: Parts) -> list[Cell]:
         for name in fields:
             alias, dot, inner = name.partition(".")
             read.add((names[alias], inner) if dot else (part.name, name))
-    return [Cell(part.name, "unread", f.name, "open", f.what, "", f"no rule of the deck reads {part.name}.{f.name}, so nothing checks it")
-            for part in found.parts.values() for f in part.type.fields.values() if f.type is None and (part.name, f.name) not in read]
+    out = []
+    for part in found.parts.values():
+        out += [Cell(part.name, UNREAD, f.name, "open", f.what, "", f"no rule of the deck reads {part.name}.{f.name}, so nothing checks it")
+                for f in part.type.fields.values() if f.type is None and (part.name, f.name) not in read]
+        out += [Cell(part.name, UNREAD, f"{load}/{case}", "open", part.type.loads[load].what, "",
+                     f"no rule of the deck reads the load {load} that case {case} puts on {part.name}, so nothing checks it")
+                for load in sorted(part.loads) if (part.name, f"load {load}") not in read for case in sorted(part.loads[load])]
+    return out
 
 
 # --- the files, the kernel and the report ------------------------------------------------------------

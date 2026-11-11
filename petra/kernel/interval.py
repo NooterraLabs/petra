@@ -239,14 +239,33 @@ def _pi_at(_: None, p: int) -> Interval:
     return Interval.point(Q(16)) * _odd_series(Q(1, 5), -1, p) - Interval.point(Q(4)) * _odd_series(Q(1, 239), -1, p)
 
 
+def _text(x: Q) -> str:
+    """The number as a text that only it has: its numerator and its denominator in base 16,
+    which costs their length to write. The caches below are keyed by this text and not by
+    the number. Python hashes a whole number by its remainder on division by 2^61 - 1, so
+    a file can list many numbers of one hash, and a table keyed by them would compare each
+    with all the others. It hashes a text with a key no file knows."""
+    return f"{x.numerator:x}/{x.denominator:x}"
+
+
 @lru_cache(maxsize=4096)
+def _ln_cached(text: str) -> tuple[Q, Q]:
+    numerator, _, denominator = text.partition("/")
+    return _grid(_ln_at, Q(int(numerator, 16), int(denominator, 16)))
+
+
+@lru_cache(maxsize=4096)
+def _exp_cached(text: str) -> tuple[Q, Q]:
+    numerator, _, denominator = text.partition("/")
+    return _grid(_exp_at, Q(int(numerator, 16), int(denominator, 16)))
+
+
 def _ln_point(x: Q) -> tuple[Q, Q]:
-    return (Q(0), Q(0)) if x == 1 else _grid(_ln_at, x)
+    return (Q(0), Q(0)) if x == 1 else _ln_cached(_text(x))
 
 
-@lru_cache(maxsize=4096)
 def _exp_point(x: Q) -> tuple[Q, Q]:
-    return (Q(1), Q(1)) if x == 0 else _grid(_exp_at, x)
+    return (Q(1), Q(1)) if x == 0 else _exp_cached(_text(x))
 
 
 def i_ln(x: Interval) -> Interval:

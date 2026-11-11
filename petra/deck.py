@@ -279,7 +279,10 @@ class _Reader:
         self.problems: list[str] = []
 
     def same(self, op: str, dims: list[Vector]) -> Vector:
-        if len(set(dims)) > 1:
+        # Each is compared with the first. A set of them would be keyed by their exponents,
+        # which a deck writes as whole numbers of any length, and Python hashes a whole number
+        # by its remainder: a deck could give many dimensions one hash.
+        if any(d != dims[0] for d in dims[1:]):
             self.problems.append(f"{op} of {' and '.join(show(d) for d in dims)}")
         return dims[0]
 
@@ -382,6 +385,8 @@ def read(body: Any) -> Row:
         takes = {}
         for t in body["takes"]:
             only(t, ("name", "what", "one_of") if "one_of" in t else ("name", "what", "dim", "range"), str(t.get("name")))
+            if not isinstance(t.get("name"), str):
+                raise RowError("an input has a name, a text")
             if "one_of" in t:
                 keys = tuple(str(k) for k in t["one_of"])
                 if len(set(keys)) != len(keys) or not keys or "dim" in t or "range" in t:
@@ -414,9 +419,15 @@ def read(body: Any) -> Row:
             cases.append(Case(when, *reader.expr(case["is"])))
         for j in body.get("jumps", []):
             only(j, ("cases", "why"), "a jump")
-        jumps = {frozenset(n - 1 for n in j["cases"]): str(j["why"]) for j in body.get("jumps", [])}
-        if any(len(pair) != 2 or not pair <= set(range(len(cases))) for pair in jumps) or not all(jumps.values()):
-            raise RowError("a jump names two of the row's cases by number, from 1, and says why")
+        jumps = {}
+        for j in body.get("jumps", []):
+            # A number of a jump is one of the row's cases before it is a key. A file could list
+            # whole numbers that share a hash, and a table keyed by them would cost the square
+            # of their count.
+            ends = [n - 1 for n in j["cases"]]
+            if not all(isinstance(n, (int, float)) and 0 <= n < len(cases) and n == int(n) for n in ends) or len({int(n) for n in ends}) != 2 or not str(j["why"]):
+                raise RowError("a jump names two of the row's cases by number, from 1, and says why")
+            jumps[frozenset(int(n) for n in ends)] = str(j["why"])
         out = dimension(gives["dim"])
         problems = reader.problems + [f"case {n + 1} gives a {show(c.dim)}, and the row gives a {show(out)}" for n, c in enumerate(cases) if c.dim != out]
         return Row(where, anchor, str(gives["name"]), out, takes, tuple(cases), jumps, tuple(dict.fromkeys(problems)))
@@ -445,7 +456,9 @@ def _table(body: Mapping[str, Any], takes: Mapping[str, Input], out: Vector, pro
             problems.append(f"the side that reads {name} is not all {show(i.dim)}")
         values = [None if end is None else end[0] for end in ends]
         if "at" in a:
-            if None in values or values != sorted(set(values)):
+            # Each value is above the one before it, which says both that they are in order and
+            # that each is there once. A set of them would be keyed by numbers the deck chooses.
+            if any(x is None for x in values) or any(not lo < hi for lo, hi in zip(values, values[1:])):
                 raise RowError(f"the values {name} is read at are in order, each once")
             return Axis(name, at=tuple(values))
         bands = tuple(zip(values[::2], values[1::2]))
@@ -472,8 +485,13 @@ def _table(body: Mapping[str, Any], takes: Mapping[str, Input], out: Vector, pro
     cells = tuple(tuple(cell(c) for c in line) for line in lines)
     if len(cells) != axes[0].places or any(len(line) != (axes[1].places if len(axes) == 2 else 1) for line in cells):
         raise RowError(f"the cells are {axes[0].places} lines" + (f" of {axes[1].places}" if len(axes) == 2 else "") + ", one for each place")
+    sides = [a.by for a in axes]
+    # Each name is a side of the table, of which there are two at most, before any set is
+    # made of them: a list of whole numbers that share a hash would make a slow set.
+    if not all(isinstance(side, str) and side in sides for side in (*body.get("rises", []), *body.get("falls", []))):
+        raise RowError("`rises` and `falls` name sides of the table, and no side is in both")
     rises, falls = frozenset(body.get("rises", [])), frozenset(body.get("falls", []))
-    if not (rises | falls) <= {a.by for a in axes} or rises & falls:
+    if rises & falls:
         raise RowError("`rises` and `falls` name sides of the table, and no side is in both")
     return Table(axes, cells, rises, falls)
 
@@ -706,10 +724,12 @@ def _renamings(row: Row, other: Row) -> Iterator[dict[str, str]]:
     if set(row.takes) == set(other.takes) and all(row.takes[n].kind == other.takes[n].kind for n in row.takes):
         yield {name: name for name in row.takes}
         return
-    by_dim: dict[tuple, list[str]] = {}
+    # The inputs of each kind, under a text of the kind: a kind holds the exponents of a
+    # dimension, which are numbers a deck chooses, and a table is keyed by none of those.
+    by_dim: dict[str, list[str]] = {}
     for name, i in other.takes.items():
-        by_dim.setdefault(i.kind, []).append(name)
-    groups = [[n for n, i in row.takes.items() if i.kind == kind] for kind in by_dim]
+        by_dim.setdefault(repr(i.kind), []).append(name)
+    groups = [[n for n, i in row.takes.items() if repr(i.kind) == kind] for kind in by_dim]
     for choice in itertools.islice(itertools.product(*(itertools.permutations(names) for names in by_dim.values())), 5040):
         yield {a: b for mine, theirs in zip(groups, choice) for a, b in zip(mine, theirs)}
 
