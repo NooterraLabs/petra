@@ -309,6 +309,13 @@ class Decks(unittest.TestCase):
         self.wrong("'4e0' is not a number", lambda b: b["rules"][2]["le"][0].__setitem__(1, ["sub", "4e0", "gap"]))
         self.wrong("'1_0' is not a number", lambda b: b["rules"][2]["le"][0].__setitem__(1, ["pow", "gap", "1_0"]))
 
+    def test_what_a_field_is_is_a_text(self):
+        """The kernel refuses a field whose `what` is true, a number or empty, and so does the
+        grid: bench/kernel_grid.py found a damaged deck that only the kernel refused."""
+        for value in (True, 1, ["its width"], ""):
+            with self.subTest(value=value):
+                self.wrong("`what`, a text, and one of `dim`, `one_of` and `type`", lambda b: b["types"][0]["fields"][0].__setitem__("what", value))
+
     def test_a_line_of_the_grid_names_a_type_of_the_deck(self):
         self.wrong("grid strip.creep: a line has a type of the deck", lambda b: b["grid"][3].__setitem__("type", "strap"))
         self.wrong("not a deck (KeyError: 'why')", lambda b: b["grid"][5].__setitem__("unless", {}))

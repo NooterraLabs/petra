@@ -168,8 +168,8 @@ def _name(name: Any) -> bool:
 
 def _field(body: Mapping[str, Any], load: bool = False) -> Field:
     allowed = {"name", "what", "dim", "least"} if load else {"name", "what", "dim", "least", "one_of", "type", "as", "signed", "whole"}
-    if set(body) - allowed or sum(key in body for key in ("dim", "one_of", "type")) != 1 or not body.get("what") or not _name(body.get("name")):
-        raise DeckError(f"field {body.get('name')!r}: it has a name of letters, digits and _, `what` and one of `dim`, `one_of` and `type`, and may have {', '.join(sorted(allowed))}")
+    if set(body) - allowed or sum(key in body for key in ("dim", "one_of", "type")) != 1 or not (isinstance(body.get("what"), str) and body["what"]) or not _name(body.get("name")):
+        raise DeckError(f"field {body.get('name')!r}: it has a name of letters, digits and _, `what`, a text, and one of `dim`, `one_of` and `type`, and may have {', '.join(sorted(allowed))}")
     name = body["name"]
     if "one_of" in body:
         keys = tuple(str(k) for k in body["one_of"])
