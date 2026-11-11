@@ -10,12 +10,15 @@ It also kept `AMBIGUITIES.md`: 61 places where the pages were silent, unclear or
 
 ## What was changed afterwards
 
-Two changes, each after the specification gained the sentence that settles the question:
+Five changes, each after the specification gained the sentence that settles the question:
 
 - Dimensions are compared by their exponents where a file meets the deck, so `moment` and `energy` are one dimension. The reading had compared them by name.
 - The cells for values that nothing reads come after every other cell. The reading had listed them after each part.
+- A row, a line of the grid or a rule with no anchor is refused, and so is an anchor that lacks its standard or its clause. The reading had taken both.
+- Bands are refused when one has its lower end at or above its upper end, or starts before the one before it ends. The reading had taken them in any order.
+- Listed values of `at` are refused unless each is above the one before it. The reading had taken them in any order.
 
-Nothing else was edited.
+The last three were written by the agent that changed the kernel, which had seen the kernel. Nothing else was edited.
 
 ## How it is used
 
@@ -70,7 +73,7 @@ The damaged decks they differ on, by what differs:
 
 No deck with bands out of order came up under this seed.
 
-The pages now say that an anchor names its standard and its clause, and that bands and listed values are in order ([deck.md](../../docs/deck.md)). This reading was not edited for it. A copy of it with those three refusals added differs from the kernel on 51 of the 3,000 decks: the rows of the table from `what` down.
+The pages now say that an anchor names its standard and its clause, and that bands and listed values are in order ([deck.md](../../docs/deck.md)). This reading then gained those three refusals, and with them it differs from the kernel on 51 of the 3,000 decks: the rows of the table from `what` down.
 
 ## What it is not
 

@@ -771,9 +771,10 @@ function optText(o, k, what) {
   if (Object.hasOwn(o, k) && !isStr(o[k])) throw DE(`${what}.${k} is not a text`);
 }
 function checkAnchor(a, what) {
-  if (a === undefined) return;
+  if (a === undefined) throw DE(`${what} has no anchor`);
   checkKeys(a, ['standard', 'clause', 'equation', 'table', 'page'], [], `${what}.anchor`);
   for (const k of Object.keys(a)) if (!isStr(a[k])) throw DE(`${what}.anchor.${k} is not a text`);
+  if (!a.standard || !a.clause) throw DE(`${what}.anchor lacks its standard or its clause`);
 }
 function checkName(s, what) {
   if (!isStr(s) || !NAME_RE.test(s)) throw DE(`${what} ${short(s)} is not a name of letters, digits and _`);
@@ -911,6 +912,10 @@ function loadSide(s, row, which) {
       }
       return [lo, hi];
     });
+    bands.forEach(([lo, hi], i) => {
+      if (hi && qcmp(lo, hi) >= 0) throw DE(`band ${i + 1} has its lower end at or above its upper end`);
+      if (i > 0 && qcmp(bands[i - 1][1], lo) > 0) throw DE(`band ${i + 1} starts before band ${i} ends`);
+    });
     return { by: s.by, kind: 'bands', bands, closed, count: bands.length };
   }
   if (Object.hasOwn(s, 'closed')) throw DE(`table.${which} has closed and no bands`);
@@ -920,6 +925,7 @@ function loadSide(s, row, which) {
     if (!q) throw DE(`value ${i + 1} of table.${which}.at, ${short(v)}, is not a quantity of the input's dimension`);
     return q;
   });
+  at.forEach((v, i) => { if (i > 0 && qcmp(at[i - 1], v) >= 0) throw DE(`value ${i + 1} of table.${which}.at is not above the one before it`); });
   return { by: s.by, kind: 'at', at, count: at.length };
 }
 
