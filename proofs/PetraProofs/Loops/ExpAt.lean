@@ -1,74 +1,19 @@
 /-
-The exponential, in a form the logic can read.
+The kernel's `expAt` encloses the exponential.
 
-The kernel's `expAt` is a `partial def` that runs a `while`, so nothing can be proved of it.
-`Provable.expAt` below is the same computation. The negative case calls the non-negative
-one once, so there is no recursion on `x`. The loop of the series is a recursion on a count
-of rounds left, and the squarings are a recursion on their number. It meets `ExpAtSpecOf`.
+`expAt` in kernel/Petra/Num.lean reduces `x` to `r = x / 2 ^ s` with `0 ≤ r ≤ 1/2`, sums the
+series for exp r in fixed point (`expGo`), adds its remainder, and squares `s` times
+(`sqGo`), each step rounded outward. For `x < 0` it returns `1 / exp (-x)`. This file proves
+that it meets `ExpAtSpecOf`: the interval it returns holds exp x.
 
-What was kept the same: the reduction `r = x / 2 ^ s` with `s = bitlen (ceil x) + 1`, the
-working precision `q = p + 2 * s + 2 * ceil x`, the terms `scale ta tb (r / n)`, the test
-`2 ^ n * fact ≤ one` that keeps the loop going, the remainder `ceil (one / (2 ^ n * fact))`
-added to the upper sum, the `s` squarings rounded outward, and `1 / exp (-x)` for `x < 0`.
-
-What differs: the loop is given `q + 1` rounds. The kernel's loop never runs more, since
-`2 ^ n ≤ 2 ^ n * fact ≤ 2 ^ q` needs `n ≤ q`. `expGo_stops` proves that the rounds do not
-run out before the test ends the loop. So the two should return the same interval on every
-input when run. That is not proved, and cannot be while the kernel's is a `partial def`.
-They agreed on every input tried: docs/proved.md.
+`expGo` is a recursion on a count of rounds, `q + 1` of them. `expGo_stops` proves that the
+count never runs out before the loop's own test ends it, so the count changes no result.
 -/
 import Mathlib.Analysis.Complex.Exponential
 import Mathlib.Analysis.SpecialFunctions.Exp
-import PetraProofs.Trust
+import PetraProofs.Spec
 
-namespace Petra.Provable
-
-/-! ## The definitions
-
-These five use core Lean and the kernel's own `scale`, `qi`, `qd` and `bitlen` only: no
-Mathlib name and no Mathlib tactic. They can be moved to `kernel/Petra/Num.lean` as they
-stand. -/
-
-/-- The loop of the series sum_n r^n / n!. `[ta, tb]` holds term `n` times `one`, `[a, b]`
-holds the sum of the terms up to `n` times `one`, and `fact` is `(n + 1)!`. The first
-argument counts the rounds left. It returns the sum, `n` and `fact`. -/
-def expGo (one : Int) (r : Rat) :
-    Nat → Int → Int → Int → Int → Nat → Int → Int × Int × Nat × Int
-  | 0, _, _, a, b, n, fact => (a, b, n, fact)
-  | rounds + 1, ta, tb, a, b, n, fact =>
-    if (2 : Int) ^ n * fact ≤ one then
-      let t := scale ta tb (r / qi (Int.ofNat (n + 1)))
-      expGo one r rounds t.1 t.2 (a + t.1) (b + t.2) (n + 1) (fact * Int.ofNat (n + 1 + 1))
-    else (a, b, n, fact)
-
-/-- `j` squarings of `[a, b] / one`, each rounded outward. -/
-def sqGo (one : Int) : Nat → Int → Int → Int × Int
-  | 0, a, b => (a, b)
-  | j + 1, a, b => sqGo one j (Int.fdiv (a * a) one) (- Int.fdiv (-(b * b)) one)
-
-/-- An enclosure of `exp (r * 2 ^ s)` times `2 ^ q`, for `0 ≤ r ≤ 1/2`: the series for
-`exp r`, its remainder, and `s` squarings. -/
-def expInt (r : Rat) (s q : Nat) : Int × Int :=
-  let one : Int := (2 : Int) ^ q
-  let g := expGo one r (q + 1) one one one one 0 1
-  sqGo one s g.1 (g.2.1 + (- Int.fdiv (-one) ((2 : Int) ^ g.2.2.1 * g.2.2.2)))
-
-/-- exp x for x >= 0: exp(r)^(2^s) with r = x / 2^s < 1/2. The working precision q grows
-with s and x, since each squaring doubles the relative error. -/
-def expPos (x : Rat) (p : Nat) : Iv :=
-  let c := x.ceil.toNat
-  let s := bitlen c + 1
-  let q := p + 2 * s + 2 * c
-  let one : Int := (2 : Int) ^ q
-  let e := expInt (x / qi ((2 : Int) ^ s)) s q
-  ⟨qd e.1 one, qd e.2 one⟩
-
-/-- exp x: `expPos x` for x >= 0, and 1 / exp(-x) for x < 0. -/
-def expAt (x : Rat) (p : Nat) : Iv :=
-  if x < 0 then
-    let e := expPos (-x) p
-    ⟨1 / e.hi, 1 / e.lo⟩
-  else expPos x p
+namespace Petra.Loops
 
 /-! ## Casts, `Int.fdiv` and `scale`
 
@@ -418,7 +363,7 @@ theorem expPos_holds (x : ℚ) (hx : 0 ≤ x) (p : ℕ) :
     rw [qd_cast _ _ hone.le]
     exact div_pos (lt_of_lt_of_le hOR e1R) hOR
 
-/-- `Provable.expAt x p` holds exp x. -/
+/-- The kernel's `expAt x p` holds exp x. -/
 theorem expAt_spec : ExpAtSpecOf expAt := by
   intro x p
   unfold expAt
@@ -441,4 +386,4 @@ theorem expAt_spec : ExpAtSpecOf expAt := by
   · rw [if_neg h]
     exact (expPos_holds x (not_lt.mp h) p).1
 
-end Petra.Provable
+end Petra.Loops

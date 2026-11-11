@@ -1,15 +1,13 @@
 /-
-What is assumed, and what a cache must hold.
+What the kernel's three loops return, and what a cache must hold.
 
-Three functions of the kernel cannot be reasoned about in this toolchain. `isqrt` and
-`oddSeries` run a `while` loop, and `expAt` is a `partial def` that also runs one. Lean
-compiles `while` to `Lean.Loop.forIn`, a `partial def`, and the logic sees a `partial def`
-as a constant with no equation. So no theorem can say what any of the three returns.
+`isqrt`, `oddSeries` and `expAt` in kernel/Petra/Num.lean each run a loop, written as a
+recursion that Lean checks to end. Each statement below says what one of them returns. It
+is stated for any function, and Loops/ proves it of the kernel's own.
 
-Each statement below says what one of them is written to return. None is proved of the
-kernel's function. A theorem that needs one takes it as a hypothesis, by name, and never as
-an axiom. Each is stated for any function, so that a function written without `while` can
-be shown to meet it.
+Nothing here is assumed. Until the kernel's loops were written this way, they ran a `while`
+or were a `partial def`, the logic could not read them, and these three statements were
+hypotheses of every theorem about `sqrt`, `pi`, `ln` and `exp`.
 -/
 import Mathlib.Analysis.SpecialFunctions.Trigonometric.Arctan
 import PetraProofs.Meaning
@@ -30,24 +28,6 @@ def OddSeriesSpecOf (f : ℚ → Int → Nat → Iv) : Prop :=
 /-- `f x p` holds exp x. -/
 def ExpAtSpecOf (f : ℚ → Nat → Iv) : Prop :=
   ∀ (x : ℚ) (p : Nat), (f x p).Holds (Real.exp (x : ℝ))
-
-/-- Assumed: the kernel's `isqrt` runs a `while`. -/
-def IsqrtSpec : Prop := IsqrtSpecOf isqrt
-
-/-- Assumed: the kernel's `oddSeries` runs a `while`. -/
-def OddSeriesSpec : Prop := OddSeriesSpecOf oddSeries
-
-/-- Assumed: the kernel's `expAt` is a `partial def`. -/
-def ExpAtSpec : Prop := ExpAtSpecOf expAt
-
-/-- What a node's step assumes: nothing for arithmetic and `pick`, and for a rounded
-function the statement about the loop it runs. -/
-def Node.Trusted : Node → Prop
-  | .sqrt _ => IsqrtSpec
-  | .pi => OddSeriesSpec
-  | .ln _ => OddSeriesSpec
-  | .exp _ => ExpAtSpec
-  | _ => True
 
 /-- Every entry of the caches is right: the pair stored for `x` holds ln x, or exp x. The
 key of `x` is its numerator and its denominator. -/

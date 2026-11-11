@@ -1,13 +1,12 @@
 import PetraProofs.Basic
 import PetraProofs.Meaning
-import PetraProofs.Trust
+import PetraProofs.Spec
 import PetraProofs.Arith
+import PetraProofs.Loops.Isqrt
+import PetraProofs.Loops.OddSeries
+import PetraProofs.Loops.ExpAt
 import PetraProofs.Rounded
 import PetraProofs.Step
 import PetraProofs.Pick
 import PetraProofs.Eval
 import PetraProofs.Rule
-import PetraProofs.Provable.Isqrt
-import PetraProofs.Provable.OddSeries
-import PetraProofs.Provable.ExpAt
-import PetraProofs.Closing

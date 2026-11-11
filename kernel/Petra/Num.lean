@@ -5,6 +5,10 @@ Exact rationals and closed rational intervals, as petra/kernel/interval.py defin
 dyadic rationals with 96 fractional bits: the lower end is the largest grid point at or
 below the value, and the upper end the smallest at or above it. The mathematics fixes both
 ends, so this kernel and the Python one agree on them whatever series each sums.
+
+No definition here is a `partial def` or runs a `while`: each loop is a recursion that Lean
+checks to end. So the logic can read every one, and proofs/ proves what each returns
+(docs/proved.md).
 -/
 import Std.Data.HashMap
 
@@ -62,15 +66,15 @@ def powInt (a : Iv) (n : Int) : Except String Iv :=
 
 def bitlen (n : Nat) : Nat := if n == 0 then 0 else Nat.log2 n + 1
 
+/-- Newton's iteration from above: step down while the next value is smaller. The value
+goes down at every step, so the recursion ends. -/
+def isqrtGo (n x : Nat) : Nat :=
+  if _h : (x + n / x) / 2 < x then isqrtGo n ((x + n / x) / 2) else x
+termination_by x
+
 /-- floor (sqrt n), by Newton's iteration from above. -/
-def isqrt (n : Nat) : Nat := Id.run do
-  if n == 0 then return 0
-  let mut x := 2 ^ (Nat.log2 n / 2 + 1)
-  let mut go := true
-  while go do
-    let y := (x + n / x) / 2
-    if y < x then x := y else go := false
-  return x
+def isqrt (n : Nat) : Nat :=
+  if n == 0 then 0 else isqrtGo n (2 ^ (Nat.log2 n / 2 + 1))
 
 /-- With y = x * 4^PREC, sqrt x * 2^PREC = sqrt y. floor (sqrt y) is isqrt (floor y), and
 ceil (sqrt y) is that integer when its square is y and the next integer otherwise. -/
@@ -91,27 +95,30 @@ def scale (a b : Int) (c : Rat) : Int × Int :=
   let d : Int := Int.ofNat c.den
   (Int.fdiv (lo * n) d, - Int.fdiv (-(hi * n)) d)
 
+/-- The loop of the series. `[a, b]` holds term `k` times `one`, and `[lo, hi]` holds the sum
+of the terms before it times `one`. It gives the sum and the number of terms summed. The
+power of 3 grows at every round, so the recursion ends. -/
+def oddGo (one : Int) (step : Rat) (a b lo hi : Int) (k : Nat) : Int × Int × Nat :=
+  if _h : (3 : Int) ^ (2 * k + 1) ≤ 2 * one then
+    let t := scale a b (mkRat 1 (2 * k + 1))
+    let n := scale a b step
+    oddGo one step n.1 n.2 (lo + t.1) (hi + t.2) (k + 1)
+  else (lo, hi, k)
+termination_by (2 * one + 1 - (3 : Int) ^ (2 * k + 1)).toNat
+decreasing_by
+  have h3 : (3 : Int) ^ (2 * (k + 1) + 1) = 3 ^ (2 * k + 1) * 3 * 3 := by
+    rw [show 2 * (k + 1) + 1 = (2 * k + 1) + 1 + 1 from by omega, Int.pow_succ, Int.pow_succ]
+  have hp : (0 : Int) < 3 ^ (2 * k + 1) := Int.pow_pos (by decide)
+  omega
+
 /-- Encloses sum_k sign^k x^(2k+1)/(2k+1) for |x| <= 1/3: atanh x for sign 1 and atan x for
 sign -1. The tail after k terms is at most (9/8) 3^-(2k+1). -/
-def oddSeries (x : Rat) (sign : Int) (p : Nat) : Iv := Id.run do
+def oddSeries (x : Rat) (sign : Int) (p : Nat) : Iv :=
   let one : Int := (2 : Int) ^ p
-  let step : Rat := qi sign * x * x
-  let (a0, b0) := scale one one x
-  let mut a := a0
-  let mut b := b0
-  let mut lo : Int := 0
-  let mut hi : Int := 0
-  let mut k : Nat := 0
-  while (3 : Int) ^ (2 * k + 1) ≤ 2 * one do
-    let (ta, tb) := scale a b (mkRat 1 (2 * k + 1))
-    lo := lo + ta
-    hi := hi + tb
-    let (a', b') := scale a b step
-    a := a'
-    b := b'
-    k := k + 1
-  let tail : Rat := mkRat 9 8 / qi ((3 : Int) ^ (2 * k + 1))
-  return ⟨qd lo one - tail, qd hi one + tail⟩
+  let s := scale one one x
+  let r := oddGo one (qi sign * x * x) s.1 s.2 0 0 0
+  let tail : Rat := mkRat 9 8 / qi ((3 : Int) ^ (2 * r.2.2 + 1))
+  ⟨qd r.1 one - tail, qd r.2.1 one + tail⟩
 
 def ln2At (p : Nat) : Iv := (Iv.pt 2).mul (oddSeries (mkRat 1 3) 1 p)
 
@@ -125,37 +132,47 @@ def lnAt (x : Rat) (p : Nat) : Iv :=
   let l2 := if p == 128 then ln2_128 else ln2At p
   ((Iv.pt 2).mul (oddSeries z 1 p)).add ((Iv.pt (qi e)).mul l2)
 
-/-- exp x = exp(r)^(2^s) with r = x / 2^s < 1/2 for x >= 0, and 1 / exp(-x) for x < 0. The
-working precision q grows with s and x, since each squaring doubles the relative error. -/
-partial def expAt (x : Rat) (p : Nat) : Iv :=
+/-- The loop of the series sum_n r^n / n!. `[ta, tb]` holds term `n` times `one`, `[a, b]`
+holds the sum of the terms up to `n` times `one`, and `fact` is `(n + 1)!`. The first
+argument counts the rounds left, so the recursion ends. It gives the sum, `n` and `fact`. -/
+def expGo (one : Int) (r : Rat) :
+    Nat → Int → Int → Int → Int → Nat → Int → Int × Int × Nat × Int
+  | 0, _, _, a, b, n, fact => (a, b, n, fact)
+  | rounds + 1, ta, tb, a, b, n, fact =>
+    if (2 : Int) ^ n * fact ≤ one then
+      let t := scale ta tb (r / qi (Int.ofNat (n + 1)))
+      expGo one r rounds t.1 t.2 (a + t.1) (b + t.2) (n + 1) (fact * Int.ofNat (n + 1 + 1))
+    else (a, b, n, fact)
+
+/-- `j` squarings of `[a, b] / one`, each rounded outward. -/
+def sqGo (one : Int) : Nat → Int → Int → Int × Int
+  | 0, a, b => (a, b)
+  | j + 1, a, b => sqGo one j (Int.fdiv (a * a) one) (- Int.fdiv (-(b * b)) one)
+
+/-- An enclosure of `exp (r * 2 ^ s)` times `2 ^ q`, for `0 <= r <= 1/2`: the series for
+`exp r`, its remainder, and `s` squarings. The loop is given `q + 1` rounds and its own
+test ends it sooner: `2 ^ n <= 2 ^ n * fact <= 2 ^ q` needs `n <= q`. -/
+def expInt (r : Rat) (s q : Nat) : Int × Int :=
+  let one : Int := (2 : Int) ^ q
+  let g := expGo one r (q + 1) one one one one 0 1
+  sqGo one s g.1 (g.2.1 + (- Int.fdiv (-one) ((2 : Int) ^ g.2.2.1 * g.2.2.2)))
+
+/-- exp x for x >= 0: exp(r)^(2^s) with r = x / 2^s < 1/2. The working precision q grows
+with s and x, since each squaring doubles the relative error. -/
+def expPos (x : Rat) (p : Nat) : Iv :=
+  let c := x.ceil.toNat
+  let s := bitlen c + 1
+  let q := p + 2 * s + 2 * c
+  let one : Int := (2 : Int) ^ q
+  let e := expInt (x / qi ((2 : Int) ^ s)) s q
+  ⟨qd e.1 one, qd e.2 one⟩
+
+/-- exp x: `expPos x` for x >= 0, and 1 / exp(-x) for x < 0. -/
+def expAt (x : Rat) (p : Nat) : Iv :=
   if x < 0 then
-    let e := expAt (-x) p
+    let e := expPos (-x) p
     ⟨1 / e.hi, 1 / e.lo⟩
-  else Id.run do
-    let c := x.ceil.toNat
-    let s := bitlen c + 1
-    let q := p + 2 * s + 2 * c
-    let r : Rat := x / qi ((2 : Int) ^ s)
-    let one : Int := (2 : Int) ^ q
-    let mut ta := one
-    let mut tb := one
-    let mut a := one
-    let mut b := one
-    let mut n : Nat := 0
-    let mut fact : Int := 1
-    while (2 : Int) ^ n * fact ≤ one do
-      n := n + 1
-      fact := fact * Int.ofNat (n + 1)
-      let (ta', tb') := scale ta tb (r / qi (Int.ofNat n))
-      ta := ta'
-      tb := tb'
-      a := a + ta
-      b := b + tb
-    b := b + (- Int.fdiv (-one) ((2 : Int) ^ n * fact))
-    for _ in [0:s] do
-      a := Int.fdiv (a * a) one
-      b := - Int.fdiv (-(b * b)) one
-    return ⟨qd a one, qd b one⟩
+  else expPos x p
 
 /-- Machin's formula: pi = 16 atan(1/5) - 4 atan(1/239). -/
 def piAt (p : Nat) : Iv :=

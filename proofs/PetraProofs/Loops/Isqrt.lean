@@ -1,34 +1,13 @@
 /-
-A square root the logic can read.
+The kernel's `isqrt` is the floor of the square root.
 
-The kernel's `isqrt` runs a `while`, so nothing can be proved of it. `Provable.isqrt` below
-is the same Newton iteration from the same start, written as a recursion on the current
-value, which goes down at every step. It meets `IsqrtSpecOf`.
-
-What was kept the same: the test for zero, the start `2 ^ (Nat.log2 n / 2 + 1)`, the step
-`(x + n / x) / 2`, and the rule to stop at the first step that does not go down. So the two
-should return the same number on every input when run. That is not proved, and cannot be
-while the kernel's is a `while`. They agreed on every input tried: docs/proved.md.
+`isqrt` in kernel/Petra/Num.lean is Newton's iteration from above, written as a recursion on
+the current value, which goes down at every step. This file proves that it meets
+`IsqrtSpecOf`: `isqrt n * isqrt n ≤ n < (isqrt n + 1) * (isqrt n + 1)`.
 -/
-import PetraProofs.Trust
+import PetraProofs.Spec
 
-namespace Petra.Provable
-
-/-! ## The definitions
-
-These two use core Lean only: no Mathlib name and no Mathlib tactic. They can be moved to
-`kernel/Petra/Num.lean` as they stand. -/
-
-/-- Newton's iteration from above: step down while the next value is smaller. -/
-def isqrtGo (n x : Nat) : Nat :=
-  if _h : (x + n / x) / 2 < x then isqrtGo n ((x + n / x) / 2) else x
-termination_by x
-
-/-- floor (sqrt n). -/
-def isqrt (n : Nat) : Nat :=
-  if n == 0 then 0 else isqrtGo n (2 ^ (Nat.log2 n / 2 + 1))
-
-/-! ## The proofs -/
+namespace Petra.Loops
 
 /-- From a positive value whose square is above `n`, the iteration ends on the floor of the
 square root of `n`. -/
@@ -74,7 +53,7 @@ theorem isqrt_start (n : Nat) :
     _ ≤ (2 ^ (Nat.log2 n / 2 + 1) + 1) * (2 ^ (Nat.log2 n / 2 + 1) + 1) :=
       Nat.mul_le_mul (Nat.le_succ _) (Nat.le_succ _)
 
-/-- `Provable.isqrt n` is the floor of the square root of `n`. -/
+/-- The kernel's `isqrt n` is the floor of the square root of `n`. -/
 theorem isqrt_spec : IsqrtSpecOf isqrt := by
   intro n
   unfold isqrt
@@ -85,4 +64,4 @@ theorem isqrt_spec : IsqrtSpecOf isqrt := by
     simp only [hne, Bool.false_eq_true, if_false]
     exact isqrtGo_spec n (Nat.pos_of_ne_zero h0) _ (Nat.pow_pos (by norm_num)) (isqrt_start n)
 
-end Petra.Provable
+end Petra.Loops

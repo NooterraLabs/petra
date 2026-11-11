@@ -1,53 +1,17 @@
 /-
-The series for atanh and arctan, in a form the logic can read.
+The kernel's `oddSeries` encloses atanh and arctan.
 
-The kernel's `oddSeries` runs a `while`, so nothing can be proved of it. `Provable.oddSeries`
-below is the same computation, with the loop written as a recursion. It meets
-`OddSeriesSpecOf`.
-
-What was kept the same: the fixed point `one = 2 ^ p`, the first term `scale one one x`, the
-step `sign * x * x`, the two calls of `scale` in each round, the test
-`3 ^ (2 * k + 1) ≤ 2 * one` that keeps the loop going, and the tail
-`(9/8) / 3 ^ (2 * k + 1)`. So the two should return the same interval on every input when
-run. That is not proved, and cannot be while the kernel's is a `while`. They agreed on every
-input tried: docs/proved.md.
+`oddSeries` in kernel/Petra/Num.lean sums `sign^k x^(2k+1) / (2k+1)` in fixed point, with
+its loop `oddGo` written as a recursion: the power of 3 it tests grows at every round. This
+file proves that it meets `OddSeriesSpecOf`: for `|x| ≤ 1/3` the interval it returns holds
+atanh x for sign 1 and arctan x for sign -1.
 -/
 import Mathlib.Analysis.SpecialFunctions.Complex.Arctan
 import Mathlib.Analysis.SpecialFunctions.Log.Deriv
 import Mathlib.Analysis.SpecificLimits.Basic
-import PetraProofs.Trust
+import PetraProofs.Spec
 
-namespace Petra.Provable
-
-/-! ## The definitions
-
-These two use core Lean and the kernel's own `scale`, `qi` and `qd` only: no Mathlib name
-and no Mathlib tactic. They can be moved to `kernel/Petra/Num.lean` as they stand. -/
-
-/-- The loop of the series. `[a, b]` holds term `k` times `one`, and `[lo, hi]` holds the sum
-of the terms before it times `one`. It returns the sum and the number of terms summed. The
-power of 3 grows at every round, so the loop ends. -/
-def oddGo (one : Int) (step : Rat) (a b lo hi : Int) (k : Nat) : Int × Int × Nat :=
-  if _h : (3 : Int) ^ (2 * k + 1) ≤ 2 * one then
-    let t := scale a b (mkRat 1 (2 * k + 1))
-    let n := scale a b step
-    oddGo one step n.1 n.2 (lo + t.1) (hi + t.2) (k + 1)
-  else (lo, hi, k)
-termination_by (2 * one + 1 - (3 : Int) ^ (2 * k + 1)).toNat
-decreasing_by
-  have h3 : (3 : Int) ^ (2 * (k + 1) + 1) = 3 ^ (2 * k + 1) * 3 * 3 := by
-    rw [show 2 * (k + 1) + 1 = (2 * k + 1) + 1 + 1 from by omega, Int.pow_succ, Int.pow_succ]
-  have hp : (0 : Int) < 3 ^ (2 * k + 1) := Int.pow_pos (by decide)
-  omega
-
-/-- Encloses sum_k sign^k x^(2k+1)/(2k+1) for |x| <= 1/3: atanh x for sign 1 and atan x for
-sign -1. The tail after k terms is at most (9/8) 3^-(2k+1). -/
-def oddSeries (x : Rat) (sign : Int) (p : Nat) : Iv :=
-  let one : Int := (2 : Int) ^ p
-  let s := scale one one x
-  let r := oddGo one (qi sign * x * x) s.1 s.2 0 0 0
-  let tail : Rat := mkRat 9 8 / qi ((3 : Int) ^ (2 * r.2.2 + 1))
-  ⟨qd r.1 one - tail, qd r.2.1 one + tail⟩
+namespace Petra.Loops
 
 /-! ## Casts and `scale` -/
 
@@ -272,8 +236,8 @@ theorem oddSeries_holds (x : ℚ) (σ : ℤ) (p : ℕ) (g : ℕ → ℝ) (S : �
     (hS : HasSum g S) : (oddSeries x σ p).Holds S :=
   oddCore_holds ((2 : ℤ) ^ p) (by positivity) x σ g S hx hσ hg hS
 
-/-- `Provable.oddSeries x 1 p` holds atanh x and `Provable.oddSeries x (-1) p` holds
-arctan x, for `|x| ≤ 1/3`. -/
+/-- The kernel's `oddSeries x 1 p` holds atanh x and `oddSeries x (-1) p` holds arctan x,
+for `|x| ≤ 1/3`. -/
 theorem oddSeries_spec : OddSeriesSpecOf oddSeries := by
   intro x p hx
   have hxR : |(x : ℝ)| ≤ 1 / 3 := by
@@ -300,4 +264,4 @@ theorem oddSeries_spec : OddSeriesSpecOf oddSeries := by
     push_cast
     ring
 
-end Petra.Provable
+end Petra.Loops

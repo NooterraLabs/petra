@@ -2,17 +2,19 @@
 The rounded functions: `iSqrt`, `piIv`, `iLn` and `iExp` return an interval that holds the
 true value.
 
-Each theorem is about the kernel's own function. Each takes as a hypothesis the statement
-of Trust.lean about the loop that function runs, since the logic cannot see into a `while`
-or a `partial def`. What is proved here is everything around those loops: the rounding to
-the grid, the scaling of the square root, Machin's formula, the reduction of ln to atanh,
-and the caches.
+Each theorem is about the kernel's own function, and none takes a hypothesis about it.
+Loops/ proves what the three loops return: `isqrt`, `oddSeries` and `expAt`. What is proved
+here is everything around those loops: the rounding to the grid, the scaling of the square
+root, Machin's formula, the reduction of ln to atanh, and the caches.
 -/
 import Mathlib.Analysis.SpecialFunctions.Trigonometric.Arctan
 import Mathlib.Analysis.SpecialFunctions.Log.Basic
 import Mathlib.Data.Rat.Floor
-import PetraProofs.Trust
+import PetraProofs.Spec
 import PetraProofs.Arith
+import PetraProofs.Loops.Isqrt
+import PetraProofs.Loops.OddSeries
+import PetraProofs.Loops.ExpAt
 
 namespace Petra
 
@@ -143,7 +145,7 @@ private theorem sqrt_upper {q : ℚ} {x : ℝ} {n : ℕ} (hxq : x ≤ (q : ℝ))
 
 /-- If `isqrt` is the integer square root, `iSqrt` succeeds only on an interval with no
 negative number, and its result holds the square root of every real the interval holds. -/
-theorem iSqrt_sound (hs : IsqrtSpec) {a r : Iv} {x : ℝ} (ha : a.Holds x)
+theorem iSqrt_sound {a r : Iv} {x : ℝ} (ha : a.Holds x)
     (h : iSqrt a = .ok r) : 0 ≤ x ∧ r.Holds (Real.sqrt x) := by
   obtain ⟨hlo, hhi⟩ := ha
   rw [iSqrt_eq] at h
@@ -158,13 +160,13 @@ theorem iSqrt_sound (hs : IsqrtSpec) {a r : Iv} {x : ℝ} (ha : a.Holds x)
       isqrt (a.hi * qi (GRID * GRID)).floor.toNat)) == a.hi * qi (GRID * GRID)) = true
   · rw [if_pos hex] at h
     cases h
-    refine ⟨sqrt_lower h0 hlo (hs _).1, sqrt_upper hhi ?_⟩
+    refine ⟨sqrt_lower h0 hlo (Loops.isqrt_spec _).1, sqrt_upper hhi ?_⟩
     have heq := beq_iff_eq.mp hex
     exact le_of_eq (heq.symm.trans (qi_ofNat _))
   · rw [if_neg hex] at h
     cases h
-    refine ⟨sqrt_lower h0 hlo (hs _).1, sqrt_upper hhi ?_⟩
-    have hlt := (hs (a.hi * qi (GRID * GRID)).floor.toNat).2
+    refine ⟨sqrt_lower h0 hlo (Loops.isqrt_spec _).1, sqrt_upper hhi ?_⟩
+    have hlt := (Loops.isqrt_spec (a.hi * qi (GRID * GRID)).floor.toNat).2
     have h1 : (a.hi * qi (GRID * GRID)).floor <
         (((isqrt (a.hi * qi (GRID * GRID)).floor.toNat + 1) *
           (isqrt (a.hi * qi (GRID * GRID)).floor.toNat + 1) : ℕ) : ℤ) :=
@@ -176,15 +178,15 @@ theorem iSqrt_sound (hs : IsqrtSpec) {a r : Iv} {x : ℝ} (ha : a.Holds x)
 
 `piAt` is Machin's formula, 16 arctan (1/5) - 4 arctan (1/239), on two runs of `oddSeries`. -/
 
-private theorem piAt_sound (hs : OddSeriesSpec) (p : ℕ) : (piAt p).Holds Real.pi := by
+private theorem piAt_sound (p : ℕ) : (piAt p).Holds Real.pi := by
   have h5 : |(mkRat 1 5 : ℚ)| ≤ 1 / 3 := by
     rw [Rat.mkRat_eq_div, abs_le]
     constructor <;> norm_num
   have h239 : |(mkRat 1 239 : ℚ)| ≤ 1 / 3 := by
     rw [Rat.mkRat_eq_div, abs_le]
     constructor <;> norm_num
-  have a5 := (hs _ p h5).2
-  have a239 := (hs _ p h239).2
+  have a5 := (Loops.oddSeries_spec _ p h5).2
+  have a239 := (Loops.oddSeries_spec _ p h239).2
   have e5 : ((mkRat 1 5 : ℚ) : ℝ) = 5⁻¹ := by
     rw [Rat.mkRat_eq_div]
     norm_num
@@ -203,7 +205,7 @@ private theorem piAt_sound (hs : OddSeriesSpec) (p : ℕ) : (piAt p).Holds Real.
 
 /-- If `oddSeries` holds the sums it is written to hold, the interval `piIv` returns holds
 pi. -/
-theorem piIv_sound (hs : OddSeriesSpec) {r : Iv} (h : piIv = .ok r) : r.Holds Real.pi := by
+theorem piIv_sound {r : Iv} (h : piIv = .ok r) : r.Holds Real.pi := by
   unfold piIv at h
   cases hg : grid piAt with
   | error e =>
@@ -214,7 +216,7 @@ theorem piIv_sound (hs : OddSeriesSpec) {r : Iv} (h : piIv = .ok r) : r.Holds Re
     obtain ⟨lo, hi⟩ := v
     have h' : (Except.ok ⟨lo, hi⟩ : Except String Iv) = .ok r := h
     cases h'
-    exact grid_sound (piAt_sound hs) hg
+    exact grid_sound (piAt_sound) hg
 
 /-! ## ln
 
@@ -297,11 +299,11 @@ private theorem lnM_bounds {x : ℚ} (hx : 0 < x) : 1 / 2 < lnM x ∧ lnM x < 2 
   rw [lnM_eq_zpow, hE, zpow_sub₀ (by norm_num : (2 : ℚ) ≠ 0), zpow_natCast, zpow_natCast]
   exact key
 
-private theorem ln2At_sound (hs : OddSeriesSpec) (p : ℕ) : (ln2At p).Holds (Real.log 2) := by
+private theorem ln2At_sound (p : ℕ) : (ln2At p).Holds (Real.log 2) := by
   have h3 : |(mkRat 1 3 : ℚ)| ≤ 1 / 3 := by
     rw [Rat.mkRat_eq_div, abs_le]
     constructor <;> norm_num
-  have a := (hs _ p h3).1
+  have a := (Loops.oddSeries_spec _ p h3).1
   have e : Real.log ((1 + ((mkRat 1 3 : ℚ) : ℝ)) / (1 - ((mkRat 1 3 : ℚ) : ℝ))) = Real.log 2 := by
     congr 1
     rw [Rat.mkRat_eq_div]
@@ -314,7 +316,7 @@ private theorem ln2At_sound (hs : OddSeriesSpec) (p : ℕ) : (ln2At p).Holds (Re
   rw [e2] at hm
   exact hm
 
-private theorem lnAt_sound (hs : OddSeriesSpec) {x : ℚ} (hx : 0 < x) (p : ℕ) :
+private theorem lnAt_sound {x : ℚ} (hx : 0 < x) (p : ℕ) :
     (lnAt x p).Holds (Real.log (x : ℝ)) := by
   obtain ⟨hm1, hm2⟩ := lnM_bounds hx
   have hmpos : (0 : ℚ) < lnM x := by linarith
@@ -326,7 +328,7 @@ private theorem lnAt_sound (hs : OddSeriesSpec) {x : ℚ} (hx : 0 < x) (p : ℕ)
       linarith
     · rw [div_le_iff₀ hpos]
       linarith
-  have hser := (hs _ p hz).1
+  have hser := (Loops.oddSeries_spec _ p hz).1
   have hmr : (0 : ℝ) < (lnM x : ℝ) := by exact_mod_cast hmpos
   have hlogm : Real.log ((1 + (((lnM x - 1) / (lnM x + 1) : ℚ) : ℝ)) /
       (1 - (((lnM x - 1) / (lnM x + 1) : ℚ) : ℝ))) = Real.log (lnM x : ℝ) := by
@@ -344,8 +346,8 @@ private theorem lnAt_sound (hs : OddSeriesSpec) {x : ℚ} (hx : 0 < x) (p : ℕ)
   rw [hlogm] at hser
   have hl2 : (if p == 128 then ln2_128 else ln2At p).Holds (Real.log 2) := by
     split_ifs
-    · exact ln2At_sound hs 128
-    · exact ln2At_sound hs p
+    · exact ln2At_sound 128
+    · exact ln2At_sound p
   have hsum := Iv.add_sound (Iv.mul_sound (Iv.pt_sound 2) hser) (Iv.mul_sound (Iv.pt_sound (qi (lnE x))) hl2)
   have hxm : (x : ℝ) = (lnM x : ℝ) * (2 : ℝ) ^ (lnE x) := by
     have h2 : ((2 : ℚ) ^ (lnE x)) ≠ 0 := zpow_ne_zero _ (by norm_num)
@@ -433,13 +435,13 @@ private theorem lnPoint_cases {q : ℚ} {c c' : Caches} {v : ℚ × ℚ}
       subst hv
       exact Or.inr (Or.inr ⟨hg, hc'⟩)
 
-private theorem lnPoint_sound (hs : OddSeriesSpec) {q : ℚ} {c c' : Caches} {v : ℚ × ℚ}
+private theorem lnPoint_sound {q : ℚ} {c c' : Caches} {v : ℚ × ℚ}
     (hc : c.Valid) (hq : 0 < q) (h : lnPoint q c = .ok (v, c')) :
     c'.Valid ∧ (v.1 : ℝ) ≤ Real.log (q : ℝ) ∧ Real.log (q : ℝ) ≤ (v.2 : ℝ) := by
   rcases lnPoint_cases h with ⟨rfl, rfl, rfl⟩ | ⟨hget, rfl⟩ | ⟨hg, rfl⟩
   · refine ⟨hc, ?_, ?_⟩ <;> simp
   · exact ⟨hc, hc.1 q v hget hq⟩
-  · have hb := grid_sound (lnAt_sound hs hq) hg
+  · have hb := grid_sound (lnAt_sound hq) hg
     refine ⟨⟨fun x w hget hx => ?_, hc.2⟩, hb⟩
     have hget' : (c.ln.insert (q.num, q.den) v).get? (x.num, x.den) = some w := hget
     rw [Std.HashMap.get?_insert] at hget'
@@ -453,7 +455,7 @@ private theorem lnPoint_sound (hs : OddSeriesSpec) {q : ℚ} {c c' : Caches} {v 
 
 /-- `lnPoint` keeps the caches valid, whatever its argument: an entry under a key that is
 not positive is never read as a logarithm. -/
-private theorem lnPoint_valid (hs : OddSeriesSpec) {q : ℚ} {c c' : Caches} {v : ℚ × ℚ}
+private theorem lnPoint_valid {q : ℚ} {c c' : Caches} {v : ℚ × ℚ}
     (hc : c.Valid) (h : lnPoint q c = .ok (v, c')) : c'.Valid := by
   rcases lnPoint_cases h with ⟨-, -, rfl⟩ | ⟨-, rfl⟩ | ⟨hg, rfl⟩
   · exact hc
@@ -466,12 +468,12 @@ private theorem lnPoint_valid (hs : OddSeriesSpec) {q : ℚ} {c c' : Caches} {v 
       cases hget'
       have hqx := key_eq hk
       subst hqx
-      exact grid_sound (lnAt_sound hs hx) hg
+      exact grid_sound (lnAt_sound hx) hg
     · rw [if_neg hk] at hget'
       exact hc.1 x w hget' hx
 
 /-- `iLn` keeps the caches valid, on any interval. -/
-theorem iLn_valid (hs : OddSeriesSpec) {a r : Iv} {c c' : Caches} (hc : c.Valid)
+theorem iLn_valid {a r : Iv} {c c' : Caches} (hc : c.Valid)
     (h : iLn a c = .ok (r, c')) : c'.Valid := by
   unfold iLn at h
   dsimp only at h
@@ -486,12 +488,12 @@ theorem iLn_valid (hs : OddSeriesSpec) {a r : Iv} {c c' : Caches} (hc : c.Valid)
     obtain ⟨vb, c3, h5, h6⟩ := M.bind_ok h4
     obtain ⟨-, hc'⟩ := M.pure_ok h6
     rw [hc']
-    exact lnPoint_valid hs (lnPoint_valid hs hc h3) h5
+    exact lnPoint_valid (lnPoint_valid hc h3) h5
 
 /-- If `oddSeries` holds the sums it is written to hold, `iLn` succeeds only on an interval
 of positive numbers, its result holds the logarithm of every real the interval holds, and
 it keeps the caches valid. -/
-theorem iLn_sound (hs : OddSeriesSpec) {a r : Iv} {x : ℝ} {c c' : Caches} (hc : c.Valid)
+theorem iLn_sound {a r : Iv} {x : ℝ} {c c' : Caches} (hc : c.Valid)
     (ha : a.Holds x) (h : iLn a c = .ok (r, c')) : c'.Valid ∧ 0 < x ∧ r.Holds (Real.log x) := by
   obtain ⟨hlo, hhi⟩ := ha
   unfold iLn at h
@@ -511,8 +513,8 @@ theorem iLn_sound (hs : OddSeriesSpec) {a r : Iv} {x : ℝ} {c c' : Caches} (hc 
     obtain ⟨va, c2, h3, h4⟩ := M.bind_ok h2
     obtain ⟨vb, c3, h5, h6⟩ := M.bind_ok h4
     obtain ⟨hr, hc'⟩ := M.pure_ok h6
-    obtain ⟨hc2, hla, -⟩ := lnPoint_sound hs hc hlo0 h3
-    obtain ⟨hc3, -, hlb⟩ := lnPoint_sound hs hc2 hhi0 h5
+    obtain ⟨hc2, hla, -⟩ := lnPoint_sound hc hlo0 h3
+    obtain ⟨hc3, -, hlb⟩ := lnPoint_sound hc2 hhi0 h5
     rw [hr, hc']
     exact ⟨hc3, hx, le_trans hla ((Real.log_le_log_iff hlor hx).2 hlo),
       le_trans ((Real.log_le_log_iff hx hhir).2 hhi) hlb⟩
@@ -552,13 +554,13 @@ private theorem expPoint_cases {q : ℚ} {c c' : Caches} {v : ℚ × ℚ}
       subst hv
       exact Or.inr (Or.inr ⟨hg, hc'⟩)
 
-private theorem expPoint_sound (hs : ExpAtSpec) {q : ℚ} {c c' : Caches} {v : ℚ × ℚ}
+private theorem expPoint_sound {q : ℚ} {c c' : Caches} {v : ℚ × ℚ}
     (hc : c.Valid) (h : expPoint q c = .ok (v, c')) :
     c'.Valid ∧ (v.1 : ℝ) ≤ Real.exp (q : ℝ) ∧ Real.exp (q : ℝ) ≤ (v.2 : ℝ) := by
   rcases expPoint_cases h with ⟨rfl, rfl, rfl⟩ | ⟨hget, rfl⟩ | ⟨hg, rfl⟩
   · refine ⟨hc, ?_, ?_⟩ <;> simp
   · exact ⟨hc, hc.2 q v hget⟩
-  · have hb := grid_sound (hs q) hg
+  · have hb := grid_sound (Loops.expAt_spec q) hg
     refine ⟨⟨hc.1, fun x w hget => ?_⟩, hb⟩
     have hget' : (c.exp.insert (q.num, q.den) v).get? (x.num, x.den) = some w := hget
     rw [Std.HashMap.get?_insert] at hget'
@@ -572,26 +574,26 @@ private theorem expPoint_sound (hs : ExpAtSpec) {q : ℚ} {c c' : Caches} {v : �
 
 /-- If `expAt` holds exp, the result of `iExp` holds the exponential of every real the
 interval holds, and `iExp` keeps the caches valid. -/
-theorem iExp_sound (hs : ExpAtSpec) {a r : Iv} {x : ℝ} {c c' : Caches} (hc : c.Valid)
+theorem iExp_sound {a r : Iv} {x : ℝ} {c c' : Caches} (hc : c.Valid)
     (ha : a.Holds x) (h : iExp a c = .ok (r, c')) : c'.Valid ∧ r.Holds (Real.exp x) := by
   obtain ⟨hlo, hhi⟩ := ha
   unfold iExp at h
   obtain ⟨va, c2, h3, h4⟩ := M.bind_ok h
   obtain ⟨vb, c3, h5, h6⟩ := M.bind_ok h4
   obtain ⟨hr, hc'⟩ := M.pure_ok h6
-  obtain ⟨hc2, hla, -⟩ := expPoint_sound hs hc h3
-  obtain ⟨hc3, -, hlb⟩ := expPoint_sound hs hc2 h5
+  obtain ⟨hc2, hla, -⟩ := expPoint_sound hc h3
+  obtain ⟨hc3, -, hlb⟩ := expPoint_sound hc2 h5
   rw [hr, hc']
   exact ⟨hc3, le_trans hla (Real.exp_le_exp.2 hlo), le_trans (Real.exp_le_exp.2 hhi) hlb⟩
 
 /-- `iExp` keeps the caches valid, on any interval. -/
-theorem iExp_valid (hs : ExpAtSpec) {a r : Iv} {c c' : Caches} (hc : c.Valid)
+theorem iExp_valid {a r : Iv} {c c' : Caches} (hc : c.Valid)
     (h : iExp a c = .ok (r, c')) : c'.Valid := by
   unfold iExp at h
   obtain ⟨va, c2, h3, h4⟩ := M.bind_ok h
   obtain ⟨vb, c3, h5, h6⟩ := M.bind_ok h4
   obtain ⟨-, hc'⟩ := M.pure_ok h6
   rw [hc']
-  exact (expPoint_sound hs (expPoint_sound hs hc h3).1 h5).1
+  exact (expPoint_sound (expPoint_sound hc h3).1 h5).1
 
 end Petra

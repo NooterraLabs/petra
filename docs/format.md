@@ -285,7 +285,7 @@ For every design:
 
 - The numbers in card.json and design.json are in SI, and the Python front end converted them from the units the card and the design write. The kernel reads the units of a deck of rules itself, and not those of a card or a design. It checks that a part's number has the dimension its field asks, by the name of the dimension that the file states.
 - card.json is not a function of the card's text alone for a design of the models' kinds: an input that a component reads with `given` takes its name from the component. So the hash of card.json identifies a card together with a design, and the hash `petra check` prints on its `card` line, of the card's text, is the one to compare with the card that was issued. For a design with parts card.json is a function of the card alone ([The asker's card](#the-askers-card)).
-- Nothing here is proved in Lean. The kernel is a second implementation of the rules on this page, and `bench/kernel_grid.py` and the corpus compare it with the first.
+- The interval rule is proved in Lean: a tape that the kernel proves has every root at most zero on its box, and a point it accepts as a refutation has its root above zero ([proved.md](proved.md)). Nothing else on this page is proved. For the shape and type rules, the deck of rules, the cells and the verdict, the kernel is a second implementation, and `bench/kernel_grid.py` and the corpus compare it with the first.
 
 For a design with no parts:
 

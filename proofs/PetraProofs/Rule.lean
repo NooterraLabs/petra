@@ -296,16 +296,18 @@ theorem Tape.refuted_sound_of {t : Tape} {point : Array ℚ} {which : Nat} {c c'
 
 /-! ## The theorems
 
-`Tape.proved_sound_exact` and `Tape.refuted_sound_exact` assume nothing: they are for a tape
-with no `sqrt`, `pi`, `ln` or `exp` node, from any caches. `Tape.proved_sound` and
-`Tape.refuted_sound` are for any tape. They assume, for each rounded node the tape has, the
-statement in Trust.lean about the loop that node runs, and they start from valid caches. The
-kernel starts from the empty caches, which are valid (`Caches.valid_empty`), and each
-theorem hands valid caches to the next proof. -/
+`Tape.proved_sound` and `Tape.refuted_sound` are for any tape. They start from valid caches.
+The kernel starts from the empty caches, which are valid (`Caches.valid_empty`), and each
+theorem hands valid caches to the next proof. `Tape.proved_sound_exact` and
+`Tape.refuted_sound_exact` are for a tape with no `sqrt`, `pi`, `ln` or `exp` node. Such a
+tape reads no cache, so they start from any caches.
+
+No theorem here takes a hypothesis about the kernel: each is about `Tape.proved` and
+`Tape.refuted` as kernel/Petra/Tape.lean defines them, down to the last loop. -/
 
 /-- A tape of exact nodes, proved. If `Tape.proved` succeeds, from any caches, then at every
 point of the box (each input in its range) every root has a value, and the value is at most
-zero. Nothing is assumed. -/
+zero. -/
 theorem Tape.proved_sound_exact {t : Tape} {p : Partition} {c c' : Caches}
     (hex : ∀ node ∈ t.nodes, node.Exact) (h : t.proved p c = .ok ((), c')) :
     ∀ ρ, InBox (t.inputs.map (·.range)) ρ →
@@ -314,8 +316,7 @@ theorem Tape.proved_sound_exact {t : Tape} {p : Partition} {c c' : Caches}
     True.intro h).2
 
 /-- A tape of exact nodes, refuted. If `Tape.refuted` succeeds, from any caches, the point
-lies in the box and the root it names has a value there that is above zero. Nothing is
-assumed. -/
+lies in the box and the root it names has a value there that is above zero. -/
 theorem Tape.refuted_sound_exact {t : Tape} {point : Array ℚ} {which : Nat} {c c' : Caches}
     (hex : ∀ node ∈ t.nodes, node.Exact) (h : t.refuted point which c = .ok ((), c')) :
     ∃ root, t.roots[which]? = some root ∧
@@ -325,29 +326,20 @@ theorem Tape.refuted_sound_exact {t : Tape} {point : Array ℚ} {which : Nat} {c
     True.intro h).2
 
 /-- Any tape, proved. If `Tape.proved` succeeds from valid caches, then at every point of the
-box every root has a value, and the value is at most zero. The caches stay valid.
-`htrust` is the assumption of each rounded node the tape has. -/
+box every root has a value, and the value is at most zero. The caches stay valid. -/
 theorem Tape.proved_sound {t : Tape} {p : Partition} {c c' : Caches}
-    (htrust : ∀ node ∈ t.nodes, node.Trusted) (hc : c.Valid)
-    (h : t.proved p c = .ok ((), c')) :
+    (hc : c.Valid) (h : t.proved p c = .ok ((), c')) :
     c'.Valid ∧ ∀ ρ, InBox (t.inputs.map (·.range)) ρ →
       ∀ root ∈ t.roots, ∃ x, t.value ρ root = some x ∧ x ≤ 0 :=
-  Tape.proved_sound_of (fun node hn => (htrust node hn).stepSound) hc h
+  Tape.proved_sound_of (fun node _ => node.stepSound) hc h
 
 /-- Any tape, refuted. If `Tape.refuted` succeeds from valid caches, the point lies in the
-box and the root it names has a value there that is above zero. The caches stay valid.
-`htrust` is the assumption of each rounded node the tape has. -/
+box and the root it names has a value there that is above zero. The caches stay valid. -/
 theorem Tape.refuted_sound {t : Tape} {point : Array ℚ} {which : Nat} {c c' : Caches}
-    (htrust : ∀ node ∈ t.nodes, node.Trusted) (hc : c.Valid)
-    (h : t.refuted point which c = .ok ((), c')) :
+    (hc : c.Valid) (h : t.refuted point which c = .ok ((), c')) :
     c'.Valid ∧ ∃ root, t.roots[which]? = some root ∧
       InBox (t.inputs.map (·.range)) (fun k => ((point[k]! : ℚ) : ℝ)) ∧
       ∃ x, t.value (fun k => ((point[k]! : ℚ) : ℝ)) root = some x ∧ 0 < x :=
-  Tape.refuted_sound_of (fun node hn => (htrust node hn).stepSound) hc h
-
-/-- The three assumptions together give every node's. -/
-theorem Node.trusted_of_specs (h1 : IsqrtSpec) (h2 : OddSeriesSpec) (h3 : ExpAtSpec)
-    (node : Node) : node.Trusted := by
-  cases node <;> first | exact True.intro | exact h1 | exact h2 | exact h3
+  Tape.refuted_sound_of (fun node _ => node.stepSound) hc h
 
 end Petra

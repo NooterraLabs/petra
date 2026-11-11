@@ -114,7 +114,7 @@ An input node must name an input of the box: `Node.enclose` reads `box[k]!`, whi
 any step runs. -/
 theorem Node.enclose_sound {node : Node} {box v : Array Iv} {ρ : Nat → ℝ}
     {val : Nat → Option ℝ} {c c' : Caches} {r : Iv}
-    (htrust : node.Trusted) (hbox : InBox box ρ)
+    (hbox : InBox box ρ)
     (hs : ∀ k, node = .s k → k < box.size)
     (hval : ∀ i ∈ node.reads, ∃ x, val i = some x ∧ v[i]!.Holds x)
     (hc : c.Valid)
@@ -132,7 +132,7 @@ theorem Node.enclose_sound {node : Node} {box v : Array Iv} {ρ : Nat → ℝ}
     rw [if_pos hk]
   | pi =>
     obtain ⟨hpi, rfl⟩ := M.lift_ok (e := piIv) h
-    exact ⟨hc, Real.pi, rfl, piIv_sound htrust hpi⟩
+    exact ⟨hc, Real.pi, rfl, piIv_sound hpi⟩
   | add a =>
     obtain ⟨hf, rfl⟩ :=
       M.lift_ok (e := a.foldlM (fun acc i => fits (acc.add v[i]!)) (Iv.pt 0)) h
@@ -210,7 +210,7 @@ theorem Node.enclose_sound {node : Node} {box v : Array Iv} {ρ : Nat → ℝ}
   | sqrt i =>
     obtain ⟨hq, rfl⟩ := M.lift_ok (e := iSqrt v[i]!) h
     obtain ⟨x, hx, hxv⟩ := hval i (by simp [Node.reads])
-    obtain ⟨hx0, hr⟩ := iSqrt_sound htrust hxv hq
+    obtain ⟨hx0, hr⟩ := iSqrt_sound hxv hq
     refine ⟨hc, Real.sqrt x, ?_, hr⟩
     show (val i).bind (fun x => if 0 ≤ x then some (Real.sqrt x) else none) = some (Real.sqrt x)
     rw [hx]
@@ -219,7 +219,7 @@ theorem Node.enclose_sound {node : Node} {box v : Array Iv} {ρ : Nat → ℝ}
   | ln i =>
     obtain ⟨x, hx, hxv⟩ := hval i (by simp [Node.reads])
     have h' : iLn v[i]! c = .ok (r, c') := h
-    obtain ⟨hc', hpos, hr⟩ := iLn_sound htrust hc hxv h'
+    obtain ⟨hc', hpos, hr⟩ := iLn_sound hc hxv h'
     refine ⟨hc', Real.log x, ?_, hr⟩
     show (val i).bind (fun x => if 0 < x then some (Real.log x) else none) = some (Real.log x)
     rw [hx]
@@ -230,7 +230,7 @@ theorem Node.enclose_sound {node : Node} {box v : Array Iv} {ρ : Nat → ℝ}
     simp only [Node.enclose] at h
     split at h
     · exact (M.throw_not_ok h).elim
-    · obtain ⟨hc', hr⟩ := iExp_sound htrust hc hxv h
+    · obtain ⟨hc', hr⟩ := iExp_sound hc hxv h
       refine ⟨hc', Real.exp x, ?_, hr⟩
       show (val i).map Real.exp = some (Real.exp x)
       rw [hx]
@@ -263,7 +263,7 @@ theorem Node.enclose_sound {node : Node} {box v : Array Iv} {ρ : Nat → ℝ}
 
 /-- A step keeps the caches right, with or without a point in the box. -/
 theorem Node.enclose_valid {node : Node} {box v : Array Iv} {c c' : Caches} {r : Iv}
-    (htrust : node.Trusted) (hc : c.Valid) (h : node.enclose box v c = .ok (r, c')) :
+    (hc : c.Valid) (h : node.enclose box v c = .ok (r, c')) :
     c'.Valid := by
   cases node with
   | c q =>
@@ -318,12 +318,12 @@ theorem Node.enclose_valid {node : Node} {box v : Array Iv} {c c' : Caches} {r :
     exact hc
   | ln i =>
     have h' : iLn v[i]! c = .ok (r, c') := h
-    exact iLn_valid htrust hc h'
+    exact iLn_valid hc h'
   | exp i =>
     simp only [Node.enclose] at h
     split at h
     · exact (M.throw_not_ok h).elim
-    · exact iExp_valid htrust hc h
+    · exact iExp_valid hc h
   | div i j =>
     obtain ⟨-, rfl⟩ := M.lift_ok (e := v[i]!.div v[j]!) h
     exact hc
@@ -337,8 +337,8 @@ theorem Node.enclose_valid {node : Node} {box v : Array Iv} {c c' : Caches} {r :
 
 The walk over a tape needs one fact of each node: its step is sound. It is stated for any
 property `V` of the caches that the step keeps, so that it has two readings. For any node,
-`V` is `Caches.Valid` and the fact needs the node's assumption. For a node the kernel
-computes exactly, `V` is true of every cache and the fact needs nothing. -/
+`V` is `Caches.Valid`: the step starts from valid caches and keeps them valid. For a node the
+kernel computes exactly, `V` is true of every cache, so the step may start from any. -/
 
 /-- A node the kernel computes with exact rational arithmetic: every node but `sqrt`, `pi`,
 `ln` and `exp`. -/
@@ -348,9 +348,6 @@ def Node.Exact : Node → Prop
   | .ln _ => False
   | .exp _ => False
   | _ => True
-
-theorem Node.Exact.trusted {node : Node} (h : node.Exact) : node.Trusted := by
-  cases node <;> first | exact True.intro | exact False.elim h
 
 /-- The step of an exact node does not read the caches and does not change them. -/
 theorem Node.enclose_exact {node : Node} {box v : Array Iv} {c c' : Caches} {r : Iv}
@@ -445,17 +442,16 @@ def Node.StepSound (V : Caches → Prop) (node : Node) : Prop :=
       (∀ i ∈ node.reads, ∃ x, val i = some x ∧ v[i]!.Holds x) →
       ∃ x, node.value box.size ρ val = some x ∧ r.Holds x
 
-/-- Any node, from valid caches, given what the node assumes. -/
-theorem Node.Trusted.stepSound {node : Node} (h : node.Trusted) :
-    node.StepSound Caches.Valid :=
-  fun _ _ _ _ _ hc he => ⟨Node.enclose_valid h hc he, fun _ _ hbox hs hval =>
-    (Node.enclose_sound h hbox hs hval hc he).2⟩
+/-- Any node, from valid caches. -/
+theorem Node.stepSound (node : Node) : node.StepSound Caches.Valid :=
+  fun _ _ _ _ _ hc he => ⟨Node.enclose_valid hc he, fun _ _ hbox hs hval =>
+    (Node.enclose_sound hbox hs hval hc he).2⟩
 
-/-- An exact node, from any caches, with nothing assumed. -/
+/-- An exact node, from any caches. -/
 theorem Node.Exact.stepSound {node : Node} (h : node.Exact) :
     node.StepSound (fun _ => True) :=
   fun _ _ _ _ _ _ he => ⟨True.intro, fun _ _ hbox hs hval =>
-    (Node.enclose_sound h.trusted hbox hs hval Caches.valid_empty
+    (Node.enclose_sound hbox hs hval Caches.valid_empty
       (Node.enclose_exact h he {})).2⟩
 
 end Petra

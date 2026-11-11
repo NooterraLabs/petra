@@ -41,4 +41,10 @@ For a design whose parts are of a deck of rules, such as `examples/deck/lap_pass
 | `Petra/Check.lean` | The rules in order, and the verdict |
 | `Main.lean` | The command line and the printed JSON |
 
-Nothing here is proved yet. The arithmetic gives the same interval ends as `petra/kernel/interval.py` on every root tried. The Windows build and a Linux build on aarch64 print the same verdict on 115 exported corpus designs. `python bench/kernel_grid.py` compares the cells the kernel makes from a deck of rules with the ones `petra/grid.py` makes, on generated designs and on damaged decks.
+## What is proved
+
+The interval rule is proved, for `Petra/Num.lean` and `Petra/Tape.lean` as they stand: a tape that `Tape.proved` accepts has every root at most zero at every point of its box, and a point that `Tape.refuted` accepts has its root above zero. The proofs are in `../proofs`, a second package that depends on Mathlib, and [docs/proved.md](../docs/proved.md) lists them. Nothing in this folder depends on that package.
+
+For the logic to read them, no definition in those two files is a `partial def` or runs a `while`: each loop is a recursion that Lean checks to end.
+
+The other files are not proved: reading the files, the deck of rules, the cells and the verdict. The arithmetic gives the same interval ends as `petra/kernel/interval.py` on every root tried. The Windows build and a Linux build on aarch64 print the same verdict on 115 exported corpus designs. `python bench/kernel_grid.py` compares the cells the kernel makes from a deck of rules with the ones `petra/grid.py` makes, on generated designs and on damaged decks.
