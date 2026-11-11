@@ -1,12 +1,17 @@
 """`petra check` asks the kernel, petra-verify, to check its report (petra/verify.py).
 
 The shell is tested with a stand-in for the kernel's answer, so these tests run with no
-kernel built. The `Built` tests run the real one when PETRA_VERIFY names it or the source
-tree holds a build, as CI's does.
+kernel built. The `Found` tests hold the order of the places a kernel is looked for, with
+empty files in two places of their own. The `Built` tests run the real one when
+PETRA_VERIFY names it or the source tree holds a build, as CI's does.
 """
 import hashlib
 import json
+import os
+import tempfile
+import time
 import unittest
+import warnings
 from pathlib import Path
 from unittest import mock
 
@@ -17,6 +22,8 @@ from petra.files import read_pair
 ROOT = Path(__file__).resolve().parents[1]
 CIRCUIT = ROOT / "examples" / "circuit_pass.petra"
 TRUSS = ROOT / "examples" / "truss_pass.petra"
+KERNEL = verify.BUILT
+"""Where this source tree's kernel is, before any test names another place."""
 
 
 def answer(files, verdict="PASS", edit=lambda cells: None, findings=()):
@@ -107,6 +114,76 @@ class Lines(unittest.TestCase):
         self.assertEqual(lines[5], f"kernel     {verify.NO_KERNEL}")
         self.assertEqual(unix.to_json()["card"], "x.card")
         self.assertEqual(unix.to_json()["hashes"], windows.to_json()["hashes"], "a checkout's line ends do not change the hash")
+
+
+class Found(unittest.TestCase):
+    """Where `binary` looks for the kernel: the environment, then the package, then the
+    source tree. Each test has its own two places and no kernel named."""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.packaged, self.built = Path(tmp.name, "packaged", verify.EXE), Path(tmp.name, "built", verify.EXE)
+        for patch in (mock.patch.object(verify, "PACKAGED", self.packaged), mock.patch.object(verify, "BUILT", self.built),
+                      mock.patch.dict(os.environ)):
+            patch.start()
+            self.addCleanup(patch.stop)
+        os.environ.pop("PETRA_VERIFY", None)
+        verify.runs.cache_clear()
+        self.addCleanup(verify.runs.cache_clear)
+
+    def put(self, path: Path, mode: int = 0o755) -> None:
+        path.parent.mkdir()
+        path.write_bytes(b"")
+        path.chmod(mode)
+
+    def test_with_none_named_packaged_or_built_there_is_no_kernel(self):
+        self.assertIsNone(verify.binary())
+
+    def test_the_kernel_built_in_the_source_tree_is_found(self):
+        self.put(self.built)
+        self.assertEqual(verify.binary(), str(self.built))
+
+    def test_the_kernel_a_wheel_carries_comes_before_the_source_trees(self):
+        self.put(self.packaged)
+        self.put(self.built)
+        with mock.patch.object(verify, "runs", lambda kernel: True):
+            self.assertEqual(verify.binary(), str(self.packaged))
+
+    def test_the_kernel_the_environment_names_comes_first(self):
+        self.put(self.packaged)
+        self.put(self.built)
+        os.environ["PETRA_VERIFY"] = "named"
+        self.assertEqual(verify.binary(), "named")
+
+    def test_a_packaged_kernel_that_cannot_run_is_warned_of_once_and_passed_over(self):
+        """An empty file with no execute bit: Windows cannot start it, and elsewhere its
+        mode says it is no program."""
+        self.put(self.packaged, 0o644)
+        with self.assertWarns(RuntimeWarning) as caught:
+            self.assertIsNone(verify.binary())
+        self.assertIn(str(self.packaged), str(caught.warning))
+        self.put(self.built)
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            self.assertEqual(verify.binary(), str(self.built), "the source tree's kernel stands in, with no second warning")
+
+    @unittest.skipUnless(KERNEL.is_file(), "no petra-verify is built here")
+    def test_a_packaged_kernel_that_runs_is_used(self):
+        with mock.patch.object(verify, "PACKAGED", KERNEL), warnings.catch_warnings():
+            warnings.simplefilter("error")
+            self.assertEqual(verify.binary(), str(KERNEL))
+
+    @unittest.skipUnless(os.name == "nt" and KERNEL.is_file(), "needs Windows and a petra-verify built here")
+    def test_a_packaged_kernel_that_imports_a_dll_this_windows_lacks_is_passed_over(self):
+        """As a Windows older than 10 version 1903 sees the kernel, which imports icu.dll:
+        the copy here imports icx.dll, which no Windows has. Windows shows no box for it."""
+        self.packaged.parent.mkdir()
+        self.packaged.write_bytes(KERNEL.read_bytes().replace(b"icu.dll\0", b"icx.dll\0"))
+        began = time.monotonic()
+        with self.assertWarns(RuntimeWarning):
+            self.assertIsNone(verify.binary())
+        self.assertLess(time.monotonic() - began, 30, "it did not wait for a click or for the time limit")
 
 
 @unittest.skipUnless(verify.binary(), "no petra-verify is built here and PETRA_VERIFY names none")

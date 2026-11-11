@@ -6,7 +6,7 @@
 petra-verify --card card.json --design design.json --deck deck.json [--rules rules.json] [--proofs proofs.json]
 ```
 
-`petra check` writes the files for its report and runs the kernel on them when it finds one: the file the environment variable `PETRA_VERIFY` names, else `kernel/.lake/build/bin/petra-verify` in a source tree. It prints how many of the proofs behind its status the kernel checked, and exits 4 if the kernel rejects one that the Python checker accepted.
+`petra check` writes the files for its report and runs the kernel on them when it finds one. It looks in three places, in this order: the file the environment variable `PETRA_VERIFY` names, the kernel inside the installed package, and `kernel/.lake/build/bin/petra-verify` in a source tree. A wheel from PyPI carries the kernel as `petra/bin/petra-verify`, or `petra-verify.exe` on Windows. Petra installed from the sdist carries none, and its report then says on the `kernel` line that no kernel ran. `petra check` prints how many of the proofs behind its status the kernel checked, and exits 4 if the kernel rejects one that the Python checker accepted.
 
 The kernel trusts none of the files. It checks that they agree with each other and that each proof holds. Who wrote each file is outside the kernel: the verdict prints the SHA-256 of the card, the design, the deck and the rules, and a reader compares the card's hash with the card they issued and the rules' hash with the deck of rules they mean. [Reading a verdict](#reading-a-verdict) says what a PASS means without that comparison: very little.
 

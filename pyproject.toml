@@ -23,3 +23,5 @@ petra-lang = "petra.cli:main"
 
 [tool.petra-build]
 include = ["petra/**/*.py", "petra/registry/aisc_shapes.json", "petra/decks/*.json", "petra/docs/*.md"]
+# What `lake build` makes in kernel/, .exe on Windows. A tree that holds it builds a wheel with the kernel inside.
+kernel = "kernel/.lake/build/bin/petra-verify"

@@ -12,10 +12,12 @@ cell itself, and `differs` compares its cells with the grid's, one by one.
 """
 from __future__ import annotations
 
+import functools
 import json
 import os
 import subprocess
 import tempfile
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
@@ -24,7 +26,13 @@ from . import export
 from .models.base import ComponentError
 from .verdict import Discharged, Refuted, WithinMargin
 
-BUILT = Path(__file__).resolve().parent.parent / "kernel" / ".lake" / "build" / "bin" / ("petra-verify.exe" if os.name == "nt" else "petra-verify")
+EXE = "petra-verify.exe" if os.name == "nt" else "petra-verify"
+
+PACKAGED = Path(__file__).resolve().parent / "bin" / EXE
+"""Where a wheel built for one platform carries the kernel (_build/petra_build.py). A wheel
+built from an sdist carries none."""
+
+BUILT = Path(__file__).resolve().parent.parent / "kernel" / ".lake" / "build" / "bin" / EXE
 """Where `lake build` puts the kernel in a source tree."""
 
 
@@ -64,10 +72,43 @@ class Kernel:
         return {"verdict": self.verdict, "checked": self.checked, "proofs": self.proofs, "hashes": dict(self.hashes)}
 
 
+@functools.cache
+def runs(kernel: str) -> bool:
+    """Whether the kernel a wheel carries can run on this machine. A wheel's tag promises
+    it on Linux and macOS, where an installer holds the glibc or the macOS to the tag, so
+    there this only looks at the file's mode. A Windows tag names no version of Windows,
+    and the kernel imports icu.dll, which Windows has carried since Windows 10 version
+    1903. So on Windows this starts the kernel once: with no arguments it prints its usage
+    and exits 64. A kernel that cannot run is warned of once, and the report then says that
+    no kernel ran."""
+    if os.name == "nt":
+        import ctypes
+
+        # Windows shows a box for a DLL it cannot find, and waits for a click. These three bits
+        # of the error mode turn the box off, and the kernel's process inherits them.
+        shown = ctypes.windll.kernel32.SetErrorMode(0x8003)
+        try:
+            ran = subprocess.run([kernel], stdin=subprocess.DEVNULL, capture_output=True, timeout=60).returncode == 64
+        except (OSError, subprocess.TimeoutExpired):
+            ran = False
+        finally:
+            ctypes.windll.kernel32.SetErrorMode(shown)
+    else:
+        ran = os.access(kernel, os.X_OK)
+    if not ran:
+        warnings.warn(f"{kernel} cannot run on this machine, so no kernel checks this verdict", RuntimeWarning, stacklevel=3)
+    return ran
+
+
 def binary() -> str | None:
-    """The kernel to run: the file PETRA_VERIFY names, else the one built in this source
-    tree, else none."""
-    return os.environ.get("PETRA_VERIFY") or (str(BUILT) if BUILT.is_file() else None)
+    """The kernel to run: the file PETRA_VERIFY names, else the one this package carries,
+    else the one built in this source tree, else none."""
+    named = os.environ.get("PETRA_VERIFY")
+    if named:
+        return named
+    if PACKAGED.is_file() and runs(str(PACKAGED)):
+        return str(PACKAGED)
+    return str(BUILT) if BUILT.is_file() else None
 
 
 def behind(report: Any) -> int:
