@@ -22,8 +22,10 @@ and for the transcription as a whole, `reads`: something reads every field and e
 
 A part is sampled as a point: each key a name, each quantity and each load one value. A
 rule's two sides at a point come from the tape that petra/grid.py writes for it, so the
-check reads a rule as `petra check` does. Nothing here decides a verdict: the check decides
-what may enter a deck, and the kernel reads the deck's file itself.
+check reads a rule as `petra check` does. For that it calls grid.py's reader, its tape
+writer and what it knows a rule reads, private names among them, and changes none of it.
+Nothing here decides a verdict: the check decides what may enter a deck, and the kernel
+reads the deck's file itself.
 """
 from __future__ import annotations
 
