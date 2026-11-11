@@ -112,6 +112,8 @@ def _deck_text(deck: grid.Deck, types: tuple[str, ...]) -> str:
                 form = f"given <name>.{f.name}" if f.signed else "<whole number>" if f.whole else f"<{deck_rows.show(f.dim)}>"
             note = "; the card states it: given <name>." + f.name + " in [<lo>, <hi>] signed ..." if f.signed else ""
             lines += [f"    {f.name} {form}", f"        {f.what}{note}"]
+        if kind.needs:
+            lines += ["  a part that breaks one of these is no design:", *(f"    {need.why}" for need in kind.needs)]
         if asks:
             lines.append("  the grid asks:")
             for a in asks:

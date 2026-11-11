@@ -251,7 +251,7 @@ A deck is one JSON file in `petra/decks`.
 | `grid` | The lines of the grid |
 | `rules` | The rules |
 
-Each object of a deck has the keys this page gives it, and no other. A key the page does not give is refused wherever it stands: in the deck, a row, an `anchor`, `gives`, an input of `takes`, a case, a jump, a table, a side of a table, a type, a field, a load, a line of the grid, `unless`, a rule and an item of `where`. So is a key where it does not belong: `signed`, `whole` or `least` on a field that is no quantity, `as` on a field that joins no part, and `closed` on a side with no `bands`. The refusal names the key. A misspelled key is then an error, and never a key left out with its default in its place: `close` for `closed` would leave every band closed at its upper end.
+Each object of a deck has the keys this page gives it, and no other. A key the page does not give is refused wherever it stands: in the deck, a row, an `anchor`, `gives`, an input of `takes`, a case, a jump, a table, a side of a table, a type, a field, a load, a need, a line of the grid, `unless`, a rule and an item of `where`. So is a key where it does not belong: `signed`, `whole` or `least` on a field that is no quantity, `as` on a field that joins no part, and `closed` on a side with no `bands`. The refusal names the key. A misspelled key is then an error, and never a key left out with its default in its place: `close` for `closed` would leave every band closed at its upper end.
 
 A design names a type as the kind of a component block: `lap splice { ... }` is a part named `splice` of type `lap`. The parts of one design are all of one deck's types, or all of the built-in models' kinds.
 
@@ -278,7 +278,7 @@ The first deck, 58 KB, takes 10,019 steps: 6,238 for its file and 3,781 for the 
   {"name": "Fy", "dim": "stress", "signed": true, "what": "the specified minimum yield stress of its steel"}]}
 ```
 
-A type has `type`, its name, `what`, a text, and `fields`. Its `what` may be the empty text.
+A type has `type`, its name, `what`, a text, and `fields`. Its `what` may be the empty text. It may have `loads` and `needs`, which are described below.
 
 A field is one line of the part's block. It has `name`, `what`, a text that is not empty, and one of `dim`, `one_of` and `type`. It is one of three things.
 
@@ -307,6 +307,50 @@ A part reads only the bound the card gives under the part's name and the field's
 `as` gives each joined part the name a rule calls it by. With `"as": ["a", "b"]`, a rule reads `a.thickness` and `b.Fu`.
 
 `loads` lists what a card may put on a part of the type. Each has a `name`, a `dim`, `what` it is, a text that is not empty, and a `least` when it has a floor. A card states one in a load case: `on splice pull in [0 kip, 45 kip]`.
+
+### What a type needs
+
+A pin larger than its hole, a hole wider than its plate and a span longer than its beam are not weak designs. They are not designs. A rule would work a strength out from such a part and might prove it. So a type may state `needs`: what must hold among its fields for a part of it to be a part at all.
+
+```json
+{"type": "eye", "what": "a plate with a hole for a pin",
+ "fields": [
+  {"name": "hole", "dim": "length", "what": "the diameter of its hole"},
+  {"name": "width", "dim": "length", "what": "its width"},
+  {"name": "edge", "dim": "length", "what": "from the centre of the hole to the edge beyond it"},
+  {"name": "pin", "type": "pin", "what": "its pin"}],
+ "needs": [
+  {"lt": ["pin.d", "hole"], "why": "a pin passes through its hole"},
+  {"lt": ["hole", "width"], "why": "a hole is narrower than its plate"},
+  {"le": [["div", "hole", "2"], "edge"], "why": "the edge lies beyond the hole"}]}
+```
+
+`needs` is a list with at least one item: a type that needs nothing leaves it out, and `"needs": []` is refused. A need has `le` or `lt`, never both, and `why`, a text that is not empty. `le` and `lt` hold two sides of one dimension: with `le` the first is at most the second, and with `lt` it is under it.
+
+A side is one of these, and nothing else.
+
+| Written | Means |
+|---|---|
+| `"hole"` | A quantity field of the type |
+| `"pin.d"` | A quantity field of a part the type joins, by the name `as` gives that part, as a rule reads it |
+| `"2"`, `"3/4"`, `["q", "1/16", "inch"]` | A number, and a constant with its unit, as in a row |
+| `["add", a, b, ...]`, `["mul", a, b, ...]` | A sum, a product |
+| `["sub", a, b]`, `["neg", a]` | A difference, the negative |
+| `["div", a, b]` | A quotient, where `b` is a field or a number that is not zero |
+
+Exact fractions decide these, and that is why the list ends there. A need has no root, no logarithm, no power, no least, no greatest, no absolute value and no pi. It reads no load, no row, no `case` and no key. A quotient divides by a field or by a constant, and by no other expression: a quantity of a part is more than zero ([format.md](format.md), Parts 3), so a quotient by a field never divides by zero and needs no other need to say so. A need names at least one field, and it names each field once, over both sides: `2 a <= b` is written `["mul", "2", "a"]`, and not `["add", "a", "a"]`. A deck with a need that breaks any of this does not load.
+
+A need is asked of every part of the type, and it must hold for every value the card and the design allow. A field that the design writes is one number. A field that the card bounds is a range. The kernel works out the range of each side from the ranges of its fields with the four operations on their ends, in exact fractions: the ends of a sum are the sums of the ends, the ends of a product are the least and the greatest of the four products of the ends, the negative turns the two ends round, and a quotient is a product by the two ends of the divisor turned over. Because a side reads each field once, that is the range of the side and no wider. The need holds when the most the first side reaches is at most the least the second reaches, or under it for `lt`. So the answer is exact: there is no rounding, no search and no hint, and no cell.
+
+A part that breaks a need makes the design ILL-FORMED, as a missing field does. The finding names the part, the need by its number from 1 and its type, the two values in SI units, and the `why`:
+
+```
+e: breaks need 1 of a eye: its left side is 23/1000 and its right side is 11/500, in SI units, and the left is to be under the right: a pin passes through its hole
+```
+
+Where a side has a range, the finding says `reaches` for the most of the left side and `goes down to` for the least of the right. The needs are asked last, of a design that breaks no other rule of its files, so each field is there and each quantity is more than zero when a need reads it.
+
+A need reads nothing in the sense of the `unread` cells. A field that only a need names is still a field that no rule checks, and has its open cell.
 
 ### The grid
 
@@ -726,7 +770,7 @@ A bolt of a size the tables do not list, such as 0.7 inch, has no value in them.
 
 The deck has no rule by ASD, none for slotted holes, and none for more than one line of bolts or more than two plates. Fifteen of its 32 rows are read by no rule.
 
-Nothing compares the fields of a lap with one another. A lap may state a `side` of more than half the width of a plate, which no plate can have. It is not refused, and the block shear of each plate is then worked out from that `side`.
+The first deck states no `needs` ([What a type needs](#what-a-type-needs)), so nothing compares the fields of a lap with one another. A lap may state a `side` of more than half the width of a plate, which no plate can have. It is not refused, and the block shear of each plate is then worked out from that `side`.
 
 ## What a deck does not check yet
 

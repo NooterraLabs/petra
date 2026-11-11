@@ -91,11 +91,25 @@ class Field:
 
 
 @dataclass(frozen=True)
+class Need:
+    """What a type needs of its fields for a part of it to be a part at all: `low` at most
+    `high`, or under it when `strict`. A side is `("c", number)`, `("field", name)`,
+    `("add", sides)`, `("mul", sides)`, `("neg", side)` or `("div", side, side)`, which
+    exact fractions decide."""
+
+    strict: bool
+    low: tuple
+    high: tuple
+    why: str
+
+
+@dataclass(frozen=True)
 class Type:
     name: str
     what: str
     fields: Mapping[str, Field]
     loads: Mapping[str, Field]
+    needs: tuple[Need, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -379,6 +393,72 @@ class _Binder(rows._Reader):
         raise RowError(f"{node!r} is not a condition on a part: write is, loaded, and, or, not")
 
 
+def _exact(node: Any, takes: Mapping[str, rows.Input]) -> tuple[tuple, Vector]:
+    """A side of a need and its dimension: a number, a constant with its unit, a quantity
+    field of the type or of a part it joins, and add, sub, mul, neg and div. A quotient
+    divides by a field, which is more than zero for every part, or by a number that is not
+    zero. Anything else is refused: exact fractions decide a need."""
+    if isinstance(node, str):
+        if node == "pi":
+            raise RowError("a need has no pi: exact fractions decide a need")
+        if node in takes:
+            if takes[node].keys:
+                raise RowError(f"{node} is a key, and a need compares quantities")
+            return ("field", node), takes[node].dim
+        try:
+            return ("c", rows.parse_quantity(node, None).value.lo), NONE
+        except ValueError:
+            raise RowError(f"{node[:40]!r} is not a number, and no quantity field has that name") from None
+    if not isinstance(node, list) or not node or not isinstance(node[0], str):
+        raise RowError(f"{node!r} is not an expression: write a number, a name or [operator, ...]")
+    op, args = node[0], node[1:]
+    if op == "q" and len(args) == 2 and all(isinstance(a, str) for a in args):
+        value, dim = quantity(f"{args[0]} {args[1]}", "a constant")
+        return ("c", value), dim
+    parts = [_exact(a, takes) for a in args] if op in ("add", "mul", "sub", "neg", "div") else []
+    sides, dims = tuple(p[0] for p in parts), [p[1] for p in parts]
+    if op in ("add", "sub") and any(d != dims[0] for d in dims[1:]):
+        raise RowError(f"{op} of different dimensions")
+    if op == "add" and sides:
+        return ("add", sides), dims[0]
+    if op == "mul" and sides:
+        return ("mul", sides), tuple(map(sum, zip(*dims)))
+    if op == "sub" and len(sides) == 2:
+        return ("add", (sides[0], ("neg", sides[1]))), dims[0]
+    if op == "neg" and len(sides) == 1:
+        return ("neg", sides[0]), dims[0]
+    if op == "div" and len(sides) == 2:
+        if sides[1][0] not in ("field", "c") or sides[1] == ("c", 0):
+            raise RowError("a need divides by a field or by a number that is not zero, and by nothing else: a field is more than zero, so exact fractions decide the quotient")
+        return ("div", *sides), tuple(a - b for a, b in zip(*dims))
+    raise RowError(f"{op!r} with {len(args)} arguments is not in a need: it has add, sub, mul, neg, and div by a field or by a number")
+
+
+def _fields(side: tuple) -> Iterator[str]:
+    """The fields a side of a need names, each as often as it names it."""
+    if side[0] == "field":
+        yield side[1]
+    elif side[0] != "c":
+        for inner in (side[1] if side[0] in ("add", "mul") else side[1:]):
+            yield from _fields(inner)
+
+
+def _need(body: Any, takes: Mapping[str, rows.Input]) -> Need:
+    """One need of a type: `{"le": [a, b], "why": "..."}` or `{"lt": [a, b], "why": "..."}`.
+    Its two sides have one dimension, and it names at least one field and each field once:
+    the range of a side that reads each quantity once is exactly what the four operations
+    on the ends of their ranges give, so the need is decided and not only enclosed."""
+    only(body, ("le", "lt", "why"), "a need")
+    if ("le" in body) == ("lt" in body) or not (isinstance(body.get("why"), str) and body["why"]):
+        raise RowError("it has `le` or `lt`, and not both, and says why in a text that is not empty")
+    strict = "lt" in body
+    (low, low_dim), (high, high_dim) = (_exact(side, takes) for side in body["lt" if strict else "le"])
+    named = [*_fields(low), *_fields(high)]
+    if low_dim != high_dim or not named or len(set(named)) != len(named):
+        raise RowError("it compares two sides of one dimension, and names at least one field and each field once, so that exact fractions decide it")
+    return Need(strict, low, high, body["why"])
+
+
 def _rule(body: Mapping[str, Any], deck_rows: Mapping[str, rows.Row], types: Mapping[str, Type]) -> Rule:
     where = body.get("id")
     try:
@@ -436,9 +516,11 @@ def read_deck(text: str) -> Deck:
             raise DeckError("; ".join(wrong))
         deck_rows = _named(found, "rows", lambda r: r.id)
         for t in body["types"]:
-            only(t, ("type", "what", "fields", "loads"), f"type {t.get('type')!r}")
+            only(t, ("type", "what", "fields", "loads", "needs"), f"type {t.get('type')!r}")
             if not isinstance(t.get("type"), str):
                 raise DeckError(f"type {t.get('type')!r}: the name of a type is a text")
+            if "needs" in t and not (isinstance(t["needs"], list) and t["needs"]):
+                raise DeckError(f"type {t['type']}: `needs` has at least one item: a type that needs nothing leaves it out")
         types = _named([Type(t["type"], t["what"], _named([_field(f) for f in t["fields"]], "fields", lambda f: f.name),
                              _named([_field(f, True) for f in t.get("loads", [])], "loads", lambda f: f.name)) for t in body["types"]],
                        "types", lambda t: t.name)
@@ -447,6 +529,13 @@ def read_deck(text: str) -> Deck:
             for f in t.fields.values():
                 if f.type is not None and (f.type not in types or any(g.type for g in types[f.type].fields.values()) or len(set(joined)) != len(joined)):
                     raise DeckError(f"{t.name}.{f.name}: it names parts of a type the deck has, whose own fields name no parts, each by a name of its own")
+        # What each type needs of its fields, read once every type is known: a need may name a field of a part the type joins.
+        for t in body["types"]:
+            try:
+                needs = tuple(_need(n, _Binder({}, types[t["type"]], types).takes) for n in t.get("needs", []))
+            except RowError as exc:
+                raise DeckError(f"type {t['type']}: a need: {exc}") from None
+            types[t["type"]] = Type(*(getattr(types[t["type"]], name) for name in ("name", "what", "fields", "loads")), needs)
         asks = []
         for a in body["grid"]:
             unless = a.get("unless")
@@ -655,9 +744,45 @@ def read_parts(design: Design, deck: Deck) -> Parts:
     unread = [("a claim", design.claims), ("a probability claim", design.probability_claims), ("a tests record", design.tests),
               ("an ambient", design.ambient), ("a param", design.params)]
     problems += [f"{design.path}: the card or the design states {what}, which a deck does not read yet" for what, there in unread if there]
+    if not problems:      # what the types need is asked of a design that breaks nothing else, so every field is there and above zero
+        problems += [f"{_at(design.components[p.name].span)}: {p.name} {broken}" for p in parts.values() for broken in _unmet(p, parts)]
     if problems:
         raise ComponentError(tuple(problems))
     return Parts({name: Part(name, p.type, p.values, loads[name]) for name, p in parts.items()}, tuple(sorted(design.loads)))
+
+
+def _span(side: tuple, value: Callable[[str], Interval]) -> tuple[Fraction, Fraction]:
+    """The least and the most a side of a need reaches over the ranges of its fields, by
+    the four operations on the ends. The side reads each field once, so this is the range
+    of its values and no wider."""
+    if side[0] == "c":
+        return side[1], side[1]
+    if side[0] == "field":
+        return value(side[1]).lo, value(side[1]).hi
+    if side[0] == "neg":
+        lo, hi = _span(side[1], value)
+        return -hi, -lo
+    found = [_span(inner, value) for inner in (side[1] if side[0] in ("add", "mul") else side[1:])]
+    if side[0] == "add":
+        return sum(lo for lo, _ in found), sum(hi for _, hi in found)
+    if side[0] == "div":      # by a field, which is more than zero, or by a number that is not zero
+        found = [found[0], (1 / found[1][1], 1 / found[1][0])]
+    lo, hi = Fraction(1), Fraction(1)
+    for a, b in found:
+        ends = (lo * a, lo * b, hi * a, hi * b)
+        lo, hi = min(ends), max(ends)
+    return lo, hi
+
+
+def _unmet(part: Part, parts: Mapping[str, Part]) -> Iterator[str]:
+    """Each need of its type that the part breaks. A need holds when the most its left side
+    reaches is at most the least its right side reaches, or under it for `lt`: for every
+    value the card and the design allow."""
+    for n, need in enumerate(part.type.needs, 1):
+        (low, most), (least, high) = (_span(side, lambda name: _field_of(part, parts, name).range) for side in (need.low, need.high))
+        if not (most < least if need.strict else most <= least):
+            yield (f"breaks need {n} of a {part.type.name}: its left side {'is' if low == most else 'reaches'} {most} and its right side "
+                   f"{'is' if least == high else 'goes down to'} {least}, in SI units, and the left is to be {'under' if need.strict else 'at most'} the right: {need.why}")
 
 
 # --- a tape ----------------------------------------------------------------------------------------

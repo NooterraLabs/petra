@@ -763,5 +763,195 @@ class AKeyPickedBySize(unittest.TestCase):
         self.assertRaises(rows.RowError, rows.example, {"anchor": "made up", "given": {"a": "75 mm", "t": "30 mm"}, "gives": "F"}, mine)
 
 
+# --- 5. what a type needs of its fields -----------------------------------------------------------------
+
+PIN = kind("pin", size("d"))
+FITS = {"lt": ["pin.d", "hole"], "why": "a pin passes through its hole"}
+NARROW = {"lt": ["hole", "width"], "why": "a hole is narrower than its plate"}
+BEYOND = {"le": [["add", ["div", "hole", "2"], "gap"], "edge"], "why": "the edge lies beyond the hole and its gap"}
+
+
+def eye(*needs: dict) -> dict:
+    return kind("eye", size("hole"), size("width"), size("edge"), size("gap", signed=True), {"name": "pin", "type": "pin", "what": "its pin"},
+                **({"needs": list(needs)} if needs else {}))
+
+
+def eyes(*needs: dict) -> dict:
+    return made_up([PIN, eye(*needs)], [asks("eye.any", "eye")], [rule("any", "eye", "eye.any", le=["pin.d", "width"])])
+
+
+EYES = eyes(FITS, NARROW, BEYOND)
+GAP = given("e.gap", "5 mm", "10 mm")
+
+
+def eyed(d: str = "20 mm", hole: str = "22 mm", width: str = "60 mm", edge: str = "30 mm") -> str:
+    return design(part("pin", "p", d=d), part("eye", "e", hole=hole, width=width, edge=edge, gap="given e.gap", pin="p"))
+
+
+class WhatATypeNeeds(unittest.TestCase):
+    def test_a_part_that_keeps_every_need_is_checked_as_before(self):
+        found, verdict, said = cells(self, EYES, eyed(), HEAD + GAP)
+        self.assertEqual(found["e", "eye.any", "any"], "proved")
+        self.assertEqual(sorted(k for k in found if k[1] == "unread"), [("e", "unread", "edge"), ("e", "unread", "gap"), ("e", "unread", "hole")],
+                         "a need reads nothing: the fields that only a need names have no rule that checks them")
+        self.assertEqual(verdict, "UNKNOWN")
+
+    def test_a_part_that_breaks_a_need_is_no_design(self):
+        mine, its = ill_formed(self, EYES, eyed(d="23 mm"), HEAD + GAP)
+        said = "breaks need 1 of a eye: its left side is 23/1000 and its right side is 11/500, in SI units, and the left is to be under the right: a pin passes through its hole"
+        self.assertIn("e " + said, mine)
+        self.assertEqual(its, "parts.9 design e: " + said)
+
+    def test_the_finding_names_the_part_the_need_and_the_two_values(self):
+        mine, its = ill_formed(self, EYES, eyed(hole="60 mm", edge="50 mm"), HEAD + GAP)
+        self.assertEqual(its, "parts.9 design e: breaks need 2 of a eye: its left side is 3/50 and its right side is 3/50, in SI units, and the left is to be under the right: "
+                              "a hole is narrower than its plate")
+        mine, its = ill_formed(self, EYES, eyed(edge="20.999 mm"), HEAD + GAP)
+        self.assertEqual(its, "parts.9 design e: breaks need 3 of a eye: its left side reaches 21/1000 and its right side is 20999/1000000, in SI units, and the left is to be at most the right: "
+                              "the edge lies beyond the hole and its gap")
+
+    def test_a_need_is_decided_exactly_on_its_edge(self):
+        """Half of 22 mm and a gap of up to 10 mm is 21 mm at most: an edge of 21 mm keeps the need, and one of 20.999 mm breaks it."""
+        found, _, _ = cells(self, EYES, eyed(edge="21 mm"), HEAD + GAP)
+        self.assertIn(("e", "eye.any", "any"), found)
+        ill_formed(self, EYES, eyed(edge="20.999999 mm"), HEAD + GAP)
+        ill_formed(self, EYES, eyed(d="22 mm"), HEAD + GAP)
+        cells(self, EYES, eyed(d="21.999999 mm"), HEAD + GAP)
+
+    def test_a_need_holds_for_every_value_a_bound_of_the_card_allows(self):
+        cells(self, EYES, eyed(), HEAD + given("e.gap", "5 mm", "19 mm"))
+        mine, its = ill_formed(self, EYES, eyed(), HEAD + given("e.gap", "5 mm", "19.001 mm"))
+        self.assertIn("its left side reaches 30001/1000000 and its right side is 3/100", its)
+
+    def test_sums_products_and_quotients_of_ranges_are_decided_at_their_ends(self):
+        both = kind("tile", size("a", signed=True), size("b", signed=True))
+        card = HEAD + given("t.a", "10 mm", "20 mm") + given("t.b", "20 mm", "30 mm")
+        text = design(part("tile", "t", a="given t.a", b="given t.b"))
+        for need, kept in (({"le": [["mul", "a", "b"], ["q", "600", "mm2"]]}, True), ({"lt": [["mul", "a", "b"], ["q", "600", "mm2"]]}, False),
+                           ({"le": [["mul", "a", "b"], ["q", "599.999", "mm2"]]}, False), ({"le": [["div", "a", "b"], "1"]}, True), ({"lt": [["div", "a", "b"], "1"]}, False),
+                           ({"le": ["1/3", ["div", "a", "b"]]}, True), ({"lt": ["1/3", ["div", "a", "b"]]}, False), ({"le": [["sub", "a", "b"], ["q", "0", "mm"]]}, True),
+                           ({"le": [["sub", "b", "a"], ["q", "19.999", "mm"]]}, False), ({"le": [["neg", "b"], ["neg", "a"]]}, True),
+                           ({"le": [["mul", "-2", "a"], ["mul", "-1", "b"]]}, False), ({"le": [["mul", "-2", "a"], ["mul", "-2/3", "b"]]}, True),
+                           ({"le": [["div", "a", "-2"], ["div", "b", "-6"]]}, True), ({"lt": [["div", "a", "-2"], ["div", "b", "-6"]]}, False),
+                           ({"le": [["div", ["mul", "a", "b"], ["q", "-6", "mm"]], ["q", "-33", "mm"]]}, True), ({"le": [["div", ["mul", "a", "b"], ["q", "-6", "mm"]], ["q", "-34", "mm"]]}, False),
+                           ({"lt": [["add", "a", ["q", "1/2", "inch"]], ["add", "b", ["q", "12.7001", "mm"]]]}, True)):
+            with self.subTest(need):
+                deck = made_up([{**both, "needs": [{**need, "why": "made up"}]}])
+                if kept:
+                    cells(self, deck, text, card)
+                else:
+                    ill_formed(self, deck, text, card)
+
+    def test_a_need_reaches_the_fields_of_the_parts_the_type_joins(self):
+        wide = kind("pin", size("d"), size("head"))
+        deck = made_up([wide, eye({"le": [["mul", "2", "pin.d"], ["sub", "width", "pin.head"]], "why": "made up"})])
+        text = design(part("pin", "p", d="20 mm", head="20 mm"), part("eye", "e", hole="22 mm", width="60 mm", edge="30 mm", gap="given e.gap", pin="p"))
+        cells(self, deck, text, HEAD + GAP)
+        ill_formed(self, deck, text.replace("head 20 mm", "head 20.001 mm"), HEAD + GAP)
+
+    def test_a_need_that_divides_by_a_field_never_divides_by_zero(self):
+        """A quantity of a part is more than zero, and a design that breaks that is refused for it before any need is asked."""
+        deck = eyes({"le": [["div", "hole", "width"], "1/2"], "why": "made up"})
+        cells(self, deck, eyed(), HEAD + GAP)
+        ill_formed(self, deck, eyed(hole="31 mm"), HEAD + GAP)
+        for width in ("0 mm", "-5 mm"):
+            mine, its = ill_formed(self, deck, eyed(width=width), HEAD + GAP)
+            self.assertIn("parts.3 design e.width: is not more than zero", its)
+            self.assertNotIn("parts.9", its)
+            self.assertNotIn("need", mine)
+        gap = eyes({"le": [["div", "hole", "gap"], "10"], "why": "made up"})
+        cells(self, gap, eyed(), HEAD + given("e.gap", "2.2 mm", "5 mm"))
+        mine, its = ill_formed(self, gap, eyed(), HEAD + given("e.gap", "0 mm", "5 mm"))
+        self.assertIn("parts.3 design e.gap: is not more than zero", its)
+        self.assertNotIn("parts.9", its)
+
+    @KERNEL
+    def test_a_range_of_a_design_written_by_hand_that_reaches_zero_is_refused_before_the_need(self):
+        deck = eyes({"le": [["div", "hole", "width"], "1/2"], "why": "made up"})
+        loaded, read = parsed(deck, eyed(), HEAD + GAP)
+        files = grid.check(read, loaded)[1]
+        body = json.loads(files["design"])
+        (line,) = [ln for p in body["parts"] if p["name"] == "e" for ln in p["lines"] if ln["field"] == "width"]
+        line["args"][0]["number"].update(lo="-1/100", hi="1/100")
+        said = ask({**files, "design": export.text(body)})
+        self.assertEqual([(f["rule"], f["item"]) for f in said["findings"]], [("parts.3", "e.width")])
+
+    def test_a_need_is_asked_of_a_design_that_breaks_nothing_else(self):
+        mine, its = ill_formed(self, EYES, eyed(d="23 mm", hole="22 kN"), HEAD + GAP)
+        self.assertEqual(its, "parts.3 design e.hole: is a force, which is not the dimension of its field")
+
+    def test_the_fields_a_need_names_are_not_read(self):
+        bare = made_up([PIN, eye(FITS, NARROW, BEYOND)])
+        found, verdict, _ = cells(self, bare, eyed(), HEAD + GAP)
+        self.assertEqual(sorted(found), sorted([("p", "unread", "d")] + [("e", "unread", f) for f in ("hole", "width", "edge", "gap")]))
+        self.assertEqual(verdict, "UNKNOWN")
+
+    @KERNEL
+    def test_deciding_the_needs_comes_off_the_work_of_the_verdict(self):
+        bare = made_up([PIN, eye(FITS, NARROW, BEYOND)])
+        loaded, read = parsed(bare, eyed(), HEAD + GAP)
+        said = ask(grid.check(read, loaded)[1])
+        self.assertTrue(0 < said["work"] < 200_000, said["work"])
+        none = made_up([PIN, eye()])
+        loaded, read = parsed(none, eyed(), HEAD + GAP)
+        self.assertEqual(ask(grid.check(read, loaded)[1])["work"], 0)
+
+    @KERNEL
+    def test_a_need_whose_numbers_grow_past_what_the_kernel_holds_is_not_decided_and_the_design_is_refused(self):
+        big = str(10 ** 3990)
+        deck = made_up([kind("tile", size("a", "dimensionless"), needs=[{"le": [["mul", *[big] * 6, "a"], big], "why": "made up"}])])
+        loaded, read = parsed(deck, design(part("tile", "t", a="1")))
+        said = ask(grid.bundle(read, loaded))
+        self.assertEqual(findings(said), "parts.9 design t: need 1 of a tile is not decided: a value has more than 65536 bits")
+
+    def test_a_need_is_two_sides_of_one_dimension_and_a_why(self):
+        reads(self, EYES)
+        le = ["hole", "width"]
+        for need in ({"le": le}, {"le": le, "why": ""}, {"le": le, "why": 5}, {"why": "x"}, {"le": le, "lt": le, "why": "x"}, {"ge": le, "why": "x"}, {"le": le, "why": "x", "note": "y"},
+                     {"le": ["hole"], "why": "x"}, {"le": ["hole", "width", "edge"], "why": "x"}, {"le": "hole", "why": "x"}, {"le": ["hole", ["q", "5", "kN"]], "why": "x"},
+                     {"le": ["hole", "5"], "why": "x"}, {"le": [["add", "hole", "1"], "width"], "why": "x"}, {"le": [["mul", "hole", "width"], "edge"], "why": "x"},
+                     {"le": ["hole", "nobody"], "why": "x"}, {"le": ["hole", "pin"], "why": "x"}, {"le": ["hole", "pin.nobody"], "why": "x"}, {"le": ["hole", "p.d"], "why": "x"},
+                     {"le": ["hole", "eye.width"], "why": "x"}, {"le": ["hole", "pin.d.d"], "why": "x"}, "hole <= width", ["le", "hole", "width"], None):
+            with self.subTest(need):
+                no_deck(self, eyes(need))
+        for needs in ([], None, FITS, "x"):
+            with self.subTest(needs=needs):
+                no_deck(self, made_up([PIN, {**eye(), "needs": needs}]))
+
+    def test_a_need_holds_only_what_exact_fractions_decide(self):
+        for side in (["sqrt", "hole"], ["pow", "hole", "2"], ["pow", "hole", "1/2"], ["pow", "hole", "1"], ["abs", "hole"], ["min", "hole", "edge"], ["max", "hole", "edge"],
+                     ["exp", ["div", "hole", "edge"]], ["ln", ["div", "hole", "edge"]], ["mul", "pi", "hole"], ["load", "pull"], ["row", "made-up/halve", {"x": "hole"}],
+                     ["case", NAMED, {}], ["div", ["mul", "hole", "edge"], ["add", "gap", "gap"]], ["div", "hole", ["add", "edge", "gap"]], ["div", "hole", ["neg", "edge"]],
+                     ["mul", "hole", ["div", "edge", "0"]], ["mul", "hole", ["div", "edge", ["q", "0", "mm"]]], ["mul", "hole", ["div", "edge", "0/5"]],
+                     ["div", "hole", ["div", "edge", "gap"]], ["add"], ["mul"], ["neg"], ["sub", "hole"], ["div", "hole"], ["q", "5"], ["q", 5, "mm"], ["q", "5", "mm", "x"], []):
+            with self.subTest(side):
+                no_deck(self, eyes({"le": [side, "width"], "why": "made up"}))
+
+    def test_a_need_names_a_field_and_each_field_once(self):
+        for le in (["hole", "hole"], [["add", "hole", "hole"], "width"], [["mul", "hole", "2"], ["add", "hole", "width"]], ["pin.d", ["add", "hole", "pin.d"]],
+                   [["div", "hole", "hole"], "1"], ["1", "2"], [["q", "1", "mm"], ["q", "2", "mm"]], [["mul", "2", "3"], "7"]):
+            with self.subTest(le):
+                no_deck(self, eyes({"le": le, "why": "made up"}))
+        reads(self, eyes({"le": [["mul", "hole", "2"], ["add", "edge", "width"]], "why": "made up"}))
+
+    def test_a_field_called_like_a_joined_part_is_not_its_field(self):
+        """The eye joins a pin under the name `pin`. `pin` alone is the field that joins it,
+        which is no quantity, and `pin.d` is the diameter of the pin."""
+        no_deck(self, eyes({"lt": ["pin", "hole"], "why": "made up"}))
+        twin = made_up([PIN, kind("eye", size("d"), size("p"), {"name": "holds", "type": "pin", "as": ["p"], "what": "its pin"},
+                                  needs=[{"lt": ["p.d", "d"], "why": "the pin is under the eye's own d"}, {"lt": ["p", "d"], "why": "the eye's own p is under its d"}])])
+        cells(self, twin, design(part("pin", "x", d="5 mm"), part("eye", "e", d="10 mm", p="9 mm", holds="x")))
+        mine, its = ill_formed(self, twin, design(part("pin", "x", d="10 mm"), part("eye", "e", d="10 mm", p="9 mm", holds="x")))
+        self.assertIn("breaks need 1 of a eye", its)
+        mine, its = ill_formed(self, twin, design(part("pin", "x", d="5 mm"), part("eye", "e", d="10 mm", p="10 mm", holds="x")))
+        self.assertIn("breaks need 2 of a eye", its)
+
+    def test_petra_kinds_says_what_a_type_needs(self):
+        from petra import teach
+
+        text = teach._deck_text(grid.read_deck(json.dumps(EYES)), ("eye",))
+        self.assertIn("  a part that breaks one of these is no design:\n    a pin passes through its hole\n    a hole is narrower than its plate\n", text)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -95,9 +95,40 @@ def Field.dim (f : Field) : Option Dim :=
   | .quantity dim .. => some dim
   | _ => none
 
+/-- An expression that exact fractions decide: a number, a quantity field of the part or of
+the part it joins under the name `part`, a sum, a product, a negation, and a quotient by a
+field or by a number that is not zero. It has no root, no logarithm and no power, so its
+range over the ranges of its fields is found with the four operations on fractions. -/
+inductive Exact where
+  | c (x : Rat)
+  | field (part : Option String) (name : String)
+  | add (terms : Array Exact)
+  | mul (factors : Array Exact)
+  | neg (x : Exact)
+  | div (x y : Exact)
+  deriving Inhabited
+
+/-- The fields an expression names, each as often as it names it. -/
+def Exact.fields : Exact → Array (Option String × String)
+  | .c _ => #[]
+  | .field part name => #[(part, name)]
+  | .add xs | .mul xs => xs.foldl (fun out x => out ++ x.fields) #[]
+  | .neg x => x.fields
+  | .div x y => x.fields ++ y.fields
+
+/-- What a type needs of its fields for a part of it to be a part at all: `low` at most
+`high`, or under it when `strict`, and why. -/
+structure Need where
+  strict : Bool
+  low : Exact
+  high : Exact
+  why : String
+  deriving Inhabited
+
 /-- A type. `field` and `load` find a field and a load by name. `called` finds, for each
 name a rule may call a joined part by, the type of that part, the field that joins it and
-its place among the parts the field joins. -/
+its place among the parts the field joins. `needs` is what must hold among its fields and
+those of the parts it joins. -/
 structure Kind where
   name : String
   fields : Array Field
@@ -105,6 +136,7 @@ structure Kind where
   field : Std.TreeMap String Field := {}
   load : Std.TreeMap String Field := {}
   called : Std.TreeMap String (String × String × Nat) := {}
+  needs : Array Need := #[]
   deriving Inhabited
 
 /-- A condition on what a part is, not on how large. An `is` holds when a key field has a
@@ -710,6 +742,78 @@ rows it applies. A file nests at most `MAX_NESTING` deep, so a row or a rule alo
 it, and a chain of names that each read the next is cut here. -/
 def MAX_EXPRESSION : Nat := 1024
 
+/-- An expression of a need, with its dimension: a number, a constant with its unit, a
+quantity field of the type or of a part it joins, and `add`, `sub`, `mul`, `neg` and `div`.
+A quotient divides by a field, which is more than zero for every part (docs/format.md,
+Parts 3), or by a number that is not zero, so it never divides by zero and exact fractions
+decide it. Anything else is refused: a root, a logarithm, a power, a least or a greatest, a
+load, a row, a key and pi. -/
+def exact (scope : Scope) : Nat → Json → Except String (Exact × Dim)
+  | 0, _ => throw "an expression nests too deep"
+  | _ + 1, .str name => do
+    if name == "pi" then throw "a need has no pi: exact fractions decide a need"
+    match scope.find name with
+    | some (.field dim part field) => return (.field part field, dim)
+    | some (.key ..) => throw s!"{name} is a key, and a need compares quantities"
+    | _ =>
+      match if name.length ≤ MAX_NUMBER_CHARS then decimal name.toList else none with
+      | some x => return (.c x, {})
+      | none => throw s!"{String.ofList (name.toList.take 40)} is not a number, and no quantity field has that name"
+  | fuel + 1, .arr items => do
+    let some (Json.str op) := items[0]? | throw "an expression starts with the name of its operator"
+    let args := items.toList.drop 1
+    let same (dims : List Dim) : Except String Dim :=
+      match dims with
+      | d :: rest => if rest.all (· == d) then pure d else throw s!"{clip op} of different dimensions"
+      | [] => throw s!"{clip op} of nothing"
+    match op, args with
+    | "q", [.str x, .str unit] =>
+      let (value, dim) ← amount (x ++ " " ++ unit)
+      return (.c value, dim)
+    | "add", _ :: _ =>
+      let parts ← args.mapM (exact scope fuel)
+      return (.add (parts.map (·.1)).toArray, ← same (parts.map (·.2)))
+    | "mul", _ :: _ =>
+      let parts ← args.mapM (exact scope fuel)
+      return (.mul (parts.map (·.1)).toArray, (parts.map (·.2)).foldl (· + ·) {})
+    | "sub", [a, b] =>
+      let (x, dx) ← exact scope fuel a
+      let (y, dy) ← exact scope fuel b
+      return (.add #[x, .neg y], ← same [dx, dy])
+    | "neg", [a] =>
+      let (x, d) ← exact scope fuel a
+      return (.neg x, d)
+    | "div", [a, b] =>
+      let (x, dx) ← exact scope fuel a
+      let (y, dy) ← exact scope fuel b
+      match y with
+      | .field .. => pure ()
+      | .c value => if value == 0 then throw "a need divides by zero"
+      | _ => throw "a need divides by a field or by a number, and by nothing else: a field is more than zero, so exact fractions decide the quotient"
+      return (.div x y, dx - dy)
+    | _, _ => throw s!"{clip op} with {args.length} arguments is not in a need: it has add, sub, mul, neg, and div by a field or by a number"
+  | _ + 1, _ => throw "an expression is a number, a name or [operator, ...]"
+
+/-- One need of a type: `{"le": [a, b], "why": "..."}` or `{"lt": [a, b], "why": "..."}`,
+with two sides of one dimension and a `why` that is not empty. It names at least one field,
+and each field once: the range of an expression that reads each of its quantities once is
+exactly what the four operations on the ends of their ranges give, so the need is decided
+for every value the card and the design allow, and not only enclosed. -/
+def readNeed (scope : Scope) (j : Json) : Except String Need := do
+  within j ["le", "lt", "why"]
+  unless filled j "why" do throw "it says why, in a text that is not empty"
+  if has j "le" == has j "lt" then throw "it has `le` or `lt`, and not both"
+  let strict := has j "lt"
+  let [low, high] := (← (← need j (if strict then "lt" else "le")).getArr?).toList | throw "it compares two sides"
+  let (x, dx) ← exact scope MAX_EXPRESSION low
+  let (y, dy) ← exact scope MAX_EXPRESSION high
+  unless dx == dy do throw "it compares two dimensions"
+  let named := x.fields ++ y.fields
+  if named.isEmpty then throw "it names no field, so it says nothing of a part"
+  if let some (part, name) := twice named then
+    throw s!"it names {(part.map (· ++ ".")).getD ""}{name} twice: a need reads each field once, so that exact fractions decide it"
+  return { strict, low := x, high := y, why := ← text j "why" }
+
 -- Reading a deck.
 
 /-- An anchor names its standard and its clause, and may name an equation, a table and a
@@ -928,7 +1032,7 @@ def readField (load : Bool) (j : Json) : Except String Field := do
 def readKind (j : Json) : Except String Kind := do
   let name ← text j "type"
   let kind : Except String Kind := do
-    within j ["type", "what", "fields", "loads"]
+    within j ["type", "what", "fields", "loads", "needs"]
     let _ ← (text j "what").mapError fun _ => "it has `what`, a text"
     let fields ← (← list j "fields").mapM (readField false)
     let loads ← (← listed j "loads").mapM (readField true)
@@ -1108,6 +1212,16 @@ def readRules (j : Json) : Except String Rules := do
           unless its.called.isEmpty do
             throw s!"{kind.name}.{f.name}: it names parts of {other}, whose own fields name parts"
         | none => throw s!"{kind.name}.{f.name}: {clip other} is not a type of the deck"
+  -- What each type needs of its fields. It is read once every type is known: a need of a
+  -- type may name a field of a part it joins.
+  let read ← (read.zip (← list j "types")).mapM fun (kind, body) => do
+    if !has body "needs" then return kind
+    let written ← (list body "needs").mapError (s!"type {clip kind.name}: " ++ ·)
+    if written.isEmpty then throw s!"type {clip kind.name}: `needs` has at least one item: a type that needs nothing leaves it out"
+    let scope : Scope := { kind := some kind, kinds }
+    let needs ← written.mapIdxM fun k item => (readNeed scope item).mapError (s!"type {clip kind.name}: need {k + 1}: " ++ ·)
+    return { kind with needs }
+  let kinds : Std.TreeMap String Kind := read.foldl (fun table kind => table.insert kind.name kind) {}
   let asks ← (← list j "grid").mapM (readAsk kinds rows)
   unless distinct (asks.map fun a => (a.kind, a.mechanism)) do throw "the grid asks one mechanism of one type twice"
   let asked : Std.TreeMap (String × String) Ask := asks.foldl (fun table a => table.insert (a.kind, a.mechanism) a) {}
