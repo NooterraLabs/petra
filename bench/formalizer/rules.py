@@ -78,7 +78,9 @@ def mutations(body: Mapping[str, Any], task: rule.Task) -> Iterator[tuple[str, s
         return node
 
     for path, node in rule.places(body):
-        if not path or path[0] not in ("le", "let", "where") or "why" in path:
+        # An expression is a side of `le`, a value of `let`, a side of a range, or something inside one. The names of a key are not.
+        inside = len(path) > (3 if path[:1] == ("where",) else 1) and path[0] in ("le", "let", "where") and "why" not in path
+        if not inside or any(isinstance(above, list) and above[:1] in (["by"], ["key"]) for above in (at(path[:n]) for n in range(1, len(path)))):
             continue
         parent = at(path[:-1])
         head = parent[0] if isinstance(parent, list) and parent else None
