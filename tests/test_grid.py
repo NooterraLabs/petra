@@ -561,6 +561,10 @@ class Kernel(unittest.TestCase):
         for path, verdict in expected.items():
             with self.subTest(design=path):
                 result = petra.check(*read_pair(ROOT / path), path=path, repair=False)
+                if verdict == "NOT_PASS":         # the standard refuses it and the deck has no rule that can
+                    self.assertIn(result["status"], ("FAIL", "UNKNOWN"))
+                    self.assertEqual(result["kernel"]["verdict"], result["status"])
+                    continue
                 self.assertEqual(result["status"], verdict)
                 if verdict != "INPUT_ERROR":      # a pair the grid refuses is not sent to the kernel
                     self.assertEqual(result["kernel"]["verdict"], verdict)

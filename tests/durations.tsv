@@ -40,7 +40,7 @@ tests.test_margin	2.1
 tests.test_mcp	36.0
 tests.test_mechanics	6.5
 tests.test_metamorphic	82.2
-tests.test_packaging	86.1
+tests.test_packaging	59.1
 tests.test_parts_exact	2.0
 tests.test_parts_gate	30.8
 tests.test_parts_layer	47.0

@@ -153,7 +153,7 @@ examples/deck/lap_unknown.petra	UNKNOWN			the grid asks four mechanisms the deck
 corpus/cases/deck/d01_short_end.petra	FAIL			the end distance is 3/4 inch, under the 1 inch Table J3.4 asks of a 3/4 inch bolt, and the end bolts tear out: the three carry 31.4 kip under a pull of 45
 corpus/cases/deck/d02_long_line.petra	PASS			14 bolts at 3 inch make a line of 39 inch, over 38, so note c of Table J3.2 takes the shear stress at 83.3%: the bolts carry 208.7 kip under a pull of 45
 corpus/cases/deck/d03_unlisted_bolt.petra	UNKNOWN			Tables J3.3 and J3.4 list no 0.7 inch bolt, so every rule that reads a hole or a least edge distance is open, on six lines
-corpus/cases/deck/d04_oversize_holes.petra	UNKNOWN			oversize holes: every rule holds, the end distance with the 1/16 inch of Table J3.5, and J3.3 bars such holes from a bearing-type joint, which no rule checks and the card does not waive
+corpus/cases/deck/d04_oversize_holes.petra	NOT_PASS			oversize holes in a bearing-type joint, which J3.3 bars: every rule holds, the end distance with the 1/16 inch of Table J3.5, and the deck has no rule for the use of the hole, so the line is open and the card does not waive it
 corpus/cases/deck/d05_swapped_given.petra	INPUT_ERROR			the yield stress of a plate reads the bound the card gives for its tensile strength
 corpus/cases/deck/d06_design_states_strength.petra	INPUT_ERROR			the design writes a plate's yield stress, which only the card may state
 corpus/cases/deck/d07_push.petra	INPUT_ERROR			the card's pull goes below zero, and a lap takes a pull
@@ -179,11 +179,11 @@ corpus/cases/deck/d26_net_section_holds.petra	PASS			the 3 inch strap of d25 rup
 corpus/cases/deck/d27_block_tears_out.petra	FAIL			holes 1.25 inch from a side edge: each plate tears out as a block at 58.82 kip under a pull of 60, and the bolts carry 65.35
 corpus/cases/deck/d28_block_holds.petra	PASS			the lap of d27: each plate tears out as a block at 58.82 kip, and the pull is 58
 corpus/cases/deck/d29_oversize_short_end.petra	FAIL			oversize holes with an end distance of 1 inch, under the 1 1/16 inch of Tables J3.4 and J3.5, where a standard hole needs 1 inch
-corpus/cases/deck/d30_oversize_end_at_minimum.petra	UNKNOWN			oversize holes with an end distance of exactly 1 1/16 inch: every rule holds, and whether a bearing-type joint may have such holes (J3.3) stays open
+corpus/cases/deck/d30_oversize_end_at_minimum.petra	NOT_PASS			oversize holes in a bearing-type joint, which J3.3 bars, with an end distance of exactly 1 1/16 inch: every rule holds, and the deck has no rule for the use of the hole, so the line is open
 corpus/cases/deck/d31_long_line_over.petra	FAIL			a line of 39 inch: at the 83.3% of note c of Table J3.2 the 14 bolts carry 208.7 kip under a pull of 215, and at the full stress they would carry 250.5
 corpus/cases/deck/d32_long_line_under.petra	PASS			the line of d31, 39 inch: at 83.3% the 14 bolts carry 208.7 kip, and the pull is 205
 corpus/cases/deck/d33_line_of_38_inch.petra	PASS			a line of exactly 38 inch is not over it, so the 20 bolts carry 248.5 kip at the full stress under a pull of 230, where 83.3% would give 207.0
 corpus/cases/deck/d34_large_bolt.petra	UNKNOWN			1 1/8 inch bolts: Table J3.3 lists holes to 1 inch, so the four lines whose rules read a hole are open, though each holds by hand
 corpus/cases/deck/d35_edge_distance_unanswered.petra	UNKNOWN			the card waives the other three mechanisms with no rule, and the greatest edge distance of J3.6 stays open: the deck has no rule for it
-corpus/cases/deck/d36_far_from_an_edge.petra	UNKNOWN			holes 5 inch from the nearest edge of a 3/8 inch plate, over the 4.5 inch of J3.6: no rule checks it, and the open cell keeps the lap from passing
+corpus/cases/deck/d36_far_from_an_edge.petra	NOT_PASS			holes 5 inch from the nearest edge of a 3/8 inch plate, over the 4.5 inch of J3.6: the deck has no rule for it, and the open cell keeps the lap from passing
 corpus/cases/deck/d37_no_side_or_surface.petra	INPUT_ERROR			a lap with no side and no surface, as one was written before the deck had those fields
