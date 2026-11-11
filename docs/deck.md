@@ -594,6 +594,8 @@ A bolt of a size the tables do not list, such as 0.7 inch, has no value in them.
 
 The deck has no rule by ASD, none for slotted holes, and none for more than one line of bolts or more than two plates. Fifteen of its 32 rows are read by no rule.
 
+Nothing compares the fields of a lap with one another. A lap may state a `side` of more than half the width of a plate, which no plate can have. It is not refused, and the block shear of each plate is then worked out from that `side`.
+
 ## What a deck does not check yet
 
 - Types and grid lines are written once, by hand, and nothing second-transcribes them. A rule has the acceptance check above. The 15 rules of the first deck are one of two transcriptions from the pages that agree at every part tried, and eight worked examples stand behind six of its eight lines with rules ([The second run](#the-second-run)).
