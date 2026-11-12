@@ -58,6 +58,11 @@ MAX_LEAVES = 256
 """The most leaves a partition may have before the search for a proof stops."""
 MAX_CORNERS = 6
 """A refuting point is looked for at every corner of the box while no more inputs than this have a range, and past that at one."""
+MAX_CLIMB = 65_536
+"""The most nodes the climb to that one corner walks, over every time it walks the tape: a tape
+of n nodes is walked MAX_CLIMB // n times at most. A round of the climb walks the tape twice
+for each ranged input, and it may take a round for each, so without this bound its time grew
+as the cube of their number."""
 MAX_NAME = 64
 """The most bytes a name may print in that a cell prints whole, as in kernel/Petra/Files.lean:
 the name of a part, a load case, a mechanism, a field, a load, a joined part and a `let`, and a rule's id."""
@@ -1447,21 +1452,25 @@ def _refuting(nodes: list[list], root: int, box: list[Interval]) -> list[Fractio
     """A point of the box where the root is above zero: a corner of it while no more inputs
     than MAX_CORNERS have a range, and past that the corner the root climbs to; and then its
     middle. The climb starts at the middle and sets each ranged input in turn to the end of
-    its range where the root is higher, the others held, until a round moves none or there
-    have been as many rounds as ranged inputs. Where the root has no value it is lowest."""
+    its range where the root is higher, the others held, until a round moves none, there
+    have been as many rounds as ranged inputs, or it has walked MAX_CLIMB nodes; it stops
+    where it is then. Where the root has no value it is lowest."""
     ranged = [k for k, x in enumerate(box) if x.width() > 0]
     middle = [x.midpoint() for x in box]
     if len(ranged) <= MAX_CORNERS:
         corners = [list(p) for p in itertools.product(*((x.lo, x.hi) if x.width() > 0 else (x.lo,) for x in box))]
     else:
-        point = list(middle)
+        point, walks = list(middle), MAX_CLIMB // max(len(nodes), 1)
         for _ in ranged:
             moved = False
             for k in ranged:
+                if walks < 2:
+                    break
+                walks -= 2
                 low, high = (_height(nodes, root, [*point[:k], end, *point[k + 1:]]) for end in (box[k].lo, box[k].hi))
                 end = box[k].hi if low is None or (high is not None and high >= low) else box[k].lo
                 moved, point[k] = moved or end != point[k], end
-            if not moved:
+            if not moved or walks < 2:
                 break
         corners = [point]
     return next((point for point in [*corners, middle] if _above(nodes, root, point)), None)

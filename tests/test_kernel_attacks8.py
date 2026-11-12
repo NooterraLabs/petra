@@ -26,14 +26,20 @@ finding.
   F4  A design whose one line is waived, and whose only proved cell is the `/where` cell of
       that line's rule: the range the rule holds in. That cell counted as the one proved cell a
       PASS needs, so the design passed with nothing it was asked answered.
+  F5  The climb of the grid's search for a refuting point, past six ranged inputs, walked the
+      tape twice for each input in a round and took a round for each input: its time grew as
+      the cube of their number, and a chain of 160 took minutes. The climb now walks at most
+      MAX_CLIMB nodes, and the search goes on at the middle and in the partition.
 """
 import json
 import math
 import unittest
 from fractions import Fraction
+from unittest import mock
 
 import petra
 from petra import grid, verify
+from petra.kernel.interval import Interval
 from tests.test_deck_features import (ANCHOR, HEAD, KERNEL, asks, cells, design, given, key, kind, load, made_up, no_deck, parsed, part, reads, reason,
                                       rule, size)
 from tests.test_kernel_grid import ask
@@ -374,6 +380,42 @@ class ABoltPastThePrintedSizes(unittest.TestCase):
         larger = petra.check(LAP_CARD, LAP.replace("diameter 1.125 inch", "diameter 1.75 inch").replace("pitch 4 inch", "pitch 5 inch").replace("end 2 inch", "end 3 inch"),
                              path="lap.petra", repair=False)
         self.assertEqual(larger["status"], "UNKNOWN", "a bolt past the sizes the tables list is not decided, and no waiver passes it")
+
+
+# --- F5. the climb of the search for a refuting point -----------------------------------------------------
+
+def chain(n: int) -> tuple[list[list], int, list[Interval]]:
+    """The tape of the review's chain, x_0 (x_1 - 3/4) + ... + x_(n-2) (x_(n-1) - 3/4) + x_(n-1), less (n - 1)/4 + 3/4, over each
+    x_k in [0, 1], and its root. Its greatest value, a quarter, is at the corner of all ones, and the climb from the middle reaches
+    it a round for each input: each round sets one more of the last inputs to 1."""
+    nodes: list[list] = [["s", k] for k in range(n)] + [["c", "-3/4"]]
+    terms = []
+    for k in range(n - 1):
+        nodes += [["add", [k + 1, n]], ["mul", [k, len(nodes)]]]
+        terms.append(len(nodes) - 1)
+    nodes += [["add", [*terms, n - 1]], ["c", str(-Fraction(n - 1, 4) - Fraction(3, 4))]]
+    nodes.append(["add", [len(nodes) - 2, len(nodes) - 1]])
+    return nodes, len(nodes) - 1, [Interval(Fraction(0), Fraction(1))] * n
+
+
+class AClimbWithABudget(unittest.TestCase):
+    def test_the_climb_walks_at_most_its_budget_and_finds_the_corner_of_a_short_chain(self):
+        """A round of the climb walks the tape twice for each ranged input, and it took a round for each, so the time grew as the cube of
+        their number: 160 inputs took minutes. The climb now walks at most MAX_CLIMB nodes, and the search goes on at the middle and in the
+        boxes a proof cannot prove. A chain of 12 is climbed to its corner, and one of 160 is not."""
+        for n, corner in ((12, True), (160, False)):
+            with self.subTest(n=n):
+                nodes, root, box = chain(n)
+                walked, real = [0], grid._height
+
+                def counted(nodes: list[list], root: int, point: list[Fraction]) -> Fraction | None:
+                    walked[0] += len(nodes)
+                    return real(nodes, root, point)
+
+                with mock.patch.object(grid, "_height", counted):
+                    point = grid._refuting(nodes, root, box)
+                self.assertEqual(point, [Fraction(1)] * n if corner else None)
+                self.assertLessEqual(walked[0], grid.MAX_CLIMB + 2 * len(nodes), "the climb, then the corner it reached and the middle")
 
 
 if __name__ == "__main__":
