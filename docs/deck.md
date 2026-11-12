@@ -50,7 +50,7 @@ An anchor has `standard` and `clause`, each a text that is not empty, and may ha
 
 A `range` is two values, the lower first, between which a real design's value would fall. The check draws its sample points from the ranges, so a row with cases needs ranges wide enough for each case to hold somewhere. Every quantity a row takes has a `range`, and a row whose input has none is refused. Each end states its unit, as every value of a dimension does ([A value with its unit](#a-value-with-its-unit)).
 
-A row has `id`, `anchor`, `gives`, `takes` and one of `is`, `cases` and `table`. `gives` has `name` and `dim`, each a text, and an input has `name`. A table that gives a name has `one_of` in place of `dim` ([A table that gives a name](#a-table-that-gives-a-name)). The `what` of `gives` and of an input may be left out. A jump has `why`, a text that is not empty.
+A row has `id`, `anchor`, `gives`, `takes` and one of `is`, `cases` and `table`. `gives` has `name` and `dim`, each a text, and an input has `name`. A table that gives a name has `one_of` in place of `dim` ([A table that gives a name](#a-table-that-gives-a-name)). The `what` of `gives` and of an input may be left out. A jump has `cases` and `why`. `cases` is a list of whole numbers, each one of the row's cases counted from 1, in which exactly two different numbers stand: `[1]` and `[1, 2, 3]` are refused. `why` is a text that is not empty.
 
 ### Dimensions
 
@@ -298,7 +298,7 @@ A quantity may also have these. A key may have `optional` and `signed`, and no o
 |---|---|
 | `optional` | A part may leave it unstated: the design writes `unstated` in its place ([A field that a record may leave unstated](#a-field-that-a-record-may-leave-unstated)) |
 | `signed` | Only the card states it, and the design reads it with `given`. A design that writes a number or a name for it is refused. A material strength is signed, and so is a design category ([What the card states of a part](#what-the-card-states-of-a-part)). |
-| `whole` | It is a count: a whole number, which the design writes or the card states exactly |
+| `whole` | It is a count: a whole number, which the design writes or the card states exactly. A count is a plain number, so its `dim` is `dimensionless`, and a `whole` field of any other dimension is refused. |
 | `least` | The least value it may take |
 | `may_be` | `"zero"`: it may be zero, and not under it. `"negative"`: it may be zero or under it. Without `may_be` a quantity of a part is more than zero. |
 

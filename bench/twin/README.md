@@ -126,6 +126,21 @@ Measured with `--count 6000 --decks 3000 --seed 7`, against the kernel and the g
 
 The reading as it was before the update differs from the kernel on 7 of the first 49 of these decks, so the comparison does see a difference when there is one.
 
+## The second update of 2026-11-11
+
+Three merges changed the pages after the first update: a cell for every load case of the card, a cell for a load nothing reads, units with a power, conditions on a joined part's key, rules that require, rows that give a name, what a type needs, keys and counts the card states, fields a record may leave unstated, quantities at or under zero, strict `lt`, and more units. A third agent, again on another model than the kernel's author, brought the reading up to them under the same rule: a folder with the pages, what had changed in them, the two decks, this reading and its notes, and nothing else.
+
+It had more examples than before: 45 generated designs and 40 damaged decks, each with the kernel's answer. It was told to change the reading only where the pages support the answer, and to write down every place they do not, rather than fit the examples. It reports one slip: it once wrote helper files outside its folder, and deleted them.
+
+`AMBIGUITIES.md` gained section J, ten entries. Most are about the findings a refused deck prints, which the comparison does not count: how many findings a deck that does not load gives, which rule a part of an unknown kind breaks, and how an item is named. 13 earlier entries were settled by the pages in another way than the reading had taken, and the reading changed to match.
+
+Measured with `--count 6000 --decks 3000 --seed 7` against the kernel and the grid at c5167fb, the comparison first found 7 damaged decks that the kernel and the grid refuse and this reading took. Both kinds were rules the pages did not state: a count of any dimension but `dimensionless`, and a jump whose `cases` do not name exactly two different cases. [deck.md](../../docs/deck.md) now states both, and the reading gained them from that sentence.
+
+| Compared | Result |
+|---|---|
+| Generated designs, 5,773 compared | The same verdict and the same cells on every one |
+| Damaged decks, 3,000 compared | The same on every one: 2,396 refused by all three, 167 PASS, 144 FAIL, 281 UNKNOWN, and 12 designs refused |
+
 ## What it is not
 
 It does not read a design of the models' kinds or hash a file. It applies the limits that decide a verdict and not the budget of work, the memory of enclosures or the limits on what is printed. It is a reading of the rules path only.

@@ -4,14 +4,15 @@
 //
 //   node verify.mjs --card F --design F --deck F --rules F [--proofs F] [--explain]
 //
-// Prints one JSON object {verdict, findings, cells} and exits 0 PASS, 1 FAIL, 2 UNKNOWN,
-// 3 ILL-FORMED, 64 for a command line it cannot read. --explain adds a reason to each cell,
-// the counts, the number of ignored hints, the steps to read the deck and the steps to make
-// the cells.
+// Prints one JSON object {verdict, findings, counts, ignored_hints, waived, cells} and exits
+// 0 PASS, 1 FAIL, 2 UNKNOWN, 3 ILL-FORMED, 64 for a command line it cannot read. A cell has its
+// subject, mechanism, entry, claimed and state, and a reason when it is open, waived, or a
+// refuted rule that requires. --explain adds the steps to read the deck and to make the cells.
 //
-// Of the limits format.md states, the budget of work (20,000,000,000 units), the words of
-// enclosures held on a leaf and the caches of ln and exp are left out: they are counted in the
-// reference kernel's own costs. So are the limits on what is printed. See AMBIGUITIES.md, I.
+// Of the limits format.md states, the budget of work (20,000,000,000 units, for the needs and
+// the proofs), the words of enclosures held on a leaf and the caches of ln and exp are left out:
+// they are counted in the reference kernel's own costs. So are the limits on what is printed.
+// See AMBIGUITIES.md, I.
 
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
@@ -149,8 +150,10 @@ export function parseDim(s) {
 }
 
 // A dim of card.json, design.json or deck.json (format.md, Numbers): one of sixteen names, or the
-// exponents of metre, kilogram, second, ampere and degree Celsius that are not zero, as in
-// `m^3 s^-1`, each a base, `^` and a whole number, one space between two (AMBIGUITIES.md, H1).
+// exponents of metre, kilogram, second, ampere and degree Celsius, as in `m^3 s^-1`: each a base,
+// `^` and a whole number, one space between two. The bases may stand in any order and more than
+// once, their exponents then added; the number may be zero or negative, may have leading zeros and
+// has no `+`. The empty text, two spaces together and a space at either end name no dimension.
 const FILE_DIMS = Object.assign(Object.create(null), BASE_DIMS, {
   I2t: dvec(0, 0, 1, 2, 0),
   'resistance per length': ddiv(BASE_DIMS.resistance, BASE_DIMS.length),
@@ -161,14 +164,10 @@ export function parseFileDim(s) {
   if (FILE_DIMS[s]) return FILE_DIMS[s];
   if (s.length === 0) return null;
   const e = [0n, 0n, 0n, 0n, 0n];
-  let last = -1;
   for (const p of s.split(' ')) {
-    const m = /^(m|kg|s|A|degC)\^(-?[1-9][0-9]*)$/.exec(p);
+    const m = /^(m|kg|s|A|degC)\^(-?[0-9]+)$/.exec(p);
     if (!m) return null;
-    const k = FILE_BASES.indexOf(m[1]);
-    if (k <= last) return null;
-    last = k;
-    e[k] = BigInt(m[2]);
+    e[FILE_BASES.indexOf(m[1])] += BigInt(m[2]);
   }
   return e.map((x) => R(x));
 }
@@ -176,16 +175,20 @@ export function parseFileDim(s) {
 const sameFileDim = (name, dim) => { const d = parseFileDim(name); return d !== null && deq(d, dim); };
 
 const IN = R(127n, 5000n);
-const LBF = qmul(R(45359237n, 100000000n), R(980665n, 100000n));
+const LB = R(45359237n, 100000000n);
+const LBF = qmul(LB, R(980665n, 100000n));
 const KIP = qmul(LBF, R(1000n));
 const FT = qmul(IN, R(12n));
+const MILE = qmul(FT, R(5280n));
 const PSI = qdiv(LBF, qmul(IN, IN));
-const U = (f, dim) => ({ f, dim: BASE_DIMS[dim] });
+const U = (f, dim) => ({ f, dim: typeof dim === 'string' ? parseDim(dim) : dim });
 const r10 = (e) => (e >= 0 ? R(10n ** BigInt(e)) : R(1n, 10n ** BigInt(-e)));
+// reference.md, Units (pages/units.md), with the factors of its table; and `N m`, which a deck
+// reads and a design cannot write (deck.md, Dimensions).
 export const UNITS = Object.assign(Object.create(null), {
   '%': U(R(1n, 100n), 'dimensionless'),
   m: U(Q1, 'length'), mm: U(r10(-3), 'length'), um: U(r10(-6), 'length'), cm: U(r10(-2), 'length'),
-  km: U(r10(3), 'length'), inch: U(IN, 'length'), ft: U(FT, 'length'),
+  km: U(r10(3), 'length'), inch: U(IN, 'length'), ft: U(FT, 'length'), mile: U(MILE, 'length'),
   mm2: U(r10(-6), 'area'), m2: U(Q1, 'area'), inch2: U(qmul(IN, IN), 'area'),
   N: U(Q1, 'force'), kN: U(r10(3), 'force'), MN: U(r10(6), 'force'), lbf: U(LBF, 'force'),
   kip: U(KIP, 'force'), kips: U(KIP, 'force'),
@@ -195,44 +198,69 @@ export const UNITS = Object.assign(Object.create(null), {
   V: U(Q1, 'voltage'), kV: U(r10(3), 'voltage'),
   ohm: U(Q1, 'resistance'), mohm: U(r10(-3), 'resistance'), kohm: U(r10(3), 'resistance'),
   Mohm: U(r10(6), 'resistance'),
-  mW: U(r10(-3), 'power'), W: U(Q1, 'power'),
-  J: U(Q1, 'energy'), Nm: U(Q1, 'energy'), kip_in: U(qmul(KIP, IN), 'energy'), kip_ft: U(qmul(KIP, FT), 'energy'),
-  s: U(Q1, 'time'), ms: U(r10(-3), 'time'),
+  'ohm/km': U(r10(-3), 'resistance/length'),
+  mW: U(r10(-3), 'power'), W: U(Q1, 'power'), kW: U(r10(3), 'power'),
+  J: U(Q1, 'energy'), Nm: U(Q1, 'energy'), 'N m': U(Q1, 'energy'),
+  kip_in: U(qmul(KIP, IN), 'energy'), kip_ft: U(qmul(KIP, FT), 'energy'),
+  lbf_in: U(qmul(LBF, IN), 'energy'), lbf_ft: U(qmul(LBF, FT), 'energy'),
+  s: U(Q1, 'time'), ms: U(r10(-3), 'time'), min: U(R(60n), 'time'), h: U(R(3600n), 'time'),
   degC: U(Q1, 'temperature'),
-  g: U(r10(-3), 'mass'), kg: U(Q1, 'mass'),
-  A2s: { f: Q1, dim: dmul(dmul(BASE_DIMS.current, BASE_DIMS.current), BASE_DIMS.time) },
+  g: U(r10(-3), 'mass'), kg: U(Q1, 'mass'), lb: U(LB, 'mass'), oz: U(qdiv(LB, R(16n)), 'mass'),
+  A2s: U(Q1, 'current^2*time'),
+  Hz: U(Q1, 'dimensionless/time'), rpm: U(R(1n, 60n), 'dimensionless/time'),
+  mAh: U(R(18n, 5n), 'current*time'), Ah: U(R(3600n), 'current*time'),
+  'm/s': U(Q1, 'length/time'), 'km/h': U(R(5n, 18n), 'length/time'),
+  knot: U(R(463n, 900n), 'length/time'), mph: U(R(1397n, 3125n), 'length/time'),
+  'kg/m3': U(Q1, 'mass/length^3'), 'g/cm3': U(R(1000n), 'mass/length^3'),
+  'N/mm': U(R(1000n), 'force/length'),
 });
+// deck.md, Dimensions: a unit of length raised to the power 2, 3 or 4, written as that one digit
+// right after `^`. No other unit takes a power, and no other power is read.
+const LENGTH_UNITS = ['m', 'mm', 'um', 'cm', 'km', 'inch', 'ft', 'mile'];
+export function unitOf(s) {
+  if (typeof s !== 'string') return null;
+  if (UNITS[s]) return UNITS[s];
+  const m = /^([a-z]+)\^([234])$/.exec(s);
+  if (!m || !LENGTH_UNITS.includes(m[1])) return null;
+  const k = Number(m[2]);
+  return { f: qpow(UNITS[m[1]].f, k), dim: dpow(BASE_DIMS.length, R(BigInt(k))) };
+}
 
 // A value of a deck (deck.md, "A value with its unit"): a number, one space and a unit, or a
 // number alone, which is a plain number of no dimension. The number is digits with an optional
 // sign and a decimal part or a denominator that is not zero, or a whole number and a fraction
-// with one space between them and no sign. A comma is read between thousands and nowhere else.
-// Spaces, tabs and line ends around the value and around the unit are dropped (H5).
+// with exactly one space between them and no sign. A comma is read between thousands, only in the
+// digits before a decimal point of a whole number or a decimal; a number with a `/` takes none.
+// Spaces, tabs and line ends (LF, CR) around the value are dropped. The space that parts the
+// number from its unit is the first space after the number, U+0020; more spaces, tabs and line
+// ends may follow it and are dropped. The unit is the rest, read whole (`N m` holds a space).
 // Returns {v (SI), dim, hasUnit} or null.
 const INTC = '(?:[0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)';
 const VALUE_RE = new RegExp(
-  `^(?:(${INTC}) ([0-9]+)/([0-9]+)|([+-]?)(${INTC})(?:\\.([0-9]+)|/([0-9]+))?)` +
-  '(?:[ \\t\\r\\n]* [ \\t\\r\\n]*([^ \\t\\r\\n]+))?$');
+  `^(?:([0-9]+) ([0-9]+)/([0-9]+)|([+-]?)(?:(${INTC})(?:\\.([0-9]+))?|([0-9]+)/([0-9]+)))` +
+  '(?: [ \\t\\r\\n]*([\\s\\S]+))?$');
+const trimWs = (s) => s.replace(/^[ \t\r\n]+|[ \t\r\n]+$/g, '');
 export function parseValue(s) {
   if (typeof s !== 'string' || s.length > MAXLEN) return null;
-  const m = VALUE_RE.exec(s.replace(/^[ \t\r\n]+|[ \t\r\n]+$/g, ''));
+  const m = VALUE_RE.exec(trimWs(s));
   if (!m) return null;
-  const [, mi, mn, md, sign, ip, dec, den, unit] = m;
+  const [, mi, mn, md, sign, ip, dec, fn, fd, unit] = m;
   let v;
   if (mi !== undefined) {
     if (BigInt(md) === 0n) return null;
-    v = qadd(R(BigInt(mi.replace(/,/g, ''))), R(BigInt(mn), BigInt(md)));
+    v = qadd(R(BigInt(mi)), R(BigInt(mn), BigInt(md)));
   } else {
-    const ints = ip.replace(/,/g, '');
-    if (dec !== undefined) v = R(BigInt(ints + dec), 10n ** BigInt(dec.length));
-    else if (den !== undefined) {
-      if (BigInt(den) === 0n) return null;
-      v = R(BigInt(ints), BigInt(den));
-    } else v = R(BigInt(ints));
+    if (fn !== undefined) {
+      if (BigInt(fd) === 0n) return null;
+      v = R(BigInt(fn), BigInt(fd));
+    } else {
+      const ints = ip.replace(/,/g, '');
+      v = dec !== undefined ? R(BigInt(ints + dec), 10n ** BigInt(dec.length)) : R(BigInt(ints));
+    }
     if (sign === '-') v = qneg(v);
   }
   if (unit === undefined) return { v, dim: DL, hasUnit: false };
-  const u = UNITS[unit];
+  const u = unitOf(unit);
   if (!u) return null;
   return { v: qmul(v, u.f), dim: u.dim, hasUnit: true };
 }
@@ -902,6 +930,12 @@ function checkAnchor(a, what) {
 function checkName(s, what) {
   if (!isStr(s) || !NAME_RE.test(s)) throw DE(`${what} ${short(s)} is not a name of letters, digits and _`);
 }
+// format.md, The deck of rules: the name of a field, a load, a joined part or a `let` is letters,
+// digits and `_`. Another name, of a type or of an input of a row, is a JSON string (format.md,
+// rules.json; AMBIGUITIES.md, D4).
+function nameText(s, what) {
+  if (!isStr(s) || s.length === 0) throw DE(`${what} ${short(s)} is not a name`);
+}
 // A text the deck must have: `what` of a type, a line; `why` of an unless, an item of where.
 function needText(o, k, what) {
   if (!Object.hasOwn(o, k)) throw DE(`${what} has no ${k}`);
@@ -995,6 +1029,9 @@ function checkExpr0(e, sc) {
     case 'row':
       if (!sc.row) throw DE('a row applies no row');
       return sc.row(args);
+    case 'case':
+      if (!sc.case) throw DE('a case is read in a rule and in no row');
+      return sc.case(args);
     default:
       throw DE(`${short(op)} is not an operator`);
   }
@@ -1072,11 +1109,14 @@ function loadSide(s, row, which) {
 }
 
 function loadTable(t, row) {
-  checkKeys(t, ['down', 'across', 'cells', 'unit', 'rises', 'falls'], ['down', 'cells'], 'table');
+  // deck.md, "A table that gives a name": such a table has `down`, `cells` and perhaps `across`,
+  // and no `unit`, `rises` or `falls`.
+  if (row.gives.names) checkKeys(t, ['down', 'across', 'cells'], ['down', 'cells'], 'table');
+  else checkKeys(t, ['down', 'across', 'cells', 'unit', 'rises', 'falls'], ['down', 'cells'], 'table');
   let unit = null;
   if (Object.hasOwn(t, 'unit')) {
-    if (!isStr(t.unit) || !UNITS[t.unit]) throw DE(`table.unit ${short(t.unit)} is not a unit`);
-    unit = UNITS[t.unit];
+    if (!isStr(t.unit) || !unitOf(t.unit)) throw DE(`table.unit ${short(t.unit)} is not a unit`);
+    unit = unitOf(t.unit);
   }
   for (const k of ['rises', 'falls']) {
     if (Object.hasOwn(t, k) && (!Array.isArray(t[k]) || !t[k].every(isStr))) throw DE(`table.${k} is not a list of names`);
@@ -1090,12 +1130,19 @@ function loadTable(t, row) {
     for (const nm of t[k] ?? []) if (!sides.has(nm)) throw DE(`table.${k} names ${short(nm)}, which is the by of no side of this table`);
   }
   if (t.rises && t.falls && t.rises.some((nm) => t.falls.includes(nm))) throw DE('a name is in both rises and falls');
-  // deck.md: a cell that holds a space is read as stating its own unit; any other cell is a
-  // number, read in the table's unit when it has one.
+  // deck.md, `unit`: spaces, tabs and line ends around a cell are dropped first. A cell that then
+  // holds a space is read as stating its own unit, and any other cell is read in the table's unit.
+  // A table that gives a name has names for cells: one of `one_of`, as a text, or null.
   const cell = (c, where) => {
     if (c === null) return null;
-    let q = parseValue(c);
-    if (q && unit && !c.includes(' ')) q = { v: qmul(q.v, unit.f), dim: unit.dim, hasUnit: true };
+    if (row.gives.names) {
+      if (!isStr(c) || !row.gives.names.includes(c)) throw DE(`cell ${where} ${short(c)} is not a name of gives.one_of`);
+      return c;
+    }
+    if (!isStr(c)) throw DE(`cell ${where} ${short(c)} is not a value`);
+    const ct = trimWs(c);
+    let q = parseValue(ct);
+    if (q && unit && !ct.includes(' ')) q = { v: qmul(q.v, unit.f), dim: unit.dim, hasUnit: true };
     if (!q) throw DE(`cell ${where} ${short(c)} is not a value`);
     if (!deq(q.dim, row.gives.dim)) throw DE(`cell ${where} is not of the row's dimension`);
     return q.v;
@@ -1106,26 +1153,58 @@ function loadTable(t, row) {
     if (!Array.isArray(line) || line.length !== across.count) throw DE(`line ${i + 1} of table.cells does not have one cell for each of the ${across.count} places across`);
     return line.map((c, j) => cell(c, `${i + 1},${j + 1}`));
   });
+  if (row.gives.names) {
+    // deck.md: every name of `one_of` is the name of at least one cell, and the refusal names the
+    // row and the name.
+    const held = new Set(across ? cells.flat() : cells);
+    for (const nm of row.gives.names) if (!held.has(nm)) throw DE(`no cell of ${row.id} holds ${short(nm)}, which one_of lists`);
+  }
   return { down, across, cells };
 }
+
+// The cells of a table that gives a name that hold a name, in the order of its lines and, within
+// a line, of its cells (format.md, "How the kernel writes a table").
+function nameCells(row) {
+  const T = row.table, out = [];
+  for (let i = 0; i < T.down.count; i++) {
+    if (!T.across) { if (T.cells[i] !== null) out.push({ i, j: null, name: T.cells[i] }); continue; }
+    for (let j = 0; j < T.across.count; j++) if (T.cells[i][j] !== null) out.push({ i, j, name: T.cells[i][j] });
+  }
+  return out;
+}
+// The orders of a place of a side: two for a band with two ends or a listed value, one for a
+// last band with no upper end.
+const placeOrders = (side, i) => (side.kind === 'bands' && side.bands[i][1] === null ? 1 : 2);
+// The orders of a cell of a table that gives a name: the orders of both its places.
+const nameCellOrders = (row, c) => placeOrders(row.table.down, c.i) + (row.table.across ? placeOrders(row.table.across, c.j) : 0);
 
 function loadRow(r, rowsSoFar) {
   checkKeys(r, ['id', 'anchor', 'gives', 'takes', 'is', 'cases', 'table', 'jumps'], ['id', 'gives', 'takes'], 'the row');
   if (!isStr(r.id) || r.id.length === 0) throw DE('the row has no id');
   if (rowsSoFar.has(r.id)) throw DE(`two rows have the id ${r.id}`);
   checkAnchor(r.anchor, 'the row');
-  checkKeys(r.gives, ['name', 'dim', 'what'], ['name', 'dim'], 'gives');
+  // deck.md: `gives` has `name` and `dim`, or for a table that gives a name `one_of` in place of
+  // `dim`: a list of texts that is not empty, each once. Never both.
+  checkKeys(r.gives, ['name', 'dim', 'one_of', 'what'], ['name'], 'gives');
   if (!isStr(r.gives.name)) throw DE('gives.name is not a text');
   optText(r.gives, 'what', 'gives');
-  const gdim = parseDim(r.gives.dim);
-  if (!gdim) throw DE(`gives.dim ${short(r.gives.dim)} is not a dimension`);
-  const row = { id: r.id, gives: { name: r.gives.name, dim: gdim }, inputs: new Map(), kind: null };
+  if (Object.hasOwn(r.gives, 'dim') === Object.hasOwn(r.gives, 'one_of')) throw DE('gives has not exactly one of dim and one_of');
+  let gdim = null, gnames = null;
+  if (Object.hasOwn(r.gives, 'dim')) {
+    gdim = parseDim(r.gives.dim);
+    if (!gdim) throw DE(`gives.dim ${short(r.gives.dim)} is not a dimension`);
+  } else {
+    const o = r.gives.one_of;
+    if (!Array.isArray(o) || o.length === 0 || !o.every(isStr) || new Set(o).size !== o.length) throw DE('gives.one_of is not a list of distinct names');
+    gnames = o.slice();
+  }
+  const row = { id: r.id, gives: { name: r.gives.name, dim: gdim, names: gnames }, inputs: new Map(), kind: null };
   if (!Array.isArray(r.takes)) throw DE('takes is not a list');
   for (const t of r.takes) {
     if (!isObj(t)) throw DE('an input is not an object');
     if (Object.hasOwn(t, 'one_of')) {
       checkKeys(t, ['name', 'one_of', 'what'], ['name', 'one_of'], 'a key input');
-      checkName(t.name, 'the input');
+      nameText(t.name, 'the input');
       optText(t, 'what', 'the input');
       if (!Array.isArray(t.one_of) || t.one_of.length === 0 || !t.one_of.every(isStr) || new Set(t.one_of).size !== t.one_of.length) throw DE(`the key ${t.name} has no list of distinct names`);
       if (row.inputs.has(t.name)) throw DE(`the row takes ${t.name} twice`);
@@ -1133,7 +1212,7 @@ function loadRow(r, rowsSoFar) {
     } else {
       // deck.md: every quantity a row takes has a range, each end with its unit.
       checkKeys(t, ['name', 'dim', 'what', 'range'], ['name', 'dim', 'range'], 'an input');
-      checkName(t.name, 'the input');
+      nameText(t.name, 'the input');
       if (t.name === 'pi') throw DE('an input is named pi');
       optText(t, 'what', 'the input');
       const dim = parseDim(t.dim);
@@ -1149,6 +1228,11 @@ function loadRow(r, rowsSoFar) {
   const kinds = ['is', 'cases', 'table'].filter((k) => Object.hasOwn(r, k));
   if (kinds.length !== 1) throw DE('the row has not exactly one of is, cases and table');
   row.kind = kinds[0];
+  // deck.md: a row that gives a name is a table, and takes quantities and no key.
+  if (gnames) {
+    if (row.kind !== 'table') throw DE(`the row gives a name with ${row.kind}, and only a table gives a name`);
+    for (const [nm, inp] of row.inputs) if (inp.kind === 'k') throw DE(`the row gives a name and takes the key ${nm}`);
+  }
   const sc = {
     name: (nm) => {
       const inp = row.inputs.get(nm);
@@ -1181,9 +1265,15 @@ function loadRow(r, rowsSoFar) {
   }
   if (Object.hasOwn(r, 'jumps')) {
     if (!Array.isArray(r.jumps)) throw DE('jumps is not a list');
+    // deck.md, A row: "A jump has `cases` and `why`. `cases` is a list of whole numbers, each one
+    // of the row's cases counted from 1, in which exactly two different numbers stand".
+    const nCases = row.kind === 'cases' ? BigInt(row.cases.length) : 0n;
     for (const j of r.jumps) {
       checkKeys(j, ['cases', 'why'], ['cases'], 'a jump');
       if (!Array.isArray(j.cases) || !j.cases.every((x) => typeof x === 'bigint')) throw DE('a jump has no list of case numbers');
+      for (const x of j.cases) if (x < 1n || x > nCases) throw DE(`a jump names case ${x}, and the row has ${nCases === 0n ? 'no cases' : `cases 1 to ${nCases}`}`);
+      const distinct = new Set(j.cases.map(String)).size;
+      if (distinct !== 2) throw DE(`a jump names ${distinct} different cases, and it names exactly two`);
       needFullText(j, 'why', 'a jump');
     }
   }
@@ -1237,16 +1327,23 @@ function rowDepth(row, bd) {
 }
 
 function loadType(t, seenTypes) {
-  // deck.md: a type has `type`, `what`, a text that may be empty, and `fields`.
-  checkKeys(t, ['type', 'what', 'fields', 'loads'], ['type', 'what', 'fields'], 'the type');
-  checkName(t.type, 'the type');
+  // deck.md: a type has `type`, `what`, a text that may be empty, and `fields`, and may have
+  // `loads` and `needs`.
+  checkKeys(t, ['type', 'what', 'fields', 'loads', 'needs'], ['type', 'what', 'fields'], 'the type');
+  nameText(t.type, 'the type');
   if (seenTypes.has(t.type)) throw DE(`two types are named ${t.type}`);
   needText(t, 'what', 'the type');
-  const T = { name: t.type, fields: [], fieldMap: new Map(), loads: new Map(), joins: [], asMap: new Map() };
+  const T = { name: t.type, fields: [], fieldMap: new Map(), loads: new Map(), joins: [], asMap: new Map(), needs: [], needsJ: undefined };
   if (!Array.isArray(t.fields)) throw DE('fields is not a list');
+  const flag = (f, k) => {
+    if (Object.hasOwn(f, k) && typeof f[k] !== 'boolean') throw DE(`${k} of ${f.name} is not true or false`);
+    return f[k] === true;
+  };
   for (const f of t.fields) {
-    // deck.md: a field has `name`, `what`, a text that is not empty, and one of dim, one_of and type.
-    checkKeys(f, ['name', 'what', 'dim', 'one_of', 'type', 'as', 'signed', 'whole', 'least'], ['name', 'what'], 'a field');
+    // deck.md: a field has `name`, `what`, a text that is not empty, and one of dim, one_of and
+    // type. A quantity may have optional, signed, whole, least and may_be; a key optional and
+    // signed and no other of them; a field that joins parts `as` and none of them.
+    checkKeys(f, ['name', 'what', 'dim', 'one_of', 'type', 'as', 'signed', 'whole', 'least', 'optional', 'may_be'], ['name', 'what'], 'a field');
     checkName(f.name, 'the field');
     checkNameBytes(f.name, 'the field');
     needFullText(f, 'what', `the field ${f.name}`);
@@ -1258,28 +1355,50 @@ function loadType(t, seenTypes) {
       if (Object.hasOwn(f, 'as')) throw DE(`the quantity ${f.name} has as`);
       const dim = parseDim(f.dim);
       if (!dim) throw DE(`the field ${f.name} has the dimension ${short(f.dim)}, which is not one`);
-      for (const k of ['signed', 'whole']) if (Object.hasOwn(f, k) && typeof f[k] !== 'boolean') throw DE(`${k} of ${f.name} is not true or false`);
+      const signed = flag(f, 'signed'), whole = flag(f, 'whole'), optional = flag(f, 'optional');
+      if (optional && signed) throw DE(`the field ${f.name} is both optional and signed`);
+      // deck.md, A type: "A count is a plain number, so its `dim` is `dimensionless`, and a `whole`
+      // field of any other dimension is refused." Compared by the exponents, as every dimension is.
+      if (whole && !deq(dim, DL)) throw DE(`the field ${f.name} is whole, and a count is dimensionless, not ${short(f.dim)}`);
+      let mayBe = null;
+      if (Object.hasOwn(f, 'may_be')) {
+        if (f.may_be !== 'zero' && f.may_be !== 'negative') throw DE(`may_be of ${f.name} is ${short(f.may_be)}, and it is "zero" or "negative"`);
+        mayBe = f.may_be;
+      }
       let least = null;
       if (Object.hasOwn(f, 'least')) {
         least = quantityOf(f.least, dim);
         if (!least) throw DE(`least of ${f.name} is not a quantity of its dimension`);
+        // deck.md, "A quantity at or under zero": a `least` beside `may_be: zero` is refused, and
+        // beside `may_be: negative` one at zero or above is.
+        if (mayBe === 'zero') throw DE(`${f.name} says may_be zero and has a least: the floor is zero`);
+        if (mayBe === 'negative' && least.n >= 0n) throw DE(`${f.name} says may_be negative and has a least at zero or above`);
       }
-      F = { name: f.name, kind: 'q', dimName: f.dim, dim, signed: f.signed === true, whole: f.whole === true, least };
+      F = { name: f.name, kind: 'q', dimName: f.dim, dim, signed, whole, least, optional, mayBe };
     } else if (kinds[0] === 'one_of') {
-      for (const k of ['signed', 'whole', 'least', 'as']) if (Object.hasOwn(f, k)) throw DE(`the key ${f.name} has ${k}`);
+      for (const k of ['whole', 'least', 'may_be', 'as']) if (Object.hasOwn(f, k)) throw DE(`the key ${f.name} has ${k}`);
       if (!Array.isArray(f.one_of) || f.one_of.length === 0 || !f.one_of.every(isStr) || new Set(f.one_of).size !== f.one_of.length) throw DE(`the key ${f.name} has no list of distinct names`);
-      F = { name: f.name, kind: 'k', names: f.one_of.slice() };
+      const signed = flag(f, 'signed'), optional = flag(f, 'optional');
+      if (optional && signed) throw DE(`the field ${f.name} is both optional and signed`);
+      // deck.md: a key that is optional has no name `unstated`.
+      if (optional && f.one_of.includes('unstated')) throw DE(`the optional key ${f.name} has the name unstated`);
+      F = { name: f.name, kind: 'k', names: f.one_of.slice(), signed, optional };
     } else {
-      for (const k of ['signed', 'whole', 'least']) if (Object.hasOwn(f, k)) throw DE(`the field ${f.name} that joins parts has ${k}`);
+      for (const k of ['signed', 'whole', 'least', 'optional', 'may_be']) if (Object.hasOwn(f, k)) throw DE(`the field ${f.name} that joins parts has ${k}`);
       if (!isStr(f.type)) throw DE(`the field ${f.name} names no type`);
-      if (!Array.isArray(f.as) || f.as.length === 0) throw DE(`the field ${f.name} has no as`);
-      for (const a of f.as) {
+      // deck.md, The grid: a field with no `as` joins one part, under the field's own name.
+      let as = [f.name];
+      if (Object.hasOwn(f, 'as')) {
+        if (!Array.isArray(f.as) || f.as.length === 0) throw DE(`as of ${f.name} is not a list of names`);
+        as = f.as;
+      }
+      for (const a of as) {
         checkName(a, 'a joined part');
         checkNameBytes(a, 'a joined part');
         if (T.asMap.has(a)) throw DE(`two joined parts are called ${a}`);
         T.asMap.set(a, { field: f.name, type: f.type });
       }
-      F = { name: f.name, kind: 'j', type: f.type, as: f.as.slice() };
+      F = { name: f.name, kind: 'j', type: f.type, as: as.slice() };
       T.joins.push(F);
     }
     T.fields.push(F);
@@ -1288,23 +1407,127 @@ function loadType(t, seenTypes) {
   if (Object.hasOwn(t, 'loads')) {
     if (!Array.isArray(t.loads)) throw DE('loads is not a list');
     for (const l of t.loads) {
-      // deck.md: a load has a name, a dim, `what` it is, a text that is not empty, and a least.
-      checkKeys(l, ['name', 'dim', 'what', 'least'], ['name', 'dim', 'what'], 'a load');
+      // deck.md: a load has a name, a dim, `what` it is, a text that is not empty, a least, and
+      // `may_be`, which on a load is "negative" or left out.
+      checkKeys(l, ['name', 'dim', 'what', 'least', 'may_be'], ['name', 'dim', 'what'], 'a load');
       checkName(l.name, 'the load');
       checkNameBytes(l.name, 'the load');
       needFullText(l, 'what', `the load ${l.name}`);
       if (T.loads.has(l.name)) throw DE(`two loads are named ${l.name}`);
       const dim = parseDim(l.dim);
       if (!dim) throw DE(`the load ${l.name} has the dimension ${short(l.dim)}, which is not one`);
+      let mayBe = null;
+      if (Object.hasOwn(l, 'may_be')) {
+        if (l.may_be !== 'negative') throw DE(`may_be of the load ${l.name} is ${short(l.may_be)}, and on a load it is "negative"`);
+        mayBe = 'negative';
+      }
       let least = null;
       if (Object.hasOwn(l, 'least')) {
         least = quantityOf(l.least, dim);
         if (!least) throw DE(`least of the load ${l.name} is not a quantity of its dimension`);
       }
-      T.loads.set(l.name, { name: l.name, dimName: l.dim, dim, least });
+      T.loads.set(l.name, { name: l.name, dimName: l.dim, dim, least, mayBe });
     }
   }
+  if (Object.hasOwn(t, 'needs')) {
+    // deck.md, "What a type needs": a list with at least one item. Its items are read once every
+    // type is known (checkNeeds), since a need may name a field of a part the type joins.
+    if (!Array.isArray(t.needs) || t.needs.length === 0) throw DE('needs is not a list with at least one item');
+    T.needsJ = t.needs;
+  }
   return T;
+}
+
+// deck.md, "What a type needs". A need has `le` or `lt`, never both, and `why`, a text that is not
+// empty. A side is a quantity field of the type, `AS.FIELD` of a part it joins, a number, a `q`,
+// add, mul, sub, neg, or div by a field that is more than zero or a constant that is not zero. A
+// need names at least one field and each field once over both sides; both sides have one dimension.
+function checkNeeds(T, types) {
+  T.needs = T.needsJ.map((n, k) => {
+    const what = `need ${k + 1}`;
+    checkKeys(n, ['le', 'lt', 'why'], ['why'], what);
+    needFullText(n, 'why', what);
+    if (Object.hasOwn(n, 'le') === Object.hasOwn(n, 'lt')) throw DE(`${what} has not exactly one of le and lt`);
+    const op = Object.hasOwn(n, 'le') ? 'le' : 'lt';
+    const sides = n[op];
+    if (!Array.isArray(sides) || sides.length !== 2) throw DE(`${what}: ${op} is not two sides`);
+    const named = [];
+    const field = (s) => {
+      const f = T.fieldMap.get(s);
+      if (f) return f.kind === 'q' ? { f, ref: s } : null;
+      const dot = s.indexOf('.');
+      if (dot <= 0) return null;
+      const j = T.asMap.get(s.slice(0, dot));
+      const f2 = j && types.get(j.type)?.fieldMap.get(s.slice(dot + 1));
+      return f2 && f2.kind === 'q' ? { f: f2, ref: s } : null;
+    };
+    const side = (e) => {
+      if (isStr(e)) {
+        if (looksNumeric(e)) {
+          const v = parseNumberAlone(e);
+          if (!v) throw DE(`${what}: ${short(e)} is not a number`);
+          return { dim: DL };
+        }
+        const fd = field(e);
+        if (!fd) throw DE(`${what}: ${short(e)} is no quantity field of ${T.name} or of a part it joins`);
+        named.push(e);
+        return { dim: fd.f.dim };
+      }
+      if (!Array.isArray(e) || e.length === 0 || !isStr(e[0])) throw DE(`${what}: ${short(e)} is not a side of a need`);
+      const args = e.slice(1);
+      switch (e[0]) {
+        case 'q': {
+          if (args.length !== 2 || !isStr(args[0]) || !isStr(args[1])) throw DE(`${what}: ${short(e)} is not a constant with a unit`);
+          const v = qValue(e);
+          if (!v) throw DE(`${what}: ${short(e)} is not a value with its unit`);
+          return { dim: v.dim };
+        }
+        case 'add': case 'mul': {
+          if (args.length < 1) throw DE(`${what}: ${e[0]} has no argument`);
+          const rs = args.map(side);
+          if (e[0] === 'mul') return { dim: rs.reduce((d, r) => dmul(d, r.dim), DL) };
+          for (const r of rs) if (!deq(r.dim, rs[0].dim)) throw DE(`${what}: the terms of add are of different dimensions`);
+          return { dim: rs[0].dim };
+        }
+        case 'sub': {
+          if (args.length !== 2) throw DE(`${what}: sub takes two arguments`);
+          const a = side(args[0]), b = side(args[1]);
+          if (!deq(a.dim, b.dim)) throw DE(`${what}: the two sides of sub are of different dimensions`);
+          return { dim: a.dim };
+        }
+        case 'neg':
+          if (args.length !== 1) throw DE(`${what}: neg takes one argument`);
+          return side(args[0]);
+        case 'div': {
+          if (args.length !== 2) throw DE(`${what}: div takes two arguments`);
+          const a = side(args[0]);
+          const d = args[1];
+          let bd;
+          if (isStr(d) && !looksNumeric(d)) {
+            const fd = field(d);
+            if (!fd) throw DE(`${what}: ${short(d)} is no quantity field of ${T.name} or of a part it joins`);
+            if (fd.f.mayBe) throw DE(`${what} divides by ${d}, which may be zero`);
+            named.push(d);
+            bd = fd.f.dim;
+          } else if (isStr(d) || (Array.isArray(d) && d[0] === 'q')) {
+            const v = isStr(d) ? parseNumberAlone(d) : (d.length === 3 && isStr(d[1]) && isStr(d[2]) ? qValue(d) : null);
+            if (!v) throw DE(`${what}: ${short(d)} is not a number or a constant`);
+            const q = isStr(d) ? v : v.v;
+            if (q.n === 0n) throw DE(`${what} divides by zero`);
+            bd = isStr(d) ? DL : v.dim;
+          } else throw DE(`${what} divides by ${short(d)}, which is neither a field nor a constant`);
+          return { dim: ddiv(a.dim, bd) };
+        }
+        default:
+          throw DE(`${what}: ${short(e[0])} is not in a need: a need has no root, logarithm, power, least, greatest, absolute value, pi, load, row, case or key`);
+      }
+    };
+    const L = side(sides[0]), Rr = side(sides[1]);
+    if (!deq(L.dim, Rr.dim)) throw DE(`${what}: the two sides are of different dimensions`);
+    if (!named.length) throw DE(`${what} names no field`);
+    if (new Set(named).size !== named.length) throw DE(`${what} names a field more than once`);
+    return { op, sides, why: n.why, fields: named };
+  });
 }
 
 // A key field of a type, by FIELD or AS.FIELD: {names, own|joined}.
@@ -1325,21 +1548,22 @@ function addRead(reads, kf) {
   else reads.joined.add(kf.joined);
 }
 
-// A condition on a part: is, loaded, and, or, not.
+// A condition on a part (deck.md, The grid): `["is", FIELD, NAME]` on a key of the type or
+// `PART.FIELD` of a part it joins, and `and`, `or` and `not` of these. `loaded` is gone and is
+// refused wherever it stands, whatever follows the word.
 function checkPartCond(c, T, types, reads) {
   if (!Array.isArray(c) || c.length === 0 || !isStr(c[0])) throw DE(`${short(c)} is not a condition on a part`);
   switch (c[0]) {
     case 'is': {
       if (c.length !== 3) throw DE('is takes a field and a name');
       const kf = keyField(c[1], T, types);
-      if (!kf) throw DE(`${short(c[1])} is not a key field of ${T.name}`);
+      if (!kf) throw DE(`${short(c[1])} is not a key field of ${T.name} or of a part it joins`);
       if (!isStr(c[2]) || !kf.names.includes(c[2])) throw DE(`${short(c[2])} is not a name of ${c[1]}`);
       addRead(reads, kf);
       return;
     }
     case 'loaded':
-      if (c.length !== 2 || !isStr(c[1]) || !T.loads.has(c[1])) throw DE(`${short(c[1])} is not a load of ${T.name}`);
-      return;
+      throw DE('loaded is no condition: a condition is over keys, which are the same under every load case');
     case 'and': case 'or':
       if (c.length < 2) throw DE(`${c[0]} has no member`);
       for (const x of c.slice(1)) checkPartCond(x, T, types, reads);
@@ -1359,12 +1583,17 @@ function mergeReads(into, from) {
 }
 
 function loadRule(r, deck) {
-  // deck.md: a rule's `says` is a text that is not empty, and a rule with no `says` is refused.
-  checkKeys(r, ['id', 'type', 'mechanism', 'anchor', 'says', 'le', 'let', 'where', 'when'], ['id', 'type', 'mechanism', 'says', 'le'], 'the rule');
+  // deck.md, A rule: `says` is a text that is not empty; a rule has one of `le`, `lt` and
+  // `requires`, and a rule with `requires` has no `let` and no `where`.
+  checkKeys(r, ['id', 'type', 'mechanism', 'anchor', 'says', 'le', 'lt', 'requires', 'let', 'where', 'when'], ['id', 'type', 'mechanism', 'says'], 'the rule');
   if (!isStr(r.id) || r.id.length === 0) throw DE('the rule has no id');
   checkNameBytes(r.id, 'the id');
   checkAnchor(r.anchor, 'the rule');
   needFullText(r, 'says', 'the rule');
+  const forms = ['le', 'lt', 'requires'].filter((k) => Object.hasOwn(r, k));
+  if (forms.length !== 1) throw DE('a rule has one of le, an inequality, lt, a strict one, and requires, a condition over keys');
+  const form = forms[0];
+  if (form === 'requires') for (const k of ['let', 'where']) if (Object.hasOwn(r, k)) throw DE(`a rule with requires has no ${k}`);
   const T = deck.types.get(r.type);
   if (!T) throw DE(`the rule's type ${short(r.type)} is not a type of the deck`);
   const line = isStr(r.mechanism) ? deck.lineOf.get(`${r.type}\u0000${r.mechanism}`) : undefined;
@@ -1379,6 +1608,33 @@ function loadRule(r, deck) {
   }
   const letMemo = new Map();
   const letBusy = new Set();
+  const fieldOf = (e) => {
+    const f = T.fieldMap.get(e);
+    if (f) return f.kind === 'q' ? { f, own: e } : null;
+    const dot = e.indexOf('.');
+    if (dot <= 0) return null;
+    const j = T.asMap.get(e.slice(0, dot));
+    const f2 = j && deck.types.get(j.type)?.fieldMap.get(e.slice(dot + 1));
+    return f2 && f2.kind === 'q' ? { f: f2, joined: e } : null;
+  };
+  // A row that gives a name, applied: each quantity it takes bound to an expression of its
+  // dimension. It gives a name and no quantity.
+  const nameRowApp = (v, reads) => {
+    if (!Array.isArray(v) || v[0] !== 'row' || v.length !== 3 || !isStr(v[1]) || !isObj(v[2])) throw DE(`${short(v)} is not a row applied`);
+    const row = deck.rows.get(v[1]);
+    if (!row) throw DE(`${short(v[1])} is not a row of the deck`);
+    if (!row.gives.names) throw DE(`the row ${row.id} gives a quantity and no name`);
+    const b = v[2];
+    for (const k of Object.keys(b)) if (!row.inputs.has(k)) throw DE(`the row ${row.id} has no input ${k}`);
+    let depth = 0;
+    for (const [nm, inp] of row.inputs) {
+      if (!Object.hasOwn(b, nm)) throw DE(`the input ${nm} of ${row.id} is not bound`);
+      const res = checkExpr(b[nm], scopeFor(reads));
+      if (!deq(res.dim, inp.dim)) throw DE(`the input ${nm} of ${row.id} is bound to an expression of another dimension`);
+      if (res.depth > depth) depth = res.depth;
+    }
+    return { row, depth: 2 + depth };
+  };
   const scopeFor = (reads) => ({
     name: (e) => {
       if (Object.hasOwn(lets, e)) {
@@ -1386,18 +1642,8 @@ function loadRule(r, deck) {
         mergeReads(reads, info.reads);
         return { dim: info.dim, depth: 1 + info.depth };
       }
-      const f = T.fieldMap.get(e);
-      if (f) {
-        if (f.kind !== 'q') throw DE(`${e} is not a quantity field of ${T.name}`);
-        reads.own.add(e);
-        return { dim: f.dim, depth: 1 };
-      }
-      const dot = e.indexOf('.');
-      if (dot > 0) {
-        const j = T.asMap.get(e.slice(0, dot));
-        const f2 = j && deck.types.get(j.type)?.fieldMap.get(e.slice(dot + 1));
-        if (f2 && f2.kind === 'q') { reads.joined.add(e); return { dim: f2.dim, depth: 1 }; }
-      }
+      const fd = fieldOf(e);
+      if (fd) { addRead(reads, fd); return { dim: fd.f.dim, depth: 1 }; }
       throw DE(`${short(e)} names no quantity field, field of a joined part or let`);
     },
     load: (args) => {
@@ -1409,6 +1655,8 @@ function loadRule(r, deck) {
       if (args.length !== 2 || !isStr(args[0]) || !isObj(args[1])) throw DE('row takes an id and a binding of its inputs');
       const row = deck.rows.get(args[0]);
       if (!row) throw DE(`${short(args[0])} is not a row of the deck`);
+      // deck.md, "A table that gives a name": a name is no quantity.
+      if (row.gives.names) throw DE(`the row ${row.id} gives a name, which is no quantity`);
       const b = args[1];
       for (const k of Object.keys(b)) if (!row.inputs.has(k)) throw DE(`the row ${row.id} has no input ${k}`);
       const bd = new Map();
@@ -1420,26 +1668,47 @@ function loadRule(r, deck) {
           if (!deq(res.dim, inp.dim)) throw DE(`the input ${nm} of ${row.id} is bound to an expression of another dimension`);
           bd.set(nm, res.depth);
         } else {
-          checkKeyBinding(v, inp, nm, row, reads);
-          bd.set(nm, 1);
+          bd.set(nm, checkKeyBinding(v, inp, nm, row, reads));
         }
       }
       const depth = 1 + rowDepth(row, bd);
       if (depth > MAX_EXPR_DEPTH) throw DE('an expression nests more than 1,024 deep');
       return { dim: row.gives.dim, depth };
     },
+    // deck.md, A rule: `["case", ["row", ID, {...}], {NAME: ...}]`, a row that gives a name and
+    // an expression for each name of its `one_of` and no other, all of one dimension.
+    case: (args) => {
+      if (args.length !== 2) throw DE('case takes a row that gives a name and a map of its names');
+      const app = nameRowApp(args[0], reads);
+      const m = args[1];
+      if (!isObj(m)) throw DE('the map of case is not an object');
+      for (const k of Object.keys(m)) if (!app.row.gives.names.includes(k)) throw DE(`${short(k)} is not a name that ${app.row.id} gives`);
+      let dim = null, depth = app.depth;
+      for (const nm of app.row.gives.names) {
+        if (!Object.hasOwn(m, nm)) throw DE(`the case has no expression for ${short(nm)}, which ${app.row.id} gives`);
+        const res = checkExpr(m[nm], scopeFor(reads));
+        if (dim && !deq(dim, res.dim)) throw DE('the expressions of a case are of different dimensions');
+        dim = res.dim;
+        if (res.depth > depth) depth = res.depth;
+      }
+      if (1 + depth > MAX_EXPR_DEPTH) throw DE('an expression nests more than 1,024 deep');
+      return { dim, depth: 1 + depth };
+    },
   });
+  // deck.md, A rule: a key that a row takes is bound to a key field whose names are all names of
+  // the row's key, to `["key", NAME]`, to `["by", FIELD, MAP]`, or to a row that gives a name,
+  // every name of whose `one_of` is a name of the key. Returns the depth of the binding.
   const checkKeyBinding = (v, inp, nm, row, reads) => {
     if (isStr(v)) {
       const kf = keyField(v, T, deck.types);
       if (!kf) throw DE(`the key ${nm} of ${row.id} is bound to ${short(v)}, which is not a key field`);
       if (!kf.names.every((x) => inp.names.includes(x))) throw DE(`the key field ${v} has a name that the key ${nm} of ${row.id} has not`);
       addRead(reads, kf);
-      return;
+      return 1;
     }
     if (Array.isArray(v) && v[0] === 'key') {
       if (v.length !== 2 || !isStr(v[1]) || !inp.names.includes(v[1])) throw DE(`${short(v)} is not a name of the key ${nm} of ${row.id}`);
-      return;
+      return 1;
     }
     if (Array.isArray(v) && v[0] === 'by') {
       if (v.length !== 3) throw DE('by takes a field and a map');
@@ -1453,7 +1722,12 @@ function loadRule(r, deck) {
       // deck.md: the map of a `by` has one entry for each name of the field.
       for (const k of kf.names) if (!Object.hasOwn(v[2], k)) throw DE(`the map of by leaves out the name ${short(k)} of ${v[1]}`);
       addRead(reads, kf);
-      return;
+      return 1;
+    }
+    if (Array.isArray(v) && v[0] === 'row') {
+      const app = nameRowApp(v, reads);
+      for (const x of app.row.gives.names) if (!inp.names.includes(x)) throw DE(`${app.row.id} gives ${short(x)}, which is no name of the key ${nm} of ${row.id}`);
+      return app.depth;
     }
     throw DE(`the key ${nm} of ${row.id} is bound to ${short(v)}`);
   };
@@ -1473,11 +1747,15 @@ function loadRule(r, deck) {
   const ruleReads = newReads();
   const sc = scopeFor(ruleReads);
   for (const k of Object.keys(lets)) letInfo(k); // every let must hold together
-  if (!Array.isArray(r.le) || r.le.length !== 2) throw DE('le is not two expressions');
-  const a = checkExpr(r.le[0], sc), b = checkExpr(r.le[1], sc);
-  if (!deq(a.dim, b.dim)) throw DE('the two sides of le are of different dimensions');
-  // deck.md: a `where` is a list with at least one item, and each item has `why`, a text that
-  // may be empty: `"where": []` is refused.
+  let sides;
+  if (form !== 'requires') {
+    sides = r[form];
+    if (!Array.isArray(sides) || sides.length !== 2) throw DE(`${form} is not two expressions`);
+    const a = checkExpr(sides[0], sc), b = checkExpr(sides[1], sc);
+    if (!deq(a.dim, b.dim)) throw DE(`the two sides of ${form} are of different dimensions`);
+  }
+  // deck.md: a `where` is a list with at least one item; each item has `le` and `why`, a text that
+  // may be empty, and no `lt`.
   let where;
   if (Object.hasOwn(r, 'where')) {
     if (!Array.isArray(r.where)) throw DE('where is not a list');
@@ -1491,28 +1769,44 @@ function loadRule(r, deck) {
       return w.le;
     });
   }
-  let when;
+  let when, requires;
   if (Object.hasOwn(r, 'when')) {
     checkPartCond(r.when, T, deck.types, ruleReads);
     when = r.when;
   }
+  if (form === 'requires') {
+    checkPartCond(r.requires, T, deck.types, ruleReads);
+    requires = r.requires;
+  }
   const slash = r.id.lastIndexOf('/');
   // For the steps of the cells (format.md, Steps): the weight of the rule, the size of its
-  // `when`, the loads it reads and the fields it reads.
+  // `when` and of its `requires`, the loads it reads and the fields it reads.
   let weight = 0;
-  const W = (e) => stepWeight(e, deck);
-  for (const k of Object.keys(lets)) weight += W(lets[k]);
-  weight += 5 + W(r.le[0]) + W(r.le[1]);
-  if (where) for (const w of where) weight += 5 + W(w[0]) + W(w[1]);
+  if (form !== 'requires') {
+    const W = (e) => stepWeight(e, deck, false);
+    for (const k of Object.keys(lets)) weight += W(lets[k]);
+    weight += W(sides[0]) + W(sides[1]);
+    if (where) for (const w of where) weight += W(w[0]) + W(w[1]);
+  }
   return {
     id: r.id, tail: slash >= 0 ? r.id.slice(slash + 1) : r.id, type: r.type, mechanism: r.mechanism,
-    le: r.le, lets, where, when, reads: ruleReads,
-    weight, whenSize: condSize(when), fieldsRead: ruleReads.own.size + ruleReads.joined.size,
+    form, sides, lets, where, when, requires, reads: ruleReads,
+    whenKeys: condKeys(when), requiresKeys: condKeys(requires),
+    weight, whenSize: condSize(when), requiresSize: condSize(requires),
+    fieldsRead: ruleReads.own.size + ruleReads.joined.size,
   };
 }
 
-// format.md, Steps: the size of a condition on a part is 1 for an `is` and a `loaded`, 1 more
-// than its members for an `and` and an `or`, and 1 more than its member for a `not`.
+// The keys a condition names, in the order it names them and each once.
+function condKeys(c, out = []) {
+  if (c === undefined) return out;
+  if (c[0] === 'is') { if (!out.includes(c[1])) out.push(c[1]); return out; }
+  for (let i = 1; i < c.length; i++) condKeys(c[i], out);
+  return out;
+}
+
+// format.md, Steps: the size of a condition is 1 for an `is`, 1 more than the sizes of its
+// members for an `and` and an `or`, and 1 more than its member for a `not`. None is 0.
 function condSize(c) {
   if (c === undefined) return 0;
   if (c[0] === 'and' || c[0] === 'or' || c[0] === 'not') {
@@ -1523,14 +1817,13 @@ function condSize(c) {
   return 1;
 }
 
-// format.md, Steps: the weight of an expression of a rule. A step is one name or one operator
-// and weighs 1 and 1 for each thing the operator reads; a difference is a negation and a sum; a
-// power is up to four steps; a pick weighs 1, 1 for each case and 2 for each order; a table 1,
-// 1 for each place down, 1 for each cell and 1 for each entry of a `by` that reads it. What the
-// page leaves open is taken as AMBIGUITIES.md, H8 says. The expression has been checked.
-function stepWeight(e, deck) {
-  const W = (x) => stepWeight(x, deck);
-  if (isStr(e)) return 1;
+// format.md, Steps, the table of steps and their weights. A number, `pi`, a `q`, a field, a load
+// and each later mention weigh 1 (a name of `let` too, AMBIGUITIES.md, J3); inside the body of a
+// row, the name of an input is no step. What the page leaves open is taken as AMBIGUITIES.md, H8
+// and J3 say. The expression has been checked.
+function stepWeight(e, deck, inBody) {
+  const W = (x) => stepWeight(x, deck, inBody);
+  if (isStr(e)) return inBody && e !== 'pi' && !looksNumeric(e) ? 0 : 1;
   const op = e[0];
   switch (op) {
     case 'q': case 'load': return 1;
@@ -1548,42 +1841,126 @@ function stepWeight(e, deck) {
         const n = parseNumberAlone(x);
         const twice = qmul(n, R(2n));
         if (twice.d !== 1n) return 8 + W(e[1]); // a constant, a logarithm, a product, an exponential
-        const neg = n.n < 0n, half = twice.n % 2n !== 0n;
-        return (half ? 2 : 0) + 2 + (neg ? 4 : 0) + W(e[1]); // a root, a power, a one and a quotient
+        const half = twice.n % 2n !== 0n;
+        // a whole power above 0 is one step of 2; of 0 or below a power, a one and a quotient
+        // (2, 1, 3); a half power is a root of 2 first and then the whole power of twice it.
+        const whole = (k) => (k > 0n ? 2 : 6);
+        return (half ? 2 + whole(twice.n) : whole(n.n)) + W(e[1]);
       }
       return 7 + W(e[1]) + W(x); // a logarithm, a product, an exponential
     }
-    case 'row': {
-      const R0 = deck.rows.get(e[1]);
-      const b = e[2];
-      let s = 0;
-      let byEntries = 0;
-      for (const [nm, inp] of R0.inputs) {
-        if (inp.kind === 'q') s += W(b[nm]);
-        else {
-          s += 1;
-          if (Array.isArray(b[nm]) && b[nm][0] === 'by') byEntries += Object.keys(b[nm][2]).length;
-        }
-      }
-      return s + rowBodyWeight(R0, byEntries);
+    case 'row': return rowAppWeight(deck.rows.get(e[1]), e[2], deck);
+    case 'case': {
+      const N = deck.rows.get(e[1][1]);
+      let s = nameRowWeight(N, e[1][2], deck);
+      const nm = e[2];
+      for (const k of Object.keys(nm)) s += W(nm[k]);
+      const cells = nameCells(N);
+      let orders = 0;
+      for (const c of cells) orders += nameCellOrders(N, c);
+      return s + 1 + cells.length + 2 * orders;
     }
   }
   throw new Error(`unexpected operator ${op}`);
 }
-function rowBodyWeight(row, byEntries) {
-  const W = (x) => stepWeight(x, null); // a row reads no row and no load
+// A row that gives a quantity, applied: the steps of each quantity it binds, the steps of its
+// body, and one step of weight 1 and 1 for each quantity it binds. A key that is bound is no step,
+// but a row that gives the name it is bound to is applied, with its own steps.
+function rowAppWeight(row, b, deck) {
+  let s = 0, nq = 0, byEntries = 0;
+  const named = { down: 0, across: 0 };
+  for (const [nm, inp] of row.inputs) {
+    if (inp.kind === 'q') { s += stepWeight(b[nm], deck, false); nq++; continue; }
+    const v = b[nm];
+    if (Array.isArray(v) && v[0] === 'by') byEntries += Object.keys(v[2]).length;
+    if (Array.isArray(v) && v[0] === 'row') {
+      const N = deck.rows.get(v[1]);
+      s += nameRowWeight(N, v[2], deck);
+      const n = nameCells(N).length;
+      if (row.table.down.by === nm) named.down = n;
+      if (row.table.across && row.table.across.by === nm) named.across = n;
+    }
+  }
+  return s + 1 + nq + rowBodyWeight(row, byEntries, named);
+}
+// A row that gives a name, applied: the steps of each quantity it binds, and one step of weight 1
+// for each end of a band and each listed value of its sides.
+function nameRowWeight(N, b, deck) {
+  let s = 0;
+  for (const [nm] of N.inputs) s += stepWeight(b[nm], deck, false);
+  for (const side of [N.table.down, N.table.across]) {
+    if (!side) continue;
+    if (side.kind === 'at') s += side.count;
+    else for (const [, hi] of side.bands) s += hi === null ? 1 : 2;
+  }
+  return s;
+}
+function rowBodyWeight(row, byEntries, named) {
+  const W = (x) => stepWeight(x, null, true); // a row reads no row and no load
   if (row.kind === 'is') return W(row.is);
   if (row.kind === 'cases') {
     const condW = (c) => {
       if (c[0] === 'and' || c[0] === 'or' || c[0] === 'not') { let s = 0; for (let i = 1; i < c.length; i++) s += condW(c[i]); return s; }
       return W(c[1]) + W(c[2]);
     };
-    let s = 1 + row.cases.length + 2 * row.orders;
+    let s = 0;
     for (const cs of row.cases) s += W(cs.is) + (cs.when === undefined ? 0 : condW(cs.when));
-    return s;
+    // One case that holds otherwise is no pick.
+    if (row.cases.length === 1 && row.cases[0].when === undefined) return s;
+    return s + 1 + row.cases.length + 2 * row.orders;
   }
+  // A table weighs 1, 1 for each place down, 1 for each cell and 1 for each entry of a `by` that
+  // reads it. A table with a key that a row names goes through the product of the places it goes
+  // through down and across in place of its cells, and 1 more for each cell of that row that holds
+  // a name (AMBIGUITIES.md, J4).
   const T = row.table;
-  return 1 + T.down.count + T.down.count * (T.across ? T.across.count : 1) + byEntries;
+  const pd = named.down || T.down.count;
+  const pa = T.across ? named.across || T.across.count : 1;
+  return 1 + T.down.count + pd * pa + named.down + named.across + byEntries;
+}
+
+// deck.md, "A rule that requires": the reader tries each `requires`, in the order of the deck,
+// at every combination of the names of the keys that it and its `when` name, while a rule has at
+// most 4,096 combinations and the cost of the rules tried, combinations times the sizes of the
+// `requires` and the `when`, is at most 1,000,000. A rule past either is read untried.
+const REQ_COMBOS = 4096;
+const REQ_COST = 1_000_000;
+function tryRequires(deck) {
+  let spent = 0;
+  for (const rule of deck.rules) {
+    if (rule.form !== 'requires') continue;
+    const T = deck.types.get(rule.type);
+    const keys = condKeys(rule.when, condKeys(rule.requires).slice());
+    const names = keys.map((k) => keyField(k, T, deck.types).names);
+    let combos = 1;
+    for (const n of names) { combos *= n.length; if (combos > REQ_COMBOS) break; }
+    if (combos > REQ_COMBOS) continue;
+    const cost = combos * (rule.requiresSize + rule.whenSize);
+    if (spent + cost > REQ_COST) continue;
+    spent += cost;
+    const at = new Array(keys.length).fill(0);
+    const val = new Map();
+    const holds = (c) => {
+      switch (c[0]) {
+        case 'is': return val.get(c[1]) === c[2];
+        case 'and': return c.slice(1).every(holds);
+        case 'or': return c.slice(1).some(holds);
+        case 'not': return !holds(c[1]);
+      }
+      return false;
+    };
+    let answers = 0, met = 0;
+    for (let n = 0; n < combos; n++) {
+      let x = n;
+      for (let i = 0; i < keys.length; i++) { at[i] = x % names[i].length; x = Math.floor(x / names[i].length); val.set(keys[i], names[i][at[i]]); }
+      if (rule.when !== undefined && !holds(rule.when)) continue;
+      answers++;
+      if (holds(rule.requires)) met++;
+    }
+    if (answers === 0) throw DE(`the rule ${rule.id} answers no part: its when holds for no combination of its keys`);
+    if (met === answers) throw DE(`the rule ${rule.id} requires what no part can break: it holds at every combination at which the rule answers`);
+    if (met === 0) throw DE(`the rule ${rule.id} requires what no part can meet: it holds at no combination at which the rule answers`);
+  }
 }
 
 export function loadDeck(D, find) {
@@ -1613,6 +1990,8 @@ export function loadDeck(D, find) {
   for (const T of deck.types.values()) {
     for (const j of T.joins) if (!deck.types.has(j.type)) top(() => { throw DE(`the field ${j.name} joins parts of ${short(j.type)}, which is not a type`); }, `types ${T.name}`);
   }
+  if (errs0.length) return null;
+  for (const T of deck.types.values()) if (T.needsJ !== undefined) top(() => checkNeeds(T, deck.types), `types ${T.name} needs`);
   const mechs = new Set();
   D.grid.forEach((g, i) => {
     const item = `grid[${i}]${isObj(g) && isStr(g.mechanism) ? ' ' + g.mechanism : ''}`;
@@ -1635,12 +2014,13 @@ export function loadDeck(D, find) {
         needText(g.unless, 'why', 'unless');
         const reads = newReads();
         if (Object.hasOwn(g.unless, 'when')) checkPartCond(g.unless.when, T, deck.types, reads);
-        unless = { when: g.unless.when, why: g.unless.why, reads };
+        unless = { when: g.unless.when, why: g.unless.why, reads, keys: condKeys(g.unless.when) };
       }
       return { type: g.type, mechanism: g.mechanism, unless, unlessSize: unless ? condSize(unless.when) : 0 };
     }, item);
     if (line) { deck.grid.push(line); mechs.add(line.mechanism); deck.lineOf.set(`${line.type}\u0000${line.mechanism}`, line); }
   });
+  if (errs0.length) return null;
   const ids = new Set();
   const tails = new Set();
   D.rules.forEach((r, i) => {
@@ -1654,6 +2034,8 @@ export function loadDeck(D, find) {
     }, item);
     if (rule) { deck.rules.push(rule); ids.add(rule.id); tails.add(`${rule.type}\u0000${rule.mechanism}\u0000${rule.tail}`); }
   });
+  if (errs0.length) return null;
+  top(() => tryRequires(deck), 'rules');
   return errs0.length ? null : deck;
 }
 
@@ -1668,8 +2050,10 @@ const nameCmp = (a, b) => {
 
 export function verifyTexts(texts, opts = {}) {
   const findings = [];
-  const find = (file, item, why) => findings.push({ file, item, why });
-  const ill = () => ({ out: { verdict: 'ILL-FORMED', findings, cells: [] }, code: 3 });
+  // A finding of the shape rules, or of a deck that does not hold together, has the rule `shape`.
+  const find = (file, item, why, rule = 'shape') => findings.push({ rule, file, item, why });
+  const zeroCounts = () => Object.fromEntries(STATES.map((s) => [s, 0]));
+  const ill = () => ({ out: { verdict: 'ILL-FORMED', findings, counts: zeroCounts(), cells: [] }, code: 3 });
 
   // ---------------------------------------------------------------- shape
   const docs = {};
@@ -1704,17 +2088,16 @@ export function verifyTexts(texts, opts = {}) {
     return o[k];
   };
 
-  // format.md, Shape and Limits: with --rules the name of the card and the name of the design
-  // print in at most 200 bytes; a part's name and the name of a load case that puts a load on a
-  // part in at most 64, and the case's name holds no `/` (Parts 6).
-  const withRules = texts.rules !== undefined;
+  // format.md, Shape and Limits: a part's name prints in at most 64 bytes, and with --rules the
+  // name of the card and the name of the design in at most 200. Those two are tested when the
+  // deck of rules holds together, below.
   const nameLimit = (file, item, s, limit, what) => {
-    if (isStr(s) && printedBytes(s) > limit) find(file, item, `${what} prints in more than ${limit} bytes`);
+    if (isStr(s) && printedBytes(s) > limit) { find(file, item, `${what} prints in more than ${limit} bytes`); return false; }
+    return true;
   };
 
   // card
   if (!isStr(cardJ.name)) find('card', 'name', 'the card has no name');
-  else if (withRules) nameLimit('card', 'name', cardJ.name, LABEL_NAME_BYTES, 'the name of the card');
   const inputs = [];
   list('card', cardJ, 'inputs', false).forEach((x, i) => {
     const item = `inputs[${i}]${isObj(x) && isStr(x.name) ? ' ' + x.name : ''}`;
@@ -1722,10 +2105,6 @@ export function verifyTexts(texts, opts = {}) {
     if (!isStr(x.name)) find('card', item, 'the input has no name');
     if (!isStr(x.dim)) find('card', item, 'the input has no dim');
     for (const k of ['case', 'on', 'field']) if (Object.hasOwn(x, k) && !isStr(x[k])) find('card', item, `${k} is not a text`);
-    if (isStr(x.case) && Object.hasOwn(x, 'on')) {
-      nameLimit('card', item, x.case, NAME_BYTES, `the name of the case ${short(x.case)}`);
-      if (x.case.includes('/')) find('card', item, `the name of the case ${short(x.case)} holds a /`);
-    }
     const rg = range('card', item, x);
     inputs.push({ item, name: x.name, dim: x.dim, lo: rg?.[0], hi: rg?.[1], by: x.by, case: x.case, on: x.on, field: x.field });
   });
@@ -1733,22 +2112,48 @@ export function verifyTexts(texts, opts = {}) {
   list('card', cardJ, 'waivers', false).forEach((w, i) => {
     const item = `waivers[${i}]`;
     if (!isObj(w) || !isStr(w.subject) || !isStr(w.mechanism)) { find('card', item, 'a waiver has no subject or mechanism'); return; }
-    waivers.push({ item, subject: w.subject, mechanism: w.mechanism, by: w.by });
+    waivers.push({ item, subject: w.subject, mechanism: w.mechanism, by: w.by, reason: w.reason });
   });
   const claims = list('card', cardJ, 'claims', false);
   const tests = list('card', cardJ, 'tests', false);
   const pclaims = list('card', cardJ, 'probability_claims', false);
+  // format.md, card.json: `cases` names the load cases.
+  const cardCases = [];
+  list('card', cardJ, 'cases', false).forEach((c, i) => {
+    if (!isStr(c)) find('card', `cases[${i}]`, `${short(c)} is not the name of a load case`);
+    else cardCases.push(c);
+  });
+  // format.md, card.json: an item of `states` has `name`, `by`, and exactly one of `key`, a text,
+  // and `whole`, a whole number written as every number of the file is, and no other key. An item
+  // that breaks this is a shape finding and is left out.
+  const states = [];
+  list('card', cardJ, 'states', false).forEach((s, i) => {
+    const item = `states[${i}]${isObj(s) && isStr(s.name) ? ' ' + s.name : ''}`;
+    if (!isObj(s)) { find('card', item, 'an item of states is not an object'); return; }
+    const extra = Object.keys(s).filter((k) => !['name', 'by', 'key', 'whole'].includes(k));
+    if (extra.length) { find('card', item, `an item of states has the key ${short(extra[0])}`); return; }
+    if (!isStr(s.name)) { find('card', item, 'an item of states has no name'); return; }
+    if (!isStr(s.by)) { find('card', item, 'an item of states has no by'); return; }
+    if (Object.hasOwn(s, 'key') === Object.hasOwn(s, 'whole')) { find('card', item, 'an item of states has not exactly one of key and whole'); return; }
+    if (Object.hasOwn(s, 'key')) {
+      if (!isStr(s.key)) { find('card', item, 'key is not a text'); return; }
+      states.push({ item, name: s.name, by: s.by, key: s.key });
+    } else {
+      const w = parseFileNumber(s.whole);
+      if (!w || w.d !== 1n) { find('card', item, `whole is ${short(s.whole)}, which is not a whole number`); return; }
+      states.push({ item, name: s.name, by: s.by, whole: w });
+    }
+  });
 
   // design
   if (!isStr(designJ.name)) find('design', 'name', 'the design has no name');
-  else if (withRules) nameLimit('design', 'name', designJ.name, LABEL_NAME_BYTES, 'the name of the design');
   if (!isStr(designJ.card)) find('design', 'card', 'the design names no card');
   const quantities = [];
   list('design', designJ, 'quantities', false).forEach((x, i) => {
     const item = `quantities[${i}]`;
     if (!isObj(x)) { find('design', item, 'not an object'); return; }
     const rg = range('design', item, x);
-    quantities.push({ item, role: x.role, lo: rg?.[0] });
+    quantities.push({ item, role: x.role, lo: rg?.[0], entity: x.entity, line: x.line });
   });
   const params = list('design', designJ, 'params', false);
   params.forEach((x, i) => { if (isObj(x)) range('design', `params[${i}]`, x); });
@@ -1774,9 +2179,10 @@ export function verifyTexts(texts, opts = {}) {
     const m = num('deck', 'domains.size.min', s.min);
     if (typeof s.strict !== 'boolean') find('deck', 'domains.size.strict', 'strict is not true or false');
     sizeDomain = m ? { min: m, strict: s.strict === true } : null;
-    // format.md, deck.json: each key names a dimension, and a key that names none is a shape
-    // finding; `about` is prose and is not read. Two keys of one dimension give it one floor: the
-    // higher, and the strict one when both are at one height. Floors are kept by the exponents.
+    // format.md, deck.json: each key names a dimension, and a key that names none, or whose value
+    // lacks `min`, a number, or `strict`, true or false, is a shape finding; `about` is prose. Two
+    // keys of one dimension give it one floor: the higher, and the strict one when both are at one
+    // height. Floors are kept by the exponents.
     for (const k of Object.keys(deckJ.domains.input)) {
       if (k === 'about') continue;
       const dim = parseFileDim(k);
@@ -1817,231 +2223,404 @@ export function verifyTexts(texts, opts = {}) {
       hints.get(key).push(c);
     });
   }
-  if (findings.length) return ill();
+  // format.md, The rules: the kernel applies the rules in order, and a shape or a type finding
+  // does not stop it: Parts 9 alone is "applied only to files that break no rule before it".
+  // What stops it is a file it cannot read as JSON (above) and a deck that does not hold
+  // together, with which "the kernel reads no part".
+
+  // ---------------------------------------------------------------- the deck of rules
+  // Read here, before the type rules, because type rules 3 and 4 ask which fields of the deck's
+  // types say `may_be`. Its findings are those of the deck of rules. deck.md, "The size of a
+  // deck": a deck that takes more than 1,000,000 steps to read is refused before a row is read.
+  let deck = null, deckStepCount = 0;
+  if (rulesJ) {
+    deckStepCount = deckSteps(rulesJ);
+    if (deckStepCount > DECK_STEPS) find('rules', '', `reading the deck takes ${deckStepCount} steps, more than 1,000,000`);
+    else deck = loadDeck(rulesJ, find);
+  }
+  // Shape: with --rules the names of the card and of the design print in at most 200 bytes,
+  // tested when the deck holds together.
+  if (deck) {
+    nameLimit('card', 'name', cardJ.name, LABEL_NAME_BYTES, 'the name of the card');
+    nameLimit('design', 'name', designJ.name, LABEL_NAME_BYTES, 'the name of the design');
+  }
+  // The type of the first part of a name (type rules 3 and 4), when the deck holds together.
+  const firstPartType = (name) => {
+    if (!deck || !hasParts) return null;
+    const p = partsJ.find((x) => isObj(x) && x.name === name);
+    return p && isStr(p.type) ? deck.types.get(p.type) ?? null : null;
+  };
 
   // ---------------------------------------------------------------- types
   const allowedDesignKeys = ['format', 'name', 'card', 'quantities', 'params', 'parts'];
-  for (const k of Object.keys(designJ)) if (!allowedDesignKeys.includes(k)) find('design', k, `the design has the key ${k}`);
+  for (const k of Object.keys(designJ)) if (!allowedDesignKeys.includes(k)) find('design', k, `the design has the key ${k}`, 'types.2');
+  // Type rule 3, but for a quantity of a field that says `may_be`, which Parts 3 holds to the
+  // field's own floor.
   for (const q of quantities) {
     if (q.role === 'size' && q.lo && sizeDomain) {
+      const T = isStr(q.entity) ? firstPartType(q.entity) : null;
+      const f = T && isStr(q.line) ? T.fieldMap.get(q.line) : null;
+      if (f && f.kind === 'q' && f.mayBe) continue;
       const c = qcmp(q.lo, sizeDomain.min);
-      if (c < 0 || (c === 0 && sizeDomain.strict)) find('design', q.item, `a size is ${q.lo}, at or below the least a size may take`);
+      if (c < 0 || (c === 0 && sizeDomain.strict)) find('design', q.item, `a size is ${q.lo}, at or below the least a size may take`, 'types.3');
     }
   }
-  // Types 4: every input's dim names a dimension, and its floor is found by the exponents.
+  // Type rule 4: every input's dim names a dimension, and its floor is found by the exponents. An
+  // input for a field or a load that says `may_be: negative` is not held to a floor at zero or
+  // above, and is held to one under zero.
   for (const x of inputs) {
     x.dimVec = parseFileDim(x.dim);
-    if (!x.dimVec) { if (isStr(x.dim)) find('card', x.item, `${short(x.dim)} names no dimension`); continue; }
+    if (!x.dimVec) { if (isStr(x.dim)) find('card', x.item, `${short(x.dim)} names no dimension`, 'types.4'); continue; }
     const d = inputDomains.get(dstr(x.dimVec));
-    if (d && x.lo) {
-      const c = qcmp(x.lo, d.min);
-      if (c < 0 || (c === 0 && d.strict)) find('card', x.item, `lo is ${x.lo}, below the floor of ${d.name}`);
+    if (!d || !x.lo) continue;
+    let negative = false;
+    if (isStr(x.on) || isStr(x.field) || isStr(x.case)) {
+      const T = isStr(x.on) ? firstPartType(x.on) : null;
+      negative = !!(T && isStr(x.field) && T.loads.get(x.field)?.mayBe === 'negative');
+    } else if (isStr(x.name)) {
+      const dot = x.name.lastIndexOf('.');
+      const T = dot > 0 ? firstPartType(x.name.slice(0, dot)) : null;
+      const f = T ? T.fieldMap.get(x.name.slice(dot + 1)) : null;
+      negative = !!(f && f.kind === 'q' && f.mayBe === 'negative');
     }
+    if (negative && d.min.n >= 0n) continue;
+    const c = qcmp(x.lo, d.min);
+    if (c < 0 || (c === 0 && d.strict)) find('card', x.item, `lo is ${x.lo}, below the floor of ${d.name}`, 'types.4');
   }
-  // Types 5: every input and every waiver names a `by` that is not the empty text.
-  for (const x of inputs) if (!isStr(x.by) || x.by.length === 0) find('card', x.item, 'the input names no by: nobody signed it');
-  for (const w of waivers) if (!isStr(w.by) || w.by.length === 0) find('card', w.item, 'the waiver names no by');
+  // Type rule 5: every input, every waiver and every item of `states` names a `by` that is not
+  // the empty text.
+  for (const x of inputs) if (!isStr(x.by) || x.by.length === 0) find('card', x.item, 'the input names no by: nobody signed it', 'types.5');
+  for (const w of waivers) if (!isStr(w.by) || w.by.length === 0) find('card', w.item, 'the waiver names no by', 'types.5');
+  for (const s of states) if (s.by.length === 0) find('card', s.item, 'the statement names no by', 'types.5');
   // Types 6 and 7: parts come with --rules, and the marks of a file for a deck of rules come
-  // with parts and --rules: an input with `on` or `field`, `tests` or `probability_claims` in
-  // the card, `rules` in deck.json.
-  if (hasParts && !rulesJ) find('design', 'parts', 'a design with parts comes with --rules');
+  // with parts and --rules: an input with `on` or `field`, `tests`, `probability_claims` or
+  // `states` in the card, `rules` in deck.json.
+  if (hasParts && !rulesJ) find('design', 'parts', 'a design with parts comes with --rules', 'types.6');
   if (!hasParts || !rulesJ) {
     const why = !hasParts ? 'is a mark of a design checked against a deck of rules, and the design has no parts' : 'is a mark of a design checked against a deck of rules, and --rules names no deck';
-    for (const x of inputs) if (x.on !== undefined || x.field !== undefined) find('card', x.item, `an input with on or field ${why}`);
-    for (const k of ['tests', 'probability_claims']) if (Object.hasOwn(cardJ, k)) find('card', k, `the key ${k} ${why}`);
-    if (Object.hasOwn(deckJ, 'rules')) find('deck', 'rules', `the key rules ${why}`);
+    for (const x of inputs) if (x.on !== undefined || x.field !== undefined) find('card', x.item, `an input with on or field ${why}`, 'types.7');
+    for (const k of ['tests', 'probability_claims', 'states']) if (Object.hasOwn(cardJ, k)) find('card', k, `the key ${k} ${why}`, 'types.7');
+    if (Object.hasOwn(deckJ, 'rules')) find('deck', 'rules', `the key rules ${why}`, 'types.7');
   }
-  if (findings.length) return ill();
-  // A design with no parts that breaks no rule this kernel reads: its cells are the tapes of
-  // proofs.json, which this kernel does not check (AMBIGUITIES.md, C8).
-  if (!hasParts) return { out: null, code: 64, message: 'a design with no parts is outside what this kernel reads' };
-
-  // ---------------------------------------------------------------- the deck of rules
-  // deck.md, "The size of a deck": a deck that takes more than 1,000,000 steps to read is
-  // refused before a row of it is read.
-  const deckStepCount = deckSteps(rulesJ);
-  if (deckStepCount > DECK_STEPS) {
-    find('rules', '', `reading the deck takes ${deckStepCount} steps, more than 1,000,000`);
-    return ill();
+  if (rulesJ && !deck) return ill();
+  // Parts are read only with --rules and parts (a design with parts and no --rules breaks Types 6).
+  if (!hasParts || !rulesJ) {
+    if (findings.length) return ill();
+    // A design with no parts that breaks no rule this kernel reads: its cells are the tapes of
+    // proofs.json, which this kernel does not check (AMBIGUITIES.md, C8).
+    return { out: null, code: 64, message: 'a design with no parts is outside what this kernel reads' };
   }
-  const deck = loadDeck(rulesJ, find);
-  if (!deck || findings.length) return ill();
 
   // ---------------------------------------------------------------- parts
   const DN = designJ.name, CN = cardJ.name;
   const inputByName = new Map();
   for (const x of inputs) {
-    if (inputByName.has(x.name)) find('card', x.item, `two inputs are named ${x.name}`);
+    if (inputByName.has(x.name)) find('card', x.item, `two inputs are named ${x.name}`, 'parts.6');
     else inputByName.set(x.name, x);
     const n = ['case', 'on', 'field'].filter((k) => x[k] !== undefined).length;
     x.isLoad = n === 3;
     x.isGiven = n === 0;
-    if (!x.isLoad && !x.isGiven) find('card', x.item, 'the input has some but not all of case, on and field');
+    if (!x.isLoad && !x.isGiven) find('card', x.item, 'the input has some but not all of case, on and field', 'parts.6');
+  }
+  // Parts 6: every item of `states` has a name of its own, among the items and among the inputs.
+  const stateByName = new Map();
+  for (const s of states) {
+    if (stateByName.has(s.name)) find('card', s.item, `${s.name} is stated twice`, 'parts.6');
+    else if (inputByName.has(s.name)) find('card', s.item, `${s.name} is stated and bounded: a statement and a bound do not share a name`, 'parts.6');
+    else stateByName.set(s.name, s);
   }
   const parts = [];
   const partByName = new Map();
   const givensRead = new Set();
+  const statesRead = new Set();
+  const argKind = (a) => (isObj(a) && Object.keys(a).length === 1 ? Object.keys(a)[0] : null);
   partsJ.forEach((p, pi) => {
     const item = `parts[${pi}]${isObj(p) && isStr(p.name) ? ' ' + p.name : ''}`;
-    const PF = (why) => find('design', item, why);
-    if (!isObj(p) || !isStr(p.name) || !isStr(p.type) || !Array.isArray(p.lines)) { PF('a part has no name, type or lines'); return; }
-    if (partByName.has(p.name)) { PF(`two parts are named ${p.name}`); return; }
+    const PF = (why, rule) => find('design', item, why, rule);
+    if (!isObj(p) || !isStr(p.name) || !isStr(p.type) || !Array.isArray(p.lines)) { PF('a part has no name, type or lines', 'parts.1'); return; }
+    if (partByName.has(p.name)) { PF(`two parts are named ${p.name}`, 'parts.1'); return; }
     const T = deck.types.get(p.type);
-    if (!T) { PF(`${p.type} is not a type of the deck`); return; }
+    if (!T) { PF(`${p.type} is not a type of the deck`, 'parts.1'); return; }
     const part = { name: p.name, type: T, values: new Map(), joinWords: new Map(), joins: new Map(), item };
     partByName.set(p.name, part);
     parts.push(part);
     const seen = new Set();
     p.lines.forEach((l, li) => {
-      const LF = (why) => PF(`line ${li + 1}: ${why}`);
-      if (!isObj(l) || !isStr(l.field) || !Array.isArray(l.args)) { LF('the line has no field or args'); return; }
+      const LF = (why, rule = 'parts.3') => PF(`line ${li + 1}: ${why}`, rule);
+      if (!isObj(l) || !isStr(l.field) || !Array.isArray(l.args)) { LF('the line has no field or args', 'parts.2'); return; }
       const f = T.fieldMap.get(l.field);
-      if (!f) { LF(`${l.field} is not a field of ${T.name}`); return; }
-      if (seen.has(l.field)) { LF(`the part gives ${l.field} twice`); return; }
+      if (!f) { LF(`${l.field} is not a field of ${T.name}`, 'parts.2'); return; }
+      if (seen.has(l.field)) { LF(`the part gives ${l.field} twice`, 'parts.2'); return; }
       seen.add(l.field);
       const args = l.args;
-      const argKind = (a) => (isObj(a) && Object.keys(a).length === 1 ? Object.keys(a)[0] : null);
+      const given = args.length === 1 && argKind(args[0]) === 'given' && isStr(args[0].given) ? args[0].given : null;
+      if (given !== null && stateByName.has(given)) statesRead.add(given);
       if (f.kind === 'q') {
         if (args.length !== 1) { LF(`${f.name} takes one number or one given`); return; }
         const a = args[0], k = argKind(a);
-        let lo, hi, label;
+        // deck.md, "A field that a record may leave unstated": the one word `unstated`.
+        if (k === 'word' && a.word === 'unstated') {
+          if (!f.optional) { LF(`${f.name} is not optional, and a part states it: unstated is refused`); return; }
+          part.values.set(f.name, { kind: 'q', unstated: true });
+          return;
+        }
+        let lo, hi, label, written = false;
         if (k === 'number' && isObj(a.number)) {
-          if (f.signed) { LF(`${f.name} is signed: only the card states it`); return; }
+          if (f.signed) { LF(`${f.name} is signed: it is for the card to state, and the design reads it with given`); return; }
           if (!sameFileDim(a.number.dim, f.dim)) { LF(`${f.name} is of ${f.dimName}, and the number is of ${short(a.number.dim)}`); return; }
           lo = parseFileNumber(a.number.lo); hi = parseFileNumber(a.number.hi);
           if (!lo || !hi) return; // reported under shape
-          if (f.whole && (qcmp(lo, hi) !== 0 || lo.d !== 1n)) { LF(`${f.name} is a whole number`); return; }
+          if (f.whole && (qcmp(lo, hi) !== 0 || lo.d !== 1n)) { LF(`${f.name} is a count: one whole number`); return; }
           label = `dsg:${DN}.${p.name}.${f.name}`;
-        } else if (k === 'given' && isStr(a.given)) {
-          if (f.whole) { LF(`${f.name} is a whole number that the design writes`); return; }
-          if (a.given !== `${p.name}.${f.name}`) { LF(`the given for ${f.name} is named ${a.given}, not ${p.name}.${f.name}`); return; }
-          const x = inputByName.get(a.given);
-          if (!x) { LF(`the card has no input ${a.given}`); return; }
-          if (!x.isGiven) { LF(`the input ${a.given} is a load`); return; }
-          if (!sameFileDim(x.dim, f.dim)) { LF(`${f.name} is of ${f.dimName}, and the card's ${a.given} is of ${short(x.dim)}`); return; }
-          givensRead.add(a.given);
-          lo = x.lo; hi = x.hi;
-          if (!lo || !hi) return;
-          label = `in:${CN}.${x.name}`;
+          written = true;
+        } else if (given !== null) {
+          if (given !== `${p.name}.${f.name}`) { LF(`reads the given ${given}, and a part reads only what the card states for it, ${p.name}.${f.name}`); return; }
+          if (f.whole) {
+            // Parts 3: a count is stated by the card with `whole`; an input of its name is no count.
+            if (inputByName.has(given)) { LF(`${given} is a count, which the card states exactly, and the card gives it a range`); return; }
+            const st = stateByName.get(given);
+            if (!st) { LF(`the card states no ${given}`); return; }
+            if (st.whole === undefined) { LF(`the card states ${given} as a name, and it is a count`); return; }
+            lo = hi = st.whole;
+            label = `in:${CN}.${given}`;
+          } else {
+            const x = inputByName.get(given);
+            if (!x) { LF(stateByName.has(given) ? `the card states ${given} exactly, and it is a quantity that is no count` : `the card has no input ${given}`); return; }
+            if (!x.isGiven) { LF(`the input ${given} is a load`); return; }
+            if (!sameFileDim(x.dim, f.dim)) { LF(`${f.name} is of ${f.dimName}, and the card's ${given} is of ${short(x.dim)}`); return; }
+            givensRead.add(given);
+            lo = x.lo; hi = x.hi;
+            if (!lo || !hi) return;
+            label = `in:${CN}.${x.name}`;
+          }
         } else { LF(`${f.name} takes one number or one given, not ${short(a)}`); return; }
-        if (lo.n <= 0n) { LF(`${f.name} is ${lo}, not more than zero`); return; }
+        // Parts 3: more than zero, at least zero with may_be zero, no floor by its sign with
+        // may_be negative; a number the design writes for such a field is held to the floor its
+        // dimension has in domains.input when that floor is under zero. And at least its least.
+        if (!f.mayBe && lo.n <= 0n) { LF(`${f.name} is ${lo}, not more than zero`); return; }
+        if (f.mayBe === 'zero' && lo.n < 0n) { LF(`${f.name} is ${lo}, under zero`); return; }
+        if (f.mayBe === 'negative' && written) {
+          const fl = inputDomains.get(dstr(f.dim));
+          if (fl && fl.min.n < 0n) {
+            const c = qcmp(lo, fl.min);
+            if (c < 0 || (c === 0 && fl.strict)) { LF(`${f.name} is ${lo}, below the floor of ${fl.name}`); return; }
+          }
+        }
         if (f.least && qcmp(lo, f.least) < 0) { LF(`${f.name} is ${lo}, below its least ${f.least}`); return; }
         part.values.set(f.name, { kind: 'q', label, lo, hi });
       } else if (f.kind === 'k') {
-        if (args.length !== 1) { LF(`${f.name} takes one word or one text`); return; }
+        if (args.length !== 1) { LF(`${f.name} takes one word, one text or one given`, 'parts.4'); return; }
         const a = args[0], k = argKind(a);
+        if (k === 'word' && a.word === 'unstated' && f.optional) { part.values.set(f.name, { kind: 'k', unstated: true }); return; }
+        if (given !== null) {
+          // Parts 4: a given of a key is an item of `states` with `key`.
+          if (given !== `${p.name}.${f.name}`) { LF(`reads the given ${given}, and a part reads only what the card states for it, ${p.name}.${f.name}`, 'parts.4'); return; }
+          if (inputByName.has(given)) { LF(`the card gives ${given} a range, and a key is stated exactly`, 'parts.4'); return; }
+          const st = stateByName.get(given);
+          if (!st) { LF(`the card states no ${given}`, 'parts.4'); return; }
+          if (st.key === undefined) { LF(`the card states ${given} as a count, and it is a key`, 'parts.4'); return; }
+          if (!f.names.includes(st.key)) { LF(`the card states ${short(st.key)} for ${given}, which is not one of the names of ${f.name}`, 'parts.4'); return; }
+          part.values.set(f.name, { kind: 'k', value: st.key });
+          return;
+        }
+        if (f.signed) { LF(`${f.name} is signed: it is for the card to state, and the design reads it with given`, 'parts.4'); return; }
         const v = k === 'word' ? a.word : k === 'text' ? a.text : undefined;
-        if (!isStr(v)) { LF(`${f.name} takes one word or one text, not ${short(a)}`); return; }
-        if (!f.names.includes(v)) { LF(`${short(v)} is not one of the names of ${f.name}`); return; }
+        if (!isStr(v)) { LF(`${f.name} takes one word, one text or one given, not ${short(a)}`, 'parts.4'); return; }
+        if (!f.names.includes(v)) { LF(`${short(v)} is not one of the names of ${f.name}`, 'parts.4'); return; }
         part.values.set(f.name, { kind: 'k', value: v });
       } else {
-        if (args.length !== f.as.length) { LF(`${f.name} takes ${f.as.length} words`); return; }
+        if (args.length !== f.as.length) { LF(`${f.name} takes ${f.as.length} words`, 'parts.5'); return; }
         const words = [];
         for (const a of args) {
-          if (argKind(a) !== 'word' || !isStr(a.word)) { LF(`${f.name} takes words that name parts, not ${short(a)}`); return; }
+          if (argKind(a) !== 'word' || !isStr(a.word)) { LF(`${f.name} takes words that name parts, not ${short(a)}`, 'parts.5'); return; }
           words.push(a.word);
         }
         part.joinWords.set(f.name, words);
       }
     });
-    for (const f of T.fields) if (!seen.has(f.name)) PF(`the part has no line for ${f.name}`);
+    for (const f of T.fields) if (!seen.has(f.name)) PF(`the part has no line for ${f.name}`, 'parts.2');
   });
   const joinedBy = new Map();
   for (const part of parts) {
     for (const f of part.type.joins) {
       const words = part.joinWords.get(f.name);
       if (!words) continue;
-      if (new Set(words).size !== words.length) { find('design', part.item, `${f.name} names one part twice`); continue; }
+      if (new Set(words).size !== words.length) { find('design', part.item, `${f.name} names one part twice`, 'parts.5'); continue; }
       words.forEach((w, i) => {
         const q = partByName.get(w);
-        if (!q) { find('design', part.item, `${f.name} names ${w}, which is no part`); return; }
-        if (q.type.name !== f.type) { find('design', part.item, `${f.name} names ${w}, which is not a ${f.type}`); return; }
-        if (joinedBy.has(w)) { find('design', part.item, `${w} is joined more than once`); return; }
+        if (!q) { find('design', part.item, `${f.name} names ${w}, which is no part`, 'parts.5'); return; }
+        if (q.type.name !== f.type) { find('design', part.item, `${f.name} names ${w}, which is not a ${f.type}`, 'parts.5'); return; }
+        if (joinedBy.has(w)) { find('design', part.item, `${w} is joined more than once`, 'parts.5'); return; }
         joinedBy.set(w, part.name);
         part.joins.set(f.as[i], q);
       });
     }
   }
+  // Parts 6. A load is tested in this order and stops at the first that fails: its part, its
+  // field, its dimension, its least, that no case puts it on the part twice, and then the name of
+  // its case (64 bytes and no `/`). A load that fails is no load of the card.
   const loadKeys = new Set();
+  const loads = [];
   for (const x of inputs) {
     if (x.isLoad) {
       const part = partByName.get(x.on);
-      if (!part) { find('card', x.item, `the load is on ${short(x.on)}, which is no part`); continue; }
+      if (!part) { find('card', x.item, `the load is on ${short(x.on)}, which is no part`, 'parts.6'); continue; }
       const L = part.type.loads.get(x.field);
-      if (!L) { find('card', x.item, `${short(x.field)} is not a load of ${part.type.name}`); continue; }
-      if (!sameFileDim(x.dim, L.dim)) { find('card', x.item, `the load ${L.name} is of ${L.dimName}, and the input is of ${short(x.dim)}`); continue; }
-      if (L.least && x.lo && qcmp(x.lo, L.least) < 0) find('card', x.item, `the load is below its least ${L.least}`);
+      if (!L) { find('card', x.item, `${short(x.field)} is not a load of ${part.type.name}`, 'parts.6'); continue; }
+      if (!sameFileDim(x.dim, L.dim)) { find('card', x.item, `the load ${L.name} is of ${L.dimName}, and the input is of ${short(x.dim)}`, 'parts.6'); continue; }
+      if (L.least && x.lo && qcmp(x.lo, L.least) < 0) { find('card', x.item, `the load is below its least ${L.least}`, 'parts.6'); continue; }
       const k = `${x.case}\u0000${x.on}\u0000${x.field}`;
-      if (loadKeys.has(k)) find('card', x.item, `the case ${x.case} puts ${x.field} on ${x.on} twice`);
+      if (loadKeys.has(k)) { find('card', x.item, `the case ${x.case} puts ${x.field} on ${x.on} twice`, 'parts.6'); continue; }
       loadKeys.add(k);
+      if (!isStr(x.case) || !nameLimit('card', x.item, x.case, NAME_BYTES, `the name of the case ${short(x.case)}`)) continue;
+      if (x.case.includes('/')) { find('card', x.item, `the name of the case ${short(x.case)} holds a /`); continue; }
+      if (x.lo && x.hi) loads.push(x);
     } else if (x.isGiven && isStr(x.name) && !givensRead.has(x.name)) {
-      find('card', x.item, `no part reads the given ${x.name}`);
+      find('card', x.item, `no part reads the given ${x.name}`, 'parts.6');
     }
+  }
+  for (const s of states) if (stateByName.get(s.name) === s && !statesRead.has(s.name)) find('card', s.item, `${s.name} is stated, and no part reads it`, 'parts.6');
+  // A name in `cases` that no load has is a load case too, held to the same limit.
+  const loadCaseNames = new Set(loads.map((x) => x.case));
+  for (const c of cardCases) {
+    if (loadCaseNames.has(c)) continue;
+    if (nameLimit('card', 'cases', c, NAME_BYTES, `the name of the case ${short(c)}`) && c.includes('/')) find('card', 'cases', `the name of the case ${short(c)} holds a /`);
   }
   for (const w of waivers) {
     const part = partByName.get(w.subject);
-    if (!part) { find('card', w.item, `the waiver names ${w.subject}, which is no part`); continue; }
-    if (!deck.lineOf.has(`${part.type.name}\u0000${w.mechanism}`)) find('card', w.item, `the grid asks no ${w.mechanism} of a ${part.type.name}`);
+    if (!part) { find('card', w.item, `the waiver names ${w.subject}, which is no part`, 'parts.7'); continue; }
+    if (!deck.lineOf.has(`${part.type.name}\u0000${w.mechanism}`)) find('card', w.item, `the grid asks no ${w.mechanism} of a ${part.type.name}`, 'parts.7');
   }
-  if (claims.length) find('card', 'claims', 'a card for a deck of rules has no claim');
-  if (tests.length) find('card', 'tests', 'a card for a deck of rules has no tests record');
-  if (pclaims.length) find('card', 'probability_claims', 'a card for a deck of rules has no probability claim');
-  if (params.length) find('design', 'params', 'a design of a deck\'s types has no param');
+  // Parts 8: no claim, tests record, probability claim or environment, and no param.
+  if (claims.length) find('card', 'claims', 'a card for a deck of rules has no claim', 'parts.8');
+  if (tests.length) find('card', 'tests', 'a card for a deck of rules has no tests record', 'parts.8');
+  if (pclaims.length) find('card', 'probability_claims', 'a card for a deck of rules has no probability claim', 'parts.8');
+  if (Object.hasOwn(cardJ, 'environment') && cardJ.environment !== null) find('card', 'environment', 'a deck of rules does not read an environment yet', 'parts.8');
+  if (params.length) find('design', 'params', 'a design of a deck\'s types has no param', 'parts.8');
+  if (findings.length) return ill();
+
+  // A field of a part by the name a rule or a need writes: FIELD, or AS.FIELD of a joined part.
+  const resolve = (part, ref) => {
+    const dot = ref.indexOf('.');
+    if (dot < 0) return { part, field: ref };
+    return { part: part.joins.get(ref.slice(0, dot)), field: ref.slice(dot + 1) };
+  };
+  const valueOf = (part, ref) => { const r = resolve(part, ref); return r.part.values.get(r.field); };
+  const isUnstated = (part, ref) => valueOf(part, ref)?.unstated === true;
+  const unstatedName = (part, ref) => { const r = resolve(part, ref); return `${r.part.name}.${r.field}`; };
+  const partHasUnstated = (part) => [part, ...part.joins.values()].some((q) => [...q.values.values()].some((v) => v.unstated));
+  for (const part of parts) part.hasUnstated = partHasUnstated(part);
+
+  // ---------------------------------------------------------------- Parts 9: the needs
+  // format.md, Parts 9: each part keeps each need of its type, decided with exact fractions over
+  // the ranges of its fields. A need that names an unstated field is not asked. A value of more
+  // than 65,536 bits leaves the need undecided, which is a finding too.
+  class NeedTooBig extends Error {}
+  const big = (q) => { if (tooBig(q)) throw new NeedTooBig(); return q; };
+  const needRange = (e, part) => {
+    if (isStr(e)) {
+      if (looksNumeric(e)) { const v = parseNumberAlone(e); return [v, v]; }
+      const v = valueOf(part, e);
+      return [v.lo, v.hi];
+    }
+    const args = e.slice(1);
+    switch (e[0]) {
+      case 'q': { const v = qValue(e).v; return [v, v]; }
+      case 'add': {
+        let lo = Q0, hi = Q0;
+        for (const a of args) { const r = needRange(a, part); lo = big(qadd(lo, r[0])); hi = big(qadd(hi, r[1])); }
+        return [lo, hi];
+      }
+      case 'mul': {
+        let acc = [Q1, Q1];
+        for (const a of args) { acc = imul(acc, needRange(a, part)); big(acc[0]); big(acc[1]); }
+        return acc;
+      }
+      case 'neg': { const r = needRange(args[0], part); return [qneg(r[1]), qneg(r[0])]; }
+      case 'sub': {
+        const a = needRange(args[0], part), b = needRange(args[1], part);
+        return [big(qsub(a[0], b[1])), big(qsub(a[1], b[0]))];
+      }
+      case 'div': {
+        const a = needRange(args[0], part), b = needRange(args[1], part);
+        const r = imul(a, [qdiv(Q1, b[1]), qdiv(Q1, b[0])]);
+        big(r[0]); big(r[1]);
+        return r;
+      }
+    }
+    throw new Error(`unexpected operator in a need: ${e[0]}`);
+  };
+  for (const part of parts) {
+    part.type.needs.forEach((need, k) => {
+      if (need.fields.some((ref) => isUnstated(part, ref))) return;
+      let L, Rg;
+      try { L = needRange(need.sides[0], part); Rg = needRange(need.sides[1], part); } catch (e) {
+        if (!(e instanceof NeedTooBig)) throw e;
+        find('design', part.name, `need ${k + 1} of a ${part.type.name} is not decided: a value has more than 65536 bits`, 'parts.9');
+        return;
+      }
+      const c = qcmp(L[1], Rg[0]);
+      if (need.op === 'le' ? c <= 0 : c < 0) return;
+      find('design', part.name, `breaks need ${k + 1} of a ${part.type.name}: its left side, up to ${L[1]}, is not ${need.op === 'le' ? 'at most' : 'under'} its right side, down to ${Rg[0]}, in SI units: ${need.why}`, 'parts.9');
+    });
+  }
   if (findings.length) return ill();
 
   // ---------------------------------------------------------------- cells
-  // format.md, Limits: at most 10,000 cells and 10,000,000 steps to make them and write their
-  // tapes; past either, or with one key twice, the design is ILL-FORMED with a finding of the
-  // rule `limits`. Each limit is tested before the step it bounds (format.md, Steps).
+  // format.md, Limits and Steps: at most 10,000 cells and 10,000,000 steps to make them and write
+  // their tapes. The count is tested after each charge of Steps items 1, 2, 3 and 5; the nodes of
+  // a tape (item 4) are added with no test of their own.
   let steps = 0;
   const charge = (n) => {
-    if (steps + n > CELL_STEPS) throw new LimitErr('making the cells and writing their tapes takes more than 10,000,000 steps');
     steps += n;
+    if (steps > CELL_STEPS) throw new LimitErr('making the cells and writing their tapes takes more than 10,000,000 steps');
   };
-  const loadInputs = inputs.filter((x) => x.isLoad);
+  // The load cases of the card: the names its `cases` lists and the `case` of each of its loads,
+  // each once, in order by code point.
+  const loadCases = [...new Set([...cardCases, ...loads.map((x) => x.case)])].sort(nameCmp);
   // The loads on each part, by field and then by case; the lines and the rules, by type.
   const loadsOn = new Map();
-  for (const x of loadInputs) {
+  for (const x of loads) {
     if (!loadsOn.has(x.on)) loadsOn.set(x.on, new Map());
     const m = loadsOn.get(x.on);
     if (!m.has(x.field)) m.set(x.field, new Map());
     m.get(x.field).set(x.case, x);
   }
   const loadInput = (cs, partName, field) => loadsOn.get(partName).get(field).get(cs);
-  const waivedLines = new Set(waivers.map((w) => `${w.subject}\u0000${w.mechanism}`));
+  const putsLoad = (cs, partName, field) => loadsOn.get(partName)?.get(field)?.has(cs) ?? false;
+  const waiverOf = new Map();
+  for (const w of waivers) { const k = `${w.subject}\u0000${w.mechanism}`; if (!waiverOf.has(k)) waiverOf.set(k, w); }
   const linesOf = new Map(), rulesOfType = new Map(), rulesOfLine = new Map();
   const addTo = (m, k, v) => { if (!m.has(k)) m.set(k, []); m.get(k).push(v); };
   for (const g of deck.grid) addTo(linesOf, g.type, g);
   for (const r of deck.rules) { addTo(rulesOfType, r.type, r); addTo(rulesOfLine, `${r.type}\u0000${r.mechanism}`, r); }
-  const keyValue = (part, ref) => {
-    const dot = ref.indexOf('.');
-    if (dot < 0 || part.type.fieldMap.has(ref)) return part.values.get(ref).value;
-    return part.joins.get(ref.slice(0, dot)).values.get(ref.slice(dot + 1)).value;
-  };
+  const keyValue = (part, ref) => valueOf(part, ref).value;
   const partCond = (c, part) => {
     switch (c[0]) {
       case 'is': return keyValue(part, c[1]) === c[2];
-      case 'loaded': return loadsOn.get(part.name)?.has(c[1]) ?? false;
       case 'and': return c.slice(1).every((x) => partCond(x, part));
       case 'or': return c.slice(1).some((x) => partCond(x, part));
       case 'not': return !partCond(c[1], part);
     }
     return false;
   };
+  // A condition that names an unstated key is not decided, whatever its other keys are.
+  const condUnstated = (keys, part) => keys.find((k) => isUnstated(part, k));
+  // format.md, Cells 3: a rule answers for a part when its `when` holds, or names an unstated key.
+  const answers = (rule, part) => rule.when === undefined || condUnstated(rule.whenKeys, part) !== undefined || partCond(rule.when, part);
+  // The first field a rule reads that the part leaves unstated: the fields of its sides and its
+  // `where`, and then the keys of its `when` and its `requires`.
+  const firstUnstated = (rule, part) => {
+    for (const ref of [...rule.reads.own, ...rule.reads.joined]) if (isUnstated(part, ref)) return ref;
+    return undefined;
+  };
 
-  // A tape from a rule for a part (and a case), with the roots of le or of where. Each node
-  // written is one step of the cells.
+  // A tape from a rule for a part (and a case), with the root of le or lt, or the roots of where.
   const writeTape = (rule, part, cs, which) => {
     const t = new Tape();
-    t.onNode = () => charge(1);
     const letNodes = new Map();
     const quantityNode = (name) => {
-      let v;
-      if (part.type.fieldMap.has(name)) v = part.values.get(name);
-      else {
-        const dot = name.indexOf('.');
-        v = part.joins.get(name.slice(0, dot)).values.get(name.slice(dot + 1));
-      }
+      const v = valueOf(part, name);
       return t.input(v.label, v.lo, v.hi);
     };
     const op = (e, sub) => {
@@ -2057,8 +2636,9 @@ export function verifyTexts(texts, opts = {}) {
             const n = parseNumberAlone(x);
             const twice = qmul(n, R(2n));
             if (twice.d === 1n) {
-              const neg = n.n < 0n;
-              const tw = neg ? -twice.n : twice.n;
+              // A whole power of 0 or below is 1 over the power, as a negative one is.
+              const neg = n.n <= 0n;
+              const tw = twice.n < 0n ? -twice.n : twice.n;
               const node = tw % 2n === 0n ? t.add(['pow', b, Number(tw / 2n)]) : t.add(['pow', t.add(['sqrt', b]), Number(tw)]);
               return neg ? t.add(['div', t.c(Q1), node]) : node;
             }
@@ -2098,6 +2678,7 @@ export function verifyTexts(texts, opts = {}) {
       if (!Object.hasOwn(b[2], v)) throw new CannotWrite(`the table has no line for ${b[1]} ${v}`);
       return b[2][v];
     };
+    // format.md, "How the kernel writes a table": the condition of a place of a side.
     const placeCond = (side, i, x) => {
       if (side.kind === 'at') { const v = t.c(side.at[i]); return ['and', [['le', x, v], ['le', v, x]]]; }
       const [lo, hi] = side.bands[i];
@@ -2106,52 +2687,58 @@ export function verifyTexts(texts, opts = {}) {
       const c1 = ['le', L, x];
       return hi === null ? c1 : ['and', [c1, ['lt', x, t.c(hi)]]];
     };
-    // The orders of a pick over a side: two for a band or a listed value, one for a last band
-    // with no upper end.
-    const sideOrders = (side, idx) => {
-      let n = 0;
-      for (const i of idx) n += side.kind === 'bands' && side.bands[i][1] === null ? 1 : 2;
-      return n;
+    const tooManyOrders = (id) => new CannotWrite(`${id} would be a pick of more than 1,024 orders`);
+    // The inputs of a row that gives a name, each written once from the expression bound to it.
+    const nameRowInputs = (binds) => {
+      const cache = new Map();
+      return (nm) => {
+        let i = cache.get(nm);
+        if (i === undefined) { i = expr(binds[nm]); cache.set(nm, i); }
+        return i;
+      };
     };
-    const tooManyOrders = (row) => new CannotWrite(`${row.id} would be a pick of more than 1,024 orders`);
-    const table = (row, qin, key) => {
+    // The condition of a cell of a row that gives a name: the condition of its place on the row's
+    // own side, or `and` of the two for a row with two sides.
+    const nameCellCond = (N, c, nq) => {
+      const down = placeCond(N.table.down, c.i, nq(N.table.down.by));
+      if (!N.table.across) return down;
+      return ['and', [down, placeCond(N.table.across, c.j, nq(N.table.across.by))]];
+    };
+    // The places of a side of a table, each with its orders and a condition written when used.
+    const sidePlaces = (side, binding, qin) => {
+      if (side.kind === 'key') {
+        const b = binding[side.by];
+        if (Array.isArray(b) && b[0] === 'row') {
+          const N = deck.rows.get(b[1]);
+          const nq = nameRowInputs(b[2]);
+          return nameCells(N).map((c) => ({ idx: side.names.indexOf(c.name), orders: nameCellOrders(N, c), cond: () => nameCellCond(N, c, nq) }));
+        }
+        return [{ idx: side.names.indexOf(resolveKey(b)), orders: 0, cond: null }];
+      }
+      let x;
+      const xn = () => (x === undefined ? (x = qin(side.by)) : x);
+      return [...Array(side.count).keys()].map((i) => ({ idx: i, orders: placeOrders(side, i), cond: () => placeCond(side, i, xn()) }));
+    };
+    const table = (row, binding, qin) => {
       const T = row.table;
-      // The keys and the cases of each pick, found before any node of the table is written.
-      const dFix = T.down.kind === 'key' ? T.down.names.indexOf(key(T.down.by)) : undefined;
-      const aFix = T.across && T.across.kind === 'key' ? T.across.names.indexOf(key(T.across.by)) : undefined;
+      const D = sidePlaces(T.down, binding, qin);
+      const A = T.across ? sidePlaces(T.across, binding, qin) : [{ idx: null, orders: 0, cond: null }];
       const cellAt = (i, j) => (T.across ? T.cells[i][j] : T.cells[i]);
-      const downIdx = dFix !== undefined ? [dFix] : [...Array(T.down.count).keys()];
-      const acrossIdx = !T.across ? [null] : aFix !== undefined ? [aFix] : [...Array(T.across.count).keys()];
       const lines = [];
-      for (const i of downIdx) {
-        const cols = acrossIdx.filter((j) => cellAt(i, j) !== null);
-        if (cols.length) lines.push({ i, cols });
+      for (const dp of D) {
+        const cs = A.filter((ap) => cellAt(dp.idx, ap.idx) !== null);
+        if (cs.length) lines.push({ dp, cs });
       }
       if (!lines.length) throw new CannotWrite(`every cell ${row.id} could read is empty`);
-      if (T.across && aFix === undefined) for (const l of lines) if (sideOrders(T.across, l.cols) > MAX_ORDERS) throw tooManyOrders(row);
-      if (dFix === undefined && sideOrders(T.down, lines.map((l) => l.i)) > MAX_ORDERS) throw tooManyOrders(row);
-      const sel = (side, fixed) => (side.kind === 'key' ? { fixed } : { side, x: qin(side.by) });
-      const d = sel(T.down, dFix);
-      const a = T.across ? sel(T.across, aFix) : null;
-      const cellNode = (i, j) => {
-        const v = a ? T.cells[i][j] : T.cells[i];
-        return v === null ? null : t.c(v);
-      };
-      const pickOver = (s, at) => {
-        const cases = [];
-        for (let i = 0; i < s.side.count; i++) {
-          const node = at(i);
-          if (node !== null) cases.push([placeCond(s.side, i, s.x), node]);
-        }
-        return cases.length ? t.add(['pick', cases]) : null;
-      };
-      let node;
-      if (!a) node = d.fixed !== undefined ? cellNode(d.fixed) : pickOver(d, (i) => cellNode(i));
-      else if (d.fixed !== undefined && a.fixed !== undefined) node = cellNode(d.fixed, a.fixed);
-      else if (d.fixed !== undefined) node = pickOver(a, (j) => cellNode(d.fixed, j));
-      else if (a.fixed !== undefined) node = pickOver(d, (i) => cellNode(i, a.fixed));
-      else node = pickOver(d, (i) => pickOver(a, (j) => cellNode(i, j)));
-      return node;
+      // Each pick is held to 1,024 orders on its own: the pick over the lines, and that of each line.
+      for (const l of lines) if (l.cs.reduce((n, ap) => n + ap.orders, 0) > MAX_ORDERS) throw tooManyOrders(row.id);
+      if (lines.reduce((n, l) => n + l.dp.orders, 0) > MAX_ORDERS) throw tooManyOrders(row.id);
+      const lineNodes = lines.map((l) => {
+        const cases = l.cs.map((ap) => [ap.cond ? ap.cond() : null, t.c(cellAt(l.dp.idx, ap.idx))]);
+        return cases[0][0] === null ? cases[0][1] : t.add(['pick', cases]);
+      });
+      const cases = lines.map((l, k) => [l.dp.cond ? l.dp.cond() : null, lineNodes[k]]);
+      return cases[0][0] === null ? cases[0][1] : t.add(['pick', cases]);
     };
     const applyRow = (row, binding) => {
       const cache = new Map();
@@ -2160,18 +2747,18 @@ export function verifyTexts(texts, opts = {}) {
         if (i === undefined) { i = expr(binding[nm]); cache.set(nm, i); }
         return i;
       };
-      const key = (nm) => resolveKey(binding[nm]);
       if (row.kind === 'is') return rowExpr(row.is, qin);
       if (row.kind === 'cases') {
         // format.md, Cells 7: an equation that would be a pick of more than 1,024 orders.
-        if (row.orders > MAX_ORDERS) throw tooManyOrders(row);
+        if (row.orders > MAX_ORDERS) throw tooManyOrders(row.id);
         const cases = row.cases.map((cs2) => {
           const c = cs2.when === undefined ? null : rowCond(cs2.when, qin);
           return [c, rowExpr(cs2.is, qin)];
         });
-        return t.add(['pick', cases]);
+        // One case that holds otherwise, standing first, is its own node and no pick.
+        return cases[0][0] === null ? cases[0][1] : t.add(['pick', cases]);
       }
-      return table(row, qin, key);
+      return table(row, binding, qin);
     };
     const expr = (e) => {
       if (isStr(e)) {
@@ -2191,79 +2778,131 @@ export function verifyTexts(texts, opts = {}) {
           return t.input(`in:${CN}.${x.name}`, x.lo, x.hi);
         }
         case 'row': return applyRow(deck.rows.get(e[1]), e[2]);
+        case 'case': {
+          // format.md: a `case` is one pick, for each cell of its row that holds a name, the
+          // condition of the cell and the node of the expression of its name. Every expression
+          // is written.
+          const N = deck.rows.get(e[1][1]);
+          const cells = nameCells(N);
+          if (cells.reduce((n, c) => n + nameCellOrders(N, c), 0) > MAX_ORDERS) throw tooManyOrders(`a case over ${N.id}`);
+          const nq = nameRowInputs(e[1][2]);
+          const node = new Map();
+          for (const nm of N.gives.names) node.set(nm, expr(e[2][nm]));
+          return t.add(['pick', cells.map((c) => [nameCellCond(N, c, nq), node.get(c.name)])]);
+        }
       }
       return op(e, expr);
     };
-    const root = (pair) => { const l = expr(pair[0]), r = expr(pair[1]); return t.add(['add', [l, t.add(['neg', r])]]); };
-    if (which === 'le') t.roots.push(root(rule.le));
-    else for (const w of rule.where) t.roots.push(root(w));
+    if (which === 'where') {
+      for (const w of rule.where) { const l = expr(w[0]), r = expr(w[1]); t.roots.push(t.add(['add', [l, t.add(['neg', r])]])); }
+    } else if (rule.form === 'le') {
+      const l = expr(rule.sides[0]), r = expr(rule.sides[1]);
+      t.roots.push(t.add(['add', [l, t.add(['neg', r])]]));
+    } else {
+      // format.md, Cells 6: for `lt` the root is the pick [[lt L R] -1] [null 1].
+      const l = expr(rule.sides[0]), r = expr(rule.sides[1]);
+      const M = t.c(R(-1n)), P = t.c(Q1);
+      t.roots.push(t.add(['pick', [[['lt', l, r], M], [null, P]]]));
+    }
     return t;
   };
 
   const usedHints = new Set();
   const cells = [];
   const cellKeys = new Set();
-  const unread = [];
-  const push = (subject, mechanism, entry, state, reason) => {
+  const usedWaivers = [];
+  const push = (c) => {
     if (cells.length >= CELL_LIMIT) throw new LimitErr('the design has more than 10,000 cells');
-    const k = hintKey(subject, mechanism, entry);
-    if (cellKeys.has(k)) throw new LimitErr(`two cells have the subject ${short(subject)}, the mechanism ${short(mechanism)} and the entry ${short(entry)}`);
+    const k = hintKey(c.subject, c.mechanism, c.entry);
     cellKeys.add(k);
-    cells.push({ subject, mechanism, entry, state, reason });
-  };
-  const hintsFor = (s, m, e) => {
-    const k = hintKey(s, m, e);
     usedHints.add(k);
-    return hints.get(k) || [];
+    c.claimed = hints.get(k)?.[0]?.state ?? null;
+    cells.push(c);
   };
+  const hintsFor = (s, m, e) => hints.get(hintKey(s, m, e)) || [];
   const tryWrite = (rule, part, cs, which) => {
-    try { return { tape: writeTape(rule, part, cs, which) }; } catch (e) { if (e instanceof CannotWrite) return { why: e.message }; throw e; }
+    try {
+      const tape = writeTape(rule, part, cs, which);
+      steps += tape.nodes.length; // Steps item 4, tested at the next charge
+      return { tape };
+    } catch (e) { if (e instanceof CannotWrite) return { why: e.message }; throw e; }
   };
 
-  const ruleCells = (rule, part, line) => {
-    const loads = rule.reads.loads;
-    let caseList = [null];
-    if (loads.size) {
-      const mine = loadsOn.get(part.name) ?? new Map();
-      // format.md, Steps: one step for each case that puts one of the rule's loads on the part,
-      // for each such load.
-      let n = 0;
-      for (const l of loads) n += mine.get(l)?.size ?? 0;
-      charge(n);
-      const missing = [...loads].find((l) => !mine.has(l));
-      if (missing) { push(part.name, line.mechanism, rule.tail, 'open', `the card puts no ${missing} on ${part.name}, which the rule reads`); return; }
-      const [first, ...rest] = [...loads];
-      const names = [...mine.get(first).keys()].filter((c) => rest.every((l) => mine.get(l).has(c)));
-      if (!names.length) { push(part.name, line.mechanism, rule.tail, 'open', 'no case puts every load the rule reads on the part'); return; }
-      caseList = names.sort(nameCmp);
+  // The cells of one rule that answers for a part, into `out`.
+  const ruleCells = (rule, part, line, out) => {
+    const cell = (entry, state, reason) => out.push({ subject: part.name, mechanism: line.mechanism, entry, state, reason });
+    // Cells 3 and Steps item 2: a rule that reads a field the part leaves unstated gives only
+    // open cells.
+    if (part.hasUnstated) {
+      charge(rule.fieldsRead);
+      const u = firstUnstated(rule, part);
+      if (u !== undefined) {
+        const why = `${unstatedName(part, u)} is unstated: its maker states none, and the rule reads it`;
+        if (rule.form === 'requires' || rule.reads.loads.size === 0 || loadCases.length === 0) cell(rule.tail, 'open', why);
+        else {
+          charge(loadCases.length);
+          for (const cs of loadCases) cell(`${rule.tail}/${cs}`, 'open', why);
+        }
+        return;
+      }
     }
-    for (const cs of caseList) {
-      // format.md, Steps: the weight of the rule each time it is written for a part and a load
-      // case, twice for a rule with where.
+    // Cells 4: a rule with `requires` gives one cell, proved when the condition holds for the part.
+    if (rule.form === 'requires') {
+      if (partCond(rule.requires, part)) { cell(rule.tail, 'proved'); return; }
+      // The keys so far, `, ` and the next key are at most 144 bytes, after the 40 of the words.
+      const head = 'the part is not what the rule requires: ';
+      let named = '';
+      const ks = rule.requiresKeys;
+      for (let i = 0; i < ks.length; i++) {
+        const piece = `${ks[i]} is ${[...String(keyValue(part, ks[i]))].slice(0, 200).join('')}`;
+        if (i > 0 && printedBytes(named) + 2 + printedBytes(piece) > 144) { named += ` and ${ks.length - i} more`; break; }
+        named += (i > 0 ? ', ' : '') + piece;
+      }
+      const reason = head + named;
+      cell(rule.tail, 'refuted', reason);
+      return;
+    }
+    const settle = (cs) => {
+      // Steps item 3: the weight of the rule, twice for a rule with `where`.
       charge(rule.where !== undefined ? 2 * rule.weight : rule.weight);
       const entry = cs === null ? rule.tail : `${rule.tail}/${cs}`;
       if (rule.where !== undefined) {
         const w = tryWrite(rule, part, cs, 'where');
         let ok = false;
-        const hs = hintsFor(part.name, line.mechanism, `${entry}/where`);
-        if (w.tape) for (const h of hs) if (Object.hasOwn(h, 'partition') && proves(w.tape, h.partition)) { ok = true; break; }
-        if (!ok) { push(part.name, line.mechanism, entry, 'open', w.tape ? 'the rule\'s range (where) is not proved' : `the range cannot be written: ${w.why}`); continue; }
-        push(part.name, line.mechanism, `${entry}/where`, 'proved', 'a partition proves the range');
+        if (w.tape) for (const h of hintsFor(part.name, line.mechanism, `${entry}/where`)) if (Object.hasOwn(h, 'partition') && proves(w.tape, h.partition)) { ok = true; break; }
+        if (!ok) { cell(entry, 'open', w.tape ? 'the rule\'s range (where) is not proved' : `the range cannot be written: ${w.why}`); return; }
+        cell(`${entry}/where`, 'proved');
       }
       const w = tryWrite(rule, part, cs, 'le');
-      if (!w.tape) { push(part.name, line.mechanism, entry, 'open', `the tape cannot be written: ${w.why}`); continue; }
+      if (!w.tape) { cell(entry, 'open', `the tape cannot be written: ${w.why}`); return; }
       let state = null;
       for (const h of hintsFor(part.name, line.mechanism, entry)) {
         if (Object.hasOwn(h, 'partition') && proves(w.tape, h.partition)) { state = 'proved'; break; }
         if (Object.hasOwn(h, 'point') && refutes(w.tape, h.point)) { state = 'refuted'; break; }
       }
-      if (state) push(part.name, line.mechanism, entry, state, state === 'proved' ? 'a partition proves it' : 'a point refutes it');
-      else push(part.name, line.mechanism, entry, 'open', 'no hint proves or refutes it');
+      if (state) cell(entry, state);
+      else cell(entry, 'open', 'no hint proves or refutes it');
+    };
+    const ls = [...rule.reads.loads];
+    if (!ls.length) { settle(null); return; }
+    if (!loadCases.length) { cell(rule.tail, 'open', 'the card has no load case, and the rule reads a load'); return; }
+    // Steps item 2: every load case of the card times every load the rule reads.
+    charge(loadCases.length * ls.length);
+    for (const cs of loadCases) {
+      const missing = ls.filter((l) => !putsLoad(cs, part.name, l));
+      if (missing.length) {
+        const named = missing.slice(0, 4).join(', ') + (missing.length > 4 ? ` and ${missing.length - 4} more` : '');
+        cell(`${rule.tail}/${cs}`, 'open', `the case ${cs} puts no ${named} on ${part.name}, which the rule reads`);
+      } else settle(cs);
     }
   };
 
-  // reads, for the unread cells
+  // Reads, for the unread cells (Cells 8): by a rule that applies to the part (it answers, waived
+  // or not and whether or not its line's unless holds), by a rule that applies to the part that
+  // joins it, and by an unless of the lines of its type. A load is read by an expression of a rule
+  // of its own part's type that applies.
   const readSets = new Map(parts.map((p) => [p.name, new Set()]));
+  const loadReads = new Map(parts.map((p) => [p.name, new Set()]));
   const markReads = (part, reads) => {
     for (const f of reads.own) readSets.get(part.name).add(f);
     for (const jf of reads.joined) {
@@ -2273,60 +2912,77 @@ export function verifyTexts(texts, opts = {}) {
     }
   };
   for (const part of parts) {
-    for (const rule of rulesOfType.get(part.type.name) ?? []) if (rule.when === undefined || partCond(rule.when, part)) markReads(part, rule.reads);
+    for (const rule of rulesOfType.get(part.type.name) ?? []) {
+      if (!answers(rule, part)) continue;
+      markReads(part, rule.reads);
+      for (const l of rule.reads.loads) loadReads.get(part.name).add(l);
+    }
     for (const g of linesOf.get(part.type.name) ?? []) if (g.unless) markReads(part, g.unless.reads);
   }
+  const ruleCharge = (r) => (r.form === 'requires' ? 1 + r.whenSize + r.requiresSize : 1 + r.whenSize + r.reads.loads.size);
 
   try {
     for (const part of parts) {
       for (const line of linesOf.get(part.type.name) ?? []) {
-        // format.md, Steps: a line of the grid, for a part: one step and the size of its unless.
-        charge(1 + line.unlessSize);
-        if (waivedLines.has(`${part.name}\u0000${line.mechanism}`)) {
-          hintsFor(part.name, line.mechanism, '');
-          push(part.name, line.mechanism, '', 'waived', 'the card waives it');
-          continue;
-        }
-        if (line.unless && (line.unless.when === undefined || partCond(line.unless.when, part))) {
-          hintsFor(part.name, line.mechanism, '');
-          push(part.name, line.mechanism, '', 'not_applicable', line.unless.why ?? 'the grid says it cannot arise');
-          continue;
-        }
-        // format.md, Steps: a rule of the line, for the part: one step, the size of its when and
-        // one for each load it reads, whether its when holds or not.
         const lineRules = rulesOfLine.get(`${part.type.name}\u0000${line.mechanism}`) ?? [];
-        for (const r of lineRules) charge(1 + r.whenSize + r.reads.loads.size);
-        const rules = lineRules.filter((r) => r.when === undefined || partCond(r.when, part));
-        if (!rules.length) {
-          hintsFor(part.name, line.mechanism, '');
-          push(part.name, line.mechanism, '', 'open', 'the deck has no rule for it that holds for the part');
-          continue;
+        // Steps item 1: the line and every rule of the line, in one charge, whatever the waivers.
+        charge(1 + line.unlessSize + lineRules.reduce((n, r) => n + ruleCharge(r), 0));
+        const out = [];
+        const lineCell = (state, reason) => out.push({ subject: part.name, mechanism: line.mechanism, entry: '', state, reason });
+        const u = line.unless;
+        if (u && u.when === undefined) lineCell('not_applicable', u.why);
+        else if (u && condUnstated(u.keys, part) !== undefined) {
+          lineCell('open', `${unstatedName(part, condUnstated(u.keys, part))} is unstated: its maker states none, and the \`unless\` of the line reads it`);
+        } else if (u && partCond(u.when, part)) lineCell('not_applicable', u.why);
+        else {
+          const rules = lineRules.filter((r) => answers(r, part));
+          if (!rules.length) lineCell('open', lineRules.length ? 'the deck has no rule for it that holds for a part like this one' : 'the deck has no rule for it');
+          else for (const rule of rules) ruleCells(rule, part, line, out);
         }
-        for (const rule of rules) ruleCells(rule, part, line);
-      }
-      for (const f of part.type.fields) {
-        if (f.kind === 'j') continue;
-        if (!readSets.get(part.name).has(f.name)) unread.push([part.name, f.name]);
+        // Cells 1: a waiver rests each cell of its line that would be open, and no other.
+        const w = waiverOf.get(`${part.name}\u0000${line.mechanism}`);
+        for (const c of out) {
+          if (w && c.state === 'open') {
+            c.state = 'waived';
+            c.reason = `open but for the waiver: ${c.reason ?? ''}`;
+            if (!usedWaivers.includes(w)) usedWaivers.push(w);
+          }
+          push(c);
+        }
       }
     }
-    // Values that nothing reads come after every other cell, part by part (docs/deck.md).
-    for (const [name, fieldName] of unread) {
-      hintsFor(name, 'unread', fieldName);
-      push(name, 'unread', fieldName, 'open', 'no rule and no line of the grid reads it');
-    }
-    // format.md, Steps: what a rule reads. For each part one step, and for each rule of its type
-    // the steps of the rule above and one for each field the rule reads.
+    // Values that nothing reads come after every other cell, part by part: a part's fields in the
+    // order of its type's fields, and then its loads in the order of their names and of their
+    // cases' names. A field the part leaves unstated has none.
     for (const part of parts) {
-      charge(1);
-      for (const r of rulesOfType.get(part.type.name) ?? []) charge(1 + r.whenSize + r.reads.loads.size + r.fieldsRead);
+      for (const f of part.type.fields) {
+        if (f.kind === 'j' || part.values.get(f.name)?.unstated) continue;
+        if (!readSets.get(part.name).has(f.name)) push({ subject: part.name, mechanism: 'unread', entry: f.name, state: 'open', reason: 'no rule and no line of the grid reads it' });
+      }
+      const mine = loadsOn.get(part.name);
+      if (!mine) continue;
+      for (const l of [...mine.keys()].sort(nameCmp)) {
+        if (loadReads.get(part.name).has(l)) continue;
+        for (const cs of [...mine.get(l).keys()].sort(nameCmp)) push({ subject: part.name, mechanism: 'unread', entry: `${l}/${cs}`, state: 'open', reason: 'no rule reads this load' });
+      }
     }
+    // Steps item 5: what a rule reads. For each part 1, and for each rule of its type what item 1
+    // charges for it and one for each field it reads.
+    for (const part of parts) {
+      let n = 1;
+      for (const r of rulesOfType.get(part.type.name) ?? []) n += ruleCharge(r) + r.fieldsRead;
+      charge(n);
+    }
+    // The finished list holds no key twice (format.md, Cells).
+    if (cellKeys.size !== cells.length) throw new LimitErr('two cells have one subject, mechanism and entry');
   } catch (e) {
     if (!(e instanceof LimitErr)) throw e;
-    findings.push({ file: 'design', item: 'limits', why: e.message, rule: 'limits' });
+    find('design', 'parts', e.message, 'limits');
     return ill();
   }
 
-  const counts = Object.fromEntries(STATES.map((s) => [s, cells.filter((c) => c.state === s).length]));
+  const counts = zeroCounts();
+  for (const c of cells) counts[c.state]++;
   let verdict, code;
   if (counts.refuted) { verdict = 'FAIL'; code = 1; }
   else if (counts.open || !counts.proved) { verdict = 'UNKNOWN'; code = 2; }
@@ -2336,9 +2992,16 @@ export function verifyTexts(texts, opts = {}) {
   const out = {
     verdict,
     findings: [],
-    cells: cells.map((c) => (opts.explain ? { ...c } : { subject: c.subject, mechanism: c.mechanism, entry: c.entry, state: c.state })),
+    counts,
+    ignored_hints: ignored,
+    waived: usedWaivers.map((w) => ({ subject: w.subject, mechanism: w.mechanism, by: w.by, reason: w.reason })),
+    cells: cells.map((c) => {
+      const o = { subject: c.subject, mechanism: c.mechanism, entry: c.entry, claimed: c.claimed, state: c.state };
+      if (c.state === 'open' || c.state === 'waived' || (c.state === 'refuted' && c.reason)) o.reason = c.reason ?? '';
+      return o;
+    }),
   };
-  if (opts.explain) { out.counts = counts; out.ignored_hints = ignored; out.deck_steps = deckStepCount; out.steps = steps; }
+  if (opts.explain) { out.deck_steps = deckStepCount; out.steps = steps; }
   return { out, code };
 }
 
