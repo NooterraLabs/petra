@@ -489,12 +489,13 @@ class Reading(Kernel):
     def test_the_grid_counts_the_first_deck_far_under_the_limit(self):
         """The deck with four rules takes 5,500 steps: 3,874 for its file, and 1,626 for the
         14 times its rules apply a row. The deck with fifteen rules that the branch `rework`
-        has in its place takes 10,448: 6,305, and 4,143 for 37 times, since its tables of
-        holes and edge distances list the sizes their last lines give. Ten decks of that size
-        would be about a tenth of the limit."""
+        has in its place takes 10,503: 6,360, and 4,143 for 37 times, since its tables of
+        holes and edge distances list the sizes their last lines give. The two needs of a lap,
+        added 2026-11-12, took 55 of its file's steps. Ten decks of that size would be about a
+        tenth of the limit."""
         deck = next(d for d in grid.decks() if "lap" in d.types)
         body = json.loads(deck.text)
-        self.assertIn((len(body["rules"]), grid._size(body), grid._steps(body)), [(4, 3874, 5500), (15, 6305, 10448)])
+        self.assertIn((len(body["rules"]), grid._size(body), grid._steps(body)), [(4, 3874, 5500), (15, 6360, 10503)])
         self.assertLess(grid._steps(body) * 10 * 8, MAX_READ, "ten decks of its size are under an eighth of the limit")
 
     def test_the_count_is_the_size_of_the_file_and_of_a_row_for_each_time_a_rule_applies_it(self):
