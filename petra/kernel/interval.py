@@ -235,19 +235,21 @@ def _exp_at(x: Q, p: int) -> Interval:
     [a, b] * 2**-q encloses the partial Taylor sum of exp(r). The tail after the r**n/n!
     term lies in [0, 2 r**(n+1)/(n+1)!], which is at most 2**-n/(n+1)!. Squaring a
     positive enclosure keeps it an enclosure. Squaring s times doubles the relative
-    error each time and exp x < 4**x, so the working precision q grows with s and x.
+    error each time and exp x < 4**x, so the working precision q grows with s and x. The
+    factorial (n + 1)! is kept as n grows, as `expPos` in kernel/Petra/Num.lean keeps it.
     """
     if x < 0:
         return Interval.point(Q(1)) / _exp_at(-x, p)
     s = math.ceil(x).bit_length() + 1
     q, r = p + 2 * s + 2 * math.ceil(x), x / (1 << s)
     one = 1 << q
-    ta, tb, a, b, n = one, one, one, one, 0
-    while (1 << n) * math.factorial(n + 1) <= one:
+    ta, tb, a, b, n, fact = one, one, one, one, 0, 1
+    while (1 << n) * fact <= one:
         n += 1
+        fact *= n + 1
         ta, tb = _scale(ta, tb, r / n)
         a, b = a + ta, b + tb
-    b += -(-one // ((1 << n) * math.factorial(n + 1)))
+    b += -(-one // ((1 << n) * fact))
     for _ in range(s):
         a, b = a * a >> q, -(-(b * b) >> q)
     return Interval(Q(a, one), Q(b, one))
@@ -338,17 +340,21 @@ def i_ln(x: Interval) -> Interval:
     return Interval(_ln_point(x.lo)[0], _ln_point(x.hi)[1])
 
 
+MAX_ARGUMENT = 65_536
+"""The largest magnitude `i_exp` and `i_cos` take, as the kernel's step does (`MAX_BITS` in
+kernel/Petra/Tape.lean). The time of an exponential grows as the square of its argument: one of
+65,536 takes seconds, and one of a million did not end."""
+
+
 def i_exp(x: Interval) -> Interval:
-    """[floor(exp x.lo), ceil(exp x.hi)] on the grid."""
+    """[floor(exp x.lo), ceil(exp x.hi)] on the grid, for an interval within MAX_ARGUMENT of zero."""
+    if x.lo < -MAX_ARGUMENT or x.hi > MAX_ARGUMENT:
+        raise KernelArithmeticError(f"exp of a value beyond {MAX_ARGUMENT}")
     return Interval(_exp_point(x.lo)[0], _exp_point(x.hi)[1])
 
 
-MAX_ANGLE = 65_536
-"""The largest magnitude `i_cos` takes, as the kernel's step does (kernel/Petra/Tape.lean)."""
-
-
 def i_cos(x: Interval) -> Interval:
-    """The cosine over [x.lo, x.hi], for any interval within MAX_ANGLE of zero, as `iCos`
+    """The cosine over [x.lo, x.hi], for any interval within MAX_ARGUMENT of zero, as `iCos`
     in kernel/Petra/Num.lean finds it.
 
     Between k pi and (k + 1) pi the cosine falls for an even k and rises for an odd one,
@@ -361,8 +367,8 @@ def i_cos(x: Interval) -> Interval:
     (i + 1) pi, so one end is -1 or 1 and the other is the greater, or the lesser, of the
     grid points of the two ends. With j > i + 2 the enclosure is [-1, 1].
     """
-    if x.lo < -MAX_ANGLE or x.hi > MAX_ANGLE:
-        raise KernelArithmeticError(f"cos of a value beyond {MAX_ANGLE}")
+    if x.lo < -MAX_ARGUMENT or x.hi > MAX_ARGUMENT:
+        raise KernelArithmeticError(f"cos of a value beyond {MAX_ARGUMENT}")
     pi = i_pi()
     i = math.floor(x.lo / (pi.hi if x.lo >= 0 else pi.lo))
     j = math.ceil(x.hi / (pi.lo if x.hi > 0 else pi.hi))

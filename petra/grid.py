@@ -32,6 +32,7 @@ from __future__ import annotations
 import itertools
 import json
 import math
+import sys
 from dataclasses import dataclass, field, replace
 from fractions import Fraction
 from functools import lru_cache
@@ -42,8 +43,9 @@ from . import deck as rows
 from . import export
 from .deck import NONE, RowError, Vector, anchored, dimension, only, quantity, replaced, show
 from .ir import Bound, Component, Design, Fixed, ParamRef, Ref, Span, Stated, Text
-from .kernel import (Abs, Add, Const, Cos, Div, Exp, Interval, KernelArithmeticError, Ln, Max, Min, Mul, Neg, Pi, PowInt, Sqrt, Sym,
-                     enclose)
+from .kernel import (MAX_ARGUMENT, Abs, Add, Const, Cos, Div, Exp, Interval, KernelArithmeticError, Ln, Max, Min, Mul, Neg, Pi, PowInt, Sqrt,
+                     Sym, enclose)
+from .kernel import PRECISION_BITS as PREC
 from .models.base import ComponentError
 
 FORMAT = "petra-rules/0"
@@ -63,6 +65,9 @@ MAX_CLIMB = 65_536
 of n nodes is walked MAX_CLIMB // n times at most. A round of the climb walks the tape twice
 for each ranged input, and it may take a round for each, so without this bound its time grew
 as the cube of their number."""
+MAX_WORK = 20_000_000_000
+"""The work the kernel spends on the proofs of a design (`MAX_WORK` in kernel/Petra/Tape.lean). The
+search walks a tape no more often than this pays for the exponentials of a walk (`_walks`)."""
 MAX_NAME = 64
 """The most bytes a name may print in that a cell prints whole, as in kernel/Petra/Files.lean:
 the name of a part, a load case, a mechanism, a field, a load, a joined part and a `let`, and a rule's id."""
@@ -320,6 +325,11 @@ def _field(body: Mapping[str, Any], load: bool = False) -> Field:
     may_be = body.get("may_be")
     if "may_be" in body and (may_be not in ("zero", "negative") or (load and may_be == "zero") or (least is not None and (may_be == "zero" or least >= 0))):
         raise DeckError(f"field {name}: `may_be` is zero or negative, and negative alone for a load; a quantity that may be zero has no `least`, and with negative a `least` is under zero")
+    # A `least` is not under the floor of its dimension where that floor holds for the quantity, as type rule 4 holds a load of the card:
+    # one under zero always, and one at zero unless the quantity may be negative. A completion of a load left out goes down to its `least`.
+    floor = _floor(dim)
+    if least is not None and floor is not None and (may_be != "negative" or floor[1] < 0) and least < floor[1]:
+        raise DeckError(f"field {name}: its least, {least} in SI units, is under {floor[1]}, the floor of a {floor[0]}, and no card states a value under it")
     return Field(name, body["what"], dim=dim, signed=bool(body.get("signed")), whole=whole, least=least, may_be=may_be, optional=optional)
 
 
@@ -953,6 +963,7 @@ def read_parts(design: Design, deck: Deck) -> Parts:
     problems += [f"{_at(x.span)}: the name of a part and of a load case is at most {MAX_NAME} characters, and {x.name[:MAX_NAME]}... is longer"
                  for x in (*design.components.values(), *design.loads.values()) if _long(x.name)]
     problems += [f"{_at(x.span)}: the name of a load case holds no /, and {x.name} has one" for x in design.loads.values() if "/" in x.name]
+    problems += [f"{_at(x.span)}: a load case is not named where: an entry that ends in /where is the range of a rule" for x in design.loads.values() if x.name == "where"]
     problems += [f"{design.path}: the name of the card is at most {MAX_TITLE} characters for a design checked against a deck"] * _long(design.name, MAX_TITLE)
     for c in design.components.values():
         kind, values = deck.types[c.kind], {}
@@ -1344,7 +1355,10 @@ def _holds(cond: Any, order: Mapping[tuple[int, int], int]) -> bool:
 def enclosures(nodes: list[list], box: list[Interval]) -> list[Any]:
     """The enclosure of each node over the box, or the reason it has none, as a string. The
     rule is kernel/Petra/Tape.lean's: a node that reads a node with no value has none, and
-    a pick reads only what it compares and the cases some ordering chooses."""
+    a pick reads only what it compares and the cases some ordering chooses. An exponential
+    has none once the exponentials of the walk take more work than MAX_WORK (`_charged`),
+    which the kernel could not pay for on any box. A walk of a tape with a hundred
+    exponentials of some 65,000 took Python minutes, and now takes it seconds."""
     v: list[Any] = []
 
     def get(i: int) -> Interval:
@@ -1392,7 +1406,12 @@ def enclosures(nodes: list[list], box: list[Interval]) -> list[Any]:
         found = [get(node[1][n][1]) for n in sorted(chosen)]
         return Interval(min(x.lo for x in found), max(x.hi for x in found))
 
+    seen: set[Fraction] = set()
+    spent = 0
     for n, node in enumerate(nodes):
+        if node[0] == "exp" and (spent := spent + _charged(v[node[1]], seen)) > MAX_WORK:
+            v.append(f"node {n}: the exponentials of the tape take more than the {MAX_WORK} units of work the kernel spends on a design")
+            continue
         try:
             v.append(step(node))
         except _Failed as exc:
@@ -1408,11 +1427,13 @@ def _partition(nodes: list[list], roots: list[int], box: list[Interval], budget:
     finds none within its budget. Splits the input with the widest range, at its middle,
     and names it by its label, as proofs.json does for the kernel. Given `refuting`, the
     search also tries the middle of each box it does not prove, and stops at the first where
-    the first root is above zero, which it puts there."""
+    the first root is above zero, which it puts there. The budget is held to the walks that
+    `_walks` allows over the box, two for each box where the search tries the middle."""
     v = enclosures(nodes, box)
     if all(isinstance(v[r], Interval) and v[r].hi <= 0 for r in roots):
         return "leaf"
-    if refuting is not None and _above(nodes, roots[0], middle := [x.midpoint() for x in box]):
+    budget[0] = min(budget[0], _walks(nodes, v) // (1 if refuting is None else 2))
+    if refuting is not None and budget[0] > 0 and _above(nodes, roots[0], middle := [x.midpoint() for x in box]):
         refuting.append(middle)
         return None
     budget[0] -= 1
@@ -1438,6 +1459,38 @@ def _nowhere(nodes: list[list], roots: list[int], box: list[Interval]) -> int | 
     return next((k for k, r in enumerate(roots) if isinstance(v[r], Interval) and v[r].lo > 0), None)
 
 
+def _exp_work(x: Fraction) -> int:
+    """The work `expWork` in kernel/Petra/Tape.lean charges for the first enclosure of the exponential of an end `x`, of 128 bits.
+    The time of an exponential grows as the square of its end: Python takes two seconds for an end of 65,536, whose work is 3.1
+    billion units, and MAX_WORK pays for six."""
+    c = math.ceil(abs(x))
+    s = c.bit_length() + 1
+    q = PREC + 32 + 2 * s + 2 * c
+    wide, words = q // 64 + 1, (abs(x.numerator).bit_length() + x.denominator.bit_length()) // 64 + 1
+    return (max(32, 2 * q // q.bit_length()) * (10000 + 54 * wide + 20 * words + wide * words // 3) + (s + 16) * wide * wide // 4) * 17 // 10
+
+
+def _charged(x: Any, seen: set[Fraction]) -> int:
+    """The work of an exponential of the enclosure `x` on a walk that has computed the ends `seen`, which then has its ends too:
+    the work of each end it has not computed, as the kernel's caches keep the ends it has. Nothing for an end of zero, and for an
+    enclosure that has no exponential."""
+    if not isinstance(x, Interval) or x.lo < -MAX_ARGUMENT or x.hi > MAX_ARGUMENT:
+        return 0
+    ends = {x.lo, x.hi} - seen - {0}
+    seen |= ends
+    return sum(map(_exp_work, ends))
+
+
+def _walks(nodes: list[list], v: list[Any]) -> int:
+    """How many times the search may walk the tape over a box where its nodes have the enclosures `v`: as many as MAX_WORK pays
+    for the exponentials of a walk (`_charged`). It pays for three walks of a tape with an exponential from -65,536 to 65,536, and
+    for 1,385 of one from -1,000 to 1,000, more than the 256 leaves of a partition or the 64 corners of a box take. A tape with no
+    exponential is walked as often as the search's other bounds allow."""
+    seen: set[Fraction] = set()
+    cost = sum(_charged(v[node[1]], seen) for node in nodes if node[0] == "exp")
+    return MAX_WORK // cost if cost else MAX_WORK
+
+
 def _height(nodes: list[list], root: int, point: list[Fraction]) -> Fraction | None:
     """The least the root may be at a point, or None where it has no value."""
     at = enclosures(nodes, [Interval.point(x) for x in point])[root]
@@ -1454,13 +1507,14 @@ def _refuting(nodes: list[list], root: int, box: list[Interval]) -> list[Fractio
     middle. The climb starts at the middle and sets each ranged input in turn to the end of
     its range where the root is higher, the others held, until a round moves none, there
     have been as many rounds as ranged inputs, or it has walked MAX_CLIMB nodes; it stops
-    where it is then. Where the root has no value it is lowest."""
+    where it is then. The climb, and the points tried, are each held to the walks that
+    `_walks` allows over the box. Where the root has no value it is lowest."""
     ranged = [k for k, x in enumerate(box) if x.width() > 0]
-    middle = [x.midpoint() for x in box]
+    middle, allowed = [x.midpoint() for x in box], _walks(nodes, enclosures(nodes, box))
     if len(ranged) <= MAX_CORNERS:
         corners = [list(p) for p in itertools.product(*((x.lo, x.hi) if x.width() > 0 else (x.lo,) for x in box))]
     else:
-        point, walks = list(middle), MAX_CLIMB // max(len(nodes), 1)
+        point, walks = list(middle), min(MAX_CLIMB // max(len(nodes), 1), allowed)
         for _ in ranged:
             moved = False
             for k in ranged:
@@ -1473,7 +1527,7 @@ def _refuting(nodes: list[list], root: int, box: list[Interval]) -> list[Fractio
             if not moved or walks < 2:
                 break
         corners = [point]
-    return next((point for point in [*corners, middle] if _above(nodes, root, point)), None)
+    return next((point for point in [*corners, middle][:allowed] if _above(nodes, root, point)), None)
 
 
 def _searched(nodes: list[list], roots: list[int], box: list[Interval]) -> list[Fraction] | None:
@@ -1637,9 +1691,12 @@ def _reads(rule: Rule) -> set[str]:
 
 
 def _ratio(nodes: list[list], low: int, high: int, box: list[Interval]) -> float | None:
+    """The demand over the capacity, for the report: none where the capacity may be zero or under, or the ratio is past the largest
+    float, as a pull of 10^99 kip on a plate of 10^-98 inch is."""
     v = enclosures(nodes, box)
     if isinstance(v[low], Interval) and isinstance(v[high], Interval) and v[high].lo > 0:
-        return float(v[low].hi / v[high].lo)
+        q = v[low].hi / v[high].lo
+        return float(q) if abs(q) <= sys.float_info.max else None
     return None
 
 
@@ -1663,8 +1720,10 @@ def _listed(names: list[str]) -> str:
 
 
 def _least(load: Field) -> Fraction:
-    """The value a completion first tries for a load: its `least`, or zero."""
-    return load.least if load.least is not None else Fraction(0)
+    """The value a completion first tries for a load: its `least`, or zero, and not under the floor of its dimension where that floor
+    holds for the load, as Completion.fits in kernel/Petra/Grid.lean holds it. A deck whose `least` is under that floor does not load."""
+    floor, least = _floor(load.dim), load.least if load.least is not None else Fraction(0)
+    return least if floor is None or (load.may_be == "negative" and floor[1] >= 0) else max(least, floor[1])
 
 
 def _incomplete(rule: Rule, part: Part, parts: Mapping[str, Part], unsaid: list[tuple[str, str, tuple[str, ...]]], missing: list[str],
@@ -1683,8 +1742,10 @@ def _incomplete(rule: Rule, part: Part, parts: Mapping[str, Part], unsaid: list[
     On a line the card waives, it is otherwise open with the first of at most MAX_COMPLETIONS
     completions that is a witness: under it the rule does not answer, its `requires` holds,
     or the search proves its tape. The names and the values that `prefer` holds come first,
-    and a load takes its `least`, or zero. `prefer` gains the witness. The tape of a rule with
-    a `where` is the rule's inside the `where` and -1 outside it."""
+    and a load takes its `least`, or zero. `prefer` gains the witness. The tape a point refutes,
+    for a rule with a `where`, is the rule's inside the `where` and -1 outside it. A witness
+    for such a rule shows the `where` holds nowhere in the box, or proves it and the rule over
+    the whole box."""
     def gated(on: Part, among: Mapping[str, Part]) -> tuple[_Tape, list[int], list]:
         return tape_of([(rule.low, rule.high)], case, rule.strict, [w[:2] for w in rule.where], on, among)
 
@@ -1719,11 +1780,17 @@ def _incomplete(rule: Rule, part: Part, parts: Mapping[str, Part], unsaid: list[
         if not found and rule.requires is not None:
             found = _static(rule.requires, on, among)
         elif not found:
+            # A witness meets what a complete cell must: a `where` that holds nowhere in the box, or a partition that proves the `where`
+            # and the rule over the whole box, as the `/where` cell and the rule's cell are proved.
             try:
-                tape, roots, _ = gated(on, among)
+                if rule.where:
+                    tape, roots, _ = tape_of([w[:2] for w in rule.where], case, False, (), on, among)
+                    found = _nowhere(tape.nodes, roots, [i.range for i in tape.inputs]) is not None
+                if not found:
+                    tape, roots, _ = tape_of([(rule.low, rule.high)], case, rule.strict, (), on, among, [w[:2] for w in rule.where])
             except NoValue:
                 continue
-            if (partition := _partition(tape.nodes, roots, [i.range for i in tape.inputs], [MAX_LEAVES], [i.label for i in tape.inputs])) is not None:
+            if not found and (partition := _partition(tape.nodes, roots, [i.range for i in tape.inputs], [MAX_LEAVES], [i.label for i in tape.inputs])) is not None:
                 hint["partition"], found = partition, True
         if found:
             prefer.update({(owner, f): name for owner, f, name in keys} | {(p, load, c): x for p, load, c, x in loads})
@@ -1762,17 +1829,20 @@ def _answers(rule: Rule, ask: Ask, part: Part, parts: Mapping[str, Part], cases:
         unsaid = _unsaid(part, parts, fields)
 
     def tape_of(pairs: list[tuple[Any, Any]], case: str | None, strict: bool = False, within: list[tuple[Any, Any]] = (),
-                on: Part = part, among: Mapping[str, Part] = parts) -> tuple[_Tape, list[int], list[tuple[int, int]]]:
+                on: Part = part, among: Mapping[str, Part] = parts, first: list[tuple[Any, Any]] = ()) -> tuple[_Tape, list[int], list[tuple[int, int]]]:
         """The tape with a root for each pair: the first side less the second, which is at most
         zero where the pair is in order. A strict root is the pick that is -1 where the first
         side is under the second and 1 elsewhere: it is at most zero on a box only where the
         first side is under the second all over it, and above zero at a point only where it
         is not under it there. With `within`, the pairs of a `where`, a root is the pick that is
         that root where each pair of `within` is in order and -1 elsewhere: it is above zero at
-        a point only inside the `where`, where the pair is out of order. `on` and `among` are
-        the part and the parts, as a completion has them."""
+        a point only inside the `where`, where the pair is out of order. With `first`, the pairs
+        of a `where` too, the tape has a root for each of them before the others, as for `le`,
+        and a partition that proves it proves the `where` and the rule over the whole box. `on`
+        and `among` are the part and the parts, as a completion has them."""
         tape = _Tape()
         env = _env(tape, rule, on, among, case)
+        ahead = [tape.node("add", [tape.emit(low, env), tape.node("neg", tape.emit(high, env))]) for low, high in first]
         sides = [(tape.emit(low, env), tape.emit(high, env)) for low, high in pairs]
         gate = ["and", [["le", tape.emit(low, env), tape.emit(high, env)] for low, high in within]]
         if strict:
@@ -1781,7 +1851,7 @@ def _answers(rule: Rule, ask: Ask, part: Part, parts: Mapping[str, Part], cases:
             roots = [tape.node("add", [low, tape.node("neg", high)]) for low, high in sides]
         if within:
             roots = [tape.node("pick", [[gate, root], [None, tape.const(Fraction(-1))]]) for root in roots]
-        return tape, roots, sides
+        return tape, ahead + roots, sides
 
     for case in cases if reads and cases else [None]:
         entry = tail if case is None else f"{tail}/{case}"
@@ -1900,17 +1970,25 @@ def cells(design: Design, deck: Deck, found: Parts) -> list[Cell]:
                     out.append(replace(c, state="waived", why=f"by {w.owner}: {w.reason}; {WAIVED}{c.why}", waiver=(w.owner, w.reason)))
                 else:
                     out.append(replace(c, why=f"{UNRESTED}{c.why}"))
-    return out + _unread(deck, found)
+    return out + _unread(deck, found, fixed)
 
 
-def _unread(deck: Deck, found: Parts) -> list[Cell]:
+def _unread(deck: Deck, found: Parts, fixed: Mapping[Any, Any] | None = None) -> list[Cell]:
     """An open cell for each quantity and each key that no rule or grid line reads for its
     part, and for each load that no rule reads, once for each case that puts it on the
     part. A value nothing reads is a value nothing checks: a plate that no joint joins
     would pass at any thickness, and a joint whose rules read its shear alone would pass
     under any tension. A load is read by an expression of a rule that applies to the part
     it is on, and by nothing else. The cells are listed part by part: the part's fields in the order of
-    its type, and then its loads in the order of their names and of their cases' names."""
+    its type, and then its loads in the order of their names and of their cases' names.
+
+    What is read is worked out under `fixed`, the completions of the cells the waivers rest,
+    as the kernel works it out: a design that leaves out what a waiver answers for reads what
+    the design that states it reads."""
+    keys = [(*k, v) for k, v in (fixed or {}).items() if len(k) == 2]
+    loads = [(*k, v) for k, v in (fixed or {}).items() if len(k) == 3]
+    if keys or loads:
+        found = replace(found, parts=_completed(next(iter(found.parts.values())), found.parts, keys, loads)[1])
     read: set[tuple[str, str]] = set()
     for part in found.parts.values():
         names = {alias: part.values[f.name][n] for f in part.type.fields.values() if f.type is not None for n, alias in enumerate(f.names)}
@@ -1990,11 +2068,17 @@ class Report:
     def counts(self) -> dict[str, int]:
         return {state: sum(c.state == state for c in self.cells) for state in STATES}
 
+    def completions(self) -> list[dict[str, list] | None]:
+        """For each cell, the completion a waived cell rests on, as proofs.json and the kernel's verdict write it, or None. The
+        signer of the waiver answers for it, so the report prints it with the cell."""
+        return [_completion_body(*c.completion) if c.state == "waived" and c.completion is not None else None for c in self.cells]
+
     def to_json(self) -> dict[str, Any]:
         return {"file": self.path, "design": self.name, "status": self.status, "deck": {"name": self.deck.name, "hash": self.deck.hash},
                 "counts": self.counts(), "waived": self.waived(),
                 "cells": [{"subject": c.subject, "mechanism": c.mechanism, "entry": c.entry, "state": c.state, "what": c.what,
-                           "anchor": c.anchor, "why": c.why, "rule": c.rule, "ratio": c.ratio} for c in self.cells]}
+                           "anchor": c.anchor, "why": c.why, "rule": c.rule, "ratio": c.ratio, **({"completion": done} if done else {})}
+                          for c, done in zip(self.cells, self.completions())]}
 
     def render(self) -> str:
         return "\n".join(self.lines())
@@ -2005,10 +2089,13 @@ class Report:
                f"rules      {self.deck.hash}  {self.deck.name}",
                "cells      " + ", ".join(f"{counts[s]} {s.replace('_', ' ')}" for s in STATES)]
         wide = max((len(f"{c.subject}/{c.mechanism}") for c in self.cells), default=0)
-        for c in self.cells:
+        for c, done in zip(self.cells, self.completions()):
             ratio = "" if c.ratio is None else f"{c.ratio:.3g}"
             said = (c.why if c.state in ("open", "not_applicable", "waived") else ": ".join(filter(None, (c.what, c.why))) if c.state == "refuted"
                     else c.what if c.entry.endswith("/where") else "")
+            if done:
+                said += "; rested where " + " and ".join([*(f"{p}.{f} is {name}" for p, f, name in done["keys"]),
+                                                          *(f"{p}.{load} is {x} in SI units" + (f" in case {case}" if case else "") for p, load, case, x in done["loads"])])
             out.append(f"  {f'{c.subject}/{c.mechanism}':<{wide}}  {c.state.replace('_', ' '):<14}  {ratio:>6}  "
                        + ": ".join(part for part in (c.entry, said) if part) + (f" ({c.anchor})" if c.anchor else ""))
         waivers = self.waived()
@@ -2069,7 +2156,8 @@ def checked(design: Design, deck: Deck, card: str, text: str, card_path: str) ->
         said = verify.ask(kernel, files)
         if said["verdict"] == "ILL-FORMED":
             raise ComponentError(verify.refusal(design.path, said))
-        differ = verify.differs([(c.subject, c.mechanism, c.entry, c.state) for c in report.cells], report.verdict, deck.hash, said, report.waived())
+        differ = verify.differs([(c.subject, c.mechanism, c.entry, c.state) for c in report.cells], report.verdict, deck.hash, said, report.waived(),
+                               report.completions())
         if differ:
             raise verify.Disagreement(f"{design.path}: petra-verify gives {said['verdict']} and the grid {report.verdict}: {differ}")
         said = {"verdict": said["verdict"], "checked": sum(bool(c.proof) for c in report.cells), "hashes": said["hashes"], "cells_from": said["cells_from"],

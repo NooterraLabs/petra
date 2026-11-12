@@ -62,6 +62,21 @@ def firsts [Ord κ] (items : Array α) (key : α → κ) : Std.TreeMap κ α :=
 /-- The floors that deck.json gives the dimensions, by the exponents of each (`Deck.input`). -/
 abbrev Floors := Std.TreeMap (Array (Int × Nat)) (String × Floor)
 
+/-- Why the deck of rules is refused for a `least` under a floor of `floors`, if it is: the
+first field or load, by type and then fields before loads, whose `least` is under the floor of
+its dimension, where that floor holds for it as type rule 4 holds a load of the card. A floor
+under zero holds always, and one at zero or above unless the quantity may be negative. A
+completion of a load left out, and the search for one, go down to the `least`, where no card
+may put the load. -/
+def underFloor (rules : Rules) (floors : Floors) : Option String := Id.run do
+  for kind in rules.kinds do
+    for f in kind.fields ++ kind.loads do
+      if let .quantity dim _ _ (some least) := f.kind then
+        if let some (name, floor) := floors.get? dim.key then
+          if (f.sign != .negative || floor.min < 0) && least < floor.min then
+            return some s!"field {f.name}: its least, {least} in SI units, is under {floor.min}, the floor of a {name}, and no card states a value under it"
+  return none
+
 /-- A quantity is of its field's dimension and at least the field's least. It is more than
 zero, unless its field says with `may_be` that it may be zero, and is then at least zero,
 or that it may be negative, and then has no floor by its sign. -/
@@ -216,11 +231,15 @@ def readParts (rules : Rules) (card : Card) (design : Design) (floors : Floors :
   -- A name of the card's `cases` is the name of a load case, whether a load has it or not,
   -- and a cell prints it. The case of a load is held to its limits below, where the load is
   -- read, and a case that no load has is held to them here.
+  -- A case is not named `where` either: the entry of its cells would end in `/where`, which
+  -- marks the cell that proves a rule's range, and their proofs would not count.
+  let WHERE := "a load case is not named where: an entry that ends in /where is the range of a rule"
   let ofLoads := setOf (card.inputs.filterMap (·.caseName))
   for under in card.caseNames do
     unless ofLoads.contains under do
       if let .error why := short "the name of a load case" under then say "shape" "card" "cases" why
       else if under.contains '/' then say "shape" "card" "cases" "the name of a load case holds no /: an entry is a rule and a case with a / between them"
+      else if under == "where" then say "shape" "card" "cases" WHERE
   for input in card.inputs do
     if (inputsNamed.getD input.name #[]).size > 1 then say "parts.6" "card" input.name "two inputs have this name"
     match input.caseName, input.on, input.field with
@@ -237,6 +256,7 @@ def readParts (rules : Rules) (card : Card) (design : Design) (floors : Floors :
           else if on.contains (part, field, under) then say "parts.6" "card" input.name s!"{under} puts {field} on {part} twice"
           else if let .error why := short "the name of a load case" under then say "shape" "card" input.name why
           else if under.contains '/' then say "shape" "card" input.name "the name of a load case holds no /: an entry is a rule and a case with a / between them"
+          else if under == "where" then say "shape" "card" input.name WHERE
           else on := on.insert (part, field, under) ⟨s!"in:{cardName}.{input.name}", input.range⟩
         | _ => say "parts.6" "card" input.name s!"a {its.kind.name} takes no load {field}"
     | _, _, _ => say "parts.6" "card" input.name "a load has its case, the part it is on and its field"
@@ -338,12 +358,15 @@ def Completion.onto (c : Completion) (named : Std.TreeMap String Part) (loads : 
 /-- Whether a completion gives each key of `unsaid` one of its names, and each load of
 `missing` under the case `under` one value its field allows, each once and nothing else. A
 load's value is at least the load's `least`; with none, at least zero, unless the load may be
-negative. -/
-def Completion.fits (c : Completion) (part : Part) (unsaid : Array Unsaid) (missing : Array String) (under : String) : Bool :=
+negative. It is held to the floor of its dimension in `floors` as a load of the card is (type
+rule 4): a floor under zero always, and one at zero or above unless the load may be negative.
+So no completion puts a temperature under absolute zero. -/
+def Completion.fits (c : Completion) (part : Part) (unsaid : Array Unsaid) (missing : Array String) (under : String) (floors : Floors) : Bool :=
   let allowed (load : String) (x : Rat) : Bool :=
     match part.kind.load.get? load with
     | some f => match f.kind with
-      | .quantity _ _ _ least => least.all (· ≤ x) && (least.isSome || f.sign == .negative || 0 ≤ x)
+      | .quantity dim _ _ least => least.all (· ≤ x) && (least.isSome || f.sign == .negative || 0 ≤ x)
+          && (floors.get? dim.key).all fun (_, floor) => (f.sign == .negative && 0 ≤ floor.min) || floor.admits x
       | _ => false
     | none => false
   c.keys.size == unsaid.size && c.loads.size == missing.size
@@ -351,11 +374,6 @@ def Completion.fits (c : Completion) (part : Part) (unsaid : Array Unsaid) (miss
     && distinct (c.loads.map fun (_, load, _, _) => load)
     && c.keys.all (fun (owner, field, name) => unsaid.any fun u => u.owner == owner && u.field == field && u.known.contains name)
     && c.loads.all (fun (p, load, u, x) => p == part.name && u == under && missing.contains load && allowed load x)
-
-/-- Whether two completions name the same keys and the same loads, the first with no key and
-no load twice. -/
-def Completion.same (c d : Completion) : Bool :=
-  c.keys.size == d.keys.size && c.loads.size == d.loads.size && c.keys.all d.keys.contains && c.loads.all d.loads.contains
 
 /-- The names of the parts that leave a field unstated. -/
 def bareOf (parts : Array Part) : Std.TreeSet String :=
@@ -651,15 +669,21 @@ that is a witness: one that `fits` the cell, under which the rule does not answe
 part, or its `requires` holds, or the hint's partition proves the rule's tape written under
 it. A waiver may rest the cell then, and only then (`cells`).
 
-The tape of a rule with a `where` is the one whose root is the rule's inside the `where` and
--1 outside it: a point refutes it only inside the `where`, and a partition proves the rule
-wherever the `where` holds. Each combination and each hint is a step, and one for each part
-of the rule's `when` and `requires` and each key and load the hint names. Each tape written
+The tape a point refutes, for a rule with a `where`, is the one whose root is the rule's
+inside the `where` and -1 outside it: a point refutes it only inside the `where`. A witness
+meets what a complete cell must. The tape its partition proves has a root for each item of
+the `where` before the rule's, so it proves the `where` and the rule over the whole box, as
+the `/where` cell and the rule's cell are proved. A hint with no partition is a witness for a
+rule with a `where` when, under its completion, the `where` holds nowhere in the box, as a
+complete cell is rested. Each combination and each hint looked at is a step, and one for each
+part of the rule's `when` and `requires`, a combination one for each key, and a hint one for
+each key and load it names. Each hint is looked at once to refute, before the combinations,
+and once more to find a witness. Each tape written
 is the weight of the rule, twice with a `where`, and a step for each node. None when that
 would come to more than `room` steps. Otherwise the cell, the steps it took, the work left
 and `dsg` with the `dsg:` inputs of the tapes that refute it. -/
 def incomplete (rule : Rule) (named : Std.TreeMap String Part) (loads : Loads) (part : Part) (unsaid : Array Unsaid)
-    (missing : Array String) (under : String) (hints : Array Hint) (waived : Bool) (room left : Nat) (dsg : Std.TreeSet String) :
+    (missing : Array String) (under : String) (hints : Array Hint) (waived : Bool) (room left : Nat) (dsg : Std.TreeSet String) (floors : Floors) :
     StateM Caches (Option (Incomplete × Nat × Nat × Std.TreeSet String)) := do
   let looks := 1 + (rule.condition.map Static.size).getD 0 + (rule.requires.map Static.size).getD 0
   let weight := rule.weight * (if rule.ranges.isEmpty then 1 else 2)
@@ -670,14 +694,31 @@ def incomplete (rule : Rule) (named : Std.TreeMap String Part) (loads : Loads) (
     let part' := named'.getD part.name part
     (part', part'.fellows named', site named' loads' part' (some under))
   let write (here : Site) : Except String Tape := rule.tape here #[(rule.low, rule.high)] rule.strict rule.ranges
+  let proving (here : Site) : Except String Tape := rule.tape here #[(rule.low, rule.high)] rule.strict (first := rule.ranges)
   let mut spent := 0
   let mut left := left
   let combinations := unsaid.foldl (fun n u => if n > MAX_TRIED then n else n * u.names.size) 1
   if missing.isEmpty && combinations ≤ MAX_TRIED then
     let mut broken := true
     let mut read := dsg
+    -- The points of the hints, by the keys of their completions in order, so that a
+    -- combination finds its own in one look however many hints the cell has. Each hint is
+    -- looked at once here and charged as a hint is, and one whose completion gives a load or
+    -- names the keys otherwise than one combination does is found by none.
+    let ordered (keys : Array (String × String × String)) := keys.qsort (fun a b => compare a b == .lt)
+    let mut pointed : Std.TreeMap (Array (String × String × String)) (Array Hint) := {}
+    if rule.requires.isNone then
+      for h in hints do
+        let some c := h.completion | continue
+        spent := spent + looks + c.keys.size + c.loads.size
+        if spent > room then return none
+        if h.point.isNone || !c.loads.isEmpty then continue
+        let point := { h with partition := none }
+        pointed := pointed.alter (ordered c.keys) fun
+          | some found => some (found.push point)
+          | none => some #[point]
     for n in [0:combinations] do
-      spent := spent + looks
+      spent := spent + looks + unsaid.size
       if spent > room then return none
       let keys := (unsaid.foldl (fun (out, n) u => (out.push (u.owner, u.field, u.names[n % u.names.size]!), n / u.names.size)) (#[], n)).1
       let c : Completion := { keys }
@@ -690,7 +731,7 @@ def incomplete (rule : Rule) (named : Std.TreeMap String Part) (loads : Loads) (
           broken := false
           break
         continue
-      let points := (hints.filter fun h => h.point.isSome && h.completion.any c.same).map ({ · with partition := none })
+      let points := pointed.getD (ordered keys) #[]
       if points.isEmpty then
         broken := false
         break
@@ -711,21 +752,31 @@ def incomplete (rule : Rule) (named : Std.TreeMap String Part) (loads : Loads) (
     let some c := h.completion | continue
     spent := spent + looks + c.keys.size + c.loads.size
     if spent > room then return none
-    unless c.fits part unsaid missing under do continue
+    unless c.fits part unsaid missing under floors do continue
     let (part', fellows', here) := complete c
     unless rule.condition.all (·.holds part' fellows') do return some (.pending (some c), spent, left, dsg)
     if let some required := rule.requires then
       if required.holds part' fellows' then return some (.pending (some c), spent, left, dsg)
       continue
-    if h.partition.isNone then continue
+    if h.partition.isNone && rule.ranges.isEmpty then continue
     spent := spent + weight
     if spent > room then return none
-    let .ok tape := write here | continue
-    spent := spent + tape.nodes.size
-    if spent > room then return none
-    let (state, _, after) ← byHints tape #[{ h with point := none }] false left
-    left := after
-    if state == .proved then return some (.pending (some c), spent, left, dsg)
+    if h.partition.isSome then
+      let .ok tape := proving here | continue
+      spent := spent + tape.nodes.size
+      if spent > room then return none
+      let (state, _, after) ← byHints tape #[{ h with point := none }] false left
+      left := after
+      if state == .proved then return some (.pending (some c), spent, left, dsg)
+    else
+      -- A `where` that holds nowhere in the box under the completion: the rule says nothing of
+      -- the part so completed. The walk comes off the work, and the caches stay as they were.
+      let .ok tape := rule.tape here rule.ranges | continue
+      spent := spent + tape.nodes.size
+      if spent > room then return none
+      if let .ok ((found, after), _) := (tape.above left).run (← get) then
+        left := after
+        if found.isSome then return some (.pending (some c), spent, left, dsg)
   return some (.pending none, spent, left, dsg)
 
 /-- What `cells` gives: every cell, how many hints name no cell the kernel has, and how many
@@ -761,9 +812,11 @@ load case of the card is a step for each load the rule reads. Writing a tape is 
 of its rule, and a tape is a step for each node. An incomplete cell counts as `incomplete`
 says, and so does a hint for a line whose `unless` reads an unstated key. Then every rule of
 a part's type is looked at once more for what it reads of the part: its look, and a step for
-each field it reads. -/
-def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hints : Array Hint) (budget : Nat := MAX_WORK) :
-    StateM Caches (Except String Made) := do
+each field it reads.
+
+`floors` are those of deck.json, which hold a completion's loads as they hold the card's. -/
+def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hints : Array Hint) (budget : Nat := MAX_WORK)
+    (floors : Floors := {}) : StateM Caches (Except String Made) := do
   let over := s!"the deck of rules asks more than {MAX_CELLS} cells of this design, and the kernel makes no more"
   let long := s!"writing the tapes of this design from the deck of rules takes more than {MAX_STEPS} steps, and the kernel takes no more"
   let hinted := grouped hints fun h => (h.subject, h.mechanism, h.entry)
@@ -831,7 +884,7 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hi
             let some c := h.completion | continue
             steps := steps + 1 + ((ask.excuse.bind id).map Static.size).getD 0 + c.keys.size + c.loads.size
             if steps > MAX_STEPS then return .error long
-            unless c.fits part unsaid #[] "" do continue
+            unless c.fits part unsaid #[] "" floors do continue
             let named' := (c.onto named loads).1
             let part' := named'.getD part.name part
             if ask.excuse.any fun condition => condition.all (·.holds part' (part'.fellows named')) then
@@ -899,7 +952,7 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hi
                 | some c => s!"case {c} puts no {listed missing} on {part.name}, which the rule reads"
                 | none => s!"the card puts no {listed missing} on {part.name}, which the rule reads"
               let some (found, spent, after, read) ← incomplete rule named loads part unsaid missing (under.getD "")
-                  (hintsFor part.name ask.mechanism entry) waived (MAX_STEPS - steps) left dsg
+                  (hintsFor part.name ask.mechanism entry) waived (MAX_STEPS - steps) left dsg floors
                 | return .error long
               steps := steps + spent
               left := after
@@ -994,6 +1047,20 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hi
   -- looked at here, whatever the card waives, so the look is counted again. The look of a
   -- rule holds a step for each load it reads. A load is read by an expression of a rule
   -- that applies to the part it is on, and by nothing else.
+  --
+  -- It is worked out under the completions of the cells the waivers rest: a key they name
+  -- has that name, and a load they give is on its part in its case. So a design that leaves
+  -- out what the waiver answers for reads what the design that states it reads, and a rule
+  -- that does not answer under the completion reads nothing.
+  let named : Std.TreeMap String Part := fixedKeys.foldl (init := named) fun named (owner, field) name =>
+    named.modify owner fun p => { p with slots := p.slots.insert field (.key name) }
+  let parts := parts.map fun p => named.getD p.name p
+  let fellowsOf := parts.map (·.fellows named)
+  let put : Std.TreeMap String (Array (String × String)) :=
+    ((fixedLoads.foldl (fun on key _ => on.insert key) (loads.on.foldl (fun on key _ => on.insert key) ({} : Std.TreeSet (String × String × String))))).foldl
+      (init := {}) fun table (part, load, under) => table.alter part fun
+        | some found => some (found.push (load, under))
+        | none => some #[(load, under)]
   let rulesOfKind := grouped rules.rules (·.kind)
   let readOf : Std.TreeMap String Nat := rulesOfKind.map fun _ line => line.foldl (fun n r => n + r.look + r.fields.size) 0
   let mut read : Std.TreeSet (String × String) := {}
@@ -1023,7 +1090,7 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hi
         out := out.push (cell part.name UNREAD field.name .undecided s!"no rule of the deck reads {part.name}.{field.name}, so nothing checks it")
     -- A load that nothing reads, once for each case that puts it on the part. Its entry is
     -- `LOAD/CASE`, which no field's entry is: the name of a field holds no `/`.
-    for (load, under) in loads.put.getD part.name #[] do
+    for (load, under) in put.getD part.name #[] do
       if out.size > MAX_CELLS then return .error over
       unless readLoads.contains (part.name, load) do
         out := out.push (cell part.name UNREAD s!"{load}/{under}" .undecided

@@ -90,6 +90,7 @@ def cells(test: unittest.TestCase, rules: dict, text: str, card: str = HEAD) -> 
         test.assertEqual([(c["subject"], c["mechanism"], c["entry"], c["state"]) for c in said["cells"]], mine, "the kernel and the grid list the same cells")
         test.assertEqual(said["verdict"], report.verdict)
         test.assertEqual(said["waived"], report.waived(), "the kernel and the grid list the same waivers")
+        test.assertEqual([c.get("completion") for c in said["cells"]], report.completions(), "the kernel and the grid rest each cell on the same completion")
     return {key[:3]: key[3] for key in mine}, report.status, said
 
 

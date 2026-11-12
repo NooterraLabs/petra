@@ -250,6 +250,13 @@ def rules (cardHash : String) (card design deck : Except String ByteArray)
   if design.parts.isSome && deckOfRules.isNone then
     modify (·.push ⟨"types.6", "design", "parts", "a design with parts is checked against a deck of rules, and --rules names none"⟩)
   marks card design deck deckOfRules.isSome
+  -- A deck of rules with a `least` under a floor of deck.json is refused, as one that does
+  -- not read is, and no part is read against it.
+  let rules? ← match rules? with
+    | some rules => match underFloor rules deck.input with
+      | some why => do modify (·.push ⟨"shape", "rules", "", why⟩); pure none
+      | none => pure (some rules)
+    | none => pure none
   let (parts, loads) ← match rules? with
     | some rules => readParts rules card design deck.input
     | none => pure (#[], {})
@@ -264,7 +271,7 @@ def rules (cardHash : String) (card design deck : Except String ByteArray)
       return (out.push found, left)
     let (cells, left) := Id.run (settled.run' {})
     return { cells, dsgInputs := dsgInputs cells, work := MAX_WORK - left }
-  match Id.run ((cells rules card parts loads (hints?.getD #[]) left).run' {}) with
+  match Id.run ((cells rules card parts loads (hints?.getD #[]) left deck.input).run' {}) with
   | .ok made => return { cells := made.cells, ignored := some made.ignored, dsgInputs := made.dsgInputs, work := made.work }
   | .error why =>
     modify (·.push ⟨"limits", "design", "parts", why⟩)
