@@ -99,6 +99,13 @@ class Exp:
 
 
 @dataclass(frozen=True, slots=True)
+class Cos:
+    """The cosine of an angle in radians, enclosed by interval.i_cos()."""
+
+    arg: "Expr"
+
+
+@dataclass(frozen=True, slots=True)
 class Abs:
     arg: "Expr"
 
@@ -113,7 +120,7 @@ class Max:
     args: tuple["Expr", ...]
 
 
-Expr = Union[Const, Sym, Pi, Add, Mul, Neg, Div, PowInt, Sqrt, Ln, Exp, Abs, Min, Max]
+Expr = Union[Const, Sym, Pi, Add, Mul, Neg, Div, PowInt, Sqrt, Ln, Exp, Cos, Abs, Min, Max]
 
 # ---------------------------------------------------------------------------
 # Exact matrices. Sparse triples so JSON stays small; dense access in linalg.py.

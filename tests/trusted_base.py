@@ -64,11 +64,15 @@ class Group:
     checked_by: Judge | Debt
 
 
-CORE_CAP = Limit(1000, "Set on 2026-11-08 at 140f742, where the core measured 957 code lines. "
+CORE_CAP = Limit(1012, "Set on 2026-11-08 at 140f742, where the core measured 957 code lines. "
                        "A new rule adds 3 to 5 lines to rules/__init__.py (inferred from its tables), so "
-                       "the headroom covers the registry entries of several rules.")
+                       "the headroom covers the registry entries of several rules. Raised on branch cosine "
+                       "for `cos`, the one step of the rule language for angles: the Python reading of its "
+                       "enclosure, which the kernel's ends must equal bit for bit (the series and the "
+                       "doublings, placing an enclosure among the multiples of pi, and the cache), 40 lines "
+                       "in interval.py and 7 in terms.py, evaluate.py, codec.py and __init__.py, 1,012.")
 
-TRUSTED_CEILING = Limit(19704, "Set on 2026-11-08 at 140f742, where the trusted base measured 13,530 "
+TRUSTED_CEILING = Limit(19751, "Set on 2026-11-08 at 140f742, where the trusted base measured 13,530 "
                                "code lines: core 957, rules 457, outside the kernel 12,116. Raised on "
                                "2026-11-08 on branch parts-core as the parts layer replaces its scaffold: "
                                "classifying the scaffold measured 14,269, and the mesh reader with its "
@@ -191,6 +195,10 @@ TRUSTED_CEILING = Limit(19704, "Set on 2026-11-08 at 140f742, where the trusted 
                                "row whose name no cell holds, refused in 4 lines of petra/deck.py, and a requirement "
                                "that no part can break or meet, which reading a deck now tries. Together those are "
                                "130 lines in petra/grid.py, and the trusted base measured 19,704. "
+                               "A rule of a lifter's lugs reads the cosine of an angle, so the rule language "
+                               "gained `cos` on branch cosine, its one step for angles, which the deck and the "
+                               "grid read with no new lines. Its Python reading in petra/kernel, which the "
+                               "kernel's ends must equal bit for bit, is 47 lines (CORE_CAP), 19,751. "
                                "Raise it in the commit that needs more and say why here.")
 
 T2_ADOPTED = date(2026, 11, 8)

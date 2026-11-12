@@ -44,6 +44,7 @@ Two more came with the review, and each is decided here as a refusal:
 import copy
 import hashlib
 import json
+import math
 import random
 import re
 import unittest
@@ -942,7 +943,7 @@ class Worst(unittest.TestCase):
     seconds and the 512 MB that an input under 1 MB may take. The first took 11.7 before the
     kernel's tables were kept in order."""
 
-    def at_its_limits(self, cases: int, waived: bool = False, strict: bool = False) -> tuple[dict, float, int, dict]:
+    def at_its_limits(self, cases: int, waived: bool = False, strict: bool = False, spend=lambda q: [["exp", q]]) -> tuple[dict, float, int, dict]:
         """Three rules for one part, each at a limit. `r/read` applies a row of 5,000 numbers
         94 times, which brings the deck to the million steps to read: a number is the text
         that costs most to read for its steps. `r/sum` sums 1,400 fields with names of 64
@@ -951,7 +952,8 @@ class Worst(unittest.TestCase):
         on `exp` of fractions of 250 bits, the step whose unit took longest in
         bench/work_sweep.py. The card, the design and the part have the longest names they
         may, which the label of every input of every tape holds. With `waived` the card waives
-        all three lines, and with `strict` the rules state `lt`. Gives what the kernel said,
+        all three lines, and with `strict` the rules state `lt`. `spend` gives other steps for
+        the proof to spend the work on, for each of its 64 fractions. Gives what the kernel said,
         its processor seconds and the bytes it held, and what it said of one load case more."""
         fields = [f"f{k:063d}" for k in range(1_400)]
         part, title = "p" * 64, "c" * 200
@@ -964,7 +966,7 @@ class Worst(unittest.TestCase):
         def stated(body: dict) -> dict:
             return {**{k: v for k, v in body.items() if k != "le"}, "lt": body["le"]} if strict else body
 
-        spends = stated(rule_of("r/big", mechanism="big", let=lets, le=(["max"] + [["exp", f"q{i}"] for i in range(64)], "1000000")))
+        spends = stated(rule_of("r/big", mechanism="big", let=lets, le=(["max"] + [step for i in range(64) for step in spend(f"q{i}")], "1000000")))
         sums = stated(rule_of("r/sum", mechanism="sum", le=(["load", "L"], ["add"] + fields)))
 
         def make(times: int) -> dict:
@@ -1010,6 +1012,87 @@ class Worst(unittest.TestCase):
         self.assertEqual((said["verdict"], said["findings"], len(said["cells"]), said["counts"]["waived"]), ("UNKNOWN", [], 2_151 + 2, 2_151 + 2))
         self.assertRegex(said["cells"][-1]["reason"], r"^open but for the waiver: leaf \d+: node \d+: " + re.escape(COSTLY) + "$")
         self.assertEqual(len(said["waived"]), 3, "each waiver is printed once, whatever rests on it")
+        self.assertGreater(said["work"], MAX_WORK * 99 // 100, "the proof stopped because the work ran out")
+        self.assertLess(seconds, PROCESSOR_SECONDS)
+        self.assertLess(peak, HALF_GB)
+
+    def test_the_same_deck_with_its_proof_spent_on_cosines_takes_no_longer(self):
+        """The three rules of `at_its_limits`, with `cos` where the hinted proof has `exp`: the
+        same deck to read and the same 2,151 load cases, and the twenty billion units spent
+        on the cosines of fractions of 250 bits. The cosine of one is charged 0.6 million
+        units, so the 400 leaves of the hint spend the work on two cosines for each fraction,
+        of it and of it and 1, where one `exp` spent it. A unit of `cos` takes no longer than
+        one of `exp` in bench/work_sweep.py. It took 11.2 processor seconds and 115 MB on a
+        busy desktop, where the test with `exp` took 13.3 beside it."""
+        said, seconds, peak, over = self.at_its_limits(2_151, spend=lambda q: [["cos", q], ["cos", ["add", q, "1"]]])
+        self.assertEqual([f["rule"] for f in over["findings"]], ["limits"], "one more load case is over the steps of the cells")
+        self.assertEqual((said["verdict"], said["findings"], len(said["cells"])), ("UNKNOWN", [], 2_151 + 2))
+        self.assertRegex(said["cells"][-1]["reason"], r"^leaf \d+: node \d+: " + re.escape(COSTLY) + "$")
+        self.assertGreater(said["work"], MAX_WORK * 99 // 100, "the proof stopped because the work ran out")
+        self.assertLess(seconds, PROCESSOR_SECONDS)
+        self.assertLess(peak, HALF_GB)
+
+    def test_cosines_that_ask_for_every_enclosure_spend_the_work_in_time(self):
+        """A cosine closer to zero than the finest enclosure is wide asks for all four, of 128,
+        224, 608 and 2,144 bits, pays for each before it asks, and has no value. Here 1,800
+        angles are within 2^-2300 of a quarter turn, each the one before and 2^-2308. They
+        are charged 16.7 million units each, so the twenty billion run out at about the
+        1,200th. The file is 0.2 MB: one long number, and each angle a short sum. It took
+        4.1 processor seconds and 33 MB."""
+        from petra.kernel.interval import _pi_at
+        base = Fraction(round(_pi_at(None, 2500).lo / 2 * 2 ** 2300), 2 ** 2300)
+        nodes = [["c", str(base.numerator)], ["c", str(base.denominator)], ["div", 0, 1], ["c", f"1/{2 ** 2309}"]]
+        roots = []
+        for k in range(1_800):
+            nodes += [["c", str(2 * k + 1)], ["mul", [3, len(nodes)]], ["add", [2, len(nodes) + 1]], ["cos", len(nodes) + 2], ["abs", len(nodes) + 3], ["neg", len(nodes) + 4]]
+            roots.append(len(nodes) - 1)
+        files = old_path([cell({"inputs": [], "nodes": nodes, "roots": roots})], [])
+        self.assertLess(total(files), MB)
+        said, seconds, peak = measured(files)
+        (found,) = said["cells"]
+        self.assertEqual((found["state"], found["reason"]), ("open", "leaf 0: node 7: no enclosure separated the value from the rounding grid"),
+                         "the first cosine has no value, and that is the failure a root reads first")
+        self.assertGreater(said["work"], MAX_WORK * 99 // 100, "every cosine that could pay was tried")
+        self.assertLess(seconds, PROCESSOR_SECONDS)
+        self.assertLess(peak, HALF_GB)
+
+    def test_looks_in_a_full_cache_of_cosines_spend_the_work_in_time(self):
+        """A cache of cosines holds 1,024 ends, kept in order. Here it holds 1,000 ends of 16,000
+        bits that are alike: one denominator, and numerators that differ in one word in the
+        middle. Rounding them takes a quarter of the work. Then 12,000 nodes take the cosine
+        of one of them again on each leaf, and each look compares the end with up to 25 of
+        the others, reading each to where they differ, until the work runs out. It took 5.0
+        processor seconds and 56 MB."""
+        bits, held = 16_000, 1_000
+        q = (1 << bits) - 1
+        nodes = [["s", 0], ["c", "3/2"]]
+
+        def whole(n: int) -> int:
+            if n.bit_length() <= 12_000:
+                nodes.append(["c", str(n)])
+                return len(nodes) - 1
+            high = whole(n >> 12_000)
+            nodes.extend([["c", str(1 << 12_000)], ["mul", [high, len(nodes)]], ["c", str(n & ((1 << 12_000) - 1))]])
+            nodes.append(["add", [len(nodes) - 2, len(nodes) - 1]])
+            return len(nodes) - 1
+
+        nodes.append(["div", whole(1 << 64 * (bits // 128)), whole(q)])
+        unit, ends, roots, k = len(nodes) - 1, [], [], 0
+        while len(ends) < held:
+            k += 1
+            if math.gcd(k, q) == 1:      # in lowest terms over 2 q, so that every end has one denominator
+                nodes.extend([["c", str(k)], ["mul", [len(nodes), unit]], ["add", [1, len(nodes) + 1]], ["cos", len(nodes) + 2], ["abs", len(nodes) + 3], ["neg", len(nodes) + 4]])
+                ends.append(len(nodes) - 4)
+                roots.append(len(nodes) - 1)
+        for n in range(12_000):
+            nodes.extend([["cos", ends[n % held]], ["abs", len(nodes)], ["neg", len(nodes) + 1]])
+            roots.append(len(nodes) - 1)
+        tape = {"inputs": [{"label": "dsg:x", "lo": "0", "hi": "64"}], "nodes": nodes, "roots": roots}
+        files = old_path([cell(tape) | {"partition": halves(0, Fraction(0), Fraction(64), 64)}], [])
+        self.assertLess(total(files), MB)
+        said, seconds, peak = measured(files)
+        (found,) = said["cells"]
+        self.assertRegex(found["reason"], r"^leaf \d+: node \d+: " + re.escape(COSTLY) + "$")
         self.assertGreater(said["work"], MAX_WORK * 99 // 100, "the proof stopped because the work ran out")
         self.assertLess(seconds, PROCESSOR_SECONDS)
         self.assertLess(peak, HALF_GB)

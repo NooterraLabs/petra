@@ -140,14 +140,14 @@ def tape(statement: Any) -> dict[str, Any] | None:
     """A statement of the interval rule as numbered nodes, each built from earlier ones, or
     None for a statement of another shape. An input is a hypothesis of the statement: its
     premise label and its range."""
-    from .kernel import Abs, Add, Const, Div, Exp, Ln, Max, Min, Mul, Neg, Pi, PowInt, RangeHyp, Sqrt, Sym
+    from .kernel import Abs, Add, Const, Cos, Div, Exp, Ln, Max, Min, Mul, Neg, Pi, PowInt, RangeHyp, Sqrt, Sym
     from .kernel.rules.r4_enclosure import AllNonpositive
 
     if not isinstance(statement.goal, AllNonpositive) or not all(isinstance(h, RangeHyp) for h in statement.hyps):
         return None
     index = {h.sym: i for i, h in enumerate(statement.hyps)}
     many = {Add: "add", Mul: "mul", Min: "min", Max: "max"}
-    one = {Neg: "neg", Sqrt: "sqrt", Ln: "ln", Exp: "exp", Abs: "abs"}
+    one = {Neg: "neg", Sqrt: "sqrt", Ln: "ln", Exp: "exp", Cos: "cos", Abs: "abs"}
     nodes: list[list[Any]] = []
     seen: dict[int, int] = {}
 

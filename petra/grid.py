@@ -40,7 +40,7 @@ from . import deck as rows
 from . import export
 from .deck import NONE, RowError, Vector, anchored, dimension, only, quantity, replaced, show
 from .ir import Bound, Component, Design, Fixed, ParamRef, Ref, Span, Stated, Text
-from .kernel import (Abs, Add, Const, Div, Exp, Interval, KernelArithmeticError, Ln, Max, Min, Mul, Neg, Pi, PowInt, Sqrt, Sym,
+from .kernel import (Abs, Add, Const, Cos, Div, Exp, Interval, KernelArithmeticError, Ln, Max, Min, Mul, Neg, Pi, PowInt, Sqrt, Sym,
                      enclose)
 from .models.base import ComponentError
 
@@ -1009,7 +1009,7 @@ class _Tape:
 
     def emit(self, e: Any, env: Callable[[str], int]) -> int:
         many = {Add: "add", Mul: "mul", Min: "min", Max: "max"}
-        one = {Neg: "neg", Sqrt: "sqrt", Ln: "ln", Exp: "exp", Abs: "abs"}
+        one = {Neg: "neg", Sqrt: "sqrt", Ln: "ln", Exp: "exp", Cos: "cos", Abs: "abs"}
         if isinstance(e, Const):
             return self.const(e.value)
         if isinstance(e, Sym):
@@ -1158,7 +1158,7 @@ class _Failed(Exception):
     pass
 
 
-_ONE = {"neg": Neg, "abs": Abs, "sqrt": Sqrt, "ln": Ln, "exp": Exp}
+_ONE = {"neg": Neg, "abs": Abs, "sqrt": Sqrt, "ln": Ln, "exp": Exp, "cos": Cos}
 _MANY = {"add": Add, "mul": Mul, "min": Min, "max": Max}
 
 

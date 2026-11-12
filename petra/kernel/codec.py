@@ -31,7 +31,7 @@ from . import rules
 from .evidence import DefinedRange, Evidence, Instance, Leaf, Split
 from .interval import format_q, parse_q
 from .terms import (
-    Abs, Add, Const, DefinedHyp, Div, Exp, Ln, Matrix, Max, Min, Mul, Neg, Pi, PowInt, RangeHyp, Sqrt, Statement, Sym,
+    Abs, Add, Const, Cos, DefinedHyp, Div, Exp, Ln, Matrix, Max, Min, Mul, Neg, Pi, PowInt, RangeHyp, Sqrt, Statement, Sym,
 )
 
 FORMAT = "petra-kernel/0"
@@ -51,6 +51,7 @@ _CORE_TAGS: tuple[tuple[str, type], ...] = (
     ("sqrt", Sqrt),
     ("ln", Ln),
     ("exp", Exp),
+    ("cos", Cos),
     ("abs", Abs),
     ("min", Min),
     ("max", Max),

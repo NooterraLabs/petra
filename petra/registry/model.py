@@ -29,7 +29,7 @@ from datetime import date
 from enum import Enum
 from typing import Callable, Collection, Iterator, Mapping, Union
 
-from ..kernel import Abs, Add, Const, Div, Exp, Expr, Interval, Ln, Max, Min, Mul, Neg, Pi, PowInt, Sqrt, Sym
+from ..kernel import Abs, Add, Const, Cos, Div, Exp, Expr, Interval, Ln, Max, Min, Mul, Neg, Pi, PowInt, Sqrt, Sym
 from ..premises import ALLOWED_TAGS, LabelKind, Tag
 
 
@@ -514,7 +514,7 @@ def render(expr: Expr) -> str:
             return f"{_operand(n)} / {_operand(d)}"
         case PowInt(base=b, exponent=k):
             return f"{_operand(b)}^{k}"
-        case Sqrt(arg=a) | Ln(arg=a) | Exp(arg=a) | Abs(arg=a):
+        case Sqrt(arg=a) | Ln(arg=a) | Exp(arg=a) | Cos(arg=a) | Abs(arg=a):
             return f"{type(expr).__name__.lower()}({render(a)})"
         case Min(args=args) | Max(args=args):
             return f"{type(expr).__name__.lower()}({', '.join(render(a) for a in args)})"

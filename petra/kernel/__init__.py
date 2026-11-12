@@ -36,7 +36,7 @@ from .codec import (
 )
 from .evaluate import Box, NotAffine, affine_coefficients, enclose, free_syms
 from .evidence import DefinedRange, Evidence, Instance, Leaf, Partition, Point, Split, Vector
-from .interval import Interval, KernelArithmeticError, Q, i_ln, i_pi, i_sqrt, parse_q
+from .interval import Interval, KernelArithmeticError, Q, i_cos, i_ln, i_pi, i_sqrt, parse_q
 from .rules import (
     GOAL_RULE,
     LEMMAS,
@@ -59,6 +59,7 @@ from .terms import (
     Abs,
     Add,
     Const,
+    Cos,
     DefinedHyp,
     Div,
     Exp,
