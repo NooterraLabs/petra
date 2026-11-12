@@ -231,11 +231,15 @@ def readParts (rules : Rules) (card : Card) (design : Design) (floors : Floors :
   -- A name of the card's `cases` is the name of a load case, whether a load has it or not,
   -- and a cell prints it. The case of a load is held to its limits below, where the load is
   -- read, and a case that no load has is held to them here.
+  -- A case is not named `where` either: the entry of its cells would end in `/where`, which
+  -- marks the cell that proves a rule's range, and their proofs would not count.
+  let WHERE := "a load case is not named where: an entry that ends in /where is the range of a rule"
   let ofLoads := setOf (card.inputs.filterMap (·.caseName))
   for under in card.caseNames do
     unless ofLoads.contains under do
       if let .error why := short "the name of a load case" under then say "shape" "card" "cases" why
       else if under.contains '/' then say "shape" "card" "cases" "the name of a load case holds no /: an entry is a rule and a case with a / between them"
+      else if under == "where" then say "shape" "card" "cases" WHERE
   for input in card.inputs do
     if (inputsNamed.getD input.name #[]).size > 1 then say "parts.6" "card" input.name "two inputs have this name"
     match input.caseName, input.on, input.field with
@@ -252,6 +256,7 @@ def readParts (rules : Rules) (card : Card) (design : Design) (floors : Floors :
           else if on.contains (part, field, under) then say "parts.6" "card" input.name s!"{under} puts {field} on {part} twice"
           else if let .error why := short "the name of a load case" under then say "shape" "card" input.name why
           else if under.contains '/' then say "shape" "card" input.name "the name of a load case holds no /: an entry is a rule and a case with a / between them"
+          else if under == "where" then say "shape" "card" input.name WHERE
           else on := on.insert (part, field, under) ⟨s!"in:{cardName}.{input.name}", input.range⟩
         | _ => say "parts.6" "card" input.name s!"a {its.kind.name} takes no load {field}"
     | _, _, _ => say "parts.6" "card" input.name "a load has its case, the part it is on and its field"

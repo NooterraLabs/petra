@@ -23,6 +23,9 @@ waived cell leaves unchecked. One test per finding.
   C1  The shipped lap with plates 10^-98 inch thick under a pull of 10^99 kip: the ratio of a
       refuted cell was past the largest float, and `petra check` stopped with exit code 4. The
       cell now prints no ratio, and the lap FAILs.
+  A5  Under a load case named `where` every rule that reads a load had an entry that ends in
+      `/where`, which marks the cell of a range, so its proof was not counted and a design
+      whose rules all held was UNKNOWN. Both readers now refuse the name.
 """
 import json
 import unittest
@@ -30,8 +33,9 @@ from pathlib import Path
 
 import petra
 from petra import grid
-from tests.test_deck_features import HEAD, KERNEL, asks, cells, design, given, key, kind, load, made_up, no_deck, parsed, part, reads, reason, rule, size
-from tests.test_kernel_grid import ask
+from tests.test_deck_features import (HEAD, KERNEL, asks, cells, design, given, ill_formed, key, kind, load, made_up, no_deck, parsed, part, reads, reason,
+                                      rule, size)
+from tests.test_kernel_grid import ask, changed, findings
 
 
 def waive(mechanism: str, on: str) -> str:
@@ -208,6 +212,35 @@ class ARatioPastTheLargestFloat(unittest.TestCase):
         self.assertEqual(found["status"], "FAIL")
         yields = [c for c in found["cells"] if c["mechanism"] == "lap.ply_yield"]
         self.assertEqual([(c["state"], c.get("ratio")) for c in yields], [("refuted", None)] * 2)
+
+
+# --- A5. a load case named `where` -----------------------------------------------------------------------
+
+LOADED_PIN = made_up([SHEAR_PIN], [asks("pin.shear", "pin")],
+                     [rule("shear", "pin", "pin.shear", le=[["load", "shear"], ["mul", "0.6", "fu", ["div", ["mul", "pi", "d", "d"], "4"]]])])
+ONE_PIN = design(part("pin", "p", d="20 mm", fu="given p.fu"))
+
+
+def one_pin(case: str) -> str:
+    return HEAD + given("p.fu", "400 MPa") + load(case, "p shear in [10 kN, 10 kN]")
+
+
+class ACaseNamedWhere(unittest.TestCase):
+    def test_a_case_named_where_is_refused_by_both_readers(self):
+        """Under a case named `where` the rule's cell was entered `shear/where`, the entry of a range, and its proof did not count: a pin
+        whose one rule held was UNKNOWN."""
+        found, status, _ = cells(self, LOADED_PIN, ONE_PIN, one_pin("service"))
+        self.assertEqual((found, status), ({("p", "pin.shear", "shear/service"): "proved"}, "PASS"))
+        mine, kernel = ill_formed(self, LOADED_PIN, ONE_PIN, one_pin("where"))
+        for said in (mine, kernel):
+            self.assertIn("a load case is not named where: an entry that ends in /where is the range of a rule", said)
+
+    @KERNEL
+    def test_a_name_in_cases_that_no_load_has_is_not_where_either(self):
+        rules, read = parsed(LOADED_PIN, ONE_PIN, one_pin("service"))
+        files = grid.check(read, rules)[1]
+        said = ask(changed(files, "card", lambda card: card["cases"].append("where")))
+        self.assertIn("shape card cases: a load case is not named where", findings(said))
 
 
 if __name__ == "__main__":

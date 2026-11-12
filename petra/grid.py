@@ -959,6 +959,7 @@ def read_parts(design: Design, deck: Deck) -> Parts:
     problems += [f"{_at(x.span)}: the name of a part and of a load case is at most {MAX_NAME} characters, and {x.name[:MAX_NAME]}... is longer"
                  for x in (*design.components.values(), *design.loads.values()) if _long(x.name)]
     problems += [f"{_at(x.span)}: the name of a load case holds no /, and {x.name} has one" for x in design.loads.values() if "/" in x.name]
+    problems += [f"{_at(x.span)}: a load case is not named where: an entry that ends in /where is the range of a rule" for x in design.loads.values() if x.name == "where"]
     problems += [f"{design.path}: the name of the card is at most {MAX_TITLE} characters for a design checked against a deck"] * _long(design.name, MAX_TITLE)
     for c in design.components.values():
         kind, values = deck.types[c.kind], {}

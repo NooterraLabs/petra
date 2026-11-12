@@ -76,7 +76,7 @@ CORE_CAP = Limit(1017, "Set on 2026-11-08 at 140f742, where the core measured 95
                        "rounded to the grid. The root of a point that is the square of a fraction is now "
                        "that fraction, as the kernel's `rootOf` takes it: 5 lines in interval.py, 1,017.")
 
-TRUSTED_CEILING = Limit(20038,"Set on 2026-11-08 at 140f742, where the trusted base measured 13,530 "
+TRUSTED_CEILING = Limit(20039,"Set on 2026-11-08 at 140f742, where the trusted base measured 13,530 "
                                "code lines: core 957, rules 457, outside the kernel 12,116. Raised on "
                                "2026-11-08 on branch parts-core as the parts layer replaces its scaffold: "
                                "classifying the scaffold measured 14,269, and the mesh reader with its "
@@ -263,6 +263,9 @@ TRUSTED_CEILING = Limit(20038,"Set on 2026-11-08 at 140f742, where the trusted b
                                "The same review found that a ratio past the largest float stopped `petra check` with "
                                "exit code 4 on a lap that FAILs. Such a cell now prints no ratio: 2 lines in "
                                "petra/grid.py, 20,038. "
+                               "The same review found that a load case named `where` gave each rule that reads a load "
+                               "the entry of a range, whose proof does not count. Both readers now refuse the name: "
+                               "1 line in petra/grid.py, 20,039. "
                                "Raise it in the commit that needs more and say why here.")
 
 T2_ADOPTED = date(2026, 11, 8)

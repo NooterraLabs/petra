@@ -702,6 +702,8 @@ The cells named `unread` come after every other cell, part by part: a part's fie
 
 A rule that reads a load has a cell for each load case of the card, entered as `RULE/CASE`. The load cases of the card are every `load` block it has, whether the block puts a load on this part, on another, or on none. Under a case that puts every load the rule reads on the part, the cell is proved, refuted or open as the inequality is. Under a case that leaves one of them out, the cell is open and names the case and the load. So a card with a case `wind` that puts a shear on a joint and no tension leaves every rule that reads the tension open under `wind`, until the card states the tension there, as zero if that is what it means. A card with no `load` block leaves one open cell for the rule. A rule with `where` has one more cell for each case, named with `/where`, that proves its range.
 
+The name of a load case holds no `/`, and is not `where`. A case named `where` gave every rule that reads a load the entry `RULE/where`, which marks the cell that proves a range, so the proof of each such rule was not counted as the proved cell a PASS needs, and a design whose rules all held was UNKNOWN. Both readers now refuse the card (`tests/test_kernel_attacks9.py`).
+
 A quantity on the end of a band reads the band that holds that end, exactly. Over a range that reaches into two bands or two cases, the inequality must hold in both.
 
 ```bash
