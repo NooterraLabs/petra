@@ -301,6 +301,10 @@ is checked in the steps it took before a field could be left unstated. -/
 def Part.touched (part : Part) (bare : Std.TreeSet String) (fellows : Std.TreeMap String Part) : Bool :=
   bare.contains part.name || fellows.foldl (fun so _ other => so || bare.contains other.name) false
 
+/-- What the reason of a waived cell starts with. What follows is the reason the cell had
+while it was open. -/
+def WAIVED : String := "open but for the waiver: "
+
 /-- What a cell says when its rule, or the `unless` of its line, reads a field that the part
 leaves unstated. -/
 def UNSTATED_WHY (field reader : String) : String := s!"{field} is unstated: its maker states none, and {reader} reads it"
@@ -596,9 +600,10 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hi
       steps := steps + 1 + ((ask.excuse.bind id).map Static.size).getD 0 + lookOf.getD (ask.kind, ask.mechanism) 0
       if steps > MAX_STEPS then return .error long
       let pending (entry reason : String) : Settled := cell part.name ask.mechanism entry .undecided reason
-      if let some (waiver, k) := waivers.get? (part.name, ask.mechanism) then
-        out := out.push (cell part.name ask.mechanism "" .waived "" (some (k, waiver)))
-      else if let some field := lacks (((ask.excuse.bind id).map Static.keys).getD #[]) then
+      -- The cells of the line are made as if the card waived nothing. Where it waives the
+      -- line on the part, those of them that are open are rested once they are all made.
+      let first := out.size
+      if let some field := lacks (((ask.excuse.bind id).map Static.keys).getD #[]) then
         -- The `unless` of the line reads a key that is unstated, so nothing says whether the
         -- mechanism can arise for the part. The line is open, and no rule of it is run.
         out := out.push (pending "" (UNSTATED_WHY field "the `unless` of the line"))
@@ -709,6 +714,14 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hi
               left := after
               out := out.push (cell part.name ask.mechanism entry state reason)
               if state == .proved || state == .refuted then dsg := dsgOf tape dsg
+      -- A waiver rests a cell that would be open, and no other. A cell of the line that its
+      -- rule proved is proved, and the waiver was not needed for it. One that its rule
+      -- refuted is refuted: no waiver hides a refutation. One that the grid says cannot
+      -- arise stays so. The reason of a waived cell says what was open.
+      if let some (waiver, k) := waivers.get? (part.name, ask.mechanism) then
+        for i in [first:out.size] do
+          out := out.modify i fun s =>
+            if s.state == .undecided then { s with state := .waived, reason := clip (WAIVED ++ s.reason), waiver := some (k, waiver) } else s
   -- What a rule or a line of the grid reads of each part. Every rule of a part's type is
   -- looked at here, whatever the card waives, so the look is counted again. The look of a
   -- rule holds a step for each load it reads. A load is read by an expression of a rule

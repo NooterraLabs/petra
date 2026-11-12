@@ -165,7 +165,11 @@ class ARuleThatIsNotRun(unittest.TestCase):
                        [rule("m", "t", "m", le=["w", ["q", "1", "m"]]), rule("n", "t", "n", le=["v", ["q", "1", "m"]])])
         waived = HEAD + 'waive m on p by "t@example.org" reason "tested"\n'
         states, _, _ = cells(self, deck, design(part("t", "p", w="1 mm", v="1 mm", fit="tight")), waived)
-        self.assertEqual(states, {("p", "m", ""): "waived", ("p", "n", ""): "not_applicable"}, "no field is unread: w and v are read by rules that were not run")
+        # The rule of the waived line is run, since a waiver rests only a cell that would be open: it proves, and the waiver was not
+        # needed. Until then the line was one waived cell. The rule of the line that cannot arise is not run, and still reads v.
+        self.assertEqual(states, {("p", "m", "m"): "proved", ("p", "n", ""): "not_applicable"}, "no field is unread: w is read by a rule that was run, and v by one that was not")
+        states, verdict, _ = cells(self, deck, design(part("t", "p", w="2 m", v="1 mm", fit="tight")), waived)
+        self.assertEqual((states["p", "m", "m"], verdict), ("refuted", "FAIL"), "no waiver hides a refutation")
 
 
 @KERNEL
@@ -232,11 +236,14 @@ class TheStepsOfTheCells(unittest.TestCase):
         self.assertEqual(self.said(10_000 - constant, **how), [], f"n and {constant} are 10,000")
         self.assertEqual(self.said(10_001 - constant, **how), [("limits", "design", "parts")], "one more is over the steps")
 
-    def test_a_line_that_cannot_arise_and_a_line_that_is_waived_pay_for_their_rules(self):
+    def test_a_line_that_cannot_arise_pays_for_its_rules_and_a_waived_line_for_running_them(self):
         """Item 1: the line, 1, its `unless`, 1 + n, and its rule, 1. Item 5: the part, 1, the
-        rule, 1, and the field it reads, 1. No tape is written, so items 3 and 4 are nothing."""
+        rule, 1, and the field it reads, 1. For a line that cannot arise no tape is written,
+        so items 3 and 4 are nothing. The rule of a waived line is run, since a waiver rests
+        only a cell that would be open: it pays its weight, 2, and the 4 nodes of its tape,
+        as the rule of a line that is not waived does. Until then a waived line paid 6."""
         self.assertConstant(6, fit="b")
-        self.assertConstant(6, waived=True)
+        self.assertConstant(6 + 2 + 4, waived=True)
 
     def test_a_tape_pays_the_weight_of_its_rule_and_a_step_for_each_node(self):
         """As above, and the weight of `w <= 1 m`, which is 2, and the 4 nodes of its tape:

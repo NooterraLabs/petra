@@ -12,6 +12,7 @@ skipped when no kernel is built.
 import json
 import unittest
 from fractions import Fraction
+from pathlib import Path
 
 from petra import export, grid, verify
 from petra.lang import LolaSyntaxError, LoweringError
@@ -255,6 +256,138 @@ class StatedByTheCard(unittest.TestCase):
         del stripped["parts"]
         said = ask({**files, "design": json.dumps(stripped)}, without=("rules",))
         self.assertIn("types.7 card states: is a key of the card, which only a design checked against a deck of rules has", findings(said))
+
+
+# --- 2. a waiver rests only a cell that would be open ---------------------------------------------------
+
+STEP = {"id": "made-up/step", "anchor": ANCHOR, "gives": {"name": "c", "dim": "force"}, "takes": [{"name": "w", "dim": "length", "range": ["1 mm", "20 mm"]}],
+        "table": {"down": {"by": "w", "at": ["5 mm", "10 mm"]}, "unit": "N", "cells": ["50", "100"]}}
+JOINT = kind("joint", size("w"), size("cap", "force"), key("grade", "a", "b"), size("rating", "force", optional=True),
+             loads=[{"name": "pull", "dim": "force", "least": "0 N", "what": "a pull"}])
+JOINTS = made_up([JOINT], [asks("j.none", "joint"), asks("j.size", "joint"), asks("j.pull", "joint"), asks("j.range", "joint"), asks("j.table", "joint"),
+                           asks("j.cannot", "joint", unless={"when": ["is", "grade", "b"], "why": "made up: grade b has none"}), asks("j.grade", "joint"),
+                           asks("j.two", "joint"), asks("j.rated", "joint")],
+                 [rule("size", "joint", "j.size", le=["w", ["q", "10", "mm"]]),
+                  rule("pull", "joint", "j.pull", le=[["load", "pull"], "cap"]),
+                  rule("range", "joint", "j.range", le=["w", ["q", "12", "mm"]], where=[{"le": [["q", "6", "mm"], "w"], "why": "made up: at least 6 mm wide"}]),
+                  rule("table", "joint", "j.table", le=[["row", "made-up/step", {"w": "w"}], "cap"]),
+                  rule("cannot", "joint", "j.cannot", le=["w", ["q", "1", "mm"]]),
+                  rule("grade", "joint", "j.grade", when=["is", "grade", "b"], le=["w", ["q", "8", "mm"]]),
+                  rule("first", "joint", "j.two", le=["w", ["q", "20", "mm"]]), rule("second", "joint", "j.two", lt=[["load", "pull"], ["q", "40", "N"]]),
+                  rule("rated", "joint", "j.rated", le=["cap", "rating"])], [STEP])
+LINES = [a["mechanism"] for a in JOINTS["grid"]]
+BY = 'by "w@example.org" reason "tested apart"'
+
+
+def joint(waive: list[str] | None = None, cases: str | None = None, **lines: str) -> tuple[str, str]:
+    """A joint and its card. The card waives every line of the grid unless `waive` names the lines, and has two load cases unless `cases` gives them."""
+    written = {"w": "10 mm", "cap": "100 N", "grade": "a", "rating": "150 N", **lines}
+    cases = load("calm", "p pull in [0 N, 30 N]") + load("gale", "p pull in [0 N, 90 N]") if cases is None else cases
+    return design(part("joint", "p", **written)), HEAD + cases + "".join(f"\nwaive {m} on p {BY}\n" for m in (LINES if waive is None else waive))
+
+
+class AWaiverRestsWhatIsOpen(unittest.TestCase):
+    def test_a_waived_line_keeps_what_its_rules_prove_and_refute_and_rests_what_is_open(self):
+        """Every line of the grid is waived. The cells are the cells of the same joint with no waiver, but that each open one is waived."""
+        bare, bare_verdict, _ = cells(self, JOINTS, *joint([]))
+        found, verdict, said = cells(self, JOINTS, *joint())
+        self.assertEqual(bare, {("p", "j.none", ""): "open", ("p", "j.size", "size"): "proved", ("p", "j.pull", "pull/calm"): "proved", ("p", "j.pull", "pull/gale"): "proved",
+                                ("p", "j.range", "range/where"): "proved", ("p", "j.range", "range"): "proved", ("p", "j.table", "table"): "proved",
+                                ("p", "j.cannot", "cannot"): "refuted", ("p", "j.grade", ""): "open", ("p", "j.two", "first"): "proved",
+                                ("p", "j.two", "second/calm"): "proved", ("p", "j.two", "second/gale"): "refuted", ("p", "j.rated", "rated"): "proved"})
+        self.assertEqual(found, {k: "waived" if v == "open" else v for k, v in bare.items()})
+        self.assertEqual((bare_verdict, verdict), ("FAIL", "FAIL"), "no waiver hides a refutation")
+        self.assertEqual(list(found), list(bare), "each cell keeps its place and its entry")
+
+    def test_each_way_a_cell_is_open_is_a_way_it_is_waived_and_its_reason_says_which(self):
+        for lines, cases, mechanism, entry, was in (
+                ({}, None, "j.none", "", "the deck has no rule for it"),
+                ({}, None, "j.grade", "", "the deck has no rule for it on a part like this one"),
+                ({}, load("calm", "p pull in [0 N, 30 N]") + load("idle"), "j.pull", "pull/idle", "case idle puts no pull on p, which the rule reads"),
+                ({}, "", "j.pull", "pull", "the card puts no pull on p, which the rule reads"),
+                (dict(w="5 mm"), None, "j.range", "range", "the range the rule holds in is not proved: "),
+                (dict(w="7 mm"), None, "j.table", "table", ""),      # between the two widths the table lists, where it has no value
+                (dict(rating="unstated"), None, "j.rated", "rated", "p.rating is unstated: its maker states none, and the rule reads it")):
+            with self.subTest(mechanism=mechanism, entry=entry):
+                found, _, said = cells(self, JOINTS, *joint(cases=cases, **lines))
+                self.assertEqual(found["p", mechanism, entry], "waived")
+                if verify.binary():
+                    self.assertTrue(reason(said, mechanism, entry).startswith("open but for the waiver: " + was), reason(said, mechanism, entry))
+                bare, _, _ = cells(self, JOINTS, *joint([], cases=cases, **lines))
+                self.assertEqual(bare["p", mechanism, entry], "open")
+        found, _, _ = cells(self, JOINTS, *joint(w="5 mm"))
+        self.assertNotIn(("p", "j.range", "range/where"), found, "a range that is not proved has no cell of its own, waived or not")
+
+    def test_a_line_that_cannot_arise_stays_so_under_a_waiver(self):
+        found, _, _ = cells(self, JOINTS, *joint(grade="b", w="8 mm"))
+        self.assertEqual((found["p", "j.cannot", ""], found["p", "j.grade", "grade"]), ("not_applicable", "proved"))
+
+    def test_a_waiver_for_a_line_whose_every_cell_is_proved_rests_nothing_and_is_not_listed(self):
+        text, card = joint(["j.size", "j.table", "j.none", "j.grade"], w="10 mm")
+        found, verdict, said = cells(self, JOINTS, text, card)
+        self.assertEqual((found["p", "j.size", "size"], found["p", "j.table", "table"], found["p", "j.none", ""]), ("proved", "proved", "waived"))
+        if verify.binary():
+            self.assertEqual([w["mechanism"] for w in said["waived"]], ["j.none", "j.grade"], "the waivers of j.size and j.table rest no cell")
+            self.assertEqual(said["counts"]["waived"], 2)
+
+    def test_the_verdict_when_every_open_cell_is_waived(self):
+        """PASS when something is proved and nothing refuted. UNKNOWN when nothing is proved: waived is a state of its own, and is never counted as proved."""
+        calm = load("calm", "p pull in [0 N, 30 N]")
+        passing = dict(w="10 mm", grade="b", cap="100 N")
+        found, verdict, said = cells(self, JOINTS, *joint(cases=calm, **{**passing, "w": "8 mm"}))
+        self.assertEqual((verdict, sorted(set(found.values()))), ("PASS", ["not_applicable", "proved", "waived"]))
+        found, verdict, _ = cells(self, JOINTS, *joint(["j.size", "j.pull", "j.range", "j.table", "j.grade", "j.two", "j.rated"], cases=calm, **{**passing, "w": "8 mm"}))
+        self.assertEqual((verdict, found["p", "j.none", ""]), ("UNKNOWN", "open"), "one open cell that no waiver rests")
+        nothing = made_up([JOINT], [asks("j.none", "joint"), asks("j.rated", "joint")], [rule("rated", "joint", "j.rated", le=["cap", "rating"])])
+        found, verdict, _ = cells(self, nothing, *joint(["j.none", "j.rated"], cases="", rating="unstated"))
+        self.assertEqual((verdict, set(found.values()) - {"open"}), ("UNKNOWN", {"waived"}), "every line is waived and nothing is proved")
+
+    def test_the_report_says_who_signed_and_what_was_open(self):
+        deck, read = parsed(JOINTS, *joint())
+        report, _ = grid.check(read, deck)
+        (none,) = [c for c in report.cells if c.mechanism == "j.none"]
+        self.assertEqual((none.state, none.why), ("waived", "by w@example.org: tested apart; open but for the waiver: the deck has no rule for it"))
+        self.assertIn("  p/j.none    waived", report.render())
+
+    def test_the_first_waiver_of_a_line_is_the_one_a_cell_rests_on(self):
+        text, card = joint(["j.none"])
+        found, _, said = cells(self, JOINTS, text, card + '\nwaive j.none on p by "second@example.org" reason "again"\n')
+        self.assertEqual(found["p", "j.none", ""], "waived")
+        if verify.binary():
+            self.assertEqual([(w["mechanism"], w["by"]) for w in said["waived"]], [("j.none", "w@example.org")])
+
+    def test_a_cell_named_unread_takes_no_waiver(self):
+        spare = made_up([kind("joint", size("w"), size("spare"))], [asks("j.size", "joint")], [rule("size", "joint", "j.size", le=["w", ["q", "10", "mm"]])])
+        text = design(part("joint", "p", w="1 mm", spare="1 mm"))
+        with self.assertRaises((LoweringError, grid.ComponentError)):
+            deck, read = parsed(spare, text, HEAD + f"\nwaive unread on p {BY}\n")
+            grid.check(read, deck)
+        found, verdict, _ = cells(self, spare, text, HEAD + f"\nwaive j.size on p {BY}\n")
+        self.assertEqual((found["p", "unread", "spare"], verdict), ("open", "UNKNOWN"))
+
+    @KERNEL
+    def test_a_hint_and_a_waiver_aimed_at_one_cell(self):
+        """The cell of j.size on a waived line, with a width the card bounds. The hint that proves it makes it proved, the point that refutes
+        it makes it refuted, and with no hint that settles it the cell is open, which the waiver rests. The state a hint claims decides nothing."""
+        text, card = joint(["j.size"], w="given p.w")
+        label = "in:made-up.p.w"
+        for lo, hi, hint, state in (("5 mm", "10 mm", dict(state="proved", partition="leaf"), "proved"),
+                                    ("5 mm", "10 mm", dict(state="refuted", point={label: "1/100"}), "waived"),
+                                    ("5 mm", "10 mm", dict(state="waived"), "waived"), ("5 mm", "10 mm", dict(state="open", why="x"), "waived"),
+                                    ("5 mm", "11 mm", dict(state="proved", partition="leaf"), "waived"),
+                                    ("5 mm", "11 mm", dict(state="refuted", point={label: "11/1000"}), "refuted"),
+                                    ("5 mm", "11 mm", dict(state="proved", point={label: "11/1000"}), "refuted"),
+                                    ("5 mm", "11 mm", dict(state="refuted", point={label: "1/100"}), "waived"),
+                                    ("5 mm", "11 mm", dict(state="refuted", point={label: "3/250"}), "waived")):
+            with self.subTest(lo=lo, hi=hi, hint=hint):
+                its = hinted(self, JOINTS, text, card + given("p.w", lo, hi), "j.size", "p", **hint)
+                self.assertEqual(its["state"], state)
+                self.assertEqual(its.get("reason", "").startswith("open but for the waiver: "), state == "waived")
+        deck, read = parsed(JOINTS, text, card + given("p.w", "5 mm", "11 mm"))
+        report, files = grid.check(read, deck)
+        self.assertEqual(next(c.state for c in report.cells if c.mechanism == "j.size"), "refuted", "petra check finds the corner at 11 mm, and no waiver rests it")
+        said = ask(files, without=("proofs",))
+        self.assertEqual(cell(said, "j.size")["state"], "waived", "with no proofs.json nothing settles the cell, and the waiver rests it: the kernel does not search")
 
 
 # --- 3. more units --------------------------------------------------------------------------------------

@@ -12,7 +12,7 @@ answer and writes the files of docs/format.md:
     proved          a rule's inequality holds for every value the card and the design allow
     refuted         it fails at a point they allow
     not_applicable  the deck says the mechanism cannot arise for this part, and why
-    waived          the card waives the mechanism on the part
+    waived          the card waives the mechanism on the part, and the cell would be open without that
     open            anything else: no rule, a rule that reads what the card does not give,
                     a value outside a rule's range, or an inequality neither proved nor refuted
 
@@ -30,7 +30,7 @@ from __future__ import annotations
 
 import itertools
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from fractions import Fraction
 from functools import lru_cache
 from pathlib import Path
@@ -58,6 +58,8 @@ MAX_NAME = 64
 the name of a part, a load case, a mechanism, a field, a load, a joined part and a `let`, and a rule's id."""
 UNREAD = "unread"
 """The mechanism of the cell of a field or a load that nothing reads. No line of the grid has this name."""
+WAIVED = "open but for the waiver: "
+"""What the kernel's reason of a waived cell starts with. The reason the cell had while it was open follows."""
 UNSTATED = "unstated"
 """The word a design writes for an `optional` field that the part's record does not state, as in kernel/Petra/Deck.lean."""
 
@@ -1476,26 +1478,32 @@ def _answers(rule: Rule, ask: Ask, part: Part, parts: Mapping[str, Part], cases:
 
 
 def cells(design: Design, deck: Deck, found: Parts) -> list[Cell]:
-    """Every cell of the design: for each part, each mechanism the grid asks of its type."""
+    """Every cell of the design: for each part, each mechanism the grid asks of its type.
+
+    A waiver rests a cell that would be open, and no other. The cells of a line are made as
+    if the card waived nothing. Where it waives the line on the part, each of them that is
+    open becomes `waived`, and says what was open. A cell that a rule proved stays proved,
+    and the waiver was not needed for it. A cell that a rule refuted stays refuted: no
+    waiver hides a refutation, and a card written before a deck gained a rule does not
+    switch the rule off."""
     out: list[Cell] = []
-    waived = {(w.subject[0], w.mode): w for w in design.waivers}
+    waived = {(w.subject[0], w.mode): w for w in reversed(design.waivers)}      # the first waiver of a line on a part, as the kernel takes it
     for part in found.parts.values():
         for ask in (a for a in deck.asks if a.type == part.type.name):
-            anchor = _anchor(ask.anchor)
-            if (part.name, ask.mechanism) in waived:
-                w = waived[part.name, ask.mechanism]
-                out.append(Cell(part.name, ask.mechanism, "", "waived", ask.what, anchor, f"by {w.owner}: {w.reason}"))
-            elif (lacks := _lacking(part, found.parts, _keys(ask.unless))) is not None:
+            anchor, line = _anchor(ask.anchor), []
+            if (lacks := _lacking(part, found.parts, _keys(ask.unless))) is not None:
                 # The `unless` reads a key that is unstated, so nothing says whether the mechanism can arise: the line is open, and no rule of it is run.
-                out.append(Cell(part.name, ask.mechanism, "", "open", ask.what, anchor, _unstated_why(lacks, "the `unless` of the line")))
+                line.append(Cell(part.name, ask.mechanism, "", "open", ask.what, anchor, _unstated_why(lacks, "the `unless` of the line")))
             elif ask.excused is not None and _static(ask.unless, part, found.parts):
-                out.append(Cell(part.name, ask.mechanism, "", "not_applicable", ask.what, anchor, ask.excused))
+                line.append(Cell(part.name, ask.mechanism, "", "not_applicable", ask.what, anchor, ask.excused))
             else:
                 rules = [r for r in deck.rules if (r.type, r.mechanism) == (ask.type, ask.mechanism) and _applies(r, part, found.parts)]
-                out += [c for r in rules for c in _answers(r, ask, part, found.parts, found.cases)]
+                line += [c for r in rules for c in _answers(r, ask, part, found.parts, found.cases)]
                 if not rules:
-                    out.append(Cell(part.name, ask.mechanism, "", "open", ask.what, anchor,
-                                    f"the deck has no rule for it{' on a part like this one' if any(r.mechanism == ask.mechanism for r in deck.rules) else ''}"))
+                    line.append(Cell(part.name, ask.mechanism, "", "open", ask.what, anchor,
+                                     f"the deck has no rule for it{' on a part like this one' if any(r.mechanism == ask.mechanism for r in deck.rules) else ''}"))
+            w = waived.get((part.name, ask.mechanism))
+            out += line if w is None else [replace(c, state="waived", why=f"by {w.owner}: {w.reason}; {WAIVED}{c.why}") if c.state == "open" else c for c in line]
     return out + _unread(deck, found)
 
 
