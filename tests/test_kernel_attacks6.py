@@ -308,17 +308,25 @@ PLATES = part("plate", "p1", t="5 mm", stiff="yes") + "\n" + part("plate", "p2",
 
 
 class JoinOrder(unittest.TestCase):
+    """The review held the two orders of a join to one verdict. The decision is that they are
+    two designs: which part fills which name of `as` is a statement of the design, read like
+    any field, and nothing in a card or a deck checks it (docs/deck.md, "A type", and
+    docs/format.md, Parts 5). So the test holds each order to its own verdict, on purpose."""
+
     @KERNEL
-    def test_the_order_of_a_join_alone_does_not_turn_a_fail_into_a_pass(self):
-        """`plates p2 p1`: the line link.bear applies and its cell is refuted, FAIL. `plates p1
-        p2`: the same plates with the same keys and sizes, and the line cannot arise, PASS. The
-        card is the same; nothing it states says which plate is on top."""
-        verdicts = set()
-        for order in ("p2 p1", "p1 p2"):
-            mine, status, said, differ = both(BEARING, design(PLATES, part("link", "L", plates=order)))
-            self.assertEqual(differ, "")
-            verdicts.add(status)
-        self.assertNotEqual(verdicts, {"PASS", "FAIL"}, "only the order of the join differs")
+    def test_the_order_of_a_join_says_which_part_is_which_and_each_order_has_its_verdict(self):
+        """`plates p1 p2`: p1 is `top`, which is stiff, and p2 `bottom`, which is not, so the
+        line link.bear cannot arise, and the design passes. `plates p2 p1`: the same plates the
+        other way up. The line arises, and its cell is refuted: 10 mm against plates of 5 mm."""
+        expected = {"p1 p2": ([("L", "link.bear", "", "not_applicable"), ("L", "link.size", "size", "proved")], "PASS"),
+                    "p2 p1": ([("L", "link.bear", "bear", "refuted"), ("L", "link.size", "size", "proved")], "FAIL")}
+        for order, (cells, verdict) in expected.items():
+            with self.subTest(order):
+                mine, status, said, differ = both(BEARING, design(PLATES, part("link", "L", plates=order)))
+                self.assertEqual((differ, mine, status, said["verdict"]), ("", cells, verdict, verdict))
+        swapped = design(part("plate", "p1", t="5 mm", stiff="no") + "\n" + part("plate", "p2", t="5 mm", stiff="yes"), part("link", "L", plates="p2 p1"))
+        mine, status, said, differ = both(BEARING, swapped)
+        self.assertEqual((differ, status), ("", "PASS"), "the stiff plate on top passes whatever it is named")
 
 
 if __name__ == "__main__":

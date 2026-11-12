@@ -309,7 +309,7 @@ A part has every field of its type once, and no other line. A part is joined by 
 
 A part reads only the bound the card gives under the part's name and the field's. On the part `tab`, the line `Fy given tab.Fy` reads `given tab.Fy in [36 ksi, 36 ksi] signed ...` from the card, and `Fy given tab.Fu` is refused. So a design cannot read the bound for one field into another.
 
-`as` gives each joined part the name a rule calls it by. With `"as": ["a", "b"]`, a rule reads `a.thickness` and `b.Fu`.
+`as` gives each joined part the name a rule calls it by. With `"as": ["a", "b"]`, a rule reads `a.thickness` and `b.Fu`. A design lists one part for each name, in the order of `as`: in `joins tab strap` the part `tab` is `a` and `strap` is `b`. Which part fills which name is a statement of the design, read like any field, and nothing in a card or a deck checks it: `joins strap tab` is another design, which a line or a rule that asks about `a` may answer another way, and the order must be true of what is built.
 
 `loads` lists what a card may put on a part of the type. Each has a `name`, a `dim`, `what` it is, a text that is not empty, and a `least` when it has a floor. A card states one in a load case: `on splice pull in [0 kip, 45 kip]`.
 
