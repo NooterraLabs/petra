@@ -435,11 +435,18 @@ class Answer:
 
     @property
     def governing(self) -> Said | None:
-        """The rule with the largest ratio, or the first to fail or to hold when one states none."""
+        """The rule with the largest ratio. When one states none, a rule that fails governs
+        one that holds, and a rule with no ratio, whose right side is at or under zero,
+        governs one with a ratio; among those with none, the one whose left side stands
+        furthest above its right. So the rule chosen does not hang on the order the
+        transcription writes its rules in."""
         found = [s for s in self.said if s.state != "nothing"]
         if not found:
             return None
-        return max(found, key=lambda s: s.ratio) if self.ratio is not None else next((s for s in found if s.state == "fails"), found[0])
+        if self.ratio is not None:
+            return max(found, key=lambda s: s.ratio)
+        pool = [s for s in found if s.state == "fails"] or found
+        return max(pool, key=lambda s: (s.ratio is None, s.ratio if s.ratio is not None else s.low - s.high if s.low is not None and s.high is not None else 0))
 
     @property
     def mark(self) -> tuple:

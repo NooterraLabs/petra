@@ -121,6 +121,17 @@ class Agreement(unittest.TestCase):
         self.assertEqual(found.outcome, "fail")
         self.assertIn("whether the inequality holds", found.detail)
 
+    def test_the_same_rules_in_another_order_are_the_same_where_a_right_side_is_at_or_under_zero(self):
+        """The second rule's right side is under zero for a far pad under 30 mm2, so it fails there with no ratio, and the
+        line states none. The rule shown for the line must not hang on which of the two the transcription writes first."""
+        under = {**CREEP, "id": "test/creep-far", "le": [["q", "1", "mm2"], ["sub", "far.area", ["q", "30", "mm2"]]]}
+        first, second = reading(lambda b: b["rules"].extend([BY_PAD[0], under])), reading(lambda b: b["rules"].extend([under, BY_PAD[0]]))
+        both = [p for p in rule.parts(first.task, "strip.creep", [first, second]).base
+                if all(s.state == "fails" for s in first.answer("strip.creep", p).said)]
+        self.assertTrue(both, "some part fails both rules")
+        found = check(first, "strip.creep", "second", second)
+        self.assertEqual((found.outcome, "different forms" in found.detail), ("pass", False), found.detail)
+
     def test_both_sides_times_one_factor_are_the_same_and_no_note_is_made(self):
         scaled = with_rule(2, le=[["mul", "2", "gap", ["sub", ["q", "4", "mm"], "gap"]], ["q", "8.4", "mm2"]])
         found = self.second("strip.bow", scaled)
