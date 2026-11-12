@@ -402,6 +402,7 @@ A rule answers one line of the grid with an inequality.
 | `anchor` | The clause the inequality comes from |
 | `says` | The inequality in words: a text that is not empty. A rule with no `says` is refused. |
 | `le` | Two expressions. The rule holds when the first is at most the second. A rule that states no inequality has `requires` in its place ([A rule that requires](#a-rule-that-requires)). |
+| `lt` | In place of `le`: two expressions, and the rule holds when the first is under the second ([A rule that states lt](#a-rule-that-states-lt)). A rule has one of `le`, `lt` and `requires`. |
 | `let` | Names for expressions the rule uses more than once. A name is letters, digits and `_`, and is no field's name. An expression reads the names before it. |
 | `where` | The range the rule holds in: a list of `{"le": [a, b], "why": "..."}` with at least one item. Each item has `why`, a text, which may be empty. A rule that holds everywhere leaves `where` out: `"where": []` is refused. |
 | `when` | A condition on the part, as in the grid: on its own keys and on the keys of the parts it joins. The rule answers only for the parts it holds for. |
@@ -440,7 +441,26 @@ A formula whose case goes by the size of one of its own inputs needs none of thi
 
 A factor that the clause fixes for the inequality, such as a resistance factor, is a number in the rule.
 
-Reading a deck checks every rule. Each input of each row is bound once and to its dimension. Both sides of `le` have one dimension. The rule answers a line of the grid that can arise. A deck that fails any of these does not load, and the kernel finds a design checked against it ill formed.
+Reading a deck checks every rule. Each input of each row is bound once and to its dimension. Both sides of `le` or of `lt` have one dimension. The rule answers a line of the grid that can arise. A deck that fails any of these does not load, and the kernel finds a design checked against it ill formed.
+
+### A rule that states lt
+
+"Less than 55 lb" and "under 250 g" are not "at most". A rule that has `lt` in place of `le` states that its first side is under its second.
+
+```json
+{"id": "made-up/under-250", "type": "craft", "mechanism": "craft.under",
+ "anchor": {"standard": "a regulation", "clause": "3"},
+ "says": "the mass is under 250 g",
+ "lt": ["mass", ["q", "250", "g"]]}
+```
+
+- A rule has one of `le`, `lt` and `requires`. A rule with two of them, or with none, is refused. A rule with `lt` may have `let`, `where` and `when`, as one with `le`. An item of `where` has `le` and no `lt`.
+- The cell is `proved` when the first side is under the second for every value the card and the design allow. A mass of exactly 250 g is not proved under 250 g. A range that reaches 250 g is not either.
+- The cell is `refuted` at a point they allow where the first side is not under the second: where it is equal to it or over it. So a mass of exactly 250 g is refuted, and `le` would prove it.
+- The cell is `open` where neither is shown. A side with a square root, a logarithm, an exponential or pi is enclosed and not exact, so a value that lies exactly on the limit may be open: its enclosure reaches to both sides.
+- A side that is under itself is refuted: `"lt": ["span", "span"]` holds for no part.
+
+The kernel decides it with the proof it has for `le` ([format.md](format.md), Cells 6, and [proved.md](proved.md)). The cells, their entries, the load cases, `where` and the hints are those of a rule with `le`. `petra check` prints the same ratio, the most of the first side over the least of the second, and a refuted `lt` may print a ratio of 1.
 
 ### A rule that requires
 
@@ -473,7 +493,7 @@ The rule reads the keys that its `requires` and its `when` name, so those keys h
 | State | When |
 |---|---|
 | `proved` | A rule's inequality holds for every value the card and the design allow, or what a rule requires of the keys holds |
-| `refuted` | The inequality fails at a point they allow, or what a rule requires does not hold |
+| `refuted` | The inequality fails at a point they allow, or what a rule requires does not hold. For `lt` that is a point where the two sides are equal, too. |
 | `not applicable` | The grid says the mechanism cannot arise for this part |
 | `waived` | The card waives the mechanism on the part |
 | `open` | Anything else |

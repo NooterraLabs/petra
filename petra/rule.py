@@ -547,7 +547,7 @@ class Reading:
         if lacking(tape.low, tape.high) is not None:
             return lacking(tape.low, tape.high)
         low, high = _middle(v[tape.low]), _middle(v[tape.high])
-        return Said(rule.id, "holds" if low <= high else "fails", low=low, high=high, mark=mark)
+        return Said(rule.id, "holds" if (low < high if rule.strict else low <= high) else "fails", low=low, high=high, mark=mark)
 
     def answer(self, mechanism: str, point: Mapping[str, Any], keep: bool = True) -> Answer:
         """What the transcription says of the mechanism for the part at this point. It is
@@ -759,7 +759,7 @@ def _side_dim(mine: Reading, body: Mapping[str, Any]) -> Vector:
     binder = grid._Binder(mine.task.deck.rows, mine.task.deck.types[body["type"]], mine.task.deck.types)
     for name, node in body.get("let", {}).items():
         binder.takes[name] = rows.Input(dim=binder.expr(node)[1])
-    return binder.expr(body["le"][0])[1]
+    return binder.expr(body["lt" if "lt" in body else "le"][0])[1]
 
 
 def reproduces(mine: Reading, mechanism: str, examples: list[Worked]) -> Check:
@@ -810,7 +810,7 @@ def _unused(mine: Reading, mechanism: str, tried: Parts) -> list[str]:
     out = []
     for body in bodies:
         for path, node in places(body):
-            if not (isinstance(node, list) and node[:1] in (["min"], ["max"]) and len(node) > 2 and path[0] in ("le", "let", "where")):
+            if not (isinstance(node, list) and node[:1] in (["min"], ["max"]) and len(node) > 2 and path[0] in ("le", "lt", "let", "where")):
                 continue
             for n in range(1, len(node)):
                 kept = node[1:n] + node[n + 1:]

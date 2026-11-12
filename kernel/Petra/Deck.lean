@@ -257,6 +257,8 @@ structure Rule where
   /-- The keys that `requires` names, each once, in the order it names them: what the reason
   of a refuted cell lists. It is made when the deck is read, and not again for each part. -/
   asked : Array (Option String × String) := #[]
+  /-- Whether the rule states `lt`: `low` under `high`, and not only at most it. -/
+  strict : Bool := false
 
 /-- What the rule's cells are entered under: its id from after its last `/`. -/
 def Rule.entry (rule : Rule) : String := (rule.id.splitOn "/").getLast!
@@ -1082,7 +1084,7 @@ def readRule (kinds : Std.TreeMap String Kind) (rows : Std.TreeMap String Row) (
   let id ← text j "id"
   let rule : Except String Rule := do
     short "the id of a rule" id
-    within j ["id", "type", "mechanism", "anchor", "says", "when", "let", "where", "le", "requires"]
+    within j ["id", "type", "mechanism", "anchor", "says", "when", "let", "where", "le", "lt", "requires"]
     anchored j
     unless filled j "says" do throw "a rule says what it states"
     let name ← text j "type"
@@ -1093,13 +1095,13 @@ def readRule (kinds : Std.TreeMap String Kind) (rows : Std.TreeMap String Row) (
     | some (some none) => throw s!"the grid says {mechanism} never arises for {name}"
     | _ => pure ()
     let scope : Scope := { kind := some kind, kinds, rows }
-    unless has j "le" || has j "requires" do
-      throw "a rule has `le`, an inequality, or `requires`, a condition over keys"
+    unless (["le", "lt", "requires"].filter (has j)).length == 1 do
+      throw "a rule has one of `le`, an inequality, `lt`, a strict one, and `requires`, a condition over keys"
     -- A rule that requires states a condition over keys and no inequality. It has nothing
     -- that an inequality has: no sides, no names of `let` and no range.
     if has j "requires" then
-      if has j "le" || has j "let" || has j "where" then
-        throw "a rule with `requires` has no `le`, no `let` and no `where`: it states a condition over keys, and no inequality"
+      if has j "let" || has j "where" then
+        throw "a rule with `requires` has no `le`, no `lt`, no `let` and no `where`: it states a condition over keys, and no inequality"
       let condition ← (j.getObjVal? "when").toOption.mapM (static scope MAX_EXPRESSION)
       let required ← (static scope MAX_EXPRESSION (← need j "requires")).mapError ("requires: " ++ ·)
       return { id, kind := name, mechanism, condition, steps := #[], weight := 0,
@@ -1118,8 +1120,9 @@ def readRule (kinds : Std.TreeMap String Kind) (rows : Std.TreeMap String Row) (
       let (y, dy) ← expr scope MAX_EXPRESSION high
       unless dx == dy do throw s!"{what} compares two dimensions"
       return (x, y)
+    let strict := has j "lt"
     let read : Reading ((Nat × Nat) × Array (Nat × Nat)) := do
-      let main ← pair (← need j "le") "`le`"
+      let main ← if strict then pair (← need j "lt") "`lt`" else pair (← need j "le") "`le`"
       let written ← listed j "where"
       if has j "where" && written.isEmpty then
         throw "`where` has at least one item: a rule that holds everywhere leaves it out"
@@ -1146,7 +1149,7 @@ def readRule (kinds : Std.TreeMap String Kind) (rows : Std.TreeMap String Row) (
     return { id, kind := name, mechanism, condition, steps := draft.steps,
              weight := draft.steps.foldl (fun n step => n + step.weight) 0,
              look := 1 + (condition.map Static.size).getD 0 + loads.size, ranges, low, high,
-             fields := once (fields ++ (condition.map Static.keys).getD #[]), loads }
+             fields := once (fields ++ (condition.map Static.keys).getD #[]), loads, strict }
   rule.mapError (s!"rule {clip id}: " ++ ·)
 
 /-- How many characters of a text are one step to read. -/
@@ -1387,8 +1390,17 @@ def tableOf (site : Site) (table : Table) (down : Chosen) (across : Option Chose
   pickOf lines
 
 /-- The tape of a rule for one part: for each pair of `pairs` a root, the first less the
-second. An error is a reason the rule has no value for the part. -/
-def Rule.tape (rule : Rule) (site : Site) (pairs : Array (Nat × Nat)) : Except String Tape := do
+second, which is at most zero where the pair is in order. An error is a reason the rule has
+no value for the part.
+
+With `strict`, a root is the pick that is -1 where the first is under the second and 1
+elsewhere. `Tape.proved` shows a root at most zero on the box, which this root is only where
+the first is under the second at every point of it: on a leaf the pick is -1 alone when the
+upper end of the first is under the lower end of the second. `Tape.refuted` shows a root
+above zero at a point, which this root is only where the first is not under the second
+there. So the two rules of the tape, as they stand and as proofs/ proves them, decide a
+strict inequality (`Tape.proved_strict` and `Tape.refuted_strict` in proofs/). -/
+def Rule.tape (rule : Rule) (site : Site) (pairs : Array (Nat × Nat)) (strict : Bool := false) : Except String Tape := do
   let need := reach rule.steps (pairs.flatMap fun (a, b) => #[a, b])
   let write : Write (Array Nat) := do
     let mut ids : Array Nat := Array.replicate rule.steps.size 0
@@ -1410,7 +1422,9 @@ def Rule.tape (rule : Rule) (site : Site) (pairs : Array (Nat × Nat)) : Except 
             pure id
           | .row _ value => pure ids[value]!
         ids := ids.set! i id
-    pairs.mapM fun (low, high) => do node (.add #[ids[low]!, ← node (.neg ids[high]!)])
+    pairs.mapM fun (low, high) => do
+      if strict then node (.pick #[(some (.lt ids[low]! ids[high]!), ← node (.c (-1))), (none, ← node (.c 1))])
+      else node (.add #[ids[low]!, ← node (.neg ids[high]!)])
   let (roots, written) ← write.run {}
   return { inputs := written.inputs, nodes := written.nodes, roots }
 

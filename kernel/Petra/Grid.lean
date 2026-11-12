@@ -570,7 +570,7 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hi
                 else
                   out := out.push (pending entry s!"the range the rule holds in is not proved: {reason}")
                   continue
-            match rule.tape here #[(rule.low, rule.high)] with
+            match rule.tape here #[(rule.low, rule.high)] rule.strict with
             | .error why => out := out.push (pending entry why)
             | .ok tape =>
               steps := steps + tape.nodes.size

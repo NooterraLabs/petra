@@ -18,6 +18,7 @@ from petra.lang import LolaSyntaxError, LoweringError
 from petra.units import CUSTOMARY, UNITS, Dim, UnitError, parse_quantity, readable_text
 from tests.test_deck_features import (ANCHOR, HEAD, KERNEL, SIGNED, asks, cells, design, given, ill_formed, key, kind, load, made_up, no_deck, parsed, part,
                                       reads, reason, rule, size)
+from tests.test_kernel_grid import ask, cell
 
 INCH = Fraction(127, 5000)
 LB = Fraction(45359237, 100000000)
@@ -147,6 +148,105 @@ class MoreUnits(unittest.TestCase):
             body = json.loads(json.dumps(deck))
             change(body)
             no_deck(self, body)
+
+
+# --- 6. a rule that states lt ---------------------------------------------------------------------------
+
+CRAFT = kind("craft", size("mass", "mass"), size("cap", "mass", signed=True), size("span", "length"),
+             loads=[{"name": "cargo", "dim": "mass", "least": "0 g", "what": "what it carries"}])
+CRAFTS = made_up([CRAFT], [asks("craft.under", "craft"), asks("craft.within", "craft"), asks("craft.capped", "craft"), asks("craft.laden", "craft"),
+                           asks("craft.self", "craft"), asks("craft.ranged", "craft")],
+                 [rule("under", "craft", "craft.under", lt=["mass", ["q", "250", "g"]]),
+                  rule("within", "craft", "craft.within", le=["mass", ["q", "250", "g"]]),
+                  rule("capped", "craft", "craft.capped", lt=["mass", "cap"]),
+                  rule("laden", "craft", "craft.laden", lt=[["add", "mass", ["load", "cargo"]], ["q", "55", "lb"]]),
+                  rule("self", "craft", "craft.self", lt=["span", "span"]),
+                  rule("ranged", "craft", "craft.ranged", lt=[["sqrt", ["mul", "span", "span"]], ["q", "0.3", "m"]],
+                       where=[{"le": ["mass", ["q", "1", "kg"]], "why": "made up: a craft of at most a kilogram"}])])
+
+
+def craft(mass: str = "249 g", cap: str = "250 g", span: str = "0.5 m", cap_to: str | None = None, cargo: str | None = None) -> tuple[str, str]:
+    card = HEAD + given("c.cap", cap, cap_to) + (load("flight", f"c cargo in {cargo}") if cargo else "")
+    return design(part("craft", "c", mass=mass, cap="given c.cap", span=span)), card
+
+
+def hinted(test: unittest.TestCase, rules: dict, text: str, card: str, mechanism: str, **hint) -> dict:
+    """The kernel's cell of `mechanism` when the hints of proofs.json are this one hint alone, which claims what the caller likes."""
+    deck, read = parsed(rules, text, card)
+    files = grid.bundle(read, deck)
+    proofs = {"format": "petra-proofs/0", "cells": [{"subject": "c", "mechanism": mechanism, "entry": mechanism.split(".")[1], **hint}]}
+    said = ask({**files, "proofs": json.dumps(proofs)})
+    test.assertEqual(said["findings"], [])
+    return cell(said, mechanism)
+
+
+class AStrictRule(unittest.TestCase):
+    def test_lt_is_proved_under_the_limit_and_refuted_on_it(self):
+        for mass, under, within in (("249.999 g", "proved", "proved"), ("250 g", "refuted", "proved"), ("250.001 g", "refuted", "refuted"), ("0.55 lb", "proved", "proved"),
+                                    ("8.818 oz", "proved", "proved"), ("8.8185 oz", "refuted", "refuted"), ("1/4 kg", "refuted", "proved")):
+            with self.subTest(mass):
+                found, verdict, _ = cells(self, CRAFTS, *craft(mass))
+                self.assertEqual((found["c", "craft.under", "under"], found["c", "craft.within", "within"]), (under, within))
+                self.assertEqual(verdict, "FAIL", "no span is under itself")
+
+    def test_lt_over_a_range_is_proved_only_when_the_whole_range_is_under(self):
+        for lo, hi, state in (("250 g", "250 g", "proved"), ("249.001 g", "300 g", "proved"), ("249 g", "300 g", "refuted"), ("240 g", "249 g", "refuted"),
+                              ("249.0001 g", "249.0001 g", "proved")):
+            with self.subTest(lo=lo, hi=hi):
+                found, _, _ = cells(self, CRAFTS, *craft("249 g", lo, cap_to=hi))
+                self.assertEqual(found["c", "craft.capped", "capped"], state, "the cap may be anywhere in its range, and the mass is 249 g")
+
+    def test_nothing_is_under_itself(self):
+        found, _, said = cells(self, CRAFTS, *craft())
+        self.assertEqual(found["c", "craft.self", "self"], "refuted")
+
+    def test_lt_reads_a_load_in_each_case_and_follows_its_range(self):
+        for cargo, state in (("[0 lb, 54 lb]", "proved"), ("[0 lb, 54.45 lb]", "proved"), ("[0 lb, 54.46 lb]", "refuted"), ("[54.5 lb, 60 lb]", "refuted")):
+            with self.subTest(cargo):
+                found, _, _ = cells(self, CRAFTS, *craft(cargo=cargo))
+                self.assertEqual(found["c", "craft.laden", "laden/flight"], state, "249 g and the cargo, against 55 lb")
+        found, _, said = cells(self, CRAFTS, *craft())
+        self.assertEqual((found["c", "craft.laden", "laden"], reason(said, "craft.laden")), ("open", "the card puts no cargo on c, which the rule reads"))
+
+    def test_lt_with_a_range_and_a_root_that_is_rounded(self):
+        """The square root of 0.09 m2 is enclosed and not exact, so a span of exactly 0.3 m is neither under 0.3 m nor shown not to be."""
+        for span, mass, state in (("0.299 m", "249 g", "proved"), ("0.301 m", "249 g", "refuted"), ("0.3 m", "249 g", "open"), ("0.2 m", "1.5 kg", "open")):
+            with self.subTest(span=span, mass=mass):
+                found, _, said = cells(self, CRAFTS, *craft(mass, cap="2 kg", span=span))
+                self.assertEqual(found["c", "craft.ranged", "ranged"], state)
+                self.assertEqual(("c", "craft.ranged", "ranged/where") in found, mass == "249 g")
+
+    def test_a_rule_states_one_of_le_lt_and_requires(self):
+        both = rule("both", "craft", "craft.under", le=["mass", ["q", "250", "g"]], lt=["mass", ["q", "250", "g"]])
+        for body in (both, rule("none", "craft", "craft.under"), rule("req", "craft", "craft.under", lt=["mass", "cap"], requires=["is", "x", "y"]),
+                     rule("three", "craft", "craft.under", lt=["mass", "cap", "cap"]), rule("one", "craft", "craft.under", lt=["mass"]),
+                     rule("dims", "craft", "craft.under", lt=["mass", "span"]), rule("text", "craft", "craft.under", lt="mass"),
+                     rule("where", "craft", "craft.under", lt=["mass", "cap"], where=[{"lt": ["mass", "cap"], "why": "made up"}]),
+                     rule("gt", "craft", "craft.under", gt=["cap", "mass"]), rule("ge", "craft", "craft.under", ge=["cap", "mass"])):
+            with self.subTest(body["id"]):
+                mine, its = no_deck(self, made_up([CRAFT], [asks("craft.under", "craft")], [body]))
+        mine, its = no_deck(self, made_up([CRAFT], [asks("craft.under", "craft")], [both]))
+        self.assertIn("a rule has one of `le`", its)
+        self.assertIn("a rule has one of `le`", mine)
+
+    @KERNEL
+    def test_a_hint_cannot_prove_lt_on_its_edge_or_refute_it_under_it(self):
+        text, card = craft("250 g")
+        self.assertEqual(hinted(self, CRAFTS, text, card, "craft.under", state="proved", partition="leaf")["state"], "open", "250 g is not under 250 g")
+        mass = {"dsg:made-up.c.mass": "1/4"}
+        self.assertEqual(hinted(self, CRAFTS, text, card, "craft.under", state="refuted", point=mass)["state"], "refuted")
+        self.assertEqual(hinted(self, CRAFTS, text, card, "craft.within", state="refuted", point=mass)["state"], "open", "250 g is at most 250 g")
+        self.assertEqual(hinted(self, CRAFTS, text, card, "craft.within", state="proved", partition="leaf")["state"], "proved")
+        text, card = craft("249 g", "249 g", cap_to="300 g")
+        label = "in:made-up.c.cap"
+        self.assertEqual(hinted(self, CRAFTS, text, card, "craft.capped", state="proved", partition="leaf")["state"], "open")
+        split = {"input": label, "at": "1/4", "below": "leaf", "above": "leaf"}
+        self.assertEqual(hinted(self, CRAFTS, text, card, "craft.capped", state="proved", partition=split)["state"], "open", "the cap may be 249 g, which the mass is not under")
+        mass = {"dsg:made-up.c.mass": "249/1000"}
+        self.assertEqual(hinted(self, CRAFTS, text, card, "craft.capped", state="refuted", point={**mass, label: "1/4"})["state"], "open", "249 g is under 250 g")
+        self.assertEqual(hinted(self, CRAFTS, text, card, "craft.capped", state="refuted", point={**mass, label: "249/1000"})["state"], "refuted", "249 g is not under 249 g")
+        self.assertEqual(hinted(self, CRAFTS, text, card, "craft.capped", state="refuted", point={**mass, label: "31/125"})["state"], "open", "the card gives no cap of 248 g")
+        self.assertEqual(hinted(self, CRAFTS, text, card, "craft.capped", state="refuted", point={label: "249/1000"})["state"], "open", "the point gives the mass no value")
 
 
 if __name__ == "__main__":

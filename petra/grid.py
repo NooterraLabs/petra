@@ -168,7 +168,8 @@ class Rule:
     """An answer to one mechanism of one type: `low <= high`, read where every `where`
     holds. The expressions are kernel terms over names: a field, `part.field`, a `let`
     name, `load NAME`, or `@n` for the n-th row the rule applies. A rule with `requires`
-    states that condition over keys and no inequality: it has no sides, no names and no range."""
+    states that condition over keys and no inequality: it has no sides, no names and no range.
+    A `strict` rule states `low < high`: its `lt` in place of `le`."""
 
     id: str
     type: str
@@ -182,6 +183,7 @@ class Rule:
     high: Any
     applied: Mapping[str, Applied]
     requires: tuple | None = None
+    strict: bool = False
 
 
 @dataclass(frozen=True, eq=False)
@@ -470,9 +472,11 @@ def _need(body: Any, takes: Mapping[str, rows.Input]) -> Need:
 def _rule(body: Mapping[str, Any], deck_rows: Mapping[str, rows.Row], types: Mapping[str, Type]) -> Rule:
     where = body.get("id")
     try:
-        only(body, ("id", "type", "mechanism", "anchor", "says", "when", "let", "where", "le", "requires"), "a rule")
+        only(body, ("id", "type", "mechanism", "anchor", "says", "when", "let", "where", "le", "lt", "requires"), "a rule")
         if not isinstance(where, str) or _long(where):
-            raise RowError(f"a rule has id, of at most {MAX_NAME} characters, type, mechanism, anchor, says, le or requires, and may have when, let and where")
+            raise RowError(f"a rule has id, of at most {MAX_NAME} characters, type, mechanism, anchor, says, one of le, lt and requires, and may have when, let and where")
+        if sum(key in body for key in ("le", "lt", "requires")) != 1:
+            raise RowError("a rule has one of `le`, `lt` and `requires`: an inequality, a strict one, or a condition over keys")
         anchor = anchored(body["anchor"], "anchor")
         for w in body.get("where", []):
             only(w, ("le", "why"), "where")
@@ -480,8 +484,8 @@ def _rule(body: Mapping[str, Any], deck_rows: Mapping[str, rows.Row], types: Map
             raise RowError("a rule says what it states, and a `where` has at least one item")
         binder = _Binder(deck_rows, types[body["type"]], types)
         if "requires" in body:
-            if {"le", "let", "where"} & set(body):
-                raise RowError("a rule with `requires` has no `le`, no `let` and no `where`: it states a condition over keys, and no inequality")
+            if {"let", "where"} & set(body):
+                raise RowError("a rule with `requires` has no `le`, no `lt`, no `let` and no `where`: it states a condition over keys, and no inequality")
             when = binder.static(body["when"]) if "when" in body else None
             return Rule(where, body["type"], body["mechanism"], anchor, body["says"], when, {}, (), None, None, {}, binder.static(body["requires"]))
         lets = {}
@@ -497,12 +501,13 @@ def _rule(body: Mapping[str, Any], deck_rows: Mapping[str, rows.Row], types: Map
                 binder.problems.append(f"{what} compares a {show(low_dim)} with a {show(high_dim)}")
             return low, high
 
-        low, high = pair(body["le"], "`le`")
+        strict = "lt" in body
+        low, high = pair(body["lt" if strict else "le"], "`lt`" if strict else "`le`")
         ranges = tuple((*pair(w["le"], "`where`"), str(w["why"])) for w in body.get("where", []))
         when = binder.static(body["when"]) if "when" in body else None
         if binder.problems:
             raise RowError("; ".join(dict.fromkeys(binder.problems)))
-        return Rule(where, body["type"], body["mechanism"], anchor, body["says"], when, lets, ranges, low, high, binder.applied)
+        return Rule(where, body["type"], body["mechanism"], anchor, body["says"], when, lets, ranges, low, high, binder.applied, strict=strict)
     except RowError as exc:
         raise DeckError(f"rule {where}: {exc}") from None
     except (KeyError, TypeError, ValueError) as exc:
@@ -1239,10 +1244,17 @@ def _answers(rule: Rule, ask: Ask, part: Part, parts: Mapping[str, Part], cases:
         yield cell(tail, "refuted", f"the part is not what the rule requires: {has}{f' and {len(asked) - said} more' if said < len(asked) else ''}")
         return
 
-    def tape_of(pairs: list[tuple[Any, Any]], case: str | None) -> tuple[_Tape, list[int], list[tuple[int, int]]]:
+    def tape_of(pairs: list[tuple[Any, Any]], case: str | None, strict: bool = False) -> tuple[_Tape, list[int], list[tuple[int, int]]]:
+        """The tape with a root for each pair: the first side less the second, which is at most
+        zero where the pair is in order. A strict root is the pick that is -1 where the first
+        side is under the second and 1 elsewhere: it is at most zero on a box only where the
+        first side is under the second all over it, and above zero at a point only where it
+        is not under it there."""
         tape = _Tape()
         env = _env(tape, rule, part, parts, case)
         sides = [(tape.emit(low, env), tape.emit(high, env)) for low, high in pairs]
+        if strict:
+            return tape, [tape.node("pick", [[["lt", low, high], tape.const(Fraction(-1))], [None, tape.const(Fraction(1))]]) for low, high in sides], sides
         return tape, [tape.node("add", [low, tape.node("neg", high)]) for low, high in sides], sides
 
     reads = sorted(name[5:] for name in _reads(rule) if name.startswith("load "))
@@ -1267,7 +1279,7 @@ def _answers(rule: Rule, ask: Ask, part: Part, parts: Mapping[str, Part], cases:
                     continue
                 yield Cell(part.name, rule.mechanism, f"{entry}/where", "proved", "; ".join(w[2] for w in rule.where), anchor, "", rule.id,
                            proof={"partition": partition})
-            tape, roots, sides = tape_of([(rule.low, rule.high)], case)
+            tape, roots, sides = tape_of([(rule.low, rule.high)], case, rule.strict)
         except NoValue as exc:
             yield cell(entry, "open", str(exc))
             continue
