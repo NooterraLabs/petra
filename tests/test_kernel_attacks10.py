@@ -32,6 +32,7 @@ import petra.lang
 from petra import grid, verify
 from petra.kernel import Interval
 from petra.registry import build_registry
+from petra.units import CUSTOMARY, UNITS, si_unit
 from tests.test_deck_features import HEAD, KERNEL, asks, cells, design, given, ill_formed, key, kind, load, made_up, parsed, part, rule, size
 from tests.test_kernel_attacks3 import cell, with_card
 from tests.test_kernel_attacks9 import STRUT_CARD, STRUT_TEXT, strut, waive
@@ -253,6 +254,25 @@ class TheUnitOfACompletedLoad(unittest.TestCase):
                                                                   [["p", "n", "service", "0", "1"]]])
         self.assertEqual([line.split("; rested where ")[1].split(" (")[0] for line in lines],
                          ["p.t is 0 degC in case service", "p.k is 0 kg^1 s^-2 in case service", "p.n is 0 in case service"])
+
+    def test_both_readers_give_each_dimension_of_the_unit_table_one_unit(self):
+        """The kernel names the unit by its own table (`siUnit` in kernel/Petra/Quantity.lean) and petra/grid.py by petra/units.py
+        (`si_unit`): the first unit of factor 1 of the dimension, so the two tables must list such units in one order. A load of
+        each dimension that a unit of either table has, each completed at zero under a waiver, holds them to one name each."""
+        dims = list(dict.fromkeys(dim for _, dim in {**UNITS, **CUSTOMARY}.values()))
+        def written(dim) -> str:
+            powers = zip(("length", "mass", "time", "current", "temperature"), (dim.m, dim.kg, dim.s, dim.A, dim.degC))
+            return "*".join(f"{name}^{power}" for name, power in powers if power) or "dimensionless"
+        box = kind("box", size("d"), loads=[{"name": f"l{k}", "dim": written(dim), "what": "a load"} for k, dim in enumerate(dims)])
+        boxes = made_up([box], [*(asks(f"box.m{k}", "box") for k in range(len(dims))), asks("box.size", "box")],
+                        [*(rule(f"r{k}", "box", f"box.m{k}", le=[["load", f"l{k}"], ["load", f"l{k}"]]) for k in range(len(dims))),
+                         rule("size", "box", "box.size", le=[["q", "1", "mm"], "d"])])
+        card = HEAD + load("service") + "".join(waive(f"box.m{k}", "b") for k in range(len(dims)))
+        _, status, _ = cells(self, boxes, design(part("box", "b", d="20 mm")), card)
+        self.assertEqual((len(dims), status), (20, grid.PASS_WAIVED))
+        completions, _ = printed(boxes, design(part("box", "b", d="20 mm")), card)
+        self.assertEqual([c["loads"][0][4] for c in completions if c], [si_unit(dim) for dim in dims])
+        self.assertIn("degC", [si_unit(dim) for dim in dims])
 
     @KERNEL
     def test_the_kernel_prints_a_completion_of_its_hint_with_its_unit(self):

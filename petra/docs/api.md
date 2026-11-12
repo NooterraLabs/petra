@@ -325,10 +325,10 @@ CELL = {"subject": PART, "mechanism": NAME, "entry": TEXT,
         "ratio": NUMBER | null,                the left side of the rule over the right, at its worst
         "completion": COMPLETION}              only for a waived cell that rests on one
 
-COMPLETION = {"keys": [[PART, FIELD, NAME], ...], "loads": [[PART, LOAD, CASE, RATIONAL], ...]}
+COMPLETION = {"keys": [[PART, FIELD, NAME], ...], "loads": [[PART, LOAD, CASE, RATIONAL, UNIT], ...]}
 ```
 
-The status is PASS_WAIVED when the design passes and a waiver of the card rests one of its cells: it passes what the deck could check, and each signer answers for the cells its waiver rests. `petra check` exits 6 for it. The kernel has no word of its own for this: it says PASS and lists the same waivers. A waived cell that a part or a case left something out of rests on a completion, a name for each key left unstated and a value in SI units for each load left out, under which the rule holds. The signer answers for it too, so the cell prints it, and the text of `petra check` ends the cell's line with it.
+The status is PASS_WAIVED when the design passes and a waiver of the card rests one of its cells: it passes what the deck could check, and each signer answers for the cells its waiver rests. `petra check` exits 6 for it. The kernel has no word of its own for this: it says PASS and lists the same waivers. A waived cell that a part or a case left something out of rests on a completion, a name for each key left unstated and a value for each load left out, under which the rule holds. The value is in Petra's SI and UNIT names its unit, as the kernel's verdict prints it: `degC` for a temperature, never kelvin, `1` for a plain number, and the exponents of the dimension, as `kg^1 s^-2`, where no unit of factor 1 has it (docs/format.md, "The verdict"). The signer answers for it too, so the cell prints it, and the text of `petra check` ends the cell's line with it, as in `rested where s.t is 295 degC in case service`.
 
 `petra.check_file` returns a `petra.grid.Report` for such a design, with `status`, `verdict` (the kernel's word, PASS where `status` is PASS_WAIVED), `waived()`, `completions()`, `cells`, `to_json()` and `render()`. A FAIL has no repair yet, and a card's claims are refused.
 
