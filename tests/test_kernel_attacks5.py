@@ -52,6 +52,7 @@ from unittest import mock
 import petra
 from petra import grid, verify
 from petra.registry import build_registry
+from tests import test_deck_features as features
 from tests.test_kernel_attacks2 import MB
 from tests.test_kernel_attacks3 import ANCHOR, PROCESSOR_SECONDS
 from tests.test_kernel_grid import ask, strips
@@ -377,6 +378,35 @@ class TheEnvironmentIsAnswered(unittest.TestCase):
         said = petra.check(marine, design, path=str(examples / "lap_pass.petra"), repair=False)
         verdicts = (said.get("status"), (said.get("kernel") or {}).get("verdict"))
         self.assertNotEqual(verdicts, ("PASS", "PASS"), "marine C5 is read by no cell, and the lap passes as it does indoors")
+        self.assertEqual(said["status"], "INPUT_ERROR", "the pair is refused, as one that states an ambient is")
+        self.assertIn("the card or the design states an environment, which a deck does not read yet", json.dumps(said))
+
+    def test_the_grid_and_the_kernel_refuse_it_with_the_words_of_an_ambient(self):
+        deck = features.made_up([features.kind("t", features.size("w"))], [features.asks("m", "t")], [features.rule("m", "t", "m", le=["w", ["q", "1", "m"]])])
+        text = features.design(features.part("t", "p", w="1 mm"))
+        for line, refused, found in (("  environment marine_c5\n", "the card or the design states an environment, which a deck does not read yet",
+                                      "parts.8 card environment: a deck of rules does not read an environment yet"),
+                                     ("  environment indoor_dry\n", "the card or the design states an environment, which a deck does not read yet",
+                                      "parts.8 card environment: a deck of rules does not read an environment yet")):
+            with self.subTest(line):
+                card = features.HEAD.replace("}\n", line + "}\n")
+                self.assertIn("environment", card)
+                mine, its = features.ill_formed(self, deck, text, card)
+                self.assertIn(refused, mine)
+                self.assertEqual(its, found)
+        mine, its = features.ill_formed(self, deck, text, features.HEAD + 'ambient in [10 degC, 40 degC] signed "t@example.org" source "test"\n')
+        self.assertIn("the card or the design states an ambient, which a deck does not read yet", mine)
+        self.assertIn("parts.6 card", its, "an ambient is an input that is no load and that no part reads")
+        states, verdict, _ = features.cells(self, deck, text)
+        self.assertEqual((states, verdict), ({("p", "m", "m"): "proved"}, "PASS"), "with no environment the design is checked")
+
+    def test_no_card_of_a_shipped_example_of_a_deck_states_one_and_the_models_still_read_theirs(self):
+        for card in sorted((REPO / "examples" / "deck").glob("*.card")):
+            self.assertNotIn("environment", card.read_text(encoding="utf-8"), card.name)
+        truss = REPO / "examples" / "truss_pass.petra"
+        self.assertIn("environment indoor_dry", truss.with_suffix(".card").read_text(encoding="utf-8"))
+        said = petra.check(truss.with_suffix(".card").read_text(encoding="utf-8"), truss.read_text(encoding="utf-8"), path=str(truss), repair=False)
+        self.assertEqual(said["status"], "PASS", "a design of the models' kinds reads its environment as before")
 
 
 if __name__ == "__main__":

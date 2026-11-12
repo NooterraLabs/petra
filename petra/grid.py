@@ -749,8 +749,9 @@ def read_parts(design: Design, deck: Deck) -> Parts:
         if part is None or (part.type.name, w.mode) not in asked:
             problems.append(f"{_at(w.span)}: waive {w.mode} on {'.'.join(w.subject)}: the deck asks "
                             + (f"of a {part.type.name}: {', '.join(a.mechanism for a in deck.asks if a.type == part.type.name) or 'nothing'}" if part else "only of a part"))
+    # An environment that no cell reads would leave a verdict that looks as if it held there: it is refused, as an ambient is.
     unread = [("a claim", design.claims), ("a probability claim", design.probability_claims), ("a tests record", design.tests),
-              ("an ambient", design.ambient), ("a param", design.params)]
+              ("an ambient", design.ambient), ("an environment", design.environment), ("a param", design.params)]
     problems += [f"{design.path}: the card or the design states {what}, which a deck does not read yet" for what, there in unread if there]
     if not problems:      # what the types need is asked of a design that breaks nothing else, so every field is there and above zero
         problems += [f"{_at(design.components[p.name].span)}: {p.name} {broken}" for p in parts.values() for broken in _unmet(p, parts)]

@@ -189,6 +189,10 @@ def readParts (rules : Rules) (card : Card) (design : Design) : StateM Findings 
   for w in card.waivers do
     unless (place.get? w.subject).any fun part => asked.contains (part.kind.name, w.mechanism) do
       say "parts.7" "card" s!"{w.subject}/{w.mechanism}" "the grid asks no such mechanism of a part of this name"
+  -- An environment that the card states would be read by no cell, and a verdict would look
+  -- as if it held there: a lap in a marine atmosphere passed as it does indoors. It is
+  -- refused, as an ambient is, until a deck reads one.
+  if card.environment.isSome then say "parts.8" "card" "environment" "a deck of rules does not read an environment yet"
   unless card.claims.isEmpty do say "parts.8" "card" "claims" "a deck of rules does not read a claim yet"
   for key in card.stated do say "parts.8" "card" key "a deck of rules does not read these yet"
   unless design.params.isEmpty do say "parts.8" "design" "params" "a deck of rules does not read a param yet"

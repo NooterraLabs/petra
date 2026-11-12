@@ -373,7 +373,9 @@ def registry_text(registry: Registry, prefix: str | None, shapes: Mapping[str, C
 
 SNIPPETS: tuple[tuple[str, str, str], ...] = (
     ("card", "A card has one `card` block, which names what is asked. `owner` is required. `environment` is "
-     "optional and names a registry environment from the registry list at the end of this page.",
+     "optional and names a registry environment from the registry list at the end of this page. No deck of "
+     "rules reads an environment yet. So the card of a design with a part of a deck's type, such as a `lap`, "
+     "states none, and `petra check` refuses one that does.",
      'card "warren-footbridge-panel" {\n  owner "a.reviewer@example.org"\n  environment indoor_dry\n}'),
     ("param", "`param` declares a family. The design holds for every value in the param's range. A line names the "
      "param by writing `param NAME` in place of a value. A param is declared in the card or in the design. A "

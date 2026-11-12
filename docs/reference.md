@@ -76,7 +76,7 @@ bounded, whatever the files hold.
 
 ### card
 
-A card has one `card` block, which names what is asked. `owner` is required. `environment` is optional and names a registry environment from the registry list at the end of this page.
+A card has one `card` block, which names what is asked. `owner` is required. `environment` is optional and names a registry environment from the registry list at the end of this page. No deck of rules reads an environment yet. So the card of a design with a part of a deck's type, such as a `lap`, states none, and `petra check` refuses one that does.
 
 ```
 card "warren-footbridge-panel" {

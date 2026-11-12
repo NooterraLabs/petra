@@ -179,6 +179,7 @@ class Draft:
     card_more: list[str] = field(default_factory=list)
     design_more: list[str] = field(default_factory=list)
     damage: list[str] = field(default_factory=list)
+    environment: str | None = None                                                   # a registry id, which no deck reads yet
 
     def lines(self, part: str) -> list[list[str]]:
         return next(lines for _, name, lines in self.parts if name == part)
@@ -187,7 +188,8 @@ class Draft:
         design = ["petra 0", "", *self.design_more]
         for kind, name, lines in self.parts:
             design += [f"{kind} {name} {{", *(f"  {key} {value}" for key, value in lines), "}", ""]
-        card = ["petra 0", "", f'card "{self.name}" {{', '  owner "t@example.org"', "}", "", *self.card_more]
+        stated = [f"  environment {self.environment}"] if self.environment else []
+        card = ["petra 0", "", f'card "{self.name}" {{', '  owner "t@example.org"', *stated, "}", "", *self.card_more]
         card += [f"given {name} in {bound} {SIGNED}" for name, bound in self.givens.items()]
         for case, entries in self.loads.items():
             card += ["", f"load {case} {{", *(f"  {e}" for e in entries), f"  {SIGNED}", "}"]
@@ -448,6 +450,9 @@ def damage(rng: random.Random, d: Draft) -> None:
     def claim() -> None:
         d.card_more.append(rng.choice([f"claim limit: {joint[1]}.{load} <= 2 {unit}", f"ambient in [10 degC, 40 degC] {SIGNED}"]))
 
+    def environment() -> None:
+        d.environment = rng.choice(["indoor_dry", "marine_c5"])
+
     def param() -> None:
         sized = [l for l in plate[2] if l[0] in ("width", "area") and len(l[1].split()) == 2]
         if sized:
@@ -468,7 +473,7 @@ def damage(rng: random.Random, d: Draft) -> None:
             lines.append([rng.choice(["width", "hole", "thickness", "screw"]), signed[0][1]])
 
     ways = [missing, unknown, twice, design_states, swapped, other_part, wrong_unit, not_positive, given_not_positive, bad_key, bad_count,
-            bad_joins, joined_twice, stray, bad_load, bad_waiver, claim, param, two_values, no_value, given_twice]
+            bad_joins, joined_twice, stray, bad_load, bad_waiver, claim, environment, param, two_values, no_value, given_twice]
     way = rng.choice(ways)
     way()
     d.damage.append(way.__name__)
