@@ -2139,7 +2139,7 @@ class Checked:
         out = self.report.lines()
         path = ("rules: the kernel worked out every cell from the rules deck" if self.kernel is not None
                 else "rules: the Python grid worked out every cell from the rules deck, and no kernel checked it")
-        return "\n".join([*out[:2], f"card      {self.hashes['card']}  {self.card}", f"design     {self.hashes['design']}  {self.path}",
+        return "\n".join([*out[:2], f"card       {self.hashes['card']}  {self.card}", f"design     {self.hashes['design']}  {self.path}",
                           f"kernel     {kernel}", f"path       {path}", *out[2:]])
 
 

@@ -716,7 +716,7 @@ petra check examples/deck/lap_unknown.petra
 
 ```
 lap-splice: UNKNOWN
-rules      sha256:d959367e...  aisc360-22
+rules      sha256:33e1bd2c...  aisc360-22
 card       sha256:b0372d69...  examples/deck/lap_unknown.card
 design     sha256:3fd22401...  examples/deck/lap_unknown.petra
 kernel     petra-verify checked 12 of 12 proofs and gives the same verdict
