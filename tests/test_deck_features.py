@@ -456,6 +456,24 @@ class ARuleThatRequires(unittest.TestCase):
         self.assertIn("refuted", line)
         self.assertIn("bores: bores: the part is not what the rule requires: top.bore is machined, bottom.bore is cut", line)
 
+    def test_the_reason_names_the_keys_that_fit_in_it_and_counts_the_rest(self):
+        """A reason prints in 200 bytes. The keys are named while they fit beside its first
+        words and the count of the rest, in the kernel and in petra/grid.py alike."""
+        names = [f"k{n:02d}" for n in range(40)]
+        deck = made_up([kind("box", *(key(name, "no", "yes") for name in names))], [asks("box.all", "box")],
+                       [rule("all", "box", "box.all", requires=["and"] + [["is", name, "yes"] for name in names])])
+        found, verdict, said = cells(self, deck, design(part("box", "b", **{name: "no" for name in names})))
+        expected = "the part is not what the rule requires: " + ", ".join(f"{name} is no" for name in names[:13]) + " and 27 more"
+        self.assertEqual((verdict, reason(said, "box.all")), ("FAIL", expected))
+        self.assertLessEqual(len(expected), 200)
+        loaded, read = parsed(deck, design(part("box", "b", **{name: "no" for name in names})))
+        (mine,) = [c.why for c in grid.check(read, loaded)[0].cells if c.mechanism == "box.all"]
+        self.assertEqual(mine, expected, "petra/grid.py words the reason as the kernel does")
+        long = made_up([kind("box", key("k", "n" * 300, "yes"))], [asks("box.all", "box")], [rule("all", "box", "box.all", requires=["is", "k", "yes"])])
+        loaded, read = parsed(long, design(part("box", "b", k='"' + "n" * 300 + '"')))
+        (mine,) = [c.why for c in grid.check(read, loaded)[0].cells if c.mechanism == "box.all"]
+        self.assertEqual(mine, "the part is not what the rule requires: k is " + "n" * 200, "a long name of a key is cut to its first 200 characters")
+
     def test_it_has_a_when_like_any_rule(self):
         found, verdict, said = cells(self, HOISTS, hoist("B", "2"))
         self.assertEqual(found["h", "hoist.category", ""], "open", "a hoist of category B has no rule for the line")
@@ -903,13 +921,38 @@ class WhatATypeNeeds(unittest.TestCase):
         loaded, read = parsed(none, eyed(), HEAD + GAP)
         self.assertEqual(ask(grid.check(read, loaded)[1])["work"], 0)
 
-    @KERNEL
     def test_a_need_whose_numbers_grow_past_what_the_kernel_holds_is_not_decided_and_the_design_is_refused(self):
-        big = str(10 ** 3990)
-        deck = made_up([kind("tile", size("a", "dimensionless"), needs=[{"le": [["mul", *[big] * 6, "a"], big], "why": "made up"}])])
-        loaded, read = parsed(deck, design(part("tile", "t", a="1")))
+        """The kernel holds a number to 65,536 bits. Six factors of 13,255 bits are within
+        that at the fifth and past it at the sixth, and petra/grid.py stops where the kernel
+        stops, so the two refuse the same designs."""
+        big, said = str(10 ** 3990), "need 1 of a tile is not decided: a value has more than 65536 bits"
+        for factors, kept in ((4, True), (5, False), (6, False)):
+            deck = made_up([kind("tile", size("a", "dimensionless"), needs=[{"le": [["mul", *[big] * factors, "a"], ["mul", *[big] * 4, "2"]], "why": "made up"}])])
+            if kept:
+                cells(self, deck, design(part("tile", "t", a="1")))
+            else:
+                mine, its = ill_formed(self, deck, design(part("tile", "t", a="1")))
+                self.assertEqual(its, "parts.9 design t: " + said)
+                self.assertIn("t " + said, mine)
+
+    def test_a_long_number_of_a_broken_need_is_not_written_out(self):
+        """A number of more than 256 bits would be cut from the finding, so the finding says how long it is."""
+        deck = made_up([kind("tile", size("a", "dimensionless"), needs=[{"le": [["mul", str(10 ** 100), "a"], str(2 ** 255)], "why": "made up"}])])
+        mine, its = ill_formed(self, deck, design(part("tile", "t", a="1")))
+        said = f"breaks need 1 of a tile: its left side, a number of 333 bits, is not at most its right side, {2 ** 255}, in SI units: made up"
+        self.assertEqual(its, "parts.9 design t: " + said)
+        self.assertIn("t " + said, mine)
+        huge = made_up([kind("tile", size("a", "dimensionless"), needs=[{"le": [["mul", *[str(10 ** 3990)] * 4, "a"], "1"], "why": "made up"}])])
+        mine, its = ill_formed(self, huge, design(part("tile", "t", a="1")))
+        self.assertIn("its left side, a number of 53018 bits, is not at most its right side, 1, in SI units: made up", its)
+        self.assertIn("its left side, a number of 53018 bits, is not at most its right side, 1, in SI units: made up", mine)
+
+    @KERNEL
+    def test_parts_that_break_a_need_past_the_findings_the_kernel_keeps_are_counted(self):
+        deck = made_up([kind("tile", size("a", "dimensionless"), needs=[{"lt": ["a", "1"], "why": "made up"}])])
+        loaded, read = parsed(deck, design(*(part("tile", f"t{k}", a="1") for k in range(130))))
         said = ask(grid.bundle(read, loaded))
-        self.assertEqual(findings(said), "parts.9 design t: need 1 of a tile is not decided: a value has more than 65536 bits")
+        self.assertEqual((said["verdict"], len(said["findings"]), said["more_findings"], {f["rule"] for f in said["findings"]}), ("ILL-FORMED", 100, 30, {"parts.9"}))
 
     def test_a_need_is_two_sides_of_one_dimension_and_a_why(self):
         reads(self, EYES)

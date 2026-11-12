@@ -254,6 +254,9 @@ structure Rule where
   fields : Array (Option String × String)
   loads : Array String
   requires : Option Static := none
+  /-- The keys that `requires` names, each once, in the order it names them: what the reason
+  of a refuted cell lists. It is made when the deck is read, and not again for each part. -/
+  asked : Array (Option String × String) := #[]
 
 /-- What the rule's cells are entered under: its id from after its last `/`. -/
 def Rule.entry (rule : Rule) : String := (rule.id.splitOn "/").getLast!
@@ -1101,7 +1104,8 @@ def readRule (kinds : Std.TreeMap String Kind) (rows : Std.TreeMap String Row) (
       let required ← (static scope MAX_EXPRESSION (← need j "requires")).mapError ("requires: " ++ ·)
       return { id, kind := name, mechanism, condition, steps := #[], weight := 0,
                look := 1 + (condition.map Static.size).getD 0 + required.size, ranges := #[], low := 0, high := 0,
-               fields := once ((condition.map Static.keys).getD #[] ++ required.keys), loads := #[], requires := some required }
+               fields := once ((condition.map Static.keys).getD #[] ++ required.keys), loads := #[], requires := some required,
+               asked := once required.keys }
     let lets ← if has j "let" then members (← need j "let") else pure #[]
     for (name, _) in lets do
       identifier name

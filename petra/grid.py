@@ -62,6 +62,11 @@ MAX_READ = 1_000_000
 """The most steps reading a deck may take, as in kernel/Petra/Files.lean."""
 MAX_TITLE = 200
 """The most bytes the name of a card may print in, for a design checked against a deck."""
+MAX_REASON = 200
+"""The bytes of a reason that the kernel prints (`MAX_TEXT` in kernel/Petra/Files.lean)."""
+MAX_BITS = 65_536
+"""The most bits a number of a need may have, as in kernel/Petra/Tape.lean. A need with a
+longer one is not decided, and its part is refused."""
 LOADED = ("`loaded` is no condition: a condition is over keys, which are the same under every load case. "
           "A card states a load in each case, as zero where there is none, and a rule reads it there")
 """What a deck that asks `loaded` is refused with, as in kernel/Petra/Deck.lean. The condition
@@ -754,10 +759,31 @@ def read_parts(design: Design, deck: Deck) -> Parts:
     return Parts({name: Part(name, p.type, p.values, loads[name]) for name, p in parts.items()}, tuple(sorted(design.loads)))
 
 
+class _Undecided(Exception):
+    """A need that exact fractions do not decide for a part, with the kernel's reason."""
+
+
+def _bits(x: Fraction) -> int:
+    """The bits of the longer of a fraction's two numbers, as `ratBits` in kernel/Petra/Tape.lean."""
+    return max(abs(x.numerator).bit_length(), x.denominator.bit_length())
+
+
 def _span(side: tuple, value: Callable[[str], Interval]) -> tuple[Fraction, Fraction]:
     """The least and the most a side of a need reaches over the ranges of its fields, by
     the four operations on the ends. The side reads each field once, so this is the range
-    of its values and no wider."""
+    of its values and no wider. It takes the steps `Exact.range` of kernel/Petra/Grid.lean
+    takes, in its order, and stops where it stops: at a sum, a product or a quotient with
+    a number of more than MAX_BITS bits, and at a quotient by a range that holds zero,
+    which a signed field may have."""
+    def fits(lo: Fraction, hi: Fraction) -> tuple[Fraction, Fraction]:
+        if max(_bits(lo), _bits(hi)) > MAX_BITS:
+            raise _Undecided(f"a value has more than {MAX_BITS} bits")
+        return lo, hi
+
+    def times(a: tuple[Fraction, Fraction], b: tuple[Fraction, Fraction]) -> tuple[Fraction, Fraction]:
+        ends = (a[0] * b[0], a[0] * b[1], a[1] * b[0], a[1] * b[1])
+        return fits(min(ends), max(ends))
+
     if side[0] == "c":
         return side[1], side[1]
     if side[0] == "field":
@@ -765,27 +791,40 @@ def _span(side: tuple, value: Callable[[str], Interval]) -> tuple[Fraction, Frac
     if side[0] == "neg":
         lo, hi = _span(side[1], value)
         return -hi, -lo
-    found = [_span(inner, value) for inner in (side[1] if side[0] in ("add", "mul") else side[1:])]
     if side[0] == "add":
-        return sum(lo for lo, _ in found), sum(hi for _, hi in found)
-    if side[0] == "div":      # by a field, which is more than zero, or by a number that is not zero
-        found = [found[0], (1 / found[1][1], 1 / found[1][0])]
-    lo, hi = Fraction(1), Fraction(1)
-    for a, b in found:
-        ends = (lo * a, lo * b, hi * a, hi * b)
-        lo, hi = min(ends), max(ends)
-    return lo, hi
+        lo = hi = Fraction(0)
+        for inner in side[1]:
+            a, b = _span(inner, value)
+            lo, hi = fits(lo + a, hi + b)
+        return lo, hi
+    if side[0] == "mul":
+        found = (Fraction(1), Fraction(1))
+        for inner in side[1]:
+            found = times(found, _span(inner, value))
+        return found
+    over, under = _span(side[1], value), _span(side[2], value)
+    if under[0] <= 0 <= under[1]:
+        raise _Undecided("division by an interval that contains 0")
+    return times(over, (1 / under[1], 1 / under[0]))
 
 
 def _unmet(part: Part, parts: Mapping[str, Part]) -> Iterator[str]:
-    """Each need of its type that the part breaks. A need holds when the most its left side
-    reaches is at most the least its right side reaches, or under it for `lt`: for every
-    value the card and the design allow."""
+    """Each need of its type that the part breaks or that is not decided for it. A need
+    holds when the most its left side reaches is at most the least its right side reaches,
+    or under it for `lt`: for every value the card and the design allow. A number of more
+    than 256 bits is not printed, as the kernel prints none."""
+    def shown(x: Fraction) -> str:
+        return str(x) if _bits(x) <= 256 else f"a number of {_bits(x)} bits"
+
     for n, need in enumerate(part.type.needs, 1):
-        (low, most), (least, high) = (_span(side, lambda name: _field_of(part, parts, name).range) for side in (need.low, need.high))
+        try:
+            (low, most), (least, high) = (_span(side, lambda name: _field_of(part, parts, name).range) for side in (need.low, need.high))
+        except _Undecided as why:
+            yield f"need {n} of a {part.type.name} is not decided: {why}"
+            continue
         if not (most < least if need.strict else most <= least):
-            yield (f"breaks need {n} of a {part.type.name}: its left side, {'' if low == most else 'up to '}{most}, is not {'under' if need.strict else 'at most'} "
-                   f"its right side, {'' if least == high else 'down to '}{least}, in SI units: {need.why}")
+            yield (f"breaks need {n} of a {part.type.name}: its left side, {'' if low == most else 'up to '}{shown(most)}, is not {'under' if need.strict else 'at most'} "
+                   f"its right side, {'' if least == high else 'down to '}{shown(least)}, in SI units: {need.why}")
 
 
 # --- a tape ----------------------------------------------------------------------------------------
@@ -1185,8 +1224,18 @@ def _answers(rule: Rule, ask: Ask, part: Part, parts: Mapping[str, Part], cases:
 
     if rule.requires is not None:
         # One cell, with no tape and no hint: proved when the condition over keys holds for the part, and refuted when not.
-        has = ", ".join(f"{name} is {_field_of(part, parts, name)}" for name in dict.fromkeys(_keys(rule.requires)))
-        yield cell(tail, "proved") if _static(rule.requires, part, parts) else cell(tail, "refuted", f"the part is not what the rule requires: {has}")
+        if _static(rule.requires, part, parts):
+            yield cell(tail, "proved")
+            return
+        # The keys are named while they fit in the reason the kernel prints, and the rest are counted, as in Grid.lean.
+        asked, has, said = list(dict.fromkeys(_keys(rule.requires))), "", 0
+        for name in asked:
+            one = f"{name} is {_field_of(part, parts, name)[:MAX_REASON]}"
+            if said and len(f"{has}, {one}".encode("utf-8", "surrogatepass")) > MAX_REASON - 56:
+                break
+            has += f"{', ' if said else ''}{one}"
+            said += 1
+        yield cell(tail, "refuted", f"the part is not what the rule requires: {has}{f' and {len(asked) - said} more' if said < len(asked) else ''}")
         return
 
     def tape_of(pairs: list[tuple[Any, Any]], case: str | None) -> tuple[_Tape, list[int], list[tuple[int, int]]]:

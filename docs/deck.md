@@ -460,7 +460,7 @@ Some clauses ask no inequality. They say what a part must be: a lifter of one ca
 
 A rule has `le` or `requires`, and never both. A rule with `requires` has no `let` and no `where`, which are for an inequality. Its condition is over keys, as every condition is: a rule requires something of what a part is. A deck that breaks any of these does not load.
 
-For a part that its `when` holds for, the rule gives one cell, entered as any rule's cell is. The cell is `proved` when the condition holds for the part and `refuted` when it does not. It has no tape, it needs no hint and no search, and it takes no work. A refuted cell makes the verdict FAIL as any refuted cell does. Its reason names each key the condition names, in the order it names them and each once, with the name the part has for it: `the part is not what the rule requires: top.bore is machined, bottom.bore is cut`.
+For a part that its `when` holds for, the rule gives one cell, entered as any rule's cell is. The cell is `proved` when the condition holds for the part and `refuted` when it does not. It has no tape, it needs no hint and no search, and it takes no work. A refuted cell makes the verdict FAIL as any refuted cell does. Its reason names each key the condition names, in the order it names them and each once, with the name the part has for it: `the part is not what the rule requires: top.bore is machined, bottom.bore is cut`. A reason prints in 200 bytes, so a rule that requires many keys names the ones that fit and counts the rest: `k00 is no, k01 is no and 38 more`.
 
 The rule reads the keys that its `requires` and its `when` name, so those keys have no `unread` cell on a part the rule applies to. It reads no load, so it has one cell whatever load cases the card has.
 

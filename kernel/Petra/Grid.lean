@@ -231,6 +231,11 @@ def Static.holds (part : Part) (fellows : Std.TreeMap String Part) : Static → 
   | .or cs => cs.foldl (fun so c => so || c.holds part fellows) false
   | .not c => !c.holds part fellows
 
+/-- The bytes that the reason of a refuted requirement has for its keys: what a reason prints,
+less its first words, `the part is not what the rule requires: `, and the count of the keys
+it does not name, ` and 999999 more`. -/
+def REQUIRED_ROOM : Nat := MAX_TEXT - 56
+
 /-- A computation that pays for each step, in units of work, from what is left, before it
 takes the step. What is left is kept when the computation fails. -/
 abbrev Paying := ExceptT String (StateM Nat)
@@ -310,15 +315,26 @@ def needs (parts : Array Part) : StateM Findings Nat := do
       match found with
       | .ok (low, high) =>
         unless (if need.strict then low.hi < high.lo else low.hi ≤ high.lo) do
-          let most := if low.lo == low.hi then s!"{low.hi}" else s!"up to {low.hi}"
-          let least := if high.lo == high.hi then s!"{high.lo}" else s!"down to {high.lo}"
-          modify (·.push ⟨"parts.9", "design", part.name,
-            s!"breaks need {k + 1} of a {part.kind.name}: its left side, {most}, is not {if need.strict then "under" else "at most"} its right side, {least}, in SI units: {need.why}"⟩)
+          -- Once the findings are full a finding is only counted, and its text is not made:
+          -- a design of many parts that each break a need costs no more than its needs.
+          if (← get).kept.size ≥ MAX_FINDINGS then
+            modify (·.push ⟨"parts.9", "design", part.name, ""⟩)
+          else
+            -- A number is printed whole when it is short. A long one would be cut from the
+            -- finding, and takes long to write out.
+            let shown (x : Rat) : String := if ratBits x ≤ 256 then toString x else s!"a number of {ratBits x} bits"
+            let most := if low.lo == low.hi then shown low.hi else s!"up to {shown low.hi}"
+            let least := if high.lo == high.hi then shown high.lo else s!"down to {shown high.lo}"
+            modify (·.push ⟨"parts.9", "design", part.name,
+              s!"breaks need {k + 1} of a {part.kind.name}: its left side, {most}, is not {if need.strict then "under" else "at most"} its right side, {least}, in SI units: {need.why}"⟩)
       | .error why =>
         if why == NEEDS_SPENT then
           modify (·.push ⟨"limits", "design", part.name, why⟩)
           return 0
-        modify (·.push ⟨"parts.9", "design", part.name, s!"need {k + 1} of a {part.kind.name} is not decided: {why}"⟩)
+        if (← get).kept.size ≥ MAX_FINDINGS then
+          modify (·.push ⟨"parts.9", "design", part.name, ""⟩)
+        else
+          modify (·.push ⟨"parts.9", "design", part.name, s!"need {k + 1} of a {part.kind.name} is not decided: {why}"⟩)
   return left
 
 /-- What a tape reads of `part` under a load case. `named` finds a part by its name. -/
@@ -488,16 +504,25 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hi
             if out.size > MAX_CELLS then return .error over
             if required.holds part fellows then out := out.push (cell part.name ask.mechanism tail .proved)
             else
-              let has := (once required.keys).map fun (called, field) =>
+              -- The keys are named while they fit in what a reason prints, beside its first
+              -- words and the count of the rest, and the rest are counted: a condition may
+              -- name thousands, for thousands of parts. The first key is always named.
+              let mut has := ""
+              let mut said := 0
+              for (called, field) in rule.asked do
                 let owner := match called with
                   | none => some part
                   | some called => fellows.get? called
+                -- A name of a key may be long, and the reason holds its first characters.
                 let name := match owner.bind (·.slot field) with
-                  | some (.key mine) => mine
+                  | some (.key mine) => toString (mine.take MAX_TEXT)
                   | _ => "nothing"
-                s!"{(called.map (· ++ ".")).getD ""}{field} is {name}"
-              out := out.push (cell part.name ask.mechanism tail .refuted
-                s!"the part is not what the rule requires: {", ".intercalate has.toList}")
+                let one := s!"{(called.map (· ++ ".")).getD ""}{field} is {name}"
+                if said > 0 && has.utf8ByteSize + 2 + one.utf8ByteSize > REQUIRED_ROOM then break
+                has := has ++ (if said == 0 then "" else ", ") ++ one
+                said := said + 1
+              let more := if said < rule.asked.size then s!" and {rule.asked.size - said} more" else ""
+              out := out.push (cell part.name ask.mechanism tail .refuted s!"the part is not what the rule requires: {has}{more}")
             continue
           let mut unders : Array (Option String) := #[none]
           if !rule.loads.isEmpty then
