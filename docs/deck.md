@@ -387,6 +387,8 @@ What reads an unstated field has no answer, and says so.
 
 So leaving a field out never helps a design past a rule. Every cell that would have read it is open, and a design passes only when the card waives those lines.
 
+### A quantity at or under zero
+
 A size is more than zero, and most quantities of a part are sizes. Some are not: the lowest temperature a battery may be discharged at, a position measured from a datum, a count of spares that may be none. A field says so with `may_be`.
 
 ```json
