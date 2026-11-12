@@ -657,6 +657,7 @@ def expr (scope : Scope) : Nat → Json → Reading (Nat × Dim)
       | "sqrt", [a], [d] => put (.sqrt a) (d.times (mkRat 1 2))
       | "exp", [a], [d] => do plain "the argument of exp" d; put (.exp a) {}
       | "ln", [a], [d] => do plain "the argument of ln" d; put (.ln a) {}
+      | "cos", [a], [d] => do plain "the argument of cos" d; put (.cos a) {}
       | _, _, _ => throw s!"{clip op} with {args.length} arguments is not in the language"
   | _ + 1, _ => throw "an expression is a number, a name or [operator, ...]"
 
@@ -1395,6 +1396,7 @@ def Node.key : Node → Array Nat
       (match cond with
         | some cond => cond.code (out.push 1)
         | none => out.push 0).push value) #[14]
+  | .cos i => #[15, i]
 
 /-- Two keys from place `i` on, when they are of one length: the one with the lesser number
 at the first place where they differ comes first. -/

@@ -1,10 +1,12 @@
 /-
 Exact rationals and closed rational intervals, as petra/kernel/interval.py defines them.
 
-+, -, *, / and integer powers are exact. sqrt, ln, exp and pi round outward to the grid of
-dyadic rationals with 96 fractional bits: the lower end is the largest grid point at or
-below the value, and the upper end the smallest at or above it. The mathematics fixes both
-ends, so this kernel and the Python one agree on them whatever series each sums.
++, -, *, / and integer powers are exact. sqrt, ln, exp, cos and pi round outward to the
+grid of dyadic rationals with 96 fractional bits: the lower end is the largest grid point
+at or below the value, and the upper end the smallest at or above it. The mathematics
+fixes both ends, so this kernel and the Python one agree on them whatever series each sums.
+The cosine of an interval also rests on where the interval lies among the multiples of pi,
+which both kernels decide with the same comparisons against the grid's pi (`iCos`).
 
 No definition here is a `partial def` or runs a `while`: each loop is a recursion that Lean
 checks to end. So the logic can read every one, and proofs/ proves what each returns
@@ -185,6 +187,55 @@ def expAt (x : Rat) (p : Nat) : Iv :=
     ⟨1 / e.hi, 1 / e.lo⟩
   else expPos x p
 
+/-- The loop of the series sum_n (-1)^n r^(2n) / (2n)!, where `m` is minus `r` squared.
+`[ta, tb]` holds term `n` times `one`, `[a, b]` holds the sum of the terms up to `n` times
+`one`, and `fact` is `(2n + 2)!`. The first argument counts the rounds left, so the
+recursion ends. It gives the sum, `n` and `fact`. -/
+def cosGo (one : Int) (m : Rat) :
+    Nat → Int → Int → Int → Int → Nat → Int → Int × Int × Nat × Int
+  | 0, _, _, a, b, n, fact => (a, b, n, fact)
+  | rounds + 1, ta, tb, a, b, n, fact =>
+    if (4 : Int) ^ n * fact ≤ one then
+      let t := scale ta tb (m / qi (Int.ofNat ((2 * n + 1) * (2 * n + 2))))
+      cosGo one m rounds t.1 t.2 (a + t.1) (b + t.2) (n + 1) (fact * Int.ofNat ((2 * n + 3) * (2 * n + 4)))
+    else (a, b, n, fact)
+
+/-- `j` doublings of the angle. `[a, b] / one` holds cos y, and cos 2y = 2 cos² y - 1. So
+each round squares the enclosure, rounded outward: the square is at least `low`, which is
+zero when the enclosure holds zero, and at most `high`. A cosine is at most 1, so the
+upper end is kept at `one`. The lower end is at least minus `one` as it comes, since
+`low` is not negative. -/
+def dblGo (one : Int) : Nat → Int → Int → Int × Int
+  | 0, a, b => (a, b)
+  | j + 1, a, b =>
+    let low := if 0 ≤ a then a * a else if b ≤ 0 then b * b else 0
+    let high := if a * a ≤ b * b then b * b else a * a
+    let hi := 2 * (- Int.fdiv (-high) one) - one
+    dblGo one j (2 * Int.fdiv low one - one) (if hi ≤ one then hi else one)
+
+/-- An enclosure of `cos (r * 2 ^ s)` times `2 ^ q`, for `r` between -1/2 and 1/2: the
+series for `cos r`, its remainder, and `s` doublings of the angle. After the term `n` the
+rest of the series is at most `1 / (4 ^ n * (2n + 2)!)` in size, whatever its sign. The
+loop is given `q + 1` rounds and its own test ends it sooner: `4 ^ n <= 2 ^ q` needs
+`2 n <= q`. -/
+def cosInt (r : Rat) (s q : Nat) : Int × Int :=
+  let one : Int := (2 : Int) ^ q
+  let g := cosGo one (-(r * r)) (q + 1) one one one one 0 2
+  let rest := - Int.fdiv (-one) ((4 : Int) ^ g.2.2.1 * g.2.2.2)
+  dblGo one s (g.1 - rest) (g.2.1 + rest)
+
+/-- cos x, for any x. The cosine is even, so it is that of `y`, the size of `x`, and
+cos y = cos (2^s r) with r = y / 2^s < 1/2. Each doubling takes the error times four at
+most, so the working precision q grows by two bits with each, and eight bits more pay for
+the rounding of the terms of the series. -/
+def cosAt (x : Rat) (p : Nat) : Iv :=
+  let y := if x < 0 then -x else x
+  let s := bitlen y.ceil.toNat + 1
+  let q := p + 2 * s + 8
+  let one : Int := (2 : Int) ^ q
+  let e := cosInt (y / qi ((2 : Int) ^ s)) s q
+  ⟨qd e.1 one, qd e.2 one⟩
+
 /-- Machin's formula: pi = 16 atan(1/5) - 4 atan(1/239). -/
 def piAt (p : Nat) : Iv :=
   ((Iv.pt 16).mul (oddSeries (mkRat 1 5) (-1) p)).sub ((Iv.pt 4).mul (oddSeries (mkRat 1 239) (-1) p))
@@ -220,6 +271,7 @@ abbrev Cache := Std.TreeMap (Int × Nat) (Rat × Rat) lexOrd.compare
 structure Caches where
   ln : Cache := {}
   exp : Cache := {}
+  cos : Cache := {}
 
 abbrev M := StateT Caches (Except String)
 
@@ -258,6 +310,57 @@ def iLn (x : Iv) (extra : Nat) : M Iv := do
 
 def iExp (x : Iv) (extra : Nat) : M Iv := do
   return ⟨(← expPoint x.lo extra).1, (← expPoint x.hi extra).2⟩
+
+/-- The grid points around cos x. cos 0 is 1, a point of the grid, and the cosine of any
+other rational is irrational. The cosine is even, so the cache keeps an end under its
+size, and an end and its negative are one entry. -/
+def cosPoint (x : Rat) (extra : Nat) : M (Rat × Rat) := do
+  if x == 0 then return (1, 1)
+  let y := if x < 0 then -x else x
+  let key := (y.num, y.den)
+  match (← get).cos.get? key with
+  | some v => return v
+  | none =>
+    let v ← liftM (m := Except String) (grid (cosAt y) extra)
+    modify fun c => { c with cos := cached c.cos key v }
+    return v
+
+/-- What `iCos` says when the two tests of its multiples of pi do not hold. They hold for
+every enclosure of pi whose ends are above zero. -/
+def UNPLACED : String := "cos over an interval that the enclosure of pi does not place between two of its multiples"
+
+/-- The cosine of an enclosure, for any enclosure.
+
+Between `k` pi and `k + 1` pi the cosine falls when `k` is even and rises when `k` is odd,
+and at `k` pi it is 1 or -1. The enclosure `pi` of pi places the interval: `i` is a whole
+number with `i` pi at or under the lower end, and `j` one with the upper end at or under
+`j` pi. Each is found by a division by an end of `pi`, and then tested: `i` times the end
+of `pi` that makes the product greater is at least `i` pi, and `j` times the end that
+makes it less is at most `j` pi. So what follows rests on the two tests and not on how
+`i` and `j` were found.
+
+- `j <= i + 1`: the interval lies between `i` pi and `i + 1` pi, where the cosine goes one
+  way. Its enclosure is from the grid points around the cosines of the two ends.
+- `j = i + 2`: `i + 1` pi may lie in the interval, and the cosine turns there, at -1 for
+  an even `i` and at 1 for an odd one. That is one end of the enclosure, and the other is
+  the greater, or the lesser, of the grid points of the two ends.
+- `j > i + 2`: the enclosure is from -1 to 1.
+
+An end that `pi` does not place on one side of a multiple of pi, since the multiple's
+enclosure holds it, counts as on both: `j` is then `i + 2`, and the enclosure reaches to
+1 or to -1. The cosine of such an end is closer to that than the grid is fine. -/
+def iCos (x : Iv) (extra : Nat) : M Iv := do
+  let pi ← liftM (m := Except String) piIv
+  let i := (x.lo / (if 0 ≤ x.lo then pi.hi else pi.lo)).floor
+  let j := (x.hi / (if 0 < x.hi then pi.lo else pi.hi)).ceil
+  if qi i * (if 0 ≤ i then pi.hi else pi.lo) ≤ x.lo ∧ x.hi ≤ qi j * (if 0 ≤ j then pi.lo else pi.hi) then
+    if i + 2 < j then return ⟨-1, 1⟩
+    else do
+      let a ← cosPoint x.lo extra
+      let b ← cosPoint x.hi extra
+      if j ≤ i + 1 then return (if i % 2 = 0 then ⟨b.1, a.2⟩ else ⟨a.1, b.2⟩)
+      else return (if i % 2 = 0 then ⟨-1, rmax a.2 b.2⟩ else ⟨rmin a.1 b.1, 1⟩)
+  else throw UNPLACED
 
 /-- The longest string the kernel reads as a number. -/
 def MAX_NUMBER_CHARS : Nat := 4000
