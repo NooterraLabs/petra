@@ -100,8 +100,23 @@ An expression is a number, a name, or a list that starts with an operator.
 | `["pow", a, "2"]`, `["pow", a, "3/2"]` | A power with a fixed exponent. A whole or a half power is at most 64. |
 | `["pow", a, b]` | A power with an exponent that varies. Both must be plain numbers. |
 | `["exp", a]`, `["ln", a]` | The exponential and the natural logarithm of a plain number |
+| `["cos", a]` | The cosine of a plain number, an angle in radians |
 
-The language has no sine, cosine or tangent and no sum over a list. An equation that needs one cannot be written as a row yet. Say so and do not approximate it.
+`cos` is the one operator for angles. Its argument is a plain number and so is its value: a deck that takes the cosine of a length is refused when it is read. An angle is in radians, and any angle of up to 65,536 in size has a cosine. A larger one has none, and a cell whose rule reads it is open, as for a division by a range that holds zero.
+
+The language has no sine, no tangent, no inverse of them and no degrees. A row writes the first two and the last with `cos` and `pi`:
+
+| Wanted | Written |
+|---|---|
+| The sine of `x` | `["cos", ["sub", ["div", "pi", "2"], "x"]]`, the cosine of a quarter turn less `x` |
+| The cosine of `x` degrees | `["cos", ["mul", "x", ["div", "pi", "180"]]]` |
+| The tangent of `x` | The sine over the cosine |
+
+An angle in degrees stays a plain number: the row multiplies it by pi over 180 itself, so the factor is on the tape and the kernel checks it with the rest.
+
+`pi` is held between two fractions 2^-96 apart, and a cosine is rounded outward to the same grid ([format.md](format.md), "Tapes"). So a design that sits exactly on a limit which is a cosine, as 1/2 is the cosine of 60 degrees, is neither proved nor refuted, and its cell is open.
+
+An equation that needs an arc cosine or another inverse, or a sum over a list, cannot be written as a row yet. Say so and do not approximate it.
 
 ### Cases
 
@@ -214,7 +229,7 @@ A worked example is a use of the equation that a published source prints: the va
 
 | Part | Passes when | Is `none` when |
 |---|---|---|
-| `units` | Every sum, comparison, minimum and maximum is of one dimension, every exponent and every argument of `exp` and `ln` is a plain number, and each case gives the row's dimension. For a table: every cell has the row's dimension and every band its input's. | never |
+| `units` | Every sum, comparison, minimum and maximum is of one dimension, every exponent and every argument of `exp`, `ln` and `cos` is a plain number, and each case gives the row's dimension. For a table: every cell has the row's dimension and every band its input's. | never |
 | `examples` | The row reproduces every worked example given for it | no example is given |
 | `continuity` | For an equation: wherever one case hands over to another, the two differ by at most 1%, or `jumps` names that pair | no two sample points fell in different cases |
 | `shape` | For a table, in place of continuity: the cells never go down along a side the row says it rises on, and never up along one it falls on | the row says neither |
