@@ -184,7 +184,7 @@ corpus/cases/deck/d30_oversize_end_at_minimum.petra	NOT_PASS			oversize holes in
 corpus/cases/deck/d31_long_line_over.petra	FAIL			a line of 39 inch: at the 83.3% of note c of Table J3.2 the 14 bolts carry 208.7 kip under a pull of 215, and at the full stress they would carry 250.5
 corpus/cases/deck/d32_long_line_under.petra	PASS_WAIVED			the line of d31, 39 inch: at 83.3% the 14 bolts carry 208.7 kip, and the pull is 205
 corpus/cases/deck/d33_line_of_38_inch.petra	PASS_WAIVED			a line of exactly 38 inch is not over it, so the 20 bolts carry 248.5 kip at the full stress under a pull of 230, where 83.3% would give 207.0
-corpus/cases/deck/d34_large_bolt.petra	UNKNOWN			1 1/8 inch bolts: Table J3.3 lists holes to 1 inch, so the four lines whose rules read a hole are open, though each holds by hand
+corpus/cases/deck/d34_large_bolt.petra	PASS_WAIVED			1 1/8 inch bolts: the last line of Table J3.3 gives a hole of d + 1/8, and the four lines whose rules read a hole hold, as by hand
 corpus/cases/deck/d35_edge_distance_unanswered.petra	UNKNOWN			the card waives the other three mechanisms with no rule, and the greatest edge distance of J3.6 stays open: the deck has no rule for it
 corpus/cases/deck/d36_far_from_an_edge.petra	NOT_PASS			holes 5 inch from the nearest edge of a 3/8 inch plate, over the 4.5 inch of J3.6: the deck has no rule for it, and the open cell keeps the lap from passing
 corpus/cases/deck/d37_no_side_or_surface.petra	INPUT_ERROR			a lap with no side and no surface, as one was written before the deck had those fields

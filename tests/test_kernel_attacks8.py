@@ -2,6 +2,10 @@
 fails whatever is missing, which a waiver rested because something was missing. One test per
 finding.
 
+  F1  The shipped deck's Table J3.3 listed holes for bolts to 1 inch, and not its last line,
+      d + 1/8 for 1 1/8 inch and more. A lap of two 1 1/8 inch bolts whose shear alone fails
+      by 2.5 times had a strength cell with no value, which a waiver rested: PASS_WAIVED. Tables
+      J3.3 and J3.4 now list what their last lines give to 1 1/2 inch, and the lap FAILs.
   D1  A waiver rested a cell because something was missing: a key the part left unstated, a
       load a case left out, a table with no line for the part. It rested it though the rule
       failed whatever the missing piece was: a pin that both coatings fail, a bolt whose
@@ -24,9 +28,11 @@ finding.
       PASS needs, so the design passed with nothing it was asked answered.
 """
 import json
+import math
 import unittest
 from fractions import Fraction
 
+import petra
 from petra import grid, verify
 from tests.test_deck_features import (ANCHOR, HEAD, KERNEL, asks, cells, design, given, key, kind, load, made_up, no_deck, parsed, part, reads, reason,
                                       rule, size)
@@ -325,6 +331,49 @@ class WhereIsNotTheRule(unittest.TestCase):
         found, status, _ = cells(self, where_deck(), design(part("joint", "j", d="20 mm")), card)
         self.assertEqual((found[("j", "joint.bearing", "bearing/service/where")], found[("j", "joint.bearing", "bearing/service")]), ("proved", "proved"))
         self.assertEqual(status, "PASS")
+
+
+# --- F1. a bolt past the sizes Table J3.3 prints -------------------------------------------------------
+
+LAP = "petra 0\n" + "".join(f"\nplate {p} {{\n  thickness 1 inch\n  width 12 inch\n  Fy given {p}.Fy\n  Fu given {p}.Fu\n}}\n" for p in ("tab", "strap")) + """
+lap splice {
+  fastener "Group 120"
+  threads included
+  diameter 1.125 inch
+  holes standard
+  count 2
+  pitch 4 inch
+  end 2 inch
+  side 3 inch
+  surface protected
+  joins tab strap
+}
+"""
+"""Two 1 inch A36 plates joined by two 1 1/8 inch Group 120 bolts, the design of the review."""
+LAP_CARD = ('petra 0\n\ncard "lap" {\n  owner "t@example.org"\n}\n\n'
+            + "".join(f'given {p}.{f} in [{v} ksi, {v} ksi] signed "t@example.org" source "ASTM A36"\n' for p in ("tab", "strap") for f, v in (("Fy", 36), ("Fu", 58)))
+            + '\nload gravity {\n  on splice pull in [0 kip, 200 kip]\n  signed "t@example.org" source "test"\n}\n'
+            + "".join(waive(m, "splice") for m in ("lap.tightening", "lap.hole_use", "lap.max_edge_distance", "lap.ply_flexure",
+                                                    "lap.spacing", "lap.strength", "lap.ply_rupture", "lap.block_shear")))
+"""Its card, which waives the four lines the deck has no rule for and the four whose rules read a hole."""
+
+
+class ABoltPastThePrintedSizes(unittest.TestCase):
+    def test_a_lap_whose_bolts_fail_in_shear_fails_under_its_waivers(self):
+        """Each bolt carries 0.75 x 54 ksi x pi / 4 x (1 1/8 inch)^2 = 40.3 kip in shear, under the bearing and the tearout of its
+        holes, so the two carry 80.5 kip under a pull of 200: the joint fails whatever its holes are. The shipped deck's Table J3.3
+        stopped at 1 inch, so the rule had no value, the cell was open and the waiver rested it: PASS_WAIVED. The table now lists the
+        hole its last line gives, 1 1/4 inch, and with D1 a waiver rests no cell of a table with no line for the part."""
+        found = petra.check(LAP_CARD, LAP, path="lap.petra", repair=False)
+        self.assertEqual(found["status"], "FAIL")
+        (strength,) = [c for c in found["cells"] if c["mechanism"] == "lap.strength"]
+        self.assertEqual(strength["state"], "refuted")
+        self.assertAlmostEqual(strength["ratio"], 200 / (2 * 0.75 * 54 * math.pi / 4 * 1.125 ** 2), places=6)
+        self.assertEqual([c["mechanism"] for c in found["cells"] if c["state"] == "waived"],
+                         ["lap.tightening", "lap.hole_use", "lap.max_edge_distance", "lap.ply_flexure"], "the waivers of the lines with rules rest nothing")
+        larger = petra.check(LAP_CARD, LAP.replace("diameter 1.125 inch", "diameter 1.75 inch").replace("pitch 4 inch", "pitch 5 inch").replace("end 2 inch", "end 3 inch"),
+                             path="lap.petra", repair=False)
+        self.assertEqual(larger["status"], "UNKNOWN", "a bolt past the sizes the tables list is not decided, and no waiver passes it")
 
 
 if __name__ == "__main__":

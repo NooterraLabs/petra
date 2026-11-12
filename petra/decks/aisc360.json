@@ -1319,7 +1319,7 @@
    "anchor": {
     "standard": "ANSI/AISC 360-22",
     "clause": "J3.3",
-    "table": "J3.3",
+    "table": "J3.3, with its last line, d + 1/8 and d + 5/16 for 1 1/8 inch and more, taken at 1 1/8, 1 1/4, 1 3/8 and 1 1/2 inch",
     "page": "16.1-137"
    },
    "gives": {
@@ -1334,7 +1334,7 @@
      "what": "bolt diameter",
      "range": [
       "1/2 inch",
-      "1 inch"
+      "3/2 inch"
      ]
     },
     {
@@ -1354,7 +1354,11 @@
       "5/8 inch",
       "3/4 inch",
       "7/8 inch",
-      "1 inch"
+      "1 inch",
+      "9/8 inch",
+      "5/4 inch",
+      "11/8 inch",
+      "3/2 inch"
      ]
     },
     "across": {
@@ -1381,6 +1385,22 @@
      [
       "9/8",
       "5/4"
+     ],
+     [
+      "5/4",
+      "23/16"
+     ],
+     [
+      "11/8",
+      "25/16"
+     ],
+     [
+      "3/2",
+      "27/16"
+     ],
+     [
+      "13/8",
+      "29/16"
      ]
     ],
     "rises": [
@@ -1394,7 +1414,7 @@
    "anchor": {
     "standard": "ANSI/AISC 360-22",
     "clause": "J3.5",
-    "table": "J3.4",
+    "table": "J3.4, with its last line, 1 1/4 d over 1 1/4 inch, taken at 1 3/8 and 1 1/2 inch",
     "page": "16.1-139"
    },
    "gives": {
@@ -1409,7 +1429,7 @@
      "what": "bolt diameter",
      "range": [
       "1/2 inch",
-      "5/4 inch"
+      "3/2 inch"
      ]
     }
    ],
@@ -1423,7 +1443,9 @@
       "7/8 inch",
       "1 inch",
       "9/8 inch",
-      "5/4 inch"
+      "5/4 inch",
+      "11/8 inch",
+      "3/2 inch"
      ]
     },
     "unit": "inch",
@@ -1434,7 +1456,9 @@
      "9/8",
      "5/4",
      "3/2",
-     "13/8"
+     "13/8",
+     "55/32",
+     "15/8"
     ],
     "rises": [
      "d"

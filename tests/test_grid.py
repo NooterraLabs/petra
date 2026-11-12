@@ -9,13 +9,14 @@ classes use the deck that ships, petra/decks/aisc360.json, and the kernel when o
 import copy
 import importlib.util
 import json
+import math
 import unittest
 from pathlib import Path
 from unittest import mock
 
 import petra
 from petra import deck as rows
-from petra import grid, verify
+from petra import export, grid, verify
 from petra.files import read_pair
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -386,6 +387,32 @@ def formalizer(name: str) -> dict:
     return {r["id"]: r for r in json.loads((ROOT / "bench" / "formalizer" / name).read_text(encoding="utf-8"))["rows"]}
 
 
+LAST_LINES = {
+    "aisc360-22/table-J3.3": (("aisc360-22/table-J3.3-large-standard", "aisc360-22/table-J3.3-large-oversize"), ("9/8", "5/4", "11/8", "3/2"),
+                              "J3.3, with its last line, d + 1/8 and d + 5/16 for 1 1/8 inch and more, taken at 1 1/8, 1 1/4, 1 3/8 and 1 1/2 inch"),
+    "aisc360-22/table-J3.4": (("aisc360-22/table-J3.4-large",), ("11/8", "3/2"), "J3.4, with its last line, 1 1/4 d over 1 1/4 inch, taken at 1 3/8 and 1 1/2 inch")}
+"""The two tables whose last line the standard prints as a formula of the bolt's diameter: the
+formula's row for each column, the sizes past the printed ones it is taken at, and the anchor.
+A rule reads a table at the bolt's size and cannot choose a formula by it, so the deck lists
+what the formula gives at each size of bolt to 1 1/2 inch, the largest the deck's other rows
+take. Each formula is a row of the deck of its own, which two transcribers agreed on."""
+
+
+def with_last_line(transcribed: dict, deck_rows: dict) -> dict:
+    """The table as the deck holds it: the transcription with a line for each size of
+    LAST_LINES, whose cells are what the formula rows give there, in inch."""
+    formulas, sizes, anchor = LAST_LINES[transcribed["id"]]
+    row = copy.deepcopy(transcribed)
+    inch = rows.quantity("1 inch", "inch")[0]
+    for size in sizes:
+        line = [export.number(rows.value(rows.read(deck_rows[f]), {"d": rows.quantity(f"{size} inch", "d")[0]}) / inch) for f in formulas]
+        row["table"]["down"]["at"].append(f"{size} inch")
+        row["table"]["cells"].append(line if "across" in row["table"] else line[0])
+    row["takes"][0]["range"][1] = f"{sizes[-1]} inch"
+    row["anchor"] = {**row["anchor"], "table": anchor}
+    return row
+
+
 class Shipped(unittest.TestCase):
     """The deck of AISC 360-22 rows and the three designs under examples/deck."""
 
@@ -400,10 +427,16 @@ class Shipped(unittest.TestCase):
             examples |= json.loads((ROOT / "bench" / "formalizer" / name).read_text(encoding="utf-8"))["examples"]
         body = json.loads((grid.DECKS / "aisc360.json").read_text(encoding="utf-8"))
         self.assertEqual(len(body["rows"]), 32, "the 18 of the first two runs and the 14 of the third")
+        deck_rows = {r["id"]: r for r in body["rows"]}
         for written in body["rows"]:
             with self.subTest(row=written["id"]):
-                self.assertEqual(written, first[written["id"]], "the row is the transcription, unedited")
-                row = rows.read(written)
+                transcribed = first[written["id"]]
+                if written["id"] in LAST_LINES:
+                    self.assertEqual(written, with_last_line(transcribed, deck_rows), "the transcription with the lines its last line gives")
+                    self.assertEqual(rows.shape(rows.read(written)).outcome, "pass", "the lines run on from the printed ones")
+                else:
+                    self.assertEqual(written, transcribed, "the row is the transcription, unedited")
+                row = rows.read(transcribed)
                 found, unread = run.worked(row, examples.get(row.id, []))
                 self.assertEqual(unread, [])
                 checks = rows.accept(row, found, rows.read(second[row.id]))
@@ -472,20 +505,43 @@ class Shipped(unittest.TestCase):
         self.assertEqual(cell(odd, "lap.spacing", "lap-spacing-centres")["state"], "proved", "2 2/3 diameters is no table")
         self.assertEqual(self.variant(("count 3", "count 1"))["status"], "INPUT_ERROR", "the rule sums over two end bolts")
 
-    def test_a_bolt_of_an_inch_and_an_eighth_leaves_four_lines_open(self):
-        """Table J3.3 lists holes for bolts to 1 inch and gives a formula for larger ones. A rule cannot choose between
-        the two by the size of the bolt, so the rules read the table, and the four lines that need a hole are open."""
+    def test_a_bolt_of_an_inch_and_an_eighth_is_read_on_the_last_line_of_each_table(self):
+        """Table J3.3 lists holes for bolts to 1 inch and gives a formula, d + 1/8 for a standard hole, for 1 1/8 inch and
+        more. A rule cannot choose between the two by the size of the bolt, so the deck's table lists what the formula gives
+        at 1 1/8 inch, and the four lines that need a hole are answered. Until the eighth review they were open, and a waiver
+        rested them: a lap whose bolts failed in shear passed (tests/test_kernel_attacks8.py)."""
         large = self.variant(("diameter 0.75 inch", "diameter 1.125 inch"), ("pitch 3 inch", "pitch 3.5 inch"), ("end 1.5 inch", "end 2 inch"))
-        opened = [c for c in large["cells"] if c["state"] == "open" and c["mechanism"] not in self.NO_RULE]
-        self.assertEqual([c["entry"] for c in opened], ["lap-spacing-clear", "lap-strength/gravity", "lap-ply-rupture-a/gravity", "lap-ply-rupture-b/gravity",
-                                                        "lap-block-shear-a/gravity", "lap-block-shear-b/gravity"])
-        self.assertEqual({c["mechanism"] for c in opened}, {"lap.spacing", "lap.strength", "lap.ply_rupture", "lap.block_shear"})
-        for c in opened:
-            self.assertIn("aisc360-22/table-J3.3 gives no value at what splice has", c["why"])
+        self.assertEqual([c["mechanism"] for c in large["cells"] if c["state"] == "open"], self.NO_RULE)
         self.assertEqual((large["status"], large["counts"]["refuted"]), ("UNKNOWN", 0))
-        # Table J3.4 lists this bolt, at 1 1/2 inch, so the end and the side distances are answered.
+        # J3.4: one diameter clear between holes of 1 1/8 + 1/8 inch.
+        self.assertAlmostEqual(cell(large, "lap.spacing", "lap-spacing-clear")["ratio"], 1.125 / (3.5 - 1.25), places=6)
+        # The end bolts tear out of 3/8 inch A36 at 0.75 x 1.2 x (2 - 1.25 / 2) inch, and the middle one shears at 0.75 x 54 ksi x pi / 4 x 1.125^2.
+        capacity = 2 * 0.75 * 1.2 * (2 - 1.25 / 2) * 0.375 * 58 + 0.75 * 54 * math.pi / 4 * 1.125 ** 2
+        self.assertAlmostEqual(cell(large, "lap.strength", "lap-strength/gravity")["ratio"], 45 / capacity, places=6)
+        # Table J3.4 asks 1 1/2 inch of this bolt.
         self.assertAlmostEqual(cell(large, "lap.end_distance")["ratio"], 1.5 / 2, places=6)
         self.assertAlmostEqual(cell(large, "lap.side_distance")["ratio"], 1.5 / 3, places=6)
+        # Past 1 1/4 inch Table J3.4 gives 1 1/4 d: 15/8 inch for a bolt of 1 1/2 inch.
+        largest = self.variant(("diameter 0.75 inch", "diameter 1.5 inch"), ("pitch 3 inch", "pitch 4.5 inch"), ("end 1.5 inch", "end 2.5 inch"))
+        self.assertAlmostEqual(cell(largest, "lap.end_distance")["ratio"], 1.875 / 2.5, places=6)
+        self.assertAlmostEqual(cell(largest, "lap.spacing", "lap-spacing-clear")["ratio"], 1.5 / (4.5 - 1.625), places=6)
+
+    def test_a_bolt_the_tables_do_not_list_leaves_six_lines_open_and_no_waiver_rests_them(self):
+        """1 3/4 inch is past the sizes the tables list, so every rule that reads a hole or a least edge distance has no value to
+        read. A card that waives those lines too leaves them open: the deck must cover the part."""
+        six = ("lap.spacing", "lap.end_distance", "lap.side_distance", "lap.strength", "lap.ply_rupture", "lap.block_shear")
+        card, design = read_pair(ROOT / "examples" / "deck" / "lap_pass.petra")
+        for old, new in (("diameter 0.75 inch", "diameter 1.75 inch"), ("pitch 3 inch", "pitch 5 inch"), ("end 1.5 inch", "end 3 inch")):
+            assert old in design, old
+            design = design.replace(old, new)
+        card += "".join(f'\nwaive {m} on splice by "t@example.org" reason "test"\n' for m in six)
+        with mock.patch.object(verify, "binary", lambda: None):
+            found = petra.check(card, design, path=str(ROOT / "examples" / "deck" / "lap_pass.petra"), repair=False)
+        opened = [c for c in found["cells"] if c["state"] == "open"]
+        self.assertEqual({c["mechanism"] for c in opened}, set(six))
+        for c in opened:
+            self.assertTrue(c["why"].startswith(grid.UNRESTED) and "gives no value at what splice has" in c["why"], c["why"])
+        self.assertEqual(found["status"], "UNKNOWN")
 
     def test_each_limit_of_the_clauses_turns_where_the_clause_puts_it(self):
         """A lap on each side of a limit: the first holds, at the limit or just inside it, and the second fails."""
