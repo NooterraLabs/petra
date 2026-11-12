@@ -154,6 +154,19 @@ Measured with `--count 6000 --decks 3000 --seed 7` against the kernel and the gr
 | Generated designs, 5,773 compared | The same verdict and the same cells on every one |
 | Damaged decks, 3,000 compared | The same on every one: 2,385 refused by all three, 167 PASS, 154 FAIL, 281 UNKNOWN, and 13 designs refused |
 
+## The fourth update, of 2026-11-12
+
+The eighth review's fixes changed the pages again: a waiver rests a cell for an unstated key or a missing load only under a completion a hint names and under which the rule holds, and the completions must agree across the design; a cell that every name of its keys fails is refuted; a table with no line for the part, a tape that cannot be written and a rule with no value stay open; a `/where` cell is not the proved cell a PASS needs; a rule that could write a pick of more than 1,024 orders is refused when the deck is read. A fifth agent, on another model than the kernel's author and under the same rule as before, brought the reading up to them. Of the 83 bundles, 82 agreed before the update and all 83 after, reasons and waived lists included. It also wrote 25 checks of its own for paths no bundle reaches, which pass. It reports one slip: it listed the folder above its own once, and used nothing from it.
+
+`AMBIGUITIES.md` gained section L, eleven entries. Two of them name places where the ninth hostile review, run at the same time and apart from it, found a wrong PASS: L1, whether a witness for a rule with a `where` must prove the tape inside the range, and L9, whether a completed load is held to its dimension's floor or only to its `least`.
+
+Measured with `--count 6000 --decks 3000 --seed 7` against the kernel and the grid at d7b617f:
+
+| Compared | Result |
+|---|---|
+| Generated designs, 5,773 compared | The same verdict and the same cells on every one |
+| Damaged decks, 3,000 compared | The same on every one: 2,390 refused by all three, 167 PASS, 152 FAIL, 278 UNKNOWN, and 13 designs refused |
+
 ## What it is not
 
 It does not read a design of the models' kinds or hash a file. It applies the limits that decide a verdict and not the budget of work, the memory of enclosures or the limits on what is printed. It is a reading of the rules path only.

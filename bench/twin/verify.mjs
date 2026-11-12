@@ -10,10 +10,12 @@
 // refuted rule that requires. --explain adds the steps to read the deck and to make the cells.
 //
 // Of the limits format.md states, the budget of work (20,000,000,000 units, for the needs, the
-// proofs and the walk that asks whether a waived cell says nothing anywhere), the words of
+// proofs and the walk that asks whether a waived rule's `where` holds nowhere), the words of
 // enclosures held on a leaf and the caches of ln, exp and cos are left out: they are counted in
 // the reference kernel's own costs. So are the limits on what is printed. The steps to make the
-// cells (Steps), cos among them, are counted. See AMBIGUITIES.md, I and K.
+// cells (Steps), cos and the completions of item 9 among them, are counted. The kernel does not
+// search: the climb of petra check and its budget of nodes are not here. See AMBIGUITIES.md, I,
+// K and L.
 
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
@@ -793,16 +795,6 @@ export class Tape {
 
 const MAX_WAYS = 4096;
 
-// The nodes a node other than a pick reads.
-function nodeArgs(nd) {
-  switch (nd[0]) {
-    case 'add': case 'mul': case 'min': case 'max': return nd[1];
-    case 'neg': case 'abs': case 'sqrt': case 'ln': case 'exp': case 'cos': case 'pow': return [nd[1]];
-    case 'div': return [nd[1], nd[2]];
-    default: return [];
-  }
-}
-
 // The enclosure of node i, a node other than a pick, on a box, or null when it has none there.
 // get(j) is the enclosure of node j, or null.
 function nodeEnc(tape, i, nd, box, get) {
@@ -1004,63 +996,15 @@ function evalPick(cases, ev) {
   return [lo, hi];
 }
 
-// format.md, The rules, items 5 and 6: on a line the card waives, an open cell asks whether its
-// rule says nothing at any point of the box. The walk goes over the whole box as a proof walks one
-// leaf. A node is NOWHERE when it has no value at any point of the box, SOME when it has no
-// enclosure on the box but may have a value at some point, and otherwise its enclosure. A node
-// other than a pick is NOWHERE when it reads a node that is NOWHERE. A pick is NOWHERE when a node
-// it compares is, or when every node it compares has an enclosure and, in every way, no case holds
-// or the first that holds is NOWHERE. A pick of more than 4,096 ways may have a value.
-const NOWHERE = 'nowhere', SOME = 'some';
-export function walker(tape, box) {
-  const memo = new Array(tape.nodes.length);
-  const W = (i) => {
-    if (memo[i] !== undefined) return memo[i];
-    const nd = tape.nodes[i];
-    let r;
-    if (nd[0] === 'pick') r = walkPick(nd[1], W);
-    else {
-      let nowhere = false, some = false;
-      for (const j of nodeArgs(nd)) { const w = W(j); if (w === NOWHERE) nowhere = true; else if (w === SOME) some = true; }
-      if (nowhere) r = NOWHERE;
-      else if (some) r = SOME;
-      else r = nodeEnc(tape, i, nd, box, W) ?? SOME;
-    }
-    memo[i] = r;
-    return r;
-  };
-  return W;
-}
-function walkPick(cases, W) {
-  const { compared, plist } = pickPairs(cases);
-  const ws = [...compared].map(W);
-  if (ws.includes(NOWHERE)) return NOWHERE;
-  if (ws.includes(SOME)) return SOME;
-  const firsts = pickWays(cases, plist, W);
-  if (!firsts) return SOME;
-  let any = false, all = true, lo = null, hi = null;
-  for (const f of new Set(firsts)) {
-    if (f < 0) { all = false; continue; }
-    const v = W(cases[f][1]);
-    if (v === NOWHERE) { all = false; continue; }
-    any = true;
-    if (v === SOME) { all = false; continue; }
-    lo = lo === null ? v[0] : qmin(lo, v[0]);
-    hi = hi === null ? v[1] : qmax(hi, v[1]);
-  }
-  if (!any) return NOWHERE;
-  return all ? [lo, hi] : SOME;
-}
+// format.md, The rules, item 5: on a line the card waives, a rule whose `where` is not proved asks
+// whether the `where` holds nowhere in the box: whether a root of its tape has an enclosure over
+// the whole box, walked as a proof walks one leaf, whose lower end is above zero. A root with no
+// value at some point is not above zero there. Returns the index of the first such root, or -1.
+// (The walk of item 6, which asked whether a root had no value anywhere, rests nothing now.)
 const fullBox = (tape) => tape.inputs.map((inp) => [inp.lo, inp.hi]);
-// Item 6: the root has no value at any point of the box.
-export function saysNothing(tape) {
-  return walker(tape, fullBox(tape))(tape.roots[0]) === NOWHERE;
-}
-// Item 5: the `where` holds nowhere in the box: a root of its tape has a lower end above zero over
-// the whole box, or has no value anywhere in it.
 export function holdsNowhere(tape) {
-  const W = walker(tape, fullBox(tape));
-  return tape.roots.some((r) => { const v = W(r); return v === NOWHERE || (Array.isArray(v) && v[0].n > 0n); });
+  const ev = evaluator(tape, fullBox(tape));
+  return tape.roots.findIndex((r) => { const v = ev(r); return !!v && v[0].n > 0n; });
 }
 
 const MAX_PARTITION_DEPTH = 64;
@@ -1119,6 +1063,9 @@ class LimitErr extends Error {}
 export const CELL_STEPS = 10_000_000;
 export const CELL_LIMIT = 10_000;
 export const MAX_ORDERS = 1024;
+// format.md, The rules, item 9: the kernel tries the combinations of names of the unstated keys
+// of an incomplete cell while there are at most 4,096 of them.
+export const COMPLETION_COMBOS = 4096;
 
 const MAX_EXPR_DEPTH = 1024;
 
@@ -1819,6 +1766,12 @@ function loadRule(r, deck) {
   }
   const letMemo = new Map();
   const letBusy = new Set();
+  // deck.md, The size of a deck: a rule that could write a pick of more than 1,024 orders for some
+  // part is refused when the deck is read, and the deck with it. Every expression of the rule is
+  // counted, each name of `let` among them (AMBIGUITIES.md, L2).
+  const tooManyOrders = (n, what) => {
+    if (n > MAX_ORDERS) throw DE(`the rule could write a pick of ${n} orders, more than 1,024: ${what}`);
+  };
   const fieldOf = (e) => {
     const f = T.fieldMap.get(e);
     if (f) return f.kind === 'q' ? { f, own: e } : null;
@@ -1884,6 +1837,24 @@ function loadRule(r, deck) {
       }
       const depth = 1 + rowDepth(row, bd);
       if (depth > MAX_EXPR_DEPTH) throw DE('an expression nests more than 1,024 deep');
+      // format.md, How the kernel writes a table: the orders of every pick the rule could write
+      // for any part, counted when the deck is read. An equation with cases is one pick (one case
+      // that holds otherwise, standing first, is none). A table is the pick over its places down
+      // and the pick of each line over its places across, every place counted, empty cells too: a
+      // place of a quantity side has the orders of its band or listed value, a place of a side
+      // whose key a row names those of that row's cell, and a side read by a key none.
+      if (row.kind === 'cases' && row.cases[0].when !== undefined) tooManyOrders(row.orders, `the cases of ${row.id}`);
+      if (row.kind === 'table') {
+        const sideOrders = (side) => {
+          if (side.kind !== 'key') { let n = 0; for (let i = 0; i < side.count; i++) n += placeOrders(side, i); return n; }
+          const v = b[side.by];
+          if (!Array.isArray(v) || v[0] !== 'row') return 0;
+          const N = deck.rows.get(v[1]);
+          return nameCells(N).reduce((n, c) => n + nameCellOrders(N, c), 0);
+        };
+        tooManyOrders(sideOrders(row.table.down), `the places down of ${row.id}`);
+        if (row.table.across) tooManyOrders(sideOrders(row.table.across), `the places across of ${row.id}`);
+      }
       return { dim: row.gives.dim, depth };
     },
     // deck.md, A rule: `["case", ["row", ID, {...}], {NAME: ...}]`, a row that gives a name and
@@ -1891,6 +1862,8 @@ function loadRule(r, deck) {
     case: (args) => {
       if (args.length !== 2) throw DE('case takes a row that gives a name and a map of its names');
       const app = nameRowApp(args[0], reads);
+      // A `case` is one pick, with one case for each cell of its row that holds a name.
+      tooManyOrders(nameCells(app.row).reduce((n, c) => n + nameCellOrders(app.row, c), 0), `a case over ${app.row.id}`);
       const m = args[1];
       if (!isObj(m)) throw DE('the map of case is not an object');
       for (const k of Object.keys(m)) if (!app.row.gives.names.includes(k)) throw DE(`${short(k)} is not a name that ${app.row.id} gives`);
@@ -1967,10 +1940,13 @@ function loadRule(r, deck) {
   }
   // deck.md: a `where` is a list with at least one item; each item has `le` and `why`, a text that
   // may be empty, and no `lt`.
-  let where;
+  let where, whereWhy;
   if (Object.hasOwn(r, 'where')) {
     if (!Array.isArray(r.where)) throw DE('where is not a list');
     if (r.where.length === 0) throw DE('where is there and has no item');
+    // The tape that refutes the rule inside its `where` has a pick of one order for each item.
+    tooManyOrders(r.where.length, 'the items of its where');
+    whereWhy = r.where.map((w) => (isObj(w) ? w.why : undefined));
     where = r.where.map((w, i) => {
       checkKeys(w, ['le', 'why'], ['le', 'why'], `where ${i + 1}`);
       needText(w, 'why', `where ${i + 1}`);
@@ -2002,7 +1978,7 @@ function loadRule(r, deck) {
   }
   return {
     id: r.id, tail: slash >= 0 ? r.id.slice(slash + 1) : r.id, type: r.type, mechanism: r.mechanism,
-    form, sides, lets, where, when, requires, reads: ruleReads,
+    form, sides, lets, where, whereWhy, when, requires, reads: ruleReads,
     whenKeys: condKeys(when), requiresKeys: condKeys(requires),
     weight, whenSize: condSize(when), requiresSize: condSize(requires),
     fieldsRead: ruleReads.own.size + ruleReads.joined.size,
@@ -2361,7 +2337,7 @@ export function verifyTexts(texts, opts = {}) {
   // A finding of the shape rules, or of a deck that does not hold together, has the rule `shape`.
   const find = (file, item, why, rule = 'shape') => findings.push({ rule, file, item, why });
   const zeroCounts = () => Object.fromEntries(STATES.map((s) => [s, 0]));
-  const ill = () => ({ out: { verdict: 'ILL-FORMED', findings, counts: zeroCounts(), cells: [] }, code: 3 });
+  const ill = () => ({ out: { verdict: 'ILL-FORMED', findings, counts: zeroCounts(), waived: [], cells: [] }, code: 3 });
 
   // ---------------------------------------------------------------- shape
   const docs = {};
@@ -2525,6 +2501,11 @@ export function verifyTexts(texts, opts = {}) {
       };
       if (Object.hasOwn(c, 'partition')) walk(c.partition, 0);
       if (isObj(c.point)) for (const k of Object.keys(c.point)) if (!parseFileNumber(c.point[k])) { find('proofs', item, `the point gives ${k} the value ${short(c.point[k])}, which is not a number`); bad = true; }
+      // A completion gives each load "a number in a string, as in a point" (item 9): every number
+      // parses (AMBIGUITIES.md, C1 and L4).
+      if (isObj(c.completion) && Array.isArray(c.completion.loads)) {
+        for (const l of c.completion.loads) if (Array.isArray(l) && l.length === 4 && isStr(l[3]) && !parseFileNumber(l[3])) { find('proofs', item, `the completion gives ${short(l[1])} the value ${short(l[3])}, which is not a number`); bad = true; }
+      }
       if (bad) return;
       const key = hintKey(c.subject, c.mechanism, c.entry);
       if (!hints.has(key)) hints.set(key, []);
@@ -2902,13 +2883,20 @@ export function verifyTexts(texts, opts = {}) {
   const addTo = (m, k, v) => { if (!m.has(k)) m.set(k, []); m.get(k).push(v); };
   for (const g of deck.grid) addTo(linesOf, g.type, g);
   for (const r of deck.rules) { addTo(rulesOfType, r.type, r); addTo(rulesOfLine, `${r.type}\u0000${r.mechanism}`, r); }
-  const keyValue = (part, ref) => valueOf(part, ref).value;
-  const partCond = (c, part) => {
+  // The name a part has for a key, by the name a rule writes. Under a completion (format.md, The
+  // rules, item 9) an unstated key has the name the completion gives it.
+  const keyValue = (part, ref, comp) => {
+    const r = resolve(part, ref);
+    const v = r.part.values.get(r.field);
+    if (v.unstated) return comp ? comp.keys.get(`${r.part.name}\u0000${r.field}`) : undefined;
+    return v.value;
+  };
+  const partCond = (c, part, comp) => {
     switch (c[0]) {
-      case 'is': return keyValue(part, c[1]) === c[2];
-      case 'and': return c.slice(1).every((x) => partCond(x, part));
-      case 'or': return c.slice(1).some((x) => partCond(x, part));
-      case 'not': return !partCond(c[1], part);
+      case 'is': return keyValue(part, c[1], comp) === c[2];
+      case 'and': return c.slice(1).every((x) => partCond(x, part, comp));
+      case 'or': return c.slice(1).some((x) => partCond(x, part, comp));
+      case 'not': return !partCond(c[1], part, comp);
     }
     return false;
   };
@@ -2924,7 +2912,9 @@ export function verifyTexts(texts, opts = {}) {
   };
 
   // A tape from a rule for a part (and a case), with the root of le or lt, or the roots of where.
-  const writeTape = (rule, part, cs, which) => {
+  // `comp`, a completion, names each unstated key the rule reads and gives each load the case
+  // leaves out, as an input of one value labelled `put:CASE.PART.LOAD` (item 9).
+  const writeTape = (rule, part, cs, which, comp = null) => {
     const t = new Tape();
     const letNodes = new Map();
     const quantityNode = (name) => {
@@ -2979,10 +2969,12 @@ export function verifyTexts(texts, opts = {}) {
       }
       throw new Error(`unexpected condition ${c[0]}`);
     };
+    // The name of a key side read by a key field, a fixed name or a `by`. The map of a `by` is
+    // total and a completion names every unstated key, so the guard does not arise.
     const resolveKey = (b) => {
-      if (isStr(b)) return keyValue(part, b);
+      if (isStr(b)) return keyValue(part, b, comp);
       if (b[0] === 'key') return b[1];
-      const v = keyValue(part, b[1]);
+      const v = keyValue(part, b[1], comp);
       if (!Object.hasOwn(b[2], v)) throw new CannotWrite(`the table has no line for ${b[1]} ${v}`);
       return b[2][v];
     };
@@ -2995,7 +2987,7 @@ export function verifyTexts(texts, opts = {}) {
       const c1 = ['le', L, x];
       return hi === null ? c1 : ['and', [c1, ['lt', x, t.c(hi)]]];
     };
-    const tooManyOrders = (id) => new CannotWrite(`${id} would be a pick of more than 1,024 orders`);
+    // No pick is over 1,024 orders: a deck that could write one does not load (loadRule).
     // The inputs of a row that gives a name, each written once from the expression bound to it.
     const nameRowInputs = (binds) => {
       const cache = new Map();
@@ -3012,35 +3004,34 @@ export function verifyTexts(texts, opts = {}) {
       if (!N.table.across) return down;
       return ['and', [down, placeCond(N.table.across, c.j, nq(N.table.across.by))]];
     };
-    // The places of a side of a table, each with its orders and a condition written when used.
+    // The places of a side of a table, each with a condition written when used.
     const sidePlaces = (side, binding, qin) => {
       if (side.kind === 'key') {
         const b = binding[side.by];
         if (Array.isArray(b) && b[0] === 'row') {
           const N = deck.rows.get(b[1]);
           const nq = nameRowInputs(b[2]);
-          return nameCells(N).map((c) => ({ idx: side.names.indexOf(c.name), orders: nameCellOrders(N, c), cond: () => nameCellCond(N, c, nq) }));
+          return nameCells(N).map((c) => ({ idx: side.names.indexOf(c.name), cond: () => nameCellCond(N, c, nq) }));
         }
-        return [{ idx: side.names.indexOf(resolveKey(b)), orders: 0, cond: null }];
+        return [{ idx: side.names.indexOf(resolveKey(b)), cond: null }];
       }
       let x;
       const xn = () => (x === undefined ? (x = qin(side.by)) : x);
-      return [...Array(side.count).keys()].map((i) => ({ idx: i, orders: placeOrders(side, i), cond: () => placeCond(side, i, xn()) }));
+      return [...Array(side.count).keys()].map((i) => ({ idx: i, cond: () => placeCond(side, i, xn()) }));
     };
     const table = (row, binding, qin) => {
       const T = row.table;
       const D = sidePlaces(T.down, binding, qin);
-      const A = T.across ? sidePlaces(T.across, binding, qin) : [{ idx: null, orders: 0, cond: null }];
+      const A = T.across ? sidePlaces(T.across, binding, qin) : [{ idx: null, cond: null }];
       const cellAt = (i, j) => (T.across ? T.cells[i][j] : T.cells[i]);
       const lines = [];
       for (const dp of D) {
         const cs = A.filter((ap) => cellAt(dp.idx, ap.idx) !== null);
         if (cs.length) lines.push({ dp, cs });
       }
-      if (!lines.length) throw new CannotWrite(`every cell ${row.id} could read is empty`);
-      // Each pick is held to 1,024 orders on its own: the pick over the lines, and that of each line.
-      for (const l of lines) if (l.cs.reduce((n, ap) => n + ap.orders, 0) > MAX_ORDERS) throw tooManyOrders(row.id);
-      if (lines.reduce((n, l) => n + l.dp.orders, 0) > MAX_ORDERS) throw tooManyOrders(row.id);
+      // format.md, How the kernel writes a table: with no line at all, the table is a pick of no
+      // case, which has no value anywhere, and the tape is still written.
+      if (!lines.length) return t.add(['pick', []]);
       const lineNodes = lines.map((l) => {
         const cases = l.cs.map((ap) => [ap.cond ? ap.cond() : null, t.c(cellAt(l.dp.idx, ap.idx))]);
         return cases[0][0] === null ? cases[0][1] : t.add(['pick', cases]);
@@ -3057,8 +3048,6 @@ export function verifyTexts(texts, opts = {}) {
       };
       if (row.kind === 'is') return rowExpr(row.is, qin);
       if (row.kind === 'cases') {
-        // format.md, Cells 7: an equation that would be a pick of more than 1,024 orders.
-        if (row.orders > MAX_ORDERS) throw tooManyOrders(row.id);
         const cases = row.cases.map((cs2) => {
           const c = cs2.when === undefined ? null : rowCond(cs2.when, qin);
           return [c, rowExpr(cs2.is, qin)];
@@ -3082,8 +3071,13 @@ export function verifyTexts(texts, opts = {}) {
       switch (e[0]) {
         case 'q': return t.c(qValue(e).v);
         case 'load': {
-          const x = loadInput(cs, part.name, e[1]);
-          return t.input(`in:${CN}.${x.name}`, x.lo, x.hi);
+          if (cs !== null && putsLoad(cs, part.name, e[1])) {
+            const x = loadInput(cs, part.name, e[1]);
+            return t.input(`in:${CN}.${x.name}`, x.lo, x.hi);
+          }
+          // Item 9: under a completion the card puts the load on its part in its case.
+          const v = comp.loads.get(e[1]);
+          return t.input(`put:${cs ?? ''}.${part.name}.${e[1]}`, v, v);
         }
         case 'row': return applyRow(deck.rows.get(e[1]), e[2]);
         case 'case': {
@@ -3092,7 +3086,6 @@ export function verifyTexts(texts, opts = {}) {
           // is written.
           const N = deck.rows.get(e[1][1]);
           const cells = nameCells(N);
-          if (cells.reduce((n, c) => n + nameCellOrders(N, c), 0) > MAX_ORDERS) throw tooManyOrders(`a case over ${N.id}`);
           const nq = nameRowInputs(e[1][2]);
           const node = new Map();
           for (const nm of N.gives.names) node.set(nm, expr(e[2][nm]));
@@ -3138,100 +3131,242 @@ export function verifyTexts(texts, opts = {}) {
     cells.push(c);
   };
   const hintsFor = (s, m, e) => hints.get(hintKey(s, m, e)) || [];
-  const tryWrite = (rule, part, cs, which) => {
+  const tryWrite = (rule, part, cs, which, comp = null) => {
     try {
-      const tape = writeTape(rule, part, cs, which);
+      const tape = writeTape(rule, part, cs, which, comp);
       steps += tape.nodes.length; // Steps item 4, tested at the next charge
       return { tape };
     } catch (e) { if (e instanceof CannotWrite) return { why: e.message }; throw e; }
   };
+  // What the hints left of a cell that none of them settles.
+  const hintsLeft = (tried) => (tried.length ? 'no partition of proofs.json proves it and no point refutes it' : 'proofs.json has no partition and no point for it');
 
-  // The cells of one rule that answers for a part, into `out`. An open cell carries `rest`, true
-  // when no inequality could answer it (format.md, Cells 1), which a waiver may then rest. On a
-  // line the card waives (`waived`), the walks of items 5 and 6 decide it for an open cell whose
-  // rule could say something.
+  // ---- completions (format.md, The rules, items 1, 2 and 9)
+  // The unstated keys of a list of names a rule or an unless writes, each key of a part once, in
+  // the order of the list: {key: "PART\0FIELD", names}.
+  const unstatedKeys = (part, refs) => {
+    const out = [];
+    for (const ref of refs) {
+      if (!isUnstated(part, ref)) continue;
+      const r = resolve(part, ref);
+      const key = `${r.part.name}\u0000${r.field}`;
+      if (!out.some((x) => x.key === key)) out.push({ key, names: r.part.type.fieldMap.get(r.field).names });
+    }
+    return out;
+  };
+  // How many keys and loads a hint's completion names, for the steps.
+  const compSize = (c) => (isObj(c) ? (Array.isArray(c.keys) ? c.keys.length : 0) + (Array.isArray(c.loads) ? c.loads.length : 0) : 0);
+  // A completion fits a cell when it names each unstated key once, with a name its field lists,
+  // and gives each load the case leaves out once, on the part and in the cell's case, with a value
+  // at or above the load's least, or at or above zero for a load with no least that is not
+  // "may_be": "negative". It names nothing else. Returns {keys, loads, loadKeys} or null.
+  const fitComp = (c, part, cs, ukeys, missing) => {
+    if (!isObj(c) || Object.keys(c).some((k) => k !== 'keys' && k !== 'loads')) return null;
+    const kl = Object.hasOwn(c, 'keys') ? c.keys : [], ll = Object.hasOwn(c, 'loads') ? c.loads : [];
+    if (!Array.isArray(kl) || !Array.isArray(ll) || kl.length !== ukeys.length || ll.length !== missing.length) return null;
+    const comp = { keys: new Map(), loads: new Map(), loadKeys: new Map() };
+    for (const k of kl) {
+      if (!Array.isArray(k) || k.length !== 3 || !k.every(isStr)) return null;
+      const key = `${k[0]}\u0000${k[1]}`;
+      const u = ukeys.find((x) => x.key === key);
+      if (!u || comp.keys.has(key) || !u.names.includes(k[2])) return null;
+      comp.keys.set(key, k[2]);
+    }
+    for (const l of ll) {
+      if (!Array.isArray(l) || l.length !== 4 || !l.every(isStr)) return null;
+      const v = parseFileNumber(l[3]);
+      if (!v || l[0] !== part.name || l[2] !== (cs ?? '') || !missing.includes(l[1]) || comp.loads.has(l[1])) return null;
+      const L = part.type.loads.get(l[1]);
+      if (L.least ? qcmp(v, L.least) < 0 : L.mayBe !== 'negative' && v.n < 0n) return null;
+      comp.loads.set(l[1], v);
+      comp.loadKeys.set(`${l[0]}\u0000${l[1]}\u0000${l[2]}`, v);
+    }
+    return comp;
+  };
+  // The completions of the cells that waivers rest agree, across the design (item 1).
+  const restedKeys = new Map(), restedLoads = new Map();
+  const agrees = (comp) => {
+    for (const [k, nm] of comp.keys) if (restedKeys.has(k) && restedKeys.get(k) !== nm) return false;
+    for (const [k, v] of comp.loadKeys) if (restedLoads.has(k) && qcmp(restedLoads.get(k), v) !== 0) return false;
+    return true;
+  };
+  const recordRested = (comp) => {
+    for (const [k, nm] of comp.keys) restedKeys.set(k, nm);
+    for (const [k, v] of comp.loadKeys) restedLoads.set(k, v);
+  };
+  const answersUnder = (rule, part, comp) => rule.when === undefined || partCond(rule.when, part, comp);
+  // Item 4: the reason of a refuted rule with requires names each key it names, in order and each
+  // once, with the name the part has for it, or `unstated`, while they fit in 144 bytes.
+  const requiresReason = (rule, part) => {
+    const head = 'the part is not what the rule requires: ';
+    let named = '';
+    const ks = rule.requiresKeys;
+    for (let i = 0; i < ks.length; i++) {
+      const v = keyValue(part, ks[i]);
+      const piece = `${ks[i]} is ${v === undefined ? 'unstated' : [...String(v)].slice(0, 200).join('')}`;
+      if (i > 0 && printedBytes(named) + 2 + printedBytes(piece) > 144) { named += ` and ${ks.length - i} more`; break; }
+      named += (i > 0 ? ', ' : '') + piece;
+    }
+    return head + named;
+  };
+  // "no pull", "no twist and no push": the first four loads a case leaves out, and how many more.
+  const noLoads = (ls) => {
+    const shown = ls.slice(0, 4).map((l) => `no ${l}`);
+    if (ls.length > 4) return `${shown.join(', ')} and ${ls.length - 4} more`;
+    return shown.length > 1 ? `${shown.slice(0, -1).join(', ')} and ${shown[shown.length - 1]}` : shown[0];
+  };
+
+  // The cells of one rule that answers for a part, into `out`. An open cell carries `rest`: what a
+  // waiver of the line may rest it on (format.md, Cells 1). 'norule' and 'where' rest it as it is,
+  // a completion rests it while it agrees with those rested before, and null not at all. On a line
+  // the card waives (`waived`) the kernel asks item 5's question and looks for item 9's witness.
   const ruleCells = (rule, part, line, out, waived) => {
-    const cell = (entry, state, reason, rest = false) => out.push({ subject: part.name, mechanism: line.mechanism, entry, state, reason, rest });
-    // Cells 3 and Steps item 2: a rule that reads a field the part leaves unstated gives only
-    // open cells. A waiver rests them when every unstated field the rule reads is a key.
+    const cell = (entry, state, reason, rest = null) => out.push({ subject: part.name, mechanism: line.mechanism, entry, state, reason, rest });
+    // Item 9: an incomplete cell, of a rule that reads unstated keys (ukeys) and no unstated
+    // quantity, or whose case leaves out loads the rule reads (missing). It looks only at the
+    // hints that have a completion.
+    const incomplete = (entry, cs, missing, ukeys, why) => {
+      const hs = hintsFor(part.name, line.mechanism, entry).filter((h) => Object.hasOwn(h, 'completion'));
+      const stepOf = 1 + rule.whenSize + rule.requiresSize;
+      // A tape written under a completion: the rule's own, or for a rule with `where` the second
+      // tape of item 5, the rule inside its range (AMBIGUITIES.md, L1). It takes the weight, twice
+      // with `where`, and its nodes, which are steps of item 9's charge and so tested at once.
+      const tapeUnder = (comp) => {
+        charge(rule.where !== undefined ? 2 * rule.weight : rule.weight);
+        const w = tryWrite(rule, part, cs, rule.where !== undefined ? 'within' : 'le', comp);
+        charge(0);
+        return w;
+      };
+      // Refuted when the case leaves out no load and the rule fails under every combination of
+      // names of the unstated keys: the names of each key in the order its field lists them, the
+      // first key's fastest, while there are at most 4,096, stopping at the first that does not.
+      if (!missing.length && ukeys.length) {
+        let combos = 1;
+        for (const k of ukeys) { combos *= k.names.length; if (combos > COMPLETION_COMBOS) break; }
+        let all = combos <= COMPLETION_COMBOS;
+        for (let n = 0; all && n < combos; n++) {
+          const comp = { keys: new Map(), loads: new Map(), loadKeys: new Map() };
+          let x = n;
+          for (const k of ukeys) { comp.keys.set(k.key, k.names[x % k.names.length]); x = Math.floor(x / k.names.length); }
+          charge(stepOf);
+          if (!answersUnder(rule, part, comp)) { all = false; break; }
+          if (rule.form === 'requires') { if (partCond(rule.requires, part, comp)) all = false; continue; }
+          let fails = false;
+          for (const h of hs) {
+            charge(stepOf + compSize(h.completion));
+            const hc = fitComp(h.completion, part, cs, ukeys, missing);
+            if (!hc || ![...comp.keys].every(([k, nm]) => hc.keys.get(k) === nm) || !Object.hasOwn(h, 'point')) continue;
+            const w = tapeUnder(hc);
+            if (w.tape && refutes(w.tape, h.point)) { fails = true; break; }
+          }
+          if (!fails) all = false;
+        }
+        if (all) { cell(entry, 'refuted', rule.form === 'requires' ? requiresReason(rule, part) : undefined); return; }
+      }
+      // Otherwise, on a line the card waives, the first hint that is a witness: its completion
+      // fits, and under it the rule does not answer, its requires holds, or the hint's partition
+      // proves the rule's tape. The hint's point is not tried.
+      if (waived) {
+        for (const h of hs) {
+          charge(stepOf + compSize(h.completion));
+          const comp = fitComp(h.completion, part, cs, ukeys, missing);
+          if (!comp) continue;
+          let witness;
+          if (!answersUnder(rule, part, comp)) witness = true;
+          else if (rule.form === 'requires') witness = partCond(rule.requires, part, comp);
+          else if (Object.hasOwn(h, 'partition')) { const w = tapeUnder(comp); witness = !!w.tape && proves(w.tape, h.partition); }
+          else witness = false;
+          if (witness) { cell(entry, 'open', why, comp); return; }
+        }
+      }
+      cell(entry, 'open', why);
+    };
+
+    // Cells 3 and Steps item 2: a rule that reads a field the part leaves unstated. An unstated
+    // quantity gives only open cells, which no waiver rests; unstated keys alone make each of the
+    // rule's cells incomplete.
+    let ukeys = [], uwhy = null;
     if (part.hasUnstated) {
       charge(rule.fieldsRead);
-      const u = firstUnstated(rule, part);
-      if (u !== undefined) {
-        const why = `${unstatedName(part, u)} is unstated: its maker states none, and the rule reads it`;
-        const rest = [...rule.reads.own, ...rule.reads.joined].every((ref) => !isUnstated(part, ref) || valueOf(part, ref).kind === 'k');
-        if (rule.form === 'requires' || rule.reads.loads.size === 0 || loadCases.length === 0) cell(rule.tail, 'open', why, rest);
-        else {
-          charge(loadCases.length);
-          for (const cs of loadCases) cell(`${rule.tail}/${cs}`, 'open', why, rest);
+      const refs = [...rule.reads.own, ...rule.reads.joined].filter((ref) => isUnstated(part, ref));
+      if (refs.length) {
+        uwhy = `${unstatedName(part, refs[0])} is unstated: its maker states none, and the rule reads it`;
+        if (refs.some((ref) => valueOf(part, ref).kind === 'q')) {
+          if (rule.form === 'requires' || rule.reads.loads.size === 0 || loadCases.length === 0) cell(rule.tail, 'open', uwhy);
+          else {
+            charge(loadCases.length);
+            for (const cs of loadCases) cell(`${rule.tail}/${cs}`, 'open', uwhy);
+          }
+          return;
         }
-        return;
+        ukeys = unstatedKeys(part, refs);
       }
     }
-    // Cells 4: a rule with `requires` gives one cell, proved when the condition holds for the part.
+    // Cells 4: a rule with `requires` gives one cell, proved when the condition holds for the part,
+    // and settled by item 9 for a part that leaves a key it reads unstated.
     if (rule.form === 'requires') {
-      if (partCond(rule.requires, part)) { cell(rule.tail, 'proved'); return; }
-      // The keys so far, `, ` and the next key are at most 144 bytes, after the 40 of the words.
-      const head = 'the part is not what the rule requires: ';
-      let named = '';
-      const ks = rule.requiresKeys;
-      for (let i = 0; i < ks.length; i++) {
-        const piece = `${ks[i]} is ${[...String(keyValue(part, ks[i]))].slice(0, 200).join('')}`;
-        if (i > 0 && printedBytes(named) + 2 + printedBytes(piece) > 144) { named += ` and ${ks.length - i} more`; break; }
-        named += (i > 0 ? ', ' : '') + piece;
-      }
-      const reason = head + named;
-      cell(rule.tail, 'refuted', reason);
+      if (ukeys.length) incomplete(rule.tail, null, [], ukeys, uwhy);
+      else if (partCond(rule.requires, part)) cell(rule.tail, 'proved');
+      else cell(rule.tail, 'refuted', requiresReason(rule, part));
       return;
     }
     const settle = (cs) => {
       // Steps item 3: the weight of the rule, twice for a rule with `where`.
       charge(rule.where !== undefined ? 2 * rule.weight : rule.weight);
       const entry = cs === null ? rule.tail : `${rule.tail}/${cs}`;
+      const hs = hintsFor(part.name, line.mechanism, entry);
       if (rule.where !== undefined) {
-        // Cells 5 and 7: a range that cannot be written leaves the cell open, and no inequality
-        // could answer it.
+        // Cells 7: a tape that cannot be written leaves the cell open, and no waiver rests it.
         const w = tryWrite(rule, part, cs, 'where');
-        if (!w.tape) { cell(entry, 'open', `the range cannot be written: ${w.why}`, true); return; }
-        let ok = false;
-        for (const h of hintsFor(part.name, line.mechanism, `${entry}/where`)) if (Object.hasOwn(h, 'partition') && proves(w.tape, h.partition)) { ok = true; break; }
-        if (!ok) {
+        if (!w.tape) { cell(entry, 'open', `the range cannot be written: ${w.why}`); return; }
+        const wh = hintsFor(part.name, line.mechanism, `${entry}/where`).filter((h) => Object.hasOwn(h, 'partition'));
+        if (!wh.some((h) => proves(w.tape, h.partition))) {
           // Cells 5: no `/where` cell. Inside its range a point may still refute the rule: the
           // points of the hints with the cell's entry, and none of their partitions, are tried on
           // the rule's tape inside its range, which Steps counts in place of the rule's own.
           const wi = tryWrite(rule, part, cs, 'within');
-          if (!wi.tape) { cell(entry, 'open', `the tape cannot be written: ${wi.why}`, true); return; }
-          for (const h of hintsFor(part.name, line.mechanism, entry)) if (Object.hasOwn(h, 'point') && refutes(wi.tape, h.point)) { cell(entry, 'refuted'); return; }
-          // On a waived line: a waiver rests the cell when the `where` holds nowhere in the box.
-          cell(entry, 'open', 'the rule\'s range (where) is not proved, and no point of a hint inside it refutes the rule', waived && holdsNowhere(w.tape));
+          if (!wi.tape) { cell(entry, 'open', `the tape cannot be written: ${wi.why}`); return; }
+          const hp = hs.filter((h) => Object.hasOwn(h, 'point'));
+          if (hp.some((h) => refutes(wi.tape, h.point))) { cell(entry, 'refuted'); return; }
+          // On a waived line: the cell is waivable when a root of the range's tape has an
+          // enclosure over the whole box whose lower end is above zero.
+          const k = waived ? holdsNowhere(w.tape) : -1;
+          if (k >= 0) cell(entry, 'open', `the rule holds only where ${rule.whereWhy[k]}, and that holds nowhere in the ranges for ${part.name}`, 'where');
+          else cell(entry, 'open', `the range the rule holds in is not proved: ${hintsLeft([...wh, ...hp])}`);
           return;
         }
         cell(`${entry}/where`, 'proved');
       }
       const w = tryWrite(rule, part, cs, 'le');
-      if (!w.tape) { cell(entry, 'open', `the tape cannot be written: ${w.why}`, true); return; }
+      if (!w.tape) { cell(entry, 'open', `the tape cannot be written: ${w.why}`); return; }
       let state = null;
-      for (const h of hintsFor(part.name, line.mechanism, entry)) {
+      for (const h of hs) {
         if (Object.hasOwn(h, 'partition') && proves(w.tape, h.partition)) { state = 'proved'; break; }
         if (Object.hasOwn(h, 'point') && refutes(w.tape, h.point)) { state = 'refuted'; break; }
       }
+      // Cells 6: an open cell stays open on a line the card waives, whether its root is left
+      // undecided or has no value at some points of the box or at all of them.
       if (state) cell(entry, state);
-      // Cells 6: on a waived line, a waiver rests the cell when its root has no value anywhere.
-      else cell(entry, 'open', 'no hint proves or refutes it', waived && saysNothing(w.tape));
+      else cell(entry, 'open', hintsLeft(hs.filter((h) => Object.hasOwn(h, 'partition') || Object.hasOwn(h, 'point'))));
     };
     const ls = [...rule.reads.loads];
-    if (!ls.length) { settle(null); return; }
-    // Cells 4: a card with no load case, or a case that leaves out a load the rule reads, leaves
-    // a cell open that no inequality could answer.
-    if (!loadCases.length) { cell(rule.tail, 'open', 'the card has no load case, and the rule reads a load', true); return; }
+    if (!ls.length) {
+      if (ukeys.length) incomplete(rule.tail, null, [], ukeys, uwhy);
+      else settle(null);
+      return;
+    }
+    // Cells 4: a card with no load case gives one cell with no case, every load it reads left
+    // out; its completion gives each load in the case named by the empty text.
+    if (!loadCases.length) {
+      incomplete(rule.tail, '', ls, ukeys, uwhy ?? `the card puts ${noLoads(ls)} on ${part.name}, which the rule reads`);
+      return;
+    }
     // Steps item 2: every load case of the card times every load the rule reads.
     charge(loadCases.length * ls.length);
     for (const cs of loadCases) {
       const missing = ls.filter((l) => !putsLoad(cs, part.name, l));
-      if (missing.length) {
-        const named = missing.slice(0, 4).join(', ') + (missing.length > 4 ? ` and ${missing.length - 4} more` : '');
-        cell(`${rule.tail}/${cs}`, 'open', `the case ${cs} puts no ${named} on ${part.name}, which the rule reads`, true);
-      } else settle(cs);
+      if (missing.length || ukeys.length) incomplete(`${rule.tail}/${cs}`, cs, missing, ukeys, uwhy ?? `case ${cs} puts ${noLoads(missing)} on ${part.name}, which the rule reads`);
+      else settle(cs);
     }
   };
 
@@ -3267,27 +3402,45 @@ export function verifyTexts(texts, opts = {}) {
         charge(1 + line.unlessSize + lineRules.reduce((n, r) => n + ruleCharge(r), 0));
         const w = waiverOf.get(`${part.name}\u0000${line.mechanism}`);
         const out = [];
-        // The cells of items 2 and 3 that no rule gives: no inequality could answer an open one.
-        const lineCell = (state, reason) => out.push({ subject: part.name, mechanism: line.mechanism, entry: '', state, reason, rest: true });
+        // The cells of items 2 and 3 that no rule gives, with an empty entry.
+        const lineCell = (state, reason, rest = null) => out.push({ subject: part.name, mechanism: line.mechanism, entry: '', state, reason, rest });
         const u = line.unless;
         if (u && u.when === undefined) lineCell('not_applicable', u.why);
         else if (u && condUnstated(u.keys, part) !== undefined) {
-          lineCell('open', `${unstatedName(part, condUnstated(u.keys, part))} is unstated: its maker states none, and the \`unless\` of the line reads it`);
+          // Cells 2: an `unless` that names an unstated key is one open cell, and no rule of the
+          // line is run. On a line the card waives, the first hint for the cell with a completion
+          // that names each unstated key the `unless` reads, and nothing else, and under which the
+          // `unless` holds, makes it waivable. Each hint looked at is a charge of its own.
+          let rest = null;
+          if (w) {
+            const ukeys = unstatedKeys(part, u.keys);
+            for (const h of hintsFor(part.name, line.mechanism, '')) {
+              if (!Object.hasOwn(h, 'completion')) continue;
+              charge(1 + line.unlessSize + compSize(h.completion));
+              const comp = fitComp(h.completion, part, null, ukeys, []);
+              if (comp && partCond(u.when, part, comp)) { rest = comp; break; }
+            }
+          }
+          lineCell('open', `${unstatedName(part, condUnstated(u.keys, part))} is unstated: its maker states none, and the \`unless\` of the line reads it`, rest);
         } else if (u && partCond(u.when, part)) lineCell('not_applicable', u.why);
         else {
           const rules = lineRules.filter((r) => answers(r, part));
-          if (!rules.length) lineCell('open', lineRules.length ? 'the deck has no rule for it that holds for a part like this one' : 'the deck has no rule for it');
+          if (!rules.length) lineCell('open', lineRules.length ? 'the deck has no rule for it on a part like this one' : 'the deck has no rule for it', 'norule');
           else for (const rule of rules) ruleCells(rule, part, line, out, !!w);
         }
-        // Cells 1: a waiver rests each cell of its line that would be open and that no inequality
-        // could answer, and no other. Every other open cell of the line stays open, and says so.
+        // Cells 1: a waiver rests each open cell of its line that is waivable: the line has no rule
+        // for the part, the rule's `where` holds nowhere in the box, or a hint's completion makes
+        // the `unless` or the rule hold and agrees with the completions of the cells rested before
+        // it. Every other open cell of the line stays open, and says so.
         for (const c of out) {
           if (w && c.state === 'open') {
-            if (c.rest) {
+            let rests = c.rest === 'norule' || c.rest === 'where';
+            if (!rests && c.rest && agrees(c.rest)) { recordRested(c.rest); rests = true; }
+            if (rests) {
               c.state = 'waived';
               c.reason = `open but for the waiver: ${c.reason ?? ''}`;
               if (!usedWaivers.includes(w)) usedWaivers.push(w);
-            } else c.reason = `the waiver rests no cell that an inequality could answer: ${c.reason ?? ''}`;
+            } else c.reason = `the waiver does not rest this cell: ${c.reason ?? ''}`;
           }
           push(c);
         }
@@ -3325,9 +3478,12 @@ export function verifyTexts(texts, opts = {}) {
 
   const counts = zeroCounts();
   for (const c of cells) counts[c.state]++;
+  // format.md, The verdict: a cell whose entry ends in `/where` proves a rule's range and not the
+  // rule, and is not the one proved cell that a PASS needs.
+  const provedRule = cells.some((c) => c.state === 'proved' && !c.entry.endsWith('/where'));
   let verdict, code;
   if (counts.refuted) { verdict = 'FAIL'; code = 1; }
-  else if (counts.open || !counts.proved) { verdict = 'UNKNOWN'; code = 2; }
+  else if (counts.open || !provedRule) { verdict = 'UNKNOWN'; code = 2; }
   else { verdict = 'PASS'; code = 0; }
   let ignored = 0;
   for (const [k, hs] of hints) if (!usedHints.has(k)) ignored += hs.length;
