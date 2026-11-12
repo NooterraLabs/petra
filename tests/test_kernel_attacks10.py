@@ -11,15 +11,22 @@
       distance of 1 inch on plates 1 3/4 inch wide, where one line of holes leaves at most
       7/8 inch and J3.4 refutes every such lap. The lap now needs twice its side to be at
       most the width of each plate.
+  C   petra/grid.py held only the numbers of a need to 65,536 bits, where the kernel holds
+      every value of a tape and every sum and product so far. The 64th power of a product of
+      four ratios of 98 digits was PASS in Python and UNKNOWN in the kernel, and petra check
+      exited 4. Python's tapes now have the kernel's bound.
 """
 import json
 import unittest
+from fractions import Fraction
 from pathlib import Path
 
 import petra.lang
 from petra import grid, verify
+from petra.kernel import Interval
 from petra.registry import build_registry
-from tests.test_deck_features import HEAD, KERNEL, asks, design, given, ill_formed, kind, load, made_up, parsed, part, rule, size
+from tests.test_deck_features import HEAD, KERNEL, asks, cells, design, given, ill_formed, kind, load, made_up, parsed, part, rule, size
+from tests.test_kernel_attacks3 import cell, with_card
 from tests.test_kernel_attacks9 import STRUT_CARD, STRUT_TEXT, strut
 from tests.test_kernel_grid import ask, findings
 
@@ -163,3 +170,41 @@ class TheSideOfALap(unittest.TestCase):
         self.assertEqual(mine, grid.PASS_WAIVED)
         if said:
             self.assertEqual((said["findings"], said["verdict"]), ([], "PASS"))
+
+
+# --- C. a value of more than 65,536 bits ----------------------------------------------------------------------
+
+TRAIN = made_up([kind("train", *(size(name, "dimensionless") for name in "xyzw"), size("d"))], [asks("train.ratio", "train")],
+                [rule("ratio", "train", "train.ratio", le=[["pow", ["mul", "x", "y", "z", "w"], "64"], "2"]),
+                 rule("size", "train", "train.ratio", le=[["q", "1", "mm"], "d"])])
+"""Four gear stages and a rule on the 64th power of the train's ratio."""
+
+
+def train(digits: int) -> str:
+    """Ratios 1.000...01 to 1.000...09 with `digits` after the point: with 98 the product's denominator has some 1,300 bits,
+    and its 64th power some 83,000."""
+    x, y, z, w = ("1." + "0" * (digits - 1) + str(k) for k in (1, 3, 7, 9))
+    return design(part("train", "r", x=x, y=y, z=z, w=w, d="10 mm"))
+
+
+class ValuesPastTheBitsOfTheKernel(unittest.TestCase):
+    def test_a_power_of_more_than_65536_bits_leaves_its_cell_open(self):
+        """The kernel gives the power no value, and the grid proved the cell with it: PASS against UNKNOWN, and petra check exited 4."""
+        found, status, _ = cells(self, TRAIN, train(98))
+        self.assertEqual((found[("r", "train.ratio", "ratio")], status), ("open", "UNKNOWN"))
+        rules, read = parsed(TRAIN, train(98))
+        self.assertEqual([c.why for c in grid.check(read, rules)[0].cells if c.entry == "ratio"], ["node 5: a value has more than 65536 bits"])
+        found, status, _ = cells(self, TRAIN, train(20))
+        self.assertEqual((found[("r", "train.ratio", "ratio")], status), ("proved", "PASS"))
+
+    def test_a_sum_so_far_of_more_than_65536_bits_has_no_value(self):
+        """1/3^24000 + 1/7^13800 has some 76,800 bits, and less 1/7^13800 again it has 38,000: the kernel holds each sum so far to
+        the bound (`folded` in kernel/Petra/Tape.lean), so the sum has no value, though its own value would fit."""
+        nodes = [["c", f"1/{3 ** 8000}"], ["pow", 0, 3], ["c", f"1/{7 ** 4600}"], ["pow", 2, 3], ["neg", 3], ["c", "-1"], ["add", [1, 3, 4, 5]]]
+        self.assertEqual(grid.enclosures(nodes, [])[6], "node 6: a value has more than 65536 bits")
+        apart = [*nodes[:6], ["add", [1, 5]], ["add", [3, 4]], ["add", [6, 7]]]
+        self.assertEqual(grid.enclosures(apart, [])[8], Interval.point(Fraction(1, 3 ** 24000) - 1))
+        if verify.binary():
+            for tape, state in (({"inputs": [], "nodes": nodes, "roots": [6]}, "open"), ({"inputs": [], "nodes": apart, "roots": [8]}, "proved")):
+                said = ask(with_card([cell(tape)]))
+                self.assertEqual([c["state"] for c in said["cells"]], [state], said)

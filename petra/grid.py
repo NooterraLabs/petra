@@ -99,8 +99,11 @@ MAX_TITLE = 200
 MAX_REASON = 200
 """The bytes of a reason that the kernel prints (`MAX_TEXT` in kernel/Petra/Files.lean)."""
 MAX_BITS = 65_536
-"""The most bits a number of a need may have, as in kernel/Petra/Tape.lean. A need with a
-longer one is not decided, and its part is refused."""
+"""The most bits a numerator or a denominator may have, as in kernel/Petra/Tape.lean (`fits`).
+A node of a tape whose value has a longer one has no value (`enclosures`), at a point as over
+a box, and neither has a sum or a product with a longer one so far: a cell that reads it is
+open. A need with a longer one is not decided, and its part is refused. The largest magnitude
+an exponential or a cosine takes is MAX_ARGUMENT, of the same size."""
 MAX_TRIED = 4096
 """The most combinations of the names of its keys at which reading a deck tries what a rule requires, as in kernel/Petra/Deck.lean."""
 MAX_TRYING = 1_000_000
@@ -1355,10 +1358,12 @@ def _holds(cond: Any, order: Mapping[tuple[int, int], int]) -> bool:
 def enclosures(nodes: list[list], box: list[Interval]) -> list[Any]:
     """The enclosure of each node over the box, or the reason it has none, as a string. The
     rule is kernel/Petra/Tape.lean's: a node that reads a node with no value has none, and
-    a pick reads only what it compares and the cases some ordering chooses. An exponential
-    has none once the exponentials of the walk take more work than MAX_WORK (`_charged`),
-    which the kernel could not pay for on any box. A walk of a tape with a hundred
-    exponentials of some 65,000 took Python minutes, and now takes it seconds."""
+    a pick reads only what it compares and the cases some ordering chooses. A node whose value
+    has a number of more than MAX_BITS bits has none, nor has a sum or a product whose value so
+    far has one. An exponential has none once the exponentials of the walk take more work
+    than MAX_WORK (`_charged`), which the kernel could not pay for on any box. A walk of a
+    tape with a hundred exponentials of some 65,000 took Python minutes, and now takes it
+    seconds."""
     v: list[Any] = []
 
     def get(i: int) -> Interval:
@@ -1369,8 +1374,19 @@ def enclosures(nodes: list[list], box: list[Interval]) -> list[Any]:
     def op(term: Any, ids: list[int]) -> Interval:
         return enclose(term, {str(k): get(i) for k, i in enumerate(ids)})
 
+    def fits(x: Interval) -> Interval:
+        if max(_bits(x.lo), _bits(x.hi)) > MAX_BITS:
+            raise KernelArithmeticError(f"a value has more than {MAX_BITS} bits")
+        return x
+
     def step(node: list) -> Interval:
         kind = node[0]
+        if kind in ("add", "mul"):
+            # Each sum or product so far is held to MAX_BITS, as `folded` holds it in the kernel.
+            acc = Interval.point(Fraction(0 if kind == "add" else 1))
+            for i in node[1]:
+                acc = fits(acc + get(i) if kind == "add" else acc * get(i))
+            return acc
         if kind == "c":
             return Interval.point(Fraction(node[1]))
         if kind == "s":
@@ -1413,7 +1429,7 @@ def enclosures(nodes: list[list], box: list[Interval]) -> list[Any]:
             v.append(f"node {n}: the exponentials of the tape take more than the {MAX_WORK} units of work the kernel spends on a design")
             continue
         try:
-            v.append(step(node))
+            v.append(step(node) if node[0] == "pick" else fits(step(node)))
         except _Failed as exc:
             v.append(str(exc))
         except KernelArithmeticError as exc:
