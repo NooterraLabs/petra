@@ -1900,17 +1900,25 @@ def cells(design: Design, deck: Deck, found: Parts) -> list[Cell]:
                     out.append(replace(c, state="waived", why=f"by {w.owner}: {w.reason}; {WAIVED}{c.why}", waiver=(w.owner, w.reason)))
                 else:
                     out.append(replace(c, why=f"{UNRESTED}{c.why}"))
-    return out + _unread(deck, found)
+    return out + _unread(deck, found, fixed)
 
 
-def _unread(deck: Deck, found: Parts) -> list[Cell]:
+def _unread(deck: Deck, found: Parts, fixed: Mapping[Any, Any] | None = None) -> list[Cell]:
     """An open cell for each quantity and each key that no rule or grid line reads for its
     part, and for each load that no rule reads, once for each case that puts it on the
     part. A value nothing reads is a value nothing checks: a plate that no joint joins
     would pass at any thickness, and a joint whose rules read its shear alone would pass
     under any tension. A load is read by an expression of a rule that applies to the part
     it is on, and by nothing else. The cells are listed part by part: the part's fields in the order of
-    its type, and then its loads in the order of their names and of their cases' names."""
+    its type, and then its loads in the order of their names and of their cases' names.
+
+    What is read is worked out under `fixed`, the completions of the cells the waivers rest,
+    as the kernel works it out: a design that leaves out what a waiver answers for reads what
+    the design that states it reads."""
+    keys = [(*k, v) for k, v in (fixed or {}).items() if len(k) == 2]
+    loads = [(*k, v) for k, v in (fixed or {}).items() if len(k) == 3]
+    if keys or loads:
+        found = replace(found, parts=_completed(next(iter(found.parts.values())), found.parts, keys, loads)[1])
     read: set[tuple[str, str]] = set()
     for part in found.parts.values():
         names = {alias: part.values[f.name][n] for f in part.type.fields.values() if f.type is not None for n, alias in enumerate(f.names)}

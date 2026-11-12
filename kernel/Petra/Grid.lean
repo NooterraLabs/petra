@@ -994,6 +994,20 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hi
   -- looked at here, whatever the card waives, so the look is counted again. The look of a
   -- rule holds a step for each load it reads. A load is read by an expression of a rule
   -- that applies to the part it is on, and by nothing else.
+  --
+  -- It is worked out under the completions of the cells the waivers rest: a key they name
+  -- has that name, and a load they give is on its part in its case. So a design that leaves
+  -- out what the waiver answers for reads what the design that states it reads, and a rule
+  -- that does not answer under the completion reads nothing.
+  let named : Std.TreeMap String Part := fixedKeys.foldl (init := named) fun named (owner, field) name =>
+    named.modify owner fun p => { p with slots := p.slots.insert field (.key name) }
+  let parts := parts.map fun p => named.getD p.name p
+  let fellowsOf := parts.map (·.fellows named)
+  let put : Std.TreeMap String (Array (String × String)) :=
+    ((fixedLoads.foldl (fun on key _ => on.insert key) (loads.on.foldl (fun on key _ => on.insert key) ({} : Std.TreeSet (String × String × String))))).foldl
+      (init := {}) fun table (part, load, under) => table.alter part fun
+        | some found => some (found.push (load, under))
+        | none => some #[(load, under)]
   let rulesOfKind := grouped rules.rules (·.kind)
   let readOf : Std.TreeMap String Nat := rulesOfKind.map fun _ line => line.foldl (fun n r => n + r.look + r.fields.size) 0
   let mut read : Std.TreeSet (String × String) := {}
@@ -1023,7 +1037,7 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hi
         out := out.push (cell part.name UNREAD field.name .undecided s!"no rule of the deck reads {part.name}.{field.name}, so nothing checks it")
     -- A load that nothing reads, once for each case that puts it on the part. Its entry is
     -- `LOAD/CASE`, which no field's entry is: the name of a field holds no `/`.
-    for (load, under) in loads.put.getD part.name #[] do
+    for (load, under) in put.getD part.name #[] do
       if out.size > MAX_CELLS then return .error over
       unless readLoads.contains (part.name, load) do
         out := out.push (cell part.name UNREAD s!"{load}/{under}" .undecided
