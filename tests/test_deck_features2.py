@@ -600,6 +600,30 @@ class AFieldLeftUnstated(unittest.TestCase):
         found, _, _ = cells(self, QUADS, *quad(HOVER.replace("11 N", "101 N"), guard="none", thrust_limit="200 N"))
         self.assertEqual(found["q", "quad.guarded", "guarded/climb"], "refuted")
 
+    def test_a_table_a_case_and_a_range_that_read_an_unstated_field_leave_the_cell_open(self):
+        """Each other way a rule reads a field: as the key of a table, through a `by`, as the quantity a row sorts by for a `case`, and in its `where`."""
+        allowed = {"id": "made-up/allowed", "anchor": ANCHOR, "gives": {"name": "v", "dim": "dimensionless/time"}, "takes": [{"name": "balance", "one_of": ["static", "dynamic"]}],
+                   "table": {"down": {"by": "balance"}, "unit": "Hz", "cells": ["100", "200"]}}
+        sort = {"id": "made-up/sort", "anchor": ANCHOR, "gives": {"name": "size", "one_of": ["small", "large"]}, "takes": [{"name": "m", "dim": "mass", "range": ["1 g", "1 kg"]}],
+                "table": {"down": {"by": "m", "bands": [["0 g", "50 g"], ["50 g", None]]}, "cells": ["small", "large"]}}
+        deck = made_up([ROTOR, kind("quad", size("speed", "dimensionless/time"), {"name": "sets", "type": "rotor_set", "as": ["rotor"], "what": "its rotor sets"})],
+                       [asks("quad.key", "quad"), asks("quad.by", "quad"), asks("quad.case", "quad"), asks("quad.where", "quad")],
+                       [rule("key", "quad", "quad.key", le=["speed", ["row", "made-up/allowed", {"balance": "rotor.balance"}]]),
+                        rule("by", "quad", "quad.by", le=["speed", ["row", "made-up/allowed", {"balance": ["by", "rotor.guard", {"none": "static", "full": "dynamic"}]}]]),
+                        rule("case", "quad", "quad.case", le=["speed", ["case", ["row", "made-up/sort", {"m": "rotor.mass"}], {"small": ["q", "150", "Hz"], "large": ["q", "250", "Hz"]}]]),
+                        rule("where", "quad", "quad.where", le=["speed", ["q", "300", "Hz"]], where=[{"le": ["rotor.thrust", "rotor.thrust_limit"], "why": "made up"}])],
+                       [allowed, sort])
+        found, _, _ = cells(self, deck, *quad(""))
+        self.assertEqual({k[1]: v for k, v in found.items() if k[0] == "q" and not k[2].endswith("/where")},
+                         {"quad.key": "proved", "quad.by": "refuted", "quad.case": "proved", "quad.where": "proved"}, "140 Hz against 200, 100, 150 and 300")
+        for field, mechanism in (("balance", "quad.key"), ("guard", "quad.by"), ("mass", "quad.case"), ("thrust_limit", "quad.where")):
+            with self.subTest(field):
+                found, _, said = cells(self, deck, *quad("", **{field: "unstated"}))
+                mine = {k[2]: v for k, v in found.items() if k[1] == mechanism}
+                self.assertEqual(mine, {mechanism.split(".")[1]: "open"}, "one open cell, and no cell for a range")
+                self.assertEqual(reason(said, mechanism), NO_MAKER.format(f"r.{field}", "the rule"))
+                self.assertEqual(sum(v == "open" for k, v in found.items() if k[0] == "q"), 1, "the rules that do not read it are settled")
+
     def test_a_field_left_unstated_that_nothing_reads_has_no_cell(self):
         found, _, _ = cells(self, QUADS, *quad(mass="unstated", blades="unstated"))
         self.assertEqual([k for k in found if k[1] == "unread"], [("r", "unread", "grain")])
@@ -1076,6 +1100,114 @@ class TheThreeFamilies(unittest.TestCase):
         with self.assertRaises((LoweringError, grid.ComponentError)):      # the draft as the scout left it takes no battery below freezing
             deck, read = parsed(old, *stated(old, self.FLEET, bat__temperature_low="-10 degC", bat__cells="4", posts__count="4", q__rotors="4"))
             grid.check(read, deck)
+
+
+# --- the heaviest input that each of them allows --------------------------------------------------------
+
+
+@KERNEL
+class Heaviest(unittest.TestCase):
+    """For each thing a card, a design or a deck can state since 2026-11-11, the input of about 1 MB that was made to cost the kernel most by
+    it, alone. Each is held to a third of the 30 processor seconds and to the 512 MB that an input under 1 MB may take, and each docstring
+    says what it took on the desktop the costs were fitted on. The two that reach furthest, a deck at every limit whose lines are all
+    waived and whose rules state `lt`, are in `Worst` of tests/test_kernel_attacks3.py, since they are that test's files."""
+
+    def bounded(self, files: dict[str, str]) -> dict:
+        from tests import test_kernel_attacks3 as heavy
+
+        self.assertLess(heavy.total(files), 1.12 * heavy.MB)
+        said, seconds, peak = heavy.measured(files)
+        self.assertLess(seconds, heavy.PROCESSOR_SECONDS / 3, "processor seconds")
+        self.assertLess(peak, heavy.HALF_GB, "bytes held")
+        return said
+
+    def test_a_card_that_states_a_key_and_a_count_for_each_of_4800_parts(self):
+        """4,800 parts that each read a key and a count from the card, and a card that states both for each: 9,600 statements, 1.0 MB.
+        A rule requires the key of each part, and nothing reads the count. Every look for a statement is by its name, in a table kept
+        in order. 0.5 processor seconds and 49 MB. With 2,000 statements that no part reads the design is refused in 0.2."""
+        from tests.test_kernel_attacks3 import empty_card, with_rules
+
+        gate = kind("gate", {**key("k", "yes", "no"), "signed": True}, size("n", "dimensionless", whole=True, signed=True))
+        deck = made_up([gate], [asks("gate.set", "gate")], [rule("set", "gate", "gate.set", requires=["is", "k", "yes"])])
+        names = [f"g{i:04d}" for i in range(4_800)]
+        card = {**empty_card(), "states": [s for name in names for s in ({"name": f"{name}.k", "by": "b", "key": "yes" if int(name[1:]) % 2 else "no"},
+                                                                         {"name": f"{name}.n", "by": "b", "whole": "3"})]}
+        parts = [{"name": name, "type": "gate", "lines": [{"field": "k", "args": [{"given": f"{name}.k"}]}, {"field": "n", "args": [{"given": f"{name}.n"}]}]} for name in names]
+        said = self.bounded(with_rules(deck, card, parts))
+        self.assertEqual((said["verdict"], said["findings"], said["counts"]["proved"], said["counts"]["refuted"], said["counts"]["open"]), ("FAIL", [], 2_400, 2_400, 4_800))
+        stray = {**card, "states": card["states"][:6_000] + [{"name": f"x{i}.k", "by": "b", "key": "yes"} for i in range(2_000)]}
+        parts = parts[:3_000]
+        over = self.bounded(with_rules(deck, stray, parts))
+        self.assertEqual((over["verdict"], len(over["findings"]), over["more_findings"]), ("ILL-FORMED", 100, 1_900), "a statement that no part reads is a finding, and they are counted past a hundred")
+
+    def test_a_table_of_values_in_the_unit_that_is_listed_last(self):
+        """A table read at 42,000 listed values, each cell in `oz`, the last unit of the kernel's list, and each value in `mile`: 84,000
+        quantities whose unit is found past every other, 1.0 MB. A rule reads the table, which is a pick of far more orders than a pick
+        may hold, so its tape is not written. 1.1 processor seconds and 60 MB."""
+        from tests.test_kernel_attacks3 import empty_card, with_rules
+
+        count = 42_000
+        row = {"id": "made-up/w", "anchor": ANCHOR, "gives": {"name": "m", "dim": "mass"}, "takes": [{"name": "x", "dim": "length", "range": ["1 mile", f"{count} mile"]}],
+               "table": {"down": {"by": "x", "at": [f"{k} mile" for k in range(1, count + 1)]}, "cells": [f"{k} oz" for k in range(1, count + 1)]}}
+        deck = made_up([kind("t", size("f"), size("m", "mass"))], [asks("t.m", "t")], [rule("m", "t", "t.m", le=["m", ["row", "made-up/w", {"x": "f"}]])], [row])
+        number = lambda dim, x: [{"number": {"dim": dim, "lo": x, "hi": x}}]      # noqa: E731
+        parts = [{"name": f"p{i}", "type": "t", "lines": [{"field": "f", "args": number("length", "201168/125")}, {"field": "m", "args": number("mass", "1/100")}]} for i in range(2)]
+        said = self.bounded(with_rules(deck, empty_card(), parts))
+        self.assertEqual((said["verdict"], said["findings"], said["counts"]["open"]), ("UNKNOWN", [], 2))
+        self.assertIn("over the budget of 1024 for one pick", said["cells"][0]["reason"])
+
+    def test_parts_that_leave_a_field_unstated_under_rules_that_read_many(self):
+        """A type of 190 optional fields, 212 rules that each sum them all, and 47 parts that leave the last field unstated. Each rule looks
+        through its 190 fields for each part before it finds the one that is unstated: 9,964 open cells and 1.9 million steps of the ten
+        million, 1.0 MB. One part more is past the cells a design may have. 1.1 processor seconds and 53 MB, and 0.7 seconds for the design that is refused."""
+        from tests.test_kernel_attacks3 import empty_card, with_rules
+
+        fields = [f"f{k:03d}" for k in range(190)]
+        deck = made_up([kind("t", *(size(name, optional=True) for name in fields))], [asks(f"t.m{r:03d}", "t") for r in range(212)],
+                       [rule(f"m{r:03d}", "t", f"t.m{r:03d}", le=[["add", *fields], ["q", "1", "km"]]) for r in range(212)])
+        one = [{"number": {"dim": "length", "lo": "1", "hi": "1"}}]
+        lines = [{"field": name, "args": one} for name in fields[:-1]] + [{"field": fields[-1], "args": [{"word": "unstated"}]}]
+
+        def files(parts: int) -> dict[str, str]:
+            return with_rules(deck, empty_card(), [{"name": f"p{i}", "type": "t", "lines": lines} for i in range(parts)])
+
+        said = self.bounded(files(47))
+        self.assertEqual((said["verdict"], said["findings"], said["counts"]["open"]), ("UNKNOWN", [], 47 * 212))
+        self.assertEqual(said["cells"][0]["reason"], "p0.f189 is unstated: its maker states none, and the rule reads it")
+        self.assertEqual(said["cells"][-1]["reason"], "past what the verdict prints of reasons")
+        over = self.bounded(files(48))
+        self.assertEqual([(f["rule"], f["item"]) for f in over["findings"]], [("limits", "parts")])
+        self.assertIn("more than 10000 cells", over["findings"][0]["why"])
+
+    def test_bounds_under_their_floor_for_loads_that_may_be_negative_and_one_long_name(self):
+        """9,000 loads of a length under zero on parts whose type lets the load be negative, so that type rule 4 looks each one up and lets
+        it by, and one given whose name is 400,000 dots, which the rule splits at its last dot to find no part: 0.9 MB and 0.4 MB. 0.8 and 0.2 processor seconds, and at most 64 MB."""
+        from tests.test_kernel_attacks3 import empty_card, with_rules
+
+        deck = made_up([kind("t", size("f"), loads=[{"name": "shift", "dim": "length", "may_be": "negative", "what": "a shift"}])], [asks("t.m", "t")],
+                       [rule("m", "t", "t.m", le=[["add", "f", ["load", "shift"]], ["q", "1", "m"]])])
+        one = [{"number": {"dim": "length", "lo": "1/2", "hi": "1/2"}}]
+        parts = [{"name": f"p{i:03d}", "type": "t", "lines": [{"field": "f", "args": one}]} for i in range(90)]
+        loads = [{"name": f"i{i}", "dim": "length", "lo": "-1", "hi": "1/4", "by": "b", "case": f"c{i // 90:02d}", "on": f"p{i % 90:03d}", "field": "shift"} for i in range(9_000)]
+        said = self.bounded(with_rules(deck, empty_card(loads), parts))
+        self.assertEqual((said["verdict"], said["findings"], len(said["cells"])), ("UNKNOWN", [], 9_000), "no hint proves a cell, and none is refused for its floor")
+        dots = {"name": "." * 400_000, "dim": "length", "lo": "-1", "hi": "1", "by": "b"}
+        said = self.bounded(with_rules(deck, empty_card([*loads[:90], dots]), parts))
+        self.assertEqual(sorted({f["rule"] for f in said["findings"]}), ["parts.6", "types.4"], "under the floor of a length, and read by no part")
+
+    def test_requirements_tried_to_the_million_and_a_thousand_more_left_untried(self):
+        """Nine rules that each require a condition of 26 conditions over twelve keys of two names, 4,096 combinations each, which is the
+        million that a deck's requirements are tried within, and 1,200 more such rules that are then read untried: 0.93 MB. Each rule has a
+        line of its own, since two rules of one line may not end alike. 0.3 processor seconds and 43 MB."""
+        from tests.test_kernel_attacks3 import empty_card, with_rules
+        from tests.test_kernel_attacks6 import SWITCHES, PANEL
+
+        honest = ["or", *(["is", name, "yes"] for name in SWITCHES[:12]), ["and", *(["is", name, "yes"] for name in SWITCHES[:12])]]
+        count = 1_209
+        deck = made_up([PANEL], [asks(f"panel.s{n:04d}", "panel") for n in range(count)], [rule(f"s{n:04d}", "panel", f"panel.s{n:04d}", requires=honest) for n in range(count)])
+        lines = [{"field": name, "args": [{"word": "no"}]} for name in SWITCHES]
+        said = self.bounded(with_rules(deck, empty_card(), [{"name": "p", "type": "panel", "lines": lines}]))
+        self.assertEqual((said["verdict"], said["findings"], said["counts"]["refuted"], said["counts"]["open"]), ("FAIL", [], count, 1), "every switch is off, and one is read by no rule")
 
 
 if __name__ == "__main__":

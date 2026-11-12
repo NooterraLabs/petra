@@ -942,16 +942,17 @@ class Worst(unittest.TestCase):
     seconds and the 512 MB that an input under 1 MB may take. The first took 11.7 before the
     kernel's tables were kept in order."""
 
-    def test_a_deck_its_cells_and_a_proof_each_at_its_limit_answer_in_time(self):
+    def at_its_limits(self, cases: int, waived: bool = False, strict: bool = False) -> tuple[dict, float, int, dict]:
         """Three rules for one part, each at a limit. `r/read` applies a row of 5,000 numbers
         94 times, which brings the deck to the million steps to read: a number is the text
         that costs most to read for its steps. `r/sum` sums 1,400 fields with names of 64
-        characters, and is written for the 2,151 load cases that the ten million steps of
+        characters, and is written for the `cases` load cases that the ten million steps of
         the cells allow. The hinted proof of `r/big` spends the twenty billion units of work
         on `exp` of fractions of 250 bits, the step whose unit took longest in
         bench/work_sweep.py. The card, the design and the part have the longest names they
-        may, which the label of every input of every tape holds. Alone, the three took 1.5,
-        1.0 and 7.8 processor seconds."""
+        may, which the label of every input of every tape holds. With `waived` the card waives
+        all three lines, and with `strict` the rules state `lt`. Gives what the kernel said,
+        its processor seconds and the bytes it held, and what it said of one load case more."""
         fields = [f"f{k:063d}" for k in range(1_400)]
         part, title = "p" * 64, "c" * 200
         row = {"id": "w", "anchor": ANCHOR, "gives": {"name": "y", "dim": "dimensionless"}, "takes": [{"name": "x", "dim": "length", "range": ["1 m", "2 m"]}],
@@ -960,30 +961,57 @@ class Worst(unittest.TestCase):
                 "loads": [{"name": "L", "dim": "length", "what": "w"}]}
         rnd = random.Random(3)
         lets = {f"q{i}": ["mul", "g", ["div", str(rnd.getrandbits(250) | 1 << 249 | 1), str(rnd.getrandbits(250) | 1 << 249 | 1)]] for i in range(64)}
-        spends = rule_of("r/big", mechanism="big", let=lets, le=(["max"] + [["exp", f"q{i}"] for i in range(64)], "1000000"))
-        sums = rule_of("r/sum", mechanism="sum", le=(["load", "L"], ["add"] + fields))
+        def stated(body: dict) -> dict:
+            return {**{k: v for k, v in body.items() if k != "le"}, "lt": body["le"]} if strict else body
+
+        spends = stated(rule_of("r/big", mechanism="big", let=lets, le=(["max"] + [["exp", f"q{i}"] for i in range(64)], "1000000")))
+        sums = stated(rule_of("r/sum", mechanism="sum", le=(["load", "L"], ["add"] + fields)))
 
         def make(times: int) -> dict:
-            reads = rule_of("r/read", mechanism="read", le=("1", ["add", "1"] + [f"v{i}" for i in range(times)]), let={f"v{i}": ["row", "w", {"x": fields[0]}] for i in range(times)})
+            reads = stated(rule_of("r/read", mechanism="read", le=("1", ["add", "1"] + [f"v{i}" for i in range(times)]), let={f"v{i}": ["row", "w", {"x": fields[0]}] for i in range(times)}))
             return deck_of(rows=[row], types=[kind], grid_lines=[asks(mechanism="sum"), asks(mechanism="read"), asks(mechanism="big")], rules=[sums, reads, spends])
 
         self.assertEqual(applied(make), 94)
         rules = make(94)
         lines = [{"field": name, "args": ONE} for name in fields] + [{"field": "g", "args": [{"number": {"dim": "dimensionless", "lo": "1", "hi": "2"}}]}]
         hint = {"subject": part, "mechanism": "big", "entry": "big", "state": "proved", "partition": halves(f"dsg:{title}.{part}.g", Fraction(1), Fraction(2), 400)}
+        waivers = [{"subject": part, "mechanism": mechanism, "by": "b", "reason": "r"} for mechanism in ("sum", "read", "big")] if waived else []
 
-        def files(cases: int) -> dict[str, str]:
-            inputs = [{"name": f"i{c}", "dim": "length", "lo": "0", "hi": "1", "by": "b", "case": f"c{c}", "on": part, "field": "L"} for c in range(cases)]
-            return with_rules(rules, empty_card(inputs, title), [{"name": part, "type": "t", "lines": lines}], [hint], title)
+        def files(count: int) -> dict[str, str]:
+            inputs = [{"name": f"i{c}", "dim": "length", "lo": "0", "hi": "1", "by": "b", "case": f"c{c}", "on": part, "field": "L"} for c in range(count)]
+            return with_rules(rules, {**empty_card(inputs, title), "waivers": waivers}, [{"name": part, "type": "t", "lines": lines}], [hint], title)
 
-        over = measured(files(2_152))[0]
+        over = measured(files(cases + 1))[0]
+        self.assertTrue(0.9 * MB < total(files(cases)) < MB, total(files(cases)))
+        return (*measured(files(cases)), over)
+
+    def test_a_deck_its_cells_and_a_proof_each_at_its_limit_answer_in_time(self):
+        """The three rules of `at_its_limits`, for the 2,151 load cases that the ten million
+        steps of the cells allow. Alone, the three took 1.5, 1.0 and 7.8 processor seconds."""
+        said, seconds, peak, over = self.at_its_limits(2_151)
         self.assertEqual([f["rule"] for f in over["findings"]], ["limits"], "one more load case is over the steps of the cells")
-        self.assertTrue(0.9 * MB < total(files(2_151)) < MB, total(files(2_151)))
-        said, seconds, peak = measured(files(2_151))
         self.assertEqual((said["verdict"], said["findings"], len(said["cells"])), ("UNKNOWN", [], 2_151 + 2))
         self.assertRegex(said["cells"][-1]["reason"], r"^leaf \d+: node \d+: " + re.escape(COSTLY) + "$")
         self.assertGreater(said["work"], MAX_WORK * 99 // 100, "the proof stopped because the work ran out")
         self.assertLess(seconds, PROCESSOR_SECONDS, "it took 10.2 processor seconds")
+        self.assertLess(peak, HALF_GB)
+
+    def test_the_same_deck_with_every_line_waived_and_every_rule_strict_takes_no_longer(self):
+        """The rules of a waived line are run, so a waiver saves the kernel nothing, and a rule
+        that states `lt` has a pick for its root, one node more than `le` has. So the heaviest
+        input for both is the heaviest there was, with its three lines waived and its three
+        rules strict: the same deck, steps and proof, and each open cell waived. In two runs on
+        a busy desktop it took 14.1 and 15.2 processor seconds and 115 MB, and the test above
+        took 13.8 beside the first. The tapes of `r/sum` hold a node more for each load case, which is 2,151
+        steps of the ten million and less than a load case costs, so the same 2,151 cases are
+        within the steps and one more is over."""
+        said, seconds, peak, over = self.at_its_limits(2_151, waived=True, strict=True)
+        self.assertEqual([f["rule"] for f in over["findings"]], ["limits"], "one more load case is over the steps of the cells")
+        self.assertEqual((said["verdict"], said["findings"], len(said["cells"]), said["counts"]["waived"]), ("UNKNOWN", [], 2_151 + 2, 2_151 + 2))
+        self.assertRegex(said["cells"][-1]["reason"], r"^open but for the waiver: leaf \d+: node \d+: " + re.escape(COSTLY) + "$")
+        self.assertEqual(len(said["waived"]), 3, "each waiver is printed once, whatever rests on it")
+        self.assertGreater(said["work"], MAX_WORK * 99 // 100, "the proof stopped because the work ran out")
+        self.assertLess(seconds, PROCESSOR_SECONDS)
         self.assertLess(peak, HALF_GB)
 
     def test_a_deck_a_proof_and_a_megabyte_of_lists_each_at_its_limit_are_held_in_bounded_memory(self):
