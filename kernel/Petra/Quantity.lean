@@ -127,13 +127,9 @@ def UNITS : List (String × Rat × Dim) :=
   let charge : Dim := { s := 1, a := 1 }
   let speed : Dim := { m := 1, s := -1 }
   let density : Dim := { m := -3, kg := 1 }
-  [("kW", 1000, power), ("min", 60, time), ("h", 3600, time), ("Hz", 1, turns), ("rpm", mkRat 1 60, turns),
-   ("mAh", mkRat 18 5, charge), ("Ah", 3600, charge),
-   ("m/s", 1, speed), ("km/h", mkRat 5 18, speed), ("knot", mkRat 463 900, speed), ("mph", MILE / 3600, speed),
-   ("kg/m3", 1, density), ("g/cm3", 1000, density), ("N/mm", 1000, { kg := 1, s := -2 }),
-   ("lbf_in", LBF * INCH, ENERGY), ("lbf_ft", LBF * 12 * INCH, ENERGY), ("mile", MILE, length),
-   ("lb", LB, { kg := 1 }), ("oz", LB / 16, { kg := 1 }),
-   ("1", 1, {}), ("%", mkRat 1 100, {}),
+  -- The units read since 2026-11-11 stand last, so a unit that was read before is found in
+  -- as many steps as it was.
+  [("1", 1, {}), ("%", mkRat 1 100, {}),
    ("m", 1, length), ("mm", mkRat 1 1000, length), ("um", mkRat 1 1000000, length), ("cm", mkRat 1 100, length), ("km", 1000, length),
    ("mm2", mkRat 1 1000000, area), ("m2", 1, area),
    ("N", 1, force), ("kN", 1000, force), ("MN", 1000000, force),
@@ -148,7 +144,13 @@ def UNITS : List (String × Rat × Dim) :=
    ("inch", INCH, length), ("ft", 12 * INCH, length), ("inch2", INCH * INCH, area),
    ("lbf", LBF, force), ("kip", KIP, force), ("kips", KIP, force),
    ("psi", LBF / (INCH * INCH), stress), ("ksi", KIP / (INCH * INCH), stress),
-   ("kip_in", KIP * INCH, ENERGY), ("kip_ft", KIP * 12 * INCH, ENERGY)]
+   ("kip_in", KIP * INCH, ENERGY), ("kip_ft", KIP * 12 * INCH, ENERGY),
+   ("kW", 1000, power), ("min", 60, time), ("h", 3600, time), ("Hz", 1, turns), ("rpm", mkRat 1 60, turns),
+   ("mAh", mkRat 18 5, charge), ("Ah", 3600, charge),
+   ("m/s", 1, speed), ("km/h", mkRat 5 18, speed), ("knot", mkRat 463 900, speed), ("mph", MILE / 3600, speed),
+   ("kg/m3", 1, density), ("g/cm3", 1000, density), ("N/mm", 1000, { kg := 1, s := -2 }),
+   ("lbf_in", LBF * INCH, ENERGY), ("lbf_ft", LBF * 12 * INCH, ENERGY), ("mile", MILE, length),
+   ("lb", LB, { kg := 1 }), ("oz", LB / 16, { kg := 1 })]
 
 /-- The powers a unit of length may be raised to, each as it is written. One power has one
 spelling: `inch^4`, and not `inch^04` or `inch^+4`. -/
