@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import argparse
 import collections
+import collections.abc
 import itertools
 import json
 import math
@@ -657,6 +658,29 @@ def parts(task: Task, mechanism: str, readings: list[Reading], seed: int = 0, co
     return _sampled(task, mechanism, tuple(sorted(_marks(readings, mechanism).items())), seed, count)
 
 
+class _Combinations(collections.abc.Sequence):
+    """Every combination of the names of a type's keys, in the order itertools.product gives
+    them, with no list made: a type with twenty keys has billions. random.sample picks the
+    same combinations from it as from the list, since it reads a sequence by its length and
+    its indices alone."""
+
+    def __init__(self, keys: Mapping[str, tuple[str, ...]]) -> None:
+        self.keys = [(name, tuple(options)) for name, options in keys.items()]
+        self.size = math.prod(len(options) for _, options in self.keys)
+
+    def __len__(self) -> int:
+        return self.size
+
+    def __getitem__(self, n: int) -> tuple[tuple[str, str], ...]:
+        if not 0 <= n < self.size:
+            raise IndexError(n)
+        out = []
+        for name, options in reversed(self.keys):
+            n, k = divmod(n, len(options))
+            out.append((name, options[k]))
+        return tuple(reversed(out))
+
+
 @lru_cache(maxsize=64)
 def _sampled(task: Task, mechanism: str, marked: tuple, seed: int, count: int) -> Parts:
     kind = next(a.type for a in task.deck.asks if a.mechanism == mechanism)
@@ -666,11 +690,13 @@ def _sampled(task: Task, mechanism: str, marked: tuple, seed: int, count: int) -
     marks = {name: (listed, tuple(x for x in beside if x > 0 or (name in sizes and sizes[name].may_be is not None and _may_have(sizes[name], x, False))))
              for name, (listed, beside) in marked}
     rng = random.Random(f"{seed}/{task.name}/{mechanism}")
-    combos = list(itertools.product(*([(name, k) for k in options] for name, options in keys.items())))
+    combos: Any = _Combinations(keys)
     said = ""
     if len(combos) > count:
         said = f", {count} of the {len(combos)} combinations of its keys"
         combos = rng.sample(combos, count)
+    else:
+        combos = list(combos)
 
     def draw(name: str, marked: bool = True) -> Fraction:
         lo, hi = spans[name]

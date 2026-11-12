@@ -391,6 +391,21 @@ class Parts(unittest.TestCase):
             self.assertEqual((p["fit"], p["turns"], p["screw"]), (q["fit"], q["turns"], q["screw"]))
         self.assertTrue(any(p["hole"] != q["hole"] for p, q in tried.pairs))
 
+    def test_the_combinations_of_keys_are_drawn_with_no_list_made(self):
+        """A type with twenty keys has billions of combinations of their names. The check
+        draws its parts from them as it drew them from the whole list, which it no longer makes."""
+        import itertools
+        import random
+        keys = {"a": ("x", "y", "z"), "b": ("p", "q"), "c": ("1", "2", "3", "4")}
+        made = list(itertools.product(*([(name, k) for k in options] for name, options in keys.items())))
+        lazy = rule._Combinations(keys)
+        self.assertEqual(list(lazy), made)
+        self.assertEqual(random.Random("s").sample(lazy, 5), random.Random("s").sample(made, 5))
+        many = rule._Combinations({f"k{n}": tuple(str(i) for i in range(5)) for n in range(16)})
+        self.assertEqual(len(many), 5 ** 16)
+        self.assertEqual(len(set(random.Random("s").sample(many, rule.PARTS))), rule.PARTS)
+        self.assertEqual(rule._Combinations({}).__getitem__(0), ())
+
     def test_the_parts_do_not_depend_on_the_order_the_readings_come_in(self):
         other = reading(with_rule(0, id="other/heat"))
         self.assertEqual(rule.parts(TASK, "strip.heat", [FIRST, other]), rule.parts(TASK, "strip.heat", [other, FIRST]))
