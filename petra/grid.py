@@ -1755,9 +1755,11 @@ def bundle(design: Design, deck: Deck, answers: list[Cell] | None = None) -> dic
 
 
 def verdict(answers: list[Cell]) -> str:
-    """The kernel's verdict: FAIL with a refuted cell, UNKNOWN with an open cell or with nothing proved, else PASS."""
+    """The kernel's verdict: FAIL with a refuted cell, UNKNOWN with an open cell or with nothing proved, else PASS. A cell
+    whose entry ends in `/where` proves a rule's range and not the rule, so it is not the one proved cell a PASS needs."""
     states = {c.state for c in answers}
-    return "FAIL" if "refuted" in states else "UNKNOWN" if "open" in states or "proved" not in states else "PASS"
+    proved = any(c.state == "proved" and not c.entry.endswith("/where") for c in answers)
+    return "FAIL" if "refuted" in states else "UNKNOWN" if "open" in states or not proved else "PASS"
 
 
 PASS_WAIVED = "PASS_WAIVED"
