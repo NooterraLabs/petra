@@ -128,16 +128,7 @@ def unconditioned(rules: dict) -> dict:
 def measured_check(card: str, design: str, timeout: float = 120) -> tuple[int | None, int, float, int]:
     """`python -m petra check` on the pair, written to a folder of its own: the exit code (None
     when stopped at `timeout` on the clock), the bytes it printed, its processor seconds and the
-    most memory its process held, from Windows' counters for that process."""
-    import ctypes
-    from ctypes import wintypes
-
-    class Counters(ctypes.Structure):
-        _fields_ = [("cb", wintypes.DWORD), ("PageFaultCount", wintypes.DWORD)] + [
-            (n, ctypes.c_size_t) for n in ("PeakWorkingSetSize", "WorkingSetSize", "QuotaPeakPagedPoolUsage",
-                                           "QuotaPagedPoolUsage", "QuotaPeakNonPagedPoolUsage",
-                                           "QuotaNonPagedPoolUsage", "PagefileUsage", "PeakPagefileUsage")]
-
+    most memory its process held, from the counters the system keeps for that process."""
     with tempfile.TemporaryDirectory() as tmp:
         Path(tmp, "x.card").write_text(card, encoding="utf-8", newline="\n")
         Path(tmp, "x.petra").write_text(design, encoding="utf-8", newline="\n")
@@ -148,17 +139,33 @@ def measured_check(card: str, design: str, timeout: float = 120) -> tuple[int | 
             timer = threading.Timer(timeout, lambda: (stopped.append(True), p.kill()))  # this process only
             timer.start()
             try:
-                p.wait()
+                if os.name == "nt":
+                    import ctypes
+                    from ctypes import wintypes
+
+                    class Counters(ctypes.Structure):
+                        _fields_ = [("cb", wintypes.DWORD), ("PageFaultCount", wintypes.DWORD)] + [
+                            (n, ctypes.c_size_t) for n in ("PeakWorkingSetSize", "WorkingSetSize", "QuotaPeakPagedPoolUsage",
+                                                           "QuotaPagedPoolUsage", "QuotaPeakNonPagedPoolUsage",
+                                                           "QuotaNonPagedPoolUsage", "PagefileUsage", "PeakPagefileUsage")]
+
+                    p.wait()
+                    handle = wintypes.HANDLE(int(p._handle))
+                    counters = Counters()
+                    counters.cb = ctypes.sizeof(Counters)
+                    times = [wintypes.FILETIME() for _ in range(4)]
+                    ctypes.windll.psapi.GetProcessMemoryInfo(handle, ctypes.byref(counters), counters.cb)
+                    ctypes.windll.kernel32.GetProcessTimes(handle, *(ctypes.byref(t) for t in times))
+                    seconds = sum((t.dwHighDateTime << 32) | t.dwLowDateTime for t in times[2:]) / 1e7
+                    code, peak = p.returncode, counters.PeakWorkingSetSize
+                else:
+                    _, status, usage = os.wait4(p.pid, 0)
+                    code = p.returncode = os.waitstatus_to_exitcode(status)
+                    seconds = usage.ru_utime + usage.ru_stime
+                    peak = usage.ru_maxrss * (1 if sys.platform == "darwin" else 1024)
             finally:
                 timer.cancel()
-            handle = wintypes.HANDLE(int(p._handle))
-            counters = Counters()
-            counters.cb = ctypes.sizeof(Counters)
-            times = [wintypes.FILETIME() for _ in range(4)]
-            ctypes.windll.psapi.GetProcessMemoryInfo(handle, ctypes.byref(counters), counters.cb)
-            ctypes.windll.kernel32.GetProcessTimes(handle, *(ctypes.byref(t) for t in times))
-        seconds = sum((t.dwHighDateTime << 32) | t.dwLowDateTime for t in times[2:]) / 1e7
-        return None if stopped else p.returncode, Path(tmp, "out").stat().st_size, seconds, counters.PeakWorkingSetSize
+        return None if stopped else code, Path(tmp, "out").stat().st_size, seconds, peak
 
 
 @unittest.skipUnless(verify.binary(), "no petra-verify is built here and PETRA_VERIFY names none")
@@ -227,12 +234,15 @@ def givens(names: int, references: int) -> tuple[str, str]:
     return card, "petra 0\n\nplate p {\n  thickness" + " given z" * references + "\n}\n"
 
 
-@unittest.skipUnless(os.name == "nt", "the counters of a process are read from Windows")
+HEAD_C = 'petra 0\n\ncard "c" {\n  owner "a"\n}\n'
+
+
 class TheFrontEndKeepsTheBudget(unittest.TestCase):
     """Findings 2 and 3. `petra check` on a pair under 1 MB takes at most 30 processor seconds
-    and 512 MB, and what it prints of a pair it refuses is not many times the pair."""
+    and 512 MB, and what it prints of a pair it refuses is not many times the pair: under
+    1 MB, whatever the pair holds."""
 
-    def assertBounded(self, card: str, design: str, timeout: float = 120):
+    def assertBounded(self, card: str, design: str, timeout: float = 120) -> None:
         size = len(card.encode()) + len(design.encode())
         self.assertLess(size, MB)
         code, printed, seconds, peak = measured_check(card, design, timeout)
@@ -242,6 +252,7 @@ class TheFrontEndKeepsTheBudget(unittest.TestCase):
         self.assertLess(seconds, PROCESSOR_SECONDS, figures)
         self.assertLess(peak, MEGABYTES * MB, figures)
         self.assertLess(printed, 3 * size, figures)
+        self.assertLess(printed, MB, figures)
 
     def test_givens_the_card_lacks_are_not_each_told_every_given_it_has(self):
         """Finding 2. 6,000 givens and 8,000 references to a given the card lacks, 0.351 MB:
@@ -259,6 +270,95 @@ class TheFrontEndKeepsTheBudget(unittest.TestCase):
         of the models, about 7.4 MB in all (0.96 MB printed 75 MB in the review)."""
         card = 'petra 0\n\ncard "c" {\n  owner "a"\n}\n' + 'waive q on p by "a" reason "b"\n' * 3100
         self.assertBounded(card, "petra 0\n")
+
+
+class Worst(unittest.TestCase):
+    """The pairs just under 1 MB that cost the front end most, of those the fifth review and its
+    fixes found. Each is held to 30 processor seconds, 512 MB and 1 MB of output, with exit
+    code 3. The figures in the docstrings are of the desktop the kernel's costs were fitted on."""
+
+    assertBounded = TheFrontEndKeepsTheBudget.assertBounded
+
+    def said(self, card: str, design: str) -> str:
+        with self.assertRaises(petra.lang.LoweringError) as refused:
+            petra.lang.parse_design(card, design, "x.petra", build_registry(), "x.card")
+        return str(refused.exception)
+
+    def test_a_megabyte_of_one_unknown_unit(self):
+        """249,980 numbers with the unknown unit `z`, 999,987 bytes: the review's worst. At
+        495f2b7 it took 11.0 processor seconds, held 513 MB and printed 99.5 MB. One line now."""
+        design = "petra 0\n\nplate p {\n  thickness" + " 1 z" * 249_980 + "\n}\n"
+        self.assertBounded(HEAD_C, design)
+        said = self.said(HEAD_C, "petra 0\n\nplate p {\n  thickness" + " 1 z" * 2_000 + "\n}\n")
+        self.assertEqual(said, "x.petra:4:15: unknown unit 'z'; petra knows 47 units: %, m, mm, um and 43 more, which docs/reference.md lists (2,000 times, first here)")
+
+    def test_a_megabyte_of_different_unknown_units(self):
+        """110,000 numbers, each with an unknown unit of its own: no message is said twice, so
+        the first hundred are printed and the rest are counted."""
+        design = "petra 0\n\nplate p {\n  thickness" + "".join(f" 1 z{i}" for i in range(110_000)) + "\n}\n"
+        self.assertBounded(HEAD_C, design)
+        said = self.said(HEAD_C, "petra 0\n\nplate p {\n  thickness" + "".join(f" 1 z{i}" for i in range(250)) + "\n}\n").splitlines()
+        self.assertEqual((len(said), said[-1]), (101, "x.petra: and 150 more problems"))
+
+    def test_a_megabyte_of_waivers_of_an_unknown_mode(self):
+        """31,000 waivers of the unknown mode `q`, 0.96 MB, which printed 75 MB in the review."""
+        self.assertBounded(HEAD_C + 'waive q on p by "a" reason "b"\n' * 31_000, "petra 0\n")
+
+    def test_a_megabyte_of_givens_and_of_references_to_one_the_card_lacks(self):
+        """12,000 givens and 50,000 references to a given the card lacks, 0.98 MB. At 495f2b7
+        that is 600 million names in the messages: a third of it, 0.35 MB, held 1.4 GB."""
+        card, design = givens(12_000, 50_000)
+        self.assertBounded(card, design)
+        said = self.said(*givens(6, 3)).splitlines()
+        self.assertEqual(len(said), 7, "a line for each of the six givens that nothing reads, and one for the given the card lacks")
+        self.assertEqual(said[-1], "x.petra:4:13: p.thickness: the card gives no 'z'; it gives 6: g0, g1, g2, g3 and 2 more (3 times, first here)")
+
+    def test_a_megabyte_of_unknown_kinds(self):
+        design = "petra 0\n" + "".join(f"\nq{i} p{i} {{\n}}\n" for i in range(52_000))
+        self.assertBounded(HEAD_C, design)
+
+    def test_a_dotted_name_of_a_megabyte(self):
+        """A given named by 499,000 names with dots between them, which the parser once joined
+        one at a time: 15.4 processor seconds in the review. The message that repeats the name
+        is cut."""
+        name = ".".join(["a"] * 499_000)
+        self.assertBounded(HEAD_C + f'\ngiven {name} in [1 m, 1 m] signed "a" source "b"\n', "petra 0\n")
+
+    def test_a_file_over_a_megabyte_is_refused_before_it_is_parsed(self):
+        design = "petra 0\n\nplate p {\n  thickness" + " 1 z" * 250_010 + "\n}\n"
+        self.assertGreater(len(design), MB)
+        code, printed, seconds, peak = measured_check(HEAD_C, design)
+        self.assertEqual(code, 3)
+        self.assertLess(printed, 400)
+        self.assertLess(seconds, PROCESSOR_SECONDS / 3)
+        with self.assertRaises(petra.lang.LolaSyntaxError) as refused:
+            petra.lang.parse_design(HEAD_C, design, "x.petra", build_registry(), "x.card")
+        self.assertIn("the text has over 1,000,000 bytes, and a card or a design has at most that many", str(refused.exception))
+        self.assertEqual(petra.check(HEAD_C, design)["status"], "INPUT_ERROR")
+
+    def test_the_exporter_and_the_mcp_tools_refuse_a_file_over_a_megabyte_too(self):
+        """`petra check`, `petra.export` and the MCP tools read a card and a design through one
+        function, petra/files.py `read_text`, which looks at the size of the file first."""
+        from petra import export, mcp
+
+        with tempfile.TemporaryDirectory() as tmp:
+            design, card = Path(tmp, "x.petra"), Path(tmp, "x.card")
+            design.write_text("petra 0\n# " + "x" * MB + "\n", encoding="utf-8", newline="\n")
+            card.write_text(HEAD_C, encoding="utf-8", newline="\n")
+            said = "x.petra:1:1: the file has 1,000,011 bytes, and a card or a design has at most 1,000,000"
+            with self.assertRaises(petra.lang.LolaSyntaxError) as refused:
+                petra.lang.load_design(design)
+            self.assertTrue(str(refused.exception).endswith(said), str(refused.exception))
+            with self.assertRaises(mcp.ToolError) as refused:
+                mcp._file_at(str(design), "path", ".petra")
+            self.assertTrue(str(refused.exception).endswith(said), str(refused.exception))
+            with mock.patch("sys.stderr"):
+                self.assertEqual(export.main([str(design), "--out", str(Path(tmp, "out"))]), 3)
+            self.assertFalse(Path(tmp, "out").exists(), "nothing is written for a pair that is refused")
+            card.write_text(HEAD_C + "# " + "x" * MB + "\n", encoding="utf-8", newline="\n")
+            design.write_text("petra 0\n", encoding="utf-8", newline="\n")
+            with self.assertRaisesRegex(petra.lang.LolaSyntaxError, "x.card:1:1: the file has .* bytes, and a card or a design has at most 1,000,000"):
+                petra.lang.load_design(design)
 
 
 @unittest.skipUnless(verify.binary(), "no petra-verify is built here and PETRA_VERIFY names none")

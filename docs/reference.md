@@ -58,6 +58,19 @@ These rules apply to both files.
   a signature. In a family, `param NAME` stands where a bound would.
 - `in`, `mean`, `signed`, `measured`, `source`, `param`, and `given` cannot be names inside a line. No
   declared name can be a declaration word.
+- A file has at most 1,000,000 bytes. `petra check`, `petra.export` and the MCP tools refuse a larger
+  file before they parse it.
+
+A pair that is refused prints its problems, each with its file, line and column. What is printed is
+bounded, whatever the files hold.
+
+- A message that names a table, such as the kinds or the givens of the card, lists at most 4 of
+  its names and says how many it has. For an unknown kind or mode they are the names that start most
+  as the unknown one does.
+- A message that arises more than once is printed once, at the first place, with how many times it
+  arose.
+- At most 100 problems are printed for a file, and then how many more there were.
+- A problem of more than 500 characters is cut, and says how many were left out.
 
 ## Declarations
 

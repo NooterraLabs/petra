@@ -153,6 +153,10 @@ def _parse_number(text: str) -> Fraction:
         raise UnitError(f"malformed number {text!r}: zero denominator") from None
 
 
+_SPELLINGS = [unit for unit in (*UNITS, *CUSTOMARY) if unit != "1"]
+"""Every unit a file can write, in the order of the tables. A message about an unknown unit
+names the first four and says how many more there are: it once listed them all, for each
+unknown unit of a file."""
 POWERS = ("2", "3", "4")
 """The powers a unit of length may be raised to, each as it is written: `inch^4`, and not
 `inch^04`. A section's area, modulus and moment of inertia are lengths to these powers."""
@@ -166,7 +170,7 @@ def _unit(unit: str) -> tuple[Fraction, Dim]:
     name, hat, power = unit.partition("^")
     found = UNITS.get(name) or CUSTOMARY.get(name)
     if found is None:
-        raise UnitError(f"unknown unit {unit!r}; known units: {', '.join(sorted({*UNITS, *CUSTOMARY}))}")
+        raise UnitError(f"unknown unit {unit!r}; petra knows {len(_SPELLINGS)} units: {', '.join(_SPELLINGS[:4])} and {len(_SPELLINGS) - 4} more, which docs/reference.md lists")
     if not hat:
         return found
     if found[1] != LENGTH or power not in POWERS:

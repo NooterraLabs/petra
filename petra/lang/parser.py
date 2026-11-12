@@ -187,11 +187,11 @@ class Parser:
     def _bound_name(self, what: str) -> Token:
         """`NAME`, or `PART.FIELD` for the bound on one field of one part, as one token."""
         first = self._ident(what)
-        text = first.text
+        parts = [first.text]      # joined once at the end: adding to a text each time copied it, a megabyte of dots in 15 seconds
         while self._is(Kind.PUNCT, "."):
             self._next()
-            text += "." + self._ident("a name after '.'").text
-        return Token(first.kind, text, first.line, first.col)
+            parts.append(self._ident("a name after '.'").text)
+        return Token(first.kind, ".".join(parts), first.line, first.col)
 
     def _component(self) -> Node:
         kind = self._ident("a component kind")

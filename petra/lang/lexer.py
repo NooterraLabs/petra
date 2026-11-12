@@ -63,6 +63,11 @@ _OPEN, _CLOSE = "([", ")]"
 
 
 def tokenize(text: str, path: str) -> tuple[Token, ...]:
+    from ..files import MAX_FILE
+
+    # A text that comes as an argument and not from a file is held to the size of a file.
+    if len(text) > MAX_FILE or len(text.encode("utf-8", "surrogatepass")) > MAX_FILE:
+        raise LolaSyntaxError(path, 1, 1, f"the text has over {MAX_FILE:,} bytes, and a card or a design has at most that many")
     tokens: list[Token] = []
     i, line, line_start, depth = 0, 1, 0, 0
 

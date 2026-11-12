@@ -26,7 +26,7 @@ from typing import Callable, Mapping
 
 from . import deck as deck_rows
 from . import grid, models
-from .files import card_of
+from .files import MAX_FILE, MAX_LISTED, MAX_MESSAGE, MAX_PROBLEMS, card_of
 from .ir import FromTests, RangeMean
 from .lang import parse_design, syntax
 from .lang.lexer import Kind, tokenize
@@ -532,6 +532,19 @@ def render_reference() -> str:
         "  a signature. In a family, `param NAME` stands where a bound would.",
         "- `in`, `mean`, `signed`, `measured`, `source`, `param`, and `given` cannot be names inside a line. No",
         "  declared name can be a declaration word.",
+        f"- A file has at most {MAX_FILE:,} bytes. `petra check`, `petra.export` and the MCP tools refuse a larger",
+        "  file before they parse it.",
+        "",
+        "A pair that is refused prints its problems, each with its file, line and column. What is printed is",
+        "bounded, whatever the files hold.",
+        "",
+        f"- A message that names a table, such as the kinds or the givens of the card, lists at most {MAX_LISTED} of",
+        "  its names and says how many it has. For an unknown kind or mode they are the names that start most",
+        "  as the unknown one does.",
+        "- A message that arises more than once is printed once, at the first place, with how many times it",
+        "  arose.",
+        f"- At most {MAX_PROBLEMS} problems are printed for a file, and then how many more there were.",
+        f"- A problem of more than {MAX_MESSAGE} characters is cut, and says how many were left out.",
         "",
         "## Declarations",
         "",

@@ -505,9 +505,14 @@ NO_PORTS = Ports(specs=(), connections=())
 class ComponentError(ValueError):
     """Raised by a lowerer for a component or a reference to it that is malformed: an
     unknown node, a wrong unit, a registry id of the wrong kind, an unknown qoi or load
-    field. The pipeline collects every problem and reports an input error."""
+    field. The pipeline collects every problem and reports an input error. The problems are
+    held as files.summed prints them: each message once with how many times it arose, and
+    at most a hundred for a file."""
 
     def __init__(self, problems: tuple[str, ...]) -> None:
+        from ..files import summed
+
+        problems = summed(problems)
         super().__init__("\n".join(problems))
         self.problems = problems
 
