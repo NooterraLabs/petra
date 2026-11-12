@@ -1553,9 +1553,15 @@ the first is under the second at every point of it: on a leaf the pick is -1 alo
 upper end of the first is under the lower end of the second. `Tape.refuted` shows a root
 above zero at a point, which this root is only where the first is not under the second
 there. So the two rules of the tape, as they stand and as proofs/ proves them, decide a
-strict inequality (`Tape.proved_strict` and `Tape.refuted_strict` in proofs/). -/
-def Rule.tape (rule : Rule) (site : Site) (pairs : Array (Nat × Nat)) (strict : Bool := false) : Except String Tape := do
-  let need := reach rule.steps (pairs.flatMap fun (a, b) => #[a, b])
+strict inequality (`Tape.proved_strict` and `Tape.refuted_strict` in proofs/).
+
+With `within`, the pairs of a rule's `where`, a root is the pick that is the root above
+where every pair of `within` is in order, and -1 elsewhere. `Tape.refuted` shows it above
+zero at a point only where the point is inside the `where` and the rule fails there
+(`Tape.refuted_within` in proofs/). The kernel takes such a tape only to refute. -/
+def Rule.tape (rule : Rule) (site : Site) (pairs : Array (Nat × Nat)) (strict : Bool := false) (within : Array (Nat × Nat) := #[]) :
+    Except String Tape := do
+  let need := reach rule.steps ((pairs ++ within).flatMap fun (a, b) => #[a, b])
   let write : Write (Array Nat) := do
     let mut ids : Array Nat := Array.replicate rule.steps.size 0
     for (step, i) in rule.steps.zipIdx do
@@ -1577,8 +1583,11 @@ def Rule.tape (rule : Rule) (site : Site) (pairs : Array (Nat × Nat)) (strict :
           | .row _ value => pure ids[value]!
         ids := ids.set! i id
     pairs.mapM fun (low, high) => do
-      if strict then node (.pick #[(some (.lt ids[low]! ids[high]!), ← node (.c (-1))), (none, ← node (.c 1))])
-      else node (.add #[ids[low]!, ← node (.neg ids[high]!)])
+      let root ← do
+        if strict then node (.pick #[(some (.lt ids[low]! ids[high]!), ← node (.c (-1))), (none, ← node (.c 1))])
+        else node (.add #[ids[low]!, ← node (.neg ids[high]!)])
+      if within.isEmpty then pure root
+      else node (.pick #[(some (.and (within.map fun (a, b) => .le ids[a]! ids[b]!)), root), (none, ← node (.c (-1)))])
   let (roots, written) ← write.run {}
   return { inputs := written.inputs, nodes := written.nodes, roots }
 

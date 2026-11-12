@@ -31,16 +31,19 @@ zero, as in 5, is refused when it is read (docs/deck.md, "A quantity at or under
 
 The search then learned to find 1 and 2. Past six ranged inputs it tries the corner the root
 climbs to from the middle, and in the search for a proof it tries the middle of each box it
-does not prove. Both are FAIL.
+does not prove. Both are FAIL. Then 3: where the `where` is not proved, both readers try a
+point on a tape whose root is the rule's inside the `where` and -1 outside it, and a point
+inside where the rule fails refutes it. The kernel tries no partition of that tape.
 """
 import json
 import unittest
 from unittest import mock
 
-from petra import grid
+from petra import grid, verify
 from petra.registry import build_registry
 from petra.repair import check_text
-from tests.test_deck_features import HEAD, asks, design, given, kind, load, made_up, no_deck, part, rule, size
+from tests.test_deck_features import HEAD, asks, design, given, kind, load, made_up, no_deck, parsed, part, rule, size
+from tests.test_kernel_grid import ask
 
 NOT_PASS = ("UNKNOWN", "FAIL")
 
@@ -158,10 +161,48 @@ TAB = made_up(
 TAB_TEXT = design(part("tab", "t", x="given t.x", y="8 mm"))
 
 
+PAST = made_up(
+    [kind("tab", size("x"), size("y"))],
+    [asks("tab.fit", "tab"), asks("tab.size", "tab")],
+    [rule("fit", "tab", "tab.fit", le=["x", ["q", "9", "mm"]], where=[{"le": ["x", ["q", "8", "mm"]], "why": "x is at most 8 mm"}]),
+     rule("size", "tab", "tab.size", le=["y", ["q", "100", "mm"]])])
+"""A rule that holds all through its `where`, x up to 8 mm, and fails past it, from 9 mm."""
+
+
 class RefutedInsideWhere(unittest.TestCase):
     def test_a_point_inside_the_where_that_fails_the_rule_is_not_rested_by_a_waiver(self):
         self.assertEqual(checked(HEAD + given("t.x", "5 mm") + waive("tab.fit", "t"), TAB_TEXT, TAB).status, "FAIL")
-        self.assertIn(checked(HEAD + given("t.x", "5 mm", "20 mm") + waive("tab.fit", "t"), TAB_TEXT, TAB).status, NOT_PASS)
+        ranged = checked(HEAD + given("t.x", "5 mm", "20 mm") + waive("tab.fit", "t"), TAB_TEXT, TAB)
+        self.assertEqual(ranged.status, "FAIL")
+        refuted = next(c for c in ranged.report.cells if c.mechanism == "tab.fit")
+        # 5 mm, inside the `where`, and under the 8 mm of y. There is no `/where` cell: the range is not proved.
+        self.assertEqual((refuted.entry, refuted.state, refuted.proof["point"]["in:made-up.t.x"]), ("fit", "refuted", "1/200"))
+
+    def test_a_rule_that_fails_only_past_its_where_is_not_refuted(self):
+        ranged = checked(HEAD + given("t.x", "5 mm", "20 mm"), TAB_TEXT, PAST)
+        self.assertEqual((ranged.status, states(ranged, "tab.fit")), ("UNKNOWN", [("fit", "open")]))
+
+    @unittest.skipUnless(verify.binary(), "no petra-verify is built here and PETRA_VERIFY names none")
+    def test_the_kernel_takes_neither_a_point_past_the_where_nor_a_partition_for_the_rule_inside_it(self):
+        """Hand-made hints for the rule of PAST. A point at 15 mm, past the `where`, where the
+        rule fails: the kernel tries it on the tape that is -1 outside the `where`, and it
+        refutes nothing. A partition at 8.5 mm that proves that tape: the kernel tries no
+        partition of it, since the rule says nothing of a part past its `where`. Either way
+        the cell stays open, as the grid has it. A point at 5 mm inside the `where` of TAB, where
+        that rule fails, refutes it."""
+        def cell(rules: dict, hint: dict) -> dict:
+            deck, read = parsed(rules, TAB_TEXT, HEAD + given("t.x", "5 mm", "20 mm"))
+            said = ask({**grid.bundle(read, deck), "proofs": json.dumps({"format": "petra-proofs/0", "cells": [hint]})})
+            self.assertEqual(said["findings"], [])
+            (found,) = [c for c in said["cells"] if c["mechanism"] == "tab.fit"]
+            return found
+
+        hint = {"subject": "t", "mechanism": "tab.fit", "entry": "fit"}
+        at = {"in:made-up.t.x": "3/200", "dsg:made-up.t.y": "1/125"}
+        self.assertEqual(cell(PAST, {**hint, "state": "refuted", "point": at})["state"], "open")
+        split = {"input": "in:made-up.t.x", "at": "17/2000", "below": "leaf", "above": "leaf"}
+        self.assertEqual(cell(PAST, {**hint, "state": "proved", "partition": split})["state"], "open")
+        self.assertEqual(cell(TAB, {**hint, "state": "refuted", "point": {**at, "in:made-up.t.x": "1/200"}})["state"], "refuted")
 
 
 # --- 4. `lt` at equality with a root -----------------------------------------------------------------------

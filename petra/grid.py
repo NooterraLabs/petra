@@ -1438,6 +1438,16 @@ def _refuting(nodes: list[list], root: int, box: list[Interval]) -> list[Fractio
     return next((point for point in [*corners, middle] if _above(nodes, root, point)), None)
 
 
+def _searched(nodes: list[list], roots: list[int], box: list[Interval]) -> list[Fraction] | None:
+    """A point of the box where the first root is above zero: one that `_refuting` finds, or
+    else the middle of a box that the search for a proof of the roots cannot prove."""
+    if (point := _refuting(nodes, roots[0], box)) is not None:
+        return point
+    found: list[list[Fraction]] = []
+    _partition(nodes, roots, box, [MAX_LEAVES], [""] * len(box), found)
+    return next(iter(found), None)
+
+
 # --- cells -----------------------------------------------------------------------------------------
 
 
@@ -1587,18 +1597,26 @@ def _answers(rule: Rule, ask: Ask, part: Part, parts: Mapping[str, Part], cases:
         yield cell(tail, "refuted", f"the part is not what the rule requires: {has}{f' and {len(asked) - said} more' if said < len(asked) else ''}")
         return
 
-    def tape_of(pairs: list[tuple[Any, Any]], case: str | None, strict: bool = False) -> tuple[_Tape, list[int], list[tuple[int, int]]]:
+    def tape_of(pairs: list[tuple[Any, Any]], case: str | None, strict: bool = False,
+                within: list[tuple[Any, Any]] = ()) -> tuple[_Tape, list[int], list[tuple[int, int]]]:
         """The tape with a root for each pair: the first side less the second, which is at most
         zero where the pair is in order. A strict root is the pick that is -1 where the first
         side is under the second and 1 elsewhere: it is at most zero on a box only where the
         first side is under the second all over it, and above zero at a point only where it
-        is not under it there."""
+        is not under it there. With `within`, the pairs of a `where`, a root is the pick that is
+        that root where each pair of `within` is in order and -1 elsewhere: it is above zero at
+        a point only inside the `where`, where the pair is out of order."""
         tape = _Tape()
         env = _env(tape, rule, part, parts, case)
         sides = [(tape.emit(low, env), tape.emit(high, env)) for low, high in pairs]
+        gate = ["and", [["le", tape.emit(low, env), tape.emit(high, env)] for low, high in within]]
         if strict:
-            return tape, [tape.node("pick", [[["lt", low, high], tape.const(Fraction(-1))], [None, tape.const(Fraction(1))]]) for low, high in sides], sides
-        return tape, [tape.node("add", [low, tape.node("neg", high)]) for low, high in sides], sides
+            roots = [tape.node("pick", [[["lt", low, high], tape.const(Fraction(-1))], [None, tape.const(Fraction(1))]]) for low, high in sides]
+        else:
+            roots = [tape.node("add", [low, tape.node("neg", high)]) for low, high in sides]
+        if within:
+            roots = [tape.node("pick", [[gate, root], [None, tape.const(Fraction(-1))]]) for root in roots]
+        return tape, roots, sides
 
     reads = sorted(name[5:] for name in _reads(rule) if name.startswith("load "))
     if reads and not cases:
@@ -1616,6 +1634,16 @@ def _answers(rule: Rule, ask: Ask, part: Part, parts: Mapping[str, Part], cases:
                 box, labels = [i.range for i in tape.inputs], [i.label for i in tape.inputs]
                 partition = _partition(tape.nodes, roots, box, [MAX_LEAVES], labels)
                 if partition is None:
+                    # A point inside the range where the rule fails refutes it, as the tape whose root is the rule's inside the `where` and
+                    # -1 outside it shows there. The kernel tries no partition of that tape: it proves nothing of a part that may be outside.
+                    try:
+                        gated = tape_of([(rule.low, rule.high)], case, rule.strict, [w[:2] for w in rule.where])
+                    except NoValue:
+                        gated = None
+                    if gated is not None and (point := _searched(gated[0].nodes, gated[1], [i.range for i in gated[0].inputs])) is not None:
+                        yield cell(entry, "refuted", ratio=_ratio(gated[0].nodes, *gated[2][0], [Interval.point(x) for x in point]),
+                                   proof={"point": {i.label: export.number(x) for i, x in zip(gated[0].inputs, point)}})
+                        continue
                     # A range that holds nowhere in the box leaves the rule nothing to say, and a waiver rests the cell. One that may hold somewhere does not.
                     v = enclosures(tape.nodes, box)
                     outside = next(why for (_, _, why), r in zip(rule.where, roots) if not (isinstance(v[r], Interval) and v[r].hi <= 0))

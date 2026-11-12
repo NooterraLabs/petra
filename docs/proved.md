@@ -18,6 +18,12 @@ A rule of a deck that states `lt` asks more: that one side is under the other, a
 
 Both follow from the two theorems above and from what a pick means. No line of `kernel/Petra/Tape.lean` or `kernel/Petra/Num.lean` changed for them. They are about any tape whose root has that shape: a pick of two cases, `lt` of `i` and `j` giving a node that is the constant -1, and otherwise a node that is the constant 1. That the kernel gives the root of an `lt` rule this shape is three lines of `Rule.tape` in `kernel/Petra/Deck.lean`, which the proofs do not read. It is not proved, as nothing of how the kernel writes a tape from a deck is.
 
+A rule with a `where` says nothing outside the range of its `where`. Where the range is not proved over the box, the kernel may still refute the rule at a point inside it ([format.md](format.md), "The rules", item 5). It writes the rule's root under a `pick`: the rule's root `r` where every pair of the `where` is in order, and -1 elsewhere. It only refutes with that tape.
+
+- If `Tape.refuted` returns no failure and the root it names is that pick, then the point lies in the box, both nodes of each pair of the `where` have values there and the first is at most the second, and node `r` is above zero there. This is `Tape.refuted_within`.
+
+It follows from `Tape.refuted_sound` and from what a pick means, as the two above do, and is about any tape whose root has that shape: a pick of two cases, an `and` of `le` of each pair giving `r`, and otherwise a node that is the constant -1. That the kernel writes the root of a rule with a `where` this way, when it refutes, is two lines of `Rule.tape`, which the proofs do not read.
+
 `Tape.proved` and `Tape.refuted` take the work their verdict has left, and give back what is left with the failure, if there is one ([format.md](format.md), "Work"). Both theorems hold for any amount of work. A step that cannot pay returns a failure. An enclosure the walk gave up is marked as a failure. So neither can stand behind a root that is proved, and the theorems need nothing of the costs or of the bookkeeping.
 
 A box is one range for each input. A point of the box is one real number for each input, inside its range. A cache is valid when every pair it stores for a number holds that number's logarithm, or its exponential, or its cosine. The kernel starts from the empty caches, which are valid, and each theorem also says that the caches stay valid.
@@ -140,6 +146,8 @@ In `proofs/PetraProofs/Eval.lean` and `proofs/PetraProofs/Rule.lean`.
 | `Tape.strict_value` | Where a pick of the cases `lt` of `i` and `j`, giving the constant -1, and otherwise, giving the constant 1, has a value, nodes `i` and `j` have values, and the pick is -1 when the first is under the second and 1 when it is not. |
 | `Tape.proved_strict` | For a tape with such a pick among its roots, from valid caches and with any work: if `Tape.proved` returns no failure, node `i` is under node `j` at every point of the box. |
 | `Tape.refuted_strict` | For a tape whose root `which` is such a pick, from valid caches and with any work: if `Tape.refuted` returns no failure, the point lies in the box and node `j` is at most node `i` there. |
+| `Tape.within_value` | Where a pick of the cases `and` of `le` of each pair of a list, giving node `r`, and otherwise, giving the constant -1, has a value above zero, both nodes of each pair have values and the first is at most the second, and node `r` has that value. |
+| `Tape.refuted_within` | For a tape whose root `which` is such a pick, from valid caches and with any work: if `Tape.refuted` returns no failure, the point lies in the box, each pair is in order there, and node `r` is above zero there. |
 
 ## How the loops came to be proved
 
@@ -277,6 +285,8 @@ No case was found where an operation returns an interval that fails to hold the 
 'Petra.Tape.strict_value' depends on axioms: [propext, Classical.choice, Quot.sound]
 'Petra.Tape.proved_strict' depends on axioms: [propext, Classical.choice, Quot.sound]
 'Petra.Tape.refuted_strict' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Petra.Tape.within_value' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Petra.Tape.refuted_within' depends on axioms: [propext, Classical.choice, Quot.sound]
 ```
 
 ## Rebuild
@@ -313,5 +323,6 @@ On Linux for aarch64, the build of this toolchain that the build machine has shi
 | `PetraProofs/Eval.lean` | `wellFormed`, `needed`, one step with its price, and `eval` |
 | `PetraProofs/Rule.lean` | The walk over the leaves, `proved` and `refuted` |
 | `PetraProofs/Strict.lean` | A strict inequality, as a root that is a pick |
+| `PetraProofs/Within.lean` | A rule's `where`, as a root that is a pick |
 | `PetraProofs/Axioms.lean` | The `#print axioms` lines |
 | `check_axioms.py` | The build, the check of the axioms, and the check of the sources |

@@ -744,6 +744,19 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hi
                   out := out.push (cell part.name ask.mechanism (entry ++ "/where") .proved)
                   dsg := dsgOf tape dsg
                 else
+                  -- A point inside the range where the rule fails refutes it, as the tape whose
+                  -- root is the rule's inside the `where` and -1 outside it shows there. Only
+                  -- the points of the cell's hints are tried: a partition of that tape proves
+                  -- nothing of a part that may be outside the range.
+                  if let .ok inside := rule.tape here #[(rule.low, rule.high)] rule.strict rule.ranges then
+                    steps := steps + inside.nodes.size
+                    let points := (hintsFor part.name ask.mechanism entry).map ({ · with partition := none })
+                    let (state, _, after) ← byHints inside points true left
+                    left := after
+                    if state == .refuted then
+                      out := out.push (cell part.name ask.mechanism entry .refuted)
+                      dsg := dsgOf inside dsg
+                      continue
                   -- A range that holds nowhere in the box leaves the rule nothing to say, and
                   -- a waiver rests the cell. One that may hold somewhere does not.
                   let (silent, after) ← silence tape true waived left

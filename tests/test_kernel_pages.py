@@ -253,8 +253,10 @@ class TheStepsOfTheCells(unittest.TestCase):
     def test_a_rule_with_where_pays_its_weight_twice_whether_or_not_its_range_is_proved(self):
         """The weight is 4, a field and a constant for `le` and for `where`, and it is paid
         twice before a tape is written. The tape of the range has 4 nodes. proofs.json has
-        no hint here, so the range is not proved and the tape of `le` is not written."""
-        self.assertConstant(6 + 2 * 4 + 4, where=[{"le": [["q", "1", "um"], "w"], "why": "w"}])
+        no hint here, so the range is not proved, and the tape of `le` inside the range is
+        written in place of the tape of `le`: the field, the two constants, the negative and
+        the sum, and the pick that is the sum inside the range and its constant -1 outside."""
+        self.assertConstant(6 + 2 * 4 + 4 + 7, where=[{"le": [["q", "1", "um"], "w"], "why": "w"}])
 
     def test_every_case_of_the_card_counts_for_every_load_a_rule_reads(self):
         """Item 1 has one more for each of the two loads the rule reads, and so has item 5.
