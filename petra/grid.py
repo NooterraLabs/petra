@@ -2068,11 +2068,17 @@ class Report:
     def counts(self) -> dict[str, int]:
         return {state: sum(c.state == state for c in self.cells) for state in STATES}
 
+    def completions(self) -> list[dict[str, list] | None]:
+        """For each cell, the completion a waived cell rests on, as proofs.json and the kernel's verdict write it, or None. The
+        signer of the waiver answers for it, so the report prints it with the cell."""
+        return [_completion_body(*c.completion) if c.state == "waived" and c.completion is not None else None for c in self.cells]
+
     def to_json(self) -> dict[str, Any]:
         return {"file": self.path, "design": self.name, "status": self.status, "deck": {"name": self.deck.name, "hash": self.deck.hash},
                 "counts": self.counts(), "waived": self.waived(),
                 "cells": [{"subject": c.subject, "mechanism": c.mechanism, "entry": c.entry, "state": c.state, "what": c.what,
-                           "anchor": c.anchor, "why": c.why, "rule": c.rule, "ratio": c.ratio} for c in self.cells]}
+                           "anchor": c.anchor, "why": c.why, "rule": c.rule, "ratio": c.ratio, **({"completion": done} if done else {})}
+                          for c, done in zip(self.cells, self.completions())]}
 
     def render(self) -> str:
         return "\n".join(self.lines())
@@ -2083,10 +2089,13 @@ class Report:
                f"rules      {self.deck.hash}  {self.deck.name}",
                "cells      " + ", ".join(f"{counts[s]} {s.replace('_', ' ')}" for s in STATES)]
         wide = max((len(f"{c.subject}/{c.mechanism}") for c in self.cells), default=0)
-        for c in self.cells:
+        for c, done in zip(self.cells, self.completions()):
             ratio = "" if c.ratio is None else f"{c.ratio:.3g}"
             said = (c.why if c.state in ("open", "not_applicable", "waived") else ": ".join(filter(None, (c.what, c.why))) if c.state == "refuted"
                     else c.what if c.entry.endswith("/where") else "")
+            if done:
+                said += "; rested where " + " and ".join([*(f"{p}.{f} is {name}" for p, f, name in done["keys"]),
+                                                          *(f"{p}.{load} is {x} in SI units" + (f" in case {case}" if case else "") for p, load, case, x in done["loads"])])
             out.append(f"  {f'{c.subject}/{c.mechanism}':<{wide}}  {c.state.replace('_', ' '):<14}  {ratio:>6}  "
                        + ": ".join(part for part in (c.entry, said) if part) + (f" ({c.anchor})" if c.anchor else ""))
         waivers = self.waived()
@@ -2147,7 +2156,8 @@ def checked(design: Design, deck: Deck, card: str, text: str, card_path: str) ->
         said = verify.ask(kernel, files)
         if said["verdict"] == "ILL-FORMED":
             raise ComponentError(verify.refusal(design.path, said))
-        differ = verify.differs([(c.subject, c.mechanism, c.entry, c.state) for c in report.cells], report.verdict, deck.hash, said, report.waived())
+        differ = verify.differs([(c.subject, c.mechanism, c.entry, c.state) for c in report.cells], report.verdict, deck.hash, said, report.waived(),
+                               report.completions())
         if differ:
             raise verify.Disagreement(f"{design.path}: petra-verify gives {said['verdict']} and the grid {report.verdict}: {differ}")
         said = {"verdict": said["verdict"], "checked": sum(bool(c.proof) for c in report.cells), "hashes": said["hashes"], "cells_from": said["cells_from"],

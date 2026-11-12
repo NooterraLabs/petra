@@ -34,6 +34,9 @@ waived cell leaves unchecked. One test per finding.
       filtered every hint of the cell once for each combination, and charged for none of it:
       65,536 hints took 115 s for the charged work of 4,096. It now looks at each hint once
       and charges it, and a combination finds its points by their keys.
+
+Each wrong PASS rested a cell on a completion that only proofs.json held. The kernel's verdict
+and `petra check` now print the completion with the waived cell.
 """
 import json
 import time
@@ -41,6 +44,7 @@ import unittest
 from fractions import Fraction
 from pathlib import Path
 from typing import Any
+from unittest import mock
 
 import petra
 from petra import grid
@@ -356,6 +360,58 @@ class HintsLookedAtOnce(unittest.TestCase):
         _, control, _ = measured(boxes(4, named=False))
         self.assertEqual((said["verdict"], [c["state"] for c in said["cells"]]), ("FAIL", ["refuted"]))
         self.assertLess(seconds, 2 * control + 2, f"{seconds:.1f} processor seconds, and {control:.1f} to read the hints")
+
+
+# --- The completion a waived cell rests on ----------------------------------------------------------------
+
+class TheCompletionOnTheWaivedLine(unittest.TestCase):
+    """Each wrong PASS above rested a cell on a completion that no reader saw: it was in proofs.json alone. The kernel's verdict and
+    `petra check` now print it with the waived cell, and the two are held to the same completion."""
+
+    def printed(self, rules: dict, text: str, card: str, subject: str, mechanism: str, entry: str) -> tuple[dict | None, str]:
+        """The completion of the cell in the JSON of `petra check`, and its line in the text."""
+        deck, read = parsed(rules, text, card)
+        with mock.patch.object(grid, "decks", lambda: (deck,)):
+            done = grid.checked(read, deck, card, text, "made-up.card")
+        (cell,) = [c for c in done.to_json()["cells"] if (c["subject"], c["mechanism"], c["entry"]) == (subject, mechanism, entry)]
+        (line,) = [line for line in done.text().splitlines() if f"{subject}/{mechanism} " in line and f" {entry}: " in line]
+        return cell.get("completion"), line
+
+    def test_a_load_left_out_prints_the_value_it_was_completed_with(self):
+        card = pin_card(("10 mm", "20 mm"))
+        found, status, said = cells(self, UP_TO_30, TWO_PINS, card)
+        self.assertEqual((found[("p", "pin.shear", "shear/service")], status), ("waived", grid.PASS_WAIVED))
+        completion = {"keys": [], "loads": [["p", "shear", "service", "0"]]}
+        if "verdict" in said:
+            (cell,) = [c for c in said["cells"] if c["subject"] == "p" and c["mechanism"] == "pin.shear" and c["state"] == "waived"]
+            self.assertEqual(cell["completion"], completion)
+            self.assertEqual([c for c in said["cells"] if "completion" in c and c["state"] != "waived"], [])
+        mine, line = self.printed(UP_TO_30, TWO_PINS, card, "p", "pin.shear", "shear/service")
+        self.assertEqual(mine, completion)
+        self.assertIn("; rested where p.shear is 0 in SI units in case service", line)
+
+    def test_a_key_left_unstated_prints_the_name_it_was_completed_with(self):
+        entry = "pullout-bonded/service"
+        mine, line = self.printed(ANCHORS, anchor("unstated"), ANCHOR_CARD, "a", "anchor.pullout", entry)
+        self.assertEqual(mine, {"keys": [["a", "kind", "mechanical"]], "loads": []})
+        self.assertIn("; rested where a.kind is mechanical", line)
+        mine, line = self.printed(ANCHORS, anchor("chemical"), ANCHOR_CARD, "a", "anchor.pullout", entry)
+        self.assertEqual((mine, "rested where" in line), (None, False))
+
+    @KERNEL
+    def test_a_kernel_that_rests_a_cell_on_another_completion_differs(self):
+        from petra import verify
+        rules, read = parsed(UP_TO_30, TWO_PINS, pin_card(("10 mm", "20 mm")))
+        report, files = grid.check(read, rules)
+        said = ask(files)
+        mine = [(c.subject, c.mechanism, c.entry, c.state) for c in report.cells]
+        self.assertEqual(verify.differs(mine, report.verdict, rules.hash, said, report.waived(), report.completions()), "")
+        for c in said["cells"]:
+            if "completion" in c:
+                c["completion"]["loads"][0][3] = "-1"
+        self.assertIn('the grid rests it on {"keys": [], "loads": [["p", "shear", "service", "0"]]} and petra-verify on '
+                      '{"keys": [], "loads": [["p", "shear", "service", "-1"]]}',
+                      verify.differs(mine, report.verdict, rules.hash, said, report.waived(), report.completions()))
 
 
 if __name__ == "__main__":

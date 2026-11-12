@@ -322,12 +322,15 @@ CELL = {"subject": PART, "mechanism": NAME, "entry": TEXT,
         "anchor": TEXT,                        the clause
         "why": TEXT,                           for an open, a not applicable and a waived cell
         "rule": ID | null,
-        "ratio": NUMBER | null}                the left side of the rule over the right, at its worst
+        "ratio": NUMBER | null,                the left side of the rule over the right, at its worst
+        "completion": COMPLETION}              only for a waived cell that rests on one
+
+COMPLETION = {"keys": [[PART, FIELD, NAME], ...], "loads": [[PART, LOAD, CASE, RATIONAL], ...]}
 ```
 
-The status is PASS_WAIVED when the design passes and a waiver of the card rests one of its cells: it passes what the deck could check, and each signer answers for the cells its waiver rests. `petra check` exits 6 for it. The kernel has no word of its own for this: it says PASS and lists the same waivers.
+The status is PASS_WAIVED when the design passes and a waiver of the card rests one of its cells: it passes what the deck could check, and each signer answers for the cells its waiver rests. `petra check` exits 6 for it. The kernel has no word of its own for this: it says PASS and lists the same waivers. A waived cell that a part or a case left something out of rests on a completion, a name for each key left unstated and a value in SI units for each load left out, under which the rule holds. The signer answers for it too, so the cell prints it, and the text of `petra check` ends the cell's line with it.
 
-`petra.check_file` returns a `petra.grid.Report` for such a design, with `status`, `verdict` (the kernel's word, PASS where `status` is PASS_WAIVED), `waived()`, `cells`, `to_json()` and `render()`. A FAIL has no repair yet, and a card's claims are refused.
+`petra.check_file` returns a `petra.grid.Report` for such a design, with `status`, `verdict` (the kernel's word, PASS where `status` is PASS_WAIVED), `waived()`, `completions()`, `cells`, `to_json()` and `render()`. A FAIL has no repair yet, and a card's claims are refused.
 
 For such a design the kernel reads the deck's own file and makes every cell itself. `petra.check` compares its cells with these, one by one, and raises `petra.verify.Disagreement` if they differ. `kernel.hashes` then also has `rules`, the hash of the deck's file, which is `deck.hash`.
 

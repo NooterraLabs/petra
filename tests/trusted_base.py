@@ -80,7 +80,7 @@ CORE_CAP = Limit(1020, "Set on 2026-11-08 at 140f742, where the core measured 95
                        "as `i_cos` does, and keeps the factorial of its series as it goes, as the kernel's "
                        "`expPos` keeps it: 3 lines in interval.py, 1,020.")
 
-TRUSTED_CEILING = Limit(20066,"Set on 2026-11-08 at 140f742, where the trusted base measured 13,530 "
+TRUSTED_CEILING = Limit(20073,"Set on 2026-11-08 at 140f742, where the trusted base measured 13,530 "
                                "code lines: core 957, rules 457, outside the kernel 12,116. Raised on "
                                "2026-11-08 on branch parts-core as the parts layer replaces its scaffold: "
                                "classifying the scaffold measured 14,269, and the mesh reader with its "
@@ -278,6 +278,10 @@ TRUSTED_CEILING = Limit(20066,"Set on 2026-11-08 at 140f742, where the trusted b
                                "pays for the exponentials of a walk, and a walk whose exponentials take more than "
                                "that work gives the rest no value, as the kernel does: 24 lines in petra/grid.py, "
                                "20,066. "
+                               "Each wrong PASS of the same review rested a cell on a completion that only "
+                               "proofs.json held. The report of `petra check` now prints the completion of a waived "
+                               "cell in its JSON and on its line, and holds the kernel's to the grid's: 7 lines in "
+                               "petra/grid.py and petra/verify.py, 20,073. "
                                "Raise it in the commit that needs more and say why here.")
 
 T2_ADOPTED = date(2026, 11, 8)

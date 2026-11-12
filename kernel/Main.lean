@@ -26,10 +26,19 @@ def render (r : Report) : String :=
   -- Each waiver once, in the order the cells first rest on it: many cells may rest on one.
   let waivers : Array Waiver := ((r.cells.filterMap (·.waiver)).foldl (fun (seen, out) (k, w) =>
     if seen.contains k then (seen, out) else (seen.insert k, out.push w)) (({} : Std.TreeSet Nat), #[])).2
+  -- What a waived cell was completed with, as proofs.json writes a completion: the waiver's
+  -- signer answers for what is left out being so.
+  let inline (items : Array String) : String := "[" ++ ", ".intercalate items.toList ++ "]"
+  let completion (c : Completion) : String :=
+    object [("keys", inline (c.keys.map fun (p, f, n) => inline #[str p, str f, str n])),
+            ("loads", inline (c.loads.map fun (p, l, u, x) => inline #[str p, str l, str u, str (toString x)]))]
   let cell (s : Settled) : String :=
     object ([("subject", str s.cell.subject), ("mechanism", str s.cell.mechanism), ("entry", str s.cell.entry),
              ("claimed", if s.hinted then str s.cell.state.name else "null"), ("state", str s.state.name)]
-            ++ if s.reason.isEmpty then [] else [("reason", str s.reason)])
+            ++ (if s.reason.isEmpty then [] else [("reason", str s.reason)])
+            ++ match s.state, s.completion with
+              | .waived, some c => [("completion", completion c)]
+              | _, _ => [])
   let count (state : State) : String × String := (state.name, toString (r.cells.filter (·.state == state)).size)
   let fields : List (String × String) := [
     ("verdict", str r.verdict.name),
