@@ -124,7 +124,22 @@ class Bound:
     name: str = ""
 
 
-Arg = Union[Fixed, ParamRef, Bound, Ref, Text, Vec, Punct]
+@dataclass(frozen=True, slots=True)
+class Stated:
+    """`given NAME` inside a component block where the card states NAME exactly, with no
+    range: `given NAME is B signed "owner" source "where"` for the name of a key, and
+    `given NAME is 4 ...` for a whole number. One of `key` and `whole` is set. Only a part
+    of a deck's type reads one, and a deck holds its name to the part and the field."""
+
+    signature: Signature
+    kind: InputKind
+    span: Span
+    name: str = ""
+    key: str | None = None
+    whole: int | None = None
+
+
+Arg = Union[Fixed, ParamRef, Bound, Stated, Ref, Text, Vec, Punct]
 """One typed argument of an attribute line. A bare number with a unit is Fixed; `param
 NAME` is a ParamRef."""
 
@@ -282,7 +297,8 @@ class Design:
     tests: Mapping[str, Tests]
     waivers: tuple[Waiver, ...]
     params: Mapping[str, Param]
-    givens: Mapping[str, Bound] = field(default_factory=dict)      # every `given` of the card, by its name
+    givens: Mapping[str, Bound] = field(default_factory=dict)      # every `given` of the card that is a bound, by its name
+    states: Mapping[str, Stated] = field(default_factory=dict)     # every `given ... is ...` of the card, by its name
 
     @property
     def is_family(self) -> bool:

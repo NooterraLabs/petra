@@ -536,16 +536,31 @@ class Shipped(unittest.TestCase):
         over = self.variant(("count 3", "count 20"), ("pitch 3 inch", "pitch 2.0001 inch"))
         self.assertAlmostEqual(cell(over, "lap.strength")["ratio"], 45 / (20 * 0.833 * bolt), places=6)
 
-    def test_a_waiver_takes_the_whole_line_and_its_rules_are_not_run(self):
-        """A card may waive a line that has rules. The line is then one waived cell, and the report says who signed it.
-        So a card written when the deck had four rules, which waived the lines that had none then, would hide the rules they have now."""
+    def test_a_waiver_rests_only_a_cell_that_would_be_open_and_hides_no_refutation(self):
+        """A card may waive a line that has rules, and the rules are still run. Under a pull of 200 kip a block tears out of each plate, so
+        both cells of the waived line are refuted. Until a waiver rested only what was open, the line was one waived cell, and a card
+        written when the deck had four rules, which waived the lines that had none then, hid the rules they have now.
+        Under 45 kip the same rules prove, the cells are proved, and the waiver rests nothing."""
         path = ROOT / "examples" / "deck" / "lap_unknown.petra"
         card, design = read_pair(path)
         card += 'waive lap.block_shear on splice by "s.engineer@example.org" reason "calculation C-12 sheet 4"\n'
         with mock.patch.object(verify, "binary", lambda: None):
             found = petra.check(card.replace("45 kip", "200 kip"), design, path=str(path), repair=False)
-        self.assertEqual((cell(found, "lap.block_shear")["state"], cell(found, "lap.block_shear")["rule"]), ("waived", None))
+            held = petra.check(card, design, path=str(path), repair=False)
+        shear = {c["entry"]: (c["state"], c["rule"]) for c in found["cells"] if c["mechanism"] == "lap.block_shear"}
+        self.assertEqual(shear, {"lap-block-shear-a/gravity": ("refuted", "aisc360-22/lap-block-shear-a"), "lap-block-shear-b/gravity": ("refuted", "aisc360-22/lap-block-shear-b")})
         self.assertEqual(cell(found, "lap.ply_rupture", "lap-ply-rupture-a/gravity")["state"], "refuted", "a line the card does not waive is still answered")
+        self.assertEqual({c["state"] for c in held["cells"] if c["mechanism"] == "lap.block_shear"}, {"proved"})
+        self.assertEqual((held["counts"]["waived"], held["status"]), (0, "UNKNOWN"), "the four lines with no rule are open, and the waiver of a line that proves rests none")
+
+    def test_a_waived_line_with_no_rule_is_one_waived_cell_that_says_what_was_open(self):
+        path = ROOT / "examples" / "deck" / "lap_pass.petra"
+        with mock.patch.object(verify, "binary", lambda: None):
+            found = petra.check(*read_pair(path), path=str(path), repair=False)
+        waived = [c for c in found["cells"] if c["state"] == "waived"]
+        self.assertEqual(([c["mechanism"] for c in waived], [c["entry"] for c in waived], found["status"]), (self.NO_RULE, [""] * 4, "PASS"))
+        for c in waived:
+            self.assertRegex(c["why"], r"^by .+: .+; open but for the waiver: the deck has no rule for it$")
 
 
 @unittest.skipIf(verify.binary() is None, "no petra-verify is built here")

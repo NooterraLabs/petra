@@ -291,7 +291,7 @@ class Worst(unittest.TestCase):
         design = "petra 0\n\nplate p {\n  thickness" + " 1 z" * 249_980 + "\n}\n"
         self.assertBounded(HEAD_C, design)
         said = self.said(HEAD_C, "petra 0\n\nplate p {\n  thickness" + " 1 z" * 2_000 + "\n}\n")
-        self.assertEqual(said, "x.petra:4:15: unknown unit 'z'; petra knows 47 units: %, m, mm, um and 43 more, which docs/reference.md lists (2,000 times, first here)")
+        self.assertEqual(said, "x.petra:4:15: unknown unit 'z'; petra knows 66 units: %, m, mm, um and 62 more, which docs/reference.md lists (2,000 times, first here)")
 
     def test_a_megabyte_of_different_unknown_units(self):
         """110,000 numbers, each with an unknown unit of its own: no message is said twice, so

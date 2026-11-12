@@ -11,6 +11,13 @@ A tape states that every root is at most zero for all values of the inputs in th
 
 Both hold for any tape, with `sqrt`, `pi`, `ln` and `exp` nodes or without. Neither takes a hypothesis about the kernel, and no proof uses `sorry` or an axiom beyond Lean's standard three.
 
+A rule of a deck that states `lt` asks more: that one side is under the other, and not only at most it ([deck.md](deck.md), "A rule"). The kernel has no second rule for that. It writes the root of such a rule as a `pick` that is -1 where node `i` is under node `j` and 1 elsewhere, and decides it with the two rules above.
+
+- If `Tape.proved` returns no failure and a root is that pick, then at every point of the box node `i` and node `j` have values, and the first is under the second. This is `Tape.proved_strict`. The root is at most zero and is -1 or 1, so it is -1.
+- If `Tape.refuted` returns no failure and the root it names is that pick, then the point lies in the box, both nodes have values there, and the second is at most the first. This is `Tape.refuted_strict`.
+
+Both follow from the two theorems above and from what a pick means. No line of `kernel/Petra/Tape.lean` or `kernel/Petra/Num.lean` changed for them. They are about any tape whose root has that shape: a pick of two cases, `lt` of `i` and `j` giving a node that is the constant -1, and otherwise a node that is the constant 1. That the kernel gives the root of an `lt` rule this shape is three lines of `Rule.tape` in `kernel/Petra/Deck.lean`, which the proofs do not read. It is not proved, as nothing of how the kernel writes a tape from a deck is.
+
 `Tape.proved` and `Tape.refuted` take the work their verdict has left, and give back what is left with the failure, if there is one ([format.md](format.md), "Work"). Both theorems hold for any amount of work. A step that cannot pay returns a failure. An enclosure the walk gave up is marked as a failure. So neither can stand behind a root that is proved, and the theorems need nothing of the costs or of the bookkeeping.
 
 A box is one range for each input. A point of the box is one real number for each input, inside its range. A cache is valid when every pair it stores for a number holds that number's logarithm, or its exponential. The kernel starts from the empty caches, which are valid, and each theorem also says that the caches stay valid.
@@ -125,6 +132,9 @@ In `proofs/PetraProofs/Eval.lean` and `proofs/PetraProofs/Rule.lean`.
 | `Tape.proved_sound` | For any tape, from valid caches and with any work: if `Tape.proved` returns no failure, every root has a value at most zero at every point of the box, and the caches stay valid. |
 | `Tape.refuted_sound` | For any tape, from valid caches and with any work: if `Tape.refuted` returns no failure, the point lies in the box and the root it names has a value above zero there, and the caches stay valid. |
 | `Tape.proved_sound_exact`, `Tape.refuted_sound_exact` | The same two for a tape with no `sqrt`, `pi`, `ln` or `exp` node, from any caches. Such a tape reads no cache. |
+| `Tape.strict_value` | Where a pick of the cases `lt` of `i` and `j`, giving the constant -1, and otherwise, giving the constant 1, has a value, nodes `i` and `j` have values, and the pick is -1 when the first is under the second and 1 when it is not. |
+| `Tape.proved_strict` | For a tape with such a pick among its roots, from valid caches and with any work: if `Tape.proved` returns no failure, node `i` is under node `j` at every point of the box. |
+| `Tape.refuted_strict` | For a tape whose root `which` is such a pick, from valid caches and with any work: if `Tape.refuted` returns no failure, the point lies in the box and node `j` is at most node `i` there. |
 
 ## How the loops came to be proved
 
@@ -236,6 +246,9 @@ No case was found where an operation returns an interval that fails to hold the 
 'Petra.Tape.refuted_sound_exact' depends on axioms: [propext, Classical.choice, Quot.sound]
 'Petra.Tape.proved_sound' depends on axioms: [propext, Classical.choice, Quot.sound]
 'Petra.Tape.refuted_sound' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Petra.Tape.strict_value' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Petra.Tape.proved_strict' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Petra.Tape.refuted_strict' depends on axioms: [propext, Classical.choice, Quot.sound]
 ```
 
 ## Rebuild
@@ -271,5 +284,6 @@ On Linux for aarch64, the build of this toolchain that the build machine has shi
 | `PetraProofs/Pick.lean` | The pick node |
 | `PetraProofs/Eval.lean` | `wellFormed`, `needed`, one step with its price, and `eval` |
 | `PetraProofs/Rule.lean` | The walk over the leaves, `proved` and `refuted` |
+| `PetraProofs/Strict.lean` | A strict inequality, as a root that is a pick |
 | `PetraProofs/Axioms.lean` | The `#print axioms` lines |
 | `check_axioms.py` | The build, the check of the axioms, and the check of the sources |

@@ -12,7 +12,7 @@ answer and writes the files of docs/format.md:
     proved          a rule's inequality holds for every value the card and the design allow
     refuted         it fails at a point they allow
     not_applicable  the deck says the mechanism cannot arise for this part, and why
-    waived          the card waives the mechanism on the part
+    waived          the card waives the mechanism on the part, and the cell would be open without that
     open            anything else: no rule, a rule that reads what the card does not give,
                     a value outside a rule's range, or an inequality neither proved nor refuted
 
@@ -30,7 +30,7 @@ from __future__ import annotations
 
 import itertools
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from fractions import Fraction
 from functools import lru_cache
 from pathlib import Path
@@ -39,7 +39,7 @@ from typing import Any, Callable, Iterator, Mapping
 from . import deck as rows
 from . import export
 from .deck import NONE, RowError, Vector, anchored, dimension, only, quantity, replaced, show
-from .ir import Bound, Component, Design, Fixed, ParamRef, Ref, Span, Text
+from .ir import Bound, Component, Design, Fixed, ParamRef, Ref, Span, Stated, Text
 from .kernel import (Abs, Add, Const, Div, Exp, Interval, KernelArithmeticError, Ln, Max, Min, Mul, Neg, Pi, PowInt, Sqrt, Sym,
                      enclose)
 from .models.base import ComponentError
@@ -58,6 +58,20 @@ MAX_NAME = 64
 the name of a part, a load case, a mechanism, a field, a load, a joined part and a `let`, and a rule's id."""
 UNREAD = "unread"
 """The mechanism of the cell of a field or a load that nothing reads. No line of the grid has this name."""
+WAIVED = "open but for the waiver: "
+"""What the kernel's reason of a waived cell starts with. The reason the cell had while it was open follows."""
+UNSTATED = "unstated"
+"""The word a design writes for an `optional` field that the part's record does not state, as in kernel/Petra/Deck.lean."""
+
+
+class _Unstated:
+    """What a part has for a field it leaves unstated: no value, and no default. It is equal to no name of a key."""
+
+    def __repr__(self) -> str:
+        return UNSTATED
+
+
+NOT_STATED = _Unstated()
 MAX_READ = 1_000_000
 """The most steps reading a deck may take, as in kernel/Petra/Files.lean."""
 MAX_TITLE = 200
@@ -67,6 +81,11 @@ MAX_REASON = 200
 MAX_BITS = 65_536
 """The most bits a number of a need may have, as in kernel/Petra/Tape.lean. A need with a
 longer one is not decided, and its part is refused."""
+MAX_TRIED = 4096
+"""The most combinations of the names of its keys at which reading a deck tries what a rule requires, as in kernel/Petra/Deck.lean."""
+MAX_TRYING = 1_000_000
+"""The most that reading one deck spends on trying its requirements: for each rule tried, its
+combinations times the sizes of its `requires` and of its `when`. A rule past it is not tried."""
 LOADED = ("`loaded` is no condition: a condition is over keys, which are the same under every load case. "
           "A card states a load in each case, as zero where there is none, and a rule reads it there")
 """What a deck that asks `loaded` is refused with, as in kernel/Petra/Deck.lean. The condition
@@ -87,7 +106,9 @@ class Field:
     """One field of a type or one load on it. A quantity has `dim`, a key has `keys`, and a
     reference has `type`, the type of the parts it names, and `names`, what a rule calls
     each of them in order. Only the card states a `signed` quantity. A `whole` quantity is
-    a count. `least` is the least value a quantity may take, in SI."""
+    a count. `least` is the least value a quantity may take, in SI. `may_be` is `zero` for a
+    quantity that may be zero and `negative` for one of any sign: with neither, a quantity of
+    a part is more than zero. A part may leave an `optional` quantity or key unstated."""
 
     name: str
     what: str
@@ -98,6 +119,8 @@ class Field:
     signed: bool = False
     whole: bool = False
     least: Fraction | None = None
+    may_be: str | None = None
+    optional: bool = False
 
 
 @dataclass(frozen=True)
@@ -168,7 +191,8 @@ class Rule:
     """An answer to one mechanism of one type: `low <= high`, read where every `where`
     holds. The expressions are kernel terms over names: a field, `part.field`, a `let`
     name, `load NAME`, or `@n` for the n-th row the rule applies. A rule with `requires`
-    states that condition over keys and no inequality: it has no sides, no names and no range."""
+    states that condition over keys and no inequality: it has no sides, no names and no range.
+    A `strict` rule states `low < high`: its `lt` in place of `le`."""
 
     id: str
     type: str
@@ -182,6 +206,7 @@ class Rule:
     high: Any
     applied: Mapping[str, Applied]
     requires: tuple | None = None
+    strict: bool = False
 
 
 @dataclass(frozen=True, eq=False)
@@ -243,18 +268,25 @@ def _name(name: Any) -> bool:
 
 
 def _field(body: Mapping[str, Any], load: bool = False) -> Field:
-    allowed = {"name", "what", "dim", "least"} if load else {"name", "what", "dim", "least", "one_of", "type", "as", "signed", "whole"}
+    allowed = {"name", "what", "dim", "least", "may_be"} if load else {"name", "what", "dim", "least", "one_of", "type", "as", "signed", "whole", "may_be", "optional"}
     only(body, tuple(sorted(allowed)), f"field {body.get('name')!r}")
     if sum(key in body for key in ("dim", "one_of", "type")) != 1 or not (isinstance(body.get("what"), str) and body["what"]) or not _name(body.get("name")):
         raise DeckError(f"field {body.get('name')!r}: it has a name of letters, digits and _, `what`, a text, and one of `dim`, `one_of` and `type`, and may have {', '.join(sorted(allowed))}")
     name = body["name"]
-    only(body, ("name", "what", "one_of") if "one_of" in body else ("name", "what", "type", "as") if "type" in body
-         else ("name", "what", "dim", "least", "signed", "whole"), f"field {name}")
+    only(body, ("name", "what", "one_of", "optional", "signed") if "one_of" in body else ("name", "what", "type", "as") if "type" in body
+         else ("name", "what", "dim", "least", "signed", "whole", "may_be", "optional"), f"field {name}")
+    # A part may leave an `optional` field unstated. The flag is true or false, as the kernel reads it, and it is the design that says what
+    # a record leaves out: only the card states a signed field, so a field is not both.
+    optional = body.get("optional", False)
+    if any(not isinstance(body.get(flag, False), bool) for flag in ("optional", "signed", "whole")):
+        raise DeckError(f"field {name}: `optional`, `signed` and `whole` are each true or false")
+    if (optional and body.get("signed")) or (optional and UNSTATED in body.get("one_of", ())):
+        raise DeckError(f"field {name}: a field is `signed` or `optional`, and not both, and a key that may be left unstated has no name `{UNSTATED}`")
     if "one_of" in body:
         keys = tuple(str(k) for k in body["one_of"])
         if not keys or len(set(keys)) != len(keys):
             raise DeckError(f"field {name}: `one_of` is a list of different names")
-        return Field(name, body["what"], keys=keys)
+        return Field(name, body["what"], keys=keys, optional=optional, signed=body.get("signed", False))
     if "type" in body:
         names = tuple(body.get("as", [name]))
         if not names or not all(map(_name, names)) or len(set(names)) != len(names):
@@ -269,7 +301,11 @@ def _field(body: Mapping[str, Any], load: bool = False) -> Field:
     whole = bool(body.get("whole"))
     if whole and dim != NONE:
         raise DeckError(f"field {name}: a count is a plain number")
-    return Field(name, body["what"], dim=dim, signed=bool(body.get("signed")), whole=whole, least=least)
+    # `may_be` says how low the quantity may go by its sign, and a `least` beside it agrees: none with zero, and one under zero with negative.
+    may_be = body.get("may_be")
+    if "may_be" in body and (may_be not in ("zero", "negative") or (load and may_be == "zero") or (least is not None and (may_be == "zero" or least >= 0))):
+        raise DeckError(f"field {name}: `may_be` is zero or negative, and negative alone for a load; a quantity that may be zero has no `least`, and with negative a `least` is under zero")
+    return Field(name, body["what"], dim=dim, signed=bool(body.get("signed")), whole=whole, least=least, may_be=may_be, optional=optional)
 
 
 def _named(items: list, what: str, name: Callable[[Any], str]) -> dict[str, Any]:
@@ -401,11 +437,12 @@ class _Binder(rows._Reader):
         raise RowError(f"{node!r} is not a condition on a part: write is, and, or, not")
 
 
-def _exact(node: Any, takes: Mapping[str, rows.Input]) -> tuple[tuple, Vector]:
+def _exact(node: Any, takes: Mapping[str, rows.Input], free: frozenset = frozenset()) -> tuple[tuple, Vector]:
     """A side of a need and its dimension: a number, a constant with its unit, a quantity
     field of the type or of a part it joins, and add, sub, mul, neg and div. A quotient
     divides by a field, which is more than zero for every part, or by a number that is not
-    zero. Anything else is refused: exact fractions decide a need."""
+    zero. `free` holds the fields that say `may_be`, which may be zero and are no divisor.
+    Anything else is refused: exact fractions decide a need."""
     if isinstance(node, str):
         if node == "pi":
             raise RowError("a need has no pi: exact fractions decide a need")
@@ -423,7 +460,7 @@ def _exact(node: Any, takes: Mapping[str, rows.Input]) -> tuple[tuple, Vector]:
     if op == "q" and len(args) == 2 and all(isinstance(a, str) for a in args):
         value, dim = quantity(f"{args[0]} {args[1]}", "a constant")
         return ("c", value), dim
-    parts = [_exact(a, takes) for a in args] if op in ("add", "mul", "sub", "neg", "div") else []
+    parts = [_exact(a, takes, free) for a in args] if op in ("add", "mul", "sub", "neg", "div") else []
     sides, dims = tuple(p[0] for p in parts), [p[1] for p in parts]
     if op in ("add", "sub") and any(d != dims[0] for d in dims[1:]):
         raise RowError(f"{op} of different dimensions")
@@ -436,8 +473,8 @@ def _exact(node: Any, takes: Mapping[str, rows.Input]) -> tuple[tuple, Vector]:
     if op == "neg" and len(sides) == 1:
         return ("neg", sides[0]), dims[0]
     if op == "div" and len(sides) == 2:
-        if sides[1][0] not in ("field", "c") or sides[1] == ("c", 0):
-            raise RowError("a need divides by a field or by a number that is not zero, and by nothing else: a field is more than zero, so exact fractions decide the quotient")
+        if sides[1][0] not in ("field", "c") or sides[1] == ("c", 0) or (sides[1][0] == "field" and sides[1][1] in free):
+            raise RowError("a need divides by a field that is more than zero or by a number that is not zero, and by nothing else: so exact fractions decide the quotient, and a field that says `may_be` may be zero")
         return ("div", *sides), tuple(a - b for a, b in zip(*dims))
     raise RowError(f"{op!r} with {len(args)} arguments is not in a need: it has add, sub, mul, neg, and div by a field or by a number")
 
@@ -451,7 +488,7 @@ def _fields(side: tuple) -> Iterator[str]:
             yield from _fields(inner)
 
 
-def _need(body: Any, takes: Mapping[str, rows.Input]) -> Need:
+def _need(body: Any, takes: Mapping[str, rows.Input], free: frozenset = frozenset()) -> Need:
     """One need of a type: `{"le": [a, b], "why": "..."}` or `{"lt": [a, b], "why": "..."}`.
     Its two sides have one dimension, and it names at least one field and each field once:
     the range of a side that reads each quantity once is exactly what the four operations
@@ -460,19 +497,57 @@ def _need(body: Any, takes: Mapping[str, rows.Input]) -> Need:
     if ("le" in body) == ("lt" in body) or not (isinstance(body.get("why"), str) and body["why"]):
         raise RowError("it has `le` or `lt`, and not both, and says why in a text that is not empty")
     strict = "lt" in body
-    (low, low_dim), (high, high_dim) = (_exact(side, takes) for side in body["lt" if strict else "le"])
+    (low, low_dim), (high, high_dim) = (_exact(side, takes, free) for side in body["lt" if strict else "le"])
     named = [*_fields(low), *_fields(high)]
     if low_dim != high_dim or not named or len(set(named)) != len(named):
         raise RowError("it compares two sides of one dimension, and names at least one field and each field once, so that exact fractions decide it")
     return Need(strict, low, high, body["why"])
 
 
+def _weight(cond: tuple | None) -> int:
+    """The size of a condition, as `Static.size` in kernel/Petra/Deck.lean: 1 for an `is`, and 1 more than its members for `and`, `or` and `not`."""
+    return 0 if cond is None else 1 if cond[0] == "is" else 1 + sum(map(_weight, cond[1:]))
+
+
+def _over(cond: tuple | None, point: Mapping[str, str]) -> bool:
+    """Whether a condition holds when `point` gives each key it names the name it has. No condition holds."""
+    if cond is None:
+        return True
+    if cond[0] == "is":
+        return point[cond[1]] == cond[2]
+    if cond[0] == "not":
+        return not _over(cond[1], point)
+    return (all if cond[0] == "and" else any)(_over(c, point) for c in cond[1:])
+
+
+def _combinations(names: list[str], takes: Mapping[str, rows.Input]) -> int:
+    """How many combinations the names of these keys make, or some number over MAX_TRIED when they make more than that."""
+    total = 1
+    for name in names:
+        total = total if total > MAX_TRIED else total * len(takes[name].keys)
+    return total
+
+
+def _tried(names: list[str], takes: Mapping[str, rows.Input], requires: tuple, when: tuple | None, unless: tuple | None = None) -> tuple[int, int]:
+    """What a requirement is at every combination of the names of the keys `names`: at how many of them its rule
+    answers, which is where `when` holds and `unless` does not, and at how many of those what it requires holds."""
+    answers = holds = 0
+    for choice in itertools.product(*(takes[name].keys for name in names)):
+        point = dict(zip(names, choice))
+        if _over(when, point) and not (unless is not None and _over(unless, point)):
+            answers += 1
+            holds += _over(requires, point)
+    return answers, holds
+
+
 def _rule(body: Mapping[str, Any], deck_rows: Mapping[str, rows.Row], types: Mapping[str, Type]) -> Rule:
     where = body.get("id")
     try:
-        only(body, ("id", "type", "mechanism", "anchor", "says", "when", "let", "where", "le", "requires"), "a rule")
+        only(body, ("id", "type", "mechanism", "anchor", "says", "when", "let", "where", "le", "lt", "requires"), "a rule")
         if not isinstance(where, str) or _long(where):
-            raise RowError(f"a rule has id, of at most {MAX_NAME} characters, type, mechanism, anchor, says, le or requires, and may have when, let and where")
+            raise RowError(f"a rule has id, of at most {MAX_NAME} characters, type, mechanism, anchor, says, one of le, lt and requires, and may have when, let and where")
+        if sum(key in body for key in ("le", "lt", "requires")) != 1:
+            raise RowError("a rule has one of `le`, `lt` and `requires`: an inequality, a strict one, or a condition over keys")
         anchor = anchored(body["anchor"], "anchor")
         for w in body.get("where", []):
             only(w, ("le", "why"), "where")
@@ -480,8 +555,8 @@ def _rule(body: Mapping[str, Any], deck_rows: Mapping[str, rows.Row], types: Map
             raise RowError("a rule says what it states, and a `where` has at least one item")
         binder = _Binder(deck_rows, types[body["type"]], types)
         if "requires" in body:
-            if {"le", "let", "where"} & set(body):
-                raise RowError("a rule with `requires` has no `le`, no `let` and no `where`: it states a condition over keys, and no inequality")
+            if {"let", "where"} & set(body):
+                raise RowError("a rule with `requires` has no `le`, no `lt`, no `let` and no `where`: it states a condition over keys, and no inequality")
             when = binder.static(body["when"]) if "when" in body else None
             return Rule(where, body["type"], body["mechanism"], anchor, body["says"], when, {}, (), None, None, {}, binder.static(body["requires"]))
         lets = {}
@@ -497,12 +572,13 @@ def _rule(body: Mapping[str, Any], deck_rows: Mapping[str, rows.Row], types: Map
                 binder.problems.append(f"{what} compares a {show(low_dim)} with a {show(high_dim)}")
             return low, high
 
-        low, high = pair(body["le"], "`le`")
+        strict = "lt" in body
+        low, high = pair(body["lt" if strict else "le"], "`lt`" if strict else "`le`")
         ranges = tuple((*pair(w["le"], "`where`"), str(w["why"])) for w in body.get("where", []))
         when = binder.static(body["when"]) if "when" in body else None
         if binder.problems:
             raise RowError("; ".join(dict.fromkeys(binder.problems)))
-        return Rule(where, body["type"], body["mechanism"], anchor, body["says"], when, lets, ranges, low, high, binder.applied)
+        return Rule(where, body["type"], body["mechanism"], anchor, body["says"], when, lets, ranges, low, high, binder.applied, strict=strict)
     except RowError as exc:
         raise DeckError(f"rule {where}: {exc}") from None
     except (KeyError, TypeError, ValueError) as exc:
@@ -540,7 +616,10 @@ def read_deck(text: str) -> Deck:
         # What each type needs of its fields, read once every type is known: a need may name a field of a part the type joins.
         for t in body["types"]:
             try:
-                needs = tuple(_need(n, _Binder({}, types[t["type"]], types).takes) for n in t.get("needs", []))
+                kind = types[t["type"]]
+                free = frozenset({f.name for f in kind.fields.values() if f.may_be}
+                                 | {f"{part}.{g.name}" for f in kind.fields.values() if f.type is not None for part in f.names for g in types[f.type].fields.values() if g.may_be})
+                needs = tuple(_need(n, _Binder({}, kind, types).takes, free) for n in t.get("needs", []))
             except RowError as exc:
                 raise DeckError(f"type {t['type']}: a need: {exc}") from None
             types[t["type"]] = Type(*(getattr(types[t["type"]], name) for name in ("name", "what", "fields", "loads")), needs)
@@ -565,6 +644,24 @@ def read_deck(text: str) -> Deck:
         _named(list(rules), "rules", lambda r: r.id)
         if len({(r.type, r.mechanism, r.id.rpartition("/")[2]) for r in rules}) != len(rules):
             raise DeckError("two rules for one line of the grid have ids that end alike after the last /, so their cells would have one entry")
+        # A requirement that no part can break, or that no part can meet, is a fault of the deck. Each is tried at every combination of the
+        # names of the keys that it and its `when` name, in the order of the rules, within MAX_TRIED for a rule and MAX_TRYING for the deck.
+        spent, named = 0, {}
+        for r in rules:
+            if r.requires is None:
+                continue
+            if r.type not in named:
+                named[r.type] = _Binder({}, types[r.type], types).takes
+            names = list(dict.fromkeys([*_keys(r.when), *_keys(r.requires)]))
+            total = _combinations(names, named[r.type])
+            cost = total * (_weight(r.requires) + _weight(r.when))
+            if total <= MAX_TRIED and spent + cost <= MAX_TRYING:
+                spent += cost
+                answers, holds = _tried(names, named[r.type], r.requires, r.when)
+                if not answers or holds in (0, answers):
+                    raise DeckError(f"rule {r.id}: " + ("its `when` holds for no combination of the names of its keys, so the rule answers for no part" if not answers
+                                                        else f"what it requires holds for {'every' if holds else 'no'} combination of the names of its keys at which it answers, "
+                                                             f"so no part can {'break' if holds else 'meet'} it"))
         return Deck(str(body["name"]), export.sha256(text), deck_rows, types, tuple(asks), rules, text)
     except (RowError, DeckError) as exc:
         raise DeckError(str(exc)) from None
@@ -649,21 +746,53 @@ def _at(span: Span) -> str:
     return f"{span.path}:{span.line}:{span.col}"
 
 
+@lru_cache(maxsize=None)
+def _floors() -> tuple[tuple[str, Vector, Fraction, bool], ...]:
+    """The floors that petra/decks/core.json gives the dimensions: the name, the dimension, the floor and whether it is strict."""
+    from . import wellformed
+
+    listed = json.loads(export.CORE.read_text(encoding="utf-8"))["domains"]["input"]
+    return tuple((name, tuple(map(Fraction, wellformed.dimension(name))), Fraction(floor["min"]), bool(floor["strict"]))
+                 for name, floor in listed.items() if isinstance(floor, dict))
+
+
+def _floor(dim: Vector) -> tuple[str, Fraction, bool] | None:
+    """The floor of a dimension in the core domains, the tighter one when two names are one dimension, or None when it has none."""
+    found = [(name, least, strict) for name, its, least, strict in _floors() if its == dim]
+    return max(found, key=lambda f: (f[1], f[2])) if found else None
+
+
 def _quantity(f: Field, kind: str, arg: Any, name: str, design: Design, say: Callable[[str], None]) -> Value | None:
     if isinstance(arg, ParamRef):
         return say("reads a param, and a family is not checked against a deck yet")
+    if isinstance(arg, Stated):      # what the card states exactly: a whole number for a count, read as a given is
+        if not f.whole or arg.whole is None:
+            return say("is a count, and the card states a name for it" if f.whole else "is stated exactly by the card, and a quantity that is no count reads a bound: `given NAME in [...]`")
+        if arg.name != name:
+            return say(f"reads `given {arg.name}`, and a part reads only what the card states for it: `given {name}`")
+        if (f.may_be is None and arg.whole <= 0) or (f.may_be == "zero" and arg.whole < 0):
+            return say("is not more than zero" if f.may_be is None else "is under zero, and its field may be zero and not under it")
+        if f.least is not None and arg.whole < f.least:
+            return say(f"is under {float(f.least):g}, the least a {kind} has: {f.what}")
+        return Value(f"in:{design.name}.{name}", Interval.point(Fraction(arg.whole)))
     if not isinstance(arg, (Fixed, Bound)):
         return say(f"is a {show(f.dim)}: write a number with its unit, or `given NAME`")
     q = arg.quantity if isinstance(arg, Fixed) else arg.range
     if rows._vector(q.dim) != f.dim:
         return say(f"is a {show(f.dim)}, not a {show(rows._vector(q.dim))}")
-    if q.value.lo <= 0:
+    if f.may_be is None and q.value.lo <= 0:
         return say("is not more than zero")
+    if f.may_be == "zero" and q.value.lo < 0:
+        return say("is under zero, and its field may be zero and not under it")
     if f.least is not None and q.value.lo < f.least:
         return say(f"is under {float(f.least):g} in SI units, the least a {kind} has: {f.what}")
+    # A number that may be negative is still held to a floor of its dimension that is under zero, as a bound of the card is.
+    floor = _floor(f.dim) if f.may_be == "negative" and isinstance(arg, Fixed) else None
+    if floor is not None and floor[1] < 0 and (q.value.lo < floor[1] or (floor[2] and q.value.lo == floor[1])):
+        return say(f"goes down to {q.value.lo} in SI units, and a {floor[0]} is {'more than' if floor[2] else 'at least'} {floor[1]}")
     if isinstance(arg, Bound):
         if f.whole:
-            return say("is a count, which the design writes as a whole number")
+            return say("is a count: the design writes a whole number, or the card states one exactly with `given NAME is N`, and not as a bound")
         if arg.name != name:
             return say(f"reads `given {arg.name}`, and a part reads only the bound the card gives for it: `given {name}`")
         return Value(f"in:{design.name}.{name}", q.value)
@@ -703,12 +832,29 @@ def read_parts(design: Design, deck: Deck) -> Parts:
                     say(f"names {len(f.names)} different {f.type} parts of this design")
                 else:
                     values[attr.key] = tuple(named)
+            elif [a.parts for a in attr.args if isinstance(a, Ref)] == [(UNSTATED,)] and len(attr.args) == 1 and (f.optional or not f.keys):
+                # The one word `unstated` leaves an optional field unstated. On a key that is not optional it is a name like any other, below.
+                if f.optional:
+                    values[attr.key] = NOT_STATED
+                else:
+                    say("is left unstated, and its field is not `optional`: it must be stated")
             elif len(attr.args) != 1:
                 say("takes one value")
             elif f.keys:
                 arg = attr.args[0]
                 word = arg.value if isinstance(arg, Text) else arg.parts[0] if isinstance(arg, Ref) and len(arg.parts) == 1 else None
-                if word not in f.keys:
+                if isinstance(arg, (Stated, Bound)):      # a key that the card states: the name is the card's, and it is one of the key's names
+                    if arg.name != f"{c.name}.{attr.key}":
+                        say(f"reads `given {arg.name}`, and a part reads only what the card states for it: `given {c.name}.{attr.key}`")
+                    elif isinstance(arg, Bound) or arg.key is None:
+                        say(f"is a key, which the card states with a name: `given {arg.name} is <name> signed ...`")
+                    elif arg.key not in f.keys:
+                        say(f"is one of: {', '.join(f.keys)}; the card states {arg.key[:MAX_NAME]!r}")
+                    else:
+                        values[attr.key] = arg.key
+                elif f.signed and word is not None:
+                    say(f"is for the card to state: write `{attr.key} given {c.name}.{attr.key}`, with `given {c.name}.{attr.key} is <name> signed ...` in the card")
+                elif word not in f.keys:
                     say(f"is one of: {', '.join(repr(k) if ' ' in k else k for k in f.keys)}" + (" (in quotes)" if any(" " in k for k in f.keys) else ""))
                 else:
                     values[attr.key] = word
@@ -818,6 +964,8 @@ def _unmet(part: Part, parts: Mapping[str, Part]) -> Iterator[str]:
         return str(x) if _bits(x) <= 256 else f"a number of {_bits(x)} bits"
 
     for n, need in enumerate(part.type.needs, 1):
+        if _lacking(part, parts, [*_fields(need.low), *_fields(need.high)]) is not None:
+            continue      # a need that names a field the part leaves unstated is not decided, and does not refuse the part
         try:
             (low, most), (least, high) = (_span(side, lambda name: _field_of(part, parts, name).range) for side in (need.low, need.high))
         except _Undecided as why:
@@ -951,6 +1099,22 @@ def _field_of(part: Part, parts: Mapping[str, Part], name: str) -> Any:
         if alias in f.names and f.type is not None:
             return parts[part.values[f.name][f.names.index(alias)]].values[inner]
     raise KeyError(name)
+
+
+def _lacking(part: Part, parts: Mapping[str, Part], names: Any) -> str | None:
+    """The first of these fields, as a rule names them, that the part or the part it joins
+    leaves unstated: `PART.FIELD`, with the name of the part that has the field."""
+    for name in names:
+        if _field_of(part, parts, name) is NOT_STATED:
+            alias, dot, inner = name.partition(".")
+            owner = next(part.values[f.name][f.names.index(alias)] for f in part.type.fields.values() if f.type is not None and alias in f.names) if dot else part.name
+            return f"{owner}.{inner if dot else name}"
+    return None
+
+
+def _unstated_why(field: str, reader: str) -> str:
+    """What a cell says when its rule, or the `unless` of its line, reads a field the part leaves unstated, in the kernel's words."""
+    return f"{field} is unstated: its maker states none, and {reader} reads it"
 
 
 def _env(tape: _Tape, rule: Rule, part: Part, parts: Mapping[str, Part], case: str | None) -> Callable[[str], int]:
@@ -1154,6 +1318,12 @@ def _static(cond: tuple | None, part: Part, parts: Mapping[str, Part]) -> bool:
     return (all if cond[0] == "and" else any)(_static(c, part, parts) for c in cond[1:])
 
 
+def _applies(rule: Rule, part: Part, parts: Mapping[str, Part]) -> bool:
+    """Whether a rule answers for a part: its `when` holds, or names a key that the part
+    leaves unstated. Nothing then says that the rule does not apply, and its cells are open."""
+    return _lacking(part, parts, _keys(rule.when)) is not None or _static(rule.when, part, parts)
+
+
 def _names(term: Any) -> Iterator[str]:
     if isinstance(term, Sym):
         yield term.name
@@ -1223,6 +1393,16 @@ def _answers(rule: Rule, ask: Ask, part: Part, parts: Mapping[str, Part], cases:
     def cell(entry: str, state: str, why: str = "", **more: Any) -> Cell:
         return Cell(part.name, rule.mechanism, entry, state, rule.says, anchor, why, rule.id, **more)
 
+    # A rule that reads a field the part leaves unstated has no answer: each cell it would give is open. It reads the field in a side, in
+    # its `where`, in its `when` or in its `requires`. The kernel names the first such field the rule reads, and this names the first by name.
+    named = _reads(rule)
+    lacks = _lacking(part, parts, sorted(name for name in named if not name.startswith("load ")))
+    if lacks is not None:
+        single = rule.requires is not None or not cases or not any(name.startswith("load ") for name in named)
+        for entry in [tail] if single else [f"{tail}/{case}" for case in cases]:
+            yield cell(entry, "open", _unstated_why(lacks, "the rule"))
+        return
+
     if rule.requires is not None:
         # One cell, with no tape and no hint: proved when the condition over keys holds for the part, and refuted when not.
         if _static(rule.requires, part, parts):
@@ -1239,10 +1419,17 @@ def _answers(rule: Rule, ask: Ask, part: Part, parts: Mapping[str, Part], cases:
         yield cell(tail, "refuted", f"the part is not what the rule requires: {has}{f' and {len(asked) - said} more' if said < len(asked) else ''}")
         return
 
-    def tape_of(pairs: list[tuple[Any, Any]], case: str | None) -> tuple[_Tape, list[int], list[tuple[int, int]]]:
+    def tape_of(pairs: list[tuple[Any, Any]], case: str | None, strict: bool = False) -> tuple[_Tape, list[int], list[tuple[int, int]]]:
+        """The tape with a root for each pair: the first side less the second, which is at most
+        zero where the pair is in order. A strict root is the pick that is -1 where the first
+        side is under the second and 1 elsewhere: it is at most zero on a box only where the
+        first side is under the second all over it, and above zero at a point only where it
+        is not under it there."""
         tape = _Tape()
         env = _env(tape, rule, part, parts, case)
         sides = [(tape.emit(low, env), tape.emit(high, env)) for low, high in pairs]
+        if strict:
+            return tape, [tape.node("pick", [[["lt", low, high], tape.const(Fraction(-1))], [None, tape.const(Fraction(1))]]) for low, high in sides], sides
         return tape, [tape.node("add", [low, tape.node("neg", high)]) for low, high in sides], sides
 
     reads = sorted(name[5:] for name in _reads(rule) if name.startswith("load "))
@@ -1267,7 +1454,7 @@ def _answers(rule: Rule, ask: Ask, part: Part, parts: Mapping[str, Part], cases:
                     continue
                 yield Cell(part.name, rule.mechanism, f"{entry}/where", "proved", "; ".join(w[2] for w in rule.where), anchor, "", rule.id,
                            proof={"partition": partition})
-            tape, roots, sides = tape_of([(rule.low, rule.high)], case)
+            tape, roots, sides = tape_of([(rule.low, rule.high)], case, rule.strict)
         except NoValue as exc:
             yield cell(entry, "open", str(exc))
             continue
@@ -1291,23 +1478,32 @@ def _answers(rule: Rule, ask: Ask, part: Part, parts: Mapping[str, Part], cases:
 
 
 def cells(design: Design, deck: Deck, found: Parts) -> list[Cell]:
-    """Every cell of the design: for each part, each mechanism the grid asks of its type."""
+    """Every cell of the design: for each part, each mechanism the grid asks of its type.
+
+    A waiver rests a cell that would be open, and no other. The cells of a line are made as
+    if the card waived nothing. Where it waives the line on the part, each of them that is
+    open becomes `waived`, and says what was open. A cell that a rule proved stays proved,
+    and the waiver was not needed for it. A cell that a rule refuted stays refuted: no
+    waiver hides a refutation, and a card written before a deck gained a rule does not
+    switch the rule off."""
     out: list[Cell] = []
-    waived = {(w.subject[0], w.mode): w for w in design.waivers}
+    waived = {(w.subject[0], w.mode): w for w in reversed(design.waivers)}      # the first waiver of a line on a part, as the kernel takes it
     for part in found.parts.values():
         for ask in (a for a in deck.asks if a.type == part.type.name):
-            anchor = _anchor(ask.anchor)
-            if (part.name, ask.mechanism) in waived:
-                w = waived[part.name, ask.mechanism]
-                out.append(Cell(part.name, ask.mechanism, "", "waived", ask.what, anchor, f"by {w.owner}: {w.reason}"))
+            anchor, line = _anchor(ask.anchor), []
+            if (lacks := _lacking(part, found.parts, _keys(ask.unless))) is not None:
+                # The `unless` reads a key that is unstated, so nothing says whether the mechanism can arise: the line is open, and no rule of it is run.
+                line.append(Cell(part.name, ask.mechanism, "", "open", ask.what, anchor, _unstated_why(lacks, "the `unless` of the line")))
             elif ask.excused is not None and _static(ask.unless, part, found.parts):
-                out.append(Cell(part.name, ask.mechanism, "", "not_applicable", ask.what, anchor, ask.excused))
+                line.append(Cell(part.name, ask.mechanism, "", "not_applicable", ask.what, anchor, ask.excused))
             else:
-                rules = [r for r in deck.rules if (r.type, r.mechanism) == (ask.type, ask.mechanism) and _static(r.when, part, found.parts)]
-                out += [c for r in rules for c in _answers(r, ask, part, found.parts, found.cases)]
+                rules = [r for r in deck.rules if (r.type, r.mechanism) == (ask.type, ask.mechanism) and _applies(r, part, found.parts)]
+                line += [c for r in rules for c in _answers(r, ask, part, found.parts, found.cases)]
                 if not rules:
-                    out.append(Cell(part.name, ask.mechanism, "", "open", ask.what, anchor,
-                                    f"the deck has no rule for it{' on a part like this one' if any(r.mechanism == ask.mechanism for r in deck.rules) else ''}"))
+                    line.append(Cell(part.name, ask.mechanism, "", "open", ask.what, anchor,
+                                     f"the deck has no rule for it{' on a part like this one' if any(r.mechanism == ask.mechanism for r in deck.rules) else ''}"))
+            w = waived.get((part.name, ask.mechanism))
+            out += line if w is None else [replace(c, state="waived", why=f"by {w.owner}: {w.reason}; {WAIVED}{c.why}") if c.state == "open" else c for c in line]
     return out + _unread(deck, found)
 
 
@@ -1323,14 +1519,14 @@ def _unread(deck: Deck, found: Parts) -> list[Cell]:
     for part in found.parts.values():
         names = {alias: part.values[f.name][n] for f in part.type.fields.values() if f.type is not None for n, alias in enumerate(f.names)}
         fields = {name for a in deck.asks if a.type == part.type.name for name in _keys(a.unless)}
-        fields |= {name for r in deck.rules if r.type == part.type.name and _static(r.when, part, found.parts) for name in _reads(r)}
+        fields |= {name for r in deck.rules if r.type == part.type.name and _applies(r, part, found.parts) for name in _reads(r)}
         for name in fields:
             alias, dot, inner = name.partition(".")
             read.add((names[alias], inner) if dot else (part.name, name))
     out = []
     for part in found.parts.values():
         out += [Cell(part.name, UNREAD, f.name, "open", f.what, "", f"no rule of the deck reads {part.name}.{f.name}, so nothing checks it")
-                for f in part.type.fields.values() if f.type is None and (part.name, f.name) not in read]
+                for f in part.type.fields.values() if f.type is None and (part.name, f.name) not in read and part.values[f.name] is not NOT_STATED]
         out += [Cell(part.name, UNREAD, f"{load}/{case}", "open", part.type.loads[load].what, "",
                      f"no rule of the deck reads the load {load} that case {case} puts on {part.name}, so nothing checks it")
                 for load in sorted(part.loads) if (part.name, f"load {load}") not in read for case in sorted(part.loads[load])]
@@ -1463,7 +1659,12 @@ def check(design: Design, deck: Deck) -> tuple[Report, dict[str, str]]:
     found = read_parts(design, deck)
     answers = cells(design, deck, found)
     files = bundle(design, deck, answers)
-    broken = wellformed.findings(*(json.loads(files[name]) for name in ("card", "design", "deck")))
+    def sign(part: str, name: str, load: bool) -> str | None:
+        """What the type of a part says with `may_be` of a field, or of a load."""
+        its = found.parts.get(part)
+        return getattr((its.type.loads if load else its.type.fields).get(name), "may_be", None) if its is not None else None
+
+    broken = wellformed.findings(*(json.loads(files[name]) for name in ("card", "design", "deck")), sign=sign)
     if broken:
         raise ComponentError(tuple(f"{design.path}: {b}" for b in broken))
     return Report(design.name, design.path, deck, tuple(answers)), files

@@ -110,6 +110,18 @@ structure Waiver where
   signer : String
   reason : String
 
+/-- What a card states of a part exactly, with no range: the name of a key, or a whole number. -/
+inductive Said where
+  | key (name : String)
+  | whole (n : Rat)
+
+/-- One exact statement of the card: the name `PART.FIELD` of what it states, what it says
+of it, and who signed it. A design reads it with a given of that name, as it reads a bound. -/
+structure Stated where
+  name : String
+  said : Said
+  signer : String
+
 structure Card where
   name : String
   environment : Option String
@@ -119,9 +131,11 @@ structure Card where
   waivers : Array Waiver
   /-- Which of `tests` and `probability_claims` the card states. A deck of rules reads neither. -/
   stated : Array String
-  /-- Which of `tests` and `probability_claims` the card has as a key, stated or empty. Only
-  the card of a design checked against a deck of rules has them. -/
+  /-- Which of `tests`, `probability_claims` and `states` the card has as a key, stated or
+  empty. Only the card of a design checked against a deck of rules has them. -/
   keyed : Array String
+  /-- The keys and the whole numbers the card states: its `states`, or none without the key. -/
+  states : Array Stated := #[]
 
 structure Quantity where
   kind : String
@@ -166,6 +180,12 @@ structure Design where
 structure Floor where
   min : Rat
   strict : Bool
+
+def Floor.admits (f : Floor) (x : Rat) : Bool := if f.strict then f.min < x else f.min ≤ x
+
+def Floor.broken (f : Floor) (what : String) (x : Rat) : String :=
+  let relation := if f.strict then "above" else "at least"
+  s!"a {what} is {relation} {f.min}, and this one goes down to {x}"
 
 structure Constant where
   label : String
@@ -264,6 +284,22 @@ def readClaim (j : Json) : Except String Claim := do
   return { name := ← text j "name", subject := ← text j "subject", quantity := ← text j "quantity",
            rel := ← text j "rel", caseNames := ← texts j "cases", dim := ← text bound "dim",
            bound := ← range bound }
+
+/-- An exact statement of the card: `name`, `by`, and one of `key`, the name of a key, and
+`whole`, a whole number. It has no other key, and a `whole` that is no whole number is not
+read. A statement with no `by` still reads, with an empty signer: naming one is a type rule. -/
+def readStated (j : Json) : Except String Stated := do
+  for (key, _) in (← j.getObj?).toArray do
+    unless ["name", "by", "key", "whole"].contains key do throw s!"a statement has name, by and one of key and whole, and no {key}"
+  let name ← text j "name"
+  let signer := (text j "by").toOption.getD ""
+  match j.getObjVal? "key", j.getObjVal? "whole" with
+  | .ok (.str key), .error _ => return { name, said := .key key, signer }
+  | .error _, .ok (.str _) =>
+    let n ← number j "whole"
+    unless n.den == 1 do throw "whole is not a whole number"
+    return { name, said := .whole n, signer }
+  | _, _ => throw "a statement has one of key, a text, and whole, a whole number as a text"
 
 /-- A waiver with no `by` still reads, with an empty signer: naming one is a type rule. -/
 def readWaiver (j : Json) : Except String Waiver := do
@@ -411,10 +447,11 @@ def readCard (j : Json) : Read Card := do
     | .ok (.arr a) => !a.isEmpty
     | .ok _ => true
     | .error _ => false
-  let keyed := #["tests", "probability_claims"].filter fun key => (j.getObjVal? key).toOption.isSome
+  let keyed := #["tests", "probability_claims", "states"].filter fun key => (j.getObjVal? key).toOption.isSome
+  let states ← if keyed.contains "states" then items "card" j "states" readStated else pure #[]
   return { name := ← text j "name", environment, caseNames := ← texts j "cases",
            inputs := ← items "card" j "inputs" readInput, claims := ← items "card" j "claims" readClaim,
-           waivers := ← items "card" j "waivers" readWaiver, stated, keyed }
+           waivers := ← items "card" j "waivers" readWaiver, stated, keyed, states }
 
 def readDesign (j : Json) : Read Design := do
   let parts ← if (j.getObjVal? "parts").toOption.isSome then some <$> items "design" j "parts" readBlock else pure none

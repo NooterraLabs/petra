@@ -6,8 +6,8 @@ petra/grid.py and petra-verify each work out the cells of a design checked again
 of rules. This makes N designs, has both check each one, and counts the designs they
 differ on. A difference is a bug in one of the two.
 
-A design is of one of three decks: the deck that ships, with its `lap` and `plate`,
-STRIPS, the deck made up for tests/test_grid.py, or OPS, made up here so that every
+A design is of one of four decks: the deck that ships, with its `lap` and `plate`,
+STRIPS, the deck made up for tests/test_grid.py, OPS and KIT. OPS is made up here so that every
 operator of the rule language is in a rule: powers, roots, exp and ln, conditions joined
 by and, or and not, a table with bands closed at the lower end, every way to bind a key,
 a key of a joined part, and a range that reads a load. Its bar takes three loads and its cap
@@ -19,7 +19,21 @@ a joined part; a rule that requires a condition over keys, which holds for some 
 fails for others; a row that gives a name by the bands of two quantities, read by a key of
 a table and by a `case`, with bars inside its bands, on their ends, outside them and at its
 empty cell; and what a cap and a bar need of their fields, which about one bar in five
-breaks. A design's numbers are drawn from
+breaks.
+
+KIT is made up here for what three more families asked (docs/deck.md): a key and a count
+that the card states with `is`, given, missing, written by the design, of the wrong kind
+and under its floor; a waiver for a line whose rules prove, for one whose rules refute,
+for one with no rule and for one that cannot arise, and for every line at once; each unit
+read since 2026-11-11 in a design, a card or the deck, on and beside the edges of the
+rules; a quantity and a key that a cell may leave unstated, read by a rule, by a `when`,
+by an `unless`, by a need and by nothing; quantities at zero and under it, a count that
+may be zero as a divisor, and a load of either sign; and rules that state `lt` with
+numbers exactly on their limit. Three of its rigs in five are calm, with numbers that keep
+every rule, so that a rig may pass when its card waives the one line that has no rule.
+One rig in three is then damaged in a way the grid refuses, or the language before it.
+
+A design's numbers are drawn from
 the ends of the decks' bands, their listed
 values and the edges of their cases and ranges, and from near them. Its loads are
 points or ranges, in no, one or two load cases, and its card waives some mechanisms or none.
@@ -41,11 +55,14 @@ For each design that the language reads, the files are written without asking th
                             the same subject, mechanism, entry and state, give the same
                             verdict, and print the hash of the deck's file
 
-`--decks N` also makes N damaged decks. Each is one of the three decks with one or two
+`--decks N` also makes N damaged decks. Each is one of the four decks with one or two
 changes: a text swapped for another text of the deck or for an odd one, a key or an item
 dropped, doubled, moved or renamed, a `where` with no item, two rules of one line whose
 ids end alike, a line named `unread`, a `when`, an `unless` or a `requires` that asks
-`loaded`, which is no condition, or a wide row that a rule applies 9 times or 1,000
+`loaded`, which is no condition, a row that gives a name that none of its cells holds,
+a requirement that no part can break or no part can meet, a mark on a field with a value
+it may or may not take there (`optional`, `signed`, `whole`, `may_be`, `least`), `lt` for
+`le` or both at once, or a wide row that a rule applies 9 times or 1,000
 times, which is within the steps a deck may take to read or over them. An honest design
 of that deck is then checked against it. The grid's `read_deck` must refuse exactly the decks the kernel finds ill formed, and
 where both read the deck they must agree on the design as above.
@@ -190,7 +207,8 @@ class Draft:
             design += [f"{kind} {name} {{", *(f"  {key} {value}" for key, value in lines), "}", ""]
         stated = [f"  environment {self.environment}"] if self.environment else []
         card = ["petra 0", "", f'card "{self.name}" {{', '  owner "t@example.org"', *stated, "}", "", *self.card_more]
-        card += [f"given {name} in {bound} {SIGNED}" for name, bound in self.givens.items()]
+        # A given is a bound, `[lo, hi]`, or what follows its name as written: `in [lo, hi]`, or `is NAME` for what the card states exactly.
+        card += [f"given {name} {bound if bound.startswith(('in ', 'is ')) else 'in ' + bound} {SIGNED}" for name, bound in self.givens.items()]
         for case, entries in self.loads.items():
             card += ["", f"load {case} {{", *(f"  {e}" for e in entries), f"  {SIGNED}", "}"]
         card += ["", *(f'waive {mechanism} on {subject} by "t@example.org" reason "generated"' for mechanism, subject in self.waivers)]
@@ -342,6 +360,206 @@ def ops(rng: random.Random, n: int) -> Draft:
     return d
 
 
+def _kit_field(name: str, **more: object) -> dict:
+    return {"name": name, "what": name, **more}
+
+
+def _kit_rule(name: str, mechanism: str, **body: object) -> dict:
+    return {"id": f"kit/{name}", "type": "rig" if mechanism.startswith("rig.") else "cell", "mechanism": mechanism, "anchor": MADE_UP, "says": "made up", **body}
+
+
+KIT = {
+    "format": "petra-rules/0", "name": "bench-kit", "about": "Made up for bench/kernel_grid.py. It is no standard, and its numbers mean nothing.",
+    "rows": [
+        {"id": "kit/pace", "anchor": MADE_UP, "gives": {"name": "v", "dim": "length/time", "what": "a pace by the duty"},
+         "takes": [{"name": "duty", "one_of": ["light", "heavy"], "what": "the duty"}],
+         "table": {"down": {"by": "duty"}, "unit": "km/h", "cells": ["36", "15 m/s"]}}],
+    "types": [
+        {"type": "cell", "what": "a cell of a rig", "fields": [
+            _kit_field("low", dim="temperature", may_be="negative", least="-40 degC"), _kit_field("spare", dim="dimensionless", whole=True, may_be="zero"),
+            _kit_field("station", dim="length", may_be="negative"), _kit_field("resistance", dim="resistance", optional=True),
+            _kit_field("limit", dim="dimensionless/time", optional=True), _kit_field("seal", one_of=["none", "full"], optional=True),
+            _kit_field("maker", one_of=["a", "b"], optional=True), _kit_field("mass", dim="mass")],
+         "needs": [{"le": ["low", ["q", "60", "degC"]], "why": "made up: a field that may be negative, in a need"}]},
+        {"type": "rig", "what": "a rig of two cells", "fields": [
+            _kit_field("duty", one_of=["light", "heavy"], signed=True), _kit_field("count", dim="dimensionless", whole=True, signed=True, least="2"),
+            _kit_field("mode", one_of=["day", "night"]), _kit_field("speed", dim="dimensionless/time"), _kit_field("pace", dim="length/time"),
+            _kit_field("charge", dim="current*time"), _kit_field("run", dim="time"), _kit_field("reach", dim="length"), _kit_field("density", dim="mass/length^3"),
+            _kit_field("rate", dim="force/length"), _kit_field("torque", dim="moment"), _kit_field("power", dim="power"),
+            _kit_field("cells", type="cell", **{"as": ["front", "rear"]})],
+         "loads": [_kit_field("air", dim="temperature"), _kit_field("shift", dim="length", may_be="negative"), _kit_field("weight", dim="mass", least="0 g")],
+         "needs": [{"le": [["add", "front.station", "rear.station"], "reach"], "why": "made up: two stations that may be behind the datum"},
+                   {"lt": ["speed", ["mul", "4", "front.limit"]], "why": "made up: a limit that a cell may leave unstated"}]}],
+    "grid": [{"type": "rig" if name.startswith("rig.") else "cell", "mechanism": name, "what": name, "anchor": MADE_UP, **more} for name, more in (
+        ("rig.class", {}), ("rig.count", {}), ("rig.cold", {}), ("rig.speed", {}),
+        ("rig.sealed", {"unless": {"when": ["is", "rear.seal", "full"], "why": "made up: a key that a cell may leave unstated"}}),
+        ("rig.share", {}), ("rig.centre", {}), ("rig.energy", {}), ("rig.dense", {}), ("rig.stiff", {}), ("rig.twist", {}), ("rig.heat", {}), ("rig.carry", {}),
+        ("rig.bare", {}), ("rig.night", {"unless": {"when": ["is", "mode", "day"], "why": "made up"}}),
+        ("cell.mass", {}), ("cell.temp", {}), ("cell.spare", {}), ("cell.limit", {}), ("cell.ohm", {}), ("cell.sealed", {}))],
+    "rules": [
+        # A key and a count that the card states: in a `when`, a `requires`, a key of a table, and as a number.
+        _kit_rule("class", "rig.class", when=["is", "duty", "heavy"], requires=["is", "mode", "day"]),
+        _kit_rule("count", "rig.count", lt=[["mul", "count", ["q", "2", "oz"]], ["q", "0.5", "lb"]]),
+        _kit_rule("pace", "rig.sealed", le=["pace", ["row", "kit/pace", {"duty": "duty"}]]),
+        _kit_rule("carry", "rig.carry", le=[["load", "weight"], ["mul", "count", ["q", "10", "lb"]]]),
+        # Quantities at and under zero, a quotient by a count that may be zero, and a load of either sign.
+        _kit_rule("cold", "rig.cold", le=["front.low", ["load", "air"]]),
+        _kit_rule("share", "rig.share", le=[["div", "reach", "front.spare"], ["q", "1", "mile"]]),
+        _kit_rule("centre", "rig.centre", le=[["abs", ["add", "front.station", "rear.station", ["load", "shift"]]], ["q", "1", "ft"]]),
+        # A quantity and a key that a cell may leave unstated: in a side, in a `when` and in the `unless` of rig.sealed.
+        _kit_rule("speed", "rig.speed", lt=["speed", "front.limit"]),
+        _kit_rule("heat", "rig.heat", when=["is", "rear.seal", "none"], le=[["mul", "rear.resistance", ["q", "1", "A"], ["q", "1", "A"]], "power"]),
+        # The units, and `lt` beside `le` on their edges.
+        _kit_rule("energy", "rig.energy", le=[["mul", "charge", ["q", "1", "V"]], ["mul", "power", "run"]]),
+        _kit_rule("dense", "rig.dense", le=["density", ["q", "2", "g/cm3"]]),
+        _kit_rule("stiff", "rig.stiff", le=[["q", "1", "N/mm"], "rate"]),
+        _kit_rule("twist", "rig.twist", lt=["torque", ["q", "1", "lbf_ft"]]),
+        _kit_rule("mass", "cell.mass", le=["mass", ["q", "1", "lb"]]),
+        # Each field of a cell read by a rule of the cell itself, so that a rig that states them all has no field that nothing reads.
+        _kit_rule("temp", "cell.temp", le=["low", ["q", "30", "degC"]]),
+        _kit_rule("spare", "cell.spare", le=["spare", "3"]),
+        _kit_rule("limit", "cell.limit", le=[["q", "1", "Hz"], "limit"]),
+        _kit_rule("ohm", "cell.ohm", lt=["resistance", ["q", "100", "kohm"]]),
+        _kit_rule("sealed", "cell.sealed", when=["is", "maker", "a"], requires=["is", "seal", "none"])],
+}
+"""A deck for what three more families asked of the language: a key and a count that the
+card states, quantities at and under zero, fields a part may leave unstated, the units read
+since 2026-11-11, and rules that state `lt`. `rig.bare` has no rule, for a waiver to rest."""
+
+
+KIT_SEED = 485
+"""The seed of the rig that a damaged KIT deck is checked with (`_decks`): a calm rig that
+carries its three loads in two cases, 28 of whose cells are proved, with one line, the one
+that has no rule, left open."""
+
+
+def kit(rng: random.Random, n: int) -> Draft:
+    """A rig of KIT with its two cells: its numbers on and beside the edges of its rules, in
+    the units read since 2026-11-11, with fields left unstated, at zero and under it, and a
+    card that states its duty and its count and waives lines that have rules and lines that
+    have none."""
+    d = Draft(f"kit-{n}")
+    # Three rigs in five are calm: each number is one that keeps every rule, but for one in twelve. The others take any value of the
+    # lists, which go on to the edges of the rules and past them, so nearly all of those fail somewhere.
+    calm = rng.random() < 0.6
+
+    def pick(values: list[str], keep: int = 2) -> str:
+        """One of the values. The first `keep` of a list keep every rule that reads them."""
+        return rng.choice(values[:keep] if calm and rng.random() < 0.92 else values)
+
+    for name in ("c1", "c2"):
+        d.parts.append(("cell", name, [
+            ["low", pick(["-10 degC", "-40 degC", "-35/9 degC", "0 degC", "5 degC", "25 degC", "31 degC"])],
+            ["spare", pick(["1", "2", "3", "0", "4"])],
+            ["station", pick(["-5 mm", "0 mm", "5 mm", "-0.5 ft", "-1 ft", "100 mm"])],
+            ["resistance", pick(["20 mohm", "0.5 ohm", "unstated", "40 ohm", "1.2 kohm", "101 kohm"])],
+            ["limit", pick(["150 Hz", "200 Hz", "9001 rpm", "unstated", "9000 rpm", "149 Hz", "9000.001 rpm", "59 rpm"])],
+            ["seal", pick(["none", "none", "full", "unstated"])],
+            ["maker", pick(["a", "a", "b", "unstated"])],
+            ["mass", pick(["400 g", "16 oz", "1 lb", "453.59237 g", "17 oz", "0.5 kg", "453.6 g"])]]))
+    duty, count, mode = rng.choice(["light", "heavy"]), pick(["2", "3", "4", "5"]), pick(["day", "day", "night"])
+    lines = [
+        ["duty", "given rig.duty"], ["count", "given rig.count"], ["mode", mode],
+        ["speed", pick(["100 Hz", "60 rpm", "8999.999 rpm", "9000 rpm", "150 Hz", "149.9 Hz", "151 Hz"])],
+        ["pace", pick(["5 m/s", "10 m/s", "36 km/h", "19 knot", "22 mph", "36.1 km/h", "20 knot", "23 mph", "15 m/s", "54 km/h", "54.001 km/h", "29 knot", "30 knot"])],
+        ["charge", pick(["2200 mAh", "2.2 Ah", "5 Ah", "13333 mAh", "13334 mAh", "40 Ah", "10 A2s"])],
+        ["run", pick(["12 min", "0.2 h", "1 h", "11 min", "660000 ms", "30 s"])],
+        ["reach", pick(["0.5 mile", "1 km", "100 ft", "1 mile", "1609.344 m", "1609.345 m", "2 mile", "3 mile"])],
+        ["density", pick(["1.6 g/cm3", "2 g/cm3", "2000 kg/m3", "2000.1 kg/m3", "7.85 g/cm3"])],
+        ["rate", pick(["3 N/mm", "1 N/mm", "1.001 N/mm", "0.999 N/mm"])],
+        ["torque", pick(["11 lbf_in", "1 Nm", "11.999 lbf_in", "12 lbf_in", "1 lbf_ft", "2 Nm", "0.001 kip_ft"])],
+        ["power", pick(["1.2 kW", "1200 W", "40 W", "0.04 kW", "10 mW"])],
+        ["cells", rng.choice(["c1 c2", "c1 c2", "c2 c1"])]]
+    # The charge is no charge in A2s, a current squared for a time: such a design is refused for its dimension.
+    d.givens["rig.duty"], d.givens["rig.count"] = f"is {duty}", f"is {count}"
+    if rng.random() < 0.3:      # a key that the type leaves to either, stated by the card
+        lines[2][1], d.givens["rig.mode"] = "given rig.mode", f"is {mode}"
+    if rng.random() < 0.2:      # a pace the card bounds, which may straddle the limit of its duty
+        lines[4][1], d.givens["rig.pace"] = "given rig.pace", rng.choice(["in [9 m/s, 10 m/s]", "in [36 km/h, 36 km/h]", "in [30 km/h, 40 km/h]", "in [14 m/s, 15 m/s]", "in [19 knot, 30 knot]"])
+    if rng.random() < 0.15:     # a count of spares the card states for a cell, and a low temperature it bounds
+        d.lines("c1")[1][1], d.givens["c1.spare"] = "given c1.spare", rng.choice(["is 0", "is 2", "is 1"])
+    if rng.random() < 0.15:
+        d.lines("c2")[0][1], d.givens["c2.low"] = "given c2.low", rng.choice(["in [-10 degC, 0 degC]", "in [-40 degC, -40 degC]", "in [-20 degC, 30 degC]"])
+    d.parts.append(("rig", "rig", lines))
+    for case in rng.choice([["calm"], ["calm", "gale"]] if calm else [[], ["calm"], ["calm"], ["calm", "gale"], ["calm", "gale"]]):
+        entries = []
+        if calm or rng.random() < 0.85:
+            entries.append(f"on rig air in {pick(['[-10 degC, 40 degC]', '[-35/9 degC, 590/9 degC]', '[5 degC, 25 degC]', '[0 degC, 0 degC]', '[-20 degC, 0 degC]', '[-40 degC, -40 degC]'])}")
+        if calm or rng.random() < 0.7:
+            entries.append(f"on rig shift in {pick(['[-2 mm, 2 mm]', '[0 mm, 0 mm]', '[-0.5 ft, 0.5 ft]', '[-1 ft, -1 ft]', '[1 ft, 1 ft]', '[-400 mm, -300 mm]'])}")
+        if calm or rng.random() < 0.6:
+            entries.append(f"on rig weight in {pick(['[0 g, 20 lb]', '[0 g, 0 g]', '[0 oz, 320 oz]', '[0 lb, 40 lb]', '[30 lb, 30 lb]', '[40.001 lb, 41 lb]'])}")
+        if entries or rng.random() < 0.5:
+            d.loads[case] = entries
+    # A waiver for a line with no rule, for lines whose rules prove, refute or have no answer, for a line that cannot arise, and for all at once.
+    every = [a["mechanism"] for a in KIT["grid"] if a["type"] == "rig"]
+    d.waivers = [(m, "rig") for m in rng.choice([[], [], ["rig.bare"], ["rig.bare", "rig.night"], ["rig.speed", "rig.count"], ["rig.cold", "rig.carry", "rig.centre"],
+                                                 ["rig.sealed", "rig.heat", "rig.share"], every, every, rng.sample(every, 5)])]
+    if rng.random() < 0.1:
+        d.waivers.append(("cell.mass", rng.choice(["c1", "c2"])))
+    return d
+
+
+def kit_damage(rng: random.Random, d: Draft) -> None:
+    """Change a draft of KIT in one way that the grid may refuse: a field of the card's that
+    the design writes, a statement the key lacks or of the wrong kind, a field that is not
+    optional left unstated, a number at or under zero where its field does not permit it,
+    and a unit of another dimension. Some of these the language refuses first."""
+    rig, cell = d.lines("rig"), d.lines(rng.choice(["c1", "c2"]))
+    line = {l[0]: l for l in rig}
+
+    def design_writes() -> None:
+        which = rng.choice(["duty", "count"])
+        line[which][1] = d.givens.pop(f"rig.{which}")[3:]
+
+    def design_writes_too() -> None:      # the card states it as well: the language refuses a statement that no part reads
+        line["duty"][1] = "light"
+
+    def not_stated() -> None:      # the language refuses a given the card does not state
+        d.givens.pop(rng.choice(["rig.duty", "rig.count"]))
+
+    def wrong_statement() -> None:
+        which = rng.choice(["duty", "count"])
+        d.givens[f"rig.{which}"] = rng.choice(["is medium", "is 3", 'is "light "', "in [2, 3]", "in [4, 4]"] if which == "duty"
+                                               else ["is four", 'is "4"', "is 1", "is 0", "is -3", "in [4, 4]", "in [2, 3]", "is heavy"])
+
+    def other_statement() -> None:      # the rig reads what the card states for another part, and the card states nothing for the rig
+        d.givens["c1.duty"] = d.givens.pop("rig.duty")
+        line["duty"][1] = "given c1.duty"
+
+    def bound_as_statement() -> None:
+        line["power"][1], d.givens["rig.power"] = "given rig.power", rng.choice(["is 40", "is forty"])
+
+    def must_be_stated() -> None:
+        chosen = rng.choice([line["speed"], line["mode"], line["cells"], cell[0], cell[7], cell[1]])
+        chosen[1] = rng.choice(["unstated", "unstated", '"unstated"'])
+
+    def unstated_twice() -> None:
+        rng.choice([cell[3], cell[4], cell[5]])[1] = rng.choice(["unstated unstated", '"unstated"', "unstated 5 Hz", "none unstated"])
+
+    def under_zero() -> None:
+        chosen, value = rng.choice([(cell[7], "0 g"), (cell[7], "-1 lb"), (line["reach"], "0 mile"), (line["reach"], "-1 ft"), (cell[1], "-1"), (cell[0], "-300 degC"),
+                                    (cell[0], "-41 degC"), (cell[0], "-273.15 degC"), (line["speed"], "0 rpm"), (line["run"], "-1 min"), (line["power"], "0 kW")])
+        chosen[1] = value
+
+    def load_under_floor() -> None:
+        d.loads[rng.choice(["calm", "extra"])] = [rng.choice(["on rig weight in [-1 lb, 1 lb]", "on rig air in [-274 degC, 0 degC]", "on rig shift in [-1 mile, 1 mile]",
+                                                              "on rig air in [-273.15 degC, 0 degC]", "on c1 weight in [0 g, 1 g]"])]
+
+    def wrong_dimension() -> None:
+        chosen, value = rng.choice([(line["speed"], "5 m/s"), (line["pace"], "5 Hz"), (line["charge"], "5 A"), (line["run"], "5 rpm"), (line["density"], "5 kg"),
+                                    (line["rate"], "5 N"), (line["torque"], "5 lbf"), (line["power"], "5 Ah"), (line["reach"], "5 mph"), (cell[7], "5 lbf")])
+        chosen[1] = value
+
+    def no_such_unit() -> None:      # the language refuses these
+        rng.choice([line["speed"], line["pace"], line["run"], cell[0]])[1] = rng.choice(["5 K", "5 degF", "5 kph", "5 m / s", "5 hr", "5 kg/m^3", "5 mm/s"])
+
+    way = rng.choice([design_writes, design_writes, design_writes_too, not_stated, wrong_statement, wrong_statement, other_statement, bound_as_statement, must_be_stated,
+                      must_be_stated, unstated_twice, under_zero, under_zero, load_under_floor, wrong_dimension, no_such_unit])
+    way()
+    d.damage.append(way.__name__)
+
+
 def damage(rng: random.Random, d: Draft) -> None:
     """Change the draft in one way that the grid may refuse. Some of these the language
     refuses first, and a few leave a design the grid still checks."""
@@ -481,7 +699,11 @@ def damage(rng: random.Random, d: Draft) -> None:
 
 def draft(seed: int, n: int) -> Draft:
     rng = random.Random(f"{seed}/{n}")
-    d = rng.choice([lap, lap, strips, strips, ops])(rng, n)
+    d = rng.choice([lap, lap, strips, strips, ops, kit, kit])(rng, n)
+    if d.name.startswith("kit"):
+        for _ in range(rng.choice([0, 0, 0, 1, 1])):
+            kit_damage(rng, d)
+        return d
     for _ in range(0 if d.name.startswith("ops") else rng.choice([0, 0, 0, 1, 1, 2])):
         damage(rng, d)
     return d
@@ -491,10 +713,15 @@ ODD = ["", "pi", "2", "x.y", "load pull", "load current", "@0", "1e3", " 5", "1_
        "length", "force", "area", "dimensionless", "length^2", "force/length", "mm", "A", "kN", "upper", "lower", "a", "b", "near", "far", "fit", "close",
        "unread", "odd�", "١ ١/٢ mm", "5 mm ", "length^٢",
        "length^4", "mm^4", "5 mm^4", "5 mm^3", "5 mm^2", "5 mm^5", "5 mm^1", "5 mm^04", "5 kN^2", "5 mm^٤", "1 inch^4", "0 mm^4", "left.finish", "right.i", "left.t",
-       "caps.finish", "left", "caps", "low", "high", "mid", "grade", "ops/class", "ops/table", "0", "0/5", "requires", "case", "row", "key", "by"]
+       "caps.finish", "left", "caps", "low", "high", "mid", "grade", "ops/class", "ops/table", "0", "0/5", "requires", "case", "row", "key", "by",
+       "zero", "negative", "positive", "unstated", "optional", "signed", "true", "5 rpm", "150 Hz", "3 m/s", "3 m / s", "36 km/h", "2200 mAh", "1 Ah", "12 min", "1 h",
+       "1 lb", "16 oz", "1 mile", "2 g/cm3", "2000 kg/m3", "1 N/mm", "1 lbf_ft", "12 lbf_in", "1.2 kW", "5 K", "5 degF", "-10 degC", "0 degC", "0 g", "-1 mm", "0 rpm",
+       "rpm", "m/s", "mAh", "min", "h", "K", "lt", "le", "dimensionless/time", "current*time", "length/time", "mass/length^3", "force/length", "temperature",
+       "front.limit", "rear.seal", "front.spare", "duty", "count", "mode", "light", "heavy", "day", "night", "full", "none", "kit/pace"]
 """Texts to put where a deck has another: numbers the two readers might read apart, and names that are something else too."""
 KEYS = ["note", "what", "dim", "type", "as", "least", "unless", "when", "closed", "at", "bands", "one_of", "range", "jumps", "unit", "rises", "falls",
-        "let", "where", "loads", "across", "table", "is", "cases", "needs", "requires", "le", "lt", "why", "gives", "down", "cells"]
+        "let", "where", "loads", "across", "table", "is", "cases", "needs", "requires", "le", "lt", "why", "gives", "down", "cells",
+        "may_be", "optional", "signed", "whole"]
 
 
 def damaged(rng: random.Random, body: dict) -> list[str]:
@@ -519,8 +746,54 @@ def damaged(rng: random.Random, body: dict) -> list[str]:
         lists = [v for _, v in nodes if isinstance(v, list) and v]
         way = rng.choice(["another text", "another text", "another text", "an odd text", "an odd text", "a key less", "an item less", "an item twice",
                           "items in another order", "a key renamed", "a key more", "a where with no item", "two rules that end alike", "a line named unread",
-                          "a wide row applied", "a condition that asks loaded"])
+                          "a wide row applied", "a condition that asks loaded", "a name no cell holds", "a requirement no part can break",
+                          "a flag on a field", "a flag on a field", "le for lt"])
         rules = [r for r in body["rules"] if isinstance(r, dict)] if isinstance(body.get("rules"), list) else []
+        naming = [r for r in body["rows"] if isinstance(r, dict) and isinstance(r.get("gives"), dict) and isinstance(r["gives"].get("one_of"), list)] if isinstance(body.get("rows"), list) else []
+        if way == "a name no cell holds" and naming:
+            # A row gives one name more, which none of its cells holds. Each `case` over the row gets an expression for it, the one of
+            # another name, so the name itself is what is wrong: no part can have it, and both refuse the row.
+            row = rng.choice(naming)
+            row["gives"]["one_of"] = [*row["gives"]["one_of"], "spare"]
+            for _, node in nodes:
+                if isinstance(node, list) and len(node) == 3 and node[0] == "case" and isinstance(node[1], list) and node[1][:2] == ["row", row.get("id")] and isinstance(node[2], dict) and node[2]:
+                    node[2]["spare"] = copy.deepcopy(next(iter(node[2].values())))
+            done.append(way)
+            continue
+        if way == "a name no cell holds":
+            continue
+        requiring = [r for r in rules if "requires" in r]
+        if way == "a requirement no part can break" and requiring:
+            # What a rule requires, or its opposite; what its `when` says already; or both at once. Each is empty, and both refuse the deck.
+            chosen = rng.choice(requiring)
+            old = chosen["requires"]
+            chosen["requires"] = rng.choice([["or", old, ["not", old]], ["and", old, ["not", old]], chosen.get("when", ["or", old, ["not", old]])])
+            done.append(way)
+            continue
+        fields = [f for t in body.get("types", []) if isinstance(t, dict) for f in [*t.get("fields", []), *t.get("loads", [])] if isinstance(f, dict)] if isinstance(body.get("types"), list) else []
+        if way == "a flag on a field" and fields:
+            # One of the marks a field may carry, with a value it may or may not take there: both readers hold a flag to true or false,
+            # `may_be` to its two words, and each to the fields it belongs on.
+            key, value = rng.choice([("optional", True), ("optional", False), ("optional", "yes"), ("optional", 1), ("signed", True), ("signed", "true"), ("signed", 0),
+                                     ("may_be", "zero"), ("may_be", "negative"), ("may_be", "positive"), ("may_be", True), ("may_be", None),
+                                     ("least", "0 mm"), ("least", "-1 degC"), ("whole", True)])
+            rng.choice(fields)[key] = value
+            done.append(way)
+            continue
+        if way == "le for lt" and rules:
+            # A rule that states `le` states `lt`, or the other way round, or both: the cells of an honest design may change, and both read it alike.
+            chosen = rng.choice(rules)
+            if "le" in chosen and rng.random() < 0.7:
+                chosen["lt"] = chosen.pop("le")
+            elif "lt" in chosen and rng.random() < 0.7:
+                chosen["le"] = chosen.pop("lt")
+            else:
+                chosen["lt"] = chosen.get("le", chosen.get("lt", ["1", "2"]))
+                chosen["le"] = chosen["lt"]
+            done.append(way)
+            continue
+        if way in ("a requirement no part can break", "a flag on a field", "le for lt"):
+            continue
         if way == "a wide row applied" and rules and isinstance(body.get("rows"), list):
             # A row of 1,000 names, about 2,000 steps, that names of `let` apply and nothing reads, so the steps to read the deck are all that
             # changes: 9 times is far within the million, and 1,000 times is over it.
@@ -595,10 +868,13 @@ def _decks() -> dict[str, grid.Deck]:
         _STATE["lap"] = next(d for d in grid.decks() if "lap" in d.types)
         _STATE["strips"] = grid.read_deck(json.dumps(STRIPS))
         _STATE["ops"] = grid.read_deck(json.dumps(OPS))
+        _STATE["kit"] = grid.read_deck(json.dumps(KIT))
         _STATE["honest"] = {"lap": (path.with_suffix(".card").read_text(encoding="utf-8"), path.read_text(encoding="utf-8")),
                             # A seed whose bar keeps every need and carries its loads, so that nine of the ten lines its
                             # rules answer are proved or refuted, and a damaged deck has something to change.
-                            "strips": (CARD, DESIGN), "ops": ops(random.Random(101), 0).texts()}
+                            "strips": (CARD, DESIGN), "ops": ops(random.Random(101), 0).texts(),
+                            # A seed whose rig keeps its needs, states every field its rules read and carries its three loads.
+                            "kit": kit(random.Random(KIT_SEED), 0).texts()}
     return _STATE      # type: ignore[return-value]
 
 
@@ -689,7 +965,7 @@ def compare(seed: int, n: int, decks: bool, keep: str | None = None) -> tuple[st
     a damaged deck."""
     if decks:
         rng = random.Random(f"deck/{seed}/{n}")
-        name = rng.choice(["strips", "strips", "ops", "ops", "lap"])
+        name = rng.choice(["strips", "strips", "ops", "ops", "lap", "kit", "kit"])
         body = json.loads(_decks()[name].text)      # type: ignore[union-attr]
         done = damaged(rng, body)
         (card, design), rules = _decks()["honest"][name], json.dumps(body)      # type: ignore[index]

@@ -10,3 +10,4 @@ import PetraProofs.Step
 import PetraProofs.Pick
 import PetraProofs.Eval
 import PetraProofs.Rule
+import PetraProofs.Strict

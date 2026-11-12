@@ -270,11 +270,16 @@ class ALoadThatNothingReads(unittest.TestCase):
             self.assertEqual([f["file"] for f in said["findings"]], ["rules"])
 
     def test_the_loads_of_a_part_whose_line_is_waived_are_read_by_the_rule_of_the_line(self):
-        """A waiver takes the whole line, and the rule of the line still reads the loads, as
-        it reads the fields: the waiver is what a reader sees, and no cell is named unread."""
+        """The rule of a waived line is run, and reads the loads as it reads the fields: no cell
+        is named unread. A waiver rests a cell that would be open, and no other. Under gravity
+        the card puts both loads on the joint and the rule proves, so the cell is proved and
+        the waiver was not needed. Under wind the card states no tension, the cell would be
+        open, and that cell is the one the waiver rests. Until then the line was one waived
+        cell, and with nothing proved the verdict was UNKNOWN."""
         waived = HEAD.replace("}\n", '}\n\nwaive joint.combined on p by "t@example.org" reason "it is a test"\n', 1)
-        cells, verdict, _ = both(self, waived + GRAVITY + WIND)
-        self.assertEqual((cells, verdict), ([("p", COMBINED, "", "waived")], "UNKNOWN"))
+        cells, verdict, said = both(self, waived + GRAVITY + WIND)
+        self.assertEqual((cells, verdict), ([("p", COMBINED, "sum/gravity", "proved"), ("p", COMBINED, "sum/wind", "waived")], "PASS"))
+        self.assertEqual(next(c["reason"] for c in said["cells"] if c["state"] == "waived"), "open but for the waiver: case wind puts no T on p, which the rule reads")
 
     KEYED = dict(RULES, types=[dict(RULES["types"][0], fields=[*RULES["types"][0]["fields"], {"name": "kind", "one_of": ["plain", "tension"], "what": "what it is for"}])])
     """The deck of RULES with a key on the joint, for a `when` and an `unless` to ask about."""

@@ -15,7 +15,7 @@ that registers the kind (petra/models), so adding a domain never edits this file
     card      = "card" STRING "{" NL { ( "owner" STRING | "environment" IDENT ) NL } "}" ;
     param     = "param" IDENT "in" range ;
     ambient   = "ambient" bound ;
-    given     = "given" name "in" range [ "mean" qty ] [ signature ] ;
+    given     = "given" name ( "in" range [ "mean" qty ] | "is" ( IDENT | STRING | INT ) ) [ signature ] ;
     name      = IDENT { "." IDENT } ;              PART.FIELD names the bound on one field of one part
     component = KIND IDENT "{" NL { attr NL } "}" ;    KIND: an IDENT not in DECLS
     attr      = IDENT { arg } ;
@@ -33,7 +33,7 @@ that registers the kind (petra/models), so adding a domain never edits this file
     waive     = "waive" ref "on" path "by" STRING "reason" STRING ;
     range     = "[" qty "," qty "]" ;
     qty       = NUMBER [ unit ] ;     an IDENT or "%" right after a NUMBER is its unit
-    unit      = IDENT [ "^" INT ] | "%" ;         inch^4: a unit of length to the power 2, 3 or 4, with no space
+    unit      = IDENT [ "/" IDENT ] [ "^" INT ] | "%" ;   m/s and inch^4, each written with no space
     qoi       = segment { "." segment } ;          last segment is the quantity name
     segment   = IDENT [ "(" IDENT ")" ] ;          member(diag_ad) names element diag_ad
     path      = IDENT { "." IDENT } ;

@@ -102,12 +102,18 @@ def dimNamed (text : String) : Option Dim :=
     | _ => none
 
 def INCH : Rat := mkRat 127 5000
-def LBF : Rat := mkRat 45359237 100000000 * mkRat 980665 100000
+def LB : Rat := mkRat 45359237 100000000
+def LBF : Rat := LB * mkRat 980665 100000
 def KIP : Rat := 1000 * LBF
+def MILE : Rat := 5280 * 12 * INCH
 
 /-- Each unit a deck may write, its factor to SI and its dimension: `UNITS` and `CUSTOMARY`
-of petra/units.py. The inch is 25.4 mm and the pound-force 0.45359237 kg times 9.80665 m/s2,
-both by definition. -/
+of petra/units.py. The inch is 25.4 mm, the pound 0.45359237 kg and the pound-force a pound
+times 9.80665 m/s2, all by definition. A mile is 5,280 ft, an ounce 1/16 lb, and a knot one
+nautical mile, 1,852 m, an hour. A rotation is counted in turns, and a turn is the plain
+number 1: `Hz` is one a second and `rpm` one a minute. `mAh` and `Ah` are a current for an
+hour. A unit with a `/` in it, as `m/s`, is one spelling of this list and is never worked
+out from its halves. -/
 def UNITS : List (String × Rat × Dim) :=
   let length : Dim := { m := 1 }
   let area : Dim := { m := 2 }
@@ -116,6 +122,13 @@ def UNITS : List (String × Rat × Dim) :=
   let current : Dim := { a := 1 }
   let voltage : Dim := { m := 2, kg := 1, s := -3, a := -1 }
   let power : Dim := { m := 2, kg := 1, s := -3 }
+  let time : Dim := { s := 1 }
+  let turns : Dim := { s := -1 }
+  let charge : Dim := { s := 1, a := 1 }
+  let speed : Dim := { m := 1, s := -1 }
+  let density : Dim := { m := -3, kg := 1 }
+  -- The units read since 2026-11-11 stand last, so a unit that was read before is found in
+  -- as many steps as it was.
   [("1", 1, {}), ("%", mkRat 1 100, {}),
    ("m", 1, length), ("mm", mkRat 1 1000, length), ("um", mkRat 1 1000000, length), ("cm", mkRat 1 100, length), ("km", 1000, length),
    ("mm2", mkRat 1 1000000, area), ("m2", 1, area),
@@ -131,7 +144,13 @@ def UNITS : List (String × Rat × Dim) :=
    ("inch", INCH, length), ("ft", 12 * INCH, length), ("inch2", INCH * INCH, area),
    ("lbf", LBF, force), ("kip", KIP, force), ("kips", KIP, force),
    ("psi", LBF / (INCH * INCH), stress), ("ksi", KIP / (INCH * INCH), stress),
-   ("kip_in", KIP * INCH, ENERGY), ("kip_ft", KIP * 12 * INCH, ENERGY)]
+   ("kip_in", KIP * INCH, ENERGY), ("kip_ft", KIP * 12 * INCH, ENERGY),
+   ("kW", 1000, power), ("min", 60, time), ("h", 3600, time), ("Hz", 1, turns), ("rpm", mkRat 1 60, turns),
+   ("mAh", mkRat 18 5, charge), ("Ah", 3600, charge),
+   ("m/s", 1, speed), ("km/h", mkRat 5 18, speed), ("knot", mkRat 463 900, speed), ("mph", MILE / 3600, speed),
+   ("kg/m3", 1, density), ("g/cm3", 1000, density), ("N/mm", 1000, { kg := 1, s := -2 }),
+   ("lbf_in", LBF * INCH, ENERGY), ("lbf_ft", LBF * 12 * INCH, ENERGY), ("mile", MILE, length),
+   ("lb", LB, { kg := 1 }), ("oz", LB / 16, { kg := 1 })]
 
 /-- The powers a unit of length may be raised to, each as it is written. One power has one
 spelling: `inch^4`, and not `inch^04` or `inch^+4`. -/

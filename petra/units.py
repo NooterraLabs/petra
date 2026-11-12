@@ -44,6 +44,11 @@ TIME = Dim(s=1)
 POWER = Dim(m=2, kg=1, s=-3)
 RESISTANCE = Dim(m=2, kg=1, s=-3, A=-2)
 RESISTANCE_PER_LENGTH = Dim(m=1, kg=1, s=-3, A=-2)
+FREQUENCY = Dim(s=-1)
+CHARGE = Dim(s=1, A=1)
+SPEED = Dim(m=1, s=-1)
+DENSITY = Dim(m=-3, kg=1)
+STIFFNESS = Dim(kg=1, s=-2)
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,13 +102,37 @@ UNITS: dict[str, tuple[Fraction, Dim]] = {
     "g": (_MILLI, MASS),
     "kg": (_ONE, MASS),
     "A2s": (_ONE, I2T),
+    "kW": (_KILO, POWER),
+    "min": (Fraction(60), TIME),
+    "h": (Fraction(3600), TIME),
+    "Hz": (_ONE, FREQUENCY),
+    "rpm": (Fraction(1, 60), FREQUENCY),
+    "mAh": (Fraction(18, 5), CHARGE),
+    "Ah": (Fraction(3600), CHARGE),
+    "m/s": (_ONE, SPEED),
+    "km/h": (Fraction(5, 18), SPEED),
+    "knot": (Fraction(463, 900), SPEED),
+    "kg/m3": (_ONE, DENSITY),
+    "g/cm3": (_KILO, DENSITY),
+    "N/mm": (_KILO, STIFFNESS),
 }
 """Unit spelling -> (factor to SI, dimension). The one table of unit spellings. The .petra
-lexer cannot write "N m" or "ohm/km"; they serve format_quantity and callers outside
-.petra text."""
+lexer cannot write "N m"; it serves format_quantity and callers outside .petra text. A unit
+with one `/` between two names, as `m/s` and `ohm/km` are, is one spelling of this table and
+is never worked out from its halves.
+
+A rotation is counted in turns, and a turn is the plain number 1, so a speed of rotation is
+a plain 1/time: `Hz` is one turn a second and `rpm` one turn a minute, 1/60 Hz. An angle is
+a plain number too. `mAh` and `Ah` are a current for an hour: 3.6 and 3,600 A s. A knot is
+one nautical mile, 1,852 m, an hour."""
+
+UNCHOSEN = frozenset({"kW", "min", "h", "rpm", "km/h", "knot"})
+"""Spellings of UNITS that a file may write and readable_text never chooses, so a time
+still prints in s or ms and a power in W or mW, as they did before these were read."""
 
 _INCH = Fraction(127, 5000)
-_LBF = Fraction(45359237, 10**8) * Fraction(980665, 10**5)
+_LB = Fraction(45359237, 10**8)
+_LBF = _LB * Fraction(980665, 10**5)
 _KIP = 1000 * _LBF
 
 CUSTOMARY: dict[str, tuple[Fraction, Dim]] = {
@@ -117,11 +146,18 @@ CUSTOMARY: dict[str, tuple[Fraction, Dim]] = {
     "ksi": (_KIP / _INCH**2, STRESS),
     "kip_in": (_KIP * _INCH, TORQUE),
     "kip_ft": (_KIP * 12 * _INCH, TORQUE),
+    "lbf_in": (_LBF * _INCH, TORQUE),
+    "lbf_ft": (_LBF * 12 * _INCH, TORQUE),
+    "mile": (5280 * 12 * _INCH, LENGTH),
+    "mph": (5280 * 12 * _INCH / 3600, SPEED),
+    "lb": (_LB, MASS),
+    "oz": (_LB / 16, MASS),
 }
 """US customary spellings for the steel deck (AISC 360 is written in inches and kips),
-exact by definition: 1 inch = 25.4 mm, 1 lbf = 0.45359237 kg x 9.80665 m/s2. Parsed and
-formatted like UNITS, but readable_text and si_unit never choose one, so SI reports stay
-SI. "in" is a .petra keyword, so the inch is spelled "inch"."""
+exact by definition: 1 inch = 25.4 mm, 1 lb = 0.45359237 kg, 1 lbf = 1 lb x 9.80665 m/s2,
+1 mile = 5,280 ft and 1 oz = 1/16 lb. Parsed and formatted like UNITS, but readable_text and
+si_unit never choose one, so SI reports stay SI. "in" is a .petra keyword, so the inch is
+spelled "inch", and a product is written with `_`, as in kip_in and lbf_ft."""
 
 _NAMED_DIMS: dict[Dim, str] = {
     DIMENSIONLESS: "dimensionless",
@@ -271,7 +307,7 @@ def readable_text(q: Quantity) -> str:
     equal factors and never "%". quantity_text when no unit fits."""
     si = si_unit(q.dim)
     size = max(abs(q.value.lo), abs(q.value.hi))
-    units = [(factor, name == si, name) for name, (factor, dim) in UNITS.items() if dim == q.dim and name != "%"]
+    units = [(factor, name == si, name) for name, (factor, dim) in UNITS.items() if dim == q.dim and name != "%" and name not in UNCHOSEN]
     if not units and q.dim in (Dim(m=3), Dim(m=4)):      # a length to the third or the fourth power: mm^3, cm^4
         units = [(factor ** q.dim.m, f"{name}^{q.dim.m}" == si, f"{name}^{q.dim.m}") for name, (factor, dim) in UNITS.items() if dim == LENGTH]
     fitting = [u for u in units if u[0] <= size]

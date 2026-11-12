@@ -1,0 +1,1755 @@
+{
+ "format": "petra-rules/0",
+ "name": "drone-draft",
+ "about": "A draft for a drone pack: the types and the grid of a small quadcopter with four like rotor sets on four like arms, one battery and a frame of two cut plates. It is written by hand from makers' data sheets, from open papers and notes for the physics, from 14 CFR Parts 107 and 89 and Regulation (EU) 2019/945, and from lists of failure mechanisms and of the stages of a product's life. Each line names one source that raises it, with the page's address and the day it was fetched in the anchor's standard. Other sources give other numbers for many lines. It has no rows and no rules, so every line that can arise is open. Five things are bent to fit the format. One part stands for each set of like parts, and the quadcopter states their number. The quadcopter joins every part itself, because a joined part joins nothing. A rotor set holds two points of its maker's test and not the curve. A part has a field only where a line reads it, so a plate has no thickness here. A position is measured from the rear end of the bottom plate, because a quantity is more than zero. Three things cannot be written by a design yet: a speed of rotation, a charge and a speed have no unit. It is a task for two transcribers and is in no deck that ships.",
+ "rows": [],
+ "types": [
+  {
+   "type": "rotor_set",
+   "what": "a brushless motor with a fixed propeller, as their maker ran the two together on a bench at one voltage, with the ratings of each. It is one record of a catalogue, and it stands for each of the like sets of a quadcopter",
+   "fields": [
+    {
+     "name": "test_voltage",
+     "dim": "voltage",
+     "what": "the voltage at the speed controller in the maker's test"
+    },
+    {
+     "name": "thrust_full",
+     "dim": "force",
+     "what": "the thrust at full throttle in the test"
+    },
+    {
+     "name": "current_full",
+     "dim": "current",
+     "what": "the current at full throttle in the test"
+    },
+    {
+     "name": "speed_full",
+     "dim": "dimensionless/time",
+     "what": "the turns of the propeller in a unit of time at full throttle in the test"
+    },
+    {
+     "name": "thrust_mid",
+     "dim": "force",
+     "what": "the thrust at the test point at half throttle, or at the nearest one under it"
+    },
+    {
+     "name": "current_mid",
+     "dim": "current",
+     "what": "the current at that test point"
+    },
+    {
+     "name": "current_limit",
+     "dim": "current",
+     "what": "the greatest current its maker rates the motor for, for the time the maker states"
+    },
+    {
+     "name": "power_limit",
+     "dim": "power",
+     "what": "the greatest electrical power its maker rates the motor for, for the time the maker states"
+    },
+    {
+     "name": "voltage_limit",
+     "dim": "voltage",
+     "what": "the greatest supply voltage its maker rates the motor for"
+    },
+    {
+     "name": "mount",
+     "one_of": [
+      "M3 on 16 mm",
+      "M3 on 16 and 19 mm",
+      "M3 on 19 mm",
+      "M3 on 25 mm"
+     ],
+     "what": "the thread and the circle or circles that the motor's mounting screws lie on"
+    },
+    {
+     "name": "thread_depth",
+     "dim": "length",
+     "what": "the depth of the threads in the motor's base"
+    },
+    {
+     "name": "motor_mass",
+     "dim": "mass",
+     "what": "the mass of the motor with its wires"
+    },
+    {
+     "name": "diameter",
+     "dim": "length",
+     "what": "the diameter of the circle the propeller's tips sweep"
+    },
+    {
+     "name": "propeller_mass",
+     "dim": "mass",
+     "what": "the mass of the propeller"
+    },
+    {
+     "name": "propeller_limit",
+     "one_of": [
+      "speed",
+      "thrust",
+      "none"
+     ],
+     "what": "what the propeller's maker limits: its speed, its thrust, or nothing that the maker publishes"
+    },
+    {
+     "name": "speed_limit",
+     "dim": "dimensionless/time",
+     "what": "the greatest turns in a unit of time that the propeller's maker allows"
+    },
+    {
+     "name": "thrust_limit",
+     "dim": "force",
+     "what": "the greatest thrust that the propeller's maker allows"
+    }
+   ]
+  },
+  {
+   "type": "controller",
+   "what": "a bought electronic speed controller for one motor. It stands for each of the like controllers of a quadcopter, or for one channel of a board of four",
+   "fields": [
+    {
+     "name": "current_continuous",
+     "dim": "current",
+     "what": "the current its maker rates a channel for without a time limit"
+    },
+    {
+     "name": "current_burst",
+     "dim": "current",
+     "what": "the current its maker rates a channel for over a short time"
+    },
+    {
+     "name": "voltage_low",
+     "dim": "voltage",
+     "what": "the least supply voltage its maker rates it for"
+    },
+    {
+     "name": "voltage_high",
+     "dim": "voltage",
+     "what": "the greatest supply voltage its maker rates it for"
+    },
+    {
+     "name": "mass",
+     "dim": "mass",
+     "what": "the mass of one controller, or of a quarter of a board of four"
+    }
+   ]
+  },
+  {
+   "type": "battery",
+   "what": "a bought pack of lithium cells in series, with its leads and its plug",
+   "fields": [
+    {
+     "name": "chemistry",
+     "one_of": [
+      "lipo",
+      "lihv",
+      "li_ion"
+     ],
+     "what": "the kind of its cells, which sets the voltage of a full and of an empty cell"
+    },
+    {
+     "name": "cells",
+     "dim": "dimensionless",
+     "what": "the number of cells in series",
+     "whole": true,
+     "least": "1"
+    },
+    {
+     "name": "capacity",
+     "dim": "current*time",
+     "what": "the charge its maker rates it to give"
+    },
+    {
+     "name": "current_continuous",
+     "dim": "current",
+     "what": "the discharge current its maker rates it for without a time limit"
+    },
+    {
+     "name": "current_burst",
+     "dim": "current",
+     "what": "the discharge current its maker rates it for over a short time"
+    },
+    {
+     "name": "resistance",
+     "dim": "resistance",
+     "what": "the resistance of the whole pack to direct current, as its maker states it or as a test gives it"
+    },
+    {
+     "name": "mass",
+     "dim": "mass",
+     "what": "its mass with leads and plug"
+    },
+    {
+     "name": "length",
+     "dim": "length",
+     "what": "its longest side"
+    },
+    {
+     "name": "width",
+     "dim": "length",
+     "what": "its middle side"
+    },
+    {
+     "name": "temperature_low",
+     "dim": "temperature",
+     "what": "the lowest temperature its maker allows it to be discharged at"
+    },
+    {
+     "name": "temperature_high",
+     "dim": "temperature",
+     "what": "the highest temperature its maker allows it to be discharged at"
+    }
+   ]
+  },
+  {
+   "type": "connector",
+   "what": "a bought pair of power plugs of one family",
+   "fields": [
+    {
+     "name": "current_rated",
+     "dim": "current",
+     "what": "the current its maker rates it for, at the temperature rise and with the wire the maker states"
+    },
+    {
+     "name": "resistance",
+     "dim": "resistance",
+     "what": "the resistance of one mated contact"
+    }
+   ]
+  },
+  {
+   "type": "lead",
+   "what": "a run of stranded copper wire of one size, out and back",
+   "fields": [
+    {
+     "name": "gauge",
+     "one_of": [
+      "AWG10",
+      "AWG12",
+      "AWG14",
+      "AWG16",
+      "AWG18",
+      "AWG20"
+     ],
+     "what": "its size"
+    },
+    {
+     "name": "insulation",
+     "one_of": [
+      "silicone",
+      "pvc"
+     ],
+     "what": "what it is insulated with, which sets the temperature it may reach"
+    },
+    {
+     "name": "length",
+     "dim": "length",
+     "what": "the length of one conductor of the run"
+    }
+   ]
+  },
+  {
+   "type": "autopilot",
+   "what": "a bought flight controller, with every board and sensor that draws from the same 5 volt rail",
+   "fields": [
+    {
+     "name": "supply_low",
+     "dim": "voltage",
+     "what": "the least voltage at its power input that it works at"
+    },
+    {
+     "name": "supply_high",
+     "dim": "voltage",
+     "what": "the greatest voltage at its power input that it works at"
+    },
+    {
+     "name": "draw",
+     "dim": "current",
+     "what": "the current that it and everything else on its rail draw together"
+    },
+    {
+     "name": "mass",
+     "dim": "mass",
+     "what": "its mass with what is on its rail"
+    }
+   ]
+  },
+  {
+   "type": "power_module",
+   "what": "a bought board between the pack and the rest, which measures the pack's voltage and current and feeds the 5 volt rail",
+   "fields": [
+    {
+     "name": "voltage_high",
+     "dim": "voltage",
+     "what": "the greatest pack voltage its maker rates it for"
+    },
+    {
+     "name": "current_continuous",
+     "dim": "current",
+     "what": "the current its maker rates it to carry without a time limit"
+    },
+    {
+     "name": "output_voltage",
+     "dim": "voltage",
+     "what": "the voltage it gives the rail"
+    },
+    {
+     "name": "output_current",
+     "dim": "current",
+     "what": "the greatest current it gives the rail"
+    },
+    {
+     "name": "mass",
+     "dim": "mass",
+     "what": "its mass"
+    }
+   ]
+  },
+  {
+   "type": "plate",
+   "what": "a flat plate of the frame, cut from sheet. Its sizes are those of the smallest rectangle that holds its outline",
+   "fields": [
+    {
+     "name": "length",
+     "dim": "length",
+     "what": "the longer side of that rectangle"
+    },
+    {
+     "name": "width",
+     "dim": "length",
+     "what": "the shorter side of that rectangle"
+    },
+    {
+     "name": "mass",
+     "dim": "mass",
+     "what": "its mass as cut"
+    }
+   ]
+  },
+  {
+   "type": "arm",
+   "what": "a straight flat arm of one rectangular section, cut from sheet, clamped between the two plates at its root and carrying a motor at its tip. It stands for each of the like arms of a quadcopter",
+   "fields": [
+    {
+     "name": "length",
+     "dim": "length",
+     "what": "from the edge of the plates that clamp it to the axis of its motor"
+    },
+    {
+     "name": "width",
+     "dim": "length",
+     "what": "the width of its section, in the plane of the frame"
+    },
+    {
+     "name": "thickness",
+     "dim": "length",
+     "what": "the thickness of its section, along the thrust"
+    },
+    {
+     "name": "mass",
+     "dim": "mass",
+     "what": "its mass as cut"
+    },
+    {
+     "name": "strength",
+     "dim": "stress",
+     "what": "the strength of its material in bending along the arm, as a test of that stock gives it",
+     "signed": true
+    },
+    {
+     "name": "mount",
+     "one_of": [
+      "M3 on 16 mm",
+      "M3 on 16 and 19 mm",
+      "M3 on 19 mm",
+      "M3 on 25 mm"
+     ],
+     "what": "the thread and the circle or circles of the holes for the motor's screws"
+    },
+    {
+     "name": "screw",
+     "dim": "length",
+     "what": "the length of a motor screw under its head"
+    }
+   ]
+  },
+  {
+   "type": "post",
+   "what": "a standoff between the two plates. It stands for each of the like standoffs of a quadcopter",
+   "fields": [
+    {
+     "name": "count",
+     "dim": "dimensionless",
+     "what": "the number of standoffs",
+     "whole": true,
+     "least": "4"
+    },
+    {
+     "name": "mass",
+     "dim": "mass",
+     "what": "the mass of one standoff with its two screws"
+    }
+   ]
+  },
+  {
+   "type": "sundries",
+   "what": "everything else that flies and is no part of its own here: screws, straps, wiring, the radio receiver, the satellite receiver, lights and a remote identification module",
+   "fields": [
+    {
+     "name": "mass",
+     "dim": "mass",
+     "what": "the mass of all of it together"
+    }
+   ]
+  },
+  {
+   "type": "quadcopter",
+   "what": "four like rotor sets at the corners of a square, each on a like arm and each with its own speed controller, with one battery, one flight controller and a frame of two plates. Two rotors that face each other across the square turn one way and the other two the other way. It has no payload of its own, no folding arm, no pair of rotors on one axis, no tilted rotor and no wing",
+   "fields": [
+    {
+     "name": "rotors",
+     "dim": "dimensionless",
+     "what": "the number of rotor sets, which is four",
+     "whole": true,
+     "least": "4"
+    },
+    {
+     "name": "side",
+     "dim": "length",
+     "what": "the distance between the axes of two neighbouring rotors"
+    },
+    {
+     "name": "mass",
+     "dim": "mass",
+     "what": "the mass it states for itself ready to fly with no payload"
+    },
+    {
+     "name": "hover_time",
+     "dim": "time",
+     "what": "the time it states it can hover for under the card's payload, down to the reserve"
+    },
+    {
+     "name": "hover_time_wanted",
+     "dim": "time",
+     "what": "the least hover time that the need asks",
+     "signed": true
+    },
+    {
+     "name": "reserve",
+     "dim": "dimensionless",
+     "what": "the share of the battery's capacity that the need keeps unused",
+     "signed": true
+    },
+    {
+     "name": "safety_factor",
+     "dim": "dimensionless",
+     "what": "the factor the need puts between the stress in an arm and its strength",
+     "signed": true
+    },
+    {
+     "name": "centre",
+     "dim": "length",
+     "what": "from the rear end of the bottom plate to the middle of the four rotor axes, along the line of flight"
+    },
+    {
+     "name": "battery_station",
+     "dim": "length",
+     "what": "from the rear end of the bottom plate to the middle of the battery, along the line of flight"
+    },
+    {
+     "name": "speed_cap",
+     "dim": "length/time",
+     "what": "the greatest speed over the ground that its firmware allows"
+    },
+    {
+     "name": "height_cap",
+     "dim": "length",
+     "what": "the greatest height above the take-off point that its firmware allows"
+    },
+    {
+     "name": "low_voltage",
+     "dim": "voltage",
+     "what": "the pack voltage at which its firmware ends the flight"
+    },
+    {
+     "name": "rule_set",
+     "one_of": [
+      "us_part_107",
+      "eu_open"
+     ],
+     "what": "the regulation it is to be flown under"
+    },
+    {
+     "name": "class_mark",
+     "one_of": [
+      "none",
+      "C0",
+      "C1",
+      "C2",
+      "C3",
+      "C4"
+     ],
+     "what": "the class of Regulation (EU) 2019/945 it is to bear, or none"
+    },
+    {
+     "name": "over_people",
+     "one_of": [
+      "no",
+      "category_1",
+      "category_2",
+      "category_3"
+     ],
+     "what": "the category of 14 CFR Part 107 Subpart D it is to be flown over people in, or no"
+    },
+    {
+     "name": "night",
+     "one_of": [
+      "no",
+      "yes"
+     ],
+     "what": "whether it is to be flown at night"
+    },
+    {
+     "name": "remote_id",
+     "one_of": [
+      "none",
+      "module",
+      "built_in"
+     ],
+     "what": "what it broadcasts its identity and position with"
+    },
+    {
+     "name": "lights",
+     "one_of": [
+      "none",
+      "anticollision",
+      "green_flashing",
+      "both"
+     ],
+     "what": "the lights it carries"
+    },
+    {
+     "name": "guards",
+     "one_of": [
+      "none",
+      "full"
+     ],
+     "what": "whether anything keeps a hand from its turning propellers"
+    },
+    {
+     "name": "locking",
+     "one_of": [
+      "none",
+      "adhesive",
+      "locknut"
+     ],
+     "what": "what keeps its screws and its propeller nuts from working loose"
+    },
+    {
+     "name": "serial",
+     "one_of": [
+      "none",
+      "ansi_cta_2063_a"
+     ],
+     "what": "the serial number it bears"
+    },
+    {
+     "name": "geo_awareness",
+     "one_of": [
+      "no",
+      "yes"
+     ],
+     "what": "whether it warns the pilot of the limits of the airspace"
+    },
+    {
+     "name": "lost_link",
+     "one_of": [
+      "none",
+      "lands",
+      "returns"
+     ],
+     "what": "what it does when the command link is lost"
+    },
+    {
+     "name": "battery_warning",
+     "one_of": [
+      "no",
+      "yes"
+     ],
+     "what": "whether it warns the pilot when the battery is low"
+    },
+    {
+     "name": "low_speed_mode",
+     "one_of": [
+      "no",
+      "yes"
+     ],
+     "what": "whether the pilot can select a mode that holds the ground speed to 3 m/s"
+    },
+    {
+     "name": "sets",
+     "type": "rotor_set",
+     "as": [
+      "rotor"
+     ],
+     "what": "the pattern of its rotor sets, which are alike"
+    },
+    {
+     "name": "controllers",
+     "type": "controller",
+     "as": [
+      "esc"
+     ],
+     "what": "the pattern of its speed controllers, which are alike"
+    },
+    {
+     "name": "pack",
+     "type": "battery",
+     "as": [
+      "battery"
+     ],
+     "what": "its battery"
+    },
+    {
+     "name": "plugs",
+     "type": "connector",
+     "as": [
+      "main_plug",
+      "branch_plug"
+     ],
+     "what": "the plug between the battery and the rest, and the pattern of the plugs to each speed controller"
+    },
+    {
+     "name": "leads",
+     "type": "lead",
+     "as": [
+      "main_lead",
+      "branch_lead"
+     ],
+     "what": "the wire from the battery to where the current divides, and the pattern of the wires from there to each speed controller"
+    },
+    {
+     "name": "brain",
+     "type": "autopilot",
+     "as": [
+      "autopilot"
+     ],
+     "what": "its flight controller"
+    },
+    {
+     "name": "supply",
+     "type": "power_module",
+     "as": [
+      "module"
+     ],
+     "what": "its power module"
+    },
+    {
+     "name": "plates",
+     "type": "plate",
+     "as": [
+      "top",
+      "bottom"
+     ],
+     "what": "the two plates of its frame"
+    },
+    {
+     "name": "arms",
+     "type": "arm",
+     "as": [
+      "arm"
+     ],
+     "what": "the pattern of its arms, which are alike"
+    },
+    {
+     "name": "posts",
+     "type": "post",
+     "as": [
+      "post"
+     ],
+     "what": "the pattern of the standoffs between its plates"
+    },
+    {
+     "name": "rest",
+     "type": "sundries",
+     "as": [
+      "sundries"
+     ],
+     "what": "everything else aboard"
+    }
+   ],
+   "loads": [
+    {
+     "name": "payload",
+     "dim": "mass",
+     "least": "0 g",
+     "what": "the mass it carries that is no part of the design"
+    },
+    {
+     "name": "payload_station",
+     "dim": "length",
+     "least": "0 mm",
+     "what": "from the rear end of the bottom plate to the middle of the payload, along the line of flight"
+    },
+    {
+     "name": "altitude",
+     "dim": "length",
+     "least": "0 m",
+     "what": "the pressure altitude of the air it flies in"
+    },
+    {
+     "name": "air_temperature",
+     "dim": "temperature",
+     "what": "the temperature of the air it flies in"
+    },
+    {
+     "name": "load_factor",
+     "dim": "dimensionless",
+     "least": "1",
+     "what": "the thrust the manoeuvre of this case needs, over the weight"
+    },
+    {
+     "name": "drop",
+     "dim": "length",
+     "least": "0 mm",
+     "what": "the height it may fall from onto its frame when it lands"
+    }
+   ]
+  }
+ ],
+ "grid": [
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.mass",
+   "what": "the mass it states is at least the sum of the masses of its parts",
+   "anchor": {
+    "standard": "14 CFR Part 107, eCFR current to 2026-11-06, fetched 2026-11-11, https://www.ecfr.gov/current/title-14/chapter-I/subchapter-F/part-107",
+    "clause": "107.3, small unmanned aircraft: everything on board or attached counts"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.hover_throttle",
+   "what": "the thrust each rotor needs to hover, at the lowest pack voltage and in the thinnest air of the case, against the thrust at half throttle",
+   "anchor": {
+    "standard": "ArduPilot, Copter documentation, Setting Hover Throttle, fetched 2026-11-11, https://ardupilot.org/copter/docs/ac_throttlemid.html",
+    "clause": "MOT_THST_HOVER and the range it usually lies in"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.thrust_reserve",
+   "what": "the thrust of the rotors at full throttle, at the lowest pack voltage and in the thinnest air of the case, against the weight times the case's load factor",
+   "anchor": {
+    "standard": "DJI, E305 tuned propulsion system, specs, fetched 2026-11-11, https://www-v1.dji.com/e305/spec.html",
+    "clause": "Max. Thrust and Takeoff Weight (Recommended)"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.motor_current",
+   "what": "the current and the power of a motor at full throttle, at the highest pack voltage, against the motor's limits",
+   "anchor": {
+    "standard": "T-MOTOR, Air Gear 450 II power combo, fetched 2026-11-11, https://store.tmotor.com/goods.php?id=1220",
+    "clause": "AIR2216II Specifications: Peak Current (180s), Max Power (180s)"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.controller_current",
+   "what": "the current of a motor at full throttle against the continuous and the burst rating of its speed controller",
+   "anchor": {
+    "standard": "T-MOTOR, Air Gear 450 II power combo, fetched 2026-11-11, https://store.tmotor.com/goods.php?id=1220",
+    "clause": "AIR 20A Specifications: Con. Current, Peak Current (10s)"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.battery_current",
+   "what": "the current of all the rotors at full throttle, with the rail's, against the discharge rating of the battery",
+   "anchor": {
+    "standard": "MaxAmps, 3750 6S LiPo data sheet, fetched 2026-11-11, https://cdn.shopify.com/s/files/1/0609/0811/0079/files/MaxAmps_3750_6S_LiPo_Data_Sheet.pdf",
+    "clause": "Technical Data: continuous and peak discharge"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.connector_current",
+   "what": "the current through each plug against its rating",
+   "anchor": {
+    "standard": "AMASS, XT60-F specification 2025V0, fetched 2026-11-11, https://www.china-amass.net/uploads/57.XT60-F-SPEC-2025V0.pdf",
+    "clause": "Electrical SPEC: current rating at a temperature rise of 85 K on 12 AWG wire"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.lead_current",
+   "what": "the current in each lead against what a wire of its size and insulation carries",
+   "anchor": {
+    "standard": "Remington Industries, Hook-Up Wire, fetched 2026-11-11, https://www.remingtonindustries.com/resources/hook-up-wire/",
+    "clause": "Single Conductor Ampacity",
+    "table": "Single Conductor Ampacity"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.module_current",
+   "what": "the current through the power module against its rating and against that of its own plug and lead",
+   "anchor": {
+    "standard": "Holybro, Connector and Wire Rating, fetched 2026-11-11, https://docs.holybro.com/power-module-and-pdb/power-module/connector-and-wire-rating",
+    "clause": "Connector and Wire Rating"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.voltage_range",
+   "what": "the voltage of the full pack and of the empty pack against the range of each part it feeds",
+   "anchor": {
+    "standard": "T-MOTOR, Air Gear 450 II power combo, fetched 2026-11-11, https://store.tmotor.com/goods.php?id=1220",
+    "clause": "AIR 20A Specifications: Rated Voltage (Lipo)"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.supply_sag",
+   "what": "the pack's voltage at full throttle, less what its own resistance, its plug and its leads drop, against the least voltage of the speed controllers and the voltage at which the firmware ends the flight",
+   "anchor": {
+    "standard": "Bauersfeld and Scaramuzza, Range, Endurance, and Optimal Speed Estimates for Multicopters, arXiv 2109.04741, fetched 2026-11-11, https://arxiv.org/abs/2109.04741",
+    "clause": "Section III, the battery model",
+    "equation": "11"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.rail",
+   "what": "the 5 volt rail: its voltage inside the flight controller's range, and the current drawn from it within what the power module gives",
+   "anchor": {
+    "standard": "PX4, Holybro Pixhawk 6C, fetched 2026-11-11, https://docs.px4.io/main/en/flight_controller/pixhawk6c.html",
+    "clause": "Voltage Ratings"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.propeller_speed",
+   "what": "the speed of a propeller at full throttle, at the highest pack voltage, against its maker's limit",
+   "anchor": {
+    "standard": "APC Propellers, APC Propeller Speed Specification, Rev 5 of 2022-03-23, fetched 2026-11-11, https://www.apcprop.com/technical-information/rpm-limits/",
+    "clause": "Maximum RPM by family: a constant over the diameter in inches"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.propeller_thrust",
+   "what": "the thrust of a propeller at full throttle against its maker's limit",
+   "anchor": {
+    "standard": "T-MOTOR, Air Gear 450 II power combo, fetched 2026-11-11, https://store.tmotor.com/goods.php?id=1220",
+    "clause": "T1045 Specifications: Thrust Limitation"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.tip_clearance",
+   "what": "two neighbouring propellers do not meet: the side of the square against the diameter",
+   "anchor": {
+    "standard": "no source read to 2026-11-11 states it",
+    "clause": "geometry: two discs in one plane. No source gives a least gap"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.body_clearance",
+   "what": "each propeller clear of the plates, the battery, the wiring and everything else on the frame",
+   "anchor": {
+    "standard": "Holybro, PX4 Development Kit X500 v2, fetched 2026-11-11, https://docs.holybro.com/drone-development-kit/px4-development-kit-x500v2",
+    "clause": "Mechanical Specification: wheelbase and frame body"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.payload_clearance",
+   "what": "each propeller clear of the payload",
+   "anchor": {
+    "standard": "no source read to 2026-11-11 states it",
+    "clause": "geometry: the swept disc against the room the payload takes"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.battery_fit",
+   "what": "the battery lies within the plate it is strapped to",
+   "anchor": {
+    "standard": "no source read to 2026-11-11 states it",
+    "clause": "geometry: one rectangle inside another"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.motor_mount",
+   "what": "the holes at the tip of an arm are the pattern of the motor's screws",
+   "anchor": {
+    "standard": "Holybro, PX4 Development Kit X500 v2, fetched 2026-11-11, https://docs.holybro.com/drone-development-kit/px4-development-kit-x500v2",
+    "clause": "Mechanical Specification: Motor mount pattern"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.screw_reach",
+   "what": "a motor screw reaches into the base of the motor and stops short of the end of its threads",
+   "anchor": {
+    "standard": "no source read to 2026-11-11 states it",
+    "clause": "a taxonomy of assembly: a screw that bottoms or that meets the winding"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.arm_strength",
+   "what": "the bending stress at the root of an arm, at full thrust times the case's load factor, against the strength of its material over the safety factor",
+   "anchor": {
+    "standard": "Roylance, Mechanics of Materials, fetched 2026-11-11, https://eng.libretexts.org/Bookshelves/Mechanical_Engineering/Mechanics_of_Materials_(Roylance)/04:_Bending/4.02:_Stresses_in_Beams",
+    "clause": "4.2, Stresses in Beams",
+    "equation": "4.2.7"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.arm_stiffness",
+   "what": "how far the tip of an arm bends and tilts at full thrust",
+   "anchor": {
+    "standard": "Irvine, Bending Frequencies of Beams, Rods, and Pipes, Revision S of 2012, fetched 2026-11-11, https://www.vibrationdata.com/tutorials2/beam.pdf",
+    "clause": "Table 1: cantilever with end mass, its stiffness"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.arm_frequency",
+   "what": "the first bending frequency of an arm with its motor, against the turns of the rotors from hover to full throttle and against the blades passing",
+   "anchor": {
+    "standard": "Irvine, Bending Frequencies of Beams, Rods, and Pipes, Revision S of 2012, fetched 2026-11-11, https://www.vibrationdata.com/tutorials2/beam.pdf",
+    "clause": "Table 1: cantilever with end mass"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.frame_frequency",
+   "what": "the first modes of the whole frame against the same speeds",
+   "anchor": {
+    "standard": "Verbeke and Debruyne, Vibration analysis of a UAV multirotor frame, ISMA 2016, fetched 2026-11-11, https://past.isma-isaac.be/downloads/isma2016/papers/isma2016_0797.pdf",
+    "clause": "Sections 3 and 4: modal test and model of a frame"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.balance",
+   "what": "the centre of mass against the middle of the rotors: the rotor nearest it carries more than a quarter of the weight",
+   "anchor": {
+    "standard": "no source read to 2026-11-11 states it",
+    "clause": "statics. No source gives a limit of its own"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.hover_time",
+   "what": "the hover time it states against the battery's capacity less the reserve, over the current in hover with the rail's, and against the hover time the need asks",
+   "anchor": {
+    "standard": "Shi, Dai, Zhang and Quan, A Practical Performance Evaluation Method for Electric Multicopters, IEEE/ASME Transactions on Mechatronics, 2017, fetched 2026-11-11, https://flyeval.com/js/2017ShiAPracticalPerf.pdf",
+    "clause": "Section IV, hovering endurance, with C_min of Table X",
+    "equation": "22"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.controller_heat",
+   "what": "the temperature of a speed controller in the airflow it gets on this frame",
+   "anchor": {
+    "standard": "Advanced Power Drives, 40F3, fetched 2026-11-11, https://powerdrives.net/40f3",
+    "clause": "the test condition of the continuous rating: throttle, time and airflow"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.motor_heat",
+   "what": "the temperature of a motor in hover and at full throttle",
+   "anchor": {
+    "standard": "T-MOTOR, Air Gear 450 II power combo, fetched 2026-11-11, https://store.tmotor.com/goods.php?id=1220",
+    "clause": "Test Data: Operating Temperature, with its note"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.battery_temperature",
+   "what": "the temperature of the battery in discharge against its maker's range",
+   "anchor": {
+    "standard": "Gens Ace, Safety Manual of Lipo Battery, fetched 2026-11-11, https://freeflysystems.com/wp-content/uploads/2021/11/Gensace_safety_manual.pdf",
+    "clause": "the precautions for discharge"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.ambient_temperature",
+   "what": "the air temperature of each case against the working range of each part",
+   "anchor": {
+    "standard": "DJI, E305 tuned propulsion system, specs, fetched 2026-11-11, https://www-v1.dji.com/e305/spec.html",
+    "clause": "Working Temperature"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.us_mass",
+   "what": "less than 55 pounds on take-off with everything aboard",
+   "anchor": {
+    "standard": "14 CFR Part 107, eCFR current to 2026-11-06, fetched 2026-11-11, https://www.ecfr.gov/current/title-14/chapter-I/subchapter-F/part-107",
+    "clause": "107.3"
+   },
+   "unless": {
+    "when": [
+     "not",
+     [
+      "is",
+      "rule_set",
+      "us_part_107"
+     ]
+    ],
+    "why": "it is not to be flown under 14 CFR Part 107"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.us_category_1_mass",
+   "what": "0.55 pounds or less on take-off and through the flight",
+   "anchor": {
+    "standard": "14 CFR Part 107, eCFR current to 2026-11-06, fetched 2026-11-11, https://www.ecfr.gov/current/title-14/chapter-I/subchapter-F/part-107",
+    "clause": "107.110(a)(1)"
+   },
+   "unless": {
+    "when": [
+     "not",
+     [
+      "is",
+      "over_people",
+      "category_1"
+     ]
+    ],
+    "why": "it is not to be flown over people in Category 1"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.us_exposed_rotors",
+   "what": "no exposed rotating part that would lacerate skin",
+   "anchor": {
+    "standard": "14 CFR Part 107, eCFR current to 2026-11-06, fetched 2026-11-11, https://www.ecfr.gov/current/title-14/chapter-I/subchapter-F/part-107",
+    "clause": "107.110(a)(2), 107.120(a)(2), 107.130(a)(2)"
+   },
+   "unless": {
+    "when": [
+     "is",
+     "over_people",
+     "no"
+    ],
+    "why": "it is not to be flown over people"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.us_injury_energy",
+   "what": "the injury of an impact on a person: no worse than 11 foot-pounds from a rigid object in Category 2, or 25 in Category 3, by an accepted means of compliance",
+   "anchor": {
+    "standard": "14 CFR Part 107, eCFR current to 2026-11-06, fetched 2026-11-11, https://www.ecfr.gov/current/title-14/chapter-I/subchapter-F/part-107",
+    "clause": "107.120(a)(1), 107.130(a)(1)"
+   },
+   "unless": {
+    "when": [
+     "or",
+     [
+      "is",
+      "over_people",
+      "no"
+     ],
+     [
+      "is",
+      "over_people",
+      "category_1"
+     ]
+    ],
+    "why": "it is not to be flown over people in Category 2 or 3"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.us_night_light",
+   "what": "an anti-collision light that is seen for 3 statute miles",
+   "anchor": {
+    "standard": "14 CFR Part 107, eCFR current to 2026-11-06, fetched 2026-11-11, https://www.ecfr.gov/current/title-14/chapter-I/subchapter-F/part-107",
+    "clause": "107.29(a)(2)"
+   },
+   "unless": {
+    "when": [
+     "or",
+     [
+      "not",
+      [
+       "is",
+       "rule_set",
+       "us_part_107"
+      ]
+     ],
+     [
+      "is",
+      "night",
+      "no"
+     ]
+    ],
+    "why": "it is not to be flown at night under 14 CFR Part 107"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.us_remote_id",
+   "what": "remote identification built in, or a broadcast module, that meets the performance of Subpart D",
+   "anchor": {
+    "standard": "14 CFR Part 89, eCFR current to 2026-11-06, fetched 2026-11-11, https://www.ecfr.gov/current/title-14/chapter-I/subchapter-F/part-89",
+    "clause": "89.110, 89.115, 89.310, 89.320"
+   },
+   "unless": {
+    "when": [
+     "not",
+     [
+      "is",
+      "rule_set",
+      "us_part_107"
+     ]
+    ],
+    "why": "it is not to be flown under 14 CFR Part 107"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.eu_class_mass",
+   "what": "the greatest take-off mass of its class, payload included",
+   "anchor": {
+    "standard": "Commission Delegated Regulation (EU) 2019/945, consolidated 2025-06-24, fetched 2026-11-11, https://eur-lex.europa.eu/eli/reg_del/2019/945",
+    "clause": "Annex, Parts 1 to 5, point (1)"
+   },
+   "unless": {
+    "when": [
+     "is",
+     "class_mark",
+     "none"
+    ],
+    "why": "it is to bear no class mark"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.eu_impact_energy",
+   "what": "under 80 joules onto a head at terminal velocity, which class C1 allows in place of its mass limit",
+   "anchor": {
+    "standard": "Commission Delegated Regulation (EU) 2019/945, consolidated 2025-06-24, fetched 2026-11-11, https://eur-lex.europa.eu/eli/reg_del/2019/945",
+    "clause": "Annex, Part 2, point (1)"
+   },
+   "unless": {
+    "when": [
+     "not",
+     [
+      "is",
+      "class_mark",
+      "C1"
+     ]
+    ],
+    "why": "only class C1 has this way"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.eu_speed",
+   "what": "a greatest speed in level flight of 19 m/s",
+   "anchor": {
+    "standard": "Commission Delegated Regulation (EU) 2019/945, consolidated 2025-06-24, fetched 2026-11-11, https://eur-lex.europa.eu/eli/reg_del/2019/945",
+    "clause": "Annex, Part 1, point (2), and Part 2, point (2)"
+   },
+   "unless": {
+    "when": [
+     "not",
+     [
+      "or",
+      [
+       "is",
+       "class_mark",
+       "C0"
+      ],
+      [
+       "is",
+       "class_mark",
+       "C1"
+      ]
+     ]
+    ],
+    "why": "only classes C0 and C1 limit speed"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.eu_height",
+   "what": "a height above the take-off point limited to 120 m, or to a value the pilot sets",
+   "anchor": {
+    "standard": "Commission Delegated Regulation (EU) 2019/945, consolidated 2025-06-24, fetched 2026-11-11, https://eur-lex.europa.eu/eli/reg_del/2019/945",
+    "clause": "Annex, Part 1, point (3); Part 2, point (3); Part 3, point (2); Part 4, point (2)"
+   },
+   "unless": {
+    "when": [
+     "not",
+     [
+      "or",
+      [
+       "is",
+       "class_mark",
+       "C0"
+      ],
+      [
+       "is",
+       "class_mark",
+       "C1"
+      ],
+      [
+       "is",
+       "class_mark",
+       "C2"
+      ],
+      [
+       "is",
+       "class_mark",
+       "C3"
+      ]
+     ]
+    ],
+    "why": "it is to bear no class mark, or C4"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.eu_dimension",
+   "what": "a greatest dimension under 3 m",
+   "anchor": {
+    "standard": "Commission Delegated Regulation (EU) 2019/945, consolidated 2025-06-24, fetched 2026-11-11, https://eur-lex.europa.eu/eli/reg_del/2019/945",
+    "clause": "Annex, Part 4, point (1)"
+   },
+   "unless": {
+    "when": [
+     "not",
+     [
+      "is",
+      "class_mark",
+      "C3"
+     ]
+    ],
+    "why": "only class C3 limits its size"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.eu_low_speed",
+   "what": "a mode the pilot can select that holds the ground speed to 3 m/s",
+   "anchor": {
+    "standard": "Commission Delegated Regulation (EU) 2019/945, consolidated 2025-06-24, fetched 2026-11-11, https://eur-lex.europa.eu/eli/reg_del/2019/945",
+    "clause": "Annex, Part 3, point (9)"
+   },
+   "unless": {
+    "when": [
+     "not",
+     [
+      "is",
+      "class_mark",
+      "C2"
+     ]
+    ],
+    "why": "only class C2 asks a low-speed mode"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.eu_power_source",
+   "what": "powered by electricity alone",
+   "anchor": {
+    "standard": "Commission Delegated Regulation (EU) 2019/945, consolidated 2025-06-24, fetched 2026-11-11, https://eur-lex.europa.eu/eli/reg_del/2019/945",
+    "clause": "Annex, Part 1, point (6); Part 2, point (10); Part 3, point (12); Part 4, point (7)"
+   },
+   "unless": {
+    "why": "a quadcopter of this type flies on a battery alone"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.eu_strength",
+   "what": "the strength, with any safety factor it needs, to bear the stress of use without a break or a deformation that makes it unsafe",
+   "anchor": {
+    "standard": "Commission Delegated Regulation (EU) 2019/945, consolidated 2025-06-24, fetched 2026-11-11, https://eur-lex.europa.eu/eli/reg_del/2019/945",
+    "clause": "Annex, Part 2, point (5), and Part 3, point (4)"
+   },
+   "unless": {
+    "when": [
+     "not",
+     [
+      "or",
+      [
+       "is",
+       "class_mark",
+       "C1"
+      ],
+      [
+       "is",
+       "class_mark",
+       "C2"
+      ]
+     ]
+    ],
+    "why": "only classes C1 and C2 ask it"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.eu_edges",
+   "what": "injury from its edges and from its propeller blades kept low",
+   "anchor": {
+    "standard": "Commission Delegated Regulation (EU) 2019/945, consolidated 2025-06-24, fetched 2026-11-11, https://eur-lex.europa.eu/eli/reg_del/2019/945",
+    "clause": "Annex, Part 1, point (5); Part 2, point (6); Part 3, point (6)"
+   },
+   "unless": {
+    "when": [
+     "not",
+     [
+      "or",
+      [
+       "is",
+       "class_mark",
+       "C0"
+      ],
+      [
+       "is",
+       "class_mark",
+       "C1"
+      ],
+      [
+       "is",
+       "class_mark",
+       "C2"
+      ]
+     ]
+    ],
+    "why": "only classes C0, C1 and C2 ask it"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.eu_sound",
+   "what": "the sound power it is measured to make against the limit for its mass",
+   "anchor": {
+    "standard": "Commission Delegated Regulation (EU) 2019/945, consolidated 2025-06-24, fetched 2026-11-11, https://eur-lex.europa.eu/eli/reg_del/2019/945",
+    "clause": "Annex, Part 15, with Parts 13 and 14"
+   },
+   "unless": {
+    "when": [
+     "not",
+     [
+      "or",
+      [
+       "is",
+       "class_mark",
+       "C1"
+      ],
+      [
+       "is",
+       "class_mark",
+       "C2"
+      ],
+      [
+       "is",
+       "class_mark",
+       "C3"
+      ]
+     ]
+    ],
+    "why": "it is to bear no class mark, or C0 or C4"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.eu_remote_id",
+   "what": "direct remote identification",
+   "anchor": {
+    "standard": "Commission Delegated Regulation (EU) 2019/945, consolidated 2025-06-24, fetched 2026-11-11, https://eur-lex.europa.eu/eli/reg_del/2019/945",
+    "clause": "Annex, Part 2, point (12); Part 3, point (14); Part 4, point (9)"
+   },
+   "unless": {
+    "when": [
+     "not",
+     [
+      "or",
+      [
+       "is",
+       "class_mark",
+       "C1"
+      ],
+      [
+       "is",
+       "class_mark",
+       "C2"
+      ],
+      [
+       "is",
+       "class_mark",
+       "C3"
+      ]
+     ]
+    ],
+    "why": "it is to bear no class mark, or C0 or C4"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.eu_geo_awareness",
+   "what": "geo-awareness",
+   "anchor": {
+    "standard": "Commission Delegated Regulation (EU) 2019/945, consolidated 2025-06-24, fetched 2026-11-11, https://eur-lex.europa.eu/eli/reg_del/2019/945",
+    "clause": "Annex, Part 2, point (13); Part 3, point (15); Part 4, point (10)"
+   },
+   "unless": {
+    "when": [
+     "not",
+     [
+      "or",
+      [
+       "is",
+       "class_mark",
+       "C1"
+      ],
+      [
+       "is",
+       "class_mark",
+       "C2"
+      ],
+      [
+       "is",
+       "class_mark",
+       "C3"
+      ]
+     ]
+    ],
+    "why": "it is to bear no class mark, or C0 or C4"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.eu_lost_link",
+   "what": "what it does when the command link is lost, and a link that is protected in classes C2 and C3",
+   "anchor": {
+    "standard": "Commission Delegated Regulation (EU) 2019/945, consolidated 2025-06-24, fetched 2026-11-11, https://eur-lex.europa.eu/eli/reg_del/2019/945",
+    "clause": "Annex, Part 2, point (7); Part 3, points (7) and (8); Part 4, points (5) and (12)"
+   },
+   "unless": {
+    "when": [
+     "not",
+     [
+      "or",
+      [
+       "is",
+       "class_mark",
+       "C1"
+      ],
+      [
+       "is",
+       "class_mark",
+       "C2"
+      ],
+      [
+       "is",
+       "class_mark",
+       "C3"
+      ]
+     ]
+    ],
+    "why": "it is to bear no class mark, or C0 or C4"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.eu_battery_warning",
+   "what": "a warning to the pilot when the battery is low",
+   "anchor": {
+    "standard": "Commission Delegated Regulation (EU) 2019/945, consolidated 2025-06-24, fetched 2026-11-11, https://eur-lex.europa.eu/eli/reg_del/2019/945",
+    "clause": "Annex, Part 2, point (15); Part 3, point (17); Part 4, point (13)"
+   },
+   "unless": {
+    "when": [
+     "not",
+     [
+      "or",
+      [
+       "is",
+       "class_mark",
+       "C1"
+      ],
+      [
+       "is",
+       "class_mark",
+       "C2"
+      ],
+      [
+       "is",
+       "class_mark",
+       "C3"
+      ]
+     ]
+    ],
+    "why": "it is to bear no class mark, or C0 or C4"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.eu_lights",
+   "what": "lights to control it by, and a green flashing light to be seen by at night",
+   "anchor": {
+    "standard": "Commission Delegated Regulation (EU) 2019/945, consolidated 2025-06-24, fetched 2026-11-11, https://eur-lex.europa.eu/eli/reg_del/2019/945",
+    "clause": "Annex, Part 2, point (16); Part 3, point (18); Part 4, point (14)"
+   },
+   "unless": {
+    "when": [
+     "not",
+     [
+      "or",
+      [
+       "is",
+       "class_mark",
+       "C1"
+      ],
+      [
+       "is",
+       "class_mark",
+       "C2"
+      ],
+      [
+       "is",
+       "class_mark",
+       "C3"
+      ]
+     ]
+    ],
+    "why": "it is to bear no class mark, or C0 or C4"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.marking",
+   "what": "a serial number to ANSI/CTA-2063-A, and the labels each regulation asks",
+   "anchor": {
+    "standard": "14 CFR Part 89, eCFR current to 2026-11-06, fetched 2026-11-11, https://www.ecfr.gov/current/title-14/chapter-I/subchapter-F/part-89",
+    "clause": "89.505 and 89.525, with (EU) 2019/945, Annex, Part 2, point (11)"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.operation",
+   "what": "how high, how fast, where, in what weather and over whom it is flown, and what is checked before each flight",
+   "anchor": {
+    "standard": "14 CFR Part 107, eCFR current to 2026-11-06, fetched 2026-11-11, https://www.ecfr.gov/current/title-14/chapter-I/subchapter-F/part-107",
+    "clause": "107.15, 107.49 and 107.51, with (EU) 2019/947, Annex, Part A"
+   },
+   "unless": {
+    "why": "these bind the pilot, and no size or part of the build answers them"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.arm_fatigue",
+   "what": "cracks in an arm from the load that repeats with every turn and every gust",
+   "anchor": {
+    "standard": "no source read to 2026-11-11 states it",
+    "clause": "a taxonomy of failure mechanisms: fatigue"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.propeller_life",
+   "what": "the hours a propeller may fly before it is looked at and before it is replaced",
+   "anchor": {
+    "standard": "Freefly Systems, Astro, Periodic Maintenance, fetched 2026-11-11, https://docs.freeflysystems.com/astro/maintenance/standard-maintenance-procedures/periodic-maintenance",
+    "clause": "the intervals for propeller inspection and replacement"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.loosening",
+   "what": "screws and propeller nuts that work loose under vibration",
+   "anchor": {
+    "standard": "Barrett, Fastener Design Manual, NASA Reference Publication 1228, 1990, fetched 2026-11-11, https://ntrs.nasa.gov/citations/19900009424",
+    "clause": "Locking Methods"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.vibration",
+   "what": "the vibration at the flight controller, as a flight measures it",
+   "anchor": {
+    "standard": "ArduPilot, Copter documentation, Measuring Vibration, fetched 2026-11-11, https://ardupilot.org/copter/docs/common-measuring-vibration.html",
+    "clause": "the levels that are acceptable and those that are not"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.rotor_out",
+   "what": "the loss of one motor, controller or propeller in flight",
+   "anchor": {
+    "standard": "Mueller and D'Andrea, Stability and control of a quadrocopter despite the complete loss of one, two, or three propellers, ICRA 2014, DOI 10.1109/ICRA.2014.6906588, read in summary only on 2026-11-11",
+    "clause": "the whole paper: a quadcopter keeps its height only by giving up its heading"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.battery_fault",
+   "what": "a short circuit or a crushed cell: a fuse, and what shields the battery in a crash",
+   "anchor": {
+    "standard": "no source read to 2026-11-11 states it",
+    "clause": "a taxonomy of hazards: fire"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.battery_retention",
+   "what": "what holds the battery under the load factor of each case and in a hard landing",
+   "anchor": {
+    "standard": "no source read to 2026-11-11 states it",
+    "clause": "a taxonomy of failure mechanisms: a part that comes loose"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.hard_landing",
+   "what": "the frame under the fall of the landing case",
+   "anchor": {
+    "standard": "JARUS, CS-LURS, Certification Specification for Light Unmanned Rotorcraft Systems, 2013-10-30, fetched 2026-11-11, http://jarus-rpas.org/wp-content/uploads/2023/05/jar_01_doc_jarus_certification_specification_for_lurs_-_30_oct_2013.pdf",
+    "clause": "CS-LURS.725, limit drop test, written for rotorcraft of up to 750 kg"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.arm_joint",
+   "what": "the clamp of each arm between the plates: its screws and the plates and the arm around them",
+   "anchor": {
+    "standard": "no source read to 2026-11-11 states it",
+    "clause": "a taxonomy of failure mechanisms: overload of a joint"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.ingress",
+   "what": "water and dust, against the protection the need asks",
+   "anchor": {
+    "standard": "IEC 60529, which is sold and was not read. Its digits were read on 2026-11-11 at https://en.wikipedia.org/wiki/IP_code",
+    "clause": "the two digits of the IP code"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.galvanic",
+   "what": "corrosion where carbon fibre meets aluminium or steel",
+   "anchor": {
+    "standard": "no source read to 2026-11-11 states it",
+    "clause": "a taxonomy of failure mechanisms: corrosion"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.compass",
+   "what": "the field of the power leads at the compass",
+   "anchor": {
+    "standard": "no source read to 2026-11-11 states it",
+    "clause": "a taxonomy of failure mechanisms: interference"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.commutation",
+   "what": "the electrical speed of a motor against what its speed controller follows",
+   "anchor": {
+    "standard": "no source read to 2026-11-11 states it",
+    "clause": "a taxonomy of failure mechanisms: loss of synchronism"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.made_parts",
+   "what": "each plate and each arm against what the shop that cuts it can make, which is the work of a process pack",
+   "anchor": {
+    "standard": "no source read to 2026-11-11 states it",
+    "clause": "a taxonomy of a product's life: making its parts"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.assembly",
+   "what": "the order of assembly, and room for a tool at every screw",
+   "anchor": {
+    "standard": "no source read to 2026-11-11 states it",
+    "clause": "a taxonomy of a product's life: assembly"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.propeller_balance",
+   "what": "how far out of balance a propeller may be",
+   "anchor": {
+    "standard": "FAA, Advisory Circular 107-2A, fetched 2026-11-11, https://www.faa.gov/documentLibrary/media/Advisory_Circular/AC_107-2A.pdf",
+    "clause": "7.3.4, the list of preflight checks: run the propellers to look for imbalance"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.firmware_limits",
+   "what": "the numbers in the firmware that must match the build: the cell count, the voltages of a full and an empty pack, the voltage that ends the flight, and the hover throttle",
+   "anchor": {
+    "standard": "ArduPilot, Copter documentation, Setting the Aircraft Up for Tuning, fetched 2026-11-11, https://ardupilot.org/copter/docs/setting-up-for-tuning.html",
+    "clause": "the battery settings and the hover thrust"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.calibration",
+   "what": "what is calibrated before first flight: the sensors, the speed controllers and the power module",
+   "anchor": {
+    "standard": "no source read to 2026-11-11 states it",
+    "clause": "a taxonomy of a product's life: commissioning"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.battery_care",
+   "what": "how the battery is charged, stored and retired",
+   "anchor": {
+    "standard": "Gens Ace, Safety Manual of Lipo Battery, fetched 2026-11-11, https://freeflysystems.com/wp-content/uploads/2021/11/Gensace_safety_manual.pdf",
+    "clause": "the precautions for charge and storage"
+   },
+   "unless": {
+    "why": "these bind who keeps the battery, and no size or part of the build answers them"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.repair",
+   "what": "whether an arm, a motor or a plate can be replaced alone",
+   "anchor": {
+    "standard": "no source read to 2026-11-11 states it",
+    "clause": "a taxonomy of a product's life: repair"
+   }
+  },
+  {
+   "type": "quadcopter",
+   "mechanism": "quad.disposal",
+   "what": "what becomes of the battery and the laminate at the end",
+   "anchor": {
+    "standard": "no source read to 2026-11-11 states it",
+    "clause": "a taxonomy of a product's life: disposal"
+   }
+  }
+ ],
+ "rules": []
+}

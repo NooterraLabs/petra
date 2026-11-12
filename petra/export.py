@@ -33,7 +33,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any, Iterator
 
-from .ir import Bound, Component, Design, Fixed, Input, ParamRef, Ref, Text, Vec
+from .ir import Bound, Component, Design, Fixed, Input, ParamRef, Ref, Stated, Text, Vec
 from .kernel import Interval
 from .units import Quantity, dimension_name
 
@@ -78,7 +78,7 @@ def parts(design: Design) -> list[dict[str, Any]]:
     def arg(a: Any) -> dict[str, Any]:
         if isinstance(a, Fixed):
             return {"number": _quantity(a.quantity)}
-        if isinstance(a, Bound):
+        if isinstance(a, (Bound, Stated)):
             return {"given": a.name}
         if isinstance(a, Ref) and len(a.parts) == 1:
             return {"word": a.parts[0]}
@@ -104,7 +104,11 @@ def card(design: Design, inputs: list[Input], placed: bool = False) -> dict[str,
     that reads a param is an input with no `by`. With `placed`, for a design checked
     against a deck of rules, a load also says the part it is `on` and which `field` it is,
     and the card names its tests records and its probability claims, which the other
-    designs' cards leave out."""
+    designs' cards leave out. A card that states a key or a whole number exactly, with
+    `given NAME is ...`, has them in `states`, in the order of their names: each with its
+    `name`, who signed it as `by`, and `key`, the name, or `whole`, the number as a text.
+    A card that states none has no `states`, so its card.json is what it was before a card
+    could state one."""
     cases = {id(e.value): {"case": load.name, **({"on": ".".join(e.target), "field": e.field} if placed else {})}
              for load in design.loads.values() for e in load.entries}
     claims = [{"name": c.name, "subject": ".".join(c.qoi.path), "quantity": c.qoi.name, "rel": c.rel.value,
@@ -118,6 +122,8 @@ def card(design: Design, inputs: list[Input], placed: bool = False) -> dict[str,
                       + [{"name": name, **case, **_quantity(design.params[ref.name].range)} for name, case, ref in unsigned],
             "claims": claims,
             **({"tests": sorted(design.tests), "probability_claims": [c.name for c in design.probability_claims]} if placed else {}),
+            **({"states": [{"name": s.name, "by": s.signature.owner, **({"key": s.key} if s.whole is None else {"whole": str(s.whole)})}
+                           for _, s in sorted(design.states.items())]} if placed and design.states else {}),
             "waivers": [{"subject": ".".join(w.subject), "mechanism": w.mode, "by": w.owner, "reason": w.reason} for w in design.waivers]}
 
 

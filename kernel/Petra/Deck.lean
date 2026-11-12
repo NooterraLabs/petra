@@ -83,12 +83,31 @@ inductive FieldKind where
   | key (names : Array String) (known : Std.TreeSet String)
   | parts (kind : String) (names : Array String)
 
+/-- How low a quantity may go by its sign. A field that says nothing is more than zero. With
+`may_be` it is at least zero, or of any sign. -/
+inductive Sign where
+  | positive | zero | negative
+  deriving BEq, Inhabited
+
 /-- A field of a type. `oneOf` is what the kernel says of a part that gives a key a name
-it lacks: the list of its names, made once here and not again for each such part. -/
+it lacks: the list of its names, made once here and not again for each such part. `sign` is
+what a quantity says with `may_be`. On a load, which has no floor of its own but its
+`least`, `negative` lifts the floor at zero that its dimension has in deck.json. -/
 structure Field where
   name : String
   kind : FieldKind
   oneOf : String := ""
+  sign : Sign := .positive
+  /-- Whether a part may leave the field unstated, as a maker's record leaves out what it
+  does not give. A design then writes `UNSTATED` in its place. -/
+  optional : Bool := false
+  /-- For a key: whether only the card states it, as `signed` says of a quantity in its kind.
+  A design then reads it with a given, and one that writes the name itself is refused. -/
+  signed : Bool := false
+
+/-- The word a design writes for a field that its type marks `optional` and that the part's
+record does not state. It is no name of such a key: the deck is refused if it is. -/
+def UNSTATED : String := "unstated"
 
 def Field.dim (f : Field) : Option Dim :=
   match f.kind with
@@ -159,6 +178,24 @@ def Static.size : Static → Nat
   | .is .. => 1
   | .and cs | .or cs => cs.foldl (fun n c => n + c.size) 1
   | .not c => 1 + c.size
+
+/-- Whether a condition holds when `named` gives each key the name it has. -/
+def Static.over (named : Option String → String → Option String) : Static → Bool
+  | .is part field name => named part field == some name
+  | .and cs => cs.foldl (fun so c => so && c.over named) true
+  | .or cs => cs.foldl (fun so c => so || c.over named) false
+  | .not c => !c.over named
+
+/-- The most combinations of the names of its keys at which the reader of a deck tries what
+a rule requires. A rule whose keys take more is not tried when the deck is read: the
+acceptance check for a rule tries it (docs/deck.md). -/
+def MAX_TRIED : Nat := 4096
+
+/-- The most the reader spends on trying the requirements of one deck. Trying a rule costs
+its combinations times the sizes of its `requires` and of its `when`, and a rule whose cost
+would take the deck past this is not tried. So reading a deck is bounded whatever its rules
+require. -/
+def MAX_TRYING : Nat := 1000000
 
 /-- A line of the grid. `excuse` is none for a line that always asks. Otherwise it holds
 the condition under which the mechanism cannot arise, or none when it never arises. -/
@@ -257,6 +294,8 @@ structure Rule where
   /-- The keys that `requires` names, each once, in the order it names them: what the reason
   of a refuted cell lists. It is made when the deck is read, and not again for each part. -/
   asked : Array (Option String × String) := #[]
+  /-- Whether the rule states `lt`: `low` under `high`, and not only at most it. -/
+  strict : Bool := false
 
 /-- What the rule's cells are entered under: its id from after its last `/`. -/
 def Rule.entry (rule : Rule) : String := (rule.id.splitOn "/").getLast!
@@ -298,6 +337,15 @@ structure Scope where
   rows : Std.TreeMap String Row := {}
 
 def Scope.rule (scope : Scope) : Bool := scope.kind.isSome
+
+/-- The field of the type, or of the part it joins under the name `part`, that has this name. -/
+def Scope.field (scope : Scope) (part : Option String) (name : String) : Option Field := do
+  let kind ← scope.kind
+  match part with
+  | none => kind.field.get? name
+  | some part =>
+    let (other, _, _) ← kind.called.get? part
+    (← scope.kinds.get? other).field.get? name
 
 /-- What a name means here: an input of the row, a quantity or a key of the type, or
 `NAME.FIELD` for a field of a part the type joins. The name is looked up in the tables of
@@ -791,7 +839,10 @@ def exact (scope : Scope) : Nat → Json → Except String (Exact × Dim)
       let (x, dx) ← exact scope fuel a
       let (y, dy) ← exact scope fuel b
       match y with
-      | .field .. => pure ()
+      | .field part name =>
+        -- A field that says `may_be` may be zero, so a quotient by it has no value for every part.
+        if ((scope.field part name).map (·.sign)).getD .positive != .positive then
+          throw s!"a need divides by {(part.map (· ++ ".")).getD ""}{name}, which may be zero: a need divides by a field that is more than zero"
       | .c value => if value == 0 then throw "a need divides by zero"
       | _ => throw "a need divides by a field or by a number, and by nothing else: a field is more than zero, so exact fractions decide the quotient"
       return (.div x y, dx - dy)
@@ -902,6 +953,13 @@ def readNaming (j : Json) (takes : Array (String × Taken)) (names : Array Strin
     if across.isSome then do (← line.getArr?).mapM cell else do return #[← cell line]
   unless lines.size == down.places && lines.all (·.size == (across.map Side.places).getD 1) do
     throw "the cells are one line for each place down, with one cell for each place across"
+  -- Every name the row gives is the name of a cell. A name that no cell holds is one that no
+  -- part can have, and a `case` would still give it an expression, which no pick reaches.
+  let held : Array Bool := lines.foldl (fun held line => line.foldl (fun held cell => match cell with
+    | some i => held.setIfInBounds i true
+    | none => held) held) (Array.replicate names.size false)
+  if let some i := held.findIdx? (!·) then
+    throw s!"no cell holds {clip names[i]!}, which `one_of` lists: each name the row gives is the name of a cell"
   return { names, down, across, cells := lines }
 
 def readTable (j : Json) (takes : Array (String × Taken)) (gives : Dim) : Except String Table := do
@@ -998,39 +1056,66 @@ def readRow (j : Json) : Except String Row := do
     return { id, dim, takes, body := .cases found }
   row.mapError (s!"row {clip id}: " ++ ·)
 
+/-- What the kernel says of a field that is both `signed` and `optional`. What a maker's
+record leaves out is for the design to say, since the design names the part, and only the
+card states a signed field. -/
+def BOTH : String :=
+  "a field is `signed` or `optional`, and not both: only the card states a signed field, and a card leaves nothing unstated"
+
 def readField (load : Bool) (j : Json) : Except String Field := do
   let name ← text j "name"
   let field : Except String Field := do
-    within j (if load then ["name", "what", "dim", "least"] else ["name", "what", "dim", "least", "one_of", "type", "as", "signed", "whole"])
+    within j (if load then ["name", "what", "dim", "least", "may_be"]
+              else ["name", "what", "dim", "least", "one_of", "type", "as", "signed", "whole", "may_be", "optional"])
     unless (["dim", "one_of", "type"].filter (has j)).length == 1 && filled j "what" do
       throw "it has `what` and one of `dim`, `one_of` and `type`"
     identifier name
+    let flag (key : String) : Except String Bool :=
+      match j.getObjVal? key with
+      | .error _ => pure false
+      | .ok (.bool b) => pure b
+      | _ => throw s!"{key} is true or false"
     if has j "one_of" then
-      within j ["name", "what", "one_of"]
+      within j ["name", "what", "one_of", "optional", "signed"]
       let names ← texts j "one_of"
       if names.isEmpty || !distinct names then throw "`one_of` is a list of different names"
-      return { name, kind := .key names (setOf names), oneOf := s!"is one of: {", ".intercalate names.toList}" }
+      let optional ← flag "optional"
+      let signed ← flag "signed"
+      if optional && names.contains UNSTATED then
+        throw s!"a key that may be left unstated has no name `{UNSTATED}`: that word is how a design leaves it unstated"
+      if optional && signed then throw BOTH
+      return { name, kind := .key names (setOf names), oneOf := s!"is one of: {", ".intercalate names.toList}", optional, signed }
     if has j "type" then
       within j ["name", "what", "type", "as"]
       let names ← if has j "as" then texts j "as" else pure #[name]
       if names.isEmpty || !distinct names then throw "`as` names each part once"
       names.forM identifier
       return { name, kind := .parts (← text j "type") names }
-    within j ["name", "what", "dim", "least", "signed", "whole"]
+    within j (if load then ["name", "what", "dim", "least", "may_be"] else ["name", "what", "dim", "least", "signed", "whole", "may_be", "optional"])
     let dim ← dimension (← text j "dim")
     let least ← if has j "least" then do
         let (x, its) ← amount (← text j "least")
         unless its == dim do throw "its least value is of another dimension"
         pure (some x)
       else pure none
-    let flag (key : String) : Except String Bool :=
-      match j.getObjVal? key with
-      | .error _ => pure false
-      | .ok (.bool b) => pure b
-      | _ => throw s!"{key} is true or false"
+    -- `may_be` says how low the quantity may go by its sign, and a `least` beside it must
+    -- agree: none with `zero`, whose floor is zero, and one under zero with `negative`.
+    let sign ← match j.getObjVal? "may_be" with
+      | .error _ => pure Sign.positive
+      | .ok (.str "zero") =>
+        if load then throw "`may_be` of a load is negative: a load may be zero as it is"
+        if least.isSome then throw "a quantity that may be zero has no `least`: its floor is zero"
+        pure Sign.zero
+      | .ok (.str "negative") =>
+        if least.any (· ≥ 0) then throw "with `may_be` negative a `least` is under zero"
+        pure Sign.negative
+      | _ => throw "`may_be` is zero or negative"
     let whole ← flag "whole"
     if whole && dim != {} then throw "a count is a plain number"
-    return { name, kind := .quantity dim (← flag "signed") whole least }
+    let signed ← flag "signed"
+    let optional ← flag "optional"
+    if optional && signed then throw BOTH
+    return { name, kind := .quantity dim signed whole least, sign, optional }
   field.mapError (s!"field {clip name}: " ++ ·)
 
 def readKind (j : Json) : Except String Kind := do
@@ -1082,7 +1167,7 @@ def readRule (kinds : Std.TreeMap String Kind) (rows : Std.TreeMap String Row) (
   let id ← text j "id"
   let rule : Except String Rule := do
     short "the id of a rule" id
-    within j ["id", "type", "mechanism", "anchor", "says", "when", "let", "where", "le", "requires"]
+    within j ["id", "type", "mechanism", "anchor", "says", "when", "let", "where", "le", "lt", "requires"]
     anchored j
     unless filled j "says" do throw "a rule says what it states"
     let name ← text j "type"
@@ -1093,13 +1178,13 @@ def readRule (kinds : Std.TreeMap String Kind) (rows : Std.TreeMap String Row) (
     | some (some none) => throw s!"the grid says {mechanism} never arises for {name}"
     | _ => pure ()
     let scope : Scope := { kind := some kind, kinds, rows }
-    unless has j "le" || has j "requires" do
-      throw "a rule has `le`, an inequality, or `requires`, a condition over keys"
+    unless (["le", "lt", "requires"].filter (has j)).length == 1 do
+      throw "a rule has one of `le`, an inequality, `lt`, a strict one, and `requires`, a condition over keys"
     -- A rule that requires states a condition over keys and no inequality. It has nothing
     -- that an inequality has: no sides, no names of `let` and no range.
     if has j "requires" then
-      if has j "le" || has j "let" || has j "where" then
-        throw "a rule with `requires` has no `le`, no `let` and no `where`: it states a condition over keys, and no inequality"
+      if has j "let" || has j "where" then
+        throw "a rule with `requires` has no `le`, no `lt`, no `let` and no `where`: it states a condition over keys, and no inequality"
       let condition ← (j.getObjVal? "when").toOption.mapM (static scope MAX_EXPRESSION)
       let required ← (static scope MAX_EXPRESSION (← need j "requires")).mapError ("requires: " ++ ·)
       return { id, kind := name, mechanism, condition, steps := #[], weight := 0,
@@ -1118,8 +1203,9 @@ def readRule (kinds : Std.TreeMap String Kind) (rows : Std.TreeMap String Row) (
       let (y, dy) ← expr scope MAX_EXPRESSION high
       unless dx == dy do throw s!"{what} compares two dimensions"
       return (x, y)
+    let strict := has j "lt"
     let read : Reading ((Nat × Nat) × Array (Nat × Nat)) := do
-      let main ← pair (← need j "le") "`le`"
+      let main ← if strict then pair (← need j "lt") "`lt`" else pair (← need j "le") "`le`"
       let written ← listed j "where"
       if has j "where" && written.isEmpty then
         throw "`where` has at least one item: a rule that holds everywhere leaves it out"
@@ -1146,7 +1232,7 @@ def readRule (kinds : Std.TreeMap String Kind) (rows : Std.TreeMap String Row) (
     return { id, kind := name, mechanism, condition, steps := draft.steps,
              weight := draft.steps.foldl (fun n step => n + step.weight) 0,
              look := 1 + (condition.map Static.size).getD 0 + loads.size, ranges, low, high,
-             fields := once (fields ++ (condition.map Static.keys).getD #[]), loads }
+             fields := once (fields ++ (condition.map Static.keys).getD #[]), loads, strict }
   rule.mapError (s!"rule {clip id}: " ++ ·)
 
 /-- How many characters of a text are one step to read. -/
@@ -1232,6 +1318,38 @@ def readRules (j : Json) : Except String Rules := do
   unless distinct (rules.map (·.id)) do throw "two rules have one id"
   if let some (kind, mechanism, entry) := twice (rules.map fun r => (r.kind, r.mechanism, r.entry)) then
     throw s!"two rules answer {mechanism} of {kind} with ids that end in {entry} after the last /, so their cells would have one entry"
+  -- A requirement that no part can break, or that no part can meet, is a fault of the deck:
+  -- its cell would be proved, or refuted, whatever a design is. The keys that a rule's
+  -- `requires` and its `when` name take finitely many combinations of names, and the rule
+  -- is tried at each, in the order of the rules, while that is within `MAX_TRIED` for the
+  -- rule and `MAX_TRYING` for the deck.
+  let mut spent := 0
+  for rule in rules do
+    if let some required := rule.requires then
+      let scope : Scope := { kind := kinds.get? rule.kind, kinds }
+      let keys : Array ((Option String × String) × Array String) := rule.fields.filterMap fun (part, field) =>
+        match (scope.field part field).map (·.kind) with
+        | some (FieldKind.key names _) => some ((part, field), names)
+        | _ => none
+      let combinations := keys.foldl (fun n (_, names) => if n > MAX_TRIED then n else n * names.size) 1
+      let cost := combinations * (required.size + (rule.condition.map Static.size).getD 0)
+      if combinations ≤ MAX_TRIED && spent + cost ≤ MAX_TRYING then
+        spent := spent + cost
+        let mut answers := 0
+        let mut holds := 0
+        for n in [0:combinations] do
+          let chosen := (keys.foldl (fun (table, n) (key, names) => (table.insert key names[n % names.size]!, n / names.size))
+            (({} : Std.TreeMap (Option String × String) String), n)).1
+          let named (part : Option String) (field : String) : Option String := chosen.get? (part, field)
+          if rule.condition.all (·.over named) then
+            answers := answers + 1
+            if required.over named then holds := holds + 1
+        if answers == 0 then
+          throw s!"rule {clip rule.id}: its `when` holds for no combination of the names of its keys, so the rule answers for no part"
+        if holds == answers then
+          throw s!"rule {clip rule.id}: what it requires holds for every combination of the names of its keys at which it answers, so no part can break it"
+        if holds == 0 then
+          throw s!"rule {clip rule.id}: what it requires holds for no combination of the names of its keys at which it answers, so no part can meet it"
   return { name, kinds := read, asks, rules }
 
 -- A rule as a tape.
@@ -1387,8 +1505,17 @@ def tableOf (site : Site) (table : Table) (down : Chosen) (across : Option Chose
   pickOf lines
 
 /-- The tape of a rule for one part: for each pair of `pairs` a root, the first less the
-second. An error is a reason the rule has no value for the part. -/
-def Rule.tape (rule : Rule) (site : Site) (pairs : Array (Nat × Nat)) : Except String Tape := do
+second, which is at most zero where the pair is in order. An error is a reason the rule has
+no value for the part.
+
+With `strict`, a root is the pick that is -1 where the first is under the second and 1
+elsewhere. `Tape.proved` shows a root at most zero on the box, which this root is only where
+the first is under the second at every point of it: on a leaf the pick is -1 alone when the
+upper end of the first is under the lower end of the second. `Tape.refuted` shows a root
+above zero at a point, which this root is only where the first is not under the second
+there. So the two rules of the tape, as they stand and as proofs/ proves them, decide a
+strict inequality (`Tape.proved_strict` and `Tape.refuted_strict` in proofs/). -/
+def Rule.tape (rule : Rule) (site : Site) (pairs : Array (Nat × Nat)) (strict : Bool := false) : Except String Tape := do
   let need := reach rule.steps (pairs.flatMap fun (a, b) => #[a, b])
   let write : Write (Array Nat) := do
     let mut ids : Array Nat := Array.replicate rule.steps.size 0
@@ -1410,7 +1537,9 @@ def Rule.tape (rule : Rule) (site : Site) (pairs : Array (Nat × Nat)) : Except 
             pure id
           | .row _ value => pure ids[value]!
         ids := ids.set! i id
-    pairs.mapM fun (low, high) => do node (.add #[ids[low]!, ← node (.neg ids[high]!)])
+    pairs.mapM fun (low, high) => do
+      if strict then node (.pick #[(some (.lt ids[low]! ids[high]!), ← node (.c (-1))), (none, ← node (.c 1))])
+      else node (.add #[ids[low]!, ← node (.neg ids[high]!)])
   let (roots, written) ← write.run {}
   return { inputs := written.inputs, nodes := written.nodes, roots }
 

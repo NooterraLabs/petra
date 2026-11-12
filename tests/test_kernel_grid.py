@@ -606,14 +606,14 @@ class ChangedRules(Kernel):
         table = {**UNITS, **CUSTOMARY}
         rules = []
         for n, (unit, (factor, dim)) in enumerate(table.items()):
-            base, scale = next((u, f) for u, (f, d) in table.items() if d == dim and (f == 1 or u == "ohm/km"))
+            base, scale = next((u, f) for u, (f, d) in table.items() if d == dim)      # the first unit of its dimension, whatever its factor
             one, same = ["q", "1", unit], ["mul", export.number(factor / scale), ["q", "1", base]]
             rules += [{**STRIPS["rules"][2], "id": f"test/unit-{n}-{way}", "le": sides} for way, sides in (("le", [one, same]), ("ge", [same, one]))]
         files = strips(rules=self.rules(lambda b: b.update(rules=rules + [r for k, r in enumerate(STRIPS["rules"]) if k != 2])))
         said = ask(files)
         units = [c for c in said["cells"] if c["mechanism"] == "strip.bow"]
         self.assertEqual((len(units), {c["state"] for c in units}), (2 * len(table), {"proved"}), [c for c in units if c["state"] != "proved"])
-        self.assertGreaterEqual(len(table), 48)
+        self.assertGreaterEqual(len(table), 67)
         off = self.rules(lambda b: b["rules"][2].update(le=[["q", "1", "inch"], ["q", "25.39999", "mm"]]))
         self.assertEqual(cell(ask({**files, "rules": json.dumps(off)}), "strip.bow", "bow")["state"], "open", "an inch is not under 25.4 mm")
 

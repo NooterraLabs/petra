@@ -491,10 +491,22 @@ class ARuleThatRequires(unittest.TestCase):
         self.assertNotIn(("up", "unread", "bore"), found)
         self.assertIn(("down", "unread", "bore"), found, "the rule names the top lug's bore alone")
 
-    def test_a_waiver_and_an_unless_take_its_line_as_any_other(self):
+    def test_a_waiver_does_not_hide_a_requirement_that_the_part_breaks(self):
+        """A hoist of category A and service class 3, under a card that waives the line. Until a
+        waiver rested only what was open, the line was one waived cell and the verdict PASS.
+        The rule is now run under the waiver: the part is not what it requires, the cell is
+        refuted, and the design fails. A part that meets the requirement is proved, and the
+        waiver is not needed for it. Only a part the line has no rule for is waived."""
         waived = HEAD + 'waive hoist.category on h by "t@example.org" reason "made up"\n'
-        found, verdict, _ = cells(self, HOISTS, hoist("A", "3"), waived)
-        self.assertEqual((found["h", "hoist.category", ""], verdict), ("waived", "PASS"))
+        found, verdict, said = cells(self, HOISTS, hoist("A", "3"), waived)
+        self.assertEqual((found["h", "hoist.category", "category-a"], verdict), ("refuted", "FAIL"))
+        self.assertNotIn(("h", "hoist.category", ""), found)
+        self.assertEqual(said.get("waived", []), [], "no cell rests on the waiver")
+        found, verdict, _ = cells(self, HOISTS, hoist("A", "0"), waived)
+        self.assertEqual(found["h", "hoist.category", "category-a"], "proved")
+        found, verdict, said = cells(self, HOISTS, hoist("B", "3"), waived)
+        self.assertEqual(found["h", "hoist.category", ""], "waived", "the deck has no rule for a hoist of category B, and that open cell is what the waiver rests")
+        self.assertEqual(reason(said, "hoist.category"), "open but for the waiver: the deck has no rule for it on a part like this one" if verify.binary() else reason(said, "hoist.category"))
 
     @KERNEL
     def test_it_needs_no_hint_and_no_work_and_no_hint_changes_it(self):
@@ -779,7 +791,9 @@ class AKeyPickedBySize(unittest.TestCase):
                                      "cells": [["two", "two"], ["three", "four"], ["five", None]]}})
         said = {c.name: c for c in rows.accept(mine, [rows.example({"anchor": "made up", "given": {"a": "75 mm", "t": "30 mm"}, "gives": "D"}, mine)], other)}
         self.assertEqual({name: c.outcome for name, c in said.items()}, {"units": "pass", "examples": "pass", "shape": "none", "second": "pass"}, said)
-        wrong = rows.read({**CATEGORY, "table": {**CATEGORY["table"], "cells": [["B", "B"], ["D", "D"], ["E", None]]}})
+        # A second transcription with two cells changed over. It still holds every name it gives: a name that no cell holds is refused.
+        wrong = rows.read({**CATEGORY, "table": {**CATEGORY["table"], "cells": [["B", "B"], ["D", "C"], ["E", None]]}})
+        self.assertRaisesRegex(rows.RowError, "no cell holds 'C'", rows.read, {**CATEGORY, "table": {**CATEGORY["table"], "cells": [["B", "B"], ["D", "D"], ["E", None]]}})
         said = {c.name: c for c in rows.accept(mine, [rows.example({"anchor": "made up", "given": {"a": "75 mm", "t": "30 mm"}, "gives": "C"}, mine)], wrong)}
         self.assertEqual((said["examples"].outcome, said["second"].outcome), ("fail", "fail"), said)
         self.assertIn("this one gives C and the other D", said["second"].detail)
