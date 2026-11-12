@@ -6,14 +6,35 @@ import Petra.Sha256
 
 namespace Petra
 
-def Floor.admits (f : Floor) (x : Rat) : Bool := if f.strict then f.min < x else f.min ≤ x
+/-- What the type of a part says with `may_be` of one of its fields, or of one of its loads
+when `load`: `positive` when it says nothing, and for a part or a field that the deck of
+rules does not have. `kinds` holds the types of the deck by name and `typed` the type of
+each part of the design by the part's name. Each look goes through two tables, so asking
+it of every quantity and of every input costs the design and the card, and not their
+product with the deck. -/
+def signOf (kinds : Std.TreeMap String Kind) (typed : Std.TreeMap String String) (part field : String) (load : Bool) : Sign :=
+  let found : Option Sign := do
+    let kind ← kinds.get? (← typed.get? part)
+    let f ← if load then kind.load.get? field else kind.field.get? field
+    return f.sign
+  found.getD .positive
 
-def Floor.broken (f : Floor) (what : String) (x : Rat) : String :=
-  let relation := if f.strict then "above" else "at least"
-  s!"a {what} is {relation} {f.min}, and this one goes down to {x}"
+/-- The part and the field that a given names, `PART.FIELD`: what stands before its last dot
+and what stands after it. The name of a field holds no dot. -/
+def givenOf (name : String) : String × String :=
+  match (name.splitOn ".").reverse with
+  | field :: rest => (".".intercalate rest.reverse, field)
+  | [] => (name, "")
 
-/-- The type rules, 1 to 5. Rules 6 and 7 are in `rules` and `marks`: they read the command line. -/
-def types (cardHash : String) (card : Card) (design : Design) (deck : Deck) : StateM Findings Unit := do
+/-- The type rules, 1 to 5. Rules 6 and 7 are in `rules` and `marks`: they read the command line.
+
+`sign` is what the deck of rules says with `may_be` of a field or of a load of a part
+(`signOf`). A number that a design writes for a field that may be zero or negative is not
+held to the floor of a size: Parts 3 holds it to its field's own. An input for a field or
+a load that may be negative is not held to a floor of its dimension that is at zero or
+above, and is still held to one under zero, as the floor of a temperature is. -/
+def types (cardHash : String) (card : Card) (design : Design) (deck : Deck)
+    (sign : String → String → Bool → Sign := fun _ _ _ => .positive) : StateM Findings Unit := do
   let say (rule file item why : String) : StateM Findings Unit := modify (·.push ⟨rule, file, item, why⟩)
   if design.card != cardHash then
     say "types.1" "design" "card" s!"is not the hash of the card file, {cardHash}"
@@ -21,14 +42,18 @@ def types (cardHash : String) (card : Card) (design : Design) (deck : Deck) : St
     unless ["format", "name", "card", "quantities", "params", "parts"].contains key do
       say "types.2" "design" key "a design has no such key"
   for q in design.quantities do
-    if q.role == "size" && !deck.size.admits q.range.lo then
+    if q.role == "size" && !deck.size.admits q.range.lo && sign q.entity q.line false == .positive then
       say "types.3" "design" s!"{q.entity}.{q.line}.{q.field}" (deck.size.broken "size" q.range.lo)
   for i in card.inputs do
     match dimNamed i.dim with
     | none => say "types.4" "card" i.name s!"{i.dim} is not a dimension"
     | some dim =>
       if let some (name, floor) := deck.input.get? dim.key then
-        if !floor.admits i.range.lo then say "types.4" "card" i.name (floor.broken name i.range.lo)
+        if !floor.admits i.range.lo then
+          let its := match i.on, i.field with
+            | some part, some field => sign part field true
+            | _, _ => let (part, field) := givenOf i.name; sign part field false
+          unless its == .negative && floor.min ≥ 0 do say "types.4" "card" i.name (floor.broken name i.range.lo)
     if i.signer.isEmpty then say "types.5" "card" i.name "the input names no by"
   for w in card.waivers do
     if w.signer.isEmpty then
@@ -214,12 +239,17 @@ def rules (cardHash : String) (card design deck : Except String ByteArray)
     | some bytes, some _ => load "proofs" "petra-proofs/0" bytes readHints
     | _, _ => pure none
   let (some card, some design, some deck) := (card?, design?, deck?) | return {}
-  types cardHash card design deck
+  -- What the deck of rules says with `may_be` of the fields and the loads of the design's parts.
+  let sign : String → String → Bool → Sign := match rules?, design.parts with
+    | some rules, some blocks =>
+      signOf (firsts rules.kinds (·.name)) (blocks.foldl (fun table b => table.insertIfNew b.name b.kind) {})
+    | _, _ => fun _ _ _ => .positive
+  types cardHash card design deck sign
   if design.parts.isSome && deckOfRules.isNone then
     modify (·.push ⟨"types.6", "design", "parts", "a design with parts is checked against a deck of rules, and --rules names none"⟩)
   marks card design deck deckOfRules.isSome
   let (parts, loads) ← match rules? with
-    | some rules => readParts rules card design
+    | some rules => readParts rules card design deck.input
     | none => pure (#[], {})
   -- What the types need of their fields is asked last, of a design that breaks no rule
   -- before it, and what deciding it takes comes off the work of the verdict.

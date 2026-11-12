@@ -167,6 +167,12 @@ structure Floor where
   min : Rat
   strict : Bool
 
+def Floor.admits (f : Floor) (x : Rat) : Bool := if f.strict then f.min < x else f.min ≤ x
+
+def Floor.broken (f : Floor) (what : String) (x : Rat) : String :=
+  let relation := if f.strict then "above" else "at least"
+  s!"a {what} is {relation} {f.min}, and this one goes down to {x}"
+
 structure Constant where
   label : String
   range : Iv

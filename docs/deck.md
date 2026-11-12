@@ -254,7 +254,7 @@ A deck is one JSON file in `petra/decks`.
 | `grid` | The lines of the grid |
 | `rules` | The rules |
 
-Each object of a deck has the keys this page gives it, and no other. A key the page does not give is refused wherever it stands: in the deck, a row, an `anchor`, `gives`, an input of `takes`, a case, a jump, a table, a side of a table, a type, a field, a load, a need, a line of the grid, `unless`, a rule and an item of `where`. So is a key where it does not belong: `signed`, `whole` or `least` on a field that is no quantity, `as` on a field that joins no part, and `closed` on a side with no `bands`. The refusal names the key. A misspelled key is then an error, and never a key left out with its default in its place: `close` for `closed` would leave every band closed at its upper end.
+Each object of a deck has the keys this page gives it, and no other. A key the page does not give is refused wherever it stands: in the deck, a row, an `anchor`, `gives`, an input of `takes`, a case, a jump, a table, a side of a table, a type, a field, a load, a need, a line of the grid, `unless`, a rule and an item of `where`. So is a key where it does not belong: `signed`, `whole`, `least` or `may_be` on a field that is no quantity, `as` on a field that joins no part, and `closed` on a side with no `bands`. The refusal names the key. A misspelled key is then an error, and never a key left out with its default in its place: `close` for `closed` would leave every band closed at its upper end.
 
 A design names a type as the kind of a component block: `lap splice { ... }` is a part named `splice` of type `lap`. The parts of one design are all of one deck's types, or all of the built-in models' kinds.
 
@@ -287,7 +287,7 @@ A field is one line of the part's block. It has `name`, `what`, a text that is n
 
 | A field with | Is | A design writes |
 |---|---|---|
-| `dim` | A quantity of that dimension, more than zero | `thickness 0.375 inch`, or `Fy given tab.Fy` |
+| `dim` | A quantity of that dimension, more than zero unless it says `may_be` | `thickness 0.375 inch`, or `Fy given tab.Fy` |
 | `one_of` | A key: one of the listed names | `threads included`, and in quotes when the name has a space: `fastener "Group 120"` |
 | `type` | The parts of that type it joins, one for each name in `as` | `joins tab strap` |
 
@@ -298,6 +298,7 @@ A quantity may also have these.
 | `signed` | Only the card states it, and the design reads it with `given`. A design that writes a number for it is refused. A material strength is signed. |
 | `whole` | It is a count, and the design writes a whole number |
 | `least` | The least value it may take |
+| `may_be` | `"zero"`: it may be zero, and not under it. `"negative"`: it may be zero or under it. Without `may_be` a quantity of a part is more than zero. |
 
 The name of a field, of a load and of a joined part in `as` is letters, digits and `_`, as the language writes a name. So a rule's `a.Fy` is always a field of a joined part, and no name reads as a number. The kernel holds these names, a name of `let`, a mechanism and a rule's id to 64 bytes as printed, and a design to 10,000 cells ([format.md](format.md), "Limits").
 
@@ -310,6 +311,33 @@ A part reads only the bound the card gives under the part's name and the field's
 `as` gives each joined part the name a rule calls it by. With `"as": ["a", "b"]`, a rule reads `a.thickness` and `b.Fu`.
 
 `loads` lists what a card may put on a part of the type. Each has a `name`, a `dim`, `what` it is, a text that is not empty, and a `least` when it has a floor. A card states one in a load case: `on splice pull in [0 kip, 45 kip]`.
+
+### A quantity at or under zero
+
+A size is more than zero, and most quantities of a part are sizes. Some are not: the lowest temperature a battery may be discharged at, a position measured from a datum, a count of spares that may be none. A field says so with `may_be`.
+
+```json
+{"name": "low", "dim": "temperature", "may_be": "negative", "least": "-40 degC", "what": "the lowest temperature it may be discharged at"}
+{"name": "offset", "dim": "length", "may_be": "zero", "what": "from the datum to its near end"}
+```
+
+A design then writes `low -10 degC` and `offset 0 mm`, and a card may give either with `given`.
+
+| A field says | Its value is | A `least` beside it |
+|---|---|---|
+| nothing | more than zero | may be there, and holds too |
+| `"may_be": "zero"` | at least zero | is refused: the floor is zero |
+| `"may_be": "negative"` | of any sign | is under zero, or left out. One at zero or above is refused. |
+
+`may_be` is one of those two texts. Anything else is refused: `true`, `"positive"`, `"Zero"`. It stands on a quantity, a count among them, and on no key and no field that joins parts.
+
+A load has no floor by its sign: it may be zero or negative as it is, unless its `least` says otherwise. But the kernel holds every bound of a card to the floor that its dimension has in deck.json ([format.md](format.md), type rule 4), and there a length, a mass, a time and seven more are at least zero. So a load that is a position needs `"may_be": "negative"` to go under zero. On a load, `may_be` is `"negative"` or left out: `"zero"` says nothing a load does not say already, and is refused.
+
+`may_be: negative` lifts a floor at zero and no other. The floor of a temperature in deck.json is absolute zero, -273.15 degC. It holds for every temperature of a part and of a card, whatever `may_be` says: a number the design writes under it, and a bound of the card that reaches under it, are refused.
+
+A temperature is a number on the Celsius scale, and the kernel does arithmetic on that number as on any other. It does not know a temperature from a difference of two temperatures: both have the dimension `temperature`. A sum, a difference, a comparison, a least and a greatest of temperatures mean what they say. A product or a quotient of a temperature means something only where the temperature is a difference, as in an expansion over a rise of 30 degC. Twice 20 degC is not a temperature, and the kernel computes 40 all the same: the `units` part of an acceptance check passes it. A rule that needs an absolute temperature adds `["q", "273.15", "degC"]` itself. [reference.md](reference.md), "Units", says why there is no `K` and no `degF`.
+
+A quotient by a quantity that is zero has no value. In a rule, the cell is then open: the kernel's proof fails where a root reads a division by a range that contains zero, and so does a refutation at a point where the divisor is zero. In a need, a field that says `may_be` is refused as a divisor when the deck is read ([What a type needs](#what-a-type-needs)).
 
 ### What a type needs
 
@@ -339,9 +367,9 @@ A side is one of these, and nothing else.
 | `"2"`, `"3/4"`, `["q", "1/16", "inch"]` | A number, and a constant with its unit, as in a row |
 | `["add", a, b, ...]`, `["mul", a, b, ...]` | A sum, a product |
 | `["sub", a, b]`, `["neg", a]` | A difference, the negative |
-| `["div", a, b]` | A quotient, where `b` is a field or a number that is not zero |
+| `["div", a, b]` | A quotient, where `b` is a field that is more than zero or a number that is not zero |
 
-Exact fractions decide these, and that is why the list ends there. A need has no root, no logarithm, no power, no least, no greatest, no absolute value and no pi. It reads no load, no row, no `case` and no key. A quotient divides by a field or by a constant, and by no other expression: a quantity of a part is more than zero ([format.md](format.md), Parts 3), so a quotient by a field never divides by zero and needs no other need to say so. A need names at least one field, and it names each field once, over both sides: `2 a <= b` is written `["mul", "2", "a"]`, and not `["add", "a", "a"]`. A deck with a need that breaks any of this does not load.
+Exact fractions decide these, and that is why the list ends there. A need has no root, no logarithm, no power, no least, no greatest, no absolute value and no pi. It reads no load, no row, no `case` and no key. A quotient divides by a field or by a constant, and by no other expression: a quantity of a part is more than zero ([format.md](format.md), Parts 3), so a quotient by a field never divides by zero and needs no other need to say so. A field that says `may_be` may be zero, so a need that divides by one is refused when the deck is read. Such a field may stand anywhere else in a need: in a sum, in a product, and above the line of a quotient. A need names at least one field, and it names each field once, over both sides: `2 a <= b` is written `["mul", "2", "a"]`, and not `["add", "a", "a"]`. A deck with a need that breaks any of this does not load.
 
 A need is asked of every part of the type, and it must hold for every value the card and the design allow. A field that the design writes is one number. A field that the card bounds is a range. The kernel works out the range of each side from the ranges of its fields with the four operations on their ends, in exact fractions: the ends of a sum are the sums of the ends, the ends of a product are the least and the greatest of the four products of the ends, the negative turns the two ends round, and a quotient is a product by the two ends of the divisor turned over. Because a side reads each field once, that is the range of the side and no wider. The need holds when the most the first side reaches is at most the least the second reaches, or under it for `lt`. So the answer is exact: there is no rounding, no search and no hint, and no cell.
 
@@ -351,7 +379,7 @@ A part that breaks a need makes the design ILL-FORMED, as a missing field does. 
 e: breaks need 1 of a eye: its left side, 23/1000, is not under its right side, 11/500, in SI units: a pin passes through its hole
 ```
 
-For `le` it says `is not at most`. Where a side has a range, the finding gives the most of the left side as `up to 21/1000` and the least of the right as `down to 7/200`. The kernel cuts a finding at 200 bytes, so a long `why` loses its end. The needs are asked last, of a design that breaks no other rule of its files, so each field is there and each quantity is more than zero when a need reads it.
+For `le` it says `is not at most`. Where a side has a range, the finding gives the most of the left side as `up to 21/1000` and the least of the right as `down to 7/200`. The kernel cuts a finding at 200 bytes, so a long `why` loses its end. The needs are asked last, of a design that breaks no other rule of its files, so each field is there and each quantity is within its floor when a need reads it.
 
 A need reads nothing in the sense of the `unread` cells. A field that only a need names is still a field that no rule checks, and has its open cell.
 

@@ -39,40 +39,52 @@ def dimension(name: Any) -> tuple[int, ...] | None:
 
 
 def _under(value: str, floor: Mapping[str, Any]) -> bool:
-    x, least = Fraction(value), Fraction(floor["min"])
+    x, least = Fraction(value), Fraction(floor["min"])      # a floor's `min` is a text in a file, and a fraction when `domains` made the floor
     return x < least or (floor["strict"] and x == least)
 
 
-def domains(card: Mapping[str, Any], design: Mapping[str, Any], deck: Mapping[str, Any]) -> list[str]:
+def domains(card: Mapping[str, Any], design: Mapping[str, Any], deck: Mapping[str, Any], sign: Any = None) -> list[str]:
     """Each size and each signed bound that lies under the floor of its domain. A floor is
-    found by the exponents of its dimension and not by the name a file spells it with."""
+    found by the exponents of its dimension and not by the name a file spells it with, and
+    of two floors of one dimension the tighter one holds.
+
+    `sign(part, field, load)` is what a deck of rules says with `may_be` of a field of a
+    part, or of a load on it: `zero`, `negative` or None. A number for a field that says
+    either is not held to the floor of a size, since its field has a floor of its own. A
+    bound for a field or a load that may be negative is not held to a floor of its dimension
+    that is at zero or above, and is still held to one under zero."""
     out: list[str] = []
     size, floors = deck["domains"]["size"], deck["domains"]["input"]
     for q in design["quantities"]:
-        if q["role"] == "size" and _under(q["lo"], size):
+        if q["role"] == "size" and _under(q["lo"], size) and not (sign and sign(q["entity"], q["line"], False)):
             out.append(f"design: {q['entity']}: {q['line']} {q['field']} is {q['lo']} in SI units, and a size is more than {size['min']}")
     for i in card["inputs"]:
         dim = dimension(i["dim"])
         if dim is None:
             out.append(f"card: {i['name']} is a {i['dim']}, which is not a dimension")
-        for name, floor in floors.items():
-            if isinstance(floor, Mapping) and dim is not None and dimension(name) == dim and _under(i["lo"], floor):
-                out.append(f"card: {i['name']} goes down to {i['lo']} in SI units, and a {name} is "
-                           f"{'more than' if floor['strict'] else 'at least'} {floor['min']}")
+            continue
+        found = [(Fraction(floor["min"]), bool(floor["strict"]), name) for name, floor in floors.items() if isinstance(floor, Mapping) and dimension(name) == dim]
+        if not found:
+            continue
+        least, strict, name = max(found)
+        its = None if sign is None else sign(i["on"], i["field"], True) if "on" in i and "field" in i else sign(*str(i["name"]).rpartition(".")[::2], False)
+        if _under(i["lo"], {"min": least, "strict": strict}) and not (its == "negative" and least >= 0):
+            out.append(f"card: {i['name']} goes down to {i['lo']} in SI units, and a {name} is {'more than' if strict else 'at least'} {least}")
     return out
 
 
-def findings(card: Mapping[str, Any], design: Mapping[str, Any], deck: Mapping[str, Any], card_hash: str | None = None) -> list[str]:
+def findings(card: Mapping[str, Any], design: Mapping[str, Any], deck: Mapping[str, Any], card_hash: str | None = None, sign: Any = None) -> list[str]:
     """Each type rule the card and the design break, in the order the rules are listed, after
     the one shape rule a text of the two can break. `card_hash` is the hash of the card
-    file's bytes, when the caller read a file."""
+    file's bytes, when the caller read a file. `sign` is what a deck of rules says with
+    `may_be` of a field or of a load of a part (`domains`)."""
     from .deck import replaced
 
     out: list[str] = [f"{name}: a text of it holds U+FFFD, the replacement character" for name, body in (("card", card), ("design", design)) if replaced(body)]
     if card_hash is not None and design["card"] != card_hash:
         out.append(f"design: it answers card {design['card']}, and the card given is {card_hash}")
     out += [f"design: a design cannot state {key}" for key in sorted(set(design) - DESIGN_KEYS)]
-    out += domains(card, design, deck)
+    out += domains(card, design, deck, sign)
     out += [f"card: the bound {i['name']} names nobody" for i in card["inputs"] if i.get("by") == ""]
     out += [f"card: the waiver of {w['mechanism']} on {w['subject']} names nobody" for w in card["waivers"] if not w.get("by")]
     return out

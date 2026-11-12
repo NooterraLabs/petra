@@ -87,7 +87,9 @@ class Field:
     """One field of a type or one load on it. A quantity has `dim`, a key has `keys`, and a
     reference has `type`, the type of the parts it names, and `names`, what a rule calls
     each of them in order. Only the card states a `signed` quantity. A `whole` quantity is
-    a count. `least` is the least value a quantity may take, in SI."""
+    a count. `least` is the least value a quantity may take, in SI. `may_be` is `zero` for a
+    quantity that may be zero and `negative` for one of any sign: with neither, a quantity of
+    a part is more than zero."""
 
     name: str
     what: str
@@ -98,6 +100,7 @@ class Field:
     signed: bool = False
     whole: bool = False
     least: Fraction | None = None
+    may_be: str | None = None
 
 
 @dataclass(frozen=True)
@@ -245,13 +248,13 @@ def _name(name: Any) -> bool:
 
 
 def _field(body: Mapping[str, Any], load: bool = False) -> Field:
-    allowed = {"name", "what", "dim", "least"} if load else {"name", "what", "dim", "least", "one_of", "type", "as", "signed", "whole"}
+    allowed = {"name", "what", "dim", "least", "may_be"} if load else {"name", "what", "dim", "least", "one_of", "type", "as", "signed", "whole", "may_be"}
     only(body, tuple(sorted(allowed)), f"field {body.get('name')!r}")
     if sum(key in body for key in ("dim", "one_of", "type")) != 1 or not (isinstance(body.get("what"), str) and body["what"]) or not _name(body.get("name")):
         raise DeckError(f"field {body.get('name')!r}: it has a name of letters, digits and _, `what`, a text, and one of `dim`, `one_of` and `type`, and may have {', '.join(sorted(allowed))}")
     name = body["name"]
     only(body, ("name", "what", "one_of") if "one_of" in body else ("name", "what", "type", "as") if "type" in body
-         else ("name", "what", "dim", "least", "signed", "whole"), f"field {name}")
+         else ("name", "what", "dim", "least", "signed", "whole", "may_be"), f"field {name}")
     if "one_of" in body:
         keys = tuple(str(k) for k in body["one_of"])
         if not keys or len(set(keys)) != len(keys):
@@ -271,7 +274,11 @@ def _field(body: Mapping[str, Any], load: bool = False) -> Field:
     whole = bool(body.get("whole"))
     if whole and dim != NONE:
         raise DeckError(f"field {name}: a count is a plain number")
-    return Field(name, body["what"], dim=dim, signed=bool(body.get("signed")), whole=whole, least=least)
+    # `may_be` says how low the quantity may go by its sign, and a `least` beside it agrees: none with zero, and one under zero with negative.
+    may_be = body.get("may_be")
+    if "may_be" in body and (may_be not in ("zero", "negative") or (load and may_be == "zero") or (least is not None and (may_be == "zero" or least >= 0))):
+        raise DeckError(f"field {name}: `may_be` is zero or negative, and negative alone for a load; a quantity that may be zero has no `least`, and with negative a `least` is under zero")
+    return Field(name, body["what"], dim=dim, signed=bool(body.get("signed")), whole=whole, least=least, may_be=may_be)
 
 
 def _named(items: list, what: str, name: Callable[[Any], str]) -> dict[str, Any]:
@@ -403,11 +410,12 @@ class _Binder(rows._Reader):
         raise RowError(f"{node!r} is not a condition on a part: write is, and, or, not")
 
 
-def _exact(node: Any, takes: Mapping[str, rows.Input]) -> tuple[tuple, Vector]:
+def _exact(node: Any, takes: Mapping[str, rows.Input], free: frozenset = frozenset()) -> tuple[tuple, Vector]:
     """A side of a need and its dimension: a number, a constant with its unit, a quantity
     field of the type or of a part it joins, and add, sub, mul, neg and div. A quotient
     divides by a field, which is more than zero for every part, or by a number that is not
-    zero. Anything else is refused: exact fractions decide a need."""
+    zero. `free` holds the fields that say `may_be`, which may be zero and are no divisor.
+    Anything else is refused: exact fractions decide a need."""
     if isinstance(node, str):
         if node == "pi":
             raise RowError("a need has no pi: exact fractions decide a need")
@@ -425,7 +433,7 @@ def _exact(node: Any, takes: Mapping[str, rows.Input]) -> tuple[tuple, Vector]:
     if op == "q" and len(args) == 2 and all(isinstance(a, str) for a in args):
         value, dim = quantity(f"{args[0]} {args[1]}", "a constant")
         return ("c", value), dim
-    parts = [_exact(a, takes) for a in args] if op in ("add", "mul", "sub", "neg", "div") else []
+    parts = [_exact(a, takes, free) for a in args] if op in ("add", "mul", "sub", "neg", "div") else []
     sides, dims = tuple(p[0] for p in parts), [p[1] for p in parts]
     if op in ("add", "sub") and any(d != dims[0] for d in dims[1:]):
         raise RowError(f"{op} of different dimensions")
@@ -438,8 +446,8 @@ def _exact(node: Any, takes: Mapping[str, rows.Input]) -> tuple[tuple, Vector]:
     if op == "neg" and len(sides) == 1:
         return ("neg", sides[0]), dims[0]
     if op == "div" and len(sides) == 2:
-        if sides[1][0] not in ("field", "c") or sides[1] == ("c", 0):
-            raise RowError("a need divides by a field or by a number that is not zero, and by nothing else: a field is more than zero, so exact fractions decide the quotient")
+        if sides[1][0] not in ("field", "c") or sides[1] == ("c", 0) or (sides[1][0] == "field" and sides[1][1] in free):
+            raise RowError("a need divides by a field that is more than zero or by a number that is not zero, and by nothing else: so exact fractions decide the quotient, and a field that says `may_be` may be zero")
         return ("div", *sides), tuple(a - b for a, b in zip(*dims))
     raise RowError(f"{op!r} with {len(args)} arguments is not in a need: it has add, sub, mul, neg, and div by a field or by a number")
 
@@ -453,7 +461,7 @@ def _fields(side: tuple) -> Iterator[str]:
             yield from _fields(inner)
 
 
-def _need(body: Any, takes: Mapping[str, rows.Input]) -> Need:
+def _need(body: Any, takes: Mapping[str, rows.Input], free: frozenset = frozenset()) -> Need:
     """One need of a type: `{"le": [a, b], "why": "..."}` or `{"lt": [a, b], "why": "..."}`.
     Its two sides have one dimension, and it names at least one field and each field once:
     the range of a side that reads each quantity once is exactly what the four operations
@@ -462,7 +470,7 @@ def _need(body: Any, takes: Mapping[str, rows.Input]) -> Need:
     if ("le" in body) == ("lt" in body) or not (isinstance(body.get("why"), str) and body["why"]):
         raise RowError("it has `le` or `lt`, and not both, and says why in a text that is not empty")
     strict = "lt" in body
-    (low, low_dim), (high, high_dim) = (_exact(side, takes) for side in body["lt" if strict else "le"])
+    (low, low_dim), (high, high_dim) = (_exact(side, takes, free) for side in body["lt" if strict else "le"])
     named = [*_fields(low), *_fields(high)]
     if low_dim != high_dim or not named or len(set(named)) != len(named):
         raise RowError("it compares two sides of one dimension, and names at least one field and each field once, so that exact fractions decide it")
@@ -545,7 +553,10 @@ def read_deck(text: str) -> Deck:
         # What each type needs of its fields, read once every type is known: a need may name a field of a part the type joins.
         for t in body["types"]:
             try:
-                needs = tuple(_need(n, _Binder({}, types[t["type"]], types).takes) for n in t.get("needs", []))
+                kind = types[t["type"]]
+                free = frozenset({f.name for f in kind.fields.values() if f.may_be}
+                                 | {f"{part}.{g.name}" for f in kind.fields.values() if f.type is not None for part in f.names for g in types[f.type].fields.values() if g.may_be})
+                needs = tuple(_need(n, _Binder({}, kind, types).takes, free) for n in t.get("needs", []))
             except RowError as exc:
                 raise DeckError(f"type {t['type']}: a need: {exc}") from None
             types[t["type"]] = Type(*(getattr(types[t["type"]], name) for name in ("name", "what", "fields", "loads")), needs)
@@ -654,6 +665,22 @@ def _at(span: Span) -> str:
     return f"{span.path}:{span.line}:{span.col}"
 
 
+@lru_cache(maxsize=None)
+def _floors() -> tuple[tuple[str, Vector, Fraction, bool], ...]:
+    """The floors that petra/decks/core.json gives the dimensions: the name, the dimension, the floor and whether it is strict."""
+    from . import wellformed
+
+    listed = json.loads(export.CORE.read_text(encoding="utf-8"))["domains"]["input"]
+    return tuple((name, tuple(map(Fraction, wellformed.dimension(name))), Fraction(floor["min"]), bool(floor["strict"]))
+                 for name, floor in listed.items() if isinstance(floor, dict))
+
+
+def _floor(dim: Vector) -> tuple[str, Fraction, bool] | None:
+    """The floor of a dimension in the core domains, the tighter one when two names are one dimension, or None when it has none."""
+    found = [(name, least, strict) for name, its, least, strict in _floors() if its == dim]
+    return max(found, key=lambda f: (f[1], f[2])) if found else None
+
+
 def _quantity(f: Field, kind: str, arg: Any, name: str, design: Design, say: Callable[[str], None]) -> Value | None:
     if isinstance(arg, ParamRef):
         return say("reads a param, and a family is not checked against a deck yet")
@@ -662,10 +689,16 @@ def _quantity(f: Field, kind: str, arg: Any, name: str, design: Design, say: Cal
     q = arg.quantity if isinstance(arg, Fixed) else arg.range
     if rows._vector(q.dim) != f.dim:
         return say(f"is a {show(f.dim)}, not a {show(rows._vector(q.dim))}")
-    if q.value.lo <= 0:
+    if f.may_be is None and q.value.lo <= 0:
         return say("is not more than zero")
+    if f.may_be == "zero" and q.value.lo < 0:
+        return say("is under zero, and its field may be zero and not under it")
     if f.least is not None and q.value.lo < f.least:
         return say(f"is under {float(f.least):g} in SI units, the least a {kind} has: {f.what}")
+    # A number that may be negative is still held to a floor of its dimension that is under zero, as a bound of the card is.
+    floor = _floor(f.dim) if f.may_be == "negative" and isinstance(arg, Fixed) else None
+    if floor is not None and floor[1] < 0 and (q.value.lo < floor[1] or (floor[2] and q.value.lo == floor[1])):
+        return say(f"goes down to {q.value.lo} in SI units, and a {floor[0]} is {'more than' if floor[2] else 'at least'} {floor[1]}")
     if isinstance(arg, Bound):
         if f.whole:
             return say("is a count, which the design writes as a whole number")
@@ -1475,7 +1508,12 @@ def check(design: Design, deck: Deck) -> tuple[Report, dict[str, str]]:
     found = read_parts(design, deck)
     answers = cells(design, deck, found)
     files = bundle(design, deck, answers)
-    broken = wellformed.findings(*(json.loads(files[name]) for name in ("card", "design", "deck")))
+    def sign(part: str, name: str, load: bool) -> str | None:
+        """What the type of a part says with `may_be` of a field, or of a load."""
+        its = found.parts.get(part)
+        return getattr((its.type.loads if load else its.type.fields).get(name), "may_be", None) if its is not None else None
+
+    broken = wellformed.findings(*(json.loads(files[name]) for name in ("card", "design", "deck")), sign=sign)
     if broken:
         raise ComponentError(tuple(f"{design.path}: {b}" for b in broken))
     return Report(design.name, design.path, deck, tuple(answers)), files

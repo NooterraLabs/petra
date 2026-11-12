@@ -150,6 +150,134 @@ class MoreUnits(unittest.TestCase):
             no_deck(self, body)
 
 
+# --- 5. a quantity at or under zero ---------------------------------------------------------------------
+
+PACK = kind("pack", size("low", "temperature", may_be="negative"), size("high", "temperature", may_be="negative", least="-40 degC"),
+            size("station", "length", may_be="negative"), size("offset", "length", may_be="zero"), size("spare", "dimensionless", whole=True, may_be="zero"),
+            size("mass", "mass"), size("drift", "length", may_be="negative", signed=True), size("width", "length"),
+            loads=[{"name": "air", "dim": "temperature", "what": "the air"}, {"name": "shift", "dim": "length", "may_be": "negative", "what": "a shift of either sign"},
+                   {"name": "reach", "dim": "length", "what": "a reach"}],
+            needs=[{"le": [["add", "station", "drift"], ["mul", "2", "width"]], "why": "made up: the station and its drift stay within two widths"},
+                   {"lt": [["mul", "offset", "station"], ["mul", "width", ["q", "1", "m"]]], "why": "made up: a product of two fields that may not be positive"}])
+PACKS = made_up([PACK], [asks("pack.cold", "pack"), asks("pack.span", "pack"), asks("pack.share", "pack"), asks("pack.centre", "pack")],
+                [rule("cold", "pack", "pack.cold", le=["low", ["load", "air"]]),
+                 rule("span", "pack", "pack.span", lt=["low", "high"]),
+                 rule("share", "pack", "pack.share", le=[["div", "mass", "offset"], ["div", ["q", "10", "kg"], ["q", "1", "m"]]]),
+                 rule("centre", "pack", "pack.centre", le=[["abs", ["add", "station", "drift", ["load", "shift"], ["neg", ["load", "reach"]], ["mul", "spare", "width"]]], ["q", "20", "mm"]])])
+COLD = dict(low="-10 degC", high="40 degC", station="-5 mm", offset="200 mm", spare="0", mass="1 kg", drift="given p.drift", width="30 mm")
+FLIGHT = load("flight", "p air in [-10 degC, 40 degC]", "p shift in [-2 mm, 2 mm]", "p reach in [0 mm, 1 mm]")
+
+
+def pack(card: str = FLIGHT, drift: tuple[str, str] = ("-3 mm", "3 mm"), **lines: str) -> tuple[str, str]:
+    return design(part("pack", "p", **{**COLD, **lines})), HEAD + given("p.drift", *drift) + card
+
+
+class AtOrUnderZero(unittest.TestCase):
+    def test_a_battery_to_ten_below_and_a_station_behind_the_datum_are_read_and_checked(self):
+        found, verdict, said = cells(self, PACKS, *pack())
+        self.assertEqual((found["p", "pack.cold", "cold/flight"], found["p", "pack.span", "span"], found["p", "pack.share", "share"], found["p", "pack.centre", "centre/flight"], verdict),
+                         ("proved", "proved", "proved", "proved", "PASS"))
+        deck, read = parsed(PACKS, *pack())
+        written = {q["field"]: q for q in export.design_file(read, "", deck=True)["quantities"]}
+        self.assertEqual([(written[f]["dim"], written[f]["lo"]) for f in ("low", "station", "spare")], [("temperature", "-10"), ("length", "-1/200"), ("dimensionless", "0")])
+        found, _, _ = cells(self, PACKS, *pack(FLIGHT.replace("[-10 degC, 40 degC]", "[-10.001 degC, 40 degC]")))
+        self.assertEqual(found["p", "pack.cold", "cold/flight"], "refuted", "the air may be colder than the pack allows")
+
+    def test_a_range_in_fahrenheit_is_stated_in_celsius_as_exact_fractions(self):
+        """25 to 150 degF is -35/9 to 590/9 degC. No unit has an offset, so the card writes the fractions."""
+        fahrenheit = FLIGHT.replace("[-10 degC, 40 degC]", "[-35/9 degC, 590/9 degC]")
+        deck, read = parsed(PACKS, *pack(fahrenheit, low="-4 degC"))
+        air = next(i for i in export.card(read, export.read_inputs(read), placed=True)["inputs"] if i.get("field") == "air")
+        self.assertEqual((Fraction(air["lo"]), Fraction(air["hi"])), ((Fraction(25) - 32) * 5 / 9, (Fraction(150) - 32) * 5 / 9))
+        found, _, _ = cells(self, PACKS, *pack(fahrenheit, low="-4 degC"))
+        self.assertEqual(found["p", "pack.cold", "cold/flight"], "proved")
+        for unit in ("degF", "K"):
+            with self.assertRaises(LoweringError):
+                parsed(PACKS, *pack(low=f"14 {unit}"))
+
+    def test_zero_and_under_it_are_refused_where_the_field_does_not_permit_them(self):
+        for lines, finding in ((dict(mass="0 kg"), "parts.3 design p.mass: is not more than zero"), (dict(mass="-1 kg"), "parts.3 design p.mass: is not more than zero"),
+                               (dict(width="0 mm"), "parts.3 design p.width: is not more than zero"),
+                               (dict(offset="-1 mm"), "parts.3 design p.offset: is under zero, and its field may be zero and not under it"),
+                               (dict(spare="-1"), "parts.3 design p.spare: is under zero"), (dict(spare="0.5"), "parts.3 design p.spare: is a count: one whole number"),
+                               (dict(high="-41 degC"), "parts.3 design p.high: is under the least its field may take"),
+                               (dict(low="-300 degC"), "parts.3 design p.low: a temperature is at least -5463/20, and this one goes down to -300")):
+            with self.subTest(lines):
+                mine, its = ill_formed(self, PACKS, *pack(**lines))
+                self.assertIn(finding, its)
+        mine, its = ill_formed(self, PACKS, *pack(mass="0 kg"))
+        self.assertIn("types.3 design p.mass.mass", its, "a number of a field that says nothing is still held to the floor of a size")
+        mine, its = ill_formed(self, PACKS, *pack(low="-300 degC"))
+        self.assertNotIn("types.3", its, "a field that may be negative is held to its own floor, and to absolute zero")
+        for lines in (dict(offset="0 mm", mass="0.001 g"), dict(spare="0"), dict(low="-273.15 degC", high="-40 degC"), dict(station="0 mm"), dict(station="-1 km", width="1 km")):
+            with self.subTest(lines):
+                cells(self, PACKS, *pack(**lines))
+
+    def test_a_bound_of_the_card_follows_the_field_or_the_load_it_is_for(self):
+        for card, drift, finding in ((FLIGHT, ("-3 mm", "3 mm"), None), (FLIGHT.replace("[-2 mm, 2 mm]", "[-9 mm, -8 mm]"), ("5 mm", "6 mm"), None),
+                                     (FLIGHT.replace("[0 mm, 1 mm]", "[-1 mm, 1 mm]"), ("-3 mm", "3 mm"), "types.4 card flight.p.reach: a length is at least 0, and this one goes down to -1/1000"),
+                                     (FLIGHT.replace("[-10 degC, 40 degC]", "[-274 degC, 40 degC]"), ("-3 mm", "3 mm"), "types.4 card flight.p.air: a temperature is at least -5463/20")):
+            with self.subTest(card=card, drift=drift):
+                if finding is None:
+                    cells(self, PACKS, *pack(card, drift))
+                else:
+                    self.assertIn(finding, ill_formed(self, PACKS, *pack(card, drift))[1])
+        text, card = pack(width="given p.width")
+        mine, its = ill_formed(self, PACKS, text, card + given("p.width", "-1 mm", "30 mm"))
+        self.assertIn("types.4 card p.width: a length is at least 0", its)
+        self.assertIn("parts.3 design p.width: is not more than zero", its)
+        cold = json.loads(json.dumps(PACKS))
+        cold["types"][0]["loads"][0]["may_be"] = "negative"
+        mine, its = ill_formed(self, cold, *pack(FLIGHT.replace("[-10 degC, 40 degC]", "[-274 degC, 40 degC]")))
+        self.assertIn("types.4 card flight.p.air: a temperature is at least -5463/20", its, "may_be lifts a floor at zero, and absolute zero is no such floor")
+
+    def test_a_quotient_by_a_field_at_zero_has_no_value_and_its_cell_is_open(self):
+        found, verdict, said = cells(self, PACKS, *pack(offset="0 mm"))
+        self.assertEqual((found["p", "pack.share", "share"], verdict), ("open", "UNKNOWN"))
+        if verify.binary():
+            text, card = pack(offset="0 mm")
+            for hint in (dict(state="proved", partition="leaf"), dict(state="refuted", point={"dsg:made-up.p.mass": "1", "dsg:made-up.p.offset": "0"})):
+                its = hinted(self, PACKS, text, card, "pack.share", "p", **hint)
+                self.assertEqual(its["state"], "open")
+                self.assertIn("division by an interval that contains 0", its["reason"])
+        text, card = pack(offset="given p.offset")
+        found, _, _ = cells(self, PACKS, text, card + given("p.offset", "0 mm", "200 mm"))
+        self.assertEqual(found["p", "pack.share", "share"], "open", "the offset may be zero, so the quotient has no value all over its range")
+        found, _, _ = cells(self, PACKS, *pack(offset="50 mm"))
+        self.assertEqual(found["p", "pack.share", "share"], "refuted", "1 kg over 50 mm is 20 kg/m")
+
+    def test_a_need_reads_a_field_at_or_under_zero_and_divides_by_none(self):
+        mine, its = ill_formed(self, PACKS, *pack(station="58 mm"))
+        self.assertIn("parts.9 design p: breaks need 1 of a pack: its left side, up to 61/1000, is not at most its right side, 3/50", its)
+        mine, its = ill_formed(self, PACKS, *pack(offset="700 mm", station="100 mm", width="60 mm"))
+        self.assertIn("parts.9 design p: breaks need 2 of a pack: its left side, 7/100, is not under its right side, 3/50", its)
+        found, _, _ = cells(self, PACKS, *pack(offset="700 mm", station="-100 mm", width="60 mm", low="-10 degC"))
+        self.assertIn(("p", "pack.span", "span"), found, "a product under zero is under the right side, and the part is a part")
+        for divisor in ("offset", "station", "spare", "drift"):
+            with self.subTest(divisor):
+                body = json.loads(json.dumps(PACKS))
+                body["types"][0]["needs"].append({"le": [["div", "mass" if divisor == "spare" else "width", divisor], ["q", "1", "kg" if divisor == "spare" else "1"]], "why": "made up"})
+                mine, its = no_deck(self, body)
+                self.assertIn("may be zero", its)
+        body = json.loads(json.dumps(PACKS))
+        body["types"][0]["needs"].append({"le": [["div", "station", "width"], "3"], "why": "made up: a quotient by a field that is more than zero"})
+        cells(self, body, *pack())
+
+    def test_a_deck_says_may_be_in_one_of_two_ways_and_agrees_with_its_least(self):
+        for field in (size("x", may_be="positive"), size("x", may_be=True), size("x", may_be="Zero"), size("x", may_be=None), size("x", may_be=["zero"]), size("x", may_be=""),
+                      size("x", may_be="zero", least="0 mm"), size("x", may_be="zero", least="-1 mm"), size("x", may_be="zero", least="1 mm"),
+                      size("x", may_be="negative", least="0 mm"), size("x", may_be="negative", least="1 mm"), {**key("x", "a", "b"), "may_be": "zero"},
+                      {"name": "x", "type": "pack", "what": "x", "may_be": "negative"}):
+            with self.subTest(field):
+                no_deck(self, made_up([PACK, kind("holder", field)]))
+        for burden in ({"name": "f", "dim": "force", "what": "f", "may_be": "zero"}, {"name": "f", "dim": "force", "what": "f", "may_be": "negative", "least": "0 N"},
+                       {"name": "f", "dim": "force", "what": "f", "may_be": "any"}):
+            with self.subTest(burden):
+                no_deck(self, made_up([kind("holder", size("x"), loads=[burden])]))
+        reads(self, made_up([kind("holder", size("x", may_be="negative", least="-1 mm"), size("n", "dimensionless", whole=True, may_be="negative"),
+                                  loads=[{"name": "f", "dim": "length", "what": "f", "may_be": "negative", "least": "-1 mm"}])]))
+
+
 # --- 6. a rule that states lt ---------------------------------------------------------------------------
 
 CRAFT = kind("craft", size("mass", "mass"), size("cap", "mass", signed=True), size("span", "length"),
@@ -170,11 +298,11 @@ def craft(mass: str = "249 g", cap: str = "250 g", span: str = "0.5 m", cap_to: 
     return design(part("craft", "c", mass=mass, cap="given c.cap", span=span)), card
 
 
-def hinted(test: unittest.TestCase, rules: dict, text: str, card: str, mechanism: str, **hint) -> dict:
+def hinted(test: unittest.TestCase, rules: dict, text: str, card: str, mechanism: str, subject: str = "c", **hint) -> dict:
     """The kernel's cell of `mechanism` when the hints of proofs.json are this one hint alone, which claims what the caller likes."""
     deck, read = parsed(rules, text, card)
     files = grid.bundle(read, deck)
-    proofs = {"format": "petra-proofs/0", "cells": [{"subject": "c", "mechanism": mechanism, "entry": mechanism.split(".")[1], **hint}]}
+    proofs = {"format": "petra-proofs/0", "cells": [{"subject": subject, "mechanism": mechanism, "entry": mechanism.split(".")[1], **hint}]}
     said = ask({**files, "proofs": json.dumps(proofs)})
     test.assertEqual(said["findings"], [])
     return cell(said, mechanism)

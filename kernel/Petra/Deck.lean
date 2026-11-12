@@ -83,12 +83,21 @@ inductive FieldKind where
   | key (names : Array String) (known : Std.TreeSet String)
   | parts (kind : String) (names : Array String)
 
+/-- How low a quantity may go by its sign. A field that says nothing is more than zero. With
+`may_be` it is at least zero, or of any sign. -/
+inductive Sign where
+  | positive | zero | negative
+  deriving BEq, Inhabited
+
 /-- A field of a type. `oneOf` is what the kernel says of a part that gives a key a name
-it lacks: the list of its names, made once here and not again for each such part. -/
+it lacks: the list of its names, made once here and not again for each such part. `sign` is
+what a quantity says with `may_be`. On a load, which has no floor of its own but its
+`least`, `negative` lifts the floor at zero that its dimension has in deck.json. -/
 structure Field where
   name : String
   kind : FieldKind
   oneOf : String := ""
+  sign : Sign := .positive
 
 def Field.dim (f : Field) : Option Dim :=
   match f.kind with
@@ -300,6 +309,15 @@ structure Scope where
   rows : Std.TreeMap String Row := {}
 
 def Scope.rule (scope : Scope) : Bool := scope.kind.isSome
+
+/-- The field of the type, or of the part it joins under the name `part`, that has this name. -/
+def Scope.field (scope : Scope) (part : Option String) (name : String) : Option Field := do
+  let kind ← scope.kind
+  match part with
+  | none => kind.field.get? name
+  | some part =>
+    let (other, _, _) ← kind.called.get? part
+    (← scope.kinds.get? other).field.get? name
 
 /-- What a name means here: an input of the row, a quantity or a key of the type, or
 `NAME.FIELD` for a field of a part the type joins. The name is looked up in the tables of
@@ -793,7 +811,10 @@ def exact (scope : Scope) : Nat → Json → Except String (Exact × Dim)
       let (x, dx) ← exact scope fuel a
       let (y, dy) ← exact scope fuel b
       match y with
-      | .field .. => pure ()
+      | .field part name =>
+        -- A field that says `may_be` may be zero, so a quotient by it has no value for every part.
+        if ((scope.field part name).map (·.sign)).getD .positive != .positive then
+          throw s!"a need divides by {(part.map (· ++ ".")).getD ""}{name}, which may be zero: a need divides by a field that is more than zero"
       | .c value => if value == 0 then throw "a need divides by zero"
       | _ => throw "a need divides by a field or by a number, and by nothing else: a field is more than zero, so exact fractions decide the quotient"
       return (.div x y, dx - dy)
@@ -1003,7 +1024,7 @@ def readRow (j : Json) : Except String Row := do
 def readField (load : Bool) (j : Json) : Except String Field := do
   let name ← text j "name"
   let field : Except String Field := do
-    within j (if load then ["name", "what", "dim", "least"] else ["name", "what", "dim", "least", "one_of", "type", "as", "signed", "whole"])
+    within j (if load then ["name", "what", "dim", "least", "may_be"] else ["name", "what", "dim", "least", "one_of", "type", "as", "signed", "whole", "may_be"])
     unless (["dim", "one_of", "type"].filter (has j)).length == 1 && filled j "what" do
       throw "it has `what` and one of `dim`, `one_of` and `type`"
     identifier name
@@ -1018,13 +1039,25 @@ def readField (load : Bool) (j : Json) : Except String Field := do
       if names.isEmpty || !distinct names then throw "`as` names each part once"
       names.forM identifier
       return { name, kind := .parts (← text j "type") names }
-    within j ["name", "what", "dim", "least", "signed", "whole"]
+    within j ["name", "what", "dim", "least", "signed", "whole", "may_be"]
     let dim ← dimension (← text j "dim")
     let least ← if has j "least" then do
         let (x, its) ← amount (← text j "least")
         unless its == dim do throw "its least value is of another dimension"
         pure (some x)
       else pure none
+    -- `may_be` says how low the quantity may go by its sign, and a `least` beside it must
+    -- agree: none with `zero`, whose floor is zero, and one under zero with `negative`.
+    let sign ← match j.getObjVal? "may_be" with
+      | .error _ => pure Sign.positive
+      | .ok (.str "zero") =>
+        if load then throw "`may_be` of a load is negative: a load may be zero as it is"
+        if least.isSome then throw "a quantity that may be zero has no `least`: its floor is zero"
+        pure Sign.zero
+      | .ok (.str "negative") =>
+        if least.any (· ≥ 0) then throw "with `may_be` negative a `least` is under zero"
+        pure Sign.negative
+      | _ => throw "`may_be` is zero or negative"
     let flag (key : String) : Except String Bool :=
       match j.getObjVal? key with
       | .error _ => pure false
@@ -1032,7 +1065,7 @@ def readField (load : Bool) (j : Json) : Except String Field := do
       | _ => throw s!"{key} is true or false"
     let whole ← flag "whole"
     if whole && dim != {} then throw "a count is a plain number"
-    return { name, kind := .quantity dim (← flag "signed") whole least }
+    return { name, kind := .quantity dim (← flag "signed") whole least, sign }
   field.mapError (s!"field {clip name}: " ++ ·)
 
 def readKind (j : Json) : Except String Kind := do

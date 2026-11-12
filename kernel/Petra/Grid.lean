@@ -55,17 +55,25 @@ def grouped [Ord κ] (items : Array α) (key : α → κ) : Std.TreeMap κ (Arra
 def firsts [Ord κ] (items : Array α) (key : α → κ) : Std.TreeMap κ α :=
   items.foldl (init := {}) fun table x => table.insertIfNew (key x) x
 
-/-- A quantity is of its field's dimension, more than zero and at least the field's least. -/
-def sized (dim : Dim) (least : Option Rat) (its : String) (range : Iv) : Except (String × String) Unit := do
+/-- The floors that deck.json gives the dimensions, by the exponents of each (`Deck.input`). -/
+abbrev Floors := Std.TreeMap (Array (Int × Nat)) (String × Floor)
+
+/-- A quantity is of its field's dimension and at least the field's least. It is more than
+zero, unless its field says with `may_be` that it may be zero, and is then at least zero,
+or that it may be negative, and then has no floor by its sign. -/
+def sized (dim : Dim) (sign : Sign) (least : Option Rat) (its : String) (range : Iv) : Except (String × String) Unit := do
   unless dimNamed its == some dim do throw ("parts.3", s!"is a {its}, which is not the dimension of its field")
-  if range.lo ≤ 0 then throw ("parts.3", "is not more than zero")
+  match sign with
+  | .positive => if range.lo ≤ 0 then throw ("parts.3", "is not more than zero")
+  | .zero => if range.lo < 0 then throw ("parts.3", "is under zero, and its field may be zero and not under it")
+  | .negative => pure ()
   if least.any (range.lo < ·) then throw ("parts.3", "is under the least its field may take")
 
 /-- What a line gives its field, or the rule it breaks and why. `typed` holds each part of
 the design by its name and its type, `inputs` the card's inputs of each name, and `card` and
 `design` the two names as the labels of a tape hold them. -/
 def slotOf (card design : String) (typed : Std.TreeSet (String × String))
-    (inputs : Std.TreeMap String (Array Input)) (part : String) (field : Field) (args : Array Arg) :
+    (inputs : Std.TreeMap String (Array Input)) (floors : Floors) (part : String) (field : Field) (args : Array Arg) :
     Except (String × String) Slot := do
   match field.kind, args.toList with
   | .parts kind names, args =>
@@ -82,7 +90,12 @@ def slotOf (card design : String) (typed : Std.TreeSet (String × String))
   | .key .., _ => throw ("parts.4", "takes one name")
   | .quantity dim signed whole least, [.number its range] =>
     if signed then throw ("parts.3", "is for the card to state: the design reads it with a given")
-    sized dim least its range
+    sized dim field.sign least its range
+    -- A number that may be negative is still held to a floor of its dimension that is under
+    -- zero, as an input of the card is (type rule 4): no temperature is under absolute zero.
+    if field.sign == .negative then
+      if let some (name, floor) := floors.get? dim.key then
+        if floor.min < 0 && !floor.admits range.lo then throw ("parts.3", floor.broken name range.lo)
     if whole && (range.lo != range.hi || range.lo.den != 1) then throw ("parts.3", "is a count: one whole number")
     return .quantity ⟨s!"dsg:{design}.{part}.{field.name}", range⟩
   | .quantity dim _ whole least, [.given name] =>
@@ -92,7 +105,7 @@ def slotOf (card design : String) (typed : Std.TreeSet (String × String))
     match (inputs.getD name #[]).toList with
     | [input] =>
       if input.caseName.isSome || input.on.isSome || input.field.isSome then throw ("parts.3", s!"{name} is a load of the card")
-      sized dim least input.dim input.range
+      sized dim field.sign least input.dim input.range
       return .quantity ⟨s!"in:{card}.{name}", input.range⟩
     | [] => throw ("parts.3", s!"the card gives no {name}")
     | _ => throw ("parts.3", s!"the card gives {name} twice")
@@ -100,7 +113,7 @@ def slotOf (card design : String) (typed : Std.TreeSet (String × String))
 
 /-- The parts of the design with the card's loads on them, and a finding for each rule of
 the group Parts in docs/format.md that the design or the card breaks. -/
-def readParts (rules : Rules) (card : Card) (design : Design) : StateM Findings (Array Part × Loads) := do
+def readParts (rules : Rules) (card : Card) (design : Design) (floors : Floors := {}) : StateM Findings (Array Part × Loads) := do
   let say (rule file item why : String) : StateM Findings Unit := modify (·.push ⟨rule, file, item, why⟩)
   -- The label of every input of a tape holds the name of the card or of the design, so a
   -- long name would be held once for each number of the design. A name past `MAX_TITLE` is
@@ -134,7 +147,7 @@ def readParts (rules : Rules) (card : Card) (design : Design) : StateM Findings 
           if given.contains line.field then say "parts.2" "design" item "is given twice"
           else
             known := known + 1
-            match slotOf cardName designName typed inputsNamed block.name field line.args with
+            match slotOf cardName designName typed inputsNamed floors block.name field line.args with
             | .ok slot => slots := slots.insert line.field slot
             | .error (rule, why) => say rule "design" item why
         given := given.insert line.field
