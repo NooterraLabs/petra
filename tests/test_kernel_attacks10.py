@@ -15,6 +15,10 @@
       every value of a tape and every sum and product so far. The 64th power of a product of
       four ratios of 98 digits was PASS in Python and UNKNOWN in the kernel, and petra check
       exited 4. Python's tapes now have the kernel's bound.
+  D   A completion was printed as a value "in SI units". Petra's SI takes a temperature in
+      degC, and SI's unit of temperature is the kelvin: a steam main rested on a completion of
+      295 read as 21.85 degC, where the rule asks 100 degC. Each value of a load a completion
+      gives is now printed with its unit, by both readers, in the JSON and in the text.
   M3  Under a card with no load case, the reason of a load that a completion puts on a part
       and that no rule reads said `that case  puts on a`. It says `that the card puts on a`.
 """
@@ -22,6 +26,7 @@ import json
 import unittest
 from fractions import Fraction
 from pathlib import Path
+from unittest import mock
 
 import petra.lang
 from petra import grid, verify
@@ -210,6 +215,56 @@ class ValuesPastTheBitsOfTheKernel(unittest.TestCase):
             for tape, state in (({"inputs": [], "nodes": nodes, "roots": [6]}, "open"), ({"inputs": [], "nodes": apart, "roots": [8]}, "proved")):
                 said = ask(with_card([cell(tape)]))
                 self.assertEqual([c["state"] for c in said["cells"]], [state], said)
+
+
+# --- D. the unit of a value a completion gives ----------------------------------------------------------------
+
+MAIN = kind("main", size("d"), loads=[{"name": "t", "dim": "temperature", "may_be": "negative", "what": "the steam's temperature"}])
+MAINS = made_up([MAIN], [asks("main.dry", "main"), asks("main.size", "main")],
+                [rule("dry", "main", "main.dry", le=[["q", "100", "degC"], ["load", "t"]]), rule("size", "main", "main.size", le=[["q", "1", "mm"], "d"])])
+"""A steam main carries dry steam only above 100 degC."""
+PLAIN = kind("plain", size("d"), loads=[{"name": "t", "dim": "temperature", "may_be": "negative", "what": "the water's temperature"},
+                                        {"name": "k", "dim": "force/length", "what": "the stiffness of the support"},
+                                        {"name": "n", "dim": "dimensionless", "what": "the number of cycles"}])
+PLAINS = made_up([PLAIN], [asks("plain.warm", "plain"), asks("plain.stiff", "plain"), asks("plain.cycles", "plain"), asks("plain.size", "plain")],
+                 [rule("warm", "plain", "plain.warm", le=[["q", "0", "degC"], ["load", "t"]]),
+                  rule("stiff", "plain", "plain.stiff", le=[["load", "k"], ["q", "5", "N/mm"]]),
+                  rule("cycles", "plain", "plain.cycles", le=[["load", "n"], "3"]),
+                  rule("size", "plain", "plain.size", le=[["q", "1", "mm"], "d"])])
+"""Three loads of three kinds of unit, each read by a line of its own: a temperature, a dimension with no unit of factor 1, and a plain number."""
+
+
+def printed(rules: dict, text: str, card: str) -> tuple[list[dict | None], list[str]]:
+    """The completions of `petra check`'s JSON, and the lines of its text that rest on one."""
+    deck, read = parsed(rules, text, card)
+    with mock.patch.object(grid, "decks", lambda: (deck,)):
+        done = grid.checked(read, deck, card, text, "made-up.card")
+    return [c.get("completion") for c in done.to_json()["cells"]], [line for line in done.text().splitlines() if "rested where" in line]
+
+
+class TheUnitOfACompletedLoad(unittest.TestCase):
+    def test_a_temperature_is_printed_in_degc(self):
+        text = design(part("plain", "p", d="20 mm"))
+        card = HEAD + load("service") + "".join(waive(m, "p") for m in ("plain.warm", "plain.stiff", "plain.cycles"))
+        _, status, _ = cells(self, PLAINS, text, card)
+        self.assertEqual(status, grid.PASS_WAIVED)
+        completions, lines = printed(PLAINS, text, card)
+        self.assertEqual([c["loads"] for c in completions if c], [[["p", "t", "service", "0", "degC"]], [["p", "k", "service", "0", "kg^1 s^-2"]],
+                                                                  [["p", "n", "service", "0", "1"]]])
+        self.assertEqual([line.split("; rested where ")[1].split(" (")[0] for line in lines],
+                         ["p.t is 0 degC in case service", "p.k is 0 kg^1 s^-2 in case service", "p.n is 0 in case service"])
+
+    @KERNEL
+    def test_the_kernel_prints_a_completion_of_its_hint_with_its_unit(self):
+        """The designer's proofs.json rests the dry steam on 295: degC to the kernel, and 21.85 degC to a reader who took it for kelvin."""
+        rules, read = parsed(MAINS, design(part("main", "s", d="50 mm")), HEAD + load("service") + waive("main.dry", "s"))
+        files = grid.bundle(read, rules)
+        hints = [{"subject": "s", "mechanism": "main.dry", "entry": "dry/service", "state": "proved", "partition": "leaf",
+                  "completion": {"keys": [], "loads": [["s", "t", "service", "295"]]}},
+                 {"subject": "s", "mechanism": "main.size", "entry": "size", "state": "proved", "partition": "leaf"}]
+        said = ask({**files, "proofs": json.dumps({"format": "petra-proofs/0", "cells": hints})})
+        self.assertEqual(said["verdict"], "PASS")
+        self.assertEqual([c.get("completion") for c in said["cells"]], [{"keys": [], "loads": [["s", "t", "service", "295", "degC"]]}, None])
 
 
 # --- M3. a load a completion puts on a part under a card with no load case ------------------------------------

@@ -47,6 +47,7 @@ from .kernel import (MAX_ARGUMENT, Abs, Add, Const, Cos, Div, Exp, Interval, Ker
                      Sym, enclose)
 from .kernel import PRECISION_BITS as PREC
 from .models.base import ComponentError
+from .units import Dim, si_unit
 
 FORMAT = "petra-rules/0"
 DECKS = Path(__file__).resolve().parent / "decks"
@@ -2062,6 +2063,8 @@ class Report:
     path: str
     deck: Deck
     cells: tuple[Cell, ...]
+    units: Mapping[tuple[str, str], str] = field(default_factory=dict)
+    """The SI unit of each load of each part, by their names (`si_unit`): degC for a temperature."""
 
     @property
     def verdict(self) -> str:
@@ -2085,9 +2088,12 @@ class Report:
         return {state: sum(c.state == state for c in self.cells) for state in STATES}
 
     def completions(self) -> list[dict[str, list] | None]:
-        """For each cell, the completion a waived cell rests on, as proofs.json and the kernel's verdict write it, or None. The
-        signer of the waiver answers for it, so the report prints it with the cell."""
-        return [_completion_body(*c.completion) if c.state == "waived" and c.completion is not None else None for c in self.cells]
+        """For each cell, the completion a waived cell rests on, as the kernel's verdict prints it, or None: as proofs.json writes
+        it, with the unit of each load's value after the value, so that a temperature reads as degC and not as kelvin. The signer
+        of the waiver answers for it, so the report prints it with the cell."""
+        def united(body: dict[str, list]) -> dict[str, list]:
+            return {**body, "loads": [[*load, self.units.get((load[0], load[1]), "")] for load in body["loads"]]}
+        return [united(_completion_body(*c.completion)) if c.state == "waived" and c.completion is not None else None for c in self.cells]
 
     def to_json(self) -> dict[str, Any]:
         return {"file": self.path, "design": self.name, "status": self.status, "deck": {"name": self.deck.name, "hash": self.deck.hash},
@@ -2111,7 +2117,8 @@ class Report:
                     else c.what if c.entry.endswith("/where") else "")
             if done:
                 said += "; rested where " + " and ".join([*(f"{p}.{f} is {name}" for p, f, name in done["keys"]),
-                                                          *(f"{p}.{load} is {x} in SI units" + (f" in case {case}" if case else "") for p, load, case, x in done["loads"])])
+                                                          *(f"{p}.{load} is {x}" + ("" if unit == "1" else f" {unit}") + (f" in case {case}" if case else "")
+                                                            for p, load, case, x, unit in done["loads"])])
             out.append(f"  {f'{c.subject}/{c.mechanism}':<{wide}}  {c.state.replace('_', ' '):<14}  {ratio:>6}  "
                        + ": ".join(part for part in (c.entry, said) if part) + (f" ({c.anchor})" if c.anchor else ""))
         waivers = self.waived()
@@ -2197,4 +2204,5 @@ def check(design: Design, deck: Deck) -> tuple[Report, dict[str, str]]:
     broken = wellformed.findings(*(json.loads(files[name]) for name in ("card", "design", "deck")), sign=sign)
     if broken:
         raise ComponentError(tuple(f"{design.path}: {b}" for b in broken))
-    return Report(design.name, design.path, deck, tuple(answers)), files
+    units = {(name, load): si_unit(Dim(*f.dim)) for name, p in found.parts.items() for load, f in p.type.loads.items()}
+    return Report(design.name, design.path, deck, tuple(answers), units), files

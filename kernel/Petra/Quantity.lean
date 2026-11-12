@@ -177,6 +177,14 @@ def unitOf (unit : String) : Except String (Rat × Dim) :=
     | some _, none => throw s!"{unit} is not a unit: the power of a unit is 2, 3 or 4, as in inch^4"
   | _ => throw s!"{unit} is not a unit"
 
+/-- The unit an SI value of a dimension is in, as `si_unit` in petra/units.py spells it: the
+first unit of `UNITS` with factor 1 and that dimension, as `N`, `Pa` and `degC`, or else the
+exponents that are not zero, as `kg^1 s^-2`. A temperature is in degC: Petra's SI takes it so. -/
+def siUnit (d : Dim) : String :=
+  match UNITS.find? fun (_, factor, dim) => factor == 1 && dim == d with
+  | some (name, _, _) => name
+  | none => " ".intercalate (([("m", d.m), ("kg", d.kg), ("s", d.s), ("A", d.a), ("degC", d.k)].filter (·.2 != 0)).map fun (b, e) => s!"{b}^{e}")
+
 /-- A number as petra/units.py reads one: digits with an optional sign, and then a decimal
 part or a denominator that is not zero. No exponent, no space and no other digit. -/
 def decimal (text : List Char) : Option Rat := do
