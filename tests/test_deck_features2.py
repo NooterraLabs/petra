@@ -212,6 +212,25 @@ class StatedByTheCard(unittest.TestCase):
         (first, *_) = export.card(parsed(LIFTERS, text, measured)[1], [], placed=True)["states"]
         self.assertEqual(first, {"name": "b.category", "by": "lab@example.org", "key": "B"})
 
+    def test_a_count_is_a_number_whose_value_is_whole_in_the_card_as_in_the_design(self):
+        """The card and the design take the same spellings of a count: 3, +3, 3.0, 6/2 and 3/1 are each 3, and card.json holds the
+        value. Until the eighth review the design took 3.0 and 6/2 and the card refused them. 5/2 and 2.5 are no count in either."""
+        for spelled in ("3", "+3", "3.0", "3.00", "6/2", "3/1"):
+            with self.subTest(spelled):
+                by_card, verdict, _ = cells(self, LIFTERS, *beam({**STATES, "lugs": spelled}, pins="3"))
+                by_design, same, _ = cells(self, lifters(False), *beam({}, **{**STATES, "lugs": spelled}, pins="3"))
+                self.assertEqual((by_card["b", "beam.lugs", "lugs"], by_card, verdict), ("proved", by_design, same))
+                deck, read = parsed(LIFTERS, *beam({**STATES, "lugs": spelled}, pins="3"))
+                self.assertIn({"name": "b.lugs", "by": "t@example.org", "whole": "3"}, export.card(read, export.read_inputs(read), placed=True)["states"])
+        for spelled in ("5/2", "2.5"):
+            with self.subTest(spelled):
+                with self.assertRaises(LolaSyntaxError):
+                    parsed(LIFTERS, *beam({**STATES, "lugs": spelled}))
+                with self.assertRaises((LoweringError, grid.ComponentError)) as refused:
+                    deck, read = parsed(lifters(False), *beam({}, **{**STATES, "lugs": spelled}))
+                    grid.check(read, deck)
+                self.assertIn("is a count", str(refused.exception))
+
     def test_a_component_of_the_models_reads_no_exact_statement(self):
         from petra.lang import parse_design
         from petra.registry import build_registry
@@ -299,15 +318,15 @@ class AWaiverRestsWhatIsOpen(unittest.TestCase):
         self.assertEqual((bare_verdict, verdict), ("FAIL", "FAIL"), "no waiver hides a refutation")
         self.assertEqual(list(found), list(bare), "each cell keeps its place and its entry")
 
-    def test_each_way_a_cell_is_open_that_no_inequality_could_answer_is_a_way_it_is_waived_and_its_reason_says_which(self):
-        """A key left unstated is the last such way, which AFieldLeftUnstated tests."""
+    def test_each_way_a_cell_is_open_that_a_waiver_rests_is_a_way_it_is_waived_and_its_reason_says_which(self):
+        """No rule for the part, a load left out that a completion gives (a pull of zero, the least it may be, is under the cap), and a `where`
+        that holds nowhere. A key left unstated is the last such way, which AFieldLeftUnstated and tests/test_kernel_attacks8.py test."""
         for lines, cases, mechanism, entry, was in (
                 ({}, None, "j.none", "", "the deck has no rule for it"),
                 ({}, None, "j.grade", "", "the deck has no rule for it on a part like this one"),
                 ({}, load("calm", "p pull in [0 N, 30 N]") + load("idle"), "j.pull", "pull/idle", "case idle puts no pull on p, which the rule reads"),
                 ({}, "", "j.pull", "pull", "the card puts no pull on p, which the rule reads"),
-                (dict(w="5 mm"), None, "j.range", "range", "the range the rule holds in is not proved: "),      # under 6 mm, where the rule holds nowhere
-                (dict(w="7 mm"), None, "j.table", "table", "")):      # between the two widths the table lists, where it has no value
+                (dict(w="5 mm"), None, "j.range", "range", "the rule holds only where made up: at least 6 mm wide, and that holds nowhere in the ranges for p")):
             with self.subTest(mechanism=mechanism, entry=entry):
                 found, _, said = cells(self, JOINTS, *joint(cases=cases, **lines))
                 self.assertEqual(found["p", mechanism, entry], "waived")
@@ -319,11 +338,14 @@ class AWaiverRestsWhatIsOpen(unittest.TestCase):
         self.assertNotIn(("p", "j.range", "range/where"), found, "a range that is not proved has no cell of its own, waived or not")
 
     def test_a_cell_that_an_inequality_could_answer_stays_open_under_a_waiver_and_says_so(self):
-        """A `where` that holds in part of the ranges, a table that has a value in part of them, and a quantity left unstated. The rule could be
-        refuted where it has a value, or at the value the quantity has, so the waiver does not rest the cell, and its reason says so."""
+        """A `where` that holds in part of the ranges, a table that has a value in part of them or in none, and a quantity left unstated. The
+        rule could be refuted where it has a value, at the value the table would give if the deck listed the width, or at the value the
+        quantity has, so the waiver does not rest the cell, and its reason says so. Until the eighth review it rested the cell of a table with no
+        value anywhere in the ranges."""
         for lines, bounds, mechanism, entry, was in (
                 (dict(w="given p.w"), ("5 mm", "7 mm"), "j.range", "range", "the range the rule holds in is not proved: "),
                 (dict(w="given p.w"), ("5 mm", "7 mm"), "j.table", "table", ""),      # the table lists 5 mm
+                (dict(w="7 mm"), None, "j.table", "table", ""),      # between the two widths the table lists, where it has no value
                 (dict(rating="unstated"), None, "j.rated", "rated", "p.rating is unstated: its maker states none, and the rule reads it")):
             with self.subTest(mechanism=mechanism):
                 text, card = joint(**lines)
@@ -349,11 +371,11 @@ class AWaiverRestsWhatIsOpen(unittest.TestCase):
         listed. UNKNOWN when nothing is proved: waived is a state of its own, and is never counted as proved."""
         calm = load("calm", "p pull in [0 N, 30 N]")
         passing = dict(w="10 mm", grade="b", cap="100 N")
-        found, verdict, said = cells(self, JOINTS, *joint(cases=calm, **{**passing, "w": "8 mm"}))
+        found, verdict, said = cells(self, JOINTS, *joint(cases=calm, **{**passing, "w": "5 mm"}))
         self.assertEqual((verdict, sorted(set(found.values()))), ("PASS_WAIVED", ["not_applicable", "proved", "waived"]))
         if verify.binary():
-            self.assertEqual((said["verdict"], [w["mechanism"] for w in said["waived"]]), ("PASS", ["j.none", "j.table"]))
-        found, verdict, _ = cells(self, JOINTS, *joint(["j.size", "j.pull", "j.range", "j.table", "j.grade", "j.two", "j.rated"], cases=calm, **{**passing, "w": "8 mm"}))
+            self.assertEqual((said["verdict"], [w["mechanism"] for w in said["waived"]]), ("PASS", ["j.none", "j.range"]))
+        found, verdict, _ = cells(self, JOINTS, *joint(["j.size", "j.pull", "j.range", "j.table", "j.grade", "j.two", "j.rated"], cases=calm, **{**passing, "w": "5 mm"}))
         self.assertEqual((verdict, found["p", "j.none", ""]), ("UNKNOWN", "open"), "one open cell that no waiver rests")
         nothing = made_up([JOINT], [asks("j.none", "joint"), asks("j.pull", "joint")], [rule("pull", "joint", "j.pull", le=[["load", "pull"], "cap"])])
         found, verdict, _ = cells(self, nothing, *joint(["j.none", "j.pull"], cases=""))
@@ -1279,7 +1301,7 @@ class Heaviest(unittest.TestCase):
     def test_a_table_of_values_in_the_unit_that_is_listed_last(self):
         """A table read at 42,000 listed values, each cell in `oz`, the last unit of the kernel's list, and each value in `mile`: 84,000
         quantities whose unit is found past every other, 1.0 MB. A rule reads the table, which is a pick of far more orders than a pick
-        may hold, so its tape is not written. 1.1 processor seconds and 60 MB."""
+        may hold, so the deck is refused when it is read, after every value of it is read. 1.1 processor seconds and 60 MB."""
         from tests.test_kernel_attacks3 import empty_card, with_rules
 
         count = 42_000
@@ -1289,8 +1311,8 @@ class Heaviest(unittest.TestCase):
         number = lambda dim, x: [{"number": {"dim": dim, "lo": x, "hi": x}}]      # noqa: E731
         parts = [{"name": f"p{i}", "type": "t", "lines": [{"field": "f", "args": number("length", "201168/125")}, {"field": "m", "args": number("mass", "1/100")}]} for i in range(2)]
         said = self.bounded(with_rules(deck, empty_card(), parts))
-        self.assertEqual((said["verdict"], said["findings"], said["counts"]["open"]), ("UNKNOWN", [], 2))
-        self.assertIn("over the budget of 1024 for one pick", said["cells"][0]["reason"])
+        self.assertEqual((said["verdict"], [f["file"] for f in said["findings"]]), ("ILL-FORMED", ["rules"]))
+        self.assertIn("over the budget of 1024 for one pick", said["findings"][0]["why"])
 
     def test_parts_that_leave_a_field_unstated_under_rules_that_read_many(self):
         """A type of 190 optional fields, 212 rules that each sum them all, and 47 parts that leave the last field unstated. Each rule looks

@@ -12,7 +12,8 @@ answer and writes the files of docs/format.md:
     proved          a rule's inequality holds for every value the card and the design allow
     refuted         it fails at a point they allow
     not_applicable  the deck says the mechanism cannot arise for this part, and why
-    waived          the card waives the mechanism on the part, and the cell would be open without that
+    waived          the card waives the mechanism on the part, the cell would be open without that,
+                    and the deck has no rule for the part or a completion of what is left out holds
     open            anything else: no rule, a rule that reads what the card does not give,
                     a value outside a rule's range, or an inequality neither proved nor refuted
 
@@ -35,7 +36,7 @@ from dataclasses import dataclass, field, replace
 from fractions import Fraction
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Callable, Iterator, Mapping
+from typing import Any, Callable, Iterable, Iterator, Mapping
 
 from . import deck as rows
 from . import export
@@ -50,10 +51,18 @@ DECKS = Path(__file__).resolve().parent / "decks"
 STATES = ("proved", "refuted", "not_applicable", "waived", "open")
 MAX_CHOICES = 4096
 """The most ways a pick may order what it compares, as in kernel/Petra/Tape.lean."""
+MAX_ORDERS = 1024
+"""The most orders the conditions of one pick may hold between them, as in kernel/Petra/Tape.lean.
+A deck whose rule could write a pick of more is refused when it is read."""
 MAX_LEAVES = 256
 """The most leaves a partition may have before the search for a proof stops."""
 MAX_CORNERS = 6
 """A refuting point is looked for at every corner of the box while no more inputs than this have a range, and past that at one."""
+MAX_CLIMB = 65_536
+"""The most nodes the climb to that one corner walks, over every time it walks the tape: a tape
+of n nodes is walked MAX_CLIMB // n times at most. A round of the climb walks the tape twice
+for each ranged input, and it may take a round for each, so without this bound its time grew
+as the cube of their number."""
 MAX_NAME = 64
 """The most bytes a name may print in that a cell prints whole, as in kernel/Petra/Files.lean:
 the name of a part, a load case, a mechanism, a field, a load, a joined part and a `let`, and a rule's id."""
@@ -61,8 +70,11 @@ UNREAD = "unread"
 """The mechanism of the cell of a field or a load that nothing reads. No line of the grid has this name."""
 WAIVED = "open but for the waiver: "
 """What the kernel's reason of a waived cell starts with. The reason the cell had while it was open follows."""
-UNRESTED = "the waiver rests no cell that an inequality could answer: "
+UNRESTED = "the waiver does not rest this cell: "
 """What the kernel's reason of an open cell of a waived line starts with, when the waiver does not rest it."""
+MAX_COMPLETIONS = 64
+"""The most completions of what a part and a case leave out that the search tries for one
+cell, as witnesses for a waiver or, for a rule with an inequality, as refutations."""
 UNSTATED = "unstated"
 """The word a design writes for an `optional` field that the part's record does not state, as in kernel/Petra/Deck.lean."""
 
@@ -624,6 +636,47 @@ def _tried(names: list[str], takes: Mapping[str, rows.Input], requires: tuple, w
     return answers, holds
 
 
+def _over_orders(count: int) -> str:
+    """Why a deck is refused that would write a pick of `count` orders, past MAX_ORDERS, in the kernel's words."""
+    return f"a pick of the rule's tape would compare {count} orders, over the budget of {MAX_ORDERS} for one pick"
+
+
+def _place_orders(axis: rows.Axis) -> list[int]:
+    """The orders of the condition that a quantity is at each place of a side: two for a listed value, one for each end of a band."""
+    return [2] * len(axis.at) if axis.at else [1 if hi is None else 2 for _, hi in axis.bands]
+
+
+def _named_orders(row: rows.Row) -> int:
+    """The orders of the conditions under which the quantities are at the cells of a row that gives a name, the empty ones left out."""
+    places = [_place_orders(axis) for axis in row.table.axes] + [[0]]
+    return sum(places[0][i] + places[1][j] for i, line in enumerate(row.table.cells) for j, cell in enumerate(line) if cell is not None)
+
+
+def _cond_orders(cond: Any) -> int:
+    """The orders a condition of a row's case or of a tape's pick compares."""
+    if cond is None:
+        return 0
+    if cond[0] in ("and", "or"):
+        return sum(map(_cond_orders, cond[1] if isinstance(cond[1], list) else cond[1:]))
+    return _cond_orders(cond[1]) if cond[0] == "not" else 1
+
+
+def _picks(applied: Mapping[str, Applied | Cased], where: tuple) -> int:
+    """The most orders a pick of the rule's tape compares for any part, as `push` in kernel/Petra/Deck.lean counts them when it reads
+    the rule: the cases of an equation, the places of a table down or across, the cells of a row that gives a name, and the `where`."""
+    most = len(where)
+    for a in applied.values():
+        if isinstance(a, Cased):
+            most = max(most, _named_orders(a.named.row))
+        elif a.row.table is None:
+            most = max(most, 0 if a.row.cases[0].when is None else sum(_cond_orders(c.when) for c in a.row.cases))
+        else:
+            for axis in a.row.table.axes:
+                how = a.keys.get(axis.by) if axis.keys else None
+                most = max(most, _named_orders(how[1].row) if how is not None and how[0] == "named" else 0 if axis.keys else sum(_place_orders(axis)))
+    return most
+
+
 def _rule(body: Mapping[str, Any], deck_rows: Mapping[str, rows.Row], types: Mapping[str, Type]) -> Rule:
     where = body.get("id")
     try:
@@ -662,6 +715,8 @@ def _rule(body: Mapping[str, Any], deck_rows: Mapping[str, rows.Row], types: Map
         when = binder.static(body["when"]) if "when" in body else None
         if binder.problems:
             raise RowError("; ".join(dict.fromkeys(binder.problems)))
+        if (most := _picks(binder.applied, ranges)) > MAX_ORDERS:
+            raise RowError(_over_orders(most))
         _refuse_no_value(types[body["type"]], types, lets, [low, high, *(term for a, b, _ in ranges for term in (a, b))], binder.applied)
         return Rule(where, body["type"], body["mechanism"], anchor, body["says"], when, lets, ranges, low, high, binder.applied, strict=strict)
     except RowError as exc:
@@ -1120,11 +1175,14 @@ class _Tape:
         return {"le": ["le", a, b], "lt": ["lt", a, b], "ge": ["le", b, a], "gt": ["lt", b, a]}[c[0]]
 
     def pick(self, cases: list[tuple[Any, int]], what: str) -> int:
-        """The first case that holds. A lone case that holds otherwise is its value."""
-        if not cases:
-            raise NoValue(f"{what} gives nothing here")
-        if cases[0][0] is None:
+        """The first case that holds. A lone case that holds otherwise is its value. With no case it is a pick that has no value
+        anywhere, as the kernel writes a table that gives nothing for the part and an equation with no case: the tape is still
+        written, so a `case` whose branch for one name reads such a table has a value where the row gives another name. A pick
+        holds at most MAX_ORDERS orders, as the kernel's `pickOf` does, and reading the deck refuses a rule that could write more."""
+        if cases and cases[0][0] is None:
             return cases[0][1]
+        if (count := sum(_cond_orders(c) for c, _ in cases)) > MAX_ORDERS:
+            raise NoValue(_over_orders(count))
         at = self.node("pick", [[c, v] for c, v in cases])
         self.picks.setdefault(at, what)
         return at
@@ -1371,37 +1429,13 @@ def _partition(nodes: list[list], roots: list[int], box: list[Interval], budget:
     return {"input": labels[widest], "at": export.number(cut), "below": halves[0], "above": halves[1]}
 
 
-def _read(node: list) -> list[int]:
-    """The nodes that a node other than a pick reads."""
-    if node[0] in ("c", "s", "pi"):
-        return []
-    return node[1] if node[0] in _MANY else [node[1]] if node[0] in _ONE or node[0] == "pow" else node[1:]
-
-
-def _silent(nodes: list[list], roots: list[int], box: list[Interval], outside: bool) -> bool:
-    """Whether a root says nothing at any point of the box, as Tape.silent in
-    kernel/Petra/Tape.lean decides it: it has no value anywhere because a row gives nothing
-    there, or, with `outside`, it is above zero all over the box. A node has no value
-    anywhere when it reads one that has none anywhere, and a pick when a node it compares has
-    none anywhere, or when in every way of ordering what it compares no case holds or the
-    first that holds has none anywhere."""
-    v, void = enclosures(nodes, box), []
-    for n, node in enumerate(nodes):
-        if not isinstance(v[n], str):
-            void.append(False)
-        elif node[0] != "pick":
-            void.append(any(void[i] for i in _read(node)))
-        else:
-            pairs = list(dict.fromkeys(pair for cond, _ in node[1] for pair in _atoms(cond)))
-            ends = [i for pair in pairs for i in pair]
-            if any(void[i] or isinstance(v[i], str) for i in ends):
-                void.append(any(void[i] for i in ends))
-                continue
-            options = [[0] if a == b else [s for s, possible in ((-1, v[a].lo < v[b].hi), (0, v[a].lo <= v[b].hi and v[b].lo <= v[a].hi), (1, v[a].hi > v[b].lo)) if possible]
-                       for a, b in pairs]
-            void.append(math.prod(map(len, options)) <= MAX_CHOICES and all(
-                next((void[value] for cond, value in node[1] if _holds(cond, dict(zip(pairs, way)))), True) for way in itertools.product(*options)))
-    return any(void[r] or (outside and isinstance(v[r], Interval) and v[r].lo > 0) for r in roots)
+def _nowhere(nodes: list[list], roots: list[int], box: list[Interval]) -> int | None:
+    """The first root that is above zero at every point of the box, as Tape.above in
+    kernel/Petra/Tape.lean finds it: its enclosure over the whole box has a lower end above
+    zero. For the tape of a rule's `where`, such a root says that the rule holds nowhere in
+    the box."""
+    v = enclosures(nodes, box)
+    return next((k for k, r in enumerate(roots) if isinstance(v[r], Interval) and v[r].lo > 0), None)
 
 
 def _height(nodes: list[list], root: int, point: list[Fraction]) -> Fraction | None:
@@ -1418,21 +1452,25 @@ def _refuting(nodes: list[list], root: int, box: list[Interval]) -> list[Fractio
     """A point of the box where the root is above zero: a corner of it while no more inputs
     than MAX_CORNERS have a range, and past that the corner the root climbs to; and then its
     middle. The climb starts at the middle and sets each ranged input in turn to the end of
-    its range where the root is higher, the others held, until a round moves none or there
-    have been as many rounds as ranged inputs. Where the root has no value it is lowest."""
+    its range where the root is higher, the others held, until a round moves none, there
+    have been as many rounds as ranged inputs, or it has walked MAX_CLIMB nodes; it stops
+    where it is then. Where the root has no value it is lowest."""
     ranged = [k for k, x in enumerate(box) if x.width() > 0]
     middle = [x.midpoint() for x in box]
     if len(ranged) <= MAX_CORNERS:
         corners = [list(p) for p in itertools.product(*((x.lo, x.hi) if x.width() > 0 else (x.lo,) for x in box))]
     else:
-        point = list(middle)
+        point, walks = list(middle), MAX_CLIMB // max(len(nodes), 1)
         for _ in ranged:
             moved = False
             for k in ranged:
+                if walks < 2:
+                    break
+                walks -= 2
                 low, high = (_height(nodes, root, [*point[:k], end, *point[k + 1:]]) for end in (box[k].lo, box[k].hi))
                 end = box[k].hi if low is None or (high is not None and high >= low) else box[k].lo
                 moved, point[k] = moved or end != point[k], end
-            if not moved:
+            if not moved or walks < 2:
                 break
         corners = [point]
     return next((point for point in [*corners, middle] if _above(nodes, root, point)), None)
@@ -1457,9 +1495,13 @@ class Cell:
     tries on the tape it writes itself. `proof` is the partition of a proved cell or the
     point of a refuted one. `ratio` is the most the left side of the rule reaches over the
     least the right side does, when both are known and the right side is above zero.
-    `waivable` says that a waiver of the line may rest the cell while it is open: no
-    inequality could answer it. `waiver` is who signed the waiver a waived cell rests on,
-    and why."""
+    `waivable` says that a waiver of the line may rest the cell while it is open: the deck
+    has no rule for the part, or `completion` makes the rule hold. That is the names of the
+    unstated keys and the values of the left-out loads, as `(keys, loads)`, each key
+    `(PART, FIELD, NAME)` and each load `(PART, LOAD, CASE, VALUE)`. `hints` are the hints
+    the cell gives proofs.json when they are not its `body` alone: one for each completion
+    of a refuted cell, or the one with the completion of a waivable cell. `waiver` is who
+    signed the waiver a waived cell rests on, and why."""
 
     subject: str
     mechanism: str
@@ -1473,11 +1515,55 @@ class Cell:
     proof: Mapping[str, Any] = field(default_factory=dict)
     waivable: bool = False
     waiver: tuple[str, str] | None = None
+    completion: tuple[tuple, tuple] | None = None
+    hints: tuple[Mapping[str, Any], ...] | None = None
 
     @property
     def body(self) -> dict[str, Any]:
         out = {"subject": self.subject, "mechanism": self.mechanism, "entry": self.entry, "state": self.state, **self.proof}
         return {**out, **({"why": self.why} if self.state in ("open", "not_applicable") else {}), **({"rule": self.rule} if self.rule else {})}
+
+
+def _completion_body(keys: Iterable[tuple[str, str, str]], loads: Iterable[tuple[str, str, str, Fraction]]) -> dict[str, list]:
+    """A completion as proofs.json holds it."""
+    return {"keys": [list(k) for k in keys], "loads": [[p, load, case, export.number(x)] for p, load, case, x in loads]}
+
+
+def _unsaid(part: Part, parts: Mapping[str, Part], names: Iterable[str]) -> list[tuple[str, str, tuple[str, ...]]]:
+    """The keys of these fields, as a rule names them, that the part or the part it joins
+    leaves unstated, each once in the order of the names: the part that has it, the field
+    and the names the key may take."""
+    found: list[tuple[str, str, tuple[str, ...]]] = []
+    for name in names:
+        if _field_of(part, parts, name) is not NOT_STATED:
+            continue
+        alias, dot, inner = name.partition(".")
+        owner = next(parts[part.values[f.name][f.names.index(alias)]] for f in part.type.fields.values() if f.type is not None and alias in f.names) if dot else part
+        field = owner.type.fields[inner if dot else name]
+        if field.keys and not any((o, f) == (owner.name, field.name) for o, f, _ in found):
+            found.append((owner.name, field.name, field.keys))
+    return found
+
+
+def _completed(part: Part, parts: Mapping[str, Part], keys: Iterable[tuple[str, str, str]],
+               loads: Iterable[tuple[str, str, str, Fraction]]) -> tuple[Part, dict[str, Part]]:
+    """The part and the parts with each key of a completion named, and each of its loads put
+    on the part as one value, labelled `put:CASE.PART.LOAD` as Completion.onto in
+    kernel/Petra/Grid.lean labels it."""
+    changed = dict(parts)
+    for owner, field, name in keys:
+        changed[owner] = replace(changed[owner], values={**changed[owner].values, field: name})
+    for on, load, case, x in loads:
+        p = changed[on]
+        changed[on] = replace(p, loads={**p.loads, load: {**p.loads.get(load, {}), case: Value(f"put:{case}.{on}.{load}", Interval.point(x))}})
+    return changed[part.name], changed
+
+
+def _choices(unsaid: list[tuple[str, str, tuple[str, ...]]], prefer: Mapping[Any, Any]) -> Iterator[tuple[tuple[str, str, str], ...]]:
+    """The combinations of the names of the keys, the names that `prefer` holds first."""
+    ordered = [sorted(names, key=lambda n: n != prefer.get((owner, field))) for owner, field, names in unsaid]
+    for combo in itertools.product(*ordered):
+        yield tuple((owner, field, name) for (owner, field, _), name in zip(unsaid, combo))
 
 
 def _static(cond: tuple | None, part: Part, parts: Mapping[str, Part]) -> bool:
@@ -1557,57 +1643,136 @@ def _ratio(nodes: list[list], low: int, high: int, box: list[Interval]) -> float
     return None
 
 
-def _answers(rule: Rule, ask: Ask, part: Part, parts: Mapping[str, Part], cases: tuple[str, ...] = ()) -> Iterator[Cell]:
+def _refusal(rule: Rule, part: Part, parts: Mapping[str, Part]) -> str:
+    """Why a part is not what a rule requires, as Part.refusal in kernel/Petra/Grid.lean says
+    it: each key the rule names and the name the part has for it, or `unstated`, named while
+    they fit in the reason the kernel prints, and the rest counted."""
+    asked, has, said = list(dict.fromkeys(_keys(rule.requires))), "", 0
+    for name in asked:
+        one = f"{name} is {str(_field_of(part, parts, name))[:MAX_REASON]}"
+        if said and len(f"{has}, {one}".encode("utf-8", "surrogatepass")) > MAX_REASON - 56:
+            break
+        has += f"{', ' if said else ''}{one}"
+        said += 1
+    return f"the part is not what the rule requires: {has}{f' and {len(asked) - said} more' if said < len(asked) else ''}"
+
+
+def _listed(names: list[str]) -> str:
+    """Loads for a reason, as the kernel lists them: the first four, and how many more."""
+    return " and no ".join(names[:4]) + (f" and {len(names) - 4} more" if len(names) > 4 else "")
+
+
+def _least(load: Field) -> Fraction:
+    """The value a completion first tries for a load: its `least`, or zero."""
+    return load.least if load.least is not None else Fraction(0)
+
+
+def _incomplete(rule: Rule, part: Part, parts: Mapping[str, Part], unsaid: list[tuple[str, str, tuple[str, ...]]], missing: list[str],
+                case: str, waived: bool, prefer: dict[Any, Any], pending: Cell, tape_of: Callable[..., tuple[_Tape, list[int], list]]) -> Cell:
+    """The cell of a rule for a part that leaves the keys of `unsaid` unstated, or under the
+    load case `case` that leaves out the loads of `missing`, as `incomplete` in
+    kernel/Petra/Grid.lean settles it from the hints this cell gives. `case` is empty for a
+    card with no load case, and `pending` is the open cell.
+
+    It is refuted when no load is left out and, under each combination of the names of the
+    keys, the rule answers for the part and fails: its `requires` does not hold, or the
+    search finds a point that refutes its tape there, which is a hint with that combination.
+    The combinations are tried while there are at most MAX_TRIED for a rule with `requires`
+    and MAX_COMPLETIONS for one with an inequality.
+
+    On a line the card waives, it is otherwise open with the first of at most MAX_COMPLETIONS
+    completions that is a witness: under it the rule does not answer, its `requires` holds,
+    or the search proves its tape. The names and the values that `prefer` holds come first,
+    and a load takes its `least`, or zero. `prefer` gains the witness. The tape of a rule with
+    a `where` is the rule's inside the `where` and -1 outside it."""
+    def gated(on: Part, among: Mapping[str, Part]) -> tuple[_Tape, list[int], list]:
+        return tape_of([(rule.low, rule.high)], case, rule.strict, [w[:2] for w in rule.where], on, among)
+
+    base = {k: v for k, v in pending.body.items() if k != "why"}
+    if not missing and math.prod(len(names) for _, _, names in unsaid) <= (MAX_TRIED if rule.requires is not None else MAX_COMPLETIONS):
+        hints = []
+        for keys in _choices(unsaid, {}):
+            on, among = _completed(part, parts, keys, ())
+            if not _static(rule.when, on, among):
+                break
+            if rule.requires is not None:
+                if _static(rule.requires, on, among):
+                    break
+                continue
+            try:
+                tape, roots, _ = gated(on, among)
+            except NoValue:
+                break
+            if (point := _searched(tape.nodes, roots, [i.range for i in tape.inputs])) is None:
+                break
+            hints.append({**base, "state": "refuted", "point": {i.label: export.number(x) for i, x in zip(tape.inputs, point)},
+                          "completion": _completion_body(keys, ())})
+        else:
+            return replace(pending, state="refuted", why=_refusal(rule, part, parts) if rule.requires is not None else "", hints=tuple(hints) or None)
+    if not waived:
+        return pending
+    loads = tuple((part.name, load, case, prefer.get((part.name, load, case), _least(part.type.loads[load]))) for load in missing)
+    for keys in itertools.islice(_choices(unsaid, prefer), MAX_COMPLETIONS):
+        on, among = _completed(part, parts, keys, loads)
+        hint = {**pending.body, "completion": _completion_body(keys, loads)}
+        found = not _static(rule.when, on, among)
+        if not found and rule.requires is not None:
+            found = _static(rule.requires, on, among)
+        elif not found:
+            try:
+                tape, roots, _ = gated(on, among)
+            except NoValue:
+                continue
+            if (partition := _partition(tape.nodes, roots, [i.range for i in tape.inputs], [MAX_LEAVES], [i.label for i in tape.inputs])) is not None:
+                hint["partition"], found = partition, True
+        if found:
+            prefer.update({(owner, f): name for owner, f, name in keys} | {(p, load, c): x for p, load, c, x in loads})
+            return replace(pending, waivable=True, completion=(keys, loads), hints=(hint,))
+    return pending
+
+
+def _answers(rule: Rule, ask: Ask, part: Part, parts: Mapping[str, Part], cases: tuple[str, ...] = (), waived: bool = False,
+             prefer: dict[Any, Any] | None = None) -> Iterator[Cell]:
     """The cells of one rule on one part. A rule that reads no load has one. A rule that
-    reads loads has one for each of `cases`, the load cases of the card, and under a case
-    that does not put every load it reads on the part its cell is open: a load the card
-    does not state is not taken as zero. Before a cell comes one that proves the rule's
-    range, where it has one."""
+    reads loads has one for each of `cases`, the load cases of the card, or one when the card
+    has none. Under a case that does not put every load it reads on the part, and for a part
+    that leaves a key it reads unstated, its cell is incomplete (`_incomplete`): a load the
+    card does not state is not taken as zero. Before a cell comes one that proves the rule's
+    range, where it has one. `waived` says that the card waives the line on the part, and
+    `prefer` holds the names and the values that the cells before these were completed with."""
     tail, anchor = rule.id.rpartition("/")[2], _anchor(rule.anchor)
+    prefer = {} if prefer is None else prefer
 
     def cell(entry: str, state: str, why: str = "", **more: Any) -> Cell:
         return Cell(part.name, rule.mechanism, entry, state, rule.says, anchor, why, rule.id, **more)
 
-    # A rule that reads a field the part leaves unstated has no answer: each cell it would give is open. It reads the field in a side, in
-    # its `where`, in its `when` or in its `requires`. The kernel names the first such field the rule reads, and this names the first by name.
+    # A rule that reads a field the part leaves unstated has no answer of its own. It reads the field in a side, in its `where`, in its
+    # `when` or in its `requires`. The kernel names the first such field the rule reads, and this names the first by name. With a quantity
+    # left unstated each cell the rule would give is open, and no waiver rests it: no hint names a value for a quantity.
     named = _reads(rule)
     fields = sorted(name for name in named if not name.startswith("load "))
-    lacks = _lacking(part, parts, fields)
+    reads = sorted(name[5:] for name in named if name.startswith("load "))
+    lacks, unsaid = _lacking(part, parts, fields), []
     if lacks is not None:
-        # A waiver rests these cells when the part leaves keys alone unstated. With a quantity left out the inequality could still be answered.
-        keys = not _lacks_quantity(part, parts, fields)
-        single = rule.requires is not None or not cases or not any(name.startswith("load ") for name in named)
-        for entry in [tail] if single else [f"{tail}/{case}" for case in cases]:
-            yield cell(entry, "open", _unstated_why(lacks, "the rule"), waivable=keys)
-        return
-
-    if rule.requires is not None:
-        # One cell, with no tape and no hint: proved when the condition over keys holds for the part, and refuted when not.
-        if _static(rule.requires, part, parts):
-            yield cell(tail, "proved")
+        if _lacks_quantity(part, parts, fields):
+            single = rule.requires is not None or not cases or not reads
+            for entry in [tail] if single else [f"{tail}/{case}" for case in cases]:
+                yield cell(entry, "open", _unstated_why(lacks, "the rule"))
             return
-        # The keys are named while they fit in the reason the kernel prints, and the rest are counted, as in Grid.lean.
-        asked, has, said = list(dict.fromkeys(_keys(rule.requires))), "", 0
-        for name in asked:
-            one = f"{name} is {_field_of(part, parts, name)[:MAX_REASON]}"
-            if said and len(f"{has}, {one}".encode("utf-8", "surrogatepass")) > MAX_REASON - 56:
-                break
-            has += f"{', ' if said else ''}{one}"
-            said += 1
-        yield cell(tail, "refuted", f"the part is not what the rule requires: {has}{f' and {len(asked) - said} more' if said < len(asked) else ''}")
-        return
+        unsaid = _unsaid(part, parts, fields)
 
-    def tape_of(pairs: list[tuple[Any, Any]], case: str | None, strict: bool = False,
-                within: list[tuple[Any, Any]] = ()) -> tuple[_Tape, list[int], list[tuple[int, int]]]:
+    def tape_of(pairs: list[tuple[Any, Any]], case: str | None, strict: bool = False, within: list[tuple[Any, Any]] = (),
+                on: Part = part, among: Mapping[str, Part] = parts) -> tuple[_Tape, list[int], list[tuple[int, int]]]:
         """The tape with a root for each pair: the first side less the second, which is at most
         zero where the pair is in order. A strict root is the pick that is -1 where the first
         side is under the second and 1 elsewhere: it is at most zero on a box only where the
         first side is under the second all over it, and above zero at a point only where it
         is not under it there. With `within`, the pairs of a `where`, a root is the pick that is
         that root where each pair of `within` is in order and -1 elsewhere: it is above zero at
-        a point only inside the `where`, where the pair is out of order."""
+        a point only inside the `where`, where the pair is out of order. `on` and `among` are
+        the part and the parts, as a completion has them."""
         tape = _Tape()
-        env = _env(tape, rule, part, parts, case)
+        env = _env(tape, rule, on, among, case)
         sides = [(tape.emit(low, env), tape.emit(high, env)) for low, high in pairs]
         gate = ["and", [["le", tape.emit(low, env), tape.emit(high, env)] for low, high in within]]
         if strict:
@@ -1618,15 +1783,17 @@ def _answers(rule: Rule, ask: Ask, part: Part, parts: Mapping[str, Part], cases:
             roots = [tape.node("pick", [[gate, root], [None, tape.const(Fraction(-1))]]) for root in roots]
         return tape, roots, sides
 
-    reads = sorted(name[5:] for name in _reads(rule) if name.startswith("load "))
-    if reads and not cases:
-        yield cell(tail, "open", f"the card puts no {' and no '.join(reads)} on {part.name}, which the rule reads", waivable=True)
-        return
-    for case in cases if reads else [None]:
+    for case in cases if reads and cases else [None]:
         entry = tail if case is None else f"{tail}/{case}"
-        missing = [name for name in reads if case not in part.loads.get(name, {})]
-        if missing:
-            yield cell(entry, "open", f"case {case} puts no {' and no '.join(missing)} on {part.name}, which the rule reads", waivable=True)
+        missing = reads if case is None else [name for name in reads if case not in part.loads.get(name, {})]
+        if unsaid or missing:
+            why = (_unstated_why(lacks, "the rule") if unsaid else f"the card puts no {_listed(missing)} on {part.name}, which the rule reads" if case is None
+                   else f"case {case} puts no {_listed(missing)} on {part.name}, which the rule reads")
+            yield _incomplete(rule, part, parts, unsaid, missing, case or "", waived, prefer, cell(entry, "open", why), tape_of)
+            continue
+        if rule.requires is not None:
+            # One cell, with no tape and no hint: proved when the condition over keys holds for the part, and refuted when not.
+            yield cell(tail, "proved") if _static(rule.requires, part, parts) else cell(tail, "refuted", _refusal(rule, part, parts))
             continue
         try:
             if rule.where:
@@ -1644,17 +1811,21 @@ def _answers(rule: Rule, ask: Ask, part: Part, parts: Mapping[str, Part], cases:
                         yield cell(entry, "refuted", ratio=_ratio(gated[0].nodes, *gated[2][0], [Interval.point(x) for x in point]),
                                    proof={"point": {i.label: export.number(x) for i, x in zip(gated[0].inputs, point)}})
                         continue
-                    # A range that holds nowhere in the box leaves the rule nothing to say, and a waiver rests the cell. One that may hold somewhere does not.
+                    # A range that holds nowhere in the box is a part the deck has no rule for, and a waiver rests the cell. One that may
+                    # hold somewhere does not. As the kernel, this looks only on a line the card waives.
+                    if waived and (k := _nowhere(tape.nodes, roots, box)) is not None:
+                        yield cell(entry, "open", f"the rule holds only where {rule.where[k][2]}, and that holds nowhere in the ranges for {part.name}", waivable=True)
+                        continue
                     v = enclosures(tape.nodes, box)
                     outside = next(why for (_, _, why), r in zip(rule.where, roots) if not (isinstance(v[r], Interval) and v[r].hi <= 0))
-                    yield cell(entry, "open", f"the rule holds only where {outside}, and that is not proved for {part.name}", waivable=_silent(tape.nodes, roots, box, True))
+                    yield cell(entry, "open", f"the rule holds only where {outside}, and that is not proved for {part.name}")
                     continue
                 yield Cell(part.name, rule.mechanism, f"{entry}/where", "proved", "; ".join(w[2] for w in rule.where), anchor, "", rule.id,
                            proof={"partition": partition})
             tape, roots, sides = tape_of([(rule.low, rule.high)], case, rule.strict)
         except NoValue as exc:
-            # A tape that cannot be written is a row with nothing for the part's key: no inequality could answer the cell.
-            yield cell(entry, "open", str(exc), waivable=True)
+            # A tape that cannot be written leaves the cell open, and a waiver does not rest it: the deck must cover the part.
+            yield cell(entry, "open", str(exc))
             continue
         box, labels = [i.range for i in tape.inputs], [i.label for i in tape.inputs]
         partition = _partition(tape.nodes, roots, box, [1], labels)
@@ -1669,46 +1840,66 @@ def _answers(rule: Rule, ask: Ask, part: Part, parts: Mapping[str, Part], cases:
             yield cell(entry, "refuted", ratio=_ratio(tape.nodes, *sides[0], [Interval.point(x) for x in point]),
                        proof={"point": {label: export.number(x) for label, x in zip(labels, point)}})
         else:
-            # An open cell that a row has no value for anywhere in the box is one a waiver rests. One whose inequality is left undecided is not.
-            v, silent = enclosures(tape.nodes, box), _silent(tape.nodes, roots, box, False)
+            # An open cell stays open under a waiver, whether its inequality is left undecided or a table has no value for the part.
+            v = enclosures(tape.nodes, box)
             if isinstance(v[roots[0]], str):
                 origin = v.index(v[roots[0]])
-                yield cell(entry, "open", (f"{tape.picks[origin]} gives no value at what {part.name} has: " if origin in tape.picks else "") + v[roots[0]], waivable=silent)
+                yield cell(entry, "open", (f"{tape.picks[origin]} gives no value at what {part.name} has: " if origin in tape.picks else "") + v[roots[0]])
             else:
-                yield cell(entry, "open", "neither proved over the ranges the card gives nor refuted at a point of them the search tried", waivable=silent)
+                yield cell(entry, "open", "neither proved over the ranges the card gives nor refuted at a point of them the search tried")
 
 
 def cells(design: Design, deck: Deck, found: Parts) -> list[Cell]:
     """Every cell of the design: for each part, each mechanism the grid asks of its type.
 
-    A waiver rests a cell that would be open and that no inequality could answer, and no
-    other: the line has no rule for the part, a load case leaves out a load the rule reads, a
-    row gives nothing for the part, the rule holds nowhere in the ranges, or the part leaves
-    a key unstated and no quantity. The cells of a line are made as if the card waived
-    nothing. Where it waives the line on the part, each of them that is open and `waivable`
-    becomes `waived`, and says what was open. A cell that a rule proved stays proved, and the
-    waiver was not needed for it. A cell that a rule refuted stays refuted: no waiver hides a
-    refutation, and a card written before a deck gained a rule does not switch the rule off.
-    A cell whose rule is left undecided stays open, and says that the waiver does not rest it."""
+    A waiver rests a cell that would be open for which the deck has no rule, or that a
+    completion of what the part and the card leave out makes hold, and no other: the line
+    has no rule for the part, the rule holds nowhere in the ranges, or the cell is
+    incomplete and has a witness (`_incomplete`). The cells of a line are made as if the card
+    waived nothing. Where it waives the line on the part, each of them that is open and
+    `waivable` becomes `waived`, and says what was open, while its completion names each key
+    and each load as the completions of the cells rested before it do. A cell that a rule
+    proved stays proved, and the waiver was not needed for it. A cell that a rule refuted
+    stays refuted: no waiver hides a refutation, and a card written before a deck gained a
+    rule does not switch the rule off. Any other open cell stays open, and says that the
+    waiver does not rest it."""
     out: list[Cell] = []
     waived = {(w.subject[0], w.mode): w for w in reversed(design.waivers)}      # the first waiver of a line on a part, as the kernel takes it
+    fixed: dict[Any, Any] = {}      # each key and each load the rested cells' completions name, as the kernel's fixedKeys and fixedLoads
     for part in found.parts.values():
         for ask in (a for a in deck.asks if a.type == part.type.name):
-            anchor, line = _anchor(ask.anchor), []
+            anchor, line, prefer = _anchor(ask.anchor), [], dict(fixed)
+            w = waived.get((part.name, ask.mechanism))
             if (lacks := _lacking(part, found.parts, _keys(ask.unless))) is not None:
-                # The `unless` reads a key that is unstated, so nothing says whether the mechanism can arise: the line is open, and no rule of it is run.
-                line.append(Cell(part.name, ask.mechanism, "", "open", ask.what, anchor, _unstated_why(lacks, "the `unless` of the line"), waivable=True))
+                # The `unless` reads a key that is unstated, so nothing says whether the mechanism can arise: the line is open, and no rule of it
+                # is run. On a line the card waives, a completion under which the `unless` holds is a witness.
+                pending = Cell(part.name, ask.mechanism, "", "open", ask.what, anchor, _unstated_why(lacks, "the `unless` of the line"))
+                unsaid = _unsaid(part, found.parts, list(dict.fromkeys(_keys(ask.unless))))
+                for keys in itertools.islice(_choices(unsaid, prefer), MAX_COMPLETIONS) if w is not None else ():
+                    if _static(ask.unless, *_completed(part, found.parts, keys, ())):
+                        pending = replace(pending, waivable=True, completion=(keys, ()), hints=({**pending.body, "completion": _completion_body(keys, ())},))
+                        break
+                line.append(pending)
             elif ask.excused is not None and _static(ask.unless, part, found.parts):
                 line.append(Cell(part.name, ask.mechanism, "", "not_applicable", ask.what, anchor, ask.excused))
             else:
                 rules = [r for r in deck.rules if (r.type, r.mechanism) == (ask.type, ask.mechanism) and _applies(r, part, found.parts)]
-                line += [c for r in rules for c in _answers(r, ask, part, found.parts, found.cases)]
+                line += [c for r in rules for c in _answers(r, ask, part, found.parts, found.cases, w is not None, prefer)]
                 if not rules:
                     line.append(Cell(part.name, ask.mechanism, "", "open", ask.what, anchor,
                                      f"the deck has no rule for it{' on a part like this one' if any(r.mechanism == ask.mechanism for r in deck.rules) else ''}", waivable=True))
-            w = waived.get((part.name, ask.mechanism))
-            out += line if w is None else [c if c.state != "open" else replace(c, state="waived", why=f"by {w.owner}: {w.reason}; {WAIVED}{c.why}", waiver=(w.owner, w.reason)) if c.waivable
-                                           else replace(c, why=f"{UNRESTED}{c.why}") for c in line]
+            if w is None:
+                out += line
+                continue
+            for c in line:
+                named = {} if c.completion is None else {(owner, f): name for owner, f, name in c.completion[0]} | {(p, load, case): x for p, load, case, x in c.completion[1]}
+                if c.state != "open":
+                    out.append(c)
+                elif c.waivable and all(fixed.get(k, v) == v for k, v in named.items()):
+                    fixed.update(named)
+                    out.append(replace(c, state="waived", why=f"by {w.owner}: {w.reason}; {WAIVED}{c.why}", waiver=(w.owner, w.reason)))
+                else:
+                    out.append(replace(c, why=f"{UNRESTED}{c.why}"))
     return out + _unread(deck, found)
 
 
@@ -1751,13 +1942,16 @@ def bundle(design: Design, deck: Deck, answers: list[Cell] | None = None) -> dic
     return {"card": card, "design": export.text(export.design_file(design, export.sha256(card), deck=True)),
             "deck": export.text({"format": "petra-deck/0", "domains": core, "constants": [], "rules": {"name": deck.name, "hash": deck.hash}}),
             "rules": deck.text,
-            **({} if answers is None else {"proofs": export.text({"format": "petra-proofs/0", "cells": [c.body for c in answers]})})}
+            **({} if answers is None else {"proofs": export.text({"format": "petra-proofs/0",
+                                                                  "cells": [h for c in answers for h in (c.hints if c.hints is not None else (c.body,))]})})}
 
 
 def verdict(answers: list[Cell]) -> str:
-    """The kernel's verdict: FAIL with a refuted cell, UNKNOWN with an open cell or with nothing proved, else PASS."""
+    """The kernel's verdict: FAIL with a refuted cell, UNKNOWN with an open cell or with nothing proved, else PASS. A cell
+    whose entry ends in `/where` proves a rule's range and not the rule, so it is not the one proved cell a PASS needs."""
     states = {c.state for c in answers}
-    return "FAIL" if "refuted" in states else "UNKNOWN" if "open" in states or "proved" not in states else "PASS"
+    proved = any(c.state == "proved" and not c.entry.endswith("/where") for c in answers)
+    return "FAIL" if "refuted" in states else "UNKNOWN" if "open" in states or not proved else "PASS"
 
 
 PASS_WAIVED = "PASS_WAIVED"
@@ -1825,7 +2019,7 @@ class Report:
         pending = [c for c in self.cells if c.state == "open"]
         if pending:
             out.append(f"open       {len(pending)} cells: each needs a rule, an input, or `waive MECHANISM on PART by \"<owner>\" reason \"<why>\"` "
-                       "in the card, which rests only a cell that no inequality could answer")
+                       "in the card, which rests only a cell the deck has no rule for, or one that holds under a completion of what is left out")
         return out
 
 
@@ -1875,7 +2069,7 @@ def checked(design: Design, deck: Deck, card: str, text: str, card_path: str) ->
         said = verify.ask(kernel, files)
         if said["verdict"] == "ILL-FORMED":
             raise ComponentError(verify.refusal(design.path, said))
-        differ = verify.differs([(c.subject, c.mechanism, c.entry, c.state) for c in report.cells], report.verdict, deck.hash, said)
+        differ = verify.differs([(c.subject, c.mechanism, c.entry, c.state) for c in report.cells], report.verdict, deck.hash, said, report.waived())
         if differ:
             raise verify.Disagreement(f"{design.path}: petra-verify gives {said['verdict']} and the grid {report.verdict}: {differ}")
         said = {"verdict": said["verdict"], "checked": sum(bool(c.proof) for c in report.cells), "hashes": said["hashes"], "cells_from": said["cells_from"],

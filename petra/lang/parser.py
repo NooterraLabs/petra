@@ -27,6 +27,8 @@ position):
 """
 from __future__ import annotations
 
+from fractions import Fraction
+
 from .lexer import Kind, LolaSyntaxError, Token, tokenize
 from .syntax import File, Node
 
@@ -189,11 +191,13 @@ class Parser:
 
     def _stated(self) -> Node:
         """`is NAME`, `is "a name"` or `is 4`, and who signs it: what the card states exactly,
-        with no range. A name is a bare word or a text in quotes, and a number is a whole
-        number with no unit. Which of the two a field takes is for its deck to say."""
+        with no range. A name is a bare word or a text in quotes, and a number is one whose
+        value is whole, however it is written, with no unit: `4`, `+4`, `4.0` and `8/2` are
+        each 4, as a count the design writes is. Which of the two a field takes is for its
+        deck to say."""
         tok = self._word("is")
         value = self._peek()
-        whole = value.kind is Kind.NUMBER and value.text.lstrip("+-").isascii() and value.text.lstrip("+-").isdigit()
+        whole = value.kind is Kind.NUMBER and Fraction(value.text).denominator == 1
         if value.kind is Kind.NUMBER and not whole:
             raise self._error(value, f"a card states a whole number exactly, as in 'is 4', and {value.text} is none")
         if value.kind not in (Kind.IDENT, Kind.STRING, Kind.NUMBER) or (value.kind is Kind.IDENT and value.text in NOT_UNITS):

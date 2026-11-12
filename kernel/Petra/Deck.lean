@@ -246,6 +246,22 @@ def Chosen.count (side : Side) : Chosen → Nat
   | .picked places => places.size
   | _ => side.places
 
+/-- The orders that a pick over the places of a side compares where `how` reads it: two for
+a listed value, one for each end of a band, and the orders of the condition of each cell of a
+row that gives the name. A key that a field or the rule names is at one place, and compares
+none. A place whose cells are empty counts too: this is the most for any part. -/
+def Chosen.orders (side : Side) : Chosen → Nat
+  | .picked places => places.foldl (fun n (_, cond) => n + cond.orders) 0
+  | .value _ => match side with
+    | .listed _ values => 2 * values.size
+    | .banded _ bands _ => bands.foldl (fun n (_, hi) => n + if hi.isSome then 2 else 1) 0
+    | .named .. => 0
+  | _ => 0
+
+/-- Why a deck is refused that would write a pick of `count` orders, past `MAX_ORDERS`. -/
+def OVER_ORDERS (count : Nat) : String :=
+  s!"a pick of the rule's tape would compare {count} orders, over the budget of {MAX_ORDERS} for one pick"
+
 def Step.reads : Step → Array Nat
   | .node n => n.reads
   | .field .. | .load _ => #[]
@@ -296,6 +312,9 @@ structure Rule where
   asked : Array (Option String × String) := #[]
   /-- Whether the rule states `lt`: `low` under `high`, and not only at most it. -/
   strict : Bool := false
+  /-- The `why` of each item of the rule's `where`, in the order of `ranges`: what the reason
+  of a cell names where the part is outside the range. -/
+  whys : Array String := #[]
 
 /-- What the rule's cells are entered under: its id from after its last `/`. -/
 def Rule.entry (rule : Rule) : String := (rule.id.splitOn "/").getLast!
@@ -392,10 +411,21 @@ abbrev Reading := StateT Draft (Except String)
 
 /-- A step more. A value of the file that is read makes at most four steps of a rule: a
 power is a root, a power, a one and a quotient. So a rule of a deck within `MAX_READ` never
-has four times that many, and the test holds the reader to the count whatever it does. -/
+has four times that many, and the test holds the reader to the count whatever it does.
+
+A step that would write a pick of more than `MAX_ORDERS` orders for some part, an equation's
+cases or a table's places down or across, is refused here, when the deck is read. -/
 def push (step : Step) : Reading Nat := do
   let place := (← get).steps.size
   if place ≥ 4 * MAX_READ then throw s!"reading a rule takes more than {4 * MAX_READ} steps"
+  let count := match step with
+    | .node (.pick cases) => orders cases
+    | .table table down across =>
+      Nat.max (down.orders table.down) (match table.across, across with
+        | some side, some how => how.orders side
+        | _, _ => 0)
+    | _ => 0
+  if count > MAX_ORDERS then throw (OVER_ORDERS count)
   modify fun d => { d with steps := d.steps.push step }
   return place
 
@@ -1250,6 +1280,8 @@ def readRule (kinds : Std.TreeMap String Kind) (rows : Std.TreeMap String Row) (
         (within range ["le", "why"]).mapError ("where: " ++ ·)
         let _ ← text range "why"
         pair (← need range "le") "`where`"
+      -- The tape that refutes a rule inside its `where` picks by every item of it at once.
+      if ranges.size > MAX_ORDERS then throw (OVER_ORDERS ranges.size)
       for (name, _) in lets do
         let _ ← expr scope MAX_EXPRESSION (.str name)
       return (main, ranges)
@@ -1267,10 +1299,11 @@ def readRule (kinds : Std.TreeMap String Kind) (rows : Std.TreeMap String Row) (
     let loads := once (used.filterMap fun
       | .load name => some name
       | _ => none)
+    let whys ← (← listed j "where").mapM fun range => text range "why"
     return { id, kind := name, mechanism, condition, steps := draft.steps,
              weight := draft.steps.foldl (fun n step => n + step.weight) 0,
              look := 1 + (condition.map Static.size).getD 0 + loads.size, ranges, low, high,
-             fields := once (fields ++ (condition.map Static.keys).getD #[]), loads, strict }
+             fields := once (fields ++ (condition.map Static.keys).getD #[]), loads, strict, whys }
   rule.mapError (s!"rule {clip id}: " ++ ·)
 
 /-- How many characters of a text are one step to read. -/
@@ -1481,15 +1514,15 @@ def input (i : TapeInput) : Write Nat := modifyGet fun w =>
   (place, { w with inputs := w.inputs.push i, nodes := w.nodes.push (.s k) })
 
 /-- The first case that holds, or none when there is no case. One case that holds otherwise
-is its value. A pick holds at most `MAX_ORDERS` orders, as one that a file carries. -/
+is its value. A pick holds at most `MAX_ORDERS` orders, as one that a file carries. Reading
+the deck refuses a rule that could write more (`push`), so none comes here. -/
 def pickOf (cases : Array (Option Cond × Nat)) : Write (Option Nat) :=
   match cases[0]? with
   | none => pure none
   | some (none, value) => pure (some value)
   | some _ =>
     let count := orders cases
-    if count > MAX_ORDERS then
-      throw s!"an equation or a table compares {count} orders here, over the budget of {MAX_ORDERS} for one pick"
+    if count > MAX_ORDERS then throw (OVER_ORDERS count)
     else some <$> node (.pick cases)
 
 /-- The places of one side that the part can be at, each with the condition that it is
@@ -1544,8 +1577,15 @@ def tableOf (site : Site) (table : Table) (down : Chosen) (across : Option Chose
   pickOf lines
 
 /-- The tape of a rule for one part: for each pair of `pairs` a root, the first less the
-second, which is at most zero where the pair is in order. An error is a reason the rule has
-no value for the part.
+second, which is at most zero where the pair is in order. An error is a reason the tape
+cannot be written: the part lacks a field or a load the rule reads.
+
+A table that gives nothing for the part, with no line for its key or only empty cells, and
+an equation with no case, are a node that has no value anywhere: a pick of no case. The tape
+is still written. A node that reads it has no value either, and a pick that has it as the
+value of a case has none where that case is the first that holds, and has one elsewhere. So
+a `case` whose branch for one name reads such a table still has a value, and can be refuted,
+where the row gives another name.
 
 With `strict`, a root is the pick that is -1 where the first is under the second and 1
 elsewhere. `Tape.proved` shows a root at most zero on the box, which this root is only where
@@ -1562,13 +1602,14 @@ zero at a point only where the point is inside the `where` and the rule fails th
 def Rule.tape (rule : Rule) (site : Site) (pairs : Array (Nat × Nat)) (strict : Bool := false) (within : Array (Nat × Nat) := #[]) :
     Except String Tape := do
   let need := reach rule.steps ((pairs ++ within).flatMap fun (a, b) => #[a, b])
+  let nothing : Write Nat := node (.pick #[])
   let write : Write (Array Nat) := do
     let mut ids : Array Nat := Array.replicate rule.steps.size 0
     for (step, i) in rule.steps.zipIdx do
       if need[i]! then
         let id ← match step with
           | .node (.pick cases) => do
-            let some id ← pickOf (cases.map fun (c, v) => (c.map (·.map (ids[·]!)), ids[v]!)) | throw "an equation has no case"
+            let some id ← pickOf (cases.map fun (c, v) => (c.map (·.map (ids[·]!)), ids[v]!)) | nothing
             pure id
           | .node n => node (n.map (ids[·]!))
           | .field part name => do
@@ -1578,7 +1619,7 @@ def Rule.tape (rule : Rule) (site : Site) (pairs : Array (Nat × Nat)) (strict :
             let some value := site.load name | throw s!"the part has no load {name}"
             input value
           | .table table down across => do
-            let some id ← tableOf site table down across ids | throw "a table gives nothing here"
+            let some id ← tableOf site table down across ids | nothing
             pure id
           | .row _ value => pure ids[value]!
         ids := ids.set! i id

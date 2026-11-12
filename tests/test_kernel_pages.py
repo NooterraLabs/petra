@@ -196,22 +196,27 @@ class TheOrdersOfATable(unittest.TestCase):
     """H14 (format.md, "How the kernel writes a table")."""
 
     def reason(self, down: dict, count: int) -> str:
+        """The reason of the one cell, or why the deck is refused when it is."""
         table = {"id": "made-up/t", "anchor": ANCHOR, "gives": {"name": "y", "dim": "length"}, "takes": [{"name": "x", "dim": "length", "range": ["1 m", "2 m"]}],
                  "table": {"down": {"by": "x", **down}, "unit": "m", "cells": ["1"] * count}}
         deck = made_up([PLAIN], [asks("m", "t")], [rule("m", "t", "m", le=["w", ["row", "made-up/t", {"x": "w"}]])], [table])
-        (cell,) = ask(with_rules(deck, empty_card(), [{"name": "p", "type": "t", "lines": [{"field": "w", "args": number("length", "3/2")}]}]))["cells"]
+        said = ask(with_rules(deck, empty_card(), [{"name": "p", "type": "t", "lines": [{"field": "w", "args": number("length", "3/2")}]}]))
+        if said["findings"]:
+            self.assertEqual([f["file"] for f in said["findings"]], ["rules"])
+            return said["findings"][0]["why"]
+        (cell,) = said["cells"]
         return cell.get("reason", "")
 
     def test_a_band_with_two_ends_has_two_orders_one_with_one_end_has_one_and_a_listed_value_two(self):
         bands = [[f"{k} m", f"{k + 1} m"] for k in range(600)]
-        self.assertIn("compares 1200 orders here", self.reason({"bands": bands}, 600))
-        self.assertIn("compares 1199 orders here", self.reason({"bands": bands[:-1] + [["599 m", None]]}, 600))
-        self.assertIn("compares 1200 orders here", self.reason({"at": [f"{k} m" for k in range(600)]}, 600))
+        self.assertIn("would compare 1200 orders", self.reason({"bands": bands}, 600))
+        self.assertIn("would compare 1199 orders", self.reason({"bands": bands[:-1] + [["599 m", None]]}, 600))
+        self.assertIn("would compare 1200 orders", self.reason({"at": [f"{k} m" for k in range(600)]}, 600))
 
-    def test_a_pick_of_1024_orders_is_written_and_one_of_1025_is_not(self):
+    def test_a_deck_whose_pick_holds_1024_orders_is_read_and_one_of_1025_is_refused(self):
         bands = [[f"{k} m", f"{k + 1} m"] for k in range(513)]
         self.assertNotIn("orders", self.reason({"bands": bands[:512]}, 512))
-        self.assertIn("compares 1025 orders here", self.reason({"bands": bands[:512] + [["512 m", None]]}, 513))
+        self.assertIn("would compare 1025 orders, over the budget of 1024", self.reason({"bands": bands[:512] + [["512 m", None]]}, 513))
 
 
 @KERNEL
@@ -266,8 +271,11 @@ class TheStepsOfTheCells(unittest.TestCase):
         self.assertConstant(6 + 2 + 2 + 8 * 2, le=[["mul", ["add", ["load", "V"], ["load", "T"]], "w"], ["q", "1", "Nm"]], cases=8)
 
     WIDE = {"id": "made-up/wide", "anchor": ANCHOR, "gives": {"name": "y", "dim": "length"}, "takes": [{"name": "x", "dim": "length", "range": ["1 m", "2 m"]}],
-            "table": {"down": {"by": "x", "bands": [[f"{k} m", f"{k + 1} m"] for k in range(513)]}, "unit": "m", "cells": ["1"] * 513}}
-    """A table of 513 bands, which is a pick of 1,026 orders: a rule that reads it writes no tape, so it pays its weight and no node."""
+            "table": {"down": {"by": "x", "bands": [[f"{k} m", f"{k + 1} m"] for k in range(512)]}, "unit": "m", "cells": ["1"] * 512}}
+    """A table of 512 bands, which is a pick of 1,024 orders, as many as a pick may compare. A
+    deck with one more band is not read. The tape of a rule that reads it holds the 513 ends of
+    the bands, each a constant, and the pick: 514 nodes."""
+    ENDS = 513
     WEIGHTS = (("neg", ["neg", "r"], 1 + 2), ("abs", ["abs", "r"], 1 + 2), ("sqrt", ["sqrt", "r"], 1 + 2), ("exp", ["exp", "r"], 1 + 2), ("ln", ["ln", "r"], 1 + 2),
                ("div", ["div", "r", "2"], 1 + 1 + 3), ("sub", ["sub", "r", "2"], 1 + 1 + 2 + 3), ("a whole power", ["pow", "r", "3"], 1 + 2),
                ("the power 0", ["pow", "r", "0"], 1 + 2 + 1 + 3), ("a negative power", ["pow", "r", "-2"], 1 + 2 + 1 + 3), ("a half power", ["pow", "r", "1/2"], 1 + 2 + 2),
@@ -276,44 +284,57 @@ class TheStepsOfTheCells(unittest.TestCase):
     """An expression over the plain number `r`, and the weight the page gives it: 1 for each name and number, and the weight of each step."""
 
     def test_the_weight_of_a_rule_is_the_sum_the_page_gives(self):
-        """`le` reads the table, which weighs 1, 513 places and 513 cells, in a row that binds
+        """`le` reads the table, which weighs 1, 512 places and 512 cells, in a row that binds
         one quantity: `w` again, 1, and the row, 1 + 1. It adds `w` times a sum of every
-        operator to it, and compares with a constant. No tape is written, so the part pays
-        the constant 6 of the first test, one more for the second field the rule reads, and
-        the weight."""
-        table = 1 + (1 + 513 + 513) + (1 + 1)
+        operator to it, and compares with a constant. The part pays the constant 6 of the
+        first test, one more for the second field the rule reads, the weight, and the nodes of
+        the tape. Those are the two fields, the table's 514, and 22 for the operators: one for
+        each of the five of one argument, `div` and the half power; two for `sub`, a negative
+        and a sum, and for each power of 0 or below, a power and a quotient; three for the
+        other fixed power, a constant, a product and an exponential, and two for the power
+        that varies, which shares the logarithm; one each for `min`, `max` and `pi`. The 1 and
+        the 2 and 3 they read are ends of the bands. Then the sum of every operator, the
+        product, the sum with the table, and the two of the comparison: a negative and a sum."""
+        table = 1 + (1 + 512 + 512) + (1 + 1)
         total = sum(weight for _, _, weight in self.WEIGHTS)
         every = ["add"] + [expression for _, expression, _ in self.WEIGHTS]
         weight = table + (1 + (1 + len(self.WEIGHTS) + total) + (1 + 2)) + (1 + 2) + 1
-        self.assertConstant(6 + 1 + weight, le=[["add", ["row", "made-up/wide", {"x": "w"}], ["mul", "w", every]], ["q", "1", "m"]], rows=[self.WIDE])
+        nodes = 2 + (self.ENDS + 1) + 22 + 3 + 2
+        self.assertConstant(6 + 1 + weight + nodes, le=[["add", ["row", "made-up/wide", {"x": "w"}], ["mul", "w", every]], ["q", "1", "m"]], rows=[self.WIDE])
 
     BANDS = WIDE["table"]["down"]["bands"]
     NAMING = {"id": "made-up/naming", "anchor": ANCHOR, "gives": {"name": "k", "one_of": ["a", "b"]}, "takes": WIDE["takes"],
-              "table": {"down": {"by": "x", "bands": BANDS}, "cells": ["a", "b"] * 256 + ["a"]}}
+              "table": {"down": {"by": "x", "bands": BANDS}, "cells": ["a", "b"] * 256}}
     KEYED = {"id": "made-up/keyed", "anchor": ANCHOR, "gives": {"name": "y", "dim": "length"}, "takes": [{"name": "k", "one_of": ["a", "b"]}],
              "table": {"down": {"by": "k"}, "unit": "m", "cells": ["1", "2"]}}
     CASES = {"id": "made-up/cases", "anchor": ANCHOR, "gives": {"name": "y", "dim": "length"}, "takes": WIDE["takes"],
              "cases": [{"when": ["and", ["le", ["q", lo.split()[0], "m"], "x"], ["lt", "x", ["q", hi.split()[0], "m"]]], "is": ["mul", "x", "2"]} for lo, hi in BANDS]}
-    PICK = 1 + 513 + 2 * 1_026
-    """A pick of 513 cases with two orders each: over the 1,024, so no tape is written."""
+    PICK = 1 + 512 + 2 * 1_024
+    """A pick of 512 cases with two orders each: the 1,024 a pick may compare."""
+    COMPARED = 1 + ENDS + 1 + 2
+    """The nodes of each tape below but its expressions: `w`, the ends of the bands, the pick,
+    and the negative and the sum of the comparison with 1 m, an end of a band."""
 
     def test_a_case_weighs_its_row_its_expressions_and_a_pick(self):
-        """`w`, 1. The row that gives the name: a step for each of the 1,026 ends of its bands.
+        """`w`, 1. The row that gives the name: a step for each of the 1,024 ends of its bands.
         The expression of `a`, 1 + 1 + 3, and of `b`, 1. The pick, and the constant of the
-        other side."""
-        self.assertConstant(6 + 1 + 1_026 + (5 + 1) + self.PICK + 1, le=[["case", ["row", "made-up/naming", {"x": "w"}], {"a": ["mul", "w", "2"], "b": "w"}], ["q", "1", "m"]], rows=[self.NAMING])
+        other side. The nodes: as above, and the product of `a`, whose 2 is an end of a band."""
+        self.assertConstant(6 + 1 + 1_024 + (5 + 1) + self.PICK + 1 + self.COMPARED + 1,
+                            le=[["case", ["row", "made-up/naming", {"x": "w"}], {"a": ["mul", "w", "2"], "b": "w"}], ["q", "1", "m"]], rows=[self.NAMING])
 
     def test_a_table_whose_key_a_row_names_weighs_the_cells_of_that_row_twice(self):
-        """`w` and the ends of the bands, as above. The table: 1, 2 places, 2 cells, the 513
-        cells of the row that hold a name, and 513 places down times 1 across. The row that
-        holds the table binds no quantity: 1. And the constant of the other side."""
-        self.assertConstant(6 + 1 + 1_026 + (1 + 2 + 2 + 513 + 513) + 1 + 1, le=[["row", "made-up/keyed", {"k": ["row", "made-up/naming", {"x": "w"}]}], ["q", "1", "m"]], rows=[self.NAMING, self.KEYED])
+        """`w` and the ends of the bands, as above. The table: 1, 2 places, 2 cells, the 512
+        cells of the row that hold a name, and 512 places down times 1 across. The row that
+        holds the table binds no quantity: 1. And the constant of the other side. The nodes:
+        as above, since the table's cells, 1 m and 2 m, are ends of the bands."""
+        self.assertConstant(6 + 1 + 1_024 + (1 + 2 + 2 + 512 + 512) + 1 + 1 + self.COMPARED,
+                            le=[["row", "made-up/keyed", {"k": ["row", "made-up/naming", {"x": "w"}]}], ["q", "1", "m"]], rows=[self.NAMING, self.KEYED])
 
     def test_an_equation_with_cases_weighs_its_expressions_and_a_pick(self):
         """`w`, 1. Each case: two constants and a product of two, 1 + 1 + (1 + 3). The name of
         the input is no step inside the row. The pick, the row, 1 + 1, and the constant of the
-        other side."""
-        self.assertConstant(6 + 1 + 513 * 6 + self.PICK + 2 + 1, le=[["row", "made-up/cases", {"x": "w"}], ["q", "1", "m"]], rows=[self.CASES])
+        other side. The nodes: as above, and the product that every case has for its value."""
+        self.assertConstant(6 + 1 + 512 * 6 + self.PICK + 2 + 1 + self.COMPARED + 1, le=[["row", "made-up/cases", {"x": "w"}], ["q", "1", "m"]], rows=[self.CASES])
 
 
 if __name__ == "__main__":

@@ -1,12 +1,13 @@
 petra 0
 
-# Three 1 1/8 inch bolts. Table J3.3 lists holes for bolts to 1 inch and gives a formula for
-# larger ones, which the rules do not read. So four lines are open: the clear spacing, the
-# strength of the bolts and their holes, and the rupture and the block shear of each plate.
-# By hand, with a hole of 1 1/8 + 1/8 inch, all four hold at 45 kip: the bolts carry
-# 35.89 + 35.89 + 40.26 = 112.0 kip, and each plate ruptures at 145.4 and tears out at 145.6.
+# Three 1 1/8 inch bolts. Table J3.3 lists holes for bolts to 1 inch and gives a formula,
+# d + 1/8 for a standard hole, for 1 1/8 inch and more, which the deck's table lists at the
+# sizes past 1 inch. With a hole of 1 1/8 + 1/8 inch the four lines that read a hole hold at
+# 45 kip: one diameter clear between holes, 3.5 - 1.25 = 2.25 inch; the bolts carry
+# 35.89 + 35.89 + 40.26 = 112.0 kip; and each plate ruptures at 145.4 and tears out at 145.6.
 # The rules that read no hole are proved: 3 inch between centres, 1.5 inch to an end and to a
 # side (Table J3.4), 12 inch at most between holes, and yielding at 129.6 kip.
+# Until 2026-11-12 the deck's table stopped at 1 inch, and the four lines were open.
 
 plate tab {
   thickness 0.5 inch

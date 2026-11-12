@@ -964,7 +964,7 @@ def judge(card: str, design: str, name: str, rules: str | None = None, slash: bo
     elif said["verdict"] == "ILL-FORMED":
         outcome, detail = f"DIFFER: the kernel refuses {its} and the grid does not", "; ".join(f"{f['item']}: {f['why']}" for f in said["findings"])
     else:
-        detail = verify.differs([(c.subject, c.mechanism, c.entry, c.state) for c in report.cells], report.verdict, deck.hash, said)
+        detail = verify.differs([(c.subject, c.mechanism, c.entry, c.state) for c in report.cells], report.verdict, deck.hash, said, report.waived())
         outcome = "DIFFER: the cells differ" if detail else f"both give {report.verdict}"
     kinds = [] if report is None else [f"{c.mechanism if c.mechanism == 'unread' else c.mechanism + ('/where' if c.entry.endswith('/where') else '')} {c.state}"
                                        + (" split" if isinstance(c.proof.get("partition"), dict) else "") for c in report.cells]

@@ -272,16 +272,18 @@ def rules (cardHash : String) (card design deck : Except String ByteArray)
 
 /-- ILL-FORMED with a finding, FAIL with a refuted cell, PASS when every cell is proved,
 waived or not applicable and one is proved, and UNKNOWN otherwise: with an open cell, or
-with nothing proved. -/
+with nothing proved. A cell whose entry ends in `/where` proves only that a rule's range
+holds, and not the rule: it is not the one proved cell a PASS needs. -/
 def check (card design deck : Except String ByteArray) (deckOfRules proofs : Option (Except String ByteArray)) : Report :=
   let hash (bytes : Except String ByteArray) : Option String := bytes.toOption.map fun b => "sha256:" ++ sha256 b
   let (found, findings) := Id.run ((rules ((hash card).getD "") card design deck deckOfRules proofs).run {})
   let cells := found.cells
   let has (state : State) : Bool := cells.any (·.state == state)
+  let proved := cells.any fun s => s.state == .proved && !s.cell.entry.endsWith "/where"
   let verdict :=
     if !findings.isEmpty then .illFormed
     else if has .refuted then .fail
-    else if has .undecided || !has .proved then .unknown
+    else if has .undecided || !proved then .unknown
     else .pass
   let hashes := [("card", hash card), ("design", hash design), ("deck", hash deck), ("rules", deckOfRules.bind hash)]
   { verdict, hashes, findings, cells, cellsFrom := if deckOfRules.isSome then "rules" else "proofs",

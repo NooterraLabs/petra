@@ -231,8 +231,16 @@ inductive Split where
   | leaf
   | split (label : String) (cut : Rat) (below above : Split)
 
+/-- What a hint fills in where the part leaves a key unstated or a load case leaves out a load
+the rule reads: a name for each such key, as `(part, field, name)`, and a value for each such
+load, as `(part, load, case, value)`. The case is empty for a card that has no load case. -/
+structure Completion where
+  keys : Array (String × String × String) := #[]
+  loads : Array (String × String × String × Rat) := #[]
+
 /-- What proofs.json says of a cell the kernel works out from a deck of rules: the state it
-claims, and a partition or a point to try. The kernel trusts neither. -/
+claims, a partition or a point to try, and the completion they are tried under. The kernel
+trusts none of them. -/
 structure Hint where
   subject : String
   mechanism : String
@@ -240,6 +248,7 @@ structure Hint where
   state : State
   partition : Option Split
   point : Option (Array (String × Rat))
+  completion : Option Completion := none
 
 def text (j : Json) (key : String) : Except String String :=
   match j.getObjVal? key with
@@ -488,6 +497,20 @@ def readProofs (j : Json) : Read (Array Cell) := items "proofs" j "cells" readCe
 /-- The deepest a file's JSON may nest. A partition of depth `MAX_DEPTH` fits. -/
 def MAX_NESTING : Nat := 128
 
+/-- A completion: `keys`, a list of `[PART, FIELD, NAME]`, and `loads`, a list of
+`[PART, LOAD, CASE, VALUE]` with the value a number in a string. Either may be left out. -/
+def readCompletion (j : Json) : Except String Completion := do
+  let texts (x : Json) : Except String (Array String) := do (← x.getArr?).mapM (·.getStr?)
+  let keys ← ((j.getObjVal? "keys").toOption.map fun x => do
+    (← x.getArr?).mapM fun k => do
+      let #[p, f, n] ← texts k | throw "a key of a completion is a part, a field and a name"
+      pure (p, f, n)).getD (pure #[])
+  let loads ← ((j.getObjVal? "loads").toOption.map fun x => do
+    (← x.getArr?).mapM fun l => do
+      let #[p, load, under, v] ← texts l | throw "a load of a completion is a part, a load, a case and a value"
+      pure (p, load, under, ← parseRat v)).getD (pure #[])
+  return { keys, loads }
+
 /-- A hint has a state of the list. Its partition names inputs by label, and its point gives
 a value to each label. A tape in it is not read. -/
 def readHint (j : Json) : Except String Hint := do
@@ -496,7 +519,8 @@ def readHint (j : Json) : Except String Hint := do
   let value (x : String × Json) : Except String (String × Rat) := do return (x.1, ← parseRat (← x.2.getStr?))
   return { subject := ← text j "subject", mechanism := ← text j "mechanism", entry := ← text j "entry", state,
            partition := ← maybe j "partition" (readSplit MAX_NESTING),
-           point := ← maybe j "point" (fun p => do (← p.getObj?).toArray.mapM value) }
+           point := ← maybe j "point" (fun p => do (← p.getObj?).toArray.mapM value),
+           completion := ← maybe j "completion" readCompletion }
 
 def readHints (j : Json) : Read (Array Hint) := items "proofs" j "cells" readHint
 
