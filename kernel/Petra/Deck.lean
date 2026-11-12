@@ -312,6 +312,9 @@ structure Rule where
   asked : Array (Option String × String) := #[]
   /-- Whether the rule states `lt`: `low` under `high`, and not only at most it. -/
   strict : Bool := false
+  /-- The `why` of each item of the rule's `where`, in the order of `ranges`: what the reason
+  of a cell names where the part is outside the range. -/
+  whys : Array String := #[]
 
 /-- What the rule's cells are entered under: its id from after its last `/`. -/
 def Rule.entry (rule : Rule) : String := (rule.id.splitOn "/").getLast!
@@ -1296,10 +1299,11 @@ def readRule (kinds : Std.TreeMap String Kind) (rows : Std.TreeMap String Row) (
     let loads := once (used.filterMap fun
       | .load name => some name
       | _ => none)
+    let whys ← (← listed j "where").mapM fun range => text range "why"
     return { id, kind := name, mechanism, condition, steps := draft.steps,
              weight := draft.steps.foldl (fun n step => n + step.weight) 0,
              look := 1 + (condition.map Static.size).getD 0 + loads.size, ranges, low, high,
-             fields := once (fields ++ (condition.map Static.keys).getD #[]), loads, strict }
+             fields := once (fields ++ (condition.map Static.keys).getD #[]), loads, strict, whys }
   rule.mapError (s!"rule {clip id}: " ++ ·)
 
 /-- How many characters of a text are one step to read. -/

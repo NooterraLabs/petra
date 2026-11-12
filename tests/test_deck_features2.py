@@ -299,15 +299,15 @@ class AWaiverRestsWhatIsOpen(unittest.TestCase):
         self.assertEqual((bare_verdict, verdict), ("FAIL", "FAIL"), "no waiver hides a refutation")
         self.assertEqual(list(found), list(bare), "each cell keeps its place and its entry")
 
-    def test_each_way_a_cell_is_open_that_no_inequality_could_answer_is_a_way_it_is_waived_and_its_reason_says_which(self):
-        """A key left unstated is the last such way, which AFieldLeftUnstated tests."""
+    def test_each_way_a_cell_is_open_that_a_waiver_rests_is_a_way_it_is_waived_and_its_reason_says_which(self):
+        """No rule for the part, a load left out that a completion gives (a pull of zero, the least it may be, is under the cap), and a `where`
+        that holds nowhere. A key left unstated is the last such way, which AFieldLeftUnstated and tests/test_kernel_attacks8.py test."""
         for lines, cases, mechanism, entry, was in (
                 ({}, None, "j.none", "", "the deck has no rule for it"),
                 ({}, None, "j.grade", "", "the deck has no rule for it on a part like this one"),
                 ({}, load("calm", "p pull in [0 N, 30 N]") + load("idle"), "j.pull", "pull/idle", "case idle puts no pull on p, which the rule reads"),
                 ({}, "", "j.pull", "pull", "the card puts no pull on p, which the rule reads"),
-                (dict(w="5 mm"), None, "j.range", "range", "the range the rule holds in is not proved: "),      # under 6 mm, where the rule holds nowhere
-                (dict(w="7 mm"), None, "j.table", "table", "")):      # between the two widths the table lists, where it has no value
+                (dict(w="5 mm"), None, "j.range", "range", "the rule holds only where made up: at least 6 mm wide, and that holds nowhere in the ranges for p")):
             with self.subTest(mechanism=mechanism, entry=entry):
                 found, _, said = cells(self, JOINTS, *joint(cases=cases, **lines))
                 self.assertEqual(found["p", mechanism, entry], "waived")
@@ -319,11 +319,14 @@ class AWaiverRestsWhatIsOpen(unittest.TestCase):
         self.assertNotIn(("p", "j.range", "range/where"), found, "a range that is not proved has no cell of its own, waived or not")
 
     def test_a_cell_that_an_inequality_could_answer_stays_open_under_a_waiver_and_says_so(self):
-        """A `where` that holds in part of the ranges, a table that has a value in part of them, and a quantity left unstated. The rule could be
-        refuted where it has a value, or at the value the quantity has, so the waiver does not rest the cell, and its reason says so."""
+        """A `where` that holds in part of the ranges, a table that has a value in part of them or in none, and a quantity left unstated. The
+        rule could be refuted where it has a value, at the value the table would give if the deck listed the width, or at the value the
+        quantity has, so the waiver does not rest the cell, and its reason says so. Until the eighth review it rested the cell of a table with no
+        value anywhere in the ranges."""
         for lines, bounds, mechanism, entry, was in (
                 (dict(w="given p.w"), ("5 mm", "7 mm"), "j.range", "range", "the range the rule holds in is not proved: "),
                 (dict(w="given p.w"), ("5 mm", "7 mm"), "j.table", "table", ""),      # the table lists 5 mm
+                (dict(w="7 mm"), None, "j.table", "table", ""),      # between the two widths the table lists, where it has no value
                 (dict(rating="unstated"), None, "j.rated", "rated", "p.rating is unstated: its maker states none, and the rule reads it")):
             with self.subTest(mechanism=mechanism):
                 text, card = joint(**lines)
@@ -349,11 +352,11 @@ class AWaiverRestsWhatIsOpen(unittest.TestCase):
         listed. UNKNOWN when nothing is proved: waived is a state of its own, and is never counted as proved."""
         calm = load("calm", "p pull in [0 N, 30 N]")
         passing = dict(w="10 mm", grade="b", cap="100 N")
-        found, verdict, said = cells(self, JOINTS, *joint(cases=calm, **{**passing, "w": "8 mm"}))
+        found, verdict, said = cells(self, JOINTS, *joint(cases=calm, **{**passing, "w": "5 mm"}))
         self.assertEqual((verdict, sorted(set(found.values()))), ("PASS_WAIVED", ["not_applicable", "proved", "waived"]))
         if verify.binary():
-            self.assertEqual((said["verdict"], [w["mechanism"] for w in said["waived"]]), ("PASS", ["j.none", "j.table"]))
-        found, verdict, _ = cells(self, JOINTS, *joint(["j.size", "j.pull", "j.range", "j.table", "j.grade", "j.two", "j.rated"], cases=calm, **{**passing, "w": "8 mm"}))
+            self.assertEqual((said["verdict"], [w["mechanism"] for w in said["waived"]]), ("PASS", ["j.none", "j.range"]))
+        found, verdict, _ = cells(self, JOINTS, *joint(["j.size", "j.pull", "j.range", "j.table", "j.grade", "j.two", "j.rated"], cases=calm, **{**passing, "w": "5 mm"}))
         self.assertEqual((verdict, found["p", "j.none", ""]), ("UNKNOWN", "open"), "one open cell that no waiver rests")
         nothing = made_up([JOINT], [asks("j.none", "joint"), asks("j.pull", "joint")], [rule("pull", "joint", "j.pull", le=[["load", "pull"], "cap"])])
         found, verdict, _ = cells(self, nothing, *joint(["j.none", "j.pull"], cases=""))

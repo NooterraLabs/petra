@@ -2,6 +2,14 @@
 fails whatever is missing, which a waiver rested because something was missing. One test per
 finding.
 
+  D1  A waiver rested a cell because something was missing: a key the part left unstated, a
+      load a case left out, a table with no line for the part. It rested it though the rule
+      failed whatever the missing piece was: a pin that both coatings fail, a bolt whose
+      shear alone fails under a case that leaves the tension out, a table gap inside a `min`
+      whose other term already fails, a `requires` that no coating meets. Now a waiver rests
+      an unstated key or a left-out load only under a completion that a hint names and under
+      which the rule holds, the completions of the rested cells agree, a cell that every name
+      of its keys fails is refuted, and a table with no line for the part is not rested.
   F2  A `case` on a row that names the class of a weld, whose branch for one class reads a
       table with no line for the weld's grade. The weld was of the other class, and that
       class's branch fails the rule, but the readers wrote every branch, so the empty one sank
@@ -15,15 +23,176 @@ finding.
       that line's rule: the range the rule holds in. That cell counted as the one proved cell a
       PASS needs, so the design passed with nothing it was asked answered.
 """
+import json
 import unittest
 from fractions import Fraction
 
-from petra import grid
-from tests.test_deck_features import ANCHOR, HEAD, asks, cells, design, given, key, kind, load, made_up, no_deck, part, reads, rule, size
+from petra import grid, verify
+from tests.test_deck_features import (ANCHOR, HEAD, KERNEL, asks, cells, design, given, key, kind, load, made_up, no_deck, parsed, part, reads, reason,
+                                      rule, size)
+from tests.test_kernel_grid import ask
 
 
 def waive(mechanism: str, on: str) -> str:
     return f'\nwaive {mechanism} on {on} by "t@example.org" reason "test"\n'
+
+
+# --- D1. what a part or a case leaves out ---------------------------------------------------------------
+
+COATING = {**key("coating", "zinc", "none"), "optional": True}
+PIN = kind("pin", size("d"), size("fy", "stress"), COATING, loads=[{"name": "shear", "dim": "force", "what": "shear on the pin", "least": "0 kN"}])
+CAPACITY = ["mul", "0.6", "fy", ["div", ["mul", "pi", "d", "d"], "4"]]
+"""0.6 x 240 MPa x pi x (10 mm)^2 / 4 = 11.31 kN for the pin below: 10.18 kN coated, 9.05 kN bare."""
+FACTOR = {"id": "made-up/factor", "anchor": ANCHOR, "gives": {"name": "k", "dim": "dimensionless", "what": "a factor of a coating"},
+          "takes": [{"name": "coating", "one_of": ["zinc", "none"], "what": "coating"}],
+          "table": {"down": {"by": "coating"}, "unit": "1", "cells": ["0.9", "0.8"]}}
+
+
+def pins(*rules: dict, rows: tuple = ()) -> dict:
+    return made_up([PIN], [asks("pin.shear", "pin"), asks("pin.size", "pin")], [*rules, rule("size", "pin", "pin.size", le=[["q", "6", "mm"], "d"])], rows)
+
+
+BY_WHEN = pins(rule("shear-coated", "pin", "pin.shear", when=["is", "coating", "zinc"], le=[["load", "shear"], ["mul", "0.9", CAPACITY]]),
+               rule("shear-bare", "pin", "pin.shear", when=["is", "coating", "none"], le=[["load", "shear"], ["mul", "0.8", CAPACITY]]))
+"""Two rules whose `when` covers the two coatings."""
+BY_TABLE = pins(rule("shear", "pin", "pin.shear", le=[["load", "shear"], ["mul", ["row", "made-up/factor", {"coating": "coating"}], CAPACITY]]), rows=(FACTOR,))
+"""One rule that reads the coating's factor in a table."""
+
+
+def pin(shear: str, waived: bool = True, coating: str = "unstated") -> tuple[str, str]:
+    card = HEAD + given("p.fy", "240 MPa") + load("service", f"p shear in [{shear}, {shear}]") + (waive("pin.shear", "p") if waived else "")
+    return design(part("pin", "p", d="10 mm", fy="given p.fy", coating=coating)), card
+
+
+BOLT = kind("bolt", size("area", "area"), size("fu", "stress"),
+            loads=[{"name": "shear", "dim": "force", "what": "shear", "least": "0 kN"}, {"name": "tension", "dim": "force", "what": "tension", "least": "0 kN"}])
+INTERACTION = made_up([BOLT], [asks("bolt.combined", "bolt"), asks("bolt.size", "bolt")],
+                      [rule("interaction", "bolt", "bolt.combined",
+                            le=[["add", ["div", ["load", "shear"], ["mul", "0.45", "fu", "area"]], ["div", ["load", "tension"], ["mul", "0.75", "fu", "area"]]], "1"]),
+                       rule("area", "bolt", "bolt.size", le=[["q", "50", "mm2"], "area"])])
+"""0.45 x 800 MPa x 157 mm2 = 56.5 kN of shear alone, and 94.2 kN of tension alone."""
+
+
+def bolt(wind: str) -> tuple[str, str]:
+    card = (HEAD + given("b.fu", "800 MPa") + load("gravity", "b shear in [10 kN, 10 kN]", "b tension in [5 kN, 5 kN]")
+            + load("wind", f"b shear in [{wind}, {wind}]") + waive("bolt.combined", "b"))
+    return design(part("bolt", "b", area="157 mm2", fu="given b.fu")), card
+
+
+class WhatIsLeftOut(unittest.TestCase):
+    def test_a_rule_that_every_name_of_an_unstated_key_fails_is_refuted(self):
+        for waived in (True, False):
+            found, status, _ = cells(self, BY_TABLE, *pin("20 kN", waived))
+            self.assertEqual((found[("p", "pin.shear", "shear/service")], status), ("refuted", "FAIL"))
+
+    def test_a_rule_that_one_name_meets_is_waived_under_that_name_or_open(self):
+        # 9.5 kN: the coated pin carries 10.18 kN and the bare one 9.05 kN.
+        found, status, said = cells(self, BY_TABLE, *pin("9.5 kN"))
+        self.assertEqual((found[("p", "pin.shear", "shear/service")], status), ("waived", grid.PASS_WAIVED))
+        self.assertTrue(reason(said, "pin.shear").startswith(grid.WAIVED), reason(said, "pin.shear"))
+        found, status, said = cells(self, BY_TABLE, *pin("9.5 kN", waived=False))
+        self.assertEqual((found[("p", "pin.shear", "shear/service")], status), ("open", "UNKNOWN"))
+
+    def test_two_rules_whose_whens_cover_an_unstated_key_and_both_fail_are_not_passed(self):
+        # The coated rule rests when the pin is bare, and the bare rule when it is coated: the
+        # two completions disagree, so the second cell is not rested.
+        found, status, said = cells(self, BY_WHEN, *pin("20 kN"))
+        self.assertEqual(([found[("p", "pin.shear", e)] for e in ("shear-coated/service", "shear-bare/service")], status), (["waived", "open"], "UNKNOWN"))
+        self.assertTrue(reason(said, "pin.shear", "shear-bare/service").startswith(grid.UNRESTED))
+
+    def test_two_rules_whose_whens_cover_an_unstated_key_rest_under_one_name_that_holds(self):
+        # 9.5 kN: under zinc the coated rule holds and the bare one does not answer.
+        found, status, _ = cells(self, BY_WHEN, *pin("9.5 kN"))
+        self.assertEqual(([found[("p", "pin.shear", e)] for e in ("shear-coated/service", "shear-bare/service")], status), (["waived", "waived"], grid.PASS_WAIVED))
+
+    def test_a_stated_key_is_decided_as_before(self):
+        for coating, verdict in (("zinc", "PASS"), ("none", "FAIL")):
+            found, status, _ = cells(self, BY_TABLE, *pin("9.5 kN", coating=coating))
+            self.assertEqual(status, verdict, coating)
+
+    def test_a_requires_that_no_name_of_an_unstated_key_meets_is_refuted(self):
+        rod = kind("rod", size("d"), key("grade", "A", "B", "C"), {**key("coating", "zinc", "paint", "none"), "optional": True})
+        size_rule = rule("size", "rod", "rod.size", le=["d", ["q", "100", "mm"]])
+        both = rule("finish", "rod", "rod.finish", requires=["or", ["and", ["is", "coating", "zinc"], ["is", "grade", "A"]], ["and", ["is", "coating", "paint"], ["is", "grade", "B"]]])
+        deck = made_up([rod], [asks("rod.finish", "rod"), asks("rod.size", "rod")], [both, size_rule])
+        for grade, waived, state, verdict in (("C", True, "refuted", "FAIL"), ("C", False, "refuted", "FAIL"), ("A", True, "waived", grid.PASS_WAIVED),
+                                              ("A", False, "open", "UNKNOWN")):
+            card = HEAD + (waive("rod.finish", "r") if waived else "")
+            found, status, said = cells(self, deck, design(part("rod", "r", d="10 mm", grade=grade, coating="unstated")), card)
+            self.assertEqual((found[("r", "rod.finish", "finish")], status), (state, verdict), (grade, waived))
+        self.assertEqual(reason(said, "rod.finish"), "r.coating is unstated: its maker states none, and the rule reads it")
+        found, status, said = cells(self, deck, design(part("rod", "r", d="10 mm", grade="C", coating="unstated")))
+        self.assertEqual(reason(said, "rod.finish"), "the part is not what the rule requires: coating is unstated, grade is C")
+
+    def test_a_load_a_case_leaves_out_that_fails_whatever_it_is_is_not_passed(self):
+        # Under wind the shear alone is 120 / 56.5 = 2.12 of the bolt, and a tension of at
+        # least zero only adds to it.
+        found, status, said = cells(self, INTERACTION, *bolt("120 kN"))
+        self.assertEqual((found[("b", "bolt.combined", "interaction/wind")], status), ("open", "UNKNOWN"))
+        self.assertTrue(reason(said, "bolt.combined", "interaction/wind").startswith(grid.UNRESTED))
+
+    def test_a_load_a_case_leaves_out_rests_under_a_value_at_which_the_rule_holds(self):
+        found, status, _ = cells(self, INTERACTION, *bolt("10 kN"))
+        self.assertEqual((found[("b", "bolt.combined", "interaction/wind")], status), ("waived", grid.PASS_WAIVED))
+
+    def test_a_table_with_no_line_for_the_part_inside_a_min_is_not_passed(self):
+        bearing = {"id": "made-up/bearing", "anchor": ANCHOR, "gives": {"name": "Rb", "dim": "force", "what": "bearing"},
+                   "takes": [{"name": "d", "dim": "length", "what": "bolt", "range": ["12 mm", "24 mm"]}],
+                   "table": {"down": {"by": "d", "at": ["12 mm", "16 mm", "20 mm", "24 mm"]}, "unit": "kN", "cells": ["40", "55", "70", "85"]}}
+        joint = kind("joint", size("d"), size("fu", "stress"), loads=[{"name": "pull", "dim": "force", "what": "pull", "least": "0 kN"}])
+        deck = made_up([joint], [asks("joint.strength", "joint")],
+                       [rule("strength", "joint", "joint.strength", le=[["load", "pull"], ["min", ["mul", "0.6", "fu", ["div", ["mul", "pi", "d", "d"], "4"]], ["row", "made-up/bearing", {"d": "d"}]]])],
+                       [bearing])
+        card = HEAD + given("j.fu", "800 MPa") + load("service", "j pull in [400 kN, 400 kN]") + waive("joint.strength", "j")
+        found, status, said = cells(self, deck, design(part("joint", "j", d="22 mm", fu="given j.fu")), card)
+        self.assertEqual((found[("j", "joint.strength", "strength/service")], status), ("open", "UNKNOWN"))
+        self.assertTrue(reason(said, "joint.strength").startswith(grid.UNRESTED))
+
+    def test_an_unless_on_an_unstated_key_rests_under_a_name_at_which_it_holds(self):
+        deck = made_up([kind("pin", size("d"), COATING)], [asks("pin.rust", "pin", unless={"when": ["is", "coating", "zinc"], "why": "zinc does not rust"}),
+                                                           asks("pin.size", "pin")],
+                       [rule("size", "pin", "pin.size", le=[["q", "6", "mm"], "d"])])
+        text = design(part("pin", "p", d="10 mm", coating="unstated"))
+        for card, state, verdict in ((HEAD + waive("pin.rust", "p"), "waived", grid.PASS_WAIVED), (HEAD, "open", "UNKNOWN")):
+            found, status, _ = cells(self, deck, text, card)
+            self.assertEqual((found[("p", "pin.rust", "")], status), (state, verdict))
+
+    @KERNEL
+    def test_the_kernel_rests_nothing_on_a_completion_that_does_not_fit(self):
+        """A hand-made hint: a name the key does not have, a load under its least, a key the
+        rule does not read, and the right completion with a partition that proves nothing."""
+        rules, read = parsed(BY_TABLE, *pin("9.5 kN"))
+        report, files = grid.check(read, rules)
+        (good,) = [h for h in json.loads(files["proofs"])["cells"] if h["mechanism"] == "pin.shear"]
+        self.assertEqual(good["completion"], {"keys": [["p", "coating", "zinc"]], "loads": []})
+        for completion, partition in (({"keys": [["p", "coating", "paint"]]}, "leaf"), ({"keys": [["p", "coating", "zinc"]], "loads": [["p", "shear", "service", "-1"]]}, "leaf"),
+                                      ({"keys": [["p", "coating", "zinc"], ["p", "grade", "x"]]}, "leaf"), ({"keys": [["p", "coating", "none"]]}, "leaf")):
+            with self.subTest(completion=completion):
+                hint = {**good, "completion": completion, "partition": partition}
+                said = ask({**files, "proofs": json.dumps({"format": "petra-proofs/0", "cells": [hint]})})
+                (cell,) = [c for c in said["cells"] if c["mechanism"] == "pin.shear"]
+                self.assertEqual((said["findings"], cell["state"], said["verdict"]), ([], "open", "UNKNOWN"))
+        self.assertEqual(report.status, grid.PASS_WAIVED)
+
+    @KERNEL
+    def test_the_kernel_refutes_only_with_a_point_for_every_name(self):
+        rules, read = parsed(BY_TABLE, *pin("20 kN"))
+        report, files = grid.check(read, rules)
+        hints = [h for h in json.loads(files["proofs"])["cells"] if h["mechanism"] == "pin.shear"]
+        self.assertEqual(sorted(h["completion"]["keys"][0][2] for h in hints), ["none", "zinc"])
+        for kept in hints:
+            said = ask({**files, "proofs": json.dumps({"format": "petra-proofs/0", "cells": [kept]})})
+            (cell,) = [c for c in said["cells"] if c["mechanism"] == "pin.shear"]
+            self.assertEqual((cell["state"], said["verdict"]), ("open", "UNKNOWN"))
+
+    def test_a_disagreement_of_the_waivers_is_one_the_kernel_and_the_grid_are_held_to(self):
+        rules, read = parsed(BY_WHEN, *pin("9.5 kN"))
+        report, files = grid.check(read, rules)
+        said = {"cells": [{"subject": c.subject, "mechanism": c.mechanism, "entry": c.entry, "state": c.state} for c in report.cells],
+                "verdict": report.verdict, "hashes": {"rules": rules.hash}, "cells_from": "rules", "waived": []}
+        self.assertIn("waivers", verify.differs([(c.subject, c.mechanism, c.entry, c.state) for c in report.cells], report.verdict, rules.hash, said, report.waived()))
+        self.assertEqual(verify.differs([(c.subject, c.mechanism, c.entry, c.state) for c in report.cells], report.verdict, rules.hash,
+                                        {**said, "waived": report.waived()}, report.waived()), "")
 
 
 # --- F2. a branch that cannot be written ---------------------------------------------------------------
@@ -140,6 +309,16 @@ class WhereIsNotTheRule(unittest.TestCase):
         found, status, _ = cells(self, where_deck(), design(part("joint", "j", d="22 mm")), card)
         self.assertEqual(found[("j", "joint.bearing", "bearing/service/where")], "proved")
         self.assertNotIn(status, ("PASS", "PASS_WAIVED"))
+
+    def test_a_range_that_holds_nowhere_is_rested_with_one_reason_in_both_readers(self):
+        card = HEAD + load("service", "j pull in [500 kN, 500 kN]") + waive("joint.bearing", "j")
+        deck, read = parsed(where_deck(), design(part("joint", "j", d="40 mm")), card)
+        report, _ = grid.check(read, deck)
+        found, status, said = cells(self, where_deck(), design(part("joint", "j", d="40 mm")), card)
+        self.assertEqual((found[("j", "joint.bearing", "bearing/service")], status), ("waived", "UNKNOWN"))
+        its = reason(said, "joint.bearing")
+        self.assertEqual(its, grid.WAIVED + "the rule holds only where the table stops at 30 mm, and that holds nowhere in the ranges for j")
+        self.assertTrue(report.cells[0].why.endswith("; " + its), report.cells[0].why)
 
     def test_a_range_beside_a_proved_rule_is_still_passed(self):
         card = HEAD + load("service", "j pull in [50 kN, 50 kN]")

@@ -147,12 +147,13 @@ def refusal(path: str, said: Mapping[str, Any]) -> tuple[str, ...]:
             *([f"{path}: petra-verify refuses it for {more} more reasons"] if more else []))
 
 
-def differs(mine: list[tuple[str, str, str, str]], status: str, rules: str, said: Mapping[str, Any]) -> str:
+def differs(mine: list[tuple[str, str, str, str]], status: str, rules: str, said: Mapping[str, Any], waived: list[Mapping[str, str]]) -> str:
     """Where the kernel's answer to a design checked against a deck of rules differs from
     the grid's (grid.py). `mine` is the grid's cells in order, each its subject, mechanism,
-    entry and state, `status` its verdict and `rules` the hash of the deck's file. The
-    kernel works the cells out itself, so every cell is the same at the same place, or
-    this says which is not. Empty when the two agree."""
+    entry and state, `status` its verdict, `rules` the hash of the deck's file and `waived`
+    the waivers its cells rest on, as Report.waived lists them. The kernel works the cells
+    out itself, so every cell is the same at the same place and the two list the same
+    waivers, or this says which is not. Empty when the two agree."""
     its = [(c["subject"], c["mechanism"], c["entry"], c["state"]) for c in said["cells"]]
     found = [f"cell {n}: the grid has {'/'.join(a)} and petra-verify {'/'.join(b)}" + (f" ({c['reason']})" if c.get("reason") else "")
              for n, (a, b, c) in enumerate(zip(mine, its, said["cells"])) if a != b]
@@ -160,6 +161,8 @@ def differs(mine: list[tuple[str, str, str, str]], status: str, rules: str, said
         found.append(f"the grid has {len(mine)} cells and petra-verify {len(its)}")
     if said["verdict"] != status:
         found.append(f"the grid gives {status} and petra-verify {said['verdict']}")
+    if said.get("waived") != waived:
+        found.append(f"the grid rests cells on {len(waived)} waivers and petra-verify on {len(said.get('waived') or [])}, or on others")
     if said["hashes"].get("rules") != rules:
         found.append(f"petra-verify read the rules {said['hashes'].get('rules')}, and the deck is {rules}")
     if said.get("cells_from") != "rules":
