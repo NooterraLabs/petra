@@ -33,7 +33,10 @@ The search then learned to find 1 and 2. Past six ranged inputs it tries the cor
 climbs to from the middle, and in the search for a proof it tries the middle of each box it
 does not prove. Both are FAIL. Then 3: where the `where` is not proved, both readers try a
 point on a tape whose root is the rule's inside the `where` and -1 outside it, and a point
-inside where the rule fails refutes it. The kernel tries no partition of that tape.
+inside where the rule fails refutes it. The kernel tries no partition of that tape. Then 4:
+both kernels take the root of a point that is the square of a fraction to be that fraction,
+not two grid points around it, so the diagonal of 3 mm and 4 mm is 5 mm, and `lt` under 5 mm
+is refuted. A root that is no fraction is rounded as before.
 """
 import json
 import unittest
@@ -218,7 +221,22 @@ class StrictAtEquality(unittest.TestCase):
     def test_a_diagonal_equal_to_its_limit_is_not_under_it_and_does_not_pass_under_a_waiver(self):
         card = HEAD + waive("box.fit", "x")
         self.assertEqual(checked(card, design(part("box", "x", a="3 mm", b="4 mm", c="4.9 mm")), DIAGONAL).status, "FAIL")
-        self.assertIn(checked(card, design(part("box", "x", a="3 mm", b="4 mm", c="5 mm")), DIAGONAL).status, NOT_PASS)
+        equal = checked(card, design(part("box", "x", a="3 mm", b="4 mm", c="5 mm")), DIAGONAL)
+        self.assertEqual(equal.status, "FAIL")
+        # The root of 3^2 + 4^2 mm^2, a point that is the square of a fraction, is 5 mm exactly.
+        self.assertEqual(states(equal, "box.fit"), [("fit", "refuted")])
+
+    def test_a_diagonal_whose_square_is_no_square_of_a_fraction_is_rounded_so_a_limit_within_a_step_of_it_is_open(self):
+        """sqrt(1^2 + 1^2) mm is no fraction, so its root is rounded outward to the grid of
+        2^-96 m. A limit under it by less than a step lies inside that enclosure and is open,
+        waiver or not. One under it by more than a step is refuted."""
+        card = HEAD + waive("box.fit", "x")
+
+        def at(c: str):
+            return checked(card, design(part("box", "x", a="1 mm", b="1 mm", c=c)), DIAGONAL)
+        inside = at("1.414213562373095048801688724 mm")
+        self.assertEqual((inside.status, states(inside, "box.fit")), ("UNKNOWN", [("fit", "open")]))
+        self.assertEqual(states(at("1.4142135623730950488016887 mm"), "box.fit"), [("fit", "refuted")])
 
 
 # --- 5. a divisor that may be zero -------------------------------------------------------------------------

@@ -73,12 +73,12 @@ theorem grid_sound {enc : Nat → Iv} {extra : Nat} {x : ℝ} {lo hi : ℚ} (hen
 
 /-! ## The square root
 
-With `G = 2^96`, `iSqrt` returns `isqrt ⌊lo G²⌋ / G` and `isqrt ⌊hi G²⌋ / G`, the second
-plus `1 / G` unless its square is exactly `hi G²`. -/
+With `G = 2^96`, `gridSqrt` returns `isqrt ⌊lo G²⌋ / G` and `isqrt ⌊hi G²⌋ / G`, the second
+plus `1 / G` unless its square is exactly `hi G²`. `iSqrt` returns that, or, for a point
+that `rootOf` finds to be the square of a fraction, that fraction at both ends. -/
 
-private theorem iSqrt_eq (a : Iv) : iSqrt a =
-    if a.lo < 0 then .error "sqrt over an interval with negative values" else
-    .ok ⟨qd (Int.ofNat (isqrt (a.lo * qi (GRID * GRID)).floor.toNat)) GRID,
+private theorem gridSqrt_eq (a : Iv) : gridSqrt a =
+    ⟨qd (Int.ofNat (isqrt (a.lo * qi (GRID * GRID)).floor.toNat)) GRID,
       qd (Int.ofNat (if (qi (Int.ofNat (isqrt (a.hi * qi (GRID * GRID)).floor.toNat *
             isqrt (a.hi * qi (GRID * GRID)).floor.toNat)) == a.hi * qi (GRID * GRID)) = true
           then isqrt (a.hi * qi (GRID * GRID)).floor.toNat
@@ -139,28 +139,19 @@ private theorem sqrt_upper {q : ℚ} {x : ℝ} {n : ℕ} (hxq : x ≤ (q : ℝ))
   calc Real.sqrt x ≤ Real.sqrt (((n : ℝ) / (GRID : ℝ)) ^ 2) := Real.sqrt_le_sqrt key
     _ = (n : ℝ) / (GRID : ℝ) := Real.sqrt_sq (by positivity)
 
-/-- If `isqrt` is the integer square root, `iSqrt` succeeds only on an interval with no
-negative number, and its result holds the square root of every real the interval holds. -/
-theorem iSqrt_sound {a r : Iv} {x : ℝ} (ha : a.Holds x)
-    (h : iSqrt a = .ok r) : 0 ≤ x ∧ r.Holds (Real.sqrt x) := by
+/-- If `isqrt` is the integer square root, the grid's root of an interval with no negative
+number holds the square root of every real the interval holds. -/
+private theorem gridSqrt_sound {a : Iv} {x : ℝ} (h0 : (0 : ℚ) ≤ a.lo) (ha : a.Holds x) :
+    (gridSqrt a).Holds (Real.sqrt x) := by
   obtain ⟨hlo, hhi⟩ := ha
-  rw [iSqrt_eq] at h
-  by_cases hneg : a.lo < 0
-  · rw [if_pos hneg] at h
-    cases h
-  rw [if_neg hneg] at h
-  have h0 : (0 : ℚ) ≤ a.lo := not_lt.mp hneg
-  have hx0 : (0 : ℝ) ≤ x := le_trans (by exact_mod_cast h0) hlo
-  refine ⟨hx0, ?_⟩
+  rw [gridSqrt_eq]
   by_cases hex : (qi (Int.ofNat (isqrt (a.hi * qi (GRID * GRID)).floor.toNat *
       isqrt (a.hi * qi (GRID * GRID)).floor.toNat)) == a.hi * qi (GRID * GRID)) = true
-  · rw [if_pos hex] at h
-    cases h
+  · rw [if_pos hex]
     refine ⟨sqrt_lower h0 hlo (Loops.isqrt_spec _).1, sqrt_upper hhi ?_⟩
     have heq := beq_iff_eq.mp hex
     exact le_of_eq (heq.symm.trans (qi_ofNat _))
-  · rw [if_neg hex] at h
-    cases h
+  · rw [if_neg hex]
     refine ⟨sqrt_lower h0 hlo (Loops.isqrt_spec _).1, sqrt_upper hhi ?_⟩
     have hlt := (Loops.isqrt_spec (a.hi * qi (GRID * GRID)).floor.toNat).2
     have h1 : (a.hi * qi (GRID * GRID)).floor <
@@ -169,6 +160,49 @@ theorem iSqrt_sound {a r : Iv} {x : ℝ} (ha : a.Holds x)
       lt_of_le_of_lt (Int.self_le_toNat _) (by exact_mod_cast hlt)
     have h2 := Rat.floor_lt_iff.mp h1
     exact le_of_lt (by exact_mod_cast h2)
+
+/-- A fraction that `rootOf` gives is at least zero, and its square is the fraction it was
+given. -/
+private theorem rootOf_sound {q r : ℚ} (h : rootOf q = some r) : 0 ≤ r ∧ r * r = q := by
+  unfold rootOf at h
+  dsimp only at h
+  split_ifs at h with hsq
+  · obtain rfl := Option.some.inj h
+    refine ⟨?_, beq_iff_eq.mp hsq⟩
+    rw [Rat.mkRat_eq_div]
+    have hn0 : (0 : ℤ) ≤ Int.ofNat (isqrt q.num.toNat) := Int.natCast_nonneg _
+    have hn : (0 : ℚ) ≤ ((Int.ofNat (isqrt q.num.toNat) : ℤ) : ℚ) := by exact_mod_cast hn0
+    exact div_nonneg hn (Nat.cast_nonneg _)
+
+/-- If `isqrt` is the integer square root, `iSqrt` succeeds only on an interval with no
+negative number, and its result holds the square root of every real the interval holds. -/
+theorem iSqrt_sound {a r : Iv} {x : ℝ} (ha : a.Holds x)
+    (h : iSqrt a = .ok r) : 0 ≤ x ∧ r.Holds (Real.sqrt x) := by
+  unfold iSqrt at h
+  by_cases hneg : a.lo < 0
+  · rw [if_pos hneg] at h
+    cases h
+  rw [if_neg hneg] at h
+  have h0 : (0 : ℚ) ≤ a.lo := not_lt.mp hneg
+  have hx0 : (0 : ℝ) ≤ x := le_trans (by exact_mod_cast h0) ha.1
+  refine ⟨hx0, ?_⟩
+  split at h
+  · rename_i q hq
+    cases h
+    by_cases hpt : (a.lo == a.hi) = true
+    · rw [if_pos hpt] at hq
+      obtain ⟨hq0, hqq⟩ := rootOf_sound hq
+      have hlh : a.lo = a.hi := beq_iff_eq.mp hpt
+      have hx : x = ((a.lo : ℚ) : ℝ) := le_antisymm (by rw [hlh]; exact ha.2) ha.1
+      have hs : Real.sqrt x = ((q : ℚ) : ℝ) := by
+        rw [hx, ← hqq]
+        push_cast
+        exact Real.sqrt_mul_self (by exact_mod_cast hq0)
+      exact ⟨le_of_eq hs.symm, le_of_eq hs⟩
+    · rw [if_neg hpt] at hq
+      cases hq
+  · cases h
+    exact gridSqrt_sound h0 ha
 
 /-! ## Pi
 

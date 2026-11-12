@@ -267,10 +267,13 @@ def leastWork (v : Array Iv) (a : Array Nat) : Nat :=
 
 /-- The square root of an enclosure: Newton's iteration on the whole part of each end times
 `GRID` squared, which has the bits the end's numerator has more than its denominator and
-192 more, and costs their square. -/
+192 more, and costs their square. A point is first tried as the square of a fraction:
+Newton's iteration on its numerator and on its denominator, and the square of their
+quotient, which `bench/work_sweep.py` measures as `sqrtat`. -/
 def sqrtWork (x : Iv) : Nat :=
   let whole (q : Rat) : Nat := bitlen q.num.natAbs + 256 - bitlen q.den
-  62000 + 4 * x.bits + (whole x.lo * whole x.lo + whole x.hi * whole x.hi) / 900
+  let root := if x.lo == x.hi then 50000 + (pow32 (bitlen x.lo.num.natAbs) + pow32 (bitlen x.lo.den)) * 2 / 5 else 0
+  62000 + 4 * x.bits + (whole x.lo * whole x.lo + whole x.hi * whole x.hi) / 900 + root
 
 /-- The logarithm of one end `x` from an enclosure of `PREC + extra` bits. The series is of
 `(m - 1) / (m + 1)` for `x` scaled to `m` between a half and two, a number as long as

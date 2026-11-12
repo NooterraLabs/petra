@@ -213,6 +213,19 @@ Until 2026-11-11 a tape had no trigonometry. The step `cos` was added with its t
 
 No statement of an earlier theorem changed but for the validity of the caches, which has a third clause, and the axioms are the same. No design of the corpus has a cosine, and `corpus/run.py` gives no wrong verdict with the kernel built after the step or without a kernel. `bench/kernel_grid.py` compares the two readings on designs whose rules take cosines at zero, at a quarter turn, at a half turn, across 65,536, of tiny angles and of long fractions.
 
+## How the root of a square came to be exact
+
+Until 2026-11-12 the kernel rounded every square root outward to the grid. The seventh hostile review found that `lt` then never decides a side with a root at a point where it equals the other side: the root of 3² + 4² was two grid points around 5, so a diagonal of 3 mm by 4 mm was neither shown under 5 mm nor refuted there. The root of a point that is the square of a fraction is now that fraction.
+
+| In the kernel | In the proofs |
+|---|---|
+| `rootOf q` takes `isqrt` of the numerator and of the denominator of `q`, and returns their quotient when its square is `q`. | `rootOf_sound`: what it returns is at least zero and its square is `q`. |
+| `gridSqrt` rounds the root of an interval to the grid, as `iSqrt` did before. | `gridSqrt_sound`, the proof that `iSqrt_sound` had. |
+| `iSqrt` returns the root that `rootOf` finds for a point, and the one `gridSqrt` gives otherwise. | `iSqrt_sound`, with the statement it had. At a point the square root of `x` is that fraction, by `Real.sqrt_mul_self`. |
+| `sqrtWork` charges a point for the two roots ([format.md](format.md), "Work"). | None. No theorem reads a cost. |
+
+No statement of a theorem changed, and the axioms are the same. The Python kernel takes the same root in `i_sqrt` (`petra/kernel/interval.py`), so the two kernels give the same ends. Only a point is taken exactly. An end of a wider interval that is a square is rounded as before, so the root of an interval holds the root of every point in it, and no enclosure is wider than it was.
+
 ## What is not proved
 
 - Anything in `Petra/Check.lean`, `Petra/Files.lean`, `Petra/Deck.lean`, `Petra/Grid.lean`, `Petra/Quantity.lean`, `Petra/Sha256.lean` and `Main.lean`: reading the files, the test on the labels and ranges of a tape's inputs, writing a tape from a rule of a deck, the list of cells, the hash, and the verdict. The theorems start at a tape, a partition and a point.
@@ -235,6 +248,7 @@ No case was found where an operation returns an interval that fails to hold the 
 - `iCos` finds two whole numbers by dividing the ends of its interval by an end of pi, and then tests each against that many times an end of pi. The tests hold whenever the ends of pi are above zero, which they are. They are made all the same, so that the proof needs nothing of the divisions, of the floor or of the ends of pi beyond `piIv_sound`.
 - `dblGo` keeps the upper end of a cosine at 1 with a test, and has no test for the lower end. It needs none: the lower end is twice a square, rounded down, less one, and the square is not negative.
 - `cosPoint` and `Node.work` each take the size of an end for the key of the cache. A key of the other sign would be a second entry for one cosine, and no wrong one.
+- `rootOf` reads the numerator of its fraction as a natural number, which is 0 for a negative one. `iSqrt` refuses an interval below zero before it calls `rootOf`, and for a negative fraction the quotient 0 would not square back to it, so `rootOf` would return nothing all the same.
 - `Partition.shape` checks that a partition is at most 64 deep and that each split is of an input of the tape, strictly inside its range. The walk covers the box without any of it: a split of an input the tape lacks leaves both halves the whole box, and a cut outside the range leaves one half with no point in it.
 
 ## The axioms

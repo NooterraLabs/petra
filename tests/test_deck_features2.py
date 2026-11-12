@@ -984,9 +984,11 @@ class AStrictRule(unittest.TestCase):
         found, _, said = cells(self, CRAFTS, *craft())
         self.assertEqual((found["c", "craft.laden", "laden"], reason(said, "craft.laden")), ("open", "the card puts no cargo on c, which the rule reads"))
 
-    def test_lt_with_a_range_and_a_root_that_is_rounded(self):
-        """The square root of 0.09 m2 is enclosed and not exact, so a span of exactly 0.3 m is neither under 0.3 m nor shown not to be."""
-        for span, mass, state in (("0.299 m", "249 g", "proved"), ("0.301 m", "249 g", "refuted"), ("0.3 m", "249 g", "open"), ("0.2 m", "1.5 kg", "open")):
+    def test_lt_with_a_range_and_a_root_of_a_square(self):
+        """The square root of 0.09 m2 is 0.3 m exactly, since 0.09 is the square of a fraction, so a span of exactly 0.3 m is not under
+        0.3 m and is refuted. Until the root of such a point was exact, its enclosure reached to both sides of 0.3 m and the cell was open.
+        A root that is no fraction is rounded, and tests/test_kernel_attacks7.py holds a limit inside its enclosure open."""
+        for span, mass, state in (("0.299 m", "249 g", "proved"), ("0.301 m", "249 g", "refuted"), ("0.3 m", "249 g", "refuted"), ("0.2 m", "1.5 kg", "open")):
             with self.subTest(span=span, mass=mass):
                 found, _, said = cells(self, CRAFTS, *craft(mass, cap="2 kg", span=span))
                 self.assertEqual(found["c", "craft.ranged", "ranged"], state)

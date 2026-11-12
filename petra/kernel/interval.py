@@ -16,7 +16,9 @@ Invariants:
   below f(a), and the upper endpoint the smallest grid point at or above f(b) (f
   increasing). Both are monotone in a and b, which gives isotonicity, and both are fixed
   by the mathematics alone, so another kernel that follows this rule (a Lean port) gets
-  the same endpoints whatever series it sums.
+  the same endpoints whatever series it sums. The root of a point that is the square of a
+  fraction is that fraction (`i_sqrt`): a point holds no other interval, so this keeps
+  isotonicity too.
 - cos rounds to the same grid. It falls and rises by turns between the multiples of pi,
   so its ends over [a, b] are the grid points around cos a and cos b, or 1 or -1 where the
   cosine may turn in the interval (`i_cos`). Which of these it is rests on comparisons
@@ -147,15 +149,28 @@ def i_max(a: Interval, b: Interval) -> Interval:
     return Interval(max(a.lo, b.lo), max(a.hi, b.hi))
 
 
+def _root(q: Q) -> Q | None:
+    """The square root of a fraction that is the square of one, or None: the root of its
+    numerator over the root of its denominator, when that squares back to it."""
+    r = Q(math.isqrt(q.numerator), math.isqrt(q.denominator))
+    return r if r * r == q else None
+
+
 def i_sqrt(x: Interval) -> Interval:
     """[floor(sqrt(x.lo)), ceil(sqrt(x.hi))] on the grid, computed exactly. Requires x.lo >= 0.
 
     With y = x * 4**PRECISION_BITS, sqrt(x) * 2**PRECISION_BITS = sqrt(y). For real y >= 0,
     floor(sqrt(y)) = isqrt(floor(y)), and ceil(sqrt(y)) is that integer when its square is
     y and the next integer otherwise.
+
+    The root of a point that is the square of a fraction is that fraction at both ends, so
+    that sqrt(3^2 + 4^2) is 5 and a strict inequality at it is decided. Only a point: an end
+    of a wider interval at a square still rounds to the grid, which keeps the root isotone.
     """
     if x.lo < 0:
         raise KernelArithmeticError(f"sqrt over [{x.lo}, {x.hi}], which has negative values")
+    if x.lo == x.hi and (root := _root(x.lo)) is not None:
+        return Interval(root, root)
     top = x.hi * _GRID * _GRID
     hi = math.isqrt(math.floor(top))
     lo = math.isqrt(math.floor(x.lo * _GRID * _GRID))

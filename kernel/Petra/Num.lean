@@ -3,7 +3,8 @@ Exact rationals and closed rational intervals, as petra/kernel/interval.py defin
 
 +, -, *, / and integer powers are exact. sqrt, ln, exp, cos and pi round outward to the
 grid of dyadic rationals with 96 fractional bits: the lower end is the largest grid point
-at or below the value, and the upper end the smallest at or above it. The mathematics
+at or below the value, and the upper end the smallest at or above it. The one exception is
+the root of a point that is the square of a fraction, which is that fraction. The mathematics
 fixes both ends, so this kernel and the Python one agree on them whatever series each sums.
 The cosine of an interval also rests on where the interval lies among the multiples of pi,
 which both kernels decide with the same comparisons against the grid's pi (`iCos`).
@@ -89,16 +90,33 @@ termination_by x
 def isqrt (n : Nat) : Nat :=
   if n == 0 then 0 else isqrtGo n (2 ^ (Nat.log2 n / 2 + 1))
 
-/-- With y = x * 4^PREC, sqrt x * 2^PREC = sqrt y. floor (sqrt y) is isqrt (floor y), and
-ceil (sqrt y) is that integer when its square is y and the next integer otherwise. -/
-def iSqrt (x : Iv) : Except String Iv :=
-  if x.lo < 0 then .error "sqrt over an interval with negative values" else
+/-- The square root of a fraction that is the square of one, or none: the root of its
+numerator over the root of its denominator, when that squares back to it. -/
+def rootOf (q : Rat) : Option Rat :=
+  let r := mkRat (Int.ofNat (isqrt q.num.toNat)) (isqrt q.den)
+  if r * r == q then some r else none
+
+/-- The root of an interval rounded outward to the grid. With y = x * 4^PREC, sqrt x * 2^PREC
+= sqrt y. floor (sqrt y) is isqrt (floor y), and ceil (sqrt y) is that integer when its
+square is y and the next integer otherwise. -/
+def gridSqrt (x : Iv) : Iv :=
   let g2 : Rat := qi (GRID * GRID)
   let top := x.hi * g2
   let hiN := isqrt top.floor.toNat
   let loN := isqrt (x.lo * g2).floor.toNat
   let exact := qi (Int.ofNat (hiN * hiN)) == top
-  .ok ⟨qd (Int.ofNat loN) GRID, qd (Int.ofNat (if exact then hiN else hiN + 1)) GRID⟩
+  ⟨qd (Int.ofNat loN) GRID, qd (Int.ofNat (if exact then hiN else hiN + 1)) GRID⟩
+
+/-- The root of a point that is the square of a fraction is that fraction, at both ends, and
+the root of any other interval is rounded outward to the grid. So sqrt (3^2 + 4^2) is 5 and
+not two grid points around it, and a strict inequality at it is decided. Only a point is
+taken exactly: an interval with an end at a square still rounds that end to the grid, so that
+an interval inside another never has a root that reaches outside the other's. -/
+def iSqrt (x : Iv) : Except String Iv :=
+  if x.lo < 0 then .error "sqrt over an interval with negative values" else
+  match (if x.lo == x.hi then rootOf x.lo else none) with
+  | some r => .ok ⟨r, r⟩
+  | none => .ok (gridSqrt x)
 
 /-- [a, b] * c rounded outward to integers. -/
 def scale (a b : Int) (c : Rat) : Int × Int :=

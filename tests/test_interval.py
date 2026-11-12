@@ -116,6 +116,23 @@ class Transcendentals(unittest.TestCase):
         self.assertEqual(i_sqrt(point(F(9, 4))), point(F(3, 2)))
         self.assertEqual(i_sqrt(point(0)), point(0))
         self.assertEqual(i_sqrt(Interval(F(1, 4), F(4))), Interval(F(1, 2), F(2)))
+        # A point that is the square of a fraction off the grid: 3 mm and 4 mm, and 5 mm, in metres.
+        self.assertEqual(i_sqrt(point(F(3, 1000) ** 2 + F(4, 1000) ** 2)), point(F(1, 200)))
+        self.assertEqual(i_sqrt(point(F(1, 9))), point(F(1, 3)))
+        self.assertEqual(i_sqrt(point(F(10) ** 60 / 49)), point(F(10) ** 30 / 7))
+
+    def test_sqrt_of_a_wider_interval_rounds_an_end_at_a_square_to_the_grid(self):
+        """So an interval inside another never has a root that reaches outside the other's:
+        the root of [1/9, 1/9 + d] is not above that of [1/9, 1/9] at its lower end."""
+        third = i_sqrt(Interval(F(1, 9), F(1, 4)))
+        self.assertEqual((third.lo / CELL).denominator, 1)
+        self.assertLess(third.lo, F(1, 3))
+        self.assertEqual(third.hi, F(1, 2))
+        for d in (F(1, 10 ** 40), F(1, 10 ** 6)):
+            self.assertTrue(i_sqrt(point(F(1, 9))).subset_of(i_sqrt(Interval(F(1, 9), F(1, 9) + d))))
+            self.assertTrue(i_sqrt(point(F(1, 9) + d)).subset_of(i_sqrt(Interval(F(1, 9), F(1, 9) + d))))
+        self.assertEqual(i_sqrt(point(F(2, 9))), i_sqrt(Interval(F(2, 9), F(2, 9))))
+        self.assertEqual(i_sqrt(point(F(2, 9))).hi - i_sqrt(point(F(2, 9))).lo, CELL, "2/9 is no square")
 
     def test_ln_against_decimal(self):
         for x in [F(2), F(10), F(1, 7), F(99, 100), F(10) ** 30, F(1, 3) ** 40]:

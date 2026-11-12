@@ -164,6 +164,8 @@ A node is a list whose first item names it.
 
 `cos` is the one node for angles. A tape has no sine, no tangent, no inverse of them and no degrees: a sine is the cosine of a quarter turn less the angle, and an angle in degrees is multiplied by pi over 180 on the tape, with the tape's pi ([deck.md](deck.md), "Expressions").
 
+**The square root of an enclosure.** The root of `[lo, hi]` runs from the grid point at or under the root of `lo` to the grid point at or over the root of `hi`, on the grid of 2^-96. A point that is the square of a fraction is the one exception: its root is that fraction at both ends. The kernel takes the whole roots of the point's numerator and of its denominator, rounded down, and keeps their quotient when its square is the point. So the root of 3² + 4² is 5, and `lt` at it is decided ([deck.md](deck.md), "A rule that states lt"). Only a point is taken so. An end of a wider enclosure that is a square is rounded to the grid all the same, so the root of an enclosure holds the root of every point in it.
+
 **The cosine of an enclosure.** Between `k` pi and `k + 1` pi the cosine falls when `k` is even and rises when `k` is odd, and at `k` pi it is 1 or −1. So the kernel first places the enclosure `[lo, hi]` of the angle among the multiples of pi, with its own enclosure of pi, two fractions 2^-96 apart. It finds a whole number `i` with `i` pi at or under `lo` and a whole number `j` with `hi` at or under `j` pi. Each is tested with the end of pi that makes the test harder: `i` times the upper end of pi is at most `lo` for an `i` of zero or more, and `i` times the lower end for an `i` under zero, and the other way round for `j`.
 
 | The enclosure lies | The enclosure of its cosine |
@@ -282,7 +284,7 @@ A finding of the rule `limits` names the file `design`. Its item is `parts` when
 
 This holds for the cells the kernel makes. Without `--rules` the cells are the list of proofs.json, which the kernel takes as it comes, and that list may hold one key twice.
 
-The interval rule is the one in `petra/kernel/interval.py` and `petra/kernel/evaluate.py`: exact rational intervals, with `sqrt`, `ln`, `exp`, `cos` and pi rounded outward on a grid of 2^-96. An `ln`, an `exp` or a `cos` is rounded from an enclosure of 128 bits, and from one of 224, 608 and then 2,144 bits when the one before has a point of the grid inside it. The two kernels give the same ends for every root. The Python kernel has no `pick`: `petra/grid.py`, which searches for the partitions and the points, reads a pick by the same rule a second time.
+The interval rule is the one in `petra/kernel/interval.py` and `petra/kernel/evaluate.py`: exact rational intervals, with `sqrt`, `ln`, `exp`, `cos` and pi rounded outward on a grid of 2^-96, but for the root of a point that is the square of a fraction, which is exact. An `ln`, an `exp` or a `cos` is rounded from an enclosure of 128 bits, and from one of 224, 608 and then 2,144 bits when the one before has a point of the grid inside it. The two kernels give the same ends for every root. The Python kernel has no `pick`: `petra/grid.py`, which searches for the partitions and the points, reads a pick by the same rule a second time.
 
 ## The verdict
 
@@ -451,7 +453,7 @@ In the table, `n` is the bits of the enclosure the step reads.
 | `mul` | For each factor in turn, `product(p, w)`, in the same way |
 | `div` | `product(p, w)` for a numerator of `p` bits and a divisor of `w`, and 6,000 more when `w` is under 32, `14,000 + w / 2` more otherwise |
 | `min`, `max` | 500. For the first node it reads, 800 when its bits `n` are under 32, and `3,000 + n / 16` otherwise. For each node after it, `order(p, w)`, where `p` is the most bits of the nodes before it and `w` its own. |
-| `sqrt` | `62,000 + 4 × n + (a × a + b × b) / 900`. `a` is the bits of the numerator of the lower end and 256, less the bits of its denominator, and `b` is the same for the upper end. |
+| `sqrt` | `62,000 + 4 × n + (a × a + b × b) / 900`. `a` is the bits of the numerator of the lower end and 256, less the bits of its denominator, and `b` is the same for the upper end. An enclosure that is a point pays `50,000 + (h(c) + h(d)) × 2 / 5` more, for the bits `c` of its numerator and `d` of its denominator: the roots of the two and the square of their quotient, which test whether it is the square of a fraction. |
 | `pow` by `k` or by `−k` | `2,800 + n / 8 + k × (e + n / 2) + (k − 1) × (h(n) × 31 / 20) + ((k − 1) × (k − 2) / 2) × (n × n / 300 + 4 × n)`. `e` is 4,700 when `n × k` is under 32, 14,500 when `n` alone is, and 31,000 otherwise. |
 | `ln` | 25,000, and for each end what is below. An upper end equal to the lower pays a look. |
 | `exp` | 3,000 when the enclosure reaches below −65,536 or above 65,536, and the node has no value. Otherwise 25,000, and for each end what is below. An upper end equal to the lower pays a look. |
@@ -489,6 +491,7 @@ A step that rounds to the grid pays for each enclosure it asks for, before it as
 | `max` | 0.22 | 0.24 | 0.21 | 0.25 | 0.29 | 0.28 |
 | A pick of one order | 0.19 | 0.20 | 0.20 | 0.31 | 0.34 | 0.30 |
 | `sqrt` | 0.30 | 0.29 | 0.31 | 0.29 | 0.26 | 0.21 |
+| `sqrt` of a point | 0.34 | 0.30 | 0.29 | 0.28 | 0.30 | 0.30 |
 | `pow` by 2 | 0.17 | 0.20 | 0.25 | 0.27 | 0.27 | 0.28 |
 | `pow` by 3 | 0.16 | 0.19 | 0.25 | 0.32 | 0.23 | 0.25 |
 | `pow` by 8 | 0.15 | 0.22 | 0.37 | 0.32 | 0.23 | 0.17 |
@@ -496,7 +499,7 @@ A step that rounds to the grid pays for each enclosure it asks for, before it as
 | `exp` | 0.32 | 0.36 | 0.33 | 0.33 | 0.32 | 0.41 |
 | `cos` | 0.40 | 0.44 | 0.34 | 0.29 | 0.26 | 0.29 |
 
-The chain took 0.34 in that run, so the most, 0.46, is 1.4 times it. The line of `cos` is from a later run on a busier desktop, where the chain took 0.45 and the most of any step, 0.56, was 1.2 times it. A figure moves by about a quarter from one run to the next: in a run on a busier machine the most was 0.55 against a chain at 0.38. A constant of a file has at most 4,000 characters, so its last two columns are for one of 6,000 bits. A product of two numbers of 64,000 bits and a power of a long number have too many bits for a value, and their figures are for steps that paid and had none. Before the costs were fitted again the same sweep gave between 0.15 and 2.34 against a chain at 0.15, which is 16 times.
+The chain took 0.34 in that run, so the most, 0.46, is 1.4 times it. The line of `cos` is from a later run on a busier desktop, where the chain took 0.45 and the most of any step, 0.56, was 1.2 times it. The line of a `sqrt` of a point, `sqrtat` in the sweep, is from a run where the chain took 0.43 and then 0.36. A point with no pattern in it is no square, so the kernel tests it and then rounds it, and that is the most a `sqrt` does. A figure moves by about a quarter from one run to the next: in a run on a busier machine the most was 0.55 against a chain at 0.38. A constant of a file has at most 4,000 characters, so its last two columns are for one of 6,000 bits. A product of two numbers of 64,000 bits and a power of a long number have too many bits for a value, and their figures are for steps that paid and had none. Before the costs were fitted again the same sweep gave between 0.15 and 2.34 against a chain at 0.15, which is 16 times.
 
 A step on whole numbers, or on fractions with a short numerator or denominator, is charged as the same step on fractions with no pattern and takes less, down to a tenth of the time for long numbers. So the count does not run far under the time, and for such numbers it runs well over it.
 

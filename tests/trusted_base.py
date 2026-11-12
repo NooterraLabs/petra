@@ -64,15 +64,19 @@ class Group:
     checked_by: Judge | Debt
 
 
-CORE_CAP = Limit(1012, "Set on 2026-11-08 at 140f742, where the core measured 957 code lines. "
+CORE_CAP = Limit(1017, "Set on 2026-11-08 at 140f742, where the core measured 957 code lines. "
                        "A new rule adds 3 to 5 lines to rules/__init__.py (inferred from its tables), so "
                        "the headroom covers the registry entries of several rules. Raised on branch cosine "
                        "for `cos`, the one step of the rule language for angles: the Python reading of its "
                        "enclosure, which the kernel's ends must equal bit for bit (the series and the "
                        "doublings, placing an enclosure among the multiples of pi, and the cache), 40 lines "
-                       "in interval.py and 7 in terms.py, evaluate.py, codec.py and __init__.py, 1,012.")
+                       "in interval.py and 7 in terms.py, evaluate.py, codec.py and __init__.py, 1,012. "
+                       "The seventh hostile review found that `lt` never decides a root at a point where "
+                       "it equals the other side, as the root of 3^2 + 4^2 against 5, since every root was "
+                       "rounded to the grid. The root of a point that is the square of a fraction is now "
+                       "that fraction, as the kernel's `rootOf` takes it: 5 lines in interval.py, 1,017.")
 
-TRUSTED_CEILING = Limit(19903, "Set on 2026-11-08 at 140f742, where the trusted base measured 13,530 "
+TRUSTED_CEILING = Limit(19908, "Set on 2026-11-08 at 140f742, where the trusted base measured 13,530 "
                                "code lines: core 957, rules 457, outside the kernel 12,116. Raised on "
                                "2026-11-08 on branch parts-core as the parts layer replaces its scaffold: "
                                "classifying the scaffold measured 14,269, and the mesh reader with its "
@@ -219,6 +223,8 @@ TRUSTED_CEILING = Limit(19903, "Set on 2026-11-08 at 140f742, where the trusted 
                                "A rule whose `where` is not proved is tried at points inside the `where`, on a tape "
                                "whose root is the rule's there and -1 outside it, as the kernel tries the point: 20 "
                                "lines in petra/grid.py, 19,903. "
+                               "The root of a point that is the square of a fraction is that fraction, so that `lt` "
+                               "at such a root is decided: 5 lines in petra/kernel/interval.py (CORE_CAP), 19,908. "
                                "Raise it in the commit that needs more and say why here.")
 
 T2_ADOPTED = date(2026, 11, 8)
