@@ -547,7 +547,7 @@ class Reading(Kernel):
             with mock.patch.object(grid, "decks", lambda: (deck,)):
                 return grid.check(petra.lang.parse_design(CARD.replace('card "strips"', f'card "{name}"'), DESIGN, "strips.petra", build_registry()), deck)
 
-        self.assertEqual(check("n" * MAX_TITLE)[0].status, "PASS")
+        self.assertEqual(check("n" * MAX_TITLE)[0].verdict, "PASS")
         with self.assertRaisesRegex(ComponentError, "the name of the card is at most 200 characters"):
             check("n" * (MAX_TITLE + 1))
 
