@@ -66,6 +66,7 @@ noncomputable def Node.value (inputs : Nat) (ρ : Nat → ℝ) (val : Nat → Op
   | .sqrt i => (val i).bind fun x => if 0 ≤ x then some (Real.sqrt x) else none
   | .ln i => (val i).bind fun x => if 0 < x then some (Real.log x) else none
   | .exp i => (val i).map Real.exp
+  | .cos i => (val i).map Real.cos
   | .div i j => (val i).bind fun x => (val j).bind fun y => if y = 0 then none else some (x / y)
   | .pow i n => (val i).bind fun x => if 0 ≤ n ∨ x ≠ 0 then some (x ^ n) else none
   | .pick cases => pickValue val cases.toList

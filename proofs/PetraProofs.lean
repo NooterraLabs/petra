@@ -5,6 +5,7 @@ import PetraProofs.Arith
 import PetraProofs.Loops.Isqrt
 import PetraProofs.Loops.OddSeries
 import PetraProofs.Loops.ExpAt
+import PetraProofs.Loops.CosAt
 import PetraProofs.Rounded
 import PetraProofs.Step
 import PetraProofs.Pick

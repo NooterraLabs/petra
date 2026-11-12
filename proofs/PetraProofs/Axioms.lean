@@ -17,19 +17,23 @@ import PetraProofs.Strict
 #print axioms Petra.Iv.div_sound
 #print axioms Petra.powInt_sound
 #print axioms Petra.fits_ok
--- the kernel's three loops
+-- the kernel's four loops
 #print axioms Petra.Loops.isqrt_spec
 #print axioms Petra.Loops.oddSeries_spec
 #print axioms Petra.Loops.expAt_spec
 #print axioms Petra.Loops.expGo_stops
+#print axioms Petra.Loops.cosAt_spec
+#print axioms Petra.Loops.cosGo_stops
 -- the rounded functions
 #print axioms Petra.grid_sound
 #print axioms Petra.iSqrt_sound
 #print axioms Petra.piIv_sound
 #print axioms Petra.iLn_sound
 #print axioms Petra.iExp_sound
+#print axioms Petra.iCos_sound
 #print axioms Petra.iLn_valid
 #print axioms Petra.iExp_valid
+#print axioms Petra.iCos_valid
 #print axioms Petra.Caches.valid_empty
 -- one step, and the pick
 #print axioms Petra.Node.enclose_sound
