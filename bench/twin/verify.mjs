@@ -6,16 +6,17 @@
 //
 // Prints one JSON object {verdict, findings, counts, ignored_hints, waived, cells} and exits
 // 0 PASS, 1 FAIL, 2 UNKNOWN, 3 ILL-FORMED, 64 for a command line it cannot read. A cell has its
-// subject, mechanism, entry, claimed and state, and a reason when it is open, waived, or a
-// refuted rule that requires. --explain adds the steps to read the deck and to make the cells.
+// subject, mechanism, entry, claimed and state, a reason when it is open, waived, or a refuted
+// rule that requires, and the completion it rests on when it is waived on one. --explain adds the
+// steps to read the deck and to make the cells.
 //
 // Of the limits format.md states, the budget of work (20,000,000,000 units, for the needs, the
-// proofs and the walk that asks whether a waived rule's `where` holds nowhere), the words of
-// enclosures held on a leaf and the caches of ln, exp and cos are left out: they are counted in
-// the reference kernel's own costs. So are the limits on what is printed. The steps to make the
+// proofs and the walks that ask whether a rule's `where` holds nowhere), the words of enclosures
+// held on a leaf and the caches of ln, exp and cos are left out: they are counted in the
+// reference kernel's own costs. So are the limits on what is printed. The steps to make the
 // cells (Steps), cos and the completions of item 9 among them, are counted. The kernel does not
-// search: the climb of petra check and its budget of nodes are not here. See AMBIGUITIES.md, I,
-// K and L.
+// search: the climb of petra check, its budget of nodes and the work it charges its exponentials
+// are not here. See AMBIGUITIES.md, I, K, L and M.
 
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
@@ -2326,6 +2327,7 @@ export function loadDeck(D, find) {
 // ============================================================ the kernel
 
 const STATES = ['proved', 'refuted', 'not_applicable', 'waived', 'open'];
+const CASE_WHERE = 'a load case is not named where: an entry that ends in /where is the range of a rule';
 const nameCmp = (a, b) => {
   const x = [...a].map((c) => c.codePointAt(0)), y = [...b].map((c) => c.codePointAt(0));
   for (let i = 0; i < Math.min(x.length, y.length); i++) if (x[i] !== y[i]) return x[i] - y[i];
@@ -2526,6 +2528,27 @@ export function verifyTexts(texts, opts = {}) {
     deckStepCount = deckSteps(rulesJ);
     if (deckStepCount > DECK_STEPS) find('rules', '', `reading the deck takes ${deckStepCount} steps, more than 1,000,000`);
     else deck = loadDeck(rulesJ, find);
+  }
+  // format.md, The deck of rules: once the deck has read, no `least` of a field or a load is under
+  // the floor its dimension has in `domains.input`, where that floor holds for it as type rule 4
+  // holds an input: a floor under zero always, and one at zero or above unless the field or load
+  // says `may_be: negative`. A deck that breaks it is refused as one that does not read is. "Under"
+  // is taken strictly, whether or not the floor is strict (AMBIGUITIES.md, M1).
+  if (deck) {
+    let under = false;
+    for (const T of deck.types.values()) {
+      const items = [...T.fields.filter((f) => f.kind === 'q').map((f) => ['field', f]), ...[...T.loads.values()].map((l) => ['load', l])];
+      for (const [what, f] of items) {
+        if (!f.least) continue;
+        const fl = inputDomains.get(dstr(f.dim));
+        if (!fl || (f.mayBe === 'negative' && fl.min.n >= 0n)) continue;
+        if (qcmp(f.least, fl.min) < 0) {
+          find('rules', `types ${T.name}`, `${what} ${f.name}: its least, ${f.least} in SI units, is under ${fl.min}, the floor of a ${fl.name}, and no card states a value under it`);
+          under = true;
+        }
+      }
+    }
+    if (under) deck = null;
   }
   // Shape: with --rules the names of the card and of the design print in at most 200 bytes,
   // tested when the deck holds together.
@@ -2763,6 +2786,8 @@ export function verifyTexts(texts, opts = {}) {
       loadKeys.add(k);
       if (!isStr(x.case) || !nameLimit('card', x.item, x.case, NAME_BYTES, `the name of the case ${short(x.case)}`)) continue;
       if (x.case.includes('/')) { find('card', x.item, `the name of the case ${short(x.case)} holds a /`); continue; }
+      // Parts 6: a case is not named `where`, since an entry that ends in `/where` is a range.
+      if (x.case === 'where') { find('card', x.item, CASE_WHERE); continue; }
       if (x.lo && x.hi) loads.push(x);
     } else if (x.isGiven && isStr(x.name) && !givensRead.has(x.name)) {
       find('card', x.item, `no part reads the given ${x.name}`, 'parts.6');
@@ -2773,7 +2798,9 @@ export function verifyTexts(texts, opts = {}) {
   const loadCaseNames = new Set(loads.map((x) => x.case));
   for (const c of cardCases) {
     if (loadCaseNames.has(c)) continue;
-    if (nameLimit('card', 'cases', c, NAME_BYTES, `the name of the case ${short(c)}`) && c.includes('/')) find('card', 'cases', `the name of the case ${short(c)} holds a /`);
+    if (!nameLimit('card', 'cases', c, NAME_BYTES, `the name of the case ${short(c)}`)) continue;
+    if (c.includes('/')) find('card', 'cases', `the name of the case ${short(c)} holds a /`);
+    else if (c === 'where') find('card', 'cases', CASE_WHERE);
   }
   for (const w of waivers) {
     const part = partByName.get(w.subject);
@@ -3094,9 +3121,12 @@ export function verifyTexts(texts, opts = {}) {
       }
       return op(e, expr);
     };
-    if (which === 'where') {
+    // 'where': one root for each item of `where`. 'whole' (item 9, a witness of a rule with
+    // `where`): those roots and after them the rule's root of item 6, so that a partition that
+    // proves every root proves the range and the rule over the whole box.
+    if (which === 'where' || which === 'whole') {
       for (const w of rule.where) { const l = expr(w[0]), r = expr(w[1]); t.roots.push(t.add(['add', [l, t.add(['neg', r])]])); }
-      return t;
+      if (which === 'where') return t;
     }
     let root;
     if (rule.form === 'le') {
@@ -3159,12 +3189,15 @@ export function verifyTexts(texts, opts = {}) {
   // A completion fits a cell when it names each unstated key once, with a name its field lists,
   // and gives each load the case leaves out once, on the part and in the cell's case, with a value
   // at or above the load's least, or at or above zero for a load with no least that is not
-  // "may_be": "negative". It names nothing else. Returns {keys, loads, loadKeys} or null.
+  // "may_be": "negative", and that the floor of its dimension admits where the floor holds for
+  // the load, as type rule 4 holds a load of the card (AMBIGUITIES.md, L9). It names nothing
+  // else. Returns {keys, loads, loadKeys, src} or null; `src` is the hint's completion, which a
+  // waived cell resting on it prints.
   const fitComp = (c, part, cs, ukeys, missing) => {
     if (!isObj(c) || Object.keys(c).some((k) => k !== 'keys' && k !== 'loads')) return null;
     const kl = Object.hasOwn(c, 'keys') ? c.keys : [], ll = Object.hasOwn(c, 'loads') ? c.loads : [];
     if (!Array.isArray(kl) || !Array.isArray(ll) || kl.length !== ukeys.length || ll.length !== missing.length) return null;
-    const comp = { keys: new Map(), loads: new Map(), loadKeys: new Map() };
+    const comp = { keys: new Map(), loads: new Map(), loadKeys: new Map(), loadList: [], src: { keys: kl, loads: ll } };
     for (const k of kl) {
       if (!Array.isArray(k) || k.length !== 3 || !k.every(isStr)) return null;
       const key = `${k[0]}\u0000${k[1]}`;
@@ -3178,13 +3211,21 @@ export function verifyTexts(texts, opts = {}) {
       if (!v || l[0] !== part.name || l[2] !== (cs ?? '') || !missing.includes(l[1]) || comp.loads.has(l[1])) return null;
       const L = part.type.loads.get(l[1]);
       if (L.least ? qcmp(v, L.least) < 0 : L.mayBe !== 'negative' && v.n < 0n) return null;
+      const fl = inputDomains.get(dstr(L.dim));
+      if (fl && !(L.mayBe === 'negative' && fl.min.n >= 0n)) {
+        const c2 = qcmp(v, fl.min);
+        if (c2 < 0 || (c2 === 0 && fl.strict)) return null;
+      }
       comp.loads.set(l[1], v);
       comp.loadKeys.set(`${l[0]}\u0000${l[1]}\u0000${l[2]}`, v);
+      comp.loadList.push({ part: l[0], load: l[1], cs: l[2] });
     }
     return comp;
   };
   // The completions of the cells that waivers rest agree, across the design (item 1).
-  const restedKeys = new Map(), restedLoads = new Map();
+  // `restedPuts`: for each part, each load a rested completion gives and the cases it gives it in,
+  // for the reads of item 8.
+  const restedKeys = new Map(), restedLoads = new Map(), restedPuts = new Map();
   const agrees = (comp) => {
     for (const [k, nm] of comp.keys) if (restedKeys.has(k) && restedKeys.get(k) !== nm) return false;
     for (const [k, v] of comp.loadKeys) if (restedLoads.has(k) && qcmp(restedLoads.get(k), v) !== 0) return false;
@@ -3193,6 +3234,12 @@ export function verifyTexts(texts, opts = {}) {
   const recordRested = (comp) => {
     for (const [k, nm] of comp.keys) restedKeys.set(k, nm);
     for (const [k, v] of comp.loadKeys) restedLoads.set(k, v);
+    for (const p of comp.loadList) {
+      if (!restedPuts.has(p.part)) restedPuts.set(p.part, new Map());
+      const m = restedPuts.get(p.part);
+      if (!m.has(p.load)) m.set(p.load, new Set());
+      m.get(p.load).add(p.cs);
+    }
   };
   const answersUnder = (rule, part, comp) => rule.when === undefined || partCond(rule.when, part, comp);
   // Item 4: the reason of a refuted rule with requires names each key it names, in order and each
@@ -3228,44 +3275,61 @@ export function verifyTexts(texts, opts = {}) {
     const incomplete = (entry, cs, missing, ukeys, why) => {
       const hs = hintsFor(part.name, line.mechanism, entry).filter((h) => Object.hasOwn(h, 'completion'));
       const stepOf = 1 + rule.whenSize + rule.requiresSize;
-      // A tape written under a completion: the rule's own, or for a rule with `where` the second
-      // tape of item 5, the rule inside its range (AMBIGUITIES.md, L1). It takes the weight, twice
-      // with `where`, and its nodes, which are steps of item 9's charge and so tested at once.
-      const tapeUnder = (comp) => {
+      // A tape written under a completion takes the weight, twice with `where`, and its nodes,
+      // which are steps of item 9's charge and so tested at once. `which` is 'within' (the second
+      // tape of item 5) to refute a rule with `where`, 'whole' (its range and the rule) or 'where'
+      // (its range alone) for a witness of one, and 'le' for a rule with none.
+      const tapeUnder = (comp, which) => {
         charge(rule.where !== undefined ? 2 * rule.weight : rule.weight);
-        const w = tryWrite(rule, part, cs, rule.where !== undefined ? 'within' : 'le', comp);
+        const w = tryWrite(rule, part, cs, which, comp);
         charge(0);
         return w;
       };
       // Refuted when the case leaves out no load and the rule fails under every combination of
       // names of the unstated keys: the names of each key in the order its field lists them, the
       // first key's fastest, while there are at most 4,096, stopping at the first that does not.
+      // Each combination is a step, with the sizes of `when` and `requires` and one for each key
+      // it names. For a rule with an inequality each hint of the cell is looked at once, before the
+      // first combination, and the points of those whose completion fits and gives no load are
+      // kept by the names they give the keys, in the file's order (AMBIGUITIES.md, L3 and L8).
       if (!missing.length && ukeys.length) {
         let combos = 1;
         for (const k of ukeys) { combos *= k.names.length; if (combos > COMPLETION_COMBOS) break; }
         let all = combos <= COMPLETION_COMBOS;
+        const namesKey = (keys) => ukeys.map((u) => keys.get(u.key)).join('\u0000');
+        const points = new Map();
+        if (all && rule.form !== 'requires') {
+          for (const h of hs) {
+            charge(stepOf + compSize(h.completion));
+            const hc = fitComp(h.completion, part, cs, ukeys, missing);
+            if (!hc || hc.loads.size || !Object.hasOwn(h, 'point')) continue;
+            const k = namesKey(hc.keys);
+            if (!points.has(k)) points.set(k, []);
+            points.get(k).push({ comp: hc, point: h.point });
+          }
+        }
         for (let n = 0; all && n < combos; n++) {
           const comp = { keys: new Map(), loads: new Map(), loadKeys: new Map() };
           let x = n;
           for (const k of ukeys) { comp.keys.set(k.key, k.names[x % k.names.length]); x = Math.floor(x / k.names.length); }
-          charge(stepOf);
+          charge(stepOf + ukeys.length);
           if (!answersUnder(rule, part, comp)) { all = false; break; }
           if (rule.form === 'requires') { if (partCond(rule.requires, part, comp)) all = false; continue; }
           let fails = false;
-          for (const h of hs) {
-            charge(stepOf + compSize(h.completion));
-            const hc = fitComp(h.completion, part, cs, ukeys, missing);
-            if (!hc || ![...comp.keys].every(([k, nm]) => hc.keys.get(k) === nm) || !Object.hasOwn(h, 'point')) continue;
-            const w = tapeUnder(hc);
-            if (w.tape && refutes(w.tape, h.point)) { fails = true; break; }
+          for (const p of points.get(namesKey(comp.keys)) ?? []) {
+            const w = tapeUnder(p.comp, rule.where !== undefined ? 'within' : 'le');
+            if (w.tape && refutes(w.tape, p.point)) { fails = true; break; }
           }
           if (!fails) all = false;
         }
         if (all) { cell(entry, 'refuted', rule.form === 'requires' ? requiresReason(rule, part) : undefined); return; }
       }
-      // Otherwise, on a line the card waives, the first hint that is a witness: its completion
-      // fits, and under it the rule does not answer, its requires holds, or the hint's partition
-      // proves the rule's tape. The hint's point is not tried.
+      // Otherwise, on a line the card waives, the first hint that is a witness, the hints looked
+      // at again in the file's order: its completion fits, and under it the rule does not answer,
+      // its requires holds, or the hint's partition proves the rule's tape. For a rule with
+      // `where` that tape is the range and the rule over the whole box, and a hint with no
+      // partition is a witness when the `where` holds nowhere in the box (item 5's question). The
+      // hint's point is not tried.
       if (waived) {
         for (const h of hs) {
           charge(stepOf + compSize(h.completion));
@@ -3274,8 +3338,13 @@ export function verifyTexts(texts, opts = {}) {
           let witness;
           if (!answersUnder(rule, part, comp)) witness = true;
           else if (rule.form === 'requires') witness = partCond(rule.requires, part, comp);
-          else if (Object.hasOwn(h, 'partition')) { const w = tapeUnder(comp); witness = !!w.tape && proves(w.tape, h.partition); }
-          else witness = false;
+          else if (Object.hasOwn(h, 'partition')) {
+            const w = tapeUnder(comp, rule.where !== undefined ? 'whole' : 'le');
+            witness = !!w.tape && proves(w.tape, h.partition);
+          } else if (rule.where !== undefined) {
+            const w = tapeUnder(comp, 'where');
+            witness = !!w.tape && holdsNowhere(w.tape) >= 0;
+          } else witness = false;
           if (witness) { cell(entry, 'open', why, comp); return; }
         }
       }
@@ -3373,7 +3442,10 @@ export function verifyTexts(texts, opts = {}) {
   // Reads, for the unread cells (Cells 8): by a rule that applies to the part (it answers, waived
   // or not and whether or not its line's unless holds), by a rule that applies to the part that
   // joins it, and by an unless of the lines of its type. A load is read by an expression of a rule
-  // of its own part's type that applies.
+  // of its own part's type that applies. They are worked out under the completions of the cells
+  // the waivers rest, after the last of them is rested: each key one of them names has that name,
+  // and each load one gives is on its part in its case. A key no rested completion names is still
+  // unstated, and a rule whose `when` names it answers.
   const readSets = new Map(parts.map((p) => [p.name, new Set()]));
   const loadReads = new Map(parts.map((p) => [p.name, new Set()]));
   const markReads = (part, reads) => {
@@ -3384,14 +3456,23 @@ export function verifyTexts(texts, opts = {}) {
       if (q) readSets.get(q.name).add(jf.slice(dot + 1));
     }
   };
-  for (const part of parts) {
-    for (const rule of rulesOfType.get(part.type.name) ?? []) {
-      if (!answers(rule, part)) continue;
-      markReads(part, rule.reads);
-      for (const l of rule.reads.loads) loadReads.get(part.name).add(l);
+  const completedKey = (partName, field) => restedKeys.has(`${partName}\u0000${field}`);
+  const workOutReads = () => {
+    const rested = { keys: restedKeys };
+    const stillUnstated = (part, ref) => {
+      const r = resolve(part, ref);
+      return r.part.values.get(r.field)?.unstated === true && !completedKey(r.part.name, r.field);
+    };
+    const appliesNow = (rule, part) => rule.when === undefined || rule.whenKeys.some((k) => stillUnstated(part, k)) || partCond(rule.when, part, rested);
+    for (const part of parts) {
+      for (const rule of rulesOfType.get(part.type.name) ?? []) {
+        if (!appliesNow(rule, part)) continue;
+        markReads(part, rule.reads);
+        for (const l of rule.reads.loads) loadReads.get(part.name).add(l);
+      }
+      for (const g of linesOf.get(part.type.name) ?? []) if (g.unless) markReads(part, g.unless.reads);
     }
-    for (const g of linesOf.get(part.type.name) ?? []) if (g.unless) markReads(part, g.unless.reads);
-  }
+  };
   const ruleCharge = (r) => (r.form === 'requires' ? 1 + r.whenSize + r.requiresSize : 1 + r.whenSize + r.reads.loads.size);
 
   try {
@@ -3435,7 +3516,7 @@ export function verifyTexts(texts, opts = {}) {
         for (const c of out) {
           if (w && c.state === 'open') {
             let rests = c.rest === 'norule' || c.rest === 'where';
-            if (!rests && c.rest && agrees(c.rest)) { recordRested(c.rest); rests = true; }
+            if (!rests && c.rest && agrees(c.rest)) { recordRested(c.rest); rests = true; c.completion = c.rest.src; }
             if (rests) {
               c.state = 'waived';
               c.reason = `open but for the waiver: ${c.reason ?? ''}`;
@@ -3448,17 +3529,24 @@ export function verifyTexts(texts, opts = {}) {
     }
     // Values that nothing reads come after every other cell, part by part: a part's fields in the
     // order of its type's fields, and then its loads in the order of their names and of their
-    // cases' names. A field the part leaves unstated has none.
+    // cases' names. A field the part leaves unstated has none, but a key that a rested completion
+    // names, which has that name; and a load a rested completion gives is on its part in its case.
+    workOutReads();
     for (const part of parts) {
       for (const f of part.type.fields) {
-        if (f.kind === 'j' || part.values.get(f.name)?.unstated) continue;
+        if (f.kind === 'j') continue;
+        if (part.values.get(f.name)?.unstated && !(f.kind === 'k' && completedKey(part.name, f.name))) continue;
         if (!readSets.get(part.name).has(f.name)) push({ subject: part.name, mechanism: 'unread', entry: f.name, state: 'open', reason: 'no rule and no line of the grid reads it' });
       }
-      const mine = loadsOn.get(part.name);
-      if (!mine) continue;
+      const mine = new Map();
+      for (const [l, m] of loadsOn.get(part.name) ?? []) mine.set(l, new Set(m.keys()));
+      for (const [l, s] of restedPuts.get(part.name) ?? []) {
+        if (!mine.has(l)) mine.set(l, new Set());
+        for (const cs of s) mine.get(l).add(cs);
+      }
       for (const l of [...mine.keys()].sort(nameCmp)) {
         if (loadReads.get(part.name).has(l)) continue;
-        for (const cs of [...mine.get(l).keys()].sort(nameCmp)) push({ subject: part.name, mechanism: 'unread', entry: `${l}/${cs}`, state: 'open', reason: 'no rule reads this load' });
+        for (const cs of [...mine.get(l)].sort(nameCmp)) push({ subject: part.name, mechanism: 'unread', entry: `${l}/${cs}`, state: 'open', reason: 'no rule reads this load' });
       }
     }
     // Steps item 5: what a rule reads. For each part 1, and for each rule of its type what item 1
@@ -3496,6 +3584,9 @@ export function verifyTexts(texts, opts = {}) {
     cells: cells.map((c) => {
       const o = { subject: c.subject, mechanism: c.mechanism, entry: c.entry, claimed: c.claimed, state: c.state };
       if (c.state === 'open' || c.state === 'waived' || (c.state === 'refuted' && c.reason)) o.reason = c.reason ?? '';
+      // format.md, The verdict: a waived cell that rests on a completion has it, as its hint in
+      // proofs.json writes it, with both lists (AMBIGUITIES.md, M4).
+      if (c.state === 'waived' && c.completion) o.completion = JSON.parse(JSON.stringify(c.completion));
       return o;
     }),
   };

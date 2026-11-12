@@ -167,6 +167,17 @@ Measured with `--count 6000 --decks 3000 --seed 7` against the kernel and the gr
 | Generated designs, 5,773 compared | The same verdict and the same cells on every one |
 | Damaged decks, 3,000 compared | The same on every one: 2,390 refused by all three, 167 PASS, 152 FAIL, 278 UNKNOWN, and 13 designs refused |
 
+## The fifth update, of 2026-11-12
+
+The ninth review's fixes changed the pages again: what a design reads is worked out under the completions of the rested cells, a witness for a rule with a `where` must prove the `where` too, a completed load is held to its dimension's floor, a load case named `where` is refused, hints are charged, and a waived cell carries its completion. A sixth agent, under the same rule as before, brought the reading up to them: 83 of 83 bundles agree, completions included, and its own 50 checks pass. Its notes L1 and L9 are settled by the pages the other way from the reading it had taken. It logged five new notes, M1 to M5; given to the tenth hostile review as leads, M4 (a completion printed as a bare number "in SI units" where the unit of temperature is degC) was a fault, and the other four held.
+
+Measured with `--count 6000 --decks 3000 --seed 7` against the kernel and the grid at 4a2ee81:
+
+| Compared | Result |
+|---|---|
+| Generated designs, 5,773 compared | The same verdict and the same cells on every one |
+| Damaged decks, 3,000 compared | The same on every one: 2,390 refused by all three, 167 PASS, 152 FAIL, 278 UNKNOWN, and 13 designs refused |
+
 ## What it is not
 
 It does not read a design of the models' kinds or hash a file. It applies the limits that decide a verdict and not the budget of work, the memory of enclosures or the limits on what is printed. It is a reading of the rules path only.
