@@ -64,7 +64,7 @@ class Group:
     checked_by: Judge | Debt
 
 
-CORE_CAP = Limit(1017, "Set on 2026-11-08 at 140f742, where the core measured 957 code lines. "
+CORE_CAP = Limit(1020, "Set on 2026-11-08 at 140f742, where the core measured 957 code lines. "
                        "A new rule adds 3 to 5 lines to rules/__init__.py (inferred from its tables), so "
                        "the headroom covers the registry entries of several rules. Raised on branch cosine "
                        "for `cos`, the one step of the rule language for angles: the Python reading of its "
@@ -74,9 +74,13 @@ CORE_CAP = Limit(1017, "Set on 2026-11-08 at 140f742, where the core measured 95
                        "The seventh hostile review found that `lt` never decides a root at a point where "
                        "it equals the other side, as the root of 3^2 + 4^2 against 5, since every root was "
                        "rounded to the grid. The root of a point that is the square of a fraction is now "
-                       "that fraction, as the kernel's `rootOf` takes it: 5 lines in interval.py, 1,017.")
+                       "that fraction, as the kernel's `rootOf` takes it: 5 lines in interval.py, 1,017. "
+                       "The ninth hostile review found that `petra check` did not end on the exponential of "
+                       "-10^6, which the kernel gives no value. `i_exp` now takes no argument beyond 65,536, "
+                       "as `i_cos` does, and keeps the factorial of its series as it goes, as the kernel's "
+                       "`expPos` keeps it: 3 lines in interval.py, 1,020.")
 
-TRUSTED_CEILING = Limit(20039,"Set on 2026-11-08 at 140f742, where the trusted base measured 13,530 "
+TRUSTED_CEILING = Limit(20066,"Set on 2026-11-08 at 140f742, where the trusted base measured 13,530 "
                                "code lines: core 957, rules 457, outside the kernel 12,116. Raised on "
                                "2026-11-08 on branch parts-core as the parts layer replaces its scaffold: "
                                "classifying the scaffold measured 14,269, and the mesh reader with its "
@@ -266,6 +270,14 @@ TRUSTED_CEILING = Limit(20039,"Set on 2026-11-08 at 140f742, where the trusted b
                                "The same review found that a load case named `where` gave each rule that reads a load "
                                "the entry of a range, whose proof does not count. Both readers now refuse the name: "
                                "1 line in petra/grid.py, 20,039. "
+                               "The same review found that `petra check` did not end on a Weibull chance of "
+                               "survival, the exponential of -10^6, which the kernel gives no value at once. "
+                               "Python's exponential now has the kernel's bound, 3 lines in petra/kernel/interval.py "
+                               "(CORE_CAP). An exponential near the bound takes Python seconds, and the search walked "
+                               "a tape with one 256 times. It now walks a tape no more often than the kernel's work "
+                               "pays for the exponentials of a walk, and a walk whose exponentials take more than "
+                               "that work gives the rest no value, as the kernel does: 24 lines in petra/grid.py, "
+                               "20,066. "
                                "Raise it in the commit that needs more and say why here.")
 
 T2_ADOPTED = date(2026, 11, 8)

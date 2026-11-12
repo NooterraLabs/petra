@@ -23,6 +23,10 @@ waived cell leaves unchecked. One test per finding.
   C1  The shipped lap with plates 10^-98 inch thick under a pull of 10^99 kip: the ratio of a
       refuted cell was past the largest float, and `petra check` stopped with exit code 4. The
       cell now prints no ratio, and the lap FAILs.
+  H1  A bearing ten thousand lives out of its Weibull life asks for exp(-10^6), which the kernel
+      gives no value, and `petra check` did not end: Python's exponential had no bound. It has
+      the kernel's, 65,536, and the search walks a tape no more often than the kernel's work
+      pays for the exponentials of a walk, since one near the bound takes Python seconds.
   A5  Under a load case named `where` every rule that reads a load had an entry that ends in
       `/where`, which marks the cell of a range, so its proof was not counted and a design
       whose rules all held was UNKNOWN. Both readers now refuse the name.
@@ -32,11 +36,16 @@ waived cell leaves unchecked. One test per finding.
       and charges it, and a combination finds its points by their keys.
 """
 import json
+import time
 import unittest
+from fractions import Fraction
 from pathlib import Path
+from typing import Any
 
 import petra
 from petra import grid
+from petra.kernel import Interval, KernelArithmeticError
+from petra.kernel.interval import i_exp
 from tests.test_deck_features import (HEAD, KERNEL, asks, cells, design, given, ill_formed, key, kind, load, made_up, no_deck, parsed, part, reads, reason,
                                       rule, size)
 from tests.test_kernel_grid import ask, changed, findings
@@ -216,6 +225,76 @@ class ARatioPastTheLargestFloat(unittest.TestCase):
         self.assertEqual(found["status"], "FAIL")
         yields = [c for c in found["cells"] if c["mechanism"] == "lap.ply_yield"]
         self.assertEqual([(c["state"], c.get("ratio")) for c in yields], [("refuted", None)] * 2)
+
+
+# --- H1. an exponential of a large argument ---------------------------------------------------------------
+
+BEARING = kind("bearing", size("mission", "time"), size("eta", "time"))
+
+
+def survival(*sides: Any) -> dict:
+    return made_up([BEARING], [asks("bearing.survival", "bearing")], [rule("survival", "bearing", "bearing.survival", le=list(sides))])
+
+
+LIVES = ["div", "mission", "eta"]
+BEARING_CELL = ("b", "bearing.survival", "survival")
+
+
+def bearing(mission: str) -> str:
+    return design(part("bearing", "b", mission=mission, eta="1 s"))
+
+
+def timed(test: unittest.TestCase, rules: dict, text: str, card: str = HEAD) -> tuple[dict, str, float]:
+    start = time.perf_counter()
+    found, status, _ = cells(test, rules, text, card)
+    return found, status, time.perf_counter() - start
+
+
+class ExponentialsTheKernelPaysFor(unittest.TestCase):
+    def test_an_exponential_beyond_65536_has_no_value(self):
+        for x in (Interval(Fraction(-65537), Fraction(0)), Interval(Fraction(0), Fraction(65537))):
+            with self.assertRaisesRegex(KernelArithmeticError, "exp of a value beyond 65536"):
+                i_exp(x)
+
+    def test_a_bearing_ten_thousand_lives_out_is_open_at_once(self):
+        """The Weibull chance of survival, exp(-(t / eta)^(3/2)), at 10,000 lives is exp(-10^6). The kernel gives it no value and the
+        cell is open in a tenth of a second, where petra check did not end."""
+        found, status, seconds = timed(self, survival("0.99", ["exp", ["neg", ["pow", LIVES, "3/2"]]]), bearing("10000 s"))
+        self.assertEqual((found, status), ({BEARING_CELL: "open"}, "UNKNOWN"))
+        self.assertLess(seconds, 30)
+
+    def test_a_rule_that_an_exponential_near_the_bound_does_not_decide_is_searched_as_often_as_the_kernel_could_pay(self):
+        """exp(-x) <= exp(-64,500) for x from 64,000 to 65,000: every side is under the grid's step, so no point refutes the rule and no
+        partition proves it. An end of either exponential takes Python a second or two, and the search halved the range 256 times,
+        which took more than ten minutes. It walks the tape no more often than the kernel's work pays for, three times here."""
+        card = HEAD + given("b.mission", "64000 s", "65000 s")
+        found, status, seconds = timed(self, survival(["exp", ["neg", LIVES]], ["exp", "-64500"]), bearing("given b.mission"), card)
+        self.assertEqual((found, status), ({BEARING_CELL: "open"}, "UNKNOWN"))
+        self.assertLess(seconds, 120)
+
+    def test_an_exponential_past_the_work_of_a_design_has_no_value(self):
+        """Eight exponentials of some 64,000 are sixteen ends, and the kernel's work pays for six. A walk of them took Python half a
+        minute, and each walk of the search another. The fourth exponential of a walk has no value now, as in the kernel."""
+        terms = [["exp", ["neg", ["add", LIVES, str(2 * k)]]] for k in range(8)]
+        card = HEAD + given("b.mission", "64000 s", "64001 s")
+        found, status, seconds = timed(self, survival(["add", *terms], "1"), bearing("given b.mission"), card)
+        self.assertEqual((found, status), ({BEARING_CELL: "open"}, "UNKNOWN"))
+        self.assertLess(seconds, 120)
+        nodes, exps = [["s", 0]], []
+        for k in range(8):
+            nodes += [["c", str(2 * k)], ["add", [0, len(nodes)]]]
+            nodes += [["neg", len(nodes) - 1]]
+            nodes += [["exp", len(nodes) - 1]]
+            exps.append(len(nodes) - 1)
+        v = grid.enclosures(nodes, [Interval(Fraction(64000), Fraction(64001))])
+        self.assertEqual([isinstance(v[n], Interval) for n in exps], [True] * 3 + [False] * 5)
+        self.assertIn("the exponentials of the tape take more than the 20000000000 units of work the kernel spends on a design", v[exps[3]])
+
+    def test_the_search_walks_a_tape_as_often_as_the_work_of_its_exponentials_allows(self):
+        tape = [["s", 0], ["exp", 0]]
+        walks = [grid._walks(tape, [Interval(Fraction(-c), Fraction(c)), None]) for c in (0, 1000, 65536, 65537)]
+        self.assertEqual(walks, [grid.MAX_WORK, 1382, 3, grid.MAX_WORK])
+        self.assertEqual(grid._walks([["s", 0], ["neg", 0]], [Interval(Fraction(0), Fraction(1)), None]), grid.MAX_WORK)
 
 
 # --- A5. a load case named `where` -----------------------------------------------------------------------

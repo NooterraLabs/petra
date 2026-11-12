@@ -43,8 +43,9 @@ from . import deck as rows
 from . import export
 from .deck import NONE, RowError, Vector, anchored, dimension, only, quantity, replaced, show
 from .ir import Bound, Component, Design, Fixed, ParamRef, Ref, Span, Stated, Text
-from .kernel import (Abs, Add, Const, Cos, Div, Exp, Interval, KernelArithmeticError, Ln, Max, Min, Mul, Neg, Pi, PowInt, Sqrt, Sym,
-                     enclose)
+from .kernel import (MAX_ARGUMENT, Abs, Add, Const, Cos, Div, Exp, Interval, KernelArithmeticError, Ln, Max, Min, Mul, Neg, Pi, PowInt, Sqrt,
+                     Sym, enclose)
+from .kernel import PRECISION_BITS as PREC
 from .models.base import ComponentError
 
 FORMAT = "petra-rules/0"
@@ -64,6 +65,9 @@ MAX_CLIMB = 65_536
 of n nodes is walked MAX_CLIMB // n times at most. A round of the climb walks the tape twice
 for each ranged input, and it may take a round for each, so without this bound its time grew
 as the cube of their number."""
+MAX_WORK = 20_000_000_000
+"""The work the kernel spends on the proofs of a design (`MAX_WORK` in kernel/Petra/Tape.lean). The
+search walks a tape no more often than this pays for the exponentials of a walk (`_walks`)."""
 MAX_NAME = 64
 """The most bytes a name may print in that a cell prints whole, as in kernel/Petra/Files.lean:
 the name of a part, a load case, a mechanism, a field, a load, a joined part and a `let`, and a rule's id."""
@@ -1351,7 +1355,10 @@ def _holds(cond: Any, order: Mapping[tuple[int, int], int]) -> bool:
 def enclosures(nodes: list[list], box: list[Interval]) -> list[Any]:
     """The enclosure of each node over the box, or the reason it has none, as a string. The
     rule is kernel/Petra/Tape.lean's: a node that reads a node with no value has none, and
-    a pick reads only what it compares and the cases some ordering chooses."""
+    a pick reads only what it compares and the cases some ordering chooses. An exponential
+    has none once the exponentials of the walk take more work than MAX_WORK (`_charged`),
+    which the kernel could not pay for on any box. A walk of a tape with a hundred
+    exponentials of some 65,000 took Python minutes, and now takes it seconds."""
     v: list[Any] = []
 
     def get(i: int) -> Interval:
@@ -1399,7 +1406,12 @@ def enclosures(nodes: list[list], box: list[Interval]) -> list[Any]:
         found = [get(node[1][n][1]) for n in sorted(chosen)]
         return Interval(min(x.lo for x in found), max(x.hi for x in found))
 
+    seen: set[Fraction] = set()
+    spent = 0
     for n, node in enumerate(nodes):
+        if node[0] == "exp" and (spent := spent + _charged(v[node[1]], seen)) > MAX_WORK:
+            v.append(f"node {n}: the exponentials of the tape take more than the {MAX_WORK} units of work the kernel spends on a design")
+            continue
         try:
             v.append(step(node))
         except _Failed as exc:
@@ -1415,11 +1427,13 @@ def _partition(nodes: list[list], roots: list[int], box: list[Interval], budget:
     finds none within its budget. Splits the input with the widest range, at its middle,
     and names it by its label, as proofs.json does for the kernel. Given `refuting`, the
     search also tries the middle of each box it does not prove, and stops at the first where
-    the first root is above zero, which it puts there."""
+    the first root is above zero, which it puts there. The budget is held to the walks that
+    `_walks` allows over the box, two for each box where the search tries the middle."""
     v = enclosures(nodes, box)
     if all(isinstance(v[r], Interval) and v[r].hi <= 0 for r in roots):
         return "leaf"
-    if refuting is not None and _above(nodes, roots[0], middle := [x.midpoint() for x in box]):
+    budget[0] = min(budget[0], _walks(nodes, v) // (1 if refuting is None else 2))
+    if refuting is not None and budget[0] > 0 and _above(nodes, roots[0], middle := [x.midpoint() for x in box]):
         refuting.append(middle)
         return None
     budget[0] -= 1
@@ -1445,6 +1459,38 @@ def _nowhere(nodes: list[list], roots: list[int], box: list[Interval]) -> int | 
     return next((k for k, r in enumerate(roots) if isinstance(v[r], Interval) and v[r].lo > 0), None)
 
 
+def _exp_work(x: Fraction) -> int:
+    """The work `expWork` in kernel/Petra/Tape.lean charges for the first enclosure of the exponential of an end `x`, of 128 bits.
+    The time of an exponential grows as the square of its end: Python takes two seconds for an end of 65,536, whose work is 3.1
+    billion units, and MAX_WORK pays for six."""
+    c = math.ceil(abs(x))
+    s = c.bit_length() + 1
+    q = PREC + 32 + 2 * s + 2 * c
+    wide, words = q // 64 + 1, (abs(x.numerator).bit_length() + x.denominator.bit_length()) // 64 + 1
+    return (max(32, 2 * q // q.bit_length()) * (10000 + 54 * wide + 20 * words + wide * words // 3) + (s + 16) * wide * wide // 4) * 17 // 10
+
+
+def _charged(x: Any, seen: set[Fraction]) -> int:
+    """The work of an exponential of the enclosure `x` on a walk that has computed the ends `seen`, which then has its ends too:
+    the work of each end it has not computed, as the kernel's caches keep the ends it has. Nothing for an end of zero, and for an
+    enclosure that has no exponential."""
+    if not isinstance(x, Interval) or x.lo < -MAX_ARGUMENT or x.hi > MAX_ARGUMENT:
+        return 0
+    ends = {x.lo, x.hi} - seen - {0}
+    seen |= ends
+    return sum(map(_exp_work, ends))
+
+
+def _walks(nodes: list[list], v: list[Any]) -> int:
+    """How many times the search may walk the tape over a box where its nodes have the enclosures `v`: as many as MAX_WORK pays
+    for the exponentials of a walk (`_charged`). It pays for three walks of a tape with an exponential from -65,536 to 65,536, and
+    for 1,385 of one from -1,000 to 1,000, more than the 256 leaves of a partition or the 64 corners of a box take. A tape with no
+    exponential is walked as often as the search's other bounds allow."""
+    seen: set[Fraction] = set()
+    cost = sum(_charged(v[node[1]], seen) for node in nodes if node[0] == "exp")
+    return MAX_WORK // cost if cost else MAX_WORK
+
+
 def _height(nodes: list[list], root: int, point: list[Fraction]) -> Fraction | None:
     """The least the root may be at a point, or None where it has no value."""
     at = enclosures(nodes, [Interval.point(x) for x in point])[root]
@@ -1461,13 +1507,14 @@ def _refuting(nodes: list[list], root: int, box: list[Interval]) -> list[Fractio
     middle. The climb starts at the middle and sets each ranged input in turn to the end of
     its range where the root is higher, the others held, until a round moves none, there
     have been as many rounds as ranged inputs, or it has walked MAX_CLIMB nodes; it stops
-    where it is then. Where the root has no value it is lowest."""
+    where it is then. The climb, and the points tried, are each held to the walks that
+    `_walks` allows over the box. Where the root has no value it is lowest."""
     ranged = [k for k, x in enumerate(box) if x.width() > 0]
-    middle = [x.midpoint() for x in box]
+    middle, allowed = [x.midpoint() for x in box], _walks(nodes, enclosures(nodes, box))
     if len(ranged) <= MAX_CORNERS:
         corners = [list(p) for p in itertools.product(*((x.lo, x.hi) if x.width() > 0 else (x.lo,) for x in box))]
     else:
-        point, walks = list(middle), MAX_CLIMB // max(len(nodes), 1)
+        point, walks = list(middle), min(MAX_CLIMB // max(len(nodes), 1), allowed)
         for _ in ranged:
             moved = False
             for k in ranged:
@@ -1480,7 +1527,7 @@ def _refuting(nodes: list[list], root: int, box: list[Interval]) -> list[Fractio
             if not moved or walks < 2:
                 break
         corners = [point]
-    return next((point for point in [*corners, middle] if _above(nodes, root, point)), None)
+    return next((point for point in [*corners, middle][:allowed] if _above(nodes, root, point)), None)
 
 
 def _searched(nodes: list[list], roots: list[int], box: list[Interval]) -> list[Fraction] | None:
