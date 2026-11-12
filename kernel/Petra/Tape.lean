@@ -688,4 +688,48 @@ def Tape.refuted (t : Tape) (point : Array Rat) (which : Nat) (work : Nat) : M (
           if w.v[root]!.lo > 0 then pure (none, w.work)
           else pure (some s!"root {which} is not above zero at the point", w.work)
 
+/-- Whether a root of the tape says nothing at any point of the box: it has no value at any
+point because a pick has none there, which is a table or an equation of a row that gives
+nothing for any value the ranges allow, or, with `outside`, it is above zero all over the
+box. A waiver may rest a cell whose rule says nothing for one of these reasons, since no
+inequality could answer it (docs/deck.md, "What a waiver rests"). For the tape of a rule's
+`where`, `outside` says that the rule holds nowhere in the box.
+
+It walks the box as `Tape.proved` walks a leaf, and holds every enclosure to the end. A node
+other than a pick has no value anywhere when it reads one that has none anywhere. A pick has
+none anywhere when a node it compares has none anywhere, or when in every way of ordering
+what it compares no case holds or the first that holds has no value anywhere. At each point
+of the box the true order of each pair is one of those ways (`pick`), so the pick has no
+value at that point. It says no when it cannot pay for the walk, and for a pick that it
+cannot pay for a second time or whose compared nodes have no enclosure. -/
+def Tape.silent (t : Tape) (outside : Bool) (work : Nat) : M (Bool × Nat) := do
+  let fee := t.fee 1
+  if work < fee then return (false, work)
+  let .ok () := t.wellFormed | return (false, work - fee)
+  let need := t.needed t.roots
+  let w ← t.eval (t.inputs.map (·.range)) need (Array.replicate t.nodes.size t.nodes.size) (work - fee)
+  let mut void : Array Bool := Array.mkEmpty t.nodes.size
+  let mut left := w.work
+  for (node, i) in t.nodes.zipIdx do
+    let mut empty := false
+    if need[i]! && w.bad[i]!.isSome then
+      match node with
+      | .pick cases =>
+        let pairs := compared cases
+        let ends := pairs.flatMap fun (a, b) => #[a, b]
+        if ends.any (void[·]!) then empty := true
+        else if (earliest w.bad ends).isNone then
+          if let some cost := pickWork w.v cases left then
+            if cost ≤ left then
+              left := left - cost
+              let options := pairs.map (outcomes w.v)
+              let ways := options.foldl (fun n os => if n > MAX_CHOICES then n else n * os.size) 1
+              empty := ways ≤ MAX_CHOICES && (List.range ways).all fun n =>
+                match cases.find? (fun (cond, _) => cond.all (·.holds (order pairs (way options n)))) with
+                | some (_, value) => void[value]!
+                | none => true
+      | node => empty := node.reads.any (void[·]!)
+    void := void.push empty
+  return (t.roots.any fun r => void[r]! || (outside && w.bad[r]!.isNone && w.v[r]!.lo > 0), left)
+
 end Petra

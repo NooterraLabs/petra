@@ -400,7 +400,7 @@ What reads an unstated field has no answer, and says so.
 - **A need.** A need that names an unstated field is not asked of the part. It is neither kept nor broken, and it does not refuse the part.
 - **Nothing.** An unstated field that nothing reads has no `unread` cell: there is no value that something failed to check.
 
-So leaving a field out never helps a design past a rule. Every cell that would have read it is open, and a design passes only when the card waives those lines.
+So leaving a field out never helps a design past a rule. Every cell that would have read it is open. A waiver rests a cell whose rule, or whose line's `unless`, reads a key left unstated, since what is unsaid is which rule answers or which line of a table. It does not rest one whose rule reads a quantity left unstated: the rule's inequality could be answered for every value the quantity may take, so the cell stays open and the design is UNKNOWN ([What a waiver rests](#what-a-waiver-rests)).
 
 ### A quantity at or under zero
 
@@ -623,14 +623,14 @@ The reader tries a rule only while the work is small. The rules with `requires` 
 | `proved` | A rule's inequality holds for every value the card and the design allow, or what a rule requires of the keys holds |
 | `refuted` | The inequality fails at a point they allow, or what a rule requires does not hold. For `lt` that is a point where the two sides are equal, too. |
 | `not applicable` | The grid says the mechanism cannot arise for this part |
-| `waived` | The card waives the mechanism on the part, and the cell would be open without the waiver |
+| `waived` | The card waives the mechanism on the part, the cell would be open without the waiver, and no inequality could answer it |
 | `open` | Anything else |
 
 No cell has a default. The verdict is FAIL with a refuted cell, UNKNOWN with an open cell or with nothing proved, and PASS otherwise.
 
 ### What a waiver rests
 
-A waiver rests a cell that would be open, and no other: the one who signs it answers for what the deck could not settle on that line of that part, and for nothing the deck did settle.
+A waiver rests a cell that would be open and that no inequality of the deck could answer, and no other: the one who signs it answers for what the deck has nothing to say about on that line of that part, and not for what the deck could say, whether it settled it or not.
 
 The card waives a mechanism on a part, and the cells of that line are made as if it had not. Every rule of the line is run.
 
@@ -639,9 +639,22 @@ The card waives a mechanism on a part, and the cells of that line are made as if
 | `proved` | `proved`. The waiver was not needed for it. |
 | `refuted` | `refuted`, and the verdict is FAIL. No waiver hides a refutation. |
 | `not applicable` | `not applicable` |
-| `open` | `waived` |
+| `open`, and no inequality could answer it | `waived` |
+| `open`, and the rule's inequality is left undecided | `open`, and the verdict is UNKNOWN |
 
-Whatever leaves a cell open leaves it for a waiver to rest: a line with no rule, or with none for a part like this one, a rule that is neither proved nor refuted, a load that the card does not state in a case, a range that is not proved, a table with no value, a field that the part leaves unstated. A waived cell keeps the entry it had. So a line with three rules of which two prove and one has no value is two `proved` cells and one `waived` cell, and a line with no rule is one `waived` cell with an empty entry. The reason of a waived cell says what was open: it is `open but for the waiver: ` and then the reason the open cell had, as in `open but for the waiver: the deck has no rule for it`.
+No inequality could answer a cell when:
+
+- the line has no rule, or none for a part like this one;
+- a rule reads a load that a case of the card does not put on the part, or the card has no load case;
+- a table or an equation of a row that the rule reads gives nothing for the part: the tape cannot be written, because a table has no line for the part's key or every cell it could read is empty, or the rule has no value at any point of the ranges, because a row gives nothing at any of them;
+- the rule's `where` holds nowhere in the ranges;
+- the part leaves unstated a key that the rule or the line's `unless` reads, and no quantity that the rule reads.
+
+Every other open cell stays open under a waiver, and its reason starts `the waiver rests no cell that an inequality could answer: `. Such a cell has a rule whose inequality could be answered. It is neither proved nor refuted at the points tried, its `where` may hold somewhere in the ranges and is not proved, it has no value at some points and not at all of them, as a quotient by a range that holds zero has none, or the part leaves a quantity unstated that it reads. A better search, a narrower range or a stated value may settle it, and a waiver does not stand in for them: a refutation that the search missed would otherwise pass under the waiver.
+
+"No value at any point of the ranges" is decided over the whole box at once. A node has no value anywhere when it reads one that has none anywhere. A row's table or equation is a pick, and it has no value anywhere when, for every order of what it compares that the enclosures leave possible, no case holds or the case that holds has no value anywhere. A bolt of a size that a table does not list, written as one size, is such a cell: every point of the ranges reads the table at that size. A width that the card gives as a range from a listed size to one that is not listed is not: the table has a value at the listed size, and the rule could be refuted there.
+
+A waived cell keeps the entry it had. So a line with three rules of which two prove and one reads a table that gives nothing for the part is two `proved` cells and one `waived` cell, and a line with no rule is one `waived` cell with an empty entry. The reason of a waived cell says what was open: it is `open but for the waiver: ` and then the reason the open cell had, as in `open but for the waiver: the deck has no rule for it`.
 
 So a card cannot switch a rule off. A card written when a deck had no rule for a line, which waived the line, does not hide the rule the deck has since gained: the rule is run, and a design that fails it fails. A design that failed a rule under a waiver was never safe by that rule, and now the verdict says so.
 
@@ -651,17 +664,18 @@ When every open cell is waived, no cell is open. `waived` stays a state of its o
 
 A rule reads what it reads whether or not its line is waived or can arise: the fields and the loads of a rule of a line that cannot arise have no `unread` cell, though that rule is not run.
 
-One limit is not the waiver's. The kernel does not search: a cell is open when no hint of proofs.json settles it. `petra check` looks for a point that refutes each cell, at the corners of the ranges and at their middle, and a point it finds is checked by the kernel and stands. A refutation that the search does not find leaves the cell open, and a waiver then rests it. A waiver never hides a refutation that is known, and it cannot make one known.
+The kernel does not search: a cell is open when no hint of proofs.json settles it. `petra check` looks for a point that refutes each cell, at the corners of the ranges and at their middle, and a point it finds is checked by the kernel and stands. A refutation that the search does not find leaves the cell open and the design UNKNOWN, waiver or not. While a waiver rested such a cell, six designs that a rule refutes passed under one, each where the search missed the point: past six ranged inputs, inside the ranges away from their corners, inside a `where`, at an equality that `lt` refutes, at a quotient by zero, and at an unstated quantity (`tests/test_kernel_attacks7.py`). What a waiver rests now is what the deck has nothing to say about, which no search could change.
 
 `petra-verify` reads the same three files and makes the cells again, each with the tape of its rule. It takes nothing of a cell from `petra check` but a hint: the partition that proved it, or the point that refuted it. The kernel tries the hint on its own tape, and the state it settles on is its own. `petra check` then compares the two lists cell by cell, and stops with exit code 4 if they differ.
 
-These cases are open:
+These cases are open. The first four a waiver rests where they hold for every point of the ranges, and the rest it does not ([What a waiver rests](#what-a-waiver-rests)).
 
 - The grid has a line and the deck has no rule for it, or none that holds for this part.
 - A rule reads a load, and a load case of the card does not put it on the part. No load is taken as zero: a card that means none in a case states a load of zero there.
-- A rule's `where` is not proved. Outside its range a rule says nothing, so its cell is never refuted there.
 - A table has no value where the rule reads it: between the listed values of a table read at listed values, outside every band, or in an empty cell.
-- A rule, or the `unless` of a line, reads a field that the part leaves unstated ([A field that a record may leave unstated](#a-field-that-a-record-may-leave-unstated)).
+- A rule, or the `unless` of a line, reads a key that the part leaves unstated ([A field that a record may leave unstated](#a-field-that-a-record-may-leave-unstated)).
+- A rule's `where` is not proved. Outside its range a rule says nothing, so its cell is never refuted there. A waiver rests the cell when the `where` holds nowhere in the ranges.
+- A rule reads a quantity that the part leaves unstated.
 - The inequality is neither proved over the ranges the card gives nor refuted at a corner or the middle of them.
 - No rule and no line of the grid reads a quantity or a key of a part. A value nothing reads is a value nothing checks, so a plate that no lap joins has an open cell for each of its fields, named `unread`.
 - No rule reads a load that the card puts on a part. A rule reads a load in an expression: a side of its `le` or of its `where`, or a name of `let` that one of them reads. The load has an open cell named `unread` for each load case that puts it on the part, entered as `LOAD/CASE`.
@@ -962,4 +976,4 @@ The first deck states no `needs` ([What a type needs](#what-a-type-needs)), so n
 - A type with no line in the grid gets no cell of its own. A `plate` has none: the lap that joins it asks about it, and a plate that nothing joins has only its `unread` cells.
 - A card's claims, tests, ambient and environment, a family's params, and the repair that `petra check` suggests on a FAIL are not read for a design of a deck's types. A card or a design that states one is refused: `environment marine_c5` in the card of a lap is an input error, `the card or the design states an environment, which a deck does not read yet`, and the kernel finds the pair ill formed.
 - The first deck has rules for 8 of the 16 lines of a lap's grid, all by LRFD. Four lines cannot arise for a lap, and four are open: tightening, hole use, the greatest edge distance and flexure of the plates. [What the first deck covers](#what-the-first-deck-covers) says what else it leaves open.
-- A waiver rests what is open and does not ask why it is open. A cell that the search did not settle is open, though a better search might refute it, and a waiver rests it ([What a waiver rests](#what-a-waiver-rests)).
+- A cell whose rule could be answered and that nothing settles is open, and the design is UNKNOWN where it would be FAIL. A rule that fails for every value an unstated quantity may take is one: `current ≤ min(limit, rating)` with the rating under the current and the limit unstated. No point is tried for a quantity that has none, and a waiver does not rest the cell ([What a waiver rests](#what-a-waiver-rests)).

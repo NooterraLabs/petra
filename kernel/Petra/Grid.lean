@@ -20,8 +20,9 @@ inductive Slot where
   | key (name : String)
   | parts (names : Array String)
   /-- The part leaves the field unstated, which its type lets it. It has no value and no
-  default: whatever reads it has no answer for the part. -/
-  | unstated
+  default: whatever reads it has no answer for the part. `quantity` says that the field is a
+  quantity and not a key. -/
+  | unstated (quantity : Bool)
 
 /-- A part of a deck's type, with what it has for each field by the field's name. -/
 structure Part where
@@ -96,7 +97,7 @@ def slotOf (card design : String) (typed : Std.TreeSet (String × String))
   -- what it would be there: a name of a key that has that name, and nothing a quantity takes.
   if let (#[.word word], false) := (args, field.kind matches .parts ..) then
     if word == UNSTATED then
-      if field.optional then return .unstated
+      if field.optional then return .unstated (field.kind matches .quantity ..)
       unless field.kind matches .key .. do
         throw ("parts.3", "is left unstated, and its field is not `optional`: it must be stated")
   match field.kind, args.toList with
@@ -287,13 +288,26 @@ def Part.lacks (part : Part) (fellows : Std.TreeMap String Part) (fields : Array
       | none => some part
       | some called => fellows.get? called
     owner.bind fun owner => match owner.slot field with
-      | some .unstated => some s!"{owner.name}.{field}"
+      | some (.unstated _) => some s!"{owner.name}.{field}"
       | _ => none
+
+/-- Whether one of these fields that the part, or a part it joins, leaves unstated is a
+quantity. A rule's inequality could then answer for the part whatever value the field has,
+so a waiver does not rest the rule's cells. A key left unstated leaves unsaid which rule
+answers, or which line of a table, and a waiver rests those. -/
+def Part.lacksQuantity (part : Part) (fellows : Std.TreeMap String Part) (fields : Array (Option String × String)) : Bool :=
+  fields.any fun (called, field) =>
+    let owner := match called with
+      | none => some part
+      | some called => fellows.get? called
+    match owner.bind (·.slot field) with
+    | some (.unstated quantity) => quantity
+    | _ => false
 
 /-- The names of the parts that leave a field unstated. -/
 def bareOf (parts : Array Part) : Std.TreeSet String :=
   parts.foldl (init := {}) fun bare part =>
-    if part.slots.foldl (fun so _ slot => so || slot matches .unstated) false then bare.insert part.name else bare
+    if part.slots.foldl (fun so _ slot => so || slot matches .unstated _) false then bare.insert part.name else bare
 
 /-- Whether the part leaves a field unstated or joins a part that does. Only for such a part
 does the kernel look for what reads an unstated field, so a design that states every field
@@ -304,6 +318,10 @@ def Part.touched (part : Part) (bare : Std.TreeSet String) (fellows : Std.TreeMa
 /-- What the reason of a waived cell starts with. What follows is the reason the cell had
 while it was open. -/
 def WAIVED : String := "open but for the waiver: "
+
+/-- What the reason of an open cell of a waived line starts with, when a rule's inequality
+could answer the cell and the waiver does not rest it. -/
+def UNRESTED : String := "the waiver rests no cell that an inequality could answer: "
 
 /-- What a cell says when its rule, or the `unless` of its line, reads a field that the part
 leaves unstated. -/
@@ -471,6 +489,11 @@ structure Settled where
   /-- The waiver a waived cell rests on, with its place in the card's list. -/
   waiver : Option (Nat × Waiver) := none
   hinted : Bool := true
+  /-- Whether a waiver of the cell's line may rest the cell while it is open: no inequality
+  could answer it. The line has no rule for the part, a load case leaves out a load the rule
+  reads, a table or an equation of a row gives nothing for the part, the rule holds nowhere
+  in the ranges, or the part leaves a key unstated and no quantity. -/
+  waivable : Bool := false
 
 /-- The partition with each label as the tape's input of that label. `place` finds the
 first input of a label. It is made when the partition first splits, so a partition of one
@@ -582,6 +605,14 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hi
       state, reason := clip reason, waiver, hinted := !claims.isEmpty }
   let dsgOf (tape : Tape) (seen : Std.TreeSet String) : Std.TreeSet String :=
     tape.inputs.foldl (fun seen i => if i.label.startsWith "dsg:" then seen.insert i.label else seen) seen
+  -- Whether a waiver may rest an open cell whose tape is written: the rule says nothing at
+  -- any point of the box (`Tape.silent`). It is asked only on a line the card waives, and
+  -- what it takes comes off the work. The caches stay as they were before it.
+  let silence (tape : Tape) (outside asked : Bool) (left : Nat) : StateM Caches (Bool × Nat) := do
+    if !asked then return (false, left)
+    match (tape.silent outside left).run (← get) with
+    | .ok ((silent, after), _) => return (silent, after)
+    | .error _ => return (false, left)
   -- The loads of a list, for a reason: the first four by name, and how many more.
   let listed (names : Array String) : String :=
     " and no ".intercalate (names.toList.take 4) ++ (if names.size > 4 then s!" and {names.size - 4} more" else "")
@@ -599,14 +630,17 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hi
       if out.size > MAX_CELLS then return .error over
       steps := steps + 1 + ((ask.excuse.bind id).map Static.size).getD 0 + lookOf.getD (ask.kind, ask.mechanism) 0
       if steps > MAX_STEPS then return .error long
-      let pending (entry reason : String) : Settled := cell part.name ask.mechanism entry .undecided reason
+      let pending (entry reason : String) (waivable : Bool) : Settled :=
+        { cell part.name ask.mechanism entry .undecided reason with waivable }
+      let waived := waivers.contains (part.name, ask.mechanism)
       -- The cells of the line are made as if the card waived nothing. Where it waives the
-      -- line on the part, those of them that are open are rested once they are all made.
+      -- line on the part, those of them that are open and that no inequality could answer
+      -- are rested once they are all made.
       let first := out.size
       if let some field := lacks (((ask.excuse.bind id).map Static.keys).getD #[]) then
         -- The `unless` of the line reads a key that is unstated, so nothing says whether the
         -- mechanism can arise for the part. The line is open, and no rule of it is run.
-        out := out.push (pending "" (UNSTATED_WHY field "the `unless` of the line"))
+        out := out.push (pending "" (UNSTATED_WHY field "the `unless` of the line") true)
       else if ask.excuse.any fun condition => condition.all (·.holds part fellows) then
         out := out.push (cell part.name ask.mechanism "" .notApplicable)
       else
@@ -616,7 +650,7 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hi
           (lacks ((r.condition.map Static.keys).getD #[])).isSome || r.condition.all (·.holds part fellows)
         if answers.isEmpty then
           let other := if answered.contains ask.mechanism then " on a part like this one" else ""
-          out := out.push (pending "" s!"the deck has no rule for it{other}")
+          out := out.push (pending "" s!"the deck has no rule for it{other}" true)
         for rule in answers do
           let tail := rule.entry
           -- A rule that reads a field the part leaves unstated has no answer: each cell it
@@ -627,15 +661,19 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hi
             if steps > MAX_STEPS then return .error long
             if let some field := part.lacks fellows rule.fields then
               let why := UNSTATED_WHY field "the rule"
+              -- A waiver rests these cells when the part leaves keys alone unstated. With a
+              -- quantity left out the inequality could still be answered for every value it
+              -- may have, so the cells stay open.
+              let keys := !part.lacksQuantity fellows rule.fields
               if rule.requires.isSome || rule.loads.isEmpty || loads.cases.isEmpty then
                 if out.size > MAX_CELLS then return .error over
-                out := out.push (pending tail why)
+                out := out.push (pending tail why keys)
               else
                 steps := steps + loads.cases.size
                 if steps > MAX_STEPS then return .error long
                 for under in loads.cases do
                   if out.size > MAX_CELLS then return .error over
-                  out := out.push (pending s!"{tail}/{under}" why)
+                  out := out.push (pending s!"{tail}/{under}" why keys)
               continue
           -- A rule that requires has one cell, with no tape and no hint: proved when its
           -- condition over keys holds for the part, and refuted when it does not, with each
@@ -668,7 +706,7 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hi
           if !rule.loads.isEmpty then
             -- A card with no load case at all puts none of the rule's loads on the part.
             if loads.cases.isEmpty then
-              out := out.push (pending tail s!"the card puts no {listed rule.loads} on {part.name}, which the rule reads")
+              out := out.push (pending tail s!"the card puts no {listed rule.loads} on {part.name}, which the rule reads" true)
               continue
             -- One cell for each load case of the card, in the order of their names. Each case
             -- is looked up for each load the rule reads, which is what is counted.
@@ -685,15 +723,17 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hi
             if let some c := under then
               let missing := rule.loads.filter fun load => !loads.on.contains (part.name, load, c)
               if !missing.isEmpty then
-                out := out.push (pending entry s!"case {c} puts no {listed missing} on {part.name}, which the rule reads")
+                out := out.push (pending entry s!"case {c} puts no {listed missing} on {part.name}, which the rule reads" true)
                 continue
             steps := steps + rule.weight * (if rule.ranges.isEmpty then 1 else 2)
             if steps > MAX_STEPS then return .error long
             let here := site named loads part under
+            -- A tape that cannot be written is a row with nothing for the part's key, so no
+            -- inequality could answer the cell, and a waiver rests it.
             if !rule.ranges.isEmpty then
               match rule.tape here rule.ranges with
               | .error why =>
-                out := out.push (pending entry why)
+                out := out.push (pending entry why true)
                 continue
               | .ok tape =>
                 steps := steps + tape.nodes.size
@@ -704,24 +744,36 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hi
                   out := out.push (cell part.name ask.mechanism (entry ++ "/where") .proved)
                   dsg := dsgOf tape dsg
                 else
-                  out := out.push (pending entry s!"the range the rule holds in is not proved: {reason}")
+                  -- A range that holds nowhere in the box leaves the rule nothing to say, and
+                  -- a waiver rests the cell. One that may hold somewhere does not.
+                  let (silent, after) ← silence tape true waived left
+                  left := after
+                  out := out.push (pending entry s!"the range the rule holds in is not proved: {reason}" silent)
                   continue
             match rule.tape here #[(rule.low, rule.high)] rule.strict with
-            | .error why => out := out.push (pending entry why)
+            | .error why => out := out.push (pending entry why true)
             | .ok tape =>
               steps := steps + tape.nodes.size
               let (state, reason, after) ← byHints tape (hintsFor part.name ask.mechanism entry) true left
               left := after
-              out := out.push (cell part.name ask.mechanism entry state reason)
+              -- An open cell that a row has no value for anywhere in the box is one a waiver
+              -- rests. One whose inequality is left undecided is not.
+              let (silent, after) ← silence tape false (waived && state == .undecided) left
+              left := after
+              out := out.push { cell part.name ask.mechanism entry state reason with waivable := silent }
               if state == .proved || state == .refuted then dsg := dsgOf tape dsg
-      -- A waiver rests a cell that would be open, and no other. A cell of the line that its
-      -- rule proved is proved, and the waiver was not needed for it. One that its rule
-      -- refuted is refuted: no waiver hides a refutation. One that the grid says cannot
-      -- arise stays so. The reason of a waived cell says what was open.
+      -- A waiver rests a cell that would be open and that no inequality could answer, and
+      -- no other. A cell of the line that its rule proved is proved, and the waiver was not
+      -- needed for it. One that its rule refuted is refuted: no waiver hides a refutation.
+      -- One that the grid says cannot arise stays so. One whose rule is left undecided
+      -- stays open, and its reason says that the waiver does not rest it. The reason of a
+      -- waived cell says what was open.
       if let some (waiver, k) := waivers.get? (part.name, ask.mechanism) then
         for i in [first:out.size] do
           out := out.modify i fun s =>
-            if s.state == .undecided then { s with state := .waived, reason := clip (WAIVED ++ s.reason), waiver := some (k, waiver) } else s
+            if s.state != .undecided then s
+            else if s.waivable then { s with state := .waived, reason := clip (WAIVED ++ s.reason), waiver := some (k, waiver) }
+            else { s with reason := clip (UNRESTED ++ s.reason) }
   -- What a rule or a line of the grid reads of each part. Every rule of a part's type is
   -- looked at here, whatever the card waives, so the look is counted again. The look of a
   -- rule holds a step for each load it reads. A load is read by an expression of a rule
@@ -751,7 +803,7 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hi
     for field in part.kind.fields do
       if out.size > MAX_CELLS then return .error over
       -- A field left unstated has no value that something could fail to check, and no cell.
-      unless (field.kind matches .parts ..) || read.contains (part.name, field.name) || (part.slot field.name matches some .unstated) do
+      unless (field.kind matches .parts ..) || read.contains (part.name, field.name) || (part.slot field.name matches some (.unstated _)) do
         out := out.push (cell part.name UNREAD field.name .undecided s!"no rule of the deck reads {part.name}.{field.name}, so nothing checks it")
     -- A load that nothing reads, once for each case that puts it on the part. Its entry is
     -- `LOAD/CASE`, which no field's entry is: the name of a field holds no `/`.

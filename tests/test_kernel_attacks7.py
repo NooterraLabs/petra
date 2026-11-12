@@ -1,0 +1,218 @@
+"""The seventh hostile review of petra-verify (kernel/), petra/grid.py and petra/rule.py: six ways
+`petra check` gave PASS for a design that a rule refutes. One test per finding.
+
+Every finding had one shape. The search for a refuting point missed it, so the cell stayed
+open, and a waiver rested the open cell. So the verdict was PASS for a design that fails the
+rule, where docs/deck.md, "What a waiver rests", said "a design that fails it fails". They
+differ in why the refutation was not found or could not be shown.
+
+  1  The shipped AISC deck. A lap whose card gives ranges to seven inputs of the block shear
+     rule of the tab. The search tried corners only up to six ranged inputs, and then only the
+     middle. The worst corner fails block shear at a ratio of 1.26, and the middle holds. The
+     card waives lap.block_shear, and the same card with six ranges, a smaller box, was FAIL.
+  2  A refutation inside the box, away from every corner and the middle: a rotor kept a tenth
+     of its natural frequency, 5000 rpm, away from it, with a speed range of 3000 to 9000 rpm.
+  3  A rule with `where`. The card's range runs past the `where`, so the `where` is not proved
+     over the box and the cell was open, though at a point inside the `where` the inequality
+     fails. The kernel took no point for such a cell.
+  4  `lt` at equality where a side has a root: sqrt(3^2 + 4^2) < 5 is false, and an enclosure
+     of the root never decides it.
+  5  `may_be: "zero"`. A rule divides a pull by a count of bolts that may be zero, and a joint
+     with no bolts had no value.
+  6  An optional field left `unstated`, inside `min`: current at most the lesser of the maker's
+     limit and the rating, with the rating under the current. The rule fails whatever value
+     the limit takes.
+
+Since the review a waiver rests only a cell that no inequality could answer: no rule reads it,
+a load is missing, a table has no value there, or a key is unstated (docs/deck.md, "What a
+waiver rests"). A cell whose rule is left undecided stays open, waiver or not. So each of the
+six is UNKNOWN or FAIL, and never PASS.
+"""
+import json
+import unittest
+from unittest import mock
+
+from petra import grid
+from petra.registry import build_registry
+from petra.repair import check_text
+from tests.test_deck_features import HEAD, asks, design, given, kind, load, made_up, part, rule, size
+
+NOT_PASS = ("UNKNOWN", "FAIL")
+
+
+def waive(mechanism: str, on: str) -> str:
+    return f'\nwaive {mechanism} on {on} by "t@example.org" reason "test"\n'
+
+
+def checked(card: str, text: str, deck: dict | None = None):
+    """What `petra check` gives (repair.check_text, as cmd_check and the MCP tool call it), with
+    the shipped decks or with a made-up one in their place. With a kernel built, the kernel's
+    cells are compared with the grid's, and a difference raises."""
+    def run():
+        return check_text(card, text, "made-up.petra", build_registry(), (), card_path="made-up.card")
+    if deck is None:
+        return run()
+    read = grid.read_deck(json.dumps(deck))
+    with mock.patch.object(grid, "decks", lambda: (read,)):
+        return run()
+
+
+def states(result, mechanism: str) -> list[tuple[str, str]]:
+    return [(c.entry, c.state) for c in result.report.cells if c.mechanism == mechanism]
+
+
+# --- 1. seven ranged inputs on the shipped deck ------------------------------------------------------------
+
+S = 'signed "s.engineer@example.org" source "test"'
+LAP = """petra 0
+
+plate tab {
+  thickness given tab.thickness
+  width 6 inch
+  Fy given tab.Fy
+  Fu given tab.Fu
+}
+
+plate strap {
+  thickness 0.375 inch
+  width 6 inch
+  Fy given strap.Fy
+  Fu given strap.Fu
+}
+
+lap splice {
+  fastener "Group 120"
+  threads included
+  diameter 0.75 inch
+  holes standard
+  count 3
+  pitch given splice.pitch
+  end given splice.end
+  side given splice.side
+  surface protected
+  joins tab strap
+}
+"""
+RANGES = {"tab.thickness": ("0.25 inch", "0.375 inch"), "tab.Fy": ("36 ksi", "50 ksi"), "tab.Fu": ("58 ksi", "65 ksi"),
+          "strap.Fy": ("36 ksi", "36 ksi"), "strap.Fu": ("58 ksi", "58 ksi"),
+          "splice.pitch": ("2.25 inch", "3 inch"), "splice.end": ("1 inch", "1.5 inch"), "splice.side": ("1 inch", "3 inch")}
+
+
+def lap_card(ranges: dict) -> str:
+    out = 'petra 0\n\ncard "lap-ranged" {\n  owner "s.engineer@example.org"\n}\n\n'
+    out += "".join(f"given {name} in [{lo}, {hi}] {S}\n" for name, (lo, hi) in ranges.items())
+    out += f"\nload gravity {{\n  on splice pull in [0 kip, 35 kip]\n  {S}\n}}\n\n"
+    for m in ("lap.tightening", "lap.hole_use", "lap.max_edge_distance", "lap.ply_flexure", "lap.block_shear"):
+        out += f'waive {m} on splice by "s.engineer@example.org" reason "test"\n'
+    return out
+
+
+class SevenRanges(unittest.TestCase):
+    def test_a_lap_whose_worst_corner_fails_block_shear_does_not_pass_under_a_waiver_with_seven_ranged_inputs(self):
+        six = checked(lap_card(dict(RANGES, **{"splice.side": ("1 inch", "1 inch")})), LAP)
+        self.assertEqual(six.status, "FAIL")
+        self.assertIn(("lap-block-shear-a/gravity", "refuted"), states(six, "lap.block_shear"))
+        seven = checked(lap_card(RANGES), LAP)                             # a wider box: every design of `six` is in it
+        self.assertIn(seven.status, NOT_PASS, states(seven, "lap.block_shear"))
+
+
+# --- 2. a refutation inside the box ------------------------------------------------------------------------
+
+ROTOR = made_up(
+    [kind("rotor", size("speed", "dimensionless/time"), size("natural", "dimensionless/time"), size("mass", "mass"))],
+    [asks("rotor.resonance", "rotor"), asks("rotor.mass", "rotor")],
+    [rule("clear", "rotor", "rotor.resonance", le=[["mul", "1/10", "natural"], ["abs", ["sub", "speed", "natural"]]]),
+     rule("light", "rotor", "rotor.mass", le=["mass", ["q", "1", "kg"]])])
+ROTOR_TEXT = design(part("rotor", "r", speed="given r.speed", natural="5000 rpm", mass="200 g"))
+
+
+class InteriorRefutation(unittest.TestCase):
+    def test_a_speed_range_through_the_natural_frequency_does_not_pass_under_a_waiver(self):
+        card = HEAD + waive("rotor.resonance", "r")
+        self.assertEqual(checked(card + given("r.speed", "5000 rpm"), ROTOR_TEXT, ROTOR).status, "FAIL")
+        self.assertIn(checked(card + given("r.speed", "3000 rpm", "9000 rpm"), ROTOR_TEXT, ROTOR).status, NOT_PASS)
+
+
+# --- 3. a refutation inside a `where` that the card's range runs past --------------------------------------
+
+TAB = made_up(
+    [kind("tab", size("x"), size("y"))],
+    [asks("tab.fit", "tab"), asks("tab.size", "tab")],
+    [rule("fit", "tab", "tab.fit", le=["y", "x"], where=[{"le": ["x", ["q", "10", "mm"]], "why": "x is at most 10 mm"}]),
+     rule("size", "tab", "tab.size", le=["y", ["q", "100", "mm"]])])
+TAB_TEXT = design(part("tab", "t", x="given t.x", y="8 mm"))
+
+
+class RefutedInsideWhere(unittest.TestCase):
+    def test_a_point_inside_the_where_that_fails_the_rule_is_not_rested_by_a_waiver(self):
+        self.assertEqual(checked(HEAD + given("t.x", "5 mm") + waive("tab.fit", "t"), TAB_TEXT, TAB).status, "FAIL")
+        self.assertIn(checked(HEAD + given("t.x", "5 mm", "20 mm") + waive("tab.fit", "t"), TAB_TEXT, TAB).status, NOT_PASS)
+
+
+# --- 4. `lt` at equality with a root -----------------------------------------------------------------------
+
+DIAGONAL = made_up(
+    [kind("box", size("a"), size("b"), size("c"))],
+    [asks("box.fit", "box"), asks("box.size", "box")],
+    [rule("fit", "box", "box.fit", lt=[["sqrt", ["add", ["mul", "a", "a"], ["mul", "b", "b"]]], "c"]),
+     rule("size", "box", "box.size", le=["c", ["q", "1", "m"]])])
+
+
+class StrictAtEquality(unittest.TestCase):
+    def test_a_diagonal_equal_to_its_limit_is_not_under_it_and_does_not_pass_under_a_waiver(self):
+        card = HEAD + waive("box.fit", "x")
+        self.assertEqual(checked(card, design(part("box", "x", a="3 mm", b="4 mm", c="4.9 mm")), DIAGONAL).status, "FAIL")
+        self.assertIn(checked(card, design(part("box", "x", a="3 mm", b="4 mm", c="5 mm")), DIAGONAL).status, NOT_PASS)
+
+
+# --- 5. a divisor that may be zero -------------------------------------------------------------------------
+
+JOINT = made_up(
+    [kind("joint", size("bolts", "dimensionless", whole=True, may_be="zero"), size("capacity", "force"), size("mass", "mass"),
+          loads=[{"name": "pull", "dim": "force", "least": "0 N", "what": "the pull"}])],
+    [asks("joint.share", "joint"), asks("joint.mass", "joint")],
+    [rule("share", "joint", "joint.share", le=[["div", ["load", "pull"], "bolts"], "capacity"]),
+     rule("light", "joint", "joint.mass", le=["mass", ["q", "1", "kg"]])])
+
+
+def joint(bolts: str) -> str:
+    return design(part("joint", "j", bolts=bolts, capacity="10 kN", mass="100 g"))
+
+
+class ZeroDivisor(unittest.TestCase):
+    def test_a_joint_with_no_bolts_does_not_pass_where_one_with_two_fails(self):
+        card = HEAD + load("service", "j pull in [50 kN, 50 kN]") + waive("joint.share", "j")
+        try:
+            grid.read_deck(json.dumps(JOINT))
+        except grid.DeckError:
+            return                                                         # a deck reader that refuses the rule closes it
+        self.assertEqual(checked(card, joint("2"), JOINT).status, "FAIL")
+        self.assertIn(checked(card, joint("0"), JOINT).status, NOT_PASS)
+
+
+# --- 6. an unstated field that no value could save ---------------------------------------------------------
+
+WIRE = made_up(
+    [kind("wire", size("current", "current"), size("limit", "current", optional=True), size("rating", "current"), size("mass", "mass"))],
+    [asks("wire.heat", "wire"), asks("wire.mass", "wire")],
+    [rule("heat", "wire", "wire.heat", le=["current", ["min", "limit", "rating"]]),
+     rule("light", "wire", "wire.mass", le=["mass", ["q", "1", "kg"]])])
+
+
+def wire(limit: str) -> str:
+    return design(part("wire", "w", current="10 A", limit=limit, rating="5 A", mass="100 g"))
+
+
+class UnstatedEveryValueFails(unittest.TestCase):
+    def test_leaving_out_a_field_whose_every_value_fails_the_rule_does_not_pass_under_a_waiver(self):
+        """A known miss: the rule fails whatever the limit is, and the cell is open and not
+        refuted. A waiver does not rest it, since the field left out is a quantity, so the
+        design is UNKNOWN (docs/format.md, where `unstated` is described)."""
+        card = HEAD + waive("wire.heat", "w")
+        for limit in ("100 A", "1000000 A"):
+            self.assertEqual(checked(card, wire(limit), WIRE).status, "FAIL")
+        self.assertEqual(checked(card, wire("unstated"), WIRE).status, "UNKNOWN")
+
+
+if __name__ == "__main__":
+    unittest.main()

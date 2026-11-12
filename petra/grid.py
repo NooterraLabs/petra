@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import itertools
 import json
+import math
 from dataclasses import dataclass, field, replace
 from fractions import Fraction
 from functools import lru_cache
@@ -60,6 +61,8 @@ UNREAD = "unread"
 """The mechanism of the cell of a field or a load that nothing reads. No line of the grid has this name."""
 WAIVED = "open but for the waiver: "
 """What the kernel's reason of a waived cell starts with. The reason the cell had while it was open follows."""
+UNRESTED = "the waiver rests no cell that an inequality could answer: "
+"""What the kernel's reason of an open cell of a waived line starts with, when the waiver does not rest it."""
 UNSTATED = "unstated"
 """The word a design writes for an `optional` field that the part's record does not state, as in kernel/Petra/Deck.lean."""
 
@@ -1112,6 +1115,19 @@ def _lacking(part: Part, parts: Mapping[str, Part], names: Any) -> str | None:
     return None
 
 
+def _lacks_quantity(part: Part, parts: Mapping[str, Part], names: Any) -> bool:
+    """Whether one of these fields that the part, or the part it joins, leaves unstated is a
+    quantity, as Part.lacksQuantity in kernel/Petra/Grid.lean decides it. A rule's inequality
+    could then answer for the part whatever value it has, so a waiver does not rest its cells."""
+    for name in names:
+        if _field_of(part, parts, name) is NOT_STATED:
+            alias, dot, inner = name.partition(".")
+            owner = next(parts[part.values[f.name][f.names.index(alias)]] for f in part.type.fields.values() if f.type is not None and alias in f.names) if dot else part
+            if owner.type.fields[inner if dot else name].dim is not None:
+                return True
+    return False
+
+
 def _unstated_why(field: str, reader: str) -> str:
     """What a cell says when its rule, or the `unless` of its line, reads a field the part leaves unstated, in the kernel's words."""
     return f"{field} is unstated: its maker states none, and {reader} reads it"
@@ -1267,6 +1283,39 @@ def _partition(nodes: list[list], roots: list[int], box: list[Interval], budget:
     return {"input": labels[widest], "at": export.number(cut), "below": halves[0], "above": halves[1]}
 
 
+def _read(node: list) -> list[int]:
+    """The nodes that a node other than a pick reads."""
+    if node[0] in ("c", "s", "pi"):
+        return []
+    return node[1] if node[0] in _MANY else [node[1]] if node[0] in _ONE or node[0] == "pow" else node[1:]
+
+
+def _silent(nodes: list[list], roots: list[int], box: list[Interval], outside: bool) -> bool:
+    """Whether a root says nothing at any point of the box, as Tape.silent in
+    kernel/Petra/Tape.lean decides it: it has no value anywhere because a row gives nothing
+    there, or, with `outside`, it is above zero all over the box. A node has no value
+    anywhere when it reads one that has none anywhere, and a pick when a node it compares has
+    none anywhere, or when in every way of ordering what it compares no case holds or the
+    first that holds has none anywhere."""
+    v, void = enclosures(nodes, box), []
+    for n, node in enumerate(nodes):
+        if not isinstance(v[n], str):
+            void.append(False)
+        elif node[0] != "pick":
+            void.append(any(void[i] for i in _read(node)))
+        else:
+            pairs = list(dict.fromkeys(pair for cond, _ in node[1] for pair in _atoms(cond)))
+            ends = [i for pair in pairs for i in pair]
+            if any(void[i] or isinstance(v[i], str) for i in ends):
+                void.append(any(void[i] for i in ends))
+                continue
+            options = [[0] if a == b else [s for s, possible in ((-1, v[a].lo < v[b].hi), (0, v[a].lo <= v[b].hi and v[b].lo <= v[a].hi), (1, v[a].hi > v[b].lo)) if possible]
+                       for a, b in pairs]
+            void.append(math.prod(map(len, options)) <= MAX_CHOICES and all(
+                next((void[value] for cond, value in node[1] if _holds(cond, dict(zip(pairs, way)))), True) for way in itertools.product(*options)))
+    return any(void[r] or (outside and isinstance(v[r], Interval) and v[r].lo > 0) for r in roots)
+
+
 def _refuting(nodes: list[list], root: int, box: list[Interval]) -> list[Fraction] | None:
     """A corner of the box, or its middle, where the root is above zero."""
     ranged = [k for k, x in enumerate(box) if x.width() > 0]
@@ -1286,7 +1335,9 @@ class Cell:
     """One answer. `body` is the cell as proofs.json holds it: a hint, which the kernel
     tries on the tape it writes itself. `proof` is the partition of a proved cell or the
     point of a refuted one. `ratio` is the most the left side of the rule reaches over the
-    least the right side does, when both are known and the right side is above zero."""
+    least the right side does, when both are known and the right side is above zero.
+    `waivable` says that a waiver of the line may rest the cell while it is open: no
+    inequality could answer it."""
 
     subject: str
     mechanism: str
@@ -1298,6 +1349,7 @@ class Cell:
     rule: str | None = None
     ratio: float | None = None
     proof: Mapping[str, Any] = field(default_factory=dict)
+    waivable: bool = False
 
     @property
     def body(self) -> dict[str, Any]:
@@ -1396,11 +1448,14 @@ def _answers(rule: Rule, ask: Ask, part: Part, parts: Mapping[str, Part], cases:
     # A rule that reads a field the part leaves unstated has no answer: each cell it would give is open. It reads the field in a side, in
     # its `where`, in its `when` or in its `requires`. The kernel names the first such field the rule reads, and this names the first by name.
     named = _reads(rule)
-    lacks = _lacking(part, parts, sorted(name for name in named if not name.startswith("load ")))
+    fields = sorted(name for name in named if not name.startswith("load "))
+    lacks = _lacking(part, parts, fields)
     if lacks is not None:
+        # A waiver rests these cells when the part leaves keys alone unstated. With a quantity left out the inequality could still be answered.
+        keys = not _lacks_quantity(part, parts, fields)
         single = rule.requires is not None or not cases or not any(name.startswith("load ") for name in named)
         for entry in [tail] if single else [f"{tail}/{case}" for case in cases]:
-            yield cell(entry, "open", _unstated_why(lacks, "the rule"))
+            yield cell(entry, "open", _unstated_why(lacks, "the rule"), waivable=keys)
         return
 
     if rule.requires is not None:
@@ -1434,13 +1489,13 @@ def _answers(rule: Rule, ask: Ask, part: Part, parts: Mapping[str, Part], cases:
 
     reads = sorted(name[5:] for name in _reads(rule) if name.startswith("load "))
     if reads and not cases:
-        yield cell(tail, "open", f"the card puts no {' and no '.join(reads)} on {part.name}, which the rule reads")
+        yield cell(tail, "open", f"the card puts no {' and no '.join(reads)} on {part.name}, which the rule reads", waivable=True)
         return
     for case in cases if reads else [None]:
         entry = tail if case is None else f"{tail}/{case}"
         missing = [name for name in reads if case not in part.loads.get(name, {})]
         if missing:
-            yield cell(entry, "open", f"case {case} puts no {' and no '.join(missing)} on {part.name}, which the rule reads")
+            yield cell(entry, "open", f"case {case} puts no {' and no '.join(missing)} on {part.name}, which the rule reads", waivable=True)
             continue
         try:
             if rule.where:
@@ -1448,15 +1503,17 @@ def _answers(rule: Rule, ask: Ask, part: Part, parts: Mapping[str, Part], cases:
                 box, labels = [i.range for i in tape.inputs], [i.label for i in tape.inputs]
                 partition = _partition(tape.nodes, roots, box, [MAX_LEAVES], labels)
                 if partition is None:
+                    # A range that holds nowhere in the box leaves the rule nothing to say, and a waiver rests the cell. One that may hold somewhere does not.
                     v = enclosures(tape.nodes, box)
                     outside = next(why for (_, _, why), r in zip(rule.where, roots) if not (isinstance(v[r], Interval) and v[r].hi <= 0))
-                    yield cell(entry, "open", f"the rule holds only where {outside}, and that is not proved for {part.name}")
+                    yield cell(entry, "open", f"the rule holds only where {outside}, and that is not proved for {part.name}", waivable=_silent(tape.nodes, roots, box, True))
                     continue
                 yield Cell(part.name, rule.mechanism, f"{entry}/where", "proved", "; ".join(w[2] for w in rule.where), anchor, "", rule.id,
                            proof={"partition": partition})
             tape, roots, sides = tape_of([(rule.low, rule.high)], case, rule.strict)
         except NoValue as exc:
-            yield cell(entry, "open", str(exc))
+            # A tape that cannot be written is a row with nothing for the part's key: no inequality could answer the cell.
+            yield cell(entry, "open", str(exc), waivable=True)
             continue
         box, labels = [i.range for i in tape.inputs], [i.label for i in tape.inputs]
         partition = _partition(tape.nodes, roots, box, [1], labels)
@@ -1469,23 +1526,27 @@ def _answers(rule: Rule, ask: Ask, part: Part, parts: Mapping[str, Part], cases:
             yield cell(entry, "refuted", ratio=_ratio(tape.nodes, *sides[0], [Interval.point(x) for x in point]),
                        proof={"point": {label: export.number(x) for label, x in zip(labels, point)}})
         else:
-            v = enclosures(tape.nodes, box)
+            # An open cell that a row has no value for anywhere in the box is one a waiver rests. One whose inequality is left undecided is not.
+            v, silent = enclosures(tape.nodes, box), _silent(tape.nodes, roots, box, False)
             if isinstance(v[roots[0]], str):
                 origin = v.index(v[roots[0]])
-                yield cell(entry, "open", (f"{tape.picks[origin]} gives no value at what {part.name} has: " if origin in tape.picks else "") + v[roots[0]])
+                yield cell(entry, "open", (f"{tape.picks[origin]} gives no value at what {part.name} has: " if origin in tape.picks else "") + v[roots[0]], waivable=silent)
             else:
-                yield cell(entry, "open", "neither proved over the ranges the card gives nor refuted at a corner of them")
+                yield cell(entry, "open", "neither proved over the ranges the card gives nor refuted at a corner of them", waivable=silent)
 
 
 def cells(design: Design, deck: Deck, found: Parts) -> list[Cell]:
     """Every cell of the design: for each part, each mechanism the grid asks of its type.
 
-    A waiver rests a cell that would be open, and no other. The cells of a line are made as
-    if the card waived nothing. Where it waives the line on the part, each of them that is
-    open becomes `waived`, and says what was open. A cell that a rule proved stays proved,
-    and the waiver was not needed for it. A cell that a rule refuted stays refuted: no
-    waiver hides a refutation, and a card written before a deck gained a rule does not
-    switch the rule off."""
+    A waiver rests a cell that would be open and that no inequality could answer, and no
+    other: the line has no rule for the part, a load case leaves out a load the rule reads, a
+    row gives nothing for the part, the rule holds nowhere in the ranges, or the part leaves
+    a key unstated and no quantity. The cells of a line are made as if the card waived
+    nothing. Where it waives the line on the part, each of them that is open and `waivable`
+    becomes `waived`, and says what was open. A cell that a rule proved stays proved, and the
+    waiver was not needed for it. A cell that a rule refuted stays refuted: no waiver hides a
+    refutation, and a card written before a deck gained a rule does not switch the rule off.
+    A cell whose rule is left undecided stays open, and says that the waiver does not rest it."""
     out: list[Cell] = []
     waived = {(w.subject[0], w.mode): w for w in reversed(design.waivers)}      # the first waiver of a line on a part, as the kernel takes it
     for part in found.parts.values():
@@ -1493,7 +1554,7 @@ def cells(design: Design, deck: Deck, found: Parts) -> list[Cell]:
             anchor, line = _anchor(ask.anchor), []
             if (lacks := _lacking(part, found.parts, _keys(ask.unless))) is not None:
                 # The `unless` reads a key that is unstated, so nothing says whether the mechanism can arise: the line is open, and no rule of it is run.
-                line.append(Cell(part.name, ask.mechanism, "", "open", ask.what, anchor, _unstated_why(lacks, "the `unless` of the line")))
+                line.append(Cell(part.name, ask.mechanism, "", "open", ask.what, anchor, _unstated_why(lacks, "the `unless` of the line"), waivable=True))
             elif ask.excused is not None and _static(ask.unless, part, found.parts):
                 line.append(Cell(part.name, ask.mechanism, "", "not_applicable", ask.what, anchor, ask.excused))
             else:
@@ -1501,9 +1562,10 @@ def cells(design: Design, deck: Deck, found: Parts) -> list[Cell]:
                 line += [c for r in rules for c in _answers(r, ask, part, found.parts, found.cases)]
                 if not rules:
                     line.append(Cell(part.name, ask.mechanism, "", "open", ask.what, anchor,
-                                     f"the deck has no rule for it{' on a part like this one' if any(r.mechanism == ask.mechanism for r in deck.rules) else ''}"))
+                                     f"the deck has no rule for it{' on a part like this one' if any(r.mechanism == ask.mechanism for r in deck.rules) else ''}", waivable=True))
             w = waived.get((part.name, ask.mechanism))
-            out += line if w is None else [replace(c, state="waived", why=f"by {w.owner}: {w.reason}; {WAIVED}{c.why}") if c.state == "open" else c for c in line]
+            out += line if w is None else [c if c.state != "open" else replace(c, state="waived", why=f"by {w.owner}: {w.reason}; {WAIVED}{c.why}") if c.waivable
+                                           else replace(c, why=f"{UNRESTED}{c.why}") for c in line]
     return out + _unread(deck, found)
 
 
@@ -1594,7 +1656,8 @@ class Report:
                        + ": ".join(part for part in (c.entry, said) if part) + (f" ({c.anchor})" if c.anchor else ""))
         pending = [c for c in self.cells if c.state == "open"]
         if pending:
-            out.append(f"open       {len(pending)} cells: each needs a rule, an input, or `waive MECHANISM on PART by \"<owner>\" reason \"<why>\"` in the card")
+            out.append(f"open       {len(pending)} cells: each needs a rule, an input, or `waive MECHANISM on PART by \"<owner>\" reason \"<why>\"` "
+                       "in the card, which rests only a cell that no inequality could answer")
         return out
 
 

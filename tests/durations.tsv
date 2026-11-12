@@ -35,6 +35,7 @@ tests.test_kernel_attacks3	128.5
 tests.test_kernel_attacks4	16.8
 tests.test_kernel_attacks5	61.7
 tests.test_kernel_attacks6	3.2
+tests.test_kernel_attacks7	4.6
 tests.test_kernel_budget	2.6
 tests.test_kernel_grid	11.5
 tests.test_kernel_instance	1.0

@@ -1000,18 +1000,20 @@ class Worst(unittest.TestCase):
 
     def test_the_same_deck_with_every_line_waived_and_every_rule_strict_takes_no_longer(self):
         """The rules of a waived line are run, so a waiver saves the kernel nothing, and a rule
-        that states `lt` has a pick for its root, one node more than `le` has. So the heaviest
-        input for both is the heaviest there was, with its three lines waived and its three
-        rules strict: the same deck, steps and proof, and each open cell waived. In two runs on
-        a busy desktop it took 14.1 and 15.2 processor seconds and 115 MB, and the test above
-        took 13.8 beside the first. The tapes of `r/sum` hold a node more for each load case, which is 2,151
-        steps of the ten million and less than a load case costs, so the same 2,151 cases are
-        within the steps and one more is over."""
+        that states `lt` has a pick for its root, one node more than `le` has. An open cell of a
+        waived line costs a walk more, over its whole box, to ask whether its rule says nothing
+        there. So the heaviest input for both is the heaviest there was, with its three lines
+        waived and its three rules strict: the same deck, steps and proof, and a walk for each
+        open cell. Every one of them could be answered, so none is waived. Before that walk, in
+        two runs on a busy desktop it took 14.1 and 15.2 processor seconds and 115 MB, and the
+        test above took 13.8 beside the first. With it, it took 16.6 and 109 MB on a desktop
+        busy with two other checks. The tapes of `r/sum` hold a node more for each
+        load case, which is 2,151 steps of the ten million and less than a load case costs, so
+        the same 2,151 cases are within the steps and one more is over."""
         said, seconds, peak, over = self.at_its_limits(2_151, waived=True, strict=True)
         self.assertEqual([f["rule"] for f in over["findings"]], ["limits"], "one more load case is over the steps of the cells")
-        self.assertEqual((said["verdict"], said["findings"], len(said["cells"]), said["counts"]["waived"]), ("UNKNOWN", [], 2_151 + 2, 2_151 + 2))
-        self.assertRegex(said["cells"][-1]["reason"], r"^open but for the waiver: leaf \d+: node \d+: " + re.escape(COSTLY) + "$")
-        self.assertEqual(len(said["waived"]), 3, "each waiver is printed once, whatever rests on it")
+        self.assertEqual((said["verdict"], said["findings"], len(said["cells"]), said["counts"]["open"], said["waived"]), ("UNKNOWN", [], 2_151 + 2, 2_151 + 2, []))
+        self.assertRegex(said["cells"][-1]["reason"], r"^" + re.escape(grid.UNRESTED) + r"leaf \d+: node \d+: " + re.escape(COSTLY) + "$")
         self.assertGreater(said["work"], MAX_WORK * 99 // 100, "the proof stopped because the work ran out")
         self.assertLess(seconds, PROCESSOR_SECONDS)
         self.assertLess(peak, HALF_GB)

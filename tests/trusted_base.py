@@ -72,7 +72,7 @@ CORE_CAP = Limit(1012, "Set on 2026-11-08 at 140f742, where the core measured 95
                        "doublings, placing an enclosure among the multiples of pi, and the cache), 40 lines "
                        "in interval.py and 7 in terms.py, evaluate.py, codec.py and __init__.py, 1,012.")
 
-TRUSTED_CEILING = Limit(19751, "Set on 2026-11-08 at 140f742, where the trusted base measured 13,530 "
+TRUSTED_CEILING = Limit(19788, "Set on 2026-11-08 at 140f742, where the trusted base measured 13,530 "
                                "code lines: core 957, rules 457, outside the kernel 12,116. Raised on "
                                "2026-11-08 on branch parts-core as the parts layer replaces its scaffold: "
                                "classifying the scaffold measured 14,269, and the mesh reader with its "
@@ -199,6 +199,11 @@ TRUSTED_CEILING = Limit(19751, "Set on 2026-11-08 at 140f742, where the trusted 
                                "gained `cos` on branch cosine, its one step for angles, which the deck and the "
                                "grid read with no new lines. Its Python reading in petra/kernel, which the "
                                "kernel's ends must equal bit for bit, is 47 lines (CORE_CAP), 19,751. "
+                               "The seventh hostile review found six designs that a rule refutes passing under a "
+                               "waiver that rested a cell the search had not settled. A waiver now rests only a cell "
+                               "that no inequality could answer, which petra/grid.py decides as the kernel does: "
+                               "whether a rule says nothing anywhere in its box, and whether an unstated field is a "
+                               "quantity, 37 lines, 19,788. "
                                "Raise it in the commit that needs more and say why here.")
 
 T2_ADOPTED = date(2026, 11, 8)
