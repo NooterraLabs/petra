@@ -278,14 +278,14 @@ def _field(body: Mapping[str, Any], load: bool = False) -> Field:
     # A part may leave an `optional` field unstated. The flag is true or false, as the kernel reads it, and it is the design that says what
     # a record leaves out: only the card states a signed field, so a field is not both.
     optional = body.get("optional", False)
-    if not isinstance(optional, bool) or (optional and body.get("signed")) or (optional and UNSTATED in body.get("one_of", ())):
-        raise DeckError(f"field {name}: `optional` is true or false, on a field that is not `signed`, and a key that may be left unstated has no name `{UNSTATED}`")
+    if any(not isinstance(body.get(flag, False), bool) for flag in ("optional", "signed", "whole")):
+        raise DeckError(f"field {name}: `optional`, `signed` and `whole` are each true or false")
+    if (optional and body.get("signed")) or (optional and UNSTATED in body.get("one_of", ())):
+        raise DeckError(f"field {name}: a field is `signed` or `optional`, and not both, and a key that may be left unstated has no name `{UNSTATED}`")
     if "one_of" in body:
         keys = tuple(str(k) for k in body["one_of"])
         if not keys or len(set(keys)) != len(keys):
             raise DeckError(f"field {name}: `one_of` is a list of different names")
-        if not isinstance(body.get("signed", False), bool):
-            raise DeckError(f"field {name}: `signed` is true or false")
         return Field(name, body["what"], keys=keys, optional=optional, signed=body.get("signed", False))
     if "type" in body:
         names = tuple(body.get("as", [name]))

@@ -120,7 +120,7 @@ The kernel reads the whole deck and refuses one that does not hold together, as 
 - A number alone, such as `0.90` or `3/2`: digits with an optional sign, and then a decimal part or a denominator. It takes no exponent, no space and no underscore.
 - An expression, as a list of tape nodes. A whole power is a `pow`, a half power is a `pow` of a `sqrt`, a negative one is 1 over it, and any other power is `exp` of the exponent times `ln`. Cases and tables are a `pick`.
 
-The kernel is stricter than `petra/grid.py` in three ways. A name, a unit and a text are JSON strings, and a flag is `true` or `false`: Python also takes a number where a unit or another text goes. A name is a JSON string for both: the name of a type, of a field, of a load, of a joined part, of a mechanism, of an input of a row, of a side that `rises` or `falls` names, and the id of a row and of a rule. The names of `let` may be read in any order, because the kernel's JSON reader keeps no order of keys, where Python reads them in the order of the file. And the limits below apply.
+The kernel is stricter than `petra/grid.py` in three ways. A name, a unit and a text are JSON strings: Python also takes a number where a unit or another text goes. A flag of a field, `signed`, `whole` and `optional`, is `true` or `false` for both, and `may_be` is one of its two texts for both. A name is a JSON string for both: the name of a type, of a field, of a load, of a joined part, of a mechanism, of an input of a row, of a side that `rises` or `falls` names, and the id of a row and of a rule. The names of `let` may be read in any order, because the kernel's JSON reader keeps no order of keys, where Python reads them in the order of the file. And the limits below apply.
 
 ## proofs.json
 
