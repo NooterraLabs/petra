@@ -320,6 +320,11 @@ def _field(body: Mapping[str, Any], load: bool = False) -> Field:
     may_be = body.get("may_be")
     if "may_be" in body and (may_be not in ("zero", "negative") or (load and may_be == "zero") or (least is not None and (may_be == "zero" or least >= 0))):
         raise DeckError(f"field {name}: `may_be` is zero or negative, and negative alone for a load; a quantity that may be zero has no `least`, and with negative a `least` is under zero")
+    # A `least` is not under the floor of its dimension where that floor holds for the quantity, as type rule 4 holds a load of the card:
+    # one under zero always, and one at zero unless the quantity may be negative. A completion of a load left out goes down to its `least`.
+    floor = _floor(dim)
+    if least is not None and floor is not None and (may_be != "negative" or floor[1] < 0) and least < floor[1]:
+        raise DeckError(f"field {name}: its least, {least} in SI units, is under {floor[1]}, the floor of a {floor[0]}, and no card states a value under it")
     return Field(name, body["what"], dim=dim, signed=bool(body.get("signed")), whole=whole, least=least, may_be=may_be, optional=optional)
 
 
@@ -1663,8 +1668,10 @@ def _listed(names: list[str]) -> str:
 
 
 def _least(load: Field) -> Fraction:
-    """The value a completion first tries for a load: its `least`, or zero."""
-    return load.least if load.least is not None else Fraction(0)
+    """The value a completion first tries for a load: its `least`, or zero, and not under the floor of its dimension where that floor
+    holds for the load, as Completion.fits in kernel/Petra/Grid.lean holds it. A deck whose `least` is under that floor does not load."""
+    floor, least = _floor(load.dim), load.least if load.least is not None else Fraction(0)
+    return least if floor is None or (load.may_be == "negative" and floor[1] >= 0) else max(least, floor[1])
 
 
 def _incomplete(rule: Rule, part: Part, parts: Mapping[str, Part], unsaid: list[tuple[str, str, tuple[str, ...]]], missing: list[str],

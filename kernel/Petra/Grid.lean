@@ -62,6 +62,21 @@ def firsts [Ord κ] (items : Array α) (key : α → κ) : Std.TreeMap κ α :=
 /-- The floors that deck.json gives the dimensions, by the exponents of each (`Deck.input`). -/
 abbrev Floors := Std.TreeMap (Array (Int × Nat)) (String × Floor)
 
+/-- Why the deck of rules is refused for a `least` under a floor of `floors`, if it is: the
+first field or load, by type and then fields before loads, whose `least` is under the floor of
+its dimension, where that floor holds for it as type rule 4 holds a load of the card. A floor
+under zero holds always, and one at zero or above unless the quantity may be negative. A
+completion of a load left out, and the search for one, go down to the `least`, where no card
+may put the load. -/
+def underFloor (rules : Rules) (floors : Floors) : Option String := Id.run do
+  for kind in rules.kinds do
+    for f in kind.fields ++ kind.loads do
+      if let .quantity dim _ _ (some least) := f.kind then
+        if let some (name, floor) := floors.get? dim.key then
+          if (f.sign != .negative || floor.min < 0) && least < floor.min then
+            return some s!"field {f.name}: its least, {least} in SI units, is under {floor.min}, the floor of a {name}, and no card states a value under it"
+  return none
+
 /-- A quantity is of its field's dimension and at least the field's least. It is more than
 zero, unless its field says with `may_be` that it may be zero, and is then at least zero,
 or that it may be negative, and then has no floor by its sign. -/
@@ -338,12 +353,15 @@ def Completion.onto (c : Completion) (named : Std.TreeMap String Part) (loads : 
 /-- Whether a completion gives each key of `unsaid` one of its names, and each load of
 `missing` under the case `under` one value its field allows, each once and nothing else. A
 load's value is at least the load's `least`; with none, at least zero, unless the load may be
-negative. -/
-def Completion.fits (c : Completion) (part : Part) (unsaid : Array Unsaid) (missing : Array String) (under : String) : Bool :=
+negative. It is held to the floor of its dimension in `floors` as a load of the card is (type
+rule 4): a floor under zero always, and one at zero or above unless the load may be negative.
+So no completion puts a temperature under absolute zero. -/
+def Completion.fits (c : Completion) (part : Part) (unsaid : Array Unsaid) (missing : Array String) (under : String) (floors : Floors) : Bool :=
   let allowed (load : String) (x : Rat) : Bool :=
     match part.kind.load.get? load with
     | some f => match f.kind with
-      | .quantity _ _ _ least => least.all (· ≤ x) && (least.isSome || f.sign == .negative || 0 ≤ x)
+      | .quantity dim _ _ least => least.all (· ≤ x) && (least.isSome || f.sign == .negative || 0 ≤ x)
+          && (floors.get? dim.key).all fun (_, floor) => (f.sign == .negative && 0 ≤ floor.min) || floor.admits x
       | _ => false
     | none => false
   c.keys.size == unsaid.size && c.loads.size == missing.size
@@ -663,7 +681,7 @@ is the weight of the rule, twice with a `where`, and a step for each node. None 
 would come to more than `room` steps. Otherwise the cell, the steps it took, the work left
 and `dsg` with the `dsg:` inputs of the tapes that refute it. -/
 def incomplete (rule : Rule) (named : Std.TreeMap String Part) (loads : Loads) (part : Part) (unsaid : Array Unsaid)
-    (missing : Array String) (under : String) (hints : Array Hint) (waived : Bool) (room left : Nat) (dsg : Std.TreeSet String) :
+    (missing : Array String) (under : String) (hints : Array Hint) (waived : Bool) (room left : Nat) (dsg : Std.TreeSet String) (floors : Floors) :
     StateM Caches (Option (Incomplete × Nat × Nat × Std.TreeSet String)) := do
   let looks := 1 + (rule.condition.map Static.size).getD 0 + (rule.requires.map Static.size).getD 0
   let weight := rule.weight * (if rule.ranges.isEmpty then 1 else 2)
@@ -716,7 +734,7 @@ def incomplete (rule : Rule) (named : Std.TreeMap String Part) (loads : Loads) (
     let some c := h.completion | continue
     spent := spent + looks + c.keys.size + c.loads.size
     if spent > room then return none
-    unless c.fits part unsaid missing under do continue
+    unless c.fits part unsaid missing under floors do continue
     let (part', fellows', here) := complete c
     unless rule.condition.all (·.holds part' fellows') do return some (.pending (some c), spent, left, dsg)
     if let some required := rule.requires then
@@ -776,9 +794,11 @@ load case of the card is a step for each load the rule reads. Writing a tape is 
 of its rule, and a tape is a step for each node. An incomplete cell counts as `incomplete`
 says, and so does a hint for a line whose `unless` reads an unstated key. Then every rule of
 a part's type is looked at once more for what it reads of the part: its look, and a step for
-each field it reads. -/
-def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hints : Array Hint) (budget : Nat := MAX_WORK) :
-    StateM Caches (Except String Made) := do
+each field it reads.
+
+`floors` are those of deck.json, which hold a completion's loads as they hold the card's. -/
+def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hints : Array Hint) (budget : Nat := MAX_WORK)
+    (floors : Floors := {}) : StateM Caches (Except String Made) := do
   let over := s!"the deck of rules asks more than {MAX_CELLS} cells of this design, and the kernel makes no more"
   let long := s!"writing the tapes of this design from the deck of rules takes more than {MAX_STEPS} steps, and the kernel takes no more"
   let hinted := grouped hints fun h => (h.subject, h.mechanism, h.entry)
@@ -846,7 +866,7 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hi
             let some c := h.completion | continue
             steps := steps + 1 + ((ask.excuse.bind id).map Static.size).getD 0 + c.keys.size + c.loads.size
             if steps > MAX_STEPS then return .error long
-            unless c.fits part unsaid #[] "" do continue
+            unless c.fits part unsaid #[] "" floors do continue
             let named' := (c.onto named loads).1
             let part' := named'.getD part.name part
             if ask.excuse.any fun condition => condition.all (·.holds part' (part'.fellows named')) then
@@ -914,7 +934,7 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hi
                 | some c => s!"case {c} puts no {listed missing} on {part.name}, which the rule reads"
                 | none => s!"the card puts no {listed missing} on {part.name}, which the rule reads"
               let some (found, spent, after, read) ← incomplete rule named loads part unsaid missing (under.getD "")
-                  (hintsFor part.name ask.mechanism entry) waived (MAX_STEPS - steps) left dsg
+                  (hintsFor part.name ask.mechanism entry) waived (MAX_STEPS - steps) left dsg floors
                 | return .error long
               steps := steps + spent
               left := after

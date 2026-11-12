@@ -13,12 +13,19 @@ waived cell leaves unchecked. One test per finding.
       at zero, and the witness proved only the tape whose root is the rule's inside the `where`:
       PASS_WAIVED. A witness now proves the `where` and the rule over the whole box, or shows the
       `where` holds nowhere, as a complete cell must.
+  A1  A strut whose stress rule holds only under -292.5 degC, under every temperature a card
+      may state, left its temperature out of the case. The kernel took a completion at -300
+      degC, and with a `least` of -300 degC on the load `petra check` found it itself: the
+      waiver rested the cell. A spring's play with a `least` of -5 mm, a length that no card
+      may state under zero, was completed there. A completion is now held to the floor of its
+      dimension as a load of the card is, and a deck whose `least` is under that floor is
+      refused.
 """
 import json
 import unittest
 
 from petra import grid
-from tests.test_deck_features import HEAD, KERNEL, asks, cells, design, given, key, kind, load, made_up, parsed, part, reason, rule, size
+from tests.test_deck_features import HEAD, KERNEL, asks, cells, design, given, key, kind, load, made_up, no_deck, parsed, part, reads, reason, rule, size
 from tests.test_kernel_grid import ask
 
 
@@ -127,6 +134,57 @@ class AWhereUnderACompletion(unittest.TestCase):
             said = ask({**files, "proofs": json.dumps({"format": "petra-proofs/0", "cells": [hint]})})
             (found,) = [c for c in said["cells"] if c["subject"] == "p" and c["mechanism"] == "pin.shear"]
             self.assertEqual((said["findings"], found["state"], said["verdict"]), ([], "open", "UNKNOWN"), partition)
+
+
+# --- A1. a completion under the floor of its dimension -----------------------------------------------------
+
+def strut(least: str | None = None) -> dict:
+    """A strut held between two walls, set at 20 degC: its stress is push / area + 2.4 MPa per degC of t - 20 degC."""
+    temperature = {"name": "t", "dim": "temperature", "may_be": "negative", "what": "the strut's temperature in the case", **({"least": least} if least else {})}
+    strut_t = kind("strut", size("area", "area"), size("Fy", "stress", signed=True),
+                   loads=[{"name": "push", "dim": "force", "what": "the push on the strut", "least": "0 kN"}, temperature])
+    stress = ["add", ["div", ["load", "push"], "area"], ["mul", ["div", ["q", "2.4", "MPa"], ["q", "1", "degC"]], ["sub", ["load", "t"], ["q", "20", "degC"]]]]
+    return made_up([strut_t], [asks("strut.stress", "strut"), asks("strut.size", "strut")],
+                   [rule("stress", "strut", "strut.stress", le=[stress, "Fy"]), rule("size", "strut", "strut.size", le=[["q", "50", "mm2"], "area"])])
+
+
+STRUT_TEXT = design(part("strut", "s", area="100 mm2", Fy="given s.Fy"))
+STRUT_CARD = HEAD + given("s.Fy", "250 MPa") + load("service", "s push in [100 kN, 100 kN]") + waive("strut.stress", "s")
+"""1,000 MPa of push against 250 MPa: the rule holds only under -292.5 degC, where no card may state a temperature."""
+
+
+class CompletionsAboveTheFloor(unittest.TestCase):
+    def test_a_temperature_left_out_is_not_completed_under_absolute_zero(self):
+        found, status, _ = cells(self, strut(), STRUT_TEXT, STRUT_CARD)
+        self.assertEqual((found[("s", "strut.stress", "stress/service")], status), ("open", "UNKNOWN"))
+
+    @KERNEL
+    def test_the_kernel_takes_no_completion_under_the_floor(self):
+        rules, read = parsed(strut(), STRUT_TEXT, STRUT_CARD)
+        report, files = grid.check(read, rules)
+        proofs = json.loads(files["proofs"])
+        for t, state in (("-300", "open"), ("-5463/20", "open")):
+            hint = {"subject": "s", "mechanism": "strut.stress", "entry": "stress/service", "state": "proved", "partition": "leaf",
+                    "completion": {"keys": [], "loads": [["s", "t", "service", t]]}}
+            said = ask({**files, "proofs": json.dumps({**proofs, "cells": [*proofs["cells"], hint]})})
+            (cell,) = [c for c in said["cells"] if c["mechanism"] == "strut.stress"]
+            self.assertEqual((said["findings"], cell["state"], said["verdict"]), ([], state, "UNKNOWN"), t)
+
+    def test_a_least_under_the_floor_that_holds_is_refused_by_both_readers(self):
+        mine, kernel = no_deck(self, strut("-300 degC"))
+        for said in (mine, kernel):
+            self.assertIn("field t: its least, -300 in SI units, is under -5463/20, the floor of a temperature", said)
+        spring = kind("spring", size("rate", "force/length"), loads=[{"name": "play", "dim": "length", "what": "the free play", "least": "-5 mm"}])
+        mine, kernel = no_deck(self, made_up([spring], [asks("spring.preload", "spring")], [rule("preload", "spring", "spring.preload", le=[["load", "play"], ["q", "-1", "mm"]])]))
+        for said in (mine, kernel):
+            self.assertIn("field play: its least, -1/200 in SI units, is under 0, the floor of a length", said)
+        mine, kernel = no_deck(self, made_up([kind("plate", size("t", least="-1 mm"))]))
+        self.assertIn("field t: its least", kernel)
+
+    def test_a_least_over_the_floor_or_under_a_floor_that_may_be_negative_lifts_is_read(self):
+        reads(self, strut("-40 degC"))
+        reads(self, made_up([kind("holder", size("x", may_be="negative", least="-1 mm"),
+                                  loads=[{"name": "f", "dim": "length", "what": "f", "may_be": "negative", "least": "-1 mm"}])]))
 
 
 if __name__ == "__main__":
