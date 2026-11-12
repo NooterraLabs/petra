@@ -14,6 +14,7 @@ tests.test_contracts	2.3
 tests.test_coped_beam_check	2.1
 tests.test_coverage	1.5
 tests.test_deck	1.2
+tests.test_deck_features	35.7
 tests.test_deck_rules	3.8
 tests.test_docs	3.7
 tests.test_domain_registry	1.7
@@ -28,8 +29,9 @@ tests.test_grid	10.6
 tests.test_interval	0.7
 tests.test_kernel_attacks	1.9
 tests.test_kernel_attacks2	18.7
-tests.test_kernel_attacks3	78.8
+tests.test_kernel_attacks3	128.5
 tests.test_kernel_attacks4	16.8
+tests.test_kernel_attacks5	61.7
 tests.test_kernel_budget	2.6
 tests.test_kernel_grid	11.5
 tests.test_kernel_instance	1.0

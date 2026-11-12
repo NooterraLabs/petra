@@ -663,12 +663,15 @@ class Alike(unittest.TestCase):
     file writes. The others are what costs a table kept in order the most: names that are
     alike to their last characters, and tapes of many different nodes. Each docstring says
     what the kernel took before the tables were kept in order, at 5714d9c, and each test
-    holds the kernel to a third of its 30 processor seconds."""
+    holds the kernel to a third of its 30 processor seconds.
 
-    def bounded(self, files: dict[str, str], megabytes: int = 128) -> dict:
+    The last five are the heaviest inputs that five later features allow, each alone
+    (tests/test_deck_features.py). `Worst` holds the one of them that takes longest."""
+
+    def bounded(self, files: dict[str, str], megabytes: int = 128, within: float = PROCESSOR_SECONDS / 3) -> dict:
         self.assertLess(total(files), 1.12 * MB)
         said, seconds, peak = measured(files)
-        self.assertLess(seconds, PROCESSOR_SECONDS / 3, "processor seconds")
+        self.assertLess(seconds, within, "processor seconds")
         self.assertLess(peak, megabytes * MB, "bytes held")
         return said
 
@@ -755,6 +758,98 @@ class Alike(unittest.TestCase):
         hints = [{"subject": alike(k, "p"), "mechanism": "m", "entry": "x", "state": "proved", "partition": "leaf"} for k in range(count)]
         said = self.bounded(with_rules(rules, empty_card(inputs), parts, hints))
         self.assertEqual((said["verdict"], said["findings"], said["counts"]["proved"], said["ignored_hints"]), ("PASS", [], count, 0))
+
+    # The tests from here on are the heaviest inputs under 1 MB that each of the five features
+    # of tests/test_deck_features.py allows: a unit with a power, a condition on a key of a
+    # joined part, a rule that requires, a row that gives a name, and what a type needs.
+
+    def test_a_table_of_bands_and_cells_in_units_with_a_power(self):
+        """18,000 bands in inch^4 and 18,000 cells in cm^3, for two parts: each value is its
+        unit's factor to the power, worked out again for each. 1.0 processor second, 45 MB."""
+        row = {"id": "h", "anchor": ANCHOR, "gives": {"name": "y", "dim": "length^3"},
+               "takes": [{"name": "x", "dim": "length^4", "what": "w", "range": ["1 mm^4", "2 inch^4"]}],
+               "table": {"down": {"by": "x", "bands": [[f"{k} inch^4", f"{k + 1} inch^4"] for k in range(1, 18_001)]}, "cells": [f"{k}.5 cm^3" for k in range(18_000)]}}
+        kind = {"type": "t", "what": "w", "fields": [{"name": "f", "dim": "length^4", "what": "w", "least": "1 mm^4"}, {"name": "g", "dim": "length^3", "what": "w"}]}
+        rules = deck_of(rows=[row], types=[kind], grid_lines=[asks()], rules=[rule_of(le=(["row", "h", {"x": "f"}], "g"))])
+        lines = [{"field": "f", "args": [{"number": {"dim": "m^4", "lo": "1/1000000", "hi": "1/1000000"}}]}, {"field": "g", "args": [{"number": {"dim": "m^3", "lo": "1", "hi": "1"}}]}]
+        said = self.bounded(with_rules(rules, empty_card(), [{"name": f"p{i}", "type": "t", "lines": lines} for i in range(2)]))
+        self.assertEqual((said["verdict"], said["findings"], said["counts"]["open"]), ("UNKNOWN", [], 2))
+        self.assertIn("compares 36000 orders here", said["cells"][0]["reason"])
+
+    def conditions(self, pairs: int, count: int, long: bool, where: str) -> dict[str, str]:
+        """`pairs` parts that each join a part of four keys, and a condition that asks `count` times about those keys."""
+        keys = [alike(k, "f") if long else f"f{k}" for k in range(4)]
+        yes, no, called = ("y" * 64, "n" * 64, alike(0, "a")) if long else ("y", "n", "a")
+        leaf = {"type": "leaf", "what": "w", "fields": [{"name": name, "one_of": [yes, no], "what": "w"} for name in keys]}
+        kind = {"type": "t", "what": "w", "fields": [{"name": "holds", "type": "leaf", "as": [called], "what": "w"}]}
+        rnd = random.Random(2)
+        asked = ["or"] + [["is", f"{called}.{rnd.choice(keys)}", no] for _ in range(count)]
+        rule = {"id": "r/x", "type": "t", "mechanism": "m", "anchor": ANCHOR, "says": "s", "requires": asked if where == "requires" else ["is", f"{called}.{keys[0]}", yes]}
+        line = asks(unless={"when": asked, "why": "w"}) if where == "unless" else asks()
+        parts = []
+        for k in range(pairs):
+            parts.append({"name": alike(k, "q") if long else f"q{k}", "type": "leaf", "lines": [{"field": name, "args": [{"word": yes}]} for name in keys]})
+            parts.append({"name": alike(k, "p") if long else f"p{k}", "type": "t", "lines": [{"field": "holds", "args": [{"word": parts[-1]["name"]}]}]})
+        return with_rules(deck_of(types=[leaf, kind], grid_lines=[line], rules=[rule]), empty_card(), parts)
+
+    def test_an_unless_on_keys_of_a_joined_part_at_the_steps_of_the_cells(self):
+        """An `unless` that asks 19,000 times about four keys of the part its part joins, for
+        526 pairs of parts: 9,998,734 of the ten million steps, each a look for the joined
+        part and for its key. 4.0 processor seconds, 38 MB. One pair more is over the steps.
+        It takes all the steps of the cells, so it is held to the kernel's 30 processor seconds."""
+        said = self.bounded(self.conditions(526, 19_000, False, "unless"), within=PROCESSOR_SECONDS)
+        self.assertEqual((said["verdict"], said["findings"], said["counts"]["proved"]), ("PASS", [], 526))
+        over = self.bounded(self.conditions(527, 19_000, False, "unless"), within=PROCESSOR_SECONDS)
+        self.assertEqual([(f["rule"], f["item"]) for f in over["findings"]], [("limits", "parts")])
+
+    def test_a_requirement_of_many_keys_with_names_alike_refuted_for_many_parts(self):
+        """A rule that requires one of 2,700 conditions on keys of a joined part, with names
+        and values of 64 characters alike to their last, refuted for 550 parts. The reason
+        of each names the keys that fit in it and no more. 0.4 processor seconds."""
+        said = self.bounded(self.conditions(550, 2_700, True, "requires"))
+        self.assertEqual((said["verdict"], said["findings"], said["counts"]["refuted"]), ("FAIL", [], 550))
+        self.assertLess(len(said["cells"][0]["reason"]), 300)
+
+    def test_a_row_that_gives_one_of_many_names_read_by_a_table_and_by_a_case(self):
+        """A row gives one of 500 names by 500 bands. One rule reads a table at that name and
+        another picks one of 500 expressions by it, for 700 parts. 1.7 processor seconds."""
+        names = [f"n{k}" for k in range(500)]
+        naming = {"id": "n", "anchor": ANCHOR, "gives": {"name": "k", "one_of": names}, "takes": [{"name": "x", "dim": "length", "what": "w", "range": ["1 m", "2 m"]}],
+                  "table": {"down": {"by": "x", "bands": [[f"{k} m", f"{k + 1} m"] for k in range(500)]}, "cells": names}}
+        table = {"id": "t", "anchor": ANCHOR, "gives": {"name": "y", "dim": "length"}, "takes": [{"name": "k", "one_of": names}],
+                 "table": {"down": {"by": "k"}, "unit": "m", "cells": [str(k + 1) for k in range(500)]}}
+        by_name = ["row", "n", {"x": "f"}]
+        rules = deck_of(rows=[naming, table], types=[PLAIN], grid_lines=[asks(mechanism="table"), asks(mechanism="case")],
+                        rules=[rule_of("r/table", mechanism="table", le=("f", ["row", "t", {"k": by_name}])),
+                               rule_of("r/case", mechanism="case", le=("f", ["case", by_name, {name: ["mul", "f", str(k + 2)] for k, name in enumerate(names)}]))])
+        said = self.bounded(with_rules(rules, empty_card(), [{"name": f"p{i}", "type": "t", "lines": [{"field": "f", "args": ONE}]} for i in range(700)]))
+        self.assertEqual((said["verdict"], said["findings"], said["counts"]["open"]), ("UNKNOWN", [], 1_400))
+
+    def test_needs_that_spend_the_work_and_needs_that_every_part_breaks(self):
+        """Three designs. A need multiplies four decimals of 3,990 digits by a field, for 1,200
+        parts: the work runs out at the 646th, in 4.5 processor seconds. A need adds 100,000
+        ones to a field, for 4,000 parts: the work runs out near the 100th, in 5.4. And each of
+        4,500 parts breaks 12 needs whose numbers have 2,000 bits: 100 findings are written
+        and 53,900 are counted, in 1.9. The first two spend all the work of a verdict, so they
+        are held to the kernel's 30 processor seconds and not to a third: the first took 10.3
+        on the second machine the suite runs on, whose unit of work takes twice as long."""
+        def design(needs: list[dict], parts: int, name: str = "t", hi: str = "1") -> dict[str, str]:
+            kind = {"type": name, "what": "w", "fields": [{"name": "f", "dim": "dimensionless", "what": "w"}], "needs": needs}
+            lines = [{"field": "f", "args": [{"number": {"dim": "dimensionless", "lo": "1", "hi": hi}}]}]
+            return with_rules(deck_of(types=[kind]), empty_card(), [{"name": alike(i, "p"), "type": name, "lines": lines} for i in range(parts)])
+
+        rnd = random.Random(4)
+        decimals = ["0." + "".join(rnd.choice("123456789") for _ in range(3_988)) for _ in range(4)]
+        for what, files in (("long", design([{"le": [["mul", *decimals, "f"], "1"], "why": "made up"}], 1_200)),
+                            ("many", design([{"le": [["add", "f"] + ["1"] * 100_000, "1"], "why": "w"}], 4_000))):
+            with self.subTest(what):
+                said = self.bounded(files, within=PROCESSOR_SECONDS)
+                self.assertEqual((said["verdict"], said["findings"][-1]["rule"], said["findings"][-1]["file"]), ("ILL-FORMED", "limits", "design"))
+                self.assertRegex(said["findings"][-1]["item"], "^p+[0-9]{6}$", "the item is the part at which the work ran out")
+        broken = design([{"lt": [["mul", "f", "1." + "7" * 600], "1"], "why": "y" * 190} for _ in range(12)], 4_500, "t" * 64, "2")
+        said = self.bounded(broken)
+        self.assertEqual((said["verdict"], len(said["findings"]), said["more_findings"]), ("ILL-FORMED", 100, 53_900))
+        self.assertIn("a number of 1994 bits", said["findings"][0]["why"])
 
 
 def applied(make) -> int:
@@ -924,6 +1019,38 @@ class Worst(unittest.TestCase):
         self.assertEqual((said["verdict"], said["findings"], said["counts"]["proved"]), ("PASS", [], 1), "every enclosure was held: the `min` read them all")
         self.assertLess(peak, HALF_GB, "it held 264 MB")
         self.assertLess(seconds, PROCESSOR_SECONDS)
+
+    def test_a_row_that_gives_a_name_by_as_many_cells_as_a_megabyte_holds(self):
+        """A row that gives a name by 480 bands of one quantity and 480 of another: 230,400
+        cells, 0.94 MB. A `case` on it is a pick with a case for each cell and four orders in
+        each, which is over the orders of a pick, so its tape is not written and its cell is
+        open. The kernel goes through every cell of the row to find that out, once when it
+        reads the deck and once for each part: a part weighs 2,073,605 steps, so four parts
+        are within the ten million and five are not. This is the input of the five features
+        of tests/test_deck_features.py that took longest and held most: 7.3 processor seconds
+        and 213 MB for four parts, and 8.2 seconds for the five that are refused."""
+        side, names = 480, ["a", "b"]
+        bands = [[f"{k} m", f"{k + 1} m"] for k in range(side)]
+        naming = {"id": "n", "anchor": ANCHOR, "gives": {"name": "k", "one_of": names},
+                  "takes": [{"name": "x", "dim": "length", "what": "w", "range": ["0 m", f"{side} m"]}, {"name": "z", "dim": "length", "what": "w", "range": ["0 m", f"{side} m"]}],
+                  "table": {"down": {"by": "x", "bands": bands}, "across": {"by": "z", "bands": bands}, "cells": [[names[(i + j) % 2] for j in range(side)] for i in range(side)]}}
+        kind = {"type": "t", "what": "w", "fields": [{"name": "f", "dim": "length", "what": "w"}, {"name": "g", "dim": "length", "what": "w"}]}
+        picks = rule_of("r/case", mechanism="case", le=("f", ["case", ["row", "n", {"x": "f", "z": "g"}], {"a": ["mul", "f", "2"], "b": ["mul", "g", "3"]}]))
+        rules = deck_of(rows=[naming], types=[kind], grid_lines=[asks(mechanism="case")], rules=[picks])
+
+        def files(parts: int) -> dict[str, str]:
+            return with_rules(rules, empty_card(), [{"name": f"p{i}", "type": "t", "lines": [{"field": "f", "args": ONE}, {"field": "g", "args": ONE}]} for i in range(parts)])
+
+        self.assertTrue(0.9 * MB < total(files(4)) < MB, total(files(4)))
+        said, seconds, peak = measured(files(4))
+        self.assertEqual((said["verdict"], said["findings"], said["counts"]["open"]), ("UNKNOWN", [], 4))
+        self.assertIn(f"compares {4 * side * side} orders here", said["cells"][0]["reason"])
+        self.assertLess(seconds, PROCESSOR_SECONDS, "it took 7.3 processor seconds")
+        self.assertLess(peak, HALF_GB, "it held 213 MB")
+        over, seconds, peak = measured(files(5))
+        self.assertEqual([(f["rule"], f["item"]) for f in over["findings"]], [("limits", "parts")], "one more part is over the steps of the cells")
+        self.assertLess(seconds, PROCESSOR_SECONDS, "it took 8.2 processor seconds")
+        self.assertLess(peak, HALF_GB)
 
 
 if __name__ == "__main__":
