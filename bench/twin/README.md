@@ -141,6 +141,19 @@ Measured with `--count 6000 --decks 3000 --seed 7` against the kernel and the gr
 | Generated designs, 5,773 compared | The same verdict and the same cells on every one |
 | Damaged decks, 3,000 compared | The same on every one: 2,396 refused by all three, 167 PASS, 144 FAIL, 281 UNKNOWN, and 12 designs refused |
 
+## The third update, of 2026-11-12
+
+The merge of the cosine changed the pages again: `cos` on a tape, a waiver that rests only a cell no inequality could answer, the refusal of a rule with no value where a field says it may be, a refutation inside a `where`, and the exact root of a point that is the square of a fraction. A fourth agent, on another model than the kernel's author and under the same rule as before, brought the reading up to them. It had 43 generated designs and 40 damaged decks with the kernel's answers, and after the update all 83 agree in verdict, counts and cells.
+
+`AMBIGUITIES.md` gained section K, seven entries. Most are about how the walk of a waived line is read: which questions a cell whose `where` is not proved asks (K5), which nodes start "no value anywhere" (K6), and a pick too large to walk (K7). K7 is a real gap: a pick of more than 4,096 ways may have a value, so a waiver cannot rest its cell, and the kernel is being changed to refuse such picks when the deck loads.
+
+Measured with `--count 6000 --decks 3000 --seed 7` against the kernel and the grid at d7955ff:
+
+| Compared | Result |
+|---|---|
+| Generated designs, 5,773 compared | The same verdict and the same cells on every one |
+| Damaged decks, 3,000 compared | The same on every one: 2,385 refused by all three, 167 PASS, 154 FAIL, 281 UNKNOWN, and 13 designs refused |
+
 ## What it is not
 
 It does not read a design of the models' kinds or hash a file. It applies the limits that decide a verdict and not the budget of work, the memory of enclosures or the limits on what is printed. It is a reading of the rules path only.

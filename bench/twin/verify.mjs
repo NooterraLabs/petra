@@ -9,10 +9,11 @@
 // subject, mechanism, entry, claimed and state, and a reason when it is open, waived, or a
 // refuted rule that requires. --explain adds the steps to read the deck and to make the cells.
 //
-// Of the limits format.md states, the budget of work (20,000,000,000 units, for the needs and
-// the proofs), the words of enclosures held on a leaf and the caches of ln and exp are left out:
-// they are counted in the reference kernel's own costs. So are the limits on what is printed.
-// See AMBIGUITIES.md, I.
+// Of the limits format.md states, the budget of work (20,000,000,000 units, for the needs, the
+// proofs and the walk that asks whether a waived cell says nothing anywhere), the words of
+// enclosures held on a leaf and the caches of ln, exp and cos are left out: they are counted in
+// the reference kernel's own costs. So are the limits on what is printed. The steps to make the
+// cells (Steps), cos among them, are counted. See AMBIGUITIES.md, I and K.
 
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
@@ -620,6 +621,114 @@ export function lnEnc(x) {
   }
 }
 
+// format.md, Tapes, "The square root of an enclosure": a point that is the square of a fraction
+// has that fraction for its root. The whole roots of the numerator and of the denominator,
+// rounded down, and their quotient when its square is the point. Null for any other point.
+export function sqrtExact(q) {
+  if (q.n < 0n) return null;
+  const rn = isqrt(q.n), rd = isqrt(q.d);
+  return rn * rn === q.n && rd * rd === q.d ? new Q(rn, rd) : null;
+}
+
+// cos x * 2^P as [lo, hi], an enclosure for a fraction x with |x| <= 65536. As format.md says the
+// reference does it: the angle is halved s times, the series of the cosine is summed with its
+// remainder, and the angle is doubled s times again by cos 2y = 2 cos^2 y - 1.
+function cosFixed(x, P) {
+  const a = absB(x.n), d = x.d;
+  let s = 0n;
+  while ((a << 1n) > (d << s)) s++; // |x| / 2^s <= 1/2
+  const one = 1n << P;
+  // z = (x / 2^s)^2, at most 1/4, held between two points of the fixed grid.
+  const zNum = a * a, zDen = (d * d) << (2n * s);
+  const zLo = (zNum << P) / zDen, zHi = ceilDiv(zNum << P, zDen);
+  // The sum of (-1)^k z^k / (2k)!. Each term is rounded down from the one before, so it is at
+  // most 2 below its true value, and the first term that rounds to 0 bounds the remainder by 2.
+  const series = (Z) => {
+    let T = one, S = one, k = 0n;
+    for (;;) {
+      k++;
+      T = (T * Z) / (one * (2n * k - 1n) * (2n * k));
+      if (T === 0n) break;
+      S += k % 2n === 1n ? -T : T;
+    }
+    return [S, 2n * k + 2n];
+  };
+  // cos of the root of z falls as z rises on [0, 1/4].
+  const [sH, eH] = series(zHi), [sL, eL] = series(zLo);
+  let lo = sH - eH, hi = sL + eL;
+  const clamp = () => { if (lo < -one) lo = -one; if (hi > one) hi = one; };
+  clamp();
+  for (let i = 0n; i < s; i++) {
+    let qlo, qhi;
+    if (lo >= 0n) { qlo = lo * lo; qhi = hi * hi; } else if (hi <= 0n) { qlo = hi * hi; qhi = lo * lo; } else { qlo = 0n; qhi = lo * lo > hi * hi ? lo * lo : hi * hi; }
+    lo = 2n * (qlo >> P) - one;
+    hi = 2n * ceilDiv(qhi, one) - one;
+    clamp();
+  }
+  return [lo, hi];
+}
+
+// format.md, Tapes, "The cosine of an enclosure": the grid points at or under and at or over the
+// cosine of one end, or null when it has none. The cosine of 0 is 1. The cosine of any other
+// fraction lies strictly between two neighbouring grid points, and those are its enclosure; one
+// that is closer to a grid point other than 1 and -1 than 2^-2144 has no value. The enclosure is
+// asked for at 128, 224 and 608 bits, and last at 2,160, under the finest width of 2^-2144.
+const COS_LEVELS = [128n, 224n, 608n, 2160n];
+const COS_FINEST = 2144n;
+const cosCache = new Map();
+function cosEnd(x) {
+  if (x.n === 0n) return [Q1, Q1];
+  const key = `${absB(x.n)}/${x.d}`; // the cosine of an end is the cosine of its negative
+  if (cosCache.has(key)) return cosCache.get(key);
+  let res = null;
+  const top = 1n << GRID_BITS; // the grid index of 1
+  for (const T of COS_LEVELS) {
+    const final = T === COS_LEVELS[COS_LEVELS.length - 1];
+    let P = T + 64n, A, B;
+    for (;;) {
+      [A, B] = cosFixed(x, P);
+      if (B - A <= (1n << (P - T))) break;
+      P += 64n;
+    }
+    const G = 1n << (P - GRID_BITS);
+    // The grid points other than 1 and -1 that the enclosure holds, or at the last level that lie
+    // within 2^-2144 of it.
+    const slack = final ? 1n << (P - COS_FINEST) : 0n;
+    const gFirst = ceilDiv(A - slack, G), gLast = floorDiv(B + slack, G);
+    let held = gLast - gFirst + 1n;
+    if (held > 0n) {
+      if (gFirst <= top && top <= gLast) held--;
+      if (gFirst <= -top && -top <= gLast) held--;
+    }
+    if (held <= 0n) { const g = floorDiv(A, G); res = [gq(g), gq(g + 1n)]; break; }
+    if (final) break;
+  }
+  if (cosCache.size >= 4096) cosCache.clear();
+  cosCache.set(key, res);
+  return res;
+}
+const QM1 = new Q(-1n, 1n);
+const ANGLE_LIMIT = R(65536n);
+// The enclosure of the cosine of an angle [lo, hi], or null when it has none: when it reaches
+// below -65,536 or above 65,536, or the cosine of an end has none. The enclosure is placed among
+// the multiples of pi with the kernel's pi: i is the greatest whole number with i pi at or under
+// lo, and j the least with hi at or under j pi, each tested with the end of pi that makes the test
+// harder (AMBIGUITIES.md, K2). The cosines of both ends are taken in every case (K1).
+export function cosEnc(v) {
+  const [lo, hi] = v;
+  if (qcmp(lo, qneg(ANGLE_LIMIT)) < 0 || qcmp(hi, ANGLE_LIMIT) > 0) return null;
+  const [pL, pH] = piEnc();
+  const i = lo.n >= 0n ? floorDiv(lo.n * pH.d, lo.d * pH.n) : floorDiv(lo.n * pL.d, lo.d * pL.n);
+  const j = hi.n > 0n ? ceilDiv(hi.n * pL.d, hi.d * pL.n) : ceilDiv(hi.n * pH.d, hi.d * pH.n);
+  const cLo = cosEnd(lo);
+  const cHi = qcmp(lo, hi) === 0 ? cLo : cosEnd(hi);
+  if (!cLo || !cHi) return null;
+  const even = i % 2n === 0n;
+  if (j <= i + 1n) return even ? [cHi[0], cLo[1]] : [cLo[0], cHi[1]];
+  if (j === i + 2n) return even ? [QM1, qmax(cLo[1], cHi[1])] : [qmin(cLo[0], cHi[0]), Q1];
+  return [QM1, Q1];
+}
+
 // ============================================================ interval evaluation of a tape
 
 const BITS_LIMIT = 65536;
@@ -684,6 +793,126 @@ export class Tape {
 
 const MAX_WAYS = 4096;
 
+// The nodes a node other than a pick reads.
+function nodeArgs(nd) {
+  switch (nd[0]) {
+    case 'add': case 'mul': case 'min': case 'max': return nd[1];
+    case 'neg': case 'abs': case 'sqrt': case 'ln': case 'exp': case 'cos': case 'pow': return [nd[1]];
+    case 'div': return [nd[1], nd[2]];
+    default: return [];
+  }
+}
+
+// The enclosure of node i, a node other than a pick, on a box, or null when it has none there.
+// get(j) is the enclosure of node j, or null.
+function nodeEnc(tape, i, nd, box, get) {
+  let r = null;
+  switch (nd[0]) {
+    case 'c': {
+      const q = tape.cq.get(i) ?? parseFileNumber(nd[1]);
+      r = [q, q];
+      break;
+    }
+    case 's': r = box[nd[1]]; break;
+    case 'pi': r = piEnc(); break;
+    case 'add': {
+      let lo = Q0, hi = Q0, ok = true;
+      for (const j of nd[1]) {
+        const v = get(j);
+        if (!v) { ok = false; break; }
+        lo = qadd(lo, v[0]); hi = qadd(hi, v[1]);
+      }
+      r = ok ? [lo, hi] : null;
+      break;
+    }
+    case 'mul': {
+      let acc = [Q1, Q1];
+      for (const j of nd[1]) {
+        const v = get(j);
+        if (!v) { acc = null; break; }
+        acc = imul(acc, v);
+        if (tooBig(acc[0]) || tooBig(acc[1])) { acc = null; break; }
+      }
+      r = acc;
+      break;
+    }
+    case 'min': case 'max': {
+      let acc = null, ok = true;
+      for (const j of nd[1]) {
+        const v = get(j);
+        if (!v) { ok = false; break; }
+        if (!acc) acc = v;
+        else if (nd[0] === 'min') acc = [qmin(acc[0], v[0]), qmin(acc[1], v[1])];
+        else acc = [qmax(acc[0], v[0]), qmax(acc[1], v[1])];
+      }
+      r = ok ? acc : null;
+      break;
+    }
+    case 'neg': { const v = get(nd[1]); r = v ? [qneg(v[1]), qneg(v[0])] : null; break; }
+    case 'abs': {
+      const v = get(nd[1]);
+      if (!v) break;
+      if (v[0].n >= 0n) r = v;
+      else if (v[1].n <= 0n) r = [qneg(v[1]), qneg(v[0])];
+      else r = [Q0, qmax(qneg(v[0]), v[1])];
+      break;
+    }
+    case 'sqrt': {
+      const v = get(nd[1]);
+      if (!v || v[0].n < 0n) break;
+      // format.md, Tapes: the root of a point that is the square of a fraction is that fraction,
+      // and only a point is taken so.
+      if (qcmp(v[0], v[1]) === 0) {
+        const e = sqrtExact(v[0]);
+        if (e) { r = [e, e]; break; }
+      }
+      r = [sqrtEnc(v[0])[0], sqrtEnc(v[1])[1]];
+      break;
+    }
+    case 'ln': {
+      const v = get(nd[1]);
+      if (!v || v[0].n <= 0n) break;
+      r = [lnEnc(v[0])[0], lnEnc(v[1])[1]];
+      break;
+    }
+    case 'exp': {
+      const v = get(nd[1]);
+      if (!v || qcmp(qabs(v[0]), EXP_LIMIT) > 0 || qcmp(qabs(v[1]), EXP_LIMIT) > 0) break;
+      if (v[1].n > 0n && Number(v[1].n / v[1].d) * 1.4427 > BITS_LIMIT) break;
+      r = [expEnc(v[0])[0], expEnc(v[1])[1]];
+      break;
+    }
+    case 'cos': {
+      const v = get(nd[1]);
+      if (!v) break;
+      r = cosEnc(v);
+      break;
+    }
+    case 'div': {
+      const a = get(nd[1]);
+      if (!a) break;
+      const b = get(nd[2]);
+      if (!b) break;
+      r = idiv(a, b);
+      break;
+    }
+    case 'pow': {
+      const v = get(nd[1]);
+      if (!v) break;
+      const k = nd[2];
+      if (k >= 0) r = ipow(v, k);
+      else {
+        const p = ipow(v, -k);
+        r = p ? idiv([Q1, Q1], p) : null;
+      }
+      break;
+    }
+    default: r = null;
+  }
+  if (r && (tooBig(r[0]) || tooBig(r[1]))) r = null;
+  return r;
+}
+
 // Returns ev(i) -> [lo, hi] or null (no value on the box), memoized and lazy.
 export function evaluator(tape, box) {
   const memo = new Array(tape.nodes.length);
@@ -691,98 +920,7 @@ export function evaluator(tape, box) {
     const m = memo[i];
     if (m !== undefined) return m;
     const nd = tape.nodes[i];
-    let r = null;
-    switch (nd[0]) {
-      case 'c': {
-        const q = tape.cq.get(i) ?? parseFileNumber(nd[1]);
-        r = [q, q];
-        break;
-      }
-      case 's': r = box[nd[1]]; break;
-      case 'pi': r = piEnc(); break;
-      case 'add': {
-        let lo = Q0, hi = Q0, ok = true;
-        for (const j of nd[1]) {
-          const v = ev(j);
-          if (!v) { ok = false; break; }
-          lo = qadd(lo, v[0]); hi = qadd(hi, v[1]);
-        }
-        r = ok ? [lo, hi] : null;
-        break;
-      }
-      case 'mul': {
-        let acc = [Q1, Q1];
-        for (const j of nd[1]) {
-          const v = ev(j);
-          if (!v) { acc = null; break; }
-          acc = imul(acc, v);
-          if (tooBig(acc[0]) || tooBig(acc[1])) { acc = null; break; }
-        }
-        r = acc;
-        break;
-      }
-      case 'min': case 'max': {
-        let acc = null, ok = true;
-        for (const j of nd[1]) {
-          const v = ev(j);
-          if (!v) { ok = false; break; }
-          if (!acc) acc = v;
-          else if (nd[0] === 'min') acc = [qmin(acc[0], v[0]), qmin(acc[1], v[1])];
-          else acc = [qmax(acc[0], v[0]), qmax(acc[1], v[1])];
-        }
-        r = ok ? acc : null;
-        break;
-      }
-      case 'neg': { const v = ev(nd[1]); r = v ? [qneg(v[1]), qneg(v[0])] : null; break; }
-      case 'abs': {
-        const v = ev(nd[1]);
-        if (!v) break;
-        if (v[0].n >= 0n) r = v;
-        else if (v[1].n <= 0n) r = [qneg(v[1]), qneg(v[0])];
-        else r = [Q0, qmax(qneg(v[0]), v[1])];
-        break;
-      }
-      case 'sqrt': {
-        const v = ev(nd[1]);
-        if (!v || v[0].n < 0n) break;
-        r = [sqrtEnc(v[0])[0], sqrtEnc(v[1])[1]];
-        break;
-      }
-      case 'ln': {
-        const v = ev(nd[1]);
-        if (!v || v[0].n <= 0n) break;
-        r = [lnEnc(v[0])[0], lnEnc(v[1])[1]];
-        break;
-      }
-      case 'exp': {
-        const v = ev(nd[1]);
-        if (!v || qcmp(qabs(v[0]), EXP_LIMIT) > 0 || qcmp(qabs(v[1]), EXP_LIMIT) > 0) break;
-        if (v[1].n > 0n && Number(v[1].n / v[1].d) * 1.4427 > BITS_LIMIT) break;
-        r = [expEnc(v[0])[0], expEnc(v[1])[1]];
-        break;
-      }
-      case 'div': {
-        const a = ev(nd[1]);
-        if (!a) break;
-        const b = ev(nd[2]);
-        if (!b) break;
-        r = idiv(a, b);
-        break;
-      }
-      case 'pow': {
-        const v = ev(nd[1]);
-        if (!v) break;
-        const k = nd[2];
-        if (k >= 0) r = ipow(v, k);
-        else {
-          const p = ipow(v, -k);
-          r = p ? idiv([Q1, Q1], p) : null;
-        }
-        break;
-      }
-      case 'pick': r = evalPick(nd[1], ev); break;
-      default: r = null;
-    }
+    let r = nd[0] === 'pick' ? evalPick(nd[1], ev) : nodeEnc(tape, i, nd, box, ev);
     if (r && (tooBig(r[0]) || tooBig(r[1]))) r = null;
     memo[i] = r;
     return r;
@@ -790,7 +928,8 @@ export function evaluator(tape, box) {
   return ev;
 }
 
-function evalPick(cases, ev) {
+// The nodes that the conditions of a pick compare, and its pairs, each pair once.
+function pickPairs(cases) {
   const pairs = new Map();
   const compared = new Set();
   const walk = (c) => {
@@ -805,11 +944,15 @@ function evalPick(cases, ev) {
     else for (const x of c[1]) walk(x);
   };
   for (const [c] of cases) walk(c);
-  for (const k of compared) if (!ev(k)) return null;
-  const plist = [...pairs.values()];
+  return { compared, plist: [...pairs.values()] };
+}
+
+// Each way of taking one order for each pair that the enclosures leave possible, as the index of
+// the first case that holds in it, or -1 where none holds; null with more than 4,096 ways.
+function pickWays(cases, plist, enc) {
   const pidx = new Map(plist.map(([a, b], k) => [`${a},${b}`, k]));
   const opts = plist.map(([a, b]) => {
-    const A = ev(a), B = ev(b);
+    const A = enc(a), B = enc(b);
     const o = [];
     if (qcmp(A[0], B[1]) < 0) o.push(-1);
     if (qcmp(A[0], B[1]) <= 0 && qcmp(B[0], A[1]) <= 0) o.push(0);
@@ -835,23 +978,89 @@ function evalPick(cases, ev) {
       default: return false;
     }
   };
-  const firsts = new Set();
+  const firsts = [];
   for (let w = 0; w < ways; w++) {
     let x = w;
     for (let k = 0; k < plist.length; k++) { choice[k] = x % opts[k].length; x = Math.floor(x / opts[k].length); }
     let f = -1;
     for (let ci = 0; ci < cases.length; ci++) if (holds(cases[ci][0])) { f = ci; break; }
-    if (f < 0) return null;
-    firsts.add(f);
+    firsts.push(f);
   }
+  return firsts;
+}
+
+function evalPick(cases, ev) {
+  const { compared, plist } = pickPairs(cases);
+  for (const k of compared) if (!ev(k)) return null;
+  const firsts = pickWays(cases, plist, ev);
+  if (!firsts || firsts.includes(-1)) return null;
   let lo = null, hi = null;
-  for (const f of [...firsts].sort((a, b) => a - b)) {
+  for (const f of [...new Set(firsts)].sort((a, b) => a - b)) {
     const v = ev(cases[f][1]);
     if (!v) return null;
     lo = lo === null ? v[0] : qmin(lo, v[0]);
     hi = hi === null ? v[1] : qmax(hi, v[1]);
   }
   return [lo, hi];
+}
+
+// format.md, The rules, items 5 and 6: on a line the card waives, an open cell asks whether its
+// rule says nothing at any point of the box. The walk goes over the whole box as a proof walks one
+// leaf. A node is NOWHERE when it has no value at any point of the box, SOME when it has no
+// enclosure on the box but may have a value at some point, and otherwise its enclosure. A node
+// other than a pick is NOWHERE when it reads a node that is NOWHERE. A pick is NOWHERE when a node
+// it compares is, or when every node it compares has an enclosure and, in every way, no case holds
+// or the first that holds is NOWHERE. A pick of more than 4,096 ways may have a value.
+const NOWHERE = 'nowhere', SOME = 'some';
+export function walker(tape, box) {
+  const memo = new Array(tape.nodes.length);
+  const W = (i) => {
+    if (memo[i] !== undefined) return memo[i];
+    const nd = tape.nodes[i];
+    let r;
+    if (nd[0] === 'pick') r = walkPick(nd[1], W);
+    else {
+      let nowhere = false, some = false;
+      for (const j of nodeArgs(nd)) { const w = W(j); if (w === NOWHERE) nowhere = true; else if (w === SOME) some = true; }
+      if (nowhere) r = NOWHERE;
+      else if (some) r = SOME;
+      else r = nodeEnc(tape, i, nd, box, W) ?? SOME;
+    }
+    memo[i] = r;
+    return r;
+  };
+  return W;
+}
+function walkPick(cases, W) {
+  const { compared, plist } = pickPairs(cases);
+  const ws = [...compared].map(W);
+  if (ws.includes(NOWHERE)) return NOWHERE;
+  if (ws.includes(SOME)) return SOME;
+  const firsts = pickWays(cases, plist, W);
+  if (!firsts) return SOME;
+  let any = false, all = true, lo = null, hi = null;
+  for (const f of new Set(firsts)) {
+    if (f < 0) { all = false; continue; }
+    const v = W(cases[f][1]);
+    if (v === NOWHERE) { all = false; continue; }
+    any = true;
+    if (v === SOME) { all = false; continue; }
+    lo = lo === null ? v[0] : qmin(lo, v[0]);
+    hi = hi === null ? v[1] : qmax(hi, v[1]);
+  }
+  if (!any) return NOWHERE;
+  return all ? [lo, hi] : SOME;
+}
+const fullBox = (tape) => tape.inputs.map((inp) => [inp.lo, inp.hi]);
+// Item 6: the root has no value at any point of the box.
+export function saysNothing(tape) {
+  return walker(tape, fullBox(tape))(tape.roots[0]) === NOWHERE;
+}
+// Item 5: the `where` holds nowhere in the box: a root of its tape has a lower end above zero over
+// the whole box, or has no value anywhere in it.
+export function holdsNowhere(tape) {
+  const W = walker(tape, fullBox(tape));
+  return tape.roots.some((r) => { const v = W(r); return v === NOWHERE || (Array.isArray(v) && v[0].n > 0n); });
 }
 
 const MAX_PARTITION_DEPTH = 64;
@@ -1000,7 +1209,9 @@ function checkExpr0(e, sc) {
     }
     case 'neg': case 'abs': { const a = one(); return { dim: a.dim, depth: 1 + a.depth }; }
     case 'sqrt': { const a = one(); return { dim: dpow(a.dim, R(1n, 2n)), depth: 1 + a.depth }; }
-    case 'exp': case 'ln': {
+    // deck.md, Expressions: the argument of exp, ln and cos is a plain number, and so is the
+    // value. A deck that takes the cosine of a length is refused.
+    case 'exp': case 'ln': case 'cos': {
       const a = one();
       if (!deq(a.dim, DL)) throw DE(`the argument of ${op} is not a plain number`);
       return { dim: DL, depth: 1 + a.depth };
@@ -1519,7 +1730,7 @@ function checkNeeds(T, types) {
           return { dim: ddiv(a.dim, bd) };
         }
         default:
-          throw DE(`${what}: ${short(e[0])} is not in a need: a need has no root, logarithm, power, least, greatest, absolute value, pi, load, row, case or key`);
+          throw DE(`${what}: ${short(e[0])} is not in a need: a need has no root, logarithm, exponential, cosine, power, least, greatest, absolute value, pi, load, row, case or key`);
       }
     };
     const L = side(sides[0]), Rr = side(sides[1]);
@@ -1778,6 +1989,7 @@ function loadRule(r, deck) {
     checkPartCond(r.requires, T, deck.types, ruleReads);
     requires = r.requires;
   }
+  if (form !== 'requires') checkMayBe({ sides, where, lets }, deck, T, fieldOf);
   const slash = r.id.lastIndexOf('/');
   // For the steps of the cells (format.md, Steps): the weight of the rule, the size of its
   // `when` and of its `requires`, the loads it reads and the fields it reads.
@@ -1795,6 +2007,102 @@ function loadRule(r, deck) {
     weight, whenSize: condSize(when), requiresSize: condSize(requires),
     fieldsRead: ruleReads.own.size + ruleReads.joined.size,
   };
+}
+
+// format.md, rules.json, "A rule with no value where a field says it may be", and deck.md, "A
+// quantity at or under zero". Once a rule's nodes are written, a `div` whose divisor stands for a
+// field or a load that says `may_be`, a `sqrt` of one that says `"may_be": "negative"`, and an `ln`
+// of either are refused. A node stands for a field when it is the field's input, a `pow` other
+// than the 0th of a node that stands for it, or a `sqrt` of one; an even `pow` of a field that may
+// be under zero stands for one that may be zero. A name of `let` and an input of a row are the
+// node they are bound to. No other node stands for a field. The nodes are those the sides and the
+// `where` read, as writeTape writes them, so a name of `let` that neither reads is not looked into
+// (AMBIGUITIES.md, K4). A stand is null or {name, kind}, kind being "zero" or "negative".
+function checkMayBe(rule, deck, T, fieldOf) {
+  const refuse = (what, s) => {
+    const may = s.kind === 'zero' ? 'may be zero' : 'may be under zero';
+    throw DE(`the rule ${what} ${s.name}, which ${may}: at such a value the rule says nothing, so a part there could not be checked`);
+  };
+  const root = (s) => { if (s && s.kind === 'negative') refuse('takes the root of', s); return s; };
+  const logOf = (s) => { if (s) refuse('takes the logarithm of', s); };
+  const divBy = (s) => { if (s) refuse('divides by', s); };
+  const powOf = (s, k) => (s && k % 2n === 0n && s.kind === 'negative' ? { name: s.name, kind: 'zero' } : s);
+  const cond = (c, name) => {
+    if (c[0] === 'and' || c[0] === 'or' || c[0] === 'not') { for (let i = 1; i < c.length; i++) cond(c[i], name); return; }
+    walk(c[1], name); walk(c[2], name);
+  };
+  // A row that gives a name, applied: the quantities it binds are written for its conditions.
+  const nameRow = (N, b, name) => { for (const [nm] of N.inputs) walk(b[nm], name); };
+  const rowApp = (row, b, name) => {
+    const memo = new Map();
+    const qin = (nm) => { if (!memo.has(nm)) memo.set(nm, walk(b[nm], name)); return memo.get(nm); };
+    if (row.kind === 'is') return walk(row.is, qin);
+    if (row.kind === 'cases') {
+      const vals = row.cases.map((cs) => { if (cs.when !== undefined) cond(cs.when, qin); return walk(cs.is, qin); });
+      // One case that holds otherwise, standing first, is its own node and no pick.
+      return row.cases[0].when === undefined ? vals[0] : null;
+    }
+    for (const side of [row.table.down, row.table.across]) {
+      if (!side) continue;
+      if (side.kind !== 'key') qin(side.by);
+      else if (Array.isArray(b[side.by]) && b[side.by][0] === 'row') nameRow(deck.rows.get(b[side.by][1]), b[side.by][2], name);
+    }
+    return null;
+  };
+  const walk = (e, name) => {
+    if (isStr(e)) return e === 'pi' || looksNumeric(e) ? null : name(e);
+    const W = (a) => walk(a, name);
+    switch (e[0]) {
+      case 'q': return null;
+      case 'load': { const L = T.loads.get(e[1]); return L.mayBe ? { name: `the load ${e[1]}`, kind: L.mayBe } : null; }
+      case 'add': case 'mul': case 'min': case 'max': for (let i = 1; i < e.length; i++) W(e[i]); return null;
+      case 'sub': W(e[1]); W(e[2]); return null;
+      case 'neg': case 'abs': case 'exp': case 'cos': W(e[1]); return null;
+      case 'sqrt': return root(W(e[1]));
+      case 'ln': logOf(W(e[1])); return null;
+      case 'div': W(e[1]); divBy(W(e[2])); return null;
+      case 'pow': {
+        const b = W(e[1]);
+        const x = e[2];
+        if (isStr(x) && looksNumeric(x)) {
+          const n = parseNumberAlone(x);
+          const twice = qmul(n, R(2n));
+          if (twice.d === 1n) {
+            // As writeTape writes it: a whole power is a pow, a half power a pow of a sqrt, and a
+            // power of 0 or below 1 over the power.
+            const tw = absB(twice.n);
+            const node = tw % 2n === 0n ? (tw === 0n ? null : powOf(b, tw / 2n)) : powOf(root(b), tw);
+            if (n.n <= 0n) { divBy(node); return null; }
+            return node;
+          }
+          logOf(b); // any other power is exp of the exponent times ln
+          return null;
+        }
+        W(x);
+        logOf(b);
+        return null;
+      }
+      case 'row': return rowApp(deck.rows.get(e[1]), e[2], name);
+      case 'case': {
+        nameRow(deck.rows.get(e[1][1]), e[1][2], name);
+        for (const k of Object.keys(e[2])) W(e[2][k]);
+        return null;
+      }
+    }
+    throw new Error(`unexpected operator ${e[0]}`);
+  };
+  const letMemo = new Map();
+  const ruleName = (nm) => {
+    if (Object.hasOwn(rule.lets, nm)) {
+      if (!letMemo.has(nm)) letMemo.set(nm, walk(rule.lets[nm], ruleName));
+      return letMemo.get(nm);
+    }
+    const fd = fieldOf(nm);
+    return fd.f.mayBe ? { name: nm, kind: fd.f.mayBe } : null;
+  };
+  walk(rule.sides[0], ruleName);
+  walk(rule.sides[1], ruleName);
+  if (rule.where) for (const w of rule.where) { walk(w[0], ruleName); walk(w[1], ruleName); }
 }
 
 // The keys a condition names, in the order it names them and each once.
@@ -1832,7 +2140,7 @@ function stepWeight(e, deck, inBody) {
       for (let i = 1; i < e.length; i++) s += W(e[i]);
       return s;
     }
-    case 'neg': case 'abs': case 'sqrt': case 'exp': case 'ln': return 2 + W(e[1]);
+    case 'neg': case 'abs': case 'sqrt': case 'exp': case 'ln': case 'cos': return 2 + W(e[1]);
     case 'div': return 3 + W(e[1]) + W(e[2]);
     case 'sub': return 5 + W(e[1]) + W(e[2]);
     case 'pow': {
@@ -2628,7 +2936,7 @@ export function verifyTexts(texts, opts = {}) {
         case 'add': case 'mul': case 'min': case 'max': return t.add([e[0], e.slice(1).map(sub)]);
         case 'sub': { const a = sub(e[1]), b = sub(e[2]); return t.add(['add', [a, t.add(['neg', b])]]); }
         case 'div': { const a = sub(e[1]), b = sub(e[2]); return t.add(['div', a, b]); }
-        case 'neg': case 'abs': case 'sqrt': case 'exp': case 'ln': return t.add([e[0], sub(e[1])]);
+        case 'neg': case 'abs': case 'sqrt': case 'exp': case 'ln': case 'cos': return t.add([e[0], sub(e[1])]);
         case 'pow': {
           const b = sub(e[1]);
           const x = e[2];
@@ -2795,15 +3103,25 @@ export function verifyTexts(texts, opts = {}) {
     };
     if (which === 'where') {
       for (const w of rule.where) { const l = expr(w[0]), r = expr(w[1]); t.roots.push(t.add(['add', [l, t.add(['neg', r])]])); }
-    } else if (rule.form === 'le') {
+      return t;
+    }
+    let root;
+    if (rule.form === 'le') {
       const l = expr(rule.sides[0]), r = expr(rule.sides[1]);
-      t.roots.push(t.add(['add', [l, t.add(['neg', r])]]));
+      root = t.add(['add', [l, t.add(['neg', r])]]);
     } else {
       // format.md, Cells 6: for `lt` the root is the pick [[lt L R] -1] [null 1].
       const l = expr(rule.sides[0]), r = expr(rule.sides[1]);
       const M = t.c(R(-1n)), P = t.c(Q1);
-      t.roots.push(t.add(['pick', [[['lt', l, r], M], [null, P]]]));
+      root = t.add(['pick', [[['lt', l, r], M], [null, P]]]);
     }
+    if (which === 'within') {
+      // format.md, Cells 5: the rule's tape inside its range, whose root is a pick: the rule's
+      // root where every item of `where` holds, and -1 where one does not.
+      const conds = rule.where.map((w) => ['le', expr(w[0]), expr(w[1])]);
+      root = t.add(['pick', [[conds.length === 1 ? conds[0] : ['and', conds], root], [null, t.c(R(-1n))]]]);
+    }
+    t.roots.push(root);
     return t;
   };
 
@@ -2828,20 +3146,24 @@ export function verifyTexts(texts, opts = {}) {
     } catch (e) { if (e instanceof CannotWrite) return { why: e.message }; throw e; }
   };
 
-  // The cells of one rule that answers for a part, into `out`.
-  const ruleCells = (rule, part, line, out) => {
-    const cell = (entry, state, reason) => out.push({ subject: part.name, mechanism: line.mechanism, entry, state, reason });
+  // The cells of one rule that answers for a part, into `out`. An open cell carries `rest`, true
+  // when no inequality could answer it (format.md, Cells 1), which a waiver may then rest. On a
+  // line the card waives (`waived`), the walks of items 5 and 6 decide it for an open cell whose
+  // rule could say something.
+  const ruleCells = (rule, part, line, out, waived) => {
+    const cell = (entry, state, reason, rest = false) => out.push({ subject: part.name, mechanism: line.mechanism, entry, state, reason, rest });
     // Cells 3 and Steps item 2: a rule that reads a field the part leaves unstated gives only
-    // open cells.
+    // open cells. A waiver rests them when every unstated field the rule reads is a key.
     if (part.hasUnstated) {
       charge(rule.fieldsRead);
       const u = firstUnstated(rule, part);
       if (u !== undefined) {
         const why = `${unstatedName(part, u)} is unstated: its maker states none, and the rule reads it`;
-        if (rule.form === 'requires' || rule.reads.loads.size === 0 || loadCases.length === 0) cell(rule.tail, 'open', why);
+        const rest = [...rule.reads.own, ...rule.reads.joined].every((ref) => !isUnstated(part, ref) || valueOf(part, ref).kind === 'k');
+        if (rule.form === 'requires' || rule.reads.loads.size === 0 || loadCases.length === 0) cell(rule.tail, 'open', why, rest);
         else {
           charge(loadCases.length);
-          for (const cs of loadCases) cell(`${rule.tail}/${cs}`, 'open', why);
+          for (const cs of loadCases) cell(`${rule.tail}/${cs}`, 'open', why, rest);
         }
         return;
       }
@@ -2867,32 +3189,48 @@ export function verifyTexts(texts, opts = {}) {
       charge(rule.where !== undefined ? 2 * rule.weight : rule.weight);
       const entry = cs === null ? rule.tail : `${rule.tail}/${cs}`;
       if (rule.where !== undefined) {
+        // Cells 5 and 7: a range that cannot be written leaves the cell open, and no inequality
+        // could answer it.
         const w = tryWrite(rule, part, cs, 'where');
+        if (!w.tape) { cell(entry, 'open', `the range cannot be written: ${w.why}`, true); return; }
         let ok = false;
-        if (w.tape) for (const h of hintsFor(part.name, line.mechanism, `${entry}/where`)) if (Object.hasOwn(h, 'partition') && proves(w.tape, h.partition)) { ok = true; break; }
-        if (!ok) { cell(entry, 'open', w.tape ? 'the rule\'s range (where) is not proved' : `the range cannot be written: ${w.why}`); return; }
+        for (const h of hintsFor(part.name, line.mechanism, `${entry}/where`)) if (Object.hasOwn(h, 'partition') && proves(w.tape, h.partition)) { ok = true; break; }
+        if (!ok) {
+          // Cells 5: no `/where` cell. Inside its range a point may still refute the rule: the
+          // points of the hints with the cell's entry, and none of their partitions, are tried on
+          // the rule's tape inside its range, which Steps counts in place of the rule's own.
+          const wi = tryWrite(rule, part, cs, 'within');
+          if (!wi.tape) { cell(entry, 'open', `the tape cannot be written: ${wi.why}`, true); return; }
+          for (const h of hintsFor(part.name, line.mechanism, entry)) if (Object.hasOwn(h, 'point') && refutes(wi.tape, h.point)) { cell(entry, 'refuted'); return; }
+          // On a waived line: a waiver rests the cell when the `where` holds nowhere in the box.
+          cell(entry, 'open', 'the rule\'s range (where) is not proved, and no point of a hint inside it refutes the rule', waived && holdsNowhere(w.tape));
+          return;
+        }
         cell(`${entry}/where`, 'proved');
       }
       const w = tryWrite(rule, part, cs, 'le');
-      if (!w.tape) { cell(entry, 'open', `the tape cannot be written: ${w.why}`); return; }
+      if (!w.tape) { cell(entry, 'open', `the tape cannot be written: ${w.why}`, true); return; }
       let state = null;
       for (const h of hintsFor(part.name, line.mechanism, entry)) {
         if (Object.hasOwn(h, 'partition') && proves(w.tape, h.partition)) { state = 'proved'; break; }
         if (Object.hasOwn(h, 'point') && refutes(w.tape, h.point)) { state = 'refuted'; break; }
       }
       if (state) cell(entry, state);
-      else cell(entry, 'open', 'no hint proves or refutes it');
+      // Cells 6: on a waived line, a waiver rests the cell when its root has no value anywhere.
+      else cell(entry, 'open', 'no hint proves or refutes it', waived && saysNothing(w.tape));
     };
     const ls = [...rule.reads.loads];
     if (!ls.length) { settle(null); return; }
-    if (!loadCases.length) { cell(rule.tail, 'open', 'the card has no load case, and the rule reads a load'); return; }
+    // Cells 4: a card with no load case, or a case that leaves out a load the rule reads, leaves
+    // a cell open that no inequality could answer.
+    if (!loadCases.length) { cell(rule.tail, 'open', 'the card has no load case, and the rule reads a load', true); return; }
     // Steps item 2: every load case of the card times every load the rule reads.
     charge(loadCases.length * ls.length);
     for (const cs of loadCases) {
       const missing = ls.filter((l) => !putsLoad(cs, part.name, l));
       if (missing.length) {
         const named = missing.slice(0, 4).join(', ') + (missing.length > 4 ? ` and ${missing.length - 4} more` : '');
-        cell(`${rule.tail}/${cs}`, 'open', `the case ${cs} puts no ${named} on ${part.name}, which the rule reads`);
+        cell(`${rule.tail}/${cs}`, 'open', `the case ${cs} puts no ${named} on ${part.name}, which the rule reads`, true);
       } else settle(cs);
     }
   };
@@ -2927,8 +3265,10 @@ export function verifyTexts(texts, opts = {}) {
         const lineRules = rulesOfLine.get(`${part.type.name}\u0000${line.mechanism}`) ?? [];
         // Steps item 1: the line and every rule of the line, in one charge, whatever the waivers.
         charge(1 + line.unlessSize + lineRules.reduce((n, r) => n + ruleCharge(r), 0));
+        const w = waiverOf.get(`${part.name}\u0000${line.mechanism}`);
         const out = [];
-        const lineCell = (state, reason) => out.push({ subject: part.name, mechanism: line.mechanism, entry: '', state, reason });
+        // The cells of items 2 and 3 that no rule gives: no inequality could answer an open one.
+        const lineCell = (state, reason) => out.push({ subject: part.name, mechanism: line.mechanism, entry: '', state, reason, rest: true });
         const u = line.unless;
         if (u && u.when === undefined) lineCell('not_applicable', u.why);
         else if (u && condUnstated(u.keys, part) !== undefined) {
@@ -2937,15 +3277,17 @@ export function verifyTexts(texts, opts = {}) {
         else {
           const rules = lineRules.filter((r) => answers(r, part));
           if (!rules.length) lineCell('open', lineRules.length ? 'the deck has no rule for it that holds for a part like this one' : 'the deck has no rule for it');
-          else for (const rule of rules) ruleCells(rule, part, line, out);
+          else for (const rule of rules) ruleCells(rule, part, line, out, !!w);
         }
-        // Cells 1: a waiver rests each cell of its line that would be open, and no other.
-        const w = waiverOf.get(`${part.name}\u0000${line.mechanism}`);
+        // Cells 1: a waiver rests each cell of its line that would be open and that no inequality
+        // could answer, and no other. Every other open cell of the line stays open, and says so.
         for (const c of out) {
           if (w && c.state === 'open') {
-            c.state = 'waived';
-            c.reason = `open but for the waiver: ${c.reason ?? ''}`;
-            if (!usedWaivers.includes(w)) usedWaivers.push(w);
+            if (c.rest) {
+              c.state = 'waived';
+              c.reason = `open but for the waiver: ${c.reason ?? ''}`;
+              if (!usedWaivers.includes(w)) usedWaivers.push(w);
+            } else c.reason = `the waiver rests no cell that an inequality could answer: ${c.reason ?? ''}`;
           }
           push(c);
         }
