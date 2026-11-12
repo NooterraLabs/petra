@@ -63,12 +63,13 @@ CACHEABLE = {"tools/list": 3_600_000, "server/discover": 3_600_000}
 the server runs, and a new version of Petra starts a new server."""
 
 INSTRUCTIONS = """Petra checks a physical design against the claims and loads written in it, and answers \
-PASS, FAIL, UNKNOWN or MARGINAL with a certificate. Its main deck is steel connections to AISC 360-22, \
+PASS, FAIL, UNKNOWN or MARGINAL with a certificate, or PASS_WAIVED for a design of a deck's parts that \
+passes with a cell resting on a waiver. Its main deck is steel connections to AISC 360-22, \
 in kips and inches. To design one: call `kinds` to see what Petra can check, `new` with a kind for a \
 complete design to edit, then `check` with the edited text. On a FAIL, the check's repair names the \
 input that lowers the governing check most, the way to move it, and a value at which that check holds. \
 Change design lines only: the loads and claims belong to their signer. Report PASS only when `check` \
-returns PASS. The `docs` tool with name `skill` prints the full guide."""
+returns PASS, and PASS_WAIVED as a pass that rests on the waivers it lists. The `docs` tool with name `skill` prints the full guide."""
 
 
 class ToolError(Exception):
@@ -196,6 +197,7 @@ def _schema(properties: Mapping[str, str], required: tuple[str, ...] = ()) -> di
 
 TOOLS: Mapping[str, tuple[str, dict[str, Any], Callable[[Mapping[str, Any]], Result]]] = {
     "check": ("Check a design against the card it answers and return its verdict: PASS, FAIL, UNKNOWN or MARGINAL, "
+              "or for a design of a deck's parts PASS_WAIVED when it passes and a cell rests on a waiver, "
               "the governing checks with demand, capacity and utilisation, and every obligation. The card holds what "
               "was asked: the loads, the signed bounds, the claims and the waivers. The design holds the components "
               "and cannot change the card. On a FAIL, the repair lists the moves that lower the governing check, best "

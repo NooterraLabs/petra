@@ -345,11 +345,14 @@ class AWaiverRestsWhatIsOpen(unittest.TestCase):
             self.assertEqual(said["counts"]["waived"], 2)
 
     def test_the_verdict_when_every_open_cell_is_waived(self):
-        """PASS when something is proved and nothing refuted. UNKNOWN when nothing is proved: waived is a state of its own, and is never counted as proved."""
+        """PASS when something is proved and nothing refuted, which `petra check` calls PASS_WAIVED, and the kernel PASS with the waivers
+        listed. UNKNOWN when nothing is proved: waived is a state of its own, and is never counted as proved."""
         calm = load("calm", "p pull in [0 N, 30 N]")
         passing = dict(w="10 mm", grade="b", cap="100 N")
         found, verdict, said = cells(self, JOINTS, *joint(cases=calm, **{**passing, "w": "8 mm"}))
-        self.assertEqual((verdict, sorted(set(found.values()))), ("PASS", ["not_applicable", "proved", "waived"]))
+        self.assertEqual((verdict, sorted(set(found.values()))), ("PASS_WAIVED", ["not_applicable", "proved", "waived"]))
+        if verify.binary():
+            self.assertEqual((said["verdict"], [w["mechanism"] for w in said["waived"]]), ("PASS", ["j.none", "j.table"]))
         found, verdict, _ = cells(self, JOINTS, *joint(["j.size", "j.pull", "j.range", "j.table", "j.grade", "j.two", "j.rated"], cases=calm, **{**passing, "w": "8 mm"}))
         self.assertEqual((verdict, found["p", "j.none", ""]), ("UNKNOWN", "open"), "one open cell that no waiver rests")
         nothing = made_up([JOINT], [asks("j.none", "joint"), asks("j.pull", "joint")], [rule("pull", "joint", "j.pull", le=[["load", "pull"], "cap"])])

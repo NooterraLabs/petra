@@ -1337,7 +1337,8 @@ class Cell:
     point of a refuted one. `ratio` is the most the left side of the rule reaches over the
     least the right side does, when both are known and the right side is above zero.
     `waivable` says that a waiver of the line may rest the cell while it is open: no
-    inequality could answer it."""
+    inequality could answer it. `waiver` is who signed the waiver a waived cell rests on,
+    and why."""
 
     subject: str
     mechanism: str
@@ -1350,6 +1351,7 @@ class Cell:
     ratio: float | None = None
     proof: Mapping[str, Any] = field(default_factory=dict)
     waivable: bool = False
+    waiver: tuple[str, str] | None = None
 
     @property
     def body(self) -> dict[str, Any]:
@@ -1564,7 +1566,7 @@ def cells(design: Design, deck: Deck, found: Parts) -> list[Cell]:
                     line.append(Cell(part.name, ask.mechanism, "", "open", ask.what, anchor,
                                      f"the deck has no rule for it{' on a part like this one' if any(r.mechanism == ask.mechanism for r in deck.rules) else ''}", waivable=True))
             w = waived.get((part.name, ask.mechanism))
-            out += line if w is None else [c if c.state != "open" else replace(c, state="waived", why=f"by {w.owner}: {w.reason}; {WAIVED}{c.why}") if c.waivable
+            out += line if w is None else [c if c.state != "open" else replace(c, state="waived", why=f"by {w.owner}: {w.reason}; {WAIVED}{c.why}", waiver=(w.owner, w.reason)) if c.waivable
                                            else replace(c, why=f"{UNRESTED}{c.why}") for c in line]
     return out + _unread(deck, found)
 
@@ -1612,9 +1614,15 @@ def bundle(design: Design, deck: Deck, answers: list[Cell] | None = None) -> dic
 
 
 def verdict(answers: list[Cell]) -> str:
-    """FAIL with a refuted cell, UNKNOWN with an open cell or with nothing proved, else PASS."""
+    """The kernel's verdict: FAIL with a refuted cell, UNKNOWN with an open cell or with nothing proved, else PASS."""
     states = {c.state for c in answers}
     return "FAIL" if "refuted" in states else "UNKNOWN" if "open" in states or "proved" not in states else "PASS"
+
+
+PASS_WAIVED = "PASS_WAIVED"
+"""What `petra check` says of a design whose verdict is PASS and a cell of which rests on a
+waiver: it passes what the deck could check, and the ones who signed the waivers answer for
+the rest. The kernel says PASS and lists the waivers."""
 
 
 @dataclass(frozen=True)
@@ -1627,15 +1635,29 @@ class Report:
     cells: tuple[Cell, ...]
 
     @property
-    def status(self) -> str:
+    def verdict(self) -> str:
+        """The verdict as the kernel gives it, which the two readings are held to."""
         return verdict(list(self.cells))
+
+    @property
+    def status(self) -> str:
+        """The verdict, with PASS_WAIVED for a PASS that rests a cell on a waiver."""
+        return PASS_WAIVED if self.verdict == "PASS" and self.waived() else self.verdict
+
+    def waived(self) -> list[dict[str, str]]:
+        """Each waiver that a cell rests on, once, in the order the cells first rest on it, as the kernel lists them."""
+        found: dict[tuple[str, str], tuple[str, str]] = {}
+        for c in self.cells:
+            if c.state == "waived" and c.waiver is not None:
+                found.setdefault((c.subject, c.mechanism), c.waiver)
+        return [{"subject": s, "mechanism": m, "by": by, "reason": reason} for (s, m), (by, reason) in found.items()]
 
     def counts(self) -> dict[str, int]:
         return {state: sum(c.state == state for c in self.cells) for state in STATES}
 
     def to_json(self) -> dict[str, Any]:
         return {"file": self.path, "design": self.name, "status": self.status, "deck": {"name": self.deck.name, "hash": self.deck.hash},
-                "counts": self.counts(),
+                "counts": self.counts(), "waived": self.waived(),
                 "cells": [{"subject": c.subject, "mechanism": c.mechanism, "entry": c.entry, "state": c.state, "what": c.what,
                            "anchor": c.anchor, "why": c.why, "rule": c.rule, "ratio": c.ratio} for c in self.cells]}
 
@@ -1654,6 +1676,11 @@ class Report:
                     else c.what if c.entry.endswith("/where") else "")
             out.append(f"  {f'{c.subject}/{c.mechanism}':<{wide}}  {c.state.replace('_', ' '):<14}  {ratio:>6}  "
                        + ": ".join(part for part in (c.entry, said) if part) + (f" ({c.anchor})" if c.anchor else ""))
+        waivers = self.waived()
+        if waivers:
+            out.append(f"waived     {counts['waived']} cells rest on {len(waivers)} waivers"
+                       + (", so the design passes what the deck could check and each signer answers for the rest" if self.status == PASS_WAIVED else ""))
+            out += [f"  {w['subject']}/{w['mechanism']}  by {w['by']}: {w['reason']}" for w in waivers]
         pending = [c for c in self.cells if c.state == "open"]
         if pending:
             out.append(f"open       {len(pending)} cells: each needs a rule, an input, or `waive MECHANISM on PART by \"<owner>\" reason \"<why>\"` "
@@ -1707,10 +1734,11 @@ def checked(design: Design, deck: Deck, card: str, text: str, card_path: str) ->
         said = verify.ask(kernel, files)
         if said["verdict"] == "ILL-FORMED":
             raise ComponentError(verify.refusal(design.path, said))
-        differ = verify.differs([(c.subject, c.mechanism, c.entry, c.state) for c in report.cells], report.status, deck.hash, said)
+        differ = verify.differs([(c.subject, c.mechanism, c.entry, c.state) for c in report.cells], report.verdict, deck.hash, said)
         if differ:
-            raise verify.Disagreement(f"{design.path}: petra-verify gives {said['verdict']} and the grid {report.status}: {differ}")
-        said = {"verdict": said["verdict"], "checked": sum(bool(c.proof) for c in report.cells), "hashes": said["hashes"], "cells_from": said["cells_from"]}
+            raise verify.Disagreement(f"{design.path}: petra-verify gives {said['verdict']} and the grid {report.verdict}: {differ}")
+        said = {"verdict": said["verdict"], "checked": sum(bool(c.proof) for c in report.cells), "hashes": said["hashes"], "cells_from": said["cells_from"],
+                "waived": said["waived"]}
     return Checked(design.path, report, card_path, {"card": export.sha256(card), "design": export.sha256(text)}, said)
 
 

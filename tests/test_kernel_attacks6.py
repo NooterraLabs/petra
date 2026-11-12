@@ -46,7 +46,7 @@ def both(rules: dict, text: str, card: str = HEAD) -> tuple[list, str, dict, str
     report, files = grid.check(read, deck)
     mine = [(c.subject, c.mechanism, c.entry, c.state) for c in report.cells]
     said = ask(files)
-    return mine, report.status, said, verify.differs(mine, report.status, deck.hash, said)
+    return mine, report.verdict, said, verify.differs(mine, report.verdict, deck.hash, said)
 
 
 # --- 1. the branch of a name that no cell holds ------------------------------------------------------------

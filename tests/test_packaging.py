@@ -94,8 +94,13 @@ def without_kernel(wheel: Path, directory: Path) -> Path:
 
 
 def report(scripts: Path, design: Path, cwd: Path) -> list[str]:
-    """The lines `petra check` prints of a design, run by the command installed in `scripts`."""
-    return ok(shutil.which("petra", path=str(scripts)), "check", design, cwd=cwd).splitlines()
+    """The lines `petra check` prints of a design, run by the command installed in `scripts`.
+    It exits 0 for a PASS and 6 for a PASS that rests on a waiver, as the lap does."""
+    argv = (shutil.which("petra", path=str(scripts)), "check", design)
+    done = run(*argv, cwd=cwd)
+    if done.returncode != (6 if design == LAP else 0):
+        raise AssertionError(f"{' '.join(map(str, argv))} exited {done.returncode}\n{done.stdout}\n{done.stderr}")
+    return done.stdout.splitlines()
 
 
 class Packaging(unittest.TestCase):
@@ -199,7 +204,7 @@ class Packaging(unittest.TestCase):
         self.assertTrue(Path(ran).resolve().is_relative_to((self.tmp / "venv").resolve()), f"the kernel it runs is the one in the venv, not {ran}")
         self.assertEqual(Path(ran).name, BUILT.name)
         lap, circuit = report(self.scripts, LAP, self.outside), report(self.scripts, CIRCUIT, self.outside)
-        self.assertEqual(lap[0], "lap-splice-waived: PASS")
+        self.assertEqual(lap[0], "lap-splice-waived: PASS_WAIVED")
         self.assertIn("kernel     petra-verify checked 12 of 12 proofs and gives the same verdict", lap)
         self.assertIn("path       rules: the kernel worked out every cell from the rules deck", lap)
         self.assertEqual(circuit[0], "workshop-lighting-radial: PASS")
@@ -209,7 +214,7 @@ class Packaging(unittest.TestCase):
         """The venv with the kernel taken out of the wheel, or the only venv where no
         kernel is built and the wheel is the pure one."""
         lap, circuit = report(self.bare, LAP, self.outside), report(self.bare, CIRCUIT, self.outside)
-        self.assertEqual((lap[0], circuit[0]), ("lap-splice-waived: PASS", "workshop-lighting-radial: PASS"))
+        self.assertEqual((lap[0], circuit[0]), ("lap-splice-waived: PASS_WAIVED", "workshop-lighting-radial: PASS"))
         self.assertIn(NOT_RUN, lap)
         self.assertIn("path       rules: the Python grid worked out every cell from the rules deck, and no kernel checked it", lap)
         self.assertIn(NOT_RUN, circuit)

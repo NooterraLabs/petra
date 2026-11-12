@@ -19,7 +19,8 @@
 #   corpus/cases/deck/   laps checked against the AISC deck of rules. Each verdict is worked
 #                        out by hand from AISC 360-22, and the header of the design shows
 #                        the arithmetic. It is UNKNOWN where a line of the grid has no rule
-#                        and no waiver, and where a rule has no value to read.
+#                        and no waiver, and where a rule has no value to read. It is
+#                        PASS_WAIVED where it passes and a cell rests on a waiver.
 #
 # Not cases yet:
 #   audit F1 to F4       false FAILs whose truth is the auditor's memory of Manual tables.
@@ -147,11 +148,11 @@ judges/canaries/stiffened_seat_beam_side_seat_bearing.petra	NOT_PASS			the outsi
 judges/canaries/stiffened_seat_beam_vs_support_web_clearance.petra	NOT_PASS			the outside judge rejects it
 judges/canaries/truss_600m_span.petra	NOT_PASS			the outside judge rejects it
 corpus/cases/found/m_huge_exponent.petra	INPUT_ERROR			a mesh coordinate of 1e999999999, which read exactly would fill memory
-examples/deck/lap_pass.petra	PASS			twelve answers proved by the rules of the AISC deck, on eight lines of its grid, and the card waives the four lines it has no rule for
+examples/deck/lap_pass.petra	PASS_WAIVED		twelve answers proved by the rules of the AISC deck, on eight lines of its grid, and the card waives the four lines it has no rule for
 examples/deck/lap_fail.petra	FAIL			the pull is 60 kip and three bolts carry 53.7
 examples/deck/lap_unknown.petra	UNKNOWN			the grid asks four mechanisms the deck has no rule for, and the card waives none
 corpus/cases/deck/d01_short_end.petra	FAIL			the end distance is 3/4 inch, under the 1 inch Table J3.4 asks of a 3/4 inch bolt, and the end bolts tear out: the three carry 31.4 kip under a pull of 45
-corpus/cases/deck/d02_long_line.petra	PASS			14 bolts at 3 inch make a line of 39 inch, over 38, so note c of Table J3.2 takes the shear stress at 83.3%: the bolts carry 208.7 kip under a pull of 45
+corpus/cases/deck/d02_long_line.petra	PASS_WAIVED		14 bolts at 3 inch make a line of 39 inch, over 38, so note c of Table J3.2 takes the shear stress at 83.3%: the bolts carry 208.7 kip under a pull of 45
 corpus/cases/deck/d03_unlisted_bolt.petra	UNKNOWN			Tables J3.3 and J3.4 list no 0.7 inch bolt, so every rule that reads a hole or a least edge distance is open, on six lines
 corpus/cases/deck/d04_oversize_holes.petra	NOT_PASS			oversize holes in a bearing-type joint, which J3.3 bars: every rule holds, the end distance with the 1/16 inch of Table J3.5, and the deck has no rule for the use of the hole, so the line is open and the card does not waive it
 corpus/cases/deck/d05_swapped_given.petra	INPUT_ERROR			the yield stress of a plate reads the bound the card gives for its tensile strength
@@ -163,30 +164,30 @@ corpus/cases/deck/d10_one_waiver_short.petra	UNKNOWN			the card waives three of 
 corpus/cases/deck/d11_stray_plate.petra	UNKNOWN			a plate 1 nm thick that no lap joins: nothing reads it, so it has open cells
 corpus/cases/deck/d12_shared_plates.petra	INPUT_ERROR			two laps join the same plates, and each would be checked as if it alone loaded them
 corpus/cases/deck/d13_pitch_under_minimum.petra	FAIL			the pitch is 1.75 inch, under the 2 2/3 diameters, 2 inch, that J3.4 asks between centres, and every other answer holds or is waived
-corpus/cases/deck/d14_pitch_at_minimum.petra	PASS			the pitch is 2 inch, exactly the 2 2/3 diameters of J3.4, and every other answer holds or is waived
+corpus/cases/deck/d14_pitch_at_minimum.petra	PASS_WAIVED		the pitch is 2 inch, exactly the 2 2/3 diameters of J3.4, and every other answer holds or is waived
 corpus/cases/deck/d15_side_short.petra	FAIL			the holes are 7/8 inch from a side edge, under the 1 inch Table J3.4 asks of a 3/4 inch bolt, and every other answer holds or is waived
-corpus/cases/deck/d16_side_at_minimum.petra	PASS			the holes are 1 inch from a side edge, exactly what Table J3.4 asks, and block shear holds at 54.7 kip against 45
+corpus/cases/deck/d16_side_at_minimum.petra	PASS_WAIVED		the holes are 1 inch from a side edge, exactly what Table J3.4 asks, and block shear holds at 54.7 kip against 45
 corpus/cases/deck/d17_pitch_over_24t.petra	FAIL			the pitch is 9.5 inch, over 24 times the thinner plate, 9 inch (J3.6(a)), and every other answer holds or is waived
-corpus/cases/deck/d18_pitch_at_24t.petra	PASS			the pitch is 9 inch, exactly 24 thicknesses of a painted 3/8 inch plate (J3.6(a))
+corpus/cases/deck/d18_pitch_at_24t.petra	PASS_WAIVED		the pitch is 9 inch, exactly 24 thicknesses of a painted 3/8 inch plate (J3.6(a))
 corpus/cases/deck/d19_pitch_over_12_inch.petra	FAIL			the pitch is 12.5 inch, over the 12 inch J3.6(a) allows however thick the plates
-corpus/cases/deck/d20_pitch_at_12_inch.petra	PASS			the pitch is 12 inch, exactly the most J3.6(a) allows a painted plate
+corpus/cases/deck/d20_pitch_at_12_inch.petra	PASS_WAIVED		the pitch is 12 inch, exactly the most J3.6(a) allows a painted plate
 corpus/cases/deck/d21_weathering_over_14t.petra	FAIL			weathering steel with a pitch of 5.5 inch, over 14 thicknesses, 5.25 inch (J3.6(b)), where a painted plate is allowed 9
-corpus/cases/deck/d22_weathering_at_14t.petra	PASS			weathering steel with a pitch of 5.25 inch, exactly 14 thicknesses (J3.6(b))
+corpus/cases/deck/d22_weathering_at_14t.petra	PASS_WAIVED		weathering steel with a pitch of 5.25 inch, exactly 14 thicknesses (J3.6(b))
 corpus/cases/deck/d23_weathering_over_7_inch.petra	FAIL			weathering steel with a pitch of 7.5 inch, over the 7 inch J3.6(b) allows however thick the plates
-corpus/cases/deck/d24_weathering_at_7_inch.petra	PASS			weathering steel with a pitch of 7 inch, exactly the most J3.6(b) allows
+corpus/cases/deck/d24_weathering_at_7_inch.petra	PASS_WAIVED		weathering steel with a pitch of 7 inch, exactly the most J3.6(b) allows
 corpus/cases/deck/d25_net_section_ruptures.petra	FAIL			a 3 inch strap ruptures through its hole at 34.66 kip under a pull of 35.5, and yields at 36.45, which holds
-corpus/cases/deck/d26_net_section_holds.petra	PASS			the 3 inch strap of d25 ruptures at 34.66 kip, and the pull is 34
+corpus/cases/deck/d26_net_section_holds.petra	PASS_WAIVED		the 3 inch strap of d25 ruptures at 34.66 kip, and the pull is 34
 corpus/cases/deck/d27_block_tears_out.petra	FAIL			holes 1.25 inch from a side edge: each plate tears out as a block at 58.82 kip under a pull of 60, and the bolts carry 65.35
-corpus/cases/deck/d28_block_holds.petra	PASS			the lap of d27: each plate tears out as a block at 58.82 kip, and the pull is 58
+corpus/cases/deck/d28_block_holds.petra	PASS_WAIVED		the lap of d27: each plate tears out as a block at 58.82 kip, and the pull is 58
 corpus/cases/deck/d29_oversize_short_end.petra	FAIL			oversize holes with an end distance of 1 inch, under the 1 1/16 inch of Tables J3.4 and J3.5, where a standard hole needs 1 inch
 corpus/cases/deck/d30_oversize_end_at_minimum.petra	NOT_PASS			oversize holes in a bearing-type joint, which J3.3 bars, with an end distance of exactly 1 1/16 inch: every rule holds, and the deck has no rule for the use of the hole, so the line is open
 corpus/cases/deck/d31_long_line_over.petra	FAIL			a line of 39 inch: at the 83.3% of note c of Table J3.2 the 14 bolts carry 208.7 kip under a pull of 215, and at the full stress they would carry 250.5
-corpus/cases/deck/d32_long_line_under.petra	PASS			the line of d31, 39 inch: at 83.3% the 14 bolts carry 208.7 kip, and the pull is 205
-corpus/cases/deck/d33_line_of_38_inch.petra	PASS			a line of exactly 38 inch is not over it, so the 20 bolts carry 248.5 kip at the full stress under a pull of 230, where 83.3% would give 207.0
+corpus/cases/deck/d32_long_line_under.petra	PASS_WAIVED		the line of d31, 39 inch: at 83.3% the 14 bolts carry 208.7 kip, and the pull is 205
+corpus/cases/deck/d33_line_of_38_inch.petra	PASS_WAIVED		a line of exactly 38 inch is not over it, so the 20 bolts carry 248.5 kip at the full stress under a pull of 230, where 83.3% would give 207.0
 corpus/cases/deck/d34_large_bolt.petra	UNKNOWN			1 1/8 inch bolts: Table J3.3 lists holes to 1 inch, so the four lines whose rules read a hole are open, though each holds by hand
 corpus/cases/deck/d35_edge_distance_unanswered.petra	UNKNOWN			the card waives the other three mechanisms with no rule, and the greatest edge distance of J3.6 stays open: the deck has no rule for it
 corpus/cases/deck/d36_far_from_an_edge.petra	NOT_PASS			holes 5 inch from the nearest edge of a 3/8 inch plate, over the 4.5 inch of J3.6: the deck has no rule for it, and the open cell keeps the lap from passing
 corpus/cases/deck/d37_no_side_or_surface.petra	INPUT_ERROR			a lap with no side and no surface, as one was written before the deck had those fields
 corpus/cases/deck/d38_case_without_the_pull.petra	UNKNOWN			the card of lap_pass with a second load case that states no pull: each rule that reads the pull is open under it, where it was passed on the first case alone
 corpus/cases/deck/d39_case_on_one_of_two_laps.petra	UNKNOWN			two laps, and a load case that puts the pull on one of them: the rules of the other are open under that case
-corpus/cases/deck/d40_two_cases_on_two_laps.petra	PASS			the laps of d39 with the pull stated on both in both cases, one of them zero: every rule is proved under each case
+corpus/cases/deck/d40_two_cases_on_two_laps.petra	PASS_WAIVED		the laps of d39 with the pull stated on both in both cases, one of them zero: every rule is proved under each case

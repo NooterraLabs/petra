@@ -5,7 +5,7 @@ description: Design, check and repair steel connections to AISC 360-22 (shear ta
 
 # Petra
 
-Petra checks a design against a card. The card, `NAME.card`, holds what is asked: the loads, the claims and any waivers, each with the name of who signs it. The design, `NAME.petra`, holds the components. Petra answers PASS, FAIL, UNKNOWN or MARGINAL. A small kernel re-checks every PASS and FAIL in exact arithmetic. The steel deck follows AISC 360-22 and works in kips, inches and ksi.
+Petra checks a design against a card. The card, `NAME.card`, holds what is asked: the loads, the claims and any waivers, each with the name of who signs it. The design, `NAME.petra`, holds the components. Petra answers PASS, PASS_WAIVED, FAIL, UNKNOWN or MARGINAL. A small kernel re-checks every PASS and FAIL in exact arithmetic. The steel deck follows AISC 360-22 and works in kips, inches and ksi.
 
 Install it with `pip install petra-lang`. The command is `petra` and the Python import is `petra`. If the `petra` MCP server is connected, call its tools `kinds`, `new` and `check` in place of the commands below. They take the same arguments and return the same text.
 
@@ -15,7 +15,7 @@ Install it with `pip install petra-lang`. The command is `petra` and the Python 
 2. Run `petra new shear_tab --card > tab.card` and `petra new shear_tab > tab.petra`. They write a card and a complete design that passes it.
 3. Edit the card to what the user asked: the load range in the `load` block, signed with the user's name and the source of the numbers. If the user gave a card, use it as it is.
 4. Edit the design to the user's job. Set the `beam` and `support` lines, the support's face (`flange` or `web`) and the `basis` (`lrfd` or `asd`).
-5. Run `petra check tab.petra`. It reads `tab.card` beside the design, and `--card FILE` names another card. The first line is the status. The `kernel` line says how many of the proofs a second, smaller checker confirmed. The exit code is 0 for PASS, 1 for FAIL, 2 for UNKNOWN, 5 for MARGINAL and 3 for an input error.
+5. Run `petra check tab.petra`. It reads `tab.card` beside the design, and `--card FILE` names another card. The first line is the status. The `kernel` line says how many of the proofs a second, smaller checker confirmed. The exit code is 0 for PASS, 1 for FAIL, 2 for UNKNOWN, 5 for MARGINAL, 6 for PASS_WAIVED and 3 for an input error.
 6. On a FAIL, apply a move from the `repair` lines, as the next section describes, and check again.
 7. Stop at PASS. Tell the user the governing strength check and its utilisation from the `governing` line.
 
@@ -43,10 +43,10 @@ The first line names the governing failed check and its utilisation. Each move c
 
 `petra kinds` lists each deck after the domains, and `petra kinds lap` prints a type's lines and what the deck's grid asks of it. `petra new lap` prints a design to start from, and `petra new lap --card` its card.
 
-The report has one line for each mechanism the grid asks of a part. A line is proved, refuted, not applicable, waived or open, and the design passes only when none is refuted or open.
+The report has one line for each mechanism the grid asks of a part. A line is proved, refuted, not applicable, waived or open, and the design passes only when none is refuted or open. When a line is waived, the status is PASS_WAIVED and not PASS: the design passes what the deck could check, and the `waived` lines name each waiver and who signed it. Report PASS_WAIVED with those lines.
 
 - A refuted line names its rule and its clause. Change the design until it is proved.
-- An open line means the deck has no rule for that mechanism, or the card gives no load, or a value is outside a table. It is not yours to close. Report UNKNOWN and list the open lines: a waiver belongs to the person who signs the card.
+- An open line means the deck has no rule for that mechanism, or the card gives no load, or a value is outside a table, or a rule could not be decided. It is not yours to close. Report UNKNOWN and list the open lines: a waiver belongs to the person who signs the card, and it rests only a line that no rule could answer.
 - A line such as `Fy given tab.Fy` reads a value only the card states. If the card lacks it, ask the user for it.
 
 A `lap` of the deck `aisc360-22` has rules for eight mechanisms: the least and the greatest spacing of the holes, their end and side distances, the strength of the bolts and their holes, and the yielding, rupture and block shear of each plate. Four have no rule: `lap.tightening`, `lap.hole_use`, `lap.max_edge_distance` and `lap.ply_flexure`. Those four are open on every lap, so a lap is UNKNOWN until the card waives them, however well it is designed. A bolt of 1 1/8 inch or more, or of a size the tables do not list, leaves more lines open.

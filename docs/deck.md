@@ -626,7 +626,7 @@ The reader tries a rule only while the work is small. The rules with `requires` 
 | `waived` | The card waives the mechanism on the part, the cell would be open without the waiver, and no inequality could answer it |
 | `open` | Anything else |
 
-No cell has a default. The verdict is FAIL with a refuted cell, UNKNOWN with an open cell or with nothing proved, and PASS otherwise.
+No cell has a default. The verdict is FAIL with a refuted cell, UNKNOWN with an open cell or with nothing proved, and PASS otherwise. `petra check` says PASS_WAIVED for a PASS with a waived cell, and exits 6 for it, where a PASS exits 0 ([What a waiver rests](#what-a-waiver-rests)).
 
 ### What a waiver rests
 
@@ -661,6 +661,8 @@ So a card cannot switch a rule off. A card written when a deck had no rule for a
 A waiver that rests no cell is no fault. Every cell of its line was proved, refuted or not applicable, and the card allowed more than the design needed. The verdict lists, under `waived`, each waiver that some cell rests on, with who signed it and why, and it does not list one that rests none.
 
 When every open cell is waived, no cell is open. `waived` stays a state of its own: a waived cell is counted as waived and never as proved. The verdict is then PASS when no cell is refuted and at least one cell is proved, and UNKNOWN when none is proved: a design all of whose lines are waived has nothing proved, and is not passed.
+
+A PASS with a waived cell is not the PASS of a design the deck checked in full: the design passes what the deck could check, and each signer answers for the cells their waiver rests. `petra check` gives it a word of its own, PASS_WAIVED, in its first line, in the `status` of its JSON and in the reply of the MCP tool, and exits 6 where a PASS exits 0. A caller that tests for exit 0 does not take it for a full pass. Its text has a `waived` line that counts the cells and the waivers, and one line for each waiver with who signed it and why, and `petra check --json` lists the same waivers under `waived`. The kernel has no such word: it says PASS, and its own `waived` list names the same waivers in the same order.
 
 A rule reads what it reads whether or not its line is waived or can arise: the fields and the loads of a rule of a line that cannot arise have no `unread` cell, though that rule is not run.
 

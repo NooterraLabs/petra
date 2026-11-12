@@ -303,14 +303,18 @@ The example below is the bolts obligation of the 60 kip shear tab in `tests/fixt
 `petra kinds` lists each deck after the domains. A design whose parts are of a deck's types is checked against that deck's grid and not by the models, and its JSON has another shape. `docs/deck.md` in the repository describes a deck and the states of a cell.
 
 ```
-{"file": FILE, "design": NAME, "status": "PASS" | "FAIL" | "UNKNOWN",
+{"file": FILE, "design": NAME, "status": "PASS" | "PASS_WAIVED" | "FAIL" | "UNKNOWN",
  "deck": {"name": NAME, "hash": "sha256:HEX"},
  "counts": {"proved": N, "refuted": N, "not_applicable": N, "waived": N, "open": N},
  "cells": [CELL, ...],                         one per answer, in the order of the grid
+ "waived": [WAIVER, ...],                      each waiver a cell rests on, once, in the order of the cells
  "card": FILE, "hashes": {"card": HASH, "design": HASH},
  "path": "rules",                              the kernel or the grid worked out the cells from the rules deck
- "kernel": {"verdict": STATUS, "checked": N, "hashes": {...}} | null,
+ "kernel": {"verdict": "PASS" | "FAIL" | "UNKNOWN", "checked": N, "cells_from": "rules",
+            "waived": [WAIVER, ...], "hashes": {...}} | null,
  "repair": null}
+
+WAIVER = {"subject": PART, "mechanism": NAME, "by": SIGNER, "reason": TEXT}
 
 CELL = {"subject": PART, "mechanism": NAME, "entry": TEXT,
         "state": "proved" | "refuted" | "not_applicable" | "waived" | "open",
@@ -321,7 +325,9 @@ CELL = {"subject": PART, "mechanism": NAME, "entry": TEXT,
         "ratio": NUMBER | null}                the left side of the rule over the right, at its worst
 ```
 
-`petra.check_file` returns a `petra.grid.Report` for such a design, with `status`, `cells`, `to_json()` and `render()`. A FAIL has no repair yet, and a card's claims are refused.
+The status is PASS_WAIVED when the design passes and a waiver of the card rests one of its cells: it passes what the deck could check, and each signer answers for the cells its waiver rests. `petra check` exits 6 for it. The kernel has no word of its own for this: it says PASS and lists the same waivers.
+
+`petra.check_file` returns a `petra.grid.Report` for such a design, with `status`, `verdict` (the kernel's word, PASS where `status` is PASS_WAIVED), `waived()`, `cells`, `to_json()` and `render()`. A FAIL has no repair yet, and a card's claims are refused.
 
 For such a design the kernel reads the deck's own file and makes every cell itself. `petra.check` compares its cells with these, one by one, and raises `petra.verify.Disagreement` if they differ. `kernel.hashes` then also has `rules`, the hash of the deck's file, which is `deck.hash`.
 
