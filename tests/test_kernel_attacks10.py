@@ -15,6 +15,8 @@
       every value of a tape and every sum and product so far. The 64th power of a product of
       four ratios of 98 digits was PASS in Python and UNKNOWN in the kernel, and petra check
       exited 4. Python's tapes now have the kernel's bound.
+  M3  Under a card with no load case, the reason of a load that a completion puts on a part
+      and that no rule reads said `that case  puts on a`. It says `that the card puts on a`.
 """
 import json
 import unittest
@@ -25,9 +27,9 @@ import petra.lang
 from petra import grid, verify
 from petra.kernel import Interval
 from petra.registry import build_registry
-from tests.test_deck_features import HEAD, KERNEL, asks, cells, design, given, ill_formed, kind, load, made_up, parsed, part, rule, size
+from tests.test_deck_features import HEAD, KERNEL, asks, cells, design, given, ill_formed, key, kind, load, made_up, parsed, part, rule, size
 from tests.test_kernel_attacks3 import cell, with_card
-from tests.test_kernel_attacks9 import STRUT_CARD, STRUT_TEXT, strut
+from tests.test_kernel_attacks9 import STRUT_CARD, STRUT_TEXT, strut, waive
 from tests.test_kernel_grid import ask, findings
 
 
@@ -208,3 +210,26 @@ class ValuesPastTheBitsOfTheKernel(unittest.TestCase):
             for tape, state in (({"inputs": [], "nodes": nodes, "roots": [6]}, "open"), ({"inputs": [], "nodes": apart, "roots": [8]}, "proved")):
                 said = ask(with_card([cell(tape)]))
                 self.assertEqual([c["state"] for c in said["cells"]], [state], said)
+
+
+# --- M3. a load a completion puts on a part under a card with no load case ------------------------------------
+
+ANCHOR = kind("anchor", {**key("kind", "chemical", "mechanical"), "optional": True}, size("bond", "force", signed=True),
+              loads=[{"name": "tension", "dim": "force", "least": "60 kN", "what": "the tension"}])
+ANCHORS = made_up([ANCHOR], [asks("anchor.pullout", "anchor"), asks("anchor.size", "anchor")],
+                  [rule("pullout", "anchor", "anchor.pullout", when=["is", "kind", "chemical"], le=[["load", "tension"], "bond"]),
+                   rule("size", "anchor", "anchor.size", le=[["q", "1", "kN"], "bond"])])
+"""A pull-out rule for chemical anchors alone. At its least, 60 kN, the tension is over the bond, so the waived cell rests on a
+mechanical anchor, where no rule reads the tension."""
+
+
+class TheReasonOfALoadNoCaseNames(unittest.TestCase):
+    def test_the_card_puts_the_load_on_the_part(self):
+        text = design(part("anchor", "a", kind="unstated", bond="given a.bond"))
+        found, status, said = cells(self, ANCHORS, text, HEAD + given("a.bond", "50 kN") + waive("anchor.pullout", "a"))
+        self.assertEqual((found[("a", "unread", "tension/")], status), ("open", "UNKNOWN"))
+        rules, read = parsed(ANCHORS, text, HEAD + given("a.bond", "50 kN") + waive("anchor.pullout", "a"))
+        why = "no rule of the deck reads the load tension that the card puts on a, so nothing checks it"
+        self.assertEqual([c.why for c in grid.check(read, rules)[0].cells if c.entry == "tension/"], [why], "it read `that case  puts on a`")
+        if verify.binary():
+            self.assertEqual([c["reason"] for c in said["cells"] if c["entry"] == "tension/"], [why])

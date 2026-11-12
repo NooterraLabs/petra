@@ -2018,7 +2018,7 @@ def _unread(deck: Deck, found: Parts, fixed: Mapping[Any, Any] | None = None) ->
         out += [Cell(part.name, UNREAD, f.name, "open", f.what, "", f"no rule of the deck reads {part.name}.{f.name}, so nothing checks it")
                 for f in part.type.fields.values() if f.type is None and (part.name, f.name) not in read and part.values[f.name] is not NOT_STATED]
         out += [Cell(part.name, UNREAD, f"{load}/{case}", "open", part.type.loads[load].what, "",
-                     f"no rule of the deck reads the load {load} that case {case} puts on {part.name}, so nothing checks it")
+                     f"no rule of the deck reads the load {load} that {f'case {case}' if case else 'the card'} puts on {part.name}, so nothing checks it")
                 for load in sorted(part.loads) if (part.name, f"load {load}") not in read for case in sorted(part.loads[load])]
     return out
 

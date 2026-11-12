@@ -1106,7 +1106,7 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hi
       if out.size > MAX_CELLS then return .error over
       unless readLoads.contains (part.name, load) do
         out := out.push (cell part.name UNREAD s!"{load}/{under}" .undecided
-          s!"no rule of the deck reads the load {load} that case {under} puts on {part.name}, so nothing checks it")
+          s!"no rule of the deck reads the load {load} that {if under.isEmpty then "the card" else s!"case {under}"} puts on {part.name}, so nothing checks it")
   if out.size > MAX_CELLS then return .error over
   -- No two cells have one key: `readRules` and `readParts` refuse what could make two, and
   -- this holds the list to it whatever they let through.
