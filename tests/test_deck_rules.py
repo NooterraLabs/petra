@@ -83,11 +83,16 @@ class FromTheFiles(unittest.TestCase):
         self.assertLessEqual({"aisc360-22/J3.4-spacing", "aisc360-22/table-J3.5", "aisc360-22/table-J3.2-note-c", "aisc360-22/B4.3b-hole", "aisc360-22/D3-1"}, named)
 
     def test_the_types_are_the_ones_both_transcribers_were_given(self):
-        """A rule reads a part by the names of its type's fields, so the deck's types are the task's, less the keys only a task has."""
+        """A rule reads a part by the names of its type's fields, so the deck's types are the task's, less the keys only a task has.
+        The deck adds what a lap needs of its plates, which is geometry and no clause: one line of holes lies within each plate,
+        so twice the least side distance is at most each plate's width (tests/test_kernel_attacks10.py)."""
         asked = read("rules_task2.json")["types"]
         plain = [{**{k: v for k, v in t.items() if k != "alike"}, "fields": [{k: v for k, v in f.items() if k != "range"} for f in t["fields"]],
                   **({"loads": [{k: v for k, v in f.items() if k not in ("range", "adverse")} for f in t["loads"]]} if "loads" in t else {})} for t in asked]
-        self.assertEqual(self.deck["types"], plain)
+        self.assertEqual([{k: v for k, v in t.items() if k != "needs"} for t in self.deck["types"]], plain)
+        self.assertEqual([t.get("needs") for t in self.deck["types"]],
+                         [None, [{"le": [["mul", "2", "side"], f"{p}.width"], "why": f"the line of holes lies within plate {p}, and each of its two side edges is at least the side distance from the line"}
+                                 for p in ("a", "b")]])
         lap = [f["name"] for f in self.deck["types"][1]["fields"]]
         self.assertEqual(lap[lap.index("end"):], ["end", "side", "surface", "joins"])
 

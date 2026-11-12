@@ -7,11 +7,18 @@
       on a completion at -300 degC were PASS. With `--rules` the kernel now holds the floors
       of petra/decks/core.json itself, and a deck.json that gives others is a finding (type
       rule 8).
+  B   The shipped lap compared no field with another, and passed under its waivers with a side
+      distance of 1 inch on plates 1 3/4 inch wide, where one line of holes leaves at most
+      7/8 inch and J3.4 refutes every such lap. The lap now needs twice its side to be at
+      most the width of each plate.
 """
 import json
 import unittest
+from pathlib import Path
 
-from petra import grid
+import petra.lang
+from petra import grid, verify
+from petra.registry import build_registry
 from tests.test_deck_features import HEAD, KERNEL, asks, design, given, ill_formed, kind, load, made_up, parsed, part, rule, size
 from tests.test_kernel_attacks9 import STRUT_CARD, STRUT_TEXT, strut
 from tests.test_kernel_grid import ask, findings
@@ -92,3 +99,67 @@ class TheKernelsOwnFloors(unittest.TestCase):
         report, files = grid.check(read, rules)
         said = ask(files)
         self.assertEqual((said["findings"], said["verdict"], report.verdict), ([], "FAIL", "FAIL"))
+
+
+# --- B. a side distance that no plate of its width allows -----------------------------------------------------
+
+EXAMPLES = Path(__file__).resolve().parents[1] / "examples" / "deck"
+
+
+def shipped_lap(width: str, side: str, pull: str = "14 kip") -> tuple[str, str]:
+    """The passing lap of examples/deck on two 3/8 inch plates of `width`, its side distance `side`, under `pull`."""
+    text = (EXAMPLES / "lap_pass.petra").read_text(encoding="utf-8").replace("width 6 inch", f"width {width}").replace("side 3 inch", f"side {side}")
+    card = (EXAMPLES / "lap_pass.card").read_text(encoding="utf-8").replace("pull in [0 kip, 45 kip]", f"pull in [0 kip, {pull}]")
+    return card, text
+
+
+def judged(card: str, text: str) -> tuple[str, dict]:
+    """petra/grid.py's verdict on a lap of the shipped deck, or why it refuses it, and the kernel's."""
+    read = petra.lang.parse_design(card, text, "lap.petra", build_registry())
+    rules = grid.owner(read)
+    try:
+        report, files = grid.check(read, rules)
+        mine = report.status
+    except grid.ComponentError as exc:
+        mine, files = str(exc), grid.bundle(read, rules)
+    return mine, ask(files) if verify.binary() else {}
+
+
+class TheSideOfALap(unittest.TestCase):
+    def test_a_side_over_half_the_width_of_a_plate_is_refused(self):
+        """1 3/4 inch plates and side 1 inch, the least Table J3.4 allows for a 3/4 inch bolt: no plate of that width has a side
+        distance over 7/8 inch, so J3.4 refutes every lap these plates can make, and the lap passed under its waivers."""
+        for width, side in (("1.75 inch", "1 inch"), ("4 inch", "6 inch")):
+            with self.subTest(width=width, side=side):
+                mine, said = judged(*shipped_lap(width, side))
+                self.assertIn("splice breaks need 1 of a lap", mine)
+                self.assertIn("splice breaks need 2 of a lap", mine)
+                self.assertIn("the line of holes lies within plate a", mine)
+                if said:
+                    self.assertEqual(said["verdict"], "ILL-FORMED", "it was PASS")
+                    self.assertIn("splice: breaks need 1 of a lap", findings(said))
+
+    def test_the_widest_side_the_plates_allow_fails_j3_4(self):
+        mine, said = judged(*shipped_lap("1.75 inch", "0.875 inch"))
+        self.assertEqual(mine, "FAIL")
+        if said:
+            (cell,) = [c for c in said["cells"] if c["mechanism"] == "lap.side_distance"]
+            self.assertEqual((cell["state"], said["verdict"]), ("refuted", "FAIL"))
+
+    def test_a_width_the_card_gives_is_held_over_its_whole_range(self):
+        card, text = shipped_lap("6 inch", "1 inch")
+        card += 'given tab.width in [1.75 inch, 6 inch] signed "s.engineer@example.org" source "the plate"\n'
+        mine, said = judged(card, text.replace("width 6 inch", "width given tab.width", 1))
+        self.assertIn("splice breaks need 1 of a lap", mine)
+        self.assertIn("down to 889/20000", mine)
+        self.assertNotIn("need 2", mine, "the strap is 6 inch wide")
+        if said:
+            self.assertEqual(said["verdict"], "ILL-FORMED")
+
+    def test_a_side_at_half_the_width_still_passes(self):
+        card, text = shipped_lap("6 inch", "3 inch", "45 kip")
+        self.assertEqual((card, text), ((EXAMPLES / "lap_pass.card").read_text(encoding="utf-8"), (EXAMPLES / "lap_pass.petra").read_text(encoding="utf-8")))
+        mine, said = judged(card, text)
+        self.assertEqual(mine, grid.PASS_WAIVED)
+        if said:
+            self.assertEqual((said["findings"], said["verdict"]), ([], "PASS"))

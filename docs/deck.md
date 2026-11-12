@@ -274,7 +274,7 @@ Each object of a deck has the keys this page gives it, and no other. A key the p
 
 A design names a type as the kind of a component block: `lap splice { ... }` is a part named `splice` of type `lap`. The parts of one design are all of one deck's types, or all of the built-in models' kinds.
 
-`petra/decks/aisc360.json` is the first deck. It holds 32 rows of AISC 360-22, the types `plate` and `lap`, a grid of 16 lines for a lap, and 15 rules. The rules answer 8 of the lines. [What the first deck covers](#what-the-first-deck-covers) lists every line, what answers it, and what the deck leaves open.
+`petra/decks/aisc360.json` is the first deck. It holds 32 rows of AISC 360-22, the types `plate` and `lap` with two needs of a lap, a grid of 16 lines for a lap, and 15 rules. The rules answer 8 of the lines. [What the first deck covers](#what-the-first-deck-covers) lists every line, what answers it, and what the deck leaves open.
 
 ### The size of a deck
 
@@ -716,7 +716,7 @@ petra check examples/deck/lap_unknown.petra
 
 ```
 lap-splice: UNKNOWN
-rules      sha256:33e1bd2c...  aisc360-22
+rules      sha256:7fd0958b...  aisc360-22
 card       sha256:b0372d69...  examples/deck/lap_unknown.card
 design     sha256:3fd22401...  examples/deck/lap_unknown.petra
 kernel     petra-verify checked 12 of 12 proofs and gives the same verdict
@@ -988,7 +988,7 @@ A bolt of a size the tables do not list, such as 0.7 inch, has no value in them.
 
 The deck has no rule by ASD, none for slotted holes, and none for more than one line of bolts or more than two plates. Fifteen of its 32 rows are read by no rule.
 
-The first deck states no `needs` ([What a type needs](#what-a-type-needs)), so nothing compares the fields of a lap with one another. A lap may state a `side` of more than half the width of a plate, which no plate can have. It is not refused, and the block shear of each plate is then worked out from that `side`.
+A lap needs two things of its plates ([What a type needs](#what-a-type-needs)): twice its `side` is at most the width of plate `a`, and at most the width of plate `b`. The one line of holes lies within each plate, and each of the plate's two side edges is at least `side` from it. These are geometry and no clause, and no transcriber wrote them. Until 2026-11-12 the deck had no `needs`, and a lap could state a `side` that no plate of its width allows: a lap of 1 3/4 inch plates with `side` at 1 inch, the least that Table J3.4 allows for a 3/4 inch bolt, passed under a waiver, where every side such a plate can have, 7/8 inch at most, fails J3.4. Block shear worked its tension area out from such a `side` too (`tests/test_kernel_attacks10.py`). A lap that breaks a need is ILL-FORMED. No other need compares the fields of a lap or of its plates.
 
 ## What a deck does not check yet
 
