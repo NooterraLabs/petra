@@ -66,6 +66,14 @@ FAR = 64
 times the top, and to this part of the bottom."""
 
 
+def _far(end: Fraction, up: bool) -> Fraction:
+    """A value far above the top of a range, or far below its bottom. Above zero that is 64
+    times the top and a 64th of the bottom. An end under zero is divided where the other is
+    multiplied, so as to go the same way: a 64th of a top under zero is above it. An end at
+    zero stays where it is."""
+    return end * FAR if (end > 0) == up else end / FAR
+
+
 # --- a task, a transcription, a worked example ---------------------------------------------------------
 
 
@@ -136,6 +144,21 @@ def _names(deck: grid.Deck, kind: str) -> tuple[dict[str, tuple[str, ...]], dict
     return keys, sizes, {f"load {f.name}": f for f in deck.types[kind].loads.values()}
 
 
+def _may_have(known: grid.Field, low: Fraction, load: bool) -> bool:
+    """Whether a part may have a quantity, or bear a load, as low as `low` in SI: by what its
+    field says with `may_be`, by its `least`, and by a floor of its dimension that is under
+    zero, which holds whatever the field says. A size is more than zero, and a load that
+    says nothing is at least zero here, as a task has always read it."""
+    if known.may_be == "negative":
+        floor = grid._floor(known.dim)
+        under = floor is not None and floor[1] < 0 and (low < floor[1] or (floor[2] and low == floor[1]))
+        return not under and (known.least is None or low >= known.least)
+    if known.may_be == "zero":
+        return low >= 0
+    least = known.least if known.least is not None else Fraction(0)
+    return low >= least if load else low > 0 and low >= least
+
+
 def read_task(body: Mapping[str, Any], folder: Path | None = None) -> Task:
     """A task from its JSON: `format`, `name`, `about`, `rows` or `rows_from`, the path or
     the paths of files that hold rows, from the task's folder, `types` and `asks`. A type is
@@ -169,9 +192,7 @@ def read_task(body: Mapping[str, Any], folder: Path | None = None) -> Task:
                 if "range" not in f:
                     raise DeckError(f"{kind.name}.{f['name']}: a task gives each quantity and each load a `range` to sample it in")
                 (lo, lo_dim), (hi, hi_dim) = (quantity(str(end), f"the range of {kind.name}.{f['name']}") for end in f["range"])
-                least = known.least if known.least is not None else Fraction(0)
-                inside = lo >= least if name.startswith("load ") else lo > 0 and lo >= least
-                if {lo_dim, hi_dim} != {known.dim} or not lo <= hi or not inside or (known.whole and lo.denominator * hi.denominator != 1):
+                if {lo_dim, hi_dim} != {known.dim} or not lo <= hi or not _may_have(known, lo, name.startswith("load ")) or (known.whole and lo.denominator * hi.denominator != 1):
                     raise DeckError(f"{kind.name}.{f['name']}: its range is two {show(known.dim)} values a part may have, the lower first")
                 ranges[kind.name, name] = (lo, hi)
             adverse[kind.name] = frozenset(f["name"] for f in t.get("loads", []) if f.get("adverse"))
@@ -624,7 +645,7 @@ def _marks(readings: list[Reading], mechanism: str) -> dict[str, tuple[tuple[Fra
                         term = rule.lets[term.name]
                     if isinstance(term, Sym) and not term.name.startswith(("@", "load ")):
                         listed[term.name] |= set(axis.at)
-                        beside[term.name] |= {x for x in axis.probes() if x > 0 and x not in axis.at}
+                        beside[term.name] |= {x for x in axis.probes() if x not in axis.at}
     return {name: (tuple(sorted(listed[name])), tuple(sorted(beside[name] - listed[name]))) for name in {*listed, *beside}}
 
 
@@ -640,7 +661,10 @@ def parts(task: Task, mechanism: str, readings: list[Reading], seed: int = 0, co
 def _sampled(task: Task, mechanism: str, marked: tuple, seed: int, count: int) -> Parts:
     kind = next(a.type for a in task.deck.asks if a.mechanism == mechanism)
     keys, sizes, loads = _names(task.deck, kind)
-    spans, marks = task.spans[kind], dict(marked)
+    spans = task.spans[kind]
+    # A part sits beside the end of a band above zero, and at or under zero only where its field says that it may be.
+    marks = {name: (listed, tuple(x for x in beside if x > 0 or (name in sizes and sizes[name].may_be is not None and _may_have(sizes[name], x, False))))
+             for name, (listed, beside) in marked}
     rng = random.Random(f"{seed}/{task.name}/{mechanism}")
     combos = list(itertools.product(*([(name, k) for k in options] for name, options in keys.items())))
     said = ""
@@ -783,8 +807,10 @@ def reproduces(mine: Reading, mechanism: str, examples: list[Worked]) -> Check:
         lacks = (set(grid._keys(mine.asks[mechanism].unless)) | {n for r in rules for n in grid._keys(r.when)}) - set(e.part)
         lacks = lacks or {n for r in rules if _is(r.when, e.part) for n in grid._reads(r)} - set(e.part)
         # A source may print a strength and no load. The side it prints is then worked out under two loads, and must not move.
+        # The two are the top of the load's range and half of it, or the top and the bottom where the top is zero and has no half.
         loads_only = bool(lacks) and e.side != "ratio" and all(n.startswith("load ") for n in lacks)
-        found = [mine.answer(mechanism, {**e.part, **{n: spans[n][1] / k for n in lacks}}) for k in ((1, 2) if loads_only else (1,))] if loads_only or not lacks else []
+        two = [{n: spans[n][1] for n in lacks}, {n: spans[n][1] / 2 if spans[n][1] else spans[n][0] for n in lacks}] if loads_only else [{}]
+        found = [mine.answer(mechanism, {**e.part, **loads}) for loads in two] if loads_only or not lacks else []
         got = [None if a.governing is None else a.ratio if e.side == "ratio" else a.governing.low if e.side == "left" else a.governing.high for a in found]
         if not found or (loads_only and got[0] != got[1]):
             misses.append(f"{e.anchor}: the rules read {', '.join(sorted(n.removeprefix('load ') for n in lacks))}, which the example does not give")
@@ -878,7 +904,7 @@ def direction(mine: Reading, mechanism: str, tried: Parts) -> Check:
     for load in loads:
         lo, hi = mine.task.spans[tried.kind][load]
         for p in [p for p in tried.base if load in p][:TRIED]:
-            found = [(x, mine.answer(mechanism, {**p, load: x})) for x in sorted({lo, p[load], hi * FAR})]
+            found = [(x, mine.answer(mechanism, {**p, load: x})) for x in sorted({lo, p[load], _far(hi, True)})]
             settled = [(x, a) for x, a in found if a.settled]
             told += len(settled) > 1
             for (x, a), (y, b) in itertools.combinations(settled, 2):
@@ -961,7 +987,7 @@ def second(mine: Reading, other: Reading, mechanism: str, tried: Parts) -> Check
         axes = [n for n in names if n.startswith("load ")] + [n for n in names if n in spans and not n.startswith("load ") and n not in tried.fixed]
         turned = 0
         for p, _, _ in forms[:TRIED]:
-            beside = next((found for name in axes if name in p for far in (spans[name][1] * FAR, spans[name][0] / FAR) for f in ask if (found := _along(f, p, name, far))), [])
+            beside = next((found for name in axes if name in p for far in (_far(spans[name][1], True), _far(spans[name][0], False)) for f in ask if (found := _along(f, p, name, far))), [])
             turned += bool(beside)
             differ += compared(beside)[0]
         p, a, b = forms[0]

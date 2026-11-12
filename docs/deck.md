@@ -718,6 +718,8 @@ The types are given, and not left to the transcriber, because two transcribers m
 
 The ranges must be wide enough for each rule to hold for one part and fail for another.
 
+A range holds values that a part may have, so it follows its field. It starts above zero for a size. It may start at zero for a field that says `"may_be": "zero"`, and under zero for a field or a load that says `"may_be": "negative"`, down to its `least` and never under absolute zero. A load that says nothing starts at zero or above. The check then tries parts at and under zero, and on the ends of a band that lies there. It moves a load or a size far past its range to see an answer turn: to 64 times the top and a 64th of the bottom. An end under zero is divided where the other is multiplied, so "more" of a load whose top is -5 degC is -0.078 degC.
+
 ### A transcription
 
 ```json
@@ -889,6 +891,7 @@ The run says less than that table may seem to.
 - The words of a rule. `says` and `anchor` are not compared, so a rule may say one thing and state another.
 - The ratio of a rule in another form. `a - b <= 0` gives the answers of `a <= b`, and `petra check` prints no ratio for it.
 - Whether a rule can be proved. The check tries points. `petra check` proves a rule over ranges, and may leave a cell open that holds at every point of them.
+- A part that leaves a field unstated. Every part the check tries states each of its fields. Say one transcription reads an optional field and the other does not. The first is open for a part that leaves the field unstated, and the second is not. The check tells the two apart only where the field's value changes an answer.
 
 ## What the first deck covers
 

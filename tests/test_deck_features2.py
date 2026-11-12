@@ -791,6 +791,71 @@ class AtOrUnderZero(unittest.TestCase):
         reads(self, made_up([kind("holder", size("x", may_be="negative", least="-1 mm"), size("n", "dimensionless", whole=True, may_be="negative"),
                                   loads=[{"name": "f", "dim": "length", "what": "f", "may_be": "negative", "least": "-1 mm"}])]))
 
+    @staticmethod
+    def task(low: list[str], offset: list[str], air: list[str], adverse: bool = False) -> tuple[dict, list[dict]]:
+        """A task for four rules of a cell, with these ranges for its lowest temperature, its offset and the air, and the four rules."""
+        from petra import rule as acceptance
+
+        derate ={"id": "made-up/derate", "anchor": ANCHOR, "gives": {"name": "k", "dim": "dimensionless"}, "takes": [{"name": "t", "dim": "temperature", "range": ["-40 degC", "60 degC"]}],
+                  "table": {"down": {"by": "t", "bands": [["-40 degC", "0 degC"], ["0 degC", "60 degC"]]}, "cells": ["1/2", "1"]}}
+        cell_ = {"type": "cell", "what": "a cell", "fields": [
+            {"name": "low", "dim": "temperature", "may_be": "negative", "least": "-40 degC", "what": "its lowest temperature", "range": low},
+            {"name": "offset", "dim": "length", "may_be": "zero", "what": "an offset", "range": offset}, {"name": "reach", "dim": "length", "what": "a reach", "range": ["10 mm", "100 mm"]},
+            {"name": "draw", "dim": "current", "what": "the current drawn", "range": ["1 A", "40 A"]}, {"name": "rated", "dim": "current", "what": "the rated current", "range": ["10 A", "60 A"]}],
+            "loads": [{"name": "air", "dim": "temperature", "may_be": "negative", "what": "the air", "range": air, **({"adverse": True} if adverse else {})}]}
+        task = {"format": acceptance.TASK, "name": "made-up", "about": "made up", "rows": [derate], "types": [cell_],
+                "asks": [{"type": "cell", "mechanism": f"cell.{name}", "what": name, "anchor": ANCHOR} for name in ("cold", "fits", "slope", "derated")]}
+        rules = [rule("cold", "cell", "cell.cold", le=["low", ["load", "air"]]), rule("fits", "cell", "cell.fits", lt=["offset", "reach"]),
+                 rule("slope", "cell", "cell.slope", le=[["div", "reach", "offset"], "2"]),
+                 rule("derated", "cell", "cell.derated", le=["draw", ["mul", "rated", ["row", "made-up/derate", {"t": "low"}]]])]
+        return task, rules
+
+    def accepted(self, *ranges, **more) -> tuple[int, str]:
+        """What the acceptance check for a rule says of the four rules, sampled in these ranges."""
+        import contextlib
+        import io
+        import tempfile
+
+        from petra import rule as acceptance
+
+        task, rules = self.task(*ranges, **more)
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "task.json").write_text(json.dumps(task), encoding="utf-8")
+            (Path(tmp) / "rules.json").write_text(json.dumps({"rules": rules}), encoding="utf-8")
+            out, err = io.StringIO(), io.StringIO()
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                code = acceptance.main([str(Path(tmp) / "task.json"), str(Path(tmp) / "rules.json")])
+        return code, out.getvalue() + err.getvalue()
+
+    def test_the_acceptance_check_for_a_rule_samples_a_field_where_its_type_says_it_may_be(self):
+        """A task gives each quantity a range to sample it in, and the range follows the field: at zero for one that may be zero, and
+        under it for one that may be negative, down to its `least` and to absolute zero. A band that ends at 0 degC is tried on its end."""
+        code, printed = self.accepted(["-20 degC", "10 degC"], ["0 mm", "150 mm"], ["-10 degC", "40 degC"])
+        self.assertEqual(code, 0, printed)
+        for name in ("cold", "fits", "slope", "derated"):
+            self.assertRegex(printed, rf"cell\.{name}: admitted[^:]*\n +units +pass[^\n]*\n +examples[^\n]*\n +reach +pass +96 parts: \d+ fails, \d+ holds")
+        from petra import rule as acceptance
+
+        body, rules = self.task(["-20 degC", "10 degC"], ["0 mm", "150 mm"], ["-10 degC", "40 degC"])
+        read = acceptance.read_task(body)
+        tried = acceptance.parts(read, "cell.derated", [acceptance.Reading(read, acceptance.Transcription(tuple(rules), {}, {}))])
+        lows = {p["low"] for p in tried.base}
+        self.assertLessEqual({Fraction(-40), Fraction(-999, 25), Fraction(-1, 25), Fraction(0), Fraction(3, 50), Fraction(60)}, lows, "on each end of each band, and a thousandth of the band inside it")
+        self.assertTrue(any(p["offset"] == 0 for p in acceptance.parts(read, "cell.fits", [], count=4_000).base), "an offset of zero is one of the values a part is given")
+        for ranges, named in(((["-50 degC", "10 degC"], ["0 mm", "150 mm"], ["-10 degC", "40 degC"]), "cell.low"),
+                              ((["-20 degC", "10 degC"], ["-1 mm", "150 mm"], ["-10 degC", "40 degC"]), "cell.offset"),
+                              ((["-20 degC", "10 degC"], ["0 mm", "150 mm"], ["-300 degC", "40 degC"]), "cell.air")):
+            with self.subTest(named):
+                code, printed = self.accepted(*ranges)
+                self.assertEqual(code, 3, printed)
+                self.assertIn(f"{named}: its range is two", printed, "under its `least`, under zero for a field that may be zero, and under absolute zero")
+        code, printed = self.accepted(["-20 degC", "-20 degC"], ["0 mm", "0 mm"], ["-10 degC", "0 degC"])
+        self.assertEqual(code, 1, printed)
+        self.assertRegex(printed, r"reach +fail +made-up/slope answers none of 96 parts: 96 no value; mostly: [^\n]*division by \[0, 0\], which contains 0")
+        code, printed = self.accepted(["-20 degC", "10 degC"], ["0 mm", "150 mm"], ["-30 degC", "-5 degC"], adverse=True)
+        self.assertRegex(printed, r"direction +fail +more air helps: [^\n]* with air=-30 and holds [^\n]* with air=-0\.078125",
+                         "above a top under zero is a 64th of it: the air is warmer there, and a warmer day helps this rule")
+
 
 # --- 6. a rule that states lt ---------------------------------------------------------------------------
 
