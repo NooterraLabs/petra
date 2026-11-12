@@ -867,5 +867,216 @@ class AStrictRule(unittest.TestCase):
         self.assertEqual(hinted(self, CRAFTS, text, card, "craft.capped", state="refuted", point={label: "249/1000"})["state"], "open", "the point gives the mass no value")
 
 
+# --- the three families that asked for them -------------------------------------------------------------
+
+FIXTURES = Path(__file__).resolve().parent / "fixtures"
+DRAFTS = {"lifter": ("sha256:c39453ed2545a61b6c3c04129c4fecc3fedb1b684b0dde7eb010ffc71eb1e7bc", 4, 52),
+          "process": ("sha256:e52e1af691a4d50d5266ce65e43c971ebba7f28fab5851bca2ee0b05f8860637", 3, 49),
+          "drone": ("sha256:d7b1995de5d63c113b154768e7d7f2c9ed996730eec0aa822508d77bf66ada91", 12, 74)}
+"""The scouts' drafts of the types and the grid of three families, as they stand on the branches `lifter`, `process` and `drone`
+(bench/formalizer/NAME/draft.json): the hash of each file, how many types it has and how many lines of the grid. None has a row
+or a rule, and none is a deck that ships."""
+SAMPLE = {"length": "100 mm", "mass": "30 g", "force": "10 N", "stress": "100 MPa", "voltage": "14.8 V", "current": "20 A", "power": "500 W", "resistance": "20 mohm",
+          "time": "12 min", "temperature": "40 degC", "dimensionless": "2", "moment": "5 Nm", "length^3": "50 inch^3", "length^4": "300 inch^4",
+          "dimensionless/time": "9000 rpm", "current*time": "2200 mAh", "length/time": "19 m/s"}
+"""A value of each dimension the drafts use, in a unit a data sheet would print it in. They are made up."""
+
+
+def draft(name: str) -> dict:
+    return json.loads((FIXTURES / f"{name}_draft.json").read_text(encoding="utf-8"))
+
+
+def field_of(body: dict, of: str, name: str) -> dict:
+    return next(f for t in body["types"] if t["type"] == of for f in t["fields"] if f["name"] == name)
+
+
+def lifter2() -> dict:
+    """The lifting beam, restated once more. The design category and the service class are the asker's: the category sets the design
+    factor, so a design that chose its own would choose its own strength. The card states both."""
+    from tests.test_deck_features import lifter
+
+    body = lifter()
+    for name in ("category", "service"):
+        field_of(body, "lifting_beam", name)["signed"] = True
+    return body
+
+
+def process2() -> dict:
+    """The cut and bent part, restated. The shop whose limits a part is checked against is the asker's to name: a design that named
+    its own would pick the loosest. The card states it."""
+    body = draft("process")
+    field_of(body, "cut_part", "shop")["signed"] = True
+    return body
+
+
+def drone2() -> dict:
+    """The quadcopter, restated.
+
+    - The regulation it is flown under, the class it is to bear and the number of its rotor sets are the asker's, and the card states them.
+    - A propeller's maker states a greatest speed or a greatest thrust, and seldom both. The draft had a key to say which, and a number the
+      design made up for the other. Both limits are optional now, and the key is gone. A pack's resistance is optional too.
+    - A battery may be discharged below freezing, so its lowest and its highest temperature may be negative.
+    - A position along the line of flight is measured from the middle of the rotor axes and may be negative, in the design and in a load.
+      The draft measured every position from the rear end of the bottom plate, because a quantity was more than zero."""
+    body = draft("drone")
+    for name in ("rule_set", "class_mark", "rotors"):
+        field_of(body, "quadcopter", name)["signed"] = True
+    rotor = next(t for t in body["types"] if t["type"] == "rotor_set")
+    rotor["fields"] = [f for f in rotor["fields"] if f["name"] != "propeller_limit"]
+    for of, name in (("rotor_set", "speed_limit"), ("rotor_set", "thrust_limit"), ("battery", "resistance")):
+        field_of(body, of, name)["optional"] = True
+    for of, name in (("battery", "temperature_low"), ("battery", "temperature_high"), ("quadcopter", "centre"), ("quadcopter", "battery_station")):
+        field_of(body, of, name)["may_be"] = "negative"
+    quad = next(t for t in body["types"] if t["type"] == "quadcopter")
+    station = next(f for f in quad["loads"] if f["name"] == "payload_station")
+    station.pop("least")
+    station["may_be"] = "negative"
+    return body
+
+
+def stated(body: dict, parts: dict[str, str], says_of: dict[str, str] | None = None, cases: str = "", **lines: str) -> tuple[str, str]:
+    """A made-up design of the deck's types and its card. `parts` names each part and its type. Every field takes a value of SAMPLE for its
+    dimension, the first name of its key, or its least count, and the parts a field joins are the parts of that type in order. A quantity
+    that is `signed` reads a given that the card bounds at the sample. `lines` changes a line, as `PART__FIELD=value`, and `says_of` is what
+    the card states exactly, by `PART.FIELD`."""
+    kinds = {t["type"]: t for t in body["types"]}
+    blocks, card = [], HEAD
+    for name, of in parts.items():
+        written = {}
+        for f in kinds[of]["fields"]:
+            key_ = f"{name}__{f['name']}"
+            if key_ in lines:
+                written[f["name"]] = lines[key_]
+            elif "type" in f:
+                written[f["name"]] = " ".join([p for p, t in parts.items() if t == f["type"]][:len(f.get("as", [f["name"]]))])
+            elif f"{name}.{f['name']}" in (says_of or {}):
+                written[f["name"]] = f"given {name}.{f['name']}"
+            elif "one_of" in f:
+                first = f["one_of"][0]
+                written[f["name"]] = first if first.isidentifier() else f'"{first}"'
+            elif f.get("signed"):
+                written[f["name"]] = f"given {name}.{f['name']}"
+                card += given(f"{name}.{f['name']}", SAMPLE[f["dim"]])
+            else:
+                written[f["name"]] = f.get("least", "2") if f.get("whole") else SAMPLE[f["dim"]]
+        blocks.append(part(of, name, **written))
+    card += "".join(says(name, value) for name, value in (says_of or {}).items())
+    return design(*blocks), card + cases
+
+
+class TheThreeFamilies(unittest.TestCase):
+    """The drafts of three families, each restated with what a deck can say now: types and lines of the grid alone, with no row and no
+    rule. So every line that can arise is open, and what the tests hold is that the kernel and petra/grid.py read each deck and a
+    made-up design of it alike, and refuse what the card alone may state when the design writes it."""
+
+    def test_each_fixture_is_its_scouts_draft(self):
+        for name, (digest, types, lines) in DRAFTS.items():
+            with self.subTest(name):
+                self.assertEqual(export.sha256((FIXTURES / f"{name}_draft.json").read_text(encoding="utf-8")), digest)
+                body = draft(name)
+                self.assertEqual((body["rows"], body["rules"], len(body["types"]), len(body["grid"])), ([], [], types, lines))
+
+    def test_each_draft_and_each_restatement_loads_in_the_grid_and_in_the_kernel(self):
+        for name, restated in (("lifter", lifter2), ("process", process2), ("drone", drone2)):
+            with self.subTest(name):
+                reads(self, draft(name))
+                reads(self, restated())
+                self.assertEqual(len(grid.read_deck(json.dumps(restated())).asks), DRAFTS[name][2], "the restatement asks every line the draft asks")
+
+    LIFT = {"w": "i_shape", "up": "lug", "down": "lug", "s1": "shackle", "s2": "shackle", "b": "lifting_beam"}
+    FITS = dict(s1__pin="1 inch", s2__pin="1 inch", up__hole="2 inch", up__width="6 inch", up__edge="3 inch", down__hole="2 inch", down__width="6 inch", down__edge="3 inch",
+                b__length="120 inch")
+    """Sizes that keep what a lug and a beam need of their fields: a pin under its hole, a hole narrower than its plate, the span within the length."""
+
+    def test_a_lifting_beam_takes_its_category_and_its_service_class_from_the_card(self):
+        body = lifter2()
+        hot = load("lift", "b lift in [0 kip, 10 kip]", "b temperature in [-35/9 degC, 590/9 degC]")
+        text, card = stated(body, self.LIFT, {"b.category": "B", "b.service": '"1"'}, hot, **self.FITS)
+        card = card.replace(given("b.span", "100 mm"), given("b.span", "96 inch", "100 inch"))
+        found, verdict, _ = cells(self, body, text, card)
+        lines = {k[1]: v for k, v in found.items() if k[0] == "b" and k[1] != "unread"}
+        self.assertEqual((len(lines), sorted(set(lines.values())), verdict), (52, ["not_applicable", "open"], "UNKNOWN"))
+        deck, read = parsed(body, text, card)
+        made = export.card(read, export.read_inputs(read), placed=True)
+        self.assertEqual(made["states"], [{"name": "b.category", "by": "t@example.org", "key": "B"}, {"name": "b.service", "by": "t@example.org", "key": "1"}])
+        heat = next(i for i in made["inputs"] if i.get("field") == "temperature")
+        self.assertEqual((heat["dim"], Fraction(heat["lo"]), Fraction(heat["hi"])), ("temperature", Fraction(-35, 9), Fraction(590, 9)), "25 to 150 degF, as exact fractions of a degC")
+        for field, written in (("category", "B"), ("service", '"1"')):
+            with self.subTest(field):
+                others = {k: v for k, v in {"b.category": "B", "b.service": '"1"'}.items() if k != f"b.{field}"}
+                mine, its = ill_formed(self, body, *stated(body, self.LIFT, others, hot, **self.FITS, **{f"b__{field}": written}))
+                self.assertIn(f"parts.4 design b.{field}: is for the card to state", its)
+        service_0 = stated(body, self.LIFT, {"b.category": "B", "b.service": '"0"'}, hot, **self.FITS)
+        found_0, _, _ = cells(self, body, service_0[0], service_0[1].replace(given("b.span", "100 mm"), given("b.span", "96 inch", "100 inch")))
+        self.assertEqual((found["b", "lifting_beam.beam_fatigue", ""], found_0["b", "lifting_beam.beam_fatigue", ""]), ("open", "not_applicable"),
+                         "the service class the card states is what the grid's `unless` reads")
+
+    CUT = {"c": "cut_part"}
+
+    def test_a_cut_part_takes_its_shop_from_the_card(self):
+        body = process2()
+        text, card = stated(body, self.CUT, {"c.shop": "oshcut"})
+        found, verdict, _ = cells(self, body, text, card)
+        lines = {k[1]: v for k, v in found.items() if k[0] == "c" and k[1] != "unread"}
+        asked = [a for a in body["grid"] if a["type"] == "cut_part"]
+        self.assertEqual((len(lines), verdict), (len(asked), "UNKNOWN"))
+        self.assertIn(("c", "unread", "shop"), found, "no line of the draft reads the shop yet: its rules will, and until then the card's statement is checked by nothing")
+        mine, its = ill_formed(self, body, *stated(body, self.CUT, c__shop="oshcut"))
+        self.assertIn("parts.4 design c.shop: is for the card to state", its)
+        mine, its = ill_formed(self, body, *stated(body, self.CUT, {"c.shop": "nobody"}))
+        self.assertIn("parts.4 design c.shop: is one of: sendcutsend, oshcut", its)
+        bent = {"c": "cut_part", "f": "bend", "p": "bent_part"}
+        found, _, _ = cells(self, body, *stated(body, bent, {"c.shop": "strictest"}, f__grain="unstated"))
+        self.assertIn(("f", "unread", "grain"), found, "`unstated` is a name of this key, which is not optional: the bend states that the grain is not stated to the shop")
+
+    FLEET = {"r": "rotor_set", "e": "controller", "bat": "battery", "plug1": "connector", "plug2": "connector", "lead1": "lead", "lead2": "lead", "fc": "autopilot",
+             "pm": "power_module", "top": "plate", "bottom": "plate", "a": "arm", "posts": "post", "rest": "sundries", "q": "quadcopter"}
+    ASKED = {"q.rule_set": "eu_open", "q.class_mark": "C1", "q.rotors": "4"}
+
+    def test_a_quadcopter_takes_its_class_from_the_card_and_states_what_its_makers_state(self):
+        body = drone2()
+        flight = load("cruise", "q payload in [0 g, 200 g]", "q payload_station in [-30 mm, 10 mm]", "q altitude in [0 m, 120 m]", "q air_temperature in [-10 degC, 40 degC]",
+                      "q load_factor in [1, 2]", "q drop in [0 mm, 500 mm]")
+        made = dict(r__speed_limit="unstated", r__thrust_limit="12 N", bat__resistance="unstated", bat__temperature_low="-10 degC", bat__temperature_high="40 degC",
+                    q__centre="0 mm", q__battery_station="-20 mm", bat__cells="4", posts__count="4")
+        text, card = stated(body, self.FLEET, self.ASKED, flight, **made)
+        found, verdict, _ = cells(self, body, text, card)
+        self.assertEqual(verdict, "UNKNOWN", "the draft has no rule, so every line that can arise is open")
+        lines = {k[:2]: v for k, v in found.items() if k[1] != "unread"}
+        self.assertEqual(len(lines), 74, "each line of the draft's grid is asked of the one part of its type")
+        unread = {k[0] + "." + k[2] for k in found if k[1] == "unread"}
+        self.assertNotIn("r.speed_limit", unread, "a limit the maker does not state has no cell")
+        self.assertNotIn("bat.resistance", unread)
+        self.assertIn("r.thrust_limit", unread, "the limit the maker states is a value that no rule of the draft checks yet")
+        deck, read = parsed(body, text, card)
+        written = {(q["entity"], q["field"]): q for q in export.design_file(read, "", deck=True)["quantities"]}
+        self.assertEqual([(written[k]["dim"], written[k]["lo"]) for k in (("bat", "temperature_low"), ("q", "centre"), ("q", "battery_station"), ("r", "speed_full"), ("bat", "capacity"))],
+                         [("temperature", "-10"), ("length", "0"), ("length", "-1/50"), ("s^-1", "150"), ("s^1 A^1", "7920")])
+        card_json = export.card(read, export.read_inputs(read), placed=True)
+        self.assertEqual([s["name"] for s in card_json["states"]], ["q.class_mark", "q.rotors", "q.rule_set"])
+        self.assertEqual(next(i["lo"] for i in card_json["inputs"] if i.get("field") == "payload_station"), "-3/100")
+        for field, written_by_design in (("class_mark", "C1"), ("rule_set", "eu_open"), ("rotors", "4")):
+            with self.subTest(field):
+                asked = {k: v for k, v in self.ASKED.items() if k != f"q.{field}"}
+                mine, its = ill_formed(self, body, *stated(body, self.FLEET, asked, flight, **made, **{f"q__{field}": written_by_design}))
+                self.assertIn(f"design q.{field}: is for the card to state", its)
+        us = stated(body, self.FLEET, {**self.ASKED, "q.rule_set": "us_part_107", "q.class_mark": "none"}, flight, **made)
+        found_us, _, _ = cells(self, body, *us)
+        self.assertEqual((found["q", "quad.us_mass", ""], found_us["q", "quad.us_mass", ""], found["q", "quad.eu_class_mass", ""], found_us["q", "quad.eu_class_mass", ""]),
+                         ("not_applicable", "open", "open", "not_applicable"), "the regulation and the class that the card states switch the lines of the grid")
+
+    def test_what_the_drafts_had_to_bend_is_refused_or_needless_now(self):
+        body = drone2()
+        self.assertNotIn("propeller_limit", [f["name"] for t in body["types"] if t["type"] == "rotor_set" for f in t["fields"]])
+        mine, its = ill_formed(self, body, *stated(body, self.FLEET, self.ASKED, r__speed_limit="unstated", r__thrust_limit="unstated", bat__temperature_low="-300 degC"))
+        self.assertIn("parts.3 design bat.temperature_low: a temperature is at least -5463/20", its)
+        mine, its = ill_formed(self, body, *stated(body, self.FLEET, self.ASKED, r__thrust_full="unstated"))
+        self.assertIn("parts.3 design r.thrust_full: is left unstated, and its field is not `optional`", its)
+        old = draft("drone")
+        with self.assertRaises((LoweringError, grid.ComponentError)):      # the draft as the scout left it takes no battery below freezing
+            deck, read = parsed(old, *stated(old, self.FLEET, bat__temperature_low="-10 degC", bat__cells="4", posts__count="4", q__rotors="4"))
+            grid.check(read, deck)
+
+
 if __name__ == "__main__":
     unittest.main()

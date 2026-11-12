@@ -1,0 +1,763 @@
+{
+ "format": "petra-rules/0",
+ "name": "process-draft",
+ "about": "A draft for a process pack: the types and the grid of a flat part that a shop cuts from sheet or plate by laser, plasma or water jet and may then bend on a press brake. It is written by hand from the design guidelines that shops and makers of machines publish, and from a list of the stages of making a part. Each line names one publisher that raises it, with the page's address and the day it was fetched in the anchor's standard. Other publishers give other numbers for most lines. It has no rows and no rules, so every line that can arise is open. It is a task for two transcribers and is in no deck that ships.",
+ "rows": [],
+ "types": [
+  {
+   "type": "cut_part",
+   "what": "a flat part cut from sheet or plate by one process at one shop. Its cut features are stated by bounds: each bound says that no feature of the part is past it, and a part with no such feature may state any value",
+   "fields": [
+    {
+     "name": "shop",
+     "one_of": [
+      "sendcutsend",
+      "oshcut",
+      "fabworks",
+      "tailorsteel",
+      "protolabs",
+      "xometry",
+      "maker",
+      "strictest"
+     ],
+     "what": "whose published limits the part is checked against: a named shop, or maker for the guidance of the makers of the machines where no shop is named, or strictest for the strictest limit the deck holds, which is no shop's own rule"
+    },
+    {
+     "name": "process",
+     "one_of": [
+      "laser",
+      "plasma",
+      "waterjet"
+     ],
+     "what": "how it is cut: by fiber or CO2 laser, by plasma arc, or by abrasive water jet"
+    },
+    {
+     "name": "material",
+     "one_of": [
+      "mild_steel",
+      "hsla_steel",
+      "stainless_304",
+      "stainless_316",
+      "aluminium_5052",
+      "aluminium_6061"
+     ],
+     "what": "the family of its metal, as the shops' tables name one"
+    },
+    {
+     "name": "thickness",
+     "dim": "length",
+     "what": "the nominal thickness of its stock"
+    },
+    {
+     "name": "length",
+     "dim": "length",
+     "what": "the longer side of the smallest rectangle that holds its outline"
+    },
+    {
+     "name": "width",
+     "dim": "length",
+     "what": "the shorter side of that rectangle"
+    },
+    {
+     "name": "hole",
+     "dim": "length",
+     "what": "a diameter that no round cut of the part is under"
+    },
+    {
+     "name": "slot",
+     "dim": "length",
+     "what": "a width that no slot, notch or other cut that is not round is under"
+    },
+    {
+     "name": "web",
+     "dim": "length",
+     "what": "a width of metal that is left between any two cuts"
+    },
+    {
+     "name": "margin",
+     "dim": "length",
+     "what": "a width of metal that is left between any cut and the outline"
+    },
+    {
+     "name": "tab",
+     "dim": "length",
+     "what": "a width that no tab, finger or other narrow run of the outline is under"
+    },
+    {
+     "name": "corner",
+     "dim": "length",
+     "what": "a radius that no inside corner of the outline or of a cut is under"
+    },
+    {
+     "name": "inner",
+     "one_of": [
+      "none",
+      "some"
+     ],
+     "what": "whether any cut lies inside the outline, and so starts from a pierce through the stock"
+    },
+    {
+     "name": "edges",
+     "one_of": [
+      "as_cut",
+      "deburred"
+     ],
+     "what": "whether the need takes the edges as the cut leaves them or asks for them deburred"
+    },
+    {
+     "name": "finish",
+     "one_of": [
+      "none",
+      "powder_coat",
+      "anodize",
+      "plating"
+     ],
+     "what": "the coating the shop puts on it after cutting"
+    },
+    {
+     "name": "tolerance",
+     "dim": "length",
+     "signed": true,
+     "what": "the tightest tolerance, plus or minus, that the need puts on a cut dimension"
+    },
+    {
+     "name": "lean",
+     "dim": "length",
+     "signed": true,
+     "what": "the most that a cut edge may lean from square over the thickness, as the need allows"
+    },
+    {
+     "name": "heat",
+     "dim": "length",
+     "signed": true,
+     "what": "the greatest depth of heat-affected metal at a cut edge that the need allows"
+    },
+    {
+     "name": "flatness",
+     "dim": "length",
+     "signed": true,
+     "what": "the greatest bow from flat over the part's length that the need allows"
+    }
+   ]
+  },
+  {
+   "type": "bend",
+   "what": "every bend of a part on a press brake, which are alike in angle and inside radius. Its lengths are bounds over those bends, as a cut_part states its cuts",
+   "fields": [
+    {
+     "name": "angle",
+     "dim": "dimensionless",
+     "what": "the angle each flange is turned through, in degrees: 90 for a square corner"
+    },
+    {
+     "name": "radius",
+     "dim": "length",
+     "what": "the inside radius of each bend"
+    },
+    {
+     "name": "allowance",
+     "dim": "length",
+     "what": "the length of flat stock the part gives each bend, between the two lines where the bend begins and ends"
+    },
+    {
+     "name": "flange",
+     "dim": "length",
+     "what": "a length that no leg is under, from a bend line to the nearest cut edge, on the flat part"
+    },
+    {
+     "name": "length",
+     "dim": "length",
+     "what": "a length that no bend line is over"
+    },
+    {
+     "name": "clear",
+     "dim": "length",
+     "what": "a distance from a bend line that no hole, slot or other cut that the line does not cross is within"
+    },
+    {
+     "name": "between",
+     "dim": "length",
+     "what": "a distance that no two bend lines are nearer than"
+    },
+    {
+     "name": "stop",
+     "dim": "length",
+     "what": "a length that the straight edge parallel to each bend line, which the back gauge meets, is not under"
+    },
+    {
+     "name": "relief_width",
+     "dim": "length",
+     "what": "a width that no relief cut at the end of a bend line is under"
+    },
+    {
+     "name": "relief_depth",
+     "dim": "length",
+     "what": "a depth, from the bend line, that no relief cut at the end of a bend line is under"
+    },
+    {
+     "name": "grain",
+     "one_of": [
+      "across",
+      "along",
+      "unstated"
+     ],
+     "what": "how the bend lines lie to the rolling direction of the stock: across it, along it, or not stated to the shop"
+    },
+    {
+     "name": "angle_tolerance",
+     "dim": "dimensionless",
+     "signed": true,
+     "what": "the tightest tolerance, plus or minus and in degrees, that the need puts on the angle"
+    },
+    {
+     "name": "tolerance",
+     "dim": "length",
+     "signed": true,
+     "what": "the tightest tolerance, plus or minus, that the need puts on a distance from a bend to an edge or to another bend"
+    }
+   ]
+  },
+  {
+   "type": "bent_part",
+   "what": "a flat part that the shop that cut it then bends on a press brake, by air bending, with every bend alike",
+   "fields": [
+    {
+     "name": "count",
+     "dim": "dimensionless",
+     "whole": true,
+     "least": "1",
+     "what": "the number of its bends"
+    },
+    {
+     "name": "flat",
+     "type": "cut_part",
+     "what": "the flat part before bending"
+    },
+    {
+     "name": "bends",
+     "type": "bend",
+     "as": [
+      "bend"
+     ],
+     "what": "its bends"
+    }
+   ]
+  }
+ ],
+ "grid": [
+  {
+   "type": "cut_part",
+   "mechanism": "cut.stock",
+   "what": "whether the shop cuts this material at this thickness by this process",
+   "anchor": {
+    "standard": "SendCutSend, A36/1008 Mild Steel Laser Cutting, fetched 2026-11-11, https://sendcutsend.com/materials/mild-steel/",
+    "clause": "Mild Steel sheet metal material details and specifications"
+   }
+  },
+  {
+   "type": "cut_part",
+   "mechanism": "cut.size_least",
+   "what": "the least size of a part that the shop cuts and does not lose",
+   "anchor": {
+    "standard": "SendCutSend, Materials Minimum/Maximum Sizing Guidelines, fetched 2026-11-11, https://sendcutsend.com/materials/min-max/",
+    "clause": "Metals",
+    "table": "Min Size"
+   }
+  },
+  {
+   "type": "cut_part",
+   "mechanism": "cut.size_greatest",
+   "what": "the greatest size of a part, which the sheet and the bed of the machine set",
+   "anchor": {
+    "standard": "SendCutSend, Materials Minimum/Maximum Sizing Guidelines, fetched 2026-11-11, https://sendcutsend.com/materials/min-max/",
+    "clause": "Metals",
+    "table": "Max instant quote, Max custom quote"
+   }
+  },
+  {
+   "type": "cut_part",
+   "mechanism": "cut.hole",
+   "what": "the least diameter of a round cut, under which the cut cannot be pierced and cut round",
+   "anchor": {
+    "standard": "SendCutSend, A36/1008 Mild Steel Laser Cutting, fetched 2026-11-11, https://sendcutsend.com/materials/mild-steel/",
+    "clause": "Mild Steel sheet metal material details and specifications: Laser cutting specifications",
+    "table": "Min hole size"
+   }
+  },
+  {
+   "type": "cut_part",
+   "mechanism": "cut.hole_advised",
+   "what": "the diameter of a round cut under which the shop cuts it and promises less of it",
+   "anchor": {
+    "standard": "OSH Cut, A36 / A1011 Steel, HR, P&O, fetched 2026-11-11, https://www.oshcut.com/materialdetails/steel-a36-a1011-hr-p-o",
+    "clause": "Design Rules",
+    "table": "Min Recommended Hole Size"
+   }
+  },
+  {
+   "type": "cut_part",
+   "mechanism": "cut.slot",
+   "what": "the least width of a slot, a notch or another cut that is not round",
+   "anchor": {
+    "standard": "247TailorSteel, Guidelines for laser cutting, changed 28-04-2026, fetched 2026-11-11, https://247tailorsteel.com/en/submission-guidelines/guidelines-for-laser-cutting",
+    "clause": "Minimum slot size"
+   }
+  },
+  {
+   "type": "cut_part",
+   "mechanism": "cut.kerf",
+   "what": "no cut narrower than the width the process itself removes",
+   "anchor": {
+    "standard": "Hypertherm, Powermax125 Cartridge Retrofit Torches Operator Manual, fetched 2026-11-11, https://xnet.hypertherm.com/docs/en/Powermax125_retrofit_torch_OM/vkl1065237733940.html",
+    "clause": "Cut charts",
+    "table": "Mild steel - 125 A - air cut chart, kerf width"
+   }
+  },
+  {
+   "type": "cut_part",
+   "mechanism": "cut.web",
+   "what": "the least width of metal left between two cuts",
+   "anchor": {
+    "standard": "SendCutSend, A36/1008 Mild Steel Laser Cutting, fetched 2026-11-11, https://sendcutsend.com/materials/mild-steel/",
+    "clause": "Mild Steel sheet metal material details and specifications: Laser cutting specifications",
+    "table": "Min bridge size"
+   }
+  },
+  {
+   "type": "cut_part",
+   "mechanism": "cut.margin",
+   "what": "the least width of metal left between a cut and the outline",
+   "anchor": {
+    "standard": "SendCutSend, A36/1008 Mild Steel Laser Cutting, fetched 2026-11-11, https://sendcutsend.com/materials/mild-steel/",
+    "clause": "Mild Steel sheet metal material details and specifications: Laser cutting specifications",
+    "table": "Min hole to edge distance"
+   }
+  },
+  {
+   "type": "cut_part",
+   "mechanism": "cut.tab",
+   "what": "the least width of a tab or another narrow run of the outline, which heat warps or the jet bends",
+   "anchor": {
+    "standard": "Protolabs, Design Guidelines for Sheet Metal Fabrication, fetched 2026-11-11, https://protolabs.com/services/sheet-metal-fabrication/design-guidelines",
+    "clause": "Common Features, notches and tabs"
+   }
+  },
+  {
+   "type": "cut_part",
+   "mechanism": "cut.corner",
+   "what": "the least radius of an inside corner, which the width of the cut sets",
+   "anchor": {
+    "standard": "247TailorSteel, Guidelines for laser cutting, changed 28-04-2026, fetched 2026-11-11, https://247tailorsteel.com/en/submission-guidelines/guidelines-for-laser-cutting",
+    "clause": "Corners"
+   }
+  },
+  {
+   "type": "cut_part",
+   "mechanism": "cut.pierce",
+   "what": "whether the process can pierce stock of this thickness to start a cut inside the outline",
+   "anchor": {
+    "standard": "Hypertherm, Powermax125 Cartridge Retrofit Torches Operator Manual, fetched 2026-11-11, https://xnet.hypertherm.com/docs/en/Powermax125_retrofit_torch_OM/vkl1065237733940.html",
+    "clause": "Cut charts",
+    "table": "Mild steel - 125 A - air cut chart, initial pierce height"
+   },
+   "unless": {
+    "when": [
+     "is",
+     "inner",
+     "none"
+    ],
+    "why": "every cut of the part starts from the edge of the stock"
+   }
+  },
+  {
+   "type": "cut_part",
+   "mechanism": "cut.tolerance",
+   "what": "the tolerance the shop holds on a cut dimension, against what the need allows",
+   "anchor": {
+    "standard": "247TailorSteel, Guidelines for laser cutting, changed 28-04-2026, fetched 2026-11-11, https://247tailorsteel.com/en/submission-guidelines/guidelines-for-laser-cutting",
+    "clause": "Tolerances"
+   }
+  },
+  {
+   "type": "cut_part",
+   "mechanism": "cut.taper",
+   "what": "the lean of a cut edge from square over the thickness, against what the need allows",
+   "anchor": {
+    "standard": "WARDJET, Precision and Quality, fetched 2026-11-11, https://www.wardjet.com/precision-and-quality/",
+    "clause": "the kerf angle of an abrasive jet"
+   }
+  },
+  {
+   "type": "cut_part",
+   "mechanism": "cut.aspect",
+   "what": "a long narrow part, which bows as it is cut",
+   "anchor": {
+    "standard": "OSH Cut, A36 / A1011 Steel, HR, P&O, fetched 2026-11-11, https://www.oshcut.com/materialdetails/steel-a36-a1011-hr-p-o",
+    "clause": "Design Rules",
+    "table": "Max Recommended Aspect Ratio"
+   }
+  },
+  {
+   "type": "cut_part",
+   "mechanism": "cut.flatness",
+   "what": "how flat the part is after cutting, against what the need allows",
+   "anchor": {
+    "standard": "SendCutSend, A36/1008 Mild Steel Laser Cutting, fetched 2026-11-11, https://sendcutsend.com/materials/mild-steel/",
+    "clause": "Mild Steel sheet metal material details and specifications: Laser cutting specifications",
+    "table": "Flatness tolerance before cutting"
+   }
+  },
+  {
+   "type": "cut_part",
+   "mechanism": "cut.heat_zone",
+   "what": "the depth of metal that a thermal cut heats past its transformation, against what the need allows",
+   "anchor": {
+    "standard": "SSAB, Cutting Hardox wear plate (cutting recommendations 106, version 3 of 2025), fetched 2026-11-11, https://www.ssab.com/-/media/files/en/hardox/cutting-recommendations-for-hardox-wear-plate-106env32025.pdf",
+    "clause": "Cutting methods",
+    "table": "1, 2 and 3",
+    "page": "4 to 6"
+   },
+   "unless": {
+    "when": [
+     "is",
+     "process",
+     "waterjet"
+    ],
+    "why": "an abrasive water jet cuts cold and leaves no heat-affected zone"
+   }
+  },
+  {
+   "type": "cut_part",
+   "mechanism": "cut.edge_condition",
+   "what": "the roughness, the gouges and the hardness of a cut edge or a cut hole that later carries load or is welded",
+   "anchor": {
+    "standard": "AISC 360-22",
+    "clause": "M2.2 and M2.5"
+   }
+  },
+  {
+   "type": "cut_part",
+   "mechanism": "cut.nesting",
+   "what": "the gap between parts cut from one sheet",
+   "anchor": {
+    "standard": "SendCutSend, Sheet Cutting Guidelines, fetched 2026-11-11, https://sendcutsend.com/guidelines/laser-cutting/",
+    "clause": "Nesting multiple parts"
+   },
+   "unless": {
+    "why": "a cut_part is one part, and the shop lays parts out on the sheet"
+   }
+  },
+  {
+   "type": "cut_part",
+   "mechanism": "cut.tabs",
+   "what": "the nubs left on the outline where the shop holds a small part in the sheet by tabs",
+   "anchor": {
+    "standard": "OSH Cut, Understanding Micro-Joints, fetched 2026-11-11, https://www.oshcut.com/design-guide/understanding-micro-joints",
+    "clause": "Understanding Micro-Joints"
+   }
+  },
+  {
+   "type": "cut_part",
+   "mechanism": "cut.deburr",
+   "what": "whether the shop deburrs a part of this size and thickness",
+   "anchor": {
+    "standard": "SendCutSend, Minimum/Maximum Part Sizing Guidelines, fetched 2026-11-11, https://sendcutsend.com/materials/processing-min-max/",
+    "clause": "Processing minimum and maximum sizes: Deburring"
+   },
+   "unless": {
+    "when": [
+     "is",
+     "edges",
+     "as_cut"
+    ],
+    "why": "the need takes the edges as cut"
+   }
+  },
+  {
+   "type": "cut_part",
+   "mechanism": "cut.finish_size",
+   "what": "whether the shop coats a part of this size, thickness and material",
+   "anchor": {
+    "standard": "SendCutSend, Minimum/Maximum Part Sizing Guidelines, fetched 2026-11-11, https://sendcutsend.com/materials/processing-min-max/",
+    "clause": "Processing minimum and maximum sizes: Anodizing, Plating, Powder Coating"
+   },
+   "unless": {
+    "when": [
+     "is",
+     "finish",
+     "none"
+    ],
+    "why": "the part is not coated"
+   }
+  },
+  {
+   "type": "cut_part",
+   "mechanism": "cut.finish_build",
+   "what": "the thickness a coating adds, which closes small holes and takes up tolerance",
+   "anchor": {
+    "standard": "SendCutSend, Durable Powder Coating Services, fetched 2026-11-11, https://sendcutsend.com/guidelines/powder-coating/",
+    "clause": "coating thickness and minimum hole size"
+   },
+   "unless": {
+    "when": [
+     "is",
+     "finish",
+     "none"
+    ],
+    "why": "the part is not coated"
+   }
+  },
+  {
+   "type": "cut_part",
+   "mechanism": "cut.finish_hang",
+   "what": "a hole to hang the part by while it is coated",
+   "anchor": {
+    "standard": "SendCutSend, Durable Powder Coating Services, fetched 2026-11-11, https://sendcutsend.com/guidelines/powder-coating/",
+    "clause": "required hanging hole"
+   },
+   "unless": {
+    "when": [
+     "is",
+     "finish",
+     "none"
+    ],
+    "why": "the part is not coated"
+   }
+  },
+  {
+   "type": "cut_part",
+   "mechanism": "cut.taps",
+   "what": "tapped holes: the threads the shop taps, the thickness each needs, and its distance from an edge",
+   "anchor": {
+    "standard": "SendCutSend, Sheet Metal Tapping Services, fetched 2026-11-11, https://sendcutsend.com/guidelines/tapping/",
+    "clause": "Sheet metal tapping guidelines"
+   }
+  },
+  {
+   "type": "cut_part",
+   "mechanism": "cut.countersinks",
+   "what": "countersinks: the sizes the shop cuts, their depth against the thickness, and their spacing",
+   "anchor": {
+    "standard": "SendCutSend, Online Countersinking Services, fetched 2026-11-11, https://sendcutsend.com/guidelines/countersinking/",
+    "clause": "Countersink size reference charts"
+   }
+  },
+  {
+   "type": "cut_part",
+   "mechanism": "cut.hardware",
+   "what": "pressed-in hardware: the distance of each from an edge and from a bend, as its maker gives it",
+   "anchor": {
+    "standard": "Protolabs, Design Guidelines for Sheet Metal Fabrication, fetched 2026-11-11, https://protolabs.com/services/sheet-metal-fabrication/design-guidelines",
+    "clause": "Hardware Inserts near Bends"
+   }
+  },
+  {
+   "type": "cut_part",
+   "mechanism": "cut.marking",
+   "what": "engraved or marked lines: their spacing and their distance from a cut",
+   "anchor": {
+    "standard": "247TailorSteel, Guidelines for laser cutting, changed 28-04-2026, fetched 2026-11-11, https://247tailorsteel.com/en/submission-guidelines/guidelines-for-laser-cutting",
+    "clause": "Engraving"
+   }
+  },
+  {
+   "type": "cut_part",
+   "mechanism": "cut.inspection",
+   "what": "what the shop measures of the part before it ships",
+   "anchor": {
+    "standard": "no publisher read to 2026-11-11 states it",
+    "clause": "a taxonomy of making a part: inspection"
+   }
+  },
+  {
+   "type": "cut_part",
+   "mechanism": "cut.shipping",
+   "what": "the greatest size and weight of a part that the shop packs and ships",
+   "anchor": {
+    "standard": "Fabworks, Sheet Metal Laser Cutting Guidelines, fetched 2026-11-11, https://www.fabworks.com/resources/guidelines/laser-cutting/sheet",
+    "clause": "Part Size"
+   }
+  },
+  {
+   "type": "bent_part",
+   "mechanism": "bend.stock",
+   "what": "whether the shop bends this material at this thickness",
+   "anchor": {
+    "standard": "SendCutSend, Sheet Metal Bending Services, fetched 2026-11-11, https://sendcutsend.com/guidelines/bending/",
+    "clause": "Available materials for Bending"
+   }
+  },
+  {
+   "type": "bent_part",
+   "mechanism": "bend.size",
+   "what": "the least and the greatest flat part, and the greatest weight, that the brake and its operator handle",
+   "anchor": {
+    "standard": "SendCutSend, Minimum/Maximum Part Sizing Guidelines, fetched 2026-11-11, https://sendcutsend.com/materials/processing-min-max/",
+    "clause": "Processing minimum and maximum sizes: Bending"
+   }
+  },
+  {
+   "type": "bent_part",
+   "mechanism": "bend.radius",
+   "what": "the inside radius that the shop's punch and die give this stock, which the part must be drawn with",
+   "anchor": {
+    "standard": "SendCutSend, Sheet Metal Bending Calculator, fetched 2026-11-11, https://sendcutsend.com/bending-calculator/",
+    "clause": "Bending specifications per material",
+    "table": "Effective Bend Radius @ 90 degrees"
+   }
+  },
+  {
+   "type": "bent_part",
+   "mechanism": "bend.radius_least",
+   "what": "the least inside radius the metal takes without cracking",
+   "anchor": {
+    "standard": "Fictiv, Sheet Metal Specifications Guidelines, fetched 2026-11-11, https://www.fictiv.com/specifications/sheet-metal",
+    "clause": "Bending Guidelines"
+   }
+  },
+  {
+   "type": "bent_part",
+   "mechanism": "bend.grain",
+   "what": "the least radius by how the bend line lies to the rolling direction of the stock",
+   "anchor": {
+    "standard": "SSAB, Bending Hardox (brochure of 2024), fetched 2026-11-11, https://www.ssab.com/-/media/314fa452afc143c3b898a959599a050e.ashx",
+    "clause": "Bending recommendations",
+    "table": "2",
+    "page": "10"
+   }
+  },
+  {
+   "type": "bent_part",
+   "mechanism": "bend.edge_cracks",
+   "what": "cracks that start at a cut edge where a bend line meets it",
+   "anchor": {
+    "standard": "SSAB, Bending Hardox (brochure of 2024), fetched 2026-11-11, https://www.ssab.com/-/media/314fa452afc143c3b898a959599a050e.ashx",
+    "clause": "Preparation before bending",
+    "page": "4"
+   }
+  },
+  {
+   "type": "bent_part",
+   "mechanism": "bend.angle",
+   "what": "the range of angles the shop bends this stock to",
+   "anchor": {
+    "standard": "SendCutSend, Sheet Metal Bending Services, fetched 2026-11-11, https://sendcutsend.com/guidelines/bending/",
+    "clause": "What we can't bend"
+   }
+  },
+  {
+   "type": "bent_part",
+   "mechanism": "bend.flange",
+   "what": "the least length of a leg, which must reach across the die",
+   "anchor": {
+    "standard": "SendCutSend, Sheet Metal Bending Calculator, fetched 2026-11-11, https://sendcutsend.com/bending-calculator/",
+    "clause": "Bending specifications per material",
+    "table": "Die Width, Min Formed Flange Length @ 90 degrees"
+   }
+  },
+  {
+   "type": "bent_part",
+   "mechanism": "bend.support",
+   "what": "the share of each bend line along which both legs are long enough for the die",
+   "anchor": {
+    "standard": "SendCutSend, Bending Deformation Guidelines, fetched 2026-11-11, https://sendcutsend.com/guidelines/bend-deformation/",
+    "clause": "Unsupported bend"
+   }
+  },
+  {
+   "type": "bent_part",
+   "mechanism": "bend.length",
+   "what": "the greatest length of a bend line, which the bed of the brake and its force set",
+   "anchor": {
+    "standard": "Fabworks, Bending Guidelines, fetched 2026-11-11, https://www.fabworks.com/resources/guidelines/bending",
+    "clause": "Material Table",
+    "table": "Max bend length"
+   }
+  },
+  {
+   "type": "bent_part",
+   "mechanism": "bend.force",
+   "what": "the force of the bend, against what the brake and its tools give",
+   "anchor": {
+    "standard": "Durmapress, Press Brake Tonnage Chart: Formula, Calculator & Bending Force Guide, fetched 2026-11-11, https://www.durmapress.com/press-brake-tonnage-chart-how-to-calculate-bending-force/",
+    "clause": "the air bending force formula"
+   }
+  },
+  {
+   "type": "bent_part",
+   "mechanism": "bend.clear",
+   "what": "the least distance from a bend line to a hole, a slot or another cut, inside which the cut is pulled out of shape",
+   "anchor": {
+    "standard": "Fabworks, Bending Guidelines, fetched 2026-11-11, https://www.fabworks.com/resources/guidelines/bending",
+    "clause": "Material Table",
+    "table": "Distortion zone 90 degrees"
+   }
+  },
+  {
+   "type": "bent_part",
+   "mechanism": "bend.relief",
+   "what": "a relief cut where a bend line ends inside the part, wide and deep enough that the metal does not tear",
+   "anchor": {
+    "standard": "SendCutSend, Sheet Metal Bending Calculator, fetched 2026-11-11, https://sendcutsend.com/bending-calculator/",
+    "clause": "Bending specifications per material",
+    "table": "Min Corner Relief Distance from Bend Line, Bend Relief Depth"
+   }
+  },
+  {
+   "type": "bent_part",
+   "mechanism": "bend.between",
+   "what": "the least distance between two bend lines, as in a joggle or a channel",
+   "anchor": {
+    "standard": "247TailorSteel, Guidelines for bending, changed 11-03-2026, fetched 2026-11-11, https://247tailorsteel.com/en/submission-guidelines/guidelines-for-bending",
+    "clause": "Minimum X-measurement for Z-bending"
+   }
+  },
+  {
+   "type": "bent_part",
+   "mechanism": "bend.collision",
+   "what": "whether the part clears the punch, the die and itself through every bend",
+   "anchor": {
+    "standard": "OSH Cut, Metal Bending Design Rules, fetched 2026-11-11, https://www.oshcut.com/design-guide/metal-bending-design-rules",
+    "clause": "Collision With the Brake"
+   }
+  },
+  {
+   "type": "bent_part",
+   "mechanism": "bend.gauge",
+   "what": "a straight edge parallel to each bend line for the back gauge to set the part by",
+   "anchor": {
+    "standard": "OSH Cut, Metal Bending Design Rules, fetched 2026-11-11, https://www.oshcut.com/design-guide/metal-bending-design-rules",
+    "clause": "Lack of Gauging Surface"
+   }
+  },
+  {
+   "type": "bent_part",
+   "mechanism": "bend.allowance",
+   "what": "whether the flat part allows each bend the length the shop's radius and K-factor take up",
+   "anchor": {
+    "standard": "SendCutSend, Sheet Metal Bending Calculator, fetched 2026-11-11, https://sendcutsend.com/bending-calculator/",
+    "clause": "Bending Calculator FAQs",
+    "table": "K Factor, Bend Deduction @ 90 degrees"
+   }
+  },
+  {
+   "type": "bent_part",
+   "mechanism": "bend.angle_tolerance",
+   "what": "the tolerance the shop holds on a bend angle, against what the need allows",
+   "anchor": {
+    "standard": "SendCutSend, Sheet Metal Bending Services, fetched 2026-11-11, https://sendcutsend.com/guidelines/bending/",
+    "clause": "What to expect with bent parts"
+   }
+  },
+  {
+   "type": "bent_part",
+   "mechanism": "bend.position_tolerance",
+   "what": "the tolerance the shop holds from a bend to an edge, which grows with each bend between, against what the need allows",
+   "anchor": {
+    "standard": "SendCutSend, Sheet Metal Bending Services, fetched 2026-11-11, https://sendcutsend.com/guidelines/bending/",
+    "clause": "What to expect with bent parts"
+   }
+  }
+ ],
+ "rules": []
+}
