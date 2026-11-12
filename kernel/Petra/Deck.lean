@@ -92,7 +92,7 @@ inductive Sign where
 /-- A field of a type. `oneOf` is what the kernel says of a part that gives a key a name
 it lacks: the list of its names, made once here and not again for each such part. `sign` is
 what a quantity says with `may_be`. On a load, which has no floor of its own but its
-`least`, `negative` lifts the floor at zero that its dimension has in deck.json. -/
+`least`, `negative` lifts the floor at zero that its dimension has in core.json (type rule 8). -/
 structure Field where
   name : String
   kind : FieldKind

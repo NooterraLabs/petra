@@ -268,8 +268,8 @@ def rules (cardHash : String) (card design deck : Except String ByteArray)
   if design.parts.isSome && deckOfRules.isNone then
     modify (·.push ⟨"types.6", "design", "parts", "a design with parts is checked against a deck of rules, and --rules names none"⟩)
   marks card design deck deckOfRules.isSome
-  -- A deck of rules with a `least` under a floor of deck.json is refused, as one that does
-  -- not read is, and no part is read against it.
+  -- A deck of rules with a `least` under a floor of core.json (type rule 8) is refused, as
+  -- one that does not read is, and no part is read against it.
   let rules? ← match rules? with
     | some rules => match underFloor rules deck.input with
       | some why => do modify (·.push ⟨"shape", "rules", "", why⟩); pure none

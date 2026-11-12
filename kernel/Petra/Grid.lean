@@ -826,7 +826,8 @@ says, and so does a hint for a line whose `unless` reads an unstated key. Then e
 a part's type is looked at once more for what it reads of the part: its look, and a step for
 each field it reads.
 
-`floors` are those of deck.json, which hold a completion's loads as they hold the card's. -/
+`floors` are those of core.json (type rule 8), which hold a completion's loads as they hold
+the card's. -/
 def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hints : Array Hint) (budget : Nat := MAX_WORK)
     (floors : Floors := {}) : StateM Caches (Except String Made) := do
   let over := s!"the deck of rules asks more than {MAX_CELLS} cells of this design, and the kernel makes no more"
