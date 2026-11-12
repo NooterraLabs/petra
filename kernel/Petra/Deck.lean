@@ -98,6 +98,13 @@ structure Field where
   kind : FieldKind
   oneOf : String := ""
   sign : Sign := .positive
+  /-- Whether a part may leave the field unstated, as a maker's record leaves out what it
+  does not give. A design then writes `UNSTATED` in its place. -/
+  optional : Bool := false
+
+/-- The word a design writes for a field that its type marks `optional` and that the part's
+record does not state. It is no name of such a key: the deck is refused if it is. -/
+def UNSTATED : String := "unstated"
 
 def Field.dim (f : Field) : Option Dim :=
   match f.kind with
@@ -1046,25 +1053,40 @@ def readRow (j : Json) : Except String Row := do
     return { id, dim, takes, body := .cases found }
   row.mapError (s!"row {clip id}: " ++ ·)
 
+/-- What the kernel says of a field that is both `signed` and `optional`. What a maker's
+record leaves out is for the design to say, since the design names the part, and only the
+card states a signed field. -/
+def BOTH : String :=
+  "a field is `signed` or `optional`, and not both: only the card states a signed field, and a card leaves nothing unstated"
+
 def readField (load : Bool) (j : Json) : Except String Field := do
   let name ← text j "name"
   let field : Except String Field := do
-    within j (if load then ["name", "what", "dim", "least", "may_be"] else ["name", "what", "dim", "least", "one_of", "type", "as", "signed", "whole", "may_be"])
+    within j (if load then ["name", "what", "dim", "least", "may_be"]
+              else ["name", "what", "dim", "least", "one_of", "type", "as", "signed", "whole", "may_be", "optional"])
     unless (["dim", "one_of", "type"].filter (has j)).length == 1 && filled j "what" do
       throw "it has `what` and one of `dim`, `one_of` and `type`"
     identifier name
+    let flag (key : String) : Except String Bool :=
+      match j.getObjVal? key with
+      | .error _ => pure false
+      | .ok (.bool b) => pure b
+      | _ => throw s!"{key} is true or false"
     if has j "one_of" then
-      within j ["name", "what", "one_of"]
+      within j ["name", "what", "one_of", "optional"]
       let names ← texts j "one_of"
       if names.isEmpty || !distinct names then throw "`one_of` is a list of different names"
-      return { name, kind := .key names (setOf names), oneOf := s!"is one of: {", ".intercalate names.toList}" }
+      let optional ← flag "optional"
+      if optional && names.contains UNSTATED then
+        throw s!"a key that may be left unstated has no name `{UNSTATED}`: that word is how a design leaves it unstated"
+      return { name, kind := .key names (setOf names), oneOf := s!"is one of: {", ".intercalate names.toList}", optional }
     if has j "type" then
       within j ["name", "what", "type", "as"]
       let names ← if has j "as" then texts j "as" else pure #[name]
       if names.isEmpty || !distinct names then throw "`as` names each part once"
       names.forM identifier
       return { name, kind := .parts (← text j "type") names }
-    within j ["name", "what", "dim", "least", "signed", "whole", "may_be"]
+    within j (if load then ["name", "what", "dim", "least", "may_be"] else ["name", "what", "dim", "least", "signed", "whole", "may_be", "optional"])
     let dim ← dimension (← text j "dim")
     let least ← if has j "least" then do
         let (x, its) ← amount (← text j "least")
@@ -1083,14 +1105,12 @@ def readField (load : Bool) (j : Json) : Except String Field := do
         if least.any (· ≥ 0) then throw "with `may_be` negative a `least` is under zero"
         pure Sign.negative
       | _ => throw "`may_be` is zero or negative"
-    let flag (key : String) : Except String Bool :=
-      match j.getObjVal? key with
-      | .error _ => pure false
-      | .ok (.bool b) => pure b
-      | _ => throw s!"{key} is true or false"
     let whole ← flag "whole"
     if whole && dim != {} then throw "a count is a plain number"
-    return { name, kind := .quantity dim (← flag "signed") whole least, sign }
+    let signed ← flag "signed"
+    let optional ← flag "optional"
+    if optional && signed then throw BOTH
+    return { name, kind := .quantity dim signed whole least, sign, optional }
   field.mapError (s!"field {clip name}: " ++ ·)
 
 def readKind (j : Json) : Except String Kind := do

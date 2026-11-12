@@ -58,6 +58,18 @@ MAX_NAME = 64
 the name of a part, a load case, a mechanism, a field, a load, a joined part and a `let`, and a rule's id."""
 UNREAD = "unread"
 """The mechanism of the cell of a field or a load that nothing reads. No line of the grid has this name."""
+UNSTATED = "unstated"
+"""The word a design writes for an `optional` field that the part's record does not state, as in kernel/Petra/Deck.lean."""
+
+
+class _Unstated:
+    """What a part has for a field it leaves unstated: no value, and no default. It is equal to no name of a key."""
+
+    def __repr__(self) -> str:
+        return UNSTATED
+
+
+NOT_STATED = _Unstated()
 MAX_READ = 1_000_000
 """The most steps reading a deck may take, as in kernel/Petra/Files.lean."""
 MAX_TITLE = 200
@@ -94,7 +106,7 @@ class Field:
     each of them in order. Only the card states a `signed` quantity. A `whole` quantity is
     a count. `least` is the least value a quantity may take, in SI. `may_be` is `zero` for a
     quantity that may be zero and `negative` for one of any sign: with neither, a quantity of
-    a part is more than zero."""
+    a part is more than zero. A part may leave an `optional` quantity or key unstated."""
 
     name: str
     what: str
@@ -106,6 +118,7 @@ class Field:
     whole: bool = False
     least: Fraction | None = None
     may_be: str | None = None
+    optional: bool = False
 
 
 @dataclass(frozen=True)
@@ -253,18 +266,23 @@ def _name(name: Any) -> bool:
 
 
 def _field(body: Mapping[str, Any], load: bool = False) -> Field:
-    allowed = {"name", "what", "dim", "least", "may_be"} if load else {"name", "what", "dim", "least", "one_of", "type", "as", "signed", "whole", "may_be"}
+    allowed = {"name", "what", "dim", "least", "may_be"} if load else {"name", "what", "dim", "least", "one_of", "type", "as", "signed", "whole", "may_be", "optional"}
     only(body, tuple(sorted(allowed)), f"field {body.get('name')!r}")
     if sum(key in body for key in ("dim", "one_of", "type")) != 1 or not (isinstance(body.get("what"), str) and body["what"]) or not _name(body.get("name")):
         raise DeckError(f"field {body.get('name')!r}: it has a name of letters, digits and _, `what`, a text, and one of `dim`, `one_of` and `type`, and may have {', '.join(sorted(allowed))}")
     name = body["name"]
-    only(body, ("name", "what", "one_of") if "one_of" in body else ("name", "what", "type", "as") if "type" in body
-         else ("name", "what", "dim", "least", "signed", "whole", "may_be"), f"field {name}")
+    only(body, ("name", "what", "one_of", "optional") if "one_of" in body else ("name", "what", "type", "as") if "type" in body
+         else ("name", "what", "dim", "least", "signed", "whole", "may_be", "optional"), f"field {name}")
+    # A part may leave an `optional` field unstated. The flag is true or false, as the kernel reads it, and it is the design that says what
+    # a record leaves out: only the card states a signed field, so a field is not both.
+    optional = body.get("optional", False)
+    if not isinstance(optional, bool) or (optional and body.get("signed")) or (optional and UNSTATED in body.get("one_of", ())):
+        raise DeckError(f"field {name}: `optional` is true or false, on a field that is not `signed`, and a key that may be left unstated has no name `{UNSTATED}`")
     if "one_of" in body:
         keys = tuple(str(k) for k in body["one_of"])
         if not keys or len(set(keys)) != len(keys):
             raise DeckError(f"field {name}: `one_of` is a list of different names")
-        return Field(name, body["what"], keys=keys)
+        return Field(name, body["what"], keys=keys, optional=optional)
     if "type" in body:
         names = tuple(body.get("as", [name]))
         if not names or not all(map(_name, names)) or len(set(names)) != len(names):
@@ -283,7 +301,7 @@ def _field(body: Mapping[str, Any], load: bool = False) -> Field:
     may_be = body.get("may_be")
     if "may_be" in body and (may_be not in ("zero", "negative") or (load and may_be == "zero") or (least is not None and (may_be == "zero" or least >= 0))):
         raise DeckError(f"field {name}: `may_be` is zero or negative, and negative alone for a load; a quantity that may be zero has no `least`, and with negative a `least` is under zero")
-    return Field(name, body["what"], dim=dim, signed=bool(body.get("signed")), whole=whole, least=least, may_be=may_be)
+    return Field(name, body["what"], dim=dim, signed=bool(body.get("signed")), whole=whole, least=least, may_be=may_be, optional=optional)
 
 
 def _named(items: list, what: str, name: Callable[[Any], str]) -> dict[str, Any]:
@@ -800,6 +818,12 @@ def read_parts(design: Design, deck: Deck) -> Parts:
                     say(f"names {len(f.names)} different {f.type} parts of this design")
                 else:
                     values[attr.key] = tuple(named)
+            elif [a.parts for a in attr.args if isinstance(a, Ref)] == [(UNSTATED,)] and len(attr.args) == 1 and (f.optional or not f.keys):
+                # The one word `unstated` leaves an optional field unstated. On a key that is not optional it is a name like any other, below.
+                if f.optional:
+                    values[attr.key] = NOT_STATED
+                else:
+                    say("is left unstated, and its field is not `optional`: it must be stated")
             elif len(attr.args) != 1:
                 say("takes one value")
             elif f.keys:
@@ -915,6 +939,8 @@ def _unmet(part: Part, parts: Mapping[str, Part]) -> Iterator[str]:
         return str(x) if _bits(x) <= 256 else f"a number of {_bits(x)} bits"
 
     for n, need in enumerate(part.type.needs, 1):
+        if _lacking(part, parts, [*_fields(need.low), *_fields(need.high)]) is not None:
+            continue      # a need that names a field the part leaves unstated is not decided, and does not refuse the part
         try:
             (low, most), (least, high) = (_span(side, lambda name: _field_of(part, parts, name).range) for side in (need.low, need.high))
         except _Undecided as why:
@@ -1048,6 +1074,22 @@ def _field_of(part: Part, parts: Mapping[str, Part], name: str) -> Any:
         if alias in f.names and f.type is not None:
             return parts[part.values[f.name][f.names.index(alias)]].values[inner]
     raise KeyError(name)
+
+
+def _lacking(part: Part, parts: Mapping[str, Part], names: Any) -> str | None:
+    """The first of these fields, as a rule names them, that the part or the part it joins
+    leaves unstated: `PART.FIELD`, with the name of the part that has the field."""
+    for name in names:
+        if _field_of(part, parts, name) is NOT_STATED:
+            alias, dot, inner = name.partition(".")
+            owner = next(part.values[f.name][f.names.index(alias)] for f in part.type.fields.values() if f.type is not None and alias in f.names) if dot else part.name
+            return f"{owner}.{inner if dot else name}"
+    return None
+
+
+def _unstated_why(field: str, reader: str) -> str:
+    """What a cell says when its rule, or the `unless` of its line, reads a field the part leaves unstated, in the kernel's words."""
+    return f"{field} is unstated: its maker states none, and {reader} reads it"
 
 
 def _env(tape: _Tape, rule: Rule, part: Part, parts: Mapping[str, Part], case: str | None) -> Callable[[str], int]:
@@ -1251,6 +1293,12 @@ def _static(cond: tuple | None, part: Part, parts: Mapping[str, Part]) -> bool:
     return (all if cond[0] == "and" else any)(_static(c, part, parts) for c in cond[1:])
 
 
+def _applies(rule: Rule, part: Part, parts: Mapping[str, Part]) -> bool:
+    """Whether a rule answers for a part: its `when` holds, or names a key that the part
+    leaves unstated. Nothing then says that the rule does not apply, and its cells are open."""
+    return _lacking(part, parts, _keys(rule.when)) is not None or _static(rule.when, part, parts)
+
+
 def _names(term: Any) -> Iterator[str]:
     if isinstance(term, Sym):
         yield term.name
@@ -1319,6 +1367,16 @@ def _answers(rule: Rule, ask: Ask, part: Part, parts: Mapping[str, Part], cases:
 
     def cell(entry: str, state: str, why: str = "", **more: Any) -> Cell:
         return Cell(part.name, rule.mechanism, entry, state, rule.says, anchor, why, rule.id, **more)
+
+    # A rule that reads a field the part leaves unstated has no answer: each cell it would give is open. It reads the field in a side, in
+    # its `where`, in its `when` or in its `requires`. The kernel names the first such field the rule reads, and this names the first by name.
+    named = _reads(rule)
+    lacks = _lacking(part, parts, sorted(name for name in named if not name.startswith("load ")))
+    if lacks is not None:
+        single = rule.requires is not None or not cases or not any(name.startswith("load ") for name in named)
+        for entry in [tail] if single else [f"{tail}/{case}" for case in cases]:
+            yield cell(entry, "open", _unstated_why(lacks, "the rule"))
+        return
 
     if rule.requires is not None:
         # One cell, with no tape and no hint: proved when the condition over keys holds for the part, and refuted when not.
@@ -1404,10 +1462,13 @@ def cells(design: Design, deck: Deck, found: Parts) -> list[Cell]:
             if (part.name, ask.mechanism) in waived:
                 w = waived[part.name, ask.mechanism]
                 out.append(Cell(part.name, ask.mechanism, "", "waived", ask.what, anchor, f"by {w.owner}: {w.reason}"))
+            elif (lacks := _lacking(part, found.parts, _keys(ask.unless))) is not None:
+                # The `unless` reads a key that is unstated, so nothing says whether the mechanism can arise: the line is open, and no rule of it is run.
+                out.append(Cell(part.name, ask.mechanism, "", "open", ask.what, anchor, _unstated_why(lacks, "the `unless` of the line")))
             elif ask.excused is not None and _static(ask.unless, part, found.parts):
                 out.append(Cell(part.name, ask.mechanism, "", "not_applicable", ask.what, anchor, ask.excused))
             else:
-                rules = [r for r in deck.rules if (r.type, r.mechanism) == (ask.type, ask.mechanism) and _static(r.when, part, found.parts)]
+                rules = [r for r in deck.rules if (r.type, r.mechanism) == (ask.type, ask.mechanism) and _applies(r, part, found.parts)]
                 out += [c for r in rules for c in _answers(r, ask, part, found.parts, found.cases)]
                 if not rules:
                     out.append(Cell(part.name, ask.mechanism, "", "open", ask.what, anchor,
@@ -1427,14 +1488,14 @@ def _unread(deck: Deck, found: Parts) -> list[Cell]:
     for part in found.parts.values():
         names = {alias: part.values[f.name][n] for f in part.type.fields.values() if f.type is not None for n, alias in enumerate(f.names)}
         fields = {name for a in deck.asks if a.type == part.type.name for name in _keys(a.unless)}
-        fields |= {name for r in deck.rules if r.type == part.type.name and _static(r.when, part, found.parts) for name in _reads(r)}
+        fields |= {name for r in deck.rules if r.type == part.type.name and _applies(r, part, found.parts) for name in _reads(r)}
         for name in fields:
             alias, dot, inner = name.partition(".")
             read.add((names[alias], inner) if dot else (part.name, name))
     out = []
     for part in found.parts.values():
         out += [Cell(part.name, UNREAD, f.name, "open", f.what, "", f"no rule of the deck reads {part.name}.{f.name}, so nothing checks it")
-                for f in part.type.fields.values() if f.type is None and (part.name, f.name) not in read]
+                for f in part.type.fields.values() if f.type is None and (part.name, f.name) not in read and part.values[f.name] is not NOT_STATED]
         out += [Cell(part.name, UNREAD, f"{load}/{case}", "open", part.type.loads[load].what, "",
                      f"no rule of the deck reads the load {load} that case {case} puts on {part.name}, so nothing checks it")
                 for load in sorted(part.loads) if (part.name, f"load {load}") not in read for case in sorted(part.loads[load])]

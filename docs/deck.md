@@ -255,7 +255,7 @@ A deck is one JSON file in `petra/decks`.
 | `grid` | The lines of the grid |
 | `rules` | The rules |
 
-Each object of a deck has the keys this page gives it, and no other. A key the page does not give is refused wherever it stands: in the deck, a row, an `anchor`, `gives`, an input of `takes`, a case, a jump, a table, a side of a table, a type, a field, a load, a need, a line of the grid, `unless`, a rule and an item of `where`. So is a key where it does not belong: `signed`, `whole`, `least` or `may_be` on a field that is no quantity, `as` on a field that joins no part, and `closed` on a side with no `bands`. The refusal names the key. A misspelled key is then an error, and never a key left out with its default in its place: `close` for `closed` would leave every band closed at its upper end.
+Each object of a deck has the keys this page gives it, and no other. A key the page does not give is refused wherever it stands: in the deck, a row, an `anchor`, `gives`, an input of `takes`, a case, a jump, a table, a side of a table, a type, a field, a load, a need, a line of the grid, `unless`, a rule and an item of `where`. So is a key where it does not belong: `signed`, `whole`, `least` or `may_be` on a field that is no quantity, `optional` on a field that joins parts or on a load, `as` on a field that joins no part, and `closed` on a side with no `bands`. The refusal names the key. A misspelled key is then an error, and never a key left out with its default in its place: `close` for `closed` would leave every band closed at its upper end.
 
 A design names a type as the kind of a component block: `lap splice { ... }` is a part named `splice` of type `lap`. The parts of one design are all of one deck's types, or all of the built-in models' kinds.
 
@@ -292,10 +292,11 @@ A field is one line of the part's block. It has `name`, `what`, a text that is n
 | `one_of` | A key: one of the listed names | `threads included`, and in quotes when the name has a space: `fastener "Group 120"` |
 | `type` | The parts of that type it joins, one for each name in `as` | `joins tab strap` |
 
-A quantity may also have these.
+A quantity may also have these. A key may have `optional`, and no other of them.
 
 | Key | Means |
 |---|---|
+| `optional` | A part may leave it unstated: the design writes `unstated` in its place ([A field that a record may leave unstated](#a-field-that-a-record-may-leave-unstated)) |
 | `signed` | Only the card states it, and the design reads it with `given`. A design that writes a number for it is refused. A material strength is signed. |
 | `whole` | It is a count, and the design writes a whole number |
 | `least` | The least value it may take |
@@ -303,7 +304,7 @@ A quantity may also have these.
 
 The name of a field, of a load and of a joined part in `as` is letters, digits and `_`, as the language writes a name. So a rule's `a.Fy` is always a field of a joined part, and no name reads as a number. The kernel holds these names, a name of `let`, a mechanism and a rule's id to 64 bytes as printed, and a design to 10,000 cells ([format.md](format.md), "Limits").
 
-A part has every field of its type once, and no other line. A part is joined by at most one other: a plate that two laps join would be checked under each lap's load alone, so the pair is refused.
+A part has every field of its type once, and no other line. A field that is `optional` is there too, with its value or with `unstated`. A part is joined by at most one other: a plate that two laps join would be checked under each lap's load alone, so the pair is refused.
 
 `petra kinds lap` prints the lines of a type and what the grid asks of it, and `petra new lap` prints a design to start from, with its card under `--card`.
 
@@ -313,7 +314,36 @@ A part reads only the bound the card gives under the part's name and the field's
 
 `loads` lists what a card may put on a part of the type. Each has a `name`, a `dim`, `what` it is, a text that is not empty, and a `least` when it has a floor. A card states one in a load case: `on splice pull in [0 kip, 45 kip]`.
 
-### A quantity at or under zero
+### A field that a record may leave unstated
+
+A standard's table is complete. A maker's data sheet is not: one maker of propellers states a greatest speed and no greatest thrust, another the thrust and no speed, and many battery packs state no resistance. A design must not make the number up. So a type may mark a quantity or a key `optional`, and a design then writes the one word `unstated` in place of its value.
+
+```json
+{"name": "speed_limit", "dim": "dimensionless/time", "optional": true, "what": "the greatest speed its maker allows"}
+```
+
+```
+rotor_set r {
+  speed_limit unstated
+  thrust_limit 12 N
+}
+```
+
+- `optional` is `true` or `false`, and a field without it is not optional. It stands on a quantity, a count among them, and on a key. A field that joins parts and a load have none. A field is not both `optional` and `signed`: what a record leaves out is for the design to say, since the design names the part, and only the card states a signed field.
+- The word is `unstated`, bare and alone on its line. In quotes it is a text, which no quantity takes and which is no name of an optional key. A key that is `optional` has no name `unstated`, and a deck that gives it one is refused. On a key that is not optional, `unstated` is a name like any other when the key lists it.
+- A field that is not optional must be stated, as before: `unstated` on a quantity that is not optional is refused, with a finding that says so.
+- A field left unstated has no value. It takes no default and is never read as zero.
+
+What reads an unstated field has no answer, and says so.
+
+- **A rule.** A rule that reads the field gives the cells it would give, each `open`. It reads the field in a side of its inequality, in its `where`, in a row or a `case` it applies, in its `when` or in its `requires`. It has one cell, entered as the rule's, when it has `requires`, reads no load, or the card has no load case. Otherwise it has one cell for each load case, entered `RULE/CASE`. It has no `/where` cell. The reason names the field by the part that has it and says that its maker states none: `r.speed_limit is unstated: its maker states none, and the rule reads it`. The kernel names the first such field in the order the rule reads its fields. `petra check` prints its own reason, which names the first by name where a rule reads several.
+- **A `when`.** A rule whose `when` names an unstated key answers: nothing says that it does not apply. Its cells are open, as above. So a line is not left "with no rule for a part like this one" because a key was left out.
+- **An `unless`.** A line whose `unless` names an unstated key is one `open` cell with an empty entry, and no rule of the line is run: nothing says whether the mechanism can arise. Its reason is ``r.guard is unstated: its maker states none, and the `unless` of the line reads it``.
+- A condition is not decided in part. `["or", ["is", "guard", "full"], ["is", "finish", "none"]]` with `finish` unstated is not decided, though `guard` alone would settle it.
+- **A need.** A need that names an unstated field is not asked of the part. It is neither kept nor broken, and it does not refuse the part.
+- **Nothing.** An unstated field that nothing reads has no `unread` cell: there is no value that something failed to check.
+
+So leaving a field out never helps a design past a rule. Every cell that would have read it is open, and a design passes only when the card waives those lines.
 
 A size is more than zero, and most quantities of a part are sizes. Some are not: the lowest temperature a battery may be discharged at, a position measured from a datum, a count of spares that may be none. A field says so with `may_be`.
 
@@ -549,6 +579,7 @@ These cases are open:
 - A rule reads a load, and a load case of the card does not put it on the part. No load is taken as zero: a card that means none in a case states a load of zero there.
 - A rule's `where` is not proved. Outside its range a rule says nothing, so its cell is never refuted there.
 - A table has no value where the rule reads it: between the listed values of a table read at listed values, outside every band, or in an empty cell.
+- A rule, or the `unless` of a line, reads a field that the part leaves unstated ([A field that a record may leave unstated](#a-field-that-a-record-may-leave-unstated)).
 - The inequality is neither proved over the ranges the card gives nor refuted at a corner or the middle of them.
 - No rule and no line of the grid reads a quantity or a key of a part. A value nothing reads is a value nothing checks, so a plate that no lap joins has an open cell for each of its fields, named `unread`.
 - No rule reads a load that the card puts on a part. A rule reads a load in an expression: a side of its `le` or of its `where`, or a name of `let` that one of them reads. The load has an open cell named `unread` for each load case that puts it on the part, entered as `LOAD/CASE`.

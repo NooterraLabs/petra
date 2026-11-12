@@ -19,6 +19,9 @@ inductive Slot where
   | quantity (input : TapeInput)
   | key (name : String)
   | parts (names : Array String)
+  /-- The part leaves the field unstated, which its type lets it. It has no value and no
+  default: whatever reads it has no answer for the part. -/
+  | unstated
 
 /-- A part of a deck's type, with what it has for each field by the field's name. -/
 structure Part where
@@ -75,6 +78,13 @@ the design by its name and its type, `inputs` the card's inputs of each name, an
 def slotOf (card design : String) (typed : Std.TreeSet (String × String))
     (inputs : Std.TreeMap String (Array Input)) (floors : Floors) (part : String) (field : Field) (args : Array Arg) :
     Except (String × String) Slot := do
+  -- The one word `unstated` leaves an `optional` field unstated. On any other field it is
+  -- what it would be there: a name of a key that has that name, and nothing a quantity takes.
+  if let (#[.word word], false) := (args, field.kind matches .parts ..) then
+    if word == UNSTATED then
+      if field.optional then return .unstated
+      unless field.kind matches .key .. do
+        throw ("parts.3", "is left unstated, and its field is not `optional`: it must be stated")
   match field.kind, args.toList with
   | .parts kind names, args =>
     let named := args.filterMap fun
@@ -232,6 +242,32 @@ def Part.fellows (named : Std.TreeMap String Part) (part : Part) : Std.TreeMap S
       | none => found
     | _ => found
 
+/-- The first of these fields that the part, or the part it joins under a name, leaves
+unstated: `PART.FIELD`, with the name of the part that has the field. -/
+def Part.lacks (part : Part) (fellows : Std.TreeMap String Part) (fields : Array (Option String × String)) : Option String :=
+  fields.findSome? fun (called, field) =>
+    let owner := match called with
+      | none => some part
+      | some called => fellows.get? called
+    owner.bind fun owner => match owner.slot field with
+      | some .unstated => some s!"{owner.name}.{field}"
+      | _ => none
+
+/-- The names of the parts that leave a field unstated. -/
+def bareOf (parts : Array Part) : Std.TreeSet String :=
+  parts.foldl (init := {}) fun bare part =>
+    if part.slots.foldl (fun so _ slot => so || slot matches .unstated) false then bare.insert part.name else bare
+
+/-- Whether the part leaves a field unstated or joins a part that does. Only for such a part
+does the kernel look for what reads an unstated field, so a design that states every field
+is checked in the steps it took before a field could be left unstated. -/
+def Part.touched (part : Part) (bare : Std.TreeSet String) (fellows : Std.TreeMap String Part) : Bool :=
+  bare.contains part.name || fellows.foldl (fun so _ other => so || bare.contains other.name) false
+
+/-- What a cell says when its rule, or the `unless` of its line, reads a field that the part
+leaves unstated. -/
+def UNSTATED_WHY (field reader : String) : String := s!"{field} is unstated: its maker states none, and {reader} reads it"
+
 /-- Whether a condition holds for a part. An `is` reads a key of the part, or of the one
 part it joins under a name, which `fellows` holds. A key that is not there holds no name.
 The answer rests on the keys of the design alone, so it is the same under every load case
@@ -310,10 +346,12 @@ fractions and no hint. It is asked of a design that breaks no rule before it, so
 field is there and every quantity is more than zero. -/
 def needs (parts : Array Part) : StateM Findings Nat := do
   let named := firsts parts (·.name)
+  let bare := bareOf parts
   let mut left := MAX_WORK
   for part in parts do
     if part.kind.needs.isEmpty then continue
     let fellows := part.fellows named
+    let touched := part.touched bare fellows
     let value (called : Option String) (field : String) : Option Iv :=
       let owner := match called with
         | none => some part
@@ -322,6 +360,18 @@ def needs (parts : Array Part) : StateM Findings Nat := do
       | some (.quantity input) => some input.range
       | _ => none
     for (need, k) in part.kind.needs.zipIdx do
+      -- A need that names a field the part leaves unstated is not decided, and does not
+      -- refuse the part: there is nothing to compare. Looking for such a field costs what
+      -- reading each field of the need costs, and only a part that leaves a field unstated,
+      -- or joins one that does, is looked at.
+      if touched then
+        let fields := need.low.fields ++ need.high.fields
+        let look := 700 * fields.size
+        if left < look then
+          modify (·.push ⟨"limits", "design", part.name, NEEDS_SPENT⟩)
+          return 0
+        left := left - look
+        if (part.lacks fellows fields).isSome then continue
       let sides : Paying (Iv × Iv) := do
         let low ← need.low.range value MAX_EXPRESSION
         let high ← need.high.range value MAX_EXPRESSION
@@ -481,6 +531,8 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hi
   let lookOf : Std.TreeMap (String × String) Nat := rulesOf.map fun _ line => line.foldl (fun n r => n + r.look) 0
   let named := firsts parts (·.name)
   let fellowsOf := parts.map (·.fellows named)
+  let bare := bareOf parts
+  let touchedOf := (parts.zip fellowsOf).map fun (part, fellows) => part.touched bare fellows
   let answered : Std.TreeSet String := rules.rules.foldl (fun found r => found.insert r.mechanism) {}
   let cell (subject mechanism entry : String) (state : State) (reason : String := "") (waiver : Option (Nat × Waiver) := none) : Settled :=
     let claims := hintsFor subject mechanism entry
@@ -497,7 +549,11 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hi
   let mut dsg : Std.TreeSet String := {}
   let mut steps := 0
   let mut left := budget
-  for (part, fellows) in parts.zip fellowsOf do
+  for ((part, fellows), touched) in (parts.zip fellowsOf).zip touchedOf do
+    -- A condition that names a key the part leaves unstated is not decided: nothing says
+    -- whether it holds. The part is looked at for one only when it leaves a field unstated
+    -- or joins a part that does.
+    let lacks (fields : Array (Option String × String)) : Option String := if touched then part.lacks fellows fields else none
     for ask in asksOf.getD part.kind.name #[] do
       if out.size > MAX_CELLS then return .error over
       steps := steps + 1 + ((ask.excuse.bind id).map Static.size).getD 0 + lookOf.getD (ask.kind, ask.mechanism) 0
@@ -505,15 +561,40 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hi
       let pending (entry reason : String) : Settled := cell part.name ask.mechanism entry .undecided reason
       if let some (waiver, k) := waivers.get? (part.name, ask.mechanism) then
         out := out.push (cell part.name ask.mechanism "" .waived "" (some (k, waiver)))
+      else if let some field := lacks (((ask.excuse.bind id).map Static.keys).getD #[]) then
+        -- The `unless` of the line reads a key that is unstated, so nothing says whether the
+        -- mechanism can arise for the part. The line is open, and no rule of it is run.
+        out := out.push (pending "" (UNSTATED_WHY field "the `unless` of the line"))
       else if ask.excuse.any fun condition => condition.all (·.holds part fellows) then
         out := out.push (cell part.name ask.mechanism "" .notApplicable)
       else
-        let answers := (rulesOf.getD (ask.kind, ask.mechanism) #[]).filter fun r => r.condition.all (·.holds part fellows)
+        -- A rule answers when its `when` holds, and also when its `when` names a key that
+        -- is unstated: nothing says that it does not apply, and its cells are then open.
+        let answers := (rulesOf.getD (ask.kind, ask.mechanism) #[]).filter fun r =>
+          (lacks ((r.condition.map Static.keys).getD #[])).isSome || r.condition.all (·.holds part fellows)
         if answers.isEmpty then
           let other := if answered.contains ask.mechanism then " on a part like this one" else ""
           out := out.push (pending "" s!"the deck has no rule for it{other}")
         for rule in answers do
           let tail := rule.entry
+          -- A rule that reads a field the part leaves unstated has no answer: each cell it
+          -- would give is open. It reads the field in a side, in its `where`, in its `when`
+          -- or in its `requires`. Looking is a step for each field the rule reads.
+          if touched then
+            steps := steps + rule.fields.size
+            if steps > MAX_STEPS then return .error long
+            if let some field := part.lacks fellows rule.fields then
+              let why := UNSTATED_WHY field "the rule"
+              if rule.requires.isSome || rule.loads.isEmpty || loads.cases.isEmpty then
+                if out.size > MAX_CELLS then return .error over
+                out := out.push (pending tail why)
+              else
+                steps := steps + loads.cases.size
+                if steps > MAX_STEPS then return .error long
+                for under in loads.cases do
+                  if out.size > MAX_CELLS then return .error over
+                  out := out.push (pending s!"{tail}/{under}" why)
+              continue
           -- A rule that requires has one cell, with no tape and no hint: proved when its
           -- condition over keys holds for the part, and refuted when it does not, with each
           -- key it names and the name the part has for it.
@@ -599,7 +680,7 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hi
   let readOf : Std.TreeMap String Nat := rulesOfKind.map fun _ line => line.foldl (fun n r => n + r.look + r.fields.size) 0
   let mut read : Std.TreeSet (String × String) := {}
   let mut readLoads : Std.TreeSet (String × String) := {}
-  for (part, fellows) in parts.zip fellowsOf do
+  for ((part, fellows), touched) in (parts.zip fellowsOf).zip touchedOf do
     steps := steps + 1 + readOf.getD part.kind.name 0
     if steps > MAX_STEPS then return .error long
     for ask in asksOf.getD part.kind.name #[] do
@@ -608,7 +689,9 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hi
         | none => read := read.insert (part.name, field)
         | some called => if let some other := fellows.get? called then read := read.insert (other.name, field)
     for rule in rulesOfKind.getD part.kind.name #[] do
-      if rule.condition.all (·.holds part fellows) then
+      -- A rule applies as it answers: where its `when` holds, and where its `when` names a
+      -- key that the part leaves unstated.
+      if (touched && (part.lacks fellows ((rule.condition.map Static.keys).getD #[])).isSome) || rule.condition.all (·.holds part fellows) then
         for load in rule.loads do readLoads := readLoads.insert (part.name, load)
         for (called, field) in rule.fields do
           match called with
@@ -617,7 +700,8 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hi
   for part in parts do
     for field in part.kind.fields do
       if out.size > MAX_CELLS then return .error over
-      unless (field.kind matches .parts ..) || read.contains (part.name, field.name) do
+      -- A field left unstated has no value that something could fail to check, and no cell.
+      unless (field.kind matches .parts ..) || read.contains (part.name, field.name) || (part.slot field.name matches some .unstated) do
         out := out.push (cell part.name UNREAD field.name .undecided s!"no rule of the deck reads {part.name}.{field.name}, so nothing checks it")
     -- A load that nothing reads, once for each case that puts it on the part. Its entry is
     -- `LOAD/CASE`, which no field's entry is: the name of a field holds no `/`.

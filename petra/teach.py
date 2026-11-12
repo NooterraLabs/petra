@@ -111,6 +111,10 @@ def _deck_text(deck: grid.Deck, types: tuple[str, ...]) -> str:
             else:
                 form = f"given <name>.{f.name}" if f.signed else "<whole number>" if f.whole else f"<{deck_rows.show(f.dim)}>"
             note = "; the card states it: given <name>." + f.name + " in [<lo>, <hi>] signed ..." if f.signed else ""
+            if f.optional:
+                form, note = f"{form} | unstated", note + "; `unstated` where the part's record states none"
+            if f.may_be:
+                note += f"; may be {f.may_be}" if f.may_be == "zero" else "; may be zero or negative"
             lines += [f"    {f.name} {form}", f"        {f.what}{note}"]
         if kind.needs:
             lines += ["  a part that breaks one of these is no design:", *(f"    {need.why}" for need in kind.needs)]

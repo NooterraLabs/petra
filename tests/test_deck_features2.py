@@ -150,6 +150,130 @@ class MoreUnits(unittest.TestCase):
             no_deck(self, body)
 
 
+# --- 4. a field that a record may leave unstated --------------------------------------------------------
+
+ROTOR = kind("rotor_set", size("thrust", "force"), size("speed_limit", "dimensionless/time", optional=True), size("thrust_limit", "force", optional=True),
+             {**key("balance", "static", "dynamic"), "optional": True}, {**key("guard", "none", "full"), "optional": True}, size("mass", "mass", optional=True),
+             size("blades", "dimensionless", whole=True, optional=True), key("grain", "along", "unstated"),
+             needs=[{"le": ["thrust", "thrust_limit"], "why": "made up: the thrust is within what the maker allows"}])
+QUAD = kind("quad", size("speed", "dimensionless/time"), {"name": "sets", "type": "rotor_set", "as": ["rotor"], "what": "its rotor sets"},
+            loads=[{"name": "pull", "dim": "force", "least": "0 N", "what": "the thrust asked of a rotor"}],
+            needs=[{"lt": ["speed", ["mul", "2", "rotor.speed_limit"]], "why": "made up: the speed is under twice the limit"}])
+QUADS = made_up([ROTOR, QUAD],
+                [asks("quad.speed", "quad"), asks("quad.thrust", "quad"), asks("quad.balance", "quad"), asks("quad.static", "quad"),
+                 asks("quad.guarded", "quad", unless={"when": ["is", "rotor.guard", "full"], "why": "made up: a guarded rotor"}), asks("quad.grain", "quad"),
+                 asks("rotor_set.own", "rotor_set")],
+                [rule("speed", "quad", "quad.speed", le=["speed", "rotor.speed_limit"]),
+                 rule("thrust", "quad", "quad.thrust", le=[["load", "pull"], "rotor.thrust_limit"]),
+                 rule("balance", "quad", "quad.balance", requires=["is", "rotor.balance", "dynamic"]),
+                 rule("static", "quad", "quad.static", when=["is", "rotor.balance", "static"], le=["speed", ["q", "100", "Hz"]]),
+                 rule("guarded", "quad", "quad.guarded", le=[["load", "pull"], ["q", "100", "N"]]),
+                 rule("grain", "quad", "quad.grain", when=["is", "rotor.grain", "unstated"], le=["speed", ["q", "200", "Hz"]]),
+                 rule("own", "rotor_set", "rotor_set.own", le=["thrust", "thrust_limit"]),
+                 rule("own-speed", "rotor_set", "rotor_set.own", when=["is", "guard", "none"], le=[["q", "10", "Hz"], "speed_limit"])])
+SET = dict(thrust="10 N", speed_limit="9000 rpm", thrust_limit="12 N", balance="dynamic", guard="none", mass="30 g", blades="2", grain="along")
+HOVER = load("hover", "q pull in [0 N, 8 N]") + load("climb", "q pull in [0 N, 11 N]")
+NO_MAKER = "{} is unstated: its maker states none, and {} reads it"
+
+
+def quad(card: str = HOVER, speed: str = "140 Hz", **lines: str) -> tuple[str, str]:
+    return design(part("rotor_set", "r", **{**SET, **lines}), part("quad", "q", speed=speed, sets="r")), HEAD + card
+
+
+class AFieldLeftUnstated(unittest.TestCase):
+    def test_a_rotor_set_that_states_every_field_is_checked_as_before(self):
+        found, verdict, _ = cells(self, QUADS, *quad())
+        self.assertEqual(found, {("r", "rotor_set.own", "own"): "proved", ("r", "rotor_set.own", "own-speed"): "proved", ("q", "quad.speed", "speed"): "proved",
+                                 ("q", "quad.thrust", "thrust/climb"): "proved", ("q", "quad.thrust", "thrust/hover"): "proved", ("q", "quad.balance", "balance"): "proved",
+                                 ("q", "quad.static", ""): "open", ("q", "quad.guarded", "guarded/climb"): "proved", ("q", "quad.guarded", "guarded/hover"): "proved",
+                                 ("q", "quad.grain", ""): "open", ("r", "unread", "mass"): "open", ("r", "unread", "blades"): "open", ("r", "unread", "grain"): "open"})
+        self.assertEqual(verdict, "UNKNOWN", "the rule that reads the grain does not apply to this rotor set, so nothing reads its grain")
+
+    def test_a_rule_that_reads_an_unstated_quantity_is_open_and_names_it(self):
+        found, verdict, said = cells(self, QUADS, *quad(speed_limit="unstated"))
+        self.assertEqual((found["q", "quad.speed", "speed"], found["r", "rotor_set.own", "own-speed"], verdict), ("open", "open", "UNKNOWN"))
+        self.assertEqual(reason(said, "quad.speed"), NO_MAKER.format("r.speed_limit", "the rule"))
+        self.assertEqual(reason(said, "rotor_set.own", "own-speed"), NO_MAKER.format("r.speed_limit", "the rule"))
+        self.assertEqual((found["q", "quad.thrust", "thrust/hover"], found["r", "rotor_set.own", "own"]), ("proved", "proved"), "the other limit is stated, and is checked")
+        self.assertNotIn(("r", "unread", "speed_limit"), found)
+
+    def test_an_unstated_field_is_never_read_as_zero_or_as_any_number(self):
+        """A speed of 10,000 Hz would fail any limit, and breaks the quad's need at any limit a maker states. With the limit unstated nothing is proved or refuted of it."""
+        found, _, said = cells(self, QUADS, *quad(speed="10000 Hz", speed_limit="unstated"))
+        self.assertEqual(found["q", "quad.speed", "speed"], "open")
+        mine, its = ill_formed(self, QUADS, *quad(speed="10000 Hz"))
+        self.assertIn("parts.9 design q: breaks need 1 of a quad", its)
+        found, _, _ = cells(self, QUADS, *quad(thrust="1000 N", thrust_limit="unstated"))
+        self.assertEqual(found["r", "rotor_set.own", "own"], "open", "the rotor's own need names the limit too, and does not refuse the part")
+
+    def test_a_rule_that_reads_loads_has_an_open_cell_for_each_case(self):
+        found, _, said = cells(self, QUADS, *quad(thrust_limit="unstated"))
+        self.assertEqual((found["q", "quad.thrust", "thrust/hover"], found["q", "quad.thrust", "thrust/climb"]), ("open", "open"))
+        self.assertNotIn(("q", "quad.thrust", "thrust"), found)
+        self.assertEqual(reason(said, "quad.thrust", "thrust/climb"), NO_MAKER.format("r.thrust_limit", "the rule"))
+        found, _, said = cells(self, QUADS, *quad("", thrust_limit="unstated"))
+        self.assertEqual((found["q", "quad.thrust", "thrust"], reason(said, "quad.thrust")), ("open", NO_MAKER.format("r.thrust_limit", "the rule")))
+        self.assertEqual(reason(said, "quad.guarded"), "the card puts no pull on q, which the rule reads", "a rule that reads no unstated field says what it said")
+
+    def test_a_requirement_and_a_when_on_an_unstated_key_are_open(self):
+        found, verdict, said = cells(self, QUADS, *quad(balance="unstated"))
+        self.assertEqual((found["q", "quad.balance", "balance"], found["q", "quad.static", "static"], verdict), ("open", "open", "UNKNOWN"))
+        self.assertEqual(reason(said, "quad.balance"), NO_MAKER.format("r.balance", "the rule"))
+        self.assertEqual(reason(said, "quad.static"), NO_MAKER.format("r.balance", "the rule"))
+        self.assertNotIn(("q", "quad.static", ""), found, "nothing says the rule does not apply, so the line is not without a rule")
+        found, _, _ = cells(self, QUADS, *quad(balance="static"))
+        self.assertEqual((found["q", "quad.balance", "balance"], found["q", "quad.static", "static"]), ("refuted", "refuted"))
+
+    def test_an_unless_on_an_unstated_key_leaves_the_line_open_and_runs_no_rule(self):
+        found, _, said = cells(self, QUADS, *quad(guard="unstated"))
+        self.assertEqual({k[2]: v for k, v in found.items() if k[1] == "quad.guarded"}, {"": "open"})
+        self.assertEqual(reason(said, "quad.guarded"), NO_MAKER.format("r.guard", "the `unless` of the line"))
+        self.assertEqual(found["r", "rotor_set.own", "own-speed"], "open", "a rule of the rotor set whose `when` names its guard")
+        found, _, _ = cells(self, QUADS, *quad(guard="full"))
+        self.assertEqual({k[2]: v for k, v in found.items() if k[1] == "quad.guarded"}, {"": "not_applicable"})
+        found, _, _ = cells(self, QUADS, *quad(HOVER.replace("11 N", "101 N"), guard="none", thrust_limit="200 N"))
+        self.assertEqual(found["q", "quad.guarded", "guarded/climb"], "refuted")
+
+    def test_a_field_left_unstated_that_nothing_reads_has_no_cell(self):
+        found, _, _ = cells(self, QUADS, *quad(mass="unstated", blades="unstated"))
+        self.assertEqual([k for k in found if k[1] == "unread"], [("r", "unread", "grain")])
+        found, _, _ = cells(self, QUADS, *quad())
+        self.assertEqual([k for k in found if k[1] == "unread"], [("r", "unread", "mass"), ("r", "unread", "blades"), ("r", "unread", "grain")])
+        found, verdict, _ = cells(self, QUADS, *quad(mass="unstated", blades="unstated", grain="unstated", balance="dynamic"))
+        self.assertEqual(([k for k in found if k[1] == "unread"], found["q", "quad.static", ""], verdict), ([], "open", "UNKNOWN"))
+
+    def test_unstated_is_a_name_of_a_key_that_is_not_optional(self):
+        found, _, _ = cells(self, QUADS, *quad(grain="unstated"))
+        self.assertEqual(found["q", "quad.grain", "grain"], "proved", "the key has the name `unstated`, and the rule's `when` holds for it")
+        self.assertEqual(found["q", "quad.speed", "speed"], "proved")
+
+    def test_a_field_that_is_not_optional_must_be_stated_and_the_word_is_bare(self):
+        for lines, finding in ((dict(thrust="unstated"), "parts.3 design r.thrust: is left unstated, and its field is not `optional`: it must be stated"),
+                               (dict(speed_limit='"unstated"'), "parts.3 design r.speed_limit: is one number or one given"),
+                               (dict(speed_limit="unstated unstated"), "parts.3 design r.speed_limit: is one number or one given"),
+                               (dict(speed_limit="none"), "parts.3 design r.speed_limit: is one number or one given"),
+                               (dict(balance='"unstated"'), "parts.4 design r.balance: is one of: static, dynamic"),
+                               (dict(balance="unknown"), "parts.4 design r.balance: is one of: static, dynamic"),
+                               (dict(blades="unstated 2"), "parts.3 design r.blades: is one number or one given")):
+            with self.subTest(lines):
+                mine, its = ill_formed(self, QUADS, *quad(**lines))
+                self.assertIn(finding, its)
+        text, card = quad()
+        mine, its = ill_formed(self, QUADS, text.replace("speed 140 Hz", "speed unstated"), card)
+        self.assertIn("parts.3 design q.speed: is left unstated", its)
+        text, card = quad(speed_limit="given r.speed_limit")
+        found, _, _ = cells(self, QUADS, text, card + given("r.speed_limit", "150 Hz", "160 Hz"))
+        self.assertEqual(found["q", "quad.speed", "speed"], "proved", "a card may bound a field that a part may leave unstated")
+
+    def test_a_deck_marks_a_quantity_or_a_key_optional_with_true_or_false(self):
+        for field in (size("x", optional="yes"), size("x", optional=1), size("x", optional=None), size("x", optional=True, signed=True), {**key("x", "a", "unstated"), "optional": True},
+                      {"name": "x", "type": "rotor_set", "what": "x", "optional": True}, {**key("x", "a", "b"), "optional": "true"}):
+            with self.subTest(field):
+                no_deck(self, made_up([ROTOR, kind("holder", field)]))
+        no_deck(self, made_up([kind("holder", size("x"), loads=[{"name": "f", "dim": "force", "what": "f", "optional": True}])]))
+        reads(self, made_up([kind("holder", size("x", optional=False), size("y", optional=True, whole=True, dim="dimensionless", may_be="zero"), {**key("k", "a", "unstated"), "optional": False})]))
+
+
 # --- 5. a quantity at or under zero ---------------------------------------------------------------------
 
 PACK = kind("pack", size("low", "temperature", may_be="negative"), size("high", "temperature", may_be="negative", least="-40 degC"),
