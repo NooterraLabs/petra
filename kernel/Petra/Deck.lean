@@ -169,6 +169,24 @@ def Static.size : Static → Nat
   | .and cs | .or cs => cs.foldl (fun n c => n + c.size) 1
   | .not c => 1 + c.size
 
+/-- Whether a condition holds when `named` gives each key the name it has. -/
+def Static.over (named : Option String → String → Option String) : Static → Bool
+  | .is part field name => named part field == some name
+  | .and cs => cs.foldl (fun so c => so && c.over named) true
+  | .or cs => cs.foldl (fun so c => so || c.over named) false
+  | .not c => !c.over named
+
+/-- The most combinations of the names of its keys at which the reader of a deck tries what
+a rule requires. A rule whose keys take more is not tried when the deck is read: the
+acceptance check for a rule tries it (docs/deck.md). -/
+def MAX_TRIED : Nat := 4096
+
+/-- The most the reader spends on trying the requirements of one deck. Trying a rule costs
+its combinations times the sizes of its `requires` and of its `when`, and a rule whose cost
+would take the deck past this is not tried. So reading a deck is bounded whatever its rules
+require. -/
+def MAX_TRYING : Nat := 1000000
+
 /-- A line of the grid. `excuse` is none for a line that always asks. Otherwise it holds
 the condition under which the mechanism cannot arise, or none when it never arises. -/
 structure Ask where
@@ -1275,6 +1293,38 @@ def readRules (j : Json) : Except String Rules := do
   unless distinct (rules.map (·.id)) do throw "two rules have one id"
   if let some (kind, mechanism, entry) := twice (rules.map fun r => (r.kind, r.mechanism, r.entry)) then
     throw s!"two rules answer {mechanism} of {kind} with ids that end in {entry} after the last /, so their cells would have one entry"
+  -- A requirement that no part can break, or that no part can meet, is a fault of the deck:
+  -- its cell would be proved, or refuted, whatever a design is. The keys that a rule's
+  -- `requires` and its `when` name take finitely many combinations of names, and the rule
+  -- is tried at each, in the order of the rules, while that is within `MAX_TRIED` for the
+  -- rule and `MAX_TRYING` for the deck.
+  let mut spent := 0
+  for rule in rules do
+    if let some required := rule.requires then
+      let scope : Scope := { kind := kinds.get? rule.kind, kinds }
+      let keys : Array ((Option String × String) × Array String) := rule.fields.filterMap fun (part, field) =>
+        match (scope.field part field).map (·.kind) with
+        | some (FieldKind.key names _) => some ((part, field), names)
+        | _ => none
+      let combinations := keys.foldl (fun n (_, names) => if n > MAX_TRIED then n else n * names.size) 1
+      let cost := combinations * (required.size + (rule.condition.map Static.size).getD 0)
+      if combinations ≤ MAX_TRIED && spent + cost ≤ MAX_TRYING then
+        spent := spent + cost
+        let mut answers := 0
+        let mut holds := 0
+        for n in [0:combinations] do
+          let chosen := (keys.foldl (fun (table, n) (key, names) => (table.insert key names[n % names.size]!, n / names.size))
+            (({} : Std.TreeMap (Option String × String) String), n)).1
+          let named (part : Option String) (field : String) : Option String := chosen.get? (part, field)
+          if rule.condition.all (·.over named) then
+            answers := answers + 1
+            if required.over named then holds := holds + 1
+        if answers == 0 then
+          throw s!"rule {clip rule.id}: its `when` holds for no combination of the names of its keys, so the rule answers for no part"
+        if holds == answers then
+          throw s!"rule {clip rule.id}: what it requires holds for every combination of the names of its keys at which it answers, so no part can break it"
+        if holds == 0 then
+          throw s!"rule {clip rule.id}: what it requires holds for no combination of the names of its keys at which it answers, so no part can meet it"
   return { name, kinds := read, asks, rules }
 
 -- A rule as a tape.

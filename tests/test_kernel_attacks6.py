@@ -185,6 +185,115 @@ class VacuousRequirement(unittest.TestCase):
             code, printed = self.accepted({"rules": [hoist_rule(when=["is", "category", "A"], requires=["is", "service", "0"])]})
             self.assertEqual(code, 0, printed)
 
+    def test_the_check_says_which_way_a_requirement_is_empty_and_gives_no_advice_about_ranges(self):
+        """The decision: a requirement is tried at every combination of the keys that it, its
+        `when` and its line's `unless` name, and is refused when it holds at every one at which
+        it answers, or at none. The first three are refused when the rules are read as a deck,
+        so `units` fails. The fourth reads as a deck, and `reach` refuses it."""
+        for requires, when, unless, said in (
+                (["or", ["is", "service", "0"], ["not", ["is", "service", "0"]]], ["is", "category", "A"], None, "so no part can break it"),
+                (["and", ["is", "service", "0"], ["is", "service", "1"]], ["is", "category", "A"], None, "so no part can meet it"),
+                (["is", "service", "0"], ["and", ["is", "category", "A"], ["is", "category", "B"]], None, "its `when` holds for no combination"),
+                (["is", "service", "0"], ["is", "category", "A"], ["is", "service", "1"], "requires what holds at every one of the 1 combinations of the names of its keys at which it answers, of 4"),
+                (["is", "service", "1"], ["is", "category", "A"], ["is", "service", "1"], "requires what holds at none of the 1 combinations of the names of its keys at which it answers, of 4"),
+                (["is", "service", "0"], ["is", "category", "A"], ["is", "category", "A"], "answers at none of the 4 combinations")):
+            with self.subTest(requires=requires, when=when, unless=unless):
+                code, printed = self.accepted({"rules": [hoist_rule(when=when, requires=requires)],
+                                               **({"unless": [{"mechanism": "hoist.category", "why": "made up", "when": unless}]} if unless else {})})
+                self.assertEqual(code, 1, printed)
+                self.assertIn("hoist.category: REFUSED", printed)
+                self.assertIn(said, printed)
+                self.assertNotIn("widen", printed, "no range of the task changes a key")
+
+    def test_a_requirement_over_more_combinations_than_the_check_tries_is_not_admitted_in_silence(self):
+        """Thirteen keys of two names take 8,192 combinations, over the 4,096 that are tried. The
+        rule is admitted, since nothing shows it wrong, and `reach` is `none` and says that it was
+        not tried in full. It gives no advice about ranges."""
+        keys = [f"k{n:02d}" for n in range(13)]
+        task = {**HOIST, "types": [{"type": "hoist", "what": "a hoist", "fields": [{"name": name, "one_of": ["no", "yes"], "what": name} for name in keys]}]}
+        always = ["or", *(["is", name, "yes"] for name in keys), ["and", *(["is", name, "no"] for name in keys)]]
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "task.json").write_text(json.dumps(task), encoding="utf-8")
+            (Path(tmp) / "rules.json").write_text(json.dumps({"rules": [hoist_rule(requires=always)]}), encoding="utf-8")
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
+                code = acceptance.main([str(Path(tmp) / "task.json"), str(Path(tmp) / "rules.json")])
+        printed = out.getvalue()
+        self.assertEqual(code, 0, printed)
+        self.assertRegex(printed, r"reach +none +made-up/category: what it requires was not tried in full: its 13 keys take over 4,096 combinations")
+        self.assertNotIn("widen", printed)
+
+
+SWITCHES = [f"k{n:02d}" for n in range(13)]
+PANEL = kind("panel", *(key(name, "no", "yes") for name in SWITCHES))
+
+
+def panel(*rules: dict) -> dict:
+    return made_up([PANEL], [asks("panel.set", "panel")], list(rules))
+
+
+def always(keys: list[str]) -> list:
+    """A condition that holds for every combination of these keys: one of them is yes, or all of them are no."""
+    return ["or", *(["is", name, "yes"] for name in keys), ["and", *(["is", name, "no"] for name in keys)]]
+
+
+class TheDeckReaderTriesARequirement(unittest.TestCase):
+    """The decision, in the reader of a deck: the kernel and petra/grid.py refuse a `requires`
+    that holds for every combination of the names of the keys it and its `when` read, or for
+    none, when the combinations are at most 4,096 and trying it keeps the deck within
+    1,000,000: the combinations times the sizes of the two conditions, over the rules tried
+    so far. Past either, the rule is left to the acceptance check."""
+
+    def test_a_requirement_no_part_can_break_or_meet_is_refused_by_the_kernel_and_the_grid(self):
+        from tests.test_deck_features import no_deck, reads
+
+        hoist = kind("hoist", key("category", "A", "B"), key("service", "0", "1"), {"name": "lugs", "type": "lug", "as": ["top", "bottom"], "what": "its lugs"})
+        lug = kind("lug", key("bore", "machined", "cut"))
+
+        def deck(**body) -> dict:
+            return made_up([lug, hoist], [asks("hoist.category", "hoist")], [rule("category", "hoist", "hoist.category", **body)])
+
+        for body, said in ((dict(requires=["or", ["is", "service", "0"], ["not", ["is", "service", "0"]]]), "so no part can break it"),
+                           (dict(requires=["or", ["is", "service", "0"], ["is", "service", "1"]]), "so no part can break it"),
+                           (dict(when=["and", ["is", "category", "A"], ["is", "service", "0"]], requires=["is", "service", "0"]), "so no part can break it"),
+                           (dict(when=["is", "top.bore", "cut"], requires=["not", ["is", "top.bore", "machined"]]), "so no part can break it"),
+                           (dict(requires=["and", ["is", "service", "0"], ["is", "service", "1"]]), "so no part can meet it"),
+                           (dict(when=["is", "service", "1"], requires=["is", "service", "0"]), "so no part can meet it"),
+                           (dict(when=["and", ["is", "category", "A"], ["not", ["is", "category", "A"]]], requires=["is", "service", "0"]), "its `when` holds for no combination")):
+            with self.subTest(body):
+                mine, its = no_deck(self, deck(**body))
+                self.assertIn("rule made-up/category: ", its)
+                self.assertIn(said, its)
+                self.assertIn(said, mine)
+        for body in (dict(when=["is", "category", "A"], requires=["is", "service", "0"]), dict(requires=["is", "top.bore", "machined"]),
+                     dict(when=["is", "top.bore", "cut"], requires=["is", "bottom.bore", "machined"]),
+                     dict(requires=["or", ["is", "service", "0"], ["is", "category", "B"]])):
+            with self.subTest(body):
+                reads(self, deck(**body))
+
+    def test_a_requirement_over_4096_combinations_is_left_to_the_acceptance_check(self):
+        from tests.test_deck_features import no_deck, reads
+
+        no_deck(self, panel(rule("set", "panel", "panel.set", requires=always(SWITCHES[:12]))))
+        reads(self, panel(rule("set", "panel", "panel.set", requires=always(SWITCHES))))
+
+    def test_trying_stops_at_a_million_for_one_deck_in_the_order_of_its_rules(self):
+        """A rule over twelve keys of two names is 4,096 combinations of a condition of size 26:
+        106,496 for each. Nine are within the million and the tenth is past it, so a requirement
+        that no part can break is refused as the ninth rule and read as the tenth."""
+        from tests.test_deck_features import no_deck, reads
+
+        honest = ["or", *(["is", name, "yes"] for name in SWITCHES[:12]), ["and", *(["is", name, "yes"] for name in SWITCHES[:12])]]
+        self.assertEqual((grid._weight(grid.read_deck(json.dumps(panel(rule("set", "panel", "panel.set", requires=honest)))).rules[0].requires), 4096 * 26), (26, 106_496))
+        empty = always(SWITCHES[:12])
+
+        def deck(before: int) -> dict:
+            return panel(*(rule(f"set{n}", "panel", "panel.set", requires=honest) for n in range(before)), rule("empty", "panel", "panel.set", requires=empty))
+
+        mine, its = no_deck(self, deck(8))
+        self.assertIn("rule made-up/empty: what it requires holds for every combination", its)
+        reads(self, deck(9))
+
 
 # --- 3. the order of a join -------------------------------------------------------------------------------
 

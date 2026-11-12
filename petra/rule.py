@@ -833,6 +833,24 @@ def reach(mine: Reading, mechanism: str, tried: Parts, unused: bool = True) -> C
     count = f"{len(found)} parts{tried.said}: " + ", ".join(f"{n} {state}" for state, n in sorted(states.items()))
     if not mine.rules[mechanism]:
         return Check("reach", "pass", count)
+    # What a rule requires is a condition over keys, which take finitely many combinations of names. So it is not sampled: it is tried at
+    # every combination of the keys that it, its `when` and its line's `unless` name. One that holds wherever it answers, or nowhere,
+    # says nothing of a part, and no range of the task can change that.
+    untried = []
+    for r in (r for r in mine.rules[mechanism] if r.requires is not None):
+        takes = grid._Binder({}, mine.task.deck.types[r.type], mine.task.deck.types).takes
+        names = list(dict.fromkeys([*grid._keys(r.when), *grid._keys(r.requires), *grid._keys(mine.asks[mechanism].unless)]))
+        total = grid._combinations(names, takes)
+        if total > grid.MAX_TRIED:
+            untried.append(f"{r.id}: what it requires was not tried in full: its {len(names)} keys take over {grid.MAX_TRIED:,} combinations of names, the most the check tries, "
+                           "so nothing here shows that one part can break it and another meet it")
+            continue
+        answers, holds = grid._tried(names, takes, r.requires, r.when, mine.asks[mechanism].unless)
+        if not answers:
+            return Check("reach", "fail", f"{r.id} answers at none of the {total} combinations of the names of its keys: its `when` holds for none that its line's `unless` leaves")
+        if holds in (0, answers):
+            return Check("reach", "fail", f"{r.id} requires what holds at {'every one' if holds else 'none'} of the {answers} combinations of the names of its keys at which it answers, "
+                                          f"of {total}: no part can {'break' if holds else 'meet'} it, so it says nothing of a part")
     said = [s for a in found for s in a.said]
     silent = sorted({r.id for r in mine.rules[mechanism]} - {s.rule for s in said if s.state != "nothing"})
     if silent:
@@ -840,11 +858,13 @@ def reach(mine: Reading, mechanism: str, tried: Parts, unused: bool = True) -> C
         return Check("reach", "fail", f"{', '.join(silent)} answers none of {count}" + (f"; mostly: {why[0][0]}" if why else "; its `when` holds for none"))
     if not states["holds"]:
         return Check("reach", "fail", f"it fails every part it answers, of {count}")
-    notes = [f"{r.id} holds at every sampled part it answers" for r in mine.rules[mechanism] if not any(s.rule == r.id and s.state == "fails" for s in said)]
+    notes = [f"{r.id} holds at every sampled part it answers" for r in mine.rules[mechanism]
+             if r.requires is None and not any(s.rule == r.id and s.state == "fails" for s in said)]
     notes += [f"{r.id}: its range holds at every sampled part ({why})" for r in mine.rules[mechanism] for _, _, why in r.where
               if not any(s.rule == r.id and s.kind == "range" and s.mark[-1:] == (why,) for s in said)]
     notes += _unused(mine, mechanism, tried) if unused else []
-    return Check("reach", "none" if notes else "pass", "; ".join([*notes, count]) + ("; widen the task's ranges to see these" if notes else ""))
+    # Wider ranges can show what a range hid. They cannot change a key, so a requirement that was not tried in full gets no such advice.
+    return Check("reach", "none" if notes or untried else "pass", "; ".join([*notes, *untried, count]) + ("; widen the task's ranges to see these" if notes else ""))
 
 
 def direction(mine: Reading, mechanism: str, tried: Parts) -> Check:

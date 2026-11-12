@@ -515,6 +515,16 @@ For a part that its `when` holds for, the rule gives one cell, entered as any ru
 
 The rule reads the keys that its `requires` and its `when` name, so those keys have no `unread` cell on a part the rule applies to. It reads no load, so it has one cell whatever load cases the card has.
 
+A requirement must be one that a part can break and a part can meet. `service is 0, or it is not` holds for every part. Its cell would be proved whatever a design is, and its keys would count as read. So reading a deck tries each `requires`. The keys that the rule's `requires` and its `when` name take finitely many combinations of names: the product of how many names each key has, each key once. The reader goes through every combination. The rule answers at a combination when its `when` holds there, and a rule with no `when` answers at all of them. The deck is refused when:
+
+- the rule answers at no combination: its `when` holds for no part;
+- what it requires holds at every combination at which the rule answers: no part can break it;
+- what it requires holds at none of them: no part can meet it.
+
+The refusal names the rule and says which of the three it is. A requirement that its own `when` already implies is of the second kind, and so is one that lists every name of a key.
+
+The reader tries a rule only while the work is small. The rules with `requires` are taken in the order of the deck. The cost of one is its combinations times the sizes of its `requires` and of its `when`, where the size of a condition is 1 for an `is`, 1 more than the sizes of its members for an `and` and an `or`, and 1 more than its member for a `not`. A rule is tried when its combinations are at most 4,096 and its cost, added to the cost of the rules tried before it, is at most 1,000,000. A rule past either is not tried, and it does not count towards the million. The deck loads with it, and nothing in the reader says whether its requirement is empty: that is left to the acceptance check for a rule, which says so when it cannot try a requirement in full ([The parts of the check](#the-parts-of-the-check)). The reader does not take the `unless` of the rule's line into account. The acceptance check does.
+
 ## A design checked against a deck
 
 `petra check` makes one cell for each answer and writes the files of [format.md](format.md): the card, the design with its parts as written, and the deck's own file. A cell has one of five states.
@@ -671,6 +681,8 @@ For each mechanism the check tries 96 parts. They take every combination of the 
 | `second` | A second transcription, made without sight of the first, gives every part tried the same answer | no second transcription is given, or it leaves the mechanism out |
 
 `reach` fails when a rule answers no sampled part, or the mechanism fails at every part it answers. A rule that no part in the task's ranges can meet is wrong, or the ranges are.
+
+A rule with `requires` is not sampled for `reach`. It is tried at every combination of the names of the keys that its `requires`, its `when` and the `unless` of its line name. It answers at a combination when its `when` holds there and the `unless` does not. `reach` fails when the rule answers at no combination, when what it requires holds at every combination at which it answers, and when it holds at none: such a rule says nothing of a part. The detail says which, with the counts. Wider ranges cannot change a key, so the detail gives no advice to widen them. Where the keys take more than 4,096 combinations the rule is not tried, `reach` is `none`, and the detail says that what the rule requires was not tried in full. The mechanism is then admitted on what else stands behind it, and the line of its check says what does not.
 
 A mechanism is admitted when no part of its check fails. A part that is `none` says the mechanism has less behind it. One more line is about the transcription as a whole: `reads` passes when a rule or an `unless` reads every key, every quantity and every load of the types. `petra check` leaves a design open at a field nothing reads.
 

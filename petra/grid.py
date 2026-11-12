@@ -67,6 +67,11 @@ MAX_REASON = 200
 MAX_BITS = 65_536
 """The most bits a number of a need may have, as in kernel/Petra/Tape.lean. A need with a
 longer one is not decided, and its part is refused."""
+MAX_TRIED = 4096
+"""The most combinations of the names of its keys at which reading a deck tries what a rule requires, as in kernel/Petra/Deck.lean."""
+MAX_TRYING = 1_000_000
+"""The most that reading one deck spends on trying its requirements: for each rule tried, its
+combinations times the sizes of its `requires` and of its `when`. A rule past it is not tried."""
 LOADED = ("`loaded` is no condition: a condition is over keys, which are the same under every load case. "
           "A card states a load in each case, as zero where there is none, and a rule reads it there")
 """What a deck that asks `loaded` is refused with, as in kernel/Petra/Deck.lean. The condition
@@ -477,6 +482,42 @@ def _need(body: Any, takes: Mapping[str, rows.Input], free: frozenset = frozense
     return Need(strict, low, high, body["why"])
 
 
+def _weight(cond: tuple | None) -> int:
+    """The size of a condition, as `Static.size` in kernel/Petra/Deck.lean: 1 for an `is`, and 1 more than its members for `and`, `or` and `not`."""
+    return 0 if cond is None else 1 if cond[0] == "is" else 1 + sum(map(_weight, cond[1:]))
+
+
+def _over(cond: tuple | None, point: Mapping[str, str]) -> bool:
+    """Whether a condition holds when `point` gives each key it names the name it has. No condition holds."""
+    if cond is None:
+        return True
+    if cond[0] == "is":
+        return point[cond[1]] == cond[2]
+    if cond[0] == "not":
+        return not _over(cond[1], point)
+    return (all if cond[0] == "and" else any)(_over(c, point) for c in cond[1:])
+
+
+def _combinations(names: list[str], takes: Mapping[str, rows.Input]) -> int:
+    """How many combinations the names of these keys make, or some number over MAX_TRIED when they make more than that."""
+    total = 1
+    for name in names:
+        total = total if total > MAX_TRIED else total * len(takes[name].keys)
+    return total
+
+
+def _tried(names: list[str], takes: Mapping[str, rows.Input], requires: tuple, when: tuple | None, unless: tuple | None = None) -> tuple[int, int]:
+    """What a requirement is at every combination of the names of the keys `names`: at how many of them its rule
+    answers, which is where `when` holds and `unless` does not, and at how many of those what it requires holds."""
+    answers = holds = 0
+    for choice in itertools.product(*(takes[name].keys for name in names)):
+        point = dict(zip(names, choice))
+        if _over(when, point) and not (unless is not None and _over(unless, point)):
+            answers += 1
+            holds += _over(requires, point)
+    return answers, holds
+
+
 def _rule(body: Mapping[str, Any], deck_rows: Mapping[str, rows.Row], types: Mapping[str, Type]) -> Rule:
     where = body.get("id")
     try:
@@ -581,6 +622,24 @@ def read_deck(text: str) -> Deck:
         _named(list(rules), "rules", lambda r: r.id)
         if len({(r.type, r.mechanism, r.id.rpartition("/")[2]) for r in rules}) != len(rules):
             raise DeckError("two rules for one line of the grid have ids that end alike after the last /, so their cells would have one entry")
+        # A requirement that no part can break, or that no part can meet, is a fault of the deck. Each is tried at every combination of the
+        # names of the keys that it and its `when` name, in the order of the rules, within MAX_TRIED for a rule and MAX_TRYING for the deck.
+        spent, named = 0, {}
+        for r in rules:
+            if r.requires is None:
+                continue
+            if r.type not in named:
+                named[r.type] = _Binder({}, types[r.type], types).takes
+            names = list(dict.fromkeys([*_keys(r.when), *_keys(r.requires)]))
+            total = _combinations(names, named[r.type])
+            cost = total * (_weight(r.requires) + _weight(r.when))
+            if total <= MAX_TRIED and spent + cost <= MAX_TRYING:
+                spent += cost
+                answers, holds = _tried(names, named[r.type], r.requires, r.when)
+                if not answers or holds in (0, answers):
+                    raise DeckError(f"rule {r.id}: " + ("its `when` holds for no combination of the names of its keys, so the rule answers for no part" if not answers
+                                                        else f"what it requires holds for {'every' if holds else 'no'} combination of the names of its keys at which it answers, "
+                                                             f"so no part can {'break' if holds else 'meet'} it"))
         return Deck(str(body["name"]), export.sha256(text), deck_rows, types, tuple(asks), rules, text)
     except (RowError, DeckError) as exc:
         raise DeckError(str(exc)) from None
