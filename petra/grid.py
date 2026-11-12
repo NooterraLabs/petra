@@ -53,7 +53,7 @@ MAX_CHOICES = 4096
 MAX_LEAVES = 256
 """The most leaves a partition may have before the search for a proof stops."""
 MAX_CORNERS = 6
-"""A refuting point is looked for at the corners of the box while no more inputs than this have a range."""
+"""A refuting point is looked for at every corner of the box while no more inputs than this have a range, and past that at one."""
 MAX_NAME = 64
 """The most bytes a name may print in that a cell prints whole, as in kernel/Petra/Files.lean:
 the name of a part, a load case, a mechanism, a field, a load, a joined part and a `let`, and a rule's id."""
@@ -1344,13 +1344,19 @@ def enclosures(nodes: list[list], box: list[Interval]) -> list[Any]:
     return v
 
 
-def _partition(nodes: list[list], roots: list[int], box: list[Interval], budget: list[int], labels: list[str]) -> Any:
+def _partition(nodes: list[list], roots: list[int], box: list[Interval], budget: list[int], labels: list[str],
+               refuting: list[list[Fraction]] | None = None) -> Any:
     """A partition on whose every leaf every root is at most zero, or None when the search
     finds none within its budget. Splits the input with the widest range, at its middle,
-    and names it by its label, as proofs.json does for the kernel."""
+    and names it by its label, as proofs.json does for the kernel. Given `refuting`, the
+    search also tries the middle of each box it does not prove, and stops at the first where
+    the first root is above zero, which it puts there."""
     v = enclosures(nodes, box)
     if all(isinstance(v[r], Interval) and v[r].hi <= 0 for r in roots):
         return "leaf"
+    if refuting is not None and _above(nodes, roots[0], middle := [x.midpoint() for x in box]):
+        refuting.append(middle)
+        return None
     budget[0] -= 1
     widest = max(range(len(box)), key=lambda k: box[k].width(), default=None)
     if widest is None or box[widest].width() == 0 or budget[0] <= 0:
@@ -1358,7 +1364,7 @@ def _partition(nodes: list[list], roots: list[int], box: list[Interval], budget:
     cut = box[widest].midpoint()
     halves = []
     for half in (Interval(box[widest].lo, cut), Interval(cut, box[widest].hi)):
-        found = _partition(nodes, roots, [*box[:widest], half, *box[widest + 1:]], budget, labels)
+        found = _partition(nodes, roots, [*box[:widest], half, *box[widest + 1:]], budget, labels, refuting)
         if found is None:
             return None
         halves.append(found)
@@ -1398,15 +1404,38 @@ def _silent(nodes: list[list], roots: list[int], box: list[Interval], outside: b
     return any(void[r] or (outside and isinstance(v[r], Interval) and v[r].lo > 0) for r in roots)
 
 
+def _height(nodes: list[list], root: int, point: list[Fraction]) -> Fraction | None:
+    """The least the root may be at a point, or None where it has no value."""
+    at = enclosures(nodes, [Interval.point(x) for x in point])[root]
+    return at.lo if isinstance(at, Interval) else None
+
+
+def _above(nodes: list[list], root: int, point: list[Fraction]) -> bool:
+    return (height := _height(nodes, root, point)) is not None and height > 0
+
+
 def _refuting(nodes: list[list], root: int, box: list[Interval]) -> list[Fraction] | None:
-    """A corner of the box, or its middle, where the root is above zero."""
+    """A point of the box where the root is above zero: a corner of it while no more inputs
+    than MAX_CORNERS have a range, and past that the corner the root climbs to; and then its
+    middle. The climb starts at the middle and sets each ranged input in turn to the end of
+    its range where the root is higher, the others held, until a round moves none or there
+    have been as many rounds as ranged inputs. Where the root has no value it is lowest."""
     ranged = [k for k, x in enumerate(box) if x.width() > 0]
-    corners = itertools.product(*((x.lo, x.hi) if x.width() > 0 else (x.lo,) for x in box)) if len(ranged) <= MAX_CORNERS else []
-    for point in itertools.chain(corners, [tuple(x.midpoint() for x in box)]):
-        at = enclosures(nodes, [Interval.point(x) for x in point])[root]
-        if isinstance(at, Interval) and at.lo > 0:
-            return list(point)
-    return None
+    middle = [x.midpoint() for x in box]
+    if len(ranged) <= MAX_CORNERS:
+        corners = [list(p) for p in itertools.product(*((x.lo, x.hi) if x.width() > 0 else (x.lo,) for x in box))]
+    else:
+        point = list(middle)
+        for _ in ranged:
+            moved = False
+            for k in ranged:
+                low, high = (_height(nodes, root, [*point[:k], end, *point[k + 1:]]) for end in (box[k].lo, box[k].hi))
+                end = box[k].hi if low is None or (high is not None and high >= low) else box[k].lo
+                moved, point[k] = moved or end != point[k], end
+            if not moved:
+                break
+        corners = [point]
+    return next((point for point in [*corners, middle] if _above(nodes, root, point)), None)
 
 
 # --- cells -----------------------------------------------------------------------------------------
@@ -1603,7 +1632,9 @@ def _answers(rule: Rule, ask: Ask, part: Part, parts: Mapping[str, Part], cases:
         partition = _partition(tape.nodes, roots, box, [1], labels)
         point = None if partition is not None else _refuting(tape.nodes, roots[0], box)
         if partition is None and point is None:
-            partition = _partition(tape.nodes, roots, box, [MAX_LEAVES], labels)
+            found: list[list[Fraction]] = []
+            partition = _partition(tape.nodes, roots, box, [MAX_LEAVES], labels, found)
+            point = next(iter(found), None)
         if partition is not None:
             yield cell(entry, "proved", ratio=_ratio(tape.nodes, *sides[0], box), proof={"partition": partition})
         elif point is not None:
@@ -1616,7 +1647,7 @@ def _answers(rule: Rule, ask: Ask, part: Part, parts: Mapping[str, Part], cases:
                 origin = v.index(v[roots[0]])
                 yield cell(entry, "open", (f"{tape.picks[origin]} gives no value at what {part.name} has: " if origin in tape.picks else "") + v[roots[0]], waivable=silent)
             else:
-                yield cell(entry, "open", "neither proved over the ranges the card gives nor refuted at a corner of them", waivable=silent)
+                yield cell(entry, "open", "neither proved over the ranges the card gives nor refuted at a point of them the search tried", waivable=silent)
 
 
 def cells(design: Design, deck: Deck, found: Parts) -> list[Cell]:

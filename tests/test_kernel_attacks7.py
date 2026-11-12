@@ -28,6 +28,10 @@ a load is missing, a table has no value there, or a key is unstated (docs/deck.m
 waiver rests"). A cell whose rule is left undecided stays open, waiver or not. So each of the
 six is UNKNOWN or FAIL, and never PASS. And a deck whose rule divides by a field that may be
 zero, as in 5, is refused when it is read (docs/deck.md, "A quantity at or under zero").
+
+The search then learned to find 1 and 2. Past six ranged inputs it tries the corner the root
+climbs to from the middle, and in the search for a proof it tries the middle of each box it
+does not prove. Both are FAIL.
 """
 import json
 import unittest
@@ -114,7 +118,13 @@ class SevenRanges(unittest.TestCase):
         self.assertEqual(six.status, "FAIL")
         self.assertIn(("lap-block-shear-a/gravity", "refuted"), states(six, "lap.block_shear"))
         seven = checked(lap_card(RANGES), LAP)                             # a wider box: every design of `six` is in it
-        self.assertIn(seven.status, NOT_PASS, states(seven, "lap.block_shear"))
+        self.assertEqual(seven.status, "FAIL", states(seven, "lap.block_shear"))
+        refuted = next(c for c in seven.report.cells if c.entry == "lap-block-shear-a/gravity")
+        self.assertEqual(refuted.state, "refuted")
+        point = refuted.proof["point"]
+        self.assertEqual(len([label for label in point if label.startswith("in:")]), 7, "the pull and the six givens of the tab and the splice")
+        self.assertEqual((point["in:lap-ranged.splice.side"], point["in:lap-ranged.tab.thickness"]), ("127/5000", "127/20000"),
+                         "the corner the root climbs to: the least side distance and the thinnest tab")
 
 
 # --- 2. a refutation inside the box ------------------------------------------------------------------------
@@ -131,7 +141,11 @@ class InteriorRefutation(unittest.TestCase):
     def test_a_speed_range_through_the_natural_frequency_does_not_pass_under_a_waiver(self):
         card = HEAD + waive("rotor.resonance", "r")
         self.assertEqual(checked(card + given("r.speed", "5000 rpm"), ROTOR_TEXT, ROTOR).status, "FAIL")
-        self.assertIn(checked(card + given("r.speed", "3000 rpm", "9000 rpm"), ROTOR_TEXT, ROTOR).status, NOT_PASS)
+        ranged = checked(card + given("r.speed", "3000 rpm", "9000 rpm"), ROTOR_TEXT, ROTOR)
+        self.assertEqual(ranged.status, "FAIL")
+        refuted = next(c for c in ranged.report.cells if c.mechanism == "rotor.resonance")
+        # 5250 rpm: the middle of the upper half of the range's lower half, a box the search could not prove.
+        self.assertEqual((refuted.state, refuted.proof["point"]["in:made-up.r.speed"]), ("refuted", "175/2"))
 
 
 # --- 3. a refutation inside a `where` that the card's range runs past --------------------------------------
