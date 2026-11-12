@@ -26,7 +26,7 @@ def givenOf (name : String) : String × String :=
   | field :: rest => (".".intercalate rest.reverse, field)
   | [] => (name, "")
 
-/-- The type rules, 1 to 5. Rules 6 and 7 are in `rules` and `marks`: they read the command line.
+/-- The type rules, 1 to 5. Rules 6, 7 and 8 are in `rules` and `marks`: they read the command line.
 
 `sign` is what the deck of rules says with `may_be` of a field or of a load of a part
 (`signOf`). A number that a design writes for a field that may be zero or negative is not
@@ -241,6 +241,12 @@ def rules (cardHash : String) (card design deck : Except String ByteArray)
     | some bytes, some _ => load "proofs" "petra-proofs/0" bytes readHints
     | _, _ => pure none
   let (some card, some design, some deck) := (card?, design?, deck?) | return {}
+  -- Type rule 8: with a deck of rules the floors are core.json's, whatever deck.json gives.
+  let deck ← if deckOfRules.isNone then pure deck else do
+    let held (f : Floors) := f.toList.map fun (key, (_, floor)) => (key, floor.min, floor.strict)
+    if held deck.input != held CORE_FLOORS then
+      modify (·.push ⟨"types.8", "deck", "domains.input", "is not the floors of petra/decks/core.json, which are the kernel's for a design checked against a deck of rules"⟩)
+    pure { deck with input := CORE_FLOORS }
   -- What the deck of rules says with `may_be` of the fields and the loads of the design's parts.
   let sign : String → String → Bool → Sign := match rules?, design.parts with
     | some rules, some blocks =>

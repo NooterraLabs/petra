@@ -62,6 +62,18 @@ def firsts [Ord κ] (items : Array α) (key : α → κ) : Std.TreeMap κ α :=
 /-- The floors that deck.json gives the dimensions, by the exponents of each (`Deck.input`). -/
 abbrev Floors := Std.TreeMap (Array (Int × Nat)) (String × Floor)
 
+/-- The floors of petra/decks/core.json, `domains.input`: zero for each dimension it lists, and
+absolute zero, -273.15 degC, for a temperature. A design checked against a deck of rules is
+held to these and not to the ones its deck.json gives: they decide whether a number of a part,
+a bound of the card or a completion may be had, and no hash a reader checks covers deck.json
+(type rule 8). -/
+def CORE_FLOORS : Floors :=
+  [("current", (0 : Rat)), ("voltage", 0), ("length", 0), ("area", 0), ("mass", 0), ("energy", 0),
+   ("power", 0), ("time", 0), ("resistance", 0), ("dimensionless", 0), ("temperature", -5463 / 20)].foldl
+    (init := {}) fun table (name, min) => match dimNamed name with
+      | some dim => table.insert dim.key (name, { min, strict := false })
+      | none => table
+
 /-- Why the deck of rules is refused for a `least` under a floor of `floors`, if it is: the
 first field or load, by type and then fields before loads, whose `least` is under the floor of
 its dimension, where that floor holds for it as type rule 4 holds a load of the card. A floor
