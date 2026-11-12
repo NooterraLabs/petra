@@ -50,6 +50,9 @@ DECKS = Path(__file__).resolve().parent / "decks"
 STATES = ("proved", "refuted", "not_applicable", "waived", "open")
 MAX_CHOICES = 4096
 """The most ways a pick may order what it compares, as in kernel/Petra/Tape.lean."""
+MAX_ORDERS = 1024
+"""The most orders the conditions of one pick may hold between them, as in kernel/Petra/Tape.lean.
+A deck whose rule could write a pick of more is refused when it is read."""
 MAX_LEAVES = 256
 """The most leaves a partition may have before the search for a proof stops."""
 MAX_CORNERS = 6
@@ -624,6 +627,47 @@ def _tried(names: list[str], takes: Mapping[str, rows.Input], requires: tuple, w
     return answers, holds
 
 
+def _over_orders(count: int) -> str:
+    """Why a deck is refused that would write a pick of `count` orders, past MAX_ORDERS, in the kernel's words."""
+    return f"a pick of the rule's tape would compare {count} orders, over the budget of {MAX_ORDERS} for one pick"
+
+
+def _place_orders(axis: rows.Axis) -> list[int]:
+    """The orders of the condition that a quantity is at each place of a side: two for a listed value, one for each end of a band."""
+    return [2] * len(axis.at) if axis.at else [1 if hi is None else 2 for _, hi in axis.bands]
+
+
+def _named_orders(row: rows.Row) -> int:
+    """The orders of the conditions under which the quantities are at the cells of a row that gives a name, the empty ones left out."""
+    places = [_place_orders(axis) for axis in row.table.axes] + [[0]]
+    return sum(places[0][i] + places[1][j] for i, line in enumerate(row.table.cells) for j, cell in enumerate(line) if cell is not None)
+
+
+def _cond_orders(cond: Any) -> int:
+    """The orders a condition of a row's case or of a tape's pick compares."""
+    if cond is None:
+        return 0
+    if cond[0] in ("and", "or"):
+        return sum(map(_cond_orders, cond[1] if isinstance(cond[1], list) else cond[1:]))
+    return _cond_orders(cond[1]) if cond[0] == "not" else 1
+
+
+def _picks(applied: Mapping[str, Applied | Cased], where: tuple) -> int:
+    """The most orders a pick of the rule's tape compares for any part, as `push` in kernel/Petra/Deck.lean counts them when it reads
+    the rule: the cases of an equation, the places of a table down or across, the cells of a row that gives a name, and the `where`."""
+    most = len(where)
+    for a in applied.values():
+        if isinstance(a, Cased):
+            most = max(most, _named_orders(a.named.row))
+        elif a.row.table is None:
+            most = max(most, 0 if a.row.cases[0].when is None else sum(_cond_orders(c.when) for c in a.row.cases))
+        else:
+            for axis in a.row.table.axes:
+                how = a.keys.get(axis.by) if axis.keys else None
+                most = max(most, _named_orders(how[1].row) if how is not None and how[0] == "named" else 0 if axis.keys else sum(_place_orders(axis)))
+    return most
+
+
 def _rule(body: Mapping[str, Any], deck_rows: Mapping[str, rows.Row], types: Mapping[str, Type]) -> Rule:
     where = body.get("id")
     try:
@@ -662,6 +706,8 @@ def _rule(body: Mapping[str, Any], deck_rows: Mapping[str, rows.Row], types: Map
         when = binder.static(body["when"]) if "when" in body else None
         if binder.problems:
             raise RowError("; ".join(dict.fromkeys(binder.problems)))
+        if (most := _picks(binder.applied, ranges)) > MAX_ORDERS:
+            raise RowError(_over_orders(most))
         _refuse_no_value(types[body["type"]], types, lets, [low, high, *(term for a, b, _ in ranges for term in (a, b))], binder.applied)
         return Rule(where, body["type"], body["mechanism"], anchor, body["says"], when, lets, ranges, low, high, binder.applied, strict=strict)
     except RowError as exc:
@@ -1120,11 +1166,14 @@ class _Tape:
         return {"le": ["le", a, b], "lt": ["lt", a, b], "ge": ["le", b, a], "gt": ["lt", b, a]}[c[0]]
 
     def pick(self, cases: list[tuple[Any, int]], what: str) -> int:
-        """The first case that holds. A lone case that holds otherwise is its value."""
+        """The first case that holds. A lone case that holds otherwise is its value. A pick holds at most MAX_ORDERS orders, as the
+        kernel's `pickOf` does, and reading the deck refuses a rule that could write more."""
         if not cases:
             raise NoValue(f"{what} gives nothing here")
         if cases[0][0] is None:
             return cases[0][1]
+        if (count := sum(_cond_orders(c) for c, _ in cases)) > MAX_ORDERS:
+            raise NoValue(_over_orders(count))
         at = self.node("pick", [[c, v] for c, v in cases])
         self.picks.setdefault(at, what)
         return at

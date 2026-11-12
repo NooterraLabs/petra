@@ -378,12 +378,21 @@ class Time(unittest.TestCase):
         60,000 orders, over the 1,024 of one pick), 46 MB. Two parts took 49.8 and 46.8
         processor seconds on a quiet desktop and 156.5, 81.3 and 48.8 on a busy one; one part
         32.5, 23.1 and 27.9, and four parts 92.3, busy. The same table with values of the same
-        length that do not share a hash took 1.2 processor seconds for three parts."""
+        length that do not share a hash took 1.2 processor seconds for three parts.
+
+        Since the eighth review such a deck is refused when it is read, and no tape is written.
+        A table of 512 such values is a pick of 1,024 orders, as many as a pick may compare: it
+        is read, and the tapes of a thousand parts are written in time. The card gives no work,
+        so each cell is open, as each was before."""
         files = colliding(30_000, 2)
         self.assertLess(total(files), MB)
         said, seconds, _ = measured(files, timeout=600)
-        self.assertEqual((said["verdict"], said["counts"]["open"], said["work"]), ("UNKNOWN", 2, 0))
-        self.assertLess(seconds, PROCESSOR_SECONDS, "the tapes are written in about a processor second")
+        self.assertEqual((said["verdict"], [f["file"] for f in said["findings"]]), ("ILL-FORMED", ["rules"]))
+        self.assertIn("would compare 60000 orders, over the budget of 1024", said["findings"][0]["why"])
+        self.assertLess(seconds, PROCESSOR_SECONDS, "the deck is refused in about a processor second")
+        said, seconds, _ = measured(colliding(512, 1_000), timeout=600)
+        self.assertEqual((said["verdict"], said["counts"]["open"], said["work"]), ("UNKNOWN", 1_000, 0))
+        self.assertLess(seconds, PROCESSOR_SECONDS, "the tapes are written in time")
 
     def test_ends_that_share_a_hash_are_looked_up_in_the_caches_in_time(self):
         """Finding 4, no deck. Cell `fill` takes exp of 1,024 ends x_k = (Q + k 2^16000) / Q,
@@ -408,9 +417,12 @@ class TheGridReadsInTime(unittest.TestCase):
         puts the values of a table's side in a set to see that each is there once. 30,000 of
         them, 0.90 MB: grid.read_deck took 312 processor seconds, where the kernel answers the
         same files in 1.2 and the values 1 + k 2^63 of finding 3 are read in 1.8. 12,000 took
-        53 busy and 39.3 and 34.5 quiet; 16,000 are read here."""
+        53 busy and 39.3 and 34.5 quiet; 16,000 are read here. No rule reads the row, since a
+        rule that read it would write a pick over the 1,024 orders, and the deck is refused
+        then."""
         body = json.loads(colliding(16_000, 1)["rules"])
         body["rows"][0]["table"]["down"]["at"] = [str(1 + k * (2 ** 61 - 1)) for k in range(16_000)]
+        body["rules"] = []
         started = time.process_time()
         grid.read_deck(json.dumps(body))
         self.assertLess(time.process_time() - started, PROCESSOR_SECONDS, "the values are read in about a processor second")

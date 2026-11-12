@@ -76,7 +76,7 @@ CORE_CAP = Limit(1017, "Set on 2026-11-08 at 140f742, where the core measured 95
                        "rounded to the grid. The root of a point that is the square of a fraction is now "
                        "that fraction, as the kernel's `rootOf` takes it: 5 lines in interval.py, 1,017.")
 
-TRUSTED_CEILING = Limit(19909, "Set on 2026-11-08 at 140f742, where the trusted base measured 13,530 "
+TRUSTED_CEILING = Limit(19939, "Set on 2026-11-08 at 140f742, where the trusted base measured 13,530 "
                                "code lines: core 957, rules 457, outside the kernel 12,116. Raised on "
                                "2026-11-08 on branch parts-core as the parts layer replaces its scaffold: "
                                "classifying the scaffold measured 14,269, and the mesh reader with its "
@@ -228,6 +228,10 @@ TRUSTED_CEILING = Limit(19909, "Set on 2026-11-08 at 140f742, where the trusted 
                                "The eighth hostile review found a design passed whose only proved cell was the range "
                                "of a waived rule. A `/where` cell is not the proved cell a PASS needs: 1 line in "
                                "petra/grid.py, 19,909. "
+                               "The same review found a table of 600 listed sizes that the kernel would not write, "
+                               "a pick of more than 1,024 orders, and the grid did. Both readers now count the orders "
+                               "of every pick a rule could write when they read the deck, and refuse one of more: "
+                               "30 lines in petra/grid.py, 19,939. "
                                "Raise it in the commit that needs more and say why here.")
 
 T2_ADOPTED = date(2026, 11, 8)

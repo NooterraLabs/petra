@@ -1279,7 +1279,7 @@ class Heaviest(unittest.TestCase):
     def test_a_table_of_values_in_the_unit_that_is_listed_last(self):
         """A table read at 42,000 listed values, each cell in `oz`, the last unit of the kernel's list, and each value in `mile`: 84,000
         quantities whose unit is found past every other, 1.0 MB. A rule reads the table, which is a pick of far more orders than a pick
-        may hold, so its tape is not written. 1.1 processor seconds and 60 MB."""
+        may hold, so the deck is refused when it is read, after every value of it is read. 1.1 processor seconds and 60 MB."""
         from tests.test_kernel_attacks3 import empty_card, with_rules
 
         count = 42_000
@@ -1289,8 +1289,8 @@ class Heaviest(unittest.TestCase):
         number = lambda dim, x: [{"number": {"dim": dim, "lo": x, "hi": x}}]      # noqa: E731
         parts = [{"name": f"p{i}", "type": "t", "lines": [{"field": "f", "args": number("length", "201168/125")}, {"field": "m", "args": number("mass", "1/100")}]} for i in range(2)]
         said = self.bounded(with_rules(deck, empty_card(), parts))
-        self.assertEqual((said["verdict"], said["findings"], said["counts"]["open"]), ("UNKNOWN", [], 2))
-        self.assertIn("over the budget of 1024 for one pick", said["cells"][0]["reason"])
+        self.assertEqual((said["verdict"], [f["file"] for f in said["findings"]]), ("ILL-FORMED", ["rules"]))
+        self.assertIn("over the budget of 1024 for one pick", said["findings"][0]["why"])
 
     def test_parts_that_leave_a_field_unstated_under_rules_that_read_many(self):
         """A type of 190 optional fields, 212 rules that each sum them all, and 47 parts that leave the last field unstated. Each rule looks

@@ -246,6 +246,22 @@ def Chosen.count (side : Side) : Chosen → Nat
   | .picked places => places.size
   | _ => side.places
 
+/-- The orders that a pick over the places of a side compares where `how` reads it: two for
+a listed value, one for each end of a band, and the orders of the condition of each cell of a
+row that gives the name. A key that a field or the rule names is at one place, and compares
+none. A place whose cells are empty counts too: this is the most for any part. -/
+def Chosen.orders (side : Side) : Chosen → Nat
+  | .picked places => places.foldl (fun n (_, cond) => n + cond.orders) 0
+  | .value _ => match side with
+    | .listed _ values => 2 * values.size
+    | .banded _ bands _ => bands.foldl (fun n (_, hi) => n + if hi.isSome then 2 else 1) 0
+    | .named .. => 0
+  | _ => 0
+
+/-- Why a deck is refused that would write a pick of `count` orders, past `MAX_ORDERS`. -/
+def OVER_ORDERS (count : Nat) : String :=
+  s!"a pick of the rule's tape would compare {count} orders, over the budget of {MAX_ORDERS} for one pick"
+
 def Step.reads : Step → Array Nat
   | .node n => n.reads
   | .field .. | .load _ => #[]
@@ -392,10 +408,21 @@ abbrev Reading := StateT Draft (Except String)
 
 /-- A step more. A value of the file that is read makes at most four steps of a rule: a
 power is a root, a power, a one and a quotient. So a rule of a deck within `MAX_READ` never
-has four times that many, and the test holds the reader to the count whatever it does. -/
+has four times that many, and the test holds the reader to the count whatever it does.
+
+A step that would write a pick of more than `MAX_ORDERS` orders for some part, an equation's
+cases or a table's places down or across, is refused here, when the deck is read. -/
 def push (step : Step) : Reading Nat := do
   let place := (← get).steps.size
   if place ≥ 4 * MAX_READ then throw s!"reading a rule takes more than {4 * MAX_READ} steps"
+  let count := match step with
+    | .node (.pick cases) => orders cases
+    | .table table down across =>
+      Nat.max (down.orders table.down) (match table.across, across with
+        | some side, some how => how.orders side
+        | _, _ => 0)
+    | _ => 0
+  if count > MAX_ORDERS then throw (OVER_ORDERS count)
   modify fun d => { d with steps := d.steps.push step }
   return place
 
@@ -1250,6 +1277,8 @@ def readRule (kinds : Std.TreeMap String Kind) (rows : Std.TreeMap String Row) (
         (within range ["le", "why"]).mapError ("where: " ++ ·)
         let _ ← text range "why"
         pair (← need range "le") "`where`"
+      -- The tape that refutes a rule inside its `where` picks by every item of it at once.
+      if ranges.size > MAX_ORDERS then throw (OVER_ORDERS ranges.size)
       for (name, _) in lets do
         let _ ← expr scope MAX_EXPRESSION (.str name)
       return (main, ranges)
@@ -1481,15 +1510,15 @@ def input (i : TapeInput) : Write Nat := modifyGet fun w =>
   (place, { w with inputs := w.inputs.push i, nodes := w.nodes.push (.s k) })
 
 /-- The first case that holds, or none when there is no case. One case that holds otherwise
-is its value. A pick holds at most `MAX_ORDERS` orders, as one that a file carries. -/
+is its value. A pick holds at most `MAX_ORDERS` orders, as one that a file carries. Reading
+the deck refuses a rule that could write more (`push`), so none comes here. -/
 def pickOf (cases : Array (Option Cond × Nat)) : Write (Option Nat) :=
   match cases[0]? with
   | none => pure none
   | some (none, value) => pure (some value)
   | some _ =>
     let count := orders cases
-    if count > MAX_ORDERS then
-      throw s!"an equation or a table compares {count} orders here, over the budget of {MAX_ORDERS} for one pick"
+    if count > MAX_ORDERS then throw (OVER_ORDERS count)
     else some <$> node (.pick cases)
 
 /-- The places of one side that the part can be at, each with the condition that it is

@@ -399,16 +399,14 @@ class Orders(Kernel):
         self.assertEqual((over["verdict"], over["cells"]), ("ILL-FORMED", []))
         self.assertIn("the conditions of a pick hold 1025 orders, over the budget of 1024", over["findings"][0]["why"])
 
-    def test_a_pick_the_kernel_would_write_from_a_deck_holds_no_more_and_its_cell_is_open(self):
+    def test_a_deck_whose_rule_would_write_a_pick_of_more_is_refused_when_it_is_read(self):
         """The row's first case compares its input 1,100 times, and its second once."""
         def wide(r: dict) -> None:
             row = next(x for x in r["rows"] if x["id"] == "test/derate")
             row["cases"][0]["when"] = ["and"] + [["le", "T", ["q", "40", "degC"]]] * 1100
         said = ask(with_rules(strips(), wide))
-        cells = {(c["subject"], c["mechanism"], c["entry"]): c for c in said["cells"]}
-        self.assertEqual(cells["s", "strip.heat", "heat/run"]["state"], "open")
-        self.assertIn("compares 1101 orders here, over the budget of 1024 for one pick", cells["s", "strip.heat", "heat/run"]["reason"])
-        self.assertEqual(cells["s", "strip.hole", "hole"]["state"], "proved", "the other cells are settled as before")
+        self.assertEqual((said["verdict"], [f["file"] for f in said["findings"]]), ("ILL-FORMED", ["rules"]))
+        self.assertIn("would compare 1101 orders, over the budget of 1024 for one pick", said["findings"][0]["why"])
 
 
 @unittest.skipUnless(verify.binary(), "no petra-verify is built here and PETRA_VERIFY names none")

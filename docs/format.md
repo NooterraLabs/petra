@@ -199,7 +199,9 @@ The value of the table is then built line by line. For each place down, in order
 
 A `case` is one pick: for each cell of its row that holds a name, in the same order, the condition of the cell and the node of the expression of its name. Every name of the row is held by a cell, or the deck does not load, so the pick has the expression of every name of the `case` among its cases, and none is left out of the tape.
 
-Each pick is held to 1,024 orders on its own: the pick over the lines, and the pick of each line. A band with two ends has 2 orders, a band with one end 1, and a listed value 2. A cell of a row with two sides that gives a name has the orders of both its bands. An equation with cases is one pick, whose orders are the `le`, `lt`, `ge` and `gt` of its conditions. One case that holds otherwise, standing first, is its own node and no pick.
+Each pick is held to 1,024 orders on its own: the pick over the lines, and the pick of each line. A band with two ends has 2 orders, a band with one end 1, and a listed value 2. A cell of a row with two sides that gives a name has the orders of both its bands. An equation with cases is one pick, whose orders are the `le`, `lt`, `ge` and `gt` of its conditions. One case that holds otherwise, standing first, is its own node and no pick. The tape that refutes a rule inside its `where` has a pick of one order for each item of the `where`.
+
+A deck is held to this when it is read, and not when a tape is written. Both readers count the orders of every pick a rule could write, for any part: the cases of each equation it applies, each `case`, the places of each table down and across with the empty cells counted, and its `where`. A rule with a pick of more than 1,024 is refused, and the deck with it. So a table of more than 512 listed values does not load, where it once loaded and left the cells that read it open in the kernel and not in the grid.
 
 ### Partitions and points
 
