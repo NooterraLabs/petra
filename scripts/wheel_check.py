@@ -15,6 +15,8 @@ It exits 1 unless all of these hold:
 - the kernel the installed package runs is the file inside the package
 - each report's `kernel` line says how many proofs petra-verify checked
 - the lap's `path` line says the kernel worked out every cell from the rules deck
+- the lap says PASS_WAIVED and exits 6, since it rests cells on a waiver, and the circuit
+  says PASS and exits 0
 
 With `--no-kernel` it asks the opposite, for an sdist or a pure wheel: the package holds no
 kernel, and each report says that none ran.
@@ -36,6 +38,10 @@ ROOT = Path(__file__).resolve().parent.parent
 LAP = ROOT / "examples" / "deck" / "lap_pass.petra"
 CIRCUIT = ROOT / "examples" / "circuit_pass.petra"
 
+# What each design must say, with its exit code. The lap rests four cells on a waiver, so it
+# passes as PASS_WAIVED.
+SAYS = {LAP: ("PASS_WAIVED", 6), CIRCUIT: ("PASS", 0)}
+
 CHECKED = re.compile(r"kernel +petra-verify checked [1-9]\d* of \d+ proofs")
 NOT_RUN = re.compile(r"kernel +not run: ")
 FROM_RULES = re.compile(r"path +rules: the kernel worked out every cell from the rules deck")
@@ -44,9 +50,9 @@ FROM_RULES = re.compile(r"path +rules: the kernel worked out every cell from the
 ENV = {k: v for k, v in os.environ.items() if k not in ("PETRA_VERIFY", "PETRA_SHAPES_XLSX", "PYTHONPATH")}
 
 
-def run(*argv: str | Path, cwd: Path) -> str:
+def run(*argv: str | Path, cwd: Path, code: int = 0) -> str:
     done = subprocess.run([str(a) for a in argv], cwd=cwd, env=ENV, capture_output=True, text=True, timeout=900)
-    if done.returncode != 0:
+    if done.returncode != code:
         sys.exit(f"{' '.join(map(str, argv))} exited {done.returncode}\n{done.stdout}\n{done.stderr}")
     return done.stdout
 
@@ -72,13 +78,14 @@ def faults(file: Path, requirements: list[str], kernel: bool, platform: str | No
     elif not kernel and ran != "None":
         found.append(f"the installed package runs a kernel, {ran}")
     for design in (LAP, CIRCUIT):
-        lines = run(shutil.which("petra", path=str(scripts)), "check", design, cwd=where).splitlines()
+        status, code = SAYS[design]
+        lines = run(shutil.which("petra", path=str(scripts)), "check", design, cwd=where, code=code).splitlines()
         print("\n".join([f"\n$ petra check {design.relative_to(ROOT).as_posix()}", *lines[:8]]))
         wanted = [CHECKED if kernel else NOT_RUN, *([FROM_RULES] if kernel and design == LAP else [])]
         found += [f"{design.name}: no line of the report matches {pattern.pattern!r}"
                   for pattern in wanted if not any(pattern.match(line) for line in lines)]
-        if not lines[0].endswith(": PASS"):
-            found.append(f"{design.name}: the report does not start with a PASS")
+        if not lines[0].endswith(f": {status}"):
+            found.append(f"{design.name}: the report does not start with {status}")
     return found
 
 
