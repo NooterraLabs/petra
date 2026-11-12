@@ -12,6 +12,7 @@ from petra.kernel import (
     Abs,
     Add,
     Const,
+    Cos,
     DecodeError,
     DefinedHyp,
     DefinedRange,
@@ -94,7 +95,7 @@ BOLT_EVIDENCE_JSON = {"t": "evidence", "defined": [], "body": {"t": "enclosure",
 def samples() -> tuple[list[Statement], list[Evidence]]:
     """One statement per goal and one evidence per body, together using every tag. The
     last evidence is an Instance of the AllNonpositive statement."""
-    every_expr = Add((c(1), s("x"), Pi(), Mul((s("x"), c(F(-1, 2)))), Neg(s("x")), Div(s("x"), c(3)), PowInt(s("x"), 2), Sqrt(s("x")), Ln(s("x")), Exp(s("x")), Abs(s("x")), Min((s("x"), c(0))), Max((s("x"), c(0)))))
+    every_expr = Add((c(1), s("x"), Pi(), Mul((s("x"), c(F(-1, 2)))), Neg(s("x")), Div(s("x"), c(3)), PowInt(s("x"), 2), Sqrt(s("x")), Ln(s("x")), Exp(s("x")), Cos(s("x")), Abs(s("x")), Min((s("x"), c(0))), Max((s("x"), c(0)))))
     m = Matrix(2, 2, ((0, 0, F(1)), (1, 0, F(-1, 3)), (1, 1, F(1))))
     problem = QuadraticProblem(B=Matrix(1, 2, ((0, 0, F(1)), (0, 1, F(1)))), f=(s("x"),), w=(c(1), c(3)))
     hyps = (RangeHyp("x", F(0), F(1), "in:x"), DefinedHyp("y", MinimizerComponent(problem, 0, c(1))))

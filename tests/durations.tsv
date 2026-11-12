@@ -12,6 +12,7 @@ tests.test_cli	7.2
 tests.test_codec	0.9
 tests.test_contracts	2.3
 tests.test_coped_beam_check	2.1
+tests.test_cosine	15.8
 tests.test_coverage	1.5
 tests.test_deck	1.2
 tests.test_deck_features	35.7
