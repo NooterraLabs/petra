@@ -440,6 +440,87 @@ class _Binder(rows._Reader):
         raise RowError(f"{node!r} is not a condition on a part: write is, and, or, not")
 
 
+def _signs(kind: Type, types: Mapping[str, Type]) -> dict[str, tuple[str, str]]:
+    """The names of a rule that say `may_be`, each with what it says and the name a message
+    gives it: a field of the type, a field of a part it joins, and a load."""
+    out = {f"load {f.name}": (f.may_be, f.name) for f in kind.loads.values() if f.may_be}
+    for f in kind.fields.values():
+        if f.type is None:
+            if f.may_be:
+                out[f.name] = (f.may_be, f.name)
+            continue
+        for part in f.names:
+            out |= {f"{part}.{g.name}": (g.may_be, f"{part}.{g.name}") for g in types[f.type].fields.values() if g.type is None and g.may_be}
+    return out
+
+
+def _may_be(term: Any, signs: Mapping[str, tuple[str, str]]) -> tuple[str, str] | None:
+    """What `may_be` lets a term be, and the name that says it, as mayBe in
+    kernel/Petra/Deck.lean finds it: a name that says it, a power other than zero of one, or a
+    root of one. An even power of one that may be under zero is at least zero. Any other term
+    is None: a sum, a product, a quotient and a row are not looked into."""
+    if isinstance(term, Sym):
+        return signs.get(term.name)
+    if isinstance(term, PowInt) and term.exponent != 0:
+        found = _may_be(term.base, signs)
+        return ("zero", found[1]) if found is not None and found[0] == "negative" and term.exponent % 2 == 0 else found
+    if isinstance(term, Sqrt):
+        return _may_be(term.arg, signs)
+    return None
+
+
+def _no_value(term: Any, signs: Mapping[str, tuple[str, str]]) -> None:
+    """Refuses a quotient by a quantity that `may_be` lets be zero, a root of one it lets be
+    under zero, and a logarithm of either, anywhere in the term, as mayBeChecked in
+    kernel/Petra/Deck.lean does: at that value of the field the term has no value, for every
+    part."""
+    if isinstance(term, Div) and (found := _may_be(term.den, signs)) is not None:
+        raise RowError(f"it divides by {found[1]}, which its `may_be` lets be zero")
+    if isinstance(term, Sqrt) and (found := _may_be(term.arg, signs)) is not None and found[0] == "negative":
+        raise RowError(f"it takes the root of {found[1]}, which its `may_be` lets be under zero")
+    if isinstance(term, Ln) and (found := _may_be(term.arg, signs)) is not None:
+        raise RowError(f"it takes the logarithm of {found[1]}, which its `may_be` lets be zero")
+    for inner in (term.args if isinstance(term, (Add, Mul, Min, Max)) else (term.num, term.den) if isinstance(term, Div)
+                  else (term.base,) if isinstance(term, PowInt) else (term.arg,) if isinstance(term, (Neg, Abs, Sqrt, Ln, Exp, Cos)) else ()):
+        _no_value(inner, signs)
+
+
+def _compared(cond: tuple | None) -> Iterator[Any]:
+    """The terms that a condition of a row's case compares."""
+    if cond is None:
+        return
+    if cond[0] in ("le", "lt", "ge", "gt"):
+        yield from cond[1:]
+    else:
+        for inner in cond[1:]:
+            yield from _compared(inner)
+
+
+def _refuse_no_value(kind: Type, types: Mapping[str, Type], lets: Mapping[str, Any], sides: list[Any], applied: Mapping[str, Any]) -> None:
+    """Every term a rule reads, through `_no_value`. A name of `let` and an input of a row the
+    rule applies stand for what they are bound to, as the kernel's steps hand those on: a
+    quotient by an input bound to a field that may be zero is a quotient by the field."""
+    signs = _signs(kind, types)
+    for name, term in lets.items():
+        _no_value(term, signs)
+        if (found := _may_be(term, signs)) is not None:
+            signs[name] = found
+    for term in sides:
+        _no_value(term, signs)
+    for use in applied.values():
+        if isinstance(use, Cased):
+            terms = [*use.named.quantities.values(), *use.branches.values()]
+        else:
+            terms = [*use.quantities.values(), *(q for selector in use.keys.values() if selector[0] == "named" for q in selector[1].quantities.values())]
+        for term in terms:
+            _no_value(term, signs)
+        if isinstance(use, Applied):
+            inside = {name: found for name, term in use.quantities.items() if (found := _may_be(term, signs)) is not None}
+            for case in use.row.cases:
+                for term in (case.expr, *_compared(case.when)):
+                    _no_value(term, inside)
+
+
 def _exact(node: Any, takes: Mapping[str, rows.Input], free: frozenset = frozenset()) -> tuple[tuple, Vector]:
     """A side of a need and its dimension: a number, a constant with its unit, a quantity
     field of the type or of a part it joins, and add, sub, mul, neg and div. A quotient
@@ -581,6 +662,7 @@ def _rule(body: Mapping[str, Any], deck_rows: Mapping[str, rows.Row], types: Map
         when = binder.static(body["when"]) if "when" in body else None
         if binder.problems:
             raise RowError("; ".join(dict.fromkeys(binder.problems)))
+        _refuse_no_value(types[body["type"]], types, lets, [low, high, *(term for a, b, _ in ranges for term in (a, b))], binder.applied)
         return Rule(where, body["type"], body["mechanism"], anchor, body["says"], when, lets, ranges, low, high, binder.applied, strict=strict)
     except RowError as exc:
         raise DeckError(f"rule {where}: {exc}") from None

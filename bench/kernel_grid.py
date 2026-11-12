@@ -29,8 +29,8 @@ and under its floor; a waiver for a line whose rules prove, for one whose rules 
 for one with no rule and for one that cannot arise, and for every line at once; each unit
 read since 2026-11-11 in a design, a card or the deck, on and beside the edges of the
 rules; a quantity and a key that a cell may leave unstated, read by a rule, by a `when`,
-by an `unless`, by a need and by nothing; quantities at zero and under it, a count that
-may be zero as a divisor, and a load of either sign; and rules that state `lt` with
+by an `unless`, by a need and by nothing; quantities at zero and under it, two counts that
+may both be zero in a divisor, and a load of either sign; and rules that state `lt` with
 numbers exactly on their limit. Three of its rigs in five are calm, with numbers that keep
 every rule, so that a rig may pass when its card waives the one line that has no rule.
 One rig in three is then damaged in a way the grid refuses, or the language before it.
@@ -444,9 +444,10 @@ KIT = {
         _kit_rule("count", "rig.count", lt=[["mul", "count", ["q", "2", "oz"]], ["q", "0.5", "lb"]]),
         _kit_rule("pace", "rig.sealed", le=["pace", ["row", "kit/pace", {"duty": "duty"}]]),
         _kit_rule("carry", "rig.carry", le=[["load", "weight"], ["mul", "count", ["q", "10", "lb"]]]),
-        # Quantities at and under zero, a quotient by a count that may be zero, and a load of either sign.
+        # Quantities at and under zero, a quotient by the counts of two cells, which may both be zero, and a load of either sign. Both
+        # readers refuse a quotient by one count that may be zero, which a damaged deck may write when a flag puts `may_be` on a field.
         _kit_rule("cold", "rig.cold", le=["front.low", ["load", "air"]]),
-        _kit_rule("share", "rig.share", le=[["div", "reach", "front.spare"], ["q", "1", "mile"]]),
+        _kit_rule("share", "rig.share", le=[["div", "reach", ["add", "front.spare", "rear.spare"]], ["q", "1", "mile"]]),
         _kit_rule("centre", "rig.centre", le=[["abs", ["add", "front.station", "rear.station", ["load", "shift"]]], ["q", "1", "ft"]]),
         # A quantity and a key that a cell may leave unstated: in a side, in a `when` and in the `unless` of rig.sealed.
         _kit_rule("speed", "rig.speed", lt=["speed", "front.limit"]),

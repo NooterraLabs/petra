@@ -1163,6 +1163,42 @@ def readAsk (kinds : Std.TreeMap String Kind) (rows : Std.TreeMap String Row) (j
     return { kind := name, mechanism, excuse }
   ask.mapError (s!"grid {clip mechanism}: " ++ ·)
 
+/-- For each step of a rule, what `may_be` lets it be and the field or the load that says so:
+a field or a load that says `may_be`, handed on where the rule names it again, raised to a
+power other than zero or under a root. An even power of one that may be under zero is at
+least zero. Any other step is none: the reader does not look into a sum, a product, a
+quotient or a row. -/
+def mayBe (scope : Scope) (kind : Kind) (steps : Array Step) : Array (Option (Sign × String)) :=
+  steps.foldl (init := #[]) fun out step =>
+    let said (sign : Option Sign) (name : String) : Option (Sign × String) :=
+      match sign with
+      | some .zero => some (.zero, name)
+      | some .negative => some (.negative, name)
+      | _ => none
+    out.push <| match step with
+      | .field part name => said ((scope.field part name).map (·.sign)) ((part.map (· ++ ".")).getD "" ++ name)
+      | .load name => said ((kind.load.get? name).map (·.sign)) name
+      | .row binds first => if binds.isEmpty then out[first]?.join else none
+      | .node (.pow i n) =>
+        if n == 0 then none
+        else (out[i]?.join).map fun (sign, name) => (if sign == .negative && n % 2 == 0 then .zero else sign, name)
+      | .node (.sqrt i) => out[i]?.join
+      | _ => none
+
+/-- Refuses a rule that divides by a quantity that `may_be` lets be zero, takes the root of
+one that it lets be under zero, or the logarithm of either: at that value of the field the
+step has no value, for every part, whatever else the rule says. -/
+def mayBeChecked (signs : Array (Option (Sign × String))) (steps : Array Step) : Except String Unit := do
+  for step in steps do
+    match step with
+    | .node (.div _ j) =>
+      if let some (_, name) := signs[j]?.join then throw s!"it divides by {name}, which its `may_be` lets be zero"
+    | .node (.sqrt i) =>
+      if let some (.negative, name) := signs[i]?.join then throw s!"it takes the root of {name}, which its `may_be` lets be under zero"
+    | .node (.ln i) =>
+      if let some (_, name) := signs[i]?.join then throw s!"it takes the logarithm of {name}, which its `may_be` lets be zero"
+    | _ => pure ()
+
 def readRule (kinds : Std.TreeMap String Kind) (rows : Std.TreeMap String Row) (asks : Std.TreeMap (String × String) Ask) (j : Json) :
     Except String Rule := do
   let id ← text j "id"
@@ -1218,6 +1254,7 @@ def readRule (kinds : Std.TreeMap String Kind) (rows : Std.TreeMap String Row) (
         let _ ← expr scope MAX_EXPRESSION (.str name)
       return (main, ranges)
     let (((low, high), ranges), draft) ← read.run { lets := lets.foldl (fun table (name, body) => table.insert name (Named.pending body)) {} }
+    mayBeChecked (mayBe scope kind draft.steps) draft.steps
     let condition ← (j.getObjVal? "when").toOption.mapM (static scope MAX_EXPRESSION)
     let need := reach draft.steps (#[low, high] ++ ranges.flatMap fun (a, b) => #[a, b])
     let used := ((draft.steps.zip need).filter (·.2)).map (·.1)

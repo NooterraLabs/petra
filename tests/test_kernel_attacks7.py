@@ -26,7 +26,8 @@ differ in why the refutation was not found or could not be shown.
 Since the review a waiver rests only a cell that no inequality could answer: no rule reads it,
 a load is missing, a table has no value there, or a key is unstated (docs/deck.md, "What a
 waiver rests"). A cell whose rule is left undecided stays open, waiver or not. So each of the
-six is UNKNOWN or FAIL, and never PASS.
+six is UNKNOWN or FAIL, and never PASS. And a deck whose rule divides by a field that may be
+zero, as in 5, is refused when it is read (docs/deck.md, "A quantity at or under zero").
 """
 import json
 import unittest
@@ -35,7 +36,7 @@ from unittest import mock
 from petra import grid
 from petra.registry import build_registry
 from petra.repair import check_text
-from tests.test_deck_features import HEAD, asks, design, given, kind, load, made_up, part, rule, size
+from tests.test_deck_features import HEAD, asks, design, given, kind, load, made_up, no_deck, part, rule, size
 
 NOT_PASS = ("UNKNOWN", "FAIL")
 
@@ -180,14 +181,17 @@ def joint(bolts: str) -> str:
 
 
 class ZeroDivisor(unittest.TestCase):
-    def test_a_joint_with_no_bolts_does_not_pass_where_one_with_two_fails(self):
+    def test_a_rule_that_divides_by_a_count_that_may_be_zero_is_refused_when_the_deck_is_read(self):
+        """Both readers refuse the deck, so no joint is checked by the rule. The same rule
+        that divides by one more than the count is read, and a joint with no bolts fails it."""
+        mine, its = no_deck(self, JOINT)
+        self.assertIn("rule made-up/share: it divides by bolts, which its `may_be` lets be zero", mine)
+        self.assertIn("it divides by bolts", its)
+        more = json.loads(json.dumps(JOINT))
+        more["rules"][0]["le"][0][2] = ["add", "bolts", "1"]
         card = HEAD + load("service", "j pull in [50 kN, 50 kN]") + waive("joint.share", "j")
-        try:
-            grid.read_deck(json.dumps(JOINT))
-        except grid.DeckError:
-            return                                                         # a deck reader that refuses the rule closes it
-        self.assertEqual(checked(card, joint("2"), JOINT).status, "FAIL")
-        self.assertIn(checked(card, joint("0"), JOINT).status, NOT_PASS)
+        for bolts in ("0", "3"):
+            self.assertEqual(checked(card, joint(bolts), more).status, "FAIL")
 
 
 # --- 6. an unstated field that no value could save ---------------------------------------------------------

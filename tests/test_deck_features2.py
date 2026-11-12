@@ -713,7 +713,7 @@ PACK = kind("pack", size("low", "temperature", may_be="negative"), size("high", 
 PACKS = made_up([PACK], [asks("pack.cold", "pack"), asks("pack.span", "pack"), asks("pack.share", "pack"), asks("pack.centre", "pack")],
                 [rule("cold", "pack", "pack.cold", le=["low", ["load", "air"]]),
                  rule("span", "pack", "pack.span", lt=["low", "high"]),
-                 rule("share", "pack", "pack.share", le=[["div", "mass", "offset"], ["div", ["q", "10", "kg"], ["q", "1", "m"]]]),
+                 rule("share", "pack", "pack.share", le=[["div", "mass", ["add", "offset", "station"]], ["div", ["q", "10", "kg"], ["q", "1", "m"]]]),
                  rule("centre", "pack", "pack.centre", le=[["abs", ["add", "station", "drift", ["load", "shift"], ["neg", ["load", "reach"]], ["mul", "spare", "width"]]], ["q", "20", "mm"]])])
 COLD = dict(low="-10 degC", high="40 degC", station="-5 mm", offset="200 mm", spare="0", mass="1 kg", drift="given p.drift", width="30 mm")
 FLIGHT = load("flight", "p air in [-10 degC, 40 degC]", "p shift in [-2 mm, 2 mm]", "p reach in [0 mm, 1 mm]")
@@ -782,20 +782,52 @@ class AtOrUnderZero(unittest.TestCase):
         mine, its = ill_formed(self, cold, *pack(FLIGHT.replace("[-10 degC, 40 degC]", "[-274 degC, 40 degC]")))
         self.assertIn("types.4 card flight.p.air: a temperature is at least -5463/20", its, "may_be lifts a floor at zero, and absolute zero is no such floor")
 
-    def test_a_quotient_by_a_field_at_zero_has_no_value_and_its_cell_is_open(self):
-        found, verdict, said = cells(self, PACKS, *pack(offset="0 mm"))
+    def test_a_quotient_by_a_sum_at_zero_has_no_value_and_its_cell_is_open(self):
+        """The rule divides by the offset and the station together, which are zero where the
+        offset of 5 mm makes up for the station 5 mm behind the datum."""
+        found, verdict, said = cells(self, PACKS, *pack(offset="5 mm"))
         self.assertEqual((found["p", "pack.share", "share"], verdict), ("open", "UNKNOWN"))
         if verify.binary():
-            text, card = pack(offset="0 mm")
-            for hint in (dict(state="proved", partition="leaf"), dict(state="refuted", point={"dsg:made-up.p.mass": "1", "dsg:made-up.p.offset": "0"})):
+            text, card = pack(offset="5 mm")
+            point = {"dsg:made-up.p.mass": "1", "dsg:made-up.p.offset": "1/200", "dsg:made-up.p.station": "-1/200"}
+            for hint in (dict(state="proved", partition="leaf"), dict(state="refuted", point=point)):
                 its = hinted(self, PACKS, text, card, "pack.share", "p", **hint)
                 self.assertEqual(its["state"], "open")
                 self.assertIn("division by an interval that contains 0", its["reason"])
         text, card = pack(offset="given p.offset")
-        found, _, _ = cells(self, PACKS, text, card + given("p.offset", "0 mm", "200 mm"))
-        self.assertEqual(found["p", "pack.share", "share"], "open", "the offset may be zero, so the quotient has no value all over its range")
+        found, _, _ = cells(self, PACKS, text, card + given("p.offset", "0 mm", "5 mm"))
+        self.assertEqual(found["p", "pack.share", "share"], "open", "the sum may be zero, so the quotient has no value all over its range")
         found, _, _ = cells(self, PACKS, *pack(offset="50 mm"))
-        self.assertEqual(found["p", "pack.share", "share"], "refuted", "1 kg over 50 mm is 20 kg/m")
+        self.assertEqual(found["p", "pack.share", "share"], "refuted", "1 kg over 45 mm is 22.2 kg/m")
+
+    def test_a_rule_that_divides_by_a_field_that_may_be_zero_is_refused_when_the_deck_is_read(self):
+        """Or takes the root of one that may be under zero, or the logarithm of either: for a
+        part at that value the rule has no value. The field may be named through a `let`, an
+        input of a row, a power or a root, in a side or a `where`, or be a load that says
+        `may_be`. A sum or a product that holds one is not looked into, and its cell is open
+        where it is zero."""
+        per_metre = ["div", ["q", "1", "kg"], ["q", "1", "m"]]
+        inverse = {"id": "made-up/inverse", "anchor": ANCHOR, "gives": {"name": "y", "dim": "mass/length"},
+                   "takes": [{"name": "x", "dim": "length", "range": ["1 mm", "1 m"]}], "is": ["div", ["q", "1", "kg"], "x"]}
+        refused = {"it divides by offset": [dict(le=[["div", "mass", "offset"], per_metre]), dict(let={"o": "offset"}, le=[["div", "mass", "o"], per_metre]),
+                                            dict(le=[["mul", "mass", ["pow", "offset", "-1"]], per_metre]),
+                                            dict(le=[["mul", "mass", ["pow", "offset", "-0.5"]], ["div", ["q", "1", "kg"], ["sqrt", ["q", "1", "m"]]]]),
+                                            dict(le=["mass", ["q", "1", "kg"]], where=[{"le": [["div", ["q", "1", "m"], "offset"], "1"], "why": "made up"}]),
+                                            dict(le=[["row", "made-up/inverse", {"x": "offset"}], per_metre])],
+                   "it divides by shift": [dict(le=[["div", "mass", ["load", "shift"]], per_metre])],
+                   "it takes the root of station": [dict(le=[["sqrt", "station"], ["sqrt", ["q", "1", "m"]]])],
+                   "it takes the logarithm of spare": [dict(le=[["ln", "spare"], "1"]), dict(le=[["pow", "spare", "0.3"], "1"])]}
+        for says, bodies in refused.items():
+            for body in bodies:
+                with self.subTest(body):
+                    mine, its = no_deck(self, made_up([PACK], [asks("pack.cold", "pack")], [rule("cold", "pack", "pack.cold", **body)], [inverse]))
+                    self.assertIn(f"rule made-up/cold: {says}, which its `may_be` lets be", mine)
+                    self.assertIn(says, its)
+        for body in (dict(le=[["sqrt", "offset"], ["sqrt", ["q", "1", "m"]]]), dict(le=[["sqrt", ["pow", "station", "2"]], ["q", "1", "m"]]),
+                     dict(le=[["div", "mass", ["add", "offset", "station"]], per_metre]), dict(le=[["div", "mass", ["mul", "offset", "2"]], per_metre]),
+                     dict(le=[["row", "made-up/inverse", {"x": ["add", "offset", "width"]}], per_metre])):
+            with self.subTest(body):
+                reads(self, made_up([PACK], [asks("pack.cold", "pack")], [rule("cold", "pack", "pack.cold", **body)], [inverse]))
 
     def test_a_need_reads_a_field_at_or_under_zero_and_divides_by_none(self):
         mine, its = ill_formed(self, PACKS, *pack(station="58 mm"))
@@ -843,7 +875,7 @@ class AtOrUnderZero(unittest.TestCase):
         task = {"format": acceptance.TASK, "name": "made-up", "about": "made up", "rows": [derate], "types": [cell_],
                 "asks": [{"type": "cell", "mechanism": f"cell.{name}", "what": name, "anchor": ANCHOR} for name in ("cold", "fits", "slope", "derated")]}
         rules = [rule("cold", "cell", "cell.cold", le=["low", ["load", "air"]]), rule("fits", "cell", "cell.fits", lt=["offset", "reach"]),
-                 rule("slope", "cell", "cell.slope", le=[["div", "reach", "offset"], "2"]),
+                 rule("slope", "cell", "cell.slope", le=[["div", "reach", ["mul", "2", "offset"]], "1"]),
                  rule("derated", "cell", "cell.derated", le=["draw", ["mul", "rated", ["row", "made-up/derate", {"t": "low"}]]])]
         return task, rules
 
