@@ -1573,8 +1573,15 @@ def tableOf (site : Site) (table : Table) (down : Chosen) (across : Option Chose
   pickOf lines
 
 /-- The tape of a rule for one part: for each pair of `pairs` a root, the first less the
-second, which is at most zero where the pair is in order. An error is a reason the rule has
-no value for the part.
+second, which is at most zero where the pair is in order. An error is a reason the tape
+cannot be written: the part lacks a field or a load the rule reads.
+
+A table that gives nothing for the part, with no line for its key or only empty cells, and
+an equation with no case, are a node that has no value anywhere: a pick of no case. The tape
+is still written. A node that reads it has no value either, and a pick that has it as the
+value of a case has none where that case is the first that holds, and has one elsewhere. So
+a `case` whose branch for one name reads such a table still has a value, and can be refuted,
+where the row gives another name.
 
 With `strict`, a root is the pick that is -1 where the first is under the second and 1
 elsewhere. `Tape.proved` shows a root at most zero on the box, which this root is only where
@@ -1591,13 +1598,14 @@ zero at a point only where the point is inside the `where` and the rule fails th
 def Rule.tape (rule : Rule) (site : Site) (pairs : Array (Nat × Nat)) (strict : Bool := false) (within : Array (Nat × Nat) := #[]) :
     Except String Tape := do
   let need := reach rule.steps ((pairs ++ within).flatMap fun (a, b) => #[a, b])
+  let nothing : Write Nat := node (.pick #[])
   let write : Write (Array Nat) := do
     let mut ids : Array Nat := Array.replicate rule.steps.size 0
     for (step, i) in rule.steps.zipIdx do
       if need[i]! then
         let id ← match step with
           | .node (.pick cases) => do
-            let some id ← pickOf (cases.map fun (c, v) => (c.map (·.map (ids[·]!)), ids[v]!)) | throw "an equation has no case"
+            let some id ← pickOf (cases.map fun (c, v) => (c.map (·.map (ids[·]!)), ids[v]!)) | nothing
             pure id
           | .node n => node (n.map (ids[·]!))
           | .field part name => do
@@ -1607,7 +1615,7 @@ def Rule.tape (rule : Rule) (site : Site) (pairs : Array (Nat × Nat)) (strict :
             let some value := site.load name | throw s!"the part has no load {name}"
             input value
           | .table table down across => do
-            let some id ← tableOf site table down across ids | throw "a table gives nothing here"
+            let some id ← tableOf site table down across ids | nothing
             pure id
           | .row _ value => pure ids[value]!
         ids := ids.set! i id

@@ -1166,11 +1166,11 @@ class _Tape:
         return {"le": ["le", a, b], "lt": ["lt", a, b], "ge": ["le", b, a], "gt": ["lt", b, a]}[c[0]]
 
     def pick(self, cases: list[tuple[Any, int]], what: str) -> int:
-        """The first case that holds. A lone case that holds otherwise is its value. A pick holds at most MAX_ORDERS orders, as the
-        kernel's `pickOf` does, and reading the deck refuses a rule that could write more."""
-        if not cases:
-            raise NoValue(f"{what} gives nothing here")
-        if cases[0][0] is None:
+        """The first case that holds. A lone case that holds otherwise is its value. With no case it is a pick that has no value
+        anywhere, as the kernel writes a table that gives nothing for the part and an equation with no case: the tape is still
+        written, so a `case` whose branch for one name reads such a table has a value where the row gives another name. A pick
+        holds at most MAX_ORDERS orders, as the kernel's `pickOf` does, and reading the deck refuses a rule that could write more."""
+        if cases and cases[0][0] is None:
             return cases[0][1]
         if (count := sum(_cond_orders(c) for c, _ in cases)) > MAX_ORDERS:
             raise NoValue(_over_orders(count))

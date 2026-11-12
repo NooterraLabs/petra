@@ -557,7 +557,7 @@ A `case` picks an expression by a name that a row gives. Its first item is `["ro
  {"B": "1", "C": ["div", "length", ["q", "50", "mm"]], "D": "3", "E": ["row", "example/reduction", {"x": "length"}]}]
 ```
 
-Where the row gives no name, the table read at it and the `case` have no value, and the rule's cell is open. A `case` writes every one of its expressions for the part: if one of them has no value that can be written for the part, as a table with no line for the part's key, the cell is open whatever name the row gives.
+Where the row gives no name, the table read at it and the `case` have no value, and the rule's cell is open. A `case` writes every one of its expressions for the part. One of them may have no value for the part, as a table with no line for the part's key has none. The `case` then has no value where the row gives that name, and has the value of another expression where the row gives another: a rule that fails there is refuted. Until 2026-11-12 such an expression left the cell open whatever name the row gave, and a waiver rested it, so a weld of class B whose branch for class C read an empty cell passed under a waiver at a pull more than twice its strength (`tests/test_kernel_attacks8.py`).
 
 A formula whose case goes by the size of one of its own inputs needs none of this: it is an equation with `cases`, and its conditions are the bands.
 
@@ -651,7 +651,7 @@ No inequality could answer a cell when:
 
 - the line has no rule, or none for a part like this one;
 - a rule reads a load that a case of the card does not put on the part, or the card has no load case;
-- a table or an equation of a row that the rule reads gives nothing for the part: the tape cannot be written, because a table has no line for the part's key or every cell it could read is empty, or the rule has no value at any point of the ranges, because a row gives nothing at any of them;
+- a table or an equation of a row that the rule reads gives nothing for the part, so that the rule has no value at any point of the ranges: a table has no line for the part's key, every cell it could read is empty, or a row gives nothing at any of the points;
 - the rule's `where` holds nowhere in the ranges;
 - the part leaves unstated a key that the rule or the line's `unless` reads, and no quantity that the rule reads.
 

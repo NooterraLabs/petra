@@ -2,6 +2,11 @@
 fails whatever is missing, which a waiver rested because something was missing. One test per
 finding.
 
+  F2  A `case` on a row that names the class of a weld, whose branch for one class reads a
+      table with no line for the weld's grade. The weld was of the other class, and that
+      class's branch fails the rule, but the readers wrote every branch, so the empty one sank
+      the whole tape, the cell was open and a waiver rested it. A branch that cannot be written
+      is now a case with no value inside the pick.
   F3  A table of 600 listed sizes is a pick of 1,200 orders. The kernel would not write a pick
       of more than 1,024 and left the cell open, which a waiver rested, and the grid wrote it and
       refuted the rule: a FAIL that the kernel passed, and a design that keeps the rule ended in
@@ -14,11 +19,59 @@ import unittest
 from fractions import Fraction
 
 from petra import grid
-from tests.test_deck_features import ANCHOR, HEAD, asks, cells, design, kind, load, made_up, no_deck, part, reads, rule, size
+from tests.test_deck_features import ANCHOR, HEAD, asks, cells, design, given, key, kind, load, made_up, no_deck, part, reads, rule, size
 
 
 def waive(mechanism: str, on: str) -> str:
     return f'\nwaive {mechanism} on {on} by "t@example.org" reason "test"\n'
+
+
+# --- F2. a branch that cannot be written ---------------------------------------------------------------
+
+CLASSES = [
+    {"id": "made-up/class", "anchor": ANCHOR, "gives": {"name": "class", "one_of": ["B", "C"], "what": "the class of a weld by its throat"},
+     "takes": [{"name": "a", "dim": "length", "what": "throat", "range": ["1 mm", "100 mm"]}],
+     "table": {"down": {"by": "a", "bands": [["0 mm", "10 mm"], ["10 mm", "100 mm"]], "closed": "upper"}, "cells": ["B", "C"]}},
+    {"id": "made-up/grade-factor", "anchor": ANCHOR, "gives": {"name": "k", "dim": "dimensionless", "what": "a factor of a grade in class C"},
+     "takes": [{"name": "grade", "one_of": ["S235", "S355", "S460"], "what": "steel grade"}],
+     "table": {"down": {"by": "grade"}, "unit": "1", "cells": ["0.8", "0.9", None]}},
+]
+WELD = kind("weld", size("a"), size("length"), size("fu", "stress"), key("grade", "S235", "S355", "S460"),
+            loads=[{"name": "pull", "dim": "force", "what": "the pull on the weld"}])
+BRANCHES = made_up([WELD], [asks("weld.strength", "weld")],
+                   [rule("strength", "weld", "weld.strength",
+                         le=[["load", "pull"],
+                             ["mul", "0.6", "fu", "a", "length",
+                              ["case", ["row", "made-up/class", {"a": "a"}], {"B": "1", "C": ["row", "made-up/grade-factor", {"grade": "grade"}]}]]])],
+                   CLASSES)
+
+
+def welded(a: str, grade: str, pull: str = "400 kN", waived: bool = True) -> tuple[str, str]:
+    card = HEAD + given("w.fu", "510 MPa") + load("service", f"w pull in [0 kN, {pull}]") + (waive("weld.strength", "w") if waived else "")
+    return design(part("weld", "w", a=a, length="100 mm", fu="given w.fu", grade=grade)), card
+
+
+class BranchesThatCannotBeWritten(unittest.TestCase):
+    def test_a_weld_of_the_class_whose_branch_is_written_is_refuted_under_a_waiver(self):
+        # A throat of 5 mm is class B, whose factor is 1: the weld carries 0.6 x 510 MPa x 5 mm
+        # x 100 mm = 153 kN and the pull reaches 400 kN. Class C has no factor for S460.
+        for waived in (True, False):
+            found, status, _ = cells(self, BRANCHES, *welded("5 mm", "S460", waived=waived))
+            self.assertEqual((found[("w", "weld.strength", "strength/service")], status), ("refuted", "FAIL"))
+
+    def test_a_weld_of_the_class_whose_branch_is_written_is_proved(self):
+        found, status, _ = cells(self, BRANCHES, *welded("5 mm", "S460", pull="100 kN", waived=False))
+        self.assertEqual((found[("w", "weld.strength", "strength/service")], status), ("proved", "PASS"))
+
+    def test_a_weld_of_the_class_with_no_factor_for_its_grade_is_not_decided(self):
+        found, status, _ = cells(self, BRANCHES, *welded("20 mm", "S460", pull="100 kN", waived=False))
+        self.assertEqual((found[("w", "weld.strength", "strength/service")], status), ("open", "UNKNOWN"))
+
+    def test_a_throat_on_both_sides_of_the_class_line_is_refuted_where_class_b_fails(self):
+        # From 5 mm to 20 mm the class is B to 10 mm and C past it. B fails at 5 mm.
+        text, card = welded("given w.a", "S460")
+        found, status, _ = cells(self, BRANCHES, text, card + given("w.a", "5 mm", "20 mm"))
+        self.assertEqual((found[("w", "weld.strength", "strength/service")], status), ("refuted", "FAIL"))
 
 
 # --- F3. a pick of more than 1,024 orders --------------------------------------------------------------

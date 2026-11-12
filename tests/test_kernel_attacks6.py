@@ -117,12 +117,14 @@ class DeadBranch(unittest.TestCase):
         self.assertEqual((differ, mine, status), ("", [("p", "w.m", "m", "refuted")], "FAIL"), "at 120 mm the name is Z, and t is over 60 mm")
 
     @KERNEL
-    def test_a_branch_that_cannot_be_written_leaves_the_cell_open_whatever_a_hint_says(self):
+    def test_a_branch_that_cannot_be_written_has_no_value_whatever_a_hint_says(self):
         """A `case` whose expression for Z reads a table at an empty line. At e4c3cde, with Z in
         no cell, the kernel never wrote that expression, and a hand-made hint of one leaf made
         it prove the cell, which item 7 of docs/format.md leaves open. The deck with Z in no
-        cell is now refused. With Z in a cell the kernel writes the expression of every name,
-        the tape cannot be written, and the cell is open with or without the hint."""
+        cell is now refused. With Z in a cell the kernel writes the expression of every name.
+        Until the eighth review an expression that could not be written sank the whole tape;
+        it is now a pick of no case, which has no value anywhere. A part of 120 mm, which is
+        Z, is open with or without the hint; a part of 30 mm, which is B, is proved."""
         from tests.test_deck_features import no_deck
 
         def deck(row: dict) -> dict:
@@ -130,17 +132,18 @@ class DeadBranch(unittest.TestCase):
                            [rule("m", "w", "w.m", le=[["case", BY_CATEGORY, {"B": "1", "C": "1", "Z": ["row", "made-up/k", {"grade": "grade"}]}], "2"])], [row, EMPTY_LINE])
 
         no_deck(self, deck(CATEGORY))
-        rules, read = parsed(deck(REACHED), design(part("w", "p", a="30 mm", grade="x")))
+        rules, read = parsed(deck(REACHED), design(part("w", "p", a="120 mm", grade="x")))
         files = grid.bundle(read, rules)
         hint = {"subject": "p", "mechanism": "w.m", "entry": "m", "state": "proved", "partition": "leaf"}
         for hints in ([], [hint]):
             said = ask({**files, "proofs": json.dumps({"format": "petra-proofs/0", "cells": hints})})
             (found,) = [c for c in said["cells"] if c["mechanism"] == "w.m"]
-            self.assertEqual((said["findings"], found["state"], found["reason"]), ([], "open", "a table gives nothing here"))
-        mine, status, said, differ = both(deck(REACHED), design(part("w", "p", a="30 mm", grade="x")))
-        self.assertEqual((differ, [c[3] for c in mine], status), ("", ["open"], "UNKNOWN"))
-        mine, status, said, differ = both(deck(REACHED), design(part("w", "p", a="30 mm", grade="y")))
-        self.assertEqual((differ, [c[3] for c in mine], status), ("", ["proved"], "PASS"))
+            self.assertEqual((said["findings"], found["state"]), ([], "open"))
+            if hints:
+                self.assertIn("no case of the pick holds somewhere in the box", found["reason"])
+        for a, grade, state, verdict in (("120 mm", "x", "open", "UNKNOWN"), ("30 mm", "x", "proved", "PASS"), ("120 mm", "y", "proved", "PASS")):
+            mine, status, said, differ = both(deck(REACHED), design(part("w", "p", a=a, grade=grade)))
+            self.assertEqual((differ, [c[3] for c in mine], status), ("", [state], verdict), (a, grade))
 
 
 # --- 2. a requirement that every part meets -----------------------------------------------------------------
