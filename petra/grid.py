@@ -1683,8 +1683,10 @@ def _incomplete(rule: Rule, part: Part, parts: Mapping[str, Part], unsaid: list[
     On a line the card waives, it is otherwise open with the first of at most MAX_COMPLETIONS
     completions that is a witness: under it the rule does not answer, its `requires` holds,
     or the search proves its tape. The names and the values that `prefer` holds come first,
-    and a load takes its `least`, or zero. `prefer` gains the witness. The tape of a rule with
-    a `where` is the rule's inside the `where` and -1 outside it."""
+    and a load takes its `least`, or zero. `prefer` gains the witness. The tape a point refutes,
+    for a rule with a `where`, is the rule's inside the `where` and -1 outside it. A witness
+    for such a rule shows the `where` holds nowhere in the box, or proves it and the rule over
+    the whole box."""
     def gated(on: Part, among: Mapping[str, Part]) -> tuple[_Tape, list[int], list]:
         return tape_of([(rule.low, rule.high)], case, rule.strict, [w[:2] for w in rule.where], on, among)
 
@@ -1719,11 +1721,17 @@ def _incomplete(rule: Rule, part: Part, parts: Mapping[str, Part], unsaid: list[
         if not found and rule.requires is not None:
             found = _static(rule.requires, on, among)
         elif not found:
+            # A witness meets what a complete cell must: a `where` that holds nowhere in the box, or a partition that proves the `where`
+            # and the rule over the whole box, as the `/where` cell and the rule's cell are proved.
             try:
-                tape, roots, _ = gated(on, among)
+                if rule.where:
+                    tape, roots, _ = tape_of([w[:2] for w in rule.where], case, False, (), on, among)
+                    found = _nowhere(tape.nodes, roots, [i.range for i in tape.inputs]) is not None
+                if not found:
+                    tape, roots, _ = tape_of([(rule.low, rule.high)], case, rule.strict, (), on, among, [w[:2] for w in rule.where])
             except NoValue:
                 continue
-            if (partition := _partition(tape.nodes, roots, [i.range for i in tape.inputs], [MAX_LEAVES], [i.label for i in tape.inputs])) is not None:
+            if not found and (partition := _partition(tape.nodes, roots, [i.range for i in tape.inputs], [MAX_LEAVES], [i.label for i in tape.inputs])) is not None:
                 hint["partition"], found = partition, True
         if found:
             prefer.update({(owner, f): name for owner, f, name in keys} | {(p, load, c): x for p, load, c, x in loads})
@@ -1762,17 +1770,20 @@ def _answers(rule: Rule, ask: Ask, part: Part, parts: Mapping[str, Part], cases:
         unsaid = _unsaid(part, parts, fields)
 
     def tape_of(pairs: list[tuple[Any, Any]], case: str | None, strict: bool = False, within: list[tuple[Any, Any]] = (),
-                on: Part = part, among: Mapping[str, Part] = parts) -> tuple[_Tape, list[int], list[tuple[int, int]]]:
+                on: Part = part, among: Mapping[str, Part] = parts, first: list[tuple[Any, Any]] = ()) -> tuple[_Tape, list[int], list[tuple[int, int]]]:
         """The tape with a root for each pair: the first side less the second, which is at most
         zero where the pair is in order. A strict root is the pick that is -1 where the first
         side is under the second and 1 elsewhere: it is at most zero on a box only where the
         first side is under the second all over it, and above zero at a point only where it
         is not under it there. With `within`, the pairs of a `where`, a root is the pick that is
         that root where each pair of `within` is in order and -1 elsewhere: it is above zero at
-        a point only inside the `where`, where the pair is out of order. `on` and `among` are
-        the part and the parts, as a completion has them."""
+        a point only inside the `where`, where the pair is out of order. With `first`, the pairs
+        of a `where` too, the tape has a root for each of them before the others, as for `le`,
+        and a partition that proves it proves the `where` and the rule over the whole box. `on`
+        and `among` are the part and the parts, as a completion has them."""
         tape = _Tape()
         env = _env(tape, rule, on, among, case)
+        ahead = [tape.node("add", [tape.emit(low, env), tape.node("neg", tape.emit(high, env))]) for low, high in first]
         sides = [(tape.emit(low, env), tape.emit(high, env)) for low, high in pairs]
         gate = ["and", [["le", tape.emit(low, env), tape.emit(high, env)] for low, high in within]]
         if strict:
@@ -1781,7 +1792,7 @@ def _answers(rule: Rule, ask: Ask, part: Part, parts: Mapping[str, Part], cases:
             roots = [tape.node("add", [low, tape.node("neg", high)]) for low, high in sides]
         if within:
             roots = [tape.node("pick", [[gate, root], [None, tape.const(Fraction(-1))]]) for root in roots]
-        return tape, roots, sides
+        return tape, ahead + roots, sides
 
     for case in cases if reads and cases else [None]:
         entry = tail if case is None else f"{tail}/{case}"

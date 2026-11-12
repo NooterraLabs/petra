@@ -651,9 +651,13 @@ that is a witness: one that `fits` the cell, under which the rule does not answe
 part, or its `requires` holds, or the hint's partition proves the rule's tape written under
 it. A waiver may rest the cell then, and only then (`cells`).
 
-The tape of a rule with a `where` is the one whose root is the rule's inside the `where` and
--1 outside it: a point refutes it only inside the `where`, and a partition proves the rule
-wherever the `where` holds. Each combination and each hint is a step, and one for each part
+The tape a point refutes, for a rule with a `where`, is the one whose root is the rule's
+inside the `where` and -1 outside it: a point refutes it only inside the `where`. A witness
+meets what a complete cell must. The tape its partition proves has a root for each item of
+the `where` before the rule's, so it proves the `where` and the rule over the whole box, as
+the `/where` cell and the rule's cell are proved. A hint with no partition is a witness for a
+rule with a `where` when, under its completion, the `where` holds nowhere in the box, as a
+complete cell is rested. Each combination and each hint is a step, and one for each part
 of the rule's `when` and `requires` and each key and load the hint names. Each tape written
 is the weight of the rule, twice with a `where`, and a step for each node. None when that
 would come to more than `room` steps. Otherwise the cell, the steps it took, the work left
@@ -670,6 +674,7 @@ def incomplete (rule : Rule) (named : Std.TreeMap String Part) (loads : Loads) (
     let part' := named'.getD part.name part
     (part', part'.fellows named', site named' loads' part' (some under))
   let write (here : Site) : Except String Tape := rule.tape here #[(rule.low, rule.high)] rule.strict rule.ranges
+  let proving (here : Site) : Except String Tape := rule.tape here #[(rule.low, rule.high)] rule.strict (first := rule.ranges)
   let mut spent := 0
   let mut left := left
   let combinations := unsaid.foldl (fun n u => if n > MAX_TRIED then n else n * u.names.size) 1
@@ -717,15 +722,25 @@ def incomplete (rule : Rule) (named : Std.TreeMap String Part) (loads : Loads) (
     if let some required := rule.requires then
       if required.holds part' fellows' then return some (.pending (some c), spent, left, dsg)
       continue
-    if h.partition.isNone then continue
+    if h.partition.isNone && rule.ranges.isEmpty then continue
     spent := spent + weight
     if spent > room then return none
-    let .ok tape := write here | continue
-    spent := spent + tape.nodes.size
-    if spent > room then return none
-    let (state, _, after) ← byHints tape #[{ h with point := none }] false left
-    left := after
-    if state == .proved then return some (.pending (some c), spent, left, dsg)
+    if h.partition.isSome then
+      let .ok tape := proving here | continue
+      spent := spent + tape.nodes.size
+      if spent > room then return none
+      let (state, _, after) ← byHints tape #[{ h with point := none }] false left
+      left := after
+      if state == .proved then return some (.pending (some c), spent, left, dsg)
+    else
+      -- A `where` that holds nowhere in the box under the completion: the rule says nothing of
+      -- the part so completed. The walk comes off the work, and the caches stay as they were.
+      let .ok tape := rule.tape here rule.ranges | continue
+      spent := spent + tape.nodes.size
+      if spent > room then return none
+      if let .ok ((found, after), _) := (tape.above left).run (← get) then
+        left := after
+        if found.isSome then return some (.pending (some c), spent, left, dsg)
   return some (.pending none, spent, left, dsg)
 
 /-- What `cells` gives: every cell, how many hints name no cell the kernel has, and how many

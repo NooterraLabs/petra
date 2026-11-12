@@ -8,11 +8,18 @@ waived cell leaves unchecked. One test per finding.
       PASS_WAIVED, with 1,000 kN of tension and nothing that checked it. What a design reads is
       now worked out under the completions of the rested cells, as for the design that states
       them.
+  A3  A pin's shear rule holds for pins up to 30 mm, and the pin is 20 to 40 mm. Stated, its
+      cell is open, since the `where` is not proved. Left out of the case, the shear completed
+      at zero, and the witness proved only the tape whose root is the rule's inside the `where`:
+      PASS_WAIVED. A witness now proves the `where` and the rule over the whole box, or shows the
+      `where` holds nowhere, as a complete cell must.
 """
+import json
 import unittest
 
 from petra import grid
-from tests.test_deck_features import ANCHOR, HEAD, asks, cells, design, key, kind, load, made_up, part, reason, rule, size
+from tests.test_deck_features import HEAD, KERNEL, asks, cells, design, given, key, kind, load, made_up, parsed, part, reason, rule, size
+from tests.test_kernel_grid import ask
 
 
 def waive(mechanism: str, on: str) -> str:
@@ -69,6 +76,57 @@ class ReadsUnderACompletion(unittest.TestCase):
         found, status, _ = cells(self, deck, design(part("pin", "p", d="10 mm", coating="unstated")), card)
         self.assertEqual((found, status), ({("p", "pin.shear", "coated/service"): "waived", ("p", "pin.shear", "bare/service"): "waived",
                                             ("p", "pin.size", "size"): "proved"}, grid.PASS_WAIVED))
+
+
+# --- A3. a witness for a rule with a `where` -------------------------------------------------------------
+
+SHEAR_PIN = kind("pin", size("d"), size("fu", "stress", signed=True), loads=[{"name": "shear", "dim": "force", "what": "shear on the pin", "least": "0 kN"}])
+UP_TO_30 = made_up([SHEAR_PIN], [asks("pin.shear", "pin"), asks("pin.size", "pin")],
+                   [rule("shear", "pin", "pin.shear", where=[{"le": ["d", ["q", "30", "mm"]], "why": "the formula is for pins up to 30 mm"}],
+                         le=[["load", "shear"], ["mul", "0.6", "fu", ["div", ["mul", "pi", "d", "d"], "4"]]]),
+                    rule("size", "pin", "pin.size", le=[["q", "6", "mm"], "d"])])
+"""A shear rule for pins up to 30 mm."""
+TWO_PINS = design(part("pin", "p", d="given p.d", fu="given p.fu"), part("pin", "q", d="20 mm", fu="given q.fu"))
+
+
+def pin_card(d: tuple[str, str], *more: str) -> str:
+    """The card's one case puts a shear on q, and on p only what `more` gives."""
+    return (HEAD + given("p.d", *d) + given("p.fu", "400 MPa") + given("q.fu", "400 MPa")
+            + load("service", "q shear in [10 kN, 10 kN]", *more) + waive("pin.shear", "p"))
+
+
+class AWhereUnderACompletion(unittest.TestCase):
+    def test_a_load_left_out_does_not_rest_a_rule_whose_where_is_not_proved(self):
+        """From 20 to 40 mm the `where` holds on part of the box. Stated, the shear cell is open, and the waiver does not rest it. Left out,
+        it was rested under the completion of zero shear, whose witness proved the rule only inside the `where`."""
+        for more in ((), ("p shear in [0 kN, 0 kN]",)):
+            with self.subTest(stated=bool(more)):
+                found, status, _ = cells(self, UP_TO_30, TWO_PINS, pin_card(("20 mm", "40 mm"), *more))
+                self.assertEqual((found[("p", "pin.shear", "shear/service")], status), ("open", "UNKNOWN"))
+
+    def test_a_load_left_out_rests_a_rule_whose_where_and_rule_are_proved_under_the_completion(self):
+        found, status, said = cells(self, UP_TO_30, TWO_PINS, pin_card(("10 mm", "20 mm")))
+        self.assertEqual((found[("p", "pin.shear", "shear/service")], status), ("waived", grid.PASS_WAIVED))
+        found, status, _ = cells(self, UP_TO_30, TWO_PINS, pin_card(("10 mm", "20 mm"), "p shear in [0 kN, 0 kN]"))
+        self.assertEqual((found[("p", "pin.shear", "shear/service/where")], found[("p", "pin.shear", "shear/service")], status), ("proved", "proved", "PASS"))
+
+    def test_a_load_left_out_rests_a_rule_whose_where_holds_nowhere_under_the_completion(self):
+        for more, state in (((), "waived"), (("p shear in [0 kN, 0 kN]",), "waived")):
+            found, status, _ = cells(self, UP_TO_30, TWO_PINS, pin_card(("40 mm", "50 mm"), *more))
+            self.assertEqual((found[("p", "pin.shear", "shear/service")], status), (state, grid.PASS_WAIVED))
+
+    @KERNEL
+    def test_the_kernel_takes_no_partition_that_proves_the_rule_only_inside_its_where(self):
+        """The hint of the review: zero shear, and one leaf, which proves the tape whose root is the rule's inside the `where` and -1
+        outside it. It proves neither the `where` nor the rule over the box."""
+        rules, read = parsed(UP_TO_30, TWO_PINS, pin_card(("20 mm", "40 mm")))
+        report, files = grid.check(read, rules)
+        (cell,) = [h for h in json.loads(files["proofs"])["cells"] if h["subject"] == "p" and h["mechanism"] == "pin.shear"]
+        for partition in ("leaf", None):
+            hint = {**cell, "completion": {"keys": [], "loads": [["p", "shear", "service", "0"]]}, **({"partition": partition} if partition else {})}
+            said = ask({**files, "proofs": json.dumps({"format": "petra-proofs/0", "cells": [hint]})})
+            (found,) = [c for c in said["cells"] if c["subject"] == "p" and c["mechanism"] == "pin.shear"]
+            self.assertEqual((said["findings"], found["state"], said["verdict"]), ([], "open", "UNKNOWN"), partition)
 
 
 if __name__ == "__main__":
