@@ -26,6 +26,10 @@ waived cell leaves unchecked. One test per finding.
   A5  Under a load case named `where` every rule that reads a load had an entry that ends in
       `/where`, which marks the cell of a range, so its proof was not counted and a design
       whose rules all held was UNKNOWN. Both readers now refuse the name.
+  K1  To refute a cell under each combination of names of its unstated keys, the kernel
+      filtered every hint of the cell once for each combination, and charged for none of it:
+      65,536 hints took 115 s for the charged work of 4,096. It now looks at each hint once
+      and charges it, and a combination finds its points by their keys.
 """
 import json
 import unittest
@@ -241,6 +245,38 @@ class ACaseNamedWhere(unittest.TestCase):
         files = grid.check(read, rules)[1]
         said = ask(changed(files, "card", lambda card: card["cases"].append("where")))
         self.assertIn("shape card cases: a load case is not named where", findings(said))
+
+
+# --- K1. the hints of an incomplete cell ---------------------------------------------------------------------
+
+TWELVE = [f"k{i}" for i in range(1, 13)]
+BOXES = made_up([kind("box", size("x"), *[{**key(k, "a", "b"), "optional": True} for k in TWELVE])], [asks("box.size", "box")],
+                [rule("size", "box", "box.size", when=["and", *[["or", ["is", k, "a"], ["is", k, "b"]] for k in TWELVE]], le=[["q", "2", "mm"], "x"])])
+"""A box with twelve optional keys and a rule that applies whatever they name: 4,096 combinations."""
+
+
+def boxes(copies: int, named: bool = True) -> dict[str, str]:
+    """The files of a box of 1 mm that leaves every key unstated, with a point for each combination, each `copies` times. Unnamed, the
+    hints name no cell, so the kernel reads them and looks at none."""
+    _, stated = parsed(BOXES, design(part("box", "b", x="1 mm", **{k: "a" for k in TWELVE})))
+    (point,) = [c for c in json.loads(grid.check(stated, grid.read_deck(json.dumps(BOXES)))[1]["proofs"])["cells"] if "point" in c]
+    rules, read = parsed(BOXES, design(part("box", "b", x="1 mm", **{k: "unstated" for k in TWELVE})))
+    files = grid.check(read, rules)[1]
+    hints = [{**point, "entry": point["entry"] if named else "nowhere", "completion": {"keys": [["b", k, "ab"[(n >> i) & 1]] for i, k in enumerate(TWELVE)], "loads": []}}
+             for n in range(2 ** 12)]
+    return {**files, "proofs": json.dumps({"format": "petra-proofs/0", "cells": hints * copies})}
+
+
+class HintsLookedAtOnce(unittest.TestCase):
+    @KERNEL
+    def test_a_cell_with_many_hints_is_refuted_in_about_the_time_its_hints_take_to_read(self):
+        """For each of the 4,096 combinations the kernel filtered every hint of the cell, and charged neither: 65,536 hints took 115 s and
+        the charged work of 4,096. It now looks at each hint once, by the keys of its completion, and charges each as a hint."""
+        from tests.test_kernel_attacks2 import measured
+        said, seconds, _ = measured(boxes(4))
+        _, control, _ = measured(boxes(4, named=False))
+        self.assertEqual((said["verdict"], [c["state"] for c in said["cells"]]), ("FAIL", ["refuted"]))
+        self.assertLess(seconds, 2 * control + 2, f"{seconds:.1f} processor seconds, and {control:.1f} to read the hints")
 
 
 if __name__ == "__main__":

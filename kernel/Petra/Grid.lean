@@ -375,11 +375,6 @@ def Completion.fits (c : Completion) (part : Part) (unsaid : Array Unsaid) (miss
     && c.keys.all (fun (owner, field, name) => unsaid.any fun u => u.owner == owner && u.field == field && u.known.contains name)
     && c.loads.all (fun (p, load, u, x) => p == part.name && u == under && missing.contains load && allowed load x)
 
-/-- Whether two completions name the same keys and the same loads, the first with no key and
-no load twice. -/
-def Completion.same (c d : Completion) : Bool :=
-  c.keys.size == d.keys.size && c.loads.size == d.loads.size && c.keys.all d.keys.contains && c.loads.all d.loads.contains
-
 /-- The names of the parts that leave a field unstated. -/
 def bareOf (parts : Array Part) : Std.TreeSet String :=
   parts.foldl (init := {}) fun bare part =>
@@ -680,8 +675,10 @@ meets what a complete cell must. The tape its partition proves has a root for ea
 the `where` before the rule's, so it proves the `where` and the rule over the whole box, as
 the `/where` cell and the rule's cell are proved. A hint with no partition is a witness for a
 rule with a `where` when, under its completion, the `where` holds nowhere in the box, as a
-complete cell is rested. Each combination and each hint is a step, and one for each part
-of the rule's `when` and `requires` and each key and load the hint names. Each tape written
+complete cell is rested. Each combination and each hint looked at is a step, and one for each
+part of the rule's `when` and `requires`, a combination one for each key, and a hint one for
+each key and load it names. Each hint is looked at once to refute, before the combinations,
+and once more to find a witness. Each tape written
 is the weight of the rule, twice with a `where`, and a step for each node. None when that
 would come to more than `room` steps. Otherwise the cell, the steps it took, the work left
 and `dsg` with the `dsg:` inputs of the tapes that refute it. -/
@@ -704,8 +701,24 @@ def incomplete (rule : Rule) (named : Std.TreeMap String Part) (loads : Loads) (
   if missing.isEmpty && combinations ≤ MAX_TRIED then
     let mut broken := true
     let mut read := dsg
+    -- The points of the hints, by the keys of their completions in order, so that a
+    -- combination finds its own in one look however many hints the cell has. Each hint is
+    -- looked at once here and charged as a hint is, and one whose completion gives a load or
+    -- names the keys otherwise than one combination does is found by none.
+    let ordered (keys : Array (String × String × String)) := keys.qsort (fun a b => compare a b == .lt)
+    let mut pointed : Std.TreeMap (Array (String × String × String)) (Array Hint) := {}
+    if rule.requires.isNone then
+      for h in hints do
+        let some c := h.completion | continue
+        spent := spent + looks + c.keys.size + c.loads.size
+        if spent > room then return none
+        if h.point.isNone || !c.loads.isEmpty then continue
+        let point := { h with partition := none }
+        pointed := pointed.alter (ordered c.keys) fun
+          | some found => some (found.push point)
+          | none => some #[point]
     for n in [0:combinations] do
-      spent := spent + looks
+      spent := spent + looks + unsaid.size
       if spent > room then return none
       let keys := (unsaid.foldl (fun (out, n) u => (out.push (u.owner, u.field, u.names[n % u.names.size]!), n / u.names.size)) (#[], n)).1
       let c : Completion := { keys }
@@ -718,7 +731,7 @@ def incomplete (rule : Rule) (named : Std.TreeMap String Part) (loads : Loads) (
           broken := false
           break
         continue
-      let points := (hints.filter fun h => h.point.isSome && h.completion.any c.same).map ({ · with partition := none })
+      let points := pointed.getD (ordered keys) #[]
       if points.isEmpty then
         broken := false
         break
