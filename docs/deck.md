@@ -69,14 +69,15 @@ A power works wherever a value is read: a `range`, a `least`, the end of a band,
 
 ### A value with its unit
 
-A value is a text: a number, one space, and a unit. It stands in a `range`, a `least`, the end of a band, a listed value of `at` and a cell of a table. `["q", NUMBER, UNIT]` holds its two halves, which are joined with one space and read as one value.
+A value is a text: a number, one space, and a unit. It stands in a `range`, a `least`, the end of a band, a listed value of `at` and a cell of a table. `["q", NUMBER, UNIT]` holds its two halves, which are joined with one space and read as one value. Both halves are texts. So a `q` takes whatever a value takes: `["q", "29,000", "ksi"]` and `["q", "1 1/8", "inch"]` are read, and `["q", "3", ""]` is `3 `, the plain number 3.
 
 - The number is digits with an optional sign, and then a decimal part or a denominator that is not zero: `0.75`, `-3`, `3/4`. The digits are `0` to `9`.
 - A whole number and a fraction with one space between them are their sum: `1 1/8 inch` is 9/8 inch. This form takes no sign.
-- A comma is read between thousands and nowhere else: `29,000 ksi` is 29000 ksi, and `2,90` is refused. The digits before the first comma are one to three, and each group after a comma is three.
+- A comma is read between thousands and nowhere else: `29,000 ksi` is 29000 ksi, and `2,90` is refused. The digits before the first comma are one to three, and each group after a comma is three. A comma stands only in the digits before a decimal point, in a whole number or a decimal: `29,000` and `1,234.5`. A number with a `/` takes none, so `1,000/3` and `1,000 1/8 inch` are refused.
 - A value with no unit is a plain number, of no dimension. So `1 1/2` alone is the number 3/2, and `1,000` alone is the number 1000.
 - `0` and `-0` alone are the plain number zero. They are not the zero of every dimension: a length that is zero is written `0 mm`, and a range, a band or a `least` of a length that starts at a bare `0` is refused for its dimension.
-- Spaces, tabs and line ends around the value are dropped, and so are those around the unit. No other character is.
+- Spaces, tabs and line ends around the value are dropped, and so are those around the unit. No other character is. A line end is a line feed or a carriage return.
+- The space that parts the number from its unit is the first space of the value, the character U+0020. More spaces, tabs and line ends may follow it before the unit, and they are dropped: `3  inch` is 3 inch. A tab alone does not part the two, so `3` and a tab and `inch` is refused. A whole number and its fraction have exactly one space between them.
 
 A number alone in an expression, such as `"2.4"`, is the first form only. It takes no comma and no whole number with a fraction.
 
@@ -143,7 +144,7 @@ An input of a table is a quantity, as in an equation, or a key. A key is one of 
 | `down` | The side that picks the line. `by` names the input it reads. |
 | `across` | The side that picks the column, for a table with two sides. A table with one side leaves it out, and `cells` is then a plain list. |
 | `cells` | One line for each place of `down`, each with one cell for each place of `across`, as printed. `null` is a cell the standard leaves empty. |
-| `unit` | The unit of a cell that states none. A cell may state its own, as `"0.1 mm"` does above. A cell that holds a space is read as stating its own. So `"1,000"` under `"unit": "um"` is 1000 um, and a whole number with a fraction in a cell is written with its unit, `"1 1/8 inch"`: `"1 1/8"` alone is the plain number 9/8, whatever `unit` says. |
+| `unit` | The unit of a cell that states none. A cell may state its own, as `"0.1 mm"` does above. Spaces, tabs and line ends around a cell are dropped first. A cell that then holds a space is read as stating its own, and any other cell is read in the table's `unit`: `"1 "` under `"unit": "inch"` is 1 inch. So `"1,000"` under `"unit": "um"` is 1000 um, and a whole number with a fraction in a cell is written with its unit, `"1 1/8 inch"`: `"1 1/8"` alone is the plain number 9/8, whatever `unit` says. |
 | `rises`, `falls` | The sides along which the printed values never go down, or never go up. Each is a list of texts, and each text is the `by` of a side of this table. A name may stand twice in a list. No name is in both lists. A list that names anything else is refused. |
 
 A side that reads a key has `by` alone, and its places are the key's names in order. A side that reads a quantity has one of two forms.
@@ -477,7 +478,7 @@ The rule reads the keys that its `requires` and its `when` name, so those keys h
 
 No cell has a default. The verdict is FAIL with a refuted cell, UNKNOWN with an open cell or with nothing proved, and PASS otherwise.
 
-A waiver takes the whole line. A line the card waives on a part is one `waived` cell, and no rule for that line is run on the part, whether or not it would hold. The report prints each waiver with who signed it and why.
+A waiver takes the whole line. A line the card waives on a part is one `waived` cell, and no rule for that line is run on the part, whether or not it would hold. A rule that is not run still reads what it reads: the fields and the loads of a rule of a waived line, or of a line that cannot arise, have no `unread` cell. The report prints each waiver with who signed it and why.
 
 `petra-verify` reads the same three files and makes the cells again, each with the tape of its rule. It takes nothing of a cell from `petra check` but a hint: the partition that proved it, or the point that refuted it. The kernel tries the hint on its own tape, and the state it settles on is its own. `petra check` then compares the two lists cell by cell, and stops with exit code 4 if they differ.
 

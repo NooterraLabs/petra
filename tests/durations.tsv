@@ -35,6 +35,7 @@ tests.test_kernel_grid	11.5
 tests.test_kernel_instance	1.0
 tests.test_kernel_limits	12.5
 tests.test_kernel_mutations	0.7
+tests.test_kernel_pages	49.8
 tests.test_kernel_redteam	0.8
 tests.test_lang	1.8
 tests.test_library	2.1
