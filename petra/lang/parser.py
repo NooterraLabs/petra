@@ -371,6 +371,9 @@ class Parser:
         unit = None
         if self._is(Kind.PUNCT, "%") or (self._is(Kind.IDENT) and self._peek().text not in NOT_UNITS):
             unit = self._next()
+            if unit.kind is Kind.IDENT and self._is(Kind.PUNCT, "/"):      # m/s: a unit that is a quotient, as one unit
+                self._next()
+                unit = Token(unit.kind, f"{unit.text}/{self._ident('the name after the / of a unit').text}", unit.line, unit.col)
             if unit.kind is Kind.IDENT and self._is(Kind.PUNCT, "^"):      # inch^4: the unit to a power, as one unit
                 self._next()
                 unit = Token(unit.kind, f"{unit.text}^{self._expect(Kind.NUMBER, None, 'the power of a unit').text}", unit.line, unit.col)

@@ -35,7 +35,7 @@ from .models.steel.lower import SHAPE_GROUP, THREAD_MARKS, tee_parent
 from .registry import Constant, ProcessKind, Registry, build_registry, steel_shapes
 from .registry.model import fold, hint
 from .registry.steel import STOCK_PLATE
-from .units import CUSTOMARY, UNITS, dimension_name
+from .units import CHARGE, CUSTOMARY, DENSITY, FREQUENCY, SPEED, STIFFNESS, UNITS, dimension_name
 
 ROOT = Path(__file__).resolve().parents[1]
 REFERENCE = ROOT / "docs" / "reference.md"
@@ -432,10 +432,33 @@ def _units() -> list[str]:
     by_dim: dict[str, list[str]] = {}
     for table in (UNITS, CUSTOMARY):
         for spelling, (_, dim) in table.items():
-            if _NAME.fullmatch(spelling) or spelling == "%":
-                name = dimension_name(dim)
+            if all(map(_NAME.fullmatch, spelling.split("/", 1))) or spelling == "%":
+                name = _DIMENSIONS.get(dim) or dimension_name(dim)
                 by_dim.setdefault("energy, torque" if name == "energy" else name, []).append(f"`{spelling}`")
     return [f"| {dim} | {', '.join(spellings)} |" for dim, spellings in by_dim.items()]
+
+
+_DIMENSIONS = {FREQUENCY: "turns or cycles in a time", CHARGE: "charge", SPEED: "speed", DENSITY: "density", STIFFNESS: "force over length"}
+"""What the units table calls a dimension that has no name of its own in a file."""
+
+_FACTORS = [
+    ("`kW`", "1,000 W", "the SI prefix"),
+    ("`min`, `h`", "60 s and 3,600 s", "the SI Brochure, 9th edition, Table 8"),
+    ("`Hz`", "1 a second", "the SI Brochure, 9th edition, Table 4"),
+    ("`rpm`", "1/60 Hz", "one turn a minute, where a turn is the plain number 1"),
+    ("`mAh`, `Ah`", "18/5 A s and 3,600 A s", "a current for an hour of 3,600 s"),
+    ("`m/s`", "1 m/s", "the SI unit"),
+    ("`km/h`", "5/18 m/s", "1,000 m in 3,600 s"),
+    ("`knot`", "463/900 m/s", "one international nautical mile of 1,852 m in 3,600 s"),
+    ("`kg/m3`, `g/cm3`", "1 kg/m3 and 1,000 kg/m3", "the SI unit and its prefixes"),
+    ("`N/mm`", "1,000 N/m", "the SI prefix"),
+    ("`mile`", "201168/125 m, which is 1,609.344 m", "5,280 ft of 0.3048 m, by the international yard of 1959"),
+    ("`mph`", "1397/3125 m/s, which is 0.44704 m/s", "a mile in 3,600 s"),
+    ("`lb`", "45359237/100000000 kg, which is 0.45359237 kg", "the international pound of 1959"),
+    ("`oz`", "1/16 lb, which is 0.028349523125 kg", "the avoirdupois ounce"),
+    ("`lbf_in`, `lbf_ft`", "a pound-force times an inch, and times 12 inch", "`lbf` and `inch`, as `kip_in` and `kip_ft` are written"),
+]
+"""The units read since 2026-11-11, each with its exact factor and where the factor comes from."""
 
 
 def _cell(text: str) -> str:
@@ -566,6 +589,28 @@ def render_reference() -> str:
               "`inch2`. A section modulus is written in a length to the third power and a moment of inertia in a",
               "length to the fourth. Petra prints such a quantity in `mm^3`, `cm^3`, `m^3` and the like, which it",
               "reads back.", "",
+              "A unit is one spelling of the table and nothing else. A unit with a `/` in it, as `m/s`, `km/h`,",
+              "`kg/m3` and `ohm/km` are, is written with no space and is never worked out from its halves: `m/s` is",
+              "one unit, and `mm/s`, `m/min` and `kg/m^3` are none. A product is written with `_`, as in `kip_in`",
+              "and `lbf_ft`. A unit that had a spelling got no second one, so a newton metre is `Nm`. `mAh` is no",
+              "`m`, `A` and `h`, and `min` no `m` and `in`: a spelling is read whole. A word right after a number is its unit,",
+              "whatever else has that name: `h 2 h` gives the field `h` two hours, and `5 K` is refused, because",
+              "`K` is no unit.", "",
+              "These units are read since 2026-11-11. Each factor is exact. NIST Special Publication 811, 2008",
+              "edition, Appendix B, lists each factor that is not SI's own and marks it exact.", "",
+              "| unit | is | by |", "|---|---|---|", *(f"| {unit} | {factor} | {source} |" for unit, factor, source in _FACTORS), "",
+              "A rotation is counted in turns, and a turn is the plain number 1. So a speed of rotation is a plain",
+              "1 over a time: `Hz` is one turn a second, and `rpm` is one turn a minute. An angle is a plain number",
+              "too, and Petra has no unit for one: a deck that needs radians writes the 2 pi itself. A report",
+              "prints a time in `s` or `ms` and a power in `W` or `mW`, and never chooses `min`, `h`, `kW`, `rpm`,",
+              "`km/h` or `knot`.", "",
+              "The one unit of temperature is `degC`. Its number is the temperature on the Celsius scale, with its",
+              "sign: `-10 degC` is ten below freezing. There is no `K` and no `degF`. A unit is a factor and",
+              "nothing more, and those two need an offset as well. With one, `50 degF` would be read as 10 degC",
+              "where it is a temperature and as 27.8 degC where it is a difference of two, and nothing in a value",
+              "says which it is. So a temperature in Fahrenheit is written in `degC` as the exact fraction:",
+              "25 degF is `-35/9 degC` and 150 degF is `590/9 degC`. A difference of temperatures is in `degC`",
+              "too, and a kelvin of difference is `1 degC`.", "",
               "## Exit codes of `petra check`", "", "| status | code |", "|---|---|",
               *(f"| {status} | {code} |" for status, code in EXIT_CODES.items()), "",
               "## Component kinds", "",

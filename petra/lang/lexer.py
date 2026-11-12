@@ -8,7 +8,9 @@ lines collapse into one NEWLINE, and a NEWLINE inside ( ) or [ ] is dropped. Oth
 whitespace separates tokens. Comments run from # to end of line. Units are IDENTs (kN,
 mm2, degC, Nm) or "%". A "^" written directly after a name, with digits directly after it,
 is the power of a unit, as in inch^4, and lexes as IDENT "^" NUMBER. A "^" anywhere else
-is an error.
+is an error. A "/" written directly after a name, with a name directly after it, is the
+quotient in a unit, as in m/s and km/h, and lexes as IDENT "/" IDENT. A "/" anywhere else
+but inside a number is an error.
 
 A "." written directly between two names continues a dotted name, and the segment after
 it may start with a digit, so registry ids such as aluminium.6061_T6 and chs.60_3x3_2
@@ -121,6 +123,10 @@ def tokenize(text: str, path: str) -> tuple[Token, ...]:
                 emit(Kind.PUNCT, ".", i)
                 emit(Kind.IDENT, seg.group(), i + 1)
                 i = seg.end()
+            if text.startswith("/", i) and (under := _IDENT.match(text, i + 1)):      # m/s: a unit with a quotient in it, as one unit
+                emit(Kind.PUNCT, "/", i)
+                emit(Kind.IDENT, under.group(), i + 1)
+                i = under.end()
             if text.startswith("^", i):
                 power = _POWER.match(text, i + 1)
                 if not power:

@@ -194,7 +194,7 @@ claim     = "claim" IDENT ":" ( qoi rel qty [ "margin" qty ] [ "under" IDENT { "
 waive     = "waive" ref "on" path "by" STRING "reason" STRING ;
 range     = "[" qty "," qty "]" ;
 qty       = NUMBER [ unit ] ;     an IDENT or "%" right after a NUMBER is its unit
-unit      = IDENT [ "^" INT ] | "%" ;         inch^4: a unit of length to the power 2, 3 or 4, with no space
+unit      = IDENT [ "/" IDENT ] [ "^" INT ] | "%" ;   m/s and inch^4, each written with no space
 qoi       = segment { "." segment } ;          last segment is the quantity name
 segment   = IDENT [ "(" IDENT ")" ] ;          member(diag_ad) names element diag_ad
 path      = IDENT { "." IDENT } ;
@@ -210,19 +210,25 @@ A card and a design accept these unit spellings.
 | dimension | spellings |
 |---|---|
 | dimensionless | `%` |
-| length | `m`, `mm`, `um`, `cm`, `km`, `inch`, `ft` |
+| length | `m`, `mm`, `um`, `cm`, `km`, `inch`, `ft`, `mile` |
 | area | `mm2`, `m2`, `inch2` |
 | force | `N`, `kN`, `MN`, `lbf`, `kip`, `kips` |
 | stress | `Pa`, `kPa`, `MPa`, `GPa`, `psi`, `ksi` |
 | current | `uA`, `mA`, `A`, `kA` |
 | voltage | `V`, `kV` |
 | resistance | `ohm`, `mohm`, `kohm`, `Mohm` |
-| power | `mW`, `W` |
-| energy, torque | `J`, `Nm`, `kip_in`, `kip_ft` |
-| time | `s`, `ms` |
+| resistance per length | `ohm/km` |
+| power | `mW`, `W`, `kW` |
+| energy, torque | `J`, `Nm`, `kip_in`, `kip_ft`, `lbf_in`, `lbf_ft` |
+| time | `s`, `ms`, `min`, `h` |
 | temperature | `degC` |
-| mass | `g`, `kg` |
+| mass | `g`, `kg`, `lb`, `oz` |
 | I2t | `A2s` |
+| turns or cycles in a time | `Hz`, `rpm` |
+| charge | `mAh`, `Ah` |
+| speed | `m/s`, `km/h`, `knot`, `mph` |
+| density | `kg/m3`, `g/cm3` |
+| force over length | `N/mm` |
 
 A unit of length may be raised to the power 2, 3 or 4: the unit, `^` and the power, with no space, as
 in `mm^3` and `inch^4`. Its factor is the unit's own factor to that power, exactly, so `1 inch^4` is
@@ -232,6 +238,49 @@ refused. An area has two spellings with one meaning: `mm^2` is `mm2`, `m^2` is `
 `inch2`. A section modulus is written in a length to the third power and a moment of inertia in a
 length to the fourth. Petra prints such a quantity in `mm^3`, `cm^3`, `m^3` and the like, which it
 reads back.
+
+A unit is one spelling of the table and nothing else. A unit with a `/` in it, as `m/s`, `km/h`,
+`kg/m3` and `ohm/km` are, is written with no space and is never worked out from its halves: `m/s` is
+one unit, and `mm/s`, `m/min` and `kg/m^3` are none. A product is written with `_`, as in `kip_in`
+and `lbf_ft`. A unit that had a spelling got no second one, so a newton metre is `Nm`. `mAh` is no
+`m`, `A` and `h`, and `min` no `m` and `in`: a spelling is read whole. A word right after a number is its unit,
+whatever else has that name: `h 2 h` gives the field `h` two hours, and `5 K` is refused, because
+`K` is no unit.
+
+These units are read since 2026-11-11. Each factor is exact. NIST Special Publication 811, 2008
+edition, Appendix B, lists each factor that is not SI's own and marks it exact.
+
+| unit | is | by |
+|---|---|---|
+| `kW` | 1,000 W | the SI prefix |
+| `min`, `h` | 60 s and 3,600 s | the SI Brochure, 9th edition, Table 8 |
+| `Hz` | 1 a second | the SI Brochure, 9th edition, Table 4 |
+| `rpm` | 1/60 Hz | one turn a minute, where a turn is the plain number 1 |
+| `mAh`, `Ah` | 18/5 A s and 3,600 A s | a current for an hour of 3,600 s |
+| `m/s` | 1 m/s | the SI unit |
+| `km/h` | 5/18 m/s | 1,000 m in 3,600 s |
+| `knot` | 463/900 m/s | one international nautical mile of 1,852 m in 3,600 s |
+| `kg/m3`, `g/cm3` | 1 kg/m3 and 1,000 kg/m3 | the SI unit and its prefixes |
+| `N/mm` | 1,000 N/m | the SI prefix |
+| `mile` | 201168/125 m, which is 1,609.344 m | 5,280 ft of 0.3048 m, by the international yard of 1959 |
+| `mph` | 1397/3125 m/s, which is 0.44704 m/s | a mile in 3,600 s |
+| `lb` | 45359237/100000000 kg, which is 0.45359237 kg | the international pound of 1959 |
+| `oz` | 1/16 lb, which is 0.028349523125 kg | the avoirdupois ounce |
+| `lbf_in`, `lbf_ft` | a pound-force times an inch, and times 12 inch | `lbf` and `inch`, as `kip_in` and `kip_ft` are written |
+
+A rotation is counted in turns, and a turn is the plain number 1. So a speed of rotation is a plain
+1 over a time: `Hz` is one turn a second, and `rpm` is one turn a minute. An angle is a plain number
+too, and Petra has no unit for one: a deck that needs radians writes the 2 pi itself. A report
+prints a time in `s` or `ms` and a power in `W` or `mW`, and never chooses `min`, `h`, `kW`, `rpm`,
+`km/h` or `knot`.
+
+The one unit of temperature is `degC`. Its number is the temperature on the Celsius scale, with its
+sign: `-10 degC` is ten below freezing. There is no `K` and no `degF`. A unit is a factor and
+nothing more, and those two need an offset as well. With one, `50 degF` would be read as 10 degC
+where it is a temperature and as 27.8 degC where it is a difference of two, and nothing in a value
+says which it is. So a temperature in Fahrenheit is written in `degC` as the exact fraction:
+25 degF is `-35/9 degC` and 150 degF is `590/9 degC`. A difference of temperatures is in `degC`
+too, and a kelvin of difference is `1 degC`.
 
 ## Exit codes of `petra check`
 
