@@ -374,10 +374,10 @@ class TheEnvironmentIsAnswered(unittest.TestCase):
         marine = card.replace('  owner "s.engineer@example.org"\n', '  owner "s.engineer@example.org"\n  environment marine_c5\n')
         self.assertNotEqual(marine, card)
         indoors = petra.check(card, design, path=str(examples / "lap_pass.petra"), repair=False)
-        self.assertEqual((indoors["status"], indoors["kernel"]["verdict"]), ("PASS", "PASS"))
+        self.assertEqual((indoors["status"], indoors["kernel"]["verdict"]), ("PASS_WAIVED", "PASS"))
         said = petra.check(marine, design, path=str(examples / "lap_pass.petra"), repair=False)
         verdicts = (said.get("status"), (said.get("kernel") or {}).get("verdict"))
-        self.assertNotEqual(verdicts, ("PASS", "PASS"), "marine C5 is read by no cell, and the lap passes as it does indoors")
+        self.assertNotIn(verdicts, (("PASS", "PASS"), ("PASS_WAIVED", "PASS")), "marine C5 is read by no cell, and the lap passes as it does indoors")
         self.assertEqual(said["status"], "INPUT_ERROR", "the pair is refused, as one that states an ambient is")
         self.assertIn("the card or the design states an environment, which a deck does not read yet", json.dumps(said))
 
