@@ -11,9 +11,11 @@ This page shows how to call Petra from an agent or a script.
 import petra
 
 result = petra.check(open("tab.card").read(), open("tab.petra").read())
-result["status"]            # "PASS", "FAIL", "UNKNOWN", "MARGINAL" or "INPUT_ERROR"
+result["status"]            # "PASS", "PASS_WAIVED", "FAIL", "UNKNOWN", "MARGINAL" or "INPUT_ERROR"
 result["repair"]["moves"]   # on a FAIL: the inputs to change, best first
 ```
+
+PASS_WAIVED is the pass of a design of a deck's type when a waiver of the card rests one of its cells. It passes what the deck could check, `result["waived"]` lists each waiver with who signed it, and `petra check` exits 6 for it.
 
 The result is the same JSON that `petra check --json` prints. On a FAIL, the `repair` key holds the moves. A move changes one number in the design, such as `tab.rows` or `tab.plate thickness`, by one step up or down. No move changes the card. Petra re-checks each step and sorts the moves by the utilisation of the governing check after the step, lowest first. For the top three moves it also searches further in the same direction for a value at which the governing check holds, and reports that value and the design's status there. When no number lowers the check, the moves swap an angle or tee for another shape of its family instead. `petra check` prints the same moves as text under the governing check. The [Python API](../petra/docs/api.md#repair) gives the exact shape.
 

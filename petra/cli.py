@@ -27,7 +27,9 @@
                 ...]}
         Exit code from the overall status (EXIT_CODES): 0 PASS, 1 FAIL, 2 UNKNOWN,
         5 MARGINAL (a claim with a margin is proved, and a certified point lies within
-        its margin of its bound), 3 input error (syntax, lowering,
+        its margin of its bound), 6 PASS_WAIVED (a design checked against a deck of rules
+        passes, and a cell rests on a waiver: the JSON lists each such waiver under
+        "waived"), 3 input error (syntax, lowering,
         ComponentError or an unreadable deck; nothing is printed to stdout).
     python -m petra explain FILE
         Print the elaborated statements with hypothesis labels.
@@ -115,9 +117,11 @@ if TYPE_CHECKING:
     from .units import Quantity
 
 EXIT_CODES: Mapping[str, int] = {"PASS": 0, "FAIL": 1, "UNKNOWN": 2, "INPUT_ERROR": 3, "INTERNAL_ERROR": 4, "MARGINAL": 5,
-                                 "BROKEN_PIPE": 141}
-"""BROKEN_PIPE: the reader closed stdout before Petra finished writing. 141 is 128 plus
-SIGPIPE's number, the status a shell reports for a command that a closed pipe stopped."""
+                                 "PASS_WAIVED": 6, "BROKEN_PIPE": 141}
+"""PASS_WAIVED: a design checked against a deck of rules passes, and a cell rests on a
+waiver (grid.PASS_WAIVED). BROKEN_PIPE: the reader closed stdout before Petra finished
+writing. 141 is 128 plus SIGPIPE's number, the status a shell reports for a command that a
+closed pipe stopped."""
 
 
 def _input_errors() -> tuple[type[Exception], ...]:

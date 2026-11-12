@@ -235,6 +235,16 @@ theorem Node.enclose_sound {node : Node} {box v : Array Iv} {ρ : Nat → ℝ}
       show (val i).map Real.exp = some (Real.exp x)
       rw [hx]
       rfl
+  | cos i =>
+    obtain ⟨x, hx, hxv⟩ := hval i (by simp [Node.reads])
+    simp only [Node.enclose] at h
+    split at h
+    · exact (M.throw_not_ok h).elim
+    · obtain ⟨hc', hr⟩ := iCos_sound hc hxv h
+      refine ⟨hc', Real.cos x, ?_, hr⟩
+      show (val i).map Real.cos = some (Real.cos x)
+      rw [hx]
+      rfl
   | div i j =>
     obtain ⟨hq, rfl⟩ := M.lift_ok (e := v[i]!.div v[j]!) h
     obtain ⟨x, hx, hxv⟩ := hval i (by simp [Node.reads])
@@ -324,6 +334,11 @@ theorem Node.enclose_valid {node : Node} {box v : Array Iv} {c c' : Caches} {r :
     split at h
     · exact (M.throw_not_ok h).elim
     · exact iExp_valid hc h
+  | cos i =>
+    simp only [Node.enclose] at h
+    split at h
+    · exact (M.throw_not_ok h).elim
+    · exact iCos_valid hc h
   | div i j =>
     obtain ⟨-, rfl⟩ := M.lift_ok (e := v[i]!.div v[j]!) h
     exact hc
@@ -341,12 +356,13 @@ property `V` of the caches that the step keeps, so that it has two readings. For
 kernel computes exactly, `V` is true of every cache, so the step may start from any. -/
 
 /-- A node the kernel computes with exact rational arithmetic: every node but `sqrt`, `pi`,
-`ln` and `exp`. -/
+`ln`, `exp` and `cos`. -/
 def Node.Exact : Node → Prop
   | .sqrt _ => False
   | .pi => False
   | .ln _ => False
   | .exp _ => False
+  | .cos _ => False
   | _ => True
 
 /-- The step of an exact node does not read the caches and does not change them. -/
@@ -420,6 +436,7 @@ theorem Node.enclose_exact {node : Node} {box v : Array Iv} {c c' : Caches} {r :
   | sqrt i => exact False.elim hex
   | ln i => exact False.elim hex
   | exp i => exact False.elim hex
+  | cos i => exact False.elim hex
   | div i j =>
     obtain ⟨hq, -⟩ := M.lift_ok (e := v[i]!.div v[j]!) h
     show (liftM (m := Except String) (v[i]!.div v[j]!) : M Iv) c₀ = .ok (r, c₀)

@@ -140,7 +140,7 @@ def cell(result: dict, mechanism: str, entry: str | None = None) -> dict:
 class Cells(unittest.TestCase):
     def test_every_mechanism_of_the_grid_gets_a_cell_and_the_verdict_follows(self):
         result = checked()
-        self.assertEqual(result["status"], "PASS")
+        self.assertEqual(result["status"], "PASS_WAIVED")
         self.assertEqual(result["counts"], {"proved": 4, "refuted": 0, "not_applicable": 2, "waived": 1, "open": 0})
         self.assertEqual({c["mechanism"] for c in result["cells"]}, {a["mechanism"] for a in STRIPS["grid"]})
         self.assertEqual(cell(result, "strip.tide")["why"], "a strip is dry")
@@ -446,7 +446,7 @@ class Shipped(unittest.TestCase):
         failed = self.check("lap_fail")
         self.assertEqual((failed["status"], [c["mechanism"] for c in failed["cells"] if c["state"] == "refuted"]), ("FAIL", ["lap.strength"]))
         waived = self.check("lap_pass")
-        self.assertEqual((waived["status"], waived["counts"]["waived"], waived["counts"]["open"]), ("PASS", 4, 0))
+        self.assertEqual((waived["status"], waived["counts"]["waived"], waived["counts"]["open"]), ("PASS_WAIVED", 4, 0))
         self.assertEqual([c["mechanism"] for c in waived["cells"] if c["state"] == "waived"], self.NO_RULE, "the card waives the lines with no rule, and no line that has one")
 
     def variant(self, *swap: tuple[str, str], pull: str = "45 kip") -> dict:
@@ -558,9 +558,46 @@ class Shipped(unittest.TestCase):
         with mock.patch.object(verify, "binary", lambda: None):
             found = petra.check(*read_pair(path), path=str(path), repair=False)
         waived = [c for c in found["cells"] if c["state"] == "waived"]
-        self.assertEqual(([c["mechanism"] for c in waived], [c["entry"] for c in waived], found["status"]), (self.NO_RULE, [""] * 4, "PASS"))
+        self.assertEqual(([c["mechanism"] for c in waived], [c["entry"] for c in waived], found["status"]), (self.NO_RULE, [""] * 4, "PASS_WAIVED"))
         for c in waived:
             self.assertRegex(c["why"], r"^by .+: .+; open but for the waiver: the deck has no rule for it$")
+
+    def test_a_pass_that_rests_on_a_waiver_says_so_in_its_text_its_json_its_exit_code_and_the_mcp_reply(self):
+        """The lap of lap_pass passes every rule the deck has, and four cells rest on the card's waivers. `petra check` gives it a status
+        word of its own, PASS_WAIVED, which exits 6, and its JSON lists the four waivers. The kernel says PASS and lists the same four."""
+        import contextlib
+        import io
+
+        from petra import mcp
+        from petra.cli import EXIT_CODES, main
+
+        path = ROOT / "examples" / "deck" / "lap_pass.petra"
+        card = read_pair(path)[0]
+        waivers = [{"subject": "splice", "mechanism": m, "by": "s.engineer@example.org", "reason": card.split(f"waive {m} on splice by \"s.engineer@example.org\" reason \"")[1].split("\"")[0]}
+                   for m in self.NO_RULE]
+        for json_flag in ((), ("--json",)):
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                code = main(["check", str(path), *json_flag])
+            self.assertEqual(code, EXIT_CODES["PASS_WAIVED"])
+            self.assertEqual(code, 6)
+            if json_flag:
+                said = json.loads(out.getvalue())
+                self.assertEqual((said["status"], said["waived"]), ("PASS_WAIVED", waivers))
+                if said["kernel"] is not None:
+                    self.assertEqual((said["kernel"]["verdict"], said["kernel"]["waived"]), ("PASS", waivers))
+            else:
+                lines = out.getvalue().splitlines()
+                self.assertEqual(lines[0], "lap-splice-waived: PASS_WAIVED")
+                self.assertIn("waived     4 cells rest on 4 waivers, so the design passes what the deck could check and each signer answers for the rest", lines)
+                self.assertIn(f"  splice/lap.tightening  by s.engineer@example.org: {waivers[0]['reason']}", lines)
+        text, body = mcp._check({"path": str(path)})
+        self.assertEqual((text.splitlines()[0], body["status"], body["waived"]), ("lap-splice-waived: PASS_WAIVED", "PASS_WAIVED", waivers))
+
+
+def kernel_word(status: str) -> str:
+    """The kernel's verdict for a status of `petra check`: PASS for PASS_WAIVED, whose waivers the kernel lists beside it."""
+    return "PASS" if status == grid.PASS_WAIVED else status
 
 
 @unittest.skipIf(verify.binary() is None, "no petra-verify is built here")
@@ -569,11 +606,11 @@ class Kernel(unittest.TestCase):
     compares the two lists cell by cell and raises on a difference."""
 
     def test_the_kernel_agrees_on_the_shipped_examples(self):
-        for name, status in (("lap_unknown", "UNKNOWN"), ("lap_fail", "FAIL"), ("lap_pass", "PASS")):
+        for name, status, its in (("lap_unknown", "UNKNOWN", "UNKNOWN"), ("lap_fail", "FAIL", "FAIL"), ("lap_pass", "PASS_WAIVED", "PASS")):
             with self.subTest(design=name):
                 path = ROOT / "examples" / "deck" / f"{name}.petra"
                 result = petra.check(*read_pair(path), path=str(path), repair=False)
-                self.assertEqual((result["status"], result["kernel"]["verdict"], result["kernel"]["checked"]), (status, status, 12))
+                self.assertEqual((result["status"], result["kernel"]["verdict"], result["kernel"]["checked"]), (status, its, 12))
 
     def test_the_kernel_agrees_on_every_lap_of_the_corpus_and_each_gets_the_verdict_worked_out_by_hand(self):
         """corpus/expected.tsv gives each lap of corpus/cases/deck the verdict a hand calculation from AISC 360-22 gives it,
@@ -584,7 +621,7 @@ class Kernel(unittest.TestCase):
             if path.startswith("corpus/cases/deck/"):
                 expected[path] = rest.split("\t")[0]
         self.assertGreaterEqual(len(expected), 37)
-        self.assertLessEqual({"PASS", "FAIL", "UNKNOWN", "INPUT_ERROR"}, set(expected.values()))
+        self.assertLessEqual({"PASS_WAIVED", "FAIL", "UNKNOWN", "INPUT_ERROR"}, set(expected.values()))
         for path, verdict in expected.items():
             with self.subTest(design=path):
                 result = petra.check(*read_pair(ROOT / path), path=path, repair=False)
@@ -594,7 +631,7 @@ class Kernel(unittest.TestCase):
                     continue
                 self.assertEqual(result["status"], verdict)
                 if verdict != "INPUT_ERROR":      # a pair the grid refuses is not sent to the kernel
-                    self.assertEqual(result["kernel"]["verdict"], verdict)
+                    self.assertEqual(result["kernel"]["verdict"], kernel_word(verdict))
 
     def test_the_kernel_agrees_on_bands_cases_listed_values_and_a_split_proof(self):
         cards = {"at the end of a band": [], "over the band": [("[0 A, 2 A]", "[0 A, 2.01 A]")],
@@ -608,7 +645,7 @@ class Kernel(unittest.TestCase):
                     card = card.replace(old, new)
                 with mock.patch.object(grid, "decks", lambda: (deck(),)):
                     result = petra.check(card, DESIGN, path="strips.petra", repair=False)
-                self.assertEqual(result["kernel"]["verdict"], result["status"], "a difference raises before this line")
+                self.assertEqual(result["kernel"]["verdict"], kernel_word(result["status"]), "a difference raises before this line")
                 self.assertGreaterEqual(result["kernel"]["checked"], 4)
 
 

@@ -64,11 +64,19 @@ class Group:
     checked_by: Judge | Debt
 
 
-CORE_CAP = Limit(1000, "Set on 2026-11-08 at 140f742, where the core measured 957 code lines. "
+CORE_CAP = Limit(1017, "Set on 2026-11-08 at 140f742, where the core measured 957 code lines. "
                        "A new rule adds 3 to 5 lines to rules/__init__.py (inferred from its tables), so "
-                       "the headroom covers the registry entries of several rules.")
+                       "the headroom covers the registry entries of several rules. Raised on branch cosine "
+                       "for `cos`, the one step of the rule language for angles: the Python reading of its "
+                       "enclosure, which the kernel's ends must equal bit for bit (the series and the "
+                       "doublings, placing an enclosure among the multiples of pi, and the cache), 40 lines "
+                       "in interval.py and 7 in terms.py, evaluate.py, codec.py and __init__.py, 1,012. "
+                       "The seventh hostile review found that `lt` never decides a root at a point where "
+                       "it equals the other side, as the root of 3^2 + 4^2 against 5, since every root was "
+                       "rounded to the grid. The root of a point that is the square of a fraction is now "
+                       "that fraction, as the kernel's `rootOf` takes it: 5 lines in interval.py, 1,017.")
 
-TRUSTED_CEILING = Limit(19704, "Set on 2026-11-08 at 140f742, where the trusted base measured 13,530 "
+TRUSTED_CEILING = Limit(19908, "Set on 2026-11-08 at 140f742, where the trusted base measured 13,530 "
                                "code lines: core 957, rules 457, outside the kernel 12,116. Raised on "
                                "2026-11-08 on branch parts-core as the parts layer replaces its scaffold: "
                                "classifying the scaffold measured 14,269, and the mesh reader with its "
@@ -191,6 +199,32 @@ TRUSTED_CEILING = Limit(19704, "Set on 2026-11-08 at 140f742, where the trusted 
                                "row whose name no cell holds, refused in 4 lines of petra/deck.py, and a requirement "
                                "that no part can break or meet, which reading a deck now tries. Together those are "
                                "130 lines in petra/grid.py, and the trusted base measured 19,704. "
+                               "A rule of a lifter's lugs reads the cosine of an angle, so the rule language "
+                               "gained `cos` on branch cosine, its one step for angles, which the deck and the "
+                               "grid read with no new lines. Its Python reading in petra/kernel, which the "
+                               "kernel's ends must equal bit for bit, is 47 lines (CORE_CAP), 19,751. "
+                               "The seventh hostile review found six designs that a rule refutes passing under a "
+                               "waiver that rested a cell the search had not settled. A waiver now rests only a cell "
+                               "that no inequality could answer, which petra/grid.py decides as the kernel does: "
+                               "whether a rule says nothing anywhere in its box, and whether an unstated field is a "
+                               "quantity, 37 lines, 19,788. "
+                               "A pass that rests a cell on a waiver has a word of its own in petra check, "
+                               "PASS_WAIVED, and the report lists the waivers its cells rest on, in the order the "
+                               "kernel lists them, so that the two lists are compared: 17 lines in petra/grid.py, "
+                               "19,805. "
+                               "A deck whose rule divides by a field that may be zero, or takes the root or the "
+                               "logarithm of one that may be under zero, is refused when it is read, in the kernel and "
+                               "in the grid alike, through the names of `let` and the inputs of rows that stand for "
+                               "the field: 58 lines in petra/grid.py, 19,863. "
+                               "The search for a refuting point goes on past six ranged inputs at the corner the "
+                               "rule climbs to from the middle, and tries the middle of each box the search for a "
+                               "proof cannot prove; the kernel checks each point it gives as before: 20 lines in "
+                               "petra/grid.py, 19,883. "
+                               "A rule whose `where` is not proved is tried at points inside the `where`, on a tape "
+                               "whose root is the rule's there and -1 outside it, as the kernel tries the point: 20 "
+                               "lines in petra/grid.py, 19,903. "
+                               "The root of a point that is the square of a fraction is that fraction, so that `lt` "
+                               "at such a root is decided: 5 lines in petra/kernel/interval.py (CORE_CAP), 19,908. "
                                "Raise it in the commit that needs more and say why here.")
 
 T2_ADOPTED = date(2026, 11, 8)

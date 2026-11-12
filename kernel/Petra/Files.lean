@@ -380,6 +380,7 @@ def readNode (j : Json) : Except String Node := do
   | [.str "sqrt", i] => return .sqrt (← i.getNat?)
   | [.str "ln", i] => return .ln (← i.getNat?)
   | [.str "exp", i] => return .exp (← i.getNat?)
+  | [.str "cos", i] => return .cos (← i.getNat?)
   | [.str "div", i, k] => return .div (← i.getNat?) (← k.getNat?)
   | [.str "pow", i, n] =>
     let n ← n.getInt?

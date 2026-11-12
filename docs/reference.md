@@ -292,7 +292,13 @@ too, and a kelvin of difference is `1 degC`.
 | INPUT_ERROR | 3 |
 | INTERNAL_ERROR | 4 |
 | MARGINAL | 5 |
+| PASS_WAIVED | 6 |
 | BROKEN_PIPE | 141 |
+
+PASS_WAIVED is the pass of a design checked against a deck of rules when a waiver of its card rests
+a cell: the design passes what the deck could check, and each signer answers for the cells its
+waiver rests. `petra check --json` lists those waivers under `waived`, and the kernel says PASS
+and lists the same waivers.
 
 ## Component kinds
 

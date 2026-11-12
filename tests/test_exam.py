@@ -86,9 +86,10 @@ class Arms(Sitting):
         self.assertEqual(self.sit(tasks=2, arms=("petra",)), 0)
         first, second = (self.records()[i] for i in (0, 1))
         self.assertIn(GUIDE, first["prompt"])
-        self.assertEqual((first["petra"]["status"], first["petra"]["handed_in"], first["petra"]["exit"]), ("PASS", True, 0))
+        # The lap rests a cell on a waiver, so petra check says PASS_WAIVED and exits 6.
+        self.assertEqual((first["petra"]["status"], first["petra"]["handed_in"], first["petra"]["exit"]), ("PASS_WAIVED", True, 6))
         self.assertEqual((first["petra"]["design"], first["petra"]["card"]), (DESIGN, CARD))
-        self.assertEqual(first["petra"]["text"].splitlines()[0], "lap-splice-waived: PASS")
+        self.assertEqual(first["petra"]["text"].splitlines()[0], "lap-splice-waived: PASS_WAIVED")
         self.assertFalse(first["final"])
         self.assertIn("Petra's report on what you handed in:\n\n" + first["petra"]["text"], second["prompt"])
         self.assertIn(first["reply"].strip(), second["prompt"])
@@ -312,7 +313,7 @@ class Totals(Sitting):
             self.assertEqual((row["retries_that_changed_the_answer"], row["retries_fail_to_pass"], row["retries_pass_to_fail"]), (2, 2, 0))
             self.assertEqual(row["prompt_chars"], sum(len(r["prompt"]) for r in self.records(row["arm"])))
         self.assertNotIn("petra", alone)
-        self.assertEqual(petra["petra"]["by_status"], {"PASS": 2, "NONE": 2})
+        self.assertEqual(petra["petra"]["by_status"], {"PASS_WAIVED": 2, "NONE": 2}, "the waived lap's exit 6, as above")
         self.assertEqual((petra["petra"]["replies"], petra["petra"]["said_something"]), (4, 2))
         self.assertEqual((petra["petra"]["reports_fed_back"], petra["petra"]["next_answer_changed_after_a_report"]), (2, 2))
 

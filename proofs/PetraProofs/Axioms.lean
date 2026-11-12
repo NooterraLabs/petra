@@ -4,7 +4,7 @@ docs/proved.md holds the output. `propext`, `Classical.choice` and `Quot.sound` 
 standard three. Any other name here is a finding, and `sorryAx` is an unfinished proof.
 proofs/check_axioms.py reads the output and fails on either.
 -/
-import PetraProofs.Strict
+import PetraProofs.Within
 
 -- the exact interval operations
 #print axioms Petra.Iv.add_sound
@@ -17,19 +17,23 @@ import PetraProofs.Strict
 #print axioms Petra.Iv.div_sound
 #print axioms Petra.powInt_sound
 #print axioms Petra.fits_ok
--- the kernel's three loops
+-- the kernel's four loops
 #print axioms Petra.Loops.isqrt_spec
 #print axioms Petra.Loops.oddSeries_spec
 #print axioms Petra.Loops.expAt_spec
 #print axioms Petra.Loops.expGo_stops
+#print axioms Petra.Loops.cosAt_spec
+#print axioms Petra.Loops.cosGo_stops
 -- the rounded functions
 #print axioms Petra.grid_sound
 #print axioms Petra.iSqrt_sound
 #print axioms Petra.piIv_sound
 #print axioms Petra.iLn_sound
 #print axioms Petra.iExp_sound
+#print axioms Petra.iCos_sound
 #print axioms Petra.iLn_valid
 #print axioms Petra.iExp_valid
+#print axioms Petra.iCos_valid
 #print axioms Petra.Caches.valid_empty
 -- one step, and the pick
 #print axioms Petra.Node.enclose_sound
@@ -52,3 +56,6 @@ import PetraProofs.Strict
 #print axioms Petra.Tape.strict_value
 #print axioms Petra.Tape.proved_strict
 #print axioms Petra.Tape.refuted_strict
+-- a rule's `where`, as a root that is a pick
+#print axioms Petra.Tape.within_value
+#print axioms Petra.Tape.refuted_within

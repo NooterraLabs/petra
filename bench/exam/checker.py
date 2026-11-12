@@ -7,7 +7,8 @@ next attempt. The blocks are not part of the answer the benchmark grades.
 
 Every reply of the petra arm is counted as one of:
 
-    PASS FAIL UNKNOWN MARGINAL   Petra read the design and gave that status
+    PASS PASS_WAIVED FAIL        Petra read the design and gave that status; PASS_WAIVED is a
+    UNKNOWN MARGINAL             pass that rests a cell on a waiver (exit code 6)
     REFUSED                      Petra read it and refused it as an input error (exit code 3)
     DISAGREE                     the kernel and the Python checker differed (exit code 4, with
                                  petra.verify.Disagreement in what was printed)
@@ -31,9 +32,9 @@ from pathlib import Path
 from bench.exam.data import ROOT
 
 GUIDE = ROOT / "petra" / "docs" / "skill.md"
-SAID = ("PASS", "FAIL", "UNKNOWN", "MARGINAL", "REFUSED")
+SAID = ("PASS", "PASS_WAIVED", "FAIL", "UNKNOWN", "MARGINAL", "REFUSED")
 STATUSES = (*SAID, "DISAGREE", "ERROR", "NONE")
-BY_EXIT = {0: "PASS", 1: "FAIL", 2: "UNKNOWN", 5: "MARGINAL", 3: "REFUSED"}
+BY_EXIT = {0: "PASS", 6: "PASS_WAIVED", 1: "FAIL", 2: "UNKNOWN", 5: "MARGINAL", 3: "REFUSED"}
 LONGEST = 20000
 """A report longer than this, in characters, is cut before it goes back to the agent."""
 
@@ -110,7 +111,7 @@ def check(design: str | None, card: str | None, timeout: float) -> Report:
         text = scrub((done.stdout + done.stderr).strip(), Path(folder))
     status = BY_EXIT.get(done.returncode, "ERROR")
     first = text.splitlines()[0] if text else ""
-    if status in ("PASS", "FAIL", "UNKNOWN", "MARGINAL") and not first.endswith(f": {status}"):
+    if status in ("PASS", "PASS_WAIVED", "FAIL", "UNKNOWN", "MARGINAL") and not first.endswith(f": {status}"):
         status = "ERROR"      # an exit code a crash can give too: only a report's own first line makes it a status
     if status == "REFUSED" and not first.startswith("petra:"):
         status = "ERROR"

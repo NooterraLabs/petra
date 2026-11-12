@@ -657,6 +657,7 @@ def expr (scope : Scope) : Nat → Json → Reading (Nat × Dim)
       | "sqrt", [a], [d] => put (.sqrt a) (d.times (mkRat 1 2))
       | "exp", [a], [d] => do plain "the argument of exp" d; put (.exp a) {}
       | "ln", [a], [d] => do plain "the argument of ln" d; put (.ln a) {}
+      | "cos", [a], [d] => do plain "the argument of cos" d; put (.cos a) {}
       | _, _, _ => throw s!"{clip op} with {args.length} arguments is not in the language"
   | _ + 1, _ => throw "an expression is a number, a name or [operator, ...]"
 
@@ -1162,6 +1163,42 @@ def readAsk (kinds : Std.TreeMap String Kind) (rows : Std.TreeMap String Row) (j
     return { kind := name, mechanism, excuse }
   ask.mapError (s!"grid {clip mechanism}: " ++ ·)
 
+/-- For each step of a rule, what `may_be` lets it be and the field or the load that says so:
+a field or a load that says `may_be`, handed on where the rule names it again, raised to a
+power other than zero or under a root. An even power of one that may be under zero is at
+least zero. Any other step is none: the reader does not look into a sum, a product, a
+quotient or a row. -/
+def mayBe (scope : Scope) (kind : Kind) (steps : Array Step) : Array (Option (Sign × String)) :=
+  steps.foldl (init := #[]) fun out step =>
+    let said (sign : Option Sign) (name : String) : Option (Sign × String) :=
+      match sign with
+      | some .zero => some (.zero, name)
+      | some .negative => some (.negative, name)
+      | _ => none
+    out.push <| match step with
+      | .field part name => said ((scope.field part name).map (·.sign)) ((part.map (· ++ ".")).getD "" ++ name)
+      | .load name => said ((kind.load.get? name).map (·.sign)) name
+      | .row binds first => if binds.isEmpty then out[first]?.join else none
+      | .node (.pow i n) =>
+        if n == 0 then none
+        else (out[i]?.join).map fun (sign, name) => (if sign == .negative && n % 2 == 0 then .zero else sign, name)
+      | .node (.sqrt i) => out[i]?.join
+      | _ => none
+
+/-- Refuses a rule that divides by a quantity that `may_be` lets be zero, takes the root of
+one that it lets be under zero, or the logarithm of either: at that value of the field the
+step has no value, for every part, whatever else the rule says. -/
+def mayBeChecked (signs : Array (Option (Sign × String))) (steps : Array Step) : Except String Unit := do
+  for step in steps do
+    match step with
+    | .node (.div _ j) =>
+      if let some (_, name) := signs[j]?.join then throw s!"it divides by {name}, which its `may_be` lets be zero"
+    | .node (.sqrt i) =>
+      if let some (.negative, name) := signs[i]?.join then throw s!"it takes the root of {name}, which its `may_be` lets be under zero"
+    | .node (.ln i) =>
+      if let some (_, name) := signs[i]?.join then throw s!"it takes the logarithm of {name}, which its `may_be` lets be zero"
+    | _ => pure ()
+
 def readRule (kinds : Std.TreeMap String Kind) (rows : Std.TreeMap String Row) (asks : Std.TreeMap (String × String) Ask) (j : Json) :
     Except String Rule := do
   let id ← text j "id"
@@ -1217,6 +1254,7 @@ def readRule (kinds : Std.TreeMap String Kind) (rows : Std.TreeMap String Row) (
         let _ ← expr scope MAX_EXPRESSION (.str name)
       return (main, ranges)
     let (((low, high), ranges), draft) ← read.run { lets := lets.foldl (fun table (name, body) => table.insert name (Named.pending body)) {} }
+    mayBeChecked (mayBe scope kind draft.steps) draft.steps
     let condition ← (j.getObjVal? "when").toOption.mapM (static scope MAX_EXPRESSION)
     let need := reach draft.steps (#[low, high] ++ ranges.flatMap fun (a, b) => #[a, b])
     let used := ((draft.steps.zip need).filter (·.2)).map (·.1)
@@ -1395,6 +1433,7 @@ def Node.key : Node → Array Nat
       (match cond with
         | some cond => cond.code (out.push 1)
         | none => out.push 0).push value) #[14]
+  | .cos i => #[15, i]
 
 /-- Two keys from place `i` on, when they are of one length: the one with the lesser number
 at the first place where they differ comes first. -/
@@ -1514,9 +1553,15 @@ the first is under the second at every point of it: on a leaf the pick is -1 alo
 upper end of the first is under the lower end of the second. `Tape.refuted` shows a root
 above zero at a point, which this root is only where the first is not under the second
 there. So the two rules of the tape, as they stand and as proofs/ proves them, decide a
-strict inequality (`Tape.proved_strict` and `Tape.refuted_strict` in proofs/). -/
-def Rule.tape (rule : Rule) (site : Site) (pairs : Array (Nat × Nat)) (strict : Bool := false) : Except String Tape := do
-  let need := reach rule.steps (pairs.flatMap fun (a, b) => #[a, b])
+strict inequality (`Tape.proved_strict` and `Tape.refuted_strict` in proofs/).
+
+With `within`, the pairs of a rule's `where`, a root is the pick that is the root above
+where every pair of `within` is in order, and -1 elsewhere. `Tape.refuted` shows it above
+zero at a point only where the point is inside the `where` and the rule fails there
+(`Tape.refuted_within` in proofs/). The kernel takes such a tape only to refute. -/
+def Rule.tape (rule : Rule) (site : Site) (pairs : Array (Nat × Nat)) (strict : Bool := false) (within : Array (Nat × Nat) := #[]) :
+    Except String Tape := do
+  let need := reach rule.steps ((pairs ++ within).flatMap fun (a, b) => #[a, b])
   let write : Write (Array Nat) := do
     let mut ids : Array Nat := Array.replicate rule.steps.size 0
     for (step, i) in rule.steps.zipIdx do
@@ -1538,8 +1583,11 @@ def Rule.tape (rule : Rule) (site : Site) (pairs : Array (Nat × Nat)) (strict :
           | .row _ value => pure ids[value]!
         ids := ids.set! i id
     pairs.mapM fun (low, high) => do
-      if strict then node (.pick #[(some (.lt ids[low]! ids[high]!), ← node (.c (-1))), (none, ← node (.c 1))])
-      else node (.add #[ids[low]!, ← node (.neg ids[high]!)])
+      let root ← do
+        if strict then node (.pick #[(some (.lt ids[low]! ids[high]!), ← node (.c (-1))), (none, ← node (.c 1))])
+        else node (.add #[ids[low]!, ← node (.neg ids[high]!)])
+      if within.isEmpty then pure root
+      else node (.pick #[(some (.and (within.map fun (a, b) => .le ids[a]! ids[b]!)), root), (none, ← node (.c (-1)))])
   let (roots, written) ← write.run {}
   return { inputs := written.inputs, nodes := written.nodes, roots }
 

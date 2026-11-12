@@ -31,9 +31,10 @@ KERNEL = HERE.parent / "kernel" / "Petra"
 DOC = HERE.parent / "docs" / "proved.md"
 STANDARD = ("propext", "Classical.choice", "Quot.sound")
 MUST = ("Petra.Tape.proved_sound", "Petra.Tape.refuted_sound", "Petra.Tape.proved_sound_exact", "Petra.Tape.refuted_sound_exact",
-        "Petra.Tape.proved_strict", "Petra.Tape.refuted_strict",
-        "Petra.Loops.isqrt_spec", "Petra.Loops.oddSeries_spec", "Petra.Loops.expAt_spec",
-        "Petra.iSqrt_sound", "Petra.piIv_sound", "Petra.iLn_sound", "Petra.iExp_sound", "Petra.pick_sound", "Petra.Node.enclose_sound")
+        "Petra.Tape.proved_strict", "Petra.Tape.refuted_strict", "Petra.Tape.refuted_within",
+        "Petra.Loops.isqrt_spec", "Petra.Loops.oddSeries_spec", "Petra.Loops.expAt_spec", "Petra.Loops.cosAt_spec",
+        "Petra.iSqrt_sound", "Petra.piIv_sound", "Petra.iLn_sound", "Petra.iExp_sound", "Petra.iCos_sound", "Petra.pick_sound",
+        "Petra.Node.enclose_sound")
 """The theorems docs/proved.md states as the result, and the ones they stand on."""
 READ = ("Num.lean", "Tape.lean")
 """The kernel files the proofs are about."""

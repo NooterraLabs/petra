@@ -1,11 +1,12 @@
 /-
-The rounded functions: `iSqrt`, `piIv`, `iLn` and `iExp` return an interval that holds the
-true value.
+The rounded functions: `iSqrt`, `piIv`, `iLn`, `iExp` and `iCos` return an interval that
+holds the true value.
 
 Each theorem is about the kernel's own function, and none takes a hypothesis about it.
-Loops/ proves what the three loops return: `isqrt`, `oddSeries` and `expAt`. What is proved
-here is everything around those loops: the rounding to the grid, the scaling of the square
-root, Machin's formula, the reduction of ln to atanh, and the caches.
+Loops/ proves what the four loops return: `isqrt`, `oddSeries`, `expAt` and `cosAt`. What is
+proved here is everything around those loops: the rounding to the grid, the scaling of the
+square root, Machin's formula, the reduction of ln to atanh, where the cosine falls and
+where it rises between the multiples of pi, and the caches.
 -/
 import Mathlib.Analysis.SpecialFunctions.Trigonometric.Arctan
 import Mathlib.Analysis.SpecialFunctions.Log.Basic
@@ -15,6 +16,7 @@ import PetraProofs.Arith
 import PetraProofs.Loops.Isqrt
 import PetraProofs.Loops.OddSeries
 import PetraProofs.Loops.ExpAt
+import PetraProofs.Loops.CosAt
 
 namespace Petra
 
@@ -71,12 +73,12 @@ theorem grid_sound {enc : Nat → Iv} {extra : Nat} {x : ℝ} {lo hi : ℚ} (hen
 
 /-! ## The square root
 
-With `G = 2^96`, `iSqrt` returns `isqrt ⌊lo G²⌋ / G` and `isqrt ⌊hi G²⌋ / G`, the second
-plus `1 / G` unless its square is exactly `hi G²`. -/
+With `G = 2^96`, `gridSqrt` returns `isqrt ⌊lo G²⌋ / G` and `isqrt ⌊hi G²⌋ / G`, the second
+plus `1 / G` unless its square is exactly `hi G²`. `iSqrt` returns that, or, for a point
+that `rootOf` finds to be the square of a fraction, that fraction at both ends. -/
 
-private theorem iSqrt_eq (a : Iv) : iSqrt a =
-    if a.lo < 0 then .error "sqrt over an interval with negative values" else
-    .ok ⟨qd (Int.ofNat (isqrt (a.lo * qi (GRID * GRID)).floor.toNat)) GRID,
+private theorem gridSqrt_eq (a : Iv) : gridSqrt a =
+    ⟨qd (Int.ofNat (isqrt (a.lo * qi (GRID * GRID)).floor.toNat)) GRID,
       qd (Int.ofNat (if (qi (Int.ofNat (isqrt (a.hi * qi (GRID * GRID)).floor.toNat *
             isqrt (a.hi * qi (GRID * GRID)).floor.toNat)) == a.hi * qi (GRID * GRID)) = true
           then isqrt (a.hi * qi (GRID * GRID)).floor.toNat
@@ -137,28 +139,19 @@ private theorem sqrt_upper {q : ℚ} {x : ℝ} {n : ℕ} (hxq : x ≤ (q : ℝ))
   calc Real.sqrt x ≤ Real.sqrt (((n : ℝ) / (GRID : ℝ)) ^ 2) := Real.sqrt_le_sqrt key
     _ = (n : ℝ) / (GRID : ℝ) := Real.sqrt_sq (by positivity)
 
-/-- If `isqrt` is the integer square root, `iSqrt` succeeds only on an interval with no
-negative number, and its result holds the square root of every real the interval holds. -/
-theorem iSqrt_sound {a r : Iv} {x : ℝ} (ha : a.Holds x)
-    (h : iSqrt a = .ok r) : 0 ≤ x ∧ r.Holds (Real.sqrt x) := by
+/-- If `isqrt` is the integer square root, the grid's root of an interval with no negative
+number holds the square root of every real the interval holds. -/
+private theorem gridSqrt_sound {a : Iv} {x : ℝ} (h0 : (0 : ℚ) ≤ a.lo) (ha : a.Holds x) :
+    (gridSqrt a).Holds (Real.sqrt x) := by
   obtain ⟨hlo, hhi⟩ := ha
-  rw [iSqrt_eq] at h
-  by_cases hneg : a.lo < 0
-  · rw [if_pos hneg] at h
-    cases h
-  rw [if_neg hneg] at h
-  have h0 : (0 : ℚ) ≤ a.lo := not_lt.mp hneg
-  have hx0 : (0 : ℝ) ≤ x := le_trans (by exact_mod_cast h0) hlo
-  refine ⟨hx0, ?_⟩
+  rw [gridSqrt_eq]
   by_cases hex : (qi (Int.ofNat (isqrt (a.hi * qi (GRID * GRID)).floor.toNat *
       isqrt (a.hi * qi (GRID * GRID)).floor.toNat)) == a.hi * qi (GRID * GRID)) = true
-  · rw [if_pos hex] at h
-    cases h
+  · rw [if_pos hex]
     refine ⟨sqrt_lower h0 hlo (Loops.isqrt_spec _).1, sqrt_upper hhi ?_⟩
     have heq := beq_iff_eq.mp hex
     exact le_of_eq (heq.symm.trans (qi_ofNat _))
-  · rw [if_neg hex] at h
-    cases h
+  · rw [if_neg hex]
     refine ⟨sqrt_lower h0 hlo (Loops.isqrt_spec _).1, sqrt_upper hhi ?_⟩
     have hlt := (Loops.isqrt_spec (a.hi * qi (GRID * GRID)).floor.toNat).2
     have h1 : (a.hi * qi (GRID * GRID)).floor <
@@ -167,6 +160,49 @@ theorem iSqrt_sound {a r : Iv} {x : ℝ} (ha : a.Holds x)
       lt_of_le_of_lt (Int.self_le_toNat _) (by exact_mod_cast hlt)
     have h2 := Rat.floor_lt_iff.mp h1
     exact le_of_lt (by exact_mod_cast h2)
+
+/-- A fraction that `rootOf` gives is at least zero, and its square is the fraction it was
+given. -/
+private theorem rootOf_sound {q r : ℚ} (h : rootOf q = some r) : 0 ≤ r ∧ r * r = q := by
+  unfold rootOf at h
+  dsimp only at h
+  split_ifs at h with hsq
+  · obtain rfl := Option.some.inj h
+    refine ⟨?_, beq_iff_eq.mp hsq⟩
+    rw [Rat.mkRat_eq_div]
+    have hn0 : (0 : ℤ) ≤ Int.ofNat (isqrt q.num.toNat) := Int.natCast_nonneg _
+    have hn : (0 : ℚ) ≤ ((Int.ofNat (isqrt q.num.toNat) : ℤ) : ℚ) := by exact_mod_cast hn0
+    exact div_nonneg hn (Nat.cast_nonneg _)
+
+/-- If `isqrt` is the integer square root, `iSqrt` succeeds only on an interval with no
+negative number, and its result holds the square root of every real the interval holds. -/
+theorem iSqrt_sound {a r : Iv} {x : ℝ} (ha : a.Holds x)
+    (h : iSqrt a = .ok r) : 0 ≤ x ∧ r.Holds (Real.sqrt x) := by
+  unfold iSqrt at h
+  by_cases hneg : a.lo < 0
+  · rw [if_pos hneg] at h
+    cases h
+  rw [if_neg hneg] at h
+  have h0 : (0 : ℚ) ≤ a.lo := not_lt.mp hneg
+  have hx0 : (0 : ℝ) ≤ x := le_trans (by exact_mod_cast h0) ha.1
+  refine ⟨hx0, ?_⟩
+  split at h
+  · rename_i q hq
+    cases h
+    by_cases hpt : (a.lo == a.hi) = true
+    · rw [if_pos hpt] at hq
+      obtain ⟨hq0, hqq⟩ := rootOf_sound hq
+      have hlh : a.lo = a.hi := beq_iff_eq.mp hpt
+      have hx : x = ((a.lo : ℚ) : ℝ) := le_antisymm (by rw [hlh]; exact ha.2) ha.1
+      have hs : Real.sqrt x = ((q : ℚ) : ℝ) := by
+        rw [hx, ← hqq]
+        push_cast
+        exact Real.sqrt_mul_self (by exact_mod_cast hq0)
+      exact ⟨le_of_eq hs.symm, le_of_eq hs⟩
+    · rw [if_neg hpt] at hq
+      cases hq
+  · cases h
+    exact gridSqrt_sound h0 ha
 
 /-! ## Pi
 
@@ -385,8 +421,10 @@ private theorem empty_get? {k : Int × Nat} {v : ℚ × ℚ} (h : (∅ : Cache).
 
 /-- The empty caches, which the kernel starts from, are valid. -/
 theorem Caches.valid_empty : ({} : Caches).Valid := by
-  constructor
+  refine ⟨?_, ?_, ?_⟩
   · intro x v h _
+    exact (empty_get? h).elim
+  · intro x v h
     exact (empty_get? h).elim
   · intro x v h
     exact (empty_get? h).elim
@@ -563,13 +601,13 @@ private theorem expPoint_sound {q : ℚ} {c c' : Caches} {v : ℚ × ℚ}
     c'.Valid ∧ (v.1 : ℝ) ≤ Real.exp (q : ℝ) ∧ Real.exp (q : ℝ) ≤ (v.2 : ℝ) := by
   rcases expPoint_cases h with ⟨rfl, rfl, rfl⟩ | ⟨hget, rfl⟩ | ⟨hg, rfl⟩
   · refine ⟨hc, ?_, ?_⟩ <;> simp
-  · exact ⟨hc, hc.2 q v hget⟩
+  · exact ⟨hc, hc.2.1 q v hget⟩
   · have hb := grid_sound (Loops.expAt_spec q) hg
-    refine ⟨⟨hc.1, fun x w hget => ?_⟩, hb⟩
+    refine ⟨⟨hc.1, fun x w hget => ?_, hc.2.2⟩, hb⟩
     obtain hnew | hold := cached_get? hget
     · rw [← hnew.1, hnew.2]
       exact hb
-    · exact hc.2 x w hold
+    · exact hc.2.1 x w hold
 
 /-- If `expAt` holds exp, the result of `iExp` holds the exponential of every real the
 interval holds, and `iExp` keeps the caches valid. -/
@@ -594,5 +632,239 @@ theorem iExp_valid {a r : Iv} {c c' : Caches} (hc : c.Valid)
   obtain ⟨-, hc'⟩ := M.pure_ok h6
   rw [hc']
   exact (expPoint_sound (expPoint_sound hc h3).1 h5).1
+
+/-! ## cos
+
+`cosPoint` keeps what it computed under the size of its argument: the cosine is even.
+`iCos` places an interval among the multiples of pi with the enclosure `piIv` of pi, and
+reads the cosine off the grid points of the two ends, by where the cosine falls and where
+it rises. -/
+
+private theorem cosPoint_cases {q : ℚ} {c c' : Caches} {v : ℚ × ℚ}
+    {extra : Nat} (h : cosPoint q extra c = .ok (v, c')) :
+    (q = 0 ∧ v = (1, 1) ∧ c' = c) ∨
+    (c.cos.get? ((if q < 0 then -q else q).num, (if q < 0 then -q else q).den) = some v ∧
+      c' = c) ∨
+    (grid (cosAt (if q < 0 then -q else q)) extra = .ok v ∧
+      c' = { c with
+        cos := cached c.cos ((if q < 0 then -q else q).num, (if q < 0 then -q else q).den) v }) := by
+  unfold cosPoint at h
+  dsimp only at h
+  by_cases h1 : (q == 0) = true
+  · rw [if_pos h1] at h
+    obtain ⟨hv, hc'⟩ := M.pure_ok h
+    exact Or.inl ⟨beq_iff_eq.mp h1, hv, hc'⟩
+  · rw [if_neg h1] at h
+    obtain ⟨u, c1, h2, h3⟩ := M.bind_ok h
+    rw [(M.pure_ok h2).2] at h3
+    obtain ⟨s, c2, h4, h5⟩ := M.bind_ok h3
+    obtain ⟨hs1, hs2⟩ := M.get_ok h4
+    rw [hs1, hs2] at h5
+    cases hget : c.cos.get? ((if q < 0 then -q else q).num, (if q < 0 then -q else q).den) with
+    | some w =>
+      rw [hget] at h5
+      obtain ⟨hv, hc'⟩ := M.pure_ok h5
+      exact Or.inr (Or.inl ⟨by rw [hv], hc'⟩)
+    | none =>
+      rw [hget] at h5
+      obtain ⟨w, c3, h6, h7⟩ := M.bind_ok h5
+      obtain ⟨hg, hc3⟩ := M.lift_ok h6
+      rw [hc3] at h7
+      obtain ⟨u', c4, h8, h9⟩ := M.bind_ok h7
+      rw [modify_ok h8] at h9
+      obtain ⟨hv, hc'⟩ := M.pure_ok h9
+      subst hv
+      exact Or.inr (Or.inr ⟨hg, hc'⟩)
+
+/-- The cosine of the size of a number is the number's cosine. -/
+private theorem cos_size (q : ℚ) :
+    Real.cos (((if q < 0 then -q else q : ℚ)) : ℝ) = Real.cos (q : ℝ) := by
+  split_ifs
+  · push_cast
+    exact Real.cos_neg _
+  · rfl
+
+/-- `cosPoint` returns two numbers with cos q between them, for any rational `q`, and keeps
+the caches valid. -/
+private theorem cosPoint_sound {q : ℚ} {c c' : Caches} {v : ℚ × ℚ}
+    (hc : c.Valid) {extra : Nat} (h : cosPoint q extra c = .ok (v, c')) :
+    c'.Valid ∧ (v.1 : ℝ) ≤ Real.cos (q : ℝ) ∧ Real.cos (q : ℝ) ≤ (v.2 : ℝ) := by
+  rcases cosPoint_cases h with ⟨rfl, rfl, rfl⟩ | ⟨hget, rfl⟩ | ⟨hg, rfl⟩
+  · refine ⟨hc, ?_, ?_⟩ <;> simp
+  · have hb := hc.2.2 _ v hget
+    rw [cos_size] at hb
+    exact ⟨hc, hb⟩
+  · have hb := grid_sound (Loops.cosAt_spec _) hg
+    refine ⟨⟨hc.1, hc.2.1, fun x w hget => ?_⟩, by rw [cos_size] at hb; exact hb⟩
+    obtain hnew | hold := cached_get? hget
+    · rw [← hnew.1, hnew.2]
+      exact hb
+    · exact hc.2.2 x w hold
+
+/-- Between `k` pi and `k + 1` pi the cosine falls when `k` is even and rises when `k` is
+odd. -/
+private theorem cos_between {k : ℤ} {u v : ℝ} (hu : (k : ℝ) * Real.pi ≤ u) (huv : u ≤ v)
+    (hv : v ≤ ((k : ℝ) + 1) * Real.pi) :
+    (k % 2 = 0 → Real.cos v ≤ Real.cos u) ∧ (¬ k % 2 = 0 → Real.cos u ≤ Real.cos v) := by
+  have e : ∀ t : ℝ, Real.cos t = (-1) ^ k * Real.cos (t - k * Real.pi) := by
+    intro t
+    have h := Real.cos_add_int_mul_pi (t - k * Real.pi) k
+    rw [sub_add_cancel] at h
+    exact h
+  have hmono : Real.cos (v - k * Real.pi) ≤ Real.cos (u - k * Real.pi) :=
+    Real.cos_le_cos_of_nonneg_of_le_pi (by linarith) (by linarith) (by linarith)
+  constructor
+  · intro hk
+    have h1 : (-1 : ℝ) ^ k = 1 := Even.neg_one_zpow (Int.even_iff.mpr hk)
+    rw [e u, e v, h1]
+    linarith
+  · intro hk
+    have h1 : (-1 : ℝ) ^ k = -1 := Odd.neg_one_zpow (Int.odd_iff.mpr (by omega))
+    rw [e u, e v, h1]
+    linarith
+
+/-- The result of `iCos` holds the cosine of every real the interval holds, whatever the
+interval, and `iCos` keeps the caches valid. -/
+theorem iCos_sound {a r : Iv} {x : ℝ} {c c' : Caches} (hc : c.Valid)
+    (ha : a.Holds x) {extra : Nat} (h : iCos a extra c = .ok (r, c')) :
+    c'.Valid ∧ r.Holds (Real.cos x) := by
+  obtain ⟨hlo, hhi⟩ := ha
+  unfold iCos at h
+  obtain ⟨pi, c1, hpi, h1⟩ := M.bind_ok h
+  obtain ⟨hpiv, rfl⟩ := M.lift_ok hpi
+  have hpiH := piIv_sound hpiv
+  dsimp only at h1
+  generalize (a.lo / (if 0 ≤ a.lo then pi.hi else pi.lo)).floor = i at h1
+  generalize (a.hi / (if 0 < a.hi then pi.lo else pi.hi)).ceil = j at h1
+  by_cases hplaced : qi i * (if 0 ≤ i then pi.hi else pi.lo) ≤ a.lo ∧
+      a.hi ≤ qi j * (if 0 ≤ j then pi.lo else pi.hi)
+  swap
+  · rw [if_neg hplaced] at h1
+    exact (M.throw_not_ok h1).elim
+  rw [if_pos hplaced] at h1
+  by_cases hwide : i + 2 < j
+  · -- more than two multiples of pi apart: from -1 to 1
+    rw [if_pos hwide] at h1
+    obtain ⟨rfl, rfl⟩ := M.pure_ok h1
+    refine ⟨hc, ?_, ?_⟩
+    · show ((-1 : ℚ) : ℝ) ≤ Real.cos x
+      push_cast
+      exact Real.neg_one_le_cos x
+    · show Real.cos x ≤ ((1 : ℚ) : ℝ)
+      push_cast
+      exact Real.cos_le_one x
+  rw [if_neg hwide] at h1
+  obtain ⟨va, c2, h3, h4⟩ := M.bind_ok h1
+  obtain ⟨vb, c3, h5, h6⟩ := M.bind_ok h4
+  obtain ⟨hc2, hla, hua⟩ := cosPoint_sound hc h3
+  obtain ⟨hc3, hlb, hub⟩ := cosPoint_sound hc2 h5
+  -- `i` pi is at or under the lower end, and the upper end at or under `j` pi
+  have ei : ((qi i : ℚ) : ℝ) = (i : ℝ) := by
+    rw [qi_eq]
+    exact Rat.cast_intCast i
+  have ej : ((qi j : ℚ) : ℝ) = (j : ℝ) := by
+    rw [qi_eq]
+    exact Rat.cast_intCast j
+  have hilo : (i : ℝ) * Real.pi ≤ (a.lo : ℝ) := by
+    have h1 : ((qi i * (if 0 ≤ i then pi.hi else pi.lo) : ℚ) : ℝ) ≤ (a.lo : ℝ) := by
+      exact_mod_cast hplaced.1
+    refine le_trans ?_ h1
+    rw [Rat.cast_mul, ei]
+    split_ifs with h0
+    · exact mul_le_mul_of_nonneg_left hpiH.2 (by exact_mod_cast h0)
+    · exact mul_le_mul_of_nonpos_left hpiH.1 (by exact_mod_cast (not_le.mp h0).le)
+  have hjhi : (a.hi : ℝ) ≤ (j : ℝ) * Real.pi := by
+    have h1 : (a.hi : ℝ) ≤ ((qi j * (if 0 ≤ j then pi.lo else pi.hi) : ℚ) : ℝ) := by
+      exact_mod_cast hplaced.2
+    refine le_trans h1 ?_
+    rw [Rat.cast_mul, ej]
+    split_ifs with h0
+    · exact mul_le_mul_of_nonneg_left hpiH.1 (by exact_mod_cast h0)
+    · exact mul_le_mul_of_nonpos_left hpiH.2 (by exact_mod_cast (not_le.mp h0).le)
+  have hpos := Real.pi_pos
+  by_cases hone : j ≤ i + 1
+  · -- between `i` pi and `i + 1` pi the cosine goes one way
+    rw [if_pos hone] at h6
+    obtain ⟨rfl, rfl⟩ := M.pure_ok h6
+    have hj1 : (j : ℝ) ≤ (i : ℝ) + 1 := by exact_mod_cast hone
+    have htop : (a.hi : ℝ) ≤ ((i : ℝ) + 1) * Real.pi :=
+      le_trans hjhi (mul_le_mul_of_nonneg_right hj1 hpos.le)
+    obtain ⟨d1, u1⟩ := cos_between hilo hlo (le_trans hhi htop)
+    obtain ⟨d2, u2⟩ := cos_between (le_trans hilo hlo) hhi htop
+    refine ⟨hc3, ?_⟩
+    by_cases heven : i % 2 = 0
+    · rw [if_pos heven]
+      exact ⟨le_trans hlb (d2 heven), le_trans (d1 heven) hua⟩
+    · rw [if_neg heven]
+      exact ⟨le_trans hla (u1 heven), le_trans (u2 heven) hub⟩
+  · -- `i + 1` pi may lie in the interval, and the cosine turns there
+    rw [if_neg hone] at h6
+    obtain ⟨rfl, rfl⟩ := M.pure_ok h6
+    have hj2 : j = i + 2 := by omega
+    have htop : (a.hi : ℝ) ≤ (((i + 1 : ℤ) : ℝ) + 1) * Real.pi := by
+      rw [hj2] at hjhi
+      push_cast at hjhi ⊢
+      linarith
+    refine ⟨hc3, ?_⟩
+    by_cases heven : i % 2 = 0
+    · rw [if_pos heven]
+      have hodd : ¬ (i + 1) % 2 = 0 := by omega
+      refine ⟨?_, ?_⟩
+      · show ((-1 : ℚ) : ℝ) ≤ Real.cos x
+        push_cast
+        exact Real.neg_one_le_cos x
+      · show Real.cos x ≤ ((rmax va.2 vb.2 : ℚ) : ℝ)
+        rw [rmax_eq, Rat.cast_max]
+        rcases le_total x (((i : ℝ) + 1) * Real.pi) with hx | hx
+        · exact le_trans ((cos_between hilo hlo hx).1 heven) (le_trans hua (le_max_left _ _))
+        · have hx' : ((i + 1 : ℤ) : ℝ) * Real.pi ≤ x := by
+            push_cast
+            exact hx
+          exact le_trans ((cos_between hx' hhi htop).2 hodd) (le_trans hub (le_max_right _ _))
+    · rw [if_neg heven]
+      have hev : (i + 1) % 2 = 0 := by omega
+      refine ⟨?_, ?_⟩
+      · show ((rmin va.1 vb.1 : ℚ) : ℝ) ≤ Real.cos x
+        rw [rmin_eq, Rat.cast_min]
+        rcases le_total x (((i : ℝ) + 1) * Real.pi) with hx | hx
+        · exact le_trans (le_trans (min_le_left _ _) hla) ((cos_between hilo hlo hx).2 heven)
+        · have hx' : ((i + 1 : ℤ) : ℝ) * Real.pi ≤ x := by
+            push_cast
+            exact hx
+          exact le_trans (le_trans (min_le_right _ _) hlb) ((cos_between hx' hhi htop).1 hev)
+      · show Real.cos x ≤ ((1 : ℚ) : ℝ)
+        push_cast
+        exact Real.cos_le_one x
+
+/-- `iCos` keeps the caches valid, on any interval, also one that holds no number. -/
+theorem iCos_valid {a r : Iv} {c c' : Caches} (hc : c.Valid)
+    {extra : Nat} (h : iCos a extra c = .ok (r, c')) : c'.Valid := by
+  unfold iCos at h
+  obtain ⟨pi, c1, hpi, h1⟩ := M.bind_ok h
+  obtain ⟨-, rfl⟩ := M.lift_ok hpi
+  dsimp only at h1
+  generalize (a.lo / (if 0 ≤ a.lo then pi.hi else pi.lo)).floor = i at h1
+  generalize (a.hi / (if 0 < a.hi then pi.lo else pi.hi)).ceil = j at h1
+  by_cases hplaced : qi i * (if 0 ≤ i then pi.hi else pi.lo) ≤ a.lo ∧
+      a.hi ≤ qi j * (if 0 ≤ j then pi.lo else pi.hi)
+  swap
+  · rw [if_neg hplaced] at h1
+    exact (M.throw_not_ok h1).elim
+  rw [if_pos hplaced] at h1
+  by_cases hwide : i + 2 < j
+  · rw [if_pos hwide] at h1
+    obtain ⟨-, rfl⟩ := M.pure_ok h1
+    exact hc
+  rw [if_neg hwide] at h1
+  obtain ⟨va, c2, h3, h4⟩ := M.bind_ok h1
+  obtain ⟨vb, c3, h5, h6⟩ := M.bind_ok h4
+  have hc3 := (cosPoint_sound (cosPoint_sound hc h3).1 h5).1
+  by_cases hone : j ≤ i + 1
+  · rw [if_pos hone] at h6
+    obtain ⟨-, rfl⟩ := M.pure_ok h6
+    exact hc3
+  · rw [if_neg hone] at h6
+    obtain ⟨-, rfl⟩ := M.pure_ok h6
+    exact hc3
 
 end Petra

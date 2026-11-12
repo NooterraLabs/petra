@@ -13,13 +13,18 @@ kernel walk the tape on enough leaves to take `--seconds` of processor time, and
 processor nanoseconds by the `work` the verdict prints. Beside them it runs the yardstick: the
 chain of 4,000 small products of tests/test_kernel_limits.py, whose numbers fit a machine word.
 
-Two more steps are a look in a cache: `lnheld` and `expheld`, an `ln` and an `exp` of an end
-that the cache holds, when the cache is full of ends that are alike. The 1,022 ends have one
-denominator, and their numerators differ in one word in the middle: the same first words,
-the same last word. A table that found an end by a hash of its last words, as the caches
-did until the fourth review, kept all of these in one place, and a look walked them all for
-the price of one. These two lines are there so that a cache that does that again fails the
-sweep. A look is of an end of 16,000 bits at most: filling a cache with longer ends takes
+`sqrtat` is a `sqrt` of a point. At a point the kernel first takes the roots of the numerator
+and of the denominator and squares their quotient, to see whether the point is the square of
+a fraction. A point with no pattern in it is not, so the kernel then rounds to the grid as
+well: this is the most a `sqrt` does.
+
+Three more steps are a look in a cache: `lnheld`, `expheld` and `cosheld`, an `ln`, an `exp`
+and a `cos` of an end that the cache holds, when the cache is full of ends that are alike.
+The 1,022 ends have one denominator, and their numerators differ in one word in the middle:
+the same first words, the same last word. A table that found an end by a hash of its last
+words, as the caches did until the fourth review, kept all of these in one place, and a
+look walked them all for the price of one. These three lines are there so that a cache that
+does that again fails the sweep. A look is of an end of 16,000 bits at most: filling a cache with longer ends takes
 most of the work a verdict has.
 
 Prints one line for each step with the nanoseconds a unit at each length, and exits 1 when
@@ -111,9 +116,12 @@ def step(kind: str, t: Tape, bits: int):
     if kind in ("neg", "abs", "sqrt", "ln"):
         a = t.wide(bits)
         return [a], lambda: t.add(kind, a)
-    if kind == "exp":
+    if kind == "sqrtat":
+        a = t.dense(bits)
+        return [a], lambda: t.add("sqrt", a)
+    if kind in ("exp", "cos"):
         a = t.add("add", [t.dense(bits), t.add("mul", [0, t.add("c", "1/1048576")])])
-        return [a], lambda: t.add("exp", a)
+        return [a], lambda: t.add(kind, a)
     if kind.startswith("pow"):
         a = t.wide(bits)
         return [a], lambda: t.add("pow", a, int(kind[3:]))
@@ -125,7 +133,7 @@ def step(kind: str, t: Tape, bits: int):
         return [], lambda: t.add("c", num(x))
     if kind == "pi":
         return [], lambda: t.add("pi")
-    if kind in ("lnheld", "expheld"):
+    if kind in ("lnheld", "expheld", "cosheld"):
         ends = alike(t, min(bits, 16_000))
         held = [t.add(kind[:-4], x) for x in ends]
         return held, lambda: t.add(kind[:-4], ends[0])
@@ -155,7 +163,8 @@ def alike(t: Tape, bits: int) -> list[int]:
     return ends
 
 
-STEPS = ("c", "pi", "neg", "abs", "add", "mul", "div", "min", "max", "pick", "sqrt", "pow2", "pow3", "pow8", "ln", "exp", "lnheld", "expheld")
+STEPS = ("c", "pi", "neg", "abs", "add", "mul", "div", "min", "max", "pick", "sqrt", "sqrtat", "pow2", "pow3", "pow8", "ln", "exp", "cos", "lnheld", "expheld",
+         "cosheld")
 
 
 def bundle(kind: str, bits: int, copies: int, leaves: int) -> dict[str, str]:

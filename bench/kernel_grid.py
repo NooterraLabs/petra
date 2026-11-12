@@ -8,7 +8,9 @@ differ on. A difference is a bug in one of the two.
 
 A design is of one of four decks: the deck that ships, with its `lap` and `plate`,
 STRIPS, the deck made up for tests/test_grid.py, OPS and KIT. OPS is made up here so that every
-operator of the rule language is in a rule: powers, roots, exp and ln, conditions joined
+operator of the rule language is in a rule: powers, roots, exp and ln, cos at zero, at a
+quarter and a half turn, across a multiple of pi, of tiny and of long fractions, at the edge
+of its domain and as a sine, conditions joined
 by and, or and not, a table with bands closed at the lower end, every way to bind a key,
 a key of a joined part, and a range that reads a load. Its bar takes three loads and its cap
 one: a rule that reads two of them, a rule that reads the third for some bars and not for
@@ -27,8 +29,8 @@ and under its floor; a waiver for a line whose rules prove, for one whose rules 
 for one with no rule and for one that cannot arise, and for every line at once; each unit
 read since 2026-11-11 in a design, a card or the deck, on and beside the edges of the
 rules; a quantity and a key that a cell may leave unstated, read by a rule, by a `when`,
-by an `unless`, by a need and by nothing; quantities at zero and under it, a count that
-may be zero as a divisor, and a load of either sign; and rules that state `lt` with
+by an `unless`, by a need and by nothing; quantities at zero and under it, two counts that
+may both be zero in a divisor, and a load of either sign; and rules that state `lt` with
 numbers exactly on their limit. Three of its rigs in five are calm, with numbers that keep
 every rule, so that a rig may pass when its card waives the one line that has no rule.
 One rig in three is then damaged in a way the grid refuses, or the language before it.
@@ -82,6 +84,7 @@ import json
 import os
 import random
 import sys
+from fractions import Fraction
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -91,6 +94,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from petra import grid, verify  # noqa: E402
+from petra.kernel import Interval, i_cos  # noqa: E402
 from petra.lang import parse_design  # noqa: E402
 from petra.models.base import ComponentError  # noqa: E402
 from petra.repair import INPUT_ERRORS  # noqa: E402
@@ -102,6 +106,22 @@ MADE_UP = {"standard": "a deck made up for the bench", "clause": "1"}
 def _takes(*names: str) -> list[dict]:
     return [{"name": name, "dim": "length" if name in "abx" else "dimensionless", "what": name,
              "range": ["1 mm", "100 mm"] if name in "abx" else ["0.1", "10"]} for name in names]
+
+
+def _exact(x: Fraction) -> str:
+    """A number as a deck writes it, with nothing rounded."""
+    return str(x.numerator) if x.denominator == 1 else f"{x.numerator}/{x.denominator}"
+
+
+STEP = Fraction(1, 2 ** 96)
+"""One step of the grid that the kernel rounds a cosine to."""
+COS_1 = i_cos(Interval.point(Fraction(1)))
+"""The two points of the grid around cos 1. A rule of OPS states each as a limit, and one
+states the point a step inside: a kernel whose cosine ends one step off settles those cells
+another way than the grid."""
+LONG = Fraction(10 ** 300 + 7, 9 * 10 ** 299 + 1)
+"""A fraction near 10/9 whose numerator and denominator each have 300 digits."""
+COS_LONG = i_cos(Interval.point(LONG))
 
 
 OPS = {
@@ -127,6 +147,10 @@ OPS = {
         {"id": "ops/modulus", "anchor": MADE_UP, "gives": {"name": "S", "dim": "length^3", "what": "a length to the fourth over a length"},
          "takes": [{"name": "i", "dim": "length^4", "what": "i", "range": ["1 mm^4", "1 cm^4"]}, {"name": "c", "dim": "length", "what": "c", "range": ["1 mm", "100 mm"]}],
          "is": ["div", "i", "c"]},
+        {"id": "ops/turn", "anchor": MADE_UP, "gives": {"name": "y", "dim": "dimensionless", "what": "the cosine of a number of half turns"}, "takes": _takes("s"),
+         "is": ["cos", ["mul", "pi", "s"]]},
+        {"id": "ops/sine", "anchor": MADE_UP, "gives": {"name": "y", "dim": "dimensionless", "what": "a sine, as the cosine of a quarter turn less the angle"},
+         "takes": _takes("r"), "is": ["cos", ["sub", ["div", "pi", "2"], "r"]]},
     ],
     "types": [
         {"type": "cap", "what": "an end of a bar", "fields": [
@@ -146,6 +170,7 @@ OPS = {
         ("cases", {}), ("roots", {}), ("exp", {}), ("table", {}), ("key", {}), ("moment", {}), ("caps", {}), ("drag", {}),
         ("idle", {"unless": {"when": ["or", ["not", ["is", "left.finish", "low"]], ["and", ["is", "grade", "hard"], ["is", "right.finish", "high"]]], "why": "made up"}}),
         ("named", {}), ("cased", {}), ("left", {}), ("alike", {}), ("modulus", {}),
+        ("cos", {}), ("cosin", {}), ("cosfloor", {}), ("turn", {}), ("sine", {}), ("zero", {}), ("tiny", {}), ("edge", {}), ("long", {}),
         ("right", {"unless": {"when": ["and", ["is", "right.finish", "low"], ["not", ["is", "left.finish", "low"]]], "why": "made up: a key of a joined part"}}))],
     "rules": [
         {"id": "ops/cases", "type": "bar", "mechanism": "bar.cases", "anchor": MADE_UP, "says": "made up",
@@ -180,6 +205,23 @@ OPS = {
          "when": ["is", "grade", "hard"], "requires": ["or", ["is", "left.finish", "low"], ["is", "right.finish", "high"]]},
         {"id": "ops/modulus", "type": "bar", "mechanism": "bar.modulus", "anchor": MADE_UP, "says": "made up",
          "le": [["row", "ops/modulus", {"i": "left.i", "c": "a"}], ["q", "0.15", "cm^3"]]},
+        # The cosine. Its limits are points of the grid: the upper point of cos 1, the point a step under it, which a
+        # ratio of 1 neither keeps nor breaks, and the lower point, as the least the cosine may be.
+        {"id": "ops/cos", "type": "bar", "mechanism": "bar.cos", "anchor": MADE_UP, "says": "made up", "le": [["cos", "r"], _exact(COS_1.hi)]},
+        {"id": "ops/cosin", "type": "bar", "mechanism": "bar.cosin", "anchor": MADE_UP, "says": "made up", "le": [["cos", "r"], _exact(COS_1.hi - STEP)]},
+        {"id": "ops/cosfloor", "type": "bar", "mechanism": "bar.cosfloor", "anchor": MADE_UP, "says": "made up", "le": [_exact(COS_1.lo), ["cos", "r"]]},
+        # An angle at a quarter turn, a half turn and a whole one, where the kernel's pi does not say on which side of
+        # the turn an end lies: at a quarter turn the cosine is within a step of zero on both sides.
+        {"id": "ops/turn", "type": "bar", "mechanism": "bar.turn", "anchor": MADE_UP, "says": "made up", "le": [["row", "ops/turn", {"s": "s"}], _exact(STEP)]},
+        {"id": "ops/sine", "type": "bar", "mechanism": "bar.sine", "anchor": MADE_UP, "says": "made up", "le": [["row", "ops/sine", {"r": "r"}], "0.85"]},
+        # At zero the cosine is 1 and no more, an angle of 10^-30 has one within a step of 1, and one of 65,536 is the
+        # largest that has a cosine: a ratio over 1 is past it, and a range that reaches over 1 is too.
+        {"id": "ops/zero", "type": "bar", "mechanism": "bar.zero", "anchor": MADE_UP, "says": "made up", "le": ["1", ["cos", ["sub", "r", "r"]]]},
+        {"id": "ops/tiny", "type": "bar", "mechanism": "bar.tiny", "anchor": MADE_UP, "says": "made up",
+         "le": [_exact(1 - STEP), ["cos", ["div", "r", "1" + "0" * 30]]]},
+        {"id": "ops/edge", "type": "bar", "mechanism": "bar.edge", "anchor": MADE_UP, "says": "made up", "le": [["cos", ["mul", "r", "65536"]], "1"]},
+        {"id": "ops/long", "type": "bar", "mechanism": "bar.long", "anchor": MADE_UP, "says": "made up",
+         "le": [["cos", ["mul", "r", _exact(LONG)]], _exact(COS_LONG.hi)]},
     ],
 }
 
@@ -402,9 +444,10 @@ KIT = {
         _kit_rule("count", "rig.count", lt=[["mul", "count", ["q", "2", "oz"]], ["q", "0.5", "lb"]]),
         _kit_rule("pace", "rig.sealed", le=["pace", ["row", "kit/pace", {"duty": "duty"}]]),
         _kit_rule("carry", "rig.carry", le=[["load", "weight"], ["mul", "count", ["q", "10", "lb"]]]),
-        # Quantities at and under zero, a quotient by a count that may be zero, and a load of either sign.
+        # Quantities at and under zero, a quotient by the counts of two cells, which may both be zero, and a load of either sign. Both
+        # readers refuse a quotient by one count that may be zero, which a damaged deck may write when a flag puts `may_be` on a field.
         _kit_rule("cold", "rig.cold", le=["front.low", ["load", "air"]]),
-        _kit_rule("share", "rig.share", le=[["div", "reach", "front.spare"], ["q", "1", "mile"]]),
+        _kit_rule("share", "rig.share", le=[["div", "reach", ["add", "front.spare", "rear.spare"]], ["q", "1", "mile"]]),
         _kit_rule("centre", "rig.centre", le=[["abs", ["add", "front.station", "rear.station", ["load", "shift"]]], ["q", "1", "ft"]]),
         # A quantity and a key that a cell may leave unstated: in a side, in a `when` and in the `unless` of rig.sealed.
         _kit_rule("speed", "rig.speed", lt=["speed", "front.limit"]),
@@ -921,8 +964,8 @@ def judge(card: str, design: str, name: str, rules: str | None = None, slash: bo
     elif said["verdict"] == "ILL-FORMED":
         outcome, detail = f"DIFFER: the kernel refuses {its} and the grid does not", "; ".join(f"{f['item']}: {f['why']}" for f in said["findings"])
     else:
-        detail = verify.differs([(c.subject, c.mechanism, c.entry, c.state) for c in report.cells], report.status, deck.hash, said)
-        outcome = "DIFFER: the cells differ" if detail else f"both give {report.status}"
+        detail = verify.differs([(c.subject, c.mechanism, c.entry, c.state) for c in report.cells], report.verdict, deck.hash, said)
+        outcome = "DIFFER: the cells differ" if detail else f"both give {report.verdict}"
     kinds = [] if report is None else [f"{c.mechanism if c.mechanism == 'unread' else c.mechanism + ('/where' if c.entry.endswith('/where') else '')} {c.state}"
                                        + (" split" if isinstance(c.proof.get("partition"), dict) else "") for c in report.cells]
     return outcome, detail, kinds, files, said

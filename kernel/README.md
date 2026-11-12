@@ -66,7 +66,7 @@ A wheel is a little over 30 MB, and the kernel in it is 100 to 120 MB unpacked. 
 
 | File | Holds |
 |---|---|
-| `Petra/Num.lean` | Exact rationals, intervals, and `sqrt`, `ln`, `exp` and pi rounded outward |
+| `Petra/Num.lean` | Exact rationals, intervals, and `sqrt`, `ln`, `exp`, `cos` and pi rounded outward |
 | `Petra/Tape.lean` | The interval rule: a partition proves a tape, a point refutes one, and each step pays for its work |
 | `Petra/Sha256.lean` | The hash of a file's bytes |
 | `Petra/Files.lean` | The files as structures |

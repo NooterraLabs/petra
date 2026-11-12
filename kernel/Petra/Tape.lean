@@ -22,7 +22,7 @@ def MAX_DEPTH : Nat := 64
 def MAX_EXPONENT : Nat := 64
 
 /-- The most bits a numerator or a denominator may have, and the largest magnitude `exp`
-takes. A tape can square a value at every node, so without this a short tape would not end. -/
+and `cos` take. A tape can square a value at every node, so without this a short tape would not end. -/
 def MAX_BITS : Nat := 65536
 
 /-- The most ways a pick may have to order the nodes its conditions compare on one box. -/
@@ -60,7 +60,7 @@ inductive Cond where
 inductive Node where
   | c (x : Rat) | s (k : Nat) | pi
   | add (a : Array Nat) | mul (a : Array Nat) | min (a : Array Nat) | max (a : Array Nat)
-  | neg (i : Nat) | abs (i : Nat) | sqrt (i : Nat) | ln (i : Nat) | exp (i : Nat)
+  | neg (i : Nat) | abs (i : Nat) | sqrt (i : Nat) | ln (i : Nat) | exp (i : Nat) | cos (i : Nat)
   | div (i j : Nat) | pow (i : Nat) (n : Int)
   /-- The value of the first case whose condition holds. A case is its condition and the
   node that is then the pick's value. A case with no condition holds otherwise. -/
@@ -126,6 +126,7 @@ def Node.map (f : Nat → Nat) : Node → Node
   | .sqrt i => .sqrt (f i)
   | .ln i => .ln (f i)
   | .exp i => .exp (f i)
+  | .cos i => .cos (f i)
   | .div i j => .div (f i) (f j)
   | .pow i n => .pow (f i) n
   | .pick cases => .pick (cases.map fun (cond, value) => (cond.map (·.map f), f value))
@@ -133,7 +134,7 @@ def Node.map (f : Nat → Nat) : Node → Node
 def Node.reads : Node → Array Nat
   | .c _ | .s _ | .pi => #[]
   | .add a | .mul a | .min a | .max a => a
-  | .neg i | .abs i | .sqrt i | .ln i | .exp i | .pow i _ => #[i]
+  | .neg i | .abs i | .sqrt i | .ln i | .exp i | .cos i | .pow i _ => #[i]
   | .div i j => #[i, j]
   | .pick cases => (compared cases).flatMap (fun (a, b) => #[a, b]) ++ cases.map (·.2)
 
@@ -163,8 +164,8 @@ def fits (x : Iv) : Except String Iv :=
   else .error s!"a value has more than {MAX_BITS} bits"
 
 /-- One step of the interval rule: the enclosure of a node from the enclosures `v` of the
-nodes before it. `sqrt`, `ln`, `exp` and pi round to the grid, `ln` and `exp` from an
-enclosure with `extra` bits more than the grid has. A pick has its own step, `pick`, which
+nodes before it. `sqrt`, `ln`, `exp`, `cos` and pi round to the grid, `ln`, `exp` and `cos`
+from an enclosure with `extra` bits more than the grid has. A pick has its own step, `pick`, which
 also reads which nodes failed. -/
 def Node.enclose (box v : Array Iv) (extra : Nat) : Node → M Iv
   | .c x => pure (Iv.pt x)
@@ -185,6 +186,9 @@ def Node.enclose (box v : Array Iv) (extra : Nat) : Node → M Iv
   | .exp i =>
     if v[i]!.lo < -(MAX_BITS : Rat) || v[i]!.hi > (MAX_BITS : Rat) then throw s!"exp of a value beyond {MAX_BITS}"
     else iExp v[i]! extra
+  | .cos i =>
+    if v[i]!.lo < -(MAX_BITS : Rat) || v[i]!.hi > (MAX_BITS : Rat) then throw s!"cos of a value beyond {MAX_BITS}"
+    else iCos v[i]! extra
   | .div i j => liftM (m := Except String) (v[i]!.div v[j]!)
   | .pow i n => liftM (m := Except String) (powInt v[i]! n)
   | .pick _ => throw "a pick is not enclosed by this step"
@@ -263,10 +267,13 @@ def leastWork (v : Array Iv) (a : Array Nat) : Nat :=
 
 /-- The square root of an enclosure: Newton's iteration on the whole part of each end times
 `GRID` squared, which has the bits the end's numerator has more than its denominator and
-192 more, and costs their square. -/
+192 more, and costs their square. A point is first tried as the square of a fraction:
+Newton's iteration on its numerator and on its denominator, and the square of their
+quotient, which `bench/work_sweep.py` measures as `sqrtat`. -/
 def sqrtWork (x : Iv) : Nat :=
   let whole (q : Rat) : Nat := bitlen q.num.natAbs + 256 - bitlen q.den
-  62000 + 4 * x.bits + (whole x.lo * whole x.lo + whole x.hi * whole x.hi) / 900
+  let root := if x.lo == x.hi then 50000 + (pow32 (bitlen x.lo.num.natAbs) + pow32 (bitlen x.lo.den)) * 2 / 5 else 0
+  62000 + 4 * x.bits + (whole x.lo * whole x.lo + whole x.hi * whole x.hi) / 900 + root
 
 /-- The logarithm of one end `x` from an enclosure of `PREC + extra` bits. The series is of
 `(m - 1) / (m + 1)` for `x` scaled to `m` between a half and two, a number as long as
@@ -291,6 +298,25 @@ def expWork (extra : Nat) (x : Rat) : Nat :=
   let w := ratWords x
   (terms * (10000 + 54 * wide + 20 * w + wide * w / 3) + (s + 16) * wide * wide / 4) * 17 / 10
 
+/-- The cosine of one end `x` from an enclosure of `PREC + extra` bits. `cosAt` works with
+`q` bits, which grow with the size of `x`. It squares the end, which takes greatest common
+divisors of its `n` bits, sums about `q / (log2 q + 1)` terms, each a product of `q` bits
+by the square and a quotient by it, and then doubles the angle `s` times, each a square of
+`q` bits. -/
+def cosWork (extra : Nat) (x : Rat) : Nat :=
+  let c := (if x < 0 then -x else x).ceil.toNat
+  let s := bitlen c + 1
+  let q := PREC + extra + 2 * s + 8
+  let wide := q / 64 + 1
+  let terms := q / (bitlen q + 1)
+  let n := ratBits x
+  let w := n / 64 + 1
+  110000 + 1000 * w + pow32 n + terms * (25000 + 400 * w + 20 * wide * w) + s * (11000 + 30 * wide * wide)
+
+/-- Placing the two ends of an enclosure among the multiples of pi: for each end a quotient
+by an end of pi, its whole part, and a comparison with that many times an end of pi. -/
+def placeWork (x : Iv) : Nat := 15000 + 3 * x.bits
+
 /-- A whole power `k` of an enclosure whose longest number has `n` bits: `k` products for
 each end, the `j`-th by a number `j` times as long. Each takes greatest common divisors
 of `n` bits, and from the third on a division of the longer number by the shorter. -/
@@ -298,14 +324,16 @@ def powWork (k n : Nat) : Nat :=
   let each := if n * k < 32 then 4700 else if n < 32 then 14500 else 31000
   k * (each + n / 2) + (k - 1) * (pow32 n * 31 / 20) + ((k - 1) * (k - 2) / 2) * (n * n / 300 + 4 * n)
 
-/-- An `ln` or an `exp` of an end the caches hold: a look at them. A cache is kept in the
+/-- An `ln`, an `exp` or a `cos` of an end the caches hold: a look at them. A cache is kept in the
 order of its ends, so a look compares the end with at most 25 of the 1,024 a cache holds,
 and with 10 or 11 as a rule, and each comparison reads no more than the end has bits. -/
 def cachedWork (x : Rat) : Nat := 1500 + ratBits x / 8
 
 /-- The work of the step `Node.enclose` for a node other than a pick, a sum and a product,
-which pay as they go (`pickPriced`, `folded`). An `ln` or an `exp` of an end the caches
-hold costs a look at them, and the step may copy a cache's table of `MAX_CACHED` entries. -/
+which pay as they go (`pickPriced`, `folded`). An `ln`, an `exp` or a `cos` of an end the
+caches hold costs a look at them, and the step may copy a cache's table of `MAX_CACHED`
+entries. A `cos` also pays for placing its enclosure among the multiples of pi, and of two
+ends of one size it computes one. -/
 def Node.work (box v : Array Iv) (extra : Nat) (caches : Caches) : Node → Nat
   | .c x => copyWork 800 8000 8 (ratBits x)
   | .s k => copyWork 700 4000 12 box[k]!.bits
@@ -325,6 +353,13 @@ def Node.work (box v : Array Iv) (extra : Nat) (caches : Caches) : Node → Nat
     let one (x : Rat) : Nat :=
       if x == 0 || caches.exp.contains (x.num, x.den) then cachedWork x else expWork extra x
     25000 + one x.lo + (if x.lo == x.hi then cachedWork x.hi else one x.hi)
+  | .cos i =>
+    let x := v[i]!
+    if x.lo < -(MAX_BITS : Rat) || x.hi > (MAX_BITS : Rat) then 3000 else
+    let one (x : Rat) : Nat :=
+      let y := if x < 0 then -x else x
+      if x == 0 || caches.cos.contains (y.num, y.den) then cachedWork x else cosWork extra x
+    25000 + placeWork x + one x.lo + (if x.lo == x.hi || x.lo == -x.hi then cachedWork x.hi else one x.hi)
   | .div i j => divWork v[i]!.bits v[j]!.bits
   | .pow i n => 2800 + v[i]!.bits / 8 + powWork n.natAbs v[i]!.bits
   | .pick _ => 500
@@ -341,7 +376,7 @@ found before it, so it reads its orders times its pairs. -/
 def Node.size : Node → Nat
   | .c _ | .s _ | .pi => 200
   | .add a | .mul a | .min a | .max a => 200 + 40 * a.size
-  | .neg _ | .abs _ | .sqrt _ | .ln _ | .exp _ | .pow _ _ => 240
+  | .neg _ | .abs _ | .sqrt _ | .ln _ | .exp _ | .cos _ | .pow _ _ => 240
   | .div _ _ => 280
   | .pick cases => 200 + 40 * cases.size + 20 * orders cases * (pairsOf cases + 1)
 
@@ -655,5 +690,49 @@ def Tape.refuted (t : Tape) (point : Array Rat) (which : Nat) (work : Nat) : M (
         | none =>
           if w.v[root]!.lo > 0 then pure (none, w.work)
           else pure (some s!"root {which} is not above zero at the point", w.work)
+
+/-- Whether a root of the tape says nothing at any point of the box: it has no value at any
+point because a pick has none there, which is a table or an equation of a row that gives
+nothing for any value the ranges allow, or, with `outside`, it is above zero all over the
+box. A waiver may rest a cell whose rule says nothing for one of these reasons, since no
+inequality could answer it (docs/deck.md, "What a waiver rests"). For the tape of a rule's
+`where`, `outside` says that the rule holds nowhere in the box.
+
+It walks the box as `Tape.proved` walks a leaf, and holds every enclosure to the end. A node
+other than a pick has no value anywhere when it reads one that has none anywhere. A pick has
+none anywhere when a node it compares has none anywhere, or when in every way of ordering
+what it compares no case holds or the first that holds has no value anywhere. At each point
+of the box the true order of each pair is one of those ways (`pick`), so the pick has no
+value at that point. It says no when it cannot pay for the walk, and for a pick that it
+cannot pay for a second time or whose compared nodes have no enclosure. -/
+def Tape.silent (t : Tape) (outside : Bool) (work : Nat) : M (Bool × Nat) := do
+  let fee := t.fee 1
+  if work < fee then return (false, work)
+  let .ok () := t.wellFormed | return (false, work - fee)
+  let need := t.needed t.roots
+  let w ← t.eval (t.inputs.map (·.range)) need (Array.replicate t.nodes.size t.nodes.size) (work - fee)
+  let mut void : Array Bool := Array.mkEmpty t.nodes.size
+  let mut left := w.work
+  for (node, i) in t.nodes.zipIdx do
+    let mut empty := false
+    if need[i]! && w.bad[i]!.isSome then
+      match node with
+      | .pick cases =>
+        let pairs := compared cases
+        let ends := pairs.flatMap fun (a, b) => #[a, b]
+        if ends.any (void[·]!) then empty := true
+        else if (earliest w.bad ends).isNone then
+          if let some cost := pickWork w.v cases left then
+            if cost ≤ left then
+              left := left - cost
+              let options := pairs.map (outcomes w.v)
+              let ways := options.foldl (fun n os => if n > MAX_CHOICES then n else n * os.size) 1
+              empty := ways ≤ MAX_CHOICES && (List.range ways).all fun n =>
+                match cases.find? (fun (cond, _) => cond.all (·.holds (order pairs (way options n)))) with
+                | some (_, value) => void[value]!
+                | none => true
+      | node => empty := node.reads.any (void[·]!)
+    void := void.push empty
+  return (t.roots.any fun r => void[r]! || (outside && w.bad[r]!.isNone && w.v[r]!.lo > 0), left)
 
 end Petra

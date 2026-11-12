@@ -2,7 +2,7 @@
 
 Everything in the kernel bottoms out here. There is no float anywhere in the kernel:
 `Q` is `fractions.Fraction`, and every function that cannot return an exact rational
-(sqrt, ln, exp, pi) returns an `Interval` whose endpoints are rationals that provably
+(sqrt, ln, exp, cos, pi) returns an `Interval` whose endpoints are rationals that provably
 enclose the real value.
 
 Invariants:
@@ -16,7 +16,13 @@ Invariants:
   below f(a), and the upper endpoint the smallest grid point at or above f(b) (f
   increasing). Both are monotone in a and b, which gives isotonicity, and both are fixed
   by the mathematics alone, so another kernel that follows this rule (a Lean port) gets
-  the same endpoints whatever series it sums.
+  the same endpoints whatever series it sums. The root of a point that is the square of a
+  fraction is that fraction (`i_sqrt`): a point holds no other interval, so this keeps
+  isotonicity too.
+- cos rounds to the same grid. It falls and rises by turns between the multiples of pi,
+  so its ends over [a, b] are the grid points around cos a and cos b, or 1 or -1 where the
+  cosine may turn in the interval (`i_cos`). Which of these it is rests on comparisons
+  with the enclosure of pi, which both kernels make alike.
 """
 from __future__ import annotations
 
@@ -143,15 +149,28 @@ def i_max(a: Interval, b: Interval) -> Interval:
     return Interval(max(a.lo, b.lo), max(a.hi, b.hi))
 
 
+def _root(q: Q) -> Q | None:
+    """The square root of a fraction that is the square of one, or None: the root of its
+    numerator over the root of its denominator, when that squares back to it."""
+    r = Q(math.isqrt(q.numerator), math.isqrt(q.denominator))
+    return r if r * r == q else None
+
+
 def i_sqrt(x: Interval) -> Interval:
     """[floor(sqrt(x.lo)), ceil(sqrt(x.hi))] on the grid, computed exactly. Requires x.lo >= 0.
 
     With y = x * 4**PRECISION_BITS, sqrt(x) * 2**PRECISION_BITS = sqrt(y). For real y >= 0,
     floor(sqrt(y)) = isqrt(floor(y)), and ceil(sqrt(y)) is that integer when its square is
     y and the next integer otherwise.
+
+    The root of a point that is the square of a fraction is that fraction at both ends, so
+    that sqrt(3^2 + 4^2) is 5 and a strict inequality at it is decided. Only a point: an end
+    of a wider interval at a square still rounds to the grid, which keeps the root isotone.
     """
     if x.lo < 0:
         raise KernelArithmeticError(f"sqrt over [{x.lo}, {x.hi}], which has negative values")
+    if x.lo == x.hi and (root := _root(x.lo)) is not None:
+        return Interval(root, root)
     top = x.hi * _GRID * _GRID
     hi = math.isqrt(math.floor(top))
     lo = math.isqrt(math.floor(x.lo * _GRID * _GRID))
@@ -234,6 +253,38 @@ def _exp_at(x: Q, p: int) -> Interval:
     return Interval(Q(a, one), Q(b, one))
 
 
+def _cos_at(x: Q, p: int) -> Interval:
+    """cos x for any x, as `cosAt` in kernel/Petra/Num.lean computes it, step for step.
+
+    The cosine is even, so it is that of y = |x|, and cos y = cos(2**s r) with
+    r = y / 2**s < 1/2. [a, b] * 2**-q encloses the partial sum of
+    sum_n (-1)**n r**(2n)/(2n)!. After the term n the rest of the series is at most
+    1/(4**n (2n+2)!) in size, whatever its sign. Then s doublings of the angle by
+    cos 2t = 2 cos(t)**2 - 1: the square of [a, b] is rounded outward, from 0 when the
+    enclosure holds 0, and the upper end is kept at 1, which no cosine passes. Each
+    doubling takes the error times four at most, so q grows by two bits with each, and
+    eight more pay for the rounding of the terms.
+    """
+    y = abs(x)
+    s = math.ceil(y).bit_length() + 1
+    q = p + 2 * s + 8
+    one, r = 1 << q, y / (1 << s)
+    m = -(r * r)
+    ta, tb, a, b, n, fact = one, one, one, one, 0, 2
+    while (1 << 2 * n) * fact <= one:
+        ta, tb = _scale(ta, tb, m / ((2 * n + 1) * (2 * n + 2)))
+        a, b = a + ta, b + tb
+        fact *= (2 * n + 3) * (2 * n + 4)
+        n += 1
+    rest = -(-one // ((1 << 2 * n) * fact))
+    a, b = a - rest, b + rest
+    for _ in range(s):
+        low = a * a if a >= 0 else b * b if b <= 0 else 0
+        high = max(a * a, b * b)
+        a, b = 2 * (low // one) - one, min(2 * -(-high // one) - one, one)
+    return Interval(Q(a, one), Q(b, one))
+
+
 def _pi_at(_: None, p: int) -> Interval:
     """Machin's formula pi = 16 atan(1/5) - 4 atan(1/239)."""
     return Interval.point(Q(16)) * _odd_series(Q(1, 5), -1, p) - Interval.point(Q(4)) * _odd_series(Q(1, 239), -1, p)
@@ -260,12 +311,24 @@ def _exp_cached(text: str) -> tuple[Q, Q]:
     return _grid(_exp_at, Q(int(numerator, 16), int(denominator, 16)))
 
 
+@lru_cache(maxsize=4096)
+def _cos_cached(text: str) -> tuple[Q, Q]:
+    numerator, _, denominator = text.partition("/")
+    return _grid(_cos_at, Q(int(numerator, 16), int(denominator, 16)))
+
+
 def _ln_point(x: Q) -> tuple[Q, Q]:
     return (Q(0), Q(0)) if x == 1 else _ln_cached(_text(x))
 
 
 def _exp_point(x: Q) -> tuple[Q, Q]:
     return (Q(1), Q(1)) if x == 0 else _exp_cached(_text(x))
+
+
+def _cos_point(x: Q) -> tuple[Q, Q]:
+    """The grid points around cos x. cos 0 is 1, a point of the grid, and the cosine of
+    any other rational is irrational. An end and its negative have one cosine."""
+    return (Q(1), Q(1)) if x == 0 else _cos_cached(_text(abs(x)))
 
 
 def i_ln(x: Interval) -> Interval:
@@ -278,6 +341,39 @@ def i_ln(x: Interval) -> Interval:
 def i_exp(x: Interval) -> Interval:
     """[floor(exp x.lo), ceil(exp x.hi)] on the grid."""
     return Interval(_exp_point(x.lo)[0], _exp_point(x.hi)[1])
+
+
+MAX_ANGLE = 65_536
+"""The largest magnitude `i_cos` takes, as the kernel's step does (kernel/Petra/Tape.lean)."""
+
+
+def i_cos(x: Interval) -> Interval:
+    """The cosine over [x.lo, x.hi], for any interval within MAX_ANGLE of zero, as `iCos`
+    in kernel/Petra/Num.lean finds it.
+
+    Between k pi and (k + 1) pi the cosine falls for an even k and rises for an odd one,
+    and at k pi it is 1 or -1. The enclosure of pi places the interval: i is a whole
+    number with i pi at or under x.lo, and j one with x.hi at or under j pi, each tested
+    against the whole number times the end of the enclosure of pi that makes the product
+    greater for i, and less for j. With j <= i + 1 the
+    cosine goes one way over the interval, and its ends are the grid points around the
+    cosines of the two ends. With j = i + 2 the cosine may turn in the interval, at
+    (i + 1) pi, so one end is -1 or 1 and the other is the greater, or the lesser, of the
+    grid points of the two ends. With j > i + 2 the enclosure is [-1, 1].
+    """
+    if x.lo < -MAX_ANGLE or x.hi > MAX_ANGLE:
+        raise KernelArithmeticError(f"cos of a value beyond {MAX_ANGLE}")
+    pi = i_pi()
+    i = math.floor(x.lo / (pi.hi if x.lo >= 0 else pi.lo))
+    j = math.ceil(x.hi / (pi.lo if x.hi > 0 else pi.hi))
+    if not (i * (pi.hi if i >= 0 else pi.lo) <= x.lo and x.hi <= j * (pi.lo if j >= 0 else pi.hi)):
+        raise KernelArithmeticError("cos over an interval that the enclosure of pi does not place between two of its multiples")
+    if j > i + 2:
+        return Interval(Q(-1), Q(1))
+    a, b = _cos_point(x.lo), _cos_point(x.hi)
+    if j <= i + 1:
+        return Interval(b[0], a[1]) if i % 2 == 0 else Interval(a[0], b[1])
+    return Interval(Q(-1), max(a[1], b[1])) if i % 2 == 0 else Interval(min(a[0], b[0]), Q(1))
 
 
 @lru_cache(maxsize=None)

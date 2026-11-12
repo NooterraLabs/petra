@@ -125,7 +125,7 @@ def both(test: unittest.TestCase, card: str, rules: dict = RULES, design: str = 
     cells = [(c["subject"], c["mechanism"], c["entry"], c["state"]) for c in said["cells"]]
     test.assertEqual(said["findings"], [])
     test.assertEqual(cells, [(c.subject, c.mechanism, c.entry, c.state) for c in report.cells], "the kernel and the grid list the same cells")
-    test.assertEqual(said["verdict"], report.status)
+    test.assertEqual(said["verdict"], report.verdict)
     return cells, said["verdict"], said
 
 

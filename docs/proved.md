@@ -9,7 +9,7 @@ A tape states that every root is at most zero for all values of the inputs in th
 - If `Tape.proved` returns no failure from valid caches, then at every point of the box every root has a value, and the value is at most zero. This is `Tape.proved_sound`.
 - If `Tape.refuted` returns no failure from valid caches, the point lies in the box and the root it names has a value above zero there. This is `Tape.refuted_sound`.
 
-Both hold for any tape, with `sqrt`, `pi`, `ln` and `exp` nodes or without. Neither takes a hypothesis about the kernel, and no proof uses `sorry` or an axiom beyond Lean's standard three.
+Both hold for any tape, with `sqrt`, `pi`, `ln`, `exp` and `cos` nodes or without. Neither takes a hypothesis about the kernel, and no proof uses `sorry` or an axiom beyond Lean's standard three.
 
 A rule of a deck that states `lt` asks more: that one side is under the other, and not only at most it ([deck.md](deck.md), "A rule"). The kernel has no second rule for that. It writes the root of such a rule as a `pick` that is -1 where node `i` is under node `j` and 1 elsewhere, and decides it with the two rules above.
 
@@ -18,13 +18,19 @@ A rule of a deck that states `lt` asks more: that one side is under the other, a
 
 Both follow from the two theorems above and from what a pick means. No line of `kernel/Petra/Tape.lean` or `kernel/Petra/Num.lean` changed for them. They are about any tape whose root has that shape: a pick of two cases, `lt` of `i` and `j` giving a node that is the constant -1, and otherwise a node that is the constant 1. That the kernel gives the root of an `lt` rule this shape is three lines of `Rule.tape` in `kernel/Petra/Deck.lean`, which the proofs do not read. It is not proved, as nothing of how the kernel writes a tape from a deck is.
 
+A rule with a `where` says nothing outside the range of its `where`. Where the range is not proved over the box, the kernel may still refute the rule at a point inside it ([format.md](format.md), "The rules", item 5). It writes the rule's root under a `pick`: the rule's root `r` where every pair of the `where` is in order, and -1 elsewhere. It only refutes with that tape.
+
+- If `Tape.refuted` returns no failure and the root it names is that pick, then the point lies in the box, both nodes of each pair of the `where` have values there and the first is at most the second, and node `r` is above zero there. This is `Tape.refuted_within`.
+
+It follows from `Tape.refuted_sound` and from what a pick means, as the two above do, and is about any tape whose root has that shape: a pick of two cases, an `and` of `le` of each pair giving `r`, and otherwise a node that is the constant -1. That the kernel writes the root of a rule with a `where` this way, when it refutes, is two lines of `Rule.tape`, which the proofs do not read.
+
 `Tape.proved` and `Tape.refuted` take the work their verdict has left, and give back what is left with the failure, if there is one ([format.md](format.md), "Work"). Both theorems hold for any amount of work. A step that cannot pay returns a failure. An enclosure the walk gave up is marked as a failure. So neither can stand behind a root that is proved, and the theorems need nothing of the costs or of the bookkeeping.
 
-A box is one range for each input. A point of the box is one real number for each input, inside its range. A cache is valid when every pair it stores for a number holds that number's logarithm, or its exponential. The kernel starts from the empty caches, which are valid, and each theorem also says that the caches stay valid.
+A box is one range for each input. A point of the box is one real number for each input, inside its range. A cache is valid when every pair it stores for a number holds that number's logarithm, or its exponential, or its cosine. The kernel starts from the empty caches, which are valid, and each theorem also says that the caches stay valid.
 
 ## What a tape means
 
-The theorems need the real value of a node at a point. `proofs/PetraProofs/Meaning.lean` defines it, in 85 lines, and it is the one file to read against the section "Tapes" of [format.md](format.md). A theorem is only as good as this definition.
+The theorems need the real value of a node at a point. `proofs/PetraProofs/Meaning.lean` defines it, in 86 lines, and it is the one file to read against the section "Tapes" of [format.md](format.md). A theorem is only as good as this definition.
 
 `Tape.value t ρ i` is the value of node `i` when input `k` has the value `ρ k`. It is `some x` or `none`. It is `none` when the node:
 
@@ -34,6 +40,8 @@ The theorems need the real value of a node at a point. `proofs/PetraProofs/Meani
 - names an input the tape does not have
 - reads a node that has no value, or a node that is not before it
 - is a `pick` where a condition compares a node that has no value, or where no case holds, or where the node of the first case that holds has no value
+
+A `cos` has a value wherever its node has one: the cosine of that value, an angle in radians of any size. The kernel's step is narrower, since it takes no angle beyond 65,536, and a step that returns nothing is no part of a proof.
 
 So "the root has a value" in a theorem says that none of these happens on the way to the root. A case of a `pick` with no condition holds wherever it sits in the list, as it does in the kernel.
 
@@ -57,9 +65,9 @@ In `proofs/PetraProofs/Arith.lean`. In each, `a` holds `x` and `b` holds `y`.
 | `powInt_sound` | If `powInt a n` returns `r`, then `n` is at least zero and `r` holds `x ^ n`. `powInt` fails for a negative `n`. |
 | `fits_ok` | `fits` returns its interval unchanged, or fails. So the bit budget never moves an enclosure. |
 
-### The three loops
+### The four loops
 
-In `proofs/PetraProofs/Loops/`. The kernel has three loops under its rounded functions. Each theorem is about the kernel's own function.
+In `proofs/PetraProofs/Loops/`. The kernel has four loops under its rounded functions. Each theorem is about the kernel's own function.
 
 | Theorem | Says |
 |---|---|
@@ -67,8 +75,10 @@ In `proofs/PetraProofs/Loops/`. The kernel has three loops under its rounded fun
 | `Loops.oddSeries_spec` | For `x` between -1/3 and 1/3, `oddSeries x 1 p` holds atanh `x` and `oddSeries x (-1) p` holds arctan `x`. |
 | `Loops.expAt_spec` | `expAt x p` holds exp `x`. |
 | `Loops.expGo_stops` | The count of rounds given to the loop of `expAt` never runs out before the loop's own test ends it. |
+| `Loops.cosAt_spec` | `cosAt x p` holds cos `x`, for every fraction `x`. |
+| `Loops.cosGo_stops` | The count of rounds given to the loop of `cosAt` never runs out before the loop's own test ends it. |
 
-`proofs/PetraProofs/Spec.lean` holds the three statements, each written for any function.
+`proofs/PetraProofs/Spec.lean` holds the four statements, each written for any function.
 
 ### The rounded functions
 
@@ -81,7 +91,8 @@ In `proofs/PetraProofs/Rounded.lean`.
 | `piIv_sound` | If `piIv` returns `r`, then `r` holds pi. |
 | `iLn_sound` | If `iLn a` returns `r`, then `x` is above zero, `r` holds ln `x`, and the caches stay valid. |
 | `iExp_sound` | If `iExp a` returns `r`, then `r` holds exp `x`, and the caches stay valid. |
-| `iLn_valid`, `iExp_valid` | `iLn` and `iExp` keep the caches valid on any interval, also one that holds no number. |
+| `iCos_sound` | If `iCos a` returns `r`, then `r` holds cos `x`, and the caches stay valid. It holds for any interval `a`: `iCos` has no domain to stay within. |
+| `iLn_valid`, `iExp_valid`, `iCos_valid` | `iLn`, `iExp` and `iCos` keep the caches valid on any interval, also one that holds no number. |
 | `Caches.valid_empty` | The empty caches, which the kernel starts from, are valid. |
 
 ### One step of a tape
@@ -92,9 +103,9 @@ In `proofs/PetraProofs/Step.lean`.
 |---|---|
 | `Node.enclose_sound` | Take a point of the box. If the enclosure of every node that this node reads holds that node's value at the point, and `Node.enclose` returns `r` from valid caches, then this node has a value at the point and `r` holds it. |
 | `Node.enclose_valid` | A step keeps the caches valid. |
-| `Node.enclose_exact` | The step of a node other than `sqrt`, `pi`, `ln` and `exp` does not read the caches and does not change them. |
+| `Node.enclose_exact` | The step of a node other than `sqrt`, `pi`, `ln`, `exp` and `cos` does not read the caches and does not change them. |
 
-A step of `ln` or `exp` rounds from the enclosure its `extra` names. Each theorem above holds for any `extra`.
+A step of `ln`, `exp` or `cos` rounds from the enclosure its `extra` names. Each theorem above holds for any `extra`.
 
 ### One step with its price
 
@@ -131,10 +142,12 @@ In `proofs/PetraProofs/Eval.lean` and `proofs/PetraProofs/Rule.lean`.
 | `Tape.walk_sound` | If the walk over the leaves of a partition returns no failure, every root has a value at most zero at every point of the box. A split hands the points at or below its cut to one half and the points at or above it to the other, so every point is walked. |
 | `Tape.proved_sound` | For any tape, from valid caches and with any work: if `Tape.proved` returns no failure, every root has a value at most zero at every point of the box, and the caches stay valid. |
 | `Tape.refuted_sound` | For any tape, from valid caches and with any work: if `Tape.refuted` returns no failure, the point lies in the box and the root it names has a value above zero there, and the caches stay valid. |
-| `Tape.proved_sound_exact`, `Tape.refuted_sound_exact` | The same two for a tape with no `sqrt`, `pi`, `ln` or `exp` node, from any caches. Such a tape reads no cache. |
+| `Tape.proved_sound_exact`, `Tape.refuted_sound_exact` | The same two for a tape with no `sqrt`, `pi`, `ln`, `exp` or `cos` node, from any caches. Such a tape reads no cache. |
 | `Tape.strict_value` | Where a pick of the cases `lt` of `i` and `j`, giving the constant -1, and otherwise, giving the constant 1, has a value, nodes `i` and `j` have values, and the pick is -1 when the first is under the second and 1 when it is not. |
 | `Tape.proved_strict` | For a tape with such a pick among its roots, from valid caches and with any work: if `Tape.proved` returns no failure, node `i` is under node `j` at every point of the box. |
 | `Tape.refuted_strict` | For a tape whose root `which` is such a pick, from valid caches and with any work: if `Tape.refuted` returns no failure, the point lies in the box and node `j` is at most node `i` there. |
+| `Tape.within_value` | Where a pick of the cases `and` of `le` of each pair of a list, giving node `r`, and otherwise, giving the constant -1, has a value above zero, both nodes of each pair have values and the first is at most the second, and node `r` has that value. |
+| `Tape.refuted_within` | For a tape whose root `which` is such a pick, from valid caches and with any work: if `Tape.refuted` returns no failure, the point lies in the box, each pair is in order there, and node `r` is above zero there. |
 
 ## How the loops came to be proved
 
@@ -185,12 +198,41 @@ Three functions that the proofs unfold changed what they hand to a cost, and not
 
 No statement of a theorem changed, and the axioms are the same. The kernel built before the change and the kernel built after it printed the same bytes, apart from the line `work`, and exited with the same code, on the same 244 runs.
 
+## How the cosine came to be proved
+
+Until 2026-11-11 a tape had no trigonometry. The step `cos` was added with its theorems, and not before them: the kernel's functions and their proofs were written together, and the step was built into the kernel once `Tape.proved_sound` and `Tape.refuted_sound` held with it.
+
+| In the kernel | In the proofs |
+|---|---|
+| `cosAt x p` encloses cos `x`. It takes `y`, the size of `x`, and `r = y / 2^s` under a half. `cosGo` sums the series of cos `r` in fixed point, each term rounded outward, and `cosInt` puts the remainder on both sides: after the term `n` the rest is at most `1 / (4^n (2n + 2)!)` in size. `dblGo` then doubles the angle `s` times by cos 2t = 2 cos² t − 1, each square rounded outward, and keeps the upper end at 1. | `Loops.cosAt_spec`. The series is Mathlib's `Real.hasSum_cos`, and the remainder is its tail under a geometric series. The doubling is `Real.cos_two_mul`. |
+| `cosPoint` rounds cos `x` to the grid and keeps it in a third cache, under the size of `x`. | A cache is valid when its third table holds cosines too. `cosPoint` is right for an `x` of either sign because the cosine is even. |
+| `iCos` places an interval among the multiples of pi with `piIv`, and reads its enclosure off the grid points of the two ends ([format.md](format.md), "Tapes"). | `iCos_sound`. Between `k` pi and `k + 1` pi the cosine goes one way, by `Real.cos_le_cos_of_nonneg_of_le_pi` and `Real.cos_add_int_mul_pi`. The proof reads the two tests `iCos` makes of its multiples of pi and nothing of how it found them. |
+| `Node.cos`, with its step in `Node.enclose`, its cost and its size. | One case more in `Node.value`, `Node.enclose_sound`, `Node.enclose_valid` and `Node.Exact`. No proof of the walk or of the rule changed: they hold for any node whose step is sound. |
+
+`iCos_sound` has no hypothesis on the interval, so the step is proved for every angle it takes. The limit of 65,536 on the size of an angle is in `Node.enclose` and bounds the work: `cosAt` halves an angle once for each bit of its size.
+
+No statement of an earlier theorem changed but for the validity of the caches, which has a third clause, and the axioms are the same. No design of the corpus has a cosine, and `corpus/run.py` gives no wrong verdict with the kernel built after the step or without a kernel. `bench/kernel_grid.py` compares the two readings on designs whose rules take cosines at zero, at a quarter turn, at a half turn, across 65,536, of tiny angles and of long fractions.
+
+## How the root of a square came to be exact
+
+Until 2026-11-12 the kernel rounded every square root outward to the grid. The seventh hostile review found that `lt` then never decides a side with a root at a point where it equals the other side: the root of 3² + 4² was two grid points around 5, so a diagonal of 3 mm by 4 mm was neither shown under 5 mm nor refuted there. The root of a point that is the square of a fraction is now that fraction.
+
+| In the kernel | In the proofs |
+|---|---|
+| `rootOf q` takes `isqrt` of the numerator and of the denominator of `q`, and returns their quotient when its square is `q`. | `rootOf_sound`: what it returns is at least zero and its square is `q`. |
+| `gridSqrt` rounds the root of an interval to the grid, as `iSqrt` did before. | `gridSqrt_sound`, the proof that `iSqrt_sound` had. |
+| `iSqrt` returns the root that `rootOf` finds for a point, and the one `gridSqrt` gives otherwise. | `iSqrt_sound`, with the statement it had. At a point the square root of `x` is that fraction, by `Real.sqrt_mul_self`. |
+| `sqrtWork` charges a point for the two roots ([format.md](format.md), "Work"). | None. No theorem reads a cost. |
+
+No statement of a theorem changed, and the axioms are the same. The Python kernel takes the same root in `i_sqrt` (`petra/kernel/interval.py`), so the two kernels give the same ends. Only a point is taken exactly. An end of a wider interval that is a square is rounded as before, so the root of an interval holds the root of every point in it, and no enclosure is wider than it was.
+
 ## What is not proved
 
 - Anything in `Petra/Check.lean`, `Petra/Files.lean`, `Petra/Deck.lean`, `Petra/Grid.lean`, `Petra/Quantity.lean`, `Petra/Sha256.lean` and `Main.lean`: reading the files, the test on the labels and ranges of a tape's inputs, writing a tape from a rule of a deck, the list of cells, the hash, and the verdict. The theorems start at a tape, a partition and a point.
 - That the program computes what the definitions say. The theorems are about the definitions as the logic reads them. Lean's compiler and its runtime, with their arithmetic on large numbers, arrays and tables kept in order, turn the definitions into the program, and they are trusted. `proofs/check_axioms.py` holds the two kernel files to no attribute that would give a definition other code to run.
 - That a verdict takes no longer than its work allows. The costs in `Petra/Tape.lean` are estimates fitted to measurements. No theorem reads them, and a wrong one changes how long a verdict takes and nothing else.
 - That `Tape.last` names the last node that reads each node. A wrong entry would give an enclosure up early. The node is then marked as failed, a node that reads it afterwards fails, and the cell is open. The theorems hold whatever `Tape.last` returns.
+- That an enclosure is narrow. The theorems say that it holds the value. `grid` returns two neighbouring points of the grid or nothing, by its own test, and how soon `cosAt`, `expAt` and `lnAt` reach that is measured and not proved.
 - That the kernel and the Python kernel give the same ends.
 - That a tape's formula is the one a standard states. [format.md](format.md) lists this among what the kernel does not check.
 
@@ -203,6 +245,10 @@ No case was found where an operation returns an interval that fails to hold the 
 - `iLn` calls `lnPoint` on the upper end without a test that it is above zero. For an interval with its ends the wrong way round, the cache gains an entry under a key that is not positive. No number lies in such an interval, and nothing reads the entry as a logarithm.
 - In `compared`, the removal of duplicate pairs is not needed for the result to be right. In `order`, the branch `none => .eq` is never reached for a condition of the same pick.
 - `grid` tests `hi - lo ≤ 1`. The test makes the result tight. It plays no part in whether the result holds the value.
+- `iCos` finds two whole numbers by dividing the ends of its interval by an end of pi, and then tests each against that many times an end of pi. The tests hold whenever the ends of pi are above zero, which they are. They are made all the same, so that the proof needs nothing of the divisions, of the floor or of the ends of pi beyond `piIv_sound`.
+- `dblGo` keeps the upper end of a cosine at 1 with a test, and has no test for the lower end. It needs none: the lower end is twice a square, rounded down, less one, and the square is not negative.
+- `cosPoint` and `Node.work` each take the size of an end for the key of the cache. A key of the other sign would be a second entry for one cosine, and no wrong one.
+- `rootOf` reads the numerator of its fraction as a natural number, which is 0 for a negative one. `iSqrt` refuses an interval below zero before it calls `rootOf`, and for a negative fraction the quotient 0 would not square back to it, so `rootOf` would return nothing all the same.
 - `Partition.shape` checks that a partition is at most 64 deep and that each split is of an input of the tape, strictly inside its range. The walk covers the box without any of it: a split of an input the tape lacks leaves both halves the whole box, and a cut outside the range leaves one half with no point in it.
 
 ## The axioms
@@ -224,13 +270,17 @@ No case was found where an operation returns an interval that fails to hold the 
 'Petra.Loops.oddSeries_spec' depends on axioms: [propext, Classical.choice, Quot.sound]
 'Petra.Loops.expAt_spec' depends on axioms: [propext, Classical.choice, Quot.sound]
 'Petra.Loops.expGo_stops' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Petra.Loops.cosAt_spec' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Petra.Loops.cosGo_stops' depends on axioms: [propext, Classical.choice, Quot.sound]
 'Petra.grid_sound' depends on axioms: [propext, Classical.choice, Quot.sound]
 'Petra.iSqrt_sound' depends on axioms: [propext, Classical.choice, Quot.sound]
 'Petra.piIv_sound' depends on axioms: [propext, Classical.choice, Quot.sound]
 'Petra.iLn_sound' depends on axioms: [propext, Classical.choice, Quot.sound]
 'Petra.iExp_sound' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Petra.iCos_sound' depends on axioms: [propext, Classical.choice, Quot.sound]
 'Petra.iLn_valid' depends on axioms: [propext, Classical.choice, Quot.sound]
 'Petra.iExp_valid' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Petra.iCos_valid' depends on axioms: [propext, Classical.choice, Quot.sound]
 'Petra.Caches.valid_empty' depends on axioms: [propext, Classical.choice, Quot.sound]
 'Petra.Node.enclose_sound' depends on axioms: [propext, Classical.choice, Quot.sound]
 'Petra.Node.enclose_valid' depends on axioms: [propext, Classical.choice, Quot.sound]
@@ -249,6 +299,8 @@ No case was found where an operation returns an interval that fails to hold the 
 'Petra.Tape.strict_value' depends on axioms: [propext, Classical.choice, Quot.sound]
 'Petra.Tape.proved_strict' depends on axioms: [propext, Classical.choice, Quot.sound]
 'Petra.Tape.refuted_strict' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Petra.Tape.within_value' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Petra.Tape.refuted_within' depends on axioms: [propext, Classical.choice, Quot.sound]
 ```
 
 ## Rebuild
@@ -276,14 +328,15 @@ On Linux for aarch64, the build of this toolchain that the build machine has shi
 |---|---|
 | `PetraProofs/Basic.lean` | When an interval holds a real, and how the kernel's monads and loops unfold |
 | `PetraProofs/Meaning.lean` | The real value of a node at a point |
-| `PetraProofs/Spec.lean` | What each of the three loops returns, as a statement, and when a cache is valid |
+| `PetraProofs/Spec.lean` | What each of the four loops returns, as a statement, and when a cache is valid |
 | `PetraProofs/Arith.lean` | The exact operations |
-| `PetraProofs/Loops/` | The kernel's `isqrt`, `oddSeries` and `expAt` meet their statements |
-| `PetraProofs/Rounded.lean` | `grid`, `iSqrt`, `piIv`, `iLn`, `iExp` and the caches |
+| `PetraProofs/Loops/` | The kernel's `isqrt`, `oddSeries`, `expAt` and `cosAt` meet their statements |
+| `PetraProofs/Rounded.lean` | `grid`, `iSqrt`, `piIv`, `iLn`, `iExp`, `iCos` and the caches |
 | `PetraProofs/Step.lean` | One step of a tape |
 | `PetraProofs/Pick.lean` | The pick node |
 | `PetraProofs/Eval.lean` | `wellFormed`, `needed`, one step with its price, and `eval` |
 | `PetraProofs/Rule.lean` | The walk over the leaves, `proved` and `refuted` |
 | `PetraProofs/Strict.lean` | A strict inequality, as a root that is a pick |
+| `PetraProofs/Within.lean` | A rule's `where`, as a root that is a pick |
 | `PetraProofs/Axioms.lean` | The `#print axioms` lines |
 | `check_axioms.py` | The build, the check of the axioms, and the check of the sources |

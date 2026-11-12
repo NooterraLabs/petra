@@ -74,7 +74,7 @@ Every reply of the petra arm is counted once:
 
 | Status | Means |
 |---|---|
-| PASS, FAIL, UNKNOWN, MARGINAL | Petra read the design and gave that status |
+| PASS, PASS_WAIVED, FAIL, UNKNOWN, MARGINAL | Petra read the design and gave that status. PASS_WAIVED is a pass that rests a cell on a waiver, exit code 6. |
 | REFUSED | Petra read it and refused it as an input error |
 | DISAGREE | The kernel and the Python checker differed |
 | ERROR | `petra check` crashed or ran past its time limit |

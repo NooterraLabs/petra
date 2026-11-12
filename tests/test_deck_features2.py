@@ -299,15 +299,15 @@ class AWaiverRestsWhatIsOpen(unittest.TestCase):
         self.assertEqual((bare_verdict, verdict), ("FAIL", "FAIL"), "no waiver hides a refutation")
         self.assertEqual(list(found), list(bare), "each cell keeps its place and its entry")
 
-    def test_each_way_a_cell_is_open_is_a_way_it_is_waived_and_its_reason_says_which(self):
+    def test_each_way_a_cell_is_open_that_no_inequality_could_answer_is_a_way_it_is_waived_and_its_reason_says_which(self):
+        """A key left unstated is the last such way, which AFieldLeftUnstated tests."""
         for lines, cases, mechanism, entry, was in (
                 ({}, None, "j.none", "", "the deck has no rule for it"),
                 ({}, None, "j.grade", "", "the deck has no rule for it on a part like this one"),
                 ({}, load("calm", "p pull in [0 N, 30 N]") + load("idle"), "j.pull", "pull/idle", "case idle puts no pull on p, which the rule reads"),
                 ({}, "", "j.pull", "pull", "the card puts no pull on p, which the rule reads"),
-                (dict(w="5 mm"), None, "j.range", "range", "the range the rule holds in is not proved: "),
-                (dict(w="7 mm"), None, "j.table", "table", ""),      # between the two widths the table lists, where it has no value
-                (dict(rating="unstated"), None, "j.rated", "rated", "p.rating is unstated: its maker states none, and the rule reads it")):
+                (dict(w="5 mm"), None, "j.range", "range", "the range the rule holds in is not proved: "),      # under 6 mm, where the rule holds nowhere
+                (dict(w="7 mm"), None, "j.table", "table", "")):      # between the two widths the table lists, where it has no value
             with self.subTest(mechanism=mechanism, entry=entry):
                 found, _, said = cells(self, JOINTS, *joint(cases=cases, **lines))
                 self.assertEqual(found["p", mechanism, entry], "waived")
@@ -317,6 +317,20 @@ class AWaiverRestsWhatIsOpen(unittest.TestCase):
                 self.assertEqual(bare["p", mechanism, entry], "open")
         found, _, _ = cells(self, JOINTS, *joint(w="5 mm"))
         self.assertNotIn(("p", "j.range", "range/where"), found, "a range that is not proved has no cell of its own, waived or not")
+
+    def test_a_cell_that_an_inequality_could_answer_stays_open_under_a_waiver_and_says_so(self):
+        """A `where` that holds in part of the ranges, a table that has a value in part of them, and a quantity left unstated. The rule could be
+        refuted where it has a value, or at the value the quantity has, so the waiver does not rest the cell, and its reason says so."""
+        for lines, bounds, mechanism, entry, was in (
+                (dict(w="given p.w"), ("5 mm", "7 mm"), "j.range", "range", "the range the rule holds in is not proved: "),
+                (dict(w="given p.w"), ("5 mm", "7 mm"), "j.table", "table", ""),      # the table lists 5 mm
+                (dict(rating="unstated"), None, "j.rated", "rated", "p.rating is unstated: its maker states none, and the rule reads it")):
+            with self.subTest(mechanism=mechanism):
+                text, card = joint(**lines)
+                found, _, said = cells(self, JOINTS, text, card + (given("p.w", *bounds) if bounds else ""))
+                self.assertEqual(found["p", mechanism, entry], "open")
+                if verify.binary():
+                    self.assertTrue(reason(said, mechanism, entry).startswith(grid.UNRESTED + was), reason(said, mechanism, entry))
 
     def test_a_line_that_cannot_arise_stays_so_under_a_waiver(self):
         found, _, _ = cells(self, JOINTS, *joint(grade="b", w="8 mm"))
@@ -331,16 +345,20 @@ class AWaiverRestsWhatIsOpen(unittest.TestCase):
             self.assertEqual(said["counts"]["waived"], 2)
 
     def test_the_verdict_when_every_open_cell_is_waived(self):
-        """PASS when something is proved and nothing refuted. UNKNOWN when nothing is proved: waived is a state of its own, and is never counted as proved."""
+        """PASS when something is proved and nothing refuted, which `petra check` calls PASS_WAIVED, and the kernel PASS with the waivers
+        listed. UNKNOWN when nothing is proved: waived is a state of its own, and is never counted as proved."""
         calm = load("calm", "p pull in [0 N, 30 N]")
         passing = dict(w="10 mm", grade="b", cap="100 N")
         found, verdict, said = cells(self, JOINTS, *joint(cases=calm, **{**passing, "w": "8 mm"}))
-        self.assertEqual((verdict, sorted(set(found.values()))), ("PASS", ["not_applicable", "proved", "waived"]))
+        self.assertEqual((verdict, sorted(set(found.values()))), ("PASS_WAIVED", ["not_applicable", "proved", "waived"]))
+        if verify.binary():
+            self.assertEqual((said["verdict"], [w["mechanism"] for w in said["waived"]]), ("PASS", ["j.none", "j.table"]))
         found, verdict, _ = cells(self, JOINTS, *joint(["j.size", "j.pull", "j.range", "j.table", "j.grade", "j.two", "j.rated"], cases=calm, **{**passing, "w": "8 mm"}))
         self.assertEqual((verdict, found["p", "j.none", ""]), ("UNKNOWN", "open"), "one open cell that no waiver rests")
-        nothing = made_up([JOINT], [asks("j.none", "joint"), asks("j.rated", "joint")], [rule("rated", "joint", "j.rated", le=["cap", "rating"])])
-        found, verdict, _ = cells(self, nothing, *joint(["j.none", "j.rated"], cases="", rating="unstated"))
-        self.assertEqual((verdict, set(found.values()) - {"open"}), ("UNKNOWN", {"waived"}), "every line is waived and nothing is proved")
+        nothing = made_up([JOINT], [asks("j.none", "joint"), asks("j.pull", "joint")], [rule("pull", "joint", "j.pull", le=[["load", "pull"], "cap"])])
+        found, verdict, _ = cells(self, nothing, *joint(["j.none", "j.pull"], cases=""))
+        self.assertEqual((verdict, {k: v for k, v in found.items() if k[1] != "unread"}), ("UNKNOWN", {("p", "j.none", ""): "waived", ("p", "j.pull", "pull"): "waived"}),
+                         "every line is waived and nothing is proved")
 
     def test_the_report_says_who_signed_and_what_was_open(self):
         deck, read = parsed(JOINTS, *joint())
@@ -368,26 +386,27 @@ class AWaiverRestsWhatIsOpen(unittest.TestCase):
     @KERNEL
     def test_a_hint_and_a_waiver_aimed_at_one_cell(self):
         """The cell of j.size on a waived line, with a width the card bounds. The hint that proves it makes it proved, the point that refutes
-        it makes it refuted, and with no hint that settles it the cell is open, which the waiver rests. The state a hint claims decides nothing."""
+        it makes it refuted, and with no hint that settles it the cell is open: its rule's inequality could be answered, so the waiver does not
+        rest it. The state a hint claims decides nothing."""
         text, card = joint(["j.size"], w="given p.w")
         label = "in:made-up.p.w"
         for lo, hi, hint, state in (("5 mm", "10 mm", dict(state="proved", partition="leaf"), "proved"),
-                                    ("5 mm", "10 mm", dict(state="refuted", point={label: "1/100"}), "waived"),
-                                    ("5 mm", "10 mm", dict(state="waived"), "waived"), ("5 mm", "10 mm", dict(state="open", why="x"), "waived"),
-                                    ("5 mm", "11 mm", dict(state="proved", partition="leaf"), "waived"),
+                                    ("5 mm", "10 mm", dict(state="refuted", point={label: "1/100"}), "open"),
+                                    ("5 mm", "10 mm", dict(state="waived"), "open"), ("5 mm", "10 mm", dict(state="open", why="x"), "open"),
+                                    ("5 mm", "11 mm", dict(state="proved", partition="leaf"), "open"),
                                     ("5 mm", "11 mm", dict(state="refuted", point={label: "11/1000"}), "refuted"),
                                     ("5 mm", "11 mm", dict(state="proved", point={label: "11/1000"}), "refuted"),
-                                    ("5 mm", "11 mm", dict(state="refuted", point={label: "1/100"}), "waived"),
-                                    ("5 mm", "11 mm", dict(state="refuted", point={label: "3/250"}), "waived")):
+                                    ("5 mm", "11 mm", dict(state="refuted", point={label: "1/100"}), "open"),
+                                    ("5 mm", "11 mm", dict(state="refuted", point={label: "3/250"}), "open")):
             with self.subTest(lo=lo, hi=hi, hint=hint):
                 its = hinted(self, JOINTS, text, card + given("p.w", lo, hi), "j.size", "p", **hint)
                 self.assertEqual(its["state"], state)
-                self.assertEqual(its.get("reason", "").startswith("open but for the waiver: "), state == "waived")
+                self.assertEqual(its.get("reason", "").startswith(grid.UNRESTED), state == "open")
         deck, read = parsed(JOINTS, text, card + given("p.w", "5 mm", "11 mm"))
         report, files = grid.check(read, deck)
         self.assertEqual(next(c.state for c in report.cells if c.mechanism == "j.size"), "refuted", "petra check finds the corner at 11 mm, and no waiver rests it")
         said = ask(files, without=("proofs",))
-        self.assertEqual(cell(said, "j.size")["state"], "waived", "with no proofs.json nothing settles the cell, and the waiver rests it: the kernel does not search")
+        self.assertEqual(cell(said, "j.size")["state"], "open", "with no proofs.json nothing settles the cell, and the waiver does not rest it: the kernel does not search")
 
 
 # --- 3. more units --------------------------------------------------------------------------------------
@@ -624,6 +643,24 @@ class AFieldLeftUnstated(unittest.TestCase):
                 self.assertEqual(reason(said, mechanism), NO_MAKER.format(f"r.{field}", "the rule"))
                 self.assertEqual(sum(v == "open" for k, v in found.items() if k[0] == "q"), 1, "the rules that do not read it are settled")
 
+    def test_a_waiver_rests_a_cell_left_open_by_an_unstated_key_and_not_by_an_unstated_quantity(self):
+        """A key left unstated leaves unsaid which rule answers, and a waiver rests the cells that read it. A quantity left unstated leaves the
+        rule's inequality to be answered for whatever value it has, and the cell stays open under the waiver."""
+        def waive(*mechanisms: str) -> str:
+            return HOVER + "".join(f"\nwaive {m} on q {BY}\n" for m in mechanisms)
+
+        found, _, said = cells(self, QUADS, *quad(waive("quad.balance", "quad.static"), balance="unstated"))
+        self.assertEqual((found["q", "quad.balance", "balance"], found["q", "quad.static", "static"]), ("waived", "waived"))
+        self.assertTrue(reason(said, "quad.static").endswith("open but for the waiver: " + NO_MAKER.format("r.balance", "the rule")), reason(said, "quad.static"))
+        found, _, said = cells(self, QUADS, *quad(waive("quad.guarded"), guard="unstated"))
+        self.assertEqual(found["q", "quad.guarded", ""], "waived")
+        self.assertTrue(reason(said, "quad.guarded").endswith("open but for the waiver: " + NO_MAKER.format("r.guard", "the `unless` of the line")))
+        found, verdict, said = cells(self, QUADS, *quad(waive("quad.speed"), speed_limit="unstated"))
+        self.assertEqual((found["q", "quad.speed", "speed"], verdict), ("open", "UNKNOWN"))
+        self.assertEqual(reason(said, "quad.speed"), grid.UNRESTED + NO_MAKER.format("r.speed_limit", "the rule"))
+        found, _, _ = cells(self, QUADS, *quad(waive("quad.thrust"), thrust_limit="unstated"))
+        self.assertEqual((found["q", "quad.thrust", "thrust/hover"], found["q", "quad.thrust", "thrust/climb"]), ("open", "open"))
+
     def test_a_field_left_unstated_that_nothing_reads_has_no_cell(self):
         found, _, _ = cells(self, QUADS, *quad(mass="unstated", blades="unstated"))
         self.assertEqual([k for k in found if k[1] == "unread"], [("r", "unread", "grain")])
@@ -676,7 +713,7 @@ PACK = kind("pack", size("low", "temperature", may_be="negative"), size("high", 
 PACKS = made_up([PACK], [asks("pack.cold", "pack"), asks("pack.span", "pack"), asks("pack.share", "pack"), asks("pack.centre", "pack")],
                 [rule("cold", "pack", "pack.cold", le=["low", ["load", "air"]]),
                  rule("span", "pack", "pack.span", lt=["low", "high"]),
-                 rule("share", "pack", "pack.share", le=[["div", "mass", "offset"], ["div", ["q", "10", "kg"], ["q", "1", "m"]]]),
+                 rule("share", "pack", "pack.share", le=[["div", "mass", ["add", "offset", "station"]], ["div", ["q", "10", "kg"], ["q", "1", "m"]]]),
                  rule("centre", "pack", "pack.centre", le=[["abs", ["add", "station", "drift", ["load", "shift"], ["neg", ["load", "reach"]], ["mul", "spare", "width"]]], ["q", "20", "mm"]])])
 COLD = dict(low="-10 degC", high="40 degC", station="-5 mm", offset="200 mm", spare="0", mass="1 kg", drift="given p.drift", width="30 mm")
 FLIGHT = load("flight", "p air in [-10 degC, 40 degC]", "p shift in [-2 mm, 2 mm]", "p reach in [0 mm, 1 mm]")
@@ -745,20 +782,52 @@ class AtOrUnderZero(unittest.TestCase):
         mine, its = ill_formed(self, cold, *pack(FLIGHT.replace("[-10 degC, 40 degC]", "[-274 degC, 40 degC]")))
         self.assertIn("types.4 card flight.p.air: a temperature is at least -5463/20", its, "may_be lifts a floor at zero, and absolute zero is no such floor")
 
-    def test_a_quotient_by_a_field_at_zero_has_no_value_and_its_cell_is_open(self):
-        found, verdict, said = cells(self, PACKS, *pack(offset="0 mm"))
+    def test_a_quotient_by_a_sum_at_zero_has_no_value_and_its_cell_is_open(self):
+        """The rule divides by the offset and the station together, which are zero where the
+        offset of 5 mm makes up for the station 5 mm behind the datum."""
+        found, verdict, said = cells(self, PACKS, *pack(offset="5 mm"))
         self.assertEqual((found["p", "pack.share", "share"], verdict), ("open", "UNKNOWN"))
         if verify.binary():
-            text, card = pack(offset="0 mm")
-            for hint in (dict(state="proved", partition="leaf"), dict(state="refuted", point={"dsg:made-up.p.mass": "1", "dsg:made-up.p.offset": "0"})):
+            text, card = pack(offset="5 mm")
+            point = {"dsg:made-up.p.mass": "1", "dsg:made-up.p.offset": "1/200", "dsg:made-up.p.station": "-1/200"}
+            for hint in (dict(state="proved", partition="leaf"), dict(state="refuted", point=point)):
                 its = hinted(self, PACKS, text, card, "pack.share", "p", **hint)
                 self.assertEqual(its["state"], "open")
                 self.assertIn("division by an interval that contains 0", its["reason"])
         text, card = pack(offset="given p.offset")
-        found, _, _ = cells(self, PACKS, text, card + given("p.offset", "0 mm", "200 mm"))
-        self.assertEqual(found["p", "pack.share", "share"], "open", "the offset may be zero, so the quotient has no value all over its range")
+        found, _, _ = cells(self, PACKS, text, card + given("p.offset", "0 mm", "5 mm"))
+        self.assertEqual(found["p", "pack.share", "share"], "open", "the sum may be zero, so the quotient has no value all over its range")
         found, _, _ = cells(self, PACKS, *pack(offset="50 mm"))
-        self.assertEqual(found["p", "pack.share", "share"], "refuted", "1 kg over 50 mm is 20 kg/m")
+        self.assertEqual(found["p", "pack.share", "share"], "refuted", "1 kg over 45 mm is 22.2 kg/m")
+
+    def test_a_rule_that_divides_by_a_field_that_may_be_zero_is_refused_when_the_deck_is_read(self):
+        """Or takes the root of one that may be under zero, or the logarithm of either: for a
+        part at that value the rule has no value. The field may be named through a `let`, an
+        input of a row, a power or a root, in a side or a `where`, or be a load that says
+        `may_be`. A sum or a product that holds one is not looked into, and its cell is open
+        where it is zero."""
+        per_metre = ["div", ["q", "1", "kg"], ["q", "1", "m"]]
+        inverse = {"id": "made-up/inverse", "anchor": ANCHOR, "gives": {"name": "y", "dim": "mass/length"},
+                   "takes": [{"name": "x", "dim": "length", "range": ["1 mm", "1 m"]}], "is": ["div", ["q", "1", "kg"], "x"]}
+        refused = {"it divides by offset": [dict(le=[["div", "mass", "offset"], per_metre]), dict(let={"o": "offset"}, le=[["div", "mass", "o"], per_metre]),
+                                            dict(le=[["mul", "mass", ["pow", "offset", "-1"]], per_metre]),
+                                            dict(le=[["mul", "mass", ["pow", "offset", "-0.5"]], ["div", ["q", "1", "kg"], ["sqrt", ["q", "1", "m"]]]]),
+                                            dict(le=["mass", ["q", "1", "kg"]], where=[{"le": [["div", ["q", "1", "m"], "offset"], "1"], "why": "made up"}]),
+                                            dict(le=[["row", "made-up/inverse", {"x": "offset"}], per_metre])],
+                   "it divides by shift": [dict(le=[["div", "mass", ["load", "shift"]], per_metre])],
+                   "it takes the root of station": [dict(le=[["sqrt", "station"], ["sqrt", ["q", "1", "m"]]])],
+                   "it takes the logarithm of spare": [dict(le=[["ln", "spare"], "1"]), dict(le=[["pow", "spare", "0.3"], "1"])]}
+        for says, bodies in refused.items():
+            for body in bodies:
+                with self.subTest(body):
+                    mine, its = no_deck(self, made_up([PACK], [asks("pack.cold", "pack")], [rule("cold", "pack", "pack.cold", **body)], [inverse]))
+                    self.assertIn(f"rule made-up/cold: {says}, which its `may_be` lets be", mine)
+                    self.assertIn(says, its)
+        for body in (dict(le=[["sqrt", "offset"], ["sqrt", ["q", "1", "m"]]]), dict(le=[["sqrt", ["pow", "station", "2"]], ["q", "1", "m"]]),
+                     dict(le=[["div", "mass", ["add", "offset", "station"]], per_metre]), dict(le=[["div", "mass", ["mul", "offset", "2"]], per_metre]),
+                     dict(le=[["row", "made-up/inverse", {"x": ["add", "offset", "width"]}], per_metre])):
+            with self.subTest(body):
+                reads(self, made_up([PACK], [asks("pack.cold", "pack")], [rule("cold", "pack", "pack.cold", **body)], [inverse]))
 
     def test_a_need_reads_a_field_at_or_under_zero_and_divides_by_none(self):
         mine, its = ill_formed(self, PACKS, *pack(station="58 mm"))
@@ -806,7 +875,7 @@ class AtOrUnderZero(unittest.TestCase):
         task = {"format": acceptance.TASK, "name": "made-up", "about": "made up", "rows": [derate], "types": [cell_],
                 "asks": [{"type": "cell", "mechanism": f"cell.{name}", "what": name, "anchor": ANCHOR} for name in ("cold", "fits", "slope", "derated")]}
         rules = [rule("cold", "cell", "cell.cold", le=["low", ["load", "air"]]), rule("fits", "cell", "cell.fits", lt=["offset", "reach"]),
-                 rule("slope", "cell", "cell.slope", le=[["div", "reach", "offset"], "2"]),
+                 rule("slope", "cell", "cell.slope", le=[["div", "reach", ["mul", "2", "offset"]], "1"]),
                  rule("derated", "cell", "cell.derated", le=["draw", ["mul", "rated", ["row", "made-up/derate", {"t": "low"}]]])]
         return task, rules
 
@@ -915,9 +984,11 @@ class AStrictRule(unittest.TestCase):
         found, _, said = cells(self, CRAFTS, *craft())
         self.assertEqual((found["c", "craft.laden", "laden"], reason(said, "craft.laden")), ("open", "the card puts no cargo on c, which the rule reads"))
 
-    def test_lt_with_a_range_and_a_root_that_is_rounded(self):
-        """The square root of 0.09 m2 is enclosed and not exact, so a span of exactly 0.3 m is neither under 0.3 m nor shown not to be."""
-        for span, mass, state in (("0.299 m", "249 g", "proved"), ("0.301 m", "249 g", "refuted"), ("0.3 m", "249 g", "open"), ("0.2 m", "1.5 kg", "open")):
+    def test_lt_with_a_range_and_a_root_of_a_square(self):
+        """The square root of 0.09 m2 is 0.3 m exactly, since 0.09 is the square of a fraction, so a span of exactly 0.3 m is not under
+        0.3 m and is refuted. Until the root of such a point was exact, its enclosure reached to both sides of 0.3 m and the cell was open.
+        A root that is no fraction is rounded, and tests/test_kernel_attacks7.py holds a limit inside its enclosure open."""
+        for span, mass, state in (("0.299 m", "249 g", "proved"), ("0.301 m", "249 g", "refuted"), ("0.3 m", "249 g", "refuted"), ("0.2 m", "1.5 kg", "open")):
             with self.subTest(span=span, mass=mass):
                 found, _, said = cells(self, CRAFTS, *craft(mass, cap="2 kg", span=span))
                 self.assertEqual(found["c", "craft.ranged", "ranged"], state)

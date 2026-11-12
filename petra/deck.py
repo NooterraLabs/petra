@@ -30,7 +30,7 @@ from dataclasses import dataclass
 from fractions import Fraction
 from typing import Any, Iterator, Mapping
 
-from .kernel import (Abs, Add, Const, Div, Exp, Interval, KernelArithmeticError, Ln, Max, Min, Mul, Neg, Pi, PowInt, Sqrt, Sym, enclose)
+from .kernel import (Abs, Add, Const, Cos, Div, Exp, Interval, KernelArithmeticError, Ln, Max, Min, Mul, Neg, Pi, PowInt, Sqrt, Sym, enclose)
 from .units import (AREA, CURRENT, DIMENSIONLESS, ENERGY, FORCE, LENGTH, MASS, POWER, RESISTANCE, STRESS, TEMPERATURE, TIME, VOLTAGE, Dim,
                     UnitError, parse_quantity)
 
@@ -328,9 +328,9 @@ class _Reader:
             return one[op](terms[0]), dims[0]
         if op == "sqrt" and len(terms) == 1:
             return Sqrt(terms[0]), tuple(a / 2 for a in dims[0])
-        if op in ("exp", "ln") and len(terms) == 1:
+        if op in ("exp", "ln", "cos") and len(terms) == 1:
             self.bare(op, dims[0])
-            return (Exp if op == "exp" else Ln)(terms[0]), NONE
+            return {"exp": Exp, "ln": Ln, "cos": Cos}[op](terms[0]), NONE
         raise RowError(f"{op!r} with {len(args)} arguments is not in the language")
 
     def power(self, base: Any, exponent: Any) -> tuple[Any, Vector]:

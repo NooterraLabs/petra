@@ -11,8 +11,8 @@ from dataclasses import fields, is_dataclass
 from functools import reduce
 from typing import Mapping
 
-from .interval import Interval, KernelArithmeticError, Q, i_exp, i_ln, i_max, i_min, i_pi, i_sqrt
-from .terms import Abs, Add, Const, Div, Exp, Expr, Ln, Matrix, Max, Min, Mul, Neg, Pi, PowInt, Sqrt, Sym
+from .interval import Interval, KernelArithmeticError, Q, i_cos, i_exp, i_ln, i_max, i_min, i_pi, i_sqrt
+from .terms import Abs, Add, Const, Cos, Div, Exp, Expr, Ln, Matrix, Max, Min, Mul, Neg, Pi, PowInt, Sqrt, Sym
 
 Box = Mapping[str, Interval]
 """Symbol -> range. A point is a box of point intervals."""
@@ -70,6 +70,8 @@ def _step(e: Expr, ev, box: Box) -> Interval:
             return i_ln(ev(a))
         case Exp(arg=a):
             return i_exp(ev(a))
+        case Cos(arg=a):
+            return i_cos(ev(a))
         case Abs(arg=a):
             return ev(a).abs()
         case Min(args=args) if args:

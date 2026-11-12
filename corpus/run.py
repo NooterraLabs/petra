@@ -10,8 +10,10 @@ INPUT_ERROR.
 
 Without --kernel the verdict is the one `petra check` exits with. With it, the pair is
 exported (petra/export.py) and the verdict is the one that petra-verify binary exits
-with, where ILL-FORMED reads as INPUT_ERROR. A pair the language refuses is INPUT_ERROR
-too: the kernel reads files, and that text gives it none. The kernel sees the card and
+with, where ILL-FORMED reads as INPUT_ERROR. For a design of a deck of rules, PASS reads as
+PASS_WAIVED when the kernel lists a waiver that a cell rests on, as `petra check` reads it.
+A pair the language refuses is INPUT_ERROR too: the kernel reads files, and that text gives
+it none. The kernel sees the card and
 the design before any physics runs, and the proofs only for a design it found well formed.
 For a design of a deck of rules the export also writes rules.json, the deck's own file,
 and the kernel gets it as --rules and works out the cells itself.
@@ -23,6 +25,7 @@ that field and the case cannot go wrong again without failing the run.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import subprocess
 import sys
@@ -39,7 +42,7 @@ from petra.cli import EXIT_CODES  # noqa: E402
 
 VERDICTS = {code: name for name, code in EXIT_CODES.items()}
 NOT_PASS = frozenset({"FAIL", "UNKNOWN", "MARGINAL", "INPUT_ERROR"})
-EXPECTABLE = frozenset({"PASS", "NOT_PASS"}) | NOT_PASS
+EXPECTABLE = frozenset({"PASS", "PASS_WAIVED", "NOT_PASS"}) | NOT_PASS
 
 LIMIT_S = 120
 """A check that runs this long counts as TIMEOUT. The slowest design in the corpus that
@@ -67,13 +70,16 @@ def cases() -> list[Case]:
     return out
 
 
-def _run(command: list[str]) -> int | None:
-    """The exit code, or None past the limit."""
+def _run(command: list[str], said: list[str] | None = None) -> int | None:
+    """The exit code, or None past the limit. With `said`, what the command printed is added to it."""
     try:
-        return subprocess.run(command, cwd=ROOT, timeout=LIMIT_S, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                              stderr=subprocess.DEVNULL).returncode
+        done = subprocess.run(command, cwd=ROOT, timeout=LIMIT_S, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL if said is None else subprocess.PIPE,
+                              stderr=subprocess.DEVNULL, text=said is not None, encoding="utf-8" if said is not None else None)
     except subprocess.TimeoutExpired:
         return None
+    if said is not None:
+        said.append(done.stdout)
+    return done.returncode
 
 
 def _verdict(code: int | None) -> str:
@@ -90,8 +96,11 @@ def by_kernel(binary: str, case: Case) -> str:
     refused = EXIT_CODES["INPUT_ERROR"]
     with tempfile.TemporaryDirectory() as tmp:
         def verify(*names: str) -> str:
-            there = [*names, *(["rules"] if Path(tmp, "rules.json").is_file() else [])]
-            return _verdict(_run([binary, *(part for name in there for part in (f"--{name}", str(Path(tmp, f"{name}.json"))))]))
+            deck = Path(tmp, "rules.json").is_file()
+            there = [*names, *(["rules"] if deck else [])]
+            said: list[str] = []
+            found = _verdict(_run([binary, *(part for name in there for part in (f"--{name}", str(Path(tmp, f"{name}.json"))))], said))
+            return "PASS_WAIVED" if deck and found == "PASS" and json.loads(said[0])["waived"] else found
 
         export = [sys.executable, "-m", "petra.export", case.path, "--out", tmp]
         code = _run([*export, "--no-physics"])
