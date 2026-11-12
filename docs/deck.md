@@ -188,7 +188,8 @@ Some tables of a standard give no quantity. They sort a part into a category by 
 - `gives` has `name`, `one_of` and perhaps `what`. `one_of` is the names the table can give, in the standard's order: a list of texts that is not empty, each once. `gives` has `dim` or `one_of`, and never both.
 - The row is a table. A row that gives a name with `is` or `cases` is refused.
 - It takes quantities and no key, so each side reads a quantity, in `bands` or `at`, exactly as a side of any table does. A table with one side derives the name from one quantity, and a table with two sides from two.
-- A cell is one of the names of `one_of`, as a text, or `null` where the standard gives none. Any text of `one_of` is a name, whatever it looks like: the text `"null"` is a name and `null` is an empty cell. A cell that holds anything else is refused. A name of `one_of` that no cell holds is allowed.
+- A cell is one of the names of `one_of`, as a text, or `null` where the standard gives none. Any text of `one_of` is a name, whatever it looks like: the text `"null"` is a name and `null` is an empty cell. A cell that holds anything else is refused.
+- Every name of `one_of` is the name of at least one cell. A row that lists a name that no cell holds is refused, and the refusal names the row and the name. Such a name is one that no part can have. A `case` over the row would still give it an expression, and nothing would ever read that expression: what only it named would count as read and be checked by no cell. So there is no such branch. Every name a row gives is one some sizes reach, and every expression of a `case` is one some part's cell is written from.
 - The table has `down`, `cells` and perhaps `across`, and no other key: no `unit`, no `rises` and no `falls`.
 
 The bands say what the table covers. A value in no band, between two listed values, or at an empty cell has no name. Nothing is assumed there: a rule that reads the name has no value, and its cell is open. A value on the end of a band is in the band that holds that end.
@@ -456,7 +457,7 @@ A quantity that a row takes is bound to an expression of its dimension. A key th
 
 A key bound this way is still a key of the table it is bound in. The name comes from the row and from nothing else: a key field of the part with the same names, or a name of the part's own, has no say in it.
 
-A `case` picks an expression by a name that a row gives. Its first item is `["row", ID, {INPUT: ...}]` with a row that gives a name, and its second has an expression for each name of that row's `one_of` and for no other name, all of one dimension. Its value is the expression of the name the row gives. It is how a formula that changes with a category is written. A `case` is read in a rule and in no row.
+A `case` picks an expression by a name that a row gives. Its first item is `["row", ID, {INPUT: ...}]` with a row that gives a name, and its second has an expression for each name of that row's `one_of` and for no other name, all of one dimension. Its value is the expression of the name the row gives. It is how a formula that changes with a category is written. A `case` is read in a rule and in no row. Each name of the row is held by a cell of it ([A table that gives a name](#a-table-that-gives-a-name)), so each expression of a `case` is the value for some sizes, and a rule reads what every one of them names.
 
 ```json
 ["case", ["row", "example/category", {"a": "length", "t": "thickness"}],

@@ -58,41 +58,89 @@ CATEGORY = {"id": "made-up/cat", "anchor": ANCHOR, "gives": {"name": "cat", "one
 BY_CATEGORY = ["row", "made-up/cat", {"a": "a"}]
 
 
+REACHED = {**CATEGORY, "takes": [{**CATEGORY["takes"][0], "range": ["1 mm", "150 mm"]}],
+           "table": {"down": {"by": "a", "bands": [["0 mm", "50 mm"], ["50 mm", "100 mm"], ["100 mm", "150 mm"]], "closed": "upper"}, "cells": ["B", "C", "Z"]}}
+"""The same row with a third band, whose cell holds Z: every name it gives is one some length reaches."""
+EMPTY_LINE = {"id": "made-up/k", "anchor": ANCHOR, "gives": {"name": "f", "dim": "dimensionless"}, "takes": [{"name": "grade", "one_of": ["x", "y"]}],
+              "table": {"down": {"by": "grade"}, "unit": "1", "cells": [None, "2"]}}
+"""A table read by a key, whose line for `x` is empty: a part whose key is x has no value in it."""
+
+
 class DeadBranch(unittest.TestCase):
-    def test_what_only_the_branch_of_a_name_no_cell_holds_reads_is_read_by_nothing_in_all_three(self):
-        """A quantity: `t` is named by the branch Z alone. A part has a = 30 mm, so its name is
-        B, and t = 1000 m. At e4c3cde the grid gives PASS with one cell; the kernel gives the
-        same proved cell and an `unread` cell for p.t, UNKNOWN, and verify.differs says so.
+    """The review asserted the kernel's reading: what only the branch of a name no cell holds
+    reads is read by nothing, so it has an `unread` cell. The decision went further, and the
+    tests here hold the checker to the decision: there is no such branch. A row that lists
+    in `one_of` a name that none of its cells holds is refused when the deck is read, by the
+    kernel and by petra/grid.py, so every expression of a `case` is one some part reaches."""
 
-        A load: P is named by the branch Z alone, and case g puts it on p. At e4c3cde the grid
-        has `m/g` proved and gives PASS; the kernel has `m`, with no case, and `unread` `P/g`.
-
-        The acceptance check, on the first rule as a transcription of a task: at e4c3cde `reads`
-        passes, `every field and every load is read`, and the line is admitted with exit 0.
-
-        The kernel's reading is the one kept here: what no part can reach is read by nothing,
-        so it is an `unread` cell and the verdict does not rest on it."""
+    def decks(self, row: dict) -> tuple[dict, dict]:
         quantity = made_up([kind("w", size("a"), size("t"))], [asks("w.m", "w")],
-                           [rule("m", "w", "w.m", le=[["case", BY_CATEGORY, {"B": "a", "C": ["mul", "a", "2"], "Z": "t"}], ["q", "60", "mm"]])], [CATEGORY])
+                           [rule("m", "w", "w.m", le=[["case", BY_CATEGORY, {"B": "a", "C": ["mul", "a", "2"], "Z": "t"}], ["q", "60", "mm"]])], [row])
         loaded = made_up([kind("w", size("a"), size("cap", "force"), loads=[{"name": "P", "dim": "force", "least": "0 N", "what": "P"}])], [asks("w.m", "w")],
-                         [rule("m", "w", "w.m", le=[["case", BY_CATEGORY, {"B": ["q", "1", "N"], "C": ["q", "1", "N"], "Z": ["load", "P"]}], "cap"])], [CATEGORY])
-        for name, deck, text, card in (("a quantity", quantity, design(part("w", "p", a="30 mm", t="1000 m")), HEAD),
-                                       ("a load", loaded, design(part("w", "p", a="30 mm", cap="10 N")), HEAD + load("g", "p P in [0 N, 5 N]"))):
+                         [rule("m", "w", "w.m", le=[["case", BY_CATEGORY, {"B": ["q", "1", "N"], "C": ["q", "1", "N"], "Z": ["load", "P"]}], "cap"])], [row])
+        return quantity, loaded
+
+    def test_a_row_that_gives_a_name_no_cell_holds_is_refused_by_all_three(self):
+        """At e4c3cde the two decks loaded. For the first the grid gave PASS with one cell and
+        the kernel the same proved cell and an `unread` cell for p.t, UNKNOWN. For the second
+        the grid had `m/g` proved and the kernel `m`, with no case, and `unread` `P/g`. The
+        acceptance check said `every field and every load is read` and exited 0."""
+        from tests.test_deck_features import no_deck
+
+        for name, deck in zip(("a quantity", "a load"), self.decks(CATEGORY)):
             with self.subTest(name):
-                if not verify.binary():
-                    self.skipTest("no petra-verify is built here and PETRA_VERIFY names none")
-                mine, status, said, differ = both(deck, text, card)
-                self.assertEqual(differ, "", "the grid and the kernel list the same cells and give the same verdict")
-                self.assertNotEqual(status, "PASS", "no cell checks what the branch Z alone reads")
+                mine, its = no_deck(self, deck)
+                for said in (mine, its):
+                    self.assertIn("made-up/cat", said)
+                    self.assertRegex(said, "no cell holds '?Z'?, which `one_of` lists")
         with self.subTest("the acceptance check"):
             task = {"format": acceptance.TASK, "name": "made-up", "about": "made up", "rows": [CATEGORY],
                     "types": [{"type": "w", "what": "a w", "fields": [{"name": "a", "dim": "length", "what": "a", "range": ["1 mm", "100 mm"]},
                                                                     {"name": "t", "dim": "length", "what": "t", "range": ["1 mm", "100 mm"]}]}],
                     "asks": [{"type": "w", "mechanism": "w.m", "what": "m", "anchor": ANCHOR}]}
-            reading = acceptance.Reading(acceptance.read_task(task), acceptance.read_transcription({"rules": quantity["rules"]}))
-            found = acceptance.reads(reading)
-            self.assertEqual(found.outcome, "fail", found.detail)
-            self.assertIn("w.t", found.detail)
+            with self.assertRaisesRegex(grid.DeckError, "made-up/cat: no cell holds 'Z'"):
+                acceptance.read_task(task)
+
+    @KERNEL
+    def test_with_every_name_in_a_cell_the_grid_and_the_kernel_read_every_branch_alike(self):
+        """The same two decks with a third band whose cell holds Z. The branch Z is then the
+        value for a part of 120 mm, so `t` and `P` are read, by the kernel as by the grid:
+        neither has an `unread` cell for them, and the two list the same cells."""
+        quantity, loaded = self.decks(REACHED)
+        for name, deck, text, card, entry in (("a quantity", quantity, design(part("w", "p", a="30 mm", t="1000 m")), HEAD, "m"),
+                                              ("a load", loaded, design(part("w", "p", a="30 mm", cap="10 N")), HEAD + load("g", "p P in [0 N, 5 N]"), "m/g")):
+            with self.subTest(name):
+                mine, status, said, differ = both(deck, text, card)
+                self.assertEqual(differ, "", "the grid and the kernel list the same cells and give the same verdict")
+                self.assertEqual((mine, status), ([("p", "w.m", entry, "proved")], "PASS"))
+        mine, status, said, differ = both(quantity, design(part("w", "p", a="120 mm", t="1000 m")))
+        self.assertEqual((differ, mine, status), ("", [("p", "w.m", "m", "refuted")], "FAIL"), "at 120 mm the name is Z, and t is over 60 mm")
+
+    @KERNEL
+    def test_a_branch_that_cannot_be_written_leaves_the_cell_open_whatever_a_hint_says(self):
+        """A `case` whose expression for Z reads a table at an empty line. At e4c3cde, with Z in
+        no cell, the kernel never wrote that expression, and a hand-made hint of one leaf made
+        it prove the cell, which item 7 of docs/format.md leaves open. The deck with Z in no
+        cell is now refused. With Z in a cell the kernel writes the expression of every name,
+        the tape cannot be written, and the cell is open with or without the hint."""
+        from tests.test_deck_features import no_deck
+
+        def deck(row: dict) -> dict:
+            return made_up([kind("w", size("a"), key("grade", "x", "y"))], [asks("w.m", "w")],
+                           [rule("m", "w", "w.m", le=[["case", BY_CATEGORY, {"B": "1", "C": "1", "Z": ["row", "made-up/k", {"grade": "grade"}]}], "2"])], [row, EMPTY_LINE])
+
+        no_deck(self, deck(CATEGORY))
+        rules, read = parsed(deck(REACHED), design(part("w", "p", a="30 mm", grade="x")))
+        files = grid.bundle(read, rules)
+        hint = {"subject": "p", "mechanism": "w.m", "entry": "m", "state": "proved", "partition": "leaf"}
+        for hints in ([], [hint]):
+            said = ask({**files, "proofs": json.dumps({"format": "petra-proofs/0", "cells": hints})})
+            (found,) = [c for c in said["cells"] if c["mechanism"] == "w.m"]
+            self.assertEqual((said["findings"], found["state"], found["reason"]), ([], "open", "a table gives nothing here"))
+        mine, status, said, differ = both(deck(REACHED), design(part("w", "p", a="30 mm", grade="x")))
+        self.assertEqual((differ, [c[3] for c in mine], status), ("", ["open"], "UNKNOWN"))
+        mine, status, said, differ = both(deck(REACHED), design(part("w", "p", a="30 mm", grade="y")))
+        self.assertEqual((differ, [c[3] for c in mine], status), ("", ["proved"], "PASS"))
 
 
 # --- 2. a requirement that every part meets -----------------------------------------------------------------

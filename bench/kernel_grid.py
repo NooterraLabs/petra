@@ -45,7 +45,8 @@ For each design that the language reads, the files are written without asking th
 changes: a text swapped for another text of the deck or for an odd one, a key or an item
 dropped, doubled, moved or renamed, a `where` with no item, two rules of one line whose
 ids end alike, a line named `unread`, a `when`, an `unless` or a `requires` that asks
-`loaded`, which is no condition, or a wide row that a rule applies 9 times or 1,000
+`loaded`, which is no condition, a row that gives a name that none of its cells holds,
+or a wide row that a rule applies 9 times or 1,000
 times, which is within the steps a deck may take to read or over them. An honest design
 of that deck is then checked against it. The grid's `read_deck` must refuse exactly the decks the kernel finds ill formed, and
 where both read the deck they must agree on the design as above.
@@ -519,8 +520,21 @@ def damaged(rng: random.Random, body: dict) -> list[str]:
         lists = [v for _, v in nodes if isinstance(v, list) and v]
         way = rng.choice(["another text", "another text", "another text", "an odd text", "an odd text", "a key less", "an item less", "an item twice",
                           "items in another order", "a key renamed", "a key more", "a where with no item", "two rules that end alike", "a line named unread",
-                          "a wide row applied", "a condition that asks loaded"])
+                          "a wide row applied", "a condition that asks loaded", "a name no cell holds"])
         rules = [r for r in body["rules"] if isinstance(r, dict)] if isinstance(body.get("rules"), list) else []
+        naming = [r for r in body["rows"] if isinstance(r, dict) and isinstance(r.get("gives"), dict) and isinstance(r["gives"].get("one_of"), list)] if isinstance(body.get("rows"), list) else []
+        if way == "a name no cell holds" and naming:
+            # A row gives one name more, which none of its cells holds. Each `case` over the row gets an expression for it, the one of
+            # another name, so the name itself is what is wrong: no part can have it, and both refuse the row.
+            row = rng.choice(naming)
+            row["gives"]["one_of"] = [*row["gives"]["one_of"], "spare"]
+            for _, node in nodes:
+                if isinstance(node, list) and len(node) == 3 and node[0] == "case" and isinstance(node[1], list) and node[1][:2] == ["row", row.get("id")] and isinstance(node[2], dict) and node[2]:
+                    node[2]["spare"] = copy.deepcopy(next(iter(node[2].values())))
+            done.append(way)
+            continue
+        if way == "a name no cell holds":
+            continue
         if way == "a wide row applied" and rules and isinstance(body.get("rows"), list):
             # A row of 1,000 names, about 2,000 steps, that names of `let` apply and nothing reads, so the steps to read the deck are all that
             # changes: 9 times is far within the million, and 1,000 times is over it.

@@ -497,6 +497,12 @@ def _naming(body: Mapping[str, Any], takes: Mapping[str, Input], names: tuple[st
         raise RowError(f"a cell of a table that gives a name is one of {', '.join(names)}, or null")
     if len(cells) != axes[0].places or any(len(line) != (axes[1].places if len(axes) == 2 else 1) for line in cells):
         raise RowError(f"the cells are {axes[0].places} lines" + (f" of {axes[1].places}" if len(axes) == 2 else "") + ", one for each place")
+    # Every name the row gives is the name of a cell. A name that no cell holds is one no part can have, and a `case`
+    # would still have to give it an expression, which nothing could reach.
+    held = {c for line in cells for c in line if c is not None}
+    lost = [n for n in names if n not in held]
+    if lost:
+        raise RowError(f"no cell holds {lost[0][:200]!r}, which `one_of` lists: each name the row gives is the name of a cell" + (f", and {len(lost) - 1} more are of none" if lost[1:] else ""))
     return Table(axes, cells, frozenset(), frozenset())
 
 

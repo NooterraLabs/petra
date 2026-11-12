@@ -925,6 +925,13 @@ def readNaming (j : Json) (takes : Array (String × Taken)) (names : Array Strin
     if across.isSome then do (← line.getArr?).mapM cell else do return #[← cell line]
   unless lines.size == down.places && lines.all (·.size == (across.map Side.places).getD 1) do
     throw "the cells are one line for each place down, with one cell for each place across"
+  -- Every name the row gives is the name of a cell. A name that no cell holds is one that no
+  -- part can have, and a `case` would still give it an expression, which no pick reaches.
+  let held : Array Bool := lines.foldl (fun held line => line.foldl (fun held cell => match cell with
+    | some i => held.setIfInBounds i true
+    | none => held) held) (Array.replicate names.size false)
+  if let some i := held.findIdx? (!·) then
+    throw s!"no cell holds {clip names[i]!}, which `one_of` lists: each name the row gives is the name of a cell"
   return { names, down, across, cells := lines }
 
 def readTable (j : Json) (takes : Array (String × Taken)) (gives : Dim) : Except String Table := do

@@ -779,7 +779,9 @@ class AKeyPickedBySize(unittest.TestCase):
                                      "cells": [["two", "two"], ["three", "four"], ["five", None]]}})
         said = {c.name: c for c in rows.accept(mine, [rows.example({"anchor": "made up", "given": {"a": "75 mm", "t": "30 mm"}, "gives": "D"}, mine)], other)}
         self.assertEqual({name: c.outcome for name, c in said.items()}, {"units": "pass", "examples": "pass", "shape": "none", "second": "pass"}, said)
-        wrong = rows.read({**CATEGORY, "table": {**CATEGORY["table"], "cells": [["B", "B"], ["D", "D"], ["E", None]]}})
+        # A second transcription with two cells changed over. It still holds every name it gives: a name that no cell holds is refused.
+        wrong = rows.read({**CATEGORY, "table": {**CATEGORY["table"], "cells": [["B", "B"], ["D", "C"], ["E", None]]}})
+        self.assertRaisesRegex(rows.RowError, "no cell holds 'C'", rows.read, {**CATEGORY, "table": {**CATEGORY["table"], "cells": [["B", "B"], ["D", "D"], ["E", None]]}})
         said = {c.name: c for c in rows.accept(mine, [rows.example({"anchor": "made up", "given": {"a": "75 mm", "t": "30 mm"}, "gives": "C"}, mine)], wrong)}
         self.assertEqual((said["examples"].outcome, said["second"].outcome), ("fail", "fail"), said)
         self.assertIn("this one gives C and the other D", said["second"].detail)
