@@ -212,6 +212,25 @@ class StatedByTheCard(unittest.TestCase):
         (first, *_) = export.card(parsed(LIFTERS, text, measured)[1], [], placed=True)["states"]
         self.assertEqual(first, {"name": "b.category", "by": "lab@example.org", "key": "B"})
 
+    def test_a_count_is_a_number_whose_value_is_whole_in_the_card_as_in_the_design(self):
+        """The card and the design take the same spellings of a count: 3, +3, 3.0, 6/2 and 3/1 are each 3, and card.json holds the
+        value. Until the eighth review the design took 3.0 and 6/2 and the card refused them. 5/2 and 2.5 are no count in either."""
+        for spelled in ("3", "+3", "3.0", "3.00", "6/2", "3/1"):
+            with self.subTest(spelled):
+                by_card, verdict, _ = cells(self, LIFTERS, *beam({**STATES, "lugs": spelled}, pins="3"))
+                by_design, same, _ = cells(self, lifters(False), *beam({}, **{**STATES, "lugs": spelled}, pins="3"))
+                self.assertEqual((by_card["b", "beam.lugs", "lugs"], by_card, verdict), ("proved", by_design, same))
+                deck, read = parsed(LIFTERS, *beam({**STATES, "lugs": spelled}, pins="3"))
+                self.assertIn({"name": "b.lugs", "by": "t@example.org", "whole": "3"}, export.card(read, export.read_inputs(read), placed=True)["states"])
+        for spelled in ("5/2", "2.5"):
+            with self.subTest(spelled):
+                with self.assertRaises(LolaSyntaxError):
+                    parsed(LIFTERS, *beam({**STATES, "lugs": spelled}))
+                with self.assertRaises((LoweringError, grid.ComponentError)) as refused:
+                    deck, read = parsed(lifters(False), *beam({}, **{**STATES, "lugs": spelled}))
+                    grid.check(read, deck)
+                self.assertIn("is a count", str(refused.exception))
+
     def test_a_component_of_the_models_reads_no_exact_statement(self):
         from petra.lang import parse_design
         from petra.registry import build_registry

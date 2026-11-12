@@ -363,6 +363,7 @@ The design asks with `given NAME`, as it asks for a bound, and the card answers 
 `signed` takes the first way from the design: the field is then a given, and a design that writes it is refused, with a finding that says the field is for the card to state. Without `signed` either may state the field. So a card may fix a key that its type leaves open, and the design reads it the same way.
 
 - The form follows the field. A bound for a key or for a count is refused, and so is `is` for a quantity that is no count, a whole number for a key, and a name for a count. A key named `"2"` is stated in quotes, `is "2"`: without them `2` is a number.
+- A count is a number whose value is whole, however it is written, in the design and in the card alike: `3`, `+3`, `3.0` and `6/2` are each 3, and `2.5` and `5/2` are no count. card.json holds the value, `"3"`. Until 2026-11-12 the design took `3.0` and `6/2` and the card refused them.
 - The name is one of the key's names, and the count is within its field's floor and its `least`, as if the design had written it.
 - A part reads only what the card states for it: on the part `b`, the line `category given c.category` is refused.
 - A design that reads a given the card does not state is refused, and the finding names the part and the field: `b.category: the card states no b.category`.

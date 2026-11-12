@@ -368,8 +368,8 @@ class _Lowering:
             signed = self.signature(sig)
             if signed is None:
                 return None
-            whole = value.kind is Kind.NUMBER
-            return Stated(signed[0], signed[1], self.span(node), name.text, None if whole else value.text, int(value.text) if whole else None)
+            whole = value.kind is Kind.NUMBER      # the parser takes a number only when its value is whole: 4, +4, 4.0 or 8/2
+            return Stated(signed[0], signed[1], self.span(node), name.text, None if whole else value.text, int(Fraction(value.text)) if whole else None)
         parts = self.signed_range(bound, None, f"given {name.text}")
         return None if parts is None else Bound(*parts, name.text)
 

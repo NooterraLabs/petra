@@ -394,7 +394,8 @@ SNIPPETS: tuple[tuple[str, str, str], ...] = (
      "`given NAME` where the value goes. The design reads every given the card states. A name may be `PART.FIELD`. "
      "A part of a deck's type reads only the given named for it: `Fy given tab.Fy` on the part `tab`. "
      "A card may also state a thing exactly, with `is` in place of the range: the name of a key, as a bare word "
-     "or in quotes, or a whole number with no unit, as in `given beam.category is B signed \"...\" source \"...\"` "
+     "or in quotes, or a number whose value is whole with no unit, `4`, `4.0` or `8/2` alike, as a count the design "
+     "writes, as in `given beam.category is B signed \"...\" source \"...\"` "
      "and `given quad.rotors is 4 signed \"...\" source \"...\"`. It has no range and no `mean`, and it carries a "
      "signature. Only a part of a deck's type reads such a given, and its type says which fields the card states: "
      "a design that writes one of them itself is refused.",
