@@ -68,7 +68,7 @@ CORE_CAP = Limit(1000, "Set on 2026-11-08 at 140f742, where the core measured 95
                        "A new rule adds 3 to 5 lines to rules/__init__.py (inferred from its tables), so "
                        "the headroom covers the registry entries of several rules.")
 
-TRUSTED_CEILING = Limit(19499, "Set on 2026-11-08 at 140f742, where the trusted base measured 13,530 "
+TRUSTED_CEILING = Limit(19704, "Set on 2026-11-08 at 140f742, where the trusted base measured 13,530 "
                                "code lines: core 957, rules 457, outside the kernel 12,116. Raised on "
                                "2026-11-08 on branch parts-core as the parts layer replaces its scaffold: "
                                "classifying the scaffold measured 14,269, and the mesh reader with its "
@@ -180,6 +180,17 @@ TRUSTED_CEILING = Limit(19499, "Set on 2026-11-08 at 140f742, where the trusted 
                                "three steps, so it passed a design the kernel refused and could not print a number "
                                "the kernel only measured. It now takes a need's steps in the kernel's order and "
                                "stops where the kernel stops: 32 lines in petra/grid.py, 19,499. "
+                               "Three more families, a lifter, a cut part and a quadcopter, asked six things of the "
+                               "format on 2026-11-11, and the grid reads each as the kernel does: the units of a "
+                               "rotation, a charge, a speed, a density and of minutes, hours, pounds and miles, 26 "
+                               "lines in petra/units.py and 7 in the lexer and the parser for a unit with a `/` in "
+                               "it; a rule that states `lt`; a field that may be zero or negative; a field that a "
+                               "part may leave unstated; a key and a count that the card states with `is`, 9 lines "
+                               "in petra/ir.py, 15 in the parser and 14 in petra/lang/lower.py; and a "
+                               "waiver that rests only a cell that would be open. The sixth hostile review added a "
+                               "row whose name no cell holds, refused in 4 lines of petra/deck.py, and a requirement "
+                               "that no part can break or meet, which reading a deck now tries. Together those are "
+                               "130 lines in petra/grid.py, and the trusted base measured 19,704. "
                                "Raise it in the commit that needs more and say why here.")
 
 T2_ADOPTED = date(2026, 11, 8)
