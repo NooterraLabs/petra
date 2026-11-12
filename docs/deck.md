@@ -636,6 +636,8 @@ The reader tries a rule only while the work is small. The rules with `requires` 
 
 No cell has a default. The verdict is FAIL with a refuted cell, UNKNOWN with an open cell or with nothing proved, and PASS otherwise. `petra check` says PASS_WAIVED for a PASS with a waived cell, and exits 6 for it, where a PASS exits 0 ([What a waiver rests](#what-a-waiver-rests)).
 
+A proved or refuted cell of an inequality prints a ratio: the most of the first side over the least of the second, as a float. It prints none where the second side may be zero or under, or where the ratio is past the largest float. Until 2026-11-12 such a ratio stopped `petra check` with exit code 4: the shipped lap with plates 10^-98 inch thick under a pull of 10^99 kip, which FAILs (`tests/test_kernel_attacks9.py`).
+
 ### What a waiver rests
 
 A waiver rests a cell that would be open because the deck has no rule for it, or because the part or the card leaves something out and a completion of what is left out makes the rule hold. It rests no other: the one who signs it answers for what the deck has nothing to say about on that line of that part, and for what is left out being as the completion has it, and not for what the deck could say, whether it settled it or not.

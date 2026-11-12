@@ -20,10 +20,15 @@ waived cell leaves unchecked. One test per finding.
       may state under zero, was completed there. A completion is now held to the floor of its
       dimension as a load of the card is, and a deck whose `least` is under that floor is
       refused.
+  C1  The shipped lap with plates 10^-98 inch thick under a pull of 10^99 kip: the ratio of a
+      refuted cell was past the largest float, and `petra check` stopped with exit code 4. The
+      cell now prints no ratio, and the lap FAILs.
 """
 import json
 import unittest
+from pathlib import Path
 
+import petra
 from petra import grid
 from tests.test_deck_features import HEAD, KERNEL, asks, cells, design, given, key, kind, load, made_up, no_deck, parsed, part, reads, reason, rule, size
 from tests.test_kernel_grid import ask
@@ -181,10 +186,28 @@ class CompletionsAboveTheFloor(unittest.TestCase):
         mine, kernel = no_deck(self, made_up([kind("plate", size("t", least="-1 mm"))]))
         self.assertIn("field t: its least", kernel)
 
-    def test_a_least_over_the_floor_or_under_a_floor_that_may_be_negative_lifts_is_read(self):
+    def test_a_least_over_the_floor_or_under_a_floor_that_negative_lifts_is_read(self):
         reads(self, strut("-40 degC"))
         reads(self, made_up([kind("holder", size("x", may_be="negative", least="-1 mm"),
                                   loads=[{"name": "f", "dim": "length", "what": "f", "may_be": "negative", "least": "-1 mm"}])]))
+
+
+# --- C1. a ratio past the largest float ------------------------------------------------------------------
+
+EXAMPLES = Path(__file__).resolve().parent.parent / "examples" / "deck"
+TINY, HUGE = "0." + "0" * 97 + "1", "1" + "0" * 99
+
+
+class ARatioPastTheLargestFloat(unittest.TestCase):
+    def test_the_shipped_lap_under_a_pull_of_ten_to_the_99_kip_fails(self):
+        """Plates 10^-98 inch thick and wide, of 10^-98 ksi, carry about 10^-196 kip, and the pull reaches 10^99: the demand over the
+        capacity is past the largest float, and float() of it raised OverflowError, which stopped petra check with exit code 4."""
+        text = (EXAMPLES / "lap_pass.petra").read_text(encoding="utf-8").replace("0.375 inch", f"{TINY} inch").replace("6 inch", f"{TINY} inch")
+        card = (EXAMPLES / "lap_pass.card").read_text(encoding="utf-8").replace("36 ksi", f"{TINY} ksi").replace("45 kip", f"{HUGE} kip")
+        found = petra.check(card, text, path="lap.petra", repair=False)
+        self.assertEqual(found["status"], "FAIL")
+        yields = [c for c in found["cells"] if c["mechanism"] == "lap.ply_yield"]
+        self.assertEqual([(c["state"], c.get("ratio")) for c in yields], [("refuted", None)] * 2)
 
 
 if __name__ == "__main__":

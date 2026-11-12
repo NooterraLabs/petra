@@ -32,6 +32,7 @@ from __future__ import annotations
 import itertools
 import json
 import math
+import sys
 from dataclasses import dataclass, field, replace
 from fractions import Fraction
 from functools import lru_cache
@@ -1642,9 +1643,12 @@ def _reads(rule: Rule) -> set[str]:
 
 
 def _ratio(nodes: list[list], low: int, high: int, box: list[Interval]) -> float | None:
+    """The demand over the capacity, for the report: none where the capacity may be zero or under, or the ratio is past the largest
+    float, as a pull of 10^99 kip on a plate of 10^-98 inch is."""
     v = enclosures(nodes, box)
     if isinstance(v[low], Interval) and isinstance(v[high], Interval) and v[high].lo > 0:
-        return float(v[low].hi / v[high].lo)
+        q = v[low].hi / v[high].lo
+        return float(q) if abs(q) <= sys.float_info.max else None
     return None
 
 
