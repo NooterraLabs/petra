@@ -76,8 +76,22 @@ def sized (dim : Dim) (sign : Sign) (least : Option Rat) (its : String) (range :
 the design by its name and its type, `inputs` the card's inputs of each name, and `card` and
 `design` the two names as the labels of a tape hold them. -/
 def slotOf (card design : String) (typed : Std.TreeSet (String × String))
-    (inputs : Std.TreeMap String (Array Input)) (floors : Floors) (part : String) (field : Field) (args : Array Arg) :
+    (inputs : Std.TreeMap String (Array Input)) (states : Std.TreeMap String (Array Stated)) (floors : Floors)
+    (part : String) (field : Field) (args : Array Arg) :
     Except (String × String) Slot := do
+  -- What the card states exactly under the name a line reads with a given: a part reads only
+  -- what the card states for it and for the field, once. `rule` is the rule the field's kind
+  -- breaks when there is none.
+  let stated (rule name : String) : Except (String × String) Said := do
+    unless name == s!"{part}.{field.name}" do
+      throw (rule, s!"reads the given {name}, and a part reads only what the card states for it, {part}.{field.name}")
+    match (states.getD name #[]).toList with
+    | [found] => pure found.said
+    | [] =>
+      if inputs.contains name then
+        throw (rule, s!"{name} is a bound of the card, and a key or a count is stated exactly: `given {name} is ...`")
+      throw (rule, s!"the card states no {name}")
+    | _ => throw (rule, s!"the card states {name} twice")
   -- The one word `unstated` leaves an `optional` field unstated. On any other field it is
   -- what it would be there: a name of a key that has that name, and nothing a quantity takes.
   if let (#[.word word], false) := (args, field.kind matches .parts ..) then
@@ -95,9 +109,17 @@ def slotOf (card design : String) (typed : Std.TreeSet (String × String))
       throw ("parts.5", s!"names {names.size} different {kind} parts of this design")
     return .parts named.toArray
   | .key _ known, [.word name] | .key _ known, [.text name] =>
+    if field.signed then throw ("parts.4", "is for the card to state: the design reads it with a given")
     unless known.contains name do throw ("parts.4", field.oneOf)
     return .key name
-  | .key .., _ => throw ("parts.4", "takes one name")
+  | .key _ known, [.given name] =>
+    -- A key that the card states: the name is the card's, and it is one of the key's names.
+    match ← stated "parts.4" name with
+    | .key said =>
+      unless known.contains said do throw ("parts.4", field.oneOf)
+      return .key said
+    | .whole _ => throw ("parts.4", s!"the card states a whole number for {name}, and it is a key")
+  | .key .., _ => throw ("parts.4", "takes one name, or one given")
   | .quantity dim signed whole least, [.number its range] =>
     if signed then throw ("parts.3", "is for the card to state: the design reads it with a given")
     sized dim field.sign least its range
@@ -108,10 +130,18 @@ def slotOf (card design : String) (typed : Std.TreeSet (String × String))
         if floor.min < 0 && !floor.admits range.lo then throw ("parts.3", floor.broken name range.lo)
     if whole && (range.lo != range.hi || range.lo.den != 1) then throw ("parts.3", "is a count: one whole number")
     return .quantity ⟨s!"dsg:{design}.{part}.{field.name}", range⟩
-  | .quantity dim _ whole least, [.given name] =>
-    if whole then throw ("parts.3", "is a count, which the design writes as a whole number")
+  | .quantity dim _ true least, [.given name] =>
+    -- A count that the card states: one whole number, exact, held to the floor of its field.
+    match ← stated "parts.3" name with
+    | .whole n =>
+      sized dim field.sign least "dimensionless" (Iv.pt n)
+      return .quantity ⟨s!"in:{card}.{name}", Iv.pt n⟩
+    | .key _ => throw ("parts.3", s!"the card states a name for {name}, and it is a count")
+  | .quantity dim _ false least, [.given name] =>
     unless name == s!"{part}.{field.name}" do
       throw ("parts.3", s!"reads the given {name}, and a part reads only the bound the card gives for it, {part}.{field.name}")
+    if states.contains name && !inputs.contains name then
+      throw ("parts.3", s!"{name} is stated exactly by the card, and a quantity that is no count reads a bound: `given {name} in [...]`")
     match (inputs.getD name #[]).toList with
     | [input] =>
       if input.caseName.isSome || input.on.isSome || input.field.isSome then throw ("parts.3", s!"{name} is a load of the card")
@@ -137,6 +167,7 @@ def readParts (rules : Rules) (card : Card) (design : Design) (floors : Floors :
   let blocks := design.parts.getD #[]
   let typed : Std.TreeSet (String × String) := blocks.foldl (fun seen b => seen.insert (b.name, b.kind)) {}
   let inputsNamed := grouped card.inputs (·.name)
+  let statesNamed := grouped card.states (·.name)
   let kinds := firsts rules.kinds (·.name)
   let mut parts : Array Part := #[]
   let mut names : Std.TreeSet String := {}
@@ -157,7 +188,7 @@ def readParts (rules : Rules) (card : Card) (design : Design) (floors : Floors :
           if given.contains line.field then say "parts.2" "design" item "is given twice"
           else
             known := known + 1
-            match slotOf cardName designName typed inputsNamed floors block.name field line.args with
+            match slotOf cardName designName typed inputsNamed statesNamed floors block.name field line.args with
             | .ok slot => slots := slots.insert line.field slot
             | .error (rule, why) => say rule "design" item why
         given := given.insert line.field
@@ -208,6 +239,12 @@ def readParts (rules : Rules) (card : Card) (design : Design) (floors : Floors :
           else on := on.insert (part, field, under) ⟨s!"in:{cardName}.{input.name}", input.range⟩
         | _ => say "parts.6" "card" input.name s!"a {its.kind.name} takes no load {field}"
     | _, _, _ => say "parts.6" "card" input.name "a load has its case, the part it is on and its field"
+  -- What the card states exactly is read by a part, as a given is, and has a name of its own
+  -- among the statements and the inputs: a name in both could be read as either.
+  for s in card.states do
+    if (statesNamed.getD s.name #[]).size > 1 then say "parts.6" "card" s.name "two statements have this name"
+    if inputsNamed.contains s.name then say "parts.6" "card" s.name "is the name of a statement and of an input: each has a name of its own"
+    unless read.contains s.name do say "parts.6" "card" s.name "is stated, and no part reads it"
   let asked : Std.TreeSet (String × String) := rules.asks.foldl (fun asked ask => asked.insert (ask.kind, ask.mechanism)) {}
   for w in card.waivers do
     unless (place.get? w.subject).any fun part => asked.contains (part.kind.name, w.mechanism) do

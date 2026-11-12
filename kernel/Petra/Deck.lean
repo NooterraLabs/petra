@@ -101,6 +101,9 @@ structure Field where
   /-- Whether a part may leave the field unstated, as a maker's record leaves out what it
   does not give. A design then writes `UNSTATED` in its place. -/
   optional : Bool := false
+  /-- For a key: whether only the card states it, as `signed` says of a quantity in its kind.
+  A design then reads it with a given, and one that writes the name itself is refused. -/
+  signed : Bool := false
 
 /-- The word a design writes for a field that its type marks `optional` and that the part's
 record does not state. It is no name of such a key: the deck is refused if it is. -/
@@ -1073,13 +1076,15 @@ def readField (load : Bool) (j : Json) : Except String Field := do
       | .ok (.bool b) => pure b
       | _ => throw s!"{key} is true or false"
     if has j "one_of" then
-      within j ["name", "what", "one_of", "optional"]
+      within j ["name", "what", "one_of", "optional", "signed"]
       let names ← texts j "one_of"
       if names.isEmpty || !distinct names then throw "`one_of` is a list of different names"
       let optional ← flag "optional"
+      let signed ← flag "signed"
       if optional && names.contains UNSTATED then
         throw s!"a key that may be left unstated has no name `{UNSTATED}`: that word is how a design leaves it unstated"
-      return { name, kind := .key names (setOf names), oneOf := s!"is one of: {", ".intercalate names.toList}", optional }
+      if optional && signed then throw BOTH
+      return { name, kind := .key names (setOf names), oneOf := s!"is one of: {", ".intercalate names.toList}", optional, signed }
     if has j "type" then
       within j ["name", "what", "type", "as"]
       let names ← if has j "as" then texts j "as" else pure #[name]

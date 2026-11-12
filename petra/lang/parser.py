@@ -11,7 +11,8 @@ position):
     card        (name, items)             items: owner (STRING) | environment (IDENT)
     param       (name, range)
     ambient     (bound | paramref)
-    given       (name, bound)             in a card; (name,) as an argument in a design
+    given       (name, bound | is)        in a card; (name,) as an argument in a design
+    is          (IDENT | STRING | NUMBER) sig?    what a card states exactly: a key's name or a whole number
     component   (kind, name, attrs)       attr: (key, args)
     load        (name, entries, sig?)     entry: (path, field, bound | paramref)
     tests       (name, path, trials, failures, level, sig?, block sig?)
@@ -180,9 +181,28 @@ class Parser:
     def _given(self) -> Node:
         kw = self._word("given")
         name = self._bound_name("a name for the given bound")
+        if self._is(Kind.IDENT, "is"):
+            return _node("given", kw, name, self._stated())
         if not self._is(Kind.IDENT, "in"):
-            raise self._error(self._peek(), f"expected a bound 'in [lo, hi]', found {_describe(self._peek())}")
+            raise self._error(self._peek(), f"expected a bound 'in [lo, hi]' or an exact statement 'is NAME', found {_describe(self._peek())}")
         return _node("given", kw, name, self._bound())
+
+    def _stated(self) -> Node:
+        """`is NAME`, `is "a name"` or `is 4`, and who signs it: what the card states exactly,
+        with no range. A name is a bare word or a text in quotes, and a number is a whole
+        number with no unit. Which of the two a field takes is for its deck to say."""
+        tok = self._word("is")
+        value = self._peek()
+        whole = value.kind is Kind.NUMBER and value.text.lstrip("+-").isascii() and value.text.lstrip("+-").isdigit()
+        if value.kind is Kind.NUMBER and not whole:
+            raise self._error(value, f"a card states a whole number exactly, as in 'is 4', and {value.text} is none")
+        if value.kind not in (Kind.IDENT, Kind.STRING, Kind.NUMBER) or (value.kind is Kind.IDENT and value.text in NOT_UNITS):
+            raise self._error(value, f"expected the name of a key, a text in quotes or a whole number after 'is', found {_describe(value)}")
+        self._next()
+        if whole and (self._is(Kind.PUNCT, "%") or (self._is(Kind.IDENT) and not self._at_signature())):
+            raise self._error(self._peek(), f"a whole number that a card states has no unit, and {_describe(self._peek())} follows it")
+        sig = self._signature() if self._at_signature() else None
+        return _node("is", tok, value, sig=sig)
 
     def _bound_name(self, what: str) -> Token:
         """`NAME`, or `PART.FIELD` for the bound on one field of one part, as one token."""

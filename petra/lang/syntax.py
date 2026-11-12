@@ -15,7 +15,7 @@ that registers the kind (petra/models), so adding a domain never edits this file
     card      = "card" STRING "{" NL { ( "owner" STRING | "environment" IDENT ) NL } "}" ;
     param     = "param" IDENT "in" range ;
     ambient   = "ambient" bound ;
-    given     = "given" name "in" range [ "mean" qty ] [ signature ] ;
+    given     = "given" name ( "in" range [ "mean" qty ] | "is" ( IDENT | STRING | INT ) ) [ signature ] ;
     name      = IDENT { "." IDENT } ;              PART.FIELD names the bound on one field of one part
     component = KIND IDENT "{" NL { attr NL } "}" ;    KIND: an IDENT not in DECLS
     attr      = IDENT { arg } ;

@@ -18,10 +18,243 @@ from petra.lang import LolaSyntaxError, LoweringError
 from petra.units import CUSTOMARY, UNITS, Dim, UnitError, parse_quantity, readable_text
 from tests.test_deck_features import (ANCHOR, HEAD, KERNEL, SIGNED, asks, cells, design, given, ill_formed, key, kind, load, made_up, no_deck, parsed, part,
                                       reads, reason, rule, size)
-from tests.test_kernel_grid import ask, cell
+from tests.test_kernel_grid import ask, cell, findings
 
 INCH = Fraction(127, 5000)
 LB = Fraction(45359237, 100000000)
+
+
+# --- 1. a key and a whole number that the card states ---------------------------------------------------
+
+LIMIT = {"id": "made-up/limit", "anchor": ANCHOR, "gives": {"name": "L", "dim": "length"}, "takes": [{"name": "category", "one_of": ["A", "B", "C"]}],
+         "table": {"down": {"by": "category"}, "unit": "m", "cells": ["2", "4", "6"]}}
+
+
+def lifters(signed: bool = True) -> dict:
+    """A beam whose category, service class and count of lugs are the card's to state, or with `signed` false the design's."""
+    mark = {"signed": True} if signed else {}
+    beam = kind("beam", {**key("category", "A", "B", "C"), **mark}, {**key("service", "0", "1", "2"), **mark}, key("end", "straight", "round"),
+                size("lugs", "dimensionless", whole=True, least="2", **mark), size("pins", "dimensionless", whole=True), size("length"), size("Fy", "stress", signed=True),
+                needs=[{"le": ["pins", "lugs"], "why": "made up: a pin for each lug at most"}])
+    return made_up([beam], [asks("beam.class", "beam"), asks("beam.length", "beam"), asks("beam.lugs", "beam"), asks("beam.heavy", "beam"),
+                            asks("beam.end", "beam", unless={"when": ["or", ["is", "end", "round"], ["is", "category", "C"]], "why": "made up"})],
+                   [rule("class", "beam", "beam.class", when=["is", "category", "A"], requires=["is", "service", "0"]),
+                    rule("length", "beam", "beam.length", le=["length", ["row", "made-up/limit", {"category": "category"}]]),
+                    rule("lugs", "beam", "beam.lugs", le=[["mul", "lugs", ["q", "1", "m"]], ["mul", "pins", "length"]]),
+                    rule("heavy", "beam", "beam.heavy", when=["not", ["is", "service", "0"]], lt=[["mul", "lugs", ["q", "10", "ksi"]], "Fy"]),
+                    rule("end", "beam", "beam.end", le=["length", ["q", "1", "m"]])], [LIMIT])
+
+
+LIFTERS = lifters()
+STATES = dict(category="B", service='"1"', lugs="2")
+
+
+def says(name: str, value: str) -> str:
+    return f"given {name} is {value} {SIGNED}\n"
+
+
+def beam(states: dict | None = None, card_more: str = "", **lines: str) -> tuple[str, str]:
+    """A beam and its card: the card states what `states` holds, and the design reads each of those with a given unless `lines` says otherwise."""
+    states = STATES if states is None else states
+    written = {"end": "straight", "pins": "2", "length": "3 m", "Fy": "given b.Fy", **{name: f"given b.{name}" for name in states}, **lines}
+    order = {name: written[name] for name in ("category", "service", "end", "lugs", "pins", "length", "Fy") if name in written}
+    return design(part("beam", "b", **order)), HEAD + "".join(says(f"b.{name}", value) for name, value in states.items()) + given("b.Fy", "36 ksi") + card_more
+
+
+def with_card(test: unittest.TestCase, text: str, card: str, change, rules: dict = LIFTERS) -> dict:
+    """What the kernel says of the pair when card.json is changed by `change` after it is written, with the design answering the changed card."""
+    deck, read = parsed(rules, text, card)
+    files = grid.bundle(read, deck)
+    body = json.loads(files["card"])
+    change(body)
+    new = export.text(body)
+    return ask({**files, "card": new, "design": files["design"].replace(json.loads(files["design"])["card"], export.sha256(new))})
+
+
+class StatedByTheCard(unittest.TestCase):
+    def test_a_card_states_a_key_and_a_count_and_the_design_reads_them_with_a_given(self):
+        text, card = beam()
+        found, verdict, said = cells(self, LIFTERS, text, card)
+        self.assertEqual(found, {("b", "beam.length", "length"): "proved", ("b", "beam.lugs", "lugs"): "proved", ("b", "beam.heavy", "heavy"): "proved",
+                                 ("b", "beam.end", "end"): "refuted", ("b", "beam.class", ""): "open"})
+        deck, read = parsed(LIFTERS, text, card)
+        body = export.card(read, export.read_inputs(read), placed=True)
+        self.assertEqual(body["states"], [{"name": "b.category", "by": "t@example.org", "key": "B"}, {"name": "b.lugs", "by": "t@example.org", "whole": "2"},
+                                          {"name": "b.service", "by": "t@example.org", "key": "1"}])
+        self.assertEqual([i["name"] for i in body["inputs"]], ["b.Fy"], "a statement is no bound, and is no input")
+        lines = {line["field"]: line["args"] for line in json.loads(grid.bundle(read, deck)["design"])["parts"][0]["lines"]}
+        self.assertEqual((lines["category"], lines["lugs"]), ([{"given": "b.category"}], [{"given": "b.lugs"}]))
+
+    def test_the_hash_of_the_card_covers_what_it_states(self):
+        hashes = set()
+        for states in (STATES, {**STATES, "category": "C"}, {**STATES, "lugs": "3"}, {**STATES, "service": '"2"'}):
+            deck, read = parsed(LIFTERS, *beam(states, pins="2"))
+            hashes.add(export.sha256(grid.bundle(read, deck)["card"]))
+        self.assertEqual(len(hashes), 4)
+        text, card = beam()
+        deck, read = parsed(LIFTERS, text, card)
+        self.assertNotIn("states", json.loads(grid.bundle(parsed(PACKS, *pack())[1], grid.read_deck(json.dumps(PACKS)))["card"]), "a card that states none has no such key")
+
+    def test_whatever_reads_the_field_reads_it_the_same_whoever_stated_it(self):
+        """A `when`, a `requires`, an `unless`, a key of a table, a rule on the count and a need: the cells of a beam whose card states the
+        three fields are the cells of the same beam under a deck that leaves them to the design."""
+        for states in (STATES, dict(category="A", service='"0"', lugs="2"), dict(category="A", service='"2"', lugs="3"), dict(category="C", service='"0"', lugs="4")):
+            with self.subTest(states):
+                pins = dict(pins=states["lugs"])
+                by_card, verdict, _ = cells(self, LIFTERS, *beam(states, **pins))
+                by_design, same, _ = cells(self, lifters(False), *beam({}, **states, **pins))
+                self.assertEqual((by_card, verdict), (by_design, same))
+        found, verdict, _ = cells(self, LIFTERS, *beam(dict(category="A", service='"2"', lugs="3"), pins="3"))
+        self.assertEqual((found["b", "beam.class", "class"], found["b", "beam.heavy", "heavy"], verdict), ("refuted", "proved", "FAIL"))
+        found, _, _ = cells(self, LIFTERS, *beam(dict(category="C", service='"0"', lugs="4"), pins="4"))
+        self.assertEqual((found["b", "beam.end", ""], found["b", "beam.length", "length"]), ("not_applicable", "proved"))
+
+    def test_a_key_that_is_not_signed_may_be_stated_by_either(self):
+        text, card = beam({**STATES, "end": "round"})
+        found, _, _ = cells(self, LIFTERS, text, card)
+        self.assertEqual(found["b", "beam.end", ""], "not_applicable", "the card states the end, which the type leaves to either")
+        text, card = beam({**STATES, "pins": "2"})
+        found, _, _ = cells(self, LIFTERS, text, card)
+        self.assertEqual(found["b", "beam.lugs", "lugs"], "proved")
+
+    def test_a_design_that_writes_a_field_of_the_cards_is_refused(self):
+        for lines, finding in ((dict(category="B"), "parts.4 design b.category: is for the card to state: the design reads it with a given"),
+                               (dict(category='"B"'), "parts.4 design b.category: is for the card to state"),
+                               (dict(service='"1"'), "parts.4 design b.service: is for the card to state"),
+                               (dict(lugs="2"), "parts.3 design b.lugs: is for the card to state: the design reads it with a given")):
+            with self.subTest(lines):
+                states = {name: value for name, value in STATES.items() if name not in lines}
+                mine, its = ill_formed(self, LIFTERS, *beam(states, **lines))
+                self.assertIn(finding, its)
+                self.assertIn("is for the card to state", mine)
+                with self.assertRaises(LoweringError) as unread:      # the card states it too: then no part reads what the card states
+                    parsed(LIFTERS, *beam(STATES, **lines))
+                self.assertIn("and no component reads it", str(unread.exception))
+
+    def test_a_design_cannot_read_a_statement_under_another_name(self):
+        for lines, card_more, finding in (
+                (dict(category="given b.service"), "", "parts.4 design b.category: reads the given b.service, and a part reads only what the card states for it, b.category"),
+                (dict(category="given c.category"), says("c.category", "A"), "parts.4 design b.category: reads the given c.category"),
+                (dict(lugs="given b.pins", pins="2"), says("b.pins", "5"), "parts.3 design b.lugs: reads the given b.pins"),
+                (dict(category="given b.category B"), "", "parts.4 design b.category: takes one name, or one given"),
+                (dict(category="given b.category given b.category"), "", "parts.4 design b.category: takes one name, or one given")):
+            with self.subTest(lines):
+                text, card = beam(**lines)
+                for name, value in STATES.items():      # the card states only what the design reads: the language refuses a statement nothing reads
+                    if f"given b.{name}" not in text:
+                        card = card.replace(says(f"b.{name}", value), "")
+                mine, its = ill_formed(self, LIFTERS, text, card + card_more)
+                self.assertIn(finding, its)
+        text, card = beam()
+        for change in (("category given", "Category given"), ("category given b.category", "category given b.Category")):
+            with self.subTest(change):
+                with self.assertRaises((LoweringError, grid.ComponentError)):
+                    deck, read = parsed(LIFTERS, text.replace(*change), card)
+                    grid.check(read, deck)
+
+    def test_a_card_that_does_not_state_it_leaves_the_design_refused_by_name(self):
+        text, card = beam()
+        with self.assertRaises(LoweringError) as refused:
+            parsed(LIFTERS, text, card.replace(says("b.category", "B"), ""))
+        self.assertIn("b.category: the card gives no 'b.category'", str(refused.exception))
+        if verify.binary():
+            said = with_card(self, text, card, lambda body: body["states"].pop(0))
+            self.assertEqual((said["verdict"], findings(said)), ("ILL-FORMED", "parts.4 design b.category: the card states no b.category"))
+            said = with_card(self, text, card, lambda body: body.pop("states"))
+            self.assertEqual(findings(said).count("the card states no b."), 3)
+            said = with_card(self, text, card, lambda body: body["states"].__setitem__(1, {"name": "b.lugs", "by": "t@example.org", "key": "2"}))
+            self.assertIn("parts.3 design b.lugs: the card states a name for b.lugs, and it is a count", findings(said))
+
+    def test_a_card_states_one_of_the_names_and_a_count_within_its_floor(self):
+        for states, finding in (({**STATES, "category": "D"}, "parts.4 design b.category: is one of: A, B, C"), ({**STATES, "category": '"b"'}, "parts.4 design b.category: is one of: A, B, C"),
+                                ({**STATES, "service": "1"}, "parts.4 design b.service: the card states a whole number for b.service, and it is a key"),
+                                ({**STATES, "category": "2"}, "parts.4 design b.category: the card states a whole number"),
+                                ({**STATES, "lugs": "two"}, "parts.3 design b.lugs: the card states a name for b.lugs, and it is a count"),
+                                ({**STATES, "lugs": '"2"'}, "parts.3 design b.lugs: the card states a name for b.lugs"),
+                                ({**STATES, "lugs": "1"}, "parts.3 design b.lugs: is under the least its field may take"),
+                                ({**STATES, "lugs": "0"}, "parts.3 design b.lugs: is not more than zero"), ({**STATES, "lugs": "-2"}, "parts.3 design b.lugs: is not more than zero")):
+            with self.subTest(states):
+                mine, its = ill_formed(self, LIFTERS, *beam(states))
+                self.assertIn(finding, its)
+        mine, its = ill_formed(self, LIFTERS, *beam(pins="3"))
+        self.assertIn("parts.9 design b: breaks need 1 of a beam: its left side, 3, is not at most its right side, 2", its, "a need reads the count the card states")
+        found, _, _ = cells(self, LIFTERS, *beam({**STATES, "lugs": "+3"}, pins="3"))
+        self.assertEqual(found["b", "beam.lugs", "lugs"], "proved")
+
+    def test_a_bound_is_no_statement_and_a_statement_no_bound(self):
+        text, card = beam()
+        for old, new, finding in ((says("b.category", "B"), given("b.category", "1", "2"), "parts.4 design b.category: b.category is a bound of the card, and a key or a count is stated exactly"),
+                                  (says("b.lugs", "2"), given("b.lugs", "2", "2"), "parts.3 design b.lugs: b.lugs is a bound of the card, and a key or a count is stated exactly"),
+                                  (given("b.Fy", "36 ksi"), says("b.Fy", "36"), "parts.3 design b.Fy: b.Fy is stated exactly by the card, and a quantity that is no count reads a bound")):
+            with self.subTest(new):
+                mine, its = ill_formed(self, LIFTERS, text, card.replace(old, new))
+                self.assertIn(finding, its)
+
+    def test_the_card_language_reads_is_with_a_name_a_text_or_a_whole_number_and_a_signature(self):
+        text, card = beam()
+        for value in ("B", '"B"', '"a name with spaces"', "2", "+2", "-2", "0", "kN", "h", "K", "unstated"):
+            with self.subTest(value):
+                try:
+                    parsed(LIFTERS, text, card.replace(says("b.category", "B"), says("b.category", value)))
+                except grid.ComponentError:
+                    pass
+        for value in ("2.5", "1/2", "2 mm", "2 %", "B C", "", "signed", "in", "given", "[A, B]", "(A)", "b.category", "A.B", "is B", '"B" "C"', "2 3"):
+            with self.subTest(value):
+                with self.assertRaises(LolaSyntaxError):
+                    parsed(LIFTERS, text, card.replace(says("b.category", "B"), says("b.category", value)))
+        for line in ("given b.category is B\n", 'given b.category is B signed "" source "x"\n', 'given b.category is B signed "x" source ""\n',
+                     "given b.category is B mean 2 " + SIGNED + "\n", says("b.category", "B") + says("b.category", "C"), says("b.category", "B") + given("b.category", "1")):
+            with self.subTest(line):
+                with self.assertRaises((LoweringError, LolaSyntaxError)):
+                    parsed(LIFTERS, text, card.replace(says("b.category", "B"), line))
+        measured = card.replace(says("b.category", "B"), 'given b.category is B measured "lab@example.org" source "a report"\n')
+        (first, *_) = export.card(parsed(LIFTERS, text, measured)[1], [], placed=True)["states"]
+        self.assertEqual(first, {"name": "b.category", "by": "lab@example.org", "key": "B"})
+
+    def test_a_component_of_the_models_reads_no_exact_statement(self):
+        from petra.lang import parse_design
+        from petra.registry import build_registry
+
+        card = 'petra 0\n\ncard "hook" {\n  owner "t@example.org"\n}\n' + says("capacity", "5")
+        with self.assertRaises(LoweringError) as refused:
+            parse_design(card, "petra 0\n\ndemand hook {\n  capacity given capacity\n}\n", "hook.petra", build_registry())
+        self.assertIn("only a part of a deck's type reads such a given", str(refused.exception))
+
+    @KERNEL
+    def test_a_card_json_that_states_what_no_part_reads_twice_or_under_an_inputs_name_is_refused(self):
+        text, card = beam()
+        stray = {"name": "nobody.category", "by": "t@example.org", "key": "B"}
+        for change, finding in ((lambda b: b["states"].append(stray), "parts.6 card nobody.category: is stated, and no part reads it"),
+                                (lambda b: b["states"].append({**stray, "name": "b.end"}), "parts.6 card b.end: is stated, and no part reads it"),
+                                (lambda b: b["states"].append(dict(b["states"][0])), "parts.6 card b.category: two statements have this name"),
+                                (lambda b: b["states"].append({**b["states"][0], "key": "C"}), "parts.4 design b.category: the card states b.category twice"),
+                                (lambda b: b["states"].append({"name": "b.Fy", "by": "t@example.org", "key": "B"}), "parts.6 card b.Fy: is the name of a statement and of an input"),
+                                (lambda b: b["inputs"].append({"name": "b.category", "dim": "dimensionless", "lo": "1", "hi": "1", "by": "x"}), "parts.6 card b.category: is the name of a statement and of an input"),
+                                (lambda b: b["states"][0].update(by=""), "types.5 card b.category: the statement names no by"),
+                                (lambda b: b["states"][0].pop("by"), "types.5 card b.category: the statement names no by"),
+                                (lambda b: b["states"][0].update(whole="2"), "shape card states[0]: a statement has one of key, a text, and whole"),
+                                (lambda b: b["states"][0].pop("key"), "shape card states[0]: a statement has one of key"),
+                                (lambda b: b["states"][0].update(key=2), "shape card states[0]: a statement has one of key"),
+                                (lambda b: b["states"][1].update(whole="2.5"), "shape card states[1]: whole: not a canonical rational"),
+                                (lambda b: b["states"][1].update(whole="5/2"), "shape card states[1]: whole is not a whole number"),
+                                (lambda b: b["states"][1].update(whole="02"), "shape card states[1]: whole: "),
+                                (lambda b: b["states"][1].update(whole=2), "shape card states[1]: a statement has one of key"),
+                                (lambda b: b["states"][0].update(case="x"), "shape card states[0]: a statement has name, by and one of key and whole, and no case"),
+                                (lambda b: b.update(states={}), "shape card : states is not a list")):
+            with self.subTest(finding):
+                said = with_card(self, text, card, change)
+                self.assertEqual(said["verdict"], "ILL-FORMED")
+                self.assertIn(finding, findings(said))
+
+    @KERNEL
+    def test_a_card_that_states_a_key_is_a_card_for_a_deck_of_rules(self):
+        """Type rule 7: with a design stripped of its parts, or with no deck of rules, the kernel refuses the card for its `states`."""
+        deck, read = parsed(LIFTERS, *beam())
+        files = grid.check(read, deck)[1]
+        stripped = json.loads(files["design"])
+        del stripped["parts"]
+        said = ask({**files, "design": json.dumps(stripped)}, without=("rules",))
+        self.assertIn("types.7 card states: is a key of the card, which only a design checked against a deck of rules has", findings(said))
 
 
 # --- 3. more units --------------------------------------------------------------------------------------

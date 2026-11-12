@@ -255,7 +255,7 @@ A deck is one JSON file in `petra/decks`.
 | `grid` | The lines of the grid |
 | `rules` | The rules |
 
-Each object of a deck has the keys this page gives it, and no other. A key the page does not give is refused wherever it stands: in the deck, a row, an `anchor`, `gives`, an input of `takes`, a case, a jump, a table, a side of a table, a type, a field, a load, a need, a line of the grid, `unless`, a rule and an item of `where`. So is a key where it does not belong: `signed`, `whole`, `least` or `may_be` on a field that is no quantity, `optional` on a field that joins parts or on a load, `as` on a field that joins no part, and `closed` on a side with no `bands`. The refusal names the key. A misspelled key is then an error, and never a key left out with its default in its place: `close` for `closed` would leave every band closed at its upper end.
+Each object of a deck has the keys this page gives it, and no other. A key the page does not give is refused wherever it stands: in the deck, a row, an `anchor`, `gives`, an input of `takes`, a case, a jump, a table, a side of a table, a type, a field, a load, a need, a line of the grid, `unless`, a rule and an item of `where`. So is a key where it does not belong: `whole`, `least` or `may_be` on a field that is no quantity, `signed` on a field that joins parts, `optional` on a field that joins parts or on a load, `as` on a field that joins no part, and `closed` on a side with no `bands`. The refusal names the key. A misspelled key is then an error, and never a key left out with its default in its place: `close` for `closed` would leave every band closed at its upper end.
 
 A design names a type as the kind of a component block: `lap splice { ... }` is a part named `splice` of type `lap`. The parts of one design are all of one deck's types, or all of the built-in models' kinds.
 
@@ -289,16 +289,16 @@ A field is one line of the part's block. It has `name`, `what`, a text that is n
 | A field with | Is | A design writes |
 |---|---|---|
 | `dim` | A quantity of that dimension, more than zero unless it says `may_be` | `thickness 0.375 inch`, or `Fy given tab.Fy` |
-| `one_of` | A key: one of the listed names | `threads included`, and in quotes when the name has a space: `fastener "Group 120"` |
+| `one_of` | A key: one of the listed names | `threads included`, and in quotes when the name has a space: `fastener "Group 120"`, or `category given beam.category` |
 | `type` | The parts of that type it joins, one for each name in `as` | `joins tab strap` |
 
-A quantity may also have these. A key may have `optional`, and no other of them.
+A quantity may also have these. A key may have `optional` and `signed`, and no other of them.
 
 | Key | Means |
 |---|---|
 | `optional` | A part may leave it unstated: the design writes `unstated` in its place ([A field that a record may leave unstated](#a-field-that-a-record-may-leave-unstated)) |
-| `signed` | Only the card states it, and the design reads it with `given`. A design that writes a number for it is refused. A material strength is signed. |
-| `whole` | It is a count, and the design writes a whole number |
+| `signed` | Only the card states it, and the design reads it with `given`. A design that writes a number or a name for it is refused. A material strength is signed, and so is a design category ([What the card states of a part](#what-the-card-states-of-a-part)). |
+| `whole` | It is a count: a whole number, which the design writes or the card states exactly |
 | `least` | The least value it may take |
 | `may_be` | `"zero"`: it may be zero, and not under it. `"negative"`: it may be zero or under it. Without `may_be` a quantity of a part is more than zero. |
 
@@ -313,6 +313,48 @@ A part reads only the bound the card gives under the part's name and the field's
 `as` gives each joined part the name a rule calls it by. With `"as": ["a", "b"]`, a rule reads `a.thickness` and `b.Fu`. A design lists one part for each name, in the order of `as`: in `joins tab strap` the part `tab` is `a` and `strap` is `b`. Which part fills which name is a statement of the design, read like any field, and nothing in a card or a deck checks it: `joins strap tab` is another design, which a line or a rule that asks about `a` may answer another way, and the order must be true of what is built.
 
 `loads` lists what a card may put on a part of the type. Each has a `name`, a `dim`, `what` it is, a text that is not empty, and a `least` when it has a floor. A card states one in a load case: `on splice pull in [0 kip, 45 kip]`.
+
+### What the card states of a part
+
+Some fields are not the designer's to choose. A lifter's design category sets its safety factor, a drone's class sets the rules it flies under, and the shop a cut part is checked for sets every limit. A design that wrote its own would pick its own verdict. So a type marks such a field `signed`, as it marks a strength, and the card states it.
+
+```json
+{"name": "category", "one_of": ["A", "B", "C"], "signed": true, "what": "the design category"}
+{"name": "lugs", "dim": "dimensionless", "whole": true, "signed": true, "what": "the number of lugs the lift needs"}
+```
+
+```
+given b.category is B signed "rigging@example.org" source "lift plan LP-7"
+given b.lugs is 2 signed "rigging@example.org" source "lift plan LP-7"
+```
+
+```
+beam b {
+  category given b.category
+  lugs given b.lugs
+}
+```
+
+The design asks with `given NAME`, as it asks for a bound, and the card answers under the same name, `PART.FIELD`. What differs is the answer. A quantity that is no count is a range, `in [lo, hi]`. A key and a count are exact, so the card states them with `is` and no range: the name of the key, as a bare word or in quotes, or one whole number with no unit. [reference.md](reference.md) gives the grammar, and [format.md](format.md) says how card.json holds a statement, in `states`.
+
+| A field | The design writes | The card states |
+|---|---|---|
+| A quantity that is no count | a number, or `given NAME` | `given NAME in [lo, hi] signed ...` |
+| A count (`whole`) | a whole number, or `given NAME` | `given NAME is 4 signed ...` |
+| A key | a name, or `given NAME` | `given NAME is B signed ...` |
+
+`signed` takes the first way from the design: the field is then a given, and a design that writes it is refused, with a finding that says the field is for the card to state. Without `signed` either may state the field. So a card may fix a key that its type leaves open, and the design reads it the same way.
+
+- The form follows the field. A bound for a key or for a count is refused, and so is `is` for a quantity that is no count, a whole number for a key, and a name for a count. A key named `"2"` is stated in quotes, `is "2"`: without them `2` is a number.
+- The name is one of the key's names, and the count is within its field's floor and its `least`, as if the design had written it.
+- A part reads only what the card states for it: on the part `b`, the line `category given c.category` is refused.
+- A design that reads a given the card does not state is refused, and the finding names the part and the field: `b.category: the card states no b.category`.
+- The card states a thing once, and states nothing that no part reads: a statement for a part that is not there, or for a field that its design wrote itself, is refused. A statement and a bound do not share a name.
+- A statement carries a signature, as a bound does, and one with none is refused.
+
+Whatever reads the field reads it the same, whoever stated it: a `when`, an `unless`, a `requires`, a key of a table, a `by`, a need, and a rule that reads the count as a number. A count that the card states is an input of a tape under the label `in:CARD.PART.FIELD`, with one value. The cells are the cells of the same part with the field written by its design.
+
+The value is in card.json, so the hash of the card covers it: a card that states category B and one that states C have two hashes ([format.md](format.md), "Reading a verdict").
 
 ### A field that a record may leave unstated
 
@@ -329,7 +371,7 @@ rotor_set r {
 }
 ```
 
-- `optional` is `true` or `false`, and a field without it is not optional. It stands on a quantity, a count among them, and on a key. A field that joins parts and a load have none. A field is not both `optional` and `signed`: what a record leaves out is for the design to say, since the design names the part, and only the card states a signed field.
+- `optional` is `true` or `false`, and a field without it is not optional. It stands on a quantity, a count among them, and on a key. A field that joins parts and a load have none. A field is not both `optional` and `signed`, and a card cannot state `unstated`: what a record leaves out is for the design to say, since the design names the part, and only the card states a signed field.
 - The word is `unstated`, bare and alone on its line. In quotes it is a text, which no quantity takes and which is no name of an optional key. A key that is `optional` has no name `unstated`, and a deck that gives it one is refused. On a key that is not optional, `unstated` is a name like any other when the key lists it.
 - A field that is not optional must be stated, as before: `unstated` on a quantity that is not optional is refused, with a finding that says so.
 - A field left unstated has no value. It takes no default and is never read as zero.

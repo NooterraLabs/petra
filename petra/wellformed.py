@@ -86,6 +86,7 @@ def findings(card: Mapping[str, Any], design: Mapping[str, Any], deck: Mapping[s
     out += [f"design: a design cannot state {key}" for key in sorted(set(design) - DESIGN_KEYS)]
     out += domains(card, design, deck, sign)
     out += [f"card: the bound {i['name']} names nobody" for i in card["inputs"] if i.get("by") == ""]
+    out += [f"card: what it states of {s.get('name')} names nobody" for s in card.get("states", []) if not s.get("by")]
     out += [f"card: the waiver of {w['mechanism']} on {w['subject']} names nobody" for w in card["waivers"] if not w.get("by")]
     return out
 

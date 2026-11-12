@@ -107,10 +107,12 @@ def _deck_text(deck: grid.Deck, types: tuple[str, ...]) -> str:
             if f.type is not None:
                 form = " ".join(f"<{f.type}>" for _ in f.names)
             elif f.keys:
-                form = "<" + " | ".join(f'"{k}"' if " " in k else k for k in f.keys) + ">"
+                names = "<" + " | ".join(f'"{k}"' if " " in k else k for k in f.keys) + ">"
+                form = f"given <name>.{f.name}" if f.signed else names
             else:
                 form = f"given <name>.{f.name}" if f.signed else "<whole number>" if f.whole else f"<{deck_rows.show(f.dim)}>"
-            note = "; the card states it: given <name>." + f.name + " in [<lo>, <hi>] signed ..." if f.signed else ""
+            states = f"is {names}" if f.keys else "is <whole number>" if f.whole else "in [<lo>, <hi>]"
+            note = f"; the card states it: given <name>.{f.name} {states} signed ..." if f.signed else ""
             if f.optional:
                 form, note = f"{form} | unstated", note + "; `unstated` where the part's record states none"
             if f.may_be:
@@ -390,7 +392,12 @@ SNIPPETS: tuple[tuple[str, str, str], ...] = (
      'ambient in [10 degC, 40 degC] signed "site.manager@example.org" source "site survey 2026-09"'),
     ("given", "`given` states a signed bound under a name. A component's line in the design reads it by writing "
      "`given NAME` where the value goes. The design reads every given the card states. A name may be `PART.FIELD`. "
-     "A part of a deck's type reads only the given named for it: `Fy given tab.Fy` on the part `tab`.",
+     "A part of a deck's type reads only the given named for it: `Fy given tab.Fy` on the part `tab`. "
+     "A card may also state a thing exactly, with `is` in place of the range: the name of a key, as a bare word "
+     "or in quotes, or a whole number with no unit, as in `given beam.category is B signed \"...\" source \"...\"` "
+     "and `given quad.rotors is 4 signed \"...\" source \"...\"`. It has no range and no `mean`, and it carries a "
+     "signature. Only a part of a deck's type reads such a given, and its type says which fields the card states: "
+     "a design that writes one of them itself is refused.",
      'given capacity in [36 kN, 40 kN] measured "qa.lab@example.org" source "proof-load report PL-0917"'),
     ("component", "A component is written `KIND NAME { ... }` in the design, with one attribute per line. The "
      "Component kinds section lists every kind and its lines.",

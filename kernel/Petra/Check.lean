@@ -55,6 +55,8 @@ def types (cardHash : String) (card : Card) (design : Design) (deck : Deck)
             | _, _ => let (part, field) := givenOf i.name; sign part field false
           unless its == .negative && floor.min ≥ 0 do say "types.4" "card" i.name (floor.broken name i.range.lo)
     if i.signer.isEmpty then say "types.5" "card" i.name "the input names no by"
+  for s in card.states do
+    if s.signer.isEmpty then say "types.5" "card" s.name "the statement names no by"
   for w in card.waivers do
     if w.signer.isEmpty then
       say "types.5" "card" s!"{w.subject}/{w.mechanism}" "the waiver names no by"

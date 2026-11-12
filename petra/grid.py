@@ -39,7 +39,7 @@ from typing import Any, Callable, Iterator, Mapping
 from . import deck as rows
 from . import export
 from .deck import NONE, RowError, Vector, anchored, dimension, only, quantity, replaced, show
-from .ir import Bound, Component, Design, Fixed, ParamRef, Ref, Span, Text
+from .ir import Bound, Component, Design, Fixed, ParamRef, Ref, Span, Stated, Text
 from .kernel import (Abs, Add, Const, Div, Exp, Interval, KernelArithmeticError, Ln, Max, Min, Mul, Neg, Pi, PowInt, Sqrt, Sym,
                      enclose)
 from .models.base import ComponentError
@@ -271,7 +271,7 @@ def _field(body: Mapping[str, Any], load: bool = False) -> Field:
     if sum(key in body for key in ("dim", "one_of", "type")) != 1 or not (isinstance(body.get("what"), str) and body["what"]) or not _name(body.get("name")):
         raise DeckError(f"field {body.get('name')!r}: it has a name of letters, digits and _, `what`, a text, and one of `dim`, `one_of` and `type`, and may have {', '.join(sorted(allowed))}")
     name = body["name"]
-    only(body, ("name", "what", "one_of", "optional") if "one_of" in body else ("name", "what", "type", "as") if "type" in body
+    only(body, ("name", "what", "one_of", "optional", "signed") if "one_of" in body else ("name", "what", "type", "as") if "type" in body
          else ("name", "what", "dim", "least", "signed", "whole", "may_be", "optional"), f"field {name}")
     # A part may leave an `optional` field unstated. The flag is true or false, as the kernel reads it, and it is the design that says what
     # a record leaves out: only the card states a signed field, so a field is not both.
@@ -282,7 +282,9 @@ def _field(body: Mapping[str, Any], load: bool = False) -> Field:
         keys = tuple(str(k) for k in body["one_of"])
         if not keys or len(set(keys)) != len(keys):
             raise DeckError(f"field {name}: `one_of` is a list of different names")
-        return Field(name, body["what"], keys=keys, optional=optional)
+        if not isinstance(body.get("signed", False), bool):
+            raise DeckError(f"field {name}: `signed` is true or false")
+        return Field(name, body["what"], keys=keys, optional=optional, signed=body.get("signed", False))
     if "type" in body:
         names = tuple(body.get("as", [name]))
         if not names or not all(map(_name, names)) or len(set(names)) != len(names):
@@ -761,6 +763,16 @@ def _floor(dim: Vector) -> tuple[str, Fraction, bool] | None:
 def _quantity(f: Field, kind: str, arg: Any, name: str, design: Design, say: Callable[[str], None]) -> Value | None:
     if isinstance(arg, ParamRef):
         return say("reads a param, and a family is not checked against a deck yet")
+    if isinstance(arg, Stated):      # what the card states exactly: a whole number for a count, read as a given is
+        if not f.whole or arg.whole is None:
+            return say("is a count, and the card states a name for it" if f.whole else "is stated exactly by the card, and a quantity that is no count reads a bound: `given NAME in [...]`")
+        if arg.name != name:
+            return say(f"reads `given {arg.name}`, and a part reads only what the card states for it: `given {name}`")
+        if (f.may_be is None and arg.whole <= 0) or (f.may_be == "zero" and arg.whole < 0):
+            return say("is not more than zero" if f.may_be is None else "is under zero, and its field may be zero and not under it")
+        if f.least is not None and arg.whole < f.least:
+            return say(f"is under {float(f.least):g}, the least a {kind} has: {f.what}")
+        return Value(f"in:{design.name}.{name}", Interval.point(Fraction(arg.whole)))
     if not isinstance(arg, (Fixed, Bound)):
         return say(f"is a {show(f.dim)}: write a number with its unit, or `given NAME`")
     q = arg.quantity if isinstance(arg, Fixed) else arg.range
@@ -778,7 +790,7 @@ def _quantity(f: Field, kind: str, arg: Any, name: str, design: Design, say: Cal
         return say(f"goes down to {q.value.lo} in SI units, and a {floor[0]} is {'more than' if floor[2] else 'at least'} {floor[1]}")
     if isinstance(arg, Bound):
         if f.whole:
-            return say("is a count, which the design writes as a whole number")
+            return say("is a count: the design writes a whole number, or the card states one exactly with `given NAME is N`, and not as a bound")
         if arg.name != name:
             return say(f"reads `given {arg.name}`, and a part reads only the bound the card gives for it: `given {name}`")
         return Value(f"in:{design.name}.{name}", q.value)
@@ -829,7 +841,18 @@ def read_parts(design: Design, deck: Deck) -> Parts:
             elif f.keys:
                 arg = attr.args[0]
                 word = arg.value if isinstance(arg, Text) else arg.parts[0] if isinstance(arg, Ref) and len(arg.parts) == 1 else None
-                if word not in f.keys:
+                if isinstance(arg, (Stated, Bound)):      # a key that the card states: the name is the card's, and it is one of the key's names
+                    if arg.name != f"{c.name}.{attr.key}":
+                        say(f"reads `given {arg.name}`, and a part reads only what the card states for it: `given {c.name}.{attr.key}`")
+                    elif isinstance(arg, Bound) or arg.key is None:
+                        say(f"is a key, which the card states with a name: `given {arg.name} is <name> signed ...`")
+                    elif arg.key not in f.keys:
+                        say(f"is one of: {', '.join(f.keys)}; the card states {arg.key[:MAX_NAME]!r}")
+                    else:
+                        values[attr.key] = arg.key
+                elif f.signed and word is not None:
+                    say(f"is for the card to state: write `{attr.key} given {c.name}.{attr.key}`, with `given {c.name}.{attr.key} is <name> signed ...` in the card")
+                elif word not in f.keys:
                     say(f"is one of: {', '.join(repr(k) if ' ' in k else k for k in f.keys)}" + (" (in quotes)" if any(" " in k for k in f.keys) else ""))
                 else:
                     values[attr.key] = word

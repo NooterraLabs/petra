@@ -68,6 +68,7 @@ from ..ir import (
     Rel,
     Signature,
     Span,
+    Stated,
     Tests,
     Text,
     Vec,
@@ -76,7 +77,7 @@ from ..ir import (
 from ..kernel import Interval
 from ..units import DIMENSIONLESS, TEMPERATURE, Dim, Quantity, UnitError, parse_quantity, require_dim
 from ..verdict import COVERAGE_ENTRY
-from .lexer import Token
+from .lexer import Kind, Token
 from .parser import DECLS
 from .syntax import File, Node
 
@@ -202,7 +203,8 @@ class _Lowering:
             tests=MappingProxyType(tests),
             waivers=waivers,
             params=MappingProxyType(params),
-            givens=MappingProxyType(self.givens),
+            givens=MappingProxyType({name: g for name, g in self.givens.items() if isinstance(g, Bound)}),
+            states=MappingProxyType({name: g for name, g in self.givens.items() if isinstance(g, Stated)}),
         )
 
     def index(self, nodes: Iterable[Node], what: str, name_of: Callable[[Node], Token]) -> dict[str, Node]:
@@ -356,8 +358,18 @@ class _Lowering:
             self.dimensioned(params[value.name].range, TEMPERATURE, f"ambient (param {value.name})", bound)
         return value
 
-    def given(self, node: Node) -> Bound | None:
+    def given(self, node: Node) -> Bound | Stated | None:
         name, bound = node.args
+        if bound.head == "is":      # what the card states exactly: the name of a key, or a whole number
+            value, sig = bound.args[0], bound.props["sig"]
+            if sig is None:
+                self.problem(node, f"given {name.text}: stated without a signature; add 'signed \"<owner>\" source \"<where>\"'")
+                return None
+            signed = self.signature(sig)
+            if signed is None:
+                return None
+            whole = value.kind is Kind.NUMBER
+            return Stated(signed[0], signed[1], self.span(node), name.text, None if whole else value.text, int(value.text) if whole else None)
         parts = self.signed_range(bound, None, f"given {name.text}")
         return None if parts is None else Bound(*parts, name.text)
 
@@ -370,7 +382,9 @@ class _Lowering:
         for attr in attrs:
             key, args = attr.args
             what = f"{name.text}.{key.text}"
-            typed = (self.arg(a, what) for a in args)
+            typed = [self.arg(a, what) for a in args]
+            if kind.text in models.KINDS and any(isinstance(a, Stated) for a in typed):
+                self.problem(attr, f"{what}: the card states it exactly, with `is`, and only a part of a deck's type reads such a given; a {kind.text} reads a bound, `in [lo, hi]`")
             lowered.append(Attr(key.text, tuple(a for a in typed if a is not None), self.span(attr)))
         return Component(kind.text, name.text, tuple(lowered), self.span(node))
 

@@ -103,7 +103,7 @@ ambient in [10 degC, 40 degC] signed "site.manager@example.org" source "site sur
 
 ### given
 
-`given` states a signed bound under a name. A component's line in the design reads it by writing `given NAME` where the value goes. The design reads every given the card states. A name may be `PART.FIELD`. A part of a deck's type reads only the given named for it: `Fy given tab.Fy` on the part `tab`.
+`given` states a signed bound under a name. A component's line in the design reads it by writing `given NAME` where the value goes. The design reads every given the card states. A name may be `PART.FIELD`. A part of a deck's type reads only the given named for it: `Fy given tab.Fy` on the part `tab`. A card may also state a thing exactly, with `is` in place of the range: the name of a key, as a bare word or in quotes, or a whole number with no unit, as in `given beam.category is B signed "..." source "..."` and `given quad.rotors is 4 signed "..." source "..."`. It has no range and no `mean`, and it carries a signature. Only a part of a deck's type reads such a given, and its type says which fields the card states: a design that writes one of them itself is refused.
 
 ```
 given capacity in [36 kN, 40 kN] measured "qa.lab@example.org" source "proof-load report PL-0917"
@@ -176,7 +176,7 @@ design file = "petra" INT NL { ( param | component ) NL } EOF ;
 card      = "card" STRING "{" NL { ( "owner" STRING | "environment" IDENT ) NL } "}" ;
 param     = "param" IDENT "in" range ;
 ambient   = "ambient" bound ;
-given     = "given" name "in" range [ "mean" qty ] [ signature ] ;
+given     = "given" name ( "in" range [ "mean" qty ] | "is" ( IDENT | STRING | INT ) ) [ signature ] ;
 name      = IDENT { "." IDENT } ;              PART.FIELD names the bound on one field of one part
 component = KIND IDENT "{" NL { attr NL } "}" ;    KIND: an IDENT not in DECLS
 attr      = IDENT { arg } ;
