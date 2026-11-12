@@ -50,7 +50,7 @@ An anchor has `standard` and `clause`, each a text that is not empty, and may ha
 
 A `range` is two values, the lower first, between which a real design's value would fall. The check draws its sample points from the ranges, so a row with cases needs ranges wide enough for each case to hold somewhere. Every quantity a row takes has a `range`, and a row whose input has none is refused. Each end states its unit, as every value of a dimension does ([A value with its unit](#a-value-with-its-unit)).
 
-A row has `id`, `anchor`, `gives`, `takes` and one of `is`, `cases` and `table`. `gives` has `name` and `dim`, each a text, and an input has `name`. The `what` of `gives` and of an input may be left out. A jump has `why`, a text that is not empty.
+A row has `id`, `anchor`, `gives`, `takes` and one of `is`, `cases` and `table`. `gives` has `name` and `dim`, each a text, and an input has `name`. A table that gives a name has `one_of` in place of `dim` ([A table that gives a name](#a-table-that-gives-a-name)). The `what` of `gives` and of an input may be left out. A jump has `why`, a text that is not empty.
 
 ### Dimensions
 
@@ -58,16 +58,26 @@ A `dim` is one of `dimensionless`, `length`, `area`, `force`, `stress`, `moment`
 
 A row carries no units. A value with a unit appears in two places: a range, and a constant that the standard gives with a unit. Every unit the language reference lists is allowed, such as `inch`, `inch2`, `kip`, `ksi`, `mm`, `mm2`, `kN` and `MPa`.
 
+A unit of length may be raised to a power: the unit, `^` and the power, with no space, as in `mm^3` and `inch^4`. The units of length are `m`, `mm`, `um`, `cm`, `km`, `inch` and `ft`. The power is `2`, `3` or `4`, written as that one digit. The factor is the unit's own factor to that power, exactly, and the dimension is `length^2`, `length^3` or `length^4`: `1 inch^4` is (127/5000)^4 m^4. So a section modulus is written `20 inch^3` and a moment of inertia `100 inch^4`.
+
+- An area has two spellings and one meaning: `mm^2` is `mm2`, `m^2` is `m2` and `inch^2` is `inch2`. Both are accepted wherever a value stands.
+- No other unit takes a power. `kN^2`, `ksi^2`, `mm2^2` and `1^2` are refused. A power of a unit that is itself a product or a quotient, as `ohm/km` and `kip_in` are, could be read two ways, and no quantity of a deck needs one.
+- Any other power is refused, and so is any other spelling of these three: `inch^0`, `inch^1`, `inch^5`, `inch^3/2`, `inch^04`, `inch^+4` and `inch^2^2`.
+- A power is part of a unit. It stands in no number: `"2^2"` and `"2 mm^2"` are no numbers alone, and a `dim` is `length^4`, never `mm^4`.
+
+A power works wherever a value is read: a `range`, a `least`, the end of a band, a listed value of `at`, a cell, the `unit` of a table, a `["q", NUMBER, UNIT]`, a number of a design and a bound of a card.
+
 ### A value with its unit
 
-A value is a text: a number, one space, and a unit. It stands in a `range`, a `least`, the end of a band, a listed value of `at` and a cell of a table. `["q", NUMBER, UNIT]` holds its two halves, which are joined with one space and read as one value.
+A value is a text: a number, one space, and a unit. It stands in a `range`, a `least`, the end of a band, a listed value of `at` and a cell of a table. `["q", NUMBER, UNIT]` holds its two halves, which are joined with one space and read as one value. Both halves are texts. So a `q` takes whatever a value takes: `["q", "29,000", "ksi"]` and `["q", "1 1/8", "inch"]` are read, and `["q", "3", ""]` is `3 `, the plain number 3.
 
 - The number is digits with an optional sign, and then a decimal part or a denominator that is not zero: `0.75`, `-3`, `3/4`. The digits are `0` to `9`.
 - A whole number and a fraction with one space between them are their sum: `1 1/8 inch` is 9/8 inch. This form takes no sign.
-- A comma is read between thousands and nowhere else: `29,000 ksi` is 29000 ksi, and `2,90` is refused. The digits before the first comma are one to three, and each group after a comma is three.
+- A comma is read between thousands and nowhere else: `29,000 ksi` is 29000 ksi, and `2,90` is refused. The digits before the first comma are one to three, and each group after a comma is three. A comma stands only in the digits before a decimal point, in a whole number or a decimal: `29,000` and `1,234.5`. A number with a `/` takes none, so `1,000/3` and `1,000 1/8 inch` are refused.
 - A value with no unit is a plain number, of no dimension. So `1 1/2` alone is the number 3/2, and `1,000` alone is the number 1000.
 - `0` and `-0` alone are the plain number zero. They are not the zero of every dimension: a length that is zero is written `0 mm`, and a range, a band or a `least` of a length that starts at a bare `0` is refused for its dimension.
-- Spaces, tabs and line ends around the value are dropped, and so are those around the unit. No other character is.
+- Spaces, tabs and line ends around the value are dropped, and so are those around the unit. No other character is. A line end is a line feed or a carriage return.
+- The space that parts the number from its unit is the first space of the value, the character U+0020. More spaces, tabs and line ends may follow it before the unit, and they are dropped: `3  inch` is 3 inch. A tab alone does not part the two, so `3` and a tab and `inch` is refused. A whole number and its fraction have exactly one space between them.
 
 A number alone in an expression, such as `"2.4"`, is the first form only. It takes no comma and no whole number with a fraction.
 
@@ -134,7 +144,7 @@ An input of a table is a quantity, as in an equation, or a key. A key is one of 
 | `down` | The side that picks the line. `by` names the input it reads. |
 | `across` | The side that picks the column, for a table with two sides. A table with one side leaves it out, and `cells` is then a plain list. |
 | `cells` | One line for each place of `down`, each with one cell for each place of `across`, as printed. `null` is a cell the standard leaves empty. |
-| `unit` | The unit of a cell that states none. A cell may state its own, as `"0.1 mm"` does above. A cell that holds a space is read as stating its own. So `"1,000"` under `"unit": "um"` is 1000 um, and a whole number with a fraction in a cell is written with its unit, `"1 1/8 inch"`: `"1 1/8"` alone is the plain number 9/8, whatever `unit` says. |
+| `unit` | The unit of a cell that states none. A cell may state its own, as `"0.1 mm"` does above. Spaces, tabs and line ends around a cell are dropped first. A cell that then holds a space is read as stating its own, and any other cell is read in the table's `unit`: `"1 "` under `"unit": "inch"` is 1 inch. So `"1,000"` under `"unit": "um"` is 1000 um, and a whole number with a fraction in a cell is written with its unit, `"1 1/8 inch"`: `"1 1/8"` alone is the plain number 9/8, whatever `unit` says. |
 | `rises`, `falls` | The sides along which the printed values never go down, or never go up. Each is a list of texts, and each text is the `by` of a side of this table. A name may stand twice in a list. No name is in both lists. A list that names anything else is refused. |
 
 A side that reads a key has `by` alone, and its places are the key's names in order. A side that reads a quantity has one of two forms.
@@ -151,6 +161,37 @@ A table's anchor has `table`, its number, and for `clause` a clause that cites i
 A table cannot hold everything a printed table does. A line whose cells are formulas, a cell with two numbers, and a footnote that changes a value under a condition are left out, and the transcriber says so. A row whose key leaves out a line has one name fewer than the table has lines.
 
 Say `rises` or `falls` only where it holds for the whole table. It is what lets the check catch a cell that was misread.
+
+### A table that gives a name
+
+Some tables of a standard give no quantity. They sort a part into a category by its sizes, and other tables are then read at that category. Such a table is a row whose `gives` has `one_of` in place of `dim`, and whose cells are names.
+
+```json
+{
+  "id": "example/category",
+  "anchor": {"standard": "a textbook", "clause": "4.2", "table": "7", "page": "90"},
+  "gives": {"name": "category", "one_of": ["B", "C", "D", "E"], "what": "the category of an attachment"},
+  "takes": [
+    {"name": "a", "dim": "length", "what": "its length", "range": ["1 mm", "300 mm"]},
+    {"name": "t", "dim": "length", "what": "its thickness", "range": ["1 mm", "100 mm"]}
+  ],
+  "table": {
+    "down": {"by": "a", "bands": [["0 mm", "50 mm"], ["50 mm", "100 mm"], ["100 mm", "200 mm"]], "closed": "upper"},
+    "across": {"by": "t", "bands": [["0 mm", "25 mm"], ["25 mm", null]], "closed": "upper"},
+    "cells": [["B", "B"], ["C", "D"], ["E", null]]
+  }
+}
+```
+
+- `gives` has `name`, `one_of` and perhaps `what`. `one_of` is the names the table can give, in the standard's order: a list of texts that is not empty, each once. `gives` has `dim` or `one_of`, and never both.
+- The row is a table. A row that gives a name with `is` or `cases` is refused.
+- It takes quantities and no key, so each side reads a quantity, in `bands` or `at`, exactly as a side of any table does. A table with one side derives the name from one quantity, and a table with two sides from two.
+- A cell is one of the names of `one_of`, as a text, or `null` where the standard gives none. Any text of `one_of` is a name, whatever it looks like: the text `"null"` is a name and `null` is an empty cell. A cell that holds anything else is refused. A name of `one_of` that no cell holds is allowed.
+- The table has `down`, `cells` and perhaps `across`, and no other key: no `unit`, no `rises` and no `falls`.
+
+The bands say what the table covers. A value in no band, between two listed values, or at an empty cell has no name. Nothing is assumed there: a rule that reads the name has no value, and its cell is open. A value on the end of a band is in the band that holds that end.
+
+A name is read in two ways, both in a rule: as a key of a row, and by a `case` ([A rule](#a-rule)). It is no quantity, so `["row", "example/category", {...}]` in a sum, a product or a side of `le` is refused. A row applies no row, so no row reads a name.
 
 ## A worked example
 
@@ -179,6 +220,8 @@ A worked example is a use of the equation that a published source prints: the va
 A row is admitted when no part fails. A part that is `none` is not a failure. It says the row has less behind it: a row with no worked example rests on its dimensions and on two transcribers agreeing.
 
 The second transcription may name its inputs differently. The check tries each renaming that keeps the dimensions, and says which one it used. It may also name a key's values differently: they are matched by their order, which is the standard's.
+
+A table that gives a name passes the same check. `units` holds every band to its input's dimension. `shape` is `none`, since a name neither rises nor falls. A worked example gives the name the source prints, as `"gives": "D"`. `second` compares the name in every cell and on each side of every band's ends, and matches the names of the two transcriptions by their order in `one_of`.
 
 ```bash
 python -m petra.deck rows.json --examples examples.json --second other_rows.json
@@ -209,7 +252,7 @@ A deck is one JSON file in `petra/decks`.
 | `grid` | The lines of the grid |
 | `rules` | The rules |
 
-Each object of a deck has the keys this page gives it, and no other. A key the page does not give is refused wherever it stands: in the deck, a row, an `anchor`, `gives`, an input of `takes`, a case, a jump, a table, a side of a table, a type, a field, a load, a line of the grid, `unless`, a rule and an item of `where`. So is a key where it does not belong: `signed`, `whole` or `least` on a field that is no quantity, `as` on a field that joins no part, and `closed` on a side with no `bands`. The refusal names the key. A misspelled key is then an error, and never a key left out with its default in its place: `close` for `closed` would leave every band closed at its upper end.
+Each object of a deck has the keys this page gives it, and no other. A key the page does not give is refused wherever it stands: in the deck, a row, an `anchor`, `gives`, an input of `takes`, a case, a jump, a table, a side of a table, a type, a field, a load, a need, a line of the grid, `unless`, a rule and an item of `where`. So is a key where it does not belong: `signed`, `whole` or `least` on a field that is no quantity, `as` on a field that joins no part, and `closed` on a side with no `bands`. The refusal names the key. A misspelled key is then an error, and never a key left out with its default in its place: `close` for `closed` would leave every band closed at its upper end.
 
 A design names a type as the kind of a component block: `lap splice { ... }` is a part named `splice` of type `lap`. The parts of one design are all of one deck's types, or all of the built-in models' kinds.
 
@@ -236,7 +279,7 @@ The first deck, 58 KB, takes 10,019 steps: 6,238 for its file and 3,781 for the 
   {"name": "Fy", "dim": "stress", "signed": true, "what": "the specified minimum yield stress of its steel"}]}
 ```
 
-A type has `type`, its name, `what`, a text, and `fields`. Its `what` may be the empty text.
+A type has `type`, its name, `what`, a text, and `fields`. Its `what` may be the empty text. It may have `loads` and `needs`, which are described below.
 
 A field is one line of the part's block. It has `name`, `what`, a text that is not empty, and one of `dim`, `one_of` and `type`. It is one of three things.
 
@@ -266,6 +309,50 @@ A part reads only the bound the card gives under the part's name and the field's
 
 `loads` lists what a card may put on a part of the type. Each has a `name`, a `dim`, `what` it is, a text that is not empty, and a `least` when it has a floor. A card states one in a load case: `on splice pull in [0 kip, 45 kip]`.
 
+### What a type needs
+
+A pin larger than its hole, a hole wider than its plate and a span longer than its beam are not weak designs. They are not designs. A rule would work a strength out from such a part and might prove it. So a type may state `needs`: what must hold among its fields for a part of it to be a part at all.
+
+```json
+{"type": "eye", "what": "a plate with a hole for a pin",
+ "fields": [
+  {"name": "hole", "dim": "length", "what": "the diameter of its hole"},
+  {"name": "width", "dim": "length", "what": "its width"},
+  {"name": "edge", "dim": "length", "what": "from the centre of the hole to the edge beyond it"},
+  {"name": "pin", "type": "pin", "what": "its pin"}],
+ "needs": [
+  {"lt": ["pin.d", "hole"], "why": "a pin passes through its hole"},
+  {"lt": ["hole", "width"], "why": "a hole is narrower than its plate"},
+  {"le": [["div", "hole", "2"], "edge"], "why": "the edge lies beyond the hole"}]}
+```
+
+`needs` is a list with at least one item: a type that needs nothing leaves it out, and `"needs": []` is refused. A need has `le` or `lt`, never both, and `why`, a text that is not empty. `le` and `lt` hold two sides of one dimension: with `le` the first is at most the second, and with `lt` it is under it.
+
+A side is one of these, and nothing else.
+
+| Written | Means |
+|---|---|
+| `"hole"` | A quantity field of the type |
+| `"pin.d"` | A quantity field of a part the type joins, by the name `as` gives that part, as a rule reads it |
+| `"2"`, `"3/4"`, `["q", "1/16", "inch"]` | A number, and a constant with its unit, as in a row |
+| `["add", a, b, ...]`, `["mul", a, b, ...]` | A sum, a product |
+| `["sub", a, b]`, `["neg", a]` | A difference, the negative |
+| `["div", a, b]` | A quotient, where `b` is a field or a number that is not zero |
+
+Exact fractions decide these, and that is why the list ends there. A need has no root, no logarithm, no power, no least, no greatest, no absolute value and no pi. It reads no load, no row, no `case` and no key. A quotient divides by a field or by a constant, and by no other expression: a quantity of a part is more than zero ([format.md](format.md), Parts 3), so a quotient by a field never divides by zero and needs no other need to say so. A need names at least one field, and it names each field once, over both sides: `2 a <= b` is written `["mul", "2", "a"]`, and not `["add", "a", "a"]`. A deck with a need that breaks any of this does not load.
+
+A need is asked of every part of the type, and it must hold for every value the card and the design allow. A field that the design writes is one number. A field that the card bounds is a range. The kernel works out the range of each side from the ranges of its fields with the four operations on their ends, in exact fractions: the ends of a sum are the sums of the ends, the ends of a product are the least and the greatest of the four products of the ends, the negative turns the two ends round, and a quotient is a product by the two ends of the divisor turned over. Because a side reads each field once, that is the range of the side and no wider. The need holds when the most the first side reaches is at most the least the second reaches, or under it for `lt`. So the answer is exact: there is no rounding, no search and no hint, and no cell.
+
+A part that breaks a need makes the design ILL-FORMED, as a missing field does. The finding names the part, the need by its number from 1 and its type, the two values in SI units, and the `why`:
+
+```
+e: breaks need 1 of a eye: its left side, 23/1000, is not under its right side, 11/500, in SI units: a pin passes through its hole
+```
+
+For `le` it says `is not at most`. Where a side has a range, the finding gives the most of the left side as `up to 21/1000` and the least of the right as `down to 7/200`. The kernel cuts a finding at 200 bytes, so a long `why` loses its end. The needs are asked last, of a design that breaks no other rule of its files, so each field is there and each quantity is more than zero when a need reads it.
+
+A need reads nothing in the sense of the `unread` cells. A field that only a need names is still a field that no rule checks, and has its open cell.
+
 ### The grid
 
 ```json
@@ -282,7 +369,18 @@ A line may say that the mechanism cannot arise, and why:
 "unless": {"when": ["is", "fit", "close"], "why": "a close fit leaves no room for one"}
 ```
 
-With no `when`, it never arises for the type. A condition is `["is", FIELD, NAME]` on a key field, `["loaded", LOAD]`, or `and`, `or` and `not` of these. A `loaded` holds when some load case of the card puts the load on the part. It asks whether the load is there and reads nothing of it, so a load that only a `loaded` names is a load nothing reads. An `unless` has `why`, a text, which may be empty. An `unless` with no `why` is refused. A line whose `unless` is `null` is read as a line with none.
+With no `when`, it never arises for the type. A condition is `["is", FIELD, NAME]`, or `and`, `or` and `not` of these. An `unless` has `why`, a text, which may be empty. An `unless` with no `why` is refused. A line whose `unless` is `null` is read as a line with none.
+
+An `is` holds when a key has the name `NAME`, which is one of the key's names. `FIELD` says which key, in one of two ways.
+
+- A key field of the type itself: `["is", "fit", "close"]`.
+- `PART.FIELD`, a key field of a part the type joins. `PART` is the name that the `as` of the joining field gives the part, as an expression of a rule reads `a.Fy`. With `"as": ["top", "bottom"]`, `["is", "top.stiffened", "yes"]` holds for a beam whose part `top` is stiffened.
+
+Each name of `as` is one part, so a condition is about one part. A field with no `as` joins one part, under the field's own name. A field whose `as` gives several names is no part's name: with `lugs` joining `top` and `bottom`, `["is", "lugs.stiffened", "yes"]` could hold for one lug and not for the other, so it has no meaning and the deck is refused. A condition that is to hold for both says so: `["and", ["is", "top.stiffened", "yes"], ["is", "bottom.stiffened", "yes"]]`. A name reaches one part and no further: `top.pin.finish` is refused. A field named as a joined part is, as `top` beside the part `top`, is still that field: `top` alone is the type's own key, and `top.stiffened` the key of the part.
+
+A line and a rule are for one part of their type, and each is asked once of that part. Nothing is asked once for each part it joins: a rule that is to answer for each of two lugs is two rules, as the first deck has one for each plate.
+
+A condition is over keys and asks about no load. The keys of a part are the same under every load case of the card, so a condition holds for a part or it does not, and no case can switch a line or a rule off for another case. The condition `["loaded", LOAD]`, which held when some case put the load on the part, is gone, and a deck that writes `loaded` in a `when`, an `unless` or a `requires` is refused, alone or inside `and`, `or` and `not`, whatever follows the word. It did exactly that switching: a rule that reads a load has a cell for each load case, and a case that put a load of zero on a joint made a line not applicable under the case that broke it. A deck that means "where the part carries tension" reads the tension in its rule, and the card states the tension in every case, as zero where there is none.
 
 ### A rule
 
@@ -301,23 +399,70 @@ A rule answers one line of the grid with an inequality.
 | `id`, `type`, `mechanism` | The rule's name, and the line of the grid it answers. A cell is entered under the id from after its last `/`, so two rules for one type and one mechanism have ids that differ there: `a/x` and `b/x` together are refused. |
 | `anchor` | The clause the inequality comes from |
 | `says` | The inequality in words: a text that is not empty. A rule with no `says` is refused. |
-| `le` | Two expressions. The rule holds when the first is at most the second. |
+| `le` | Two expressions. The rule holds when the first is at most the second. A rule that states no inequality has `requires` in its place ([A rule that requires](#a-rule-that-requires)). |
 | `let` | Names for expressions the rule uses more than once. A name is letters, digits and `_`, and is no field's name. An expression reads the names before it. |
 | `where` | The range the rule holds in: a list of `{"le": [a, b], "why": "..."}` with at least one item. Each item has `why`, a text, which may be empty. A rule that holds everywhere leaves `where` out: `"where": []` is refused. |
-| `when` | A condition on the part, as in the grid. The rule answers only for the parts it holds for. |
+| `when` | A condition on the part, as in the grid: on its own keys and on the keys of the parts it joins. The rule answers only for the parts it holds for. |
 
 An expression is written as a row's is. A name in it is a quantity field of the part, `NAME.FIELD` for a part it joins, or a name from `let`. It has two more forms.
 
 | Written | Means |
 |---|---|
 | `["load", NAME]` | A load the card puts on the part. It is a load of the rule's own type: a rule reads no load of a part its part joins. |
-| `["row", ID, {INPUT: ...}]` | A row of the deck, with each of its inputs bound |
+| `["row", ID, {INPUT: ...}]` | A row of the deck that gives a quantity, with each of its inputs bound |
+| `["case", ["row", ID, {INPUT: ...}], {NAME: ...}]` | The expression of the name that a row gives |
 
-A quantity that a row takes is bound to an expression of its dimension. A key that a row takes is bound in one of three ways: to a key field whose names are all names of the row's key, to `["key", NAME]`, or to `["by", FIELD, {NAME OF THE FIELD: NAME OF THE ROW'S KEY}]`. The map of a `by` has one entry for each name of the field and no other entry, and each of its values is a name of the row's key. A map that leaves a name of the field out is refused.
+A quantity that a row takes is bound to an expression of its dimension. A key that a row takes is bound in one of four ways.
+
+- To a key field whose names are all names of the row's key.
+- To `["key", NAME]`, one name of the row's key.
+- To `["by", FIELD, {NAME OF THE FIELD: NAME OF THE ROW'S KEY}]`. The map of a `by` has one entry for each name of the field and no other entry, and each of its values is a name of the row's key. A map that leaves a name of the field out is refused.
+- To `["row", ID, {INPUT: ...}]`, where the row `ID` gives a name ([A table that gives a name](#a-table-that-gives-a-name)) and each quantity it takes is bound to an expression of its dimension. The key then has the name that row gives for the part's sizes. Every name of that row's `one_of` is a name of the key, or the deck is refused. A `by` takes a field and no row, so the names are not mapped: the row that gives the name writes the names of the key it feeds.
+
+```json
+["row", "example/allowed", {"category": ["row", "example/category", {"a": "length", "t": "thickness"}], "service": "service"}]
+```
+
+A key bound this way is still a key of the table it is bound in. The name comes from the row and from nothing else: a key field of the part with the same names, or a name of the part's own, has no say in it.
+
+A `case` picks an expression by a name that a row gives. Its first item is `["row", ID, {INPUT: ...}]` with a row that gives a name, and its second has an expression for each name of that row's `one_of` and for no other name, all of one dimension. Its value is the expression of the name the row gives. It is how a formula that changes with a category is written. A `case` is read in a rule and in no row.
+
+```json
+["case", ["row", "example/category", {"a": "length", "t": "thickness"}],
+ {"B": "1", "C": ["div", "length", ["q", "50", "mm"]], "D": "3", "E": ["row", "example/reduction", {"x": "length"}]}]
+```
+
+Where the row gives no name, the table read at it and the `case` have no value, and the rule's cell is open. A `case` writes every one of its expressions for the part: if one of them has no value that can be written for the part, as a table with no line for the part's key, the cell is open whatever name the row gives.
+
+A formula whose case goes by the size of one of its own inputs needs none of this: it is an equation with `cases`, and its conditions are the bands.
 
 A factor that the clause fixes for the inequality, such as a resistance factor, is a number in the rule.
 
 Reading a deck checks every rule. Each input of each row is bound once and to its dimension. Both sides of `le` have one dimension. The rule answers a line of the grid that can arise. A deck that fails any of these does not load, and the kernel finds a design checked against it ill formed.
+
+### A rule that requires
+
+Some clauses ask no inequality. They say what a part must be: a lifter of one category is of one service class, a pinhole is machined. Such a rule has `requires` in place of `le`.
+
+```json
+{"id": "made-up/category-a", "type": "hoist", "mechanism": "hoist.category",
+ "anchor": {"standard": "a standard", "clause": "2.1(b)"},
+ "says": "a hoist of category A is of service class 0",
+ "when": ["is", "category", "A"],
+ "requires": ["is", "service", "0"]}
+```
+
+| Key | Holds |
+|---|---|
+| `id`, `type`, `mechanism`, `anchor`, `says` | As for any rule |
+| `requires` | A condition over keys that must hold: `["is", FIELD, NAME]` on a key of the part or of a part it joins, and `and`, `or` and `not` of these, as a `when` writes them |
+| `when` | As for any rule: the parts the rule answers for |
+
+A rule has `le` or `requires`, and never both. A rule with `requires` has no `let` and no `where`, which are for an inequality. Its condition is over keys, as every condition is: a rule requires something of what a part is. A deck that breaks any of these does not load.
+
+For a part that its `when` holds for, the rule gives one cell, entered as any rule's cell is. The cell is `proved` when the condition holds for the part and `refuted` when it does not. It has no tape, it needs no hint and no search, and it takes no work. A refuted cell makes the verdict FAIL as any refuted cell does. Its reason names each key the condition names, in the order it names them and each once, with the name the part has for it: `the part is not what the rule requires: top.bore is machined, bottom.bore is cut`. A reason prints in 200 bytes, so a rule that requires many keys names the ones that fit and counts the rest: `k00 is no, k01 is no and 38 more`.
+
+The rule reads the keys that its `requires` and its `when` name, so those keys have no `unread` cell on a part the rule applies to. It reads no load, so it has one cell whatever load cases the card has.
 
 ## A design checked against a deck
 
@@ -325,15 +470,15 @@ Reading a deck checks every rule. Each input of each row is bound once and to it
 
 | State | When |
 |---|---|
-| `proved` | A rule's inequality holds for every value the card and the design allow |
-| `refuted` | It fails at a point they allow |
+| `proved` | A rule's inequality holds for every value the card and the design allow, or what a rule requires of the keys holds |
+| `refuted` | The inequality fails at a point they allow, or what a rule requires does not hold |
 | `not applicable` | The grid says the mechanism cannot arise for this part |
 | `waived` | The card waives the mechanism on the part |
 | `open` | Anything else |
 
 No cell has a default. The verdict is FAIL with a refuted cell, UNKNOWN with an open cell or with nothing proved, and PASS otherwise.
 
-A waiver takes the whole line. A line the card waives on a part is one `waived` cell, and no rule for that line is run on the part, whether or not it would hold. The report prints each waiver with who signed it and why.
+A waiver takes the whole line. A line the card waives on a part is one `waived` cell, and no rule for that line is run on the part, whether or not it would hold. A rule that is not run still reads what it reads: the fields and the loads of a rule of a waived line, or of a line that cannot arise, have no `unread` cell. The report prints each waiver with who signed it and why.
 
 `petra-verify` reads the same three files and makes the cells again, each with the tape of its rule. It takes nothing of a cell from `petra check` but a hint: the partition that proved it, or the point that refuted it. The kernel tries the hint on its own tape, and the state it settles on is its own. `petra check` then compares the two lists cell by cell, and stops with exit code 4 if they differ.
 
@@ -345,7 +490,7 @@ These cases are open:
 - A table has no value where the rule reads it: between the listed values of a table read at listed values, outside every band, or in an empty cell.
 - The inequality is neither proved over the ranges the card gives nor refuted at a corner or the middle of them.
 - No rule and no line of the grid reads a quantity or a key of a part. A value nothing reads is a value nothing checks, so a plate that no lap joins has an open cell for each of its fields, named `unread`.
-- No rule reads a load that the card puts on a part. A rule reads a load in an expression: a side of its `le` or of its `where`, or a name of `let` that one of them reads. A `loaded` in a `when` or an `unless` does not read it. The load has an open cell named `unread` for each load case that puts it on the part, entered as `LOAD/CASE`.
+- No rule reads a load that the card puts on a part. A rule reads a load in an expression: a side of its `le` or of its `where`, or a name of `let` that one of them reads. The load has an open cell named `unread` for each load case that puts it on the part, entered as `LOAD/CASE`.
 
 The cells named `unread` come after every other cell, part by part: a part's fields in the order of its type's fields, and then its loads in the order of their names and of their cases' names.
 
@@ -461,7 +606,7 @@ The check tries parts as points: each key a name, each quantity and each load on
 
 An answer that holds or fails has a ratio: the largest, over its rules, of the left side over the right. It is the number `petra check` prints on a line.
 
-For each mechanism the check tries 96 parts. They take every combination of the type's keys in turn, with and without a load that a `when` or an `unless` asks about. A quantity is spread over its range on a log scale, and a count over its whole numbers. A quantity that a rule binds straight to the side of a table sits on the values the table lists, and on and beside the ends of its bands. The first 32 parts each have a partner: the same part with other sizes and loads. Where a transcription treats a part and its partner differently, by another case of a row, another band of a table or the other side of a range, the check halves the way between them 24 times and tries the part on each side of the change.
+For each mechanism the check tries 96 parts. They take every combination of the type's keys in turn, and each carries every load of its type. A quantity is spread over its range on a log scale, and a count over its whole numbers. A quantity that a rule binds straight to the side of a table sits on the values the table lists, and on and beside the ends of its bands. The first 32 parts each have a partner: the same part with other sizes and loads. Where a transcription treats a part and its partner differently, by another case of a row, another band of a table or the other side of a range, the check halves the way between them 24 times and tries the part on each side of the change.
 
 ### The parts of the check
 
@@ -540,7 +685,7 @@ The run then damages each rule, one change at a time, and counts the damaged rul
 
 The check refused 115 of 157 wrong rules, 73%. `alike` alone refused 86 of them. A lap joins two like plates, so its rules write each term twice, and one change damages one of the two. A transcriber who errs the same way for both plates is not seen by `alike`. The last column is then the fairer measure: 29 of 157, or 18%. A lap takes one load, so no rule was damaged by the load of another kind.
 
-A number a tenth off, a key bound to another column, a range left out and a `when` turned round pass almost every time. A worked example or a second transcription is what catches those. On the deck made up for the tests, with one or two made-up examples for each rule, the check with no second transcription refused 43 of 49 wrong rules. With no example it refused 19.
+A number a tenth off, a key bound to another column, a range left out and a `when` turned round pass almost every time. A worked example or a second transcription is what catches those. On the deck made up for the tests, with one or two made-up examples for each rule, the check with no second transcription refused 43 of 49 wrong rules. With no example it refused 21.
 
 ### The second run
 
@@ -626,7 +771,7 @@ A bolt of a size the tables do not list, such as 0.7 inch, has no value in them.
 
 The deck has no rule by ASD, none for slotted holes, and none for more than one line of bolts or more than two plates. Fifteen of its 32 rows are read by no rule.
 
-Nothing compares the fields of a lap with one another. A lap may state a `side` of more than half the width of a plate, which no plate can have. It is not refused, and the block shear of each plate is then worked out from that `side`.
+The first deck states no `needs` ([What a type needs](#what-a-type-needs)), so nothing compares the fields of a lap with one another. A lap may state a `side` of more than half the width of a plate, which no plate can have. It is not refused, and the block shear of each plate is then worked out from that `side`.
 
 ## What a deck does not check yet
 
@@ -636,6 +781,6 @@ Nothing compares the fields of a lap with one another. A lap may state a `side` 
 - A `not applicable` cell is the deck's word. The kernel checks that the line's `unless` holds for the part, and not that the mechanism cannot arise.
 - The `range` of a row's input is where the acceptance check samples the row. It is not enforced as the range the row holds in. A rule's `where` is.
 - A type with no line in the grid gets no cell of its own. A `plate` has none: the lap that joins it asks about it, and a plate that nothing joins has only its `unread` cells.
-- A card's claims, tests and ambient, a family's params, and the repair that `petra check` suggests on a FAIL are not read for a design of a deck's types. A card or a design that states one is refused.
+- A card's claims, tests, ambient and environment, a family's params, and the repair that `petra check` suggests on a FAIL are not read for a design of a deck's types. A card or a design that states one is refused: `environment marine_c5` in the card of a lap is an input error, `the card or the design states an environment, which a deck does not read yet`, and the kernel finds the pair ill formed.
 - The first deck has rules for 8 of the 16 lines of a lap's grid, all by LRFD. Four lines cannot arise for a lap, and four are open: tightening, hole use, the greatest edge distance and flexure of the plates. [What the first deck covers](#what-the-first-deck-covers) says what else it leaves open.
 - A waiver is not checked against the rules. A card may waive a line that has rules, and the rules are then not run.

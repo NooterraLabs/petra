@@ -58,12 +58,25 @@ These rules apply to both files.
   a signature. In a family, `param NAME` stands where a bound would.
 - `in`, `mean`, `signed`, `measured`, `source`, `param`, and `given` cannot be names inside a line. No
   declared name can be a declaration word.
+- A file has at most 1,000,000 bytes. `petra check`, `petra.export` and the MCP tools refuse a larger
+  file before they parse it.
+
+A pair that is refused prints its problems, each with its file, line and column. What is printed is
+bounded, whatever the files hold.
+
+- A message that names a table, such as the kinds or the givens of the card, lists at most 4 of
+  its names and says how many it has. For an unknown kind or mode they are the names that start most
+  as the unknown one does.
+- A message that arises more than once is printed once, at the first place, with how many times it
+  arose.
+- At most 100 problems are printed for a file, and then how many more there were.
+- A problem of more than 500 characters is cut, and says how many were left out.
 
 ## Declarations
 
 ### card
 
-A card has one `card` block, which names what is asked. `owner` is required. `environment` is optional and names a registry environment from the registry list at the end of this page.
+A card has one `card` block, which names what is asked. `owner` is required. `environment` is optional and names a registry environment from the registry list at the end of this page. No deck of rules reads an environment yet. So the card of a design with a part of a deck's type, such as a `lap`, states none, and `petra check` refuses one that does.
 
 ```
 card "warren-footbridge-panel" {
@@ -181,6 +194,7 @@ claim     = "claim" IDENT ":" ( qoi rel qty [ "margin" qty ] [ "under" IDENT { "
 waive     = "waive" ref "on" path "by" STRING "reason" STRING ;
 range     = "[" qty "," qty "]" ;
 qty       = NUMBER [ unit ] ;     an IDENT or "%" right after a NUMBER is its unit
+unit      = IDENT [ "^" INT ] | "%" ;         inch^4: a unit of length to the power 2, 3 or 4, with no space
 qoi       = segment { "." segment } ;          last segment is the quantity name
 segment   = IDENT [ "(" IDENT ")" ] ;          member(diag_ad) names element diag_ad
 path      = IDENT { "." IDENT } ;
@@ -209,6 +223,15 @@ A card and a design accept these unit spellings.
 | temperature | `degC` |
 | mass | `g`, `kg` |
 | I2t | `A2s` |
+
+A unit of length may be raised to the power 2, 3 or 4: the unit, `^` and the power, with no space, as
+in `mm^3` and `inch^4`. Its factor is the unit's own factor to that power, exactly, so `1 inch^4` is
+(127/5000)^4 m^4. A power is one of `2`, `3` and `4`, written as that one digit: `inch^1`, `inch^5`,
+`inch^04` and `inch^3/2` are refused. Only a unit of length takes a power, so `kN^2` and `mm2^2` are
+refused. An area has two spellings with one meaning: `mm^2` is `mm2`, `m^2` is `m2` and `inch^2` is
+`inch2`. A section modulus is written in a length to the third power and a moment of inertia in a
+length to the fourth. Petra prints such a quantity in `mm^3`, `cm^3`, `m^3` and the like, which it
+reads back.
 
 ## Exit codes of `petra check`
 

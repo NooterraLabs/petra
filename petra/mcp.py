@@ -131,6 +131,7 @@ def _file_at(path: str, argument: str, suffix: str) -> str:
     before anything touches it, because opening one sends the user's credentials to the
     host it names."""
     from .files import read_text
+    from .lang import LolaSyntaxError
 
     try:
         if path.startswith(("\\\\", "//")):
@@ -139,6 +140,8 @@ def _file_at(path: str, argument: str, suffix: str) -> str:
         if real.suffix != suffix or not real.is_file():
             raise OSError
         return read_text(real)
+    except LolaSyntaxError as exc:      # a file over the size a card or a design may have, or one that is no text
+        raise ToolError(str(exc)) from None
     except (OSError, ValueError):
         raise ToolError(f"cannot read {path}: `{argument}` takes a {suffix} file on this machine. "
                         "Give its text instead.") from None

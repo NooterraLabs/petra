@@ -221,6 +221,9 @@ def rules (cardHash : String) (card design deck : Except String ByteArray)
   let (parts, loads) ← match rules? with
     | some rules => readParts rules card design
     | none => pure (#[], {})
+  -- What the types need of their fields is asked last, of a design that breaks no rule
+  -- before it, and what deciding it takes comes off the work of the verdict.
+  let left ← if (← get).isEmpty then needs parts else pure MAX_WORK
   if !(← get).isEmpty then return {}
   let some rules := rules? |
     let signed := Signed.of card deck
@@ -229,7 +232,7 @@ def rules (cardHash : String) (card design deck : Except String ByteArray)
       return (out.push found, left)
     let (cells, left) := Id.run (settled.run' {})
     return { cells, dsgInputs := dsgInputs cells, work := MAX_WORK - left }
-  match Id.run ((cells rules card parts loads (hints?.getD #[])).run' {}) with
+  match Id.run ((cells rules card parts loads (hints?.getD #[]) left).run' {}) with
   | .ok made => return { cells := made.cells, ignored := some made.ignored, dsgInputs := made.dsgInputs, work := made.work }
   | .error why =>
     modify (·.push ⟨"limits", "design", "parts", why⟩)

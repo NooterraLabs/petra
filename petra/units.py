@@ -153,11 +153,29 @@ def _parse_number(text: str) -> Fraction:
         raise UnitError(f"malformed number {text!r}: zero denominator") from None
 
 
+_SPELLINGS = [unit for unit in (*UNITS, *CUSTOMARY) if unit != "1"]
+"""Every unit a file can write, in the order of the tables. A message about an unknown unit
+names the first four and says how many more there are: it once listed them all, for each
+unknown unit of a file."""
+POWERS = ("2", "3", "4")
+"""The powers a unit of length may be raised to, each as it is written: `inch^4`, and not
+`inch^04`. A section's area, modulus and moment of inertia are lengths to these powers."""
+
+
 def _unit(unit: str) -> tuple[Fraction, Dim]:
-    found = UNITS.get(unit) or CUSTOMARY.get(unit)
+    """The factor to SI and the dimension of a unit: a spelling of UNITS or CUSTOMARY, or a
+    unit of length, `^` and 2, 3 or 4, as in `mm^3` and `inch^4`. The factor is then the
+    unit's own to that power, exactly, so `mm^2` is `mm2`. Only a unit of length takes a
+    power: a power of `ohm/km` or of `kip_in` could be read two ways."""
+    name, hat, power = unit.partition("^")
+    found = UNITS.get(name) or CUSTOMARY.get(name)
     if found is None:
-        raise UnitError(f"unknown unit {unit!r}; known units: {', '.join(sorted({*UNITS, *CUSTOMARY}))}")
-    return found
+        raise UnitError(f"unknown unit {unit!r}; petra knows {len(_SPELLINGS)} units: {', '.join(_SPELLINGS[:4])} and {len(_SPELLINGS) - 4} more, which docs/reference.md lists")
+    if not hat:
+        return found
+    if found[1] != LENGTH or power not in POWERS:
+        raise UnitError(f"unknown unit {unit!r}: a unit of length takes a power of 2, 3 or 4, as in mm^3 and inch^4")
+    return found[0] ** int(power), Dim(m=int(power))
 
 
 def dimension_name(dim: Dim) -> str:
@@ -254,6 +272,8 @@ def readable_text(q: Quantity) -> str:
     si = si_unit(q.dim)
     size = max(abs(q.value.lo), abs(q.value.hi))
     units = [(factor, name == si, name) for name, (factor, dim) in UNITS.items() if dim == q.dim and name != "%"]
+    if not units and q.dim in (Dim(m=3), Dim(m=4)):      # a length to the third or the fourth power: mm^3, cm^4
+        units = [(factor ** q.dim.m, f"{name}^{q.dim.m}" == si, f"{name}^{q.dim.m}") for name, (factor, dim) in UNITS.items() if dim == LENGTH]
     fitting = [u for u in units if u[0] <= size]
     if not units or size == 0:
         return quantity_text(q)

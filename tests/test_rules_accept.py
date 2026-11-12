@@ -144,13 +144,18 @@ class Agreement(unittest.TestCase):
         self.assertEqual(self.second("strip.spark", spark).outcome, "fail")
 
     def test_open_is_open_whatever_leaves_it_open(self):
-        """The deck's rule for a spark holds only for a strip that carries a current, so an idle strip has no rule. This one has
-        no `when` and a range that reads the current, so on an idle strip it says nothing. The cell is open either way."""
-        ranged = with_rule(3, when=None, where=[{"le": [["q", "0", "A"], ["load", "current"]], "why": "it carries a current"}])
-        self.assertEqual(self.second("strip.spark", ranged).outcome, "pass")
-        idle = next(p for p in rule.parts(TASK, "strip.spark", [FIRST]).base if p["fit"] == "free" and "load current" not in p)
-        mine, theirs = FIRST.answer("strip.spark", idle), reading(ranged).answer("strip.spark", idle)
-        self.assertEqual([(a.state, a.kind) for a in (mine, theirs)], [("open", "no rule"), ("open", "load")])
+        """One transcription says its rule for a spark holds for a hole of at most 4 mm, in a range. The other reads a made-up
+        table that has a line up to 4 mm and none above, so over 4 mm its row gives no value. The cell is open either way."""
+        cover = {"id": "test/cover", "anchor": TEST, "gives": {"name": "c", "dim": "dimensionless", "what": "one, for a hole the table covers"},
+                 "takes": [{"name": "h", "dim": "length", "what": "the hole", "range": ["3 mm", "5 mm"]}],
+                 "table": {"down": {"by": "h", "bands": [["0 mm", "4 mm"]]}, "cells": ["1"]}}
+        covered = task(lambda b: b["rows"].append(cover))
+        ranged = reading(with_rule(3, where=[{"le": ["hole", ["q", "4", "mm"]], "why": "the hole is at most 4 mm"}]), covered)
+        tabled = reading(with_rule(3, le=[["add", "screw", ["q", "0.1", "mm"]], ["mul", "hole", ["row", "test/cover", {"h": "hole"}]]]), covered)
+        self.assertEqual(check(ranged, "strip.spark", "second", tabled).outcome, "pass")
+        wide = next(p for p in rule.parts(covered, "strip.spark", [ranged, tabled]).base if p["fit"] == "free" and p["hole"] > Fraction(4, 1000))
+        mine, theirs = ranged.answer("strip.spark", wide), tabled.answer("strip.spark", wide)
+        self.assertEqual([(a.state, a.kind) for a in (mine, theirs)], [("open", "range"), ("open", "value")])
 
     def test_two_inequalities_that_no_part_fails_cannot_be_told_the_same(self):
         """The made-up rule for bowing never fails: gap (4 mm - gap) is at most 4 mm2. With 4.3 for 4.2 no part gets another
@@ -181,8 +186,17 @@ class Disagreement(unittest.TestCase):
         self.differs("strip.heat", with_rule(0, where=None), "the range a rule holds in")
 
     def test_which_parts_a_rule_answers_for(self):
-        self.differs("strip.spark", with_rule(3, when=None), "which parts a rule answers for", "has no rule for a part like it")
-        self.differs("strip.spark", with_rule(3, when=["not", ["loaded", "current"]]), "which parts a rule answers for")
+        self.differs("strip.spark", with_rule(3, when=["is", "fit", "close"]), "which parts a rule answers for", "has no rule for a part like it")
+        self.differs("strip.spark", with_rule(3, when=["not", ["is", "fit", "free"]]), "which parts a rule answers for")
+        same = check(FIRST, "strip.spark", "second", reading(with_rule(3, when=None)))
+        self.assertEqual(same.outcome, "pass", "the line cannot arise for a close fit, so a rule for every strip answers the same parts")
+
+    def test_a_transcription_that_asks_whether_a_load_is_there_does_not_load(self):
+        """`loaded` is no condition (the fifth review): a rule that asks it is refused when its deck is read, and here in `units`."""
+        asked = reading(with_rule(3, when=["loaded", "current"]))
+        found = check(asked, "strip.spark", "units")
+        self.assertEqual(found.outcome, "fail")
+        self.assertIn(grid.LOADED, found.detail)
 
     def test_whether_the_mechanism_can_arise(self):
         self.differs("strip.spark", lambda b: b["grid"][4].pop("unless"), "whether it can arise", "says it cannot arise (a close fit leaves no room for one)")
@@ -325,7 +339,7 @@ class Alone(unittest.TestCase):
         self.assertIn("more current helps", found.detail)
         self.assertEqual(check(FIRST, "strip.heat", "direction").outcome, "pass")
         self.assertEqual(check(FIRST, "strip.bow", "direction").outcome, "none", "it reads no load")
-        self.assertEqual(check(FIRST, "strip.spark", "direction").outcome, "none", "its rule asks whether the current is there, and not how large it is")
+        self.assertEqual(check(FIRST, "strip.spark", "direction").outcome, "none", "its rule reads no load")
         self.assertEqual(check(reading(swapped, task(lambda b: b["types"][1]["loads"][0].pop("adverse"))), "strip.heat", "direction").outcome, "none", "the task calls no load adverse")
 
     def test_alike_fails_a_rule_that_treats_two_like_parts_differently(self):
@@ -346,20 +360,21 @@ class Alone(unittest.TestCase):
         idle = rule.reads(reading(lambda b: [b["rules"].pop(3), b["rules"].pop(0)]))
         self.assertIn("nothing reads strip.width, strip.T, strip.turns, strip.near.area, strip.far.area, strip.current", idle.detail)
 
-    def test_reads_does_not_count_a_load_that_only_a_when_asks_about(self):
-        """test/spark answers `when` the strip carries a current, and reads nothing of the
-        current. With test/heat gone no expression reads it, and `petra check` would leave a
-        design open at it (docs/format.md, "Cells from a deck of rules", item 8)."""
+    def test_reads_names_a_load_that_no_expression_reads(self):
+        """Only test/heat reads the current. With it gone no expression reads the current, and
+        `petra check` would leave a design open at it (docs/format.md, "Cells from a deck of
+        rules", item 8)."""
         asked = rule.reads(reading(lambda b: b["rules"].pop(0)))
         self.assertIn("nothing reads strip.width, strip.T, strip.turns, strip.near.area, strip.far.area, strip.current", asked.detail)
 
 
 class Parts(unittest.TestCase):
-    def test_every_combination_of_keys_with_and_without_a_load_a_condition_asks_about(self):
+    def test_every_combination_of_keys_and_every_load_on_every_part(self):
+        """A part carries every load of its type: a card states each load in every case, as zero where there is none."""
         tried = rule.parts(TASK, "strip.spark", [FIRST])
         self.assertEqual(len(tried.base), rule.PARTS)
-        self.assertEqual({(p["fit"], "load current" in p) for p in tried.base}, {("close", True), ("close", False), ("free", True), ("free", False)})
-        self.assertTrue(all("load current" in p for p in rule.parts(TASK, "strip.heat", [FIRST]).base), "no condition asks whether the heat's load is there")
+        self.assertEqual({p["fit"] for p in tried.base}, {"close", "free"})
+        self.assertTrue(all("load current" in p for mechanism in ("strip.spark", "strip.heat") for p in rule.parts(TASK, mechanism, [FIRST]).base))
 
     def test_a_size_bound_to_a_table_sits_on_and_beside_its_ends(self):
         mm = Fraction(1, 1000)
@@ -468,14 +483,14 @@ class Measurement(unittest.TestCase):
     def test_the_tally_by_kind_of_damage(self):
         total = sum((tally for tally in self.kinds.values()), start=collections.Counter())
         self.assertEqual((total["wrong"], total["any"]), (49, 43), "the samples come from a fixed seed, so the tally is the same each time")
-        self.assertEqual([total[name] for name in self.bench.PARTS], [3, 34, 5, 1, 2, 10], "every rule of STRIPS has a made-up example, and an example catches most damage")
+        self.assertEqual([total[name] for name in self.bench.PARTS], [3, 34, 7, 1, 2, 10], "every rule of STRIPS has a made-up example, and an example catches most damage")
         self.assertEqual((self.kinds["factor"]["wrong"], self.kinds["factor"]["any"]), (8, 2), "an example whose part is inside a range cannot tell where the range ends")
         self.assertEqual(self.kinds["sides swapped"]["wrong"], self.kinds["sides swapped"]["any"], "an example or the direction of the load refuses each swap")
         self.assertEqual(self.kinds["other part"]["alike"], self.kinds["other part"]["wrong"], "a field of the other pad breaks what the task calls alike")
         text = self.bench.table(self.kinds)
         self.assertEqual(text[0].split(), ["damage", "wrong", "refused", *self.bench.PARTS])
         self.assertEqual(text[-3].split()[:3], ["all", str(total["wrong"]), str(total["any"])])
-        self.assertEqual(text[-2:], ["  refused by one part of the check and no other: units 3, examples 24, reach 1, reads 3", "  refused by a part other than `alike`: 43 (88%)"])
+        self.assertEqual(text[-2:], ["  refused by one part of the check and no other: units 3, examples 22, reach 1, reads 3", "  refused by a part other than `alike`: 43 (88%)"])
 
     def test_damage_that_changes_no_answer_is_not_counted_as_wrong(self):
         """Two rows with one formula: reading the other changes no answer, so it is no wrong rule."""
@@ -487,10 +502,10 @@ class Measurement(unittest.TestCase):
     def test_without_examples_the_check_alone_refuses_less(self):
         lines, bare = self.bench.measure(FIRST, {}, ["strip.spark"])
         self.assertEqual(len(lines), 1)
-        self.assertIn("  test/spark: 12 wrong rules, 2 refused (reach 2), 0 the same as the rule; passed: add loses argument 1 in le 0 (term dropped); ", lines[0])
-        self.assertTrue(lines[0].endswith("; and 2 more"), lines[0])
+        self.assertIn("  test/spark: 12 wrong rules, 4 refused (reach 4), 0 the same as the rule; passed: add loses argument 1 in le 0 (term dropped); ", lines[0])
+        self.assertTrue(lines[0].endswith("; the two sides of `le` change places (sides swapped)"), lines[0])
         self.assertEqual(sum(tally["examples"] for tally in bare.values()), 0)
-        self.assertIn("  test/spark: 12 wrong rules, 10 refused (examples 10, reach 2), 0 the same as the rule", self.lines[3])
+        self.assertIn("  test/spark: 12 wrong rules, 10 refused (examples 10, reach 4), 0 the same as the rule", self.lines[3])
 
 
 class CommandLine(unittest.TestCase):

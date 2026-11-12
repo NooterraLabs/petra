@@ -37,14 +37,12 @@ def Part.joined (part : Part) (called : String) : Option String := do
 
 /-- The loads the card puts on the parts. `on` finds the card's input by the part, the load
 and the load case. `put` holds, for a part, each load the card puts on it with the case
-that does, in the order of the loads' names and then of the cases'. `carried` holds each
-part with each load that some case puts on it. `cases` holds the load cases of the card,
-each once, in the order of their names: the names its `cases` lists and the case of each
-of its loads. -/
+that does, in the order of the loads' names and then of the cases'. `cases` holds the load
+cases of the card, each once, in the order of their names: the names its `cases` lists and
+the case of each of its loads. -/
 structure Loads where
   on : Std.TreeMap (String × String × String) TapeInput := {}
   put : Std.TreeMap String (Array (String × String)) := {}
-  carried : Std.TreeSet (String × String) := {}
   cases : Array String := #[]
 
 /-- The items under each key, in their order. -/
@@ -191,6 +189,10 @@ def readParts (rules : Rules) (card : Card) (design : Design) : StateM Findings 
   for w in card.waivers do
     unless (place.get? w.subject).any fun part => asked.contains (part.kind.name, w.mechanism) do
       say "parts.7" "card" s!"{w.subject}/{w.mechanism}" "the grid asks no such mechanism of a part of this name"
+  -- An environment that the card states would be read by no cell, and a verdict would look
+  -- as if it held there: a lap in a marine atmosphere passed as it does indoors. It is
+  -- refused, as an ambient is, until a deck reads one.
+  if card.environment.isSome then say "parts.8" "card" "environment" "a deck of rules does not read an environment yet"
   unless card.claims.isEmpty do say "parts.8" "card" "claims" "a deck of rules does not read a claim yet"
   for key in card.stated do say "parts.8" "card" key "a deck of rules does not read these yet"
   unless design.params.isEmpty do say "parts.8" "design" "params" "a deck of rules does not read a param yet"
@@ -201,18 +203,143 @@ def readParts (rules : Rules) (card : Card) (design : Design) : StateM Findings 
     table.alter part fun
       | some found => some (found.push (load, under))
       | none => some #[(load, under)]
-  let carried : Std.TreeSet (String × String) := on.foldl (init := {}) fun found (part, load, _) _ => found.insert (part, load)
   let cases : Std.TreeSet String := on.foldl (init := setOf card.caseNames) fun found (_, _, under) _ => found.insert under
-  return (parts, { on, put, carried, cases := cases.toArray })
+  return (parts, { on, put, cases := cases.toArray })
 
-def Static.holds (loads : Loads) (part : Part) : Static → Bool
-  | .is field name => match part.slot field with
+/-- The parts that `part` joins, each under the name a rule calls it by. A condition finds a
+joined part here, among the names of one part's type, and not among every part of the
+design. A part gives one word for each of these names, so the table is no larger than the
+part's own lines. -/
+def Part.fellows (named : Std.TreeMap String Part) (part : Part) : Std.TreeMap String Part :=
+  part.kind.called.foldl (init := {}) fun found called (_, field, k) =>
+    match part.slot field with
+    | some (.parts joined) =>
+      match joined[k]? >>= named.get? with
+      | some other => found.insert called other
+      | none => found
+    | _ => found
+
+/-- Whether a condition holds for a part. An `is` reads a key of the part, or of the one
+part it joins under a name, which `fellows` holds. A key that is not there holds no name.
+The answer rests on the keys of the design alone, so it is the same under every load case
+of the card, and no case can switch a rule or a line off for another. -/
+def Static.holds (part : Part) (fellows : Std.TreeMap String Part) : Static → Bool
+  | .is called field name =>
+    let owner := match called with
+      | none => some part
+      | some called => fellows.get? called
+    match owner.bind (·.slot field) with
     | some (.key mine) => mine == name
     | _ => false
-  | .loaded load => loads.carried.contains (part.name, load)
-  | .and cs => cs.foldl (fun so c => so && c.holds loads part) true
-  | .or cs => cs.foldl (fun so c => so || c.holds loads part) false
-  | .not c => !c.holds loads part
+  | .and cs => cs.foldl (fun so c => so && c.holds part fellows) true
+  | .or cs => cs.foldl (fun so c => so || c.holds part fellows) false
+  | .not c => !c.holds part fellows
+
+/-- The bytes that the reason of a refuted requirement has for its keys: what a reason prints,
+less its first words, `the part is not what the rule requires: `, and the count of the keys
+it does not name, ` and 999999 more`. -/
+def REQUIRED_ROOM : Nat := MAX_TEXT - 56
+
+/-- A computation that pays for each step, in units of work, from what is left, before it
+takes the step. What is left is kept when the computation fails. -/
+abbrev Paying := ExceptT String (StateM Nat)
+
+/-- What the kernel says when the needs of a design would take it past its work. -/
+def NEEDS_SPENT : String :=
+  s!"deciding what the types need of this design would take the kernel past the {MAX_WORK} units of work it spends on one verdict"
+
+def pay (cost : Nat) : Paying Unit := do
+  let left ← get
+  if left < cost then throw NEEDS_SPENT
+  set (left - cost)
+
+def paid (found : Except String α) : Paying α :=
+  match found with
+  | .ok x => pure x
+  | .error why => throw why
+
+/-- The range of an expression of a need over the ranges that `value` gives its fields, by
+the four operations on the ends. The expression reads each field once, so this is the
+range of its values and no wider. Each step pays what the same step of a tape pays
+(`addWork`, `mulWork`, `divWork` in Tape.lean), and a number is held to `MAX_BITS`. -/
+def Exact.range (value : Option String → String → Option Iv) : Nat → Exact → Paying Iv
+  | 0, _ => throw "a need nests too deep"
+  | _ + 1, .c x => do
+    pay (copyWork 800 8000 8 (ratBits x))
+    return Iv.pt x
+  | _ + 1, .field part name => do
+    let some x := value part name | throw s!"the part has no quantity {name}"
+    pay (copyWork 700 4000 12 x.bits)
+    return x
+  | fuel + 1, .add terms => terms.foldlM (init := Iv.pt 0) fun sum term => do
+    let x ← term.range value fuel
+    pay (addWork sum.bits x.bits)
+    paid (fits (sum.add x))
+  | fuel + 1, .mul factors => factors.foldlM (init := Iv.pt 1) fun product factor => do
+    let x ← factor.range value fuel
+    pay (mulWork product.bits x.bits)
+    paid (fits (product.mul x))
+  | fuel + 1, .neg x => do
+    let v ← x.range value fuel
+    pay (copyWork 1100 7000 3 v.bits)
+    return v.neg
+  | fuel + 1, .div x y => do
+    let a ← x.range value fuel
+    let b ← y.range value fuel
+    pay (divWork a.bits b.bits)
+    paid (a.div b >>= fits)
+
+/-- A finding for each need of its type that a part breaks (docs/format.md, Parts 9), and
+the work that is left of `MAX_WORK` for the proofs. A need holds when the most its left
+side reaches is at most the least its right side reaches, or under it for `lt`: for every
+value the card and the design allow, and not only at one. The kernel decides it with exact
+fractions and no hint. It is asked of a design that breaks no rule before it, so every
+field is there and every quantity is more than zero. -/
+def needs (parts : Array Part) : StateM Findings Nat := do
+  let named := firsts parts (·.name)
+  let mut left := MAX_WORK
+  for part in parts do
+    if part.kind.needs.isEmpty then continue
+    let fellows := part.fellows named
+    let value (called : Option String) (field : String) : Option Iv :=
+      let owner := match called with
+        | none => some part
+        | some called => fellows.get? called
+      match owner.bind (·.slot field) with
+      | some (.quantity input) => some input.range
+      | _ => none
+    for (need, k) in part.kind.needs.zipIdx do
+      let sides : Paying (Iv × Iv) := do
+        let low ← need.low.range value MAX_EXPRESSION
+        let high ← need.high.range value MAX_EXPRESSION
+        pay (orderWork low.bits high.bits)
+        return (low, high)
+      let (found, after) := Id.run (sides.run.run left)
+      left := after
+      match found with
+      | .ok (low, high) =>
+        unless (if need.strict then low.hi < high.lo else low.hi ≤ high.lo) do
+          -- Once the findings are full a finding is only counted, and its text is not made:
+          -- a design of many parts that each break a need costs no more than its needs.
+          if (← get).kept.size ≥ MAX_FINDINGS then
+            modify (·.push ⟨"parts.9", "design", part.name, ""⟩)
+          else
+            -- A number is printed whole when it is short. A long one would be cut from the
+            -- finding, and takes long to write out.
+            let shown (x : Rat) : String := if ratBits x ≤ 256 then toString x else s!"a number of {ratBits x} bits"
+            let most := if low.lo == low.hi then shown low.hi else s!"up to {shown low.hi}"
+            let least := if high.lo == high.hi then shown high.lo else s!"down to {shown high.lo}"
+            modify (·.push ⟨"parts.9", "design", part.name,
+              s!"breaks need {k + 1} of a {part.kind.name}: its left side, {most}, is not {if need.strict then "under" else "at most"} its right side, {least}, in SI units: {need.why}"⟩)
+      | .error why =>
+        if why == NEEDS_SPENT then
+          modify (·.push ⟨"limits", "design", part.name, why⟩)
+          return 0
+        if (← get).kept.size ≥ MAX_FINDINGS then
+          modify (·.push ⟨"parts.9", "design", part.name, ""⟩)
+        else
+          modify (·.push ⟨"parts.9", "design", part.name, s!"need {k + 1} of a {part.kind.name} is not decided: {why}"⟩)
+  return left
 
 /-- What a tape reads of `part` under a load case. `named` finds a part by its name. -/
 def site (named : Std.TreeMap String Part) (loads : Loads) (part : Part) (under : Option String) : Site :=
@@ -329,7 +456,8 @@ its `when` and one for each load it reads. For a rule that answers and reads loa
 load case of the card is a step for each load the rule reads. Writing a tape is the weight
 of its rule, and a tape is a step for each node. Then every rule of a part's type is looked
 at once more for what it reads of the part: its look, and a step for each field it reads. -/
-def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hints : Array Hint) : StateM Caches (Except String Made) := do
+def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hints : Array Hint) (budget : Nat := MAX_WORK) :
+    StateM Caches (Except String Made) := do
   let over := s!"the deck of rules asks more than {MAX_CELLS} cells of this design, and the kernel makes no more"
   let long := s!"writing the tapes of this design from the deck of rules takes more than {MAX_STEPS} steps, and the kernel takes no more"
   let hinted := grouped hints fun h => (h.subject, h.mechanism, h.entry)
@@ -339,6 +467,7 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hi
   let rulesOf := grouped rules.rules fun r => (r.kind, r.mechanism)
   let lookOf : Std.TreeMap (String × String) Nat := rulesOf.map fun _ line => line.foldl (fun n r => n + r.look) 0
   let named := firsts parts (·.name)
+  let fellowsOf := parts.map (·.fellows named)
   let answered : Std.TreeSet String := rules.rules.foldl (fun found r => found.insert r.mechanism) {}
   let cell (subject mechanism entry : String) (state : State) (reason : String := "") (waiver : Option (Nat × Waiver) := none) : Settled :=
     let claims := hintsFor subject mechanism entry
@@ -354,8 +483,8 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hi
   let mut ranges : Std.TreeSet (String × String × String) := {}
   let mut dsg : Std.TreeSet String := {}
   let mut steps := 0
-  let mut left := MAX_WORK
-  for part in parts do
+  let mut left := budget
+  for (part, fellows) in parts.zip fellowsOf do
     for ask in asksOf.getD part.kind.name #[] do
       if out.size > MAX_CELLS then return .error over
       steps := steps + 1 + ((ask.excuse.bind id).map Static.size).getD 0 + lookOf.getD (ask.kind, ask.mechanism) 0
@@ -363,15 +492,42 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hi
       let pending (entry reason : String) : Settled := cell part.name ask.mechanism entry .undecided reason
       if let some (waiver, k) := waivers.get? (part.name, ask.mechanism) then
         out := out.push (cell part.name ask.mechanism "" .waived "" (some (k, waiver)))
-      else if ask.excuse.any fun condition => condition.all (·.holds loads part) then
+      else if ask.excuse.any fun condition => condition.all (·.holds part fellows) then
         out := out.push (cell part.name ask.mechanism "" .notApplicable)
       else
-        let answers := (rulesOf.getD (ask.kind, ask.mechanism) #[]).filter fun r => r.condition.all (·.holds loads part)
+        let answers := (rulesOf.getD (ask.kind, ask.mechanism) #[]).filter fun r => r.condition.all (·.holds part fellows)
         if answers.isEmpty then
           let other := if answered.contains ask.mechanism then " on a part like this one" else ""
           out := out.push (pending "" s!"the deck has no rule for it{other}")
         for rule in answers do
           let tail := rule.entry
+          -- A rule that requires has one cell, with no tape and no hint: proved when its
+          -- condition over keys holds for the part, and refuted when it does not, with each
+          -- key it names and the name the part has for it.
+          if let some required := rule.requires then
+            if out.size > MAX_CELLS then return .error over
+            if required.holds part fellows then out := out.push (cell part.name ask.mechanism tail .proved)
+            else
+              -- The keys are named while they fit in what a reason prints, beside its first
+              -- words and the count of the rest, and the rest are counted: a condition may
+              -- name thousands, for thousands of parts. The first key is always named.
+              let mut has := ""
+              let mut said := 0
+              for (called, field) in rule.asked do
+                let owner := match called with
+                  | none => some part
+                  | some called => fellows.get? called
+                -- A name of a key may be long, and the reason holds its first characters.
+                let name := match owner.bind (·.slot field) with
+                  | some (.key mine) => toString (mine.take MAX_TEXT)
+                  | _ => "nothing"
+                let one := s!"{(called.map (· ++ ".")).getD ""}{field} is {name}"
+                if said > 0 && has.utf8ByteSize + 2 + one.utf8ByteSize > REQUIRED_ROOM then break
+                has := has ++ (if said == 0 then "" else ", ") ++ one
+                said := said + 1
+              let more := if said < rule.asked.size then s!" and {rule.asked.size - said} more" else ""
+              out := out.push (cell part.name ask.mechanism tail .refuted s!"the part is not what the rule requires: {has}{more}")
+            continue
           let mut unders : Array (Option String) := #[none]
           if !rule.loads.isEmpty then
             -- A card with no load case at all puts none of the rule's loads on the part.
@@ -425,19 +581,21 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hi
   -- What a rule or a line of the grid reads of each part. Every rule of a part's type is
   -- looked at here, whatever the card waives, so the look is counted again. The look of a
   -- rule holds a step for each load it reads. A load is read by an expression of a rule
-  -- that applies to the part it is on. A `loaded` in a `when` or an `unless` asks whether
-  -- the load is there and reads nothing of it, so it is no reader.
+  -- that applies to the part it is on, and by nothing else.
   let rulesOfKind := grouped rules.rules (·.kind)
   let readOf : Std.TreeMap String Nat := rulesOfKind.map fun _ line => line.foldl (fun n r => n + r.look + r.fields.size) 0
   let mut read : Std.TreeSet (String × String) := {}
   let mut readLoads : Std.TreeSet (String × String) := {}
-  for part in parts do
+  for (part, fellows) in parts.zip fellowsOf do
     steps := steps + 1 + readOf.getD part.kind.name 0
     if steps > MAX_STEPS then return .error long
     for ask in asksOf.getD part.kind.name #[] do
-      for field in ((ask.excuse.bind id).map Static.keys).getD #[] do read := read.insert (part.name, field)
+      for (called, field) in ((ask.excuse.bind id).map Static.keys).getD #[] do
+        match called with
+        | none => read := read.insert (part.name, field)
+        | some called => if let some other := fellows.get? called then read := read.insert (other.name, field)
     for rule in rulesOfKind.getD part.kind.name #[] do
-      if rule.condition.all (·.holds loads part) then
+      if rule.condition.all (·.holds part fellows) then
         for load in rule.loads do readLoads := readLoads.insert (part.name, load)
         for (called, field) in rule.fields do
           match called with

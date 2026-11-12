@@ -1,0 +1,831 @@
+{
+ "format": "petra-rules/0",
+ "name": "asme-bth-1-2023-draft",
+ "about": "A draft for the second deck: the types and the grid of a lifting beam to ASME BTH-1-2023, written by hand from the standard's list of sections and from lists of failure mechanisms and of the stages of a lifter's life. It has no rows and no rules, so every line that can arise is open. It is a task for two transcribers and is in no deck that ships.",
+ "rows": [],
+ "types": [
+  {
+   "type": "i_shape",
+   "what": "a rolled steel I-shape with two like flanges, used as the beam of a lifter",
+   "fields": [
+    {
+     "name": "depth",
+     "dim": "length",
+     "what": "its depth, over both flanges"
+    },
+    {
+     "name": "flange_width",
+     "dim": "length",
+     "what": "the width of a flange"
+    },
+    {
+     "name": "flange_thickness",
+     "dim": "length",
+     "what": "the thickness of a flange"
+    },
+    {
+     "name": "web_thickness",
+     "dim": "length",
+     "what": "the thickness of the web"
+    },
+    {
+     "name": "k",
+     "dim": "length",
+     "what": "the distance from the outer face of a flange to the toe of the fillet on the web"
+    },
+    {
+     "name": "Ix",
+     "dim": "length^4",
+     "what": "the moment of inertia about its major axis, as its maker's table gives it"
+    },
+    {
+     "name": "Sx",
+     "dim": "length^3",
+     "what": "the section modulus about its major axis, as its maker's table gives it"
+    },
+    {
+     "name": "ry",
+     "dim": "length",
+     "what": "the radius of gyration about its minor axis, as its maker's table gives it"
+    },
+    {
+     "name": "J",
+     "dim": "length^4",
+     "what": "the torsional constant, as its maker's table gives it"
+    },
+    {
+     "name": "Fy",
+     "dim": "stress",
+     "signed": true,
+     "what": "the specified minimum yield stress of its steel"
+    }
+   ]
+  },
+  {
+   "type": "lug",
+   "what": "a flat steel plate with one round hole for a pin, welded by its base to a flange of the beam over the web, and pulled in its own plane, square to the beam",
+   "fields": [
+    {
+     "name": "thickness",
+     "dim": "length",
+     "what": "its thickness"
+    },
+    {
+     "name": "width",
+     "dim": "length",
+     "what": "its width across the pull, with the hole at the middle of it. Its base along the beam is as long."
+    },
+    {
+     "name": "hole",
+     "dim": "length",
+     "what": "the diameter of the hole"
+    },
+    {
+     "name": "edge",
+     "dim": "length",
+     "what": "the distance from the centre of the hole to the edge of the plate beyond it, along the pull"
+    },
+    {
+     "name": "end",
+     "one_of": [
+      "straight",
+      "round"
+     ],
+     "what": "the edge beyond the hole: straight and square to the pull, or an arc about the centre of the hole whose radius is the edge distance"
+    },
+    {
+     "name": "stiffened",
+     "one_of": [
+      "no",
+      "yes"
+     ],
+     "what": "whether the plate is held against buckling out of its plane at the hole"
+    },
+    {
+     "name": "bore",
+     "one_of": [
+      "machined",
+      "cut"
+     ],
+     "what": "how the hole is made: drilled, reamed or finished to a roughness of 500 microinch or less, or flame cut and left so"
+    },
+    {
+     "name": "leg",
+     "dim": "length",
+     "what": "the leg of the fillet weld that runs all round its base"
+    },
+    {
+     "name": "Fy",
+     "dim": "stress",
+     "signed": true,
+     "what": "the specified minimum yield stress of its steel"
+    },
+    {
+     "name": "Fu",
+     "dim": "stress",
+     "signed": true,
+     "what": "the specified minimum tensile strength of its steel"
+    },
+    {
+     "name": "Exx",
+     "dim": "stress",
+     "signed": true,
+     "what": "the nominal tensile strength of the weld metal at its base"
+    }
+   ]
+  },
+  {
+   "type": "shackle",
+   "what": "a bought shackle whose pin passes through the hole of a lug",
+   "fields": [
+    {
+     "name": "rating",
+     "dim": "force",
+     "signed": true,
+     "what": "the rated load its maker marks on it"
+    },
+    {
+     "name": "pin",
+     "dim": "length",
+     "what": "the diameter of its pin"
+    },
+    {
+     "name": "pin_Fy",
+     "dim": "stress",
+     "signed": true,
+     "what": "the specified minimum yield stress of its pin"
+    }
+   ]
+  },
+  {
+   "type": "lifting_beam",
+   "what": "a straight beam hung from one lug at the middle of its top flange, that carries a load from two like lugs under its bottom flange, each as far from the middle as the other, with every pull plumb and in the plane of the web",
+   "fields": [
+    {
+     "name": "category",
+     "one_of": [
+      "A",
+      "B",
+      "C"
+     ],
+     "what": "the design category, as Section 2-2 names it"
+    },
+    {
+     "name": "service",
+     "one_of": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4"
+     ],
+     "what": "the service class, as Table 2-3-1 names it"
+    },
+    {
+     "name": "turns",
+     "one_of": [
+      "no",
+      "yes"
+     ],
+     "what": "whether a pin turns in its hole under load, for a large number of load cycles"
+    },
+    {
+     "name": "length",
+     "dim": "length",
+     "what": "the length of the beam, end to end"
+    },
+    {
+     "name": "span",
+     "dim": "length",
+     "signed": true,
+     "what": "the distance between the centres of the two lugs below, which the load to be lifted sets"
+    },
+    {
+     "name": "weight",
+     "dim": "force",
+     "what": "the weight of the lifter itself: the beam, its lugs and the shackles that hang from it"
+    },
+    {
+     "name": "section",
+     "type": "i_shape",
+     "as": [
+      "beam"
+     ],
+     "what": "the beam"
+    },
+    {
+     "name": "lugs",
+     "type": "lug",
+     "as": [
+      "top",
+      "bottom"
+     ],
+     "what": "the lug above, and the pattern of the two lugs below, which are alike"
+    },
+    {
+     "name": "shackles",
+     "type": "shackle",
+     "as": [
+      "top_shackle",
+      "bottom_shackle"
+     ],
+     "what": "the shackle in the lug above, and the pattern of the two shackles in the lugs below, which are alike"
+    }
+   ],
+   "loads": [
+    {
+     "name": "lift",
+     "dim": "force",
+     "least": "0 kip",
+     "what": "the weight hung from the two lugs below together, with the rigging between them and the load"
+    },
+    {
+     "name": "temperature",
+     "dim": "temperature",
+     "what": "the temperature of the steel of the lifter while it lifts"
+    }
+   ]
+  }
+ ],
+ "grid": [
+  {
+   "type": "lifting_beam",
+   "mechanism": "lifting_beam.design_responsibility",
+   "what": "whether the lifter is designed by a qualified person, or under one",
+   "anchor": {
+    "standard": "ASME BTH-1-2023",
+    "clause": "1-4.1"
+   }
+  },
+  {
+   "type": "lifting_beam",
+   "mechanism": "lifting_beam.material",
+   "what": "whether the steel is carbon, high-strength low-alloy or heat-treated constructional alloy steel, made to a named specification",
+   "anchor": {
+    "standard": "ASME BTH-1-2023",
+    "clause": "1-4.5"
+   }
+  },
+  {
+   "type": "lifting_beam",
+   "mechanism": "lifting_beam.welding",
+   "what": "welding design and procedures, which the standard leaves to AWS D14.1 for all but the strength of a weld",
+   "anchor": {
+    "standard": "ASME BTH-1-2023",
+    "clause": "1-4.6"
+   }
+  },
+  {
+   "type": "lifting_beam",
+   "mechanism": "lifting_beam.temperature",
+   "what": "the temperature of the steel in service, inside the range the design provisions hold for",
+   "anchor": {
+    "standard": "ASME BTH-1-2023",
+    "clause": "1-4.7"
+   }
+  },
+  {
+   "type": "lifting_beam",
+   "mechanism": "lifting_beam.environment",
+   "what": "air free of excessive dust, moisture and corrosion, which the standard takes for granted",
+   "anchor": {
+    "standard": "ASME BTH-1-2023",
+    "clause": "2-1.4"
+   }
+  },
+  {
+   "type": "lifting_beam",
+   "mechanism": "lifting_beam.marking",
+   "what": "the design category and the service class marked on the lifter and its drawings, with the marking ASME B30.20 asks",
+   "anchor": {
+    "standard": "ASME BTH-1-2023",
+    "clause": "2-1.3"
+   }
+  },
+  {
+   "type": "lifting_beam",
+   "mechanism": "lifting_beam.category",
+   "what": "whether the design category is the one the use of the lifter calls for",
+   "anchor": {
+    "standard": "ASME BTH-1-2023",
+    "clause": "2-2"
+   }
+  },
+  {
+   "type": "lifting_beam",
+   "mechanism": "lifting_beam.category_a_service",
+   "what": "a lifter of design category A is of service class 0",
+   "anchor": {
+    "standard": "ASME BTH-1-2023",
+    "clause": "2-2.1(b)"
+   }
+  },
+  {
+   "type": "lifting_beam",
+   "mechanism": "lifting_beam.service_class",
+   "what": "whether the service class is the one for the load cycles the lifter is to see",
+   "anchor": {
+    "standard": "ASME BTH-1-2023",
+    "clause": "2-3",
+    "table": "2-3-1"
+   }
+  },
+  {
+   "type": "lifting_beam",
+   "mechanism": "lifting_beam.side_load",
+   "what": "forces of use other than plumb pulls in the plane of the web, such as a side pull or a lift out of level",
+   "anchor": {
+    "standard": "ASME BTH-1-2023",
+    "clause": "3-1.2"
+   }
+  },
+  {
+   "type": "lifting_beam",
+   "mechanism": "lifting_beam.curved_member",
+   "what": "more bending stress in a member that is curved",
+   "anchor": {
+    "standard": "ASME BTH-1-2023",
+    "clause": "3-1.5"
+   },
+   "unless": {
+    "why": "the beam is straight"
+   }
+  },
+  {
+   "type": "lifting_beam",
+   "mechanism": "lifting_beam.tube_wall",
+   "what": "the design wall thickness of a hollow section",
+   "anchor": {
+    "standard": "ASME BTH-1-2023",
+    "clause": "3-1.7"
+   },
+   "unless": {
+    "why": "the beam is an I-shape"
+   }
+  },
+  {
+   "type": "lifting_beam",
+   "mechanism": "lifting_beam.axial",
+   "what": "tension or compression along the beam, alone or with bending",
+   "anchor": {
+    "standard": "ASME BTH-1-2023",
+    "clause": "3-2.1, 3-2.2 and 3-2.4"
+   },
+   "unless": {
+    "why": "every pull on the beam is plumb, so no force runs along it"
+   }
+  },
+  {
+   "type": "lifting_beam",
+   "mechanism": "lifting_beam.lug_yield",
+   "what": "yielding of each lug in tension on its gross section",
+   "anchor": {
+    "standard": "ASME BTH-1-2023",
+    "clause": "3-2.1",
+    "equation": "3-1"
+   }
+  },
+  {
+   "type": "lifting_beam",
+   "mechanism": "lifting_beam.local_buckling",
+   "what": "the flanges and the web of the beam no more slender than noncompact, past which the standard gives no strength",
+   "anchor": {
+    "standard": "ASME BTH-1-2023",
+    "clause": "3-2.6",
+    "table": "3-2.2-1"
+   }
+  },
+  {
+   "type": "lifting_beam",
+   "mechanism": "lifting_beam.flexure",
+   "what": "bending of the beam about its major axis, with lateral-torsional buckling of a hung beam that nothing braces",
+   "anchor": {
+    "standard": "ASME BTH-1-2023",
+    "clause": "3-2.3.1 and 3-2.3.2",
+    "equation": "3-6 to 3-17"
+   }
+  },
+  {
+   "type": "lifting_beam",
+   "mechanism": "lifting_beam.minor_axis_bending",
+   "what": "bending of the beam about its minor axis, alone or with major axis bending",
+   "anchor": {
+    "standard": "ASME BTH-1-2023",
+    "clause": "3-2.3.4 and 3-2.3.5"
+   },
+   "unless": {
+    "why": "every pull is in the plane of the web"
+   }
+  },
+  {
+   "type": "lifting_beam",
+   "mechanism": "lifting_beam.shear",
+   "what": "shear in the web of the beam",
+   "anchor": {
+    "standard": "ASME BTH-1-2023",
+    "clause": "3-2.3.6",
+    "equation": "3-28"
+   }
+  },
+  {
+   "type": "lifting_beam",
+   "mechanism": "lifting_beam.normal_with_shear",
+   "what": "bending stress and shear stress together at one point of the beam",
+   "anchor": {
+    "standard": "ASME BTH-1-2023",
+    "clause": "3-2.5",
+    "equation": "3-37"
+   }
+  },
+  {
+   "type": "lifting_beam",
+   "mechanism": "lifting_beam.web_at_lug",
+   "what": "yielding of the web of the beam under the pull of a lug, which this standard has no equation for and AISC 360-22 Section J10 has",
+   "anchor": {
+    "standard": "ASME BTH-1-2023",
+    "clause": "3-1.3.2"
+   }
+  },
+  {
+   "type": "lifting_beam",
+   "mechanism": "lifting_beam.eccentricity",
+   "what": "bending in a connection whose forces do not meet at one point",
+   "anchor": {
+    "standard": "ASME BTH-1-2023",
+    "clause": "3-3.1"
+   },
+   "unless": {
+    "why": "each lug stands over the web and is pulled along its own axis"
+   }
+  },
+  {
+   "type": "lifting_beam",
+   "mechanism": "lifting_beam.contact_bearing",
+   "what": "bearing on milled surfaces and on rollers",
+   "anchor": {
+    "standard": "ASME BTH-1-2023",
+    "clause": "3-3.1",
+    "equation": "3-38, 3-39"
+   },
+   "unless": {
+    "why": "no part bears on another but a pin in its hole"
+   }
+  },
+  {
+   "type": "lifting_beam",
+   "mechanism": "lifting_beam.bolts",
+   "what": "the bolts of a bolted connection and the parts they join",
+   "anchor": {
+    "standard": "ASME BTH-1-2023",
+    "clause": "3-3.2"
+   },
+   "unless": {
+    "why": "no part of the lifter is bolted"
+   }
+  },
+  {
+   "type": "lifting_beam",
+   "mechanism": "lifting_beam.lug_tension",
+   "what": "tension through the pinhole of each lug",
+   "anchor": {
+    "standard": "ASME BTH-1-2023",
+    "clause": "3-3.3.1",
+    "equation": "3-47 to 3-50"
+   }
+  },
+  {
+   "type": "lifting_beam",
+   "mechanism": "lifting_beam.lug_fracture",
+   "what": "fracture on one plane beyond the pinhole of each lug",
+   "anchor": {
+    "standard": "ASME BTH-1-2023",
+    "clause": "3-3.3.1",
+    "equation": "3-51"
+   }
+  },
+  {
+   "type": "lifting_beam",
+   "mechanism": "lifting_beam.lug_shear",
+   "what": "shear on two planes beyond the pinhole of each lug",
+   "anchor": {
+    "standard": "ASME BTH-1-2023",
+    "clause": "3-3.3.1",
+    "equation": "3-52 to 3-54"
+   }
+  },
+  {
+   "type": "lifting_beam",
+   "mechanism": "lifting_beam.lug_combined",
+   "what": "stress of the member together with the stress of the pin at a pinhole",
+   "anchor": {
+    "standard": "ASME BTH-1-2023",
+    "clause": "3-3.3.2"
+   },
+   "unless": {
+    "why": "each pinhole is in a lug of its own, away from the stress of the beam"
+   }
+  },
+  {
+   "type": "lifting_beam",
+   "mechanism": "lifting_beam.lug_fatigue",
+   "what": "the range of tension on the net area through each pinhole",
+   "anchor": {
+    "standard": "ASME BTH-1-2023",
+    "clause": "3-3.3.3",
+    "table": "3-4.3-1"
+   },
+   "unless": {
+    "when": [
+     "is",
+     "service",
+     "0"
+    ],
+    "why": "a lifter of service class 0 need not be analysed for fatigue"
+   }
+  },
+  {
+   "type": "lifting_beam",
+   "mechanism": "lifting_beam.bore",
+   "what": "each pinhole drilled, reamed or finished smooth",
+   "anchor": {
+    "standard": "ASME BTH-1-2023",
+    "clause": "3-3.3.3"
+   },
+   "unless": {
+    "when": [
+     "is",
+     "service",
+     "0"
+    ],
+    "why": "the finish is asked of service classes 1 to 4"
+   }
+  },
+  {
+   "type": "lifting_beam",
+   "mechanism": "lifting_beam.lug_bearing",
+   "what": "bearing between each pin and its lug",
+   "anchor": {
+    "standard": "ASME BTH-1-2023",
+    "clause": "3-3.3.4",
+    "equation": "3-55, 3-56"
+   }
+  },
+  {
+   "type": "lifting_beam",
+   "mechanism": "lifting_beam.pin_clearance",
+   "what": "room between each pin and its hole that lets the joint work",
+   "anchor": {
+    "standard": "ASME BTH-1-2023",
+    "clause": "3-3.3.5"
+   },
+   "unless": {
+    "when": [
+     "or",
+     [
+      "is",
+      "service",
+      "0"
+     ],
+     [
+      "is",
+      "turns",
+      "no"
+     ]
+    ],
+    "why": "the clearance is asked of a joint that turns under load or sees its load reverse, over a large number of load cycles"
+   }
+  },
+  {
+   "type": "lifting_beam",
+   "mechanism": "lifting_beam.pin",
+   "what": "shear and bending of each pin",
+   "anchor": {
+    "standard": "ASME BTH-1-2023",
+    "clause": "3-3.3.6"
+   },
+   "unless": {
+    "why": "each pin is part of a bought shackle, whose rated load answers for it"
+   }
+  },
+  {
+   "type": "lifting_beam",
+   "mechanism": "lifting_beam.lug_weld",
+   "what": "shear on the throat of the fillet weld at the base of each lug",
+   "anchor": {
+    "standard": "ASME BTH-1-2023",
+    "clause": "3-3.4.1 and 3-3.4.3",
+    "equation": "3-57"
+   }
+  },
+  {
+   "type": "lifting_beam",
+   "mechanism": "lifting_beam.groove_and_plug_welds",
+   "what": "groove welds, plug welds and slot welds",
+   "anchor": {
+    "standard": "ASME BTH-1-2023",
+    "clause": "3-3.4.2 and 3-3.4.4"
+   },
+   "unless": {
+    "why": "every weld of the lifter is a fillet weld"
+   }
+  },
+  {
+   "type": "lifting_beam",
+   "mechanism": "lifting_beam.weld_min_size",
+   "what": "the least size of each fillet weld, by the thicker part it joins",
+   "anchor": {
+    "standard": "ASME BTH-1-2023",
+    "clause": "3-3.4.3",
+    "table": "3-3.4.3-1"
+   }
+  },
+  {
+   "type": "lifting_beam",
+   "mechanism": "lifting_beam.weld_max_size",
+   "what": "the greatest size of a fillet weld along the edge of a part",
+   "anchor": {
+    "standard": "ASME BTH-1-2023",
+    "clause": "3-3.4.3"
+   },
+   "unless": {
+    "why": "each weld joins the base of a lug to the face of a flange, and none runs along the edge of a plate"
+   }
+  },
+  {
+   "type": "lifting_beam",
+   "mechanism": "lifting_beam.weld_min_length",
+   "what": "the least length of each fillet weld, by its size",
+   "anchor": {
+    "standard": "ASME BTH-1-2023",
+    "clause": "3-3.4.3"
+   }
+  },
+  {
+   "type": "lifting_beam",
+   "mechanism": "lifting_beam.beam_fatigue",
+   "what": "the range of bending stress in the plain steel of the beam",
+   "anchor": {
+    "standard": "ASME BTH-1-2023",
+    "clause": "3-4.3",
+    "table": "3-4.3-1"
+   },
+   "unless": {
+    "when": [
+     "is",
+     "service",
+     "0"
+    ],
+    "why": "a lifter of service class 0 need not be analysed for fatigue"
+   }
+  },
+  {
+   "type": "lifting_beam",
+   "mechanism": "lifting_beam.flange_fatigue_at_lug",
+   "what": "the range of stress in a flange of the beam where a lug is welded to it",
+   "anchor": {
+    "standard": "ASME BTH-1-2023",
+    "clause": "3-4.4",
+    "table": "3-4.3-1, 3-4.4-1"
+   },
+   "unless": {
+    "when": [
+     "is",
+     "service",
+     "0"
+    ],
+    "why": "a lifter of service class 0 need not be analysed for fatigue"
+   }
+  },
+  {
+   "type": "lifting_beam",
+   "mechanism": "lifting_beam.weld_fatigue",
+   "what": "the range of stress at the weld of each lug: at its toe, at its root and on its throat",
+   "anchor": {
+    "standard": "ASME BTH-1-2023",
+    "clause": "3-4.4 and 3-4.6",
+    "equation": "3-59",
+    "table": "3-4.3-1, 3-4.4-1"
+   },
+   "unless": {
+    "when": [
+     "is",
+     "service",
+     "0"
+    ],
+    "why": "a lifter of service class 0 need not be analysed for fatigue"
+   }
+  },
+  {
+   "type": "lifting_beam",
+   "mechanism": "lifting_beam.threaded_fatigue",
+   "what": "the range of tension in a threaded fastener",
+   "anchor": {
+    "standard": "ASME BTH-1-2023",
+    "clause": "3-4.5"
+   },
+   "unless": {
+    "why": "no threaded fastener of the lifter's own design carries tension"
+   }
+  },
+  {
+   "type": "lifting_beam",
+   "mechanism": "lifting_beam.impact",
+   "what": "impact above half the lifted load in design category A, or above the whole of it in category B",
+   "anchor": {
+    "standard": "ASME BTH-1-2023",
+    "clause": "3-5.1"
+   }
+  },
+  {
+   "type": "lifting_beam",
+   "mechanism": "lifting_beam.stress_concentration",
+   "what": "peak stress at holes and changes of section, where the load repeats",
+   "anchor": {
+    "standard": "ASME BTH-1-2023",
+    "clause": "3-5.2"
+   }
+  },
+  {
+   "type": "lifting_beam",
+   "mechanism": "lifting_beam.deflection",
+   "what": "any limit on how far the beam may bend that its use needs",
+   "anchor": {
+    "standard": "ASME BTH-1-2023",
+    "clause": "3-5.3"
+   }
+  },
+  {
+   "type": "lifting_beam",
+   "mechanism": "lifting_beam.shackle_rating",
+   "what": "each bought shackle carries no more than its rated load, which the standard leaves to ASME B30.26 and to the maker",
+   "anchor": {
+    "standard": "ASME BTH-1-2023",
+    "clause": "1-5.1"
+   }
+  },
+  {
+   "type": "lifting_beam",
+   "mechanism": "lifting_beam.pin_retention",
+   "what": "each pin kept from working loose",
+   "anchor": {
+    "standard": "ASME BTH-1-2023",
+    "clause": "4-8.4"
+   }
+  },
+  {
+   "type": "lifting_beam",
+   "mechanism": "lifting_beam.fabrication",
+   "what": "construction and its tolerances, which the standard leaves to ASME B30.20",
+   "anchor": {
+    "standard": "ASME BTH-1-2023",
+    "clause": "1-2"
+   }
+  },
+  {
+   "type": "lifting_beam",
+   "mechanism": "lifting_beam.inspection",
+   "what": "inspection of the lifter and of its welds, which the standard leaves to ASME B30.20 and AWS D14.1",
+   "anchor": {
+    "standard": "ASME BTH-1-2023",
+    "clause": "1-2"
+   }
+  },
+  {
+   "type": "lifting_beam",
+   "mechanism": "lifting_beam.proof_test",
+   "what": "the load test before use, which the standard leaves to ASME B30.20",
+   "anchor": {
+    "standard": "ASME BTH-1-2023",
+    "clause": "1-2"
+   }
+  },
+  {
+   "type": "lifting_beam",
+   "mechanism": "lifting_beam.use_and_maintenance",
+   "what": "operation and maintenance, which the standard leaves to ASME B30.20",
+   "anchor": {
+    "standard": "ASME BTH-1-2023",
+    "clause": "1-2"
+   }
+  },
+  {
+   "type": "lifting_beam",
+   "mechanism": "lifting_beam.through_thickness",
+   "what": "tearing of a flange pulled through its thickness by the weld of a lug, which the standard does not speak of",
+   "anchor": {
+    "standard": "ASME BTH-1-2023",
+    "clause": "1-2"
+   }
+  },
+  {
+   "type": "lifting_beam",
+   "mechanism": "lifting_beam.stability",
+   "what": "whether the hung beam and its load stay level and do not roll, which the standard does not speak of",
+   "anchor": {
+    "standard": "ASME BTH-1-2023",
+    "clause": "1-2"
+   }
+  }
+ ],
+ "rules": []
+}

@@ -254,18 +254,20 @@ class ALoadThatNothingReads(unittest.TestCase):
         self.assertEqual(verdict, "UNKNOWN")
         self.assertEqual(reason(said, "T/wind"), "no rule of the deck reads the load T that case wind puts on p, so nothing checks it")
 
-    def test_a_load_that_only_a_when_asks_about_with_loaded_is_not_read(self):
+    def test_a_deck_whose_when_or_unless_asks_whether_a_load_is_there_is_refused(self):
+        """Until the fifth review a `when` and an `unless` could ask `loaded`, which read
+        nothing of the load. It held when any case of the card put the load on the part, so
+        one case could switch a rule or a line off under every other. The condition is gone:
+        a deck that asks it does not load, in petra/grid.py and in the kernel."""
         asked = dict(RULES, rules=[dict(SHEAR["rules"][0], when=["loaded", "T"])])
-        cells, verdict, _ = both(self, HEAD + TENSION, asked)
-        self.assertEqual((cells, verdict), ([("p", COMBINED, "shear/gravity", "proved"), ("p", "unread", "T/gravity", "open")], "UNKNOWN"))
-
-    def test_a_load_that_only_an_unless_asks_about_with_loaded_is_not_read(self):
-        """The line cannot arise for a joint under tension, the deck says, and the joint is
-        under tension. No rule reads the tension, so it is an open cell."""
         excused = dict(SHEAR, grid=[dict(RULES["grid"][0], unless={"when": ["loaded", "T"], "why": "made up"})])
-        cells, verdict, _ = both(self, HEAD + TENSION, excused)
-        self.assertEqual(cells, [("p", COMBINED, "", "not_applicable"), ("p", "unread", "T/gravity", "open")])
-        self.assertEqual(verdict, "UNKNOWN")
+        for rules in (asked, excused):
+            with self.assertRaises(grid.DeckError) as refused:
+                grid.read_deck(json.dumps(rules))
+            self.assertIn(grid.LOADED, str(refused.exception))
+            said = ask(strips(HEAD + TENSION, DESIGN, SHEAR) | {"rules": json.dumps(rules)})
+            self.assertIn("`loaded` is no condition: a condition is over keys", findings(said))
+            self.assertEqual([f["file"] for f in said["findings"]], ["rules"])
 
     def test_the_loads_of_a_part_whose_line_is_waived_are_read_by_the_rule_of_the_line(self):
         """A waiver takes the whole line, and the rule of the line still reads the loads, as
@@ -274,17 +276,21 @@ class ALoadThatNothingReads(unittest.TestCase):
         cells, verdict, _ = both(self, waived + GRAVITY + WIND)
         self.assertEqual((cells, verdict), ([("p", COMBINED, "", "waived")], "UNKNOWN"))
 
+    KEYED = dict(RULES, types=[dict(RULES["types"][0], fields=[*RULES["types"][0]["fields"], {"name": "kind", "one_of": ["plain", "tension"], "what": "what it is for"}])])
+    """The deck of RULES with a key on the joint, for a `when` and an `unless` to ask about."""
+    TENSION_JOINT = DESIGN.replace("  cap 10 N\n", "  cap 10 N\n  kind tension\n")
+
     def test_the_loads_of_a_part_whose_line_is_not_applicable_are_read_by_the_rule_of_the_line(self):
-        excused = dict(RULES, grid=[dict(RULES["grid"][0], unless={"when": ["loaded", "T"], "why": "made up"})])
-        cells, verdict, _ = both(self, HEAD + GRAVITY + WIND, excused)
+        excused = dict(self.KEYED, grid=[dict(RULES["grid"][0], unless={"when": ["is", "kind", "tension"], "why": "made up"})])
+        cells, verdict, _ = both(self, HEAD + GRAVITY + WIND, excused, self.TENSION_JOINT)
         self.assertEqual((cells, verdict), ([("p", COMBINED, "", "not_applicable")], "UNKNOWN"))
 
     def test_the_loads_of_a_part_that_a_rule_does_not_apply_to_are_not_read_by_it(self):
-        """The one rule holds for a joint with no tension, and this joint has tension: the
-        line has no rule for it, and nothing reads its field or its two loads."""
-        slack = dict(RULES, rules=[dict(RULES["rules"][0], when=["not", ["loaded", "T"]])])
-        cells, verdict, _ = both(self, HEAD + GRAVITY, slack)
-        self.assertEqual(cells, [("p", COMBINED, "", "open"), ("p", "unread", "cap", "open"),
+        """The one rule holds for a plain joint, and this one is a tension joint: the line
+        has no rule for it, and nothing reads its fields or its two loads."""
+        slack = dict(self.KEYED, rules=[dict(RULES["rules"][0], when=["is", "kind", "plain"])])
+        cells, verdict, _ = both(self, HEAD + GRAVITY, slack, self.TENSION_JOINT)
+        self.assertEqual(cells, [("p", COMBINED, "", "open"), ("p", "unread", "cap", "open"), ("p", "unread", "kind", "open"),
                                  ("p", "unread", "T/gravity", "open"), ("p", "unread", "V/gravity", "open")])
         self.assertEqual(verdict, "UNKNOWN")
 

@@ -12,7 +12,14 @@ operator of the rule language is in a rule: powers, roots, exp and ln, condition
 by and, or and not, a table with bands closed at the lower end, every way to bind a key,
 a key of a joined part, and a range that reads a load. Its bar takes three loads and its cap
 one: a rule that reads two of them, a rule that reads the third for some bars and not for
-others, and a load on a cap that no rule reads. A design's numbers are drawn from
+others, and a load on a cap that no rule reads. OPS also has what the deck for lifting
+beams asked of the language (docs/deck.md): a length to the fourth power, written in mm^4,
+cm^4, m^4 and inch^4 in a design, a card and the deck; a `when` and an `unless` on a key of
+a joined part; a rule that requires a condition over keys, which holds for some bars and
+fails for others; a row that gives a name by the bands of two quantities, read by a key of
+a table and by a `case`, with bars inside its bands, on their ends, outside them and at its
+empty cell; and what a cap and a bar need of their fields, which about one bar in five
+breaks. A design's numbers are drawn from
 the ends of the decks' bands, their listed
 values and the edges of their cases and ranges, and from near them. Its loads are
 points or ranges, in no, one or two load cases, and its card waives some mechanisms or none.
@@ -37,7 +44,8 @@ For each design that the language reads, the files are written without asking th
 `--decks N` also makes N damaged decks. Each is one of the three decks with one or two
 changes: a text swapped for another text of the deck or for an odd one, a key or an item
 dropped, doubled, moved or renamed, a `where` with no item, two rules of one line whose
-ids end alike, a line named `unread`, or a wide row that a rule applies 9 times or 1,000
+ids end alike, a line named `unread`, a `when`, an `unless` or a `requires` that asks
+`loaded`, which is no condition, or a wide row that a rule applies 9 times or 1,000
 times, which is within the steps a deck may take to read or over them. An honest design
 of that deck is then checked against it. The grid's `read_deck` must refuse exactly the decks the kernel finds ill formed, and
 where both read the deck they must agree on the design as above.
@@ -94,20 +102,34 @@ OPS = {
          "takes": [*_takes("x"), {"name": "grade", "one_of": ["low", "mid", "high"], "what": "a key"}],
          "table": {"down": {"by": "x", "bands": [["0 mm", "10 mm"], ["10 mm", "20 mm"], ["20 mm", None]], "closed": "lower"}, "across": {"by": "grade"},
                    "unit": "kN", "cells": [["1", "2", None], ["3", "4", "5"], ["6000 N", "7", "8"]]}},
+        {"id": "ops/class", "anchor": MADE_UP, "gives": {"name": "grade", "one_of": ["low", "mid", "high"], "what": "a name by the bands of two quantities"},
+         "takes": [*_takes("x"), {"name": "i", "dim": "length^4", "what": "i", "range": ["1 mm^4", "10000 mm^4"]}],
+         "table": {"down": {"by": "x", "bands": [["0 mm", "10 mm"], ["10 mm", "20 mm"], ["20 mm", "40 mm"]], "closed": "lower"},
+                   "across": {"by": "i", "bands": [["0 mm^4", "1000 mm^4"], ["1000 mm^4", None]]},
+                   "cells": [["low", "mid"], ["mid", None], ["high", "high"]]}},
+        {"id": "ops/modulus", "anchor": MADE_UP, "gives": {"name": "S", "dim": "length^3", "what": "a length to the fourth over a length"},
+         "takes": [{"name": "i", "dim": "length^4", "what": "i", "range": ["1 mm^4", "1 cm^4"]}, {"name": "c", "dim": "length", "what": "c", "range": ["1 mm", "100 mm"]}],
+         "is": ["div", "i", "c"]},
     ],
     "types": [
         {"type": "cap", "what": "an end of a bar", "fields": [
-            {"name": "t", "dim": "length", "what": "its thickness"}, {"name": "finish", "one_of": ["low", "high"], "what": "a key whose names are the table's"}],
-         "loads": [{"name": "press", "dim": "force", "least": "0 N", "what": "a force that no rule reads"}]},
+            {"name": "t", "dim": "length", "what": "its thickness"}, {"name": "finish", "one_of": ["low", "high"], "what": "a key whose names are the table's"},
+            {"name": "i", "dim": "length^4", "least": "1 mm^4", "what": "a length to the fourth power"}],
+         "loads": [{"name": "press", "dim": "force", "least": "0 N", "what": "a force that no rule reads"}],
+         "needs": [{"le": [["q", "400", "mm^4"], "i"], "why": "made up: at least 400 mm^4"}]},
         {"type": "bar", "what": "a bar", "fields": [
             {"name": "a", "dim": "length", "what": "a length"}, {"name": "b", "dim": "length", "what": "another"},
             {"name": "r", "dim": "dimensionless", "signed": True, "what": "a ratio the card states"}, {"name": "s", "dim": "dimensionless", "what": "an exponent"},
             {"name": "grade", "one_of": ["soft", "hard"], "what": "a key"}, {"name": "caps", "type": "cap", "as": ["left", "right"], "what": "its two ends"}],
          "loads": [{"name": "push", "dim": "force", "what": "a force of either sign"}, {"name": "twist", "dim": "moment", "least": "0 Nm", "what": "a moment"},
-                   {"name": "drag", "dim": "force", "least": "0 N", "what": "a force that a rule reads for a hard bar and none for a soft one"}]}],
+                   {"name": "drag", "dim": "force", "least": "0 N", "what": "a force that a rule reads for a hard bar and none for a soft one"}],
+         "needs": [{"lt": ["left.t", ["mul", "8", "a"]], "why": "made up: the left cap is under 8 times as thick as the bar is long"},
+                   {"le": [["div", ["sub", "right.t", ["q", "100", "mm"]], "b"], ["div", "r", "1/1000"]], "why": "made up: a quotient by a field"}]}],
     "grid": [{"type": "bar", "mechanism": f"bar.{name}", "what": name, "anchor": MADE_UP, **more} for name, more in (
         ("cases", {}), ("roots", {}), ("exp", {}), ("table", {}), ("key", {}), ("moment", {}), ("caps", {}), ("drag", {}),
-        ("idle", {"unless": {"when": ["or", ["not", ["loaded", "push"]], ["and", ["is", "grade", "hard"], ["loaded", "twist"]]], "why": "made up"}}))],
+        ("idle", {"unless": {"when": ["or", ["not", ["is", "left.finish", "low"]], ["and", ["is", "grade", "hard"], ["is", "right.finish", "high"]]], "why": "made up"}}),
+        ("named", {}), ("cased", {}), ("left", {}), ("alike", {}), ("modulus", {}),
+        ("right", {"unless": {"when": ["and", ["is", "right.finish", "low"], ["not", ["is", "left.finish", "low"]]], "why": "made up: a key of a joined part"}}))],
     "rules": [
         {"id": "ops/cases", "type": "bar", "mechanism": "bar.cases", "anchor": MADE_UP, "says": "made up",
          "le": [["row", "ops/cases", {"a": "a", "b": "b"}], "1.5"]},
@@ -116,7 +138,7 @@ OPS = {
         {"id": "ops/exp", "type": "bar", "mechanism": "bar.exp", "anchor": MADE_UP, "says": "made up", "where": [{"le": ["s", "4"], "why": "made up"}],
          "le": [["row", "ops/exp", {"r": "r", "s": "s"}], "5.2"]},
         {"id": "ops/table", "type": "bar", "mechanism": "bar.table", "anchor": MADE_UP, "says": "made up",
-         "when": ["or", ["is", "grade", "soft"], ["not", ["loaded", "twist"]]],
+         "when": ["or", ["is", "grade", "soft"], ["not", ["is", "right.finish", "low"]]],
          "le": [["abs", ["load", "push"]], ["row", "ops/table", {"x": "a", "grade": ["by", "grade", {"soft": "low", "hard": "high"}]}]]},
         {"id": "ops/key", "type": "bar", "mechanism": "bar.key", "anchor": MADE_UP, "says": "made up",
          "where": [{"le": [["abs", ["load", "push"]], ["q", "6.5", "kN"]], "why": "made up"}, {"le": ["a", ["q", "40", "mm"]], "why": "made up"}],
@@ -127,7 +149,20 @@ OPS = {
         {"id": "ops/moment", "type": "bar", "mechanism": "bar.moment", "anchor": MADE_UP, "says": "made up",
          "le": [["load", "twist"], ["mul", ["load", "push"], "a"]]},
         {"id": "ops/drag", "type": "bar", "mechanism": "bar.drag", "anchor": MADE_UP, "says": "made up",
-         "when": ["and", ["is", "grade", "hard"], ["loaded", "drag"]], "le": [["load", "drag"], ["q", "2", "kN"]]},
+         "when": ["is", "grade", "hard"], "le": [["load", "drag"], ["q", "2", "kN"]]},
+        # A key of a table that a row names by the bands of two quantities, and the expression of that name.
+        {"id": "ops/named", "type": "bar", "mechanism": "bar.named", "anchor": MADE_UP, "says": "made up",
+         "le": [["abs", ["load", "push"]], ["row", "ops/table", {"x": "b", "grade": ["row", "ops/class", {"x": "a", "i": "left.i"}]}]]},
+        {"id": "ops/cased", "type": "bar", "mechanism": "bar.cased", "anchor": MADE_UP, "says": "made up",
+         "le": [["case", ["row", "ops/class", {"x": "b", "i": "right.i"}],
+                 {"low": ["mul", "a", "2"], "mid": ["row", "ops/roots", {"a": "a", "b": "b"}], "high": ["sub", "a", ["q", "1", "mm"]]}], ["q", "30", "mm"]]},
+        # A condition on keys of the joined parts, a rule that requires, and a unit with a power.
+        {"id": "ops/left", "type": "bar", "mechanism": "bar.left", "anchor": MADE_UP, "says": "made up",
+         "when": ["and", ["is", "left.finish", "high"], ["not", ["is", "right.finish", "high"]]], "le": ["left.t", ["mul", "2", "right.t"]]},
+        {"id": "ops/alike", "type": "bar", "mechanism": "bar.alike", "anchor": MADE_UP, "says": "made up",
+         "when": ["is", "grade", "hard"], "requires": ["or", ["is", "left.finish", "low"], ["is", "right.finish", "high"]]},
+        {"id": "ops/modulus", "type": "bar", "mechanism": "bar.modulus", "anchor": MADE_UP, "says": "made up",
+         "le": [["row", "ops/modulus", {"i": "left.i", "c": "a"}], ["q", "0.15", "cm^3"]]},
     ],
 }
 
@@ -144,6 +179,7 @@ class Draft:
     card_more: list[str] = field(default_factory=list)
     design_more: list[str] = field(default_factory=list)
     damage: list[str] = field(default_factory=list)
+    environment: str | None = None                                                   # a registry id, which no deck reads yet
 
     def lines(self, part: str) -> list[list[str]]:
         return next(lines for _, name, lines in self.parts if name == part)
@@ -152,7 +188,8 @@ class Draft:
         design = ["petra 0", "", *self.design_more]
         for kind, name, lines in self.parts:
             design += [f"{kind} {name} {{", *(f"  {key} {value}" for key, value in lines), "}", ""]
-        card = ["petra 0", "", f'card "{self.name}" {{', '  owner "t@example.org"', "}", "", *self.card_more]
+        stated = [f"  environment {self.environment}"] if self.environment else []
+        card = ["petra 0", "", f'card "{self.name}" {{', '  owner "t@example.org"', *stated, "}", "", *self.card_more]
         card += [f"given {name} in {bound} {SIGNED}" for name, bound in self.givens.items()]
         for case, entries in self.loads.items():
             card += ["", f"load {case} {{", *(f"  {e}" for e in entries), f"  {SIGNED}", "}"]
@@ -279,8 +316,16 @@ def ops(rng: random.Random, n: int) -> Draft:
             d.givens[f"bar.{lines[k][0]}"] = rng.choice(["[5 mm, 10 mm]", "[10 mm, 10 mm]", "[9 mm, 11 mm]", "[10 mm, 20 mm]", "[19 mm, 21 mm]", "[4 mm, 6 mm]", "[1 mm, 50 mm]"])
             lines[k][1] = f"given bar.{lines[k][0]}"
     for cap in ("c1", "c2"):
-        d.parts.append(("cap", cap, [["t", rng.choice(length)], ["finish", rng.choice(["low", "high"])]]))
-    d.parts.append(("bar", "bar", [*lines, ["caps", "c1 c2"]]))
+        # A length to the fourth power, in several units, on and beside the end of a band of ops/class at 1000 mm^4. One in
+        # sixteen is under the 400 mm^4 that a cap needs, and a thick left cap on a short bar breaks what a bar needs.
+        fourth = rng.choice(["500 mm^4", "500 mm^4", "1000 mm^4", "1000 mm^4", "1000.001 mm^4", "0.1 cm^4", "2000 mm^4", "0.2 cm^4", "0.0024025 inch^4",
+                             "999.999 mm^4", "400 mm^4", "0.0000000005 m^4", "1500 mm^4", "700 mm^4", "399.999 mm^4", "5000 mm^4",
+                             "800 mm^4", "1200 mm^4", "0.09 cm^4", "999 mm^4", "1001 mm^4", "3000 mm^4", "450 mm^4", "600 mm^4"])
+        if rng.random() < 0.2:      # a bound of the card, which may reach over the end of the band or under what the cap needs
+            d.givens[f"{cap}.i"] = rng.choice(["[900 mm^4, 1000 mm^4]", "[900 mm^4, 1100 mm^4]", "[1000 mm^4, 1000 mm^4]", "[0.1 cm^4, 0.2 cm^4]", "[390 mm^4, 500 mm^4]", "[400 mm^4, 800 mm^4]"])
+            fourth = f"given {cap}.i"
+        d.parts.append(("cap", cap, [["t", rng.choice(length)], ["finish", rng.choice(["low", "high"])], ["i", fourth]]))
+    d.parts.append(("bar", "bar", [*lines, ["caps", rng.choice(["c1 c2", "c1 c2", "c2 c1"])]]))
     for case in rng.choice([[], ["one"], ["one"], ["one", "two"], ["one", "two"]]):
         entries = []
         if rng.random() < 0.85:
@@ -405,6 +450,9 @@ def damage(rng: random.Random, d: Draft) -> None:
     def claim() -> None:
         d.card_more.append(rng.choice([f"claim limit: {joint[1]}.{load} <= 2 {unit}", f"ambient in [10 degC, 40 degC] {SIGNED}"]))
 
+    def environment() -> None:
+        d.environment = rng.choice(["indoor_dry", "marine_c5"])
+
     def param() -> None:
         sized = [l for l in plate[2] if l[0] in ("width", "area") and len(l[1].split()) == 2]
         if sized:
@@ -425,7 +473,7 @@ def damage(rng: random.Random, d: Draft) -> None:
             lines.append([rng.choice(["width", "hole", "thickness", "screw"]), signed[0][1]])
 
     ways = [missing, unknown, twice, design_states, swapped, other_part, wrong_unit, not_positive, given_not_positive, bad_key, bad_count,
-            bad_joins, joined_twice, stray, bad_load, bad_waiver, claim, param, two_values, no_value, given_twice]
+            bad_joins, joined_twice, stray, bad_load, bad_waiver, claim, environment, param, two_values, no_value, given_twice]
     way = rng.choice(ways)
     way()
     d.damage.append(way.__name__)
@@ -441,10 +489,12 @@ def draft(seed: int, n: int) -> Draft:
 
 ODD = ["", "pi", "2", "x.y", "load pull", "load current", "@0", "1e3", " 5", "1_000", "+5", "-0", "1/0", "3/4", "1,000", "1 1/2", "0.5", "-3", "7/2", "100",
        "length", "force", "area", "dimensionless", "length^2", "force/length", "mm", "A", "kN", "upper", "lower", "a", "b", "near", "far", "fit", "close",
-       "unread", "odd�", "١ ١/٢ mm", "5 mm ", "length^٢"]
+       "unread", "odd�", "١ ١/٢ mm", "5 mm ", "length^٢",
+       "length^4", "mm^4", "5 mm^4", "5 mm^3", "5 mm^2", "5 mm^5", "5 mm^1", "5 mm^04", "5 kN^2", "5 mm^٤", "1 inch^4", "0 mm^4", "left.finish", "right.i", "left.t",
+       "caps.finish", "left", "caps", "low", "high", "mid", "grade", "ops/class", "ops/table", "0", "0/5", "requires", "case", "row", "key", "by"]
 """Texts to put where a deck has another: numbers the two readers might read apart, and names that are something else too."""
 KEYS = ["note", "what", "dim", "type", "as", "least", "unless", "when", "closed", "at", "bands", "one_of", "range", "jumps", "unit", "rises", "falls",
-        "let", "where", "loads", "across", "table", "is", "cases"]
+        "let", "where", "loads", "across", "table", "is", "cases", "needs", "requires", "le", "lt", "why", "gives", "down", "cells"]
 
 
 def damaged(rng: random.Random, body: dict) -> list[str]:
@@ -469,7 +519,7 @@ def damaged(rng: random.Random, body: dict) -> list[str]:
         lists = [v for _, v in nodes if isinstance(v, list) and v]
         way = rng.choice(["another text", "another text", "another text", "an odd text", "an odd text", "a key less", "an item less", "an item twice",
                           "items in another order", "a key renamed", "a key more", "a where with no item", "two rules that end alike", "a line named unread",
-                          "a wide row applied"])
+                          "a wide row applied", "a condition that asks loaded"])
         rules = [r for r in body["rules"] if isinstance(r, dict)] if isinstance(body.get("rules"), list) else []
         if way == "a wide row applied" and rules and isinstance(body.get("rows"), list):
             # A row of 1,000 names, about 2,000 steps, that names of `let` apply and nothing reads, so the steps to read the deck are all that
@@ -494,7 +544,19 @@ def damaged(rng: random.Random, body: dict) -> list[str]:
             for item in [*rules, *(a for a in body.get("grid", []) if isinstance(a, dict))]:
                 if item.get("mechanism") == old:
                     item["mechanism"] = "unread"
-        elif way in ("a where with no item", "two rules that end alike", "a line named unread"):
+        elif way == "a condition that asks loaded" and rules:
+            # `loaded` is no condition any more: alone, joined to the condition that was there, in a `requires` or in an `unless`.
+            asks = ["loaded", rng.choice(["push", "twist", "drag", "current", "pull", "nobody"])]
+            lines = [a for a in body.get("grid", []) if isinstance(a, dict)] if isinstance(body.get("grid"), list) else []
+            where = rng.choice(["when", "when", "requires", "unless"])
+            if where == "unless" and lines:
+                rng.choice(lines)["unless"] = {"when": asks, "why": "made up"}
+            else:
+                chosen = rng.choice(rules)
+                key = "requires" if where == "requires" and "requires" in chosen else "when"
+                old = chosen.get(key)
+                chosen[key] = asks if old is None else rng.choice([asks, ["and", old, asks], ["or", ["not", asks], old], ["not", asks]])
+        elif way in ("a where with no item", "two rules that end alike", "a line named unread", "a condition that asks loaded"):
             continue
         elif way == "another text":
             put(rng.choice(texts)[0], rng.choice(texts)[1])
@@ -534,7 +596,9 @@ def _decks() -> dict[str, grid.Deck]:
         _STATE["strips"] = grid.read_deck(json.dumps(STRIPS))
         _STATE["ops"] = grid.read_deck(json.dumps(OPS))
         _STATE["honest"] = {"lap": (path.with_suffix(".card").read_text(encoding="utf-8"), path.read_text(encoding="utf-8")),
-                            "strips": (CARD, DESIGN), "ops": ops(random.Random(5), 0).texts()}
+                            # A seed whose bar keeps every need and carries its loads, so that nine of the ten lines its
+                            # rules answer are proved or refuted, and a damaged deck has something to change.
+                            "strips": (CARD, DESIGN), "ops": ops(random.Random(101), 0).texts()}
     return _STATE      # type: ignore[return-value]
 
 

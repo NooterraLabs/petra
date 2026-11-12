@@ -46,6 +46,16 @@ structure Table where
   across : Option Side
   cells : Array (Array (Option Rat))
 
+/-- A table whose cells are names: `cells[down][across]`, with one column when the table has
+one side, each cell the place of its name among `names`, the names the row gives, or none
+for a cell the standard leaves empty. Both sides read quantities, so the name follows from
+the sizes of one or two quantities. -/
+structure Naming where
+  names : Array String
+  down : Side
+  across : Option Side
+  cells : Array (Array (Option Nat))
+
 /-- What a row takes: a quantity of a dimension, or a key, one of a few names. `known` holds
 the names of a key again, to find one without going through the list. -/
 inductive Taken where
@@ -53,10 +63,12 @@ inductive Taken where
   | key (names : Array String) (known : Std.TreeSet String)
 
 /-- An equation keeps its cases as written, each a condition and an expression: a rule that
-applies the row reads them again with the row's inputs bound. -/
+applies the row reads them again with the row's inputs bound. A table gives a quantity,
+and a naming table a name. -/
 inductive Body where
   | cases (cases : Array (Option Json × Json))
   | table (table : Table)
+  | naming (table : Naming)
 
 structure Row where
   id : String
@@ -83,9 +95,40 @@ def Field.dim (f : Field) : Option Dim :=
   | .quantity dim .. => some dim
   | _ => none
 
+/-- An expression that exact fractions decide: a number, a quantity field of the part or of
+the part it joins under the name `part`, a sum, a product, a negation, and a quotient by a
+field or by a number that is not zero. It has no root, no logarithm and no power, so its
+range over the ranges of its fields is found with the four operations on fractions. -/
+inductive Exact where
+  | c (x : Rat)
+  | field (part : Option String) (name : String)
+  | add (terms : Array Exact)
+  | mul (factors : Array Exact)
+  | neg (x : Exact)
+  | div (x y : Exact)
+  deriving Inhabited
+
+/-- The fields an expression names, each as often as it names it. -/
+def Exact.fields : Exact → Array (Option String × String)
+  | .c _ => #[]
+  | .field part name => #[(part, name)]
+  | .add xs | .mul xs => xs.foldl (fun out x => out ++ x.fields) #[]
+  | .neg x => x.fields
+  | .div x y => x.fields ++ y.fields
+
+/-- What a type needs of its fields for a part of it to be a part at all: `low` at most
+`high`, or under it when `strict`, and why. -/
+structure Need where
+  strict : Bool
+  low : Exact
+  high : Exact
+  why : String
+  deriving Inhabited
+
 /-- A type. `field` and `load` find a field and a load by name. `called` finds, for each
 name a rule may call a joined part by, the type of that part, the field that joins it and
-its place among the parts the field joins. -/
+its place among the parts the field joins. `needs` is what must hold among its fields and
+those of the parts it joins. -/
 structure Kind where
   name : String
   fields : Array Field
@@ -93,23 +136,27 @@ structure Kind where
   field : Std.TreeMap String Field := {}
   load : Std.TreeMap String Field := {}
   called : Std.TreeMap String (String × String × Nat) := {}
+  needs : Array Need := #[]
   deriving Inhabited
 
-/-- A condition on what a part is, not on how large. -/
+/-- A condition on what a part is, not on how large. An `is` holds when a key field has a
+name: a key of the part itself, or of the part it joins under the name `part`. A condition
+is over keys alone. It asks about no load: a part's keys are the same under every load
+case, and what a card puts on a part is not. -/
 inductive Static where
-  | is (field name : String) | loaded (load : String)
+  | is (part : Option String) (field name : String)
   | and (cs : Array Static) | or (cs : Array Static) | not (c : Static)
 
-/-- The key fields a condition on a part reads. -/
-def Static.keys : Static → Array String
-  | .is field _ => #[field]
-  | .loaded _ => #[]
+/-- The key fields a condition on a part reads, each with the joined part it is a key of, or
+none for a key of the part itself. -/
+def Static.keys : Static → Array (Option String × String)
+  | .is part field _ => #[(part, field)]
   | .and cs | .or cs => cs.foldl (fun out c => out ++ c.keys) #[]
   | .not c => c.keys
 
 /-- How many parts a condition has: what looking at it for one part costs, in steps. -/
 def Static.size : Static → Nat
-  | .is _ _ | .loaded _ => 1
+  | .is .. => 1
   | .and cs | .or cs => cs.foldl (fun n c => n + c.size) 1
   | .not c => 1 + c.size
 
@@ -122,11 +169,15 @@ structure Ask where
 
 /-- How a rule gives a side of a table its value: a step, a name of the row's key, or a key
 field of the part, or of the part `part` names, through a map from its names to the row's.
-No map is the map of each name to itself. -/
+No map is the map of each name to itself. Or a row that gives a name, applied to
+quantities: then `picked` holds, for each cell of that row that has a name, the place of
+the name among the names of the key and the condition, over steps, under which the
+quantities are at that cell. -/
 inductive Chosen where
   | value (step : Nat)
   | fixed (name : String)
   | field (part : Option String) (field : String) (names : Option (Array (String × String)))
+  | picked (places : Array (Nat × Cond))
 
 /-- One step of a rule. A `node` is a node of a tape over earlier steps. The others are what
 a part gives it: a quantity field of the part or of the part `part` names, a load, a table
@@ -142,12 +193,21 @@ inductive Step where
 
 def Chosen.reads : Chosen → Array Nat
   | .value step => #[step]
+  | .picked places => places.flatMap fun (_, cond) => cond.pairs.flatMap fun (a, b) => #[a, b]
   | _ => #[]
 
-/-- What finding a side's place costs beyond the side's own places: the entries of a map. -/
+/-- What finding a side's place costs beyond the side's own places: the entries of a map,
+or the cells of a row that gives the name. -/
 def Chosen.weight : Chosen → Nat
   | .field _ _ (some names) => names.size
+  | .picked places => places.size
   | _ => 0
+
+/-- How many places of a side a tape goes through: each cell of the row that gives its
+name, or each place of the side. -/
+def Chosen.count (side : Side) : Chosen → Nat
+  | .picked places => places.size
+  | _ => side.places
 
 def Step.reads : Step → Array Nat
   | .node n => n.reads
@@ -156,19 +216,30 @@ def Step.reads : Step → Array Nat
   | .row binds value => binds.push value
 
 /-- What a step costs to write for one part: itself and each step it reads. A pick renames
-every order of its conditions, and a table looks at every cell. -/
+every order of its conditions, and a table looks at every cell. A table whose key a row
+names looks at a cell once for each cell of that row, so it also weighs the places it goes
+through down times the places it goes through across. -/
 def Step.weight : Step → Nat
   | .node (.pick cases) => 1 + cases.size + 2 * orders cases
   | .node n => 1 + n.reads.size
   | .field .. | .load _ => 1
   | .table grid down across =>
+    let named := (down matches .picked ..) || across.any (· matches .picked ..)
+    let wide := match grid.across, across with
+      | some side, some how => how.count side
+      | _, _ => 1
     1 + grid.down.places + grid.cells.foldl (fun n line => n + line.size) 0 + down.weight + (across.map Chosen.weight).getD 0
+      + (if named then down.count grid.down * wide else 0)
   | .row binds _ => 1 + binds.size
 
 /-- An answer to one line of the grid: `low <= high`, read where every pair of `ranges` is
 in order. `fields` and `loads` are what its roots read, through its names and its rows, each
 once. `weight` is what its steps cost to write for one part, and `look` what it costs to
-see whether the rule is for a part and which loads the part must carry. -/
+see whether the rule is for a part and which loads the part must carry.
+
+A rule with `requires` states no inequality. It holds for a part when that condition over
+keys holds, and it has no steps, no tape and no loads: `look` holds the size of the
+condition, and `fields` the keys it names. -/
 structure Rule where
   id : String
   kind : String
@@ -182,6 +253,10 @@ structure Rule where
   high : Nat
   fields : Array (Option String × String)
   loads : Array String
+  requires : Option Static := none
+  /-- The keys that `requires` names, each once, in the order it names them: what the reason
+  of a refuted cell lists. It is made when the deck is read, and not again for each part. -/
+  asked : Array (Option String × String) := #[]
 
 /-- What the rule's cells are entered under: its id from after its last `/`. -/
 def Rule.entry (rule : Rule) : String := (rule.id.splitOn "/").getLast!
@@ -452,9 +527,29 @@ def expr (scope : Scope) : Nat → Json → Reading (Nat × Dim)
       match (kind.load.get? name).bind Field.dim with
       | some dim => return (← source (.load name), dim)
       | none => throw s!"the type takes no load {clip name}"
+    | "case", [key, .obj branches] =>
+      -- The expression of the name that a row gives: `["case", ["row", ID, {...}], {NAME: ...}]`,
+      -- with an expression for each name the row gives and for no other. It is a pick over the
+      -- cells of that row, so where the quantities are at no cell it has no value.
+      unless scope.rule do throw "a row has no `case`"
+      let (names, found) ← naming scope fuel key
+      unless branches.toArray.size == names.size && names.all (fun name => (branches.get? name).isSome) do
+        throw s!"`case` has an expression for each of {", ".intercalate names.toList}, and for no other name"
+      let mut values : Array Nat := #[]
+      let mut one : Option Dim := none
+      for name in names do
+        let some body := branches.get? name | throw s!"`case` has no expression for {name}"
+        let (step, its) ← expr scope fuel body
+        if one.any (· != its) then throw "`case` of different dimensions"
+        one := some its
+        values := values.push step
+      let some dim := one | throw "`case` of nothing"
+      put (.pick (found.map fun (name, cond) => (some cond, values[name]!))) dim
     | "row", [.str id, binds] =>
       unless scope.rule do throw "a row applies no row"
       let some row := scope.rows.get? id | throw s!"{clip id} is not a row of the deck"
+      if row.body matches .naming .. then
+        throw s!"{id} gives a name, and a name is read by a key of a row or by a `case`"
       -- Each input is bound once: as many names as the row takes, and each of them given.
       let written ← members binds
       let given : Std.TreeMap String Json := written.foldl (fun table (name, value) => table.insert name value) {}
@@ -471,7 +566,18 @@ def expr (scope : Scope) : Nat → Json → Reading (Nat × Dim)
           unless its == dim do throw s!"{id}: the rule binds {name} to another dimension than the row takes"
           names := names.insert name (.bound dim step)
           bound := bound.push step
-        | .key _ known => keys := keys.insert name (← chosen scope known value)
+        | .key keyNames known =>
+          -- A key bound to `["row", ID, {...}]` takes the name that row gives. Every name
+          -- the row gives is then a name of the key, as for a key field.
+          let named := match value with
+            | .arr items => items[0]? == some (Json.str "row")
+            | _ => false
+          if named then
+            let (its, found) ← naming scope fuel value
+            let place : Std.TreeMap String Nat := keyNames.zipIdx.foldl (fun table (n, i) => table.insert n i) {}
+            let some to := its.mapM place.get? | throw s!"{id}: the row that gives {name} gives names the key lacks"
+            keys := keys.insert name (.picked (found.map fun (n, cond) => (to[n]!, cond)))
+          else keys := keys.insert name (← chosen scope known value)
       let value ← match row.body with
         | .cases written => cases { bound := names } row.dim fuel written
         | .table table =>
@@ -481,6 +587,7 @@ def expr (scope : Scope) : Nat → Json → Reading (Nat × Dim)
             | none, some (.bound _ step) => pure (.value step)
             | _, _ => throw s!"{id}: {side.input} is not bound"
           push (.table table (← pick table.down) (← table.across.mapM pick))
+        | .naming _ => throw s!"{id} gives a name, and a name is read by a key of a row or by a `case`"
       return (← push (.row bound value), row.dim)
     | _, args =>
       let parts ← args.mapM (expr scope fuel)
@@ -542,32 +649,174 @@ def cases (scope : Scope) (dim : Dim) : Nat → Array (Option Json × Json) → 
     | some (none, step) => return step
     | _ => push (.node (.pick found))
 
+/-- A row that gives a name, applied to quantities: `["row", ID, {INPUT: ...}]`. Gives the
+names of the row, and for each cell that holds a name, in the order of the cells, the place
+of the name among them and the condition under which the quantities are at the cell. The
+condition of a band or of a listed value is the one a table read by that quantity has
+(`places`), over steps, and a cell of a table with two sides holds when both do. An empty
+cell gives nothing, so at such a cell and outside every band no condition holds. -/
+def naming (scope : Scope) : Nat → Json → Reading (Array String × Array (Nat × Cond))
+  | 0, _ => throw "an expression nests too deep"
+  | fuel + 1, j => do
+    let how := "a name comes from [\"row\", ID, {...}] with a row that gives a name"
+    let .arr items := j | throw how
+    let [.str "row", .str id, binds] := items.toList | throw how
+    unless scope.rule do throw "a row applies no row"
+    let some row := scope.rows.get? id | throw s!"{clip id} is not a row of the deck"
+    let .naming table := row.body | throw s!"{id} gives a quantity, and a name comes from a row that gives a name"
+    let written ← members binds
+    let given : Std.TreeMap String Json := written.foldl (fun table (name, value) => table.insert name value) {}
+    unless written.size == row.takes.size && row.takes.all (fun t => given.contains t.1) do
+      throw s!"{id} takes {", ".intercalate (row.takes.map (·.1)).toList}, and the rule binds {", ".intercalate (written.map (·.1)).toList}"
+    let mut bound : Std.TreeMap String Nat := {}
+    for (name, taken) in row.takes do
+      let some value := given.get? name | throw s!"{id}: {name} is not bound"
+      let .quantity dim := taken | throw s!"{id}: {name} is a key, and a row that gives a name takes quantities"
+      let (step, its) ← expr scope fuel value
+      unless its == dim do throw s!"{id}: the rule binds {name} to another dimension than the row takes"
+      bound := bound.insert name step
+    let conds (side : Side) : Reading (Array Cond) := do
+      let some x := bound.get? side.input | throw s!"{id}: {side.input} is not bound"
+      match side with
+      | .listed _ values => values.mapM fun v => do
+        let c ← push (.node (.c v))
+        return Cond.and #[.le x c, .le c x]
+      | .banded _ bands upper => bands.mapM fun (lo, hi) => do
+        let l ← push (.node (.c lo))
+        let above : Cond := if upper then .lt l x else .le l x
+        match hi with
+        | none => return above
+        | some hi =>
+          let h ← push (.node (.c hi))
+          return Cond.and #[above, if upper then .le x h else .lt x h]
+      | .named .. => throw s!"{id}: a side of a row that gives a name reads a quantity"
+    let down ← conds table.down
+    let across ← table.across.mapM conds
+    let mut found : Array (Nat × Cond) := #[]
+    for (line, p) in table.cells.zipIdx do
+      for (cell, q) in line.zipIdx do
+        if let some name := cell then
+          found := found.push (name, match across with
+            | some across => Cond.and #[down[p]!, across[q]!]
+            | none => down[p]!)
+    return (table.names, found)
+
 end
 
-/-- A condition on a part: `["is", FIELD, NAME]` on a key field of the type itself,
-`["loaded", LOAD]`, and `and`, `or`, `not` of these. -/
+/-- What the kernel says of a deck that asks `loaded`. The condition once held when some load
+case of the card put the load on the part. A rule that reads loads has a cell for each load
+case, so one case could then switch a rule or a line off under every other case: the fifth
+review turned a FAIL into a PASS with a case that put a load of zero on a joint. Whether a
+load is there is no longer asked. A card states every load a rule reads in every case, as
+zero where it means none. -/
+def LOADED : String :=
+  "`loaded` is no condition: a condition is over keys, which are the same under every load case. A card states a load in each case, as zero where there is none, and a rule reads it there"
+
+/-- A condition on a part: `["is", FIELD, NAME]`, and `and`, `or`, `not` of these. `FIELD`
+is a key field of the type itself, or `PART.FIELD` for a key field of a part the type
+joins, by the name its `as` gives that part, as an expression reads `a.Fy`. Such a name is
+one part. The name of a field that joins several parts is no part's name, so a condition on
+it has no meaning and is refused: it could hold for one and not for another. A condition
+that asks `loaded`, in any form, is refused with `LOADED`. -/
 def static (scope : Scope) : Nat → Json → Except String Static
   | 0, _ => throw "a condition nests too deep"
   | fuel + 1, j => do
     match (← j.getArr?).toList with
     | [.str "is", .str field, .str name] =>
       match scope.find field with
-      | some (.key _ known none _) =>
+      | some (.key _ known part inner) =>
         unless known.contains name do throw s!"{clip name} is not a name of {field}"
-        return .is field name
-      | _ => throw s!"{clip field} is not a key field of the type"
-    | [.str "loaded", .str load] =>
-      unless scope.kind.any (·.load.contains load) do throw s!"the type takes no load {clip load}"
-      return .loaded load
+        return .is part inner name
+      | _ =>
+        let several : Option String := do
+          let [join, _] := field.splitOn "." | none
+          let kind ← scope.kind
+          if kind.called.contains join then none
+          let .parts _ names := (← kind.field.get? join).kind | none
+          some s!": {join} joins {names.size} parts, and a condition names one of them, {", ".intercalate names.toList}"
+        throw s!"{clip field} is not a key field of the type or of a part it joins{several.getD ""}"
+    | .str "loaded" :: _ => throw LOADED
     | .str "and" :: c :: rest => return .and (← (c :: rest).toArray.mapM (static scope fuel))
     | .str "or" :: c :: rest => return .or (← (c :: rest).toArray.mapM (static scope fuel))
     | [.str "not", c] => return .not (← static scope fuel c)
-    | _ => throw "not a condition on a part: write is, loaded, and, or, not"
+    | _ => throw "not a condition on a part: write is, and, or, not"
 
 /-- The deepest an expression may nest, counted through the names of `let` it reads and the
 rows it applies. A file nests at most `MAX_NESTING` deep, so a row or a rule alone is within
 it, and a chain of names that each read the next is cut here. -/
 def MAX_EXPRESSION : Nat := 1024
+
+/-- An expression of a need, with its dimension: a number, a constant with its unit, a
+quantity field of the type or of a part it joins, and `add`, `sub`, `mul`, `neg` and `div`.
+A quotient divides by a field, which is more than zero for every part (docs/format.md,
+Parts 3), or by a number that is not zero, so it never divides by zero and exact fractions
+decide it. Anything else is refused: a root, a logarithm, a power, a least or a greatest, a
+load, a row, a key and pi. -/
+def exact (scope : Scope) : Nat → Json → Except String (Exact × Dim)
+  | 0, _ => throw "an expression nests too deep"
+  | _ + 1, .str name => do
+    if name == "pi" then throw "a need has no pi: exact fractions decide a need"
+    match scope.find name with
+    | some (.field dim part field) => return (.field part field, dim)
+    | some (.key ..) => throw s!"{name} is a key, and a need compares quantities"
+    | _ =>
+      match if name.length ≤ MAX_NUMBER_CHARS then decimal name.toList else none with
+      | some x => return (.c x, {})
+      | none => throw s!"{String.ofList (name.toList.take 40)} is not a number, and no quantity field has that name"
+  | fuel + 1, .arr items => do
+    let some (Json.str op) := items[0]? | throw "an expression starts with the name of its operator"
+    let args := items.toList.drop 1
+    let same (dims : List Dim) : Except String Dim :=
+      match dims with
+      | d :: rest => if rest.all (· == d) then pure d else throw s!"{clip op} of different dimensions"
+      | [] => throw s!"{clip op} of nothing"
+    match op, args with
+    | "q", [.str x, .str unit] =>
+      let (value, dim) ← amount (x ++ " " ++ unit)
+      return (.c value, dim)
+    | "add", _ :: _ =>
+      let parts ← args.mapM (exact scope fuel)
+      return (.add (parts.map (·.1)).toArray, ← same (parts.map (·.2)))
+    | "mul", _ :: _ =>
+      let parts ← args.mapM (exact scope fuel)
+      return (.mul (parts.map (·.1)).toArray, (parts.map (·.2)).foldl (· + ·) {})
+    | "sub", [a, b] =>
+      let (x, dx) ← exact scope fuel a
+      let (y, dy) ← exact scope fuel b
+      return (.add #[x, .neg y], ← same [dx, dy])
+    | "neg", [a] =>
+      let (x, d) ← exact scope fuel a
+      return (.neg x, d)
+    | "div", [a, b] =>
+      let (x, dx) ← exact scope fuel a
+      let (y, dy) ← exact scope fuel b
+      match y with
+      | .field .. => pure ()
+      | .c value => if value == 0 then throw "a need divides by zero"
+      | _ => throw "a need divides by a field or by a number, and by nothing else: a field is more than zero, so exact fractions decide the quotient"
+      return (.div x y, dx - dy)
+    | _, _ => throw s!"{clip op} with {args.length} arguments is not in a need: it has add, sub, mul, neg, and div by a field or by a number"
+  | _ + 1, _ => throw "an expression is a number, a name or [operator, ...]"
+
+/-- One need of a type: `{"le": [a, b], "why": "..."}` or `{"lt": [a, b], "why": "..."}`,
+with two sides of one dimension and a `why` that is not empty. It names at least one field,
+and each field once: the range of an expression that reads each of its quantities once is
+exactly what the four operations on the ends of their ranges give, so the need is decided
+for every value the card and the design allow, and not only enclosed. -/
+def readNeed (scope : Scope) (j : Json) : Except String Need := do
+  within j ["le", "lt", "why"]
+  unless filled j "why" do throw "it says why, in a text that is not empty"
+  if has j "le" == has j "lt" then throw "it has `le` or `lt`, and not both"
+  let strict := has j "lt"
+  let [low, high] := (← (← need j (if strict then "lt" else "le")).getArr?).toList | throw "it compares two sides"
+  let (x, dx) ← exact scope MAX_EXPRESSION low
+  let (y, dy) ← exact scope MAX_EXPRESSION high
+  unless dx == dy do throw "it compares two dimensions"
+  let named := x.fields ++ y.fields
+  if named.isEmpty then throw "it names no field, so it says nothing of a part"
+  if let some (part, name) := twice named then
+    throw s!"it names {(part.map (· ++ ".")).getD ""}{name} twice: a need reads each field once, so that exact fractions decide it"
+  return { strict, low := x, high := y, why := ← text j "why" }
 
 -- Reading a deck.
 
@@ -583,51 +832,82 @@ def anchored (j : Json) : Except String Unit := do
 /-- A list a key may leave out. -/
 def listed (j : Json) (key : String) : Except String (Array Json) := if has j key then list j key else pure #[]
 
-def readTable (j : Json) (takes : Array (String × Taken)) (gives : Dim) : Except String Table := do
-  within j ["down", "across", "cells", "unit", "rises", "falls"]
-  let side (a : Json) : Except String Side := do
-    let input ← text a "by"
-    match takes.find? (·.1 == input) with
-    | none => throw s!"the table reads {clip input}, which the row does not take"
-    | some (_, .key names _) =>
-      within a ["by"]
-      return .named input names
-    | some (_, .quantity dim) =>
-      within a (if has a "bands" then ["by", "bands", "closed"] else ["by", "at"])
-      if has a "bands" == has a "at" then throw s!"the side that reads {input} has `bands` or `at`"
-      let upper ← match a.getObjVal? "closed" with
-        | .error _ | .ok (.str "upper") => pure true
-        | .ok (.str "lower") => pure false
-        | _ => throw "`closed` is upper or lower"
-      let value (x : Json) : Except String Rat := do
-        let (v, its) ← amount (← x.getStr?)
-        unless its == dim do throw s!"the side that reads {input} has a value of another dimension"
-        return v
-      if has a "at" then
-        let values ← (← list a "at").mapM value
-        unless (values.zip (values.extract 1 values.size)).all (fun (x, y) => x < y) do
-          throw s!"the values {input} is read at are in order, each once"
-        return .listed input values
-      let bands ← (← list a "bands").mapM fun band => do
-        let ends ← band.getArr?
-        if ends.size != 2 then throw "a band is a pair"
-        match ends.toList with
-        | [lo, .null] => return (← value lo, none)
-        | [lo, hi] => return (← value lo, some (← value hi))
-        | _ => throw "a band is a pair"
-      for ((lo, hi), n) in bands.zipIdx do
-        let inOrder := match hi, bands[n + 1]? with
-          | none, next => next.isNone
-          | some hi, some (next, _) => lo < hi && hi ≤ next
-          | some hi, none => lo < hi
-        unless inOrder do
-          throw s!"the bands of {input} are pairs, the lower end first, in order and none over another; only the last may have no upper end"
-      return .banded input bands upper
-  let down ← side (← need j "down")
-  let across ← (j.getObjVal? "across").toOption.mapM side
+/-- One side of a table from its JSON: the input it reads, and its places. -/
+def readSide (takes : Array (String × Taken)) (a : Json) : Except String Side := do
+  let input ← text a "by"
+  match takes.find? (·.1 == input) with
+  | none => throw s!"the table reads {clip input}, which the row does not take"
+  | some (_, .key names _) =>
+    within a ["by"]
+    return .named input names
+  | some (_, .quantity dim) =>
+    within a (if has a "bands" then ["by", "bands", "closed"] else ["by", "at"])
+    if has a "bands" == has a "at" then throw s!"the side that reads {input} has `bands` or `at`"
+    let upper ← match a.getObjVal? "closed" with
+      | .error _ | .ok (.str "upper") => pure true
+      | .ok (.str "lower") => pure false
+      | _ => throw "`closed` is upper or lower"
+    let value (x : Json) : Except String Rat := do
+      let (v, its) ← amount (← x.getStr?)
+      unless its == dim do throw s!"the side that reads {input} has a value of another dimension"
+      return v
+    if has a "at" then
+      let values ← (← list a "at").mapM value
+      unless (values.zip (values.extract 1 values.size)).all (fun (x, y) => x < y) do
+        throw s!"the values {input} is read at are in order, each once"
+      return .listed input values
+    let bands ← (← list a "bands").mapM fun band => do
+      let ends ← band.getArr?
+      if ends.size != 2 then throw "a band is a pair"
+      match ends.toList with
+      | [lo, .null] => return (← value lo, none)
+      | [lo, hi] => return (← value lo, some (← value hi))
+      | _ => throw "a band is a pair"
+    for ((lo, hi), n) in bands.zipIdx do
+      let inOrder := match hi, bands[n + 1]? with
+        | none, next => next.isNone
+        | some hi, some (next, _) => lo < hi && hi ≤ next
+        | some hi, none => lo < hi
+      unless inOrder do
+        throw s!"the bands of {input} are pairs, the lower end first, in order and none over another; only the last may have no upper end"
+    return .banded input bands upper
+
+/-- The sides of a table: `down`, and `across` for a table with two. Each input of the row
+is read by one of them, and by one only. -/
+def readSides (j : Json) (takes : Array (String × Taken)) : Except String (Side × Option Side) := do
+  let down ← readSide takes (← need j "down")
+  let across ← (j.getObjVal? "across").toOption.mapM (readSide takes)
   let sides := #[down.input] ++ (across.map (·.input)).toArray
   unless sides.size == takes.size && takes.all (fun t => sides.contains t.1) do
     throw "each input of a table is read by one of its sides, and by one only"
+  return (down, across)
+
+/-- A table whose cells are names, for a row that gives one of `names`. It has the sides of
+any table, each read by a quantity in `bands` or `at`, and `cells`. A cell is one of the
+names, or null where the standard gives none. It has no `unit`, and no `rises` or `falls`:
+a name has no size. -/
+def readNaming (j : Json) (takes : Array (String × Taken)) (names : Array String) : Except String Naming := do
+  within j ["down", "across", "cells"]
+  let (down, across) ← readSides j takes
+  let place : Std.TreeMap String Nat := names.zipIdx.foldl (fun table (name, i) => table.insert name i) {}
+  let cell (x : Json) : Except String (Option Nat) :=
+    match x with
+    | .null => pure none
+    | .str name =>
+      match place.get? name with
+      | some i => pure (some i)
+      | none => throw s!"a cell holds {clip name}, which is not one of the names the row gives"
+    | _ => throw "a cell of a table that gives a name is one of the names, or null"
+  let lines ← (← list j "cells").mapM fun line =>
+    if across.isSome then do (← line.getArr?).mapM cell else do return #[← cell line]
+  unless lines.size == down.places && lines.all (·.size == (across.map Side.places).getD 1) do
+    throw "the cells are one line for each place down, with one cell for each place across"
+  return { names, down, across, cells := lines }
+
+def readTable (j : Json) (takes : Array (String × Taken)) (gives : Dim) : Except String Table := do
+  within j ["down", "across", "cells", "unit", "rises", "falls"]
+  let (down, across) ← readSides j takes
+  let sides := #[down.input] ++ (across.map (·.input)).toArray
   let unit ← match j.getObjVal? "unit" with
     | .ok (.str unit) => pure (some unit)
     | .ok .null | .error _ => pure none
@@ -659,9 +939,12 @@ def readRow (j : Json) : Except String Row := do
     unless (["is", "cases", "table"].filter (has j)).length == 1 do throw "a row has one of `is`, `cases` and `table`"
     anchored j
     let gives ← need j "gives"
-    (within gives ["name", "dim", "what"]).mapError ("gives: " ++ ·)
+    (within gives ["name", "dim", "what", "one_of"]).mapError ("gives: " ++ ·)
     let _ ← text gives "name"
-    let dim ← dimension (← text gives "dim")
+    -- A row gives a quantity, with `dim`, or a name, with `one_of`: one of the two.
+    let named := has gives "one_of"
+    if named == has gives "dim" then throw "`gives` has `dim`, for a quantity, or `one_of`, for a name, and not both"
+    let dim ← if named then pure {} else dimension (← text gives "dim")
     let mut takes : Array (String × Taken) := #[]
     let mut seen : Std.TreeSet String := {}
     for t in ← list j "takes" do
@@ -682,6 +965,13 @@ def readRow (j : Json) : Except String Row := do
           unless loDim == its && hiDim == its && lo ≤ hi do throw s!"the range of {clip name} is two values of its dimension, the lower first"
         | _ => throw s!"the range of {clip name} is two values"
         takes := takes.push (name, .quantity its)
+    if named then
+      let names ← texts gives "one_of"
+      if names.isEmpty || !distinct names then throw "the `one_of` of `gives` is a list of different names"
+      unless has j "table" && !has j "jumps" do throw "a row that gives a name is a table, with no jumps: its cells are the names"
+      if takes.any (fun t => t.2 matches .key ..) then
+        throw "a row that gives a name takes quantities and no key: its sides read them in `bands` or `at`"
+      return { id, dim, takes, body := .naming (← readNaming (← need j "table") takes names) }
     if has j "table" then
       if has j "jumps" then throw "a table has no jumps: it steps at every band"
       return { id, dim, takes, body := .table (← readTable (← need j "table") takes dim) }
@@ -746,7 +1036,7 @@ def readField (load : Bool) (j : Json) : Except String Field := do
 def readKind (j : Json) : Except String Kind := do
   let name ← text j "type"
   let kind : Except String Kind := do
-    within j ["type", "what", "fields", "loads"]
+    within j ["type", "what", "fields", "loads", "needs"]
     let _ ← (text j "what").mapError fun _ => "it has `what`, a text"
     let fields ← (← list j "fields").mapM (readField false)
     let loads ← (← listed j "loads").mapM (readField true)
@@ -792,7 +1082,7 @@ def readRule (kinds : Std.TreeMap String Kind) (rows : Std.TreeMap String Row) (
   let id ← text j "id"
   let rule : Except String Rule := do
     short "the id of a rule" id
-    within j ["id", "type", "mechanism", "anchor", "says", "when", "let", "where", "le"]
+    within j ["id", "type", "mechanism", "anchor", "says", "when", "let", "where", "le", "requires"]
     anchored j
     unless filled j "says" do throw "a rule says what it states"
     let name ← text j "type"
@@ -803,6 +1093,19 @@ def readRule (kinds : Std.TreeMap String Kind) (rows : Std.TreeMap String Row) (
     | some (some none) => throw s!"the grid says {mechanism} never arises for {name}"
     | _ => pure ()
     let scope : Scope := { kind := some kind, kinds, rows }
+    unless has j "le" || has j "requires" do
+      throw "a rule has `le`, an inequality, or `requires`, a condition over keys"
+    -- A rule that requires states a condition over keys and no inequality. It has nothing
+    -- that an inequality has: no sides, no names of `let` and no range.
+    if has j "requires" then
+      if has j "le" || has j "let" || has j "where" then
+        throw "a rule with `requires` has no `le`, no `let` and no `where`: it states a condition over keys, and no inequality"
+      let condition ← (j.getObjVal? "when").toOption.mapM (static scope MAX_EXPRESSION)
+      let required ← (static scope MAX_EXPRESSION (← need j "requires")).mapError ("requires: " ++ ·)
+      return { id, kind := name, mechanism, condition, steps := #[], weight := 0,
+               look := 1 + (condition.map Static.size).getD 0 + required.size, ranges := #[], low := 0, high := 0,
+               fields := once ((condition.map Static.keys).getD #[] ++ required.keys), loads := #[], requires := some required,
+               asked := once required.keys }
     let lets ← if has j "let" then members (← need j "let") else pure #[]
     for (name, _) in lets do
       identifier name
@@ -843,7 +1146,7 @@ def readRule (kinds : Std.TreeMap String Kind) (rows : Std.TreeMap String Row) (
     return { id, kind := name, mechanism, condition, steps := draft.steps,
              weight := draft.steps.foldl (fun n step => n + step.weight) 0,
              look := 1 + (condition.map Static.size).getD 0 + loads.size, ranges, low, high,
-             fields := once (fields ++ ((condition.map Static.keys).getD #[]).map (none, ·)), loads }
+             fields := once (fields ++ (condition.map Static.keys).getD #[]), loads }
   rule.mapError (s!"rule {clip id}: " ++ ·)
 
 /-- How many characters of a text are one step to read. -/
@@ -912,6 +1215,16 @@ def readRules (j : Json) : Except String Rules := do
           unless its.called.isEmpty do
             throw s!"{kind.name}.{f.name}: it names parts of {other}, whose own fields name parts"
         | none => throw s!"{kind.name}.{f.name}: {clip other} is not a type of the deck"
+  -- What each type needs of its fields. It is read once every type is known: a need of a
+  -- type may name a field of a part it joins.
+  let read ← (read.zip (← list j "types")).mapM fun (kind, body) => do
+    if !has body "needs" then return kind
+    let written ← (list body "needs").mapError (s!"type {clip kind.name}: " ++ ·)
+    if written.isEmpty then throw s!"type {clip kind.name}: `needs` has at least one item: a type that needs nothing leaves it out"
+    let scope : Scope := { kind := some kind, kinds }
+    let needs ← written.mapIdxM fun k item => (readNeed scope item).mapError (s!"type {clip kind.name}: need {k + 1}: " ++ ·)
+    return { kind with needs }
+  let kinds : Std.TreeMap String Kind := read.foldl (fun table kind => table.insert kind.name kind) {}
   let asks ← (← list j "grid").mapM (readAsk kinds rows)
   unless distinct (asks.map fun a => (a.kind, a.mechanism)) do throw "the grid asks one mechanism of one type twice"
   let asked : Std.TreeMap (String × String) Ask := asks.foldl (fun table a => table.insert (a.kind, a.mechanism) a) {}
@@ -1038,6 +1351,9 @@ def places (site : Site) (side : Side) (how : Chosen) (ids : Array Nat) : Write 
     | some pairs =>
       let some (_, its) := pairs.find? (·.1 == mine) | throw s!"{mine} has no name in {side.input}"
       key names its
+  -- A key that a row names is at the place of each name the row can give, where the
+  -- quantities are at a cell of that name. One name may come from several cells.
+  | .named _ _, .picked found => pure (found.map fun (i, cond) => (i, some (cond.map (ids[·]!))))
   | .listed _ values, .value step =>
     values.mapIdxM fun n v => do
       let c ← node (.c v)

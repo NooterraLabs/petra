@@ -39,9 +39,10 @@ from __future__ import annotations
 
 from fractions import Fraction
 from types import MappingProxyType
-from typing import Callable, Iterable
+from typing import Callable, Collection, Iterable
 
 from .. import grid, models
+from ..files import MAX_PROBLEMS, listed, summed
 from ..ir import (
     Arg,
     Attr,
@@ -81,7 +82,11 @@ from .syntax import File, Node
 
 
 class LoweringError(ValueError):
+    """Every problem of a card and a design, as files.summed prints them: each message once
+    with how many times it arose, and at most a hundred for a file."""
+
     def __init__(self, problems: tuple[str, ...]) -> None:
+        problems = summed(problems)
         super().__init__("\n".join(problems))
         self.problems = problems
 
@@ -117,9 +122,25 @@ class _Lowering:
         self.registry = registry
         self.alone = alone
         self.problems: list[tuple[str, int, int, str]] = []
+        self.tables: dict[str, list[str]] = {}
+        self.nearest: dict[str, str] = {}
 
     def problem(self, at: Located, message: str) -> None:
         self.problems.append((self.path, at.line, at.col, message))
+
+    def known(self, what: str, make: Callable[[], list[str]]) -> list[str]:
+        """A table that a message names, such as every kind, made once for the pair and not once for each mistake."""
+        if what not in self.tables:
+            self.tables[what] = make()
+        return self.tables[what]
+
+    def near(self, name: str, known: Collection[str]) -> str:
+        """Four names of a table for a message about `name`, which it does not hold: the ones that start most as `name`
+        does, so that a name one letter off is among them. That goes through the table, so it is done for the first
+        MAX_PROBLEMS unknown names of the pair, as many as are printed, and a later one gets the first four."""
+        if name not in self.nearest:
+            self.nearest[name] = listed(known, like=name if len(self.nearest) < MAX_PROBLEMS else None)
+        return self.nearest[name]
 
     def read(self, file: File, *heads: str) -> list[Node]:
         """The file's declarations of these kinds, and `file` as the one being read."""
@@ -225,7 +246,7 @@ class _Lowering:
         environment = envs[0].args[0].text if envs else None
         known = self.registry.environments
         if environment is not None and environment not in known:
-            self.problem(envs[0].args[0], f"unknown environment '{environment}'; the registry holds: {', '.join(sorted(known))}")
+            self.problem(envs[0].args[0], f"unknown environment '{environment}'; the registry holds {len(known)}: {listed(sorted(known), like=environment)}")      # a card states one environment
         return name_tok.text, owner, environment
 
     def nonempty(self, tok: Token, what: str) -> bool:
@@ -343,7 +364,8 @@ class _Lowering:
     def component(self, node: Node) -> Component:
         kind, name, attrs = node.args
         if kind.text not in models.KINDS and kind.text not in grid.kinds():
-            self.problem(kind, f"unknown component kind '{kind.text}'; registered kinds: {', '.join(sorted({*models.KINDS, *grid.kinds()}))}")
+            known = self.known("kinds", lambda: sorted({*models.KINDS, *grid.kinds()}))
+            self.problem(kind, f"unknown component kind '{kind.text}'; petra has {len(known)} kinds: {self.near(kind.text, known)}; `petra kinds` lists them")
         lowered = []
         for attr in attrs:
             key, args = attr.args
@@ -360,7 +382,10 @@ class _Lowering:
             case "given":
                 name = node.args[0].text
                 if name not in self.givens_by_name:
-                    self.problem(node, f"{what}: the card gives no '{name}'; it gives: {', '.join(sorted(self.givens_by_name)) or 'nothing'}")
+                    # The missing given, how many the card has and the first four of them. Every given of the card, sorted
+                    # again for each reference, made the message the card times the design: 330 MB printed for 0.35 MB.
+                    has = f"{len(self.givens_by_name):,}: {listed(self.givens_by_name)}" if self.givens_by_name else "nothing"
+                    self.problem(node, f"{what}: the card gives no '{name}'; it gives {has}")
                 self.unread.discard(name)
                 return self.givens.get(name)
             case "paramref":
@@ -489,7 +514,8 @@ class _Lowering:
         mode, subject, owner, reason = node.args
         mode_id = ".".join(t.text for t in mode.args)
         if mode_id not in models.MODES and mode_id not in grid.mechanisms():
-            self.problem(mode, f"unknown failure mode '{mode_id}'; known modes: {', '.join(sorted({*models.MODES, *grid.mechanisms()}))}")
+            known = self.known("modes", lambda: sorted({*models.MODES, *grid.mechanisms()}))
+            self.problem(mode, f"unknown failure mode '{mode_id}'; petra has {len(known)} modes: {self.near(mode_id, known)}; `petra kinds` lists the modes of each kind")
         self.nonempty(owner, "the waiver's owner")
         self.nonempty(reason, "the waiver's reason")
         return Waiver(mode_id, tuple(t.text for t in subject.args), owner.text, reason.text, self.span(node))

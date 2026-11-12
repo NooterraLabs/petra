@@ -26,7 +26,7 @@ from typing import Callable, Mapping
 
 from . import deck as deck_rows
 from . import grid, models
-from .files import card_of
+from .files import MAX_FILE, MAX_LISTED, MAX_MESSAGE, MAX_PROBLEMS, card_of
 from .ir import FromTests, RangeMean
 from .lang import parse_design, syntax
 from .lang.lexer import Kind, tokenize
@@ -112,6 +112,8 @@ def _deck_text(deck: grid.Deck, types: tuple[str, ...]) -> str:
                 form = f"given <name>.{f.name}" if f.signed else "<whole number>" if f.whole else f"<{deck_rows.show(f.dim)}>"
             note = "; the card states it: given <name>." + f.name + " in [<lo>, <hi>] signed ..." if f.signed else ""
             lines += [f"    {f.name} {form}", f"        {f.what}{note}"]
+        if kind.needs:
+            lines += ["  a part that breaks one of these is no design:", *(f"    {need.why}" for need in kind.needs)]
         if asks:
             lines.append("  the grid asks:")
             for a in asks:
@@ -371,7 +373,9 @@ def registry_text(registry: Registry, prefix: str | None, shapes: Mapping[str, C
 
 SNIPPETS: tuple[tuple[str, str, str], ...] = (
     ("card", "A card has one `card` block, which names what is asked. `owner` is required. `environment` is "
-     "optional and names a registry environment from the registry list at the end of this page.",
+     "optional and names a registry environment from the registry list at the end of this page. No deck of "
+     "rules reads an environment yet. So the card of a design with a part of a deck's type, such as a `lap`, "
+     "states none, and `petra check` refuses one that does.",
      'card "warren-footbridge-panel" {\n  owner "a.reviewer@example.org"\n  environment indoor_dry\n}'),
     ("param", "`param` declares a family. The design holds for every value in the param's range. A line names the "
      "param by writing `param NAME` in place of a value. A param is declared in the card or in the design. A "
@@ -530,6 +534,19 @@ def render_reference() -> str:
         "  a signature. In a family, `param NAME` stands where a bound would.",
         "- `in`, `mean`, `signed`, `measured`, `source`, `param`, and `given` cannot be names inside a line. No",
         "  declared name can be a declaration word.",
+        f"- A file has at most {MAX_FILE:,} bytes. `petra check`, `petra.export` and the MCP tools refuse a larger",
+        "  file before they parse it.",
+        "",
+        "A pair that is refused prints its problems, each with its file, line and column. What is printed is",
+        "bounded, whatever the files hold.",
+        "",
+        f"- A message that names a table, such as the kinds or the givens of the card, lists at most {MAX_LISTED} of",
+        "  its names and says how many it has. For an unknown kind or mode they are the names that start most",
+        "  as the unknown one does.",
+        "- A message that arises more than once is printed once, at the first place, with how many times it",
+        "  arose.",
+        f"- At most {MAX_PROBLEMS} problems are printed for a file, and then how many more there were.",
+        f"- A problem of more than {MAX_MESSAGE} characters is cut, and says how many were left out.",
         "",
         "## Declarations",
         "",
@@ -541,6 +558,14 @@ def render_reference() -> str:
               "", "```", _grammar(), "```", "",
               "## Units", "", "A card and a design accept these unit spellings.", "",
               "| dimension | spellings |", "|---|---|", *_units(), "",
+              "A unit of length may be raised to the power 2, 3 or 4: the unit, `^` and the power, with no space, as",
+              "in `mm^3` and `inch^4`. Its factor is the unit's own factor to that power, exactly, so `1 inch^4` is",
+              "(127/5000)^4 m^4. A power is one of `2`, `3` and `4`, written as that one digit: `inch^1`, `inch^5`,",
+              "`inch^04` and `inch^3/2` are refused. Only a unit of length takes a power, so `kN^2` and `mm2^2` are",
+              "refused. An area has two spellings with one meaning: `mm^2` is `mm2`, `m^2` is `m2` and `inch^2` is",
+              "`inch2`. A section modulus is written in a length to the third power and a moment of inertia in a",
+              "length to the fourth. Petra prints such a quantity in `mm^3`, `cm^3`, `m^3` and the like, which it",
+              "reads back.", "",
               "## Exit codes of `petra check`", "", "| status | code |", "|---|---|",
               *(f"| {status} | {code} |" for status, code in EXIT_CODES.items()), "",
               "## Component kinds", "",

@@ -354,20 +354,9 @@ def _is(cond: tuple | None, point: Mapping[str, Any]) -> bool:
         return True
     if cond[0] == "is":
         return point.get(cond[1]) == cond[2]
-    if cond[0] == "loaded":
-        return f"load {cond[1]}" in point
     if cond[0] == "not":
         return not _is(cond[1], point)
     return (all if cond[0] == "and" else any)(_is(c, point) for c in cond[1:])
-
-
-def _loaded(cond: tuple | None) -> Iterator[str]:
-    """The loads a condition on a part asks about."""
-    if cond is not None and cond[0] == "loaded":
-        yield f"load {cond[1]}"
-    elif cond is not None and cond[0] != "is":
-        for inner in cond[1:]:
-            yield from _loaded(inner)
 
 
 @dataclass(frozen=True)
@@ -491,15 +480,11 @@ class Reading:
         """Whether the transcription says anything of the mechanism: a rule, or that it cannot arise."""
         return bool(self.rules[mechanism]) or self.asks[mechanism].excused is not None or mechanism in self.wrong
 
-    def reads(self, mechanism: str, asked: bool = True) -> set[str]:
-        """Every name the mechanism's rules and its `unless` read: fields, and loads as
-        `load NAME`. With `asked`, also each load that a `when` or an `unless` asks about
-        with `loaded`. Such a test says whether the load is there and reads nothing of it,
-        so `petra check` does not count it as a reader, and neither does this without `asked`."""
-        ask = self.asks[mechanism]
-        found = set(grid._keys(ask.unless)) | (set(_loaded(ask.unless)) if asked else set())
+    def reads(self, mechanism: str) -> set[str]:
+        """Every name the mechanism's rules and its `unless` read: fields, and loads as `load NAME`."""
+        found = set(grid._keys(self.asks[mechanism].unless))
         for rule in self.rules[mechanism]:
-            found |= grid._reads(rule) | (set(_loaded(rule.when)) if asked else set())
+            found |= grid._reads(rule)
         return found
 
     def _loads_of(self, rule: grid.Rule) -> tuple[str, ...]:
@@ -536,6 +521,8 @@ class Reading:
         return self._tapes[at]
 
     def says(self, rule: grid.Rule, point: Mapping[str, Any]) -> Said:
+        if rule.requires is not None:      # a condition over keys: it holds or fails, and states no two sides
+            return Said(rule.id, "holds" if _is(rule.requires, point) else "fails")
         missing = [name[5:] for name in self._loads_of(rule) if name not in point]
         if missing:
             return Said(rule.id, "nothing", f"the part carries no {' and no '.join(missing)}, which the rule reads", "load")
@@ -630,9 +617,9 @@ def _marks(readings: list[Reading], mechanism: str) -> dict[str, tuple[tuple[Fra
     beside: dict[str, set[Fraction]] = collections.defaultdict(set)
     for reading in readings:
         for rule in reading.rules[mechanism]:
-            for applied in rule.applied.values():
-                for axis in applied.row.table.axes if applied.row.table is not None else ():
-                    term = applied.quantities.get(axis.by)
+            for row, quantities in (found for applied in rule.applied.values() for found in grid._tables(applied)):
+                for axis in row.table.axes if row.table is not None else ():
+                    term = quantities.get(axis.by)
                     while isinstance(term, Sym) and term.name in rule.lets:
                         term = rule.lets[term.name]
                     if isinstance(term, Sym) and not term.name.startswith(("@", "load ")):
@@ -642,21 +629,20 @@ def _marks(readings: list[Reading], mechanism: str) -> dict[str, tuple[tuple[Fra
 
 
 def parts(task: Task, mechanism: str, readings: list[Reading], seed: int = 0, count: int = PARTS) -> Parts:
-    """Parts of the mechanism's type as points: every combination of its keys, with and
-    without each load that a rule or an `unless` asks to be `loaded`; each quantity spread
-    over its range on a log scale, a count over its whole numbers, and a quantity that a
-    rule binds to the side of a table on and beside that side's ends."""
-    maybe = sorted({name for r in readings for cond in (r.asks[mechanism].unless, *(rule.when for rule in r.rules[mechanism])) for name in _loaded(cond)})
-    return _sampled(task, mechanism, tuple(sorted(_marks(readings, mechanism).items())), tuple(maybe), seed, count)
+    """Parts of the mechanism's type as points: every combination of its keys; each quantity
+    and each load spread over its range on a log scale, a count over its whole numbers, and
+    a quantity that a rule binds to the side of a table on and beside that side's ends. A
+    part carries every load of its type: a card states each load a rule reads in every case."""
+    return _sampled(task, mechanism, tuple(sorted(_marks(readings, mechanism).items())), seed, count)
 
 
 @lru_cache(maxsize=64)
-def _sampled(task: Task, mechanism: str, marked: tuple, maybe: tuple[str, ...], seed: int, count: int) -> Parts:
+def _sampled(task: Task, mechanism: str, marked: tuple, seed: int, count: int) -> Parts:
     kind = next(a.type for a in task.deck.asks if a.mechanism == mechanism)
     keys, sizes, loads = _names(task.deck, kind)
     spans, marks = task.spans[kind], dict(marked)
     rng = random.Random(f"{seed}/{task.name}/{mechanism}")
-    combos = list(itertools.product(*([(name, k) for k in options] for name, options in keys.items()), *([(name, True), (name, False)] for name in maybe)))
+    combos = list(itertools.product(*([(name, k) for k in options] for name, options in keys.items())))
     said = ""
     if len(combos) > count:
         said = f", {count} of the {len(combos)} combinations of its keys"
@@ -677,9 +663,7 @@ def _sampled(task: Task, mechanism: str, marked: tuple, maybe: tuple[str, ...], 
 
     base: list[dict[str, Any]] = []
     for combo in itertools.islice(itertools.cycle(combos), max(count, len(combos))):
-        point: dict[str, Any] = {name: value for name, value in combo if not isinstance(value, bool)}
-        absent = {name for name, value in combo if value is False}
-        base.append({**point, **{name: draw(name) for name in (*sizes, *loads) if name not in absent}})
+        base.append({**dict(combo), **{name: draw(name) for name in (*sizes, *loads)}})
     for name, (listed, beside) in sorted(marks.items()):
         found = [*listed, *beside]
         for n, x in zip(rng.sample(range(len(base)), min(len(found), len(base))), found):
@@ -752,7 +736,8 @@ def _told(found: Answer) -> str:
         silent = next(s for s in found.said if s.state == "nothing")
         return f"says nothing ({silent.rule}: {silent.why})"
     g = found.governing
-    return found.state + (f" at {float(found.ratio):.6g}" if found.ratio is not None else "") + f" ({g.rule}: {float(g.low):.6g} against {float(g.high):.6g})"
+    sides = "what it requires of the keys" if g.low is None else f"{float(g.low):.6g} against {float(g.high):.6g}"
+    return found.state + (f" at {float(found.ratio):.6g}" if found.ratio is not None else "") + f" ({g.rule}: {sides})"
 
 
 def _order(reading: Reading, mechanism: str, *others: Reading) -> list[str]:
@@ -807,6 +792,8 @@ def reproduces(mine: Reading, mechanism: str, examples: list[Worked]) -> Check:
         governing = found[0].governing
         if governing is None:
             misses.append(f"{e.anchor}: for this part the transcription {_told(found[0])}")
+        elif "requires" in bodies[governing.rule]:
+            misses.append(f"{e.anchor}: {governing.rule} requires a condition over keys, and has no side and no ratio for an example to print")
         elif e.side != "ratio" and _side_dim(mine, bodies[governing.rule]) != e.dim:
             misses.append(f"{e.anchor}: prints a {show(e.dim)}, and the sides of {governing.rule} are a {show(_side_dim(mine, bodies[governing.rule]))}")
         elif got[0] is None or abs(got[0] - e.gives) > e.within * abs(e.gives):
@@ -978,11 +965,10 @@ def reads(mine: Reading) -> Check:
     """Whether something reads every key, every quantity and every load of each type the
     task asks about, in the names a rule reads them under. `petra check` leaves a design
     open at a field nothing reads and at a load nothing reads. A load is read by an
-    expression of a rule: a `let`, a side of `le` or a `where`. A `loaded` in a `when` or
-    an `unless` does not read it, here as in `petra check`."""
+    expression of a rule: a `let`, a side of `le` or a `where`."""
     unread = []
     for kind in dict.fromkeys(a.type for a in mine.task.deck.asks):
-        read = set().union(*(mine.reads(m, asked=False) for m in mine.task.mechanisms if mine.asks[m].type == kind))
+        read = set().union(*(mine.reads(m) for m in mine.task.mechanisms if mine.asks[m].type == kind))
         unread += [f"{kind}.{name.removeprefix('load ')}" for group in _names(mine.task.deck, kind) for name in group if name not in read]
     if not unread:
         return Check("reads", "pass", "every field and every load is read")
