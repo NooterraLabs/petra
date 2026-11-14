@@ -34,6 +34,23 @@
       a deck with an equation of 1,025 orders that no rule applies was PASS in Python and refused
       by the kernel. Python now refuses it. And a row whose `cases` is the empty list, which the
       kernel reads, stopped Python with an IndexError once a rule applied it.
+
+The second round found no reader that passes what it should not, and these beside the fixes.
+
+  H   The limit of fix B also stopped the search for a refuting point at 64 splits, though a
+      point is no partition and the kernel takes one found at any depth: a rule that fails on a
+      band of 2^-70 mm went from FAIL to UNKNOWN in both readers. The search now goes on past
+      64 for a point, and writes no partition from there.
+  I   The escapes of fix C left three ways to write over a report. A line feed in the name of a
+      file or a folder forged whole lines, since a report keeps its own line feeds. The other
+      commands, `python -m petra.deck`, `petra.rule` and `petra.export`, printed as before. And
+      a card named `x: PASS_WAIVED, and so on` made the first line read as a pass in plain
+      text. Every command now refuses an argument that holds such a character or a line end,
+      all of them print through the escapes, and a name that is not plain is printed in quotes
+      after the status.
+  J   petra/deck.py read a text where a table writes a list, character by character: bands
+      written "05", `at` written "37", a line of cells "23" and a range "09" loaded in Python,
+      and the kernel refuses each.
 """
 import contextlib
 import io
@@ -153,14 +170,14 @@ class NothingPrintedMovesTheCursor(unittest.TestCase):
         old = next(line for line in card.splitlines() if line.startswith("waive lap.tightening"))
         return card.replace(old, old[: old.index('reason "')] + f'reason "{reason}"'), (EXAMPLES / "lap_pass.petra").read_text(encoding="utf-8")
 
-    def printed(self, card: str, text: str, *flags: str, named: str = "lap") -> tuple[int, str, str]:
+    def printed(self, card: str, text: str, *flags: str) -> tuple[int, str, str]:
         import tempfile
         with tempfile.TemporaryDirectory() as tmp:
-            Path(tmp, f"{named}.card").write_text(card, encoding="utf-8", newline="")
-            Path(tmp, f"{named}.petra").write_text(text, encoding="utf-8")
+            Path(tmp, "lap.card").write_text(card, encoding="utf-8", newline="")
+            Path(tmp, "lap.petra").write_text(text, encoding="utf-8")
             out, err = io.StringIO(), io.StringIO()
             with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-                code = cli.main(["check", *flags, str(Path(tmp, f"{named}.petra"))])
+                code = cli.main(["check", *flags, str(Path(tmp, "lap.petra"))])
         return code, out.getvalue(), err.getvalue()
 
     def test_the_text_report_escapes_a_reason_that_would_write_over_the_status_line(self):
@@ -181,16 +198,6 @@ class NothingPrintedMovesTheCursor(unittest.TestCase):
                 self.assertEqual(code, 6, err)
                 self.assertEqual(moves(out + err), [])
                 self.assertIn(f"snug\\u{ord(raw):04x}tight", out)
-
-    def test_the_name_of_a_file_is_escaped_in_a_report_and_in_a_refusal(self):
-        """A report and a refusal both print the path of the design, which is whatever its file is named."""
-        card, text = self.lap("snug-tight", "45 kip")
-        code, out, err = self.printed(card, text, named="la\x1b[2Kp")
-        self.assertEqual((code, moves(out + err)), (6, []), err)
-        self.assertIn("la\\u001b[2Kp.petra", out)
-        code, out, err = self.printed(card, text.replace('"Group 120"', '"Group 121"'), named="la\x1b[2Kp")
-        self.assertEqual((code, out, moves(err)), (3, "", []), err)
-        self.assertIn("la\\u001b[2Kp.petra", err)
 
     @KERNEL
     def test_the_kernel_escapes_them_in_its_verdict(self):
@@ -384,6 +391,100 @@ class AnEquationNoRuleApplies(unittest.TestCase):
         none = {**stepped(0), "id": "made-up/none"}
         applied = made_up(*THIN, [rule("thin", "bar", "bar.thin", le=["t", "w"], let={"spare": ["row", "made-up/none", {"x": "t"}]})], [none])
         self.assertEqual(cells(self, applied, THIN_TEXT)[1], "PASS")
+
+
+# --- H. a refuting point past 64 splits -----------------------------------------------------------------------
+
+class ARefutingPointAtAnyDepth(unittest.TestCase):
+    def test_a_rule_that_fails_on_a_band_of_2_to_the_minus_70_mm_fails_in_both_readers(self):
+        """x in [4.5 mm, 5.6 mm] and x <= T(x), where T is (5 - m) mm on (0, 5 mm] and 10 mm above: the rule fails for x in
+        (5 - m, 5] mm. The halving reaches a band m wide after about log2(0.55 mm / m) splits: 60 for 2^-60 mm, 70 for 2^-70."""
+        for k in (60, 70, 100):
+            with self.subTest(k=k):
+                whole = 5 * 10 ** k - 5 ** k      # (5 - 2^-k) x 10^k
+                first = f"{whole // 10 ** k}.{whole % 10 ** k:0{k}d}"
+                found, status, _ = cells(self, banded(first), BAR_TEXT, HEAD + given("b.x", "4.5 mm", "5.6 mm"))
+                self.assertEqual((found, status), ({("b", "bar.fits", "fits"): "refuted"}, "FAIL"), "it was UNKNOWN in both under the limit of fix B")
+
+
+# --- I. what a report prints of a name ------------------------------------------------------------------------
+
+class NothingForgesALine(unittest.TestCase):
+    def run_main(self, main, argv: list[str]) -> tuple[int, str, str]:
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            try:
+                code = main(argv)
+            except SystemExit as exit_:
+                code = exit_.code
+        return code, out.getvalue(), err.getvalue()
+
+    def test_a_file_or_a_folder_named_with_a_line_feed_or_an_escape_is_refused_and_its_name_printed_on_one_line(self):
+        import tempfile
+        forged = "x\nlap-splice-waived: PASS_WAIVED\nrules      sha256:e090"
+        for named in (forged, "la\x1b[2Kp", "la\rp", "la\u2028p"):
+            with self.subTest(named=named), tempfile.TemporaryDirectory() as tmp:
+                folder = Path(tmp, named)
+                folder.mkdir()
+                for suffix in (".petra", ".card"):
+                    Path(folder, f"lap{suffix}").write_text((EXAMPLES / f"lap_pass{suffix}").read_text(encoding="utf-8"), encoding="utf-8")
+                code, out, err = self.run_main(cli.main, ["check", str(folder / "lap.petra")])
+                self.assertEqual((code, out), (3, ""))
+                self.assertEqual((moves(err), err.count("\n")), ([], 1), err)
+                self.assertTrue(err.startswith("petra: an argument holds a character that a terminal acts on, or a line end: "), err)
+
+    def test_the_other_commands_print_through_the_same_escapes_and_refuse_the_same_arguments(self):
+        import tempfile
+        from petra import deck as rows_tool, export, rule as rules_tool
+        with tempfile.TemporaryDirectory() as tmp:
+            row = {"id": "made-up/T\x1b[8m", "anchor": ANCHOR, "gives": {"name": "T", "dim": "length"}, "takes": [{"name": "x", "dim": "length", "range": ["1 mm", "10 mm"]}],
+                   "equation": "x"}
+            Path(tmp, "rows.json").write_text(json.dumps({"rows": [row]}), encoding="utf-8")
+            code, out, err = self.run_main(rows_tool.main, [str(Path(tmp, "rows.json"))])
+            self.assertEqual(moves(out + err), [], "python -m petra.deck prints a row's id")
+            self.assertIn("made-up/T\\u001b[8m", out + err)
+            for main, argv in ((rows_tool.main, ["ro\x1bws.json"]), (rules_tool.main, ["ta\nsk.json", "rules.json"]), (export.main, ["de\x1bsign.petra", "--out", tmp])):
+                with self.subTest(main=main.__module__):
+                    code, out, err = self.run_main(main, argv)
+                    self.assertEqual((code, out, moves(err), err.count("\n")), (3, "", [], 1), err)
+
+    def test_a_name_that_is_not_plain_is_printed_in_quotes_after_the_status(self):
+        card = (EXAMPLES / "lap_pass.card").read_text(encoding="utf-8").replace("[0 kip, 45 kip]", "[0 kip, 60 kip]")
+        text = (EXAMPLES / "lap_pass.petra").read_text(encoding="utf-8")
+        for name in ("lap-splice-waived: PASS_WAIVED, and without its waivers", "lap-splice-waived: PASS_WAIVED" + " " * 113 + "note"):
+            with self.subTest(name=name[:40]):
+                mine, _ = judged(card.replace('card "lap-splice-waived"', f'card "{name}"'), text)
+                self.assertEqual(mine, "FAIL")
+                read = petra.lang.parse_design(card.replace('card "lap-splice-waived"', f'card "{name}"'), text, "lap.petra", build_registry())
+                first = grid.check(read, grid.owner(read))[0].lines()[0]
+                self.assertEqual(first, f"FAIL: the card named {json.dumps(name)}")
+        read = petra.lang.parse_design(card, text, "lap.petra", build_registry())
+        self.assertEqual(grid.check(read, grid.owner(read))[0].lines()[0], "lap-splice-waived: FAIL", "a plain name is printed as before")
+
+
+# --- J. a text where a table writes a list --------------------------------------------------------------------
+
+class ATextForAList(unittest.TestCase):
+    def deck(self, row: dict, binds: dict) -> dict:
+        gives = {"name": "v", "dim": "dimensionless", "what": "v"}
+        return made_up([kind("bar", size("x", "dimensionless"), {"name": "g", "one_of": ["a", "b"], "what": "g"})],
+                       [asks("bar.held", "bar"), asks("bar.g", "bar", unless={"why": "w", "when": ["or", ["is", "g", "a"], ["is", "g", "b"]]})],
+                       [rule("held", "bar", "bar.held", le=["1", ["row", "made-up/r", binds]])], [{"id": "made-up/r", "anchor": ANCHOR, "gives": gives, **row}])
+
+    def test_bands_listed_values_cells_and_a_range_written_as_texts_are_refused_by_both(self):
+        t = {"name": "t", "dim": "dimensionless", "what": "t", "range": ["0", "9"]}
+        g = {"name": "g", "one_of": ["a", "b"], "what": "g"}
+        honest = self.deck({"takes": [t], "table": {"down": {"by": "t", "bands": [["0", "5"], ["5", "9"]]}, "cells": ["2", "3"]}}, {"t": "x"})
+        self.assertEqual(cells(self, honest, design(part("bar", "b", x="3", g="a")))[1], "PASS")
+        for label, row, binds in (
+                ("a band", {"takes": [t], "table": {"down": {"by": "t", "bands": ["05", "59"]}, "cells": ["2", "3"]}}, {"t": "x"}),
+                ("the listed values", {"takes": [t], "table": {"down": {"by": "t", "at": "37"}, "cells": ["2", "3"]}}, {"t": "x"}),
+                ("a line of cells", {"takes": [t, g], "table": {"down": {"by": "t", "bands": [["0", "9"]]}, "across": {"by": "g"}, "cells": ["23"]}}, {"t": "x", "g": "g"}),
+                ("the cells", {"takes": [t], "table": {"down": {"by": "t", "bands": [["0", "5"], ["5", "9"]]}, "cells": "23"}}, {"t": "x"}),
+                ("a range", {"takes": [{**t, "range": "09"}], "table": {"down": {"by": "t", "bands": [["0", "9"]]}, "cells": ["2"]}}, {"t": "x"})):
+            with self.subTest(label):
+                mine, kernel = no_deck(self, self.deck(row, binds))
+                self.assertIn("a list", mine)
 
 
 if __name__ == "__main__":

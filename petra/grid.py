@@ -43,6 +43,7 @@ from typing import Any, Callable, Iterable, Iterator, Mapping
 from . import deck as rows
 from . import export
 from .deck import NONE, RowError, Vector, anchored, dimension, only, quantity, replaced, show
+from .files import escaped, shown  # noqa: F401  (shown is what a caller prints a report through)
 from .ir import Bound, Component, Design, Fixed, ParamRef, Ref, Span, Stated, Text
 from .kernel import (MAX_ARGUMENT, Abs, Add, Const, Cos, Div, Exp, Interval, KernelArithmeticError, Ln, Max, Min, Mul, Neg, Pi, PowInt, Sqrt,
                      Sym, enclose)
@@ -256,27 +257,6 @@ class Deck:
 def _anchor(a: Mapping[str, str]) -> str:
     parts = [a["standard"], a["clause"], *(f"{word} {a[key]}" for key, word in (("equation", "equation"), ("table", "Table")) if a.get(key))]
     return " ".join(parts[:2]) + "".join(f", {p}" for p in parts[2:])
-
-
-def escaped(c: str) -> bool:
-    """Whether the kernel prints this character as an escape of six bytes, `\\uXXXX`
-    (`escaped` in kernel/Petra/Files.lean). A terminal acts on these and does not show them:
-    the control characters, which are those under U+0020 but the line feed and the carriage
-    return, and U+007F to U+009F; the line and the paragraph separator; and the marks that
-    turn the direction of text."""
-    n = ord(c)
-    return (n < 0x20 and c not in "\n\r") or 0x7F <= n <= 0x9F or n in (0x2028, 0x2029, 0x61C, 0x200E, 0x200F) or 0x202A <= n <= 0x202E or 0x2066 <= n <= 0x2069
-
-
-_ACTED_ON = re.compile("[\\x00-\\x09\\x0b-\\x1f\\x7f-\\x9f\\u061c\\u200e\\u200f\\u2028\\u2029\\u202a-\\u202e\\u2066-\\u2069]")
-"""Every character of `escaped`, and the carriage return."""
-
-
-def shown(text: str) -> str:
-    """A text for a terminal: its lines as they are, and every other character that a
-    terminal acts on written as the kernel prints it, `\\u` and four digits. A carriage
-    return is one of them here: it sends the cursor back to the start of its line."""
-    return _ACTED_ON.sub(lambda found: f"\\u{ord(found[0]):04x}", text)
 
 
 def _about(x: Fraction) -> str:
@@ -1486,8 +1466,10 @@ def _partition(nodes: list[list], roots: list[int], box: list[Interval], budget:
     and names it by its label, as proofs.json does for the kernel. Given `refuting`, the
     search also tries the middle of each box it does not prove, and stops at the first where
     the first root is above zero, which it puts there. The budget is held to the walks that
-    `_walks` allows over the box, two for each box where the search tries the middle. It
-    splits no deeper than `MAX_DEPTH`, the deepest partition the kernel takes."""
+    `_walks` allows over the box, two for each box where the search tries the middle. A
+    partition splits no deeper than `MAX_DEPTH`, the deepest the kernel takes. The search for
+    a refuting point goes on past it, since the kernel takes a point found at any depth, and
+    gives no partition from there."""
     v = enclosures(nodes, box)
     if all(isinstance(v[r], Interval) and v[r].hi <= 0 for r in roots):
         return "leaf"
@@ -1497,7 +1479,7 @@ def _partition(nodes: list[list], roots: list[int], box: list[Interval], budget:
         return None
     budget[0] -= 1
     widest = max(range(len(box)), key=lambda k: box[k].width(), default=None)
-    if widest is None or box[widest].width() == 0 or budget[0] <= 0 or depth >= MAX_DEPTH:
+    if widest is None or box[widest].width() == 0 or budget[0] <= 0 or (depth >= MAX_DEPTH and refuting is None):
         return None
     cut = box[widest].midpoint()
     halves = []
@@ -1506,7 +1488,7 @@ def _partition(nodes: list[list], roots: list[int], box: list[Interval], budget:
         if found is None:
             return None
         halves.append(found)
-    return {"input": labels[widest], "at": export.number(cut), "below": halves[0], "above": halves[1]}
+    return None if depth >= MAX_DEPTH else {"input": labels[widest], "at": export.number(cut), "below": halves[0], "above": halves[1]}
 
 
 def _nowhere(nodes: list[list], roots: list[int], box: list[Interval]) -> int | None:
@@ -1779,9 +1761,9 @@ def _listed(names: list[str]) -> str:
 
 
 def _written(x: Fraction) -> bool:
-    """Whether the kernel reads this number from a file: `export.number` writes it in at most MAX_NUMBER characters. A number of
-    more bits than 13,288 has more digits than that, and Python does not write a whole number of more than 4,300."""
-    return abs(x.numerator).bit_length() + x.denominator.bit_length() <= 13_288 and len(export.number(x)) <= MAX_NUMBER
+    """Whether the kernel reads this number from a file: `export.number` writes it in at most MAX_NUMBER characters. A numerator
+    or a denominator of more than 14,000 bits has over 4,214 digits, and Python writes no whole number of more than 4,300."""
+    return max(abs(x.numerator).bit_length(), x.denominator.bit_length()) <= 14_000 and len(export.number(x)) <= MAX_NUMBER
 
 
 def _least(load: Field) -> Fraction:
@@ -2157,7 +2139,10 @@ class Report:
 
     def lines(self) -> list[str]:
         counts = self.counts()
-        out = [f"{self.name}: {self.status}",
+        # A name that is not plain could read as a status of its own, `x: PASS_WAIVED, and so on`, or push the true one off the first
+        # row of a terminal with blanks. Such a name is printed in quotes after the status, so that the first word is the status.
+        plain = re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", self.name) is not None
+        out = [f"{self.name}: {self.status}" if plain else f"{self.status}: the card named {json.dumps(self.name, ensure_ascii=False)}",
                f"rules      {self.deck.hash}  {self.deck.name}",
                "cells      " + ", ".join(f"{counts[s]} {s.replace('_', ' ')}" for s in STATES)]
         wide = max((len(f"{c.subject}/{c.mechanism}") for c in self.cells), default=0)

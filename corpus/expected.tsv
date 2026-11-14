@@ -160,7 +160,7 @@ corpus/cases/deck/d06_design_states_strength.petra	INPUT_ERROR			the design writ
 corpus/cases/deck/d07_push.petra	INPUT_ERROR			the card's pull goes below zero, and a lap takes a pull
 corpus/cases/deck/d08_no_load.petra	UNKNOWN			the card puts no pull on the lap, so the rules that read one are open, on four lines
 corpus/cases/deck/d09_thin_plate.petra	FAIL			a 1/8 inch plate yields at 24.3 kip, ruptures at 27.9, tears out as a block at 29.1 and holds 26.7 at its holes, under a pull of 45 kip
-corpus/cases/deck/d10_one_waiver_short.petra	UNKNOWN			the card waives three of the four mechanisms the deck has no rule for, and the bending of the plates stays open
+corpus/cases/deck/d10_one_waiver_short.petra	UNKNOWN			the card waives three of the five mechanisms the deck has no rule for, and the bending of the plates and the block shear of fewer bolts than all stay open
 corpus/cases/deck/d11_stray_plate.petra	UNKNOWN			a plate 1 nm thick that no lap joins: nothing reads it, so it has open cells
 corpus/cases/deck/d12_shared_plates.petra	INPUT_ERROR			two laps join the same plates, and each would be checked as if it alone loaded them
 corpus/cases/deck/d13_pitch_under_minimum.petra	FAIL			the pitch is 1.75 inch, under the 2 2/3 diameters, 2 inch, that J3.4 asks between centres, and every other answer holds or is waived

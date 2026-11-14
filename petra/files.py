@@ -9,8 +9,9 @@ import codecs
 import itertools
 import os
 import re
+import sys
 from pathlib import Path
-from typing import Collection, Iterable
+from typing import Any, Callable, Collection, Iterable
 
 MAX_FILE = 1_000_000
 """The most bytes a card or a design may have. A larger one is refused before it is parsed:
@@ -24,6 +25,59 @@ MAX_MESSAGE = 500
 """The most characters of one problem that are printed. A longer one is cut, and says how
 much was left out: a message may repeat a name of the file, which may be long."""
 _WHERE = re.compile(r"(.+?):(\d+):(\d+): (.*)", re.DOTALL)
+_ACTED_ON = re.compile("[\\x00-\\x09\\x0b-\\x1f\\x7f-\\x9f\\u061c\\u200e\\u200f\\u2028\\u2029\\u202a-\\u202e\\u2066-\\u2069]")
+"""Every character of `escaped`, and the carriage return."""
+
+
+def escaped(c: str) -> bool:
+    """Whether the kernel prints this character as an escape of six bytes, `\\uXXXX`
+    (`escaped` in kernel/Petra/Files.lean). A terminal acts on these and does not show them:
+    the control characters, which are those under U+0020 but the line feed and the carriage
+    return, and U+007F to U+009F; the line and the paragraph separator; and the marks that
+    turn the direction of text."""
+    n = ord(c)
+    return (n < 0x20 and c not in "\n\r") or 0x7F <= n <= 0x9F or n in (0x2028, 0x2029, 0x61C, 0x200E, 0x200F) or 0x202A <= n <= 0x202E or 0x2066 <= n <= 0x2069
+
+
+def shown(text: str) -> str:
+    """A text for a terminal: its lines as they are, and every other character that a
+    terminal acts on written as the kernel prints it, `\\u` and four digits. A carriage
+    return is one of them here: it sends the cursor back to the start of its line."""
+    return _ACTED_ON.sub(lambda found: f"\\u{ord(found[0]):04x}", text)
+
+
+class Shown:
+    """A stream that writes every text as `shown` gives it, so that nothing a card, a design
+    or a deck holds reaches a terminal as a character it acts on: the lines of a report are
+    its own, and an escape, a backspace or a carriage return in a name or a reason is printed
+    as `\\u001b`, `\\u0008` or `\\u000d`. Everything else is the stream's own."""
+
+    def __init__(self, stream: Any) -> None:
+        self._stream = stream
+
+    def write(self, text: str) -> int:
+        self._stream.write(shown(text))
+        return len(text)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._stream, name)
+
+
+def guarded(run: Callable[[list[str]], int], argv: list[str], who: str = "petra") -> int:
+    """Run a command with its two streams printing as `shown`, and refuse an argument that
+    holds a character a terminal acts on or a line end, with exit code 3. A report and a
+    refusal print the names of files, and a report keeps its own line feeds: a folder named
+    with one would write whole lines of a report that no command made."""
+    out, err = sys.stdout, sys.stderr
+    sys.stdout, sys.stderr = Shown(out), Shown(err)
+    try:
+        for arg in argv:
+            if _ACTED_ON.search(arg) or "\n" in arg:
+                print(f"{who}: an argument holds a character that a terminal acts on, or a line end: {shown(arg).replace(chr(10), chr(92) + 'u000a')}", file=sys.stderr)
+                return 3
+        return run(argv)
+    finally:
+        sys.stdout, sys.stderr = out, err
 
 
 def listed(names: Collection[str], most: int = MAX_LISTED, like: str | None = None) -> str:

@@ -85,7 +85,7 @@ CORE_CAP = Limit(1023, "Set on 2026-11-08 at 140f742, where the core measured 95
                        "for a whole number that long. A long number is now named by its bits: 3 lines in "
                        "interval.py, 1,023.")
 
-TRUSTED_CEILING = Limit(20112,"Set on 2026-11-08 at 140f742, where the trusted base measured 13,530 "
+TRUSTED_CEILING = Limit(20119,"Set on 2026-11-08 at 140f742, where the trusted base measured 13,530 "
                                "code lines: core 957, rules 457, outside the kernel 12,116. Raised on "
                                "2026-11-08 on branch parts-core as the parts layer replaces its scaffold: "
                                "classifying the scaffold measured 14,269, and the mesh reader with its "
@@ -306,6 +306,13 @@ TRUSTED_CEILING = Limit(20112,"Set on 2026-11-08 at 140f742, where the trusted b
                                "reason with escape sequences wrote another status over the first line: `petra` now "
                                "prints every character a terminal acts on as the kernel's escape, and counts a name's "
                                "bytes as the kernel prints them. 21 lines in petra/grid.py and petra/cli.py, 20,112. "
+                               "The second round of that review found petra/deck.py reading a text where a table "
+                               "writes a list, which the kernel refuses; a line feed in the name of a folder forging "
+                               "lines of a report, and a card's name in plain text reading as a status; and the limit "
+                               "of depth stopping the search for a refuting point, which the kernel takes at any depth. "
+                               "The list checks, the guard of each command and the first line of a report are 7 lines "
+                               "more in petra/deck.py, petra/grid.py, petra/rule.py and petra/export.py, with the "
+                               "escapes moved to petra/files.py, which is outside the base: 20,119. "
                                "Raise it in the commit that needs more and say why here.")
 
 T2_ADOPTED = date(2026, 11, 8)

@@ -111,7 +111,7 @@ import stat
 import sys
 import traceback
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Mapping, NoReturn
+from typing import TYPE_CHECKING, Mapping, NoReturn
 
 if TYPE_CHECKING:
     from .units import Quantity
@@ -541,35 +541,15 @@ def _join_negative(argv: list[str]) -> list[str]:
     return out
 
 
-class _Shown:
-    """A stream that writes every text as petra.grid.shown gives it, so that nothing a card, a
-    design or a deck holds reaches a terminal as a character it acts on: the lines of a report
-    are its own, and an escape, a backspace or a carriage return in a name or a reason is
-    printed as `\\u001b`, `\\u0008` or `\\u000d`. Everything else is the stream's own."""
-
-    def __init__(self, stream: Any) -> None:
-        self._stream = stream
-
-    def write(self, text: str) -> int:
-        from .grid import shown
-
-        self._stream.write(shown(text))
-        return len(text)
-
-    def __getattr__(self, name: str) -> Any:
-        return getattr(self._stream, name)
-
-
 def main(argv: list[str] | None = None) -> int:
+    """Every command but the server prints through petra.files.guarded: nothing that a card, a design, a deck or the name of a
+    file holds reaches a terminal as a character it acts on, and an argument that holds one is refused."""
+    from .files import guarded
+
     argv = _join_negative(sys.argv[1:] if argv is None else list(argv))
     if argv[:1] == ["mcp"]:        # the server writes bytes of its own to the stream, and its texts are JSON
         return _main(argv)
-    out, err = sys.stdout, sys.stderr
-    sys.stdout, sys.stderr = _Shown(out), _Shown(err)
-    try:
-        return _main(argv)
-    finally:
-        sys.stdout, sys.stderr = out, err
+    return guarded(_main, argv)
 
 
 def _main(argv: list[str]) -> int:

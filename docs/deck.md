@@ -288,7 +288,7 @@ The count follows the work. A rule reads a row again each time it applies it, wi
 
 The first deck, 58 KB, takes 10,530 steps: 6,387 for its file and 4,143 for the 37 times its rules apply a row. That is about a hundredth of the limit, so ten decks of that size are a tenth of it. With the 18 rows and 4 rules it shipped until 2026-11-11 it took 5,500. A file under 1 MB whose rules apply no row is always within it: a text of `n` characters takes `n` and three bytes with its quotes and its comma, and any other value two or more, so a megabyte holds under 700,000 steps. So the limit refuses one kind of deck: a long row applied many times. `petra/grid.py` makes the same count and refuses the same decks.
 
-A pick of a tape compares at most 1,024 orders ([format.md](format.md), "Tapes"). A rule that could write a larger one for some part is refused when the deck is read: an equation whose conditions hold more, a `case` or a table read by a quantity with more places than that holds, counting two for a listed value, one or two for a band and empty cells too, or a `where` of more than 1,024 items. So a table read at more than 512 listed values does not load.
+A pick of a tape compares at most 1,024 orders ([format.md](format.md), "Tapes"). A rule that could write a larger one for some part is refused when the deck is read: an equation whose conditions hold more, a `case` or a table read by a quantity with more places than that holds, counting two for a listed value, one or two for a band and empty cells too, or a `where` of more than 1,024 items. So a table read at more than 512 listed values does not load. An equation whose conditions hold more is refused whether or not a rule applies it, since the kernel writes every equation when it reads its row; a table that no rule reads is held to no such limit.
 
 ### A type
 
@@ -731,7 +731,7 @@ cells      12 proved, 0 refuted, 4 not applicable, 0 waived, 5 open
   ...
 ```
 
-The `rules` line is the hash of the deck's file, which the kernel prints as `hashes.rules`. A verdict is "checked against this deck" only when that hash is the one the reader trusts ([format.md](format.md), "Reading a verdict"). The number on a proved or refuted line is the most the left side of the rule reaches over the least the right side does. `examples/deck` has the same lap passing, with a card that waives the four open mechanisms, and failing under a larger pull.
+The `rules` line is the hash of the deck's file, which the kernel prints as `hashes.rules`. A verdict is "checked against this deck" only when that hash is the one the reader trusts ([format.md](format.md), "Reading a verdict"). The number on a proved or refuted line is the most the left side of the rule reaches over the least the right side does. `examples/deck` has the same lap passing, with a card that waives the five open mechanisms, and failing under a larger pull.
 
 ## The acceptance check for a rule
 

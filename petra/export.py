@@ -307,6 +307,13 @@ def card_only(card_path: str, out: Path) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """The command, printing through petra.files.guarded as every command of Petra does."""
+    from .files import guarded
+
+    return guarded(_main, sys.argv[1:] if argv is None else list(argv), "petra.export")
+
+
+def _main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(prog="python -m petra.export", description=__doc__.split("\n")[0])
     parser.add_argument("file", nargs="?", help="the design, a .petra file")
     parser.add_argument("--card", metavar="FILE", help="the card the design answers; default the .card file beside the design")

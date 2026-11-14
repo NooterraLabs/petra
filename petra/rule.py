@@ -1111,6 +1111,13 @@ def render(lines: list[Line], whole: Check, stray: list[str]) -> list[str]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """The command, printing through petra.files.guarded as every command of Petra does."""
+    from .files import guarded
+
+    return guarded(_main, sys.argv[1:] if argv is None else list(argv), "petra.rule")
+
+
+def _main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(prog="python -m petra.rule", description="Run the acceptance check on the rules written for a task.")
     parser.add_argument("task", help="a JSON file: the types, the rows and the mechanisms to answer")
     parser.add_argument("rules", help="a transcription, or a deck, whose rules and `unless` are read as one")
