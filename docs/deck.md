@@ -148,7 +148,7 @@ A table of a standard is a row with `table` in place of an expression. This one 
     "down": {"by": "D", "bands": [["0 mm", "6 mm"], ["6 mm", "18 mm"], ["18 mm", "30 mm"]], "closed": "upper"},
     "across": {"by": "grade"},
     "unit": "um",
-    "cells": [["8", "12", "0.1 mm"], ["11", "18", "0.12 mm"], ["13", "21", null]],
+    "cells": [["5", "9", "0.1 mm"], ["7", "14", "0.12 mm"], ["10", "16", null]],
     "rises": ["D", "grade"]
   }
 }
