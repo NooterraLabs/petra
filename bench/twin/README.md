@@ -178,6 +178,23 @@ Measured with `--count 6000 --decks 3000 --seed 7` against the kernel and the gr
 | Generated designs, 5,773 compared | The same verdict and the same cells on every one |
 | Damaged decks, 3,000 compared | The same on every one: 2,390 refused by all three, 167 PASS, 152 FAIL, 278 UNKNOWN, and 13 designs refused |
 
+## The sixth update, of 2026-11-13
+
+The tenth review's fixes changed the pages again: with `--rules` the floors are `core.json`'s and a deck.json that gives others is a finding (type rule 8), a completion prints each load's value with its unit, and each sum so far of a node that adds many is held to 65,536 bits. A seventh agent, under the same rule as before, brought the reading up to them. Its folder held the two pages, what had changed in them, the units list, the two decks, this reading, its notes and 89 bundles with the kernel's answers: the 83 generated ones, and the tenth review's three forged deck.json files beside their real ones. Before the update 7 of the 89 differed, the three forged floors in verdict and four in the unit of a completed load. After it all 89 agree, completions included, and its own 97 checks of floors, units, bits and the first deck pass.
+
+It reports two slips, neither outside its folder: a listing piped through `head`, and a shell loop that labelled four runs of Node. Its session also showed it the repository's rules for agents and five commit subjects, which it did not ask for.
+
+`AMBIGUITIES.md` gained section N, nine entries. Given to the eleventh hostile review as leads, N7 was a fault: type rule 8 covered `domains.input` only, and a deck.json with a lower `domains.size` turned a refused design to PASS.
+
+Measured with `--count 6000 --decks 3000 --seed 7` against the kernel and the grid at e77d558:
+
+| Compared | Result |
+|---|---|
+| Generated designs, 5,773 compared | The same verdict and the same cells on every one |
+| Damaged decks, 3,000 compared | The same on every one: 2,394 refused by all three, 167 PASS, 152 FAIL, 274 UNKNOWN, and 13 designs refused |
+
+This run compares verdicts and cells, and its generator forges no deck.json, so it does not see either change of this update: the 89 bundles do.
+
 ## What it is not
 
 It does not read a design of the models' kinds or hash a file. It applies the limits that decide a verdict and not the budget of work, the memory of enclosures or the limits on what is printed. It is a reading of the rules path only.
