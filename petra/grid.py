@@ -2182,6 +2182,7 @@ class Checked:
     kernel: Mapping[str, Any]
     error: None = None
     repair: None = None
+    reason: None = None      # a design of a deck needs no reason that its kind has none (repair.Checked.reason)
 
     @property
     def status(self) -> str:

@@ -22,6 +22,7 @@ from petra.premises import Tag
 from petra.units import DIMENSIONLESS, FORCE, TEMPERATURE, Quantity
 from petra.verdict import Pass
 from tests.test_pipeline import CAPACITY, GIVEN, REGISTRY, WAIVE_WEAR, GadgetDomain, Solver, card, gadget, point
+from tests.old_kinds import no_deck
 
 ROOT = Path(__file__).resolve().parent.parent
 KN = Fraction(1000)
@@ -214,7 +215,7 @@ class CommandLine(unittest.TestCase):
 
     def test_the_ambient_envelope_of_the_lighting_radial(self):
         code, out = self.run_cli("--input", "ambient", "--from", "-20 degC", "--to", "100degC", "--json")
-        self.assertEqual(code, 0)
+        self.assertTrue(code == 2 and no_deck(out), "an envelope is the Python checker's working, and a circuit has no deck of rules")
         found = json.loads(out)
         lo, hi = (Fraction(x) for x in found["safe"])
         self.assertEqual(lo, -20)
@@ -230,7 +231,7 @@ class CommandLine(unittest.TestCase):
 
     def test_a_negative_quantity_may_carry_its_unit_attached(self):
         code, out = self.run_cli("--input", "ambient", "--from", "-20degC", "--to", "100degC", "--json")
-        self.assertEqual(code, 0, out)
+        self.assertEqual(code, 2, out)
         self.assertEqual(json.loads(out)["probe"], ["-20", "100"])
 
     def test_a_steel_envelope_reads_in_kips_from_the_low_end(self):
@@ -246,7 +247,7 @@ class CommandLine(unittest.TestCase):
                 code = cli.main(["envelope", str(fixture), "--card", str(path), "--input", "reaction.tab.shear", "--from", "0 kip",
                                  "--to", "120 kip", "--max-probes", "4"])
         text = out.getvalue()
-        self.assertEqual(code, 0, text)
+        self.assertTrue(code == 2 and no_deck(text), text)
         self.assertIn("at reaction.tab.shear = 60 kip, the middle, the design is FAIL", text)
         self.assertIn("stated [0, 120] kip; probed [0, 120] kip from 0 kip", text)
         self.assertNotRegex(text, r"\d N\b")

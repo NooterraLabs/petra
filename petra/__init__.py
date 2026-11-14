@@ -1,12 +1,15 @@
 """Petra: verdicts about physical designs as theorems relative to explicit premises.
 
     import petra
-    result = petra.check(card, design)  # plain data; a FAIL's "repair" names the inputs to change
-    report = petra.check_file("examples/truss_pass.petra")  # against examples/truss_pass.card
-    print(report.render())
-    report.verdict            # petra.Pass | petra.Fail | petra.Unknown | petra.Marginal
-    report.verdict.footprint  # every non-proved premise the verdict used
-    report.findings           # each obligation's numbers in the design's units (readout.py)
+    result = petra.check(card, design)  # plain data: "status" is the kernel's verdict
+    checked = petra.check_file("examples/deck/lap_pass.petra")  # against examples/deck/lap_pass.card
+    print(checked.text())
+    checked.status            # the kernel's verdict: PASS, PASS_WAIVED, FAIL or UNKNOWN
+    checked.reason            # for a design of a kind with no deck of rules: why it reads UNKNOWN
+
+The verdict of a design is the kernel's (petra/verify.py). The models, the Python checker
+(petra.kernel), the solvers and the classes below are the old path, which decides nothing:
+petra.check_design gives its report, and no status of that report is a verdict.
 
 petra/docs/api.md documents this API and the JSON `petra check --json` prints, and
 `petra docs api` prints it from any install. `petra docs` lists every document, the
@@ -74,23 +77,27 @@ def check(card: str, design: str, *, path: str = "<design>", repair: bool = True
 
 
 def check_file(path: str | Path, *, card: str | Path | None = None, certs: str | Path | None = None,
-               library: Library | None = None, solve: bool = True) -> Report:
-    """Convenience shell over check_design: the design at `path` against `card`, the .card
-    file beside it when none is named, with the default registry, evidence sources in the
-    order certs -> library -> solvers, and accepted evidence recorded into `certs` when given."""
-    from . import grid, wellformed
+               library: Library | None = None, solve: bool = True) -> Any:
+    """`check` of the design at `path` against `card`, the .card file beside it when none is
+    named, with evidence sources in the order certs -> library -> solvers and accepted
+    evidence recorded into `certs` when given. Returns the checked pair (repair.Checked, or
+    grid.Checked for a design of a deck of rules): `status` is the kernel's verdict,
+    `reason` says why a design whose kinds have no deck of rules reads UNKNOWN, `to_json()`
+    is what `petra check --json` prints and `text()` what `petra check` prints. `report` is
+    the working behind it, which decides nothing: the grid's report for a design of a deck,
+    and the Python checker's for one of the models' kinds.
+
+    Raises what the pair raises when it does not read or lower (lang.LolaSyntaxError,
+    lang.LoweringError, models.base.ComponentError, OSError), and petra.verify.NoVerdict
+    when there is no kernel to run or its answer cannot be taken."""
     from .certs import CertStore
-    from .lang import load_design
-    from .pipeline import check_design
+    from .files import read_pair
     from .registry import build_registry
+    from .repair import check_text
     from .solvers import SolverSource
 
-    registry = build_registry()
-    design = load_design(path, registry, card)
-    rules = grid.owner(design)
-    if rules is not None:
-        return grid.check(design, rules)[0]
-    wellformed.require(design, registry)
+    asked, text = read_pair(path, card)
     store = CertStore(certs) if certs is not None else None
     sources = tuple(s for s in (store, library, SolverSource() if solve else None) if s is not None)
-    return check_design(design, registry, sources, sink=store, path=str(path))
+    return check_text(asked, text, str(path), build_registry(), sources, sink=store, moves=False, card_path=None if card is None else str(card),
+                      raises=True)

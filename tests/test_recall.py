@@ -14,7 +14,7 @@ from petra.pipeline import check_design
 from petra.recall import RecallError, covered, recall, to_json
 from petra.registry import build_registry
 from petra.solvers import SolverSource
-from tests.python_says import python_says
+from tests.old_kinds import no_deck
 
 ROOT = Path(__file__).resolve().parents[1]
 EXAMPLES = ROOT / "examples"
@@ -52,7 +52,7 @@ class Footprints(unittest.TestCase):
 
     def test_the_text_footprint_names_a_corrected_entry_s_version(self):
         code, out, _ = run("check", str(CIRCUIT))
-        self.assertEqual((code, python_says(out)), (EXIT_CODES["UNKNOWN"], "PASS"))
+        self.assertTrue(code == EXIT_CODES["UNKNOWN"] and no_deck(out), out)
         (line,) = [line for line in out.splitlines() if f" {SERIES} " in line]
         self.assertTrue(line.endswith("; version 2)"), line)
 
@@ -131,7 +131,7 @@ class SavedReports(unittest.TestCase):
         bad.write_text(json.dumps({"statement": {}}), encoding="utf-8")
         code, out, _ = run("registry", "recall", "cable.cu_pvc", str(bad), str(CIRCUIT), str(Path(self.dir.name) / "missing.petra"))
         self.assertEqual(code, EXIT_CODES["INPUT_ERROR"])
-        self.assertIn(f"PASS      {CIRCUIT.as_posix()}  workshop-lighting-radial", out)
+        self.assertIn(f"UNKNOWN   {CIRCUIT.as_posix()}  workshop-lighting-radial", out)
         self.assertIn("not a `petra check --json` report", out)
         self.assertTrue(out.rstrip().endswith("1 of 1 designs rest on cable.cu_pvc"), out)
 

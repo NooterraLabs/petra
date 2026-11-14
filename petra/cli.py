@@ -13,11 +13,13 @@
         name the moves that lower the governing check, best first (petra/repair.py). The
         `card` and `design` lines give the SHA-256 of each text. The status on the first
         line is the verdict of petra-verify (petra/verify.py), and the `kernel` line says
-        how many of the proofs it checked. For a design of the models' kinds the kernel
-        has no deck of rules and never says PASS: the `python` line gives the Python
-        checker's own status, which decides nothing. --json prints
-        pipeline.Report.to_json() with "status" the kernel's verdict, "python", "card",
-        "hashes", "kernel" and "repair", the moves or null (`petra docs api`):
+        how many of the proofs it checked. A design of the models' kinds has no deck of
+        rules, and the kernel never passes it: it reads UNKNOWN, with a `reason` line that
+        says its kind of part has no deck, or FAIL where the kernel checked a refutation.
+        The lines after `path` are the Python checker's working, which decides nothing.
+        --json prints pipeline.Report.to_json() with "status" the kernel's verdict,
+        "reason", "card", "hashes", "kernel" and "repair", the moves or null
+        (`petra docs api`):
             {"file": FILE, "design": NAME, "status": OVERALL, "repair": REPAIR | null, "verdicts": [
                 {"claim": NAME, "status": "PASS" | "FAIL" | "UNKNOWN" | "MARGINAL",
                  "footprint": [{"tag", "label", "owner", "source", "version"?}, ...],
@@ -47,9 +49,11 @@
         middle of the input's stated range, or the low end of the probe range when the
         design does not pass at the middle. The exit code is that of the worse of
         the anchor's status and the status of the obligations that do not depend on the
-        input ("elsewhere"): 0 when both pass, so an envelope over a design that fails
-        elsewhere does not exit 0. 3 for an input error such as an unknown input, a range
-        in the wrong unit or an anchor whose design does not lower.
+        input ("elsewhere"). An envelope is the Python checker's working over a design
+        of the models' kinds, so it is never a pass: the first line is UNKNOWN, with the
+        reason that the kind has no deck of rules and exit code 2, or FAIL with 1 where
+        the anchor or the rest is refuted. 3 for an input error such as an unknown input,
+        a range in the wrong unit or an anchor whose design does not lower.
     python -m petra verify CERT.json [...]
         Kernel-check certificate files on their own (statement taken from the file), and
         library files, which are certificate envelopes with a "models" list. This is what
@@ -73,7 +77,9 @@
         the premises it rests on with the version each was checked at (petra/recall.py).
         A FILE is a .petra design (checked now), a saved `petra check --json` report (a
         premise checked at an older version is marked) or a directory of .petra files;
-        default examples/. Exit 0 when every file was read, 3 for an unknown ID or a file
+        default examples/. A status is the Python checker's, or the one a saved report
+        holds, and none is a pass: one that is not FAIL or UNKNOWN prints as UNKNOWN.
+        Exit 0 when every file was read, 3 for an unknown ID or a file
         that could not be read (the rest are still printed).
     python -m petra registry list [PREFIX]
         Print every registry id a design can name, one line each: what it is, and the
@@ -107,6 +113,7 @@ subcommand stops writing and exits 141 without a traceback.
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import errno
 import json
 import os
@@ -328,11 +335,27 @@ def cmd_envelope(args: argparse.Namespace) -> int:
                          max_probes=args.max_probes, unit=unit)
     except (*_input_errors(), EnvelopeError, UnitError) as exc:
         return _input_error(exc)
-    print(json.dumps(to_json(found), sort_keys=True) if args.json else render(found))
     if found.start.status not in SEVERITY:
+        print(json.dumps(to_json(found), sort_keys=True) if args.json else render(found))
         return EXIT_CODES["INPUT_ERROR"]
+    # An envelope is the Python checker's working over a design of the models' kinds, which no deck of rules has. Where every
+    # check it made passes, that is no pass of the design: the status is UNKNOWN with that reason, and FAIL where one is refuted.
     statuses = [found.start.status, *([found.elsewhere] if found.elsewhere in SEVERITY else [])]
-    return EXIT_CODES[max(statuses, key=SEVERITY.__getitem__)]
+    status = "FAIL" if "FAIL" in statuses else "UNKNOWN"
+    reason = _no_deck(design) if status == "UNKNOWN" else None
+    if args.json:
+        print(json.dumps({**to_json(found), "status": status, "reason": reason}, sort_keys=True))
+    else:
+        print("\n".join([f"{design.name}: {status}", *([f"reason     {reason}"] if reason else []),
+                         "path       legacy: every line below is the working of Python's models, and it decides nothing", render(found)]))
+    return EXIT_CODES[status]
+
+
+def _no_deck(design) -> str:
+    """The reason a design of the models' kinds reads UNKNOWN (verify.no_deck)."""
+    from .verify import no_deck
+
+    return no_deck(c.kind for c in design.components.values())
 
 
 _QUANTITY = re.compile(r"\s*([+-]?[0-9]+(?:\.[0-9]+|/[0-9]+)?)\s*(\S*)\s*")
@@ -451,6 +474,12 @@ def cmd_registry_recall(args: argparse.Namespace) -> int:
         found = recall(build_registry(), args.id, args.files)
     except RecallError as exc:
         return _input_error(exc)
+    # A recall lists the designs that rest on an entry, each with the Python checker's status of it or the one a saved report
+    # holds. Neither is a pass of the design: a status that is not FAIL or UNKNOWN is printed as UNKNOWN.
+    held = lambda status: status if status in ("FAIL", "UNKNOWN") else "UNKNOWN"      # noqa: E731
+    found = dataclasses.replace(found, designs=tuple(
+        dataclasses.replace(d, status=held(d.status), verdicts=tuple(dataclasses.replace(v, status=held(v.status)) for v in d.verdicts))
+        for d in found.designs))
     print(json.dumps(to_json(found), sort_keys=True) if args.json else render(found))
     return EXIT_CODES["INPUT_ERROR"] if found.errors else 0
 

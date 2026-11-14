@@ -33,7 +33,7 @@ from petra.units import DIMENSIONLESS, TEMPERATURE, Quantity
 from petra.verdict import Discharged, Fail, Marginal, Open, Pass, Scope, Unknown, WithinMargin, assemble, verdict_json
 from tests.test_pipeline import CAPACITY, GADGET, GIVEN, REGISTRY, STRENGTH, WAIVE_WEAR, GadgetDomain, Solver, build_strength, card, gadget, point, push
 from tests.test_seal import FOOTPRINT
-from tests.python_says import python_says
+from tests.old_kinds import no_deck
 
 ROOT = Path(__file__).resolve().parent.parent
 FITS = "claim fits: g.utilisation <= 1/2 margin 1/10 under push\n"
@@ -330,18 +330,17 @@ class CommandLine(unittest.TestCase):
                 code = cli.main(["check", str(path), *flags])
         return code, out.getvalue()
 
-    def test_marginal_is_the_python_checkers_status_and_not_a_verdict(self):
+    def test_marginal_is_the_python_checkers_word_for_a_claim_and_not_a_verdict(self):
         """MARGINAL is the Python checker's word. The kernel has four verdicts and no deck of
-        rules for a circuit, so the status is UNKNOWN and the exit code 2."""
+        rules for a circuit, so the status is UNKNOWN with that reason, and the exit code 2."""
         code, out = self.run_check("70 degC margin 25 degC", "--json")
         report = json.loads(out)
-        self.assertEqual((code, report["status"]), (2, "UNKNOWN"))
-        self.assertEqual(report["python"], "MARGINAL")
+        self.assertTrue(code == 2 and no_deck(out), out)
         self.assertEqual([v["status"] for v in report["verdicts"]], ["MARGINAL", "PASS", "PASS"])
 
     def test_a_margin_the_design_keeps_passes(self):
         code, out = self.run_check("70 degC margin 2 degC")
-        self.assertEqual((code, python_says(out)), (2, "PASS"), out)
+        self.assertTrue(code == 2 and no_deck(out), out)
 
 
 if __name__ == "__main__":

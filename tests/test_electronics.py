@@ -98,7 +98,9 @@ class Examples(unittest.TestCase):
                 done = subprocess.run([sys.executable, "-m", "petra", "check", f"examples/electronics/{name}.petra", "--json"],
                                       cwd=ROOT, capture_output=True, text=True, timeout=600)
                 self.assertEqual(done.returncode, code, done.stderr)
-                self.assertEqual((json.loads(done.stdout)["status"], json.loads(done.stdout)["python"]), (status, self.EXPECTED[name][0]))
+                report = json.loads(done.stdout)
+                self.assertEqual(report["status"], status)
+                self.assertEqual(report["reason"] is not None, status == "UNKNOWN", "an UNKNOWN says that a board has no deck of rules")
 
     def test_each_example_rechecks_from_its_certificates(self):
         for name, (status, _) in self.EXPECTED.items():

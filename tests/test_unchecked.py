@@ -21,6 +21,7 @@ from petra.lang import load_design
 from petra.pipeline import Report, check_design
 from petra.registry import build_registry
 from petra.solvers import SolverSource
+from tests.old_kinds import python_report
 
 ROOT = Path(__file__).resolve().parents[1]
 STEEL = ROOT / "examples" / "steel"
@@ -41,14 +42,14 @@ _REPORTS: dict[Path, Report] = {}
 
 
 def check(path: Path) -> Report:
-    """The report of the design at `path`. petra.check_file refuses a family, whose card
+    """The report of the design at `path`. python_report refuses a family, whose card
     leaves a load to a param, so a family goes to check_design."""
     if path not in _REPORTS:
         if path.parent == FAMILIES:
             registry = build_registry()
             _REPORTS[path] = check_design(load_design(path, registry), registry, (SolverSource(),), path=str(path))
         else:
-            _REPORTS[path] = petra.check_file(path)
+            _REPORTS[path] = python_report(path)
     return _REPORTS[path]
 
 
@@ -69,7 +70,7 @@ def written(card: str, text: str, name: str = "design.petra") -> Report:
         target = Path(tmp) / name
         target.write_text(text, encoding="utf-8", newline="\n")
         target.with_suffix(".card").write_text(card, encoding="utf-8", newline="\n")
-        return petra.check_file(target)
+        return python_report(target)
 
 
 # A card's text and the text of the design that answers it.

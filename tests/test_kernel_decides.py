@@ -1,8 +1,8 @@
 """Nothing but petra-verify decides a verdict (plan step 1.1).
 
 Every way into a check is run here: the command line as text and as JSON, the server's
-check tool, `petra.check`, which the skill names beside the two, and the two functions that
-call petra/verify.py, `repair.check_text` and `grid.checked`. Each is run with no kernel,
+check tool, `petra.check`, which the skill names beside the two, `petra.check_file`, and
+the two functions that call petra/verify.py, `repair.check_text` and `grid.checked`. Each is run with no kernel,
 with a kernel that refuses in each way one can, and with the real one.
 
 The faults these tests were written against, at 1e34098:
@@ -146,7 +146,20 @@ def by_grid(path: Path) -> str:
         return "INPUT_ERROR"
 
 
-WAYS = {"petra check": by_text, "petra check --json": by_json, "the server": by_server, "petra.check": by_api, "check_text": by_check_text}
+def by_check_file(path: Path) -> str:
+    """`petra.check_file(path)`, a check of a file."""
+    from petra.repair import INPUT_ERRORS
+
+    try:
+        return petra.check_file(path).status
+    except verify.NoVerdict:
+        return NO_VERDICT
+    except INPUT_ERRORS:
+        return "INPUT_ERROR"
+
+
+WAYS = {"petra check": by_text, "petra check --json": by_json, "the server": by_server, "petra.check": by_api, "petra.check_file": by_check_file,
+        "check_text": by_check_text}
 
 
 SLOW = (TRUSS, TRUSS_FAIL)
@@ -357,13 +370,19 @@ class Decides(unittest.TestCase):
                 done = subprocess.run([sys.executable, "-m", "petra", "check", str(path)], cwd=ROOT, capture_output=True, stdin=subprocess.DEVNULL)
                 self.assertEqual(done.returncode, {"PASS": 0, "FAIL": 1, "UNKNOWN": 2}[its])
 
-    def test_the_report_says_what_the_python_checker_said_and_that_it_decides_nothing(self):
+    def test_the_report_gives_the_reason_and_no_status_of_the_python_checkers(self):
+        """The truss reads UNKNOWN because no deck of rules has a truss. The report says so
+        on its second line, calls what follows the working of Python's models, and gives
+        neither their verdict nor their status of each claim (plan step 1.1a)."""
         code, out, _ = cli("check", str(TRUSS))
-        self.assertEqual(code, EXIT_CODES["UNKNOWN"])
-        self.assertTrue(out.startswith("warren-footbridge-panel: UNKNOWN\n"), out[:200])
-        self.assertIn("decides nothing", out)
+        lines = out.splitlines()
+        self.assertEqual((code, lines[0]), (EXIT_CODES["UNKNOWN"], "warren-footbridge-panel: UNKNOWN"))
+        self.assertEqual(lines[1], f"reason     {verify.no_deck(['truss'])}")
+        self.assertIn("path       legacy: every line below is the working of Python's models, which chose the checks and wrote the formulas, and it decides nothing", lines)
+        self.assertEqual([line for line in lines if "PASS" in line or line.startswith("entries")], [])
         report = json.loads(cli("check", str(TRUSS), "--json")[1])
-        self.assertEqual((report["status"], report["kernel"]["verdict"], report["python"]), ("UNKNOWN", "UNKNOWN", "PASS"))
+        self.assertEqual((report["status"], report["kernel"]["verdict"], report["reason"]), ("UNKNOWN", "UNKNOWN", verify.no_deck(["truss"])))
+        self.assertNotIn("python", report)
 
     def test_a_design_of_a_deck_gets_the_kernels_verdict(self):
         """PASS reads PASS_WAIVED when the kernel lists a waiver that a cell rests on, until
@@ -421,19 +440,43 @@ class ForgedProofs(unittest.TestCase):
         self.assertGreater(said["counts"]["proved"], 0)
 
 
+@KERNEL
 class OutsideCheck(unittest.TestCase):
-    """Ways to a status that do not go through `petra check`, and that the Python checker
-    alone still decides. Each goes with the old path (docs/old_path_removal.md), and each
-    test here fails until it does."""
+    """The ways to a status that do not go through `petra check`. Until plan step 1.1a each
+    gave the Python checker's own PASS: `petra.check_file` returned its report, `petra
+    envelope` exited 0 where every check it made passed, and `petra registry recall` printed
+    PASS beside each design. tests/test_no_wrong_pass.py walks the corpus through the first."""
 
-    @unittest.expectedFailure
-    def test_check_file_gives_no_pass_of_its_own(self):
-        self.assertNotIsInstance(petra.check_file(TRUSS).verdict, petra.Pass)
+    def test_check_file_is_a_check_and_gives_the_kernels_verdict(self):
+        for path, status in ((TRUSS, "UNKNOWN"), (CIRCUIT, "UNKNOWN"), (LAP, "PASS_WAIVED"), (LAP_FAIL, "FAIL")):
+            with self.subTest(path=path.name):
+                checked = petra.check_file(path)
+                self.assertEqual((checked.status, checked.to_json()["status"]), (status, status))
+                self.assertEqual(checked.reason is not None, path in MODELS, "the reason is that the kind has no deck of rules")
+        with no_kernel(), self.assertRaises(verify.NoKernel):
+            petra.check_file(LAP)
 
-    @unittest.expectedFailure
-    def test_envelope_exits_with_no_pass_of_its_own(self):
-        code, _, _ = cli("envelope", str(CIRCUIT), "--input", "ambient", "--from", "20 degC", "--to", "30 degC", "--max-probes", "4")
-        self.assertNotEqual(code, EXIT_CODES["PASS"])
+    def test_an_envelope_is_no_pass(self):
+        """Every check the Python checker makes over 20 to 30 degC passes. That is its
+        working: the circuit has no deck of rules, so the status is UNKNOWN and the exit code 2."""
+        argv = ("envelope", str(CIRCUIT), "--input", "ambient", "--from", "20 degC", "--to", "30 degC", "--max-probes", "4")
+        code, out, _ = cli(*argv)
+        lines = out.splitlines()
+        self.assertEqual((code, lines[0], lines[1]), (EXIT_CODES["UNKNOWN"], "workshop-lighting-radial: UNKNOWN", f"reason     {verify.no_deck(['circuit'])}"))
+        self.assertIn("decides nothing", lines[2])
+        code, out, _ = cli(*argv, "--json")
+        found = json.loads(out)
+        self.assertEqual((code, found["status"], found["reason"]), (EXIT_CODES["UNKNOWN"], "UNKNOWN", verify.no_deck(["circuit"])))
+
+    def test_a_recall_prints_no_pass(self):
+        code, out, _ = cli("registry", "recall", "cable.cu_pvc", str(CIRCUIT))
+        self.assertEqual(code, 0)
+        rows = [line.split() for line in out.splitlines() if "circuit_pass.petra" in line or line.startswith("  hot") or line.startswith("  drop")]
+        self.assertEqual([row[0] if "circuit_pass.petra" in " ".join(row) else row[1] for row in rows], ["UNKNOWN"] * len(rows), out)
+        self.assertGreaterEqual(len(rows), 3)
+        self.assertNotIn("PASS", out)
+        found = json.loads(cli("registry", "recall", "cable.cu_pvc", str(CIRCUIT), "--json")[1])
+        self.assertEqual({d["status"] for d in found["designs"]} | {v["status"] for d in found["designs"] for v in d["verdicts"]}, {"UNKNOWN"})
 
 
 if __name__ == "__main__":

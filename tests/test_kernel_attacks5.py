@@ -406,7 +406,8 @@ class TheEnvironmentIsAnswered(unittest.TestCase):
         truss = REPO / "examples" / "truss_pass.petra"
         self.assertIn("environment indoor_dry", truss.with_suffix(".card").read_text(encoding="utf-8"))
         said = petra.check(truss.with_suffix(".card").read_text(encoding="utf-8"), truss.read_text(encoding="utf-8"), path=str(truss), repair=False)
-        self.assertEqual(said["python"], "PASS", "a design of the models' kinds reads its environment as before")
+        self.assertEqual((said["status"], said["reason"][:41]), ("UNKNOWN", "no deck of rules has a part of kind truss"),
+                         "a design of the models' kinds reads its environment as before, and is refused for none")
 
 
 if __name__ == "__main__":

@@ -51,7 +51,7 @@ class Shell(unittest.TestCase):
         """The Python checker passes the circuit and the kernel accepts each of its eight
         proofs. The status is still the kernel's, which passes nothing without a deck of rules."""
         result = checked(answer)
-        self.assertEqual((result["status"], result["python"]), ("UNKNOWN", "PASS"))
+        self.assertEqual((result["status"], result["reason"]), ("UNKNOWN", verify.no_deck(["circuit"])))
         self.assertEqual(result["kernel"], {"verdict": "UNKNOWN", "checked": 8, "proofs": 8, "cells_from": "proofs",
                                             "hashes": {"card": "sha256:c", "design": "sha256:d", "deck": "sha256:k"}})
 
@@ -79,7 +79,7 @@ class Shell(unittest.TestCase):
 
     def test_a_proof_the_kernel_has_no_rule_for_is_counted_and_is_no_disagreement(self):
         result = checked(lambda files: answer(files, "UNKNOWN"), TRUSS)
-        self.assertEqual((result["status"], result["python"]), ("UNKNOWN", "PASS"), "the kernel's verdict stands, and not the Python checker's")
+        self.assertEqual((result["status"], result["reason"]), ("UNKNOWN", verify.no_deck(["truss"])), "the kernel's verdict stands, and not the Python checker's")
         kernel = result["kernel"]
         self.assertEqual(kernel["verdict"], "UNKNOWN")
         self.assertLess(kernel["checked"], kernel["proofs"])
@@ -120,11 +120,13 @@ class Lines(unittest.TestCase):
             windows = check_text(card.replace("\n", "\r\n"), design.replace("\n", "\r\n"), "x.petra", build_registry(), (SolverSource(),), moves=False)
         lines = unix.text().splitlines()
         self.assertEqual(lines[0], "workshop-lighting-radial: UNKNOWN")
-        self.assertEqual(lines[1], f"kernel     {verify.Kernel('UNKNOWN', 8, 8, {}).line()}")
-        self.assertEqual(lines[2], "python     the Python checker says PASS, which decides nothing: every line below is its own")
-        self.assertTrue(lines[3].startswith("entries    ") and lines[4].startswith("scope  "), "the Python checker's own first lines")
-        self.assertEqual(lines[5], f"card       sha256:{hashlib.sha256(card.encode('utf-8')).hexdigest()}  x.card")
-        self.assertEqual(lines[6], f"design     sha256:{hashlib.sha256(design.encode('utf-8')).hexdigest()}  x.petra")
+        self.assertEqual(lines[1], f"reason     {verify.no_deck(['circuit'])}")
+        self.assertEqual(lines[2], f"kernel     {verify.Kernel('UNKNOWN', 8, 8, {}).line()}")
+        self.assertEqual(lines[3], f"card       sha256:{hashlib.sha256(card.encode('utf-8')).hexdigest()}  x.card")
+        self.assertEqual(lines[4], f"design     sha256:{hashlib.sha256(design.encode('utf-8')).hexdigest()}  x.petra")
+        self.assertTrue(lines[5].startswith("path       legacy: every line below is the working of Python's models"), lines[5])
+        self.assertTrue(lines[6].startswith("scope  "), "the Python checker's working starts at its scope, without its verdict or its entries")
+        self.assertEqual([line for line in lines if "PASS" in line], [])
         self.assertEqual(unix.to_json()["card"], "x.card")
         self.assertEqual(unix.to_json()["hashes"], windows.to_json()["hashes"], "a checkout's line ends do not change the hash")
 
@@ -203,7 +205,7 @@ class Found(unittest.TestCase):
 class Built(unittest.TestCase):
     def test_the_kernel_checks_every_proof_of_the_circuit(self):
         result = petra.check(*read_pair(CIRCUIT), repair=False)
-        self.assertEqual((result["status"], result["kernel"]["verdict"], result["python"]), ("UNKNOWN", "UNKNOWN", "PASS"),
+        self.assertEqual((result["status"], result["kernel"]["verdict"], result["reason"]), ("UNKNOWN", "UNKNOWN", verify.no_deck(["circuit"])),
                          "it accepts every proof, and passes nothing without a deck of rules")
         self.assertEqual((result["kernel"]["checked"], result["kernel"]["proofs"]), (8, 8))
         self.assertEqual(set(result["kernel"]["hashes"]), {"card", "design", "deck"})
@@ -215,7 +217,7 @@ class Built(unittest.TestCase):
 
     def test_the_kernel_has_no_rule_for_the_truss_yet(self):
         result = petra.check(*read_pair(TRUSS), repair=False)
-        self.assertEqual((result["status"], result["kernel"]["verdict"], result["python"]), ("UNKNOWN", "UNKNOWN", "PASS"))
+        self.assertEqual((result["status"], result["kernel"]["verdict"], result["reason"]), ("UNKNOWN", "UNKNOWN", verify.no_deck(["truss"])))
 
 
 if __name__ == "__main__":

@@ -67,8 +67,8 @@ the server runs, and a new version of Petra starts a new server."""
 INSTRUCTIONS = """Petra checks a physical design against the claims and loads written in it. The answer \
 is the verdict of its kernel: PASS, FAIL or UNKNOWN, or PASS_WAIVED for a design of a deck's parts that \
 passes with a cell resting on a waiver. The kernel passes only a design checked against a deck of rules: \
-a design of the other kinds reads UNKNOWN, and its `python` line says what the Python checker found, \
-which decides nothing. With no kernel to run, `check` answers with an error and no verdict. \
+a design of the other kinds never passes. It reads UNKNOWN, with the reason that its kind has no deck, \
+or FAIL. Never report such a design as passing. With no kernel to run, `check` answers with an error and no verdict. \
 Its main deck is steel connections to AISC 360-22, \
 in kips and inches. To design one: call `kinds` to see what Petra can check, `new` with a kind for a \
 complete design to edit, then `check` with the edited text. On a FAIL, the check's repair names the \
@@ -224,7 +224,7 @@ TOOLS: Mapping[str, tuple[str, dict[str, Any], Callable[[Mapping[str, Any]], Res
     "kinds": ("List the component kinds Petra can check. With a domain (steel) or a kind (shear_tab), print each "
               "kind's lines, required and optional, with units, registry ids and meanings.",
               _schema({"name": "a domain or a component kind; leave out to list them all"}), _kinds),
-    "new": ("Return a card and a complete design of one kind, which the Python checker passes, to edit into the pair you need.",
+    "new": ("Return a card and a complete design of one kind to edit into the pair you need.",
             _schema({"kind": "the component kind, such as shear_tab or double_angle", "name": "the component's name"},
                     ("kind",)), _new),
     "registry_list": ("List the registry ids a design can name: shapes, grades, bolt groups, electrodes, stocked plates, "

@@ -25,7 +25,7 @@ from petra.pipeline import _prepare, check_design
 from petra.registry import build_registry
 from petra.solvers import SolverSource
 from petra.verdict import Marginal, Pass, Refuted, WithinMargin
-from tests.python_says import python_says
+from tests.old_kinds import no_deck
 
 ROOT = Path(__file__).resolve().parent.parent
 REGISTRY = build_registry()
@@ -107,17 +107,17 @@ class MarginWitnessHidesFail(_Files):
         self.assertNotIsInstance(check(self.claim.statement, self.witness), Refutation)
         self.assertIsInstance(check(self.claim.statement, Evidence(PointWitness(self.point, 1))), Refutation)
         code, out, _ = run_cli("check", self.path)
-        self.assertEqual((code, python_says(out)), (1, "FAIL"), out)
+        self.assertEqual(code, 1, out)
         code, out, _ = run_cli("check", self.path, "--no-solve", "--certs", str(self.certs))
-        self.assertEqual((code, python_says(out)), (2, "UNKNOWN"), out)
+        self.assertEqual(code, 2, out)
 
     def test_a_margin_witness_never_reports_marginal_where_the_claim_fails(self):
         CertStore(self.certs).record(self.margin.statement, statement_hash(self.margin.statement), self.witness, "hand")
         code, out, _ = run_cli("check", self.path, "--no-solve", "--certs", str(self.certs))
         # Before the fix: exit 5, "ol MARGINAL ... not proved and not refuted", ambient = 70 degC.
         self.assertNotIn("MARGINAL", out.splitlines()[0], out)
-        self.assertNotEqual(python_says(out), "MARGINAL", out)
-        self.assertEqual(python_says(out), "FAIL", "the witness point refutes the claim through another expression")
+        self.assertNotEqual(code, 5, out)
+        self.assertEqual(code, 1, "the witness point refutes the claim through another expression")
 
     def test_a_margin_point_where_the_claim_holds_leaves_an_unproved_claim_unknown(self):
         cool = tuple((sym, Fraction(10) if sym == "ambient" else value) for sym, value in self.point)
@@ -127,7 +127,7 @@ class MarginWitnessHidesFail(_Files):
         self.assertNotIsInstance(check(self.claim.statement, Evidence(PointWitness(cool, 1))), Refutation)
         CertStore(self.certs).record(self.margin.statement, statement_hash(self.margin.statement), witness, "hand")
         code, out, _ = run_cli("check", self.path, "--no-solve", "--certs", str(self.certs))
-        self.assertEqual((code, python_says(out)), (2, "UNKNOWN"), out)
+        self.assertEqual(code, 2, out)
         self.assertIn("neither proved nor refuted; at this point it is within", out)
 
 
@@ -172,7 +172,8 @@ class MarginProofDiscarded(_Files):
     def test_precondition_the_margin_certificate_proves_the_claim(self):
         certs = str(self.dir / "certs")
         plain = self.write("p.petra", edited("examples/circuit_pass.petra", ("<= 70 degC under lamp_draw", "<= 58 degC under lamp_draw")))
-        self.assertEqual(python_says(run_cli("check", plain, "--certs", certs)[1]), "PASS")
+        code, out, _ = run_cli("check", plain, "--certs", certs)
+        self.assertTrue(code == 2 and no_deck(out), "a circuit has no deck of rules, so the check that stores the certificates reads UNKNOWN")
         path = self.write("m.petra", edited("examples/circuit_pass.petra", ("<= 70 degC under lamp_draw", "<= 60 degC margin 2 degC under lamp_draw")))
         design = load_design(path, REGISTRY)
         prepared = _prepare(design, REGISTRY)
@@ -188,7 +189,7 @@ class MarginProofDiscarded(_Files):
         run_cli("check", plain, "--certs", certs)
         path = self.write("m.petra", edited("examples/circuit_pass.petra", ("<= 70 degC under lamp_draw", "<= 60 degC margin 2 degC under lamp_draw")))
         code, out, _ = run_cli("check", path, "--no-solve", "--certs", certs)
-        self.assertEqual(python_says(out), "PASS", out)
+        self.assertTrue(code == 2 and no_deck(out), out)
         self.assertIn("proved: the claim holds with at least 2 degC to spare", out)
 
 
@@ -237,7 +238,7 @@ class FamilyMarginMessage(_Files):
 class EnvelopeCli(_Files):
     def test_exit_status_is_not_zero_when_the_design_fails_elsewhere(self):
         path = self.write("c.petra", edited("examples/circuit_pass.petra", ("fault_current in [0 kA, 6 kA]", "fault_current in [0 kA, 9 kA]")))
-        self.assertEqual(python_says(run_cli("check", path)[1]), "FAIL")
+        self.assertEqual(run_cli("check", path)[0], 1)
         code, out, _ = run_cli("envelope", path, "--input", "ambient", "--from", "10 degC", "--to", "60 degC")
         self.assertIn("elsewhere  the obligations that do not depend on ambient are FAIL", out)
         self.assertNotEqual(code, 0, out)  # today 0, the same as a design that holds
@@ -246,7 +247,7 @@ class EnvelopeCli(_Files):
         # _quantity documents "-20degC"; argparse takes it for an option and exits 3.
         code, out, err = run_cli("envelope", str(ROOT / "examples/truss_pass.petra"), "--input", "crowd.frame.D.fy",
                                  "--from", "-30kN", "--to", "-10kN", "--resolution", "10kN")
-        self.assertEqual(code, 0, err)
+        self.assertTrue(code == 2 and no_deck(out), err)
 
 
 if __name__ == "__main__":

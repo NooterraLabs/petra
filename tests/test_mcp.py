@@ -101,7 +101,9 @@ class Session(unittest.TestCase):
     def test_check_reads_a_path(self):
         """The status is the kernel's, which has no deck of rules for a shear tab."""
         report = self.by_id[8]["result"]["structuredContent"]
-        self.assertEqual((report["status"], report["python"], report["file"]), ("UNKNOWN", "PASS", str(SHEAR_TAB)))
+        self.assertEqual((report["status"], report["file"]), ("UNKNOWN", str(SHEAR_TAB)))
+        self.assertTrue(report["reason"].startswith("no deck of rules has a part of kind shear_tab"), report["reason"])
+        self.assertEqual(self.by_id[8]["result"]["content"][0]["text"].splitlines()[1], f"reason     {report['reason']}")
 
     def test_a_design_that_does_not_lower_is_a_tool_error_the_model_reads(self):
         result = self.by_id[9]["result"]

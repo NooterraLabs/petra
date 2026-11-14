@@ -8,9 +8,9 @@ open. `petra check` refuses a family, whose card leaves its load to a param, so 
 family's report comes from check_design. Truss and hook examples join once their
 elaborators land.
 
-These are the Python checker's statuses, which `petra check` prints as `python`. Its own
-status and its exit code are the kernel's, which has no deck of rules for these kinds: 2,
-UNKNOWN, for both (tests/test_kernel_decides.py).
+The status and the exit code of `petra check` are the kernel's, which has no deck of rules
+for these kinds: UNKNOWN and 2 for both, with that reason (tests/test_no_wrong_pass.py). The
+statuses of the claims in a report are the Python checker's working.
 """
 import json
 import subprocess
@@ -26,7 +26,7 @@ from petra.solvers import SolverSource
 
 ROOT = Path(__file__).resolve().parents[1]
 EXPECTED = {
-    "examples/circuit_pass.petra": ("PASS", 2),
+    "examples/circuit_pass.petra": ("UNKNOWN", 2),
     "examples/bolt_unknown.petra": ("UNKNOWN", 2),
 }
 FAMILY = "examples/families/cu_pvc_clipped.petra"
@@ -38,7 +38,7 @@ def petra(*argv: str) -> subprocess.CompletedProcess:
 
 class Examples(unittest.TestCase):
     def assertReport(self, report: dict, path: str, status: str):
-        self.assertEqual(report.get("python", report["status"]), status, f"the Python checker calls {path} {status}")
+        self.assertEqual(report["status"], status, f"{path} is {status}")
         self.assertEqual(report["file"], path, "the report names the file")
         for verdict in report["verdicts"]:
             self.assertTrue(verdict["footprint"], f"{path} {verdict['claim']} names its premises")
@@ -52,7 +52,7 @@ class Examples(unittest.TestCase):
             with self.subTest(path=path):
                 done = petra("check", path, "--json")
                 self.assertEqual(done.returncode, code, f"{path} exits {code}: {done.stderr}")
-                self.assertEqual(json.loads(done.stdout)["status"], "UNKNOWN", "the kernel's verdict")
+                self.assertTrue(json.loads(done.stdout)["reason"].startswith("no deck of rules has a part of kind "), "the reason it is UNKNOWN")
                 self.assertReport(json.loads(done.stdout), path, status)
 
     def test_check_refuses_the_family_and_check_design_leaves_its_coverage_open(self):

@@ -7,8 +7,9 @@ This page describes what a program needs to read a check. It covers the calls, t
 ```python
 import petra
 
-report = petra.check_file("examples/truss_fail.petra")
-print(type(report.verdict).__name__)               # Fail
+checked = petra.check_file("examples/truss_fail.petra")
+print(checked.status, checked.reason)              # UNKNOWN, and that no deck of rules has a truss
+report = checked.report                            # the Python checker's working, which decides nothing
 strength = report.governing["strength"]            # the highest utilisation of any strength check
 print(strength.requirement, strength.value.what, strength.value.utilisation)
 for f in report.findings:
@@ -21,7 +22,7 @@ for f in report.findings:
                 print("  at", c.symbol, "=", c.shown, "exact", c.exact, c.si_unit)
 ```
 
-`petra check --json examples/truss_fail.petra` gives the same report as JSON, and so does `petra.check(card, design)`. `report.to_json()` gives it without the `repair` key.
+`checked.to_json()` is what `petra check --json examples/truss_fail.petra` prints, and so is what `petra.check(card, design)` returns. `report.to_json()` is the Python checker's working alone, whose `status` is its own and no verdict.
 
 ## Check functions
 
@@ -36,7 +37,7 @@ if result["status"] == "FAIL":
     print(move["direction"], move["input"], "on line", move["line"], "from", move["from"], "to", move["to"])
 ```
 
-`petra.check_file(path, *, card=None, certs=None, library=None, solve=True) -> Report` loads the design at `path` and its card with the shipped registry and checks the pair. The card is the `.card` file beside the design unless `card` names another. It gathers evidence from these sources, in this order:
+`petra.check_file(path, *, card=None, certs=None, library=None, solve=True)` loads the design at `path` and its card with the shipped registry and checks the pair, as `petra.check` does. It returns the checked pair: `status` is the kernel's verdict, `reason` says why a design whose kinds have no deck of rules reads UNKNOWN, `to_json()` and `text()` are what `petra check` prints, and `report` is the working behind it. The card is the `.card` file beside the design unless `card` names another. It gathers evidence from these sources, in this order:
 
 1. The certificate store `certs`, a directory.
 2. `library`, a `petra.Library`.
@@ -44,7 +45,7 @@ if result["status"] == "FAIL":
 
 The kernel checks every piece of evidence. When `certs` is given, `check_file` records accepted evidence there. A syntax error raises `petra.lang.LolaSyntaxError`. A design that cannot be lowered raises `petra.lang.LoweringError` or `petra.models.base.ComponentError`. The CLI reports each of these errors as exit code 3.
 
-`petra.check_design(design, registry, sources, sink=None, deck=None, path="") -> Report` does the same check for a design and registry that you already hold. `petra.parse_design(card, design, path, registry)` and `petra.load_design(path, registry, card=None)` return a design, and `petra.build_registry` returns a registry.
+`petra.check_design(design, registry, sources, sink=None, deck=None, path="") -> Report` gives the Python checker's own report for a design and registry that you already hold. It runs no kernel, and no status of that report is a verdict. `petra.parse_design(card, design, path, registry)` and `petra.load_design(path, registry, card=None)` return a design, and `petra.build_registry` returns a registry.
 
 ## The card's hash and the kernel
 
@@ -52,7 +53,7 @@ A status is about one card and one design. `hashes` names each by the SHA-256 of
 
 `kernel` is what `petra-verify` said, the small checker in `kernel/` that is written in Lean, and `status` is its verdict. `petra.check` and `petra check` run the file the environment variable `PETRA_VERIFY` names, else the one inside the installed package, else the one `lake build` put in a source tree's `kernel/`. A wheel from PyPI carries the kernel for its platform, and Petra installed from the sdist carries none. With no kernel to run, or with one whose exit code or error stream is at odds with what it printed, there is no verdict: `petra.check` raises `petra.verify.NoVerdict`, `petra check` prints nothing to stdout and exits 4, and the server's `check` tool answers with an error. Nothing in Python gives a verdict in the kernel's place.
 
-For a design of the models' kinds the kernel has no deck of rules. It checks again each proof that has a tape, and `checked` of `proofs` counts them, but it takes the list of cells from the Python checker, so its verdict is never PASS: such a design reads UNKNOWN, or FAIL when the kernel checked a refutation. `python` is the Python checker's own status, which every line of the report below the first is written from, and which decides nothing. A proof the kernel rejects after the Python checker accepted it is a bug in one of the two: `petra.check` raises `petra.verify.Disagreement`, and `petra check` exits 4. `petra.check_file` and `petra.check_design` return the Python checker's report and run no kernel.
+For a design of the models' kinds the kernel has no deck of rules. It checks again each proof that has a tape, and `checked` of `proofs` counts them, but it takes the list of cells from the Python checker, so its verdict is never PASS. Such a design reads UNKNOWN, and `reason` says that no deck of rules has its kind of part, or FAIL when the kernel checked a refutation. Everything else in the report is the Python checker's working, which decides nothing: its statuses of the claims under `verdicts` are its own, and its status of the whole design is not given. A proof the kernel rejects after the Python checker accepted it is a bug in one of the two: `petra.check` raises `petra.verify.Disagreement`, and `petra check` exits 4. `petra.check_file` and `petra.check_design` return the Python checker's report and run no kernel.
 
 ## Report
 
@@ -76,7 +77,7 @@ For a design of the models' kinds the kernel has no deck of rules. It checks aga
 
 ## Verdicts
 
-`petra.verdict.STATUS` maps each verdict class to its status string. `SEVERITY` orders the statuses: PASS 0, MARGINAL 1, UNKNOWN 2, FAIL 3. The conjunction of several verdicts takes the most severe one. These are the Python checker's verdicts, which `petra.check_file` and `petra.check_design` return and `petra check` prints as `python`. They are not the verdict of a check: `petra check` exits with the kernel's, 0 for PASS, 1 for FAIL and 2 for UNKNOWN, and never with 5 for MARGINAL. All four classes are importable from `petra`.
+`petra.verdict.STATUS` maps each verdict class to its status string. `SEVERITY` orders the statuses: PASS 0, MARGINAL 1, UNKNOWN 2, FAIL 3. The conjunction of several verdicts takes the most severe one. These are the Python checker's verdicts, which `petra.check_design` returns and the `report` of a checked pair holds. They are not the verdict of a check: `petra check` exits with the kernel's, 0 for PASS, 1 for FAIL and 2 for UNKNOWN, and never with 5 for MARGINAL. All four classes are importable from `petra`.
 
 | class | status | fields |
 |---|---|---|
@@ -202,7 +203,7 @@ With `--no-solve`, `petra check` computes no repair.
 
 ```
 {"file": FILE, "design": NAME, "status": "FAIL" | "UNKNOWN",   the kernel's verdict, never PASS for the models' kinds
- "python": "PASS" | "FAIL" | "UNKNOWN" | "MARGINAL",   the Python checker's own status, which decides nothing
+ "reason": TEXT | null,                        why it is UNKNOWN: no deck of rules has its kind of part; null for a FAIL
  "card": FILE,                                 the card the design was checked against
  "hashes": {"card": HASH, "design": HASH},     "sha256:HEX" of each text as UTF-8 with LF line ends
  "kernel": KERNEL,                             what the kernel said

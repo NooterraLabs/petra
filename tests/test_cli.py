@@ -2,7 +2,7 @@
 
 The status and the exit code of `petra check` are the kernel's (tests/test_kernel_decides.py).
 The kernel has no deck of rules for the kinds used here, so it passes none of them: where the
-Python checker passes a design, the status is UNKNOWN and `python` is PASS.
+Python checker passes a design, the status is UNKNOWN with the reason that its kind has no deck.
 
 The Python checker's statuses: examples/circuit_pass.petra passes and examples/bolt_unknown.petra is
 UNKNOWN (their own headers say why). Under a card that asks for a 16 A draw the circuit_pass design breaks
@@ -21,6 +21,7 @@ from fractions import Fraction
 from pathlib import Path
 
 import petra
+from petra import verify
 from petra.cli import EXIT_CODES, main
 from petra.files import read_pair
 from petra.kernel import Evidence, Leaf, Split, encode_evidence
@@ -62,9 +63,9 @@ class Check(Workspace):
         code, out, _ = run("check", str(CIRCUIT), "--json")
         self.assertEqual(code, EXIT_CODES["UNKNOWN"], "circuit_pass exits 2: the kernel has no deck of rules for a circuit")
         report = json.loads(out)
-        self.assertEqual(set(report), {"file", "card", "hashes", "kernel", "path", "design", "status", "python", "governing", "verdicts", "unchecked",
+        self.assertEqual(set(report), {"file", "card", "hashes", "kernel", "path", "design", "status", "reason", "governing", "verdicts", "unchecked",
                                        "repair"}, "the report has the documented keys")
-        self.assertEqual((report["status"], report["python"]), ("UNKNOWN", "PASS"))
+        self.assertEqual((report["status"], report["reason"]), ("UNKNOWN", verify.no_deck(["circuit"])))
         self.assertEqual(report["file"], str(CIRCUIT), "the file is named as given")
         for verdict in report["verdicts"]:
             self.assertEqual(set(verdict), VERDICT_KEYS, f"{verdict['claim']} has the documented keys")

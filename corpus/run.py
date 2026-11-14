@@ -6,7 +6,10 @@ Each line of expected.tsv names a design by its path from the repository root, t
 it must get, the wrong verdict `petra check` gives today when it gives one, the wrong
 verdict the kernel gives today when it gives one, and a note. The card a design answers
 is the .card file beside it. NOT_PASS stands for any of FAIL, UNKNOWN, MARGINAL and
-INPUT_ERROR.
+INPUT_ERROR. A design of a kind with no deck of rules must get UNKNOWN, or FAIL where the
+kernel checked a refutation. Where such a design is one the Python checker decided rightly,
+its note starts with `right answer PASS` or `right answer FAIL`, which is what the deck
+that brings its kind back has to give it.
 
 Without --kernel the verdict is the one `petra check` exits with. With it, the pair is
 exported (petra/export.py) and the verdict is the one that petra-verify binary exits

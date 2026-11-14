@@ -32,6 +32,7 @@ from petra.models.steel import calc
 from petra.pipeline import Report
 from petra.registry import build_registry
 from petra.units import CUSTOMARY, UNITS
+from tests.old_kinds import python_report
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests" / "fixtures" / "readout"
@@ -61,7 +62,7 @@ _REPORTS: dict[Path, Report] = {}
 
 def check(path: Path) -> Report:
     if path not in _REPORTS:
-        _REPORTS[path] = petra.check_file(path)
+        _REPORTS[path] = python_report(path)
     return _REPORTS[path]
 
 
@@ -135,7 +136,7 @@ class SteelFailure(unittest.TestCase):
             path = Path(tmp) / "job5_claim.petra"
             path.write_text(source, encoding="utf-8", newline="\n")
             path.with_suffix(".card").write_text(card + "\nclaim tight: tab.bolts <= 0.95 under reaction\n", encoding="utf-8", newline="\n")
-            report = petra.check_file(path)
+            report = python_report(path)
             text = report.render()
         (f,) = [f for f in refuted(report) if f.requirement == "tab/steel.bolts/claim.tight"]
         self.assertTrue(f.governing.what.endswith("against 0.95 of its available strength"), f.governing.what)
@@ -149,7 +150,7 @@ class SteelFailure(unittest.TestCase):
                 raise RuntimeError("boom")
             return readout.Domain(read, {})
 
-        report = petra.check_file(JOB5)
+        report = python_report(JOB5)
         with mock.patch.dict(readout.READERS, {"steel": broken}):
             text = report.render()
         self.assertIsInstance(report.verdict, petra.Fail)

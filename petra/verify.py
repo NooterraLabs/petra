@@ -10,7 +10,9 @@ with an error.
 
 `status` is what a caller reports for an answer: the kernel's verdict, where a PASS with a
 waiver the kernel lists reads PASS_WAIVED. A pair the kernel finds ill formed raises
-ComponentError, the input error every caller reports.
+ComponentError, the input error every caller reports. A design whose cells the kernel did
+not work out from a deck of rules is never a pass: it reads UNKNOWN with the reason of
+`no_deck`, or FAIL where the kernel checked a refutation.
 
 For a design checked against a deck of rules the kernel reads the deck and works out every
 cell itself, and `differs` compares its cells with the grid's, one by one. For a design of
@@ -216,6 +218,15 @@ def status(said: Mapping[str, Any]) -> str:
     that a cell rests on, by the kernel's own list and no other. The waived pass is to be
     retired, and until then a pass that rests on a signature is not printed as a plain one."""
     return "PASS_WAIVED" if said["verdict"] == "PASS" and said["waived"] else said["verdict"]
+
+
+def no_deck(kinds: Any) -> str:
+    """Why a design whose cells the kernel did not work out from a deck of rules reads
+    UNKNOWN: its kinds of part, which no deck of rules has. Every way into a check gives
+    this reason with the status."""
+    names = sorted(set(kinds))
+    of = f"a part of kind {', '.join(names)}" if names else "the parts of this design"
+    return f"no deck of rules has {of}, so the kernel worked out none of its checks and nothing can pass it"
 
 
 def refusal(path: str, said: Mapping[str, Any]) -> tuple[str, ...]:

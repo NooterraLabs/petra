@@ -37,7 +37,7 @@ from .verdict import SEVERITY, STATUS
 
 INPUT_ERRORS = (LolaSyntaxError, LoweringError, ComponentError)
 
-LEGACY = "legacy: Python's models chose the checks and wrote the formulas, and no rules deck stands behind them"
+LEGACY = "legacy: every line below is the working of Python's models, which chose the checks and wrote the formulas, and it decides nothing"
 """What a report says of a design of the models' kinds. A design of a deck's types says the
 kernel worked out its cells (grid.Checked). The models go as their kinds move to decks."""
 """What a design that does not lower raises: the edit is not a step."""
@@ -250,7 +250,7 @@ class Move:
         unit = f" {s.unit}" if s.unit else ""
         out = f"{self.direction:<9} {s.input} (line {s.line}) from {s.text} to {self.step.to}{unit}: utilisation {_ratio(self.step.utilisation)}"
         if self.clears is not None:
-            where = "the design passes" if self.clears.status == "PASS" else f"the design is {self.clears.status}" + (
+            where = "no check is refuted" if self.clears.status == "PASS" else f"the design is {self.clears.status}" + (
                 f" on {', '.join(_short(r) for r in self.clears.fails)}" if self.clears.fails else "")
             out += f"; it holds there, and {where}" if self.direction == "swap" else f"; it holds at {self.clears.to}{unit}, where {where}"
         return out
@@ -416,8 +416,10 @@ class Checked:
     and of the design's (export.sha256), and `kernel` is what the kernel said (verify.py).
 
     The status is the kernel's verdict and no other. For a design of the models' kinds the
-    kernel has no deck of rules, so that is never PASS, whatever the report says: `python`
-    is the report's own status, which is printed beside the kernel's and decides nothing."""
+    kernel has no deck of rules, so that is never a pass, whatever the report says: it is
+    UNKNOWN, with `reason` saying that the design's kinds have no deck (verify.no_deck), or
+    FAIL where the kernel checked a refutation. The report's own status is not given: it
+    is the working of a checker that decides nothing."""
 
     path: str
     report: Report | None
@@ -426,50 +428,50 @@ class Checked:
     card: str = ""
     hashes: Mapping[str, str] | None = None
     kernel: verify.Kernel | None = None
+    kinds: tuple[str, ...] = ()
 
     @property
     def status(self) -> str:
         return "INPUT_ERROR" if self.report is None else self.kernel.verdict
 
     @property
-    def python(self) -> str:
-        """What the Python checker's report says of the design."""
-        return STATUS[type(self.report.verdict)]
+    def reason(self) -> str | None:
+        """Why the design reads UNKNOWN, and None when it does not."""
+        return verify.no_deck(self.kinds) if self.status == "UNKNOWN" else None
 
     def to_json(self) -> dict[str, Any]:
-        """The report's JSON with "status" the kernel's verdict, "python" the report's own
-        status, "card", "hashes", "kernel" and "repair", or
-        {"file", "status": "INPUT_ERROR", "error"}."""
+        """The report's JSON with "status" the kernel's verdict, "reason", "card", "hashes",
+        "kernel" and "repair", or {"file", "status": "INPUT_ERROR", "error"}."""
         if self.report is None:
             return {"file": self.path, "status": "INPUT_ERROR", "error": self.error}
-        return {**self.report.to_json(), "status": self.status, "python": self.python, "card": self.card, "hashes": dict(self.hashes),
+        return {**self.report.to_json(), "status": self.status, "reason": self.reason, "card": self.card, "hashes": dict(self.hashes),
                 "path": "legacy", "kernel": self.kernel.to_json(), "repair": None if self.repair is None else self.repair.to_json()}
 
     def text(self) -> str:
-        """What `petra check` prints: the kernel's verdict on the first line and what the
-        kernel said on the second. Every line after those is the Python checker's, and the
-        third says so: its report, with what it was checked against after its scope, and the
+        """What `petra check` prints: the kernel's verdict on the first line, the reason on
+        the second when that is UNKNOWN, what the kernel said, and what the pair was checked
+        against. Every line after the `path` line is the Python checker's working: its
+        report without its own verdict and its line of a status for each claim, and the
         repair after its governing lines."""
         if self.report is None:
             return f"{self.path}: INPUT_ERROR\n{self.error}"
-        out = self.report.render().split("\n")[1:]
-        at = max((i + 1 for i, line in enumerate(out[:8]) if line.startswith("governing  ")), default=min(1, len(out)))
+        out = self.report.render().split("\n")[2:]
+        at = max((i + 1 for i, line in enumerate(out[:8]) if line.startswith("governing  ")), default=0)
         out = out[:at] + ([] if self.repair is None else self.repair.lines()) + out[at:]
-        against = [f"card       {self.hashes['card']}  {self.card}", f"design     {self.hashes['design']}  {self.path}", f"path       {LEGACY}"]
-        at = next((i + 1 for i, line in enumerate(out[:3]) if line.startswith("scope  ")), min(1, len(out)))
-        return "\n".join([f"{self.report.design}: {self.status}", f"kernel     {self.kernel.line()}",
-                          f"python     the Python checker says {self.python}, which decides nothing: every line below is its own",
-                          *out[:at], *against, *out[at:]])
+        return "\n".join([f"{self.report.design}: {self.status}", *([f"reason     {self.reason}"] if self.reason else []),
+                          f"kernel     {self.kernel.line()}", f"card       {self.hashes['card']}  {self.card}",
+                          f"design     {self.hashes['design']}  {self.path}", f"path       {LEGACY}", *out])
 
 
 def check_text(card: str, text: str, path: str, registry: Any, sources: tuple, *, sink: Any = None, deck: Any = None,
-               moves: bool = True, card_path: str | None = None) -> Checked:
+               moves: bool = True, card_path: str | None = None, raises: bool = False) -> Checked:
     """Check the design `text` against the card and `registry` with `sources`, recording
     accepted evidence into `sink`, and take the kernel's verdict on it (verify.py). Raises
     verify.NoVerdict when there is no kernel to run or it gives no answer. `path` names the
     design in messages, and `card_path` the card when it is not the file beside it. With
     `moves`, a report that is a FAIL gets its repair, probed with the same card and sources,
-    no sink and no kernel: a move is a suggestion.
+    no sink and no kernel: a move is a suggestion. A pair that does not lower gives a
+    Checked with the error and no report, or with `raises` its own exception.
 
     A design whose parts are of a deck's types goes to the grid (grid.py) and not to the
     models: its cells need no solver and get no repair yet."""
@@ -484,7 +486,9 @@ def check_text(card: str, text: str, path: str, registry: Any, sources: tuple, *
         report = check_design(design, registry, sources, sink=proofs, deck=deck, path=path)
         kernel = verify.verify(design, registry, report, proofs)
     except INPUT_ERRORS as exc:
+        if raises:
+            raise
         return Checked(path, None, None, str(exc))
     found = repair(text, report, checker(card, registry, sources, path, deck), registry) if moves else None
     hashes = {"card": export.sha256(card), "design": export.sha256(text)}
-    return Checked(path, report, found, None, card_path or card_of(path), hashes, kernel)
+    return Checked(path, report, found, None, card_path or card_of(path), hashes, kernel, tuple(sorted({c.kind for c in design.components.values()})))

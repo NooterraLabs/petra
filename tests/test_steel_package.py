@@ -15,7 +15,7 @@ from petra.models.steel import generate as gen
 from petra.models.steel.domain import required
 from petra.models.steel.package import recheck, write_package
 from petra.registry import build_registry
-from tests.python_says import python_says
+from tests.old_kinds import no_deck
 
 REGISTRY = build_registry()
 STREAM = list(gen.generate(33, 9, REGISTRY))
@@ -72,13 +72,18 @@ class Packages(unittest.TestCase):
         self.assertEqual(code, 0, out.getvalue())
         self.assertEqual(len(out.getvalue().splitlines()), len(files))
 
-    def test_petra_check_from_the_certificates_alone_reproduces_the_verdict(self):
+    def test_petra_check_from_the_certificates_alone_gives_the_package_no_pass(self):
+        """The package holds the Python checker's status of its design. `petra check` on its
+        certificates gives the kernel's: a bracket has no deck of rules, so where the package
+        says PASS the check reads UNKNOWN with that reason, and the certificates are all found."""
         g = pick(lambda g: g.kind == "bolt_bracket")
         pkg = self.package(g)
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
-            cli.main(["check", "--certs", str(pkg.root / "certs"), "--no-solve", str(pkg.root / "design.petra")])
-        self.assertEqual(python_says(out.getvalue()), pkg.status, "the Python checker's status, which the package holds")
+            code = cli.main(["check", "--certs", str(pkg.root / "certs"), "--no-solve", str(pkg.root / "design.petra")])
+        self.assertEqual(pkg.status, "PASS")
+        self.assertTrue(code == 2 and no_deck(out.getvalue()), out.getvalue())
+        self.assertRegex(out.getvalue(), r"checked    \d+ obligations, \d+ certified, 0 refuted, 0 waived, 0 open")
 
     def test_a_tampered_certificate_is_caught(self):
         pkg = self.package(pick(lambda g: g.kind == "shear_end_plate" and g.expected == "PASS"))

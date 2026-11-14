@@ -210,7 +210,7 @@ class Packaging(unittest.TestCase):
         self.assertIn("path       rules: the kernel worked out every cell from the rules deck", lap)
         self.assertEqual(circuit[0], "workshop-lighting-radial: UNKNOWN")
         self.assertIn("kernel     petra-verify gives UNKNOWN: it checked 8 of 8 proofs, and with no deck of rules for this design it passes nothing", circuit)
-        self.assertIn("python     the Python checker says PASS, which decides nothing: every line below is its own", circuit)
+        self.assertEqual(circuit[1], "reason     no deck of rules has a part of kind circuit, so the kernel worked out none of its checks and nothing can pass it")
 
     def test_a_wheel_with_no_kernel_in_it_gives_no_verdict(self):
         """The venv with the kernel taken out of the wheel, or the only venv where no

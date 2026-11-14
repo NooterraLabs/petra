@@ -1,7 +1,8 @@
 """The repair-and-minimise loop for steel connections (docs/plan.md P2). Untrusted
-tooling: it searches by the Python checker's own status of each design (`Checked.python`),
-and where this page says PASS or FAIL it means that status. It is no verdict. The verdict
-of a design is the kernel's, which has no deck of rules for a steel kind and passes none.
+tooling: it searches by the Python checker's own status of each design, read from the
+report of a check, and where this page says PASS or FAIL it means that status. It is no
+verdict. The verdict of a design is the kernel's, which has no deck of rules for a steel
+kind and passes none.
 
 A Task is a job a user would give: a connection kind, the design basis, the members and
 any line the job fixes (`beam`, `support`, a bracket's `eccentricity`), and the loads.
@@ -47,6 +48,7 @@ from .registry.steel import INCH
 from .repair import INPUT_ERRORS, Checked, Site, check_text, edit, family, ladder, shape_sites, sites
 from .solvers import SolverSource
 from .units import parse_quantity
+from .verdict import STATUS
 
 
 TASK_KINDS = ("shear_tab", "double_angle", "single_angle", "shear_tee", "shear_end_plate", "seated", "stiffened_seat",
@@ -344,7 +346,7 @@ def _judge(run: Run, text: str, judge: Judge | None) -> None:
 def _said(checked: Checked) -> str:
     """The Python checker's status of a design, which the loop searches by, or INPUT_ERROR
     for one that does not lower."""
-    return checked.status if checked.report is None else checked.python
+    return checked.status if checked.report is None else STATUS[type(checked.report.verdict)]
 
 
 def _passes(text: str, registry: Registry, sources: tuple, run: Run) -> bool:
