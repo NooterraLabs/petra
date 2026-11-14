@@ -1,0 +1,20 @@
+{
+ "sig": "12c7dbcadc",
+ "kind": "findings",
+ "where": "kernel/twin",
+ "detail": "[('card', 'shape'), ('design', 'parts.3')] against [('card', 'shape')]",
+ "recipe": "forge",
+ "notes": [
+  "card: number 3/250 made '0/5'"
+ ],
+ "deck": null,
+ "relation": null,
+ "extra": {},
+ "verdicts": {
+  "kernel": "ILL-FORMED",
+  "twin": "ILL-FORMED"
+ },
+ "seed": 100,
+ "count": 13,
+ "language": false
+}

@@ -1,0 +1,20 @@
+{
+ "sig": "c06d8dc629",
+ "kind": "findings",
+ "where": "kernel/twin",
+ "detail": "[('design', 'types.1')] against [('card', 'shape')]",
+ "recipe": "syntax",
+ "notes": [
+  "card: JSON syntax dup"
+ ],
+ "deck": "aisc360",
+ "relation": null,
+ "extra": {},
+ "verdicts": {
+  "kernel": "ILL-FORMED",
+  "twin": "ILL-FORMED"
+ },
+ "seed": 100,
+ "count": 2,
+ "language": false
+}

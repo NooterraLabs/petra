@@ -24,7 +24,7 @@ Kept differences go to `OUT/found/KIND-SIG/`. Run one again with
 python3.11 -m bench.attack.repro bench/attack/found/KIND-SIG
 ```
 
-[FINDINGS.md](FINDINGS.md) lists what a run found in the readers as they stand.
+`python3.11 -m bench.attack.summary OUT` lists what a run kept, the worst first. [FINDINGS.md](FINDINGS.md) lists what the last run found in the readers as they stand, and [found](found) holds one folder for each kind it names.
 
 ## What it makes
 
@@ -61,6 +61,10 @@ Each is a property that holds with no oracle. [meta.py](meta.py) gives, for each
 | respell | A deck value written another way, or rules in another order: the same verdict and cells |
 | json | A file in another JSON spelling: the same verdict and cells |
 | hints | Any hint leaves a proved, refuted or not applicable cell as it was or open, and the cells the same |
+
+## The sweep
+
+`python3.11 -m bench.attack.sweep` leaves out each key of the kernel's files, one at a time, for the three examples that PASS, FAIL and are UNKNOWN, and asks the kernel and the third reading about each. The pages do not say a key may be missing, and the two readers read a missing key differently.
 
 ## Planted faults
 

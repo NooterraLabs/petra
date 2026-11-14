@@ -1,0 +1,333 @@
+{
+ "cells": [
+  {
+   "entry": "cases",
+   "mechanism": "bar.cases",
+   "point": {
+    "dsg:a.bar.b": "7/17340",
+    "in:a.bar.a": "1/75"
+   },
+   "rule": "ops/cases",
+   "state": "refuted",
+   "subject": "bar"
+  },
+  {
+   "entry": "roots",
+   "mechanism": "bar.roots",
+   "point": {
+    "dsg:a.bar.b": "7/17340",
+    "in:a.bar.a": "1/75"
+   },
+   "rule": "ops/roots",
+   "state": "refuted",
+   "subject": "bar"
+  },
+  {
+   "entry": "exp/where",
+   "mechanism": "bar.exp",
+   "partition": "leaf",
+   "rule": "ops/exp",
+   "state": "proved",
+   "subject": "bar"
+  },
+  {
+   "entry": "exp",
+   "mechanism": "bar.exp",
+   "point": {
+    "dsg:a.bar.s": "1071249151376222108200382238767/1980704062856608439838598758400",
+    "in:a.bar.r": "120"
+   },
+   "rule": "ops/exp",
+   "state": "refuted",
+   "subject": "bar"
+  },
+  {
+   "entry": "table/B",
+   "mechanism": "bar.table",
+   "partition": "leaf",
+   "rule": "ops/table",
+   "state": "proved",
+   "subject": "bar"
+  },
+  {
+   "entry": "table/service",
+   "mechanism": "bar.table",
+   "partition": "leaf",
+   "rule": "ops/table",
+   "state": "proved",
+   "subject": "bar"
+  },
+  {
+   "entry": "key/B/where",
+   "mechanism": "bar.key",
+   "partition": "leaf",
+   "rule": "ops/key",
+   "state": "proved",
+   "subject": "bar"
+  },
+  {
+   "entry": "key/B",
+   "mechanism": "bar.key",
+   "partition": "leaf",
+   "rule": "ops/key",
+   "state": "proved",
+   "subject": "bar"
+  },
+  {
+   "entry": "key/service/where",
+   "mechanism": "bar.key",
+   "partition": "leaf",
+   "rule": "ops/key",
+   "state": "proved",
+   "subject": "bar"
+  },
+  {
+   "entry": "key/service",
+   "mechanism": "bar.key",
+   "partition": "leaf",
+   "rule": "ops/key",
+   "state": "proved",
+   "subject": "bar"
+  },
+  {
+   "entry": "moment/B",
+   "mechanism": "bar.moment",
+   "point": {
+    "in:a.B.bar.push": "0",
+    "in:a.B.bar.twist": "47/521",
+    "in:a.bar.a": "1/75"
+   },
+   "rule": "ops/moment",
+   "state": "refuted",
+   "subject": "bar"
+  },
+  {
+   "entry": "moment/service",
+   "mechanism": "bar.moment",
+   "point": {
+    "in:a.bar.a": "1/75",
+    "in:a.service.bar.push": "0",
+    "in:a.service.bar.twist": "3/340"
+   },
+   "rule": "ops/moment",
+   "state": "refuted",
+   "subject": "bar"
+  },
+  {
+   "entry": "caps/B",
+   "mechanism": "bar.caps",
+   "partition": "leaf",
+   "rule": "ops/caps",
+   "state": "proved",
+   "subject": "bar"
+  },
+  {
+   "entry": "caps/service",
+   "mechanism": "bar.caps",
+   "partition": "leaf",
+   "rule": "ops/caps",
+   "state": "proved",
+   "subject": "bar"
+  },
+  {
+   "completion": {
+    "keys": [],
+    "loads": [
+     [
+      "bar",
+      "drag",
+      "B",
+      "0"
+     ]
+    ]
+   },
+   "entry": "drag/B",
+   "mechanism": "bar.drag",
+   "partition": "leaf",
+   "rule": "ops/drag",
+   "state": "open",
+   "subject": "bar",
+   "why": "case B puts no drag on bar, which the rule reads"
+  },
+  {
+   "entry": "drag/service",
+   "mechanism": "bar.drag",
+   "point": {
+    "in:a.service.bar.drag": "6500"
+   },
+   "rule": "ops/drag",
+   "state": "refuted",
+   "subject": "bar"
+  },
+  {
+   "entry": "",
+   "mechanism": "bar.idle",
+   "state": "not_applicable",
+   "subject": "bar",
+   "why": "made up"
+  },
+  {
+   "entry": "named/B",
+   "mechanism": "bar.named",
+   "rule": "ops/named",
+   "state": "open",
+   "subject": "bar",
+   "why": "the waiver does not rest this cell: ops/table gives no value at what bar has: no case of the pick holds somewhere in the box"
+  },
+  {
+   "entry": "named/service",
+   "mechanism": "bar.named",
+   "rule": "ops/named",
+   "state": "open",
+   "subject": "bar",
+   "why": "the waiver does not rest this cell: ops/table gives no value at what bar has: no case of the pick holds somewhere in the box"
+  },
+  {
+   "entry": "cased",
+   "mechanism": "bar.cased",
+   "point": {
+    "dsg:a.Z.i": "7/6250000000",
+    "dsg:a.bar.b": "7/17340",
+    "in:a.bar.a": "1/75"
+   },
+   "rule": "ops/cased",
+   "state": "refuted",
+   "subject": "bar"
+  },
+  {
+   "entry": "",
+   "mechanism": "bar.left",
+   "state": "waived",
+   "subject": "bar"
+  },
+  {
+   "entry": "alike",
+   "mechanism": "bar.alike",
+   "rule": "ops/alike",
+   "state": "proved",
+   "subject": "bar"
+  },
+  {
+   "entry": "modulus",
+   "mechanism": "bar.modulus",
+   "point": {
+    "dsg:a.cap2.i": "3/25000000",
+    "in:a.bar.a": "1/75"
+   },
+   "rule": "ops/modulus",
+   "state": "refuted",
+   "subject": "bar"
+  },
+  {
+   "entry": "cos",
+   "mechanism": "bar.cos",
+   "point": {
+    "in:a.bar.r": "120"
+   },
+   "rule": "ops/cos",
+   "state": "refuted",
+   "subject": "bar"
+  },
+  {
+   "entry": "cosin",
+   "mechanism": "bar.cosin",
+   "point": {
+    "in:a.bar.r": "120"
+   },
+   "rule": "ops/cosin",
+   "state": "refuted",
+   "subject": "bar"
+  },
+  {
+   "entry": "cosfloor",
+   "mechanism": "bar.cosfloor",
+   "partition": "leaf",
+   "rule": "ops/cosfloor",
+   "state": "proved",
+   "subject": "bar"
+  },
+  {
+   "entry": "turn",
+   "mechanism": "bar.turn",
+   "partition": "leaf",
+   "rule": "ops/turn",
+   "state": "proved",
+   "subject": "bar"
+  },
+  {
+   "entry": "sine",
+   "mechanism": "bar.sine",
+   "partition": "leaf",
+   "rule": "ops/sine",
+   "state": "proved",
+   "subject": "bar"
+  },
+  {
+   "entry": "zero",
+   "mechanism": "bar.zero",
+   "partition": "leaf",
+   "rule": "ops/zero",
+   "state": "proved",
+   "subject": "bar"
+  },
+  {
+   "entry": "tiny",
+   "mechanism": "bar.tiny",
+   "partition": "leaf",
+   "rule": "ops/tiny",
+   "state": "proved",
+   "subject": "bar"
+  },
+  {
+   "entry": "edge",
+   "mechanism": "bar.edge",
+   "rule": "ops/edge",
+   "state": "open",
+   "subject": "bar",
+   "why": "the waiver does not rest this cell: node 3: cos of a value beyond 65536"
+  },
+  {
+   "entry": "long",
+   "mechanism": "bar.long",
+   "partition": "leaf",
+   "rule": "ops/long",
+   "state": "proved",
+   "subject": "bar"
+  },
+  {
+   "entry": "",
+   "mechanism": "bar.right",
+   "state": "waived",
+   "subject": "bar"
+  },
+  {
+   "entry": "press/B",
+   "mechanism": "unread",
+   "state": "open",
+   "subject": "cap2",
+   "why": "no rule of the deck reads the load press that case B puts on cap2, so nothing checks it"
+  },
+  {
+   "entry": "press/service",
+   "mechanism": "unread",
+   "state": "open",
+   "subject": "cap2",
+   "why": "no rule of the deck reads the load press that case service puts on cap2, so nothing checks it"
+  },
+  {
+   "entry": "press/B",
+   "mechanism": "unread",
+   "state": "open",
+   "subject": "Z",
+   "why": "no rule of the deck reads the load press that case B puts on Z, so nothing checks it"
+  },
+  {
+   "entry": "press/service",
+   "mechanism": "unread",
+   "state": "open",
+   "subject": "Z",
+   "why": "no rule of the deck reads the load press that case service puts on Z, so nothing checks it"
+  }
+ ],
+ "format": "petra-proofs/0"
+}

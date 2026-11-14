@@ -1,0 +1,238 @@
+{
+ "cells": [
+  {
+   "entry": "mass",
+   "mechanism": "cell.mass",
+   "point": {
+    "dsg:card_1.p1.mass": "45359237/10000000"
+   },
+   "rule": "kit/mass",
+   "state": "refuted",
+   "subject": "p1"
+  },
+  {
+   "entry": "temp",
+   "mechanism": "cell.temp",
+   "partition": "leaf",
+   "rule": "kit/temp",
+   "state": "proved",
+   "subject": "p1"
+  },
+  {
+   "entry": "spare",
+   "mechanism": "cell.spare",
+   "point": {
+    "dsg:card_1.p1.spare": "20"
+   },
+   "rule": "kit/spare",
+   "state": "refuted",
+   "subject": "p1"
+  },
+  {
+   "entry": "limit",
+   "mechanism": "cell.limit",
+   "partition": "leaf",
+   "rule": "kit/limit",
+   "state": "proved",
+   "subject": "p1"
+  },
+  {
+   "entry": "ohm",
+   "mechanism": "cell.ohm",
+   "partition": "leaf",
+   "rule": "kit/ohm",
+   "state": "proved",
+   "subject": "p1"
+  },
+  {
+   "entry": "sealed",
+   "mechanism": "cell.sealed",
+   "rule": "kit/sealed",
+   "state": "refuted",
+   "subject": "p1"
+  },
+  {
+   "entry": "mass",
+   "mechanism": "cell.mass",
+   "partition": "leaf",
+   "rule": "kit/mass",
+   "state": "proved",
+   "subject": "lap_main"
+  },
+  {
+   "entry": "temp",
+   "mechanism": "cell.temp",
+   "point": {
+    "dsg:card_1.lap_main.low": "60"
+   },
+   "rule": "kit/temp",
+   "state": "refuted",
+   "subject": "lap_main"
+  },
+  {
+   "entry": "spare",
+   "mechanism": "cell.spare",
+   "point": {
+    "dsg:card_1.lap_main.spare": "20"
+   },
+   "rule": "kit/spare",
+   "state": "refuted",
+   "subject": "lap_main"
+  },
+  {
+   "entry": "limit",
+   "mechanism": "cell.limit",
+   "rule": "kit/limit",
+   "state": "open",
+   "subject": "lap_main",
+   "why": "lap_main.limit is unstated: its maker states none, and the rule reads it"
+  },
+  {
+   "entry": "ohm",
+   "mechanism": "cell.ohm",
+   "partition": "leaf",
+   "rule": "kit/ohm",
+   "state": "proved",
+   "subject": "lap_main"
+  },
+  {
+   "entry": "",
+   "mechanism": "cell.sealed",
+   "state": "open",
+   "subject": "lap_main",
+   "why": "the deck has no rule for it on a part like this one"
+  },
+  {
+   "entry": "class",
+   "mechanism": "rig.class",
+   "rule": "kit/class",
+   "state": "refuted",
+   "subject": "rig"
+  },
+  {
+   "entry": "count",
+   "mechanism": "rig.count",
+   "point": {
+    "in:card_1.rig.count": "14"
+   },
+   "rule": "kit/count",
+   "state": "refuted",
+   "subject": "rig"
+  },
+  {
+   "entry": "cold",
+   "mechanism": "rig.cold",
+   "rule": "kit/cold",
+   "state": "open",
+   "subject": "rig",
+   "why": "the card puts no air on rig, which the rule reads"
+  },
+  {
+   "entry": "speed",
+   "mechanism": "rig.speed",
+   "point": {
+    "dsg:card_1.p1.limit": "1",
+    "dsg:card_1.rig.speed": "1001/1000"
+   },
+   "rule": "kit/speed",
+   "state": "refuted",
+   "subject": "rig"
+  },
+  {
+   "entry": "pace",
+   "mechanism": "rig.sealed",
+   "point": {
+    "in:card_1.rig.pace": "360"
+   },
+   "rule": "kit/pace",
+   "state": "refuted",
+   "subject": "rig"
+  },
+  {
+   "entry": "share",
+   "mechanism": "rig.share",
+   "partition": "leaf",
+   "rule": "kit/share",
+   "state": "proved",
+   "subject": "rig"
+  },
+  {
+   "entry": "centre",
+   "mechanism": "rig.centre",
+   "rule": "kit/centre",
+   "state": "open",
+   "subject": "rig",
+   "why": "the card puts no shift on rig, which the rule reads"
+  },
+  {
+   "entry": "energy",
+   "mechanism": "rig.energy",
+   "partition": "leaf",
+   "rule": "kit/energy",
+   "state": "proved",
+   "subject": "rig"
+  },
+  {
+   "entry": "dense",
+   "mechanism": "rig.dense",
+   "partition": "leaf",
+   "rule": "kit/dense",
+   "state": "proved",
+   "subject": "rig"
+  },
+  {
+   "entry": "stiff",
+   "mechanism": "rig.stiff",
+   "partition": "leaf",
+   "rule": "kit/stiff",
+   "state": "proved",
+   "subject": "rig"
+  },
+  {
+   "entry": "twist",
+   "mechanism": "rig.twist",
+   "point": {
+    "dsg:card_1.rig.torque": "87067239096971705187/1153750000000000000"
+   },
+   "rule": "kit/twist",
+   "state": "refuted",
+   "subject": "rig"
+  },
+  {
+   "entry": "heat",
+   "mechanism": "rig.heat",
+   "partition": "leaf",
+   "rule": "kit/heat",
+   "state": "proved",
+   "subject": "rig"
+  },
+  {
+   "entry": "carry",
+   "mechanism": "rig.carry",
+   "rule": "kit/carry",
+   "state": "open",
+   "subject": "rig",
+   "why": "the card puts no weight on rig, which the rule reads"
+  },
+  {
+   "entry": "",
+   "mechanism": "rig.bare",
+   "state": "waived",
+   "subject": "rig"
+  },
+  {
+   "entry": "",
+   "mechanism": "rig.night",
+   "state": "waived",
+   "subject": "rig"
+  },
+  {
+   "entry": "maker",
+   "mechanism": "unread",
+   "state": "open",
+   "subject": "lap_main",
+   "why": "no rule of the deck reads lap_main.maker, so nothing checks it"
+  }
+ ],
+ "format": "petra-proofs/0"
+}

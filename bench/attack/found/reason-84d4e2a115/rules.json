@@ -1,0 +1,447 @@
+{
+ "format": "petra-rules/0",
+ "name": "test-strips",
+ "about": "Made up for the tests. It is no standard.",
+ "rows": [
+  {
+   "id": "test/limit",
+   "anchor": {
+    "standard": "a deck made up for the tests",
+    "clause": "1"
+   },
+   "gives": {
+    "name": "I",
+    "dim": "current",
+    "what": "the current a strip carries"
+   },
+   "takes": [
+    {
+     "name": "w",
+     "dim": "length",
+     "what": "its width",
+     "range": [
+      "0.5 mm",
+      "5 mm"
+     ]
+    }
+   ],
+   "table": {
+    "down": {
+     "by": "w",
+     "bands": [
+      [
+       "0 mm",
+       "1 mm"
+      ],
+      [
+       "1 mm",
+       "2 mm"
+      ],
+      [
+       "2 mm",
+       null
+      ]
+     ],
+     "closed": "upper"
+    },
+    "unit": "A",
+    "cells": [
+     "1",
+     "2",
+     "3"
+    ],
+    "rises": [
+     "w"
+    ]
+   }
+  },
+  {
+   "id": "test/derate",
+   "anchor": {
+    "standard": "a deck made up for the tests",
+    "clause": "1"
+   },
+   "gives": {
+    "name": "k",
+    "dim": "dimensionless",
+    "what": "the share of it a warm strip carries"
+   },
+   "takes": [
+    {
+     "name": "T",
+     "dim": "temperature",
+     "what": "its temperature",
+     "range": [
+      "0 degC",
+      "100 degC"
+     ]
+    }
+   ],
+   "cases": [
+    {
+     "when": [
+      "le",
+      "T",
+      [
+       "q",
+       "40",
+       "degC"
+      ]
+     ],
+     "is": "1"
+    },
+    {
+     "when": [
+      "gt",
+      "T",
+      [
+       "q",
+       "40",
+       "degC"
+      ]
+     ],
+     "is": "0.5"
+    }
+   ],
+   "jumps": [
+    {
+     "cases": [
+      1,
+      2
+     ],
+     "why": "made up"
+    }
+   ]
+  },
+  {
+   "id": "test/drill",
+   "anchor": {
+    "standard": "a deck made up for the tests",
+    "clause": "1"
+   },
+   "gives": {
+    "name": "dh",
+    "dim": "length",
+    "what": "the hole a screw needs"
+   },
+   "takes": [
+    {
+     "name": "d",
+     "dim": "length",
+     "what": "the screw's diameter",
+     "range": [
+      "3 mm",
+      "4 mm"
+     ]
+    },
+    {
+     "name": "fit",
+     "one_of": [
+      "close",
+      "free"
+     ],
+     "what": "the fit"
+    }
+   ],
+   "table": {
+    "down": {
+     "by": "d",
+     "at": [
+      "3 mm",
+      "4 mm"
+     ]
+    },
+    "across": {
+     "by": "fit"
+    },
+    "unit": "mm",
+    "cells": [
+     [
+      "3.2",
+      "3.6"
+     ],
+     [
+      "4.3",
+      null
+     ]
+    ]
+   }
+  }
+ ],
+ "types": [
+  {
+   "type": "pad",
+   "what": "a pad a strip ends on",
+   "fields": [
+    {
+     "name": "area",
+     "dim": "area",
+     "what": "its area"
+    }
+   ]
+  },
+  {
+   "type": "strip",
+   "what": "a strip between two pads",
+   "fields": [
+    {
+     "name": "width",
+     "dim": "length",
+     "what": "its width"
+    },
+    {
+     "name": "T",
+     "dim": "temperature",
+     "signed": true,
+     "what": "its temperature"
+    },
+    {
+     "name": "gap",
+     "dim": "length",
+     "signed": true,
+     "what": "the gap under it"
+    },
+    {
+     "name": "screw",
+     "dim": "length",
+     "what": "the diameter of its screw"
+    },
+    {
+     "name": "hole",
+     "dim": "length",
+     "what": "the diameter of its hole"
+    },
+    {
+     "name": "fit",
+     "one_of": [
+      "close",
+      "free"
+     ],
+     "what": "the fit of the screw"
+    },
+    {
+     "name": "turns",
+     "dim": "dimensionless",
+     "whole": true,
+     "least": "1",
+     "what": "how many strips lie side by side"
+    },
+    {
+     "name": "lands",
+     "type": "pad",
+     "as": [
+      "near",
+      "far"
+     ],
+     "what": "its two pads"
+    }
+   ],
+   "loads": [
+    {
+     "name": "current",
+     "dim": "current",
+     "least": "0 A",
+     "what": "the current through it"
+    }
+   ]
+  }
+ ],
+ "grid": [
+  {
+   "type": "strip",
+   "mechanism": "strip.heat",
+   "what": "overheating",
+   "anchor": {
+    "standard": "a deck made up for the tests",
+    "clause": "1"
+   }
+  },
+  {
+   "type": "strip",
+   "mechanism": "strip.hole",
+   "what": "a hole too small for the screw",
+   "anchor": {
+    "standard": "a deck made up for the tests",
+    "clause": "1"
+   }
+  },
+  {
+   "type": "strip",
+   "mechanism": "strip.bow",
+   "what": "bowing over the gap",
+   "anchor": {
+    "standard": "a deck made up for the tests",
+    "clause": "1"
+   }
+  },
+  {
+   "type": "strip",
+   "mechanism": "strip.creep",
+   "what": "creep",
+   "anchor": {
+    "standard": "a deck made up for the tests",
+    "clause": "1"
+   }
+  },
+  {
+   "type": "strip",
+   "mechanism": "strip.spark",
+   "what": "a spark across a loose screw",
+   "anchor": {
+    "standard": "a deck made up for the tests",
+    "clause": "1"
+   },
+   "unless": {
+    "when": [
+     "is",
+     "fit",
+     "close"
+    ],
+    "why": "a close fit leaves no room for one"
+   }
+  },
+  {
+   "type": "strip",
+   "mechanism": "strip.tide",
+   "what": "the tide",
+   "anchor": {
+    "standard": "a deck made up for the tests",
+    "clause": "1"
+   },
+   "unless": {
+    "why": "a strip is dry"
+   }
+  }
+ ],
+ "rules": [
+  {
+   "id": "test/heat",
+   "type": "strip",
+   "mechanism": "strip.heat",
+   "anchor": {
+    "standard": "a deck made up for the tests",
+    "clause": "1"
+   },
+   "says": "the current is at most what the strips carry warm",
+   "where": [
+    {
+     "le": [
+      [
+       "add",
+       "near.area",
+       "far.area"
+      ],
+      [
+       "q",
+       "120",
+       "mm2"
+      ]
+     ],
+     "why": "the pads are at most 120 mm2 together"
+    }
+   ],
+   "le": [
+    [
+     "load",
+     "current"
+    ],
+    [
+     "mul",
+     "turns",
+     [
+      "row",
+      "test/limit",
+      {
+       "w": "width"
+      }
+     ],
+     [
+      "row",
+      "test/derate",
+      {
+       "T": "T"
+      }
+     ]
+    ]
+   ]
+  },
+  {
+   "id": "test/hole",
+   "type": "strip",
+   "mechanism": "strip.hole",
+   "anchor": {
+    "standard": "a deck made up for the tests",
+    "clause": "1"
+   },
+   "says": "the hole is at least the screw's",
+   "le": [
+    [
+     "row",
+     "test/drill",
+     {
+      "d": "screw",
+      "fit": "fit"
+     }
+    ],
+    "hole"
+   ]
+  },
+  {
+   "id": "test/bow",
+   "type": "strip",
+   "mechanism": "strip.bow",
+   "anchor": {
+    "standard": "a deck made up for the tests",
+    "clause": "1"
+   },
+   "says": "the gap times what is left of 4 mm is at most 4.2 mm2",
+   "le": [
+    [
+     "mul",
+     "gap",
+     [
+      "sub",
+      [
+       "q",
+       "4",
+       "mm"
+      ],
+      "gap"
+     ]
+    ],
+    [
+     "q",
+     "4.2",
+     "mm2"
+    ]
+   ]
+  },
+  {
+   "id": "test/spark",
+   "type": "strip",
+   "mechanism": "strip.spark",
+   "anchor": {
+    "standard": "a deck made up for the tests",
+    "clause": "1"
+   },
+   "says": "the hole is at least 0.1 mm over the screw",
+   "when": [
+    "is",
+    "fit",
+    "free"
+   ],
+   "le": [
+    [
+     "add",
+     "screw",
+     [
+      "q",
+      "0.1",
+      "mm"
+     ]
+    ],
+    "hole"
+   ]
+  }
+ ]
+}

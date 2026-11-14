@@ -1,0 +1,46 @@
+{
+ "cases": [],
+ "claims": [],
+ "environment": null,
+ "format": "petra-card/0",
+ "inputs": [
+  {
+   "by": "t@example.org",
+   "dim": "temperature",
+   "hi": "150",
+   "lo": "150",
+   "name": "pxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.T"
+  },
+  {
+   "by": "a.b@c.d",
+   "dim": "length",
+   "hi": "363/79900",
+   "lo": "363/79900",
+   "name": "pxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.gap"
+  },
+  {
+   "by": "s.engineer@example.org",
+   "dim": "area",
+   "hi": "21/10000000",
+   "lo": "21/10000000",
+   "name": "x.area"
+  }
+ ],
+ "name": "a",
+ "probability_claims": [],
+ "tests": [],
+ "waivers": [
+  {
+   "by": "t@example.org",
+   "mechanism": "strip.creep",
+   "reason": "a reason with \"quotes\"",
+   "subject": "pxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  {
+   "by": "s.engineer@example.org",
+   "mechanism": "strip.tide",
+   "reason": "a reason with \"quotes\"",
+   "subject": "pxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  }
+ ]
+}

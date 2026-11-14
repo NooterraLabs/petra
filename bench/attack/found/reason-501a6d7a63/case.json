@@ -1,0 +1,19 @@
+{
+ "sig": "501a6d7a63",
+ "kind": "reason",
+ "where": "kernel/grid",
+ "detail": "Z/bar.moment/moment/storm waived: grid 'open but for the waiver: case storm puts no push and no twist on Z, which the rule reads', kernel 'open but for the waiver: case storm puts no twist and no push on Z, which the rule reads'",
+ "recipe": "fresh",
+ "notes": [],
+ "deck": null,
+ "relation": null,
+ "extra": {},
+ "verdicts": {
+  "grid": "FAIL",
+  "kernel": "FAIL",
+  "twin": "FAIL"
+ },
+ "seed": 100,
+ "count": 13,
+ "language": true
+}

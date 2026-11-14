@@ -153,7 +153,7 @@ def _conds(node: Any) -> Iterator[list]:
 
 def op_operator(rng, deck):
     swaps = {"le": "lt", "lt": "le", "ge": "gt", "gt": "ge", "and": "or", "or": "and", "min": "max", "max": "min"}
-    found = [c for c in _conds({"rows": deck.get("rows", []), "rules": deck.get("rules", [])})]
+    found = [c for c in _conds({"rows": deck.get("rows", []), "rules": deck.get("rules", [])}) if c[0] in swaps]
     if not found:
         return None
     c = rng.choice(found)

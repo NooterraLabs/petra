@@ -1,0 +1,22 @@
+{
+ "sig": "32f334a53d",
+ "kind": "verdict",
+ "where": "kernel/twin",
+ "detail": "ILL-FORMED against UNKNOWN",
+ "recipe": "forge",
+ "notes": [
+  "from corpus/cases/deck/d34_large_bolt.petra",
+  "a number moved to 58 ksi",
+  "card: drop_key"
+ ],
+ "deck": "aisc360",
+ "relation": null,
+ "extra": {},
+ "verdicts": {
+  "kernel": "ILL-FORMED",
+  "twin": "UNKNOWN"
+ },
+ "seed": 100,
+ "count": 1,
+ "language": false
+}

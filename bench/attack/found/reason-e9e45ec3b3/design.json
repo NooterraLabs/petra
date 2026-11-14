@@ -1,0 +1,211 @@
+{
+ "card": "sha256:11c1bcc746e0a85a883719845252c5450b7ec22f3f4bfdb9570359c7160cda13",
+ "format": "petra-design/0",
+ "name": "attack",
+ "params": [],
+ "parts": [
+  {
+   "lines": [
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "length",
+        "hi": "12/5",
+        "lo": "12/5"
+       }
+      }
+     ],
+     "field": "t"
+    },
+    {
+     "args": [
+      {
+       "word": "high"
+      }
+     ],
+     "field": "finish"
+    },
+    {
+     "args": [
+      {
+       "given": "B2.i"
+      }
+     ],
+     "field": "i"
+    }
+   ],
+   "name": "B2",
+   "type": "cap"
+  },
+  {
+   "lines": [
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "length",
+        "hi": "3/50",
+        "lo": "3/50"
+       }
+      }
+     ],
+     "field": "t"
+    },
+    {
+     "args": [
+      {
+       "word": "high"
+      }
+     ],
+     "field": "finish"
+    },
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "m^4",
+        "hi": "11/3224000000",
+        "lo": "11/3224000000"
+       }
+      }
+     ],
+     "field": "i"
+    }
+   ],
+   "name": "Z",
+   "type": "cap"
+  },
+  {
+   "lines": [
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "length",
+        "hi": "1431209736/443125",
+        "lo": "1431209736/443125"
+       }
+      }
+     ],
+     "field": "a"
+    },
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "length",
+        "hi": "9/150500",
+        "lo": "9/150500"
+       }
+      }
+     ],
+     "field": "b"
+    },
+    {
+     "args": [
+      {
+       "given": "bar.r"
+      }
+     ],
+     "field": "r"
+    },
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "dimensionless",
+        "hi": "1",
+        "lo": "1"
+       }
+      }
+     ],
+     "field": "s"
+    },
+    {
+     "args": [
+      {
+       "word": "hard"
+      }
+     ],
+     "field": "grade"
+    },
+    {
+     "args": [
+      {
+       "word": "B2"
+      },
+      {
+       "word": "Z"
+      }
+     ],
+     "field": "caps"
+    }
+   ],
+   "name": "bar",
+   "type": "bar"
+  }
+ ],
+ "quantities": [
+  {
+   "dim": "length",
+   "entity": "B2",
+   "field": "t",
+   "hi": "12/5",
+   "line": "t",
+   "lo": "12/5",
+   "role": "size",
+   "type": "cap"
+  },
+  {
+   "dim": "length",
+   "entity": "Z",
+   "field": "t",
+   "hi": "3/50",
+   "line": "t",
+   "lo": "3/50",
+   "role": "size",
+   "type": "cap"
+  },
+  {
+   "dim": "m^4",
+   "entity": "Z",
+   "field": "i",
+   "hi": "11/3224000000",
+   "line": "i",
+   "lo": "11/3224000000",
+   "role": "size",
+   "type": "cap"
+  },
+  {
+   "dim": "length",
+   "entity": "bar",
+   "field": "a",
+   "hi": "1431209736/443125",
+   "line": "a",
+   "lo": "1431209736/443125",
+   "role": "size",
+   "type": "bar"
+  },
+  {
+   "dim": "length",
+   "entity": "bar",
+   "field": "b",
+   "hi": "9/150500",
+   "line": "b",
+   "lo": "9/150500",
+   "role": "size",
+   "type": "bar"
+  },
+  {
+   "dim": "dimensionless",
+   "entity": "bar",
+   "field": "s",
+   "hi": "1",
+   "line": "s",
+   "lo": "1",
+   "role": "size",
+   "type": "bar"
+  }
+ ]
+}

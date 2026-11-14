@@ -1,0 +1,40 @@
+petra 0
+
+cell p1 {
+  low 2997/100 degC
+  spare 20
+  station 4419/52731232000 mile
+  resistance 5436/559kohm
+  limit 1Hz
+  seal full
+  maker a
+  mass 10lb
+}
+
+cell lap_main {
+  low 60degC
+  spare 20
+  station 6340930648/60324553275019 mile
+  resistance 196/991 kohm
+  limit unstated
+  seal none
+  maker b
+  mass 453.59237 g
+}
+
+rig rig {
+  duty given rig.duty
+  count given rig.count
+  mode night
+  speed 1.001 Hz
+  pace given rig.pace
+  charge 5821/956 Ah
+  run 477/937min
+  reach 457.2 mm
+  density 2g/cm3
+  rate 101/100N/mm
+  torque 51374/923 lbf_ft
+  power 4764/971 kW
+  cells p1 lap_main
+}
+

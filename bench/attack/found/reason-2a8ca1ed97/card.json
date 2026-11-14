@@ -1,0 +1,44 @@
+{
+ "cases": [],
+ "claims": [],
+ "environment": null,
+ "format": "petra-card/0",
+ "inputs": [
+  {
+   "by": "x@y.z",
+   "dim": "m^1 s^-1",
+   "hi": "360",
+   "lo": "360",
+   "name": "rig.pace"
+  }
+ ],
+ "name": "card_1",
+ "probability_claims": [],
+ "states": [
+  {
+   "by": "s.engineer@example.org",
+   "name": "rig.count",
+   "whole": "14"
+  },
+  {
+   "by": "t@example.org",
+   "key": "heavy",
+   "name": "rig.duty"
+  }
+ ],
+ "tests": [],
+ "waivers": [
+  {
+   "by": "t@example.org",
+   "mechanism": "rig.bare",
+   "reason": "back\\slash",
+   "subject": "rig"
+  },
+  {
+   "by": "x@y.z",
+   "mechanism": "rig.night",
+   "reason": "caf\u00e9",
+   "subject": "rig"
+  }
+ ]
+}

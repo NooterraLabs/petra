@@ -1,0 +1,209 @@
+{
+ "card": "sha256:01d5fadc49d0fc318490a1982562599f5510d59d001d974c9c698bcc76bcfe1b",
+ "format": "petra-design/0",
+ "name": "lap-splice-waived",
+ "params": [],
+ "parts": [
+  {
+   "lines": [
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "length",
+        "hi": "381/40000",
+        "lo": "381/40000"
+       }
+      }
+     ],
+     "field": "thickness"
+    },
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "length",
+        "hi": "381/2500",
+        "lo": "381/2500"
+       }
+      }
+     ],
+     "field": "width"
+    },
+    {
+     "args": [
+      {
+       "given": "tab.Fy"
+      }
+     ],
+     "field": "Fy"
+    },
+    {
+     "args": [
+      {
+       "given": "tab.Fu"
+      }
+     ],
+     "field": "Fu"
+    }
+   ],
+   "name": "tab",
+   "type": "plate"
+  },
+  {
+   "lines": [
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "length",
+        "hi": "381/40000",
+        "lo": "381/40000"
+       }
+      }
+     ],
+     "field": "thickness"
+    },
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "length",
+        "hi": "381/2500",
+        "lo": "381/2500"
+       }
+      }
+     ],
+     "field": "width"
+    },
+    {
+     "args": [
+      {
+       "given": "strap.Fy"
+      }
+     ],
+     "field": "Fy"
+    },
+    {
+     "args": [
+      {
+       "given": "strap.Fu"
+      }
+     ],
+     "field": "Fu"
+    }
+   ],
+   "name": "strap",
+   "type": "plate"
+  },
+  {
+   "lines": [
+    {
+     "args": [
+      {
+       "text": "Group 120"
+      }
+     ],
+     "field": "fastener"
+    },
+    {
+     "args": [
+      {
+       "word": "included"
+      }
+     ],
+     "field": "threads"
+    },
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "length",
+        "hi": "381/20000",
+        "lo": "381/20000"
+       }
+      }
+     ],
+     "field": "diameter"
+    },
+    {
+     "args": [
+      {
+       "word": "standard"
+      }
+     ],
+     "field": "holes"
+    },
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "dimensionless",
+        "hi": "3",
+        "lo": "3"
+       }
+      }
+     ],
+     "field": "count"
+    },
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "length",
+        "hi": "381/5000",
+        "lo": "381/5000"
+       }
+      }
+     ],
+     "field": "pitch"
+    },
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "length",
+        "hi": "381/10000",
+        "lo": "381/10000"
+       }
+      }
+     ],
+     "field": "end"
+    },
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "length",
+        "hi": "381/5000",
+        "lo": "381/5000"
+       }
+      }
+     ],
+     "field": "side"
+    },
+    {
+     "args": [
+      {
+       "word": "protected"
+      }
+     ],
+     "field": "surface"
+    },
+    {
+     "args": [
+      {
+       "word": "tab"
+      },
+      {
+       "word": "strap"
+      }
+     ],
+     "field": "joins"
+    }
+   ],
+   "name": "splice",
+   "type": "lap"
+  }
+ ]
+}

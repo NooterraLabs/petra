@@ -1,0 +1,297 @@
+{
+ "cases": [],
+ "claims": [],
+ "environment": null,
+ "format": "petra-card/0",
+ "inputs": [
+  {
+   "by": "s.engineer@example.org",
+   "dim": "m^-3 kg^1",
+   "hi": "383500/477",
+   "lo": "383500/477",
+   "name": "b.density"
+  },
+  {
+   "by": "s.engineer@example.org",
+   "dim": "m^1 s^-1",
+   "hi": "15",
+   "lo": "15",
+   "name": "b.pace"
+  },
+  {
+   "by": "t@example.org",
+   "dim": "mass",
+   "hi": "45359237/640000000",
+   "lo": "45359237/800000000",
+   "name": "lap_main.mass"
+  },
+  {
+   "by": "s.engineer@example.org",
+   "dim": "mass",
+   "hi": "45359237/160000000",
+   "lo": "45359237/200000000",
+   "name": "x.mass"
+  }
+ ],
+ "name": "lap-splice",
+ "probability_claims": [],
+ "states": [
+  {
+   "by": "s.engineer@example.org",
+   "name": "b.count",
+   "whole": "6"
+  },
+  {
+   "by": "a.b@c.d",
+   "key": "light",
+   "name": "b.duty"
+  },
+  {
+   "by": "s.engineer@example.org",
+   "name": "rig.count",
+   "whole": "4"
+  },
+  {
+   "by": "t@example.org",
+   "key": "heavy",
+   "name": "rig.duty"
+  }
+ ],
+ "tests": [],
+ "waivers": [
+  {
+   "by": "s.engineer@example.org",
+   "mechanism": "cell.mass",
+   "reason": "n\u00e4mn",
+   "subject": "x"
+  },
+  {
+   "by": "x@y.z",
+   "mechanism": "cell.sealed",
+   "reason": "n\u00e4mn",
+   "subject": "x"
+  },
+  {
+   "by": "s.engineer@example.org",
+   "mechanism": "cell.ohm",
+   "reason": "a reason with \"quotes\"",
+   "subject": "x"
+  },
+  {
+   "by": "x@y.z",
+   "mechanism": "cell.spare",
+   "reason": "it is a test",
+   "subject": "x"
+  },
+  {
+   "by": "a.b@c.d",
+   "mechanism": "cell.temp",
+   "reason": "a reason with \"quotes\"",
+   "subject": "x"
+  },
+  {
+   "by": "s.engineer@example.org",
+   "mechanism": "cell.limit",
+   "reason": "n\u00e4mn",
+   "subject": "x"
+  },
+  {
+   "by": "t@example.org",
+   "mechanism": "cell.mass",
+   "reason": "caf\u00e9",
+   "subject": "a_"
+  },
+  {
+   "by": "s.engineer@example.org",
+   "mechanism": "cell.sealed",
+   "reason": "caf\u00e9",
+   "subject": "a_"
+  },
+  {
+   "by": "s.engineer@example.org",
+   "mechanism": "cell.limit",
+   "reason": "caf\u00e9",
+   "subject": "a_"
+  },
+  {
+   "by": "s.engineer@example.org",
+   "mechanism": "cell.temp",
+   "reason": "it is a test",
+   "subject": "strap"
+  },
+  {
+   "by": "x@y.z",
+   "mechanism": "cell.sealed",
+   "reason": "a reason with \"quotes\"",
+   "subject": "strap"
+  },
+  {
+   "by": "a.b@c.d",
+   "mechanism": "cell.limit",
+   "reason": "snug-tight bolts",
+   "subject": "strap"
+  },
+  {
+   "by": "a.b@c.d",
+   "mechanism": "cell.ohm",
+   "reason": "a long reason xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "subject": "strap"
+  },
+  {
+   "by": "x@y.z",
+   "mechanism": "cell.mass",
+   "reason": "snug-tight bolts",
+   "subject": "strap"
+  },
+  {
+   "by": "a.b@c.d",
+   "mechanism": "cell.spare",
+   "reason": "a reason with \"quotes\"",
+   "subject": "strap"
+  },
+  {
+   "by": "x@y.z",
+   "mechanism": "cell.sealed",
+   "reason": "n\u00e4mn",
+   "subject": "lap_main"
+  },
+  {
+   "by": "t@example.org",
+   "mechanism": "cell.spare",
+   "reason": "n\u00e4mn",
+   "subject": "lap_main"
+  },
+  {
+   "by": "t@example.org",
+   "mechanism": "cell.temp",
+   "reason": "n\u00e4mn",
+   "subject": "lap_main"
+  },
+  {
+   "by": "s.engineer@example.org",
+   "mechanism": "cell.mass",
+   "reason": "n\u00e4mn",
+   "subject": "lap_main"
+  },
+  {
+   "by": "t@example.org",
+   "mechanism": "cell.ohm",
+   "reason": "it is a test",
+   "subject": "lap_main"
+  },
+  {
+   "by": "s.engineer@example.org",
+   "mechanism": "rig.cold",
+   "reason": "it is a test",
+   "subject": "rig"
+  },
+  {
+   "by": "t@example.org",
+   "mechanism": "rig.share",
+   "reason": "back\\slash",
+   "subject": "rig"
+  },
+  {
+   "by": "t@example.org",
+   "mechanism": "rig.carry",
+   "reason": "caf\u00e9",
+   "subject": "rig"
+  },
+  {
+   "by": "a.b@c.d",
+   "mechanism": "rig.sealed",
+   "reason": "n\u00e4mn",
+   "subject": "rig"
+  },
+  {
+   "by": "s.engineer@example.org",
+   "mechanism": "rig.heat",
+   "reason": "it is a test",
+   "subject": "rig"
+  },
+  {
+   "by": "a.b@c.d",
+   "mechanism": "rig.speed",
+   "reason": "snug-tight bolts",
+   "subject": "rig"
+  },
+  {
+   "by": "s.engineer@example.org",
+   "mechanism": "rig.twist",
+   "reason": "caf\u00e9",
+   "subject": "rig"
+  },
+  {
+   "by": "a.b@c.d",
+   "mechanism": "rig.stiff",
+   "reason": "snug-tight bolts",
+   "subject": "rig"
+  },
+  {
+   "by": "a.b@c.d",
+   "mechanism": "rig.night",
+   "reason": "back\\slash",
+   "subject": "rig"
+  },
+  {
+   "by": "s.engineer@example.org",
+   "mechanism": "rig.count",
+   "reason": "snug-tight bolts",
+   "subject": "rig"
+  },
+  {
+   "by": "x@y.z",
+   "mechanism": "rig.centre",
+   "reason": "caf\u00e9",
+   "subject": "rig"
+  },
+  {
+   "by": "t@example.org",
+   "mechanism": "rig.bare",
+   "reason": "back\\slash",
+   "subject": "b"
+  },
+  {
+   "by": "t@example.org",
+   "mechanism": "rig.speed",
+   "reason": "it is a test",
+   "subject": "b"
+  },
+  {
+   "by": "s.engineer@example.org",
+   "mechanism": "rig.carry",
+   "reason": "snug-tight bolts",
+   "subject": "b"
+  },
+  {
+   "by": "a.b@c.d",
+   "mechanism": "rig.sealed",
+   "reason": "caf\u00e9",
+   "subject": "b"
+  },
+  {
+   "by": "t@example.org",
+   "mechanism": "rig.count",
+   "reason": "a long reason xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "subject": "b"
+  },
+  {
+   "by": "s.engineer@example.org",
+   "mechanism": "rig.night",
+   "reason": "n\u00e4mn",
+   "subject": "b"
+  },
+  {
+   "by": "s.engineer@example.org",
+   "mechanism": "rig.twist",
+   "reason": "back\\slash",
+   "subject": "b"
+  },
+  {
+   "by": "s.engineer@example.org",
+   "mechanism": "rig.cold",
+   "reason": "snug-tight bolts",
+   "subject": "b"
+  }
+ ]
+}

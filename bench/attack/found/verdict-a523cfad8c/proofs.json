@@ -1,0 +1,159 @@
+{
+ "cells": [
+  {
+   "entry": "",
+   "mechanism": "lap.tightening",
+   "state": "waived",
+   "subject": "splice"
+  },
+  {
+   "entry": "",
+   "mechanism": "lap.hole_use",
+   "state": "waived",
+   "subject": "splice"
+  },
+  {
+   "entry": "lap-spacing-centres",
+   "mechanism": "lap.spacing",
+   "partition": "leaf",
+   "rule": "aisc360-22/lap-spacing-centres",
+   "state": "proved",
+   "subject": "splice"
+  },
+  {
+   "entry": "lap-spacing-clear",
+   "mechanism": "lap.spacing",
+   "partition": "leaf",
+   "rule": "aisc360-22/lap-spacing-clear",
+   "state": "proved",
+   "subject": "splice"
+  },
+  {
+   "entry": "lap-end-distance-standard",
+   "mechanism": "lap.end_distance",
+   "partition": "leaf",
+   "rule": "aisc360-22/lap-end-distance-standard",
+   "state": "proved",
+   "subject": "splice"
+  },
+  {
+   "entry": "lap-side-distance-standard",
+   "mechanism": "lap.side_distance",
+   "partition": "leaf",
+   "rule": "aisc360-22/lap-side-distance-standard",
+   "state": "proved",
+   "subject": "splice"
+  },
+  {
+   "entry": "lap-spread-pitch-protected",
+   "mechanism": "lap.spread",
+   "partition": "leaf",
+   "rule": "aisc360-22/lap-spread-pitch-protected",
+   "state": "proved",
+   "subject": "splice"
+  },
+  {
+   "entry": "",
+   "mechanism": "lap.max_edge_distance",
+   "state": "waived",
+   "subject": "splice"
+  },
+  {
+   "entry": "lap-strength/gravity",
+   "mechanism": "lap.strength",
+   "partition": "leaf",
+   "rule": "aisc360-22/lap-strength",
+   "state": "proved",
+   "subject": "splice"
+  },
+  {
+   "entry": "",
+   "mechanism": "lap.tension_with_shear",
+   "state": "not_applicable",
+   "subject": "splice",
+   "why": "a lap carries a pull along its line, which shears its bolts and puts no tension on them"
+  },
+  {
+   "entry": "",
+   "mechanism": "lap.slip",
+   "state": "not_applicable",
+   "subject": "splice",
+   "why": "a lap is a bearing-type joint, which claims no slip resistance"
+  },
+  {
+   "entry": "lap-ply-yield-a/gravity",
+   "mechanism": "lap.ply_yield",
+   "partition": "leaf",
+   "rule": "aisc360-22/lap-ply-yield-a",
+   "state": "proved",
+   "subject": "splice"
+  },
+  {
+   "entry": "lap-ply-yield-b/gravity",
+   "mechanism": "lap.ply_yield",
+   "partition": "leaf",
+   "rule": "aisc360-22/lap-ply-yield-b",
+   "state": "proved",
+   "subject": "splice"
+  },
+  {
+   "entry": "lap-ply-rupture-a/gravity",
+   "mechanism": "lap.ply_rupture",
+   "partition": "leaf",
+   "rule": "aisc360-22/lap-ply-rupture-a",
+   "state": "proved",
+   "subject": "splice"
+  },
+  {
+   "entry": "lap-ply-rupture-b/gravity",
+   "mechanism": "lap.ply_rupture",
+   "partition": "leaf",
+   "rule": "aisc360-22/lap-ply-rupture-b",
+   "state": "proved",
+   "subject": "splice"
+  },
+  {
+   "entry": "",
+   "mechanism": "lap.ply_shear",
+   "state": "not_applicable",
+   "subject": "splice",
+   "why": "the plates of a lap are pulled along its line; shear on their planes beside the bolts is tearout and block shear"
+  },
+  {
+   "entry": "lap-block-shear-a/gravity",
+   "mechanism": "lap.block_shear",
+   "partition": "leaf",
+   "rule": "aisc360-22/lap-block-shear-a",
+   "state": "proved",
+   "subject": "splice"
+  },
+  {
+   "entry": "lap-block-shear-b/gravity",
+   "mechanism": "lap.block_shear",
+   "partition": "leaf",
+   "rule": "aisc360-22/lap-block-shear-b",
+   "state": "proved",
+   "subject": "splice"
+  },
+  {
+   "entry": "",
+   "mechanism": "lap.partial_block_shear",
+   "state": "waived",
+   "subject": "splice"
+  },
+  {
+   "entry": "",
+   "mechanism": "lap.ply_compression",
+   "state": "not_applicable",
+   "subject": "splice",
+   "why": "the load on a lap is a pull, which the card signs as at least zero"
+  },
+  {
+   "entry": "",
+   "mechanism": "lap.ply_flexure",
+   "state": "waived",
+   "subject": "splice"
+  }
+ ],
+ "format": "petra-proofs/0"
+}

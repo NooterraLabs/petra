@@ -1,0 +1,44 @@
+petra 0
+
+cap pxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx {
+  t 11/10 mm
+  finish high
+  i 1000001000000000 um^4
+}
+
+cap ab {
+  t 1000 um
+  finish high
+  i 2230/341 cm^4
+}
+
+cap tab {
+  t 45000 um
+  finish low
+  i 24000 mm^4
+}
+
+cap A {
+  t 100 mm
+  finish low
+  i 1000mm^4
+}
+
+bar bar {
+  a 10000um
+  b given bar.b
+  r given bar.r
+  s 4
+  grade "soft"
+  caps pxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx ab
+}
+
+bar Z {
+  a 1512/367 cm
+  b 4162/369mm
+  r given Z.r
+  s 89/503
+  grade hard
+  caps tab A
+}
+

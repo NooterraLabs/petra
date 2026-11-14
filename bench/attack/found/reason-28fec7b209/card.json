@@ -1,0 +1,172 @@
+{
+ "cases": [
+  "a1",
+  "ab",
+  "seismic"
+ ],
+ "claims": [],
+ "environment": null,
+ "format": "petra-card/0",
+ "inputs": [
+  {
+   "by": "a.b@c.d",
+   "case": "a1",
+   "dim": "force",
+   "field": "press",
+   "hi": "1270920461503/2600000000",
+   "lo": "0",
+   "name": "a1.a_.press",
+   "on": "a_"
+  },
+  {
+   "by": "a.b@c.d",
+   "case": "a1",
+   "dim": "force",
+   "field": "press",
+   "hi": "52000/3",
+   "lo": "15600",
+   "name": "a1.cap3.press",
+   "on": "cap3"
+  },
+  {
+   "by": "a.b@c.d",
+   "case": "a1",
+   "dim": "force",
+   "field": "push",
+   "hi": "6000",
+   "lo": "0",
+   "name": "a1.k.push",
+   "on": "k"
+  },
+  {
+   "by": "a.b@c.d",
+   "case": "a1",
+   "dim": "energy",
+   "field": "twist",
+   "hi": "13588685387151460509/1103750000000000000",
+   "lo": "0",
+   "name": "a1.k.twist",
+   "on": "k"
+  },
+  {
+   "by": "s.engineer@example.org",
+   "dim": "m^4",
+   "hi": "1347/70900000000",
+   "lo": "1347/70900000000",
+   "name": "a_.i"
+  },
+  {
+   "by": "t@example.org",
+   "case": "ab",
+   "dim": "force",
+   "field": "press",
+   "hi": "6000",
+   "lo": "600",
+   "name": "ab.a_.press",
+   "on": "a_"
+  },
+  {
+   "by": "t@example.org",
+   "case": "ab",
+   "dim": "force",
+   "field": "press",
+   "hi": "6000",
+   "lo": "600",
+   "name": "ab.cap3.press",
+   "on": "cap3"
+  },
+  {
+   "by": "t@example.org",
+   "case": "ab",
+   "dim": "force",
+   "field": "drag",
+   "hi": "9000/689",
+   "lo": "900/689",
+   "name": "ab.k.drag",
+   "on": "k"
+  },
+  {
+   "by": "t@example.org",
+   "case": "ab",
+   "dim": "force",
+   "field": "push",
+   "hi": "1000",
+   "lo": "1000",
+   "name": "ab.k.push",
+   "on": "k"
+  },
+  {
+   "by": "t@example.org",
+   "case": "ab",
+   "dim": "energy",
+   "field": "twist",
+   "hi": "16875/964",
+   "lo": "0",
+   "name": "ab.k.twist",
+   "on": "k"
+  },
+  {
+   "by": "t@example.org",
+   "dim": "dimensionless",
+   "hi": "1816/887",
+   "lo": "1816/887",
+   "name": "k.r"
+  },
+  {
+   "by": "a.b@c.d",
+   "dim": "dimensionless",
+   "hi": "99/200",
+   "lo": "81/200",
+   "name": "k.s"
+  },
+  {
+   "by": "x@y.z",
+   "case": "seismic",
+   "dim": "force",
+   "field": "press",
+   "hi": "6000",
+   "lo": "0",
+   "name": "seismic.a_.press",
+   "on": "a_"
+  },
+  {
+   "by": "x@y.z",
+   "case": "seismic",
+   "dim": "force",
+   "field": "push",
+   "hi": "2000",
+   "lo": "2000",
+   "name": "seismic.k.push",
+   "on": "k"
+  }
+ ],
+ "name": "lap-splice",
+ "probability_claims": [],
+ "tests": [],
+ "waivers": [
+  {
+   "by": "x@y.z",
+   "mechanism": "bar.idle",
+   "reason": "it is a test",
+   "subject": "k"
+  },
+  {
+   "by": "t@example.org",
+   "mechanism": "bar.right",
+   "reason": "a reason with \"quotes\"",
+   "subject": "k"
+  },
+  {
+   "by": "t@example.org",
+   "mechanism": "bar.moment",
+   "reason": "back\\slash",
+   "subject": "k"
+  },
+  {
+   "by": "s.engineer@example.org",
+   "mechanism": "bar.drag",
+   "reason": "snug-tight bolts",
+   "subject": "k"
+  }
+ ]
+}

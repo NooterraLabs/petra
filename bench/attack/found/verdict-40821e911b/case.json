@@ -1,0 +1,20 @@
+{
+ "sig": "40821e911b",
+ "kind": "verdict",
+ "where": "kernel/twin",
+ "detail": "ILL-FORMED against PASS",
+ "recipe": "sweep",
+ "notes": [
+  "design.params left out of lap_pass"
+ ],
+ "deck": "aisc360",
+ "relation": null,
+ "extra": {},
+ "verdicts": {
+  "kernel": "ILL-FORMED",
+  "twin": "PASS"
+ },
+ "seed": 0,
+ "count": 1,
+ "language": false
+}

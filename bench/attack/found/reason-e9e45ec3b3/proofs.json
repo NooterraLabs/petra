@@ -1,0 +1,249 @@
+{
+ "cells": [
+  {
+   "entry": "cases",
+   "mechanism": "bar.cases",
+   "point": {
+    "dsg:attack.bar.a": "1431209736/443125",
+    "dsg:attack.bar.b": "9/150500"
+   },
+   "rule": "ops/cases",
+   "state": "refuted",
+   "subject": "bar"
+  },
+  {
+   "entry": "exp/where",
+   "mechanism": "bar.exp",
+   "partition": "leaf",
+   "rule": "ops/exp",
+   "state": "proved",
+   "subject": "bar"
+  },
+  {
+   "entry": "exp",
+   "mechanism": "bar.exp",
+   "rule": "ops/exp",
+   "state": "proved",
+   "subject": "bar",
+   "partition": {
+    "input": "dsg:attack.bar.s",
+    "at": "23",
+    "below": "leaf",
+    "above": "leaf"
+   }
+  },
+  {
+   "entry": "table/dead",
+   "mechanism": "bar.table",
+   "partition": "leaf",
+   "rule": "ops/table",
+   "state": "proved",
+   "subject": "bar"
+  },
+  {
+   "entry": "key/dead",
+   "mechanism": "bar.key",
+   "rule": "ops/key",
+   "state": "open",
+   "subject": "bar",
+   "why": "the rule holds only where made up, and that is not proved for bar",
+   "completion": {
+    "keys": [
+     [
+      "lap",
+      "holes",
+      "oversize"
+     ],
+     [
+      "nobody",
+      "x",
+      "y"
+     ]
+    ],
+    "loads": []
+   }
+  },
+  {
+   "entry": "moment/dead",
+   "mechanism": "bar.moment",
+   "point": {
+    "dsg:attack.bar.a": "1431209736/443125",
+    "in:attack.dead.bar.push": "0",
+    "in:attack.dead.bar.twist": "8723/7000"
+   },
+   "rule": "ops/moment",
+   "state": "refuted",
+   "subject": "bar"
+  },
+  {
+   "entry": "caps/dead",
+   "mechanism": "bar.caps",
+   "partition": "leaf",
+   "rule": "ops/caps",
+   "state": "proved",
+   "subject": "bar"
+  },
+  {
+   "entry": "drag/dead",
+   "mechanism": "bar.drag",
+   "rule": "ops/drag",
+   "state": "open",
+   "subject": "bar",
+   "why": "case dead puts no drag on bar, which the rule reads"
+  },
+  {
+   "entry": "",
+   "mechanism": "bar.idle",
+   "state": "not_applicable",
+   "subject": "bar",
+   "why": "made up"
+  },
+  {
+   "entry": "named/dead",
+   "mechanism": "bar.named",
+   "rule": "ops/named",
+   "state": "open",
+   "subject": "bar",
+   "why": "ops/table gives no value at what bar has: no case of the pick holds somewhere in the box",
+   "completion": {
+    "keys": [],
+    "loads": []
+   }
+  },
+  {
+   "entry": "cased",
+   "mechanism": "bar.cased",
+   "point": {
+    "dsg:attack.Z.i": "11/3224000000",
+    "dsg:attack.bar.a": "1431209736/443125",
+    "dsg:attack.bar.b": "9/150500"
+   },
+   "rule": "ops/cased",
+   "state": "refuted",
+   "subject": "bar"
+  },
+  {
+   "entry": "",
+   "mechanism": "bar.left",
+   "state": "open",
+   "subject": "bar",
+   "why": "the deck has no rule for it on a part like this one"
+  },
+  {
+   "entry": "alike",
+   "mechanism": "bar.alike",
+   "rule": "ops/alike",
+   "state": "proved",
+   "subject": "bar"
+  },
+  {
+   "entry": "modulus",
+   "mechanism": "bar.modulus",
+   "partition": "leaf",
+   "rule": "ops/modulus",
+   "state": "proved",
+   "subject": "bar"
+  },
+  {
+   "entry": "cos",
+   "mechanism": "bar.cos",
+   "partition": "leaf",
+   "rule": "ops/cos",
+   "state": "proved",
+   "subject": "bar"
+  },
+  {
+   "entry": "cosin",
+   "mechanism": "bar.cosin",
+   "partition": "leaf",
+   "rule": "ops/cosin",
+   "state": "proved",
+   "subject": "bar"
+  },
+  {
+   "entry": "cosfloor",
+   "mechanism": "bar.cosfloor",
+   "point": {
+    "in:attack.bar.r": "16/5"
+   },
+   "rule": "ops/cosfloor",
+   "state": "refuted",
+   "subject": "bar"
+  },
+  {
+   "entry": "turn",
+   "mechanism": "bar.turn",
+   "partition": "leaf",
+   "rule": "ops/turn",
+   "state": "proved",
+   "subject": "bar"
+  },
+  {
+   "entry": "sine",
+   "mechanism": "bar.sine",
+   "partition": "leaf",
+   "rule": "ops/sine",
+   "state": "proved",
+   "subject": "bar"
+  },
+  {
+   "entry": "zero",
+   "mechanism": "bar.zero",
+   "partition": "leaf",
+   "rule": "ops/zero",
+   "state": "proved",
+   "subject": "bar"
+  },
+  {
+   "entry": "tiny",
+   "mechanism": "bar.tiny",
+   "partition": "leaf",
+   "rule": "ops/tiny",
+   "state": "proved",
+   "subject": "bar"
+  },
+  {
+   "entry": "edge",
+   "mechanism": "bar.edge",
+   "rule": "ops/edge",
+   "state": "proved",
+   "subject": "bar",
+   "why": "node 3: cos of a value beyond 65536",
+   "partition": {
+    "input": "dsg:attack.bar.s",
+    "at": "127/5000",
+    "below": "leaf",
+    "above": "leaf"
+   }
+  },
+  {
+   "entry": "long",
+   "mechanism": "bar.long",
+   "partition": "leaf",
+   "rule": "ops/long",
+   "state": "proved",
+   "subject": "bar"
+  },
+  {
+   "entry": "",
+   "mechanism": "bar.right",
+   "state": "waived",
+   "subject": "bar"
+  },
+  {
+   "entry": "press/dead",
+   "mechanism": "unread",
+   "state": "open",
+   "subject": "B2",
+   "why": "no rule of the deck reads the load press that case dead puts on B2, so nothing checks it"
+  },
+  {
+   "subject": "bar",
+   "mechanism": "bar.turn",
+   "entry": "",
+   "state": "proved",
+   "partition": "leaf"
+  }
+ ],
+ "format": "petra-proofs/0"
+}
