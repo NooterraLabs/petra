@@ -1,0 +1,529 @@
+{
+ "cells": [
+  {
+   "entry": "cases",
+   "mechanism": "bar.cases",
+   "point": {
+    "dsg:a.bar.a": "1/100",
+    "in:a.bar.b": "12/25"
+   },
+   "rule": "ops/cases",
+   "state": "refuted",
+   "subject": "bar"
+  },
+  {
+   "entry": "roots",
+   "mechanism": "bar.roots",
+   "partition": "leaf",
+   "rule": "ops/roots",
+   "state": "proved",
+   "subject": "bar"
+  },
+  {
+   "entry": "exp/where",
+   "mechanism": "bar.exp",
+   "partition": "leaf",
+   "rule": "ops/exp",
+   "state": "proved",
+   "subject": "bar"
+  },
+  {
+   "entry": "exp",
+   "mechanism": "bar.exp",
+   "point": {
+    "dsg:a.bar.s": "4",
+    "in:a.bar.r": "5071/918"
+   },
+   "rule": "ops/exp",
+   "state": "refuted",
+   "subject": "bar"
+  },
+  {
+   "entry": "table/storm",
+   "mechanism": "bar.table",
+   "point": {
+    "dsg:a.bar.a": "1/100",
+    "in:a.storm.bar.push": "5400"
+   },
+   "rule": "ops/table",
+   "state": "refuted",
+   "subject": "bar"
+  },
+  {
+   "entry": "key/storm/where",
+   "mechanism": "bar.key",
+   "partition": "leaf",
+   "rule": "ops/key",
+   "state": "proved",
+   "subject": "bar"
+  },
+  {
+   "entry": "key/storm",
+   "mechanism": "bar.key",
+   "partition": "leaf",
+   "rule": "ops/key",
+   "state": "proved",
+   "subject": "bar"
+  },
+  {
+   "completion": {
+    "keys": [],
+    "loads": [
+     [
+      "bar",
+      "twist",
+      "storm",
+      "0"
+     ]
+    ]
+   },
+   "entry": "moment/storm",
+   "mechanism": "bar.moment",
+   "partition": "leaf",
+   "rule": "ops/moment",
+   "state": "open",
+   "subject": "bar",
+   "why": "case storm puts no twist on bar, which the rule reads"
+  },
+  {
+   "entry": "caps/storm",
+   "mechanism": "bar.caps",
+   "rule": "ops/caps",
+   "state": "open",
+   "subject": "bar",
+   "why": "the waiver does not rest this cell: ops/table gives no value at what bar has: no case of the pick holds somewhere in the box"
+  },
+  {
+   "entry": "",
+   "mechanism": "bar.drag",
+   "state": "waived",
+   "subject": "bar"
+  },
+  {
+   "entry": "",
+   "mechanism": "bar.idle",
+   "state": "not_applicable",
+   "subject": "bar",
+   "why": "made up"
+  },
+  {
+   "entry": "named/storm",
+   "mechanism": "bar.named",
+   "rule": "ops/named",
+   "state": "open",
+   "subject": "bar",
+   "why": "the waiver does not rest this cell: ops/table gives no value at what bar has: no case of the pick holds somewhere in the box"
+  },
+  {
+   "entry": "cased",
+   "mechanism": "bar.cased",
+   "rule": "ops/cased",
+   "state": "open",
+   "subject": "bar",
+   "why": "the waiver does not rest this cell: ops/class gives no value at what bar has: no case of the pick holds somewhere in the box"
+  },
+  {
+   "entry": "",
+   "mechanism": "bar.left",
+   "state": "waived",
+   "subject": "bar"
+  },
+  {
+   "entry": "",
+   "mechanism": "bar.alike",
+   "state": "waived",
+   "subject": "bar"
+  },
+  {
+   "entry": "modulus",
+   "mechanism": "bar.modulus",
+   "partition": "leaf",
+   "rule": "ops/modulus",
+   "state": "proved",
+   "subject": "bar"
+  },
+  {
+   "entry": "cos",
+   "mechanism": "bar.cos",
+   "point": {
+    "in:a.bar.r": "5071/918"
+   },
+   "rule": "ops/cos",
+   "state": "refuted",
+   "subject": "bar"
+  },
+  {
+   "entry": "cosin",
+   "mechanism": "bar.cosin",
+   "point": {
+    "in:a.bar.r": "5071/918"
+   },
+   "rule": "ops/cosin",
+   "state": "refuted",
+   "subject": "bar"
+  },
+  {
+   "entry": "cosfloor",
+   "mechanism": "bar.cosfloor",
+   "partition": "leaf",
+   "rule": "ops/cosfloor",
+   "state": "proved",
+   "subject": "bar"
+  },
+  {
+   "entry": "turn",
+   "mechanism": "bar.turn",
+   "point": {
+    "dsg:a.bar.s": "4"
+   },
+   "rule": "ops/turn",
+   "state": "refuted",
+   "subject": "bar"
+  },
+  {
+   "entry": "sine",
+   "mechanism": "bar.sine",
+   "partition": "leaf",
+   "rule": "ops/sine",
+   "state": "proved",
+   "subject": "bar"
+  },
+  {
+   "entry": "zero",
+   "mechanism": "bar.zero",
+   "partition": "leaf",
+   "rule": "ops/zero",
+   "state": "proved",
+   "subject": "bar"
+  },
+  {
+   "entry": "tiny",
+   "mechanism": "bar.tiny",
+   "partition": "leaf",
+   "rule": "ops/tiny",
+   "state": "proved",
+   "subject": "bar"
+  },
+  {
+   "entry": "edge",
+   "mechanism": "bar.edge",
+   "rule": "ops/edge",
+   "state": "open",
+   "subject": "bar",
+   "why": "the waiver does not rest this cell: node 3: cos of a value beyond 65536"
+  },
+  {
+   "entry": "long",
+   "mechanism": "bar.long",
+   "point": {
+    "in:a.bar.r": "5071/918"
+   },
+   "rule": "ops/long",
+   "state": "refuted",
+   "subject": "bar"
+  },
+  {
+   "entry": "",
+   "mechanism": "bar.right",
+   "state": "waived",
+   "subject": "bar"
+  },
+  {
+   "entry": "cases",
+   "mechanism": "bar.cases",
+   "point": {
+    "dsg:a.Z.a": "378/9175",
+    "dsg:a.Z.b": "2081/184500"
+   },
+   "rule": "ops/cases",
+   "state": "refuted",
+   "subject": "Z"
+  },
+  {
+   "entry": "roots",
+   "mechanism": "bar.roots",
+   "point": {
+    "dsg:a.Z.a": "378/9175",
+    "dsg:a.Z.b": "2081/184500"
+   },
+   "rule": "ops/roots",
+   "state": "refuted",
+   "subject": "Z"
+  },
+  {
+   "entry": "exp/where",
+   "mechanism": "bar.exp",
+   "partition": "leaf",
+   "rule": "ops/exp",
+   "state": "proved",
+   "subject": "Z"
+  },
+  {
+   "entry": "exp",
+   "mechanism": "bar.exp",
+   "point": {
+    "dsg:a.Z.s": "89/503",
+    "in:a.Z.r": "15845632502852867518708790067/19807040628566084398385987584"
+   },
+   "rule": "ops/exp",
+   "state": "refuted",
+   "subject": "Z"
+  },
+  {
+   "entry": "",
+   "mechanism": "bar.table",
+   "state": "waived",
+   "subject": "Z"
+  },
+  {
+   "completion": {
+    "keys": [],
+    "loads": [
+     [
+      "Z",
+      "push",
+      "storm",
+      "0"
+     ]
+    ]
+   },
+   "entry": "key/storm",
+   "mechanism": "bar.key",
+   "rule": "ops/key",
+   "state": "open",
+   "subject": "Z",
+   "why": "case storm puts no push on Z, which the rule reads"
+  },
+  {
+   "completion": {
+    "keys": [],
+    "loads": [
+     [
+      "Z",
+      "push",
+      "storm",
+      "0"
+     ],
+     [
+      "Z",
+      "twist",
+      "storm",
+      "0"
+     ]
+    ]
+   },
+   "entry": "moment/storm",
+   "mechanism": "bar.moment",
+   "partition": "leaf",
+   "rule": "ops/moment",
+   "state": "open",
+   "subject": "Z",
+   "why": "case storm puts no push and no twist on Z, which the rule reads"
+  },
+  {
+   "completion": {
+    "keys": [],
+    "loads": [
+     [
+      "Z",
+      "push",
+      "storm",
+      "0"
+     ]
+    ]
+   },
+   "entry": "caps/storm",
+   "mechanism": "bar.caps",
+   "partition": "leaf",
+   "rule": "ops/caps",
+   "state": "open",
+   "subject": "Z",
+   "why": "case storm puts no push on Z, which the rule reads"
+  },
+  {
+   "completion": {
+    "keys": [],
+    "loads": [
+     [
+      "Z",
+      "drag",
+      "storm",
+      "0"
+     ]
+    ]
+   },
+   "entry": "drag/storm",
+   "mechanism": "bar.drag",
+   "partition": "leaf",
+   "rule": "ops/drag",
+   "state": "open",
+   "subject": "Z",
+   "why": "case storm puts no drag on Z, which the rule reads"
+  },
+  {
+   "entry": "",
+   "mechanism": "bar.idle",
+   "state": "waived",
+   "subject": "Z"
+  },
+  {
+   "entry": "named/storm",
+   "mechanism": "bar.named",
+   "rule": "ops/named",
+   "state": "open",
+   "subject": "Z",
+   "why": "the waiver does not rest this cell: case storm puts no push on Z, which the rule reads"
+  },
+  {
+   "entry": "cased",
+   "mechanism": "bar.cased",
+   "point": {
+    "dsg:a.A.i": "1/1000000000",
+    "dsg:a.Z.a": "378/9175",
+    "dsg:a.Z.b": "2081/184500"
+   },
+   "rule": "ops/cased",
+   "state": "refuted",
+   "subject": "Z"
+  },
+  {
+   "entry": "",
+   "mechanism": "bar.left",
+   "state": "waived",
+   "subject": "Z"
+  },
+  {
+   "entry": "alike",
+   "mechanism": "bar.alike",
+   "rule": "ops/alike",
+   "state": "proved",
+   "subject": "Z"
+  },
+  {
+   "entry": "modulus",
+   "mechanism": "bar.modulus",
+   "point": {
+    "dsg:a.Z.a": "378/9175",
+    "dsg:a.tab.i": "3/125000000"
+   },
+   "rule": "ops/modulus",
+   "state": "refuted",
+   "subject": "Z"
+  },
+  {
+   "entry": "cos",
+   "mechanism": "bar.cos",
+   "point": {
+    "in:a.Z.r": "15845632502852867518708790067/19807040628566084398385987584"
+   },
+   "rule": "ops/cos",
+   "state": "refuted",
+   "subject": "Z"
+  },
+  {
+   "entry": "cosin",
+   "mechanism": "bar.cosin",
+   "point": {
+    "in:a.Z.r": "15845632502852867518708790067/19807040628566084398385987584"
+   },
+   "rule": "ops/cosin",
+   "state": "refuted",
+   "subject": "Z"
+  },
+  {
+   "entry": "cosfloor",
+   "mechanism": "bar.cosfloor",
+   "partition": "leaf",
+   "rule": "ops/cosfloor",
+   "state": "proved",
+   "subject": "Z"
+  },
+  {
+   "entry": "turn",
+   "mechanism": "bar.turn",
+   "point": {
+    "dsg:a.Z.s": "89/503"
+   },
+   "rule": "ops/turn",
+   "state": "refuted",
+   "subject": "Z"
+  },
+  {
+   "entry": "sine",
+   "mechanism": "bar.sine",
+   "partition": "leaf",
+   "rule": "ops/sine",
+   "state": "proved",
+   "subject": "Z"
+  },
+  {
+   "entry": "zero",
+   "mechanism": "bar.zero",
+   "rule": "ops/zero",
+   "state": "open",
+   "subject": "Z",
+   "why": "the waiver does not rest this cell: neither proved over the ranges the card gives nor refuted at a point of them the search tried"
+  },
+  {
+   "entry": "tiny",
+   "mechanism": "bar.tiny",
+   "partition": "leaf",
+   "rule": "ops/tiny",
+   "state": "proved",
+   "subject": "Z"
+  },
+  {
+   "entry": "edge",
+   "mechanism": "bar.edge",
+   "partition": "leaf",
+   "rule": "ops/edge",
+   "state": "proved",
+   "subject": "Z"
+  },
+  {
+   "entry": "long",
+   "mechanism": "bar.long",
+   "point": {
+    "in:a.Z.r": "15845632502852867518708790067/19807040628566084398385987584"
+   },
+   "rule": "ops/long",
+   "state": "refuted",
+   "subject": "Z"
+  },
+  {
+   "entry": "",
+   "mechanism": "bar.right",
+   "state": "waived",
+   "subject": "Z"
+  },
+  {
+   "entry": "press/storm",
+   "mechanism": "unread",
+   "state": "open",
+   "subject": "pxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "why": "no rule of the deck reads the load press that case storm puts on pxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx, so nothing checks it"
+  },
+  {
+   "entry": "press/storm",
+   "mechanism": "unread",
+   "state": "open",
+   "subject": "ab",
+   "why": "no rule of the deck reads the load press that case storm puts on ab, so nothing checks it"
+  },
+  {
+   "entry": "press/storm",
+   "mechanism": "unread",
+   "state": "open",
+   "subject": "A",
+   "why": "no rule of the deck reads the load press that case storm puts on A, so nothing checks it"
+  },
+  {
+   "entry": "drag/storm",
+   "mechanism": "unread",
+   "state": "open",
+   "subject": "bar",
+   "why": "no rule of the deck reads the load drag that case storm puts on bar, so nothing checks it"
+  }
+ ],
+ "format": "petra-proofs/0"
+}

@@ -1,0 +1,19 @@
+{
+ "sig": "e431d18a93",
+ "kind": "reason",
+ "where": "kernel/twin",
+ "detail": "cap2/unread/press/B open: 'no rule of the deck reads the load press that case B puts on cap2, so nothing checks it' against 'no rule reads this load'",
+ "recipe": "fresh",
+ "notes": [],
+ "deck": null,
+ "relation": null,
+ "extra": {},
+ "verdicts": {
+  "grid": "FAIL",
+  "kernel": "FAIL",
+  "twin": "FAIL"
+ },
+ "seed": 100,
+ "count": 228,
+ "language": true
+}

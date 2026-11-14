@@ -1,0 +1,67 @@
+petra 0
+
+card "a" {
+  owner "a.b@c.d"
+}
+
+given bar.b in [480 mm, 480 mm] signed "t@example.org" source "calc C-12"
+given bar.r in [5071/918, 5071/918] signed "t@example.org" source "test"
+given Z.r in [15845632502852867518708790067/19807040628566084398385987584, 79228162514264337593543950335/79228162514264337593543950336] signed "a.b@c.d" source "a source, with a comma"
+
+load storm {
+  on pxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx press in [0 kips, 13000013000000/8896443230521 kips]
+  on ab press in [0 N, 1744830465625/268435456 N]
+  on A press in [0 N, 1744830465625/268435456 N]
+  on bar push in [5.4kN, 6kN]
+  on bar drag in [0 N, 65000 N]
+  signed "x@y.z" source "test"
+}
+
+waive bar.cases on bar by "a.b@c.d" reason "a long reason xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+waive bar.roots on bar by "s.engineer@example.org" reason "café"
+waive bar.exp on bar by "a.b@c.d" reason "a long reason xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+waive bar.table on bar by "a.b@c.d" reason "a reason with \"quotes\""
+waive bar.key on bar by "x@y.z" reason "nämn"
+waive bar.moment on bar by "a.b@c.d" reason "snug-tight bolts"
+waive bar.caps on bar by "t@example.org" reason "back\\slash"
+waive bar.drag on bar by "t@example.org" reason "snug-tight bolts"
+waive bar.idle on bar by "t@example.org" reason "a reason with \"quotes\""
+waive bar.named on bar by "t@example.org" reason "nämn"
+waive bar.cased on bar by "a.b@c.d" reason "back\\slash"
+waive bar.left on bar by "a.b@c.d" reason "nämn"
+waive bar.alike on bar by "x@y.z" reason "a reason with \"quotes\""
+waive bar.modulus on bar by "x@y.z" reason "a long reason xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+waive bar.cos on bar by "x@y.z" reason "nämn"
+waive bar.cosin on bar by "s.engineer@example.org" reason "a reason with \"quotes\""
+waive bar.cosfloor on bar by "x@y.z" reason "nämn"
+waive bar.turn on bar by "t@example.org" reason "it is a test"
+waive bar.sine on bar by "t@example.org" reason "it is a test"
+waive bar.zero on bar by "x@y.z" reason "a long reason xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+waive bar.tiny on bar by "a.b@c.d" reason "back\\slash"
+waive bar.edge on bar by "s.engineer@example.org" reason "nämn"
+waive bar.long on bar by "t@example.org" reason "café"
+waive bar.right on bar by "t@example.org" reason "a reason with \"quotes\""
+waive bar.cases on Z by "s.engineer@example.org" reason "a long reason xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+waive bar.roots on Z by "t@example.org" reason "café"
+waive bar.exp on Z by "a.b@c.d" reason "a long reason xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+waive bar.table on Z by "t@example.org" reason "a long reason xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+waive bar.key on Z by "a.b@c.d" reason "a reason with \"quotes\""
+waive bar.moment on Z by "a.b@c.d" reason "café"
+waive bar.caps on Z by "x@y.z" reason "a reason with \"quotes\""
+waive bar.drag on Z by "a.b@c.d" reason "a long reason xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+waive bar.idle on Z by "t@example.org" reason "back\\slash"
+waive bar.named on Z by "t@example.org" reason "it is a test"
+waive bar.cased on Z by "x@y.z" reason "snug-tight bolts"
+waive bar.left on Z by "t@example.org" reason "a reason with \"quotes\""
+waive bar.alike on Z by "t@example.org" reason "café"
+waive bar.modulus on Z by "s.engineer@example.org" reason "nämn"
+waive bar.cos on Z by "s.engineer@example.org" reason "back\\slash"
+waive bar.cosin on Z by "x@y.z" reason "a reason with \"quotes\""
+waive bar.cosfloor on Z by "x@y.z" reason "a long reason xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+waive bar.turn on Z by "x@y.z" reason "nämn"
+waive bar.sine on Z by "s.engineer@example.org" reason "back\\slash"
+waive bar.zero on Z by "s.engineer@example.org" reason "a long reason xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+waive bar.tiny on Z by "x@y.z" reason "a long reason xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+waive bar.edge on Z by "x@y.z" reason "snug-tight bolts"
+waive bar.long on Z by "t@example.org" reason "nämn"
+waive bar.right on Z by "x@y.z" reason "a long reason xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"

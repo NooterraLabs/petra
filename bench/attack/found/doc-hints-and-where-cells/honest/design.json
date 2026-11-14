@@ -1,0 +1,380 @@
+{
+ "card": "sha256:8d22491bee5fef67de4cb8dcb9f75b8f388e04c28e9a49afd01990200ff6a4fd",
+ "format": "petra-design/0",
+ "name": "card_1",
+ "params": [],
+ "parts": [
+  {
+   "lines": [
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "area",
+        "hi": "63/625000",
+        "lo": "63/625000"
+       }
+      }
+     ],
+     "field": "area"
+    }
+   ],
+   "name": "A",
+   "type": "pad"
+  },
+  {
+   "lines": [
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "area",
+        "hi": "2153/9300000",
+        "lo": "2153/9300000"
+       }
+      }
+     ],
+     "field": "area"
+    }
+   ],
+   "name": "joint",
+   "type": "pad"
+  },
+  {
+   "lines": [
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "area",
+        "hi": "21/5000000",
+        "lo": "21/5000000"
+       }
+      }
+     ],
+     "field": "area"
+    }
+   ],
+   "name": "pp",
+   "type": "pad"
+  },
+  {
+   "lines": [
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "area",
+        "hi": "21/10000000",
+        "lo": "21/10000000"
+       }
+      }
+     ],
+     "field": "area"
+    }
+   ],
+   "name": "x",
+   "type": "pad"
+  },
+  {
+   "lines": [
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "length",
+        "hi": "4217/268500",
+        "lo": "4217/268500"
+       }
+      }
+     ],
+     "field": "width"
+    },
+    {
+     "args": [
+      {
+       "given": "strip.T"
+      }
+     ],
+     "field": "T"
+    },
+    {
+     "args": [
+      {
+       "given": "strip.gap"
+      }
+     ],
+     "field": "gap"
+    },
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "length",
+        "hi": "1/200",
+        "lo": "1/200"
+       }
+      }
+     ],
+     "field": "screw"
+    },
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "length",
+        "hi": "3/250",
+        "lo": "3/250"
+       }
+      }
+     ],
+     "field": "hole"
+    },
+    {
+     "args": [
+      {
+       "word": "free"
+      }
+     ],
+     "field": "fit"
+    },
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "dimensionless",
+        "hi": "4",
+        "lo": "4"
+       }
+      }
+     ],
+     "field": "turns"
+    },
+    {
+     "args": [
+      {
+       "word": "A"
+      },
+      {
+       "word": "joint"
+      }
+     ],
+     "field": "lands"
+    }
+   ],
+   "name": "strip",
+   "type": "strip"
+  },
+  {
+   "lines": [
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "length",
+        "hi": "9/250",
+        "lo": "9/250"
+       }
+      }
+     ],
+     "field": "width"
+    },
+    {
+     "args": [
+      {
+       "given": "ab.T"
+      }
+     ],
+     "field": "T"
+    },
+    {
+     "args": [
+      {
+       "given": "ab.gap"
+      }
+     ],
+     "field": "gap"
+    },
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "length",
+        "hi": "11/100000",
+        "lo": "11/100000"
+       }
+      }
+     ],
+     "field": "screw"
+    },
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "length",
+        "hi": "3/40000",
+        "lo": "3/40000"
+       }
+      }
+     ],
+     "field": "hole"
+    },
+    {
+     "args": [
+      {
+       "text": "close"
+      }
+     ],
+     "field": "fit"
+    },
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "dimensionless",
+        "hi": "3",
+        "lo": "3"
+       }
+      }
+     ],
+     "field": "turns"
+    },
+    {
+     "args": [
+      {
+       "word": "pp"
+      },
+      {
+       "word": "x"
+      }
+     ],
+     "field": "lands"
+    }
+   ],
+   "name": "ab",
+   "type": "strip"
+  }
+ ],
+ "quantities": [
+  {
+   "dim": "area",
+   "entity": "A",
+   "field": "area",
+   "hi": "63/625000",
+   "line": "area",
+   "lo": "63/625000",
+   "role": "size",
+   "type": "pad"
+  },
+  {
+   "dim": "area",
+   "entity": "joint",
+   "field": "area",
+   "hi": "2153/9300000",
+   "line": "area",
+   "lo": "2153/9300000",
+   "role": "size",
+   "type": "pad"
+  },
+  {
+   "dim": "area",
+   "entity": "pp",
+   "field": "area",
+   "hi": "21/5000000",
+   "line": "area",
+   "lo": "21/5000000",
+   "role": "size",
+   "type": "pad"
+  },
+  {
+   "dim": "area",
+   "entity": "x",
+   "field": "area",
+   "hi": "21/10000000",
+   "line": "area",
+   "lo": "21/10000000",
+   "role": "size",
+   "type": "pad"
+  },
+  {
+   "dim": "length",
+   "entity": "strip",
+   "field": "width",
+   "hi": "4217/268500",
+   "line": "width",
+   "lo": "4217/268500",
+   "role": "size",
+   "type": "strip"
+  },
+  {
+   "dim": "length",
+   "entity": "strip",
+   "field": "screw",
+   "hi": "1/200",
+   "line": "screw",
+   "lo": "1/200",
+   "role": "size",
+   "type": "strip"
+  },
+  {
+   "dim": "length",
+   "entity": "strip",
+   "field": "hole",
+   "hi": "3/250",
+   "line": "hole",
+   "lo": "3/250",
+   "role": "size",
+   "type": "strip"
+  },
+  {
+   "dim": "dimensionless",
+   "entity": "strip",
+   "field": "turns",
+   "hi": "4",
+   "line": "turns",
+   "lo": "4",
+   "role": "size",
+   "type": "strip"
+  },
+  {
+   "dim": "length",
+   "entity": "ab",
+   "field": "width",
+   "hi": "9/250",
+   "line": "width",
+   "lo": "9/250",
+   "role": "size",
+   "type": "strip"
+  },
+  {
+   "dim": "length",
+   "entity": "ab",
+   "field": "screw",
+   "hi": "11/100000",
+   "line": "screw",
+   "lo": "11/100000",
+   "role": "size",
+   "type": "strip"
+  },
+  {
+   "dim": "length",
+   "entity": "ab",
+   "field": "hole",
+   "hi": "3/40000",
+   "line": "hole",
+   "lo": "3/40000",
+   "role": "size",
+   "type": "strip"
+  },
+  {
+   "dim": "dimensionless",
+   "entity": "ab",
+   "field": "turns",
+   "hi": "3",
+   "line": "turns",
+   "lo": "3",
+   "role": "size",
+   "type": "strip"
+  }
+ ]
+}

@@ -1,0 +1,20 @@
+{
+ "sig": "b6218ba805",
+ "kind": "verdict",
+ "where": "kernel/twin",
+ "detail": "ILL-FORMED against FAIL",
+ "recipe": "forge",
+ "notes": [
+  "design: drop_key"
+ ],
+ "deck": "aisc360",
+ "relation": null,
+ "extra": {},
+ "verdicts": {
+  "kernel": "ILL-FORMED",
+  "twin": "FAIL"
+ },
+ "seed": 100,
+ "count": 3,
+ "language": false
+}

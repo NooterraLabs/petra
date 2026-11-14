@@ -1,0 +1,537 @@
+{
+ "cells": [
+  {
+   "entry": "mass",
+   "mechanism": "cell.mass",
+   "partition": "leaf",
+   "rule": "kit/mass",
+   "state": "proved",
+   "subject": "x"
+  },
+  {
+   "entry": "temp",
+   "mechanism": "cell.temp",
+   "point": {
+    "dsg:lap-splice.x.low": "3000003/100000"
+   },
+   "rule": "kit/temp",
+   "state": "refuted",
+   "subject": "x"
+  },
+  {
+   "entry": "spare",
+   "mechanism": "cell.spare",
+   "partition": "leaf",
+   "rule": "kit/spare",
+   "state": "proved",
+   "subject": "x"
+  },
+  {
+   "entry": "limit",
+   "mechanism": "cell.limit",
+   "partition": "leaf",
+   "rule": "kit/limit",
+   "state": "proved",
+   "subject": "x"
+  },
+  {
+   "entry": "ohm",
+   "mechanism": "cell.ohm",
+   "rule": "kit/ohm",
+   "state": "open",
+   "subject": "x",
+   "why": "the waiver does not rest this cell: x.resistance is unstated: its maker states none, and the rule reads it"
+  },
+  {
+   "completion": {
+    "keys": [
+     [
+      "x",
+      "maker",
+      "a"
+     ]
+    ],
+    "loads": []
+   },
+   "entry": "sealed",
+   "mechanism": "cell.sealed",
+   "rule": "kit/sealed",
+   "state": "open",
+   "subject": "x",
+   "why": "x.maker is unstated: its maker states none, and the rule reads it"
+  },
+  {
+   "entry": "mass",
+   "mechanism": "cell.mass",
+   "partition": "leaf",
+   "rule": "kit/mass",
+   "state": "proved",
+   "subject": "a_"
+  },
+  {
+   "entry": "temp",
+   "mechanism": "cell.temp",
+   "point": {
+    "dsg:lap-splice.a_.low": "273/5"
+   },
+   "rule": "kit/temp",
+   "state": "refuted",
+   "subject": "a_"
+  },
+  {
+   "entry": "spare",
+   "mechanism": "cell.spare",
+   "point": {
+    "dsg:lap-splice.a_.spare": "4"
+   },
+   "rule": "kit/spare",
+   "state": "refuted",
+   "subject": "a_"
+  },
+  {
+   "entry": "limit",
+   "mechanism": "cell.limit",
+   "partition": "leaf",
+   "rule": "kit/limit",
+   "state": "proved",
+   "subject": "a_"
+  },
+  {
+   "entry": "ohm",
+   "mechanism": "cell.ohm",
+   "rule": "kit/ohm",
+   "state": "open",
+   "subject": "a_",
+   "why": "a_.resistance is unstated: its maker states none, and the rule reads it"
+  },
+  {
+   "entry": "",
+   "mechanism": "cell.sealed",
+   "state": "waived",
+   "subject": "a_"
+  },
+  {
+   "entry": "mass",
+   "mechanism": "cell.mass",
+   "point": {
+    "dsg:lap-splice.strap.mass": "45359282359237/10000000000000"
+   },
+   "rule": "kit/mass",
+   "state": "refuted",
+   "subject": "strap"
+  },
+  {
+   "entry": "temp",
+   "mechanism": "cell.temp",
+   "partition": "leaf",
+   "rule": "kit/temp",
+   "state": "proved",
+   "subject": "strap"
+  },
+  {
+   "entry": "spare",
+   "mechanism": "cell.spare",
+   "point": {
+    "dsg:lap-splice.strap.spare": "100"
+   },
+   "rule": "kit/spare",
+   "state": "refuted",
+   "subject": "strap"
+  },
+  {
+   "entry": "limit",
+   "mechanism": "cell.limit",
+   "partition": "leaf",
+   "rule": "kit/limit",
+   "state": "proved",
+   "subject": "strap"
+  },
+  {
+   "entry": "ohm",
+   "mechanism": "cell.ohm",
+   "point": {
+    "dsg:lap-splice.strap.resistance": "3355443203125/33554432"
+   },
+   "rule": "kit/ohm",
+   "state": "refuted",
+   "subject": "strap"
+  },
+  {
+   "completion": {
+    "keys": [
+     [
+      "strap",
+      "maker",
+      "a"
+     ],
+     [
+      "strap",
+      "seal",
+      "none"
+     ]
+    ],
+    "loads": []
+   },
+   "entry": "sealed",
+   "mechanism": "cell.sealed",
+   "rule": "kit/sealed",
+   "state": "open",
+   "subject": "strap",
+   "why": "strap.maker is unstated: its maker states none, and the rule reads it"
+  },
+  {
+   "entry": "mass",
+   "mechanism": "cell.mass",
+   "partition": "leaf",
+   "rule": "kit/mass",
+   "state": "proved",
+   "subject": "lap_main"
+  },
+  {
+   "entry": "temp",
+   "mechanism": "cell.temp",
+   "partition": "leaf",
+   "rule": "kit/temp",
+   "state": "proved",
+   "subject": "lap_main"
+  },
+  {
+   "entry": "spare",
+   "mechanism": "cell.spare",
+   "partition": "leaf",
+   "rule": "kit/spare",
+   "state": "proved",
+   "subject": "lap_main"
+  },
+  {
+   "entry": "limit",
+   "mechanism": "cell.limit",
+   "partition": "leaf",
+   "rule": "kit/limit",
+   "state": "proved",
+   "subject": "lap_main"
+  },
+  {
+   "entry": "ohm",
+   "mechanism": "cell.ohm",
+   "point": {
+    "dsg:lap-splice.lap_main.resistance": "100000"
+   },
+   "rule": "kit/ohm",
+   "state": "refuted",
+   "subject": "lap_main"
+  },
+  {
+   "entry": "",
+   "mechanism": "cell.sealed",
+   "state": "waived",
+   "subject": "lap_main"
+  },
+  {
+   "entry": "class",
+   "mechanism": "rig.class",
+   "rule": "kit/class",
+   "state": "proved",
+   "subject": "rig"
+  },
+  {
+   "entry": "count",
+   "mechanism": "rig.count",
+   "point": {
+    "in:lap-splice.rig.count": "4"
+   },
+   "rule": "kit/count",
+   "state": "refuted",
+   "subject": "rig"
+  },
+  {
+   "entry": "cold",
+   "mechanism": "rig.cold",
+   "rule": "kit/cold",
+   "state": "open",
+   "subject": "rig",
+   "why": "the waiver does not rest this cell: the card puts no air on rig, which the rule reads"
+  },
+  {
+   "entry": "speed",
+   "mechanism": "rig.speed",
+   "partition": "leaf",
+   "rule": "kit/speed",
+   "state": "proved",
+   "subject": "rig"
+  },
+  {
+   "completion": {
+    "keys": [
+     [
+      "a_",
+      "seal",
+      "full"
+     ]
+    ],
+    "loads": []
+   },
+   "entry": "",
+   "mechanism": "rig.sealed",
+   "state": "open",
+   "subject": "rig",
+   "why": "a_.seal is unstated: its maker states none, and the `unless` of the line reads it"
+  },
+  {
+   "entry": "share",
+   "mechanism": "rig.share",
+   "partition": "leaf",
+   "rule": "kit/share",
+   "state": "proved",
+   "subject": "rig"
+  },
+  {
+   "entry": "centre",
+   "mechanism": "rig.centre",
+   "rule": "kit/centre",
+   "state": "open",
+   "subject": "rig",
+   "why": "the waiver does not rest this cell: the card puts no shift on rig, which the rule reads"
+  },
+  {
+   "entry": "energy",
+   "mechanism": "rig.energy",
+   "point": {
+    "dsg:lap-splice.rig.charge": "16596/1615",
+    "dsg:lap-splice.rig.power": "3/98125",
+    "dsg:lap-splice.rig.run": "5/78"
+   },
+   "rule": "kit/energy",
+   "state": "refuted",
+   "subject": "rig"
+  },
+  {
+   "entry": "dense",
+   "mechanism": "rig.dense",
+   "point": {
+    "dsg:lap-splice.rig.density": "16000/3"
+   },
+   "rule": "kit/dense",
+   "state": "refuted",
+   "subject": "rig"
+  },
+  {
+   "entry": "stiff",
+   "mechanism": "rig.stiff",
+   "point": {
+    "dsg:lap-splice.rig.rate": "565000/663"
+   },
+   "rule": "kit/stiff",
+   "state": "refuted",
+   "subject": "rig"
+  },
+  {
+   "entry": "twist",
+   "mechanism": "rig.twist",
+   "point": {
+    "dsg:lap-splice.rig.torque": "145579843820911357030173/107374182400000000000000"
+   },
+   "rule": "kit/twist",
+   "state": "refuted",
+   "subject": "rig"
+  },
+  {
+   "entry": "heat",
+   "mechanism": "rig.heat",
+   "rule": "kit/heat",
+   "state": "open",
+   "subject": "rig",
+   "why": "the waiver does not rest this cell: a_.resistance is unstated: its maker states none, and the rule reads it"
+  },
+  {
+   "completion": {
+    "keys": [],
+    "loads": [
+     [
+      "rig",
+      "weight",
+      "",
+      "0"
+     ]
+    ]
+   },
+   "entry": "carry",
+   "mechanism": "rig.carry",
+   "partition": "leaf",
+   "rule": "kit/carry",
+   "state": "open",
+   "subject": "rig",
+   "why": "the card puts no weight on rig, which the rule reads"
+  },
+  {
+   "entry": "",
+   "mechanism": "rig.bare",
+   "state": "open",
+   "subject": "rig",
+   "why": "the deck has no rule for it"
+  },
+  {
+   "entry": "",
+   "mechanism": "rig.night",
+   "state": "not_applicable",
+   "subject": "rig",
+   "why": "made up"
+  },
+  {
+   "entry": "",
+   "mechanism": "rig.class",
+   "state": "open",
+   "subject": "b",
+   "why": "the deck has no rule for it on a part like this one"
+  },
+  {
+   "entry": "count",
+   "mechanism": "rig.count",
+   "point": {
+    "in:lap-splice.b.count": "6"
+   },
+   "rule": "kit/count",
+   "state": "refuted",
+   "subject": "b"
+  },
+  {
+   "entry": "cold",
+   "mechanism": "rig.cold",
+   "rule": "kit/cold",
+   "state": "open",
+   "subject": "b",
+   "why": "the waiver does not rest this cell: the card puts no air on b, which the rule reads"
+  },
+  {
+   "entry": "speed",
+   "mechanism": "rig.speed",
+   "partition": "leaf",
+   "rule": "kit/speed",
+   "state": "proved",
+   "subject": "b"
+  },
+  {
+   "completion": {
+    "keys": [
+     [
+      "lap_main",
+      "seal",
+      "full"
+     ]
+    ],
+    "loads": []
+   },
+   "entry": "",
+   "mechanism": "rig.sealed",
+   "state": "open",
+   "subject": "b",
+   "why": "lap_main.seal is unstated: its maker states none, and the `unless` of the line reads it"
+  },
+  {
+   "entry": "share",
+   "mechanism": "rig.share",
+   "partition": "leaf",
+   "rule": "kit/share",
+   "state": "proved",
+   "subject": "b"
+  },
+  {
+   "entry": "centre",
+   "mechanism": "rig.centre",
+   "rule": "kit/centre",
+   "state": "open",
+   "subject": "b",
+   "why": "the card puts no shift on b, which the rule reads"
+  },
+  {
+   "entry": "energy",
+   "mechanism": "rig.energy",
+   "partition": "leaf",
+   "rule": "kit/energy",
+   "state": "proved",
+   "subject": "b"
+  },
+  {
+   "entry": "dense",
+   "mechanism": "rig.dense",
+   "partition": "leaf",
+   "rule": "kit/dense",
+   "state": "proved",
+   "subject": "b"
+  },
+  {
+   "entry": "stiff",
+   "mechanism": "rig.stiff",
+   "partition": "leaf",
+   "rule": "kit/stiff",
+   "state": "proved",
+   "subject": "b"
+  },
+  {
+   "entry": "twist",
+   "mechanism": "rig.twist",
+   "point": {
+    "dsg:lap-splice.b.torque": "3389544870828501/250000000000000"
+   },
+   "rule": "kit/twist",
+   "state": "refuted",
+   "subject": "b"
+  },
+  {
+   "entry": "heat",
+   "mechanism": "rig.heat",
+   "rule": "kit/heat",
+   "state": "open",
+   "subject": "b",
+   "why": "lap_main.seal is unstated: its maker states none, and the rule reads it"
+  },
+  {
+   "completion": {
+    "keys": [],
+    "loads": [
+     [
+      "b",
+      "weight",
+      "",
+      "0"
+     ]
+    ]
+   },
+   "entry": "carry",
+   "mechanism": "rig.carry",
+   "partition": "leaf",
+   "rule": "kit/carry",
+   "state": "open",
+   "subject": "b",
+   "why": "the card puts no weight on b, which the rule reads"
+  },
+  {
+   "entry": "",
+   "mechanism": "rig.bare",
+   "state": "waived",
+   "subject": "b"
+  },
+  {
+   "entry": "",
+   "mechanism": "rig.night",
+   "state": "not_applicable",
+   "subject": "b",
+   "why": "made up"
+  },
+  {
+   "entry": "maker",
+   "mechanism": "unread",
+   "state": "open",
+   "subject": "a_",
+   "why": "no rule of the deck reads a_.maker, so nothing checks it"
+  },
+  {
+   "entry": "maker",
+   "mechanism": "unread",
+   "state": "open",
+   "subject": "lap_main",
+   "why": "no rule of the deck reads lap_main.maker, so nothing checks it"
+  }
+ ],
+ "format": "petra-proofs/0"
+}

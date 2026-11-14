@@ -1,0 +1,178 @@
+{
+ "cells": [
+  {
+   "entry": "",
+   "mechanism": "lap.tightening",
+   "state": "open",
+   "subject": "joint",
+   "why": "the deck has no rule for it"
+  },
+  {
+   "entry": "",
+   "mechanism": "lap.hole_use",
+   "state": "open",
+   "subject": "joint",
+   "why": "the deck has no rule for it"
+  },
+  {
+   "entry": "lap-spacing-centres",
+   "mechanism": "lap.spacing",
+   "partition": "leaf",
+   "rule": "aisc360-22/lap-spacing-centres",
+   "state": "proved",
+   "subject": "joint"
+  },
+  {
+   "entry": "lap-spacing-clear",
+   "mechanism": "lap.spacing",
+   "partition": "leaf",
+   "rule": "aisc360-22/lap-spacing-clear",
+   "state": "proved",
+   "subject": "joint"
+  },
+  {
+   "entry": "lap-end-distance-standard",
+   "mechanism": "lap.end_distance",
+   "partition": "leaf",
+   "rule": "aisc360-22/lap-end-distance-standard",
+   "state": "proved",
+   "subject": "joint"
+  },
+  {
+   "entry": "lap-side-distance-standard",
+   "mechanism": "lap.side_distance",
+   "partition": "leaf",
+   "rule": "aisc360-22/lap-side-distance-standard",
+   "state": "proved",
+   "subject": "joint"
+  },
+  {
+   "entry": "lap-spread-pitch-protected",
+   "mechanism": "lap.spread",
+   "point": {
+    "dsg:attack.Z.thickness": "127/20000",
+    "dsg:attack.joint.pitch": "294700/83",
+    "dsg:attack.splice.thickness": "66929/638750"
+   },
+   "rule": "aisc360-22/lap-spread-pitch-protected",
+   "state": "refuted",
+   "subject": "joint"
+  },
+  {
+   "entry": "",
+   "mechanism": "lap.max_edge_distance",
+   "state": "open",
+   "subject": "joint",
+   "why": "the deck has no rule for it"
+  },
+  {
+   "entry": "lap-strength/dead",
+   "mechanism": "lap.strength",
+   "point": {
+    "dsg:attack.Z.thickness": "127/20000",
+    "dsg:attack.joint.count": "2",
+    "dsg:attack.joint.diameter": "381/20000",
+    "dsg:attack.joint.end": "381/2500",
+    "dsg:attack.joint.pitch": "294700/83",
+    "dsg:attack.splice.thickness": "66929/638750",
+    "in:attack.Z.Fu": "2321971683165981/6451600",
+    "in:attack.dead.joint.pull": "97860875535731/400000000",
+    "in:attack.splice.Fu": "8896443230521/645160"
+   },
+   "rule": "aisc360-22/lap-strength",
+   "state": "refuted",
+   "subject": "joint"
+  },
+  {
+   "entry": "",
+   "mechanism": "lap.tension_with_shear",
+   "state": "not_applicable",
+   "subject": "joint",
+   "why": "a lap carries a pull along its line, which shears its bolts and puts no tension on them"
+  },
+  {
+   "entry": "",
+   "mechanism": "lap.slip",
+   "state": "not_applicable",
+   "subject": "joint",
+   "why": "a lap is a bearing-type joint, which claims no slip resistance"
+  },
+  {
+   "entry": "lap-ply-yield-a/dead",
+   "mechanism": "lap.ply_yield",
+   "partition": "leaf",
+   "rule": "aisc360-22/lap-ply-yield-a",
+   "state": "proved",
+   "subject": "joint"
+  },
+  {
+   "entry": "lap-ply-yield-b/dead",
+   "mechanism": "lap.ply_yield",
+   "partition": "leaf",
+   "rule": "aisc360-22/lap-ply-yield-b",
+   "state": "proved",
+   "subject": "joint"
+  },
+  {
+   "entry": "lap-ply-rupture-a/dead",
+   "mechanism": "lap.ply_rupture",
+   "partition": "leaf",
+   "rule": "aisc360-22/lap-ply-rupture-a",
+   "state": "proved",
+   "subject": "joint"
+  },
+  {
+   "entry": "lap-ply-rupture-b/dead",
+   "mechanism": "lap.ply_rupture",
+   "partition": "leaf",
+   "rule": "aisc360-22/lap-ply-rupture-b",
+   "state": "proved",
+   "subject": "joint"
+  },
+  {
+   "entry": "",
+   "mechanism": "lap.ply_shear",
+   "state": "not_applicable",
+   "subject": "joint",
+   "why": "the plates of a lap are pulled along its line; shear on their planes beside the bolts is tearout and block shear"
+  },
+  {
+   "entry": "lap-block-shear-a/dead",
+   "mechanism": "lap.block_shear",
+   "partition": "leaf",
+   "rule": "aisc360-22/lap-block-shear-a",
+   "state": "proved",
+   "subject": "joint"
+  },
+  {
+   "entry": "lap-block-shear-b/dead",
+   "mechanism": "lap.block_shear",
+   "partition": "leaf",
+   "rule": "aisc360-22/lap-block-shear-b",
+   "state": "proved",
+   "subject": "joint"
+  },
+  {
+   "entry": "",
+   "mechanism": "lap.partial_block_shear",
+   "state": "open",
+   "subject": "joint",
+   "why": "the deck has no rule for it"
+  },
+  {
+   "entry": "",
+   "mechanism": "lap.ply_compression",
+   "state": "not_applicable",
+   "subject": "joint",
+   "why": "the load on a lap is a pull, which the card signs as at least zero"
+  },
+  {
+   "entry": "",
+   "mechanism": "lap.ply_flexure",
+   "state": "open",
+   "subject": "joint",
+   "why": "the deck has no rule for it"
+  }
+ ],
+ "format": "petra-proofs/0"
+}

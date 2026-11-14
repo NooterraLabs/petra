@@ -1,0 +1,19 @@
+{
+ "sig": "2a8ca1ed97",
+ "kind": "reason",
+ "where": "kernel/twin",
+ "detail": "lap_main/unread/maker open: 'no rule of the deck reads lap_main.maker, so nothing checks it' against 'no rule and no line of the grid reads it'",
+ "recipe": "fresh",
+ "notes": [],
+ "deck": null,
+ "relation": null,
+ "extra": {},
+ "verdicts": {
+  "grid": "FAIL",
+  "kernel": "FAIL",
+  "twin": "FAIL"
+ },
+ "seed": 100,
+ "count": 356,
+ "language": true
+}

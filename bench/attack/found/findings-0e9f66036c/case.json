@@ -1,0 +1,20 @@
+{
+ "sig": "0e9f66036c",
+ "kind": "findings",
+ "where": "kernel/twin",
+ "detail": "[('deck', 'shape')] against [('deck', 'shape'), ('deck', 'types.8')]",
+ "recipe": "forge",
+ "notes": [
+  "deck: number 0 made '1 '"
+ ],
+ "deck": null,
+ "relation": null,
+ "extra": {},
+ "verdicts": {
+  "kernel": "ILL-FORMED",
+  "twin": "ILL-FORMED"
+ },
+ "seed": 100,
+ "count": 2,
+ "language": false
+}

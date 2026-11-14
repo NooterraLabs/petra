@@ -1,0 +1,847 @@
+{
+ "format": "petra-rules/0",
+ "name": "bench-kit",
+ "about": "Made up for bench/kernel_grid.py. It is no standard, and its numbers mean nothing.",
+ "rows": [
+  {
+   "id": "kit/pace",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   },
+   "gives": {
+    "name": "v",
+    "dim": "length/time",
+    "what": "a pace by the duty"
+   },
+   "takes": [
+    {
+     "name": "duty",
+     "one_of": [
+      "light",
+      "heavy"
+     ],
+     "what": "the duty"
+    }
+   ],
+   "table": {
+    "down": {
+     "by": "duty"
+    },
+    "unit": "km/h",
+    "cells": [
+     "36",
+     "15 m/s"
+    ]
+   }
+  }
+ ],
+ "types": [
+  {
+   "type": "cell",
+   "what": "a cell of a rig",
+   "fields": [
+    {
+     "name": "low",
+     "what": "low",
+     "dim": "temperature",
+     "may_be": "negative",
+     "least": "-40 degC"
+    },
+    {
+     "name": "spare",
+     "what": "spare",
+     "dim": "dimensionless",
+     "whole": true,
+     "may_be": "zero"
+    },
+    {
+     "name": "station",
+     "what": "station",
+     "dim": "length",
+     "may_be": "negative"
+    },
+    {
+     "name": "resistance",
+     "what": "resistance",
+     "dim": "resistance",
+     "optional": true
+    },
+    {
+     "name": "limit",
+     "what": "limit",
+     "dim": "dimensionless/time",
+     "optional": true
+    },
+    {
+     "name": "seal",
+     "what": "seal",
+     "one_of": [
+      "none",
+      "full"
+     ],
+     "optional": true
+    },
+    {
+     "name": "maker",
+     "what": "maker",
+     "one_of": [
+      "a",
+      "b"
+     ],
+     "optional": true
+    },
+    {
+     "name": "mass",
+     "what": "mass",
+     "dim": "mass"
+    }
+   ],
+   "needs": [
+    {
+     "le": [
+      "low",
+      [
+       "q",
+       "60",
+       "degC"
+      ]
+     ],
+     "why": "made up: a field that may be negative, in a need"
+    }
+   ]
+  },
+  {
+   "type": "rig",
+   "what": "a rig of two cells",
+   "fields": [
+    {
+     "name": "duty",
+     "what": "duty",
+     "one_of": [
+      "light",
+      "heavy"
+     ],
+     "signed": true
+    },
+    {
+     "name": "count",
+     "what": "count",
+     "dim": "dimensionless",
+     "whole": true,
+     "signed": true,
+     "least": "2"
+    },
+    {
+     "name": "mode",
+     "what": "mode",
+     "one_of": [
+      "day",
+      "night"
+     ]
+    },
+    {
+     "name": "speed",
+     "what": "speed",
+     "dim": "dimensionless/time"
+    },
+    {
+     "name": "pace",
+     "what": "pace",
+     "dim": "length/time"
+    },
+    {
+     "name": "charge",
+     "what": "charge",
+     "dim": "current*time"
+    },
+    {
+     "name": "run",
+     "what": "run",
+     "dim": "time"
+    },
+    {
+     "name": "reach",
+     "what": "reach",
+     "dim": "length"
+    },
+    {
+     "name": "density",
+     "what": "density",
+     "dim": "mass/length^3"
+    },
+    {
+     "name": "rate",
+     "what": "rate",
+     "dim": "force/length"
+    },
+    {
+     "name": "torque",
+     "what": "torque",
+     "dim": "moment"
+    },
+    {
+     "name": "power",
+     "what": "power",
+     "dim": "power"
+    },
+    {
+     "name": "cells",
+     "what": "cells",
+     "type": "cell",
+     "as": [
+      "front",
+      "rear"
+     ]
+    }
+   ],
+   "loads": [
+    {
+     "name": "air",
+     "what": "air",
+     "dim": "temperature"
+    },
+    {
+     "name": "shift",
+     "what": "shift",
+     "dim": "length",
+     "may_be": "negative"
+    },
+    {
+     "name": "weight",
+     "what": "weight",
+     "dim": "mass",
+     "least": "0 g"
+    }
+   ],
+   "needs": [
+    {
+     "le": [
+      [
+       "add",
+       "front.station",
+       "rear.station"
+      ],
+      "reach"
+     ],
+     "why": "made up: two stations that may be behind the datum"
+    },
+    {
+     "lt": [
+      "speed",
+      [
+       "mul",
+       "4",
+       "front.limit"
+      ]
+     ],
+     "why": "made up: a limit that a cell may leave unstated"
+    }
+   ]
+  }
+ ],
+ "grid": [
+  {
+   "type": "rig",
+   "mechanism": "rig.class",
+   "what": "rig.class",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   }
+  },
+  {
+   "type": "rig",
+   "mechanism": "rig.count",
+   "what": "rig.count",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   }
+  },
+  {
+   "type": "rig",
+   "mechanism": "rig.cold",
+   "what": "rig.cold",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   }
+  },
+  {
+   "type": "rig",
+   "mechanism": "rig.speed",
+   "what": "rig.speed",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   }
+  },
+  {
+   "type": "rig",
+   "mechanism": "rig.sealed",
+   "what": "rig.sealed",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   },
+   "unless": {
+    "when": [
+     "is",
+     "rear.seal",
+     "full"
+    ],
+    "why": "made up: a key that a cell may leave unstated"
+   }
+  },
+  {
+   "type": "rig",
+   "mechanism": "rig.share",
+   "what": "rig.share",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   }
+  },
+  {
+   "type": "rig",
+   "mechanism": "rig.centre",
+   "what": "rig.centre",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   }
+  },
+  {
+   "type": "rig",
+   "mechanism": "rig.energy",
+   "what": "rig.energy",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   }
+  },
+  {
+   "type": "rig",
+   "mechanism": "rig.dense",
+   "what": "rig.dense",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   }
+  },
+  {
+   "type": "rig",
+   "mechanism": "rig.stiff",
+   "what": "rig.stiff",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   }
+  },
+  {
+   "type": "rig",
+   "mechanism": "rig.twist",
+   "what": "rig.twist",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   }
+  },
+  {
+   "type": "rig",
+   "mechanism": "rig.heat",
+   "what": "rig.heat",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   }
+  },
+  {
+   "type": "rig",
+   "mechanism": "rig.carry",
+   "what": "rig.carry",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   }
+  },
+  {
+   "type": "rig",
+   "mechanism": "rig.bare",
+   "what": "rig.bare",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   }
+  },
+  {
+   "type": "rig",
+   "mechanism": "rig.night",
+   "what": "rig.night",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   },
+   "unless": {
+    "when": [
+     "is",
+     "mode",
+     "day"
+    ],
+    "why": "made up"
+   }
+  },
+  {
+   "type": "cell",
+   "mechanism": "cell.mass",
+   "what": "cell.mass",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   }
+  },
+  {
+   "type": "cell",
+   "mechanism": "cell.temp",
+   "what": "cell.temp",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   }
+  },
+  {
+   "type": "cell",
+   "mechanism": "cell.spare",
+   "what": "cell.spare",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   }
+  },
+  {
+   "type": "cell",
+   "mechanism": "cell.limit",
+   "what": "cell.limit",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   }
+  },
+  {
+   "type": "cell",
+   "mechanism": "cell.ohm",
+   "what": "cell.ohm",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   }
+  },
+  {
+   "type": "cell",
+   "mechanism": "cell.sealed",
+   "what": "cell.sealed",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   }
+  }
+ ],
+ "rules": [
+  {
+   "id": "kit/class",
+   "type": "rig",
+   "mechanism": "rig.class",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   },
+   "says": "made up",
+   "when": [
+    "is",
+    "duty",
+    "heavy"
+   ],
+   "requires": [
+    "is",
+    "mode",
+    "day"
+   ]
+  },
+  {
+   "id": "kit/count",
+   "type": "rig",
+   "mechanism": "rig.count",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   },
+   "says": "made up",
+   "lt": [
+    [
+     "mul",
+     "count",
+     [
+      "q",
+      "2",
+      "oz"
+     ]
+    ],
+    [
+     "q",
+     "0.5",
+     "lb"
+    ]
+   ]
+  },
+  {
+   "id": "kit/pace",
+   "type": "rig",
+   "mechanism": "rig.sealed",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   },
+   "says": "made up",
+   "le": [
+    "pace",
+    [
+     "row",
+     "kit/pace",
+     {
+      "duty": "duty"
+     }
+    ]
+   ]
+  },
+  {
+   "id": "kit/carry",
+   "type": "rig",
+   "mechanism": "rig.carry",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   },
+   "says": "made up",
+   "le": [
+    [
+     "load",
+     "weight"
+    ],
+    [
+     "mul",
+     "count",
+     [
+      "q",
+      "10",
+      "lb"
+     ]
+    ]
+   ]
+  },
+  {
+   "id": "kit/cold",
+   "type": "rig",
+   "mechanism": "rig.cold",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   },
+   "says": "made up",
+   "le": [
+    "front.low",
+    [
+     "load",
+     "air"
+    ]
+   ]
+  },
+  {
+   "id": "kit/share",
+   "type": "rig",
+   "mechanism": "rig.share",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   },
+   "says": "made up",
+   "le": [
+    [
+     "div",
+     "reach",
+     [
+      "add",
+      "front.spare",
+      "rear.spare"
+     ]
+    ],
+    [
+     "q",
+     "1",
+     "mile"
+    ]
+   ]
+  },
+  {
+   "id": "kit/centre",
+   "type": "rig",
+   "mechanism": "rig.centre",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   },
+   "says": "made up",
+   "le": [
+    [
+     "abs",
+     [
+      "add",
+      "front.station",
+      "rear.station",
+      [
+       "load",
+       "shift"
+      ]
+     ]
+    ],
+    [
+     "q",
+     "1",
+     "ft"
+    ]
+   ]
+  },
+  {
+   "id": "kit/speed",
+   "type": "rig",
+   "mechanism": "rig.speed",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   },
+   "says": "made up",
+   "lt": [
+    "speed",
+    "front.limit"
+   ]
+  },
+  {
+   "id": "kit/heat",
+   "type": "rig",
+   "mechanism": "rig.heat",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   },
+   "says": "made up",
+   "when": [
+    "is",
+    "rear.seal",
+    "none"
+   ],
+   "le": [
+    [
+     "mul",
+     "rear.resistance",
+     [
+      "q",
+      "1",
+      "A"
+     ],
+     [
+      "q",
+      "1",
+      "A"
+     ]
+    ],
+    "power"
+   ]
+  },
+  {
+   "id": "kit/energy",
+   "type": "rig",
+   "mechanism": "rig.energy",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   },
+   "says": "made up",
+   "le": [
+    [
+     "mul",
+     "charge",
+     [
+      "q",
+      "1",
+      "V"
+     ]
+    ],
+    [
+     "mul",
+     "power",
+     "run"
+    ]
+   ]
+  },
+  {
+   "id": "kit/dense",
+   "type": "rig",
+   "mechanism": "rig.dense",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   },
+   "says": "made up",
+   "le": [
+    "density",
+    [
+     "q",
+     "2",
+     "g/cm3"
+    ]
+   ]
+  },
+  {
+   "id": "kit/stiff",
+   "type": "rig",
+   "mechanism": "rig.stiff",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   },
+   "says": "made up",
+   "le": [
+    [
+     "q",
+     "1",
+     "N/mm"
+    ],
+    "rate"
+   ]
+  },
+  {
+   "id": "kit/twist",
+   "type": "rig",
+   "mechanism": "rig.twist",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   },
+   "says": "made up",
+   "lt": [
+    "torque",
+    [
+     "q",
+     "1",
+     "lbf_ft"
+    ]
+   ]
+  },
+  {
+   "id": "kit/mass",
+   "type": "cell",
+   "mechanism": "cell.mass",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   },
+   "says": "made up",
+   "le": [
+    "mass",
+    [
+     "q",
+     "1",
+     "lb"
+    ]
+   ]
+  },
+  {
+   "id": "kit/temp",
+   "type": "cell",
+   "mechanism": "cell.temp",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   },
+   "says": "made up",
+   "le": [
+    "low",
+    [
+     "q",
+     "30",
+     "degC"
+    ]
+   ]
+  },
+  {
+   "id": "kit/spare",
+   "type": "cell",
+   "mechanism": "cell.spare",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   },
+   "says": "made up",
+   "le": [
+    "spare",
+    "3"
+   ]
+  },
+  {
+   "id": "kit/limit",
+   "type": "cell",
+   "mechanism": "cell.limit",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   },
+   "says": "made up",
+   "le": [
+    [
+     "q",
+     "1",
+     "Hz"
+    ],
+    "limit"
+   ]
+  },
+  {
+   "id": "kit/ohm",
+   "type": "cell",
+   "mechanism": "cell.ohm",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   },
+   "says": "made up",
+   "lt": [
+    "resistance",
+    [
+     "q",
+     "100",
+     "kohm"
+    ]
+   ]
+  },
+  {
+   "id": "kit/sealed",
+   "type": "cell",
+   "mechanism": "cell.sealed",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   },
+   "says": "made up",
+   "when": [
+    "is",
+    "maker",
+    "a"
+   ],
+   "requires": [
+    "is",
+    "seal",
+    "none"
+   ]
+  }
+ ]
+}

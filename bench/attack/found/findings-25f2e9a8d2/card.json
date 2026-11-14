@@ -1,0 +1,72 @@
+{
+ "cases": [],
+ "claims": [],
+ "environment": null,
+ "format": "petra-card/0",
+ "inputs": [
+  {
+   "by": "a.b@c.d",
+   "dim": "temperature",
+   "hi": "26843545575/268435456",
+   "lo": "26843545575/268435456",
+   "name": "strip.T"
+  },
+  {
+   "by": "s.engineer@example.org",
+   "dim": "length",
+   "hi": "3/800",
+   "lo": "3/1000",
+   "name": "strip.gap"
+  },
+  {
+   "by": "x@y.z",
+   "dim": "temperature",
+   "hi": "202/5",
+   "lo": "202/5",
+   "name": "x.T"
+  },
+  {
+   "by": "x@y.z",
+   "dim": "length",
+   "hi": "27/350000",
+   "lo": "27/350000",
+   "name": "x.gap"
+  },
+  {
+   "by": "t@example.org",
+   "dim": "length",
+   "hi": "999999/2000000000",
+   "lo": "999999/2000000000",
+   "name": "x.width"
+  }
+ ],
+ "name": "card_1",
+ "probability_claims": [],
+ "tests": [],
+ "waivers": [
+  {
+   "by": "a.b@c.d",
+   "mechanism": "strip.creep",
+   "reason": "caf\u00e9",
+   "subject": "strip"
+  },
+  {
+   "by": "t@example.org",
+   "mechanism": "strip.tide",
+   "reason": "a long reason xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "subject": "strip"
+  },
+  {
+   "by": "t@example.org",
+   "mechanism": "strip.creep",
+   "reason": "caf\u00e9",
+   "subject": "x"
+  },
+  {
+   "by": "x@y.z",
+   "mechanism": "strip.tide",
+   "reason": "back\\slash",
+   "subject": "x"
+  }
+ ]
+}

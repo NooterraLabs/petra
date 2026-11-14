@@ -1,0 +1,529 @@
+{
+ "card": "sha256:a59f011a49815b08a07e1c7da9929ca70455dc9ee30f5b95931aca725cf194c4",
+ "format": "petra-design/0",
+ "name": "card_1",
+ "params": [],
+ "parts": [
+  {
+   "lines": [
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "temperature",
+        "hi": "2997/100",
+        "lo": "2997/100"
+       }
+      }
+     ],
+     "field": "low"
+    },
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "dimensionless",
+        "hi": "20",
+        "lo": "20"
+       }
+      }
+     ],
+     "field": "spare"
+    },
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "length",
+        "hi": "55560087/411962750000",
+        "lo": "55560087/411962750000"
+       }
+      }
+     ],
+     "field": "station"
+    },
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "resistance",
+        "hi": "5436000/559",
+        "lo": "5436000/559"
+       }
+      }
+     ],
+     "field": "resistance"
+    },
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "s^-1",
+        "hi": "1",
+        "lo": "1"
+       }
+      }
+     ],
+     "field": "limit"
+    },
+    {
+     "args": [
+      {
+       "word": "full"
+      }
+     ],
+     "field": "seal"
+    },
+    {
+     "args": [
+      {
+       "word": "a"
+      }
+     ],
+     "field": "maker"
+    },
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "mass",
+        "hi": "45359237/10000000",
+        "lo": "45359237/10000000"
+       }
+      }
+     ],
+     "field": "mass"
+    }
+   ],
+   "name": "p1",
+   "type": "cell"
+  },
+  {
+   "lines": [
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "temperature",
+        "hi": "60",
+        "lo": "60"
+       }
+      }
+     ],
+     "field": "low"
+    },
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "dimensionless",
+        "hi": "20",
+        "lo": "20"
+       }
+      }
+     ],
+     "field": "spare"
+    },
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "length",
+        "hi": "115962939690624/685506287216125",
+        "lo": "115962939690624/685506287216125"
+       }
+      }
+     ],
+     "field": "station"
+    },
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "resistance",
+        "hi": "196000/991",
+        "lo": "196000/991"
+       }
+      }
+     ],
+     "field": "resistance"
+    },
+    {
+     "args": [
+      {
+       "word": "unstated"
+      }
+     ],
+     "field": "limit"
+    },
+    {
+     "args": [
+      {
+       "word": "none"
+      }
+     ],
+     "field": "seal"
+    },
+    {
+     "args": [
+      {
+       "word": "b"
+      }
+     ],
+     "field": "maker"
+    },
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "mass",
+        "hi": "45359237/100000000",
+        "lo": "45359237/100000000"
+       }
+      }
+     ],
+     "field": "mass"
+    }
+   ],
+   "name": "lap_main",
+   "type": "cell"
+  },
+  {
+   "lines": [
+    {
+     "args": [
+      {
+       "given": "rig.duty"
+      }
+     ],
+     "field": "duty"
+    },
+    {
+     "args": [
+      {
+       "given": "rig.count"
+      }
+     ],
+     "field": "count"
+    },
+    {
+     "args": [
+      {
+       "word": "night"
+      }
+     ],
+     "field": "mode"
+    },
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "s^-1",
+        "hi": "1001/1000",
+        "lo": "1001/1000"
+       }
+      }
+     ],
+     "field": "speed"
+    },
+    {
+     "args": [
+      {
+       "given": "rig.pace"
+      }
+     ],
+     "field": "pace"
+    },
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "s^1 A^1",
+        "hi": "5238900/239",
+        "lo": "5238900/239"
+       }
+      }
+     ],
+     "field": "charge"
+    },
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "time",
+        "hi": "28620/937",
+        "lo": "28620/937"
+       }
+      }
+     ],
+     "field": "run"
+    },
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "length",
+        "hi": "1143/2500",
+        "lo": "1143/2500"
+       }
+      }
+     ],
+     "field": "reach"
+    },
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "m^-3 kg^1",
+        "hi": "2000",
+        "lo": "2000"
+       }
+      }
+     ],
+     "field": "density"
+    },
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "kg^1 s^-2",
+        "hi": "1010",
+        "lo": "1010"
+       }
+      }
+     ],
+     "field": "rate"
+    },
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "energy",
+        "hi": "87067239096971705187/1153750000000000000",
+        "lo": "87067239096971705187/1153750000000000000"
+       }
+      }
+     ],
+     "field": "torque"
+    },
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "power",
+        "hi": "4764000/971",
+        "lo": "4764000/971"
+       }
+      }
+     ],
+     "field": "power"
+    },
+    {
+     "args": [
+      {
+       "word": "p1"
+      },
+      {
+       "word": "lap_main"
+      }
+     ],
+     "field": "cells"
+    }
+   ],
+   "name": "rig",
+   "type": "rig"
+  }
+ ],
+ "quantities": [
+  {
+   "dim": "temperature",
+   "entity": "p1",
+   "field": "low",
+   "hi": "2997/100",
+   "line": "low",
+   "lo": "2997/100",
+   "role": "size",
+   "type": "cell"
+  },
+  {
+   "dim": "dimensionless",
+   "entity": "p1",
+   "field": "spare",
+   "hi": "20",
+   "line": "spare",
+   "lo": "20",
+   "role": "size",
+   "type": "cell"
+  },
+  {
+   "dim": "length",
+   "entity": "p1",
+   "field": "station",
+   "hi": "55560087/411962750000",
+   "line": "station",
+   "lo": "55560087/411962750000",
+   "role": "size",
+   "type": "cell"
+  },
+  {
+   "dim": "resistance",
+   "entity": "p1",
+   "field": "resistance",
+   "hi": "5436000/559",
+   "line": "resistance",
+   "lo": "5436000/559",
+   "role": "size",
+   "type": "cell"
+  },
+  {
+   "dim": "s^-1",
+   "entity": "p1",
+   "field": "limit",
+   "hi": "1",
+   "line": "limit",
+   "lo": "1",
+   "role": "size",
+   "type": "cell"
+  },
+  {
+   "dim": "mass",
+   "entity": "p1",
+   "field": "mass",
+   "hi": "45359237/10000000",
+   "line": "mass",
+   "lo": "45359237/10000000",
+   "role": "size",
+   "type": "cell"
+  },
+  {
+   "dim": "temperature",
+   "entity": "lap_main",
+   "field": "low",
+   "hi": "60",
+   "line": "low",
+   "lo": "60",
+   "role": "size",
+   "type": "cell"
+  },
+  {
+   "dim": "dimensionless",
+   "entity": "lap_main",
+   "field": "spare",
+   "hi": "20",
+   "line": "spare",
+   "lo": "20",
+   "role": "size",
+   "type": "cell"
+  },
+  {
+   "dim": "length",
+   "entity": "lap_main",
+   "field": "station",
+   "hi": "115962939690624/685506287216125",
+   "line": "station",
+   "lo": "115962939690624/685506287216125",
+   "role": "size",
+   "type": "cell"
+  },
+  {
+   "dim": "resistance",
+   "entity": "lap_main",
+   "field": "resistance",
+   "hi": "196000/991",
+   "line": "resistance",
+   "lo": "196000/991",
+   "role": "size",
+   "type": "cell"
+  },
+  {
+   "dim": "mass",
+   "entity": "lap_main",
+   "field": "mass",
+   "hi": "45359237/100000000",
+   "line": "mass",
+   "lo": "45359237/100000000",
+   "role": "size",
+   "type": "cell"
+  },
+  {
+   "dim": "s^-1",
+   "entity": "rig",
+   "field": "speed",
+   "hi": "1001/1000",
+   "line": "speed",
+   "lo": "1001/1000",
+   "role": "size",
+   "type": "rig"
+  },
+  {
+   "dim": "s^1 A^1",
+   "entity": "rig",
+   "field": "charge",
+   "hi": "5238900/239",
+   "line": "charge",
+   "lo": "5238900/239",
+   "role": "size",
+   "type": "rig"
+  },
+  {
+   "dim": "time",
+   "entity": "rig",
+   "field": "run",
+   "hi": "28620/937",
+   "line": "run",
+   "lo": "28620/937",
+   "role": "size",
+   "type": "rig"
+  },
+  {
+   "dim": "length",
+   "entity": "rig",
+   "field": "reach",
+   "hi": "1143/2500",
+   "line": "reach",
+   "lo": "1143/2500",
+   "role": "size",
+   "type": "rig"
+  },
+  {
+   "dim": "m^-3 kg^1",
+   "entity": "rig",
+   "field": "density",
+   "hi": "2000",
+   "line": "density",
+   "lo": "2000",
+   "role": "size",
+   "type": "rig"
+  },
+  {
+   "dim": "kg^1 s^-2",
+   "entity": "rig",
+   "field": "rate",
+   "hi": "1010",
+   "line": "rate",
+   "lo": "1010",
+   "role": "size",
+   "type": "rig"
+  },
+  {
+   "dim": "energy",
+   "entity": "rig",
+   "field": "torque",
+   "hi": "87067239096971705187/1153750000000000000",
+   "line": "torque",
+   "lo": "87067239096971705187/1153750000000000000",
+   "role": "size",
+   "type": "rig"
+  },
+  {
+   "dim": "power",
+   "entity": "rig",
+   "field": "power",
+   "hi": "4764000/971",
+   "line": "power",
+   "lo": "4764000/971",
+   "role": "size",
+   "type": "rig"
+  }
+ ]
+}

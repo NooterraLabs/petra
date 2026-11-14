@@ -1,0 +1,25 @@
+{
+ "sig": "28fec7b209",
+ "kind": "reason",
+ "where": "kernel/twin",
+ "detail": "k/bar.long/long open: 'the point is outside the range of input 0' against 'no partition of proofs.json proves it and no point refutes it'",
+ "recipe": "hints",
+ "notes": [
+  "a hint: ghost",
+  "a hint: scramble_point",
+  "a hint: completion",
+  "a hint: dup",
+  "a hint: point",
+  "a hint: drop"
+ ],
+ "deck": null,
+ "relation": "hints",
+ "extra": {},
+ "verdicts": {
+  "kernel": "FAIL",
+  "twin": "FAIL"
+ },
+ "seed": 100,
+ "count": 6,
+ "language": false
+}

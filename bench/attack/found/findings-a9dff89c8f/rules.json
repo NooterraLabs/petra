@@ -1,0 +1,1572 @@
+{
+ "format": "petra-rules/0",
+ "name": "bench-ops",
+ "about": "Made up for bench/kernel_grid.py. It is no standard, and its numbers mean nothing.",
+ "rows": [
+  {
+   "id": "ops/cases",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   },
+   "gives": {
+    "name": "y",
+    "dim": "dimensionless",
+    "what": "three cases"
+   },
+   "takes": [
+    {
+     "name": "a",
+     "dim": "length",
+     "what": "a",
+     "range": [
+      "1 mm",
+      "100 mm"
+     ]
+    },
+    {
+     "name": "b",
+     "dim": "length",
+     "what": "b",
+     "range": [
+      "1 mm",
+      "100 mm"
+     ]
+    }
+   ],
+   "cases": [
+    {
+     "when": [
+      "and",
+      [
+       "ge",
+       "a",
+       "b"
+      ],
+      [
+       "not",
+       [
+        "lt",
+        "a",
+        [
+         "q",
+         "10",
+         "mm"
+        ]
+       ]
+      ]
+     ],
+     "is": [
+      "pow",
+      [
+       "div",
+       "a",
+       "b"
+      ],
+      "2"
+     ]
+    },
+    {
+     "when": [
+      "or",
+      [
+       "lt",
+       "a",
+       "b"
+      ],
+      [
+       "le",
+       "a",
+       [
+        "q",
+        "5",
+        "mm"
+       ]
+      ]
+     ],
+     "is": [
+      "pow",
+      [
+       "div",
+       "a",
+       "b"
+      ],
+      "-1"
+     ]
+    },
+    {
+     "is": [
+      "div",
+      [
+       "abs",
+       [
+        "sub",
+        "a",
+        "b"
+       ]
+      ],
+      [
+       "max",
+       "a",
+       "b",
+       [
+        "q",
+        "1",
+        "mm"
+       ]
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "id": "ops/roots",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   },
+   "gives": {
+    "name": "y",
+    "dim": "length",
+    "what": "roots and half powers"
+   },
+   "takes": [
+    {
+     "name": "a",
+     "dim": "length",
+     "what": "a",
+     "range": [
+      "1 mm",
+      "100 mm"
+     ]
+    },
+    {
+     "name": "b",
+     "dim": "length",
+     "what": "b",
+     "range": [
+      "1 mm",
+      "100 mm"
+     ]
+    }
+   ],
+   "is": [
+    "add",
+    [
+     "sqrt",
+     [
+      "mul",
+      "a",
+      "b"
+     ]
+    ],
+    [
+     "pow",
+     [
+      "mul",
+      "a",
+      "b"
+     ],
+     "1/2"
+    ],
+    [
+     "mul",
+     [
+      "pow",
+      [
+       "div",
+       "a",
+       "b"
+      ],
+      "3/2"
+     ],
+     "b"
+    ],
+    [
+     "neg",
+     [
+      "min",
+      "a",
+      "b"
+     ]
+    ]
+   ]
+  },
+  {
+   "id": "ops/exp",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   },
+   "gives": {
+    "name": "y",
+    "dim": "dimensionless",
+    "what": "exp, ln and the powers that need them"
+   },
+   "takes": [
+    {
+     "name": "r",
+     "dim": "dimensionless",
+     "what": "r",
+     "range": [
+      "0.1",
+      "10"
+     ]
+    },
+    {
+     "name": "s",
+     "dim": "dimensionless",
+     "what": "s",
+     "range": [
+      "0.1",
+      "10"
+     ]
+    }
+   ],
+   "is": [
+    "add",
+    [
+     "pow",
+     "r",
+     "0.3"
+    ],
+    [
+     "pow",
+     "r",
+     "s"
+    ],
+    [
+     "exp",
+     [
+      "neg",
+      "r"
+     ]
+    ],
+    [
+     "ln",
+     [
+      "add",
+      "r",
+      "1"
+     ]
+    ],
+    [
+     "pow",
+     "pi",
+     "0"
+    ],
+    [
+     "pow",
+     "r",
+     "-3/2"
+    ]
+   ]
+  },
+  {
+   "id": "ops/table",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   },
+   "gives": {
+    "name": "F",
+    "dim": "force",
+    "what": "a table with bands closed at the lower end"
+   },
+   "takes": [
+    {
+     "name": "x",
+     "dim": "length",
+     "what": "x",
+     "range": [
+      "1 mm",
+      "100 mm"
+     ]
+    },
+    {
+     "name": "grade",
+     "one_of": [
+      "low",
+      "mid",
+      "high"
+     ],
+     "what": "a key"
+    }
+   ],
+   "table": {
+    "down": {
+     "by": "x",
+     "bands": [
+      [
+       "0 mm",
+       "10 mm"
+      ],
+      [
+       "10 mm",
+       "20 mm"
+      ],
+      [
+       "20 mm",
+       null
+      ]
+     ],
+     "closed": "lower"
+    },
+    "across": {
+     "by": "grade"
+    },
+    "unit": "kN",
+    "cells": [
+     [
+      "1",
+      "2",
+      null
+     ],
+     [
+      "3",
+      "4",
+      "5"
+     ],
+     [
+      "6000 N",
+      "7",
+      "8"
+     ]
+    ]
+   }
+  },
+  {
+   "id": "ops/class",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   },
+   "gives": {
+    "name": "grade",
+    "one_of": [
+     "low",
+     "mid",
+     "high"
+    ],
+    "what": "a name by the bands of two quantities"
+   },
+   "takes": [
+    {
+     "name": "x",
+     "dim": "length",
+     "what": "x",
+     "range": [
+      "1 mm",
+      "100 mm"
+     ]
+    },
+    {
+     "name": "i",
+     "dim": "length^4",
+     "what": "i",
+     "range": [
+      "1 mm^4",
+      "10000 mm^4"
+     ]
+    }
+   ],
+   "table": {
+    "down": {
+     "by": "x",
+     "bands": [
+      [
+       "0 mm",
+       "10 mm"
+      ],
+      [
+       "10 mm",
+       "20 mm"
+      ],
+      [
+       "20 mm",
+       "40 mm"
+      ]
+     ],
+     "closed": "lower"
+    },
+    "across": {
+     "by": "i",
+     "bands": [
+      [
+       "0 mm^4",
+       "1000 mm^4"
+      ],
+      [
+       "1000 mm^4",
+       null
+      ]
+     ]
+    },
+    "cells": [
+     [
+      "low",
+      "mid"
+     ],
+     [
+      "mid",
+      null
+     ],
+     [
+      "high",
+      "high"
+     ]
+    ]
+   }
+  },
+  {
+   "id": "ops/modulus",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   },
+   "gives": {
+    "name": "S",
+    "dim": "length^3",
+    "what": "a length to the fourth over a length"
+   },
+   "takes": [
+    {
+     "name": "i",
+     "dim": "length^4",
+     "what": "i",
+     "range": [
+      "1 mm^4",
+      "1 cm^4"
+     ]
+    },
+    {
+     "name": "c",
+     "dim": "length",
+     "what": "c",
+     "range": [
+      "1 mm",
+      "100 mm"
+     ]
+    }
+   ],
+   "is": [
+    "div",
+    "i",
+    "c"
+   ]
+  },
+  {
+   "id": "ops/turn",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   },
+   "gives": {
+    "name": "y",
+    "dim": "dimensionless",
+    "what": "the cosine of a number of half turns"
+   },
+   "takes": [
+    {
+     "name": "s",
+     "dim": "dimensionless",
+     "what": "s",
+     "range": [
+      "0.1",
+      "10"
+     ]
+    }
+   ],
+   "is": [
+    "cos",
+    [
+     "mul",
+     "pi",
+     "s"
+    ]
+   ]
+  },
+  {
+   "id": "ops/sine",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   },
+   "gives": {
+    "name": "y",
+    "dim": "dimensionless",
+    "what": "a sine, as the cosine of a quarter turn less the angle"
+   },
+   "takes": [
+    {
+     "name": "r",
+     "dim": "dimensionless",
+     "what": "r",
+     "range": [
+      "0.1",
+      "10"
+     ]
+    }
+   ],
+   "is": [
+    "cos",
+    [
+     "sub",
+     [
+      "div",
+      "pi",
+      "2"
+     ],
+     "r"
+    ]
+   ]
+  }
+ ],
+ "types": [
+  {
+   "type": "cap",
+   "what": "an end of a bar",
+   "fields": [
+    {
+     "name": "t",
+     "dim": "length",
+     "what": "its thickness"
+    },
+    {
+     "name": "finish",
+     "one_of": [
+      "low",
+      "high"
+     ],
+     "what": "a key whose names are the table's"
+    },
+    {
+     "name": "i",
+     "dim": "length^4",
+     "least": "1 mm^4",
+     "what": "a length to the fourth power"
+    }
+   ],
+   "loads": [
+    {
+     "name": "press",
+     "dim": "force",
+     "least": "0 N",
+     "what": "a force that no rule reads"
+    }
+   ],
+   "needs": [
+    {
+     "le": [
+      [
+       "q",
+       "400",
+       "mm^4"
+      ],
+      "i"
+     ],
+     "why": "made up: at least 400 mm^4"
+    }
+   ]
+  },
+  {
+   "type": "bar",
+   "what": "a bar",
+   "fields": [
+    {
+     "name": "a",
+     "dim": "length",
+     "what": "a length"
+    },
+    {
+     "name": "b",
+     "dim": "length",
+     "what": "another"
+    },
+    {
+     "name": "r",
+     "dim": "dimensionless",
+     "signed": true,
+     "what": "a ratio the card states"
+    },
+    {
+     "name": "s",
+     "dim": "dimensionless",
+     "what": "an exponent"
+    },
+    {
+     "name": "grade",
+     "one_of": [
+      "soft",
+      "hard"
+     ],
+     "what": "a key"
+    },
+    {
+     "name": "caps",
+     "type": "cap",
+     "as": [
+      "left",
+      "right"
+     ],
+     "what": "its two ends"
+    }
+   ],
+   "loads": [
+    {
+     "name": "push",
+     "dim": "force",
+     "what": "a force of either sign"
+    },
+    {
+     "name": "twist",
+     "dim": "moment",
+     "least": "0 Nm",
+     "what": "a moment"
+    },
+    {
+     "name": "drag",
+     "dim": "force",
+     "least": "0 N",
+     "what": "a force that a rule reads for a hard bar and none for a soft one"
+    }
+   ],
+   "needs": [
+    {
+     "lt": [
+      "left.t",
+      [
+       "mul",
+       "8",
+       "a"
+      ]
+     ],
+     "why": "made up: the left cap is under 8 times as thick as the bar is long"
+    },
+    {
+     "le": [
+      [
+       "div",
+       [
+        "sub",
+        "right.t",
+        [
+         "q",
+         "100",
+         "mm"
+        ]
+       ],
+       "b"
+      ],
+      [
+       "div",
+       "r",
+       "1/1000"
+      ]
+     ],
+     "why": "made up: a quotient by a field"
+    }
+   ]
+  }
+ ],
+ "grid": [
+  {
+   "type": "bar",
+   "mechanism": "bar.cases",
+   "what": "cases",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   }
+  },
+  {
+   "type": "bar",
+   "mechanism": "bar.roots",
+   "what": "roots",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   }
+  },
+  {
+   "type": "bar",
+   "mechanism": "bar.exp",
+   "what": "exp",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   }
+  },
+  {
+   "type": "bar",
+   "mechanism": "bar.table",
+   "what": "table",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   }
+  },
+  {
+   "type": "bar",
+   "mechanism": "bar.key",
+   "what": "key",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   }
+  },
+  {
+   "type": "bar",
+   "mechanism": "bar.moment",
+   "what": "moment",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   }
+  },
+  {
+   "type": "bar",
+   "mechanism": "bar.caps",
+   "what": "caps",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   }
+  },
+  {
+   "type": "bar",
+   "mechanism": "bar.drag",
+   "what": "drag",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   }
+  },
+  {
+   "type": "bar",
+   "mechanism": "bar.idle",
+   "what": "idle",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   },
+   "unless": {
+    "when": [
+     "or",
+     [
+      "not",
+      [
+       "is",
+       "left.finish",
+       "low"
+      ]
+     ],
+     [
+      "and",
+      [
+       "is",
+       "grade",
+       "hard"
+      ],
+      [
+       "is",
+       "right.finish",
+       "high"
+      ]
+     ]
+    ],
+    "why": "made up"
+   }
+  },
+  {
+   "type": "bar",
+   "mechanism": "bar.named",
+   "what": "named",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   }
+  },
+  {
+   "type": "bar",
+   "mechanism": "bar.cased",
+   "what": "cased",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   }
+  },
+  {
+   "type": "bar",
+   "mechanism": "bar.left",
+   "what": "left",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   }
+  },
+  {
+   "type": "bar",
+   "mechanism": "bar.alike",
+   "what": "alike",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   }
+  },
+  {
+   "type": "bar",
+   "mechanism": "bar.modulus",
+   "what": "modulus",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   }
+  },
+  {
+   "type": "bar",
+   "mechanism": "bar.cos",
+   "what": "cos",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   }
+  },
+  {
+   "type": "bar",
+   "mechanism": "bar.cosin",
+   "what": "cosin",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   }
+  },
+  {
+   "type": "bar",
+   "mechanism": "bar.cosfloor",
+   "what": "cosfloor",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   }
+  },
+  {
+   "type": "bar",
+   "mechanism": "bar.turn",
+   "what": "turn",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   }
+  },
+  {
+   "type": "bar",
+   "mechanism": "bar.sine",
+   "what": "sine",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   }
+  },
+  {
+   "type": "bar",
+   "mechanism": "bar.zero",
+   "what": "zero",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   }
+  },
+  {
+   "type": "bar",
+   "mechanism": "bar.tiny",
+   "what": "tiny",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   }
+  },
+  {
+   "type": "bar",
+   "mechanism": "bar.edge",
+   "what": "edge",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   }
+  },
+  {
+   "type": "bar",
+   "mechanism": "bar.long",
+   "what": "long",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   }
+  },
+  {
+   "type": "bar",
+   "mechanism": "bar.right",
+   "what": "right",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   },
+   "unless": {
+    "when": [
+     "and",
+     [
+      "is",
+      "right.finish",
+      "low"
+     ],
+     [
+      "not",
+      [
+       "is",
+       "left.finish",
+       "low"
+      ]
+     ]
+    ],
+    "why": "made up: a key of a joined part"
+   }
+  }
+ ],
+ "rules": [
+  {
+   "id": "ops/cases",
+   "type": "bar",
+   "mechanism": "bar.cases",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   },
+   "says": "made up",
+   "le": [
+    [
+     "row",
+     "ops/cases",
+     {
+      "a": "a",
+      "b": "b"
+     }
+    ],
+    "1.5"
+   ]
+  },
+  {
+   "id": "ops/roots",
+   "type": "bar",
+   "mechanism": "bar.roots",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   },
+   "says": "made up",
+   "let": {
+    "both": [
+     "row",
+     "ops/roots",
+     {
+      "a": "a",
+      "b": "b"
+     }
+    ]
+   },
+   "le": [
+    "both",
+    [
+     "mul",
+     "2.5",
+     "b"
+    ]
+   ]
+  },
+  {
+   "id": "ops/exp",
+   "type": "bar",
+   "mechanism": "bar.exp",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   },
+   "says": "made up",
+   "where": [
+    {
+     "le": [
+      "s",
+      "4"
+     ],
+     "why": "made up"
+    }
+   ],
+   "le": [
+    [
+     "row",
+     "ops/exp",
+     {
+      "r": "r",
+      "s": "s"
+     }
+    ],
+    "5.2"
+   ]
+  },
+  {
+   "id": "ops/table",
+   "type": "bar",
+   "mechanism": "bar.table",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   },
+   "says": "made up",
+   "when": [
+    "or",
+    [
+     "is",
+     "grade",
+     "soft"
+    ],
+    [
+     "not",
+     [
+      "is",
+      "right.finish",
+      "low"
+     ]
+    ]
+   ],
+   "le": [
+    [
+     "abs",
+     [
+      "load",
+      "push"
+     ]
+    ],
+    [
+     "row",
+     "ops/table",
+     {
+      "x": "a",
+      "grade": [
+       "by",
+       "grade",
+       {
+        "soft": "low",
+        "hard": "high"
+       }
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "id": "ops/key",
+   "type": "bar",
+   "mechanism": "bar.key",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   },
+   "says": "made up",
+   "where": [
+    {
+     "le": [
+      [
+       "abs",
+       [
+        "load",
+        "push"
+       ]
+      ],
+      [
+       "q",
+       "6.5",
+       "kN"
+      ]
+     ],
+     "why": "made up"
+    },
+    {
+     "le": [
+      "a",
+      [
+       "q",
+       "40",
+       "mm"
+      ]
+     ],
+     "why": "made up"
+    }
+   ],
+   "le": [
+    [
+     "load",
+     "push"
+    ],
+    [
+     "row",
+     "ops/table",
+     {
+      "x": [
+       "max",
+       "a",
+       "b"
+      ],
+      "grade": [
+       "key",
+       "mid"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "id": "ops/caps",
+   "type": "bar",
+   "mechanism": "bar.caps",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   },
+   "says": "made up",
+   "le": [
+    [
+     "load",
+     "push"
+    ],
+    [
+     "add",
+     [
+      "row",
+      "ops/table",
+      {
+       "x": "left.t",
+       "grade": "left.finish"
+      }
+     ],
+     [
+      "row",
+      "ops/table",
+      {
+       "x": [
+        "add",
+        "right.t",
+        "b"
+       ],
+       "grade": [
+        "by",
+        "right.finish",
+        {
+         "low": "high",
+         "high": "mid"
+        }
+       ]
+      }
+     ]
+    ]
+   ]
+  },
+  {
+   "id": "ops/moment",
+   "type": "bar",
+   "mechanism": "bar.moment",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   },
+   "says": "made up",
+   "le": [
+    [
+     "load",
+     "twist"
+    ],
+    [
+     "mul",
+     [
+      "load",
+      "push"
+     ],
+     "a"
+    ]
+   ]
+  },
+  {
+   "id": "ops/drag",
+   "type": "bar",
+   "mechanism": "bar.drag",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   },
+   "says": "made up",
+   "when": [
+    "is",
+    "grade",
+    "hard"
+   ],
+   "le": [
+    [
+     "load",
+     "drag"
+    ],
+    [
+     "q",
+     "2",
+     "kN"
+    ]
+   ]
+  },
+  {
+   "id": "ops/named",
+   "type": "bar",
+   "mechanism": "bar.named",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   },
+   "says": "made up",
+   "le": [
+    [
+     "abs",
+     [
+      "load",
+      "push"
+     ]
+    ],
+    [
+     "row",
+     "ops/table",
+     {
+      "x": "b",
+      "grade": [
+       "row",
+       "ops/class",
+       {
+        "x": "a",
+        "i": "left.i"
+       }
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "id": "ops/cased",
+   "type": "bar",
+   "mechanism": "bar.cased",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   },
+   "says": "made up",
+   "le": [
+    [
+     "case",
+     [
+      "row",
+      "ops/class",
+      {
+       "x": "b",
+       "i": "right.i"
+      }
+     ],
+     {
+      "low": [
+       "mul",
+       "a",
+       "2"
+      ],
+      "mid": [
+       "row",
+       "ops/roots",
+       {
+        "a": "a",
+        "b": "b"
+       }
+      ],
+      "high": [
+       "sub",
+       "a",
+       [
+        "q",
+        "1",
+        "mm"
+       ]
+      ]
+     }
+    ],
+    [
+     "q",
+     "30",
+     "mm"
+    ]
+   ]
+  },
+  {
+   "id": "ops/left",
+   "type": "bar",
+   "mechanism": "bar.left",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   },
+   "says": "made up",
+   "when": [
+    "and",
+    [
+     "is",
+     "left.finish",
+     "high"
+    ],
+    [
+     "not",
+     [
+      "is",
+      "right.finish",
+      "high"
+     ]
+    ]
+   ],
+   "le": [
+    "left.t",
+    [
+     "mul",
+     "2",
+     "right.t"
+    ]
+   ]
+  },
+  {
+   "id": "ops/alike",
+   "type": "bar",
+   "mechanism": "bar.alike",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   },
+   "says": "made up",
+   "when": [
+    "is",
+    "grade",
+    "hard"
+   ],
+   "requires": [
+    "or",
+    [
+     "is",
+     "left.finish",
+     "low"
+    ],
+    [
+     "is",
+     "right.finish",
+     "high"
+    ]
+   ]
+  },
+  {
+   "id": "ops/modulus",
+   "type": "bar",
+   "mechanism": "bar.modulus",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   },
+   "says": "made up",
+   "le": [
+    [
+     "row",
+     "ops/modulus",
+     {
+      "i": "left.i",
+      "c": "a"
+     }
+    ],
+    [
+     "q",
+     "0.15",
+     "cm^3"
+    ]
+   ]
+  },
+  {
+   "id": "ops/cos",
+   "type": "bar",
+   "mechanism": "bar.cos",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   },
+   "says": "made up",
+   "le": [
+    [
+     "cos",
+     "r"
+    ],
+    "5350894862019091449552358835/9903520314283042199192993792"
+   ]
+  },
+  {
+   "id": "ops/cosin",
+   "type": "bar",
+   "mechanism": "bar.cosin",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   },
+   "says": "made up",
+   "le": [
+    [
+     "cos",
+     "r"
+    ],
+    "42807158896152731596418870679/79228162514264337593543950336"
+   ]
+  },
+  {
+   "id": "ops/cosfloor",
+   "type": "bar",
+   "mechanism": "bar.cosfloor",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   },
+   "says": "made up",
+   "le": [
+    "42807158896152731596418870679/79228162514264337593543950336",
+    [
+     "cos",
+     "r"
+    ]
+   ]
+  },
+  {
+   "id": "ops/turn",
+   "type": "bar",
+   "mechanism": "bar.turn",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   },
+   "says": "made up",
+   "le": [
+    [
+     "row",
+     "ops/turn",
+     {
+      "s": "s"
+     }
+    ],
+    "1/79228162514264337593543950336"
+   ]
+  },
+  {
+   "id": "ops/sine",
+   "type": "bar",
+   "mechanism": "bar.sine",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   },
+   "says": "made up",
+   "le": [
+    [
+     "row",
+     "ops/sine",
+     {
+      "r": "r"
+     }
+    ],
+    "0.85"
+   ]
+  },
+  {
+   "id": "ops/zero",
+   "type": "bar",
+   "mechanism": "bar.zero",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   },
+   "says": "made up",
+   "le": [
+    "1",
+    [
+     "cos",
+     [
+      "sub",
+      "r",
+      "r"
+     ]
+    ]
+   ]
+  },
+  {
+   "id": "ops/tiny",
+   "type": "bar",
+   "mechanism": "bar.tiny",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   },
+   "says": "made up",
+   "le": [
+    "79228162514264337593543950335/79228162514264337593543950336",
+    [
+     "cos",
+     [
+      "div",
+      "r",
+      "1000000000000000000000000000000"
+     ]
+    ]
+   ]
+  },
+  {
+   "id": "ops/edge",
+   "type": "bar",
+   "mechanism": "bar.edge",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   },
+   "says": "made up",
+   "le": [
+    [
+     "cos",
+     [
+      "mul",
+      "r",
+      "65536"
+     ]
+    ],
+    "1"
+   ]
+  },
+  {
+   "id": "ops/long",
+   "type": "bar",
+   "mechanism": "bar.long",
+   "anchor": {
+    "standard": "a deck made up for the bench",
+    "clause": "1"
+   },
+   "says": "made up",
+   "le": [
+    [
+     "cos",
+     [
+      "mul",
+      "r",
+      "1000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000007/900000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001"
+     ]
+    ],
+    "35150843669481291932710104019/79228162514264337593543950336"
+   ]
+  }
+ ]
+}

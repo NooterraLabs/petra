@@ -1,0 +1,119 @@
+{
+  "card": "sha256:a4b33d51d950a51b34a0ade9baa9e410010baa9ee1beb91dc38036eec3f65a7f", 
+  "format": "petra-design/0", 
+  "name": "card_1", 
+  "params": [], 
+  "parts": "x", 
+  "quantities": [
+    {
+      "dim": "area", 
+      "entity": "pad", 
+      "field": "area", 
+      "hi": "1753/232500", 
+      "line": "area", 
+      "lo": "1753/232500", 
+      "role": "size", 
+      "type": "pad"
+    }, 
+    {
+      "dim": "area", 
+      "entity": "a", 
+      "field": "area", 
+      "hi": "63/625000", 
+      "line": "area", 
+      "lo": "63/625000", 
+      "role": "size", 
+      "type": "pad"
+    }, 
+    {
+      "dim": "area", 
+      "entity": "splice", 
+      "field": "area", 
+      "hi": "16214/591", 
+      "line": "area", 
+      "lo": "16214/591", 
+      "role": "size", 
+      "type": "pad"
+    }, 
+    {
+      "dim": "area", 
+      "entity": "a_", 
+      "field": "area", 
+      "hi": "3/25000", 
+      "line": "area", 
+      "lo": "3/25000", 
+      "role": "size", 
+      "type": "pad"
+    }, 
+    {
+      "dim": "length", 
+      "entity": "strip", 
+      "field": "width", 
+      "hi": "3/1000", 
+      "line": "width", 
+      "lo": "3/1000", 
+      "role": "size", 
+      "type": "strip"
+    }, 
+    {
+      "dim": "length", 
+      "entity": "strip", 
+      "field": "screw", 
+      "hi": "1/3000", 
+      "line": "screw", 
+      "lo": "1/3000", 
+      "role": "size", 
+      "type": "strip"
+    }, 
+    {
+      "dim": "length", 
+      "entity": "strip", 
+      "field": "hole", 
+      "hi": "1/250", 
+      "line": "hole", 
+      "lo": "1/250", 
+      "role": "size", 
+      "type": "strip"
+    }, 
+    {
+      "dim": "dimensionless", 
+      "entity": "strip", 
+      "field": "turns", 
+      "hi": "1", 
+      "line": "turns", 
+      "lo": "1", 
+      "role": "size", 
+      "type": "strip"
+    }, 
+    {
+      "dim": "length", 
+      "entity": "x", 
+      "field": "screw", 
+      "hi": "3/1000", 
+      "line": "screw", 
+      "lo": "3/1000", 
+      "role": "size", 
+      "type": "strip"
+    }, 
+    {
+      "dim": "length", 
+      "entity": "x", 
+      "field": "hole", 
+      "hi": "33/10000", 
+      "line": "hole", 
+      "lo": "33/10000", 
+      "role": "size", 
+      "type": "strip"
+    }, 
+    {
+      "dim": "dimensionless", 
+      "entity": "x", 
+      "field": "turns", 
+      "hi": "6", 
+      "line": "turns", 
+      "lo": "6", 
+      "role": "size", 
+      "type": "strip"
+    }
+  ]
+}
