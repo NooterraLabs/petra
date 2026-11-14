@@ -1,0 +1,14 @@
+name = "petra-certify-proofs"
+defaultTargets = ["CertifyProofs"]
+
+[[require]]
+name = "mathlib"
+scope = "leanprover-community"
+rev = "v4.30.0-rc2"
+
+[[require]]
+name = "petra-certify"
+path = ".."
+
+[[lean_lib]]
+name = "CertifyProofs"

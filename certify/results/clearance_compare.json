@@ -1,0 +1,3512 @@
+[
+ {
+  "file": "samples/c1_pin_in_bore_32.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 65735494311815931753923/146261010191574799141690 = 0.449440 apart",
+  "lean_says": "PROVED: the parts are at least 65735494311815931753923/146261010191574799141690 = 0.449440 apart"
+ },
+ {
+  "file": "clearance/certs/c1_pin_in_bore_auto_128.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 171923396070388609493200/346035399398037011446589 = 0.496838 apart",
+  "lean_says": "PROVED: the parts are at least 171923396070388609493200/346035399398037011446589 = 0.496838 apart"
+ },
+ {
+  "file": "clearance/certs/c1_pin_in_bore_auto_16.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 2411395670509680048163/8085272439852019870970 = 0.298245 apart",
+  "lean_says": "PROVED: the parts are at least 2411395670509680048163/8085272439852019870970 = 0.298245 apart"
+ },
+ {
+  "file": "clearance/certs/c1_pin_in_bore_auto_32.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 65735494311815931753923/146261010191574799141690 = 0.449440 apart",
+  "lean_says": "PROVED: the parts are at least 65735494311815931753923/146261010191574799141690 = 0.449440 apart"
+ },
+ {
+  "file": "clearance/certs/c1_pin_in_bore_auto_64.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 889802058397459564357237/1825788195566773307155130 = 0.487352 apart",
+  "lean_says": "PROVED: the parts are at least 889802058397459564357237/1825788195566773307155130 = 0.487352 apart"
+ },
+ {
+  "file": "clearance/certs/c2_pin_off_centre_auto_128.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 838002677/4255377025 = 0.196928 apart",
+  "lean_says": "PROVED: the parts are at least 838002677/4255377025 = 0.196928 apart"
+ },
+ {
+  "file": "clearance/certs/c2_pin_off_centre_auto_16.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 18270866623/4556484791225 = 0.004010 apart",
+  "lean_says": "PROVED: the parts are at least 18270866623/4556484791225 = 0.004010 apart"
+ },
+ {
+  "file": "clearance/certs/c2_pin_off_centre_auto_32.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 3561258793/23602593965 = 0.150884 apart",
+  "lean_says": "PROVED: the parts are at least 3561258793/23602593965 = 0.150884 apart"
+ },
+ {
+  "file": "clearance/certs/c2_pin_off_centre_auto_64.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 37440071/199453105 = 0.187714 apart",
+  "lean_says": "PROVED: the parts are at least 37440071/199453105 = 0.187714 apart"
+ },
+ {
+  "file": "clearance/certs/c3a_clevis_vs_pin_and_bar_auto_128.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 171923396070388609493200/346035399398037011446589 = 0.496838 apart",
+  "lean_says": "PROVED: the parts are at least 171923396070388609493200/346035399398037011446589 = 0.496838 apart"
+ },
+ {
+  "file": "clearance/certs/c3a_clevis_vs_pin_and_bar_auto_16.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 2411395670509680048163/8085272439852019870970 = 0.298245 apart",
+  "lean_says": "PROVED: the parts are at least 2411395670509680048163/8085272439852019870970 = 0.298245 apart"
+ },
+ {
+  "file": "clearance/certs/c3a_clevis_vs_pin_and_bar_auto_32.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 65735494311815931753923/146261010191574799141690 = 0.449440 apart",
+  "lean_says": "PROVED: the parts are at least 65735494311815931753923/146261010191574799141690 = 0.449440 apart"
+ },
+ {
+  "file": "clearance/certs/c3a_clevis_vs_pin_and_bar_auto_64.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 889802058397459564357237/1825788195566773307155130 = 0.487352 apart",
+  "lean_says": "PROVED: the parts are at least 889802058397459564357237/1825788195566773307155130 = 0.487352 apart"
+ },
+ {
+  "file": "clearance/certs/c3b_clevis_and_pin_vs_bar_auto_128.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 12089572210465109380139066964227/3725393822302434433213918619004 = 3.245180 apart",
+  "lean_says": "PROVED: the parts are at least 12089572210465109380139066964227/3725393822302434433213918619004 = 3.245180 apart"
+ },
+ {
+  "file": "clearance/certs/c3b_clevis_and_pin_vs_bar_auto_16.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 371607365145743650306178163508951711/126545927959979129859038228539642732 = 2.936541 apart",
+  "lean_says": "PROVED: the parts are at least 371607365145743650306178163508951711/126545927959979129859038228539642732 = 2.936541 apart"
+ },
+ {
+  "file": "clearance/certs/c3b_clevis_and_pin_vs_bar_auto_32.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 672279224713378187637878224920981/211902811745991329376654493471268 = 3.172583 apart",
+  "lean_says": "PROVED: the parts are at least 672279224713378187637878224920981/211902811745991329376654493471268 = 3.172583 apart"
+ },
+ {
+  "file": "clearance/certs/c3b_clevis_and_pin_vs_bar_auto_64.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 421405623633230076909769842591/130437705301049154982571971628 = 3.230704 apart",
+  "lean_says": "PROVED: the parts are at least 421405623633230076909769842591/130437705301049154982571971628 = 3.230704 apart"
+ },
+ {
+  "file": "clearance/certs/c3b_clevis_and_pin_vs_bar_auto_8.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 341721259274085220639420464524023/176899556346021756826136975437412 = 1.931725 apart",
+  "lean_says": "PROVED: the parts are at least 341721259274085220639420464524023/176899556346021756826136975437412 = 1.931725 apart"
+ },
+ {
+  "file": "clearance/certs/c3b_clevis_and_pin_vs_bar_auto_aim_128.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 13/4 = 3.250000 apart",
+  "lean_says": "PROVED: the parts are at least 13/4 = 3.250000 apart"
+ },
+ {
+  "file": "clearance/certs/c3b_clevis_and_pin_vs_bar_auto_aim_16.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 13/4 = 3.250000 apart",
+  "lean_says": "PROVED: the parts are at least 13/4 = 3.250000 apart"
+ },
+ {
+  "file": "clearance/certs/c3b_clevis_and_pin_vs_bar_auto_aim_32.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 13/4 = 3.250000 apart",
+  "lean_says": "PROVED: the parts are at least 13/4 = 3.250000 apart"
+ },
+ {
+  "file": "clearance/certs/c3b_clevis_and_pin_vs_bar_auto_aim_64.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 13/4 = 3.250000 apart",
+  "lean_says": "PROVED: the parts are at least 13/4 = 3.250000 apart"
+ },
+ {
+  "file": "clearance/certs/c3b_clevis_and_pin_vs_bar_auto_aim_8.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 13/4 = 3.250000 apart",
+  "lean_says": "PROVED: the parts are at least 13/4 = 3.250000 apart"
+ },
+ {
+  "file": "clearance/certs/c4a_wedge_rim_auto_128.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 566956390/283606359 = 1.999096 apart",
+  "lean_says": "PROVED: the parts are at least 566956390/283606359 = 1.999096 apart"
+ },
+ {
+  "file": "clearance/certs/c4a_wedge_rim_auto_16.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 1735042338880/893786642723 = 1.941227 apart",
+  "lean_says": "PROVED: the parts are at least 1735042338880/893786642723 = 1.941227 apart"
+ },
+ {
+  "file": "clearance/certs/c4a_wedge_rim_auto_32.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 52855179654/26620799827 = 1.985484 apart",
+  "lean_says": "PROVED: the parts are at least 52855179654/26620799827 = 1.985484 apart"
+ },
+ {
+  "file": "clearance/certs/c4a_wedge_rim_auto_64.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 26513664/13280857 = 1.996382 apart",
+  "lean_says": "PROVED: the parts are at least 26513664/13280857 = 1.996382 apart"
+ },
+ {
+  "file": "clearance/certs/c4a_wedge_rim_auto_8.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 22209193183/12670525276 = 1.752823 apart",
+  "lean_says": "PROVED: the parts are at least 22209193183/12670525276 = 1.752823 apart"
+ },
+ {
+  "file": "clearance/certs/c4a_wedge_rim_auto_aim_128.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 2 = 2.000000 apart",
+  "lean_says": "PROVED: the parts are at least 2 = 2.000000 apart"
+ },
+ {
+  "file": "clearance/certs/c4a_wedge_rim_auto_aim_16.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 2 = 2.000000 apart",
+  "lean_says": "PROVED: the parts are at least 2 = 2.000000 apart"
+ },
+ {
+  "file": "clearance/certs/c4a_wedge_rim_auto_aim_32.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 2 = 2.000000 apart",
+  "lean_says": "PROVED: the parts are at least 2 = 2.000000 apart"
+ },
+ {
+  "file": "clearance/certs/c4a_wedge_rim_auto_aim_64.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 2 = 2.000000 apart",
+  "lean_says": "PROVED: the parts are at least 2 = 2.000000 apart"
+ },
+ {
+  "file": "clearance/certs/c4a_wedge_rim_auto_aim_8.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 2 = 2.000000 apart",
+  "lean_says": "PROVED: the parts are at least 2 = 2.000000 apart"
+ },
+ {
+  "file": "clearance/certs/c4b_wedge_skew_auto_128.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 138920989315915729268375/47257587630768921459117 = 2.939655 apart",
+  "lean_says": "PROVED: the parts are at least 138920989315915729268375/47257587630768921459117 = 2.939655 apart"
+ },
+ {
+  "file": "clearance/certs/c4b_wedge_skew_auto_16.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 442491389304223897/153833305630463715 = 2.876434 apart",
+  "lean_says": "PROVED: the parts are at least 442491389304223897/153833305630463715 = 2.876434 apart"
+ },
+ {
+  "file": "clearance/certs/c4b_wedge_skew_auto_32.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 130987718400875401895047/44686251782779368511330 = 2.931276 apart",
+  "lean_says": "PROVED: the parts are at least 130987718400875401895047/44686251782779368511330 = 2.931276 apart"
+ },
+ {
+  "file": "clearance/certs/c4b_wedge_skew_auto_64.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 3383816308778374453087175/1152221816326127294830731 = 2.936775 apart",
+  "lean_says": "PROVED: the parts are at least 3383816308778374453087175/1152221816326127294830731 = 2.936775 apart"
+ },
+ {
+  "file": "clearance/certs/c4b_wedge_skew_auto_8.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 82518335752705885/29057467408514856 = 2.839832 apart",
+  "lean_says": "PROVED: the parts are at least 82518335752705885/29057467408514856 = 2.839832 apart"
+ },
+ {
+  "file": "clearance/certs/c4b_wedge_skew_auto_aim_128.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 440886565231389180307513092394141318978598790385/149967195880873191683111500883034041942104080384 = 2.939887 apart",
+  "lean_says": "PROVED: the parts are at least 440886565231389180307513092394141318978598790385/149967195880873191683111500883034041942104080384 = 2.939887 apart"
+ },
+ {
+  "file": "clearance/certs/c4b_wedge_skew_auto_aim_16.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 3561982245042475370021773786581733141/1211605277167210346436472086472949760 = 2.939887 apart",
+  "lean_says": "PROVED: the parts are at least 3561982245042475370021773786581733141/1211605277167210346436472086472949760 = 2.939887 apart"
+ },
+ {
+  "file": "clearance/certs/c4b_wedge_skew_auto_aim_32.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 1241256812381065/422212465065984 = 2.939887 apart",
+  "lean_says": "PROVED: the parts are at least 1241256812381065/422212465065984 = 2.939887 apart"
+ },
+ {
+  "file": "clearance/certs/c4b_wedge_skew_auto_aim_64.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 1241256812381065/422212465065984 = 2.939887 apart",
+  "lean_says": "PROVED: the parts are at least 1241256812381065/422212465065984 = 2.939887 apart"
+ },
+ {
+  "file": "clearance/certs/c4b_wedge_skew_auto_aim_8.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 8449391798077437290749955803120091/2874053542982185953636803023994880 = 2.939887 apart",
+  "lean_says": "PROVED: the parts are at least 8449391798077437290749955803120091/2874053542982185953636803023994880 = 2.939887 apart"
+ },
+ {
+  "file": "clearance/certs/c5_blocks_1x0_all_16.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 6005795882160446769928/4042636219926009935485 = 1.485614 apart",
+  "lean_says": "PROVED: the parts are at least 6005795882160446769928/4042636219926009935485 = 1.485614 apart"
+ },
+ {
+  "file": "clearance/certs/c5_blocks_1x0_all_8.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 14953714751794670148498/10685670551428152618253 = 1.399418 apart",
+  "lean_says": "PROVED: the parts are at least 14953714751794670148498/10685670551428152618253 = 1.399418 apart"
+ },
+ {
+  "file": "clearance/certs/c5_blocks_1x1_all_16.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 6005795882160446769928/4042636219926009935485 = 1.485614 apart",
+  "lean_says": "PROVED: the parts are at least 6005795882160446769928/4042636219926009935485 = 1.485614 apart"
+ },
+ {
+  "file": "clearance/certs/c5_blocks_1x1_all_8.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 14953714751794670148498/10685670551428152618253 = 1.399418 apart",
+  "lean_says": "PROVED: the parts are at least 14953714751794670148498/10685670551428152618253 = 1.399418 apart"
+ },
+ {
+  "file": "clearance/certs/c5_blocks_2x1_all_16.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 6005795882160446769928/4042636219926009935485 = 1.485614 apart",
+  "lean_says": "PROVED: the parts are at least 6005795882160446769928/4042636219926009935485 = 1.485614 apart"
+ },
+ {
+  "file": "clearance/certs/c5_blocks_2x1_all_8.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 14953714751794670148498/10685670551428152618253 = 1.399418 apart",
+  "lean_says": "PROVED: the parts are at least 14953714751794670148498/10685670551428152618253 = 1.399418 apart"
+ },
+ {
+  "file": "clearance/certs/c5_blocks_2x2_all_8.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 14953714751794670148498/10685670551428152618253 = 1.399418 apart",
+  "lean_says": "PROVED: the parts are at least 14953714751794670148498/10685670551428152618253 = 1.399418 apart"
+ },
+ {
+  "file": "clearance/certs/c5_blocks_3x2_all_6.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 158631825972/341804080817 = 0.464102 apart",
+  "lean_says": "PROVED: the parts are at least 158631825972/341804080817 = 0.464102 apart"
+ },
+ {
+  "file": "clearance/certs/c5_blocks_3x2_all_8.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 14953714751794670148498/10685670551428152618253 = 1.399418 apart",
+  "lean_says": "PROVED: the parts are at least 14953714751794670148498/10685670551428152618253 = 1.399418 apart"
+ },
+ {
+  "file": "clearance/certs/c5_blocks_3x2_auto_128.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 15364230055580891196218/10146345735216143801897 = 1.514262 apart",
+  "lean_says": "PROVED: the parts are at least 15364230055580891196218/10146345735216143801897 = 1.514262 apart"
+ },
+ {
+  "file": "clearance/certs/c5_blocks_3x2_auto_16.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 6005795882160446769928/4042636219926009935485 = 1.485614 apart",
+  "lean_says": "PROVED: the parts are at least 6005795882160446769928/4042636219926009935485 = 1.485614 apart"
+ },
+ {
+  "file": "clearance/certs/c5_blocks_3x2_auto_32.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 48507706516298689908118/32179187432091319318625 = 1.507425 apart",
+  "lean_says": "PROVED: the parts are at least 48507706516298689908118/32179187432091319318625 = 1.507425 apart"
+ },
+ {
+  "file": "clearance/certs/c5_blocks_3x2_auto_64.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 11949920962096825998216/7898716184733231032381 = 1.512894 apart",
+  "lean_says": "PROVED: the parts are at least 11949920962096825998216/7898716184733231032381 = 1.512894 apart"
+ },
+ {
+  "file": "clearance/certs/c5_blocks_3x2_auto_8.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 14953714751794670148498/10685670551428152618253 = 1.399418 apart",
+  "lean_says": "PROVED: the parts are at least 14953714751794670148498/10685670551428152618253 = 1.399418 apart"
+ },
+ {
+  "file": "clearance/neg/base_c1_pin_in_bore_32.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 65735494311815931753923/146261010191574799141690 = 0.449440 apart",
+  "lean_says": "PROVED: the parts are at least 65735494311815931753923/146261010191574799141690 = 0.449440 apart"
+ },
+ {
+  "file": "clearance/neg/base_c2_pin_off_centre_64.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 37440071/199453105 = 0.187714 apart",
+  "lean_says": "PROVED: the parts are at least 37440071/199453105 = 0.187714 apart"
+ },
+ {
+  "file": "clearance/neg/base_c3a_clevis_vs_pin_and_bar_16.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 2411395670509680048163/8085272439852019870970 = 0.298245 apart",
+  "lean_says": "PROVED: the parts are at least 2411395670509680048163/8085272439852019870970 = 0.298245 apart"
+ },
+ {
+  "file": "clearance/neg/base_c3b_clevis_and_pin_vs_bar_16.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 13/4 = 3.250000 apart",
+  "lean_says": "PROVED: the parts are at least 13/4 = 3.250000 apart"
+ },
+ {
+  "file": "clearance/neg/base_c4a_wedge_rim_16.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 1735042338880/893786642723 = 1.941227 apart",
+  "lean_says": "PROVED: the parts are at least 1735042338880/893786642723 = 1.941227 apart"
+ },
+ {
+  "file": "clearance/neg/base_c4b_wedge_skew_32.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 1241256812381065/422212465065984 = 2.939887 apart",
+  "lean_says": "PROVED: the parts are at least 1241256812381065/422212465065984 = 2.939887 apart"
+ },
+ {
+  "file": "clearance/neg/base_c5_blocks_2x1_8.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 14953714751794670148498/10685670551428152618253 = 1.399418 apart",
+  "lean_says": "PROVED: the parts are at least 14953714751794670148498/10685670551428152618253 = 1.399418 apart"
+ },
+ {
+  "file": "clearance/neg/base_c5_blocks_3x2_16.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 6005795882160446769928/4042636219926009935485 = 1.485614 apart",
+  "lean_says": "PROVED: the parts are at least 6005795882160446769928/4042636219926009935485 = 1.485614 apart"
+ },
+ {
+  "file": "clearance/neg/cheat_0_c1_pin_in_bore_64.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a corner of a polygon given for a hole of the box 0 is outside the hole",
+  "lean_says": "REFUSED: a corner of a polygon given for a hole of the box 0 is outside the hole"
+ },
+ {
+  "file": "clearance/neg/cheat_10_c5_blocks_3x2_16.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a corner of a polygon given for a hole of the box 0 is outside the hole",
+  "lean_says": "REFUSED: a corner of a polygon given for a hole of the box 0 is outside the hole"
+ },
+ {
+  "file": "clearance/neg/cheat_1_c1_pin_in_bore_64.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a side given for the cylinder 0 cuts into it",
+  "lean_says": "REFUSED: a side given for the cylinder 0 cuts into it"
+ },
+ {
+  "file": "clearance/neg/cheat_2_c1_pin_in_bore_64.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a corner of a polygon given for a hole of the box 0 is outside the hole",
+  "lean_says": "REFUSED: a corner of a polygon given for a hole of the box 0 is outside the hole"
+ },
+ {
+  "file": "clearance/neg/cheat_3_c1_pin_in_bore_64.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a side given for the cylinder 0 cuts into it",
+  "lean_says": "REFUSED: a side given for the cylinder 0 cuts into it"
+ },
+ {
+  "file": "clearance/neg/cheat_4_c1_pin_in_bore_8.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a corner of a polygon given for a hole of the box 0 is outside the hole",
+  "lean_says": "REFUSED: a corner of a polygon given for a hole of the box 0 is outside the hole"
+ },
+ {
+  "file": "clearance/neg/cheat_5_c2_pin_off_centre_32.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a corner of a polygon given for a hole of the box 0 is outside the hole",
+  "lean_says": "REFUSED: a corner of a polygon given for a hole of the box 0 is outside the hole"
+ },
+ {
+  "file": "clearance/neg/cheat_6_c3a_clevis_vs_pin_and_bar_16.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a corner of a polygon given for a hole of the box 0 is outside the hole",
+  "lean_says": "REFUSED: a corner of a polygon given for a hole of the box 0 is outside the hole"
+ },
+ {
+  "file": "clearance/neg/cheat_7_c3b_clevis_and_pin_vs_bar_16.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a side given for the cylinder 2 cuts into it",
+  "lean_says": "REFUSED: a side given for the cylinder 2 cuts into it"
+ },
+ {
+  "file": "clearance/neg/cheat_8_c4a_wedge_rim_16.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a side given for the cylinder 0 cuts into it",
+  "lean_says": "REFUSED: a side given for the cylinder 0 cuts into it"
+ },
+ {
+  "file": "clearance/neg/cheat_9_c4b_wedge_skew_16.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a side given for the cylinder 0 cuts into it",
+  "lean_says": "REFUSED: a side given for the cylinder 0 cuts into it"
+ },
+ {
+  "file": "clearance/neg/claim_c1_pin_in_bore_64_exact.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 889802058397459564357237/1825788195566773307155130 = 0.487352 apart",
+  "lean_says": "PROVED: the parts are at least 889802058397459564357237/1825788195566773307155130 = 0.487352 apart"
+ },
+ {
+  "file": "clearance/neg/claim_c1_pin_in_bore_64_shown.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 3 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 3 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/claim_c1_pin_in_bore_64_true.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/claim_c1_pin_in_bore_64_true2.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/claim_c2_pin_off_centre_64_exact.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 37440071/199453105 = 0.187714 apart",
+  "lean_says": "PROVED: the parts are at least 37440071/199453105 = 0.187714 apart"
+ },
+ {
+  "file": "clearance/neg/claim_c2_pin_off_centre_64_shown.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/claim_c2_pin_off_centre_64_true.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/claim_c2_pin_off_centre_64_true2.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/claim_c3a_clevis_vs_pin_and_bar_32_exact.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 65735494311815931753923/146261010191574799141690 = 0.449440 apart",
+  "lean_says": "PROVED: the parts are at least 65735494311815931753923/146261010191574799141690 = 0.449440 apart"
+ },
+ {
+  "file": "clearance/neg/claim_c3a_clevis_vs_pin_and_bar_32_shown.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 1 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 1 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/claim_c3a_clevis_vs_pin_and_bar_32_true.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/claim_c3a_clevis_vs_pin_and_bar_32_true2.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/claim_c3b_clevis_and_pin_vs_bar_32_aim_exact.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 13/4 = 3.250000 apart",
+  "lean_says": "PROVED: the parts are at least 13/4 = 3.250000 apart"
+ },
+ {
+  "file": "clearance/neg/claim_c3b_clevis_and_pin_vs_bar_32_aim_shown.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 2 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 2 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/claim_c3b_clevis_and_pin_vs_bar_32_aim_true.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 2 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 2 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/claim_c3b_clevis_and_pin_vs_bar_32_aim_true2.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/claim_c3b_clevis_and_pin_vs_bar_32_exact.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 672279224713378187637878224920981/211902811745991329376654493471268 = 3.172583 apart",
+  "lean_says": "PROVED: the parts are at least 672279224713378187637878224920981/211902811745991329376654493471268 = 3.172583 apart"
+ },
+ {
+  "file": "clearance/neg/claim_c3b_clevis_and_pin_vs_bar_32_shown.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 2 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 2 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/claim_c3b_clevis_and_pin_vs_bar_32_true.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 2 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 2 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/claim_c3b_clevis_and_pin_vs_bar_32_true2.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/claim_c4a_wedge_rim_32_aim_exact.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 2 = 2.000000 apart",
+  "lean_says": "PROVED: the parts are at least 2 = 2.000000 apart"
+ },
+ {
+  "file": "clearance/neg/claim_c4a_wedge_rim_32_aim_shown.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/claim_c4a_wedge_rim_32_aim_true.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/claim_c4a_wedge_rim_32_aim_true2.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/claim_c4a_wedge_rim_32_exact.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 52855179654/26620799827 = 1.985484 apart",
+  "lean_says": "PROVED: the parts are at least 52855179654/26620799827 = 1.985484 apart"
+ },
+ {
+  "file": "clearance/neg/claim_c4a_wedge_rim_32_shown.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/claim_c4a_wedge_rim_32_true.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/claim_c4a_wedge_rim_32_true2.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/claim_c4b_wedge_skew_32_aim_exact.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 1241256812381065/422212465065984 = 2.939887 apart",
+  "lean_says": "PROVED: the parts are at least 1241256812381065/422212465065984 = 2.939887 apart"
+ },
+ {
+  "file": "clearance/neg/claim_c4b_wedge_skew_32_aim_shown.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/claim_c4b_wedge_skew_32_aim_true.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/claim_c4b_wedge_skew_32_aim_true2.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/claim_c4b_wedge_skew_32_exact.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 130987718400875401895047/44686251782779368511330 = 2.931276 apart",
+  "lean_says": "PROVED: the parts are at least 130987718400875401895047/44686251782779368511330 = 2.931276 apart"
+ },
+ {
+  "file": "clearance/neg/claim_c4b_wedge_skew_32_shown.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/claim_c4b_wedge_skew_32_true.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/claim_c4b_wedge_skew_32_true2.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/claim_c5_blocks_3x2_32_exact.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 48507706516298689908118/32179187432091319318625 = 1.507425 apart",
+  "lean_says": "PROVED: the parts are at least 48507706516298689908118/32179187432091319318625 = 1.507425 apart"
+ },
+ {
+  "file": "clearance/neg/claim_c5_blocks_3x2_32_shown.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 4 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 4 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/claim_c5_blocks_3x2_32_true.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 3 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 3 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/claim_c5_blocks_3x2_32_true2.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 1 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 1 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/harmless_c1_pin_in_bore_32_clearance_lowered.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 591619448806343385785307/1462610101915747991416900 = 0.404496 apart",
+  "lean_says": "PROVED: the parts are at least 591619448806343385785307/1462610101915747991416900 = 0.404496 apart"
+ },
+ {
+  "file": "clearance/neg/harmless_c1_pin_in_bore_32_witness_given_twice.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 65735494311815931753923/146261010191574799141690 = 0.449440 apart",
+  "lean_says": "PROVED: the parts are at least 65735494311815931753923/146261010191574799141690 = 0.449440 apart"
+ },
+ {
+  "file": "clearance/neg/harmless_c1_pin_in_bore_32_witness_scaled_whole.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 65735494311815931753923/146261010191574799141690 = 0.449440 apart",
+  "lean_says": "PROVED: the parts are at least 65735494311815931753923/146261010191574799141690 = 0.449440 apart"
+ },
+ {
+  "file": "clearance/neg/harmless_c1_pin_in_bore_32_witnesses_reordered.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 65735494311815931753923/146261010191574799141690 = 0.449440 apart",
+  "lean_says": "PROVED: the parts are at least 65735494311815931753923/146261010191574799141690 = 0.449440 apart"
+ },
+ {
+  "file": "clearance/neg/harmless_c2_pin_off_centre_64_clearance_lowered.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 336960639/1994531050 = 0.168942 apart",
+  "lean_says": "PROVED: the parts are at least 336960639/1994531050 = 0.168942 apart"
+ },
+ {
+  "file": "clearance/neg/harmless_c2_pin_off_centre_64_witness_given_twice.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 37440071/199453105 = 0.187714 apart",
+  "lean_says": "PROVED: the parts are at least 37440071/199453105 = 0.187714 apart"
+ },
+ {
+  "file": "clearance/neg/harmless_c2_pin_off_centre_64_witness_scaled_whole.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 37440071/199453105 = 0.187714 apart",
+  "lean_says": "PROVED: the parts are at least 37440071/199453105 = 0.187714 apart"
+ },
+ {
+  "file": "clearance/neg/harmless_c2_pin_off_centre_64_witnesses_reordered.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 37440071/199453105 = 0.187714 apart",
+  "lean_says": "PROVED: the parts are at least 37440071/199453105 = 0.187714 apart"
+ },
+ {
+  "file": "clearance/neg/harmless_c3a_clevis_vs_pin_and_bar_16_clearance_lowered.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 21702561034587120433467/80852724398520198709700 = 0.268421 apart",
+  "lean_says": "PROVED: the parts are at least 21702561034587120433467/80852724398520198709700 = 0.268421 apart"
+ },
+ {
+  "file": "clearance/neg/harmless_c3a_clevis_vs_pin_and_bar_16_witness_given_twice.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 2411395670509680048163/8085272439852019870970 = 0.298245 apart",
+  "lean_says": "PROVED: the parts are at least 2411395670509680048163/8085272439852019870970 = 0.298245 apart"
+ },
+ {
+  "file": "clearance/neg/harmless_c3a_clevis_vs_pin_and_bar_16_witness_scaled_whole.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 2411395670509680048163/8085272439852019870970 = 0.298245 apart",
+  "lean_says": "PROVED: the parts are at least 2411395670509680048163/8085272439852019870970 = 0.298245 apart"
+ },
+ {
+  "file": "clearance/neg/harmless_c3a_clevis_vs_pin_and_bar_16_witnesses_reordered.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 2411395670509680048163/8085272439852019870970 = 0.298245 apart",
+  "lean_says": "PROVED: the parts are at least 2411395670509680048163/8085272439852019870970 = 0.298245 apart"
+ },
+ {
+  "file": "clearance/neg/harmless_c3b_clevis_and_pin_vs_bar_16_clearance_lowered.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 117/40 = 2.925000 apart",
+  "lean_says": "PROVED: the parts are at least 117/40 = 2.925000 apart"
+ },
+ {
+  "file": "clearance/neg/harmless_c3b_clevis_and_pin_vs_bar_16_witness_given_twice.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 13/4 = 3.250000 apart",
+  "lean_says": "PROVED: the parts are at least 13/4 = 3.250000 apart"
+ },
+ {
+  "file": "clearance/neg/harmless_c3b_clevis_and_pin_vs_bar_16_witness_scaled_whole.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 13/4 = 3.250000 apart",
+  "lean_says": "PROVED: the parts are at least 13/4 = 3.250000 apart"
+ },
+ {
+  "file": "clearance/neg/harmless_c3b_clevis_and_pin_vs_bar_16_witnesses_reordered.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 13/4 = 3.250000 apart",
+  "lean_says": "PROVED: the parts are at least 13/4 = 3.250000 apart"
+ },
+ {
+  "file": "clearance/neg/harmless_c4a_wedge_rim_16_clearance_lowered.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 1561538104992/893786642723 = 1.747104 apart",
+  "lean_says": "PROVED: the parts are at least 1561538104992/893786642723 = 1.747104 apart"
+ },
+ {
+  "file": "clearance/neg/harmless_c4a_wedge_rim_16_witness_given_twice.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 1735042338880/893786642723 = 1.941227 apart",
+  "lean_says": "PROVED: the parts are at least 1735042338880/893786642723 = 1.941227 apart"
+ },
+ {
+  "file": "clearance/neg/harmless_c4a_wedge_rim_16_witness_scaled_whole.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 1735042338880/893786642723 = 1.941227 apart",
+  "lean_says": "PROVED: the parts are at least 1735042338880/893786642723 = 1.941227 apart"
+ },
+ {
+  "file": "clearance/neg/harmless_c4a_wedge_rim_16_witnesses_reordered.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 1735042338880/893786642723 = 1.941227 apart",
+  "lean_says": "PROVED: the parts are at least 1735042338880/893786642723 = 1.941227 apart"
+ },
+ {
+  "file": "clearance/neg/harmless_c4b_wedge_skew_32_clearance_lowered.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 744754087428639/281474976710656 = 2.645898 apart",
+  "lean_says": "PROVED: the parts are at least 744754087428639/281474976710656 = 2.645898 apart"
+ },
+ {
+  "file": "clearance/neg/harmless_c4b_wedge_skew_32_witness_given_twice.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 1241256812381065/422212465065984 = 2.939887 apart",
+  "lean_says": "PROVED: the parts are at least 1241256812381065/422212465065984 = 2.939887 apart"
+ },
+ {
+  "file": "clearance/neg/harmless_c4b_wedge_skew_32_witness_scaled_whole.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 1241256812381065/422212465065984 = 2.939887 apart",
+  "lean_says": "PROVED: the parts are at least 1241256812381065/422212465065984 = 2.939887 apart"
+ },
+ {
+  "file": "clearance/neg/harmless_c4b_wedge_skew_32_witnesses_reordered.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 1241256812381065/422212465065984 = 2.939887 apart",
+  "lean_says": "PROVED: the parts are at least 1241256812381065/422212465065984 = 2.939887 apart"
+ },
+ {
+  "file": "clearance/neg/harmless_c5_blocks_2x1_8_clearance_lowered.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 67291716383076015668241/53428352757140763091265 = 1.259476 apart",
+  "lean_says": "PROVED: the parts are at least 67291716383076015668241/53428352757140763091265 = 1.259476 apart"
+ },
+ {
+  "file": "clearance/neg/harmless_c5_blocks_2x1_8_witness_given_twice.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 14953714751794670148498/10685670551428152618253 = 1.399418 apart",
+  "lean_says": "PROVED: the parts are at least 14953714751794670148498/10685670551428152618253 = 1.399418 apart"
+ },
+ {
+  "file": "clearance/neg/harmless_c5_blocks_2x1_8_witness_scaled_whole.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 14953714751794670148498/10685670551428152618253 = 1.399418 apart",
+  "lean_says": "PROVED: the parts are at least 14953714751794670148498/10685670551428152618253 = 1.399418 apart"
+ },
+ {
+  "file": "clearance/neg/harmless_c5_blocks_2x1_8_witnesses_reordered.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 14953714751794670148498/10685670551428152618253 = 1.399418 apart",
+  "lean_says": "PROVED: the parts are at least 14953714751794670148498/10685670551428152618253 = 1.399418 apart"
+ },
+ {
+  "file": "clearance/neg/harmless_c5_blocks_3x2_16_clearance_lowered.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 27026081469722010464676/20213181099630049677425 = 1.337052 apart",
+  "lean_says": "PROVED: the parts are at least 27026081469722010464676/20213181099630049677425 = 1.337052 apart"
+ },
+ {
+  "file": "clearance/neg/harmless_c5_blocks_3x2_16_witness_given_twice.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 6005795882160446769928/4042636219926009935485 = 1.485614 apart",
+  "lean_says": "PROVED: the parts are at least 6005795882160446769928/4042636219926009935485 = 1.485614 apart"
+ },
+ {
+  "file": "clearance/neg/harmless_c5_blocks_3x2_16_witness_scaled_whole.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 6005795882160446769928/4042636219926009935485 = 1.485614 apart",
+  "lean_says": "PROVED: the parts are at least 6005795882160446769928/4042636219926009935485 = 1.485614 apart"
+ },
+ {
+  "file": "clearance/neg/harmless_c5_blocks_3x2_16_witnesses_reordered.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 6005795882160446769928/4042636219926009935485 = 1.485614 apart",
+  "lean_says": "PROVED: the parts are at least 6005795882160446769928/4042636219926009935485 = 1.485614 apart"
+ },
+ {
+  "file": "clearance/neg/spoil_c1_pin_in_bore_32_all_sides_pulled_inside.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a side given for the cylinder 0 cuts into it",
+  "lean_says": "REFUSED: a side given for the cylinder 0 cuts into it"
+ },
+ {
+  "file": "clearance/neg/spoil_c1_pin_in_bore_32_bar_axis_changed.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c1_pin_in_bore_32_bar_made_fatter.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a side given for the cylinder 0 cuts into it",
+  "lean_says": "REFUSED: a side given for the cylinder 0 cuts into it"
+ },
+ {
+  "file": "clearance/neg/spoil_c1_pin_in_bore_32_bar_moved.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/spoil_c1_pin_in_bore_32_both_sides_negated.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a weight is negative",
+  "lean_says": "REFUSED: a weight is negative"
+ },
+ {
+  "file": "clearance/neg/spoil_c1_pin_in_bore_32_clearance_doubled.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/spoil_c1_pin_in_bore_32_clearance_negative.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the clearance is negative",
+  "lean_says": "REFUSED: the clearance is negative"
+ },
+ {
+  "file": "clearance/neg/spoil_c1_pin_in_bore_32_clearance_raised_a_hair.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/spoil_c1_pin_in_bore_32_clearance_raised_by_one_bit.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 1 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 1 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/spoil_c1_pin_in_bore_32_corner_dropped.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c1_pin_in_bore_32_corner_moved_inward.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c1_pin_in_bore_32_corner_pushed_outside.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a corner of a polygon given for a hole of the box 0 is outside the hole",
+  "lean_says": "REFUSED: a corner of a polygon given for a hole of the box 0 is outside the hole"
+ },
+ {
+  "file": "clearance/neg/spoil_c1_pin_in_bore_32_corner_pushed_outside_by_a_hair.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a corner of a polygon given for a hole of the box 0 is outside the hole",
+  "lean_says": "REFUSED: a corner of a polygon given for a hole of the box 0 is outside the hole"
+ },
+ {
+  "file": "clearance/neg/spoil_c1_pin_in_bore_32_face_index_changed_on_b.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 1 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 1 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c1_pin_in_bore_32_faces_renumbered.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a weight names no face",
+  "lean_says": "REFUSED: a weight names no face"
+ },
+ {
+  "file": "clearance/neg/spoil_c1_pin_in_bore_32_format_changed.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: not a clearance-cert/0 file",
+  "lean_says": "REFUSED: not a clearance-cert/0 file"
+ },
+ {
+  "file": "clearance/neg/spoil_c1_pin_in_bore_32_hole_left_filled.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a weight names no face",
+  "lean_says": "REFUSED: a weight names no face"
+ },
+ {
+  "file": "clearance/neg/spoil_c1_pin_in_bore_32_hole_made_smaller.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a corner of a polygon given for a hole of the box 0 is outside the hole",
+  "lean_says": "REFUSED: a corner of a polygon given for a hole of the box 0 is outside the hole"
+ },
+ {
+  "file": "clearance/neg/spoil_c1_pin_in_bore_32_one_side_doubled.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 1 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 1 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c1_pin_in_bore_32_parts_swapped.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c1_pin_in_bore_32_pieces_renumbered.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 1 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 1 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c1_pin_in_bore_32_polygon_all_scaled_up.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a corner of a polygon given for a hole of the box 0 is outside the hole",
+  "lean_says": "REFUSED: a corner of a polygon given for a hole of the box 0 is outside the hole"
+ },
+ {
+  "file": "clearance/neg/spoil_c1_pin_in_bore_32_polygon_made_dented.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a polygon given for a hole of the box 0 is not convex and counter-clockwise",
+  "lean_says": "REFUSED: a polygon given for a hole of the box 0 is not convex and counter-clockwise"
+ },
+ {
+  "file": "clearance/neg/spoil_c1_pin_in_bore_32_polygon_reversed.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a polygon given for a hole of the box 0 is not convex and counter-clockwise",
+  "lean_says": "REFUSED: a polygon given for a hole of the box 0 is not convex and counter-clockwise"
+ },
+ {
+  "file": "clearance/neg/spoil_c1_pin_in_bore_32_side_pulled_inside.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a side given for the cylinder 0 cuts into it",
+  "lean_says": "REFUSED: a side given for the cylinder 0 cuts into it"
+ },
+ {
+  "file": "clearance/neg/spoil_c1_pin_in_bore_32_side_pulled_inside_by_a_hair.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a side given for the cylinder 0 cuts into it",
+  "lean_says": "REFUSED: a side given for the cylinder 0 cuts into it"
+ },
+ {
+  "file": "clearance/neg/spoil_c1_pin_in_bore_32_side_removed.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c1_pin_in_bore_32_side_turned.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a side given for the cylinder 0 cuts into it",
+  "lean_says": "REFUSED: a side given for the cylinder 0 cuts into it"
+ },
+ {
+  "file": "clearance/neg/spoil_c1_pin_in_bore_32_two_pieces_swapped.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 1 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 1 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c1_pin_in_bore_32_weight_negated.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a weight is negative",
+  "lean_says": "REFUSED: a weight is negative"
+ },
+ {
+  "file": "clearance/neg/spoil_c1_pin_in_bore_32_weight_nudged_on_b.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 5 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 5 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c1_pin_in_bore_32_weight_raised.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 3 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 3 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c1_pin_in_bore_32_witness_copied_over_another.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 1 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 1 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c1_pin_in_bore_32_witness_dropped.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: 1 pairs of pieces have no witness, the first [(4, 0)]",
+  "lean_says": "REFUSED: 1 pairs of pieces have no witness, the first [(4, 0)]"
+ },
+ {
+  "file": "clearance/neg/spoil_c1_pin_in_bore_32_witness_emptied.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 0 and 0 has no direction",
+  "lean_says": "REFUSED: the witness for pieces 0 and 0 has no direction"
+ },
+ {
+  "file": "clearance/neg/spoil_c2_pin_off_centre_64_all_sides_pulled_inside.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a side given for the cylinder 0 cuts into it",
+  "lean_says": "REFUSED: a side given for the cylinder 0 cuts into it"
+ },
+ {
+  "file": "clearance/neg/spoil_c2_pin_off_centre_64_bar_axis_changed.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c2_pin_off_centre_64_bar_made_fatter.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a side given for the cylinder 0 cuts into it",
+  "lean_says": "REFUSED: a side given for the cylinder 0 cuts into it"
+ },
+ {
+  "file": "clearance/neg/spoil_c2_pin_off_centre_64_bar_moved.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/spoil_c2_pin_off_centre_64_both_sides_negated.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a weight is negative",
+  "lean_says": "REFUSED: a weight is negative"
+ },
+ {
+  "file": "clearance/neg/spoil_c2_pin_off_centre_64_clearance_doubled.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/spoil_c2_pin_off_centre_64_clearance_negative.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the clearance is negative",
+  "lean_says": "REFUSED: the clearance is negative"
+ },
+ {
+  "file": "clearance/neg/spoil_c2_pin_off_centre_64_clearance_raised_a_hair.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/spoil_c2_pin_off_centre_64_clearance_raised_by_one_bit.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/spoil_c2_pin_off_centre_64_corner_dropped.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c2_pin_off_centre_64_corner_moved_inward.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c2_pin_off_centre_64_corner_pushed_outside.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a corner of a polygon given for a hole of the box 0 is outside the hole",
+  "lean_says": "REFUSED: a corner of a polygon given for a hole of the box 0 is outside the hole"
+ },
+ {
+  "file": "clearance/neg/spoil_c2_pin_off_centre_64_corner_pushed_outside_by_a_hair.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a corner of a polygon given for a hole of the box 0 is outside the hole",
+  "lean_says": "REFUSED: a corner of a polygon given for a hole of the box 0 is outside the hole"
+ },
+ {
+  "file": "clearance/neg/spoil_c2_pin_off_centre_64_face_index_changed_on_b.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 1 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 1 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c2_pin_off_centre_64_faces_renumbered.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a weight names no face",
+  "lean_says": "REFUSED: a weight names no face"
+ },
+ {
+  "file": "clearance/neg/spoil_c2_pin_off_centre_64_format_changed.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: not a clearance-cert/0 file",
+  "lean_says": "REFUSED: not a clearance-cert/0 file"
+ },
+ {
+  "file": "clearance/neg/spoil_c2_pin_off_centre_64_hole_left_filled.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a weight names no face",
+  "lean_says": "REFUSED: a weight names no face"
+ },
+ {
+  "file": "clearance/neg/spoil_c2_pin_off_centre_64_hole_made_smaller.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a corner of a polygon given for a hole of the box 0 is outside the hole",
+  "lean_says": "REFUSED: a corner of a polygon given for a hole of the box 0 is outside the hole"
+ },
+ {
+  "file": "clearance/neg/spoil_c2_pin_off_centre_64_one_side_doubled.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 1 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 1 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c2_pin_off_centre_64_parts_swapped.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c2_pin_off_centre_64_pieces_renumbered.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 1 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 1 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c2_pin_off_centre_64_polygon_all_scaled_up.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a corner of a polygon given for a hole of the box 0 is outside the hole",
+  "lean_says": "REFUSED: a corner of a polygon given for a hole of the box 0 is outside the hole"
+ },
+ {
+  "file": "clearance/neg/spoil_c2_pin_off_centre_64_polygon_made_dented.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a polygon given for a hole of the box 0 is not convex and counter-clockwise",
+  "lean_says": "REFUSED: a polygon given for a hole of the box 0 is not convex and counter-clockwise"
+ },
+ {
+  "file": "clearance/neg/spoil_c2_pin_off_centre_64_polygon_reversed.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a polygon given for a hole of the box 0 is not convex and counter-clockwise",
+  "lean_says": "REFUSED: a polygon given for a hole of the box 0 is not convex and counter-clockwise"
+ },
+ {
+  "file": "clearance/neg/spoil_c2_pin_off_centre_64_side_pulled_inside.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a side given for the cylinder 0 cuts into it",
+  "lean_says": "REFUSED: a side given for the cylinder 0 cuts into it"
+ },
+ {
+  "file": "clearance/neg/spoil_c2_pin_off_centre_64_side_pulled_inside_by_a_hair.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a side given for the cylinder 0 cuts into it",
+  "lean_says": "REFUSED: a side given for the cylinder 0 cuts into it"
+ },
+ {
+  "file": "clearance/neg/spoil_c2_pin_off_centre_64_side_removed.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c2_pin_off_centre_64_side_turned.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a side given for the cylinder 0 cuts into it",
+  "lean_says": "REFUSED: a side given for the cylinder 0 cuts into it"
+ },
+ {
+  "file": "clearance/neg/spoil_c2_pin_off_centre_64_two_pieces_swapped.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 1 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 1 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c2_pin_off_centre_64_weight_negated.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a weight is negative",
+  "lean_says": "REFUSED: a weight is negative"
+ },
+ {
+  "file": "clearance/neg/spoil_c2_pin_off_centre_64_weight_nudged_on_b.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 5 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 5 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c2_pin_off_centre_64_weight_raised.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 3 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 3 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c2_pin_off_centre_64_witness_copied_over_another.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 1 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 1 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c2_pin_off_centre_64_witness_dropped.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: 1 pairs of pieces have no witness, the first [(4, 0)]",
+  "lean_says": "REFUSED: 1 pairs of pieces have no witness, the first [(4, 0)]"
+ },
+ {
+  "file": "clearance/neg/spoil_c2_pin_off_centre_64_witness_emptied.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 0 and 0 has no direction",
+  "lean_says": "REFUSED: the witness for pieces 0 and 0 has no direction"
+ },
+ {
+  "file": "clearance/neg/spoil_c3a_clevis_vs_pin_and_bar_16_all_sides_pulled_inside.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a side given for the cylinder 0 cuts into it",
+  "lean_says": "REFUSED: a side given for the cylinder 0 cuts into it"
+ },
+ {
+  "file": "clearance/neg/spoil_c3a_clevis_vs_pin_and_bar_16_bar_axis_changed.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c3a_clevis_vs_pin_and_bar_16_bar_made_fatter.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a side given for the cylinder 0 cuts into it",
+  "lean_says": "REFUSED: a side given for the cylinder 0 cuts into it"
+ },
+ {
+  "file": "clearance/neg/spoil_c3a_clevis_vs_pin_and_bar_16_bar_moved.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/spoil_c3a_clevis_vs_pin_and_bar_16_both_sides_negated.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a weight is negative",
+  "lean_says": "REFUSED: a weight is negative"
+ },
+ {
+  "file": "clearance/neg/spoil_c3a_clevis_vs_pin_and_bar_16_clearance_doubled.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/spoil_c3a_clevis_vs_pin_and_bar_16_clearance_negative.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the clearance is negative",
+  "lean_says": "REFUSED: the clearance is negative"
+ },
+ {
+  "file": "clearance/neg/spoil_c3a_clevis_vs_pin_and_bar_16_clearance_raised_a_hair.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/spoil_c3a_clevis_vs_pin_and_bar_16_clearance_raised_by_one_bit.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 2 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 2 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/spoil_c3a_clevis_vs_pin_and_bar_16_corner_dropped.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c3a_clevis_vs_pin_and_bar_16_corner_moved_inward.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c3a_clevis_vs_pin_and_bar_16_corner_pushed_outside.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a corner of a polygon given for a hole of the box 0 is outside the hole",
+  "lean_says": "REFUSED: a corner of a polygon given for a hole of the box 0 is outside the hole"
+ },
+ {
+  "file": "clearance/neg/spoil_c3a_clevis_vs_pin_and_bar_16_corner_pushed_outside_by_a_hair.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a corner of a polygon given for a hole of the box 0 is outside the hole",
+  "lean_says": "REFUSED: a corner of a polygon given for a hole of the box 0 is outside the hole"
+ },
+ {
+  "file": "clearance/neg/spoil_c3a_clevis_vs_pin_and_bar_16_face_index_changed_on_b.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 0 and 1 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 0 and 1 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c3a_clevis_vs_pin_and_bar_16_faces_renumbered.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a weight names no face",
+  "lean_says": "REFUSED: a weight names no face"
+ },
+ {
+  "file": "clearance/neg/spoil_c3a_clevis_vs_pin_and_bar_16_format_changed.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: not a clearance-cert/0 file",
+  "lean_says": "REFUSED: not a clearance-cert/0 file"
+ },
+ {
+  "file": "clearance/neg/spoil_c3a_clevis_vs_pin_and_bar_16_hole_left_filled.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a weight names no face",
+  "lean_says": "REFUSED: a weight names no face"
+ },
+ {
+  "file": "clearance/neg/spoil_c3a_clevis_vs_pin_and_bar_16_hole_made_smaller.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a corner of a polygon given for a hole of the box 0 is outside the hole",
+  "lean_says": "REFUSED: a corner of a polygon given for a hole of the box 0 is outside the hole"
+ },
+ {
+  "file": "clearance/neg/spoil_c3a_clevis_vs_pin_and_bar_16_one_side_doubled.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 0 and 1 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 0 and 1 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c3a_clevis_vs_pin_and_bar_16_parts_swapped.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c3a_clevis_vs_pin_and_bar_16_pieces_renumbered.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 1 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 1 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c3a_clevis_vs_pin_and_bar_16_polygon_all_scaled_up.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a corner of a polygon given for a hole of the box 0 is outside the hole",
+  "lean_says": "REFUSED: a corner of a polygon given for a hole of the box 0 is outside the hole"
+ },
+ {
+  "file": "clearance/neg/spoil_c3a_clevis_vs_pin_and_bar_16_polygon_made_dented.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a polygon given for a hole of the box 0 is not convex and counter-clockwise",
+  "lean_says": "REFUSED: a polygon given for a hole of the box 0 is not convex and counter-clockwise"
+ },
+ {
+  "file": "clearance/neg/spoil_c3a_clevis_vs_pin_and_bar_16_polygon_reversed.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a polygon given for a hole of the box 0 is not convex and counter-clockwise",
+  "lean_says": "REFUSED: a polygon given for a hole of the box 0 is not convex and counter-clockwise"
+ },
+ {
+  "file": "clearance/neg/spoil_c3a_clevis_vs_pin_and_bar_16_side_pulled_inside.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a side given for the cylinder 0 cuts into it",
+  "lean_says": "REFUSED: a side given for the cylinder 0 cuts into it"
+ },
+ {
+  "file": "clearance/neg/spoil_c3a_clevis_vs_pin_and_bar_16_side_pulled_inside_by_a_hair.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a side given for the cylinder 0 cuts into it",
+  "lean_says": "REFUSED: a side given for the cylinder 0 cuts into it"
+ },
+ {
+  "file": "clearance/neg/spoil_c3a_clevis_vs_pin_and_bar_16_side_removed.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c3a_clevis_vs_pin_and_bar_16_side_turned.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a side given for the cylinder 0 cuts into it",
+  "lean_says": "REFUSED: a side given for the cylinder 0 cuts into it"
+ },
+ {
+  "file": "clearance/neg/spoil_c3a_clevis_vs_pin_and_bar_16_two_pieces_swapped.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 1 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 1 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c3a_clevis_vs_pin_and_bar_16_weight_negated.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a weight is negative",
+  "lean_says": "REFUSED: a weight is negative"
+ },
+ {
+  "file": "clearance/neg/spoil_c3a_clevis_vs_pin_and_bar_16_weight_nudged_on_b.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 2 and 1 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 2 and 1 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c3a_clevis_vs_pin_and_bar_16_weight_raised.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 1 and 1 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 1 and 1 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c3a_clevis_vs_pin_and_bar_16_witness_copied_over_another.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 0 and 1 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 0 and 1 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c3a_clevis_vs_pin_and_bar_16_witness_dropped.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: 1 pairs of pieces have no witness, the first [(2, 0)]",
+  "lean_says": "REFUSED: 1 pairs of pieces have no witness, the first [(2, 0)]"
+ },
+ {
+  "file": "clearance/neg/spoil_c3a_clevis_vs_pin_and_bar_16_witness_emptied.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 0 and 0 has no direction",
+  "lean_says": "REFUSED: the witness for pieces 0 and 0 has no direction"
+ },
+ {
+  "file": "clearance/neg/spoil_c3b_clevis_and_pin_vs_bar_16_all_sides_pulled_inside.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a side given for the cylinder 2 cuts into it",
+  "lean_says": "REFUSED: a side given for the cylinder 2 cuts into it"
+ },
+ {
+  "file": "clearance/neg/spoil_c3b_clevis_and_pin_vs_bar_16_bar_axis_changed.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 2 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 2 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c3b_clevis_and_pin_vs_bar_16_bar_made_fatter.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a side given for the cylinder 2 cuts into it",
+  "lean_says": "REFUSED: a side given for the cylinder 2 cuts into it"
+ },
+ {
+  "file": "clearance/neg/spoil_c3b_clevis_and_pin_vs_bar_16_bar_moved.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 2 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 2 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/spoil_c3b_clevis_and_pin_vs_bar_16_both_sides_negated.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a weight is negative",
+  "lean_says": "REFUSED: a weight is negative"
+ },
+ {
+  "file": "clearance/neg/spoil_c3b_clevis_and_pin_vs_bar_16_clearance_doubled.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/spoil_c3b_clevis_and_pin_vs_bar_16_clearance_negative.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the clearance is negative",
+  "lean_says": "REFUSED: the clearance is negative"
+ },
+ {
+  "file": "clearance/neg/spoil_c3b_clevis_and_pin_vs_bar_16_clearance_raised_a_hair.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 2 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 2 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/spoil_c3b_clevis_and_pin_vs_bar_16_clearance_raised_by_one_bit.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 2 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 2 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/spoil_c3b_clevis_and_pin_vs_bar_16_face_index_changed_on_b.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 1 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 1 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c3b_clevis_and_pin_vs_bar_16_faces_renumbered.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a weight names no face",
+  "lean_says": "REFUSED: a weight names no face"
+ },
+ {
+  "file": "clearance/neg/spoil_c3b_clevis_and_pin_vs_bar_16_format_changed.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: not a clearance-cert/0 file",
+  "lean_says": "REFUSED: not a clearance-cert/0 file"
+ },
+ {
+  "file": "clearance/neg/spoil_c3b_clevis_and_pin_vs_bar_16_one_side_doubled.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 1 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 1 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c3b_clevis_and_pin_vs_bar_16_parts_swapped.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a weight names no face",
+  "lean_says": "REFUSED: a weight names no face"
+ },
+ {
+  "file": "clearance/neg/spoil_c3b_clevis_and_pin_vs_bar_16_pieces_renumbered.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 1 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 1 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/spoil_c3b_clevis_and_pin_vs_bar_16_side_pulled_inside.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a side given for the cylinder 2 cuts into it",
+  "lean_says": "REFUSED: a side given for the cylinder 2 cuts into it"
+ },
+ {
+  "file": "clearance/neg/spoil_c3b_clevis_and_pin_vs_bar_16_side_pulled_inside_by_a_hair.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a side given for the cylinder 2 cuts into it",
+  "lean_says": "REFUSED: a side given for the cylinder 2 cuts into it"
+ },
+ {
+  "file": "clearance/neg/spoil_c3b_clevis_and_pin_vs_bar_16_side_removed.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a weight names no face",
+  "lean_says": "REFUSED: a weight names no face"
+ },
+ {
+  "file": "clearance/neg/spoil_c3b_clevis_and_pin_vs_bar_16_side_turned.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a side given for the cylinder 2 cuts into it",
+  "lean_says": "REFUSED: a side given for the cylinder 2 cuts into it"
+ },
+ {
+  "file": "clearance/neg/spoil_c3b_clevis_and_pin_vs_bar_16_two_pieces_swapped.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 1 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 1 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/spoil_c3b_clevis_and_pin_vs_bar_16_weight_negated.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a weight is negative",
+  "lean_says": "REFUSED: a weight is negative"
+ },
+ {
+  "file": "clearance/neg/spoil_c3b_clevis_and_pin_vs_bar_16_weight_nudged_on_b.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 2 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 2 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c3b_clevis_and_pin_vs_bar_16_weight_raised.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c3b_clevis_and_pin_vs_bar_16_witness_copied_over_another.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 1 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 1 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/spoil_c3b_clevis_and_pin_vs_bar_16_witness_dropped.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: 1 pairs of pieces have no witness, the first [(1, 0)]",
+  "lean_says": "REFUSED: 1 pairs of pieces have no witness, the first [(1, 0)]"
+ },
+ {
+  "file": "clearance/neg/spoil_c3b_clevis_and_pin_vs_bar_16_witness_emptied.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 0 and 0 has no direction",
+  "lean_says": "REFUSED: the witness for pieces 0 and 0 has no direction"
+ },
+ {
+  "file": "clearance/neg/spoil_c4a_wedge_rim_16_all_sides_pulled_inside.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a side given for the cylinder 0 cuts into it",
+  "lean_says": "REFUSED: a side given for the cylinder 0 cuts into it"
+ },
+ {
+  "file": "clearance/neg/spoil_c4a_wedge_rim_16_bar_axis_changed.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c4a_wedge_rim_16_bar_made_fatter.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a side given for the cylinder 0 cuts into it",
+  "lean_says": "REFUSED: a side given for the cylinder 0 cuts into it"
+ },
+ {
+  "file": "clearance/neg/spoil_c4a_wedge_rim_16_bar_moved.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/spoil_c4a_wedge_rim_16_both_sides_negated.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a weight is negative",
+  "lean_says": "REFUSED: a weight is negative"
+ },
+ {
+  "file": "clearance/neg/spoil_c4a_wedge_rim_16_clearance_doubled.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/spoil_c4a_wedge_rim_16_clearance_negative.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the clearance is negative",
+  "lean_says": "REFUSED: the clearance is negative"
+ },
+ {
+  "file": "clearance/neg/spoil_c4a_wedge_rim_16_clearance_raised_a_hair.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/spoil_c4a_wedge_rim_16_clearance_raised_by_one_bit.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/spoil_c4a_wedge_rim_16_face_index_changed_on_b.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c4a_wedge_rim_16_faces_renumbered.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c4a_wedge_rim_16_format_changed.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: not a clearance-cert/0 file",
+  "lean_says": "REFUSED: not a clearance-cert/0 file"
+ },
+ {
+  "file": "clearance/neg/spoil_c4a_wedge_rim_16_one_side_doubled.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c4a_wedge_rim_16_parts_swapped.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a weight names no face",
+  "lean_says": "REFUSED: a weight names no face"
+ },
+ {
+  "file": "clearance/neg/spoil_c4a_wedge_rim_16_side_pulled_inside.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a side given for the cylinder 0 cuts into it",
+  "lean_says": "REFUSED: a side given for the cylinder 0 cuts into it"
+ },
+ {
+  "file": "clearance/neg/spoil_c4a_wedge_rim_16_side_pulled_inside_by_a_hair.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a side given for the cylinder 0 cuts into it",
+  "lean_says": "REFUSED: a side given for the cylinder 0 cuts into it"
+ },
+ {
+  "file": "clearance/neg/spoil_c4a_wedge_rim_16_side_removed.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a weight names no face",
+  "lean_says": "REFUSED: a weight names no face"
+ },
+ {
+  "file": "clearance/neg/spoil_c4a_wedge_rim_16_side_turned.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a side given for the cylinder 0 cuts into it",
+  "lean_says": "REFUSED: a side given for the cylinder 0 cuts into it"
+ },
+ {
+  "file": "clearance/neg/spoil_c4a_wedge_rim_16_weight_negated.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a weight is negative",
+  "lean_says": "REFUSED: a weight is negative"
+ },
+ {
+  "file": "clearance/neg/spoil_c4a_wedge_rim_16_weight_nudged_on_b.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c4a_wedge_rim_16_weight_raised.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c4a_wedge_rim_16_witness_dropped.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: 1 pairs of pieces have no witness, the first [(0, 0)]",
+  "lean_says": "REFUSED: 1 pairs of pieces have no witness, the first [(0, 0)]"
+ },
+ {
+  "file": "clearance/neg/spoil_c4a_wedge_rim_16_witness_emptied.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 0 and 0 has no direction",
+  "lean_says": "REFUSED: the witness for pieces 0 and 0 has no direction"
+ },
+ {
+  "file": "clearance/neg/spoil_c4b_wedge_skew_32_all_sides_pulled_inside.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a side given for the cylinder 0 cuts into it",
+  "lean_says": "REFUSED: a side given for the cylinder 0 cuts into it"
+ },
+ {
+  "file": "clearance/neg/spoil_c4b_wedge_skew_32_bar_axis_changed.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c4b_wedge_skew_32_bar_made_fatter.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a side given for the cylinder 0 cuts into it",
+  "lean_says": "REFUSED: a side given for the cylinder 0 cuts into it"
+ },
+ {
+  "file": "clearance/neg/spoil_c4b_wedge_skew_32_bar_moved.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/spoil_c4b_wedge_skew_32_both_sides_negated.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a weight is negative",
+  "lean_says": "REFUSED: a weight is negative"
+ },
+ {
+  "file": "clearance/neg/spoil_c4b_wedge_skew_32_clearance_doubled.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/spoil_c4b_wedge_skew_32_clearance_negative.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the clearance is negative",
+  "lean_says": "REFUSED: the clearance is negative"
+ },
+ {
+  "file": "clearance/neg/spoil_c4b_wedge_skew_32_clearance_raised_a_hair.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/spoil_c4b_wedge_skew_32_clearance_raised_by_one_bit.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/spoil_c4b_wedge_skew_32_face_index_changed_on_b.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c4b_wedge_skew_32_faces_renumbered.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c4b_wedge_skew_32_format_changed.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: not a clearance-cert/0 file",
+  "lean_says": "REFUSED: not a clearance-cert/0 file"
+ },
+ {
+  "file": "clearance/neg/spoil_c4b_wedge_skew_32_one_side_doubled.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c4b_wedge_skew_32_parts_swapped.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a weight names no face",
+  "lean_says": "REFUSED: a weight names no face"
+ },
+ {
+  "file": "clearance/neg/spoil_c4b_wedge_skew_32_side_pulled_inside.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a side given for the cylinder 0 cuts into it",
+  "lean_says": "REFUSED: a side given for the cylinder 0 cuts into it"
+ },
+ {
+  "file": "clearance/neg/spoil_c4b_wedge_skew_32_side_pulled_inside_by_a_hair.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a side given for the cylinder 0 cuts into it",
+  "lean_says": "REFUSED: a side given for the cylinder 0 cuts into it"
+ },
+ {
+  "file": "clearance/neg/spoil_c4b_wedge_skew_32_side_removed.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a weight names no face",
+  "lean_says": "REFUSED: a weight names no face"
+ },
+ {
+  "file": "clearance/neg/spoil_c4b_wedge_skew_32_side_turned.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a side given for the cylinder 0 cuts into it",
+  "lean_says": "REFUSED: a side given for the cylinder 0 cuts into it"
+ },
+ {
+  "file": "clearance/neg/spoil_c4b_wedge_skew_32_weight_negated.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a weight is negative",
+  "lean_says": "REFUSED: a weight is negative"
+ },
+ {
+  "file": "clearance/neg/spoil_c4b_wedge_skew_32_weight_nudged_on_b.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c4b_wedge_skew_32_weight_raised.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c4b_wedge_skew_32_witness_dropped.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: 1 pairs of pieces have no witness, the first [(0, 0)]",
+  "lean_says": "REFUSED: 1 pairs of pieces have no witness, the first [(0, 0)]"
+ },
+ {
+  "file": "clearance/neg/spoil_c4b_wedge_skew_32_witness_emptied.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 0 and 0 has no direction",
+  "lean_says": "REFUSED: the witness for pieces 0 and 0 has no direction"
+ },
+ {
+  "file": "clearance/neg/spoil_c5_blocks_2x1_8_both_sides_negated.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a weight is negative",
+  "lean_says": "REFUSED: a weight is negative"
+ },
+ {
+  "file": "clearance/neg/spoil_c5_blocks_2x1_8_clearance_doubled.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/spoil_c5_blocks_2x1_8_clearance_negative.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the clearance is negative",
+  "lean_says": "REFUSED: the clearance is negative"
+ },
+ {
+  "file": "clearance/neg/spoil_c5_blocks_2x1_8_clearance_raised_a_hair.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/spoil_c5_blocks_2x1_8_clearance_raised_by_one_bit.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 8 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 8 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/spoil_c5_blocks_2x1_8_corner_dropped.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c5_blocks_2x1_8_corner_moved_inward.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c5_blocks_2x1_8_corner_pushed_outside.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a corner of a polygon given for a hole of the box 0 is outside the hole",
+  "lean_says": "REFUSED: a corner of a polygon given for a hole of the box 0 is outside the hole"
+ },
+ {
+  "file": "clearance/neg/spoil_c5_blocks_2x1_8_corner_pushed_outside_by_a_hair.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a corner of a polygon given for a hole of the box 0 is outside the hole",
+  "lean_says": "REFUSED: a corner of a polygon given for a hole of the box 0 is outside the hole"
+ },
+ {
+  "file": "clearance/neg/spoil_c5_blocks_2x1_8_face_index_changed_on_b.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 0 and 1 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 0 and 1 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c5_blocks_2x1_8_faces_renumbered.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c5_blocks_2x1_8_format_changed.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: not a clearance-cert/0 file",
+  "lean_says": "REFUSED: not a clearance-cert/0 file"
+ },
+ {
+  "file": "clearance/neg/spoil_c5_blocks_2x1_8_hole_left_filled.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c5_blocks_2x1_8_hole_made_smaller.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a corner of a polygon given for a hole of the box 0 is outside the hole",
+  "lean_says": "REFUSED: a corner of a polygon given for a hole of the box 0 is outside the hole"
+ },
+ {
+  "file": "clearance/neg/spoil_c5_blocks_2x1_8_one_side_doubled.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 0 and 1 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 0 and 1 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c5_blocks_2x1_8_parts_swapped.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c5_blocks_2x1_8_pieces_renumbered.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 3 and 2 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 3 and 2 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c5_blocks_2x1_8_polygon_all_scaled_up.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a corner of a polygon given for a hole of the box 0 is outside the hole",
+  "lean_says": "REFUSED: a corner of a polygon given for a hole of the box 0 is outside the hole"
+ },
+ {
+  "file": "clearance/neg/spoil_c5_blocks_2x1_8_polygon_made_dented.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a polygon given for a hole of the box 0 is not convex and counter-clockwise",
+  "lean_says": "REFUSED: a polygon given for a hole of the box 0 is not convex and counter-clockwise"
+ },
+ {
+  "file": "clearance/neg/spoil_c5_blocks_2x1_8_polygon_reversed.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a polygon given for a hole of the box 0 is not convex and counter-clockwise",
+  "lean_says": "REFUSED: a polygon given for a hole of the box 0 is not convex and counter-clockwise"
+ },
+ {
+  "file": "clearance/neg/spoil_c5_blocks_2x1_8_two_pieces_swapped.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 8 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 8 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c5_blocks_2x1_8_weight_negated.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a weight is negative",
+  "lean_says": "REFUSED: a weight is negative"
+ },
+ {
+  "file": "clearance/neg/spoil_c5_blocks_2x1_8_weight_nudged_on_b.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 0 and 5 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 0 and 5 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c5_blocks_2x1_8_weight_raised.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 0 and 3 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 0 and 3 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c5_blocks_2x1_8_witness_copied_over_another.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 8 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 8 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c5_blocks_2x1_8_witness_dropped.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: 1 pairs of pieces have no witness, the first [(0, 4)]",
+  "lean_says": "REFUSED: 1 pairs of pieces have no witness, the first [(0, 4)]"
+ },
+ {
+  "file": "clearance/neg/spoil_c5_blocks_2x1_8_witness_emptied.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 0 and 0 has no direction",
+  "lean_says": "REFUSED: the witness for pieces 0 and 0 has no direction"
+ },
+ {
+  "file": "clearance/neg/spoil_c5_blocks_3x2_16_both_sides_negated.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a weight is negative",
+  "lean_says": "REFUSED: a weight is negative"
+ },
+ {
+  "file": "clearance/neg/spoil_c5_blocks_3x2_16_clearance_doubled.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 0 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/spoil_c5_blocks_3x2_16_clearance_negative.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the clearance is negative",
+  "lean_says": "REFUSED: the clearance is negative"
+ },
+ {
+  "file": "clearance/neg/spoil_c5_blocks_3x2_16_clearance_raised_a_hair.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 1 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 1 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/spoil_c5_blocks_3x2_16_clearance_raised_by_one_bit.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 2 and 0 does not show the clearance",
+  "lean_says": "REFUSED: the witness for pieces 2 and 0 does not show the clearance"
+ },
+ {
+  "file": "clearance/neg/spoil_c5_blocks_3x2_16_corner_dropped.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c5_blocks_3x2_16_corner_moved_inward.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 0 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c5_blocks_3x2_16_corner_pushed_outside.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a corner of a polygon given for a hole of the box 0 is outside the hole",
+  "lean_says": "REFUSED: a corner of a polygon given for a hole of the box 0 is outside the hole"
+ },
+ {
+  "file": "clearance/neg/spoil_c5_blocks_3x2_16_corner_pushed_outside_by_a_hair.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a corner of a polygon given for a hole of the box 0 is outside the hole",
+  "lean_says": "REFUSED: a corner of a polygon given for a hole of the box 0 is outside the hole"
+ },
+ {
+  "file": "clearance/neg/spoil_c5_blocks_3x2_16_face_index_changed_on_b.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 1 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 1 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c5_blocks_3x2_16_faces_renumbered.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a weight names no face",
+  "lean_says": "REFUSED: a weight names no face"
+ },
+ {
+  "file": "clearance/neg/spoil_c5_blocks_3x2_16_format_changed.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: not a clearance-cert/0 file",
+  "lean_says": "REFUSED: not a clearance-cert/0 file"
+ },
+ {
+  "file": "clearance/neg/spoil_c5_blocks_3x2_16_hole_left_filled.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a weight names no face",
+  "lean_says": "REFUSED: a weight names no face"
+ },
+ {
+  "file": "clearance/neg/spoil_c5_blocks_3x2_16_hole_made_smaller.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a corner of a polygon given for a hole of the box 0 is outside the hole",
+  "lean_says": "REFUSED: a corner of a polygon given for a hole of the box 0 is outside the hole"
+ },
+ {
+  "file": "clearance/neg/spoil_c5_blocks_3x2_16_one_side_doubled.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 1 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 1 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c5_blocks_3x2_16_parts_swapped.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a weight names no face",
+  "lean_says": "REFUSED: a weight names no face"
+ },
+ {
+  "file": "clearance/neg/spoil_c5_blocks_3x2_16_pieces_renumbered.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 1 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 1 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c5_blocks_3x2_16_polygon_all_scaled_up.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a corner of a polygon given for a hole of the box 0 is outside the hole",
+  "lean_says": "REFUSED: a corner of a polygon given for a hole of the box 0 is outside the hole"
+ },
+ {
+  "file": "clearance/neg/spoil_c5_blocks_3x2_16_polygon_made_dented.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a polygon given for a hole of the box 0 is not convex and counter-clockwise",
+  "lean_says": "REFUSED: a polygon given for a hole of the box 0 is not convex and counter-clockwise"
+ },
+ {
+  "file": "clearance/neg/spoil_c5_blocks_3x2_16_polygon_reversed.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a polygon given for a hole of the box 0 is not convex and counter-clockwise",
+  "lean_says": "REFUSED: a polygon given for a hole of the box 0 is not convex and counter-clockwise"
+ },
+ {
+  "file": "clearance/neg/spoil_c5_blocks_3x2_16_two_pieces_swapped.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 1 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 1 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c5_blocks_3x2_16_weight_negated.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a weight is negative",
+  "lean_says": "REFUSED: a weight is negative"
+ },
+ {
+  "file": "clearance/neg/spoil_c5_blocks_3x2_16_weight_nudged_on_b.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 5 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 5 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c5_blocks_3x2_16_weight_raised.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 3 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 3 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c5_blocks_3x2_16_witness_copied_over_another.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the two sides of the witness for pieces 1 and 0 do not face each other",
+  "lean_says": "REFUSED: the two sides of the witness for pieces 1 and 0 do not face each other"
+ },
+ {
+  "file": "clearance/neg/spoil_c5_blocks_3x2_16_witness_dropped.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: 1 pairs of pieces have no witness, the first [(4, 0)]",
+  "lean_says": "REFUSED: 1 pairs of pieces have no witness, the first [(4, 0)]"
+ },
+ {
+  "file": "clearance/neg/spoil_c5_blocks_3x2_16_witness_emptied.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the witness for pieces 0 and 0 has no direction",
+  "lean_says": "REFUSED: the witness for pieces 0 and 0 has no direction"
+ },
+ {
+  "file": "clearance/probes/clearance_nan.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the file is not in the format (ValueError: cannot convert NaN to integer ratio)",
+  "lean_says": "REFUSED: the file is not in the format (JSON: offset 41: unexpected input)"
+ },
+ {
+  "file": "clearance/probes/empty_part.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 1000 = 1000.000000 apart",
+  "lean_says": "PROVED: the parts are at least 1000 = 1000.000000 apart"
+ },
+ {
+  "file": "clearance/probes/face_index_out_of_range.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a weight names no face",
+  "lean_says": "REFUSED: a weight names no face"
+ },
+ {
+  "file": "clearance/probes/good.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 65735494311815931753923/146261010191574799141690 = 0.449440 apart",
+  "lean_says": "PROVED: the parts are at least 65735494311815931753923/146261010191574799141690 = 0.449440 apart"
+ },
+ {
+  "file": "clearance/probes/missing_key.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the file is not in the format (KeyError: 'nu')",
+  "lean_says": "REFUSED: the file is not in the format (no 'nu')"
+ },
+ {
+  "file": "clearance/probes/negative_face_index.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a weight names no face",
+  "lean_says": "REFUSED: a weight names no face"
+ },
+ {
+  "file": "clearance/probes/negative_hole_radius.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a hole of the box 0 has no radius",
+  "lean_says": "REFUSED: a hole of the box 0 has no radius"
+ },
+ {
+  "file": "clearance/probes/scaled_times_10-200.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 65735494311815931753923/146261010191574799141690 = 0.449440 apart",
+  "lean_says": "PROVED: the parts are at least 65735494311815931753923/146261010191574799141690 = 0.449440 apart"
+ },
+ {
+  "file": "clearance/probes/scaled_times_10200.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 65735494311815931753923/146261010191574799141690 = 0.449440 apart",
+  "lean_says": "PROVED: the parts are at least 65735494311815931753923/146261010191574799141690 = 0.449440 apart"
+ },
+ {
+  "file": "clearance/probes/unknown_key_depth.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a hole of the box 0 has a key this format does not know: ['depth']",
+  "lean_says": "REFUSED: a hole of the box 0 has a key this format does not know: ['depth']"
+ },
+ {
+  "file": "clearance/probes/unknown_key_tube.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: solid 0 has a key this format does not know: ['holes']",
+  "lean_says": "REFUSED: solid 0 has a key this format does not know: ['holes']"
+ }
+]

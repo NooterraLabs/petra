@@ -1,0 +1,9 @@
+name = "petra-certify"
+defaultTargets = ["check-clearance"]
+
+[[lean_lib]]
+name = "Certify"
+
+[[lean_exe]]
+name = "check-clearance"
+root = "ClearanceMain"

@@ -1,0 +1,74 @@
+[
+ {
+  "file": "clearance/forms/c1_lo_as_float.json",
+  "python": "proved",
+  "lean": "refused",
+  "same_verdict": false,
+  "same_line": false,
+  "python_says": "PROVED: the parts are at least 65735494311815931753923/146261010191574799141690 = 0.449440 apart",
+  "lean_says": "REFUSED: the file is not in the format (a number with a decimal point is not exact; write it as \"p/q\")"
+ },
+ {
+  "file": "clearance/forms/c2_box_with_four_coordinates.json",
+  "python": "proved",
+  "lean": "refused",
+  "same_verdict": false,
+  "same_line": false,
+  "python_says": "PROVED: the parts are at least 65735494311815931753923/146261010191574799141690 = 0.449440 apart",
+  "lean_says": "REFUSED: the file is not in the format (three numbers are needed)"
+ },
+ {
+  "file": "clearance/forms/c3_piece_index_as_string.json",
+  "python": "proved",
+  "lean": "refused",
+  "same_verdict": false,
+  "same_line": false,
+  "python_says": "PROVED: the parts are at least 65735494311815931753923/146261010191574799141690 = 0.449440 apart",
+  "lean_says": "REFUSED: the file is not in the format (a whole number is needed)"
+ },
+ {
+  "file": "clearance/forms/c4_face_index_as_float.json",
+  "python": "proved",
+  "lean": "refused",
+  "same_verdict": false,
+  "same_line": false,
+  "python_says": "PROVED: the parts are at least 65735494311815931753923/146261010191574799141690 = 0.449440 apart",
+  "lean_says": "REFUSED: the file is not in the format (a whole number is needed)"
+ },
+ {
+  "file": "clearance/forms/c5_clearance_as_float_0.25.json",
+  "python": "proved",
+  "lean": "refused",
+  "same_verdict": false,
+  "same_line": false,
+  "python_says": "PROVED: the parts are at least 1/4 = 0.250000 apart",
+  "lean_says": "REFUSED: the file is not in the format (a number with a decimal point is not exact; write it as \"p/q\")"
+ },
+ {
+  "file": "clearance/forms/c6_filled_hole_with_junk_fields.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: a weight names no face",
+  "lean_says": "REFUSED: a weight names no face"
+ },
+ {
+  "file": "clearance/forms/c7_bar_hint_with_a_holes_key.json",
+  "python": "proved",
+  "lean": "proved",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "PROVED: the parts are at least 65735494311815931753923/146261010191574799141690 = 0.449440 apart",
+  "lean_says": "PROVED: the parts are at least 65735494311815931753923/146261010191574799141690 = 0.449440 apart"
+ },
+ {
+  "file": "clearance/forms/c8_centre_with_three_numbers.json",
+  "python": "refused",
+  "lean": "refused",
+  "same_verdict": true,
+  "same_line": true,
+  "python_says": "REFUSED: the file is not in the format (ValueError: too many values to unpack (expected 2))",
+  "lean_says": "REFUSED: the file is not in the format (a pair of numbers is needed)"
+ }
+]

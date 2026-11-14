@@ -1,0 +1,7 @@
+'Certify.Clearance.check_sound' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Certify.Clearance.checkWitness_sound' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Certify.Clearance.cylinderSide_holds' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Certify.Clearance.holeCut_covers' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Certify.Clearance.polygon_core' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Certify.Clearance.pieces_covers' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Certify.Clearance.markAll_sound' depends on axioms: [propext, Classical.choice, Quot.sound]
