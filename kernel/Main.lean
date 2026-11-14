@@ -10,7 +10,9 @@ import Petra.Check
 
 open Petra
 
-def str (s : String) : String := (Lean.Json.str s).compress
+/-- A text as the verdict prints it: no character that a terminal acts on is printed raw
+(`Petra.quote`). -/
+def str (s : String) : String := quote s
 
 def object (fields : List (String × String)) : String :=
   "{" ++ ", ".intercalate (fields.map fun (key, value) => s!"{str key}: {value}") ++ "}"

@@ -74,6 +74,12 @@ def CORE_FLOORS : Floors :=
       | some dim => table.insert dim.key (name, { min, strict := false })
       | none => table
 
+/-- The size floor of petra/decks/core.json, `domains.size`: a size is more than zero. A design
+checked against a deck of rules is held to it and not to the one its deck.json gives: it decides
+whether a quantity of role `size` may be had (type rule 3), and no hash a reader checks covers
+deck.json (type rule 8). -/
+def CORE_SIZE : Floor := { min := 0, strict := true }
+
 /-- Why the deck of rules is refused for a `least` under a floor of `floors`, if it is: the
 first field or load, by type and then fields before loads, whose `least` is under the floor of
 its dimension, where that floor holds for it as type rule 4 holds a load of the card. A floor

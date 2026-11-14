@@ -64,7 +64,7 @@ class Group:
     checked_by: Judge | Debt
 
 
-CORE_CAP = Limit(1020, "Set on 2026-11-08 at 140f742, where the core measured 957 code lines. "
+CORE_CAP = Limit(1023, "Set on 2026-11-08 at 140f742, where the core measured 957 code lines. "
                        "A new rule adds 3 to 5 lines to rules/__init__.py (inferred from its tables), so "
                        "the headroom covers the registry entries of several rules. Raised on branch cosine "
                        "for `cos`, the one step of the rule language for angles: the Python reading of its "
@@ -78,9 +78,14 @@ CORE_CAP = Limit(1020, "Set on 2026-11-08 at 140f742, where the core measured 95
                        "The ninth hostile review found that `petra check` did not end on the exponential of "
                        "-10^6, which the kernel gives no value. `i_exp` now takes no argument beyond 65,536, "
                        "as `i_cos` does, and keeps the factorial of its series as it goes, as the kernel's "
-                       "`expPos` keeps it: 3 lines in interval.py, 1,020.")
+                       "`expPos` keeps it: 3 lines in interval.py, 1,020. "
+                       "The eleventh hostile review found that a quotient, a root or a logarithm with no "
+                       "value over numbers of more than 4,300 digits stopped petra/grid.py: the message of "
+                       "the arithmetic error wrote the numbers out, and Python raises an error of its own "
+                       "for a whole number that long. A long number is now named by its bits: 3 lines in "
+                       "interval.py, 1,023.")
 
-TRUSTED_CEILING = Limit(20088,"Set on 2026-11-08 at 140f742, where the trusted base measured 13,530 "
+TRUSTED_CEILING = Limit(20112,"Set on 2026-11-08 at 140f742, where the trusted base measured 13,530 "
                                "code lines: core 957, rules 457, outside the kernel 12,116. Raised on "
                                "2026-11-08 on branch parts-core as the parts layer replaces its scaffold: "
                                "classifying the scaffold measured 14,269, and the mesh reader with its "
@@ -291,6 +296,16 @@ TRUSTED_CEILING = Limit(20088,"Set on 2026-11-08 at 140f742, where the trusted b
                                "which a signer could read as kelvin where Petra means degC. The report now prints the "
                                "unit of each value a completion gives a load, as the kernel does: 6 lines in "
                                "petra/grid.py, 20,088. "
+                               "The eleventh review found seven things in what stays outside the kernel, and the "
+                               "three lines of CORE_CAP. petra/grid.py searched for a partition with no limit of depth "
+                               "and was PASS where the kernel, which takes 64, was UNKNOWN; it wrote a completion of "
+                               "more than 4,000 characters that the kernel does not read; it counted the orders of an "
+                               "equation only where a rule applies it, where the kernel holds every equation to 1,024; "
+                               "and it stopped with an error of Python's on a row with no cases and on a `least` past "
+                               "the largest float. The text report printed the texts of a card raw, so a waiver's "
+                               "reason with escape sequences wrote another status over the first line: `petra` now "
+                               "prints every character a terminal acts on as the kernel's escape, and counts a name's "
+                               "bytes as the kernel prints them. 21 lines in petra/grid.py and petra/cli.py, 20,112. "
                                "Raise it in the commit that needs more and say why here.")
 
 T2_ADOPTED = date(2026, 11, 8)

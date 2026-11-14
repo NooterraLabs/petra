@@ -253,12 +253,15 @@ def rules (cardHash : String) (card design deck : Except String ByteArray)
     | some bytes, some _ => load "proofs" "petra-proofs/0" bytes readHints
     | _, _ => pure none
   let (some card, some design, some deck) := (card?, design?, deck?) | return {}
-  -- Type rule 8: with a deck of rules the floors are core.json's, whatever deck.json gives.
+  -- Type rule 8: with a deck of rules the floors are core.json's, whatever deck.json gives:
+  -- the floor of a size, and the floor of each dimension.
   let deck ← if deckOfRules.isNone then pure deck else do
+    if (deck.size.min, deck.size.strict) != (CORE_SIZE.min, CORE_SIZE.strict) then
+      modify (·.push ⟨"types.8", "deck", "domains.size", "is not the size floor of petra/decks/core.json, which is the kernel's for a design checked against a deck of rules"⟩)
     let held (f : Floors) := f.toList.map fun (key, (_, floor)) => (key, floor.min, floor.strict)
     if held deck.input != held CORE_FLOORS then
       modify (·.push ⟨"types.8", "deck", "domains.input", "is not the floors of petra/decks/core.json, which are the kernel's for a design checked against a deck of rules"⟩)
-    pure { deck with input := CORE_FLOORS }
+    pure { deck with size := CORE_SIZE, input := CORE_FLOORS }
   -- What the deck of rules says with `may_be` of the fields and the loads of the design's parts.
   let sign : String → String → Bool → Sign := match rules?, design.parts with
     | some rules, some blocks =>

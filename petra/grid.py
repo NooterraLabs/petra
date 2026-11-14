@@ -32,6 +32,7 @@ from __future__ import annotations
 import itertools
 import json
 import math
+import re
 import sys
 from dataclasses import dataclass, field, replace
 from fractions import Fraction
@@ -58,6 +59,10 @@ MAX_ORDERS = 1024
 """The most orders the conditions of one pick may hold between them, as in kernel/Petra/Tape.lean.
 A deck whose rule could write a pick of more is refused when it is read."""
 MAX_LEAVES = 256
+MAX_DEPTH = 64
+"""The deepest a partition may split, as in kernel/Petra/Tape.lean (`MAX_DEPTH`). The kernel
+refuses a deeper one, and a file nested past 128, so the search writes none: a rule that
+holds only under a deeper comb is open in both readers."""
 """The most leaves a partition may have before the search for a proof stops."""
 MAX_CORNERS = 6
 """A refuting point is looked for at every corner of the box while no more inputs than this have a range, and past that at one."""
@@ -99,6 +104,8 @@ MAX_TITLE = 200
 """The most bytes the name of a card may print in, for a design checked against a deck."""
 MAX_REASON = 200
 """The bytes of a reason that the kernel prints (`MAX_TEXT` in kernel/Petra/Files.lean)."""
+MAX_NUMBER = 4000
+"""The most characters of a number in a file, as in kernel/Petra/Num.lean (`MAX_NUMBER_CHARS`)."""
 MAX_BITS = 65_536
 """The most bits a numerator or a denominator may have, as in kernel/Petra/Tape.lean (`fits`).
 A node of a tape whose value has a longer one has no value (`enclosures`), at a point as over
@@ -251,11 +258,40 @@ def _anchor(a: Mapping[str, str]) -> str:
     return " ".join(parts[:2]) + "".join(f", {p}" for p in parts[2:])
 
 
+def escaped(c: str) -> bool:
+    """Whether the kernel prints this character as an escape of six bytes, `\\uXXXX`
+    (`escaped` in kernel/Petra/Files.lean). A terminal acts on these and does not show them:
+    the control characters, which are those under U+0020 but the line feed and the carriage
+    return, and U+007F to U+009F; the line and the paragraph separator; and the marks that
+    turn the direction of text."""
+    n = ord(c)
+    return (n < 0x20 and c not in "\n\r") or 0x7F <= n <= 0x9F or n in (0x2028, 0x2029, 0x61C, 0x200E, 0x200F) or 0x202A <= n <= 0x202E or 0x2066 <= n <= 0x2069
+
+
+_ACTED_ON = re.compile("[\\x00-\\x09\\x0b-\\x1f\\x7f-\\x9f\\u061c\\u200e\\u200f\\u2028\\u2029\\u202a-\\u202e\\u2066-\\u2069]")
+"""Every character of `escaped`, and the carriage return."""
+
+
+def shown(text: str) -> str:
+    """A text for a terminal: its lines as they are, and every other character that a
+    terminal acts on written as the kernel prints it, `\\u` and four digits. A carriage
+    return is one of them here: it sends the cursor back to the start of its line."""
+    return _ACTED_ON.sub(lambda found: f"\\u{ord(found[0]):04x}", text)
+
+
+def _about(x: Fraction) -> str:
+    """A number for a message, as `:g` writes a float, or its power of ten where it is past the largest float."""
+    try:
+        return f"{float(x):g}"
+    except OverflowError:
+        return f"{'-' if x < 0 else ''}1e{math.floor(math.log10(abs(x.numerator)) - math.log10(x.denominator) + 1e-9)}"
+
+
 def _long(name: Any, most: int = MAX_NAME) -> bool:
     """Whether the kernel would print this name in more than `most` bytes, counted as
     `printed` in kernel/Petra/Files.lean counts them: two for a quote, a backslash and a
-    line end, six for any other control character, and the bytes of its UTF-8 otherwise."""
-    return isinstance(name, str) and sum(2 if c in '"\\\n\r' else 6 if c < " " else len(c.encode("utf-8", "surrogatepass")) for c in name) > most
+    line end, six for a character it escapes, and the bytes of its UTF-8 otherwise."""
+    return isinstance(name, str) and sum(2 if c in '"\\\n\r' else 6 if escaped(c) else len(c.encode("utf-8", "surrogatepass")) for c in name) > most
 
 
 def _size(value: Any) -> int:
@@ -683,7 +719,7 @@ def _picks(applied: Mapping[str, Applied | Cased], where: tuple) -> int:
         if isinstance(a, Cased):
             most = max(most, _named_orders(a.named.row))
         elif a.row.table is None:
-            most = max(most, 0 if a.row.cases[0].when is None else sum(_cond_orders(c.when) for c in a.row.cases))
+            most = max(most, 0 if not a.row.cases or a.row.cases[0].when is None else sum(_cond_orders(c.when) for c in a.row.cases))
         else:
             for axis in a.row.table.axes:
                 how = a.keys.get(axis.by) if axis.keys else None
@@ -749,6 +785,11 @@ def read_deck(text: str) -> Deck:
         if _steps(body) > MAX_READ:
             raise DeckError(f"reading this deck takes {_steps(body)} steps, over the budget of {MAX_READ}: a value of the file is one step, a text two or more, and a rule that applies a row takes the row's steps again")
         found = [rows.read(r) for r in body["rows"]]
+        # The kernel writes every equation once when it reads its row, whether or not a rule applies it, and holds the pick it writes
+        # to MAX_ORDERS (`readRow` in kernel/Petra/Deck.lean).
+        for r in found:
+            if r.table is None and r.cases and r.cases[0].when is not None and (count := sum(_cond_orders(c.when) for c in r.cases)) > MAX_ORDERS:
+                raise DeckError(f"row {r.id}: {_over_orders(count)}")
         wrong = [f"{r.id}: {p}" for r in found for p in r.problems]
         if wrong:
             raise DeckError("; ".join(wrong))
@@ -927,7 +968,7 @@ def _quantity(f: Field, kind: str, arg: Any, name: str, design: Design, say: Cal
         if (f.may_be is None and arg.whole <= 0) or (f.may_be == "zero" and arg.whole < 0):
             return say("is not more than zero" if f.may_be is None else "is under zero, and its field may be zero and not under it")
         if f.least is not None and arg.whole < f.least:
-            return say(f"is under {float(f.least):g}, the least a {kind} has: {f.what}")
+            return say(f"is under {_about(f.least)}, the least a {kind} has: {f.what}")
         return Value(f"in:{design.name}.{name}", Interval.point(Fraction(arg.whole)))
     if not isinstance(arg, (Fixed, Bound)):
         return say(f"is a {show(f.dim)}: write a number with its unit, or `given NAME`")
@@ -939,7 +980,7 @@ def _quantity(f: Field, kind: str, arg: Any, name: str, design: Design, say: Cal
     if f.may_be == "zero" and q.value.lo < 0:
         return say("is under zero, and its field may be zero and not under it")
     if f.least is not None and q.value.lo < f.least:
-        return say(f"is under {float(f.least):g} in SI units, the least a {kind} has: {f.what}")
+        return say(f"is under {_about(f.least)} in SI units, the least a {kind} has: {f.what}")
     # A number that may be negative is still held to a floor of its dimension that is under zero, as a bound of the card is.
     floor = _floor(f.dim) if f.may_be == "negative" and isinstance(arg, Fixed) else None
     if floor is not None and floor[1] < 0 and (q.value.lo < floor[1] or (floor[2] and q.value.lo == floor[1])):
@@ -1034,7 +1075,7 @@ def read_parts(design: Design, deck: Deck) -> Parts:
             elif rows._vector(e.value.range.dim) != f.dim:
                 problems.append(f"{where} is a {show(f.dim)}")
             elif f.least is not None and e.value.range.value.lo < f.least:
-                problems.append(f"{where} is at least {float(f.least):g} in SI units: {f.what}")
+                problems.append(f"{where} is at least {_about(f.least)} in SI units: {f.what}")
             else:
                 loads[part.name].setdefault(e.field, {})[case.name] = Value(f"in:{design.name}.{e.value.name}", e.value.range.value)
     joined: dict[str, list[str]] = {}
@@ -1439,13 +1480,14 @@ def enclosures(nodes: list[list], box: list[Interval]) -> list[Any]:
 
 
 def _partition(nodes: list[list], roots: list[int], box: list[Interval], budget: list[int], labels: list[str],
-               refuting: list[list[Fraction]] | None = None) -> Any:
+               refuting: list[list[Fraction]] | None = None, depth: int = 0) -> Any:
     """A partition on whose every leaf every root is at most zero, or None when the search
     finds none within its budget. Splits the input with the widest range, at its middle,
     and names it by its label, as proofs.json does for the kernel. Given `refuting`, the
     search also tries the middle of each box it does not prove, and stops at the first where
     the first root is above zero, which it puts there. The budget is held to the walks that
-    `_walks` allows over the box, two for each box where the search tries the middle."""
+    `_walks` allows over the box, two for each box where the search tries the middle. It
+    splits no deeper than `MAX_DEPTH`, the deepest partition the kernel takes."""
     v = enclosures(nodes, box)
     if all(isinstance(v[r], Interval) and v[r].hi <= 0 for r in roots):
         return "leaf"
@@ -1455,12 +1497,12 @@ def _partition(nodes: list[list], roots: list[int], box: list[Interval], budget:
         return None
     budget[0] -= 1
     widest = max(range(len(box)), key=lambda k: box[k].width(), default=None)
-    if widest is None or box[widest].width() == 0 or budget[0] <= 0:
+    if widest is None or box[widest].width() == 0 or budget[0] <= 0 or depth >= MAX_DEPTH:
         return None
     cut = box[widest].midpoint()
     halves = []
     for half in (Interval(box[widest].lo, cut), Interval(cut, box[widest].hi)):
-        found = _partition(nodes, roots, [*box[:widest], half, *box[widest + 1:]], budget, labels, refuting)
+        found = _partition(nodes, roots, [*box[:widest], half, *box[widest + 1:]], budget, labels, refuting, depth + 1)
         if found is None:
             return None
         halves.append(found)
@@ -1736,6 +1778,12 @@ def _listed(names: list[str]) -> str:
     return " and no ".join(names[:4]) + (f" and {len(names) - 4} more" if len(names) > 4 else "")
 
 
+def _written(x: Fraction) -> bool:
+    """Whether the kernel reads this number from a file: `export.number` writes it in at most MAX_NUMBER characters. A number of
+    more bits than 13,288 has more digits than that, and Python does not write a whole number of more than 4,300."""
+    return abs(x.numerator).bit_length() + x.denominator.bit_length() <= 13_288 and len(export.number(x)) <= MAX_NUMBER
+
+
 def _least(load: Field) -> Fraction:
     """The value a completion first tries for a load: its `least`, or zero, and not under the floor of its dimension where that floor
     holds for the load, as Completion.fits in kernel/Petra/Grid.lean holds it. A deck whose `least` is under that floor does not load."""
@@ -1790,6 +1838,8 @@ def _incomplete(rule: Rule, part: Part, parts: Mapping[str, Part], unsaid: list[
     if not waived:
         return pending
     loads = tuple((part.name, load, case, prefer.get((part.name, load, case), _least(part.type.loads[load]))) for load in missing)
+    if not all(_written(x) for _, _, _, x in loads):
+        return pending      # a hint is a file, and the kernel reads no number of more than MAX_NUMBER characters: no completion can be written
     for keys in itertools.islice(_choices(unsaid, prefer), MAX_COMPLETIONS):
         on, among = _completed(part, parts, keys, loads)
         hint = {**pending.body, "completion": _completion_body(keys, loads)}

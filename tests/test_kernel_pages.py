@@ -64,7 +64,8 @@ class TheBytesOfAName(unittest.TestCase):
     """H3 (format.md, "What the kernel holds and prints")."""
 
     def test_each_character_prints_in_the_bytes_the_page_says(self):
-        bytes_of = {"a": 1, "\x7f": 1, '"': 2, "\\": 2, "\n": 2, "\r": 2, "\t": 6, "\f": 6, "\b": 6, "\x01": 6, "\x1f": 6, "é": 2, "€": 3, "\U0001F600": 4}
+        bytes_of = {"a": 1, '"': 2, "\\": 2, "\n": 2, "\r": 2, "\t": 6, "\f": 6, "\b": 6, "\x01": 6, "\x1f": 6, "\x7f": 6, "\x85": 6, "\x9f": 6, "\u2028": 6,
+                    "\u202e": 6, "\u2066": 6, "\xa0": 2, "é": 2, "€": 3, "\u2027": 3, "\U0001F600": 4}
         for char, each in bytes_of.items():
             with self.subTest(repr(char)):
                 most = 64 // each

@@ -70,6 +70,14 @@ def round_out(lo: Q, hi: Q, bits: int = PRECISION_BITS) -> "Interval":
     return Interval(Q(math.floor(lo * scale), scale), Q(math.ceil(hi * scale), scale))
 
 
+def _said(q: Q) -> str:
+    """A number for a message. Python writes no whole number of more than 4,300 digits and raises
+    a ValueError of its own for one, which is no KernelArithmeticError: a caller that catches the
+    arithmetic error to leave a cell open would stop on it. So a long number is named by its bits."""
+    bits = max(abs(q.numerator).bit_length(), q.denominator.bit_length())
+    return str(q) if bits <= 4096 else f"a number of {bits} bits"
+
+
 @dataclass(frozen=True, slots=True)
 class Interval:
     """Closed interval [lo, hi] of rationals."""
@@ -119,7 +127,7 @@ class Interval:
     def __truediv__(self, other: "Interval") -> "Interval":
         """Raises KernelArithmeticError if 0 ∈ other."""
         if other.lo <= 0 <= other.hi:
-            raise KernelArithmeticError(f"division by [{other.lo}, {other.hi}], which contains 0")
+            raise KernelArithmeticError(f"division by [{_said(other.lo)}, {_said(other.hi)}], which contains 0")
         return self * Interval(1 / other.hi, 1 / other.lo)
 
     def pow_int(self, n: int) -> "Interval":
@@ -168,7 +176,7 @@ def i_sqrt(x: Interval) -> Interval:
     of a wider interval at a square still rounds to the grid, which keeps the root isotone.
     """
     if x.lo < 0:
-        raise KernelArithmeticError(f"sqrt over [{x.lo}, {x.hi}], which has negative values")
+        raise KernelArithmeticError(f"sqrt over [{_said(x.lo)}, {_said(x.hi)}], which has negative values")
     if x.lo == x.hi and (root := _root(x.lo)) is not None:
         return Interval(root, root)
     top = x.hi * _GRID * _GRID
@@ -191,7 +199,7 @@ def _grid(enclosure, x) -> tuple[Q, Q]:
         lo, hi = math.floor(e.lo * _GRID), math.ceil(e.hi * _GRID)
         if hi - lo <= 1:
             return Q(lo, _GRID), Q(hi, _GRID)
-    raise KernelArithmeticError(f"no enclosure of the value at {x} separated it from the rounding grid")
+    raise KernelArithmeticError(f"no enclosure of the value at {_said(x)} separated it from the rounding grid")
 
 
 def _scale(a: int, b: int, c: Q) -> tuple[int, int]:
@@ -336,7 +344,7 @@ def _cos_point(x: Q) -> tuple[Q, Q]:
 def i_ln(x: Interval) -> Interval:
     """[floor(ln x.lo), ceil(ln x.hi)] on the grid. Requires x.lo > 0."""
     if x.lo <= 0:
-        raise KernelArithmeticError(f"ln over [{x.lo}, {x.hi}], which has non-positive values")
+        raise KernelArithmeticError(f"ln over [{_said(x.lo)}, {_said(x.hi)}], which has non-positive values")
     return Interval(_ln_point(x.lo)[0], _ln_point(x.hi)[1])
 
 

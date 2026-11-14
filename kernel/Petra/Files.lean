@@ -47,8 +47,32 @@ def MAX_REASONS : Nat := 500000
 /-- What a cell says in place of its reason once the reasons before it took `MAX_REASONS`. -/
 def UNSAID : String := "past what the verdict prints of reasons"
 
+/-- Whether the verdict prints a character as an escape of six bytes, `\uXXXX`. A terminal
+acts on these characters and does not show them, so a text of a card that held one could move
+the cursor and write over a line of the verdict. They are the control characters, which are
+those under U+0020 but the line feed and the carriage return, and U+007F to U+009F; the line
+and the paragraph separator, U+2028 and U+2029; and the marks that turn the direction of text,
+U+061C, U+200E, U+200F, U+202A to U+202E and U+2066 to U+2069. -/
+def escaped (c : Char) : Bool :=
+  let n := c.toNat
+  (n < 0x20 && c != '\n' && c != '\r') || (0x7f ≤ n && n ≤ 0x9f) || n == 0x2028 || n == 0x2029
+    || n == 0x61c || n == 0x200e || n == 0x200f || (0x202a ≤ n && n ≤ 0x202e) || (0x2066 ≤ n && n ≤ 0x2069)
+
+/-- A text as the verdict prints it, between quotes: a quote, a backslash, a line feed and a
+carriage return in two bytes, a character of `escaped` in six, and any other as it is. It is
+JSON, and a reader of JSON gets the text back. -/
+def quote (s : String) : String :=
+  (s.foldl (fun acc c =>
+    if c == '"' then acc ++ "\\\"" else if c == '\\' then acc ++ "\\\\" else if c == '\n' then acc ++ "\\n"
+    else if c == '\r' then acc ++ "\\r"
+    else if escaped c then
+      let n := c.toNat
+      ((((acc ++ "\\u").push (Nat.digitChar (n / 4096))).push (Nat.digitChar (n % 4096 / 256))).push (Nat.digitChar (n % 256 / 16))).push
+        (Nat.digitChar (n % 16))
+    else acc.push c) "\"").push '"'
+
 /-- The bytes the verdict prints for a text, between its quotes. -/
-def printed (s : String) : Nat := (Json.str s).compress.utf8ByteSize - 2
+def printed (s : String) : Nat := (quote s).utf8ByteSize - 2
 
 /-- The text when it prints in at most `MAX_TEXT` bytes. Otherwise its longest start that
 does, and how many characters were left out. -/
