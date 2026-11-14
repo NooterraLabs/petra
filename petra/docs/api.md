@@ -229,17 +229,17 @@ MOVE = {"input": NAME,                         "<component>.<key>", with the wor
         "direction": "increase" | "decrease" | "swap",
         "to": NUMBER TEXT,                     the step, written as the design writes numbers, or the swap's shape
         "utilisation": NUMBER | null,          the governing check's after the step
-        "status": STATUS, "fails": [REQUIREMENT, ...],   the design's after the step, and its refuted checks
+        "status": "FAIL" | "UNKNOWN", "fails": [REQUIREMENT, ...],   the Python checker's of the design after the step, UNKNOWN where it refutes nothing, and its refuted checks
         "clears": {"to", "utilisation", "status", "fails"} | null}   a value at which the check holds; first three moves only
 
 UNCHECKED = {"subject": NAME, "mode": MODE, "reason": TEXT}   see What was not checked
 
 GOVERNING = {"requirement", **CHECK}           the report's governing check of that category
 
-ENTRY = {"claim": NAME, "status": STATUS,
+ENTRY = {"claim": NAME, "status": "FAIL" | "UNKNOWN",   the Python checker's status of the claim, which is no verdict: its PASS and MARGINAL read UNKNOWN
          "rules": ["R1", ...],                 the rules of the kernel results the verdict used
          "footprint": [{"tag", "label", "owner", "source", "version"?}, ...],
-         "needs": [TEXT, ...],                 what each open item needs; non-empty iff UNKNOWN
+         "needs": [TEXT, ...],                 what each open item needs; non-empty where the Python checker's own status was UNKNOWN
          "margins": [{"requirement", "proved", "margin": "proved" | "undecided" | "within",
                       "point"?: {SYMBOL: EXACT}}, ...],     claims with a margin
          "obligations": [OBLIGATION, ...]}     one per outcome of the entry

@@ -157,7 +157,7 @@ def compare_two(a: dict, b: dict, where: str, reasons: bool = True) -> list[Diff
         out.append(Diff("cells", where, first, key=f"{mech}|{first.split('(')[0][:0]}{[(x[1], x[3]) for x, y in zip(ca, cb) if x[:4] != y[:4]][:2]}"))
     elif reasons:
         for x, y in zip(ca, cb):
-            if x[3] in ("open", "waived", "refuted") and x[4] != y[4]:
+            if x[3] in ("open", "waived", "refuted") and (x[4] != y[4] if x[3] == "refuted" else held(x[4]) != held(y[4])):
                 out.append(Diff("reason", where, f"{x[0]}/{x[1]}/{x[2]} {x[3]}: {x[4]!r} against {y[4]!r}", key=f"{x[3]}|{_lead(x[4])}|{_lead(y[4])}"))
                 break
         for x, y in zip(a.get("cells", []), b.get("cells", [])):
@@ -167,6 +167,26 @@ def compare_two(a: dict, b: dict, where: str, reasons: bool = True) -> list[Diff
     if a.get("waived") != b.get("waived") and not out:
         out.append(Diff("waived", where, f"{a.get('waived')} against {b.get('waived')}", key="waived-list"))
     return out
+
+
+LEADS = ("open but for the waiver: ", "the waiver does not rest this cell: ")
+NOT_PROVED = "the range the rule holds in is not proved: "
+
+
+def held(reason: str) -> str:
+    """What the pages hold of the reason of an open or a waived cell (format.md, The verdict): the start of the
+    reason of a waived cell and of one a waiver does not rest, the start of the reason of a range that is not
+    proved, and the whole reason of an unstated field, of a range that holds nowhere and of a cell that nothing
+    reads. Every other reason is in the reader's own words, and so is the order of the loads a case leaves out:
+    two readers that word those differently do not differ."""
+    for lead in LEADS:
+        if reason.startswith(lead):
+            return lead + held(reason[len(lead):])
+    if reason.startswith(NOT_PROVED):
+        return NOT_PROVED
+    given = (" is unstated: its maker states none, and " in reason or reason.startswith("the rule holds only where ")
+             or (reason.startswith("no rule of the deck reads ") and reason.endswith(", so nothing checks it")))
+    return reason if given else ""
 
 
 def _shape(text: str) -> str:
@@ -330,7 +350,7 @@ def _against_grid(kernel: dict, report: Any, refuses: str, deck: Any, deck_refus
         why = c.why or ""
         if c.state == "waived" and why.startswith("by ") and "; open but for the waiver: " in why:
             why = why[why.index("; open but for the waiver: ") + 2:]       # the grid names who signed, which the kernel prints elsewhere
-        if c.state == "waived" and why != k.get("reason", ""):      # the grid words its other reasons itself, and the pages say so
+        if c.state == "waived" and held(why) != held(k.get("reason", "")):      # the grid words its other reasons itself, and the pages say so
             out.append(Diff("reason", "kernel/grid", f"{c.subject}/{c.mechanism}/{c.entry} {c.state}: grid {why!r}, kernel {k.get('reason')!r}", key=f"{c.state}|{_lead(why)}|{_lead(k.get('reason', ''))}"))
             break
     if kernel["hashes"].get("rules") != deck.hash:

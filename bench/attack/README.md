@@ -43,9 +43,9 @@ The decks it starts from are `petra/decks/aisc360.json` and the decks `bench/ker
 
 ## What is compared
 
-Every input goes to the kernel and the third reading, and every pair of texts also to the Python reader. They must give one verdict and the same cells, and the kernel and the third reading the same reasons, waivers and completions. The three comparisons are kept apart: `kernel/twin`, `kernel/grid` and `grid`. A crash, a missing verdict or more than 90 seconds is kept as a crash or a hang.
+Every input goes to the kernel and the third reading, and every pair of texts also to the Python reader. They must give one verdict and the same cells, and the kernel and the third reading the same waivers and completions, the same rules of the same files in their findings, and the same reasons where the pages give a reason its words ([format.md](../../docs/format.md), The verdict). Any other reason is each reader's own, and so is the order of the loads a case leaves out: `held` in [readers.py](readers.py) says which is which. The three comparisons are kept apart: `kernel/twin`, `kernel/grid` and `grid`. A crash, a missing verdict or more than 90 seconds is kept as a crash or a hang.
 
-The reasons of the grid and the kernel are compared for waived cells only: the pages say that `petra check` words its other reasons itself.
+The reasons of the grid and the kernel are compared for waived cells only, and there by the same rule: `petra check` words its other reasons itself.
 
 ## Metamorphic pairs
 

@@ -69,7 +69,7 @@ class Check(Workspace):
         self.assertEqual(report["file"], str(CIRCUIT), "the file is named as given")
         for verdict in report["verdicts"]:
             self.assertEqual(set(verdict), VERDICT_KEYS, f"{verdict['claim']} has the documented keys")
-            self.assertEqual(verdict["status"], "PASS", f"{verdict['claim']} passes")
+            self.assertEqual(verdict["status"], "UNKNOWN", f"{verdict['claim']}: no claim of a design with no deck passes, whatever the Python checker gave it")
             self.assertTrue(verdict["footprint"], f"{verdict['claim']} names its premises")
             self.assertEqual(verdict["needs"], [], f"{verdict['claim']} has nothing open")
             self.assertTrue(verdict["obligations"], f"{verdict['claim']} lists its obligations")
@@ -78,9 +78,9 @@ class Check(Workspace):
     def test_an_unknown_design_exits_2_and_names_what_is_open(self):
         code, out, _ = run("check", str(EXAMPLES / "bolt_unknown.petra"), "--json")
         self.assertEqual(code, EXIT_CODES["UNKNOWN"], "bolt_unknown exits 2")
-        unknown = [v for v in json.loads(out)["verdicts"] if v["status"] == "UNKNOWN"]
-        self.assertTrue(unknown, "some entry is UNKNOWN")
-        self.assertTrue(all(v["needs"] for v in unknown), "each UNKNOWN entry says what it needs")
+        verdicts = json.loads(out)["verdicts"]
+        self.assertTrue(any(v["needs"] for v in verdicts), "some entry says what it needs")
+        self.assertEqual({v["status"] for v in verdicts if v["needs"]}, {"UNKNOWN"}, "and each that does is UNKNOWN")
 
     def test_a_design_refuted_under_another_card_exits_1(self):
         card = self.write("overloaded.card", read_pair(CIRCUIT)[0].replace("[0 A, 10 A]", "[0 A, 16 A]"))
@@ -126,9 +126,10 @@ class Check(Workspace):
         library = str(self.tmp / "library")
         self.assertEqual(run("certify-family", str(FAMILY), "--library", library)[0], 0, "the family certifies")
         code, out, _ = run("check", str(CIRCUIT), "--json", "--library", library, "--no-solve")
-        statuses = {v["claim"]: v["status"] for v in json.loads(out)["verdicts"]}
-        self.assertEqual((statuses["hot"], statuses["drop"]), ("PASS", "PASS"), "both claims come from the library")
-        self.assertEqual(statuses["coverage"], "UNKNOWN", "coverage needs the solver the run switched off")
+        verdicts = {v["claim"]: v for v in json.loads(out)["verdicts"]}
+        self.assertEqual((verdicts["hot"]["needs"], verdicts["drop"]["needs"]), ([], []), "both claims come from the library, with nothing open")
+        self.assertTrue(verdicts["coverage"]["needs"], "coverage needs the solver the run switched off")
+        self.assertEqual({v["status"] for v in verdicts.values()}, {"UNKNOWN"}, "and no claim of a design with no deck has the status of a pass")
         self.assertEqual(code, EXIT_CODES["UNKNOWN"], "so the design exits 2")
 
     def test_python_dash_m_petra_uses_the_same_exit_codes(self):

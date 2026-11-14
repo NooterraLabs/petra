@@ -70,7 +70,7 @@ class Failing(unittest.TestCase):
         for m in self.result["repair"]["moves"][:2]:
             after = petra.check(self.card, set_number(self.text, m["line"], m["from"], m["to"]), repair=False)
             self.assertAlmostEqual(obligation(after, self.result["repair"]["check"])["utilisation"], m["utilisation"], msg=m["input"])
-            self.assertEqual(python_status(self.card, set_number(self.text, m["line"], m["from"], m["to"])), m["status"], m["input"])
+            self.assertEqual(held(python_status(self.card, set_number(self.text, m["line"], m["from"], m["to"]))), m["status"], m["input"])
 
     def test_clears_names_a_value_at_which_the_check_holds(self):
         cleared = [m for m in self.result["repair"]["moves"] if m["clears"] is not None]
@@ -78,7 +78,13 @@ class Failing(unittest.TestCase):
         m = cleared[0]
         after = petra.check(self.card, set_number(self.text, m["line"], m["from"], m["clears"]["to"]), repair=False)
         self.assertEqual(obligation(after, self.result["repair"]["check"])["outcome"], "certified")
-        self.assertEqual(python_status(self.card, set_number(self.text, m["line"], m["from"], m["clears"]["to"])), m["clears"]["status"])
+        self.assertEqual(python_status(self.card, set_number(self.text, m["line"], m["from"], m["clears"]["to"])), "PASS", "the Python checker refutes nothing there")
+        self.assertEqual(m["clears"]["status"], "UNKNOWN", "which the JSON does not print as a pass: the design has no deck of rules")
+
+
+def held(status: str) -> str:
+    """What the JSON of a check prints for a status of the Python checker: its PASS and MARGINAL read UNKNOWN (repair._no_pass)."""
+    return status if status in ("FAIL", "UNKNOWN") else "UNKNOWN"
 
 
 class Others(unittest.TestCase):

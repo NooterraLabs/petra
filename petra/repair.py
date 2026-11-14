@@ -441,11 +441,13 @@ class Checked:
 
     def to_json(self) -> dict[str, Any]:
         """The report's JSON with "status" the kernel's verdict, "reason", "card", "hashes",
-        "kernel" and "repair", or {"file", "status": "INPUT_ERROR", "error"}."""
+        "kernel" and "repair", or {"file", "status": "INPUT_ERROR", "error"}. No `status` of
+        the report or of the repair is a pass in it (`_no_pass`)."""
         if self.report is None:
             return {"file": self.path, "status": "INPUT_ERROR", "error": self.error}
-        return {**self.report.to_json(), "status": self.status, "reason": self.reason, "card": self.card, "hashes": dict(self.hashes),
-                "path": "legacy", "kernel": self.kernel.to_json(), "repair": None if self.repair is None else self.repair.to_json()}
+        working = _no_pass({**self.report.to_json(), "repair": None if self.repair is None else self.repair.to_json()})
+        return {**working, "status": self.status, "reason": self.reason, "card": self.card, "hashes": dict(self.hashes), "path": "legacy",
+                "kernel": self.kernel.to_json()}
 
     def text(self) -> str:
         """What `petra check` prints: the kernel's verdict on the first line, the reason on
@@ -461,6 +463,18 @@ class Checked:
         return "\n".join([f"{self.report.design}: {self.status}", *([f"reason     {self.reason}"] if self.reason else []),
                           f"kernel     {self.kernel.line()}", f"card       {self.hashes['card']}  {self.card}",
                           f"design     {self.hashes['design']}  {self.path}", f"path       {LEGACY}", *out])
+
+
+def _no_pass(node: Any) -> Any:
+    """The JSON of the Python checker's working with no `status` in it that reads as a pass. The checker gives each
+    claim a status, and the design after each move of a repair one, and its PASS and MARGINAL there are no verdict:
+    the kernel has no deck of rules for the design, so no claim of it passes. Each reads UNKNOWN, as it does in a
+    recall (cli.cmd_registry_recall). FAIL and UNKNOWN stand."""
+    if isinstance(node, dict):
+        return {key: ("UNKNOWN" if key == "status" and value not in ("FAIL", "UNKNOWN") else _no_pass(value)) for key, value in node.items()}
+    if isinstance(node, list):
+        return [_no_pass(value) for value in node]
+    return node
 
 
 def check_text(card: str, text: str, path: str, registry: Any, sources: tuple, *, sink: Any = None, deck: Any = None,
