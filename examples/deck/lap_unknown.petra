@@ -1,7 +1,7 @@
 petra 0
 
 # The lap of lap_pass with a card that waives nothing. The deck's rules are proved, and
-# the four mechanisms it has no rule for stay open, so the verdict is UNKNOWN.
+# the five mechanisms it has no rule for stay open, so the verdict is UNKNOWN.
 
 plate tab {
   thickness 0.375 inch

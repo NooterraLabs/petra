@@ -2140,6 +2140,30 @@
      "least": "0 kip",
      "what": "the force the lap carries from one plate to the other along the line, as a required strength by LRFD load combinations"
     }
+   ],
+   "needs": [
+    {
+     "le": [
+      [
+       "mul",
+       "2",
+       "side"
+      ],
+      "a.width"
+     ],
+     "why": "the line of holes lies within plate a, and each of its two side edges is at least the side distance from the line"
+    },
+    {
+     "le": [
+      [
+       "mul",
+       "2",
+       "side"
+      ],
+      "b.width"
+     ],
+     "why": "the line of holes lies within plate b, and each of its two side edges is at least the side distance from the line"
+    }
    ]
   }
  ],
@@ -2276,6 +2300,15 @@
    "type": "lap",
    "mechanism": "lap.block_shear",
    "what": "block shear rupture of each plate",
+   "anchor": {
+    "standard": "AISC 360-22",
+    "clause": "J4.3"
+   }
+  },
+  {
+   "type": "lap",
+   "mechanism": "lap.partial_block_shear",
+   "what": "block shear rupture of each plate along a block of fewer bolts than all, as the corner at its end bolt",
    "anchor": {
     "standard": "AISC 360-22",
     "clause": "J4.3"

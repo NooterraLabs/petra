@@ -542,8 +542,18 @@ def _join_negative(argv: list[str]) -> list[str]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Every command but the server prints through petra.files.guarded: nothing that a card, a design, a deck or the name of a
+    file holds reaches a terminal as a character it acts on, and an argument that holds one is refused."""
+    from .files import guarded
+
+    argv = _join_negative(sys.argv[1:] if argv is None else list(argv))
+    if argv[:1] == ["mcp"]:        # the server writes bytes of its own to the stream, and its texts are JSON
+        return _main(argv)
+    return guarded(_main, argv)
+
+
+def _main(argv: list[str]) -> int:
     try:
-        argv = _join_negative(sys.argv[1:] if argv is None else list(argv))
         mcp = argv[:1] == ["mcp"]
         args = _mcp_arguments(_Parser(prog="petra mcp")).parse_args(argv[1:]) if mcp else build_parser().parse_args(argv)
         code = args.run(args)

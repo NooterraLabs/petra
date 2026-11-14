@@ -26,7 +26,7 @@ def givenOf (name : String) : String × String :=
   | field :: rest => (".".intercalate rest.reverse, field)
   | [] => (name, "")
 
-/-- The type rules, 1 to 5. Rules 6 and 7 are in `rules` and `marks`: they read the command line.
+/-- The type rules, 1 to 5. Rules 6, 7 and 8 are in `rules` and `marks`: they read the command line.
 
 `sign` is what the deck of rules says with `may_be` of a field or of a load of a part
 (`signOf`). A number that a design writes for a field that may be zero or negative is not
@@ -205,6 +205,17 @@ structure Report where
   dsgInputs : Nat
   /-- The work the proofs took, of `MAX_WORK`. -/
   work : Nat
+  /-- The unit of each load of each part, by their names: what the verdict prints after the
+  value a completion gives the load. -/
+  units : Std.TreeMap (String × String) String := {}
+
+/-- The SI unit of each quantity load of each part, by the part's name and the load's
+(`siUnit`): degC for a temperature. -/
+def unitsOf (parts : Array Part) : Std.TreeMap (String × String) String :=
+  parts.foldl (init := {}) fun table part => part.kind.loads.foldl (init := table) fun table f =>
+    match f.kind with
+    | .quantity dim _ _ _ => table.insert (part.name, f.name) (siUnit dim)
+    | _ => table
 
 /-- The distinct `dsg:` inputs that the tapes of the proved and the refuted cells read. -/
 def dsgInputs (cells : Array Settled) : Nat :=
@@ -221,6 +232,7 @@ structure Found where
   ignored : Option Nat := none
   dsgInputs : Nat := 0
   work : Nat := 0
+  units : Std.TreeMap (String × String) String := {}
 
 /-- Shape, then types, then the deck of rules and the parts when `--rules` names a deck,
 then the cells. A broken rule of a group before the cells is a finding, and with a finding
@@ -241,6 +253,15 @@ def rules (cardHash : String) (card design deck : Except String ByteArray)
     | some bytes, some _ => load "proofs" "petra-proofs/0" bytes readHints
     | _, _ => pure none
   let (some card, some design, some deck) := (card?, design?, deck?) | return {}
+  -- Type rule 8: with a deck of rules the floors are core.json's, whatever deck.json gives:
+  -- the floor of a size, and the floor of each dimension.
+  let deck ← if deckOfRules.isNone then pure deck else do
+    if (deck.size.min, deck.size.strict) != (CORE_SIZE.min, CORE_SIZE.strict) then
+      modify (·.push ⟨"types.8", "deck", "domains.size", "is not the size floor of petra/decks/core.json, which is the kernel's for a design checked against a deck of rules"⟩)
+    let held (f : Floors) := f.toList.map fun (key, (_, floor)) => (key, floor.min, floor.strict)
+    if held deck.input != held CORE_FLOORS then
+      modify (·.push ⟨"types.8", "deck", "domains.input", "is not the floors of petra/decks/core.json, which are the kernel's for a design checked against a deck of rules"⟩)
+    pure { deck with size := CORE_SIZE, input := CORE_FLOORS }
   -- What the deck of rules says with `may_be` of the fields and the loads of the design's parts.
   let sign : String → String → Bool → Sign := match rules?, design.parts with
     | some rules, some blocks =>
@@ -250,8 +271,8 @@ def rules (cardHash : String) (card design deck : Except String ByteArray)
   if design.parts.isSome && deckOfRules.isNone then
     modify (·.push ⟨"types.6", "design", "parts", "a design with parts is checked against a deck of rules, and --rules names none"⟩)
   marks card design deck deckOfRules.isSome
-  -- A deck of rules with a `least` under a floor of deck.json is refused, as one that does
-  -- not read is, and no part is read against it.
+  -- A deck of rules with a `least` under a floor of core.json (type rule 8) is refused, as
+  -- one that does not read is, and no part is read against it.
   let rules? ← match rules? with
     | some rules => match underFloor rules deck.input with
       | some why => do modify (·.push ⟨"shape", "rules", "", why⟩); pure none
@@ -272,7 +293,7 @@ def rules (cardHash : String) (card design deck : Except String ByteArray)
     let (cells, left) := Id.run (settled.run' {})
     return { cells, dsgInputs := dsgInputs cells, work := MAX_WORK - left }
   match Id.run ((cells rules card parts loads (hints?.getD #[]) left deck.input).run' {}) with
-  | .ok made => return { cells := made.cells, ignored := some made.ignored, dsgInputs := made.dsgInputs, work := made.work }
+  | .ok made => return { cells := made.cells, ignored := some made.ignored, dsgInputs := made.dsgInputs, work := made.work, units := unitsOf parts }
   | .error why =>
     modify (·.push ⟨"limits", "design", "parts", why⟩)
     return {}
@@ -294,6 +315,6 @@ def check (card design deck : Except String ByteArray) (deckOfRules proofs : Opt
     else .pass
   let hashes := [("card", hash card), ("design", hash design), ("deck", hash deck), ("rules", deckOfRules.bind hash)]
   { verdict, hashes, findings, cells, cellsFrom := if deckOfRules.isSome then "rules" else "proofs",
-    ignored := found.ignored, dsgInputs := found.dsgInputs, work := found.work }
+    ignored := found.ignored, dsgInputs := found.dsgInputs, work := found.work, units := found.units }
 
 end Petra

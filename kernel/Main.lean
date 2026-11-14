@@ -10,7 +10,9 @@ import Petra.Check
 
 open Petra
 
-def str (s : String) : String := (Lean.Json.str s).compress
+/-- A text as the verdict prints it: no character that a terminal acts on is printed raw
+(`Petra.quote`). -/
+def str (s : String) : String := quote s
 
 def object (fields : List (String × String)) : String :=
   "{" ++ ", ".intercalate (fields.map fun (key, value) => s!"{str key}: {value}") ++ "}"
@@ -26,12 +28,13 @@ def render (r : Report) : String :=
   -- Each waiver once, in the order the cells first rest on it: many cells may rest on one.
   let waivers : Array Waiver := ((r.cells.filterMap (·.waiver)).foldl (fun (seen, out) (k, w) =>
     if seen.contains k then (seen, out) else (seen.insert k, out.push w)) (({} : Std.TreeSet Nat), #[])).2
-  -- What a waived cell was completed with, as proofs.json writes a completion: the waiver's
-  -- signer answers for what is left out being so.
+  -- What a waived cell was completed with, as proofs.json writes a completion, with the unit
+  -- of each load's value after it: degC for a temperature, and no kelvin. The waiver's signer
+  -- answers for what is left out being so.
   let inline (items : Array String) : String := "[" ++ ", ".intercalate items.toList ++ "]"
   let completion (c : Completion) : String :=
     object [("keys", inline (c.keys.map fun (p, f, n) => inline #[str p, str f, str n])),
-            ("loads", inline (c.loads.map fun (p, l, u, x) => inline #[str p, str l, str u, str (toString x)]))]
+            ("loads", inline (c.loads.map fun (p, l, u, x) => inline #[str p, str l, str u, str (toString x), str (r.units.getD (p, l) "")]))]
   let cell (s : Settled) : String :=
     object ([("subject", str s.cell.subject), ("mechanism", str s.cell.mechanism), ("entry", str s.cell.entry),
              ("claimed", if s.hinted then str s.cell.state.name else "null"), ("state", str s.state.name)]

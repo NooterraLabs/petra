@@ -1,0 +1,53 @@
+petra 0
+
+# Two bolts 6 inch apart on a line 1 inch from a side edge, and 55 kip. The eleventh review
+# found this lap: it passed under the four waivers of its card.
+#
+# What the deck's rules ask, and each holds:
+#   bolts          2 x 0.75 x 84 x 0.4418 = 55.67 kip, by shear        (bearing and tearout hold more)
+#   block of both  shear length 2 + 6 = 8 inch, a hole 7/8 inch wide
+#                  gross shear 8 x 0.375 = 3 inch2                     0.60 x 36 x 3 = 64.8 kip
+#                  net shear (8 - 1.5 x 7/8) x 0.375 = 2.508 inch2     0.60 x 58 x 2.508 = 87.27 kip
+#                  net tension (1 - 7/16) x 0.375 = 0.2109 inch2       58 x 0.2109 = 12.23 kip
+#                  0.75 x (64.8 + 12.23) = 57.78 kip
+#   yield 0.90 x 36 x 2.25 = 72.9 kip, rupture 0.75 x 58 x (6 - 7/8) x 0.375 = 83.6 kip
+#
+# What they do not ask: the corner of a plate at its end bolt. That block shears along the line
+# from the plate's end to the first hole and tears from that hole to the side edge (J4.3,
+# Equation J4-5 with Ubs = 1).
+#   gross shear    2 x 0.375 = 0.75 inch2                      0.60 x 36 x 0.75 = 16.2 kip
+#   net shear      (2 - 0.5 x 7/8) x 0.375 = 0.5859 inch2      0.60 x 58 x 0.5859 = 20.39 kip
+#   net tension    (1 - 7/16) x 0.375 = 0.2109 inch2           58 x 0.2109 = 12.23 kip
+# 0.75 x (16.2 + 12.23) = 21.33 kip. Each bolt is the end bolt of one plate and carries half the
+# pull, 27.5 kip: 1.29 of what its corner holds. The lap holds 2 x 21.33 = 42.65 kip.
+#
+# The deck has no rule for a block of fewer bolts than all. Its grid asks them on the line
+# lap.partial_block_shear, which is open, and this card does not waive it. So the lap is
+# UNKNOWN today, and FAIL once a rule for the line is transcribed.
+
+plate tab {
+  thickness 0.375 inch
+  width 6 inch
+  Fy given tab.Fy
+  Fu given tab.Fu
+}
+
+plate strap {
+  thickness 0.375 inch
+  width 6 inch
+  Fy given strap.Fy
+  Fu given strap.Fu
+}
+
+lap splice {
+  fastener "Group 150"
+  threads excluded
+  diameter 0.75 inch
+  holes standard
+  count 2
+  pitch 6 inch
+  end 2 inch
+  side 1 inch
+  surface protected
+  joins tab strap
+}

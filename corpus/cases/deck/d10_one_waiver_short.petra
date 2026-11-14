@@ -1,6 +1,7 @@
 petra 0
 
-# The card waives three of the four mechanisms the deck has no rule for, and the bending of the plates stays open.
+# The card waives three of the five mechanisms the deck has no rule for. The bending of the plates stays open, and so does
+# block shear of a block of fewer bolts than all.
 
 plate tab {
   thickness 0.375 inch

@@ -62,6 +62,24 @@ def firsts [Ord κ] (items : Array α) (key : α → κ) : Std.TreeMap κ α :=
 /-- The floors that deck.json gives the dimensions, by the exponents of each (`Deck.input`). -/
 abbrev Floors := Std.TreeMap (Array (Int × Nat)) (String × Floor)
 
+/-- The floors of petra/decks/core.json, `domains.input`: zero for each dimension it lists, and
+absolute zero, -273.15 degC, for a temperature. A design checked against a deck of rules is
+held to these and not to the ones its deck.json gives: they decide whether a number of a part,
+a bound of the card or a completion may be had, and no hash a reader checks covers deck.json
+(type rule 8). -/
+def CORE_FLOORS : Floors :=
+  [("current", (0 : Rat)), ("voltage", 0), ("length", 0), ("area", 0), ("mass", 0), ("energy", 0),
+   ("power", 0), ("time", 0), ("resistance", 0), ("dimensionless", 0), ("temperature", -5463 / 20)].foldl
+    (init := {}) fun table (name, min) => match dimNamed name with
+      | some dim => table.insert dim.key (name, { min, strict := false })
+      | none => table
+
+/-- The size floor of petra/decks/core.json, `domains.size`: a size is more than zero. A design
+checked against a deck of rules is held to it and not to the one its deck.json gives: it decides
+whether a quantity of role `size` may be had (type rule 3), and no hash a reader checks covers
+deck.json (type rule 8). -/
+def CORE_SIZE : Floor := { min := 0, strict := true }
+
 /-- Why the deck of rules is refused for a `least` under a floor of `floors`, if it is: the
 first field or load, by type and then fields before loads, whose `least` is under the floor of
 its dimension, where that floor holds for it as type rule 4 holds a load of the card. A floor
@@ -814,7 +832,8 @@ says, and so does a hint for a line whose `unless` reads an unstated key. Then e
 a part's type is looked at once more for what it reads of the part: its look, and a step for
 each field it reads.
 
-`floors` are those of deck.json, which hold a completion's loads as they hold the card's. -/
+`floors` are those of core.json (type rule 8), which hold a completion's loads as they hold
+the card's. -/
 def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hints : Array Hint) (budget : Nat := MAX_WORK)
     (floors : Floors := {}) : StateM Caches (Except String Made) := do
   let over := s!"the deck of rules asks more than {MAX_CELLS} cells of this design, and the kernel makes no more"
@@ -1094,7 +1113,7 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hi
       if out.size > MAX_CELLS then return .error over
       unless readLoads.contains (part.name, load) do
         out := out.push (cell part.name UNREAD s!"{load}/{under}" .undecided
-          s!"no rule of the deck reads the load {load} that case {under} puts on {part.name}, so nothing checks it")
+          s!"no rule of the deck reads the load {load} that {if under.isEmpty then "the card" else s!"case {under}"} puts on {part.name}, so nothing checks it")
   if out.size > MAX_CELLS then return .error over
   -- No two cells have one key: `readRules` and `readParts` refuse what could make two, and
   -- this holds the list to it whatever they let through.

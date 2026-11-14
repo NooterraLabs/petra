@@ -17,6 +17,15 @@
 // cells (Steps), cos and the completions of item 9 among them, are counted. The kernel does not
 // search: the climb of petra check, its budget of nodes and the work it charges its exponentials
 // are not here. See AMBIGUITIES.md, I, K, L and M.
+//
+// With --rules the floors of `domains.input` are the kernel's own copy of core.json's, and a
+// deck.json that gives others is a finding (format.md, type rule 8). A completion that a waived
+// cell rests on prints each load's value with the unit it is in. See AMBIGUITIES.md, N.
+//
+// With --rules the size floor of `domains.size` is the kernel's own too (type rule 8). A name is
+// counted, and the verdict printed, with an escape of six for each character a terminal acts on
+// and does not show. An equation is held to the 1,024 orders of a pick when its row is read,
+// whether or not a rule applies it. See AMBIGUITIES.md, O.
 
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
@@ -229,6 +238,23 @@ export function unitOf(s) {
   const k = Number(m[2]);
   return { f: qpow(UNITS[m[1]].f, k), dim: dpow(BASE_DIMS.length, R(BigInt(k))) };
 }
+// format.md, The verdict: the unit that a value in Petra's SI is in, printed after the value of
+// each load of a completion. "The first unit of factor 1 for the load's dimension, as `N`, `Pa` or
+// `m`, or the exponents of the dimension, as `kg^1 s^-2`, when there is none, and `1` for a plain
+// number." So a temperature is in `degC`. "First" is taken in the order of the units list
+// (pages/units.md), which UNITS keeps; `N m`, which only a deck reads, is not of that list. The
+// exponents are written as a `dim` of a file is (format.md, Numbers): the bases m, kg, s, A and
+// degC in that order, each that is not zero with `^` and its number, one space between two
+// (AMBIGUITIES.md, N4).
+export function siUnit(dim) {
+  if (deq(dim, DL)) return '1';
+  for (const name of Object.keys(UNITS)) {
+    if (name === 'N m') continue;
+    const u = UNITS[name];
+    if (u.f.n === 1n && u.f.d === 1n && deq(u.dim, dim)) return name;
+  }
+  return FILE_BASES.map((b, i) => (dim[i].n === 0n ? null : `${b}^${dim[i]}`)).filter((x) => x !== null).join(' ');
+}
 
 // A value of a deck (deck.md, "A value with its unit"): a number, one space and a unit, or a
 // number alone, which is a plain number of no dimension. The number is digits with an optional
@@ -416,21 +442,47 @@ const short = (x) => {
   return s.length > 80 ? s.slice(0, 77) + '...' : s;
 };
 
-// format.md, Limits: the bytes a name prints in. A character outside ASCII prints in up to four
-// (its UTF-8), a quote, a backslash and a line end in two, any other control character in six
-// (H3: a line end is LF or CR).
+// format.md, Limits: the bytes a name prints in. "A quote, a backslash and a line end print in
+// two, and a character that a terminal acts on and does not show prints as an escape of six, `\u`
+// and four digits of base 16. A line end is a line feed, U+000A, or a carriage return, U+000D. The
+// characters that print in six are the control characters, which are every other character below
+// U+0020 and U+007F to U+009F, the line and the paragraph separator, U+2028 and U+2029, and the
+// marks that turn the direction of text, U+061C, U+200E, U+200F, U+202A to U+202E and U+2066 to
+// U+2069. The tab is one of them. Any other character outside ASCII prints in the bytes of its
+// UTF-8, which are two, three or four." The list is taken as it stands (AMBIGUITIES.md, O4).
+// The characters from U+007F on that print in six, as ranges of code points. They are written as
+// numbers, so that this file holds none of them.
+const SIX_FROM_DEL = [[0x7f, 0x9f], [0x61c, 0x61c], [0x200e, 0x200f], [0x2028, 0x2029], [0x202a, 0x202e], [0x2066, 0x2069]];
+export function printsInSix(c) {
+  if (c === 0x0a || c === 0x0d) return false;
+  return c < 0x20 || SIX_FROM_DEL.some(([a, b]) => c >= a && c <= b);
+}
+const SIX_RE = new RegExp(`[${SIX_FROM_DEL.map(([a, b]) => `${String.fromCharCode(a)}-${String.fromCharCode(b)}`).join('')}]`, 'g');
+const sixEscape = (ch) => `${String.fromCharCode(0x5c)}u${ch.charCodeAt(0).toString(16).padStart(4, '0')}`;
 export function printedBytes(s) {
   let n = 0;
   for (const ch of s) {
     const c = ch.codePointAt(0);
     if (c === 0x22 || c === 0x5c || c === 0x0a || c === 0x0d) n += 2;
-    else if (c < 0x20) n += 6;
+    else if (printsInSix(c)) n += 6;
     else if (c < 0x80) n += 1;
     else if (c < 0x800) n += 2;
     else if (c < 0x10000) n += 3;
     else n += 4;
   }
   return n;
+}
+// What the kernel prints: its one JSON object, with every text written as the sentences above
+// count it. JSON.stringify writes a quote, a backslash and a line end in two, and the other
+// characters below U+0020 in six, but for the backspace, the form feed and the tab, which it
+// writes in two (`\b`, `\f`, `\t`): those are written as `\u0008`, `\u000c` and `\u0009` here. It
+// writes U+007F to U+009F, the two separators and the marks of direction as they are: here each is
+// the escape of six. "So nothing a card, a design or a deck holds can move the cursor of a terminal
+// that shows the verdict, or write over a line of it." The JSON reads back as the same object.
+export function printVerdict(out) {
+  return JSON.stringify(out, null, 1)
+    .replace(/\\[\s\S]/g, (m) => (m === '\\b' ? '\\u0008' : m === '\\f' ? '\\u000c' : m === '\\t' ? '\\u0009' : m))
+    .replace(SIX_RE, sixEscape);
 }
 const NAME_BYTES = 64;
 const LABEL_NAME_BYTES = 200;
@@ -809,11 +861,16 @@ function nodeEnc(tape, i, nd, box, get) {
     case 's': r = box[nd[1]]; break;
     case 'pi': r = piEnc(); break;
     case 'add': {
+      // format.md, Limits: a value with more than 65,536 bits in its numerator or its denominator
+      // has none, and "that holds for every node of a tape, and for each sum and each product so
+      // far of a node that adds or multiplies many, at a point as over a box". So each sum so far
+      // is held to the bits, as each product so far is below, and not the last alone.
       let lo = Q0, hi = Q0, ok = true;
       for (const j of nd[1]) {
         const v = get(j);
         if (!v) { ok = false; break; }
         lo = qadd(lo, v[0]); hi = qadd(hi, v[1]);
+        if (tooBig(lo) || tooBig(hi)) { ok = false; break; }
       }
       r = ok ? [lo, hi] : null;
       break;
@@ -1439,6 +1496,12 @@ function loadRow(r, rowsSoFar) {
   // The orders of the pick a row with cases is written as: every comparison of its conditions.
   row.orders = 0;
   if (row.kind === 'cases') for (const cs of row.cases) if (cs.when !== undefined) row.orders += condOrders(cs.when);
+  // format.md, How the kernel writes a table: "An equation is held to it whether or not a rule
+  // applies it: the kernel writes every equation once when it reads its row." So an equation whose
+  // conditions hold more than 1,024 orders refuses its row, and the deck with it, here and not
+  // where a rule applies it. One case that holds otherwise, standing first, is no pick and has no
+  // order. A table is still counted where a rule applies it (AMBIGUITIES.md, O3).
+  if (row.orders > MAX_ORDERS) throw DE(`the cases of the equation hold ${row.orders} orders, more than 1,024 for one pick, whether or not a rule applies it`);
   return row;
 }
 function condOrders(c) {
@@ -1840,11 +1903,11 @@ function loadRule(r, deck) {
       if (depth > MAX_EXPR_DEPTH) throw DE('an expression nests more than 1,024 deep');
       // format.md, How the kernel writes a table: the orders of every pick the rule could write
       // for any part, counted when the deck is read. An equation with cases is one pick (one case
-      // that holds otherwise, standing first, is none). A table is the pick over its places down
-      // and the pick of each line over its places across, every place counted, empty cells too: a
-      // place of a quantity side has the orders of its band or listed value, a place of a side
-      // whose key a row names those of that row's cell, and a side read by a key none.
-      if (row.kind === 'cases' && row.cases[0].when !== undefined) tooManyOrders(row.orders, `the cases of ${row.id}`);
+      // that holds otherwise, standing first, is none), and it is held to the orders when its row
+      // is read, whether or not a rule applies it (loadRow). A table is the pick over its places
+      // down and the pick of each line over its places across, every place counted, empty cells
+      // too: a place of a quantity side has the orders of its band or listed value, a place of a
+      // side whose key a row names those of that row's cell, and a side read by a key none.
       if (row.kind === 'table') {
         const sideOrders = (side) => {
           if (side.kind !== 'key') { let n = 0; for (let i = 0; i < side.count; i++) n += placeOrders(side, i); return n; }
@@ -2327,7 +2390,21 @@ export function loadDeck(D, find) {
 // ============================================================ the kernel
 
 const STATES = ['proved', 'refuted', 'not_applicable', 'waived', 'open'];
-const CASE_WHERE = 'a load case is not named where: an entry that ends in /where is the range of a rule';
+// format.md, type rule 8, and deck.json: "For a design checked against a deck of rules the kernel
+// holds its own copy of the size floor of `domains.size` and of the floors of `domains.input`, and
+// a deck.json that gives others is a finding". These are the floors of decks/core.json,
+// as type rule 8 lists them: "zero for a current, a voltage, a length, an area, a mass, an energy,
+// a power, a time, a resistance and a dimensionless number, and -5463/20, absolute zero in degC,
+// for a temperature, none strict". Eleven lines, kept by the exponents of the dimension.
+export const CORE_INPUT_FLOORS = [
+  ['current', '0'], ['voltage', '0'], ['length', '0'], ['area', '0'], ['mass', '0'], ['energy', '0'],
+  ['power', '0'], ['time', '0'], ['resistance', '0'], ['dimensionless', '0'], ['temperature', '-5463/20'],
+];
+const coreInputFloors = () => new Map(CORE_INPUT_FLOORS.map(([name, min]) => [dstr(FILE_DIMS[name]), { min: parseFileNumber(min), strict: false, name }]));
+// The twelfth line of that table (format.md, type rule 8): "`domains.size` of deck.json has the
+// `min` and the `strict` that core.json gives it too: zero, and strict."
+export const CORE_SIZE_FLOOR = { min: '0', strict: true };
+const CASE_WHERE ='a load case is not named where: an entry that ends in /where is the range of a rule';
 const nameCmp = (a, b) => {
   const x = [...a].map((c) => c.codePointAt(0)), y = [...b].map((c) => c.codePointAt(0));
   for (let i = 0; i < Math.min(x.length, y.length); i++) if (x[i] !== y[i]) return x[i] - y[i];
@@ -2458,13 +2535,19 @@ export function verifyTexts(texts, opts = {}) {
 
   // deck.json
   let sizeDomain = null;
-  const inputDomains = new Map();
-  if (!isObj(deckJ.domains) || !isObj(deckJ.domains.size) || !isObj(deckJ.domains.input)) find('deck', 'domains', 'the deck has no domains.size and domains.input');
-  else {
-    const s = deckJ.domains.size;
+  // The size floor as deck.json gives it, for type rule 8: null when it gives none that reads.
+  let sizeGiven = null;
+  let inputDomains = new Map();
+  const domainsJ = isObj(deckJ.domains) ? deckJ.domains : null;
+  if (!domainsJ || !isObj(domainsJ.size) || !isObj(domainsJ.input)) find('deck', 'domains', 'the deck has no domains.size and domains.input');
+  if (domainsJ && isObj(domainsJ.size)) {
+    const s = domainsJ.size;
     const m = num('deck', 'domains.size.min', s.min);
     if (typeof s.strict !== 'boolean') find('deck', 'domains.size.strict', 'strict is not true or false');
     sizeDomain = m ? { min: m, strict: s.strict === true } : null;
+    sizeGiven = m && typeof s.strict === 'boolean' ? { min: m, strict: s.strict } : null;
+  }
+  if (domainsJ && isObj(domainsJ.input)) {
     // format.md, deck.json: each key names a dimension, and a key that names none, or whose value
     // lacks `min`, a number, or `strict`, true or false, is a shape finding; `about` is prose. Two
     // keys of one dimension give it one floor: the higher, and the strict one when both are at one
@@ -2483,6 +2566,44 @@ export function verifyTexts(texts, opts = {}) {
       if (c > 0) inputDomains.set(key, { min: dm, strict: d.strict === true, name: k });
       else if (c === 0 && d.strict === true) was.strict = true;
     }
+  }
+  // format.md, type rule 8: "With `--rules`, `domains.input` of deck.json gives each dimension the
+  // floor that `petra/decks/core.json` gives it, and no other dimension a floor ... A floor is
+  // compared by the exponents of its dimension, its `min` and its `strict`, so `m^1` and `length`
+  // are one key. A deck.json that differs is a finding, and the kernel goes on with core.json's
+  // floors in its place." The floors that deck.json gives are compared as it gives them once two
+  // keys of one dimension are one floor (AMBIGUITIES.md, N2), and from here on `inputDomains` is
+  // the kernel's own copy: type rule 4, the deck of rules, Parts 3 and the completions are held to
+  // it. The finding is made with the type rules, below. Without `--rules` the floors are
+  // deck.json's, as before.
+  let floorsDiffer = null;
+  if (rulesJ) {
+    const core = coreInputFloors();
+    for (const [key, c] of core) {
+      const d = inputDomains.get(key);
+      if (!d) floorsDiffer = `it gives a ${c.name} no floor, and core.json gives it ${c.min}`;
+      else if (qcmp(d.min, c.min) !== 0) floorsDiffer = `it gives a ${c.name} the floor ${d.min}, and core.json gives it ${c.min}`;
+      else if (d.strict !== c.strict) floorsDiffer = `it gives a ${c.name} a strict floor, and no floor of core.json is strict`;
+      if (floorsDiffer) break;
+    }
+    if (!floorsDiffer) for (const [key, d] of inputDomains) if (!core.has(key)) { floorsDiffer = `it gives the floor ${d.min} to ${short(d.name)}, a dimension that core.json gives none`; break; }
+    inputDomains = core;
+  }
+  // format.md, type rule 8: "With `--rules`, `domains.size` of deck.json has the `min` and the
+  // `strict` that core.json gives it too: zero, and strict. A deck.json that gives another is a
+  // finding of its own, at `domains.size`, and the kernel goes on with core.json's size floor. So
+  // with `--rules` every floor this document names, in type rules 3 and 4, in the deck of rules, in
+  // Parts 3 and in a completion, is core.json's." The `min` and the `strict` alone are compared: an
+  // `about` beside them is prose. A `domains.size` that is a shape finding gives no size floor,
+  // which is another than core.json's (AMBIGUITIES.md, O1). From here on `sizeDomain` is the
+  // kernel's own with --rules, and type rule 3 is held to it. Without `--rules` it is deck.json's.
+  let sizeDiffers = null;
+  if (rulesJ) {
+    const core = { min: parseFileNumber(CORE_SIZE_FLOOR.min), strict: CORE_SIZE_FLOOR.strict };
+    if (!sizeGiven) sizeDiffers = `it gives no size floor that reads, and core.json gives ${core.min}, strict`;
+    else if (qcmp(sizeGiven.min, core.min) !== 0) sizeDiffers = `it gives a size the floor ${sizeGiven.min}, and core.json gives it ${core.min}`;
+    else if (sizeGiven.strict !== core.strict) sizeDiffers = 'it gives a size a floor that is not strict, and the size floor of core.json is strict';
+    sizeDomain = core;
   }
   list('deck', deckJ, 'constants', false).forEach((c, i) => { if (isObj(c)) range('deck', `constants[${i}]`, c); else find('deck', `constants[${i}]`, 'not an object'); });
 
@@ -2530,7 +2651,8 @@ export function verifyTexts(texts, opts = {}) {
     else deck = loadDeck(rulesJ, find);
   }
   // format.md, The deck of rules: once the deck has read, no `least` of a field or a load is under
-  // the floor its dimension has in `domains.input`, where that floor holds for it as type rule 4
+  // the floor its dimension has in `domains.input` of core.json (type rule 8: `inputDomains` is
+  // the kernel's own copy with --rules), where that floor holds for it as type rule 4
   // holds an input: a floor under zero always, and one at zero or above unless the field or load
   // says `may_be: negative`. A deck that breaks it is refused as one that does not read is. "Under"
   // is taken strictly, whether or not the floor is strict (AMBIGUITIES.md, M1).
@@ -2567,7 +2689,8 @@ export function verifyTexts(texts, opts = {}) {
   const allowedDesignKeys = ['format', 'name', 'card', 'quantities', 'params', 'parts'];
   for (const k of Object.keys(designJ)) if (!allowedDesignKeys.includes(k)) find('design', k, `the design has the key ${k}`, 'types.2');
   // Type rule 3, but for a quantity of a field that says `may_be`, which Parts 3 holds to the
-  // field's own floor.
+  // field's own floor. With --rules the size floor is core.json's (type rule 8), whatever
+  // deck.json gives.
   for (const q of quantities) {
     if (q.role === 'size' && q.lo && sizeDomain) {
       const T = isStr(q.entity) ? firstPartType(q.entity) : null;
@@ -2614,6 +2737,13 @@ export function verifyTexts(texts, opts = {}) {
     for (const k of ['tests', 'probability_claims', 'states']) if (Object.hasOwn(cardJ, k)) find('card', k, `the key ${k} ${why}`, 'types.7');
     if (Object.hasOwn(deckJ, 'rules')) find('deck', 'rules', `the key rules ${why}`, 'types.7');
   }
+  // Type rule 8: with --rules, a deck.json whose `domains.input` is not the floors of core.json is
+  // a finding. The kernel went on with core.json's floors in its place, above: type rule 4, the
+  // `least`s of the deck of rules, Parts 3 and the completions are all held to them.
+  if (rulesJ && floorsDiffer) find('deck', 'domains.input', `with --rules the floors are those of core.json, which the kernel holds itself, and deck.json gives others: ${floorsDiffer}`, 'types.8');
+  // And a deck.json whose `domains.size` is not core.json's size floor is "a finding of its own,
+  // at `domains.size`". Type rule 3, above, was held to core.json's size floor already.
+  if (rulesJ && sizeDiffers) find('deck', 'domains.size', `with --rules the size floor is that of core.json, which the kernel holds itself, and deck.json gives another: ${sizeDiffers}`, 'types.8');
   if (rulesJ && !deck) return ill();
   // Parts are read only with --rules and parts (a design with parts and no --rules breaks Types 6).
   if (!hasParts || !rulesJ) {
@@ -2708,7 +2838,8 @@ export function verifyTexts(texts, opts = {}) {
         } else { LF(`${f.name} takes one number or one given, not ${short(a)}`); return; }
         // Parts 3: more than zero, at least zero with may_be zero, no floor by its sign with
         // may_be negative; a number the design writes for such a field is held to the floor its
-        // dimension has in domains.input when that floor is under zero. And at least its least.
+        // dimension has in domains.input of core.json (type rule 8) when that floor is under
+        // zero. And at least its least.
         if (!f.mayBe && lo.n <= 0n) { LF(`${f.name} is ${lo}, not more than zero`); return; }
         if (f.mayBe === 'zero' && lo.n < 0n) { LF(`${f.name} is ${lo}, under zero`); return; }
         if (f.mayBe === 'negative' && written) {
@@ -3190,14 +3321,16 @@ export function verifyTexts(texts, opts = {}) {
   // and gives each load the case leaves out once, on the part and in the cell's case, with a value
   // at or above the load's least, or at or above zero for a load with no least that is not
   // "may_be": "negative", and that the floor of its dimension admits where the floor holds for
-  // the load, as type rule 4 holds a load of the card (AMBIGUITIES.md, L9). It names nothing
-  // else. Returns {keys, loads, loadKeys, src} or null; `src` is the hint's completion, which a
-  // waived cell resting on it prints.
+  // the load, as type rule 4 holds a load of the card (AMBIGUITIES.md, L9): that floor is
+  // core.json's (type rule 8). It names nothing else. Returns {keys, loads, loadKeys, src} or
+  // null; `src` is what a waived cell resting on it prints (format.md, The verdict): the hint's
+  // completion "with one item more for each load", `[PART, LOAD, CASE, VALUE, UNIT]`, where UNIT
+  // is the unit of Petra's SI for the dimension the deck gives the load (siUnit).
   const fitComp = (c, part, cs, ukeys, missing) => {
     if (!isObj(c) || Object.keys(c).some((k) => k !== 'keys' && k !== 'loads')) return null;
     const kl = Object.hasOwn(c, 'keys') ? c.keys : [], ll = Object.hasOwn(c, 'loads') ? c.loads : [];
     if (!Array.isArray(kl) || !Array.isArray(ll) || kl.length !== ukeys.length || ll.length !== missing.length) return null;
-    const comp = { keys: new Map(), loads: new Map(), loadKeys: new Map(), loadList: [], src: { keys: kl, loads: ll } };
+    const comp = { keys: new Map(), loads: new Map(), loadKeys: new Map(), loadList: [], src: { keys: kl, loads: [] } };
     for (const k of kl) {
       if (!Array.isArray(k) || k.length !== 3 || !k.every(isStr)) return null;
       const key = `${k[0]}\u0000${k[1]}`;
@@ -3219,6 +3352,7 @@ export function verifyTexts(texts, opts = {}) {
       comp.loads.set(l[1], v);
       comp.loadKeys.set(`${l[0]}\u0000${l[1]}\u0000${l[2]}`, v);
       comp.loadList.push({ part: l[0], load: l[1], cs: l[2] });
+      comp.src.loads.push([l[0], l[1], l[2], l[3], siUnit(L.dim)]);
     }
     return comp;
   };
@@ -3585,7 +3719,8 @@ export function verifyTexts(texts, opts = {}) {
       const o = { subject: c.subject, mechanism: c.mechanism, entry: c.entry, claimed: c.claimed, state: c.state };
       if (c.state === 'open' || c.state === 'waived' || (c.state === 'refuted' && c.reason)) o.reason = c.reason ?? '';
       // format.md, The verdict: a waived cell that rests on a completion has it, as its hint in
-      // proofs.json writes it, with both lists (AMBIGUITIES.md, M4).
+      // proofs.json writes it, with both lists (AMBIGUITIES.md, M4) and with the unit of each
+      // load's value after the value.
       if (c.state === 'waived' && c.completion) o.completion = JSON.parse(JSON.stringify(c.completion));
       return o;
     }),
@@ -3635,7 +3770,7 @@ function main() {
   const res = run(process.argv.slice(2));
   if (res.usage) { process.stderr.write(USAGE + '\n'); process.exit(64); }
   if (res.code === 64) { process.stderr.write((res.message || USAGE) + '\n'); process.exit(64); }
-  process.stdout.write(JSON.stringify(res.out, null, 1) + '\n');
+  process.stdout.write(printVerdict(res.out) + '\n');
   process.exitCode = res.code;
 }
 

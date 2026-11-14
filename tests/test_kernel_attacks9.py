@@ -216,14 +216,16 @@ class CompletionsAboveTheFloor(unittest.TestCase):
 # --- C1. a ratio past the largest float ------------------------------------------------------------------
 
 EXAMPLES = Path(__file__).resolve().parent.parent / "examples" / "deck"
-TINY, HUGE = "0." + "0" * 97 + "1", "1" + "0" * 99
+TINY, TWICE, HUGE = "0." + "0" * 97 + "1", "0." + "0" * 97 + "2", "1" + "0" * 99
 
 
 class ARatioPastTheLargestFloat(unittest.TestCase):
     def test_the_shipped_lap_under_a_pull_of_ten_to_the_99_kip_fails(self):
-        """Plates 10^-98 inch thick and wide, of 10^-98 ksi, carry about 10^-196 kip, and the pull reaches 10^99: the demand over the
-        capacity is past the largest float, and float() of it raised OverflowError, which stopped petra check with exit code 4."""
-        text = (EXAMPLES / "lap_pass.petra").read_text(encoding="utf-8").replace("0.375 inch", f"{TINY} inch").replace("6 inch", f"{TINY} inch")
+        """Plates 10^-98 inch thick and twice that wide, of 10^-98 ksi, carry about 10^-196 kip, and the pull reaches 10^99: the demand
+        over the capacity is past the largest float, and float() of it raised OverflowError, which stopped petra check with exit code 4.
+        The side distance is half the width, as the lap needs of its plates (tests/test_kernel_attacks10.py)."""
+        text = (EXAMPLES / "lap_pass.petra").read_text(encoding="utf-8").replace("0.375 inch", f"{TINY} inch").replace("6 inch", f"{TWICE} inch")
+        text = text.replace("side 3 inch", f"side {TINY} inch")
         card = (EXAMPLES / "lap_pass.card").read_text(encoding="utf-8").replace("36 ksi", f"{TINY} ksi").replace("45 kip", f"{HUGE} kip")
         found = petra.check(card, text, path="lap.petra", repair=False)
         self.assertEqual(found["status"], "FAIL")
@@ -381,14 +383,14 @@ class TheCompletionOnTheWaivedLine(unittest.TestCase):
         card = pin_card(("10 mm", "20 mm"))
         found, status, said = cells(self, UP_TO_30, TWO_PINS, card)
         self.assertEqual((found[("p", "pin.shear", "shear/service")], status), ("waived", grid.PASS_WAIVED))
-        completion = {"keys": [], "loads": [["p", "shear", "service", "0"]]}
+        completion = {"keys": [], "loads": [["p", "shear", "service", "0", "N"]]}
         if "verdict" in said:
             (cell,) = [c for c in said["cells"] if c["subject"] == "p" and c["mechanism"] == "pin.shear" and c["state"] == "waived"]
             self.assertEqual(cell["completion"], completion)
             self.assertEqual([c for c in said["cells"] if "completion" in c and c["state"] != "waived"], [])
         mine, line = self.printed(UP_TO_30, TWO_PINS, card, "p", "pin.shear", "shear/service")
         self.assertEqual(mine, completion)
-        self.assertIn("; rested where p.shear is 0 in SI units in case service", line)
+        self.assertIn("; rested where p.shear is 0 N in case service", line)
 
     def test_a_key_left_unstated_prints_the_name_it_was_completed_with(self):
         entry = "pullout-bonded/service"
@@ -409,8 +411,8 @@ class TheCompletionOnTheWaivedLine(unittest.TestCase):
         for c in said["cells"]:
             if "completion" in c:
                 c["completion"]["loads"][0][3] = "-1"
-        self.assertIn('the grid rests it on {"keys": [], "loads": [["p", "shear", "service", "0"]]} and petra-verify on '
-                      '{"keys": [], "loads": [["p", "shear", "service", "-1"]]}',
+        self.assertIn('the grid rests it on {"keys": [], "loads": [["p", "shear", "service", "0", "N"]]} and petra-verify on '
+                      '{"keys": [], "loads": [["p", "shear", "service", "-1", "N"]]}',
                       verify.differs(mine, report.verdict, rules.hash, said, report.waived(), report.completions()))
 
 

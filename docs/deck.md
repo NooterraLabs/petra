@@ -274,7 +274,7 @@ Each object of a deck has the keys this page gives it, and no other. A key the p
 
 A design names a type as the kind of a component block: `lap splice { ... }` is a part named `splice` of type `lap`. The parts of one design are all of one deck's types, or all of the built-in models' kinds.
 
-`petra/decks/aisc360.json` is the first deck. It holds 32 rows of AISC 360-22, the types `plate` and `lap`, a grid of 16 lines for a lap, and 15 rules. The rules answer 8 of the lines. [What the first deck covers](#what-the-first-deck-covers) lists every line, what answers it, and what the deck leaves open.
+`petra/decks/aisc360.json` is the first deck. It holds 32 rows of AISC 360-22, the types `plate` and `lap` with two needs of a lap, a grid of 17 lines for a lap, and 15 rules. The rules answer 8 of the lines. [What the first deck covers](#what-the-first-deck-covers) lists every line, what answers it, and what the deck leaves open.
 
 ### The size of a deck
 
@@ -286,9 +286,9 @@ Reading a deck takes steps, and a deck that takes more than 1,000,000 is refused
 
 The count follows the work. A rule reads a row again each time it applies it, with the row's inputs bound to the rule's expressions, and it reads everything else in the file once. A text of an expression is a name or a number. The kernel goes through it character by character each time it reads it, and a number becomes a step of the rule that the kernel keeps: so a text counts for its length, and for two where a list counts for one. A name is found through a table whatever the deck holds, and a type that joins many parts costs a rule only the names the rule writes.
 
-The first deck, 58 KB, takes 10,448 steps: 6,305 for its file and 4,143 for the 37 times its rules apply a row. That is about a hundredth of the limit, so ten decks of that size are a tenth of it. With the 18 rows and 4 rules it shipped until 2026-11-11 it took 5,500. A file under 1 MB whose rules apply no row is always within it: a text of `n` characters takes `n` and three bytes with its quotes and its comma, and any other value two or more, so a megabyte holds under 700,000 steps. So the limit refuses one kind of deck: a long row applied many times. `petra/grid.py` makes the same count and refuses the same decks.
+The first deck, 58 KB, takes 10,530 steps: 6,387 for its file and 4,143 for the 37 times its rules apply a row. That is about a hundredth of the limit, so ten decks of that size are a tenth of it. With the 18 rows and 4 rules it shipped until 2026-11-11 it took 5,500. A file under 1 MB whose rules apply no row is always within it: a text of `n` characters takes `n` and three bytes with its quotes and its comma, and any other value two or more, so a megabyte holds under 700,000 steps. So the limit refuses one kind of deck: a long row applied many times. `petra/grid.py` makes the same count and refuses the same decks.
 
-A pick of a tape compares at most 1,024 orders ([format.md](format.md), "Tapes"). A rule that could write a larger one for some part is refused when the deck is read: an equation whose conditions hold more, a `case` or a table read by a quantity with more places than that holds, counting two for a listed value, one or two for a band and empty cells too, or a `where` of more than 1,024 items. So a table read at more than 512 listed values does not load.
+A pick of a tape compares at most 1,024 orders ([format.md](format.md), "Tapes"). A rule that could write a larger one for some part is refused when the deck is read: an equation whose conditions hold more, a `case` or a table read by a quantity with more places than that holds, counting two for a listed value, one or two for a band and empty cells too, or a `where` of more than 1,024 items. So a table read at more than 512 listed values does not load. An equation whose conditions hold more is refused whether or not a rule applies it, since the kernel writes every equation when it reads its row; a table that no rule reads is held to no such limit.
 
 ### A type
 
@@ -424,9 +424,9 @@ A design then writes `low -10 degC` and `offset 0 mm`, and a card may give eithe
 
 `may_be` is one of those two texts. Anything else is refused: `true`, `"positive"`, `"Zero"`. It stands on a quantity, a count among them, and on no key and no field that joins parts.
 
-A load has no floor by its sign: it may be zero or negative as it is, unless its `least` says otherwise. But the kernel holds every bound of a card to the floor that its dimension has in deck.json ([format.md](format.md), type rule 4), and there a length, a mass, a time and seven more are at least zero. So a load that is a position needs `"may_be": "negative"` to go under zero. On a load, `may_be` is `"negative"` or left out: `"zero"` says nothing a load does not say already, and is refused.
+A load has no floor by its sign: it may be zero or negative as it is, unless its `least` says otherwise. But the kernel holds every bound of a card to the floor that its dimension has in `petra/decks/core.json` ([format.md](format.md), type rules 4 and 8), and there a length, a mass, a time and seven more are at least zero. So a load that is a position needs `"may_be": "negative"` to go under zero. On a load, `may_be` is `"negative"` or left out: `"zero"` says nothing a load does not say already, and is refused.
 
-`may_be: negative` lifts a floor at zero and no other. The floor of a temperature in deck.json is absolute zero, -273.15 degC. It holds for every temperature of a part and of a card, whatever `may_be` says: a number the design writes under it, and a bound of the card that reaches under it, are refused.
+`may_be: negative` lifts a floor at zero and no other. The floor of a temperature in core.json is absolute zero, -273.15 degC. It holds for every temperature of a part and of a card, whatever `may_be` says: a number the design writes under it, and a bound of the card that reaches under it, are refused. The kernel holds these floors itself, and a deck.json that gives others is a finding: before 2026-11-12 it took them from deck.json, which the designer writes, so a deck.json with the floor of a temperature left out turned a part fitted at -300 degC to PASS (`tests/test_kernel_attacks10.py`).
 
 A `least` is not under the floor that holds for its field or load: a deck whose temperature has a `least` of -300 degC, or whose length load with no `may_be` has a `least` of -5 mm, is refused. And a completion of a load left out ([What a waiver rests](#what-a-waiver-rests)) is held to that floor as a load of the card is. Until 2026-11-12 neither was: a completion took a load's `least` alone, or zero, or for a load that may be negative no floor at all, so a strut that fails at every temperature a card may state rested its cell on a temperature of -300 degC, and a spring whose rule asks a play no card may state rested its cell on a play of -5 mm (`tests/test_kernel_attacks9.py`).
 
@@ -668,7 +668,7 @@ Every other open cell stays open under a waiver, and its reason starts `the waiv
 
 A waived cell keeps the entry it had. So a line with three rules of which two prove and one reads an unstated key that a completion settles is two `proved` cells and one `waived` cell, and a line with no rule is one `waived` cell with an empty entry. The reason of a waived cell says what was open: it is `open but for the waiver: ` and then the reason the open cell had, as in `open but for the waiver: the deck has no rule for it`.
 
-A waived cell that rests on a completion prints it, since the signer answers for it and a reader checks it against the part. The kernel's verdict gives the cell a `completion` with its `keys` and its `loads`, as proofs.json writes it ([format.md](format.md), "The verdict"). The JSON of `petra check` gives the cell the same `completion`, and its text ends the cell's line with what the completion names, each load's value in SI units, as in `rested where a.kind is mechanical` or `rested where p.shear is 0 in SI units in case service`. `petra check` holds the two readers to the same completion of each cell, as to the same state. Each wrong PASS of the ninth review rested a cell on a completion that only proofs.json held: an anchor completed as mechanical where only a bonded anchor had a rule, a pin's shear completed at zero, and a strut's temperature completed under absolute zero (`tests/test_kernel_attacks9.py`). Printed, each shows on the waived line.
+A waived cell that rests on a completion prints it, since the signer answers for it and a reader checks it against the part. The kernel's verdict gives the cell a `completion` with its `keys` and its `loads`, as proofs.json writes it with the unit of each load's value after the value ([format.md](format.md), "The verdict"). The JSON of `petra check` gives the cell the same `completion`, and its text ends the cell's line with what the completion names, each load's value in SI with its unit, as in `rested where a.kind is mechanical`, `rested where p.shear is 0 N in case service` or `rested where s.t is 295 degC in case service`. Petra's SI takes a temperature in degC, so the unit of a temperature is degC and never K. `petra check` holds the two readers to the same completion of each cell, as to the same state. Each wrong PASS of the ninth review rested a cell on a completion that only proofs.json held: an anchor completed as mechanical where only a bonded anchor had a rule, a pin's shear completed at zero, and a strut's temperature completed under absolute zero (`tests/test_kernel_attacks9.py`). Printed, each shows on the waived line.
 
 Until 2026-11-12 a waiver also rested a cell whose rule had no value at any point of the ranges, as when a table had no line for the part, and a cell that read an unstated key or a load a case left out, whatever the rule would have said with them. A lap of a bolt larger than the deck's table of holes listed then passed under a waiver though its bolts failed in shear by 2.5 times, and so did five designs like it (`tests/test_kernel_attacks8.py`). Now a missing piece rests a cell only where a completion of it makes the rule hold, and the deck must cover the part.
 
@@ -716,22 +716,22 @@ petra check examples/deck/lap_unknown.petra
 
 ```
 lap-splice: UNKNOWN
-rules      sha256:33e1bd2c...  aisc360-22
+rules      sha256:e090aab7...  aisc360-22
 card       sha256:b0372d69...  examples/deck/lap_unknown.card
-design     sha256:3fd22401...  examples/deck/lap_unknown.petra
+design     sha256:bc3449af...  examples/deck/lap_unknown.petra
 kernel     petra-verify checked 12 of 12 proofs and gives the same verdict
 path       rules: the kernel worked out every cell from the rules deck
-cells      12 proved, 0 refuted, 4 not applicable, 0 waived, 4 open
-  splice/lap.tightening          open                    the deck has no rule for it (AISC 360-22 J3.2)
-  splice/lap.spacing             proved           0.667  lap-spacing-centres (AISC 360-22 J3.4)
-  splice/lap.spacing             proved           0.343  lap-spacing-clear (AISC 360-22 J3.4, Table J3.3)
-  splice/lap.end_distance        proved           0.667  lap-end-distance-standard (AISC 360-22 J3.5, Table J3.4)
-  splice/lap.slip                not applicable          a lap is a bearing-type joint, which claims no slip resistance (AISC 360-22 J3.9)
-  splice/lap.ply_yield           proved           0.617  lap-ply-yield-a/gravity (AISC 360-22 J4.1(a), equation J4-1)
+cells      12 proved, 0 refuted, 4 not applicable, 0 waived, 5 open
+  splice/lap.tightening           open                    the deck has no rule for it (AISC 360-22 J3.2)
+  splice/lap.spacing              proved           0.667  lap-spacing-centres (AISC 360-22 J3.4)
+  splice/lap.spacing              proved           0.343  lap-spacing-clear (AISC 360-22 J3.4, Table J3.3)
+  splice/lap.end_distance         proved           0.667  lap-end-distance-standard (AISC 360-22 J3.5, Table J3.4)
+  splice/lap.slip                 not applicable          a lap is a bearing-type joint, which claims no slip resistance (AISC 360-22 J3.9)
+  splice/lap.ply_yield            proved           0.617  lap-ply-yield-a/gravity (AISC 360-22 J4.1(a), equation J4-1)
   ...
 ```
 
-The `rules` line is the hash of the deck's file, which the kernel prints as `hashes.rules`. A verdict is "checked against this deck" only when that hash is the one the reader trusts ([format.md](format.md), "Reading a verdict"). The number on a proved or refuted line is the most the left side of the rule reaches over the least the right side does. `examples/deck` has the same lap passing, with a card that waives the four open mechanisms, and failing under a larger pull.
+The `rules` line is the hash of the deck's file, which the kernel prints as `hashes.rules`. A verdict is "checked against this deck" only when that hash is the one the reader trusts ([format.md](format.md), "Reading a verdict"). The number on a proved or refuted line is the most the left side of the rule reaches over the least the right side does. `examples/deck` has the same lap passing, with a card that waives the five open mechanisms, and failing under a larger pull.
 
 ## The acceptance check for a rule
 
@@ -948,7 +948,7 @@ The run says less than that table may seem to.
 
 ## What the first deck covers
 
-`petra/decks/aisc360.json` checks one kind of joint: a `lap`, which is one line of two or more bolts in single shear through two plates, in a bearing-type joint that is pulled along the line. The holes are standard or oversize. The rules use LRFD. The grid has 16 lines for a lap.
+`petra/decks/aisc360.json` checks one kind of joint: a `lap`, which is one line of two or more bolts in single shear through two plates, in a bearing-type joint that is pulled along the line. The holes are standard or oversize. The rules use LRFD. The grid has 17 lines for a lap.
 
 | Line | Section | What answers it |
 |---|---|---|
@@ -965,17 +965,19 @@ The run says less than that table may seem to.
 | `lap.ply_yield` | J4.1 | 2 rules, one for each plate |
 | `lap.ply_rupture` | J4.1 | 2 rules, one for each plate: the net section less one hole, taken 1/16 inch wider (B4.3b), with a shear lag factor of 1 |
 | `lap.ply_shear` | J4.2 | Cannot arise: the plates are pulled |
-| `lap.block_shear` | J4.3 | 2 rules, one for each plate: shear along the line of holes from the end of the plate, and tension across to the side edge |
+| `lap.block_shear` | J4.3 | 2 rules, one for each plate: shear along the line of holes from the end of the plate to the farthest hole, and tension across to the side edge. It is the block of all the bolts. |
+| `lap.partial_block_shear` | J4.3 | No rule |
 | `lap.ply_compression` | J4.4 | Cannot arise: the load is a pull |
 | `lap.ply_flexure` | J4.5 | No rule |
 
-So 8 lines have rules, 4 cannot arise, and 4 have no rule. A line with no rule is open on every lap, and a lap passes only when its card waives each of the four.
+So 8 lines have rules, 4 cannot arise, and 5 have no rule. A line with no rule is open on every lap, and a lap passes only when its card waives each of the five.
 
 | Line with no rule | Why |
 |---|---|
 | `lap.tightening` | Section J3.2 asks for pretensioned bolts by what the joint is for, which is no comparison of quantities |
 | `lap.hole_use` | Section J3.3 bars oversize holes from a bearing-type joint, which a lap is. That is a ban on a kind of hole and no inequality, and no transcriber wrote it. So the deck does not refuse a lap with oversize holes. It leaves the line open. |
 | `lap.max_edge_distance` | Section J3.6 limits the distance from each hole to the nearest edge of each plate by that plate's thickness. A lap states `side`, the least distance over both plates, and has no field for each plate's own. |
+| `lap.partial_block_shear` | Section J4.3 asks every block that a shear path and a tension path across it cut out of a plate. The two rules of `lap.block_shear` ask the block of all the bolts. A block of fewer bolts carries those bolts' share of the pull, and the corner of a plate at its end bolt can hold less than that share where the line of holes is near a side edge and the bolts are strong and far apart. Both transcribers and the worked example took the block of all the bolts alone. Nobody writes a rule of a deck by hand, so the line has no rule until one is transcribed for it from the page. Until 2026-11-13 the grid did not ask it: a lap of two 3/4 inch Group 150 bolts 6 inch apart, on a line 1 inch from a side edge of 3/8 inch A36 plates, passed under its waivers at 55 kip, where the corner at each end bolt holds 21.3 kip by Equation J4-5 and the bolt carries 27.5 (`tests/test_kernel_attacks11.py`, `corpus/cases/deck/d41_corner_tears_out.petra`). |
 | `lap.ply_flexure` | Section J4.5 gives no equation, and a lap takes no load that is a moment |
 
 On the lines that have rules, the deck leaves three things out on purpose. Both transcribers left out the same three.
@@ -988,7 +990,7 @@ A bolt of a size the tables do not list, such as 0.7 inch, has no value in them.
 
 The deck has no rule by ASD, none for slotted holes, and none for more than one line of bolts or more than two plates. Fifteen of its 32 rows are read by no rule.
 
-The first deck states no `needs` ([What a type needs](#what-a-type-needs)), so nothing compares the fields of a lap with one another. A lap may state a `side` of more than half the width of a plate, which no plate can have. It is not refused, and the block shear of each plate is then worked out from that `side`.
+A lap needs two things of its plates ([What a type needs](#what-a-type-needs)): twice its `side` is at most the width of plate `a`, and at most the width of plate `b`. The one line of holes lies within each plate, and each of the plate's two side edges is at least `side` from it. These are geometry and no clause, and no transcriber wrote them. Until 2026-11-12 the deck had no `needs`, and a lap could state a `side` that no plate of its width allows: a lap of 1 3/4 inch plates with `side` at 1 inch, the least that Table J3.4 allows for a 3/4 inch bolt, passed under a waiver, where every side such a plate can have, 7/8 inch at most, fails J3.4. Block shear worked its tension area out from such a `side` too (`tests/test_kernel_attacks10.py`). A lap that breaks a need is ILL-FORMED. No other need compares the fields of a lap or of its plates.
 
 ## What a deck does not check yet
 
@@ -999,5 +1001,5 @@ The first deck states no `needs` ([What a type needs](#what-a-type-needs)), so n
 - The `range` of a row's input is where the acceptance check samples the row. It is not enforced as the range the row holds in. A rule's `where` is.
 - A type with no line in the grid gets no cell of its own. A `plate` has none: the lap that joins it asks about it, and a plate that nothing joins has only its `unread` cells.
 - A card's claims, tests, ambient and environment, a family's params, and the repair that `petra check` suggests on a FAIL are not read for a design of a deck's types. A card or a design that states one is refused: `environment marine_c5` in the card of a lap is an input error, `the card or the design states an environment, which a deck does not read yet`, and the kernel finds the pair ill formed.
-- The first deck has rules for 8 of the 16 lines of a lap's grid, all by LRFD. Four lines cannot arise for a lap, and four are open: tightening, hole use, the greatest edge distance and flexure of the plates. [What the first deck covers](#what-the-first-deck-covers) says what else it leaves open.
+- The first deck has rules for 8 of the 17 lines of a lap's grid, all by LRFD. Four lines cannot arise for a lap, and five are open: tightening, hole use, the greatest edge distance, block shear of a block of fewer bolts than all, and flexure of the plates. [What the first deck covers](#what-the-first-deck-covers) says what else it leaves open.
 - A cell whose rule could be answered and that nothing settles is open, and the design is UNKNOWN where it would be FAIL. A rule that fails for every value an unstated quantity may take is one: `current ≤ min(limit, rating)` with the rating under the current and the limit unstated. No point is tried for a quantity that has none, and a waiver does not rest the cell ([What a waiver rests](#what-a-waiver-rests)).

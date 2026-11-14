@@ -328,7 +328,7 @@ def lap(rng: random.Random, n: int) -> Draft:
         if rng.random() < 0.08:      # a case of the card that puts no pull on this lap, or on any
             d.loads.setdefault("storm", [])
         # The lines the deck has no rule for, which a card waives to pass, and some lines that have rules, which a waiver hides.
-        open_lines = ["lap.tightening", "lap.hole_use", "lap.max_edge_distance", "lap.ply_flexure"]
+        open_lines = ["lap.tightening", "lap.hole_use", "lap.max_edge_distance", "lap.partial_block_shear", "lap.ply_flexure"]
         waived = rng.choice([[], open_lines, open_lines, open_lines, rng.sample(open_lines, 2), ["lap.strength", "lap.slip"], open_lines + ["lap.end_distance"],
                              open_lines + ["lap.spread", "lap.block_shear"]])
         d.waivers += [(m, splice) for m in waived]

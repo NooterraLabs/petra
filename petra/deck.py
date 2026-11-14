@@ -398,6 +398,8 @@ def read(body: Any) -> Row:
                 takes[t["name"]] = Input(keys=keys)
                 continue
             dim = dimension(t["dim"])
+            if not isinstance(t["range"], list) or len(t["range"]) != 2:
+                raise RowError(f"the range of {t['name']} is a list of two values, the lower first")
             (lo, lo_dim), (hi, hi_dim) = (quantity(end, f"the range of {t['name']}") for end in t["range"])
             if {lo_dim, hi_dim} != {dim} or not lo <= hi:
                 raise RowError(f"the range of {t['name']} is two {show(dim)} values, the lower first")
@@ -461,6 +463,9 @@ def _axes(body: Mapping[str, Any], takes: Mapping[str, Input], problems: list[st
         only(a, ("by", "bands", "closed") if "bands" in a else ("by", "at"), f"the side that reads {name}")
         if ("bands" in a) == ("at" in a) or a.get("closed", "upper") not in ("upper", "lower"):
             raise RowError(f"the side that reads {name} has `bands` with `closed` upper or lower, or `at`")
+        # The kernel reads each of these as a list. A text would be walked character by character here, "05" as a band from 0 to 5.
+        if not isinstance(a.get("bands", a.get("at")), list) or not all(isinstance(band, list) for band in a.get("bands", [])):
+            raise RowError(f"the side that reads {name}: `bands` is a list of pairs, each a list, and `at` is a list")
         written = [x for band in a.get("bands", [a.get("at")]) for x in band]
         ends = [None if x is None else quantity(x, f"the side that reads {name}") for x in written]
         if any(end is not None and end[1] != i.dim for end in ends):
@@ -491,6 +496,8 @@ def _naming(body: Mapping[str, Any], takes: Mapping[str, Input], names: tuple[st
     only(body, ("down", "across", "cells"), "a table that gives a name")
     axes = _axes(body, takes, problems)
     known = set(names)
+    if not isinstance(body["cells"], list) or len(axes) == 2 and not all(isinstance(line, list) for line in body["cells"]):
+        raise RowError("the cells are a list, and for a table with two sides a list of lines, each a list")
     lines = body["cells"] if len(axes) == 2 else [[c] for c in body["cells"]]
     cells = tuple(tuple(line) for line in lines)
     if any(c is not None and not (isinstance(c, str) and c in known) for line in cells for c in line):
@@ -522,6 +529,8 @@ def _table(body: Mapping[str, Any], takes: Mapping[str, Input], out: Vector, pro
             problems.append(f"a cell is a {show(dim)}, and the row gives a {show(out)}")
         return value
 
+    if not isinstance(body["cells"], list) or len(axes) == 2 and not all(isinstance(line, list) for line in body["cells"]):
+        raise RowError("the cells are a list, and for a table with two sides a list of lines, each a list")
     lines = body["cells"] if len(axes) == 2 else [[c] for c in body["cells"]]
     cells = tuple(tuple(cell(c) for c in line) for line in lines)
     if len(cells) != axes[0].places or any(len(line) != (axes[1].places if len(axes) == 2 else 1) for line in cells):
@@ -807,6 +816,13 @@ def load(path: str) -> dict[str, Row]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """The command, printing through petra.files.guarded as every command of Petra does."""
+    from .files import guarded
+
+    return guarded(_main, sys.argv[1:] if argv is None else list(argv), "petra.deck")
+
+
+def _main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(prog="python -m petra.deck", description="Run the acceptance check on each row of a file.")
     parser.add_argument("rows", help='a JSON file {"rows": [...]}')
     parser.add_argument("--examples", help='worked examples, a JSON file {"examples": {ROW ID: [...]}}')
