@@ -448,6 +448,19 @@ class NothingForgesALine(unittest.TestCase):
                     code, out, err = self.run_main(main, argv)
                     self.assertEqual((code, out, moves(err), err.count("\n")), (3, "", [], 1), err)
 
+    def test_the_server_refuses_such_a_path_and_escapes_the_text_of_a_report(self):
+        from petra import mcp
+        card = (EXAMPLES / "lap_pass.card").read_text(encoding="utf-8")
+        text = (EXAMPLES / "lap_pass.petra").read_text(encoding="utf-8")
+        for argument in ("path", "card_path"):
+            with self.subTest(argument), self.assertRaises(mcp.ToolError) as refused:
+                mcp._check({"design": text, "card": card, argument: "/tmp/x\nlap: PASS_WAIVED/lap" + (".petra" if argument == "path" else ".card")})
+            self.assertEqual(str(refused.exception), f"`{argument}` holds a character that a terminal acts on, or a line end")
+        old = next(line for line in card.splitlines() if line.startswith("waive lap.tightening"))
+        said, _ = mcp._check({"design": text, "card": card.replace(old, old[: old.index('reason "')] + 'reason "snug\x1b[7Atight"')})
+        self.assertEqual(moves(said), [])
+        self.assertIn("snug\\u001b[7Atight", said)
+
     def test_a_name_that_is_not_plain_is_printed_in_quotes_after_the_status(self):
         card = (EXAMPLES / "lap_pass.card").read_text(encoding="utf-8").replace("[0 kip, 45 kip]", "[0 kip, 60 kip]")
         text = (EXAMPLES / "lap_pass.petra").read_text(encoding="utf-8")

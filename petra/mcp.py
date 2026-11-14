@@ -104,10 +104,13 @@ def _check(args: Mapping[str, Any]) -> Result:
     from .repair import check_text
     from .solvers import SolverSource
 
-    from .files import card_of, shown
+    from .files import acts, card_of, shown
 
     text, path = _string(args, "design"), _string(args, "path")
     card, card_path = _string(args, "card"), _string(args, "card_path")
+    for name, value in (("path", path), ("card_path", card_path)):
+        if value is not None and acts(value):      # the report prints the paths, and keeps its own line feeds
+            raise ToolError(f"`{name}` holds a character that a terminal acts on, or a line end")
     if text is None and path is None:
         raise ToolError("give the design as `design`, its text, or as the absolute `path` of a .petra file")
     if text is not None and path is not None:

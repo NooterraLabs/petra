@@ -46,6 +46,12 @@ def shown(text: str) -> str:
     return _ACTED_ON.sub(lambda found: f"\\u{ord(found[0]):04x}", text)
 
 
+def acts(text: str) -> bool:
+    """Whether a text holds a character that a terminal acts on, or a line end. A name of a
+    file that does is refused by every command and by the server: a report prints it."""
+    return bool(_ACTED_ON.search(text)) or "\n" in text
+
+
 class Shown:
     """A stream that writes every text as `shown` gives it, so that nothing a card, a design
     or a deck holds reaches a terminal as a character it acts on: the lines of a report are
@@ -72,7 +78,7 @@ def guarded(run: Callable[[list[str]], int], argv: list[str], who: str = "petra"
     sys.stdout, sys.stderr = Shown(out), Shown(err)
     try:
         for arg in argv:
-            if _ACTED_ON.search(arg) or "\n" in arg:
+            if acts(arg):
                 print(f"{who}: an argument holds a character that a terminal acts on, or a line end: {shown(arg).replace(chr(10), chr(92) + 'u000a')}", file=sys.stderr)
                 return 3
         return run(argv)
