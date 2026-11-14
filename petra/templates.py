@@ -730,6 +730,7 @@ TEMPLATES: dict[str, tuple[str, str, str, str]] = {
             'waive lap.hole_use on splice by "s.engineer@example.org" reason "standard holes, which J3.3 allows in every joint"\n'
             'waive lap.max_edge_distance on splice by "s.engineer@example.org" reason "no hole is over 3 inch from the nearest edge of either plate, and J3.6 allows 12 thicknesses, 4.5 inch"\n'
             'waive lap.ply_flexure on splice by "s.engineer@example.org" reason "the members the plates belong to hold them against rotation"\n'
+            'waive lap.partial_block_shear on splice by "s.engineer@example.org" reason "the corner of each plate at its end bolt holds its share of the pull, by Equation J4-5"\n'
         ),
         (
             'petra 0\n'
@@ -737,7 +738,7 @@ TEMPLATES: dict[str, tuple[str, str, str, str]] = {
             '# Two A36 plates joined by three 3/4 inch Group 120 bolts in one line, pulled along it.\n'
             '# The AISC deck has rules for eight mechanisms: the least and the greatest spacing of the\n'
             '# holes, their end and side distances, the strength of the bolts and their holes, and the\n'
-            '# yielding, rupture and block shear of each plate. Each is proved. The grid asks four more\n'
+            '# yielding, rupture and block shear of each plate. Each is proved. The grid asks five more\n'
             '# that the deck has no rule for. The card waives each one, signed and with its reason, and\n'
             '# the report lists them. So the verdict is PASS.\n'
             '\n'

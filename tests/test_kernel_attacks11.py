@@ -14,6 +14,12 @@
       there. The kernel escaped the characters under U+0020 and printed U+007F to U+009F, the line
       and paragraph separators and the marks that turn the direction of text raw. Both now print
       each of these as an escape.
+  D   The shipped deck asked block shear of the block of all the bolts alone. A lap whose line of
+      holes is 1 inch from a side edge, with strong bolts at a long pitch, passed under its waivers
+      at 1.29 times what the corner of each plate holds at its end bolt. Nobody writes a rule of a
+      deck by hand, so the grid of a lap now asks the blocks of fewer bolts on a line of their own,
+      `lap.partial_block_shear`, which has no rule: it is open on every lap until a rule is
+      transcribed for it.
   E   petra/grid.py completed a load a case leaves out at the load's `least`, and wrote that value
       into its hint as a fraction in SI. A `least` of 2,100 decimals, which a deck may write, is a
       fraction of 4,201 characters, and the kernel reads no number of more than 4,000: Python said
@@ -42,6 +48,7 @@ import petra.lang
 from petra import cli, grid, verify
 from petra.registry import build_registry
 from tests.test_deck_features import ANCHOR, HEAD, KERNEL, asks, cells, design, given, ill_formed, kind, made_up, no_deck, parsed, part, rule, size
+from tests.test_kernel_attacks10 import judged
 from tests.test_kernel_grid import ask, findings
 
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples" / "deck"
@@ -216,6 +223,69 @@ class NothingPrintedMovesTheCursor(unittest.TestCase):
                         mine, kernel = ill_formed(self, BARS, BAR_TEXT, card)
                         self.assertIn("the name of the card", mine)
                         self.assertIn("prints in at most 200 bytes", kernel)
+
+
+# --- D. block shear of the corner at the end bolt -------------------------------------------------------------
+
+def lap(card_changes: dict[str, str], **fields: str) -> tuple[str, str]:
+    """The passing lap of examples/deck with the lines of its lap changed, `count="2"`, and the card's text changed by
+    `card_changes`."""
+    text = (EXAMPLES / "lap_pass.petra").read_text(encoding="utf-8")
+    for field, value in fields.items():
+        (line,) = [line for line in text.splitlines() if line.strip().split(" ")[0] == field]
+        text = text.replace(line, f"  {field} {value}")
+    card = (EXAMPLES / "lap_pass.card").read_text(encoding="utf-8")
+    for old, new in card_changes.items():
+        assert old in card, old
+        card = card.replace(old, new)
+    return card, text
+
+
+PART = "lap.partial_block_shear"
+CORNER = dict(fastener='"Group 150"', threads="excluded", count="2", pitch="6 inch", end="2 inch", side="1 inch")
+"""Two 3/8 inch A36 plates 6 inch wide, two 3/4 inch Group 150 bolts with threads excluded at 6 inch, end 2 inch, side
+1 inch. The block of both bolts holds 57.8 kip and the bolts 55.7. The corner of a plate at its end bolt holds
+0.75 (min(0.6 x 58 x 0.586, 0.6 x 36 x 0.750) + 58 x 0.211) = 21.3 kip by Equation J4-5, and each bolt carries half the pull."""
+
+
+def unwaived(card: str, mechanism: str) -> str:
+    return "\n".join(line for line in card.splitlines() if not line.startswith(f"waive {mechanism} ")) + "\n"
+
+
+class TheCornerAtTheEndBolt(unittest.TestCase):
+    def test_a_lap_whose_end_bolts_tear_the_corners_out_does_not_pass_under_the_four_waivers_it_passed_under(self):
+        card, text = lap({"[0 kip, 45 kip]": "[0 kip, 55 kip]"}, **CORNER)
+        mine, said = judged(unwaived(card, PART), text)
+        self.assertEqual(mine, "UNKNOWN", "it was PASS_WAIVED")
+        if said:
+            self.assertEqual(said["verdict"], "UNKNOWN")
+            self.assertEqual({c["entry"]: c["state"] for c in said["cells"] if c["mechanism"] == "lap.block_shear"},
+                             {"lap-block-shear-a/gravity": "proved", "lap-block-shear-b/gravity": "proved"}, "the rules of the block of all the bolts hold")
+            (cell,) = [c for c in said["cells"] if c["mechanism"] == PART]
+            self.assertEqual((cell["subject"], cell["entry"], cell["state"], cell["reason"]), ("splice", "", "open", "the deck has no rule for it"))
+
+    def test_the_line_is_open_on_every_lap_and_the_example_waives_it(self):
+        card, text = lap({})
+        self.assertIn(f"waive {PART} on splice", card)
+        self.assertEqual(judged(card, text)[0], "PASS_WAIVED")
+        mine, said = judged(unwaived(card, PART), text)
+        self.assertEqual(mine, "UNKNOWN")
+        if said:
+            self.assertEqual([c["state"] for c in said["cells"] if c["mechanism"] == PART], ["open"])
+
+    def test_the_grid_asks_it_after_block_shear_and_no_rule_answers_it(self):
+        deck = json.loads((grid.DECKS / "aisc360.json").read_text(encoding="utf-8"))
+        lines = [a["mechanism"] for a in deck["grid"]]
+        self.assertEqual(lines[lines.index("lap.block_shear") + 1], PART)
+        (line,) = [a for a in deck["grid"] if a["mechanism"] == PART]
+        self.assertEqual((line["anchor"], "unless" in line), ({"standard": "AISC 360-22", "clause": "J4.3"}, False))
+        self.assertEqual([r["id"] for r in deck["rules"] if r["mechanism"] == PART], [])
+
+    def test_the_examples_keep_their_verdicts(self):
+        for name, status in (("lap_pass", "PASS_WAIVED"), ("lap_fail", "FAIL"), ("lap_unknown", "UNKNOWN")):
+            with self.subTest(name):
+                mine, _ = judged((EXAMPLES / f"{name}.card").read_text(encoding="utf-8"), (EXAMPLES / f"{name}.petra").read_text(encoding="utf-8"))
+                self.assertEqual(mine, status)
 
 
 # --- E. a completion the kernel cannot read -------------------------------------------------------------------

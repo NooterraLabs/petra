@@ -18,3 +18,4 @@ waive lap.tightening on splice by "s.engineer@example.org" reason "snug-tight bo
 waive lap.hole_use on splice by "s.engineer@example.org" reason "standard holes, which J3.3 allows in every joint"
 waive lap.max_edge_distance on splice by "s.engineer@example.org" reason "no hole is over 3 inch from the nearest edge of either plate, and J3.6 allows 12 thicknesses, 4.5 inch"
 waive lap.ply_flexure on splice by "s.engineer@example.org" reason "the members the plates belong to hold them against rotation"
+waive lap.partial_block_shear on splice by "s.engineer@example.org" reason "the corner of each plate at its end bolt holds its share of the pull, by Equation J4-5"

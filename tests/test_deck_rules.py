@@ -20,7 +20,7 @@ from petra.kernel import Interval
 
 ROOT = Path(__file__).resolve().parents[1]
 BENCH = ROOT / "bench" / "formalizer"
-NO_RULE = ["lap.tightening", "lap.hole_use", "lap.max_edge_distance", "lap.ply_flexure"]
+NO_RULE = ["lap.tightening", "lap.hole_use", "lap.max_edge_distance", "lap.partial_block_shear", "lap.ply_flexure"]
 """The lines of a lap's grid that the deck has no rule and no `unless` for. Each is open until a card waives it."""
 CANNOT_ARISE = ["lap.tension_with_shear", "lap.slip", "lap.ply_shear", "lap.ply_compression"]
 RULES = {"lap.spacing": 2, "lap.end_distance": 2, "lap.side_distance": 2, "lap.spread": 2, "lap.strength": 1, "lap.ply_yield": 2, "lap.ply_rupture": 2,
@@ -96,20 +96,24 @@ class FromTheFiles(unittest.TestCase):
         lap = [f["name"] for f in self.deck["types"][1]["fields"]]
         self.assertEqual(lap[lap.index("end"):], ["end", "side", "surface", "joins"])
 
-    def test_the_grid_has_sixteen_lines_and_j3_6_is_two_of_them(self):
+    def test_the_grid_has_seventeen_lines_and_j3_6_and_j4_3_are_two_each(self):
         """The task asked Section J3.6 as one line. The deck asks its greatest spacing and its greatest edge distance apart:
-        the lap has no field for each plate's own edge distance, so only the spacing has rules."""
+        the lap has no field for each plate's own edge distance, so only the spacing has rules. The task asked block shear as
+        one line too, and both transcribers answered it for the block of all the bolts. The deck asks a block of fewer bolts
+        on a line of its own, which has no rule: the corner of a plate at its end bolt can hold less than that bolt's share
+        (tests/test_kernel_attacks11.py). Lines of a grid are written by hand, and rules are not."""
         asked = [a["mechanism"] for a in read("rules_task2.json")["asks"]]
         lines = [a["mechanism"] for a in self.deck["grid"]]
-        at = asked.index("lap.spread") + 1
-        self.assertEqual(lines, [*asked[:at], "lap.max_edge_distance", *asked[at:]])
-        self.assertEqual(len(lines), 16)
+        at, block = asked.index("lap.spread") + 1, asked.index("lap.block_shear") + 1
+        self.assertEqual(lines, [*asked[:at], "lap.max_edge_distance", *asked[at:block], "lap.partial_block_shear", *asked[block:]])
+        self.assertEqual(len(lines), 17)
         ruled = {r["mechanism"] for r in self.deck["rules"]}
         self.assertEqual(sorted(a["mechanism"] for a in self.deck["grid"] if "unless" in a), sorted(CANNOT_ARISE))
         self.assertEqual([m for m in lines if m not in ruled and m not in CANNOT_ARISE], NO_RULE)
         self.assertEqual(sorted(ruled), sorted(RULES))
         by = {a["mechanism"]: a for a in self.deck["grid"]}
         self.assertEqual(by["lap.max_edge_distance"]["anchor"], {"standard": "AISC 360-22", "clause": "J3.6"})
+        self.assertEqual(by["lap.partial_block_shear"]["anchor"], {"standard": "AISC 360-22", "clause": "J4.3"})
         self.assertEqual(by["lap.spread"]["what"], "maximum spacing of the holes")
 
 

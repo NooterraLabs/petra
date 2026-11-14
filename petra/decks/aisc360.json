@@ -2307,6 +2307,15 @@
   },
   {
    "type": "lap",
+   "mechanism": "lap.partial_block_shear",
+   "what": "block shear rupture of each plate along a block of fewer bolts than all, as the corner at its end bolt",
+   "anchor": {
+    "standard": "AISC 360-22",
+    "clause": "J4.3"
+   }
+  },
+  {
+   "type": "lap",
    "mechanism": "lap.ply_compression",
    "what": "yielding and buckling of a plate in compression",
    "anchor": {

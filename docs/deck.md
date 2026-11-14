@@ -274,7 +274,7 @@ Each object of a deck has the keys this page gives it, and no other. A key the p
 
 A design names a type as the kind of a component block: `lap splice { ... }` is a part named `splice` of type `lap`. The parts of one design are all of one deck's types, or all of the built-in models' kinds.
 
-`petra/decks/aisc360.json` is the first deck. It holds 32 rows of AISC 360-22, the types `plate` and `lap` with two needs of a lap, a grid of 16 lines for a lap, and 15 rules. The rules answer 8 of the lines. [What the first deck covers](#what-the-first-deck-covers) lists every line, what answers it, and what the deck leaves open.
+`petra/decks/aisc360.json` is the first deck. It holds 32 rows of AISC 360-22, the types `plate` and `lap` with two needs of a lap, a grid of 17 lines for a lap, and 15 rules. The rules answer 8 of the lines. [What the first deck covers](#what-the-first-deck-covers) lists every line, what answers it, and what the deck leaves open.
 
 ### The size of a deck
 
@@ -286,7 +286,7 @@ Reading a deck takes steps, and a deck that takes more than 1,000,000 is refused
 
 The count follows the work. A rule reads a row again each time it applies it, with the row's inputs bound to the rule's expressions, and it reads everything else in the file once. A text of an expression is a name or a number. The kernel goes through it character by character each time it reads it, and a number becomes a step of the rule that the kernel keeps: so a text counts for its length, and for two where a list counts for one. A name is found through a table whatever the deck holds, and a type that joins many parts costs a rule only the names the rule writes.
 
-The first deck, 58 KB, takes 10,503 steps: 6,360 for its file and 4,143 for the 37 times its rules apply a row. That is about a hundredth of the limit, so ten decks of that size are a tenth of it. With the 18 rows and 4 rules it shipped until 2026-11-11 it took 5,500. A file under 1 MB whose rules apply no row is always within it: a text of `n` characters takes `n` and three bytes with its quotes and its comma, and any other value two or more, so a megabyte holds under 700,000 steps. So the limit refuses one kind of deck: a long row applied many times. `petra/grid.py` makes the same count and refuses the same decks.
+The first deck, 58 KB, takes 10,530 steps: 6,387 for its file and 4,143 for the 37 times its rules apply a row. That is about a hundredth of the limit, so ten decks of that size are a tenth of it. With the 18 rows and 4 rules it shipped until 2026-11-11 it took 5,500. A file under 1 MB whose rules apply no row is always within it: a text of `n` characters takes `n` and three bytes with its quotes and its comma, and any other value two or more, so a megabyte holds under 700,000 steps. So the limit refuses one kind of deck: a long row applied many times. `petra/grid.py` makes the same count and refuses the same decks.
 
 A pick of a tape compares at most 1,024 orders ([format.md](format.md), "Tapes"). A rule that could write a larger one for some part is refused when the deck is read: an equation whose conditions hold more, a `case` or a table read by a quantity with more places than that holds, counting two for a listed value, one or two for a band and empty cells too, or a `where` of more than 1,024 items. So a table read at more than 512 listed values does not load.
 
@@ -716,18 +716,18 @@ petra check examples/deck/lap_unknown.petra
 
 ```
 lap-splice: UNKNOWN
-rules      sha256:7fd0958b...  aisc360-22
+rules      sha256:e090aab7...  aisc360-22
 card       sha256:b0372d69...  examples/deck/lap_unknown.card
-design     sha256:3fd22401...  examples/deck/lap_unknown.petra
+design     sha256:bc3449af...  examples/deck/lap_unknown.petra
 kernel     petra-verify checked 12 of 12 proofs and gives the same verdict
 path       rules: the kernel worked out every cell from the rules deck
-cells      12 proved, 0 refuted, 4 not applicable, 0 waived, 4 open
-  splice/lap.tightening          open                    the deck has no rule for it (AISC 360-22 J3.2)
-  splice/lap.spacing             proved           0.667  lap-spacing-centres (AISC 360-22 J3.4)
-  splice/lap.spacing             proved           0.343  lap-spacing-clear (AISC 360-22 J3.4, Table J3.3)
-  splice/lap.end_distance        proved           0.667  lap-end-distance-standard (AISC 360-22 J3.5, Table J3.4)
-  splice/lap.slip                not applicable          a lap is a bearing-type joint, which claims no slip resistance (AISC 360-22 J3.9)
-  splice/lap.ply_yield           proved           0.617  lap-ply-yield-a/gravity (AISC 360-22 J4.1(a), equation J4-1)
+cells      12 proved, 0 refuted, 4 not applicable, 0 waived, 5 open
+  splice/lap.tightening           open                    the deck has no rule for it (AISC 360-22 J3.2)
+  splice/lap.spacing              proved           0.667  lap-spacing-centres (AISC 360-22 J3.4)
+  splice/lap.spacing              proved           0.343  lap-spacing-clear (AISC 360-22 J3.4, Table J3.3)
+  splice/lap.end_distance         proved           0.667  lap-end-distance-standard (AISC 360-22 J3.5, Table J3.4)
+  splice/lap.slip                 not applicable          a lap is a bearing-type joint, which claims no slip resistance (AISC 360-22 J3.9)
+  splice/lap.ply_yield            proved           0.617  lap-ply-yield-a/gravity (AISC 360-22 J4.1(a), equation J4-1)
   ...
 ```
 
@@ -948,7 +948,7 @@ The run says less than that table may seem to.
 
 ## What the first deck covers
 
-`petra/decks/aisc360.json` checks one kind of joint: a `lap`, which is one line of two or more bolts in single shear through two plates, in a bearing-type joint that is pulled along the line. The holes are standard or oversize. The rules use LRFD. The grid has 16 lines for a lap.
+`petra/decks/aisc360.json` checks one kind of joint: a `lap`, which is one line of two or more bolts in single shear through two plates, in a bearing-type joint that is pulled along the line. The holes are standard or oversize. The rules use LRFD. The grid has 17 lines for a lap.
 
 | Line | Section | What answers it |
 |---|---|---|
@@ -965,17 +965,19 @@ The run says less than that table may seem to.
 | `lap.ply_yield` | J4.1 | 2 rules, one for each plate |
 | `lap.ply_rupture` | J4.1 | 2 rules, one for each plate: the net section less one hole, taken 1/16 inch wider (B4.3b), with a shear lag factor of 1 |
 | `lap.ply_shear` | J4.2 | Cannot arise: the plates are pulled |
-| `lap.block_shear` | J4.3 | 2 rules, one for each plate: shear along the line of holes from the end of the plate, and tension across to the side edge |
+| `lap.block_shear` | J4.3 | 2 rules, one for each plate: shear along the line of holes from the end of the plate to the farthest hole, and tension across to the side edge. It is the block of all the bolts. |
+| `lap.partial_block_shear` | J4.3 | No rule |
 | `lap.ply_compression` | J4.4 | Cannot arise: the load is a pull |
 | `lap.ply_flexure` | J4.5 | No rule |
 
-So 8 lines have rules, 4 cannot arise, and 4 have no rule. A line with no rule is open on every lap, and a lap passes only when its card waives each of the four.
+So 8 lines have rules, 4 cannot arise, and 5 have no rule. A line with no rule is open on every lap, and a lap passes only when its card waives each of the five.
 
 | Line with no rule | Why |
 |---|---|
 | `lap.tightening` | Section J3.2 asks for pretensioned bolts by what the joint is for, which is no comparison of quantities |
 | `lap.hole_use` | Section J3.3 bars oversize holes from a bearing-type joint, which a lap is. That is a ban on a kind of hole and no inequality, and no transcriber wrote it. So the deck does not refuse a lap with oversize holes. It leaves the line open. |
 | `lap.max_edge_distance` | Section J3.6 limits the distance from each hole to the nearest edge of each plate by that plate's thickness. A lap states `side`, the least distance over both plates, and has no field for each plate's own. |
+| `lap.partial_block_shear` | Section J4.3 asks every block that a shear path and a tension path across it cut out of a plate. The two rules of `lap.block_shear` ask the block of all the bolts. A block of fewer bolts carries those bolts' share of the pull, and the corner of a plate at its end bolt can hold less than that share where the line of holes is near a side edge and the bolts are strong and far apart. Both transcribers and the worked example took the block of all the bolts alone. Nobody writes a rule of a deck by hand, so the line has no rule until one is transcribed for it from the page. Until 2026-11-13 the grid did not ask it: a lap of two 3/4 inch Group 150 bolts 6 inch apart, on a line 1 inch from a side edge of 3/8 inch A36 plates, passed under its waivers at 55 kip, where the corner at each end bolt holds 21.3 kip by Equation J4-5 and the bolt carries 27.5 (`tests/test_kernel_attacks11.py`, `corpus/cases/deck/d41_corner_tears_out.petra`). |
 | `lap.ply_flexure` | Section J4.5 gives no equation, and a lap takes no load that is a moment |
 
 On the lines that have rules, the deck leaves three things out on purpose. Both transcribers left out the same three.
@@ -999,5 +1001,5 @@ A lap needs two things of its plates ([What a type needs](#what-a-type-needs)): 
 - The `range` of a row's input is where the acceptance check samples the row. It is not enforced as the range the row holds in. A rule's `where` is.
 - A type with no line in the grid gets no cell of its own. A `plate` has none: the lap that joins it asks about it, and a plate that nothing joins has only its `unread` cells.
 - A card's claims, tests, ambient and environment, a family's params, and the repair that `petra check` suggests on a FAIL are not read for a design of a deck's types. A card or a design that states one is refused: `environment marine_c5` in the card of a lap is an input error, `the card or the design states an environment, which a deck does not read yet`, and the kernel finds the pair ill formed.
-- The first deck has rules for 8 of the 16 lines of a lap's grid, all by LRFD. Four lines cannot arise for a lap, and four are open: tightening, hole use, the greatest edge distance and flexure of the plates. [What the first deck covers](#what-the-first-deck-covers) says what else it leaves open.
+- The first deck has rules for 8 of the 17 lines of a lap's grid, all by LRFD. Four lines cannot arise for a lap, and five are open: tightening, hole use, the greatest edge distance, block shear of a block of fewer bolts than all, and flexure of the plates. [What the first deck covers](#what-the-first-deck-covers) says what else it leaves open.
 - A cell whose rule could be answered and that nothing settles is open, and the design is UNKNOWN where it would be FAIL. A rule that fails for every value an unstated quantity may take is one: `current ≤ min(limit, rating)` with the rating under the current and the limit unstated. No point is tried for a quantity that has none, and a waiver does not rest the cell ([What a waiver rests](#what-a-waiver-rests)).

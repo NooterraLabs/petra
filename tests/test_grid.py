@@ -448,12 +448,12 @@ class Shipped(unittest.TestCase):
         with mock.patch.object(verify, "binary", lambda: None):
             return petra.check(*read_pair(path), path=str(path), repair=False)
 
-    NO_RULE = ["lap.tightening", "lap.hole_use", "lap.max_edge_distance", "lap.ply_flexure"]
+    NO_RULE = ["lap.tightening", "lap.hole_use", "lap.max_edge_distance", "lap.partial_block_shear", "lap.ply_flexure"]
 
     def test_the_lap_that_waives_nothing_is_unknown_with_its_rules_proved(self):
         result = self.check("lap_unknown")
         self.assertEqual(result["status"], "UNKNOWN")
-        self.assertEqual(result["counts"], {"proved": 12, "refuted": 0, "not_applicable": 4, "waived": 0, "open": 4})
+        self.assertEqual(result["counts"], {"proved": 12, "refuted": 0, "not_applicable": 4, "waived": 0, "open": 5})
         self.assertEqual([c["mechanism"] for c in result["cells"] if c["state"] == "open"], self.NO_RULE)
         self.assertEqual({c["why"] for c in result["cells"] if c["state"] == "open"}, {"the deck has no rule for it"})
         # Each ratio is worked out here from the clause, with the numbers of the design.
@@ -479,7 +479,7 @@ class Shipped(unittest.TestCase):
         failed = self.check("lap_fail")
         self.assertEqual((failed["status"], [c["mechanism"] for c in failed["cells"] if c["state"] == "refuted"]), ("FAIL", ["lap.strength"]))
         waived = self.check("lap_pass")
-        self.assertEqual((waived["status"], waived["counts"]["waived"], waived["counts"]["open"]), ("PASS_WAIVED", 4, 0))
+        self.assertEqual((waived["status"], waived["counts"]["waived"], waived["counts"]["open"]), ("PASS_WAIVED", 5, 0))
         self.assertEqual([c["mechanism"] for c in waived["cells"] if c["state"] == "waived"], self.NO_RULE, "the card waives the lines with no rule, and no line that has one")
 
     def variant(self, *swap: tuple[str, str], pull: str = "45 kip") -> dict:
@@ -614,7 +614,7 @@ class Shipped(unittest.TestCase):
         with mock.patch.object(verify, "binary", lambda: None):
             found = petra.check(*read_pair(path), path=str(path), repair=False)
         waived = [c for c in found["cells"] if c["state"] == "waived"]
-        self.assertEqual(([c["mechanism"] for c in waived], [c["entry"] for c in waived], found["status"]), (self.NO_RULE, [""] * 4, "PASS_WAIVED"))
+        self.assertEqual(([c["mechanism"] for c in waived], [c["entry"] for c in waived], found["status"]), (self.NO_RULE, [""] * 5, "PASS_WAIVED"))
         for c in waived:
             self.assertRegex(c["why"], r"^by .+: .+; open but for the waiver: the deck has no rule for it$")
 
@@ -645,7 +645,7 @@ class Shipped(unittest.TestCase):
             else:
                 lines = out.getvalue().splitlines()
                 self.assertEqual(lines[0], "lap-splice-waived: PASS_WAIVED")
-                self.assertIn("waived     4 cells rest on 4 waivers, so the design passes what the deck could check and each signer answers for the rest", lines)
+                self.assertIn("waived     5 cells rest on 5 waivers, so the design passes what the deck could check and each signer answers for the rest", lines)
                 self.assertIn(f"  splice/lap.tightening  by s.engineer@example.org: {waivers[0]['reason']}", lines)
         text, body = mcp._check({"path": str(path)})
         self.assertEqual((text.splitlines()[0], body["status"], body["waived"]), ("lap-splice-waived: PASS_WAIVED", "PASS_WAIVED", waivers))

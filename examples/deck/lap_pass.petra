@@ -3,7 +3,7 @@ petra 0
 # Two A36 plates joined by three 3/4 inch Group 120 bolts in one line, pulled along it.
 # The AISC deck has rules for eight mechanisms: the least and the greatest spacing of the
 # holes, their end and side distances, the strength of the bolts and their holes, and the
-# yielding, rupture and block shear of each plate. Each is proved. The grid asks four more
+# yielding, rupture and block shear of each plate. Each is proved. The grid asks five more
 # that the deck has no rule for. The card waives each one, signed and with its reason, and
 # the report lists them. So the verdict is PASS.
 

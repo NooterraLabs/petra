@@ -49,7 +49,7 @@ The report has one line for each mechanism the grid asks of a part. A line is pr
 - An open line means the deck has no rule for that mechanism, or the card gives no load, or a value is outside a table, or a rule could not be decided. It is not yours to close. Report UNKNOWN and list the open lines: a waiver belongs to the person who signs the card, and it rests only a line that no rule could answer.
 - A line such as `Fy given tab.Fy` reads a value only the card states. If the card lacks it, ask the user for it.
 
-A `lap` of the deck `aisc360-22` has rules for eight mechanisms: the least and the greatest spacing of the holes, their end and side distances, the strength of the bolts and their holes, and the yielding, rupture and block shear of each plate. Four have no rule: `lap.tightening`, `lap.hole_use`, `lap.max_edge_distance` and `lap.ply_flexure`. Those four are open on every lap, so a lap is UNKNOWN until the card waives them, however well it is designed. A bolt of 1 1/8 inch or more, or of a size the tables do not list, leaves more lines open.
+A `lap` of the deck `aisc360-22` has rules for eight mechanisms: the least and the greatest spacing of the holes, their end and side distances, the strength of the bolts and their holes, and the yielding, rupture and block shear of each plate. Five have no rule: `lap.tightening`, `lap.hole_use`, `lap.max_edge_distance`, `lap.partial_block_shear` and `lap.ply_flexure`. Those five are open on every lap, so a lap is UNKNOWN until the card waives them, however well it is designed. A bolt of 1 1/8 inch or more, or of a size the tables do not list, leaves more lines open.
 
 ## Rules
 

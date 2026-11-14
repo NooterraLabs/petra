@@ -191,3 +191,4 @@ corpus/cases/deck/d37_no_side_or_surface.petra	INPUT_ERROR			a lap with no side 
 corpus/cases/deck/d38_case_without_the_pull.petra	UNKNOWN			the card of lap_pass with a second load case that states no pull: each rule that reads the pull is open under it, where it was passed on the first case alone
 corpus/cases/deck/d39_case_on_one_of_two_laps.petra	UNKNOWN			two laps, and a load case that puts the pull on one of them: the rules of the other are open under that case
 corpus/cases/deck/d40_two_cases_on_two_laps.petra	PASS_WAIVED			the laps of d39 with the pull stated on both in both cases, one of them zero: every rule is proved under each case
+corpus/cases/deck/d41_corner_tears_out.petra	NOT_PASS			two bolts on a line 1 inch from a side edge under 55 kip: the corner of each plate at its end bolt holds 21.33 kip by Equation J4-5 and the bolt carries 27.5. The deck has no rule for a block of fewer bolts than all, and the open cell keeps the lap from passing
