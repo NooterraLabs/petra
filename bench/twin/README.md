@@ -195,6 +195,21 @@ Measured with `--count 6000 --decks 3000 --seed 7` against the kernel and the gr
 
 This run compares verdicts and cells, and its generator forges no deck.json, so it does not see either change of this update: the 89 bundles do.
 
+## The seventh update, of 2026-11-13
+
+The eleventh review's fixes changed the pages the same day: with `--rules` the size floor is `core.json`'s too, a character that a terminal acts on prints in six bytes and counts as six in a name, an equation is held to 1,024 orders whether or not a rule applies it, and the first deck's grid has a line more. An eighth agent, under the same rule as before, brought the reading up to them. It had 120 bundles with the kernel's answers: 83 generated ones, the forged floors, six for the size floor, twenty names at the limit of their bytes, an equation that no rule applies at 1,024 and 1,025 orders, and three laps of the first deck. Before the update 11 differed, and after it all 120 agree. Its own checks, 245 in eight files, pass. It reports no file opened outside its folder and no command but Node and a plain listing. Its session again showed it the repository's rules for agents, which it did not ask for.
+
+`AMBIGUITIES.md` gained section O, eight entries, and nine older entries are settled. It also sent eleven places where the pages were at odds with themselves or with an example, such as three things for a reader to check over a table of four, and no stated way to get a design's hash. The pages are corrected for each. One is left as the reading took it: it prints the finding of type rule 3 before that of type rule 8, where the kernel prints rule 8's first, and the comparison does not count the order of findings.
+
+The second round of the same review ran this reading beside the kernel on files of its own. They differ on one kind of deck: the kernel and the grid read `1` as the unit of a plain number, as in `["q", "5", "1"]`, and this reading refuses it, since the units list has no such unit. No value is read wrongly. That difference stands, and the comparison's generator makes no such deck.
+
+Measured with `--count 6000 --decks 3000 --seed 7` against the kernel and the grid at ee47bd0. The generator of laps now waives the new line among the open ones, so the designs are not quite those of the runs above.
+
+| Compared | Result |
+|---|---|
+| Generated designs, 5,774 compared | The same verdict and the same cells on every one |
+| Damaged decks, 3,000 compared | The same on every one: 2,396 refused by all three, 167 PASS, 152 FAIL, 272 UNKNOWN, and 13 designs refused |
+
 ## What it is not
 
 It does not read a design of the models' kinds or hash a file. It applies the limits that decide a verdict and not the budget of work, the memory of enclosures or the limits on what is printed. It is a reading of the rules path only.
