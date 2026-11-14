@@ -1049,13 +1049,12 @@ class AStrictRule(unittest.TestCase):
         self.assertEqual(hinted(self, CRAFTS, text, card, "craft.capped", state="refuted", point={label: "249/1000"})["state"], "open", "the point gives the mass no value")
 
 
-# --- the three families that asked for them -------------------------------------------------------------
+# --- the two families that asked for them ---------------------------------------------------------------
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
-DRAFTS = {"lifter": ("sha256:c39453ed2545a61b6c3c04129c4fecc3fedb1b684b0dde7eb010ffc71eb1e7bc", 4, 52),
-          "process": ("sha256:e52e1af691a4d50d5266ce65e43c971ebba7f28fab5851bca2ee0b05f8860637", 3, 49),
+DRAFTS = {"process": ("sha256:e52e1af691a4d50d5266ce65e43c971ebba7f28fab5851bca2ee0b05f8860637", 3, 49),
           "drone": ("sha256:d7b1995de5d63c113b154768e7d7f2c9ed996730eec0aa822508d77bf66ada91", 12, 74)}
-"""The scouts' drafts of the types and the grid of three families, as they stand on the branches `lifter`, `process` and `drone`
+"""The scouts' drafts of the types and the grid of two families, as they stand on the branches `process` and `drone`
 (bench/formalizer/NAME/draft.json): the hash of each file, how many types it has and how many lines of the grid. None has a row
 or a rule, and none is a deck that ships."""
 SAMPLE = {"length": "100 mm", "mass": "30 g", "force": "10 N", "stress": "100 MPa", "voltage": "14.8 V", "current": "20 A", "power": "500 W", "resistance": "20 mohm",
@@ -1070,17 +1069,6 @@ def draft(name: str) -> dict:
 
 def field_of(body: dict, of: str, name: str) -> dict:
     return next(f for t in body["types"] if t["type"] == of for f in t["fields"] if f["name"] == name)
-
-
-def lifter2() -> dict:
-    """The lifting beam, restated once more. The design category and the service class are the asker's: the category sets the design
-    factor, so a design that chose its own would choose its own strength. The card states both."""
-    from tests.test_deck_features import lifter
-
-    body = lifter()
-    for name in ("category", "service"):
-        field_of(body, "lifting_beam", name)["signed"] = True
-    return body
 
 
 def process2() -> dict:
@@ -1146,8 +1134,8 @@ def stated(body: dict, parts: dict[str, str], says_of: dict[str, str] | None = N
     return design(*blocks), card + cases
 
 
-class TheThreeFamilies(unittest.TestCase):
-    """The drafts of three families, each restated with what a deck can say now: types and lines of the grid alone, with no row and no
+class TheTwoFamilies(unittest.TestCase):
+    """The drafts of two families, each restated with what a deck can say now: types and lines of the grid alone, with no row and no
     rule. So every line that can arise is open, and what the tests hold is that the kernel and petra/grid.py read each deck and a
     made-up design of it alike, and refuse what the card alone may state when the design writes it."""
 
@@ -1159,39 +1147,11 @@ class TheThreeFamilies(unittest.TestCase):
                 self.assertEqual((body["rows"], body["rules"], len(body["types"]), len(body["grid"])), ([], [], types, lines))
 
     def test_each_draft_and_each_restatement_loads_in_the_grid_and_in_the_kernel(self):
-        for name, restated in (("lifter", lifter2), ("process", process2), ("drone", drone2)):
+        for name, restated in (("process", process2), ("drone", drone2)):
             with self.subTest(name):
                 reads(self, draft(name))
                 reads(self, restated())
                 self.assertEqual(len(grid.read_deck(json.dumps(restated())).asks), DRAFTS[name][2], "the restatement asks every line the draft asks")
-
-    LIFT = {"w": "i_shape", "up": "lug", "down": "lug", "s1": "shackle", "s2": "shackle", "b": "lifting_beam"}
-    FITS = dict(s1__pin="1 inch", s2__pin="1 inch", up__hole="2 inch", up__width="6 inch", up__edge="3 inch", down__hole="2 inch", down__width="6 inch", down__edge="3 inch",
-                b__length="120 inch")
-    """Sizes that keep what a lug and a beam need of their fields: a pin under its hole, a hole narrower than its plate, the span within the length."""
-
-    def test_a_lifting_beam_takes_its_category_and_its_service_class_from_the_card(self):
-        body = lifter2()
-        hot = load("lift", "b lift in [0 kip, 10 kip]", "b temperature in [-35/9 degC, 590/9 degC]")
-        text, card = stated(body, self.LIFT, {"b.category": "B", "b.service": '"1"'}, hot, **self.FITS)
-        card = card.replace(given("b.span", "100 mm"), given("b.span", "96 inch", "100 inch"))
-        found, verdict, _ = cells(self, body, text, card)
-        lines = {k[1]: v for k, v in found.items() if k[0] == "b" and k[1] != "unread"}
-        self.assertEqual((len(lines), sorted(set(lines.values())), verdict), (52, ["not_applicable", "open"], "UNKNOWN"))
-        deck, read = parsed(body, text, card)
-        made = export.card(read, export.read_inputs(read), placed=True)
-        self.assertEqual(made["states"], [{"name": "b.category", "by": "t@example.org", "key": "B"}, {"name": "b.service", "by": "t@example.org", "key": "1"}])
-        heat = next(i for i in made["inputs"] if i.get("field") == "temperature")
-        self.assertEqual((heat["dim"], Fraction(heat["lo"]), Fraction(heat["hi"])), ("temperature", Fraction(-35, 9), Fraction(590, 9)), "25 to 150 degF, as exact fractions of a degC")
-        for field, written in (("category", "B"), ("service", '"1"')):
-            with self.subTest(field):
-                others = {k: v for k, v in {"b.category": "B", "b.service": '"1"'}.items() if k != f"b.{field}"}
-                mine, its = ill_formed(self, body, *stated(body, self.LIFT, others, hot, **self.FITS, **{f"b__{field}": written}))
-                self.assertIn(f"parts.4 design b.{field}: is for the card to state", its)
-        service_0 = stated(body, self.LIFT, {"b.category": "B", "b.service": '"0"'}, hot, **self.FITS)
-        found_0, _, _ = cells(self, body, service_0[0], service_0[1].replace(given("b.span", "100 mm"), given("b.span", "96 inch", "100 inch")))
-        self.assertEqual((found["b", "lifting_beam.beam_fatigue", ""], found_0["b", "lifting_beam.beam_fatigue", ""]), ("open", "not_applicable"),
-                         "the service class the card states is what the grid's `unless` reads")
 
     CUT = {"c": "cut_part"}
 

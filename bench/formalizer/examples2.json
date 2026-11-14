@@ -1,55 +1,5 @@
 {
  "examples": {
-  "iso286-1/table-1": [
-   {
-    "anchor": "ISO 286-1:2010, 4.3.2.2, Example 1 (hole 90 F7 and shaft 90 f7), p. 15",
-    "given": {
-     "D": "90 mm",
-     "grade": "IT7"
-    },
-    "gives": "35 um"
-   },
-   {
-    "anchor": "ISO 286-1:2010, 4.3.2.2, Example 2 (hole 28 P9), p. 15",
-    "given": {
-     "D": "28 mm",
-     "grade": "IT9"
-    },
-    "gives": "52 um"
-   },
-   {
-    "anchor": "ISO 286-1:2010, 4.3.2.5, Example 1 (hole 20 K7), p. 16",
-    "given": {
-     "D": "20 mm",
-     "grade": "IT7"
-    },
-    "gives": "21 um"
-   },
-   {
-    "anchor": "ISO 286-1:2010, 4.3.2.5, Example 2 (hole 40 U6), p. 16",
-    "given": {
-     "D": "40 mm",
-     "grade": "IT6"
-    },
-    "gives": "16 um"
-   },
-   {
-    "anchor": "ISO 286-1:2010, Annex B, B.4.1, Example (first standard tolerance), p. 34",
-    "given": {
-     "D": "40 mm",
-     "grade": "IT7"
-    },
-    "gives": "25 um"
-   },
-   {
-    "anchor": "ISO 286-1:2010, Annex B, B.4.1, Example (second standard tolerance), p. 34",
-    "given": {
-     "D": "40 mm",
-     "grade": "IT8"
-    },
-    "gives": "39 um"
-   }
-  ],
   "aisc360-22/table-J2.4": [
    {
     "anchor": "AISC Design Examples v16.0, Example J.1, p. J-2",

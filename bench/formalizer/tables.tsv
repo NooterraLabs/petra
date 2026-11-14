@@ -3,13 +3,13 @@
 #
 # a2.json and b2.json are the two transcriptions as made, and examples2.json the worked examples as a
 # third agent collected them, but for the names of keys: the collector described a line or a column in
-# words, and those words were replaced by hand with the transcribers' names for it. Both transcribers
-# passed the standard's own worked examples of Table 1 while looking for the table, so four of its cells
-# were not read blind. Each left out what a table cannot hold and listed it: the lines that are formulas,
-# the slot columns, the footnotes that change a value, and the second system of units.
+# words, and those words were replaced by hand with the transcribers' names for it. Each left out what
+# a table cannot hold and listed it: the lines that are formulas, the slot columns, the footnotes that
+# change a value, and the second system of units.
+#
+# The run had a fifth table, from a standard that is not free to read. It was taken out on 2026-11-13.
 #
 # id	file	table	what the row gives	its inputs
-iso286-1/table-1	iso-286-1-pr.pdf	Table 1	standard tolerance value	takes D, the nominal size, in bands, and grade, a key whose names are the standard tolerance grades as printed
 aisc360-22/table-J2.4	A360-22W-ewr.pdf	Table J2.4	minimum size of a fillet weld	takes t, the thickness of the thinner part joined, in bands
 aisc360-22/table-J3.2	A360-22W-ewr.pdf	Table J3.2	nominal stress of a fastener or threaded part	takes fastener, a key with one name for each line of the table in order, and stress, a key with one name for each column in order
 aisc360-22/table-J3.3	A360-22W-ewr.pdf	Table J3.3, the US customary one	nominal diameter of a standard or an oversize hole	takes d, the bolt diameter, at the listed values, and hole, a key for the standard and the oversize columns; the slot columns give two numbers each and are left out
