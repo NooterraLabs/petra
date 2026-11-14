@@ -8,9 +8,8 @@ and prints its documents, from a directory outside the repository, as it would f
 stranger.
 
 Where `lake build` has made the kernel in this tree, the first wheel is of this platform
-and carries it, and the installed command has that kernel check its reports. A second
-venv gets the same wheel with the kernel taken out, and its reports say that no kernel
-ran. Where no kernel is built, the first wheel is the pure one, and the same tests hold
+and carries it, and the installed command prints that kernel's verdicts. A second
+venv gets the same wheel with the kernel taken out, and its checks give no verdict. Where no kernel is built, the first wheel is the pure one, and the same tests hold
 it to that line.
 """
 import base64
@@ -43,7 +42,8 @@ BUILT = ROOT / (PYPROJECT["tool"]["petra-build"]["kernel"] + (".exe" if os.name 
 """The kernel `lake build` makes in this tree, when it has."""
 KERNEL = f"petra/bin/{BUILT.name}"
 """Where a wheel carries it."""
-NOT_RUN = "kernel     not run: there is no petra-verify here, so the Python checker alone stands behind this verdict"
+NO_VERDICT = 4
+"""What `petra check` exits with when there is no kernel to run."""
 LAP = ROOT / "examples" / "deck" / "lap_pass.petra"
 CIRCUIT = ROOT / "examples" / "circuit_pass.petra"
 
@@ -95,10 +95,11 @@ def without_kernel(wheel: Path, directory: Path) -> Path:
 
 def report(scripts: Path, design: Path, cwd: Path) -> list[str]:
     """The lines `petra check` prints of a design, run by the command installed in `scripts`.
-    It exits 0 for a PASS and 6 for a PASS that rests on a waiver, as the lap does."""
+    It exits 6 for a PASS that rests on a waiver, as the lap does, and 2 for the circuit,
+    which is of a models' kind: the kernel has no deck of rules for it, and says UNKNOWN."""
     argv = (shutil.which("petra", path=str(scripts)), "check", design)
     done = run(*argv, cwd=cwd)
-    if done.returncode != (6 if design == LAP else 0):
+    if done.returncode != (6 if design == LAP else 2):
         raise AssertionError(f"{' '.join(map(str, argv))} exited {done.returncode}\n{done.stdout}\n{done.stderr}")
     return done.stdout.splitlines()
 
@@ -197,7 +198,7 @@ class Packaging(unittest.TestCase):
         differ = {KERNEL, f"{DIST_INFO}/WHEEL", f"{DIST_INFO}/RECORD"} if BUILT.is_file() else set()
         self.assertEqual({n for n in set(self.files) | set(self.sdist_files) if self.files.get(n) != self.sdist_files.get(n)}, differ)
 
-    def test_the_installed_command_has_the_kernel_in_the_wheel_check_its_reports(self):
+    def test_the_installed_command_prints_the_verdicts_of_the_kernel_in_the_wheel(self):
         if not BUILT.is_file():
             self.skipTest("no petra-verify is built here")
         ran = ok(self.python, "-c", "from petra import verify; print(verify.binary())", cwd=self.outside).strip()
@@ -205,27 +206,31 @@ class Packaging(unittest.TestCase):
         self.assertEqual(Path(ran).name, BUILT.name)
         lap, circuit = report(self.scripts, LAP, self.outside), report(self.scripts, CIRCUIT, self.outside)
         self.assertEqual(lap[0], "lap-splice-waived: PASS_WAIVED")
-        self.assertIn("kernel     petra-verify checked 12 of 12 proofs and gives the same verdict", lap)
+        self.assertIn("kernel     petra-verify gives PASS: it checked 12 of 12 proofs", lap)
         self.assertIn("path       rules: the kernel worked out every cell from the rules deck", lap)
-        self.assertEqual(circuit[0], "workshop-lighting-radial: PASS")
-        self.assertIn("kernel     petra-verify checked 8 of 8 proofs and agrees", circuit)
+        self.assertEqual(circuit[0], "workshop-lighting-radial: UNKNOWN")
+        self.assertIn("kernel     petra-verify gives UNKNOWN: it checked 8 of 8 proofs, and with no deck of rules for this design it passes nothing", circuit)
+        self.assertIn("python     the Python checker says PASS, which decides nothing: every line below is its own", circuit)
 
-    def test_a_wheel_with_no_kernel_in_it_says_that_none_ran(self):
+    def test_a_wheel_with_no_kernel_in_it_gives_no_verdict(self):
         """The venv with the kernel taken out of the wheel, or the only venv where no
-        kernel is built and the wheel is the pure one."""
-        lap, circuit = report(self.bare, LAP, self.outside), report(self.bare, CIRCUIT, self.outside)
-        self.assertEqual((lap[0], circuit[0]), ("lap-splice-waived: PASS_WAIVED", "workshop-lighting-radial: PASS"))
-        self.assertIn(NOT_RUN, lap)
-        self.assertIn("path       rules: the Python grid worked out every cell from the rules deck, and no kernel checked it", lap)
-        self.assertIn(NOT_RUN, circuit)
+        kernel is built and the wheel is the pure one. The grid and the Python checker
+        are both in the wheel, and neither gives a verdict in the kernel's place."""
+        for design in (LAP, CIRCUIT):
+            done = run(shutil.which("petra", path=str(self.bare)), "check", design, cwd=self.outside)
+            self.assertEqual((done.returncode, done.stdout), (NO_VERDICT, ""), done.stderr)
+            self.assertIn("petra: no verdict: there is no petra-verify to run", done.stderr)
 
     def test_the_installed_command_runs_outside_the_repository(self):
         petra = shutil.which("petra", path=str(self.scripts))
         self.assertIsNotNone(petra, "pip installed the petra command")
         self.assertEqual(run(petra, "--help", cwd=self.outside).returncode, 0)
         done = run(petra, "check", ROOT / "examples" / "steel" / "shear_tab.petra", cwd=self.outside)
-        self.assertEqual(done.returncode, 0, done.stderr)
-        self.assertEqual(done.stdout.splitlines()[0], "steel-shear-tab: PASS")
+        if BUILT.is_file():
+            self.assertEqual(done.returncode, 2, done.stderr)
+            self.assertEqual(done.stdout.splitlines()[0], "steel-shear-tab: UNKNOWN")
+        else:
+            self.assertEqual((done.returncode, done.stdout), (NO_VERDICT, ""), done.stderr)
         where, *versions = ok(self.python, "-c", "import importlib.metadata, petra; print(petra.__file__); "
                               "print(importlib.metadata.version('petra-lang')); print(petra.__version__)", cwd=self.outside).splitlines()
         self.assertTrue(Path(where).resolve().is_relative_to((self.tmp / "venv").resolve()), f"petra imports from the venv, not {where}")

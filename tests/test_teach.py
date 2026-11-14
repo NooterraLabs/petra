@@ -22,6 +22,7 @@ from petra.registry import OutsideMakeableSet, build_registry
 from petra.registry.model import fold
 from petra import teach
 from petra.templates import TEMPLATES
+from tests.python_says import python_says
 
 ROOT = Path(__file__).resolve().parents[1]
 REGISTRY = build_registry()
@@ -176,8 +177,8 @@ class CommonNames(unittest.TestCase):
                 path.write_text(body, encoding="utf-8")
                 path.with_suffix(".card").write_text(TEMPLATES["shear_tab"][2], encoding="utf-8")
                 code, out, err = run("check", "--json", str(path))
-                self.assertEqual(code, 0, err)
                 report = json.loads(out)
+                self.assertEqual((code, report["python"]), (cli.EXIT_CODES["UNKNOWN"], "PASS"), err)
                 for named in ("file", "card", "hashes"):    # the two designs are two files of different text
                     report.pop(named)
                 reports.append(report)
@@ -268,7 +269,7 @@ class PetraNew(unittest.TestCase):
             path.write_text(run("new", "shear_tab", "--name", "tab7")[1], encoding="utf-8")
             path.with_suffix(".card").write_text(run("new", "shear_tab", "--name", "tab7", "--card")[1], encoding="utf-8")
             code, out, err = run("check", str(path))
-        self.assertEqual(code, cli.EXIT_CODES["PASS"], err)
+        self.assertEqual((code, python_says(out)), (cli.EXIT_CODES["UNKNOWN"], "PASS"), err)
         self.assertIn("tab7/steel.block_shear", out)
 
     def test_rename_leaves_strings_comments_and_dotted_parts(self):

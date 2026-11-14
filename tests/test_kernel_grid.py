@@ -423,11 +423,11 @@ class Downgrade(Kernel):
         files = changed(self.forged(strips()), "card", lambda b: b.update(inputs=[i for i in b["inputs"] if "on" not in i]))
         self.assertIllFormed(files, "types.7 card tests", without=("rules",))
 
-    def test_with_every_mark_removed_the_card_has_another_hash_and_the_verdict_says_proofs(self):
-        """What the files cannot close. A card.json with no mark and a design with no parts
-        are a design of the models' kinds to the kernel, and the forged cells pass. The
-        reader sees it in three places: the card's hash is not the asker's, `cells_from` is
-        `proofs`, and the hash of the rules is null."""
+    def test_with_every_mark_removed_the_forged_cells_do_not_pass(self):
+        """A card.json with no mark and a design with no parts are a design of the models'
+        kinds to the kernel, which takes the forged cells as they come. Until 2026-11-14 they
+        passed, and only a reader who compared the card's hash, `cells_from` or the hash of
+        the rules saw it. With no deck of rules the kernel now passes nothing."""
         honest = strips(card=OVER)
         files = self.forged(honest)
 
@@ -436,7 +436,8 @@ class Downgrade(Kernel):
             body.pop("tests"), body.pop("probability_claims")
         files = changed(changed(files, "card", unmark), "deck", lambda b: b.pop("rules"))
         said = ask(files, without=("rules",))
-        self.assertEqual((said["verdict"], said["cells_from"], said["hashes"]["rules"]), ("PASS", "proofs", None))
+        self.assertEqual((said["verdict"], said["cells_from"], said["hashes"]["rules"], said["counts"]["open"]), ("UNKNOWN", "proofs", None, 0),
+                         "the kernel takes the forged cells, and with no deck of rules it passes nothing")
         self.assertNotEqual(said["hashes"]["card"], ask(honest)["hashes"]["card"])
 
 

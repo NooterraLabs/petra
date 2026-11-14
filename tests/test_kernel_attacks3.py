@@ -330,7 +330,7 @@ class Types(unittest.TestCase):
         floors = {"length": {"min": "0", "strict": False}, "m^1": {"min": "5", "strict": False}, "m^1 kg^0": {"min": "5", "strict": True}}
         for dim in ("length", "m^1", "kg^0 m^1"):
             with self.subTest(dim=dim):
-                self.assertEqual(said("6", dim, floors)["verdict"], "PASS")
+                self.assertEqual(said("6", dim, floors)["findings"], [], "6 is above both floors")
                 under = said("5", dim, floors)
                 self.assertEqual((under["verdict"], [f["rule"] for f in under["findings"]]), ("ILL-FORMED", ["types.4"]),
                                  "5 is at the floor of 5, and one of the two floors at 5 is strict")
@@ -631,7 +631,7 @@ class Shapes(unittest.TestCase):
         inputs = [{"name": "x", "dim": "force", "lo": str(k % 7), "hi": str(10 + k % 5), "by": "b"} for k in range(9_000)]
         tape = {"inputs": [{"label": "in:c.x", "lo": "0", "hi": "14"}] * 12_000, "nodes": [["c", "-1"]], "roots": [0]}
         said = self.bounded(with_card([cell(tape)], inputs=inputs))
-        self.assertEqual(said["verdict"], "PASS")
+        self.assertEqual((said["findings"], [c["state"] for c in said["cells"]]), ([], ["proved"]))
         narrow = dict(tape, inputs=[{"label": "in:c.x", "lo": "0", "hi": "13"}])
         (found,) = self.bounded(with_card([cell(narrow)], inputs=inputs))["cells"]
         self.assertEqual((found["state"], found["reason"]), ("open", "the tape's range for in:c.x does not contain the signed one"))

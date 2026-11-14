@@ -5,7 +5,7 @@ description: Design, check and repair steel connections to AISC 360-22 (shear ta
 
 # Petra
 
-Petra checks a design against a card. The card, `NAME.card`, holds what is asked: the loads, the claims and any waivers, each with the name of who signs it. The design, `NAME.petra`, holds the components. Petra answers PASS, PASS_WAIVED, FAIL, UNKNOWN or MARGINAL. A small kernel re-checks every PASS and FAIL in exact arithmetic. The steel deck follows AISC 360-22 and works in kips, inches and ksi.
+Petra checks a design against a card. The card, `NAME.card`, holds what is asked: the loads, the claims and any waivers, each with the name of who signs it. The design, `NAME.petra`, holds the components. Petra answers PASS, PASS_WAIVED, FAIL or UNKNOWN, and the answer is the verdict of a small kernel that works in exact arithmetic. The kernel passes a design only against a deck of rules, as a `lap` of the deck `aisc360-22` has. For the other kinds here it has none yet, so a design of them reads UNKNOWN, or FAIL when the kernel checked a refutation, and the `python` line gives what the Python checker says, which decides nothing. The steel deck follows AISC 360-22 and works in kips, inches and ksi.
 
 Install it with `pip install petra-lang`. The command is `petra` and the Python import is `petra`. If the `petra` MCP server is connected, call its tools `kinds`, `new` and `check` in place of the commands below. They take the same arguments and return the same text.
 
@@ -15,9 +15,9 @@ Install it with `pip install petra-lang`. The command is `petra` and the Python 
 2. Run `petra new shear_tab --card > tab.card` and `petra new shear_tab > tab.petra`. They write a card and a complete design that passes it.
 3. Edit the card to what the user asked: the load range in the `load` block, signed with the user's name and the source of the numbers. If the user gave a card, use it as it is.
 4. Edit the design to the user's job. Set the `beam` and `support` lines, the support's face (`flange` or `web`) and the `basis` (`lrfd` or `asd`).
-5. Run `petra check tab.petra`. It reads `tab.card` beside the design, and `--card FILE` names another card. The first line is the status. The `kernel` line says how many of the proofs a second, smaller checker confirmed. The exit code is 0 for PASS, 1 for FAIL, 2 for UNKNOWN, 5 for MARGINAL, 6 for PASS_WAIVED and 3 for an input error.
+5. Run `petra check tab.petra`. It reads `tab.card` beside the design, and `--card FILE` names another card. The first line is the status, which is the kernel's verdict. The `kernel` line says how many of the proofs it checked. The exit code is 0 for PASS, 1 for FAIL, 2 for UNKNOWN, 6 for PASS_WAIVED and 3 for an input error. With no kernel to run there is no verdict: nothing is printed to stdout and the exit code is 4.
 6. On a FAIL, apply a move from the `repair` lines, as the next section describes, and check again.
-7. Stop at PASS. Tell the user the governing strength check and its utilisation from the `governing` line.
+7. Stop when the `python` line says PASS. The status of a design of these kinds stays UNKNOWN until its kind has a deck of rules, so tell the user both: the status, and that the Python checker passes it, with the governing strength check and its utilisation from the `governing` line.
 
 A shape, grade or bolt must be a registry id or a common name for one. `petra registry list W18` lists the W18 shapes. `A325` stands for `bolt_group.120` and `A992` for `steel.A992`. A plate thickness must be a stocked one, and a bolt diameter must be an RCSC size.
 

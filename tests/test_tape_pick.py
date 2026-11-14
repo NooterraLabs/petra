@@ -131,10 +131,10 @@ class Pick(unittest.TestCase):
         self.assertEqual(between(tape, weld, "1/4", "1/4")[0], "open")
         self.assertEqual(between(*welds("1/4", cut=lt), "3/16", "3/16"), ("proved", ""), "with lt the end belongs to the band above")
 
-    def test_a_proved_cell_through_a_pick_is_a_pass(self):
+    def test_a_cell_is_proved_through_a_pick(self):
         tape, weld = welds("1/4")
         said = ask(tape.nodes, tape.inputs, [tape.minus(weld, tape.const("1/8"))], partition="leaf")
-        self.assertEqual((said["verdict"], said["counts"]["proved"], said["dsg_inputs"]), ("PASS", 1, 1))
+        self.assertEqual((said["findings"], said["counts"]["proved"], said["counts"]["open"], said["dsg_inputs"]), ([], 1, 0, 1))
 
     def test_a_range_that_straddles_the_end_takes_both_bands(self):
         tape, weld = welds("3/16", "5/16")

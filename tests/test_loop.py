@@ -37,7 +37,7 @@ class Tasks(unittest.TestCase):
     def test_the_reference_passes_so_the_job_can_be_done(self):
         for task in self.tasks[:3]:
             with self.subTest(task.id):
-                self.assertEqual(petra.check(*task.reference, repair=False)["status"], "PASS")
+                self.assertEqual(petra.check(*task.reference, repair=False)["python"], "PASS")
 
     def test_a_design_that_changes_the_job_is_named(self):
         task = self.tasks[0]
@@ -71,10 +71,10 @@ class Solve(unittest.TestCase):
         self.assertIsNotNone(self.solved.attempts[0].move, "the loop took a move from the repair")
         self.assertIsNotNone(self.solved.checks_to_pass)
         self.assertLessEqual(self.solved.checks_to_pass, 10)
-        self.assertEqual(petra.check(self.solved.card, self.solved.passed, repair=False)["status"], "PASS")
+        self.assertEqual(petra.check(self.solved.card, self.solved.passed, repair=False)["python"], "PASS")
 
     def test_the_optimum_passes_keeps_the_job_and_weighs_less(self):
-        self.assertEqual(petra.check(self.solved.card, self.solved.optimum, repair=False)["status"], "PASS")
+        self.assertEqual(petra.check(self.solved.card, self.solved.optimum, repair=False)["python"], "PASS")
         self.assertEqual(self.task.faithful(self.solved.card, self.solved.optimum, REGISTRY), [])
         self.assertLess(self.solved.mass_optimum, self.solved.mass_passed)
         self.assertAlmostEqual(self.solved.mass_optimum, loop.mass(self.solved.card, self.solved.optimum, REGISTRY))

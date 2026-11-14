@@ -1,4 +1,4 @@
-"""Install a built wheel as a stranger would, and see that the kernel inside it checks verdicts.
+"""Install a built wheel as a stranger would, and see that the kernel inside it gives the verdicts.
 
     python scripts/wheel_check.py FILE [REQUIREMENT ...] [--platform TAG] [--no-kernel]
 
@@ -13,13 +13,13 @@ It exits 1 unless all of these hold:
 
 - the wheel is built for one platform, and for `--platform` when that is given
 - the kernel the installed package runs is the file inside the package
-- each report's `kernel` line says how many proofs petra-verify checked
+- each report's `kernel` line gives the kernel's verdict and how many proofs it checked
 - the lap's `path` line says the kernel worked out every cell from the rules deck
 - the lap says PASS_WAIVED and exits 6, since it rests cells on a waiver, and the circuit
-  says PASS and exits 0
+  says UNKNOWN and exits 2, since the kernel has no deck of rules for it
 
 With `--no-kernel` it asks the opposite, for an sdist or a pure wheel: the package holds no
-kernel, and each report says that none ran.
+kernel, and each check gives no verdict: nothing on stdout, the reason on stderr, exit 4.
 
 The `wheels` workflow runs this on each platform's wheel, on a runner of that platform.
 """
@@ -39,21 +39,25 @@ LAP = ROOT / "examples" / "deck" / "lap_pass.petra"
 CIRCUIT = ROOT / "examples" / "circuit_pass.petra"
 
 # What each design must say, with its exit code. The lap rests four cells on a waiver, so it
-# passes as PASS_WAIVED.
-SAYS = {LAP: ("PASS_WAIVED", 6), CIRCUIT: ("PASS", 0)}
+# passes as PASS_WAIVED. The circuit is of a models' kind, which the kernel has no deck of
+# rules for: it checks every proof and passes nothing.
+SAYS = {LAP: ("PASS_WAIVED", 6), CIRCUIT: ("UNKNOWN", 2)}
+NO_VERDICT = 4
 
-CHECKED = re.compile(r"kernel +petra-verify checked [1-9]\d* of \d+ proofs")
-NOT_RUN = re.compile(r"kernel +not run: ")
+CHECKED = re.compile(r"kernel +petra-verify gives (PASS|FAIL|UNKNOWN): it checked [1-9]\d* of \d+ proofs")
 FROM_RULES = re.compile(r"path +rules: the kernel worked out every cell from the rules deck")
 
 # A stranger has no kernel named in the environment and no repository on sys.path.
 ENV = {k: v for k, v in os.environ.items() if k not in ("PETRA_VERIFY", "PETRA_SHAPES_XLSX", "PYTHONPATH")}
 
 
-def run(*argv: str | Path, cwd: Path, code: int = 0) -> str:
+def run(*argv: str | Path, cwd: Path, code: int = 0, said: list[str] | None = None) -> str:
+    """What the command printed. With `said`, what it wrote to stderr is added to it."""
     done = subprocess.run([str(a) for a in argv], cwd=cwd, env=ENV, capture_output=True, text=True, timeout=900)
     if done.returncode != code:
-        sys.exit(f"{' '.join(map(str, argv))} exited {done.returncode}\n{done.stdout}\n{done.stderr}")
+        sys.exit(f"{' '.join(map(str, argv))} exited {done.returncode}, not {code}\n{done.stdout}\n{done.stderr}")
+    if said is not None:
+        said.append(done.stderr)
     return done.stdout
 
 
@@ -79,9 +83,16 @@ def faults(file: Path, requirements: list[str], kernel: bool, platform: str | No
         found.append(f"the installed package runs a kernel, {ran}")
     for design in (LAP, CIRCUIT):
         status, code = SAYS[design]
+        if not kernel:
+            why: list[str] = []
+            printed = run(shutil.which("petra", path=str(scripts)), "check", design, cwd=where, code=NO_VERDICT, said=why)
+            print(f"\n$ petra check {design.relative_to(ROOT).as_posix()}\n{why[0].strip()}")
+            if printed or "no verdict" not in why[0]:
+                found.append(f"{design.name}: with no kernel the check must print nothing and say on stderr that there is no verdict")
+            continue
         lines = run(shutil.which("petra", path=str(scripts)), "check", design, cwd=where, code=code).splitlines()
         print("\n".join([f"\n$ petra check {design.relative_to(ROOT).as_posix()}", *lines[:8]]))
-        wanted = [CHECKED if kernel else NOT_RUN, *([FROM_RULES] if kernel and design == LAP else [])]
+        wanted = [CHECKED, *([FROM_RULES] if design == LAP else [])]
         found += [f"{design.name}: no line of the report matches {pattern.pattern!r}"
                   for pattern in wanted if not any(pattern.match(line) for line in lines)]
         if not lines[0].endswith(f": {status}"):
@@ -94,7 +105,7 @@ def main() -> int:
     parser.add_argument("file", type=Path, help="a wheel or an sdist")
     parser.add_argument("requirements", nargs="*", metavar="REQUIREMENT", help="a pin for pip, such as numpy==2.4.6")
     parser.add_argument("--platform", help="the platform tag the wheel must carry")
-    parser.add_argument("--no-kernel", action="store_true", help="the package must hold no kernel, and say that none ran")
+    parser.add_argument("--no-kernel", action="store_true", help="the package must hold no kernel, and give no verdict")
     args = parser.parse_args()
     where = Path(tempfile.mkdtemp(prefix="petra-wheel-")).resolve()
     if where.is_relative_to(ROOT):

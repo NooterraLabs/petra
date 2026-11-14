@@ -14,6 +14,7 @@ from petra.pipeline import check_design
 from petra.recall import RecallError, covered, recall, to_json
 from petra.registry import build_registry
 from petra.solvers import SolverSource
+from tests.python_says import python_says
 
 ROOT = Path(__file__).resolve().parents[1]
 EXAMPLES = ROOT / "examples"
@@ -51,7 +52,7 @@ class Footprints(unittest.TestCase):
 
     def test_the_text_footprint_names_a_corrected_entry_s_version(self):
         code, out, _ = run("check", str(CIRCUIT))
-        self.assertEqual(code, 0)
+        self.assertEqual((code, python_says(out)), (EXIT_CODES["UNKNOWN"], "PASS"))
         (line,) = [line for line in out.splitlines() if f" {SERIES} " in line]
         self.assertTrue(line.endswith("; version 2)"), line)
 

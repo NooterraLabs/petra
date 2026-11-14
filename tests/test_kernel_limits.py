@@ -317,7 +317,7 @@ class Work(Kernel):
     def test_the_same_tape_on_fewer_leaves_is_tried(self):
         long = {"inputs": [{"label": "dsg:x", "lo": "0", "hi": "64"}], "nodes": [["c", "-1"]] + [["neg", 0]] * 60000, "roots": [0]}
         said = ask(old_path([proved(long, "long", halves(0, 0, 64))], []))
-        self.assertEqual((said["verdict"], said["cells"][0]["state"]), ("PASS", "proved"))
+        self.assertEqual((said["findings"], said["cells"][0]["state"]), ([], "proved"))
         self.assertGreater(said["work"], 60000 * 240 * 64, "it paid for every node on every leaf")
 
     def test_a_step_that_costs_more_than_the_work_left_is_not_taken_and_a_small_proof_after_it_is_tried(self):
@@ -394,7 +394,7 @@ class Orders(Kernel):
 
     def test_a_pick_that_a_file_carries_holds_1024_orders_and_no_more(self):
         at = ask(old_path([proved(self.wide(MAX_ORDERS), "at")], []))
-        self.assertEqual((at["verdict"], at["cells"][0]["state"]), ("PASS", "proved"))
+        self.assertEqual((at["findings"], at["cells"][0]["state"]), ([], "proved"))
         over = ask(old_path([proved(self.wide(MAX_ORDERS + 1), "over")], []))
         self.assertEqual((over["verdict"], over["cells"]), ("ILL-FORMED", []))
         self.assertIn("the conditions of a pick hold 1025 orders, over the budget of 1024", over["findings"][0]["why"])

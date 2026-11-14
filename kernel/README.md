@@ -27,11 +27,11 @@ The verdict says which of the two it did, in `cells_from`, and prints the hash o
 
 ## With petra check
 
-`petra check` runs the kernel on its own report when it finds one. It looks for the file the environment variable `PETRA_VERIFY` names, then for the kernel inside the installed package, then for `.lake/build/bin/petra-verify` here. Its `kernel` line says how many of the proofs behind the status the kernel checked, and `python corpus/run.py --kernel BINARY` gives the kernel's own verdict on every corpus design.
+`petra check` runs the kernel and prints the kernel's verdict. With no kernel, or with one whose exit code or error stream is at odds with what it printed, it gives no verdict and exits 4. It looks for the file the environment variable `PETRA_VERIFY` names, then for the kernel inside the installed package, then for `.lake/build/bin/petra-verify` here. Its `kernel` line gives the kernel's verdict and how many proofs it checked, and `python corpus/run.py --kernel BINARY` gives the kernel's own verdict on every corpus design.
 
 ## In a wheel
 
-A wheel from PyPI carries the kernel as `petra/bin/petra-verify`, so `pip install petra-lang` needs no Lean toolchain. The sdist carries no kernel. Petra installed from the sdist says on the `kernel` line of each report that no kernel ran.
+A wheel from PyPI carries the kernel as `petra/bin/petra-verify`, so `pip install petra-lang` needs no Lean toolchain. The sdist carries no kernel. Petra installed from the sdist gives no verdict until `PETRA_VERIFY` names a kernel.
 
 The build backend, `_build/petra_build.py`, puts the kernel in a wheel when the tree holds one. After `lake build` here, these two commands, run in the repository's root, build a wheel for your platform and try it in a fresh environment:
 

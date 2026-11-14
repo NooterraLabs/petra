@@ -99,7 +99,9 @@ class Session(unittest.TestCase):
         self.assertEqual(result["structuredContent"]["repair"]["moves"][0]["input"], "tab.rows")
 
     def test_check_reads_a_path(self):
-        self.assertEqual(self.by_id[8]["result"]["structuredContent"]["status"], "PASS")
+        """The status is the kernel's, which has no deck of rules for a shear tab."""
+        report = self.by_id[8]["result"]["structuredContent"]
+        self.assertEqual((report["status"], report["python"], report["file"]), ("UNKNOWN", "PASS", str(SHEAR_TAB)))
 
     def test_a_design_that_does_not_lower_is_a_tool_error_the_model_reads(self):
         result = self.by_id[9]["result"]
@@ -216,7 +218,7 @@ class Waiting(unittest.TestCase):
         server.stdin.write(json.dumps(call(1, "check", path=str(SHEAR_TAB))).encode("utf-8") + b"\n")
         server.stdin.flush()
         try:
-            self.assertTrue(replies.get(timeout=120)["result"]["content"][0]["text"].splitlines()[0].endswith(": PASS"))
+            self.assertEqual(replies.get(timeout=120)["result"]["content"][0]["text"].splitlines()[0], "steel-shear-tab: UNKNOWN")
         finally:
             server.stdin.close()
             self.assertEqual(server.wait(timeout=60), 0, "the server exits once stdin closes")

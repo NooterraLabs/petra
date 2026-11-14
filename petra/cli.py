@@ -11,11 +11,13 @@
         capacity and utilisation in the design's units, and its counterexample as decimals
         in those units. On a FAIL, unless --no-solve, the lines after the governing lines
         name the moves that lower the governing check, best first (petra/repair.py). The
-        `card` and `design` lines give the SHA-256 of each text, and the `kernel` line the
-        word of petra-verify (petra/verify.py): how many of the proofs it checked, or that
-        none is here to run. A proof it rejects exits 4. --json prints
-        pipeline.Report.to_json() with "card", "hashes", "kernel" and "repair", the moves
-        or null (`petra docs api`):
+        `card` and `design` lines give the SHA-256 of each text. The status on the first
+        line is the verdict of petra-verify (petra/verify.py), and the `kernel` line says
+        how many of the proofs it checked. For a design of the models' kinds the kernel
+        has no deck of rules and never says PASS: the `python` line gives the Python
+        checker's own status, which decides nothing. --json prints
+        pipeline.Report.to_json() with "status" the kernel's verdict, "python", "card",
+        "hashes", "kernel" and "repair", the moves or null (`petra docs api`):
             {"file": FILE, "design": NAME, "status": OVERALL, "repair": REPAIR | null, "verdicts": [
                 {"claim": NAME, "status": "PASS" | "FAIL" | "UNKNOWN" | "MARGINAL",
                  "footprint": [{"tag", "label", "owner", "source", "version"?}, ...],
@@ -25,12 +27,14 @@
                               | "within", "point"?}, ...],   claims with a margin
                  "obligations": [readout.Finding.to_json(), ...]},   one per outcome
                 ...]}
-        Exit code from the overall status (EXIT_CODES): 0 PASS, 1 FAIL, 2 UNKNOWN,
-        5 MARGINAL (a claim with a margin is proved, and a certified point lies within
-        its margin of its bound), 6 PASS_WAIVED (a design checked against a deck of rules
-        passes, and a cell rests on a waiver: the JSON lists each such waiver under
-        "waived"), 3 input error (syntax, lowering,
-        ComponentError or an unreadable deck; nothing is printed to stdout).
+        Exit code from the status, which is the kernel's own: 0 PASS, 1 FAIL, 2 UNKNOWN,
+        and 6 PASS_WAIVED where the kernel says PASS and lists a waiver that a cell
+        rests on (the JSON lists each such waiver under "waived"). 3 input error
+        (syntax, lowering, ComponentError, a pair the kernel finds ill formed or an
+        unreadable deck; nothing is printed to stdout). 4 no verdict: there is no
+        kernel to run, or its exit code or its error stream is at odds with what it
+        printed, or it rejects a proof the Python checker accepted. Nothing is printed
+        to stdout, and no status of the Python checker's stands in.
     python -m petra explain FILE
         Print the elaborated statements with hypothesis labels.
     python -m petra envelope FILE --input NAME --from QTY --to QTY [--at QTY]
@@ -118,7 +122,11 @@ if TYPE_CHECKING:
 
 EXIT_CODES: Mapping[str, int] = {"PASS": 0, "FAIL": 1, "UNKNOWN": 2, "INPUT_ERROR": 3, "INTERNAL_ERROR": 4, "MARGINAL": 5,
                                  "PASS_WAIVED": 6, "BROKEN_PIPE": 141}
-"""PASS_WAIVED: a design checked against a deck of rules passes, and a cell rests on a
+"""`petra check` exits with the code of the kernel's verdict: PASS, FAIL and UNKNOWN are
+the kernel's own 0, 1 and 2, and INPUT_ERROR is its 3 for an ill-formed pair. INTERNAL_ERROR
+is also what it exits with when there is no verdict (verify.NoVerdict). MARGINAL is a status
+of the Python checker alone, which `envelope` and `certify-family` still exit with.
+PASS_WAIVED: a design checked against a deck of rules passes, and a cell rests on a
 waiver (grid.PASS_WAIVED). BROKEN_PIPE: the reader closed stdout before Petra finished
 writing. 141 is 128 plus SIGPIPE's number, the status a shell reports for a command that a
 closed pipe stopped."""
@@ -244,8 +252,12 @@ def _input_error(exc: BaseException) -> int:
 
 def cmd_check(args: argparse.Namespace) -> int:
     """repair.check_text on the file, print its text() or json.dumps(to_json(),
-    sort_keys=True). Returns EXIT_CODES[status], or EXIT_CODES["INPUT_ERROR"] when the file
-    or the deck cannot be read or the design does not lower (message on stderr)."""
+    sort_keys=True). Returns EXIT_CODES[status], where the status is the kernel's verdict,
+    or EXIT_CODES["INPUT_ERROR"] when the file or the deck cannot be read or the design does
+    not lower (message on stderr). With no kernel to run, or one whose answer cannot be
+    taken, there is no verdict: nothing goes to stdout, the reason goes to stderr, and the
+    code is EXIT_CODES["INTERNAL_ERROR"]."""
+    from . import verify
     from .certs import CertStore
     from .files import read_pair
     from .library import Library
@@ -262,7 +274,13 @@ def cmd_check(args: argparse.Namespace) -> int:
     except _input_errors() as exc:
         return _input_error(exc)
     sources = tuple(s for s in (store, library, None if args.no_solve else SolverSource()) if s is not None)
-    checked = check_text(card, text, args.file, registry, sources, sink=store, deck=deck, moves=not args.no_solve, card_path=args.card)
+    try:
+        checked = check_text(card, text, args.file, registry, sources, sink=store, deck=deck, moves=not args.no_solve, card_path=args.card)
+    except verify.Disagreement:
+        raise      # a bug in one of the two checkers: a crash, with its traceback
+    except verify.NoVerdict as exc:
+        print(f"petra: no verdict: {exc}", file=sys.stderr)
+        return EXIT_CODES["INTERNAL_ERROR"]
     if checked.report is None:
         return _input_error(checked.error)
     print(json.dumps(checked.to_json(), sort_keys=True) if args.json else checked.text())

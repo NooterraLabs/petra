@@ -15,6 +15,7 @@ from petra.models.steel import generate as gen
 from petra.models.steel.domain import required
 from petra.models.steel.package import recheck, write_package
 from petra.registry import build_registry
+from tests.python_says import python_says
 
 REGISTRY = build_registry()
 STREAM = list(gen.generate(33, 9, REGISTRY))
@@ -77,7 +78,7 @@ class Packages(unittest.TestCase):
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
             cli.main(["check", "--certs", str(pkg.root / "certs"), "--no-solve", str(pkg.root / "design.petra")])
-        self.assertIn(f"{g.name}: {pkg.status}", out.getvalue())
+        self.assertEqual(python_says(out.getvalue()), pkg.status, "the Python checker's status, which the package holds")
 
     def test_a_tampered_certificate_is_caught(self):
         pkg = self.package(pick(lambda g: g.kind == "shear_end_plate" and g.expected == "PASS"))

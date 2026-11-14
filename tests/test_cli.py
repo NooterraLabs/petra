@@ -1,6 +1,10 @@
 """The command line: exit codes, the JSON report, and each subcommand. Owner: Y.
 
-Expected verdicts: examples/circuit_pass.petra passes and examples/bolt_unknown.petra is
+The status and the exit code of `petra check` are the kernel's (tests/test_kernel_decides.py).
+The kernel has no deck of rules for the kinds used here, so it passes none of them: where the
+Python checker passes a design, the status is UNKNOWN and `python` is PASS.
+
+The Python checker's statuses: examples/circuit_pass.petra passes and examples/bolt_unknown.petra is
 UNKNOWN (their own headers say why). Under a card that asks for a 16 A draw the circuit_pass design breaks
 the overload condition I_B <= I_n of its B10 breaker (IEC 60364-4-43 433.1), so it
 fails. A stress area of 1.5 x 84.267 mm2 for M12 contradicts ISO 724, so a deck holding
@@ -54,12 +58,13 @@ class Workspace(unittest.TestCase):
 
 
 class Check(Workspace):
-    def test_a_passing_design_exits_0_with_the_json_report(self):
+    def test_a_design_the_python_checker_passes_exits_2_with_the_json_report(self):
         code, out, _ = run("check", str(CIRCUIT), "--json")
-        self.assertEqual(code, EXIT_CODES["PASS"], "circuit_pass exits 0")
+        self.assertEqual(code, EXIT_CODES["UNKNOWN"], "circuit_pass exits 2: the kernel has no deck of rules for a circuit")
         report = json.loads(out)
-        self.assertEqual(set(report), {"file", "card", "hashes", "kernel", "path", "design", "status", "governing", "verdicts", "unchecked", "repair"},
-                         "the report has the documented keys")
+        self.assertEqual(set(report), {"file", "card", "hashes", "kernel", "path", "design", "status", "python", "governing", "verdicts", "unchecked",
+                                       "repair"}, "the report has the documented keys")
+        self.assertEqual((report["status"], report["python"]), ("UNKNOWN", "PASS"))
         self.assertEqual(report["file"], str(CIRCUIT), "the file is named as given")
         for verdict in report["verdicts"]:
             self.assertEqual(set(verdict), VERDICT_KEYS, f"{verdict['claim']} has the documented keys")
@@ -156,10 +161,10 @@ class Encodings(Workspace):
         return run("check", str(path))[0]
 
     def test_a_pair_with_a_byte_order_mark_checks(self):
-        self.assertEqual(self.check(self.CARD.encode("utf-8-sig"), self.TEXT.encode("utf-8-sig")), EXIT_CODES["PASS"])
+        self.assertEqual(self.check(self.CARD.encode("utf-8-sig"), self.TEXT.encode("utf-8-sig")), EXIT_CODES["UNKNOWN"])
 
     def test_a_utf16_pair_checks(self):
-        self.assertEqual(self.check(*(text.replace("\n", "\r\n").encode("utf-16") for text in (self.CARD, self.TEXT))), EXIT_CODES["PASS"])
+        self.assertEqual(self.check(*(text.replace("\n", "\r\n").encode("utf-16") for text in (self.CARD, self.TEXT))), EXIT_CODES["UNKNOWN"])
 
     def test_bytes_that_are_not_text_are_an_input_error(self):
         self.assertEqual(self.check(self.CARD.encode("utf-8"), b"petra 0\n\xff\xfe\xfd"), EXIT_CODES["INPUT_ERROR"])

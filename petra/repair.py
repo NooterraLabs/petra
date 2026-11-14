@@ -37,7 +37,7 @@ from .verdict import SEVERITY, STATUS
 
 INPUT_ERRORS = (LolaSyntaxError, LoweringError, ComponentError)
 
-LEGACY = "legacy: Python's models chose the checks and wrote the formulas, and no rules deck stands behind this verdict"
+LEGACY = "legacy: Python's models chose the checks and wrote the formulas, and no rules deck stands behind them"
 """What a report says of a design of the models' kinds. A design of a deck's types says the
 kernel worked out its cells (grid.Checked). The models go as their kinds move to decks."""
 """What a design that does not lower raises: the edit is not a step."""
@@ -410,11 +410,14 @@ def _ratio(x: float | None) -> str:
 
 @dataclass(frozen=True)
 class Checked:
-    """A design checked from its text: its report and, on a FAIL, its repair; or, for a
-    design that does not lower, the input error and no report. `card` names the card it
-    was checked against, `hashes` holds the hash of the card's text and of the design's
-    (export.sha256), and `kernel` is the kernel's word on the report, None when no kernel
-    ran."""
+    """A design checked from its text: the Python checker's report and, where that is a
+    FAIL, its repair; or, for a design that does not lower, the input error and no report.
+    `card` names the card it was checked against, `hashes` holds the hash of the card's text
+    and of the design's (export.sha256), and `kernel` is what the kernel said (verify.py).
+
+    The status is the kernel's verdict and no other. For a design of the models' kinds the
+    kernel has no deck of rules, so that is never PASS, whatever the report says: `python`
+    is the report's own status, which is printed beside the kernel's and decides nothing."""
 
     path: str
     report: Report | None
@@ -426,44 +429,53 @@ class Checked:
 
     @property
     def status(self) -> str:
-        return "INPUT_ERROR" if self.report is None else STATUS[type(self.report.verdict)]
+        return "INPUT_ERROR" if self.report is None else self.kernel.verdict
+
+    @property
+    def python(self) -> str:
+        """What the Python checker's report says of the design."""
+        return STATUS[type(self.report.verdict)]
 
     def to_json(self) -> dict[str, Any]:
-        """The report's JSON with "card", "hashes", "kernel" and "repair", or
+        """The report's JSON with "status" the kernel's verdict, "python" the report's own
+        status, "card", "hashes", "kernel" and "repair", or
         {"file", "status": "INPUT_ERROR", "error"}."""
         if self.report is None:
             return {"file": self.path, "status": "INPUT_ERROR", "error": self.error}
-        return {**self.report.to_json(), "card": self.card, "hashes": dict(self.hashes), "path": "legacy",
-                "kernel": None if self.kernel is None else self.kernel.to_json(),
-                "repair": None if self.repair is None else self.repair.to_json()}
+        return {**self.report.to_json(), "status": self.status, "python": self.python, "card": self.card, "hashes": dict(self.hashes),
+                "path": "legacy", "kernel": self.kernel.to_json(), "repair": None if self.repair is None else self.repair.to_json()}
 
     def text(self) -> str:
-        """What `petra check` prints: the report, with what it was checked against and the
-        kernel's word after its scope, and the repair after its governing lines."""
+        """What `petra check` prints: the kernel's verdict on the first line and what the
+        kernel said on the second. Every line after those is the Python checker's, and the
+        third says so: its report, with what it was checked against after its scope, and the
+        repair after its governing lines."""
         if self.report is None:
             return f"{self.path}: INPUT_ERROR\n{self.error}"
-        out = self.report.render().split("\n")
-        at = max((i + 1 for i, line in enumerate(out[:8]) if line.startswith("governing  ")), default=min(2, len(out)))
+        out = self.report.render().split("\n")[1:]
+        at = max((i + 1 for i, line in enumerate(out[:8]) if line.startswith("governing  ")), default=min(1, len(out)))
         out = out[:at] + ([] if self.repair is None else self.repair.lines()) + out[at:]
-        kernel = verify.NO_KERNEL if self.kernel is None else self.kernel.line(self.status)
-        against = [f"card       {self.hashes['card']}  {self.card}", f"design     {self.hashes['design']}  {self.path}", f"kernel     {kernel}",
-                   f"path       {LEGACY}"]
-        at = next((i + 1 for i, line in enumerate(out[:4]) if line.startswith("scope  ")), min(2, len(out)))
-        return "\n".join(out[:at] + against + out[at:])
+        against = [f"card       {self.hashes['card']}  {self.card}", f"design     {self.hashes['design']}  {self.path}", f"path       {LEGACY}"]
+        at = next((i + 1 for i, line in enumerate(out[:3]) if line.startswith("scope  ")), min(1, len(out)))
+        return "\n".join([f"{self.report.design}: {self.status}", f"kernel     {self.kernel.line()}",
+                          f"python     the Python checker says {self.python}, which decides nothing: every line below is its own",
+                          *out[:at], *against, *out[at:]])
 
 
 def check_text(card: str, text: str, path: str, registry: Any, sources: tuple, *, sink: Any = None, deck: Any = None,
                moves: bool = True, card_path: str | None = None) -> Checked:
     """Check the design `text` against the card and `registry` with `sources`, recording
-    accepted evidence into `sink`, and have the kernel check the report when there is one
-    to run (verify.py). `path` names the design in messages, and `card_path` the card
-    when it is not the file beside it. With `moves`, a FAIL gets its repair, probed with
-    the same card and sources, no sink and no kernel: a move is a suggestion.
+    accepted evidence into `sink`, and take the kernel's verdict on it (verify.py). Raises
+    verify.NoVerdict when there is no kernel to run or it gives no answer. `path` names the
+    design in messages, and `card_path` the card when it is not the file beside it. With
+    `moves`, a report that is a FAIL gets its repair, probed with the same card and sources,
+    no sink and no kernel: a move is a suggestion.
 
     A design whose parts are of a deck's types goes to the grid (grid.py) and not to the
     models: its cells need no solver and get no repair yet."""
     try:
         design = parse_design(card, text, path, registry, card_path)
+        verify.need()      # with no kernel there is no verdict, so no solver runs for one
         rules = grid.owner(design)
         if rules is not None:
             return grid.checked(design, rules, card, text, card_path or card_of(path))

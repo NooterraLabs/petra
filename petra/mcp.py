@@ -8,7 +8,9 @@ the server writes one response per request to stdout, one per line, and nothing 
 petra's own commands make:
 
     check           repair.check_text: the text `petra check` prints, and the JSON as
-                    structured content
+                    structured content. The verdict is the kernel's: with none to run,
+                    or one whose answer cannot be taken, the tool answers with isError
+                    true and `no verdict`
     kinds           teach.kinds_summary, or teach.kinds_text for a domain or a kind
     new             teach.new_text: a card and a complete design of a kind to edit
     registry_list   teach.registry_text: the registry ids a design can name
@@ -62,9 +64,12 @@ CACHEABLE = {"tools/list": 3_600_000, "server/discover": 3_600_000}
 """The modern results that carry caching hints, with ttlMs: the tools never change while
 the server runs, and a new version of Petra starts a new server."""
 
-INSTRUCTIONS = """Petra checks a physical design against the claims and loads written in it, and answers \
-PASS, FAIL, UNKNOWN or MARGINAL with a certificate, or PASS_WAIVED for a design of a deck's parts that \
-passes with a cell resting on a waiver. Its main deck is steel connections to AISC 360-22, \
+INSTRUCTIONS = """Petra checks a physical design against the claims and loads written in it. The answer \
+is the verdict of its kernel: PASS, FAIL or UNKNOWN, or PASS_WAIVED for a design of a deck's parts that \
+passes with a cell resting on a waiver. The kernel passes only a design checked against a deck of rules: \
+a design of the other kinds reads UNKNOWN, and its `python` line says what the Python checker found, \
+which decides nothing. With no kernel to run, `check` answers with an error and no verdict. \
+Its main deck is steel connections to AISC 360-22, \
 in kips and inches. To design one: call `kinds` to see what Petra can check, `new` with a kind for a \
 complete design to edit, then `check` with the edited text. On a FAIL, the check's repair names the \
 input that lowers the governing check most, the way to move it, and a value at which that check holds. \
@@ -100,7 +105,7 @@ def _string(args: Mapping[str, Any], key: str, required: bool = False) -> str | 
 
 
 def _check(args: Mapping[str, Any]) -> Result:
-    from . import build_registry
+    from . import build_registry, verify
     from .repair import check_text
     from .solvers import SolverSource
 
@@ -124,7 +129,10 @@ def _check(args: Mapping[str, Any]) -> Result:
     if card is None:
         card_path = card_path or card_of(path)
         card = _file_at(card_path, "card_path", ".card")
-    checked = check_text(card, text, path or "<design>", build_registry(), (SolverSource(),), card_path=card_path or "<card>")
+    try:
+        checked = check_text(card, text, path or "<design>", build_registry(), (SolverSource(),), card_path=card_path or "<card>")
+    except verify.NoVerdict as exc:      # no kernel ran, or its answer cannot be taken: nothing else gives a verdict
+        raise ToolError(shown(f"no verdict: {exc}")) from None
     # The text is what a client shows a person, so it goes out as `petra check` prints it: no character a terminal acts on.
     if checked.report is None:
         raise ToolError(shown(checked.text()))
@@ -200,7 +208,7 @@ def _schema(properties: Mapping[str, str], required: tuple[str, ...] = ()) -> di
 
 
 TOOLS: Mapping[str, tuple[str, dict[str, Any], Callable[[Mapping[str, Any]], Result]]] = {
-    "check": ("Check a design against the card it answers and return its verdict: PASS, FAIL, UNKNOWN or MARGINAL, "
+    "check": ("Check a design against the card it answers and return the kernel's verdict: PASS, FAIL or UNKNOWN, "
               "or for a design of a deck's parts PASS_WAIVED when it passes and a cell rests on a waiver, "
               "the governing checks with demand, capacity and utilisation, and every obligation. The card holds what "
               "was asked: the loads, the signed bounds, the claims and the waivers. The design holds the components "
@@ -216,7 +224,7 @@ TOOLS: Mapping[str, tuple[str, dict[str, Any], Callable[[Mapping[str, Any]], Res
     "kinds": ("List the component kinds Petra can check. With a domain (steel) or a kind (shear_tab), print each "
               "kind's lines, required and optional, with units, registry ids and meanings.",
               _schema({"name": "a domain or a component kind; leave out to list them all"}), _kinds),
-    "new": ("Return a card and a complete design of one kind, which passes, to edit into the pair you need.",
+    "new": ("Return a card and a complete design of one kind, which the Python checker passes, to edit into the pair you need.",
             _schema({"kind": "the component kind, such as shear_tab or double_angle", "name": "the component's name"},
                     ("kind",)), _new),
     "registry_list": ("List the registry ids a design can name: shapes, grades, bolt groups, electrodes, stocked plates, "

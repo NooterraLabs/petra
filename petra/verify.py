@@ -1,14 +1,23 @@
-"""The kernel's word on a checked design. Untrusted shell around petra-verify (kernel/).
+"""The kernel's verdict on a design. Untrusted shell around petra-verify (kernel/).
 
-`verify` writes the files of docs/format.md for a report, runs the kernel on them and reads
-its answer. The kernel checks again every proof it has a rule for. Where it has none, the
-Python checker's word stands alone, and `Kernel.proofs - Kernel.checked` counts those
-proofs. A proof the kernel rejects after the Python checker accepted it is a bug in one of
-the two, and raises Disagreement, which no caller catches. A pair the kernel finds ill
-formed raises ComponentError, the input error every caller reports.
+The verdict of a check is the kernel's, and nothing here or in a caller gives one of its
+own. `ask` writes the files of docs/format.md, runs the kernel on them and takes its answer
+only when the answer holds together: one JSON object with one of the four verdicts, the exit
+code of that verdict, and nothing on the error stream. Anything else raises NoVerdict, and
+so does having no kernel to run. Every way into a check then reports that there is no
+verdict: `petra check` prints nothing to stdout and exits 4, and the server's tool answers
+with an error.
+
+`status` is what a caller reports for an answer: the kernel's verdict, where a PASS with a
+waiver the kernel lists reads PASS_WAIVED. A pair the kernel finds ill formed raises
+ComponentError, the input error every caller reports.
 
 For a design checked against a deck of rules the kernel reads the deck and works out every
-cell itself, and `differs` compares its cells with the grid's, one by one.
+cell itself, and `differs` compares its cells with the grid's, one by one. For a design of
+the models' kinds the kernel has no deck of rules. It checks the tape of each proof the
+Python checker wrote, and its verdict is then never PASS (kernel/Petra/Check.lean): the
+Python checker chose the cells, and it decides nothing. A proof the kernel rejects after
+the Python checker accepted it is a bug in one of the two, and raises Disagreement.
 """
 from __future__ import annotations
 
@@ -36,40 +45,55 @@ BUILT = Path(__file__).resolve().parent.parent / "kernel" / ".lake" / "build" / 
 """Where `lake build` puts the kernel in a source tree."""
 
 
-NO_KERNEL = "not run: there is no petra-verify here, so the Python checker alone stands behind this verdict"
-"""What a report says in place of the kernel's word. PETRA_VERIFY names a kernel to run."""
+EXITS: Mapping[str, int] = {"PASS": 0, "FAIL": 1, "UNKNOWN": 2, "ILL-FORMED": 3}
+"""The four verdicts of the kernel, each with the code it exits with (kernel/Main.lean)."""
 
 
-class Disagreement(RuntimeError):
-    """The kernel rejects a proof, a refutation or a waiver that the Python checker accepted."""
+class NoVerdict(RuntimeError):
+    """There is no verdict: no kernel ran, or what it answered cannot be taken. No caller
+    gives a verdict of its own in its place."""
+
+
+class NoKernel(NoVerdict):
+    """There is no kernel to run, or the one that is named cannot be started."""
+
+
+class BadAnswer(NoVerdict):
+    """The kernel ran, and what it gave is not an answer: no JSON object, no verdict of the
+    four, an exit code that is not its verdict's, or text on its error stream."""
+
+
+class Disagreement(NoVerdict):
+    """The kernel rejects a proof, a refutation or a waiver that the Python checker accepted,
+    or its cells are not the grid's. It is a bug in one of the two, and the command line
+    lets it through as a crash, with its traceback."""
 
 
 @dataclass(frozen=True)
 class Kernel:
-    """What the kernel said of one report. `checked` of the `proofs` the report's verdict
-    rests on went through the kernel, which accepted each. `hashes` are of the files it
-    read, by the names docs/format.md gives them. A design of the models' kinds has no
-    deck of rules, and the kernel's null for it is left out."""
+    """What the kernel said of a design of the models' kinds. `verdict` is its own, and the
+    design's status. `checked` of the `proofs` the Python checker's report rests on had a
+    tape, which the kernel checked and accepted. `hashes` are of the files it read, by the
+    names docs/format.md gives them: the kernel had no deck of rules, and its null for one
+    is left out. `cells_from` is `proofs`, since it took the cells of proofs.json."""
 
     verdict: str
     checked: int
     proofs: int
     hashes: Mapping[str, str]
+    cells_from: str = "proofs"
 
-    def line(self, status: str) -> str:
-        """What a report prints of the kernel, for a design whose status is `status`. A
-        refutation counts as a proof here."""
+    def line(self) -> str:
+        """What a report prints of the kernel. A refutation counts as a proof here."""
         rest = self.proofs - self.checked
         if not self.checked:
-            said = [f"petra-verify has no rule yet for any of the {self.proofs} proofs"]
+            tapes = f"it has no rule yet for any of the {self.proofs} proofs"
         else:
-            said = [f"petra-verify checked {self.checked} of {self.proofs} proofs and agrees", *([f"it has no rule yet for the other {rest}"] if rest else [])]
-        if self.verdict != status:
-            said.append(f"its own verdict is {self.verdict}")
-        return "; ".join(said)
+            tapes = f"it checked {self.checked} of {self.proofs} proofs" + (f" and has no rule yet for the other {rest}" if rest else "")
+        return f"petra-verify gives {self.verdict}: {tapes}, and with no deck of rules for this design it passes nothing"
 
     def to_json(self) -> dict[str, Any]:
-        return {"verdict": self.verdict, "checked": self.checked, "proofs": self.proofs, "hashes": dict(self.hashes)}
+        return {"verdict": self.verdict, "checked": self.checked, "proofs": self.proofs, "hashes": dict(self.hashes), "cells_from": self.cells_from}
 
 
 @functools.cache
@@ -79,8 +103,8 @@ def runs(kernel: str) -> bool:
     there this only looks at the file's mode. A Windows tag names no version of Windows,
     and the kernel imports icu.dll, which Windows has carried since Windows 10 version
     1903. So on Windows this starts the kernel once: with no arguments it prints its usage
-    and exits 64. A kernel that cannot run is warned of once, and the report then says that
-    no kernel ran."""
+    and exits 64. A kernel that cannot run is warned of once, and a check then has no
+    kernel and gives no verdict."""
     if os.name == "nt":
         import ctypes
 
@@ -96,7 +120,7 @@ def runs(kernel: str) -> bool:
     else:
         ran = os.access(kernel, os.X_OK)
     if not ran:
-        warnings.warn(f"{kernel} cannot run on this machine, so no kernel checks this verdict", RuntimeWarning, stacklevel=3)
+        warnings.warn(f"{kernel} cannot run on this machine, so it gives no verdict here", RuntimeWarning, stacklevel=3)
     return ran
 
 
@@ -124,19 +148,74 @@ def behind(report: Any) -> int:
     return count
 
 
+def need() -> str:
+    """The kernel to run, as `binary` finds it. Raises NoKernel when there is none."""
+    kernel = binary()
+    if kernel is None:
+        raise NoKernel(f"there is no petra-verify to run, and nothing else gives a verdict. PETRA_VERIFY names none, this install "
+                       f"carries none at {PACKAGED}, and none is built at {BUILT}")
+    return kernel
+
+
+def run(command: list[str]) -> tuple[int, bytes, bytes]:
+    """Run the kernel: its exit code, what it printed and what it wrote to its error stream.
+    The one place a kernel is started. Raises NoKernel for a file that cannot be started."""
+    try:
+        done = subprocess.run(command, stdin=subprocess.DEVNULL, capture_output=True)
+    except OSError as exc:
+        raise NoKernel(f"{command[0]} cannot be run as petra-verify: {exc}") from None
+    return done.returncode, done.stdout, done.stderr
+
+
+def taken(kernel: str, code: int, out: bytes, err: bytes) -> dict[str, Any]:
+    """The kernel's answer, when it is one: a JSON object with one of the four verdicts,
+    printed by a kernel that exited with that verdict's code and wrote nothing to its error
+    stream. A kernel that panics writes there and goes on, and one that is stopped exits
+    with another code, so neither may be read past. A PASS is taken only with `cells_from`
+    at `rules` and the hash of the deck of rules it read: the kernel gives none without a
+    deck of rules, and one that did would be another kernel than this one. Raises BadAnswer."""
+    if err.strip():
+        raise BadAnswer(f"{kernel} exited {code} and wrote to its error stream: {err.decode('utf-8', 'replace').strip()[-300:]}")
+    try:
+        said = json.loads(out.decode("utf-8"))
+    except (ValueError, RecursionError):
+        raise BadAnswer(f"{kernel} exited {code} and printed no verdict") from None
+    if not isinstance(said, dict) or not isinstance(said.get("verdict"), str) or said["verdict"] not in EXITS:
+        raise BadAnswer(f"{kernel} exited {code} and printed no verdict of {', '.join(EXITS)}")
+    if code != EXITS[said["verdict"]]:
+        raise BadAnswer(f"{kernel} printed {said['verdict']} and exited {code}, where {said['verdict']} exits {EXITS[said['verdict']]}")
+    shape = {"hashes": dict, "cells_from": str, "findings": list, "waived": list, "cells": list}
+    wrong = [key for key, kind in shape.items() if not isinstance(said.get(key), kind)]
+    if wrong or not all(isinstance(cell, dict) for cell in said["cells"]) or not all(isinstance(w, dict) for w in said["waived"]):
+        raise BadAnswer(f"{kernel} printed {said['verdict']} without {', '.join(wrong) or 'cells and waivers that are objects'}")
+    if said["verdict"] == "PASS" and (said["cells_from"] != "rules" or not isinstance(said["hashes"].get("rules"), str)):
+        raise BadAnswer(f"{kernel} printed PASS with no deck of rules, which petra-verify never does")
+    return said
+
+
 def ask(kernel: str, files: Mapping[str, str]) -> dict[str, Any]:
-    """The kernel's answer to the files, each given as its text under its name."""
+    """The kernel's answer to the files, each given as its text under its name. Raises
+    NoVerdict when the kernel cannot be run or gives no answer (`taken`), and when it prints
+    PASS for files that hold no deck of rules, whatever it says its cells came from."""
     with tempfile.TemporaryDirectory() as tmp:
         command = [kernel]
         for name, body in files.items():
             path = Path(tmp, f"{name}.json")
             path.write_text(body, encoding="utf-8", newline="\n")
             command += [f"--{name}", str(path)]
-        done = subprocess.run(command, stdin=subprocess.DEVNULL, capture_output=True)
-    try:
-        return json.loads(done.stdout.decode("utf-8"))
-    except ValueError:
-        raise RuntimeError(f"{kernel} exited {done.returncode} with no verdict: {done.stderr.decode('utf-8', 'replace')[-300:]}") from None
+        code, out, err = run(command)
+    said = taken(kernel, code, out, err)
+    if said["verdict"] == "PASS" and "rules" not in files:
+        raise BadAnswer(f"{kernel} printed PASS for files with no deck of rules, which petra-verify never does")
+    return said
+
+
+def status(said: Mapping[str, Any]) -> str:
+    """What every way into a check reports for the kernel's answer to a pair it found well
+    formed: the kernel's verdict. A PASS reads PASS_WAIVED when the kernel lists a waiver
+    that a cell rests on, by the kernel's own list and no other. The waived pass is to be
+    retired, and until then a pass that rests on a signature is not printed as a plain one."""
+    return "PASS_WAIVED" if said["verdict"] == "PASS" and said["waived"] else said["verdict"]
 
 
 def refusal(path: str, said: Mapping[str, Any]) -> tuple[str, ...]:
@@ -174,18 +253,21 @@ def differs(mine: list[tuple[str, str, str, str]], status: str, rules: str, said
     return "; ".join(found)
 
 
-def verify(design: Any, registry: Any, report: Any, proofs: export.Proofs) -> Kernel | None:
-    """The kernel's word on `report`, or None when there is no kernel to run."""
-    kernel = binary()
-    if kernel is None:
-        return None
+def verify(design: Any, registry: Any, report: Any, proofs: export.Proofs) -> Kernel:
+    """The kernel's verdict on a design of the models' kinds, with the proofs of the Python
+    checker's `report` as its cells. Raises NoVerdict when there is no kernel to run or it
+    gives no answer."""
+    kernel = need()
     files = export.bundle(design, registry, report, proofs)
     said = ask(kernel, files)
     if said["verdict"] == "ILL-FORMED":
         raise ComponentError(refusal(design.path, said))
+    if said["verdict"] == "PASS":      # `ask` refuses it too: these files hold no deck of rules
+        raise BadAnswer(f"{design.path}: {kernel} printed PASS for a design with no deck of rules, which petra-verify never does")
     cells = json.loads(files["proofs"])["cells"]
     rejected = [f"{mine['subject']}/{mine['mechanism']}/{mine['entry']}: {its.get('reason', its['state'])}"
                 for mine, its in zip(cells, said["cells"]) if ("tape" in mine or mine["state"] == "waived") and its["state"] != mine["state"]]
     if rejected or len(cells) != len(said["cells"]):
         raise Disagreement(f"{design.path}: petra-verify does not accept what the Python checker did: {'; '.join(rejected) or 'it read other cells'}")
-    return Kernel(said["verdict"], sum("tape" in cell for cell in cells), behind(report), {name: h for name, h in said["hashes"].items() if h is not None})
+    return Kernel(status(said), sum("tape" in cell for cell in cells), behind(report), {name: h for name, h in said["hashes"].items() if h is not None},
+                  said["cells_from"])

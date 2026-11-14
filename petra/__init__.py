@@ -64,7 +64,8 @@ def check(card: str, design: str, *, path: str = "<design>", repair: bool = True
     (petra/docs/api.md) with a "repair" key, which on a FAIL names the inputs that lower
     the governing check (repair.py) and is None otherwise, or with `repair=False`. A pair
     that does not lower gives {"file", "status": "INPUT_ERROR", "error"} instead of
-    raising."""
+    raising. The status is the verdict of petra-verify: with no kernel to run, or one whose
+    answer cannot be taken, this raises petra.verify.NoVerdict."""
     from .registry import build_registry
     from .repair import check_text
     from .solvers import SolverSource
