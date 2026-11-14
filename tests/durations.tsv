@@ -100,3 +100,4 @@ tests.test_validity	104.7
 tests.test_verdict	1.5
 tests.test_verify	8.7
 tests.test_wheel_tags	0.6
+tests.test_attack	40.0
