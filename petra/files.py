@@ -26,8 +26,12 @@ MAX_MESSAGE = 500
 """The most characters of one problem that are printed. A longer one is cut, and says how
 much was left out: a message may repeat a name of the file, which may be long."""
 _WHERE = re.compile(r"(.+?):(\d+):(\d+): (.*)", re.DOTALL)
-_ACTED_ON = re.compile("[\\x00-\\x09\\x0b-\\x1f\\x7f-\\x9f\\u061c\\u200e\\u200f\\u2028\\u2029\\u202a-\\u202e\\u2066-\\u2069]")
-"""Every character of `escaped`, and the carriage return."""
+_ACTED_ON = re.compile("[\\x00-\\x09\\x0b-\\x1f\\x7f-\\x9f\\u061c\\u200e\\u200f\\u2028\\u2029\\u202a-\\u202e\\u2066-\\u2069\\ud800-\\udfff]")
+"""Every character of `escaped`, the carriage return, and half a surrogate pair, which is no
+character and which no stream can write."""
+
+HALF = re.compile("[\\ud800-\\udfff]")
+"""Half a surrogate pair. A text that holds one cannot be written as UTF-8, so it has no hash."""
 
 
 def escaped(c: str) -> bool:
@@ -53,25 +57,36 @@ def acts(text: str) -> bool:
     return bool(_ACTED_ON.search(text)) or "\n" in text
 
 
-_STATUS_LIKE = re.compile(r"(pass_waived|pass|fail|unknown|marginal|ill-formed|input_error|internal_error)(?![A-Za-z0-9])", re.IGNORECASE)
-"""A name that is a status, or starts with one and goes on with no letter or digit: PASS, pass-1, FAIL.x."""
+_VERDICT_WORDS = frozenset("""pass passed passes passing fail failed fails failing unknown marginal ok okay proved proven certified
+                              verified approved accepted error formed""".split())
+"""Words that read as a verdict where a name stands first on a line. `formed` and `error` are
+the last parts of ILL-FORMED and INPUT_ERROR."""
+
+
+def _reads_as_a_verdict(name: str) -> bool:
+    """Whether a part of a plain name, between its dots, dashes and underscores, is a word of a
+    verdict: PASS, pass-1, x.PASS, PASSED, a_FAIL, bridge.ok."""
+    return any(part.lower() in _VERDICT_WORDS for part in re.split(r"[._-]", name))
 
 
 def headed(name: str, status: str) -> str:
     """The first line of a report: `NAME: STATUS`. A name that is not plain could read as a
     status of its own, `x: PASS, and so on`, or push the true one off the first row of a
-    terminal with blanks. So could a plain name that is a status itself, as a card named
-    PASS. Such a name is printed in quotes after the status, so that the first word of
-    every report is its status."""
-    if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", name) and not _STATUS_LIKE.match(name):
+    terminal with blanks. So could a plain name with a word of a verdict among its parts,
+    as a card named PASS, PASSED or x.OK. Such a name is printed in quotes after the status.
+    Any other plain name stands first, and the status is the last word of the line: a caller
+    takes the status from the exit code or the JSON, and not from the first word."""
+    if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", name) and not _reads_as_a_verdict(name):
         return f"{name}: {status}"
     return f"{status}: the card named {json.dumps(name, ensure_ascii=False)}"
 
 
 def one_line(text: str) -> str:
-    """A name for a listing that gives each item a line: its line ends written as `\\n` and
-    `\\r`, so that a name a file or a folder carries cannot start a line of its own."""
-    return text.replace("\\", "\\\\").replace("\n", "\\n").replace("\r", "\\r") if ("\n" in text or "\r" in text) else text
+    """A name for a listing that gives each item a line and reads its columns by the blanks
+    between them: a name with a blank or a line end in it is printed in quotes, as JSON writes
+    a text, so that a name a file, a folder or a saved report carries cannot start a line of its
+    own or put a word of its own in the next column."""
+    return json.dumps(text, ensure_ascii=False) if re.search(r"\s", text) else text
 
 
 class Shown:

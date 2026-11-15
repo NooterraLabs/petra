@@ -151,6 +151,10 @@ class Found(unittest.TestCase):
         path.parent.mkdir()
         path.write_bytes(b"")
         path.chmod(mode)
+        if path == self.built:      # the built kernel is used only from a source tree of Petra (verify.source_tree)
+            patch = mock.patch.object(verify, "source_tree", lambda folder: True)
+            patch.start()
+            self.addCleanup(patch.stop)
 
     def test_with_none_named_packaged_or_built_there_is_no_kernel(self):
         self.assertIsNone(verify.binary())

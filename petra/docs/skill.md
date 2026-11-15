@@ -15,7 +15,7 @@ Install it with `pip install petra-lang`. The command is `petra` and the Python 
 2. Run `petra new shear_tab --card > tab.card` and `petra new shear_tab > tab.petra`. They write a card and a complete design to start from.
 3. Edit the card to what the user asked: the load range in the `load` block, signed with the user's name and the source of the numbers. If the user gave a card, use it as it is.
 4. Edit the design to the user's job. Set the `beam` and `support` lines, the support's face (`flange` or `web`) and the `basis` (`lrfd` or `asd`).
-5. Run `petra check tab.petra`. It reads `tab.card` beside the design, and `--card FILE` names another card. The first line is the status, which is the kernel's verdict. The `kernel` line says how many of the proofs it checked. The exit code is 0 for PASS, 1 for FAIL, 2 for UNKNOWN, 6 for PASS_WAIVED and 3 for an input error. With no kernel to run there is no verdict: nothing is printed to stdout and the exit code is 4.
+5. Run `petra check tab.petra`. It reads `tab.card` beside the design, and `--card FILE` names another card. The first line gives the status, which is the kernel's verdict: `NAME: STATUS`, or the status first and the name in quotes after it when the name is not plain or reads as a verdict. Take the status from the exit code or from `--json`, and not from the first word of the line. The `kernel` line says how many of the proofs it checked. The exit code is 0 for PASS, 1 for FAIL, 2 for UNKNOWN, 6 for PASS_WAIVED and 3 for an input error. With no kernel to run there is no verdict: nothing is printed to stdout and the exit code is 4.
 6. On a FAIL, apply a move from the `repair` lines, as the next section describes, and check again.
 7. Stop when the status is UNKNOWN and no check is refuted. A design of these kinds cannot reach PASS, and its `reason` line says why: no deck of rules has its kind. Tell the user that, with the governing strength check and its utilisation from the `governing` line, and never report the design as passing.
 
@@ -41,7 +41,7 @@ The first line names the governing failed check and its utilisation. Each move c
 
 ## Design a part of a deck's type
 
-`petra kinds` lists each deck after the domains, and `petra kinds lap` prints a type's lines and what the deck's grid asks of it. `petra new lap` prints a design to start from, and `petra new lap --card` its card.
+`petra kinds` lists each deck after the domains, and `petra kinds lap` prints a type's lines and what the deck's grid asks of it. `petra new lap` prints a design to start from, and `petra new lap --card` its card. That card signs no waiver, so the pair reads UNKNOWN with the five lines open: the example it is from passes on waivers that its own engineer signed, and nobody has signed yours.
 
 The report has one line for each mechanism the grid asks of a part. A line is proved, refuted, not applicable, waived or open, and the design passes only when none is refuted or open. When a line is waived, the status is PASS_WAIVED and not PASS: the design passes what the deck could check, and the `waived` lines name each waiver and who signed it. Report PASS_WAIVED with those lines.
 
@@ -49,7 +49,7 @@ The report has one line for each mechanism the grid asks of a part. A line is pr
 - An open line means the deck has no rule for that mechanism, or the card gives no load, or a value is outside a table, or a rule could not be decided. It is not yours to close. Report UNKNOWN and list the open lines: a waiver belongs to the person who signs the card, and it rests only a line that no rule could answer.
 - A line such as `Fy given tab.Fy` reads a value only the card states. If the card lacks it, ask the user for it.
 
-A `lap` of the deck `aisc360-22` has rules for eight mechanisms: the least and the greatest spacing of the holes, their end and side distances, the strength of the bolts and their holes, and the yielding, rupture and block shear of each plate. Five have no rule: `lap.tightening`, `lap.hole_use`, `lap.max_edge_distance`, `lap.partial_block_shear` and `lap.ply_flexure`. Those five are open on every lap, so a lap is UNKNOWN until the card waives them, however well it is designed. A bolt of 1 1/8 inch or more, or of a size the tables do not list, leaves more lines open.
+A `lap` of the deck `aisc360-22` has rules for eight mechanisms: the least and the greatest spacing of the holes, their end and side distances, the strength of the bolts and their holes, and the yielding, rupture and block shear of each plate. Five have no rule: `lap.tightening`, `lap.hole_use`, `lap.max_edge_distance`, `lap.partial_block_shear` and `lap.ply_flexure`. Those five are open on every lap, so a lap is UNKNOWN until the card waives them, however well it is designed. A bolt of a size the tables do not list leaves more lines open.
 
 ## Rules
 

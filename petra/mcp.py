@@ -366,12 +366,18 @@ class Worker:
     thread waits on stdin can block until the client writes again. numpy's did, and the
     first tool call got no answer."""
 
-    COMMAND = (sys.executable, "-P", "-c", "import sys; sys.path.insert(0, sys.argv[1]); from petra.cli import main; sys.exit(main(['mcp', '--worker']))",
+    COMMAND = (sys.executable, "-P", "-c",
+               "import os, sys; here = os.getcwd(); "
+               "sys.path[:] = [sys.argv[1]] + [p for p in sys.path if p and os.path.abspath(p) != here]; "
+               "from petra.cli import main; sys.exit(main(['mcp', '--worker']))",
                str(Path(__file__).resolve().parent.parent))
     """The worker is this package: the folder that holds it goes first on the worker's path, and
-    `-P` keeps the working directory off it. `python -m petra` would put the working directory
+    the working directory comes off it. `python -m petra` would put the working directory
     first, and a file named petra.py in the folder a client starts the server in would then be
-    the worker, and answer every check as it liked (tests/test_kernel_attacks12.py)."""
+    the worker, and answer every check as it liked (tests/test_kernel_attacks12.py). `-P` stops
+    Python adding the working directory itself, and the command takes out every entry that is
+    the working directory by another road: an empty entry of PYTHONPATH is one. The folder that
+    holds the package stays, working directory or not."""
 
     def __init__(self, budget: float = BUDGET_S) -> None:
         self.budget = budget
@@ -523,8 +529,24 @@ def main(budget: float = BUDGET_S, worker: bool = False) -> int:
     out = sys.stdout.buffer
     sys.stdout = sys.stderr
     if worker:
+        _watch(os.getppid())
         return work(sys.stdin.buffer, out)
     return serve(sys.stdin.buffer, out, Worker(budget))
+
+
+def _watch(server: int) -> None:
+    """Have this worker stop itself, and everything it started, once the server that started it
+    is gone. The worker leads a group of its own (`Worker._start`), so a signal that ends the
+    server does not reach it, and a check it is in the middle of does not see its input
+    close: without this, a server stopped with Ctrl-C left its worker and a kernel running."""
+    def watch() -> None:
+        while os.getppid() == server:
+            time.sleep(0.5)
+        if hasattr(os, "killpg") and os.getpgid(0) == os.getpid():
+            os.killpg(os.getpid(), signal.SIGKILL)
+        os._exit(1)
+
+    threading.Thread(target=watch, name="petra-mcp-server-watch", daemon=True).start()
 
 
 if __name__ == "__main__":

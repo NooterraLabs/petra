@@ -141,13 +141,21 @@ def runs(kernel: str) -> bool:
 
 def binary() -> str | None:
     """The kernel to run: the file PETRA_VERIFY names, else the one this package carries,
-    else the one built in this source tree, else none."""
+    else the one built in the source tree this package is in (`source_tree`), else none."""
     named = os.environ.get("PETRA_VERIFY")
     if named:
         return named
     if PACKAGED.is_file() and runs(str(PACKAGED)):
         return str(PACKAGED)
-    return str(BUILT) if BUILT.is_file() else None
+    return str(BUILT) if BUILT.is_file() and source_tree(BUILT.parents[4]) else None
+
+
+def source_tree(folder: Path) -> bool:
+    """Whether the folder that holds this package is a source tree of Petra, with the kernel's
+    sources in it, and not the folder of an install. `BUILT` is beside the package wherever the
+    package is, and for an install that is site-packages, where any other package may write: a
+    file it put at kernel/.lake/build/bin/petra-verify is not Petra's kernel."""
+    return folder.name not in ("site-packages", "dist-packages") and (folder / "kernel" / "lakefile.toml").is_file() and (folder / "pyproject.toml").is_file()
 
 
 def behind(report: Any) -> int:

@@ -842,6 +842,9 @@ def _main(argv: list[str]) -> int:
     except (RowError, OSError, json.JSONDecodeError, KeyError) as exc:
         print(f"petra.deck: {exc}", file=sys.stderr)
         return 3
+    except (RecursionError, TypeError, AttributeError) as exc:      # a file nested too deep, or one that does not hold what it should
+        print(f"petra.deck: a file does not hold what it should: {type(exc).__name__}", file=sys.stderr)
+        return 3
     return 1 if failed else 0
 
 

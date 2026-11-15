@@ -102,7 +102,10 @@
     python -m petra mcp [--budget SECONDS]
         Serve check, kinds, new, registry_list and docs to an MCP client, JSON-RPC over
         stdin and stdout, until stdin closes (petra/mcp.py). A tool call that runs longer
-        than the budget is stopped and says so. Exit 0.
+        than the budget is stopped and says so. Exit 0. A client starts the server as
+        `petra mcp`, the installed command, and not as `python -m petra mcp`: with -m,
+        Python looks in the working directory first, and a workspace that holds a file
+        named petra.py or a folder named petra would be run in Petra's place.
     python -m petra --version
         Print the version.
 
@@ -347,7 +350,7 @@ def cmd_envelope(args: argparse.Namespace) -> int:
     status = "FAIL" if "FAIL" in statuses else "UNKNOWN"
     reason = _no_deck(design) if status == "UNKNOWN" else None
     if args.json:
-        print(json.dumps({**to_json(found), "status": status, "reason": reason}, sort_keys=True))
+        print(json.dumps({**to_json(found), "status": status, "reason": reason, "path": "legacy"}, sort_keys=True))
     else:
         print("\n".join([headed(design.name, status), *([f"reason     {reason}"] if reason else []),
                          "path       legacy: every line below is the working of Python's models, and it decides nothing", render(found)]))
@@ -410,7 +413,7 @@ def _read_certificate(path: str):
 
     try:
         obj = json.loads(Path(path).read_text(encoding="utf-8"), object_pairs_hook=unique)
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+    except (UnicodeDecodeError, ValueError) as exc:      # a number of more digits than Python reads is a plain ValueError
         raise CertificateError(str(exc)) from None
     except RecursionError:
         raise CertificateError("its JSON nests too deep to read") from None

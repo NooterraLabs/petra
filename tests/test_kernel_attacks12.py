@@ -59,6 +59,38 @@ The first round of the review found no status line of a check that gives an old 
       a status, or starts with one, is printed in quotes after the status like any name that is not plain.
   P   The server stopped its worker at the budget and left the kernel the worker had started running, with no
       parent. The worker and what it starts are now one group of processes, and the group is stopped.
+
+The second round found no status line that gives an old kind a pass, and these. None of the fixes below had
+a review after it.
+
+  Q   `petra new lap --card`, and the server's `new`, handed out the example's card with its five waivers
+      already signed by the example's engineer. An agent that followed the skill, wrote the user's load in
+      and never typed a waiver got PASS_WAIVED for a lap whose corner tears out (corpus case d41). The card
+      a template prints now signs nothing: the lines the deck has no rule for are open, and the check reads
+      UNKNOWN until the person who answers for a line signs it.
+  R   Fix E closed the worker and not what stands before it. With an empty entry in PYTHONPATH the working
+      directory was on the worker's path again, `-P` or not, and `python -m petra` puts it first on the
+      path of whatever it starts. The worker now takes every entry that is the working directory off its
+      path, and `python -m petra` does the same once the package is loaded. A file named petra.py or a
+      folder named petra in the working directory is still loaded in the package's place by
+      `python -m petra`, before any line of Petra runs: the server is started as `petra mcp`.
+  S   Fix P made the worker lead a session of its own, so a signal to the server's group no longer reached
+      it: after Ctrl-C or SIGTERM the worker and its kernel ran on. The worker now watches for the server
+      that started it and stops its own group when that server is gone.
+  T   A plain name that reads as a verdict and is none of Petra's status words was still first on the line:
+      `PASSED: FAIL`, `OK: UNKNOWN`, `x.PASS: UNKNOWN`. A name with such a word among its parts goes in
+      quotes after the status too. And a claim's name with blanks in a saved report put PASS second on a
+      line of a recall: a name with a blank is printed in quotes there.
+  U   The JSON of an envelope had `safe` and `proved` beside its UNKNOWN and nothing that said whose working
+      they are. It has `path` at `legacy` now, as the JSON of a check has.
+  V   Three more inputs ended in a traceback and exit 4: a file with an integer of 5,000 digits given to
+      `petra verify`, a saved report with half a surrogate pair in a name given to a recall, and a card or a
+      design with half a surrogate pair given as text, on which `petra.check` raised and the server answered
+      with an internal error. Each is an input error now, and so are deep or mis-shaped files given to
+      `python -m petra.deck` and `python -m petra.rule`.
+  W   `verify.BUILT` is `kernel/.lake/build/bin/petra-verify` beside the package, wherever the package is.
+      For an install that is site-packages, where a file another package put there would be run as the
+      kernel with no PETRA_VERIFY set. The built kernel is now used only from a source tree of Petra.
 """
 import contextlib
 import copy
@@ -587,6 +619,187 @@ class TheServerLeavesNoKernelRunning(unittest.TestCase):
             for pid in left:
                 os.kill(int(pid), 9)
             self.assertEqual(left, [], "the kernel the worker started was left running")
+
+
+@KERNEL
+class TheCardOfATemplateSignsNothing(unittest.TestCase):
+    def test_petra_new_lap_prints_a_card_with_no_waiver_and_the_pair_reads_unknown(self):
+        code, card, _ = command("new", "lap", "--card")
+        self.assertEqual(code, 0)
+        self.assertEqual([line for line in card.splitlines() if line.lstrip().startswith("waive ")], [], "the template signed five waivers")
+        code, text, _ = command("new", "lap")
+        with tempfile.TemporaryDirectory() as folder:
+            Path(folder, "lap.card").write_text(card, encoding="utf-8")
+            Path(folder, "lap.petra").write_text(text, encoding="utf-8")
+            code, out, _ = command("check", str(Path(folder, "lap.petra")), "--json")
+        said = json.loads(out)
+        self.assertEqual((code, said["status"], said["kernel"]["waived"]), (cli.EXIT_CODES["UNKNOWN"], "UNKNOWN", []), "it was PASS_WAIVED, with nobody signing")
+        self.assertEqual(sum(cell["state"] == "open" for cell in said["cells"]), 5, "the five lines the deck has no rule for are open")
+
+    def test_the_servers_new_prints_the_same_card(self):
+        text, _ = mcp._new({"kind": "lap"})
+        self.assertNotRegex(text, r"(?m)^\s*waive ")
+
+    def test_the_example_itself_keeps_its_waivers(self):
+        self.assertEqual(ask(lap("lap_pass"))["verdict"], "PASS")
+
+
+class NothingInTheWorkingDirectoryIsOnThePath(unittest.TestCase):
+    def test_an_empty_entry_of_pythonpath_does_not_put_it_on_the_workers_path(self):
+        import os
+        from unittest import mock
+
+        card, text = read_pair(str(ROOT / CABLE), None)
+        with tempfile.TemporaryDirectory() as folder:
+            Path(folder, "fractions.py").write_text('open("ran", "w").close()\nraise SystemExit(7)\n', encoding="utf-8")
+            with contextlib.chdir(folder), mock.patch.dict(os.environ, {"PYTHONPATH": os.pathsep + os.environ.get("PYTHONPATH", "")}):
+                worker = mcp.Worker()
+                try:
+                    said = worker.call({"name": "check", "arguments": {"design": text, "card": card}}, lambda: False)
+                finally:
+                    worker.stop()
+            self.assertFalse(Path(folder, "ran").exists(), "a file of the working directory was imported by the worker")
+        self.assertEqual(said.get("structuredContent", {}).get("status"), "UNKNOWN", said["content"][0]["text"][:200])
+
+    def test_python_dash_m_petra_takes_the_working_directory_off_its_path(self):
+        import os
+        import subprocess
+        import sys
+
+        with tempfile.TemporaryDirectory() as folder:
+            Path(folder, "argparse.py").write_text('open("ran", "w").close()\nraise SystemExit(7)\n', encoding="utf-8")
+            Path(folder, "tomllib.py").write_text('open("ran", "w").close()\nraise SystemExit(7)\n', encoding="utf-8")
+            env = {**os.environ, "PYTHONPATH": str(ROOT)}
+            done = subprocess.run([sys.executable, "-m", "petra", "docs", "skill"], cwd=folder, env=env, capture_output=True, text=True, timeout=120)
+            self.assertFalse(Path(folder, "ran").exists(), "python -m petra imported a file of the working directory")
+        self.assertEqual(done.returncode, 0, done.stderr[-300:])
+
+
+@unittest.skipUnless(hasattr(__import__("os"), "killpg"), "process groups are POSIX")
+class TheWorkerDoesNotOutliveItsServer(unittest.TestCase):
+    def test_a_worker_whose_server_is_killed_stops_itself(self):
+        import os
+        import signal
+        import subprocess
+        import sys
+        import time
+
+        starter = ("import sys, time; sys.path.insert(0, sys.argv[1]); from petra import mcp; w = mcp.Worker(); "
+                   "print(w.process.pid, flush=True); time.sleep(120)")
+        server = subprocess.Popen([sys.executable, "-c", starter, str(ROOT)], stdout=subprocess.PIPE, text=True)
+        try:
+            worker = int(server.stdout.readline())
+            os.kill(worker, 0)      # it runs
+            server.send_signal(signal.SIGKILL)
+            server.wait()
+            for _ in range(60):
+                try:
+                    os.kill(worker, 0)
+                except ProcessLookupError:
+                    break
+                time.sleep(0.1)
+            else:
+                os.killpg(worker, signal.SIGKILL)
+                self.fail("the worker ran on after its server was gone")
+        finally:
+            server.kill()
+            server.stdout.close()
+
+
+class ANameThatReadsAsAVerdict(unittest.TestCase):
+    def test_a_word_of_a_verdict_among_the_parts_of_a_name_puts_it_in_quotes(self):
+        from petra.files import headed
+
+        for name in ("PASSED", "OK", "x.PASS", "passes-all", "a_FAIL", "Certified", "bridge.ok", "proved-2"):
+            with self.subTest(name=name):
+                self.assertEqual(headed(name, "FAIL"), f'FAIL: the card named "{name}"')
+        for name in ("lap-splice-waived", "passage", "bypass-valve", "okra", "warren-footbridge-panel", "huge-voltage"):
+            with self.subTest(name=name):
+                self.assertEqual(headed(name, "FAIL"), f"{name}: FAIL")
+
+    def test_a_claim_named_with_blanks_puts_no_status_of_its_own_on_a_line_of_a_recall(self):
+        found = recall.Recall("x", (), (recall.RecalledDesign("a.json", "d", "UNKNOWN", (recall.RecalledVerdict("drop      PASS     kernel-checked", "UNKNOWN", ()),)),), 1, ())
+        line = recall.render(found).splitlines()[1]
+        self.assertEqual(line.split()[0], '"drop', line)
+        self.assertNotRegex(line, r"^\s*drop\s+PASS\b")
+
+
+class TheJsonOfAnEnvelopeSaysWhoseWorkingItIs(unittest.TestCase):
+    def test_it_has_path_at_legacy(self):
+        code, out, _ = command("envelope", str(ROOT / CABLE), "--input", "ambient", "--from", "10 degC", "--to", "30 degC", "--json")
+        said = json.loads(out)
+        self.assertEqual((said["status"], said["path"]), ("UNKNOWN", "legacy"))
+
+
+class MoreInputsThatAreInputErrors(unittest.TestCase):
+    def test_an_integer_of_5000_digits_in_a_certificate_file(self):
+        with tempfile.TemporaryDirectory() as folder:
+            Path(folder, "int.json").write_text('{"n": ' + "9" * 5000 + "}", encoding="utf-8")
+            code, _, err = command("verify", str(Path(folder, "int.json")))
+        self.assertEqual(code, cli.EXIT_CODES["INPUT_ERROR"], err[-200:])
+
+    @KERNEL
+    def test_half_a_surrogate_pair_in_a_saved_report(self):
+        code, out, _ = command("check", str(ROOT / "examples" / "circuit_pass.petra"), "--json")
+        report = json.loads(out)
+        report["design"] = "\ud800"
+        with tempfile.TemporaryDirectory() as folder:
+            Path(folder, "r.json").write_text(json.dumps(report), encoding="utf-8")
+            code, out, err = command("registry", "recall", "cable.cu_pvc", str(Path(folder, "r.json")))
+        self.assertIn(code, (0, cli.EXIT_CODES["INPUT_ERROR"]), err[-200:])
+        out.encode("utf-8")      # what was printed can be written
+
+    @KERNEL
+    def test_half_a_surrogate_pair_in_a_card_or_a_design_given_as_text(self):
+        card, text = read_pair(str(ROOT / "examples" / "deck" / "lap_pass.petra"), None)
+        for label, pair in (("the design", (card, text + "# \ud800\n")), ("the card", (card + "# \udfff\n", text))):
+            with self.subTest(label):
+                said = petra.check(*pair)
+                self.assertEqual(said["status"], "INPUT_ERROR", "petra.check raised")
+                self.assertIn("surrogate", said["error"])
+                reply = mcp._call({"name": "check", "arguments": {"card": pair[0], "design": pair[1]}})
+                self.assertTrue(reply["isError"], "the server answered with an internal error")
+
+    def test_the_acceptance_commands_refuse_a_deep_or_a_mis_shaped_file(self):
+        from petra import deck as rows_command, rule as rules_command
+
+        with tempfile.TemporaryDirectory() as folder:
+            Path(folder, "deep.json").write_text("[" * 200_000 + "]" * 200_000, encoding="utf-8")
+            Path(folder, "five.json").write_text('{"rows": 5}', encoding="utf-8")
+            for name, run, argv in (("petra.deck deep", rows_command.main, ["deep.json"]), ("petra.deck rows 5", rows_command.main, ["five.json"]),
+                                    ("petra.rule deep", rules_command.main, ["deep.json", "deep.json"])):
+                with self.subTest(name), contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(run([str(Path(folder, a)) for a in argv]), 3)
+
+
+class TheBuiltKernelIsOfASourceTree(unittest.TestCase):
+    def test_a_file_beside_an_installed_package_is_not_run_as_the_kernel(self):
+        import os
+        from unittest import mock
+
+        from petra import verify
+
+        with tempfile.TemporaryDirectory() as folder:
+            planted = Path(folder, "site-packages", "kernel", ".lake", "build", "bin", "petra-verify")
+            planted.parent.mkdir(parents=True)
+            planted.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            planted.chmod(0o755)
+            Path(folder, "site-packages", "kernel", "lakefile.toml").write_text('name = "x"\n', encoding="utf-8")
+            env = {k: v for k, v in os.environ.items() if k != "PETRA_VERIFY"}
+            with mock.patch.dict(os.environ, env, clear=True), mock.patch.object(verify, "PACKAGED", Path(folder, "none")), mock.patch.object(verify, "BUILT", planted):
+                self.assertIsNone(verify.binary(), "a file in site-packages was the kernel")
+
+    def test_the_kernel_built_in_this_tree_is_found(self):
+        import os
+        from unittest import mock
+
+        from petra import verify
+
+        if not verify.BUILT.is_file():
+            self.skipTest("no kernel is built here")
+        env = {k: v for k, v in os.environ.items() if k != "PETRA_VERIFY"}
+        with mock.patch.dict(os.environ, env, clear=True), mock.patch.object(verify, "PACKAGED", Path("/nonexistent/petra-verify")):
+            self.assertEqual(verify.binary(), str(verify.BUILT))
 
 
 if __name__ == "__main__":

@@ -49,7 +49,9 @@ class DesignDoc(unittest.TestCase):
 class Readme(unittest.TestCase):
     text = README.read_text(encoding="utf-8")
 
-    def test_the_quickstart_runs_as_written_and_its_design_passes_on_its_waivers(self):
+    def test_the_quickstart_runs_as_written_and_its_design_is_unknown_with_five_lines_open(self):
+        """The card `petra new lap --card` prints signs no waiver (tests/test_kernel_attacks12.py, Q): the
+        quickstart's lap reads UNKNOWN, and the README says so."""
         commands = [line for m in BASH.finditer(self.text) for line in m["code"].splitlines()
                     if line.strip() and not line.startswith("pip install")]
         self.assertEqual([c.split()[0] for c in commands], ["petra"] * len(commands), "the quickstart runs only petra")
@@ -57,10 +59,11 @@ class Readme(unittest.TestCase):
             for command in commands:
                 shell = f'"{sys.executable}" -m petra' + command.removeprefix("petra")
                 done = subprocess.run(shell, shell=True, cwd=empty, env=ENV, capture_output=True, text=True, timeout=300)
-                self.assertEqual(done.returncode, 6 if command == commands[-1] else 0, f"{command}\n{done.stderr}")
+                self.assertEqual(done.returncode, 2 if command == commands[-1] else 0, f"{command}\n{done.stderr}")
         self.assertEqual(commands[-1].split()[:2], ["petra", "check"])
-        self.assertTrue(done.stdout.splitlines()[0].endswith(": PASS_WAIVED"), done.stdout)
-        self.assertEqual(sum(line.startswith("  splice/") and " waived " in line for line in done.stdout.splitlines()), 5, "the README says five")
+        self.assertTrue(done.stdout.splitlines()[0].endswith(": UNKNOWN"), done.stdout)
+        lines = [line for line in done.stdout.splitlines() if line.startswith("  splice/")]
+        self.assertEqual((sum(" open " in line for line in lines), sum(" waived " in line for line in lines)), (5, 0), "the README says five open, and no waiver")
 
     def test_no_word_is_in_capitals(self):
         prose = re.sub(r"\]\([^)]*\)", "]", self.text)

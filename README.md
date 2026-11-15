@@ -22,7 +22,7 @@ petra new lap > lap.petra
 petra check lap.petra
 ```
 
-`petra new` prints an example design to edit, and with `--card` the card it answers. `petra check` prints the verdict and every check behind it. The example passes with five of its checks resting on waivers that its card signs, so the verdict is a waived pass and the exit code is 6. `petra kinds` lists what Petra can check, and `petra docs` lists the documents that ship with it.
+`petra new` prints an example design to edit, and with `--card` a card for it. `petra check` prints the verdict and every check behind it. The deck proves eight of the lap's checks and has no rule yet for five more, and the card signs no waiver, so the verdict is unknown, with those five lines open, and the exit code is 2. A waiver is for the person who answers for a line to sign: with all five signed the verdict is a waived pass, and the exit code is 6. `petra kinds` lists what Petra can check, and `petra docs` lists the documents that ship with it.
 
 ## Learn more
 

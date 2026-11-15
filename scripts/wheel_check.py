@@ -38,7 +38,7 @@ ROOT = Path(__file__).resolve().parent.parent
 LAP = ROOT / "examples" / "deck" / "lap_pass.petra"
 CIRCUIT = ROOT / "examples" / "circuit_pass.petra"
 
-# What each design must say, with its exit code. The lap rests four cells on a waiver, so it
+# What each design must say, with its exit code. The lap rests five cells on waivers, so it
 # passes as PASS_WAIVED. The circuit is of a models' kind, which the kernel has no deck of
 # rules for: it checks every proof and passes nothing.
 SAYS = {LAP: ("PASS_WAIVED", 6), CIRCUIT: ("UNKNOWN", 2)}

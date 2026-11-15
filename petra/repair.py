@@ -26,7 +26,7 @@ from fractions import Fraction
 from typing import Any, Callable, Iterator, Mapping
 
 from . import export, grid, models, verify, wellformed
-from .files import card_of, headed
+from .files import HALF, card_of, headed
 from .lang import LolaSyntaxError, LoweringError, parse_design
 from .lang.lexer import Kind, tokenize
 from .lang.parser import NOT_UNITS
@@ -490,6 +490,12 @@ def check_text(card: str, text: str, path: str, registry: Any, sources: tuple, *
 
     A design whose parts are of a deck's types goes to the grid (grid.py) and not to the
     models: its cells need no solver and get no repair yet."""
+    for what, body in (("card", card), ("design", text)):
+        if HALF.search(body):      # a text read from a file never holds one, and one given as text can
+            problem = f"the {what} holds half a surrogate pair, which is no character: it cannot be written, so it has no hash"
+            if raises:
+                raise ComponentError((problem,))
+            return Checked(path, None, None, problem)
     try:
         design = parse_design(card, text, path, registry, card_path)
         verify.need()      # with no kernel there is no verdict, so no solver runs for one
