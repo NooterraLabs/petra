@@ -839,11 +839,8 @@ def _main(argv: list[str]) -> int:
             print(f"{row.id}: {'REFUSED' if any(c.outcome == 'fail' for c in checks) else 'admitted'}")
             for c in checks:
                 print(f"  {c.name:<11} {c.outcome:<5} {c.detail}")
-    except (RowError, OSError, json.JSONDecodeError, KeyError) as exc:
+    except (RowError, OSError, json.JSONDecodeError, KeyError, RecursionError, TypeError, AttributeError) as exc:      # the last three: nested too deep, or not what a file should hold
         print(f"petra.deck: {exc}", file=sys.stderr)
-        return 3
-    except (RecursionError, TypeError, AttributeError) as exc:      # a file nested too deep, or one that does not hold what it should
-        print(f"petra.deck: a file does not hold what it should: {type(exc).__name__}", file=sys.stderr)
         return 3
     return 1 if failed else 0
 

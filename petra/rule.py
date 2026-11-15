@@ -1129,11 +1129,8 @@ def _main(argv: list[str]) -> int:
         mine, other = load(task, args.rules), load(task, args.second) if args.second else None
         given = json.loads(Path(args.examples).read_text(encoding="utf-8"))["examples"] if args.examples else {}
         lines, whole = accept(mine, {m: [worked(e, task, m) for e in found] for m, found in given.items()}, other)
-    except (DeckError, OSError, json.JSONDecodeError, KeyError) as exc:
+    except (DeckError, OSError, json.JSONDecodeError, KeyError, RecursionError, TypeError, AttributeError) as exc:      # the last three: nested too deep, or not what a file should hold
         print(f"petra.rule: {exc}", file=sys.stderr)
-        return 3
-    except (RecursionError, TypeError, AttributeError) as exc:      # a file nested too deep, or one that does not hold what it should
-        print(f"petra.rule: a file does not hold what it should: {type(exc).__name__}", file=sys.stderr)
         return 3
     print("\n".join(render(lines, whole, mine.stray)))
     return 1 if whole.outcome == "fail" or mine.stray or any(line.state == "refused" for line in lines) else 0
