@@ -54,7 +54,8 @@ class Packages(unittest.TestCase):
             self.assertIn(f"### {mode}: holds", text)
         for h in pkg.hashes:
             self.assertIn(h, text)
-        self.assertIn("**PASS**", text)
+        self.assertIn("Status: **UNKNOWN**. This is no verdict of the kernel: no deck of rules has a part of kind shear_tab", text)
+        self.assertNotIn("PASS", text.split("## Card")[0], "the head of the package gives the Python checker's PASS no word")
         self.assertEqual(pkg.report.design, g.name)
 
     def test_a_fail_reports_its_witness(self):

@@ -522,8 +522,11 @@ def readProofs (j : Json) : Read (Array Cell) := items "proofs" j "cells" readCe
 def MAX_NESTING : Nat := 128
 
 /-- A completion: `keys`, a list of `[PART, FIELD, NAME]`, and `loads`, a list of
-`[PART, LOAD, CASE, VALUE]` with the value a number in a string. Either may be left out. -/
+`[PART, LOAD, CASE, VALUE]` with the value a number in a string. Either may be left out. The
+completion itself is an object: a number, a text, a list or null in its place is no completion
+that names nothing, and the hint does not read. -/
 def readCompletion (j : Json) : Except String Completion := do
+  unless j matches .obj _ do throw "a completion is an object with keys and loads"
   let texts (x : Json) : Except String (Array String) := do (← x.getArr?).mapM (·.getStr?)
   let keys ← ((j.getObjVal? "keys").toOption.map fun x => do
     (← x.getArr?).mapM fun k => do

@@ -21,7 +21,7 @@
         "reason", "card", "hashes", "kernel" and "repair", the moves or null
         (`petra docs api`):
             {"file": FILE, "design": NAME, "status": OVERALL, "repair": REPAIR | null, "verdicts": [
-                {"claim": NAME, "status": "PASS" | "FAIL" | "UNKNOWN" | "MARGINAL",
+                {"claim": NAME, "status": "FAIL" | "UNKNOWN",
                  "footprint": [{"tag", "label", "owner", "source", "version"?}, ...],
                  "rules": ["R1", ...],
                  "needs": [what each open item needs, ...],    non-empty iff UNKNOWN
@@ -60,12 +60,13 @@
         a Lean kernel will reimplement. Exit 0 when the kernel accepts every file (a
         theorem or a refutation), 1 when it rejects one, 3 when a file does not decode.
     python -m petra certify-family FILE --library DIR
-        Certify a family design's claims over its whole box and store them in the
-        library. A proved claim is stored even when a certified point lies within its
-        margin, and is then listed as "margin". Exit 0 when every claim is stored and
-        none is within its margin, 5 when every claim is stored and one is within its
-        margin, 1 when one is refuted, 2 when one is otherwise not stored (neither proved
-        nor refuted, or waived), 3 when FILE is not a family or does not load.
+        Have the Python checker go through a family design's claims over its whole box
+        and store the ones it proves in the library. A proved claim is stored even when
+        a certified point lies within its margin, and is then listed as "margin". This
+        is that checker's working over a design of the models' kinds, so it is never a
+        pass: the first line is UNKNOWN, with the reason that the kind has no deck of
+        rules and exit code 2, whether every claim is stored or not, or FAIL with 1
+        where one is refuted. 3 when FILE is not a family or does not load.
     python -m petra registry build --out DECK.json
     python -m petra registry check [DECK.json]
         Run the deck consistency checker. With no DECK, check the deck built from the
@@ -132,7 +133,8 @@ EXIT_CODES: Mapping[str, int] = {"PASS": 0, "FAIL": 1, "UNKNOWN": 2, "INPUT_ERRO
 """`petra check` exits with the code of the kernel's verdict: PASS, FAIL and UNKNOWN are
 the kernel's own 0, 1 and 2, and INPUT_ERROR is its 3 for an ill-formed pair. INTERNAL_ERROR
 is also what it exits with when there is no verdict (verify.NoVerdict). MARGINAL is a status
-of the Python checker alone, which `envelope` and `certify-family` still exit with.
+of the Python checker alone, and no command exits with its code any more: `envelope` and
+`certify-family` exit 2 where that checker refutes nothing, with or without a margin.
 PASS_WAIVED: a design checked against a deck of rules passes, and a cell rests on a
 waiver (grid.PASS_WAIVED). BROKEN_PIPE: the reader closed stdout before Petra finished
 writing. 141 is 128 plus SIGPIPE's number, the status a shell reports for a command that a
@@ -316,6 +318,7 @@ def cmd_explain(args: argparse.Namespace) -> int:
 
 def cmd_envelope(args: argparse.Namespace) -> int:
     from .envelope import EnvelopeError, envelope, render, to_json
+    from .files import headed
     from .lang import load_design
     from .library import Library
     from .registry import build_registry
@@ -346,7 +349,7 @@ def cmd_envelope(args: argparse.Namespace) -> int:
     if args.json:
         print(json.dumps({**to_json(found), "status": status, "reason": reason}, sort_keys=True))
     else:
-        print("\n".join([f"{design.name}: {status}", *([f"reason     {reason}"] if reason else []),
+        print("\n".join([headed(design.name, status), *([f"reason     {reason}"] if reason else []),
                          "path       legacy: every line below is the working of Python's models, and it decides nothing", render(found)]))
     return EXIT_CODES[status]
 
@@ -409,12 +412,15 @@ def _read_certificate(path: str):
         obj = json.loads(Path(path).read_text(encoding="utf-8"), object_pairs_hook=unique)
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise CertificateError(str(exc)) from None
+    except RecursionError:
+        raise CertificateError("its JSON nests too deep to read") from None
     if isinstance(obj, dict) and "models" in obj:
         obj = {k: v for k, v in obj.items() if k != "models"}
     return decode_certificate(obj)
 
 
 def cmd_certify_family(args: argparse.Namespace) -> int:
+    from .files import headed
     from .lang import load_design
     from .library import Library, certify_family
     from .registry import build_registry
@@ -426,17 +432,20 @@ def cmd_certify_family(args: argparse.Namespace) -> int:
         result = certify_family(design, registry, Library(args.library))
     except (*_input_errors(), ValueError) as exc:
         return _input_error(exc)
+    # A family is a design of the models' kinds, and storing its claims is the Python checker's working: no deck of rules has its
+    # kind, so it is no pass, with every claim stored or not. The status is UNKNOWN with that reason, and FAIL where a claim is refuted.
+    status = "FAIL" if any(isinstance(o, Refuted) for o in result.report.outcomes) else "UNKNOWN"
+    print(headed(design.name, status))
+    if status == "UNKNOWN":
+        print(f"reason     {_no_deck(design)}")
+    print("path       legacy: every line below is the working of Python's models, and it decides nothing")
     for entry in result.stored:
         print(f"stored   {entry.family_key} (shape {entry.shape_hash})")
     for reason in result.near:
         print(f"margin   {reason}")
     for reason in result.skipped:
         print(f"skipped  {reason}")
-    if not result.skipped:
-        return EXIT_CODES["MARGINAL"] if result.near else EXIT_CODES["PASS"]
-    if any(isinstance(o, Refuted) for o in result.report.outcomes):
-        return EXIT_CODES["FAIL"]
-    return EXIT_CODES["UNKNOWN"]
+    return EXIT_CODES[status]
 
 
 def cmd_registry_build(args: argparse.Namespace) -> int:

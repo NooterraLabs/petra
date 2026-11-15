@@ -26,7 +26,7 @@ from fractions import Fraction
 from typing import Any, Callable, Iterator, Mapping
 
 from . import export, grid, models, verify, wellformed
-from .files import card_of
+from .files import card_of, headed
 from .lang import LolaSyntaxError, LoweringError, parse_design
 from .lang.lexer import Kind, tokenize
 from .lang.parser import NOT_UNITS
@@ -37,7 +37,8 @@ from .verdict import SEVERITY, STATUS
 
 INPUT_ERRORS = (LolaSyntaxError, LoweringError, ComponentError)
 
-LEGACY = "legacy: every line below is the working of Python's models, which chose the checks and wrote the formulas, and it decides nothing"
+LEGACY = ("legacy: every line below is the working of Python's models, which chose the checks and wrote the formulas, and it decides nothing: "
+          "where it says certified, proved or kernel-checked, that is Python's own checker and not petra-verify")
 """What a report says of a design of the models' kinds. A design of a deck's types says the
 kernel worked out its cells (grid.Checked). The models go as their kinds move to decks."""
 """What a design that does not lower raises: the edit is not a step."""
@@ -460,7 +461,7 @@ class Checked:
         out = self.report.render().split("\n")[2:]
         at = max((i + 1 for i, line in enumerate(out[:8]) if line.startswith("governing  ")), default=0)
         out = out[:at] + ([] if self.repair is None else self.repair.lines()) + out[at:]
-        return "\n".join([f"{self.report.design}: {self.status}", *([f"reason     {self.reason}"] if self.reason else []),
+        return "\n".join([headed(self.report.design, self.status), *([f"reason     {self.reason}"] if self.reason else []),
                           f"kernel     {self.kernel.line()}", f"card       {self.hashes['card']}  {self.card}",
                           f"design     {self.hashes['design']}  {self.path}", f"path       {LEGACY}", *out])
 

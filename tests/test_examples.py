@@ -42,9 +42,11 @@ class Examples(unittest.TestCase):
         self.assertEqual(report["file"], path, "the report names the file")
         for verdict in report["verdicts"]:
             self.assertTrue(verdict["footprint"], f"{path} {verdict['claim']} names its premises")
-            if verdict["status"] == "PASS":
+            # The JSON of a check prints the Python checker's PASS of a claim as UNKNOWN (repair._no_pass): such a claim has nothing open.
+            if verdict["status"] == "PASS" or (verdict["status"] == "UNKNOWN" and not verdict["needs"]):
                 self.assertTrue(verdict["rules"], f"{path} {verdict['claim']} names the rules its proof used")
-            self.assertEqual(bool(verdict["needs"]), verdict["status"] == "UNKNOWN", f"{path} {verdict['claim']} lists needs only when open")
+            if verdict["needs"]:
+                self.assertEqual(verdict["status"], "UNKNOWN", f"{path} {verdict['claim']} lists needs only when open")
             self.assertTrue(verdict["obligations"], f"{path} {verdict['claim']} lists its obligations")
 
     def test_each_example_gets_its_expected_verdict(self):
@@ -66,13 +68,14 @@ class Examples(unittest.TestCase):
     def test_a_design_inside_the_family_reuses_it_without_solving(self):
         with tempfile.TemporaryDirectory() as library:
             stored = petra("certify-family", "examples/families/cu_pvc_clipped.petra", "--library", library)
-            self.assertEqual(stored.returncode, 0, f"the family certifies: {stored.stdout}{stored.stderr}")
+            self.assertEqual((stored.returncode, stored.stdout.count("stored ")), (2, 2), f"both claims of the family are stored: {stored.stdout}{stored.stderr}")
             done = petra("check", "examples/circuit_pass.petra", "--json", "--library", library, "--no-solve")
         verdicts = {v["claim"]: v for v in json.loads(done.stdout)["verdicts"]}
         for claim in ("hot", "drop"):
-            self.assertEqual(verdicts[claim]["status"], "PASS", f"{claim} passes from the library alone")
+            self.assertEqual(verdicts[claim]["needs"], [], f"{claim} is settled from the library alone, with nothing open")
+            self.assertEqual(verdicts[claim]["status"], "UNKNOWN", f"and {claim} has no status of a pass: the design has no deck of rules")
             self.assertTrue(verdicts[claim]["footprint"], f"{claim} keeps its footprint")
-        self.assertEqual(verdicts["coverage"]["status"], "UNKNOWN", "coverage is not in the family, and the run solved nothing")
+        self.assertTrue(verdicts["coverage"]["needs"], "coverage is not in the family, and the run solved nothing")
 
 
 if __name__ == "__main__":

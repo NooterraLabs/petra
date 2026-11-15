@@ -5,8 +5,10 @@ every obligation that depends on that input is proved.
 
 Untrusted. This module only chooses which designs to check. Each probe is the design with
 the one input's range replaced by an interval, checked by pipeline.check_design like any
-other design, so every interval reported as proved is a PASS the pipeline assembled from
-kernel theorems.
+other design, so every interval reported as proved is one over which the Python checker
+proved every obligation that depends on the input. That is its working and no verdict: a
+design of the models' kinds has no deck of rules, so `render` and `to_json` print no PASS,
+and say `unrefuted` or UNKNOWN where the checker refuted nothing.
 
 Why bisection is sound. A claim is a statement for all values of its inputs, so a proof
 over [a, b] proves it over every interval inside [a, b], and proofs over [a, m] and
@@ -261,12 +263,12 @@ def envelope(
     start = probe(anchor, anchor)
     if at is None and start.status != "PASS" and anchor != a:
         low = probe(a, a)
-        there = f"at {name} = {show(anchor)}, the middle, the design is {start.status}{_reason(start, name, show)}"
+        there = f"at {name} = {show(anchor)}, the middle, the design is {_said(start.status)}{_reason(start, name, show)}"
         if low.status == "PASS":
             notes.append(f"{there}; the envelope is anchored at the low end of the probe range instead")
             start, anchor = low, a
         else:
-            notes.append(f"{there}; at the low end of the probe range, {show(a)}, it is {low.status} too")
+            notes.append(f"{there}; at the low end of the probe range, {show(a)}, it is {_said(low.status)} too")
     checked = next((p.report for p in probes if p.report is not None), None)
     if checked is not None and not any(_depends(o, target.label, reach) for o in checked.outcomes):
         raise EnvelopeError(f"no obligation of {design.name} depends on {name}")
@@ -411,6 +413,22 @@ def _iv(env: Envelope, x: Fraction, y: Fraction) -> str:
     return _text(x, y, env.target.dim, env.unit)
 
 
+WORKING = {"PASS": "unrefuted", "MARGINAL": "unrefuted, within a margin"}
+"""What the text of an envelope says where the Python checker refuted nothing. An envelope is
+that checker's working over a design with no deck of rules, so no line of it says PASS."""
+
+
+def _said(status: str) -> str:
+    return WORKING.get(status, status)
+
+
+def _held(status: str | None) -> str | None:
+    """A status for the JSON: the Python checker's PASS and MARGINAL read UNKNOWN there, as
+    they do in the JSON of a check (repair._no_pass). INVALID and NONE are no statuses of a
+    design, and stand."""
+    return "UNKNOWN" if status in WORKING else status
+
+
 def _side_text(env: Envelope, side: Side) -> str:
     if side.blocker is None:
         return f"proved to {_q(env, side.proved)}, the end of the probe range"
@@ -418,7 +436,7 @@ def _side_text(env: Envelope, side: Side) -> str:
     why = _reason(p, env.target.name, lambda x: _q(env, x))
     gap = abs(side.limit - side.proved)
     capped = ", stopped at the probe limit" if side.capped else ""
-    return f"proved to {_q(env, side.proved)}; {_q(env, side.limit)} is not: {p.status}{why}; {_q(env, gap)} undecided{capped}"
+    return f"proved to {_q(env, side.proved)}; {_q(env, side.limit)} is not: {_said(p.status)}{why}; {_q(env, gap)} undecided{capped}"
 
 
 def render(env: Envelope) -> str:
@@ -426,11 +444,11 @@ def render(env: Envelope) -> str:
     lines = []
     if env.safe is None:
         why = _reason(env.start, t.name, lambda x: _q(env, x))
-        lines.append(f"envelope   none: at {t.name} = {_q(env, env.anchor)} the design is {env.start.status}{why}")
+        lines.append(f"envelope   none: at {t.name} = {_q(env, env.anchor)} the design is {_said(env.start.status)}{why}")
     else:
         lo, hi = env.safe
-        confirmed = "one check over the whole interval passes" if env.confirm is not None and env.confirm.status == "PASS" else (
-            f"the check over the whole interval is {env.confirm.status}, so it rests on the two checks either side of the anchor" if env.confirm is not None
+        confirmed = "one check over the whole interval refutes nothing" if env.confirm is not None and env.confirm.status == "PASS" else (
+            f"the check over the whole interval is {_said(env.confirm.status)}, so it rests on the two checks either side of the anchor" if env.confirm is not None
             else "a single point")
         lines.append(f"envelope   {t.name} in {_iv(env, lo, hi)}: every obligation that depends on it is proved ({confirmed})")
     lines.append(f"input      {t.label}, stated {_iv(env, t.stated.lo, t.stated.hi)}; probed {_iv(env, env.lo, env.hi)} from {_q(env, env.anchor)}, resolution {_q(env, env.resolution)}")
@@ -439,11 +457,11 @@ def render(env: Envelope) -> str:
         lines.append(f"above      {_side_text(env, env.above)}")
     if env.elsewhere != "NONE":
         others = f": {', '.join(env.elsewhere_open)}" if env.elsewhere_open else ""
-        lines.append(f"elsewhere  the obligations that do not depend on {t.name} are {env.elsewhere}{others}")
+        lines.append(f"elsewhere  the obligations that do not depend on {t.name} are {_said(env.elsewhere)}{others}")
     lines += [f"note       {n}" for n in env.notes]
     lines.append(f"probes     {len(env.probes)} checks (limit {env.max_probes})")
     for p in env.probes:
-        lines.append(f"  {_iv(env, p.lo, p.hi):<32} {p.status}")
+        lines.append(f"  {_iv(env, p.lo, p.hi):<32} {_said(p.status)}")
     return "\n".join(lines)
 
 
@@ -456,7 +474,7 @@ def to_json(env: Envelope) -> dict:
         if s is None:
             return None
         b = s.blocker
-        return {"proved": str(s.proved), "limit": str(s.limit), "status": None if b is None else b.status,
+        return {"proved": str(s.proved), "limit": str(s.limit), "status": None if b is None else _held(b.status),
                 "why": None if b is None else b.why, "at": None if b is None or b.at is None else str(b.at), "capped": s.capped}
 
     safe = env.safe
@@ -469,13 +487,13 @@ def to_json(env: Envelope) -> dict:
         "probe": [str(env.lo), str(env.hi)],
         "anchor": str(env.anchor),
         "resolution": str(env.resolution),
-        "anchor_status": env.start.status,
+        "anchor_status": _held(env.start.status),
         "safe": None if safe is None else [str(safe[0]), str(safe[1])],
-        "confirmed": None if env.confirm is None else env.confirm.status,
+        "confirmed": None if env.confirm is None else _held(env.confirm.status),
         "below": side(env.below),
         "above": side(env.above),
-        "elsewhere": {"status": env.elsewhere, "open": list(env.elsewhere_open)},
+        "elsewhere": {"status": _held(env.elsewhere), "open": list(env.elsewhere_open)},
         "notes": list(env.notes),
         "max_probes": env.max_probes,
-        "probes": [{"range": [str(p.lo), str(p.hi)], "status": p.status} for p in env.probes],
+        "probes": [{"range": [str(p.lo), str(p.hi)], "status": _held(p.status)} for p in env.probes],
     }

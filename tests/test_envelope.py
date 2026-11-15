@@ -124,7 +124,7 @@ class Envelopes(GadgetDomain):
         env = self.run_envelope(card(GIVEN, PUSH, other, CLAIM, WAIVE_WEAR, waive_h), gadget(CAPACITY) + gadget(CAPACITY, name="h"),
                                 resolution=kn(2))
         self.assertEqual((env.elsewhere, env.elsewhere_open), ("PASS", ()))
-        self.assertIn("do not depend on push.g.force are PASS", render(env))
+        self.assertIn("do not depend on push.g.force are unrefuted", render(env))
 
     def test_a_probe_the_design_refuses_is_invalid_and_stops_the_envelope(self):
         real = envelope_module.check_design
@@ -203,7 +203,7 @@ class Envelopes(GadgetDomain):
         self.assertEqual((found["label"], found["unit"], found["probe"]), ("in:rig.push.g.force", "N", ["0", "30000"]))
         self.assertEqual(found["safe"][0], "0")
         self.assertEqual(found["above"]["status"], "FAIL")
-        self.assertEqual(found["probes"][0], {"range": ["3000", "3000"], "status": "PASS"})
+        self.assertEqual(found["probes"][0], {"range": ["3000", "3000"], "status": "UNKNOWN"}, "a probe the Python checker passes is no pass in the JSON")
 
 
 class CommandLine(unittest.TestCase):
@@ -222,7 +222,7 @@ class CommandLine(unittest.TestCase):
         self.assertTrue(40 <= hi < Fraction(found["above"]["limit"]) <= 100, found["above"])
         self.assertEqual(found["above"]["status"], "FAIL")
         self.assertIn("claim.hot", found["above"]["why"])
-        self.assertEqual(found["confirmed"], "PASS")
+        self.assertEqual(found["confirmed"], "UNKNOWN", "the check over the whole interval refutes nothing, and that is no pass in the JSON")
 
     def test_an_unknown_input_or_a_wrong_unit_is_an_input_error(self):
         self.assertEqual(self.run_cli("--input", "nothing", "--from", "0", "--to", "1")[0], 3)

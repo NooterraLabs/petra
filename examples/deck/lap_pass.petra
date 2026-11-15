@@ -5,7 +5,8 @@ petra 0
 # holes, their end and side distances, the strength of the bolts and their holes, and the
 # yielding, rupture and block shear of each plate. Each is proved. The grid asks five more
 # that the deck has no rule for. The card waives each one, signed and with its reason, and
-# the report lists them. So the verdict is PASS.
+# the report lists them. So the kernel says PASS, and `petra check` reads PASS_WAIVED and
+# exits 6: a pass that rests on signatures is not printed as a plain one.
 
 plate tab {
   thickness 0.375 inch

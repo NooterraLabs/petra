@@ -5,7 +5,8 @@
 //   node verify.mjs --card F --design F --deck F --rules F [--proofs F] [--explain]
 //
 // Prints one JSON object {verdict, findings, counts, ignored_hints, waived, cells} and exits
-// 0 PASS, 1 FAIL, 2 UNKNOWN, 3 ILL-FORMED, 64 for a command line it cannot read. A cell has its
+// 0 PASS, 1 FAIL, 2 UNKNOWN, 3 ILL-FORMED, 64 for a command line it cannot read, and for files
+// with no deck of rules whose proofs.json carries a tape, which it does not check. A cell has its
 // subject, mechanism, entry, claimed and state, a reason when it is open, waived, or a refuted
 // rule that requires, and the completion it rests on when it is waived on one. --explain adds the
 // steps to read the deck and to make the cells.
@@ -26,9 +27,21 @@
 // counted, and the verdict printed, with an escape of six for each character a terminal acts on
 // and does not show. An equation is held to the 1,024 orders of a pick when its row is read,
 // whether or not a rule applies it. See AMBIGUITIES.md, O.
+//
+// A file, an item of one of its lists and a cell have every key format.md gives them, but the
+// keys its table of Keys lets them leave out: a key left out, or of the wrong kind, breaks the
+// shape rule. An object that holds a key twice is read with the last value. A shape finding is of
+// one item, which is left out, or of the whole file, and a card, a design or a deck.json that
+// does not read as a whole stops the kernel with the shape findings of all the files; otherwise
+// the type rules are applied to what was read, type rule 1 (the design's `card` is the SHA-256 of
+// the card's bytes) among them, and then Parts 1 to 8 when the deck of rules reads. A design with
+// no parts that comes with a deck of rules is one with no part. With no deck of rules the verdict
+// is never PASS, and this kernel gives one only for a list of cells that carries no tape: with a
+// tape it exits 64 and prints no verdict. See AMBIGUITIES.md, P.
 
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
+import { createHash } from 'node:crypto';
 
 // ============================================================ rationals
 
@@ -390,9 +403,12 @@ export function parseJson(text) {
         ws();
         if (text[i] !== ':') err('expected :');
         i++;
-        const v = val(depth + 1);
-        if (Object.hasOwn(obj, k)) err(`the key ${JSON.stringify(k)} appears twice`);
-        obj[k] = v;
+        // format.md, Keys: "An object that holds one key twice is read with the last value the
+        // file gives the key. The value before it is not read, and the file is not refused for
+        // it." The value before it is still JSON that this reader went through, so what holds
+        // for the text of a file holds for it too: its nesting, its bare numbers and U+FFFD,
+        // which the kernel refuses "anywhere" (AMBIGUITIES.md, P2).
+        obj[k] = val(depth + 1);
         ws();
         if (text[i] === ',') { i++; continue; }
         if (text[i] === '}') { i++; return obj; }
@@ -2312,14 +2328,18 @@ function tryRequires(deck) {
 }
 
 export function loadDeck(D, find) {
-  const F = (item, why) => find('rules', item, why);
+  // format.md, After a broken rule: a deck of rules "reads whole or not at all", and the item of
+  // a finding of the whole file is the empty text. Where in the deck it is goes in the reason.
+  const F = (item, why) => find('rules', '', item ? `${item}: ${why}` : why);
   const errs0 = [];
   const top = (fn, item) => {
     try { return fn(); } catch (e) { if (e instanceof DeckErr) { F(item, e.message); errs0.push(1); return undefined; } throw e; }
   };
   top(() => {
-    checkKeys(D, ['format', 'name', 'about', 'rows', 'types', 'grid', 'rules'], ['format', 'rows', 'types', 'grid', 'rules'], 'the deck');
-    optText(D, 'name', 'the deck');
+    // deck.md, A deck: "A deck has every key of this table but `about`, which it may leave out:
+    // a deck with no `name` is refused."
+    checkKeys(D, ['format', 'name', 'about', 'rows', 'types', 'grid', 'rules'], ['format', 'name', 'rows', 'types', 'grid', 'rules'], 'the deck');
+    needText(D, 'name', 'the deck');
     optText(D, 'about', 'the deck');
     for (const k of ['rows', 'types', 'grid', 'rules']) if (!Array.isArray(D[k])) throw DE(`${k} is not a list`);
   }, '');
@@ -2414,158 +2434,199 @@ const nameCmp = (a, b) => {
 export function verifyTexts(texts, opts = {}) {
   const findings = [];
   // A finding of the shape rules, or of a deck that does not hold together, has the rule `shape`.
-  const find = (file, item, why, rule = 'shape') => findings.push({ rule, file, item, why });
+  const find = (file, item, why, rule = 'shape') => { findings.push({ rule, file, item, why }); };
   const zeroCounts = () => Object.fromEntries(STATES.map((s) => [s, 0]));
   const ill = () => ({ out: { verdict: 'ILL-FORMED', findings, counts: zeroCounts(), waived: [], cells: [] }, code: 3 });
+  const has = (o, k) => Object.hasOwn(o, k);
 
   // ---------------------------------------------------------------- shape
+  // format.md, After a broken rule: "The kernel reads every file it is given and lists the shape
+  // findings of each. A shape finding is of one item or of the whole file. An item is an item of
+  // `inputs`, `claims`, `waivers`, `states`, `quantities`, `params`, `parts`, `constants` or
+  // `cells`, or a key of `domains.input`: it is left out, and the rest of its file is read. ...
+  // Anything else that does not read is of the whole file, and the finding's item is the empty
+  // text: a file that is not JSON or has not its `format`, a key of the file itself that is
+  // missing or holds a value of the wrong kind, `domains.size`, and a deck of rules, which reads
+  // whole or not at all." `whole` holds the files that do not read as a whole.
+  const whole = new Set();
+  const W = (file, why) => { whole.add(file); find(file, '', why); };
   const docs = {};
   const formats = { card: 'petra-card/0', design: 'petra-design/0', deck: 'petra-deck/0', rules: 'petra-rules/0', proofs: 'petra-proofs/0' };
+  for (const k of ['card', 'design', 'deck']) if (texts[k] === undefined) W(k, 'no file is given');
   for (const k of Object.keys(formats)) {
     if (texts[k] === undefined) continue;
-    if (texts[k] === null) { find(k, '', 'the file cannot be read'); continue; }
+    if (texts[k] === null) { W(k, 'the file cannot be read'); continue; }
     try {
       docs[k] = parseJson(texts[k]);
     } catch (e) {
-      if (e instanceof JsonErr) { find(k, '', `not JSON the kernel reads: ${e.message}`); continue; }
+      if (e instanceof JsonErr) { W(k, `not JSON the kernel reads: ${e.message}`); continue; }
       throw e;
     }
-    if (!isObj(docs[k]) || docs[k].format !== formats[k]) { find(k, 'format', `format is not ${formats[k]}`); delete docs[k]; }
+    if (!isObj(docs[k]) || docs[k].format !== formats[k]) { W(k, `format is not ${formats[k]}`); delete docs[k]; }
   }
-  if (findings.length) return ill();
   const { card: cardJ, design: designJ, deck: deckJ, rules: rulesJ, proofs: proofsJ } = docs;
+  // `--rules` names a deck when the command line has it, whether or not its file reads.
+  const rulesGiven = texts.rules !== undefined;
 
-  const num = (file, item, v) => {
-    const q = parseFileNumber(v);
-    if (!q) find(file, item, `${short(v)} is not a number`);
-    return q;
+  // format.md, Keys: "A file, an item of one of its lists and a cell have every key this page
+  // gives them. One that leaves a key out breaks the shape rule, as one that gives the key a value
+  // of the wrong kind does." Each of the readers below gives the first thing that does not read,
+  // in words, or null.
+  const noText = (o, keys) => { const k = keys.find((x) => !isStr(o[x])); return k === undefined ? null : `${k} is not a text`; };
+  // A range: `lo` and `hi`, each a number of the file (format.md, Numbers), with lo <= hi.
+  const noRange = (o) => {
+    for (const k of ['lo', 'hi']) if (!parseFileNumber(o[k])) return `${k} is ${short(o[k])}, which is not a number`;
+    return qcmp(parseFileNumber(o.lo), parseFileNumber(o.hi)) > 0 ? 'lo is above hi' : null;
   };
-  const range = (file, item, o) => {
-    const lo = num(file, `${item}.lo`, o.lo), hi = num(file, `${item}.hi`, o.hi);
-    if (lo && hi && qcmp(lo, hi) > 0) { find(file, item, 'lo is above hi'); return null; }
-    return lo && hi ? [lo, hi] : null;
-  };
-  const list = (file, o, k, required) => {
-    if (!Object.hasOwn(o, k)) { if (required) find(file, k, `has no ${k}`); return []; }
-    if (!Array.isArray(o[k])) { find(file, k, `${k} is not a list`); return []; }
-    return o[k];
-  };
-
-  // format.md, Shape and Limits: a part's name prints in at most 64 bytes, and with --rules the
-  // name of the card and the name of the design in at most 200. Those two are tested when the
-  // deck of rules holds together, below.
-  const nameLimit = (file, item, s, limit, what) => {
-    if (isStr(s) && printedBytes(s) > limit) { find(file, item, `${what} prints in more than ${limit} bytes`); return false; }
-    return true;
-  };
-
-  // card
-  if (!isStr(cardJ.name)) find('card', 'name', 'the card has no name');
-  const inputs = [];
-  list('card', cardJ, 'inputs', false).forEach((x, i) => {
-    const item = `inputs[${i}]${isObj(x) && isStr(x.name) ? ' ' + x.name : ''}`;
-    if (!isObj(x)) { find('card', item, 'not an object'); return; }
-    if (!isStr(x.name)) find('card', item, 'the input has no name');
-    if (!isStr(x.dim)) find('card', item, 'the input has no dim');
-    for (const k of ['case', 'on', 'field']) if (Object.hasOwn(x, k) && !isStr(x[k])) find('card', item, `${k} is not a text`);
-    const rg = range('card', item, x);
-    inputs.push({ item, name: x.name, dim: x.dim, lo: rg?.[0], hi: rg?.[1], by: x.by, case: x.case, on: x.on, field: x.field });
-  });
-  const waivers = [];
-  list('card', cardJ, 'waivers', false).forEach((w, i) => {
-    const item = `waivers[${i}]`;
-    if (!isObj(w) || !isStr(w.subject) || !isStr(w.mechanism)) { find('card', item, 'a waiver has no subject or mechanism'); return; }
-    waivers.push({ item, subject: w.subject, mechanism: w.mechanism, by: w.by, reason: w.reason });
-  });
-  const claims = list('card', cardJ, 'claims', false);
-  const tests = list('card', cardJ, 'tests', false);
-  const pclaims = list('card', cardJ, 'probability_claims', false);
-  // format.md, card.json: `cases` names the load cases.
-  const cardCases = [];
-  list('card', cardJ, 'cases', false).forEach((c, i) => {
-    if (!isStr(c)) find('card', `cases[${i}]`, `${short(c)} is not the name of a load case`);
-    else cardCases.push(c);
-  });
-  // format.md, card.json: an item of `states` has `name`, `by`, and exactly one of `key`, a text,
-  // and `whole`, a whole number written as every number of the file is, and no other key. An item
-  // that breaks this is a shape finding and is left out.
-  const states = [];
-  list('card', cardJ, 'states', false).forEach((s, i) => {
-    const item = `states[${i}]${isObj(s) && isStr(s.name) ? ' ' + s.name : ''}`;
-    if (!isObj(s)) { find('card', item, 'an item of states is not an object'); return; }
-    const extra = Object.keys(s).filter((k) => !['name', 'by', 'key', 'whole'].includes(k));
-    if (extra.length) { find('card', item, `an item of states has the key ${short(extra[0])}`); return; }
-    if (!isStr(s.name)) { find('card', item, 'an item of states has no name'); return; }
-    if (!isStr(s.by)) { find('card', item, 'an item of states has no by'); return; }
-    if (Object.hasOwn(s, 'key') === Object.hasOwn(s, 'whole')) { find('card', item, 'an item of states has not exactly one of key and whole'); return; }
-    if (Object.hasOwn(s, 'key')) {
-      if (!isStr(s.key)) { find('card', item, 'key is not a text'); return; }
-      states.push({ item, name: s.name, by: s.by, key: s.key });
-    } else {
-      const w = parseFileNumber(s.whole);
-      if (!w || w.d !== 1n) { find('card', item, `whole is ${short(s.whole)}, which is not a whole number`); return; }
-      states.push({ item, name: s.name, by: s.by, whole: w });
-    }
-  });
-
-  // design
-  if (!isStr(designJ.name)) find('design', 'name', 'the design has no name');
-  if (!isStr(designJ.card)) find('design', 'card', 'the design names no card');
-  const quantities = [];
-  list('design', designJ, 'quantities', false).forEach((x, i) => {
-    const item = `quantities[${i}]`;
-    if (!isObj(x)) { find('design', item, 'not an object'); return; }
-    const rg = range('design', item, x);
-    quantities.push({ item, role: x.role, lo: rg?.[0], entity: x.entity, line: x.line });
-  });
-  const params = list('design', designJ, 'params', false);
-  params.forEach((x, i) => { if (isObj(x)) range('design', `params[${i}]`, x); });
-  const hasParts = Object.hasOwn(designJ, 'parts');
-  const partsJ = hasParts ? list('design', designJ, 'parts', true) : [];
-  partsJ.forEach((p, i) => {
-    if (isObj(p)) nameLimit('design', `parts[${i}]`, p.name, NAME_BYTES, `the name of the part ${short(p.name)}`);
-    if (!isObj(p) || !Array.isArray(p.lines)) return;
-    p.lines.forEach((l, j) => {
-      if (!isObj(l) || !Array.isArray(l.args)) return;
-      l.args.forEach((a, k) => {
-        if (isObj(a) && isObj(a.number)) range('design', `parts[${i}].lines[${j}].args[${k}].number`, a.number);
-      });
+  // The items of a list of a file. A list that is missing or is no list is of the whole file. An
+  // item that reads is kept, as what `read` gives for it; one that does not is a shape finding
+  // with the words `read` gives, and is left out.
+  const items = (file, o, k, read) => {
+    if (!Array.isArray(o[k])) { W(file, `${k} is not a list`); return []; }
+    const out = [];
+    o[k].forEach((x, i) => {
+      const item = `${k}[${i}]`;
+      const r = isObj(x) ? read(x, item) : 'not an object';
+      if (isStr(r)) find(file, item, r);
+      else out.push(r);
     });
-  });
+    return out;
+  };
 
-  // deck.json
-  let sizeDomain = null;
-  // The size floor as deck.json gives it, for type rule 8: null when it gives none that reads.
-  let sizeGiven = null;
-  let inputDomains = new Map();
-  const domainsJ = isObj(deckJ.domains) ? deckJ.domains : null;
-  if (!domainsJ || !isObj(domainsJ.size) || !isObj(domainsJ.input)) find('deck', 'domains', 'the deck has no domains.size and domains.input');
-  if (domainsJ && isObj(domainsJ.size)) {
-    const s = domainsJ.size;
-    const m = num('deck', 'domains.size.min', s.min);
-    if (typeof s.strict !== 'boolean') find('deck', 'domains.size.strict', 'strict is not true or false');
-    sizeDomain = m ? { min: m, strict: s.strict === true } : null;
-    sizeGiven = m && typeof s.strict === 'boolean' ? { min: m, strict: s.strict } : null;
+  // card.json. format.md, Keys: it may leave out `states`, `tests` and `probability_claims`, and
+  // no other key. `name` is a text, `environment` "a registry id, or null", `cases` the names of
+  // the load cases. `tests` and `probability_claims` are held to no kind: "any value but the empty
+  // list is a card that has one, and the finding is of Parts 8 and not of shape."
+  let inputs = [], waivers = [], claims = [], states = [], cardCases = [];
+  if (cardJ) {
+    if (!isStr(cardJ.name)) W('card', 'name is not a text');
+    if (!has(cardJ, 'environment') || (cardJ.environment !== null && !isStr(cardJ.environment))) W('card', 'environment is not a text or null');
+    // A name of `cases` that is no text is no item of the lists above: it is of the whole file.
+    if (!Array.isArray(cardJ.cases)) W('card', 'cases is not a list');
+    else if (!cardJ.cases.every(isStr)) W('card', 'cases holds a name that is not a text');
+    else cardCases = cardJ.cases;
+    // An input: `name`, `dim`, `lo`, `hi` and `by`. It may leave out `case`, `on` and `field`.
+    inputs = items('card', cardJ, 'inputs', (x, item) => {
+      const e = noText(x, ['name', 'dim']) ?? noRange(x) ?? noText(x, ['by']);
+      if (e) return e;
+      for (const k of ['case', 'on', 'field']) if (has(x, k) && !isStr(x[k])) return `${k} is not a text`;
+      return { item: `${item} ${x.name}`, name: x.name, dim: x.dim, lo: parseFileNumber(x.lo), hi: parseFileNumber(x.hi), by: x.by, case: x.case, on: x.on, field: x.field };
+    });
+    // A claim: `name`, `subject`, `quantity`, `rel`, `cases`, `bound`. The page gives the kind of
+    // none of them, so a claim that has the six keys reads (AMBIGUITIES.md, P5).
+    claims = items('card', cardJ, 'claims', (c) => {
+      const k = ['name', 'subject', 'quantity', 'rel', 'cases', 'bound'].find((x) => !has(c, x));
+      return k === undefined ? c : `a claim has no ${k}`;
+    });
+    // A waiver: `subject`, `mechanism`, `reason`, and `by`, which it may leave out: "It then
+    // names nobody, which type rule 5 refuses."
+    waivers = items('card', cardJ, 'waivers', (w, item) => {
+      const e = noText(w, ['subject', 'mechanism', 'reason']);
+      if (e) return e;
+      if (has(w, 'by') && !isStr(w.by)) return 'by is not a text';
+      return { item, subject: w.subject, mechanism: w.mechanism, by: w.by, reason: w.reason };
+    });
+    // format.md, card.json: an item of `states` has `name`, `by`, and exactly one of `key`, a
+    // text, and `whole`, a whole number written as every number of the file is, and no other key.
+    // "An item that breaks this is a shape finding and is left out." It may leave out `by`, as a
+    // waiver may (Keys).
+    if (has(cardJ, 'states')) states = items('card', cardJ, 'states', (s, item) => {
+      const extra = Object.keys(s).find((k) => !['name', 'by', 'key', 'whole'].includes(k));
+      if (extra !== undefined) return `an item of states has the key ${short(extra)}`;
+      if (!isStr(s.name)) return 'name is not a text';
+      if (has(s, 'by') && !isStr(s.by)) return 'by is not a text';
+      if (has(s, 'key') === has(s, 'whole')) return 'an item of states has exactly one of key and whole';
+      if (has(s, 'key')) return isStr(s.key) ? { item: `${item} ${s.name}`, name: s.name, by: s.by, key: s.key } : 'key is not a text';
+      const w = parseFileNumber(s.whole);
+      return w && w.d === 1n ? { item: `${item} ${s.name}`, name: s.name, by: s.by, whole: w } : `whole is ${short(s.whole)}, which is not a whole number`;
+    });
   }
-  if (domainsJ && isObj(domainsJ.input)) {
-    // format.md, deck.json: each key names a dimension, and a key that names none, or whose value
-    // lacks `min`, a number, or `strict`, true or false, is a shape finding; `about` is prose. Two
-    // keys of one dimension give it one floor: the higher, and the strict one when both are at one
-    // height. Floors are kept by the exponents.
-    for (const k of Object.keys(deckJ.domains.input)) {
-      if (k === 'about') continue;
-      const dim = parseFileDim(k);
-      if (!dim) { find('deck', `domains.input.${k}`, `${short(k)} names no dimension`); continue; }
-      const d = deckJ.domains.input[k];
-      if (!isObj(d)) { find('deck', `domains.input.${k}`, 'the floor has no min and strict'); continue; }
-      const dm = num('deck', `domains.input.${k}.min`, d.min);
-      if (typeof d.strict !== 'boolean') find('deck', `domains.input.${k}.strict`, 'strict is not true or false');
-      if (!dm) continue;
-      const key = dstr(dim), was = inputDomains.get(key);
-      const c = was ? qcmp(dm, was.min) : 1;
-      if (c > 0) inputDomains.set(key, { min: dm, strict: d.strict === true, name: k });
-      else if (c === 0 && d.strict === true) was.strict = true;
+
+  // design.json. It may leave out `parts`, and no other key. A part is one item, "so a part with
+  // one line that does not read is left out whole". Its name is within 64 bytes as printed,
+  // "whether or not `--rules` names a deck". A line has its `field` and its `args`, and an
+  // argument is one of four things: a number with its `dim`, `lo` and `hi`, a given, a word or a
+  // text. Anything else, as the `{"other": KIND}` of the exporter, does not read.
+  const readPart = (p, item) => {
+    if (!isStr(p.name)) return 'name is not a text';
+    const bytes = printedBytes(p.name);
+    if (bytes > NAME_BYTES) return `the name of a part prints in at most ${NAME_BYTES} bytes, and this one in ${bytes}`;
+    if (!isStr(p.type)) return 'type is not a text';
+    if (!Array.isArray(p.lines)) return 'lines is not a list';
+    const lines = [];
+    for (let j = 0; j < p.lines.length; j++) {
+      const l = p.lines[j], at = `line ${j + 1}`;
+      if (!isObj(l)) return `${at} is not an object`;
+      if (!isStr(l.field)) return `${at}: field is not a text`;
+      if (!Array.isArray(l.args)) return `${at}: args is not a list`;
+      const args = [];
+      for (let k = 0; k < l.args.length; k++) {
+        const a = l.args[k], aat = `${at}, argument ${k + 1}`;
+        const kind = isObj(a) && Object.keys(a).length === 1 ? Object.keys(a)[0] : null;
+        if (kind === 'number') {
+          if (!isObj(a.number)) return `${aat}: the number is not an object`;
+          const e = noText(a.number, ['dim']) ?? noRange(a.number);
+          if (e) return `${aat}: ${e}`;
+          args.push({ kind, dim: a.number.dim, lo: parseFileNumber(a.number.lo), hi: parseFileNumber(a.number.hi) });
+        } else if (kind === 'given' || kind === 'word' || kind === 'text') {
+          if (!isStr(a[kind])) return `${aat}: ${kind} is not a text`;
+          args.push({ kind, value: a[kind] });
+        } else return `${aat} is not a number, a given, a word or a text`;
+      }
+      lines.push({ field: l.field, args });
     }
+    return { item: `${item} ${p.name}`, name: p.name, type: p.type, lines };
+  };
+  let quantities = [], params = [], partsR = [];
+  const hasParts = !!designJ && has(designJ, 'parts');
+  if (designJ) {
+    if (!isStr(designJ.name)) W('design', 'name is not a text');
+    if (!isStr(designJ.card)) W('design', 'card is not a text');
+    // A quantity: `type`, `entity`, `line`, `field`, `role`, `dim`, `lo`, `hi`. A param: `name`,
+    // `dim`, `lo`, `hi`.
+    quantities = items('design', designJ, 'quantities', (x, item) => noText(x, ['type', 'entity', 'line', 'field', 'role', 'dim']) ?? noRange(x)
+      ?? { item, role: x.role, lo: parseFileNumber(x.lo), entity: x.entity, line: x.line });
+    params = items('design', designJ, 'params', (x) => noText(x, ['name', 'dim']) ?? noRange(x) ?? x);
+    if (hasParts) partsR = items('design', designJ, 'parts', readPart);
+  }
+
+  // deck.json. It may leave out `rules`, and `about` wherever it stands. `domains.size` has `min`,
+  // a number, and `strict`, true or false, and one that does not read is of the whole file. A key
+  // of `domains.input` is an item: it names a dimension and has `min` and `strict`, and one that
+  // does not read is left out, so its dimension has no floor of it. `about` is prose. Two keys of
+  // one dimension give it one floor: the higher, and the strict one when both are at one height.
+  // Floors are kept by the exponents. A constant has `label`, `lo` and `hi`.
+  let sizeDomain = null;
+  let inputDomains = new Map();
+  if (deckJ) {
+    const dom = deckJ.domains;
+    if (!isObj(dom)) W('deck', 'domains is not an object');
+    else {
+      const s = dom.size;
+      if (!isObj(s)) W('deck', 'domains.size is not an object');
+      else if (!parseFileNumber(s.min)) W('deck', `domains.size: min is ${short(s.min)}, which is not a number`);
+      else if (typeof s.strict !== 'boolean') W('deck', 'domains.size: strict is not true or false');
+      else sizeDomain = { min: parseFileNumber(s.min), strict: s.strict };
+      if (!isObj(dom.input)) W('deck', 'domains.input is not an object');
+      else {
+        for (const k of Object.keys(dom.input)) {
+          if (k === 'about') continue;
+          const item = `domains.input.${k}`;
+          const dim = parseFileDim(k);
+          if (!dim) { find('deck', item, `${short(k)} names no dimension`); continue; }
+          const d = dom.input[k];
+          if (!isObj(d)) { find('deck', item, 'the floor is not an object'); continue; }
+          const dm = parseFileNumber(d.min);
+          if (!dm) { find('deck', item, `min is ${short(d.min)}, which is not a number`); continue; }
+          if (typeof d.strict !== 'boolean') { find('deck', item, 'strict is not true or false'); continue; }
+          const key = dstr(dim), was = inputDomains.get(key);
+          const c = was ? qcmp(dm, was.min) : 1;
+          if (c > 0) inputDomains.set(key, { min: dm, strict: d.strict, name: k });
+          else if (c === 0 && d.strict) was.strict = true;
+        }
+      }
+    }
+    items('deck', deckJ, 'constants', (c) => noText(c, ['label']) ?? noRange(c) ?? c);
   }
   // format.md, type rule 8: "With `--rules`, `domains.input` of deck.json gives each dimension the
   // floor that `petra/decks/core.json` gives it, and no other dimension a floor ... A floor is
@@ -2577,7 +2638,7 @@ export function verifyTexts(texts, opts = {}) {
   // it. The finding is made with the type rules, below. Without `--rules` the floors are
   // deck.json's, as before.
   let floorsDiffer = null;
-  if (rulesJ) {
+  if (rulesGiven) {
     const core = coreInputFloors();
     for (const [key, c] of core) {
       const d = inputDomains.get(key);
@@ -2594,56 +2655,76 @@ export function verifyTexts(texts, opts = {}) {
   // finding of its own, at `domains.size`, and the kernel goes on with core.json's size floor. So
   // with `--rules` every floor this document names, in type rules 3 and 4, in the deck of rules, in
   // Parts 3 and in a completion, is core.json's." The `min` and the `strict` alone are compared: an
-  // `about` beside them is prose. A `domains.size` that is a shape finding gives no size floor,
-  // which is another than core.json's (AMBIGUITIES.md, O1). From here on `sizeDomain` is the
+  // `about` beside them is prose. A `domains.size` that does not read is of the whole file, and the
+  // kernel stops before the type rules (After a broken rule). From here on `sizeDomain` is the
   // kernel's own with --rules, and type rule 3 is held to it. Without `--rules` it is deck.json's.
   let sizeDiffers = null;
-  if (rulesJ) {
+  if (rulesGiven) {
     const core = { min: parseFileNumber(CORE_SIZE_FLOOR.min), strict: CORE_SIZE_FLOOR.strict };
-    if (!sizeGiven) sizeDiffers = `it gives no size floor that reads, and core.json gives ${core.min}, strict`;
-    else if (qcmp(sizeGiven.min, core.min) !== 0) sizeDiffers = `it gives a size the floor ${sizeGiven.min}, and core.json gives it ${core.min}`;
-    else if (sizeGiven.strict !== core.strict) sizeDiffers = 'it gives a size a floor that is not strict, and the size floor of core.json is strict';
+    if (sizeDomain && qcmp(sizeDomain.min, core.min) !== 0) sizeDiffers = `it gives a size the floor ${sizeDomain.min}, and core.json gives it ${core.min}`;
+    else if (sizeDomain && sizeDomain.strict !== core.strict) sizeDiffers = 'it gives a size a floor that is not strict, and the size floor of core.json is strict';
     sizeDomain = core;
   }
-  list('deck', deckJ, 'constants', false).forEach((c, i) => { if (isObj(c)) range('deck', `constants[${i}]`, c); else find('deck', `constants[${i}]`, 'not an object'); });
 
-  // proofs.json
+  // proofs.json. format.md, Keys: a cell has `subject`, `mechanism`, `entry` and `state`, and may
+  // leave out `tape`, `partition`, `point`, `which`, `rule` and `completion`, and `why` but for a
+  // `not_applicable` or `open` cell of a design with no parts. "A proofs.json that breaks a shape
+  // rule in any hint, as a number written `01` or a hint with no `state`, is refused whole like
+  // any file, and the verdict is ILL-FORMED with no cell." With `--rules` a cell is a hint, and
+  // the kernel reads three more of its keys: `partition`, which is the text `leaf` or an object,
+  // `point`, an object, and `completion`, an object whose `keys` and `loads` are lists. One that
+  // gives such a key a value of another kind breaks the shape rule (Keys), and so does a number
+  // that does not parse: the `at` of a split, a value of a point, the value of a load of four
+  // items of a completion. Any other fault of their form settles nothing, or does not fit, and
+  // breaks no shape rule (AMBIGUITIES.md, P6). The kernel does not read the `why`, the `rule`,
+  // the `tape` or the `which` of a hint, and holds them to no kind.
   const hints = new Map();
   const hintKey = (s, m, e) => `${s}\u0000${m}\u0000${e}`;
   if (proofsJ) {
-    list('proofs', proofsJ, 'cells', true).forEach((c, i) => {
-      const item = `cells[${i}]`;
-      if (!isObj(c) || !isStr(c.subject) || !isStr(c.mechanism) || !isStr(c.entry) || !isStr(c.state)) { find('proofs', item, 'a cell lacks its subject, mechanism, entry or state'); return; }
-      if (!STATES.includes(c.state)) { find('proofs', item, `${short(c.state)} is not a state`); return; }
-      let bad = false;
-      const walk = (P, d) => {
-        if (!isObj(P) || d > 200) return;
-        if (Object.hasOwn(P, 'at') && !parseFileNumber(P.at)) { find('proofs', item, `the partition splits at ${short(P.at)}, which is not a number`); bad = true; }
-        walk(P.below, d + 1);
-        walk(P.above, d + 1);
-      };
-      if (Object.hasOwn(c, 'partition')) walk(c.partition, 0);
-      if (isObj(c.point)) for (const k of Object.keys(c.point)) if (!parseFileNumber(c.point[k])) { find('proofs', item, `the point gives ${k} the value ${short(c.point[k])}, which is not a number`); bad = true; }
-      // A completion gives each load "a number in a string, as in a point" (item 9): every number
-      // parses (AMBIGUITIES.md, C1 and L4).
-      if (isObj(c.completion) && Array.isArray(c.completion.loads)) {
-        for (const l of c.completion.loads) if (Array.isArray(l) && l.length === 4 && isStr(l[3]) && !parseFileNumber(l[3])) { find('proofs', item, `the completion gives ${short(l[1])} the value ${short(l[3])}, which is not a number`); bad = true; }
+    items('proofs', proofsJ, 'cells', (c) => {
+      const e = noText(c, ['subject', 'mechanism', 'entry', 'state']);
+      if (e) return e;
+      if (!STATES.includes(c.state)) return `${short(c.state)} is not a state`;
+      if (!rulesGiven) {
+        // The cell of a design with no parts, which the kernel checks as it stands.
+        if (!hasParts && (c.state === 'not_applicable' || c.state === 'open') && !isStr(c.why)) return `a cell that is ${c.state} says why, and why is not a text`;
+        return c;
       }
-      if (bad) return;
+      if (has(c, 'partition')) {
+        if (!isStr(c.partition) && !isObj(c.partition)) return 'partition is not the text leaf or an object';
+        let bad = null;
+        const walk = (P) => {
+          if (!isObj(P) || bad) return;
+          if (has(P, 'at') && !parseFileNumber(P.at)) { bad = `the partition splits at ${short(P.at)}, which is not a number`; return; }
+          walk(P.below);
+          walk(P.above);
+        };
+        walk(c.partition);
+        if (bad) return bad;
+      }
+      if (has(c, 'point')) {
+        if (!isObj(c.point)) return 'point is not an object';
+        for (const k of Object.keys(c.point)) if (!parseFileNumber(c.point[k])) return `the point gives ${short(k)} the value ${short(c.point[k])}, which is not a number`;
+      }
+      if (has(c, 'completion')) {
+        const cp = c.completion;
+        if (!isObj(cp)) return 'completion is not an object';
+        for (const k of ['keys', 'loads']) if (has(cp, k) && !Array.isArray(cp[k])) return `completion: ${k} is not a list`;
+        // A completion gives each load "a number in a string, as in a point" (item 9).
+        for (const l of cp.loads ?? []) if (Array.isArray(l) && l.length === 4 && isStr(l[3]) && !parseFileNumber(l[3])) return `the completion gives ${short(l[1])} the value ${short(l[3])}, which is not a number`;
+      }
       const key = hintKey(c.subject, c.mechanism, c.entry);
       if (!hints.has(key)) hints.set(key, []);
       hints.get(key).push(c);
+      return c;
     });
   }
-  // format.md, The rules: the kernel applies the rules in order, and a shape or a type finding
-  // does not stop it: Parts 9 alone is "applied only to files that break no rule before it".
-  // What stops it is a file it cannot read as JSON (above) and a deck that does not hold
-  // together, with which "the kernel reads no part".
 
   // ---------------------------------------------------------------- the deck of rules
   // Read here, before the type rules, because type rules 3 and 4 ask which fields of the deck's
-  // types say `may_be`. Its findings are those of the deck of rules. deck.md, "The size of a
-  // deck": a deck that takes more than 1,000,000 steps to read is refused before a row is read.
+  // types say `may_be`. Its findings are those of the deck of rules: of the file `rules`, with the
+  // empty item, since a deck reads whole or not at all. deck.md, "The size of a deck": a deck that
+  // takes more than 1,000,000 steps to read is refused before a row is read.
   let deck = null, deckStepCount = 0;
   if (rulesJ) {
     deckStepCount = deckSteps(rulesJ);
@@ -2659,13 +2740,13 @@ export function verifyTexts(texts, opts = {}) {
   if (deck) {
     let under = false;
     for (const T of deck.types.values()) {
-      const items = [...T.fields.filter((f) => f.kind === 'q').map((f) => ['field', f]), ...[...T.loads.values()].map((l) => ['load', l])];
-      for (const [what, f] of items) {
+      const fls = [...T.fields.filter((f) => f.kind === 'q').map((f) => ['field', f]), ...[...T.loads.values()].map((l) => ['load', l])];
+      for (const [what, f] of fls) {
         if (!f.least) continue;
         const fl = inputDomains.get(dstr(f.dim));
         if (!fl || (f.mayBe === 'negative' && fl.min.n >= 0n)) continue;
         if (qcmp(f.least, fl.min) < 0) {
-          find('rules', `types ${T.name}`, `${what} ${f.name}: its least, ${f.least} in SI units, is under ${fl.min}, the floor of a ${fl.name}, and no card states a value under it`);
+          find('rules', '', `${what} ${f.name}: its least, ${f.least} in SI units, is under ${fl.min}, the floor of a ${fl.name}, and no card states a value under it`);
           under = true;
         }
       }
@@ -2673,28 +2754,54 @@ export function verifyTexts(texts, opts = {}) {
     if (under) deck = null;
   }
   // Shape: with --rules the names of the card and of the design print in at most 200 bytes,
-  // tested when the deck holds together.
+  // "tested when the deck that `--rules` names holds together". A name past the limit is a text
+  // that reads: the finding is at `name`, leaves nothing out and stops nothing (AMBIGUITIES.md, P7).
+  const nameLimit = (file, item, s, limit, what) => {
+    if (isStr(s) && printedBytes(s) > limit) { find(file, item, `${what} prints in at most ${limit} bytes, and this one in ${printedBytes(s)}`); return false; }
+    return true;
+  };
   if (deck) {
-    nameLimit('card', 'name', cardJ.name, LABEL_NAME_BYTES, 'the name of the card');
-    nameLimit('design', 'name', designJ.name, LABEL_NAME_BYTES, 'the name of the design');
+    if (cardJ) nameLimit('card', 'name', cardJ.name, LABEL_NAME_BYTES, 'the name of the card');
+    if (designJ) nameLimit('design', 'name', designJ.name, LABEL_NAME_BYTES, 'the name of the design');
   }
-  // The type of the first part of a name (type rules 3 and 4), when the deck holds together.
+  // format.md, After a broken rule: "When card.json, design.json or deck.json does not read as a
+  // whole, the kernel stops there, with the shape findings of all the files. Otherwise it applies
+  // the type rules to what it read".
+  if (whole.has('card') || whole.has('design') || whole.has('deck')) return ill();
+
+  // The type of the first part of a name (type rules 3 and 4), when the deck holds together: "The
+  // part is the first of that name in `parts`", of the parts that read (AMBIGUITIES.md, P11).
+  const firstOfName = new Map();
+  for (const p of partsR) if (!firstOfName.has(p.name)) firstOfName.set(p.name, p);
   const firstPartType = (name) => {
-    if (!deck || !hasParts) return null;
-    const p = partsJ.find((x) => isObj(x) && x.name === name);
-    return p && isStr(p.type) ? deck.types.get(p.type) ?? null : null;
+    if (!deck) return null;
+    const p = firstOfName.get(name);
+    return p ? deck.types.get(p.type) ?? null : null;
   };
 
   // ---------------------------------------------------------------- types
+  // Type rule 1: "The design's `card` is the SHA-256 of the card file's bytes", written
+  // `sha256:HEX` (format.md, design.json). The file read as JSON, so it is UTF-8 with no byte
+  // order mark, and its text gives its bytes back.
+  const cardHash = `sha256:${createHash('sha256').update(texts.card, 'utf8').digest('hex')}`;
+  if (designJ.card !== cardHash) find('design', 'card', `is not the hash of the card file, ${cardHash}`, 'types.1');
   const allowedDesignKeys = ['format', 'name', 'card', 'quantities', 'params', 'parts'];
-  for (const k of Object.keys(designJ)) if (!allowedDesignKeys.includes(k)) find('design', k, `the design has the key ${k}`, 'types.2');
+  for (const k of Object.keys(designJ)) if (!allowedDesignKeys.includes(k)) find('design', k, `the design has the key ${short(k)}`, 'types.2');
+  // Type rule 8: "Rule 8 is applied before rules 3 and 4, which read the floors it settles, so its
+  // findings are printed before theirs." With --rules, a deck.json whose `domains.input` is not the
+  // floors of core.json is a finding. The kernel went on with core.json's floors in its place,
+  // above: type rule 4, the `least`s of the deck of rules, Parts 3 and the completions are all
+  // held to them. And a deck.json whose `domains.size` is not core.json's size floor is "a finding
+  // of its own, at `domains.size`".
+  if (rulesGiven && floorsDiffer) find('deck', 'domains.input', `with --rules the floors are those of core.json, which the kernel holds itself, and deck.json gives others: ${floorsDiffer}`, 'types.8');
+  if (rulesGiven && sizeDiffers) find('deck', 'domains.size', `with --rules the size floor is that of core.json, which the kernel holds itself, and deck.json gives another: ${sizeDiffers}`, 'types.8');
   // Type rule 3, but for a quantity of a field that says `may_be`, which Parts 3 holds to the
   // field's own floor. With --rules the size floor is core.json's (type rule 8), whatever
   // deck.json gives.
   for (const q of quantities) {
-    if (q.role === 'size' && q.lo && sizeDomain) {
-      const T = isStr(q.entity) ? firstPartType(q.entity) : null;
-      const f = T && isStr(q.line) ? T.fieldMap.get(q.line) : null;
+    if (q.role === 'size') {
+      const T = firstPartType(q.entity);
+      const f = T ? T.fieldMap.get(q.line) : null;
       if (f && f.kind === 'q' && f.mayBe) continue;
       const c = qcmp(q.lo, sizeDomain.min);
       if (c < 0 || (c === 0 && sizeDomain.strict)) find('design', q.item, `a size is ${q.lo}, at or below the least a size may take`, 'types.3');
@@ -2705,14 +2812,14 @@ export function verifyTexts(texts, opts = {}) {
   // above, and is held to one under zero.
   for (const x of inputs) {
     x.dimVec = parseFileDim(x.dim);
-    if (!x.dimVec) { if (isStr(x.dim)) find('card', x.item, `${short(x.dim)} names no dimension`, 'types.4'); continue; }
+    if (!x.dimVec) { find('card', x.item, `${short(x.dim)} names no dimension`, 'types.4'); continue; }
     const d = inputDomains.get(dstr(x.dimVec));
-    if (!d || !x.lo) continue;
+    if (!d) continue;
     let negative = false;
-    if (isStr(x.on) || isStr(x.field) || isStr(x.case)) {
-      const T = isStr(x.on) ? firstPartType(x.on) : null;
-      negative = !!(T && isStr(x.field) && T.loads.get(x.field)?.mayBe === 'negative');
-    } else if (isStr(x.name)) {
+    if (x.on !== undefined || x.field !== undefined || x.case !== undefined) {
+      const T = x.on !== undefined ? firstPartType(x.on) : null;
+      negative = !!(T && x.field !== undefined && T.loads.get(x.field)?.mayBe === 'negative');
+    } else {
       const dot = x.name.lastIndexOf('.');
       const T = dot > 0 ? firstPartType(x.name.slice(0, dot)) : null;
       const f = T ? T.fieldMap.get(x.name.slice(dot + 1)) : null;
@@ -2723,37 +2830,63 @@ export function verifyTexts(texts, opts = {}) {
     if (c < 0 || (c === 0 && d.strict)) find('card', x.item, `lo is ${x.lo}, below the floor of ${d.name}`, 'types.4');
   }
   // Type rule 5: every input, every waiver and every item of `states` names a `by` that is not
-  // the empty text.
-  for (const x of inputs) if (!isStr(x.by) || x.by.length === 0) find('card', x.item, 'the input names no by: nobody signed it', 'types.5');
-  for (const w of waivers) if (!isStr(w.by) || w.by.length === 0) find('card', w.item, 'the waiver names no by', 'types.5');
-  for (const s of states) if (s.by.length === 0) find('card', s.item, 'the statement names no by', 'types.5');
+  // the empty text. A waiver or an item of `states` with no `by` "names nobody, which type rule 5
+  // refuses" (Keys); an input with none did not read.
+  for (const x of inputs) if (x.by.length === 0) find('card', x.item, 'the input names no by: nobody signed it', 'types.5');
+  for (const w of waivers) if (w.by === undefined || w.by.length === 0) find('card', w.item, 'the waiver names no by', 'types.5');
+  for (const s of states) if (s.by === undefined || s.by.length === 0) find('card', s.item, 'the statement names no by', 'types.5');
   // Types 6 and 7: parts come with --rules, and the marks of a file for a deck of rules come
   // with parts and --rules: an input with `on` or `field`, `tests`, `probability_claims` or
   // `states` in the card, `rules` in deck.json.
-  if (hasParts && !rulesJ) find('design', 'parts', 'a design with parts comes with --rules', 'types.6');
-  if (!hasParts || !rulesJ) {
+  if (hasParts && !rulesGiven) find('design', 'parts', 'a design with parts comes with --rules', 'types.6');
+  if (!hasParts || !rulesGiven) {
     const why = !hasParts ? 'is a mark of a design checked against a deck of rules, and the design has no parts' : 'is a mark of a design checked against a deck of rules, and --rules names no deck';
     for (const x of inputs) if (x.on !== undefined || x.field !== undefined) find('card', x.item, `an input with on or field ${why}`, 'types.7');
-    for (const k of ['tests', 'probability_claims', 'states']) if (Object.hasOwn(cardJ, k)) find('card', k, `the key ${k} ${why}`, 'types.7');
-    if (Object.hasOwn(deckJ, 'rules')) find('deck', 'rules', `the key rules ${why}`, 'types.7');
-  }
-  // Type rule 8: with --rules, a deck.json whose `domains.input` is not the floors of core.json is
-  // a finding. The kernel went on with core.json's floors in its place, above: type rule 4, the
-  // `least`s of the deck of rules, Parts 3 and the completions are all held to them.
-  if (rulesJ && floorsDiffer) find('deck', 'domains.input', `with --rules the floors are those of core.json, which the kernel holds itself, and deck.json gives others: ${floorsDiffer}`, 'types.8');
-  // And a deck.json whose `domains.size` is not core.json's size floor is "a finding of its own,
-  // at `domains.size`". Type rule 3, above, was held to core.json's size floor already.
-  if (rulesJ && sizeDiffers) find('deck', 'domains.size', `with --rules the size floor is that of core.json, which the kernel holds itself, and deck.json gives another: ${sizeDiffers}`, 'types.8');
-  if (rulesJ && !deck) return ill();
-  // Parts are read only with --rules and parts (a design with parts and no --rules breaks Types 6).
-  if (!hasParts || !rulesJ) {
-    if (findings.length) return ill();
-    // A design with no parts that breaks no rule this kernel reads: its cells are the tapes of
-    // proofs.json, which this kernel does not check (AMBIGUITIES.md, C8).
-    return { out: null, code: 64, message: 'a design with no parts is outside what this kernel reads' };
+    for (const k of ['tests', 'probability_claims', 'states']) if (has(cardJ, k)) find('card', k, `the key ${k} ${why}`, 'types.7');
+    if (has(deckJ, 'rules')) find('deck', 'rules', `the key rules ${why}`, 'types.7');
   }
 
+  // format.md, After a broken rule: "and then, when `--rules` names a deck of rules that reads,
+  // Parts 1 to 8, whatever it has found by then. ... With a deck of rules that does not read, no
+  // rule of Parts is applied."
+  if (!rulesGiven) {
+    if (findings.length) return ill();
+    // `--rules` names no deck and no rule is broken (so the design has no parts: type rule 6).
+    // format.md, The verdict: "Without `--rules` the cells are the list of proofs.json, which the
+    // kernel takes as it comes. It checks the tape of each ... So nothing the kernel checks there
+    // makes a PASS, and the verdict of such files is UNKNOWN at best." This kernel checks no tape
+    // that a file carries (AMBIGUITIES.md, C8), so a list with a tape in it gets no verdict here.
+    // A list with none is settled by Cells 3 to 5 alone: "`proved` or `refuted` with no tape is
+    // open", "`waived` holds only when the card lists a waiver with the same `subject` and
+    // `mechanism`. Otherwise it is open", and "`not_applicable` is taken as stated". No cell of it
+    // is refuted, so its verdict is UNKNOWN (AMBIGUITIES.md, P10).
+    const listed = proofsJ ? proofsJ.cells : [];
+    if (listed.some((c) => has(c, 'tape'))) return { out: null, code: 64, message: 'files with no deck of rules whose cells carry a tape are outside what this kernel reads: it gives them no verdict' };
+    const counts = zeroCounts();
+    const rested = [];
+    const cells = listed.map((c) => {
+      const o = { subject: c.subject, mechanism: c.mechanism, entry: c.entry, claimed: c.state, state: 'open' };
+      if (c.state === 'not_applicable') o.state = 'not_applicable';
+      else if (c.state === 'waived') {
+        const w = waivers.find((x) => x.subject === c.subject && x.mechanism === c.mechanism);
+        if (w) { o.state = 'waived'; if (!rested.includes(w)) rested.push(w); }
+        else o.reason = 'the card lists no waiver with this subject and mechanism';
+      } else if (c.state === 'open') o.reason = c.why;
+      else o.reason = `the cell is written ${c.state} and carries no tape: the kernel has no rule for its proof yet`;
+      if (o.state === 'waived') o.reason = 'the card waives it';
+      counts[o.state]++;
+      return o;
+    });
+    return {
+      out: { verdict: 'UNKNOWN', findings: [], counts, waived: rested.map((w) => ({ subject: w.subject, mechanism: w.mechanism, by: w.by, reason: w.reason })), cells },
+      code: 2,
+    };
+  }
+  if (!deck) return ill();
+
   // ---------------------------------------------------------------- parts
+  // "So a design that has no `parts` is one with no part: each given of the card is then one that
+  // no part reads, and each waiver names no part."
   const DN = designJ.name, CN = cardJ.name;
   const inputByName = new Map();
   for (const x of inputs) {
@@ -2771,47 +2904,49 @@ export function verifyTexts(texts, opts = {}) {
     else if (inputByName.has(s.name)) find('card', s.item, `${s.name} is stated and bounded: a statement and a bound do not share a name`, 'parts.6');
     else stateByName.set(s.name, s);
   }
+  // format.md, After a broken rule: "A rule of Parts counts a given as read when a line of a part
+  // has it as an argument, whether or not the line or the part breaks a rule of Parts. ... A part
+  // that a shape finding left out reads nothing". And Parts 6: "A line reads the name its given
+  // writes, so a statement is read when some line of some part has a given of its name."
+  const givensNamed = new Set();
+  for (const p of partsR) for (const l of p.lines) for (const a of l.args) if (a.kind === 'given') givensNamed.add(a.value);
+  // "A part whose type the deck does not have (Parts 1) is no part that a load is put on, that a
+  // waiver names or that another part joins. A part that breaks any other rule is still one." Of
+  // two parts of one name the first is the part of that name, as in type rule 3, and the lines of
+  // both are held to Parts 2 to 5 (AMBIGUITIES.md, P8).
   const parts = [];
   const partByName = new Map();
-  const givensRead = new Set();
-  const statesRead = new Set();
-  const argKind = (a) => (isObj(a) && Object.keys(a).length === 1 ? Object.keys(a)[0] : null);
-  partsJ.forEach((p, pi) => {
-    const item = `parts[${pi}]${isObj(p) && isStr(p.name) ? ' ' + p.name : ''}`;
-    const PF = (why, rule) => find('design', item, why, rule);
-    if (!isObj(p) || !isStr(p.name) || !isStr(p.type) || !Array.isArray(p.lines)) { PF('a part has no name, type or lines', 'parts.1'); return; }
-    if (partByName.has(p.name)) { PF(`two parts are named ${p.name}`, 'parts.1'); return; }
+  for (const p of partsR) {
+    const PF = (why, rule) => find('design', p.item, why, rule);
     const T = deck.types.get(p.type);
-    if (!T) { PF(`${p.type} is not a type of the deck`, 'parts.1'); return; }
-    const part = { name: p.name, type: T, values: new Map(), joinWords: new Map(), joins: new Map(), item };
-    partByName.set(p.name, part);
+    if (!T) { PF(`${short(p.type)} is not a type of the deck`, 'parts.1'); continue; }
+    const part = { name: p.name, type: T, values: new Map(), joinWords: new Map(), joins: new Map(), item: p.item };
+    if (partByName.has(p.name)) PF(`two parts are named ${p.name}`, 'parts.1');
+    else partByName.set(p.name, part);
     parts.push(part);
     const seen = new Set();
     p.lines.forEach((l, li) => {
       const LF = (why, rule = 'parts.3') => PF(`line ${li + 1}: ${why}`, rule);
-      if (!isObj(l) || !isStr(l.field) || !Array.isArray(l.args)) { LF('the line has no field or args', 'parts.2'); return; }
       const f = T.fieldMap.get(l.field);
-      if (!f) { LF(`${l.field} is not a field of ${T.name}`, 'parts.2'); return; }
+      if (!f) { LF(`${short(l.field)} is not a field of ${T.name}`, 'parts.2'); return; }
       if (seen.has(l.field)) { LF(`the part gives ${l.field} twice`, 'parts.2'); return; }
       seen.add(l.field);
       const args = l.args;
-      const given = args.length === 1 && argKind(args[0]) === 'given' && isStr(args[0].given) ? args[0].given : null;
-      if (given !== null && stateByName.has(given)) statesRead.add(given);
+      const a = args.length === 1 ? args[0] : null;
+      const given = a && a.kind === 'given' ? a.value : null;
       if (f.kind === 'q') {
-        if (args.length !== 1) { LF(`${f.name} takes one number or one given`); return; }
-        const a = args[0], k = argKind(a);
+        if (!a) { LF(`${f.name} takes one number or one given`); return; }
         // deck.md, "A field that a record may leave unstated": the one word `unstated`.
-        if (k === 'word' && a.word === 'unstated') {
+        if (a.kind === 'word' && a.value === 'unstated') {
           if (!f.optional) { LF(`${f.name} is not optional, and a part states it: unstated is refused`); return; }
           part.values.set(f.name, { kind: 'q', unstated: true });
           return;
         }
         let lo, hi, label, written = false;
-        if (k === 'number' && isObj(a.number)) {
+        if (a.kind === 'number') {
           if (f.signed) { LF(`${f.name} is signed: it is for the card to state, and the design reads it with given`); return; }
-          if (!sameFileDim(a.number.dim, f.dim)) { LF(`${f.name} is of ${f.dimName}, and the number is of ${short(a.number.dim)}`); return; }
-          lo = parseFileNumber(a.number.lo); hi = parseFileNumber(a.number.hi);
-          if (!lo || !hi) return; // reported under shape
+          if (!sameFileDim(a.dim, f.dim)) { LF(`${f.name} is of ${f.dimName}, and the number is of ${short(a.dim)}`); return; }
+          lo = a.lo; hi = a.hi;
           if (f.whole && (qcmp(lo, hi) !== 0 || lo.d !== 1n)) { LF(`${f.name} is a count: one whole number`); return; }
           label = `dsg:${DN}.${p.name}.${f.name}`;
           written = true;
@@ -2830,12 +2965,10 @@ export function verifyTexts(texts, opts = {}) {
             if (!x) { LF(stateByName.has(given) ? `the card states ${given} exactly, and it is a quantity that is no count` : `the card has no input ${given}`); return; }
             if (!x.isGiven) { LF(`the input ${given} is a load`); return; }
             if (!sameFileDim(x.dim, f.dim)) { LF(`${f.name} is of ${f.dimName}, and the card's ${given} is of ${short(x.dim)}`); return; }
-            givensRead.add(given);
             lo = x.lo; hi = x.hi;
-            if (!lo || !hi) return;
             label = `in:${CN}.${x.name}`;
           }
-        } else { LF(`${f.name} takes one number or one given, not ${short(a)}`); return; }
+        } else { LF(`${f.name} takes one number or one given, not a ${a.kind}`); return; }
         // Parts 3: more than zero, at least zero with may_be zero, no floor by its sign with
         // may_be negative; a number the design writes for such a field is held to the floor its
         // dimension has in domains.input of core.json (type rule 8) when that floor is under
@@ -2852,9 +2985,8 @@ export function verifyTexts(texts, opts = {}) {
         if (f.least && qcmp(lo, f.least) < 0) { LF(`${f.name} is ${lo}, below its least ${f.least}`); return; }
         part.values.set(f.name, { kind: 'q', label, lo, hi });
       } else if (f.kind === 'k') {
-        if (args.length !== 1) { LF(`${f.name} takes one word, one text or one given`, 'parts.4'); return; }
-        const a = args[0], k = argKind(a);
-        if (k === 'word' && a.word === 'unstated' && f.optional) { part.values.set(f.name, { kind: 'k', unstated: true }); return; }
+        if (!a) { LF(`${f.name} takes one word, one text or one given`, 'parts.4'); return; }
+        if (a.kind === 'word' && a.value === 'unstated' && f.optional) { part.values.set(f.name, { kind: 'k', unstated: true }); return; }
         if (given !== null) {
           // Parts 4: a given of a key is an item of `states` with `key`.
           if (given !== `${p.name}.${f.name}`) { LF(`reads the given ${given}, and a part reads only what the card states for it, ${p.name}.${f.name}`, 'parts.4'); return; }
@@ -2867,22 +2999,21 @@ export function verifyTexts(texts, opts = {}) {
           return;
         }
         if (f.signed) { LF(`${f.name} is signed: it is for the card to state, and the design reads it with given`, 'parts.4'); return; }
-        const v = k === 'word' ? a.word : k === 'text' ? a.text : undefined;
-        if (!isStr(v)) { LF(`${f.name} takes one word, one text or one given, not ${short(a)}`, 'parts.4'); return; }
-        if (!f.names.includes(v)) { LF(`${short(v)} is not one of the names of ${f.name}`, 'parts.4'); return; }
-        part.values.set(f.name, { kind: 'k', value: v });
+        if (a.kind !== 'word' && a.kind !== 'text') { LF(`${f.name} takes one word, one text or one given, not a number`, 'parts.4'); return; }
+        if (!f.names.includes(a.value)) { LF(`${short(a.value)} is not one of the names of ${f.name}`, 'parts.4'); return; }
+        part.values.set(f.name, { kind: 'k', value: a.value });
       } else {
         if (args.length !== f.as.length) { LF(`${f.name} takes ${f.as.length} words`, 'parts.5'); return; }
         const words = [];
-        for (const a of args) {
-          if (argKind(a) !== 'word' || !isStr(a.word)) { LF(`${f.name} takes words that name parts, not ${short(a)}`, 'parts.5'); return; }
-          words.push(a.word);
+        for (const b of args) {
+          if (b.kind !== 'word') { LF(`${f.name} takes words that name parts, not a ${b.kind}`, 'parts.5'); return; }
+          words.push(b.value);
         }
         part.joinWords.set(f.name, words);
       }
     });
     for (const f of T.fields) if (!seen.has(f.name)) PF(`the part has no line for ${f.name}`, 'parts.2');
-  });
+  }
   const joinedBy = new Map();
   for (const part of parts) {
     for (const f of part.type.joins) {
@@ -2901,7 +3032,8 @@ export function verifyTexts(texts, opts = {}) {
   }
   // Parts 6. A load is tested in this order and stops at the first that fails: its part, its
   // field, its dimension, its least, that no case puts it on the part twice, and then the name of
-  // its case (64 bytes and no `/`). A load that fails is no load of the card.
+  // its case (64 bytes, no `/`, and not `where`). A load that fails is no load of the card. A
+  // given is one that a part reads (`givensNamed`, above).
   const loadKeys = new Set();
   const loads = [];
   for (const x of inputs) {
@@ -2911,20 +3043,20 @@ export function verifyTexts(texts, opts = {}) {
       const L = part.type.loads.get(x.field);
       if (!L) { find('card', x.item, `${short(x.field)} is not a load of ${part.type.name}`, 'parts.6'); continue; }
       if (!sameFileDim(x.dim, L.dim)) { find('card', x.item, `the load ${L.name} is of ${L.dimName}, and the input is of ${short(x.dim)}`, 'parts.6'); continue; }
-      if (L.least && x.lo && qcmp(x.lo, L.least) < 0) { find('card', x.item, `the load is below its least ${L.least}`, 'parts.6'); continue; }
+      if (L.least && qcmp(x.lo, L.least) < 0) { find('card', x.item, `the load is below its least ${L.least}`, 'parts.6'); continue; }
       const k = `${x.case}\u0000${x.on}\u0000${x.field}`;
       if (loadKeys.has(k)) { find('card', x.item, `the case ${x.case} puts ${x.field} on ${x.on} twice`, 'parts.6'); continue; }
       loadKeys.add(k);
-      if (!isStr(x.case) || !nameLimit('card', x.item, x.case, NAME_BYTES, `the name of the case ${short(x.case)}`)) continue;
+      if (!nameLimit('card', x.item, x.case, NAME_BYTES, `the name of the case ${short(x.case)}`)) continue;
       if (x.case.includes('/')) { find('card', x.item, `the name of the case ${short(x.case)} holds a /`); continue; }
       // Parts 6: a case is not named `where`, since an entry that ends in `/where` is a range.
       if (x.case === 'where') { find('card', x.item, CASE_WHERE); continue; }
-      if (x.lo && x.hi) loads.push(x);
-    } else if (x.isGiven && isStr(x.name) && !givensRead.has(x.name)) {
+      loads.push(x);
+    } else if (x.isGiven && !givensNamed.has(x.name)) {
       find('card', x.item, `no part reads the given ${x.name}`, 'parts.6');
     }
   }
-  for (const s of states) if (stateByName.get(s.name) === s && !statesRead.has(s.name)) find('card', s.item, `${s.name} is stated, and no part reads it`, 'parts.6');
+  for (const s of states) if (stateByName.get(s.name) === s && !givensNamed.has(s.name)) find('card', s.item, `${s.name} is stated, and no part reads it`, 'parts.6');
   // A name in `cases` that no load has is a load case too, held to the same limit.
   const loadCaseNames = new Set(loads.map((x) => x.case));
   for (const c of cardCases) {
@@ -2938,11 +3070,14 @@ export function verifyTexts(texts, opts = {}) {
     if (!part) { find('card', w.item, `the waiver names ${w.subject}, which is no part`, 'parts.7'); continue; }
     if (!deck.lineOf.has(`${part.type.name}\u0000${w.mechanism}`)) find('card', w.item, `the grid asks no ${w.mechanism} of a ${part.type.name}`, 'parts.7');
   }
-  // Parts 8: no claim, tests record, probability claim or environment, and no param.
+  // Parts 8: no claim, tests record, probability claim or environment, and no param. format.md,
+  // card.json: the kernel "holds neither key to a list: any value but the empty list is a card
+  // that has one, and the finding is of Parts 8 and not of shape."
+  const hasOne = (k) => has(cardJ, k) && !(Array.isArray(cardJ[k]) && cardJ[k].length === 0);
   if (claims.length) find('card', 'claims', 'a card for a deck of rules has no claim', 'parts.8');
-  if (tests.length) find('card', 'tests', 'a card for a deck of rules has no tests record', 'parts.8');
-  if (pclaims.length) find('card', 'probability_claims', 'a card for a deck of rules has no probability claim', 'parts.8');
-  if (Object.hasOwn(cardJ, 'environment') && cardJ.environment !== null) find('card', 'environment', 'a deck of rules does not read an environment yet', 'parts.8');
+  if (hasOne('tests')) find('card', 'tests', 'a card for a deck of rules has no tests record', 'parts.8');
+  if (hasOne('probability_claims')) find('card', 'probability_claims', 'a card for a deck of rules has no probability claim', 'parts.8');
+  if (cardJ.environment !== null) find('card', 'environment', 'a deck of rules does not read an environment yet', 'parts.8');
   if (params.length) find('design', 'params', 'a design of a deck\'s types has no param', 'parts.8');
   if (findings.length) return ill();
 
@@ -3665,12 +3800,16 @@ export function verifyTexts(texts, opts = {}) {
     // order of its type's fields, and then its loads in the order of their names and of their
     // cases' names. A field the part leaves unstated has none, but a key that a rested completion
     // names, which has that name; and a load a rested completion gives is on its part in its case.
+    // format.md, Cells 8, gives the words of their reasons: "The reason of the first is `no rule
+    // of the deck reads PART.FIELD, so nothing checks it`, and of the second `no rule of the deck
+    // reads the load LOAD that case CASE puts on PART, so nothing checks it`, with `the card` in
+    // place of `case CASE` when the card has no load case."
     workOutReads();
     for (const part of parts) {
       for (const f of part.type.fields) {
         if (f.kind === 'j') continue;
         if (part.values.get(f.name)?.unstated && !(f.kind === 'k' && completedKey(part.name, f.name))) continue;
-        if (!readSets.get(part.name).has(f.name)) push({ subject: part.name, mechanism: 'unread', entry: f.name, state: 'open', reason: 'no rule and no line of the grid reads it' });
+        if (!readSets.get(part.name).has(f.name)) push({ subject: part.name, mechanism: 'unread', entry: f.name, state: 'open', reason: `no rule of the deck reads ${part.name}.${f.name}, so nothing checks it` });
       }
       const mine = new Map();
       for (const [l, m] of loadsOn.get(part.name) ?? []) mine.set(l, new Set(m.keys()));
@@ -3680,7 +3819,9 @@ export function verifyTexts(texts, opts = {}) {
       }
       for (const l of [...mine.keys()].sort(nameCmp)) {
         if (loadReads.get(part.name).has(l)) continue;
-        for (const cs of [...mine.get(l)].sort(nameCmp)) push({ subject: part.name, mechanism: 'unread', entry: `${l}/${cs}`, state: 'open', reason: 'no rule reads this load' });
+        for (const cs of [...mine.get(l)].sort(nameCmp)) {
+          push({ subject: part.name, mechanism: 'unread', entry: `${l}/${cs}`, state: 'open', reason: `no rule of the deck reads the load ${l} that ${loadCases.length ? `case ${cs}` : 'the card'} puts on ${part.name}, so nothing checks it` });
+        }
       }
     }
     // Steps item 5: what a rule reads. For each part 1, and for each rule of its type what item 1
@@ -3731,7 +3872,7 @@ export function verifyTexts(texts, opts = {}) {
 
 // ============================================================ command line
 
-const USAGE = 'usage: node verify.mjs --card FILE --design FILE --deck FILE --rules FILE [--proofs FILE] [--explain]';
+const USAGE = 'usage: node verify.mjs --card FILE --design FILE --deck FILE [--rules FILE] [--proofs FILE] [--explain]';
 
 function readText(path) {
   let buf;

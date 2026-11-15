@@ -124,7 +124,8 @@ class Check(Workspace):
 
     def test_check_without_solvers_reuses_the_library(self):
         library = str(self.tmp / "library")
-        self.assertEqual(run("certify-family", str(FAMILY), "--library", library)[0], 0, "the family certifies")
+        code, out, _ = run("certify-family", str(FAMILY), "--library", library)
+        self.assertEqual((code, out.count("stored ")), (EXIT_CODES["UNKNOWN"], 2), "both claims of the family are stored")
         code, out, _ = run("check", str(CIRCUIT), "--json", "--library", library, "--no-solve")
         verdicts = {v["claim"]: v for v in json.loads(out)["verdicts"]}
         self.assertEqual((verdicts["hot"]["needs"], verdicts["drop"]["needs"]), ([], []), "both claims come from the library, with nothing open")
@@ -229,7 +230,8 @@ class Verify(Workspace):
 class CertifyFamily(Workspace):
     def test_the_family_stores_both_claims(self):
         code, out, _ = run("certify-family", str(FAMILY), "--library", str(self.tmp / "library"))
-        self.assertEqual(code, 0, "every claim is stored")
+        self.assertEqual(code, EXIT_CODES["UNKNOWN"], "every claim is stored, and that is no pass: a family has no deck of rules")
+        self.assertRegex(out.splitlines()[0], r": UNKNOWN$")
         self.assertEqual(out.count("stored "), 2, "one line per stored claim")
 
     def test_a_false_family_exits_1(self):

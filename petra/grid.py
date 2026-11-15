@@ -43,7 +43,7 @@ from typing import Any, Callable, Iterable, Iterator, Mapping
 from . import deck as rows
 from . import export
 from .deck import NONE, RowError, Vector, anchored, dimension, only, quantity, replaced, show
-from .files import escaped, shown  # noqa: F401  (shown is what a caller prints a report through)
+from .files import escaped, headed, shown  # noqa: F401  (shown is what a caller prints a report through)
 from .ir import Bound, Component, Design, Fixed, ParamRef, Ref, Span, Stated, Text
 from .kernel import (MAX_ARGUMENT, Abs, Add, Const, Cos, Div, Exp, Interval, KernelArithmeticError, Ln, Max, Min, Mul, Neg, Pi, PowInt, Sqrt,
                      Sym, enclose)
@@ -2139,10 +2139,7 @@ class Report:
 
     def lines(self) -> list[str]:
         counts = self.counts()
-        # A name that is not plain could read as a status of its own, `x: PASS_WAIVED, and so on`, or push the true one off the first
-        # row of a terminal with blanks. Such a name is printed in quotes after the status, so that the first word is the status.
-        plain = re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", self.name) is not None
-        out = [f"{self.name}: {self.status}" if plain else f"{self.status}: the card named {json.dumps(self.name, ensure_ascii=False)}",
+        out = [headed(self.name, self.status),      # a name that is not plain goes in quotes after the status (files.headed)
                f"rules      {self.deck.hash}  {self.deck.name}",
                "cells      " + ", ".join(f"{counts[s]} {s.replace('_', ' ')}" for s in STATES)]
         wide = max((len(f"{c.subject}/{c.mechanism}") for c in self.cells), default=0)

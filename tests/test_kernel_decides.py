@@ -378,7 +378,8 @@ class Decides(unittest.TestCase):
         lines = out.splitlines()
         self.assertEqual((code, lines[0]), (EXIT_CODES["UNKNOWN"], "warren-footbridge-panel: UNKNOWN"))
         self.assertEqual(lines[1], f"reason     {verify.no_deck(['truss'])}")
-        self.assertIn("path       legacy: every line below is the working of Python's models, which chose the checks and wrote the formulas, and it decides nothing", lines)
+        self.assertTrue(any(line.startswith("path       legacy: every line below is the working of Python's models, which chose the checks and wrote the "
+                                            "formulas, and it decides nothing: where it says certified") for line in lines), lines[:8])
         self.assertEqual([line for line in lines if "PASS" in line or line.startswith("entries")], [])
         report = json.loads(cli("check", str(TRUSS), "--json")[1])
         self.assertEqual((report["status"], report["kernel"]["verdict"], report["reason"]), ("UNKNOWN", "UNKNOWN", verify.no_deck(["truss"])))

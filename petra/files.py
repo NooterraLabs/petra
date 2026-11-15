@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import codecs
 import itertools
+import json
 import os
 import re
 import sys
@@ -50,6 +51,27 @@ def acts(text: str) -> bool:
     """Whether a text holds a character that a terminal acts on, or a line end. A name of a
     file that does is refused by every command and by the server: a report prints it."""
     return bool(_ACTED_ON.search(text)) or "\n" in text
+
+
+_STATUS_LIKE = re.compile(r"(pass_waived|pass|fail|unknown|marginal|ill-formed|input_error|internal_error)(?![A-Za-z0-9])", re.IGNORECASE)
+"""A name that is a status, or starts with one and goes on with no letter or digit: PASS, pass-1, FAIL.x."""
+
+
+def headed(name: str, status: str) -> str:
+    """The first line of a report: `NAME: STATUS`. A name that is not plain could read as a
+    status of its own, `x: PASS, and so on`, or push the true one off the first row of a
+    terminal with blanks. So could a plain name that is a status itself, as a card named
+    PASS. Such a name is printed in quotes after the status, so that the first word of
+    every report is its status."""
+    if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", name) and not _STATUS_LIKE.match(name):
+        return f"{name}: {status}"
+    return f"{status}: the card named {json.dumps(name, ensure_ascii=False)}"
+
+
+def one_line(text: str) -> str:
+    """A name for a listing that gives each item a line: its line ends written as `\\n` and
+    `\\r`, so that a name a file or a folder carries cannot start a line of its own."""
+    return text.replace("\\", "\\\\").replace("\n", "\\n").replace("\r", "\\r") if ("\n" in text or "\r" in text) else text
 
 
 class Shown:

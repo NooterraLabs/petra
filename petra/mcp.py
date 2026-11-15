@@ -41,7 +41,9 @@ Untrusted: it only calls the API, so a bug here costs a reply, never a verdict.
 from __future__ import annotations
 
 import json
+import os
 import queue
+import signal
 import subprocess
 import sys
 import threading
@@ -364,14 +366,20 @@ class Worker:
     thread waits on stdin can block until the client writes again. numpy's did, and the
     first tool call got no answer."""
 
-    COMMAND = (sys.executable, "-m", "petra", "mcp", "--worker")
+    COMMAND = (sys.executable, "-P", "-c", "import sys; sys.path.insert(0, sys.argv[1]); from petra.cli import main; sys.exit(main(['mcp', '--worker']))",
+               str(Path(__file__).resolve().parent.parent))
+    """The worker is this package: the folder that holds it goes first on the worker's path, and
+    `-P` keeps the working directory off it. `python -m petra` would put the working directory
+    first, and a file named petra.py in the folder a client starts the server in would then be
+    the worker, and answer every check as it liked (tests/test_kernel_attacks12.py)."""
 
     def __init__(self, budget: float = BUDGET_S) -> None:
         self.budget = budget
         self._start()
 
     def _start(self) -> None:
-        self.process = subprocess.Popen(self.COMMAND, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+        # On POSIX the worker leads a group of its own, so that stopping it stops the kernel and the solvers it started with it.
+        self.process = subprocess.Popen(self.COMMAND, stdin=subprocess.PIPE, stdout=subprocess.PIPE, start_new_session=hasattr(os, "killpg"))
         self.replies: queue.Queue[bytes] = queue.Queue()
         self.reader = threading.Thread(target=self._read, args=(self.process, self.replies), name="petra-mcp-worker", daemon=True)
         self.reader.start()
@@ -383,6 +391,11 @@ class Worker:
         replies.put(b"")
 
     def stop(self) -> None:
+        if hasattr(os, "killpg"):
+            try:
+                os.killpg(self.process.pid, signal.SIGKILL)      # the worker and every process it started, a kernel among them
+            except (ProcessLookupError, PermissionError):
+                pass      # it has ended already
         self.process.kill()
         self.process.wait()
         self.reader.join()

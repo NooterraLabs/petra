@@ -174,6 +174,8 @@ def read_deck(path: str) -> Deck:
             body = json.loads(f.read(), parse_float=_no_number, parse_int=_no_number, parse_constant=_no_number)
     except (OSError, UnicodeDecodeError, json.JSONDecodeError, DeckError) as exc:
         raise DeckError(f"{path}: {exc}") from None
+    except RecursionError:
+        raise DeckError(f"{path}: its JSON nests too deep to read") from None
     if not isinstance(body, dict) or set(body) != {"format", "records", "entries"}:
         raise DeckError(f"{path}: a deck is an object with exactly the keys format, records and entries")
     if body["format"] != FORMAT:

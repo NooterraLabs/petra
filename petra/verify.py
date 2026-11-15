@@ -24,6 +24,7 @@ the Python checker accepted it is a bug in one of the two, and raises Disagreeme
 from __future__ import annotations
 
 import functools
+import hashlib
 import json
 import os
 import subprocess
@@ -49,6 +50,17 @@ BUILT = Path(__file__).resolve().parent.parent / "kernel" / ".lake" / "build" / 
 
 EXITS: Mapping[str, int] = {"PASS": 0, "FAIL": 1, "UNKNOWN": 2, "ILL-FORMED": 3}
 """The four verdicts of the kernel, each with the code it exits with (kernel/Main.lean)."""
+
+
+HASHED = ("card", "design", "deck", "rules")
+"""The files whose hashes the kernel prints (kernel/Petra/Check.lean)."""
+
+STATES = ("proved", "refuted", "not_applicable", "waived", "open")
+"""The states the kernel settles a cell in (docs/format.md, proofs.json)."""
+
+SHAPES: Mapping[str, tuple[str, ...]] = {"cells": ("subject", "mechanism", "entry", "state"), "findings": ("rule", "file", "item", "why"),
+                                         "waived": ("subject", "mechanism", "by", "reason")}
+"""The keys of each item of a list of the kernel's answer, each a text (kernel/Main.lean)."""
 
 
 class NoVerdict(RuntimeError):
@@ -105,8 +117,9 @@ def runs(kernel: str) -> bool:
     there this only looks at the file's mode. A Windows tag names no version of Windows,
     and the kernel imports icu.dll, which Windows has carried since Windows 10 version
     1903. So on Windows this starts the kernel once: with no arguments it prints its usage
-    and exits 64. A kernel that cannot run is warned of once, and a check then has no
-    kernel and gives no verdict."""
+    and exits 64. A kernel that cannot run is warned of once and passed over: `binary` goes
+    on to the one built in a source tree, and with none there a check has no kernel and
+    gives no verdict. The answer is kept for the life of the process."""
     if os.name == "nt":
         import ctypes
 
@@ -122,7 +135,7 @@ def runs(kernel: str) -> bool:
     else:
         ran = os.access(kernel, os.X_OK)
     if not ran:
-        warnings.warn(f"{kernel} cannot run on this machine, so it gives no verdict here", RuntimeWarning, stacklevel=3)
+        warnings.warn(f"{kernel} cannot run on this machine, so it is passed over", RuntimeWarning, stacklevel=3)
     return ran
 
 
@@ -172,24 +185,50 @@ def run(command: list[str]) -> tuple[int, bytes, bytes]:
 def taken(kernel: str, code: int, out: bytes, err: bytes) -> dict[str, Any]:
     """The kernel's answer, when it is one: a JSON object with one of the four verdicts,
     printed by a kernel that exited with that verdict's code and wrote nothing to its error
-    stream. A kernel that panics writes there and goes on, and one that is stopped exits
+    stream, whose cells, findings and waivers have their keys and whose verdict is the one
+    those findings and cells give. A kernel that panics writes there and goes on, and one that is stopped exits
     with another code, so neither may be read past. A PASS is taken only with `cells_from`
     at `rules` and the hash of the deck of rules it read: the kernel gives none without a
     deck of rules, and one that did would be another kernel than this one. Raises BadAnswer."""
-    if err.strip():
-        raise BadAnswer(f"{kernel} exited {code} and wrote to its error stream: {err.decode('utf-8', 'replace').strip()[-300:]}")
+    if err:      # anything at all: a blank is not nothing, and this reads past none of it
+        raise BadAnswer(f"{kernel} exited {code} and wrote to its error stream: {err.decode('utf-8', 'replace').strip()[-300:] or 'blanks'}")
+
+    def once(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        """An object of the answer. The kernel writes each key once, and of a key written twice a reader would have to pick."""
+        found = dict(pairs)
+        if len(found) != len(pairs):
+            raise ValueError("a key is written twice")
+        return found
+
     try:
-        said = json.loads(out.decode("utf-8"))
+        said = json.loads(out.decode("utf-8"), object_pairs_hook=once)
     except (ValueError, RecursionError):
-        raise BadAnswer(f"{kernel} exited {code} and printed no verdict") from None
+        raise BadAnswer(f"{kernel} exited {code} and printed no verdict, or one with a key written twice") from None
     if not isinstance(said, dict) or not isinstance(said.get("verdict"), str) or said["verdict"] not in EXITS:
         raise BadAnswer(f"{kernel} exited {code} and printed no verdict of {', '.join(EXITS)}")
     if code != EXITS[said["verdict"]]:
         raise BadAnswer(f"{kernel} printed {said['verdict']} and exited {code}, where {said['verdict']} exits {EXITS[said['verdict']]}")
     shape = {"hashes": dict, "cells_from": str, "findings": list, "waived": list, "cells": list}
     wrong = [key for key, kind in shape.items() if not isinstance(said.get(key), kind)]
-    if wrong or not all(isinstance(cell, dict) for cell in said["cells"]) or not all(isinstance(w, dict) for w in said["waived"]):
-        raise BadAnswer(f"{kernel} printed {said['verdict']} without {', '.join(wrong) or 'cells and waivers that are objects'}")
+    if wrong:
+        raise BadAnswer(f"{kernel} printed {said['verdict']} without {', '.join(wrong)}")
+    # Every cell, finding and waiver has the keys the kernel prints for it, each a text (kernel/Main.lean). A caller reads them
+    # by name, so an answer that lacks one is not one to stop on with an error of Python's: it is no answer.
+    for key, texts in SHAPES.items():
+        if not all(isinstance(item, dict) and all(isinstance(item.get(name), str) for name in texts) for item in said[key]):
+            raise BadAnswer(f"{kernel} printed {said['verdict']} with an item of {key} that lacks its {', '.join(texts)}")
+    if not all(cell["state"] in STATES and isinstance(cell.get("reason", ""), str) for cell in said["cells"]):
+        raise BadAnswer(f"{kernel} printed {said['verdict']} with a cell whose state is none of {', '.join(STATES)}")
+    if not all(isinstance(name, str) and (h is None or isinstance(h, str)) for name, h in said["hashes"].items()):
+        raise BadAnswer(f"{kernel} printed {said['verdict']} with a hash that is no text")
+    # The verdict is what the findings and the cells of the same answer give (docs/format.md, The verdict): ILL-FORMED with
+    # a finding and with no other, FAIL with a refuted cell and with no other, and PASS with no cell open.
+    states = {cell["state"] for cell in said["cells"]}
+    held = {"ILL-FORMED": bool(said["findings"]), "FAIL": not said["findings"] and "refuted" in states,
+            "UNKNOWN": not said["findings"] and "refuted" not in states,
+            "PASS": not said["findings"] and not states & {"refuted", "open"} and "proved" in states}
+    if not held[said["verdict"]]:
+        raise BadAnswer(f"{kernel} printed {said['verdict']}, which its own findings and cells do not give")
     if said["verdict"] == "PASS" and (said["cells_from"] != "rules" or not isinstance(said["hashes"].get("rules"), str)):
         raise BadAnswer(f"{kernel} printed PASS with no deck of rules, which petra-verify never does")
     return said
@@ -209,6 +248,13 @@ def ask(kernel: str, files: Mapping[str, str]) -> dict[str, Any]:
     said = taken(kernel, code, out, err)
     if said["verdict"] == "PASS" and "rules" not in files:
         raise BadAnswer(f"{kernel} printed PASS for files with no deck of rules, which petra-verify never does")
+    # The answer is about the files it was handed: the kernel prints the hash of the bytes of each, with null for a deck of
+    # rules it was given none of, and says where its cells came from. An answer with other hashes is about other files.
+    handed = {name: (f"sha256:{hashlib.sha256(files[name].encode('utf-8')).hexdigest()}" if name in files else None) for name in HASHED}
+    if said["hashes"] != handed:
+        raise BadAnswer(f"{kernel} printed the hashes of other files than the ones it was handed")
+    if said["cells_from"] != ("rules" if "rules" in files else "proofs"):
+        raise BadAnswer(f"{kernel} says its cells are from {said['cells_from']}, which is not what it was handed")
     return said
 
 
@@ -227,6 +273,14 @@ def no_deck(kinds: Any) -> str:
     names = sorted(set(kinds))
     of = f"a part of kind {', '.join(names)}" if names else "the parts of this design"
     return f"no deck of rules has {of}, so the kernel worked out none of its checks and nothing can pass it"
+
+
+def held(status: str) -> str:
+    """A status of the Python checker as it is printed outside a check: in a recall, in a
+    calculation package, in the JSON under the kernel's verdict. It is no verdict, and its
+    PASS and MARGINAL are no pass of a design that has no deck of rules: each reads UNKNOWN.
+    FAIL and UNKNOWN stand."""
+    return status if status in ("FAIL", "UNKNOWN") else "UNKNOWN"
 
 
 def refusal(path: str, said: Mapping[str, Any]) -> tuple[str, ...]:

@@ -336,7 +336,8 @@ class CommandLine(unittest.TestCase):
         code, out = self.run_check("70 degC margin 25 degC", "--json")
         report = json.loads(out)
         self.assertTrue(code == 2 and no_deck(out), out)
-        self.assertEqual([v["status"] for v in report["verdicts"]], ["MARGINAL", "PASS", "PASS"])
+        self.assertEqual([v["status"] for v in report["verdicts"]], ["UNKNOWN", "UNKNOWN", "UNKNOWN"], "no claim has the status of a pass or of a near pass")
+        self.assertEqual([m["margin"] for m in report["verdicts"][0]["margins"]], ["within"], "the margin itself is still in the working")
 
     def test_a_margin_the_design_keeps_passes(self):
         code, out = self.run_check("70 degC margin 2 degC")
