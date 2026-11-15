@@ -33,6 +33,7 @@ petra check lap.petra
 - [Steel connections](docs/steel_connections.md)
 - [Electronics worst case](docs/electronics_dc.md)
 - [Roadmap and test results](docs/plan.md)
+- [Wrong passes in version 0.1.1](docs/advisory_0.1.1.md)
 
 ## License
 
