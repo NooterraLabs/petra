@@ -367,8 +367,9 @@ class Worker:
     first tool call got no answer."""
 
     COMMAND = (sys.executable, "-P", "-c",
-               "import os, sys; here = os.getcwd(); "
-               "sys.path[:] = [sys.argv[1]] + [p for p in sys.path if p and os.path.abspath(p) != here]; "
+               "import os, sys; here, own = os.getcwd(), os.path.abspath(sys.argv[1]); "
+               "kept = [p for p in sys.path if p and (os.path.abspath(p) != here or os.path.abspath(p) == own)]; "
+               "sys.path[:] = kept if own in map(os.path.abspath, kept) else [own] + kept; "
                "from petra.cli import main; sys.exit(main(['mcp', '--worker']))",
                str(Path(__file__).resolve().parent.parent))
     """The worker is this package: the folder that holds it goes first on the worker's path, and
@@ -377,7 +378,9 @@ class Worker:
     the worker, and answer every check as it liked (tests/test_kernel_attacks12.py). `-P` stops
     Python adding the working directory itself, and the command takes out every entry that is
     the working directory by another road: an empty entry of PYTHONPATH is one. The folder that
-    holds the package stays, working directory or not."""
+    holds the package stays where it is on the path, working directory or not, and goes first
+    only when it is not there at all, as in a source tree with no install. For an install it is
+    site-packages, which must not come before the standard library."""
 
     def __init__(self, budget: float = BUDGET_S) -> None:
         self.budget = budget

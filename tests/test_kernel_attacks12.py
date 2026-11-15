@@ -375,6 +375,18 @@ class TheServersWorkerIsThisPackage(unittest.TestCase):
         self.assertIn("-P", mcp.Worker.COMMAND, "python -P keeps the working directory off the path of the worker")
         self.assertNotIn("-m", mcp.Worker.COMMAND, "and -m would put it first")
 
+    def test_the_packages_folder_does_not_go_before_the_standard_library_when_it_is_on_the_path(self):
+        """For an install the folder that holds the package is site-packages. Put first, a module there with the
+        name of one of the standard library would be the worker's."""
+        import subprocess
+        import sysconfig
+
+        site = sysconfig.get_paths()["purelib"]
+        probe = mcp.Worker.COMMAND[3].replace("from petra.cli import main; sys.exit(main(['mcp', '--worker']))", "print(sys.path.index(own) if own in sys.path else -1, len(sys.path))")
+        done = subprocess.run([*mcp.Worker.COMMAND[:3], probe, site], capture_output=True, text=True, cwd=tempfile.gettempdir())
+        at, size = map(int, done.stdout.split())
+        self.assertGreater(at, 0, f"site-packages was first of {size} on the worker's path: {done.stderr[-200:]}")
+
 
 class ThePackageOfASteelConnectionSaysNoPass(unittest.TestCase):
     WELD = "corpus/cases/audit/s06_fillet_larger_than_angle_toe.petra"      # must not pass, and the Python checker passes it
