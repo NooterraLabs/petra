@@ -5,7 +5,7 @@ backend-path = ["_build"]
 
 [project]
 name = "petra-lang"
-version = "0.1.2"
+version = "0.2.0"
 description = "Checks physical designs against decks of rules, with the verdict of a small kernel that works in exact arithmetic"
 readme = "README.md"
 requires-python = ">=3.11"

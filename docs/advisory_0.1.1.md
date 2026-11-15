@@ -31,6 +31,10 @@ The verdict is the kernel's, and the kernel passes a design only against a deck 
 
 So 0.1.2 answers fewer designs than 0.1.1 did. Of the 15 above, the twelve steel connections read unknown. The other three are refused before any check: a waiver belongs in the card and not in the design, and a load is signed on the card.
 
+## What 0.2.0 does
+
+The checker that passed those designs is gone from the code. A design of an older kind reads unknown whether that checker passed it or failed it: nothing is left that could refute one.
+
 ## What to do
 
 ```bash

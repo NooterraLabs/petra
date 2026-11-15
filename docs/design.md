@@ -23,7 +23,7 @@ The kernel makes one cell for each part, each mechanism and each load case, and 
 | Proved | The rule's inequality holds for every value the card and the design allow |
 | Refuted | It fails at a point they allow |
 | Not applicable | The grid says the mechanism cannot arise for this part |
-| Waived | The deck has no rule for the cell, and the card waives it with a signature |
+| Waived | The card waives the mechanism on the part with a signature, and the cell would be open without it: the deck has no rule for the part, or the design or the card leaves out something a rule reads and the rule holds under some value of it |
 | Open | Anything else |
 
 No cell has a default. A mechanism with no rule is an open cell and not a silent pass.
@@ -38,7 +38,7 @@ No cell has a default. A mechanism with no rule is an open cell and not a silent
 
 `petra check` prints PASS_WAIVED for a PASS that rests a cell on a waiver, so that nobody takes it for a pass in which the deck answered every cell.
 
-A design with a part of a kind no shipped deck has cannot be checked, since there is no rule to check it by. It reads UNKNOWN, and the report says which kinds no deck has.
+A design none of whose parts is of a deck's type cannot be checked, since there is no rule to check it by. It reads UNKNOWN, and the report says which kinds no deck has. The kernel is not asked about it, so it reads the same on a machine with no kernel. A design that has parts of a deck's types beside parts of another kind is refused as input.
 
 ## What does the work
 
@@ -48,16 +48,17 @@ A design with a part of a kind no shipped deck has cannot be checked, since ther
 4. **The kernel** (`kernel/`) reads the files and the deck, works out every cell itself in exact arithmetic, and prints the verdict. It takes the hints only as places to look.
 5. **The shell** (`petra/verify.py`, `petra/pipeline.py`) runs the kernel and takes its answer. It compares the kernel's cells with the Python reader's, one by one. A difference is a bug in one of the two and gives no verdict.
 
-Nothing in Python can print a pass. With no kernel to run, or with one whose answer does not hold together, `petra check` prints no verdict and exits 4.
+No way into a check gives a pass or a fail that is not the kernel's. With no kernel to run, or with one whose answer does not hold together, `petra check` prints no verdict for a design of a deck and exits 4. The Python reader does work out a verdict of its own, which `petra.grid.check` returns to code that calls it: that is its working, held to the kernel's, and no check reports it.
 
 ## What a pass rests on
 
-A PASS says that every cell of the grid was settled. It rests on four things of different strength, and it is only as strong as the weakest.
+A PASS says that every cell of the grid was settled. It rests on five things of different strength, and it is only as strong as the weakest.
 
 | Level | What stands behind it | Where |
 |---|---|---|
 | The arithmetic of a proved or refuted cell | Theorems about the kernel's own definitions, checked by Lean | [proved.md](proved.md) |
 | The rest of the kernel: reading the files, writing a rule as arithmetic, listing the cells | Tests, a second reading of the specification written without sight of the kernel, a generator of hostile files, and review. Not proved | [format.md](format.md), `bench/` |
+| The front end: turning the text of a card and a design into the files the kernel reads | Tests. No second reading of the language. A bug here, a wrong unit factor for one, gives the kernel other numbers than the pair's, and the verdict is then about those | `petra/lang`, `petra/units.py`, `petra/export.py` |
 | The rules of a deck | Two transcriptions of the standard that agree on sampled parts, and worked examples from a published source. Agreement is not proof that a rule is the standard's | [deck.md](deck.md) |
 | A waived cell | The signature of the person named. Petra checks nothing about it | The report's `waived` lines |
 

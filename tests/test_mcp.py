@@ -101,7 +101,7 @@ class Session(unittest.TestCase):
         self.assertIn("refuted", {c["state"] for c in report["cells"]})
 
     def test_check_reads_a_path(self):
-        """The status is the kernel's, which is handed no deck of rules for a shear tab: no deck has one."""
+        """No deck of rules has a shear tab, so it reads UNKNOWN with that reason."""
         report = self.by_id[8]["result"]["structuredContent"]
         self.assertEqual((report["status"], report["file"]), ("UNKNOWN", str(SHEAR_TAB)))
         self.assertTrue(report["reason"].startswith("no deck of rules has a part of kind shear_tab"), report["reason"])

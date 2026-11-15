@@ -7,7 +7,7 @@ description: Design and check bolted lap joints of steel plates to AISC 360-22 w
 
 Petra checks a design against a card and a deck of rules. The card, `NAME.card`, holds what is asked: the loads, the signed bounds and any waivers, each with the name of who signs it. The design, `NAME.petra`, holds the parts. Petra answers PASS, PASS_WAIVED, FAIL or UNKNOWN. The answer is the verdict of a small kernel, which reads the deck and works out every check itself in exact arithmetic.
 
-The kernel passes a design only against a deck of rules. One deck ships today, `aisc360-22`, with two types of part: a `plate` and a `lap`, a bolted lap joint of two plates. It follows AISC 360-22 and works in kips, inches and ksi. A design with a part of any other kind reads UNKNOWN, with the reason that no deck has its kind.
+The kernel passes a design only against a deck of rules. One deck ships today, `aisc360-22`, with two types of part: a `plate` and a `lap`, a bolted lap joint of two plates. It follows AISC 360-22 and works in kips, inches and ksi. A design whose parts are all of other kinds reads UNKNOWN, with the reason that no deck has its kind, and one that mixes the two is refused.
 
 Install it with `pip install petra-lang`. The command is `petra` and the Python import is `petra`. If the `petra` MCP server is connected, call its tools `kinds`, `new` and `check` in place of the commands below. They take the same arguments and return the same text.
 
@@ -44,10 +44,10 @@ A `lap` has rules for eight mechanisms: the least and the greatest spacing of th
 
 `petra mcp` serves the tools `check`, `kinds`, `new` and `docs` over stdio. The `check` tool takes the design as `design`, its text, or as the absolute `path` of a `.petra` file on the server's machine. It takes the card as `card` or `card_path` in the same way, and with `path` alone it reads the `.card` file beside the design. `new` returns a card and a design. `check` returns the text that `petra check` prints, and the JSON as structured content. The server stops a call that runs longer than 120 s and says so. `petra mcp --budget SECONDS` sets another limit.
 
-In Claude Code, `/plugin marketplace add NooterraLabs/petra` and then `/plugin install petra@petra` add the server and this skill. The server runs as `uvx --from petra-lang==0.1.2 petra mcp`, so it needs [uv](https://docs.astral.sh/uv/) and no other install. Clients that read a JSON file take this entry:
+In Claude Code, `/plugin marketplace add NooterraLabs/petra` and then `/plugin install petra@petra` add the server and this skill. The server runs as `uvx --from petra-lang==0.2.0 petra mcp`, so it needs [uv](https://docs.astral.sh/uv/) and no other install. Clients that read a JSON file take this entry:
 
 ```json
-{"mcpServers": {"petra": {"command": "uvx", "args": ["--from", "petra-lang==0.1.2", "petra", "mcp"]}}}
+{"mcpServers": {"petra": {"command": "uvx", "args": ["--from", "petra-lang==0.2.0", "petra", "mcp"]}}}
 ```
 
 After `pip install petra-lang`, the command `petra mcp` serves the same tools without uv.

@@ -11,6 +11,8 @@ are skipped when no kernel is built.
 """
 import copy
 import hashlib
+import contextlib
+import io
 import json
 import tempfile
 import unittest
@@ -147,222 +149,16 @@ class TheKernelsOwnCells(Kernel):
         other = ask(changed(files, "proofs", lambda b: hint(b, "strip.bow")["partition"].update(input="in:strips.s.T")))
         self.assertEqual(cell(other, "strip.bow")["reason"], "the partition splits in:strips.s.T, which the tape does not read")
 
-    def test_a_design_of_a_kind_no_deck_has_is_written_without_parts_and_read_with_no_deck_of_rules(self):
-        from petra.lang import load_design
+    def test_a_design_of_a_kind_no_deck_has_has_no_files(self):
+        """There is no deck of rules to write and no type that says what its lines are, so the exporter writes nothing and says why."""
+        with tempfile.TemporaryDirectory() as tmp, self.assertRaises(export.NoDeck) as refused:
+            export.export(str(ROOT / "corpus" / "cases" / "old" / "circuit_pass.petra"), Path(tmp, "out"))
+        self.assertIn("no deck of rules has a part of kind circuit", str(refused.exception))
+        with tempfile.TemporaryDirectory() as tmp, contextlib.redirect_stderr(io.StringIO()) as said:
+            self.assertEqual(export.main([str(ROOT / "corpus" / "cases" / "old" / "circuit_pass.petra"), "--out", str(Path(tmp, "out"))]), 2)
+            self.assertFalse(Path(tmp, "out").exists())
+        self.assertIn("nothing written", said.getvalue())
 
-        design = load_design(ROOT / "corpus" / "cases" / "old" / "circuit_pass.petra")
-        files = export.bare(design)
-        self.assertNotIn("parts", json.loads(files["design"]))
-        self.assertTrue(all("on" not in i and "field" not in i for i in json.loads(files["card"])["inputs"]))
-        said = ask(files)
-        self.assertEqual((said["findings"], set(said["hashes"]), "ignored_hints" in said), ([], {"card", "design", "deck", "rules"}, False))
-        self.assertEqual((said["hashes"]["rules"], said["cells_from"]), (None, "proofs"), "it read no deck of rules, and says so")
-
-
-class Exported(Kernel):
-    """`python -m petra.export` on a design of a deck: the files as the kernel takes them from a folder."""
-
-    def exported(self, path: Path, physics: bool = True) -> dict[str, str]:
-        with tempfile.TemporaryDirectory() as tmp:
-            export.export(str(path), Path(tmp), physics=physics)
-            return {p.stem: p.read_bytes().decode("utf-8") for p in sorted(Path(tmp).iterdir())}
-
-    def test_the_export_writes_the_decks_own_file_beside_the_other_four(self):
-        files = self.exported(ROOT / "examples" / "deck" / "lap_pass.petra")
-        self.assertEqual(sorted(files), ["card", "deck", "design", "proofs", "rules"])
-        shipped = (grid.DECKS / "aisc360.json").read_bytes().decode("utf-8").replace("\r\n", "\n")
-        self.assertEqual(files["rules"], shipped, "the file as it ships, with the line ends of the repository")
-        said = ask(files)
-        self.assertEqual((said["verdict"], said["hashes"]["rules"]), ("PASS", next(d for d in grid.decks() if "lap" in d.types).hash))
-        self.assertEqual(json.loads(files["deck"])["rules"]["hash"], said["hashes"]["rules"], "deck.json names the same deck of rules")
-
-    def test_without_physics_a_design_the_grid_refuses_is_written_for_the_kernel_to_refuse(self):
-        files = self.exported(ROOT / "corpus" / "cases" / "deck" / "d05_swapped_given.petra", physics=False)
-        self.assertEqual(sorted(files), ["card", "deck", "design", "rules"])
-        self.assertIllFormed(files, "parts.3 design tab.Fy: reads the given tab.Fu, and a part reads only the bound the card gives for it, tab.Fy")
-        with self.assertRaises(grid.ComponentError):
-            self.exported(ROOT / "corpus" / "cases" / "deck" / "d05_swapped_given.petra")
-
-
-class ChangedProofs(Kernel):
-    """Only proofs.json is changed: a cell is left out, a state or a proof is claimed that
-    does not hold, a hint names a cell that is not there, a point lies outside the card."""
-
-    def test_deleting_an_open_cell_or_every_cell_leaves_it_open(self):
-        files = strips(card=NO_WAIVER)
-        honest = ask(files)
-        self.assertEqual((honest["verdict"], cell(honest, "strip.creep")["state"]), ("UNKNOWN", "open"))
-        without = ask(changed(files, "proofs", lambda b: b["cells"].remove(hint(b, "strip.creep"))))
-        self.assertEqual((without["verdict"], cell(without, "strip.creep")["state"], cell(without, "strip.creep")["claimed"]), ("UNKNOWN", "open", None))
-        self.assertEqual(states(without), states(honest))
-        empty = ask(changed(files, "proofs", lambda b: b.update(cells=[])))
-        self.assertEqual((empty["verdict"], cell(empty, "strip.creep")["state"], empty["counts"]["proved"]), ("UNKNOWN", "open", 0))
-
-    def test_a_proof_claimed_for_a_rule_that_fails_is_open_or_refuted_and_never_proved(self):
-        files = strips(card=OVER)
-        honest = ask(files)
-        self.assertEqual((honest["verdict"], cell(honest, "strip.heat", "heat/run")["state"]), ("FAIL", "refuted"))
-        point = hint(json.loads(files["proofs"]), "strip.heat", "heat/run")["point"]
-
-        def claim(**proof):
-            def change(body):
-                found = hint(body, "strip.heat", "heat/run")
-                found.pop("point")
-                found.update(state="proved", **proof)
-            return cell(ask(changed(files, "proofs", change)), "strip.heat", "heat/run")
-
-        leaf = claim(partition="leaf")
-        self.assertEqual((leaf["claimed"], leaf["state"], leaf["reason"]), ("proved", "open", "leaf 0: root 0 is above zero"))
-        self.assertEqual(claim()["state"], "open", "a claim with nothing behind it")
-        self.assertEqual(claim(partition="leaf", point=point)["state"], "refuted", "the point still refutes, whatever the state says")
-        deep = {"input": "in:strips.run.s.current", "at": "1", "below": "leaf", "above": {"input": "in:strips.run.s.current", "at": "2", "below": "leaf", "above": "leaf"}}
-        self.assertEqual(claim(partition=deep)["state"], "open", "no partition proves what is false")
-
-    def test_a_cell_claimed_not_applicable_or_waived_stays_what_the_grid_and_the_card_make_it(self):
-        files = strips(card=NO_WAIVER)
-        for claimed in ("not_applicable", "waived", "proved"):
-            with self.subTest(claimed=claimed):
-                said = ask(changed(files, "proofs", lambda b: hint(b, "strip.creep").update(state=claimed, why="it cannot arise")))
-                self.assertEqual((said["verdict"], cell(said, "strip.creep")["claimed"], cell(said, "strip.creep")["state"]), ("UNKNOWN", claimed, "open"))
-                self.assertEqual(said["waived"], [])
-        ruled = ask(changed(files, "proofs", lambda b: hint(b, "strip.hole").update(state="not_applicable", why="it cannot arise")))
-        self.assertEqual(cell(ruled, "strip.hole")["state"], "proved", "its partition still proves it, and the claim changes nothing")
-        bare = ask(changed(files, "proofs", lambda b: [hint(b, "strip.hole").pop("partition"), hint(b, "strip.hole").update(state="not_applicable", why="no")]))
-        self.assertEqual(cell(bare, "strip.hole")["state"], "open", "a rule's cell is never not applicable")
-
-    def test_a_hint_for_a_cell_the_kernel_does_not_have_is_ignored_and_counted(self):
-        files = strips(card=NO_WAIVER)
-        honest = ask(files)
-        proved = {"state": "proved", "partition": "leaf"}
-        for what, extra in (("a cell of another part", {"subject": "p1", "mechanism": "strip.creep", "entry": "", **proved}),
-                            ("a rule that does not apply to a close fit", {"subject": "s", "mechanism": "strip.spark", "entry": "spark", **proved}),
-                            ("an entry that does not exist", {"subject": "s", "mechanism": "strip.heat", "entry": "heat/idle", **proved}),
-                            ("a mechanism that does not exist", {"subject": "s", "mechanism": "strip.melt", "entry": "", **proved})):
-            with self.subTest(what=what):
-                said = ask(changed(files, "proofs", lambda b: b["cells"].append(extra)))
-                self.assertEqual((states(said), said["verdict"], said["ignored_hints"]), (states(honest), "UNKNOWN", 1))
-        self.assertEqual(cell(honest, "strip.spark")["state"], "not_applicable")
-
-    def test_a_point_outside_what_the_card_allows_refutes_nothing(self):
-        files = strips(card=OVER)
-        label = "in:strips.run.s.current"
-        self.assertEqual(Fraction(hint(json.loads(files["proofs"]), "strip.heat", "heat/run")["point"][label]), Fraction("2.01"))
-
-        def at(amps: str) -> dict:
-            return cell(ask(changed(files, "proofs", lambda b: hint(b, "strip.heat", "heat/run")["point"].update({label: amps}))), "strip.heat", "heat/run")
-
-        self.assertEqual(at("5")["state"], "open")
-        self.assertRegex(at("5")["reason"], "^the point is outside the range of input [0-9]+$")
-        self.assertEqual(at("201/100")["state"], "refuted")
-        self.assertEqual((at("2")["state"], at("2")["reason"]), ("open", "root 0 is not above zero at the point"))
-        short = ask(changed(files, "proofs", lambda b: hint(b, "strip.heat", "heat/run")["point"].pop(label)))
-        self.assertEqual(cell(short, "strip.heat", "heat/run")["reason"], f"the point has no value for {label}")
-
-    def test_outside_a_rules_range_no_hint_refutes_or_proves_it(self):
-        # The pads are 200 mm2 together, past the 120 mm2 the heat rule holds to, and the current is far over what the strips carry.
-        wide = DESIGN.replace("area 50 mm2", "area 100 mm2")
-        files = strips(card=CARD.replace("[0 A, 2 A]", "[0 A, 9 A]"), design=wide)
-        honest = ask(files)
-        self.assertEqual([c["entry"] for c in honest["cells"] if c["mechanism"] == "strip.heat"], ["heat/run"], "no /where cell: the range is not proved")
-        self.assertEqual(cell(honest, "strip.heat")["state"], "open")
-        inside = strips(card=CARD.replace("[0 A, 2 A]", "[0 A, 9 A]"))
-        refuting = hint(json.loads(inside["proofs"]), "strip.heat", "heat/run")
-        self.assertEqual(cell(ask(inside), "strip.heat", "heat/run")["state"], "refuted", "inside the range the same point refutes")
-
-        def plant(body):
-            body["cells"] = [c for c in body["cells"] if c["mechanism"] != "strip.heat"]
-            body["cells"] += [refuting, {"subject": "s", "mechanism": "strip.heat", "entry": "heat/run/where", "state": "proved", "partition": "leaf"}]
-
-        planted = ask(changed(files, "proofs", plant))
-        heat = cell(planted, "strip.heat")
-        self.assertEqual((heat["entry"], heat["state"], planted["verdict"]), ("heat/run", "open", "UNKNOWN"))
-        self.assertIn("the range the rule holds in is not proved", heat["reason"])
-
-    def test_without_the_hint_for_its_range_a_rule_is_open(self):
-        files = strips()
-        said = ask(changed(files, "proofs", lambda b: b["cells"].remove(hint(b, "strip.heat", "heat/run/where"))))
-        self.assertEqual([(c["entry"], c["state"]) for c in said["cells"] if c["mechanism"] == "strip.heat"], [("heat/run", "open")])
-        self.assertEqual(said["verdict"], "UNKNOWN")
-
-
-class ChangedDesign(Kernel):
-    """design.json is changed after the proofs were made, or the rules are left out."""
-
-    def test_a_number_changed_after_the_proofs_were_made_changes_what_is_proved(self):
-        files = lap("lap_pass")
-        self.assertEqual(ask(files)["verdict"], "PASS")
-        # A tab of 1/8 inch yields at 24.3 kip, under the pull of 45, and tears out at its bolts.
-        thin = lap("lap_pass", ("thickness 0.375 inch", "thickness 0.125 inch"))
-        self.assertEqual(line(json.loads(thin["design"]), "tab", "thickness")["args"][0]["number"]["lo"], export.number(Fraction(127, 40000)))
-        self.assertEqual(ask(thin)["verdict"], "FAIL")
-        stale = ask({**files, "design": thin["design"]})
-        self.assertEqual((stale["verdict"], cell(stale, "lap.ply_yield", "lap-ply-yield-a/gravity")["state"]), ("UNKNOWN", "open"), "the old partition proves nothing now")
-        self.assertEqual(cell(stale, "lap.ply_yield", "lap-ply-yield-b/gravity")["state"], "proved", "the other plate is as it was")
-        self.assertEqual(cell(stale, "lap.strength", "lap-strength/gravity")["state"], "open")
-        point = hint(json.loads(thin["proofs"]), "lap.ply_yield", "lap-ply-yield-a/gravity")["point"]
-        refuted = ask(changed({**files, "design": thin["design"]}, "proofs", lambda b: hint(b, "lap.ply_yield", "lap-ply-yield-a/gravity").update(point=point)))
-        self.assertEqual((refuted["verdict"], cell(refuted, "lap.ply_yield", "lap-ply-yield-a/gravity")["state"]), ("FAIL", "refuted"), "a point refutes it, whoever gives it")
-
-    def test_a_smaller_hole_turns_its_proof_open(self):
-        files = strips()
-
-        def smaller(body):
-            line(body, "s", "hole")["args"][0]["number"].update(lo=si("3.1"), hi=si("3.1"))
-
-        said = ask(changed(files, "design", smaller))
-        self.assertEqual((said["verdict"], cell(said, "strip.hole")["state"]), ("UNKNOWN", "open"))
-
-    def test_a_design_that_is_not_parts_of_the_decks_types_is_ill_formed(self):
-        files = strips()
-        number = {"number": {"dim": "length", "lo": si("1"), "hi": si("1")}}
-        cases = {
-            "leaves out a field": (lambda b: part(b, "s")["lines"].remove(line(b, "s", "hole")), "parts.2 design s: lacks hole"),
-            "adds an unknown field": (lambda b: part(b, "s")["lines"].append({"field": "colour", "args": [{"word": "red"}]}), "parts.2 design s.colour: is not a field of a strip"),
-            "writes a field twice": (lambda b: part(b, "s")["lines"].append(copy.deepcopy(line(b, "s", "hole"))), "parts.2 design s.hole: is given twice"),
-            "writes a signed field as a number": (lambda b: line(b, "s", "T").update(args=[{"number": {"dim": "temperature", "lo": "25", "hi": "25"}}]),
-                                                  "parts.3 design s.T: is for the card to state"),
-            "reads the bound of another field": (lambda b: line(b, "s", "T").update(args=[{"given": "s.gap"}]), "parts.3 design s.T: reads the given s.gap"),
-            "reads a bound the card lacks": (lambda b: line(b, "s", "width").update(args=[{"given": "s.width"}]), "parts.3 design s.width: the card gives no s.width"),
-            "writes a length where an area goes": (lambda b: line(b, "p1", "area").update(args=[number]), "parts.3 design p1.area: is a length"),
-            "writes a size of zero": (lambda b: line(b, "s", "screw")["args"][0]["number"].update(lo="0", hi="0"), "parts.3 design s.screw: is not more than zero"),
-            "writes a count that is not whole": (lambda b: line(b, "s", "turns")["args"][0]["number"].update(lo="5/2", hi="5/2"), "parts.3 design s.turns: is a count"),
-            "writes two values": (lambda b: line(b, "s", "width")["args"].append(number), "parts.3 design s.width: is one number or one given"),
-            "names a fit the field lacks": (lambda b: line(b, "s", "fit").update(args=[{"word": "snug"}]), "parts.4 design s.fit: is one of: close, free"),
-            "joins one pad twice": (lambda b: line(b, "s", "lands").update(args=[{"word": "p1"}, {"word": "p1"}]), "parts.5 design s.lands: names 2 different pad parts"),
-            "joins a strip": (lambda b: line(b, "s", "lands").update(args=[{"word": "p1"}, {"word": "s"}]), "parts.5 design s.lands: names 2 different pad parts"),
-            "has a part of no type": (lambda b: part(b, "p1").update(type="plate"), "parts.1 design p1: plate is not a type of the deck of rules"),
-            "has two parts of one name": (lambda b: part(b, "p2").update(name="p1"), "parts.1 design p1: two parts have this name"),
-            "has a param": (lambda b: b["params"].append({"name": "w", "dim": "length", "lo": "1", "hi": "2"}), "parts.8 design params"),
-            "has a key the format lacks": (lambda b: b.update(waivers=[]), "types.2 design waivers"),
-        }
-        for what, (change, says) in cases.items():
-            with self.subTest(what=what):
-                self.assertIllFormed(changed(files, "design", change), says)
-
-    def test_a_part_reads_only_its_own_bound(self):
-        files = lap("lap_pass")
-        self.assertIllFormed(changed(files, "design", lambda b: line(b, "tab", "Fy").update(args=[{"given": "strap.Fy"}])),
-                             "parts.3 design tab.Fy: reads the given strap.Fy, and a part reads only the bound the card gives for it, tab.Fy")
-
-    def test_a_part_joined_by_two_others_is_ill_formed(self):
-        second = DESIGN.split("strip s {")[1].replace("given s.", "given r.")
-        more = 'given r.T in [20 degC, 30 degC] signed "t@example.org" source "test"\ngiven r.gap in [0.5 mm, 0.6 mm] signed "t@example.org" source "test"\n\nload run'
-        self.assertIllFormed(strips(card=CARD.replace("load run", more), design=DESIGN + "\nstrip r {" + second), "parts.5 design p1: is joined more than once")
-
-    def test_a_design_with_parts_and_no_rules_is_ill_formed(self):
-        files = strips()
-        self.assertIllFormed(files, "types.6 design parts: a design with parts is checked against a deck of rules", without=("rules",))
-        self.assertIllFormed(files, "types.6 design parts", without=("rules", "proofs"))
-        bare = changed(files, "design", lambda b: b.pop("parts"))
-        self.assertIllFormed(bare, "parts.6 card run.s.current: a load is put on a part, and s is not one")
-        self.assertIllFormed(bare, "parts.6 card s.gap: is no load, and no part reads it")
-        nothing = changed(changed(bare, "card", lambda b: b.update(inputs=[], waivers=[], cases=[])), "proofs", lambda b: b.update(cells=[]))
-        self.assertIllFormed(nothing, "types.7 card tests: is a key of the card, which only a design checked against a deck of rules has, and the design has no parts")
-        unmarked = changed(changed(nothing, "card", lambda b: [b.pop("tests"), b.pop("probability_claims")]), "deck", lambda b: b.pop("rules"))
-        self.assertEqual((ask(unmarked)["verdict"], ask(unmarked)["cells"]), ("UNKNOWN", []), "with no part there is no cell, and nothing is proved")
-
-
-class Downgrade(Kernel):
     """A card that was issued for a deck of rules is not checked as a design of the models'
     kinds (type rule 7). The files of a deck design carry marks, and each mark is refused
     with a design that has no parts or with no --rules. What is left is a card.json written

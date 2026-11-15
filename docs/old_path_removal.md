@@ -8,11 +8,11 @@ It was deleted on 2026-11-15. The tag `old-path` holds the tree as it stood just
 
 An audit found designs that it passed and should not have ([advisory_0.1.1.md](advisory_0.1.1.md)). Its rules were code, written once, and nothing outside the code said which checks a design owed. A deck of rules is data: it lists every mechanism a part must answer for, a small kernel works each one out, and a mechanism with no rule is an open cell.
 
-Version 0.1.2 first took away the old path's power to pass a design. This step removed the code.
+Version 0.1.2 first took away the old path's power to pass a design. Version 0.2.0 is the tree without the code.
 
 ## What went
 
-- 103 of the 131 files under `petra/`: the models, the mechanics layer, the registry, the solvers, the library of family certificates, the Python checker with its six certificate rules, and the repair search.
+- 102 of the 131 files under `petra/`: the models, the mechanics layer, the registry, the solvers, the library of family certificates, the Python checker with its six certificate rules, and the repair search.
 - The commands `explain`, `envelope`, `verify`, `certify-family` and `registry`, and the server's `registry_list` tool.
 - The folder `twin/`, a second reading of the old steel models.
 - The tests, scripts and public pages that described them.
@@ -26,7 +26,7 @@ Version 0.1.2 first took away the old path's power to pass a design. This step r
 
 ## What it costs
 
-A design of an old kind reads UNKNOWN, with the reason that no deck has its kind. That holds for a design the old path failed, too: with no rule to work out, the kernel has no cell to refute.
+A design of an old kind reads UNKNOWN, with the reason that no deck has its kind. That holds for a design the old path failed, too: there is no rule to work out, so there is no cell to refute, and the kernel is not asked.
 
 The designs that were the old path's examples are kept as cases under `corpus/cases/old/`. Where the old path decided one rightly, its line in `corpus/expected.tsv` says what the right answer is. A deck that brings a kind back has to give each of them that answer.
 

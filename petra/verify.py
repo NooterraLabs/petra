@@ -13,10 +13,10 @@ waiver the kernel lists reads PASS_WAIVED. A pair the kernel finds ill formed ra
 ComponentError, the input error every caller reports.
 
 For a design checked against a deck of rules the kernel reads the deck and works out every
-cell itself, and `differs` compares its cells with the grid's, one by one. A design with a
-part of a kind no deck has is handed to the kernel with no deck of rules: it holds the card
-and the design to the type rules, works out no cell, and its verdict is then never PASS
-(kernel/Petra/Check.lean). Such a design reads UNKNOWN with the reason of `no_deck`.
+cell itself, and `differs` compares its cells with the grid's, one by one. A design none of
+whose parts is of a deck's type is not handed to the kernel: it reads UNKNOWN with the
+reason of `no_deck` (pipeline.py). The kernel still takes files with no deck of rules, and
+its verdict of them is never PASS (kernel/Petra/Check.lean): `ask` holds it to that.
 """
 from __future__ import annotations
 
@@ -228,17 +228,23 @@ def status(said: Mapping[str, Any]) -> str:
     return "PASS_WAIVED" if said["verdict"] == "PASS" and said["waived"] else said["verdict"]
 
 
+def clipped(name: str) -> str:
+    """A kind as a reason prints it: whole up to 64 characters, the most a deck's type has,
+    and past that its first 64 and how many more there were."""
+    return name if len(name) <= 64 else f"{name[:64]}... ({len(name) - 64:,} more characters)"
+
+
 def no_deck(kinds: Any) -> str:
-    """Why a design the kernel was handed no deck of rules for reads UNKNOWN: its kinds of
-    part that no shipped deck has, at most four of them by name and the rest by their count
-    (files.listed), or that it has no part at all. Every way into a check gives this reason
-    with the status."""
+    """Why a design that no deck of rules was read for is UNKNOWN: its kinds of part, which
+    no shipped deck has, at most four of them by name and the rest by their count
+    (files.listed), each cut to 64 characters, or that it has no part at all. Every way into
+    a check gives this reason with the status."""
     from .files import listed
 
     names = sorted(set(kinds))
     if not names:
-        return "the design has no part, so the kernel worked out no check and nothing can pass it"
-    return f"no deck of rules has a part of kind {listed(names)}, so the kernel worked out none of its checks and nothing can pass it"
+        return "the design has no part, so there is no check to work out and nothing can pass it"
+    return f"no deck of rules has a part of kind {listed([clipped(n) for n in names])}, so none of its checks was worked out and nothing can pass it"
 
 
 def refusal(path: str, said: Mapping[str, Any]) -> tuple[str, ...]:

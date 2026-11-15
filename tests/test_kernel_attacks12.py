@@ -449,7 +449,7 @@ class AnAnswerOfTheWrongShapeIsNoVerdict(unittest.TestCase):
             "a hash that is a number": same(hashes={"card": 7, "design": 7, "deck": 7, "rules": 7}),
         }
         for said, how in answers.items():
-            for path in (decides.LAP, decides.CIRCUIT):
+            for path in (decides.LAP, decides.LAP_FAIL):
                 for name, way in decides.ways(path).items():
                     with self.subTest(kernel=said, path=path.name, way=name), decides.refusing(how):
                         self.assertEqual(way(path), decides.NO_VERDICT, "no traceback and no verdict")
@@ -474,18 +474,20 @@ class TheAnswerIsForTheseFilesAndHoldsTogether(unittest.TestCase):
             "no hash of the design": lambda code, out, err: other(code, out, err, design="left out"),
         }
         for said, how in answers.items():
-            for path in (decides.LAP, decides.CIRCUIT):
+            for path in (decides.LAP, decides.LAP_FAIL):
                 for name, way in decides.ways(path).items():
                     with self.subTest(kernel=said, path=path.name, way=name), decides.refusing(how):
                         self.assertEqual(way(path), decides.NO_VERDICT)
 
     def test_an_answer_to_files_with_no_deck_that_says_its_cells_are_a_decks_is_no_verdict(self):
+        """`petra check` hands the kernel no files without a deck of rules since the old path went. `verify.ask` holds
+        the answer to what it was handed all the same."""
         from tests import test_kernel_decides as decides
 
+        files = {name: body for name, body in decides.exported(decides.LAP).items() if name not in ("rules", "proofs")}
         how = lambda code, out, err: decides.rewritten(code, cells_from="rules")(code, out, err)      # noqa: E731
-        for name, way in decides.ways(decides.CIRCUIT).items():
-            with self.subTest(way=name), decides.refusing(how):
-                self.assertEqual(way(decides.CIRCUIT), decides.NO_VERDICT, "it printed cells_from rules under UNKNOWN")
+        with decides.refusing(how), self.assertRaises(decides.verify.NoVerdict):
+            decides.verify.ask(decides.verify.need(), files)
 
 
 class ANameThatIsAStatus(unittest.TestCase):

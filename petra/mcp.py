@@ -68,8 +68,9 @@ the server runs, and a new version of Petra starts a new server."""
 INSTRUCTIONS = """Petra checks a physical design against a deck of rules, under the loads and bounds its card states. The \
 answer is the verdict of its kernel: PASS, FAIL or UNKNOWN, or PASS_WAIVED for a design that passes with a \
 cell resting on a waiver. The kernel passes only a design whose parts are of the types of a deck of rules. A \
-design with a part of any other kind reads UNKNOWN, with the reason that no deck has its kind. Never report \
-such a design as passing. With no kernel to run, `check` answers with an error and no verdict. \
+design whose parts are all of other kinds reads UNKNOWN, with the reason that no deck has its kind, and one \
+that mixes the two is refused. Never report such a design as passing. With no kernel to run, `check` of a \
+design of a deck answers with an error and no verdict. \
 The shipped deck is bolted lap joints of steel plates to AISC 360-22, in kips and inches. To design one: call \
 `kinds` to see the types and their lines, `new` with a type for a card and a complete design to edit, then \
 `check` with the edited text. The report lists every cell of the grid: proved, refuted with the two sides of \
@@ -202,7 +203,7 @@ TOOLS: Mapping[str, tuple[str, dict[str, Any], Callable[[Mapping[str, Any]], Res
               "or PASS_WAIVED when it passes and a cell rests on a waiver, with every cell of the deck's grid: its "
               "part, its mechanism, its state and, for a rule that was worked out, how much of the limit is used. The "
               "card holds what was asked: the loads, the signed bounds and the waivers. The design holds the parts "
-              "and cannot change the card. A design with a part of a kind no deck of rules has reads UNKNOWN. The "
+              "and cannot change the card. A design none of whose parts is of a deck's type reads UNKNOWN. The "
               "structured content is the JSON `petra check --json` prints.",
               _schema({"design": "the design, the full text of a .petra file",
                        "path": "the absolute path of a .petra file to read instead of `design`",
@@ -210,7 +211,7 @@ TOOLS: Mapping[str, tuple[str, dict[str, Any], Callable[[Mapping[str, Any]], Res
                        "card_path": "the absolute path of a .card file to read instead of `card`; "
                                     "with `path` and no card, the .card file beside the design"}),
               _check),
-    "kinds": ("List the decks of rules Petra checks against and the types of part each has. With a deck (aisc360) or "
+    "kinds": ("List the decks of rules Petra checks against and the types of part each has. With a deck (aisc360-22) or "
               "a type (lap), print each type's lines with their units and meanings, the loads a card may put on a "
               "part of it, and the mechanisms the grid asks of it, each with its rule or as open.",
               _schema({"name": "a deck or a type of one; leave out to list them all"}), _kinds),

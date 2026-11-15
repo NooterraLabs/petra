@@ -8,8 +8,9 @@ through every way into a check: `petra check` as text and as JSON, the server's 
 - A design that must not pass gets no PASS, no PASS_WAIVED and no MARGINAL from any of them.
 - A pass is given only where the kernel worked out the cells from a deck of rules: the
   report says `cells_from` is `rules`.
-- A design the kernel was handed no deck of rules for reads UNKNOWN with exit code 2 and the
-  reason that no deck has its kind of part. It has no cell, so it has none to fail on.
+- A design none of whose parts is of a deck's type reads UNKNOWN with exit code 2 and the
+  reason that no deck has its kind of part. The kernel is not asked about it, and it has no
+  cell to pass or to fail on.
 
 Written against bfd7b89, where `petra.check_file` still gave the Python checker's own PASS
 to 22 designs that must not pass, among them 400 kV on a 750 V cable and a 0.1 mm dimple
@@ -160,9 +161,9 @@ class Corpus(unittest.TestCase):
             self.assertEqual(report["kernel"]["hashes"]["rules"], report["deck"]["hash"], path)
 
     def test_a_design_of_a_kind_no_deck_has_reads_unknown_with_that_reason(self):
-        """The kernel is handed such a design with no deck of rules and no cells: Python writes none since the old path went.
+        """There is nothing to hand the kernel for such a design: no deck of rules, and no cells that Python wrote.
         So it is UNKNOWN, and never a FAIL or a PASS."""
-        old = [path for path, _ in self.rows if self.report[path] is not None and self.report[path]["kernel"]["cells_from"] != "rules"]
+        old = [path for path, _ in self.rows if self.report[path] is not None and self.report[path]["kernel"] is None]
         self.assertGreater(len(old), 60, "most of the corpus is of kinds no deck has")
         for path in old:
             report = self.report[path]

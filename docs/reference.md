@@ -94,7 +94,7 @@ card "lap-splice" {
 
 ### param
 
-`param` declares a range that a line reads by writing `param NAME` in place of a value. A param is declared in the card or in the design, and a load and the ambient read only the card's params. No deck of rules reads a param yet, and `petra check` refuses a pair that declares one.
+`param` declares a range that a line reads by writing `param NAME` in place of a value. A param is declared in the card or in the design, and a load and the ambient read only the card's params. No deck of rules reads a param yet, and `petra check` refuses a design of a deck's types that declares one.
 
 ```
 param run in [0 m, 20 m]
@@ -202,8 +202,8 @@ unit      = IDENT [ "/" IDENT ] [ "^" INT ] | "%" ;   m/s and inch^4, each writt
 qoi       = segment { "." segment } ;          last segment is the quantity name
 segment   = IDENT [ "(" IDENT ")" ] ;          member(diag_ad) names element diag_ad
 path      = IDENT { "." IDENT } ;
-ref       = IDENT { "." IDENT } ;   a local name, a domain keyword, a registry id,
-                                    a port (w1.b) or a failure-mode id
+ref       = IDENT { "." IDENT } ;   a word of a line, the name of a part or of a key,
+                                    a dotted name (tab.Fy) or a mechanism (lap.slip)
 rel       = "<=" | ">=" ;
 ```
 

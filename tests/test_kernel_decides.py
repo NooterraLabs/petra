@@ -17,8 +17,9 @@ The faults these tests were written against, at 1e34098:
   takes the cells of proofs.json as they come.
 
 The Python checker that gave those passes was deleted on 2026-11-15 (the tag `old-path`
-holds it). A design of its kinds, which no deck of rules has, is now handed to the kernel
-with no deck and no proofs, and reads UNKNOWN by every way in.
+holds it). A design of its kinds, which no deck of rules has, is not handed to the kernel:
+there is nothing to hand it. It reads UNKNOWN by every way in, with a kernel and without one.
+tests/test_kernel_grid.py holds the kernel itself to passing no files that lack a deck of rules.
 
 The tests that run a kernel are skipped when none is built.
 """
@@ -232,19 +233,20 @@ does not. None may read as a pass at any way in."""
 
 
 class NoKernel(unittest.TestCase):
-    """With no kernel there is no verdict: nothing printed to stdout, exit code 4, and the
-    reason on the error stream. The grid of a deck is Python's own reading, and it does not
-    decide."""
+    """With no kernel there is no verdict of a design of a deck: nothing printed to stdout,
+    exit code 4, and the reason on the error stream. The grid of a deck is Python's own
+    reading, and it does not decide. A design no deck has reads UNKNOWN all the same: the
+    kernel is not asked about it, and UNKNOWN is no pass and no fail."""
 
     def test_no_way_in_gives_a_verdict_without_a_kernel(self):
-        for path in (CIRCUIT, TRUSS, TRUSS_FAIL, LAP, LAP_FAIL):
+        for path, status in ((LAP, NO_VERDICT), (LAP_FAIL, NO_VERDICT), (CIRCUIT, "UNKNOWN"), (TRUSS, "UNKNOWN"), (TRUSS_FAIL, "UNKNOWN")):
             for name, way in ways(path).items():
                 with self.subTest(path=path.name, way=name), no_kernel():
-                    self.assertEqual(way(path), NO_VERDICT)
+                    self.assertEqual(way(path), status)
 
     def test_the_refusal_says_where_a_kernel_is_looked_for(self):
         with no_kernel():
-            code, out, err = cli("check", str(CIRCUIT))
+            code, out, err = cli("check", str(LAP))
         self.assertEqual((code, out), (EXIT_CODES["INTERNAL_ERROR"], ""))
         self.assertIn("PETRA_VERIFY", err)
         self.assertNotIn("Traceback", err)
@@ -256,10 +258,10 @@ class NoKernel(unittest.TestCase):
             text = Path(tmp, "petra-verify")
             text.write_text("not a program\n", encoding="utf-8")
             for named in (str(Path(tmp, "missing")), tmp, str(text)):
-                for path in (CIRCUIT, LAP):
+                for path, status in ((LAP, NO_VERDICT), (LAP_FAIL, NO_VERDICT), (CIRCUIT, "UNKNOWN")):
                     for name, way in ways(path).items():
                         with self.subTest(named=Path(named).name, path=path.name, way=name), mock.patch.dict(os.environ, {"PETRA_VERIFY": named}):
-                            self.assertEqual(way(path), NO_VERDICT)
+                            self.assertEqual(way(path), status)
 
     def test_the_server_in_its_own_process_answers_with_an_error_and_no_verdict(self):
         """`petra mcp` as a client starts it, with PETRA_VERIFY naming a file that is not there."""
@@ -308,15 +310,15 @@ class Refusing(unittest.TestCase):
     def test_a_kernel_that_calls_the_files_ill_formed_is_an_input_error(self):
         finding = {"rule": "types.5", "file": "card", "item": "x", "why": "the input names no by"}
         ill = rewritten(3, verdict="ILL-FORMED", findings=[finding], cells=[])
-        for path in (CIRCUIT, LAP):
+        for path, status in ((LAP, "INPUT_ERROR"), (CIRCUIT, "UNKNOWN")):      # the kernel is not asked about the circuit
             for name, way in ways(path).items():
                 with self.subTest(path=path.name, way=name), refusing(ill):
-                    self.assertEqual(way(path), "INPUT_ERROR")
+                    self.assertEqual(way(path), status)
 
     def test_a_kernel_that_leaves_every_cell_open_is_never_a_pass(self):
-        """A kernel that leaves every cell open and says UNKNOWN. The truss and the circuit have
-        no cell, so they read UNKNOWN as they do with the real one. The lap has no verdict: the
-        grid holds cells proved that this kernel leaves open."""
+        """A kernel that leaves every cell open and says UNKNOWN. The truss and the circuit read
+        UNKNOWN as they do with the real one: the kernel is not asked about them. The lap has no
+        verdict: the grid holds cells proved that this kernel leaves open."""
         def unknown(code, out, err):
             said = json.loads(out)
             for cell in said["cells"]:
@@ -338,47 +340,47 @@ class Refusing(unittest.TestCase):
                 script = Path(tmp, stem)
                 script.write_text(f'#!/bin/sh\n"{verify.binary()}" "$@"\ncode=$?\n{last}\n', encoding="utf-8")
                 script.chmod(script.stat().st_mode | stat.S_IXUSR)
-                for path in (LAP, CIRCUIT):
-                    with self.subTest(kernel=stem, path=path.name):
-                        done = subprocess.run([sys.executable, "-m", "petra", "check", str(path)], cwd=ROOT, capture_output=True, text=True,
-                                              env={**os.environ, "PETRA_VERIFY": str(script)}, stdin=subprocess.DEVNULL)
-                        self.assertEqual((done.returncode, done.stdout), (EXIT_CODES["INTERNAL_ERROR"], ""), done.stderr)
-                        self.assertIn("no verdict", done.stderr)
+                with self.subTest(kernel=stem):
+                    done = subprocess.run([sys.executable, "-m", "petra", "check", str(LAP)], cwd=ROOT, capture_output=True, text=True,
+                                          env={**os.environ, "PETRA_VERIFY": str(script)}, stdin=subprocess.DEVNULL)
+                    self.assertEqual((done.returncode, done.stdout), (EXIT_CODES["INTERNAL_ERROR"], ""), done.stderr)
+                    self.assertIn("no verdict", done.stderr)
 
 
 @KERNEL
 class Decides(unittest.TestCase):
     """With the real kernel, every way in gives the kernel's own verdict and exit code."""
 
-    def test_a_design_of_a_kind_no_deck_has_gets_the_kernels_unknown(self):
+    def test_a_design_of_a_kind_no_deck_has_reads_unknown_and_the_kernel_is_not_run(self):
         """The Python checker passed the truss, the circuit and the shear tab and failed the
-        other truss. No deck of rules has any of them, so the kernel works out no cell."""
-        for path in MODELS:
-            its, said = kernel_alone(path)
-            self.assertEqual((its, said["cells"], said["cells_from"]), ("UNKNOWN", [], "proofs"), f"petra-verify alone, on {path.name}")
-            for name, way in ways(path).items():
-                with self.subTest(path=path.name, way=name):
-                    self.assertEqual(way(path), its)
+        other truss. No deck of rules has any of them, so there is nothing to hand the kernel."""
+        ran = []
+        with mock.patch.object(verify, "run", lambda command: ran.append(command) or REAL(command)):
+            for path in MODELS:
+                for name, way in ways(path).items():
+                    with self.subTest(path=path.name, way=name):
+                        self.assertEqual(way(path), "UNKNOWN")
+        self.assertEqual(ran, [], "the kernel was started for a design that has no deck of rules")
 
     def test_the_exit_code_of_the_command_is_the_kernels(self):
-        for path in (CIRCUIT, TAB, LAP_FAIL):
-            its, _ = kernel_alone(path)
+        its, _ = kernel_alone(LAP_FAIL)
+        for path, code in ((LAP_FAIL, {"PASS": 0, "FAIL": 1, "UNKNOWN": 2}[its]), (CIRCUIT, 2), (TAB, 2)):
             with self.subTest(path=path.name):
                 done = subprocess.run([sys.executable, "-m", "petra", "check", str(path)], cwd=ROOT, capture_output=True, stdin=subprocess.DEVNULL)
-                self.assertEqual(done.returncode, {"PASS": 0, "FAIL": 1, "UNKNOWN": 2}[its])
+                self.assertEqual(done.returncode, code)
 
     def test_the_report_gives_the_reason_and_nothing_of_a_checker_in_python(self):
         """The truss reads UNKNOWN because no deck of rules has a truss. The report says so on
-        its second line, names the two texts by hash and says what the kernel was handed. It
-        has no other line: no checker in Python has a working to print."""
+        its second line, names the two texts by hash and says that there was nothing to hand
+        the kernel. It has no other line: no checker in Python has a working to print."""
         code, out, _ = cli("check", str(TRUSS))
         lines = out.splitlines()
         self.assertEqual((code, lines[0]), (EXIT_CODES["UNKNOWN"], "warren-footbridge-panel: UNKNOWN"))
         self.assertEqual(lines[1], f"reason     {verify.no_deck(['truss'])}")
-        self.assertEqual([line.split()[0] for line in lines[2:]], ["card", "design", "kernel", "path"])
+        self.assertEqual([line.split()[0] for line in lines[2:]], ["card", "design", "path"])
         self.assertEqual([line for line in lines if "PASS" in line or "certified" in line], [])
         report = json.loads(cli("check", str(TRUSS), "--json")[1])
-        self.assertEqual((report["status"], report["kernel"]["verdict"], report["reason"]), ("UNKNOWN", "UNKNOWN", verify.no_deck(["truss"])))
+        self.assertEqual((report["status"], report["kernel"], report["reason"]), ("UNKNOWN", None, verify.no_deck(["truss"])))
         self.assertEqual(set(report) & {"python", "verdicts", "governing", "repair", "unchecked"}, set())
 
     def test_a_design_of_a_deck_gets_the_kernels_verdict(self):
@@ -393,7 +395,7 @@ class Decides(unittest.TestCase):
                     self.assertEqual(way(path), status)
 
     def test_the_json_of_a_check_holds_the_kernels_answer(self):
-        for path in (CIRCUIT, LAP):
+        for path in (LAP, LAP_FAIL):
             report = json.loads(cli("check", str(path), "--json")[1])
             its, said = kernel_alone(path)
             with self.subTest(path=path.name):
@@ -401,36 +403,23 @@ class Decides(unittest.TestCase):
 
 
 @KERNEL
-class ForgedProofs(unittest.TestCase):
+class NoFilesWithoutADeck(unittest.TestCase):
     """Without a deck of rules the kernel takes the cells of proofs.json as they come, so
-    nothing it checks there makes a PASS."""
+    nothing it checks there makes a PASS: tests/test_kernel_grid.py hands it such files, forged
+    cells among them, and holds it to UNKNOWN. Petra itself writes no such files any more."""
 
-    def forged(self) -> str:
-        """A proofs file: one cell proved by a tape that proves -1 <= 0, and one written as
-        not applicable. The Python checker's own proofs went with it, and these stand for any."""
-        trivial = {"inputs": [{"label": "dsg:x", "lo": "0", "hi": "1"}], "nodes": [["c", "-1"]], "roots": [0]}
-        cells = [{"subject": "frame", "mechanism": "truss.member_stress", "entry": "", "state": "proved", "tape": trivial, "partition": "leaf"},
-                 {"subject": "frame", "mechanism": "truss.stability", "entry": "", "state": "not_applicable", "why": "forged"}]
-        return json.dumps({"format": "petra-proofs/0", "cells": cells})
-
-    def test_a_forged_proofs_file_does_not_pass_a_failing_truss(self):
-        verdict, said = kernel_alone(TRUSS_FAIL, self.forged())
-        self.assertEqual((said["cells_from"], said["counts"]["proved"], said["counts"]["open"]), ("proofs", 1, 0), "the kernel took the forged cells")
-        self.assertEqual(verdict, "UNKNOWN")
-
-    def test_no_proofs_file_passes_without_a_deck_of_rules(self):
-        """Each design of a kind no deck has, with no proofs, as `petra check` hands it over, and with the forged ones."""
+    def test_petra_writes_no_files_for_a_design_no_deck_has(self):
         for path in MODELS:
-            for proofs in (None, self.forged()):
-                with self.subTest(path=path.name, forged=proofs is not None):
-                    verdict, said = kernel_alone(path, proofs)
-                    self.assertEqual(said["cells_from"], "proofs")
-                    self.assertNotEqual(verdict, "PASS")
-
-    def test_petra_check_hands_the_kernel_no_proofs_for_such_a_design(self):
-        """So no cell of such a design is one that Python chose."""
-        self.assertEqual(sorted(exported(TRUSS_FAIL)), ["card", "deck", "design"])
+            with self.subTest(path=path.name), self.assertRaises(export.NoDeck):
+                exported(path)
         self.assertEqual(sorted(exported(LAP)), ["card", "deck", "design", "proofs", "rules"])
+
+    def test_the_shell_takes_no_pass_for_files_with_no_deck_of_rules(self):
+        """`verify.ask` is still held to it, for any caller that hands the kernel files of its own."""
+        files = {name: body for name, body in exported(LAP).items() if name not in ("rules", "proofs")}
+        with refusing(rewritten(0, verdict="PASS", findings=[], cells=[{"subject": "s", "mechanism": "m", "entry": "", "state": "proved"}])):
+            with self.assertRaises(verify.NoVerdict):
+                verify.ask(verify.need(), files)
 
 
 @KERNEL

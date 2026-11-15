@@ -6,15 +6,17 @@
         of rules whose types its parts are, and print the kernel's verdict with every cell
         of the deck's grid (petra/pipeline.py). The `card` and `design` lines give the
         SHA-256 of each text, and `rules` the hash of the deck. The status on the first
-        line is the verdict of petra-verify (petra/verify.py). A design with a part of a
-        kind no shipped deck has reads UNKNOWN, with a `reason` line that says so.
+        line is the verdict of petra-verify (petra/verify.py). A design none of whose parts
+        is of a deck's type reads UNKNOWN, with a `reason` line that says which kinds no deck
+        has: the kernel is not asked about it. One that mixes such parts with a deck's is an
+        input error.
         --json prints the same as data (`petra docs api`).
         Exit code from the status, which is the kernel's own: 0 PASS, 1 FAIL, 2 UNKNOWN,
         and 6 PASS_WAIVED where the kernel says PASS and lists a waiver that a cell
         rests on (the JSON lists each such waiver under "waived"). 3 input error
         (syntax, lowering, a part its deck's types refuse, or a pair the kernel finds
-        ill formed; nothing is printed to stdout). 4 no verdict: there is no kernel to
-        run, or its exit code or its error stream is at odds with what it printed, or
+        ill formed; nothing is printed to stdout). 4 no verdict of a design of a deck:
+        there is no kernel to run, or its exit code or its error stream is at odds with what it printed, or
         its cells are not the ones the Python reader worked out. Nothing is printed to
         stdout, and nothing else gives a verdict.
     python -m petra kinds [DECK|TYPE] [--all] [--json]

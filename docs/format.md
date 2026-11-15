@@ -12,11 +12,11 @@ With no kernel to run there is no verdict: `petra check` prints nothing to stdou
 
 The kernel trusts none of the files. It checks that they agree with each other and that each proof holds. Who wrote each file is outside the kernel: the verdict prints the SHA-256 of the card, the design, the deck and the rules, and a reader compares the card's hash with the card they issued and the rules' hash with the deck of rules they mean. [Reading a verdict](#reading-a-verdict) says what a PASS means without that comparison: very little.
 
-`python -m petra.export FILE.petra [--card FILE.card] --out DIR` writes the files from a design and its card, the `.card` file beside the design unless `--card` names another. It exits 3 and writes nothing when the language refuses the pair, as it does for a design that states a load, a claim, a waiver or a signature. With `--no-physics` it writes no proofs.json, and a design with parts is then written as it stands, for the kernel to say whether the deck's types take it. With `--card-only FILE.card` and no design it writes card.json alone and prints its hash ([The asker's card](#the-askers-card)).
+`python -m petra.export FILE.petra [--card FILE.card] --out DIR` writes the files from a design and its card, the `.card` file beside the design unless `--card` names another. It exits 3 and writes nothing when the language refuses the pair, as it does for a design that states a load, a claim, a waiver or a signature. It exits 2 and writes nothing for a design none of whose parts is of a deck's type: there is no deck of rules to write. With `--no-physics` it writes no proofs.json, and a design with parts is then written as it stands, for the kernel to say whether the deck's types take it. With `--card-only FILE.card` and no design it writes card.json alone and prints its hash ([The asker's card](#the-askers-card)).
 
 The kernel reads a design in one of two ways, and does more in the second.
 
-- A design.json with no `parts` goes without `--rules`. The kernel checks each cell that proofs.json lists, with the tape the cell carries, and its verdict is never PASS: it has no deck of rules that says which cells the design owes ([The verdict](#the-verdict)). `petra check` hands the kernel such files, with no proofs.json at all, for a design with a part of a kind that no shipped deck has. The kernel then holds the card and the design to the type rules and gives UNKNOWN with no cell.
+- A design.json with no `parts` goes without `--rules`. The kernel checks each cell that proofs.json lists, with the tape the cell carries, and its verdict is never PASS: it has no deck of rules that says which cells the design owes ([The verdict](#the-verdict)). Nothing in Petra writes such files any more. Until 2026-11-15 a checker written in Python wrote them for the designs of its own kinds. A design none of whose parts is of a deck's type is now not handed to the kernel at all: `petra check` gives it UNKNOWN and says which kinds no deck has.
 - A design whose parts are of a deck of rules ([deck.md](deck.md)) has `parts`, and goes with `--rules`. The kernel reads the deck of rules, works out every cell and every tape itself, and takes from proofs.json only hints: a partition or a point to try.
 
 ## Numbers
@@ -383,7 +383,7 @@ The asker runs it on the card they issued, and compares the hash it prints with 
 - The two are the same: the verdict is about the asker's card.
 - They differ: the card.json the kernel read states something else. It may give a load another range, waive a mechanism the asker did not, or hold a bound the asker never gave.
 
-The comparison holds for a design with parts only. For a design with a part of a kind no shipped deck has, `petra check` hands the kernel a card.json that puts no load on a part, so its hash is not the one this command prints. `tests/test_export_card.py` compares the two files, byte for byte, for every pair of `examples/deck` and `corpus/cases/deck`.
+The comparison holds for a design with parts only. A design none of whose parts is of a deck's type has no card.json: Petra writes no files for it. `tests/test_export_card.py` compares the two files, byte for byte, for every pair of `examples/deck` and `corpus/cases/deck`.
 
 ## Limits
 
@@ -584,17 +584,16 @@ A cell made from a deck of rules prints in at most about 370 bytes beside its re
 For every design:
 
 - The numbers in card.json and design.json are in SI, and the Python front end converted them from the units the card and the design write. The kernel reads the units of a deck of rules itself, and not those of a card or a design. It checks that a part's number has the dimension its field asks, by the exponents of the dimension that the file states.
-- card.json has two forms. For a design with parts it says the part and the field each load is on, and it is a function of the card alone ([The asker's card](#the-askers-card)). For a design with a part of a kind no shipped deck has it says neither, since the kernel takes a load on a part only with a deck of rules. So the hash `petra check` prints on its `card` line, of the card's text, is the one to compare with the card that was issued.
+- card.json is a function of the card alone for a design with parts: it says the part and the field each load is on ([The asker's card](#the-askers-card)). The hash `petra check` prints on its `card` line is of the card's text, and that is the one to compare with the card that was issued.
 - The interval rule is proved in Lean: a tape that the kernel proves has every root at most zero on its box, and a point it accepts as a refutation has its root above zero ([proved.md](proved.md)). So is what that means for a root that is the pick of an `lt` rule: the left side is under the right on the box, or not under it at the point. Nothing else on this page is proved. For the shape and type rules, the deck of rules, the cells and the verdict, the kernel is a second implementation, and `bench/kernel_grid.py` and the corpus compare it with the first.
 
-For a design with no parts:
+For files with no deck of rules, which nothing in Petra writes any more:
 
-- The list of cells comes from Python, from the models' coverage rules. The kernel checks each cell and not that the list is complete.
-- A tape's formula comes from Python's models. The kernel checks its arithmetic and its `in:` and `reg:` inputs, not that the formula is the standard's.
-- Inputs labelled `dsg:` are the design's values as the models resolved them. The kernel does not tie them to `quantities`, and the verdict counts them.
-- A `not_applicable` cell is the model's word.
-- Proofs by the other five rules have no tape, and neither has an interval proof that leans on a defined quantity.
-- A cell holds the proof of its own statement. The proofs that its model applies there (its validity rows) and the proof of a claim's margin are not in the file. `petra check` counts them among the proofs the kernel has no rule for.
+- The list of cells is the list of proofs.json, from whoever wrote the file. The kernel checks each cell and not that the list is complete.
+- A tape's formula is that writer's. The kernel checks its arithmetic and its `in:` and `reg:` inputs, not that the formula is a standard's.
+- Inputs labelled `dsg:` are values the writer gives for the design. The kernel does not tie them to `quantities`, and the verdict counts them.
+- A `not_applicable` cell is the writer's word.
+- So the verdict of such files is never PASS ([The verdict](#the-verdict)).
 
 For a design with parts:
 

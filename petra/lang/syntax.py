@@ -37,8 +37,8 @@ rules that has the kind as a type (petra/grid.py), so a new deck never edits thi
     qoi       = segment { "." segment } ;          last segment is the quantity name
     segment   = IDENT [ "(" IDENT ")" ] ;          member(diag_ad) names element diag_ad
     path      = IDENT { "." IDENT } ;
-    ref       = IDENT { "." IDENT } ;   a local name, a domain keyword, a registry id,
-                                        a port (w1.b) or a failure-mode id
+    ref       = IDENT { "." IDENT } ;   a word of a line, the name of a part or of a key,
+                                        a dotted name (tab.Fy) or a mechanism (lap.slip)
     rel       = "<=" | ">=" ;
 
 Every given, load entry and tests record carries a signature, its own or its block's. The

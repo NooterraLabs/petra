@@ -17,8 +17,9 @@ PASS_WAIVED when the kernel lists a waiver that a cell rests on, as `petra check
 A pair the language refuses is INPUT_ERROR too: the kernel reads files, and that text gives
 it none. For a design of a deck of rules the export also writes rules.json, the deck's own
 file, and proofs.json, the hints, and the kernel gets the first as --rules and works out the
-cells itself. For any other design it writes the card, the design and the deck of domains,
-and the kernel is handed no deck of rules and no proofs.
+cells itself. A design none of whose parts is of a deck's type has no files: the export
+writes nothing and exits 2, the kernel is not asked, and the verdict is UNKNOWN, as
+`petra check` gives it.
 
 A run fails when a design gets a verdict that is neither the expected one nor the known
 wrong one. It also fails when a known wrong verdict has come right, so that the line loses
@@ -106,6 +107,8 @@ def by_kernel(binary: str, case: Case) -> str:
 
         export = [sys.executable, "-m", "petra.export", case.path, "--out", tmp]
         code = _run([*export, "--no-physics"])
+        if code == EXIT_CODES["UNKNOWN"]:      # no deck of rules has its kinds, so there is nothing to hand the kernel
+            return "UNKNOWN"
         if code != 0:
             return "INPUT_ERROR" if code == refused else "NO_FILES"
         typed = verify("card", "design", "deck")
@@ -114,7 +117,7 @@ def by_kernel(binary: str, case: Case) -> str:
         code = _run(export)
         if code != 0:
             return "TIMEOUT" if code is None else "INPUT_ERROR" if code == refused else "NO_FILES"
-        return verify("card", "design", "deck", *(["proofs"] if Path(tmp, "proofs.json").is_file() else []))
+        return verify("card", "design", "deck", "proofs")
 
 
 def meets(expect: str, got: str) -> bool:

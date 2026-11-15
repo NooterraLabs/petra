@@ -1,6 +1,6 @@
 # Petra's Python API and `--json` output
 
-Petra checks a design against a card and a deck of rules. The card, `NAME.card`, holds what is asked: the loads, the signed bounds and the waivers. The design, `NAME.petra`, holds the parts. The answer is the verdict of `petra-verify`, a small kernel written in Lean. Nothing in Python gives a verdict.
+Petra checks a design against a card and a deck of rules. The card, `NAME.card`, holds what is asked: the loads, the signed bounds and the waivers. The design, `NAME.petra`, holds the parts. The answer is the verdict of `petra-verify`, a small kernel written in Lean. No function here gives a pass or a fail of its own.
 
 ## Example
 
@@ -28,8 +28,8 @@ print(checked.text())                    # what `petra check` prints
 | Member | Holds |
 |---|---|
 | `status` | The kernel's verdict: PASS, PASS_WAIVED, FAIL or UNKNOWN |
-| `reason` | For a design with a part of a kind no deck has, why it reads UNKNOWN. Otherwise `None` |
-| `kernel` | What the kernel said: its verdict, the hashes of the files it read and the waivers it lists |
+| `reason` | For a design no deck has, why it reads UNKNOWN. Otherwise `None` |
+| `kernel` | What the kernel said: its verdict, the hashes of the files it read and the waivers it lists. `None` for a design no deck has, which the kernel is not asked about |
 | `hashes` | The SHA-256 of the card's text and of the design's |
 | `to_json()` | The dict `petra.check` returns |
 | `text()` | What `petra check` prints |
@@ -37,13 +37,13 @@ print(checked.text())                    # what `petra check` prints
 
 `check_file` raises what the pair raises when it is refused: `petra.lang.LolaSyntaxError`, `petra.lang.LoweringError`, `petra.files.ComponentError` or `OSError`.
 
-Both functions raise `petra.verify.NoVerdict` when there is no verdict to give. See the next section.
+For a design of a deck, both functions raise `petra.verify.NoVerdict` when there is no verdict to give. See the next section.
 
 ## The kernel
 
 `status` is the verdict of `petra-verify`, the checker in `kernel/`. Petra runs the file the environment variable `PETRA_VERIFY` names, else the one inside the installed package, else the one `lake build` put in a source tree's `kernel/`. A wheel from PyPI carries the kernel for its platform, and Petra installed from the sdist carries none.
 
-With no kernel to run, there is no verdict. The same holds for a kernel whose exit code or error stream is at odds with what it printed, or whose answer does not hold together ([format.md](../../docs/format.md), the first section). Then `petra.check` raises `petra.verify.NoVerdict`, `petra check` prints nothing to stdout and exits 4, and the server's `check` tool answers with an error.
+With no kernel to run, there is no verdict of a design of a deck. The same holds for a kernel whose exit code or error stream is at odds with what it printed, or whose answer does not hold together ([format.md](../../docs/format.md), the first section). Then `petra.check` raises `petra.verify.NoVerdict`, `petra check` prints nothing to stdout and exits 4, and the server's `check` tool answers with an error.
 
 The kernel reads the deck's own file and works out every cell itself. The Python reader works the same cells out to word the report and to search for hints of proofs. `petra.check` compares the two, cell by cell, and raises `petra.verify.Disagreement` if they differ. That is a bug in one of the two, and `petra check` exits 4 with a traceback.
 
@@ -86,23 +86,25 @@ The status is PASS_WAIVED when the design passes and a waiver of the card rests 
 
 A waived cell that a part or a case left something out of rests on a completion: a name for each key left unstated and a value for each load left out, under which the rule holds. The value is in SI and UNIT names its unit, as the kernel's verdict prints it: `degC` for a temperature, `1` for a plain number, and the exponents of the dimension, as `kg^1 s^-2`, where no unit of factor 1 has it. The signer answers for the completion too, so the cell prints it.
 
-`ratio` is worked out by the Python reader. It is not the kernel's.
+`ratio` is worked out by the Python reader. It is not the kernel's. Nor is `report.verdict`, the reader's own word for the cells it worked out: `petra.check` holds it to the kernel's and reports only the kernel's.
 
 ## JSON of a design no deck has
 
-A design with a part of a kind no shipped deck has cannot be checked: there is no rule to check it by. The kernel is handed its card and its quantities with no deck of rules. It holds them to the type rules, works out no cell, and gives UNKNOWN.
+A design none of whose parts is of a deck's type cannot be checked: there is no rule to check it by. The kernel is not asked about it, and it reads UNKNOWN with a kernel on the machine or without one.
 
 ```
 {"file": FILE, "design": NAME, "status": "UNKNOWN",
  "reason": TEXT,                               which kinds of part no deck has
- "kinds": [KIND, ...],
- "deck": null, "cells": [], "waived": [],
+ "kinds": [KIND, ...],                         at most 100 of them, each cut to 64 characters
+ "more_kinds": N,                              how many more there are
+ "deck": null, "kernel": null, "cells": [], "waived": [],
  "card": FILE, "hashes": {"card": HASH, "design": HASH},
- "path": "none",
- "kernel": {"verdict": "UNKNOWN", "checked": 0, "cells_from": "proofs", "waived": [], "hashes": {...}}}
+ "path": "none"}
 ```
 
-A design with parts of a deck's types and parts of another kind is refused.
+No number of such a design is held to a floor, and nothing a card states of it is read: a floor and a load belong to a type, and it has none.
+
+A design with parts of a deck's types and parts of another kind is refused as input.
 
 ## Exit codes of `petra check`
 
@@ -117,14 +119,14 @@ A design with parts of a deck's types and parts of another kind is refused.
 
 ## Other modules
 
-Everything below is untrusted: a bug in it costs an input error, an UNKNOWN or a difference from the kernel, never a pass.
+None of these gives the verdict of a check. A bug in the reader of a deck costs an UNKNOWN or a difference from the kernel. A bug in the language, the units or the exporter gives the kernel other files than the pair's, and the verdict is then about those files.
 
 | Module | Holds |
 |---|---|
 | `petra.lang` | `parse_design(card, design, path)` and `load_design(path)`: the two texts as one parsed design |
-| `petra.grid` | The Python reader of a deck's grid: `decks()`, `kinds()`, `check(design, deck)` |
-| `petra.rule` | Reads a deck's types, grid and rules, and runs an acceptance of a rule |
+| `petra.grid` | The Python reader of a deck: `read_deck(text)`, `decks()`, `kinds()`, and `check(design, deck)`, which returns the reader's own cells and runs no kernel |
+| `petra.rule` | The acceptance check that a rule passes before it enters a deck |
 | `petra.deck` | Reads a deck's rows: tables and constants |
-| `petra.export` | Writes the files the kernel reads: `python -m petra.export FILE.petra --out DIR` |
+| `petra.export` | Writes the files the kernel reads, for a design of a deck: `python -m petra.export FILE.petra --out DIR` |
 | `petra.verify` | Finds and runs the kernel, and takes its answer |
 | `petra.teach` | What `petra kinds`, `petra new` and `petra docs` print |

@@ -10,12 +10,15 @@ Three steps, and none of them decides anything:
    deck and works out every cell itself, and `grid.checked` holds the reader's cells to the
    kernel's one by one.
 
-A design with a part of a kind no shipped deck has cannot be worked out: there is no rule
-to read. It still goes to the kernel, with its card, its quantities and no deck of rules.
-The kernel holds the two to the type rules, works out no cell, and never passes such files
-(kernel/Petra/Check.lean), so the design reads UNKNOWN with the reason that no deck has its
-kind (verify.no_deck). Nothing in Python can print a pass: a status here is the kernel's
-verdict, or INPUT_ERROR for a pair that was refused.
+A design none of whose parts is of a deck's type cannot be checked: there is no rule to
+read, and no type that says what its lines mean. The kernel is not asked about it, so it
+reads the same with a kernel and without one: UNKNOWN, with the reason that no deck has its
+kinds (verify.no_deck). That is the one status Python gives on its own, and it is never a
+pass or a fail.
+
+No status given here is a pass or a fail but the kernel's own. A bug in step 1 or in the
+files of step 3 gives the kernel other files than the pair's, and the verdict is then about
+those files: the report names the card, the design and the deck by hash.
 """
 from __future__ import annotations
 
@@ -23,41 +26,39 @@ from dataclasses import dataclass
 from typing import Any, Mapping
 
 from . import export, grid, verify
-from .files import HALF, ComponentError, card_of, headed
+from .files import HALF, MAX_PROBLEMS, ComponentError, card_of, headed
 from .lang import LolaSyntaxError, LoweringError, parse_design
 
 INPUT_ERRORS = (LolaSyntaxError, LoweringError, ComponentError)
 """What a pair raises when the language, a deck's types, the type rules or the kernel refuse
 it. Every way into a check reports each as an input error."""
 
-NO_DECK = "none: no deck of rules has this design's kinds of part, so the kernel worked out no cell"
-"""The `path` line of a design the kernel was handed no deck of rules for."""
+NO_DECK = "none: no deck of rules has this design's kinds of part, so there was nothing to hand the kernel"
+"""The `path` line of a design no deck of rules was read for."""
 
 
 @dataclass(frozen=True)
 class Checked:
-    """A pair checked from its text that no deck of rules was read for: one the language or
-    the kernel refused, with the `error` and nothing else, or a design with a part of a kind
-    no shipped deck has, with what the kernel said of its files. A design of a deck's types
-    gives a grid.Checked, which has the same members.
+    """A pair checked from its text that no deck of rules was read for: one the language
+    refused, with the `error` and nothing else, or a design none of whose parts is of a
+    deck's type. A design of a deck's types gives a grid.Checked, which has the same members.
 
-    `status` is INPUT_ERROR for a refused pair and else the kernel's verdict, which for
-    these files is UNKNOWN: `ask` takes no pass from a kernel that was handed no deck of
-    rules. `reason` says which kinds no deck has. `report` is None: there are no cells to
-    report."""
+    `status` is INPUT_ERROR for a refused pair and else UNKNOWN: nothing can pass or fail a
+    design that no rule reads. `reason` says which kinds no deck has. `report` and `kernel`
+    are None: there are no cells, and the kernel was not asked."""
 
     path: str
     error: str | None = None
     name: str = ""
     card: str = ""
     hashes: Mapping[str, str] | None = None
-    kernel: Mapping[str, Any] | None = None
     kinds: tuple[str, ...] = ()
     report: None = None
+    kernel: None = None
 
     @property
     def status(self) -> str:
-        return "INPUT_ERROR" if self.error is not None else verify.status(self.kernel)
+        return "INPUT_ERROR" if self.error is not None else "UNKNOWN"
 
     @property
     def reason(self) -> str | None:
@@ -66,49 +67,30 @@ class Checked:
 
     def to_json(self) -> dict[str, Any]:
         """{"file", "status": "INPUT_ERROR", "error"} for a refused pair. Else the keys of a
-        design of a deck (grid.Checked.to_json) that have a value here: no deck, no counts,
-        and no cells."""
+        design of a deck (grid.Checked.to_json) that have a value here: no deck, no kernel,
+        no counts, and no cells. `kinds` holds at most MAX_PROBLEMS of the kinds, each cut as
+        the reason cuts it, and `more_kinds` how many more there are."""
         if self.error is not None:
             return {"file": self.path, "status": "INPUT_ERROR", "error": self.error}
         return {"file": self.path, "design": self.name, "status": self.status, "reason": self.reason, "card": self.card, "hashes": dict(self.hashes),
-                "path": "none", "kernel": dict(self.kernel), "kinds": list(self.kinds), "deck": None, "cells": [], "waived": []}
+                "path": "none", "kernel": None, "kinds": [verify.clipped(k) for k in self.kinds[:MAX_PROBLEMS]],
+                "more_kinds": max(0, len(self.kinds) - MAX_PROBLEMS), "deck": None, "cells": [], "waived": []}
 
     def text(self) -> str:
-        """What `petra check` prints: the kernel's verdict on the first line, the reason on
-        the second, what the pair was checked against, and what the kernel said."""
+        """What `petra check` prints: UNKNOWN on the first line, the reason on the second,
+        and what the pair was."""
         if self.error is not None:
             return f"{self.path}: INPUT_ERROR\n{self.error}"
         return "\n".join([headed(self.name, self.status), f"reason     {self.reason}", f"card       {self.hashes['card']}  {self.card}",
-                          f"design     {self.hashes['design']}  {self.path}",
-                          f"kernel     petra-verify gives {self.kernel['verdict']}: it was handed no deck of rules and worked out no cell",
-                          f"path       {NO_DECK}"])
-
-
-def undecked(design: Any, card: str, text: str, card_path: str) -> Checked:
-    """The kernel's verdict on a design with a part of a kind no shipped deck has. Raises
-    ComponentError for a pair the kernel finds ill formed, and verify.NoVerdict when there
-    is no kernel to run, when it gives no answer, or when it gives these files any verdict
-    but UNKNOWN: it was handed no cell, so it has none to refute."""
-    known = grid.kinds()
-    kernel = verify.need()
-    said = verify.ask(kernel, export.bare(design))
-    if said["verdict"] == "ILL-FORMED":
-        raise ComponentError(verify.refusal(design.path, said))
-    if said["verdict"] != "UNKNOWN" or said["cells"]:
-        raise verify.BadAnswer(f"{design.path}: {kernel} printed {said['verdict']} with {len(said['cells'])} cells for files with no deck of rules and no "
-                               "proofs, where petra-verify works out no cell and gives UNKNOWN")
-    said = {"verdict": said["verdict"], "checked": 0, "hashes": {name: h for name, h in said["hashes"].items() if h is not None},
-            "cells_from": said["cells_from"], "waived": said["waived"]}
-    return Checked(design.path, None, design.name, card_path, {"card": export.sha256(card), "design": export.sha256(text)}, said,
-                   tuple(sorted({c.kind for c in design.components.values() if c.kind not in known})))
+                          f"design     {self.hashes['design']}  {self.path}", f"path       {NO_DECK}"])
 
 
 def check_text(card: str, text: str, path: str, *, card_path: str | None = None, raises: bool = False) -> Checked | grid.Checked:
     """Check the design `text` against the card and take the kernel's verdict on it
     (verify.py). `path` names the design in messages, and `card_path` the card when it is
-    not the file beside it. Raises verify.NoVerdict when there is no kernel to run or it
-    gives no answer. A pair that is refused gives a Checked with the error, or with `raises`
-    its own exception, one of INPUT_ERRORS."""
+    not the file beside it. For a design of a deck's types it raises verify.NoVerdict when
+    there is no kernel to run or it gives no answer. A pair that is refused gives a Checked
+    with the error, or with `raises` its own exception, one of INPUT_ERRORS."""
     for what, body in (("card", card), ("design", text)):
         if HALF.search(body):      # a text read from a file never holds one, and one given as text can
             problem = f"the {what} holds half a surrogate pair, which is no character: it cannot be written, so it has no hash"
@@ -117,11 +99,12 @@ def check_text(card: str, text: str, path: str, *, card_path: str | None = None,
             return Checked(path, problem)
     try:
         design = parse_design(card, text, path, card_path)
-        verify.need()      # with no kernel there is no verdict, so nothing is searched for one
         rules = grid.owner(design)
         if rules is not None:
+            verify.need()      # with no kernel there is no verdict, so nothing is searched for one
             return grid.checked(design, rules, card, text, card_path or card_of(path))
-        return undecked(design, card, text, card_path or card_of(path))
+        kinds = tuple(sorted({c.kind for c in design.components.values()}))      # none of them is a deck's, or `owner` had refused the mix
+        return Checked(design.path, None, design.name, card_path or card_of(path), {"card": export.sha256(card), "design": export.sha256(text)}, kinds)
     except INPUT_ERRORS as exc:
         if raises:
             raise

@@ -11,8 +11,9 @@ Writes the files of docs/format.md into DIR:
 
 With --no-physics the design is written as it stands, with no proofs.json and without
 asking the grid whether the deck's types take it: the kernel reads the parts itself and
-says. A design with a part of a kind no shipped deck has gets card.json, design.json and
-deck.json alone, as `petra check` hands them to the kernel (pipeline.py).
+says. A design none of whose parts is of a deck's type has no files: there is no deck of
+rules to write, and no type that says what its lines are. The command then writes nothing,
+says so, and exits 2, the code of the UNKNOWN that `petra check` gives such a design.
 
 `python -m petra.export --card-only FILE.card --out DIR` writes card.json from the card
 with no design, and prints its hash. card.json holds nothing the design chooses, so this
@@ -102,10 +103,9 @@ def read_inputs(design: Design) -> list[Input]:
 def card(design: Design, inputs: list[Input], placed: bool = False) -> dict[str, Any]:
     """What the card states. `inputs` is every signed bound of the card (`read_inputs`), each
     under its name there. A load or an ambient that reads a param is an input with no `by`.
-    With `placed`, for a design checked against a deck of rules, a load also says the part
-    it is `on` and which `field` it is, and the card names its tests records and its
-    probability claims. A design the kernel is handed no deck of rules for leaves those out:
-    the kernel takes a load on a part only with the deck that has the part's type. A card that states a key or a whole number exactly, with
+    With `placed`, as every caller here asks, a load also says the part it is `on` and which
+    `field` it is, and the card names its tests records and its probability claims: the
+    kernel takes a load on a part only with the deck that has the part's type. A card that states a key or a whole number exactly, with
     `given NAME is ...`, has them in `states`, in the order of their names: each with its
     `name`, who signed it as `by`, and `key`, the name, or `whole`, the number as a text.
     A card that states none has no `states`, so its card.json is what it was before a card
@@ -147,29 +147,23 @@ def sha256(data: str) -> str:
     return "sha256:" + hashlib.sha256(data.replace("\r\n", "\n").encode("utf-8")).hexdigest()
 
 
-def bare(design: Design) -> dict[str, str]:
-    """The text of the files the kernel is handed for a design with a part of a kind no
-    shipped deck has: the card, the design's quantities and the deck of domains, and no deck
-    of rules. The kernel holds the two to the type rules and works out no cell."""
-    card_text = text(card(design, read_inputs(design)))
-    return {"card": card_text, "design": text(design_file(design, sha256(card_text))),
-            "deck": text({"format": "petra-deck/0", "domains": json.loads(CORE.read_text(encoding="utf-8"))["domains"], "constants": []})}
+class NoDeck(ValueError):
+    """No shipped deck of rules has the design's kinds of part, so there are no files to write."""
 
 
 def export(path: str, out: Path, physics: bool = True, card_path: str | None = None) -> None:
-    """Write the files of the design at `path` into `out`: for a design of a deck's types
-    card.json, design.json, deck.json and rules.json, and proofs.json when `physics`; for
-    any other the three of `bare`."""
-    from . import grid
+    """Write card.json, design.json, deck.json and rules.json of the design at `path` into
+    `out`, and proofs.json when `physics`. Raises NoDeck for a design none of whose parts is
+    of a deck's type, and writes nothing."""
+    from . import grid, verify
     from .lang import load_design
 
     design = load_design(path, card_path)
     rules = grid.owner(design)
     if rules is None:
-        files = bare(design)
-    else:
-        # Without physics the files are the design as written, and the kernel says whether the deck's types take it.
-        files = grid.check(design, rules)[1] if physics else grid.bundle(design, rules)
+        raise NoDeck(verify.no_deck(c.kind for c in design.components.values()))
+    # Without physics the files are the design as written, and the kernel says whether the deck's types take it.
+    files = grid.check(design, rules)[1] if physics else grid.bundle(design, rules)
     out.mkdir(parents=True, exist_ok=True)
     for name, body in files.items():
         (out / f"{name}.json").write_text(body, encoding="utf-8", newline="\n")
@@ -213,6 +207,9 @@ def _main(argv: list[str]) -> int:
             print(card_only(args.card_only, args.out))
         else:
             export(args.file, args.out, physics=not args.no_physics, card_path=args.card)
+    except NoDeck as exc:
+        print(f"petra: nothing written: {exc}", file=sys.stderr)
+        return 2
     except (*INPUT_ERRORS, OSError) as exc:
         print(f"petra: {exc}", file=sys.stderr)
         return 3

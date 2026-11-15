@@ -6,7 +6,7 @@ These are the rules for anyone writing Petra code, human or agent. One rule rank
 
 | # | Rule | Why | Enforced by |
 |---|---|---|---|
-| T1 | The verdict is the kernel's. Nothing in Python gives one, and with no kernel there is none. | Every line that can pass a design is a possible false pass, so there is one place for them | `tests/test_kernel_decides.py`, `tests/test_no_wrong_pass.py` |
+| T1 | A pass or a fail is the kernel's. No way into a check gives one of its own, and with no kernel there is none. The one status Python gives by itself is UNKNOWN, for a design no deck has. | Every line that can pass a design is a possible false pass, so there is one place for them | `tests/test_kernel_decides.py`, `tests/test_no_wrong_pass.py` |
 | T2 | What Python does on the way to the kernel is counted and held to a ceiling: its arithmetic, the front end, and the reader of a deck. Each part names what checks it, or a dated debt. | A bug in the front end gives the kernel the wrong files. A cap makes growth a decision. | `tests/test_kernel_budget.py`, which reads `tests/trusted_base.py` |
 | T3 | No floats decide anything. The kernel and the Python reader work in exact rationals and intervals rounded outward. A float appears only in a ratio that a report prints. | A rounding error is a false pass that nobody can see | `tests/test_interval.py`, `tests/test_cosine.py`, the comparison of the two readers |
 | T4 | A search is never trusted. A partition or a point that Python finds is a hint, and the kernel checks it. | Check each output and not the program that made it | [format.md](format.md), `bench/kernel_grid.py` |

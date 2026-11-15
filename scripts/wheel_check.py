@@ -12,13 +12,15 @@ It exits 1 unless all of these hold:
 
 - the wheel is built for one platform, and for `--platform` when that is given
 - the kernel the installed package runs is the file inside the package
-- each report's `kernel` line gives the kernel's verdict, and the lap's how many proofs it checked
-- the lap's `path` line says the kernel worked out every cell from the rules deck
+- the lap's `kernel` line gives the kernel's verdict and how many proofs it checked
+- the lap's `path` line says the kernel worked out every cell from the rules deck, and the
+  circuit's that there was nothing to hand the kernel
 - the lap says PASS_WAIVED and exits 6, since it rests cells on a waiver, and the circuit
   says UNKNOWN and exits 2, since no deck of rules has a circuit
 
 With `--no-kernel` it asks the opposite, for an sdist or a pure wheel: the package holds no
-kernel, and each check gives no verdict: nothing on stdout, the reason on stderr, exit 4.
+kernel, and the lap's check gives no verdict: nothing on stdout, the reason on stderr, exit 4.
+The circuit reads UNKNOWN as before, since the kernel is not asked about it.
 
 The `wheels` workflow runs this on each platform's wheel, on a runner of that platform.
 """
@@ -38,13 +40,13 @@ LAP = ROOT / "examples" / "deck" / "lap_pass.petra"
 CIRCUIT = ROOT / "corpus" / "cases" / "old" / "circuit_pass.petra"
 
 # What each design must say, with its exit code. The lap rests five cells on waivers, so it
-# passes as PASS_WAIVED. No deck of rules has a circuit, so the kernel is handed none for it:
-# it works out no cell and passes nothing.
+# passes as PASS_WAIVED. No deck of rules has a circuit, so there is nothing to hand the
+# kernel, and the design reads UNKNOWN.
 SAYS = {LAP: ("PASS_WAIVED", 6), CIRCUIT: ("UNKNOWN", 2)}
 NO_VERDICT = 4
 
 CHECKED = re.compile(r"kernel +petra-verify gives (PASS|FAIL|UNKNOWN): it checked [1-9]\d* of \d+ proofs")
-NO_DECK = re.compile(r"kernel +petra-verify gives UNKNOWN: it was handed no deck of rules and worked out no cell")
+NO_DECK = re.compile(r"path +none: no deck of rules has this design's kinds of part")
 FROM_RULES = re.compile(r"path +rules: the kernel worked out every cell from the rules deck")
 
 # A stranger has no kernel named in the environment and no repository on sys.path.
@@ -83,7 +85,7 @@ def faults(file: Path, requirements: list[str], kernel: bool, platform: str | No
         found.append(f"the installed package runs a kernel, {ran}")
     for design in (LAP, CIRCUIT):
         status, code = SAYS[design]
-        if not kernel:
+        if not kernel and design == LAP:
             why: list[str] = []
             printed = run(shutil.which("petra", path=str(scripts)), "check", design, cwd=where, code=NO_VERDICT, said=why)
             print(f"\n$ petra check {design.relative_to(ROOT).as_posix()}\n{why[0].strip()}")
@@ -92,7 +94,7 @@ def faults(file: Path, requirements: list[str], kernel: bool, platform: str | No
             continue
         lines = run(shutil.which("petra", path=str(scripts)), "check", design, cwd=where, code=code).splitlines()
         print("\n".join([f"\n$ petra check {design.relative_to(ROOT).as_posix()}", *lines[:8]]))
-        wanted = [CHECKED, FROM_RULES] if design == LAP else [NO_DECK]
+        wanted = [CHECKED, FROM_RULES] if design == LAP else [NO_DECK]      # the circuit reads the same with a kernel and without
         found += [f"{design.name}: no line of the report matches {pattern.pattern!r}"
                   for pattern in wanted if not any(pattern.match(line) for line in lines)]
         if not lines[0].endswith(f": {status}"):

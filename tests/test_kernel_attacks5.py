@@ -319,7 +319,10 @@ class Worst(unittest.TestCase):
         design = "petra 0\n" + "".join(f"\nq{i} p{i} {{\n}}\n" for i in range(52_000))
         self.assertBounded(HEAD_C, design, exits=2)
         self.assertEqual(verify.no_deck(f"q{i}" for i in range(9)),
-                         "no deck of rules has a part of kind q0, q1, q2, q3 and 5 more, so the kernel worked out none of its checks and nothing can pass it")
+                         "no deck of rules has a part of kind q0, q1, q2, q3 and 5 more, so none of its checks was worked out and nothing can pass it")
+        long = verify.no_deck(["k" * 100_000])
+        self.assertLess(len(long), 250, "a kind's name is cut in the reason")
+        self.assertIn("(99,936 more characters)", long)
 
     def test_a_dotted_name_of_a_megabyte(self):
         """A given named by 499,000 names with dots between them, which the parser once joined

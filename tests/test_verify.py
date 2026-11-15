@@ -29,14 +29,6 @@ KERNEL = verify.BUILT
 """Where this source tree's kernel is, before any test names another place."""
 
 
-def answer(files, verdict="UNKNOWN", cells=(), findings=()):
-    """What the kernel prints for the files of a design it was handed no deck of rules for: the
-    hash of each file, no cell, and UNKNOWN. `verdict`, `cells` and `findings` make it say
-    something else."""
-    hashes = {name: (f"sha256:{hashlib.sha256(files[name].encode('utf-8')).hexdigest()}" if name in files else None) for name in verify.HASHED}
-    return {"verdict": verdict, "hashes": hashes, "cells_from": "proofs", "findings": list(findings), "waived": [], "cells": list(cells)}
-
-
 def checked(kernel, path=CIRCUIT) -> dict:
     """petra.check of the pair at `path`, with `kernel` answering in place of petra-verify,
     or with no kernel when it is None."""
@@ -45,56 +37,55 @@ def checked(kernel, path=CIRCUIT) -> dict:
         return petra.check(*read_pair(path), path=str(path))
 
 
+def never(files):
+    raise AssertionError(f"the kernel was asked about {sorted(files)}")
+
+
 class Shell(unittest.TestCase):
-    """A design with a part of a kind no deck has: the kernel is handed its card and its
-    quantities with no deck of rules, and its verdict is the status."""
+    """A design none of whose parts is of a deck's type: there is no deck of rules to hand
+    the kernel, so it is not asked, and the design reads UNKNOWN with the reason."""
 
-    def test_the_kernels_unknown_is_the_status_and_its_hashes_are_kept(self):
-        result = checked(answer)
+    def test_a_design_no_deck_has_reads_unknown_and_the_kernel_is_not_asked(self):
+        result = checked(never)
         self.assertEqual((result["status"], result["reason"], result["kinds"]), ("UNKNOWN", verify.no_deck(["circuit"]), ["circuit"]))
-        self.assertEqual({k: v for k, v in result["kernel"].items() if k != "hashes"}, {"verdict": "UNKNOWN", "checked": 0, "cells_from": "proofs", "waived": []})
-        self.assertEqual(set(result["kernel"]["hashes"]), {"card", "design", "deck"}, "the kernel read no deck of rules, and its null for one is left out")
-        self.assertEqual((result["cells"], result["deck"], result["path"]), ([], None, "none"))
+        self.assertEqual((result["kernel"], result["cells"], result["deck"], result["path"], result["more_kinds"]), (None, [], None, "none", 0))
 
-    def test_a_kernel_that_says_pass_of_these_files_is_not_taken(self):
-        """The files hold no deck of rules, so a PASS is not the kernel's."""
-        proved = [{"subject": "lighting", "mechanism": "wire.ampacity", "entry": "", "state": "proved"}]
-        for cells in ((), proved):
-            with self.assertRaises(verify.NoVerdict):
-                checked(lambda files: answer(files, "PASS", cells))
+    def test_no_answer_of_a_kernel_can_move_it(self):
+        """Whatever a kernel would say of it, PASS among them: nothing is asked, so nothing is taken."""
+        passing = lambda files: {"verdict": "PASS", "hashes": {}, "cells_from": "rules", "findings": [], "waived": [], "cells": []}      # noqa: E731
+        for path in (CIRCUIT, TRUSS):
+            self.assertEqual(checked(passing, path)["status"], "UNKNOWN")
 
-    def test_a_kernel_that_gives_these_files_a_cell_or_a_fail_is_not_taken(self):
-        """It was handed no deck of rules and no proofs, so it has no cell to refute or to leave open."""
-        for verdict, state in (("FAIL", "refuted"), ("UNKNOWN", "open")):
-            with self.assertRaises(verify.NoVerdict):
-                checked(lambda files: answer(files, verdict, [{"subject": "lighting", "mechanism": "wire.ampacity", "entry": "", "state": state}]))
+    def test_with_no_kernel_a_lap_has_no_verdict_and_a_design_no_deck_has_is_still_unknown(self):
+        with self.assertRaises(verify.NoKernel):
+            checked(None, LAP)
+        self.assertEqual(checked(None, CIRCUIT)["status"], "UNKNOWN", "the kernel is not asked about it, so it reads the same without one")
 
-    def test_the_kernel_reads_the_files_of_the_format_and_no_deck_of_rules(self):
+    def test_a_design_of_a_deck_is_handed_to_the_kernel_with_its_rules(self):
         seen = {}
-        checked(lambda files: seen.update(files) or answer(files))
-        self.assertEqual(set(seen), {"card", "design", "deck"}, "no rules and no proofs: Python writes no cell for the kernel to take")
-        card, design, deck = (json.loads(seen[name]) for name in ("card", "design", "deck"))
-        self.assertEqual((card["format"], design["format"], deck["format"]), ("petra-card/0", "petra-design/0", "petra-deck/0"))
+
+        def refuse(files):
+            seen.update(files)
+            raise verify.BadAnswer("stopped by the test")
+
+        with self.assertRaises(verify.NoVerdict):
+            checked(refuse, LAP)
+        self.assertEqual(set(seen), {"card", "design", "deck", "rules", "proofs"})
+        card, design = json.loads(seen["card"]), json.loads(seen["design"])
+        self.assertEqual((card["format"], design["format"]), ("petra-card/0", "petra-design/0"))
         self.assertEqual(design["card"], "sha256:" + hashlib.sha256(seen["card"].encode("utf-8")).hexdigest())
-        self.assertNotIn("parts", design, "the parts are read only against the deck that has their types")
-        self.assertNotIn("rules", deck)
 
-    def test_a_pair_the_kernel_finds_ill_formed_is_an_input_error(self):
-        finding = {"rule": "types.3", "file": "design", "item": "lighting.wire.length", "why": "a size is above 0, and this one goes down to 0"}
-        result = checked(lambda files: answer(files, "ILL-FORMED", findings=[finding]))
-        self.assertEqual(result["status"], "INPUT_ERROR")
-        self.assertIn("petra-verify refuses the design: lighting.wire.length: a size is above 0", result["error"])
-
-    def test_with_no_kernel_there_is_no_verdict(self):
-        for path in (CIRCUIT, LAP):
-            with self.assertRaises(verify.NoKernel):
-                checked(None, path)
+    def test_the_reason_names_four_kinds_at_most_and_cuts_a_long_one(self):
+        self.assertEqual(verify.no_deck([]), "the design has no part, so there is no check to work out and nothing can pass it")
+        self.assertIn("kind a, b, c, d and 2 more,", verify.no_deck("abcdef"))
+        self.assertEqual(verify.clipped("k" * 64), "k" * 64)
+        self.assertEqual(verify.clipped("k" * 70), "k" * 64 + "... (6 more characters)")
 
 
 class Lines(unittest.TestCase):
     def test_the_report_names_the_card_and_the_design_by_hash(self):
         card, design = read_pair(CIRCUIT)
-        with mock.patch.object(verify, "binary", lambda: "petra-verify"), mock.patch.object(verify, "ask", lambda _, files: answer(files)):
+        with mock.patch.object(verify, "binary", lambda: "petra-verify"), mock.patch.object(verify, "ask", lambda _, files: never(files)):
             from petra.pipeline import check_text
 
             unix = check_text(card, design, "x.petra")
@@ -104,9 +95,8 @@ class Lines(unittest.TestCase):
         self.assertEqual(lines[1], f"reason     {verify.no_deck(['circuit'])}")
         self.assertEqual(lines[2], f"card       sha256:{hashlib.sha256(card.encode('utf-8')).hexdigest()}  x.card")
         self.assertEqual(lines[3], f"design     sha256:{hashlib.sha256(design.encode('utf-8')).hexdigest()}  x.petra")
-        self.assertEqual(lines[4], "kernel     petra-verify gives UNKNOWN: it was handed no deck of rules and worked out no cell")
-        self.assertTrue(lines[5].startswith("path       none: "), lines[5])
-        self.assertEqual(len(lines), 6, "and nothing else: Python has no working of its own to print")
+        self.assertTrue(lines[4].startswith("path       none: "), lines[4])
+        self.assertEqual(len(lines), 5, "and nothing else: Python has no working of its own to print")
         self.assertEqual([line for line in lines if "PASS" in line], [])
         self.assertEqual(unix.to_json()["card"], "x.card")
         self.assertEqual(unix.to_json()["hashes"], windows.to_json()["hashes"], "a checkout's line ends do not change the hash")
@@ -190,26 +180,39 @@ class Found(unittest.TestCase):
 
 @unittest.skipUnless(verify.binary(), "no petra-verify is built here and PETRA_VERIFY names none")
 class Built(unittest.TestCase):
-    def test_the_kernel_gives_a_design_of_no_deck_unknown(self):
+    def test_a_design_no_deck_has_reads_unknown(self):
         for path, kind in ((CIRCUIT, "circuit"), (TRUSS, "truss")):
             result = petra.check(*read_pair(path))
-            self.assertEqual((result["status"], result["kernel"]["verdict"], result["reason"]), ("UNKNOWN", "UNKNOWN", verify.no_deck([kind])))
-            self.assertEqual(set(result["kernel"]["hashes"]), {"card", "design", "deck"})
+            self.assertEqual((result["status"], result["kernel"], result["reason"]), ("UNKNOWN", None, verify.no_deck([kind])))
+
+    def test_no_number_of_a_part_no_deck_has_is_held_to_a_floor(self):
+        """A size of zero, a number under zero, a moment of either sign: the floors are of types, and a part of no deck
+        has none. The thirteenth review found such a pair refused as input, with a message about a size, where the
+        reason it cannot be checked is that no deck has its kind."""
+        head = 'petra 0\n\ncard "t" {\n  owner "me"\n}\n'
+        for line in ("cold -5 degC", "gap 0", "slope -1", "offset -3 mm", "length 0 m"):
+            with self.subTest(line=line):
+                self.assertEqual(petra.check(head, f"petra 0\nwidget w {{\n  {line}\n}}\n")["status"], "UNKNOWN")
+        load = 'load g {\n  on w moment in [-5 Nm, 5 Nm]\n  signed "me" source "s"\n}\n'
+        self.assertEqual(petra.check(head + load, "petra 0\nwidget w {\n  size 3 mm\n}\n")["status"], "UNKNOWN")
 
     def test_a_card_under_which_the_old_checker_refuted_the_circuit_reads_unknown_too(self):
-        """16 A on a B10 breaker: the Python checker refuted it, and the kernel checked that refutation's arithmetic. With
-        that checker gone there is no cell to refute, and the right answer, FAIL, waits for the deck that brings circuits back."""
+        """16 A on a B10 breaker: the Python checker refuted it. With that checker gone there is no cell to refute, and
+        the right answer, FAIL, waits for the deck that brings circuits back."""
         card, design = read_pair(CIRCUIT)
-        result = petra.check(card.replace("[0 A, 10 A]", "[0 A, 16 A]"), design)
-        self.assertEqual((result["status"], result["kernel"]["verdict"]), ("UNKNOWN", "UNKNOWN"))
+        self.assertEqual(petra.check(card.replace("[0 A, 10 A]", "[0 A, 16 A]"), design)["status"], "UNKNOWN")
 
-    def test_the_kernel_refuses_a_size_under_its_floor_with_no_deck_of_rules(self):
-        """The type rules hold for every pair the kernel reads: a length of zero is no size, whatever kind its part is of."""
-        card, design = read_pair(CIRCUIT)
-        self.assertIn("length 18 m", design)
-        result = petra.check(card, design.replace("length 18 m", "length 0 m", 1))
-        self.assertEqual(result["status"], "INPUT_ERROR")
-        self.assertIn("petra-verify refuses the design: lighting.wire.length: a size is above 0", result["error"])
+    def test_a_long_kind_costs_no_more_than_its_text(self):
+        """The thirteenth review, finding 1: a kind of 12,000 characters on a part with 12,000 numbers took 1.7 s and
+        122 MB while the files were written for the kernel, and four times that at twice the size. No file is written now."""
+        import time
+
+        head = 'petra 0\n\ncard "t" {\n  owner "me"\n}\n'
+        began = time.process_time()
+        result = petra.check(head, "petra 0\n" + "k" * 48_000 + " w {\n  a" + " 1" * 48_000 + "\n}\n")
+        self.assertEqual(result["status"], "UNKNOWN")
+        self.assertLess(time.process_time() - began, 5)
+        self.assertLess(len(json.dumps(result)), 2000, "and the report cuts the kind")
 
     def test_the_kernel_works_out_the_cells_of_a_lap(self):
         result = petra.check(*read_pair(LAP))

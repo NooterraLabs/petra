@@ -163,11 +163,22 @@ def new_text(kind: str, name: str | None) -> tuple[str, str]:
         if not _NAME.fullmatch(name):
             raise TeachError(f"--name {name!r} is not a name: letters, digits and _, starting with a letter or _")
         card, text = rename(card, component, name), rename(text, component, name)
-    first, _, rest = text.partition("\n")
-    out = f"{first}\n# From {source}. `petra kinds {kind}` lists every line a {kind} takes.\n{rest}"
+    out = started(text, source, kind)
     card = unsigned(card)
     parse_design(card, out, f"<petra new {kind}>")
     return card, out
+
+
+def started(text: str, source: str, kind: str) -> str:
+    """The design of a template: the example's design without the comment at its head. That
+    comment tells the example's own story, with the verdict its own card gives it, and a
+    design printed beside a card that signs no waiver has another verdict."""
+    first, _, rest = text.partition("\n")
+    lines = rest.split("\n")
+    while lines and (not lines[0].strip() or lines[0].lstrip().startswith("#")):
+        lines.pop(0)
+    return (f"{first}\n\n# From {source}. `petra kinds {kind}` lists every line a {kind} takes.\n"
+            f"# The card `petra new {kind} --card` prints signs no waiver: read its last lines.\n\n" + "\n".join(lines))
 
 
 UNSIGNED = ("# The example this card is from waives each line that its deck has no rule for, signed by its\n"
@@ -181,12 +192,14 @@ def unsigned(card: str) -> str:
     """The card of a template with no waiver. An example signs the waivers of its own engineer,
     and a card to start from must sign nothing in anyone's name: with the example's waivers
     in it, a design drawn against it passed on signatures nobody gave
-    (tests/test_kernel_attacks12.py)."""
+    (tests/test_kernel_attacks12.py). A card that loses its waivers loses `-waived` from the
+    end of its name too."""
     lines = card.splitlines(keepends=True)
     at = [n for n, line in enumerate(lines) if line.lstrip().startswith("waive ")]
     if not at:
         return card
-    kept = [line for n, line in enumerate(lines) if n not in at]
+    kept = [re.sub(r'^(card "[^"]*?)-waived"', r'\1"', line) if n not in at else None for n, line in enumerate(lines)]
+    kept = [line for line in kept if line is not None]
     return "".join(kept[:at[0]]) + UNSIGNED + "".join(kept[at[0]:])
 
 
@@ -236,7 +249,7 @@ SNIPPETS: tuple[tuple[str, str, str], ...] = (
      'card "lap-splice" {\n  owner "s.engineer@example.org"\n}'),
     ("param", "`param` declares a range that a line reads by writing `param NAME` in place of a value. A param is "
      "declared in the card or in the design, and a load and the ambient read only the card's params. No deck of "
-     "rules reads a param yet, and `petra check` refuses a pair that declares one.",
+     "rules reads a param yet, and `petra check` refuses a design of a deck's types that declares one.",
      "param run in [0 m, 20 m]"),
     ("ambient", "`ambient` declares the ambient temperature range, with a signature. No deck of rules reads one yet.",
      'ambient in [10 degC, 40 degC] signed "site.manager@example.org" source "site survey 2026-09"'),

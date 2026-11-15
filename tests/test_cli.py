@@ -84,7 +84,7 @@ class Check(Workspace):
         self.assertEqual(code, EXIT_CODES["UNKNOWN"], "a truss exits 2: no deck of rules has one")
         report = json.loads(out)
         self.assertEqual((report["status"], report["reason"], report["kinds"]), ("UNKNOWN", verify.no_deck(["truss"]), ["truss"]))
-        self.assertEqual((report["cells"], report["deck"], report["path"]), ([], None, "none"), "and no cell was worked out")
+        self.assertEqual((report["cells"], report["deck"], report["kernel"], report["path"]), ([], None, None, "none"), "and no cell was worked out")
         code, out, _ = run("check", str(TRUSS))
         self.assertEqual(code, EXIT_CODES["UNKNOWN"])
         self.assertEqual(out.splitlines()[1], f"reason     {verify.no_deck(['truss'])}", "the text gives the reason on its second line")
@@ -118,6 +118,13 @@ class Check(Workspace):
         code, out, err = run("check", self.write("mixed.petra", design + "\ntruss frame {\n  node a at (0 m, 0 m)\n}\n"))
         self.assertEqual((code, out), (EXIT_CODES["INPUT_ERROR"], ""))
         self.assertIn("frame", err, "the part of no deck is named")
+
+    def test_a_design_with_no_part_reads_unknown_and_says_so(self):
+        card, _ = read_pair(TRUSS)
+        self.write("empty.card", 'petra 0\n\ncard "nothing" {\n  owner "me"\n}\n')
+        code, out, _ = run("check", self.write("empty.petra", "petra 0\n"))
+        self.assertEqual(code, EXIT_CODES["UNKNOWN"])
+        self.assertEqual(out.splitlines()[1], "reason     the design has no part, so there is no check to work out and nothing can pass it")
 
     def test_usage_errors_exit_3(self):
         for argv in (("frobnicate",), ("check",), ("mcp", "--budget", "0"), ("check", str(LAP), "--no-solve"), ("envelope", str(LAP)),

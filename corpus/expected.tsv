@@ -5,14 +5,15 @@
 # corpus/run.py explains the verdicts and what fails a run.
 #
 # The verdict of a check is the kernel's, and the kernel passes a design only against a deck
-# of rules. A design with a part of a kind no shipped deck has reads UNKNOWN, with the reason
-# that no deck has its kind. So no line here is a known wrong verdict.
+# of rules. A design none of whose parts is of a deck's type reads UNKNOWN, with the reason
+# that no deck has its kind: the kernel is not asked about it, and none of its numbers is
+# held to a floor, since a floor belongs to a type. So no line here is a known wrong verdict.
 #
 # Until 2026-11-15 a Python checker decided the designs of those kinds. It was deleted, and
 # the tag `old-path` holds it. A design that it decided rightly must get UNKNOWN today. Its
 # note starts with `right answer PASS`, `right answer FAIL` or `right answer INPUT_ERROR`:
 # that is what the deck that brings its kind back has to give it, and the line's verdict
-# changes to it then. There are 27 such passes, 4 such fails and 5 such input errors. A note
+# changes to it then. There are 27 such passes, 4 such fails and 14 such input errors. A note
 # that names a test or a script of the old path names a file of the tag.
 #
 # Where the expected verdicts come from:
@@ -43,19 +44,19 @@
 #   corpus/cases/old/families/   families of designs, which no deck reads yet.
 #   three weld_bracket_support_side canaries, which FAIL after about 150 s, past the limit.
 corpus/cases/audit/b1_absurd_bolts.petra	NOT_PASS			audit B1, re-ran: 10^12 bolts through a 1 nm plate made of an LED
-corpus/cases/audit/c1_negative_current.petra	INPUT_ERROR			audit C1, re-ran: +12 A fails on drop and overload
-corpus/cases/audit/c2_negative_length.petra	INPUT_ERROR			audit C2, re-ran: a wire of -5000 m
-corpus/cases/audit/c3_below_absolute_zero.petra	INPUT_ERROR			audit C3, re-ran: an ambient of -1000 degC
+corpus/cases/audit/c1_negative_current.petra	UNKNOWN			right answer INPUT_ERROR, for the deck that brings its kind back: a floor belongs to a type, and no deck has this one. audit C1, re-ran: +12 A fails on drop and overload
+corpus/cases/audit/c2_negative_length.petra	UNKNOWN			right answer INPUT_ERROR, for the deck that brings its kind back: a floor belongs to a type, and no deck has this one. audit C2, re-ran: a wire of -5000 m
+corpus/cases/audit/c3_below_absolute_zero.petra	UNKNOWN			right answer INPUT_ERROR, for the deck that brings its kind back: a floor belongs to a type, and no deck has this one. audit C3, re-ran: an ambient of -1000 degC
 corpus/cases/audit/c4_400kv_on_750v_cable.petra	NOT_PASS			audit C4, re-ran: 400 kV on 450/750 V cable, no voltage rating mode
-corpus/cases/audit/c5_negative_fault_current.petra	INPUT_ERROR			audit C5, auditor: a fault current of -50 kA on a 6 kA breaker
+corpus/cases/audit/c5_negative_fault_current.petra	UNKNOWN			right answer INPUT_ERROR, for the deck that brings its kind back: a floor belongs to a type, and no deck has this one. audit C5, auditor: a fault current of -50 kA on a 6 kA breaker
 corpus/cases/audit/c6_huge_area.petra	NOT_PASS			audit C6, auditor: a cable outside its catalogue with no validity row
-corpus/cases/audit/c6_negative_area.petra	INPUT_ERROR			audit C6, auditor: a cable outside its catalogue with no validity row
-corpus/cases/audit/c6_negative_insulation.petra	INPUT_ERROR			audit C6, auditor: a cable outside its catalogue with no validity row
-corpus/cases/audit/c6_zero_insulation.petra	INPUT_ERROR			audit C6, auditor: a cable outside its catalogue with no validity row
+corpus/cases/audit/c6_negative_area.petra	UNKNOWN			right answer INPUT_ERROR, for the deck that brings its kind back: a floor belongs to a type, and no deck has this one. audit C6, auditor: a cable outside its catalogue with no validity row
+corpus/cases/audit/c6_negative_insulation.petra	UNKNOWN			right answer INPUT_ERROR, for the deck that brings its kind back: a floor belongs to a type, and no deck has this one. audit C6, auditor: a cable outside its catalogue with no validity row
+corpus/cases/audit/c6_zero_insulation.petra	UNKNOWN			right answer INPUT_ERROR, for the deck that brings its kind back: a floor belongs to a type, and no deck has this one. audit C6, auditor: a cable outside its catalogue with no validity row
 corpus/cases/audit/c7_drop_at_assumed_temperature.petra	NOT_PASS			audit C7, auditor: the drop claim assumes 70 degC and the heat mode is waived
-corpus/cases/audit/e1_negative_rail.petra	INPUT_ERROR			audit E1, re-ran: +200 V on the same 75 V part fails at 2.67
+corpus/cases/audit/e1_negative_rail.petra	UNKNOWN			right answer INPUT_ERROR, for the deck that brings its kind back: a floor belongs to a type, and no deck has this one. audit E1, re-ran: +200 V on the same 75 V part fails at 2.67
 corpus/cases/audit/e2_dropout_waived.petra	NOT_PASS			audit E2, re-ran: the rail claim leans on a waived sibling mode
-corpus/cases/audit/e3_negative_sink.petra	INPUT_ERROR			audit E3, auditor: the sign of the sink current is never checked
+corpus/cases/audit/e3_negative_sink.petra	UNKNOWN			right answer INPUT_ERROR, for the deck that brings its kind back: a floor belongs to a type, and no deck has this one. audit E3, auditor: the sign of the sink current is never checked
 corpus/cases/audit/m_bad_transform.petra	UNKNOWN			right answer INPUT_ERROR, for the deck that brings its kind back. a malformed 3MF is an input error
 corpus/cases/audit/m_bad_vertex.petra	UNKNOWN			right answer INPUT_ERROR, for the deck that brings its kind back. a malformed 3MF is an input error
 corpus/cases/audit/m_nan_vertex.petra	UNKNOWN			right answer INPUT_ERROR, for the deck that brings its kind back. a malformed 3MF is an input error

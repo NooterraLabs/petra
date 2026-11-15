@@ -209,28 +209,26 @@ class Packaging(unittest.TestCase):
         self.assertIn("kernel     petra-verify gives PASS: it checked 12 of 12 proofs", lap)
         self.assertIn("path       rules: the kernel worked out every cell from the rules deck", lap)
         self.assertEqual(circuit[0], "workshop-lighting-radial: UNKNOWN")
-        self.assertIn("kernel     petra-verify gives UNKNOWN: it was handed no deck of rules and worked out no cell", circuit)
-        self.assertEqual(circuit[1], "reason     no deck of rules has a part of kind circuit, so the kernel worked out none of its checks and nothing can pass it")
+        self.assertIn("path       none: no deck of rules has this design's kinds of part, so there was nothing to hand the kernel", circuit)
+        self.assertEqual(circuit[1], "reason     no deck of rules has a part of kind circuit, so none of its checks was worked out and nothing can pass it")
 
     def test_a_wheel_with_no_kernel_in_it_gives_no_verdict(self):
         """The venv with the kernel taken out of the wheel, or the only venv where no
         kernel is built and the wheel is the pure one. The Python reader of a deck is in
         the wheel, and it gives no verdict in the kernel's place."""
-        for design in (LAP, CIRCUIT):
-            done = run(shutil.which("petra", path=str(self.bare)), "check", design, cwd=self.outside)
-            self.assertEqual((done.returncode, done.stdout), (NO_VERDICT, ""), done.stderr)
-            self.assertIn("petra: no verdict: there is no petra-verify to run", done.stderr)
+        done = run(shutil.which("petra", path=str(self.bare)), "check", LAP, cwd=self.outside)
+        self.assertEqual((done.returncode, done.stdout), (NO_VERDICT, ""), done.stderr)
+        self.assertIn("petra: no verdict: there is no petra-verify to run", done.stderr)
+        done = run(shutil.which("petra", path=str(self.bare)), "check", CIRCUIT, cwd=self.outside)
+        self.assertEqual((done.returncode, done.stdout.splitlines()[0]), (2, "workshop-lighting-radial: UNKNOWN"), "no deck has a circuit, with a kernel or without")
 
     def test_the_installed_command_runs_outside_the_repository(self):
         petra = shutil.which("petra", path=str(self.scripts))
         self.assertIsNotNone(petra, "pip installed the petra command")
         self.assertEqual(run(petra, "--help", cwd=self.outside).returncode, 0)
         done = run(petra, "check", ROOT / "corpus" / "cases" / "old" / "steel" / "shear_tab.petra", cwd=self.outside)
-        if BUILT.is_file():
-            self.assertEqual(done.returncode, 2, done.stderr)
-            self.assertEqual(done.stdout.splitlines()[0], "steel-shear-tab: UNKNOWN")
-        else:
-            self.assertEqual((done.returncode, done.stdout), (NO_VERDICT, ""), done.stderr)
+        self.assertEqual(done.returncode, 2, done.stderr)      # no deck has a shear tab, with a kernel in the wheel or without
+        self.assertEqual(done.stdout.splitlines()[0], "steel-shear-tab: UNKNOWN")
         where, *versions = ok(self.python, "-c", "import importlib.metadata, petra; print(petra.__file__); "
                               "print(importlib.metadata.version('petra-lang')); print(petra.__version__)", cwd=self.outside).splitlines()
         self.assertTrue(Path(where).resolve().is_relative_to((self.tmp / "venv").resolve()), f"petra imports from the venv, not {where}")

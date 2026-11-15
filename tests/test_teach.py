@@ -69,6 +69,21 @@ class PetraNew(unittest.TestCase):
         self.assertIn("joint7/lap.block_shear", out)
         self.assertIn("5 open", out)
 
+    def test_the_design_and_the_card_it_comes_with_tell_one_story(self):
+        """The thirteenth review, finding 9: the design `petra new lap` printed kept the example's header, which says that
+        the card waives each open line and that the check reads PASS_WAIVED, beside a card that waives nothing and was
+        still named for its waivers."""
+        design, card = run("new", "lap")[1], run("new", "lap", "--card")[1]
+        for text in (design, card):
+            self.assertNotIn("PASS_WAIVED", text)
+            self.assertNotIn("The card waives", text)
+        self.assertIn('card "lap-splice" {', card)
+        self.assertNotIn("\nwaive ", card)
+        self.assertIn("signs no waiver", design)
+        self.assertIn("signs none", card)
+        example = (ROOT / teach.CANONICAL["lap"]).read_text(encoding="utf-8")
+        self.assertEqual(design[design.index("plate tab {"):], example[example.index("plate tab {"):], "the parts are the example's")
+
     def test_rename_leaves_strings_comments_and_dotted_parts(self):
         text = 'petra 0\n# st1 here\nlap st1 {\n  x st1.st1 "st1"\n}\n'
         self.assertEqual(teach.rename(text, "st1", "t"), 'petra 0\n# st1 here\nlap t {\n  x t.st1 "st1"\n}\n')

@@ -109,18 +109,13 @@ class CardOnly(unittest.TestCase):
             with self.subTest(argv=argv), contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
                 export.main(argv)
 
-    def test_the_card_of_a_design_no_deck_has_gets_another_hash_than_its_design_names(self):
-        """The kernel takes a load on a part only with the deck that has the part's type. So a design
-        with a part of a kind no deck has is handed a card.json that does not place its loads, and
-        that file's hash is not the one `--card-only` prints."""
+    def test_a_card_alone_is_written_whatever_kinds_its_designs_have(self):
+        """`--card-only` reads no design, so it writes the card of a truss too: each load with the part and the field
+        the card puts it on. The design that answers it has no files, since no deck has a truss (tests/test_kernel_grid.py)."""
         said, body = alone(ROOT / "corpus" / "cases" / "old" / "truss_pass.card")
-        design = load_design(ROOT / "corpus" / "cases" / "old" / "truss_pass.petra")
-        files = export.bare(design)
-        self.assertEqual(set(files), {"card", "design", "deck"})
-        self.assertNotEqual(said, json.loads(files["design"])["card"])
-        self.assertIn("tests", json.loads(body), "the card alone is written as the card of a design of a deck's types")
-        self.assertNotIn("tests", json.loads(files["card"]))
-        self.assertTrue(all("on" not in i for i in json.loads(files["card"])["inputs"]), "no load is placed on a part")
+        self.assertIn("tests", json.loads(body), "it is written as the card of a design of a deck's types")
+        self.assertTrue(all("on" in i for i in json.loads(body)["inputs"] if "case" in i), "each load is on a part")
+        self.assertEqual(said, export.sha256(body.decode("utf-8")))
 
 
 @unittest.skipUnless(verify.binary(), "no petra-verify is built here and PETRA_VERIFY names none")
