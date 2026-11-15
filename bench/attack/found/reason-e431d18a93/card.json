@@ -1,0 +1,271 @@
+{
+ "cases": [
+  "B",
+  "service"
+ ],
+ "claims": [],
+ "environment": null,
+ "format": "petra-card/0",
+ "inputs": [
+  {
+   "by": "a.b@c.d",
+   "case": "B",
+   "dim": "force",
+   "field": "press",
+   "hi": "6000",
+   "lo": "6000",
+   "name": "B.Z.press",
+   "on": "Z"
+  },
+  {
+   "by": "a.b@c.d",
+   "case": "B",
+   "dim": "force",
+   "field": "push",
+   "hi": "2000",
+   "lo": "0",
+   "name": "B.bar.push",
+   "on": "bar"
+  },
+  {
+   "by": "a.b@c.d",
+   "case": "B",
+   "dim": "energy",
+   "field": "twist",
+   "hi": "47/521",
+   "lo": "0",
+   "name": "B.bar.twist",
+   "on": "bar"
+  },
+  {
+   "by": "a.b@c.d",
+   "case": "B",
+   "dim": "force",
+   "field": "press",
+   "hi": "48000",
+   "lo": "48000",
+   "name": "B.cap2.press",
+   "on": "cap2"
+  },
+  {
+   "by": "s.engineer@example.org",
+   "dim": "length",
+   "hi": "1/75",
+   "lo": "1/75",
+   "name": "bar.a"
+  },
+  {
+   "by": "x@y.z",
+   "dim": "dimensionless",
+   "hi": "120",
+   "lo": "120",
+   "name": "bar.r"
+  },
+  {
+   "by": "s.engineer@example.org",
+   "dim": "length",
+   "hi": "214748365/8589934592",
+   "lo": "42949673/2147483648",
+   "name": "cap2.t"
+  },
+  {
+   "by": "x@y.z",
+   "case": "service",
+   "dim": "force",
+   "field": "press",
+   "hi": "1960",
+   "lo": "0",
+   "name": "service.Z.press",
+   "on": "Z"
+  },
+  {
+   "by": "x@y.z",
+   "case": "service",
+   "dim": "force",
+   "field": "drag",
+   "hi": "65000",
+   "lo": "6500",
+   "name": "service.bar.drag",
+   "on": "bar"
+  },
+  {
+   "by": "x@y.z",
+   "case": "service",
+   "dim": "force",
+   "field": "push",
+   "hi": "2000",
+   "lo": "0",
+   "name": "service.bar.push",
+   "on": "bar"
+  },
+  {
+   "by": "x@y.z",
+   "case": "service",
+   "dim": "energy",
+   "field": "twist",
+   "hi": "3/34",
+   "lo": "3/340",
+   "name": "service.bar.twist",
+   "on": "bar"
+  },
+  {
+   "by": "x@y.z",
+   "case": "service",
+   "dim": "force",
+   "field": "press",
+   "hi": "2200",
+   "lo": "0",
+   "name": "service.cap2.press",
+   "on": "cap2"
+  }
+ ],
+ "name": "a",
+ "probability_claims": [],
+ "tests": [],
+ "waivers": [
+  {
+   "by": "x@y.z",
+   "mechanism": "bar.cases",
+   "reason": "a long reason xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "subject": "bar"
+  },
+  {
+   "by": "a.b@c.d",
+   "mechanism": "bar.roots",
+   "reason": "a reason with \"quotes\"",
+   "subject": "bar"
+  },
+  {
+   "by": "t@example.org",
+   "mechanism": "bar.exp",
+   "reason": "it is a test",
+   "subject": "bar"
+  },
+  {
+   "by": "s.engineer@example.org",
+   "mechanism": "bar.table",
+   "reason": "caf\u00e9",
+   "subject": "bar"
+  },
+  {
+   "by": "t@example.org",
+   "mechanism": "bar.key",
+   "reason": "n\u00e4mn",
+   "subject": "bar"
+  },
+  {
+   "by": "s.engineer@example.org",
+   "mechanism": "bar.moment",
+   "reason": "back\\slash",
+   "subject": "bar"
+  },
+  {
+   "by": "x@y.z",
+   "mechanism": "bar.caps",
+   "reason": "caf\u00e9",
+   "subject": "bar"
+  },
+  {
+   "by": "x@y.z",
+   "mechanism": "bar.drag",
+   "reason": "snug-tight bolts",
+   "subject": "bar"
+  },
+  {
+   "by": "t@example.org",
+   "mechanism": "bar.idle",
+   "reason": "a reason with \"quotes\"",
+   "subject": "bar"
+  },
+  {
+   "by": "s.engineer@example.org",
+   "mechanism": "bar.named",
+   "reason": "a long reason xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "subject": "bar"
+  },
+  {
+   "by": "x@y.z",
+   "mechanism": "bar.cased",
+   "reason": "n\u00e4mn",
+   "subject": "bar"
+  },
+  {
+   "by": "x@y.z",
+   "mechanism": "bar.left",
+   "reason": "a long reason xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "subject": "bar"
+  },
+  {
+   "by": "s.engineer@example.org",
+   "mechanism": "bar.alike",
+   "reason": "a long reason xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "subject": "bar"
+  },
+  {
+   "by": "t@example.org",
+   "mechanism": "bar.modulus",
+   "reason": "a long reason xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "subject": "bar"
+  },
+  {
+   "by": "s.engineer@example.org",
+   "mechanism": "bar.cos",
+   "reason": "a reason with \"quotes\"",
+   "subject": "bar"
+  },
+  {
+   "by": "a.b@c.d",
+   "mechanism": "bar.cosin",
+   "reason": "a long reason xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "subject": "bar"
+  },
+  {
+   "by": "t@example.org",
+   "mechanism": "bar.cosfloor",
+   "reason": "snug-tight bolts",
+   "subject": "bar"
+  },
+  {
+   "by": "t@example.org",
+   "mechanism": "bar.turn",
+   "reason": "it is a test",
+   "subject": "bar"
+  },
+  {
+   "by": "x@y.z",
+   "mechanism": "bar.sine",
+   "reason": "a long reason xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "subject": "bar"
+  },
+  {
+   "by": "s.engineer@example.org",
+   "mechanism": "bar.zero",
+   "reason": "it is a test",
+   "subject": "bar"
+  },
+  {
+   "by": "t@example.org",
+   "mechanism": "bar.tiny",
+   "reason": "a reason with \"quotes\"",
+   "subject": "bar"
+  },
+  {
+   "by": "x@y.z",
+   "mechanism": "bar.edge",
+   "reason": "n\u00e4mn",
+   "subject": "bar"
+  },
+  {
+   "by": "s.engineer@example.org",
+   "mechanism": "bar.long",
+   "reason": "a long reason xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "subject": "bar"
+  },
+  {
+   "by": "t@example.org",
+   "mechanism": "bar.right",
+   "reason": "a reason with \"quotes\"",
+   "subject": "bar"
+  }
+ ]
+}

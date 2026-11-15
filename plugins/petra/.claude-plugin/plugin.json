@@ -2,7 +2,7 @@
   "name": "petra",
   "displayName": "Petra",
   "version": "0.1.2",
-  "description": "Petra's MCP server and skill. Check steel connections and other physical designs, and repair a design until it passes",
+  "description": "Petra's MCP server and skill. Check steel connections and other physical designs, and find what to change in a design that fails",
   "author": {
     "name": "Nooterra",
     "url": "https://github.com/NooterraLabs"

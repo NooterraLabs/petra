@@ -1,0 +1,157 @@
+{
+ "cases": [
+  "a_",
+  "seismic",
+  "z"
+ ],
+ "claims": [],
+ "environment": null,
+ "format": "petra-card/0",
+ "inputs": [
+  {
+   "by": "a.b@c.d",
+   "dim": "dimensionless",
+   "hi": "1122/3445",
+   "lo": "918/3445",
+   "name": "A.r"
+  },
+  {
+   "by": "t@example.org",
+   "case": "a_",
+   "dim": "force",
+   "field": "drag",
+   "hi": "565800000/131",
+   "lo": "0",
+   "name": "a_.A.drag",
+   "on": "A"
+  },
+  {
+   "by": "t@example.org",
+   "case": "a_",
+   "dim": "force",
+   "field": "push",
+   "hi": "2000",
+   "lo": "0",
+   "name": "a_.A.push",
+   "on": "A"
+  },
+  {
+   "by": "t@example.org",
+   "case": "a_",
+   "dim": "energy",
+   "field": "twist",
+   "hi": "21985/461",
+   "lo": "0",
+   "name": "a_.A.twist",
+   "on": "A"
+  },
+  {
+   "by": "t@example.org",
+   "case": "a_",
+   "dim": "force",
+   "field": "press",
+   "hi": "72000",
+   "lo": "0",
+   "name": "a_.cap2.press",
+   "on": "cap2"
+  },
+  {
+   "by": "t@example.org",
+   "case": "a_",
+   "dim": "force",
+   "field": "press",
+   "hi": "1744830462375/268435456",
+   "lo": "0",
+   "name": "a_.lap_main.press",
+   "on": "lap_main"
+  },
+  {
+   "by": "a.b@c.d",
+   "dim": "length",
+   "hi": "999/25000",
+   "lo": "999/25000",
+   "name": "cap2.t"
+  },
+  {
+   "by": "x@y.z",
+   "case": "seismic",
+   "dim": "force",
+   "field": "drag",
+   "hi": "134217727875/67108864",
+   "lo": "0",
+   "name": "seismic.A.drag",
+   "on": "A"
+  },
+  {
+   "by": "x@y.z",
+   "case": "seismic",
+   "dim": "force",
+   "field": "push",
+   "hi": "5940",
+   "lo": "0",
+   "name": "seismic.A.push",
+   "on": "A"
+  },
+  {
+   "by": "x@y.z",
+   "case": "seismic",
+   "dim": "force",
+   "field": "press",
+   "hi": "2000",
+   "lo": "0",
+   "name": "seismic.cap2.press",
+   "on": "cap2"
+  },
+  {
+   "by": "a.b@c.d",
+   "case": "z",
+   "dim": "force",
+   "field": "drag",
+   "hi": "2500/177",
+   "lo": "2500/177",
+   "name": "z.A.drag",
+   "on": "A"
+  },
+  {
+   "by": "a.b@c.d",
+   "case": "z",
+   "dim": "force",
+   "field": "push",
+   "hi": "23500/7",
+   "lo": "0",
+   "name": "z.A.push",
+   "on": "A"
+  },
+  {
+   "by": "a.b@c.d",
+   "case": "z",
+   "dim": "energy",
+   "field": "twist",
+   "hi": "779/586",
+   "lo": "779/5860",
+   "name": "z.A.twist",
+   "on": "A"
+  },
+  {
+   "by": "a.b@c.d",
+   "case": "z",
+   "dim": "force",
+   "field": "press",
+   "hi": "1980",
+   "lo": "198",
+   "name": "z.cap2.press",
+   "on": "cap2"
+  }
+ ],
+ "name": "a",
+ "probability_claims": [],
+ "tests": [],
+ "waivers": [
+  {
+   "by": "x@y.z",
+   "mechanism": "bar.caps",
+   "reason": "back\\slash",
+   "subject": "A"
+  }
+ ]
+}

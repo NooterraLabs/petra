@@ -25,6 +25,7 @@ from typing import Any, Iterable, Mapping
 from .lang import LolaSyntaxError, LoweringError, load_design
 from .models.base import ComponentError
 from . import grid
+from .files import one_line
 from .pipeline import check_design
 from .registry import OutsideMakeableSet, Provenance, Registry
 from .solvers import SolverSource
@@ -82,6 +83,9 @@ def recall(registry: Registry, id: str, paths: Iterable[str | Path] = ()) -> Rec
     for path in files:
         try:
             body = _report(registry, path)
+        except RecursionError:
+            errors.append((path.as_posix(), "its JSON nests too deep to read"))
+            continue
         except (LolaSyntaxError, LoweringError, ComponentError, OSError, UnicodeDecodeError, ValueError) as exc:
             errors.append((path.as_posix(), str(exc)))
             continue
@@ -108,18 +112,24 @@ def covered(registry: Registry, id: str) -> tuple[tuple[str, Provenance], ...]:
     return tuple((entry_id, registry.entry(entry_id).provenance) for entry_id in chosen)
 
 
+def held(status: str) -> str:
+    """A status as a recall prints it. It is the Python checker's, or the one a saved report
+    holds, and neither is a pass of the design: one that is not FAIL or UNKNOWN reads UNKNOWN."""
+    return status if status in ("FAIL", "UNKNOWN") else "UNKNOWN"
+
+
 def to_json(found: Recall) -> Mapping[str, Any]:
     """{"id", "entries": [{"entry", "version", "source", "errata": [{"date", "was",
     "now"}]}], "designs": [{"file", "design", "status", "verdicts": [{"claim", "status",
     "premises": [{"label", "version", "current", "stale"}]}]}], "checked", "errors":
-    [{"file", "error"}]}."""
+    [{"file", "error"}]}. Each status is `held`: none is a pass."""
     return {
         "id": found.id,
         "entries": [{"entry": entry_id, "version": p.version, "source": p.source,
                      "errata": [{"date": e.date, "was": e.was, "now": e.now} for e in p.errata]}
                     for entry_id, p in found.entries],
-        "designs": [{"file": d.file, "design": d.design, "status": d.status,
-                     "verdicts": [{"claim": v.claim, "status": v.status,
+        "designs": [{"file": d.file, "design": d.design, "status": held(d.status),
+                     "verdicts": [{"claim": v.claim, "status": held(v.status),
                                    "premises": [{"label": r.label, "version": r.version, "current": r.current,
                                                  "stale": r.stale} for r in v.premises]}
                                   for v in d.verdicts]}
@@ -133,6 +143,9 @@ _LISTED = 20
 
 
 def render(found: Recall) -> str:
+    """The listing, a line for each design and each claim. Each status is `held`, and a name
+    of a file, a design or a claim is printed on one line (files.one_line): a saved report
+    and a folder carry names of their own, and one with a line feed would start a line."""
     lines = []
     for entry_id, p in found.entries[:_LISTED]:
         lines.append(f"entry     {entry_id}  version {p.version}  ({p.source})")
@@ -142,11 +155,11 @@ def render(found: Recall) -> str:
     if len(found.entries) > _LISTED:
         lines.append(f"entry     and {len(found.entries) - _LISTED} more under {found.id} (--json lists each)")
     for d in found.designs:
-        lines.append(f"{d.status:<9} {d.file}  {d.design}")
-        width = max(len(v.claim) for v in d.verdicts)
+        lines.append(f"{held(d.status):<9} {one_line(d.file)}  {one_line(d.design)}")
+        width = max(len(one_line(v.claim)) for v in d.verdicts)
         for v in d.verdicts:
-            lines.append(f"  {v.claim:<{width}}  {v.status:<8} {', '.join(_rested_text(r) for r in v.premises)}")
-    lines += [f"error     {f}: {e}" for f, e in found.errors]
+            lines.append(f"  {one_line(v.claim):<{width}}  {held(v.status):<8} {', '.join(one_line(_rested_text(r)) for r in v.premises)}")
+    lines += [f"error     {one_line(f)}: {one_line(e)}" for f, e in found.errors]
     lines.append(f"{len(found.designs)} of {found.checked} designs rest on {found.id}")
     return "\n".join(lines)
 

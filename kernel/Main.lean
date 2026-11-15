@@ -3,8 +3,9 @@ petra-verify --card card.json --design design.json --deck deck.json [--rules rul
 
 Prints one JSON object, the verdict of docs/format.md with the state of each cell, and
 exits 0 for PASS, 1 for FAIL, 2 for UNKNOWN and 3 for ILL-FORMED. `cells_from` says whether
-the cells are the kernel's own, made from the deck of rules, or the list of proofs.json. A command line it cannot
-read prints the usage and exits 64.
+the cells are the kernel's own, made from the deck of rules, or the list of proofs.json, and
+with that list the verdict is never PASS. A command line it cannot read prints the usage and
+exits 64.
 -/
 import Petra.Check
 

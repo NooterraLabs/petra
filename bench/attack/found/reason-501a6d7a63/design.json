@@ -1,0 +1,426 @@
+{
+ "card": "sha256:cc0f2502b6d6c351590f6fa3563ef7a9dceb2222a8a55b6f4dab1b041a7e2754",
+ "format": "petra-design/0",
+ "name": "a",
+ "params": [],
+ "parts": [
+  {
+   "lines": [
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "length",
+        "hi": "11/10000",
+        "lo": "11/10000"
+       }
+      }
+     ],
+     "field": "t"
+    },
+    {
+     "args": [
+      {
+       "word": "high"
+      }
+     ],
+     "field": "finish"
+    },
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "m^4",
+        "hi": "1000001/1000000000000000",
+        "lo": "1000001/1000000000000000"
+       }
+      }
+     ],
+     "field": "i"
+    }
+   ],
+   "name": "pxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "type": "cap"
+  },
+  {
+   "lines": [
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "length",
+        "hi": "1/1000",
+        "lo": "1/1000"
+       }
+      }
+     ],
+     "field": "t"
+    },
+    {
+     "args": [
+      {
+       "word": "high"
+      }
+     ],
+     "field": "finish"
+    },
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "m^4",
+        "hi": "223/3410000000",
+        "lo": "223/3410000000"
+       }
+      }
+     ],
+     "field": "i"
+    }
+   ],
+   "name": "ab",
+   "type": "cap"
+  },
+  {
+   "lines": [
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "length",
+        "hi": "9/200",
+        "lo": "9/200"
+       }
+      }
+     ],
+     "field": "t"
+    },
+    {
+     "args": [
+      {
+       "word": "low"
+      }
+     ],
+     "field": "finish"
+    },
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "m^4",
+        "hi": "3/125000000",
+        "lo": "3/125000000"
+       }
+      }
+     ],
+     "field": "i"
+    }
+   ],
+   "name": "tab",
+   "type": "cap"
+  },
+  {
+   "lines": [
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "length",
+        "hi": "1/10",
+        "lo": "1/10"
+       }
+      }
+     ],
+     "field": "t"
+    },
+    {
+     "args": [
+      {
+       "word": "low"
+      }
+     ],
+     "field": "finish"
+    },
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "m^4",
+        "hi": "1/1000000000",
+        "lo": "1/1000000000"
+       }
+      }
+     ],
+     "field": "i"
+    }
+   ],
+   "name": "A",
+   "type": "cap"
+  },
+  {
+   "lines": [
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "length",
+        "hi": "1/100",
+        "lo": "1/100"
+       }
+      }
+     ],
+     "field": "a"
+    },
+    {
+     "args": [
+      {
+       "given": "bar.b"
+      }
+     ],
+     "field": "b"
+    },
+    {
+     "args": [
+      {
+       "given": "bar.r"
+      }
+     ],
+     "field": "r"
+    },
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "dimensionless",
+        "hi": "4",
+        "lo": "4"
+       }
+      }
+     ],
+     "field": "s"
+    },
+    {
+     "args": [
+      {
+       "text": "soft"
+      }
+     ],
+     "field": "grade"
+    },
+    {
+     "args": [
+      {
+       "word": "pxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      },
+      {
+       "word": "ab"
+      }
+     ],
+     "field": "caps"
+    }
+   ],
+   "name": "bar",
+   "type": "bar"
+  },
+  {
+   "lines": [
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "length",
+        "hi": "378/9175",
+        "lo": "378/9175"
+       }
+      }
+     ],
+     "field": "a"
+    },
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "length",
+        "hi": "2081/184500",
+        "lo": "2081/184500"
+       }
+      }
+     ],
+     "field": "b"
+    },
+    {
+     "args": [
+      {
+       "given": "Z.r"
+      }
+     ],
+     "field": "r"
+    },
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "dimensionless",
+        "hi": "89/503",
+        "lo": "89/503"
+       }
+      }
+     ],
+     "field": "s"
+    },
+    {
+     "args": [
+      {
+       "word": "hard"
+      }
+     ],
+     "field": "grade"
+    },
+    {
+     "args": [
+      {
+       "word": "tab"
+      },
+      {
+       "word": "A"
+      }
+     ],
+     "field": "caps"
+    }
+   ],
+   "name": "Z",
+   "type": "bar"
+  }
+ ],
+ "quantities": [
+  {
+   "dim": "length",
+   "entity": "pxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "field": "t",
+   "hi": "11/10000",
+   "line": "t",
+   "lo": "11/10000",
+   "role": "size",
+   "type": "cap"
+  },
+  {
+   "dim": "m^4",
+   "entity": "pxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "field": "i",
+   "hi": "1000001/1000000000000000",
+   "line": "i",
+   "lo": "1000001/1000000000000000",
+   "role": "size",
+   "type": "cap"
+  },
+  {
+   "dim": "length",
+   "entity": "ab",
+   "field": "t",
+   "hi": "1/1000",
+   "line": "t",
+   "lo": "1/1000",
+   "role": "size",
+   "type": "cap"
+  },
+  {
+   "dim": "m^4",
+   "entity": "ab",
+   "field": "i",
+   "hi": "223/3410000000",
+   "line": "i",
+   "lo": "223/3410000000",
+   "role": "size",
+   "type": "cap"
+  },
+  {
+   "dim": "length",
+   "entity": "tab",
+   "field": "t",
+   "hi": "9/200",
+   "line": "t",
+   "lo": "9/200",
+   "role": "size",
+   "type": "cap"
+  },
+  {
+   "dim": "m^4",
+   "entity": "tab",
+   "field": "i",
+   "hi": "3/125000000",
+   "line": "i",
+   "lo": "3/125000000",
+   "role": "size",
+   "type": "cap"
+  },
+  {
+   "dim": "length",
+   "entity": "A",
+   "field": "t",
+   "hi": "1/10",
+   "line": "t",
+   "lo": "1/10",
+   "role": "size",
+   "type": "cap"
+  },
+  {
+   "dim": "m^4",
+   "entity": "A",
+   "field": "i",
+   "hi": "1/1000000000",
+   "line": "i",
+   "lo": "1/1000000000",
+   "role": "size",
+   "type": "cap"
+  },
+  {
+   "dim": "length",
+   "entity": "bar",
+   "field": "a",
+   "hi": "1/100",
+   "line": "a",
+   "lo": "1/100",
+   "role": "size",
+   "type": "bar"
+  },
+  {
+   "dim": "dimensionless",
+   "entity": "bar",
+   "field": "s",
+   "hi": "4",
+   "line": "s",
+   "lo": "4",
+   "role": "size",
+   "type": "bar"
+  },
+  {
+   "dim": "length",
+   "entity": "Z",
+   "field": "a",
+   "hi": "378/9175",
+   "line": "a",
+   "lo": "378/9175",
+   "role": "size",
+   "type": "bar"
+  },
+  {
+   "dim": "length",
+   "entity": "Z",
+   "field": "b",
+   "hi": "2081/184500",
+   "line": "b",
+   "lo": "2081/184500",
+   "role": "size",
+   "type": "bar"
+  },
+  {
+   "dim": "dimensionless",
+   "entity": "Z",
+   "field": "s",
+   "hi": "89/503",
+   "line": "s",
+   "lo": "89/503",
+   "role": "size",
+   "type": "bar"
+  }
+ ]
+}

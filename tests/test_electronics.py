@@ -89,13 +89,18 @@ class Examples(unittest.TestCase):
         self.assertIn("dc.led_range", needs(report))
         self.assertEqual(modes(report, "Discharged"), set(), "nothing that reads the LED past its fit passes")
 
-    def test_the_cli_exits_by_verdict(self):
-        for name, code in (("board", 0), ("led_fail", 1), ("cold_unknown", 2)):
+    def test_the_cli_exits_by_the_kernels_verdict(self):
+        """The kernel has no deck of rules for a board, so it passes none: the board the
+        Python checker passes exits 2. The refutation of the LED has a tape, which the
+        kernel checks, so that one fails in both."""
+        for name, code, status in (("board", 2, "UNKNOWN"), ("led_fail", 1, "FAIL"), ("cold_unknown", 2, "UNKNOWN")):
             with self.subTest(name):
                 done = subprocess.run([sys.executable, "-m", "petra", "check", f"examples/electronics/{name}.petra", "--json"],
                                       cwd=ROOT, capture_output=True, text=True, timeout=600)
                 self.assertEqual(done.returncode, code, done.stderr)
-                self.assertEqual(json.loads(done.stdout)["status"], self.EXPECTED[name][0])
+                report = json.loads(done.stdout)
+                self.assertEqual(report["status"], status)
+                self.assertEqual(report["reason"] is not None, status == "UNKNOWN", "an UNKNOWN says that a board has no deck of rules")
 
     def test_each_example_rechecks_from_its_certificates(self):
         for name, (status, _) in self.EXPECTED.items():

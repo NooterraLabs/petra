@@ -43,7 +43,7 @@ from typing import Any, Callable, Iterable, Iterator, Mapping
 from . import deck as rows
 from . import export
 from .deck import NONE, RowError, Vector, anchored, dimension, only, quantity, replaced, show
-from .files import escaped, shown  # noqa: F401  (shown is what a caller prints a report through)
+from .files import escaped, headed, shown  # noqa: F401  (shown is what a caller prints a report through)
 from .ir import Bound, Component, Design, Fixed, ParamRef, Ref, Span, Stated, Text
 from .kernel import (MAX_ARGUMENT, Abs, Add, Const, Cos, Div, Exp, Interval, KernelArithmeticError, Ln, Max, Min, Mul, Neg, Pi, PowInt, Sqrt,
                      Sym, enclose)
@@ -2139,10 +2139,7 @@ class Report:
 
     def lines(self) -> list[str]:
         counts = self.counts()
-        # A name that is not plain could read as a status of its own, `x: PASS_WAIVED, and so on`, or push the true one off the first
-        # row of a terminal with blanks. Such a name is printed in quotes after the status, so that the first word is the status.
-        plain = re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", self.name) is not None
-        out = [f"{self.name}: {self.status}" if plain else f"{self.status}: the card named {json.dumps(self.name, ensure_ascii=False)}",
+        out = [headed(self.name, self.status),      # a name that is not plain goes in quotes after the status (files.headed)
                f"rules      {self.deck.hash}  {self.deck.name}",
                "cells      " + ", ".join(f"{counts[s]} {s.replace('_', ' ')}" for s in STATES)]
         wide = max((len(f"{c.subject}/{c.mechanism}") for c in self.cells), default=0)
@@ -2172,54 +2169,56 @@ class Report:
 class Checked:
     """What `petra check` gives for a design checked against a deck, with the members of
     repair.Checked that its callers read. `kernel` is what petra-verify said of the files,
-    or None when there is none to run."""
+    and the status is its verdict (verify.status). The report is the grid's, which `checked`
+    holds to the kernel's cell by cell: it words the lines, and decides nothing."""
 
     path: str
     report: Report
     card: str
     hashes: Mapping[str, str]
-    kernel: Mapping[str, Any] | None
+    kernel: Mapping[str, Any]
     error: None = None
     repair: None = None
+    reason: None = None      # a design of a deck needs no reason that its kind has none (repair.Checked.reason)
 
     @property
     def status(self) -> str:
-        return self.report.status
-
-    def to_json(self) -> dict[str, Any]:
-        return {**self.report.to_json(), "card": self.card, "hashes": dict(self.hashes), "path": "rules", "kernel": self.kernel, "repair": None}
-
-    def text(self) -> str:
         from . import verify
 
+        return verify.status(self.kernel)
+
+    def to_json(self) -> dict[str, Any]:
+        return {**self.report.to_json(), "status": self.status, "card": self.card, "hashes": dict(self.hashes), "path": "rules", "kernel": self.kernel,
+                "repair": None}
+
+    def text(self) -> str:
         proofs = sum(bool(c.proof) for c in self.report.cells)
-        kernel = verify.NO_KERNEL if self.kernel is None else f"petra-verify checked {proofs} of {proofs} proofs and gives the same verdict"
         out = self.report.lines()
-        path = ("rules: the kernel worked out every cell from the rules deck" if self.kernel is not None
-                else "rules: the Python grid worked out every cell from the rules deck, and no kernel checked it")
         return "\n".join([*out[:2], f"card       {self.hashes['card']}  {self.card}", f"design     {self.hashes['design']}  {self.path}",
-                          f"kernel     {kernel}", f"path       {path}", *out[2:]])
+                          f"kernel     petra-verify gives {self.kernel['verdict']}: it checked {proofs} of {proofs} proofs",
+                          "path       rules: the kernel worked out every cell from the rules deck", *out[2:]])
 
 
 def checked(design: Design, deck: Deck, card: str, text: str, card_path: str) -> Checked:
-    """Check the design against the deck and have the kernel check the files, when there is
-    a kernel to run. The kernel reads the deck's file and works out every cell itself, so
-    the two list the same cells in the same order with the same states, or one of them has
-    a bug: that raises verify.Disagreement, which no caller catches."""
+    """Take the kernel's verdict on the design, and word it with the grid's report. The
+    kernel reads the deck's file and works out every cell itself, so the two list the same
+    cells in the same order with the same states, or one of them has a bug: that raises
+    verify.Disagreement. Raises verify.NoVerdict when there is no kernel to run or it gives
+    no answer: the grid's own verdict is never given in its place."""
     from . import verify
 
     report, files = check(design, deck)
-    kernel, said = verify.binary(), None
-    if kernel is not None:
-        said = verify.ask(kernel, files)
-        if said["verdict"] == "ILL-FORMED":
-            raise ComponentError(verify.refusal(design.path, said))
-        differ = verify.differs([(c.subject, c.mechanism, c.entry, c.state) for c in report.cells], report.verdict, deck.hash, said, report.waived(),
-                               report.completions())
-        if differ:
-            raise verify.Disagreement(f"{design.path}: petra-verify gives {said['verdict']} and the grid {report.verdict}: {differ}")
-        said = {"verdict": said["verdict"], "checked": sum(bool(c.proof) for c in report.cells), "hashes": said["hashes"], "cells_from": said["cells_from"],
-                "waived": said["waived"]}
+    said = verify.ask(verify.need(), files)
+    if said["verdict"] == "ILL-FORMED":
+        raise ComponentError(verify.refusal(design.path, said))
+    differ = verify.differs([(c.subject, c.mechanism, c.entry, c.state) for c in report.cells], report.verdict, deck.hash, said, report.waived(),
+                           report.completions())
+    if not differ and verify.status(said) != report.status:
+        differ = f"the report would print {report.status}"
+    if differ:
+        raise verify.Disagreement(f"{design.path}: petra-verify gives {said['verdict']} and the grid {report.verdict}: {differ}")
+    said = {"verdict": said["verdict"], "checked": sum(bool(c.proof) for c in report.cells), "hashes": said["hashes"], "cells_from": said["cells_from"],
+            "waived": said["waived"]}
     return Checked(design.path, report, card_path, {"card": export.sha256(card), "design": export.sha256(text)}, said)
 
 

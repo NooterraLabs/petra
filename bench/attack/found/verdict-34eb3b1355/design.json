@@ -1,0 +1,301 @@
+{
+ "card": "sha256:10d7c80292031e72ff7f589010de5757bcb0bf3b589ce3f37df4fb9c106e2e0a",
+ "format": "petra-design/0",
+ "name": "lap-splice",
+ "params": [],
+ "parts": [
+  {
+   "lines": [
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "length",
+        "hi": "19431/2000000",
+        "lo": "19431/2000000"
+       }
+      }
+     ],
+     "field": "thickness"
+    },
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "length",
+        "hi": "3429/50000",
+        "lo": "3429/50000"
+       }
+      }
+     ],
+     "field": "width"
+    },
+    {
+     "args": [
+      {
+       "given": "p1.Fy"
+      }
+     ],
+     "field": "Fy"
+    },
+    {
+     "args": [
+      {
+       "given": "p1.Fu"
+      }
+     ],
+     "field": "Fu"
+    }
+   ],
+   "name": "p1",
+   "type": "plate"
+  },
+  {
+   "lines": [
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "length",
+        "hi": "127/20000",
+        "lo": "127/20000"
+       }
+      }
+     ],
+     "field": "thickness"
+    },
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "length",
+        "hi": "64008/15625",
+        "lo": "64008/15625"
+       }
+      }
+     ],
+     "field": "width"
+    },
+    {
+     "args": [
+      {
+       "given": "joint.Fy"
+      }
+     ],
+     "field": "Fy"
+    },
+    {
+     "args": [
+      {
+       "given": "joint.Fu"
+      }
+     ],
+     "field": "Fu"
+    }
+   ],
+   "name": "joint",
+   "type": "plate"
+  },
+  {
+   "lines": [
+    {
+     "args": [
+      {
+       "text": "Group 120"
+      }
+     ],
+     "field": "fastener"
+    },
+    {
+     "args": [
+      {
+       "word": "included"
+      }
+     ],
+     "field": "threads"
+    },
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "length",
+        "hi": "381381/20000000",
+        "lo": "381381/20000000"
+       }
+      }
+     ],
+     "field": "diameter"
+    },
+    {
+     "args": [
+      {
+       "text": "oversize"
+      }
+     ],
+     "field": "holes"
+    },
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "dimensionless",
+        "hi": "2",
+        "lo": "2"
+       }
+      }
+     ],
+     "field": "count"
+    },
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "length",
+        "hi": "1143/1250",
+        "lo": "1143/1250"
+       }
+      }
+     ],
+     "field": "pitch"
+    },
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "length",
+        "hi": "3429/100000",
+        "lo": "3429/100000"
+       }
+      }
+     ],
+     "field": "end"
+    },
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "length",
+        "hi": "126873/10000000",
+        "lo": "126873/10000000"
+       }
+      }
+     ],
+     "field": "side"
+    },
+    {
+     "args": [
+      {
+       "word": "protected"
+      }
+     ],
+     "field": "surface"
+    },
+    {
+     "args": [
+      {
+       "word": "p1"
+      },
+      {
+       "word": "joint"
+      }
+     ],
+     "field": "joins"
+    }
+   ],
+   "name": "lap",
+   "type": "lap"
+  }
+ ],
+ "quantities": [
+  {
+   "dim": "length",
+   "entity": "p1",
+   "field": "thickness",
+   "hi": "19431/2000000",
+   "line": "thickness",
+   "lo": "19431/2000000",
+   "role": "size",
+   "type": "plate"
+  },
+  {
+   "dim": "length",
+   "entity": "p1",
+   "field": "width",
+   "hi": "3429/50000",
+   "line": "width",
+   "lo": "3429/50000",
+   "role": "size",
+   "type": "plate"
+  },
+  {
+   "dim": "length",
+   "entity": "joint",
+   "field": "thickness",
+   "hi": "127/20000",
+   "line": "thickness",
+   "lo": "127/20000",
+   "role": "size",
+   "type": "plate"
+  },
+  {
+   "dim": "length",
+   "entity": "joint",
+   "field": "width",
+   "hi": "64008/15625",
+   "line": "width",
+   "lo": "64008/15625",
+   "role": "size",
+   "type": "plate"
+  },
+  {
+   "dim": "length",
+   "entity": "lap",
+   "field": "diameter",
+   "hi": "381381/20000000",
+   "line": "diameter",
+   "lo": "381381/20000000",
+   "role": "size",
+   "type": "lap"
+  },
+  {
+   "dim": "dimensionless",
+   "entity": "lap",
+   "field": "count",
+   "hi": "2",
+   "line": "count",
+   "lo": "2",
+   "role": "size",
+   "type": "lap"
+  },
+  {
+   "dim": "length",
+   "entity": "lap",
+   "field": "pitch",
+   "hi": "1143/1250",
+   "line": "pitch",
+   "lo": "1143/1250",
+   "role": "size",
+   "type": "lap"
+  },
+  {
+   "dim": "length",
+   "entity": "lap",
+   "field": "end",
+   "hi": "3429/100000",
+   "line": "end",
+   "lo": "3429/100000",
+   "role": "size",
+   "type": "lap"
+  },
+  {
+   "dim": "length",
+   "entity": "lap",
+   "field": "side",
+   "hi": "126873/10000000",
+   "line": "side",
+   "lo": "126873/10000000",
+   "role": "size",
+   "type": "lap"
+  }
+ ]
+}

@@ -1,0 +1,387 @@
+{
+ "cells": [
+  {
+   "entry": "cases",
+   "mechanism": "bar.cases",
+   "point": {
+    "dsg:a.A.a": "6511/990000",
+    "dsg:a.A.b": "1/25"
+   },
+   "rule": "ops/cases",
+   "state": "refuted",
+   "subject": "A"
+  },
+  {
+   "entry": "roots",
+   "mechanism": "bar.roots",
+   "partition": "leaf",
+   "rule": "ops/roots",
+   "state": "proved",
+   "subject": "A"
+  },
+  {
+   "entry": "exp/where",
+   "mechanism": "bar.exp",
+   "partition": "leaf",
+   "rule": "ops/exp",
+   "state": "proved",
+   "subject": "A"
+  },
+  {
+   "entry": "exp",
+   "mechanism": "bar.exp",
+   "point": {
+    "dsg:a.A.s": "181/638",
+    "in:a.A.r": "918/3445"
+   },
+   "rule": "ops/exp",
+   "state": "refuted",
+   "subject": "A"
+  },
+  {
+   "entry": "table/a_",
+   "mechanism": "bar.table",
+   "point": {
+    "dsg:a.A.a": "6511/990000",
+    "in:a.a_.A.push": "2000"
+   },
+   "rule": "ops/table",
+   "state": "refuted",
+   "subject": "A"
+  },
+  {
+   "entry": "table/seismic",
+   "mechanism": "bar.table",
+   "point": {
+    "dsg:a.A.a": "6511/990000",
+    "in:a.seismic.A.push": "5940"
+   },
+   "rule": "ops/table",
+   "state": "refuted",
+   "subject": "A"
+  },
+  {
+   "entry": "table/z",
+   "mechanism": "bar.table",
+   "point": {
+    "dsg:a.A.a": "6511/990000",
+    "in:a.z.A.push": "23500/7"
+   },
+   "rule": "ops/table",
+   "state": "refuted",
+   "subject": "A"
+  },
+  {
+   "entry": "key/a_/where",
+   "mechanism": "bar.key",
+   "partition": "leaf",
+   "rule": "ops/key",
+   "state": "proved",
+   "subject": "A"
+  },
+  {
+   "entry": "key/a_",
+   "mechanism": "bar.key",
+   "partition": "leaf",
+   "rule": "ops/key",
+   "state": "proved",
+   "subject": "A"
+  },
+  {
+   "entry": "key/seismic/where",
+   "mechanism": "bar.key",
+   "partition": "leaf",
+   "rule": "ops/key",
+   "state": "proved",
+   "subject": "A"
+  },
+  {
+   "entry": "key/seismic",
+   "mechanism": "bar.key",
+   "partition": "leaf",
+   "rule": "ops/key",
+   "state": "proved",
+   "subject": "A"
+  },
+  {
+   "entry": "key/z/where",
+   "mechanism": "bar.key",
+   "partition": "leaf",
+   "rule": "ops/key",
+   "state": "proved",
+   "subject": "A"
+  },
+  {
+   "entry": "key/z",
+   "mechanism": "bar.key",
+   "partition": "leaf",
+   "rule": "ops/key",
+   "state": "proved",
+   "subject": "A"
+  },
+  {
+   "entry": "moment/a_",
+   "mechanism": "bar.moment",
+   "point": {
+    "dsg:a.A.a": "6511/990000",
+    "in:a.a_.A.push": "0",
+    "in:a.a_.A.twist": "21985/461"
+   },
+   "rule": "ops/moment",
+   "state": "refuted",
+   "subject": "A"
+  },
+  {
+   "entry": "moment/seismic",
+   "mechanism": "bar.moment",
+   "rule": "ops/moment",
+   "state": "open",
+   "subject": "A",
+   "why": "case seismic puts no twist on A, which the rule reads"
+  },
+  {
+   "entry": "moment/z",
+   "mechanism": "bar.moment",
+   "point": {
+    "dsg:a.A.a": "6511/990000",
+    "in:a.z.A.push": "0",
+    "in:a.z.A.twist": "779/5860"
+   },
+   "rule": "ops/moment",
+   "state": "refuted",
+   "subject": "A"
+  },
+  {
+   "entry": "caps/a_",
+   "mechanism": "bar.caps",
+   "partition": "leaf",
+   "rule": "ops/caps",
+   "state": "proved",
+   "subject": "A"
+  },
+  {
+   "entry": "caps/seismic",
+   "mechanism": "bar.caps",
+   "partition": "leaf",
+   "rule": "ops/caps",
+   "state": "proved",
+   "subject": "A"
+  },
+  {
+   "entry": "caps/z",
+   "mechanism": "bar.caps",
+   "partition": "leaf",
+   "rule": "ops/caps",
+   "state": "proved",
+   "subject": "A"
+  },
+  {
+   "entry": "",
+   "mechanism": "bar.drag",
+   "state": "open",
+   "subject": "A",
+   "why": "the deck has no rule for it on a part like this one"
+  },
+  {
+   "entry": "",
+   "mechanism": "bar.idle",
+   "state": "open",
+   "subject": "A",
+   "why": "the deck has no rule for it"
+  },
+  {
+   "entry": "named/a_",
+   "mechanism": "bar.named",
+   "partition": "leaf",
+   "rule": "ops/named",
+   "state": "proved",
+   "subject": "A"
+  },
+  {
+   "entry": "named/seismic",
+   "mechanism": "bar.named",
+   "partition": "leaf",
+   "rule": "ops/named",
+   "state": "proved",
+   "subject": "A"
+  },
+  {
+   "entry": "named/z",
+   "mechanism": "bar.named",
+   "partition": "leaf",
+   "rule": "ops/named",
+   "state": "proved",
+   "subject": "A"
+  },
+  {
+   "entry": "cased",
+   "mechanism": "bar.cased",
+   "rule": "ops/cased",
+   "state": "open",
+   "subject": "A",
+   "why": "ops/class gives no value at what A has: no case of the pick holds somewhere in the box"
+  },
+  {
+   "entry": "",
+   "mechanism": "bar.left",
+   "state": "open",
+   "subject": "A",
+   "why": "the deck has no rule for it on a part like this one"
+  },
+  {
+   "entry": "",
+   "mechanism": "bar.alike",
+   "state": "open",
+   "subject": "A",
+   "why": "the deck has no rule for it on a part like this one"
+  },
+  {
+   "entry": "modulus",
+   "mechanism": "bar.modulus",
+   "point": {
+    "dsg:a.A.a": "6511/990000",
+    "dsg:a.cap2.i": "1/300000000"
+   },
+   "rule": "ops/modulus",
+   "state": "refuted",
+   "subject": "A"
+  },
+  {
+   "entry": "cos",
+   "mechanism": "bar.cos",
+   "point": {
+    "in:a.A.r": "918/3445"
+   },
+   "rule": "ops/cos",
+   "state": "refuted",
+   "subject": "A"
+  },
+  {
+   "entry": "cosin",
+   "mechanism": "bar.cosin",
+   "point": {
+    "in:a.A.r": "918/3445"
+   },
+   "rule": "ops/cosin",
+   "state": "refuted",
+   "subject": "A"
+  },
+  {
+   "entry": "cosfloor",
+   "mechanism": "bar.cosfloor",
+   "partition": "leaf",
+   "rule": "ops/cosfloor",
+   "state": "proved",
+   "subject": "A"
+  },
+  {
+   "entry": "turn",
+   "mechanism": "bar.turn",
+   "point": {
+    "dsg:a.A.s": "181/638"
+   },
+   "rule": "ops/turn",
+   "state": "refuted",
+   "subject": "A"
+  },
+  {
+   "entry": "sine",
+   "mechanism": "bar.sine",
+   "partition": "leaf",
+   "rule": "ops/sine",
+   "state": "proved",
+   "subject": "A"
+  },
+  {
+   "entry": "zero",
+   "mechanism": "bar.zero",
+   "rule": "ops/zero",
+   "state": "open",
+   "subject": "A",
+   "why": "neither proved over the ranges the card gives nor refuted at a point of them the search tried"
+  },
+  {
+   "entry": "tiny",
+   "mechanism": "bar.tiny",
+   "partition": "leaf",
+   "rule": "ops/tiny",
+   "state": "proved",
+   "subject": "A"
+  },
+  {
+   "entry": "edge",
+   "mechanism": "bar.edge",
+   "partition": "leaf",
+   "rule": "ops/edge",
+   "state": "proved",
+   "subject": "A"
+  },
+  {
+   "entry": "long",
+   "mechanism": "bar.long",
+   "point": {
+    "in:a.A.r": "918/3445"
+   },
+   "rule": "ops/long",
+   "state": "refuted",
+   "subject": "A"
+  },
+  {
+   "entry": "",
+   "mechanism": "bar.right",
+   "state": "open",
+   "subject": "A",
+   "why": "the deck has no rule for it"
+  },
+  {
+   "entry": "press/a_",
+   "mechanism": "unread",
+   "state": "open",
+   "subject": "cap2",
+   "why": "no rule of the deck reads the load press that case a_ puts on cap2, so nothing checks it"
+  },
+  {
+   "entry": "press/seismic",
+   "mechanism": "unread",
+   "state": "open",
+   "subject": "cap2",
+   "why": "no rule of the deck reads the load press that case seismic puts on cap2, so nothing checks it"
+  },
+  {
+   "entry": "press/z",
+   "mechanism": "unread",
+   "state": "open",
+   "subject": "cap2",
+   "why": "no rule of the deck reads the load press that case z puts on cap2, so nothing checks it"
+  },
+  {
+   "entry": "press/a_",
+   "mechanism": "unread",
+   "state": "open",
+   "subject": "lap_main",
+   "why": "no rule of the deck reads the load press that case a_ puts on lap_main, so nothing checks it"
+  },
+  {
+   "entry": "drag/a_",
+   "mechanism": "unread",
+   "state": "open",
+   "subject": "A",
+   "why": "no rule of the deck reads the load drag that case a_ puts on A, so nothing checks it"
+  },
+  {
+   "entry": "drag/seismic",
+   "mechanism": "unread",
+   "state": "open",
+   "subject": "A",
+   "why": "no rule of the deck reads the load drag that case seismic puts on A, so nothing checks it"
+  },
+  {
+   "entry": "drag/z",
+   "mechanism": "unread",
+   "state": "open",
+   "subject": "A",
+   "why": "no rule of the deck reads the load drag that case z puts on A, so nothing checks it"
+  }
+ ],
+ "format": "petra-proofs/0"
+}

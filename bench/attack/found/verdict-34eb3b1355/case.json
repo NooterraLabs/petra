@@ -1,0 +1,20 @@
+{
+ "sig": "34eb3b1355",
+ "kind": "verdict",
+ "where": "kernel/twin",
+ "detail": "FAIL against ILL-FORMED",
+ "recipe": "syntax",
+ "notes": [
+  "proofs: JSON syntax dup"
+ ],
+ "deck": "aisc360",
+ "relation": null,
+ "extra": {},
+ "verdicts": {
+  "kernel": "FAIL",
+  "twin": "ILL-FORMED"
+ },
+ "seed": 100,
+ "count": 2,
+ "language": false
+}

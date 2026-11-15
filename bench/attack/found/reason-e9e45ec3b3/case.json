@@ -1,0 +1,26 @@
+{
+ "sig": "e9e45ec3b3",
+ "kind": "reason",
+ "where": "kernel/twin",
+ "detail": "bar/bar.exp/exp open: 'a split of input 1 is not strictly inside its range' against 'no partition of proofs.json proves it and no point refutes it'",
+ "recipe": "hints",
+ "notes": [
+  "8 numbers moved toward a design that holds",
+  "a hint: split",
+  "a hint: split",
+  "a hint: ghost",
+  "a hint: drop",
+  "a hint: completion",
+  "a hint: completion"
+ ],
+ "deck": null,
+ "relation": "hints",
+ "extra": {},
+ "verdicts": {
+  "kernel": "FAIL",
+  "twin": "FAIL"
+ },
+ "seed": 100,
+ "count": 2,
+ "language": false
+}

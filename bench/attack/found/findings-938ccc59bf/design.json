@@ -1,0 +1,68 @@
+{
+  "card": "sha256:d9bfe5f560b5f642939de72b9bc275b569803ff04ac589ecf8a2c2d02239168a",
+  "format": "petra-design/0",
+  "name": "card_1",
+  "params": [],
+  "quantities": [
+    {
+      "dim": "length",
+      "entity": "x",
+      "field": "t",
+      "hi": "214748365/2147483648",
+      "line": "t",
+      "lo": "214748365/2147483648",
+      "role": "size",
+      "type": "cap"
+    },
+    {
+      "dim": "m^4",
+      "entity": "x",
+      "field": "i",
+      "hi": "281/250000000000",
+      "line": "i",
+      "lo": "281/250000000000",
+      "role": "size",
+      "type": "cap"
+    },
+    {
+      "dim": "length",
+      "entity": "b",
+      "field": "t",
+      "hi": "99/1000",
+      "line": "t",
+      "lo": "99/1000",
+      "role": "size",
+      "type": "cap"
+    },
+    {
+      "dim": "m^4",
+      "entity": "b",
+      "field": "i",
+      "hi": "3/312500000",
+      "line": "i",
+      "lo": "3/312500000",
+      "role": "size",
+      "type": "cap"
+    },
+    {
+      "dim": "length",
+      "entity": "Z",
+      "field": "b",
+      "hi": "1/50",
+      "line": "b",
+      "lo": "1/50",
+      "role": "size",
+      "type": "bar"
+    },
+    {
+      "dim": "dimensionless",
+      "entity": "Z",
+      "field": "s",
+      "hi": "3/250",
+      "line": "s",
+      "lo": "3/250",
+      "role": "size",
+      "type": "bar"
+    }
+  ]
+}

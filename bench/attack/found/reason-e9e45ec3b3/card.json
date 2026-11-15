@@ -1,0 +1,71 @@
+{
+ "cases": [
+  "dead"
+ ],
+ "claims": [],
+ "environment": null,
+ "format": "petra-card/0",
+ "inputs": [
+  {
+   "by": "s.engineer@example.org",
+   "dim": "m^4",
+   "hi": "1/1000000000",
+   "lo": "1/1000000000",
+   "name": "B2.i"
+  },
+  {
+   "by": "t@example.org",
+   "dim": "dimensionless",
+   "hi": "16/5",
+   "lo": "16/5",
+   "name": "bar.r"
+  },
+  {
+   "by": "x@y.z",
+   "case": "dead",
+   "dim": "force",
+   "field": "press",
+   "hi": "8292500/1071",
+   "lo": "0",
+   "name": "dead.B2.press",
+   "on": "B2"
+  },
+  {
+   "by": "x@y.z",
+   "case": "dead",
+   "dim": "force",
+   "field": "push",
+   "hi": "5850",
+   "lo": "0",
+   "name": "dead.bar.push",
+   "on": "bar"
+  },
+  {
+   "by": "x@y.z",
+   "case": "dead",
+   "dim": "energy",
+   "field": "twist",
+   "hi": "1586/105",
+   "lo": "8723/7000",
+   "name": "dead.bar.twist",
+   "on": "bar"
+  }
+ ],
+ "name": "attack",
+ "probability_claims": [],
+ "tests": [],
+ "waivers": [
+  {
+   "by": "x@y.z",
+   "mechanism": "bar.idle",
+   "reason": "a long reason xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "subject": "bar"
+  },
+  {
+   "by": "t@example.org",
+   "mechanism": "bar.right",
+   "reason": "caf\u00e9",
+   "subject": "bar"
+  }
+ ]
+}

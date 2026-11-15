@@ -1,6 +1,10 @@
 """The command line: exit codes, the JSON report, and each subcommand. Owner: Y.
 
-Expected verdicts: examples/circuit_pass.petra passes and examples/bolt_unknown.petra is
+The status and the exit code of `petra check` are the kernel's (tests/test_kernel_decides.py).
+The kernel has no deck of rules for the kinds used here, so it passes none of them: where the
+Python checker passes a design, the status is UNKNOWN with the reason that its kind has no deck.
+
+The Python checker's statuses: examples/circuit_pass.petra passes and examples/bolt_unknown.petra is
 UNKNOWN (their own headers say why). Under a card that asks for a 16 A draw the circuit_pass design breaks
 the overload condition I_B <= I_n of its B10 breaker (IEC 60364-4-43 433.1), so it
 fails. A stress area of 1.5 x 84.267 mm2 for M12 contradicts ISO 724, so a deck holding
@@ -17,6 +21,7 @@ from fractions import Fraction
 from pathlib import Path
 
 import petra
+from petra import verify
 from petra.cli import EXIT_CODES, main
 from petra.files import read_pair
 from petra.kernel import Evidence, Leaf, Split, encode_evidence
@@ -54,16 +59,17 @@ class Workspace(unittest.TestCase):
 
 
 class Check(Workspace):
-    def test_a_passing_design_exits_0_with_the_json_report(self):
+    def test_a_design_the_python_checker_passes_exits_2_with_the_json_report(self):
         code, out, _ = run("check", str(CIRCUIT), "--json")
-        self.assertEqual(code, EXIT_CODES["PASS"], "circuit_pass exits 0")
+        self.assertEqual(code, EXIT_CODES["UNKNOWN"], "circuit_pass exits 2: the kernel has no deck of rules for a circuit")
         report = json.loads(out)
-        self.assertEqual(set(report), {"file", "card", "hashes", "kernel", "path", "design", "status", "governing", "verdicts", "unchecked", "repair"},
-                         "the report has the documented keys")
+        self.assertEqual(set(report), {"file", "card", "hashes", "kernel", "path", "design", "status", "reason", "governing", "verdicts", "unchecked",
+                                       "repair"}, "the report has the documented keys")
+        self.assertEqual((report["status"], report["reason"]), ("UNKNOWN", verify.no_deck(["circuit"])))
         self.assertEqual(report["file"], str(CIRCUIT), "the file is named as given")
         for verdict in report["verdicts"]:
             self.assertEqual(set(verdict), VERDICT_KEYS, f"{verdict['claim']} has the documented keys")
-            self.assertEqual(verdict["status"], "PASS", f"{verdict['claim']} passes")
+            self.assertEqual(verdict["status"], "UNKNOWN", f"{verdict['claim']}: no claim of a design with no deck passes, whatever the Python checker gave it")
             self.assertTrue(verdict["footprint"], f"{verdict['claim']} names its premises")
             self.assertEqual(verdict["needs"], [], f"{verdict['claim']} has nothing open")
             self.assertTrue(verdict["obligations"], f"{verdict['claim']} lists its obligations")
@@ -72,9 +78,9 @@ class Check(Workspace):
     def test_an_unknown_design_exits_2_and_names_what_is_open(self):
         code, out, _ = run("check", str(EXAMPLES / "bolt_unknown.petra"), "--json")
         self.assertEqual(code, EXIT_CODES["UNKNOWN"], "bolt_unknown exits 2")
-        unknown = [v for v in json.loads(out)["verdicts"] if v["status"] == "UNKNOWN"]
-        self.assertTrue(unknown, "some entry is UNKNOWN")
-        self.assertTrue(all(v["needs"] for v in unknown), "each UNKNOWN entry says what it needs")
+        verdicts = json.loads(out)["verdicts"]
+        self.assertTrue(any(v["needs"] for v in verdicts), "some entry says what it needs")
+        self.assertEqual({v["status"] for v in verdicts if v["needs"]}, {"UNKNOWN"}, "and each that does is UNKNOWN")
 
     def test_a_design_refuted_under_another_card_exits_1(self):
         card = self.write("overloaded.card", read_pair(CIRCUIT)[0].replace("[0 A, 10 A]", "[0 A, 16 A]"))
@@ -118,11 +124,13 @@ class Check(Workspace):
 
     def test_check_without_solvers_reuses_the_library(self):
         library = str(self.tmp / "library")
-        self.assertEqual(run("certify-family", str(FAMILY), "--library", library)[0], 0, "the family certifies")
+        code, out, _ = run("certify-family", str(FAMILY), "--library", library)
+        self.assertEqual((code, out.count("stored ")), (EXIT_CODES["UNKNOWN"], 2), "both claims of the family are stored")
         code, out, _ = run("check", str(CIRCUIT), "--json", "--library", library, "--no-solve")
-        statuses = {v["claim"]: v["status"] for v in json.loads(out)["verdicts"]}
-        self.assertEqual((statuses["hot"], statuses["drop"]), ("PASS", "PASS"), "both claims come from the library")
-        self.assertEqual(statuses["coverage"], "UNKNOWN", "coverage needs the solver the run switched off")
+        verdicts = {v["claim"]: v for v in json.loads(out)["verdicts"]}
+        self.assertEqual((verdicts["hot"]["needs"], verdicts["drop"]["needs"]), ([], []), "both claims come from the library, with nothing open")
+        self.assertTrue(verdicts["coverage"]["needs"], "coverage needs the solver the run switched off")
+        self.assertEqual({v["status"] for v in verdicts.values()}, {"UNKNOWN"}, "and no claim of a design with no deck has the status of a pass")
         self.assertEqual(code, EXIT_CODES["UNKNOWN"], "so the design exits 2")
 
     def test_python_dash_m_petra_uses_the_same_exit_codes(self):
@@ -156,10 +164,10 @@ class Encodings(Workspace):
         return run("check", str(path))[0]
 
     def test_a_pair_with_a_byte_order_mark_checks(self):
-        self.assertEqual(self.check(self.CARD.encode("utf-8-sig"), self.TEXT.encode("utf-8-sig")), EXIT_CODES["PASS"])
+        self.assertEqual(self.check(self.CARD.encode("utf-8-sig"), self.TEXT.encode("utf-8-sig")), EXIT_CODES["UNKNOWN"])
 
     def test_a_utf16_pair_checks(self):
-        self.assertEqual(self.check(*(text.replace("\n", "\r\n").encode("utf-16") for text in (self.CARD, self.TEXT))), EXIT_CODES["PASS"])
+        self.assertEqual(self.check(*(text.replace("\n", "\r\n").encode("utf-16") for text in (self.CARD, self.TEXT))), EXIT_CODES["UNKNOWN"])
 
     def test_bytes_that_are_not_text_are_an_input_error(self):
         self.assertEqual(self.check(self.CARD.encode("utf-8"), b"petra 0\n\xff\xfe\xfd"), EXIT_CODES["INPUT_ERROR"])
@@ -222,7 +230,8 @@ class Verify(Workspace):
 class CertifyFamily(Workspace):
     def test_the_family_stores_both_claims(self):
         code, out, _ = run("certify-family", str(FAMILY), "--library", str(self.tmp / "library"))
-        self.assertEqual(code, 0, "every claim is stored")
+        self.assertEqual(code, EXIT_CODES["UNKNOWN"], "every claim is stored, and that is no pass: a family has no deck of rules")
+        self.assertRegex(out.splitlines()[0], r": UNKNOWN$")
         self.assertEqual(out.count("stored "), 2, "one line per stored claim")
 
     def test_a_false_family_exits_1(self):

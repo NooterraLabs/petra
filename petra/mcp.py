@@ -8,7 +8,9 @@ the server writes one response per request to stdout, one per line, and nothing 
 petra's own commands make:
 
     check           repair.check_text: the text `petra check` prints, and the JSON as
-                    structured content
+                    structured content. The verdict is the kernel's: with none to run,
+                    or one whose answer cannot be taken, the tool answers with isError
+                    true and `no verdict`
     kinds           teach.kinds_summary, or teach.kinds_text for a domain or a kind
     new             teach.new_text: a card and a complete design of a kind to edit
     registry_list   teach.registry_text: the registry ids a design can name
@@ -39,7 +41,9 @@ Untrusted: it only calls the API, so a bug here costs a reply, never a verdict.
 from __future__ import annotations
 
 import json
+import os
 import queue
+import signal
 import subprocess
 import sys
 import threading
@@ -62,9 +66,12 @@ CACHEABLE = {"tools/list": 3_600_000, "server/discover": 3_600_000}
 """The modern results that carry caching hints, with ttlMs: the tools never change while
 the server runs, and a new version of Petra starts a new server."""
 
-INSTRUCTIONS = """Petra checks a physical design against the claims and loads written in it, and answers \
-PASS, FAIL, UNKNOWN or MARGINAL with a certificate, or PASS_WAIVED for a design of a deck's parts that \
-passes with a cell resting on a waiver. Its main deck is steel connections to AISC 360-22, \
+INSTRUCTIONS = """Petra checks a physical design against the claims and loads written in it. The answer \
+is the verdict of its kernel: PASS, FAIL or UNKNOWN, or PASS_WAIVED for a design of a deck's parts that \
+passes with a cell resting on a waiver. The kernel passes only a design checked against a deck of rules: \
+a design of the other kinds never passes. It reads UNKNOWN, with the reason that its kind has no deck, \
+or FAIL. Never report such a design as passing. With no kernel to run, `check` answers with an error and no verdict. \
+Its main deck is steel connections to AISC 360-22, \
 in kips and inches. To design one: call `kinds` to see what Petra can check, `new` with a kind for a \
 complete design to edit, then `check` with the edited text. On a FAIL, the check's repair names the \
 input that lowers the governing check most, the way to move it, and a value at which that check holds. \
@@ -100,7 +107,7 @@ def _string(args: Mapping[str, Any], key: str, required: bool = False) -> str | 
 
 
 def _check(args: Mapping[str, Any]) -> Result:
-    from . import build_registry
+    from . import build_registry, verify
     from .repair import check_text
     from .solvers import SolverSource
 
@@ -124,7 +131,10 @@ def _check(args: Mapping[str, Any]) -> Result:
     if card is None:
         card_path = card_path or card_of(path)
         card = _file_at(card_path, "card_path", ".card")
-    checked = check_text(card, text, path or "<design>", build_registry(), (SolverSource(),), card_path=card_path or "<card>")
+    try:
+        checked = check_text(card, text, path or "<design>", build_registry(), (SolverSource(),), card_path=card_path or "<card>")
+    except verify.NoVerdict as exc:      # no kernel ran, or its answer cannot be taken: nothing else gives a verdict
+        raise ToolError(shown(f"no verdict: {exc}")) from None
     # The text is what a client shows a person, so it goes out as `petra check` prints it: no character a terminal acts on.
     if checked.report is None:
         raise ToolError(shown(checked.text()))
@@ -200,7 +210,7 @@ def _schema(properties: Mapping[str, str], required: tuple[str, ...] = ()) -> di
 
 
 TOOLS: Mapping[str, tuple[str, dict[str, Any], Callable[[Mapping[str, Any]], Result]]] = {
-    "check": ("Check a design against the card it answers and return its verdict: PASS, FAIL, UNKNOWN or MARGINAL, "
+    "check": ("Check a design against the card it answers and return the kernel's verdict: PASS, FAIL or UNKNOWN, "
               "or for a design of a deck's parts PASS_WAIVED when it passes and a cell rests on a waiver, "
               "the governing checks with demand, capacity and utilisation, and every obligation. The card holds what "
               "was asked: the loads, the signed bounds, the claims and the waivers. The design holds the components "
@@ -216,7 +226,7 @@ TOOLS: Mapping[str, tuple[str, dict[str, Any], Callable[[Mapping[str, Any]], Res
     "kinds": ("List the component kinds Petra can check. With a domain (steel) or a kind (shear_tab), print each "
               "kind's lines, required and optional, with units, registry ids and meanings.",
               _schema({"name": "a domain or a component kind; leave out to list them all"}), _kinds),
-    "new": ("Return a card and a complete design of one kind, which passes, to edit into the pair you need.",
+    "new": ("Return a card and a complete design of one kind to edit into the pair you need.",
             _schema({"kind": "the component kind, such as shear_tab or double_angle", "name": "the component's name"},
                     ("kind",)), _new),
     "registry_list": ("List the registry ids a design can name: shapes, grades, bolt groups, electrodes, stocked plates, "
@@ -356,14 +366,29 @@ class Worker:
     thread waits on stdin can block until the client writes again. numpy's did, and the
     first tool call got no answer."""
 
-    COMMAND = (sys.executable, "-m", "petra", "mcp", "--worker")
+    COMMAND = (sys.executable, "-P", "-c",
+               "import os, sys; here, own = os.getcwd(), os.path.abspath(sys.argv[1]); "
+               "kept = [p for p in sys.path if p and (os.path.abspath(p) != here or os.path.abspath(p) == own)]; "
+               "sys.path[:] = kept if own in map(os.path.abspath, kept) else [own] + kept; "
+               "from petra.cli import main; sys.exit(main(['mcp', '--worker']))",
+               str(Path(__file__).resolve().parent.parent))
+    """The worker is this package: the folder that holds it goes first on the worker's path, and
+    the working directory comes off it. `python -m petra` would put the working directory
+    first, and a file named petra.py in the folder a client starts the server in would then be
+    the worker, and answer every check as it liked (tests/test_kernel_attacks12.py). `-P` stops
+    Python adding the working directory itself, and the command takes out every entry that is
+    the working directory by another road: an empty entry of PYTHONPATH is one. The folder that
+    holds the package stays where it is on the path, working directory or not, and goes first
+    only when it is not there at all, as in a source tree with no install. For an install it is
+    site-packages, which must not come before the standard library."""
 
     def __init__(self, budget: float = BUDGET_S) -> None:
         self.budget = budget
         self._start()
 
     def _start(self) -> None:
-        self.process = subprocess.Popen(self.COMMAND, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+        # On POSIX the worker leads a group of its own, so that stopping it stops the kernel and the solvers it started with it.
+        self.process = subprocess.Popen(self.COMMAND, stdin=subprocess.PIPE, stdout=subprocess.PIPE, start_new_session=hasattr(os, "killpg"))
         self.replies: queue.Queue[bytes] = queue.Queue()
         self.reader = threading.Thread(target=self._read, args=(self.process, self.replies), name="petra-mcp-worker", daemon=True)
         self.reader.start()
@@ -375,6 +400,11 @@ class Worker:
         replies.put(b"")
 
     def stop(self) -> None:
+        if hasattr(os, "killpg"):
+            try:
+                os.killpg(self.process.pid, signal.SIGKILL)      # the worker and every process it started, a kernel among them
+            except (ProcessLookupError, PermissionError):
+                pass      # it has ended already
         self.process.kill()
         self.process.wait()
         self.reader.join()
@@ -502,8 +532,24 @@ def main(budget: float = BUDGET_S, worker: bool = False) -> int:
     out = sys.stdout.buffer
     sys.stdout = sys.stderr
     if worker:
+        _watch(os.getppid())
         return work(sys.stdin.buffer, out)
     return serve(sys.stdin.buffer, out, Worker(budget))
+
+
+def _watch(server: int) -> None:
+    """Have this worker stop itself, and everything it started, once the server that started it
+    is gone. The worker leads a group of its own (`Worker._start`), so a signal that ends the
+    server does not reach it, and a check it is in the middle of does not see its input
+    close: without this, a server stopped with Ctrl-C left its worker and a kernel running."""
+    def watch() -> None:
+        while os.getppid() == server:
+            time.sleep(0.5)
+        if hasattr(os, "killpg") and os.getpgid(0) == os.getpid():
+            os.killpg(os.getpid(), signal.SIGKILL)
+        os._exit(1)
+
+    threading.Thread(target=watch, name="petra-mcp-server-watch", daemon=True).start()
 
 
 if __name__ == "__main__":

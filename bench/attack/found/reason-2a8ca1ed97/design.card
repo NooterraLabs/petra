@@ -1,0 +1,12 @@
+petra 0
+
+card "card_1" {
+  owner "t@example.org"
+}
+
+given rig.duty is "heavy" signed "t@example.org" source "ASTM A36"
+given rig.count is 14 signed "s.engineer@example.org" source "test"
+given rig.pace in [360 m/s, 360 m/s] signed "x@y.z" source "calc C-12"
+
+waive rig.bare on rig by "t@example.org" reason "back\\slash"
+waive rig.night on rig by "x@y.z" reason "café"

@@ -1,0 +1,58 @@
+{
+  "cases": [
+    "dead"
+  ], 
+  "claims": [], 
+  "environment": null, 
+  "format": "petra-card/0", 
+  "inputs": [
+    {
+      "by": "x@y.z", 
+      "case": "dead", 
+      "dim": "current", 
+      "field": "current", 
+      "hi": "3/32", 
+      "lo": "27/320", 
+      "name": "dead.strip.current", 
+      "on": "strip"
+    }, 
+    {
+      "by": "x@y.z", 
+      "dim": "temperature", 
+      "hi": "999999/10000", 
+      "lo": "999999/10000", 
+      "name": "strip.T"
+    }, 
+    {
+      "by": "t@example.org", 
+      "dim": "length", 
+      "hi": "3761/387000", 
+      "lo": "3761/387000", 
+      "name": "strip.gap"
+    }, 
+    {
+      "by": "t@example.org", 
+      "dim": "length", 
+      "hi": "3/250", 
+      "lo": "0/5", 
+      "name": "strip.hole"
+    }
+  ], 
+  "name": "a", 
+  "probability_claims": [], 
+  "tests": [], 
+  "waivers": [
+    {
+      "by": "x@y.z", 
+      "mechanism": "strip.creep", 
+      "reason": "a reason with \"quotes\"", 
+      "subject": "strip"
+    }, 
+    {
+      "by": "t@example.org", 
+      "mechanism": "strip.tide", 
+      "reason": "snug-tight bolts", 
+      "subject": "strip"
+    }
+  ]
+}

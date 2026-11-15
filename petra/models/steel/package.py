@@ -33,6 +33,7 @@ from ...pipeline import Report, check_design
 from ...registry import Registry
 from ...solvers import SolverSource
 from ...verdict import STATUS
+from ...verify import held, no_deck
 from . import calc
 from .domain import required
 from .lower import KIND_SPECS
@@ -48,6 +49,7 @@ class Package:
     hashes: tuple[str, ...]          # every statement hash the report cites (obligations and validity)
     report: Report
     over: tuple[str, ...] = ()       # each check the report reads above 1 under a limit state that holds
+    kinds: tuple[str, ...] = ()      # the kinds of the design's parts, none of which a deck of rules has
 
 
 def _hashes(outcome) -> tuple[str | None, tuple[str, ...]]:
@@ -73,11 +75,12 @@ def render(design, report: Report, registry: Registry, card: str, text: str) -> 
     cited: list[str] = []
     over: list[str] = []
     lines = [f"# Calculation package: {design.name}", "",
-             f"Verdict: **{STATUS[type(report.verdict)]}**, by the Petra kernel over every load case and every value in each "
-             "stated range.", "",
-             "Re-check it without trusting this file: `petra verify certs/*.json` re-checks each certificate; `petra check "
-             "--certs certs --no-solve design.petra` re-derives every statement from the card and the design and reproduces "
-             "the verdict from the certificates alone.", "",
+             f"Status: **{held(STATUS[type(report.verdict)])}**. This is no verdict of the kernel: "
+             f"{no_deck(c.kind for c in design.components.values())}. Everything below is the working of Python's own "
+             "checker over every load case and every value in each stated range, and it decides nothing.", "",
+             "Re-check it without trusting this file: `petra verify certs/*.json` has that checker go through each "
+             "certificate again, and `petra check --certs certs --no-solve design.petra` gives the kernel's verdict on the "
+             "card and the design, with the same working found from the certificates alone.", "",
              "## Card", "", "```", card.rstrip(), "```", "",
              "## Design", "", "```", text.rstrip(), "```", ""]
     for name, component in design.components.items():
@@ -142,7 +145,7 @@ def write_package(card: str, text: str, out: Path, registry: Registry) -> Packag
     report = check_design(design, registry, (SolverSource(),), sink=CertStore(out / "certs"), path=str(path))
     body, cited, over = render(design, report, registry, card, text)
     (out / "report.md").write_text(body, encoding="utf-8", newline="\n")
-    return Package(out, STATUS[type(report.verdict)], cited, report, over)
+    return Package(out, STATUS[type(report.verdict)], cited, report, over, tuple(sorted({c.kind for c in design.components.values()})))
 
 
 @dataclass(frozen=True)

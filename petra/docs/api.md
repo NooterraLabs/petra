@@ -7,8 +7,9 @@ This page describes what a program needs to read a check. It covers the calls, t
 ```python
 import petra
 
-report = petra.check_file("examples/truss_fail.petra")
-print(type(report.verdict).__name__)               # Fail
+checked = petra.check_file("examples/truss_fail.petra")
+print(checked.status, checked.reason)              # UNKNOWN, and that no deck of rules has a truss
+report = checked.report                            # the Python checker's working, which decides nothing
 strength = report.governing["strength"]            # the highest utilisation of any strength check
 print(strength.requirement, strength.value.what, strength.value.utilisation)
 for f in report.findings:
@@ -21,7 +22,7 @@ for f in report.findings:
                 print("  at", c.symbol, "=", c.shown, "exact", c.exact, c.si_unit)
 ```
 
-`petra check --json examples/truss_fail.petra` gives the same report as JSON, and so does `petra.check(card, design)`. `report.to_json()` gives it without the `repair` key.
+`checked.to_json()` is what `petra check --json examples/truss_fail.petra` prints, and so is what `petra.check(card, design)` returns. `report.to_json()` is the Python checker's working alone, whose `status` is its own and no verdict.
 
 ## Check functions
 
@@ -36,7 +37,7 @@ if result["status"] == "FAIL":
     print(move["direction"], move["input"], "on line", move["line"], "from", move["from"], "to", move["to"])
 ```
 
-`petra.check_file(path, *, card=None, certs=None, library=None, solve=True) -> Report` loads the design at `path` and its card with the shipped registry and checks the pair. The card is the `.card` file beside the design unless `card` names another. It gathers evidence from these sources, in this order:
+`petra.check_file(path, *, card=None, certs=None, library=None, solve=True)` loads the design at `path` and its card with the shipped registry and checks the pair, as `petra.check` does. It returns the checked pair: `status` is the kernel's verdict, `reason` says why a design whose kinds have no deck of rules reads UNKNOWN, `to_json()` and `text()` are what `petra check` prints, and `report` is the working behind it. The card is the `.card` file beside the design unless `card` names another. It gathers evidence from these sources, in this order:
 
 1. The certificate store `certs`, a directory.
 2. `library`, a `petra.Library`.
@@ -44,13 +45,15 @@ if result["status"] == "FAIL":
 
 The kernel checks every piece of evidence. When `certs` is given, `check_file` records accepted evidence there. A syntax error raises `petra.lang.LolaSyntaxError`. A design that cannot be lowered raises `petra.lang.LoweringError` or `petra.models.base.ComponentError`. The CLI reports each of these errors as exit code 3.
 
-`petra.check_design(design, registry, sources, sink=None, deck=None, path="") -> Report` does the same check for a design and registry that you already hold. `petra.parse_design(card, design, path, registry)` and `petra.load_design(path, registry, card=None)` return a design, and `petra.build_registry` returns a registry.
+`petra.check_design(design, registry, sources, sink=None, deck=None, path="") -> Report` gives the Python checker's own report for a design and registry that you already hold. It runs no kernel, and no status of that report is a verdict. `petra.parse_design(card, design, path, registry)` and `petra.load_design(path, registry, card=None)` return a design, and `petra.build_registry` returns a registry.
 
 ## The card's hash and the kernel
 
 A status is about one card and one design. `hashes` names each by the SHA-256 of its text, so a reader can tell that a PASS was against the card they issued: for a file saved as UTF-8 with LF line ends it is what `sha256sum` prints. `petra check` prints the two on its `card` and `design` lines.
 
-`kernel` is the word of `petra-verify`, the small checker in `kernel/` that is written in Lean. `petra.check` and `petra check` run it on the report when there is one to run: the file the environment variable `PETRA_VERIFY` names, else the one inside the installed package, else the one `lake build` put in a source tree's `kernel/`. A wheel from PyPI carries the kernel for its platform. Petra installed from the sdist carries none, and `kernel` is then null. The kernel checks again each proof it has a rule for, and `checked` of `proofs` counts them. For the rest the Python checker's word stands alone, and the kernel's own `verdict` is then UNKNOWN where the status is PASS. A proof the kernel rejects after the Python checker accepted it is a bug in one of the two: `petra.check` raises `petra.verify.Disagreement`, and `petra check` exits 4. `petra.check_file` and `petra.check_design` return the Python checker's report and run no kernel.
+`kernel` is what `petra-verify` said, the small checker in `kernel/` that is written in Lean, and `status` is its verdict. `petra.check` and `petra check` run the file the environment variable `PETRA_VERIFY` names, else the one inside the installed package, else the one `lake build` put in a source tree's `kernel/`. A wheel from PyPI carries the kernel for its platform, and Petra installed from the sdist carries none. With no kernel to run, or with one whose exit code or error stream is at odds with what it printed, or whose answer does not hold together ([format.md](../../docs/format.md), the first section), there is no verdict: `petra.check` raises `petra.verify.NoVerdict`, `petra check` prints nothing to stdout and exits 4, and the server's `check` tool answers with an error. Nothing in Python gives a verdict in the kernel's place.
+
+For a design of the models' kinds the kernel has no deck of rules. It checks again each proof that has a tape, and `checked` of `proofs` counts them, but it takes the list of cells from the Python checker, so its verdict is never PASS. Such a design reads UNKNOWN, and `reason` says that no deck of rules has its kind of part, or FAIL when the kernel checked a refutation. That FAIL says less than a FAIL against a deck: the kernel checked the arithmetic of a formula that the Python checker wrote, at a point inside the card's ranges, and not that the formula is the right one for the design, nor what the design's own numbers are. Everything else in the report is the Python checker's working, which decides nothing. Its status of the whole design is not given, and no `status` under `verdicts` or `repair` is a pass: where that checker gave PASS or MARGINAL the JSON reads UNKNOWN. A proof the kernel rejects after the Python checker accepted it is a bug in one of the two: `petra.check` raises `petra.verify.Disagreement`, and `petra check` exits 4. `petra.check_design` returns the Python checker's report and runs no kernel. `petra.check_file` is a check: it runs the kernel, and raises `petra.verify.NoVerdict` when there is none.
 
 ## Report
 
@@ -70,11 +73,11 @@ A status is about one card and one design. `hashes` names each by the SHA-256 of
 | `governing` | `dict[str, Governing \| None]` | the governing `"strength"` check and the governing `"detailing"` check of the whole report, computed on first use (see The governing checks) |
 | `unchecked` | `tuple[Unchecked, ...]` | each mode of a component's domain that no requirement names on that component, with the reason, computed on first use (see What was not checked) |
 
-`report.render()` returns the text that `petra check` prints. Right after its `checked` line, the text has a `governing  strength` line and a `governing  detailing` line. Each line names the requirement and the check, with the check's demand, capacity, and utilisation in the design's units. The strength line reads `none` when no strength check has a utilisation. The detailing line is left out when no detailing check has a utilisation. Each row of the obligation table ends with its finding's utilisation, with `excused` when a guard excuses every term the finding read, or with nothing. The `excused` and `not checked` lines come after the table and its margin lines, as What was not checked describes. `report.to_json()` returns the JSON that the JSON section describes.
+`report.render()` returns the Python checker's own text, with its own status on the first line. It is not what `petra check` prints: that is the `text()` of the checked pair, which leaves that status and the line of statuses out. Right after its `checked` line, the text has a `governing  strength` line and a `governing  detailing` line. Each line names the requirement and the check, with the check's demand, capacity, and utilisation in the design's units. The strength line reads `none` when no strength check has a utilisation. The detailing line is left out when no detailing check has a utilisation. Each row of the obligation table ends with its finding's utilisation, with `excused` when a guard excuses every term the finding read, or with nothing. The `excused` and `not checked` lines come after the table and its margin lines, as What was not checked describes. `report.to_json()` returns the JSON that the JSON section describes.
 
 ## Verdicts
 
-`petra.verdict.STATUS` maps each verdict class to its status string. `SEVERITY` orders the statuses: PASS 0, MARGINAL 1, UNKNOWN 2, FAIL 3. The conjunction of several verdicts takes the most severe one. `petra check` exits with 0 for PASS, 1 for FAIL, 2 for UNKNOWN, and 5 for MARGINAL. All four classes are importable from `petra`.
+`petra.verdict.STATUS` maps each verdict class to its status string. `SEVERITY` orders the statuses: PASS 0, MARGINAL 1, UNKNOWN 2, FAIL 3. The conjunction of several verdicts takes the most severe one. These are the Python checker's verdicts, which `petra.check_design` returns and the `report` of a checked pair holds. They are not the verdict of a check: `petra check` exits with the kernel's, 0 for PASS, 1 for FAIL and 2 for UNKNOWN, and never with 5 for MARGINAL. All four classes are importable from `petra`.
 
 | class | status | fields |
 |---|---|---|
@@ -95,8 +98,8 @@ Each requirement ends in one of five outcomes. `petra.verdict` defines a class f
 
 | class | finding `outcome` | what happened | fields |
 |---|---|---|---|
-| `Discharged` | `certified` | the kernel proved the obligation | `obligation`, `theorem`, `source`, `margin`, `margin_theorem`, `validity` |
-| `Refuted` | `refuted` | the kernel checked a counterexample | `obligation`, `refutation`, `source`, `validity` |
+| `Discharged` | `certified` | the Python checker, `petra.kernel`, proved the obligation. It is not petra-verify, and this is no pass | `obligation`, `theorem`, `source`, `margin`, `margin_theorem`, `validity` |
+| `Refuted` | `refuted` | the Python checker checked a counterexample | `obligation`, `refutation`, `source`, `validity` |
 | `WithinMargin` | `marginal` | the claim was proved, but a certified point lies within its margin | `obligation`, `margin`, `refutation`, `source`, `theorem`, `validity` |
 | `Waived` | `waived` | a named owner waived the requirement | `requirement`, `waiver` |
 | `Open` | `open` | nothing settled it | `requirement`, `needs`, `rejections`, `statement`, `near` |
@@ -199,19 +202,21 @@ With `--no-solve`, `petra check` computes no repair.
 `petra check --json FILE` prints one object with sorted keys. In the shape below, an upper-case name is a placeholder, a key followed by `?` may be absent, and text to the right of a line describes it.
 
 ```
-{"file": FILE, "design": NAME, "status": "PASS" | "FAIL" | "UNKNOWN" | "MARGINAL",
+{"file": FILE, "design": NAME, "status": "FAIL" | "UNKNOWN",   the kernel's verdict, never PASS for the models' kinds
+ "reason": TEXT | null,                        why it is UNKNOWN: no deck of rules has its kind of part; null for a FAIL
  "card": FILE,                                 the card the design was checked against
  "hashes": {"card": HASH, "design": HASH},     "sha256:HEX" of each text as UTF-8 with LF line ends
- "kernel": KERNEL | null,                      the kernel's word; null when no kernel ran
+ "kernel": KERNEL,                             what the kernel said
  "path": "legacy",                             Python's models chose the checks; "rules" for a design of a deck's types
  "governing": {"strength": GOVERNING | null, "detailing": GOVERNING | null},
  "verdicts": [ENTRY, ...],                     one per claim, then "coverage"
  "unchecked": [UNCHECKED, ...],                each mode of a component's domain no requirement names, design order
  "repair": REPAIR | null}                      a FAIL's moves; null for any other status
 
-KERNEL = {"verdict": "PASS" | "FAIL" | "UNKNOWN",   the kernel's own verdict on the files it read
+KERNEL = {"verdict": "FAIL" | "UNKNOWN",        the kernel's own verdict on the files it read
           "checked": N,                        the proofs and refutations the kernel checked and accepted
-          "proofs": N,                         the proofs and refutations the status rests on
+          "proofs": N,                         the proofs and refutations the Python checker's report rests on
+          "cells_from": "proofs",              the kernel had no deck of rules, and took the cells of proofs.json
           "hashes": {"card", "design", "deck"}}   of the JSON files the kernel read (docs/format.md)
 
 REPAIR = {"check": REQUIREMENT,                the governing check: the refuted obligation that ranks first
@@ -224,17 +229,17 @@ MOVE = {"input": NAME,                         "<component>.<key>", with the wor
         "direction": "increase" | "decrease" | "swap",
         "to": NUMBER TEXT,                     the step, written as the design writes numbers, or the swap's shape
         "utilisation": NUMBER | null,          the governing check's after the step
-        "status": STATUS, "fails": [REQUIREMENT, ...],   the design's after the step, and its refuted checks
+        "status": "FAIL" | "UNKNOWN", "fails": [REQUIREMENT, ...],   the Python checker's of the design after the step, UNKNOWN where it refutes nothing, and its refuted checks
         "clears": {"to", "utilisation", "status", "fails"} | null}   a value at which the check holds; first three moves only
 
 UNCHECKED = {"subject": NAME, "mode": MODE, "reason": TEXT}   see What was not checked
 
 GOVERNING = {"requirement", **CHECK}           the report's governing check of that category
 
-ENTRY = {"claim": NAME, "status": STATUS,
+ENTRY = {"claim": NAME, "status": "FAIL" | "UNKNOWN",   the Python checker's status of the claim, which is no verdict: its PASS and MARGINAL read UNKNOWN
          "rules": ["R1", ...],                 the rules of the kernel results the verdict used
          "footprint": [{"tag", "label", "owner", "source", "version"?}, ...],
-         "needs": [TEXT, ...],                 what each open item needs; non-empty iff UNKNOWN
+         "needs": [TEXT, ...],                 what each open item needs; non-empty where the Python checker's own status was UNKNOWN
          "margins": [{"requirement", "proved", "margin": "proved" | "undecided" | "within",
                       "point"?: {SYMBOL: EXACT}}, ...],     claims with a margin
          "obligations": [OBLIGATION, ...]}     one per outcome of the entry
@@ -309,9 +314,9 @@ The example below is the bolts obligation of the 60 kip shear tab in `tests/fixt
  "cells": [CELL, ...],                         one per answer, in the order of the grid
  "waived": [WAIVER, ...],                      each waiver a cell rests on, once, in the order of the cells
  "card": FILE, "hashes": {"card": HASH, "design": HASH},
- "path": "rules",                              the kernel or the grid worked out the cells from the rules deck
+ "path": "rules",                              the kernel worked out the cells from the rules deck
  "kernel": {"verdict": "PASS" | "FAIL" | "UNKNOWN", "checked": N, "cells_from": "rules",
-            "waived": [WAIVER, ...], "hashes": {...}} | null,
+            "waived": [WAIVER, ...], "hashes": {...}},
  "repair": null}
 
 WAIVER = {"subject": PART, "mechanism": NAME, "by": SIGNER, "reason": TEXT}
@@ -328,11 +333,11 @@ CELL = {"subject": PART, "mechanism": NAME, "entry": TEXT,
 COMPLETION = {"keys": [[PART, FIELD, NAME], ...], "loads": [[PART, LOAD, CASE, RATIONAL, UNIT], ...]}
 ```
 
-The status is PASS_WAIVED when the design passes and a waiver of the card rests one of its cells: it passes what the deck could check, and each signer answers for the cells its waiver rests. `petra check` exits 6 for it. The kernel has no word of its own for this: it says PASS and lists the same waivers. A waived cell that a part or a case left something out of rests on a completion, a name for each key left unstated and a value for each load left out, under which the rule holds. The value is in Petra's SI and UNIT names its unit, as the kernel's verdict prints it: `degC` for a temperature, never kelvin, `1` for a plain number, and the exponents of the dimension, as `kg^1 s^-2`, where no unit of factor 1 has it (docs/format.md, "The verdict"). The signer answers for it too, so the cell prints it, and the text of `petra check` ends the cell's line with it, as in `rested where s.t is 295 degC in case service`.
+The status is PASS_WAIVED when the design passes and a waiver of the card rests one of its cells: it passes what the deck could check, and each signer answers for the cells its waiver rests. `petra check` exits 6 for it. The kernel has no word of its own for this: it says PASS and lists the waivers, and the status is read from that list. A waived cell that a part or a case left something out of rests on a completion, a name for each key left unstated and a value for each load left out, under which the rule holds. The value is in Petra's SI and UNIT names its unit, as the kernel's verdict prints it: `degC` for a temperature, never kelvin, `1` for a plain number, and the exponents of the dimension, as `kg^1 s^-2`, where no unit of factor 1 has it (docs/format.md, "The verdict"). The signer answers for it too, so the cell prints it, and the text of `petra check` ends the cell's line with it, as in `rested where s.t is 295 degC in case service`.
 
-`petra.check_file` returns a `petra.grid.Report` for such a design, with `status`, `verdict` (the kernel's word, PASS where `status` is PASS_WAIVED), `waived()`, `completions()`, `cells`, `to_json()` and `render()`. A FAIL has no repair yet, and a card's claims are refused.
+`petra.check_file` returns a `petra.grid.Checked` for such a design, with `status`, `kernel`, `to_json()`, `text()` and `report`. The `report` is the grid's `petra.grid.Report`, with `verdict` (the grid's own word, which is held to the kernel's: PASS where `status` is PASS_WAIVED), `waived()`, `completions()`, `cells`, `to_json()` and `render()`. A FAIL has no repair yet, and a card's claims are refused.
 
-For such a design the kernel reads the deck's own file and makes every cell itself. `petra.check` compares its cells with these, one by one, and raises `petra.verify.Disagreement` if they differ. `kernel.hashes` then also has `rules`, the hash of the deck's file, which is `deck.hash`.
+For such a design the kernel reads the deck's own file and makes every cell itself. The status is its verdict. `petra.check` compares its cells with the grid's, one by one, and raises `petra.verify.Disagreement` if they differ. `kernel.hashes` then also has `rules`, the hash of the deck's file, which is `deck.hash`.
 
 ## Envelopes
 

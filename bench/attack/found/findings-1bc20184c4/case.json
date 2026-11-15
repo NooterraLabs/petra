@@ -1,0 +1,23 @@
+{
+ "sig": "1bc20184c4",
+ "kind": "findings",
+ "where": "kernel/twin",
+ "detail": "[('design', 'parts.3')] against [('card', 'parts.6'), ('design', 'parts.3')]",
+ "recipe": "deck",
+ "notes": [
+  "deck: a number 11/10 of an expression moved to 11/30",
+  "from corpus/cases/deck/d05_swapped_given.petra",
+  "a number moved to 0.374625 inch"
+ ],
+ "deck": null,
+ "relation": null,
+ "extra": {},
+ "verdicts": {
+  "grid": "REFUSED",
+  "kernel": "ILL-FORMED",
+  "twin": "ILL-FORMED"
+ },
+ "seed": 100,
+ "count": 16,
+ "language": true
+}

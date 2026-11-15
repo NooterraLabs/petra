@@ -22,6 +22,7 @@ from petra.premises import Tag
 from petra.units import DIMENSIONLESS, FORCE, TEMPERATURE, Quantity
 from petra.verdict import Pass
 from tests.test_pipeline import CAPACITY, GIVEN, REGISTRY, WAIVE_WEAR, GadgetDomain, Solver, card, gadget, point
+from tests.old_kinds import no_deck
 
 ROOT = Path(__file__).resolve().parent.parent
 KN = Fraction(1000)
@@ -123,7 +124,7 @@ class Envelopes(GadgetDomain):
         env = self.run_envelope(card(GIVEN, PUSH, other, CLAIM, WAIVE_WEAR, waive_h), gadget(CAPACITY) + gadget(CAPACITY, name="h"),
                                 resolution=kn(2))
         self.assertEqual((env.elsewhere, env.elsewhere_open), ("PASS", ()))
-        self.assertIn("do not depend on push.g.force are PASS", render(env))
+        self.assertIn("do not depend on push.g.force are unrefuted", render(env))
 
     def test_a_probe_the_design_refuses_is_invalid_and_stops_the_envelope(self):
         real = envelope_module.check_design
@@ -202,7 +203,7 @@ class Envelopes(GadgetDomain):
         self.assertEqual((found["label"], found["unit"], found["probe"]), ("in:rig.push.g.force", "N", ["0", "30000"]))
         self.assertEqual(found["safe"][0], "0")
         self.assertEqual(found["above"]["status"], "FAIL")
-        self.assertEqual(found["probes"][0], {"range": ["3000", "3000"], "status": "PASS"})
+        self.assertEqual(found["probes"][0], {"range": ["3000", "3000"], "status": "UNKNOWN"}, "a probe the Python checker passes is no pass in the JSON")
 
 
 class CommandLine(unittest.TestCase):
@@ -214,14 +215,14 @@ class CommandLine(unittest.TestCase):
 
     def test_the_ambient_envelope_of_the_lighting_radial(self):
         code, out = self.run_cli("--input", "ambient", "--from", "-20 degC", "--to", "100degC", "--json")
-        self.assertEqual(code, 0)
+        self.assertTrue(code == 2 and no_deck(out), "an envelope is the Python checker's working, and a circuit has no deck of rules")
         found = json.loads(out)
         lo, hi = (Fraction(x) for x in found["safe"])
         self.assertEqual(lo, -20)
         self.assertTrue(40 <= hi < Fraction(found["above"]["limit"]) <= 100, found["above"])
         self.assertEqual(found["above"]["status"], "FAIL")
         self.assertIn("claim.hot", found["above"]["why"])
-        self.assertEqual(found["confirmed"], "PASS")
+        self.assertEqual(found["confirmed"], "UNKNOWN", "the check over the whole interval refutes nothing, and that is no pass in the JSON")
 
     def test_an_unknown_input_or_a_wrong_unit_is_an_input_error(self):
         self.assertEqual(self.run_cli("--input", "nothing", "--from", "0", "--to", "1")[0], 3)
@@ -230,7 +231,7 @@ class CommandLine(unittest.TestCase):
 
     def test_a_negative_quantity_may_carry_its_unit_attached(self):
         code, out = self.run_cli("--input", "ambient", "--from", "-20degC", "--to", "100degC", "--json")
-        self.assertEqual(code, 0, out)
+        self.assertEqual(code, 2, out)
         self.assertEqual(json.loads(out)["probe"], ["-20", "100"])
 
     def test_a_steel_envelope_reads_in_kips_from_the_low_end(self):
@@ -246,7 +247,7 @@ class CommandLine(unittest.TestCase):
                 code = cli.main(["envelope", str(fixture), "--card", str(path), "--input", "reaction.tab.shear", "--from", "0 kip",
                                  "--to", "120 kip", "--max-probes", "4"])
         text = out.getvalue()
-        self.assertEqual(code, 0, text)
+        self.assertTrue(code == 2 and no_deck(text), text)
         self.assertIn("at reaction.tab.shear = 60 kip, the middle, the design is FAIL", text)
         self.assertIn("stated [0, 120] kip; probed [0, 120] kip from 0 kip", text)
         self.assertNotRegex(text, r"\d N\b")

@@ -18,6 +18,7 @@ import petra
 from petra.cli import EXIT_CODES, main
 from petra.files import read_pair
 from petra.repair import sites, written
+from tests.old_kinds import python_status
 
 ROOT = Path(__file__).resolve().parents[1]
 FAILING = ROOT / "tests" / "fixtures" / "readout" / "job5_fail_60k.petra"
@@ -69,7 +70,7 @@ class Failing(unittest.TestCase):
         for m in self.result["repair"]["moves"][:2]:
             after = petra.check(self.card, set_number(self.text, m["line"], m["from"], m["to"]), repair=False)
             self.assertAlmostEqual(obligation(after, self.result["repair"]["check"])["utilisation"], m["utilisation"], msg=m["input"])
-            self.assertEqual(after["status"], m["status"], m["input"])
+            self.assertEqual(held(python_status(self.card, set_number(self.text, m["line"], m["from"], m["to"]))), m["status"], m["input"])
 
     def test_clears_names_a_value_at_which_the_check_holds(self):
         cleared = [m for m in self.result["repair"]["moves"] if m["clears"] is not None]
@@ -77,13 +78,19 @@ class Failing(unittest.TestCase):
         m = cleared[0]
         after = petra.check(self.card, set_number(self.text, m["line"], m["from"], m["clears"]["to"]), repair=False)
         self.assertEqual(obligation(after, self.result["repair"]["check"])["outcome"], "certified")
-        self.assertEqual(after["status"], m["clears"]["status"])
+        self.assertEqual(python_status(self.card, set_number(self.text, m["line"], m["from"], m["clears"]["to"])), "PASS", "the Python checker refutes nothing there")
+        self.assertEqual(m["clears"]["status"], "UNKNOWN", "which the JSON does not print as a pass: the design has no deck of rules")
+
+
+def held(status: str) -> str:
+    """What the JSON of a check prints for a status of the Python checker: its PASS and MARGINAL read UNKNOWN (repair._no_pass)."""
+    return status if status in ("FAIL", "UNKNOWN") else "UNKNOWN"
 
 
 class Others(unittest.TestCase):
     def test_a_pass_has_no_repair(self):
         result = petra.check(*read_pair(PASSING))
-        self.assertEqual((result["status"], result["repair"]), ("PASS", None))
+        self.assertEqual((result["status"], result["reason"][:45], result["repair"]), ("UNKNOWN", "no deck of rules has a part of kind shear_tab", None))
 
     def test_an_input_error_is_data_not_an_exception(self):
         card = read_pair(PASSING)[0]
@@ -129,7 +136,7 @@ class Swaps(unittest.TestCase):
             after = petra.check(self.card, self.text.replace("tee WT6x25", f"tee {m['to']}"), repair=False)
             self.assertAlmostEqual(obligation(after, self.result["repair"]["check"])["utilisation"], m["utilisation"], msg=m["to"])
             self.assertLess(m["utilisation"], self.result["repair"]["utilisation"], m["to"])
-            self.assertEqual(after["status"], m["status"], m["to"])
+            self.assertEqual(python_status(self.card, self.text.replace("tee WT6x25", f"tee {m['to']}")), m["status"], m["to"])
             certified = obligation(after, self.result["repair"]["check"])["outcome"] == "certified"
             self.assertEqual(m["clears"], {k: m[k] for k in ("to", "utilisation", "status", "fails")} if certified else None, m["to"])
 

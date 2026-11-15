@@ -61,6 +61,7 @@ from petra.registry import build_registry
 from petra.units import CUSTOMARY
 
 from tests import steel_examples as ex
+from tests.old_kinds import python_report
 
 ROOT = Path(__file__).resolve().parents[1]
 INCH = CUSTOMARY["inch"][0]
@@ -87,7 +88,7 @@ def checked(card: str, text: str) -> dict:
         target = Path(tmp) / "design.petra"
         target.write_text(text, encoding="utf-8", newline="\n")
         target.with_suffix(".card").write_text(card, encoding="utf-8", newline="\n")
-        return petra.check_file(target).to_json()
+        return python_report(target).to_json()
 
 
 def obligation(report: dict, mode: str) -> dict:
@@ -340,7 +341,7 @@ class TableTenNine(unittest.TestCase):
         return found.utilisation
 
     def test_the_pilots_plate_passes_at_half_a(self):
-        self.assertEqual(petra.check_file(self.PILOT).to_json()["status"], "PASS")
+        self.assertEqual(python_report(self.PILOT).to_json()["status"], "PASS")
         self.assertAlmostEqual(self.bolts(), 0.836, delta=0.001)
         self.assertAlmostEqual(self.bolts(("  form conventional", "  form conventional\n  eccentricity 2.5 inch")), 0.999,
                                delta=0.001)
@@ -473,7 +474,7 @@ class TableEightFour(unittest.TestCase):
         return calc.values(calc.connection(d, "wb1", REGISTRY), d, REGISTRY, mode, "service")
 
     def test_the_pilots_bracket_passes(self):
-        self.assertEqual(petra.check_file(PILOT_022).to_json()["status"], "PASS")
+        self.assertEqual(python_report(PILOT_022).to_json()["status"], "PASS")
         card, text = read_pair(PILOT_022)
         (weld,) = self.values(card, text, "weld")
         self.assertIn("instantaneous center", weld.what)
@@ -652,7 +653,7 @@ class BracketTearout(unittest.TestCase):
         centroid, inside the group, so the back column's top bolt pushes the plate 2.5
         degrees off straight back: lc = 0.908 in, 22.1 kips against 32.5 in shear, and C =
         3.08 times that holds 34.1 kips. The clean-room twin fails it too (1.17)."""
-        report = petra.check_file(ROOT / "corpus" / "cases" / "pilot" / "bracket_from_the_arm.petra").to_json()
+        report = python_report(ROOT / "corpus" / "cases" / "pilot" / "bracket_from_the_arm.petra").to_json()
         self.assertEqual(report["status"], "FAIL")
         self.assertAlmostEqual(obligation(report, "bolts")["utilisation"], 1.17, delta=0.005)
 

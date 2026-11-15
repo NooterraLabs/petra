@@ -413,7 +413,7 @@ class Time(unittest.TestCase):
         files = with_card([exp_cell("fill", 1024, 1024, 1024, 1), exp_cell("hit", 1024, 1, 30_000, 11)])
         self.assertLess(total(files), MB)
         said, seconds, _ = measured(files, timeout=1200)
-        self.assertEqual((said["verdict"], said["counts"]["proved"], said["work"] < 20 * 10 ** 9), ("PASS", 2, True))
+        self.assertEqual((said["findings"], said["counts"]["proved"], said["counts"]["open"], said["work"] < 20 * 10 ** 9), ([], 2, 0, True))
         self.assertLess(seconds, PROCESSOR_SECONDS, "the work is 18 billion units, which take about 7 processor seconds")
 
 

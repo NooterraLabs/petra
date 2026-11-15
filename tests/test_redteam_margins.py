@@ -25,6 +25,7 @@ from petra.pipeline import _prepare, check_design
 from petra.registry import build_registry
 from petra.solvers import SolverSource
 from petra.verdict import Marginal, Pass, Refuted, WithinMargin
+from tests.old_kinds import no_deck
 
 ROOT = Path(__file__).resolve().parent.parent
 REGISTRY = build_registry()
@@ -171,7 +172,8 @@ class MarginProofDiscarded(_Files):
     def test_precondition_the_margin_certificate_proves_the_claim(self):
         certs = str(self.dir / "certs")
         plain = self.write("p.petra", edited("examples/circuit_pass.petra", ("<= 70 degC under lamp_draw", "<= 58 degC under lamp_draw")))
-        self.assertEqual(run_cli("check", plain, "--certs", certs)[0], 0)
+        code, out, _ = run_cli("check", plain, "--certs", certs)
+        self.assertTrue(code == 2 and no_deck(out), "a circuit has no deck of rules, so the check that stores the certificates reads UNKNOWN")
         path = self.write("m.petra", edited("examples/circuit_pass.petra", ("<= 70 degC under lamp_draw", "<= 60 degC margin 2 degC under lamp_draw")))
         design = load_design(path, REGISTRY)
         prepared = _prepare(design, REGISTRY)
@@ -187,7 +189,7 @@ class MarginProofDiscarded(_Files):
         run_cli("check", plain, "--certs", certs)
         path = self.write("m.petra", edited("examples/circuit_pass.petra", ("<= 70 degC under lamp_draw", "<= 60 degC margin 2 degC under lamp_draw")))
         code, out, _ = run_cli("check", path, "--no-solve", "--certs", certs)
-        self.assertEqual(code, 0, out)
+        self.assertTrue(code == 2 and no_deck(out), out)
         self.assertIn("proved: the claim holds with at least 2 degC to spare", out)
 
 
@@ -245,7 +247,7 @@ class EnvelopeCli(_Files):
         # _quantity documents "-20degC"; argparse takes it for an option and exits 3.
         code, out, err = run_cli("envelope", str(ROOT / "examples/truss_pass.petra"), "--input", "crowd.frame.D.fy",
                                  "--from", "-30kN", "--to", "-10kN", "--resolution", "10kN")
-        self.assertEqual(code, 0, err)
+        self.assertTrue(code == 2 and no_deck(out), err)
 
 
 if __name__ == "__main__":

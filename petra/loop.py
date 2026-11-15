@@ -1,5 +1,8 @@
 """The repair-and-minimise loop for steel connections (docs/plan.md P2). Untrusted
-tooling: every verdict it acts on comes from the checker, and it changes none.
+tooling: it searches by the Python checker's own status of each design, read from the
+report of a check, and where this page says PASS or FAIL it means that status. It is no
+verdict. The verdict of a design is the kernel's, which has no deck of rules for a steel
+kind and passes none.
 
 A Task is a job a user would give: a connection kind, the design basis, the members and
 any line the job fixes (`beam`, `support`, a bracket's `eccentricity`), and the loads.
@@ -19,8 +22,7 @@ a design the deck passes at that load (`reference`), which proves the job can be
 3. Minimise. From the PASS, push the mass of the connection's parts down while the
    design still passes: step each number on the component's lines toward less mass,
    doubling the step while it passes, and swap each angle or tee for a lighter one. A
-   design is kept only when the checker returns PASS for it, so every margin the loop
-   keeps is certified by the kernel, not estimated. MARGINAL is not kept.
+   design is kept only when the Python checker returns PASS for it. MARGINAL is not kept.
 
 `judge`, when given, reads every design the loop keeps (each PASS of the repair, each
 step of the minimiser). A caller can pass the outside judge (judges/), which
@@ -46,6 +48,7 @@ from .registry.steel import INCH
 from .repair import INPUT_ERRORS, Checked, Site, check_text, edit, family, ladder, shape_sites, sites
 from .solvers import SolverSource
 from .units import parse_quantity
+from .verdict import STATUS
 
 
 TASK_KINDS = ("shear_tab", "double_angle", "single_angle", "shear_tee", "shear_end_plate", "seated", "stiffened_seat",
@@ -292,8 +295,8 @@ def solve(task: Task, registry: Registry, *, budget: int = 10, judge: Judge | No
     seen = {text}
     for _ in range(budget):
         checked = check_text(card, text, f"task-{task.id}.petra", registry, sources)
-        if checked.status != "FAIL":
-            run.attempts.append(Attempt(checked.status, None, None))
+        if _said(checked) != "FAIL":
+            run.attempts.append(Attempt(_said(checked), None, None))
             break
         chosen = _choose(text, checked, seen)
         run.attempts.append(Attempt("FAIL", checked.repair.utilisation if checked.repair else None,
@@ -340,9 +343,15 @@ def _judge(run: Run, text: str, judge: Judge | None) -> None:
             run.judged.append((text, found))
 
 
+def _said(checked: Checked) -> str:
+    """The Python checker's status of a design, which the loop searches by, or INPUT_ERROR
+    for one that does not lower."""
+    return checked.status if checked.report is None else STATUS[type(checked.report.verdict)]
+
+
 def _passes(text: str, registry: Registry, sources: tuple, run: Run) -> bool:
     run.probes += 1
-    return check_text(run.card, text, "<minimise>", registry, sources, moves=False).status == "PASS"
+    return _said(check_text(run.card, text, "<minimise>", registry, sources, moves=False)) == "PASS"
 
 
 def _minimise(run: Run, text: str, registry: Registry, sources: tuple, judge: Judge | None) -> None:

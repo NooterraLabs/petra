@@ -37,6 +37,7 @@ tests.test_kernel_attacks5	61.7
 tests.test_kernel_attacks6	3.2
 tests.test_kernel_attacks7	4.6
 tests.test_kernel_budget	2.6
+tests.test_kernel_decides	134.0
 tests.test_kernel_grid	11.5
 tests.test_kernel_instance	1.0
 tests.test_kernel_limits	12.5
@@ -51,6 +52,8 @@ tests.test_margin	2.1
 tests.test_mcp	36.0
 tests.test_mechanics	6.5
 tests.test_metamorphic	82.2
+tests.test_no_wrong_pass	147.0
+tests.test_old_path	12.0
 tests.test_packaging	59.1
 tests.test_parts_exact	2.0
 tests.test_parts_gate	30.8
@@ -100,3 +103,4 @@ tests.test_validity	104.7
 tests.test_verdict	1.5
 tests.test_verify	8.7
 tests.test_wheel_tags	0.6
+tests.test_attack	40.0

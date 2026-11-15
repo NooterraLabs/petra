@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import Callable, Mapping
 
 from . import deck as deck_rows
-from . import grid, models
+from . import grid, models, verify
 from .files import MAX_FILE, MAX_LISTED, MAX_MESSAGE, MAX_PROBLEMS, card_of
 from .ir import FromTests, RangeMean
 from .lang import parse_design, syntax
@@ -243,8 +243,29 @@ def new_text(kind: str, name: str | None, registry: Registry) -> tuple[str, str]
         card, text = rename(card, component, name), rename(text, component, name)
     first, _, rest = text.partition("\n")
     out = f"{first}\n# From {source}. `petra kinds {kind}` lists every line a {kind} takes.\n{rest}"
+    card = unsigned(card)
     parse_design(card, out, f"<petra new {kind}>", registry)
     return card, out
+
+
+UNSIGNED = ("# The example this card is from waives each line that its deck has no rule for, signed by its\n"
+            "# engineer. This card signs none: those lines are open, and the check reads UNKNOWN until the\n"
+            "# person who answers for a line writes its `waive` and signs it. That is never the one who\n"
+            "# draws the design.\n")
+"""What a template's card says where the example's waivers stood."""
+
+
+def unsigned(card: str) -> str:
+    """The card of a template with no waiver. An example signs the waivers of its own engineer,
+    and a card to start from must sign nothing in anyone's name: with the example's waivers
+    in it, a design drawn against it passed on signatures nobody gave
+    (tests/test_kernel_attacks12.py)."""
+    lines = card.splitlines(keepends=True)
+    at = [n for n, line in enumerate(lines) if line.lstrip().startswith("waive ")]
+    if not at:
+        return card
+    kept = [line for n, line in enumerate(lines) if n not in at]
+    return "".join(kept[:at[0]]) + UNSIGNED + "".join(kept[at[0]:])
 
 
 def rename(text: str, old: str, new: str) -> str:
@@ -660,7 +681,7 @@ DOCS_DIR = Path(__file__).with_name("docs")
 def readme() -> str:
     """README.md of the source tree petra runs from (a clone or an editable install), else
     the copy the installed distribution carries as its description."""
-    if (ROOT / "pyproject.toml").is_file() and (ROOT / "README.md").is_file():
+    if verify.source_tree(ROOT) and (ROOT / "README.md").is_file():
         return (ROOT / "README.md").read_text(encoding="utf-8")
     return importlib.metadata.metadata("petra-lang").get_payload()
 

@@ -13,7 +13,7 @@ tree that holds it builds a wheel for one platform, which carries the binary as
 petra/bin/petra-verify (.exe on Windows), where petra/verify.py looks for it. The wheel's
 platform tag is read from the binary itself (`platform_tag`), so it promises what the
 binary needs and no less. A tree without the binary builds the pure wheel, and so does an
-sdist, which never holds it: a report from that wheel says that no kernel ran.
+sdist, which never holds it: a check from that wheel gives no verdict, and says there is no kernel to run.
 """
 from __future__ import annotations
 

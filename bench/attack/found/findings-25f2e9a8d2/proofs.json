@@ -1,0 +1,94 @@
+{
+ "cells": [
+  {
+   "entry": "heat",
+   "mechanism": "strip.heat",
+   "rule": "test/heat",
+   "state": "open",
+   "subject": "strip",
+   "why": "the card puts no current on strip, which the rule reads"
+  },
+  {
+   "entry": "hole",
+   "mechanism": "strip.hole",
+   "rule": "test/hole",
+   "state": "open",
+   "subject": "strip",
+   "why": "test/drill gives no value at what strip has: no case of the pick holds somewhere in the box"
+  },
+  {
+   "entry": "bow",
+   "mechanism": "strip.bow",
+   "partition": "leaf",
+   "rule": "test/bow",
+   "state": "proved",
+   "subject": "strip"
+  },
+  {
+   "entry": "",
+   "mechanism": "strip.creep",
+   "state": "waived",
+   "subject": "strip"
+  },
+  {
+   "entry": "spark",
+   "mechanism": "strip.spark",
+   "partition": "leaf",
+   "rule": "test/spark",
+   "state": "proved",
+   "subject": "strip"
+  },
+  {
+   "entry": "",
+   "mechanism": "strip.tide",
+   "state": "not_applicable",
+   "subject": "strip",
+   "why": "a strip is dry"
+  },
+  {
+   "entry": "heat",
+   "mechanism": "strip.heat",
+   "rule": "test/heat",
+   "state": "open",
+   "subject": "x",
+   "why": "the card puts no current on x, which the rule reads"
+  },
+  {
+   "entry": "hole",
+   "mechanism": "strip.hole",
+   "partition": "leaf",
+   "rule": "test/hole",
+   "state": "proved",
+   "subject": "x"
+  },
+  {
+   "entry": "bow",
+   "mechanism": "strip.bow",
+   "partition": "leaf",
+   "rule": "test/bow",
+   "state": "proved",
+   "subject": "x"
+  },
+  {
+   "entry": "",
+   "mechanism": "strip.creep",
+   "state": "waived",
+   "subject": "x"
+  },
+  {
+   "entry": "",
+   "mechanism": "strip.spark",
+   "state": "not_applicable",
+   "subject": "x",
+   "why": "a close fit leaves no room for one"
+  },
+  {
+   "entry": "",
+   "mechanism": "strip.tide",
+   "state": "not_applicable",
+   "subject": "x",
+   "why": "a strip is dry"
+  }
+ ],
+ "format": "petra-proofs/0"
+}

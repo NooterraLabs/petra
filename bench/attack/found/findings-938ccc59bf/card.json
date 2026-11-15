@@ -1,0 +1,39 @@
+{
+ "cases": [],
+ "claims": [],
+ "environment": null,
+ "format": "petra-card/0",
+ "inputs": [
+  {
+   "by": "x@y.z",
+   "dim": "length",
+   "hi": "214748365/4294967296",
+   "lo": "42949673/1073741824",
+   "name": "Z.a"
+  },
+  {
+   "by": "a.b@c.d",
+   "dim": "dimensionless",
+   "hi": "42807158896152731596418870679/158456325028528675187087900672",
+   "lo": "42807158896152731596418870679/158456325028528675187087900672",
+   "name": "Z.r"
+  }
+ ],
+ "name": "card_1",
+ "probability_claims": [],
+ "tests": [],
+ "waivers": [
+  {
+   "by": "x@y.z",
+   "mechanism": "bar.tiny",
+   "reason": "n\u00e4mn",
+   "subject": "Z"
+  },
+  {
+   "by": "a.b@c.d",
+   "mechanism": "bar.table",
+   "reason": "caf\u00e9",
+   "subject": "Z"
+  }
+ ]
+}

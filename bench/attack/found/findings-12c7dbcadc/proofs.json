@@ -1,0 +1,50 @@
+{
+ "cells": [
+  {
+   "entry": "heat/dead",
+   "mechanism": "strip.heat",
+   "rule": "test/heat",
+   "state": "open",
+   "subject": "strip",
+   "why": "the rule holds only where the pads are at most 120 mm2 together, and that is not proved for strip"
+  },
+  {
+   "entry": "hole",
+   "mechanism": "strip.hole",
+   "rule": "test/hole",
+   "state": "open",
+   "subject": "strip",
+   "why": "test/drill gives no value at what strip has: no case of the pick holds somewhere in the box"
+  },
+  {
+   "entry": "bow",
+   "mechanism": "strip.bow",
+   "partition": "leaf",
+   "rule": "test/bow",
+   "state": "proved",
+   "subject": "strip"
+  },
+  {
+   "entry": "",
+   "mechanism": "strip.creep",
+   "state": "waived",
+   "subject": "strip"
+  },
+  {
+   "entry": "spark",
+   "mechanism": "strip.spark",
+   "partition": "leaf",
+   "rule": "test/spark",
+   "state": "proved",
+   "subject": "strip"
+  },
+  {
+   "entry": "",
+   "mechanism": "strip.tide",
+   "state": "not_applicable",
+   "subject": "strip",
+   "why": "a strip is dry"
+  }
+ ],
+ "format": "petra-proofs/0"
+}

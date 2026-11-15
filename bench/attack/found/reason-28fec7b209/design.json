@@ -1,0 +1,197 @@
+{
+ "card": "sha256:773041d8e039c3540a7435066f844fbeddc3198e72060ed8fe808e99eb0f97b0",
+ "format": "petra-design/0",
+ "name": "lap-splice",
+ "params": [],
+ "parts": [
+  {
+   "lines": [
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "length",
+        "hi": "1073741823/53687091200",
+        "lo": "1073741823/53687091200"
+       }
+      }
+     ],
+     "field": "t"
+    },
+    {
+     "args": [
+      {
+       "word": "low"
+      }
+     ],
+     "field": "finish"
+    },
+    {
+     "args": [
+      {
+       "given": "a_.i"
+      }
+     ],
+     "field": "i"
+    }
+   ],
+   "name": "a_",
+   "type": "cap"
+  },
+  {
+   "lines": [
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "length",
+        "hi": "3/20",
+        "lo": "3/20"
+       }
+      }
+     ],
+     "field": "t"
+    },
+    {
+     "args": [
+      {
+       "word": "low"
+      }
+     ],
+     "field": "finish"
+    },
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "m^4",
+        "hi": "151/250000000000",
+        "lo": "151/250000000000"
+       }
+      }
+     ],
+     "field": "i"
+    }
+   ],
+   "name": "cap3",
+   "type": "cap"
+  },
+  {
+   "lines": [
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "length",
+        "hi": "3/100",
+        "lo": "3/100"
+       }
+      }
+     ],
+     "field": "a"
+    },
+    {
+     "args": [
+      {
+       "number": {
+        "dim": "length",
+        "hi": "1/100",
+        "lo": "1/100"
+       }
+      }
+     ],
+     "field": "b"
+    },
+    {
+     "args": [
+      {
+       "given": "k.r"
+      }
+     ],
+     "field": "r"
+    },
+    {
+     "args": [
+      {
+       "given": "k.s"
+      }
+     ],
+     "field": "s"
+    },
+    {
+     "args": [
+      {
+       "word": "hard"
+      }
+     ],
+     "field": "grade"
+    },
+    {
+     "args": [
+      {
+       "word": "a_"
+      },
+      {
+       "word": "cap3"
+      }
+     ],
+     "field": "caps"
+    }
+   ],
+   "name": "k",
+   "type": "bar"
+  }
+ ],
+ "quantities": [
+  {
+   "dim": "length",
+   "entity": "a_",
+   "field": "t",
+   "hi": "1073741823/53687091200",
+   "line": "t",
+   "lo": "1073741823/53687091200",
+   "role": "size",
+   "type": "cap"
+  },
+  {
+   "dim": "length",
+   "entity": "cap3",
+   "field": "t",
+   "hi": "3/20",
+   "line": "t",
+   "lo": "3/20",
+   "role": "size",
+   "type": "cap"
+  },
+  {
+   "dim": "m^4",
+   "entity": "cap3",
+   "field": "i",
+   "hi": "151/250000000000",
+   "line": "i",
+   "lo": "151/250000000000",
+   "role": "size",
+   "type": "cap"
+  },
+  {
+   "dim": "length",
+   "entity": "k",
+   "field": "a",
+   "hi": "3/100",
+   "line": "a",
+   "lo": "3/100",
+   "role": "size",
+   "type": "bar"
+  },
+  {
+   "dim": "length",
+   "entity": "k",
+   "field": "b",
+   "hi": "1/100",
+   "line": "b",
+   "lo": "1/100",
+   "role": "size",
+   "type": "bar"
+  }
+ ]
+}

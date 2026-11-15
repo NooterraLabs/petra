@@ -1,0 +1,94 @@
+{
+ "cases": [
+  "seismic",
+  "wind"
+ ],
+ "claims": [],
+ "environment": null,
+ "format": "petra-card/0",
+ "inputs": [
+  {
+   "by": "t@example.org",
+   "dim": "temperature",
+   "hi": "1001/8",
+   "lo": "1001/10",
+   "name": "ab.T"
+  },
+  {
+   "by": "s.engineer@example.org",
+   "dim": "length",
+   "hi": "3/1000",
+   "lo": "3/1000",
+   "name": "ab.gap"
+  },
+  {
+   "by": "x@y.z",
+   "case": "seismic",
+   "dim": "current",
+   "field": "current",
+   "hi": "2844/937",
+   "lo": "2844/937",
+   "name": "seismic.ab.current",
+   "on": "ab"
+  },
+  {
+   "by": "t@example.org",
+   "dim": "temperature",
+   "hi": "999/25",
+   "lo": "999/25",
+   "name": "strip.T"
+  },
+  {
+   "by": "t@example.org",
+   "dim": "length",
+   "hi": "3/500",
+   "lo": "3/500",
+   "name": "strip.gap"
+  },
+  {
+   "by": "a.b@c.d",
+   "case": "wind",
+   "dim": "current",
+   "field": "current",
+   "hi": "6583/855000000",
+   "lo": "0",
+   "name": "wind.ab.current",
+   "on": "ab"
+  }
+ ],
+ "name": "card_1",
+ "probability_claims": [],
+ "tests": [],
+ "waivers": [
+  {
+   "by": "s.engineer@example.org",
+   "mechanism": "strip.creep",
+   "reason": "snug-tight bolts",
+   "subject": "strip"
+  },
+  {
+   "by": "s.engineer@example.org",
+   "mechanism": "strip.tide",
+   "reason": "n\u00e4mn",
+   "subject": "strip"
+  },
+  {
+   "by": "t@example.org",
+   "mechanism": "strip.spark",
+   "reason": "caf\u00e9",
+   "subject": "strip"
+  },
+  {
+   "by": "x@y.z",
+   "mechanism": "strip.creep",
+   "reason": "caf\u00e9",
+   "subject": "ab"
+  },
+  {
+   "by": "a.b@c.d",
+   "mechanism": "strip.tide",
+   "reason": "n\u00e4mn",
+   "subject": "ab"
+  }
+ ]
+}

@@ -8,6 +8,7 @@ from pathlib import Path
 
 import petra
 from petra.files import read_pair
+from tests.old_kinds import python_report
 
 ROOT = Path(__file__).resolve().parents[1]
 STEEL = ROOT / "examples" / "steel"
@@ -18,7 +19,7 @@ def written(card: str, text: str):
         target = Path(tmp) / "design.petra"
         target.write_text(text, encoding="utf-8", newline="\n")
         target.with_suffix(".card").write_text(card, encoding="utf-8", newline="\n")
-        return petra.check_file(target)
+        return python_report(target)
 
 
 def checks(report, mode: str) -> list[str]:
@@ -52,7 +53,7 @@ class MaximumSpacing(unittest.TestCase):
         """A seat bolted to its support by one row of two bolts, the P3 pilot's task 303-003:
         its bolts sit side by side across the reaction, so J3.6 has no pitch to limit. It
         was left open for want of a spacing check; it is not owed, and says why."""
-        report = petra.check_file(ROOT / "corpus" / "cases" / "pilot" / "seat_one_row.petra")
+        report = python_report(ROOT / "corpus" / "cases" / "pilot" / "seat_one_row.petra")
         self.assertEqual(report.to_json()["status"], "PASS")
         why = [u["reason"] for u in report.to_json()["unchecked"] if u["mode"] == "steel.spacing_max"]
         self.assertEqual(len(why), 1)

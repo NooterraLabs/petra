@@ -120,16 +120,31 @@ def deck(edit=lambda body: None) -> grid.Deck:
     return grid.read_deck(json.dumps(body))
 
 
+def alone(card: str, design: str, path: str) -> dict:
+    """The grid's own report of a pair, in the JSON `petra check` prints it in, with no kernel
+    run. The grid words a report and decides nothing: `petra check` takes the verdict from the
+    kernel and holds these cells to the kernel's (class Kernel below, and
+    tests/test_kernel_decides.py). A pair the grid refuses is an input error, as data."""
+    from petra.registry import build_registry
+    from petra.repair import INPUT_ERRORS
+
+    try:
+        parsed = petra.lang.parse_design(card, design, path, build_registry())
+        return grid.check(parsed, grid.owner(parsed))[0].to_json()
+    except INPUT_ERRORS as exc:
+        return {"file": path, "status": "INPUT_ERROR", "error": str(exc)}
+
+
 def checked(design=DESIGN, card=CARD, rules=None, swap=(), card_swap=()) -> dict:
-    """petra.check of the texts against STRIPS, each after its replacements, with no kernel."""
+    """The grid's own report of the texts against STRIPS, each after its replacements."""
     for old, new in swap:
         assert old in design, old
         design = design.replace(old, new)
     for old, new in card_swap:
         assert old in card, old
         card = card.replace(old, new)
-    with mock.patch.object(grid, "decks", lambda: (rules or deck(),)), mock.patch.object(verify, "binary", lambda: None):
-        return petra.check(card, design, path="strips.petra", repair=False)
+    with mock.patch.object(grid, "decks", lambda: (rules or deck(),)):
+        return alone(card, design, "strips.petra")
 
 
 def cell(result: dict, mechanism: str, entry: str | None = None) -> dict:
@@ -445,8 +460,7 @@ class Shipped(unittest.TestCase):
 
     def check(self, name: str) -> dict:
         path = ROOT / "examples" / "deck" / f"{name}.petra"
-        with mock.patch.object(verify, "binary", lambda: None):
-            return petra.check(*read_pair(path), path=str(path), repair=False)
+        return alone(*read_pair(path), str(path))
 
     NO_RULE = ["lap.tightening", "lap.hole_use", "lap.max_edge_distance", "lap.partial_block_shear", "lap.ply_flexure"]
 
@@ -489,8 +503,7 @@ class Shipped(unittest.TestCase):
             assert old in design, old
             design = design.replace(old, new)
         assert "[0 kip, 45 kip]" in card
-        with mock.patch.object(verify, "binary", lambda: None):
-            return petra.check(card.replace("[0 kip, 45 kip]", f"[0 kip, {pull}]"), design, path=str(path), repair=False)
+        return alone(card.replace("[0 kip, 45 kip]", f"[0 kip, {pull}]"), design, str(path))
 
     def test_tearout_governs_a_short_end_and_the_table_refuses_it(self):
         short = self.variant(("end 1.5 inch", "end 0.75 inch"))
@@ -535,8 +548,7 @@ class Shipped(unittest.TestCase):
             assert old in design, old
             design = design.replace(old, new)
         card += "".join(f'\nwaive {m} on splice by "t@example.org" reason "test"\n' for m in six)
-        with mock.patch.object(verify, "binary", lambda: None):
-            found = petra.check(card, design, path=str(ROOT / "examples" / "deck" / "lap_pass.petra"), repair=False)
+        found = alone(card, design, str(ROOT / "examples" / "deck" / "lap_pass.petra"))
         opened = [c for c in found["cells"] if c["state"] == "open"]
         self.assertEqual({c["mechanism"] for c in opened}, set(six))
         for c in opened:
@@ -600,9 +612,8 @@ class Shipped(unittest.TestCase):
         path = ROOT / "examples" / "deck" / "lap_unknown.petra"
         card, design = read_pair(path)
         card += 'waive lap.block_shear on splice by "s.engineer@example.org" reason "calculation C-12 sheet 4"\n'
-        with mock.patch.object(verify, "binary", lambda: None):
-            found = petra.check(card.replace("45 kip", "200 kip"), design, path=str(path), repair=False)
-            held = petra.check(card, design, path=str(path), repair=False)
+        found = alone(card.replace("45 kip", "200 kip"), design, str(path))
+        held = alone(card, design, str(path))
         shear = {c["entry"]: (c["state"], c["rule"]) for c in found["cells"] if c["mechanism"] == "lap.block_shear"}
         self.assertEqual(shear, {"lap-block-shear-a/gravity": ("refuted", "aisc360-22/lap-block-shear-a"), "lap-block-shear-b/gravity": ("refuted", "aisc360-22/lap-block-shear-b")})
         self.assertEqual(cell(found, "lap.ply_rupture", "lap-ply-rupture-a/gravity")["state"], "refuted", "a line the card does not waive is still answered")
@@ -611,13 +622,13 @@ class Shipped(unittest.TestCase):
 
     def test_a_waived_line_with_no_rule_is_one_waived_cell_that_says_what_was_open(self):
         path = ROOT / "examples" / "deck" / "lap_pass.petra"
-        with mock.patch.object(verify, "binary", lambda: None):
-            found = petra.check(*read_pair(path), path=str(path), repair=False)
+        found = alone(*read_pair(path), str(path))
         waived = [c for c in found["cells"] if c["state"] == "waived"]
         self.assertEqual(([c["mechanism"] for c in waived], [c["entry"] for c in waived], found["status"]), (self.NO_RULE, [""] * 5, "PASS_WAIVED"))
         for c in waived:
             self.assertRegex(c["why"], r"^by .+: .+; open but for the waiver: the deck has no rule for it$")
 
+    @unittest.skipIf(verify.binary() is None, "no petra-verify is built here")
     def test_a_pass_that_rests_on_a_waiver_says_so_in_its_text_its_json_its_exit_code_and_the_mcp_reply(self):
         """The lap of lap_pass passes every rule the deck has, and four cells rest on the card's waivers. `petra check` gives it a status
         word of its own, PASS_WAIVED, which exits 6, and its JSON lists the four waivers. The kernel says PASS and lists the same four."""
@@ -640,8 +651,7 @@ class Shipped(unittest.TestCase):
             if json_flag:
                 said = json.loads(out.getvalue())
                 self.assertEqual((said["status"], said["waived"]), ("PASS_WAIVED", waivers))
-                if said["kernel"] is not None:
-                    self.assertEqual((said["kernel"]["verdict"], said["kernel"]["waived"]), ("PASS", waivers))
+                self.assertEqual((said["kernel"]["verdict"], said["kernel"]["waived"]), ("PASS", waivers))
             else:
                 lines = out.getvalue().splitlines()
                 self.assertEqual(lines[0], "lap-splice-waived: PASS_WAIVED")

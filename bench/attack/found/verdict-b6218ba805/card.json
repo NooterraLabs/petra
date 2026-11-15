@@ -1,0 +1,114 @@
+{
+ "cases": [
+  "a"
+ ],
+ "claims": [],
+ "environment": null,
+ "format": "petra-card/0",
+ "inputs": [
+  {
+   "by": "t@example.org",
+   "case": "a",
+   "dim": "force",
+   "field": "pull",
+   "hi": "8086866896543589/40000000000",
+   "lo": "8086866896543589/40000000000",
+   "name": "a.lap.pull",
+   "on": "lap"
+  },
+  {
+   "by": "s.engineer@example.org",
+   "dim": "stress",
+   "hi": "266893296915630/16129",
+   "lo": "266893296915630/16129",
+   "name": "k.Fu"
+  },
+  {
+   "by": "x@y.z",
+   "dim": "stress",
+   "hi": "80067989074689/322580",
+   "lo": "80067989074689/322580",
+   "name": "k.Fy"
+  },
+  {
+   "by": "t@example.org",
+   "dim": "length",
+   "hi": "381/2500",
+   "lo": "381/2500",
+   "name": "k.width"
+  },
+  {
+   "by": "x@y.z",
+   "dim": "stress",
+   "hi": "97860875535731/12903200",
+   "lo": "80067989074689/12903200",
+   "name": "p1.Fu"
+  },
+  {
+   "by": "t@example.org",
+   "dim": "stress",
+   "hi": "80067989074689/322580",
+   "lo": "80067989074689/322580",
+   "name": "p1.Fy"
+  }
+ ],
+ "name": "card_1",
+ "probability_claims": [],
+ "tests": [],
+ "waivers": [
+  {
+   "by": "s.engineer@example.org",
+   "mechanism": "lap.tightening",
+   "reason": "a long reason xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "subject": "lap"
+  },
+  {
+   "by": "t@example.org",
+   "mechanism": "lap.hole_use",
+   "reason": "it is a test",
+   "subject": "lap"
+  },
+  {
+   "by": "x@y.z",
+   "mechanism": "lap.max_edge_distance",
+   "reason": "a long reason xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "subject": "lap"
+  },
+  {
+   "by": "t@example.org",
+   "mechanism": "lap.tension_with_shear",
+   "reason": "snug-tight bolts",
+   "subject": "lap"
+  },
+  {
+   "by": "t@example.org",
+   "mechanism": "lap.slip",
+   "reason": "a long reason xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "subject": "lap"
+  },
+  {
+   "by": "t@example.org",
+   "mechanism": "lap.ply_shear",
+   "reason": "it is a test",
+   "subject": "lap"
+  },
+  {
+   "by": "x@y.z",
+   "mechanism": "lap.partial_block_shear",
+   "reason": "a long reason xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "subject": "lap"
+  },
+  {
+   "by": "x@y.z",
+   "mechanism": "lap.ply_compression",
+   "reason": "caf\u00e9",
+   "subject": "lap"
+  },
+  {
+   "by": "s.engineer@example.org",
+   "mechanism": "lap.ply_flexure",
+   "reason": "a reason with \"quotes\"",
+   "subject": "lap"
+  }
+ ]
+}

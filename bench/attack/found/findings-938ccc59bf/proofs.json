@@ -1,0 +1,234 @@
+{
+ "cells": [
+  {
+   "entry": "cases",
+   "mechanism": "bar.cases",
+   "point": {
+    "dsg:card_1.Z.b": "1/50",
+    "in:card_1.Z.a": "42949673/1073741824"
+   },
+   "rule": "ops/cases",
+   "state": "refuted",
+   "subject": "Z"
+  },
+  {
+   "entry": "roots",
+   "mechanism": "bar.roots",
+   "point": {
+    "dsg:card_1.Z.b": "1/50",
+    "in:card_1.Z.a": "42949673/1073741824"
+   },
+   "rule": "ops/roots",
+   "state": "refuted",
+   "subject": "Z"
+  },
+  {
+   "entry": "exp/where",
+   "mechanism": "bar.exp",
+   "partition": "leaf",
+   "rule": "ops/exp",
+   "state": "proved",
+   "subject": "Z"
+  },
+  {
+   "entry": "exp",
+   "mechanism": "bar.exp",
+   "point": {
+    "dsg:card_1.Z.s": "3/250",
+    "in:card_1.Z.r": "42807158896152731596418870679/158456325028528675187087900672"
+   },
+   "rule": "ops/exp",
+   "state": "refuted",
+   "subject": "Z"
+  },
+  {
+   "completion": {
+    "keys": [],
+    "loads": [
+     [
+      "Z",
+      "push",
+      "",
+      "0"
+     ]
+    ]
+   },
+   "entry": "table",
+   "mechanism": "bar.table",
+   "partition": "leaf",
+   "rule": "ops/table",
+   "state": "open",
+   "subject": "Z",
+   "why": "the card puts no push on Z, which the rule reads"
+  },
+  {
+   "entry": "key",
+   "mechanism": "bar.key",
+   "rule": "ops/key",
+   "state": "open",
+   "subject": "Z",
+   "why": "the card puts no push on Z, which the rule reads"
+  },
+  {
+   "entry": "moment",
+   "mechanism": "bar.moment",
+   "rule": "ops/moment",
+   "state": "open",
+   "subject": "Z",
+   "why": "the card puts no push and no twist on Z, which the rule reads"
+  },
+  {
+   "entry": "caps",
+   "mechanism": "bar.caps",
+   "rule": "ops/caps",
+   "state": "open",
+   "subject": "Z",
+   "why": "the card puts no push on Z, which the rule reads"
+  },
+  {
+   "entry": "",
+   "mechanism": "bar.drag",
+   "state": "open",
+   "subject": "Z",
+   "why": "the deck has no rule for it on a part like this one"
+  },
+  {
+   "entry": "",
+   "mechanism": "bar.idle",
+   "state": "not_applicable",
+   "subject": "Z",
+   "why": "made up"
+  },
+  {
+   "entry": "named",
+   "mechanism": "bar.named",
+   "rule": "ops/named",
+   "state": "open",
+   "subject": "Z",
+   "why": "the card puts no push on Z, which the rule reads"
+  },
+  {
+   "entry": "cased",
+   "mechanism": "bar.cased",
+   "point": {
+    "dsg:card_1.Z.b": "1/50",
+    "dsg:card_1.b.i": "3/312500000",
+    "in:card_1.Z.a": "42949673/1073741824"
+   },
+   "rule": "ops/cased",
+   "state": "refuted",
+   "subject": "Z"
+  },
+  {
+   "entry": "left",
+   "mechanism": "bar.left",
+   "partition": "leaf",
+   "rule": "ops/left",
+   "state": "proved",
+   "subject": "Z"
+  },
+  {
+   "entry": "",
+   "mechanism": "bar.alike",
+   "state": "open",
+   "subject": "Z",
+   "why": "the deck has no rule for it on a part like this one"
+  },
+  {
+   "entry": "modulus",
+   "mechanism": "bar.modulus",
+   "partition": "leaf",
+   "rule": "ops/modulus",
+   "state": "proved",
+   "subject": "Z"
+  },
+  {
+   "entry": "cos",
+   "mechanism": "bar.cos",
+   "point": {
+    "in:card_1.Z.r": "42807158896152731596418870679/158456325028528675187087900672"
+   },
+   "rule": "ops/cos",
+   "state": "refuted",
+   "subject": "Z"
+  },
+  {
+   "entry": "cosin",
+   "mechanism": "bar.cosin",
+   "point": {
+    "in:card_1.Z.r": "42807158896152731596418870679/158456325028528675187087900672"
+   },
+   "rule": "ops/cosin",
+   "state": "refuted",
+   "subject": "Z"
+  },
+  {
+   "entry": "cosfloor",
+   "mechanism": "bar.cosfloor",
+   "partition": "leaf",
+   "rule": "ops/cosfloor",
+   "state": "proved",
+   "subject": "Z"
+  },
+  {
+   "entry": "turn",
+   "mechanism": "bar.turn",
+   "point": {
+    "dsg:card_1.Z.s": "3/250"
+   },
+   "rule": "ops/turn",
+   "state": "refuted",
+   "subject": "Z"
+  },
+  {
+   "entry": "sine",
+   "mechanism": "bar.sine",
+   "partition": "leaf",
+   "rule": "ops/sine",
+   "state": "proved",
+   "subject": "Z"
+  },
+  {
+   "entry": "zero",
+   "mechanism": "bar.zero",
+   "partition": "leaf",
+   "rule": "ops/zero",
+   "state": "proved",
+   "subject": "Z"
+  },
+  {
+   "entry": "tiny",
+   "mechanism": "bar.tiny",
+   "partition": "leaf",
+   "rule": "ops/tiny",
+   "state": "proved",
+   "subject": "Z"
+  },
+  {
+   "entry": "edge",
+   "mechanism": "bar.edge",
+   "partition": "leaf",
+   "rule": "ops/edge",
+   "state": "proved",
+   "subject": "Z"
+  },
+  {
+   "entry": "long",
+   "mechanism": "bar.long",
+   "point": {
+    "in:card_1.Z.r": "42807158896152731596418870679/158456325028528675187087900672"
+   },
+   "rule": "ops/long",
+   "state": "refuted",
+   "subject": "Z"
+  },
+  {
+   "entry": "",
+   "mechanism": "bar.right",
+   "state": "not_applicable",
+   "subject": "Z",
+   "why": "made up: a key of a joined part"
+  }
+ ],
+ "format": "petra-proofs/0"
+}

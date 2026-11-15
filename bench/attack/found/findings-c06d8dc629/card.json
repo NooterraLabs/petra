@@ -1,0 +1,52 @@
+{"format": "x",
+ "cases": [
+  "dead"
+ ],
+ "claims": [],
+ "environment": null,
+ "format": "petra-card/0",
+ "inputs": [
+  {
+   "by": "s.engineer@example.org",
+   "dim": "stress",
+   "hi": "2837965390536199/6451600",
+   "lo": "2321971683165981/6451600",
+   "name": "Z.Fu"
+  },
+  {
+   "by": "s.engineer@example.org",
+   "dim": "stress",
+   "hi": "80067989074689/322580",
+   "lo": "80067989074689/322580",
+   "name": "Z.Fy"
+  },
+  {
+   "by": "s.engineer@example.org",
+   "case": "dead",
+   "dim": "force",
+   "field": "pull",
+   "hi": "97860875535731/400000000",
+   "lo": "97860875535731/400000000",
+   "name": "dead.joint.pull",
+   "on": "joint"
+  },
+  {
+   "by": "a.b@c.d",
+   "dim": "stress",
+   "hi": "8896443230521/516128",
+   "lo": "8896443230521/645160",
+   "name": "splice.Fu"
+  },
+  {
+   "by": "s.engineer@example.org",
+   "dim": "stress",
+   "hi": "26689329691563/32258",
+   "lo": "26689329691563/32258",
+   "name": "splice.Fy"
+  }
+ ],
+ "name": "attack",
+ "probability_claims": [],
+ "tests": [],
+ "waivers": []
+}
