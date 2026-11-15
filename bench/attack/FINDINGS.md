@@ -63,6 +63,25 @@ Reasons of open and waived cells. The pages give the text of some (`open but for
 - No crash, hang or traceback in any reader, and no output the attacker could not read.
 - No relation broken: units (the Python reader's files do not change when a number is written in another unit, and each value equals the attacker's own table), rename, reorder, a load raised (held for the shipped deck), a plate thicker or stronger, a deck value written another way, a file in another JSON spelling, and wrong hints that leave a proved cell proved.
 
+## What became of each finding
+
+The twelfth review ruled on each of the nine, after an hour of its own on the tree of phase 1 (seed 12, the log line of 2026-11-14T23:51 in [log.jsonl](log.jsonl)): 5,682 inputs, 5,568 of them at the comparison, 891 differences of 43 kinds, no difference of verdict or of cells between the kernel and the Python reader, no relation broken. That hour added two: the clean-room reading stopped with no verdict on a card whose name is no text, and it read `"tests": null` as a finding of shape where the kernel says Parts 8.
+
+| Finding | Ruling |
+|---|---|
+| 1. A key left out | The clean-room reading is fixed. format.md has a section "Keys" that lists every key a file may leave out, and `tests/test_kernel_attacks12.py` holds the kernel to it. |
+| 2. A key written twice | format.md says the last value is read, and the reading follows. Whether a repeated key should be refused is still open, in step 1.12 of the plan. |
+| 3. After a shape finding | format.md says how far the rules go, under "After a broken rule", and the reading follows. |
+| 4. A given that a refused line names | It counts as read. format.md says so. |
+| 5. A card with a key twice | It follows from 2: the hash is of the bytes. |
+| 6. The reason of a cell nothing reads | format.md gives the words, and the reading follows. |
+| 7, 8. The reason the hints left, and the order of the loads a case leaves out | Each reader's own words. format.md says which reasons it holds, and [readers.py](readers.py) compares those (`held`). |
+| 9. A hint adds or drops the cell of a range | The page was wrong, and is corrected. |
+| The reading stops with no verdict | Fixed in the reading. |
+| `"tests": null` | format.md says the two keys are held to no kind, and the reading follows. |
+
+After the rulings a run of 15 minutes (seed 121, 4 workers) made 903 inputs, 891 of them at the comparison, and kept no difference of any kind. The sweep of missing keys gives the kernel and the clean-room reading the same answer on all 305 files.
+
 ## What the attacker is not yet
 
 It does not run the kernel against another kernel, only against the two readings. Its designs for the decks other than the first are written from their fields and not from their rules, so the made-up decks of the benches get fewer passes (5 percent of inputs PASS overall). It does not change a deck's types or its grid beyond dropping a line, and it makes no byte-level changes to the JSON.

@@ -210,6 +210,25 @@ Measured with `--count 6000 --decks 3000 --seed 7` against the kernel and the gr
 | Generated designs, 5,774 compared | The same verdict and the same cells on every one |
 | Damaged decks, 3,000 compared | The same on every one: 2,396 refused by all three, 167 PASS, 152 FAIL, 272 UNKNOWN, and 13 designs refused |
 
+## The eighth update, of 2026-11-14
+
+The attacker of `bench/attack` found the first fault of this reading that passes a file. The pages said what each file has and not that a key may not be left out, and the reading took a missing list for an empty one: a card with no `cases`, a design with no `quantities` and a deck.json with no `constants` passed here where the kernel refuses them, 40 of 305 files with one key left out, and 139 of 734 once the deck of rules and the rules of the findings were counted. The twelfth review settled it on the pages first: which keys may be left out, what a key written twice reads as, how far the rules go after a broken one, and the words of the reason of a cell that nothing reads.
+
+A ninth agent, under the same rule as before, brought the reading up to those pages. It had 555 bundles with the kernel's answers: the 120 of the last update, 335 files with one key left out, 63 written for a key twice and for what follows a broken rule, and 37 that the attacker kept, one of them a card on which this reading had stopped with no verdict. Before the update 230 differed, and after it all 555 agree. The comparison now also holds the findings to the same rules of the same files, and the reason of a cell that nothing reads to the page's words. Its own checks walk 16,186 files with one value changed, and each gets one of the four verdicts.
+
+The review then corrected four of the new sentences, and a tenth agent made the one change they asked for: a U+FFFD in the value that a repeated key replaces is not seen. It had 593 bundles, 8 of which differed, and all 593 agree. Each agent reports no file opened outside its folder and no command but Node and a plain listing. Each was shown, without asking, the repository's notes for agents and its recent commit messages, and reports using none of it.
+
+`AMBIGUITIES.md` gained section P, sixteen entries, and 25 older entries are settled or noted. The two agents sent ten places where the new sentences were at odds with themselves or with an example, and the pages are corrected where they were at fault. One kind of file still gets no verdict here: files with no deck of rules whose proofs.json carries a tape (entry P10). This reading is of the rules path only.
+
+Measured with `--count 6000 --decks 3000 --seed 7` against the kernel and the grid of the twelfth review's tree.
+
+| Compared | Result |
+|---|---|
+| Generated designs, 5,774 compared | The same verdict and the same cells on every one |
+| Damaged decks, 3,000 compared | The same on every one |
+| Files with one key left out, 734 | The same verdict and the same rules in the findings on every one |
+| The attacker, 15 minutes, 903 inputs | No difference of any kind |
+
 ## What it is not
 
-It does not read a design of the models' kinds or hash a file. It applies the limits that decide a verdict and not the budget of work, the memory of enclosures or the limits on what is printed. It is a reading of the rules path only.
+It does not read a design of the models' kinds: files with no deck of rules get UNKNOWN from it when no cell carries a tape, and no verdict when one does. It applies the limits that decide a verdict and not the budget of work, the memory of enclosures or the limits on what is printed. It is a reading of the rules path only.

@@ -51,7 +51,7 @@ A file, an item of one of its lists and a cell have every key this page gives th
 
 [deck.md](deck.md) says what a deck of rules has. Until 2026-11-14 this page did not say that a key may not be left out, and a reader written from it took a card with no `cases` and a design with no `quantities` as files with empty lists, and passed them where the kernel refuses them (`tests/test_kernel_attacks12.py`).
 
-An object that holds one key twice is read with the last value the file gives the key, and the file is not refused for the repeat. The value before it is not read: nothing in it is a finding, whatever kind of value it is, and a U+FFFD in it is not seen ([Texts](#texts)). It is still part of the file's bytes, so the limits that are tested on the bytes before the file is read hold for it: the nesting of the file, and the digits of a number outside a string ([Limits](#limits)).
+An object that holds one key twice is read with the last value the file gives the key, and the file is not refused for the repeat. The value before it is not read: nothing in it is a finding, whatever kind of value it is, and a U+FFFD in it is not seen ([Texts](#texts)). It is still part of the file's bytes, so what is tested on the bytes before the file is read holds for it: the file is UTF-8 and JSON as a whole, it nests no deeper than the limit, and a number outside a string in it has no more digits than the limit, no fraction and no exponent ([Limits](#limits)). The escape of half a surrogate pair in it is not seen either, since that reads as U+FFFD.
 
 ## card.json
 

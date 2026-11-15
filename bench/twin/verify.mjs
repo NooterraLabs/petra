@@ -344,6 +344,12 @@ export function parseJson(text) {
     }
   };
   const numRe = /-?(?:0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?/y;
+  // format.md, Keys: "The value before it is not read: nothing in it is a finding, whatever kind
+  // of value it is, and a U+FFFD in it is not seen". So a text or a key with U+FFFD, or with half
+  // a surrogate pair, which the kernel "reads as U+FFFD" (Texts), refuses the file only where the
+  // file is read. `seen` is the place of the first such text in the value being gone through, or
+  // -1, and an object forgets what a value held when the same key comes again.
+  let seen = -1;
   function str() {
     i++;
     let out = '';
@@ -353,7 +359,7 @@ export function parseJson(text) {
       const c = text.charCodeAt(i);
       if (c === 34) {
         out += text.slice(start, i);
-        if (badText(out)) err('a text holds U+FFFD or half a surrogate pair');
+        if (seen < 0 && badText(out)) seen = i;
         i++;
         return out;
       }
@@ -396,22 +402,38 @@ export function parseJson(text) {
       const obj = Object.create(null);
       ws();
       if (text[i] === '}') { i++; return obj; }
+      // format.md, Keys: "An object that holds one key twice is read with the last value the
+      // file gives the key, and the file is not refused for the repeat. The value before it is
+      // not read: nothing in it is a finding, whatever kind of value it is, and a U+FFFD in it is
+      // not seen. It is still part of the file's bytes, so the limits that are tested on the
+      // bytes before the file is read hold for it: the nesting of the file, and the digits of a
+      // number outside a string". So the value before the last is gone through as any JSON, with
+      // its nesting and its bare numbers held to Limits, and a U+FFFD in it is dropped when its
+      // key comes again (AMBIGUITIES.md, P2 and P15). A key is read whatever its value is.
+      const before = seen;
+      let inKey = -1;
+      let inValue = null;
       for (;;) {
         ws();
         if (text[i] !== '"') err('expected a key');
+        seen = -1;
         const k = str();
+        if (seen >= 0 && inKey < 0) inKey = seen;
         ws();
         if (text[i] !== ':') err('expected :');
         i++;
-        // format.md, Keys: "An object that holds one key twice is read with the last value the
-        // file gives the key. The value before it is not read, and the file is not refused for
-        // it." The value before it is still JSON that this reader went through, so what holds
-        // for the text of a file holds for it too: its nesting, its bare numbers and U+FFFD,
-        // which the kernel refuses "anywhere" (AMBIGUITIES.md, P2).
+        seen = -1;
         obj[k] = val(depth + 1);
+        if (seen >= 0) (inValue ??= new Map()).set(k, seen);
+        else if (inValue) inValue.delete(k);
         ws();
         if (text[i] === ',') { i++; continue; }
-        if (text[i] === '}') { i++; return obj; }
+        if (text[i] === '}') {
+          i++;
+          seen = before >= 0 ? before : inKey;
+          if (seen < 0 && inValue) for (const at of inValue.values()) { seen = at; break; }
+          return obj;
+        }
         err('expected , or }');
       }
     }
@@ -445,6 +467,7 @@ export function parseJson(text) {
   const v = val(0);
   ws();
   if (i < n) err('text after the JSON value');
+  if (seen >= 0) { i = seen; err('a text or a key that is read holds U+FFFD or half a surrogate pair'); }
   return v;
 }
 
@@ -2667,8 +2690,9 @@ export function verifyTexts(texts, opts = {}) {
   }
 
   // proofs.json. format.md, Keys: a cell has `subject`, `mechanism`, `entry` and `state`, and may
-  // leave out `tape`, `partition`, `point`, `which`, `rule` and `completion`, and `why` but for a
-  // `not_applicable` or `open` cell of a design with no parts. "A proofs.json that breaks a shape
+  // leave out `tape`, `partition`, `point`, `which`, `rule` and `completion`. "Without `--rules`,
+  // a `not_applicable` or `open` cell has `why`. With `--rules` a cell is a hint, and `why` may be
+  // left out of any." "A proofs.json that breaks a shape
   // rule in any hint, as a number written `01` or a hint with no `state`, is refused whole like
   // any file, and the verdict is ILL-FORMED with no cell." With `--rules` a cell is a hint, and
   // the kernel reads three more of its keys: `partition`, which is the text `leaf` or an object,
@@ -2686,8 +2710,9 @@ export function verifyTexts(texts, opts = {}) {
       if (e) return e;
       if (!STATES.includes(c.state)) return `${short(c.state)} is not a state`;
       if (!rulesGiven) {
-        // The cell of a design with no parts, which the kernel checks as it stands.
-        if (!hasParts && (c.state === 'not_applicable' || c.state === 'open') && !isStr(c.why)) return `a cell that is ${c.state} says why, and why is not a text`;
+        // "Without `--rules` a cell is what the kernel checks", whatever the design is: the page
+        // asked the `why` of a design with no parts only, until it was changed with P15.
+        if ((c.state === 'not_applicable' || c.state === 'open') && !isStr(c.why)) return `a cell that is ${c.state} says why, and why is not a text`;
         return c;
       }
       if (has(c, 'partition')) {
@@ -2760,14 +2785,17 @@ export function verifyTexts(texts, opts = {}) {
     if (isStr(s) && printedBytes(s) > limit) { find(file, item, `${what} prints in at most ${limit} bytes, and this one in ${printedBytes(s)}`); return false; }
     return true;
   };
-  if (deck) {
-    if (cardJ) nameLimit('card', 'name', cardJ.name, LABEL_NAME_BYTES, 'the name of the card');
-    if (designJ) nameLimit('design', 'name', designJ.name, LABEL_NAME_BYTES, 'the name of the design');
-  }
   // format.md, After a broken rule: "When card.json, design.json or deck.json does not read as a
   // whole, the kernel stops there, with the shape findings of all the files. Otherwise it applies
   // the type rules to what it read".
   if (whole.has('card') || whole.has('design') || whole.has('deck')) return ill();
+  // The two names are tested past the stop: "They are found where the parts are read, with the
+  // rules of Parts, and those go on", as the name of a load case is. Nothing stops between here
+  // and Parts 1 to 8 when the deck of rules reads (AMBIGUITIES.md, P16).
+  if (deck) {
+    nameLimit('card', 'name', cardJ.name, LABEL_NAME_BYTES, 'the name of the card');
+    nameLimit('design', 'name', designJ.name, LABEL_NAME_BYTES, 'the name of the design');
+  }
 
   // The type of the first part of a name (type rules 3 and 4), when the deck holds together: "The
   // part is the first of that name in `parts`", of the parts that read (AMBIGUITIES.md, P11).
