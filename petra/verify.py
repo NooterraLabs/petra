@@ -147,7 +147,8 @@ def binary() -> str | None:
         return named
     if PACKAGED.is_file() and runs(str(PACKAGED)):
         return str(PACKAGED)
-    return str(BUILT) if BUILT.is_file() and source_tree(BUILT.parents[4]) else None
+    # The tree is the fifth folder above the built kernel. A path with fewer folders above it has none, and is no kernel of a tree.
+    return str(BUILT) if BUILT.is_file() and len(BUILT.parents) > 4 and source_tree(BUILT.parents[4]) else None
 
 
 def source_tree(folder: Path) -> bool:

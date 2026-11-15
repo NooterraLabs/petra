@@ -138,7 +138,10 @@ class Found(unittest.TestCase):
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
-        self.packaged, self.built = Path(tmp.name, "packaged", verify.EXE), Path(tmp.name, "built", verify.EXE)
+        # The built kernel is where `lake build` puts it in a source tree, kernel/.lake/build/bin, so that its tree is the fifth
+        # folder above it however deep the temporary folder is: /tmp/NAME on Linux is nearer the root than a kernel's own path.
+        self.tree = Path(tmp.name, "tree")
+        self.packaged, self.built = Path(tmp.name, "packaged", verify.EXE), self.tree / "kernel" / ".lake" / "build" / "bin" / verify.EXE
         for patch in (mock.patch.object(verify, "PACKAGED", self.packaged), mock.patch.object(verify, "BUILT", self.built),
                       mock.patch.dict(os.environ)):
             patch.start()
@@ -148,13 +151,12 @@ class Found(unittest.TestCase):
         self.addCleanup(verify.runs.cache_clear)
 
     def put(self, path: Path, mode: int = 0o755) -> None:
-        path.parent.mkdir()
+        path.parent.mkdir(parents=True)
         path.write_bytes(b"")
         path.chmod(mode)
-        if path == self.built:      # the built kernel is used only from a source tree of Petra (verify.source_tree)
-            patch = mock.patch.object(verify, "source_tree", lambda folder: True)
-            patch.start()
-            self.addCleanup(patch.stop)
+        if path == self.built:      # the built kernel is used only from a source tree of Petra (verify.source_tree): this is one
+            (self.tree / "kernel" / "lakefile.toml").write_text('name = "petra-kernel"\n', encoding="utf-8")
+            (self.tree / "pyproject.toml").write_text('[project]\nname = "petra-lang"\n', encoding="utf-8")
 
     def test_with_none_named_packaged_or_built_there_is_no_kernel(self):
         self.assertIsNone(verify.binary())

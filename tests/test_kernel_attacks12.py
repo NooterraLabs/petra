@@ -801,6 +801,24 @@ class TheBuiltKernelIsOfASourceTree(unittest.TestCase):
             with mock.patch.dict(os.environ, env, clear=True), mock.patch.object(verify, "PACKAGED", Path(folder, "none")), mock.patch.object(verify, "BUILT", planted):
                 self.assertIsNone(verify.binary(), "a file in site-packages was the kernel")
 
+    @unittest.skipIf(__import__("os").name == "nt", "a file two folders deep, by a POSIX path")
+    def test_a_built_kernel_too_near_the_root_to_have_a_tree_is_no_kernel_and_no_error(self):
+        """`binary` took the fifth folder above the built kernel as its tree, and a path with
+        fewer folders above it raised IndexError: on Linux, where a temporary folder is /tmp/NAME,
+        the tests of tests/test_verify.py that put a kernel there stopped on it. A real install is
+        never that near the root, and the function must raise on no path at all."""
+        import os
+        from unittest import mock
+
+        from petra import verify
+
+        with tempfile.NamedTemporaryFile(dir="/tmp", prefix="petra-verify-") as shallow:
+            near = Path(shallow.name)
+            self.assertLess(len(near.parents), 5, near)
+            env = {k: v for k, v in os.environ.items() if k != "PETRA_VERIFY"}
+            with mock.patch.dict(os.environ, env, clear=True), mock.patch.object(verify, "PACKAGED", Path("/nonexistent/petra-verify")), mock.patch.object(verify, "BUILT", near):
+                self.assertIsNone(verify.binary(), "a kernel with no fifth folder above it is not this source tree's")
+
     def test_the_kernel_built_in_this_tree_is_found(self):
         import os
         from unittest import mock
