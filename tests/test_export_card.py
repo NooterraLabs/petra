@@ -106,8 +106,18 @@ class CardOnly(unittest.TestCase):
 
     def test_card_only_takes_no_design_and_a_design_takes_no_card_only(self):
         for argv in (["x.petra", "--card-only", "x.card", "--out", "o"], ["--out", "o"], ["--card-only", "x.card", "--no-physics", "--out", "o"]):
-            with self.subTest(argv=argv), contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            with self.subTest(argv=argv), contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as stopped:
                 export.main(argv)
+            self.assertEqual(stopped.exception.code, 3, "a usage error is an input error: 2 is kept for a design no deck has")
+
+    def test_a_file_that_cannot_be_written_leaves_none_of_the_run_behind(self):
+        """The thirteenth review, round 2: with proofs.json a folder, the command exited 3 and left the other four files."""
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp, "out")
+            Path(out, "proofs.json").mkdir(parents=True)
+            with contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(export.main([str(ROOT / "examples" / "deck" / "lap_pass.petra"), "--out", str(out)]), 3)
+            self.assertEqual(sorted(p.name for p in out.iterdir()), ["proofs.json"])
 
     def test_a_card_alone_is_written_whatever_kinds_its_designs_have(self):
         """`--card-only` reads no design, so it writes the card of a truss too: each load with the part and the field

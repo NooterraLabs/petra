@@ -27,7 +27,7 @@ print(checked.text())                    # what `petra check` prints
 
 | Member | Holds |
 |---|---|
-| `status` | The kernel's verdict: PASS, PASS_WAIVED, FAIL or UNKNOWN |
+| `status` | The kernel's verdict: PASS, PASS_WAIVED, FAIL or UNKNOWN. For a design no deck has it is UNKNOWN, and the kernel is not asked |
 | `reason` | For a design no deck has, why it reads UNKNOWN. Otherwise `None` |
 | `kernel` | What the kernel said: its verdict, the hashes of the files it read and the waivers it lists. `None` for a design no deck has, which the kernel is not asked about |
 | `hashes` | The SHA-256 of the card's text and of the design's |
@@ -41,7 +41,7 @@ For a design of a deck, both functions raise `petra.verify.NoVerdict` when there
 
 ## The kernel
 
-`status` is the verdict of `petra-verify`, the checker in `kernel/`. Petra runs the file the environment variable `PETRA_VERIFY` names, else the one inside the installed package, else the one `lake build` put in a source tree's `kernel/`. A wheel from PyPI carries the kernel for its platform, and Petra installed from the sdist carries none.
+For a design of a deck, `status` is the verdict of `petra-verify`, the checker in `kernel/`. Petra runs the file the environment variable `PETRA_VERIFY` names, else the one inside the installed package, else the one `lake build` put in a source tree's `kernel/`. A wheel from PyPI carries the kernel for its platform, and Petra installed from the sdist carries none.
 
 With no kernel to run, there is no verdict of a design of a deck. The same holds for a kernel whose exit code or error stream is at odds with what it printed, or whose answer does not hold together ([format.md](../../docs/format.md), the first section). Then `petra.check` raises `petra.verify.NoVerdict`, `petra check` prints nothing to stdout and exits 4, and the server's `check` tool answers with an error.
 
@@ -102,7 +102,7 @@ A design none of whose parts is of a deck's type cannot be checked: there is no 
  "path": "none"}
 ```
 
-No number of such a design is held to a floor, and nothing a card states of it is read: a floor and a load belong to a type, and it has none.
+The pair is still held to the language: a load with no signature, a given no part reads and a load on a part the design does not have are refused as input. Past that nothing checks its numbers. The kernel holds every size and every signed bound to the floors of `deck.json`, and it is not asked, so a length under zero or an ambient of -1000 degC reads UNKNOWN like the rest.
 
 A design with parts of a deck's types and parts of another kind is refused as input.
 

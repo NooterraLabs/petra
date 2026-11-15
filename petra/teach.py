@@ -160,8 +160,8 @@ def new_text(kind: str, name: str | None) -> tuple[str, str]:
         raise _unknown(kind, "a type of a deck that has an example", list(TEMPLATES))
     source, component, card, text = TEMPLATES[kind]
     if name is not None:
-        if not _NAME.fullmatch(name):
-            raise TeachError(f"--name {name!r} is not a name: letters, digits and _, starting with a letter or _")
+        if not _NAME.fullmatch(name) or len(name) > grid.MAX_NAME:
+            raise TeachError(f"--name {name[:80]!r} is not a name: at most {grid.MAX_NAME} letters, digits and _, starting with a letter or _")
         card, text = rename(card, component, name), rename(text, component, name)
     out = started(text, source, kind)
     card = unsigned(card)
@@ -264,8 +264,9 @@ SNIPPETS: tuple[tuple[str, str, str], ...] = (
      "is refused.",
      'given tab.Fy in [36 ksi, 36 ksi] signed "s.engineer@example.org" source "ASTM A36, specified minimum"'),
     ("component", "A component is a part, written `TYPE NAME { ... }` in the design, with one line per field. The "
-     "Types section lists every type of the shipped decks and its lines. A design with a part of a kind no deck "
-     "has is read too, and `petra check` gives it UNKNOWN with that reason: there is no rule to check it by.",
+     "Types section lists every type of the shipped decks and its lines. A design whose parts are all of kinds no "
+     "deck has is read too, and `petra check` gives it UNKNOWN with that reason: there is no rule to check it by. "
+     "A design that has such a part beside parts of a deck's types is refused.",
      "plate tab {\n  thickness 0.375 inch\n  width 6 inch\n  Fy given tab.Fy\n  Fu given tab.Fu\n}"),
     ("load", "A `load` block is one load case. Each entry is `on <part> <load> <bound>`, where the load is one "
      "that the part's type takes. An entry is signed by its own signature or by the signature on the block's "

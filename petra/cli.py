@@ -61,7 +61,8 @@ from typing import Mapping, NoReturn
 
 EXIT_CODES: Mapping[str, int] = {"PASS": 0, "FAIL": 1, "UNKNOWN": 2, "INPUT_ERROR": 3, "INTERNAL_ERROR": 4, "PASS_WAIVED": 6, "BROKEN_PIPE": 141}
 """`petra check` exits with the code of the kernel's verdict: PASS, FAIL and UNKNOWN are
-the kernel's own 0, 1 and 2, and INPUT_ERROR is its 3 for an ill-formed pair. INTERNAL_ERROR
+the kernel's own 0, 1 and 2, and INPUT_ERROR is its 3 for an ill-formed pair. UNKNOWN is
+also what a design no deck has reads, which the kernel is not asked about. INTERNAL_ERROR
 is also what it exits with when there is no verdict (verify.NoVerdict). PASS_WAIVED: the
 kernel says PASS, and a cell rests on a waiver (grid.PASS_WAIVED). No command exits 5, which
 was the code of a status the Python checker had. BROKEN_PIPE: the reader closed stdout
@@ -139,9 +140,9 @@ def _input_error(exc: BaseException) -> int:
 def cmd_check(args: argparse.Namespace) -> int:
     """pipeline.check_text on the file, print its text() or json.dumps(to_json(),
     sort_keys=True). Returns EXIT_CODES[status], where the status is the kernel's verdict,
-    or EXIT_CODES["INPUT_ERROR"] when a file cannot be read or the pair is refused (message
+    or UNKNOWN for a design no deck has, or EXIT_CODES["INPUT_ERROR"] when a file cannot be read or the pair is refused (message
     on stderr). With no kernel to run, or one whose answer cannot be taken, there is no
-    verdict: nothing goes to stdout, the reason goes to stderr, and the code is
+    verdict of a design of a deck: nothing goes to stdout, the reason goes to stderr, and the code is
     EXIT_CODES["INTERNAL_ERROR"]."""
     from . import verify
     from .files import read_pair

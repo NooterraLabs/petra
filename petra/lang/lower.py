@@ -28,8 +28,9 @@ and 1; no declared name is a DECLS keyword. The probability-claim pairing holds 
 construction: the parser has one rule per form.
 
 Not checked here: the kind of a component. A kind is a type of a deck of rules, and a
-design with a part of a kind no deck has is still a design: every way into a check gives it
-UNKNOWN, with the reason that no deck has its kind (pipeline.py). What a part's lines mean
+design whose parts are all of kinds no deck has is still a design: every way into a check
+gives it UNKNOWN, with the reason that no deck has its kind (pipeline.py). One that has such
+a part beside a deck's is refused by grid.owner. What a part's lines mean
 is read by the grid from its deck (grid.read_parts), and by the kernel from the same deck.
 """
 from __future__ import annotations
@@ -175,7 +176,7 @@ class _Lowering:
         self.unread = set() if self.alone else set(self.givens_by_name)
         components = self.lowered(self.components_by_name, self.component)
         # A waiver names a mechanism of a deck. Which mechanisms there are is known only where every part is of a deck's
-        # type: a part of a kind no deck has may have had mechanisms of its own, and the pair reads UNKNOWN whatever it waives.
+        # type: a part of a kind no deck has may have had mechanisms of its own, and the pair reads UNKNOWN or is refused whatever it waives.
         self.decked = not self.alone and all(c.kind in grid.kinds() for c in components.values())      # so of a design with no part too
         self.path = card.path
         waivers = tuple(self.waiver(n) for n in waive_nodes)

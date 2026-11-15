@@ -118,6 +118,10 @@ class Check(Workspace):
         code, out, err = run("check", self.write("mixed.petra", design + "\ntruss frame {\n  node a at (0 m, 0 m)\n}\n"))
         self.assertEqual((code, out), (EXIT_CODES["INPUT_ERROR"], ""))
         self.assertIn("frame", err, "the part of no deck is named")
+        many = design + "".join(f"\ntruss f{i} {{\n}}\n" for i in range(40))
+        code, out, err = run("check", self.write("mixed.petra", many))
+        self.assertEqual((code, out), (EXIT_CODES["INPUT_ERROR"], ""))
+        self.assertIn("and 36 more", err, "four of the parts of no deck are named, and the rest counted")
 
     def test_a_design_with_no_part_reads_unknown_and_says_so(self):
         card, _ = read_pair(TRUSS)

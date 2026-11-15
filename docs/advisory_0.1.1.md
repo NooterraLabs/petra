@@ -33,7 +33,7 @@ So 0.1.2 answers fewer designs than 0.1.1 did. Of the 15 above, the twelve steel
 
 ## What 0.2.0 does
 
-The checker that passed those designs is gone from the code. A design of an older kind reads unknown whether that checker passed it or failed it: nothing is left that could refute one.
+The checker that passed those designs is gone from the code. A design of an older kind reads unknown whether that checker passed it or failed it: nothing is left that could refute one. That holds for one whose load nobody signed, too, which 0.1.2 refused.
 
 ## What to do
 

@@ -23,7 +23,8 @@ Untrusted. It reads the two files through the language, so a bug here gives the 
 wrong files, and the kernel's verdict is about the files it was given. A load or an
 ambient that reads a param is an input nobody signed, and goes into card.json with no `by`,
 which the kernel refuses. Exits 3 when the language or a deck's types refuse the pair, as
-`petra check` does, and then writes nothing.
+`petra check` does, for a file it cannot write and for a usage error, and then leaves no file
+of this run behind.
 """
 from __future__ import annotations
 
@@ -165,8 +166,15 @@ def export(path: str, out: Path, physics: bool = True, card_path: str | None = N
     # Without physics the files are the design as written, and the kernel says whether the deck's types take it.
     files = grid.check(design, rules)[1] if physics else grid.bundle(design, rules)
     out.mkdir(parents=True, exist_ok=True)
-    for name, body in files.items():
-        (out / f"{name}.json").write_text(body, encoding="utf-8", newline="\n")
+    wrote: list[Path] = []
+    try:
+        for name, body in files.items():
+            (out / f"{name}.json").write_text(body, encoding="utf-8", newline="\n")
+            wrote.append(out / f"{name}.json")
+    except OSError:      # a file that cannot be written: take back the ones that were, so a refusal leaves no half of a bundle
+        for path in wrote:
+            path.unlink(missing_ok=True)
+        raise
 
 
 def card_only(card_path: str, out: Path) -> str:
@@ -183,6 +191,14 @@ def card_only(card_path: str, out: Path) -> str:
     return sha256(body)
 
 
+class _Parser(argparse.ArgumentParser):
+    """argparse exits 2 on a usage error, which this command keeps for a design no deck has."""
+
+    def error(self, message: str):
+        self.print_usage(sys.stderr)
+        self.exit(3, f"{self.prog}: error: {message}\n")
+
+
 def main(argv: list[str] | None = None) -> int:
     """The command, printing through petra.files.guarded as every command of Petra does."""
     from .files import guarded
@@ -191,7 +207,7 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _main(argv: list[str]) -> int:
-    parser = argparse.ArgumentParser(prog="python -m petra.export", description=__doc__.split("\n")[0])
+    parser = _Parser(prog="python -m petra.export", description=__doc__.split("\n")[0])
     parser.add_argument("file", nargs="?", help="the design, a .petra file")
     parser.add_argument("--card", metavar="FILE", help="the card the design answers; default the .card file beside the design")
     parser.add_argument("--card-only", metavar="FILE", help="a card with no design: write its card.json alone and print its hash")

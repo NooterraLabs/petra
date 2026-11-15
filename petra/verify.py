@@ -1,7 +1,6 @@
 """The kernel's verdict on a design. Untrusted shell around petra-verify (kernel/).
 
-The verdict of a check is the kernel's, and nothing here or in a caller gives one of its
-own. `ask` writes the files of docs/format.md, runs the kernel on them and takes its answer
+A pass or a fail is the kernel's, and nothing here or in a caller gives one of its own. `ask` writes the files of docs/format.md, runs the kernel on them and takes its answer
 only when the answer holds together: one JSON object with one of the four verdicts, the exit
 code of that verdict, and nothing on the error stream. Anything else raises NoVerdict, and
 so does having no kernel to run. Every way into a check then reports that there is no
@@ -129,7 +128,7 @@ def need() -> str:
     """The kernel to run, as `binary` finds it. Raises NoKernel when there is none."""
     kernel = binary()
     if kernel is None:
-        raise NoKernel(f"there is no petra-verify to run, and nothing else gives a verdict. PETRA_VERIFY names none, this install "
+        raise NoKernel(f"there is no petra-verify to run, and nothing else gives the verdict of a design of a deck. PETRA_VERIFY names none, this install "
                        f"carries none at {PACKAGED}, and none is built at {BUILT}")
     return kernel
 

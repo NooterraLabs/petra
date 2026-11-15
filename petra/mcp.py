@@ -8,9 +8,9 @@ the server writes one response per request to stdout, one per line, and nothing 
 petra's own commands make:
 
     check           pipeline.check_text: the text `petra check` prints, and the JSON as
-                    structured content. The verdict is the kernel's: with none to run,
-                    or one whose answer cannot be taken, the tool answers with isError
-                    true and `no verdict`
+                    structured content. The verdict of a design of a deck is the
+                    kernel's: with none to run, or one whose answer cannot be taken,
+                    the tool answers with isError true and `no verdict`
     kinds           teach.kinds_summary, or teach.kinds_text for a deck or a type of one
     new             teach.new_text: a card and a complete design of a type to edit
     docs            teach.docs_text: the skill, the API, the language reference

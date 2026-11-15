@@ -6,7 +6,7 @@ Each line of expected.tsv names a design by its path from the repository root, t
 it must get, the wrong verdict `petra check` gives today when it gives one, the wrong
 verdict the kernel gives today when it gives one, and a note. The card a design answers
 is the .card file beside it. NOT_PASS stands for any of FAIL, UNKNOWN and INPUT_ERROR. A
-design with a part of a kind no shipped deck has must get UNKNOWN. Where its right answer is
+design none of whose parts is of a deck's type must get UNKNOWN. Where its right answer is
 known, its note starts with `right answer PASS`, `right answer FAIL` or `right answer
 INPUT_ERROR`, which is what the deck that brings its kind back has to give it.
 

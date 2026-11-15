@@ -41,7 +41,7 @@ Each wheel carries the Lean kernel for its platform, so Petra installed from PyP
 
 ## Changes to the kernel
 
-Every verdict is the kernel's, `petra-verify`, built from `kernel/`. A change under `kernel/` or to [docs/format.md](docs/format.md), its specification, needs the maintainer's approval before it merges. `petra/kernel/` is not the kernel: it holds the exact arithmetic of Petra's Python reader, which imports only the Python standard library, and a test enforces that.
+Every pass and every fail is the kernel's, `petra-verify`, built from `kernel/`. A change under `kernel/` or to [docs/format.md](docs/format.md), its specification, needs the maintainer's approval before it merges. `petra/kernel/` is not the kernel: it holds the exact arithmetic of Petra's Python reader, which imports only the Python standard library, and a test enforces that.
 
 ## Sign off every commit
 

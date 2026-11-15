@@ -2,8 +2,10 @@
 
 The kernel in kernel/ is the authority on whether a design is well formed. This module
 applies the same rules to the same data, so that the two can be compared on every design
-and so that `petra check` can refuse a design on a machine that has no kernel binary. A
-bug here costs a refusal or a difference from the kernel, which the corpus run reports.
+and so that a refusal is worded with the place in the pair's own text. `petra check` asks
+for a kernel first, so on a machine with none a design of a deck gets no verdict before it
+gets a refusal. A bug here costs a refusal or a difference from the kernel, which the
+corpus run reports.
 """
 from __future__ import annotations
 

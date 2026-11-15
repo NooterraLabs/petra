@@ -2,8 +2,8 @@
 
 One function per grammar rule. No backtracking beyond one token of lookahead, except the
 claim rule, which looks for "P" "(" to pick the probability form. In a design, a leading
-IDENT that is not in DECLS starts a component block; whether it names a registered kind is
-checked by lower.py against models.KINDS, so the parser knows no component kind.
+IDENT that is not in DECLS starts a component block; whether it names a type of a deck is
+for grid.owner to say, so the parser knows no component kind.
 
 The tree it builds (lower.py reads it; leaves are lexer Tokens, so every name keeps its
 position):

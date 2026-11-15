@@ -1,10 +1,10 @@
 """Petra: a checker of physical designs against decks of rules.
 
     import petra
-    result = petra.check(card, design)      # plain data: "status" is the kernel's verdict
+    result = petra.check(card, design)      # plain data: "status" is the kernel's verdict, or UNKNOWN for a design no deck has
     checked = petra.check_file("examples/deck/lap_pass.petra")      # against examples/deck/lap_pass.card
     print(checked.text())
-    checked.status            # the kernel's verdict: PASS, PASS_WAIVED, FAIL or UNKNOWN
+    checked.status            # PASS, PASS_WAIVED, FAIL or UNKNOWN: the kernel's verdict for a design of a deck
     checked.reason            # for a design no deck has: why it reads UNKNOWN
 
 The verdict of a design is the kernel's: petra-verify, built from kernel/ (petra/verify.py).
@@ -12,7 +12,8 @@ This package parses the card and the design, writes the files the kernel reads, 
 the hints of proofs.json, and words the report. No way into a check gives a pass or a fail
 of its own. A bug in the reader of a deck costs an UNKNOWN or a difference from the kernel.
 A bug in the language, the units or the exporter gives the kernel other files than the
-pair's, and the verdict is then about those files, which the report names by hash.
+pair's, and the verdict is then about those files: `kernel.hashes` of the JSON names them,
+and the `card` and `design` lines of the text name the two texts.
 
 petra/docs/api.md documents this API and the JSON `petra check --json` prints, and
 `petra docs api` prints it from any install. `petra docs` lists every document, the

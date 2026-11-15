@@ -118,7 +118,7 @@ given tab.Fy in [36 ksi, 36 ksi] signed "s.engineer@example.org" source "ASTM A3
 
 ### component
 
-A component is a part, written `TYPE NAME { ... }` in the design, with one line per field. The Types section lists every type of the shipped decks and its lines. A design with a part of a kind no deck has is read too, and `petra check` gives it UNKNOWN with that reason: there is no rule to check it by.
+A component is a part, written `TYPE NAME { ... }` in the design, with one line per field. The Types section lists every type of the shipped decks and its lines. A design whose parts are all of kinds no deck has is read too, and `petra check` gives it UNKNOWN with that reason: there is no rule to check it by. A design that has such a part beside parts of a deck's types is refused.
 
 ```
 plate tab {

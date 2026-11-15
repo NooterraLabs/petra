@@ -15,23 +15,23 @@ The binary is `.lake/build/bin/petra-verify`, or `petra-verify.exe` on Windows.
 ## Run
 
 ```bash
-python -m petra.export examples/circuit_pass.petra --out out
-kernel/.lake/build/bin/petra-verify --card out/card.json --design out/design.json --deck out/deck.json --proofs out/proofs.json
+python -m petra.export examples/deck/lap_pass.petra --out out
+kernel/.lake/build/bin/petra-verify --card out/card.json --design out/design.json --deck out/deck.json --rules out/rules.json --proofs out/proofs.json
 ```
 
-The second command prints the verdict as JSON and exits 0 for PASS, 1 for FAIL, 2 for UNKNOWN and 3 for ILL-FORMED.
+The first command writes the files of a design whose parts are of a deck of rules, `rules.json`, the deck's own file, among them. The second prints the verdict as JSON and exits 0 for PASS, 1 for FAIL, 2 for UNKNOWN and 3 for ILL-FORMED. The kernel works out every cell from the deck itself, and takes `proofs.json` as hints.
 
-For a design whose parts are of a deck of rules, such as `examples/deck/lap_pass.petra`, the export also writes `rules.json`, the deck's own file, and the kernel takes it as `--rules out/rules.json`. It then works out every cell from the deck itself.
+The export writes nothing for a design none of whose parts is of a deck's type, and exits 2: there is no deck of rules to hand the kernel. The kernel still takes files with no `--rules`, checks the cells that `proofs.json` lists, and never passes them.
 
 The verdict says which of the two it did, in `cells_from`, and prints the hash of each file it read. A PASS is about a deck of rules only when `hashes.rules` is the hash of the deck the reader trusts, and about the asker's card only when `hashes.card` is the asker's. [docs/format.md](../docs/format.md) says how to check both, under "Reading a verdict" and "The asker's card".
 
 ## With petra check
 
-`petra check` runs the kernel and prints the kernel's verdict. With no kernel, or with one whose exit code or error stream is at odds with what it printed, it gives no verdict and exits 4. It looks for the file the environment variable `PETRA_VERIFY` names, then for the kernel inside the installed package, then for `.lake/build/bin/petra-verify` here. Its `kernel` line gives the kernel's verdict and how many proofs it checked, and `python corpus/run.py --kernel BINARY` gives the kernel's own verdict on every corpus design.
+`petra check` runs the kernel and prints the kernel's verdict. With no kernel, or with one whose exit code or error stream is at odds with what it printed, it gives no verdict of a design of a deck and exits 4. A design none of whose parts is of a deck's type is not handed to the kernel, and reads UNKNOWN either way. It looks for the file the environment variable `PETRA_VERIFY` names, then for the kernel inside the installed package, then for `.lake/build/bin/petra-verify` here. Its `kernel` line gives the kernel's verdict and how many proofs it checked, and `python corpus/run.py --kernel BINARY` gives the kernel's own verdict on every corpus design of a deck's types. The other designs have no files, and it counts them as the UNKNOWN that `petra check` gives them.
 
 ## In a wheel
 
-A wheel from PyPI carries the kernel as `petra/bin/petra-verify`, so `pip install petra-lang` needs no Lean toolchain. The sdist carries no kernel. Petra installed from the sdist gives no verdict until `PETRA_VERIFY` names a kernel.
+A wheel from PyPI carries the kernel as `petra/bin/petra-verify`, so `pip install petra-lang` needs no Lean toolchain. The sdist carries no kernel. Petra installed from the sdist gives no verdict of a design of a deck until `PETRA_VERIFY` names a kernel.
 
 The build backend, `_build/petra_build.py`, puts the kernel in a wheel when the tree holds one. After `lake build` here, these two commands, run in the repository's root, build a wheel for your platform and try it in a fresh environment:
 

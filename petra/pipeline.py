@@ -13,12 +13,13 @@ Three steps, and none of them decides anything:
 A design none of whose parts is of a deck's type cannot be checked: there is no rule to
 read, and no type that says what its lines mean. The kernel is not asked about it, so it
 reads the same with a kernel and without one: UNKNOWN, with the reason that no deck has its
-kinds (verify.no_deck). That is the one status Python gives on its own, and it is never a
-pass or a fail.
+kinds (verify.no_deck). Beside INPUT_ERROR that is the one status Python gives on its own,
+and it is never a pass or a fail.
 
 No status given here is a pass or a fail but the kernel's own. A bug in step 1 or in the
 files of step 3 gives the kernel other files than the pair's, and the verdict is then about
-those files: the report names the card, the design and the deck by hash.
+those files: `kernel.hashes` of the JSON names the files the kernel read, and the report's
+`card` and `design` lines name the two texts.
 """
 from __future__ import annotations
 

@@ -43,7 +43,7 @@ from typing import Any, Callable, Iterable, Iterator, Mapping
 from . import deck as rows
 from . import export
 from .deck import NONE, RowError, Vector, anchored, dimension, only, quantity, replaced, show
-from .files import escaped, headed, shown  # noqa: F401  (shown is what a caller prints a report through)
+from .files import escaped, headed, listed, shown  # noqa: F401  (shown is what a caller prints a report through)
 from .ir import Bound, Component, Design, Fixed, ParamRef, Ref, Span, Stated, Text
 from .kernel import (MAX_ARGUMENT, Abs, Add, Const, Cos, Div, Exp, Interval, KernelArithmeticError, Ln, Max, Min, Mul, Neg, Pi, PowInt, Sqrt,
                      Sym, enclose)
@@ -884,7 +884,7 @@ def owner(design: Design) -> Deck | None:
         names = sorted(c.name for c in design.components.values() if known.get(c.kind) is None)
         raise ComponentError((f"{design.path}: a design is checked against one deck, and this one has parts of "
                               f"{' and '.join(sorted(d.name if d else 'kinds no deck has' for d in found))}"
-                              + (f" ({', '.join(names)} are of no deck)" if names else ""),))
+                              + (f" ({listed(names)}: of no deck)" if names else ""),))
     return found.pop()
 
 

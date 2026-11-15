@@ -22,6 +22,7 @@ TOPS = ("petra", "kernel", "proofs", "tests", "bench", "corpus", "docs", "exampl
 BUILT = ("petra/bin/", "kernel/.lake/")
 """Where a build puts the kernel. A page names these, and a clean tree has neither."""
 NAMED = re.compile(r"`((?:%s)/[A-Za-z0-9_./-]+)`" % "|".join(TOPS))
+DESIGNS = re.compile(r"\b((?:examples|corpus/cases)/[A-Za-z0-9_/.-]+\.(?:petra|card))\b")
 LINK = re.compile(r"\]\(([^)\s]+)\)")
 
 # A reader has no kernel named in the environment but the one under test, and the only Petra on the path is the one under test.
@@ -38,6 +39,9 @@ def missing(page: Path) -> list[str]:
         if path.startswith(BUILT):      # what a build puts in the tree
             continue
         if not (ROOT / path).exists() and not list(ROOT.glob(path + "*")):      # a name may be the start of several: `tests/test_kernel_attacks`
+            out.append(name)
+    for name in DESIGNS.findall(text):      # a design or a card named anywhere, in a command of a code block too
+        if not (ROOT / name).exists():
             out.append(name)
     for target in LINK.findall(text):
         if target.startswith(("https://", "http://", "#", "mailto:")):
@@ -57,8 +61,9 @@ class Pages(unittest.TestCase):
     def test_a_missing_file_is_caught(self):
         with tempfile.TemporaryDirectory(dir=ROOT / "docs") as tmp:
             page = Path(tmp, "page.md")
-            page.write_text("See `petra/models/steel/calc.py`, `petra/grid.py` and [the plan](../plan.md), and [this](../design.md#the-verdict).\n", encoding="utf-8")
-            self.assertEqual(missing(page), ["../plan.md", "petra/models/steel/calc.py"])
+            page.write_text("See `petra/models/steel/calc.py`, `petra/grid.py` and [the plan](../plan.md), and [this](../design.md#the-verdict).\n"
+                            "```bash\npetra check examples/circuit_pass.petra\npetra check examples/deck/lap_pass.petra\n```\n", encoding="utf-8")
+            self.assertEqual(missing(page), ["../plan.md", "examples/circuit_pass.petra", "petra/models/steel/calc.py"])
 
 
 class Readme(unittest.TestCase):

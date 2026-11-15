@@ -98,6 +98,9 @@ class PetraNew(unittest.TestCase):
         code, _, err = run("new", "lap", "--name", "x-y")
         self.assertEqual(code, cli.EXIT_CODES["INPUT_ERROR"])
         self.assertIn("is not a name", err)
+        code, _, err = run("new", "lap", "--name", "n" * 65)
+        self.assertEqual(code, cli.EXIT_CODES["INPUT_ERROR"], "a part's name has at most 64 characters, and `petra check` refuses a longer one")
+        self.assertEqual(run("new", "lap", "--name", "n" * 64)[0], 0)
         code, _, err = run("new", "lap", "--name", "load")
         self.assertEqual(code, cli.EXIT_CODES["INPUT_ERROR"], "a declaration word is not a part's name")
 
