@@ -17,7 +17,6 @@ from unittest import mock
 
 from petra import grid, units as petra_units, verify
 from petra.lang import parse_design
-from petra.registry import build_registry
 
 from bench.attack import deckinfo, decks, files as F, gen, found, meta, readers, spec as S, units
 from bench.attack.maker import Maker
@@ -59,7 +58,6 @@ class Units(unittest.TestCase):
 class Specs(unittest.TestCase):
     def test_the_pairs_of_the_corpus_read_and_write_back_to_the_same_files(self):
         deck = grid.read_deck(DECK_TEXT)
-        registry = build_registry()
         n = 0
         for folder in ("corpus/cases/deck", "examples/deck"):
             for path in sorted((ROOT / folder).glob("*.petra")):
@@ -67,8 +65,8 @@ class Specs(unittest.TestCase):
                 s = S.read(card, design)
                 self.assertIsNotNone(s, path.name)
                 with mock.patch.object(grid, "decks", lambda: (deck,)):
-                    a = grid.bundle(parse_design(card, design, "a.petra", registry), deck)
-                    b = grid.bundle(parse_design(*s.texts(), "b.petra", registry), deck)
+                    a = grid.bundle(parse_design(card, design, "a.petra"), deck)
+                    b = grid.bundle(parse_design(*s.texts(), "b.petra"), deck)
                 self.assertEqual(a, b, path.name)
                 n += 1
         self.assertGreater(n, 40)
@@ -94,7 +92,6 @@ class Generator(unittest.TestCase):
 
     def test_a_fresh_design_is_read_by_the_language_and_keeps_its_needs(self):
         deck = grid.read_deck(DECK_TEXT)
-        registry = build_registry()
         rng = random.Random(3)
         read = 0
         for _ in range(60):
@@ -102,7 +99,7 @@ class Generator(unittest.TestCase):
             self.assertEqual(gen.breaks(s, self.info), [])
             with mock.patch.object(grid, "decks", lambda: (deck,)):
                 try:
-                    parse_design(*s.texts(), "x.petra", registry)
+                    parse_design(*s.texts(), "x.petra")
                     read += 1
                 except Exception:       # noqa: BLE001
                     pass

@@ -48,7 +48,7 @@ from .ir import Bound, Component, Design, Fixed, ParamRef, Ref, Span, Stated, Te
 from .kernel import (MAX_ARGUMENT, Abs, Add, Const, Cos, Div, Exp, Interval, KernelArithmeticError, Ln, Max, Min, Mul, Neg, Pi, PowInt, Sqrt,
                      Sym, enclose)
 from .kernel import PRECISION_BITS as PREC
-from .models.base import ComponentError
+from .files import ComponentError
 from .units import Dim, si_unit
 
 FORMAT = "petra-rules/0"
@@ -873,8 +873,9 @@ def mechanisms() -> frozenset[str]:
 
 
 def owner(design: Design) -> Deck | None:
-    """The deck whose types the design's components are, or None for a design of the
-    models' kinds. A design of both, or of two decks, is refused."""
+    """The deck whose types the design's components are, or None for a design none of whose
+    parts is of a deck's type. A design of two decks, or with parts of a deck and parts of a
+    kind no deck has, is refused."""
     known = kinds()
     found = {known.get(c.kind) for c in design.components.values()}
     if found <= {None}:
@@ -882,8 +883,8 @@ def owner(design: Design) -> Deck | None:
     if len(found) > 1:
         names = sorted(c.name for c in design.components.values() if known.get(c.kind) is None)
         raise ComponentError((f"{design.path}: a design is checked against one deck, and this one has parts of "
-                              f"{' and '.join(sorted(d.name if d else 'the built-in models' for d in found))}"
-                              + (f" ({', '.join(names)} are the models')" if names else ""),))
+                              f"{' and '.join(sorted(d.name if d else 'kinds no deck has' for d in found))}"
+                              + (f" ({', '.join(names)} are of no deck)" if names else ""),))
     return found.pop()
 
 
@@ -2168,7 +2169,7 @@ class Report:
 @dataclass(frozen=True)
 class Checked:
     """What `petra check` gives for a design checked against a deck, with the members of
-    repair.Checked that its callers read. `kernel` is what petra-verify said of the files,
+    pipeline.Checked that its callers read. `kernel` is what petra-verify said of the files,
     and the status is its verdict (verify.status). The report is the grid's, which `checked`
     holds to the kernel's cell by cell: it words the lines, and decides nothing."""
 
@@ -2178,8 +2179,7 @@ class Checked:
     hashes: Mapping[str, str]
     kernel: Mapping[str, Any]
     error: None = None
-    repair: None = None
-    reason: None = None      # a design of a deck needs no reason that its kind has none (repair.Checked.reason)
+    reason: None = None      # a design of a deck needs no reason that its kind has none (pipeline.Checked.reason)
 
     @property
     def status(self) -> str:
@@ -2188,8 +2188,7 @@ class Checked:
         return verify.status(self.kernel)
 
     def to_json(self) -> dict[str, Any]:
-        return {**self.report.to_json(), "status": self.status, "card": self.card, "hashes": dict(self.hashes), "path": "rules", "kernel": self.kernel,
-                "repair": None}
+        return {**self.report.to_json(), "status": self.status, "card": self.card, "hashes": dict(self.hashes), "path": "rules", "kernel": self.kernel}
 
     def text(self) -> str:
         proofs = sum(bool(c.proof) for c in self.report.cells)

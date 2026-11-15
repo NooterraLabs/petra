@@ -2,7 +2,7 @@
 
 Petra checks a physical design against what was asked of it. A card is a short file that states the loads and the claims, each with who signs it. A design is a short `.petra` file that describes the parts, and it cannot change the card. Petra answers pass, fail or unknown. The answer is the verdict of a small kernel, which reads a deck of rules and works out every check itself in exact arithmetic.
 
-The kernel passes a design only against a deck of rules. One kind of part has a deck today, a bolted lap splice. A design of the older kinds, which are the other steel connections, trusses, wire circuits and bolted joints, reads unknown until its kind has one.
+The kernel passes a design only against a deck of rules. One deck ships today, for a bolted lap splice of two steel plates. A design with a part of any other kind reads unknown, and the report says that no deck has its kind.
 
 Petra checks the loads a card states. It does not choose them, and it does not replace the engineer who signs the design.
 
@@ -28,11 +28,10 @@ petra check lap.petra
 
 - [Language reference](docs/reference.md)
 - [Using Petra from Python](petra/docs/api.md)
-- [Petra in a coding agent's loop](docs/in_the_loop.md)
 - [How the checker works](docs/design.md)
-- [Steel connections](docs/steel_connections.md)
-- [Electronics worst case](docs/electronics_dc.md)
-- [Roadmap and test results](docs/plan.md)
+- [How a deck is written](docs/deck.md)
+- [The files the kernel reads](docs/format.md)
+- [What is proved about the kernel](docs/proved.md)
 - [Wrong passes in version 0.1.1](docs/advisory_0.1.1.md)
 
 ## License

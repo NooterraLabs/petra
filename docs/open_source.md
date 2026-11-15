@@ -65,25 +65,23 @@ Three research passes read the sources on 2026-11-06. The author then re-checked
 
 ## 2. The playbook for Petra
 
-In the table below, "Petra has" is what the repository held on 2026-11-06, after the three release decisions in `docs/plan.md` §8 item 8. "When" ties each step to `docs/plan.md`.
-
-| Practice | Precedent | Petra has | Petra adds | When |
-|---|---|---|---|---|
-| Publish what is trusted, and the levels of checking | Lean, seL4 | `docs/design.md` splits the trusted kernel, the trusted code outside it and the untrusted code | A public page that names each level (kernel, certificate re-check, twin elaborator, outside judge, CalculiX, Lean port) and prints which level each verdict reached | Before first publish |
-| A templated log of every false PASS, treated as a security advisory | Rocq, Lean | The false PASSes are listed in `docs/plan.md` §1 | `docs/soundness.md` with component, versions, finder, reproducing canary, fix and risk per entry. `SECURITY.md` and private vulnerability reporting. | Before first publish |
-| Adversarial reports arrive as canaries | Lean, Z3 | `judges/canaries/` and the recall harness | A rule that a soundness report needs a `.petra` file that reproduces it, and that each accepted report becomes a canary | Before first publish |
-| Independent checkers, scored in public | Kernel Arena | One kernel, a twin elaborator per deck, the outside judge | A written certificate format and a public corpus of valid and planted-invalid certificates. Any checker, `always-accept` and `always-reject` included, is scored on it. | P3 specifications, P7 Lean port |
-| Qualify the small checker, publish the evidence | NASA, Ferrocene, MOOSE, code_aster | A kernel of 2,615 lines (plan §1, measured), `docs/steel_traceability.md`, the gate logs | An evidence set per release: the traceability matrix, the gate, recall and gap reports, and the rule text each mode cites | Each release |
-| Rerun everything on every change | code_aster, Rocq | The full suite, the steel gate, canary recall and the absurd-design gap | CI that runs the gate and recall on every merge and rebuilds every example | Before first publish |
-| Apache-2.0, docs CC BY 4.0 | Lean, MCP | `LICENSE` says Apache-2.0, and `docs/LICENSE.md` puts the docs under CC BY 4.0 | The data-licence audit for the shapes table, as `docs/plan.md` §8 item 3 says | Before first publish |
-| DCO and a no-relicence pledge | GitLab, Pydantic, Astral | `CONTRIBUTING.md` asks for a DCO sign-off and pledges that Petra stays Apache-2.0 | A CI check that refuses unsigned commits | Before first publish |
-| A name policy written before forks exist | PSF, Rust, OpenFOAM | `TRADEMARK.md` lets anyone say "compatible with Petra" and reserves "Petra-checked" for checkers that pass the conformance corpus | Public comment on the draft, and the conformance corpus it points to | Before first publish |
-| Small merge group, open review, labelled AI work | mathlib, Lean core, Ferrocene | Parallel lanes of work merge through one integrator | Anyone reviews, a few named maintainers merge, and CI gates the merge. Changes to the kernel, registries and modes start as a proposal. AI-assisted pull requests carry a label. | Before first publish |
-| Proposals need a sponsor, a prototype and a conformance test | MCP, Rust | Registry errata record the date, the old value and the new value | Petra proposals for the language, certificate format, modes and registries. Final status requires a canary or conformance case. | When outside contributors arrive |
-| Dated deprecation | mathlib, MCP, SemVer | Registry versions count errata | Stay on 0.y until the certificate format is stable. Treat `.petra` syntax and the certificate format as public API, with each deprecation dated and kept twelve months after 1.0. | From first publish |
-| Benchmark held out, pinned and rerun | SWE-bench Pro, Terminal-Bench, PutnamBench, Lean Eval | P3's plan already has held-out variants from the generator | A canary GUID in every task file, every result pinned to a Petra commit and a bench commit with its logs, maintainers rerunning entries before a mark, and an audit of each task statement against its intent | P3 |
-| Supply chain | PyPI, Sigstore, OpenSSF | Nothing published yet | Trusted publishing with attestations, branch protection, Scorecard | At the PyPI claim |
-| Many backers, nothing closed that Petra needs to run | seL4, Efabless, Amazon on Lean | Everything is in one open repository | Keep every piece needed to check a design open. Write down when Petra moves to a neutral body, for example once a second organisation pays for full-time work on it, with seats capped per organisation. | When a second organisation joins |
+| Practice | Precedent | What Petra does or plans |
+|---|---|---|
+| Publish what is trusted, and the levels of checking | Lean, seL4 | A public page that names each level of evidence and says what a pass rests on: [design.md](design.md) |
+| A templated log of every false pass, treated as a security advisory | Rocq, Lean | An advisory per release that held one, with the component, the versions, the finder, a file that reproduces it, the fix and the risk: [advisory_0.1.1.md](advisory_0.1.1.md) is the first. A security page and private reporting |
+| Adversarial reports arrive as files | Lean, Z3 | A report of a wrong verdict needs a card and a design that reproduce it, and each accepted report becomes a corpus case |
+| Independent checkers, scored in public | Kernel Arena | A written file format, [format.md](format.md), and a public corpus of files with known verdicts. Any checker, one that always accepts and one that always rejects included, is scored on it |
+| Qualify the small checker, publish the evidence | NASA, Ferrocene, MOOSE, code_aster | An evidence set per release: the corpus run, the comparison of the two readers, the build of the proofs with its axiom check, and the clause each rule cites |
+| Rerun everything on every change | code_aster, Rocq | CI that runs the suite and the corpus on every merge and rebuilds every example |
+| Apache-2.0, docs CC BY 4.0 | Lean, MCP | `LICENSE` says Apache-2.0, and [LICENSE.md](LICENSE.md) puts the docs under CC BY 4.0. A licence for the decks as data |
+| DCO and a no-relicence pledge | GitLab, Pydantic, Astral | `CONTRIBUTING.md` asks for a DCO sign-off and pledges that Petra stays Apache-2.0. A CI check that refuses unsigned commits |
+| A name policy written before forks exist | PSF, Rust, OpenFOAM | `TRADEMARK.md` lets anyone say "compatible with Petra" and reserves "Petra-checked" for checkers that pass the conformance corpus. Public comment on the draft |
+| Small merge group, open review, labelled AI work | mathlib, Lean core, Ferrocene | Anyone reviews, a few named maintainers merge, and CI gates the merge. Changes to the kernel, the file format and the decks' language start as a proposal. AI-assisted pull requests carry a label |
+| Proposals need a sponsor, a prototype and a conformance test | MCP, Rust | Proposals for the language, the file format and the decks. Final status requires a corpus case |
+| Dated deprecation | mathlib, MCP, SemVer | Stay on 0.y until the file format is stable. Treat `.petra` syntax and the file format as public API, with each deprecation dated and kept twelve months after 1.0 |
+| Benchmark held out, pinned and rerun | SWE-bench Pro, Terminal-Bench, PutnamBench, Lean Eval | Every result pinned to a Petra commit with its logs, both arms on one model, and nothing fitted to a benchmark's tasks |
+| Supply chain | PyPI, Sigstore, OpenSSF | Trusted publishing with attestations, branch protection, Scorecard |
+| Many backers, nothing closed that Petra needs to run | seL4, Efabless, Amazon on Lean | Keep every piece needed to check a design open. Write down when Petra moves to a neutral body, for example once a second organisation pays for full-time work on it, with seats capped per organisation |
 
 ## 3. Mistakes to avoid
 

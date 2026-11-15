@@ -5,21 +5,20 @@
 Each line of expected.tsv names a design by its path from the repository root, the verdict
 it must get, the wrong verdict `petra check` gives today when it gives one, the wrong
 verdict the kernel gives today when it gives one, and a note. The card a design answers
-is the .card file beside it. NOT_PASS stands for any of FAIL, UNKNOWN, MARGINAL and
-INPUT_ERROR. A design of a kind with no deck of rules must get UNKNOWN, or FAIL where the
-kernel checked a refutation. Where such a design is one the Python checker decided rightly,
-its note starts with `right answer PASS` or `right answer FAIL`, which is what the deck
-that brings its kind back has to give it.
+is the .card file beside it. NOT_PASS stands for any of FAIL, UNKNOWN and INPUT_ERROR. A
+design with a part of a kind no shipped deck has must get UNKNOWN. Where its right answer is
+known, its note starts with `right answer PASS`, `right answer FAIL` or `right answer
+INPUT_ERROR`, which is what the deck that brings its kind back has to give it.
 
 Without --kernel the verdict is the one `petra check` exits with. With it, the pair is
 exported (petra/export.py) and the verdict is the one that petra-verify binary exits
 with, where ILL-FORMED reads as INPUT_ERROR. For a design of a deck of rules, PASS reads as
 PASS_WAIVED when the kernel lists a waiver that a cell rests on, as `petra check` reads it.
 A pair the language refuses is INPUT_ERROR too: the kernel reads files, and that text gives
-it none. The kernel sees the card and
-the design before any physics runs, and the proofs only for a design it found well formed.
-For a design of a deck of rules the export also writes rules.json, the deck's own file,
-and the kernel gets it as --rules and works out the cells itself.
+it none. For a design of a deck of rules the export also writes rules.json, the deck's own
+file, and proofs.json, the hints, and the kernel gets the first as --rules and works out the
+cells itself. For any other design it writes the card, the design and the deck of domains,
+and the kernel is handed no deck of rules and no proofs.
 
 A run fails when a design gets a verdict that is neither the expected one nor the known
 wrong one. It also fails when a known wrong verdict has come right, so that the line loses
@@ -44,7 +43,7 @@ sys.path.insert(0, str(ROOT))
 from petra.cli import EXIT_CODES  # noqa: E402
 
 VERDICTS = {code: name for name, code in EXIT_CODES.items()}
-NOT_PASS = frozenset({"FAIL", "UNKNOWN", "MARGINAL", "INPUT_ERROR"})
+NOT_PASS = frozenset({"FAIL", "UNKNOWN", "INPUT_ERROR"})
 EXPECTABLE = frozenset({"PASS", "PASS_WAIVED", "NOT_PASS"}) | NOT_PASS
 
 LIMIT_S = 120
@@ -115,7 +114,7 @@ def by_kernel(binary: str, case: Case) -> str:
         code = _run(export)
         if code != 0:
             return "TIMEOUT" if code is None else "INPUT_ERROR" if code == refused else "NO_FILES"
-        return verify("card", "design", "deck", "proofs")
+        return verify("card", "design", "deck", *(["proofs"] if Path(tmp, "proofs.json").is_file() else []))
 
 
 def meets(expect: str, got: str) -> bool:

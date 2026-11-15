@@ -227,7 +227,7 @@ class ARatioPastTheLargestFloat(unittest.TestCase):
         text = (EXAMPLES / "lap_pass.petra").read_text(encoding="utf-8").replace("0.375 inch", f"{TINY} inch").replace("6 inch", f"{TWICE} inch")
         text = text.replace("side 3 inch", f"side {TINY} inch")
         card = (EXAMPLES / "lap_pass.card").read_text(encoding="utf-8").replace("36 ksi", f"{TINY} ksi").replace("45 kip", f"{HUGE} kip")
-        found = petra.check(card, text, path="lap.petra", repair=False)
+        found = petra.check(card, text, path="lap.petra")
         self.assertEqual(found["status"], "FAIL")
         yields = [c for c in found["cells"] if c["mechanism"] == "lap.ply_yield"]
         self.assertEqual([(c["state"], c.get("ratio")) for c in yields], [("refuted", None)] * 2)

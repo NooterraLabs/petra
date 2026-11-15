@@ -4,16 +4,15 @@
 
 The client starts the server and writes JSON-RPC 2.0 messages to its stdin, one per line;
 the server writes one response per request to stdout, one per line, and nothing else
-(the stdio transport of the Model Context Protocol). It offers five tools, each a call
+(the stdio transport of the Model Context Protocol). It offers four tools, each a call
 petra's own commands make:
 
-    check           repair.check_text: the text `petra check` prints, and the JSON as
+    check           pipeline.check_text: the text `petra check` prints, and the JSON as
                     structured content. The verdict is the kernel's: with none to run,
                     or one whose answer cannot be taken, the tool answers with isError
                     true and `no verdict`
-    kinds           teach.kinds_summary, or teach.kinds_text for a domain or a kind
-    new             teach.new_text: a card and a complete design of a kind to edit
-    registry_list   teach.registry_text: the registry ids a design can name
+    kinds           teach.kinds_summary, or teach.kinds_text for a deck or a type of one
+    new             teach.new_text: a card and a complete design of a type to edit
     docs            teach.docs_text: the skill, the API, the language reference
 
 The server speaks both eras of the protocol. A request whose params._meta names a
@@ -22,8 +21,8 @@ resultType, the server's identity in _meta, and for a list the caching hints. A 
 an earlier revision opens with initialize, and gets results without those fields.
 server/discover answers only a modern request, and initialize is always legacy.
 
-A tool that cannot do what it was asked (an argument of the wrong type, an unknown kind,
-a design that does not lower) answers with isError true and the reason, so the model
+A tool that cannot do what it was asked (an argument of the wrong type, an unknown type,
+a pair that is refused) answers with isError true and the reason, so the model
 reads it and can try again. An unknown tool, a malformed request or a bug in a tool
 answers with a JSON-RPC error, and the server keeps serving. A thread reads stdin ahead
 of the requests being answered, so that notifications/cancelled reaches a request still
@@ -31,7 +30,7 @@ in the queue, which is then never answered, or one in progress, which is stopped
 
 Tool calls run in a second process, the worker. A call that is cancelled, or that runs past
 the budget, ends with that process, and the server starts another. The server itself never
-imports the language, the models or the solvers.
+imports the language or the grid.
 
 The `path` and `card_path` of a check come from a model, so they read a .petra and a
 .card file on this machine and nothing else, and they give the same answer for a file that
@@ -66,17 +65,18 @@ CACHEABLE = {"tools/list": 3_600_000, "server/discover": 3_600_000}
 """The modern results that carry caching hints, with ttlMs: the tools never change while
 the server runs, and a new version of Petra starts a new server."""
 
-INSTRUCTIONS = """Petra checks a physical design against the claims and loads written in it. The answer \
-is the verdict of its kernel: PASS, FAIL or UNKNOWN, or PASS_WAIVED for a design of a deck's parts that \
-passes with a cell resting on a waiver. The kernel passes only a design checked against a deck of rules: \
-a design of the other kinds never passes. It reads UNKNOWN, with the reason that its kind has no deck, \
-or FAIL. Never report such a design as passing. With no kernel to run, `check` answers with an error and no verdict. \
-Its main deck is steel connections to AISC 360-22, \
-in kips and inches. To design one: call `kinds` to see what Petra can check, `new` with a kind for a \
-complete design to edit, then `check` with the edited text. On a FAIL, the check's repair names the \
-input that lowers the governing check most, the way to move it, and a value at which that check holds. \
-Change design lines only: the loads and claims belong to their signer. Report PASS only when `check` \
-returns PASS, and PASS_WAIVED as a pass that rests on the waivers it lists. The `docs` tool with name `skill` prints the full guide."""
+INSTRUCTIONS = """Petra checks a physical design against a deck of rules, under the loads and bounds its card states. The \
+answer is the verdict of its kernel: PASS, FAIL or UNKNOWN, or PASS_WAIVED for a design that passes with a \
+cell resting on a waiver. The kernel passes only a design whose parts are of the types of a deck of rules. A \
+design with a part of any other kind reads UNKNOWN, with the reason that no deck has its kind. Never report \
+such a design as passing. With no kernel to run, `check` answers with an error and no verdict. \
+The shipped deck is bolted lap joints of steel plates to AISC 360-22, in kips and inches. To design one: call \
+`kinds` to see the types and their lines, `new` with a type for a card and a complete design to edit, then \
+`check` with the edited text. The report lists every cell of the grid: proved, refuted with the two sides of \
+the rule, open where the deck has no rule yet, or waived. \
+Change design lines only: the loads, the bounds and the waivers belong to their signer. Report PASS only when \
+`check` returns PASS, and PASS_WAIVED as a pass that rests on the waivers it lists. The `docs` tool with name \
+`skill` prints the full guide."""
 
 
 class ToolError(Exception):
@@ -107,11 +107,9 @@ def _string(args: Mapping[str, Any], key: str, required: bool = False) -> str | 
 
 
 def _check(args: Mapping[str, Any]) -> Result:
-    from . import build_registry, verify
-    from .repair import check_text
-    from .solvers import SolverSource
-
+    from . import verify
     from .files import acts, card_of, shown
+    from .pipeline import check_text
 
     text, path = _string(args, "design"), _string(args, "path")
     card, card_path = _string(args, "card"), _string(args, "card_path")
@@ -132,11 +130,11 @@ def _check(args: Mapping[str, Any]) -> Result:
         card_path = card_path or card_of(path)
         card = _file_at(card_path, "card_path", ".card")
     try:
-        checked = check_text(card, text, path or "<design>", build_registry(), (SolverSource(),), card_path=card_path or "<card>")
+        checked = check_text(card, text, path or "<design>", card_path=card_path or "<card>")
     except verify.NoVerdict as exc:      # no kernel ran, or its answer cannot be taken: nothing else gives a verdict
         raise ToolError(shown(f"no verdict: {exc}")) from None
     # The text is what a client shows a person, so it goes out as `petra check` prints it: no character a terminal acts on.
-    if checked.report is None:
+    if checked.error is not None:
         raise ToolError(shown(checked.text()))
     return shown(checked.text()), checked.to_json()
 
@@ -163,7 +161,7 @@ def _file_at(path: str, argument: str, suffix: str) -> str:
 
 
 def _taught(call: Callable[[], str]) -> str:
-    from .repair import INPUT_ERRORS
+    from .pipeline import INPUT_ERRORS
     from .teach import TeachError
 
     try:
@@ -180,21 +178,11 @@ def _kinds(args: Mapping[str, Any]) -> Result:
 
 
 def _new(args: Mapping[str, Any]) -> Result:
-    from . import build_registry
     from .teach import new_text
 
     kind, name = _string(args, "kind", required=True), _string(args, "name")
-    card, design = _taught(lambda: new_text(kind, name, build_registry()))
+    card, design = _taught(lambda: new_text(kind, name))
     return f"The card, {kind}.card:\n\n{card}\nThe design, {kind}.petra:\n\n{design}", {"card": card, "design": design}
-
-
-def _registry_list(args: Mapping[str, Any]) -> Result:
-    from . import build_registry
-    from .teach import registry_text
-
-    prefix = _string(args, "prefix")
-    registry = build_registry()
-    return _taught(lambda: registry_text(registry, prefix, registry.constants)), None
 
 
 def _docs(args: Mapping[str, Any]) -> Result:
@@ -211,11 +199,10 @@ def _schema(properties: Mapping[str, str], required: tuple[str, ...] = ()) -> di
 
 TOOLS: Mapping[str, tuple[str, dict[str, Any], Callable[[Mapping[str, Any]], Result]]] = {
     "check": ("Check a design against the card it answers and return the kernel's verdict: PASS, FAIL or UNKNOWN, "
-              "or for a design of a deck's parts PASS_WAIVED when it passes and a cell rests on a waiver, "
-              "the governing checks with demand, capacity and utilisation, and every obligation. The card holds what "
-              "was asked: the loads, the signed bounds, the claims and the waivers. The design holds the components "
-              "and cannot change the card. On a FAIL, the repair lists the moves that lower the governing check, best "
-              "first: one number on a component's line, which way, and a value at which the check holds. The "
+              "or PASS_WAIVED when it passes and a cell rests on a waiver, with every cell of the deck's grid: its "
+              "part, its mechanism, its state and, for a rule that was worked out, how much of the limit is used. The "
+              "card holds what was asked: the loads, the signed bounds and the waivers. The design holds the parts "
+              "and cannot change the card. A design with a part of a kind no deck of rules has reads UNKNOWN. The "
               "structured content is the JSON `petra check --json` prints.",
               _schema({"design": "the design, the full text of a .petra file",
                        "path": "the absolute path of a .petra file to read instead of `design`",
@@ -223,16 +210,14 @@ TOOLS: Mapping[str, tuple[str, dict[str, Any], Callable[[Mapping[str, Any]], Res
                        "card_path": "the absolute path of a .card file to read instead of `card`; "
                                     "with `path` and no card, the .card file beside the design"}),
               _check),
-    "kinds": ("List the component kinds Petra can check. With a domain (steel) or a kind (shear_tab), print each "
-              "kind's lines, required and optional, with units, registry ids and meanings.",
-              _schema({"name": "a domain or a component kind; leave out to list them all"}), _kinds),
-    "new": ("Return a card and a complete design of one kind to edit into the pair you need.",
-            _schema({"kind": "the component kind, such as shear_tab or double_angle", "name": "the component's name"},
+    "kinds": ("List the decks of rules Petra checks against and the types of part each has. With a deck (aisc360) or "
+              "a type (lap), print each type's lines with their units and meanings, the loads a card may put on a "
+              "part of it, and the mechanisms the grid asks of it, each with its rule or as open.",
+              _schema({"name": "a deck or a type of one; leave out to list them all"}), _kinds),
+    "new": ("Return a card and a complete design of one type to edit into the pair you need. The card signs no "
+            "waiver, so the pair reads UNKNOWN until the lines its deck has no rule for are waived by their signer.",
+            _schema({"kind": "the type of part, such as lap", "name": "the part's name"},
                     ("kind",)), _new),
-    "registry_list": ("List the registry ids a design can name: shapes, grades, bolt groups, electrodes, stocked plates, "
-                      "with the common names that stand for them (A325 is bolt_group.120).",
-                      _schema({"prefix": "only ids and common names that start with this, such as W18 or steel."}),
-                      _registry_list),
     "docs": ("Print a document that ships with Petra: skill (how to design and check with Petra), api (the Python API "
              "and the JSON), reference (the language), readme. Leave out name to list them.",
              _schema({"name": "skill, api, reference or readme"}), _docs),
@@ -387,7 +372,7 @@ class Worker:
         self._start()
 
     def _start(self) -> None:
-        # On POSIX the worker leads a group of its own, so that stopping it stops the kernel and the solvers it started with it.
+        # On POSIX the worker leads a group of its own, so that stopping it stops the kernel it started with it.
         self.process = subprocess.Popen(self.COMMAND, stdin=subprocess.PIPE, stdout=subprocess.PIPE, start_new_session=hasattr(os, "killpg"))
         self.replies: queue.Queue[bytes] = queue.Queue()
         self.reader = threading.Thread(target=self._read, args=(self.process, self.replies), name="petra-mcp-worker", daemon=True)
@@ -446,7 +431,7 @@ def work(stdin: Iterable[bytes], stdout: BinaryIO) -> int:
     """The worker: answer each line of `stdin`, the params of one tools/call, with a line
     that holds its result or its JSON-RPC error. What a tool call imports is imported
     first, while the client is still shaking hands with the server."""
-    from . import build_registry, repair, solvers, teach  # noqa: F401
+    from . import pipeline, teach  # noqa: F401
 
     for raw in stdin:
         try:

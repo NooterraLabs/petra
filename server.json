@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.NooterraLabs/petra",
   "title": "Petra",
-  "description": "Checks steel connections and other physical designs, with an exact-arithmetic certificate",
+  "description": "Checks physical designs against decks of rules, with the verdict of a small exact kernel",
   "repository": {
     "url": "https://github.com/NooterraLabs/petra",
     "source": "github"

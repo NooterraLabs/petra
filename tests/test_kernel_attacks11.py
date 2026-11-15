@@ -63,7 +63,6 @@ from unittest import mock
 
 import petra.lang
 from petra import cli, grid, verify
-from petra.registry import build_registry
 from tests.test_deck_features import ANCHOR, HEAD, KERNEL, asks, cells, design, given, ill_formed, kind, made_up, no_deck, parsed, part, rule, size
 from tests.test_kernel_attacks10 import judged
 from tests.test_kernel_grid import ask, findings
@@ -468,10 +467,10 @@ class NothingForgesALine(unittest.TestCase):
             with self.subTest(name=name[:40]):
                 mine, _ = judged(card.replace('card "lap-splice-waived"', f'card "{name}"'), text)
                 self.assertEqual(mine, "FAIL")
-                read = petra.lang.parse_design(card.replace('card "lap-splice-waived"', f'card "{name}"'), text, "lap.petra", build_registry())
+                read = petra.lang.parse_design(card.replace('card "lap-splice-waived"', f'card "{name}"'), text, "lap.petra")
                 first = grid.check(read, grid.owner(read))[0].lines()[0]
                 self.assertEqual(first, f"FAIL: the card named {json.dumps(name)}")
-        read = petra.lang.parse_design(card, text, "lap.petra", build_registry())
+        read = petra.lang.parse_design(card, text, "lap.petra")
         self.assertEqual(grid.check(read, grid.owner(read))[0].lines()[0], "lap-splice-waived: FAIL", "a plain name is printed as before")
 
 

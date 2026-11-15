@@ -1,27 +1,28 @@
 """A card and a design as the kernel reads them:
 `python -m petra.export FILE.petra [--card FILE.card] --out DIR`.
 
-Writes four files into DIR (docs/format.md):
+Writes the files of docs/format.md into DIR:
 
     card.json     what the asker owns: the load cases, every bound, the claims, the waivers
-    design.json   what the designer owns: every quantity written in a component block
-    deck.json     the registry values the proofs read, and the domains of petra/decks/core.json
-    proofs.json   one cell per obligation, with the proof of each that has one
+    design.json   what the designer owns: the parts as written, and every quantity in them
+    deck.json     the domains of petra/decks/core.json, and the name and hash of the rules
+    rules.json    the deck of rules whose types the parts are, as it ships
+    proofs.json   the hints the Python reader found for the cells the kernel works out
 
-For a design whose parts are of a deck of rules it writes a fifth, rules.json, the deck's
-file as it ships. design.json then holds the parts as written, and proofs.json holds hints.
-With --no-physics such a design is written as it stands, without asking the grid whether
-the deck's types take it: the kernel reads the parts itself and says.
+With --no-physics the design is written as it stands, with no proofs.json and without
+asking the grid whether the deck's types take it: the kernel reads the parts itself and
+says. A design with a part of a kind no shipped deck has gets card.json, design.json and
+deck.json alone, as `petra check` hands them to the kernel (pipeline.py).
 
 `python -m petra.export --card-only FILE.card --out DIR` writes card.json from the card
-with no design, and prints its hash. For a design of a deck's types card.json holds nothing
-the design chooses, so this is how an asker works out the hash of their own card.
+with no design, and prints its hash. card.json holds nothing the design chooses, so this
+is how an asker works out the hash of their own card.
 
-Untrusted. It reads the two files through the language and the models, so a bug here
-gives the kernel the wrong files, and the kernel's verdict is about the files it was given.
-A load or an ambient that reads a param is an input nobody signed, and goes into card.json
-with no `by`, which the kernel refuses. Exits 3 when the language or a model refuses the
-pair, as `petra check` does, and then writes nothing.
+Untrusted. It reads the two files through the language, so a bug here gives the kernel the
+wrong files, and the kernel's verdict is about the files it was given. A load or an
+ambient that reads a param is an input nobody signed, and goes into card.json with no `by`,
+which the kernel refuses. Exits 3 when the language or a deck's types refuse the pair, as
+`petra check` does, and then writes nothing.
 """
 from __future__ import annotations
 
@@ -99,12 +100,12 @@ def read_inputs(design: Design) -> list[Input]:
 
 
 def card(design: Design, inputs: list[Input], placed: bool = False) -> dict[str, Any]:
-    """What the card states. An input's name is the stem of its premise label, and `inputs`
-    is every signed bound the models hold (pipeline.signed_inputs). A load or an ambient
-    that reads a param is an input with no `by`. With `placed`, for a design checked
-    against a deck of rules, a load also says the part it is `on` and which `field` it is,
-    and the card names its tests records and its probability claims, which the other
-    designs' cards leave out. A card that states a key or a whole number exactly, with
+    """What the card states. `inputs` is every signed bound of the card (`read_inputs`), each
+    under its name there. A load or an ambient that reads a param is an input with no `by`.
+    With `placed`, for a design checked against a deck of rules, a load also says the part
+    it is `on` and which `field` it is, and the card names its tests records and its
+    probability claims. A design the kernel is handed no deck of rules for leaves those out:
+    the kernel takes a load on a part only with the deck that has the part's type. A card that states a key or a whole number exactly, with
     `given NAME is ...`, has them in `states`, in the order of their names: each with its
     `name`, who signed it as `by`, and `key`, the name, or `whole`, the number as a text.
     A card that states none has no `states`, so its card.json is what it was before a card
@@ -136,107 +137,6 @@ def design_file(design: Design, card_hash: str, deck: bool = False) -> dict[str,
             **({"parts": parts(design)} if deck else {})}
 
 
-def tape(statement: Any) -> dict[str, Any] | None:
-    """A statement of the interval rule as numbered nodes, each built from earlier ones, or
-    None for a statement of another shape. An input is a hypothesis of the statement: its
-    premise label and its range."""
-    from .kernel import Abs, Add, Const, Cos, Div, Exp, Ln, Max, Min, Mul, Neg, Pi, PowInt, RangeHyp, Sqrt, Sym
-    from .kernel.rules.r4_enclosure import AllNonpositive
-
-    if not isinstance(statement.goal, AllNonpositive) or not all(isinstance(h, RangeHyp) for h in statement.hyps):
-        return None
-    index = {h.sym: i for i, h in enumerate(statement.hyps)}
-    many = {Add: "add", Mul: "mul", Min: "min", Max: "max"}
-    one = {Neg: "neg", Sqrt: "sqrt", Ln: "ln", Exp: "exp", Cos: "cos", Abs: "abs"}
-    nodes: list[list[Any]] = []
-    seen: dict[int, int] = {}
-
-    def emit(e: Any) -> int:
-        if id(e) in seen:
-            return seen[id(e)]
-        if isinstance(e, Const):
-            node: list[Any] = ["c", number(e.value)]
-        elif isinstance(e, Sym):
-            node = ["s", index[e.name]]
-        elif isinstance(e, Pi):
-            node = ["pi"]
-        elif type(e) in many:
-            node = [many[type(e)], [emit(x) for x in e.args]]
-        elif type(e) in one:
-            node = [one[type(e)], emit(e.arg)]
-        elif isinstance(e, Div):
-            node = ["div", emit(e.num), emit(e.den)]
-        elif isinstance(e, PowInt):
-            node = ["pow", emit(e.base), e.exponent]
-        else:
-            raise TypeError(type(e).__name__)
-        seen[id(e)] = len(nodes)
-        nodes.append(node)
-        return seen[id(e)]
-
-    roots = [emit(e) for e in statement.goal.exprs]
-    return {"inputs": [{"label": h.label, "lo": number(h.lo), "hi": number(h.hi)} for h in statement.hyps], "nodes": nodes, "roots": roots}
-
-
-def _partition(node: Any, index: dict[str, int]) -> Any:
-    from .kernel import Leaf
-
-    if isinstance(node, Leaf):
-        return "leaf"
-    return {"input": index[node.sym], "at": number(node.at), "below": _partition(node.left, index), "above": _partition(node.right, index)}
-
-
-class Proofs:
-    """The evidence the Python kernel accepted, by statement hash. An evidence sink that
-    also passes each piece on to `sink`, when there is one."""
-
-    def __init__(self, sink: Any = None) -> None:
-        self.items: dict[str, tuple[Any, Any]] = {}
-        self.sink = sink
-
-    def record(self, statement: Any, statement_hash: str, evidence: Any, source: str) -> None:
-        self.items[statement_hash] = (statement, evidence)
-        if self.sink is not None:
-            self.sink.record(statement, statement_hash, evidence, source)
-
-
-def cells(report: Any, proofs: Proofs) -> list[dict[str, Any]]:
-    """One cell per obligation the coverage rules demand, and one per mode they excuse."""
-    from .kernel.rules.r4_enclosure import Enclosure, PointWitness
-
-    states = {"certified": "proved", "refuted": "refuted", "waived": "waived"}
-    out: list[dict[str, Any]] = []
-    body = report.to_json()
-    for verdict in body["verdicts"]:
-        for o in verdict["obligations"]:
-            subject, mechanism, entry = o["requirement"].split("/", 2)
-            cell: dict[str, Any] = {"subject": subject, "mechanism": mechanism, "entry": entry,
-                                    "state": states.get(o["outcome"], "open"), "rule": o["rule"]}
-            found = proofs.items.get(o["statement_hash"])
-            given = None if found is None or found[1].defined else tape(found[0])
-            if given is not None:
-                index = {h.sym: i for i, h in enumerate(found[0].hyps)}
-                proof = found[1].body
-                if cell["state"] == "proved" and isinstance(proof, Enclosure):
-                    cell |= {"tape": given, "partition": _partition(proof.partition, index)}
-                elif cell["state"] == "refuted" and isinstance(proof, PointWitness):
-                    point = dict(proof.point)
-                    cell |= {"tape": given, "point": [number(point[h.sym]) for h in found[0].hyps], "which": proof.which}
-            if cell["state"] == "open":
-                cell["why"] = "; ".join(o["needs"]) or o["note"] or o["outcome"]
-            out.append(cell)
-    for u in body["unchecked"]:
-        out.append({"subject": u["subject"], "mechanism": u["mode"], "entry": "", "state": "not_applicable", "why": u["reason"]})
-    return out
-
-
-def deck(registry: Any, found: list[dict[str, Any]]) -> dict[str, Any]:
-    """The domains of petra/decks/core.json, and the registry values the proofs read."""
-    labels = sorted({i["label"] for c in found if "tape" in c for i in c["tape"]["inputs"] if i["label"].startswith("reg:")})
-    constants = [{"label": label, **_range(registry.fact(label[len("reg:"):]).value)} for label in labels]
-    return {"format": "petra-deck/0", "domains": json.loads(CORE.read_text(encoding="utf-8"))["domains"], "constants": constants}
-
-
 def text(body: dict[str, Any]) -> str:
     return json.dumps(body, indent=1, sort_keys=True) + "\n"
 
@@ -247,47 +147,31 @@ def sha256(data: str) -> str:
     return "sha256:" + hashlib.sha256(data.replace("\r\n", "\n").encode("utf-8")).hexdigest()
 
 
-def bundle(design: Design, registry: Any, report: Any = None, proofs: Proofs | None = None) -> dict[str, str]:
-    """The text of each file the kernel reads, by its name in docs/format.md: `card`,
-    `design` and `deck`, and `proofs` when there is a report with the evidence behind it."""
-    from .pipeline import lower_components, signed_inputs
-
-    inputs = sorted(signed_inputs(design, lower_components(design, registry)), key=lambda i: i.name)
-    card_text = text(card(design, inputs))
-    out = {"card": card_text, "design": text(design_file(design, sha256(card_text)))}
-    found = [] if report is None else cells(report, proofs)
-    out["deck"] = text(deck(registry, found))
-    if report is not None:
-        out["proofs"] = text({"format": "petra-proofs/0", "cells": found})
-    return out
+def bare(design: Design) -> dict[str, str]:
+    """The text of the files the kernel is handed for a design with a part of a kind no
+    shipped deck has: the card, the design's quantities and the deck of domains, and no deck
+    of rules. The kernel holds the two to the type rules and works out no cell."""
+    card_text = text(card(design, read_inputs(design)))
+    return {"card": card_text, "design": text(design_file(design, sha256(card_text))),
+            "deck": text({"format": "petra-deck/0", "domains": json.loads(CORE.read_text(encoding="utf-8"))["domains"], "constants": []})}
 
 
 def export(path: str, out: Path, physics: bool = True, card_path: str | None = None) -> None:
-    """Write card.json, design.json and deck.json, then proofs.json when `physics`. The
-    first three need no solver, so the kernel can refuse an ill-formed design before any
-    physics runs. A design of a deck of rules gets rules.json too."""
-    from .lang import load_design
-    from .pipeline import check_design
-    from .registry import build_registry
-    from .solvers import SolverSource
-
+    """Write the files of the design at `path` into `out`: for a design of a deck's types
+    card.json, design.json, deck.json and rules.json, and proofs.json when `physics`; for
+    any other the three of `bare`."""
     from . import grid
+    from .lang import load_design
 
-    registry = build_registry()
-    design = load_design(path, registry, card_path)
+    design = load_design(path, card_path)
     rules = grid.owner(design)
-    if rules is not None:
+    if rules is None:
+        files = bare(design)
+    else:
         # Without physics the files are the design as written, and the kernel says whether the deck's types take it.
         files = grid.check(design, rules)[1] if physics else grid.bundle(design, rules)
-        out.mkdir(parents=True, exist_ok=True)
-        for name, body in files.items():
-            if physics or name != "proofs":
-                (out / f"{name}.json").write_text(body, encoding="utf-8", newline="\n")
-        return
-    proofs = Proofs()
-    report = check_design(design, registry, (SolverSource(),), sink=proofs, path=path) if physics else None
     out.mkdir(parents=True, exist_ok=True)
-    for name, body in bundle(design, registry, report, proofs).items():
+    for name, body in files.items():
         (out / f"{name}.json").write_text(body, encoding="utf-8", newline="\n")
 
 
@@ -295,8 +179,7 @@ def card_only(card_path: str, out: Path) -> str:
     """Write card.json from a card with no design, and give its hash: the hash the kernel
     prints for the card of any design of a deck's types that answers this card. Such a
     card.json holds nothing a design chooses: each given under the card's own name for it,
-    and each load with the part and the field the card puts it on. For a design of the
-    models' kinds card.json takes names from the design, and its hash is another."""
+    and each load with the part and the field the card puts it on."""
     from .lang import load_card
 
     design = load_card(card_path)
@@ -323,7 +206,7 @@ def _main(argv: list[str]) -> int:
     args = parser.parse_args(argv)
     if (args.file is None) == (args.card_only is None) or (args.card_only and (args.card or args.no_physics)):
         parser.error("give a design, or --card-only FILE with no design, no --card and no --no-physics")
-    from .repair import INPUT_ERRORS
+    from .pipeline import INPUT_ERRORS
 
     try:
         if args.card_only:

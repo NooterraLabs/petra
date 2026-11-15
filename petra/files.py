@@ -188,3 +188,16 @@ def read_text(path: str | Path) -> str:
         return Path(path).read_text(encoding="utf-16" if utf16 else "utf-8-sig")
     except UnicodeError as exc:
         raise LolaSyntaxError(str(path), 1, 1, f"the file is not UTF-8 or UTF-16 text ({exc})") from None
+
+
+class ComponentError(ValueError):
+    """A card or a design that a deck's types, the type rules or the kernel refuse: a part
+    that lacks a field, a wrong unit, a size under its floor, a pair the kernel finds ill
+    formed. Every way into a check reports it as an input error. The problems are held as
+    `summed` prints them: each message once with how many times it arose, and at most a
+    hundred for a file."""
+
+    def __init__(self, problems: tuple[str, ...]) -> None:
+        problems = summed(problems)
+        super().__init__("\n".join(problems))
+        self.problems = problems

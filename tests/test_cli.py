@@ -1,14 +1,9 @@
-"""The command line: exit codes, the JSON report, and each subcommand. Owner: Y.
+"""The command line: exit codes, the JSON report, and each subcommand.
 
 The status and the exit code of `petra check` are the kernel's (tests/test_kernel_decides.py).
-The kernel has no deck of rules for the kinds used here, so it passes none of them: where the
-Python checker passes a design, the status is UNKNOWN with the reason that its kind has no deck.
-
-The Python checker's statuses: examples/circuit_pass.petra passes and examples/bolt_unknown.petra is
-UNKNOWN (their own headers say why). Under a card that asks for a 16 A draw the circuit_pass design breaks
-the overload condition I_B <= I_n of its B10 breaker (IEC 60364-4-43 433.1), so it
-fails. A stress area of 1.5 x 84.267 mm2 for M12 contradicts ISO 724, so a deck holding
-it fails the consistency check.
+The three laps of examples/deck are checked against the AISC deck: lap_pass passes on the
+waivers of its card, lap_unknown has five lines the deck has no rule for, and lap_fail carries
+a pull its bolts do not. A truss is a kind no deck has, so it reads UNKNOWN with that reason.
 """
 import contextlib
 import io
@@ -17,21 +12,21 @@ import subprocess
 import sys
 import tempfile
 import unittest
-from fractions import Fraction
 from pathlib import Path
 
 import petra
 from petra import verify
-from petra.cli import EXIT_CODES, main
+from petra.cli import EXIT_CODES, build_parser, main
 from petra.files import read_pair
-from petra.kernel import Evidence, Leaf, Split, encode_evidence
-from petra.kernel.rules.r4_enclosure import Enclosure
 
 ROOT = Path(__file__).resolve().parents[1]
 EXAMPLES = ROOT / "examples"
-CIRCUIT = EXAMPLES / "circuit_pass.petra"
-FAMILY = EXAMPLES / "families" / "cu_pvc_clipped.petra"
-VERDICT_KEYS = {"claim", "status", "footprint", "rules", "needs", "margins", "obligations"}
+OLD = Path(__file__).resolve().parents[1] / "corpus" / "cases" / "old"
+"""Designs of kinds no deck has, which read UNKNOWN: the examples of the old path, kept as cases."""
+LAP = EXAMPLES / "deck" / "lap_pass.petra"
+TRUSS = OLD / "truss_pass.petra"
+DECK_KEYS = {"file", "design", "status", "deck", "counts", "cells", "waived", "card", "hashes", "path", "kernel"}
+CELL_KEYS = {"subject", "mechanism", "entry", "state", "what", "anchor", "why", "rule", "ratio"}
 
 
 def run(*argv: str) -> tuple[int, str, str]:
@@ -59,43 +54,47 @@ class Workspace(unittest.TestCase):
 
 
 class Check(Workspace):
-    def test_a_design_the_python_checker_passes_exits_2_with_the_json_report(self):
-        code, out, _ = run("check", str(CIRCUIT), "--json")
-        self.assertEqual(code, EXIT_CODES["UNKNOWN"], "circuit_pass exits 2: the kernel has no deck of rules for a circuit")
+    def test_a_lap_that_passes_on_waivers_exits_6_with_the_json_report(self):
+        code, out, _ = run("check", str(LAP), "--json")
+        self.assertEqual(code, EXIT_CODES["PASS_WAIVED"], "lap_pass exits 6: the kernel says PASS and lists the waivers its cells rest on")
         report = json.loads(out)
-        self.assertEqual(set(report), {"file", "card", "hashes", "kernel", "path", "design", "status", "reason", "governing", "verdicts", "unchecked",
-                                       "repair"}, "the report has the documented keys")
-        self.assertEqual((report["status"], report["reason"]), ("UNKNOWN", verify.no_deck(["circuit"])))
-        self.assertEqual(report["file"], str(CIRCUIT), "the file is named as given")
-        for verdict in report["verdicts"]:
-            self.assertEqual(set(verdict), VERDICT_KEYS, f"{verdict['claim']} has the documented keys")
-            self.assertEqual(verdict["status"], "UNKNOWN", f"{verdict['claim']}: no claim of a design with no deck passes, whatever the Python checker gave it")
-            self.assertTrue(verdict["footprint"], f"{verdict['claim']} names its premises")
-            self.assertEqual(verdict["needs"], [], f"{verdict['claim']} has nothing open")
-            self.assertTrue(verdict["obligations"], f"{verdict['claim']} lists its obligations")
-            self.assertEqual({o["outcome"] for o in verdict["obligations"]}, {"certified"}, f"{verdict['claim']} certifies each")
+        self.assertEqual(set(report), DECK_KEYS, "the report has the documented keys")
+        self.assertEqual((report["status"], report["kernel"]["verdict"], report["path"]), ("PASS_WAIVED", "PASS", "rules"))
+        self.assertEqual(report["file"], str(LAP), "the file is named as given")
+        self.assertEqual(len(report["waived"]), 5, "each of the five waivers is listed")
+        for cell in report["cells"]:
+            self.assertLessEqual(CELL_KEYS, set(cell), f"{cell['mechanism']} has the documented keys")
+        self.assertEqual(sum(report["counts"].values()), len(report["cells"]), "the counts are of the cells")
 
-    def test_an_unknown_design_exits_2_and_names_what_is_open(self):
-        code, out, _ = run("check", str(EXAMPLES / "bolt_unknown.petra"), "--json")
-        self.assertEqual(code, EXIT_CODES["UNKNOWN"], "bolt_unknown exits 2")
-        verdicts = json.loads(out)["verdicts"]
-        self.assertTrue(any(v["needs"] for v in verdicts), "some entry says what it needs")
-        self.assertEqual({v["status"] for v in verdicts if v["needs"]}, {"UNKNOWN"}, "and each that does is UNKNOWN")
+    def test_a_lap_with_open_lines_exits_2_and_names_them(self):
+        code, out, _ = run("check", str(EXAMPLES / "deck" / "lap_unknown.petra"), "--json")
+        self.assertEqual(code, EXIT_CODES["UNKNOWN"], "lap_unknown exits 2")
+        pending = [c for c in json.loads(out)["cells"] if c["state"] == "open"]
+        self.assertEqual(len(pending), 5, "the five lines the deck has no rule for")
+        self.assertTrue(all(c["why"] for c in pending), "and each says why it is open")
 
-    def test_a_design_refuted_under_another_card_exits_1(self):
-        card = self.write("overloaded.card", read_pair(CIRCUIT)[0].replace("[0 A, 10 A]", "[0 A, 16 A]"))
-        code, out, _ = run("check", str(CIRCUIT), "--card", card)
-        self.assertEqual(code, EXIT_CODES["FAIL"], "16 A on a B10 exits 1")
-        self.assertIn("FAIL", out.splitlines()[0], "the first line gives the overall status")
+    def test_a_lap_that_is_refuted_exits_1(self):
+        code, out, _ = run("check", str(EXAMPLES / "deck" / "lap_fail.petra"))
+        self.assertEqual(code, EXIT_CODES["FAIL"], "lap_fail exits 1")
+        self.assertIn("FAIL", out.splitlines()[0], "the first line gives the status")
+        self.assertIn("refuted", out)
+
+    def test_a_design_of_a_kind_no_deck_has_exits_2_with_the_reason(self):
+        code, out, _ = run("check", str(TRUSS), "--json")
+        self.assertEqual(code, EXIT_CODES["UNKNOWN"], "a truss exits 2: no deck of rules has one")
+        report = json.loads(out)
+        self.assertEqual((report["status"], report["reason"], report["kinds"]), ("UNKNOWN", verify.no_deck(["truss"]), ["truss"]))
+        self.assertEqual((report["cells"], report["deck"], report["path"]), ([], None, "none"), "and no cell was worked out")
+        code, out, _ = run("check", str(TRUSS))
+        self.assertEqual(code, EXIT_CODES["UNKNOWN"])
+        self.assertEqual(out.splitlines()[1], f"reason     {verify.no_deck(['truss'])}", "the text gives the reason on its second line")
 
     def test_input_errors_exit_3_and_print_nothing(self):
-        card, design = read_pair(CIRCUIT)
+        card, design = read_pair(LAP)
         self.write("broken.card", card)
-        syntax = self.write("broken.petra", "petra 0\ncircuit {\n")
+        syntax = self.write("broken.petra", "petra 0\nlap {\n")
         lone = self.write("lone.petra", design)
-        deck = self.write("deck.json", "not a deck")
-        for argv in (("check", syntax), ("check", str(self.tmp / "missing.petra")), ("check", lone), ("check", str(CIRCUIT), "--card", syntax),
-                     ("check", str(CIRCUIT), "--deck", deck)):
+        for argv in (("check", syntax), ("check", str(self.tmp / "missing.petra")), ("check", lone), ("check", str(LAP), "--card", syntax)):
             code, out, err = run(*argv)
             self.assertEqual(code, EXIT_CODES["INPUT_ERROR"], f"{argv} exits 3")
             self.assertEqual(out, "", f"{argv} prints nothing to stdout")
@@ -104,44 +103,41 @@ class Check(Workspace):
         self.assertIn("lone.card", run("check", lone)[2], "a design with no card beside it names the card it looked for")
 
     def test_a_design_cannot_state_what_is_asked_of_it(self):
-        card, design = read_pair(CIRCUIT)
+        card, design = read_pair(LAP)
         self.write("own.card", card)
-        for line in ("load easy {\n  on lighting.lamps current in [0 A, 1 A]\n  signed \"me\" source \"me\"\n}\n",
-                     "claim hot: lighting.w1.temperature <= 500 degC\n",
-                     "waive wire.short_circuit on lighting.w1 by \"me\" reason \"fine\"\n"):
+        for line in ("load easy {\n  on splice pull in [0 kip, 1 kip]\n  signed \"me\" source \"me\"\n}\n",
+                     "claim hot: splice.temperature <= 500 degC\n",
+                     "waive lap.tightening on splice by \"me\" reason \"fine\"\n"):
             code, out, err = run("check", self.write("own.petra", design + line))
             self.assertEqual((code, out), (EXIT_CODES["INPUT_ERROR"], ""), line)
             self.assertIn("belongs in the card", err, line)
 
-    def test_a_family_is_not_a_design_to_check(self):
-        code, _, err = run("check", str(FAMILY))
-        self.assertEqual(code, EXIT_CODES["INPUT_ERROR"], "a load that reads a param is one nobody signed")
-        self.assertIn("certify-family", err)
+    def test_a_part_of_a_deck_beside_one_of_no_deck_is_refused(self):
+        card, design = read_pair(LAP)
+        self.write("mixed.card", card)
+        code, out, err = run("check", self.write("mixed.petra", design + "\ntruss frame {\n  node a at (0 m, 0 m)\n}\n"))
+        self.assertEqual((code, out), (EXIT_CODES["INPUT_ERROR"], ""))
+        self.assertIn("frame", err, "the part of no deck is named")
 
     def test_usage_errors_exit_3(self):
-        for argv in (("frobnicate",), ("check",), ("mcp", "--budget", "0")):
+        for argv in (("frobnicate",), ("check",), ("mcp", "--budget", "0"), ("check", str(LAP), "--no-solve"), ("envelope", str(LAP)),
+                     ("verify", "x.json"), ("certify-family", str(LAP)), ("registry", "list"), ("explain", str(LAP))):
             self.assertEqual(run(*argv)[0], EXIT_CODES["INPUT_ERROR"], f"{argv} exits 3")
 
-    def test_check_without_solvers_reuses_the_library(self):
-        library = str(self.tmp / "library")
-        code, out, _ = run("certify-family", str(FAMILY), "--library", library)
-        self.assertEqual((code, out.count("stored ")), (EXIT_CODES["UNKNOWN"], 2), "both claims of the family are stored")
-        code, out, _ = run("check", str(CIRCUIT), "--json", "--library", library, "--no-solve")
-        verdicts = {v["claim"]: v for v in json.loads(out)["verdicts"]}
-        self.assertEqual((verdicts["hot"]["needs"], verdicts["drop"]["needs"]), ([], []), "both claims come from the library, with nothing open")
-        self.assertTrue(verdicts["coverage"]["needs"], "coverage needs the solver the run switched off")
-        self.assertEqual({v["status"] for v in verdicts.values()}, {"UNKNOWN"}, "and no claim of a design with no deck has the status of a pass")
-        self.assertEqual(code, EXIT_CODES["UNKNOWN"], "so the design exits 2")
+    def test_the_commands_are_the_ones_the_kernel_or_the_decks_serve(self):
+        """Nothing that the old Python checker served is a command: each was a way to a status that was not the kernel's."""
+        actions = [a for a in build_parser()._actions if a.dest == "command"]
+        self.assertEqual(sorted(actions[0].choices), ["check", "docs", "kinds", "mcp", "new"])
 
     def test_python_dash_m_petra_uses_the_same_exit_codes(self):
-        done = subprocess.run([sys.executable, "-m", "petra", "check", str(EXAMPLES / "bolt_unknown.petra"), "--json"],
+        done = subprocess.run([sys.executable, "-m", "petra", "check", str(EXAMPLES / "deck" / "lap_unknown.petra"), "--json"],
                               cwd=ROOT, capture_output=True, text=True, timeout=300)
         self.assertEqual(done.returncode, EXIT_CODES["UNKNOWN"], "python -m petra exits with the verdict's code")
         self.assertEqual(json.loads(done.stdout)["status"], "UNKNOWN", "and prints the report")
 
     def test_a_reader_that_closes_stdout_early_stops_the_output_without_a_traceback(self):
         # As `petra check FILE | head` does once it has its lines. Every subcommand, not only check.
-        for argv in (("check", str(CIRCUIT)), ("docs", "reference")):
+        for argv in (("check", str(LAP)), ("docs", "reference")):
             proc = subprocess.Popen([sys.executable, "-m", "petra", *argv], cwd=ROOT, stdout=subprocess.PIPE,
                                     stderr=subprocess.PIPE)
             proc.stdout.close()
@@ -155,7 +151,7 @@ class Encodings(Workspace):
     """Windows PowerShell 5.1 writes UTF-8 with a byte order mark from `Out-File -Encoding
     utf8` and UTF-16 from `>`. The README's quickstart redirects `petra new` into a file."""
 
-    CARD, TEXT = read_pair(ROOT / "examples" / "circuit_pass.petra")
+    CARD, TEXT = read_pair(LAP)
 
     def check(self, card: bytes, design: bytes) -> int:
         (self.tmp / "design.card").write_bytes(card)
@@ -164,10 +160,10 @@ class Encodings(Workspace):
         return run("check", str(path))[0]
 
     def test_a_pair_with_a_byte_order_mark_checks(self):
-        self.assertEqual(self.check(self.CARD.encode("utf-8-sig"), self.TEXT.encode("utf-8-sig")), EXIT_CODES["UNKNOWN"])
+        self.assertEqual(self.check(self.CARD.encode("utf-8-sig"), self.TEXT.encode("utf-8-sig")), EXIT_CODES["PASS_WAIVED"])
 
     def test_a_utf16_pair_checks(self):
-        self.assertEqual(self.check(*(text.replace("\n", "\r\n").encode("utf-16") for text in (self.CARD, self.TEXT))), EXIT_CODES["UNKNOWN"])
+        self.assertEqual(self.check(*(text.replace("\n", "\r\n").encode("utf-16") for text in (self.CARD, self.TEXT))), EXIT_CODES["PASS_WAIVED"])
 
     def test_bytes_that_are_not_text_are_an_input_error(self):
         self.assertEqual(self.check(self.CARD.encode("utf-8"), b"petra 0\n\xff\xfe\xfd"), EXIT_CODES["INPUT_ERROR"])
@@ -180,94 +176,33 @@ class Version(unittest.TestCase):
         self.assertEqual((code, out.strip()), (0, f"petra {petra.__version__}"))
 
 
-class Explain(Workspace):
-    def test_explain_prints_the_statements(self):
-        code, out, _ = run("explain", str(EXAMPLES / "bolt_unknown.petra"))
-        self.assertEqual(code, 0, "explain exits 0")
-        self.assertIn("obligation", out, "it lists the obligations")
+class Teach(Workspace):
+    def test_kinds_lists_the_decks_and_prints_a_type(self):
+        code, out, _ = run("kinds")
+        self.assertEqual(code, 0)
+        self.assertIn("deck aisc360-22: plate, lap", out)
+        code, out, _ = run("kinds", "lap")
+        self.assertEqual(code, 0)
+        self.assertIn("lap.block_shear", out, "a type prints what the grid asks of it")
+        self.assertEqual(json.loads(run("kinds", "lap", "--json")[1])["decks"][0]["types"][0]["type"], "lap")
+        self.assertEqual(run("kinds", "truss")[0], EXIT_CODES["INPUT_ERROR"], "a kind no deck has is no type")
+        self.assertEqual(run("kinds", "lap", "--all")[0], EXIT_CODES["INPUT_ERROR"])
 
-    def test_explain_refuses_a_broken_file(self):
-        self.write("broken.card", read_pair(CIRCUIT)[0])
-        self.assertEqual(run("explain", self.write("broken.petra", "petra 0\ncircuit {\n"))[0], EXIT_CODES["INPUT_ERROR"], "a syntax error exits 3")
+    def test_new_prints_a_pair_that_checks(self):
+        code, card, _ = run("new", "lap", "--card")
+        self.assertEqual(code, 0)
+        code, design, _ = run("new", "lap", "--name", "joint")
+        self.assertEqual(code, 0)
+        self.write("lap.card", card.replace(" on splice ", " on joint "))
+        self.assertEqual(run("check", self.write("lap.petra", design))[0], EXIT_CODES["UNKNOWN"], "the card signs no waiver, so five lines are open")
+        self.assertEqual(run("new", "truss")[0], EXIT_CODES["INPUT_ERROR"])
 
-
-class Verify(Workspace):
-    def certificates(self) -> list[Path]:
-        certs = self.tmp / "certs"
-        run("check", str(CIRCUIT), "--certs", str(certs))
-        return sorted(certs.glob("*.json"))
-
-    def test_certificates_written_by_check_verify(self):
-        paths = self.certificates()
-        self.assertTrue(paths, "check wrote certificates")
-        code, out, _ = run("verify", *map(str, paths))
-        self.assertEqual(code, 0, "every certificate checks")
-        self.assertEqual(out.count(": theorem "), len(paths), "one theorem line per file")
-
-    def test_library_files_verify(self):
-        library = self.tmp / "library"
-        run("certify-family", str(FAMILY), "--library", str(library))
-        paths = sorted(library.rglob("*.json"))
-        self.assertEqual(len(paths), 2, "two library files")
-        self.assertEqual(run("verify", *map(str, paths))[0], 0, "library files verify like certificates")
-
-    def test_forged_evidence_exits_1(self):
-        path = self.certificates()[0]
-        cert = json.loads(path.read_text(encoding="utf-8"))
-        sym = next(h["sym"] for h in cert["statement"]["hyps"] if h["t"] == "range_hyp")
-        cert["evidence"] = encode_evidence(Evidence(Enclosure(Split(sym, Fraction(10**9), Leaf(), Leaf()))))
-        code, out, _ = run("verify", self.write("forged.json", json.dumps(cert)))
-        self.assertEqual(code, 1, "the kernel rejects a split outside the cell")
-        self.assertIn("REJECTED", out, "and says so")
-
-    def test_an_edited_statement_exits_3(self):
-        path = self.certificates()[0]
-        cert = json.loads(path.read_text(encoding="utf-8"))
-        cert["statement"]["hyps"] = cert["statement"]["hyps"][1:]
-        self.assertEqual(run("verify", self.write("edited.json", json.dumps(cert)))[0], EXIT_CODES["INPUT_ERROR"], "a statement that does not match its hash does not decode")
-
-
-class CertifyFamily(Workspace):
-    def test_the_family_stores_both_claims(self):
-        code, out, _ = run("certify-family", str(FAMILY), "--library", str(self.tmp / "library"))
-        self.assertEqual(code, EXIT_CODES["UNKNOWN"], "every claim is stored, and that is no pass: a family has no deck of rules")
-        self.assertRegex(out.splitlines()[0], r": UNKNOWN$")
-        self.assertEqual(out.count("stored "), 2, "one line per stored claim")
-
-    def test_a_false_family_exits_1(self):
-        card = self.write("too_hot.card", read_pair(FAMILY)[0].replace("[0 A, 13 A]", "[0 A, 16 A]"))
-        code, out, _ = run("certify-family", str(FAMILY), "--card", card, "--library", str(self.tmp / "library"))
-        self.assertEqual(code, EXIT_CODES["FAIL"], "the hot claim is refuted at 16 A")
-        self.assertIn("skipped", out, "the refuted claim is listed")
-
-    def test_a_concrete_design_exits_3(self):
-        self.assertEqual(run("certify-family", str(CIRCUIT), "--library", str(self.tmp / "library"))[0], EXIT_CODES["INPUT_ERROR"], "a design with no param is not a family")
-
-
-class Registry(Workspace):
-    def test_the_shipped_registry_is_consistent(self):
-        code, out, _ = run("registry", "check")
-        self.assertEqual(code, 0, "the shipped deck breaks no relation")
-        self.assertIn("0 findings", out, "and says so")
-
-    def test_a_built_deck_round_trips(self):
-        deck = str(self.tmp / "deck.json")
-        self.assertEqual(run("registry", "build", "--out", deck)[0], 0, "build exits 0")
-        self.assertEqual(run("registry", "check", deck)[0], 0, "the written deck is consistent")
-
-    def test_a_wrong_stress_area_exits_1(self):
-        deck = self.tmp / "deck.json"
-        run("registry", "build", "--out", str(deck))
-        body = json.loads(deck.read_text(encoding="utf-8"))
-        record = next(r for r in body["records"] if (r["entry"], r["prop"]) == ("bolt.M12_A4_70", "As"))
-        record["lo"], record["hi"] = (str(Fraction(record[k]) * Fraction(3, 2)) for k in ("lo", "hi"))
-        deck.write_text(json.dumps(body), encoding="utf-8", newline="\n")
-        code, out, _ = run("registry", "check", str(deck))
-        self.assertEqual(code, 1, "a deck that contradicts ISO 724 exits 1")
-        self.assertIn("bolt.M12_A4_70", out, "the finding names the entry")
-
-    def test_an_unreadable_deck_exits_3(self):
-        self.assertEqual(run("registry", "check", self.write("deck.json", "{"))[0], EXIT_CODES["INPUT_ERROR"], "a deck that does not parse exits 3")
+    def test_docs_lists_and_prints(self):
+        code, out, _ = run("docs")
+        self.assertEqual(code, 0)
+        self.assertEqual([line.split()[0] for line in out.splitlines()[:-1]], ["readme", "reference", "api", "skill"])
+        self.assertEqual(run("docs", "api")[0], 0)
+        self.assertEqual(run("docs", "nothing")[0], EXIT_CODES["INPUT_ERROR"])
 
 
 if __name__ == "__main__":

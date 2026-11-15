@@ -43,8 +43,7 @@ import unittest
 from unittest import mock
 
 from petra import grid, verify
-from petra.registry import build_registry
-from petra.repair import check_text
+from petra.pipeline import check_text
 from tests.test_deck_features import HEAD, asks, design, given, kind, load, made_up, no_deck, parsed, part, rule, size
 from tests.test_kernel_grid import ask
 
@@ -60,7 +59,7 @@ def checked(card: str, text: str, deck: dict | None = None):
     the shipped decks or with a made-up one in their place. With a kernel built, the kernel's
     cells are compared with the grid's, and a difference raises."""
     def run():
-        return check_text(card, text, "made-up.petra", build_registry(), (), card_path="made-up.card")
+        return check_text(card, text, "made-up.petra", card_path="made-up.card")
     if deck is None:
         return run()
     read = grid.read_deck(json.dumps(deck))

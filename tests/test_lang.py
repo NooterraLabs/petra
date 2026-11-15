@@ -5,7 +5,6 @@ import unittest
 from fractions import Fraction
 from pathlib import Path
 
-from petra import grid, models
 from petra.ir import (
     Attr,
     Bound,
@@ -34,22 +33,11 @@ from petra.ir import (
 from petra.kernel import Interval
 from petra.files import read_pair
 from petra.lang import LolaSyntaxError, LoweringError, load_design, parse_design
-from petra.premises import Tag
-from petra.registry import Corrosivity, Environment, Registry, Stated
 from petra.units import AREA, CURRENT, DIMENSIONLESS, FORCE, LENGTH, STRESS, TEMPERATURE, TORQUE, VOLTAGE, Quantity
 
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples"
-
-
-def environments_only(*ids: str) -> Registry:
-    """Design-level lowering reads only the registry's environment ids; the domains'
-    lowerers read the rest."""
-    ambient = Stated(Interval(Fraction(0), Fraction(40)), "degC", Tag.SANCTIONED, "test fixture", "test fixture", "test fixture")
-    envs = {e: Environment(e, ambient, Corrosivity.C1, False, source="test fixture") for e in ids}
-    return Registry(constants={}, materials={}, parts={}, processes={}, environments=envs)
-
-
-REGISTRY = environments_only("indoor_dry", "outdoor_c3", "marine_c5")
+OLD = Path(__file__).resolve().parents[1] / "corpus" / "cases" / "old"
+"""Designs of kinds no deck has, which read UNKNOWN: the examples of the old path, kept as cases."""
 
 
 HEADER = 'petra 0\ncard "d" {\n  owner "o@example.org"\n  environment indoor_dry\n}\n'
@@ -62,7 +50,7 @@ PROOF = 'tests proof {\n  on hook trials 300 failures 0 at 36 kN\n  measured "qa
 
 
 def lower_text(card: str = CAPACITY, design: str = HOOK, header: str = HEADER) -> Design:
-    return parse_design(header + card, "petra 0\n" + design, "t.petra", REGISTRY)
+    return parse_design(header + card, "petra 0\n" + design, "t.petra")
 
 
 def q(x, dim) -> Quantity:
@@ -95,7 +83,7 @@ class Case(unittest.TestCase):
     def assertSyntax(self, at: str, *fragments: str, card: str = HEADER + CAPACITY, design: str = "petra 0\n" + HOOK) -> None:
         """A syntax error at `at`, which is FILE:LINE:COL, in the whole text of a card or a design."""
         with self.assertRaises(LolaSyntaxError) as ctx:
-            parse_design(card, design, "t.petra", REGISTRY)
+            parse_design(card, design, "t.petra")
         self.assertTrue(str(ctx.exception).startswith(f"{at}: "), str(ctx.exception))
         self.assertEqual(f"{ctx.exception.path}:{ctx.exception.line}:{ctx.exception.col}", at)
         for fragment in fragments:
@@ -104,33 +92,37 @@ class Case(unittest.TestCase):
 
 class Examples(Case):
     def paths(self) -> list[Path]:
-        paths = sorted(EXAMPLES.rglob("*.petra"))
-        self.assertTrue(any(p.parent.name == "families" for p in paths), "examples/families is swept too")
+        paths = sorted([*EXAMPLES.rglob("*.petra"), *OLD.rglob("*.petra")])
+        self.assertTrue(any(p.parent.name == "families" for p in paths) and any(p.parent.name == "deck" for p in paths), "the laps and the old kinds are swept")
         return paths
 
     def test_every_example_parses_and_lowers_to_ir(self):
         for path in self.paths():
-            with self.subTest(example=str(path.relative_to(EXAMPLES))):
-                design = load_design(path, REGISTRY)
+            with self.subTest(example=path.name):
+                design = load_design(path)
                 self.assertIsInstance(design, Design)
                 self.assertEqual(design.path, str(path))
                 self.assertTrue(design.name and design.owner)
                 self.assertTrue(design.components, "every example draws a component")
-                for component in design.components.values():
-                    self.assertIn(component.kind, {*models.KINDS, *grid.kinds()})
 
-    def test_every_example_is_rejected_once_its_component_kind_is_misspelt(self):
+    def test_a_kind_is_lowered_as_written_whether_a_deck_has_it_or_not(self):
+        """The language knows no kind. Which deck has a kind, and that a design with a part of no deck reads UNKNOWN, is
+        pipeline.py's to say (tests/test_kernel_decides.py)."""
         for path in self.paths():
-            with self.subTest(example=str(path.relative_to(EXAMPLES))):
+            with self.subTest(example=path.name):
                 card, text = read_pair(path)
-                kind = next(iter(load_design(path, REGISTRY).components.values())).kind
+                kind = next(iter(load_design(path).components.values())).kind
                 broken = text.replace(f"\n{kind} ", f"\n{kind}x ", 1)
                 self.assertNotEqual(broken, text)
-                with self.assertRaises(LoweringError):
-                    parse_design(card, broken, str(path), REGISTRY)
+                try:
+                    kinds = {c.kind for c in parse_design(card, broken, str(path)).components.values()}
+                except LoweringError as exc:      # a card that waives a deck's mechanism on a part no longer of the deck's type
+                    self.assertIn("unknown mechanism", str(exc))
+                else:
+                    self.assertIn(f"{kind}x", kinds)
 
     def test_truss_pass_lowers_to_generic_attributes_and_si_loads(self):
-        d = load_design(EXAMPLES / "truss_pass.petra", REGISTRY)
+        d = load_design(OLD / "truss_pass.petra")
         self.assertEqual((d.name, d.owner, d.environment, d.is_family), ("warren-footbridge-panel", "a.reviewer@example.org", "indoor_dry", False))
         self.assertEqual(d.components["frame"].kind, "truss")
         self.assertEqual(attr(d, "frame", "section"), (Ref(("chs", "60_3x3_2")),))
@@ -150,18 +142,18 @@ class Examples(Case):
         self.assertEqual((stress.qoi, stress.rel, stress.bound), (QoiRef(("frame", "diag_ad"), "stress"), Rel.LE, q(235_000_000, STRESS)))
 
     def test_bolt_unknown_keeps_digit_led_registry_ids_and_reads_the_cards_bounds(self):
-        d = load_design(EXAMPLES / "bolt_unknown.petra", REGISTRY)
+        d = load_design(OLD / "bolt_unknown.petra")
         self.assertEqual(d.environment, "marine_c5")
         self.assertEqual(attr(d, "bracket", "bolt"), (Ref(("bolt", "M12_A4_70")), Ref(("count",)), Fixed(q(1, DIMENSIONLESS))))
         self.assertEqual(attr(d, "bracket", "plate"), (Ref(("aluminium", "6061_T6")), Ref(("thickness",)), Fixed(q(Fraction(1, 100), LENGTH))))
         (torque,) = attr(d, "bracket", "torque")
         self.assertEqual(unspanned(torque), Bound(rng(40, 50, TORQUE), Signature("fitter.lead@example.org", "assembly spec AS-12 rev C"), InputKind.ASSUMED, None, None, "torque"))
-        self.assertEqual(torque.span.path, str(EXAMPLES / "bolt_unknown.card"), "a bound is where the card states it")
+        self.assertEqual(torque.span.path, str(OLD / "bolt_unknown.card"), "a bound is where the card states it")
         (nut_factor,) = attr(d, "bracket", "nut_factor")
         self.assertEqual((nut_factor.range, nut_factor.kind), (rng(Fraction(4, 25), Fraction(11, 50), DIMENSIONLESS), InputKind.MEASURED))
 
     def test_circuit_pass_has_a_signed_ambient_and_port_connections(self):
-        d = load_design(EXAMPLES / "circuit_pass.petra", REGISTRY)
+        d = load_design(OLD / "circuit_pass.petra")
         self.assertEqual(
             unspanned(d.ambient),
             Input("ambient", rng(10, 40, TEMPERATURE), Signature("site.manager@example.org", "site survey 2026-09"), InputKind.ASSUMED, None),
@@ -174,7 +166,7 @@ class Examples(Case):
         self.assertEqual(d.claims[1].bound, q(Fraction(3, 100), DIMENSIONLESS))
 
     def test_hook_uncertain_pairs_each_probability_method_with_its_event(self):
-        d = load_design(EXAMPLES / "hook_uncertain.petra", REGISTRY)
+        d = load_design(OLD / "hook_uncertain.petra")
         self.assertEqual(d.loads["lift"].entries[0].value.mean, q(10000, FORCE))
         proof = d.tests["proof"]
         self.assertEqual((proof.subject, proof.trials, proof.failures, proof.level), (("hook",), 300, 0, q(36000, FORCE)))
@@ -185,7 +177,7 @@ class Examples(Case):
         self.assertEqual(d.claims, ())
 
     def test_the_family_example_is_a_family_of_param_refs(self):
-        d = load_design(EXAMPLES / "families" / "cu_pvc_clipped.petra", REGISTRY)
+        d = load_design(OLD / "families" / "cu_pvc_clipped.petra")
         self.assertTrue(d.is_family)
         self.assertEqual(tuple(d.params), ("size", "insulation", "run", "draw", "amb"), "the design's params, then the card's")
         self.assertEqual(d.params["size"].range, rng(Fraction(1, 400000), Fraction(1, 62500), AREA))
@@ -194,8 +186,8 @@ class Examples(Case):
         self.assertEqual(d.loads["demand"].entries[0], LoadEntry(("c", "load"), "current", ParamRef("draw")))
 
     def test_a_card_named_on_its_own_stands_in_for_the_one_beside_the_design(self):
-        d = load_design(EXAMPLES / "truss_pass.petra", REGISTRY, EXAMPLES / "truss_fail.card")
-        self.assertEqual((d.path, d.loads["crowd"].span.path), (str(EXAMPLES / "truss_pass.petra"), str(EXAMPLES / "truss_fail.card")))
+        d = load_design(OLD / "truss_pass.petra", OLD / "truss_fail.card")
+        self.assertEqual((d.path, d.loads["crowd"].span.path), (str(OLD / "truss_pass.petra"), str(OLD / "truss_fail.card")))
 
 
 class Lowering(Case):
@@ -221,7 +213,7 @@ class Lowering(Case):
         self.assertEqual(d.components["hook"].attrs[0].args[0].range, rng(36000, 40000, FORCE))
 
     def test_crlf_line_ends_lower_like_lf(self):
-        crlf = parse_design((HEADER + CAPACITY).replace("\n", "\r\n"), ("petra 0\n" + HOOK).replace("\n", "\r\n"), "t.petra", REGISTRY)
+        crlf = parse_design((HEADER + CAPACITY).replace("\n", "\r\n"), ("petra 0\n" + HOOK).replace("\n", "\r\n"), "t.petra")
         self.assertEqual(crlf.components["hook"], lower_text().components["hook"])
 
     def test_string_escapes(self):
@@ -297,7 +289,8 @@ class TwoFiles(Case):
 
 class Rejections(Case):
     def test_an_unknown_component_kind(self):
-        self.assertProblem("t.petra:2:1", "trus", "truss", card="", design="trus frame {\n  material steel.S355\n}\n")
+        """No kind is refused here: a kind is a type of a deck or of none, and the pair then reads UNKNOWN."""
+        self.assertEqual(lower_text("", "trus frame {\n  material steel.S355\n}\n").components["frame"].kind, "trus")
         self.assertEqual(lower_text("", "truss frame {\n  material steel.S355\n}\n").components["frame"].kind, "truss")
 
     def test_an_input_bound_without_a_signature(self):
@@ -326,15 +319,23 @@ class Rejections(Case):
         self.assertSyntax("t.card:6:33", card=HEADER + CAPACITY.replace("40 kN]", "40 kN"))
         self.assertSyntax("t.card:6:19", card=HEADER + CAPACITY.replace("[36 kN, 40 kN]", "36 kN"))
 
-    def test_an_unknown_environment_id(self):
-        self.assertProblem("t.card:4:15", "marine_c6", header=HEADER.replace("indoor_dry", "marine_c6"))
+    def test_an_environment_is_kept_as_the_card_names_it(self):
+        """No deck reads an environment yet, so there is no table of them to hold a name to. The grid refuses a card that
+        states one for a design of a deck's types (tests/test_grid.py)."""
+        self.assertEqual(lower_text(header=HEADER.replace("indoor_dry", "marine_c6")).environment, "marine_c6")
 
     def test_an_unknown_waiver_mode(self):
-        self.assertProblem("t.card:7:7", "corrosion.galvanik", card=CAPACITY + 'waive corrosion.galvanik on hook by "o@example.org" reason "isolated"\n')
+        """A mechanism is held to the decks' where every part is of a deck's type. A part of a kind no deck has may have had
+        mechanisms of its own, and its pair reads UNKNOWN whatever it waives."""
+        card, text = read_pair(EXAMPLES / "deck" / "lap_pass.petra")
+        with self.assertRaises(LoweringError) as ctx:
+            parse_design(card.replace("waive lap.tightening on", "waive lap.tightenin on"), text, "lap.petra")
+        self.assertIn("unknown mechanism 'lap.tightenin'", str(ctx.exception))
+        self.assertIn("lap.tightening", str(ctx.exception), "the nearest names are listed")
+        self.assertEqual(lower_text(CAPACITY + 'waive corrosion.galvanik on hook by "o@example.org" reason "isolated"\n').waivers[0].mode, "corrosion.galvanik")
 
     def test_names_that_are_taken(self):
         self.assertProblem("t.petra:5:8", "twice", design=HOOK + HOOK)
-        self.assertProblem("t.card:7:7", "reserved", card=CAPACITY + "claim coverage: hook.utilisation <= 1\n")
         self.assertProblem("t.card:12:7", "twice", card=CAPACITY + LIFT + "claim c: hook.utilisation <= 1\nclaim c: P(hook.utilisation > 1) <= 1/2 under lift\n")
         self.assertProblem("t.petra:2:8", "keyword", card="", design="demand tests {\n}\n")
         self.assertProblem("t.card:11:6", "twice", card=CAPACITY + LIFT + LIFT)
@@ -356,12 +357,12 @@ class Rejections(Case):
         self.assertProblem("t.card:9:3", "twice", card=CAPACITY + signed_twice)
 
     def test_every_problem_in_the_two_files_is_reported_together_in_source_order(self):
-        error = self.assertProblem("t.petra:2:1", "trus", card="claim c: nowhere.x <= 1\nclaim d: nowhere.y <= 1\n", design="trus frame {\n}\n")
-        self.assertEqual([p.split(": ")[0] for p in error.problems], ["t.card:6:10", "t.card:7:10", "t.petra:2:1"])
+        error = self.assertProblem("t.petra:3:10", "km2", card="claim c: nowhere.x <= 1\nclaim d: nowhere.y <= 1\n", design="truss frame {\n  span 3 km2\n}\n")
+        self.assertEqual([p.split(": ")[0] for p in error.problems], ["t.card:6:10", "t.card:7:10", "t.petra:3:10"])
 
     def test_a_card_without_a_card_block(self):
         with self.assertRaises(LoweringError) as ctx:
-            parse_design("petra 0\n" + CAPACITY, "petra 0\n" + HOOK, "t.petra", REGISTRY)
+            parse_design("petra 0\n" + CAPACITY, "petra 0\n" + HOOK, "t.petra")
         self.assertTrue(ctx.exception.problems[0].startswith("t.card:1:1: "))
         self.assertProblem("t.card:2:1", "owner", header='petra 0\ncard "d" {\n}\n')
 
@@ -387,11 +388,11 @@ class SyntaxErrors(Case):
 
     def test_the_declaration_error_lists_what_the_file_takes(self):
         with self.assertRaises(LolaSyntaxError) as ctx:
-            parse_design(HEADER + "requirement x\n", "petra 0\n", "t.petra", REGISTRY)
+            parse_design(HEADER + "requirement x\n", "petra 0\n", "t.petra")
         for keyword in ("card", "param", "ambient", "given", "load", "tests", "claim", "waive"):
             self.assertIn(keyword, str(ctx.exception))
         with self.assertRaises(LolaSyntaxError) as ctx:
-            parse_design(HEADER, "petra 0\nrequirement x\n", "t.petra", REGISTRY)
+            parse_design(HEADER, "petra 0\nrequirement x\n", "t.petra")
         for word in ("param", "component block"):
             self.assertIn(word, str(ctx.exception))
 

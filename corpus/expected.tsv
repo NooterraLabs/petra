@@ -4,20 +4,23 @@
 #
 # corpus/run.py explains the verdicts and what fails a run.
 #
-# Since 2026-11-14 the verdict of a check is the kernel's, and a design whose cells the kernel
-# did not work out from a deck of rules is never a pass: it reads UNKNOWN, with the reason that
-# its kind of part has no deck, or FAIL where the kernel checked a refutation. So no line here
-# is a known wrong verdict any more.
+# The verdict of a check is the kernel's, and the kernel passes a design only against a deck
+# of rules. A design with a part of a kind no shipped deck has reads UNKNOWN, with the reason
+# that no deck has its kind. So no line here is a known wrong verdict.
 #
-# A design of an old kind that the Python checker decided rightly must get UNKNOWN today. Its
-# note starts with `right answer PASS` or `right answer FAIL`: that is what the deck that
-# brings its kind back has to give it, and the line's verdict changes to it then. There are
-# 18 such passes and 1 such fail.
+# Until 2026-11-15 a Python checker decided the designs of those kinds. It was deleted, and
+# the tag `old-path` holds it. A design that it decided rightly must get UNKNOWN today. Its
+# note starts with `right answer PASS`, `right answer FAIL` or `right answer INPUT_ERROR`:
+# that is what the deck that brings its kind back has to give it, and the line's verdict
+# changes to it then. There are 27 such passes, 4 such fails and 5 such input errors. A note
+# that names a test or a script of the old path names a file of the tag.
 #
 # Where the expected verdicts come from:
-#   examples/            what the example's name or header says it shows. For the passing
-#                        steel and electronics examples that is the verdict they ship with,
-#                        which nothing outside Petra has confirmed.
+#   examples/deck/       what the example's name and header say it shows.
+#   corpus/cases/old/    the examples of the old path. The right answer of each is what its
+#                        name or header says it shows. For the passing steel and electronics
+#                        examples that is the verdict they shipped with, which nothing
+#                        outside Petra has confirmed.
 #   judges/canaries/     each is a design the outside judge rejects, so it must not pass.
 #   corpus/cases/pilot/  designs from the lift pilot that the steel tests reason about.
 #   corpus/cases/audit/  the audit of 2026-11-09. "re-ran" means the lead auditor reproduced
@@ -25,6 +28,8 @@
 #                        type rules refuse must be an INPUT_ERROR.
 #                        A waiver there is one the designer wrote, so it is in the design
 #                        file, where the language refuses it.
+#   corpus/cases/twin/   the cards of the second reading of the old steel kinds, which went with
+#                        them. The tag holds its code and its tests under twin/.
 #   corpus/cases/found/  designs found while fixing others. The note says what each showed.
 #   corpus/cases/deck/   laps checked against the AISC deck of rules. Each verdict is worked
 #                        out by hand from AISC 360-22, and the header of the design shows
@@ -35,7 +40,7 @@
 # Not cases yet:
 #   audit F1 to F4       false FAILs whose truth is the auditor's memory of Manual tables.
 #   hook_uncertain       the audit disputes its PASS by analysis, with no run.
-#   examples/families/   inputs to `petra certify-family`, not to `petra check`.
+#   corpus/cases/old/families/   families of designs, which no deck reads yet.
 #   three weld_bracket_support_side canaries, which FAIL after about 150 s, past the limit.
 corpus/cases/audit/b1_absurd_bolts.petra	NOT_PASS			audit B1, re-ran: 10^12 bolts through a 1 nm plate made of an LED
 corpus/cases/audit/c1_negative_current.petra	INPUT_ERROR			audit C1, re-ran: +12 A fails on drop and overload
@@ -51,10 +56,10 @@ corpus/cases/audit/c7_drop_at_assumed_temperature.petra	NOT_PASS			audit C7, aud
 corpus/cases/audit/e1_negative_rail.petra	INPUT_ERROR			audit E1, re-ran: +200 V on the same 75 V part fails at 2.67
 corpus/cases/audit/e2_dropout_waived.petra	NOT_PASS			audit E2, re-ran: the rail claim leans on a waived sibling mode
 corpus/cases/audit/e3_negative_sink.petra	INPUT_ERROR			audit E3, auditor: the sign of the sink current is never checked
-corpus/cases/audit/m_bad_transform.petra	INPUT_ERROR			a malformed 3MF is an input error
-corpus/cases/audit/m_bad_vertex.petra	INPUT_ERROR			a malformed 3MF is an input error
-corpus/cases/audit/m_nan_vertex.petra	INPUT_ERROR			a malformed 3MF is an input error
-corpus/cases/audit/m_no_vertices.petra	INPUT_ERROR			a malformed 3MF is an input error
+corpus/cases/audit/m_bad_transform.petra	UNKNOWN			right answer INPUT_ERROR, for the deck that brings its kind back. a malformed 3MF is an input error
+corpus/cases/audit/m_bad_vertex.petra	UNKNOWN			right answer INPUT_ERROR, for the deck that brings its kind back. a malformed 3MF is an input error
+corpus/cases/audit/m_nan_vertex.petra	UNKNOWN			right answer INPUT_ERROR, for the deck that brings its kind back. a malformed 3MF is an input error
+corpus/cases/audit/m_no_vertices.petra	UNKNOWN			right answer INPUT_ERROR, for the deck that brings its kind back. a malformed 3MF is an input error
 corpus/cases/audit/p1_screw_in_narrowing_bore.petra	NOT_PASS			audit P1, re-ran: the bore narrows to 0.8 mm after 5 mm
 corpus/cases/audit/p2_dimple_as_through_hole.petra	NOT_PASS			audit P2, re-ran: a 0.1 mm dimple declared as a through hole
 corpus/cases/audit/p3_loose_cubes.petra	NOT_PASS			audit P3, auditor: one part made of two loose pieces
@@ -80,33 +85,33 @@ corpus/cases/audit/u1_one_trial.petra	NOT_PASS			audit U1, re-ran: one trial at 
 corpus/cases/audit/w1_design_waives_its_own_checks.petra	NOT_PASS			audit fault 1: the design waives its own bolt and block shear checks
 corpus/cases/audit/w2_truss_waives_collapse.petra	NOT_PASS			audit fault 1: the design waives collapse, stability and buckling by "x"
 corpus/cases/audit/x1_number_over_4300_digits.petra	INPUT_ERROR			audit, smaller items: a number over 4,300 digits is an input error
-corpus/cases/pilot/bracket_from_the_arm.petra	FAIL			tests/test_steel_groups.py: the moment arm is taken from the bolt group
+corpus/cases/pilot/bracket_from_the_arm.petra	UNKNOWN			right answer FAIL, for the deck that brings its kind back. tests/test_steel_groups.py: the moment arm is taken from the bolt group
 corpus/cases/pilot/seat_one_row.petra	UNKNOWN			right answer PASS, for the deck that brings its kind back. tests/test_steel_coverage.py: one row has no pitch for J3.6 to limit
 corpus/cases/pilot/tab_half_a.petra	UNKNOWN			right answer PASS, for the deck that brings its kind back. tests/test_steel_groups.py: the plate passes at half a
 corpus/cases/pilot/weld_bracket_thin_plate.petra	UNKNOWN			right answer PASS, for the deck that brings its kind back. tests/test_steel_groups.py: 3/16 in fillets on a 5/16 in plate
-examples/bolt_unknown.petra	UNKNOWN			shipped example
-examples/circuit_pass.petra	UNKNOWN			right answer PASS, for the deck that brings its kind back. shipped example
-examples/electronics/adjustable.petra	UNKNOWN			right answer PASS, for the deck that brings its kind back. shipped example
-examples/electronics/board.petra	UNKNOWN			right answer PASS, for the deck that brings its kind back. shipped example
-examples/electronics/cold_unknown.petra	UNKNOWN			shipped example
-examples/electronics/led_fail.petra	FAIL			shipped example
-examples/electronics/regulator_fail.petra	FAIL			shipped example
-examples/parts/assembly.petra	UNKNOWN			shipped example
-examples/parts/part.petra	UNKNOWN			shipped example
-examples/steel/bolt_bracket.petra	UNKNOWN			right answer PASS, for the deck that brings its kind back. shipped example
-examples/steel/double_angle.petra	UNKNOWN			right answer PASS, for the deck that brings its kind back. shipped example
-examples/steel/flange_force.petra	UNKNOWN			shipped example
-examples/steel/hanger.petra	UNKNOWN			right answer PASS, for the deck that brings its kind back. shipped example
-examples/steel/seated.petra	UNKNOWN			right answer PASS, for the deck that brings its kind back. shipped example
-examples/steel/shear_end_plate.petra	UNKNOWN			right answer PASS, for the deck that brings its kind back. shipped example
-examples/steel/shear_tab.petra	UNKNOWN			right answer PASS, for the deck that brings its kind back. shipped example
-examples/steel/shear_tab_cyclic.petra	UNKNOWN			right answer PASS, for the deck that brings its kind back. shipped example
-examples/steel/shear_tee.petra	UNKNOWN			right answer PASS, for the deck that brings its kind back. shipped example
-examples/steel/single_angle.petra	UNKNOWN			right answer PASS, for the deck that brings its kind back. shipped example
-examples/steel/stiffened_seat.petra	UNKNOWN			right answer PASS, for the deck that brings its kind back. shipped example
-examples/steel/weld_bracket.petra	UNKNOWN			right answer PASS, for the deck that brings its kind back. shipped example
-examples/truss_fail.petra	UNKNOWN			right answer FAIL, for the deck that brings its kind back. shipped example
-examples/truss_pass.petra	UNKNOWN			right answer PASS, for the deck that brings its kind back. shipped example
+corpus/cases/old/bolt_unknown.petra	UNKNOWN			shipped example
+corpus/cases/old/circuit_pass.petra	UNKNOWN			right answer PASS, for the deck that brings its kind back. shipped example
+corpus/cases/old/electronics/adjustable.petra	UNKNOWN			right answer PASS, for the deck that brings its kind back. shipped example
+corpus/cases/old/electronics/board.petra	UNKNOWN			right answer PASS, for the deck that brings its kind back. shipped example
+corpus/cases/old/electronics/cold_unknown.petra	UNKNOWN			shipped example
+corpus/cases/old/electronics/led_fail.petra	UNKNOWN			right answer FAIL, for the deck that brings its kind back. shipped example
+corpus/cases/old/electronics/regulator_fail.petra	UNKNOWN			right answer FAIL, for the deck that brings its kind back. shipped example
+corpus/cases/old/parts/assembly.petra	UNKNOWN			shipped example
+corpus/cases/old/parts/part.petra	UNKNOWN			shipped example
+corpus/cases/old/steel/bolt_bracket.petra	UNKNOWN			right answer PASS, for the deck that brings its kind back. shipped example
+corpus/cases/old/steel/double_angle.petra	UNKNOWN			right answer PASS, for the deck that brings its kind back. shipped example
+corpus/cases/old/steel/flange_force.petra	UNKNOWN			shipped example
+corpus/cases/old/steel/hanger.petra	UNKNOWN			right answer PASS, for the deck that brings its kind back. shipped example
+corpus/cases/old/steel/seated.petra	UNKNOWN			right answer PASS, for the deck that brings its kind back. shipped example
+corpus/cases/old/steel/shear_end_plate.petra	UNKNOWN			right answer PASS, for the deck that brings its kind back. shipped example
+corpus/cases/old/steel/shear_tab.petra	UNKNOWN			right answer PASS, for the deck that brings its kind back. shipped example
+corpus/cases/old/steel/shear_tab_cyclic.petra	UNKNOWN			right answer PASS, for the deck that brings its kind back. shipped example
+corpus/cases/old/steel/shear_tee.petra	UNKNOWN			right answer PASS, for the deck that brings its kind back. shipped example
+corpus/cases/old/steel/single_angle.petra	UNKNOWN			right answer PASS, for the deck that brings its kind back. shipped example
+corpus/cases/old/steel/stiffened_seat.petra	UNKNOWN			right answer PASS, for the deck that brings its kind back. shipped example
+corpus/cases/old/steel/weld_bracket.petra	UNKNOWN			right answer PASS, for the deck that brings its kind back. shipped example
+corpus/cases/old/truss_fail.petra	UNKNOWN			right answer FAIL, for the deck that brings its kind back. shipped example
+corpus/cases/old/truss_pass.petra	UNKNOWN			right answer PASS, for the deck that brings its kind back. shipped example
 judges/canaries/bolt_bracket_gauge_10.petra	NOT_PASS			the outside judge rejects it
 judges/canaries/bolt_bracket_support_side_web_fillet.petra	NOT_PASS			the outside judge rejects it
 judges/canaries/bolt_bracket_support_side_web_width.petra	NOT_PASS			the outside judge rejects it
@@ -157,7 +162,7 @@ judges/canaries/single_angle_support_side_web_width.petra	NOT_PASS			the outside
 judges/canaries/stiffened_seat_beam_side_seat_bearing.petra	NOT_PASS			the outside judge rejects it
 judges/canaries/stiffened_seat_beam_vs_support_web_clearance.petra	NOT_PASS			the outside judge rejects it
 judges/canaries/truss_600m_span.petra	NOT_PASS			the outside judge rejects it
-corpus/cases/found/m_huge_exponent.petra	INPUT_ERROR			a mesh coordinate of 1e999999999, which read exactly would fill memory
+corpus/cases/found/m_huge_exponent.petra	UNKNOWN			right answer INPUT_ERROR, for the deck that brings its kind back. a mesh coordinate of 1e999999999, which read exactly would fill memory
 examples/deck/lap_pass.petra	PASS_WAIVED			twelve answers proved by the rules of the AISC deck, on eight lines of its grid, and the card waives the four lines it has no rule for
 examples/deck/lap_fail.petra	FAIL			the pull is 60 kip and three bolts carry 53.7
 examples/deck/lap_unknown.petra	UNKNOWN			the grid asks four mechanisms the deck has no rule for, and the card waives none
@@ -202,3 +207,24 @@ corpus/cases/deck/d38_case_without_the_pull.petra	UNKNOWN			the card of lap_pass
 corpus/cases/deck/d39_case_on_one_of_two_laps.petra	UNKNOWN			two laps, and a load case that puts the pull on one of them: the rules of the other are open under that case
 corpus/cases/deck/d40_two_cases_on_two_laps.petra	PASS_WAIVED			the laps of d39 with the pull stated on both in both cases, one of them zero: every rule is proved under each case
 corpus/cases/deck/d41_corner_tears_out.petra	NOT_PASS			two bolts on a line 1 inch from a side edge under 55 kip: the corner of each plate at its end bolt holds 21.33 kip by Equation J4-5 and the bolt carries 27.5. The deck has no rule for a block of fewer bolts than all, and the open cell keeps the lap from passing
+corpus/cases/twin/gate_1_00042_weld_bracket.petra	UNKNOWN			right answer PASS, for the deck that brings its kind back. twin/tests/test_brackets.py: the second reading of the steel kinds checks it, and its governing check is under 1
+corpus/cases/twin/gate_1_00185_weld_bracket.petra	UNKNOWN			right answer PASS, for the deck that brings its kind back. twin/tests/test_brackets.py: the second reading of the steel kinds checks it, and its governing check is under 1
+corpus/cases/twin/gate_1_00229_weld_bracket.petra	UNKNOWN			right answer PASS, for the deck that brings its kind back. twin/tests/test_brackets.py: the second reading of the steel kinds checks it, and its governing check is under 1
+corpus/cases/twin/gate_1_00273_weld_bracket.petra	UNKNOWN			right answer PASS, for the deck that brings its kind back. twin/tests/test_brackets.py: the second reading of the steel kinds checks it, and its governing check is under 1
+corpus/cases/twin/gate_1_00284_weld_bracket.petra	UNKNOWN			right answer PASS, for the deck that brings its kind back. twin/tests/test_brackets.py: the second reading of the steel kinds checks it, and its governing check is under 1
+corpus/cases/twin/gate_1_00427_weld_bracket.petra	UNKNOWN			right answer PASS, for the deck that brings its kind back. twin/tests/test_brackets.py: the second reading of the steel kinds checks it, and its governing check is under 1
+corpus/cases/twin/gate_1_03786_single_angle.petra	UNKNOWN			twin/tests/test_edges.py: a design from the steel gate's stream that the second reading's edge tests start from
+corpus/cases/twin/gate_1_04213_shear_tab.petra	UNKNOWN			twin/tests/test_edges.py: a design from the steel gate's stream that the second reading's edge tests start from
+corpus/cases/twin/gate_1_07378_bolt_bracket.petra	UNKNOWN			right answer PASS, for the deck that brings its kind back. twin/tests/test_brackets.py: the second reading of the steel kinds checks it, and its governing check is under 1
+corpus/cases/twin/gate_1_08126_bolt_bracket.petra	UNKNOWN			right answer PASS, for the deck that brings its kind back. twin/tests/test_brackets.py: the second reading of the steel kinds checks it, and its governing check is under 1
+corpus/cases/twin/gate_1_08786_bolt_bracket.petra	UNKNOWN			right answer PASS, for the deck that brings its kind back. twin/tests/test_brackets.py: the second reading of the steel kinds checks it, and its governing check is under 1
+corpus/cases/twin/ii_a_11a_end_plate.petra	INPUT_ERROR			Companion Example II.A-11A restated for the second reading's own reader: its card has no card block and signs no load, which Petra refuses. twin/tests/test_companion.py: the second reading of the steel kinds gives the strengths the example prints, within 1 percent
+corpus/cases/twin/ii_a_12a_seated.petra	INPUT_ERROR			Companion Example II.A-12A restated for the second reading's own reader: its card has no card block and signs no load, which Petra refuses. twin/tests/test_companion.py: the second reading of the steel kinds gives the strengths the example prints, within 1 percent
+corpus/cases/twin/ii_a_17a_shear_tab.petra	INPUT_ERROR			Companion Example II.A-17A restated for the second reading's own reader: its card has no card block and signs no load, which Petra refuses. twin/tests/test_companion.py: the second reading of the steel kinds gives the strengths the example prints, within 1 percent
+corpus/cases/twin/ii_a_1a_double_angle.petra	INPUT_ERROR			Companion Example II.A-1A restated for the second reading's own reader: its card has no card block and signs no load, which Petra refuses. twin/tests/test_companion.py: the second reading of the steel kinds gives the strengths the example prints, within 1 percent
+corpus/cases/twin/ii_a_22_bolt_bracket.petra	INPUT_ERROR			Companion Example II.A-22 restated for the second reading's own reader: its card has no card block and signs no load, which Petra refuses. twin/tests/test_companion.py: the second reading of the steel kinds gives the strengths the example prints, within 1 percent
+corpus/cases/twin/ii_a_23_weld_bracket.petra	INPUT_ERROR			Companion Example II.A-23 restated for the second reading's own reader: its card has no card block and signs no load, which Petra refuses. twin/tests/test_companion.py: the second reading of the steel kinds gives the strengths the example prints, within 1 percent
+corpus/cases/twin/ii_a_28a_single_angle.petra	INPUT_ERROR			Companion Example II.A-28A restated for the second reading's own reader: its card has no card block and signs no load, which Petra refuses. twin/tests/test_companion.py: the second reading of the steel kinds gives the strengths the example prints, within 1 percent
+corpus/cases/twin/ii_a_30_shear_tee.petra	INPUT_ERROR			Companion Example II.A-30 restated for the second reading's own reader: its card has no card block and signs no load, which Petra refuses. twin/tests/test_companion.py: the second reading of the steel kinds gives the strengths the example prints, within 1 percent
+corpus/cases/twin/ii_a_4_coped_double_angle.petra	INPUT_ERROR			Companion Example II.A-4 restated for the second reading's own reader: its card has no card block and signs no load, which Petra refuses. twin/tests/test_companion.py: the second reading of the steel kinds gives the strengths the example prints, within 1 percent
+corpus/cases/twin/ii_d_1_hanger.petra	INPUT_ERROR			Companion Example II.D-1 restated for the second reading's own reader: its card has no card block and signs no load, which Petra refuses. twin/tests/test_companion.py: the second reading of the steel kinds gives the strengths the example prints, within 1 percent

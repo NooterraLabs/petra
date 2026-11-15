@@ -231,14 +231,16 @@ class StatedByTheCard(unittest.TestCase):
                     grid.check(read, deck)
                 self.assertIn("is a count", str(refused.exception))
 
-    def test_a_component_of_the_models_reads_no_exact_statement(self):
+    def test_a_part_of_a_kind_no_deck_has_lowers_with_an_exact_statement_and_is_never_checked(self):
+        """The language knows no kind, so it cannot say that a `demand` reads no exact statement. No deck has a `demand`:
+        the pair reads UNKNOWN with that reason, and nothing reads the statement (tests/test_kernel_decides.py)."""
+        from petra import ir
         from petra.lang import parse_design
-        from petra.registry import build_registry
 
         card = 'petra 0\n\ncard "hook" {\n  owner "t@example.org"\n}\n' + says("capacity", "5")
-        with self.assertRaises(LoweringError) as refused:
-            parse_design(card, "petra 0\n\ndemand hook {\n  capacity given capacity\n}\n", "hook.petra", build_registry())
-        self.assertIn("only a part of a deck's type reads such a given", str(refused.exception))
+        design = parse_design(card, "petra 0\n\ndemand hook {\n  capacity given capacity\n}\n", "hook.petra")
+        self.assertIsInstance(design.components["hook"].attrs[0].args[0], ir.Stated)
+        self.assertIsNone(grid.owner(design))
 
     @KERNEL
     def test_a_card_json_that_states_what_no_part_reads_twice_or_under_an_inputs_name_is_refused(self):

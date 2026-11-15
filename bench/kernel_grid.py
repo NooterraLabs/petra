@@ -96,8 +96,8 @@ sys.path.insert(0, str(ROOT))
 from petra import grid, verify  # noqa: E402
 from petra.kernel import Interval, i_cos  # noqa: E402
 from petra.lang import parse_design  # noqa: E402
-from petra.models.base import ComponentError  # noqa: E402
-from petra.repair import INPUT_ERRORS  # noqa: E402
+from petra.files import ComponentError  # noqa: E402
+from petra.pipeline import INPUT_ERRORS  # noqa: E402
 
 SIGNED = 'signed "t@example.org" source "generated"'
 MADE_UP = {"standard": "a deck made up for the bench", "clause": "1"}
@@ -903,11 +903,9 @@ _STATE: dict[str, object] = {}
 
 def _decks() -> dict[str, grid.Deck]:
     if not _STATE:
-        from petra.registry import build_registry
         from tests.test_grid import CARD, DESIGN, STRIPS
 
         path = ROOT / "examples" / "deck" / "lap_unknown.petra"
-        _STATE["registry"] = build_registry()
         _STATE["lap"] = next(d for d in grid.decks() if "lap" in d.types)
         _STATE["strips"] = grid.read_deck(json.dumps(STRIPS))
         _STATE["ops"] = grid.read_deck(json.dumps(OPS))
@@ -932,7 +930,7 @@ def judge(card: str, design: str, name: str, rules: str | None = None, slash: bo
     deck = decks[name.partition("-")[0]]
     with mock.patch.object(grid, "decks", lambda: (deck,)):
         try:
-            parsed = parse_design(card, design, f"{name}.petra", decks["registry"])
+            parsed = parse_design(card, design, f"{name}.petra")
             if grid.owner(parsed) is None:
                 return "the language refuses it", "", [], {}, {}
         except INPUT_ERRORS:

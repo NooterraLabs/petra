@@ -7,8 +7,8 @@ owns: the components and the params of a family. A design signs nothing and waiv
 nothing; it reads a bound the card states with `given NAME`.
 
 Grammar (EBNF; NL is a NEWLINE token). The parser in parser.py follows it rule for rule.
-The grammar knows no component kind and no attribute name: those belong to the domain
-that registers the kind (petra/models), so adding a domain never edits this file.
+The grammar knows no component kind and no attribute name: those belong to the deck of
+rules that has the kind as a type (petra/grid.py), so a new deck never edits this file.
 
     card file   = "petra" INT NL { ( card | param | ambient | given | load | tests | claim | waive ) NL } EOF ;
     design file = "petra" INT NL { ( param | component ) NL } EOF ;

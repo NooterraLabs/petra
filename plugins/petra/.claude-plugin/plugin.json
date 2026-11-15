@@ -2,7 +2,7 @@
   "name": "petra",
   "displayName": "Petra",
   "version": "0.1.2",
-  "description": "Petra's MCP server and skill. Check steel connections and other physical designs, and find what to change in a design that fails",
+  "description": "Petra's MCP server and skill. Check a physical design against a deck of rules, with the verdict of a small exact kernel",
   "author": {
     "name": "Nooterra",
     "url": "https://github.com/NooterraLabs"

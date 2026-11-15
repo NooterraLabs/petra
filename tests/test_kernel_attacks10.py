@@ -31,7 +31,6 @@ from unittest import mock
 import petra.lang
 from petra import grid, verify
 from petra.kernel import Interval
-from petra.registry import build_registry
 from petra.units import CUSTOMARY, UNITS, si_unit
 from tests.test_deck_features import HEAD, KERNEL, asks, cells, design, given, ill_formed, key, kind, load, made_up, parsed, part, rule, size
 from tests.test_kernel_attacks3 import cell, with_card
@@ -130,7 +129,7 @@ def shipped_lap(width: str, side: str, pull: str = "14 kip") -> tuple[str, str]:
 
 def judged(card: str, text: str) -> tuple[str, dict]:
     """petra/grid.py's verdict on a lap of the shipped deck, or why it refuses it, and the kernel's."""
-    read = petra.lang.parse_design(card, text, "lap.petra", build_registry())
+    read = petra.lang.parse_design(card, text, "lap.petra")
     rules = grid.owner(read)
     try:
         report, files = grid.check(read, rules)

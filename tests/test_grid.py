@@ -125,11 +125,10 @@ def alone(card: str, design: str, path: str) -> dict:
     run. The grid words a report and decides nothing: `petra check` takes the verdict from the
     kernel and holds these cells to the kernel's (class Kernel below, and
     tests/test_kernel_decides.py). A pair the grid refuses is an input error, as data."""
-    from petra.registry import build_registry
-    from petra.repair import INPUT_ERRORS
+    from petra.pipeline import INPUT_ERRORS
 
     try:
-        parsed = petra.lang.parse_design(card, design, path, build_registry())
+        parsed = petra.lang.parse_design(card, design, path)
         return grid.check(parsed, grid.owner(parsed))[0].to_json()
     except INPUT_ERRORS as exc:
         return {"file": path, "status": "INPUT_ERROR", "error": str(exc)}
@@ -242,7 +241,7 @@ class Cells(unittest.TestCase):
         bow = cell(wide, "strip.bow")
         self.assertEqual(bow["state"], "proved", "gap (4 mm - gap) peaks at 4 mm2, under 4.2, and one enclosure over [1, 3] mm reaches 9")
         with mock.patch.object(grid, "decks", lambda: (deck(),)):
-            design = petra.lang.parse_design(CARD.replace("[0.5 mm, 0.6 mm]", "[1 mm, 3 mm]"), DESIGN, "strips.petra", petra.registry.build_registry())
+            design = petra.lang.parse_design(CARD.replace("[0.5 mm, 0.6 mm]", "[1 mm, 3 mm]"), DESIGN, "strips.petra")
             report, files = grid.check(design, grid.owner(design))
         partition = next(c for c in json.loads(files["proofs"])["cells"] if c["mechanism"] == "strip.bow")["partition"]
         self.assertIsInstance(partition, dict, "it is split")
@@ -675,7 +674,7 @@ class Kernel(unittest.TestCase):
         for name, status, its in (("lap_unknown", "UNKNOWN", "UNKNOWN"), ("lap_fail", "FAIL", "FAIL"), ("lap_pass", "PASS_WAIVED", "PASS")):
             with self.subTest(design=name):
                 path = ROOT / "examples" / "deck" / f"{name}.petra"
-                result = petra.check(*read_pair(path), path=str(path), repair=False)
+                result = petra.check(*read_pair(path), path=str(path))
                 self.assertEqual((result["status"], result["kernel"]["verdict"], result["kernel"]["checked"]), (status, its, 12))
 
     def test_the_kernel_agrees_on_every_lap_of_the_corpus_and_each_gets_the_verdict_worked_out_by_hand(self):
@@ -690,7 +689,7 @@ class Kernel(unittest.TestCase):
         self.assertLessEqual({"PASS_WAIVED", "FAIL", "UNKNOWN", "INPUT_ERROR"}, set(expected.values()))
         for path, verdict in expected.items():
             with self.subTest(design=path):
-                result = petra.check(*read_pair(ROOT / path), path=path, repair=False)
+                result = petra.check(*read_pair(ROOT / path), path=path)
                 if verdict == "NOT_PASS":         # the standard refuses it and the deck has no rule that can
                     self.assertIn(result["status"], ("FAIL", "UNKNOWN"))
                     self.assertEqual(result["kernel"]["verdict"], result["status"])
@@ -710,7 +709,7 @@ class Kernel(unittest.TestCase):
                 for old, new in card_swap:
                     card = card.replace(old, new)
                 with mock.patch.object(grid, "decks", lambda: (deck(),)):
-                    result = petra.check(card, DESIGN, path="strips.petra", repair=False)
+                    result = petra.check(card, DESIGN, path="strips.petra")
                 self.assertEqual(result["kernel"]["verdict"], kernel_word(result["status"]), "a difference raises before this line")
                 self.assertGreaterEqual(result["kernel"]["checked"], 4)
 

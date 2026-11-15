@@ -1,19 +1,17 @@
-"""Design IR: the typed, unit-normalised, name-resolved form of a .petra file.
+"""Design IR: the typed, unit-normalised, name-resolved form of a card and a design.
 
 Produced only by petra.lang.lower (the parse boundary). Units are SI (degC for
 temperature), every input bound carries a signature, and every design-level name
-resolves. Physics is absent: the IR says what was drawn, not what it means.
+resolves. Physics is absent: the IR says what was written, not what it means.
 
 Components are generic. A component block is a kind, a name and a list of attribute
 lines whose arguments are already typed (quantities, signed bounds, references). The
-language knows no component kind. The domain that registers a kind in petra.models parses
-the attributes into its own typed model and validates every reference that targets the
-component (see models.base.DomainSpec.kinds). Adding a domain never edits this file.
+language knows no component kind. A kind is a type of a deck of rules, and the grid reads
+what each line means from that deck (grid.read_parts), as the kernel does.
 
 Invariants encoded here:
-- An input bound cannot exist without a Signature (owner and source), so the checker
-  cannot invent one. A missing bound is a missing field, which elaborators report as
-  an UNKNOWN obligation needing that bound.
+- An input bound cannot exist without a Signature (owner and source), so nothing can
+  invent one.
 - A Value is either Fixed or a ParamRef to a declared Param; a design with any ParamRef
   is a family.
 """
@@ -84,7 +82,7 @@ Value = Union[Fixed, ParamRef]
 @dataclass(frozen=True, slots=True)
 class Ref:
     """An identifier or dotted name as written: a local name (A), a word the domain reads
-    as a keyword (at, support, count), a registry id (steel.S355), or a port (w1.b)."""
+    as a keyword (at, support, count) or a dotted name (w1.b)."""
 
     parts: tuple[str, ...]
 
@@ -156,8 +154,8 @@ class Attr:
 
 @dataclass(frozen=True, slots=True)
 class Component:
-    """A component block as written: `truss frame { ... }`. `kind` is a key of
-    models.KINDS; lowering rejects any other kind."""
+    """A component block as written: `lap splice { ... }`. `kind` is a type of a deck of
+    rules, or a kind no deck has: lowering refuses none."""
 
     kind: str
     name: str
@@ -212,7 +210,7 @@ class Claim:
     under: tuple[str, ...]   # load case names; empty means every load case on the subject
     signature: Signature | None
     span: Span
-    margin: Quantity | None = None   # a positive point in the bound's dimension; see models.base.Criterion
+    margin: Quantity | None = None   # a positive point in the bound's dimension
 
 
 @dataclass(frozen=True, slots=True)
@@ -276,7 +274,7 @@ class Tests:
 
 @dataclass(frozen=True, slots=True)
 class Waiver:
-    mode: str                 # FailureMode id, checked at lowering against models.MODES
+    mode: str                 # a mechanism, checked at lowering against the decks' where every part is of a deck's type
     subject: tuple[str, ...]
     owner: str
     reason: str
@@ -288,7 +286,7 @@ class Design:
     name: str
     owner: str
     path: str
-    environment: str | None          # registry environment id; None -> no environment class
+    environment: str | None          # the environment the card names; None -> none
     ambient: Union[Input, ParamRef, None]
     components: Mapping[str, Component]
     loads: Mapping[str, LoadCase]

@@ -224,7 +224,7 @@ Until 2026-11-12 the kernel rounded every square root outward to the grid. The s
 | `iSqrt` returns the root that `rootOf` finds for a point, and the one `gridSqrt` gives otherwise. | `iSqrt_sound`, with the statement it had. At a point the square root of `x` is that fraction, by `Real.sqrt_mul_self`. |
 | `sqrtWork` charges a point for the two roots ([format.md](format.md), "Work"). | None. No theorem reads a cost. |
 
-No statement of a theorem changed, and the axioms are the same. The Python kernel takes the same root in `i_sqrt` (`petra/kernel/interval.py`), so the two kernels give the same ends. Only a point is taken exactly. An end of a wider interval that is a square is rounded as before, so the root of an interval holds the root of every point in it, and no enclosure is wider than it was.
+No statement of a theorem changed, and the axioms are the same. The arithmetic of Petra's Python reader takes the same root in `i_sqrt` (`petra/kernel/interval.py`), so the two give the same ends. Only a point is taken exactly. An end of a wider interval that is a square is rounded as before, so the root of an interval holds the root of every point in it, and no enclosure is wider than it was.
 
 ## What is not proved
 
@@ -233,7 +233,7 @@ No statement of a theorem changed, and the axioms are the same. The Python kerne
 - That a verdict takes no longer than its work allows. The costs in `Petra/Tape.lean` are estimates fitted to measurements. No theorem reads them, and a wrong one changes how long a verdict takes and nothing else.
 - That `Tape.last` names the last node that reads each node. A wrong entry would give an enclosure up early. The node is then marked as failed, a node that reads it afterwards fails, and the cell is open. The theorems hold whatever `Tape.last` returns.
 - That an enclosure is narrow. The theorems say that it holds the value. `grid` returns two neighbouring points of the grid or nothing, by its own test, and how soon `cosAt`, `expAt` and `lnAt` reach that is measured and not proved.
-- That the kernel and the Python kernel give the same ends.
+- That the kernel and the arithmetic of Petra's Python reader (`petra/kernel/`) give the same ends.
 - That a tape's formula is the one a standard states. [format.md](format.md) lists this among what the kernel does not check.
 
 ## What the proofs found in the kernel

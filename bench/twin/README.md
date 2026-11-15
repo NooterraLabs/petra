@@ -231,4 +231,4 @@ Measured with `--count 6000 --decks 3000 --seed 7` against the kernel and the gr
 
 ## What it is not
 
-It does not read a design of the models' kinds: files with no deck of rules get UNKNOWN from it when no cell carries a tape, and no verdict when one does. It applies the limits that decide a verdict and not the budget of work, the memory of enclosures or the limits on what is printed. It is a reading of the rules path only.
+It does not check a design.json with no `parts`: files with no deck of rules get UNKNOWN from it when no cell carries a tape, and no verdict when one does. It applies the limits that decide a verdict and not the budget of work, the memory of enclosures or the limits on what is printed. It is a reading of the rules path only.

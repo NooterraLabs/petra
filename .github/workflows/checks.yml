@@ -6,30 +6,12 @@ name: checks
 # module. The corpus runs twice: by `petra check`, and by the kernel alone. The proofs of
 # the kernel's interval rule (docs/proved.md) are built against Mathlib and held to Lean's
 # three standard axioms. A wheel with the kernel inside is built and tested for each of five
-# platforms (wheels.yml), and each is kept as an artifact of the run. The
-# absurd-design gap with one job per seed, canary recall, and the metamorphic relations over
-# the steel gate's stream run when the workflow is started by hand. The steel gate stays off
-# CI because it reads the full AISC shapes workbook, which is not in the repository.
+# platforms (wheels.yml), and each is kept as an artifact of the run.
 
 on:
   push:
   pull_request:
   workflow_dispatch:
-    inputs:
-      n:
-        description: designs per seed for the absurd-design gap
-        default: "18000"
-      seeds:
-        description: gap seeds as a JSON list, one job each
-        default: "[1, 2, 3]"
-      recall:
-        description: also run canary recall (seed 2, budget 600)
-        type: boolean
-        default: true
-      metamorphic:
-        description: also run the metamorphic relations (steel gate stream, seed 1, 10000 designs)
-        type: boolean
-        default: true
 
 permissions:
   contents: read
@@ -113,7 +95,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install numpy==2.4.6 scipy==1.17.1
       - uses: actions/download-artifact@v4
         with:
           name: petra-verify
@@ -130,7 +111,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install numpy==2.4.6 scipy==1.17.1
       - uses: actions/download-artifact@v4
         with:
           name: petra-verify
@@ -144,63 +124,3 @@ jobs:
     # platform. The artifacts are named wheel-<platform tag>.
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository }}
     uses: ./.github/workflows/wheels.yml
-
-  gap:
-    if: ${{ github.event_name == 'workflow_dispatch' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 360
-    strategy:
-      fail-fast: false
-      matrix:
-        seed: ${{ fromJSON(inputs.seeds || '[1]') }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - run: pip install numpy==2.4.6 scipy==1.17.1
-      - run: python scripts/absurd_gap.py --n "${{ inputs.n }}" --seeds "${{ matrix.seed }}" --workers "$(nproc)" --out out
-      - uses: actions/upload-artifact@v4
-        with:
-          name: gap-seed-${{ matrix.seed }}
-          path: out/
-
-  recall:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.recall }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 360
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - run: pip install numpy==2.4.6 scipy==1.17.1
-      - run: python scripts/canary_recall.py --seed 2 --budget 600 --workers "$(nproc)" --out out
-      - uses: actions/upload-artifact@v4
-        with:
-          name: canary-recall
-          path: out/
-
-  metamorphic:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.metamorphic }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 360
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - run: pip install numpy==2.4.6 scipy==1.17.1
-      - run: python scripts/metamorphic.py --n 10000 --seed 1 --workers "$(nproc)" --out out
-      # the log names every broken relation, so it is kept when the run fails
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: metamorphic
-          path: out/

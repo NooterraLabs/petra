@@ -18,8 +18,7 @@ import petra
 from petra import export, grid, verify
 from petra.files import read_pair
 from petra.lang import LoweringError, load_card, load_design
-from petra.registry import build_registry
-from petra.repair import INPUT_ERRORS
+from petra.pipeline import INPUT_ERRORS
 
 ROOT = Path(__file__).resolve().parents[1]
 PAIRS = sorted([*(ROOT / "examples" / "deck").glob("*.petra"), *(ROOT / "corpus" / "cases" / "deck").glob("*.petra")])
@@ -71,9 +70,8 @@ class CardOnly(unittest.TestCase):
         blocks = design.split("\n\n")
         other = "\n\n".join([blocks[0], *reversed(blocks[1:])]).replace("0.375 inch", "0.5 inch").replace("count 3", "count 4")
         self.assertNotEqual(other, design)
-        registry = build_registry()
-        first = petra.lang.parse_design(card, design, "lap.petra", registry, "lap.card")
-        second = petra.lang.parse_design(card, other, "lap.petra", registry, "lap.card")
+        first = petra.lang.parse_design(card, design, "lap.petra", "lap.card")
+        second = petra.lang.parse_design(card, other, "lap.petra", "lap.card")
         deck = grid.owner(first)
         self.assertEqual(grid.bundle(first, deck)["card"], grid.bundle(second, deck)["card"])
         self.assertNotEqual(grid.bundle(first, deck)["design"], grid.bundle(second, deck)["design"])
@@ -83,12 +81,12 @@ class CardOnly(unittest.TestCase):
         card, design = read_pair(ROOT / "examples" / "deck" / "lap_pass.petra")
         twice = design.replace("Fu given tab.Fu", "Fu given tab.Fy")
         with self.assertRaises(LoweringError):      # tab.Fu is then read by nothing
-            petra.lang.parse_design(card, twice, "lap.petra", build_registry(), "lap.card")
+            petra.lang.parse_design(card, twice, "lap.petra", "lap.card")
         twice = design.replace("Fy given strap.Fy", "Fy given tab.Fy")
         with self.assertRaises(LoweringError):
-            petra.lang.parse_design(card, twice, "lap.petra", build_registry(), "lap.card")
+            petra.lang.parse_design(card, twice, "lap.petra", "lap.card")
         both = design.replace("Fy given strap.Fy", "Fy given strap.Fy\n  Fu given tab.Fy", 1)
-        parsed = petra.lang.parse_design(card, both, "lap.petra", build_registry(), "lap.card")
+        parsed = petra.lang.parse_design(card, both, "lap.petra", "lap.card")
         _, body = alone(ROOT / "examples" / "deck" / "lap_pass.card")
         self.assertEqual(grid.bundle(parsed, grid.owner(parsed))["card"].encode("utf-8"), body)
 
@@ -111,14 +109,18 @@ class CardOnly(unittest.TestCase):
             with self.subTest(argv=argv), contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
                 export.main(argv)
 
-    def test_a_card_of_the_models_kinds_gets_another_hash_than_its_design_names(self):
-        """For a design of the models' kinds card.json takes names from the design, so the
-        card alone does not give it. The hashes differ, and the reader is told why."""
-        said, body = alone(ROOT / "examples" / "truss_pass.card")
-        design = load_design(ROOT / "examples" / "truss_pass.petra")
-        files = export.bundle(design, build_registry())
+    def test_the_card_of_a_design_no_deck_has_gets_another_hash_than_its_design_names(self):
+        """The kernel takes a load on a part only with the deck that has the part's type. So a design
+        with a part of a kind no deck has is handed a card.json that does not place its loads, and
+        that file's hash is not the one `--card-only` prints."""
+        said, body = alone(ROOT / "corpus" / "cases" / "old" / "truss_pass.card")
+        design = load_design(ROOT / "corpus" / "cases" / "old" / "truss_pass.petra")
+        files = export.bare(design)
+        self.assertEqual(set(files), {"card", "design", "deck"})
         self.assertNotEqual(said, json.loads(files["design"])["card"])
-        self.assertIn("tests", json.loads(body), "it is written as the card of a design of a deck's types")
+        self.assertIn("tests", json.loads(body), "the card alone is written as the card of a design of a deck's types")
+        self.assertNotIn("tests", json.loads(files["card"]))
+        self.assertTrue(all("on" not in i for i in json.loads(files["card"])["inputs"]), "no load is placed on a part")
 
 
 @unittest.skipUnless(verify.binary(), "no petra-verify is built here and PETRA_VERIFY names none")

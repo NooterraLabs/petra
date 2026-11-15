@@ -16,7 +16,6 @@ from unittest import mock
 import petra
 from petra import export, grid, verify
 from petra.lang import LolaSyntaxError, LoweringError
-from petra.registry import build_registry
 from petra.units import LENGTH, Dim, Quantity, UnitError, format_quantity, parse_quantity, quantity_text, readable_text
 from tests.test_kernel_attacks3 import empty_card, with_rules
 from tests.test_kernel_grid import ask, findings
@@ -72,7 +71,7 @@ def load(case: str, *entries: str) -> str:
 def parsed(rules: dict, text: str, card: str = HEAD):
     deck = grid.read_deck(json.dumps(rules))
     with mock.patch.object(grid, "decks", lambda: (deck,)):
-        return deck, petra.lang.parse_design(card, text, "made-up.petra", build_registry())
+        return deck, petra.lang.parse_design(card, text, "made-up.petra")
 
 
 def cells(test: unittest.TestCase, rules: dict, text: str, card: str = HEAD) -> tuple[dict[tuple[str, str, str], str], str, dict]:

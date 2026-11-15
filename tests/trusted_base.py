@@ -1,16 +1,20 @@
-"""The manifest of Petra's trusted base (docs/principles.md T2), read by tests/test_kernel_budget.py.
+"""The manifest of what Petra's Python counts and holds to a ceiling (docs/principles.md T2), read
+by tests/test_kernel_budget.py.
 
-It holds the kernel core's cap and the trusted total's ceiling, each with its reason, one entry
-per certificate rule, and every module under petra/ outside the kernel, trusted or not. It
-imports nothing from petra, so the test reads it without loading the kernel.
+The verdict of a check is the kernel's, petra-verify, written in Lean under kernel/. Nothing in
+petra/ is trusted for a pass: a bug there costs an input error, an UNKNOWN or a difference from
+the kernel. Two parts of it still stand between what a person wrote and what the kernel reads or
+what a report says, so they are counted and each names what checks it, or a dated Debt:
 
-A rule's entry records its code lines and three items: where the docs state its soundness, the
-mutation corpus it must reject, and its check against an outside checker. An item a rule lacks is
-a Debt, dated, saying what exists instead.
+- the arithmetic of the Python reader (petra/kernel), which the grid's own cells rest on;
+- the front end, which turns the text of a card and a design into the files the kernel reads;
+- the decks as data, the Python reader of a deck's rows and grid.
 
-Each trusted group names the judge or twin that checks it, or a Debt. A judge counts when it
-re-derives most of what its modules compute and a test or script compares it with Petra. A judge
-of a single condition is named in its group's debt instead.
+It imports nothing from petra, so the test reads it without loading the package.
+
+Until 2026-11-15 this file also held one entry for each certificate rule of the Python checker
+and the trust class of the models, the registry and the solvers. They went with the old path
+(plan step 1.2c), and the tag `old-path` holds them.
 """
 from __future__ import annotations
 
@@ -40,16 +44,6 @@ class Debt:
 
 
 @dataclass(frozen=True)
-class Rule:
-    id: str
-    module: str
-    lines: int
-    soundness: Ref | Debt
-    mutations: tuple[Ref, ...] | Debt
-    outside: Ref | Debt
-
-
-@dataclass(frozen=True)
 class Judge:
     code: Ref
     compared_by: tuple[Ref, ...]
@@ -64,406 +58,32 @@ class Group:
     checked_by: Judge | Debt
 
 
-CORE_CAP = Limit(1023, "Set on 2026-11-08 at 140f742, where the core measured 957 code lines. "
-                       "A new rule adds 3 to 5 lines to rules/__init__.py (inferred from its tables), so "
-                       "the headroom covers the registry entries of several rules. Raised on branch cosine "
-                       "for `cos`, the one step of the rule language for angles: the Python reading of its "
-                       "enclosure, which the kernel's ends must equal bit for bit (the series and the "
-                       "doublings, placing an enclosure among the multiples of pi, and the cache), 40 lines "
-                       "in interval.py and 7 in terms.py, evaluate.py, codec.py and __init__.py, 1,012. "
-                       "The seventh hostile review found that `lt` never decides a root at a point where "
-                       "it equals the other side, as the root of 3^2 + 4^2 against 5, since every root was "
-                       "rounded to the grid. The root of a point that is the square of a fraction is now "
-                       "that fraction, as the kernel's `rootOf` takes it: 5 lines in interval.py, 1,017. "
-                       "The ninth hostile review found that `petra check` did not end on the exponential of "
-                       "-10^6, which the kernel gives no value. `i_exp` now takes no argument beyond 65,536, "
-                       "as `i_cos` does, and keeps the factorial of its series as it goes, as the kernel's "
-                       "`expPos` keeps it: 3 lines in interval.py, 1,020. "
-                       "The eleventh hostile review found that a quotient, a root or a logarithm with no "
-                       "value over numbers of more than 4,300 digits stopped petra/grid.py: the message of "
-                       "the arithmetic error wrote the numbers out, and Python raises an error of its own "
-                       "for a whole number that long. A long number is now named by its bits: 3 lines in "
-                       "interval.py, 1,023.")
+CORE_CAP = Limit(331, "Set on 2026-11-15 at the deletion of the old path (plan step 1.2c), where the arithmetic of the "
+                       "Python reader measured 331 code lines: interval.py, terms.py and evaluate.py, and the "
+                       "package's own file. Before that day the cap was 1,023 and covered the Python checker's "
+                       "core too: its check, its codec, its evidence and its linear algebra, which are gone.")
 
-TRUSTED_CEILING = Limit(20119,"Set on 2026-11-08 at 140f742, where the trusted base measured 13,530 "
-                               "code lines: core 957, rules 457, outside the kernel 12,116. Raised on "
-                               "2026-11-08 on branch parts-core as the parts layer replaces its scaffold: "
-                               "classifying the scaffold measured 14,269, and the mesh reader with its "
-                               "solid-boundary rules measured 14,461, and the exact evaluator 14,823. "
-                               "Registering the parts layer, which deletes the grid, reach, deck and "
-                               "KiCad scaffold and adds the fit, fastener, insert, press, temperature, "
-                               "extent, flat-sheet and bridge builders with their registry rows, "
-                               "measured 15,696. Mass and centre-of-mass claims "
-                               "measured 15,796. Raised on branch parts-fix to close the parts-core "
-                               "review's false PASSes: holes, threads, presses and seats read from the "
-                               "mesh, every screw pair and the last body before its mouth, mass and "
-                               "centre-of-mass bounds over the tolerance, and per-piece containment "
-                               "measured 16,366. Stops read by flat face rather than by triangle, so "
-                               "splitting a face changes no verdict, and a press read with its pairs "
-                               "pruned by box, both found by scripts/parts_gate.py, measured 16,404. "
-                               "On branch kicad-reader, from parts-core's 15,796, the KiCad board reader "
-                               "(its s-expression parser, exact plane geometry with bounding polygons for "
-                               "arcs, feature table and reader) measured 16,795, and its exact solids of the "
-                               "board and of each part's keep-out, with the checked triangulation, 17,013. "
-                               "The fixes after its review on branch kicad-fix, marks from the words of a "
-                               "library id and a keep-out room over the courtyard and the Fab layer's "
-                               "shapes, measured 17,051, and a name for each solid's mesh that holds what "
-                               "defines it 17,058. Both branches merged on branch integration-merge, with "
-                               "release 0.1.1's anodic indices and tightening note, hanger-slot's worse-way "
-                               "reads and an anodic index for the inserts' brass, measured 17,727. "
-                               "On branch rework a design's card became a file of its own: the grammar of "
-                               "each file, the `given` declaration and lowering the two trees measured 17,766. "
-                               "Refusing a mesh number that is missing, not finite or longer than a coordinate, "
-                               "and a design number of more than 100 characters, measured 17,780. "
-                               "The micrometre, the unit ISO 286 prints its tolerances in, measured 17,781. "
-                               "A given named for the field of the part that reads it, and a refusal in place "
-                               "of a crash when a command of the models meets a part of a deck, measured 17,793. "
-                               "The grid (petra/grid.py) decides the cells of a design checked against a deck and "
-                               "writes each tape from rows that petra/deck.py reads, so both are trusted until the "
-                               "kernel reads decks: with them the base measured 19,115. The count takes all of "
-                               "deck.py, though the acceptance check in it writes no tape. "
-                               "The kernel reads decks since 2026-11-10 (kernel/Petra/Deck.lean): the grid then sends "
-                               "it hints and no tapes, and holds a deck's names to letters, digits and _, a grid line "
-                               "to a type of the deck and a whole power to 64, as the kernel does. With that the base "
-                               "measured 19,115 again. "
-                               "Lowering a card with no design, so that an asker can write card.json from their own "
-                               "card and compare its hash with the one the kernel prints, and keeping the card's "
-                               "givens in the design for the exporter to read, measured 19,122: seven lines in "
-                               "petra/lang and petra/ir.py. "
-                               "The kernel holds a name that a cell prints whole to 64 bytes, so that its verdict "
-                               "stays small. The grid holds the same names to the same 64, counted the same way, so "
-                               "that the two refuse the same decks and designs: six lines in petra/grid.py, 19,128. "
-                               "A report of a deck's design says which path made it, two lines in grid.py: 19,130. "
-                               "A deck is refused for a key it does not know wherever the key stands, and not only at "
-                               "the top of a row, a type, a grid line or a rule, and the refusal names the key: 26 lines "
-                               "in petra/deck.py and petra/grid.py, 19,156. "
-                               "The third hostile review of the kernel found names that two texts could share and "
-                               "cells that two rules could share. The kernel now refuses them, and the grid refuses "
-                               "the same decks and designs: a text with U+FFFD or half a surrogate pair, a mechanism "
-                               "named `unread`, a `where` with no item, two rules of one line whose ids end alike, a "
-                               "load case with a / in its name, and an anchor that names something that is no text. "
-                               "It also reads a value's digits and blanks as the kernel does, 0 to 9 and space, tab "
-                               "and line end, where it took any digit and any blank of Unicode: 13 lines in "
-                               "petra/deck.py and petra/grid.py, 19,169. "
-                               "The same review found decks under 1 MB that took the kernel a minute or a gigabyte "
-                               "to read. The kernel now counts the steps to read a deck from its file, a million at "
-                               "most, and holds the name of a card to 200 bytes for a design with parts. The grid "
-                               "makes the same count and holds the same name, so that the two refuse the same decks "
-                               "and designs: 20 lines in petra/grid.py, 19,189. "
-                               "The fourth hostile review of the kernel found two wrong verdicts. A load case that "
-                               "put some of the loads a rule reads on a part, and not all, gave the rule no cell under "
-                               "it, and a load that no rule reads gave no cell at all. A rule that reads loads now has "
-                               "a cell for each load case of the card, open where the case leaves one of its loads "
-                               "out, and a load that nothing reads is an open cell, in the kernel and in the grid "
-                               "alike: 7 lines in petra/grid.py, 19,196. "
-                               "The same review found the values a table is read at in a set, which a deck could "
-                               "fill with whole numbers that share Python's hash: 312 processor seconds to read "
-                               "30,000 of them. The Python reading now keys no table by a number of a file. A name "
-                               "is a text before it is a key, the values a table is read at are compared each with "
-                               "the one before, and the caches of ln and exp are kept by the digits of an end: 8 "
-                               "lines in petra/deck.py, 2 in petra/grid.py and 8 in petra/kernel/interval.py, 19,214. "
-                               "The deck for lifting beams needs five things the deck language could not say. The first "
-                               "is a unit of length to the power 2, 3 or 4, as in inch^4, without which no design "
-                               "states a section modulus or a moment of inertia: the units read it, the lexer and the "
-                               "parser take it after a number, and a volume or a fourth power prints in such a unit, "
-                               "10 lines in petra/units.py and 9 in petra/lang, 19,233. "
-                               "The second is a condition on a key of a part that a part joins, so that a rule of a "
-                               "beam answers only for a lug that is stiffened: the grid finds the joined part's key "
-                               "as the kernel does, 2 lines in petra/grid.py, 19,235. "
-                               "The third is a rule that requires something of a key and states no inequality, as "
-                               "that a lifter of category A is of service class 0. A transcriber could only fake "
-                               "such a clause with a made-up inequality. Its cell is proved or refuted by the keys "
-                               "alone, in the kernel and in the grid alike: 13 lines in petra/grid.py, 19,248. "
-                               "The fourth is a key that a row picks by the size of a quantity, as a fatigue category "
-                               "goes by the length and the thickness of an attachment. A table may give a name in "
-                               "place of a quantity, a rule binds a key of another table to it or picks an expression "
-                               "by it with `case`, and outside its bands it gives nothing. The acceptance check for "
-                               "a row reads such a table too: 39 lines in petra/deck.py and 69 in petra/grid.py, 19,356. "
-                               "The fifth is what a type needs of its fields: a pin under its hole, a hole under "
-                               "its plate, a span within its beam. A scout found that a pin larger than its hole "
-                               "could be proved. A need is an inequality over sums, products and quotients by a "
-                               "field, which exact fractions decide over the ranges, and a part that breaks one is "
-                               "refused before any cell is made: 92 lines in petra/grid.py, 19,448. "
-                               "The fifth hostile review took `loaded` out of the conditions, two lines fewer in "
-                               "petra/grid.py, and found that a pair under 1 MB could make `petra check` print 330 MB "
-                               "and hold 1.4 GB: each unknown given, unit, kind and mode printed the whole table it "
-                               "was looked for in. A message now lists four names and a count, a pair's problems are "
-                               "printed once each and a hundred at most for a file, a table a message names is made "
-                               "once, and the lexer refuses a text over 1 MB: 3 lines in petra/lang/lexer.py, 15 in "
-                               "petra/lang/lower.py, 2 in petra/models/base.py and 1 in petra/units.py, 19,467. "
-                               "The kernel stops deciding a need at a number of more than 65,536 bits, prints no "
-                               "number of more than 256 bits in the finding of a broken need, and names in the reason "
-                               "of a refuted requirement the keys that fit in 200 bytes. The grid took none of the "
-                               "three steps, so it passed a design the kernel refused and could not print a number "
-                               "the kernel only measured. It now takes a need's steps in the kernel's order and "
-                               "stops where the kernel stops: 32 lines in petra/grid.py, 19,499. "
-                               "Three more families, a lifter, a cut part and a quadcopter, asked six things of the "
-                               "format on 2026-11-11, and the grid reads each as the kernel does: the units of a "
-                               "rotation, a charge, a speed, a density and of minutes, hours, pounds and miles, 26 "
-                               "lines in petra/units.py and 7 in the lexer and the parser for a unit with a `/` in "
-                               "it; a rule that states `lt`; a field that may be zero or negative; a field that a "
-                               "part may leave unstated; a key and a count that the card states with `is`, 9 lines "
-                               "in petra/ir.py, 15 in the parser and 14 in petra/lang/lower.py; and a "
-                               "waiver that rests only a cell that would be open. The sixth hostile review added a "
-                               "row whose name no cell holds, refused in 4 lines of petra/deck.py, and a requirement "
-                               "that no part can break or meet, which reading a deck now tries. Together those are "
-                               "130 lines in petra/grid.py, and the trusted base measured 19,704. "
-                               "A rule of a lifter's lugs reads the cosine of an angle, so the rule language "
-                               "gained `cos` on branch cosine, its one step for angles, which the deck and the "
-                               "grid read with no new lines. Its Python reading in petra/kernel, which the "
-                               "kernel's ends must equal bit for bit, is 47 lines (CORE_CAP), 19,751. "
-                               "The seventh hostile review found six designs that a rule refutes passing under a "
-                               "waiver that rested a cell the search had not settled. A waiver now rests only a cell "
-                               "that no inequality could answer, which petra/grid.py decides as the kernel does: "
-                               "whether a rule says nothing anywhere in its box, and whether an unstated field is a "
-                               "quantity, 37 lines, 19,788. "
-                               "A pass that rests a cell on a waiver has a word of its own in petra check, "
-                               "PASS_WAIVED, and the report lists the waivers its cells rest on, in the order the "
-                               "kernel lists them, so that the two lists are compared: 17 lines in petra/grid.py, "
-                               "19,805. "
-                               "A deck whose rule divides by a field that may be zero, or takes the root or the "
-                               "logarithm of one that may be under zero, is refused when it is read, in the kernel and "
-                               "in the grid alike, through the names of `let` and the inputs of rows that stand for "
-                               "the field: 58 lines in petra/grid.py, 19,863. "
-                               "The search for a refuting point goes on past six ranged inputs at the corner the "
-                               "rule climbs to from the middle, and tries the middle of each box the search for a "
-                               "proof cannot prove; the kernel checks each point it gives as before: 20 lines in "
-                               "petra/grid.py, 19,883. "
-                               "A rule whose `where` is not proved is tried at points inside the `where`, on a tape "
-                               "whose root is the rule's there and -1 outside it, as the kernel tries the point: 20 "
-                               "lines in petra/grid.py, 19,903. "
-                               "The root of a point that is the square of a fraction is that fraction, so that `lt` "
-                               "at such a root is decided: 5 lines in petra/kernel/interval.py (CORE_CAP), 19,908. "
-                               "The eighth hostile review found a design passed whose only proved cell was the range "
-                               "of a waived rule. A `/where` cell is not the proved cell a PASS needs: 1 line in "
-                               "petra/grid.py, 19,909. "
-                               "The same review found a table of 600 listed sizes that the kernel would not write, "
-                               "a pick of more than 1,024 orders, and the grid did. Both readers now count the orders "
-                               "of every pick a rule could write when they read the deck, and refuse one of more: "
-                               "30 lines in petra/grid.py, 19,939. "
-                               "The same review found that a waiver rested a cell because something was missing, a "
-                               "key left unstated, a load that a case left out, a table with no line for the part or "
-                               "a tape that could not be written, even where the rule failed whatever the missing "
-                               "piece was. A waiver now rests such a cell only under a completion, a name for each "
-                               "unstated key and a value for each load left out under which the rule holds, which "
-                               "the grid searches for and the kernel checks as a proof; a cell that the rule fails "
-                               "under every name of its keys is refuted; and a table with no line for the part "
-                               "leaves the cell open: 81 lines in petra/grid.py, 20,018. "
-                               "The same review found the climb of the search for a refuting point cubic in the "
-                               "number of ranged inputs. It now walks at most 65,536 nodes of the tape: 4 lines in "
-                               "petra/grid.py, 20,022. "
-                               "The same review found that the design took a count written `3.0` or `6/2` and the "
-                               "card refused it. A count is now a number whose value is whole, however it is "
-                               "written, in both: 1 line in petra/lang/parser.py, 20,023. "
-                               "The ninth review found that a rule whose `when` named an unstated key counted as "
-                               "reading its fields and loads under a completion where it did not answer, so a waiver "
-                               "rested its cell and the fields only it read had no `unread` cell. What a design reads "
-                               "is now worked out under the completions of the rested cells: 4 lines in "
-                               "petra/grid.py, 20,027. "
-                               "The same review found that a witness for a rule with a `where` proved the rule only "
-                               "inside it, so a load left out rested a cell whose range was not proved, where the "
-                               "load stated left it open. A witness now proves the range and the rule over the whole "
-                               "box, or shows the range holds nowhere: 5 lines in petra/grid.py, 20,032. "
-                               "The same review found that a completion was held to a load's `least` and not to the "
-                               "floor of its dimension, so a temperature left out was completed under absolute zero "
-                               "and a length under zero. A deck whose `least` is under the floor that holds for it "
-                               "is now refused, and a completion is held to the floor in both readers: 4 lines in "
-                               "petra/grid.py, 20,036. "
-                               "The same review found that a ratio past the largest float stopped `petra check` with "
-                               "exit code 4 on a lap that FAILs. Such a cell now prints no ratio: 2 lines in "
-                               "petra/grid.py, 20,038. "
-                               "The same review found that a load case named `where` gave each rule that reads a load "
-                               "the entry of a range, whose proof does not count. Both readers now refuse the name: "
-                               "1 line in petra/grid.py, 20,039. "
-                               "The same review found that `petra check` did not end on a Weibull chance of "
-                               "survival, the exponential of -10^6, which the kernel gives no value at once. "
-                               "Python's exponential now has the kernel's bound, 3 lines in petra/kernel/interval.py "
-                               "(CORE_CAP). An exponential near the bound takes Python seconds, and the search walked "
-                               "a tape with one 256 times. It now walks a tape no more often than the kernel's work "
-                               "pays for the exponentials of a walk, and a walk whose exponentials take more than "
-                               "that work gives the rest no value, as the kernel does: 24 lines in petra/grid.py, "
-                               "20,066. "
-                               "Each wrong PASS of the same review rested a cell on a completion that only "
-                               "proofs.json held. The report of `petra check` now prints the completion of a waived "
-                               "cell in its JSON and on its line, and holds the kernel's to the grid's: 7 lines in "
-                               "petra/grid.py and petra/verify.py, 20,073. "
-                               "The tenth review found that petra/grid.py held only the numbers of a need to 65,536 "
-                               "bits, where the kernel holds every value of a tape and every sum and product so far, "
-                               "so a 64th power of 83,000 bits was PASS in Python and UNKNOWN in the kernel, and "
-                               "`petra check` exited 4. Python's tapes now have the bound: 9 lines in petra/grid.py, "
-                               "20,082. "
-                               "The same review found that a completion printed a temperature as a value in SI units, "
-                               "which a signer could read as kelvin where Petra means degC. The report now prints the "
-                               "unit of each value a completion gives a load, as the kernel does: 6 lines in "
-                               "petra/grid.py, 20,088. "
-                               "The eleventh review found seven things in what stays outside the kernel, and the "
-                               "three lines of CORE_CAP. petra/grid.py searched for a partition with no limit of depth "
-                               "and was PASS where the kernel, which takes 64, was UNKNOWN; it wrote a completion of "
-                               "more than 4,000 characters that the kernel does not read; it counted the orders of an "
-                               "equation only where a rule applies it, where the kernel holds every equation to 1,024; "
-                               "and it stopped with an error of Python's on a row with no cases and on a `least` past "
-                               "the largest float. The text report printed the texts of a card raw, so a waiver's "
-                               "reason with escape sequences wrote another status over the first line: `petra` now "
-                               "prints every character a terminal acts on as the kernel's escape, and counts a name's "
-                               "bytes as the kernel prints them. 21 lines in petra/grid.py and petra/cli.py, 20,112. "
-                               "The second round of that review found petra/deck.py reading a text where a table "
-                               "writes a list, which the kernel refuses; a line feed in the name of a folder forging "
-                               "lines of a report, and a card's name in plain text reading as a status; and the limit "
-                               "of depth stopping the search for a refuting point, which the kernel takes at any depth. "
-                               "The list checks, the guard of each command and the first line of a report are 7 lines "
-                               "more in petra/deck.py, petra/grid.py, petra/rule.py and petra/export.py, with the "
-                               "escapes moved to petra/files.py, which is outside the base: 20,119. "
-                               "Raise it in the commit that needs more and say why here.")
+TRUSTED_CEILING = Limit(3872, "Set on 2026-11-15 at the deletion of the old path (plan step 1.2c), where what is counted "
+                                "measured 3,872 code lines: the arithmetic 331, and outside it the front end and the decks "
+                                "as data, 3,541. Before that day the ceiling was 20,119, of which the models, the "
+                                "registry, the premises and the Python checker's rules were the most: all are gone. "
+                                "Raise it in the commit that needs more and say why here.")
 
 T2_ADOPTED = date(2026, 11, 8)
 """The day T2 took this form. Every debt found that day carries it."""
 
 
-def _argued_in_docstring(argument: str) -> Debt:
-    return Debt(T2_ADOPTED, f"The module docstring gives the argument ({argument}), and docs/frame.md "
-                            "'Certificate rules' gives one line. No doc states the rule's soundness conditions.")
-
-
-NO_OUTSIDE_CHECKER = Debt(T2_ADOPTED, "No outside checker reads this rule's certificates. T5 names the "
-                                      "planned Lean kernel as the second implementation, and this machine "
-                                      "has no Lean toolchain (docs/frame.md, Constraints).")
-
-MUTANTS = Ref("tests/test_kernel_mutations.py", "Mutants")
-
-RULES: tuple[Rule, ...] = (
-    Rule("R1", "petra/kernel/rules/r1_linear.py", 71,
-         _argued_in_docstring("convexity over the vertices of the load box, and Farkas's lemma for the refutation"),
-         (MUTANTS, Ref("tests/fixtures/r1_feasible.cert.json"), Ref("tests/fixtures/r1_farkas.cert.json")),
-         NO_OUTSIDE_CHECKER),
-    Rule("R2", "petra/kernel/rules/r2_definite.py", 68,
-         _argued_in_docstring("the Loewner order below the box, and Sylvester's law of inertia for the LDL^T factor"),
-         (MUTANTS, Ref("tests/fixtures/r2_ldl.cert.json"), Ref("tests/fixtures/r2_negative_direction.cert.json")),
-         NO_OUTSIDE_CHECKER),
-    Rule("R3", "petra/kernel/rules/r3_hypercircle.py", 150,
-         _argued_in_docstring("the Prager-Synge hypercircle identity, which also proves the MinimizerComponent lemma"),
-         (MUTANTS, Ref("tests/fixtures/r3_hypercircle.cert.json"), Ref("tests/fixtures/r3_violation.cert.json"),
-          Ref("tests/fixtures/r3_lemma.cert.json"), Ref("tests/fixtures/r3_lemma_witness.cert.json")),
-         NO_OUTSIDE_CHECKER),
-    Rule("R4", "petra/kernel/rules/r4_enclosure.py", 64,
-         _argued_in_docstring("the leaves of a split tree cover the box, and the natural interval extension encloses each leaf"),
-         (MUTANTS, Ref("tests/fixtures/r4_enclosure.cert.json"), Ref("tests/fixtures/r4_point_witness.cert.json")),
-         NO_OUTSIDE_CHECKER),
-    Rule("R5", "petra/kernel/rules/r5_moment.py", 60,
-         _argued_in_docstring("moment-problem duality, with domination checked cell by cell"),
-         (MUTANTS, Ref("tests/fixtures/r5_moment_dual.cert.json")),
-         NO_OUTSIDE_CHECKER),
-    Rule("R6", "petra/kernel/rules/r6_scenario.py", 44,
-         _argued_in_docstring("the binomial tail summed in exact rationals"),
-         Debt(T2_ADOPTED, "tests/fixtures/r6_binomial.cert.json is in the corpus of "
-                          "tests/test_kernel_mutations.py, but every operator that applies to it is stopped "
-                          "by the codec, the statement hash or dispatch, so no mutant reaches the tail check. "
-                          "BinomialTails in tests/test_rules.py and R6Degenerate in "
-                          "tests/test_kernel_redteam.py give it false statements by hand."),
-         NO_OUTSIDE_CHECKER),
-)
-
-TWIN = Ref("twin")
-IN_REPO_TWIN = Ref("petra/models/steel/twin.py")
-
 TRUSTED: tuple[Group, ...] = (
     Group("front end",
           ("petra/lang/__init__.py", "petra/lang/lexer.py", "petra/lang/parser.py", "petra/lang/syntax.py",
-           "petra/lang/lower.py", "petra/ir.py", "petra/units.py"),
-          Debt(T2_ADOPTED, "twin/card.py parses steel cards from the language reference with its own unit "
-                           "table, and scripts/twin_check.py compares the results on the steel gate stream. "
-                           "No judge parses the other decks' cards.")),
-    Group("registry",
-          ("petra/registry/__init__.py", "petra/registry/model.py", "petra/registry/constants.py",
-           "petra/registry/catalog.py"),
-          Debt(T2_ADOPTED, "petra/registry/consistency.py re-derives derivable records from physics "
-                           "relations (tests/test_registry_consistency.py), but it is Petra's own code and "
-                           "shares registry/model.py. No judge reads the constants from their sources.")),
-    Group("domain registry and shared types",
-          ("petra/models/__init__.py", "petra/models/base.py"),
-          Debt(T2_ADOPTED, "No judge or twin.")),
-    Group("truss",
-          ("petra/models/truss.py",),
-          Debt(T2_ADOPTED, "judges/truss.py re-solves the plastic collapse factor, with and without the "
-                           "members' weight, as its own linear program. Elastic forces, stability and member "
-                           "buckling have no judge.")),
-    Group("circuit",
-          ("petra/models/circuit.py",),
-          Debt(T2_ADOPTED, "judges/circuit.py checks only that each conductor fits its terminal. Ampacity, "
-                           "adiabatic heating, voltage drop and breaker coordination have no judge.")),
-    Group("bolt",
-          ("petra/models/bolt.py",),
-          Debt(T2_ADOPTED, "judges/bolt.py checks only whether a tension claim survives the joint opening.")),
-    Group("uncertainty",
-          ("petra/models/uncertainty.py",),
-          Debt(T2_ADOPTED, "judges/uncertainty.py recomputes the range-and-mean bound only to flag a claim "
-                           "that a tested failure below the stated capacity breaks. The scenario bound has no "
-                           "judge.")),
-    Group("port contracts",
-          ("petra/models/contracts.py",),
-          Debt(T2_ADOPTED, "No judge or twin.")),
-    Group("electronics",
-          ("petra/models/electronics/__init__.py", "petra/models/electronics/board.py",
-           "petra/models/electronics/network.py", "petra/models/electronics/domain.py",
-           "petra/registry/electronics.py"),
-          Debt(T2_ADOPTED, "No judge or twin. The deck's gate wants each of its planted faults caught "
-                           "(petra/models/electronics/gate.py, docs/electronics_gate.md), which tests the "
-                           "deck against known defects, not against a second implementation.")),
-    Group("steel strength",
-          ("petra/models/steel/__init__.py", "petra/models/steel/lower.py", "petra/models/steel/limits.py",
-           "petra/models/steel/checks.py", "petra/models/steel/build.py", "petra/models/steel/path.py",
-           "petra/models/steel/domain.py", "petra/mechanics/__init__.py", "petra/mechanics/algebra.py",
-           "petra/mechanics/bolt_groups.py", "petra/mechanics/sections.py", "petra/mechanics/stability.py",
-           "petra/mechanics/weld_groups.py", "petra/registry/steel.py", "petra/registry/steel_shapes.py"),
-          Judge(TWIN, (Ref("scripts/twin_check.py"), Ref("docs/twin_check.md", "The clean-room twin against Petra on the gate stream")),
-                "the .petra card format and the model family that wrote both, and no code, registry or "
-                "representation (twin/README.md). It does not model stiffened_seat, flange_force, fatigue "
-                "or fit beyond J3.5 edge distance.")),
-    Group("steel fatigue",
-          ("petra/models/steel/fatigue.py",),
-          Judge(IN_REPO_TWIN, (Ref("tests/test_steel_twin.py", "TwinAgreesWithTheDeck"),),
-                "the deck's lowering (lower.py), its load paths (path.py, cyclic.py), the registry and the "
-                "model family")),
-    Group("steel fatigue duty and data",
-          ("petra/models/steel/cyclic.py", "petra/registry/steel_fatigue.py"),
-          Debt(T2_ADOPTED, "The in-repo twin imports cyclic.py and reads these rows from the registry, so "
-                           "it shares them. twin/ does not model fatigue.")),
-    Group("steel geometry",
-          ("petra/models/steel/geometry.py",),
-          Judge(Ref("judges/steel.py"), (Ref("tests/test_steel_geometry.py", "JudgeReadings"), Ref("scripts/absurd_gap.py")),
-                "petra.ir, the shapes table through petra.registry.steel_shapes, and the model family")),
-    Group("steel vocabulary",
-          ("petra/models/steel/vocab.py",),
-          Debt(T2_ADOPTED, "No judge restates the validity rows or the model premises. The in-repo twin "
-                           "reads its method statements from this module.")),
-    Group("block shear pilot",
-          ("petra/models/steel/blockshear.py",),
-          Debt(T2_ADOPTED, "No judge or twin. docs/coped_beam_check.md sets the pilot's bound beside 25 "
-                           "published tests, which checks the method, not this builder.")),
-    Group("parts",
-          ("petra/models/parts/__init__.py", "petra/models/parts/mesh.py", "petra/models/parts/space.py",
-           "petra/models/parts/exact.py", "petra/models/parts/rules.py", "petra/models/parts/lower.py",
-           "petra/models/parts/engine.py", "petra/models/parts/build.py", "petra/models/parts/domain.py",
-           "petra/registry/parts.py"),
-          Debt(T2_ADOPTED, "No judge or twin. The engine states its geometric measures as design values, "
-                           "so the kernel re-checks the arithmetic over them and not the measures; "
-                           "tests/test_parts_exact.py checks the integer primitives against dense sampling, "
-                           "which is not a second implementation. scripts/parts_gate.py holds generated "
-                           "designs to ten metamorphic relations and checks that planted faults never "
-                           "pass, which tests the layer against itself. docs/parts.md 'Testing' plans a "
-                           "clean-room twin of analytic assemblies, and it is not written yet.")),
-    Group("boards",
-          ("petra/models/boards/__init__.py", "petra/models/boards/sexpr.py", "petra/models/boards/plane.py",
-           "petra/models/boards/features.py", "petra/models/boards/kicad.py", "petra/models/boards/solid.py"),
-          Debt(T2_ADOPTED, "No judge or twin. tests/board_second_reading.py, written by an agent that never saw "
-                           "the reader, places every pad of every test board from first principles, and "
-                           "SecondReading in tests/test_boards_kicad.py compares the two. It judges pad places "
-                           "only, so it is named here and not as the group's judge. The outline, its bounds, "
-                           "courtyards, rooms, holes and solids have no second reading.")),
-    Group("premises, coverage, verdict and pipeline",
-          ("petra/premises.py", "petra/coverage.py", "petra/verdict.py", "petra/pipeline.py"),
-          Debt(T2_ADOPTED, "No judge or twin. The absurd-design gap and canary recall score whole verdicts "
-                           "against the judges (docs/absurd_gap.md, docs/canary_recall.md), which is not a "
-                           "second implementation of these modules.")),
+           "petra/lang/lower.py", "petra/ir.py", "petra/units.py", "petra/export.py"),
+          Debt(date(2026, 11, 15), "No second reading of the language. The kernel and the clean-room reading under "
+                                   "bench/twin both start from the JSON files this group writes, so a card or a design "
+                                   "that it turns into the wrong files is checked as those files. The report names the "
+                                   "card and the design by the hash of their text, and the kernel prints the hash of "
+                                   "each file it read, which ties a verdict to the files and not to this group's reading "
+                                   "of the text. The second parser there was, twin/card.py, read the steel kinds' cards "
+                                   "and went with them on this date.")),
     Group("decks as data",
           ("petra/deck.py", "petra/grid.py"),
           Debt(date(2026, 11, 10), "petra-verify reads the deck's own file and works out every cell and every tape "
@@ -483,18 +103,8 @@ TRUSTED: tuple[Group, ...] = (
 )
 
 UNTRUSTED: tuple[str, ...] = (
-    "petra/__init__.py", "petra/__main__.py", "petra/cli.py", "petra/certs.py", "petra/envelope.py", "petra/export.py", "petra/files.py",
-    "petra/loop.py", "petra/mcp.py", "petra/readout.py", "petra/recall.py", "petra/repair.py", "petra/rule.py",
+    "petra/__init__.py", "petra/__main__.py", "petra/cli.py", "petra/files.py", "petra/mcp.py", "petra/pipeline.py", "petra/rule.py",
     "petra/teach.py", "petra/templates.py", "petra/verify.py", "petra/wellformed.py",
-    "petra/library/__init__.py", "petra/library/family.py", "petra/library/store.py",
-    "petra/registry/consistency.py", "petra/registry/deck.py",
-    "petra/solvers/__init__.py", "petra/solvers/exact.py", "petra/solvers/r1_linear.py",
-    "petra/solvers/r2_definite.py", "petra/solvers/r3_hypercircle.py", "petra/solvers/r4_enclosure.py",
-    "petra/solvers/r5_moment.py", "petra/solvers/r6_scenario.py",
-    "petra/models/electronics/faults.py", "petra/models/electronics/gate.py",
-    "petra/models/electronics/generate.py",
-    "petra/models/steel/absent.py", "petra/models/steel/blockshear_solve.py", "petra/models/steel/breaker.py",
-    "petra/models/steel/calc.py", "petra/models/steel/faults.py", "petra/models/steel/gate.py",
-    "petra/models/steel/generate.py", "petra/models/steel/ic.py", "petra/models/steel/package.py",
-    "petra/models/steel/trace.py", "petra/models/steel/twin.py",
 )
+"""Each of these calls the front end, the reader or the kernel, or words what they gave. A bug in one costs a refusal, a reply or a
+line of a report, and none of them writes a file the kernel reads."""

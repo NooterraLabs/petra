@@ -674,11 +674,9 @@ def probe_factory(deck_text: str):
     from unittest import mock
     from petra import grid
     from petra.lang import parse_design
-    from petra.models.base import ComponentError
-    from petra.registry import build_registry
-    from petra.repair import INPUT_ERRORS
+    from petra.files import ComponentError
+    from petra.pipeline import INPUT_ERRORS
     deck = grid.read_deck(deck_text)
-    registry = build_registry()
 
     def probe(spec: Spec):
         from .readers import Timeout, alarm
@@ -686,7 +684,7 @@ def probe_factory(deck_text: str):
         with mock.patch.object(grid, "decks", lambda: (deck,)):
             try:
                 with alarm(4):
-                    parsed = parse_design(card, design, "probe.petra", registry)
+                    parsed = parse_design(card, design, "probe.petra")
                     if grid.owner(parsed) is None:
                         return ("none",)
                     report, _ = grid.check(parsed, deck)

@@ -42,7 +42,6 @@ from unittest import mock
 
 import petra
 from petra import grid, verify
-from petra.registry import build_registry
 from tests.test_kernel_attacks2 import MB, halves, measured, total
 from tests.test_kernel_attacks3 import ANCHOR, PROCESSOR_SECONDS, empty_card, with_card, with_rules
 from tests.test_kernel_grid import ask, changed, findings, strips
@@ -71,7 +70,7 @@ TENSION = '\nload gravity {\n  on p V in [0 N, 1 N]\n  on p T in [0 N, 1000000 N
 def grid_status(card: str, rules: dict = RULES) -> str:
     deck = grid.read_deck(json.dumps(rules))
     with mock.patch.object(grid, "decks", lambda: (deck,)):
-        parsed = petra.lang.parse_design(card, DESIGN, "pc.petra", build_registry())
+        parsed = petra.lang.parse_design(card, DESIGN, "pc.petra")
         return grid.check(parsed, deck)[0].status
 
 
@@ -119,7 +118,7 @@ def both(test: unittest.TestCase, card: str, rules: dict = RULES, design: str = 
     kernel said, for its reasons."""
     deck = grid.read_deck(json.dumps(rules))
     with mock.patch.object(grid, "decks", lambda: (deck,)):
-        parsed = petra.lang.parse_design(card, design, "pc.petra", build_registry())
+        parsed = petra.lang.parse_design(card, design, "pc.petra")
         report, files = grid.check(parsed, deck)
     said = ask(files)
     cells = [(c["subject"], c["mechanism"], c["entry"], c["state"]) for c in said["cells"]]

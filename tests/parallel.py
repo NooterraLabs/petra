@@ -24,13 +24,11 @@ same time. CI runs one share in each job.
 
 Exits 0 when every module passed. A module that failed is printed whole at the end.
 
-Measured on a 4-core desktop, 82 modules and 1,740 tests: 32 minutes one after another,
-12 with 4 at a time and 12 with 8, and 8 with a second 4-core machine. `--fast` took under
-5 minutes on the desktop alone and under 2 with the second machine. Two threads of one
-core do the work of about one, so the default is half the logical processors. The longest
-module takes 8 minutes while others run beside it, and no split by module goes under the
-longest. Running a long module class by class was tried and made it slower: its classes
-share what the module builds once.
+Measured on 2026-11-15 on an 8-core laptop with three at a time, 44 modules and 1,070 tests:
+about two minutes, and six minutes of work. Two threads of one core do the work of about
+one, so the default is half the logical processors. Until that day the suite held the tests
+of the old Python checker too: 82 modules and 1,740 tests in 2026-11, 12 minutes with four
+at a time on a 4-core desktop, of which one module took 8.
 """
 from __future__ import annotations
 

@@ -51,7 +51,6 @@ from unittest import mock
 
 import petra
 from petra import grid, verify
-from petra.registry import build_registry
 from tests import test_deck_features as features
 from tests.test_kernel_attacks2 import MB
 from tests.test_kernel_attacks3 import ANCHOR, PROCESSOR_SECONDS
@@ -101,7 +100,7 @@ CALM_V = load("calm", "p V in [0 N, 1 N]", "p T in [0 N, 0 N]")
 def grid_status(card: str, rules: dict) -> str:
     deck = grid.read_deck(json.dumps(rules))
     with mock.patch.object(grid, "decks", lambda: (deck,)):
-        parsed = petra.lang.parse_design(card, DESIGN, "pc.petra", build_registry())
+        parsed = petra.lang.parse_design(card, DESIGN, "pc.petra")
         return grid.check(parsed, deck)[0].status
 
 
@@ -243,13 +242,13 @@ class TheFrontEndKeepsTheBudget(unittest.TestCase):
     and 512 MB, and what it prints of a pair it refuses is not many times the pair: under
     1 MB, whatever the pair holds."""
 
-    def assertBounded(self, card: str, design: str, timeout: float = 120) -> None:
+    def assertBounded(self, card: str, design: str, timeout: float = 120, exits: int = 3) -> None:
         size = len(card.encode()) + len(design.encode())
         self.assertLess(size, MB)
         code, printed, seconds, peak = measured_check(card, design, timeout)
         figures = f"{size / MB:.3f} MB in, exit {code}, {seconds:.1f} s, {peak / MB:.0f} MB held, {printed:,} bytes printed"
         self.assertIsNotNone(code, f"stopped after {timeout:.0f} s: {figures}")
-        self.assertEqual(code, 3, f"the pair is refused as input: {figures}")
+        self.assertEqual(code, exits, f"the pair is refused as input, or with `exits` at 2 reads UNKNOWN: {figures}")
         self.assertLess(seconds, PROCESSOR_SECONDS, figures)
         self.assertLess(peak, MEGABYTES * MB, figures)
         self.assertLess(printed, 3 * size, figures)
@@ -282,7 +281,7 @@ class Worst(unittest.TestCase):
 
     def said(self, card: str, design: str) -> str:
         with self.assertRaises(petra.lang.LoweringError) as refused:
-            petra.lang.parse_design(card, design, "x.petra", build_registry(), "x.card")
+            petra.lang.parse_design(card, design, "x.petra", "x.card")
         return str(refused.exception)
 
     def test_a_megabyte_of_one_unknown_unit(self):
@@ -315,8 +314,12 @@ class Worst(unittest.TestCase):
         self.assertEqual(said[-1], "x.petra:4:13: p.thickness: the card gives no 'z'; it gives 6: g0, g1, g2, g3 and 2 more (3 times, first here)")
 
     def test_a_megabyte_of_unknown_kinds(self):
+        """52,000 parts, each of a kind of its own that no deck has. The language refuses no kind, so the pair reads UNKNOWN,
+        and the reason names four of the kinds and counts the rest: with every kind in it the report was 0.4 MB."""
         design = "petra 0\n" + "".join(f"\nq{i} p{i} {{\n}}\n" for i in range(52_000))
-        self.assertBounded(HEAD_C, design)
+        self.assertBounded(HEAD_C, design, exits=2)
+        self.assertEqual(verify.no_deck(f"q{i}" for i in range(9)),
+                         "no deck of rules has a part of kind q0, q1, q2, q3 and 5 more, so the kernel worked out none of its checks and nothing can pass it")
 
     def test_a_dotted_name_of_a_megabyte(self):
         """A given named by 499,000 names with dots between them, which the parser once joined
@@ -333,7 +336,7 @@ class Worst(unittest.TestCase):
         self.assertLess(printed, 400)
         self.assertLess(seconds, PROCESSOR_SECONDS / 3)
         with self.assertRaises(petra.lang.LolaSyntaxError) as refused:
-            petra.lang.parse_design(HEAD_C, design, "x.petra", build_registry(), "x.card")
+            petra.lang.parse_design(HEAD_C, design, "x.petra", "x.card")
         self.assertIn("the text has over 1,000,000 bytes, and a card or a design has at most that many", str(refused.exception))
         self.assertEqual(petra.check(HEAD_C, design)["status"], "INPUT_ERROR")
 
@@ -373,9 +376,9 @@ class TheEnvironmentIsAnswered(unittest.TestCase):
         design = (examples / "lap_pass.petra").read_text(encoding="utf-8")
         marine = card.replace('  owner "s.engineer@example.org"\n', '  owner "s.engineer@example.org"\n  environment marine_c5\n')
         self.assertNotEqual(marine, card)
-        indoors = petra.check(card, design, path=str(examples / "lap_pass.petra"), repair=False)
+        indoors = petra.check(card, design, path=str(examples / "lap_pass.petra"))
         self.assertEqual((indoors["status"], indoors["kernel"]["verdict"]), ("PASS_WAIVED", "PASS"))
-        said = petra.check(marine, design, path=str(examples / "lap_pass.petra"), repair=False)
+        said = petra.check(marine, design, path=str(examples / "lap_pass.petra"))
         verdicts = (said.get("status"), (said.get("kernel") or {}).get("verdict"))
         self.assertNotIn(verdicts, (("PASS", "PASS"), ("PASS_WAIVED", "PASS")), "marine C5 is read by no cell, and the lap passes as it does indoors")
         self.assertEqual(said["status"], "INPUT_ERROR", "the pair is refused, as one that states an ambient is")
@@ -403,9 +406,9 @@ class TheEnvironmentIsAnswered(unittest.TestCase):
     def test_no_card_of_a_shipped_example_of_a_deck_states_one_and_the_models_still_read_theirs(self):
         for card in sorted((REPO / "examples" / "deck").glob("*.card")):
             self.assertNotIn("environment", card.read_text(encoding="utf-8"), card.name)
-        truss = REPO / "examples" / "truss_pass.petra"
+        truss = REPO / "corpus" / "cases" / "old" / "truss_pass.petra"
         self.assertIn("environment indoor_dry", truss.with_suffix(".card").read_text(encoding="utf-8"))
-        said = petra.check(truss.with_suffix(".card").read_text(encoding="utf-8"), truss.read_text(encoding="utf-8"), path=str(truss), repair=False)
+        said = petra.check(truss.with_suffix(".card").read_text(encoding="utf-8"), truss.read_text(encoding="utf-8"), path=str(truss))
         self.assertEqual((said["status"], said["reason"][:41]), ("UNKNOWN", "no deck of rules has a part of kind truss"),
                          "a design of the models' kinds reads its environment as before, and is refused for none")
 

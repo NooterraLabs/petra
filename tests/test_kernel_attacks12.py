@@ -91,6 +91,11 @@ a review after it.
   W   `verify.BUILT` is `kernel/.lake/build/bin/petra-verify` beside the package, wherever the package is.
       For an install that is site-packages, where a file another package put there would be run as the
       kernel with no PETRA_VERIFY set. The built kernel is now used only from a source tree of Petra.
+
+Since 2026-11-15 the Python checker is gone (plan step 1.2c, the tag `old-path` holds it), and with it what
+findings F, G, H, I, K and U were about: the steel package, `petra certify-family`, the recall, the envelope
+and `petra verify`. Their tests went with them, and tests/test_cli.py holds that none of those is a command.
+Finding D's tests now hold the JSON of a design with no deck to one `status`, the kernel's.
 """
 import contextlib
 import copy
@@ -103,9 +108,8 @@ from pathlib import Path
 
 import petra
 import petra.lang
-from petra import cli, grid, mcp, recall
+from petra import cli, grid, mcp
 from petra.files import read_pair
-from petra.registry import build_registry
 from tests.test_deck_features import KERNEL
 from tests.test_kernel_grid import ask
 
@@ -124,7 +128,7 @@ the object in it. `rules` of deck.json is read only for being there, so nothing 
 def lap(name: str) -> dict[str, str]:
     """The files `petra check` hands the kernel for an example of the shipped deck."""
     read = petra.lang.parse_design((EXAMPLES / f"{name}.card").read_text(encoding="utf-8"), (EXAMPLES / f"{name}.petra").read_text(encoding="utf-8"),
-                                   f"{name}.petra", build_registry())
+                                   f"{name}.petra")
     return grid.check(read, grid.owner(read))[1]
 
 
@@ -294,7 +298,7 @@ class AfterABrokenRule(unittest.TestCase):
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PASSES = ("PASS", "PASS_WAIVED", "MARGINAL")
+PASSES = ("PASS", "PASS_WAIVED")
 
 
 def statuses(node, place: str = "") -> list[tuple[str, str]]:
@@ -309,31 +313,25 @@ def statuses(node, place: str = "") -> list[tuple[str, str]]:
 
 @KERNEL
 class NoStatusInsideTheJsonIsAPass(unittest.TestCase):
-    CABLE = "corpus/cases/audit/c4_400kv_on_750v_cable.petra"      # must not pass, and the Python checker passes each of its claims
-    BRACKET = "corpus/cases/pilot/bracket_from_the_arm.petra"      # fails, with moves after which the Python checker refutes nothing
+    CABLE = "corpus/cases/audit/c4_400kv_on_750v_cable.petra"      # must not pass, and the Python checker passed each of its claims
+    BRACKET = "corpus/cases/pilot/bracket_from_the_arm.petra"      # the Python checker failed it, and after a move of its repair refuted nothing
 
     def said(self, path: str) -> dict:
         card, text = read_pair(str(ROOT / path), None)
         return petra.check(card, text, path=path)
 
-    def test_no_claim_of_a_design_with_no_deck_has_the_status_of_a_pass(self):
-        said = self.said(self.CABLE)
-        self.assertEqual(said["status"], "UNKNOWN")
-        self.assertTrue(said["verdicts"])
-        self.assertEqual([found for found in statuses(said) if found[1] in PASSES], [], "each claim read PASS")
-
-    def test_no_move_of_a_repair_leaves_a_design_with_the_status_of_a_pass(self):
-        said = self.said(self.BRACKET)
-        self.assertEqual(said["status"], "FAIL")
-        self.assertTrue(said["repair"]["moves"])
-        self.assertEqual([found for found in statuses(said) if found[1] in PASSES], [], "the design after a move read PASS")
-        self.assertIn("UNKNOWN", {value for place, value in statuses(said["repair"])}, "after a move that refutes nothing the design is not known to pass")
+    def test_the_json_of_a_design_with_no_deck_has_one_status_and_it_is_the_kernels(self):
+        for path in (self.CABLE, self.BRACKET):
+            with self.subTest(path=path):
+                said = self.said(path)
+                self.assertEqual(statuses(said), [(".status", "UNKNOWN")], "no claim, no move and no other working has a status of its own")
+                self.assertEqual(set(said) & {"verdicts", "repair", "governing", "unchecked"}, set())
 
     def test_the_servers_structured_content_holds_none_either(self):
         card, text = read_pair(str(ROOT / self.CABLE), None)
         text_out, structured = mcp._check({"design": text, "card": card})
-        self.assertEqual(structured["status"], "UNKNOWN")
-        self.assertEqual([found for found in statuses(structured) if found[1] in PASSES], [])
+        self.assertEqual(statuses(structured), [(".status", "UNKNOWN")])
+        self.assertNotIn("PASS", text_out)
 
 
 def command(*argv: str) -> tuple[int, str, str]:
@@ -388,101 +386,12 @@ class TheServersWorkerIsThisPackage(unittest.TestCase):
         self.assertGreater(at, 0, f"site-packages was first of {size} on the worker's path: {done.stderr[-200:]}")
 
 
-class ThePackageOfASteelConnectionSaysNoPass(unittest.TestCase):
-    WELD = "corpus/cases/audit/s06_fillet_larger_than_angle_toe.petra"      # must not pass, and the Python checker passes it
-
-    def test_the_script_and_the_report_give_unknown_with_the_reason(self):
-        import importlib.util
-
-        spec = importlib.util.spec_from_file_location("steel_package_script", ROOT / "scripts" / "steel_package.py")
-        script = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(script)
-        with tempfile.TemporaryDirectory() as folder:
-            out = io.StringIO()
-            with contextlib.redirect_stdout(out):
-                code = script.main([str(ROOT / self.WELD), folder])
-            report = Path(folder, "report.md").read_text(encoding="utf-8")
-        self.assertEqual(code, 0, "the package re-checks: its certificates are all there")
-        self.assertNotIn("PASS", out.getvalue(), "the script printed PASS, twice")
-        self.assertIn("UNKNOWN", out.getvalue())
-        self.assertNotIn("**PASS**", report)
-        self.assertNotIn("by the Petra kernel", report, "no kernel ran")
-        self.assertIn("**UNKNOWN**", report)
-        self.assertIn("no deck of rules has a part of kind ", report)
-
-
-class CertifyFamilyIsNoPass(unittest.TestCase):
-    def test_a_family_whose_claims_are_all_stored_exits_2_with_the_reason(self):
-        with tempfile.TemporaryDirectory() as library:
-            code, out, _ = command("certify-family", str(ROOT / "examples" / "families" / "cu_pvc_clipped.petra"), "--library", library)
-        lines = out.splitlines()
-        self.assertEqual(code, cli.EXIT_CODES["UNKNOWN"], "it exited 0, the code of a pass")
-        self.assertRegex(lines[0], r": UNKNOWN$")
-        self.assertTrue(lines[1].startswith("reason     no deck of rules has a part of kind "), lines[1])
-        self.assertTrue(any(line.startswith("stored   ") for line in lines), "the claims are still stored, as working")
-
-
-@KERNEL
-class ARecallPrintsNoPassAndNoForgedLine(unittest.TestCase):
-    ENTRY = "cable.cu_pvc"
-
-    def saved(self) -> dict:
-        code, out, _ = command("check", str(ROOT / "examples" / "circuit_pass.petra"), "--json")
-        self.assertEqual(code, cli.EXIT_CODES["UNKNOWN"])
-        return json.loads(out)
-
-    def test_the_functions_of_a_recall_print_no_pass_either(self):
-        from petra.registry import build_registry
-
-        found = recall.recall(build_registry(), self.ENTRY, [str(ROOT / "examples" / "circuit_pass.petra")])
-        self.assertTrue(found.designs)
-        self.assertNotRegex(recall.render(found), r"\b(PASS|MARGINAL)\b", "recall.render printed the Python checker's PASS")
-        self.assertEqual([place for place, status in statuses(recall.to_json(found)) if status in PASSES], [])
-
-    def test_a_name_with_a_line_feed_writes_no_line_of_its_own(self):
-        report = self.saved()
-        report["design"] = "radial\nPASS      examples/safe.petra  safe"
-        with tempfile.TemporaryDirectory() as folder:
-            Path(folder, "report.json").write_text(json.dumps(report), encoding="utf-8")
-            code, out, _ = command("registry", "recall", self.ENTRY, str(Path(folder, "report.json")))
-        self.assertEqual(code, 0)
-        self.assertEqual([line for line in out.splitlines() if line.startswith("PASS")], [], "the name forged a line")
-
-    def test_a_folder_with_a_line_feed_in_its_name_writes_no_line_of_its_own(self):
-        card, text = read_pair(str(ROOT / "examples" / "circuit_pass.petra"), None)
-        with tempfile.TemporaryDirectory() as folder:
-            inner = Path(folder, "designs", "a\nPASS      examples")
-            inner.mkdir(parents=True)
-            Path(inner, "safe.petra").write_text(text, encoding="utf-8")
-            Path(inner, "safe.card").write_text(card, encoding="utf-8")
-            code, out, _ = command("registry", "recall", self.ENTRY, str(Path(folder, "designs")))
-        self.assertEqual([line for line in out.splitlines() if line.startswith("PASS")], [], "the folder's name forged a line")
-        self.assertIn("UNKNOWN", out)
-
-
-class AnEnvelopePrintsNoPass(unittest.TestCase):
-    ARGS = ("envelope", str(ROOT / CABLE), "--input", "ambient", "--from", "10 degC", "--to", "30 degC")
-
-    def test_the_text_says_unrefuted_where_the_python_checker_refuted_nothing(self):
-        code, out, _ = command(*self.ARGS)
-        self.assertEqual(code, cli.EXIT_CODES["UNKNOWN"])
-        self.assertNotRegex(out, r"\b(PASS|MARGINAL|passes)\b", "the lines under the first said PASS")
-        self.assertIn("unrefuted", out)
-
-    def test_no_status_of_the_json_is_a_pass(self):
-        code, out, _ = command(*self.ARGS, "--json")
-        said = json.loads(out)
-        self.assertEqual((code, said["status"]), (cli.EXIT_CODES["UNKNOWN"], "UNKNOWN"))
-        self.assertNotIn('"PASS"', out, "anchor_status, confirmed and the probes said PASS")
-        self.assertNotIn('"MARGINAL"', out)
-
-
 FORGING = "huge-voltage: PASS" + " " * 113 + "note"
 """A card's name that reads as a status on a terminal 80 columns wide."""
 
 
 @KERNEL
-class TheFirstLineOfAnOldKindsReport(unittest.TestCase):
+class TheFirstLineOfTheReportOfADesignWithNoDeck(unittest.TestCase):
     def pair(self, folder: str) -> str:
         card, text = read_pair(str(ROOT / CABLE), None)
         self.assertIn('card "huge-voltage"', card)
@@ -499,24 +408,10 @@ class TheFirstLineOfAnOldKindsReport(unittest.TestCase):
             self.assertTrue(first.startswith('UNKNOWN: the card named "huge-voltage: PASS'), first[:70])
             text, _ = mcp._check({"path": path})
             self.assertTrue(text.startswith('UNKNOWN: the card named "'), text[:70])
-            code, out, _ = command("envelope", path, "--input", "ambient", "--from", "10 degC", "--to", "30 degC")
-            self.assertTrue(out.startswith('UNKNOWN: the card named "'), out[:70])
 
     def test_a_plain_name_is_printed_as_before(self):
         code, out, _ = command("check", str(ROOT / CABLE))
         self.assertEqual(out.splitlines()[0], "huge-voltage: UNKNOWN")
-
-
-class AFileNestedTooDeepIsAnInputError(unittest.TestCase):
-    def test_each_command_that_reads_a_json_file_exits_3_and_not_4(self):
-        with tempfile.TemporaryDirectory() as folder:
-            deep = Path(folder, "deep.json")
-            deep.write_text("[" * 200_000 + "]" * 200_000, encoding="utf-8")
-            for argv in (("verify", str(deep)), ("registry", "recall", "cable.cu_pvc", str(deep)),
-                         ("check", str(ROOT / "examples" / "circuit_pass.petra"), "--deck", str(deep))):
-                with self.subTest(argv=argv[:2]):
-                    code, out, err = command(*argv)
-                    self.assertEqual(code, cli.EXIT_CODES["INPUT_ERROR"], err[-300:])
 
 
 @KERNEL
@@ -584,7 +479,7 @@ class TheAnswerIsForTheseFilesAndHoldsTogether(unittest.TestCase):
                     with self.subTest(kernel=said, path=path.name, way=name), decides.refusing(how):
                         self.assertEqual(way(path), decides.NO_VERDICT)
 
-    def test_an_old_kinds_answer_that_says_its_cells_are_a_decks_is_no_verdict(self):
+    def test_an_answer_to_files_with_no_deck_that_says_its_cells_are_a_decks_is_no_verdict(self):
         from tests import test_kernel_decides as decides
 
         how = lambda code, out, err: decides.rewritten(code, cells_from="rules")(code, out, err)      # noqa: E731
@@ -729,38 +624,7 @@ class ANameThatReadsAsAVerdict(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertEqual(headed(name, "FAIL"), f"{name}: FAIL")
 
-    def test_a_claim_named_with_blanks_puts_no_status_of_its_own_on_a_line_of_a_recall(self):
-        found = recall.Recall("x", (), (recall.RecalledDesign("a.json", "d", "UNKNOWN", (recall.RecalledVerdict("drop      PASS     kernel-checked", "UNKNOWN", ()),)),), 1, ())
-        line = recall.render(found).splitlines()[1]
-        self.assertEqual(line.split()[0], '"drop', line)
-        self.assertNotRegex(line, r"^\s*drop\s+PASS\b")
-
-
-class TheJsonOfAnEnvelopeSaysWhoseWorkingItIs(unittest.TestCase):
-    def test_it_has_path_at_legacy(self):
-        code, out, _ = command("envelope", str(ROOT / CABLE), "--input", "ambient", "--from", "10 degC", "--to", "30 degC", "--json")
-        said = json.loads(out)
-        self.assertEqual((said["status"], said["path"]), ("UNKNOWN", "legacy"))
-
-
 class MoreInputsThatAreInputErrors(unittest.TestCase):
-    def test_an_integer_of_5000_digits_in_a_certificate_file(self):
-        with tempfile.TemporaryDirectory() as folder:
-            Path(folder, "int.json").write_text('{"n": ' + "9" * 5000 + "}", encoding="utf-8")
-            code, _, err = command("verify", str(Path(folder, "int.json")))
-        self.assertEqual(code, cli.EXIT_CODES["INPUT_ERROR"], err[-200:])
-
-    @KERNEL
-    def test_half_a_surrogate_pair_in_a_saved_report(self):
-        code, out, _ = command("check", str(ROOT / "examples" / "circuit_pass.petra"), "--json")
-        report = json.loads(out)
-        report["design"] = "\ud800"
-        with tempfile.TemporaryDirectory() as folder:
-            Path(folder, "r.json").write_text(json.dumps(report), encoding="utf-8")
-            code, out, err = command("registry", "recall", "cable.cu_pvc", str(Path(folder, "r.json")))
-        self.assertIn(code, (0, cli.EXIT_CODES["INPUT_ERROR"]), err[-200:])
-        out.encode("utf-8")      # what was printed can be written
-
     @KERNEL
     def test_half_a_surrogate_pair_in_a_card_or_a_design_given_as_text(self):
         card, text = read_pair(str(ROOT / "examples" / "deck" / "lap_pass.petra"), None)

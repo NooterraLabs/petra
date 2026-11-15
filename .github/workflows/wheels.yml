@@ -95,7 +95,7 @@ jobs:
           minos=$(otool -l "$KERNEL" | awk '$1 == "minos" && !seen++ { print $2 }')
           test "macosx_${minos//./_}_$(uname -m)" = "${{ matrix.platform }}"
       - name: The wheel installs outside the repository, and its kernel checks two designs
-        run: python scripts/wheel_check.py dist/*.whl numpy==2.4.6 scipy==1.17.1 --platform "${{ matrix.platform }}"
+        run: python scripts/wheel_check.py dist/*.whl --platform "${{ matrix.platform }}"
       - uses: actions/upload-artifact@v4
         with:
           name: wheel-${{ matrix.platform }}

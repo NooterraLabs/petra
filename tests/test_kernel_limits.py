@@ -15,8 +15,7 @@ from unittest import mock
 
 import petra
 from petra import export, grid, verify
-from petra.models.base import ComponentError
-from petra.registry import build_registry
+from petra.files import ComponentError
 from tests.test_grid import CARD, DESIGN, STRIPS, TEST
 from tests.test_kernel_attacks import run_raw
 from tests.test_kernel_grid import Kernel, ask, changed, findings, part, states, strips
@@ -161,7 +160,7 @@ class TheGridsNames(unittest.TestCase):
 
         def check(card: str, design: str):
             with mock.patch.object(grid, "decks", lambda: (deck,)):
-                return grid.check(petra.lang.parse_design(card, design, "strips.petra", build_registry()), deck)
+                return grid.check(petra.lang.parse_design(card, design, "strips.petra"), deck)
 
         self.assertEqual(check(CARD, DESIGN.replace("p1", "p" * MAX_NAME))[0].status, check(CARD, DESIGN)[0].status)
         says = "the name of a part and of a load case is at most 64 characters"
@@ -546,7 +545,7 @@ class Reading(Kernel):
 
         def check(name: str):
             with mock.patch.object(grid, "decks", lambda: (deck,)):
-                return grid.check(petra.lang.parse_design(CARD.replace('card "strips"', f'card "{name}"'), DESIGN, "strips.petra", build_registry()), deck)
+                return grid.check(petra.lang.parse_design(CARD.replace('card "strips"', f'card "{name}"'), DESIGN, "strips.petra"), deck)
 
         self.assertEqual(check("n" * MAX_TITLE)[0].verdict, "PASS")
         with self.assertRaisesRegex(ComponentError, "the name of the card is at most 200 characters"):

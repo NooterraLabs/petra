@@ -80,10 +80,9 @@ jobs:
           name: petra-verify
           path: kernel/.lake/build/bin
       - run: chmod +x kernel/.lake/build/bin/petra-verify
-      - run: pip install numpy==2.4.6 scipy==1.17.1
       - run: python tests/parallel.py --local -j "$(nproc)"
       - name: The sdist installs and runs outside the repository, and says that no kernel ran
-        run: python scripts/wheel_check.py dist/*.tar.gz numpy==2.4.6 scipy==1.17.1 --no-kernel
+        run: python scripts/wheel_check.py dist/*.tar.gz --no-kernel
 
   publish:
     needs: [build, wheels, test]

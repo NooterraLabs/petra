@@ -3,20 +3,19 @@
     python scripts/wheel_check.py FILE [REQUIREMENT ...] [--platform TAG] [--no-kernel]
 
 FILE is a wheel or an sdist. The script makes a fresh virtual environment in a temporary
-directory outside the repository and installs FILE there with pip, which fetches numpy and
-scipy from the package index. A REQUIREMENT, such as numpy==2.4.6, goes to the same pip
-command and pins what it fetches. From that directory the script runs `petra check` on
-examples/deck/lap_pass.petra and on examples/circuit_pass.petra, and prints the first eight
-lines of each report.
+directory outside the repository and installs FILE there with pip. Petra needs no other
+package. A REQUIREMENT goes to the same pip command, for a run that wants one beside it.
+From that directory the script runs `petra check` on examples/deck/lap_pass.petra and on
+corpus/cases/old/circuit_pass.petra, and prints the first eight lines of each report.
 
 It exits 1 unless all of these hold:
 
 - the wheel is built for one platform, and for `--platform` when that is given
 - the kernel the installed package runs is the file inside the package
-- each report's `kernel` line gives the kernel's verdict and how many proofs it checked
+- each report's `kernel` line gives the kernel's verdict, and the lap's how many proofs it checked
 - the lap's `path` line says the kernel worked out every cell from the rules deck
 - the lap says PASS_WAIVED and exits 6, since it rests cells on a waiver, and the circuit
-  says UNKNOWN and exits 2, since the kernel has no deck of rules for it
+  says UNKNOWN and exits 2, since no deck of rules has a circuit
 
 With `--no-kernel` it asks the opposite, for an sdist or a pure wheel: the package holds no
 kernel, and each check gives no verdict: nothing on stdout, the reason on stderr, exit 4.
@@ -36,19 +35,20 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 LAP = ROOT / "examples" / "deck" / "lap_pass.petra"
-CIRCUIT = ROOT / "examples" / "circuit_pass.petra"
+CIRCUIT = ROOT / "corpus" / "cases" / "old" / "circuit_pass.petra"
 
 # What each design must say, with its exit code. The lap rests five cells on waivers, so it
-# passes as PASS_WAIVED. The circuit is of a models' kind, which the kernel has no deck of
-# rules for: it checks every proof and passes nothing.
+# passes as PASS_WAIVED. No deck of rules has a circuit, so the kernel is handed none for it:
+# it works out no cell and passes nothing.
 SAYS = {LAP: ("PASS_WAIVED", 6), CIRCUIT: ("UNKNOWN", 2)}
 NO_VERDICT = 4
 
 CHECKED = re.compile(r"kernel +petra-verify gives (PASS|FAIL|UNKNOWN): it checked [1-9]\d* of \d+ proofs")
+NO_DECK = re.compile(r"kernel +petra-verify gives UNKNOWN: it was handed no deck of rules and worked out no cell")
 FROM_RULES = re.compile(r"path +rules: the kernel worked out every cell from the rules deck")
 
 # A stranger has no kernel named in the environment and no repository on sys.path.
-ENV = {k: v for k, v in os.environ.items() if k not in ("PETRA_VERIFY", "PETRA_SHAPES_XLSX", "PYTHONPATH")}
+ENV = {k: v for k, v in os.environ.items() if k not in ("PETRA_VERIFY", "PYTHONPATH")}
 
 
 def run(*argv: str | Path, cwd: Path, code: int = 0, said: list[str] | None = None) -> str:
@@ -92,7 +92,7 @@ def faults(file: Path, requirements: list[str], kernel: bool, platform: str | No
             continue
         lines = run(shutil.which("petra", path=str(scripts)), "check", design, cwd=where, code=code).splitlines()
         print("\n".join([f"\n$ petra check {design.relative_to(ROOT).as_posix()}", *lines[:8]]))
-        wanted = [CHECKED, *([FROM_RULES] if design == LAP else [])]
+        wanted = [CHECKED, FROM_RULES] if design == LAP else [NO_DECK]
         found += [f"{design.name}: no line of the report matches {pattern.pattern!r}"
                   for pattern in wanted if not any(pattern.match(line) for line in lines)]
         if not lines[0].endswith(f": {status}"):
@@ -103,7 +103,7 @@ def faults(file: Path, requirements: list[str], kernel: bool, platform: str | No
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("file", type=Path, help="a wheel or an sdist")
-    parser.add_argument("requirements", nargs="*", metavar="REQUIREMENT", help="a pin for pip, such as numpy==2.4.6")
+    parser.add_argument("requirements", nargs="*", metavar="REQUIREMENT", help="another requirement for pip to install beside the file")
     parser.add_argument("--platform", help="the platform tag the wheel must carry")
     parser.add_argument("--no-kernel", action="store_true", help="the package must hold no kernel, and give no verdict")
     args = parser.parse_args()

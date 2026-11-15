@@ -21,7 +21,6 @@ from unittest import mock
 import petra
 from petra import export, grid, verify
 from petra.files import read_pair
-from petra.registry import build_registry
 from petra.units import CUSTOMARY, UNITS
 from tests.test_grid import CARD, DESIGN, STRIPS, UNKNOWN_KEYS
 
@@ -36,7 +35,7 @@ def strips(card: str = CARD, design: str = DESIGN, rules: dict = STRIPS) -> dict
     checks the design, and as written when it refuses it."""
     deck = grid.read_deck(json.dumps(rules))
     with mock.patch.object(grid, "decks", lambda: (deck,)):
-        parsed = petra.lang.parse_design(card, design, "strips.petra", build_registry())
+        parsed = petra.lang.parse_design(card, design, "strips.petra")
         try:
             return grid.check(parsed, deck)[1]
         except grid.ComponentError:
@@ -50,7 +49,7 @@ def lap(name: str, *swap: tuple[str, str]) -> dict[str, str]:
     for old, new in swap:
         assert old in design, old
         design = design.replace(old, new, 1)
-    parsed = petra.lang.parse_design(card, design, str(path), build_registry())
+    parsed = petra.lang.parse_design(card, design, str(path))
     return grid.check(parsed, grid.owner(parsed))[1]
 
 
@@ -148,11 +147,11 @@ class TheKernelsOwnCells(Kernel):
         other = ask(changed(files, "proofs", lambda b: hint(b, "strip.bow")["partition"].update(input="in:strips.s.T")))
         self.assertEqual(cell(other, "strip.bow")["reason"], "the partition splits in:strips.s.T, which the tape does not read")
 
-    def test_a_design_of_the_models_kinds_is_written_and_read_as_before(self):
+    def test_a_design_of_a_kind_no_deck_has_is_written_without_parts_and_read_with_no_deck_of_rules(self):
         from petra.lang import load_design
 
-        design = load_design(ROOT / "examples" / "circuit_pass.petra", build_registry())
-        files = export.bundle(design, build_registry())
+        design = load_design(ROOT / "corpus" / "cases" / "old" / "circuit_pass.petra")
+        files = export.bare(design)
         self.assertNotIn("parts", json.loads(files["design"]))
         self.assertTrue(all("on" not in i and "field" not in i for i in json.loads(files["card"])["inputs"]))
         said = ask(files)

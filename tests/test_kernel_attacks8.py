@@ -370,7 +370,7 @@ class ABoltPastThePrintedSizes(unittest.TestCase):
         holes, so the two carry 80.5 kip under a pull of 200: the joint fails whatever its holes are. The shipped deck's Table J3.3
         stopped at 1 inch, so the rule had no value, the cell was open and the waiver rested it: PASS_WAIVED. The table now lists the
         hole its last line gives, 1 1/4 inch, and with D1 a waiver rests no cell of a table with no line for the part."""
-        found = petra.check(LAP_CARD, LAP, path="lap.petra", repair=False)
+        found = petra.check(LAP_CARD, LAP, path="lap.petra")
         self.assertEqual(found["status"], "FAIL")
         (strength,) = [c for c in found["cells"] if c["mechanism"] == "lap.strength"]
         self.assertEqual(strength["state"], "refuted")
@@ -378,7 +378,7 @@ class ABoltPastThePrintedSizes(unittest.TestCase):
         self.assertEqual([c["mechanism"] for c in found["cells"] if c["state"] == "waived"],
                          ["lap.tightening", "lap.hole_use", "lap.max_edge_distance", "lap.ply_flexure"], "the waivers of the lines with rules rest nothing")
         larger = petra.check(LAP_CARD, LAP.replace("diameter 1.125 inch", "diameter 1.75 inch").replace("pitch 4 inch", "pitch 5 inch").replace("end 2 inch", "end 3 inch"),
-                             path="lap.petra", repair=False)
+                             path="lap.petra")
         self.assertEqual(larger["status"], "UNKNOWN", "a bolt past the sizes the tables list is not decided, and no waiver passes it")
 
 

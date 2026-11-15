@@ -231,9 +231,8 @@ def judge(card: str, design: str, deck_text: str, base_text: str | None = None, 
     """All three readers on a pair of texts against a deck. `base_text` is the deck the language parses the design with when `deck_text` does not load."""
     from petra import grid, verify
     from petra.lang import parse_design
-    from petra.models.base import ComponentError
-    from petra.registry import build_registry
-    from petra.repair import INPUT_ERRORS
+    from petra.files import ComponentError
+    from petra.pipeline import INPUT_ERRORS
 
     t0 = time.time()
     j = Judged()
@@ -258,11 +257,10 @@ def judge(card: str, design: str, deck_text: str, base_text: str | None = None, 
         j.outcome = "no deck to read the design with"
         j.seconds = time.time() - t0
         return j
-    registry = build_registry()
     with mock.patch.object(grid, "decks", lambda: (parse_with,)):
         try:
             with alarm(30):
-                parsed = parse_design(card, design, "attack.petra", registry)
+                parsed = parse_design(card, design, "attack.petra")
                 if grid.owner(parsed) is None:
                     j.outcome = "no part of the deck's types"
                     j.seconds = time.time() - t0
@@ -414,13 +412,12 @@ def bundle_of(card: str, design: str, deck_text: str) -> dict[str, str] | None:
     """The files the Python reader writes for a pair, with no kernel run, or None when the language or the grid refuses it."""
     from petra import grid
     from petra.lang import parse_design
-    from petra.models.base import ComponentError
-    from petra.registry import build_registry
-    from petra.repair import INPUT_ERRORS
+    from petra.files import ComponentError
+    from petra.pipeline import INPUT_ERRORS
     try:
         deck = read_deck(deck_text)
         with mock.patch.object(grid, "decks", lambda: (deck,)):
-            parsed = parse_design(card, design, "attack.petra", build_registry())
+            parsed = parse_design(card, design, "attack.petra")
             if grid.owner(parsed) is None:
                 return None
             try:

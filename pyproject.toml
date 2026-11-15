@@ -6,12 +6,12 @@ backend-path = ["_build"]
 [project]
 name = "petra-lang"
 version = "0.1.2"
-description = "Checks physical designs against their stated claims, with an exact-arithmetic certificate for every PASS and FAIL"
+description = "Checks physical designs against decks of rules, with the verdict of a small kernel that works in exact arithmetic"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
-dependencies = ["numpy>=1.23.2", "scipy>=1.9.2"]
+dependencies = []
 
 [project.urls]
 Source = "https://github.com/NooterraLabs/petra"
@@ -22,6 +22,6 @@ petra = "petra.cli:main"
 petra-lang = "petra.cli:main"
 
 [tool.petra-build]
-include = ["petra/**/*.py", "petra/registry/aisc_shapes.json", "petra/decks/*.json", "petra/docs/*.md"]
+include = ["petra/**/*.py", "petra/decks/*.json", "petra/docs/*.md"]
 # What `lake build` makes in kernel/, .exe on Windows. A tree that holds it builds a wheel with the kernel inside.
 kernel = "kernel/.lake/build/bin/petra-verify"

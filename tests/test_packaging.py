@@ -45,11 +45,11 @@ KERNEL = f"petra/bin/{BUILT.name}"
 NO_VERDICT = 4
 """What `petra check` exits with when there is no kernel to run."""
 LAP = ROOT / "examples" / "deck" / "lap_pass.petra"
-CIRCUIT = ROOT / "examples" / "circuit_pass.petra"
+CIRCUIT = ROOT / "corpus" / "cases" / "old" / "circuit_pass.petra"
 
-# A stranger has no pip configuration of ours, no shapes workbook, no kernel named in the
-# environment and no repository on sys.path.
-ENV = {k: v for k, v in os.environ.items() if not k.startswith("PIP_") and k not in ("PETRA_SHAPES_XLSX", "PETRA_VERIFY", "PYTHONPATH")}
+# A stranger has no pip configuration of ours, no kernel named in the environment and no
+# repository on sys.path.
+ENV = {k: v for k, v in os.environ.items() if not k.startswith("PIP_") and k not in ("PETRA_VERIFY", "PYTHONPATH")}
 ENV["PIP_CONFIG_FILE"] = os.devnull
 
 
@@ -65,8 +65,8 @@ def ok(*argv: str | Path, cwd: Path) -> str:
 
 
 def venv(where: Path) -> tuple[Path, Path]:
-    """A fresh venv that sees the base install's numpy, scipy and pip. Its own pip would
-    cost ensurepip about 20 s on Windows. Returns (python, scripts directory)."""
+    """A fresh venv that sees the base install's pip. Its own pip would cost ensurepip about
+    20 s on Windows. Petra needs no other package. Returns (python, scripts directory)."""
     ok(sys.executable, "-m", "venv", "--system-site-packages", "--without-pip", where, cwd=where.parent)
     scripts = where / ("Scripts" if os.name == "nt" else "bin")
     return Path(shutil.which("python", path=str(scripts))), scripts
@@ -133,7 +133,7 @@ class Packaging(unittest.TestCase):
         if listed.returncode != 0:
             self.skipTest("not a git checkout")
         tracked = set(listed.stdout.decode("utf-8").split("\0")) - {""}
-        self.assertIn("petra/registry/aisc_shapes.json", tracked, "the shapes table is tracked")
+        self.assertIn("petra/decks/aisc360.json", tracked, "the shipped deck of rules is tracked")
         self.assertIn("petra/docs/api.md", tracked, "the API document is tracked")
         self.assertEqual(tracked - set(self.files), set(), "the wheel ships every tracked file under petra/, data files included")
         stray = {n for n in self.files if not n.startswith(("petra/", f"{DIST_INFO}/"))}
@@ -160,7 +160,7 @@ class Packaging(unittest.TestCase):
         self.assertEqual((meta["Name"], meta["Version"]), ("petra-lang", PROJECT["version"]))
         self.assertEqual(meta["Requires-Python"], ">=3.11")
         self.assertEqual(meta["License-Expression"], "Apache-2.0")
-        self.assertEqual({d.split(">=")[0] for d in meta.get_all("Requires-Dist")}, {"numpy", "scipy"})
+        self.assertIsNone(meta.get_all("Requires-Dist"), "Petra installs with the standard library alone")
         self.assertEqual(self.files[f"{DIST_INFO}/licenses/LICENSE"], (ROOT / "LICENSE").read_bytes())
         scripts = self.files[f"{DIST_INFO}/entry_points.txt"].decode("utf-8").splitlines()
         self.assertLess({"petra = petra.cli:main", "petra-lang = petra.cli:main"}, set(scripts))
@@ -172,7 +172,7 @@ class Packaging(unittest.TestCase):
         self.assertEqual([t for t in targets if not t.startswith(("https://", "http://", "#"))], [],
                          "no link is relative, because PyPI and an installed petra have no repository beside them")
         tag = f"https://github.com/NooterraLabs/petra/blob/v{PROJECT['version']}/"
-        self.assertIn(f"]({tag}docs/plan.md)", published)
+        self.assertIn(f"]({tag}docs/design.md)", published)
         self.assertEqual(re.sub(re.escape(tag), "", published), (ROOT / "README.md").read_text(encoding="utf-8"),
                          "only the link targets differ from README.md")
 
@@ -209,13 +209,13 @@ class Packaging(unittest.TestCase):
         self.assertIn("kernel     petra-verify gives PASS: it checked 12 of 12 proofs", lap)
         self.assertIn("path       rules: the kernel worked out every cell from the rules deck", lap)
         self.assertEqual(circuit[0], "workshop-lighting-radial: UNKNOWN")
-        self.assertIn("kernel     petra-verify gives UNKNOWN: it checked 8 of 8 proofs, and with no deck of rules for this design it passes nothing", circuit)
+        self.assertIn("kernel     petra-verify gives UNKNOWN: it was handed no deck of rules and worked out no cell", circuit)
         self.assertEqual(circuit[1], "reason     no deck of rules has a part of kind circuit, so the kernel worked out none of its checks and nothing can pass it")
 
     def test_a_wheel_with_no_kernel_in_it_gives_no_verdict(self):
         """The venv with the kernel taken out of the wheel, or the only venv where no
-        kernel is built and the wheel is the pure one. The grid and the Python checker
-        are both in the wheel, and neither gives a verdict in the kernel's place."""
+        kernel is built and the wheel is the pure one. The Python reader of a deck is in
+        the wheel, and it gives no verdict in the kernel's place."""
         for design in (LAP, CIRCUIT):
             done = run(shutil.which("petra", path=str(self.bare)), "check", design, cwd=self.outside)
             self.assertEqual((done.returncode, done.stdout), (NO_VERDICT, ""), done.stderr)
@@ -225,7 +225,7 @@ class Packaging(unittest.TestCase):
         petra = shutil.which("petra", path=str(self.scripts))
         self.assertIsNotNone(petra, "pip installed the petra command")
         self.assertEqual(run(petra, "--help", cwd=self.outside).returncode, 0)
-        done = run(petra, "check", ROOT / "examples" / "steel" / "shear_tab.petra", cwd=self.outside)
+        done = run(petra, "check", ROOT / "corpus" / "cases" / "old" / "steel" / "shear_tab.petra", cwd=self.outside)
         if BUILT.is_file():
             self.assertEqual(done.returncode, 2, done.stderr)
             self.assertEqual(done.stdout.splitlines()[0], "steel-shear-tab: UNKNOWN")

@@ -39,7 +39,7 @@ class Plugin(unittest.TestCase):
 
     def test_every_install_line_and_manifest_names_this_release(self):
         pinned = {}
-        for path in (PLUGIN / ".mcp.json", SKILL, ROOT / "docs" / "in_the_loop.md", ROOT / "README.md"):
+        for path in (PLUGIN / ".mcp.json", SKILL, ROOT / "README.md"):
             for version in PIN.findall(path.read_text(encoding="utf-8")):
                 pinned.setdefault(version, []).append(path.relative_to(ROOT).as_posix())
         self.assertEqual(set(pinned), {VERSION}, f"pins of petra-lang, by version: {pinned}")

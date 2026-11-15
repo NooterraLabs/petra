@@ -1,9 +1,10 @@
-"""Interval evaluation of expressions, free symbols, affine forms and vertex order. Owner: K."""
+"""Interval evaluation of expressions over a box."""
 import unittest
 from decimal import Decimal
 from fractions import Fraction as F
 
 from petra.kernel import (
+    free_syms,
     Abs,
     Add,
     Const,
@@ -16,17 +17,12 @@ from petra.kernel import (
     Min,
     Mul,
     Neg,
-    NotAffine,
     Pi,
     PowInt,
     Sqrt,
     Sym,
-    affine_coefficients,
     enclose,
-    free_syms,
 )
-from petra.kernel.evaluate import at_vertices, vertices
-from petra.kernel.rules.r4_enclosure import AllNonpositive
 
 x, y = Sym("x"), Sym("y")
 BOX = {"x": Interval(F(1), F(2)), "y": Interval(F(-3), F(4))}
@@ -85,38 +81,11 @@ class Enclose(unittest.TestCase):
         self.assertEqual(enclose(e, {"x": Interval(F(1), F(1))}), Interval(F(2) ** 60, F(2) ** 60))
 
 
-class Structure(unittest.TestCase):
+class Symbols(unittest.TestCase):
     def test_free_syms_walks_every_field(self):
         self.assertEqual(free_syms(Add((x, Mul((y, c(2))), Pi()))), {"x", "y"})
-        self.assertEqual(free_syms(AllNonpositive(exprs=(x, Neg(Sym("z"))))), {"x", "z"})
         self.assertEqual(free_syms((c(1), Pi())), frozenset())
-
-    def test_affine_forms(self):
-        cases = [
-            (Add((Mul((c(2), x)), c(3))), (3, (2, 0))),
-            (Div(Add((x, Neg(y))), c(2)), (0, (F(1, 2), F(-1, 2)))),
-            (Mul((c(3), x, c(F(1, 2)))), (0, (F(3, 2), 0))),
-            (Mul((Sqrt(c(4)), y)), (0, (0, 2))),
-            (Mul((PowInt(c(3), 2), x)), (0, (9, 0))),
-            (PowInt(x, 1), (0, (1, 0))),
-            (PowInt(y, 0), (1, (0, 0))),
-            (Mul((Add((x, Neg(x))), y)), (0, (0, 0))),
-            (Add(()), (0, (0, 0))),
-        ]
-        for expr, (c0, cs) in cases:
-            self.assertEqual(affine_coefficients(expr, ("x", "y")), (F(c0), tuple(F(v) for v in cs)), repr(expr))
-
-    def test_non_affine_forms_raise(self):
-        for expr in [Mul((x, y)), Div(c(1), x), PowInt(x, 2), Sqrt(x), Mul((Pi(), x)), Sym("z"), Div(x, c(0)), Abs(x)]:
-            with self.assertRaises(NotAffine, msg=repr(expr)):
-                affine_coefficients(expr, ("x", "y"))
-
-    def test_vertex_order_puts_the_first_symbol_in_the_low_bit(self):
-        box = {"a": Interval(F(0), F(1)), "b": Interval(F(2), F(3))}
-        expected = ({"a": 0, "b": 2}, {"a": 1, "b": 2}, {"a": 0, "b": 3}, {"a": 1, "b": 3})
-        self.assertEqual(vertices(box, ("a", "b")), expected)
-        self.assertEqual(vertices(box, ()), ({},))
-        self.assertEqual(at_vertices((Add((Sym("a"), Mul((c(10), Sym("b"))))),), ("a", "b"), box), ((20,), (21,), (30,), (31,)))
+        self.assertEqual(free_syms((x, Neg(Sym("z")))), {"x", "z"})
 
 
 if __name__ == "__main__":

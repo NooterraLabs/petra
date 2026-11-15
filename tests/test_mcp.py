@@ -18,8 +18,9 @@ from petra import mcp
 from petra.files import read_pair
 
 ROOT = Path(__file__).resolve().parents[1]
-FAILING = ROOT / "tests" / "fixtures" / "readout" / "job5_fail_60k.petra"
-SHEAR_TAB = ROOT / "examples" / "steel" / "shear_tab.petra"
+FAILING = ROOT / "examples" / "deck" / "lap_fail.petra"           # a lap the deck refutes
+LAP = ROOT / "examples" / "deck" / "lap_pass.petra"               # one that passes on the waivers of its card
+SHEAR_TAB = ROOT / "corpus" / "cases" / "old" / "steel" / "shear_tab.petra"      # a kind no deck has
 MODERN = {"io.modelcontextprotocol/protocolVersion": "2026-07-28", "io.modelcontextprotocol/clientCapabilities": {}}
 
 
@@ -47,9 +48,9 @@ class Session(unittest.TestCase):
             {"jsonrpc": "2.0", "method": "notifications/initialized"},
             request(2, "tools/list"),
             call(3, "check", **dict(zip(("card", "design"), read_pair(FAILING)))),
-            call(4, "new", kind="shear_tab", name="tab"),
+            call(4, "new", kind="lap", name="joint"),
             call(5, "kinds", name="nonesuché"),
-            call(6, "registry_list", prefix="A325"),
+            call(6, "kinds", name="lap"),
             call(7, "docs", name="skill"),
             call(8, "check", path=str(SHEAR_TAB)),
             call(9, "check", card=read_pair(SHEAR_TAB)[0], design="petra 0\nshear_tab {\n"),
@@ -84,22 +85,23 @@ class Session(unittest.TestCase):
         self.assertIn("tools", result["capabilities"])
         self.assertEqual(result["serverInfo"]["name"], "petra")
 
-    def test_the_tools_cover_check_kinds_new_registry_list_and_docs(self):
+    def test_the_tools_are_check_kinds_new_and_docs(self):
         tools = {t["name"]: t for t in self.by_id[2]["result"]["tools"]}
-        self.assertEqual(set(tools), {"check", "kinds", "new", "registry_list", "docs"})
+        self.assertEqual(set(tools), {"check", "kinds", "new", "docs"})
         self.assertEqual(tools["new"]["inputSchema"]["required"], ["kind"])
 
-    def test_check_returns_the_report_text_and_the_json_with_its_repair(self):
+    def test_check_returns_the_report_text_and_the_json_with_its_cells(self):
         result = self.by_id[3]["result"]
         self.assertFalse(result["isError"])
         text = result["content"][0]["text"]
-        self.assertTrue(text.startswith("job5-shear-tab-60k: FAIL"))
-        self.assertIn("increase  tab.rows (line 15) from 3 to 4", text)
-        self.assertEqual(result["structuredContent"]["status"], "FAIL")
-        self.assertEqual(result["structuredContent"]["repair"]["moves"][0]["input"], "tab.rows")
+        self.assertTrue(text.startswith("lap-splice-overloaded: FAIL"), text[:60])
+        self.assertIn("refuted", text)
+        report = result["structuredContent"]
+        self.assertEqual((report["status"], report["kernel"]["verdict"], report["path"]), ("FAIL", "FAIL", "rules"))
+        self.assertIn("refuted", {c["state"] for c in report["cells"]})
 
     def test_check_reads_a_path(self):
-        """The status is the kernel's, which has no deck of rules for a shear tab."""
+        """The status is the kernel's, which is handed no deck of rules for a shear tab: no deck has one."""
         report = self.by_id[8]["result"]["structuredContent"]
         self.assertEqual((report["status"], report["file"]), ("UNKNOWN", str(SHEAR_TAB)))
         self.assertTrue(report["reason"].startswith("no deck of rules has a part of kind shear_tab"), report["reason"])
@@ -112,18 +114,19 @@ class Session(unittest.TestCase):
 
     def test_new_returns_a_card_and_a_design_under_the_name_asked_for(self):
         result = self.by_id[4]["result"]
-        self.assertIn("shear_tab tab {", result["content"][0]["text"])
-        self.assertIn("on tab shear", result["content"][0]["text"])
-        self.assertIn("shear_tab tab {", result["structuredContent"]["design"])
-        self.assertIn("on tab shear", result["structuredContent"]["card"])
+        self.assertIn("lap joint {", result["content"][0]["text"])
+        self.assertIn("on joint pull", result["content"][0]["text"])
+        self.assertIn("lap joint {", result["structuredContent"]["design"])
+        self.assertIn("on joint pull", result["structuredContent"]["card"])
+        self.assertNotIn("\nwaive ", result["structuredContent"]["card"], "the card signs no waiver")
 
     def test_an_unknown_kind_is_a_tool_error_that_suggests(self):
         result = self.by_id[5]["result"]
         self.assertTrue(result["isError"])
         self.assertIn("nonesuch", result["content"][0]["text"])
 
-    def test_registry_list_and_docs(self):
-        self.assertIn("bolt_group.120", self.by_id[6]["result"]["content"][0]["text"])
+    def test_kinds_of_a_type_and_docs(self):
+        self.assertIn("lap.block_shear", self.by_id[6]["result"]["content"][0]["text"])
         self.assertEqual(self.by_id[7]["result"]["content"][0]["text"],
                          (ROOT / "petra" / "docs" / "skill.md").read_text(encoding="utf-8"))
 
@@ -141,12 +144,12 @@ class Session(unittest.TestCase):
 
 class Handshake(unittest.TestCase):
     """A client gives the server a limited time to answer initialize, so the handshake and
-    the tool list import none of the language, the domain models, the kernel, the solvers,
-    numpy or scipy. The first tool call that needs one imports it."""
+    the tool list import none of the language, the grid, the decks or the reader's arithmetic.
+    The first tool call that needs one imports it."""
 
-    HEAVY = ("petra.lang", "petra.models", "petra.kernel", "petra.solvers", "numpy", "scipy")
+    HEAVY = ("petra.lang", "petra.grid", "petra.deck", "petra.rule", "petra.kernel", "petra.pipeline", "petra.teach", "numpy", "scipy")
 
-    def test_the_handshake_imports_neither_the_language_the_models_nor_the_solvers(self):
+    def test_the_handshake_imports_neither_the_language_nor_the_grid(self):
         lines = [request(1, "initialize", {"protocolVersion": "2025-06-18", "capabilities": {},
                                            "clientInfo": {"name": "test", "version": "0"}}),
                  {"jsonrpc": "2.0", "method": "notifications/initialized"}, request(2, "tools/list")]
@@ -155,7 +158,7 @@ class Handshake(unittest.TestCase):
                               cwd=ROOT, capture_output=True, timeout=300)
         replies = {r["id"]: r for r in map(json.loads, done.stdout.splitlines())}
         self.assertEqual(replies[1]["result"]["serverInfo"]["name"], "petra")
-        self.assertEqual(len(replies[2]["result"]["tools"]), 5)
+        self.assertEqual(len(replies[2]["result"]["tools"]), 4)
         imported = {line.rsplit("|", 1)[1].strip() for line in done.stderr.decode("utf-8").splitlines()
                     if line.startswith("import time:")}
         self.assertIn("petra.mcp", imported, "the trace shows the server's own imports")
@@ -298,13 +301,14 @@ class Paths(unittest.TestCase):
             self.assertIn("lone.card", self.text(lone))
 
     def test_a_card_named_by_text_or_by_path_stands_in_for_the_one_beside_the_design(self):
-        card = read_pair(SHEAR_TAB)[0].replace("[0 kip, 45 kip]", "[0 kip, 450 kip]")
+        self.assertEqual(mcp.handle(call(1, "check", path=str(LAP)))["result"]["structuredContent"]["status"], "PASS_WAIVED")
+        card = read_pair(LAP)[0].replace("[0 kip, 45 kip]", "[0 kip, 450 kip]")
         self.assertIn("[0 kip, 450 kip]", card)
-        self.assertEqual(mcp.handle(call(1, "check", path=str(SHEAR_TAB), card=card))["result"]["structuredContent"]["status"], "FAIL")
+        self.assertEqual(mcp.handle(call(1, "check", path=str(LAP), card=card))["result"]["structuredContent"]["status"], "FAIL")
         with tempfile.TemporaryDirectory() as tmp:
             heavy = Path(tmp, "heavy.card")
             heavy.write_text(card, encoding="utf-8")
-            result = mcp.handle(call(1, "check", path=str(SHEAR_TAB), card_path=str(heavy)))["result"]
+            result = mcp.handle(call(1, "check", path=str(LAP), card_path=str(heavy)))["result"]
             self.assertEqual(result["structuredContent"]["status"], "FAIL")
 
 

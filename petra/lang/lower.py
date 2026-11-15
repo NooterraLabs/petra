@@ -1,14 +1,11 @@
 """The syntax trees of a card and a design -> Design IR. The parse boundary: every check
 that makes the IR trustworthy happens here and nowhere downstream.
 
-The IR is one Design, as the models read it. What the card states and what the design
-states is settled by the grammar: a design's tree holds only params and components.
+The IR is one Design. What the card states and what the design states is settled by the
+grammar: a design's tree holds only params and components.
 
-Checks here (design level; the language knows no domain):
-- every component kind is a key of models.KINDS, so a typo is an input error naming the
-  registered kinds;
-- component, load, tests, param and claim names are unique; "coverage" is reserved as a
-  claim name because the report uses it for the requirements no claim made;
+Checks here (design level; the language knows no deck):
+- component, load, tests, param and claim names are unique;
 - every load entry, tests record and claim path starts with a declared component; every
   `under` and `from` names a declared load or tests block; a ParamRef names a param, and
   in the card a param of the card, so no design sets a load or the ambient;
@@ -16,24 +13,24 @@ Checks here (design level; the language knows no domain):
   given the card states, so no design leaves a condition out;
 - every quantity parses to an exact Quantity (units.parse_quantity); every bound outside
   a family carries a signature;
-- every waiver mode is a key of models.MODES;
+- in a pair whose parts are all of the types of the shipped decks, every waiver names a
+  mechanism a deck asks about;
 - probability-claim method and event agree (RangeMean with Exceeds, FromTests with
   FailsAt).
 All problems in the two files are collected and raised together as a LoweringError.
 
-Also checked here, because they are design-level facts rather than domain physics: the
-card block names one owner and at most one environment, which must be a key of
-registry.environments; a range's ends share a dimension and lo <= hi; a mean shares its
-range's dimension and lies inside it; the ambient is a temperature; every signature,
-owner and reason is non-empty; a load case gives each (target, field) once; a tests
-record has at least one trial and no more failures than trials; a probability lies in
-[0, 1] and a confidence strictly between 0 and 1; no declared name is a DECLS keyword.
-The probability-claim pairing holds by construction: the parser has one rule per form.
+Also checked here: the card block names one owner and at most one environment; a range's
+ends share a dimension and lo <= hi; a mean shares its range's dimension and lies inside
+it; the ambient is a temperature; every signature, owner and reason is non-empty; a load
+case gives each (target, field) once; a tests record has at least one trial and no more
+failures than trials; a probability lies in [0, 1] and a confidence strictly between 0
+and 1; no declared name is a DECLS keyword. The probability-claim pairing holds by
+construction: the parser has one rule per form.
 
-Checks in the owning domain's lowerer (models.base.DomainSpec.kinds), raised as
-ComponentError and reported the same way: attribute names and shapes, local name
-resolution (nodes, elements, ports), registry references of the right kind (Petra never
-substitutes a default part), unit dimensions per slot, load fields and claim qois.
+Not checked here: the kind of a component. A kind is a type of a deck of rules, and a
+design with a part of a kind no deck has is still a design: every way into a check gives it
+UNKNOWN, with the reason that no deck has its kind (pipeline.py). What a part's lines mean
+is read by the grid from its deck (grid.read_parts), and by the kernel from the same deck.
 """
 from __future__ import annotations
 
@@ -41,7 +38,7 @@ from fractions import Fraction
 from types import MappingProxyType
 from typing import Callable, Collection, Iterable
 
-from .. import grid, models
+from .. import grid
 from ..files import MAX_PROBLEMS, listed, summed
 from ..ir import (
     Arg,
@@ -76,7 +73,6 @@ from ..ir import (
 )
 from ..kernel import Interval
 from ..units import DIMENSIONLESS, TEMPERATURE, Dim, Quantity, UnitError, parse_quantity, require_dim
-from ..verdict import COVERAGE_ENTRY
 from .lexer import Kind, Token
 from .parser import DECLS
 from .syntax import File, Node
@@ -92,22 +88,20 @@ class LoweringError(ValueError):
         self.problems = problems
 
 
-RESERVED_CLAIMS: frozenset[str] = frozenset({COVERAGE_ENTRY})
-
 _CLAIM_HEADS = ("claim", "prob_exceeds", "prob_fails")
 
 Located = Token | Node
 
 
-def lower(card: File, design: File, registry: object) -> Design:
-    return _Lowering(card, design, registry).design()
+def lower(card: File, design: File) -> Design:
+    return _Lowering(card, design).design()
 
 
-def lower_card(card: File, registry: object) -> Design:
+def lower_card(card: File) -> Design:
     """A card with no design, as a design of no component. Every check of the card itself
     is made. The two that need a design are not: that a load, a tests record or a claim
     names a component, and that a component reads each given."""
-    return _Lowering(card, File(card.path, card.version, ()), registry, alone=True).design()
+    return _Lowering(card, File(card.path, card.version, ()), alone=True).design()
 
 
 class _Lowering:
@@ -116,11 +110,10 @@ class _Lowering:
     `path` is the file being read: a problem and a span are in that file. `alone` is a
     card lowered with no design."""
 
-    def __init__(self, card: File, design: File, registry: object, alone: bool = False) -> None:
+    def __init__(self, card: File, design: File, alone: bool = False) -> None:
         self.card = card
         self.file = design
         self.path = card.path
-        self.registry = registry
         self.alone = alone
         self.problems: list[tuple[str, int, int, str]] = []
         self.tables: dict[str, list[str]] = {}
@@ -162,9 +155,6 @@ class _Lowering:
         self.tests_by_name = self.index(self.read(card, "tests"), "tests block", lambda n: n.args[0])
         claim_nodes = self.read(card, *_CLAIM_HEADS)
         self.index(claim_nodes, "claim", lambda n: n.args[0])
-        for node in claim_nodes:
-            if node.args[0].text in RESERVED_CLAIMS:
-                self.problem(node.args[0], f"claim name '{node.args[0].text}' is reserved for the report entry of requirements no claim made")
 
         name, owner, environment = self.header(self.read(card, "card"))
         params = self.lowered(self.params_by_name, self.param)
@@ -175,7 +165,7 @@ class _Lowering:
         tests = self.lowered(self.tests_by_name, self.tests)
         claims = tuple(self.claim(n) for n in claim_nodes if n.head == "claim")
         probability_claims = tuple(self.probability_claim(n) for n in claim_nodes if n.head != "claim")
-        waivers = tuple(self.waiver(n) for n in self.read(card, "waive"))
+        waive_nodes = self.read(card, "waive")
 
         self.path = design.path
         for twice in own.keys() & self.params_by_name.keys():
@@ -184,6 +174,12 @@ class _Lowering:
         params = self.lowered(own, self.param) | params
         self.unread = set() if self.alone else set(self.givens_by_name)
         components = self.lowered(self.components_by_name, self.component)
+        # A waiver names a mechanism of a deck. Which mechanisms there are is known only where every part is of a deck's
+        # type: a part of a kind no deck has may have had mechanisms of its own, and the pair reads UNKNOWN whatever it waives.
+        self.decked = not self.alone and all(c.kind in grid.kinds() for c in components.values())      # so of a design with no part too
+        self.path = card.path
+        waivers = tuple(self.waiver(n) for n in waive_nodes)
+        self.path = design.path
         for unread in self.unread:
             at = self.givens_by_name[unread].args[0]
             self.problems.append((card.path, at.line, at.col, f"the card gives '{unread}' and no component reads it; a component's line reads it as 'given {unread}'"))
@@ -245,10 +241,9 @@ class _Lowering:
         owner = owners[0].args[0].text if owners else ""
         if owners:
             self.nonempty(owners[0].args[0], "the card's owner")
-        environment = envs[0].args[0].text if envs else None
-        known = self.registry.environments
-        if environment is not None and environment not in known:
-            self.problem(envs[0].args[0], f"unknown environment '{environment}'; the registry holds {len(known)}: {listed(sorted(known), like=environment)}")      # a card states one environment
+        environment = envs[0].args[0].text if envs else None      # a card states one environment, and no deck reads one yet (grid.read_parts)
+        if envs:
+            self.nonempty(envs[0].args[0], "the card's environment")
         return name_tok.text, owner, environment
 
     def nonempty(self, tok: Token, what: str) -> bool:
@@ -374,17 +369,12 @@ class _Lowering:
         return None if parts is None else Bound(*parts, name.text)
 
     def component(self, node: Node) -> Component:
-        kind, name, attrs = node.args
-        if kind.text not in models.KINDS and kind.text not in grid.kinds():
-            known = self.known("kinds", lambda: sorted({*models.KINDS, *grid.kinds()}))
-            self.problem(kind, f"unknown component kind '{kind.text}'; petra has {len(known)} kinds: {self.near(kind.text, known)}; `petra kinds` lists them")
+        kind, name, attrs = node.args      # the kind is a type of a deck, or of none: pipeline.py says which, and no kind is refused here
         lowered = []
         for attr in attrs:
             key, args = attr.args
             what = f"{name.text}.{key.text}"
             typed = [self.arg(a, what) for a in args]
-            if kind.text in models.KINDS and any(isinstance(a, Stated) for a in typed):
-                self.problem(attr, f"{what}: the card states it exactly, with `is`, and only a part of a deck's type reads such a given; a {kind.text} reads a bound, `in [lo, hi]`")
             lowered.append(Attr(key.text, tuple(a for a in typed if a is not None), self.span(attr)))
         return Component(kind.text, name.text, tuple(lowered), self.span(node))
 
@@ -527,9 +517,9 @@ class _Lowering:
     def waiver(self, node: Node) -> Waiver:
         mode, subject, owner, reason = node.args
         mode_id = ".".join(t.text for t in mode.args)
-        if mode_id not in models.MODES and mode_id not in grid.mechanisms():
-            known = self.known("modes", lambda: sorted({*models.MODES, *grid.mechanisms()}))
-            self.problem(mode, f"unknown failure mode '{mode_id}'; petra has {len(known)} modes: {self.near(mode_id, known)}; `petra kinds` lists the modes of each kind")
+        if self.decked and mode_id not in grid.mechanisms():
+            known = self.known("mechanisms", lambda: sorted(grid.mechanisms()))
+            self.problem(mode, f"unknown mechanism '{mode_id}'; the decks ask about {len(known)}: {self.near(mode_id, known)}; `petra kinds` lists the mechanisms of each type")
         self.nonempty(owner, "the waiver's owner")
         self.nonempty(reason, "the waiver's reason")
         return Waiver(mode_id, tuple(t.text for t in subject.args), owner.text, reason.text, self.span(node))

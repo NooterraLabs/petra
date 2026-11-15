@@ -1,9 +1,10 @@
-"""The docs' examples stay true to the shipped files and to what Petra prints.
+"""The public pages stay true to the tree and to what Petra prints.
 
-The README's quickstart runs as written, from an empty directory, and its design passes on the
-waivers of its card.
+No page names a file that is not there: the old path was deleted on 2026-11-15, and a page that
+still pointed at one of its files would describe a checker that does not exist (plan step R1).
+The README's quickstart runs as written, from an empty directory, and its design reads UNKNOWN
+with five lines open.
 """
-import json
 import os
 import re
 import subprocess
@@ -13,37 +14,51 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-DESIGN = (ROOT / "docs" / "design.md").read_text(encoding="utf-8")
 README = ROOT / "README.md"
 BASH = re.compile(r"^```bash\n(?P<code>.*?)^```$", re.M | re.S)
+PAGES = sorted([README, ROOT / "CONTRIBUTING.md", *(ROOT / "docs").glob("*.md"), *(ROOT / "petra" / "docs").glob("*.md"), ROOT / "kernel" / "README.md"])
+TOPS = ("petra", "kernel", "proofs", "tests", "bench", "corpus", "docs", "examples", "scripts", "plugins", "_build")
+"""The folders of the tree a page may name a file of."""
+BUILT = ("petra/bin/", "kernel/.lake/")
+"""Where a build puts the kernel. A page names these, and a clean tree has neither."""
+NAMED = re.compile(r"`((?:%s)/[A-Za-z0-9_./-]+)`" % "|".join(TOPS))
+LINK = re.compile(r"\]\(([^)\s]+)\)")
 
-# A reader has no shapes workbook, and the only Petra on the path is the one under test.
-ENV = {k: v for k, v in os.environ.items() if k not in ("PETRA_SHAPES_XLSX", "PYTHONPATH")}
+# A reader has no kernel named in the environment but the one under test, and the only Petra on the path is the one under test.
+ENV = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
 ENV["PYTHONPATH"] = str(ROOT)
 
 
-def json_block_after(heading: str) -> object:
-    start = DESIGN.index(heading)
-    a = DESIGN.index("```json\n", start) + len("```json\n")
-    return json.loads(DESIGN[a:DESIGN.index("\n```", a)])
+def missing(page: Path) -> list[str]:
+    """Each file a page names in backticks by its path from the root, or links to by a relative path, that is not in the tree."""
+    text = page.read_text(encoding="utf-8")
+    out = []
+    for name in NAMED.findall(text):
+        path = name.rstrip(".,")
+        if path.startswith(BUILT):      # what a build puts in the tree
+            continue
+        if not (ROOT / path).exists() and not list(ROOT.glob(path + "*")):      # a name may be the start of several: `tests/test_kernel_attacks`
+            out.append(name)
+    for target in LINK.findall(text):
+        if target.startswith(("https://", "http://", "#", "mailto:")):
+            continue
+        if not (page.parent / target.split("#", 1)[0]).exists():
+            out.append(target)
+    return sorted(set(out))
 
 
-class DesignDoc(unittest.TestCase):
-    def test_the_certificate_example_is_the_shipped_certificate(self):
-        shipped = json.loads((ROOT / "examples" / "bolt_tension.cert.json").read_text(encoding="utf-8"))
-        self.assertEqual(json_block_after("## Certificate JSON format"), shipped,
-                         "docs/design.md must show examples/bolt_tension.cert.json verbatim")
+class Pages(unittest.TestCase):
+    def test_no_page_names_a_file_that_is_not_there(self):
+        self.assertGreater(len(PAGES), 8)
+        for page in PAGES:
+            with self.subTest(page=str(page.relative_to(ROOT))):
+                self.assertEqual(missing(page), [])
 
-    def test_a_drifted_certificate_example_is_caught(self):
-        shipped = json.loads((ROOT / "examples" / "bolt_tension.cert.json").read_text(encoding="utf-8"))
-        drifted = {**shipped, "statement_hash": "sha256:" + "0" * 64}
-        self.assertNotEqual(json_block_after("## Certificate JSON format"), drifted)
-
-    def test_every_example_file_the_doc_names_exists(self):
-        named = set(re.findall(r"examples/[\w/]+\.(?:petra|json)", DESIGN))
-        self.assertTrue(named, "the doc names example files")
-        missing = sorted(p for p in named if not (ROOT / p).exists())
-        self.assertEqual(missing, [], "docs/design.md names example files that do not exist")
+    def test_a_missing_file_is_caught(self):
+        with tempfile.TemporaryDirectory(dir=ROOT / "docs") as tmp:
+            page = Path(tmp, "page.md")
+            page.write_text("See `petra/models/steel/calc.py`, `petra/grid.py` and [the plan](../plan.md), and [this](../design.md#the-verdict).\n", encoding="utf-8")
+            self.assertEqual(missing(page), ["../plan.md", "petra/models/steel/calc.py"])
 
 
 class Readme(unittest.TestCase):

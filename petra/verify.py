@@ -10,16 +10,13 @@ with an error.
 
 `status` is what a caller reports for an answer: the kernel's verdict, where a PASS with a
 waiver the kernel lists reads PASS_WAIVED. A pair the kernel finds ill formed raises
-ComponentError, the input error every caller reports. A design whose cells the kernel did
-not work out from a deck of rules is never a pass: it reads UNKNOWN with the reason of
-`no_deck`, or FAIL where the kernel checked a refutation.
+ComponentError, the input error every caller reports.
 
 For a design checked against a deck of rules the kernel reads the deck and works out every
-cell itself, and `differs` compares its cells with the grid's, one by one. For a design of
-the models' kinds the kernel has no deck of rules. It checks the tape of each proof the
-Python checker wrote, and its verdict is then never PASS (kernel/Petra/Check.lean): the
-Python checker chose the cells, and it decides nothing. A proof the kernel rejects after
-the Python checker accepted it is a bug in one of the two, and raises Disagreement.
+cell itself, and `differs` compares its cells with the grid's, one by one. A design with a
+part of a kind no deck has is handed to the kernel with no deck of rules: it holds the card
+and the design to the type rules, works out no cell, and its verdict is then never PASS
+(kernel/Petra/Check.lean). Such a design reads UNKNOWN with the reason of `no_deck`.
 """
 from __future__ import annotations
 
@@ -30,13 +27,9 @@ import os
 import subprocess
 import tempfile
 import warnings
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
 
-from . import export
-from .models.base import ComponentError
-from .verdict import Discharged, Refuted, WithinMargin
 
 EXE = "petra-verify.exe" if os.name == "nt" else "petra-verify"
 
@@ -78,36 +71,9 @@ class BadAnswer(NoVerdict):
 
 
 class Disagreement(NoVerdict):
-    """The kernel rejects a proof, a refutation or a waiver that the Python checker accepted,
-    or its cells are not the grid's. It is a bug in one of the two, and the command line
+    """The kernel's cells, its verdict or the waivers it lists are not the ones the Python
+    reader of the deck worked out (grid.checked). It is a bug in one of the two, and the command line
     lets it through as a crash, with its traceback."""
-
-
-@dataclass(frozen=True)
-class Kernel:
-    """What the kernel said of a design of the models' kinds. `verdict` is its own, and the
-    design's status. `checked` of the `proofs` the Python checker's report rests on had a
-    tape, which the kernel checked and accepted. `hashes` are of the files it read, by the
-    names docs/format.md gives them: the kernel had no deck of rules, and its null for one
-    is left out. `cells_from` is `proofs`, since it took the cells of proofs.json."""
-
-    verdict: str
-    checked: int
-    proofs: int
-    hashes: Mapping[str, str]
-    cells_from: str = "proofs"
-
-    def line(self) -> str:
-        """What a report prints of the kernel. A refutation counts as a proof here."""
-        rest = self.proofs - self.checked
-        if not self.checked:
-            tapes = f"it has no rule yet for any of the {self.proofs} proofs"
-        else:
-            tapes = f"it checked {self.checked} of {self.proofs} proofs" + (f" and has no rule yet for the other {rest}" if rest else "")
-        return f"petra-verify gives {self.verdict}: {tapes}, and with no deck of rules for this design it passes nothing"
-
-    def to_json(self) -> dict[str, Any]:
-        return {"verdict": self.verdict, "checked": self.checked, "proofs": self.proofs, "hashes": dict(self.hashes), "cells_from": self.cells_from}
 
 
 @functools.cache
@@ -157,19 +123,6 @@ def source_tree(folder: Path) -> bool:
     package is, and for an install that is site-packages, where any other package may write: a
     file it put at kernel/.lake/build/bin/petra-verify is not Petra's kernel."""
     return folder.name not in ("site-packages", "dist-packages") and (folder / "kernel" / "lakefile.toml").is_file() and (folder / "pyproject.toml").is_file()
-
-
-def behind(report: Any) -> int:
-    """How many proofs and refutations the report's verdict rests on: each obligation's
-    own, its margin's, and one per validity row of its model."""
-    count = 0
-    for outcome in report.outcomes:
-        count += len(getattr(outcome, "validity", ()))
-        if isinstance(outcome, (Discharged, Refuted)):
-            count += 1 + (getattr(outcome, "margin_theorem", None) is not None)
-        elif isinstance(outcome, WithinMargin):
-            count += 1 + (outcome.theorem is not None)
-    return count
 
 
 def need() -> str:
@@ -276,20 +229,16 @@ def status(said: Mapping[str, Any]) -> str:
 
 
 def no_deck(kinds: Any) -> str:
-    """Why a design whose cells the kernel did not work out from a deck of rules reads
-    UNKNOWN: its kinds of part, which no deck of rules has. Every way into a check gives
-    this reason with the status."""
+    """Why a design the kernel was handed no deck of rules for reads UNKNOWN: its kinds of
+    part that no shipped deck has, at most four of them by name and the rest by their count
+    (files.listed), or that it has no part at all. Every way into a check gives this reason
+    with the status."""
+    from .files import listed
+
     names = sorted(set(kinds))
-    of = f"a part of kind {', '.join(names)}" if names else "the parts of this design"
-    return f"no deck of rules has {of}, so the kernel worked out none of its checks and nothing can pass it"
-
-
-def held(status: str) -> str:
-    """A status of the Python checker as it is printed outside a check: in a recall, in a
-    calculation package, in the JSON under the kernel's verdict. It is no verdict, and its
-    PASS and MARGINAL are no pass of a design that has no deck of rules: each reads UNKNOWN.
-    FAIL and UNKNOWN stand."""
-    return status if status in ("FAIL", "UNKNOWN") else "UNKNOWN"
+    if not names:
+        return "the design has no part, so the kernel worked out no check and nothing can pass it"
+    return f"no deck of rules has a part of kind {listed(names)}, so the kernel worked out none of its checks and nothing can pass it"
 
 
 def refusal(path: str, said: Mapping[str, Any]) -> tuple[str, ...]:
@@ -325,23 +274,3 @@ def differs(mine: list[tuple[str, str, str, str]], status: str, rules: str, said
     if said.get("cells_from") != "rules":
         found.append(f"petra-verify took its cells from {said.get('cells_from')} and not from the deck of rules")
     return "; ".join(found)
-
-
-def verify(design: Any, registry: Any, report: Any, proofs: export.Proofs) -> Kernel:
-    """The kernel's verdict on a design of the models' kinds, with the proofs of the Python
-    checker's `report` as its cells. Raises NoVerdict when there is no kernel to run or it
-    gives no answer."""
-    kernel = need()
-    files = export.bundle(design, registry, report, proofs)
-    said = ask(kernel, files)
-    if said["verdict"] == "ILL-FORMED":
-        raise ComponentError(refusal(design.path, said))
-    if said["verdict"] == "PASS":      # `ask` refuses it too: these files hold no deck of rules
-        raise BadAnswer(f"{design.path}: {kernel} printed PASS for a design with no deck of rules, which petra-verify never does")
-    cells = json.loads(files["proofs"])["cells"]
-    rejected = [f"{mine['subject']}/{mine['mechanism']}/{mine['entry']}: {its.get('reason', its['state'])}"
-                for mine, its in zip(cells, said["cells"]) if ("tape" in mine or mine["state"] == "waived") and its["state"] != mine["state"]]
-    if rejected or len(cells) != len(said["cells"]):
-        raise Disagreement(f"{design.path}: petra-verify does not accept what the Python checker did: {'; '.join(rejected) or 'it read other cells'}")
-    return Kernel(status(said), sum("tape" in cell for cell in cells), behind(report), {name: h for name, h in said["hashes"].items() if h is not None},
-                  said["cells_from"])
