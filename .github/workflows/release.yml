@@ -33,15 +33,41 @@ jobs:
           name: sdist
           path: dist/
 
+  kernel:
+    # The suite needs the kernel: with none there is no verdict, and the tests that ask for one fail.
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.elan
+            kernel/.lake
+          key: kernel-${{ runner.os }}-${{ hashFiles('kernel/**') }}
+      - name: Build the kernel
+        run: |
+          if [ ! -x "$HOME/.elan/bin/lake" ]; then
+            curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -o elan-init.sh
+            sh elan-init.sh -y --default-toolchain none
+          fi
+          cd kernel && "$HOME/.elan/bin/lake" build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: petra-verify
+          path: kernel/.lake/build/bin/petra-verify
+
   wheels:
     uses: ./.github/workflows/wheels.yml
 
   test:
-    needs: build
+    needs: [build, kernel]
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -49,6 +75,11 @@ jobs:
         with:
           name: sdist
           path: dist/
+      - uses: actions/download-artifact@v4
+        with:
+          name: petra-verify
+          path: kernel/.lake/build/bin
+      - run: chmod +x kernel/.lake/build/bin/petra-verify
       - run: pip install numpy==2.4.6 scipy==1.17.1
       - run: python tests/parallel.py --local -j "$(nproc)"
       - name: The sdist installs and runs outside the repository, and says that no kernel ran
