@@ -298,6 +298,12 @@ class Refused(unittest.TestCase):
     def test_what_a_deck_does_not_read_yet_is_refused_and_not_ignored(self):
         self.refused("states a claim, which a deck does not read yet", card_swap=[("waive strip.creep", "claim heat: s.current <= 2 A\n\nwaive strip.creep")])
 
+    def test_a_mean_is_refused_and_not_dropped(self):
+        """Plan step 1.6. A given and a load may state a mean beside their range. No file the kernel reads carries one, so a
+        deck's card that stated a mean read as the same card without it, and the number was dropped with nothing said."""
+        self.refused("the card or the design states the mean of a given, which a deck does not read yet", card_swap=[("[0.5 mm, 0.6 mm] signed", "[0.5 mm, 0.6 mm] mean 0.55 mm signed")])
+        self.refused("load run: s current states a mean, which a deck does not read yet", card_swap=[("on s current in [0 A, 2 A]", "on s current in [0 A, 2 A] mean 1 A")])
+
     def test_a_design_of_a_deck_and_of_the_models_is_refused(self):
         mixed = DESIGN + "\njoint j {\n  bolt bolt.M12_A4_70 count 1\n  plate aluminium.6061_T6 thickness 10 mm\n  plate aluminium.6061_T6 thickness 10 mm\n}\n"
         self.refused("a design is checked against one deck", design=mixed)
@@ -373,8 +379,9 @@ class Decks(unittest.TestCase):
     def test_a_rule_answers_a_line_of_the_grid_that_can_arise(self):
         self.wrong("the grid does not ask strip.melt of strip", lambda b: b["rules"][0].__setitem__("mechanism", "strip.melt"))
         self.wrong("the grid does not ask strip.tide of strip, or says it never arises", lambda b: b["rules"][0].__setitem__("mechanism", "strip.tide"))
-        self.wrong("the grid does not ask strip.tide of strip, or says it never arises",
-                   lambda b: [b["grid"][5]["unless"].__setitem__("why", ""), b["rules"][0].__setitem__("mechanism", "strip.tide")])
+        for nothing in ("", " ", " \t\r\n", 0, None, ["a reason"]):
+            with self.subTest(why=nothing):
+                self.wrong("grid strip.tide: unless: it says why, in a text that is not empty", lambda b: b["grid"][5]["unless"].__setitem__("why", nothing))
         self.wrong("two rules have one name", lambda b: b["rules"].append(b["rules"][0]))
 
     def test_a_row_of_a_deck_has_no_dimension_error(self):
@@ -398,7 +405,7 @@ class Decks(unittest.TestCase):
 
     def test_a_line_of_the_grid_names_a_type_of_the_deck(self):
         self.wrong("grid strip.creep: a line has a type of the deck", lambda b: b["grid"][3].__setitem__("type", "strap"))
-        self.wrong("not a deck (KeyError: 'why')", lambda b: b["grid"][5].__setitem__("unless", {}))
+        self.wrong("grid strip.tide: unless: it says why, in a text that is not empty", lambda b: b["grid"][5].__setitem__("unless", {}))
 
 
 def formalizer(name: str) -> dict:

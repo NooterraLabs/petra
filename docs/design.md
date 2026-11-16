@@ -52,7 +52,7 @@ No way into a check gives a pass or a fail that is not the kernel's. With no ker
 
 ## What a pass rests on
 
-A PASS says that every cell of the grid was settled. It rests on five things of different strength, and it is only as strong as the weakest.
+A PASS says that every cell of the grid was settled, and that at least one was settled by working something out. A proved cell says that the design meets that rule of the deck, under the card. It does not say that the design meets the standard. A PASS rests on eight things of different strength, and it is only as strong as the weakest.
 
 | Level | What stands behind it | Where |
 |---|---|---|
@@ -61,6 +61,9 @@ A PASS says that every cell of the grid was settled. It rests on five things of 
 | The front end: turning the text of a card and a design into the files the kernel reads | Tests. No second reading of the language. A bug here, a wrong unit factor for one, gives the kernel other numbers than the pair's, and the verdict is then about those | `petra/lang`, `petra/units.py`, `petra/export.py` |
 | The rules of a deck | Two transcriptions of the standard that agree on sampled parts, and worked examples from a published source. Agreement is not proof that a rule is the standard's | [deck.md](deck.md) |
 | A waived cell | The signature of the person named. Petra checks nothing about it | The report's `waived` lines |
+| A key the card states | The signature of the person who states it. The kernel checks that the key is stated and signed, and not that it is true of the part. The lines that arise and the rules that answer turn on such keys | The card, and [deck.md](deck.md) |
+| A cell that is not applicable | The deck's word that the mechanism cannot arise, with the reason the deck gives. The kernel checks that the condition holds for the part and prints the reason. It does not check the reason | The report's `not_applicable` cells |
+| A cell of a rule with `requires` | The word of whoever stated the keys, the card or the design. Nothing is worked out, and such a cell alone makes no PASS | Cells marked `stated` |
 
 A PASS does not say that the grid lists every way the part can fail. A deck asks about the mechanisms its authors wrote down. [deck.md](deck.md) lists what the first deck covers and what it does not.
 

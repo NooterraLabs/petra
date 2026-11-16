@@ -302,7 +302,10 @@ def rules (cardHash : String) (card design deck : Except String ByteArray)
 rules and every cell is proved, waived or not applicable and one is proved, and UNKNOWN
 otherwise: with an open cell, with nothing proved, or with no deck of rules. A cell whose
 entry ends in `/where` proves only that a rule's range holds, and not the rule: it is not
-the one proved cell a PASS needs.
+the one proved cell a PASS needs. Nor is the cell of a rule with `requires`, which says that
+keys are stated as the rule requires and works nothing out: a design that only states what
+is required of it is UNKNOWN, since nothing was checked of it but its own word or the
+card's.
 
 Without a deck of rules the cells are the list of proofs.json, which the kernel takes as it
 comes. It checks the tape of each, and it cannot tell that the list leaves no cell out, or
@@ -314,7 +317,7 @@ def check (card design deck : Except String ByteArray) (deckOfRules proofs : Opt
   let (found, findings) := Id.run ((rules ((hash card).getD "") card design deck deckOfRules proofs).run {})
   let cells := found.cells
   let has (state : State) : Bool := cells.any (·.state == state)
-  let proved := cells.any fun s => s.state == .proved && !s.cell.entry.endsWith "/where"
+  let proved := cells.any fun s => s.state == .proved && !s.stated && !s.cell.entry.endsWith "/where"
   let verdict :=
     if !findings.isEmpty then .illFormed
     else if has .refuted then .fail

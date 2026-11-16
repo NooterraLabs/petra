@@ -605,7 +605,7 @@ class Shapes(unittest.TestCase):
         plate = {"type": "p", "what": "w", "fields": [{"name": f"f{k}", "dim": "length", "what": "w"} for k in range(300)]}
         lap = {"type": "lap", "what": "w", "fields": [{"name": "joins", "type": "p", "as": [f"a{k}" for k in range(300)], "what": "w"},
                                                       {"name": "k", "one_of": ["x", "y"], "what": "w", "signed": True}]}
-        lines = [asks("lap", f"m{i}", unless={"why": "", "when": ["is", "k", "x"]}) for i in range(3_000)]
+        lines = [asks("lap", f"m{i}", unless={"why": "w", "when": ["is", "k", "x"]}) for i in range(3_000)]
         rules = [rule_of(f"r/{i}", "lap", f"m{i}", le=("a0.f0", "a1.f1")) for i in range(3_000)]
         said = self.bounded(with_rules(deck_of(types=[plate, lap], grid_lines=lines, rules=rules), empty_card(), []))
         self.assertEqual((said["verdict"], said["findings"]), ("UNKNOWN", []))
@@ -615,7 +615,7 @@ class Shapes(unittest.TestCase):
         75 million looks that nothing counted, over a minute. Each is a step now. The card
         states the key of each part, which a megabyte has room for 3,000 times."""
         kind = {"type": "t", "what": "w", "fields": [LENGTH, {"name": "k", "one_of": ["x", "y"], "what": "w", "signed": True}]}
-        lines = [asks(unless={"why": "", "when": ["and"] + [["is", "k", "x"]] * 25_000})]
+        lines = [asks(unless={"why": "w", "when": ["and"] + [["is", "k", "x"]] * 25_000})]
         parts = [{"name": f"p{i}", "type": "t", "lines": [{"field": "f", "args": ONE}, {"field": "k", "args": [{"word": "x"}]}]} for i in range(3_000)]
         said = self.bounded(with_rules(deck_of(types=[kind], grid_lines=lines), *card_states(parts, "k")))
         self.assertEqual([(f["rule"], f["why"][:60]) for f in said["findings"]],
@@ -817,9 +817,11 @@ class Alike(unittest.TestCase):
         """An `unless` that asks 19,000 times about four keys of the part its part joins, for
         526 pairs of parts: 9,998,734 of the ten million steps, each a look for the joined
         part and for its key. 4.0 processor seconds, 38 MB. One pair more is over the steps.
-        It takes all the steps of the cells, so it is held to the kernel's 30 processor seconds."""
+        It takes all the steps of the cells, so it is held to the kernel's 30 processor seconds.
+        Each of its cells is of a rule with `requires`, which works nothing out, so the 526
+        proved cells make no PASS: the design is UNKNOWN (plan step 1.6)."""
         said = self.bounded(self.conditions(526, 19_000, False, "unless"), within=PROCESSOR_SECONDS)
-        self.assertEqual((said["verdict"], said["findings"], said["counts"]["proved"]), ("PASS", [], 526))
+        self.assertEqual((said["verdict"], said["findings"], said["counts"]["proved"]), ("UNKNOWN", [], 526))
         over = self.bounded(self.conditions(527, 19_000, False, "unless"), within=PROCESSOR_SECONDS)
         self.assertEqual([(f["rule"], f["item"]) for f in over["findings"]], [("limits", "parts")])
 

@@ -198,11 +198,15 @@ require. -/
 def MAX_TRYING : Nat := 1000000
 
 /-- A line of the grid. `excuse` is none for a line that always asks. Otherwise it holds
-the condition under which the mechanism cannot arise, or none when it never arises. -/
+the condition under which the mechanism cannot arise, or none when it never arises, and
+`why` is the deck's reason for it, a text that is not empty: a cell that is not applicable
+carries it, so that no line is excused with nothing said. The reason is the deck's word.
+The kernel prints it and proves nothing of it. -/
 structure Ask where
   kind : String
   mechanism : String
   excuse : Option (Option Static)
+  why : String := ""
 
 /-- How a rule gives a side of a table its value: a step, a name of the row's key, or a key
 field of the part, or of the part `part` names, through a map from its names to the row's.
@@ -825,6 +829,11 @@ rows it applies. A file nests at most `MAX_NESTING` deep, so a row or a rule alo
 it, and a chain of names that each read the next is cut here. -/
 def MAX_EXPRESSION : Nat := 1024
 
+/-- The reason of a cell that a rule with `requires` proves. Such a cell says that keys are
+stated as the rule requires, by the card or by the design, and the kernel works nothing out
+for it. It is no evidence that anything holds: a PASS needs a cell of another kind. -/
+def STATED : String := "what the rule requires is stated: nothing is worked out"
+
 /-- What the kernel says of a condition that reads a key the card does not sign. -/
 def UNSIGNED_KEY : String :=
   "which the design may state: a `when` reads only a key the card signs"
@@ -1206,13 +1215,14 @@ def readAsk (kinds : Std.TreeMap String Kind) (rows : Std.TreeMap String Row) (j
     let _ ← (text j "what").mapError fun _ => "it has `what`, a text"
     let name ← text j "type"
     let some kind := kinds.get? name | throw s!"{clip name} is not a type of the deck"
-    let excuse ← match j.getObjVal? "unless" with
-      | .error _ | .ok .null => pure none
+    let (excuse, why) ← match j.getObjVal? "unless" with
+      | .error _ | .ok .null => pure (none, "")
       | .ok said => do
         (within said ["why", "when"]).mapError ("unless: " ++ ·)
-        let _ ← text said "why"
-        pure (some (← (said.getObjVal? "when").toOption.mapM (deciding { kind := some kind, kinds, rows } "the `when` of its `unless`")))
-    return { kind := name, mechanism, excuse }
+        let why ← text said "why"
+        unless why.any (!·.isWhitespace) do throw "unless: it says why, in a text that is not empty"
+        pure (some (← (said.getObjVal? "when").toOption.mapM (deciding { kind := some kind, kinds, rows } "the `when` of its `unless`")), why)
+    return { kind := name, mechanism, excuse, why }
   ask.mapError (s!"grid {clip mechanism}: " ++ ·)
 
 /-- For each step of a rule, what `may_be` lets it be and the field or the load that says so:

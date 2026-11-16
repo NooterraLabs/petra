@@ -503,7 +503,7 @@ class ARuleThatRequires(unittest.TestCase):
     def test_its_cell_is_proved_when_the_condition_holds(self):
         found, verdict, said = cells(self, HOISTS, hoist())
         self.assertEqual(found, {("h", "hoist.category", "category-a"): "proved", ("h", "hoist.bore", ""): "not_applicable", ("h", "hoist.span", "span"): "proved"})
-        self.assertEqual((verdict, reason(said, "hoist.category")), ("PASS", ""))
+        self.assertEqual((verdict, reason(said, "hoist.category")), ("PASS", grid.STATED), "the span is worked out, so the design passes, and the cell of the keys says what it is")
 
     def test_its_cell_is_refuted_when_the_condition_does_not_hold_and_the_verdict_fails(self):
         found, verdict, said = cells(self, HOISTS, hoist("A", "2"))
@@ -592,14 +592,35 @@ class ARuleThatRequires(unittest.TestCase):
         said = ask(grid.check(read, deck)[1], without=("proofs",))
         self.assertEqual((said["verdict"], said["work"], said["counts"]["proved"]), ("UNKNOWN", 0, 1), "its proof took no work, and the fields nothing reads are open")
 
-    def test_a_design_passes_on_what_it_requires_alone(self):
+    def test_a_design_does_not_pass_on_what_it_requires_alone(self):
+        """A rule with `requires` reads keys and works nothing out. Its cell is proved when the keys are as it requires, by
+        the word of whoever stated them, and here that is the design. Until plan step 1.6 such a design read PASS, with
+        no number checked of it. It reads UNKNOWN: a PASS needs a cell of another kind. A refuted one still fails."""
         small = made_up([kind("hoist", key("category", "A", "B", "C"), key("service", "0", "1", "2", "3", "4"))], [asks("hoist.category", "hoist")],
                         [rule("category-a", "hoist", "hoist.category", requires=["or", ["not", ["is", "category", "A"]], ["is", "service", "0"]])])
-        for category, service, verdict in (("A", "0", "PASS"), ("A", "1", "FAIL"), ("B", "4", "PASS"), ("C", "0", "PASS")):
+        for category, service, verdict in (("A", "0", "UNKNOWN"), ("A", "1", "FAIL"), ("B", "4", "UNKNOWN"), ("C", "0", "UNKNOWN")):
             with self.subTest(category=category, service=service):
-                found, said, _ = cells(self, small, design(part("hoist", "h", category=category, service=f'"{service}"')))
+                found, said, kernel = cells(self, small, design(part("hoist", "h", category=category, service=f'"{service}"')))
                 self.assertEqual(said, verdict)
-                self.assertEqual(found, {("h", "hoist.category", "category-a"): "proved" if verdict == "PASS" else "refuted"})
+                self.assertEqual(found, {("h", "hoist.category", "category-a"): "refuted" if verdict == "FAIL" else "proved"})
+                if verdict == "UNKNOWN":
+                    self.assertEqual(reason(kernel, "hoist.category"), grid.STATED)
+                if verify.binary():
+                    self.assertEqual([c.get("stated") for c in kernel["cells"]], [True], "the kernel marks the cell as one of stated keys")
+
+    def test_a_cell_that_is_worked_out_beside_it_makes_the_pass(self):
+        """The same keys, with one rule the kernel works out: that cell is the evidence, and the design passes. With the
+        worked cell of a range alone it does not, as before."""
+        both = made_up([kind("hoist", size("span"), key("category", "A", "B", "C"), key("service", "0", "1", "2", "3", "4"))],
+                       [asks("hoist.category", "hoist"), asks("hoist.span", "hoist")],
+                       [rule("category-a", "hoist", "hoist.category", requires=["or", ["not", ["is", "category", "A"]], ["is", "service", "0"]]),
+                        rule("span", "hoist", "hoist.span", le=[["q", "1", "mm"], "span"])])
+        found, said, kernel = cells(self, both, design(part("hoist", "h", span="5 mm", category="B", service='"4"')))
+        self.assertEqual((said, found), ("PASS", {("h", "hoist.category", "category-a"): "proved", ("h", "hoist.span", "span"): "proved"}))
+        if verify.binary():
+            self.assertEqual([c.get("stated") for c in kernel["cells"]], [True, None])
+        report = grid.check(*reversed(parsed(both, design(part("hoist", "h", span="5 mm", category="B", service='"4"')))))[0]
+        self.assertEqual([cell["stated"] for cell in report.to_json()["cells"] if "stated" in cell], [True], "and petra/grid.py prints the same mark")
 
     def test_a_rule_has_an_inequality_or_a_requirement_and_not_both(self):
         le = ["span", "span"]

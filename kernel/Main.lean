@@ -40,6 +40,7 @@ def render (r : Report) : String :=
     object ([("subject", str s.cell.subject), ("mechanism", str s.cell.mechanism), ("entry", str s.cell.entry),
              ("claimed", if s.hinted then str s.cell.state.name else "null"), ("state", str s.state.name)]
             ++ (if s.reason.isEmpty then [] else [("reason", str s.reason)])
+            ++ (if s.stated then [("stated", "true")] else [])
             ++ match s.state, s.completion with
               | .waived, some c => [("completion", completion c)]
               | _, _ => [])

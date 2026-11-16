@@ -601,6 +601,9 @@ structure Settled where
   /-- The waiver a waived cell rests on, with its place in the card's list. -/
   waiver : Option (Nat × Waiver) := none
   hinted : Bool := true
+  /-- Whether the cell is of a rule with `requires`: it reads keys and works nothing out. A
+  proved one is not the proved cell a PASS needs. -/
+  stated : Bool := false
   /-- Whether a waiver of the cell's line may rest the cell while it is open. The deck has no
   rule for the part: the line has no rule for it, or the rule's `where` holds nowhere in the
   ranges. Or the part leaves keys unstated, or a load case leaves out loads, and a hint names
@@ -911,7 +914,7 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hi
               break
         out := out.push { pending "" (UNSTATED_WHY field "the `unless` of the line") found.isSome with completion := found }
       else if ask.excuse.any fun condition => condition.all (·.holds part fellows) then
-        out := out.push (cell part.name ask.mechanism "" .notApplicable)
+        out := out.push (cell part.name ask.mechanism "" .notApplicable ask.why)
       else
         -- A rule answers when its `when` holds, and also when its `when` names a key that
         -- is unstated: nothing says that it does not apply, and its cells are then open.
@@ -986,8 +989,8 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hi
             -- condition over keys holds for the part, and refuted when it does not, with each
             -- key it names and the name the part has for it.
             if let some required := rule.requires then
-              if required.holds part fellows then out := out.push (cell part.name ask.mechanism tail .proved)
-              else out := out.push (cell part.name ask.mechanism tail .refuted (part.refusal fellows rule))
+              if required.holds part fellows then out := out.push { cell part.name ask.mechanism tail .proved STATED with stated := true }
+              else out := out.push { cell part.name ask.mechanism tail .refuted (part.refusal fellows rule) with stated := true }
               continue
             steps := steps + rule.weight * (if rule.ranges.isEmpty then 1 else 2)
             if steps > MAX_STEPS then return .error long

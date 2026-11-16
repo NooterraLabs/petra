@@ -519,6 +519,9 @@ def _unsigned(cond: tuple | None, kind: Type, types: Mapping[str, Type]) -> str 
 
 
 UNSIGNED_KEY = "which the design may state: a `when` reads only a key the card signs"
+STATED = "what the rule requires is stated: nothing is worked out"
+"""The reason of a cell that a rule with `requires` proves, as kernel/Petra/Deck.lean has it. Such a cell says that keys are
+stated as the rule requires, by the card or by the design. It is no evidence that anything holds: a PASS needs a cell of another kind."""
 """What both readers say of a `when` that reads a key the card does not sign (kernel/Petra/Deck.lean)."""
 
 
@@ -885,12 +888,15 @@ def read_deck(text: str) -> Deck:
             anchor = anchored(a["anchor"], f"grid {a.get('mechanism')}: anchor")
             if unless is not None:
                 only(unless, ("why", "when"), f"grid {a.get('mechanism')}: unless")
+                # A line is excused with a reason that says something. The reason is the deck's word: no reader proves it.
+                if not isinstance(unless.get("why"), str) or not unless["why"].strip(" \t\r\n"):
+                    raise DeckError(f"grid {a.get('mechanism')}: unless: it says why, in a text that is not empty")
             if not isinstance(a["type"], str) or not isinstance(a["mechanism"], str) or a["type"] not in types or _long(a["mechanism"]) or a["mechanism"] == UNREAD:
                 raise DeckError(f"grid {a.get('mechanism')}: a line has a type of the deck, mechanism, of at most {MAX_NAME} characters and not `{UNREAD}`, what, anchor and may have unless")
             when = _Binder(deck_rows, types[a["type"]], types).static(unless["when"]) if unless is not None and "when" in unless else None
             if (key := _unsigned(when, types[a["type"]], types)) is not None:
                 raise DeckError(f"grid {a['mechanism']}: the `when` of its `unless` reads {key}, {UNSIGNED_KEY}")
-            asks.append(Ask(a["type"], a["mechanism"], a["what"], anchor, when, str(unless["why"]) if unless is not None else None))
+            asks.append(Ask(a["type"], a["mechanism"], a["what"], anchor, when, unless["why"] if unless is not None else None))
         if len({(a.type, a.mechanism) for a in asks}) != len(asks):
             raise DeckError("the grid asks one mechanism of one type twice")
         rules = tuple(_rule(r, deck_rows, types) for r in body["rules"])
@@ -1140,6 +1146,8 @@ def read_parts(design: Design, deck: Deck) -> Parts:
                 problems.append(f"{where}: " + (f"a {part.type.name} takes: {', '.join(part.type.loads) or 'no load'}" if part else "a load is put on a part"))
             elif isinstance(e.value, ParamRef):
                 problems.append(f"{where} reads a param, and a family is not checked against a deck yet")
+            elif e.value.mean is not None:
+                problems.append(f"{where} states a mean, which a deck does not read yet")
             elif rows._vector(e.value.range.dim) != f.dim:
                 problems.append(f"{where} is a {show(f.dim)}")
             elif f.least is not None and e.value.range.value.lo < f.least:
@@ -1161,7 +1169,9 @@ def read_parts(design: Design, deck: Deck) -> Parts:
                             + (f"of a {part.type.name}: {', '.join(a.mechanism for a in deck.asks if a.type == part.type.name) or 'nothing'}" if part else "only of a part"))
     # An environment that no cell reads would leave a verdict that looks as if it held there: it is refused, as an ambient is.
     unread = [("a claim", design.claims), ("a probability claim", design.probability_claims), ("a tests record", design.tests),
-              ("an ambient", design.ambient), ("an environment", design.environment), ("a param", design.params)]
+              ("an ambient", design.ambient), ("an environment", design.environment), ("a param", design.params),
+              # A mean is a number no file of the kernel carries: said and dropped, it would look as if it had been read.
+              ("the mean of a given", [g for g in design.givens.values() if g.mean is not None])]
     problems += [f"{design.path}: the card or the design states {what}, which a deck does not read yet" for what, there in unread if there]
     if not problems:      # what the types need is asked of a design that breaks nothing else, so every field is there and above zero
         problems += [f"{_at(design.components[p.name].span)}: {p.name} {broken}" for p in parts.values() for broken in _unmet(p, parts)]
@@ -1684,7 +1694,9 @@ class Cell:
     `(PART, FIELD, NAME)` and each load `(PART, LOAD, CASE, VALUE)`. `hints` are the hints
     the cell gives proofs.json when they are not its `body` alone: one for each completion
     of a refuted cell, or the one with the completion of a waivable cell. `waiver` is who
-    signed the waiver a waived cell rests on, and why."""
+    signed the waiver a waived cell rests on, and why. `stated` says that the cell is of a
+    rule with `requires`: it reads keys and works nothing out, and a proved one is not the
+    proved cell a PASS needs."""
 
     subject: str
     mechanism: str
@@ -1700,6 +1712,7 @@ class Cell:
     waiver: tuple[str, str] | None = None
     completion: tuple[tuple, tuple] | None = None
     hints: tuple[Mapping[str, Any], ...] | None = None
+    stated: bool = False
 
     @property
     def body(self) -> dict[str, Any]:
@@ -2000,7 +2013,7 @@ def _answers(rule: Rule, ask: Ask, part: Part, parts: Mapping[str, Part], cases:
             continue
         if rule.requires is not None:
             # One cell, with no tape and no hint: proved when the condition over keys holds for the part, and refuted when not.
-            yield cell(tail, "proved") if _static(rule.requires, part, parts) else cell(tail, "refuted", _refusal(rule, part, parts))
+            yield cell(tail, "proved", STATED, stated=True) if _static(rule.requires, part, parts) else cell(tail, "refuted", _refusal(rule, part, parts), stated=True)
             continue
         try:
             if rule.where:
@@ -2176,9 +2189,10 @@ def bundle(design: Design, deck: Deck, answers: list[Cell] | None = None) -> dic
 
 def verdict(answers: list[Cell]) -> str:
     """The kernel's verdict: FAIL with a refuted cell, UNKNOWN with an open cell or with nothing proved, else PASS. A cell
-    whose entry ends in `/where` proves a rule's range and not the rule, so it is not the one proved cell a PASS needs."""
+    whose entry ends in `/where` proves a rule's range and not the rule, so it is not the one proved cell a PASS needs. Nor
+    is the cell of a rule with `requires`, which says that keys are stated and works nothing out."""
     states = {c.state for c in answers}
-    proved = any(c.state == "proved" and not c.entry.endswith("/where") for c in answers)
+    proved = any(c.state == "proved" and not c.stated and not c.entry.endswith("/where") for c in answers)
     return "FAIL" if "refuted" in states else "UNKNOWN" if "open" in states or not proved else "PASS"
 
 
@@ -2232,7 +2246,8 @@ class Report:
         return {"file": self.path, "design": self.name, "status": self.status, "deck": {"name": self.deck.name, "hash": self.deck.hash},
                 "counts": self.counts(), "waived": self.waived(),
                 "cells": [{"subject": c.subject, "mechanism": c.mechanism, "entry": c.entry, "state": c.state, "what": c.what,
-                           "anchor": c.anchor, "why": c.why, "rule": c.rule, "ratio": c.ratio, **({"completion": done} if done else {})}
+                           "anchor": c.anchor, "why": c.why, "rule": c.rule, "ratio": c.ratio, **({"stated": True} if c.stated else {}),
+                           **({"completion": done} if done else {})}
                           for c, done in zip(self.cells, self.completions())]}
 
     def render(self) -> str:

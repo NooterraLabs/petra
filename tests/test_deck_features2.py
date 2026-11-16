@@ -1545,5 +1545,49 @@ class ANeedThatIsNotAsked(unittest.TestCase):
             parsed(EYE, design(part("eye", "e", hole="30 mm", width="unstated")), HEAD + '\nwaive unread on e by "t@example.org" reason "test"\n')
 
 
+class ALineIsExcusedWithAReason(unittest.TestCase):
+    """Plan step 1.6: a "not applicable" with no reason is refused. A line of the grid says that its mechanism cannot arise
+    with `unless`, and until this step its `why` could be empty, and petra/grid.py took a number for it where the kernel
+    did not. Both readers now refuse a deck whose `unless` has no `why`, one that is no text, or one of nothing but
+    spaces, tabs and line ends. The reason is the deck's word: the kernel prints it on the cell and proves nothing of it."""
+
+    WHY = "the finish is asked of service classes 1 to 4"
+
+    def excused(self, why: object, when: bool = True) -> dict:
+        from tests.test_deck_features import HOISTS
+        deck = json.loads(json.dumps(HOISTS))
+        deck["grid"][1]["unless"] = {**({"when": ["is", "service", "0"]} if when else {}), **({} if why is ... else {"why": why})}
+        if not when:
+            deck["rules"] = [r for r in deck["rules"] if r["mechanism"] != "hoist.bore"]
+        return deck
+
+    def test_an_unless_with_no_reason_is_refused_by_both_readers(self):
+        for why in ("", " ", "\t", " \r\n\t ", 0, None, ["a reason"], {"en": "a reason"}, ...):
+            for when in (True, False):
+                with self.subTest(why=why, when=when):
+                    mine, kernels = no_deck(self, self.excused(why, when))
+                    self.assertIn("grid hoist.bore: unless: it says why, in a text that is not empty", mine)
+                    self.assertTrue(kernels.startswith("grid hoist.bore: "), kernels)
+                    self.assertTrue(kernels.endswith("unless: it says why, in a text that is not empty" if isinstance(why, str) else "why is not a string"), kernels)
+
+    def test_a_reason_of_one_character_that_is_no_space_is_one(self):
+        for why in ("x", "\u00a0", "\u3000", " . "):
+            with self.subTest(why=why):
+                reads(self, self.excused(why))
+                reads(self, self.excused(why, False))
+
+    @KERNEL
+    def test_the_kernel_prints_the_decks_reason_on_the_cell_it_excuses(self):
+        from tests.test_deck_features import HOISTS, hoist
+        found, verdict, said = cells(self, HOISTS, hoist())
+        self.assertEqual((found["h", "hoist.bore", ""], reason(said, "hoist.bore")), ("not_applicable", self.WHY))
+        long = self.excused("a reason " * 40)
+        _, _, said = cells(self, long, hoist())
+        self.assertTrue(reason(said, "hoist.bore").startswith("a reason a reason") and "more characters" in reason(said, "hoist.bore"), "a long reason is cut as every reason is")
+        found, verdict, said = cells(self, self.excused("a lug of this hoist has no bore to finish", False), hoist(service="2"))
+        self.assertEqual((found["h", "hoist.bore", ""], reason(said, "hoist.bore")), ("not_applicable", "a lug of this hoist has no bore to finish"),
+                         "and a line that never arises carries its reason as one with a condition does")
+
+
 if __name__ == "__main__":
     unittest.main()

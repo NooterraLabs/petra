@@ -63,7 +63,7 @@ CORE_CAP = Limit(331, "Set on 2026-11-15 at the deletion of the old path (plan s
                        "package's own file. Before that day the cap was 1,023 and covered the Python checker's "
                        "core too: its check, its codec, its evidence and its linear algebra, which are gone.")
 
-TRUSTED_CEILING = Limit(3951, "Set on 2026-11-15 at the deletion of the old path (plan step 1.2c), where what is counted "
+TRUSTED_CEILING = Limit(3959, "Set on 2026-11-15 at the deletion of the old path (plan step 1.2c), where what is counted "
                                 "measured 3,871 code lines: the arithmetic 331, and outside it the front end and the decks "
                                 "as data, 3,540. Before that day the ceiling was 20,119, of which the models, the "
                                 "registry, the premises and the Python checker's rules were the most: all are gone. "
@@ -81,6 +81,11 @@ TRUSTED_CEILING = Limit(3951, "Set on 2026-11-15 at the deletion of the old path
                                 "And for its second round: the reader has room for a chain of names as long as the "
                                 "kernel reads, which ended it at 246, and a file of the decks' folder is held to the "
                                 "depth before it is read. 18 lines in petra/grid.py: 3,951. "
+                                "Raised on 2026-11-16 for the rest of plan step 1.6: a line of the grid is excused only "
+                                "with a reason that is not empty, and the cell of a rule with `requires`, which works "
+                                "nothing out, is marked and is not the proved cell a PASS needs. And the mean of a "
+                                "given or of a load on a deck's card is refused, where it was dropped with nothing "
+                                "said. 8 lines in petra/grid.py: 3,959. "
                                 "Raise it in the commit that needs more and say why here.")
 
 T2_ADOPTED = date(2026, 11, 8)
