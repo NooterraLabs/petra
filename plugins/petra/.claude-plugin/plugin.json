@@ -1,7 +1,7 @@
 {
   "name": "petra",
   "displayName": "Petra",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Petra's MCP server and skill. Check a physical design against a deck of rules, with the verdict of a small exact kernel",
   "author": {
     "name": "Nooterra",

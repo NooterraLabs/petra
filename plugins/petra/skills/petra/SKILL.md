@@ -44,10 +44,10 @@ A `lap` has rules for eight mechanisms: the least and the greatest spacing of th
 
 `petra mcp` serves the tools `check`, `kinds`, `new` and `docs` over stdio. The `check` tool takes the design as `design`, its text, or as the absolute `path` of a `.petra` file on the server's machine. It takes the card as `card` or `card_path` in the same way, and with `path` alone it reads the `.card` file beside the design. `new` returns a card and a design. `check` returns the text that `petra check` prints, and the JSON as structured content. The server stops a call that runs longer than 120 s and says so. `petra mcp --budget SECONDS` sets another limit.
 
-In Claude Code, `/plugin marketplace add NooterraLabs/petra` and then `/plugin install petra@petra` add the server and this skill. The server runs as `uvx --from petra-lang==0.2.0 petra mcp`, so it needs [uv](https://docs.astral.sh/uv/) and no other install. Clients that read a JSON file take this entry:
+In Claude Code, `/plugin marketplace add NooterraLabs/petra` and then `/plugin install petra@petra` add the server and this skill. The server runs as `uvx --from petra-lang==0.3.0 petra mcp`, so it needs [uv](https://docs.astral.sh/uv/) and no other install. Clients that read a JSON file take this entry:
 
 ```json
-{"mcpServers": {"petra": {"command": "uvx", "args": ["--from", "petra-lang==0.2.0", "petra", "mcp"]}}}
+{"mcpServers": {"petra": {"command": "uvx", "args": ["--from", "petra-lang==0.3.0", "petra", "mcp"]}}}
 ```
 
 After `pip install petra-lang`, the command `petra mcp` serves the same tools without uv.
