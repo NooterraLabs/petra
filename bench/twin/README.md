@@ -229,6 +229,23 @@ Measured with `--count 6000 --decks 3000 --seed 7` against the kernel and the gr
 | Files with one key left out, 734 | The same verdict and the same rules in the findings on every one |
 | The attacker, 15 minutes, 903 inputs | No difference of any kind |
 
+## The ninth update, of 2026-11-15
+
+The pages gained two rules. The `when` of a rule and of a line's `unless` reads only keys that are `signed`, and a deck that names another key there is refused. And a field that a part leaves unstated has an open cell when a need names it, where it had none.
+
+Two agents, each under the same rule as before, brought the reading up to them, one for each rule. Each had the two pages as they stood, what had changed in them, the shipped deck, this reading and its list, and bundles with the kernel's answers: sixteen for the first rule, five of them decks the kernel refuses, and seventeen for the second. The first reading read the five refused decks before its change, and the second gave five of its bundles one cell too few. All thirty-three agree now.
+
+With the first rule the pages no longer describe a `when` or an `unless` on a key left unstated, since no deck that reads has one, and the reading lost those branches: the open cell of such a line, the completion under which a rule does not answer, and the test of whether a rule answers under each combination of names.
+
+`AMBIGUITIES.md` gained sections Q and R, fifteen entries. The two agents sent over twenty sentences of the pages that were false, at odds with another, or still described what the rules had made impossible: "condition" used of a `requires` where a `when` was meant, a step count and a hash of the first deck that the change had moved, and the lists of what leaves a cell open. The pages are corrected. One change was made by the agent that changed the kernel: the reason of the new cell lost its last clause after the second agent was done, so that it fits the 200 bytes a reason prints in, and the words here were cut to match.
+
+Measured with `--count 5000 --decks 3000 --seed 7` against the kernel and the grid of the fourteenth review's tree.
+
+| Compared | Result |
+|---|---|
+| Generated designs, 4,756 compared | The same verdict and the same cells on every one |
+| Damaged decks, 3,000 compared | The same on every one |
+
 ## What it is not
 
 It does not check a design.json with no `parts`: files with no deck of rules get UNKNOWN from it when no cell carries a tape, and no verdict when one does. It applies the limits that decide a verdict and not the budget of work, the memory of enclosures or the limits on what is printed. It is a reading of the rules path only.

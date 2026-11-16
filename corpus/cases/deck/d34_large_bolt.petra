@@ -27,11 +27,11 @@ lap splice {
   fastener "Group 120"
   threads included
   diameter 1.125 inch
-  holes standard
+  holes given splice.holes
   count 3
   pitch 3.5 inch
   end 2 inch
   side 4 inch
-  surface protected
+  surface given splice.surface
   joins tab strap
 }

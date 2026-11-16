@@ -1,0 +1,33 @@
+petra 0
+
+# The lap of d21 with its holes written by the design, where only the card states them. The end
+# and side distances of Table J3.4 grow for an oversize hole (Table J3.5), and the rules for
+# them answer by `holes`: a design that wrote `standard` for an oversize hole would be held to
+# the smaller distances. So the holes are for the card to state, and the design is refused.
+
+plate tab {
+  thickness 0.375 inch
+  width 6 inch
+  Fy given tab.Fy
+  Fu given tab.Fu
+}
+
+plate strap {
+  thickness 0.375 inch
+  width 6 inch
+  Fy given strap.Fy
+  Fu given strap.Fu
+}
+
+lap splice {
+  fastener "Group 120"
+  threads included
+  diameter 0.75 inch
+  holes standard
+  count 3
+  pitch 5.5 inch
+  end 1.5 inch
+  side 3 inch
+  surface given splice.surface
+  joins tab strap
+}

@@ -78,37 +78,50 @@ ANCHOR_CARD = HEAD + load("service", "a tension in [1000 kN, 1000 kN]") + waive(
 UNREAD = [("a", "unread", "tau"), ("a", "unread", "kind"), ("a", "unread", "tension/service")]
 
 
+TWELVE = [f"k{i}" for i in range(1, 13)]
+BOXES = made_up([kind("box", size("x"), *[{**key(k, "a", "b"), "optional": True} for k in TWELVE])], [asks("box.size", "box")],
+                [rule("size", "box", "box.size", when=["and", *[["or", ["is", k, "a"], ["is", k, "b"]] for k in TWELVE]], le=[["q", "2", "mm"], "x"])])
+"""A box with twelve optional keys and a rule that applies whatever they name: 4,096 combinations. Finding K1 was the
+cost of the hints of its one cell, a hint for each combination of names left unstated. The deck is refused since plan step
+1.6 (ReadsUnderACompletion below): no deck that reads has a `when` over keys left unstated. SUMS asks the same of the kernel."""
+
+WIDTH = {"id": "made-up/width", "anchor": {"standard": "a deck made up for the tests", "clause": "1"}, "gives": {"name": "w", "dim": "length"},
+         "takes": [{"name": "g", "one_of": ["a", "b"]}], "table": {"down": {"by": "g"}, "cells": ["2 mm", "3 mm"]}}
+SUMS = made_up([kind("box", size("x"), *[{**key(k, "a", "b"), "optional": True} for k in TWELVE])], [asks("box.size", "box")],
+               [rule("size", "box", "box.size", le=[["add", *[["row", "made-up/width", {"g": k}] for k in TWELVE]], "x"])], [WIDTH])
+"""The same box under a rule that reads its twelve keys as keys of a table: the sum of twelve widths, each 2 mm or 3 mm, is at
+most `x`. A box of 1 mm fails it under each of the 4,096 combinations of names."""
+
+
+def boxes(copies: int, named: bool = True) -> dict[str, str]:
+    """The files of a box of 1 mm that leaves every key unstated, with a point for each combination, each `copies` times. Unnamed, the
+    hints name no cell, so the kernel reads them and looks at none."""
+    _, stated = parsed(SUMS, design(part("box", "b", x="1 mm", **{k: "a" for k in TWELVE})))
+    (point,) = [c for c in json.loads(grid.check(stated, grid.read_deck(json.dumps(SUMS)))[1]["proofs"])["cells"] if "point" in c]
+    rules, read = parsed(SUMS, design(part("box", "b", x="1 mm", **{k: "unstated" for k in TWELVE})))
+    files = grid.check(read, rules)[1]
+    hints = [{**point, "entry": point["entry"] if named else "nowhere", "completion": {"keys": [["b", k, "ab"[(n >> i) & 1]] for i, k in enumerate(TWELVE)], "loads": []}}
+             for n in range(2 ** 12)]
+    return {**files, "proofs": json.dumps({"format": "petra-proofs/0", "cells": hints * copies})}
+
+
 class ReadsUnderACompletion(unittest.TestCase):
-    def test_a_rule_that_does_not_answer_under_the_completion_reads_nothing(self):
-        found, status, said = cells(self, ANCHORS, anchor("unstated"), ANCHOR_CARD)
-        self.assertEqual((found[("a", "anchor.pullout", "pullout-bonded/service")], status), ("waived", "UNKNOWN"))
-        self.assertEqual([found[c] for c in UNREAD], ["open"] * 3)
-        self.assertEqual(reason(said, "unread", "tau"), "no rule of the deck reads a.tau, so nothing checks it")
+    """Finding A4 was about a rule whose `when` reads a key that the part's record leaves unstated: a waiver rested the
+    cell under the name at which the rule does not answer, and what the rule would have read went unread. Four tests held
+    the readers to what such a design reads. Since plan step 1.6 a `when` reads only a key the card signs, and a signed
+    key is never left unstated, so no deck can ask the question any more: both readers refuse these decks."""
 
-    def test_the_design_that_states_the_completion_gets_the_same_cells_but_the_waived_one(self):
-        left, _, _ = cells(self, ANCHORS, anchor("unstated"), ANCHOR_CARD)
-        stated, status, _ = cells(self, ANCHORS, anchor("mechanical"), ANCHOR_CARD)
-        self.assertEqual(status, "UNKNOWN")
-        self.assertEqual({c: s for c, s in left.items() if c[1] != "anchor.pullout"}, {c: s for c, s in stated.items() if c[1] != "anchor.pullout"})
-        found, status, _ = cells(self, ANCHORS, anchor("chemical"), ANCHOR_CARD)
-        self.assertEqual((found[("a", "anchor.pullout", "pullout-bonded/service")], status), ("refuted", "FAIL"))
-
-    def test_with_no_waiver_the_rule_reads_what_its_when_names(self):
-        found, status, _ = cells(self, ANCHORS, anchor("unstated"), HEAD + load("service", "a tension in [1000 kN, 1000 kN]"))
-        self.assertEqual((found[("a", "anchor.pullout", "pullout-bonded/service")], status), ("open", "UNKNOWN"))
-        self.assertFalse([c for c in found if c[1] == "unread"], "no completion is rested, so the rule that answers reads tau and the tension")
-
-    def test_two_rules_that_cover_the_key_are_still_rested_under_the_name_one_holds_by(self):
+    def test_a_when_that_reads_an_optional_key_is_refused_by_both_readers(self):
         coating = {**key("coating", "zinc", "none"), "optional": True}
         pin = kind("pin", size("d"), coating, loads=[{"name": "shear", "dim": "force", "what": "shear", "least": "0 kN"}])
-        deck = made_up([pin], [asks("pin.shear", "pin"), asks("pin.size", "pin")],
+        pins = made_up([pin], [asks("pin.shear", "pin"), asks("pin.size", "pin")],
                        [rule("coated", "pin", "pin.shear", when=["is", "coating", "zinc"], le=[["load", "shear"], ["mul", ["q", "100", "MPa"], "d", "d"]]),
                         rule("bare", "pin", "pin.shear", when=["is", "coating", "none"], le=[["load", "shear"], ["mul", ["q", "50", "MPa"], "d", "d"]]),
                         rule("size", "pin", "pin.size", le=[["q", "6", "mm"], "d"])])
-        card = HEAD + load("service", "p shear in [7 kN, 7 kN]") + waive("pin.shear", "p")
-        found, status, _ = cells(self, deck, design(part("pin", "p", d="10 mm", coating="unstated")), card)
-        self.assertEqual((found, status), ({("p", "pin.shear", "coated/service"): "waived", ("p", "pin.shear", "bare/service"): "waived",
-                                            ("p", "pin.size", "size"): "proved"}, grid.PASS_WAIVED))
+        for deck, name in ((ANCHORS, "kind"), (pins, "coating"), (BOXES, "k1")):
+            mine, its = no_deck(self, deck)
+            for said in (mine, its):
+                self.assertIn(f"its `when` reads {name}, which the design may state: a `when` reads only a key the card signs", said)
 
 
 # --- A3. a witness for a rule with a `where` -------------------------------------------------------------
@@ -334,24 +347,6 @@ class ACaseNamedWhere(unittest.TestCase):
 
 # --- K1. the hints of an incomplete cell ---------------------------------------------------------------------
 
-TWELVE = [f"k{i}" for i in range(1, 13)]
-BOXES = made_up([kind("box", size("x"), *[{**key(k, "a", "b"), "optional": True} for k in TWELVE])], [asks("box.size", "box")],
-                [rule("size", "box", "box.size", when=["and", *[["or", ["is", k, "a"], ["is", k, "b"]] for k in TWELVE]], le=[["q", "2", "mm"], "x"])])
-"""A box with twelve optional keys and a rule that applies whatever they name: 4,096 combinations."""
-
-
-def boxes(copies: int, named: bool = True) -> dict[str, str]:
-    """The files of a box of 1 mm that leaves every key unstated, with a point for each combination, each `copies` times. Unnamed, the
-    hints name no cell, so the kernel reads them and looks at none."""
-    _, stated = parsed(BOXES, design(part("box", "b", x="1 mm", **{k: "a" for k in TWELVE})))
-    (point,) = [c for c in json.loads(grid.check(stated, grid.read_deck(json.dumps(BOXES)))[1]["proofs"])["cells"] if "point" in c]
-    rules, read = parsed(BOXES, design(part("box", "b", x="1 mm", **{k: "unstated" for k in TWELVE})))
-    files = grid.check(read, rules)[1]
-    hints = [{**point, "entry": point["entry"] if named else "nowhere", "completion": {"keys": [["b", k, "ab"[(n >> i) & 1]] for i, k in enumerate(TWELVE)], "loads": []}}
-             for n in range(2 ** 12)]
-    return {**files, "proofs": json.dumps({"format": "petra-proofs/0", "cells": hints * copies})}
-
-
 class HintsLookedAtOnce(unittest.TestCase):
     @KERNEL
     def test_a_cell_with_many_hints_is_refuted_in_about_the_time_its_hints_take_to_read(self):
@@ -363,8 +358,6 @@ class HintsLookedAtOnce(unittest.TestCase):
         self.assertEqual((said["verdict"], [c["state"] for c in said["cells"]]), ("FAIL", ["refuted"]))
         self.assertLess(seconds, 2 * control + 2, f"{seconds:.1f} processor seconds, and {control:.1f} to read the hints")
 
-
-# --- The completion a waived cell rests on ----------------------------------------------------------------
 
 class TheCompletionOnTheWaivedLine(unittest.TestCase):
     """Each wrong PASS above rested a cell on a completion that no reader saw: it was in proofs.json alone. The kernel's verdict and
@@ -393,12 +386,16 @@ class TheCompletionOnTheWaivedLine(unittest.TestCase):
         self.assertIn("; rested where p.shear is 0 N in case service", line)
 
     def test_a_key_left_unstated_prints_the_name_it_was_completed_with(self):
-        entry = "pullout-bonded/service"
-        mine, line = self.printed(ANCHORS, anchor("unstated"), ANCHOR_CARD, "a", "anchor.pullout", entry)
+        """An anchor that must be mechanical and leaves its kind unstated: the waiver rests the cell where it is mechanical, and says so."""
+        must = made_up([ANCHOR_T], [asks("anchor.kind", "anchor")], [rule("mechanical", "anchor", "anchor.kind", requires=["is", "kind", "mechanical"])])
+        card = HEAD + waive("anchor.kind", "a")
+        mine, line = self.printed(must, anchor("unstated"), card, "a", "anchor.kind", "mechanical")
         self.assertEqual(mine, {"keys": [["a", "kind", "mechanical"]], "loads": []})
         self.assertIn("; rested where a.kind is mechanical", line)
-        mine, line = self.printed(ANCHORS, anchor("chemical"), ANCHOR_CARD, "a", "anchor.pullout", entry)
-        self.assertEqual((mine, "rested where" in line), (None, False))
+        found, _, said = cells(self, must, anchor("mechanical"), card)
+        self.assertEqual((found["a", "anchor.kind", "mechanical"], [c for c in said["cells"] if "completion" in c]), ("proved", []), "a stated key needs no completion")
+        found, status, _ = cells(self, must, anchor("chemical"), card)
+        self.assertEqual((found["a", "anchor.kind", "mechanical"], status), ("refuted", "FAIL"), "a waiver rests no cell that a stated key refutes")
 
     @KERNEL
     def test_a_kernel_that_rests_a_cell_on_another_completion_differs(self):

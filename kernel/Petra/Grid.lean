@@ -1084,9 +1084,26 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hi
   let readOf : Std.TreeMap String Nat := rulesOfKind.map fun _ line => line.foldl (fun n r => n + r.look + r.fields.size) 0
   let mut read : Std.TreeSet (String × String) := {}
   let mut readLoads : Std.TreeSet (String × String) := {}
+  -- The fields that a need names, of a part that leaves a field unstated or joins one that
+  -- does: `needs` did not ask a need that names an unstated field, and each such field has
+  -- a cell below. A step for each field a need of the part's type names. The fields of a
+  -- type's needs are listed once for the type, and not again for each of its parts: listing
+  -- them walks every node of the need, and reading the deck paid for that walk once.
+  let needsOf : Std.TreeMap String (Array (Array (Option String × String))) := parts.foldl (init := {}) fun table part =>
+    if table.contains part.kind.name then table
+    else table.insert part.kind.name (part.kind.needs.map fun need => need.low.fields ++ need.high.fields)
+  let mut needed : Std.TreeSet (String × String) := {}
   for ((part, fellows), touched) in (parts.zip fellowsOf).zip touchedOf do
     steps := steps + 1 + readOf.getD part.kind.name 0
     if steps > MAX_STEPS then return .error long
+    if touched then
+      for fields in needsOf.getD part.kind.name #[] do
+        steps := steps + fields.size
+        if steps > MAX_STEPS then return .error long
+        for (called, field) in fields do
+          match called with
+          | none => needed := needed.insert (part.name, field)
+          | some called => if let some other := fellows.get? called then needed := needed.insert (other.name, field)
     for ask in asksOf.getD part.kind.name #[] do
       for (called, field) in ((ask.excuse.bind id).map Static.keys).getD #[] do
         match called with
@@ -1104,8 +1121,15 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hi
   for part in parts do
     for field in part.kind.fields do
       if out.size > MAX_CELLS then return .error over
-      -- A field left unstated has no value that something could fail to check, and no cell.
-      unless (field.kind matches .parts ..) || read.contains (part.name, field.name) || (part.slot field.name matches some (.unstated _)) do
+      -- A field left unstated has no value that something could fail to check, and no cell,
+      -- unless a need names it: that need was not asked, so what a part must be to be a part
+      -- is not known of this one, and a hole no narrower than its plate would pass by leaving
+      -- the width out. Its cell is open, and the design does not pass.
+      if part.slot field.name matches some (.unstated _) then
+        if needed.contains (part.name, field.name) then
+          out := out.push (cell part.name UNREAD field.name .undecided
+            s!"{part.name}.{field.name} is unstated: its maker states none, and a need names it")
+      else unless (field.kind matches .parts ..) || read.contains (part.name, field.name) do
         out := out.push (cell part.name UNREAD field.name .undecided s!"no rule of the deck reads {part.name}.{field.name}, so nothing checks it")
     -- A load that nothing reads, once for each case that puts it on the part. Its entry is
     -- `LOAD/CASE`, which no field's entry is: the name of a field holds no `/`.

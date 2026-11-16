@@ -28,12 +28,16 @@ that the card states with `is`, given, missing, written by the design, of the wr
 and under its floor; a waiver for a line whose rules prove, for one whose rules refute,
 for one with no rule and for one that cannot arise, and for every line at once; each unit
 read since 2026-11-11 in a design, a card or the deck, on and beside the edges of the
-rules; a quantity and a key that a cell may leave unstated, read by a rule, by a `when`,
-by an `unless`, by a need and by nothing; quantities at zero and under it, two counts that
+rules; a quantity and a key that a cell may leave unstated, read by a rule, by what a rule
+requires, by a need and by nothing; quantities at zero and under it, two counts that
 may both be zero in a divisor, and a load of either sign; and rules that state `lt` with
 numbers exactly on their limit. Three of its rigs in five are calm, with numbers that keep
 every rule, so that a rig may pass when its card waives the one line that has no rule.
 One rig in three is then damaged in a way the grid refuses, or the language before it.
+
+A condition reads only a key the card signs (plan step 1.6): the `when` of a rule and of a
+line's `unless`. So each key that a condition of these decks reads is `signed`, and each
+draft has its card state it (`Draft.state`).
 
 A design's numbers are drawn from
 the ends of the decks' bands, their listed
@@ -154,14 +158,14 @@ OPS = {
     ],
     "types": [
         {"type": "cap", "what": "an end of a bar", "fields": [
-            {"name": "t", "dim": "length", "what": "its thickness"}, {"name": "finish", "one_of": ["low", "high"], "what": "a key whose names are the table's"},
+            {"name": "t", "dim": "length", "what": "its thickness"}, {"name": "finish", "one_of": ["low", "high"], "signed": True, "what": "a key whose names are the table's"},
             {"name": "i", "dim": "length^4", "least": "1 mm^4", "what": "a length to the fourth power"}],
          "loads": [{"name": "press", "dim": "force", "least": "0 N", "what": "a force that no rule reads"}],
          "needs": [{"le": [["q", "400", "mm^4"], "i"], "why": "made up: at least 400 mm^4"}]},
         {"type": "bar", "what": "a bar", "fields": [
             {"name": "a", "dim": "length", "what": "a length"}, {"name": "b", "dim": "length", "what": "another"},
             {"name": "r", "dim": "dimensionless", "signed": True, "what": "a ratio the card states"}, {"name": "s", "dim": "dimensionless", "what": "an exponent"},
-            {"name": "grade", "one_of": ["soft", "hard"], "what": "a key"}, {"name": "caps", "type": "cap", "as": ["left", "right"], "what": "its two ends"}],
+            {"name": "grade", "one_of": ["soft", "hard"], "signed": True, "what": "a key"}, {"name": "caps", "type": "cap", "as": ["left", "right"], "what": "its two ends"}],
          "loads": [{"name": "push", "dim": "force", "what": "a force of either sign"}, {"name": "twist", "dim": "moment", "least": "0 Nm", "what": "a moment"},
                    {"name": "drag", "dim": "force", "least": "0 N", "what": "a force that a rule reads for a hard bar and none for a soft one"}],
          "needs": [{"lt": ["left.t", ["mul", "8", "a"]], "why": "made up: the left cap is under 8 times as thick as the bar is long"},
@@ -243,6 +247,16 @@ class Draft:
     def lines(self, part: str) -> list[list[str]]:
         return next(lines for _, name, lines in self.parts if name == part)
 
+    def state(self, rules: dict) -> "Draft":
+        """Have the card state each key that `rules` marks `signed` and that a part writes as a name: the part's line
+        then reads the given. A condition reads only such a key."""
+        signed = {(t["type"], f["name"]) for t in rules["types"] for f in t["fields"] if f.get("signed") and "one_of" in f}
+        for kind, name, lines in self.parts:
+            for line in lines:
+                if (kind, line[0]) in signed and not line[1].startswith("given "):
+                    self.givens[f"{name}.{line[0]}"], line[1] = f"is {line[1]}", f"given {name}.{line[0]}"
+        return self
+
     def texts(self) -> tuple[str, str]:
         design = ["petra 0", "", *self.design_more]
         for kind, name, lines in self.parts:
@@ -268,6 +282,10 @@ def spread(rng: random.Random, value: str) -> str:
     x = float(number)
     lo, hi = rng.choice([(x, x), (x, x), (x * 0.8, x), (x, x * 1.25), (x * 0.9, x * 1.1)])
     return f"[{round(lo, 6):g} {unit}, {round(hi, 6):g} {unit}]"
+
+
+SHIPPED = json.loads((ROOT / "petra" / "decks" / "aisc360.json").read_text(encoding="utf-8"))
+"""The deck that ships, as its file says it."""
 
 
 def lap(rng: random.Random, n: int) -> Draft:
@@ -332,7 +350,7 @@ def lap(rng: random.Random, n: int) -> Draft:
         waived = rng.choice([[], open_lines, open_lines, open_lines, rng.sample(open_lines, 2), ["lap.strength", "lap.slip"], open_lines + ["lap.end_distance"],
                              open_lines + ["lap.spread", "lap.block_shear"]])
         d.waivers += [(m, splice) for m in waived]
-    return d
+    return d.state(SHIPPED)
 
 
 def strips(rng: random.Random, n: int) -> Draft:
@@ -361,7 +379,8 @@ def strips(rng: random.Random, n: int) -> Draft:
     if rng.random() < 0.08:      # a case of the card that puts no current on the strip
         d.loads["idle"] = []
     d.waivers = [(m, "s") for m in rng.choice([["strip.creep"], ["strip.creep"], [], ["strip.creep", "strip.heat"], ["strip.creep", "strip.tide", "strip.spark"]])]
-    return d
+    from tests.test_grid import STRIPS
+    return d.state(STRIPS)
 
 
 def ops(rng: random.Random, n: int) -> Draft:
@@ -399,7 +418,7 @@ def ops(rng: random.Random, n: int) -> Draft:
         if entries or rng.random() < 0.5:      # a case with no load in it is still a case of the card
             d.loads[case] = entries
     d.waivers = [(m, "bar") for m in rng.choice([[], [], ["bar.idle"], ["bar.exp", "bar.cases"]])]
-    return d
+    return d.state(OPS)
 
 
 def _kit_field(name: str, **more: object) -> dict:
@@ -421,11 +440,11 @@ KIT = {
             _kit_field("low", dim="temperature", may_be="negative", least="-40 degC"), _kit_field("spare", dim="dimensionless", whole=True, may_be="zero"),
             _kit_field("station", dim="length", may_be="negative"), _kit_field("resistance", dim="resistance", optional=True),
             _kit_field("limit", dim="dimensionless/time", optional=True), _kit_field("seal", one_of=["none", "full"], optional=True),
-            _kit_field("maker", one_of=["a", "b"], optional=True), _kit_field("mass", dim="mass")],
+            _kit_field("maker", one_of=["a", "b"], optional=True), _kit_field("mass", dim="mass"), _kit_field("housing", one_of=["open", "closed"], signed=True)],
          "needs": [{"le": ["low", ["q", "60", "degC"]], "why": "made up: a field that may be negative, in a need"}]},
         {"type": "rig", "what": "a rig of two cells", "fields": [
             _kit_field("duty", one_of=["light", "heavy"], signed=True), _kit_field("count", dim="dimensionless", whole=True, signed=True, least="2"),
-            _kit_field("mode", one_of=["day", "night"]), _kit_field("speed", dim="dimensionless/time"), _kit_field("pace", dim="length/time"),
+            _kit_field("mode", one_of=["day", "night"], signed=True), _kit_field("speed", dim="dimensionless/time"), _kit_field("pace", dim="length/time"),
             _kit_field("charge", dim="current*time"), _kit_field("run", dim="time"), _kit_field("reach", dim="length"), _kit_field("density", dim="mass/length^3"),
             _kit_field("rate", dim="force/length"), _kit_field("torque", dim="moment"), _kit_field("power", dim="power"),
             _kit_field("cells", type="cell", **{"as": ["front", "rear"]})],
@@ -434,7 +453,7 @@ KIT = {
                    {"lt": ["speed", ["mul", "4", "front.limit"]], "why": "made up: a limit that a cell may leave unstated"}]}],
     "grid": [{"type": "rig" if name.startswith("rig.") else "cell", "mechanism": name, "what": name, "anchor": MADE_UP, **more} for name, more in (
         ("rig.class", {}), ("rig.count", {}), ("rig.cold", {}), ("rig.speed", {}),
-        ("rig.sealed", {"unless": {"when": ["is", "rear.seal", "full"], "why": "made up: a key that a cell may leave unstated"}}),
+        ("rig.sealed", {"unless": {"when": ["is", "rear.housing", "closed"], "why": "made up: a key of a joined part, which the card states"}}),
         ("rig.share", {}), ("rig.centre", {}), ("rig.energy", {}), ("rig.dense", {}), ("rig.stiff", {}), ("rig.twist", {}), ("rig.heat", {}), ("rig.carry", {}),
         ("rig.bare", {}), ("rig.night", {"unless": {"when": ["is", "mode", "day"], "why": "made up"}}),
         ("cell.mass", {}), ("cell.temp", {}), ("cell.spare", {}), ("cell.limit", {}), ("cell.ohm", {}), ("cell.sealed", {}))],
@@ -449,9 +468,10 @@ KIT = {
         _kit_rule("cold", "rig.cold", le=["front.low", ["load", "air"]]),
         _kit_rule("share", "rig.share", le=[["div", "reach", ["add", "front.spare", "rear.spare"]], ["q", "1", "mile"]]),
         _kit_rule("centre", "rig.centre", le=[["abs", ["add", "front.station", "rear.station", ["load", "shift"]]], ["q", "1", "ft"]]),
-        # A quantity and a key that a cell may leave unstated: in a side, in a `when` and in the `unless` of rig.sealed.
+        # A quantity that a cell may leave unstated, in a side. No condition reads a field that may be left unstated: a condition reads
+        # only a key the card signs, and a signed field is not optional. So the `unless` of rig.sealed and these two `when` read the housing.
         _kit_rule("speed", "rig.speed", lt=["speed", "front.limit"]),
-        _kit_rule("heat", "rig.heat", when=["is", "rear.seal", "none"], le=[["mul", "rear.resistance", ["q", "1", "A"], ["q", "1", "A"]], "power"]),
+        _kit_rule("heat", "rig.heat", when=["is", "rear.housing", "open"], le=[["mul", "rear.resistance", ["q", "1", "A"], ["q", "1", "A"]], "power"]),
         # The units, and `lt` beside `le` on their edges.
         _kit_rule("energy", "rig.energy", le=[["mul", "charge", ["q", "1", "V"]], ["mul", "power", "run"]]),
         _kit_rule("dense", "rig.dense", le=["density", ["q", "2", "g/cm3"]]),
@@ -463,7 +483,8 @@ KIT = {
         _kit_rule("spare", "cell.spare", le=["spare", "3"]),
         _kit_rule("limit", "cell.limit", le=[["q", "1", "Hz"], "limit"]),
         _kit_rule("ohm", "cell.ohm", lt=["resistance", ["q", "100", "kohm"]]),
-        _kit_rule("sealed", "cell.sealed", when=["is", "maker", "a"], requires=["is", "seal", "none"])],
+        # Two keys that a cell may leave unstated, in what a rule requires.
+        _kit_rule("sealed", "cell.sealed", when=["is", "housing", "open"], requires=["and", ["is", "seal", "none"], ["is", "maker", "a"]])],
 }
 """A deck for what three more families asked of the language: a key and a count that the
 card states, quantities at and under zero, fields a part may leave unstated, the units read
@@ -500,6 +521,7 @@ def kit(rng: random.Random, n: int) -> Draft:
             ["seal", pick(["none", "none", "full", "unstated"])],
             ["maker", pick(["a", "a", "b", "unstated"])],
             ["mass", pick(["400 g", "16 oz", "1 lb", "453.59237 g", "17 oz", "0.5 kg", "453.6 g"])]]))
+        d.parts[-1][2].append(["housing", "closed" if d.parts[-1][2][5][1] == "full" else "open"])      # a full seal is that of a closed housing
     duty, count, mode = rng.choice(["light", "heavy"]), pick(["2", "3", "4", "5"]), pick(["day", "day", "night"])
     lines = [
         ["duty", "given rig.duty"], ["count", "given rig.count"], ["mode", mode],
@@ -515,8 +537,8 @@ def kit(rng: random.Random, n: int) -> Draft:
         ["cells", rng.choice(["c1 c2", "c1 c2", "c2 c1"])]]
     # The charge is no charge in A2s, a current squared for a time: such a design is refused for its dimension.
     d.givens["rig.duty"], d.givens["rig.count"] = f"is {duty}", f"is {count}"
-    if rng.random() < 0.3:      # a key that the type leaves to either, stated by the card
-        lines[2][1], d.givens["rig.mode"] = "given rig.mode", f"is {mode}"
+    if rng.random() < 0.3 and d.lines("c1")[6][1] != "unstated":      # a key that the type leaves to either, stated by the card
+        d.givens["c1.maker"], d.lines("c1")[6][1] = f"is {d.lines('c1')[6][1]}", "given c1.maker"
     if rng.random() < 0.2:      # a pace the card bounds, which may straddle the limit of its duty
         lines[4][1], d.givens["rig.pace"] = "given rig.pace", rng.choice(["in [9 m/s, 10 m/s]", "in [36 km/h, 36 km/h]", "in [30 km/h, 40 km/h]", "in [14 m/s, 15 m/s]", "in [19 knot, 30 knot]"])
     if rng.random() < 0.15:     # a count of spares the card states for a cell, and a low temperature it bounds
@@ -540,7 +562,7 @@ def kit(rng: random.Random, n: int) -> Draft:
                                                  ["rig.sealed", "rig.heat", "rig.share"], every, every, rng.sample(every, 5)])]
     if rng.random() < 0.1:
         d.waivers.append(("cell.mass", rng.choice(["c1", "c2"])))
-    return d
+    return d.state(KIT)
 
 
 def kit_damage(rng: random.Random, d: Draft) -> None:
@@ -552,7 +574,7 @@ def kit_damage(rng: random.Random, d: Draft) -> None:
     line = {l[0]: l for l in rig}
 
     def design_writes() -> None:
-        which = rng.choice(["duty", "count"])
+        which = rng.choice(["duty", "count", "mode"])
         line[which][1] = d.givens.pop(f"rig.{which}")[3:]
 
     def design_writes_too() -> None:      # the card states it as well: the language refuses a statement that no part reads
@@ -628,11 +650,11 @@ def damage(rng: random.Random, d: Draft) -> None:
         lines.append(list(line))
 
     def design_states() -> None:
-        signed = [l for _, _, ls in d.parts for l in ls if l[0] in ("Fy", "Fu", "T", "gap")]
+        signed = [l for _, _, ls in d.parts for l in ls if l[0] in ("Fy", "Fu", "T", "gap", "holes", "surface", "fit")]
         if signed:
             chosen = rng.choice(signed)
             drop_given(chosen[1])
-            chosen[1] = {"Fy": "36 ksi", "Fu": "58 ksi", "T": "25 degC", "gap": "0.5 mm"}[chosen[0]]
+            chosen[1] = {"Fy": "36 ksi", "Fu": "58 ksi", "T": "25 degC", "gap": "0.5 mm", "holes": "standard", "surface": "protected", "fit": "free"}[chosen[0]]
 
     def swapped() -> None:
         for _, name, ls in d.parts:
@@ -669,7 +691,11 @@ def damage(rng: random.Random, d: Draft) -> None:
     def bad_key() -> None:
         keys = [l for _, _, ls in d.parts for l in ls if l[0] in ("fastener", "threads", "holes", "surface", "fit")]
         if keys:
-            rng.choice(keys)[1] = rng.choice(["huge", '"Group 200"', "A307", "a.b", "3 mm", "close free", "(1 mm, 2 mm)", "tab"])
+            chosen, bad = rng.choice(keys), rng.choice(["huge", '"Group 200"', "A307", "a.b", "3 mm", "close free", "(1 mm, 2 mm)", "tab"])
+            if chosen[1].startswith("given "):      # a key the card states: the card states the name that is none of the key's
+                d.givens[chosen[1].split()[1]] = f"is {bad}"
+            else:
+                chosen[1] = bad
 
     def bad_count() -> None:
         counts = [l for _, _, ls in d.parts for l in ls if l[0] in ("count", "turns")]
@@ -790,7 +816,7 @@ def damaged(rng: random.Random, body: dict) -> list[str]:
         way = rng.choice(["another text", "another text", "another text", "an odd text", "an odd text", "a key less", "an item less", "an item twice",
                           "items in another order", "a key renamed", "a key more", "a where with no item", "two rules that end alike", "a line named unread",
                           "a wide row applied", "a condition that asks loaded", "a name no cell holds", "a requirement no part can break",
-                          "a flag on a field", "a flag on a field", "le for lt"])
+                          "a flag on a field", "a flag on a field", "le for lt", "a condition on a key the design states"])
         rules = [r for r in body["rules"] if isinstance(r, dict)] if isinstance(body.get("rules"), list) else []
         naming = [r for r in body["rows"] if isinstance(r, dict) and isinstance(r.get("gives"), dict) and isinstance(r["gives"].get("one_of"), list)] if isinstance(body.get("rows"), list) else []
         if way == "a name no cell holds" and naming:
@@ -814,6 +840,22 @@ def damaged(rng: random.Random, body: dict) -> list[str]:
             done.append(way)
             continue
         fields = [f for t in body.get("types", []) if isinstance(t, dict) for f in [*t.get("fields", []), *t.get("loads", [])] if isinstance(f, dict)] if isinstance(body.get("types"), list) else []
+        if way == "a condition on a key the design states":
+            # A key loses the mark that makes it the card's, or a rule gets a `when` on a key of its type that never had it. Both
+            # readers refuse a deck whose condition reads such a key: the design would choose which of its checks are run.
+            marked = [f for f in fields if isinstance(f.get("one_of"), list) and f.get("signed") is True]
+            free = [(r, f) for r in rules for t in body["types"] if isinstance(t, dict) and t.get("type") == r.get("type")
+                    for f in t.get("fields", []) if isinstance(f, dict) and isinstance(f.get("one_of"), list) and f["one_of"] and not f.get("signed")]
+            if marked and (not free or rng.random() < 0.5):
+                rng.choice(marked).pop("signed")
+            elif free:
+                chosen, read = rng.choice(free)
+                asks = ["is", read.get("name"), read["one_of"][0]]
+                chosen["when"] = asks if "when" not in chosen else ["and", chosen["when"], asks]
+            else:
+                continue
+            done.append(way)
+            continue
         if way == "a flag on a field" and fields:
             # One of the marks a field may carry, with a value it may or may not take there: both readers hold a flag to true or false,
             # `may_be` to its two words, and each to the fields it belongs on.

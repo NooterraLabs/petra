@@ -287,20 +287,21 @@ class ALoadThatNothingReads(unittest.TestCase):
         self.assertEqual((cells, verdict), ([("p", COMBINED, "sum/gravity", "proved"), ("p", COMBINED, "sum/wind", "open")], "UNKNOWN"))
         self.assertEqual(reason(said, "sum/wind"), grid.UNRESTED + "case wind puts no T on p, which the rule reads")
 
-    KEYED = dict(RULES, types=[dict(RULES["types"][0], fields=[*RULES["types"][0]["fields"], {"name": "kind", "one_of": ["plain", "tension"], "what": "what it is for"}])])
-    """The deck of RULES with a key on the joint, for a `when` and an `unless` to ask about."""
-    TENSION_JOINT = DESIGN.replace("  cap 10 N\n", "  cap 10 N\n  kind tension\n")
+    KEYED = dict(RULES, types=[dict(RULES["types"][0], fields=[*RULES["types"][0]["fields"], {"name": "kind", "one_of": ["plain", "tension"], "signed": True, "what": "what it is for"}])])
+    """The deck of RULES with a key on the joint, for a `when` and an `unless` to ask about. The card signs it: a condition reads no other key."""
+    TENSION_JOINT = DESIGN.replace("  cap 10 N\n", "  cap 10 N\n  kind given p.kind\n")
+    TENSION = 'given p.kind is tension signed "t@example.org" source "test"\n'
 
     def test_the_loads_of_a_part_whose_line_is_not_applicable_are_read_by_the_rule_of_the_line(self):
         excused = dict(self.KEYED, grid=[dict(RULES["grid"][0], unless={"when": ["is", "kind", "tension"], "why": "made up"})])
-        cells, verdict, _ = both(self, HEAD + GRAVITY + WIND, excused, self.TENSION_JOINT)
+        cells, verdict, _ = both(self, HEAD + self.TENSION + GRAVITY + WIND, excused, self.TENSION_JOINT)
         self.assertEqual((cells, verdict), ([("p", COMBINED, "", "not_applicable")], "UNKNOWN"))
 
     def test_the_loads_of_a_part_that_a_rule_does_not_apply_to_are_not_read_by_it(self):
         """The one rule holds for a plain joint, and this one is a tension joint: the line
         has no rule for it, and nothing reads its fields or its two loads."""
         slack = dict(self.KEYED, rules=[dict(RULES["rules"][0], when=["is", "kind", "plain"])])
-        cells, verdict, _ = both(self, HEAD + GRAVITY, slack, self.TENSION_JOINT)
+        cells, verdict, _ = both(self, HEAD + self.TENSION + GRAVITY, slack, self.TENSION_JOINT)
         self.assertEqual(cells, [("p", COMBINED, "", "open"), ("p", "unread", "cap", "open"), ("p", "unread", "kind", "open"),
                                  ("p", "unread", "T/gravity", "open"), ("p", "unread", "V/gravity", "open")])
         self.assertEqual(verdict, "UNKNOWN")

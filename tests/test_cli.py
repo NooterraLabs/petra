@@ -200,11 +200,12 @@ class Teach(Workspace):
         self.assertEqual(run("kinds", "lap", "--all")[0], EXIT_CODES["INPUT_ERROR"])
 
     def test_new_prints_a_pair_that_checks(self):
-        code, card, _ = run("new", "lap", "--card")
+        code, card, _ = run("new", "lap", "--name", "joint", "--card")
         self.assertEqual(code, 0)
         code, design, _ = run("new", "lap", "--name", "joint")
         self.assertEqual(code, 0)
-        self.write("lap.card", card.replace(" on splice ", " on joint "))
+        self.assertIn("given joint.holes is standard", card, "the card states the keys that a condition reads")
+        self.write("lap.card", card)
         self.assertEqual(run("check", self.write("lap.petra", design))[0], EXIT_CODES["UNKNOWN"], "the card signs no waiver, so five lines are open")
         self.assertEqual(run("new", "truss")[0], EXIT_CODES["INPUT_ERROR"])
 

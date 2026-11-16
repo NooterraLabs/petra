@@ -89,6 +89,9 @@ class FromTheFiles(unittest.TestCase):
         asked = read("rules_task2.json")["types"]
         plain = [{**{k: v for k, v in t.items() if k != "alike"}, "fields": [{k: v for k, v in f.items() if k != "range"} for f in t["fields"]],
                   **({"loads": [{k: v for k, v in f.items() if k not in ("range", "adverse")} for f in t["loads"]]} if "loads" in t else {})} for t in asked]
+        # Since plan step 1.6 the deck and the task mark `holes` and `surface` as signed: a rule's `when` reads them, so the card
+        # states them. Which file states a key is no part of what a transcriber was asked: a rule names the key the same way.
+        self.assertEqual([f["name"] for t in self.deck["types"] for f in t["fields"] if "one_of" in f and f.get("signed")], ["holes", "surface"])
         self.assertEqual([{k: v for k, v in t.items() if k != "needs"} for t in self.deck["types"]], plain)
         self.assertEqual([t.get("needs") for t in self.deck["types"]],
                          [None, [{"le": [["mul", "2", "side"], f"{p}.width"], "why": f"the line of holes lies within plate {p}, and each of its two side edges is at least the side distance from the line"}

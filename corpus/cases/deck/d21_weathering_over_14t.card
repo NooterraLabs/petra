@@ -8,6 +8,8 @@ given tab.Fy in [50 ksi, 50 ksi] signed "s.engineer@example.org" source "ASTM A5
 given tab.Fu in [70 ksi, 70 ksi] signed "s.engineer@example.org" source "ASTM A588, specified minimum"
 given strap.Fy in [50 ksi, 50 ksi] signed "s.engineer@example.org" source "ASTM A588, specified minimum"
 given strap.Fu in [70 ksi, 70 ksi] signed "s.engineer@example.org" source "ASTM A588, specified minimum"
+given splice.holes is standard signed "s.engineer@example.org" source "connection drawing, hole schedule"
+given splice.surface is weathering signed "s.engineer@example.org" source "connection drawing, coating note"
 
 load gravity {
   on splice pull in [0 kip, 45 kip]

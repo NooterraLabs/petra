@@ -312,7 +312,7 @@ with no rule yet is an open cell, and the design reads UNKNOWN until a rule or a
 
 ### Deck aisc360-22
 
-Its file's hash is `sha256:e090aab7e7e59621e8fcc8c96daf2136a13fd9017b66178702ce4b25a5bb36af`. `petra kinds aisc360-22` prints this.
+Its file's hash is `sha256:f4e0b94f8645b32f0fe56ff77a7e054409d610fbef767ac3ddeee87817e9d674`. `petra kinds aisc360-22` prints this.
 
 ```
 deck aisc360-22: plate, lap
@@ -339,8 +339,8 @@ lap <name> { one line each }    one line of two or more bolts in single shear th
         whether threads are in the shear plane
     diameter <length>
         the nominal diameter of a bolt
-    holes <standard | oversize>
-        the type of the holes in both plates
+    holes given <name>.holes
+        the type of the holes in both plates; the card states it: given <name>.holes is <standard | oversize> signed ...
     count <whole number>
         the number of bolts in the line
     pitch <length>
@@ -349,8 +349,8 @@ lap <name> { one line each }    one line of two or more bolts in single shear th
         the least distance from the centre of an end hole to the end of either plate, along the line
     side <length>
         the least distance from the centre of a hole to a side edge of either plate, across the line
-    surface <protected | weathering>
-        whether the plates are painted or otherwise not open to atmospheric corrosion, or are unpainted weathering steel open to it
+    surface given <name>.surface
+        whether the plates are painted or otherwise not open to atmospheric corrosion, or are unpainted weathering steel open to it; the card states it: given <name>.surface is <protected | weathering> signed ...
     joins <plate> <plate>
         the two plates
   a part that breaks one of these is no design:

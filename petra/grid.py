@@ -36,7 +36,7 @@ import re
 import sys
 from dataclasses import dataclass, field, replace
 from fractions import Fraction
-from functools import lru_cache
+from functools import lru_cache, wraps
 from pathlib import Path
 from typing import Any, Callable, Iterable, Iterator, Mapping
 
@@ -80,6 +80,9 @@ MAX_NAME = 64
 the name of a part, a load case, a mechanism, a field, a load, a joined part and a `let`, and a rule's id."""
 UNREAD = "unread"
 """The mechanism of the cell of a field or a load that nothing reads. No line of the grid has this name."""
+UNASKED = "{} is unstated: its maker states none, and a need names it"
+"""The reason of the open cell of a field left unstated that a need names, as the kernel words it. The need was not
+asked. With two names of 64 bytes it is within the 200 bytes a reason prints in, so the kernel never cuts it."""
 WAIVED = "open but for the waiver: "
 """What the kernel's reason of a waived cell starts with. The reason the cell had while it was open follows."""
 UNRESTED = "the waiver does not rest this cell: "
@@ -496,6 +499,29 @@ def _signs(kind: Type, types: Mapping[str, Type]) -> dict[str, tuple[str, str]]:
     return out
 
 
+def _unsigned(cond: tuple | None, kind: Type, types: Mapping[str, Type]) -> str | None:
+    """The first key that a condition reads and that the card does not sign, or None. A
+    condition decides whether a rule answers for a part, or whether a line of the grid can
+    arise for it. A key that the design writes there would let the design choose which of
+    its own checks are run: with the lap's `surface` at `protected` in place of `weathering`,
+    a pitch that fails read as one that passes (plan step 1.6). So the `when` of a rule and
+    the `when` of a line's `unless` read only keys marked `signed`, which the card states."""
+    for name in dict.fromkeys(_keys(cond)):
+        part, _, inner = name.rpartition(".")
+        if part:
+            joined = next(f for f in kind.fields.values() if f.type is not None and part in f.names)
+            field = types[joined.type].fields[inner]
+        else:
+            field = kind.fields[name]
+        if not field.signed:
+            return name
+    return None
+
+
+UNSIGNED_KEY = "which the design may state: a `when` reads only a key the card signs"
+"""What both readers say of a `when` that reads a key the card does not sign (kernel/Petra/Deck.lean)."""
+
+
 def _may_be(term: Any, signs: Mapping[str, tuple[str, str]]) -> tuple[str, str] | None:
     """What `may_be` lets a term be, and the name that says it, as mayBe in
     kernel/Petra/Deck.lean finds it: a name that says it, a power other than zero of one, or a
@@ -725,6 +751,8 @@ def _rule(body: Mapping[str, Any], deck_rows: Mapping[str, rows.Row], types: Map
             if {"let", "where"} & set(body):
                 raise RowError("a rule with `requires` has no `le`, no `lt`, no `let` and no `where`: it states a condition over keys, and no inequality")
             when = binder.static(body["when"]) if "when" in body else None
+            if (key := _unsigned(when, types[body["type"]], types)) is not None:
+                raise RowError(f"its `when` reads {key}, {UNSIGNED_KEY}")
             return Rule(where, body["type"], body["mechanism"], anchor, body["says"], when, {}, (), None, None, {}, binder.static(body["requires"]))
         lets = {}
         for name, node in body.get("let", {}).items():
@@ -743,6 +771,8 @@ def _rule(body: Mapping[str, Any], deck_rows: Mapping[str, rows.Row], types: Map
         low, high = pair(body["lt" if strict else "le"], "`lt`" if strict else "`le`")
         ranges = tuple((*pair(w["le"], "`where`"), str(w["why"])) for w in body.get("where", []))
         when = binder.static(body["when"]) if "when" in body else None
+        if (key := _unsigned(when, types[body["type"]], types)) is not None:
+            binder.problems.append(f"its `when` reads {key}, {UNSIGNED_KEY}")
         if binder.problems:
             raise RowError("; ".join(dict.fromkeys(binder.problems)))
         if (most := _picks(binder.applied, ranges)) > MAX_ORDERS:
@@ -755,8 +785,58 @@ def _rule(body: Mapping[str, Any], deck_rows: Mapping[str, rows.Row], types: Map
         raise DeckError(f"rule {where}: not a rule ({type(exc).__name__}: {exc})") from None
 
 
+DEPTH = 20_000
+"""The frames this reader may nest while it reads a deck and checks a design. Its expressions are read by functions that
+call themselves, a few frames for each level and for each name of `let` that reads the one before. The kernel reads an
+expression to 1,024 levels, and Python's own limit of 1,000 frames ended a chain of 246 names, which the kernel checks, in
+a RecursionError (the fourteenth review)."""
+
+
+def _deep(run: Callable) -> Callable:
+    """`run` with room for the frames of `DEPTH`, and Python's limit as it was afterwards."""
+    @wraps(run)
+    def roomy(*args: Any, **kwargs: Any) -> Any:
+        before = sys.getrecursionlimit()
+        sys.setrecursionlimit(max(before, DEPTH))
+        try:
+            return run(*args, **kwargs)
+        finally:
+            sys.setrecursionlimit(before)
+    return roomy
+
+
+MAX_NESTING = 128
+"""The deepest a file nests, as in kernel/Petra/Files.lean (`MAX_NESTING`)."""
+
+
+def _nesting(text: str) -> int:
+    """The deepest that a `[` or a `{` outside a string stands in the text, as `bounded` of
+    kernel/Petra/Files.lean counts it before the file is read."""
+    depth = deepest = 0
+    quoted = escaped = False
+    for c in text:
+        if quoted:
+            if escaped:
+                escaped = False
+            elif c == "\\":
+                escaped = True
+            elif c == '"':
+                quoted = False
+        elif c == '"':
+            quoted = True
+        elif c in "[{":
+            depth += 1
+            deepest = max(deepest, depth)
+        elif c in "]}":
+            depth -= 1
+    return deepest
+
+
+@_deep
 def read_deck(text: str) -> Deck:
     """A deck from the text of its file. Raises DeckError for one that does not hold together."""
+    if _nesting(text) > MAX_NESTING:      # before the text is read: a reader of JSON that recurses has no depth to spare
+        raise DeckError(f"nested deeper than {MAX_NESTING}")
     try:
         body = json.loads(text)
         only(body, ("format", "name", "about", "rows", "types", "grid", "rules"), "a deck")
@@ -808,6 +888,8 @@ def read_deck(text: str) -> Deck:
             if not isinstance(a["type"], str) or not isinstance(a["mechanism"], str) or a["type"] not in types or _long(a["mechanism"]) or a["mechanism"] == UNREAD:
                 raise DeckError(f"grid {a.get('mechanism')}: a line has a type of the deck, mechanism, of at most {MAX_NAME} characters and not `{UNREAD}`, what, anchor and may have unless")
             when = _Binder(deck_rows, types[a["type"]], types).static(unless["when"]) if unless is not None and "when" in unless else None
+            if (key := _unsigned(when, types[a["type"]], types)) is not None:
+                raise DeckError(f"grid {a['mechanism']}: the `when` of its `unless` reads {key}, {UNSIGNED_KEY}")
             asks.append(Ask(a["type"], a["mechanism"], a["what"], anchor, when, str(unless["why"]) if unless is not None else None))
         if len({(a.type, a.mechanism) for a in asks}) != len(asks):
             raise DeckError("the grid asks one mechanism of one type twice")
@@ -852,11 +934,16 @@ def decks() -> tuple[Deck, ...]:
     found = []
     for path in sorted(DECKS.glob("*.json")):
         text = path.read_text(encoding="utf-8")
-        if json.loads(text).get("format") == FORMAT:
-            try:
+        try:
+            if _nesting(text) > MAX_NESTING:      # before the text is read, as in `read_deck`
+                raise DeckError(f"nested deeper than {MAX_NESTING}")
+            body = json.loads(text)
+            if isinstance(body, dict) and body.get("format") == FORMAT:
                 found.append(read_deck(text))
-            except DeckError as exc:
-                raise DeckError(f"{path.name}: {exc}") from None
+        except DeckError as exc:
+            raise DeckError(f"{path.name}: {exc}") from None
+        except ValueError as exc:
+            raise DeckError(f"{path.name}: not a deck ({type(exc).__name__}: {str(exc)[:200]})") from None
     types = [t for d in found for t in d.types]
     if len(set(types)) != len(types):
         raise DeckError("two decks have a type of one name")
@@ -2040,6 +2127,7 @@ def _unread(deck: Deck, found: Parts, fixed: Mapping[Any, Any] | None = None) ->
     if keys or loads:
         found = replace(found, parts=_completed(next(iter(found.parts.values())), found.parts, keys, loads)[1])
     read: set[tuple[str, str]] = set()
+    needed: set[tuple[str, str]] = set()      # the fields that a need names, of its part or of a part it joins
     for part in found.parts.values():
         names = {alias: part.values[f.name][n] for f in part.type.fields.values() if f.type is not None for n, alias in enumerate(f.names)}
         fields = {name for a in deck.asks if a.type == part.type.name for name in _keys(a.unless)}
@@ -2047,10 +2135,22 @@ def _unread(deck: Deck, found: Parts, fixed: Mapping[Any, Any] | None = None) ->
         for name in fields:
             alias, dot, inner = name.partition(".")
             read.add((names[alias], inner) if dot else (part.name, name))
+        for name in (n for need in part.type.needs for n in (*_fields(need.low), *_fields(need.high))):
+            alias, dot, inner = name.partition(".")
+            needed.add((names[alias], inner) if dot else (part.name, name))
     out = []
     for part in found.parts.values():
-        out += [Cell(part.name, UNREAD, f.name, "open", f.what, "", f"no rule of the deck reads {part.name}.{f.name}, so nothing checks it")
-                for f in part.type.fields.values() if f.type is None and (part.name, f.name) not in read and part.values[f.name] is not NOT_STATED]
+        for f in part.type.fields.values():
+            if f.type is not None:
+                continue
+            if part.values[f.name] is NOT_STATED:
+                # A field left unstated has no value that something could fail to check. A need that names it is not asked, though
+                # (`_unmet`), and what a part must be to be a part is then not known of this one: a hole no narrower than its plate
+                # would pass by leaving the width out. So the field has a cell, open, and the design does not pass.
+                if (part.name, f.name) in needed:
+                    out.append(Cell(part.name, UNREAD, f.name, "open", f.what, "", UNASKED.format(f"{part.name}.{f.name}")))
+            elif (part.name, f.name) not in read:
+                out.append(Cell(part.name, UNREAD, f.name, "open", f.what, "", f"no rule of the deck reads {part.name}.{f.name}, so nothing checks it"))
         out += [Cell(part.name, UNREAD, f"{load}/{case}", "open", part.type.loads[load].what, "",
                      f"no rule of the deck reads the load {load} that {f'case {case}' if case else 'the card'} puts on {part.name}, so nothing checks it")
                 for load in sorted(part.loads) if (part.name, f"load {load}") not in read for case in sorted(part.loads[load])]
@@ -2221,6 +2321,7 @@ def checked(design: Design, deck: Deck, card: str, text: str, card_path: str) ->
     return Checked(design.path, report, card_path, {"card": export.sha256(card), "design": export.sha256(text)}, said)
 
 
+@_deep
 def check(design: Design, deck: Deck) -> tuple[Report, dict[str, str]]:
     """The report of a design whose parts are of the deck's types, and the files behind it.
     Raises ComponentError for a design or a card the deck's types or the type rules refuse."""

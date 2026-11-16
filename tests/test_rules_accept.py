@@ -577,7 +577,10 @@ class FirstRun(unittest.TestCase):
         cls.deck = json.loads(Path(cls.FIRST).read_text(encoding="utf-8"))
 
     def test_the_task_has_the_types_of_the_deck_of_the_time_and_asks_what_its_grid_asked(self):
-        self.assertEqual(self.task.body["types"], [{**t, "loads": t.get("loads", [])} for t in self.deck["types"]])
+        # The task marks `holes` as signed since plan step 1.6, when a rule's `when` came to read only a key the card signs. The
+        # deck of the time is kept as it was, so the two are held together but for that mark.
+        asked = [{**t, "fields": [{k: v for k, v in f.items() if not (k == "signed" and "one_of" in f)} for f in t["fields"]]} for t in self.task.body["types"]]
+        self.assertEqual(asked, [{**t, "loads": t.get("loads", [])} for t in self.deck["types"]])
         self.assertEqual(self.task.body["grid"], [{k: v for k, v in a.items() if k != "unless"} for a in self.deck["grid"]])
         self.assertEqual(self.task.body["rows"], self.deck["rows"])
         self.assertEqual((len(self.deck["rows"]), len(self.deck["grid"]), len(self.deck["rules"])), (18, 15, 4))

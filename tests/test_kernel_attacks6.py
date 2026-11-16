@@ -149,8 +149,8 @@ class DeadBranch(unittest.TestCase):
 # --- 2. a requirement that every part meets -----------------------------------------------------------------
 
 HOIST = {"format": acceptance.TASK, "name": "made-up", "about": "made up", "rows": [],
-         "types": [{"type": "hoist", "what": "a hoist", "fields": [{"name": "category", "one_of": ["A", "B"], "what": "its category"},
-                                                                    {"name": "service", "one_of": ["0", "1"], "what": "its service class"}]}],
+         "types": [{"type": "hoist", "what": "a hoist", "fields": [{"name": "category", "one_of": ["A", "B"], "signed": True, "what": "its category"},
+                                                                    {"name": "service", "one_of": ["0", "1"], "signed": True, "what": "its service class"}]}],
          "asks": [{"type": "hoist", "mechanism": "hoist.category", "what": "the category and the service class", "anchor": ANCHOR}]}
 
 
@@ -250,8 +250,10 @@ class TheDeckReaderTriesARequirement(unittest.TestCase):
     def test_a_requirement_no_part_can_break_or_meet_is_refused_by_the_kernel_and_the_grid(self):
         from tests.test_deck_features import no_deck, reads
 
-        hoist = kind("hoist", key("category", "A", "B"), key("service", "0", "1"), {"name": "lugs", "type": "lug", "as": ["top", "bottom"], "what": "its lugs"})
-        lug = kind("lug", key("bore", "machined", "cut"))
+        # A `when` reads only a key the card signs (plan step 1.6), so each key here is signed. A `requires` may read any key.
+        hoist = kind("hoist", {**key("category", "A", "B"), "signed": True}, {**key("service", "0", "1"), "signed": True},
+                     {"name": "lugs", "type": "lug", "as": ["top", "bottom"], "what": "its lugs"})
+        lug = kind("lug", {**key("bore", "machined", "cut"), "signed": True})
 
         def deck(**body) -> dict:
             return made_up([lug, hoist], [asks("hoist.category", "hoist")], [rule("category", "hoist", "hoist.category", **body)])
@@ -300,14 +302,20 @@ class TheDeckReaderTriesARequirement(unittest.TestCase):
 
 # --- 3. the order of a join -------------------------------------------------------------------------------
 
-PLATE = kind("plate", size("t"), key("stiff", "yes", "no"))
+PLATE = kind("plate", size("t"), {**key("stiff", "yes", "no"), "signed": True})
+"""Whether a plate is stiff decides whether a line can arise, so the card states it (plan step 1.6)."""
 LINK = kind("link", {"name": "plates", "type": "plate", "as": ["top", "bottom"], "what": "its two plates"})
 BEARING = made_up([PLATE, LINK],
                   [asks("link.bear", "link", unless={"when": ["and", ["is", "top.stiff", "yes"], ["is", "bottom.stiff", "no"]], "why": "made up"}),
                    asks("link.size", "link")],
                   [rule("bear", "link", "link.bear", le=[["q", "10", "mm"], ["min", "top.t", "bottom.t"]]),
                    rule("size", "link", "link.size", le=[["q", "1", "mm"], "top.t"])])
-PLATES = part("plate", "p1", t="5 mm", stiff="yes") + "\n" + part("plate", "p2", t="5 mm", stiff="no")
+PLATES = part("plate", "p1", t="5 mm", stiff="given p1.stiff") + "\n" + part("plate", "p2", t="5 mm", stiff="given p2.stiff")
+
+
+def stiff(p1: str, p2: str) -> str:
+    """The card, which states of each plate whether it is stiff."""
+    return HEAD + f'given p1.stiff is {p1} signed "t@example.org" source "test"\ngiven p2.stiff is {p2} signed "t@example.org" source "test"\n'
 
 
 class JoinOrder(unittest.TestCase):
@@ -325,10 +333,9 @@ class JoinOrder(unittest.TestCase):
                     "p2 p1": ([("L", "link.bear", "bear", "refuted"), ("L", "link.size", "size", "proved")], "FAIL")}
         for order, (cells, verdict) in expected.items():
             with self.subTest(order):
-                mine, status, said, differ = both(BEARING, design(PLATES, part("link", "L", plates=order)))
+                mine, status, said, differ = both(BEARING, design(PLATES, part("link", "L", plates=order)), stiff("yes", "no"))
                 self.assertEqual((differ, mine, status, said["verdict"]), ("", cells, verdict, verdict))
-        swapped = design(part("plate", "p1", t="5 mm", stiff="no") + "\n" + part("plate", "p2", t="5 mm", stiff="yes"), part("link", "L", plates="p2 p1"))
-        mine, status, said, differ = both(BEARING, swapped)
+        mine, status, said, differ = both(BEARING, design(PLATES, part("link", "L", plates="p2 p1")), stiff("no", "yes"))
         self.assertEqual((differ, status), ("", "PASS"), "the stiff plate on top passes whatever it is named")
 
 

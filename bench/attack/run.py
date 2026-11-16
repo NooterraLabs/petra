@@ -204,8 +204,17 @@ def line(seed: int, jobs: int, budget: float | None, total: collections.Counter,
             "share_settled": round(total["settled"] / made, 4), "differences": total["differences"], "distinct": distinct, "crashes": total["crashes"], "hangs": total["hangs"],
             "relations": total["relations"], "relations_broken": total["violations"], "internal_errors": total["internal"], "wall_s": round(wall, 1), "note": note,
             "recipes": {k[7:]: v for k, v in sorted(total.items()) if k.startswith("recipe:")}, "verdicts": {k[8:]: v for k, v in sorted(total.items()) if k.startswith("outcome:")},
-            "reads_petra_from": sorted(k[6:] for k in total if k.startswith("petra:")),
+            "reads_petra_from": sorted({_where(k[6:]) for k in total if k.startswith("petra:")}),
             "unreached": {k[10:]: v for k, v in sorted(total.items(), key=lambda kv: -kv[1]) if k.startswith("unreached:")}}
+
+
+def _where(path: str) -> str:
+    """Where the workers read petra from, with no path of this machine in it: the summary goes into a tracked file."""
+    try:
+        Path(path).resolve().relative_to(ROOT)
+        return "petra of this checkout"
+    except ValueError:
+        return "a copy of petra outside this checkout"
 
 
 def main(argv: list[str] | None = None) -> int:

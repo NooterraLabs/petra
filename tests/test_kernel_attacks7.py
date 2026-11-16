@@ -94,12 +94,12 @@ lap splice {
   fastener "Group 120"
   threads included
   diameter 0.75 inch
-  holes standard
+  holes given splice.holes
   count 3
   pitch given splice.pitch
   end given splice.end
   side given splice.side
-  surface protected
+  surface given splice.surface
   joins tab strap
 }
 """
@@ -111,6 +111,7 @@ RANGES = {"tab.thickness": ("0.25 inch", "0.375 inch"), "tab.Fy": ("36 ksi", "50
 def lap_card(ranges: dict) -> str:
     out = 'petra 0\n\ncard "lap-ranged" {\n  owner "s.engineer@example.org"\n}\n\n'
     out += "".join(f"given {name} in [{lo}, {hi}] {S}\n" for name, (lo, hi) in ranges.items())
+    out += f"given splice.holes is standard {S}\ngiven splice.surface is protected {S}\n"
     out += f"\nload gravity {{\n  on splice pull in [0 kip, 35 kip]\n  {S}\n}}\n\n"
     for m in ("lap.tightening", "lap.hole_use", "lap.max_edge_distance", "lap.ply_flexure", "lap.block_shear"):
         out += f'waive {m} on splice by "s.engineer@example.org" reason "test"\n'

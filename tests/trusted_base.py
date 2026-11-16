@@ -63,13 +63,24 @@ CORE_CAP = Limit(331, "Set on 2026-11-15 at the deletion of the old path (plan s
                        "package's own file. Before that day the cap was 1,023 and covered the Python checker's "
                        "core too: its check, its codec, its evidence and its linear algebra, which are gone.")
 
-TRUSTED_CEILING = Limit(3882, "Set on 2026-11-15 at the deletion of the old path (plan step 1.2c), where what is counted "
+TRUSTED_CEILING = Limit(3951, "Set on 2026-11-15 at the deletion of the old path (plan step 1.2c), where what is counted "
                                 "measured 3,871 code lines: the arithmetic 331, and outside it the front end and the decks "
                                 "as data, 3,540. Before that day the ceiling was 20,119, of which the models, the "
                                 "registry, the premises and the Python checker's rules were the most: all are gone. "
                                 "Raised the same day for what the thirteenth review found in the exporter: a usage error "
                                 "exits 3 and not 2, which is kept for a design no deck has, and a run that cannot write "
                                 "one of its files takes back the ones it wrote. 11 lines in petra/export.py: 3,882. "
+                                "Raised on 2026-11-15 for plan step 1.6: the Python reader refuses a deck whose rule's "
+                                "`when`, or whose line's `unless`, reads a key the card does not sign, as the kernel "
+                                "does. 16 lines in petra/grid.py and 2 in the deck, where the holes and the surface of a "
+                                "lap are signed: 3,900. "
+                                "Raised the same day for what the fourteenth review found: a field left unstated that a "
+                                "need names has an open cell, so that no part passes by leaving out what its type needs, "
+                                "and a deck nested deeper than the kernel reads is refused before it is read, where it "
+                                "ended in a RecursionError. 33 lines in petra/grid.py: 3,933. "
+                                "And for its second round: the reader has room for a chain of names as long as the "
+                                "kernel reads, which ended it at 246, and a file of the decks' folder is held to the "
+                                "depth before it is read. 18 lines in petra/grid.py: 3,951. "
                                 "Raise it in the commit that needs more and say why here.")
 
 T2_ADOPTED = date(2026, 11, 8)

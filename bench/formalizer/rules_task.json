@@ -16,7 +16,7 @@
       {"name": "fastener", "one_of": ["Group 120", "Group 144", "Group 150"], "what": "the strength group of the bolts, as Section J3.2 names it"},
       {"name": "threads", "one_of": ["included", "excluded"], "what": "whether threads are in the shear plane"},
       {"name": "diameter", "dim": "length", "what": "the nominal diameter of a bolt", "range": ["1/2 inch", "1 1/4 inch"]},
-      {"name": "holes", "one_of": ["standard", "oversize"], "what": "the type of the holes in both plates"},
+      {"name": "holes", "one_of": ["standard", "oversize"], "signed": true, "what": "the type of the holes in both plates"},
       {"name": "count", "dim": "dimensionless", "whole": true, "least": "2", "what": "the number of bolts in the line", "range": ["2", "12"]},
       {"name": "pitch", "dim": "length", "what": "the distance between the centres of neighbouring holes", "range": ["1 inch", "6 inch"]},
       {"name": "end", "dim": "length", "what": "the least distance from the centre of an end hole to the end of either plate, along the line", "range": ["1/2 inch", "4 inch"]},

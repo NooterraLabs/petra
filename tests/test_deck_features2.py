@@ -13,11 +13,12 @@ import json
 import unittest
 from fractions import Fraction
 from pathlib import Path
+from unittest import mock
 
 from petra import export, grid, verify
 from petra.lang import LolaSyntaxError, LoweringError
 from petra.units import CUSTOMARY, UNITS, Dim, UnitError, parse_quantity, readable_text
-from tests.test_deck_features import (ANCHOR, HEAD, KERNEL, SIGNED, asks, cells, design, given, ill_formed, key, kind, load, made_up, no_deck, parsed, part,
+from tests.test_deck_features import (signing, ANCHOR, HEAD, KERNEL, SIGNED, asks, cells, design, given, ill_formed, key, kind, load, made_up, no_deck, parsed, part,
                                       reads, reason, rule, size)
 from tests.test_kernel_grid import ask, cell, findings
 
@@ -80,8 +81,9 @@ class StatedByTheCard(unittest.TestCase):
                                  ("b", "beam.end", "end"): "refuted", ("b", "beam.class", ""): "open"})
         deck, read = parsed(LIFTERS, text, card)
         body = export.card(read, export.read_inputs(read), placed=True)
-        self.assertEqual(body["states"], [{"name": "b.category", "by": "t@example.org", "key": "B"}, {"name": "b.lugs", "by": "t@example.org", "whole": "2"},
-                                          {"name": "b.service", "by": "t@example.org", "key": "1"}])
+        self.assertEqual(body["states"], [{"name": "b.category", "by": "t@example.org", "key": "B"}, {"name": "b.end", "by": "t@example.org", "key": "straight"},
+                                          {"name": "b.lugs", "by": "t@example.org", "whole": "2"}, {"name": "b.service", "by": "t@example.org", "key": "1"}],
+                         "the end is the card's too, since the `unless` of a line reads it")
         self.assertEqual([i["name"] for i in body["inputs"]], ["b.Fy"], "a statement is no bound, and is no input")
         lines = {line["field"]: line["args"] for line in json.loads(grid.bundle(read, deck)["design"])["parts"][0]["lines"]}
         self.assertEqual((lines["category"], lines["lugs"]), ([{"given": "b.category"}], [{"given": "b.lugs"}]))
@@ -111,9 +113,10 @@ class StatedByTheCard(unittest.TestCase):
         self.assertEqual((found["b", "beam.end", ""], found["b", "beam.length", "length"]), ("not_applicable", "proved"))
 
     def test_a_key_that_is_not_signed_may_be_stated_by_either(self):
+        """The count of pins is one. The end is not: the `unless` of a line reads it, so it is the card's alone (plan step 1.6)."""
         text, card = beam({**STATES, "end": "round"})
         found, _, _ = cells(self, LIFTERS, text, card)
-        self.assertEqual(found["b", "beam.end", ""], "not_applicable", "the card states the end, which the type leaves to either")
+        self.assertEqual(found["b", "beam.end", ""], "not_applicable", "the card states the end")
         text, card = beam({**STATES, "pins": "2"})
         found, _, _ = cells(self, LIFTERS, text, card)
         self.assertEqual(found["b", "beam.lugs", "lugs"], "proved")
@@ -125,7 +128,7 @@ class StatedByTheCard(unittest.TestCase):
                                (dict(lugs="2"), "parts.3 design b.lugs: is for the card to state: the design reads it with a given")):
             with self.subTest(lines):
                 states = {name: value for name, value in STATES.items() if name not in lines}
-                mine, its = ill_formed(self, LIFTERS, *beam(states, **lines))
+                mine, its = ill_formed(self, LIFTERS, *beam(states, **lines), states=False)
                 self.assertIn(finding, its)
                 self.assertIn("is for the card to state", mine)
                 with self.assertRaises(LoweringError) as unread:      # the card states it too: then no part reads what the card states
@@ -162,8 +165,8 @@ class StatedByTheCard(unittest.TestCase):
             said = with_card(self, text, card, lambda body: body["states"].pop(0))
             self.assertEqual((said["verdict"], findings(said)), ("ILL-FORMED", "parts.4 design b.category: the card states no b.category"))
             said = with_card(self, text, card, lambda body: body.pop("states"))
-            self.assertEqual(findings(said).count("the card states no b."), 3)
-            said = with_card(self, text, card, lambda body: body["states"].__setitem__(1, {"name": "b.lugs", "by": "t@example.org", "key": "2"}))
+            self.assertEqual(findings(said).count("the card states no b."), 4)
+            said = with_card(self, text, card, lambda body: body["states"].__setitem__(2, {"name": "b.lugs", "by": "t@example.org", "key": "2"}))
             self.assertIn("parts.3 design b.lugs: the card states a name for b.lugs, and it is a count", findings(said))
 
     def test_a_card_states_one_of_the_names_and_a_count_within_its_floor(self):
@@ -247,7 +250,7 @@ class StatedByTheCard(unittest.TestCase):
         text, card = beam()
         stray = {"name": "nobody.category", "by": "t@example.org", "key": "B"}
         for change, finding in ((lambda b: b["states"].append(stray), "parts.6 card nobody.category: is stated, and no part reads it"),
-                                (lambda b: b["states"].append({**stray, "name": "b.end"}), "parts.6 card b.end: is stated, and no part reads it"),
+                                (lambda b: b["states"].append({**stray, "name": "b.pins"}), "parts.6 card b.pins: is stated, and no part reads it"),
                                 (lambda b: b["states"].append(dict(b["states"][0])), "parts.6 card b.category: two statements have this name"),
                                 (lambda b: b["states"].append({**b["states"][0], "key": "C"}), "parts.4 design b.category: the card states b.category twice"),
                                 (lambda b: b["states"].append({"name": "b.Fy", "by": "t@example.org", "key": "B"}), "parts.6 card b.Fy: is the name of a statement and of an input"),
@@ -257,10 +260,10 @@ class StatedByTheCard(unittest.TestCase):
                                 (lambda b: b["states"][0].update(whole="2"), "shape card states[0]: a statement has one of key, a text, and whole"),
                                 (lambda b: b["states"][0].pop("key"), "shape card states[0]: a statement has one of key"),
                                 (lambda b: b["states"][0].update(key=2), "shape card states[0]: a statement has one of key"),
-                                (lambda b: b["states"][1].update(whole="2.5"), "shape card states[1]: whole: not a canonical rational"),
-                                (lambda b: b["states"][1].update(whole="5/2"), "shape card states[1]: whole is not a whole number"),
-                                (lambda b: b["states"][1].update(whole="02"), "shape card states[1]: whole: "),
-                                (lambda b: b["states"][1].update(whole=2), "shape card states[1]: a statement has one of key"),
+                                (lambda b: b["states"][2].update(whole="2.5"), "shape card states[2]: whole: not a canonical rational"),
+                                (lambda b: b["states"][2].update(whole="5/2"), "shape card states[2]: whole is not a whole number"),
+                                (lambda b: b["states"][2].update(whole="02"), "shape card states[2]: whole: "),
+                                (lambda b: b["states"][2].update(whole=2), "shape card states[2]: a statement has one of key"),
                                 (lambda b: b["states"][0].update(case="x"), "shape card states[0]: a statement has name, by and one of key and whole, and no case"),
                                 (lambda b: b.update(states={}), "shape card : states is not a list")):
             with self.subTest(finding):
@@ -563,24 +566,26 @@ class MoreUnits(unittest.TestCase):
 
 ROTOR = kind("rotor_set", size("thrust", "force"), size("speed_limit", "dimensionless/time", optional=True), size("thrust_limit", "force", optional=True),
              {**key("balance", "static", "dynamic"), "optional": True}, {**key("guard", "none", "full"), "optional": True}, size("mass", "mass", optional=True),
-             size("blades", "dimensionless", whole=True, optional=True), key("grain", "along", "unstated"),
+             size("blades", "dimensionless", whole=True, optional=True), key("grain", "along", "unstated"), key("mount", "fixed", "free"),
              needs=[{"le": ["thrust", "thrust_limit"], "why": "made up: the thrust is within what the maker allows"}])
 QUAD = kind("quad", size("speed", "dimensionless/time"), {"name": "sets", "type": "rotor_set", "as": ["rotor"], "what": "its rotor sets"},
             loads=[{"name": "pull", "dim": "force", "least": "0 N", "what": "the thrust asked of a rotor"}],
             needs=[{"lt": ["speed", ["mul", "2", "rotor.speed_limit"]], "why": "made up: the speed is under twice the limit"}])
 QUADS = made_up([ROTOR, QUAD],
                 [asks("quad.speed", "quad"), asks("quad.thrust", "quad"), asks("quad.balance", "quad"), asks("quad.static", "quad"),
-                 asks("quad.guarded", "quad", unless={"when": ["is", "rotor.guard", "full"], "why": "made up: a guarded rotor"}), asks("quad.grain", "quad"),
+                 asks("quad.guarded", "quad"), asks("quad.grain", "quad"),
                  asks("rotor_set.own", "rotor_set")],
                 [rule("speed", "quad", "quad.speed", le=["speed", "rotor.speed_limit"]),
                  rule("thrust", "quad", "quad.thrust", le=[["load", "pull"], "rotor.thrust_limit"]),
                  rule("balance", "quad", "quad.balance", requires=["is", "rotor.balance", "dynamic"]),
-                 rule("static", "quad", "quad.static", when=["is", "rotor.balance", "static"], le=["speed", ["q", "100", "Hz"]]),
+                 rule("static", "quad", "quad.static", when=["is", "rotor.mount", "fixed"], le=["speed", ["q", "100", "Hz"]]),
                  rule("guarded", "quad", "quad.guarded", le=[["load", "pull"], ["q", "100", "N"]]),
                  rule("grain", "quad", "quad.grain", when=["is", "rotor.grain", "unstated"], le=["speed", ["q", "200", "Hz"]]),
                  rule("own", "rotor_set", "rotor_set.own", le=["thrust", "thrust_limit"]),
-                 rule("own-speed", "rotor_set", "rotor_set.own", when=["is", "guard", "none"], le=[["q", "10", "Hz"], "speed_limit"])])
-SET = dict(thrust="10 N", speed_limit="9000 rpm", thrust_limit="12 N", balance="dynamic", guard="none", mass="30 g", blades="2", grain="along")
+                 rule("own-speed", "rotor_set", "rotor_set.own", le=[["q", "10", "Hz"], "speed_limit"])])
+"""No condition of this deck reads a field that a record may leave unstated: a condition reads only a key the card signs (plan
+step 1.6), and a signed field is not optional. `ConditionsReadSignedKeys` holds a deck that tries."""
+SET = dict(thrust="10 N", speed_limit="9000 rpm", thrust_limit="12 N", balance="dynamic", guard="none", mass="30 g", blades="2", grain="along", mount="free")
 HOVER = load("hover", "q pull in [0 N, 8 N]") + load("climb", "q pull in [0 N, 11 N]")
 NO_MAKER = "{} is unstated: its maker states none, and {} reads it"
 
@@ -595,7 +600,8 @@ class AFieldLeftUnstated(unittest.TestCase):
         self.assertEqual(found, {("r", "rotor_set.own", "own"): "proved", ("r", "rotor_set.own", "own-speed"): "proved", ("q", "quad.speed", "speed"): "proved",
                                  ("q", "quad.thrust", "thrust/climb"): "proved", ("q", "quad.thrust", "thrust/hover"): "proved", ("q", "quad.balance", "balance"): "proved",
                                  ("q", "quad.static", ""): "open", ("q", "quad.guarded", "guarded/climb"): "proved", ("q", "quad.guarded", "guarded/hover"): "proved",
-                                 ("q", "quad.grain", ""): "open", ("r", "unread", "mass"): "open", ("r", "unread", "blades"): "open", ("r", "unread", "grain"): "open"})
+                                 ("q", "quad.grain", ""): "open", ("r", "unread", "guard"): "open", ("r", "unread", "mass"): "open", ("r", "unread", "blades"): "open",
+                                 ("r", "unread", "grain"): "open", ("r", "unread", "mount"): "open"})
         self.assertEqual(verdict, "UNKNOWN", "the rule that reads the grain does not apply to this rotor set, so nothing reads its grain")
 
     def test_a_rule_that_reads_an_unstated_quantity_is_open_and_names_it(self):
@@ -604,7 +610,8 @@ class AFieldLeftUnstated(unittest.TestCase):
         self.assertEqual(reason(said, "quad.speed"), NO_MAKER.format("r.speed_limit", "the rule"))
         self.assertEqual(reason(said, "rotor_set.own", "own-speed"), NO_MAKER.format("r.speed_limit", "the rule"))
         self.assertEqual((found["q", "quad.thrust", "thrust/hover"], found["r", "rotor_set.own", "own"]), ("proved", "proved"), "the other limit is stated, and is checked")
-        self.assertNotIn(("r", "unread", "speed_limit"), found)
+        self.assertEqual((found["r", "unread", "speed_limit"], reason(said, "unread", "speed_limit")), ("open", grid.UNASKED.format("r.speed_limit")),
+                         "a quad needs its speed under twice the limit, and that need was not asked")
 
     def test_an_unstated_field_is_never_read_as_zero_or_as_any_number(self):
         """A speed of 10,000 Hz would fail any limit, and breaks the quad's need at any limit a maker states. With the limit unstated nothing is proved or refuted of it."""
@@ -624,24 +631,31 @@ class AFieldLeftUnstated(unittest.TestCase):
         self.assertEqual((found["q", "quad.thrust", "thrust"], reason(said, "quad.thrust")), ("open", NO_MAKER.format("r.thrust_limit", "the rule")))
         self.assertEqual(reason(said, "quad.guarded"), "the card puts no pull on q, which the rule reads", "a rule that reads no unstated field says what it said")
 
-    def test_a_requirement_and_a_when_on_an_unstated_key_are_open(self):
+    def test_a_requirement_on_an_unstated_key_is_open(self):
         found, verdict, said = cells(self, QUADS, *quad(balance="unstated"))
-        self.assertEqual((found["q", "quad.balance", "balance"], found["q", "quad.static", "static"], verdict), ("open", "open", "UNKNOWN"))
+        self.assertEqual((found["q", "quad.balance", "balance"], verdict), ("open", "UNKNOWN"))
         self.assertEqual(reason(said, "quad.balance"), NO_MAKER.format("r.balance", "the rule"))
-        self.assertEqual(reason(said, "quad.static"), NO_MAKER.format("r.balance", "the rule"))
-        self.assertNotIn(("q", "quad.static", ""), found, "nothing says the rule does not apply, so the line is not without a rule")
         found, _, _ = cells(self, QUADS, *quad(balance="static"))
-        self.assertEqual((found["q", "quad.balance", "balance"], found["q", "quad.static", "static"]), ("refuted", "refuted"))
+        self.assertEqual(found["q", "quad.balance", "balance"], "refuted")
+        found, _, _ = cells(self, QUADS, *quad(mount="fixed"))
+        self.assertEqual(found["q", "quad.static", "static"], "refuted", "the mount is the card's, and the rule it switches on is run: 140 Hz against 100")
 
-    def test_an_unless_on_an_unstated_key_leaves_the_line_open_and_runs_no_rule(self):
-        found, _, said = cells(self, QUADS, *quad(guard="unstated"))
-        self.assertEqual({k[2]: v for k, v in found.items() if k[1] == "quad.guarded"}, {"": "open"})
-        self.assertEqual(reason(said, "quad.guarded"), NO_MAKER.format("r.guard", "the `unless` of the line"))
-        self.assertEqual(found["r", "rotor_set.own", "own-speed"], "open", "a rule of the rotor set whose `when` names its guard")
-        found, _, _ = cells(self, QUADS, *quad(guard="full"))
-        self.assertEqual({k[2]: v for k, v in found.items() if k[1] == "quad.guarded"}, {"": "not_applicable"})
-        found, _, _ = cells(self, QUADS, *quad(HOVER.replace("11 N", "101 N"), guard="none", thrust_limit="200 N"))
-        self.assertEqual(found["q", "quad.guarded", "guarded/climb"], "refuted")
+    def test_no_condition_reads_a_field_that_a_record_may_leave_unstated(self):
+        """A condition reads only a key the card signs, and a signed field is not optional. So the two cases that this deck had are
+        refused with the deck: a line whose `unless` reads the guard, and a rule whose `when` reads it."""
+        unless = made_up([ROTOR, QUAD], [asks("quad.guarded", "quad", unless={"when": ["is", "rotor.guard", "full"], "why": "made up: a guarded rotor"})],
+                         [rule("guarded", "quad", "quad.guarded", le=[["load", "pull"], ["q", "100", "N"]])])
+        mine, its = no_deck(self, unless)
+        for said in (mine, its):
+            self.assertIn("grid quad.guarded: the `when` of its `unless` reads rotor.guard, " + grid.UNSIGNED_KEY, said)
+        when = made_up([ROTOR], [asks("rotor_set.own", "rotor_set")],
+                       [rule("own-speed", "rotor_set", "rotor_set.own", when=["is", "guard", "none"], le=[["q", "10", "Hz"], "speed_limit"])])
+        mine, its = no_deck(self, when)
+        for said in (mine, its):
+            self.assertIn("its `when` reads guard, " + grid.UNSIGNED_KEY, said)
+        signed_and_optional = json.loads(json.dumps(when))
+        next(f for f in signed_and_optional["types"][0]["fields"] if f["name"] == "guard")["signed"] = True
+        no_deck(self, signed_and_optional)
 
     def test_a_table_a_case_and_a_range_that_read_an_unstated_field_leave_the_cell_open(self):
         """Each other way a rule reads a field: as the key of a table, through a `by`, as the quantity a row sorts by for a `case`, and in its `where`."""
@@ -673,12 +687,9 @@ class AFieldLeftUnstated(unittest.TestCase):
         def waive(*mechanisms: str) -> str:
             return HOVER + "".join(f"\nwaive {m} on q {BY}\n" for m in mechanisms)
 
-        found, _, said = cells(self, QUADS, *quad(waive("quad.balance", "quad.static"), balance="unstated"))
-        self.assertEqual((found["q", "quad.balance", "balance"], found["q", "quad.static", "static"]), ("waived", "waived"))
-        self.assertTrue(reason(said, "quad.static").endswith("open but for the waiver: " + NO_MAKER.format("r.balance", "the rule")), reason(said, "quad.static"))
-        found, _, said = cells(self, QUADS, *quad(waive("quad.guarded"), guard="unstated"))
-        self.assertEqual(found["q", "quad.guarded", ""], "waived")
-        self.assertTrue(reason(said, "quad.guarded").endswith("open but for the waiver: " + NO_MAKER.format("r.guard", "the `unless` of the line")))
+        found, _, said = cells(self, QUADS, *quad(waive("quad.balance"), balance="unstated"))
+        self.assertEqual(found["q", "quad.balance", "balance"], "waived")
+        self.assertTrue(reason(said, "quad.balance").endswith("open but for the waiver: " + NO_MAKER.format("r.balance", "the rule")), reason(said, "quad.balance"))
         found, verdict, said = cells(self, QUADS, *quad(waive("quad.speed"), speed_limit="unstated"))
         self.assertEqual((found["q", "quad.speed", "speed"], verdict), ("open", "UNKNOWN"))
         self.assertEqual(reason(said, "quad.speed"), grid.UNRESTED + NO_MAKER.format("r.speed_limit", "the rule"))
@@ -687,11 +698,13 @@ class AFieldLeftUnstated(unittest.TestCase):
 
     def test_a_field_left_unstated_that_nothing_reads_has_no_cell(self):
         found, _, _ = cells(self, QUADS, *quad(mass="unstated", blades="unstated"))
-        self.assertEqual([k for k in found if k[1] == "unread"], [("r", "unread", "grain")])
+        self.assertEqual([k for k in found if k[1] == "unread"], [("r", "unread", "guard"), ("r", "unread", "grain"), ("r", "unread", "mount")])
         found, _, _ = cells(self, QUADS, *quad())
-        self.assertEqual([k for k in found if k[1] == "unread"], [("r", "unread", "mass"), ("r", "unread", "blades"), ("r", "unread", "grain")])
-        found, verdict, _ = cells(self, QUADS, *quad(mass="unstated", blades="unstated", grain="unstated", balance="dynamic"))
-        self.assertEqual(([k for k in found if k[1] == "unread"], found["q", "quad.static", ""], verdict), ([], "open", "UNKNOWN"))
+        self.assertEqual([k for k in found if k[1] == "unread"],
+                         [("r", "unread", "guard"), ("r", "unread", "mass"), ("r", "unread", "blades"), ("r", "unread", "grain"), ("r", "unread", "mount")])
+        found, verdict, _ = cells(self, QUADS, *quad(guard="unstated", mass="unstated", blades="unstated", grain="unstated", balance="dynamic"))
+        self.assertEqual(([k for k in found if k[1] == "unread"], found["q", "quad.static", ""], verdict), ([("r", "unread", "mount")], "open", "UNKNOWN"),
+                         "the mount is stated by the card, and the one rule whose `when` names it does not apply")
 
     def test_unstated_is_a_name_of_a_key_that_is_not_optional(self):
         found, _, _ = cells(self, QUADS, *quad(grain="unstated"))
@@ -1066,7 +1079,11 @@ SAMPLE = {"length": "100 mm", "mass": "30 g", "force": "10 N", "stress": "100 MP
 
 
 def draft(name: str) -> dict:
-    return json.loads((FIXTURES / f"{name}_draft.json").read_text(encoding="utf-8"))
+    """The draft, with `signed` on each key that the `when` of a line's `unless` reads (test_deck_features.signing). The scouts
+    wrote the drafts when a design stated every key. Since plan step 1.6 a condition reads only a key the card signs, and both
+    readers refuse the files as they stand: for the drone that is the rule set, flight over people, flight at night and the
+    class mark, and for a cut part its process, its edges, its finish and whether it has an inner cut."""
+    return signing(json.loads((FIXTURES / f"{name}_draft.json").read_text(encoding="utf-8")))
 
 
 def field_of(body: dict, of: str, name: str) -> dict:
@@ -1165,7 +1182,7 @@ class TheTwoFamilies(unittest.TestCase):
         asked = [a for a in body["grid"] if a["type"] == "cut_part"]
         self.assertEqual((len(lines), verdict), (len(asked), "UNKNOWN"))
         self.assertIn(("c", "unread", "shop"), found, "no line of the draft reads the shop yet: its rules will, and until then the card's statement is checked by nothing")
-        mine, its = ill_formed(self, body, *stated(body, self.CUT, c__shop="oshcut"))
+        mine, its = ill_formed(self, body, *stated(body, self.CUT, c__shop="oshcut"), states=False)
         self.assertIn("parts.4 design c.shop: is for the card to state", its)
         mine, its = ill_formed(self, body, *stated(body, self.CUT, {"c.shop": "nobody"}))
         self.assertIn("parts.4 design c.shop: is one of: sendcutsend, oshcut", its)
@@ -1197,12 +1214,13 @@ class TheTwoFamilies(unittest.TestCase):
         self.assertEqual([(written[k]["dim"], written[k]["lo"]) for k in (("bat", "temperature_low"), ("q", "centre"), ("q", "battery_station"), ("r", "speed_full"), ("bat", "capacity"))],
                          [("temperature", "-10"), ("length", "0"), ("length", "-1/50"), ("s^-1", "150"), ("s^1 A^1", "7920")])
         card_json = export.card(read, export.read_inputs(read), placed=True)
-        self.assertEqual([s["name"] for s in card_json["states"]], ["q.class_mark", "q.rotors", "q.rule_set"])
+        self.assertEqual([s["name"] for s in card_json["states"]], ["q.class_mark", "q.night", "q.over_people", "q.rotors", "q.rule_set"],
+                         "flight at night and over people decide which lines arise, so the card states them too")
         self.assertEqual(next(i["lo"] for i in card_json["inputs"] if i.get("field") == "payload_station"), "-3/100")
         for field, written_by_design in (("class_mark", "C1"), ("rule_set", "eu_open"), ("rotors", "4")):
             with self.subTest(field):
                 asked = {k: v for k, v in self.ASKED.items() if k != f"q.{field}"}
-                mine, its = ill_formed(self, body, *stated(body, self.FLEET, asked, flight, **made, **{f"q__{field}": written_by_design}))
+                mine, its = ill_formed(self, body, *stated(body, self.FLEET, asked, flight, **made, **{f"q__{field}": written_by_design}), states=False)
                 self.assertIn(f"design q.{field}: is for the card to state", its)
         us = stated(body, self.FLEET, {**self.ASKED, "q.rule_set": "us_part_107", "q.class_mark": "none"}, flight, **made)
         found_us, _, _ = cells(self, body, *us)
@@ -1328,6 +1346,203 @@ class Heaviest(unittest.TestCase):
         lines = [{"field": name, "args": [{"word": "no"}]} for name in SWITCHES]
         said = self.bounded(with_rules(deck, empty_card(), [{"name": "p", "type": "panel", "lines": lines}]))
         self.assertEqual((said["verdict"], said["findings"], said["counts"]["refuted"], said["counts"]["open"]), ("FAIL", [], count, 1), "every switch is off, and one is read by no rule")
+
+
+# --- 9. a condition reads only a key the card signs (plan step 1.6) --------------------------------------
+
+def tie(signed: tuple[str, ...] = (), lines: list = (), rules: list = ()) -> dict:
+    """A tie that joins one end, as the deck is written: nothing is signed but the fields named in `signed`."""
+    def named(name: str, *names: str) -> dict:
+        return {**key(name, *names), **({"signed": True} if name in signed else {})}
+    return made_up([kind("end", size("t"), named("shape", "straight", "round")),
+                    kind("tie", size("w"), named("duty", "light", "heavy"), {"name": "ends", "type": "end", "as": ["near"], "what": "its end"})],
+                   list(lines), list(rules), signs=False)
+
+
+def tied(duty: str = "heavy", shape: str = "round", w: str = "10 mm") -> str:
+    return design(part("end", "e", t="5 mm", shape=shape), part("tie", "l", w=w, duty=duty, ends="e"))
+
+
+class ConditionsReadSignedKeys(unittest.TestCase):
+    """Whether a line of the grid arises, and whether a rule runs, is decided by a condition. A key the design writes there
+    would let the design pick its own checks: the lap of weathering steel that wrote its own surface as protected was
+    held to the wider spacing of painted steel. So both readers refuse a deck whose `when` reads a key that is not `signed`.
+    The rule closes that one way: docs/deck.md, "The grid", lists three that it leaves to the deck's author."""
+    WIDE = dict(le=["near.t", "w"])
+
+    def refused(self, deck: dict, what: str) -> None:
+        mine, its = no_deck(self, deck)
+        for said in (mine, its):
+            self.assertIn(f"{what}, {grid.UNSIGNED_KEY}", said)
+
+    def test_a_when_on_a_key_the_design_states_is_refused(self):
+        for body in (self.WIDE, dict(requires=["is", "near.shape", "round"])):
+            with self.subTest(sorted(body)):
+                self.refused(tie((), [asks("tie.m", "tie")], [rule("r", "tie", "tie.m", when=["is", "duty", "heavy"], **body)]), "its `when` reads duty")
+
+    def test_a_when_on_a_key_of_a_joined_part_names_the_part_and_the_key(self):
+        self.refused(tie(("duty",), [asks("tie.m", "tie")], [rule("r", "tie", "tie.m", when=["is", "near.shape", "round"], **self.WIDE)]), "its `when` reads near.shape")
+
+    def test_a_key_deep_in_a_condition_is_found(self):
+        deep = ["and", ["is", "duty", "heavy"], ["or", ["is", "duty", "light"], ["not", ["is", "near.shape", "round"]]]]
+        self.refused(tie(("duty",), [asks("tie.m", "tie")], [rule("r", "tie", "tie.m", when=deep, **self.WIDE)]), "its `when` reads near.shape")
+        self.refused(tie(("duty",), [asks("tie.m", "tie", unless={"when": deep, "why": "made up"})], [rule("r", "tie", "tie.m", **self.WIDE)]),
+                     "grid tie.m: the `when` of its `unless` reads near.shape")
+        reads(self, tie(("duty", "shape"), [asks("tie.m", "tie", unless={"when": deep, "why": "made up"})], [rule("r", "tie", "tie.m", when=deep, **self.WIDE)]))
+
+    def test_an_unless_on_a_key_the_design_states_is_refused(self):
+        self.refused(tie((), [asks("tie.m", "tie", unless={"when": ["is", "duty", "light"], "why": "made up: a light tie"})], [rule("r", "tie", "tie.m", **self.WIDE)]),
+                     "grid tie.m: the `when` of its `unless` reads duty")
+
+    def test_what_a_rule_requires_may_be_any_key(self):
+        """A requirement is the check, and may read a key the design writes: such a design passes or fails by its own word."""
+        deck = tie((), [asks("tie.m", "tie")], [rule("r", "tie", "tie.m", requires=["and", ["is", "duty", "heavy"], ["is", "near.shape", "round"]])])
+        found, _, _ = cells(self, deck, tied(), states=False)
+        self.assertEqual(found["l", "tie.m", "r"], "proved")
+        found, verdict, _ = cells(self, deck, tied(duty="light"), states=False)
+        self.assertEqual((found["l", "tie.m", "r"], verdict), ("refuted", "FAIL"))
+
+    def test_the_card_alone_switches_a_rule_and_a_line(self):
+        """The design of a 4 mm tie on a 5 mm end fails the rule of a heavy tie. It cannot write itself light: only the card
+        says which it is, and for a light one the line has no rule, which is open and no pass."""
+        when = tie(("duty",), [asks("tie.m", "tie")], [rule("r", "tie", "tie.m", when=["is", "duty", "heavy"], **self.WIDE)])
+        unless = tie(("duty",), [asks("tie.m", "tie", unless={"when": ["is", "duty", "light"], "why": "made up: a light tie"})], [rule("r", "tie", "tie.m", **self.WIDE)])
+        for name, deck, light in (("when", when, "open"), ("unless", unless, "not_applicable")):
+            with self.subTest(name):
+                found, verdict, _ = cells(self, deck, tied(w="4 mm"))
+                self.assertEqual((found["l", "tie.m", "r"], verdict), ("refuted", "FAIL"))
+                mine, its = ill_formed(self, deck, tied(duty="light", w="4 mm"), states=False)
+                self.assertIn("design l.duty: is for the card to state", its)
+                self.assertIn("is for the card to state", mine)
+                found, verdict, _ = cells(self, deck, tied(duty="light", w="4 mm"))
+                self.assertEqual(found["l", "tie.m", ""], light, "the card states the tie light")
+                self.assertNotIn(("l", "tie.m", "r"), found)
+
+    def test_a_key_that_no_when_reads_may_be_stated_by_the_card_or_by_the_design(self):
+        """Without `signed` either may state a key. Here a requirement reads the duty, and the card fixes it."""
+        deck = tie((), [asks("tie.m", "tie")], [rule("r", "tie", "tie.m", requires=["is", "duty", "heavy"])])
+        for said, state in (("heavy", "proved"), ("light", "refuted")):
+            with self.subTest(said):
+                by_design, _, _ = cells(self, deck, tied(duty=said), states=False)
+                by_card, _, files = cells(self, deck, tied(duty="given l.duty"), HEAD + f"given l.duty is {said} {SIGNED}\n", states=False)
+                self.assertEqual((by_design["l", "tie.m", "r"], by_card["l", "tie.m", "r"]), (state, state))
+
+    def test_a_deck_nested_past_the_kernels_depth_is_refused_by_both_readers(self):
+        """The kernel reads no file nested deeper than 128. petra/grid.py read a deck to about 490 deep, and past that it
+        ended in a RecursionError that nothing caught (the fourteenth review)."""
+        def nested(levels: int) -> dict:
+            when = ["is", "duty", "heavy"]
+            for _ in range(levels):
+                when = ["not", when]
+            return tie(("duty",), [asks("tie.m", "tie")], [rule("r", "tie", "tie.m", when=when, le=["near.t", "w"])])
+
+        at = next(n for n in range(1, 200) if grid._nesting(json.dumps(nested(n))) == grid.MAX_NESTING)
+        reads(self, nested(at))
+        self.assertEqual(grid._nesting(json.dumps(nested(at + 1))), grid.MAX_NESTING + 1, "one level past what the kernel reads")
+        self.assertEqual(grid._nesting('{"a": "[[[\\"[[", "b": ["]", "\\\\", [1]]}'), 3, "a bracket in a text is no level, and an escaped quote ends no text")
+        for levels in (at + 1, 300, 2000):
+            with self.subTest(levels):
+                with self.assertRaises(grid.DeckError) as refused:
+                    grid.read_deck(json.dumps(nested(levels)) if levels < 400 else json.dumps(nested(1)).replace('["is", "duty", "heavy"]', "[" * levels + "]" * levels))
+                self.assertEqual(str(refused.exception), f"nested deeper than {grid.MAX_NESTING}")
+        if verify.binary():
+            from tests.test_kernel_attacks3 import empty_card, with_rules
+            said = ask(with_rules(nested(at + 1), empty_card(), []))
+            self.assertEqual((said["verdict"], [f["file"] for f in said["findings"]]), ("ILL-FORMED", ["rules"]))
+            self.assertIn(f"nested deeper than {grid.MAX_NESTING}", said["findings"][0]["why"])
+
+    def test_a_file_of_the_decks_folder_is_held_to_the_depth_before_it_is_read(self):
+        """`grid.decks` read each file of its folder as JSON to see whether it was a deck, before `read_deck` looked at its
+        depth: a file nested 5,000 deep ended in a RecursionError, and one that was a list in an AttributeError."""
+        import tempfile
+        shipped = (grid.DECKS / "aisc360.json").read_text(encoding="utf-8")
+        for name, text, refused in (("deep", "[" * 5000 + "]" * 5000, "deep.json: nested deeper than 128"), ("list", "[1, 2]", None),
+                                    ("broken", '{"format": ', "broken.json: not a deck (JSONDecodeError")):
+            with self.subTest(name), tempfile.TemporaryDirectory() as tmp:
+                Path(tmp, "aisc360.json").write_text(shipped, encoding="utf-8")
+                Path(tmp, f"{name}.json").write_text(text, encoding="utf-8")
+                grid.decks.cache_clear()
+                try:
+                    with mock.patch.object(grid, "DECKS", Path(tmp)):
+                        if refused is None:
+                            self.assertEqual([d.name for d in grid.decks()], ["aisc360-22"], "a file that is no deck is passed over")
+                        else:
+                            with self.assertRaises(grid.DeckError) as said:
+                                grid.decks()
+                            self.assertTrue(str(said.exception).startswith(refused), str(said.exception))
+                finally:
+                    grid.decks.cache_clear()
+
+    def test_a_chain_of_names_as_long_as_the_kernel_reads_is_checked_and_ends_in_no_error(self):
+        """Each name of a `let` here reads the one before it. Python's limit of 1,000 frames ended a chain of 246 names in a
+        RecursionError, where the kernel reads one of 511 (the fourteenth review)."""
+        def chain(count: int) -> dict:
+            let = {"a0": "x"}
+            for i in range(1, count + 1):
+                let[f"a{i}"] = ["add", f"a{i - 1}", ["q", "1", "mm"]]
+            return made_up([kind("pin", size("x"))], [asks("pin.size", "pin")], [rule("size", "pin", "pin.size", let=let, le=[["q", "5", "mm"], f"a{count}"])])
+
+        import sys
+        before = sys.getrecursionlimit()
+        for count in (246, 511):
+            with self.subTest(count):
+                found, verdict, _ = cells(self, chain(count), design(part("pin", "p", x="30 mm")))
+                self.assertEqual((found, verdict), ({("p", "pin.size", "size"): "proved"}, "PASS"))
+        self.assertEqual(sys.getrecursionlimit(), before, "the limit is as it was once the check is done")
+
+
+EYE = made_up([kind("eye", size("hole"), size("width", optional=True), needs=[{"lt": ["hole", "width"], "why": "made up: a hole is narrower than its plate"}]),
+               kind("clevis", size("gap"), {"name": "holds", "type": "eye", "as": ["lug"], "what": "its eye"},
+                    needs=[{"le": ["gap", "lug.width"], "why": "made up: the gap is no wider than the plate of the eye"}])],
+              [asks("eye.size", "eye"), asks("clevis.gap", "clevis")],
+              [rule("size", "eye", "eye.size", le=[["q", "5", "mm"], "hole"]), rule("gap", "clevis", "clevis.gap", le=[["q", "1", "mm"], "gap"])])
+"""An eye that needs its hole narrower than its plate, whose width a record may leave unstated, and a clevis that needs its
+gap within that width. No rule reads the width."""
+
+
+class ANeedThatIsNotAsked(unittest.TestCase):
+    """A need that names a field left unstated is not asked. Until the fourteenth review that left nothing behind: an eye
+    whose hole was wider than its plate was refused when it stated the width and passed when it wrote `unstated`."""
+
+    def test_a_field_left_unstated_that_a_need_names_has_an_open_cell(self):
+        mine, its = ill_formed(self, EYE, design(part("eye", "e", hole="30 mm", width="20 mm")))
+        self.assertIn("breaks need 1 of a eye", its)
+        found, verdict, said = cells(self, EYE, design(part("eye", "e", hole="30 mm", width="unstated")))
+        self.assertEqual((found, verdict), ({("e", "eye.size", "size"): "proved", ("e", "unread", "width"): "open"}, "UNKNOWN"))
+        self.assertEqual(reason(said, "unread", "width"), grid.UNASKED.format("e.width"))
+        found, verdict, _ = cells(self, EYE, design(part("eye", "e", hole="10 mm", width="20 mm")))
+        self.assertEqual((found["e", "unread", "width"], verdict), ("open", "UNKNOWN"), "stated and kept, the width is still a field no rule reads")
+
+    def test_a_need_of_the_part_that_joins_it_counts_too(self):
+        text = design(part("eye", "e", hole="10 mm", width="unstated"), part("clevis", "c", gap="50 mm", holds="e"))
+        found, verdict, said = cells(self, EYE, text)
+        self.assertEqual(([k for k in found if k[1] == "unread"], verdict), ([("e", "unread", "width")], "UNKNOWN"), "one cell, though two needs name the width")
+        self.assertEqual(reason(said, "unread", "width"), grid.UNASKED.format("e.width"))
+        # The same with no need of the eye's own: only the clevis needs the width, and names it by the name the eye fills.
+        alone = json.loads(json.dumps(EYE))
+        del alone["types"][0]["needs"]
+        found, verdict, said = cells(self, alone, text)
+        self.assertEqual(([k for k in found if k[1] == "unread"], verdict), ([("e", "unread", "width")], "UNKNOWN"))
+        self.assertEqual(reason(said, "unread", "width"), grid.UNASKED.format("e.width"))
+        found, _, _ = cells(self, alone, design(part("eye", "e", hole="10 mm", width="unstated")))
+        self.assertEqual([k for k in found if k[1] == "unread"], [], "an eye that no clevis holds has no need that names its width")
+
+    def test_a_need_that_names_two_fields_left_unstated_leaves_a_cell_for_each(self):
+        box = made_up([kind("box", size("x"), size("w", optional=True), size("v", optional=True), needs=[{"le": ["w", "v"], "why": "made up"}])],
+                      [asks("box.size", "box")], [rule("size", "box", "box.size", le=[["q", "1", "mm"], "x"])])
+        found, verdict, _ = cells(self, box, design(part("box", "b", x="5 mm", w="unstated", v="unstated")))
+        self.assertEqual(([k for k in found if k[1] == "unread"], verdict), ([("b", "unread", "w"), ("b", "unread", "v")], "UNKNOWN"))
+        long = made_up([kind("b" * 64, size("x"), size("w" * 64, optional=True), needs=[{"le": ["x", "w" * 64], "why": "made up"}])],
+                       [asks("box.size", "b" * 64)], [rule("size", "b" * 64, "box.size", le=[["q", "1", "mm"], "x"])])
+        _, _, said = cells(self, long, design(part("b" * 64, "p" * 64, x="5 mm", **{"w" * 64: "unstated"})))
+        self.assertEqual(reason(said, "unread"), grid.UNASKED.format("p" * 64 + "." + "w" * 64), "the kernel cuts no reason of this kind: it is within 200 bytes")
+
+    def test_no_waiver_rests_the_cell(self):
+        card = HEAD + '\nwaive eye.size on e by "t@example.org" reason "test"\n'
+        found, verdict, _ = cells(self, EYE, design(part("eye", "e", hole="30 mm", width="unstated")), card)
+        self.assertEqual((found["e", "unread", "width"], verdict), ("open", "UNKNOWN"))
+        with self.assertRaises(LoweringError, msg="`unread` is no mechanism of the deck, and the language takes no waiver of it"):
+            parsed(EYE, design(part("eye", "e", hole="30 mm", width="unstated")), HEAD + '\nwaive unread on e by "t@example.org" reason "test"\n')
 
 
 if __name__ == "__main__":

@@ -825,6 +825,28 @@ rows it applies. A file nests at most `MAX_NESTING` deep, so a row or a rule alo
 it, and a chain of names that each read the next is cut here. -/
 def MAX_EXPRESSION : Nat := 1024
 
+/-- What the kernel says of a condition that reads a key the card does not sign. -/
+def UNSIGNED_KEY : String :=
+  "which the design may state: a `when` reads only a key the card signs"
+
+/-- A condition that decides which checks are run: the `when` of a rule, which says whether
+the rule answers for a part, and the `when` of a line's `unless`, which says whether the
+mechanism can arise for it. Each key it reads is a field marked `signed`, which only the
+card states. A key that the design writes there would let the design choose its own checks:
+a lap that fails as unpainted weathering steel passed once its design called the surface
+protected. What a rule `requires` is the check itself, and reads any key. `what` names the
+condition in the refusal. -/
+def deciding (scope : Scope) (what : String) (j : Json) : Except String Static := do
+  let condition ← static scope MAX_EXPRESSION j
+  for (part, field) in condition.keys do
+    if let some f := scope.field part field then
+      unless f.signed do
+        let name := match part with
+          | some joined => s!"{joined}.{field}"
+          | none => field
+        throw s!"{what} reads {name}, {UNSIGNED_KEY}"
+  return condition
+
 /-- An expression of a need, with its dimension: a number, a constant with its unit, a
 quantity field of the type or of a part it joins, and `add`, `sub`, `mul`, `neg` and `div`.
 A quotient divides by a field, which is more than zero for every part (docs/format.md,
@@ -1189,7 +1211,7 @@ def readAsk (kinds : Std.TreeMap String Kind) (rows : Std.TreeMap String Row) (j
       | .ok said => do
         (within said ["why", "when"]).mapError ("unless: " ++ ·)
         let _ ← text said "why"
-        pure (some (← (said.getObjVal? "when").toOption.mapM (static { kind := some kind, kinds, rows } MAX_EXPRESSION)))
+        pure (some (← (said.getObjVal? "when").toOption.mapM (deciding { kind := some kind, kinds, rows } "the `when` of its `unless`")))
     return { kind := name, mechanism, excuse }
   ask.mapError (s!"grid {clip mechanism}: " ++ ·)
 
@@ -1252,7 +1274,7 @@ def readRule (kinds : Std.TreeMap String Kind) (rows : Std.TreeMap String Row) (
     if has j "requires" then
       if has j "let" || has j "where" then
         throw "a rule with `requires` has no `le`, no `lt`, no `let` and no `where`: it states a condition over keys, and no inequality"
-      let condition ← (j.getObjVal? "when").toOption.mapM (static scope MAX_EXPRESSION)
+      let condition ← (j.getObjVal? "when").toOption.mapM (deciding scope "its `when`")
       let required ← (static scope MAX_EXPRESSION (← need j "requires")).mapError ("requires: " ++ ·)
       return { id, kind := name, mechanism, condition, steps := #[], weight := 0,
                look := 1 + (condition.map Static.size).getD 0 + required.size, ranges := #[], low := 0, high := 0,
@@ -1287,7 +1309,7 @@ def readRule (kinds : Std.TreeMap String Kind) (rows : Std.TreeMap String Row) (
       return (main, ranges)
     let (((low, high), ranges), draft) ← read.run { lets := lets.foldl (fun table (name, body) => table.insert name (Named.pending body)) {} }
     mayBeChecked (mayBe scope kind draft.steps) draft.steps
-    let condition ← (j.getObjVal? "when").toOption.mapM (static scope MAX_EXPRESSION)
+    let condition ← (j.getObjVal? "when").toOption.mapM (deciding scope "its `when`")
     let need := reach draft.steps (#[low, high] ++ ranges.flatMap fun (a, b) => #[a, b])
     let used := ((draft.steps.zip need).filter (·.2)).map (·.1)
     let fields := used.flatMap fun

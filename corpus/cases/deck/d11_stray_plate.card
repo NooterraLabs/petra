@@ -10,6 +10,8 @@ given strap.Fy in [36 ksi, 36 ksi] signed "s.engineer@example.org" source "ASTM 
 given strap.Fu in [58 ksi, 58 ksi] signed "s.engineer@example.org" source "ASTM A36, specified minimum"
 given spare.Fy in [36 ksi, 36 ksi] signed "s.engineer@example.org" source "ASTM A36, specified minimum"
 given spare.Fu in [58 ksi, 58 ksi] signed "s.engineer@example.org" source "ASTM A36, specified minimum"
+given splice.holes is standard signed "s.engineer@example.org" source "connection drawing, hole schedule"
+given splice.surface is protected signed "s.engineer@example.org" source "connection drawing, coating note"
 
 load gravity {
   on splice pull in [0 kip, 45 kip]

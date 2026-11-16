@@ -38,6 +38,18 @@
 // no parts that comes with a deck of rules is one with no part. With no deck of rules the verdict
 // is never PASS, and this kernel gives one only for a list of cells that carries no tape: with a
 // tape it exits 64 and prints no verdict. See AMBIGUITIES.md, P.
+//
+// The `when` of a rule and the `when` of a line's `unless` read only keys that their type marks
+// `signed`, of the type itself or of a part it joins, and a deck that names any other key there
+// does not read: a finding of the file `rules`. What a rule `requires` may name any key. So a
+// `when` holds for a part or it does not: no line is left open for an unstated key of its
+// `unless`, a rule answers only when its `when` holds, and no completion makes a rule not answer
+// or an `unless` hold. See AMBIGUITIES.md, Q.
+//
+// A field that a part leaves unstated and that a need names, a need of the part's own type or of
+// the type of the part that joins it, is one open cell with mechanism `unread`, in its place among
+// the part's fields: the need was not asked (format.md, Parts 9 and Cells 8). An unstated field
+// has no other `unread` cell, whatever a completion names. See AMBIGUITIES.md, R.
 
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
@@ -1791,17 +1803,17 @@ function checkNeeds(T, types) {
   });
 }
 
-// A key field of a type, by FIELD or AS.FIELD: {names, own|joined}.
+// A key field of a type, by FIELD or AS.FIELD: {names, signed, own|joined}.
 function keyField(s, T, types) {
   if (!isStr(s)) return null;
   const f = T.fieldMap.get(s);
-  if (f) return f.kind === 'k' ? { names: f.names, own: s } : null;
+  if (f) return f.kind === 'k' ? { names: f.names, signed: f.signed, own: s } : null;
   const dot = s.indexOf('.');
   if (dot <= 0) return null;
   const j = T.asMap.get(s.slice(0, dot));
   if (!j) return null;
   const f2 = types.get(j.type)?.fieldMap.get(s.slice(dot + 1));
-  return f2 && f2.kind === 'k' ? { names: f2.names, joined: s } : null;
+  return f2 && f2.kind === 'k' ? { names: f2.names, signed: f2.signed, joined: s } : null;
 }
 
 function addRead(reads, kf) {
@@ -1812,13 +1824,22 @@ function addRead(reads, kf) {
 // A condition on a part (deck.md, The grid): `["is", FIELD, NAME]` on a key of the type or
 // `PART.FIELD` of a part it joins, and `and`, `or` and `not` of these. `loaded` is gone and is
 // refused wherever it stands, whatever follows the word.
-function checkPartCond(c, T, types, reads) {
+//
+// `whenOf` is given for the `when` of a rule and the `when` of a line's `unless`, as the words
+// that say whose it is, and left out for what a rule `requires`. deck.md, The grid: "A `when`
+// reads only keys that are `signed`. ... So each `is` of a `when` names a key that only the card
+// states ..., of the type itself or of a part it joins, and a deck that names any other key there
+// is refused when it is read." and "What a rule `requires` is the check itself, and it may name
+// any key" (AMBIGUITIES.md, Q1 to Q3). The words of the refusal are the page's: "its `when` reads
+// surface, which the design may state: a `when` reads only a key the card signs".
+function checkPartCond(c, T, types, reads, whenOf) {
   if (!Array.isArray(c) || c.length === 0 || !isStr(c[0])) throw DE(`${short(c)} is not a condition on a part`);
   switch (c[0]) {
     case 'is': {
       if (c.length !== 3) throw DE('is takes a field and a name');
       const kf = keyField(c[1], T, types);
       if (!kf) throw DE(`${short(c[1])} is not a key field of ${T.name} or of a part it joins`);
+      if (whenOf !== undefined && !kf.signed) throw DE(`${whenOf} reads ${c[1]}, which the design may state: a \`when\` reads only a key the card signs`);
       if (!isStr(c[2]) || !kf.names.includes(c[2])) throw DE(`${short(c[2])} is not a name of ${c[1]}`);
       addRead(reads, kf);
       return;
@@ -1827,11 +1848,11 @@ function checkPartCond(c, T, types, reads) {
       throw DE('loaded is no condition: a condition is over keys, which are the same under every load case');
     case 'and': case 'or':
       if (c.length < 2) throw DE(`${c[0]} has no member`);
-      for (const x of c.slice(1)) checkPartCond(x, T, types, reads);
+      for (const x of c.slice(1)) checkPartCond(x, T, types, reads, whenOf);
       return;
     case 'not':
       if (c.length !== 2) throw DE('not takes one condition');
-      checkPartCond(c[1], T, types, reads);
+      checkPartCond(c[1], T, types, reads, whenOf);
       return;
     default:
       throw DE(`${short(c[0])} is not a condition on a part`);
@@ -2061,10 +2082,13 @@ function loadRule(r, deck) {
   }
   let when, requires;
   if (Object.hasOwn(r, 'when')) {
-    checkPartCond(r.when, T, deck.types, ruleReads);
+    // deck.md, A rule: `when` is "A condition on the part, as in the grid: on its own keys and on
+    // the keys of the parts it joins, each of them `signed`."
+    checkPartCond(r.when, T, deck.types, ruleReads, 'its `when`');
     when = r.when;
   }
   if (form === 'requires') {
+    // deck.md, A rule that requires: "on a key of the part or of a part it joins, signed or not".
     checkPartCond(r.requires, T, deck.types, ruleReads);
     requires = r.requires;
   }
@@ -2404,8 +2428,9 @@ export function loadDeck(D, find) {
         checkKeys(g.unless, ['why', 'when'], ['why'], 'unless');
         needText(g.unless, 'why', 'unless');
         const reads = newReads();
-        if (Object.hasOwn(g.unless, 'when')) checkPartCond(g.unless.when, T, deck.types, reads);
-        unless = { when: g.unless.when, why: g.unless.why, reads, keys: condKeys(g.unless.when) };
+        // deck.md, The grid: the `when` of an `unless` reads only keys that are `signed`.
+        if (Object.hasOwn(g.unless, 'when')) checkPartCond(g.unless.when, T, deck.types, reads, 'the `when` of its `unless`');
+        unless = { when: g.unless.when, why: g.unless.why, reads };
       }
       return { type: g.type, mechanism: g.mechanism, unless, unlessSize: unless ? condSize(unless.when) : 0 };
     }, item);
@@ -3123,7 +3148,9 @@ export function verifyTexts(texts, opts = {}) {
 
   // ---------------------------------------------------------------- Parts 9: the needs
   // format.md, Parts 9: each part keeps each need of its type, decided with exact fractions over
-  // the ranges of its fields. A need that names an unstated field is not asked. A value of more
+  // the ranges of its fields. A need that names an unstated field is not asked: "it is no
+  // finding, and the kernel goes on to the next need. Each such field then has an open cell, so
+  // the design does not pass" (the cell is made with the `unread` cells, below). A value of more
   // than 65,536 bits leaves the need undecided, which is a finding too.
   class NeedTooBig extends Error {}
   const big = (q) => { if (tooBig(q)) throw new NeedTooBig(); return q; };
@@ -3221,16 +3248,12 @@ export function verifyTexts(texts, opts = {}) {
     }
     return false;
   };
-  // A condition that names an unstated key is not decided, whatever its other keys are.
-  const condUnstated = (keys, part) => keys.find((k) => isUnstated(part, k));
-  // format.md, Cells 3: a rule answers for a part when its `when` holds, or names an unstated key.
-  const answers = (rule, part) => rule.when === undefined || condUnstated(rule.whenKeys, part) !== undefined || partCond(rule.when, part);
-  // The first field a rule reads that the part leaves unstated: the fields of its sides and its
-  // `where`, and then the keys of its `when` and its `requires`.
-  const firstUnstated = (rule, part) => {
-    for (const ref of [...rule.reads.own, ...rule.reads.joined]) if (isUnstated(part, ref)) return ref;
-    return undefined;
-  };
+  // format.md, Cells 3: "A rule answers for a part when its `when` holds for the part, and a rule
+  // with no `when` answers for every part of its type." Cells 2: "A signed field is not optional,
+  // so no key that a `when` reads is unstated, and a `when` holds for a part or it does
+  // not." So the `when` of a rule and of an `unless` is decided on the part as it is, with no
+  // completion: the deck reader has refused a `when` that names a key that is not signed.
+  const answers = (rule, part) => rule.when === undefined || partCond(rule.when, part);
 
   // A tape from a rule for a part (and a case), with the root of le or lt, or the roots of where.
   // `comp`, a completion, names each unstated key the rule reads and gives each load the case
@@ -3465,9 +3488,9 @@ export function verifyTexts(texts, opts = {}) {
   // What the hints left of a cell that none of them settles.
   const hintsLeft = (tried) => (tried.length ? 'no partition of proofs.json proves it and no point refutes it' : 'proofs.json has no partition and no point for it');
 
-  // ---- completions (format.md, The rules, items 1, 2 and 9)
-  // The unstated keys of a list of names a rule or an unless writes, each key of a part once, in
-  // the order of the list: {key: "PART\0FIELD", names}.
+  // ---- completions (format.md, The rules, items 1 and 9)
+  // The unstated keys of a list of names a rule writes, each key of a part once, in the order of
+  // the list: {key: "PART\0FIELD", names}.
   const unstatedKeys = (part, refs) => {
     const out = [];
     for (const ref of refs) {
@@ -3538,7 +3561,6 @@ export function verifyTexts(texts, opts = {}) {
       m.get(p.load).add(p.cs);
     }
   };
-  const answersUnder = (rule, part, comp) => rule.when === undefined || partCond(rule.when, part, comp);
   // Item 4: the reason of a refuted rule with requires names each key it names, in order and each
   // once, with the name the part has for it, or `unstated`, while they fit in 144 bytes.
   const requiresReason = (rule, part) => {
@@ -3610,7 +3632,8 @@ export function verifyTexts(texts, opts = {}) {
           let x = n;
           for (const k of ukeys) { comp.keys.set(k.key, k.names[x % k.names.length]); x = Math.floor(x / k.names.length); }
           charge(stepOf + ukeys.length);
-          if (!answersUnder(rule, part, comp)) { all = false; break; }
+          // Item 9: "under each, the rule answers for the part": it does, since no completion
+          // names a key of its `when` ("No completion changes which rules answer for a part").
           if (rule.form === 'requires') { if (partCond(rule.requires, part, comp)) all = false; continue; }
           let fails = false;
           for (const p of points.get(namesKey(comp.keys)) ?? []) {
@@ -3622,19 +3645,20 @@ export function verifyTexts(texts, opts = {}) {
         if (all) { cell(entry, 'refuted', rule.form === 'requires' ? requiresReason(rule, part) : undefined); return; }
       }
       // Otherwise, on a line the card waives, the first hint that is a witness, the hints looked
-      // at again in the file's order: its completion fits, and under it the rule does not answer,
-      // its requires holds, or the hint's partition proves the rule's tape. For a rule with
-      // `where` that tape is the range and the rule over the whole box, and a hint with no
-      // partition is a witness when the `where` holds nowhere in the box (item 5's question). The
-      // hint's point is not tried.
+      // at again in the file's order. Item 9: "A hint is a witness when its completion fits the
+      // cell and, under it, its `requires` holds, or the hint's partition proves the rule's tape
+      // written under it." For a rule with `where` that tape is the range and the rule over the
+      // whole box, and a hint with no partition is a witness when the `where` holds nowhere in
+      // the box (item 5's question). The hint's point is not tried. A completion under which the
+      // rule does not answer is no witness any more: there is none ("No completion changes which
+      // rules answer for a part or which lines arise").
       if (waived) {
         for (const h of hs) {
           charge(stepOf + compSize(h.completion));
           const comp = fitComp(h.completion, part, cs, ukeys, missing);
           if (!comp) continue;
           let witness;
-          if (!answersUnder(rule, part, comp)) witness = true;
-          else if (rule.form === 'requires') witness = partCond(rule.requires, part, comp);
+          if (rule.form === 'requires') witness = partCond(rule.requires, part, comp);
           else if (Object.hasOwn(h, 'partition')) {
             const w = tapeUnder(comp, rule.where !== undefined ? 'whole' : 'le');
             witness = !!w.tape && proves(w.tape, h.partition);
@@ -3650,11 +3674,16 @@ export function verifyTexts(texts, opts = {}) {
 
     // Cells 3 and Steps item 2: a rule that reads a field the part leaves unstated. An unstated
     // quantity gives only open cells, which no waiver rests; unstated keys alone make each of the
-    // rule's cells incomplete.
+    // rule's cells incomplete. The field is one of its sides, its `where`, a row or a `case` it
+    // applies, or its `requires`: "The keys of a `when` are never unstated (item 2)". The reason
+    // names the first "in this order: the fields that the steps of the rule read, in the order of
+    // the steps; or for a rule with `requires`, the keys of its `requires`": for an inequality
+    // this reader's own order, the part's fields before those of the parts it joins, and for a
+    // rule with `requires` the order in which it names them (AMBIGUITIES.md, L3 and Q6).
     let ukeys = [], uwhy = null;
     if (part.hasUnstated) {
       charge(rule.fieldsRead);
-      const refs = [...rule.reads.own, ...rule.reads.joined].filter((ref) => isUnstated(part, ref));
+      const refs = (rule.form === 'requires' ? rule.requiresKeys : [...rule.reads.own, ...rule.reads.joined]).filter((ref) => isUnstated(part, ref));
       if (refs.length) {
         uwhy = `${unstatedName(part, refs[0])} is unstated: its maker states none, and the rule reads it`;
         if (refs.some((ref) => valueOf(part, ref).kind === 'q')) {
@@ -3741,8 +3770,11 @@ export function verifyTexts(texts, opts = {}) {
   // joins it, and by an unless of the lines of its type. A load is read by an expression of a rule
   // of its own part's type that applies. They are worked out under the completions of the cells
   // the waivers rest, after the last of them is rested: each key one of them names has that name,
-  // and each load one gives is on its part in its case. A key no rested completion names is still
-  // unstated, and a rule whose `when` names it answers.
+  // and each load one gives is on its part in its case. Which rules apply does not turn on them:
+  // "A rule applies to a part when it is for the part's type and it answers for the part: its
+  // `when` holds (item 3)", and no completion names a key of a `when`. So the completions bear
+  // only on which loads left out are on a part here, and each of those is read by the rule whose
+  // cell was rested (AMBIGUITIES.md, Q5 and R2).
   const readSets = new Map(parts.map((p) => [p.name, new Set()]));
   const loadReads = new Map(parts.map((p) => [p.name, new Set()]));
   const markReads = (part, reads) => {
@@ -3753,17 +3785,27 @@ export function verifyTexts(texts, opts = {}) {
       if (q) readSets.get(q.name).add(jf.slice(dot + 1));
     }
   };
-  const completedKey = (partName, field) => restedKeys.has(`${partName}\u0000${field}`);
+  // format.md, Cells 8: "A field that the part leaves unstated has no `unread` cell, read or
+  // not, unless a need names it: a need of the part's own type that names the field, or a need of
+  // the type of the part that joins it, which names it `PART.FIELD`." `PART` is the name that the
+  // joining field's `as` gives the part, as a need writes a field of a joined part (deck.md, What
+  // a type needs), so the need of a part that joins two names the field of the one it names and
+  // not of the other (AMBIGUITIES.md, R1).
+  const joinerOf = new Map();
+  for (const j of parts) for (const [as, q] of j.joins) joinerOf.set(q.name, { part: j, as });
+  const needNames = (part, field) => {
+    if (part.type.needs.some((n) => n.fields.includes(field))) return true;
+    const j = joinerOf.get(part.name);
+    return !!j && j.part.type.needs.some((n) => n.fields.includes(`${j.as}.${field}`));
+  };
+  // format.md, Steps, An unstated field: "For such a part, after every cell: one step for each
+  // field that a need of the part's type names, as often as the need names it." Such a part is
+  // one "that leaves a field unstated, or that joins a part that does" (AMBIGUITIES.md, R3).
+  const needsCharge = (part) => part.type.needs.reduce((n, need) => n + need.fields.length, 0);
   const workOutReads = () => {
-    const rested = { keys: restedKeys };
-    const stillUnstated = (part, ref) => {
-      const r = resolve(part, ref);
-      return r.part.values.get(r.field)?.unstated === true && !completedKey(r.part.name, r.field);
-    };
-    const appliesNow = (rule, part) => rule.when === undefined || rule.whenKeys.some((k) => stillUnstated(part, k)) || partCond(rule.when, part, rested);
     for (const part of parts) {
       for (const rule of rulesOfType.get(part.type.name) ?? []) {
-        if (!appliesNow(rule, part)) continue;
+        if (!answers(rule, part)) continue;
         markReads(part, rule.reads);
         for (const l of rule.reads.loads) loadReads.get(part.name).add(l);
       }
@@ -3782,25 +3824,12 @@ export function verifyTexts(texts, opts = {}) {
         const out = [];
         // The cells of items 2 and 3 that no rule gives, with an empty entry.
         const lineCell = (state, reason, rest = null) => out.push({ subject: part.name, mechanism: line.mechanism, entry: '', state, reason, rest });
+        // Cells 2: "A line whose `unless` holds for the part, or that has an `unless` with no
+        // condition, is one `not_applicable` cell." No key of its `when` is unstated, so it holds
+        // or it does not. Until 2026-11-15 such a line could be one open cell that a hint's
+        // completion rested, with a charge for each hint looked at; the pages have neither now.
         const u = line.unless;
-        if (u && u.when === undefined) lineCell('not_applicable', u.why);
-        else if (u && condUnstated(u.keys, part) !== undefined) {
-          // Cells 2: an `unless` that names an unstated key is one open cell, and no rule of the
-          // line is run. On a line the card waives, the first hint for the cell with a completion
-          // that names each unstated key the `unless` reads, and nothing else, and under which the
-          // `unless` holds, makes it waivable. Each hint looked at is a charge of its own.
-          let rest = null;
-          if (w) {
-            const ukeys = unstatedKeys(part, u.keys);
-            for (const h of hintsFor(part.name, line.mechanism, '')) {
-              if (!Object.hasOwn(h, 'completion')) continue;
-              charge(1 + line.unlessSize + compSize(h.completion));
-              const comp = fitComp(h.completion, part, null, ukeys, []);
-              if (comp && partCond(u.when, part, comp)) { rest = comp; break; }
-            }
-          }
-          lineCell('open', `${unstatedName(part, condUnstated(u.keys, part))} is unstated: its maker states none, and the \`unless\` of the line reads it`, rest);
-        } else if (u && partCond(u.when, part)) lineCell('not_applicable', u.why);
+        if (u && (u.when === undefined || partCond(u.when, part))) lineCell('not_applicable', u.why);
         else {
           const rules = lineRules.filter((r) => answers(r, part));
           if (!rules.length) lineCell('open', lineRules.length ? 'the deck has no rule for it on a part like this one' : 'the deck has no rule for it', 'norule');
@@ -3808,8 +3837,11 @@ export function verifyTexts(texts, opts = {}) {
         }
         // Cells 1: a waiver rests each open cell of its line that is waivable: the line has no rule
         // for the part, the rule's `where` holds nowhere in the box, or a hint's completion makes
-        // the `unless` or the rule hold and agrees with the completions of the cells rested before
-        // it. Every other open cell of the line stays open, and says so.
+        // the rule hold and agrees with the completions of the cells rested before it. Every other
+        // open cell of the line stays open, and says so. Cells 1 names no completion of a line's
+        // `unless` any more: "when the rule reads an unstated key, or the case leaves out a load
+        // the rule reads, and a hint names a completion of what is left out under which the rule
+        // holds (item 9)" (AMBIGUITIES.md, Q4).
         for (const c of out) {
           if (w && c.state === 'open') {
             let rests = c.rest === 'norule' || c.rest === 'where';
@@ -3826,17 +3858,23 @@ export function verifyTexts(texts, opts = {}) {
     }
     // Values that nothing reads come after every other cell, part by part: a part's fields in the
     // order of its type's fields, and then its loads in the order of their names and of their
-    // cases' names. A field the part leaves unstated has none, but a key that a rested completion
-    // names, which has that name; and a load a rested completion gives is on its part in its case.
+    // cases' names. A field the part leaves unstated has none, unless a need names it: it is then
+    // one open cell with the field as its entry, "in its place among the part's fields", and the
+    // reason the page gives it. A load a rested completion gives is on its part in its case; a
+    // key one names is still a field the part leaves unstated (AMBIGUITIES.md, R2).
     // format.md, Cells 8, gives the words of their reasons: "The reason of the first is `no rule
     // of the deck reads PART.FIELD, so nothing checks it`, and of the second `no rule of the deck
     // reads the load LOAD that case CASE puts on PART, so nothing checks it`, with `the card` in
     // place of `case CASE` when the card has no load case."
+    for (const part of parts) if (part.hasUnstated) charge(needsCharge(part));
     workOutReads();
     for (const part of parts) {
       for (const f of part.type.fields) {
         if (f.kind === 'j') continue;
-        if (part.values.get(f.name)?.unstated && !(f.kind === 'k' && completedKey(part.name, f.name))) continue;
+        if (part.values.get(f.name)?.unstated) {
+          if (needNames(part, f.name)) push({ subject: part.name, mechanism: 'unread', entry: f.name, state: 'open', reason: `${part.name}.${f.name} is unstated: its maker states none, and a need names it` });
+          continue;
+        }
         if (!readSets.get(part.name).has(f.name)) push({ subject: part.name, mechanism: 'unread', entry: f.name, state: 'open', reason: `no rule of the deck reads ${part.name}.${f.name}, so nothing checks it` });
       }
       const mine = new Map();

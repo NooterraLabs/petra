@@ -8,7 +8,9 @@ made up: it is no standard and its numbers mean nothing. A test reads a deck wit
 petra/grid.py and with the kernel and holds the two to the same refusal or the same cells.
 The tests of the kernel are skipped when no kernel is built.
 """
+import copy
 import json
+import re
 import unittest
 from fractions import Fraction
 from unittest import mock
@@ -27,9 +29,66 @@ KERNEL = unittest.skipUnless(verify.binary(), "no petra-verify is built here and
 INCH = Fraction(127, 5000)
 
 
-def made_up(types: list, lines: list = (), rules: list = (), rows: list = ()) -> dict:
-    return {"format": "petra-rules/0", "name": "made-up", "about": "Made up for the tests. It is no standard.",
+def made_up(types: list, lines: list = (), rules: list = (), rows: list = (), signs: bool = True) -> dict:
+    """A deck of these parts. With `signs`, each key that a condition reads is marked `signed` (`signing`): the `when` of a
+    rule and of a line's `unless` read only a key the card signs (plan step 1.6), and most of these decks were written when a
+    design stated every key. A test of that rule itself asks for the deck as written, with `signs` off."""
+    deck = {"format": "petra-rules/0", "name": "made-up", "about": "Made up for the tests. It is no standard.",
             "rows": list(rows), "types": list(types), "grid": list(lines), "rules": list(rules)}
+    return signing(deck) if signs else deck
+
+
+def _condition_keys(cond: object) -> list[str]:
+    if isinstance(cond, list) and len(cond) == 3 and cond[0] == "is" and isinstance(cond[1], str):
+        return [cond[1]]
+    return [name for inner in cond[1:] for name in _condition_keys(inner)] if isinstance(cond, list) else []
+
+
+def signing(deck: dict) -> dict:
+    """A copy of the deck with `signed` on each key that the `when` of a rule or of a line's `unless` reads: a key of the
+    type, or `PART.KEY` for a key of a part it joins. A key marked `optional` is left as it is, since a field is not both, so
+    a deck whose condition reads one stays a deck that both readers refuse. Anything that is no deck comes back unchanged."""
+    try:
+        out = copy.deepcopy(deck)
+        types = {t["type"]: t for t in out["types"]}
+        asked = [(r["type"], r["when"]) for r in out["rules"] if "when" in r]
+        asked += [(a["type"], a["unless"]["when"]) for a in out["grid"] if isinstance(a.get("unless"), dict) and "when" in a["unless"]]
+        for of, cond in asked:
+            for name in _condition_keys(cond):
+                part, _, inner = name.rpartition(".")
+                kinds = [types[of]] if not part else [types[f["type"]] for f in types[of]["fields"] if "type" in f and part in f.get("as", [f["name"]])]
+                for t in kinds:
+                    for f in t["fields"]:
+                        if f.get("name") == inner and "one_of" in f and not f.get("optional"):
+                            f["signed"] = True
+        return out
+    except (KeyError, TypeError, AttributeError):
+        return deck
+
+
+_BLOCK = re.compile(r"^(\w+)[ \t]+(\w+)[ \t]*\{[ \t]*$")
+_LINE = re.compile(r"^([ \t]+)(\w+)[ \t]+(\"[^\"]*\"|[\w.]+)[ \t]*$")
+
+
+def stating(deck: grid.Deck, text: str, card: str) -> tuple[str, str]:
+    """The design and the card with each key that the deck marks `signed`, and that the design writes as a bare name, moved
+    to the card: the design's line reads `KEY given PART.KEY` and the card states `given PART.KEY is NAME`. So a test writes
+    a part as it did before a condition's keys were the card's, and the pair is the one the two readers now ask for. A line
+    that already reads a given, and a key the card already states, are left alone."""
+    out, of, name, more = [], None, None, []
+    for line in text.split("\n"):
+        block, wrote = _BLOCK.match(line), _LINE.match(line)
+        if block:
+            of, name = block[1], block[2]
+        elif line.strip() == "}":
+            of = None
+        elif wrote and of in deck.types and wrote[2] in deck.types[of].fields:
+            field = deck.types[of].fields[wrote[2]]
+            if field.keys and field.signed and f"given {name}.{wrote[2]} " not in card:
+                line = f"{wrote[1]}{wrote[2]} given {name}.{wrote[2]}"
+                more.append(f"given {name}.{wrote[2]} is {wrote[3]} {SIGNED}\n")
+        out.append(line)
+    return "\n".join(out), card + ("" if card.endswith("\n") else "\n") + "".join(more)
 
 
 def kind(name: str, *fields: dict, **more) -> dict:
@@ -68,17 +127,21 @@ def load(case: str, *entries: str) -> str:
     return f"\nload {case} {{\n" + "".join(f"  on {entry}\n" for entry in entries) + f"  {SIGNED}\n}}\n"
 
 
-def parsed(rules: dict, text: str, card: str = HEAD):
+def parsed(rules: dict, text: str, card: str = HEAD, states: bool = True):
+    """The deck and the pair read against it. With `states`, a key the deck marks `signed` that the design writes as a
+    bare name is moved to the card first (`stating`). A test of a design that writes such a key itself turns it off."""
     deck = grid.read_deck(json.dumps(rules))
+    if states:
+        text, card = stating(deck, text, card)
     with mock.patch.object(grid, "decks", lambda: (deck,)):
         return deck, petra.lang.parse_design(card, text, "made-up.petra")
 
 
-def cells(test: unittest.TestCase, rules: dict, text: str, card: str = HEAD) -> tuple[dict[tuple[str, str, str], str], str, dict]:
+def cells(test: unittest.TestCase, rules: dict, text: str, card: str = HEAD, states: bool = True) -> tuple[dict[tuple[str, str, str], str], str, dict]:
     """The state of each cell of the design by its subject, mechanism and entry, the verdict,
     and what the kernel said, after the test holds the kernel and petra/grid.py to the same
     cells in the same order and to the same verdict."""
-    deck, read = parsed(rules, text, card)
+    deck, read = parsed(rules, text, card, states)
     report, files = grid.check(read, deck)
     mine = [(c.subject, c.mechanism, c.entry, c.state) for c in report.cells]
     said = {"cells": [{"subject": c.subject, "mechanism": c.mechanism, "entry": c.entry, "state": c.state, "reason": c.why} for c in report.cells]}
@@ -97,9 +160,10 @@ def reason(said: dict, mechanism: str, entry: str | None = None) -> str:
     return found.get("reason", "")
 
 
-def ill_formed(test: unittest.TestCase, rules: dict, text: str, card: str = HEAD) -> tuple[str, str]:
-    """Why petra/grid.py refuses the design and why the kernel finds it ill formed. Both must."""
-    deck, read = parsed(rules, text, card)
+def ill_formed(test: unittest.TestCase, rules: dict, text: str, card: str = HEAD, states: bool = True) -> tuple[str, str]:
+    """Why petra/grid.py refuses the design and why the kernel finds it ill formed. Both must. With `states` off, a key the
+    card signs that the design writes itself is left where the design wrote it (`parsed`)."""
+    deck, read = parsed(rules, text, card, states)
     with test.assertRaises(grid.ComponentError) as refused:
         grid.check(read, deck)
     if not verify.binary():
@@ -418,7 +482,7 @@ class AKeyOfAJoinedPart(unittest.TestCase):
 # --- 3. a rule that requires something of a key ---------------------------------------------------------
 
 LUG = kind("lug", size("t"), key("bore", "machined", "cut"))
-HOIST = kind("hoist", size("span"), key("category", "A", "B", "C"), key("service", "0", "1", "2", "3", "4"),
+HOIST = kind("hoist", size("span"), {**key("category", "A", "B", "C"), "signed": True}, {**key("service", "0", "1", "2", "3", "4"), "signed": True},
              {"name": "lugs", "type": "lug", "as": ["top", "bottom"], "what": "its two lugs"},
              loads=[{"name": "lift", "dim": "force", "least": "0 N", "what": "the lift"}])
 A_ONLY_0 = rule("category-a", "hoist", "hoist.category", when=["is", "category", "A"], requires=["is", "service", "0"])

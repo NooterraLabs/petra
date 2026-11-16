@@ -495,7 +495,7 @@ class Reading(Kernel):
         decks of that size would be about a tenth of the limit."""
         deck = next(d for d in grid.decks() if "lap" in d.types)
         body = json.loads(deck.text)
-        self.assertIn((len(body["rules"]), grid._size(body), grid._steps(body)), [(4, 3874, 5500), (15, 6387, 10530)])
+        self.assertIn((len(body["rules"]), grid._size(body), grid._steps(body)), [(4, 3874, 5500), (15, 6389, 10532)])
         self.assertLess(grid._steps(body) * 10 * 8, MAX_READ, "ten decks of its size are under an eighth of the limit")
 
     def test_the_count_is_the_size_of_the_file_and_of_a_row_for_each_time_a_rule_applies_it(self):

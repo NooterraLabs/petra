@@ -105,17 +105,11 @@ class WhatIsLeftOut(unittest.TestCase):
         found, status, said = cells(self, BY_TABLE, *pin("9.5 kN", waived=False))
         self.assertEqual((found[("p", "pin.shear", "shear/service")], status), ("open", "UNKNOWN"))
 
-    def test_two_rules_whose_whens_cover_an_unstated_key_and_both_fail_are_not_passed(self):
-        # The coated rule rests when the pin is bare, and the bare rule when it is coated: the
-        # two completions disagree, so the second cell is not rested.
-        found, status, said = cells(self, BY_WHEN, *pin("20 kN"))
-        self.assertEqual(([found[("p", "pin.shear", e)] for e in ("shear-coated/service", "shear-bare/service")], status), (["waived", "open"], "UNKNOWN"))
-        self.assertTrue(reason(said, "pin.shear", "shear-bare/service").startswith(grid.UNRESTED))
-
-    def test_two_rules_whose_whens_cover_an_unstated_key_rest_under_one_name_that_holds(self):
-        # 9.5 kN: under zinc the coated rule holds and the bare one does not answer.
-        found, status, _ = cells(self, BY_WHEN, *pin("9.5 kN"))
-        self.assertEqual(([found[("p", "pin.shear", e)] for e in ("shear-coated/service", "shear-bare/service")], status), (["waived", "waived"], grid.PASS_WAIVED))
+    def test_rules_whose_whens_read_a_key_that_may_be_left_unstated_are_refused_by_both_readers(self):
+        """Two tests held two rules whose `when` covers the names of an unstated key to resting under one name. Since plan
+        step 1.6 a `when` reads only a key the card signs, which is never left unstated, so the deck does not read."""
+        for said in no_deck(self, BY_WHEN):
+            self.assertIn("its `when` reads coating, which the design may state: a `when` reads only a key the card signs", said)
 
     def test_a_stated_key_is_decided_as_before(self):
         for coating, verdict in (("zinc", "PASS"), ("none", "FAIL")):
@@ -160,14 +154,12 @@ class WhatIsLeftOut(unittest.TestCase):
         self.assertEqual((found[("j", "joint.strength", "strength/service")], status), ("open", "UNKNOWN"))
         self.assertTrue(reason(said, "joint.strength").startswith(grid.UNRESTED))
 
-    def test_an_unless_on_an_unstated_key_rests_under_a_name_at_which_it_holds(self):
+    def test_an_unless_that_reads_a_key_that_may_be_left_unstated_is_refused_by_both_readers(self):
         deck = made_up([kind("pin", size("d"), COATING)], [asks("pin.rust", "pin", unless={"when": ["is", "coating", "zinc"], "why": "zinc does not rust"}),
                                                            asks("pin.size", "pin")],
                        [rule("size", "pin", "pin.size", le=[["q", "6", "mm"], "d"])])
-        text = design(part("pin", "p", d="10 mm", coating="unstated"))
-        for card, state, verdict in ((HEAD + waive("pin.rust", "p"), "waived", grid.PASS_WAIVED), (HEAD, "open", "UNKNOWN")):
-            found, status, _ = cells(self, deck, text, card)
-            self.assertEqual((found[("p", "pin.rust", "")], status), (state, verdict))
+        for said in no_deck(self, deck):
+            self.assertIn("the `when` of its `unless` reads coating, which the design may state: a `when` reads only a key the card signs", said)
 
     @KERNEL
     def test_the_kernel_rests_nothing_on_a_completion_that_does_not_fit(self):
@@ -198,7 +190,7 @@ class WhatIsLeftOut(unittest.TestCase):
             self.assertEqual((cell["state"], said["verdict"]), ("open", "UNKNOWN"))
 
     def test_a_disagreement_of_the_waivers_is_one_the_kernel_and_the_grid_are_held_to(self):
-        rules, read = parsed(BY_WHEN, *pin("9.5 kN"))
+        rules, read = parsed(BY_TABLE, *pin("9.5 kN"))
         report, files = grid.check(read, rules)
         said = {"cells": [{"subject": c.subject, "mechanism": c.mechanism, "entry": c.entry, "state": c.state} for c in report.cells],
                 "verdict": report.verdict, "hashes": {"rules": rules.hash}, "cells_from": "rules", "waived": []}
@@ -346,18 +338,19 @@ lap splice {
   fastener "Group 120"
   threads included
   diameter 1.125 inch
-  holes standard
+  holes given splice.holes
   count 2
   pitch 4 inch
   end 2 inch
   side 3 inch
-  surface protected
+  surface given splice.surface
   joins tab strap
 }
 """
 """Two 1 inch A36 plates joined by two 1 1/8 inch Group 120 bolts, the design of the review."""
 LAP_CARD = ('petra 0\n\ncard "lap" {\n  owner "t@example.org"\n}\n\n'
             + "".join(f'given {p}.{f} in [{v} ksi, {v} ksi] signed "t@example.org" source "ASTM A36"\n' for p in ("tab", "strap") for f, v in (("Fy", 36), ("Fu", 58)))
+            + 'given splice.holes is standard signed "t@example.org" source "test"\ngiven splice.surface is protected signed "t@example.org" source "test"\n'
             + '\nload gravity {\n  on splice pull in [0 kip, 200 kip]\n  signed "t@example.org" source "test"\n}\n'
             + "".join(waive(m, "splice") for m in ("lap.tightening", "lap.hole_use", "lap.max_edge_distance", "lap.ply_flexure",
                                                     "lap.spacing", "lap.strength", "lap.ply_rupture", "lap.block_shear")))

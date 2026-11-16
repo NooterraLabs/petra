@@ -328,7 +328,7 @@ class ChangedDesign(Kernel):
             "writes a size of zero": (lambda b: line(b, "s", "screw")["args"][0]["number"].update(lo="0", hi="0"), "parts.3 design s.screw: is not more than zero"),
             "writes a count that is not whole": (lambda b: line(b, "s", "turns")["args"][0]["number"].update(lo="5/2", hi="5/2"), "parts.3 design s.turns: is a count"),
             "writes two values": (lambda b: line(b, "s", "width")["args"].append(number), "parts.3 design s.width: is one number or one given"),
-            "names a fit the field lacks": (lambda b: line(b, "s", "fit").update(args=[{"word": "snug"}]), "parts.4 design s.fit: is one of: close, free"),
+            "writes a fit, which the card signs": (lambda b: line(b, "s", "fit").update(args=[{"word": "free"}]), "parts.4 design s.fit: is for the card to state"),
             "joins one pad twice": (lambda b: line(b, "s", "lands").update(args=[{"word": "p1"}, {"word": "p1"}]), "parts.5 design s.lands: names 2 different pad parts"),
             "joins a strip": (lambda b: line(b, "s", "lands").update(args=[{"word": "p1"}, {"word": "s"}]), "parts.5 design s.lands: names 2 different pad parts"),
             "has a part of no type": (lambda b: part(b, "p1").update(type="plate"), "parts.1 design p1: plate is not a type of the deck of rules"),
@@ -347,7 +347,8 @@ class ChangedDesign(Kernel):
 
     def test_a_part_joined_by_two_others_is_ill_formed(self):
         second = DESIGN.split("strip s {")[1].replace("given s.", "given r.")
-        more = 'given r.T in [20 degC, 30 degC] signed "t@example.org" source "test"\ngiven r.gap in [0.5 mm, 0.6 mm] signed "t@example.org" source "test"\n\nload run'
+        more = ('given r.T in [20 degC, 30 degC] signed "t@example.org" source "test"\ngiven r.gap in [0.5 mm, 0.6 mm] signed "t@example.org" source "test"\n'
+                'given r.fit is close signed "t@example.org" source "test"\n\nload run')
         self.assertIllFormed(strips(card=CARD.replace("load run", more), design=DESIGN + "\nstrip r {" + second), "parts.5 design p1: is joined more than once")
 
     def test_a_design_with_parts_and_no_rules_is_ill_formed(self):
@@ -357,9 +358,9 @@ class ChangedDesign(Kernel):
         bare = changed(files, "design", lambda b: b.pop("parts"))
         self.assertIllFormed(bare, "parts.6 card run.s.current: a load is put on a part, and s is not one")
         self.assertIllFormed(bare, "parts.6 card s.gap: is no load, and no part reads it")
-        nothing = changed(changed(bare, "card", lambda b: b.update(inputs=[], waivers=[], cases=[])), "proofs", lambda b: b.update(cells=[]))
+        nothing = changed(changed(bare, "card", lambda b: b.update(inputs=[], waivers=[], cases=[], states=[])), "proofs", lambda b: b.update(cells=[]))
         self.assertIllFormed(nothing, "types.7 card tests: is a key of the card, which only a design checked against a deck of rules has, and the design has no parts")
-        unmarked = changed(changed(nothing, "card", lambda b: [b.pop("tests"), b.pop("probability_claims")]), "deck", lambda b: b.pop("rules"))
+        unmarked = changed(changed(nothing, "card", lambda b: [b.pop("tests"), b.pop("probability_claims"), b.pop("states")]), "deck", lambda b: b.pop("rules"))
         self.assertEqual((ask(unmarked)["verdict"], ask(unmarked)["cells"]), ("UNKNOWN", []), "with no part there is no cell, and nothing is proved")
 
 
@@ -394,6 +395,7 @@ class Downgrade(Kernel):
             ("types.7", "card", "run.s.current", f"is a load on a part, {lacks}"),
             ("types.7", "card", "tests", f"is a key of the card, {lacks}"),
             ("types.7", "card", "probability_claims", f"is a key of the card, {lacks}"),
+            ("types.7", "card", "states", f"is a key of the card, {lacks}"),
             ("types.7", "deck", "rules", f"names a deck of rules, {lacks}")])
 
     def test_each_mark_alone_is_refused(self):
@@ -404,14 +406,15 @@ class Downgrade(Kernel):
             def card(body: dict) -> None:
                 if mark != "load":
                     body["inputs"] = [{k: v for k, v in i.items() if k not in ("on", "field")} for i in body["inputs"]]
-                for key in ("tests", "probability_claims"):
+                for key in ("tests", "probability_claims", "states"):
                     if mark != key:
                         body.pop(key)
             out = changed(files, "card", card)
             return out if mark == "rules" else changed(out, "deck", lambda b: b.pop("rules"))
 
         for mark, says in (("load", "types.7 card run.s.current: is a load on a part"), ("tests", "types.7 card tests: is a key of the card"),
-                           ("probability_claims", "types.7 card probability_claims: is a key of the card"), ("rules", "types.7 deck rules: names a deck of rules")):
+                           ("probability_claims", "types.7 card probability_claims: is a key of the card"), ("states", "types.7 card states: is a key of the card"),
+                           ("rules", "types.7 deck rules: names a deck of rules")):
             with self.subTest(mark=mark):
                 self.assertIllFormed(only(mark), says, without=("rules",))
         self.assertIllFormed(strips(), "types.7 card tests: is a key of the card, which only a design checked against a deck of rules has, and --rules names none",
@@ -433,7 +436,7 @@ class Downgrade(Kernel):
 
         def unmark(body: dict) -> None:
             body["inputs"] = [{k: v for k, v in i.items() if k not in ("on", "field")} for i in body["inputs"]]
-            body.pop("tests"), body.pop("probability_claims")
+            body.pop("tests"), body.pop("probability_claims"), body.pop("states")
         files = changed(changed(files, "card", unmark), "deck", lambda b: b.pop("rules"))
         said = ask(files, without=("rules",))
         self.assertEqual((said["verdict"], said["cells_from"], said["hashes"]["rules"], said["counts"]["open"]), ("UNKNOWN", "proofs", None, 0),

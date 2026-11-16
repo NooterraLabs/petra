@@ -160,16 +160,16 @@ class ARuleThatIsNotRun(unittest.TestCase):
     """H17 (deck.md, "A deck in the grid")."""
 
     def test_the_rule_of_a_waived_line_and_of_a_line_that_cannot_arise_still_reads(self):
-        flag = {"name": "fit", "one_of": ["loose", "tight"], "what": "fit"}
+        flag = {"name": "fit", "one_of": ["loose", "tight"], "signed": True, "what": "fit"}      # an `unless` reads it, so the card states it
         deck = made_up([kind("t", size("w"), size("v"), flag)],
                        [asks("m", "t"), asks("n", "t", unless={"when": ["is", "fit", "tight"], "why": "a tight one has none"})],
                        [rule("m", "t", "m", le=["w", ["q", "1", "m"]]), rule("n", "t", "n", le=["v", ["q", "1", "m"]])])
-        waived = HEAD + 'waive m on p by "t@example.org" reason "tested"\n'
-        states, _, _ = cells(self, deck, design(part("t", "p", w="1 mm", v="1 mm", fit="tight")), waived)
+        waived = HEAD + 'given p.fit is tight signed "t@example.org" source "test"\nwaive m on p by "t@example.org" reason "tested"\n'
+        states, _, _ = cells(self, deck, design(part("t", "p", w="1 mm", v="1 mm", fit="given p.fit")), waived)
         # The rule of the waived line is run, since a waiver rests only a cell that would be open: it proves, and the waiver was not
         # needed. Until then the line was one waived cell. The rule of the line that cannot arise is not run, and still reads v.
         self.assertEqual(states, {("p", "m", "m"): "proved", ("p", "n", ""): "not_applicable"}, "no field is unread: w is read by a rule that was run, and v by one that was not")
-        states, verdict, _ = cells(self, deck, design(part("t", "p", w="2 m", v="1 mm", fit="tight")), waived)
+        states, verdict, _ = cells(self, deck, design(part("t", "p", w="2 m", v="1 mm", fit="given p.fit")), waived)
         self.assertEqual((states["p", "m", "m"], verdict), ("refuted", "FAIL"), "no waiver hides a refutation")
 
 
@@ -227,16 +227,21 @@ class TheStepsOfTheCells(unittest.TestCase):
     steps while `n` and the constant are at most 10,000. Each test names the constant the page
     gives and holds the kernel to it from both sides."""
 
-    FIT = {"name": "fit", "one_of": ["a", "b"], "what": "fit"}
+    FIT = {"name": "fit", "one_of": ["a", "b"], "signed": True, "what": "fit"}
+    """The `unless` of the line reads it, so the card states it of each part (plan step 1.6)."""
     LOADS = [{"name": "V", "dim": "force", "what": "V"}, {"name": "T", "dim": "force", "what": "T"}]
 
     def said(self, n: int, fit: str = "a", le: list = ("w", ["q", "1", "m"]), cases: int = 0, waived: bool = False, rows: list = (), **more) -> list[tuple[str, str, str]]:
         deck = made_up([{**kind("t", size("w"), size("r", "dimensionless"), self.FIT), "loads": self.LOADS}],
                        [asks("m", "t", unless={"when": ["or"] + [["is", "fit", "b"]] * n, "why": "w"})], [rule("m", "t", "m", le=list(le), **more)], rows)
-        inputs = [{"name": f"i{c}", "dim": "force", "lo": "0", "hi": "1", "by": "b", "case": f"c{c}", "on": "p0", "field": "V"} for c in range(cases)]
-        card = {**empty_card(inputs), "waivers": [{"subject": f"p{k}", "mechanism": "m", "by": "b", "reason": "r"} for k in range(1_000)] if waived else []}
-        lines = [{"field": "w", "args": number("length", "1/1000")}, {"field": "r", "args": number("dimensionless", "3/2")}, {"field": "fit", "args": [{"word": fit}]}]
-        return found(ask(with_rules(deck, card, [{"name": f"p{k}", "type": "t", "lines": lines} for k in range(1_000)])))
+        inputs = [{"name": f"i{c}", "dim": "force", "lo": "0", "hi": "1", "by": "b", "case": f"c{c}", "on": "p000", "field": "V"} for c in range(cases)]
+        card = {**empty_card(inputs), "waivers": [{"subject": f"p{k:03d}", "mechanism": "m", "by": "b", "reason": "r"} for k in range(1_000)] if waived else [],
+                "states": [{"name": f"p{k:03d}.fit", "by": "b", "key": fit} for k in range(1_000)]}
+
+        def lines(k: int) -> list:
+            return [{"field": "w", "args": number("length", "1/1000")}, {"field": "r", "args": number("dimensionless", "3/2")},
+                    {"field": "fit", "args": [{"given": f"p{k:03d}.fit"}]}]
+        return found(ask(with_rules(deck, card, [{"name": f"p{k:03d}", "type": "t", "lines": lines(k)} for k in range(1_000)])))
 
     def assertConstant(self, constant: int, **how) -> None:
         self.assertEqual(self.said(10_000 - constant, **how), [], f"n and {constant} are 10,000")

@@ -16,7 +16,7 @@ from pathlib import Path
 from unittest import mock
 
 from petra import grid, units as petra_units, verify
-from petra.lang import parse_design
+from petra.lang import LoweringError, parse_design
 
 from bench.attack import deckinfo, decks, files as F, gen, found, meta, readers, spec as S, units
 from bench.attack.maker import Maker
@@ -65,7 +65,13 @@ class Specs(unittest.TestCase):
                 s = S.read(card, design)
                 self.assertIsNotNone(s, path.name)
                 with mock.patch.object(grid, "decks", lambda: (deck,)):
-                    a = grid.bundle(parse_design(card, design, "a.petra"), deck)
+                    try:
+                        a = grid.bundle(parse_design(card, design, "a.petra"), deck)
+                    except LoweringError as refused:      # a pair the language refuses is refused for the same reason when written back
+                        with self.assertRaises(LoweringError, msg=path.name) as again:
+                            parse_design(*s.texts(), "a.petra")
+                        self.assertEqual([m.split(": ", 1)[1] for m in again.exception.problems], [m.split(": ", 1)[1] for m in refused.problems], path.name)
+                        continue
                     b = grid.bundle(parse_design(*s.texts(), "b.petra"), deck)
                 self.assertEqual(a, b, path.name)
                 n += 1

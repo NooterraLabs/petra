@@ -1,0 +1,34 @@
+petra 0
+
+# The lap of d21, unpainted weathering steel with a pitch over 14 thicknesses, which fails. Here
+# the card states no surface and the design writes `surface protected` itself. Until 2026-11-15
+# the surface was the design's to write: this pair was then held to the 24 thicknesses of a
+# painted plate and read PASS_WAIVED on its five waivers. A rule's `when` reads only a key the
+# card signs, so the surface is for the card to state and the design is refused.
+
+plate tab {
+  thickness 0.375 inch
+  width 6 inch
+  Fy given tab.Fy
+  Fu given tab.Fu
+}
+
+plate strap {
+  thickness 0.375 inch
+  width 6 inch
+  Fy given strap.Fy
+  Fu given strap.Fu
+}
+
+lap splice {
+  fastener "Group 120"
+  threads included
+  diameter 0.75 inch
+  holes given splice.holes
+  count 3
+  pitch 5.5 inch
+  end 1.5 inch
+  side 3 inch
+  surface protected
+  joins tab strap
+}

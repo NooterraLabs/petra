@@ -104,6 +104,21 @@ def empty_card(inputs: list[dict] = (), name: str = "c") -> dict:
 
 
 ANCHOR = {"standard": "s", "clause": "c"}
+
+
+def card_states(parts: list[dict], *fields: str) -> tuple[dict, list[dict]]:
+    """The card and the parts with each of these `fields`, written by a part as the name of a key, stated by the card: the
+    part's line reads the given, and the card states the name. A condition reads only a key the card signs (plan step 1.6)."""
+    states, out = [], []
+    for part in parts:
+        lines = []
+        for line in part["lines"]:
+            if line["field"] in fields and "word" in line["args"][0]:
+                states.append({"name": f"{part['name']}.{line['field']}", "by": "t@example.org", "key": line["args"][0]["word"]})
+                line = {"field": line["field"], "args": [{"given": f"{part['name']}.{line['field']}"}]}
+            lines.append(line)
+        out.append({**part, "lines": lines})
+    return {**empty_card(), "states": sorted(states, key=lambda s: s["name"])}, out
 TRUE = {"inputs": [], "nodes": [["c", "-1"]], "roots": [0]}
 
 
@@ -589,29 +604,30 @@ class Shapes(unittest.TestCase):
         type of 300 fields: 90,000 names were made for each rule and each line, over a minute."""
         plate = {"type": "p", "what": "w", "fields": [{"name": f"f{k}", "dim": "length", "what": "w"} for k in range(300)]}
         lap = {"type": "lap", "what": "w", "fields": [{"name": "joins", "type": "p", "as": [f"a{k}" for k in range(300)], "what": "w"},
-                                                      {"name": "k", "one_of": ["x", "y"], "what": "w"}]}
+                                                      {"name": "k", "one_of": ["x", "y"], "what": "w", "signed": True}]}
         lines = [asks("lap", f"m{i}", unless={"why": "", "when": ["is", "k", "x"]}) for i in range(3_000)]
         rules = [rule_of(f"r/{i}", "lap", f"m{i}", le=("a0.f0", "a1.f1")) for i in range(3_000)]
         said = self.bounded(with_rules(deck_of(types=[plate, lap], grid_lines=lines, rules=rules), empty_card(), []))
         self.assertEqual((said["verdict"], said["findings"]), ("UNKNOWN", []))
 
     def test_a_long_condition_for_many_parts_is_over_the_steps(self):
-        """A line of the grid whose `unless` has 25,000 parts, for 5,000 parts of the design:
-        125 million looks that nothing counted, over a minute. Each is a step now."""
-        kind = {"type": "t", "what": "w", "fields": [LENGTH, {"name": "k", "one_of": ["x", "y"], "what": "w"}]}
+        """A line of the grid whose `unless` has 25,000 parts, for 3,000 parts of the design:
+        75 million looks that nothing counted, over a minute. Each is a step now. The card
+        states the key of each part, which a megabyte has room for 3,000 times."""
+        kind = {"type": "t", "what": "w", "fields": [LENGTH, {"name": "k", "one_of": ["x", "y"], "what": "w", "signed": True}]}
         lines = [asks(unless={"why": "", "when": ["and"] + [["is", "k", "x"]] * 25_000})]
-        parts = [{"name": f"p{i}", "type": "t", "lines": [{"field": "f", "args": ONE}, {"field": "k", "args": [{"word": "x"}]}]} for i in range(4_500)]
-        said = self.bounded(with_rules(deck_of(types=[kind], grid_lines=lines), empty_card(), parts))
+        parts = [{"name": f"p{i}", "type": "t", "lines": [{"field": "f", "args": ONE}, {"field": "k", "args": [{"word": "x"}]}]} for i in range(3_000)]
+        said = self.bounded(with_rules(deck_of(types=[kind], grid_lines=lines), *card_states(parts, "k")))
         self.assertEqual([(f["rule"], f["why"][:60]) for f in said["findings"]],
                          [("limits", "writing the tapes of this design from the deck of rules take")])
 
     def test_many_rules_that_are_for_no_part_are_over_the_steps(self):
-        """1,200 rules of one line whose `when` has 25 parts and holds for no part, and 3,000
-        parts: no cell came of them, so nothing counted the 90 million looks."""
-        kind = {"type": "t", "what": "w", "fields": [LENGTH, {"name": "k", "one_of": ["x", "y"], "what": "w"}]}
+        """1,200 rules of one line whose `when` has 25 parts and holds for no part, and 2,000
+        parts: no cell came of them, so nothing counted the 60 million looks."""
+        kind = {"type": "t", "what": "w", "fields": [LENGTH, {"name": "k", "one_of": ["x", "y"], "what": "w", "signed": True}]}
         rules = [rule_of(f"r/{i}", when=["and"] + [["is", "k", "y"]] * 25) for i in range(1_200)]
-        parts = [{"name": f"p{i}", "type": "t", "lines": [{"field": "f", "args": ONE}, {"field": "k", "args": [{"word": "x"}]}]} for i in range(3_000)]
-        said = self.bounded(with_rules(deck_of(types=[kind], grid_lines=[asks()], rules=rules), empty_card(), parts))
+        parts = [{"name": f"p{i}", "type": "t", "lines": [{"field": "f", "args": ONE}, {"field": "k", "args": [{"word": "x"}]}]} for i in range(2_000)]
+        said = self.bounded(with_rules(deck_of(types=[kind], grid_lines=[asks()], rules=rules), *card_states(parts, "k")))
         self.assertEqual([f["rule"] for f in said["findings"]], ["limits"])
 
     def test_empty_parts_of_a_type_of_many_fields_are_counted(self):
@@ -784,7 +800,7 @@ class Alike(unittest.TestCase):
         """`pairs` parts that each join a part of four keys, and a condition that asks `count` times about those keys."""
         keys = [alike(k, "f") if long else f"f{k}" for k in range(4)]
         yes, no, called = ("y" * 64, "n" * 64, alike(0, "a")) if long else ("y", "n", "a")
-        leaf = {"type": "leaf", "what": "w", "fields": [{"name": name, "one_of": [yes, no], "what": "w"} for name in keys]}
+        leaf = {"type": "leaf", "what": "w", "fields": [{"name": name, "one_of": [yes, no], "what": "w", **({"signed": True} if where == "unless" else {})} for name in keys]}
         kind = {"type": "t", "what": "w", "fields": [{"name": "holds", "type": "leaf", "as": [called], "what": "w"}]}
         rnd = random.Random(2)
         asked = ["or"] + [["is", f"{called}.{rnd.choice(keys)}", no] for _ in range(count)]
@@ -794,7 +810,8 @@ class Alike(unittest.TestCase):
         for k in range(pairs):
             parts.append({"name": alike(k, "q") if long else f"q{k}", "type": "leaf", "lines": [{"field": name, "args": [{"word": yes}]} for name in keys]})
             parts.append({"name": alike(k, "p") if long else f"p{k}", "type": "t", "lines": [{"field": "holds", "args": [{"word": parts[-1]["name"]}]}]})
-        return with_rules(deck_of(types=[leaf, kind], grid_lines=[line], rules=[rule]), empty_card(), parts)
+        card, parts = card_states(parts, *keys) if where == "unless" else (empty_card(), parts)      # the `unless` of a line reads only keys the card signs
+        return with_rules(deck_of(types=[leaf, kind], grid_lines=[line], rules=[rule]), card, parts)
 
     def test_an_unless_on_keys_of_a_joined_part_at_the_steps_of_the_cells(self):
         """An `unless` that asks 19,000 times about four keys of the part its part joins, for

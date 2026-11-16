@@ -298,12 +298,12 @@ mechanical anchor, where no rule reads the tension."""
 
 
 class TheReasonOfALoadNoCaseNames(unittest.TestCase):
-    def test_the_card_puts_the_load_on_the_part(self):
-        text = design(part("anchor", "a", kind="unstated", bond="given a.bond"))
-        found, status, said = cells(self, ANCHORS, text, HEAD + given("a.bond", "50 kN") + waive("anchor.pullout", "a"))
-        self.assertEqual((found[("a", "unread", "tension/")], status), ("open", "UNKNOWN"))
-        rules, read = parsed(ANCHORS, text, HEAD + given("a.bond", "50 kN") + waive("anchor.pullout", "a"))
-        why = "no rule of the deck reads the load tension that the card puts on a, so nothing checks it"
-        self.assertEqual([c.why for c in grid.check(read, rules)[0].cells if c.entry == "tension/"], [why], "it read `that case  puts on a`")
-        if verify.binary():
-            self.assertEqual([c["reason"] for c in said["cells"] if c["entry"] == "tension/"], [why])
+    def test_the_deck_of_the_finding_is_refused_by_both_readers(self):
+        """M3 was the wording of one reason: of a load that a completion puts on a part under a card with no load case, where
+        the rule that would read the load does not answer under the completion. That needs a `when` over a key left unstated.
+        Since plan step 1.6 a `when` reads only a key the card signs, so no deck that reads can put the question."""
+        from tests.test_deck_features import no_deck
+
+        for said in no_deck(self, ANCHORS):
+            self.assertIn("its `when` reads kind, which the design may state: a `when` reads only a key the card signs", said)
+

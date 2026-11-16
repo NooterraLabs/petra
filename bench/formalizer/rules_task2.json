@@ -92,7 +92,7 @@
      "one_of": [
       "standard",
       "oversize"
-     ],
+     ], "signed": true,
      "what": "the type of the holes in both plates"
     },
     {
@@ -138,7 +138,7 @@
      "one_of": [
       "protected",
       "weathering"
-     ],
+     ], "signed": true,
      "what": "whether the plates are painted or otherwise not open to atmospheric corrosion, or are unpainted weathering steel open to it"
     },
     {

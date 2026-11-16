@@ -479,7 +479,7 @@ class NothingForgesALine(unittest.TestCase):
 class ATextForAList(unittest.TestCase):
     def deck(self, row: dict, binds: dict) -> dict:
         gives = {"name": "v", "dim": "dimensionless", "what": "v"}
-        return made_up([kind("bar", size("x", "dimensionless"), {"name": "g", "one_of": ["a", "b"], "what": "g"})],
+        return made_up([kind("bar", size("x", "dimensionless"), {"name": "g", "one_of": ["a", "b"], "signed": True, "what": "g"})],
                        [asks("bar.held", "bar"), asks("bar.g", "bar", unless={"why": "w", "when": ["or", ["is", "g", "a"], ["is", "g", "b"]]})],
                        [rule("held", "bar", "bar.held", le=["1", ["row", "made-up/r", binds]])], [{"id": "made-up/r", "anchor": ANCHOR, "gives": gives, **row}])
 
@@ -487,7 +487,7 @@ class ATextForAList(unittest.TestCase):
         t = {"name": "t", "dim": "dimensionless", "what": "t", "range": ["0", "9"]}
         g = {"name": "g", "one_of": ["a", "b"], "what": "g"}
         honest = self.deck({"takes": [t], "table": {"down": {"by": "t", "bands": [["0", "5"], ["5", "9"]]}, "cells": ["2", "3"]}}, {"t": "x"})
-        self.assertEqual(cells(self, honest, design(part("bar", "b", x="3", g="a")))[1], "PASS")
+        self.assertEqual(cells(self, honest, design(part("bar", "b", x="3", g="given b.g")), HEAD + 'given b.g is a signed "t@example.org" source "test"\n')[1], "PASS")
         for label, row, binds in (
                 ("a band", {"takes": [t], "table": {"down": {"by": "t", "bands": ["05", "59"]}, "cells": ["2", "3"]}}, {"t": "x"}),
                 ("the listed values", {"takes": [t], "table": {"down": {"by": "t", "at": "37"}, "cells": ["2", "3"]}}, {"t": "x"}),

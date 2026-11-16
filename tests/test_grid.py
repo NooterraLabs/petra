@@ -47,7 +47,7 @@ STRIPS = {
              {"name": "gap", "dim": "length", "signed": True, "what": "the gap under it"},
              {"name": "screw", "dim": "length", "what": "the diameter of its screw"},
              {"name": "hole", "dim": "length", "what": "the diameter of its hole"},
-             {"name": "fit", "one_of": ["close", "free"], "what": "the fit of the screw"},
+             {"name": "fit", "one_of": ["close", "free"], "signed": True, "what": "the fit of the screw"},
              {"name": "turns", "dim": "dimensionless", "whole": True, "least": "1", "what": "how many strips lie side by side"},
              {"name": "lands", "type": "pad", "as": ["near", "far"], "what": "its two pads"}],
          "loads": [{"name": "current", "dim": "current", "least": "0 A", "what": "the current through it"}]},
@@ -90,7 +90,7 @@ strip s {
   gap given s.gap
   screw 3 mm
   hole 3.2 mm
-  fit close
+  fit given s.fit
   turns 2
   lands p1 p2
 }
@@ -104,6 +104,7 @@ card "strips" {
 
 given s.T in [20 degC, 30 degC] signed "t@example.org" source "test"
 given s.gap in [0.5 mm, 0.6 mm] signed "t@example.org" source "test"
+given s.fit is close signed "t@example.org" source "test"
 
 load run {
   on s current in [0 A, 2 A]
@@ -135,10 +136,12 @@ def alone(card: str, design: str, path: str) -> dict:
 
 
 def checked(design=DESIGN, card=CARD, rules=None, swap=(), card_swap=()) -> dict:
-    """The grid's own report of the texts against STRIPS, each after its replacements."""
+    """The grid's own report of the texts against STRIPS, each after its replacements. A
+    replacement of `swap` is made in the design, or in the card where only the card holds
+    its text: the fit of the screw is a key that a condition reads, so the card states it."""
     for old, new in swap:
-        assert old in design, old
-        design = design.replace(old, new)
+        assert old in design or old in card, old
+        design, card = (design.replace(old, new), card) if old in design else (design, card.replace(old, new))
     for old, new in card_swap:
         assert old in card, old
         card = card.replace(old, new)
@@ -189,7 +192,7 @@ class Cells(unittest.TestCase):
         between = cell(checked(swap=[("screw 3 mm", "screw 3.5 mm")]), "strip.hole")
         self.assertEqual(between["state"], "open")
         self.assertIn("test/drill gives no value at what s has", between["why"])
-        empty = cell(checked(swap=[("screw 3 mm", "screw 4 mm"), ("fit close", "fit free"), ("hole 3.2 mm", "hole 5 mm")]), "strip.hole")
+        empty = cell(checked(swap=[("screw 3 mm", "screw 4 mm"), ("s.fit is close", "s.fit is free"), ("hole 3.2 mm", "hole 5 mm")]), "strip.hole")
         self.assertEqual((empty["state"], empty["why"]), ("open", "test/drill gives no value at what s has: no case of the pick holds somewhere in the box"))
         small = checked(swap=[("hole 3.2 mm", "hole 3.1 mm")])
         self.assertEqual((small["status"], cell(small, "strip.hole")["state"]), ("FAIL", "refuted"))
@@ -211,13 +214,13 @@ class Cells(unittest.TestCase):
 
     def test_what_a_part_is_decides_which_rule_answers_and_whether_one_must(self):
         self.assertEqual(cell(checked(), "strip.spark")["state"], "not_applicable")
-        free = checked(swap=[("fit close", "fit free"), ("hole 3.2 mm", "hole 3.6 mm")])
+        free = checked(swap=[("s.fit is close", "s.fit is free"), ("hole 3.2 mm", "hole 3.6 mm")])
         self.assertEqual(cell(free, "strip.spark")["state"], "proved")
-        idle = checked(swap=[("fit close", "fit free"), ("hole 3.2 mm", "hole 3.6 mm")],
+        idle = checked(swap=[("s.fit is close", "s.fit is free"), ("hole 3.2 mm", "hole 3.6 mm")],
                        card_swap=[('load run {\n  on s current in [0 A, 2 A]\n  signed "t@example.org" source "test"\n}\n', "")])
         self.assertEqual(cell(idle, "strip.spark")["state"], "proved", "the rule reads no load, so it answers the same with no load case")
         other = deck(lambda body: body["rules"][3].update(when=["is", "fit", "close"]))
-        unanswered = checked(swap=[("fit close", "fit free"), ("hole 3.2 mm", "hole 3.6 mm")], rules=other)
+        unanswered = checked(swap=[("s.fit is close", "s.fit is free"), ("hole 3.2 mm", "hole 3.6 mm")], rules=other)
         self.assertEqual(cell(unanswered, "strip.spark")["state"], "open")
         self.assertIn("no rule for it on a part like this one", cell(unanswered, "strip.spark")["why"])
 
@@ -268,19 +271,20 @@ class Refused(unittest.TestCase):
 
     def test_a_part_has_each_line_of_its_type_once_and_no_other(self):
         self.refused("s lacks hole", swap=[("  hole 3.2 mm\n", "")])
-        self.refused("s.colour is not a line of a strip", swap=[("  fit close\n", "  fit close\n  colour red\n")])
-        self.refused("s.hole is given twice", swap=[("  fit close\n", "  fit close\n  hole 3.3 mm\n")])
+        self.refused("s.colour is not a line of a strip", swap=[("  fit given s.fit\n", "  fit given s.fit\n  colour red\n")])
+        self.refused("s.hole is given twice", swap=[("  fit given s.fit\n", "  fit given s.fit\n  hole 3.3 mm\n")])
 
     def test_a_value_has_the_dimension_and_the_domain_of_its_field(self):
         self.refused("s.width is a length, not a current", swap=[("width 1 mm", "width 1 A")])
-        self.refused("s.fit is one of: close, free", swap=[("fit close", "fit snug")])
+        self.refused("s.fit is one of: close, free", swap=[("s.fit is close", "s.fit is snug")])
         self.refused("s.turns is a count: a whole number", swap=[("turns 2", "turns 2.5")])
         self.refused("s.lands names 2 different pad parts", swap=[("lands p1 p2", "lands p1 s")])
         self.refused("s.lands names 2 different pad parts", swap=[("lands p1 p2", "lands p1 p1")])
 
     def test_a_part_is_joined_by_one_other(self):
         second = DESIGN.split("strip s {")[1].replace("given s.", "given r.")
-        more = 'given r.T in [20 degC, 30 degC] signed "t@example.org" source "test"\ngiven r.gap in [0.5 mm, 0.6 mm] signed "t@example.org" source "test"\n\nload run'
+        more = ('given r.T in [20 degC, 30 degC] signed "t@example.org" source "test"\ngiven r.gap in [0.5 mm, 0.6 mm] signed "t@example.org" source "test"\n'
+                'given r.fit is close signed "t@example.org" source "test"\n\nload run')
         self.refused("p1 is joined by s and r", design=DESIGN + "\nstrip r {" + second, card_swap=[("load run", more)])
 
     def test_a_load_is_one_the_type_takes_and_no_less_than_its_least(self):
@@ -498,9 +502,9 @@ class Shipped(unittest.TestCase):
     def variant(self, *swap: tuple[str, str], pull: str = "45 kip") -> dict:
         path = ROOT / "examples" / "deck" / "lap_unknown.petra"
         card, design = read_pair(path)
-        for old, new in swap:
-            assert old in design, old
-            design = design.replace(old, new)
+        for old, new in swap:      # in the design, or in the card for a key that a condition reads and the card signs
+            assert old in design or old in card, old
+            design, card = (design.replace(old, new), card) if old in design else (design, card.replace(old, new))
         assert "[0 kip, 45 kip]" in card
         return alone(card.replace("[0 kip, 45 kip]", f"[0 kip, {pull}]"), design, str(path))
 
@@ -566,7 +570,7 @@ class Shipped(unittest.TestCase):
         self.assertEqual(states("lap.side_distance", None, self.variant(("side 3 inch", "side 1 inch")), self.variant(("side 3 inch", "side 0.999 inch"))), turned)
         # J3.6(a): 24 thicknesses of 3/8 inch, 9 inch. J3.6(b): 14 thicknesses, 5.25 inch.
         self.assertEqual(states("lap.spread", None, self.variant(("pitch 3 inch", "pitch 9 inch")), self.variant(("pitch 3 inch", "pitch 9.001 inch"))), turned)
-        weathering = ("surface protected", "surface weathering")
+        weathering = ("splice.surface is protected", "splice.surface is weathering")
         self.assertEqual(states("lap.spread", None, self.variant(weathering, ("pitch 3 inch", "pitch 5.25 inch")), self.variant(weathering, ("pitch 3 inch", "pitch 5.251 inch"))), turned)
         # J3.6: the caps of 12 inch and 7 inch, on plates of 3/4 inch, where 24 and 14 thicknesses are more.
         thick = ("thickness 0.375 inch", "thickness 0.75 inch")
@@ -580,7 +584,7 @@ class Shipped(unittest.TestCase):
         self.assertEqual(states("lap.block_shear", "lap-block-shear-b/gravity", self.variant(near, pull="58.81 kip"), self.variant(near, pull="58.82 kip")), turned)
 
     def test_an_oversize_hole_adds_the_increment_of_table_j3_5_to_the_end_and_the_side(self):
-        oversize = ("holes standard", "holes oversize")
+        oversize = ("splice.holes is standard", "splice.holes is oversize")
         at = self.variant(oversize, ("end 1.5 inch", "end 1.0625 inch"), ("side 3 inch", "side 1.0625 inch"))
         self.assertEqual([(cell(at, m)["entry"], cell(at, m)["state"], cell(at, m)["ratio"]) for m in ("lap.end_distance", "lap.side_distance")],
                          [("lap-end-distance-oversize", "proved", 1.0), ("lap-side-distance-oversize", "proved", 1.0)], "1 inch and 1/16 inch more, for a 3/4 inch bolt")
