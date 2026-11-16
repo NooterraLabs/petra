@@ -2102,10 +2102,12 @@ def _answers(rule: Rule, ask: Ask, part: Part, parts: Mapping[str, Part], cases:
         return Cell(part.name, rule.mechanism, entry, state, rule.says, anchor, why, rule.id, **{"stated": rule.requires is not None, **more})
 
     # A rule that reads a field the part leaves unstated has no answer of its own. It reads the field in a side, in its `where`, in its
-    # `when` or in its `requires`. The kernel names the first such field the rule reads, and this names the first by name. With a quantity
-    # left unstated each cell the rule would give is open, and no waiver rests it: no hint names a value for a quantity.
+    # `when` or in its `requires`. The kernel names the first such field the rule reads. For a rule with `requires` that is the first key
+    # of its `when` and then of its `requires`, as they are written, and this names the same one. For any other rule the order is that of
+    # the kernel's steps, and this names the first by name. With a quantity left unstated each cell the rule would give is open, and no
+    # waiver rests it: no hint names a value for a quantity.
     named = _reads(rule)
-    fields = sorted(name for name in named if not name.startswith("load "))
+    fields = list(dict.fromkeys([*_keys(rule.when), *_keys(rule.requires)])) if rule.requires is not None else sorted(n for n in named if not n.startswith("load "))
     reads = sorted(name[5:] for name in named if name.startswith("load "))
     lacks, unsaid = _lacking(part, parts, fields), []
     if lacks is not None:

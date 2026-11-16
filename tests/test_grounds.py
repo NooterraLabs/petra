@@ -340,6 +340,28 @@ class ACellThatReadsNothing(unittest.TestCase):
         self.assertEqual([line for line in lines if "\n" in line], [])
 
 
+class TheFirstKeyLeftUnstated(unittest.TestCase):
+    def test_both_readers_name_the_first_key_a_requirement_reads(self):
+        """The attacker, at seed 20: a rule required two keys that a part left unstated, and the kernel named the first as the
+        rule writes them where the grid named the first by name. It was so before this step. The pages fix the order for a
+        rule with `requires`, so both name the same key now, on an open cell and on a waived one."""
+        for first, second in (("seal", "maker"), ("maker", "seal")):
+            keys = [{**key(name, "none", "full"), "optional": True, "chosen": WHY} for name in ("seal", "maker")]
+            deck = made_up([kind("hoist", size("span"), *keys)], [asks("hoist.span", "hoist"), asks("hoist.sealed", "hoist")],
+                           [rule("span", "hoist", "hoist.span", le=[["q", "1", "mm"], "span"]),
+                            rule("sealed", "hoist", "hoist.sealed", requires=["and", ["is", first, "none"], ["is", second, "none"]])], signs=False)
+            text = design(part("hoist", "h", span="5 mm", seal="unstated", maker="unstated"))
+            for waive in ("", '\nwaive hoist.sealed on h by "t@example.org" reason "test"\n'):
+                with self.subTest(first=first, waived=bool(waive)):
+                    deck_, read = parsed(deck, text, HEAD + waive, states=False)
+                    report, files = grid.check(read, deck_)
+                    (mine,) = [c for c in report.cells if c.mechanism == "hoist.sealed"]
+                    self.assertIn(f"h.{first} is unstated: its maker states none, and the rule reads it", mine.why)
+                    if verify.binary():
+                        (theirs,) = [c for c in ask(files)["cells"] if c["mechanism"] == "hoist.sealed"]
+                        self.assertIn(f"h.{first} is unstated: its maker states none, and the rule reads it", theirs["reason"])
+
+
 class TheGuardKnowsAStatedCell(unittest.TestCase):
     @KERNEL
     def test_a_pass_on_stated_cells_alone_is_no_answer(self):
