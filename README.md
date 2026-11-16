@@ -33,6 +33,7 @@ petra check lap.petra
 - [The files the kernel reads](docs/format.md)
 - [What is proved about the kernel](docs/proved.md)
 - [Wrong passes in version 0.1.1](docs/advisory_0.1.1.md)
+- [A wrong pass in version 0.1.2](docs/advisory_0.1.2.md)
 
 ## License
 
