@@ -246,6 +246,33 @@ Measured with `--count 5000 --decks 3000 --seed 7` against the kernel and the gr
 | Generated designs, 4,756 compared | The same verdict and the same cells on every one |
 | Damaged decks, 3,000 compared | The same on every one |
 
+## The tenth update, of 2026-11-16
+
+The pages changed twice in one day, for the two parts that close plan step 1.6.
+
+First, a line is excused only with a reason, and every cell of a rule with `requires` is marked `stated` and is not the proved cell a PASS needs. One agent, under the same rule as before, had the two pages, what had changed in them, the shipped deck, this reading and its list, and 44 bundles with the kernel's answers. It found that the kernel left a refuted cell of an incomplete `requires` unmarked where the pages marked it, and that a reason of invisible characters was taken. Both are corrected, the second by asking a letter of a reason.
+
+Then the format of a deck changed: a key is the card's unless its field says `chosen`, an `unless` has one ground that the readers check, and a numeric cell that reads nothing is marked `stated`. The reading as it stood refused the deck that ships. The same agent brought it up in three rounds, each from the pages before any bundle was run:
+
+| Round | Bundles | Agree | What it turned on |
+|---|---|---|---|
+| The format change | 112 | 110, and 58 as found | The two that differed were bundles that wrote a cell with no reason as an empty one |
+| The sixteenth review's fixes | 124 | 124 | `least` part by part, the mark by what a root reads, three rooms for reasons |
+| Two reasons reworded | 124 | 124 | The words alone |
+
+It also wrote 21 cases of its own for corners the bundles did not reach, with the reading's answer for each. The kernel gives the same verdict, cells, marks and reasons on all 21. Two of them were the same faults the sixteenth review found from the code: a line excused by a `least` for a part with no value, and a mark that went by whether a tape had an input and not by what its root read.
+
+`AMBIGUITIES.md` gained sections S, T and U, 24 entries. The agent sent 21 sentences of the pages that were false, at odds with another or unclear, and the pages are corrected: "cannot arise" said of a ground, "settled" in two senses, which `why` is cut when a deck is read, and what a waiver that rests nothing means. Nothing in `verify.mjs` was edited by the agent that changed the kernel.
+
+The agent ran on the strongest model, as the hostile reviews do, which is also the model that changed the kernel. What keeps it apart is the rule and not the model: it read the pages and the bundles and nothing else.
+
+Measured with `PETRA_TWIN` set and `--count 1500 --decks 800 --seed 7 --jobs 2` against the kernel and the grid of this tree.
+
+| Compared | Result |
+|---|---|
+| Generated designs, 1,424 compared | The same verdict and the same cells on every one |
+| Damaged decks, 800 compared | The same on every one |
+
 ## What it is not
 
 It does not check a design.json with no `parts`: files with no deck of rules get UNKNOWN from it when no cell carries a tape, and no verdict when one does. It applies the limits that decide a verdict and not the budget of work, the memory of enclosures or the limits on what is printed. It is a reading of the rules path only.

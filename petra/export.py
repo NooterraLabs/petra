@@ -98,6 +98,12 @@ def read_inputs(design: Design) -> list[Input]:
     answers the card. This knows no deck."""
     given = [Input(a.name, a.range, a.signature, a.kind, a.span, a.mean) for a in design.givens.values()]
     loads = [e.value for case in design.loads.values() for e in case.entries if isinstance(e.value, Input)]
+    # card.json has no place for a mean, and a card that states one is not written as the card without it: every way to
+    # these files refuses it, as `petra check` does.
+    stated = [i.name for i in given + loads if i.mean is not None]
+    if stated:
+        from .files import ComponentError
+        raise ComponentError(tuple(f"{design.path}: {name} states a mean, which a deck does not read yet" for name in stated))
     return sorted(given + loads + ([design.ambient] if isinstance(design.ambient, Input) else []), key=lambda i: i.name)
 
 

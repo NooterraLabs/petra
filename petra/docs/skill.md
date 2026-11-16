@@ -18,7 +18,7 @@ Install it with `pip install petra-lang`. The command is `petra` and the Python 
 3. Put the user's loads and material bounds into the card, signed with the user's name and the source of the numbers. Edit the design's lines to fit.
 4. Run `petra check lap.petra`. Read the first line for the verdict, and then the cells.
 
-The card that `petra new` prints signs no waiver, so the pair reads UNKNOWN with five lines open. The example it is from passes on waivers that its own engineer signed, and nobody has signed yours.
+The card that `petra new` prints signs no waiver, so the pair reads UNKNOWN with six lines open. The example it is from passes on waivers that its own engineer signed, and nobody has signed yours.
 
 ## Read the report
 

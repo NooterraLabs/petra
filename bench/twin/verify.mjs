@@ -7,14 +7,15 @@
 // Prints one JSON object {verdict, findings, counts, ignored_hints, waived, cells} and exits
 // 0 PASS, 1 FAIL, 2 UNKNOWN, 3 ILL-FORMED, 64 for a command line it cannot read, and for files
 // with no deck of rules whose proofs.json carries a tape, which it does not check. A cell has its
-// subject, mechanism, entry, claimed and state, a reason when it is open, waived, or a refuted
-// rule that requires, and the completion it rests on when it is waived on one. --explain adds the
+// subject, mechanism, entry, claimed and state, a reason when it is open, waived, not applicable
+// or a settled rule that requires, `stated: true` when it is a cell of a rule that requires or a
+// cell settled on a tape with no input, and the completion it rests on when it is waived on one. --explain adds the
 // steps to read the deck and to make the cells.
 //
 // Of the limits format.md states, the budget of work (20,000,000,000 units, for the needs, the
 // proofs and the walks that ask whether a rule's `where` holds nowhere), the words of enclosures
 // held on a leaf and the caches of ln, exp and cos are left out: they are counted in the
-// reference kernel's own costs. So are the limits on what is printed. The steps to make the
+// reference kernel's own costs. So is the limit of 100 findings. The steps to make the
 // cells (Steps), cos and the completions of item 9 among them, are counted. The kernel does not
 // search: the climb of petra check, its budget of nodes and the work it charges its exponentials
 // are not here. See AMBIGUITIES.md, I, K, L and M.
@@ -50,6 +51,19 @@
 // the type of the part that joins it, is one open cell with mechanism `unread`, in its place among
 // the part's fields: the need was not asked (format.md, Parts 9 and Cells 8). An unstated field
 // has no other `unread` cell, whatever a completion names. See AMBIGUITIES.md, R.
+//
+// A line of the grid is excused only with a reason and a ground: the `why` of an `unless` is a
+// text with a letter in it, `a` to `z` or `A` to `Z`, and beside it stands exactly one of `when`,
+// `least`, `loads` and `with`, each held to deck.md, The grid, when the deck is read. A cell that
+// is not applicable has that `why` as its reason, cut once. A line answered `with` other lines is
+// one cell for a part, settled after every other cell and every waiver, and no waiver rests it.
+// A key is the card's unless its field says `chosen`, a text with a letter in it: a design that
+// writes any other key is refused, and no `when` reads a chosen key. Every cell of a rule that
+// requires is marked `stated: true`, and so is a cell proved or refuted on a tape whose root reads no input;
+// neither is the proved cell a PASS needs. A text past 200 bytes as printed is cut as format.md,
+// "A text that is cut", says, and the reasons are held to their three rooms. A `least` excuses
+// its line only for a part that has a value for what it names, and the line is open and waivable
+// for any other. See AMBIGUITIES.md, S, T and U.
 
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
@@ -537,6 +551,32 @@ export function printVerdict(out) {
 }
 const NAME_BYTES = 64;
 const LABEL_NAME_BYTES = 200;
+
+// format.md, Limits, "A text that is cut": "A text that prints in at most 200 bytes is printed
+// whole. A longer one is cut in this one way." The bytes are those it prints in, character by
+// character, a character being one code point. "The kernel takes the characters in order from the
+// first and keeps each while its bytes fit in what is left of the 200. It stops at the first
+// character that does not fit, and keeps nothing after it, though a later character might fit."
+// "After the kept start come the words `... (N more characters)` ... `N` is the number of
+// characters left out, the characters of the whole text less those kept ... The word is
+// `characters` for one, too." The ending is outside the 200 bytes. "A text is cut once, where it
+// is made": the callers say where (AMBIGUITIES.md, S5 and T7).
+export const TEXT_BYTES = 200;
+export function cutText(s) {
+  if (printedBytes(s) <= TEXT_BYTES) return s;
+  const chars = [...s];
+  let left = TEXT_BYTES, kept = 0;
+  for (; kept < chars.length; kept++) {
+    const b = printedBytes(chars[kept]);
+    if (b > left) break;
+    left -= b;
+  }
+  return `${chars.slice(0, kept).join('')}... (${chars.length - kept} more characters)`;
+}
+// format.md, Limits, "The room of the reasons": three rooms of 500,000 bytes as printed, for the
+// reasons of the refuted cells, of the cells that are not applicable, and of every other cell.
+export const REASON_ROOM = 500_000;
+export const PAST_ROOM = 'past what the verdict prints of reasons';
 
 // deck.md, "The size of a deck": the steps to read a deck, counted from its JSON alone.
 // 1. A number, true, false and null are 1; a text is 2 and 1 more for each 8 code points; a list
@@ -1116,6 +1156,41 @@ export function holdsNowhere(tape) {
   return tape.roots.findIndex((r) => { const v = ev(r); return !!v && v[0].n > 0n; });
 }
 
+// format.md, Cells 6: "The root of this tape reads an input when it reads the input's node,
+// directly or through the nodes it reads: the nodes of a sum, a product or any other arithmetic,
+// the nodes that a pick compares, and the node of each case of a pick. A tape may hold an input
+// that its root does not read, as the quantity bound to an input of a row that the row does not
+// use." The exponent of a `pow` is a number of the node and no node.
+export function rootReadsInput(tape, root) {
+  const seen = new Set();
+  const stack = [root];
+  const cond = (c0) => {
+    const cs = [c0];
+    while (cs.length) {
+      const c = cs.pop();
+      if (c === null) continue;
+      if (c[0] === 'le' || c[0] === 'lt') stack.push(c[1], c[2]);
+      else if (c[0] === 'not') cs.push(c[1]);
+      else for (const x of c[1]) cs.push(x);
+    }
+  };
+  while (stack.length) {
+    const i = stack.pop();
+    if (seen.has(i)) continue;
+    seen.add(i);
+    const nd = tape.nodes[i];
+    switch (nd[0]) {
+      case 's': return true;
+      case 'c': case 'pi': break;
+      case 'add': case 'mul': case 'min': case 'max': for (const j of nd[1]) stack.push(j); break;
+      case 'div': stack.push(nd[1], nd[2]); break;
+      case 'pick': for (const [c, n] of nd[1]) { cond(c); stack.push(n); } break;
+      default: stack.push(nd[1]); // neg, abs, sqrt, ln, exp, cos, and the base of a pow
+    }
+  }
+  return false;
+}
+
 const MAX_PARTITION_DEPTH = 64;
 
 // True when the partition proves every root of the tape (each upper end at most zero).
@@ -1201,7 +1276,7 @@ function checkName(s, what) {
 function nameText(s, what) {
   if (!isStr(s) || s.length === 0) throw DE(`${what} ${short(s)} is not a name`);
 }
-// A text the deck must have: `what` of a type, a line; `why` of an unless, an item of where.
+// A text the deck must have: `what` of a type, a line; `why` of an item of where.
 function needText(o, k, what) {
   if (!Object.hasOwn(o, k)) throw DE(`${what} has no ${k}`);
   if (!isStr(o[k])) throw DE(`${what}.${k} is not a text`);
@@ -1210,6 +1285,17 @@ function needText(o, k, what) {
 function needFullText(o, k, what) {
   needText(o, k, what);
   if (o[k].length === 0) throw DE(`${what}.${k} is the empty text`);
+}
+// deck.md, The grid, "The reason": "`why` is a text that holds at least one letter, `a` to `z` or
+// `A` to `Z`. An `unless` with no `why`, with a `why` that is no text, or with one that holds none
+// of those 52 letters, as `""`, `" "`, `"..."` and `"0"`, is refused, and the message is the same
+// for all three: `grid MECHANISM: unless: it says why, in a text with a letter in it`." The same
+// test holds the `chosen` of a key (deck.md, A key the designer chooses). A letter with an accent,
+// or of another alphabet, is none of the 52 (AMBIGUITIES.md, S1).
+const LETTER_RE = /[A-Za-z]/;
+const hasLetter = (x) => isStr(x) && LETTER_RE.test(x);
+function needReason(o, k, what) {
+  if (!Object.hasOwn(o, k) || !hasLetter(o[k])) throw DE(`${what}: it says ${k}, in a text with a letter in it`);
 }
 // format.md, Limits: in a deck of rules the name of a field, a load, a joined part and a let,
 // the name of a mechanism and the id of a rule print in at most 64 bytes.
@@ -1614,9 +1700,9 @@ function loadType(t, seenTypes) {
   };
   for (const f of t.fields) {
     // deck.md: a field has `name`, `what`, a text that is not empty, and one of dim, one_of and
-    // type. A quantity may have optional, signed, whole, least and may_be; a key optional and
-    // signed and no other of them; a field that joins parts `as` and none of them.
-    checkKeys(f, ['name', 'what', 'dim', 'one_of', 'type', 'as', 'signed', 'whole', 'least', 'optional', 'may_be'], ['name', 'what'], 'a field');
+    // type. A quantity may have optional, signed, whole, least and may_be; a key optional, signed
+    // and chosen and no other of them; a field that joins parts `as` and none of them.
+    checkKeys(f, ['name', 'what', 'dim', 'one_of', 'type', 'as', 'signed', 'chosen', 'whole', 'least', 'optional', 'may_be'], ['name', 'what'], 'a field');
     checkName(f.name, 'the field');
     checkNameBytes(f.name, 'the field');
     needFullText(f, 'what', `the field ${f.name}`);
@@ -1624,6 +1710,9 @@ function loadType(t, seenTypes) {
     const kinds = ['dim', 'one_of', 'type'].filter((k) => Object.hasOwn(f, k));
     if (kinds.length !== 1) throw DE(`the field ${f.name} has not exactly one of dim, one_of and type`);
     let F;
+    // deck.md, A deck: "So is a key where it does not belong: ... `chosen` on a field that is no
+    // key", whatever it holds.
+    if (kinds[0] !== 'one_of' && Object.hasOwn(f, 'chosen')) throw DE(`the field ${f.name} has chosen, and it is no key: chosen stands on a key and on no other field`);
     if (kinds[0] === 'dim') {
       if (Object.hasOwn(f, 'as')) throw DE(`the quantity ${f.name} has as`);
       const dim = parseDim(f.dim);
@@ -1651,13 +1740,31 @@ function loadType(t, seenTypes) {
     } else if (kinds[0] === 'one_of') {
       for (const k of ['whole', 'least', 'may_be', 'as']) if (Object.hasOwn(f, k)) throw DE(`the key ${f.name} has ${k}`);
       if (!Array.isArray(f.one_of) || f.one_of.length === 0 || !f.one_of.every(isStr) || new Set(f.one_of).size !== f.one_of.length) throw DE(`the key ${f.name} has no list of distinct names`);
-      const signed = flag(f, 'signed'), optional = flag(f, 'optional');
-      if (optional && signed) throw DE(`the field ${f.name} is both optional and signed`);
+      // deck.md, A key the designer chooses: "A key is the card's or the designer's: one of the
+      // two, and not both. A key with no `chosen` is the card's, with `"signed": true` or with no
+      // `signed` at all. A key with `chosen` is the designer's, and `"signed": false` beside it
+      // says the same again. A deck is refused for a key that has `"signed": false` and no
+      // `chosen`, for a key that has `chosen` beside `"signed": true`, and for a key whose `chosen`
+      // is no text or holds none of those 52 letters, as `""`, `"1 2 3."`, `5` and `null`. The
+      // refusal names the field, and says the same for each of the three." A `chosen` that is
+      // there is one, `null` too: an `unless` of `null` is read as none, and that is said of the
+      // `unless` alone (AMBIGUITIES.md, T1).
+      const saysSigned = Object.hasOwn(f, 'signed');
+      const signedFlag = flag(f, 'signed'), optional = flag(f, 'optional');
+      const chosen = Object.hasOwn(f, 'chosen');
+      const KEY_OWNER = `field ${f.name}: a key is the card's, which \`signed\` may say, or the designer's, which \`chosen\` says with why, in words: one of the two, and not both`;
+      if (chosen && !hasLetter(f.chosen)) throw DE(KEY_OWNER);
+      if (chosen && signedFlag) throw DE(KEY_OWNER);
+      if (!chosen && saysSigned && !signedFlag) throw DE(KEY_OWNER);
+      // "A key is signed unless it says `chosen`, so an optional key says `chosen`", and "A field
+      // is not both `optional` and `signed`".
+      const signed = !chosen;
+      if (optional && signed) throw DE(`the field ${f.name} is both optional and signed: a key with no chosen is signed, so an optional key says chosen`);
       // deck.md: a key that is optional has no name `unstated`.
       if (optional && f.one_of.includes('unstated')) throw DE(`the optional key ${f.name} has the name unstated`);
-      F = { name: f.name, kind: 'k', names: f.one_of.slice(), signed, optional };
+      F = { name: f.name, kind: 'k', names: f.one_of.slice(), signed, optional, chosen };
     } else {
-      for (const k of ['signed', 'whole', 'least', 'optional', 'may_be']) if (Object.hasOwn(f, k)) throw DE(`the field ${f.name} that joins parts has ${k}`);
+      for (const k of ['signed', 'chosen', 'whole', 'least', 'optional', 'may_be']) if (Object.hasOwn(f, k)) throw DE(`the field ${f.name} that joins parts has ${k}`);
       if (!isStr(f.type)) throw DE(`the field ${f.name} names no type`);
       // deck.md, The grid: a field with no `as` joins one part, under the field's own name.
       let as = [f.name];
@@ -1827,11 +1934,13 @@ function addRead(reads, kf) {
 //
 // `whenOf` is given for the `when` of a rule and the `when` of a line's `unless`, as the words
 // that say whose it is, and left out for what a rule `requires`. deck.md, The grid: "A `when`
-// reads only keys that are `signed`. ... So each `is` of a `when` names a key that only the card
-// states ..., of the type itself or of a part it joins, and a deck that names any other key there
-// is refused when it is read." and "What a rule `requires` is the check itself, and it may name
-// any key" (AMBIGUITIES.md, Q1 to Q3). The words of the refusal are the page's: "its `when` reads
-// surface, which the design may state: a `when` reads only a key the card signs".
+// reads only keys that the card states: keys that do not say `chosen` ... So each `is` of a
+// `when` names a key that only the card states ..., of the type itself or of a part it joins, and
+// a deck that names a chosen key there is refused when it is read." and "What a rule `requires`
+// is the check itself, and it may name any key, the card's or a chosen one" (AMBIGUITIES.md, Q1
+// to Q3). A key's `signed` here is that it does not say `chosen` (loadType). The words of the
+// refusal are the page's: "its `when` reads surface, which the design may state: a `when` reads
+// only a key the card signs".
 function checkPartCond(c, T, types, reads, whenOf) {
   if (!Array.isArray(c) || c.length === 0 || !isStr(c[0])) throw DE(`${short(c)} is not a condition on a part`);
   switch (c[0]) {
@@ -1880,7 +1989,13 @@ function loadRule(r, deck) {
   if (!T) throw DE(`the rule's type ${short(r.type)} is not a type of the deck`);
   const line = isStr(r.mechanism) ? deck.lineOf.get(`${r.type}\u0000${r.mechanism}`) : undefined;
   if (!line) throw DE(`the rule answers ${short(r.mechanism)}, which is no line of the grid for ${r.type}`);
-  if (line.unless && line.unless.when === undefined) throw DE(`the rule answers ${r.mechanism}, which cannot arise`);
+  // deck.md, The grid: "No rule answers a line whose ground is `least`, `loads` or `with`, and a
+  // deck with such a rule is refused, in the same words by both readers. The first refusal is for
+  // a ground of `least` or of `loads`, and the second for `with`: `rule ID: the grid excuses
+  // MECHANISM by what TYPE declares, and no rule answers such a line`, `rule ID: the grid says
+  // MECHANISM is answered with other lines for TYPE`." A line with a `when` has rules.
+  if (line.unless && line.unless.ground === 'with') throw DE(`the grid says ${r.mechanism} is answered with other lines for ${r.type}`);
+  if (line.unless && line.unless.ground !== 'when') throw DE(`the grid excuses ${r.mechanism} by what ${r.type} declares, and no rule answers such a line`);
   const lets = Object.hasOwn(r, 'let') ? r.let : Object.create(null);
   if (!isObj(lets)) throw DE('let is not an object');
   for (const k of Object.keys(lets)) {
@@ -2374,6 +2489,7 @@ function tryRequires(deck) {
   }
 }
 
+const GROUNDS = ['when', 'least', 'loads', 'with'];
 export function loadDeck(D, find) {
   // format.md, After a broken rule: a deck of rules "reads whole or not at all", and the item of
   // a finding of the whole file is the empty text. Where in the deck it is goes in the reason.
@@ -2422,20 +2538,89 @@ export function loadDeck(D, find) {
       if (mechs.has(g.mechanism)) throw DE(`two lines are named ${g.mechanism}`);
       needText(g, 'what', 'the line');
       checkAnchor(g.anchor, 'the line');
-      // deck.md: an `unless` has `why`, a text that may be empty; an `unless` that is null is none.
+      // deck.md, The grid: "An `unless` has `why` and exactly one of the four grounds, and no
+      // other key. One with no ground, or with two, is refused"; "A line whose `unless` is `null`
+      // is read as a line with none." The key that the page does not give is refused first, then
+      // the `why`, then the count of the grounds, then the ground itself: a line has one finding,
+      // of the first of these that it breaks (AMBIGUITIES.md, T1 and T2).
       let unless;
       if (Object.hasOwn(g, 'unless') && g.unless !== null) {
-        checkKeys(g.unless, ['why', 'when'], ['why'], 'unless');
-        needText(g.unless, 'why', 'unless');
+        const u = g.unless;
+        checkKeys(u, ['why', ...GROUNDS], [], 'unless');
+        needReason(u, 'why', 'unless');
+        const grounds = GROUNDS.filter((k) => Object.hasOwn(u, k));
+        if (grounds.length !== 1) throw DE('unless: it has one ground: `when` over keys the card states, `least` of the type, `loads` of the type, or `with` other lines');
+        const ground = grounds[0];
         const reads = newReads();
-        // deck.md, The grid: the `when` of an `unless` reads only keys that are `signed`.
-        if (Object.hasOwn(g.unless, 'when')) checkPartCond(g.unless.when, T, deck.types, reads, 'the `when` of its `unless`');
-        unless = { when: g.unless.when, why: g.unless.why, reads };
+        // format.md, Cells 2: the reason of a cell that is not applicable "is the `why` of the
+        // `unless`, as the deck writes it, cut once, when the deck is read".
+        unless = { ground, why: cutText(u.why), reads };
+        if (ground === 'when') {
+          // deck.md, The grid: the `when` of an `unless` reads only keys that the card states.
+          checkPartCond(u.when, T, deck.types, reads, 'the `when` of its `unless`');
+          unless.when = u.when;
+        } else if (ground === 'least') {
+          // deck.md, The grid, `least`: "A list of exactly two texts. `NAME` is a load of the
+          // line's type, or else a field of it, and it is a quantity that has a `least` in the
+          // type. `VALUE` is a value with its unit ..., of the dimension of `NAME`, and it is at
+          // most the `least` that the type gives `NAME`." The tests are made in the order the
+          // page lists the refusals, and the words after `unless: ` are the page's.
+          // "A deck is refused when its `least` is no list of exactly two texts ... A `least`
+          // that is no list, or that holds an item that is no text, is refused in the first of
+          // these words, by both readers."
+          const l = u.least;
+          if (!Array.isArray(l) || l.length !== 2 || !l.every(isStr)) throw DE('unless: `least` is a load or a quantity of the type and a value: [NAME, VALUE]');
+          const [nm, val] = l;
+          const ofLoad = T.loads.has(nm);
+          const q = T.loads.get(nm) ?? T.fieldMap.get(nm);
+          if (!q) throw DE(`unless: ${nm} is no load and no field of ${T.name}`);
+          // A key and a field that joins parts have no `least`; neither has a quantity or a load
+          // that the type gives none.
+          if (!q.least) throw DE(`unless: ${nm} has no \`least\` in ${T.name}`);
+          const pv = parseValue(val);
+          // "A `VALUE` that is a text and no value with a unit is refused by each reader in its
+          // own words, after `grid MECHANISM: unless: least: `."
+          if (!pv) throw DE(`unless: least: ${short(val)} is no value with its unit`);
+          if (!deq(pv.dim, q.dim)) throw DE(`unless: the value of \`least\` is of another dimension than ${nm}`);
+          const v = pv.v;
+          if (qcmp(v, q.least) > 0) throw DE(`unless: ${T.name} does not say that ${nm} is at least ${trimWs(val)}`);
+          unless.least = { name: nm, ofLoad };
+        } else if (ground === 'loads') {
+          // deck.md, The grid, `loads`: "A list of texts: every load of the line's type, each
+          // once, and no other name. For a type that takes no load it is the empty list."
+          const l = u.loads;
+          // "Anything else is refused in the same words by both readers, a `loads` that is no
+          // list of texts among them".
+          if (!Array.isArray(l) || !l.every(isStr) || l.length !== T.loads.size || new Set(l).size !== l.length || !l.every((x) => T.loads.has(x))) throw DE(`unless: \`loads\` names each load of ${T.name} once and no other`);
+        } else {
+          // deck.md, The grid, `with`: "A list of at least one text, each once: the mechanisms of
+          // other lines that the grid asks of the same type. A line does not name itself, and it
+          // names no line that is itself answered `with` others". The lines it names "may stand
+          // before it in the grid or after it", so they are looked up once the grid has read.
+          const l = u.with;
+          // "A `with` that is no list of texts is refused in the first of these words, by both
+          // readers."
+          if (!Array.isArray(l) || !l.every(isStr) || l.length === 0 || new Set(l).size !== l.length || l.includes(g.mechanism)) throw DE('unless: `with` names other lines of the grid, each once');
+          unless.with = l.slice();
+        }
       }
       return { type: g.type, mechanism: g.mechanism, unless, unlessSize: unless ? condSize(unless.when) : 0 };
     }, item);
-    if (line) { deck.grid.push(line); mechs.add(line.mechanism); deck.lineOf.set(`${line.type}\u0000${line.mechanism}`, line); }
+    if (line) { deck.grid.push({ ...line, item }); mechs.add(line.mechanism); deck.lineOf.set(`${line.type}\u0000${line.mechanism}`, deck.grid[deck.grid.length - 1]); }
   });
+  if (errs0.length) return null;
+  // The lines that a `with` names, once every line has read: each is a line that the grid asks of
+  // the same type, and none is itself answered with other lines, "so the answer is one step away".
+  for (const line of deck.grid) {
+    if (line.unless?.ground !== 'with') continue;
+    top(() => {
+      for (const m of line.unless.with) {
+        const other = deck.lineOf.get(`${line.type}\u0000${m}`);
+        if (!other) throw DE(`unless: it is answered with ${m}, which the grid does not ask of ${line.type}`);
+        if (other.unless?.ground === 'with') throw DE(`unless: it is answered with ${m}, which is itself answered with other lines`);
+      }
+    }, line.item);
+  }
   if (errs0.length) return null;
   const ids = new Set();
   const tails = new Set();
@@ -2472,6 +2657,11 @@ const coreInputFloors = () => new Map(CORE_INPUT_FLOORS.map(([name, min]) => [ds
 // The twelfth line of that table (format.md, type rule 8): "`domains.size` of deck.json has the
 // `min` and the `strict` that core.json gives it too: zero, and strict."
 export const CORE_SIZE_FLOOR = { min: '0', strict: true };
+// format.md, Cells 4, and deck.md, A rule that requires: the reason of a proved cell of a rule
+// that requires.
+const STATED_REASON = 'what the rule requires is stated: nothing is worked out';
+// format.md, Cells 6: the reason of a proved cell whose tape has no input.
+const NO_INPUT_REASON = 'the inequality reads no quantity of the part or of the card: nothing of the design is worked out';
 const CASE_WHERE ='a load case is not named where: an entry that ends in /where is the range of a rule';
 const nameCmp = (a, b) => {
   const x = [...a].map((c) => c.codePointAt(0)), y = [...b].map((c) => c.codePointAt(0));
@@ -2482,7 +2672,8 @@ const nameCmp = (a, b) => {
 export function verifyTexts(texts, opts = {}) {
   const findings = [];
   // A finding of the shape rules, or of a deck that does not hold together, has the rule `shape`.
-  const find = (file, item, why, rule = 'shape') => { findings.push({ rule, file, item, why }); };
+  // format.md, A text that is cut: "the item and the reason of a finding when the finding is kept".
+  const find = (file, item, why, rule = 'shape') => { findings.push({ rule, file, item: isStr(item) ? cutText(item) : item, why: isStr(why) ? cutText(why) : why }); };
   const zeroCounts = () => Object.fromEntries(STATES.map((s) => [s, 0]));
   const ill = () => ({ out: { verdict: 'ILL-FORMED', findings, counts: zeroCounts(), waived: [], cells: [] }, code: 3 });
   const has = (o, k) => Object.hasOwn(o, k);
@@ -2924,7 +3115,7 @@ export function verifyTexts(texts, opts = {}) {
         const w = waivers.find((x) => x.subject === c.subject && x.mechanism === c.mechanism);
         if (w) { o.state = 'waived'; if (!rested.includes(w)) rested.push(w); }
         else o.reason = 'the card lists no waiver with this subject and mechanism';
-      } else if (c.state === 'open') o.reason = c.why;
+      } else if (c.state === 'open') { /* format.md, The verdict: "An `open` cell of the file has none either" */ }
       else o.reason = `the cell is written ${c.state} and carries no tape: the kernel has no rule for its proof yet`;
       if (o.state === 'waived') o.reason = 'the card waives it';
       counts[o.state]++;
@@ -3051,7 +3242,10 @@ export function verifyTexts(texts, opts = {}) {
           part.values.set(f.name, { kind: 'k', value: st.key });
           return;
         }
-        if (f.signed) { LF(`${f.name} is signed: it is for the card to state, and the design reads it with given`, 'parts.4'); return; }
+        // Parts 4: "a key that does not say `chosen` is a given, whether or not its field says
+        // `signed`, and a word or a text for it is a finding. A key that says `chosen` is a word,
+        // a text or a given."
+        if (f.signed) { LF(`${f.name} is for the card to state: its field does not say chosen, and the design reads it with given`, 'parts.4'); return; }
         if (a.kind !== 'word' && a.kind !== 'text') { LF(`${f.name} takes one word, one text or one given, not a number`, 'parts.4'); return; }
         if (!f.names.includes(a.value)) { LF(`${short(a.value)} is not one of the names of ${f.name}`, 'parts.4'); return; }
         part.values.set(f.name, { kind: 'k', value: a.value });
@@ -3469,6 +3663,8 @@ export function verifyTexts(texts, opts = {}) {
   const cells = [];
   const cellKeys = new Set();
   const usedWaivers = [];
+  // The cells of the lines that are answered `with` other lines, to be settled last (Cells 2).
+  const withCells = [];
   const push = (c) => {
     if (cells.length >= CELL_LIMIT) throw new LimitErr('the design has more than 10,000 cells');
     const k = hintKey(c.subject, c.mechanism, c.entry);
@@ -3562,7 +3758,11 @@ export function verifyTexts(texts, opts = {}) {
     }
   };
   // Item 4: the reason of a refuted rule with requires names each key it names, in order and each
-  // once, with the name the part has for it, or `unstated`, while they fit in 144 bytes.
+  // once, with the name the part has for it, or `unstated`, while they fit: "the first key always,
+  // and a later one while the keys so far, `, ` and that key are at most 144 bytes of UTF-8". The
+  // bytes are now those of UTF-8 and not those a text prints in, and "A reason whose first key
+  // alone takes it past 200 bytes as printed is cut as any reason is" (the cell cuts it).
+  const utf8Bytes = (t) => Buffer.byteLength(t, 'utf8');
   const requiresReason = (rule, part) => {
     const head = 'the part is not what the rule requires: ';
     let named = '';
@@ -3570,7 +3770,7 @@ export function verifyTexts(texts, opts = {}) {
     for (let i = 0; i < ks.length; i++) {
       const v = keyValue(part, ks[i]);
       const piece = `${ks[i]} is ${v === undefined ? 'unstated' : [...String(v)].slice(0, 200).join('')}`;
-      if (i > 0 && printedBytes(named) + 2 + printedBytes(piece) > 144) { named += ` and ${ks.length - i} more`; break; }
+      if (i > 0 && utf8Bytes(named) + 2 + utf8Bytes(piece) > 144) { named += ` and ${ks.length - i} more`; break; }
       named += (i > 0 ? ', ' : '') + piece;
     }
     return head + named;
@@ -3587,7 +3787,10 @@ export function verifyTexts(texts, opts = {}) {
   // a completion rests it while it agrees with those rested before, and null not at all. On a line
   // the card waives (`waived`) the kernel asks item 5's question and looks for item 9's witness.
   const ruleCells = (rule, part, line, out, waived) => {
-    const cell = (entry, state, reason, rest = null) => out.push({ subject: part.name, mechanism: line.mechanism, entry, state, reason, rest });
+    // "A text is cut once, where it is made: a reason when its cell is made" (format.md, A text
+    // that is cut). `requires` marks every cell of a rule with `requires`, and `noInput` a cell
+    // that item 6 proves or refutes on a tape whose root reads no input: both print `"stated": true`.
+    const cell = (entry, state, reason, rest = null, noInput = false) => out.push({ subject: part.name, mechanism: line.mechanism, entry, state, reason: reason === undefined ? undefined : cutText(reason), rest, requires: rule.form === 'requires', noInput });
     // Item 9: an incomplete cell, of a rule that reads unstated keys (ukeys) and no unstated
     // quantity, or whose case leaves out loads the rule reads (missing). It looks only at the
     // hints that have a completion.
@@ -3698,10 +3901,14 @@ export function verifyTexts(texts, opts = {}) {
       }
     }
     // Cells 4: a rule with `requires` gives one cell, proved when the condition holds for the part,
-    // and settled by item 9 for a part that leaves a key it reads unstated.
+    // and settled by item 9 for a part that leaves a key it reads unstated. "The cell is marked
+    // `"stated": true`, and it is not the proved cell a PASS needs (The verdict). A proved cell has
+    // the `reason` `what the rule requires is stated: nothing is worked out`." The mark is put on
+    // where the cells are printed, on each cell of such a rule that is proved or refuted, however
+    // it came to be refuted (AMBIGUITIES.md, S3).
     if (rule.form === 'requires') {
       if (ukeys.length) incomplete(rule.tail, null, [], ukeys, uwhy);
-      else if (partCond(rule.requires, part)) cell(rule.tail, 'proved');
+      else if (partCond(rule.requires, part)) cell(rule.tail, 'proved', STATED_REASON);
       else cell(rule.tail, 'refuted', requiresReason(rule, part));
       return;
     }
@@ -3741,7 +3948,15 @@ export function verifyTexts(texts, opts = {}) {
       }
       // Cells 6: an open cell stays open on a line the card waives, whether its root is left
       // undecided or has no value at some points of the box or at all of them.
-      if (state) cell(entry, state);
+      // Cells 6: "A cell that this item proves or refutes on a tape whose root reads no input is
+      // marked `"stated": true` ... Its inequality reads no quantity of the part and none of the
+      // card ... A proved one has the `reason` `the inequality reads no quantity of the part or of
+      // the card: nothing of the design is worked out` ... A refuted one has no reason ... This
+      // tape holds no root of the `where`, so a rule whose `where` reads a quantity and whose two
+      // sides are numbers has a marked cell, beside the `/where` cell of item 5." The mark goes by
+      // what the root reads and not by what the tape holds (AMBIGUITIES.md, T5 and U3).
+      const noInput = !rootReadsInput(w.tape, w.tape.roots[0]);
+      if (state) cell(entry, state, noInput && state === 'proved' ? NO_INPUT_REASON : undefined, null, noInput);
       else cell(entry, 'open', hintsLeft(hs.filter((h) => Object.hasOwn(h, 'partition') || Object.hasOwn(h, 'point'))));
     };
     const ls = [...rule.reads.loads];
@@ -3822,14 +4037,55 @@ export function verifyTexts(texts, opts = {}) {
         charge(1 + line.unlessSize + lineRules.reduce((n, r) => n + ruleCharge(r), 0));
         const w = waiverOf.get(`${part.name}\u0000${line.mechanism}`);
         const out = [];
-        // The cells of items 2 and 3 that no rule gives, with an empty entry.
-        const lineCell = (state, reason, rest = null) => out.push({ subject: part.name, mechanism: line.mechanism, entry: '', state, reason, rest });
-        // Cells 2: "A line whose `unless` holds for the part, or that has an `unless` with no
-        // condition, is one `not_applicable` cell." No key of its `when` is unstated, so it holds
-        // or it does not. Until 2026-11-15 such a line could be one open cell that a hint's
-        // completion rested, with a charge for each hint looked at; the pages have neither now.
+        // The cells of items 2 and 3 that no rule gives, with an empty entry. The `why` of a deck
+        // was cut when the deck was read, "and it is not cut again"; any other reason is cut here,
+        // where its cell is made.
+        const lineCell = (state, reason, rest = null) => out.push({ subject: part.name, mechanism: line.mechanism, entry: '', state, reason: state === 'not_applicable' ? reason : cutText(reason), rest });
+        // Cells 2: "A line with an `unless` does not ask of a part where the ground of the
+        // `unless` holds." `when`: one `not_applicable` cell for a part that the condition holds
+        // for, and item 3 for any other; no key of a `when` is unstated, so it holds or it does
+        // not. `least`: part by part, below. `loads`: "the ground was checked when the deck was
+        // read, and it holds for every part of the type." `with`: "one cell for each part, in the line's place in
+        // the order of the cells, and its state is settled last". "Each of these cells has an
+        // empty `entry`."
         const u = line.unless;
-        if (u && (u.when === undefined || partCond(u.when, part))) lineCell('not_applicable', u.why);
+        if (u && u.ground === 'with') {
+          // Steps item 1: "its charge is 1, and it is tested. Then one step is added for each
+          // line that its `with` names, with no test."
+          steps += u.with.length;
+          // Cells 1: "A line that is answered with other lines (item 2) is no line that a waiver
+          // rests ... whether or not the card waives it". So the cell goes by the waiver's loop
+          // below untouched: it is not open yet, and it is settled after the last part.
+          const c = { subject: part.name, mechanism: line.mechanism, entry: '', state: null, reason: undefined, rest: null, answeredWith: u };
+          withCells.push(c);
+          push(c);
+          continue;
+        }
+        if (u && u.ground === 'least') {
+          // Cells 2, `least`: "It excuses the line for a part that has a value for `NAME`, and for
+          // no other part. Where `NAME` is a load, a part has a value when the card has at least
+          // one load case and every load case of the card puts `NAME` on the part. Where `NAME` is
+          // a quantity, a part has a value unless it leaves the quantity unstated (Parts 2). For a
+          // part that has a value the line is one `not_applicable` cell. For any other part it is
+          // one `open` cell, which is waivable (item 1) as the cell of a line with no rule is. Its
+          // `reason` is `the least of NAME would excuse it, and the card does not put NAME on PART
+          // in every load case, or has none` for a load, and `the least of NAME would excuse it,
+          // and PART leaves NAME unstated` for a quantity."
+          // The loads are those of the card: "a load that a completion gives is no load that the
+          // card puts on the part" (item 9). Steps item 1: "in a charge of its own with the limit
+          // tested after it, it takes one step for each load case of the card where the `least` is
+          // of a load, and one step where it is of a quantity, for every part of the type, excused
+          // or not."
+          const nm = u.least.name;
+          charge(u.least.ofLoad ? loadCases.length : 1);
+          const hasValue = u.least.ofLoad
+            ? loadCases.length > 0 && loadCases.every((cs) => putsLoad(cs, part.name, nm))
+            : part.values.get(nm)?.unstated !== true;
+          if (hasValue) lineCell('not_applicable', u.why);
+          else lineCell('open', u.least.ofLoad
+            ? `the least of ${nm} would excuse it, and the card does not put ${nm} on ${part.name} in every load case, or has none`
+            : `the least of ${nm} would excuse it, and ${part.name} leaves ${nm} unstated`, 'norule');
+        } else if (u && (u.ground !== 'when' || partCond(u.when, part))) lineCell('not_applicable', u.why);
         else {
           const rules = lineRules.filter((r) => answers(r, part));
           if (!rules.length) lineCell('open', lineRules.length ? 'the deck has no rule for it on a part like this one' : 'the deck has no rule for it', 'norule');
@@ -3846,11 +4102,15 @@ export function verifyTexts(texts, opts = {}) {
           if (w && c.state === 'open') {
             let rests = c.rest === 'norule' || c.rest === 'where';
             if (!rests && c.rest && agrees(c.rest)) { recordRested(c.rest); rests = true; c.completion = c.rest.src; }
+            // Cells 1: "The kernel cuts a reason twice here ... It cuts the reason of the open
+            // cell when it makes the cell, before any word is put in front. It then puts the words
+            // in front and cuts the whole." and "The reason that starts `the waiver does not rest
+            // this cell: ` is made and cut the same way."
             if (rests) {
               c.state = 'waived';
-              c.reason = `open but for the waiver: ${c.reason ?? ''}`;
+              c.reason = cutText(`open but for the waiver: ${c.reason ?? ''}`);
               if (!usedWaivers.includes(w)) usedWaivers.push(w);
-            } else c.reason = `the waiver does not rest this cell: ${c.reason ?? ''}`;
+            } else c.reason = cutText(`the waiver does not rest this cell: ${c.reason ?? ''}`);
           }
           push(c);
         }
@@ -3866,16 +4126,35 @@ export function verifyTexts(texts, opts = {}) {
     // of the deck reads PART.FIELD, so nothing checks it`, and of the second `no rule of the deck
     // reads the load LOAD that case CASE puts on PART, so nothing checks it`, with `the card` in
     // place of `case CASE` when the card has no load case."
+    // Cells 2, `with`: the state of a line that is answered with other lines "is settled last:
+    // after every other cell of the lines of the grid is made for every part (items 2 to 7 and
+    // 9), and after every waiver has rested what it rests (item 1). The cell is `not_applicable`
+    // when every cell that the named lines have for the same part is `proved`, `waived` or
+    // `not_applicable`: a cell entered `RULE/where` counts, and so does a cell marked `stated`.
+    // Otherwise the cell is `open`, and its `reason` is `it is answered with LINE, which is not
+    // settled for PART` ... `LINE` is the first line, in the order `with` lists them, that has a
+    // cell for the part that is `open` or `refuted`." A line that a `with` names is never itself
+    // answered with others, so every cell looked at here has its state. The cells are in their
+    // places already; the cells named `unread` come after and are no cells of a line.
+    if (withCells.length) {
+      const unsettled = new Set();
+      for (const c of cells) if (c.state === 'open' || c.state === 'refuted') unsettled.add(`${c.subject}\u0000${c.mechanism}`);
+      for (const c of withCells) {
+        const first = c.answeredWith.with.find((m) => unsettled.has(`${c.subject}\u0000${m}`));
+        if (first === undefined) { c.state = 'not_applicable'; c.reason = c.answeredWith.why; }
+        else { c.state = 'open'; c.reason = cutText(`it is answered with ${first}, which is not settled for ${c.subject}`); }
+      }
+    }
     for (const part of parts) if (part.hasUnstated) charge(needsCharge(part));
     workOutReads();
     for (const part of parts) {
       for (const f of part.type.fields) {
         if (f.kind === 'j') continue;
         if (part.values.get(f.name)?.unstated) {
-          if (needNames(part, f.name)) push({ subject: part.name, mechanism: 'unread', entry: f.name, state: 'open', reason: `${part.name}.${f.name} is unstated: its maker states none, and a need names it` });
+          if (needNames(part, f.name)) push({ subject: part.name, mechanism: 'unread', entry: f.name, state: 'open', reason: cutText(`${part.name}.${f.name} is unstated: its maker states none, and a need names it`) });
           continue;
         }
-        if (!readSets.get(part.name).has(f.name)) push({ subject: part.name, mechanism: 'unread', entry: f.name, state: 'open', reason: `no rule of the deck reads ${part.name}.${f.name}, so nothing checks it` });
+        if (!readSets.get(part.name).has(f.name)) push({ subject: part.name, mechanism: 'unread', entry: f.name, state: 'open', reason: cutText(`no rule of the deck reads ${part.name}.${f.name}, so nothing checks it`) });
       }
       const mine = new Map();
       for (const [l, m] of loadsOn.get(part.name) ?? []) mine.set(l, new Set(m.keys()));
@@ -3886,7 +4165,7 @@ export function verifyTexts(texts, opts = {}) {
       for (const l of [...mine.keys()].sort(nameCmp)) {
         if (loadReads.get(part.name).has(l)) continue;
         for (const cs of [...mine.get(l)].sort(nameCmp)) {
-          push({ subject: part.name, mechanism: 'unread', entry: `${l}/${cs}`, state: 'open', reason: `no rule of the deck reads the load ${l} that ${loadCases.length ? `case ${cs}` : 'the card'} puts on ${part.name}, so nothing checks it` });
+          push({ subject: part.name, mechanism: 'unread', entry: `${l}/${cs}`, state: 'open', reason: cutText(`no rule of the deck reads the load ${l} that ${loadCases.length ? `case ${cs}` : 'the card'} puts on ${part.name}, so nothing checks it`) });
         }
       }
     }
@@ -3908,8 +4187,42 @@ export function verifyTexts(texts, opts = {}) {
   const counts = zeroCounts();
   for (const c of cells) counts[c.state]++;
   // format.md, The verdict: a cell whose entry ends in `/where` proves a rule's range and not the
-  // rule, and is not the one proved cell that a PASS needs.
-  const provedRule = cells.some((c) => c.state === 'proved' && !c.entry.endsWith('/where'));
+  // rule, and is not the one proved cell that a PASS needs. "Nor is the cell of a rule with
+  // `requires`, which the kernel marks `"stated": true` ... A design whose only proved cells are of
+  // ranges or of stated keys is UNKNOWN." So a PASS needs a cell that is proved by working
+  // something out: the proved cell of a rule with an inequality.
+  // Now, format.md, The verdict: "A cell is worked out when all three of these hold, and by
+  // nothing else: its state is `proved`, it is not marked `"stated": true`, and its entry does not
+  // end in `/where`. The words of a reason and of a rule decide nothing here." A cell is marked
+  // when it is of a rule with `requires`, whatever its state, or when item 6 proved or refuted it
+  // on a tape with no input.
+  const isStated = (c) => c.requires === true || c.noInput === true;
+  const provedRule = cells.some((c) => c.state === 'proved' && !isStated(c) && !c.entry.endsWith('/where'));
+  // format.md, The verdict: "With `--rules` a cell has a reason when it is open, waived or not
+  // applicable, when it is a refuted cell of a rule with `requires`, and when it is a proved cell
+  // marked `stated`. Any other proved or refuted cell has none."
+  const hasReason = (c) => c.state === 'open' || c.state === 'waived' || c.state === 'not_applicable'
+    || (c.state === 'refuted' && c.requires === true) || (c.state === 'proved' && isStated(c));
+  // format.md, The room of the reasons: three rooms of 500,000 bytes, "one for each of three kinds
+  // of cell": the cells that are refuted, the cells that are not applicable, and "Every other
+  // cell: open, waived and proved". "The kernel goes through the finished cells in their
+  // order, after the last cell is made, with the three rooms full. A cell with no reason takes
+  // nothing. A cell with a reason takes the bytes its reason prints in, as cut, from the room of
+  // its kind, when they fit in what is left of that room. The first reason that does not fit is
+  // replaced by `past what the verdict prints of reasons`, and so is every later reason of that
+  // kind, whatever its length: that room is then at nothing. The words that replace a reason are
+  // not counted against either room."
+  const room = { refuted: REASON_ROOM, na: REASON_ROOM, other: REASON_ROOM };
+  const shut = { refuted: false, na: false, other: false };
+  const printedReason = new Map();
+  for (const c of cells) {
+    if (!hasReason(c)) continue;
+    const kind = c.state === 'refuted' ? 'refuted' : c.state === 'not_applicable' ? 'na' : 'other';
+    const text = c.reason ?? '';
+    const b = printedBytes(text);
+    if (!shut[kind] && b <= room[kind]) { room[kind] -= b; printedReason.set(c, text); }
+    else { shut[kind] = true; room[kind] = 0; printedReason.set(c, PAST_ROOM); }
+  }
   let verdict, code;
   if (counts.refuted) { verdict = 'FAIL'; code = 1; }
   else if (counts.open || !provedRule) { verdict = 'UNKNOWN'; code = 2; }
@@ -3924,7 +4237,12 @@ export function verifyTexts(texts, opts = {}) {
     waived: usedWaivers.map((w) => ({ subject: w.subject, mechanism: w.mechanism, by: w.by, reason: w.reason })),
     cells: cells.map((c) => {
       const o = { subject: c.subject, mechanism: c.mechanism, entry: c.entry, claimed: c.claimed, state: c.state };
-      if (c.state === 'open' || c.state === 'waived' || (c.state === 'refuted' && c.reason)) o.reason = c.reason ?? '';
+      // format.md, The verdict: "A cell that is marked `stated` has `"stated": true` (items 4 and
+      // 6): every cell of a rule with `requires`, and a cell that a tape with no input proves or
+      // refutes. No other cell has the key, and it is never `false`." The reason of a cell that is
+      // not applicable is the `why` of its line's `unless`, cut once, when the deck was read.
+      if (isStated(c)) o.stated = true;
+      if (printedReason.has(c)) o.reason = printedReason.get(c);
       // format.md, The verdict: a waived cell that rests on a completion has it, as its hint in
       // proofs.json writes it, with both lists (AMBIGUITIES.md, M4) and with the unit of each
       // load's value after the value.

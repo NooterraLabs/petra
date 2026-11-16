@@ -312,7 +312,7 @@ class Alone(unittest.TestCase):
         self.assertIn("`le` compares a length with a current", check(reading(with_rule(2, le=["gap", ["q", "4", "A"]])), "strip.bow", "units").detail)
         self.assertIn("w is a length, and the rule binds a temperature", check(reading(with_rule(0, le=[["load", "current"], ["row", "test/limit", {"w": "T"}]])), "strip.heat", "units").detail)
         tide = reading(lambda b: b["rules"].append({**CREEP, "mechanism": "strip.tide", "le": ["gap", ["q", "9", "mm"]]}))
-        self.assertIn("says it never arises", check(tide, "strip.tide", "units").detail)
+        self.assertIn("the grid excuses strip.tide by what strip declares, and no rule answers such a line", check(tide, "strip.tide", "units").detail)
         lines, _ = rule.accept(tide)
         self.assertEqual(next(line.state for line in lines if line.mechanism == "strip.tide"), "refused")
 
@@ -595,8 +595,38 @@ class FirstRun(unittest.TestCase):
         self.assertEqual(len(wider.deck.rows), len(self.deck["rows"]) + 14)
         self.assertIn("aisc360-22/J3.4-spacing", wider.deck.rows)
 
-    def test_the_two_transcriptions_agree_on_every_mechanism_either_answers(self):
+    GROUNDS = {"lap.tension_with_shear": {"loads": ["pull"]}, "lap.slip": {"with": ["lap.tightening"]},
+               "lap.ply_shear": {"with": ["lap.strength", "lap.block_shear"]}, "lap.ply_compression": {"least": ["pull", "0 kip"]}}
+    """The first run excused four lines on a reason alone, in both transcriptions, and an `unless` has a ground now. The two
+    files are kept as they were written. These are the grounds the deck that ships gives the same four lines."""
+
+    def grounded(self, name: str) -> rule.Reading:
+        """A transcription of the first run with the ground of each line it excuses."""
+        body = json.loads((BENCH / name).read_text(encoding="utf-8"))
+        for said in [*body.get("unless", []), *({"mechanism": a["mechanism"], "unless": a["unless"]} for a in body.get("grid", []) if "unless" in a)]:
+            said.get("unless", said).update(self.GROUNDS[said["mechanism"]])
+        return rule.Reading(self.task, rule.read_transcription(body))
+
+    def test_the_grounds_are_the_ones_the_deck_that_ships_gives(self):
+        shipped = json.loads((grid.DECKS / "aisc360.json").read_text(encoding="utf-8"))
+        self.assertEqual({a["mechanism"]: {k: v for k, v in a["unless"].items() if k != "why"} for a in shipped["grid"] if "unless" in a}, self.GROUNDS)
+
+    def test_as_they_were_written_the_four_lines_excused_on_a_reason_alone_are_refused(self):
+        """Each transcription of the first run says of four lines that they cannot arise, and why, and gives no ground. A deck
+        with such a line does not load, so the acceptance refuses the four, and admits the three that rules answer as before."""
         first, other = rule.load(self.task, self.FIRST), rule.load(self.task, str(BENCH / "rules_b.json"))
+        self.assertEqual((sorted(first.wrong), sorted(other.wrong)), (sorted(self.GROUNDS),) * 2)
+        lines, _ = rule.accept(first, {}, other)
+        states = {line.mechanism: line.state for line in lines}
+        self.assertEqual(sorted(m for m, state in states.items() if state == "admitted"), ["lap.end_distance", "lap.ply_yield", "lap.strength"])
+        self.assertEqual(sorted(m for m, state in states.items() if state == "refused"), sorted(self.GROUNDS))
+        for line in lines:
+            if line.state == "refused":
+                self.assertEqual([(c.name, c.outcome) for c in line.checks], [("units", "fail")], line.mechanism)
+                self.assertEqual(line.checks[0].detail, f"grid {line.mechanism}: {grid.GROUND}")
+
+    def test_the_two_transcriptions_agree_on_every_mechanism_either_answers(self):
+        first, other = self.grounded("rules_a.json"), self.grounded("rules_b.json")
         lines, whole = rule.accept(first, {}, other)
         self.assertEqual((first.stray, other.stray, whole.outcome), ([], [], "pass"))
         states = {line.mechanism: line.state for line in lines}

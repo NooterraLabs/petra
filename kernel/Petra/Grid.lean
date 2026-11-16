@@ -809,13 +809,25 @@ structure Made where
   /-- The work the proofs took, of `MAX_WORK`. -/
   work : Nat
 
-/-- The cells with their reasons held to `MAX_REASONS` bytes between them: a reason that
-would go past it is replaced by `UNSAID`. -/
+/-- The cells with their reasons held to `MAX_REASONS` bytes for each of three kinds: the
+cells that are refuted, the cells that are not applicable, and every other cell. A reason
+that would go past the room of its kind is replaced by `UNSAID`, and so is every later
+reason of that kind. -/
 def said (cells : Array Settled) : Array Settled :=
-  (cells.foldl (fun (out, room) s =>
-    if s.reason.isEmpty then (out.push s, room)
-    else if printed s.reason ≤ room then (out.push s, room - printed s.reason)
-    else (out.push { s with reason := UNSAID }, 0)) (#[], MAX_REASONS)).1
+  (cells.foldl (fun (out, room, excused, failed) s =>
+    if s.reason.isEmpty then (out.push s, room, excused, failed)
+    -- The reason of a refuted cell says why a design fails. It has room of its own, so that
+    -- no number of open, proved or excused cells takes it.
+    else if s.state == .refuted then
+      if printed s.reason ≤ failed then (out.push s, room, excused, failed - printed s.reason)
+      else (out.push { s with reason := UNSAID }, room, excused, 0)
+    -- The reason of a cell that is not applicable is the deck's, the same for every part of
+    -- a line. It has room of its own too.
+    else if s.state == .notApplicable then
+      if printed s.reason ≤ excused then (out.push s, room, excused - printed s.reason, failed)
+      else (out.push { s with reason := UNSAID }, room, 0, failed)
+    else if printed s.reason ≤ room then (out.push s, room - printed s.reason, excused, failed)
+    else (out.push { s with reason := UNSAID }, 0, excused, failed)) (#[], MAX_REASONS, MAX_REASONS, MAX_REASONS)).1
 
 /-- Every cell of the design, in the order petra/grid.py lists them: for each part, each
 mechanism the grid asks of its type, and then for each part each field and each load that
@@ -877,6 +889,7 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hi
   let mut left := budget
   let mut fixedKeys : Std.TreeMap (String × String) String := {}
   let mut fixedLoads : Std.TreeMap (String × String × String) Rat := {}
+  let mut alongs : Array (Nat × String × Ask) := #[]
   for ((part, fellows), touched) in (parts.zip fellowsOf).zip touchedOf do
     -- A condition that names a key the part leaves unstated is not decided: nothing says
     -- whether it holds. The part is looked at for one only when it leaves a field unstated
@@ -884,7 +897,7 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hi
     let lacks (fields : Array (Option String × String)) : Option String := if touched then part.lacks fellows fields else none
     for ask in asksOf.getD part.kind.name #[] do
       if out.size > MAX_CELLS then return .error over
-      steps := steps + 1 + ((ask.excuse.bind id).map Static.size).getD 0 + lookOf.getD (ask.kind, ask.mechanism) 0
+      steps := steps + 1 + (ask.condition.map Static.size).getD 0 + lookOf.getD (ask.kind, ask.mechanism) 0
       if steps > MAX_STEPS then return .error long
       let pending (entry reason : String) (waivable : Bool) : Settled :=
         { cell part.name ask.mechanism entry .undecided reason with waivable }
@@ -893,28 +906,48 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hi
       -- completions, which are looked at only where it waives the line on the part. There,
       -- those of them that are open and waivable are rested once they are all made.
       let first := out.size
-      if let some field := lacks (((ask.excuse.bind id).map Static.keys).getD #[]) then
+      -- A line that is answered with other lines has one cell, which waits for theirs: it
+      -- is settled below, once every cell of the design is made. No waiver of the line
+      -- rests it: a waiver rests a line it is answered with. A step for each such line.
+      if let some (.along lines) := ask.excuse then
+        steps := steps + lines.size
+        alongs := alongs.push (out.size, part.name, ask)
+        out := out.push (pending "" "" false)
+        continue
+      if let some field := lacks ((ask.condition.map Static.keys).getD #[]) then
         -- The `unless` of the line reads a key that is unstated, so nothing says whether the
         -- mechanism can arise for the part. The line is open, and no rule of it is run. On a
         -- line the card waives, a waiver may rest it under the completion of the first hint
         -- that names a name for each such key and under which the `unless` holds. Each hint
         -- is a step, and one for each key and load it names.
-        let unsaid := part.unsaid fellows (((ask.excuse.bind id).map Static.keys).getD #[])
+        let unsaid := part.unsaid fellows ((ask.condition.map Static.keys).getD #[])
         let mut found : Option Completion := none
         if waived then
           for h in hintsFor part.name ask.mechanism "" do
             let some c := h.completion | continue
-            steps := steps + 1 + ((ask.excuse.bind id).map Static.size).getD 0 + c.keys.size + c.loads.size
+            steps := steps + 1 + (ask.condition.map Static.size).getD 0 + c.keys.size + c.loads.size
             if steps > MAX_STEPS then return .error long
             unless c.fits part unsaid #[] "" floors do continue
             let named' := (c.onto named loads).1
             let part' := named'.getD part.name part
-            if ask.excuse.any fun condition => condition.all (·.holds part' (part'.fellows named')) then
+            if ask.condition.any (·.holds part' (part'.fellows named')) then
               found := some c
               break
         out := out.push { pending "" (UNSTATED_WHY field "the `unless` of the line") found.isSome with completion := found }
-      else if ask.excuse.any fun condition => condition.all (·.holds part fellows) then
-        out := out.push (cell part.name ask.mechanism "" .notApplicable ask.why)
+      else if let some (.least name load) := ask.excuse then
+        -- The least of a load or of a quantity says something of a part that has a value for
+        -- it: a load the card puts on the part in every case, or a quantity the part states.
+        -- For any other part nothing says that the value is there, and the line is open, as
+        -- a line with no rule is: the card may waive it. A step for each case, or one.
+        steps := steps + (if load then loads.cases.size else 1)
+        if steps > MAX_STEPS then return .error long
+        let there := if load then !loads.cases.isEmpty && loads.cases.all fun c => loads.on.contains (part.name, name, c)
+          else !((part.slots.get? name) matches some (.unstated _))
+        if there then out := out.push { cell part.name ask.mechanism "" .notApplicable with reason := ask.why }
+        else out := out.push (pending "" (if load then NO_LOAD name part.name else NO_VALUE name part.name) true)
+      else if (match ask.excuse with | some (.cond condition) => condition.holds part fellows | some .never => true | _ => false) then
+        -- The reason was cut where the deck was read, and is not cut again.
+        out := out.push { cell part.name ask.mechanism "" .notApplicable with reason := ask.why }
       else
         -- A rule answers when its `when` holds, and also when its `when` names a key that
         -- is unstated: nothing says that it does not apply, and its cells are then open.
@@ -978,12 +1011,13 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hi
                 | return .error long
               steps := steps + spent
               left := after
+              let stated := rule.requires.isSome
               match found with
               | .refuted =>
-                let why := if rule.requires.isSome then part.refusal fellows rule else ""
-                out := out.push (cell part.name ask.mechanism entry .refuted why)
+                let why := if stated then part.refusal fellows rule else ""
+                out := out.push { cell part.name ask.mechanism entry .refuted why with stated }
                 dsg := read
-              | .pending completion => out := out.push { pending entry why completion.isSome with completion }
+              | .pending completion => out := out.push { pending entry why completion.isSome with completion, stated }
               continue
             -- A rule that requires has one cell, with no tape and no hint: proved when its
             -- condition over keys holds for the part, and refuted when it does not, with each
@@ -1040,12 +1074,17 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hi
               left := after
               -- An open cell stays open under a waiver, whether its inequality is left
               -- undecided or a table has no value for the part: the deck must cover the part.
-              out := out.push (cell part.name ask.mechanism entry state reason)
+              -- A tape none of whose roots reads an input, directly or through other nodes,
+              -- reads nothing of the design or of the card: its cell is one of stated keys,
+              -- whatever the form of its rule, and is marked as one when it is proved or
+              -- refuted. An open cell says nothing, and has no mark.
+              let stated := !tape.readsInput && (state == .proved || state == .refuted)
+              out := out.push { cell part.name ask.mechanism entry state (if stated && state == .proved then NOTHING_READ else reason) with stated }
               if state == .proved || state == .refuted then dsg := dsgOf tape dsg
       -- A waiver rests a cell that would be open and that the deck has no rule for, or that a
       -- completion makes hold, and no other. A cell of the line that its rule proved is
       -- proved, and the waiver was not needed for it. One that its rule refuted is refuted:
-      -- no waiver hides a refutation. One that the grid says cannot arise stays so. One whose
+      -- no waiver hides a refutation. One that the grid excuses stays so. One whose
       -- rule is left undecided, or has no value for the part, stays open, and its reason says
       -- that the waiver does not rest it. The reason of a waived cell says what was open.
       --
@@ -1065,6 +1104,20 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hi
               fixedLoads := c.loads.foldl (fun fixed (p, load, u, x) => fixed.insert (p, load, u) x) fixedLoads
             out := out.set! i { s with state := .waived, reason := clip (WAIVED ++ s.reason), waiver := some (k, waiver) }
           else out := out.set! i { s with reason := clip (UNRESTED ++ s.reason) }
+  -- The lines answered with other lines, now that every cell is made and every waiver has
+  -- rested what it rests. Such a line is excused for a part while each cell of the lines
+  -- it names is proved, waived or not applicable for that part, and it is open otherwise,
+  -- with the first of them that is not settled in its reason.
+  if !alongs.isEmpty then
+    let unsettled : Std.TreeSet (String × String) := out.foldl (init := {}) fun found s =>
+      if s.state == .proved || s.state == .waived || s.state == .notApplicable then found else found.insert (s.cell.subject, s.cell.mechanism)
+    for (i, name, ask) in alongs do
+      let lines := match ask.excuse with
+        | some (.along lines) => lines
+        | _ => #[]
+      match lines.find? fun line => unsettled.contains (name, line) with
+      | none => out := out.set! i { cell name ask.mechanism "" .notApplicable with reason := ask.why }
+      | some line => out := out.set! i (cell name ask.mechanism "" .undecided (ALONG line name))
   -- What a rule or a line of the grid reads of each part. Every rule of a part's type is
   -- looked at here, whatever the card waives, so the look is counted again. The look of a
   -- rule holds a step for each load it reads. A load is read by an expression of a rule
@@ -1108,7 +1161,7 @@ def cells (rules : Rules) (card : Card) (parts : Array Part) (loads : Loads) (hi
           | none => needed := needed.insert (part.name, field)
           | some called => if let some other := fellows.get? called then needed := needed.insert (other.name, field)
     for ask in asksOf.getD part.kind.name #[] do
-      for (called, field) in ((ask.excuse.bind id).map Static.keys).getD #[] do
+      for (called, field) in (ask.condition.map Static.keys).getD #[] do
         match called with
         | none => read := read.insert (part.name, field)
         | some called => if let some other := fellows.get? called then read := read.insert (other.name, field)

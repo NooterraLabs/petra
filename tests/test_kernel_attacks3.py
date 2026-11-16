@@ -562,7 +562,8 @@ class Shapes(unittest.TestCase):
         whatever read it afterwards. With 8,500 parts that give the key a name it lacks, the
         list was also written out for each: 45 s."""
         names = [f"n{k}" for k in range(38_000)]
-        kind = {"type": "t", "what": "w", "fields": [{"name": "k", "one_of": names, "what": "w"}]}
+        # The designer chooses the key, so a design may write it, and the name it writes is looked for in the list.
+        kind = {"type": "t", "what": "w", "fields": [{"name": "k", "one_of": names, "what": "w", "chosen": "the designer picks it"}]}
         parts = [{"name": f"p{i}", "type": "t", "lines": [{"field": "k", "args": [{"word": "zz"}]}]} for i in range(8_500)]
         said = self.bounded(with_rules(deck_of(types=[kind], grid_lines=[asks()]), empty_card(), parts))
         self.assertEqual((said["verdict"], len(said["findings"]), said["more_findings"]), ("ILL-FORMED", 100, 8_400))
@@ -800,7 +801,9 @@ class Alike(unittest.TestCase):
         """`pairs` parts that each join a part of four keys, and a condition that asks `count` times about those keys."""
         keys = [alike(k, "f") if long else f"f{k}" for k in range(4)]
         yes, no, called = ("y" * 64, "n" * 64, alike(0, "a")) if long else ("y", "n", "a")
-        leaf = {"type": "leaf", "what": "w", "fields": [{"name": name, "one_of": [yes, no], "what": "w", **({"signed": True} if where == "unless" else {})} for name in keys]}
+        # A condition reads only keys the card signs. What a rule requires may be a key the designer chooses, and the design writes it.
+        leaf = {"type": "leaf", "what": "w", "fields": [{"name": name, "one_of": [yes, no], "what": "w", **({"signed": True} if where == "unless" else {"chosen": "the designer picks it"})}
+                                                          for name in keys]}
         kind = {"type": "t", "what": "w", "fields": [{"name": "holds", "type": "leaf", "as": [called], "what": "w"}]}
         rnd = random.Random(2)
         asked = ["or"] + [["is", f"{called}.{rnd.choice(keys)}", no] for _ in range(count)]

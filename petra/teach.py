@@ -93,7 +93,9 @@ def _deck_text(deck: grid.Deck, types: tuple[str, ...]) -> str:
             lines.append("  the grid asks:")
             for a in asks:
                 rules = [r.id for r in deck.rules if (r.type, r.mechanism) == (a.type, a.mechanism)]
-                answer = (f"cannot arise{' for some parts' if a.unless else ''}: {a.excused}" if a.excused and not rules
+                answer = (f"answered with {', '.join(a.along)}, and open while one of them is: {a.excused}" if a.along
+                          else f"excused for a part that has a value for {a.least[0]}, and open for any other: {a.excused}" if a.least
+                          else f"excused for {'some parts' if a.unless else 'every part'}: {a.excused}" if a.excused and not rules
                           else f"rule {', '.join(rules)}" if rules else "no rule yet, so its cell is open until the card waives it")
                 lines += [f"    {a.mechanism}    {a.what} ({grid._anchor(a.anchor)})", f"        {answer}"]
         lines.append("")
@@ -418,7 +420,8 @@ def render_reference() -> str:
         "- A bound is a range with its provenance, written",
         "  `in [<lo>, <hi>] [mean <value>] signed \"<owner>\" source \"<source>\"`. A measured value has",
         "  `measured` in place of `signed`. Only a card states a bound, and outside a family every bound carries",
-        "  a signature. In a family, `param NAME` stands where a bound would.",
+        "  a signature. In a family, `param NAME` stands where a bound would. No deck reads a `mean` yet: a card",
+        "  that states one on a given or on a load is refused where a design with parts is checked or exported.",
         "- `in`, `mean`, `signed`, `measured`, `source`, `param`, and `given` cannot be names inside a line. No",
         "  declared name can be a declaration word.",
         f"- A file has at most {MAX_FILE:,} bytes. `petra check`, `petra.export` and the MCP tools refuse a larger",

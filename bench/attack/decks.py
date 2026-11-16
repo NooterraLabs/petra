@@ -2,7 +2,8 @@
 
 A deck is JSON, and docs/deck.md names every key it has and every form a value takes. A change
 here is one the pages allow: a value moved to the next one, a bound made strict, a band's end
-shifted, a line of the grid dropped, a rule copied, or a value written another way. Of these,
+shifted, a line of the grid dropped, a rule copied, a key moved from the card to the designer
+or back, the ground of an `unless` changed for another, or a value written another way. Of these,
 two kinds are relations: a value respelled (a fraction as a decimal, an inch as 25.4 mm, a
 whole number with commas) and a list of rules or rows in another order must not change what a
 design gets (`relation` below), and the rest are changes of what the deck says.
@@ -25,7 +26,7 @@ def leaves(node: Any, path: Path = ()) -> Iterator[tuple[Any, Any, Path]]:
     """(container, key, path) of every string in a deck's JSON that is a value, with its unit or without."""
     if isinstance(node, dict):
         for k, v in node.items():
-            if k in ("what", "says", "why", "about", "name", "id", "anchor", "mechanism", "type", "as", "by", "one_of", "dim", "format", "unit"):
+            if k in ("what", "says", "why", "chosen", "about", "name", "id", "anchor", "mechanism", "type", "as", "by", "one_of", "dim", "format", "unit"):
                 continue
             if isinstance(v, str):
                 yield node, k, path + (k,)
@@ -208,6 +209,13 @@ def op_drop_line(rng, deck):
     if not deck.get("grid"):
         return None
     g = deck["grid"].pop(rng.randrange(len(deck["grid"])))
+    # A line that was answered `with` the dropped one is answered with the rest, and one that named no other asks again.
+    for a in deck["grid"]:
+        said = a.get("unless") if isinstance(a.get("unless"), dict) else {}
+        if a.get("type") == g.get("type") and g.get("mechanism") in said.get("with", []):
+            said["with"] = [m for m in said["with"] if m != g.get("mechanism")]
+            if not said["with"]:
+                del a["unless"]
     return f"the line {g.get('mechanism')} dropped from the grid"
 
 
@@ -241,6 +249,21 @@ def op_flag(rng, deck):
         return None
     f = rng.choice(fields)
     flag = rng.choice(["optional", "signed", "least", "may_be"])
+    if "one_of" in f and flag in ("optional", "signed"):
+        # A key is the card's, or the designer's with `chosen` and why, and only a key the designer chooses may be left
+        # unstated. So the mark moves from one to the other, and `optional` brings `chosen` with it.
+        if flag == "signed" and "chosen" in f:
+            f.pop("chosen")
+            f.pop("optional", None)
+            return f"{f['name']}: the card states it"
+        if flag == "signed" or not f.get("optional"):
+            f.pop("signed", None)
+            f.setdefault("chosen", "the designer picks it")
+            if flag == "optional":
+                f["optional"] = True
+            return f"{f['name']}: the designer chooses it" + (", or leaves it unstated" if flag == "optional" else "")
+        f.pop("optional")
+        return f"{f['name']}: optional changed"
     if flag == "least":
         if "dim" not in f:
             return None
@@ -324,6 +347,37 @@ def op_expr(rng, deck):
     return f"a number {old} of an expression moved to {parent[idx]}"
 
 
+def op_ground(rng, deck):
+    """The ground of an `unless` that is no condition, changed to another that the pages allow: the loads of the type, the
+    least of one of them, or other lines of the type that answer the line. Or a line that no rule answers and that always
+    asked is excused on one of them, or a line that was excused asks again."""
+    types = {t.get("type"): t for t in deck.get("types", [])}
+    ruled = {(r.get("type"), r.get("mechanism")) for r in deck.get("rules", [])}
+    lines = [a for a in deck.get("grid", []) if (a.get("type"), a.get("mechanism")) not in ruled and "when" not in (a.get("unless") or {})]
+    if not lines:
+        return None
+    a = rng.choice(lines)
+    kind = types.get(a.get("type"), {})
+    loads = [f for f in kind.get("loads", [])]
+    alone = [b["mechanism"] for b in deck["grid"] if b is not a and b.get("type") == a.get("type") and "with" not in (b.get("unless") or {})]
+    named = any(a.get("mechanism") in (b.get("unless") or {}).get("with", []) for b in deck["grid"])
+    grounds = {"loads": [f["name"] for f in loads]}
+    floors = [f for f in loads if isinstance(f.get("least"), str)]
+    if floors:
+        f = rng.choice(floors)
+        grounds["least"] = [f["name"], f["least"]]
+    if alone and not named:      # a line that another is answered with is not itself answered with others
+        grounds["with"] = rng.sample(alone, k=min(len(alone), rng.choice([1, 1, 2])))
+    old = a.get("unless")
+    if old is not None and rng.random() < 0.25:
+        del a["unless"]
+        return f"the line {a.get('mechanism')} asks again"
+    was = next((g for g in ("loads", "least", "with") if old and g in old), None)
+    now = rng.choice([g for g in grounds if g != was] or list(grounds))
+    a["unless"] = {"why": (old or {}).get("why", "made up: it cannot arise for the type"), now: grounds[now]}
+    return f"the line {a.get('mechanism')} excused by {now} {grounds[now]}" + (f" where it was by {was}" if was else "")
+
+
 def op_reorder(rng, deck):
     key = rng.choice(["rules", "rows", "grid", "types"])
     if len(deck.get(key, [])) < 2:
@@ -335,7 +389,7 @@ def op_reorder(rng, deck):
 # (weight, operator, kind): kind "relation" means the deck still says the same.
 OPS = [(6, op_nudge, "change"), (4, op_respell, "relation"), (2, op_le_lt, "change"), (3, op_operator, "change"), (2, op_closed, "change"), (3, op_band, "change"),
        (1, op_drop_rule, "change"), (1, op_drop_line, "change"), (1, op_dup_rule, "change"), (1, op_swap_sides, "change"), (1, op_flag, "change"),
-       (1, op_need, "change"), (2, op_when, "change"), (4, op_expr, "change"), (2, op_reorder, "relation")]
+       (1, op_need, "change"), (2, op_when, "change"), (4, op_expr, "change"), (2, op_reorder, "relation"), (2, op_ground, "change")]
 
 
 def mutate(rng: random.Random, deck: dict, ops: int | None = None) -> tuple[dict, list[str], str]:

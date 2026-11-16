@@ -11,7 +11,7 @@ answer and writes the files of docs/format.md:
 
     proved          a rule's inequality holds for every value the card and the design allow
     refuted         it fails at a point they allow
-    not_applicable  the deck says the mechanism cannot arise for this part, and why
+    not_applicable  the deck excuses the line for this part, on a ground the readers check, and says why
     waived          the card waives the mechanism on the part, the cell would be open without that,
                     and the deck has no rule for the part or a completion of what is left out holds
     open            anything else: no rule, a rule that reads what the card does not give,
@@ -183,8 +183,13 @@ class Type:
 @dataclass(frozen=True)
 class Ask:
     """One line of the grid: a mechanism every part of the type answers for. `excused` is
-    why the mechanism cannot arise, and holds when `unless` does, or always when there is
-    no `unless`."""
+    the deck's reason that the mechanism cannot arise, where the line has an `unless`. Its
+    ground is one the reader checks: `unless`, a condition over keys the card states, which
+    holds for a part; or none of that, and then the line asks of no part of the type, by the
+    loads the type takes (`loads`, checked when the deck is read); or `least`, a load or a
+    quantity whose least the type declares, and whether it is a load, which excuses the line
+    for a part that has a value for it; or `along`, the lines it is answered with, each of
+    whose cells is then settled for the part."""
 
     type: str
     mechanism: str
@@ -192,6 +197,8 @@ class Ask:
     anchor: Mapping[str, str]
     unless: tuple | None = None
     excused: str | None = None
+    along: tuple[str, ...] = ()
+    least: tuple[str, bool] | None = None
 
 
 @dataclass(frozen=True)
@@ -311,25 +318,31 @@ def _name(name: Any) -> bool:
 
 
 def _field(body: Mapping[str, Any], load: bool = False) -> Field:
-    allowed = {"name", "what", "dim", "least", "may_be"} if load else {"name", "what", "dim", "least", "one_of", "type", "as", "signed", "whole", "may_be", "optional"}
+    allowed = {"name", "what", "dim", "least", "may_be"} if load else {"name", "what", "dim", "least", "one_of", "type", "as", "signed", "chosen", "whole", "may_be", "optional"}
     only(body, tuple(sorted(allowed)), f"field {body.get('name')!r}")
     if sum(key in body for key in ("dim", "one_of", "type")) != 1 or not (isinstance(body.get("what"), str) and body["what"]) or not _name(body.get("name")):
         raise DeckError(f"field {body.get('name')!r}: it has a name of letters, digits and _, `what`, a text, and one of `dim`, `one_of` and `type`, and may have {', '.join(sorted(allowed))}")
     name = body["name"]
-    only(body, ("name", "what", "one_of", "optional", "signed") if "one_of" in body else ("name", "what", "type", "as") if "type" in body
+    only(body, ("name", "what", "one_of", "optional", "signed", "chosen") if "one_of" in body else ("name", "what", "type", "as") if "type" in body
          else ("name", "what", "dim", "least", "signed", "whole", "may_be", "optional"), f"field {name}")
     # A part may leave an `optional` field unstated. The flag is true or false, as the kernel reads it, and it is the design that says what
     # a record leaves out: only the card states a signed field, so a field is not both.
     optional = body.get("optional", False)
     if any(not isinstance(body.get(flag, False), bool) for flag in ("optional", "signed", "whole")):
         raise DeckError(f"field {name}: `optional`, `signed` and `whole` are each true or false")
-    if (optional and body.get("signed")) or (optional and UNSTATED in body.get("one_of", ())):
+    # A key is the card's to state unless the deck says that the designer chooses it, and why: no key is the design's by saying nothing.
+    signed = bool(body.get("signed"))
+    if "one_of" in body:
+        if ("chosen" in body and (not _worded(body["chosen"]) or signed)) or ("chosen" not in body and "signed" in body and not signed):
+            raise DeckError(f"field {name}: {CHOSEN}")
+        signed = "chosen" not in body
+    if (optional and signed) or (optional and UNSTATED in body.get("one_of", ())):
         raise DeckError(f"field {name}: a field is `signed` or `optional`, and not both, and a key that may be left unstated has no name `{UNSTATED}`")
     if "one_of" in body:
         keys = tuple(str(k) for k in body["one_of"])
         if not keys or len(set(keys)) != len(keys):
             raise DeckError(f"field {name}: `one_of` is a list of different names")
-        return Field(name, body["what"], keys=keys, optional=optional, signed=body.get("signed", False))
+        return Field(name, body["what"], keys=keys, optional=optional, signed=signed)
     if "type" in body:
         names = tuple(body.get("as", [name]))
         if not names or not all(map(_name, names)) or len(set(names)) != len(names):
@@ -519,10 +532,97 @@ def _unsigned(cond: tuple | None, kind: Type, types: Mapping[str, Type]) -> str 
 
 
 UNSIGNED_KEY = "which the design may state: a `when` reads only a key the card signs"
+"""What both readers say of a `when` that reads a key the card does not sign (kernel/Petra/Deck.lean)."""
+GROUND = "unless: it has one ground: `when` over keys the card states, `least` of the type, `loads` of the type, or `with` other lines"
+"""What both readers say of an `unless` that names no ground, or more than one, as kernel/Petra/Deck.lean has it."""
+CHOSEN = "a key is the card's, which `signed` may say, or the designer's, which `chosen` says with why, in words: one of the two, and not both"
+"""What both readers say of a key that is not the card's and does not say why it is the designer's."""
+ALONG = "it is answered with {}, which is not settled for {}"
+"""The reason of a line that is answered with other lines while one of them is not settled for the part."""
+NO_LOAD = "the least of {0} would excuse it, and the card does not put {0} on {1} in every load case, or has none"
+"""The reason of a line excused by the least of a load, for a part the card does not put the load on in every case."""
+NO_VALUE = "the least of {0} would excuse it, and {1} leaves {0} unstated"
+"""The reason of a line excused by the least of a quantity, for a part that leaves the quantity unstated."""
+
+
+def _ground(unless: Mapping[str, Any], kind: "Type", mechanism: str) -> tuple[tuple[str, ...], tuple[str, bool] | None]:
+    """The lines an `unless` is answered with, and the load or the quantity whose least it rests on with whether that is a load,
+    after checking the ground it gives that is no condition. `least` names a load or a quantity of the type and a value its own
+    `least` is no less than: a card or a design that states it keeps the `least`, so the bound holds for a part that has a
+    value. `loads` names each load the type takes, once, and no other: a type that gains a load loses the excuse. `with` names
+    other lines. Raises DeckError otherwise."""
+    at = f"grid {mechanism}: unless"
+    if "least" in unless:
+        pair = unless["least"]
+        if not isinstance(pair, list) or len(pair) != 2 or not all(isinstance(x, str) for x in pair):
+            raise DeckError(f"{at}: `least` is a load or a quantity of the type and a value: [NAME, VALUE]")
+        on, value = pair
+        f = kind.loads.get(on) or kind.fields.get(on)
+        if f is None:
+            raise DeckError(f"{at}: {on} is no load and no field of {kind.name}")
+        if f.dim is None or f.least is None:
+            raise DeckError(f"{at}: {on} has no `least` in {kind.name}")
+        x, dim = quantity(value, f"{at}: least")
+        if dim != f.dim:
+            raise DeckError(f"{at}: the value of `least` is of another dimension than {on}")
+        if x > f.least:
+            raise DeckError(f"{at}: {kind.name} does not say that {on} is at least {value}")
+        return (), (on, on in kind.loads)
+    if "loads" in unless:
+        names = unless["loads"]
+        if not isinstance(names, list) or not all(isinstance(x, str) for x in names) or len(set(names)) != len(names) or set(names) != set(kind.loads):
+            raise DeckError(f"{at}: `loads` names each load of {kind.name} once and no other")
+        return (), None
+    lines = unless["with"]
+    if not isinstance(lines, list) or not lines or not all(isinstance(x, str) for x in lines) or len(set(lines)) != len(lines) or mechanism in lines:
+        raise DeckError(f"{at}: `with` names other lines of the grid, each once")
+    return tuple(lines), None
+
+
+MAX_TEXT = 200
+"""The bytes a text prints in before it is cut, as kernel/Petra/Files.lean has it."""
+
+
+def _printed(ch: str) -> int:
+    """The bytes the kernel prints for one character of a text, between quotes: two for a quote, a backslash, a line feed and
+    a carriage return, six for a character it writes as an escape, and its bytes in UTF-8 for any other."""
+    n = ord(ch)
+    if ch in '"\\\n\r':
+        return 2
+    if n < 0x20 or 0x7F <= n <= 0x9F or n in (0x2028, 0x2029, 0x61C, 0x200E, 0x200F) or 0x202A <= n <= 0x202E or 0x2066 <= n <= 0x2069:
+        return 6
+    return len(ch.encode("utf-8", "surrogatepass"))
+
+
+def _clip(text: str) -> str:
+    """A text as the kernel's `clip` cuts it: whole when it prints in at most MAX_TEXT bytes, and else its longest start that
+    does, and how many characters were left out. A deck's reason is cut once, where the deck is read, so that a cell of each
+    part does not carry a long one."""
+    if sum(map(_printed, text)) <= MAX_TEXT:
+        return text
+    room, kept = MAX_TEXT, 0
+    for ch in text:
+        size = _printed(ch)
+        if size > room:
+            break
+        room, kept = room - size, kept + 1
+        if room == 0:
+            break
+    return f"{text[:kept]}... ({len(text) - kept} more characters)"
+
+
+def _worded(value: Any) -> bool:
+    """Whether a value is a text that says something: it holds a letter, a to z or A to Z, as the kernel's `worded` reads it."""
+    return isinstance(value, str) and any("a" <= ch <= "z" or "A" <= ch <= "Z" for ch in value)
+
+
 STATED = "what the rule requires is stated: nothing is worked out"
 """The reason of a cell that a rule with `requires` proves, as kernel/Petra/Deck.lean has it. Such a cell says that keys are
 stated as the rule requires, by the card or by the design. It is no evidence that anything holds: a PASS needs a cell of another kind."""
-"""What both readers say of a `when` that reads a key the card does not sign (kernel/Petra/Deck.lean)."""
+NOTHING_READ = "the inequality reads no quantity of the part or of the card: nothing of the design is worked out"
+"""The reason of a proved cell whose rule reads no quantity, as kernel/Petra/Deck.lean has it: such a cell is one of stated keys in
+the form of an inequality, and is marked as one."""
+
 
 
 def _may_be(term: Any, signs: Mapping[str, tuple[str, str]]) -> tuple[str, str] | None:
@@ -886,24 +986,42 @@ def read_deck(text: str) -> Deck:
             unless = a.get("unless")
             only(a, ("type", "mechanism", "what", "anchor", "unless"), f"grid {a.get('mechanism')}")
             anchor = anchored(a["anchor"], f"grid {a.get('mechanism')}: anchor")
+            along: tuple[str, ...] = ()
+            least: tuple[str, bool] | None = None
             if unless is not None:
-                only(unless, ("why", "when"), f"grid {a.get('mechanism')}: unless")
-                # A line is excused with a reason that says something. The reason is the deck's word: no reader proves it.
-                if not isinstance(unless.get("why"), str) or not unless["why"].strip(" \t\r\n"):
-                    raise DeckError(f"grid {a.get('mechanism')}: unless: it says why, in a text that is not empty")
+                only(unless, ("why", "when", "least", "loads", "with"), f"grid {a.get('mechanism')}: unless")
+                # A line is excused with a reason that says something, on one ground that the reader checks.
+                if not _worded(unless.get("why")):
+                    raise DeckError(f"grid {a.get('mechanism')}: unless: it says why, in a text with a letter in it")
+                if sum(ground in unless for ground in ("when", "least", "loads", "with")) != 1:
+                    raise DeckError(f"grid {a.get('mechanism')}: {GROUND}")
             if not isinstance(a["type"], str) or not isinstance(a["mechanism"], str) or a["type"] not in types or _long(a["mechanism"]) or a["mechanism"] == UNREAD:
                 raise DeckError(f"grid {a.get('mechanism')}: a line has a type of the deck, mechanism, of at most {MAX_NAME} characters and not `{UNREAD}`, what, anchor and may have unless")
             when = _Binder(deck_rows, types[a["type"]], types).static(unless["when"]) if unless is not None and "when" in unless else None
             if (key := _unsigned(when, types[a["type"]], types)) is not None:
                 raise DeckError(f"grid {a['mechanism']}: the `when` of its `unless` reads {key}, {UNSIGNED_KEY}")
-            asks.append(Ask(a["type"], a["mechanism"], a["what"], anchor, when, unless["why"] if unless is not None else None))
+            if unless is not None and "when" not in unless:
+                along, least = _ground(unless, types[a["type"]], a["mechanism"])
+            asks.append(Ask(a["type"], a["mechanism"], a["what"], anchor, when, _clip(unless["why"]) if unless is not None else None, along, least))
         if len({(a.type, a.mechanism) for a in asks}) != len(asks):
             raise DeckError("the grid asks one mechanism of one type twice")
+        # A line answered with other lines names lines the grid asks of the same type, and none that is itself answered with others.
+        lines = {(a.type, a.mechanism): a for a in asks}
+        for a in asks:
+            for other in a.along:
+                if (a.type, other) not in lines:
+                    raise DeckError(f"grid {a.mechanism}: unless: it is answered with {other}, which the grid does not ask of {a.type}")
+                if lines[a.type, other].along:
+                    raise DeckError(f"grid {a.mechanism}: unless: it is answered with {other}, which is itself answered with other lines")
         rules = tuple(_rule(r, deck_rows, types) for r in body["rules"])
         asked = {(a.type, a.mechanism): a for a in asks}
         for r in rules:
-            if (r.type, r.mechanism) not in asked or asked[r.type, r.mechanism].unless is None and asked[r.type, r.mechanism].excused is not None:
-                raise DeckError(f"rule {r.id}: the grid does not ask {r.mechanism} of {r.type}, or says it never arises")
+            if (r.type, r.mechanism) not in asked:
+                raise DeckError(f"rule {r.id}: the grid does not ask {r.mechanism} of {r.type}")
+            if asked[r.type, r.mechanism].along:
+                raise DeckError(f"rule {r.id}: the grid says {r.mechanism} is answered with other lines for {r.type}")
+            if asked[r.type, r.mechanism].unless is None and asked[r.type, r.mechanism].excused is not None:
+                raise DeckError(f"rule {r.id}: the grid excuses {r.mechanism} by what {r.type} declares, and no rule answers such a line")
         _named(list(rules), "rules", lambda r: r.id)
         if len({(r.type, r.mechanism, r.id.rpartition("/")[2]) for r in rules}) != len(rules):
             raise DeckError("two rules for one line of the grid have ids that end alike after the last /, so their cells would have one entry")
@@ -1475,6 +1593,25 @@ def _holds(cond: Any, order: Mapping[tuple[int, int], int]) -> bool:
     return sign <= 0 if op == "le" else sign < 0
 
 
+def _reads_input(nodes: list[list], roots: list[int]) -> bool:
+    """Whether a root reads an input, directly or through other nodes, as `Tape.readsInput` of kernel/Petra/Tape.lean finds it. A
+    tape may hold an input that no root reads, as the quantity bound to a name its row does not use."""
+    need = set(roots)
+    for i in range(len(nodes) - 1, -1, -1):
+        if i not in need:
+            continue
+        kind, *rest = nodes[i]
+        if kind == "s":
+            return True
+        if kind == "pick":
+            need.update(n for cond, value in rest[0] for n in (value, *(x for pair in _atoms(cond) for x in pair)))
+        elif kind == "div":
+            need.update(rest)
+        elif kind not in ("c", "pi"):
+            need.update(rest[0] if isinstance(rest[0], list) else rest[:1])
+    return False
+
+
 def enclosures(nodes: list[list], box: list[Interval]) -> list[Any]:
     """The enclosure of each node over the box, or the reason it has none, as a string. The
     rule is kernel/Petra/Tape.lean's: a node that reads a node with no value has none, and
@@ -1961,7 +2098,8 @@ def _answers(rule: Rule, ask: Ask, part: Part, parts: Mapping[str, Part], cases:
     prefer = {} if prefer is None else prefer
 
     def cell(entry: str, state: str, why: str = "", **more: Any) -> Cell:
-        return Cell(part.name, rule.mechanism, entry, state, rule.says, anchor, why, rule.id, **more)
+        # Every cell of a rule with `requires` is marked, whatever its state: nothing is worked out for it.
+        return Cell(part.name, rule.mechanism, entry, state, rule.says, anchor, why, rule.id, **{"stated": rule.requires is not None, **more})
 
     # A rule that reads a field the part leaves unstated has no answer of its own. It reads the field in a side, in its `where`, in its
     # `when` or in its `requires`. The kernel names the first such field the rule reads, and this names the first by name. With a quantity
@@ -2054,11 +2192,14 @@ def _answers(rule: Rule, ask: Ask, part: Part, parts: Mapping[str, Part], cases:
             found: list[list[Fraction]] = []
             partition = _partition(tape.nodes, roots, box, [MAX_LEAVES], labels, found)
             point = next(iter(found), None)
+        # A tape none of whose roots reads an input reads nothing of the design or of the card: its cell is one of stated keys,
+        # whatever the form of its rule.
+        bare = not _reads_input(tape.nodes, roots)
         if partition is not None:
-            yield cell(entry, "proved", ratio=_ratio(tape.nodes, *sides[0], box), proof={"partition": partition})
+            yield cell(entry, "proved", NOTHING_READ if bare else "", ratio=_ratio(tape.nodes, *sides[0], box), proof={"partition": partition}, stated=bare)
         elif point is not None:
             yield cell(entry, "refuted", ratio=_ratio(tape.nodes, *sides[0], [Interval.point(x) for x in point]),
-                       proof={"point": {label: export.number(x) for label, x in zip(labels, point)}})
+                       proof={"point": {label: export.number(x) for label, x in zip(labels, point)}}, stated=bare)
         else:
             # An open cell stays open under a waiver, whether its inequality is left undecided or a table has no value for the part.
             v = enclosures(tape.nodes, box)
@@ -2084,6 +2225,7 @@ def cells(design: Design, deck: Deck, found: Parts) -> list[Cell]:
     rule does not switch the rule off. Any other open cell stays open, and says that the
     waiver does not rest it."""
     out: list[Cell] = []
+    waiting: list[tuple[int, str, Ask]] = []      # each cell of a line that is answered with other lines, by its place in `out`
     waived = {(w.subject[0], w.mode): w for w in reversed(design.waivers)}      # the first waiver of a line on a part, as the kernel takes it
     fixed: dict[Any, Any] = {}      # each key and each load the rested cells' completions name, as the kernel's fixedKeys and fixedLoads
     for part in found.parts.values():
@@ -2100,6 +2242,18 @@ def cells(design: Design, deck: Deck, found: Parts) -> list[Cell]:
                         pending = replace(pending, waivable=True, completion=(keys, ()), hints=({**pending.body, "completion": _completion_body(keys, ())},))
                         break
                 line.append(pending)
+            elif ask.along:
+                # One cell, which waits for the cells of the lines it is answered with: it is settled below, once every cell is made.
+                # No waiver of the line rests it: a waiver rests a line it is answered with.
+                out.append(Cell(part.name, ask.mechanism, "", "open", ask.what, anchor, ""))
+                waiting.append((len(out) - 1, part.name, ask))
+                continue
+            elif ask.least is not None and not (all(case in part.loads.get(ask.least[0], {}) for case in found.cases) and bool(found.cases) if ask.least[1]
+                                                else part.values.get(ask.least[0]) is not NOT_STATED):
+                # The least of a load or of a quantity says something of a part that has a value for it. For any other part nothing
+                # says that the value is there, and the line is open as a line with no rule is: the card may waive it.
+                line.append(Cell(part.name, ask.mechanism, "", "open", ask.what, anchor, _clip((NO_LOAD if ask.least[1] else NO_VALUE).format(ask.least[0], part.name)),
+                                 waivable=True))
             elif ask.excused is not None and _static(ask.unless, part, found.parts):
                 line.append(Cell(part.name, ask.mechanism, "", "not_applicable", ask.what, anchor, ask.excused))
             else:
@@ -2120,6 +2274,12 @@ def cells(design: Design, deck: Deck, found: Parts) -> list[Cell]:
                     out.append(replace(c, state="waived", why=f"by {w.owner}: {w.reason}; {WAIVED}{c.why}", waiver=(w.owner, w.reason)))
                 else:
                     out.append(replace(c, why=f"{UNRESTED}{c.why}"))
+    # The lines answered with other lines, now that every cell is made and every waiver has rested what it rests. Such a line cannot
+    # arise for a part while each cell of the lines it names is proved, waived or not applicable for that part, and is open otherwise.
+    unsettled = {(c.subject, c.mechanism) for c in out if c.state not in ("proved", "waived", "not_applicable")}
+    for k, name, ask in waiting:
+        first = next((other for other in ask.along if (name, other) in unsettled), None)
+        out[k] = replace(out[k], state="not_applicable", why=ask.excused) if first is None else replace(out[k], why=ALONG.format(first, name))
     return out + _unread(deck, found, fixed)
 
 
@@ -2259,26 +2419,36 @@ class Report:
                f"rules      {self.deck.hash}  {self.deck.name}",
                "cells      " + ", ".join(f"{counts[s]} {s.replace('_', ' ')}" for s in STATES)]
         wide = max((len(f"{c.subject}/{c.mechanism}") for c in self.cells), default=0)
+        # One line for one cell and for one waiver: a reason, a name and an anchor are texts of a deck or of a card, and a line feed in
+        # one would write lines of this report.
+        flat = lambda text: " ".join(text.split())      # noqa: E731
         for c, done in zip(self.cells, self.completions()):
             ratio = "" if c.ratio is None else f"{c.ratio:.3g}"
-            said = (c.why if c.state in ("open", "not_applicable", "waived") else ": ".join(filter(None, (c.what, c.why))) if c.state == "refuted"
-                    else c.what if c.entry.endswith("/where") else "")
+            said = (c.why if c.state in ("open", "not_applicable", "waived") or (c.stated and c.state == "proved")
+                    else ": ".join(filter(None, (c.what, c.why))) if c.state == "refuted" else c.what if c.entry.endswith("/where") else "")
+            said = flat(said)
             if done:
                 said += "; rested where " + " and ".join([*(f"{p}.{f} is {name}" for p, f, name in done["keys"]),
                                                           *(f"{p}.{load} is {x}" + ("" if unit == "1" else f" {unit}") + (f" in case {case}" if case else "")
                                                             for p, load, case, x, unit in done["loads"])])
-            out.append(f"  {f'{c.subject}/{c.mechanism}':<{wide}}  {c.state.replace('_', ' '):<14}  {ratio:>6}  "
-                       + ": ".join(part for part in (c.entry, said) if part) + (f" ({c.anchor})" if c.anchor else ""))
+            out.append(f"  {flat(f'{c.subject}/{c.mechanism}'):<{wide}}  {('stated' if c.stated and c.state == 'proved' else c.state.replace('_', ' ')):<14}  {ratio:>6}  "
+                       + ": ".join(part for part in (flat(c.entry), said) if part) + (f" ({flat(c.anchor)})" if c.anchor else ""))
         waivers = self.waived()
         if waivers:
             out.append(f"waived     {counts['waived']} cells rest on {len(waivers)} waivers"
                        + (", so the design passes what the deck could check and each signer answers for the rest" if self.status == PASS_WAIVED else ""))
-            out += [f"  {w['subject']}/{w['mechanism']}  by {w['by']}: {w['reason']}" for w in waivers]
+            # A waiver's texts are the card's. A line feed in one is a space here, and every other character is left for the command to
+            # escape (files.shown), as it was.
+            out += [f"  {w['subject']}/{w['mechanism']}  by {w['by']}: {w['reason']}".replace("\n", " ") for w in waivers]
+        worked = any(c.state == "proved" and not c.stated and not c.entry.endswith("/where") for c in self.cells)
+        if self.status == "UNKNOWN" and not worked and not any(c.state == "open" for c in self.cells):
+            out.append("unknown    no cell was worked out: each proved cell is of stated keys, of numbers alone or of a rule's range, and that is no evidence of a design")
         pending = [c for c in self.cells if c.state == "open"]
         if pending:
             out.append(f"open       {len(pending)} cells: each needs a rule, an input, or `waive MECHANISM on PART by \"<owner>\" reason \"<why>\"` "
                        "in the card, which rests only a cell the deck has no rule for, or one that holds under a completion of what is left out")
-        return out
+        # Each item is one line of the report, whatever a text of a deck or of a card holds: its name, a name of a key in a completion.
+        return [line.replace("\n", " ") for line in out]
 
 
 @dataclass(frozen=True)
@@ -2326,7 +2496,7 @@ def checked(design: Design, deck: Deck, card: str, text: str, card_path: str) ->
     if said["verdict"] == "ILL-FORMED":
         raise ComponentError(verify.refusal(design.path, said))
     differ = verify.differs([(c.subject, c.mechanism, c.entry, c.state) for c in report.cells], report.verdict, deck.hash, said, report.waived(),
-                           report.completions())
+                           report.completions(), [c.stated for c in report.cells])
     if not differ and verify.status(said) != report.status:
         differ = f"the report would print {report.status}"
     if differ:

@@ -63,7 +63,7 @@ CORE_CAP = Limit(331, "Set on 2026-11-15 at the deletion of the old path (plan s
                        "package's own file. Before that day the cap was 1,023 and covered the Python checker's "
                        "core too: its check, its codec, its evidence and its linear algebra, which are gone.")
 
-TRUSTED_CEILING = Limit(3959, "Set on 2026-11-15 at the deletion of the old path (plan step 1.2c), where what is counted "
+TRUSTED_CEILING = Limit(4076, "Set on 2026-11-15 at the deletion of the old path (plan step 1.2c), where what is counted "
                                 "measured 3,871 code lines: the arithmetic 331, and outside it the front end and the decks "
                                 "as data, 3,540. Before that day the ceiling was 20,119, of which the models, the "
                                 "registry, the premises and the Python checker's rules were the most: all are gone. "
@@ -86,6 +86,18 @@ TRUSTED_CEILING = Limit(3959, "Set on 2026-11-15 at the deletion of the old path
                                 "nothing out, is marked and is not the proved cell a PASS needs. And the mean of a "
                                 "given or of a load on a deck's card is refused, where it was dropped with nothing "
                                 "said. 8 lines in petra/grid.py: 3,959. "
+                                "Raised the same day for the last part of step 1.6, the owner's rulings 1 and 2, and for "
+                                "what the fifteenth review found. A key is the card's unless the deck says `chosen` and "
+                                "why. An `unless` has one ground that the reader checks: a `when`, a `least` or the "
+                                "`loads` the type declares, or `with` other lines, whose cell is settled after every "
+                                "other. The cell of a rule that reads no quantity is marked as one of stated keys. A "
+                                "deck's reason is cut once, as the kernel cuts it, and prints on one line. The guard on "
+                                "the kernel's answer knows a stated cell, and the exporter refuses a mean on every way "
+                                "in. 93 lines, most of them in petra/grid.py: 4,052. "
+                                "And for what the sixteenth review found: the least of a load or of a quantity excuses a "
+                                "line for a part that has a value for it and leaves it open for any other, a tape none "
+                                "of whose roots reads an input is one that reads nothing, and a name and an anchor of a "
+                                "deck print on the line of their own cell. 24 lines in petra/grid.py: 4,076. "
                                 "Raise it in the commit that needs more and say why here.")
 
 T2_ADOPTED = date(2026, 11, 8)

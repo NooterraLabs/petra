@@ -2065,6 +2065,7 @@
    "fields": [
     {
      "name": "fastener",
+     "chosen": "the designer picks the bolts, and the parts list names their strength group",
      "one_of": [
       "Group 120",
       "Group 144",
@@ -2074,6 +2075,7 @@
     },
     {
      "name": "threads",
+     "chosen": "the designer picks bolts whose threads are in the shear planes or kept out of them, and the parts list says which",
      "one_of": [
       "included",
       "excluded"
@@ -2253,7 +2255,10 @@
     "clause": "J3.8"
    },
    "unless": {
-    "why": "a lap carries a pull along its line, which shears its bolts and puts no tension on them"
+    "loads": [
+     "pull"
+    ],
+    "why": "a lap takes one load, a pull along its line, which shears its bolts and puts no tension on them"
    }
   },
   {
@@ -2265,7 +2270,10 @@
     "clause": "J3.9"
    },
    "unless": {
-    "why": "a lap is a bearing-type joint, which claims no slip resistance"
+    "why": "slip is asked of a slip-critical joint, and the line of tightening answers whether this joint must be one",
+    "with": [
+     "lap.tightening"
+    ]
    }
   },
   {
@@ -2295,7 +2303,11 @@
     "clause": "J4.2"
    },
    "unless": {
-    "why": "the plates of a lap are pulled along its line; shear on their planes beside the bolts is tearout and block shear"
+    "why": "the plates of a lap are pulled along its line, and shear on their planes beside the bolts is tearout and block shear, which those lines answer",
+    "with": [
+     "lap.strength",
+     "lap.block_shear"
+    ]
    }
   },
   {
@@ -2325,7 +2337,11 @@
     "clause": "J4.4"
    },
    "unless": {
-    "why": "the load on a lap is a pull, which the card signs as at least zero"
+    "least": [
+     "pull",
+     "0 kip"
+    ],
+    "why": "the load on a lap is a pull, which is at least zero on every card"
    }
   },
   {

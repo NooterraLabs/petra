@@ -36,8 +36,18 @@ every rule, so that a rig may pass when its card waives the one line that has no
 One rig in three is then damaged in a way the grid refuses, or the language before it.
 
 A condition reads only a key the card signs (plan step 1.6): the `when` of a rule and of a
-line's `unless`. So each key that a condition of these decks reads is `signed`, and each
-draft has its card state it (`Draft.state`).
+line's `unless`. A key is the card's unless the deck marks it `chosen` and says why, so each
+draft has its card state every key that has no such mark (`Draft.state`). KIT marks the two
+keys a cell may leave unstated `chosen`, and the deck that ships its fastener and threads.
+
+A line that cannot arise says so on one ground that both readers check. The four decks have
+each: a condition (`when`), the loads the type takes (`loads`: strip.tide, bar.soak,
+rig.flood, cell.dry for a type with none, and the lap's tension with shear), a least value
+the type declares (`least`: bar.untwist, rig.lift, the lap's ply compression), and other
+lines that answer it (`with`: bar.follow, rig.spill, cell.creep, the lap's slip and ply
+shear). A line answered with others has one cell, which is not applicable while every cell
+of those lines is proved, waived or not applicable for the part and open otherwise, so the
+drafts' waivers and failing rules move it.
 
 A design's numbers are drawn from
 the ends of the decks' bands, their listed
@@ -69,7 +79,13 @@ ids end alike, a line named `unread`, a `when`, an `unless` or a `requires` that
 a requirement that no part can break or no part can meet, a mark on a field with a value
 it may or may not take there (`optional`, `signed`, `whole`, `may_be`, `least`), `lt` for
 `le` or both at once, or a wide row that a rule applies 9 times or 1,000
-times, which is within the steps a deck may take to read or over them. An honest design
+times, which is within the steps a deck may take to read or over them. Seven more are of
+the two rules above (GROUNDS): a key with neither mark, with both or with `signed: false`,
+a `chosen` with no letter or that is no text, an `unless` with a reason and no ground or
+with two grounds, a `least` the type gives, one over it, of a field with none, of no field
+or of another dimension, `loads` that leave one out, add one or name one twice, and a line
+answered `with` itself, with a line the grid lacks or asks of another type, with one line
+twice, with none, or with a line that is itself answered with others. An honest design
 of that deck is then checked against it. The grid's `read_deck` must refuse exactly the decks the kernel finds ill formed, and
 where both read the deck they must agree on the design as above.
 
@@ -175,7 +191,12 @@ OPS = {
         ("idle", {"unless": {"when": ["or", ["not", ["is", "left.finish", "low"]], ["and", ["is", "grade", "hard"], ["is", "right.finish", "high"]]], "why": "made up"}}),
         ("named", {}), ("cased", {}), ("left", {}), ("alike", {}), ("modulus", {}),
         ("cos", {}), ("cosin", {}), ("cosfloor", {}), ("turn", {}), ("sine", {}), ("zero", {}), ("tiny", {}), ("edge", {}), ("long", {}),
-        ("right", {"unless": {"when": ["and", ["is", "right.finish", "low"], ["not", ["is", "left.finish", "low"]]], "why": "made up: a key of a joined part"}}))],
+        ("right", {"unless": {"when": ["and", ["is", "right.finish", "low"], ["not", ["is", "left.finish", "low"]]], "why": "made up: a key of a joined part"}}),
+        # A line that cannot arise on each ground that is no condition: the loads a bar takes, the least of one of them, and two
+        # other lines, of which a rule with a `when` and a load answers one and a rule that requires the other.
+        ("soak", {"unless": {"loads": ["push", "twist", "drag"], "why": "made up: a bar takes a push, a twist and a drag, and no water"}}),
+        ("untwist", {"unless": {"least": ["twist", "0 Nm"], "why": "made up: a twist is at least zero"}}),
+        ("follow", {"unless": {"with": ["bar.drag", "bar.alike"], "why": "made up: the lines of drag and of caps alike answer it"}}))],
     "rules": [
         {"id": "ops/cases", "type": "bar", "mechanism": "bar.cases", "anchor": MADE_UP, "says": "made up",
          "le": [["row", "ops/cases", {"a": "a", "b": "b"}], "1.5"]},
@@ -248,9 +269,9 @@ class Draft:
         return next(lines for _, name, lines in self.parts if name == part)
 
     def state(self, rules: dict) -> "Draft":
-        """Have the card state each key that `rules` marks `signed` and that a part writes as a name: the part's line
-        then reads the given. A condition reads only such a key."""
-        signed = {(t["type"], f["name"]) for t in rules["types"] for f in t["fields"] if f.get("signed") and "one_of" in f}
+        """Have the card state each key of `rules` that is the card's, which is every key the deck does not mark `chosen`,
+        and that a part writes as a name: the part's line then reads the given. A condition reads only such a key."""
+        signed = {(t["type"], f["name"]) for t in rules["types"] for f in t["fields"] if "one_of" in f and "chosen" not in f}
         for kind, name, lines in self.parts:
             for line in lines:
                 if (kind, line[0]) in signed and not line[1].startswith("given "):
@@ -439,8 +460,11 @@ KIT = {
         {"type": "cell", "what": "a cell of a rig", "fields": [
             _kit_field("low", dim="temperature", may_be="negative", least="-40 degC"), _kit_field("spare", dim="dimensionless", whole=True, may_be="zero"),
             _kit_field("station", dim="length", may_be="negative"), _kit_field("resistance", dim="resistance", optional=True),
-            _kit_field("limit", dim="dimensionless/time", optional=True), _kit_field("seal", one_of=["none", "full"], optional=True),
-            _kit_field("maker", one_of=["a", "b"], optional=True), _kit_field("mass", dim="mass"), _kit_field("housing", one_of=["open", "closed"], signed=True)],
+            _kit_field("limit", dim="dimensionless/time", optional=True),
+            # A key that may be left unstated is one the designer chooses: a signed field is not optional.
+            _kit_field("seal", one_of=["none", "full"], optional=True, chosen="made up: the designer picks the seal, or leaves it to the maker"),
+            _kit_field("maker", one_of=["a", "b"], optional=True, chosen="made up: the designer picks the maker, or the card states it"),
+            _kit_field("mass", dim="mass"), _kit_field("housing", one_of=["open", "closed"], signed=True)],
          "needs": [{"le": ["low", ["q", "60", "degC"]], "why": "made up: a field that may be negative, in a need"}]},
         {"type": "rig", "what": "a rig of two cells", "fields": [
             _kit_field("duty", one_of=["light", "heavy"], signed=True), _kit_field("count", dim="dimensionless", whole=True, signed=True, least="2"),
@@ -456,7 +480,15 @@ KIT = {
         ("rig.sealed", {"unless": {"when": ["is", "rear.housing", "closed"], "why": "made up: a key of a joined part, which the card states"}}),
         ("rig.share", {}), ("rig.centre", {}), ("rig.energy", {}), ("rig.dense", {}), ("rig.stiff", {}), ("rig.twist", {}), ("rig.heat", {}), ("rig.carry", {}),
         ("rig.bare", {}), ("rig.night", {"unless": {"when": ["is", "mode", "day"], "why": "made up"}}),
-        ("cell.mass", {}), ("cell.temp", {}), ("cell.spare", {}), ("cell.limit", {}), ("cell.ohm", {}), ("cell.sealed", {}))],
+        ("cell.mass", {}), ("cell.temp", {}), ("cell.spare", {}), ("cell.limit", {}), ("cell.ohm", {}), ("cell.sealed", {}),
+        # Lines that cannot arise on a ground that is no condition. rig.spill is answered with a line that has no rule, which is
+        # open until the card waives it, and with one whose rule reads a load. cell.creep is answered with a line of the cell,
+        # and cell.dry names the loads of a type that takes none.
+        ("rig.flood", {"unless": {"loads": ["air", "shift", "weight"], "why": "made up: a rig takes the air, a shift and a weight, and no water"}}),
+        ("rig.lift", {"unless": {"least": ["weight", "0 g"], "why": "made up: a weight is at least zero"}}),
+        ("rig.spill", {"unless": {"with": ["rig.bare", "rig.carry"], "why": "made up: the bare line and the line of what it carries answer it"}}),
+        ("cell.creep", {"unless": {"with": ["cell.mass"], "why": "made up: the line of its mass answers it"}}),
+        ("cell.dry", {"unless": {"loads": [], "why": "made up: a cell takes no load"}}))],
     "rules": [
         # A key and a count that the card states: in a `when`, a `requires`, a key of a table, and as a number.
         _kit_rule("class", "rig.class", when=["is", "duty", "heavy"], requires=["is", "mode", "day"]),
@@ -494,7 +526,7 @@ since 2026-11-11, and rules that state `lt`. `rig.bare` has no rule, for a waive
 KIT_SEED = 485
 """The seed of the rig that a damaged KIT deck is checked with (`_decks`): a calm rig that
 carries its three loads in two cases, 28 of whose cells are proved, with one line, the one
-that has no rule, left open."""
+that has no rule, left open, and with it the line that is answered with that one."""
 
 
 def kit(rng: random.Random, n: int) -> Draft:
@@ -786,11 +818,13 @@ ODD = ["", "pi", "2", "x.y", "load pull", "load current", "@0", "1e3", " 5", "1_
        "zero", "negative", "positive", "unstated", "optional", "signed", "true", "5 rpm", "150 Hz", "3 m/s", "3 m / s", "36 km/h", "2200 mAh", "1 Ah", "12 min", "1 h",
        "1 lb", "16 oz", "1 mile", "2 g/cm3", "2000 kg/m3", "1 N/mm", "1 lbf_ft", "12 lbf_in", "1.2 kW", "5 K", "5 degF", "-10 degC", "0 degC", "0 g", "-1 mm", "0 rpm",
        "rpm", "m/s", "mAh", "min", "h", "K", "lt", "le", "dimensionless/time", "current*time", "length/time", "mass/length^3", "force/length", "temperature",
-       "front.limit", "rear.seal", "front.spare", "duty", "count", "mode", "light", "heavy", "day", "night", "full", "none", "kit/pace"]
+       "front.limit", "rear.seal", "front.spare", "duty", "count", "mode", "light", "heavy", "day", "night", "full", "none", "kit/pace",
+       "chosen", "with", "42", "...", "current", "pull", "weight", "air", "push", "twist", "0 A", "0 kip", "0 g", "0 Nm", "1 A", "strip.heat", "strip.creep",
+       "lap.tightening", "lap.strength", "rig.bare", "rig.carry", "rig.spill", "bar.drag", "bar.follow", "cell.mass"]
 """Texts to put where a deck has another: numbers the two readers might read apart, and names that are something else too."""
 KEYS = ["note", "what", "dim", "type", "as", "least", "unless", "when", "closed", "at", "bands", "one_of", "range", "jumps", "unit", "rises", "falls",
         "let", "where", "loads", "across", "table", "is", "cases", "needs", "requires", "le", "lt", "why", "gives", "down", "cells",
-        "may_be", "optional", "signed", "whole"]
+        "may_be", "optional", "signed", "whole", "chosen", "with"]
 
 
 def damaged(rng: random.Random, body: dict) -> list[str]:
@@ -816,7 +850,8 @@ def damaged(rng: random.Random, body: dict) -> list[str]:
         way = rng.choice(["another text", "another text", "another text", "an odd text", "an odd text", "a key less", "an item less", "an item twice",
                           "items in another order", "a key renamed", "a key more", "a where with no item", "two rules that end alike", "a line named unread",
                           "a wide row applied", "a condition that asks loaded", "a name no cell holds", "a requirement no part can break",
-                          "a flag on a field", "a flag on a field", "le for lt", "a condition on a key the design states"])
+                          "a flag on a field", "a flag on a field", "le for lt", "a condition on a key the design states",
+                          *GROUNDS, *GROUNDS])
         rules = [r for r in body["rules"] if isinstance(r, dict)] if isinstance(body.get("rules"), list) else []
         naming = [r for r in body["rows"] if isinstance(r, dict) and isinstance(r.get("gives"), dict) and isinstance(r["gives"].get("one_of"), list)] if isinstance(body.get("rows"), list) else []
         if way == "a name no cell holds" and naming:
@@ -843,11 +878,15 @@ def damaged(rng: random.Random, body: dict) -> list[str]:
         if way == "a condition on a key the design states":
             # A key loses the mark that makes it the card's, or a rule gets a `when` on a key of its type that never had it. Both
             # readers refuse a deck whose condition reads such a key: the design would choose which of its checks are run.
-            marked = [f for f in fields if isinstance(f.get("one_of"), list) and f.get("signed") is True]
+            # A key is the card's unless the deck says `chosen`: so the mark it loses is replaced by that one, and a key that is
+            # free for a new `when` is one the deck marks `chosen`.
+            marked = [f for f in fields if isinstance(f.get("one_of"), list) and "chosen" not in f]
             free = [(r, f) for r in rules for t in body["types"] if isinstance(t, dict) and t.get("type") == r.get("type")
-                    for f in t.get("fields", []) if isinstance(f, dict) and isinstance(f.get("one_of"), list) and f["one_of"] and not f.get("signed")]
+                    for f in t.get("fields", []) if isinstance(f, dict) and isinstance(f.get("one_of"), list) and f["one_of"] and "chosen" in f]
             if marked and (not free or rng.random() < 0.5):
-                rng.choice(marked).pop("signed")
+                loose = rng.choice(marked)
+                loose.pop("signed", None)
+                loose["chosen"] = "made up: the designer picks it"
             elif free:
                 chosen, read = rng.choice(free)
                 asks = ["is", read.get("name"), read["one_of"][0]]
@@ -878,6 +917,10 @@ def damaged(rng: random.Random, body: dict) -> list[str]:
             done.append(way)
             continue
         if way in ("a requirement no part can break", "a flag on a field", "le for lt"):
+            continue
+        if way in GROUNDS:
+            if _grounds(rng, body, way, fields):
+                done.append(way)
             continue
         if way == "a wide row applied" and rules and isinstance(body.get("rows"), list):
             # A row of 1,000 names, about 2,000 steps, that names of `let` apply and nothing reads, so the steps to read the deck are all that
@@ -938,6 +981,101 @@ def damaged(rng: random.Random, body: dict) -> list[str]:
             rng.choice(dicts)[rng.choice(KEYS)] = rng.choice([rng.choice(texts)[1], rng.choice(ODD)])
         done.append(way)
     return done
+
+
+GROUNDS = ["a key with neither mark or both", "a chosen with no letter", "an unless with no ground", "an unless with two grounds",
+           "a least of a line", "the loads of a line", "a line answered with others"]
+"""The damages of the two rules of plan step 1.6, its last part: a key is the card's or says why the designer chooses it, and an
+`unless` has one ground that the readers check. Each has ways that both readers refuse and ways that both read."""
+
+
+def _grounds(rng: random.Random, body: dict, way: str, fields: list[dict]) -> bool:
+    """Damage the deck in one of the ways of GROUNDS, and say whether anything was there to damage. The deck may be damaged
+    already, so nothing here trusts its shape."""
+    keys = [f for f in fields if isinstance(f.get("one_of"), list)]
+    lines = [a for a in body["grid"] if isinstance(a, dict)] if isinstance(body.get("grid"), list) else []
+    kinds = {t.get("type"): t for t in body["types"] if isinstance(t, dict) and isinstance(t.get("type"), str)} if isinstance(body.get("types"), list) else {}
+    ruled = {r.get("mechanism") for r in body["rules"] if isinstance(r, dict)} if isinstance(body.get("rules"), list) else set()
+    why = {"why": "made up for the bench"}
+    if way == "a key with neither mark or both":
+        # Neither mark leaves the key the card's, so the honest design may now write a key that is not its own. Both marks, and
+        # `signed: false` alone, are refused. `chosen` on a key that a condition reads is refused for the condition.
+        if not keys:
+            return False
+        key = rng.choice(keys)
+        marks = rng.choice([{}, {}, {"signed": True, "chosen": "made up"}, {"signed": False}, {"signed": False, "chosen": "made up"}, {"chosen": "made up"}, {"signed": True}])
+        key.pop("signed", None)
+        key.pop("chosen", None)
+        key.update(marks)
+        return True
+    if way == "a chosen with no letter":
+        # A reason with no letter of a to z or A to Z, which is none, one that is no text, and one of a single letter, which is one.
+        if not keys:
+            return False
+        key = rng.choice(keys)
+        key.pop("signed", None)
+        key["chosen"] = rng.choice(["", " ", "42", "...", "1 2 3.", "\u00e9", "\u0430", "\u3000", "\uff41", "x", "Z", 7, None, True, ["made up"]])
+        return True
+    if not lines:
+        return False
+    # A line that no rule answers, more often than not: a ground on a line that has a rule is refused for the rule.
+    bare = [a for a in lines if a.get("mechanism") not in ruled]
+    line = rng.choice(bare if bare and rng.random() < 0.8 else lines)
+    kind = kinds.get(line.get("type"), {})
+    loads = [f.get("name") for f in kind.get("loads", []) if isinstance(f, dict)] if isinstance(kind.get("loads", []), list) else []
+    floors = [f for f in [*kind.get("fields", []), *kind.get("loads", [])] if isinstance(f, dict) and isinstance(f.get("name"), str)] if isinstance(kind.get("fields"), list) else []
+    others = [a.get("mechanism") for a in lines if a is not line and a.get("type") == line.get("type") and isinstance(a.get("mechanism"), str)]
+    elsewhere = [a.get("mechanism") for a in lines if a.get("type") != line.get("type") and isinstance(a.get("mechanism"), str)]
+    old = line.get("unless") if isinstance(line.get("unless"), dict) else {}
+
+    def least() -> list:
+        """A `least`: one the type gives, one under it, one over it, of a field that has none, of no field, of another
+        dimension, or of another shape."""
+        with_floor = [f for f in floors if isinstance(f.get("least"), str)]
+        if not floors:
+            return ["nobody", "0 mm"]
+        f = rng.choice(with_floor if with_floor and rng.random() < 0.7 else floors)
+        name, floor = f["name"], f.get("least") if isinstance(f.get("least"), str) else "0 mm"
+        number, _, unit = floor.partition(" ")
+        try:
+            over, under = f"{Fraction(number) + 1} {unit}".strip(), f"{Fraction(number) - 1} {unit}".strip()
+        except (ValueError, ZeroDivisionError):
+            over, under = f"1000000 {unit}".strip(), f"-1000000 {unit}".strip()
+        return rng.choice([[name, floor], [name, floor], [name, floor], [name, under], [name, under], [name, over], [name, over], ["nobody", floor], [name, rng.choice(ODD)],
+                           [name, "0 A"], [name], [name, floor, floor], [floor, name], []])
+
+    def taken() -> list:
+        """The loads of the type: each once, in this order or another, or one left out, one more, or one twice."""
+        return rng.choice([list(loads), list(loads), list(loads), list(reversed(loads)), loads[:-1], loads[1:], [*loads, "nobody"], [*loads, *loads[:1]],
+                           [*loads, rng.choice(ODD)], ["nobody"]])
+
+    def answered() -> list:
+        """The lines that answer this one: others of its type, itself, one the grid lacks, one of another type, one twice, or none."""
+        alone = [m for m in others if not any(a.get("mechanism") == m and isinstance(a.get("unless"), dict) and "with" in a["unless"] for a in lines)]
+        pool = alone if alone and rng.random() < 0.8 else others      # one line in five may be one that is itself answered with others
+        some = rng.sample(pool, k=min(len(pool), rng.choice([1, 1, 2]))) if pool else []
+        return rng.choice([some, some, some, some, some, some, [line.get("mechanism")], [*some, line.get("mechanism")], [*some, "no.line"], [*some, *some[:1]], [],
+                           elsewhere[:1], ["unread"]])
+
+    if way == "an unless with no ground":
+        # A reason alone: the ground of a line that had one is taken away, or a line that had no `unless` gets one of a reason.
+        line["unless"] = {"why": old.get("why", why["why"])}
+    elif way == "an unless with two grounds":
+        grounds = {"loads": taken(), "least": least(), "with": answered(), **({"when": old["when"]} if "when" in old else {})}
+        first, second = rng.sample(sorted(grounds), 2)
+        line["unless"] = {**why, first: grounds[first], second: grounds[second]}
+    elif way == "a least of a line":
+        line["unless"] = {**why, "least": least()}
+    elif way == "the loads of a line":
+        line["unless"] = {**why, "loads": taken()}
+    else:
+        line["unless"] = {**why, "with": answered()}
+        # One time in seven a line it names is itself answered with others, or the two name each other.
+        named = [a for a in lines if a.get("mechanism") in line["unless"]["with"] and a is not line]
+        if named and rng.random() < 0.15:
+            third = [m for m in others if m != named[0].get("mechanism")]
+            named[0]["unless"] = {**why, "with": rng.choice([[line.get("mechanism")], third[:1] or [line.get("mechanism")]])}
+    return True
 
 
 _STATE: dict[str, object] = {}
@@ -1004,8 +1142,9 @@ def judge(card: str, design: str, name: str, rules: str | None = None, slash: bo
     elif said["verdict"] == "ILL-FORMED":
         outcome, detail = f"DIFFER: the kernel refuses {its} and the grid does not", "; ".join(f"{f['item']}: {f['why']}" for f in said["findings"])
     else:
+        # The two mark the same cells as ones of stated keys, which work nothing out, as `petra check` holds them to.
         detail = verify.differs([(c.subject, c.mechanism, c.entry, c.state) for c in report.cells], report.verdict, deck.hash, said, report.waived(),
-                                report.completions())
+                                report.completions(), [c.stated for c in report.cells])
         outcome = "DIFFER: the cells differ" if detail else f"both give {report.verdict}"
     kinds = [] if report is None else [f"{c.mechanism if c.mechanism == 'unread' else c.mechanism + ('/where' if c.entry.endswith('/where') else '')} {c.state}"
                                        + (" split" if isinstance(c.proof.get("partition"), dict) else "") for c in report.cells]

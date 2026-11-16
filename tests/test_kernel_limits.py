@@ -491,11 +491,14 @@ class Reading(Kernel):
         has in its place takes 10,503: 6,360, and 4,143 for 37 times, since its tables of
         holes and edge distances list the sizes their last lines give. The two needs of a lap,
         added 2026-11-12, took 55 of its file's steps, and the line of the grid for a block of
-        fewer bolts than all, added 2026-11-13, 27 more: 10,530, of which 6,387 for its file. Ten
-        decks of that size would be about a tenth of the limit."""
+        fewer bolts than all, added 2026-11-13, 27 more: 10,530, of which 6,387 for its file. The
+        grounds of 2026-11-16 took 56 more of its file's steps, 10,588 of which 6,445 for its file:
+        27 for the two keys that say `chosen` and why, and 29 for the four lines that never arise,
+        each with its ground (`loads`, `with`, `with`, `least`) and a reason reworded to say it:
+        4, 10, 10 and 5. Ten decks of that size would be about a tenth of the limit."""
         deck = next(d for d in grid.decks() if "lap" in d.types)
         body = json.loads(deck.text)
-        self.assertIn((len(body["rules"]), grid._size(body), grid._steps(body)), [(4, 3874, 5500), (15, 6389, 10532)])
+        self.assertIn((len(body["rules"]), grid._size(body), grid._steps(body)), [(4, 3874, 5500), (15, 6445, 10588)])
         self.assertLess(grid._steps(body) * 10 * 8, MAX_READ, "ten decks of its size are under an eighth of the limit")
 
     def test_the_count_is_the_size_of_the_file_and_of_a_row_for_each_time_a_rule_applies_it(self):

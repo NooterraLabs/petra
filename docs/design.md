@@ -20,21 +20,25 @@ The kernel makes one cell for each part, each mechanism and each load case, and 
 
 | State | When |
 |---|---|
-| Proved | The rule's inequality holds for every value the card and the design allow |
-| Refuted | It fails at a point they allow |
-| Not applicable | The grid says the mechanism cannot arise for this part |
+| Proved | The rule's inequality holds for every value the card and the design allow, or the keys are as a rule requires |
+| Refuted | The inequality fails at a point they allow, or the keys are not as a rule requires |
+| Not applicable | The deck excuses the part from the mechanism, with a reason and on one ground that the kernel checks: a condition over keys the card states, the loads the type takes, the least value the type declares for a load or a quantity that the part has a value for, or other lines of the grid whose cells for the part are all proved, waived or not applicable |
 | Waived | The card waives the mechanism on the part with a signature, and the cell would be open without it: the deck has no rule for the part, or the design or the card leaves out something a rule reads and the rule holds under some value of it |
 | Open | Anything else |
 
-No cell has a default. A mechanism with no rule is an open cell and not a silent pass.
+No cell has a default. A mechanism with no rule and no excuse is an open cell and not a silent pass.
+
+A cell that reads no quantity of the part or of the card is marked `stated`: a cell of a rule that requires something of the keys, and a proved or refuted cell of an inequality neither of whose sides reads one, as an inequality between numbers of the deck alone. Nothing is worked out for it. A cell is worked out when it is proved, it is not marked `stated`, and it is not the cell that proves only the range a rule holds in, whose entry ends in `/where`.
+
+That is all "worked out" means: the cell is proved, and its inequality reads a quantity of the part or of the card. The kernel does not tell whether the inequality turns on what it reads. A rule that reads a quantity and does not turn on it, as nought times a span, has a cell that counts as worked out. The deck's author answers for such a rule, as for a limit set too high.
 
 ## The verdict
 
 | Verdict | When |
 |---|---|
 | FAIL | A cell is refuted |
-| UNKNOWN | No cell is refuted, and a cell is open or no cell is proved |
-| PASS | Every cell is proved, waived or not applicable, and at least one is proved |
+| UNKNOWN | No cell is refuted, and a cell is open or no cell is worked out |
+| PASS | Every cell is proved, waived or not applicable, and at least one is worked out |
 
 `petra check` prints PASS_WAIVED for a PASS that rests a cell on a waiver, so that nobody takes it for a pass in which the deck answered every cell.
 
@@ -52,7 +56,7 @@ No way into a check gives a pass or a fail that is not the kernel's. With no ker
 
 ## What a pass rests on
 
-A PASS says that every cell of the grid was settled, and that at least one was settled by working something out. A proved cell says that the design meets that rule of the deck, under the card. It does not say that the design meets the standard. A PASS rests on eight things of different strength, and it is only as strong as the weakest.
+A PASS says that every cell is proved, waived or not applicable, and that at least one was worked out: it is proved by an inequality that reads a quantity of the part or of the card. It does not say that the inequality turns on that quantity. A proved cell says that the design meets that rule of the deck, under the card. It does not say that the design meets the standard. A PASS rests on nine things of different strength, and it is only as strong as the weakest.
 
 | Level | What stands behind it | Where |
 |---|---|---|
@@ -61,9 +65,10 @@ A PASS says that every cell of the grid was settled, and that at least one was s
 | The front end: turning the text of a card and a design into the files the kernel reads | Tests. No second reading of the language. A bug here, a wrong unit factor for one, gives the kernel other numbers than the pair's, and the verdict is then about those | `petra/lang`, `petra/units.py`, `petra/export.py` |
 | The rules of a deck | Two transcriptions of the standard that agree on sampled parts, and worked examples from a published source. Agreement is not proof that a rule is the standard's | [deck.md](deck.md) |
 | A waived cell | The signature of the person named. Petra checks nothing about it | The report's `waived` lines |
-| A key the card states | The signature of the person who states it. The kernel checks that the key is stated and signed, and not that it is true of the part. The lines that arise and the rules that answer turn on such keys | The card, and [deck.md](deck.md) |
-| A cell that is not applicable | The deck's word that the mechanism cannot arise, with the reason the deck gives. The kernel checks that the condition holds for the part and prints the reason. It does not check the reason | The report's `not_applicable` cells |
-| A cell of a rule with `requires` | The word of whoever stated the keys, the card or the design. Nothing is worked out, and such a cell alone makes no PASS | Cells marked `stated` |
+| A key the card states | The signature of the person who states it. The kernel checks that the key is stated and signed, and not that it is true of the part. Every key is the card's unless the deck says the designer chooses it. Which lines a condition excuses and which rules answer turn on the card's keys, and on one thing that is the design's: the order in which it lists the parts of a join, which picks the part that stands under each name. Nothing checks that order | The card, and [deck.md](deck.md), "The grid" |
+| A key the designer chooses | The design's own word, for a key that the deck marks `chosen` with a reason. The kernel checks that the deck gives the reason, and not that it is true. Nothing checks that the name the design writes reaches the drawing and the parts list, or that what is built keeps it. A rule may take a limit from a table by such a key | The design, and [deck.md](deck.md), "A key the designer chooses" |
+| A cell that is not applicable | One ground that the kernel checks, and the deck's reason in words, which it prints on the cell and does not check. The ground is a condition over keys the card states that holds for the part, the loads that the type takes, the least value that the type declares for a load the card puts on the part in every load case or for a quantity the part states, or other lines of the grid whose cells are all proved, waived or not applicable for the part. A ground excuses a line and may say less than the reason does. That the mechanism cannot arise is the deck's reason, which no reader checks, and the deck's author's to answer for | The report's `not_applicable` cells |
+| A cell marked `stated` | The word of whoever stated the keys, the card or the design. Every cell of a rule with `requires` is marked, and so is a proved or refuted cell of an inequality that reads no quantity of the part or of the card. Nothing is worked out for it, and such cells alone make no PASS. A proved cell of an inequality that is not marked reads a quantity, and nothing shows that its rule turns on it | Cells marked `stated`, which the report prints as `stated` where they are proved |
 
 A PASS does not say that the grid lists every way the part can fail. A deck asks about the mechanisms its authors wrote down. [deck.md](deck.md) lists what the first deck covers and what it does not.
 

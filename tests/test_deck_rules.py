@@ -92,7 +92,12 @@ class FromTheFiles(unittest.TestCase):
         # Since plan step 1.6 the deck and the task mark `holes` and `surface` as signed: a rule's `when` reads them, so the card
         # states them. Which file states a key is no part of what a transcriber was asked: a rule names the key the same way.
         self.assertEqual([f["name"] for t in self.deck["types"] for f in t["fields"] if "one_of" in f and f.get("signed")], ["holes", "surface"])
-        self.assertEqual([{k: v for k, v in t.items() if k != "needs"} for t in self.deck["types"]], plain)
+        # Since its last part the deck says of every other key that the designer chooses it, and why. The task says nothing of
+        # the two, as the transcribers were given it: the types are held together but for that mark, which names no key anew.
+        self.assertEqual([f["name"] for t in self.deck["types"] for f in t["fields"] if "chosen" in f], ["fastener", "threads"])
+        self.assertEqual([f["name"] for t in asked for f in t["fields"] if "chosen" in f], [])
+        self.assertEqual([{**{k: v for k, v in t.items() if k != "needs"}, "fields": [{k: v for k, v in f.items() if k != "chosen"} for f in t["fields"]]}
+                          for t in self.deck["types"]], plain)
         self.assertEqual([t.get("needs") for t in self.deck["types"]],
                          [None, [{"le": [["mul", "2", "side"], f"{p}.width"], "why": f"the line of holes lies within plate {p}, and each of its two side edges is at least the side distance from the line"}
                                  for p in ("a", "b")]])
@@ -127,7 +132,12 @@ class FromThePage(unittest.TestCase):
     two for the greatest edge distance, `lap-spread-edge-a` and `-b`, written from the lap's least side distance. The first
     transcriber refused to write those, and the deck asks the edge distance on a line of its own with no rule. So this
     test sets the two edge rules aside before it compares. They are set aside here and not in rules2_b.json, which is
-    kept as it was handed in."""
+    kept as it was handed in.
+
+    Both transcribers said of four lines that they cannot arise, each with a reason and no ground, as an `unless` was then.
+    An `unless` has a ground that the readers check now, and the deck's four were given theirs by hand, as lines of a grid
+    are. So this test gives the second transcription's four the deck's grounds before it compares, here and not in
+    rules2_b.json: as it was handed in it does not load on those lines, which the last test holds."""
 
     SET_ASIDE = ("lap-spread-edge-a", "lap-spread-edge-b")
 
@@ -138,7 +148,10 @@ class FromThePage(unittest.TestCase):
         cls.first = rule.Reading(cls.task, rule.read_transcription(cls.deck))
         handed_in = read("rules2_b.json")
         assert sorted(r["id"] for r in handed_in["rules"] if r["id"] in cls.SET_ASIDE) == sorted(cls.SET_ASIDE)
-        cls.other = rule.Reading(cls.task, rule.read_transcription({**handed_in, "rules": [r for r in handed_in["rules"] if r["id"] not in cls.SET_ASIDE]}))
+        cls.grounds = {a["mechanism"]: {k: v for k, v in a["unless"].items() if k != "why"} for a in cls.deck["grid"] if "unless" in a}
+        assert sorted(u["mechanism"] for u in handed_in["unless"]) == sorted(CANNOT_ARISE) and all(set(u) == {"mechanism", "why"} for u in handed_in["unless"])
+        excused = [{**u, **cls.grounds[u["mechanism"]]} for u in handed_in["unless"]]
+        cls.other = rule.Reading(cls.task, rule.read_transcription({**handed_in, "rules": [r for r in handed_in["rules"] if r["id"] not in cls.SET_ASIDE], "unless": excused}))
         cls.examples = {m: [rule.worked(e, cls.task, m) for e in found] for m, found in read("rules2_examples.json")["examples"].items()}
         cls.lines, cls.whole = rule.accept(cls.first, cls.examples, cls.other)
         cls.by = {line.mechanism: line for line in cls.lines}
@@ -176,6 +189,17 @@ class FromThePage(unittest.TestCase):
                 self.assertNotIn("different forms", found.detail, "and with the same ratio at every part that holds or fails")
         for mechanism in NO_RULE:
             self.assertFalse(self.other.answers(mechanism), f"neither answers {mechanism}")
+
+    def test_each_line_that_cannot_arise_has_one_ground_and_as_handed_in_the_second_transcription_has_none(self):
+        self.assertEqual(self.grounds, {"lap.tension_with_shear": {"loads": ["pull"]}, "lap.slip": {"with": ["lap.tightening"]},
+                                        "lap.ply_shear": {"with": ["lap.strength", "lap.block_shear"]}, "lap.ply_compression": {"least": ["pull", "0 kip"]}})
+        handed_in = read("rules2_b.json")
+        as_written = rule.Reading(self.task, rule.read_transcription({**handed_in, "rules": [r for r in handed_in["rules"] if r["id"] not in self.SET_ASIDE]}))
+        self.assertEqual(as_written.wrong, {m: f"grid {m}: {grid.GROUND}" for m in CANNOT_ARISE})
+        for mechanism in CANNOT_ARISE:
+            with self.subTest(mechanism=mechanism):
+                found = rule.second(self.first, as_written, mechanism, rule.parts(self.task, mechanism, [self.first]))
+                self.assertEqual((found.outcome, found.detail), ("fail", f"the other transcription does not load: grid {mechanism}: {grid.GROUND}"))
 
     def test_the_parts_tried_reach_every_rule(self):
         """Each rule answers a sampled part and fails at one, so an agreement is not two rules that say nothing."""

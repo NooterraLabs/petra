@@ -3,7 +3,7 @@
 No page names a file that is not there: the old path was deleted on 2026-11-15, and a page that
 still pointed at one of its files would describe a checker that does not exist (plan step R1).
 The README's quickstart runs as written, from an empty directory, and its design reads UNKNOWN
-with five lines open.
+with six lines open: the five with no rule, and the slip, which is answered with the tightening.
 """
 import os
 import re
@@ -69,9 +69,10 @@ class Pages(unittest.TestCase):
 class Readme(unittest.TestCase):
     text = README.read_text(encoding="utf-8")
 
-    def test_the_quickstart_runs_as_written_and_its_design_is_unknown_with_five_lines_open(self):
+    def test_the_quickstart_runs_as_written_and_its_design_is_unknown_with_six_lines_open(self):
         """The card `petra new lap --card` prints signs no waiver (tests/test_kernel_attacks12.py, Q): the
-        quickstart's lap reads UNKNOWN, and the README says so."""
+        quickstart's lap reads UNKNOWN, and the README says so. Five lines have no rule, and the slip is open with the
+        tightening, which it is answered with (docs/deck.md, "What the first deck covers")."""
         commands = [line for m in BASH.finditer(self.text) for line in m["code"].splitlines()
                     if line.strip() and not line.startswith("pip install")]
         self.assertEqual([c.split()[0] for c in commands], ["petra"] * len(commands), "the quickstart runs only petra")
@@ -83,7 +84,7 @@ class Readme(unittest.TestCase):
         self.assertEqual(commands[-1].split()[:2], ["petra", "check"])
         self.assertTrue(done.stdout.splitlines()[0].endswith(": UNKNOWN"), done.stdout)
         lines = [line for line in done.stdout.splitlines() if line.startswith("  splice/")]
-        self.assertEqual((sum(" open " in line for line in lines), sum(" waived " in line for line in lines)), (5, 0), "the README says five open, and no waiver")
+        self.assertEqual((sum(" open " in line for line in lines), sum(" waived " in line for line in lines)), (6, 0), "the README says six open, and no waiver")
 
     def test_no_word_is_in_capitals(self):
         prose = re.sub(r"\]\([^)]*\)", "]", self.text)

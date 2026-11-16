@@ -543,7 +543,13 @@ class TheCardOfATemplateSignsNothing(unittest.TestCase):
             code, out, _ = command("check", str(Path(folder, "lap.petra")), "--json")
         said = json.loads(out)
         self.assertEqual((code, said["status"], said["kernel"]["waived"]), (cli.EXIT_CODES["UNKNOWN"], "UNKNOWN", []), "it was PASS_WAIVED, with nobody signing")
-        self.assertEqual(sum(cell["state"] == "open" for cell in said["cells"]), 5, "the five lines the deck has no rule for are open")
+        # Six are open: the five lines the deck has no rule for, and lap.slip, which the deck answers with lap.tightening and
+        # which is open while that line is.
+        pending = {cell["mechanism"]: cell["why"] for cell in said["cells"] if cell["state"] == "open"}
+        self.assertEqual(sum(cell["state"] == "open" for cell in said["cells"]), 6, "the five lines the deck has no rule for are open, and the one answered with one of them")
+        self.assertEqual(pending.pop("lap.slip"), grid.ALONG.format("lap.tightening", "splice"))
+        self.assertEqual(set(pending), {"lap.tightening", "lap.hole_use", "lap.max_edge_distance", "lap.partial_block_shear", "lap.ply_flexure"})
+        self.assertEqual(set(pending.values()), {"the deck has no rule for it"})
 
     def test_the_servers_new_prints_the_same_card(self):
         text, _ = mcp._new({"kind": "lap"})

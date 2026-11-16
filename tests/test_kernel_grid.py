@@ -564,7 +564,7 @@ class ChangedRules(Kernel):
             "a load the type lacks": (lambda b: b["rules"][0]["le"].__setitem__(0, ["load", "force"]), "rule test/heat: the type takes no load force"),
             "a key with names the row lacks": (lambda b: b["types"][1]["fields"][5].__setitem__("one_of", ["close", "snug"]), "rule test/hole: fit has names the row lacks"),
             "a rule for a line the grid lacks": (lambda b: b["rules"][0].__setitem__("mechanism", "strip.melt"), "rule test/heat: the grid does not ask strip.melt of strip"),
-            "a rule for a line that never arises": (lambda b: b["rules"][0].__setitem__("mechanism", "strip.tide"), "rule test/heat: the grid says strip.tide never arises"),
+            "a rule for a line that never arises": (lambda b: b["rules"][0].__setitem__("mechanism", "strip.tide"), "rule test/heat: the grid excuses strip.tide by what strip declares, and no rule answers such a line"),
             "two rules of one id": (lambda b: b["rules"].append(b["rules"][0]), "two rules have one id"),
             "two rows of one id": (lambda b: b["rows"].append(b["rows"][0]), "two rows have one id"),
             "an unknown key in the deck": (lambda b: b.update(notes="x"), "notes is not a key here"),
@@ -581,6 +581,100 @@ class ChangedRules(Kernel):
             with self.subTest(what=what):
                 self.assertIllFormed({**files, "rules": json.dumps(self.rules(edit[0]))}, edit[1])
         self.assertIllFormed({**files, "rules": "{"}, "shape rules : not JSON")
+
+    def test_an_unless_with_no_ground_or_one_the_type_does_not_give_is_ill_formed_and_the_grid_refuses_it_too(self):
+        """A reason alone excuses no line. Beside it stands one ground that the kernel checks when it reads the deck, and the
+        grid refuses each deck the kernel does."""
+        files = strips()
+        why = {"why": "a strip is dry"}
+        tide = lambda said: lambda b: b["grid"][5].__setitem__("unless", {**why, **said})      # noqa: E731
+        cases = {
+            "a reason and no ground": (tide({}), f"grid strip.tide: {grid.GROUND}"),
+            "two grounds": (tide({"loads": ["current"], "when": ["is", "fit", "close"]}), f"grid strip.tide: {grid.GROUND}"),
+            "a reason with no letter": (tide({"why": "42", "loads": ["current"]}), "grid strip.tide: unless: it says why, in a text with a letter in it"),
+            "loads that leave one out": (tide({"loads": []}), "grid strip.tide: unless: `loads` names each load of strip once and no other"),
+            "loads that name one twice": (tide({"loads": ["current", "current"]}), "grid strip.tide: unless: `loads` names each load of strip once and no other"),
+            "loads that name another": (tide({"loads": ["current", "tide"]}), "grid strip.tide: unless: `loads` names each load of strip once and no other"),
+            "loads that are no list": (tide({"loads": "current"}), "grid strip.tide: unless: `loads` names each load of strip once and no other"),
+            "a least the type does not give": (tide({"least": ["current", "1 A"]}), "grid strip.tide: unless: strip does not say that current is at least 1 A"),
+            "a least of a quantity with none": (tide({"least": ["width", "0 mm"]}), "grid strip.tide: unless: width has no `least` in strip"),
+            "a least of a key": (tide({"least": ["fit", "0 mm"]}), "grid strip.tide: unless: fit has no `least` in strip"),
+            "a least of a name the type lacks": (tide({"least": ["tide", "0 A"]}), "grid strip.tide: unless: tide is no load and no field of strip"),
+            "a least of another dimension": (tide({"least": ["current", "0 mm"]}), "grid strip.tide: unless: the value of `least` is of another dimension than current"),
+            "a least with no value": (tide({"least": ["current"]}), "grid strip.tide: unless: `least` is a load or a quantity of the type and a value: [NAME, VALUE]"),
+            "a least whose value is no quantity": (tide({"least": ["current", "zero"]}), "grid strip.tide: unless: least: zero is not a quantity"),
+            "with no line": (tide({"with": []}), "grid strip.tide: unless: `with` names other lines of the grid, each once"),
+            "with itself": (tide({"with": ["strip.tide"]}), "grid strip.tide: unless: `with` names other lines of the grid, each once"),
+            "with one line twice": (tide({"with": ["strip.heat", "strip.heat"]}), "grid strip.tide: unless: `with` names other lines of the grid, each once"),
+            "with a line the grid lacks": (tide({"with": ["strip.melt"]}), "grid strip.tide: unless: it is answered with strip.melt, which the grid does not ask of strip"),
+            "with a line itself answered with others": (lambda b: [b["grid"][3].__setitem__("unless", {**why, "with": ["strip.heat"]}), tide({"with": ["strip.creep"]})(b)],
+                                                        "grid strip.tide: unless: it is answered with strip.creep, which is itself answered with other lines"),
+            "a rule for a line answered with others": (lambda b: [tide({"with": ["strip.creep"]})(b), b["rules"][0].__setitem__("mechanism", "strip.tide")],
+                                                       "rule test/heat: the grid says strip.tide is answered with other lines for strip"),
+            "a rule for a line with a least": (lambda b: [tide({"least": ["current", "0 A"]})(b), b["rules"][0].__setitem__("mechanism", "strip.tide")],
+                                               "rule test/heat: the grid excuses strip.tide by what strip declares, and no rule answers such a line"),
+        }
+        for what, (edit, says) in cases.items():
+            with self.subTest(what=what):
+                self.assertIllFormed({**files, "rules": json.dumps(self.rules(edit))}, says)
+                with self.assertRaises(grid.DeckError):
+                    grid.read_deck(json.dumps(self.rules(edit)))
+        for what, said in {"a least the type gives": {"least": ["current", "0 A"]}, "a least under it": {"least": ["current", "-1 A"]},
+                           "the least of a count": {"least": ["turns", "1"]}, "two other lines": {"with": ["strip.heat", "strip.creep"]}}.items():
+            with self.subTest(what=what):
+                self.assertEqual(findings(ask({**files, "rules": json.dumps(self.rules(tide(said)))})), "")
+                grid.read_deck(json.dumps(self.rules(tide(said))))
+
+    def test_a_key_is_the_cards_or_says_why_the_designer_chooses_it_and_the_grid_reads_it_so(self):
+        files = strips()
+        fit = lambda b: b["types"][1]["fields"][5]      # noqa: E731
+        chosen = f"type strip: field fit: {grid.CHOSEN}"
+        cases = {
+            "signed false": (lambda b: fit(b).__setitem__("signed", False), chosen),
+            "both marks": (lambda b: fit(b).__setitem__("chosen", "the designer picks the fit"), chosen),
+            "chosen with no letter": (lambda b: [fit(b).pop("signed"), fit(b).__setitem__("chosen", "42")], chosen),
+            "chosen that is no text": (lambda b: [fit(b).pop("signed"), fit(b).__setitem__("chosen", True)], chosen),
+            "a chosen key that a condition reads": (lambda b: [fit(b).pop("signed"), fit(b).__setitem__("chosen", "the designer picks the fit")],
+                                                    "grid strip.spark: the `when` of its `unless` reads fit, which the design may state"),
+            "an optional key that says nothing": (lambda b: [fit(b).pop("signed"), fit(b).__setitem__("optional", True)], "type strip: field fit: a field is `signed` or `optional`, and not both"),
+            "chosen on a quantity": (lambda b: b["types"][1]["fields"][0].__setitem__("chosen", "a quantity is no key"), "type strip: field width: chosen is not a key here"),
+        }
+        for what, (edit, says) in cases.items():
+            with self.subTest(what=what):
+                self.assertIllFormed({**files, "rules": json.dumps(self.rules(edit))}, says)
+                with self.assertRaises(grid.DeckError):
+                    grid.read_deck(json.dumps(self.rules(edit)))
+        # A key that says nothing is the card's: the pair reads as it did with `signed: true`, on a deck of another hash.
+        silent = strips(rules=self.rules(lambda b: fit(b).pop("signed")))
+        self.assertEqual((ask(silent)["verdict"], states(ask(silent))), ("PASS", states(ask(files))))
+        # And a design that writes it is refused, by both: the kernel says whose the key is.
+        written = DESIGN.replace("fit given s.fit", "fit close")
+        with mock.patch.object(grid, "decks", lambda: (grid.read_deck(json.dumps(self.rules(lambda b: fit(b).pop("signed")))),)):
+            with self.assertRaises(grid.ComponentError) as ctx:
+                grid.check(petra.lang.parse_design(CARD.replace('given s.fit is close signed "t@example.org" source "test"\n', ""), written, "strips.petra"), grid.decks()[0])
+        self.assertIn("s.fit is for the card to state", str(ctx.exception))
+        self.assertIn("design s.fit: is for the card to state", findings(ask(strips(CARD.replace('given s.fit is close signed "t@example.org" source "test"\n', ""), written,
+                                                                                  self.rules(lambda b: fit(b).pop("signed"))))))
+
+    def test_a_line_answered_with_others_cannot_arise_while_each_of_their_cells_is_settled_and_is_open_otherwise(self):
+        """strip.tide answered with strip.creep, which no rule answers, and with strip.heat, which one does. The kernel and the grid
+        give the line one cell: not applicable while every cell of the two is proved, waived or not applicable, and open
+        otherwise, with the first unsettled line in its reason."""
+        rules = self.rules(lambda b: b["grid"][5].__setitem__("unless", {"why": "the lines of heat and creep answer it", "with": ["strip.heat", "strip.creep"]}))
+
+        def tide(card: str) -> tuple[str, str, str]:
+            files = strips(card, rules=rules)
+            said = ask(files)
+            self.assertEqual(states(said), [(c["subject"], c["mechanism"], c["entry"], c["state"]) for c in json.loads(files["proofs"])["cells"]], "the grid has other cells")
+            found = cell(said, "strip.tide")
+            return said["verdict"], found["state"], found["reason"]
+
+        self.assertEqual(tide(CARD), ("PASS", "not_applicable", "the lines of heat and creep answer it"), "heat is proved and creep is waived")
+        self.assertEqual(tide(NO_WAIVER), ("UNKNOWN", "open", grid.ALONG.format("strip.creep", "s")), "creep is open")
+        self.assertEqual(tide(OVER), ("FAIL", "open", grid.ALONG.format("strip.heat", "s")), "heat is refuted, and it is named first")
+        # A waiver of the line itself rests nothing: a waiver rests a line it is answered with.
+        waived = NO_WAIVER + 'waive strip.tide on s by "t@example.org" reason "it is a test"\n'
+        self.assertEqual(tide(waived), ("UNKNOWN", "open", grid.ALONG.format("strip.creep", "s")))
 
     def test_a_key_the_deck_does_not_know_is_refused_wherever_it_stands(self):
         """The same places and keys as the grid's test, and the finding names the key."""

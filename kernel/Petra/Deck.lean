@@ -197,16 +197,53 @@ would take the deck past this is not tried. So reading a deck is bounded whateve
 require. -/
 def MAX_TRYING : Nat := 1000000
 
-/-- A line of the grid. `excuse` is none for a line that always asks. Otherwise it holds
-the condition under which the mechanism cannot arise, or none when it never arises, and
-`why` is the deck's reason for it, a text that is not empty: a cell that is not applicable
-carries it, so that no line is excused with nothing said. The reason is the deck's word.
-The kernel prints it and proves nothing of it. -/
+/-- Why a line of the grid does not ask of a part, as its `unless` says. Each is a ground
+the kernel checks, so that no line is excused on the word of the deck's author alone.
+`cond`: a condition over keys that the card states holds for the part.
+`never`: the type takes the loads the line names and no other (`loads`), which the kernel
+checks when it reads the deck. The line then asks of no part of the type.
+`least`: the type declares a least value for a load or a quantity that is no less than the
+value the line names, which the kernel checks when it reads the deck. That says something of
+a part only where the part has a value: a load that the card puts on it in every case, or a
+quantity that it states. So the line is excused for such a part and open for any other.
+`along`: the line is answered with other lines of the same type. It is excused for a
+part while each cell of those lines is proved, waived or not applicable for that part. -/
+inductive Excuse where
+  | cond (condition : Static)
+  | never
+  | least (name : String) (load : Bool)
+  | along (lines : Array String)
+
+/-- A line of the grid. `excuse` is none for a line that always asks, and `why` is the
+deck's reason for an excuse, a text that is not empty: a cell that is not applicable
+carries it. The reason says in words what the ground checks. -/
 structure Ask where
   kind : String
   mechanism : String
-  excuse : Option (Option Static)
+  excuse : Option Excuse
   why : String := ""
+
+/-- The condition of a line that is excused where a condition holds. -/
+def Ask.condition (ask : Ask) : Option Static :=
+  match ask.excuse with
+  | some (.cond condition) => some condition
+  | _ => none
+
+/-- The reason of a line that is answered with other lines while one of them is not settled
+for the part. -/
+def ALONG (line part : String) : String := s!"it is answered with {line}, which is not settled for {part}"
+
+/-- The reason of a line that is excused by the least of a load while the card does not put
+the load on the part in every case: nothing then says that the load is there at all. -/
+def NO_LOAD (name part : String) : String := s!"the least of {name} would excuse it, and the card does not put {name} on {part} in every load case, or has none"
+
+/-- The reason of a line that is excused by the least of a quantity that the part leaves
+unstated: nothing then says what the quantity is. -/
+def NO_VALUE (name part : String) : String := s!"the least of {name} would excuse it, and {part} leaves {name} unstated"
+
+/-- What the kernel says of an `unless` that names no ground, or more than one. -/
+def GROUND : String :=
+  "unless: it has one ground: `when` over keys the card states, `least` of the type, `loads` of the type, or `with` other lines"
 
 /-- How a rule gives a side of a table its value: a step, a name of the row's key, or a key
 field of the part, or of the part `part` names, through a map from its names to the row's.
@@ -834,6 +871,12 @@ stated as the rule requires, by the card or by the design, and the kernel works 
 for it. It is no evidence that anything holds: a PASS needs a cell of another kind. -/
 def STATED : String := "what the rule requires is stated: nothing is worked out"
 
+/-- The reason of a proved cell whose rule reads no quantity: its sides are numbers of the
+deck alone, or cells of a table that keys pick, and no size of a part and no value of the
+card enters them. It is a cell of stated keys in the form of an inequality, and it is
+marked as one. -/
+def NOTHING_READ : String := "the inequality reads no quantity of the part or of the card: nothing of the design is worked out"
+
 /-- What the kernel says of a condition that reads a key the card does not sign. -/
 def UNSIGNED_KEY : String :=
   "which the design may state: a `when` reads only a key the card signs"
@@ -1124,11 +1167,24 @@ card states a signed field. -/
 def BOTH : String :=
   "a field is `signed` or `optional`, and not both: only the card states a signed field, and a card leaves nothing unstated"
 
+/-- Whether a value is a text that says something: it holds a letter, a to z or A to Z. A
+reason of spaces, of marks, or of characters that print as nothing is no reason, and the
+three readers agree on what a letter is only for these fifty-two. -/
+def worded (value : Option Json) : Bool :=
+  match value with
+  | some (.str s) => s.any fun c => ('a' ≤ c && c ≤ 'z') || ('A' ≤ c && c ≤ 'Z')
+  | _ => false
+
+/-- What the kernel says of a key that is not the card's and does not say why it is the
+designer's. -/
+def CHOSEN : String :=
+  "a key is the card's, which `signed` may say, or the designer's, which `chosen` says with why, in words: one of the two, and not both"
+
 def readField (load : Bool) (j : Json) : Except String Field := do
   let name ← text j "name"
   let field : Except String Field := do
     within j (if load then ["name", "what", "dim", "least", "may_be"]
-              else ["name", "what", "dim", "least", "one_of", "type", "as", "signed", "whole", "may_be", "optional"])
+              else ["name", "what", "dim", "least", "one_of", "type", "as", "signed", "chosen", "whole", "may_be", "optional"])
     unless (["dim", "one_of", "type"].filter (has j)).length == 1 && filled j "what" do
       throw "it has `what` and one of `dim`, `one_of` and `type`"
     identifier name
@@ -1138,11 +1194,18 @@ def readField (load : Bool) (j : Json) : Except String Field := do
       | .ok (.bool b) => pure b
       | _ => throw s!"{key} is true or false"
     if has j "one_of" then
-      within j ["name", "what", "one_of", "optional", "signed"]
+      within j ["name", "what", "one_of", "optional", "signed", "chosen"]
       let names ← texts j "one_of"
       if names.isEmpty || !distinct names then throw "`one_of` is a list of different names"
       let optional ← flag "optional"
-      let signed ← flag "signed"
+      -- A key is the card's to state unless the deck says that the designer chooses it,
+      -- and why. So no key is the design's by saying nothing.
+      let chosen := has j "chosen"
+      let says ← flag "signed"
+      if chosen then
+        unless worded (j.getObjVal? "chosen").toOption && !says do throw CHOSEN
+      unless chosen || !(has j "signed") || says do throw CHOSEN
+      let signed := !chosen
       if optional && names.contains UNSTATED then
         throw s!"a key that may be left unstated has no name `{UNSTATED}`: that word is how a design leaves it unstated"
       if optional && signed then throw BOTH
@@ -1218,11 +1281,42 @@ def readAsk (kinds : Std.TreeMap String Kind) (rows : Std.TreeMap String Row) (j
     let (excuse, why) ← match j.getObjVal? "unless" with
       | .error _ | .ok .null => pure (none, "")
       | .ok said => do
-        (within said ["why", "when"]).mapError ("unless: " ++ ·)
+        (within said ["why", "when", "least", "loads", "with"]).mapError ("unless: " ++ ·)
+        unless worded (said.getObjVal? "why").toOption do throw "unless: it says why, in a text with a letter in it"
         let why ← text said "why"
-        unless why.any (!·.isWhitespace) do throw "unless: it says why, in a text that is not empty"
-        pure (some (← (said.getObjVal? "when").toOption.mapM (deciding { kind := some kind, kinds, rows } "the `when` of its `unless`")), why)
-    return { kind := name, mechanism, excuse, why }
+        unless (["when", "least", "loads", "with"].filter (has said)).length == 1 do throw GROUND
+        if has said "when" then
+          pure (some (.cond (← deciding { kind := some kind, kinds, rows } "the `when` of its `unless`" (← need said "when"))), why)
+        else if has said "least" then
+          -- A load or a quantity of the type, and a value its `least` is no less than: a card
+          -- or a design that states it keeps the `least`, so the bound holds for a part that
+          -- has a value. Whether a part has one is asked where its cells are made.
+          let form := "unless: `least` is a load or a quantity of the type and a value: [NAME, VALUE]"
+          let pair ← (texts said "least").mapError fun _ => form
+          unless pair.size == 2 do throw form
+          let on := pair[0]!
+          let value := pair[1]!
+          let some f := (kind.load.get? on).orElse fun _ => kind.field.get? on
+            | throw s!"unless: {clip on} is no load and no field of {kind.name}"
+          let .quantity dim _ _ (some least) := f.kind | throw s!"unless: {on} has no `least` in {kind.name}"
+          let (x, its) ← (amount value).mapError ("unless: least: " ++ ·)
+          unless its == dim do throw s!"unless: the value of `least` is of another dimension than {on}"
+          unless x ≤ least do throw s!"unless: {kind.name} does not say that {on} is at least {clip value}"
+          pure (some (.least on (kind.load.contains on)), why)
+        else if has said "loads" then
+          -- The loads the type takes, each once and no other: a mechanism that needs
+          -- another load cannot arise, and a type that gains a load loses the excuse.
+          let names ← (texts said "loads").mapError fun _ => s!"unless: `loads` names each load of {kind.name} once and no other"
+          unless distinct names && names.size == kind.loads.size && names.all kind.load.contains do
+            throw s!"unless: `loads` names each load of {kind.name} once and no other"
+          pure (some .never, why)
+        else
+          let lines ← (texts said "with").mapError fun _ => "unless: `with` names other lines of the grid, each once"
+          if lines.isEmpty || !distinct lines || lines.contains mechanism then
+            throw "unless: `with` names other lines of the grid, each once"
+          pure (some (.along lines), why)
+    -- The reason is cut once, here, as every reason is where it prints: a cell of each part carries it.
+    return { kind := name, mechanism, excuse, why := clip why }
   ask.mapError (s!"grid {clip mechanism}: " ++ ·)
 
 /-- For each step of a rule, what `may_be` lets it be and the field or the load that says so:
@@ -1274,7 +1368,8 @@ def readRule (kinds : Std.TreeMap String Kind) (rows : Std.TreeMap String Row) (
     let some kind := kinds.get? name | throw s!"{clip name} is not a type of the deck"
     match (asks.get? (name, mechanism)).map (·.excuse) with
     | none => throw s!"the grid does not ask {clip mechanism} of {name}"
-    | some (some none) => throw s!"the grid says {mechanism} never arises for {name}"
+    | some (some .never) | some (some (.least ..)) => throw s!"the grid excuses {mechanism} by what {name} declares, and no rule answers such a line"
+    | some (some (.along _)) => throw s!"the grid says {mechanism} is answered with other lines for {name}"
     | _ => pure ()
     let scope : Scope := { kind := some kind, kinds, rows }
     unless (["le", "lt", "requires"].filter (has j)).length == 1 do
@@ -1417,6 +1512,15 @@ def readRules (j : Json) : Except String Rules := do
   let asks ← (← list j "grid").mapM (readAsk kinds rows)
   unless distinct (asks.map fun a => (a.kind, a.mechanism)) do throw "the grid asks one mechanism of one type twice"
   let asked : Std.TreeMap (String × String) Ask := asks.foldl (fun table a => table.insert (a.kind, a.mechanism) a) {}
+  -- A line answered with other lines names lines the grid asks of the same type, and none
+  -- that is itself answered with others: the answer is one step away.
+  for a in asks do
+    if let some (.along lines) := a.excuse then
+      for line in lines do
+        match (asked.get? (a.kind, line)).map (·.excuse) with
+        | none => throw s!"grid {clip a.mechanism}: unless: it is answered with {clip line}, which the grid does not ask of {a.kind}"
+        | some (some (.along _)) => throw s!"grid {clip a.mechanism}: unless: it is answered with {clip line}, which is itself answered with other lines"
+        | _ => pure ()
   let rules ← (← list j "rules").mapM (readRule kinds rows asked)
   unless distinct (rules.map (·.id)) do throw "two rules have one id"
   if let some (kind, mechanism, entry) := twice (rules.map fun r => (r.kind, r.mechanism, r.entry)) then

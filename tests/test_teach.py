@@ -59,7 +59,8 @@ class PetraNew(unittest.TestCase):
     @KERNEL
     def test_a_renamed_design_reads_unknown_until_its_open_lines_are_signed(self):
         """The example passes on the waivers of its own engineer. The card `petra new` prints signs none, so the five
-        lines the deck has no rule for are open (tests/test_kernel_attacks12.py, finding Q)."""
+        lines the deck has no rule for are open (tests/test_kernel_attacks12.py, finding Q), and with them lap.slip,
+        which the deck answers with the line of tightening: six."""
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "lap.petra"
             path.write_text(run("new", "lap", "--name", "joint7")[1], encoding="utf-8")
@@ -67,7 +68,9 @@ class PetraNew(unittest.TestCase):
             code, out, err = run("check", str(path))
         self.assertEqual(code, cli.EXIT_CODES["UNKNOWN"], err)
         self.assertIn("joint7/lap.block_shear", out)
-        self.assertIn("5 open", out)
+        self.assertIn("6 open", out)
+        self.assertRegex(out, r"joint7/lap\.slip\s+open\s+it is answered with lap\.tightening, which is not settled for joint7")
+        self.assertEqual(out.count("the deck has no rule for it"), 5)
 
     def test_the_design_and_the_card_it_comes_with_tell_one_story(self):
         """The thirteenth review, finding 9: the design `petra new lap` printed kept the example's header, which says that

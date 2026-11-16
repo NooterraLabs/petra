@@ -72,15 +72,20 @@ CELL = {"subject": PART, "mechanism": NAME, "entry": TEXT,
         "state": "proved" | "refuted" | "not_applicable" | "waived" | "open",
         "what": TEXT,                          what the rule states, or what the grid asks
         "anchor": TEXT,                        the clause
-        "why": TEXT,                           for an open, a not applicable and a waived cell
+        "why": TEXT,                           the reason, or "" for a cell with none
         "rule": ID | null,
         "ratio": NUMBER | null,                the left side of the rule over the right, at its worst
+        "stated": true,                        only for a cell that reads no quantity
         "completion": COMPLETION}              only for a waived cell that rests on one
 
 COMPLETION = {"keys": [[PART, FIELD, NAME], ...], "loads": [[PART, LOAD, CASE, RATIONAL, UNIT], ...]}
 ```
 
-The verdict is FAIL with a refuted cell, UNKNOWN with an open cell or with nothing proved, and else PASS.
+The verdict is FAIL with a refuted cell. With none refuted it is UNKNOWN with an open cell or with no cell that was worked out, and else PASS. A cell was worked out when its `state` is `proved`, it has no `stated`, and its `entry` does not end in `/where`.
+
+`why` holds a reason for an open, a waived and a not applicable cell, for a refuted cell of a rule that requires, and for a proved cell marked `stated`. On a not applicable cell it is the reason the deck gives for excusing the line. Any other cell has the empty text.
+
+`stated` marks a cell for which nothing is worked out: every cell of a rule that requires something of the keys, and a proved or refuted cell of an inequality that reads no quantity of the part or of the card. The mark goes by what the inequality reads, and not by whether it turns on it: a rule that reads a quantity and does not turn on it, as nought times a span, has a cell with no mark. It is `true` or left out. `petra check` prints `stated` in place of `proved` for such a cell, and a design whose proved cells are all marked so, or prove only a rule's range, reads UNKNOWN.
 
 The status is PASS_WAIVED when the design passes and a waiver of the card rests one of its cells. The design passes what the deck could check, and each signer answers for the cells its waiver rests. `petra check` exits 6 for it. The kernel has no word of its own for this: it says PASS and lists the waivers, and the status is read from that list.
 

@@ -159,6 +159,13 @@ def Tape.needed (t : Tape) (roots : Array Nat) : Array Bool := Id.run do
     if need[i]! then need := mark need t.nodes[i]!.reads
   return need
 
+/-- Whether a root of the tape reads an input, directly or through other nodes. A tape may
+hold an input that no root reads, as the quantity bound to a name that its row does not
+use: such an input is nothing the tape's answer rests on. -/
+def Tape.readsInput (t : Tape) : Bool :=
+  let need := t.needed t.roots
+  t.nodes.zipIdx.any fun (node, i) => need[i]! && node matches .s _
+
 def fits (x : Iv) : Except String Iv :=
   if [x.lo, x.hi].all (fun q => bitlen q.num.natAbs ≤ MAX_BITS && bitlen q.den ≤ MAX_BITS) then .ok x
   else .error s!"a value has more than {MAX_BITS} bits"

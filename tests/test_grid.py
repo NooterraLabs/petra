@@ -59,7 +59,8 @@ STRIPS = {
         {"type": "strip", "mechanism": "strip.creep", "what": "creep", "anchor": TEST},
         {"type": "strip", "mechanism": "strip.spark", "what": "a spark across a loose screw", "anchor": TEST,
          "unless": {"when": ["is", "fit", "close"], "why": "a close fit leaves no room for one"}},
-        {"type": "strip", "mechanism": "strip.tide", "what": "the tide", "anchor": TEST, "unless": {"why": "a strip is dry"}},
+        {"type": "strip", "mechanism": "strip.tide", "what": "the tide", "anchor": TEST,
+         "unless": {"loads": ["current"], "why": "a strip is dry"}},
     ],
     "rules": [
         {"id": "test/heat", "type": "strip", "mechanism": "strip.heat", "anchor": TEST, "says": "the current is at most what the strips carry warm",
@@ -378,10 +379,12 @@ class Decks(unittest.TestCase):
 
     def test_a_rule_answers_a_line_of_the_grid_that_can_arise(self):
         self.wrong("the grid does not ask strip.melt of strip", lambda b: b["rules"][0].__setitem__("mechanism", "strip.melt"))
-        self.wrong("the grid does not ask strip.tide of strip, or says it never arises", lambda b: b["rules"][0].__setitem__("mechanism", "strip.tide"))
-        for nothing in ("", " ", " \t\r\n", 0, None, ["a reason"]):
+        self.wrong("the grid excuses strip.tide by what strip declares, and no rule answers such a line", lambda b: b["rules"][0].__setitem__("mechanism", "strip.tide"))
+        # A reason is a text with a letter in it, a to z or A to Z: one of spaces, of marks or of digits says nothing.
+        for nothing in ("", " ", " \t\r\n", 0, None, ["a reason"], ".", "42", "\u3000", "\u00e9"):
             with self.subTest(why=nothing):
-                self.wrong("grid strip.tide: unless: it says why, in a text that is not empty", lambda b: b["grid"][5]["unless"].__setitem__("why", nothing))
+                self.wrong("grid strip.tide: unless: it says why, in a text with a letter in it", lambda b: b["grid"][5]["unless"].__setitem__("why", nothing))
+        deck(lambda b: b["grid"][5]["unless"].__setitem__("why", "x"))
         self.wrong("two rules have one name", lambda b: b["rules"].append(b["rules"][0]))
 
     def test_a_row_of_a_deck_has_no_dimension_error(self):
@@ -405,7 +408,56 @@ class Decks(unittest.TestCase):
 
     def test_a_line_of_the_grid_names_a_type_of_the_deck(self):
         self.wrong("grid strip.creep: a line has a type of the deck", lambda b: b["grid"][3].__setitem__("type", "strap"))
-        self.wrong("grid strip.tide: unless: it says why, in a text that is not empty", lambda b: b["grid"][5].__setitem__("unless", {}))
+        self.wrong("grid strip.tide: unless: it says why, in a text with a letter in it", lambda b: b["grid"][5].__setitem__("unless", {}))
+
+    def test_an_unless_has_one_ground_that_is_checked(self):
+        """A reason alone excuses no line: beside it stands one of `when`, `least`, `loads` and `with`, and the reader checks it."""
+        why = {"why": "a strip is dry"}
+        self.wrong(f"grid strip.tide: {grid.GROUND}", lambda b: b["grid"][5].__setitem__("unless", why))
+        self.wrong(f"grid strip.tide: {grid.GROUND}", lambda b: b["grid"][5].__setitem__("unless", {**why, "loads": ["current"], "when": ["is", "fit", "close"]}))
+        self.wrong(f"grid strip.tide: {grid.GROUND}", lambda b: b["grid"][5].__setitem__("unless", {**why, "least": ["current", "0 A"], "with": ["strip.heat"]}))
+        # `loads` names each load of the type once, and no other.
+        for loads in ([], ["current", "current"], ["current", "tide"], "current", [1]):
+            with self.subTest(loads=loads):
+                self.wrong("grid strip.tide: unless: `loads` names each load of strip once and no other", lambda b: b["grid"][5].__setitem__("unless", {**why, "loads": loads}))
+        # `least` names a load or a quantity whose own `least` is no less than the value.
+        deck(lambda b: b["grid"][5].__setitem__("unless", {**why, "least": ["current", "0 A"]}))
+        deck(lambda b: b["grid"][5].__setitem__("unless", {**why, "least": ["current", "-1 A"]}))
+        deck(lambda b: b["grid"][5].__setitem__("unless", {**why, "least": ["turns", "1"]}))
+        self.wrong("grid strip.tide: unless: strip does not say that current is at least 1 A", lambda b: b["grid"][5].__setitem__("unless", {**why, "least": ["current", "1 A"]}))
+        self.wrong("grid strip.tide: unless: width has no `least` in strip", lambda b: b["grid"][5].__setitem__("unless", {**why, "least": ["width", "0 mm"]}))
+        self.wrong("grid strip.tide: unless: fit has no `least` in strip", lambda b: b["grid"][5].__setitem__("unless", {**why, "least": ["fit", "0 mm"]}))
+        self.wrong("grid strip.tide: unless: tide is no load and no field of strip", lambda b: b["grid"][5].__setitem__("unless", {**why, "least": ["tide", "0 A"]}))
+        self.wrong("grid strip.tide: unless: the value of `least` is of another dimension than current", lambda b: b["grid"][5].__setitem__("unless", {**why, "least": ["current", "0 mm"]}))
+        for pair in (["current"], ["current", "0 A", "1 A"], "current", ["current", 0]):
+            with self.subTest(least=pair):
+                self.wrong("grid strip.tide: unless: `least` is a load or a quantity of the type and a value: [NAME, VALUE]", lambda b: b["grid"][5].__setitem__("unless", {**why, "least": pair}))
+        # `with` names other lines of the same type's grid, each once, and none that is itself answered with others.
+        deck(lambda b: b["grid"][5].__setitem__("unless", {**why, "with": ["strip.heat", "strip.creep"]}))
+        for lines in ([], ["strip.tide"], ["strip.heat", "strip.heat"], "strip.heat", [5]):
+            with self.subTest(lines=lines):
+                self.wrong("grid strip.tide: unless: `with` names other lines of the grid, each once", lambda b: b["grid"][5].__setitem__("unless", {**why, "with": lines}))
+        self.wrong("grid strip.tide: unless: it is answered with strip.melt, which the grid does not ask of strip", lambda b: b["grid"][5].__setitem__("unless", {**why, "with": ["strip.melt"]}))
+        self.wrong("grid strip.tide: unless: it is answered with strip.creep, which is itself answered with other lines",
+                   lambda b: [b["grid"][3].__setitem__("unless", {**why, "with": ["strip.heat"]}), b["grid"][5].__setitem__("unless", {**why, "with": ["strip.creep"]})])
+
+    def test_a_key_is_the_cards_or_says_why_the_designer_chooses_it(self):
+        """A key is signed unless the deck says `chosen`, with why. `signed: true` may say so, and nothing else may."""
+        fit = lambda b: b["types"][1]["fields"][5]      # noqa: E731
+        self.assertTrue(deck(lambda b: fit(b).pop("signed")).types["strip"].fields["fit"].signed, "a key that says nothing is the card's")
+        self.assertTrue(deck().types["strip"].fields["fit"].signed)
+        # No condition of this deck may read the key once the designer chooses it, so the two that do are taken out with it.
+        loose = lambda b: [fit(b).pop("signed"), fit(b).__setitem__("chosen", "the designer picks the fit"), b["grid"][4].pop("unless"), b["rules"][3].pop("when")]      # noqa: E731
+        self.assertFalse(deck(loose).types["strip"].fields["fit"].signed)
+        self.wrong("the `when` of its `unless` reads fit, " + grid.UNSIGNED_KEY, lambda b: [fit(b).pop("signed"), fit(b).__setitem__("chosen", "the designer picks the fit")])
+        self.wrong(f"field fit: {grid.CHOSEN}", lambda b: fit(b).__setitem__("signed", False))
+        self.wrong(f"field fit: {grid.CHOSEN}", lambda b: fit(b).__setitem__("chosen", "both marks"))
+        for nothing in ("", " ", "42", ".", 0, None, True, ["why"]):
+            with self.subTest(chosen=nothing):
+                self.wrong(f"field fit: {grid.CHOSEN}", lambda b: [fit(b).pop("signed"), fit(b).__setitem__("chosen", nothing)])
+        # A signed field is not optional, so a key that may be left unstated is one the designer chooses.
+        self.wrong("field fit: a field is `signed` or `optional`, and not both", lambda b: [fit(b).pop("signed"), fit(b).__setitem__("optional", True)])
+        self.wrong("field width: chosen is not a key here", lambda b: b["types"][1]["fields"][0].__setitem__("chosen", "a quantity is no key"))
 
 
 def formalizer(name: str) -> dict:
@@ -473,13 +525,20 @@ class Shipped(unittest.TestCase):
         return alone(*read_pair(path), str(path))
 
     NO_RULE = ["lap.tightening", "lap.hole_use", "lap.max_edge_distance", "lap.partial_block_shear", "lap.ply_flexure"]
+    OPEN = ["lap.tightening", "lap.hole_use", "lap.max_edge_distance", "lap.slip", "lap.partial_block_shear", "lap.ply_flexure"]
+    """The lines that are open for a lap whose card waives nothing: the five with no rule, and lap.slip, which the deck answers
+    with lap.tightening and which is open while that line is."""
 
     def test_the_lap_that_waives_nothing_is_unknown_with_its_rules_proved(self):
         result = self.check("lap_unknown")
         self.assertEqual(result["status"], "UNKNOWN")
-        self.assertEqual(result["counts"], {"proved": 12, "refuted": 0, "not_applicable": 4, "waived": 0, "open": 5})
-        self.assertEqual([c["mechanism"] for c in result["cells"] if c["state"] == "open"], self.NO_RULE)
-        self.assertEqual({c["why"] for c in result["cells"] if c["state"] == "open"}, {"the deck has no rule for it"})
+        # lap.slip was not applicable on the deck's word. It is now answered with lap.tightening, which no rule answers here: open.
+        self.assertEqual(result["counts"], {"proved": 12, "refuted": 0, "not_applicable": 3, "waived": 0, "open": 6})
+        self.assertEqual([c["mechanism"] for c in result["cells"] if c["state"] == "open"], self.OPEN)
+        self.assertEqual({c["mechanism"]: c["why"] for c in result["cells"] if c["state"] == "open"},
+                         {**dict.fromkeys(self.NO_RULE, "the deck has no rule for it"), "lap.slip": grid.ALONG.format("lap.tightening", "splice")})
+        # The three lines that cannot arise, each on its ground: the loads of a lap, the lines that answer it, and the least pull.
+        self.assertEqual([c["mechanism"] for c in result["cells"] if c["state"] == "not_applicable"], ["lap.tension_with_shear", "lap.ply_shear", "lap.ply_compression"])
         # Each ratio is worked out here from the clause, with the numbers of the design.
         # Three 3/4 inch Group 120 bolts with threads in the shear plane: 0.75 x 54 ksi x 0.4418 inch2 is 17.9 kip a bolt, the
         # shear strength Design Examples v16.0 prints for this bolt, and bearing and tearout on 3/8 inch A36 are above it.
@@ -534,7 +593,7 @@ class Shipped(unittest.TestCase):
         at 1 1/8 inch, and the four lines that need a hole are answered. Until the eighth review they were open, and a waiver
         rested them: a lap whose bolts failed in shear passed (tests/test_kernel_attacks8.py)."""
         large = self.variant(("diameter 0.75 inch", "diameter 1.125 inch"), ("pitch 3 inch", "pitch 3.5 inch"), ("end 1.5 inch", "end 2 inch"))
-        self.assertEqual([c["mechanism"] for c in large["cells"] if c["state"] == "open"], self.NO_RULE)
+        self.assertEqual([c["mechanism"] for c in large["cells"] if c["state"] == "open"], self.OPEN)
         self.assertEqual((large["status"], large["counts"]["refuted"]), ("UNKNOWN", 0))
         # J3.4: one diameter clear between holes of 1 1/8 + 1/8 inch.
         self.assertAlmostEqual(cell(large, "lap.spacing", "lap-spacing-clear")["ratio"], 1.125 / (3.5 - 1.25), places=6)
@@ -560,10 +619,16 @@ class Shipped(unittest.TestCase):
         card += "".join(f'\nwaive {m} on splice by "t@example.org" reason "test"\n' for m in six)
         found = alone(card, design, str(ROOT / "examples" / "deck" / "lap_pass.petra"))
         opened = [c for c in found["cells"] if c["state"] == "open"]
-        self.assertEqual({c["mechanism"] for c in opened}, set(six))
+        # A seventh line is open with them: lap.ply_shear is answered with lap.strength and lap.block_shear, and neither is settled.
+        self.assertEqual({c["mechanism"] for c in opened}, {*six, "lap.ply_shear"})
         for c in opened:
-            self.assertTrue(c["why"].startswith(grid.UNRESTED) and "gives no value at what splice has" in c["why"], c["why"])
+            if c["mechanism"] == "lap.ply_shear":
+                self.assertEqual(c["why"], grid.ALONG.format("lap.strength", "splice"))
+            else:
+                self.assertTrue(c["why"].startswith(grid.UNRESTED) and "gives no value at what splice has" in c["why"], c["why"])
         self.assertEqual(found["status"], "UNKNOWN")
+        # lap.slip is answered with lap.tightening, which this card waives: it cannot arise.
+        self.assertEqual(cell(found, "lap.slip")["state"], "not_applicable")
 
     def test_each_limit_of_the_clauses_turns_where_the_clause_puts_it(self):
         """A lap on each side of a limit: the first holds, at the limit or just inside it, and the second fails."""

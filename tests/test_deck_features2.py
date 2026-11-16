@@ -1082,7 +1082,9 @@ def draft(name: str) -> dict:
     """The draft, with `signed` on each key that the `when` of a line's `unless` reads (test_deck_features.signing). The scouts
     wrote the drafts when a design stated every key. Since plan step 1.6 a condition reads only a key the card signs, and both
     readers refuse the files as they stand: for the drone that is the rule set, flight over people, flight at night and the
-    class mark, and for a cut part its process, its edges, its finish and whether it has an inner cut."""
+    class mark, and for a cut part its process, its edges, its finish and whether it has an inner cut. Every other key is
+    marked `chosen`, as a key the designer wrote when the drafts were made, and a line the drafts excuse on a reason alone is
+    given the loads of its type as its ground."""
     return signing(json.loads((FIXTURES / f"{name}_draft.json").read_text(encoding="utf-8")))
 
 
@@ -1090,11 +1092,19 @@ def field_of(body: dict, of: str, name: str) -> dict:
     return next(f for t in body["types"] if t["type"] == of for f in t["fields"] if f["name"] == name)
 
 
+def the_cards(body: dict, of: str, name: str) -> None:
+    """Mark the field as one the card states. `signing` marked each key that no condition reads `chosen`, and a key is one of
+    the two and not both, so that mark goes."""
+    field = field_of(body, of, name)
+    field.pop("chosen", None)
+    field["signed"] = True
+
+
 def process2() -> dict:
     """The cut and bent part, restated. The shop whose limits a part is checked against is the asker's to name: a design that named
     its own would pick the loosest. The card states it."""
     body = draft("process")
-    field_of(body, "cut_part", "shop")["signed"] = True
+    the_cards(body, "cut_part", "shop")
     return body
 
 
@@ -1109,7 +1119,7 @@ def drone2() -> dict:
       The draft measured every position from the rear end of the bottom plate, because a quantity was more than zero."""
     body = draft("drone")
     for name in ("rule_set", "class_mark", "rotors"):
-        field_of(body, "quadcopter", name)["signed"] = True
+        the_cards(body, "quadcopter", name)
     rotor = next(t for t in body["types"] if t["type"] == "rotor_set")
     rotor["fields"] = [f for f in rotor["fields"] if f["name"] != "propeller_limit"]
     for of, name in (("rotor_set", "speed_limit"), ("rotor_set", "thrust_limit"), ("battery", "resistance")):
@@ -1350,10 +1360,11 @@ class Heaviest(unittest.TestCase):
 
 # --- 9. a condition reads only a key the card signs (plan step 1.6) --------------------------------------
 
-def tie(signed: tuple[str, ...] = (), lines: list = (), rules: list = ()) -> dict:
-    """A tie that joins one end, as the deck is written: nothing is signed but the fields named in `signed`."""
+def tie(signed: tuple[str, ...] = (), lines: list = (), rules: list = (), silent: tuple[str, ...] = ()) -> dict:
+    """A tie that joins one end, as the deck is written: the keys named in `signed` say so, those in `silent` say nothing, which
+    makes them the card's too, and the designer chooses every other."""
     def named(name: str, *names: str) -> dict:
-        return {**key(name, *names), **({"signed": True} if name in signed else {})}
+        return {**key(name, *names), **({"signed": True} if name in signed else {} if name in silent else {"chosen": "the designer picks it, and the drawing says which"})}
     return made_up([kind("end", size("t"), named("shape", "straight", "round")),
                     kind("tie", size("w"), named("duty", "light", "heavy"), {"name": "ends", "type": "end", "as": ["near"], "what": "its end"})],
                    list(lines), list(rules), signs=False)
@@ -1366,7 +1377,8 @@ def tied(duty: str = "heavy", shape: str = "round", w: str = "10 mm") -> str:
 class ConditionsReadSignedKeys(unittest.TestCase):
     """Whether a line of the grid arises, and whether a rule runs, is decided by a condition. A key the design writes there
     would let the design pick its own checks: the lap of weathering steel that wrote its own surface as protected was
-    held to the wider spacing of painted steel. So both readers refuse a deck whose `when` reads a key that is not `signed`.
+    held to the wider spacing of painted steel. So both readers refuse a deck whose `when` reads a key that the designer
+    chooses. A key is the card's unless the deck says `chosen`, so one that says nothing may be read.
     The rule closes that one way: docs/deck.md, "The grid", lists three that it leaves to the deck's author."""
     WIDE = dict(le=["near.t", "w"])
 
@@ -1379,6 +1391,8 @@ class ConditionsReadSignedKeys(unittest.TestCase):
         for body in (self.WIDE, dict(requires=["is", "near.shape", "round"])):
             with self.subTest(sorted(body)):
                 self.refused(tie((), [asks("tie.m", "tie")], [rule("r", "tie", "tie.m", when=["is", "duty", "heavy"], **body)]), "its `when` reads duty")
+                # The same deck with no mark on the key: it is the card's, and both read the deck.
+                reads(self, tie((), [asks("tie.m", "tie")], [rule("r", "tie", "tie.m", when=["is", "duty", "heavy"], **body)], silent=("duty",)))
 
     def test_a_when_on_a_key_of_a_joined_part_names_the_part_and_the_key(self):
         self.refused(tie(("duty",), [asks("tie.m", "tie")], [rule("r", "tie", "tie.m", when=["is", "near.shape", "round"], **self.WIDE)]), "its `when` reads near.shape")
@@ -1393,9 +1407,19 @@ class ConditionsReadSignedKeys(unittest.TestCase):
     def test_an_unless_on_a_key_the_design_states_is_refused(self):
         self.refused(tie((), [asks("tie.m", "tie", unless={"when": ["is", "duty", "light"], "why": "made up: a light tie"})], [rule("r", "tie", "tie.m", **self.WIDE)]),
                      "grid tie.m: the `when` of its `unless` reads duty")
+        reads(self, tie((), [asks("tie.m", "tie", unless={"when": ["is", "duty", "light"], "why": "made up: a light tie"})], [rule("r", "tie", "tie.m", **self.WIDE)], silent=("duty",)))
+
+    def test_a_key_with_no_mark_is_the_cards_and_a_design_that_writes_it_is_refused(self):
+        """Until the last part of step 1.6 a key with no mark was the design's to write. It is the card's now."""
+        deck = tie((), [asks("tie.m", "tie")], [rule("r", "tie", "tie.m", requires=["is", "duty", "heavy"])], silent=("duty",))
+        mine, its = ill_formed(self, deck, tied(), states=False)
+        self.assertIn("l.duty is for the card to state", mine)
+        self.assertIn("design l.duty: is for the card to state", its)
+        found, _, _ = cells(self, deck, tied(duty="given l.duty"), HEAD + f"given l.duty is heavy {SIGNED}\n", states=False)
+        self.assertEqual(found["l", "tie.m", "r"], "proved")
 
     def test_what_a_rule_requires_may_be_any_key(self):
-        """A requirement is the check, and may read a key the design writes: such a design passes or fails by its own word."""
+        """A requirement is the check, and may read a key the designer chooses: such a design passes or fails by its own word."""
         deck = tie((), [asks("tie.m", "tie")], [rule("r", "tie", "tie.m", requires=["and", ["is", "duty", "heavy"], ["is", "near.shape", "round"]])])
         found, _, _ = cells(self, deck, tied(), states=False)
         self.assertEqual(found["l", "tie.m", "r"], "proved")
@@ -1419,7 +1443,7 @@ class ConditionsReadSignedKeys(unittest.TestCase):
                 self.assertNotIn(("l", "tie.m", "r"), found)
 
     def test_a_key_that_no_when_reads_may_be_stated_by_the_card_or_by_the_design(self):
-        """Without `signed` either may state a key. Here a requirement reads the duty, and the card fixes it."""
+        """A key the designer chooses may be stated by either. Here a requirement reads the duty, and the card fixes it."""
         deck = tie((), [asks("tie.m", "tie")], [rule("r", "tie", "tie.m", requires=["is", "duty", "heavy"])])
         for said, state in (("heavy", "proved"), ("light", "refuted")):
             with self.subTest(said):
@@ -1548,33 +1572,51 @@ class ANeedThatIsNotAsked(unittest.TestCase):
 class ALineIsExcusedWithAReason(unittest.TestCase):
     """Plan step 1.6: a "not applicable" with no reason is refused. A line of the grid says that its mechanism cannot arise
     with `unless`, and until this step its `why` could be empty, and petra/grid.py took a number for it where the kernel
-    did not. Both readers now refuse a deck whose `unless` has no `why`, one that is no text, or one of nothing but
-    spaces, tabs and line ends. The reason is the deck's word: the kernel prints it on the cell and proves nothing of it."""
+    did not. Both readers now refuse a deck whose `unless` has no `why`, one that is no text, or one with no letter in it,
+    a to z or A to Z. The reason says in words what the ground beside it checks: here a condition, or the loads of a hoist
+    (tests/test_grounds.py has the grounds themselves)."""
 
     WHY = "the finish is asked of service classes 1 to 4"
 
     def excused(self, why: object, when: bool = True) -> dict:
         from tests.test_deck_features import HOISTS
         deck = json.loads(json.dumps(HOISTS))
-        deck["grid"][1]["unless"] = {**({"when": ["is", "service", "0"]} if when else {}), **({} if why is ... else {"why": why})}
+        # With no condition the line never arises, on the ground every type has: the loads it takes, each named once.
+        deck["grid"][1]["unless"] = {**({"when": ["is", "service", "0"]} if when else {"loads": ["lift"]}), **({} if why is ... else {"why": why})}
         if not when:
             deck["rules"] = [r for r in deck["rules"] if r["mechanism"] != "hoist.bore"]
         return deck
 
     def test_an_unless_with_no_reason_is_refused_by_both_readers(self):
+        # The words changed with the rule: a reason has a letter in it. And the kernel now says the same of a `why` that is
+        # no text as of one that is empty, where it said "why is not a string".
         for why in ("", " ", "\t", " \r\n\t ", 0, None, ["a reason"], {"en": "a reason"}, ...):
             for when in (True, False):
                 with self.subTest(why=why, when=when):
                     mine, kernels = no_deck(self, self.excused(why, when))
-                    self.assertIn("grid hoist.bore: unless: it says why, in a text that is not empty", mine)
-                    self.assertTrue(kernels.startswith("grid hoist.bore: "), kernels)
-                    self.assertTrue(kernels.endswith("unless: it says why, in a text that is not empty" if isinstance(why, str) else "why is not a string"), kernels)
+                    self.assertEqual(mine, "grid hoist.bore: unless: it says why, in a text with a letter in it")
+                    self.assertEqual(kernels, "grid hoist.bore: unless: it says why, in a text with a letter in it")
 
-    def test_a_reason_of_one_character_that_is_no_space_is_one(self):
-        for why in ("x", "\u00a0", "\u3000", " . "):
+    def test_a_reason_of_one_letter_is_one_and_one_of_marks_digits_or_other_spaces_is_none(self):
+        """This test held that one character that is no space, tab or line end was a reason: a no-break space, an ideographic
+        space and a full stop were read. A reason has a letter now, a to z or A to Z, so the three are refused by both."""
+        for why in ("x", "Z", " . a"):
             with self.subTest(why=why):
                 reads(self, self.excused(why))
                 reads(self, self.excused(why, False))
+        for why in ("\u00a0", "\u3000", " . ", "7", "\u00e9", "\u0430", "\uff41"):      # the last three: e acute, a Cyrillic a, a full-width a
+            for when in (True, False):
+                with self.subTest(why=why, when=when):
+                    mine, kernels = no_deck(self, self.excused(why, when))
+                    self.assertEqual(mine, "grid hoist.bore: unless: it says why, in a text with a letter in it")
+                    self.assertEqual(kernels, mine)
+
+    def test_a_reason_alone_excuses_no_line(self):
+        """The line that never arises said so on its reason alone. Both readers refuse it without a ground."""
+        deck = self.excused("a lug of this hoist has no bore to finish", False)
+        del deck["grid"][1]["unless"]["loads"]
+        mine, kernels = no_deck(self, deck)
+        self.assertEqual((mine, kernels), (f"grid hoist.bore: {grid.GROUND}",) * 2)
 
     @KERNEL
     def test_the_kernel_prints_the_decks_reason_on_the_cell_it_excuses(self):

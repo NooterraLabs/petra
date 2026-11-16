@@ -63,7 +63,8 @@ These rules apply to both files.
 - A bound is a range with its provenance, written
   `in [<lo>, <hi>] [mean <value>] signed "<owner>" source "<source>"`. A measured value has
   `measured` in place of `signed`. Only a card states a bound, and outside a family every bound carries
-  a signature. In a family, `param NAME` stands where a bound would.
+  a signature. In a family, `param NAME` stands where a bound would. No deck reads a `mean` yet: a card
+  that states one on a given or on a load is refused where a design with parts is checked or exported.
 - `in`, `mean`, `signed`, `measured`, `source`, `param`, and `given` cannot be names inside a line. No
   declared name can be a declaration word.
 - A file has at most 1,000,000 bytes. `petra check`, `petra.export` and the MCP tools refuse a larger
@@ -312,7 +313,7 @@ with no rule yet is an open cell, and the design reads UNKNOWN until a rule or a
 
 ### Deck aisc360-22
 
-Its file's hash is `sha256:f4e0b94f8645b32f0fe56ff77a7e054409d610fbef767ac3ddeee87817e9d674`. `petra kinds aisc360-22` prints this.
+Its file's hash is `sha256:fb92c98c91e26573ff826e9983047dbd19142e2f26b3feb14723329aa6877d94`. `petra kinds aisc360-22` prints this.
 
 ```
 deck aisc360-22: plate, lap
@@ -374,21 +375,21 @@ lap <name> { one line each }    one line of two or more bolts in single shear th
     lap.strength    shear of the bolts with bearing and tearout at their holes (AISC 360-22 J3.7 and J3.11)
         rule aisc360-22/lap-strength
     lap.tension_with_shear    tension on the bolts together with shear (AISC 360-22 J3.8)
-        cannot arise: a lap carries a pull along its line, which shears its bolts and puts no tension on them
+        excused for every part: a lap takes one load, a pull along its line, which shears its bolts and puts no tension on them
     lap.slip    slip of a slip-critical joint (AISC 360-22 J3.9)
-        cannot arise: a lap is a bearing-type joint, which claims no slip resistance
+        answered with lap.tightening, and open while one of them is: slip is asked of a slip-critical joint, and the line of tightening answers whether this joint must be one
     lap.ply_yield    tensile yielding of each plate (AISC 360-22 J4.1)
         rule aisc360-22/lap-ply-yield-a, aisc360-22/lap-ply-yield-b
     lap.ply_rupture    tensile rupture of each plate through its holes (AISC 360-22 J4.1)
         rule aisc360-22/lap-ply-rupture-a, aisc360-22/lap-ply-rupture-b
     lap.ply_shear    shear of a plate as an element loaded in shear (AISC 360-22 J4.2)
-        cannot arise: the plates of a lap are pulled along its line; shear on their planes beside the bolts is tearout and block shear
+        answered with lap.strength, lap.block_shear, and open while one of them is: the plates of a lap are pulled along its line, and shear on their planes beside the bolts is tearout and block shear, which those lines answer
     lap.block_shear    block shear rupture of each plate (AISC 360-22 J4.3)
         rule aisc360-22/lap-block-shear-a, aisc360-22/lap-block-shear-b
     lap.partial_block_shear    block shear rupture of each plate along a block of fewer bolts than all, as the corner at its end bolt (AISC 360-22 J4.3)
         no rule yet, so its cell is open until the card waives it
     lap.ply_compression    yielding and buckling of a plate in compression (AISC 360-22 J4.4)
-        cannot arise: the load on a lap is a pull, which the card signs as at least zero
+        excused for a part that has a value for pull, and open for any other: the load on a lap is a pull, which is at least zero on every card
     lap.ply_flexure    bending of the plates, which a lap in single shear sets apart (AISC 360-22 J4.5)
         no rule yet, so its cell is open until the card waives it
 ```

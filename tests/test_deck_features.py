@@ -47,7 +47,8 @@ def _condition_keys(cond: object) -> list[str]:
 def signing(deck: dict) -> dict:
     """A copy of the deck with `signed` on each key that the `when` of a rule or of a line's `unless` reads: a key of the
     type, or `PART.KEY` for a key of a part it joins. A key marked `optional` is left as it is, since a field is not both, so
-    a deck whose condition reads one stays a deck that both readers refuse. Anything that is no deck comes back unchanged."""
+    a deck whose condition reads one stays a deck that both readers refuse. Every other key is marked `chosen`, and an `unless`
+    with a reason and no ground is given the loads of its type as its ground. Anything that is no deck comes back unchanged."""
     try:
         out = copy.deepcopy(deck)
         types = {t["type"]: t for t in out["types"]}
@@ -61,6 +62,16 @@ def signing(deck: dict) -> dict:
                     for f in t["fields"]:
                         if f.get("name") == inner and "one_of" in f and not f.get("optional"):
                             f["signed"] = True
+        # Every other key is the designer's to choose, as it was when a design stated every key: a key is the card's unless the deck
+        # says `chosen`, with why. And a line that says it never arises gives the ground that every type has: the loads it takes.
+        for t in out["types"]:
+            for f in t["fields"]:
+                if isinstance(f, dict) and "one_of" in f and not f.get("signed") and "chosen" not in f:
+                    f["chosen"] = "made up for the tests"
+        for a in out["grid"]:
+            unless = a.get("unless")
+            if isinstance(unless, dict) and not any(ground in unless for ground in ("when", "least", "loads", "with")):
+                unless["loads"] = [load["name"] for load in types[a["type"]].get("loads", [])]
         return out
     except (KeyError, TypeError, AttributeError):
         return deck

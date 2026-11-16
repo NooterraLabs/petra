@@ -60,7 +60,8 @@ class Info:
 def _field(body: dict) -> F:
     least = units.si(body["least"]) if isinstance(body.get("least"), str) else None
     if "one_of" in body:
-        return F(body["name"], "key", None, list(body["one_of"]), signed=bool(body.get("signed")), optional=bool(body.get("optional")))
+        # A key is the card's to state unless the deck says `chosen`, with why: the design writes only a chosen key.
+        return F(body["name"], "key", None, list(body["one_of"]), signed="chosen" not in body, optional=bool(body.get("optional")))
     if "type" in body:
         return F(body["name"], "joins", type=body["type"], names=list(body.get("as", [])))
     return F(body["name"], "quantity", units.dim_of(body.get("dim", "")), whole=bool(body.get("whole")), signed=bool(body.get("signed")),
@@ -91,7 +92,7 @@ def values(node: Any) -> Iterator[tuple[Fraction, str]]:
             yield from values(x)
     elif isinstance(node, dict):
         for k, x in node.items():
-            if k in ("what", "says", "why", "about", "name", "id", "anchor", "mechanism"):
+            if k in ("what", "says", "why", "chosen", "about", "name", "id", "anchor", "mechanism"):
                 continue
             yield from values(x)
 

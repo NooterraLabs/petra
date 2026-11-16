@@ -187,7 +187,9 @@ def taken(kernel: str, code: int, out: bytes, err: bytes) -> dict[str, Any]:
     states = {cell["state"] for cell in said["cells"]}
     held = {"ILL-FORMED": bool(said["findings"]), "FAIL": not said["findings"] and "refuted" in states,
             "UNKNOWN": not said["findings"] and "refuted" not in states,
-            "PASS": not said["findings"] and not states & {"refuted", "open"} and "proved" in states}
+            # A PASS has a cell that was worked out: proved, and neither of stated keys nor of a rule's range.
+            "PASS": not said["findings"] and not states & {"refuted", "open"}
+                    and any(cell["state"] == "proved" and not cell.get("stated") and not cell["entry"].endswith("/where") for cell in said["cells"])}
     if not held[said["verdict"]]:
         raise BadAnswer(f"{kernel} printed {said['verdict']}, which its own findings and cells do not give")
     if said["verdict"] == "PASS" and (said["cells_from"] != "rules" or not isinstance(said["hashes"].get("rules"), str)):
@@ -255,7 +257,7 @@ def refusal(path: str, said: Mapping[str, Any]) -> tuple[str, ...]:
 
 
 def differs(mine: list[tuple[str, str, str, str]], status: str, rules: str, said: Mapping[str, Any], waived: list[Mapping[str, str]],
-            completions: list[Mapping[str, Any] | None] | None = None) -> str:
+            completions: list[Mapping[str, Any] | None] | None = None, stated: list[bool] | None = None) -> str:
     """Where the kernel's answer to a design checked against a deck of rules differs from
     the grid's (grid.py). `mine` is the grid's cells in order, each its subject, mechanism,
     entry and state, `status` its verdict, `rules` the hash of the deck's file and `waived`
@@ -268,6 +270,9 @@ def differs(mine: list[tuple[str, str, str, str]], status: str, rules: str, said
              for n, (a, b, c) in enumerate(zip(mine, its, said["cells"])) if a != b]
     found += [f"cell {n}: the grid rests it on {json.dumps(a)} and petra-verify on {json.dumps(c.get('completion'))}"
               for n, (a, c) in enumerate(zip(completions or [], said["cells"])) if a != c.get("completion")]
+    # `stated`, when given, says of each cell whether it is one of stated keys, which works nothing out: the two mark the same cells.
+    found += [f"cell {n}: the grid {'marks' if a else 'does not mark'} it as one of stated keys and petra-verify {'does' if c.get('stated') else 'does not'}"
+              for n, (a, c) in enumerate(zip(stated or [], said["cells"])) if a != bool(c.get("stated"))]
     if len(mine) != len(its):
         found.append(f"the grid has {len(mine)} cells and petra-verify {len(its)}")
     if said["verdict"] != status:

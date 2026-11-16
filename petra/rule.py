@@ -225,8 +225,9 @@ def read_transcription(body: Mapping[str, Any]) -> Transcription:
             raise DeckError("not a transcription: `rules` is a list of rules")
         if "grid" in body:
             return Transcription(tuple(body["rules"]), {a["mechanism"]: dict(a["unless"]) for a in body["grid"] if "unless" in a}, {})
-        unless = {u["mechanism"]: {k: u[k] for k in ("why", "when") if k in u} for u in body.get("unless", [])}
-        if not all(isinstance(u.get("why"), str) and u["why"] for u in unless.values()):
+        # An `unless` is carried as a deck writes it: its reason, and the one ground that the readers check (docs/deck.md, The grid).
+        unless = {u["mechanism"]: {k: u[k] for k in ("why", "when", "least", "loads", "with") if k in u} for u in body.get("unless", [])}
+        if not all(grid._worded(u.get("why")) for u in unless.values()):
             raise DeckError("not a transcription: each `unless` says why, in words")
         return Transcription(tuple(body["rules"]), unless, {x["mechanism"]: str(x["why"]) for x in body.get("left_out", [])})
     except (KeyError, TypeError, AttributeError) as exc:

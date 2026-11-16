@@ -70,7 +70,10 @@ class Check(Workspace):
         code, out, _ = run("check", str(EXAMPLES / "deck" / "lap_unknown.petra"), "--json")
         self.assertEqual(code, EXIT_CODES["UNKNOWN"], "lap_unknown exits 2")
         pending = [c for c in json.loads(out)["cells"] if c["state"] == "open"]
-        self.assertEqual(len(pending), 5, "the five lines the deck has no rule for")
+        # Six since an `unless` has a ground: lap.slip is answered with lap.tightening, which is one of the five and open here.
+        self.assertEqual(len(pending), 6, "the five lines the deck has no rule for, and the one answered with one of them")
+        self.assertEqual([c["mechanism"] for c in pending if c["why"] != "the deck has no rule for it"], ["lap.slip"])
+        self.assertEqual(sum(c["why"] == "the deck has no rule for it" for c in pending), 5)
         self.assertTrue(all(c["why"] for c in pending), "and each says why it is open")
 
     def test_a_lap_that_is_refuted_exits_1(self):
