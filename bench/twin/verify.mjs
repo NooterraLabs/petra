@@ -1814,6 +1814,12 @@ function loadType(t, seenTypes) {
       if (Object.hasOwn(l, 'least')) {
         least = quantityOf(l.least, dim);
         if (!least) throw DE(`least of the load ${l.name} is not a quantity of its dimension`);
+        // deck.md, "A quantity at or under zero": "The last row of the table holds for a load as
+        // for a field: beside `\"may_be\": \"negative\"` a load's `least` is under zero or left
+        // out, and a deck with one at zero or above is refused, since the two would say opposite
+        // things of the load." Until this change the reading held a field alone to it
+        // (AMBIGUITIES.md, J8).
+        if (mayBe === 'negative' && least.n >= 0n) throw DE(`the load ${l.name} says may_be negative and has a least at zero or above`);
       }
       T.loads.set(l.name, { name: l.name, dimName: l.dim, dim, least, mayBe });
     }
@@ -2522,13 +2528,17 @@ export function loadDeck(D, find) {
     const row = top(() => loadRow(r, deck.rows), item);
     if (row) deck.rows.set(row.id, row);
   });
+  const refusedTypes = new Set();
   D.types.forEach((t, i) => {
     const item = `types[${i}]${isObj(t) && isStr(t.type) ? ' ' + t.type : ''}`;
     const T = top(() => loadType(t, deck.types), item);
     if (T) deck.types.set(T.name, T);
+    else if (isObj(t) && isStr(t.type)) refusedTypes.add(t.type);
   });
+  // A type that the deck has and that did not read is a type of the file all the same: the field
+  // that joins parts of it names a type, and the one finding is that type's own (AMBIGUITIES.md, X2).
   for (const T of deck.types.values()) {
-    for (const j of T.joins) if (!deck.types.has(j.type)) top(() => { throw DE(`the field ${j.name} joins parts of ${short(j.type)}, which is not a type`); }, `types ${T.name}`);
+    for (const j of T.joins) if (!deck.types.has(j.type) && !refusedTypes.has(j.type)) top(() => { throw DE(`the field ${j.name} joins parts of ${short(j.type)}, which is not a type`); }, `types ${T.name}`);
   }
   if (errs0.length) return null;
   for (const T of deck.types.values()) if (T.needsJ !== undefined) top(() => checkNeeds(T, deck.types), `types ${T.name} needs`);
@@ -3048,8 +3058,8 @@ export function verifyTexts(texts, opts = {}) {
   // says `may_be: negative`. A deck that breaks it is refused as one that does not read is. "Under"
   // is taken strictly, whether or not the floor is strict (AMBIGUITIES.md, M1).
   // The findings are kept in `underFloor` and listed where the page puts them: after rules 9 to 11
-  // when the type rules are applied, and with the shape findings of all the files when the kernel
-  // stops before them (AMBIGUITIES.md, P12, V6 and W4).
+  // and the second half of rule 5, when the type rules are applied, and not at all when the
+  // kernel stops before them (AMBIGUITIES.md, V6 and W4).
   const underFloor = [];
   if (deck) {
     let under = false;
@@ -3079,7 +3089,9 @@ export function verifyTexts(texts, opts = {}) {
   // the type rules to what it read".
   const listUnderFloor = () => { for (const why of underFloor) find('rules', '', why); };
   const stops = whole.has('card') || whole.has('design') || whole.has('deck');
-  if (stops) listUnderFloor();
+  // format.md, type rule 9, of the finding of a `least` under a floor: "it is not listed at all
+  // when the kernel stops before the type rules because card.json, design.json or deck.json did
+  // not read as a whole." Until this change the reading listed it there (AMBIGUITIES.md, P12, W4).
   // format.md, The verdict: "The shape findings of whole files come in the order card, design,
   // deck, rules, run, proofs." Every finding so far is a shape finding. They are put in that order
   // of their files, the findings of items with those of the whole file they are of, and each

@@ -273,6 +273,33 @@ Measured with `PETRA_TWIN` set and `--count 1500 --decks 800 --seed 7 --jobs 2` 
 | Generated designs, 1,424 compared | The same verdict and the same cells on every one |
 | Damaged decks, 800 compared | The same on every one |
 
+## The eleventh update, of 2026-11-16
+
+The pages bound the files of a verdict to each other by hash, for plan step 1.7: a card names its deck of rules, deck.json names the same deck, a deck is read with the record of its acceptance run, a sixth file, the card says whose it is and where each value is from, and the verdict prints the hash of each file and one hash of them all. The reading as it stood refused or misread most files.
+
+One agent, under the same rule as before, had the two pages, what had changed in them, the shipped deck and its run, this reading and its list, and 189 bundles with the kernel's answers: the 124 of the tenth update written again in the new format, on which the kernel answers as it did, and 65 of the binding. It brought the reading up in three rounds, each from the pages before any bundle was run.
+
+| Round | Bundles | Agree | What it turned on |
+|---|---|---|---|
+| The binding | 189 | 183 | The six that differ are the same rules of the same files in the same order, with an item worded another way, which the pages leave to each reader |
+| The pages corrected after its list and after the seventeenth review | 189 | 183, the same six | The order of the shape findings of whole files, the item of a finding for a missing `by`, a deck with a `least` under a floor |
+| Three damaged decks | 189 and 3 | 183 and 3 | A load that may be negative with a `least` at zero |
+
+The third round came from the comparison below. At seed 19 it found three damaged decks of 3,000, two of them the same files, that the kernel and the Python reader refuse and the reading took: a load that says `may_be: negative` beside a `least` of zero. The page gave that rule in a table headed "A field says" and said nothing of it for a load. The reading had read the heading at its word and had the gap on its list since the second change, as entry J8. The page now says the rule for a load, and the reading follows.
+
+The agent wrote 38 cases of its own for corners the bundles did not reach. The kernel gives the reading's verdict and findings on 36. On one the kernel lists the finding of a file that does not read without the finding of an item of it, where the reading lists both, and the page now says that is each reader's own. The other was a fault of the kernel: with `--rules` given twice it read the first file and said nothing of the second, where the reading refused the command line. The kernel now refuses a flag given twice, and the page says so.
+
+`AMBIGUITIES.md` gained sections V, W and X, and closed J8 the other way. The agent sent 21 sentences of the pages that were false, at odds with another or unclear in the first round, nine more in the second and three in the third. All are corrected: what a finding's item is and which the page fixes, where the two halves of type rule 5 are applied, that a hash is in lower case and compared as a text, which line ends a deck's hash is of, what "cannot be read" means of a file, what a record of a run shows and what it does not. Nothing in `verify.mjs` was edited by the agent that changed the kernel.
+
+Measured with `PETRA_TWIN` set against the kernel and the grid of this tree.
+
+| Compared | Result |
+|---|---|
+| Generated designs, 4,759 compared, seed 19, before the third round | The same verdict and the same cells on every one |
+| Damaged decks, 3,000 compared, seed 19, before the third round | The same on 2,997, and the three above |
+| Generated designs, 1,434 compared, seed 19, after it | The same on every one |
+| Damaged decks, 3,000 compared, seed 19, after it | The same on every one |
+
 ## What it is not
 
 It does not check a design.json with no `parts`: files with no deck of rules get UNKNOWN from it when no cell carries a tape, and no verdict when one does. It applies the limits that decide a verdict and not the budget of work, the memory of enclosures or the limits on what is printed. It is a reading of the rules path only.
