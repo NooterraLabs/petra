@@ -25,7 +25,7 @@ import importlib
 from pathlib import Path
 from typing import Any
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 _API = {"load_design": "lang", "parse_design": "lang", "check_text": "pipeline"}
 """Each name of the API that a submodule defines. A name is imported when first read, and
