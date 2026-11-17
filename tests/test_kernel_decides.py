@@ -412,11 +412,11 @@ class NoFilesWithoutADeck(unittest.TestCase):
         for path in MODELS:
             with self.subTest(path=path.name), self.assertRaises(export.NoDeck):
                 exported(path)
-        self.assertEqual(sorted(exported(LAP)), ["card", "deck", "design", "proofs", "rules"])
+        self.assertEqual(sorted(exported(LAP)), ["card", "deck", "design", "proofs", "rules", "run"], "the deck of rules goes with the run it is bound to")
 
     def test_the_shell_takes_no_pass_for_files_with_no_deck_of_rules(self):
         """`verify.ask` is still held to it, for any caller that hands the kernel files of its own."""
-        files = {name: body for name, body in exported(LAP).items() if name not in ("rules", "proofs")}
+        files = {name: body for name, body in exported(LAP).items() if name not in ("rules", "run", "proofs")}
         with refusing(rewritten(0, verdict="PASS", findings=[], cells=[{"subject": "s", "mechanism": "m", "entry": "", "state": "proved"}])):
             with self.assertRaises(verify.NoVerdict):
                 verify.ask(verify.need(), files)

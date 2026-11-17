@@ -12,41 +12,72 @@
    "dim": "force",
    "field": "pull",
    "hi": "80067989074689/400000000",
+   "kind": "signed",
    "lo": "0",
    "name": "gravity.splice.pull",
-   "on": "splice"
+   "on": "splice",
+   "source": "attack"
   },
   {
    "by": "s.engineer@example.org",
    "dim": "stress",
    "hi": "257996853685109/645160",
+   "kind": "signed",
    "lo": "257996853685109/645160",
-   "name": "strap.Fu"
+   "name": "strap.Fu",
+   "source": "attack"
   },
   {
    "by": "s.engineer@example.org",
    "dim": "stress",
    "hi": "80067989074689/322580",
+   "kind": "signed",
    "lo": "80067989074689/322580",
-   "name": "strap.Fy"
+   "name": "strap.Fy",
+   "source": "attack"
   },
   {
    "by": "s.engineer@example.org",
    "dim": "stress",
    "hi": "257996853685109/645160",
+   "kind": "signed",
    "lo": "257996853685109/645160",
-   "name": "tab.Fu"
+   "name": "tab.Fu",
+   "source": "attack"
   },
   {
    "by": "s.engineer@example.org",
    "dim": "stress",
    "hi": "80067989074689/322580",
+   "kind": "signed",
    "lo": "80067989074689/322580",
-   "name": "tab.Fy"
+   "name": "tab.Fy",
+   "source": "attack"
   }
  ],
  "name": "lap-splice-waived",
+ "owner": "s.engineer@example.org",
  "probability_claims": [],
+ "rules": {
+  "hash": "sha256:fb92c98c91e26573ff826e9983047dbd19142e2f26b3feb14723329aa6877d94",
+  "name": "aisc360-22"
+ },
+ "states": [
+  {
+   "by": "s.engineer@example.org",
+   "key": "standard",
+   "kind": "signed",
+   "name": "splice.holes",
+   "source": "attack"
+  },
+  {
+   "by": "s.engineer@example.org",
+   "key": "protected",
+   "kind": "signed",
+   "name": "splice.surface",
+   "source": "attack"
+  }
+ ],
  "tests": [],
  "waivers": [
   {

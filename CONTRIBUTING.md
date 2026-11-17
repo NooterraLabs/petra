@@ -29,7 +29,11 @@ Some files are generated. Edit the source, then regenerate them:
 
 | File | Regenerate with |
 |---|---|
+| `petra/decks/aisc360.run.json`, the record of the deck's acceptance run | `python -m bench.formalizer.bound` |
+| The `rules` line of each card under `examples` and `corpus/cases` | `python scripts/pin.py examples corpus/cases` |
 | `docs/reference.md` and `petra/templates.py` | `python -m petra.teach --write` |
+
+An edit of a deck changes its hash, so all three follow it, in this order: no reader takes a deck until its record names the new hash, and no check takes a card until it names it too.
 
 The `checks` workflow in `.github/workflows/checks.yml` runs the suite and the corpus on GitHub's runners.
 

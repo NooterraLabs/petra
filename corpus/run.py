@@ -16,7 +16,8 @@ with, where ILL-FORMED reads as INPUT_ERROR. For a design of a deck of rules, PA
 PASS_WAIVED when the kernel lists a waiver that a cell rests on, as `petra check` reads it.
 A pair the language refuses is INPUT_ERROR too: the kernel reads files, and that text gives
 it none. For a design of a deck of rules the export also writes rules.json, the deck's own
-file, and proofs.json, the hints, and the kernel gets the first as --rules and works out the
+file, run.json, the record of the run the deck is bound to, and proofs.json, the hints, and
+the kernel gets the first as --rules and the second as --run and works out the
 cells itself. A design none of whose parts is of a deck's type has no files: the export
 writes nothing and exits 2, the kernel is not asked, and the verdict is UNKNOWN, as
 `petra check` gives it.
@@ -100,7 +101,7 @@ def by_kernel(binary: str, case: Case) -> str:
     with tempfile.TemporaryDirectory() as tmp:
         def verify(*names: str) -> str:
             deck = Path(tmp, "rules.json").is_file()
-            there = [*names, *(["rules"] if deck else [])]
+            there = [*names, *(["rules", "run"] if deck else [])]      # a deck of rules is read with its run
             said: list[str] = []
             found = _verdict(_run([binary, *(part for name in there for part in (f"--{name}", str(Path(tmp, f"{name}.json"))))], said))
             return "PASS_WAIVED" if deck and found == "PASS" and json.loads(said[0])["waived"] else found

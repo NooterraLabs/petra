@@ -8,19 +8,28 @@
    "by": "x@y.z",
    "dim": "length",
    "hi": "214748365/4294967296",
+   "kind": "signed",
    "lo": "42949673/1073741824",
-   "name": "Z.a"
+   "name": "Z.a",
+   "source": "attack"
   },
   {
    "by": "a.b@c.d",
    "dim": "dimensionless",
    "hi": "42807158896152731596418870679/158456325028528675187087900672",
+   "kind": "signed",
    "lo": "42807158896152731596418870679/158456325028528675187087900672",
-   "name": "Z.r"
+   "name": "Z.r",
+   "source": "attack"
   }
  ],
  "name": "card_1",
+ "owner": "x@y.z",
  "probability_claims": [],
+ "rules": {
+  "hash": "sha256:3c46a258a5e32aea24e2ef9becfd535895736fc804e98875d3c057f2e0e94221",
+  "name": "bench-ops"
+ },
  "tests": [],
  "waivers": [
   {

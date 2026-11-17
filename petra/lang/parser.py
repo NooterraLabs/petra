@@ -8,7 +8,7 @@ for grid.owner to say, so the parser knows no component kind.
 The tree it builds (lower.py reads it; leaves are lexer Tokens, so every name keeps its
 position):
 
-    card        (name, items)             items: owner (STRING) | environment (IDENT)
+    card        (name, items)             items: owner (STRING) | environment (IDENT) | rules (STRING, STRING)
     param       (name, range)
     ambient     (bound | paramref)
     given       (name, bound | is)        in a card; (name,) as an argument in a design
@@ -164,8 +164,11 @@ class Parser:
             elif self._is(Kind.IDENT, "environment"):
                 self._next()
                 items.append(_node("environment", tok, self._ident("an environment id")))
+            elif self._is(Kind.IDENT, "rules"):
+                self._next()
+                items.append(_node("rules", tok, self._string("the name of a deck of rules"), self._string("the hash of the deck's file")))
             else:
-                raise self._error(tok, f"expected 'owner', 'environment' or '}}', found {_describe(tok)}")
+                raise self._error(tok, f"expected 'owner', 'environment', 'rules' or '}}', found {_describe(tok)}")
             self._newline()
         self._next()
         return _node("card", kw, name, tuple(items))

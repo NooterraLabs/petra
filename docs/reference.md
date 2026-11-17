@@ -8,8 +8,8 @@ them, and the examples. Do not edit it by hand. tests/test_teach.py fails when t
 
 ## File layout and syntax
 
-A check reads two files. The card, `NAME.card`, holds what is asked: the name, every signed bound, the
-load cases, and the waivers. The design, `NAME.petra`, holds the answer: the parts. Whoever asks writes
+A check reads two files. The card, `NAME.card`, holds what is asked: the name, the deck of rules to
+check against, every signed bound, the load cases, and the waivers. The design, `NAME.petra`, holds the answer: the parts. Whoever asks writes
 the card, and a designer or an agent writes the design. A design cannot state a load, a waiver, or a
 signature, so it cannot change what is asked of it.
 `petra check NAME.petra` reads `NAME.card` beside the design, and `--card FILE` names another card.
@@ -19,6 +19,7 @@ petra 0
 
 card "lap-splice" {
   owner "s.engineer@example.org"
+  rules "aisc360-22" "sha256:fb92c98c91e26573ff826e9983047dbd19142e2f26b3feb14723329aa6877d94"
 }
 
 given tab.Fy in [36 ksi, 36 ksi] signed "s.engineer@example.org" source "ASTM A36, specified minimum"
@@ -85,11 +86,12 @@ bounded, whatever the files hold.
 
 ### card
 
-A card has one `card` block, which names what is asked. `owner` is required. `environment` is optional and names where the design stands. No deck of rules reads an environment yet, so `petra check` refuses a card that states one for a design of a deck's types.
+A card has one `card` block, which names what is asked. `owner` is required. `rules` names the deck of rules that the owner has the design checked against, by its name and the hash of its file, and a design of a deck's types is checked only with a card that names the deck `petra check` has: `petra kinds` prints the line to write. So the hash of a card covers which rules its owner asked for, and after a change to the deck the card is refused until its owner names the new one. `environment` is optional and names where the design stands. No deck of rules reads an environment yet, so `petra check` refuses a card that states one for a design of a deck's types.
 
 ```
 card "lap-splice" {
   owner "s.engineer@example.org"
+  rules "aisc360-22" "sha256:fb92c98c91e26573ff826e9983047dbd19142e2f26b3feb14723329aa6877d94"
 }
 ```
 
@@ -178,7 +180,7 @@ The grammar below is EBNF, and `NL` is a line end. The types of parts and their 
 ```
 card file   = "petra" INT NL { ( card | param | ambient | given | load | tests | claim | waive ) NL } EOF ;
 design file = "petra" INT NL { ( param | component ) NL } EOF ;
-card      = "card" STRING "{" NL { ( "owner" STRING | "environment" IDENT ) NL } "}" ;
+card      = "card" STRING "{" NL { ( "owner" STRING | "environment" IDENT | "rules" STRING STRING ) NL } "}" ;
 param     = "param" IDENT "in" range ;
 ambient   = "ambient" bound ;
 given     = "given" name ( "in" range [ "mean" qty ] | "is" ( IDENT | STRING | INT ) ) [ signature ] ;
@@ -317,6 +319,7 @@ Its file's hash is `sha256:fb92c98c91e26573ff826e9983047dbd19142e2f26b3feb147233
 
 ```
 deck aisc360-22: plate, lap
+  a card names it in its card block: rules "aisc360-22" "sha256:fb92c98c91e26573ff826e9983047dbd19142e2f26b3feb14723329aa6877d94"
 
 plate <name> { one line each }    a flat steel plate that a joint connects
   lines, each once:

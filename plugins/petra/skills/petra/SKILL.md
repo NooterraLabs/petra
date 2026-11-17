@@ -35,8 +35,9 @@ A `lap` has rules for eight mechanisms: the least and the greatest spacing of th
 ## Rules
 
 - The card is the user's. Write into it only the loads and bounds the user gave, signed with the user's name and the source of the numbers. Never lower a load or add a `waive` line to reach PASS. Those belong to the person who signs them.
+- The card names the deck it is checked against in its card block, `rules "NAME" "HASH"`, the line that `petra kinds` prints and `petra new --card` writes. If `petra check` refuses a card because it names another deck, or none, tell the user: which rules their card asks for is theirs to say.
 - A design cannot state a load, a waiver or a signature, and Petra refuses one that does. A line reads a signed bound the card states with `given NAME`.
-- With a PASS, give the user the `card` line. Its hash says which card the design was checked against, so the user can see it is theirs.
+- With a PASS, give the user the `card` line. Its hash says which card the design was checked against, and with it which deck, so the user can see it is theirs.
 - Report PASS only when `petra check` prints PASS. A PASS covers the cells in its table, for the stated loads. It says nothing of what the deck does not ask about.
 - Petra checks a design. It does not choose the loads, and it does not replace the engineer who signs the design.
 

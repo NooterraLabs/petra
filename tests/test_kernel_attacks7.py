@@ -44,6 +44,7 @@ from unittest import mock
 
 from petra import grid, verify
 from petra.pipeline import check_text
+from tests import bound
 from tests.test_deck_features import HEAD, asks, design, given, kind, load, made_up, no_deck, parsed, part, rule, size
 from tests.test_kernel_grid import ask
 
@@ -57,12 +58,12 @@ def waive(mechanism: str, on: str) -> str:
 def checked(card: str, text: str, deck: dict | None = None):
     """What `petra check` gives (repair.check_text, as cmd_check and the MCP tool call it), with
     the shipped decks or with a made-up one in their place. With a kernel built, the kernel's
-    cells are compared with the grid's, and a difference raises."""
+    cells are compared with the grid's, and a difference raises. The card names the deck (tests/bound.py)."""
     def run():
-        return check_text(card, text, "made-up.petra", card_path="made-up.card")
+        return check_text(bound.card_for(card, text), text, "made-up.petra", card_path="made-up.card")
     if deck is None:
         return run()
-    read = grid.read_deck(json.dumps(deck))
+    read = bound.read(json.dumps(deck))
     with mock.patch.object(grid, "decks", lambda: (read,)):
         return run()
 

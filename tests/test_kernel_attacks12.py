@@ -110,19 +110,23 @@ import petra
 import petra.lang
 from petra import cli, grid, mcp
 from petra.files import read_pair
+from tests import bound
 from tests.test_deck_features import KERNEL
 from tests.test_kernel_grid import ask
 
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples" / "deck"
 
 MAY_BE_LEFT_OUT = {
-    "card": {(): {"states", "tests", "probability_claims"}, ("inputs",): {"case", "on", "field"}, ("waivers",): {"by"}, ("states",): {"by"}},
+    "card": {(): {"states", "tests", "probability_claims", "owner", "rules"}, ("inputs",): {"case", "on", "field", "source", "kind"}, ("waivers",): {"by"},
+             ("states",): {"by", "source", "kind"}},
     "design": {(): {"parts"}},
     "deck": {(): {"rules"}, ("rules",): {"name", "hash"}, ("domains", "size"): {"about"}, ("domains", "input"): {"about"}},
     "proofs": {("cells",): {"tape", "partition", "point", "which", "rule", "completion", "why"}, ("cells", "completion"): {"keys", "loads"}},
 }
 """docs/format.md, "Keys": the keys that a file, an item or a cell may leave out, by the file and the place of
-the object in it. `rules` of deck.json is read only for being there, so nothing of it is missed."""
+the object in it. A card's `owner` and `rules`, and the `source` and `kind` of an input and of a statement, may be
+left out as to the shape: with --rules, type rules 5 and 9 refuse a card without them. So may `rules` of deck.json,
+and its `name` and `hash`: with --rules, type rule 10 refuses a deck.json without them."""
 
 
 def lap(name: str) -> dict[str, str]:
@@ -205,11 +209,11 @@ class AKeyLeftOut(unittest.TestCase):
         files = lap("lap_pass")
         deck = json.loads(files["rules"])
         del deck["name"]
-        said = ask({**files, "rules": json.dumps(deck)})
+        said = ask(bound.with_rules(files, json.dumps(deck)))
         self.assertEqual((said["verdict"], rules_of(said)), ("ILL-FORMED", {("rules", "shape")}))
         del deck["about"]
         deck["name"] = "aisc360"
-        self.assertEqual(ask({**files, "rules": json.dumps(deck)})["verdict"], "PASS", "a deck may leave out `about`, and no other key of its own")
+        self.assertEqual(ask(bound.with_rules(files, json.dumps(deck)))["verdict"], "PASS", "a deck may leave out `about`, and no other key of its own")
 
 
 def twice(text: str, key: str, first: str) -> str:
@@ -225,7 +229,9 @@ class AKeyWrittenTwice(unittest.TestCase):
         for file, key, first in (("design", "quantities", "[]"), ("design", "name", '"another"'), ("deck", "constants", '"none"'),
                                  ("proofs", "cells", "7"), ("rules", "rules", "[]"), ("rules", "grid", "[]")):
             with self.subTest(file=file, key=key):
-                said = ask({**files, file: twice(files[file], key, first)})
+                written = {**files, file: twice(files[file], key, first)}
+                # Another deck of rules is another hash, which the card, deck.json and the run name (tests/bound.py).
+                said = ask(bound.with_rules(files, written["rules"]) if file == "rules" else written)
                 self.assertEqual((said["verdict"], said["findings"]), ("PASS", []))
 
     def test_a_card_with_a_key_twice_is_another_file_than_the_one_the_design_names(self):
@@ -484,7 +490,7 @@ class TheAnswerIsForTheseFilesAndHoldsTogether(unittest.TestCase):
         the answer to what it was handed all the same."""
         from tests import test_kernel_decides as decides
 
-        files = {name: body for name, body in decides.exported(decides.LAP).items() if name not in ("rules", "proofs")}
+        files = {name: body for name, body in decides.exported(decides.LAP).items() if name not in ("rules", "run", "proofs")}
         how = lambda code, out, err: decides.rewritten(code, cells_from="rules")(code, out, err)      # noqa: E731
         with decides.refusing(how), self.assertRaises(decides.verify.NoVerdict):
             decides.verify.ask(decides.verify.need(), files)

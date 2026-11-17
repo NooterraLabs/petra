@@ -1,0 +1,35 @@
+petra 0
+
+card "card_1" {
+  owner "s.engineer@example.org"
+  rules "aisc360-22" "sha256:fb92c98c91e26573ff826e9983047dbd19142e2f26b3feb14723329aa6877d94"
+}
+
+given B2.holes is "oversize" signed "x@y.z" source "a source, with a comma"
+given B2.surface is weathering signed "x@y.z" source "a source, with a comma"
+given joint.Fy in [291/511 Pa, 291/511 Pa] signed "x@y.z" source "calc C-12"
+given joint.Fu in [58 ksi, 58 ksi] signed "a.b@c.d" source "a source, with a comma"
+given lap_main.width in [6 inch, 6 inch] signed "a.b@c.d" source "test"
+given lap_main.Fy in [50 ksi, 50 ksi] signed "x@y.z" source "calc C-12"
+given lap_main.Fu in [7000007/1000000 ksi, 7000007/1000000 ksi] signed "a.b@c.d" source "test"
+
+load storm {
+  on B2 pull in [0kip, 45kip]
+  signed "x@y.z" source "test"
+}
+
+load wind {
+  on B2 pull in [0 MN, 17/66 MN]
+  signed "x@y.z" source "test"
+}
+
+waive lap.tightening on B2 by "a.b@c.d" reason "nämn"
+waive lap.side_distance on B2 by "a.b@c.d" reason "it is a test"
+waive lap.ply_shear on B2 by "a.b@c.d" reason "snug-tight bolts"
+waive lap.ply_flexure on B2 by "x@y.z" reason "nämn"
+waive lap.strength on B2 by "a.b@c.d" reason "café"
+waive lap.partial_block_shear on B2 by "a.b@c.d" reason "a reason with \"quotes\""
+waive lap.block_shear on B2 by "s.engineer@example.org" reason "café"
+waive lap.spread on B2 by "t@example.org" reason "a reason with \"quotes\""
+waive lap.ply_compression on B2 by "x@y.z" reason "café"
+waive lap.ply_rupture on B2 by "x@y.z" reason "snug-tight bolts"

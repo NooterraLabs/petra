@@ -11,6 +11,7 @@ TEMPLATES: dict[str, tuple[str, str, str, str]] = {
             '\n'
             'card "lap-splice-waived" {\n'
             '  owner "s.engineer@example.org"\n'
+            '  rules "aisc360-22" "sha256:fb92c98c91e26573ff826e9983047dbd19142e2f26b3feb14723329aa6877d94"\n'
             '}\n'
             '\n'
             'given tab.Fy in [36 ksi, 36 ksi] signed "s.engineer@example.org" source "ASTM A36, specified minimum"\n'

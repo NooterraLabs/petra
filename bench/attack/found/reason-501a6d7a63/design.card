@@ -2,11 +2,18 @@ petra 0
 
 card "a" {
   owner "a.b@c.d"
+  rules "bench-ops" "sha256:3c46a258a5e32aea24e2ef9becfd535895736fc804e98875d3c057f2e0e94221"
 }
 
 given bar.b in [480 mm, 480 mm] signed "t@example.org" source "calc C-12"
 given bar.r in [5071/918, 5071/918] signed "t@example.org" source "test"
 given Z.r in [15845632502852867518708790067/19807040628566084398385987584, 79228162514264337593543950335/79228162514264337593543950336] signed "a.b@c.d" source "a source, with a comma"
+given pxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.finish is high signed "t@example.org" source "attack"
+given ab.finish is high signed "t@example.org" source "attack"
+given tab.finish is low signed "t@example.org" source "attack"
+given A.finish is low signed "t@example.org" source "attack"
+given bar.grade is "soft" signed "t@example.org" source "attack"
+given Z.grade is hard signed "t@example.org" source "attack"
 
 load storm {
   on pxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx press in [0 kips, 13000013000000/8896443230521 kips]

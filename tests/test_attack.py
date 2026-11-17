@@ -16,13 +16,17 @@ from pathlib import Path
 from unittest import mock
 
 from petra import grid, units as petra_units, verify
+from petra.files import ComponentError
 from petra.lang import LoweringError, parse_design
 
-from bench.attack import deckinfo, decks, files as F, gen, found, meta, readers, spec as S, units
+from bench.attack import bind, deckinfo, decks, files as F, gen, found, meta, readers, spec as S, units
+from bench.attack import maker as MAKER
 from bench.attack.maker import Maker
 
 ROOT = Path(__file__).resolve().parents[1]
 DECK_TEXT = (ROOT / "petra" / "decks" / "aisc360.json").read_text(encoding="utf-8")
+RUN_TEXT = (ROOT / "petra" / "decks" / "aisc360.run.json").read_text(encoding="utf-8")
+"""The run the shipped deck is bound to: a design is checked only against a deck read with it."""
 KERNEL = verify.binary()
 NODE = shutil.which("node")
 
@@ -57,7 +61,7 @@ class Units(unittest.TestCase):
 
 class Specs(unittest.TestCase):
     def test_the_pairs_of_the_corpus_read_and_write_back_to_the_same_files(self):
-        deck = grid.read_deck(DECK_TEXT)
+        deck = grid.read_deck(DECK_TEXT, RUN_TEXT)
         n = 0
         for folder in ("corpus/cases/deck", "examples/deck"):
             for path in sorted((ROOT / folder).glob("*.petra")):
@@ -67,9 +71,9 @@ class Specs(unittest.TestCase):
                 with mock.patch.object(grid, "decks", lambda: (deck,)):
                     try:
                         a = grid.bundle(parse_design(card, design, "a.petra"), deck)
-                    except LoweringError as refused:      # a pair the language refuses is refused for the same reason when written back
-                        with self.assertRaises(LoweringError, msg=path.name) as again:
-                            parse_design(*s.texts(), "a.petra")
+                    except (LoweringError, ComponentError) as refused:      # a pair refused is refused for the same reason when written back:
+                        with self.assertRaises(type(refused), msg=path.name) as again:     # the language's refusal, or a card that names another deck or none
+                            grid.bundle(parse_design(*s.texts(), "a.petra"), deck)
                         self.assertEqual([m.split(": ", 1)[1] for m in again.exception.problems], [m.split(": ", 1)[1] for m in refused.problems], path.name)
                         continue
                     b = grid.bundle(parse_design(*s.texts(), "b.petra"), deck)
@@ -97,7 +101,7 @@ class Generator(unittest.TestCase):
         self.assertNotEqual(a, [gen.fresh(random.Random(8), self.info).texts()])
 
     def test_a_fresh_design_is_read_by_the_language_and_keeps_its_needs(self):
-        deck = grid.read_deck(DECK_TEXT)
+        deck = grid.read_deck(DECK_TEXT, RUN_TEXT)
         rng = random.Random(3)
         read = 0
         for _ in range(60):
@@ -158,7 +162,7 @@ class Relations(unittest.TestCase):
                 meta.load_monotone(deckinfo.seeds()[name])      # reads without a fault
 
     def test_the_same_numbers_in_another_unit_write_the_same_files(self):
-        deck = grid.read_deck(DECK_TEXT)
+        deck = grid.read_deck(DECK_TEXT, RUN_TEXT)
         for name in ("lap_pass", "lap_fail", "lap_unknown"):
             s = S.read(*pair(name))
             for child in (meta.to_si(s), meta.other_units(random.Random(1), s)):
@@ -190,17 +194,19 @@ class Relations(unittest.TestCase):
         self.assertIn("not the same", F.sound(honest, honest[:1]))
 
 
-@unittest.skipUnless(KERNEL and NODE, "needs a built kernel and Node")
+@unittest.skipUnless(KERNEL and (NODE or not readers.Config.twin), "needs a built kernel, and Node for the third reading")
 class Readers(unittest.TestCase):
+    """The third reading is asked when readers.Config.twin names it, and is not asked while it is None."""
+
     @classmethod
     def setUpClass(cls):
         readers.Config.kernel = KERNEL
 
-    def test_the_three_readers_agree_on_the_examples(self):
+    def test_the_readers_agree_on_the_examples(self):
         for name, verdict in (("lap_pass", "PASS"), ("lap_fail", "FAIL"), ("lap_unknown", "UNKNOWN")):
             j = readers.judge(*pair(name), DECK_TEXT)
             self.assertTrue(j.reached and j.settled, name)
-            self.assertEqual(j.verdict, {"grid": verdict, "kernel": verdict, "twin": verdict}, name)
+            self.assertEqual(j.verdict, {"grid": verdict, "kernel": verdict, **({"twin": verdict} if readers.Config.twin else {})}, name)
             self.assertEqual([d for d in j.diffs if d.kind != "reason"], [], name)
 
     def test_a_refused_pair_does_not_reach(self):
@@ -257,6 +263,79 @@ class Readers(unittest.TestCase):
             for key in ("seed", "inputs", "share_reached", "differences", "crashes", "wall_s"):
                 self.assertIn(key, row)
             self.assertGreater(row["inputs"], 0)
+
+
+class Binding(unittest.TestCase):
+    """What the attacker holds of the binding by hash (bench/attack/bind.py), on files made up here."""
+
+    def setUp(self):
+        self.files = {"card": F.dump({"format": "petra-card/0", "rules": {"name": "aisc360-22", "hash": bind.deck_hash(DECK_TEXT)}}),
+                      "design": "{}", "deck": "{}", "rules": DECK_TEXT, "run": RUN_TEXT}
+        hashes, whole = bind.bundle(self.files)
+        self.said = {"verdict": "PASS", "hashes": hashes, "bundle": whole}
+
+    def test_the_bundle_is_the_hash_of_six_lines(self):
+        hashes, whole = bind.bundle({"card": "a"})
+        lines = "".join(f"{n} {hashes[n] or 'none'}\n" for n in bind.FILES)
+        self.assertEqual(whole, bind.sha(lines))
+        self.assertEqual([n for n in bind.FILES if hashes[n]], ["card"])
+
+    def test_a_pass_of_the_files_whose_card_names_the_deck_read_is_held(self):
+        self.assertEqual(bind.held_of(self.files, self.said), [])
+
+    def test_a_pass_for_a_card_that_names_another_deck_is_a_difference(self):
+        files = {**self.files, "card": F.dump({"rules": {"name": "aisc360-22", "hash": "sha256:" + "0" * 64}})}
+        hashes, whole = bind.bundle(files)
+        self.assertEqual([d.kind for d in bind.held_of(files, {**self.said, "hashes": hashes, "bundle": whole})], ["bind"])
+
+    def test_a_bundle_that_is_not_of_the_files_is_a_difference(self):
+        self.assertEqual([d.kind for d in bind.held_of(self.files, {**self.said, "bundle": "sha256:00"})], ["bundle"])
+        self.assertEqual([d.kind for d in bind.held_of({**self.files, "run": RUN_TEXT + " "}, self.said)], ["bundle"])
+
+    def test_the_shipped_deck_is_read_with_its_record_and_any_other_with_one_made_up(self):
+        self.assertEqual(bind.run_for(DECK_TEXT), RUN_TEXT)
+        made = json.loads(bind.run_for(DECK_TEXT + "\n"))
+        self.assertEqual((made["format"], made["deck"]), (grid.RUN, bind.deck_hash(DECK_TEXT + "\n")))
+        grid.read_deck(DECK_TEXT + "\n", bind.run_for(DECK_TEXT + "\n"))
+
+    def test_a_card_names_the_deck_it_is_checked_against(self):
+        s = S.read(*pair("lap_pass"))
+        self.assertEqual(s.rules, bind.pin(DECK_TEXT))
+        s.rules = S.DECK
+        self.assertIn('rules "x\\"y" "sha256:1"', s.card_text(('x"y', "sha256:1")))
+        self.assertNotIn("rules", s.card_text())
+
+
+@unittest.skipUnless(KERNEL, "needs a built kernel")
+class BindingRecipes(unittest.TestCase):
+    """Each recipe of the binding, once: what it expects holds, and the kernel and the grid agree on refusing or not."""
+
+    @classmethod
+    def setUpClass(cls):
+        readers.Config.kernel = KERNEL
+
+    def test_each_recipe_of_the_binding_meets_what_it_expects(self):
+        from bench.attack import run as R
+        maker = Maker(random.Random(21))
+        for kind in sorted(MAKER.BINDING):      # crlf among them: the attacker found the readers apart on it on 2026-11-16, and they agree since
+            drafts = getattr(maker, "bind_" + kind)()
+            judged = []
+            for d in drafts:
+                j = R.judge(maker, d, False)
+                judged.append(j)
+                self.assertEqual([x.detail for x in j.diffs if x.kind != "reason"], [], f"{kind}: {d.notes[-1:]}")
+                self.assertEqual([x.detail for x in bind.expected(d.extra, j)], [], f"{kind}: {d.notes[-1:]}")
+                if d.relation:
+                    self.assertEqual([x.detail for x in R.relation(d, judged[d.relation[1]], j, drafts[d.relation[1]])], [], kind)
+            refused = [d for d in drafts if (d.extra.get("bind") or {}).get("expect") == "refuse"]
+            for d, j in zip(drafts, judged):
+                if d in refused and j.reached:
+                    self.assertEqual(j.verdict.get("kernel"), "ILL-FORMED", kind)
+
+    def test_the_third_reading_is_not_asked_while_it_is_switched_off(self):
+        with mock.patch.object(readers.Config, "twin", None):
+            j = readers.judge(*pair("lap_unknown"), DECK_TEXT)
+        self.assertNotIn("twin", j.verdict)
 
 
 if __name__ == "__main__":

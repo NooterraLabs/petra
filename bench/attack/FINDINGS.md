@@ -82,6 +82,16 @@ The twelfth review ruled on each of the nine, after an hour of its own on the tr
 
 After the rulings a run of 15 minutes (seed 121, 4 workers) made 903 inputs, 891 of them at the comparison, and kept no difference of any kind. The sweep of missing keys gives the kernel and the clean-room reading the same answer on all 305 files.
 
+## The binding by hash, 2026-11-16
+
+Plan step 1.7 bound the files of a verdict to each other: the card names its deck by hash, deck.json names the same deck, and a deck is read with the record of its acceptance run. The attacker was ported to it and gained the recipe `bind`, sixteen kinds of case against the binding itself ([README.md](README.md) has the table of what each must hold). Ten minutes at seed 22 with the kernel and the Python reader alone, since the clean-room reading was being brought up at the time: 521 inputs, 512 at the comparison, no PASS for a card that names another deck than the one read, no hash or bundle that is not of the files handed over, no crash.
+
+It kept one difference, five times, all of the kind `crlf`. A deck read from a text with CR LF at its line ends was hashed with line feeds, as `export.sha256` hashes every text, and handed to the kernel as it came. So the Python reader took the pair, whose card and run named the hash with line feeds, and the kernel refused it under type rules 9, 10 and 11. No wrong pass could come of it, since the kernel refuses, and the decks that ship are read with line feeds whatever the checkout: only a caller that handed `grid.read_deck` such a text reached it. `grid.read_deck` now takes the text with a line feed at each line end, so the bytes handed over are the bytes that were hashed, and `tests/test_bound.py` holds it. The case is `found/refusal-cec2dd3522`, which no longer reproduces.
+
+Two relations broke in that run by the attacker's own fault: a reordered twin of a binding case was judged with the honest run in place of the case's broken one. Twins keep the case's run now, and a binding case gets no twin.
+
+Six of the kept folders under `found/` are not ported: `findings-0e9f66036c`, `findings-12c7dbcadc`, `findings-25f2e9a8d2`, `findings-1bc20184c4`, `reason-84d4e2a115` and `reason-2a8ca1ed97`. Each keeps a made-up deck that the rules of step 1.6 refuse, a field both signed and optional or an `unless` with no ground, so bringing one up would mean writing its deck again and not only binding it. `doc-hints-and-where-cells` is ported and no longer shows the cells it was kept for, for the same reason.
+
 ## What the attacker is not yet
 
 It does not run the kernel against another kernel, only against the two readings. Its designs for the decks other than the first are written from their fields and not from their rules, so the made-up decks of the benches get fewer passes (5 percent of inputs PASS overall). It does not change a deck's types or its grid beyond dropping a line, and it makes no byte-level changes to the JSON.

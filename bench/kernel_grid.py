@@ -113,7 +113,8 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from petra import grid, verify  # noqa: E402
+from petra import export, grid, verify  # noqa: E402
+from tests import bound  # noqa: E402
 from petra.kernel import Interval, i_cos  # noqa: E402
 from petra.lang import parse_design  # noqa: E402
 from petra.files import ComponentError  # noqa: E402
@@ -1087,9 +1088,10 @@ def _decks() -> dict[str, grid.Deck]:
 
         path = ROOT / "examples" / "deck" / "lap_unknown.petra"
         _STATE["lap"] = next(d for d in grid.decks() if "lap" in d.types)
-        _STATE["strips"] = grid.read_deck(json.dumps(STRIPS))
-        _STATE["ops"] = grid.read_deck(json.dumps(OPS))
-        _STATE["kit"] = grid.read_deck(json.dumps(KIT))
+        # A deck made up here went through no gate, and is bound to a run that says so (tests/bound.py).
+        _STATE["strips"] = bound.read(json.dumps(STRIPS))
+        _STATE["ops"] = bound.read(json.dumps(OPS))
+        _STATE["kit"] = bound.read(json.dumps(KIT))
         _STATE["honest"] = {"lap": (path.with_suffix(".card").read_text(encoding="utf-8"), path.read_text(encoding="utf-8")),
                             # A seed whose bar keeps every need and carries its loads, so that nine of the ten lines its
                             # rules answer are proved or refuted, and a damaged deck has something to change.
@@ -1103,8 +1105,10 @@ def judge(card: str, design: str, name: str, rules: str | None = None, slash: bo
     """What the grid and the kernel make of a pair: an outcome, a line that says what
     differs, what each cell is for a design both checked (its mechanism and state, with
     `split` for a proof whose partition is not one leaf), the files and the kernel's word.
-    The design is read with its own deck. With `rules`, both then check it against that
-    text in place of the deck. With `slash`, the first load case is renamed to hold a `/`
+    The design is read with its own deck, and its card is made to name that deck: a card of
+    this script names none in its text. With `rules`, both then check it against that text
+    in place of the deck, with every file bound to that text as an honest exporter would
+    bind it: the card and deck.json name it, and it has a run made up for it. With `slash`, the first load case is renamed to hold a `/`
     once the language has read it: the language writes no such name, and a card.json can."""
     decks = _decks()
     deck = decks[name.partition("-")[0]]
@@ -1119,10 +1123,17 @@ def judge(card: str, design: str, name: str, rules: str | None = None, slash: bo
             first = next(iter(parsed.loads))
             renamed = {(f"{k}/where" if k == first else k): (dataclasses.replace(v, name=f"{k}/where") if k == first else v) for k, v in parsed.loads.items()}
             parsed = dataclasses.replace(parsed, loads=renamed)
-        files = {**grid.bundle(parsed, deck), **({} if rules is None else {"rules": rules})}
+        parsed = dataclasses.replace(parsed, rules=(deck.name, deck.hash))
+        files = grid.bundle(parsed, deck)
+        if rules is not None:      # what the kernel is asked when the grid refuses the deck: the same pair, bound to the damaged text
+            named = json.loads(files["card"])
+            named["rules"] = bound.pin(rules)
+            files = bound.rebound({**files, "card": export.text(named), "rules": rules})
         report, mine = None, "the design"
         try:
-            deck = deck if rules is None else grid.read_deck(rules)
+            if rules is not None:
+                deck = bound.read(rules)
+                parsed = dataclasses.replace(parsed, rules=(deck.name, deck.hash))
             report, files = grid.check(parsed, deck)
         except grid.DeckError as exc:
             mine, refusal = "the deck", str(exc)

@@ -297,6 +297,7 @@ class Design:
     params: Mapping[str, Param]
     givens: Mapping[str, Bound] = field(default_factory=dict)      # every `given` of the card that is a bound, by its name
     states: Mapping[str, Stated] = field(default_factory=dict)     # every `given ... is ...` of the card, by its name
+    rules: tuple[str, str] | None = None                            # the deck of rules the card names: its name and the hash of its file
 
     @property
     def is_family(self) -> bool:

@@ -1,5 +1,5 @@
 {
- "card": "sha256:10d7c80292031e72ff7f589010de5757bcb0bf3b589ce3f37df4fb9c106e2e0a",
+ "card": "sha256:cead5ac33f87da20b0a2301bbf722323f80a4eeba2e2323ae777b8782c6513be",
  "format": "petra-design/0",
  "name": "lap-splice",
  "params": [],
@@ -129,7 +129,7 @@
     {
      "args": [
       {
-       "text": "oversize"
+       "given": "lap.holes"
       }
      ],
      "field": "holes"
@@ -185,7 +185,7 @@
     {
      "args": [
       {
-       "word": "protected"
+       "given": "lap.surface"
       }
      ],
      "field": "surface"

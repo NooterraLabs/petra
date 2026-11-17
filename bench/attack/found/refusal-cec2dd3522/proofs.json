@@ -1,0 +1,231 @@
+{
+ "cells": [
+  {
+   "entry": "",
+   "mechanism": "lap.tightening",
+   "state": "waived",
+   "subject": "B2"
+  },
+  {
+   "entry": "",
+   "mechanism": "lap.hole_use",
+   "state": "open",
+   "subject": "B2",
+   "why": "the deck has no rule for it"
+  },
+  {
+   "entry": "lap-spacing-centres",
+   "mechanism": "lap.spacing",
+   "partition": "leaf",
+   "rule": "aisc360-22/lap-spacing-centres",
+   "state": "proved",
+   "subject": "B2"
+  },
+  {
+   "entry": "lap-spacing-clear",
+   "mechanism": "lap.spacing",
+   "rule": "aisc360-22/lap-spacing-clear",
+   "state": "open",
+   "subject": "B2",
+   "why": "aisc360-22/table-J3.3 gives no value at what B2 has: no case of the pick holds somewhere in the box"
+  },
+  {
+   "entry": "lap-end-distance-oversize",
+   "mechanism": "lap.end_distance",
+   "rule": "aisc360-22/lap-end-distance-oversize",
+   "state": "open",
+   "subject": "B2",
+   "why": "aisc360-22/table-J3.4 gives no value at what B2 has: no case of the pick holds somewhere in the box"
+  },
+  {
+   "entry": "lap-side-distance-oversize",
+   "mechanism": "lap.side_distance",
+   "rule": "aisc360-22/lap-side-distance-oversize",
+   "state": "open",
+   "subject": "B2",
+   "why": "the waiver does not rest this cell: aisc360-22/table-J3.4 gives no value at what B2 has: no case of the pick holds somewhere in the box"
+  },
+  {
+   "entry": "lap-spread-pitch-weathering",
+   "mechanism": "lap.spread",
+   "point": {
+    "dsg:card_1.B2.pitch": "4191/1250",
+    "dsg:card_1.joint.thickness": "1397/50000",
+    "dsg:card_1.lap_main.thickness": "2286/125"
+   },
+   "rule": "aisc360-22/lap-spread-pitch-weathering",
+   "state": "refuted",
+   "subject": "B2"
+  },
+  {
+   "entry": "",
+   "mechanism": "lap.max_edge_distance",
+   "state": "open",
+   "subject": "B2",
+   "why": "the deck has no rule for it"
+  },
+  {
+   "entry": "lap-strength/storm",
+   "mechanism": "lap.strength",
+   "rule": "aisc360-22/lap-strength",
+   "state": "open",
+   "subject": "B2",
+   "why": "the waiver does not rest this cell: aisc360-22/table-J3.3 gives no value at what B2 has: no case of the pick holds somewhere in the box"
+  },
+  {
+   "entry": "lap-strength/wind",
+   "mechanism": "lap.strength",
+   "rule": "aisc360-22/lap-strength",
+   "state": "open",
+   "subject": "B2",
+   "why": "the waiver does not rest this cell: aisc360-22/table-J3.3 gives no value at what B2 has: no case of the pick holds somewhere in the box"
+  },
+  {
+   "entry": "",
+   "mechanism": "lap.tension_with_shear",
+   "state": "not_applicable",
+   "subject": "B2",
+   "why": "a lap takes one load, a pull along its line, which shears its bolts and puts no tension on them"
+  },
+  {
+   "entry": "",
+   "mechanism": "lap.slip",
+   "state": "not_applicable",
+   "subject": "B2",
+   "why": "slip is asked of a slip-critical joint, and the line of tightening answers whether this joint must be one"
+  },
+  {
+   "entry": "lap-ply-yield-a/storm",
+   "mechanism": "lap.ply_yield",
+   "point": {
+    "dsg:card_1.joint.thickness": "1397/50000",
+    "dsg:card_1.joint.width": "381/250",
+    "in:card_1.joint.Fy": "291/511",
+    "in:card_1.storm.B2.pull": "80067989074689/400000000"
+   },
+   "rule": "aisc360-22/lap-ply-yield-a",
+   "state": "refuted",
+   "subject": "B2"
+  },
+  {
+   "entry": "lap-ply-yield-a/wind",
+   "mechanism": "lap.ply_yield",
+   "point": {
+    "dsg:card_1.joint.thickness": "1397/50000",
+    "dsg:card_1.joint.width": "381/250",
+    "in:card_1.joint.Fy": "291/511",
+    "in:card_1.wind.B2.pull": "8500000/33"
+   },
+   "rule": "aisc360-22/lap-ply-yield-a",
+   "state": "refuted",
+   "subject": "B2"
+  },
+  {
+   "entry": "lap-ply-yield-b/storm",
+   "mechanism": "lap.ply_yield",
+   "partition": "leaf",
+   "rule": "aisc360-22/lap-ply-yield-b",
+   "state": "proved",
+   "subject": "B2"
+  },
+  {
+   "entry": "lap-ply-yield-b/wind",
+   "mechanism": "lap.ply_yield",
+   "partition": "leaf",
+   "rule": "aisc360-22/lap-ply-yield-b",
+   "state": "proved",
+   "subject": "B2"
+  },
+  {
+   "entry": "lap-ply-rupture-a/storm",
+   "mechanism": "lap.ply_rupture",
+   "rule": "aisc360-22/lap-ply-rupture-a",
+   "state": "open",
+   "subject": "B2",
+   "why": "the waiver does not rest this cell: aisc360-22/table-J3.3 gives no value at what B2 has: no case of the pick holds somewhere in the box"
+  },
+  {
+   "entry": "lap-ply-rupture-a/wind",
+   "mechanism": "lap.ply_rupture",
+   "rule": "aisc360-22/lap-ply-rupture-a",
+   "state": "open",
+   "subject": "B2",
+   "why": "the waiver does not rest this cell: aisc360-22/table-J3.3 gives no value at what B2 has: no case of the pick holds somewhere in the box"
+  },
+  {
+   "entry": "lap-ply-rupture-b/storm",
+   "mechanism": "lap.ply_rupture",
+   "rule": "aisc360-22/lap-ply-rupture-b",
+   "state": "open",
+   "subject": "B2",
+   "why": "the waiver does not rest this cell: aisc360-22/table-J3.3 gives no value at what B2 has: no case of the pick holds somewhere in the box"
+  },
+  {
+   "entry": "lap-ply-rupture-b/wind",
+   "mechanism": "lap.ply_rupture",
+   "rule": "aisc360-22/lap-ply-rupture-b",
+   "state": "open",
+   "subject": "B2",
+   "why": "the waiver does not rest this cell: aisc360-22/table-J3.3 gives no value at what B2 has: no case of the pick holds somewhere in the box"
+  },
+  {
+   "entry": "",
+   "mechanism": "lap.ply_shear",
+   "state": "open",
+   "subject": "B2",
+   "why": "it is answered with lap.strength, which is not settled for B2"
+  },
+  {
+   "entry": "lap-block-shear-a/storm",
+   "mechanism": "lap.block_shear",
+   "rule": "aisc360-22/lap-block-shear-a",
+   "state": "open",
+   "subject": "B2",
+   "why": "the waiver does not rest this cell: aisc360-22/table-J3.3 gives no value at what B2 has: no case of the pick holds somewhere in the box"
+  },
+  {
+   "entry": "lap-block-shear-a/wind",
+   "mechanism": "lap.block_shear",
+   "rule": "aisc360-22/lap-block-shear-a",
+   "state": "open",
+   "subject": "B2",
+   "why": "the waiver does not rest this cell: aisc360-22/table-J3.3 gives no value at what B2 has: no case of the pick holds somewhere in the box"
+  },
+  {
+   "entry": "lap-block-shear-b/storm",
+   "mechanism": "lap.block_shear",
+   "rule": "aisc360-22/lap-block-shear-b",
+   "state": "open",
+   "subject": "B2",
+   "why": "the waiver does not rest this cell: aisc360-22/table-J3.3 gives no value at what B2 has: no case of the pick holds somewhere in the box"
+  },
+  {
+   "entry": "lap-block-shear-b/wind",
+   "mechanism": "lap.block_shear",
+   "rule": "aisc360-22/lap-block-shear-b",
+   "state": "open",
+   "subject": "B2",
+   "why": "the waiver does not rest this cell: aisc360-22/table-J3.3 gives no value at what B2 has: no case of the pick holds somewhere in the box"
+  },
+  {
+   "entry": "",
+   "mechanism": "lap.partial_block_shear",
+   "state": "waived",
+   "subject": "B2"
+  },
+  {
+   "entry": "",
+   "mechanism": "lap.ply_compression",
+   "state": "not_applicable",
+   "subject": "B2",
+   "why": "the load on a lap is a pull, which is at least zero on every card"
+  },
+  {
+   "entry": "",
+   "mechanism": "lap.ply_flexure",
+   "state": "waived",
+   "subject": "B2"
+  }
+ ],
+ "format": "petra-proofs/0"
+}

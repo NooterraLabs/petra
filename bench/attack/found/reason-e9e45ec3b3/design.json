@@ -1,5 +1,5 @@
 {
- "card": "sha256:11c1bcc746e0a85a883719845252c5450b7ec22f3f4bfdb9570359c7160cda13",
+ "card": "sha256:58f816d7d36a4a97bb5fb8deac9d9fafd188c0bddd51d2d5d92971778b8a65cc",
  "format": "petra-design/0",
  "name": "attack",
  "params": [],
@@ -21,7 +21,7 @@
     {
      "args": [
       {
-       "word": "high"
+       "given": "B2.finish"
       }
      ],
      "field": "finish"
@@ -55,7 +55,7 @@
     {
      "args": [
       {
-       "word": "high"
+       "given": "Z.finish"
       }
      ],
      "field": "finish"
@@ -125,7 +125,7 @@
     {
      "args": [
       {
-       "word": "hard"
+       "given": "bar.grade"
       }
      ],
      "field": "grade"

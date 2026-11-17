@@ -1,5 +1,5 @@
 {
- "card": "sha256:773041d8e039c3540a7435066f844fbeddc3198e72060ed8fe808e99eb0f97b0",
+ "card": "sha256:917582df50395ea9b551dc8911bbdc67473f551d6ae7e945293d5ab8503d1265",
  "format": "petra-design/0",
  "name": "lap-splice",
  "params": [],
@@ -21,7 +21,7 @@
     {
      "args": [
       {
-       "word": "low"
+       "given": "a_.finish"
       }
      ],
      "field": "finish"
@@ -55,7 +55,7 @@
     {
      "args": [
       {
-       "word": "low"
+       "given": "cap3.finish"
       }
      ],
      "field": "finish"
@@ -121,7 +121,7 @@
     {
      "args": [
       {
-       "word": "hard"
+       "given": "k.grade"
       }
      ],
      "field": "grade"

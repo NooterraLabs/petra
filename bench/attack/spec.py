@@ -113,10 +113,27 @@ class Waiver:
     reason: str = '"attack"'
 
 
+DECK = "the deck it is checked against"
+
+
+def quoted(text: str) -> str:
+    """A text of a card in quotes, with the two escapes a text of a card has."""
+    return '"' + text.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def unquoted(text: str) -> str:
+    """The text a quoted text of a card holds, quotes and escapes taken off."""
+    return re.sub(r"\\(.)", r"\1", text[1:-1])
+
+
 @dataclass
 class Spec:
     card_name: str = "attack"
     owner: str = "t@example.org"
+    rules: tuple[str, str] | str | None = DECK
+    """The deck of rules the card names in its card block (docs/format.md, type rule 9): DECK names
+    the deck the pair is checked against, as its owner would name it, a pair (name, hash) names that
+    deck, and None names none."""
     environment: str | None = None
     parts: list[Part] = field(default_factory=list)
     givens: list[Given] = field(default_factory=list)
@@ -134,10 +151,15 @@ class Spec:
 
     # --- writing
 
-    def card_text(self) -> str:
+    def card_text(self, deck: tuple[str, str] | None = None) -> str:
+        """The card's text. `deck` is the name and the hash of the deck the pair is checked
+        against, which the card names when its `rules` is DECK; with no deck it names none."""
         out = ["petra 0", "", f'card "{self.card_name}" {{', f'  owner "{self.owner}"']
         if self.environment:
             out.append(f"  environment {self.environment}")
+        named = deck if self.rules == DECK else self.rules
+        if named is not None:
+            out.append(f"  rules {quoted(named[0])} {quoted(named[1])}")
         out += ["}", ""]
         for g in self.givens:
             if g.form == "is":
@@ -168,8 +190,8 @@ class Spec:
             out += ["}", ""]
         return "\n".join(out) + "\n"
 
-    def texts(self) -> tuple[str, str]:
-        return self.card_text(), self.design_text()
+    def texts(self, deck: tuple[str, str] | None = None) -> tuple[str, str]:
+        return self.card_text(deck), self.design_text()
 
 
 # --- reading
@@ -198,7 +220,7 @@ _RANGE = re.compile(r"\[\s*([^,\]]+?)\s*,\s*([^\]]+?)\s*\]")
 
 def read(card: str, design: str) -> Spec | None:
     """The spec of a pair of texts, or None when the pair holds something this reading does not keep: a claim, a family, a test."""
-    s = Spec()
+    s = Spec(rules=None)
     lines = [_strip(l) for l in card.splitlines()]
     i = 0
     while i < len(lines):
@@ -212,8 +234,11 @@ def read(card: str, design: str) -> Spec | None:
             while i < len(lines) and lines[i] != "}":
                 o = re.fullmatch(r'owner "((?:[^"\\]|\\.)*)"', lines[i])
                 e = re.fullmatch(r"environment (\S+)", lines[i])
+                r = re.fullmatch(r'rules ("(?:[^"\\]|\\.)*") ("(?:[^"\\]|\\.)*")', lines[i])
                 if o:
                     s.owner = o.group(1)
+                elif r:
+                    s.rules = (unquoted(r.group(1)), unquoted(r.group(2)))
                 elif e:
                     s.environment = e.group(1)
                 elif lines[i]:

@@ -4,7 +4,8 @@ For a design of a deck's types, card.json holds nothing that the design chooses.
 asker can write it from their own card with their own copy of Petra, and compare its hash
 with the `card` hash the kernel prints (docs/format.md, "The asker's card"). These tests
 hold the exporter to that: the file from the card alone is, byte for byte, the file the
-full export writes, for every pair of examples/deck and corpus/cases/deck.
+full export writes, for every pair of examples/deck and corpus/cases/deck that it exports. A
+pair whose card names another deck, or none, is refused before any file is written.
 """
 import contextlib
 import hashlib
@@ -16,7 +17,7 @@ from pathlib import Path
 
 import petra
 from petra import export, grid, verify
-from petra.files import read_pair
+from petra.files import ComponentError, read_pair
 from petra.lang import LoweringError, load_card, load_design
 from petra.pipeline import INPUT_ERRORS
 
@@ -51,7 +52,13 @@ class CardOnly(unittest.TestCase):
                     load_design(design)
                 except INPUT_ERRORS:
                     continue        # the pair does not lower, so no export writes a card for it
-                files = full(design)
+                try:
+                    files = full(design)
+                except ComponentError as refused:
+                    # a card that names another deck, or none, is refused before any file is written (docs/format.md,
+                    # type rule 9), so there is no card.json of the full export to hold the card's alone to
+                    self.assertRegex(str(refused), r": the card names (the deck of rules \S+ \S+, and the deck this Petra has|no deck of rules)")
+                    continue
                 self.assertIn("rules", files, "a pair of these folders is of a deck's types")
                 said, body = alone(design.with_suffix(".card"))
                 self.assertEqual(body, files["card"], "card.json depends on the design")

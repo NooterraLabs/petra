@@ -12,48 +12,65 @@
    "dim": "force",
    "field": "pull",
    "hi": "8086866896543589/40000000000",
+   "kind": "signed",
    "lo": "8086866896543589/40000000000",
    "name": "a.lap.pull",
-   "on": "lap"
+   "on": "lap",
+   "source": "attack"
   },
   {
    "by": "s.engineer@example.org",
    "dim": "stress",
    "hi": "266893296915630/16129",
+   "kind": "signed",
    "lo": "266893296915630/16129",
-   "name": "k.Fu"
+   "name": "k.Fu",
+   "source": "attack"
   },
   {
    "by": "x@y.z",
    "dim": "stress",
    "hi": "80067989074689/322580",
+   "kind": "signed",
    "lo": "80067989074689/322580",
-   "name": "k.Fy"
+   "name": "k.Fy",
+   "source": "attack"
   },
   {
    "by": "t@example.org",
    "dim": "length",
    "hi": "381/2500",
+   "kind": "signed",
    "lo": "381/2500",
-   "name": "k.width"
+   "name": "k.width",
+   "source": "attack"
   },
   {
    "by": "x@y.z",
    "dim": "stress",
    "hi": "97860875535731/12903200",
+   "kind": "signed",
    "lo": "80067989074689/12903200",
-   "name": "p1.Fu"
+   "name": "p1.Fu",
+   "source": "attack"
   },
   {
    "by": "t@example.org",
    "dim": "stress",
    "hi": "80067989074689/322580",
+   "kind": "signed",
    "lo": "80067989074689/322580",
-   "name": "p1.Fy"
+   "name": "p1.Fy",
+   "source": "attack"
   }
  ],
  "name": "card_1",
+ "owner": "t@example.org",
  "probability_claims": [],
+ "rules": {
+  "hash": "sha256:fb92c98c91e26573ff826e9983047dbd19142e2f26b3feb14723329aa6877d94",
+  "name": "aisc360-22"
+ },
  "tests": [],
  "waivers": [
   {

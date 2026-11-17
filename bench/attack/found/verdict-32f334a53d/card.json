@@ -1,1 +1,66 @@
-{"cases": ["gravity"], "claims": [], "environment": null, "format": "petra-card/0", "inputs": [{"by": "s.engineer@example.org", "case": "gravity", "dim": "force", "field": "pull", "hi": "80067989074689/400000000", "lo": "0", "name": "gravity.splice.pull", "on": "splice"}, {"by": "s.engineer@example.org", "dim": "stress", "hi": "257996853685109/645160", "lo": "257996853685109/645160", "name": "strap.Fu"}, {"by": "s.engineer@example.org", "dim": "stress", "hi": "80067989074689/322580", "lo": "80067989074689/322580", "name": "strap.Fy"}, {"by": "s.engineer@example.org", "dim": "stress", "hi": "257996853685109/645160", "lo": "257996853685109/645160", "name": "tab.Fu"}, {"by": "s.engineer@example.org", "dim": "stress", "hi": "80067989074689/322580", "lo": "80067989074689/322580", "name": "tab.Fy"}], "name": "d34_large_bolt", "probability_claims": [], "tests": []}
+{
+ "cases": [
+  "gravity"
+ ],
+ "claims": [],
+ "environment": null,
+ "format": "petra-card/0",
+ "inputs": [
+  {
+   "by": "s.engineer@example.org",
+   "case": "gravity",
+   "dim": "force",
+   "field": "pull",
+   "hi": "80067989074689/400000000",
+   "kind": "signed",
+   "lo": "0",
+   "name": "gravity.splice.pull",
+   "on": "splice",
+   "source": "attack"
+  },
+  {
+   "by": "s.engineer@example.org",
+   "dim": "stress",
+   "hi": "257996853685109/645160",
+   "kind": "signed",
+   "lo": "257996853685109/645160",
+   "name": "strap.Fu",
+   "source": "attack"
+  },
+  {
+   "by": "s.engineer@example.org",
+   "dim": "stress",
+   "hi": "80067989074689/322580",
+   "kind": "signed",
+   "lo": "80067989074689/322580",
+   "name": "strap.Fy",
+   "source": "attack"
+  },
+  {
+   "by": "s.engineer@example.org",
+   "dim": "stress",
+   "hi": "257996853685109/645160",
+   "kind": "signed",
+   "lo": "257996853685109/645160",
+   "name": "tab.Fu",
+   "source": "attack"
+  },
+  {
+   "by": "s.engineer@example.org",
+   "dim": "stress",
+   "hi": "80067989074689/322580",
+   "kind": "signed",
+   "lo": "80067989074689/322580",
+   "name": "tab.Fy",
+   "source": "attack"
+  }
+ ],
+ "name": "d34_large_bolt",
+ "owner": "s.engineer@example.org",
+ "probability_claims": [],
+ "rules": {
+  "hash": "sha256:fb92c98c91e26573ff826e9983047dbd19142e2f26b3feb14723329aa6877d94",
+  "name": "aisc360-22"
+ },
+ "tests": []
+}

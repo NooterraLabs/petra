@@ -19,6 +19,7 @@ import petra
 from petra import export, grid, verify
 from petra.lang import LolaSyntaxError, LoweringError
 from petra.units import LENGTH, Dim, Quantity, UnitError, format_quantity, parse_quantity, quantity_text, readable_text
+from tests import bound
 from tests.test_kernel_attacks3 import empty_card, with_rules
 from tests.test_kernel_grid import ask, findings
 
@@ -139,9 +140,10 @@ def load(case: str, *entries: str) -> str:
 
 
 def parsed(rules: dict, text: str, card: str = HEAD, states: bool = True):
-    """The deck and the pair read against it. With `states`, a key the deck marks `signed` that the design writes as a
+    """The deck, bound to a run made up for it, and the pair read against it, with the card naming the deck (tests/bound.py). With `states`, a key the deck marks `signed` that the design writes as a
     bare name is moved to the card first (`stating`). A test of a design that writes such a key itself turns it off."""
-    deck = grid.read_deck(json.dumps(rules))
+    deck = bound.read(json.dumps(rules))
+    card = bound.card_of(card, deck)
     if states:
         text, card = stating(deck, text, card)
     with mock.patch.object(grid, "decks", lambda: (deck,)):

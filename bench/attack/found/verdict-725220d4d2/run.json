@@ -1,0 +1,454 @@
+{
+ "changed": "the task is made from the deck's rows, types and grid with the ranges, alike and adverse of rules_task2.json; the rules lap-spread-edge-a and lap-spread-edge-b of the second transcription are set aside; the four lines the second transcription excuses are given the deck's grounds",
+ "deck": "sha256:fb92c98c91e26573ff826e9983047dbd19142e2f26b3feb14723329aa6877d94",
+ "format": "petra-run/0",
+ "gate": "petra.rule 1",
+ "inputs": {
+  "rules2_b.json": "sha256:e440d4537cc937c3ac83e2cbc8713b9dfbfe50ee36f35805c852b69ae84b7504",
+  "rules2_examples.json": "sha256:2a24f75145ea5e23f4ad918362614ce1d83263697917355489eb3309b503fed9",
+  "rules_task2.json": "sha256:38236daeba4d2080d5a16a17cd0700a0c10c68c7d3b076cc43c1b4b27acd690a"
+ },
+ "lines": [
+  {
+   "checks": [],
+   "mechanism": "lap.tightening",
+   "note": "the other transcription leaves it out too",
+   "rules": [],
+   "state": "left out"
+  },
+  {
+   "checks": [],
+   "mechanism": "lap.hole_use",
+   "note": "the other transcription leaves it out too",
+   "rules": [],
+   "state": "left out"
+  },
+  {
+   "checks": [
+    {
+     "detail": "2 rules",
+     "name": "units",
+     "outcome": "pass"
+    },
+    {
+     "detail": "1 reproduced",
+     "name": "examples",
+     "outcome": "pass"
+    },
+    {
+     "detail": "96 parts: 51 fails, 42 holds, 3 no value",
+     "name": "reach",
+     "outcome": "pass"
+    },
+    {
+     "detail": "its rules read no load that the task calls adverse",
+     "name": "direction",
+     "outcome": "none"
+    },
+    {
+     "detail": "its rules read no parts that the task calls alike",
+     "name": "alike",
+     "outcome": "none"
+    },
+    {
+     "detail": "132 parts, which hold or fail at 124",
+     "name": "second",
+     "outcome": "pass"
+    }
+   ],
+   "mechanism": "lap.spacing",
+   "note": "",
+   "rules": [
+    "aisc360-22/lap-spacing-centres",
+    "aisc360-22/lap-spacing-clear"
+   ],
+   "state": "admitted"
+  },
+  {
+   "checks": [
+    {
+     "detail": "2 rules",
+     "name": "units",
+     "outcome": "pass"
+    },
+    {
+     "detail": "2 reproduced",
+     "name": "examples",
+     "outcome": "pass"
+    },
+    {
+     "detail": "96 parts: 37 fails, 40 holds, 19 no value",
+     "name": "reach",
+     "outcome": "pass"
+    },
+    {
+     "detail": "its rules read no load that the task calls adverse",
+     "name": "direction",
+     "outcome": "none"
+    },
+    {
+     "detail": "its rules read no parts that the task calls alike",
+     "name": "alike",
+     "outcome": "none"
+    },
+    {
+     "detail": "128 parts, which hold or fail at 102",
+     "name": "second",
+     "outcome": "pass"
+    }
+   ],
+   "mechanism": "lap.end_distance",
+   "note": "",
+   "rules": [
+    "aisc360-22/lap-end-distance-standard",
+    "aisc360-22/lap-end-distance-oversize"
+   ],
+   "state": "admitted"
+  },
+  {
+   "checks": [
+    {
+     "detail": "2 rules",
+     "name": "units",
+     "outcome": "pass"
+    },
+    {
+     "detail": "no worked example",
+     "name": "examples",
+     "outcome": "none"
+    },
+    {
+     "detail": "96 parts: 27 fails, 49 holds, 20 no value",
+     "name": "reach",
+     "outcome": "pass"
+    },
+    {
+     "detail": "its rules read no load that the task calls adverse",
+     "name": "direction",
+     "outcome": "none"
+    },
+    {
+     "detail": "its rules read no parts that the task calls alike",
+     "name": "alike",
+     "outcome": "none"
+    },
+    {
+     "detail": "128 parts, which hold or fail at 101",
+     "name": "second",
+     "outcome": "pass"
+    }
+   ],
+   "mechanism": "lap.side_distance",
+   "note": "",
+   "rules": [
+    "aisc360-22/lap-side-distance-standard",
+    "aisc360-22/lap-side-distance-oversize"
+   ],
+   "state": "admitted"
+  },
+  {
+   "checks": [
+    {
+     "detail": "2 rules",
+     "name": "units",
+     "outcome": "pass"
+    },
+    {
+     "detail": "no worked example",
+     "name": "examples",
+     "outcome": "none"
+    },
+    {
+     "detail": "96 parts: 20 fails, 76 holds",
+     "name": "reach",
+     "outcome": "pass"
+    },
+    {
+     "detail": "its rules read no load that the task calls adverse",
+     "name": "direction",
+     "outcome": "none"
+    },
+    {
+     "detail": "a and b changed places at 32 parts",
+     "name": "alike",
+     "outcome": "pass"
+    },
+    {
+     "detail": "128 parts, which hold or fail at 128",
+     "name": "second",
+     "outcome": "pass"
+    }
+   ],
+   "mechanism": "lap.spread",
+   "note": "",
+   "rules": [
+    "aisc360-22/lap-spread-pitch-protected",
+    "aisc360-22/lap-spread-pitch-weathering"
+   ],
+   "state": "admitted"
+  },
+  {
+   "checks": [],
+   "mechanism": "lap.max_edge_distance",
+   "note": "the other transcription leaves it out too",
+   "rules": [],
+   "state": "left out"
+  },
+  {
+   "checks": [
+    {
+     "detail": "1 rule",
+     "name": "units",
+     "outcome": "pass"
+    },
+    {
+     "detail": "2 reproduced",
+     "name": "examples",
+     "outcome": "pass"
+    },
+    {
+     "detail": "aisc360-22/lap-strength: \"bearing_b\" never decides its min in let end_b; 96 parts: 37 fails, 43 holds, 16 no value; widen the task's ranges to see these",
+     "name": "reach",
+     "outcome": "none"
+    },
+    {
+     "detail": "more pull turned no failing part into a holding one, at 27 parts",
+     "name": "direction",
+     "outcome": "pass"
+    },
+    {
+     "detail": "a and b changed places at 32 parts",
+     "name": "alike",
+     "outcome": "pass"
+    },
+    {
+     "detail": "144 parts, which hold or fail at 119",
+     "name": "second",
+     "outcome": "pass"
+    }
+   ],
+   "mechanism": "lap.strength",
+   "note": "",
+   "rules": [
+    "aisc360-22/lap-strength"
+   ],
+   "state": "admitted"
+  },
+  {
+   "checks": [
+    {
+     "detail": "0 rules, and an `unless`",
+     "name": "units",
+     "outcome": "pass"
+    },
+    {
+     "detail": "128 parts",
+     "name": "second",
+     "outcome": "pass"
+    }
+   ],
+   "mechanism": "lap.tension_with_shear",
+   "note": "cannot arise: a lap takes one load, a pull along its line, which shears its bolts and puts no tension on them",
+   "rules": [],
+   "state": "admitted"
+  },
+  {
+   "checks": [
+    {
+     "detail": "0 rules, and an `unless`",
+     "name": "units",
+     "outcome": "pass"
+    },
+    {
+     "detail": "128 parts",
+     "name": "second",
+     "outcome": "pass"
+    }
+   ],
+   "mechanism": "lap.slip",
+   "note": "cannot arise: slip is asked of a slip-critical joint, and the line of tightening answers whether this joint must be one",
+   "rules": [],
+   "state": "admitted"
+  },
+  {
+   "checks": [
+    {
+     "detail": "2 rules",
+     "name": "units",
+     "outcome": "pass"
+    },
+    {
+     "detail": "1 reproduced",
+     "name": "examples",
+     "outcome": "pass"
+    },
+    {
+     "detail": "96 parts: 30 fails, 66 holds",
+     "name": "reach",
+     "outcome": "pass"
+    },
+    {
+     "detail": "more pull turned no failing part into a holding one, at 32 parts",
+     "name": "direction",
+     "outcome": "pass"
+    },
+    {
+     "detail": "a and b changed places at 32 parts",
+     "name": "alike",
+     "outcome": "pass"
+    },
+    {
+     "detail": "128 parts, which hold or fail at 128",
+     "name": "second",
+     "outcome": "pass"
+    }
+   ],
+   "mechanism": "lap.ply_yield",
+   "note": "",
+   "rules": [
+    "aisc360-22/lap-ply-yield-a",
+    "aisc360-22/lap-ply-yield-b"
+   ],
+   "state": "admitted"
+  },
+  {
+   "checks": [
+    {
+     "detail": "2 rules",
+     "name": "units",
+     "outcome": "pass"
+    },
+    {
+     "detail": "1 reproduced",
+     "name": "examples",
+     "outcome": "pass"
+    },
+    {
+     "detail": "96 parts: 33 fails, 54 holds, 9 no value",
+     "name": "reach",
+     "outcome": "pass"
+    },
+    {
+     "detail": "more pull turned no failing part into a holding one, at 28 parts",
+     "name": "direction",
+     "outcome": "pass"
+    },
+    {
+     "detail": "a and b changed places at 32 parts",
+     "name": "alike",
+     "outcome": "pass"
+    },
+    {
+     "detail": "128 parts, which hold or fail at 115",
+     "name": "second",
+     "outcome": "pass"
+    }
+   ],
+   "mechanism": "lap.ply_rupture",
+   "note": "",
+   "rules": [
+    "aisc360-22/lap-ply-rupture-a",
+    "aisc360-22/lap-ply-rupture-b"
+   ],
+   "state": "admitted"
+  },
+  {
+   "checks": [
+    {
+     "detail": "0 rules, and an `unless`",
+     "name": "units",
+     "outcome": "pass"
+    },
+    {
+     "detail": "128 parts",
+     "name": "second",
+     "outcome": "pass"
+    }
+   ],
+   "mechanism": "lap.ply_shear",
+   "note": "cannot arise: the plates of a lap are pulled along its line, and shear on their planes beside the bolts is tearout and block shear, which those lines answer",
+   "rules": [],
+   "state": "admitted"
+  },
+  {
+   "checks": [
+    {
+     "detail": "2 rules",
+     "name": "units",
+     "outcome": "pass"
+    },
+    {
+     "detail": "1 reproduced",
+     "name": "examples",
+     "outcome": "pass"
+    },
+    {
+     "detail": "96 parts: 26 fails, 59 holds, 11 no value",
+     "name": "reach",
+     "outcome": "pass"
+    },
+    {
+     "detail": "more pull turned no failing part into a holding one, at 29 parts",
+     "name": "direction",
+     "outcome": "pass"
+    },
+    {
+     "detail": "a and b changed places at 32 parts",
+     "name": "alike",
+     "outcome": "pass"
+    },
+    {
+     "detail": "128 parts, which hold or fail at 114",
+     "name": "second",
+     "outcome": "pass"
+    }
+   ],
+   "mechanism": "lap.block_shear",
+   "note": "",
+   "rules": [
+    "aisc360-22/lap-block-shear-a",
+    "aisc360-22/lap-block-shear-b"
+   ],
+   "state": "admitted"
+  },
+  {
+   "checks": [],
+   "mechanism": "lap.partial_block_shear",
+   "note": "the other transcription leaves it out too",
+   "rules": [],
+   "state": "left out"
+  },
+  {
+   "checks": [
+    {
+     "detail": "0 rules, and an `unless`",
+     "name": "units",
+     "outcome": "pass"
+    },
+    {
+     "detail": "128 parts",
+     "name": "second",
+     "outcome": "pass"
+    }
+   ],
+   "mechanism": "lap.ply_compression",
+   "note": "cannot arise: the load on a lap is a pull, which is at least zero on every card",
+   "rules": [],
+   "state": "admitted"
+  },
+  {
+   "checks": [],
+   "mechanism": "lap.ply_flexure",
+   "note": "the other transcription leaves it out too",
+   "rules": [],
+   "state": "left out"
+  }
+ ],
+ "seed": 0,
+ "stray": [],
+ "whole": {
+  "detail": "every field and every load is read",
+  "name": "reads",
+  "outcome": "pass"
+ }
+}

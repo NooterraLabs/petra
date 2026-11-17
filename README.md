@@ -1,6 +1,6 @@
 # Petra
 
-Petra checks a physical design against what was asked of it. A card is a short file that states the loads and the bounds, each with who signs it. A design is a short `.petra` file that describes the parts, and it cannot change the card. Petra answers pass, fail or unknown. The answer is the verdict of a small kernel, which reads a deck of rules and works out every check itself in exact arithmetic.
+Petra checks a physical design against what was asked of it. A card is a short file that states the loads and the bounds, each with who signs it, and names the deck of rules by its hash. A design is a short `.petra` file that describes the parts, and it cannot change the card. Petra answers pass, fail or unknown. The answer is the verdict of a small kernel, which reads a deck of rules and works out every check itself in exact arithmetic.
 
 The kernel passes a design only against a deck of rules. One deck ships today, for a bolted lap splice of two steel plates. A design of any other kind of part reads unknown, and the report says that no deck has its kind.
 

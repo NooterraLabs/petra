@@ -11,15 +11,19 @@
    "by": "t@example.org",
    "dim": "temperature",
    "hi": "1001/8",
+   "kind": "signed",
    "lo": "1001/10",
-   "name": "ab.T"
+   "name": "ab.T",
+   "source": "attack"
   },
   {
    "by": "s.engineer@example.org",
    "dim": "length",
    "hi": "3/1000",
+   "kind": "signed",
    "lo": "3/1000",
-   "name": "ab.gap"
+   "name": "ab.gap",
+   "source": "attack"
   },
   {
    "by": "x@y.z",
@@ -27,23 +31,29 @@
    "dim": "current",
    "field": "current",
    "hi": "2844/937",
+   "kind": "signed",
    "lo": "2844/937",
    "name": "seismic.ab.current",
-   "on": "ab"
+   "on": "ab",
+   "source": "attack"
   },
   {
    "by": "t@example.org",
    "dim": "temperature",
    "hi": "999/25",
+   "kind": "signed",
    "lo": "999/25",
-   "name": "strip.T"
+   "name": "strip.T",
+   "source": "attack"
   },
   {
    "by": "t@example.org",
    "dim": "length",
    "hi": "3/500",
+   "kind": "signed",
    "lo": "3/500",
-   "name": "strip.gap"
+   "name": "strip.gap",
+   "source": "attack"
   },
   {
    "by": "a.b@c.d",
@@ -51,13 +61,20 @@
    "dim": "current",
    "field": "current",
    "hi": "6583/855000000",
+   "kind": "signed",
    "lo": "0",
    "name": "wind.ab.current",
-   "on": "ab"
+   "on": "ab",
+   "source": "attack"
   }
  ],
  "name": "card_1",
+ "owner": "t@example.org",
  "probability_claims": [],
+ "rules": {
+  "hash": "sha256:340365acb255ab24b69b380a3af33298056db72aa1b47c4bbb185157e584cddc",
+  "name": "test-strips"
+ },
  "tests": [],
  "waivers": [
   {

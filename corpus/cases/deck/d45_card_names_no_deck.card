@@ -1,0 +1,24 @@
+petra 0
+
+card "d45_card_names_no_deck" {
+  owner "s.engineer@example.org"
+  # pin kept as written: this card names no deck of rules, and it is the case that it does not
+}
+
+given tab.Fy in [36 ksi, 36 ksi] signed "s.engineer@example.org" source "ASTM A36, specified minimum"
+given tab.Fu in [58 ksi, 58 ksi] signed "s.engineer@example.org" source "ASTM A36, specified minimum"
+given strap.Fy in [36 ksi, 36 ksi] signed "s.engineer@example.org" source "ASTM A36, specified minimum"
+given strap.Fu in [58 ksi, 58 ksi] signed "s.engineer@example.org" source "ASTM A36, specified minimum"
+given splice.holes is standard signed "s.engineer@example.org" source "connection drawing, hole schedule"
+given splice.surface is protected signed "s.engineer@example.org" source "connection drawing, coating note"
+
+load gravity {
+  on splice pull in [0 kip, 45 kip]
+  signed "s.engineer@example.org" source "calculation C-12, LRFD combination 1.2D + 1.6L"
+}
+
+waive lap.tightening on splice by "s.engineer@example.org" reason "snug-tight bolts: a bearing-type joint under static load, J3.2 (a)(1)"
+waive lap.hole_use on splice by "s.engineer@example.org" reason "standard holes, which J3.3 allows in every joint"
+waive lap.max_edge_distance on splice by "s.engineer@example.org" reason "no hole is over 3 inch from the nearest edge of either plate, and J3.6 allows 12 thicknesses, 4.5 inch"
+waive lap.ply_flexure on splice by "s.engineer@example.org" reason "the members the plates belong to hold them against rotation"
+waive lap.partial_block_shear on splice by "s.engineer@example.org" reason "the corner of each plate at its end bolt holds its share of the pull, by Equation J4-5"

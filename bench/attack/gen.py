@@ -676,11 +676,12 @@ def probe_factory(deck_text: str):
     from petra.lang import parse_design
     from petra.files import ComponentError
     from petra.pipeline import INPUT_ERRORS
-    deck = grid.read_deck(deck_text)
+    from .bind import run_for
+    deck = grid.read_deck(deck_text, run_for(deck_text))
 
     def probe(spec: Spec):
         from .readers import Timeout, alarm
-        card, design = spec.texts()
+        card, design = spec.texts((deck.name, deck.hash))
         with mock.patch.object(grid, "decks", lambda: (deck,)):
             try:
                 with alarm(4):

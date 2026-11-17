@@ -2,13 +2,13 @@ petra 0
 
 cap cap2 {
   t given cap2.t
-  finish low
+  finish given cap2.finish
   i 75000000/260144641 inch^4
 }
 
 cap Z {
   t 10 mm
-  finish high
+  finish given Z.finish
   i 1120 mm^4
 }
 
@@ -17,7 +17,7 @@ bar bar {
   b 350/867 mm
   r given bar.r
   s 1071249151376222108200382238767/1980704062856608439838598758400
-  grade hard
+  grade given bar.grade
   caps cap2 Z
 }
 

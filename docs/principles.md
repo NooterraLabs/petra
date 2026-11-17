@@ -27,6 +27,7 @@ A deck is data: rows, types, a grid and rules ([deck.md](deck.md)). Every false 
 | D5 | Units are fixed at the boundary. A quantity is parsed with its unit and stored exactly in SI. | Unit errors are among the classic engineering failures | `tests/test_units.py` |
 | D6 | Only the card states a load, a signed bound or a waiver. | A design must not change what is asked of it | `tests/test_lang.py`, `tests/test_cli.py` |
 | D7 | A waiver rests only a cell that the deck has no rule for, or one that holds under a completion of what is left out. It never rests a refuted cell. | A signature is not a proof | The kernel, and `tests/test_kernel_attacks7.py` |
+| D8 | A card names its deck by the hash of the deck's file, and a deck is read only with the record of its acceptance run, which names the same hash. | A deck edited after its run, or other than the one the card's owner asked for, must not check a design | The kernel, and `tests/test_bound.py` |
 
 ## 3. Evidence that the code is right
 

@@ -7,15 +7,19 @@ took the first transcription's rules, and the 14 rows of a3.json that those rule
 
 The first class holds the deck to those files, so that an edit of a rule or a row in one
 place alone fails. The second runs the acceptance check of petra/rule.py on the deck
-itself: its rules must reproduce the worked examples, and the second transcription must
-give every sampled part the same answer on every line both answer.
+itself, as bench/formalizer/bound.py runs it: its rules must reproduce the worked examples,
+and the second transcription must give every sampled part the same answer on every line
+both answer. The third holds the record of that run, which ships beside the deck and binds
+it (docs/deck.md, "The run a deck is bound to"), to the run as it is now.
 """
-import copy
 import json
+import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
-from petra import grid, rule
+from bench.formalizer import bound as acceptance
+from petra import export, grid, rule
 from petra.kernel import Interval
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -36,24 +40,6 @@ def read(name: str) -> dict:
 
 def shipped() -> dict:
     return json.loads((grid.DECKS / "aisc360.json").read_text(encoding="utf-8"))
-
-
-def task_of(deck: dict) -> dict:
-    """The task of the second run, made from the deck: the deck's rows, its types with the
-    ranges, `alike` and `adverse` that rules_task2.json gives them, and its grid with no
-    `unless`. rules_task2.json no longer loads as it stands: it names the deck and a3.json
-    for its rows, and the deck now holds the rows of a3.json, so each would be there twice.
-    The name is that task's, because the check samples its parts by it."""
-    asked = read("rules_task2.json")
-    types = copy.deepcopy(deck["types"])
-    for kind, given in zip(types, asked["types"], strict=True):
-        sampled = {f["name"]: f for f in (*given["fields"], *given.get("loads", []))}
-        for f in (*kind["fields"], *kind.get("loads", [])):
-            f.update({key: sampled[f["name"]][key] for key in ("range", "adverse") if key in sampled[f["name"]]})
-        if "alike" in given:
-            kind["alike"] = given["alike"]
-    return {"format": rule.TASK, "name": asked["name"], "about": "The lap of the deck that ships, with the ranges of bench/formalizer/rules_task2.json.",
-            "rows": deck["rows"], "types": types, "asks": [{k: v for k, v in a.items() if k != "unless"} for a in deck["grid"]]}
 
 
 class FromTheFiles(unittest.TestCase):
@@ -137,23 +123,23 @@ class FromThePage(unittest.TestCase):
     Both transcribers said of four lines that they cannot arise, each with a reason and no ground, as an `unless` was then.
     An `unless` has a ground that the readers check now, and the deck's four were given theirs by hand, as lines of a grid
     are. So this test gives the second transcription's four the deck's grounds before it compares, here and not in
-    rules2_b.json: as it was handed in it does not load on those lines, which the last test holds."""
+    rules2_b.json: as it was handed in it does not load on those lines, which the last test holds.
 
-    SET_ASIDE = ("lap-spread-edge-a", "lap-spread-edge-b")
+    The run is bench/formalizer/bound.py's `Run`, the one whose record ships beside the deck, so the run this class checks
+    is the run that record is written from."""
+
+    SET_ASIDE = acceptance.SET_ASIDE
 
     @classmethod
     def setUpClass(cls):
-        cls.deck = shipped()
-        cls.task = rule.read_task(task_of(cls.deck))
-        cls.first = rule.Reading(cls.task, rule.read_transcription(cls.deck))
+        cls.text = (grid.DECKS / "aisc360.json").read_text(encoding="utf-8")
+        cls.ran = acceptance.Run(cls.text)
+        cls.deck, cls.task, cls.first, cls.other, cls.grounds, cls.examples = cls.ran.deck, cls.ran.task, cls.ran.first, cls.ran.other, cls.ran.grounds, cls.ran.examples
         handed_in = read("rules2_b.json")
         assert sorted(r["id"] for r in handed_in["rules"] if r["id"] in cls.SET_ASIDE) == sorted(cls.SET_ASIDE)
-        cls.grounds = {a["mechanism"]: {k: v for k, v in a["unless"].items() if k != "why"} for a in cls.deck["grid"] if "unless" in a}
         assert sorted(u["mechanism"] for u in handed_in["unless"]) == sorted(CANNOT_ARISE) and all(set(u) == {"mechanism", "why"} for u in handed_in["unless"])
-        excused = [{**u, **cls.grounds[u["mechanism"]]} for u in handed_in["unless"]]
-        cls.other = rule.Reading(cls.task, rule.read_transcription({**handed_in, "rules": [r for r in handed_in["rules"] if r["id"] not in cls.SET_ASIDE], "unless": excused}))
-        cls.examples = {m: [rule.worked(e, cls.task, m) for e in found] for m, found in read("rules2_examples.json")["examples"].items()}
-        cls.lines, cls.whole = rule.accept(cls.first, cls.examples, cls.other)
+        assert cls.ran.handed_in == handed_in, "the run reads rules2_b.json as it was handed in"
+        cls.lines, cls.whole = cls.ran.lines, cls.ran.whole
         cls.by = {line.mechanism: line for line in cls.lines}
 
     def check(self, mechanism: str, name: str) -> rule.Check:
@@ -236,6 +222,55 @@ class FromThePage(unittest.TestCase):
                         self.assertTrue(isinstance(a, str) or rule._lifted(a) == b, (found.id, a, b))
                     compared += 1
         self.assertGreater(compared, 250)
+
+
+class TheRunBesideTheDeck(unittest.TestCase):
+    """petra/decks/aisc360.run.json, the record of the run of FromThePage, which a reader reads the deck with."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.text = (grid.DECKS / "aisc360.json").read_text(encoding="utf-8")
+        cls.beside = grid.DECKS / "aisc360.run.json"
+
+    def test_the_file_beside_the_deck_is_the_record_of_the_run_as_it_is_now(self):
+        self.assertEqual(self.beside.read_bytes(), acceptance.Run(self.text).record().encode("utf-8"),
+                         "byte for byte: python -m bench.formalizer.bound writes it again after any change to the deck or to what the run reads")
+
+    def test_it_names_the_hash_of_the_deck(self):
+        run = json.loads(self.beside.read_text(encoding="utf-8"))
+        (deck,) = [d for d in grid.decks() if d.name == "aisc360-22"]
+        self.assertEqual((run["format"], run["deck"], run["gate"]), (grid.RUN, export.sha256(self.text), rule.GATE))
+        self.assertEqual((deck.hash, deck.run), (run["deck"], self.beside.read_text(encoding="utf-8")), "the deck that ships is read with it")
+
+    def decks_in(self, files: dict[str, str]):
+        """What grid.decks makes of a folder that holds these files, with its cache cleared before and after."""
+        with tempfile.TemporaryDirectory() as tmp:
+            for name, text in files.items():
+                Path(tmp, name).write_text(text, encoding="utf-8", newline="\n")
+            grid.decks.cache_clear()
+            try:
+                with mock.patch.object(grid, "DECKS", Path(tmp)):
+                    return grid.decks()
+            finally:
+                grid.decks.cache_clear()
+
+    def test_a_folder_of_the_deck_and_its_run_is_read(self):
+        self.assertEqual([d.name for d in self.decks_in({"aisc360.json": self.text, "aisc360.run.json": self.beside.read_text(encoding="utf-8")})], ["aisc360-22"])
+
+    def test_a_deck_with_no_run_beside_it_is_refused(self):
+        with self.assertRaises(grid.DeckError) as refused:
+            self.decks_in({"aisc360.json": self.text})
+        self.assertEqual(str(refused.exception), f"aisc360.json: {grid.NO_RUN}, and aisc360.run.json is not beside it")
+
+    def test_a_deck_edited_by_one_character_is_refused_with_the_run_of_the_deck_before_it(self):
+        about = json.loads(self.text)["about"]
+        at = self.text.index(about)
+        edited = self.text[:at] + ("r" if about[0] != "r" else "s") + self.text[at + 1:]
+        self.assertEqual((len(edited), sum(a != b for a, b in zip(edited, self.text))), (len(self.text), 1))
+        self.assertEqual(grid.read_deck(edited).name, "aisc360-22", "the edited deck reads on its own")
+        with self.assertRaises(grid.DeckError) as refused:
+            self.decks_in({"aisc360.json": edited, "aisc360.run.json": self.beside.read_text(encoding="utf-8")})
+        self.assertEqual(str(refused.exception), f"aisc360.json: run: deck is not the hash of the deck of rules, {export.sha256(edited)}")
 
 
 if __name__ == "__main__":

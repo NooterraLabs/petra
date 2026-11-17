@@ -10,15 +10,19 @@
    "by": "s.engineer@example.org",
    "dim": "m^4",
    "hi": "1/1000000000",
+   "kind": "signed",
    "lo": "1/1000000000",
-   "name": "B2.i"
+   "name": "B2.i",
+   "source": "attack"
   },
   {
    "by": "t@example.org",
    "dim": "dimensionless",
    "hi": "16/5",
+   "kind": "signed",
    "lo": "16/5",
-   "name": "bar.r"
+   "name": "bar.r",
+   "source": "attack"
   },
   {
    "by": "x@y.z",
@@ -26,9 +30,11 @@
    "dim": "force",
    "field": "press",
    "hi": "8292500/1071",
+   "kind": "signed",
    "lo": "0",
    "name": "dead.B2.press",
-   "on": "B2"
+   "on": "B2",
+   "source": "attack"
   },
   {
    "by": "x@y.z",
@@ -36,9 +42,11 @@
    "dim": "force",
    "field": "push",
    "hi": "5850",
+   "kind": "signed",
    "lo": "0",
    "name": "dead.bar.push",
-   "on": "bar"
+   "on": "bar",
+   "source": "attack"
   },
   {
    "by": "x@y.z",
@@ -46,13 +54,43 @@
    "dim": "energy",
    "field": "twist",
    "hi": "1586/105",
+   "kind": "signed",
    "lo": "8723/7000",
    "name": "dead.bar.twist",
-   "on": "bar"
+   "on": "bar",
+   "source": "attack"
   }
  ],
  "name": "attack",
+ "owner": "s.engineer@example.org",
  "probability_claims": [],
+ "rules": {
+  "hash": "sha256:3c46a258a5e32aea24e2ef9becfd535895736fc804e98875d3c057f2e0e94221",
+  "name": "bench-ops"
+ },
+ "states": [
+  {
+   "by": "s.engineer@example.org",
+   "key": "high",
+   "kind": "signed",
+   "name": "B2.finish",
+   "source": "attack"
+  },
+  {
+   "by": "s.engineer@example.org",
+   "key": "high",
+   "kind": "signed",
+   "name": "Z.finish",
+   "source": "attack"
+  },
+  {
+   "by": "s.engineer@example.org",
+   "key": "hard",
+   "kind": "signed",
+   "name": "bar.grade",
+   "source": "attack"
+  }
+ ],
  "tests": [],
  "waivers": [
   {

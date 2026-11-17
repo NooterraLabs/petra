@@ -36,6 +36,7 @@ from fractions import Fraction
 from pathlib import Path
 
 from petra import export, verify
+from tests import bound
 from tests.test_kernel_attacks import export_lap, run_raw
 from tests.test_kernel_limits import old_path
 
@@ -224,13 +225,16 @@ class Output(unittest.TestCase):
                  "grid": [{"type": "t", "mechanism": name("m", k), "what": "w", "anchor": anchor} for k in range(100)],
                  "rules": [{"id": "r/" + name("i", k, 62), "type": "t", "mechanism": name("m", k), "anchor": anchor, "says": "s",
                             "le": [["add"] + [["load", n] for n in loads], "x"]} for k in range(100)]}
-        card = export.text({"format": "petra-card/0", "name": "c", "environment": None, "cases": [], "inputs": [], "claims": [],
-                            "waivers": [], "tests": [], "probability_claims": []})
+        card = export.text(bound.card_json({"format": "petra-card/0", "name": "c", "environment": None, "cases": [], "inputs": [], "claims": [],
+                                            "waivers": [], "tests": [], "probability_claims": []}))
         parts = [{"name": name("p", i), "type": "t", "lines": [{"field": "x", "args": [{"number": {"dim": "force", "lo": "1", "hi": "1"}}]}]}
                  for i in range(100)]
         design = {"format": "petra-design/0", "name": "c", "card": export.sha256(card), "quantities": [], "params": [], "parts": parts}
-        files = {"card": card, "design": json.dumps(design, separators=(",", ":")), "deck": export_lap("lap_pass")["deck"],
-                 "rules": json.dumps(rules, separators=(",", ":")), "proofs": '{"format":"petra-proofs/0","cells":[]}'}
+        # The card, deck.json and the run name the deck of rules (tests/bound.py), as an honest exporter binds them.
+        files = bound.rebound({"card": card, "design": json.dumps(design, separators=(",", ":")), "deck": export_lap("lap_pass")["deck"],
+                               "rules": json.dumps(rules, separators=(",", ":")), "proofs": '{"format":"petra-proofs/0","cells":[]}'},
+                              lambda body: json.dumps(body, separators=(",", ":")))
+        self.assertEqual(verify.ask(verify.binary(), files)["findings"], [], "the files are well formed")
         self.assertLess(total(files), 100_000)
         _, out = run_raw(files, timeout=120)
         self.assertEqual(len(json.loads(out)["cells"]), 10_000)

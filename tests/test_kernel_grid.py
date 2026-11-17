@@ -24,6 +24,7 @@ import petra
 from petra import export, grid, verify
 from petra.files import read_pair
 from petra.units import CUSTOMARY, UNITS
+from tests import bound
 from tests.test_grid import CARD, DESIGN, STRIPS, UNKNOWN_KEYS
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -33,11 +34,12 @@ OVER = CARD.replace("[0 A, 2 A]", "[0 A, 2.01 A]")
 
 
 def strips(card: str = CARD, design: str = DESIGN, rules: dict = STRIPS) -> dict[str, str]:
-    """The files of the pair against the test deck: with the grid's hints when the grid
-    checks the design, and as written when it refuses it."""
-    deck = grid.read_deck(json.dumps(rules))
+    """The files of the pair against the test deck, bound to a run made up for it and named by
+    the card (tests/bound.py): with the grid's hints when the grid checks the design, and as
+    written when it refuses it."""
+    deck = bound.read(json.dumps(rules))
     with mock.patch.object(grid, "decks", lambda: (deck,)):
-        parsed = petra.lang.parse_design(card, design, "strips.petra")
+        parsed = petra.lang.parse_design(bound.card_of(card, deck), design, "strips.petra")
         try:
             return grid.check(parsed, deck)[1]
         except grid.ComponentError:
@@ -169,17 +171,19 @@ class Exported(Kernel):
             return {p.stem: p.read_bytes().decode("utf-8") for p in sorted(Path(tmp).iterdir())}
 
     def test_the_export_writes_the_decks_own_file_beside_the_other_four(self):
+        """And the file of the run the deck is bound to, as it ships beside the deck."""
         files = self.exported(ROOT / "examples" / "deck" / "lap_pass.petra")
-        self.assertEqual(sorted(files), ["card", "deck", "design", "proofs", "rules"])
+        self.assertEqual(sorted(files), ["card", "deck", "design", "proofs", "rules", "run"])
         shipped = (grid.DECKS / "aisc360.json").read_bytes().decode("utf-8").replace("\r\n", "\n")
         self.assertEqual(files["rules"], shipped, "the file as it ships, with the line ends of the repository")
+        self.assertEqual(files["run"], (grid.DECKS / "aisc360.run.json").read_bytes().decode("utf-8").replace("\r\n", "\n"), "and so is its run")
         said = ask(files)
         self.assertEqual((said["verdict"], said["hashes"]["rules"]), ("PASS", next(d for d in grid.decks() if "lap" in d.types).hash))
         self.assertEqual(json.loads(files["deck"])["rules"]["hash"], said["hashes"]["rules"], "deck.json names the same deck of rules")
 
     def test_without_physics_a_design_the_grid_refuses_is_written_for_the_kernel_to_refuse(self):
         files = self.exported(ROOT / "corpus" / "cases" / "deck" / "d05_swapped_given.petra", physics=False)
-        self.assertEqual(sorted(files), ["card", "deck", "design", "rules"])
+        self.assertEqual(sorted(files), ["card", "deck", "design", "rules", "run"])
         self.assertIllFormed(files, "parts.3 design tab.Fy: reads the given tab.Fu, and a part reads only the bound the card gives for it, tab.Fy")
         with self.assertRaises(grid.ComponentError):
             self.exported(ROOT / "corpus" / "cases" / "deck" / "d05_swapped_given.petra")
@@ -352,6 +356,9 @@ class ChangedDesign(Kernel):
         self.assertIllFormed(strips(card=CARD.replace("load run", more), design=DESIGN + "\nstrip r {" + second), "parts.5 design p1: is joined more than once")
 
     def test_a_design_with_parts_and_no_rules_is_ill_formed(self):
+        """And a design with no parts against a deck of rules has no cell. Since a card names its deck (type rules 9 and 10),
+        such a pair is ill formed whatever its marks: with `rules` in the card and in deck.json they are marks of a design with
+        parts (type rule 7), and without them the deck is named by nothing."""
         files = strips()
         self.assertIllFormed(files, "types.6 design parts: a design with parts is checked against a deck of rules", without=("rules",))
         self.assertIllFormed(files, "types.6 design parts", without=("rules", "proofs"))
@@ -360,8 +367,11 @@ class ChangedDesign(Kernel):
         self.assertIllFormed(bare, "parts.6 card s.gap: is no load, and no part reads it")
         nothing = changed(changed(bare, "card", lambda b: b.update(inputs=[], waivers=[], cases=[], states=[])), "proofs", lambda b: b.update(cells=[]))
         self.assertIllFormed(nothing, "types.7 card tests: is a key of the card, which only a design checked against a deck of rules has, and the design has no parts")
-        unmarked = changed(changed(nothing, "card", lambda b: [b.pop("tests"), b.pop("probability_claims"), b.pop("states")]), "deck", lambda b: b.pop("rules"))
-        self.assertEqual((ask(unmarked)["verdict"], ask(unmarked)["cells"]), ("UNKNOWN", []), "with no part there is no cell, and nothing is proved")
+        self.assertIllFormed(nothing, "types.7 card rules: is a key of the card, which only a design checked against a deck of rules has, and the design has no parts")
+        unmarked = changed(changed(nothing, "card", lambda b: [b.pop("tests"), b.pop("probability_claims"), b.pop("states"), b.pop("rules")]), "deck", lambda b: b.pop("rules"))
+        said = ask(unmarked)
+        self.assertEqual((said["verdict"], said["cells"], [(f["rule"], f["file"], f["item"]) for f in said["findings"]]),
+                         ("ILL-FORMED", [], [("types.9", "card", "rules"), ("types.10", "deck", "rules")]), "with no part there is no cell, and nothing is proved")
 
 
 class Downgrade(Kernel):
@@ -383,12 +393,12 @@ class Downgrade(Kernel):
         files = strips()
         said = ask(files)
         self.assertEqual((said["cells_from"], said["hashes"]["rules"]), ("rules", "sha256:" + hashlib.sha256(files["rules"].encode("utf-8")).hexdigest()))
-        self.assertEqual(list(said)[:3], ["verdict", "hashes", "cells_from"], "printed with the verdict, before anything else")
+        self.assertEqual(list(said)[:4], ["verdict", "hashes", "bundle", "cells_from"], "printed with the verdict and the hashes, before anything else")
 
     def test_an_honest_card_with_no_parts_and_no_rules_is_ill_formed(self):
         files = self.forged(strips(card=OVER))
         self.assertEqual(ask(strips(card=OVER))["verdict"], "FAIL", "the honest files, with the deck, fail")
-        said = ask(files, without=("rules",))
+        said = ask(files, without=("rules", "run"))
         self.assertEqual((said["verdict"], said["cells"], said["cells_from"], said["hashes"]["rules"]), ("ILL-FORMED", [], "proofs", None))
         lacks = "which only a design checked against a deck of rules has, and the design has no parts and --rules names none"
         self.assertEqual([(f["rule"], f["file"], f["item"], f["why"]) for f in said["findings"]], [
@@ -396,7 +406,10 @@ class Downgrade(Kernel):
             ("types.7", "card", "tests", f"is a key of the card, {lacks}"),
             ("types.7", "card", "probability_claims", f"is a key of the card, {lacks}"),
             ("types.7", "card", "states", f"is a key of the card, {lacks}"),
+            ("types.7", "card", "rules", f"is a key of the card, {lacks}"),
             ("types.7", "deck", "rules", f"names a deck of rules, {lacks}")])
+        said = ask(files, without=("rules",))
+        self.assertIn(("types.7", "run", ""), [(f["rule"], f["file"], f["item"]) for f in said["findings"]], "and a run with no deck of rules is refused too")
 
     def test_each_mark_alone_is_refused(self):
         files = self.forged(strips())
@@ -409,6 +422,7 @@ class Downgrade(Kernel):
                 for key in ("tests", "probability_claims", "states"):
                     if mark != key:
                         body.pop(key)
+                body.pop("rules")      # the card's own name of the deck of rules is a mark too, and no mark tested here
             out = changed(files, "card", card)
             return out if mark == "rules" else changed(out, "deck", lambda b: b.pop("rules"))
 
@@ -416,15 +430,15 @@ class Downgrade(Kernel):
                            ("probability_claims", "types.7 card probability_claims: is a key of the card"), ("states", "types.7 card states: is a key of the card"),
                            ("rules", "types.7 deck rules: names a deck of rules")):
             with self.subTest(mark=mark):
-                self.assertIllFormed(only(mark), says, without=("rules",))
+                self.assertIllFormed(only(mark), says, without=("rules", "run"))
         self.assertIllFormed(strips(), "types.7 card tests: is a key of the card, which only a design checked against a deck of rules has, and --rules names none",
-                             without=("rules",))
+                             without=("rules", "run"))
 
     def test_a_card_that_only_waives_is_marked_too(self):
         """The exporter writes `tests` and `probability_claims` into every card of a deck
         design, so a card with no load is refused as well."""
         files = changed(self.forged(strips()), "card", lambda b: b.update(inputs=[i for i in b["inputs"] if "on" not in i]))
-        self.assertIllFormed(files, "types.7 card tests", without=("rules",))
+        self.assertIllFormed(files, "types.7 card tests", without=("rules", "run"))
 
     def test_with_every_mark_removed_the_forged_cells_do_not_pass(self):
         """A card.json with no mark and a design with no parts are a design of the models'
@@ -436,9 +450,9 @@ class Downgrade(Kernel):
 
         def unmark(body: dict) -> None:
             body["inputs"] = [{k: v for k, v in i.items() if k not in ("on", "field")} for i in body["inputs"]]
-            body.pop("tests"), body.pop("probability_claims"), body.pop("states")
+            body.pop("tests"), body.pop("probability_claims"), body.pop("states"), body.pop("rules")
         files = changed(changed(files, "card", unmark), "deck", lambda b: b.pop("rules"))
-        said = ask(files, without=("rules",))
+        said = ask(files, without=("rules", "run"))
         self.assertEqual((said["verdict"], said["cells_from"], said["hashes"]["rules"], said["counts"]["open"]), ("UNKNOWN", "proofs", None, 0),
                          "the kernel takes the forged cells, and with no deck of rules it passes nothing")
         self.assertNotEqual(said["hashes"]["card"], ask(honest)["hashes"]["card"])
@@ -467,7 +481,7 @@ class ChangedCard(Kernel):
             "a bound of another dimension": (lambda b: next(i for i in b["inputs"] if i["name"] == "s.gap").update(dim="force"), "parts.3 design s.gap: is a force"),
             "a bound that reaches zero": (lambda b: next(i for i in b["inputs"] if i["name"] == "s.gap").update(lo="0"), "parts.3 design s.gap: is not more than zero"),
             "a bound nobody signed": (lambda b: next(i for i in b["inputs"] if i["name"] == "s.gap").pop("by"), "shape card inputs"),
-            "a bound no part reads": (lambda b: b["inputs"].append({"name": "s.spare", "dim": "length", "lo": "1", "hi": "2", "by": "x"}), "parts.6 card s.spare: is no load, and no part reads it"),
+            "a bound no part reads": (lambda b: b["inputs"].append({"name": "s.spare", "dim": "length", "lo": "1", "hi": "2", "by": "x", "source": "test", "kind": "signed"}), "parts.6 card s.spare: is no load, and no part reads it"),
             "two bounds of one name": (lambda b: b["inputs"].append(dict(load(b))), "parts.6 card run.s.current: two inputs have this name"),
             "a claim": (lambda b: b["claims"].append({"name": "c", "subject": "s", "quantity": "current", "rel": "<=", "cases": [], "bound": {"dim": "current", "lo": "2", "hi": "2"}}),
                         "parts.8 card claims"),
@@ -512,7 +526,9 @@ class ChangedCard(Kernel):
 
 
 class ChangedRules(Kernel):
-    """The rules file is changed: one cell of a table, its bytes alone, or so that it no longer holds together."""
+    """The rules file is changed: one cell of a table, its bytes alone, or so that it no longer holds together. The card
+    names a deck of rules by the hash of its file, and so do deck.json and the run (type rules 9 to 11), so each test hands
+    the kernel the changed deck with the rest bound to it, as the card's owner would name it (tests/bound.py)."""
 
     def rules(self, edit) -> dict:
         body = copy.deepcopy(STRIPS)
@@ -531,18 +547,26 @@ class ChangedRules(Kernel):
 
         body = json.loads(files["rules"])
         end_distance(body)
-        said = ask({**files, "rules": json.dumps(body, indent=1) + "\n"})
+        said = ask(bound.with_rules(files, json.dumps(body, indent=1) + "\n"))
         self.assertNotEqual(said["hashes"]["rules"], honest["hashes"]["rules"])
-        self.assertEqual(said["hashes"]["deck"], honest["hashes"]["deck"])
+        self.assertNotEqual(said["hashes"]["deck"], honest["hashes"]["deck"], "deck.json names the deck of rules by its hash")
+        self.assertEqual(json.loads(bound.with_rules(files, json.dumps(body, indent=1) + "\n")["deck"])["domains"], json.loads(files["deck"])["domains"],
+                         "and its domains are the same")
         self.assertEqual((said["verdict"], cell(said, "lap.end_distance")["state"]), ("UNKNOWN", "open"))
         label = "dsg:lap-splice-waived.splice."
         point = {label + "diameter": export.number(Fraction(381, 20000)), label + "end": export.number(Fraction(381, 10000))}
-        refuted = ask(changed({**files, "rules": json.dumps(body, indent=1) + "\n"}, "proofs", lambda b: hint(b, "lap.end_distance").update(point=point)))
+        refuted = ask(changed(bound.with_rules(files, json.dumps(body, indent=1) + "\n"), "proofs", lambda b: hint(b, "lap.end_distance").update(point=point)))
         self.assertEqual((refuted["verdict"], cell(refuted, "lap.end_distance")["state"]), ("FAIL", "refuted"))
 
     def test_the_same_rules_in_other_bytes_are_another_hash_and_the_same_cells(self):
+        """The same rules in other bytes are another deck to the card, which names the hash of a file: handed in place of the
+        one the card names, they are refused. Named by the card, they give the same cells."""
         files = lap("lap_unknown")
-        again = {**files, "rules": json.dumps(json.loads(files["rules"]))}
+        other = json.dumps(json.loads(files["rules"]))
+        refused = ask({**files, "rules": other})
+        self.assertEqual((refused["verdict"], sorted({(f["rule"], f["file"]) for f in refused["findings"]})),
+                         ("ILL-FORMED", [("types.10", "deck"), ("types.11", "run"), ("types.9", "card")]))
+        again = bound.with_rules(files, other)
         self.assertNotEqual(ask(again)["hashes"]["rules"], ask(files)["hashes"]["rules"])
         self.assertEqual(states(ask(again)), states(ask(files)))
 
@@ -579,8 +603,8 @@ class ChangedRules(Kernel):
         }
         for what, edit in cases.items():
             with self.subTest(what=what):
-                self.assertIllFormed({**files, "rules": json.dumps(self.rules(edit[0]))}, edit[1])
-        self.assertIllFormed({**files, "rules": "{"}, "shape rules : not JSON")
+                self.assertIllFormed(bound.with_rules(files, json.dumps(self.rules(edit[0]))), edit[1])
+        self.assertIllFormed(bound.with_rules(files, "{"), "shape rules : not JSON")
 
     def test_an_unless_with_no_ground_or_one_the_type_does_not_give_is_ill_formed_and_the_grid_refuses_it_too(self):
         """A reason alone excuses no line. Beside it stands one ground that the kernel checks when it reads the deck, and the
@@ -616,13 +640,13 @@ class ChangedRules(Kernel):
         }
         for what, (edit, says) in cases.items():
             with self.subTest(what=what):
-                self.assertIllFormed({**files, "rules": json.dumps(self.rules(edit))}, says)
+                self.assertIllFormed(bound.with_rules(files, json.dumps(self.rules(edit))), says)
                 with self.assertRaises(grid.DeckError):
                     grid.read_deck(json.dumps(self.rules(edit)))
         for what, said in {"a least the type gives": {"least": ["current", "0 A"]}, "a least under it": {"least": ["current", "-1 A"]},
                            "the least of a count": {"least": ["turns", "1"]}, "two other lines": {"with": ["strip.heat", "strip.creep"]}}.items():
             with self.subTest(what=what):
-                self.assertEqual(findings(ask({**files, "rules": json.dumps(self.rules(tide(said)))})), "")
+                self.assertEqual(findings(ask(bound.with_rules(files, json.dumps(self.rules(tide(said)))))), "")
                 grid.read_deck(json.dumps(self.rules(tide(said))))
 
     def test_a_key_is_the_cards_or_says_why_the_designer_chooses_it_and_the_grid_reads_it_so(self):
@@ -641,7 +665,7 @@ class ChangedRules(Kernel):
         }
         for what, (edit, says) in cases.items():
             with self.subTest(what=what):
-                self.assertIllFormed({**files, "rules": json.dumps(self.rules(edit))}, says)
+                self.assertIllFormed(bound.with_rules(files, json.dumps(self.rules(edit))), says)
                 with self.assertRaises(grid.DeckError):
                     grid.read_deck(json.dumps(self.rules(edit)))
         # A key that says nothing is the card's: the pair reads as it did with `signed: true`, on a deck of another hash.
@@ -649,9 +673,10 @@ class ChangedRules(Kernel):
         self.assertEqual((ask(silent)["verdict"], states(ask(silent))), ("PASS", states(ask(files))))
         # And a design that writes it is refused, by both: the kernel says whose the key is.
         written = DESIGN.replace("fit given s.fit", "fit close")
-        with mock.patch.object(grid, "decks", lambda: (grid.read_deck(json.dumps(self.rules(lambda b: fit(b).pop("signed")))),)):
+        with mock.patch.object(grid, "decks", lambda: (bound.read(json.dumps(self.rules(lambda b: fit(b).pop("signed")))),)):
             with self.assertRaises(grid.ComponentError) as ctx:
-                grid.check(petra.lang.parse_design(CARD.replace('given s.fit is close signed "t@example.org" source "test"\n', ""), written, "strips.petra"), grid.decks()[0])
+                grid.check(petra.lang.parse_design(bound.card(CARD.replace('given s.fit is close signed "t@example.org" source "test"\n', ""), grid.decks()[0]), written,
+                                                   "strips.petra"), grid.decks()[0])
         self.assertIn("s.fit is for the card to state", str(ctx.exception))
         self.assertIn("design s.fit: is for the card to state", findings(ask(strips(CARD.replace('given s.fit is close signed "t@example.org" source "test"\n', ""), written,
                                                                                   self.rules(lambda b: fit(b).pop("signed"))))))
@@ -681,7 +706,7 @@ class ChangedRules(Kernel):
         files = strips()
         for what, (edit, key) in UNKNOWN_KEYS.items():
             with self.subTest(what=what):
-                self.assertIllFormed({**files, "rules": json.dumps(self.rules(edit))}, f"{key} is not a key here")
+                self.assertIllFormed(bound.with_rules(files, json.dumps(self.rules(edit))), f"{key} is not a key here")
 
     def test_an_anchor_names_its_standard_and_its_clause(self):
         files = strips()
@@ -689,7 +714,7 @@ class ChangedRules(Kernel):
             for anchor in ({"standard": "made up"}, {"clause": "1"}, {"standard": "", "clause": "1"}):
                 with self.subTest(place=place, anchor=anchor):
                     rules = self.rules(lambda b: b[place][0].__setitem__("anchor", anchor))
-                    self.assertIllFormed({**files, "rules": json.dumps(rules)}, "the anchor lacks its standard or its clause")
+                    self.assertIllFormed(bound.with_rules(files, json.dumps(rules)), "the anchor lacks its standard or its clause")
 
     def test_bands_are_in_order_and_none_lies_over_another(self):
         files = strips()
@@ -697,7 +722,7 @@ class ChangedRules(Kernel):
                       [["1 mm", "0 mm"], ["1 mm", "2 mm"], ["2 mm", None]]):
             with self.subTest(bands=bands):
                 rules = self.rules(lambda b: b["rows"][0]["table"]["down"].__setitem__("bands", bands))
-                self.assertIllFormed({**files, "rules": json.dumps(rules)}, "row test/limit: the bands of w are pairs, the lower end first, in order and none over another")
+                self.assertIllFormed(bound.with_rules(files, json.dumps(rules)), "row test/limit: the bands of w are pairs, the lower end first, in order and none over another")
 
     def test_the_kernels_unit_table_is_the_one_of_petra_units(self):
         # For each unit, two rules with no input: 1 of the unit is at most, and at least, its SI factor as Python has it.
@@ -713,7 +738,7 @@ class ChangedRules(Kernel):
         self.assertEqual((len(units), {c["state"] for c in units}), (2 * len(table), {"proved"}), [c for c in units if c["state"] != "proved"])
         self.assertGreaterEqual(len(table), 67)
         off = self.rules(lambda b: b["rules"][2].update(le=[["q", "1", "inch"], ["q", "25.39999", "mm"]]))
-        self.assertEqual(cell(ask({**files, "rules": json.dumps(off)}), "strip.bow", "bow")["state"], "open", "an inch is not under 25.4 mm")
+        self.assertEqual(cell(ask(bound.with_rules(files, json.dumps(off))), "strip.bow", "bow")["state"], "open", "an inch is not under 25.4 mm")
 
     def test_the_kernel_reads_a_quantity_as_the_deck_writes_it(self):
         # Each way a deck may write 4.2 mm2 on the right of test/bow leaves its proof as it is, and 4.2 mm does not.
@@ -723,12 +748,12 @@ class ChangedRules(Kernel):
                         ["div", ["q", "4.2", "mm"], ["pow", ["q", "1", "mm"], "-1"]], ["mul", ["sqrt", ["q", "17.64", "mm2"]], ["q", "1", "mm"]],
                         ["mul", ["pow", ["q", "17.64", "mm2"], "1/2"], ["q", "1", "mm"]], ["mul", ["exp", ["ln", "4.2"]], ["q", "1.0001", "mm2"]]):
             with self.subTest(written=written):
-                said = ask({**files, "rules": json.dumps(self.rules(lambda b: b["rules"][2]["le"].__setitem__(1, written)))})
+                said = ask(bound.with_rules(files, json.dumps(self.rules(lambda b: b["rules"][2]["le"].__setitem__(1, written)))))
                 if written[:2] in (["q", "4,200,000"], ["pow", ["q", "17.64", "mm2"]]):
                     self.assertIn("rule test/bow: `le` compares two dimensions", findings(said), "micrometres and mm4 are not an area")
                 else:
                     self.assertEqual((cell(said, "strip.bow")["state"], said["findings"]), ("proved", []))
-        lower = ask({**files, "rules": json.dumps(self.rules(lambda b: b["rules"][2]["le"].__setitem__(1, ["q", "3.9", "mm2"])))})
+        lower = ask(bound.with_rules(files, json.dumps(self.rules(lambda b: b["rules"][2]["le"].__setitem__(1, ["q", "3.9", "mm2"])))))
         self.assertEqual(cell(lower, "strip.bow")["state"], "open", "gap (4 mm - gap) reaches 4 mm2, and the old partition proves nothing under it")
 
 

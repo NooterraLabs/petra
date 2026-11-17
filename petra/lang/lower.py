@@ -157,7 +157,7 @@ class _Lowering:
         claim_nodes = self.read(card, *_CLAIM_HEADS)
         self.index(claim_nodes, "claim", lambda n: n.args[0])
 
-        name, owner, environment = self.header(self.read(card, "card"))
+        name, owner, environment, rules = self.header(self.read(card, "card"))
         params = self.lowered(self.params_by_name, self.param)
         ambient = self.ambient(self.read(card, "ambient"), params)
         self.givens_by_name = self.index(self.read(card, "given"), "given", lambda n: n.args[0])
@@ -190,6 +190,7 @@ class _Lowering:
         return Design(
             name=name,
             owner=owner,
+            rules=rules,
             path=design.path,
             environment=environment,
             ambient=ambient,
@@ -225,10 +226,10 @@ class _Lowering:
                 out[name] = value
         return out
 
-    def header(self, nodes: list[Node]) -> tuple[str, str, str | None]:
+    def header(self, nodes: list[Node]) -> tuple[str, str, str | None, tuple[str, str] | None]:
         if not nodes:
             self.problems.append((self.path, 1, 1, 'no card block: add card "<name>" { owner "<who>" }'))
-            return "", "", None
+            return "", "", None, None
         for extra in nodes[1:]:
             self.problem(extra, "a file declares one card; this is a second card block")
         name_tok, items = nodes[0].args
@@ -237,7 +238,8 @@ class _Lowering:
         envs = [i for i in items if i.head == "environment"]
         if not owners:
             self.problem(nodes[0], f"card '{name_tok.text}' names no owner")
-        for extra in owners[1:] + envs[1:]:
+        pins = [i for i in items if i.head == "rules"]
+        for extra in owners[1:] + envs[1:] + pins[1:]:
             self.problem(extra, f"the card's {extra.head} is given twice")
         owner = owners[0].args[0].text if owners else ""
         if owners:
@@ -245,7 +247,9 @@ class _Lowering:
         environment = envs[0].args[0].text if envs else None      # a card states one environment, and no deck reads one yet (grid.read_parts)
         if envs:
             self.nonempty(envs[0].args[0], "the card's environment")
-        return name_tok.text, owner, environment
+        # The deck of rules the card's owner has the design checked against, by its name and the hash of its file. Whether
+        # it is the deck that is read is asked where a deck is (grid.held): a card read alone names any.
+        return name_tok.text, owner, environment, (pins[0].args[0].text, pins[0].args[1].text) if pins else None
 
     def nonempty(self, tok: Token, what: str) -> bool:
         if tok.text.strip():

@@ -63,7 +63,7 @@ CORE_CAP = Limit(331, "Set on 2026-11-15 at the deletion of the old path (plan s
                        "package's own file. Before that day the cap was 1,023 and covered the Python checker's "
                        "core too: its check, its codec, its evidence and its linear algebra, which are gone.")
 
-TRUSTED_CEILING = Limit(4076, "Set on 2026-11-15 at the deletion of the old path (plan step 1.2c), where what is counted "
+TRUSTED_CEILING = Limit(4169, "Set on 2026-11-15 at the deletion of the old path (plan step 1.2c), where what is counted "
                                 "measured 3,871 code lines: the arithmetic 331, and outside it the front end and the decks "
                                 "as data, 3,540. Before that day the ceiling was 20,119, of which the models, the "
                                 "registry, the premises and the Python checker's rules were the most: all are gone. "
@@ -98,6 +98,22 @@ TRUSTED_CEILING = Limit(4076, "Set on 2026-11-15 at the deletion of the old path
                                 "line for a part that has a value for it and leaves it open for any other, a tape none "
                                 "of whose roots reads an input is one that reads nothing, and a name and an anchor of a "
                                 "deck print on the line of their own cell. 24 lines in petra/grid.py: 4,076. "
+                                "Raised on 2026-11-16 for plan step 1.7, where every layer is bound by hash: the kernel "
+                                "reads the deck a card names, its owner and each value's source and kind, deck.json's "
+                                "name of the deck and the run a deck is read with, and holds each to the file that was "
+                                "read (type rules 5 and 9 to 11), and it prints one hash of the six files. The Python "
+                                "reader holds a deck to its run and a card to its deck, and the front end writes what "
+                                "the kernel reads. 60 lines, in kernel/Petra/Files.lean and Check.lean, kernel/Main.lean, "
+                                "petra/grid.py, petra/export.py, petra/verify.py and the language's card block: 4,136. "
+                                "And for what the clean-room reading found the same day: the kernel refuses a flag given "
+                                "twice, where it read the first of two decks and said nothing of the second, and the "
+                                "Python reader refuses the numbers of a run that the kernel refuses of every file. And "
+                                "for what the attacker found: a deck is handed to the kernel with the line ends it was "
+                                "hashed with. 16 lines in kernel/Main.lean and petra/grid.py: 4,152. "
+                                "And for what the seventeenth review found: a deck is hashed as the bytes it is handed "
+                                "over in, a run with NaN or Infinity is no JSON, the line that names a deck is written "
+                                "with its escapes and read back, and the exporter says that the decks do not read and "
+                                "exits 4. 17 lines in petra/grid.py and petra/export.py: 4,169. "
                                 "Raise it in the commit that needs more and say why here.")
 
 T2_ADOPTED = date(2026, 11, 8)

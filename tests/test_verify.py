@@ -70,7 +70,7 @@ class Shell(unittest.TestCase):
 
         with self.assertRaises(verify.NoVerdict):
             checked(refuse, LAP)
-        self.assertEqual(set(seen), {"card", "design", "deck", "rules", "proofs"})
+        self.assertEqual(set(seen), {"card", "design", "deck", "rules", "run", "proofs"}, "the deck of rules goes with the run it is bound to")
         card, design = json.loads(seen["card"]), json.loads(seen["design"])
         self.assertEqual((card["format"], design["format"]), ("petra-card/0", "petra-design/0"))
         self.assertEqual(design["card"], "sha256:" + hashlib.sha256(seen["card"].encode("utf-8")).hexdigest())
@@ -217,7 +217,7 @@ class Built(unittest.TestCase):
     def test_the_kernel_works_out_the_cells_of_a_lap(self):
         result = petra.check(*read_pair(LAP))
         self.assertEqual((result["status"], result["kernel"]["verdict"], result["kernel"]["cells_from"]), ("PASS_WAIVED", "PASS", "rules"))
-        self.assertEqual(set(result["kernel"]["hashes"]), {"card", "design", "deck", "rules"})
+        self.assertEqual(set(result["kernel"]["hashes"]), {"card", "design", "deck", "rules", "run", "proofs"}, "a hash for each file the verdict rests on")
 
 
 if __name__ == "__main__":

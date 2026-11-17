@@ -26,7 +26,8 @@ def givenOf (name : String) : String × String :=
   | field :: rest => (".".intercalate rest.reverse, field)
   | [] => (name, "")
 
-/-- The type rules, 1 to 5. Rules 6, 7 and 8 are in `rules` and `marks`: they read the command line.
+/-- The type rules, 1 to 5, but for what rule 5 asks with `--rules`, which is in `bound`. Rules 6,
+7 and 8 are in `rules` and `marks`, and 9 to 11 in `bound`: they read the command line.
 
 `sign` is what the deck of rules says with `may_be` of a field or of a load of a part
 (`signOf`). A number that a design writes for a field that may be zero or negative is not
@@ -62,10 +63,10 @@ def types (cardHash : String) (card : Card) (design : Design) (deck : Deck)
       say "types.5" "card" s!"{w.subject}/{w.mechanism}" "the waiver names no by"
 
 /-- Type rule 7. What only the files of a design checked against a deck of rules have: an
-input of the card that puts a load on a part, the keys `tests` and `probability_claims` of
-the card, and `rules` in deck.json. Each is a finding when the design has no parts or
-`--rules` names no deck. Without this a card that was issued for a deck of rules would be
-checked with the cells that proofs.json lists, which the kernel takes as they come. -/
+input of the card that puts a load on a part, the keys `tests`, `probability_claims`, `states`
+and `rules` of the card, and `rules` in deck.json. The fourth mark, run.json, is in `rules`.
+Each of these is a finding when the design has no parts or `--rules` names no deck. Without
+this a card that was issued for a deck of rules would be checked with the cells that proofs.json lists, which the kernel takes as they come. -/
 def marks (card : Card) (design : Design) (deck : Deck) (deckOfRules : Bool) : StateM Findings Unit := do
   let lacks := " and ".intercalate ((if design.parts.isNone then ["the design has no parts"] else [])
     ++ (if deckOfRules then [] else ["--rules names none"]))
@@ -76,6 +77,37 @@ def marks (card : Card) (design : Design) (deck : Deck) (deckOfRules : Bool) : S
     if i.on.isSome || i.field.isSome then say "card" i.name "is a load on a part"
   for key in card.keyed do say "card" key "is a key of the card"
   if deck.rules then say "deck" "rules" "names a deck of rules"
+
+/-- Type rules 9 to 11, for a design checked against a deck of rules: what binds the files
+to each other. The card names the deck by its name and the hash of its file, so the hash of
+the card covers which rules its owner asked for. deck.json names the same file. The deck is
+read with the acceptance run that names its hash. And the card says whose it is, and each of
+its inputs and statements says where its value is from and how it was had (type rule 5). -/
+def bound (card : Card) (deck : Deck) (rules : Option Rules) (rulesHash : String) (run : Option (Option Run)) :
+    StateM Findings Unit := do
+  let say (rule file item why : String) : StateM Findings Unit := modify (·.push ⟨rule, file, item, why⟩)
+  let other (pin : String × String) : Option String :=
+    if pin.2 != rulesHash then some s!"names the deck of rules {pin.2}, and --rules is {rulesHash}"
+    else match rules with
+      | some held => if pin.1 != held.name then some s!"names the deck of rules {pin.1}, and --rules is {held.name}" else none
+      | none => none
+  match card.rules with
+  | none => say "types.9" "card" "rules" "the card names no deck of rules by its name and the hash of its file"
+  | some pin => if let some why := other pin then say "types.9" "card" "rules" why
+  match deck.pin with
+  | none => say "types.10" "deck" "rules" "does not hold the name and the hash of the deck of rules"
+  | some pin => if let some why := other pin then say "types.10" "deck" "rules" why
+  match run with
+  | none => say "types.11" "run" "" "a deck of rules is read with the acceptance run it is bound to, and --run names none"
+  | some none => pure ()
+  | some (some run) =>
+    if run.deck != rulesHash then say "types.11" "run" "deck" s!"is not the hash of the deck of rules, {rulesHash}"
+    unless worded (some (.str run.gate)) do say "types.11" "run" "gate" "does not name the gate that ran, in a text with a letter in it"
+  if card.owner.isNone then say "types.5" "card" "owner" "the card names no owner"
+  for i in card.inputs do
+    unless i.sourced do say "types.5" "card" i.name "the input names no source, or no kind that is signed or measured"
+  for s in card.states do
+    unless s.sourced do say "types.5" "card" s.name "the statement names no source, or no kind that is signed or measured"
 
 /-- What the ranges signed under one name ask between them. A range contains every one of
 them when it contains `hull`, the least range that holds them all, and a point lies in
@@ -192,6 +224,9 @@ def Verdict.exitCode : Verdict → UInt32
 structure Report where
   verdict : Verdict
   hashes : List (String × Option String)
+  /-- One hash for the files the verdict is about: of the six lines `FILE HASH`, in the order
+  of `hashes`, each ended by a line feed, with `none` for a file that was not given. -/
+  bundle : String
   findings : Findings
   cells : Array Settled
   /-- Where the cells came from: `rules` when `--rules` named a deck and the kernel made them
@@ -238,13 +273,16 @@ structure Found where
 then the cells. A broken rule of a group before the cells is a finding, and with a finding
 the kernel settles no cell. With a deck of rules the cells are the ones the kernel works out
 from it, and proofs.json holds hints. Without one the cells are the ones proofs.json lists. -/
-def rules (cardHash : String) (card design deck : Except String ByteArray)
-    (deckOfRules proofs : Option (Except String ByteArray)) : StateM Findings Found := do
+def rules (cardHash rulesHash : String) (card design deck : Except String ByteArray)
+    (deckOfRules run proofs : Option (Except String ByteArray)) : StateM Findings Found := do
   let card? ← load "card" "petra-card/0" card readCard
   let design? ← load "design" "petra-design/0" design readDesign
   let deck? ← load "deck" "petra-deck/0" deck readDeck
   let rules? ← match deckOfRules with
     | some bytes => load "rules" "petra-rules/0" bytes fun j => do return ← readRules j
+    | none => pure none
+  let run? ← match run with
+    | some bytes => some <$> load "run" "petra-run/0" bytes readRun
     | none => pure none
   let cells? ← match proofs, deckOfRules with
     | some bytes, none => load "proofs" "petra-proofs/0" bytes readProofs
@@ -271,6 +309,9 @@ def rules (cardHash : String) (card design deck : Except String ByteArray)
   if design.parts.isSome && deckOfRules.isNone then
     modify (·.push ⟨"types.6", "design", "parts", "a design with parts is checked against a deck of rules, and --rules names none"⟩)
   marks card design deck deckOfRules.isSome
+  if deckOfRules.isSome then bound card deck rules? rulesHash run?
+  else if run.isSome then
+    modify (·.push ⟨"types.7", "run", "", "is the acceptance run of a deck of rules, and --rules names none"⟩)
   -- A deck of rules with a `least` under a floor of core.json (type rule 8) is refused, as
   -- one that does not read is, and no part is read against it.
   let rules? ← match rules? with
@@ -312,9 +353,9 @@ comes. It checks the tape of each, and it cannot tell that the list leaves no ce
 that a cell written as not applicable is so. So nothing it checks there makes a PASS: a
 proofs file with one trivial proved cell and every other cell not applicable would pass any
 design. -/
-def check (card design deck : Except String ByteArray) (deckOfRules proofs : Option (Except String ByteArray)) : Report :=
+def check (card design deck : Except String ByteArray) (deckOfRules run proofs : Option (Except String ByteArray)) : Report :=
   let hash (bytes : Except String ByteArray) : Option String := bytes.toOption.map fun b => "sha256:" ++ sha256 b
-  let (found, findings) := Id.run ((rules ((hash card).getD "") card design deck deckOfRules proofs).run {})
+  let (found, findings) := Id.run ((rules ((hash card).getD "") ((deckOfRules.bind hash).getD "") card design deck deckOfRules run proofs).run {})
   let cells := found.cells
   let has (state : State) : Bool := cells.any (·.state == state)
   let proved := cells.any fun s => s.state == .proved && !s.stated && !s.cell.entry.endsWith "/where"
@@ -323,8 +364,10 @@ def check (card design deck : Except String ByteArray) (deckOfRules proofs : Opt
     else if has .refuted then .fail
     else if has .undecided || !proved || deckOfRules.isNone then .unknown
     else .pass
-  let hashes := [("card", hash card), ("design", hash design), ("deck", hash deck), ("rules", deckOfRules.bind hash)]
-  { verdict, hashes, findings, cells, cellsFrom := if deckOfRules.isSome then "rules" else "proofs",
+  let hashes := [("card", hash card), ("design", hash design), ("deck", hash deck), ("rules", deckOfRules.bind hash),
+                 ("run", run.bind hash), ("proofs", proofs.bind hash)]
+  let bundle := "sha256:" ++ sha256 ("".intercalate (hashes.map fun (file, held) => s!"{file} {held.getD "none"}\n")).toUTF8
+  { verdict, hashes, bundle, findings, cells, cellsFrom := if deckOfRules.isSome then "rules" else "proofs",
     ignored := found.ignored, dsgInputs := found.dsgInputs, work := found.work, units := found.units }
 
 end Petra

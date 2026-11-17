@@ -96,8 +96,8 @@ most `x`. A box of 1 mm fails it under each of the 4,096 combinations of names."
 def boxes(copies: int, named: bool = True) -> dict[str, str]:
     """The files of a box of 1 mm that leaves every key unstated, with a point for each combination, each `copies` times. Unnamed, the
     hints name no cell, so the kernel reads them and looks at none."""
-    _, stated = parsed(SUMS, design(part("box", "b", x="1 mm", **{k: "a" for k in TWELVE})))
-    (point,) = [c for c in json.loads(grid.check(stated, grid.read_deck(json.dumps(SUMS)))[1]["proofs"])["cells"] if "point" in c]
+    sums, stated = parsed(SUMS, design(part("box", "b", x="1 mm", **{k: "a" for k in TWELVE})))
+    (point,) = [c for c in json.loads(grid.check(stated, sums)[1]["proofs"])["cells"] if "point" in c]
     rules, read = parsed(SUMS, design(part("box", "b", x="1 mm", **{k: "unstated" for k in TWELVE})))
     files = grid.check(read, rules)[1]
     hints = [{**point, "entry": point["entry"] if named else "nowhere", "completion": {"keys": [["b", k, "ab"[(n >> i) & 1]] for i, k in enumerate(TWELVE)], "loads": []}}

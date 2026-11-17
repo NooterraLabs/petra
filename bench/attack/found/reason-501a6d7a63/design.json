@@ -1,5 +1,5 @@
 {
- "card": "sha256:cc0f2502b6d6c351590f6fa3563ef7a9dceb2222a8a55b6f4dab1b041a7e2754",
+ "card": "sha256:56cf6f472388959c390db687b762310ca16c345967f6578ef210920c8ef54fc5",
  "format": "petra-design/0",
  "name": "a",
  "params": [],
@@ -21,7 +21,7 @@
     {
      "args": [
       {
-       "word": "high"
+       "given": "pxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.finish"
       }
      ],
      "field": "finish"
@@ -59,7 +59,7 @@
     {
      "args": [
       {
-       "word": "high"
+       "given": "ab.finish"
       }
      ],
      "field": "finish"
@@ -97,7 +97,7 @@
     {
      "args": [
       {
-       "word": "low"
+       "given": "tab.finish"
       }
      ],
      "field": "finish"
@@ -135,7 +135,7 @@
     {
      "args": [
       {
-       "word": "low"
+       "given": "A.finish"
       }
      ],
      "field": "finish"
@@ -201,7 +201,7 @@
     {
      "args": [
       {
-       "text": "soft"
+       "given": "bar.grade"
       }
      ],
      "field": "grade"
@@ -270,7 +270,7 @@
     {
      "args": [
       {
-       "word": "hard"
+       "given": "Z.grade"
       }
      ],
      "field": "grade"

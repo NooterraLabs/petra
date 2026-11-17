@@ -1,5 +1,5 @@
 {
- "card": "sha256:831d78762fcff91b3c11f36808402cc598b788b7eb7e1874248ce55340c76678",
+ "card": "sha256:a2ac529ffd9e58d04f9f546f34384489ed288e668b31a49b092c99401b0c4878",
  "format": "petra-design/0",
  "name": "a",
  "params": [],
@@ -17,7 +17,7 @@
     {
      "args": [
       {
-       "word": "low"
+       "given": "cap2.finish"
       }
      ],
      "field": "finish"
@@ -55,7 +55,7 @@
     {
      "args": [
       {
-       "word": "high"
+       "given": "Z.finish"
       }
      ],
      "field": "finish"
@@ -121,7 +121,7 @@
     {
      "args": [
       {
-       "word": "hard"
+       "given": "bar.grade"
       }
      ],
      "field": "grade"

@@ -10,15 +10,19 @@
    "by": "s.engineer@example.org",
    "dim": "stress",
    "hi": "2837965390536199/6451600",
+   "kind": "signed",
    "lo": "2321971683165981/6451600",
-   "name": "Z.Fu"
+   "name": "Z.Fu",
+   "source": "attack"
   },
   {
    "by": "s.engineer@example.org",
    "dim": "stress",
    "hi": "80067989074689/322580",
+   "kind": "signed",
    "lo": "80067989074689/322580",
-   "name": "Z.Fy"
+   "name": "Z.Fy",
+   "source": "attack"
   },
   {
    "by": "s.engineer@example.org",
@@ -26,27 +30,54 @@
    "dim": "force",
    "field": "pull",
    "hi": "97860875535731/400000000",
+   "kind": "signed",
    "lo": "97860875535731/400000000",
    "name": "dead.joint.pull",
-   "on": "joint"
+   "on": "joint",
+   "source": "attack"
   },
   {
    "by": "a.b@c.d",
    "dim": "stress",
    "hi": "8896443230521/516128",
+   "kind": "signed",
    "lo": "8896443230521/645160",
-   "name": "splice.Fu"
+   "name": "splice.Fu",
+   "source": "attack"
   },
   {
    "by": "s.engineer@example.org",
    "dim": "stress",
    "hi": "26689329691563/32258",
+   "kind": "signed",
    "lo": "26689329691563/32258",
-   "name": "splice.Fy"
+   "name": "splice.Fy",
+   "source": "attack"
   }
  ],
  "name": "attack",
+ "owner": "s.engineer@example.org",
  "probability_claims": [],
+ "rules": {
+  "hash": "sha256:fb92c98c91e26573ff826e9983047dbd19142e2f26b3feb14723329aa6877d94",
+  "name": "aisc360-22"
+ },
+ "states": [
+  {
+   "by": "s.engineer@example.org",
+   "key": "standard",
+   "kind": "signed",
+   "name": "joint.holes",
+   "source": "attack"
+  },
+  {
+   "by": "s.engineer@example.org",
+   "key": "protected",
+   "kind": "signed",
+   "name": "joint.surface",
+   "source": "attack"
+  }
+ ],
  "tests": [],
  "waivers": []
 }

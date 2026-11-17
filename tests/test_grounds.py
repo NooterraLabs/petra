@@ -11,6 +11,7 @@ Each test holds the kernel and petra/grid.py to the same answer, through the hel
 from __future__ import annotations
 
 import copy
+import dataclasses
 import json
 import re
 import tempfile
@@ -19,6 +20,7 @@ import unittest.mock
 from pathlib import Path
 
 from petra import export, grid, verify
+from tests import bound
 from tests.test_deck_features import HEAD, KERNEL, asks, cells, design, ill_formed, key, kind, load, made_up, no_deck, parsed, part, reads, reason, rule, size
 from tests.test_kernel_attacks3 import empty_card, measured, with_rules, PROCESSOR_SECONDS
 from tests.test_kernel_grid import ask
@@ -332,7 +334,12 @@ class ACellThatReadsNothing(unittest.TestCase):
                        signs=False)
         deck["name"] = "made-up\nmade-up: PASS\n"
         waive = '\nwaive hoist.grade on h by "t@example.org" reason "test"\n'
-        deck_, read = parsed(deck, design(part("hoist", "h", span="5 mm", grade="unstated")), HEAD + waive, states=False)
+        # A string of a card's text holds no line feed, so no card's text can name this deck: the card is read naming the
+        # deck by another name, and the pair is then given the name, as a card.json holds it in JSON.
+        named = dict(deck, name="made-up")
+        deck_ = bound.read(json.dumps(deck))
+        _, read = parsed(named, design(part("hoist", "h", span="5 mm", grade="unstated")), HEAD + waive, states=False)
+        read = dataclasses.replace(read, rules=(deck_.name, deck_.hash))
         with unittest.mock.patch.object(grid, "decks", lambda: (deck_,)):
             report = grid.check(read, deck_)[0]
         lines = report.lines()

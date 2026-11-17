@@ -1,0 +1,33 @@
+petra 0
+
+# The lap of examples/deck/lap_pass, under a card that names no deck of rules, as every card
+# did until 2026-11-16. Nothing in such a card says which rules its owner asked for, so a
+# verdict under it would be about whatever deck was at hand. The pair is refused, and the
+# refusal gives the line to add (plan step 1.7).
+
+plate tab {
+  thickness 0.375 inch
+  width 6 inch
+  Fy given tab.Fy
+  Fu given tab.Fu
+}
+
+plate strap {
+  thickness 0.375 inch
+  width 6 inch
+  Fy given strap.Fy
+  Fu given strap.Fu
+}
+
+lap splice {
+  fastener "Group 120"
+  threads included
+  diameter 0.75 inch
+  holes given splice.holes
+  count 3
+  pitch 3 inch
+  end 1.5 inch
+  side 3 inch
+  surface given splice.surface
+  joins tab strap
+}

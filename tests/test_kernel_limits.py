@@ -16,6 +16,7 @@ from unittest import mock
 import petra
 from petra import export, grid, verify
 from petra.files import ComponentError
+from tests import bound
 from tests.test_grid import CARD, DESIGN, STRIPS, TEST
 from tests.test_kernel_attacks import run_raw
 from tests.test_kernel_grid import Kernel, ask, changed, findings, part, states, strips
@@ -25,10 +26,11 @@ MAX_FINDINGS, MAX_TEXT, MAX_NAME, MAX_CELLS = 100, 200, 64, 10_000
 
 
 def with_rules(files: dict[str, str], change) -> dict[str, str]:
-    """The files with the deck of rules changed by `change`, which takes its JSON."""
+    """The files with the deck of rules changed by `change`, which takes its JSON, and the card, deck.json and the run bound
+    to the changed deck as its owner would name it (tests/bound.py)."""
     rules = json.loads(files["rules"])
     change(rules)
-    return {**files, "rules": json.dumps(rules)}
+    return bound.with_rules(files, json.dumps(rules))
 
 
 def printed(files: dict[str, str]) -> tuple[dict, int]:
@@ -156,11 +158,11 @@ class TheGridsNames(unittest.TestCase):
         self.assertEqual(grid.read_deck(json.dumps(at)).rules[0].id, "test/" + "m" * 59, "64 bytes are within the limit")
 
     def test_the_grid_refuses_a_part_and_a_load_case_with_a_name_over_the_limit(self):
-        deck = grid.read_deck(json.dumps(STRIPS))
+        deck = bound.read(json.dumps(STRIPS))
 
         def check(card: str, design: str):
             with mock.patch.object(grid, "decks", lambda: (deck,)):
-                return grid.check(petra.lang.parse_design(card, design, "strips.petra"), deck)
+                return grid.check(petra.lang.parse_design(bound.card(card, deck), design, "strips.petra"), deck)
 
         self.assertEqual(check(CARD, DESIGN.replace("p1", "p" * MAX_NAME))[0].status, check(CARD, DESIGN)[0].status)
         says = "the name of a part and of a load case is at most 64 characters"
@@ -417,7 +419,8 @@ class Reasons(Kernel):
     def loud(parts: int, lines: int) -> dict[str, str]:
         """A deck of one type with `lines` lines of the grid, each with a rule that reads four
         loads of 64-byte names, and `parts` parts that the card puts no load on: every cell
-        is open, with the longest reason the kernel writes."""
+        is open, with the longest reason the kernel writes. The card has an owner, and the card,
+        deck.json and the run are bound to the deck (tests/bound.py)."""
         def name(prefix: str, k: int, width: int = 64) -> str:
             return f"{prefix}{k}".ljust(width, "q")
         loads = [name(f"L{j}_", 0) for j in range(4)]
@@ -427,13 +430,14 @@ class Reasons(Kernel):
                  "grid": [{"type": "t", "mechanism": name("m", k), "what": "w", "anchor": TEST} for k in range(lines)],
                  "rules": [{"id": "r/" + name("i", k, 62), "type": "t", "mechanism": name("m", k), "anchor": TEST, "says": "s",
                             "le": [["add"] + [["load", n] for n in loads], "x"]} for k in range(lines)]}
-        card = export.text({"format": "petra-card/0", "name": "c", "environment": None, "cases": [], "inputs": [], "claims": [],
-                            "waivers": [], "tests": [], "probability_claims": []})
+        card = export.text(bound.card_json({"format": "petra-card/0", "name": "c", "environment": None, "cases": [], "inputs": [], "claims": [],
+                                            "waivers": [], "tests": [], "probability_claims": []}))
         made = [{"name": name("p", i), "type": "t", "lines": [{"field": "x", "args": [{"number": {"dim": "force", "lo": "1", "hi": "1"}}]}]}
                 for i in range(parts)]
         design = {"format": "petra-design/0", "name": "c", "card": export.sha256(card), "quantities": [], "params": [], "parts": made}
-        return {"card": card, "design": json.dumps(design, separators=(",", ":")), "deck": strips()["deck"],
-                "rules": json.dumps(rules, separators=(",", ":")), "proofs": '{"format":"petra-proofs/0","cells":[]}'}
+        return bound.rebound({"card": card, "design": json.dumps(design, separators=(",", ":")), "deck": strips()["deck"],
+                              "rules": json.dumps(rules, separators=(",", ":")), "proofs": '{"format":"petra-proofs/0","cells":[]}'},
+                             lambda body: json.dumps(body, separators=(",", ":")))
 
     def test_a_few_cells_keep_their_reasons_whole(self):
         said, _ = printed(self.loud(3, 3))
@@ -519,10 +523,10 @@ class Reading(Kernel):
     @unittest.skipUnless(verify.binary(), "no petra-verify is built here and PETRA_VERIFY names none")
     def test_the_kernel_reads_a_deck_of_a_million_steps_and_no_more(self):
         honest = ask(strips())
-        at = ask({**strips(), "rules": json.dumps(padded(MAX_READ))})
+        at = ask(bound.with_rules(strips(), json.dumps(padded(MAX_READ))))
         self.assertEqual(at["findings"], [])
         self.assertEqual([c for c in states(at) if c[1] != "pad.wide"], states(honest), "the deck is read, and the other cells are as before")
-        over = ask({**strips(), "rules": json.dumps(padded(MAX_READ + 1))})
+        over = ask(bound.with_rules(strips(), json.dumps(padded(MAX_READ + 1))))
         self.assertEqual((over["verdict"], over["cells"]), ("ILL-FORMED", []))
         self.assertEqual([(f["rule"], f["file"]) for f in over["findings"]], [("shape", "rules")])
         self.assertIn("reading this deck takes 1000001 steps, over the budget of 1000000", over["findings"][0]["why"])
@@ -540,15 +544,15 @@ class Reading(Kernel):
         for text in (json.dumps(body), json.dumps(body, ensure_ascii=False)):
             with self.assertRaisesRegex(grid.DeckError, f"reading this deck takes {count} steps"):
                 grid.read_deck(text)
-            over = ask({**strips(), "rules": text})
+            over = ask(bound.with_rules(strips(), text))
             self.assertIn(f"reading this deck takes {count} steps, over the budget of 1000000", over["findings"][0]["why"])
 
     def test_the_name_of_a_card_is_at_most_200_bytes_for_a_design_with_parts(self):
-        deck = grid.read_deck(json.dumps(STRIPS))
+        deck = bound.read(json.dumps(STRIPS))
 
         def check(name: str):
             with mock.patch.object(grid, "decks", lambda: (deck,)):
-                return grid.check(petra.lang.parse_design(CARD.replace('card "strips"', f'card "{name}"'), DESIGN, "strips.petra"), deck)
+                return grid.check(petra.lang.parse_design(bound.card(CARD.replace('card "strips"', f'card "{name}"'), deck), DESIGN, "strips.petra"), deck)
 
         self.assertEqual(check("n" * MAX_TITLE)[0].verdict, "PASS")
         with self.assertRaisesRegex(ComponentError, "the name of the card is at most 200 characters"):

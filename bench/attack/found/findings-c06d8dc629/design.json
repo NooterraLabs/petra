@@ -1,5 +1,5 @@
 {
- "card": "sha256:0533030d3f4ac5b9a81b980b7ee566e08a95292be2f996453adeed0255a78e7f",
+ "card": "sha256:236dab5faef0e90a0c3f1d758fe7ce795c3120d35ec7d85c62f8ad19aeabcd95",
  "format": "petra-design/0",
  "name": "attack",
  "params": [],
@@ -129,7 +129,7 @@
     {
      "args": [
       {
-       "word": "standard"
+       "given": "joint.holes"
       }
      ],
      "field": "holes"
@@ -185,7 +185,7 @@
     {
      "args": [
       {
-       "word": "protected"
+       "given": "joint.surface"
       }
      ],
      "field": "surface"

@@ -118,6 +118,9 @@ structure Input where
   /-- For a load on a part of a deck's type: the part, and which of its type's loads it is. -/
   on : Option String
   field : Option String
+  /-- Whether the item says where its value is from and how it was had: `source`, a text
+  that is not empty, and `kind`, `signed` or `measured`. -/
+  sourced : Bool := false
 
 structure Claim where
   name : String
@@ -145,6 +148,7 @@ structure Stated where
   name : String
   said : Said
   signer : String
+  sourced : Bool := false
 
 structure Card where
   name : String
@@ -160,6 +164,11 @@ structure Card where
   keyed : Array String
   /-- The keys and the whole numbers the card states: its `states`, or none without the key. -/
   states : Array Stated := #[]
+  /-- Who owns the card, when it says so in a text that is not empty. -/
+  owner : Option String := none
+  /-- The deck of rules the card's owner has the design checked against: its name and the
+  hash of its file. -/
+  rules : Option (String × String) := none
 
 structure Quantity where
   kind : String
@@ -223,8 +232,16 @@ structure Deck where
   input : Std.TreeMap (Array (Int × Nat)) (String × Floor)
   constants : Array Constant
   /-- Whether deck.json has `rules`, the name and the hash of a deck of rules. The exporter
-  writes it for a design checked against one, and the kernel reads only that it is there. -/
+  writes it for a design checked against one. -/
   rules : Bool
+  /-- That name and that hash, when `rules` holds both as texts. -/
+  pin : Option (String × String) := none
+
+/-- The acceptance run a deck of rules is bound to: the hash of the deck's file, and the
+gate that ran. The kernel reads no other key of run.json. -/
+structure Run where
+  deck : String
+  gate : String
 
 /-- The state of a cell. The files write `undecided` as "open". -/
 inductive State where
@@ -307,10 +324,19 @@ def maybe (j : Json) (key : String) (read : Json → Except String α) : Except 
 def numbered (what : String) (read : Json → Except String α) (a : Array Json) : Except String (Array α) :=
   a.mapIdxM fun i x => (read x).mapError (s!"{what} {i}: " ++ ·)
 
+/-- Whether an item of the card says where its value is from and how it was had. -/
+def sourced (j : Json) : Bool :=
+  (text j "source").toOption.any (!·.isEmpty) && (text j "kind").toOption.any ["signed", "measured"].contains
+
+/-- A name and a hash held under `key`, when both are texts. -/
+def pinned (j : Json) (key : String) : Option (String × String) := do
+  let held ← (j.getObjVal? key).toOption
+  return (← (text held "name").toOption, ← (text held "hash").toOption)
+
 def readInput (j : Json) : Except String Input := do
   return { name := ← text j "name", dim := ← text j "dim", range := ← range j, signer := ← text j "by",
            caseName := ← maybe j "case" (·.getStr?), on := ← maybe j "on" (·.getStr?),
-           field := ← maybe j "field" (·.getStr?) }
+           field := ← maybe j "field" (·.getStr?), sourced := sourced j }
 
 def readClaim (j : Json) : Except String Claim := do
   let bound ← j.getObjVal? "bound"
@@ -323,15 +349,15 @@ def readClaim (j : Json) : Except String Claim := do
 read. A statement with no `by` still reads, with an empty signer: naming one is a type rule. -/
 def readStated (j : Json) : Except String Stated := do
   for (key, _) in (← j.getObj?).toArray do
-    unless ["name", "by", "key", "whole"].contains key do throw s!"a statement has name, by and one of key and whole, and no {key}"
+    unless ["name", "by", "source", "kind", "key", "whole"].contains key do throw s!"a statement has name, by, source, kind and one of key and whole, and no {key}"
   let name ← text j "name"
   let signer := (text j "by").toOption.getD ""
   match j.getObjVal? "key", j.getObjVal? "whole" with
-  | .ok (.str key), .error _ => return { name, said := .key key, signer }
+  | .ok (.str key), .error _ => return { name, said := .key key, signer, sourced := sourced j }
   | .error _, .ok (.str _) =>
     let n ← number j "whole"
     unless n.den == 1 do throw "whole is not a whole number"
-    return { name, said := .whole n, signer }
+    return { name, said := .whole n, signer, sourced := sourced j }
   | _, _ => throw "a statement has one of key, a text, and whole, a whole number as a text"
 
 /-- A waiver with no `by` still reads, with an empty signer: naming one is a type rule. -/
@@ -481,11 +507,12 @@ def readCard (j : Json) : Read Card := do
     | .ok (.arr a) => !a.isEmpty
     | .ok _ => true
     | .error _ => false
-  let keyed := #["tests", "probability_claims", "states"].filter fun key => (j.getObjVal? key).toOption.isSome
+  let keyed := #["tests", "probability_claims", "states", "rules"].filter fun key => (j.getObjVal? key).toOption.isSome
   let states ← if keyed.contains "states" then items "card" j "states" readStated else pure #[]
   return { name := ← text j "name", environment, caseNames := ← texts j "cases",
            inputs := ← items "card" j "inputs" readInput, claims := ← items "card" j "claims" readClaim,
-           waivers := ← items "card" j "waivers" readWaiver, stated, keyed, states }
+           waivers := ← items "card" j "waivers" readWaiver, stated, keyed, states,
+           owner := (text j "owner").toOption.filter (!·.isEmpty), rules := pinned j "rules" }
 
 def readDesign (j : Json) : Read Design := do
   let parts ← if (j.getObjVal? "parts").toOption.isSome then some <$> items "design" j "parts" readBlock else pure none
@@ -514,7 +541,11 @@ def readDeck (j : Json) : Read Deck := do
         unless (input.get? dim.key).any fun held => !floor.tighter held.2 do
           input := input.insert dim.key (name, floor)
   return { size := ← readFloor (← domains.getObjVal? "size"), input,
-           constants := ← items "deck" j "constants" readConstant, rules := (j.getObjVal? "rules").toOption.isSome }
+           constants := ← items "deck" j "constants" readConstant, rules := (j.getObjVal? "rules").toOption.isSome,
+           pin := pinned j "rules" }
+
+def readRun (j : Json) : Read Run := do
+  return { deck := ← text j "deck", gate := ← text j "gate" }
 
 def readProofs (j : Json) : Read (Array Cell) := items "proofs" j "cells" readCell
 

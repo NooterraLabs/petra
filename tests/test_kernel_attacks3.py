@@ -52,6 +52,7 @@ from collections import Counter
 from fractions import Fraction
 
 from petra import export, grid, verify
+from tests import bound
 from tests.test_grid import STRIPS
 from tests.test_kernel_attacks import export_lap, run_raw
 from tests.test_kernel_attacks2 import MB, halves, measured, total
@@ -89,12 +90,15 @@ def with_card(cells: list[dict], inputs: list[dict] = (), waivers: list[dict] = 
 
 
 def with_rules(rules: dict, card: dict, parts: list[dict], hints: list[dict] = (), name: str = "c") -> dict[str, str]:
-    """A design of `parts` against a hostile deck of rules."""
-    card_text = text(card)
+    """A design of `parts` against a hostile deck of rules, bound to it as an honest exporter binds a pair (tests/bound.py):
+    the card names the deck and says who owns it and where each input is from, deck.json names the deck, and a run made up
+    for the deck names its hash."""
+    rules_text = text(rules)
+    card_text = text(bound.card_json(card, rules_text))
     design = text({"format": "petra-design/0", "name": name, "card": sha(card_text), "quantities": [], "params": [],
                    "parts": parts})
-    deck = text({"format": "petra-deck/0", "domains": core_domains(), "constants": [], "rules": {"name": rules["name"], "hash": "x"}})
-    return {"card": card_text, "design": design, "deck": deck, "rules": text(rules),
+    deck = text({"format": "petra-deck/0", "domains": core_domains(), "constants": [], "rules": bound.pin(rules_text)})
+    return {"card": card_text, "design": design, "deck": deck, "rules": rules_text, "run": bound.run_of(rules_text),
             "proofs": text({"format": "petra-proofs/0", "cells": list(hints)})}
 
 
@@ -108,13 +112,15 @@ ANCHOR = {"standard": "s", "clause": "c"}
 
 def card_states(parts: list[dict], *fields: str) -> tuple[dict, list[dict]]:
     """The card and the parts with each of these `fields`, written by a part as the name of a key, stated by the card: the
-    part's line reads the given, and the card states the name. A condition reads only a key the card signs (plan step 1.6)."""
+    part's line reads the given, and the card states the name. A condition reads only a key the card signs (plan step 1.6).
+    Each statement names its signer, source and kind in one letter where it can (type rule 5), so that the inputs of a
+    megabyte made with it hold as many parts as they did before a statement said where it is from."""
     states, out = [], []
     for part in parts:
         lines = []
         for line in part["lines"]:
             if line["field"] in fields and "word" in line["args"][0]:
-                states.append({"name": f"{part['name']}.{line['field']}", "by": "t@example.org", "key": line["args"][0]["word"]})
+                states.append({"name": f"{part['name']}.{line['field']}", "by": "b", "source": "s", "kind": "signed", "key": line["args"][0]["word"]})
                 line = {"field": line["field"], "args": [{"given": f"{part['name']}.{line['field']}"}]}
             lines.append(line)
         out.append({**part, "lines": lines})
@@ -228,11 +234,16 @@ class Time(unittest.TestCase):
         rules", item 4): a rule that reads loads has a cell for each load case of the card,
         open under a case that does not put every load it reads on the part. So the 1,000
         rules ask 6,000 cells each, which is past the 10,000 the kernel makes, and it refuses
-        the design at once. One such rule asks 6,000, and each is open."""
-        N = 3000
+        the design at once. One such rule asks 6,000, and each is open.
+
+        Since each input of the card names its source and kind (type rule 5), 3,000 cases of
+        each load are 0.87 MB, past the 0.7 MB this input was. So the card puts A on the part in
+        2,000 cases and B in 2,000 others, 0.62 MB: each rule asks 4,000 cells, still past the
+        10,000, and one such rule asks 4,000."""
+        N = 2000
         kind = {"type": "t", "what": "w", "fields": [{"name": "f", "dim": "length", "what": "w"}],
                 "loads": [{"name": n, "dim": "length", "what": "w"} for n in ("A", "B")]}
-        inputs = [{"name": f"{x}{c}", "dim": "length", "lo": "0", "hi": "1", "by": "b", "case": f"{x}{c}", "on": "p",
+        inputs = [{"name": f"{x}{c}", "dim": "length", "lo": "0", "hi": "1", "by": "b", "source": "s", "kind": "signed", "case": f"{x}{c}", "on": "p",
                    "field": x.upper()} for x in ("a", "b") for c in range(N)]
         part = {"name": "p", "type": "t", "lines": [{"field": "f", "args": [{"number": {"dim": "length", "lo": "1", "hi": "1"}}]}]}
 
@@ -246,7 +257,7 @@ class Time(unittest.TestCase):
         files = files_of(1000)
         self.assertLess(total(files), 0.7 * MB)
         said, seconds, _ = measured(files)
-        self.assertEqual((said["verdict"], len(said["cells"])), ("ILL-FORMED", 0), "6,000 cells for each of 1,000 rules are past the limit")
+        self.assertEqual((said["verdict"], len(said["cells"])), ("ILL-FORMED", 0), "4,000 cells for each of 1,000 rules are past the limit")
         self.assertEqual([(f["rule"], f["item"]) for f in said["findings"]], [("limits", "parts")])
         self.assertIn("asks more than 10000 cells", said["findings"][0]["why"])
         self.assertLess(seconds, PROCESSOR_SECONDS, "the design is refused in under a processor second")
@@ -381,7 +392,7 @@ class Names(unittest.TestCase):
                 with self.subTest(file=name, escaped=write is text):
                     body = json.loads(honest[name])
                     change(body)
-                    said = ask({**honest, name: write(body)})
+                    said = ask(bound.with_rules(honest, write(body)) if name == "rules" else {**honest, name: write(body)})
                     self.assertIn(f"shape {name} : a text or a key holds U+FFFD", findings(said))
         pair = json.loads(honest["card"])
         pair["waivers"][0]["reason"] = "a face \U0001F600"
@@ -979,9 +990,13 @@ class Worst(unittest.TestCase):
         may, which the label of every input of every tape holds. With `waived` the card waives
         all three lines, and with `strict` the rules state `lt`. `spend` gives other steps for
         the proof to spend the work on, for each of its 64 fractions. Gives what the kernel said,
-        its processor seconds and the bytes it held, and what it said of one load case more."""
+        its processor seconds and the bytes it held, and what it said of one load case more.
+
+        The part's name is 52 bytes, and not the 64 it may be: since each load names its source
+        and kind (type rule 5), the files of the 2,151 cases with a name of 64 bytes are 1.02 MB,
+        and 52 is the longest that leaves them under the megabyte."""
         fields = [f"f{k:063d}" for k in range(1_400)]
-        part, title = "p" * 64, "c" * 200
+        part, title = "p" * 52, "c" * 200
         row = {"id": "w", "anchor": ANCHOR, "gives": {"name": "y", "dim": "dimensionless"}, "takes": [{"name": "x", "dim": "length", "range": ["1 m", "2 m"]}],
                "is": ["add"] + [str(1_000_000 + k) for k in range(5_000)]}
         kind = {"type": "t", "what": "w", "fields": [{"name": name, "dim": "length", "what": "w"} for name in fields] + [{"name": "g", "dim": "dimensionless", "what": "w"}],
@@ -1005,7 +1020,8 @@ class Worst(unittest.TestCase):
         waivers = [{"subject": part, "mechanism": mechanism, "by": "b", "reason": "r"} for mechanism in ("sum", "read", "big")] if waived else []
 
         def files(count: int) -> dict[str, str]:
-            inputs = [{"name": f"i{c}", "dim": "length", "lo": "0", "hi": "1", "by": "b", "case": f"c{c}", "on": part, "field": "L"} for c in range(count)]
+            inputs = [{"name": f"i{c}", "dim": "length", "lo": "0", "hi": "1", "by": "b", "source": "s", "kind": "signed", "case": f"c{c}", "on": part, "field": "L"}
+                      for c in range(count)]
             return with_rules(rules, {**empty_card(inputs, title), "waivers": waivers}, [{"name": part, "type": "t", "lines": lines}], [hint], title)
 
         over = measured(files(cases + 1))[0]

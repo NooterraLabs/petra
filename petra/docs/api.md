@@ -1,6 +1,6 @@
 # Petra's Python API and `--json` output
 
-Petra checks a design against a card and a deck of rules. The card, `NAME.card`, holds what is asked: the loads, the signed bounds and the waivers. The design, `NAME.petra`, holds the parts. The answer is the verdict of `petra-verify`, a small kernel written in Lean. No function here gives a pass or a fail of its own.
+Petra checks a design against a card and a deck of rules. The card, `NAME.card`, holds what is asked: the deck of rules, by the hash of its file, the loads, the signed bounds and the waivers. The design, `NAME.petra`, holds the parts. The answer is the verdict of `petra-verify`, a small kernel written in Lean. No function here gives a pass or a fail of its own.
 
 ## Example
 
@@ -29,7 +29,7 @@ print(checked.text())                    # what `petra check` prints
 |---|---|
 | `status` | The kernel's verdict: PASS, PASS_WAIVED, FAIL or UNKNOWN. For a design no deck has it is UNKNOWN, and the kernel is not asked |
 | `reason` | For a design no deck has, why it reads UNKNOWN. Otherwise `None` |
-| `kernel` | What the kernel said: its verdict, the hashes of the files it read and the waivers it lists. `None` for a design no deck has, which the kernel is not asked about |
+| `kernel` | What the kernel said: its verdict, the hashes of the files it read, one hash of them all and the waivers it lists. `None` for a design no deck has, which the kernel is not asked about |
 | `hashes` | The SHA-256 of the card's text and of the design's |
 | `to_json()` | The dict `petra.check` returns |
 | `text()` | What `petra check` prints |
@@ -49,11 +49,11 @@ The kernel reads the deck's own file and works out every cell itself. The Python
 
 ## The hashes
 
-A status is about one card and one design. `hashes` names each by the SHA-256 of its text, so a reader can tell that a PASS was against the card they issued. For a file saved as UTF-8 with LF line ends it is what `sha256sum` prints. `petra check` prints the two on its `card` and `design` lines. `kernel.hashes` names the files the kernel read: `card.json`, `design.json`, `deck.json` and `rules.json`, as [format.md](../../docs/format.md) describes them.
+A status is about one card and one design. `hashes` names each by the SHA-256 of its text, so a reader can tell that a PASS was against the card they issued. For a file saved as UTF-8 with LF line ends it is what `sha256sum` prints. `petra check` prints the two on its `card` and `design` lines. The card names the deck of rules by the hash of its file, and a pair whose card names another deck, or none, is refused, so the card's hash also says which rules. `kernel.hashes` names the files the kernel read: `card.json`, `design.json`, `deck.json`, `rules.json`, `run.json` and `proofs.json`, as [format.md](../../docs/format.md) describes them, and `kernel.bundle` is one hash of the six. `petra check` prints the hash of the run on its `run` line and the bundle on its `bundle` line.
 
 ## JSON of a design checked against a deck
 
-`petra kinds` lists each shipped deck and its types. A design whose parts are of a deck's types is checked against that deck's grid: every mechanism the deck asks about, for every part, under every load case. `docs/deck.md` in the repository describes a deck and the states of a cell.
+`petra kinds` lists each shipped deck and its types, with the line a card writes to name the deck. A design whose parts are of a deck's types is checked against that deck's grid: every mechanism the deck asks about, for every part, under every load case. `docs/deck.md` in the repository describes a deck and the states of a cell.
 
 ```
 {"file": FILE, "design": NAME, "status": "PASS" | "PASS_WAIVED" | "FAIL" | "UNKNOWN",
@@ -64,7 +64,7 @@ A status is about one card and one design. `hashes` names each by the SHA-256 of
  "card": FILE, "hashes": {"card": HASH, "design": HASH},
  "path": "rules",                              the kernel worked out the cells from the rules deck
  "kernel": {"verdict": "PASS" | "FAIL" | "UNKNOWN", "checked": N, "cells_from": "rules",
-            "waived": [WAIVER, ...], "hashes": {...}}}
+            "waived": [WAIVER, ...], "hashes": {...}, "bundle": HASH}}
 
 WAIVER = {"subject": PART, "mechanism": NAME, "by": SIGNER, "reason": TEXT}
 
@@ -130,7 +130,7 @@ None of these gives the verdict of a check. A bug in the reader of a deck costs 
 |---|---|
 | `petra.lang` | `parse_design(card, design, path)` and `load_design(path)`: the two texts as one parsed design |
 | `petra.grid` | The Python reader of a deck: `read_deck(text)`, `decks()`, `kinds()`, and `check(design, deck)`, which returns the reader's own cells and runs no kernel |
-| `petra.rule` | The acceptance check that a rule passes before it enters a deck |
+| `petra.rule` | The acceptance check that a rule passes before it enters a deck, and with `--run FILE` the record of the run that a deck is read with |
 | `petra.deck` | Reads a deck's rows: tables and constants |
 | `petra.export` | Writes the files the kernel reads, for a design of a deck: `python -m petra.export FILE.petra --out DIR` |
 | `petra.verify` | Finds and runs the kernel, and takes its answer |

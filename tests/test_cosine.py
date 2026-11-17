@@ -20,6 +20,7 @@ from fractions import Fraction as F
 
 from petra import deck, grid, verify
 from petra.kernel import Add, Const, Cos, Div, Interval, KernelArithmeticError, Mul, Neg, Pi, Sym, enclose, i_cos, i_pi
+from tests import bound
 from tests.test_kernel_attacks2 import MB, measured, total
 from tests.test_kernel_grid import ask, changed, findings, strips
 from tests.test_kernel_limits import old_path
@@ -523,7 +524,7 @@ class KernelRules(unittest.TestCase):
         for change in (["cos", "reach"], ["cos", ["mul", "reach", "angle"]], ["cos"], ["cos", "angle", "angle"], ["sin", "angle"]):
             rules = json.loads(files["rules"])
             rules["rules"][0]["le"][0] = change
-            why = findings(ask({**files, "rules": json.dumps(rules)}))
+            why = findings(ask(bound.with_rules(files, json.dumps(rules))))
             self.assertRegex(why, "the argument of cos must be a plain number" if len(change) == 2 and change[0] == "cos" else "is not in the language", change)
 
     def test_a_tape_of_a_file_takes_the_node_and_a_node_of_another_shape_is_refused(self):

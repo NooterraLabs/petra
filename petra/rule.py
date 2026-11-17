@@ -1098,6 +1098,47 @@ def accept(mine: Reading, examples: Mapping[str, list[Worked]] | None = None, ot
     return lines, reads(mine)
 
 
+GATE = "petra.rule 1"
+"""The gate that `accept` is, as a run's record names it. The number goes up when what the
+check asks of a line changes, so a record says which gate admitted its deck."""
+
+
+def own(task: Task, deck: Mapping[str, Any]) -> str | None:
+    """What of the task is not the deck's own, or None. The check reads the rows, the types
+    and the lines of its task, and of a deck only the rules and the `unless`. So a run says
+    something of a deck only when its task holds that deck's rows, types and grid: a task
+    adds the ranges, `adverse` and `alike` to the types and takes no `unless`."""
+    if not all(isinstance(item, dict) for key in ("types", "grid") for item in (deck.get(key) if isinstance(deck.get(key), list) else [None])):
+        return "the types and the grid of the deck are not lists of objects"
+    types = [{**t, "fields": list(t.get("fields", [])), "loads": list(t.get("loads", []))} for t in deck["types"]]
+    lines = [{k: v for k, v in a.items() if k != "unless"} for a in deck["grid"]]
+    for what, mine, its in (("rows", task.body["rows"], deck.get("rows")), ("types", task.body["types"], types), ("lines of the grid", task.body["grid"], lines)):
+        # As JSON writes them, and not as Python compares them, for which true is 1 and 2.0 is 2.
+        if json.dumps(mine, sort_keys=True) != json.dumps(its, sort_keys=True):
+            return f"the {what} of the task are not the deck's"
+    return None
+
+
+def record(task: Task, deck: str, lines: list[Line], whole: Check, stray: list[str], inputs: Mapping[str, str], changed: str = "", seed: int = 0) -> str:
+    """The file of an acceptance run, bound to the deck whose text is `deck` (docs/deck.md,
+    "The run a deck is bound to"): the hash of the deck's file, the gate, the seed, the hash
+    of each file the run read under the name the caller gives it, what the caller changed
+    in them before the check, and what the check found for each line and for the whole. A
+    run with the same files gives the same text, byte for byte, so anyone can run it again
+    and compare. Raises DeckError when the task is not the deck's own (`own`): the check
+    then read other rows, types or lines than the deck has, and its record would say
+    nothing of the deck."""
+    from . import export
+
+    other = own(task, json.loads(deck))
+    if other:
+        raise DeckError(f"a run binds a deck when its task is the deck's own, and {other}")
+    return export.text({"format": grid.RUN, "deck": export.sha256(deck), "gate": GATE, "seed": seed, "inputs": dict(inputs), "changed": changed,
+                        "lines": [{"mechanism": line.mechanism, "state": line.state, "rules": list(line.rules), "note": line.note,
+                                   "checks": [{"name": c.name, "outcome": c.outcome, "detail": c.detail} for c in line.checks]} for line in lines],
+                        "whole": {"name": whole.name, "outcome": whole.outcome, "detail": whole.detail}, "stray": list(stray)})
+
+
 def load(task: Task, path: str) -> Reading:
     return Reading(task, read_transcription(json.loads(Path(path).read_text(encoding="utf-8"))))
 
@@ -1124,17 +1165,36 @@ def _main(argv: list[str]) -> int:
     parser.add_argument("rules", help="a transcription, or a deck, whose rules and `unless` are read as one")
     parser.add_argument("--second", help="a second transcription of the same task, to compare")
     parser.add_argument("--examples", help='worked examples, a JSON file {"examples": {MECHANISM: [...]}}')
+    parser.add_argument("--run", metavar="FILE", help="write the record of this run to FILE, bound to the deck that RULES is: the file a deck is read with")
     args = parser.parse_args(argv)
     try:
-        task = read_task(json.loads(Path(args.task).read_text(encoding="utf-8")), Path(args.task).parent)
-        mine, other = load(task, args.rules), load(task, args.second) if args.second else None
-        given = json.loads(Path(args.examples).read_text(encoding="utf-8"))["examples"] if args.examples else {}
+        # Each file is read once, and what the check reads is what a record hashes.
+        read = {name: Path(path).read_text(encoding="utf-8") for name, path in (("task", args.task), ("rules", args.rules), ("second", args.second), ("examples", args.examples)) if path}
+        task = read_task(json.loads(read["task"]), Path(args.task).parent)
+        mine = Reading(task, read_transcription(json.loads(read["rules"])))
+        other = Reading(task, read_transcription(json.loads(read["second"]))) if args.second else None
+        given = json.loads(read["examples"])["examples"] if args.examples else {}
         lines, whole = accept(mine, {m: [worked(e, task, m) for e in found] for m, found in given.items()}, other)
+        written = None
+        if args.run:
+            from . import export
+
+            grid.read_deck(read["rules"])      # a run binds a deck, and a transcription is none
+            written = record(task, read["rules"], lines, whole, mine.stray, {name: export.sha256(text) for name, text in read.items()})
     except (DeckError, OSError, json.JSONDecodeError, KeyError, RecursionError, TypeError, AttributeError) as exc:      # the last three: nested too deep, or not what a file should hold
         print(f"petra.rule: {exc}", file=sys.stderr)
         return 3
     print("\n".join(render(lines, whole, mine.stray)))
-    return 1 if whole.outcome == "fail" or mine.stray or any(line.state == "refused" for line in lines) else 0
+    refused = whole.outcome == "fail" or bool(mine.stray) or any(line.state == "refused" for line in lines)
+    if written is not None:
+        try:
+            Path(args.run).write_text(written, encoding="utf-8", newline="\n")
+        except OSError as exc:
+            print(f"petra.rule: the record is not written: {exc}", file=sys.stderr)
+            return 3
+        if refused:      # the record says so, and no reader of a deck reads what a record found
+            print(f"petra.rule: {args.run} is the record of a run that refused: read its lines before a deck is read with it", file=sys.stderr)
+    return 1 if refused else 0
 
 
 if __name__ == "__main__":

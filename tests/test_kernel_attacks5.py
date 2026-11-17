@@ -51,6 +51,7 @@ from unittest import mock
 
 import petra
 from petra import grid, verify
+from tests import bound
 from tests import test_deck_features as features
 from tests.test_kernel_attacks2 import MB
 from tests.test_kernel_attacks3 import ANCHOR, PROCESSOR_SECONDS
@@ -98,9 +99,9 @@ CALM_V = load("calm", "p V in [0 N, 1 N]", "p T in [0 N, 0 N]")
 
 
 def grid_status(card: str, rules: dict) -> str:
-    deck = grid.read_deck(json.dumps(rules))
+    deck = bound.read(json.dumps(rules))
     with mock.patch.object(grid, "decks", lambda: (deck,)):
-        parsed = petra.lang.parse_design(card, DESIGN, "pc.petra")
+        parsed = petra.lang.parse_design(bound.card(card, deck), DESIGN, "pc.petra")
         return grid.check(parsed, deck)[0].status
 
 
@@ -182,7 +183,7 @@ class LoadedIsNoCondition(unittest.TestCase):
         [0 N, 0 N], beside it the kernel made ("", not_applicable) and (size, proved) and said
         PASS. Now the deck is refused. With the `unless` taken out, the two cases together
         are FAIL: shear/gravity is refuted whatever calm states."""
-        said = ask({**strips(HEAD + GRAVITY + CALM, DESIGN, unconditioned(EXCUSED)), "rules": json.dumps(EXCUSED)})
+        said = ask(bound.with_rules(strips(HEAD + GRAVITY + CALM, DESIGN, unconditioned(EXCUSED)), json.dumps(EXCUSED)))
         self.assertEqual((said["verdict"], [f["file"] for f in said["findings"]]), ("ILL-FORMED", ["rules"]))
         self.assertIn("grid joint.shear: `loaded` is no condition", said["findings"][0]["why"])
         alone, files = with_calm(unconditioned(EXCUSED), CALM)
@@ -197,7 +198,7 @@ class LoadedIsNoCondition(unittest.TestCase):
         495f2b7 case calm, V in [0 N, 1 N] and T in [0 N, 0 N], turned FAIL into UNKNOWN. Now
         the deck is refused. With the two `when` taken out both rules answer under each case,
         and the verdict is FAIL with and without case calm."""
-        said = ask({**strips(HEAD + GRAVITY + CALM_V, DESIGN, unconditioned(NATURAL)), "rules": json.dumps(NATURAL)})
+        said = ask(bound.with_rules(strips(HEAD + GRAVITY + CALM_V, DESIGN, unconditioned(NATURAL)), json.dumps(NATURAL)))
         self.assertEqual((said["verdict"], [f["file"] for f in said["findings"]]), ("ILL-FORMED", ["rules"]))
         self.assertIn("rule pc/alone: `loaded` is no condition", said["findings"][0]["why"])
         alone, files = with_calm(unconditioned(NATURAL), CALM_V)

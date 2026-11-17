@@ -12,8 +12,10 @@
    "by": "a.b@c.d",
    "dim": "dimensionless",
    "hi": "1122/3445",
+   "kind": "signed",
    "lo": "918/3445",
-   "name": "A.r"
+   "name": "A.r",
+   "source": "attack"
   },
   {
    "by": "t@example.org",
@@ -21,9 +23,11 @@
    "dim": "force",
    "field": "drag",
    "hi": "565800000/131",
+   "kind": "signed",
    "lo": "0",
    "name": "a_.A.drag",
-   "on": "A"
+   "on": "A",
+   "source": "attack"
   },
   {
    "by": "t@example.org",
@@ -31,9 +35,11 @@
    "dim": "force",
    "field": "push",
    "hi": "2000",
+   "kind": "signed",
    "lo": "0",
    "name": "a_.A.push",
-   "on": "A"
+   "on": "A",
+   "source": "attack"
   },
   {
    "by": "t@example.org",
@@ -41,9 +47,11 @@
    "dim": "energy",
    "field": "twist",
    "hi": "21985/461",
+   "kind": "signed",
    "lo": "0",
    "name": "a_.A.twist",
-   "on": "A"
+   "on": "A",
+   "source": "attack"
   },
   {
    "by": "t@example.org",
@@ -51,9 +59,11 @@
    "dim": "force",
    "field": "press",
    "hi": "72000",
+   "kind": "signed",
    "lo": "0",
    "name": "a_.cap2.press",
-   "on": "cap2"
+   "on": "cap2",
+   "source": "attack"
   },
   {
    "by": "t@example.org",
@@ -61,16 +71,20 @@
    "dim": "force",
    "field": "press",
    "hi": "1744830462375/268435456",
+   "kind": "signed",
    "lo": "0",
    "name": "a_.lap_main.press",
-   "on": "lap_main"
+   "on": "lap_main",
+   "source": "attack"
   },
   {
    "by": "a.b@c.d",
    "dim": "length",
    "hi": "999/25000",
+   "kind": "signed",
    "lo": "999/25000",
-   "name": "cap2.t"
+   "name": "cap2.t",
+   "source": "attack"
   },
   {
    "by": "x@y.z",
@@ -78,9 +92,11 @@
    "dim": "force",
    "field": "drag",
    "hi": "134217727875/67108864",
+   "kind": "signed",
    "lo": "0",
    "name": "seismic.A.drag",
-   "on": "A"
+   "on": "A",
+   "source": "attack"
   },
   {
    "by": "x@y.z",
@@ -88,9 +104,11 @@
    "dim": "force",
    "field": "push",
    "hi": "5940",
+   "kind": "signed",
    "lo": "0",
    "name": "seismic.A.push",
-   "on": "A"
+   "on": "A",
+   "source": "attack"
   },
   {
    "by": "x@y.z",
@@ -98,9 +116,11 @@
    "dim": "force",
    "field": "press",
    "hi": "2000",
+   "kind": "signed",
    "lo": "0",
    "name": "seismic.cap2.press",
-   "on": "cap2"
+   "on": "cap2",
+   "source": "attack"
   },
   {
    "by": "a.b@c.d",
@@ -108,9 +128,11 @@
    "dim": "force",
    "field": "drag",
    "hi": "2500/177",
+   "kind": "signed",
    "lo": "2500/177",
    "name": "z.A.drag",
-   "on": "A"
+   "on": "A",
+   "source": "attack"
   },
   {
    "by": "a.b@c.d",
@@ -118,9 +140,11 @@
    "dim": "force",
    "field": "push",
    "hi": "23500/7",
+   "kind": "signed",
    "lo": "0",
    "name": "z.A.push",
-   "on": "A"
+   "on": "A",
+   "source": "attack"
   },
   {
    "by": "a.b@c.d",
@@ -128,9 +152,11 @@
    "dim": "energy",
    "field": "twist",
    "hi": "779/586",
+   "kind": "signed",
    "lo": "779/5860",
    "name": "z.A.twist",
-   "on": "A"
+   "on": "A",
+   "source": "attack"
   },
   {
    "by": "a.b@c.d",
@@ -138,13 +164,43 @@
    "dim": "force",
    "field": "press",
    "hi": "1980",
+   "kind": "signed",
    "lo": "198",
    "name": "z.cap2.press",
-   "on": "cap2"
+   "on": "cap2",
+   "source": "attack"
   }
  ],
  "name": "a",
+ "owner": "a.b@c.d",
  "probability_claims": [],
+ "rules": {
+  "hash": "sha256:3c46a258a5e32aea24e2ef9becfd535895736fc804e98875d3c057f2e0e94221",
+  "name": "bench-ops"
+ },
+ "states": [
+  {
+   "by": "a.b@c.d",
+   "key": "soft",
+   "kind": "signed",
+   "name": "A.grade",
+   "source": "attack"
+  },
+  {
+   "by": "a.b@c.d",
+   "key": "low",
+   "kind": "signed",
+   "name": "cap2.finish",
+   "source": "attack"
+  },
+  {
+   "by": "a.b@c.d",
+   "key": "low",
+   "kind": "signed",
+   "name": "lap_main.finish",
+   "source": "attack"
+  }
+ ],
  "tests": [],
  "waivers": [
   {

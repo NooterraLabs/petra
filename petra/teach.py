@@ -19,7 +19,7 @@ import importlib.metadata
 import re
 import sys
 from pathlib import Path
-from typing import Callable, Mapping
+from typing import Any, Callable, Mapping
 
 from . import deck as deck_rows
 from . import grid, verify
@@ -62,7 +62,7 @@ def _decks(name: str | None) -> list[tuple[grid.Deck, tuple[str, ...]]]:
 def _deck_text(deck: grid.Deck, types: tuple[str, ...]) -> str:
     """What a design writes for a part of each type, what a card may put on it, and what
     the grid asks of it, as `petra kinds` prints a kind."""
-    lines = [f"deck {deck.name}: {', '.join(deck.types)}", ""]
+    lines = [f"deck {deck.name}: {', '.join(deck.types)}", f"  a card names it in its card block: {grid.rules_line(deck)}", ""]
     for kind in (deck.types[name] for name in types):
         lines.append(f"{kind.name} <name> {{ one line each }}    {kind.what}")
         if kind.name in CANONICAL:
@@ -102,9 +102,14 @@ def _deck_text(deck: grid.Deck, types: tuple[str, ...]) -> str:
     return "\n".join(lines)
 
 
+def pin_line(kind: str) -> str:
+    """The line a card writes in its card block to name the deck that has the type `kind`, as that deck is now."""
+    return grid.rules_line(grid.kinds()[kind])
+
+
 def kinds_summary() -> str:
     """Each deck with its types, then how to print a type's lines."""
-    return "\n".join([*(f"deck {d.name}: {', '.join(d.types)}" for d in grid.decks()), "",
+    return "\n".join([*(line for d in grid.decks() for line in (f"deck {d.name}: {', '.join(d.types)}", f"  a card names it in its card block: {grid.rules_line(d)}")), "",
                       "`petra kinds TYPE` prints the lines a part of a type takes, each with its meaning, and what the",
                       "grid asks of it; `petra kinds DECK` prints them for every type of a deck, and `petra kinds --all`",
                       "for every type. `petra new TYPE` prints a complete design to start from, and `--card` its card.", ""])
@@ -244,11 +249,15 @@ def render_templates() -> str:
 
 # --- docs/reference.md --------------------------------------------------------------------
 
-SNIPPETS: tuple[tuple[str, str, str], ...] = (
-    ("card", "A card has one `card` block, which names what is asked. `owner` is required. `environment` is "
+_SNIPPETS: tuple[tuple[str, str, str], ...] = (
+    ("card", "A card has one `card` block, which names what is asked. `owner` is required. `rules` names the deck "
+     "of rules that the owner has the design checked against, by its name and the hash of its file, and a design "
+     "of a deck's types is checked only with a card that names the deck `petra check` has: `petra kinds` prints "
+     "the line to write. So the hash of a card covers which rules its owner asked for, and after a change to "
+     "the deck the card is refused until its owner names the new one. `environment` is "
      "optional and names where the design stands. No deck of rules reads an environment yet, so `petra check` "
      "refuses a card that states one for a design of a deck's types.",
-     'card "lap-splice" {\n  owner "s.engineer@example.org"\n}'),
+     'card "lap-splice" {\n  owner "s.engineer@example.org"\n  <RULES>\n}'),
     ("param", "`param` declares a range that a line reads by writing `param NAME` in place of a value. A param is "
      "declared in the card or in the design, and a load and the ambient read only the card's params. No deck of "
      "rules reads a param yet, and `petra check` refuses a design of a deck's types that declares one.",
@@ -295,6 +304,18 @@ SNIPPETS: tuple[tuple[str, str, str], ...] = (
 )
 """(declaration, what it says, an example). Every declaration but `param` and `component` is
 the card's. tests/test_teach.py parses the examples."""
+
+
+def snippets() -> tuple[tuple[str, str, str], ...]:
+    """Each declaration of the reference with what it is and an example that parses. The
+    card's example names the deck of a lap by the hash that deck has now."""
+    return tuple((decl, what, example.replace("<RULES>", pin_line("lap"))) for decl, what, example in _SNIPPETS)
+
+
+def __getattr__(name: str) -> Any:
+    if name == "SNIPPETS":      # read from the decks, so worked out when it is asked for and not when the module is loaded
+        return snippets()
+    raise AttributeError(name)
 
 
 def _grammar() -> str:
@@ -365,8 +386,8 @@ def render_reference() -> str:
         "",
         "## File layout and syntax",
         "",
-        "A check reads two files. The card, `NAME.card`, holds what is asked: the name, every signed bound, the",
-        "load cases, and the waivers. The design, `NAME.petra`, holds the answer: the parts. Whoever asks writes",
+        "A check reads two files. The card, `NAME.card`, holds what is asked: the name, the deck of rules to",
+        "check against, every signed bound, the load cases, and the waivers. The design, `NAME.petra`, holds the answer: the parts. Whoever asks writes",
         "the card, and a designer or an agent writes the design. A design cannot state a load, a waiver, or a",
         "signature, so it cannot change what is asked of it.",
         "`petra check NAME.petra` reads `NAME.card` beside the design, and `--card FILE` names another card.",
@@ -376,6 +397,7 @@ def render_reference() -> str:
         "",
         'card "lap-splice" {',
         '  owner "s.engineer@example.org"',
+        f"  {pin_line('lap')}",
         "}",
         "",
         'given tab.Fy in [36 ksi, 36 ksi] signed "s.engineer@example.org" source "ASTM A36, specified minimum"',
@@ -441,7 +463,7 @@ def render_reference() -> str:
         "## Declarations",
         "",
     ]
-    for decl, what, example in SNIPPETS:
+    for decl, what, example in snippets():
         lines += [f"### {decl}", "", what, "", "```", example, "```", ""]
     lines += ["## Grammar", "", "The grammar below is EBNF, and `NL` is a line end. The types of parts and their lines "
               "are not in the grammar. Each deck of rules declares its own, as the Types section shows.",

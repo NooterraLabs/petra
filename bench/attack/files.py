@@ -1,7 +1,7 @@
 """Changes to the files the kernel reads, which no language wrote.
 
-The kernel reads `card.json`, `design.json`, `deck.json`, `rules.json` and `proofs.json`
-(docs/format.md). Here the files of a design the Python reader checked are changed one way
+The kernel reads `card.json`, `design.json`, `deck.json`, `rules.json`, `run.json` and
+`proofs.json` (docs/format.md). Here the files of a design the Python reader checked are changed one way
 the pages describe, so the kernel and the third reading are asked about files that the
 exporter would never write. Three families:
 

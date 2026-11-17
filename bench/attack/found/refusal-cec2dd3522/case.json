@@ -1,0 +1,26 @@
+{
+ "sig": "cec2dd3522",
+ "kind": "refusal",
+ "where": "kernel/grid",
+ "detail": "the kernel refuses (rules: names the deck of rules sha256:fb92c98c91e26573ff826e9983047dbd19142e2f26b3feb14723329aa6877d94, and --rules is sha256:a6957b9b51e21d43c9209352ab6c6fbf4e0770ccd1e8d98fdbb8c75ff0d0a0e6; rules: n) and the grid gives FAIL",
+ "recipe": "bind:crlf",
+ "notes": [
+  "binding: the deck's file with CR LF line ends, the card and the run naming its hash with LF"
+ ],
+ "deck": null,
+ "relation": null,
+ "extra": {
+  "bind": {
+   "what": "the deck's file with CR LF line ends, the card and the run naming its hash with LF",
+   "expect": "agree",
+   "rules": []
+  }
+ },
+ "verdicts": {
+  "grid": "FAIL",
+  "kernel": "ILL-FORMED"
+ },
+ "seed": 22,
+ "count": 5,
+ "language": true
+}

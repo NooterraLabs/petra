@@ -258,7 +258,7 @@ A row proves nothing by itself. A rule puts it to work.
 
 ## A deck
 
-A deck is one JSON file in `petra/decks`.
+A deck is one JSON file in `petra/decks` whose format is `petra-rules/0`, with the record of its acceptance run beside it ([The run a deck is bound to](#the-run-a-deck-is-bound-to)).
 
 | Key | Holds |
 |---|---|
@@ -450,7 +450,7 @@ A design then writes `low -10 degC` and `offset 0 mm`, and a card may give eithe
 
 `may_be` is one of those two texts. Anything else is refused: `true`, `"positive"`, `"Zero"`. It stands on a quantity, a count among them, and on no key and no field that joins parts.
 
-A load has no floor by its sign: it may be zero or negative as it is, unless its `least` says otherwise. But the kernel holds every bound of a card to the floor that its dimension has in `petra/decks/core.json` ([format.md](format.md), type rules 4 and 8), and there a length, a mass, a time and seven more are at least zero. So a load that is a position needs `"may_be": "negative"` to go under zero. On a load, `may_be` is `"negative"` or left out: `"zero"` says nothing a load does not say already, and is refused.
+A load has no floor by its sign: it may be zero or negative as it is, unless its `least` says otherwise. But the kernel holds every bound of a card to the floor that its dimension has in `petra/decks/core.json` ([format.md](format.md), type rules 4 and 8), and there a length, a mass, a time and seven more are at least zero. So a load that is a position needs `"may_be": "negative"` to go under zero. On a load, `may_be` is `"negative"` or left out: `"zero"` says nothing a load does not say already, and is refused. The last row of the table holds for a load as for a field: beside `"may_be": "negative"` a load's `least` is under zero or left out, and a deck with one at zero or above is refused, since the two would say opposite things of the load.
 
 `may_be: negative` lifts a floor at zero and no other. The floor of a temperature in core.json is absolute zero, -273.15 degC. It holds for every temperature of a part and of a card, whatever `may_be` says: a number the design writes under it, and a bound of the card that reaches under it, are refused. The kernel holds these floors itself, and a deck.json that gives others is a finding: before 2026-11-12 it took them from deck.json, which the designer writes, so a deck.json with the floor of a temperature left out turned a part fitted at -300 degC to PASS (`tests/test_kernel_attacks10.py`).
 
@@ -744,7 +744,7 @@ The reader tries a rule only while the work is small. The rules with `requires` 
 
 ## A design checked against a deck
 
-`petra check` makes one cell for each answer and writes the files of [format.md](format.md): the card, the design with its parts as written, and the deck's own file. A cell has one of five states.
+`petra check` makes one cell for each answer and writes the files of [format.md](format.md): the card, the design with its parts as written, the deck's own file and the record of its acceptance run. A cell has one of five states.
 
 | State | When |
 |---|---|
@@ -830,7 +830,7 @@ An exponential costs the search more than any other node. The time of `exp` grow
 
 While a waiver rested such a cell, six designs that a rule refutes passed under one, each where the search missed the point: past six ranged inputs, inside the ranges away from their corners, inside a `where`, at an equality that `lt` refutes, at a quotient by zero, and at an unstated quantity (`tests/test_kernel_attacks7.py`). What a waiver rests now is what the deck has nothing to say about, which no search could change. The search now finds the first three, the corner past six ranged inputs, the point inside the ranges and the point inside the `where`, and the three designs FAIL. The fourth FAILs too: its side is the root of 3² + 4², which is now 5 exactly, as the root of the square of any fraction is ([format.md](format.md), "Tapes"). The deck of the quotient by zero, whose rule divided by a count that may be zero, is now refused when it is read ([A quantity at or under zero](#a-quantity-at-or-under-zero)).
 
-`petra-verify` reads the same three files and makes the cells again, each with the tape of its rule. It takes nothing of a cell from `petra check` but a hint: the partition that proved it, or the point that refuted it. The kernel tries the hint on its own tape, and the state it settles on is its own. `petra check` then compares the two lists cell by cell, and stops with exit code 4 if they differ.
+`petra-verify` reads the same files and makes the cells again, each with the tape of its rule. It takes nothing of a cell from `petra check` but a hint: the partition that proved it, or the point that refuted it. The kernel tries the hint on its own tape, and the state it settles on is its own. `petra check` then compares the two lists cell by cell, and stops with exit code 4 if they differ.
 
 These cases are open. A waiver rests the first two, and the fourth and the sixth where a completion of what is left out makes the rule hold, the seventh where the `where` holds nowhere in the ranges, and none of the others ([What a waiver rests](#what-a-waiver-rests)).
 
@@ -862,8 +862,10 @@ petra check examples/deck/lap_unknown.petra
 ```
 lap-splice: UNKNOWN
 rules      sha256:fb92c98c...  aisc360-22
-card       sha256:a5de0541...  examples/deck/lap_unknown.card
+run        sha256:0e94ebcc...  the acceptance run the deck is bound to
+card       sha256:e1a4af9c...  examples/deck/lap_unknown.card
 design     sha256:681a6588...  examples/deck/lap_unknown.petra
+bundle     sha256:ba5ac651...  the six files the kernel read
 kernel     petra-verify gives UNKNOWN: it checked 12 of 12 proofs
 path       rules: the kernel worked out every cell from the rules deck
 cells      12 proved, 0 refuted, 3 not applicable, 0 waived, 6 open
@@ -877,7 +879,33 @@ cells      12 proved, 0 refuted, 3 not applicable, 0 waived, 6 open
   ...
 ```
 
-The `rules` line is the hash of the deck's file, which the kernel prints as `hashes.rules`. A verdict is "checked against this deck" only when that hash is the one the reader trusts ([format.md](format.md), "Reading a verdict"). The number on a proved or refuted line is the most the left side of the rule reaches over the least the right side does. The block leaves lines out. Five of the six open cells are of the lines with no rule, and the sixth is the slip, which waits for the tightening. `examples/deck` has the same lap passing, with a card that waives the five lines with no rule, so that its slip is not applicable, and failing under a larger pull.
+The `rules` line is the hash of the deck's file, which the kernel prints as `hashes.rules`. It is the hash that the card names in its card block: with a card that names another, or none, there is no report, and `petra check` says which deck the card names and which it has. The `run` line is the hash of the record of the deck's acceptance run, and the `bundle` line one hash for all six files the kernel read ([format.md](format.md), "Reading a verdict"). The number on a proved or refuted line is the most the left side of the rule reaches over the least the right side does. The block leaves lines out. Five of the six open cells are of the lines with no rule, and the sixth is the slip, which waits for the tightening. `examples/deck` has the same lap passing, with a card that waives the five lines with no rule, so that its slip is not applicable, and failing under a larger pull.
+
+## The run a deck is bound to
+
+A deck is read with the record of its acceptance run, and with no other file in its place. The record is `NAME.run.json` beside `NAME.json` in `petra/decks`, and the kernel reads it as run.json ([format.md](format.md), "run.json").
+
+| Key | Holds |
+|---|---|
+| `format` | `"petra-run/0"` |
+| `deck` | The hash of the deck's file, `sha256:HEX`. It is the hash of the file with a line feed at each line end, which is how the file is in the repository and in a wheel, and how Petra hands it to the kernel. A checkout that turned the line ends to CR LF has a file of other bytes, and `petra kinds` still prints this hash for it |
+| `gate` | The gate that ran. `petra.rule 1` is the acceptance check for a rule as this page describes it, whoever calls it: the command below, or a script that changes its files first and then runs the same check, as the one for the deck that ships does. The number goes up when what the check asks of a line changes. No reader reads the name or the number: a `gate` is held to having a letter in it. |
+| `seed` | The seed of the sample of parts |
+| `inputs` | The hash of each file the run was given, each under the name its writer gives it: `task`, `rules`, `second` and `examples` from the command below, and the files' own names in the record of the deck that ships |
+| `changed` | What was changed in those files before the check, in words, or the empty text |
+| `lines` | For each line of the task, in its order: `mechanism`, `state` (`admitted`, `refused` or `left out`), the ids of its `rules`, its `note`, and its `checks`, each with `name`, `outcome` and `detail` |
+| `whole` | The check on the whole transcription, `reads`: `name`, `outcome` and `detail` |
+| `stray` | What the transcription holds that the task does not ask |
+
+Both readers hold the file to what every file is held to before it is read ([format.md](format.md), "run.json"), and then hold three things of it and read nothing else: the format, that `deck` is the hash of the deck's file, and that `gate` is a text with a letter in it. So three things follow.
+
+- A deck with no record beside it is not read, and neither is any other deck of the folder: `petra check`, `kinds`, `new` and `docs` and `python -m petra.export` of a design stop with exit code 4 and say which record is missing. `python -m petra.export --card-only` reads no deck and writes its card.json. A folder of decks with one that is not bound is a broken install, as one with a deck that does not hold together is.
+- A deck that was edited after its run is not read with the record of that run, however small the edit: its hash is no longer the one the record names. A limit raised by a slip of the hand, as a strength made ten times too generous, is refused where until 2026-11-16 it passed designs with no complaint. To have the deck read again it needs a record that names it. Its author runs the check again, and the new record says what the check found for the deck as it is.
+- A card names the deck by the same hash ([format.md](format.md), type rule 9). So after any change to a deck, every card that names the deck before it is refused until its owner names the new one. That is meant: the owner asked for a check against the rules they named, and the rules changed.
+
+`python -m petra.rule TASK DECK [--second FILE] [--examples FILE] --run OUT` runs the check on a deck and writes the record. The check reads the rows, the types and the lines of its task, and of DECK only the rules and each `unless`. So the command writes a record only when the task is the deck's own: its rows are the deck's rows, its types the deck's types with the ranges, `adverse` and `alike` that a task adds, and its lines the deck's grid with no `unless`. With any other task it writes nothing and exits 3, since the run would say nothing of that deck's rows. So a file of rows that a task names with `rows_from` is not among the `inputs`: its rows are the deck's, which `deck` hashes. The command exits 3 too when it cannot write OUT. Until the seventeenth review it wrote one, and the deck with a strength taken ten times got the record of the deck that ships, every line admitted, from a run on the honest rows. The command also writes nothing for a DECK that is a transcription and no deck. For a run that refuses a line it writes the record, which says so, exits 1 and says that the run refused. A run of the same files gives the same record, byte for byte: the sample of parts is drawn from the seed, the task's name and the mechanism, and nothing in the record is a time or a path. So anyone who has the files that `inputs` names can run the check again and compare the two records, and that comparison is what stands between a record and one written by hand. It shows that the record is of a run of this gate on these files. It does not show that the run found the deck good: that is in the record's `lines`, which a reader reads for themselves, since a record with a refused line binds its deck like any other. The kernel prints the hash of the record it was handed as `hashes.run`, so a reader compares that hash with the hash of the record their own run writes.
+
+The readers do not make it. A record that names the deck's hash and a gate binds the deck, whatever its `lines` say, and the readers do not read whether a line was admitted or refused. The record of the deck that ships is held to a run in `tests/test_deck_rules.py`: the test runs the check on the deck with the files of `bench/formalizer` and compares its record with the file beside the deck, byte for byte. That record is not written by the command above: `python -m bench.formalizer.bound` writes it, since the second run changes three things in its files before the check, which the command cannot. Its `changed` says what they are, its `inputs` names the three files of `bench/formalizer` that it read by their own names, and the deck itself is named by `deck` ([The second run](#the-second-run)).
 
 ## The acceptance check for a rule
 
@@ -1157,7 +1185,7 @@ A lap needs two things of its plates ([What a type needs](#what-a-type-needs)): 
 ## What a deck does not check yet
 
 - Types and grid lines are written once, by hand, and nothing second-transcribes them. A rule has the acceptance check above. The 15 rules of the first deck are one of two transcriptions from the pages that agree at every part tried, and eight worked examples stand behind six of its eight lines with rules ([The second run](#the-second-run)).
-- The kernel makes the cells and the tapes from the deck's file, and does not know whether that file is the standard's. It prints the file's hash.
+- The kernel makes the cells and the tapes from the deck's file, and does not know whether that file is the standard's. It holds the file to the hash that the card names and to the hash that the record of its acceptance run names, and prints the hash of the deck and the hash of the record. It does not read what the run found: a deck whose record says that a line was refused is read like any other.
 - The kernel does not search. The partition or the point for a cell comes from `petra/grid.py`, so a cell that search does not settle is open, though a better search might prove it.
 - A `not applicable` cell rests on the ground of its line's `unless`, which the readers check, and on the deck's reason, which they print and do not check. A ground excuses a line, and says less than a reason may. `when` says that keys of the card are as its condition has them. `least` says that the type declares a least value, and that the part has a value for it. `loads` says which loads the type takes. `with` says that other lines are settled for the part. None says that the mechanism cannot arise: that is the deck's reason, which no reader checks, and the deck's author's to answer for. The types and the grid are written by hand, so the grounds are too.
 - A `loads` ground can be written for any line of any type, by listing the loads of the type. So it checks that the line's author looked at those loads, and looks again when the type gains one. It does not check that the mechanism needs a load the type lacks. A `least` ground can be written the same way for any line of a type that declares a `least`.

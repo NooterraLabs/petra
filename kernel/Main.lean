@@ -1,11 +1,11 @@
 /-
-petra-verify --card card.json --design design.json --deck deck.json [--rules rules.json] [--proofs proofs.json]
+petra-verify --card card.json --design design.json --deck deck.json [--rules rules.json --run run.json] [--proofs proofs.json]
 
 Prints one JSON object, the verdict of docs/format.md with the state of each cell, and
 exits 0 for PASS, 1 for FAIL, 2 for UNKNOWN and 3 for ILL-FORMED. `cells_from` says whether
 the cells are the kernel's own, made from the deck of rules, or the list of proofs.json, and
-with that list the verdict is never PASS. A command line it cannot read prints the usage and
-exits 64.
+with that list the verdict is never PASS. A command line it cannot read, or one that gives a
+flag twice, prints the usage and exits 64.
 -/
 import Petra.Check
 
@@ -48,6 +48,7 @@ def render (r : Report) : String :=
   let fields : List (String × String) := [
     ("verdict", str r.verdict.name),
     ("hashes", object (r.hashes.map fun (file, hash) => (file, hash.elim "null" str))),
+    ("bundle", str r.bundle),
     ("cells_from", str r.cellsFrom),
     ("findings", rows (r.findings.kept.map finding)),
     ("more_findings", toString r.findings.more),
@@ -60,12 +61,12 @@ def render (r : Report) : String :=
   "{" ++ ",\n ".intercalate (fields.map fun (key, value) => s!"{str key}: {value}") ++ "}"
 
 def usage : String :=
-  "usage: petra-verify --card card.json --design design.json --deck deck.json [--rules rules.json] [--proofs proofs.json]"
+  "usage: petra-verify --card card.json --design design.json --deck deck.json [--rules rules.json --run run.json] [--proofs proofs.json]"
 
 def flags : List String → Option (List (String × String))
   | [] => some []
   | flag :: path :: rest =>
-    if ["--card", "--design", "--deck", "--rules", "--proofs"].contains flag then (flags rest).map ((flag, path) :: ·)
+    if ["--card", "--design", "--deck", "--rules", "--run", "--proofs"].contains flag then (flags rest).map ((flag, path) :: ·)
     else none
   | _ => none
 
@@ -80,9 +81,11 @@ def refuse : IO UInt32 := do
 
 def main (args : List String) : IO UInt32 := do
   let some given := flags args | refuse
+  -- A flag given twice names two files, and a reader of the verdict could not say which was read.
+  if (given.map (·.1)).eraseDups.length != given.length then return ← refuse
   let (some card, some design, some deck) := (given.lookup "--card", given.lookup "--design", given.lookup "--deck")
     | refuse
   let report := check (← slurp card) (← slurp design) (← slurp deck) (← (given.lookup "--rules").mapM slurp)
-    (← (given.lookup "--proofs").mapM slurp)
+    (← (given.lookup "--run").mapM slurp) (← (given.lookup "--proofs").mapM slurp)
   IO.println (render report)
   return report.verdict.exitCode

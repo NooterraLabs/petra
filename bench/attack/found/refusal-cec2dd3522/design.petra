@@ -1,0 +1,29 @@
+petra 0
+
+plate joint {
+  thickness 1.1 inch
+  width 60 inch
+  Fy given joint.Fy
+  Fu given joint.Fu
+}
+
+plate lap_main {
+  thickness 18288mm
+  width given lap_main.width
+  Fy given lap_main.Fy
+  Fu given lap_main.Fu
+}
+
+lap B2 {
+  fastener "Group 150"
+  threads included
+  diameter 0.7575 inch
+  holes given B2.holes
+  count 6
+  pitch 132 inch
+  end 1/8ft
+  side 67/2112000mile
+  surface given B2.surface
+  joins joint lap_main
+}
+

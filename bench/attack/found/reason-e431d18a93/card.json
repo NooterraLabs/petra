@@ -13,9 +13,11 @@
    "dim": "force",
    "field": "press",
    "hi": "6000",
+   "kind": "signed",
    "lo": "6000",
    "name": "B.Z.press",
-   "on": "Z"
+   "on": "Z",
+   "source": "test"
   },
   {
    "by": "a.b@c.d",
@@ -23,9 +25,11 @@
    "dim": "force",
    "field": "push",
    "hi": "2000",
+   "kind": "signed",
    "lo": "0",
    "name": "B.bar.push",
-   "on": "bar"
+   "on": "bar",
+   "source": "test"
   },
   {
    "by": "a.b@c.d",
@@ -33,9 +37,11 @@
    "dim": "energy",
    "field": "twist",
    "hi": "47/521",
+   "kind": "signed",
    "lo": "0",
    "name": "B.bar.twist",
-   "on": "bar"
+   "on": "bar",
+   "source": "test"
   },
   {
    "by": "a.b@c.d",
@@ -43,30 +49,38 @@
    "dim": "force",
    "field": "press",
    "hi": "48000",
+   "kind": "signed",
    "lo": "48000",
    "name": "B.cap2.press",
-   "on": "cap2"
+   "on": "cap2",
+   "source": "test"
   },
   {
    "by": "s.engineer@example.org",
    "dim": "length",
    "hi": "1/75",
+   "kind": "signed",
    "lo": "1/75",
-   "name": "bar.a"
+   "name": "bar.a",
+   "source": "calc C-12"
   },
   {
    "by": "x@y.z",
    "dim": "dimensionless",
    "hi": "120",
+   "kind": "signed",
    "lo": "120",
-   "name": "bar.r"
+   "name": "bar.r",
+   "source": "a source, with a comma"
   },
   {
    "by": "s.engineer@example.org",
    "dim": "length",
    "hi": "214748365/8589934592",
+   "kind": "signed",
    "lo": "42949673/2147483648",
-   "name": "cap2.t"
+   "name": "cap2.t",
+   "source": "ASTM A36"
   },
   {
    "by": "x@y.z",
@@ -74,9 +88,11 @@
    "dim": "force",
    "field": "press",
    "hi": "1960",
+   "kind": "signed",
    "lo": "0",
    "name": "service.Z.press",
-   "on": "Z"
+   "on": "Z",
+   "source": "a source, with a comma"
   },
   {
    "by": "x@y.z",
@@ -84,9 +100,11 @@
    "dim": "force",
    "field": "drag",
    "hi": "65000",
+   "kind": "signed",
    "lo": "6500",
    "name": "service.bar.drag",
-   "on": "bar"
+   "on": "bar",
+   "source": "a source, with a comma"
   },
   {
    "by": "x@y.z",
@@ -94,9 +112,11 @@
    "dim": "force",
    "field": "push",
    "hi": "2000",
+   "kind": "signed",
    "lo": "0",
    "name": "service.bar.push",
-   "on": "bar"
+   "on": "bar",
+   "source": "a source, with a comma"
   },
   {
    "by": "x@y.z",
@@ -104,9 +124,11 @@
    "dim": "energy",
    "field": "twist",
    "hi": "3/34",
+   "kind": "signed",
    "lo": "3/340",
    "name": "service.bar.twist",
-   "on": "bar"
+   "on": "bar",
+   "source": "a source, with a comma"
   },
   {
    "by": "x@y.z",
@@ -114,13 +136,43 @@
    "dim": "force",
    "field": "press",
    "hi": "2200",
+   "kind": "signed",
    "lo": "0",
    "name": "service.cap2.press",
-   "on": "cap2"
+   "on": "cap2",
+   "source": "a source, with a comma"
   }
  ],
  "name": "a",
+ "owner": "t@example.org",
  "probability_claims": [],
+ "rules": {
+  "hash": "sha256:3c46a258a5e32aea24e2ef9becfd535895736fc804e98875d3c057f2e0e94221",
+  "name": "bench-ops"
+ },
+ "states": [
+  {
+   "by": "t@example.org",
+   "key": "high",
+   "kind": "signed",
+   "name": "Z.finish",
+   "source": "attack"
+  },
+  {
+   "by": "t@example.org",
+   "key": "hard",
+   "kind": "signed",
+   "name": "bar.grade",
+   "source": "attack"
+  },
+  {
+   "by": "t@example.org",
+   "key": "low",
+   "kind": "signed",
+   "name": "cap2.finish",
+   "source": "attack"
+  }
+ ],
  "tests": [],
  "waivers": [
   {

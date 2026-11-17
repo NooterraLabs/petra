@@ -12,7 +12,7 @@ rules that has the kind as a type (petra/grid.py), so a new deck never edits thi
 
     card file   = "petra" INT NL { ( card | param | ambient | given | load | tests | claim | waive ) NL } EOF ;
     design file = "petra" INT NL { ( param | component ) NL } EOF ;
-    card      = "card" STRING "{" NL { ( "owner" STRING | "environment" IDENT ) NL } "}" ;
+    card      = "card" STRING "{" NL { ( "owner" STRING | "environment" IDENT | "rules" STRING STRING ) NL } "}" ;
     param     = "param" IDENT "in" range ;
     ambient   = "ambient" bound ;
     given     = "given" name ( "in" range [ "mean" qty ] | "is" ( IDENT | STRING | INT ) ) [ signature ] ;

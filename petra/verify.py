@@ -44,7 +44,7 @@ EXITS: Mapping[str, int] = {"PASS": 0, "FAIL": 1, "UNKNOWN": 2, "ILL-FORMED": 3}
 """The four verdicts of the kernel, each with the code it exits with (kernel/Main.lean)."""
 
 
-HASHED = ("card", "design", "deck", "rules")
+HASHED = ("card", "design", "deck", "rules", "run", "proofs")
 """The files whose hashes the kernel prints (kernel/Petra/Check.lean)."""
 
 STATES = ("proved", "refuted", "not_applicable", "waived", "open")
@@ -169,7 +169,7 @@ def taken(kernel: str, code: int, out: bytes, err: bytes) -> dict[str, Any]:
         raise BadAnswer(f"{kernel} exited {code} and printed no verdict of {', '.join(EXITS)}")
     if code != EXITS[said["verdict"]]:
         raise BadAnswer(f"{kernel} printed {said['verdict']} and exited {code}, where {said['verdict']} exits {EXITS[said['verdict']]}")
-    shape = {"hashes": dict, "cells_from": str, "findings": list, "waived": list, "cells": list}
+    shape = {"hashes": dict, "bundle": str, "cells_from": str, "findings": list, "waived": list, "cells": list}
     wrong = [key for key, kind in shape.items() if not isinstance(said.get(key), kind)]
     if wrong:
         raise BadAnswer(f"{kernel} printed {said['verdict']} without {', '.join(wrong)}")
@@ -197,6 +197,13 @@ def taken(kernel: str, code: int, out: bytes, err: bytes) -> dict[str, Any]:
     return said
 
 
+def bundle_hash(hashes: Mapping[str, str | None]) -> str:
+    """One hash for the files a verdict is about (docs/format.md, "Reading a verdict"): of
+    the six lines `FILE HASH`, in the order of HASHED, each ended by a line feed, with `none`
+    for a file that was not given."""
+    return "sha256:" + hashlib.sha256("".join(f"{name} {hashes.get(name) or 'none'}\n" for name in HASHED).encode("utf-8")).hexdigest()
+
+
 def ask(kernel: str, files: Mapping[str, str]) -> dict[str, Any]:
     """The kernel's answer to the files, each given as its text under its name. Raises
     NoVerdict when the kernel cannot be run or gives no answer (`taken`), and when it prints
@@ -216,6 +223,8 @@ def ask(kernel: str, files: Mapping[str, str]) -> dict[str, Any]:
     handed = {name: (f"sha256:{hashlib.sha256(files[name].encode('utf-8')).hexdigest()}" if name in files else None) for name in HASHED}
     if said["hashes"] != handed:
         raise BadAnswer(f"{kernel} printed the hashes of other files than the ones it was handed")
+    if said["bundle"] != bundle_hash(handed):
+        raise BadAnswer(f"{kernel} printed a hash of the bundle that is not the hash of the six lines of its files")
     if said["cells_from"] != ("rules" if "rules" in files else "proofs"):
         raise BadAnswer(f"{kernel} says its cells are from {said['cells_from']}, which is not what it was handed")
     return said

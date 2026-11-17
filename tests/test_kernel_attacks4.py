@@ -42,6 +42,7 @@ from unittest import mock
 
 import petra
 from petra import grid, verify
+from tests import bound
 from tests.test_kernel_attacks2 import MB, halves, measured, total
 from tests.test_kernel_attacks3 import ANCHOR, PROCESSOR_SECONDS, empty_card, with_card, with_rules
 from tests.test_kernel_grid import ask, changed, findings, strips
@@ -68,9 +69,9 @@ TENSION = '\nload gravity {\n  on p V in [0 N, 1 N]\n  on p T in [0 N, 1000000 N
 
 
 def grid_status(card: str, rules: dict = RULES) -> str:
-    deck = grid.read_deck(json.dumps(rules))
+    deck = bound.read(json.dumps(rules))
     with mock.patch.object(grid, "decks", lambda: (deck,)):
-        parsed = petra.lang.parse_design(card, DESIGN, "pc.petra")
+        parsed = petra.lang.parse_design(bound.card(card, deck), DESIGN, "pc.petra")
         return grid.check(parsed, deck)[0].status
 
 
@@ -115,10 +116,10 @@ class TheGridChecksTheSameCases(unittest.TestCase):
 def both(test: unittest.TestCase, card: str, rules: dict = RULES, design: str = DESIGN) -> tuple[list[tuple[str, str, str, str]], str, dict]:
     """The cells of the pair as the kernel lists them and its verdict, after the test holds
     petra/grid.py to the same cells in the same order and to the same verdict. Also what the
-    kernel said, for its reasons."""
-    deck = grid.read_deck(json.dumps(rules))
+    kernel said, for its reasons. The deck is bound to a run made up for it, and the card names it (tests/bound.py)."""
+    deck = bound.read(json.dumps(rules))
     with mock.patch.object(grid, "decks", lambda: (deck,)):
-        parsed = petra.lang.parse_design(card, design, "pc.petra")
+        parsed = petra.lang.parse_design(bound.card(card, deck), design, "pc.petra")
         report, files = grid.check(parsed, deck)
     said = ask(files)
     cells = [(c["subject"], c["mechanism"], c["entry"], c["state"]) for c in said["cells"]]
@@ -264,7 +265,7 @@ class ALoadThatNothingReads(unittest.TestCase):
             with self.assertRaises(grid.DeckError) as refused:
                 grid.read_deck(json.dumps(rules))
             self.assertIn(grid.LOADED, str(refused.exception))
-            said = ask(strips(HEAD + TENSION, DESIGN, SHEAR) | {"rules": json.dumps(rules)})
+            said = ask(bound.with_rules(strips(HEAD + TENSION, DESIGN, SHEAR), json.dumps(rules)))
             self.assertIn("`loaded` is no condition: a condition is over keys", findings(said))
             self.assertEqual([f["file"] for f in said["findings"]], ["rules"])
 
@@ -317,7 +318,7 @@ class ALoadThatNothingReads(unittest.TestCase):
         reaching["rules"][0]["le"] = [["load", "V"], "grip"]
         with self.assertRaises(grid.DeckError):
             grid.read_deck(json.dumps(reaching))
-        self.assertIn("the type takes no load V", findings(ask(strips(HEAD + GRAVITY, design, JOINED) | {"rules": json.dumps(reaching)})))
+        self.assertIn("the type takes no load V", findings(ask(bound.with_rules(strips(HEAD + GRAVITY, design, JOINED), json.dumps(reaching)))))
 
     def test_the_cells_of_unread_fields_and_unread_loads_have_different_keys(self):
         """A type with a field and a load of one name, V, and no rule: the field's cell has

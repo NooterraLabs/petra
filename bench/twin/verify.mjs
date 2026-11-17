@@ -2,9 +2,10 @@
 // verify.mjs: an independent kernel for a design whose parts are of a deck's types.
 // Written from format.md and deck.md alone. Exact rational interval arithmetic on BigInt.
 //
-//   node verify.mjs --card F --design F --deck F --rules F [--proofs F] [--explain]
+//   node verify.mjs --card F --design F --deck F --rules F --run F [--proofs F] [--explain]
 //
-// Prints one JSON object {verdict, findings, counts, ignored_hints, waived, cells} and exits
+// Prints one JSON object {verdict, hashes, bundle, cells_from, findings, counts, ignored_hints,
+// waived, cells} and exits
 // 0 PASS, 1 FAIL, 2 UNKNOWN, 3 ILL-FORMED, 64 for a command line it cannot read, and for files
 // with no deck of rules whose proofs.json carries a tape, which it does not check. A cell has its
 // subject, mechanism, entry, claimed and state, a reason when it is open, waived, not applicable
@@ -64,6 +65,14 @@
 // "A text that is cut", says, and the reasons are held to their three rooms. A `least` excuses
 // its line only for a part that has a value for what it names, and the line is open and waivable
 // for any other. See AMBIGUITIES.md, S, T and U.
+//
+// The files of one verdict are bound to each other by hash (format.md, type rules 1 and 9 to 11).
+// With --rules the card names the deck of rules by its name and the hash of its file, deck.json
+// names the same deck, and the deck is read with run.json, the record of its acceptance run,
+// under --run: its `deck` is the hash of the deck's file and its `gate` has a letter in it. The
+// card says whose it is, and each input and statement says where its value is from and how it was
+// had (type rule 5). The verdict prints the hash of each of the six files and `bundle`, one hash
+// of them all. See AMBIGUITIES.md, V and W.
 
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
@@ -2675,8 +2684,30 @@ export function verifyTexts(texts, opts = {}) {
   // format.md, A text that is cut: "the item and the reason of a finding when the finding is kept".
   const find = (file, item, why, rule = 'shape') => { findings.push({ rule, file, item: isStr(item) ? cutText(item) : item, why: isStr(why) ? cutText(why) : why }); };
   const zeroCounts = () => Object.fromEntries(STATES.map((s) => [s, 0]));
-  const ill = () => ({ out: { verdict: 'ILL-FORMED', findings, counts: zeroCounts(), waived: [], cells: [] }, code: 3 });
   const has = (o, k) => Object.hasOwn(o, k);
+  // format.md, The verdict: "the `hashes` of the six files, `card`, `design`, `deck`, `rules`,
+  // `run` and `proofs`, where each of the last three is null when its flag names no file,
+  // `bundle`, one hash for them all". A hash is of the file's bytes, whether or not the file
+  // reads: `opts.bytes` holds them where the caller has them, and a text that came with none is
+  // hashed as its UTF-8. "and any of the six is null when the file its flag names cannot be
+  // read": a path where no file can be opened has no bytes to hash, and prints null. A file whose
+  // bytes are there and do not read, as one that is not JSON, has its hash (AMBIGUITIES.md, V1 and W1).
+  const FILES = ['card', 'design', 'deck', 'rules', 'run', 'proofs'];
+  const sha = (b) => `sha256:${createHash('sha256').update(b).digest('hex')}`;
+  const hashes = {};
+  for (const k of FILES) {
+    const b = opts.bytes ? opts.bytes[k] : undefined;
+    hashes[k] = b !== undefined && b !== null ? sha(b) : isStr(texts[k]) ? sha(Buffer.from(texts[k], 'utf8')) : null;
+  }
+  // format.md, Reading a verdict: "It is the SHA-256, written `sha256:HEX`, of six lines of UTF-8,
+  // one for each key of `hashes` in the order `card`, `design`, `deck`, `rules`, `run`, `proofs`:
+  // the key, one space, the hash as `hashes` prints it or the word `none` for a null, and a line
+  // feed."
+  const bundle = sha(Buffer.from(FILES.map((k) => `${k} ${hashes[k] ?? 'none'}\n`).join(''), 'utf8'));
+  // "`cells_from` (`rules` when `--rules` names a deck of rules, whose cells the kernel makes
+  // itself, and `proofs` when it takes the list of proofs.json)".
+  const head = (verdict) => ({ verdict, hashes, bundle, cells_from: texts.rules !== undefined ? 'rules' : 'proofs' });
+  const ill = () => ({ out: { ...head('ILL-FORMED'), findings, counts: zeroCounts(), waived: [], cells: [] }, code: 3 });
 
   // ---------------------------------------------------------------- shape
   // format.md, After a broken rule: "The kernel reads every file it is given and lists the shape
@@ -2690,7 +2721,7 @@ export function verifyTexts(texts, opts = {}) {
   const whole = new Set();
   const W = (file, why) => { whole.add(file); find(file, '', why); };
   const docs = {};
-  const formats = { card: 'petra-card/0', design: 'petra-design/0', deck: 'petra-deck/0', rules: 'petra-rules/0', proofs: 'petra-proofs/0' };
+  const formats = { card: 'petra-card/0', design: 'petra-design/0', deck: 'petra-deck/0', rules: 'petra-rules/0', run: 'petra-run/0', proofs: 'petra-proofs/0' };
   for (const k of ['card', 'design', 'deck']) if (texts[k] === undefined) W(k, 'no file is given');
   for (const k of Object.keys(formats)) {
     if (texts[k] === undefined) continue;
@@ -2706,6 +2737,20 @@ export function verifyTexts(texts, opts = {}) {
   const { card: cardJ, design: designJ, deck: deckJ, rules: rulesJ, proofs: proofsJ } = docs;
   // `--rules` names a deck when the command line has it, whether or not its file reads.
   const rulesGiven = texts.rules !== undefined;
+  // format.md, run.json: "The kernel reads these three keys and no other. The file is held to what
+  // every file is held to before it is read: it is UTF-8 and JSON, nests no deeper than the limit,
+  // holds no number outside a string with more digits than the limit, and no text or key of it
+  // holds U+FFFD. A run.json that is not that, that has another `format`, or whose `deck` or
+  // `gate` is no text is a shape finding of the whole file, with the empty text for its item. The
+  // kernel then goes on with the other files". A `deck` or a `gate` that is left out is no text
+  // (Keys: "One that leaves a key out breaks the shape rule"). `runJ` is the run that read.
+  const runGiven = texts.run !== undefined;
+  let runJ = null;
+  if (docs.run) {
+    const k = ['deck', 'gate'].find((x) => !isStr(docs.run[x]));
+    if (k !== undefined) W('run', `${k} is not a text`);
+    else runJ = docs.run;
+  }
 
   // format.md, Keys: "A file, an item of one of its lists and a cell have every key this page
   // gives them. One that leaves a key out breaks the shape rule, as one that gives the key a value
@@ -2749,7 +2794,9 @@ export function verifyTexts(texts, opts = {}) {
       const e = noText(x, ['name', 'dim']) ?? noRange(x) ?? noText(x, ['by']);
       if (e) return e;
       for (const k of ['case', 'on', 'field']) if (has(x, k) && !isStr(x[k])) return `${k} is not a text`;
-      return { item: `${item} ${x.name}`, name: x.name, dim: x.dim, lo: parseFileNumber(x.lo), hi: parseFileNumber(x.hi), by: x.by, case: x.case, on: x.on, field: x.field };
+      // `source` and `kind` may be left out, and one of another kind than type rule 5 gives is "no
+      // shape finding" (Keys): they are kept as the file has them, for type rule 5.
+      return { item: `${item} ${x.name}`, name: x.name, dim: x.dim, lo: parseFileNumber(x.lo), hi: parseFileNumber(x.hi), by: x.by, case: x.case, on: x.on, field: x.field, source: x.source, kind: x.kind };
     });
     // A claim: `name`, `subject`, `quantity`, `rel`, `cases`, `bound`. The page gives the kind of
     // none of them, so a claim that has the six keys reads (AMBIGUITIES.md, P5).
@@ -2770,14 +2817,17 @@ export function verifyTexts(texts, opts = {}) {
     // "An item that breaks this is a shape finding and is left out." It may leave out `by`, as a
     // waiver may (Keys).
     if (has(cardJ, 'states')) states = items('card', cardJ, 'states', (s, item) => {
-      const extra = Object.keys(s).find((k) => !['name', 'by', 'key', 'whole'].includes(k));
+      // "It has `name`, ... `by`, `source` and `kind` as an input has them, and exactly one of
+      // `key` ... and `whole` ... It has no other key." Keys: "An item of `states` may also leave
+      // out `source` and `kind`, which type rule 5 refuses with `--rules`, as it does for an input."
+      const extra = Object.keys(s).find((k) => !['name', 'by', 'source', 'kind', 'key', 'whole'].includes(k));
       if (extra !== undefined) return `an item of states has the key ${short(extra)}`;
       if (!isStr(s.name)) return 'name is not a text';
       if (has(s, 'by') && !isStr(s.by)) return 'by is not a text';
       if (has(s, 'key') === has(s, 'whole')) return 'an item of states has exactly one of key and whole';
-      if (has(s, 'key')) return isStr(s.key) ? { item: `${item} ${s.name}`, name: s.name, by: s.by, key: s.key } : 'key is not a text';
+      if (has(s, 'key')) return isStr(s.key) ? { item: `${item} ${s.name}`, name: s.name, by: s.by, source: s.source, kind: s.kind, key: s.key } : 'key is not a text';
       const w = parseFileNumber(s.whole);
-      return w && w.d === 1n ? { item: `${item} ${s.name}`, name: s.name, by: s.by, whole: w } : `whole is ${short(s.whole)}, which is not a whole number`;
+      return w && w.d === 1n ? { item: `${item} ${s.name}`, name: s.name, by: s.by, source: s.source, kind: s.kind, whole: w } : `whole is ${short(s.whole)}, which is not a whole number`;
     });
   }
 
@@ -2929,6 +2979,13 @@ export function verifyTexts(texts, opts = {}) {
         // "Without `--rules` a cell is what the kernel checks", whatever the design is: the page
         // asked the `why` of a design with no parts only, until it was changed with P15.
         if ((c.state === 'not_applicable' || c.state === 'open') && !isStr(c.why)) return `a cell that is ${c.state} says why, and why is not a text`;
+        // format.md, Partitions and points: without `--rules` a cell is no hint, and its `point` is
+        // "one value per input", in the order of the tape's inputs, where a hint's "is an object
+        // with a value for each label". So a `point` that is no list is a key of the wrong kind
+        // here, and a `partition` is "the string `\"leaf\"`, or `{\"input\": k, ...}`", as a hint's
+        // is. This kernel reads no further into either, and checks no tape (AMBIGUITIES.md, P10 and V7).
+        if (has(c, 'point') && !Array.isArray(c.point)) return 'point is not a list of one value for each input';
+        if (has(c, 'partition') && !isStr(c.partition) && !isObj(c.partition)) return 'partition is not the text leaf or an object';
         return c;
       }
       if (has(c, 'partition')) {
@@ -2972,12 +3029,28 @@ export function verifyTexts(texts, opts = {}) {
     if (deckStepCount > DECK_STEPS) find('rules', '', `reading the deck takes ${deckStepCount} steps, more than 1,000,000`);
     else deck = loadDeck(rulesJ, find);
   }
+  // format.md, type rule 9: "A card that names the hash and another name is a finding too, when
+  // the deck of rules reads: of a deck that does not read the kernel has no name to compare." And
+  // After a broken rule: "Rules 9 to 11 are applied after rule 7 and before the deck of rules is
+  // held to the floors". So the name that rules 9 and 10 compare is that of a deck that read,
+  // whether or not a `least` of it is under its floor: `deckName` is kept here, before the floors.
+  const deckName = deck ? rulesJ.name : null;
+  // format.md, type rule 9: "A deck with a `least` under a floor of core.json reads, for this rule
+  // and for type rules 3 and 4, which take its `may_be` fields: its own finding comes after those
+  // of rules 9 to 11, and it is from there on that no part is read against it." `deckRead` is the
+  // deck that read, for those three rules; `deck` is null from the floors on, for the rules of
+  // Parts and the two names of Shape, which are "found where the parts are read".
+  const deckRead = deck;
   // format.md, The deck of rules: once the deck has read, no `least` of a field or a load is under
   // the floor its dimension has in `domains.input` of core.json (type rule 8: `inputDomains` is
   // the kernel's own copy with --rules), where that floor holds for it as type rule 4
   // holds an input: a floor under zero always, and one at zero or above unless the field or load
   // says `may_be: negative`. A deck that breaks it is refused as one that does not read is. "Under"
   // is taken strictly, whether or not the floor is strict (AMBIGUITIES.md, M1).
+  // The findings are kept in `underFloor` and listed where the page puts them: after rules 9 to 11
+  // when the type rules are applied, and with the shape findings of all the files when the kernel
+  // stops before them (AMBIGUITIES.md, P12, V6 and W4).
+  const underFloor = [];
   if (deck) {
     let under = false;
     for (const T of deck.types.values()) {
@@ -2987,7 +3060,7 @@ export function verifyTexts(texts, opts = {}) {
         const fl = inputDomains.get(dstr(f.dim));
         if (!fl || (f.mayBe === 'negative' && fl.min.n >= 0n)) continue;
         if (qcmp(f.least, fl.min) < 0) {
-          find('rules', '', `${what} ${f.name}: its least, ${f.least} in SI units, is under ${fl.min}, the floor of a ${fl.name}, and no card states a value under it`);
+          underFloor.push(`${what} ${f.name}: its least, ${f.least} in SI units, is under ${fl.min}, the floor of a ${fl.name}, and no card states a value under it`);
           under = true;
         }
       }
@@ -3004,7 +3077,19 @@ export function verifyTexts(texts, opts = {}) {
   // format.md, After a broken rule: "When card.json, design.json or deck.json does not read as a
   // whole, the kernel stops there, with the shape findings of all the files. Otherwise it applies
   // the type rules to what it read".
-  if (whole.has('card') || whole.has('design') || whole.has('deck')) return ill();
+  const listUnderFloor = () => { for (const why of underFloor) find('rules', '', why); };
+  const stops = whole.has('card') || whole.has('design') || whole.has('deck');
+  if (stops) listUnderFloor();
+  // format.md, The verdict: "The shape findings of whole files come in the order card, design,
+  // deck, rules, run, proofs." Every finding so far is a shape finding. They are put in that order
+  // of their files, the findings of items with those of the whole file they are of, and each
+  // file's own in the order they were found (AMBIGUITIES.md, W2).
+  {
+    const sorted = findings.map((f, i) => [f, i]).sort((a, b) => FILES.indexOf(a[0].file) - FILES.indexOf(b[0].file) || a[1] - b[1]).map((x) => x[0]);
+    findings.length = 0;
+    findings.push(...sorted);
+  }
+  if (stops) return ill();
   // The two names are tested past the stop: "They are found where the parts are read, with the
   // rules of Parts, and those go on", as the name of a load case is. Nothing stops between here
   // and Parts 1 to 8 when the deck of rules reads (AMBIGUITIES.md, P16).
@@ -3018,16 +3103,16 @@ export function verifyTexts(texts, opts = {}) {
   const firstOfName = new Map();
   for (const p of partsR) if (!firstOfName.has(p.name)) firstOfName.set(p.name, p);
   const firstPartType = (name) => {
-    if (!deck) return null;
+    if (!deckRead) return null;
     const p = firstOfName.get(name);
-    return p ? deck.types.get(p.type) ?? null : null;
+    return p ? deckRead.types.get(p.type) ?? null : null;
   };
 
   // ---------------------------------------------------------------- types
   // Type rule 1: "The design's `card` is the SHA-256 of the card file's bytes", written
   // `sha256:HEX` (format.md, design.json). The file read as JSON, so it is UTF-8 with no byte
   // order mark, and its text gives its bytes back.
-  const cardHash = `sha256:${createHash('sha256').update(texts.card, 'utf8').digest('hex')}`;
+  const cardHash = hashes.card;
   if (designJ.card !== cardHash) find('design', 'card', `is not the hash of the card file, ${cardHash}`, 'types.1');
   const allowedDesignKeys = ['format', 'name', 'card', 'quantities', 'params', 'parts'];
   for (const k of Object.keys(designJ)) if (!allowedDesignKeys.includes(k)) find('design', k, `the design has the key ${short(k)}`, 'types.2');
@@ -3076,9 +3161,12 @@ export function verifyTexts(texts, opts = {}) {
   // Type rule 5: every input, every waiver and every item of `states` names a `by` that is not
   // the empty text. A waiver or an item of `states` with no `by` "names nobody, which type rule 5
   // refuses" (Keys); an input with none did not read.
-  for (const x of inputs) if (x.by.length === 0) find('card', x.item, 'the input names no by: nobody signed it', 'types.5');
+  // The item of a finding of this rule on an input or a statement is its name (The verdict: "but
+  // where a rule of this page gives the item: `owner` and the name of an input or of a statement
+  // (type rule 5)"), in both halves of the rule (AMBIGUITIES.md, W3). A waiver's is this reading's own.
+  for (const x of inputs) if (x.by.length === 0) find('card', x.name, 'the input names no by: nobody signed it', 'types.5');
   for (const w of waivers) if (w.by === undefined || w.by.length === 0) find('card', w.item, 'the waiver names no by', 'types.5');
-  for (const s of states) if (s.by === undefined || s.by.length === 0) find('card', s.item, 'the statement names no by', 'types.5');
+  for (const s of states) if (s.by === undefined || s.by.length === 0) find('card', s.name, 'the statement names no by', 'types.5');
   // Types 6 and 7: parts come with --rules, and the marks of a file for a deck of rules come
   // with parts and --rules: an input with `on` or `field`, `tests`, `probability_claims` or
   // `states` in the card, `rules` in deck.json.
@@ -3086,9 +3174,67 @@ export function verifyTexts(texts, opts = {}) {
   if (!hasParts || !rulesGiven) {
     const why = !hasParts ? 'is a mark of a design checked against a deck of rules, and the design has no parts' : 'is a mark of a design checked against a deck of rules, and --rules names no deck';
     for (const x of inputs) if (x.on !== undefined || x.field !== undefined) find('card', x.item, `an input with on or field ${why}`, 'types.7');
-    for (const k of ['tests', 'probability_claims', 'states']) if (has(cardJ, k)) find('card', k, `the key ${k} ${why}`, 'types.7');
+    for (const k of ['tests', 'probability_claims', 'states', 'rules']) if (has(cardJ, k)) find('card', k, `the key ${k} ${why}`, 'types.7');
     if (has(deckJ, 'rules')) find('deck', 'rules', `the key rules ${why}`, 'types.7');
   }
+  // Type rule 7, the fourth mark: "The fourth, `--run`, is a finding only when `--rules` names no
+  // deck, whether or not the file it names reads: of the file `run`, with the empty text for its
+  // item, beside the shape finding of a file that does not read."
+  if (runGiven && !rulesGiven) find('run', '', 'the file run.json is a mark of a design checked against a deck of rules, and --rules names no deck', 'types.7');
+  // Type rules 9 to 11, and what type rule 5 asks with `--rules`. format.md, After a broken rule:
+  // "Rules 9 to 11 are applied after rule 7 and before the deck of rules is held to the floors,
+  // with what the kernel read of each file. Their findings come in this order: the card's `rules`,
+  // deck.json's `rules`, the run, the card's `owner`, each input and then each item of `states`
+  // that lacks its `source` or its `kind`."
+  if (rulesGiven) {
+    // The hash of "the bytes of the file `--rules` names, written `sha256:HEX`": the text that
+    // `hashes.rules` prints, compared as text, as type rule 1 is (AMBIGUITIES.md, P4 and V2).
+    const rulesHash = hashes.rules;
+    // Rule 9: "`rules` of card.json holds `name` and `hash`, both texts, the `hash` is the SHA-256
+    // of the bytes of the file `--rules` names, written `sha256:HEX`, and the `name` is the `name`
+    // of that deck. A card with no `rules`, or with one that does not hold the two texts, is a
+    // finding with the item `rules`. So is a card that names another hash. A card that names the
+    // hash and another name is a finding too, when the deck of rules reads". Rule 10: "`rules` of
+    // deck.json holds the same two, held to the same file in the same way, with the item `rules`
+    // of the file `deck`." One finding for a file, of the first of these that it breaks.
+    const namesTheDeck = (file, o, rule) => {
+      const F = (why) => find(file, 'rules', why, rule);
+      if (!has(o, 'rules')) return F('names no deck of rules: there is no rules');
+      const r = o.rules;
+      if (!isObj(r) || !isStr(r.name) || !isStr(r.hash)) return F('rules does not hold name and hash, both texts');
+      if (r.hash !== rulesHash) return F(`names the deck of rules ${short(r.name)} with the hash ${short(r.hash)}, and the file --rules names has ${rulesHash === null ? 'none' : rulesHash}`);
+      if (deckName !== null && r.name !== deckName) return F(`names the hash of the deck of rules under the name ${short(r.name)}, and the deck is named ${short(deckName)}`);
+      return undefined;
+    };
+    namesTheDeck('card', cardJ, 'types.9');
+    namesTheDeck('deck', deckJ, 'types.10');
+    // Rule 11: "`--run` names the acceptance run of the deck: run.json's `deck` is the SHA-256 of
+    // the bytes of the file `--rules` names, and its `gate` has a letter in it. With no `--run`
+    // the finding is of the file `run` with the empty text for its item. A `deck` that is another
+    // hash is a finding with the item `deck`, and a `gate` with no letter one with the item
+    // `gate`. A run.json that did not read is a shape finding and no finding of this rule."
+    if (!runGiven) find('run', '', 'a deck of rules is read with the record of its acceptance run, and there is no --run', 'types.11');
+    else if (runJ) {
+      if (runJ.deck !== rulesHash) find('run', 'deck', `the run is of the deck ${short(runJ.deck)}, and the file --rules names has ${rulesHash === null ? 'none' : rulesHash}`, 'types.11');
+      if (!hasLetter(runJ.gate)) find('run', 'gate', `the gate ${short(runJ.gate)} has no letter in it`, 'types.11');
+    }
+    // Rule 5: "With `--rules`, the card also has an `owner` that is a text and not empty, and
+    // every input and every item of `states` has a `source` that is a text and not empty and a
+    // `kind` that is `signed` or `measured`. A card with no such `owner` is a finding with the
+    // item `owner`. An input or an item of `states` that lacks either is one finding with its
+    // name for the item, whichever it lacks."
+    if (!isStr(cardJ.owner) || cardJ.owner.length === 0) find('card', 'owner', has(cardJ, 'owner') ? 'the owner of the card is not a text that is not empty' : 'the card names no owner', 'types.5');
+    const lacks = (x) => {
+      const noSource = !isStr(x.source) || x.source.length === 0;
+      const noKind = x.kind !== 'signed' && x.kind !== 'measured';
+      return noSource && noKind ? 'has no source that is a text and not empty, and no kind that is signed or measured' : noSource ? 'has no source that is a text and not empty' : noKind ? 'has no kind that is signed or measured' : null;
+    };
+    for (const x of inputs) { const why = lacks(x); if (why) find('card', x.name, `the input ${why}`, 'types.5'); }
+    for (const s of states) { const why = lacks(s); if (why) find('card', s.name, `the statement ${why}`, 'types.5'); }
+  }
+  // "... before the deck of rules is held to the floors": a deck with a `least` under its floor
+  // "is a finding of the file `rules` as one that does not read is".
+  listUnderFloor();
 
   // format.md, After a broken rule: "and then, when `--rules` names a deck of rules that reads,
   // Parts 1 to 8, whatever it has found by then. ... With a deck of rules that does not read, no
@@ -3122,7 +3268,7 @@ export function verifyTexts(texts, opts = {}) {
       return o;
     });
     return {
-      out: { verdict: 'UNKNOWN', findings: [], counts, waived: rested.map((w) => ({ subject: w.subject, mechanism: w.mechanism, by: w.by, reason: w.reason })), cells },
+      out: { ...head('UNKNOWN'), findings: [], counts, waived: rested.map((w) => ({ subject: w.subject, mechanism: w.mechanism, by: w.by, reason: w.reason })), cells },
       code: 2,
     };
   }
@@ -4230,7 +4376,7 @@ export function verifyTexts(texts, opts = {}) {
   let ignored = 0;
   for (const [k, hs] of hints) if (!usedHints.has(k)) ignored += hs.length;
   const out = {
-    verdict,
+    ...head(verdict),
     findings: [],
     counts,
     ignored_hints: ignored,
@@ -4256,17 +4402,22 @@ export function verifyTexts(texts, opts = {}) {
 
 // ============================================================ command line
 
-const USAGE = 'usage: node verify.mjs --card FILE --design FILE --deck FILE [--rules FILE] [--proofs FILE] [--explain]';
+const USAGE = 'usage: node verify.mjs --card FILE --design FILE --deck FILE [--rules FILE --run FILE] [--proofs FILE] [--explain]';
 
-function readText(path) {
-  let buf;
-  try { buf = readFileSync(path); } catch { return null; }
+function readBytes(path) {
+  try { return readFileSync(path); } catch { return null; }
+}
+function readText(buf) {
+  if (buf === null) return null;
   if (buf.length >= 3 && buf[0] === 0xef && buf[1] === 0xbb && buf[2] === 0xbf) return '\u0000BOM';
   try { return new TextDecoder('utf-8', { fatal: true }).decode(buf); } catch { return '\u0000UTF8'; }
 }
 
 export function run(argv) {
-  const flags = { '--card': 'card', '--design': 'design', '--deck': 'deck', '--rules': 'rules', '--proofs': 'proofs' };
+  // format.md: "petra-verify --card card.json --design design.json --deck deck.json [--rules
+  // rules.json --run run.json] [--proofs proofs.json]". `--run` with no `--rules` and `--rules`
+  // with no `--run` are command lines the kernel reads: type rules 7 and 11 have a finding for each.
+  const flags = { '--card': 'card', '--design': 'design', '--deck': 'deck', '--rules': 'rules', '--run': 'run', '--proofs': 'proofs' };
   const paths = {};
   let explain = false;
   for (let i = 0; i < argv.length; i++) {
@@ -4277,14 +4428,14 @@ export function run(argv) {
     paths[k] = argv[++i];
   }
   if (!paths.card || !paths.design || !paths.deck) return { usage: true };
-  const texts = {};
-  for (const k of Object.keys(paths)) texts[k] = readText(paths[k]);
+  const texts = {}, bytes = {};
+  for (const k of Object.keys(paths)) { bytes[k] = readBytes(paths[k]); texts[k] = readText(bytes[k]); }
   const bad = {};
   for (const k of Object.keys(texts)) {
     if (texts[k] === '\u0000BOM') { bad[k] = 'the file begins with a byte order mark'; texts[k] = null; }
     else if (texts[k] === '\u0000UTF8') { bad[k] = 'the file is not UTF-8'; texts[k] = null; }
   }
-  const res = verifyTexts(texts, { explain });
+  const res = verifyTexts(texts, { explain, bytes });
   if (res.out && res.out.verdict === 'ILL-FORMED') {
     for (const f of res.out.findings) if (bad[f.file] && f.why === 'the file cannot be read') f.why = bad[f.file];
   }

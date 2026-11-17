@@ -2,6 +2,7 @@ petra 0
 
 card "d16_side_at_minimum" {
   owner "s.engineer@example.org"
+  rules "aisc360-22" "sha256:fb92c98c91e26573ff826e9983047dbd19142e2f26b3feb14723329aa6877d94"
 }
 
 given tab.Fy in [36 ksi, 36 ksi] signed "s.engineer@example.org" source "ASTM A36, specified minimum"

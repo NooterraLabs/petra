@@ -18,6 +18,7 @@ import petra
 from petra import deck as rows
 from petra import export, grid, verify
 from petra.files import read_pair
+from tests import bound
 
 ROOT = Path(__file__).resolve().parents[1]
 TEST = {"standard": "a deck made up for the tests", "clause": "1"}
@@ -117,9 +118,10 @@ waive strip.creep on s by "t@example.org" reason "it is a test"
 
 
 def deck(edit=lambda body: None) -> grid.Deck:
+    """STRIPS after the edit, bound to a run made up for it (tests/bound.py)."""
     body = copy.deepcopy(STRIPS)
     edit(body)
-    return grid.read_deck(json.dumps(body))
+    return bound.read(json.dumps(body))
 
 
 def alone(card: str, design: str, path: str) -> dict:
@@ -139,15 +141,17 @@ def alone(card: str, design: str, path: str) -> dict:
 def checked(design=DESIGN, card=CARD, rules=None, swap=(), card_swap=()) -> dict:
     """The grid's own report of the texts against STRIPS, each after its replacements. A
     replacement of `swap` is made in the design, or in the card where only the card holds
-    its text: the fit of the screw is a key that a condition reads, so the card states it."""
+    its text: the fit of the screw is a key that a condition reads, so the card states it. The
+    card names the deck it is checked against."""
     for old, new in swap:
         assert old in design or old in card, old
         design, card = (design.replace(old, new), card) if old in design else (design, card.replace(old, new))
     for old, new in card_swap:
         assert old in card, old
         card = card.replace(old, new)
-    with mock.patch.object(grid, "decks", lambda: (rules or deck(),)):
-        return alone(card, design, "strips.petra")
+    against = rules or deck()
+    with mock.patch.object(grid, "decks", lambda: (against,)):
+        return alone(bound.card_of(card, against), design, "strips.petra")
 
 
 def cell(result: dict, mechanism: str, entry: str | None = None) -> dict:
@@ -245,7 +249,7 @@ class Cells(unittest.TestCase):
         bow = cell(wide, "strip.bow")
         self.assertEqual(bow["state"], "proved", "gap (4 mm - gap) peaks at 4 mm2, under 4.2, and one enclosure over [1, 3] mm reaches 9")
         with mock.patch.object(grid, "decks", lambda: (deck(),)):
-            design = petra.lang.parse_design(CARD.replace("[0.5 mm, 0.6 mm]", "[1 mm, 3 mm]"), DESIGN, "strips.petra")
+            design = petra.lang.parse_design(bound.card_of(CARD.replace("[0.5 mm, 0.6 mm]", "[1 mm, 3 mm]"), deck()), DESIGN, "strips.petra")
             report, files = grid.check(design, grid.owner(design))
         partition = next(c for c in json.loads(files["proofs"])["cells"] if c["mechanism"] == "strip.bow")["partition"]
         self.assertIsInstance(partition, dict, "it is split")
@@ -785,7 +789,7 @@ class Kernel(unittest.TestCase):
                 for old, new in card_swap:
                     card = card.replace(old, new)
                 with mock.patch.object(grid, "decks", lambda: (deck(),)):
-                    result = petra.check(card, DESIGN, path="strips.petra")
+                    result = petra.check(bound.card_of(card, deck()), DESIGN, path="strips.petra")
                 self.assertEqual(result["kernel"]["verdict"], kernel_word(result["status"]), "a difference raises before this line")
                 self.assertGreaterEqual(result["kernel"]["checked"], 4)
 

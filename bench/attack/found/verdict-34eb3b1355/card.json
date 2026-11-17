@@ -13,9 +13,11 @@
    "dim": "force",
    "field": "pull",
    "hi": "880747879821579/4000000000",
+   "kind": "signed",
    "lo": "0",
    "name": "a.lap.pull",
-   "on": "lap"
+   "on": "lap",
+   "source": "attack"
   },
   {
    "by": "a.b@c.d",
@@ -23,41 +25,72 @@
    "dim": "force",
    "field": "pull",
    "hi": "1503498905958049/1242000000000",
+   "kind": "signed",
    "lo": "0",
    "name": "a1.lap.pull",
-   "on": "lap"
+   "on": "lap",
+   "source": "attack"
   },
   {
    "by": "s.engineer@example.org",
    "dim": "stress",
    "hi": "257996595688255314891/645160000000",
+   "kind": "signed",
    "lo": "257996595688255314891/645160000000",
-   "name": "joint.Fu"
+   "name": "joint.Fu",
+   "source": "attack"
   },
   {
    "by": "t@example.org",
    "dim": "stress",
    "hi": "80067989074689/322580",
+   "kind": "signed",
    "lo": "80067989074689/322580",
-   "name": "joint.Fy"
+   "name": "joint.Fy",
+   "source": "attack"
   },
   {
    "by": "t@example.org",
    "dim": "stress",
    "hi": "8896443230521/483870",
+   "kind": "signed",
    "lo": "8896443230521/483870",
-   "name": "p1.Fu"
+   "name": "p1.Fu",
+   "source": "attack"
   },
   {
    "by": "a.b@c.d",
    "dim": "stress",
    "hi": "62275102613647/1290320",
+   "kind": "signed",
    "lo": "62275102613647/1290320",
-   "name": "p1.Fy"
+   "name": "p1.Fy",
+   "source": "attack"
   }
  ],
  "name": "lap-splice",
+ "owner": "a.b@c.d",
  "probability_claims": [],
+ "rules": {
+  "hash": "sha256:fb92c98c91e26573ff826e9983047dbd19142e2f26b3feb14723329aa6877d94",
+  "name": "aisc360-22"
+ },
+ "states": [
+  {
+   "by": "a.b@c.d",
+   "key": "oversize",
+   "kind": "signed",
+   "name": "lap.holes",
+   "source": "attack"
+  },
+  {
+   "by": "a.b@c.d",
+   "key": "protected",
+   "kind": "signed",
+   "name": "lap.surface",
+   "source": "attack"
+  }
+ ],
  "tests": [],
  "waivers": [
   {

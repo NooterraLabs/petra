@@ -1,0 +1,35 @@
+petra 0
+
+# The lap of examples/deck/lap_pass, under a card that names the deck of rules as version 0.2.0
+# shipped it, by the hash of that file. The deck has changed since, so this is a card whose
+# owner asked for a check against other rules than the ones Petra has, and the pair is
+# refused: the deck that is read is the deck the card names, or none (plan step 1.7). Its
+# owner looks at what changed and names the new deck, or checks it with the Petra that has
+# the old one.
+
+plate tab {
+  thickness 0.375 inch
+  width 6 inch
+  Fy given tab.Fy
+  Fu given tab.Fu
+}
+
+plate strap {
+  thickness 0.375 inch
+  width 6 inch
+  Fy given strap.Fy
+  Fu given strap.Fu
+}
+
+lap splice {
+  fastener "Group 120"
+  threads included
+  diameter 0.75 inch
+  holes given splice.holes
+  count 3
+  pitch 3 inch
+  end 1.5 inch
+  side 3 inch
+  surface given splice.surface
+  joins tab strap
+}

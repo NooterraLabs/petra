@@ -10,22 +10,28 @@
    "by": "a.b@c.d",
    "dim": "dimensionless",
    "hi": "79228162514264337593543950335/79228162514264337593543950336",
+   "kind": "signed",
    "lo": "15845632502852867518708790067/19807040628566084398385987584",
-   "name": "Z.r"
+   "name": "Z.r",
+   "source": "a source, with a comma"
   },
   {
    "by": "t@example.org",
    "dim": "length",
    "hi": "12/25",
+   "kind": "signed",
    "lo": "12/25",
-   "name": "bar.b"
+   "name": "bar.b",
+   "source": "calc C-12"
   },
   {
    "by": "t@example.org",
    "dim": "dimensionless",
    "hi": "5071/918",
+   "kind": "signed",
    "lo": "5071/918",
-   "name": "bar.r"
+   "name": "bar.r",
+   "source": "test"
   },
   {
    "by": "x@y.z",
@@ -33,9 +39,11 @@
    "dim": "force",
    "field": "press",
    "hi": "1744830465625/268435456",
+   "kind": "signed",
    "lo": "0",
    "name": "storm.A.press",
-   "on": "A"
+   "on": "A",
+   "source": "test"
   },
   {
    "by": "x@y.z",
@@ -43,9 +51,11 @@
    "dim": "force",
    "field": "press",
    "hi": "1744830465625/268435456",
+   "kind": "signed",
    "lo": "0",
    "name": "storm.ab.press",
-   "on": "ab"
+   "on": "ab",
+   "source": "test"
   },
   {
    "by": "x@y.z",
@@ -53,9 +63,11 @@
    "dim": "force",
    "field": "drag",
    "hi": "65000",
+   "kind": "signed",
    "lo": "0",
    "name": "storm.bar.drag",
-   "on": "bar"
+   "on": "bar",
+   "source": "test"
   },
   {
    "by": "x@y.z",
@@ -63,9 +75,11 @@
    "dim": "force",
    "field": "push",
    "hi": "6000",
+   "kind": "signed",
    "lo": "5400",
    "name": "storm.bar.push",
-   "on": "bar"
+   "on": "bar",
+   "source": "test"
   },
   {
    "by": "x@y.z",
@@ -73,13 +87,64 @@
    "dim": "force",
    "field": "press",
    "hi": "13000013/2000",
+   "kind": "signed",
    "lo": "0",
    "name": "storm.pxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.press",
-   "on": "pxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+   "on": "pxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "source": "test"
   }
  ],
  "name": "a",
+ "owner": "a.b@c.d",
  "probability_claims": [],
+ "rules": {
+  "hash": "sha256:3c46a258a5e32aea24e2ef9becfd535895736fc804e98875d3c057f2e0e94221",
+  "name": "bench-ops"
+ },
+ "states": [
+  {
+   "by": "t@example.org",
+   "key": "low",
+   "kind": "signed",
+   "name": "A.finish",
+   "source": "attack"
+  },
+  {
+   "by": "t@example.org",
+   "key": "hard",
+   "kind": "signed",
+   "name": "Z.grade",
+   "source": "attack"
+  },
+  {
+   "by": "t@example.org",
+   "key": "high",
+   "kind": "signed",
+   "name": "ab.finish",
+   "source": "attack"
+  },
+  {
+   "by": "t@example.org",
+   "key": "soft",
+   "kind": "signed",
+   "name": "bar.grade",
+   "source": "attack"
+  },
+  {
+   "by": "t@example.org",
+   "key": "high",
+   "kind": "signed",
+   "name": "pxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.finish",
+   "source": "attack"
+  },
+  {
+   "by": "t@example.org",
+   "key": "low",
+   "kind": "signed",
+   "name": "tab.finish",
+   "source": "attack"
+  }
+ ],
  "tests": [],
  "waivers": [
   {

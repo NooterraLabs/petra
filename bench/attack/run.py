@@ -43,7 +43,7 @@ def judge(maker, d, cli: bool):
     if d.files is not None and d.spec is None:
         return readers.judge_files({**d.files, "rules": d.deck_text})
     card, design = d.texts()
-    return readers.judge(card, design, d.deck_text, d.base_text, cli=cli)
+    return readers.judge(card, design, d.deck_text, d.base_text, cli=cli, run=d.run)
 
 
 def relation(d, base, j, base_draft) -> list:
@@ -59,6 +59,8 @@ def relation(d, base, j, base_draft) -> list:
         return meta.same(base, j, "rename", d.extra.get("rename"))
     if name in ("reorder", "json", "respell"):
         return meta.same(base, j, name, ordered=False)
+    if name == "bind_same":
+        return meta.same(base, j, "bind")
     if name in ("load_up", "load_down"):
         return meta.load_check(base, j, d.extra.get("up", True))
     if name == "stronger":
@@ -69,7 +71,7 @@ def relation(d, base, j, base_draft) -> list:
 
 
 def step(maker, stats: collections.Counter, out: Path, seed: int, rng: random.Random, over=lambda: False) -> None:
-    from . import found, readers
+    from . import bind, found, readers
     maker.hung = None
     drafts = maker.next()
     if maker.hung is not None:         # the Python reader did not finish a design in a minute
@@ -94,6 +96,11 @@ def step(maker, stats: collections.Counter, out: Path, seed: int, rng: random.Ra
         for diff in j.diffs:
             stats["crashes" if diff.kind == "crash" else "hangs" if diff.kind == "hang" else "differences"] += 1
             stats["new"] += found.keep(out, d, j, diff, seed=seed)
+        if d.extra.get("bind"):          # what a draft of the binding expects (bind.expected), held as a relation
+            stats["relations"] += 1
+            for diff in bind.expected(d.extra, j):
+                stats["violations"] += 1
+                stats["new"] += found.keep(out, d, j, diff, seed=seed)
         if d.relation and d.relation[1] < len(judged) - 1:
             base_draft, base = drafts[d.relation[1]], judged[d.relation[1]]
             stats["relations"] += 1
@@ -225,7 +232,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", type=Path, default=None, help="where found/ and the counts go; default runs/SEED-TIME under bench/attack")
     ap.add_argument("--log", type=Path, default=LOG)
     ap.add_argument("--kernel", default=os.environ.get("PETRA_VERIFY"))
-    ap.add_argument("--twin", default=None, help="the third reading, default bench/twin/verify.mjs")
+    ap.add_argument("--twin", default=None, help="the third reading, such as bench/twin/verify.mjs; default readers.Config.twin")
     ap.add_argument("--petra", default=None, help="a folder that holds a petra package to read the designs with, in place of this checkout's own")
     ap.add_argument("--max-steps", type=int, default=None, help="steps for each worker, for the tests")
     ap.add_argument("--until", default="", help="stop at the first difference of one of these kinds (verdict, cells, bundle, relation...), for showing that a planted fault is found")

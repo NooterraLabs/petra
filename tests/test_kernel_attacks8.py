@@ -40,6 +40,7 @@ from unittest import mock
 import petra
 from petra import grid, verify
 from petra.kernel.interval import Interval
+from tests import bound
 from tests.test_deck_features import (ANCHOR, HEAD, KERNEL, asks, cells, design, given, key, kind, load, made_up, no_deck, parsed, part, reads, reason,
                                       rule, size)
 from tests.test_kernel_grid import ask
@@ -354,7 +355,8 @@ LAP_CARD = ('petra 0\n\ncard "lap" {\n  owner "t@example.org"\n}\n\n'
             + '\nload gravity {\n  on splice pull in [0 kip, 200 kip]\n  signed "t@example.org" source "test"\n}\n'
             + "".join(waive(m, "splice") for m in ("lap.tightening", "lap.hole_use", "lap.max_edge_distance", "lap.ply_flexure",
                                                     "lap.spacing", "lap.strength", "lap.ply_rupture", "lap.block_shear")))
-"""Its card, which waives the four lines the deck has no rule for and the four whose rules read a hole."""
+"""Its card, which waives the four lines the deck has no rule for and the four whose rules read a hole. A test names the deck in
+it (tests/bound.py, `card_for`)."""
 
 
 class ABoltPastThePrintedSizes(unittest.TestCase):
@@ -363,14 +365,14 @@ class ABoltPastThePrintedSizes(unittest.TestCase):
         holes, so the two carry 80.5 kip under a pull of 200: the joint fails whatever its holes are. The shipped deck's Table J3.3
         stopped at 1 inch, so the rule had no value, the cell was open and the waiver rested it: PASS_WAIVED. The table now lists the
         hole its last line gives, 1 1/4 inch, and with D1 a waiver rests no cell of a table with no line for the part."""
-        found = petra.check(LAP_CARD, LAP, path="lap.petra")
+        found = petra.check(bound.card_for(LAP_CARD, LAP), LAP, path="lap.petra")
         self.assertEqual(found["status"], "FAIL")
         (strength,) = [c for c in found["cells"] if c["mechanism"] == "lap.strength"]
         self.assertEqual(strength["state"], "refuted")
         self.assertAlmostEqual(strength["ratio"], 200 / (2 * 0.75 * 54 * math.pi / 4 * 1.125 ** 2), places=6)
         self.assertEqual([c["mechanism"] for c in found["cells"] if c["state"] == "waived"],
                          ["lap.tightening", "lap.hole_use", "lap.max_edge_distance", "lap.ply_flexure"], "the waivers of the lines with rules rest nothing")
-        larger = petra.check(LAP_CARD, LAP.replace("diameter 1.125 inch", "diameter 1.75 inch").replace("pitch 4 inch", "pitch 5 inch").replace("end 2 inch", "end 3 inch"),
+        larger = petra.check(bound.card_for(LAP_CARD, LAP), LAP.replace("diameter 1.125 inch", "diameter 1.75 inch").replace("pitch 4 inch", "pitch 5 inch").replace("end 2 inch", "end 3 inch"),
                              path="lap.petra")
         self.assertEqual(larger["status"], "UNKNOWN", "a bolt past the sizes the tables list is not decided, and no waiver passes it")
 

@@ -1,0 +1,166 @@
+{
+ "cases": [
+  "storm",
+  "wind"
+ ],
+ "claims": [],
+ "environment": null,
+ "format": "petra-card/0",
+ "inputs": [
+  {
+   "by": "a.b@c.d",
+   "dim": "stress",
+   "hi": "257996853685109/645160",
+   "kind": "signed",
+   "lo": "257996853685109/645160",
+   "name": "joint.Fu",
+   "source": "a source, with a comma"
+  },
+  {
+   "by": "x@y.z",
+   "dim": "stress",
+   "hi": "291/511",
+   "kind": "signed",
+   "lo": "291/511",
+   "name": "joint.Fy",
+   "source": "calc C-12"
+  },
+  {
+   "by": "a.b@c.d",
+   "dim": "stress",
+   "hi": "62275164888749613647/1290320000000",
+   "kind": "signed",
+   "lo": "62275164888749613647/1290320000000",
+   "name": "lap_main.Fu",
+   "source": "test"
+  },
+  {
+   "by": "x@y.z",
+   "dim": "stress",
+   "hi": "44482216152605/129032",
+   "kind": "signed",
+   "lo": "44482216152605/129032",
+   "name": "lap_main.Fy",
+   "source": "calc C-12"
+  },
+  {
+   "by": "a.b@c.d",
+   "dim": "length",
+   "hi": "381/2500",
+   "kind": "signed",
+   "lo": "381/2500",
+   "name": "lap_main.width",
+   "source": "test"
+  },
+  {
+   "by": "x@y.z",
+   "case": "storm",
+   "dim": "force",
+   "field": "pull",
+   "hi": "80067989074689/400000000",
+   "kind": "signed",
+   "lo": "0",
+   "name": "storm.B2.pull",
+   "on": "B2",
+   "source": "test"
+  },
+  {
+   "by": "x@y.z",
+   "case": "wind",
+   "dim": "force",
+   "field": "pull",
+   "hi": "8500000/33",
+   "kind": "signed",
+   "lo": "0",
+   "name": "wind.B2.pull",
+   "on": "B2",
+   "source": "test"
+  }
+ ],
+ "name": "card_1",
+ "owner": "s.engineer@example.org",
+ "probability_claims": [],
+ "rules": {
+  "hash": "sha256:fb92c98c91e26573ff826e9983047dbd19142e2f26b3feb14723329aa6877d94",
+  "name": "aisc360-22"
+ },
+ "states": [
+  {
+   "by": "x@y.z",
+   "key": "oversize",
+   "kind": "signed",
+   "name": "B2.holes",
+   "source": "a source, with a comma"
+  },
+  {
+   "by": "x@y.z",
+   "key": "weathering",
+   "kind": "signed",
+   "name": "B2.surface",
+   "source": "a source, with a comma"
+  }
+ ],
+ "tests": [],
+ "waivers": [
+  {
+   "by": "a.b@c.d",
+   "mechanism": "lap.tightening",
+   "reason": "n\u00e4mn",
+   "subject": "B2"
+  },
+  {
+   "by": "a.b@c.d",
+   "mechanism": "lap.side_distance",
+   "reason": "it is a test",
+   "subject": "B2"
+  },
+  {
+   "by": "a.b@c.d",
+   "mechanism": "lap.ply_shear",
+   "reason": "snug-tight bolts",
+   "subject": "B2"
+  },
+  {
+   "by": "x@y.z",
+   "mechanism": "lap.ply_flexure",
+   "reason": "n\u00e4mn",
+   "subject": "B2"
+  },
+  {
+   "by": "a.b@c.d",
+   "mechanism": "lap.strength",
+   "reason": "caf\u00e9",
+   "subject": "B2"
+  },
+  {
+   "by": "a.b@c.d",
+   "mechanism": "lap.partial_block_shear",
+   "reason": "a reason with \"quotes\"",
+   "subject": "B2"
+  },
+  {
+   "by": "s.engineer@example.org",
+   "mechanism": "lap.block_shear",
+   "reason": "caf\u00e9",
+   "subject": "B2"
+  },
+  {
+   "by": "t@example.org",
+   "mechanism": "lap.spread",
+   "reason": "a reason with \"quotes\"",
+   "subject": "B2"
+  },
+  {
+   "by": "x@y.z",
+   "mechanism": "lap.ply_compression",
+   "reason": "caf\u00e9",
+   "subject": "B2"
+  },
+  {
+   "by": "x@y.z",
+   "mechanism": "lap.ply_rupture",
+   "reason": "snug-tight bolts",
+   "subject": "B2"
+  }
+ ]
+}

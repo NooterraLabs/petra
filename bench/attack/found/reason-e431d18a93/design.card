@@ -2,11 +2,15 @@ petra 0
 
 card "a" {
   owner "t@example.org"
+  rules "bench-ops" "sha256:3c46a258a5e32aea24e2ef9becfd535895736fc804e98875d3c057f2e0e94221"
 }
 
 given bar.a in [40/3 mm, 40/3 mm] signed "s.engineer@example.org" source "calc C-12"
 given bar.r in [120, 120] signed "x@y.z" source "a source, with a comma"
 given cap2.t in [5368709125/432004990500864 mile, 26843545625/1728019962003456 mile] signed "s.engineer@example.org" source "ASTM A36"
+given cap2.finish is low signed "t@example.org" source "attack"
+given Z.finish is high signed "t@example.org" source "attack"
+given bar.grade is hard signed "t@example.org" source "attack"
 
 load B {
   on cap2 press in [96000000000000/8896443230521 kip, 96000000000000/8896443230521 kip]

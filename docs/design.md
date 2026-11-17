@@ -6,9 +6,9 @@ Petra checks a design against a card and a deck of rules. The verdict comes from
 
 | Input | Written by | Holds |
 |---|---|---|
-| The card, `NAME.card` | Whoever asks for the design | The loads, each signed bound, and any waivers |
+| The card, `NAME.card` | Whoever asks for the design | The deck of rules it asks for, by the hash of its file, the loads, each signed bound, and any waivers |
 | The design, `NAME.petra` | A designer or an agent | The parts |
-| The deck of rules | Whoever transcribes a standard | The types of part, the grid, and the rules |
+| The deck of rules | Whoever transcribes a standard | The types of part, the grid, and the rules, with the record of the deck's acceptance run beside it |
 
 A design cannot state a load, a waiver or a signature, so it cannot change what is asked of it. [reference.md](reference.md) describes the language of the first two, and [deck.md](deck.md) the third.
 
@@ -56,7 +56,7 @@ No way into a check gives a pass or a fail that is not the kernel's. With no ker
 
 ## What a pass rests on
 
-A PASS says that every cell is proved, waived or not applicable, and that at least one was worked out: it is proved by an inequality that reads a quantity of the part or of the card. It does not say that the inequality turns on that quantity. A proved cell says that the design meets that rule of the deck, under the card. It does not say that the design meets the standard. A PASS rests on nine things of different strength, and it is only as strong as the weakest.
+A PASS says that every cell is proved, waived or not applicable, and that at least one was worked out: it is proved by an inequality that reads a quantity of the part or of the card. It does not say that the inequality turns on that quantity. A proved cell says that the design meets that rule of the deck, under the card. It does not say that the design meets the standard. A PASS rests on eleven things of different strength, and it is only as strong as the weakest.
 
 | Level | What stands behind it | Where |
 |---|---|---|
@@ -64,6 +64,8 @@ A PASS says that every cell is proved, waived or not applicable, and that at lea
 | The rest of the kernel: reading the files, writing a rule as arithmetic, listing the cells | Tests, a second reading of the specification written without sight of the kernel, a generator of hostile files, and review. Not proved | [format.md](format.md), `bench/` |
 | The front end: turning the text of a card and a design into the files the kernel reads | Tests. No second reading of the language. A bug here, a wrong unit factor for one, gives the kernel other numbers than the pair's, and the verdict is then about those | `petra/lang`, `petra/units.py`, `petra/export.py` |
 | The rules of a deck | Two transcriptions of the standard that agree on sampled parts, and worked examples from a published source. Agreement is not proof that a rule is the standard's | [deck.md](deck.md) |
+| The deck the card names | The card names the deck by the hash of its file, and the kernel refuses the pair with any other deck. That stops a deck swapped or edited after the card was issued, a limit raised by a slip among them, and makes the card's hash say which rules were asked for. It does not say the deck is a good one, only that it is the one the card's owner named, and it ties a PASS to that deck only for a reader who compares the card's hash with the card they issued | The card's `rules` line, and [format.md](format.md), "Reading a verdict" |
+| The deck's acceptance run | A record beside the deck names the deck's hash and the gate that ran, and the kernel reads the deck only with it. That stops a deck edited after its run, by any hand, from being read until the run is made again. It does not show that the run happened or what it found: the kernel reads neither, and a record can be written by hand. Running the check again and comparing the two records, byte for byte, shows that the record is of a run on the deck's own rows. What the run found is in the record's lines, which no reader of a deck reads yet: a deck whose record says that a line was refused is read like any other | `petra/decks/aisc360.run.json`, and [deck.md](deck.md), "The run a deck is bound to" |
 | A waived cell | The signature of the person named. Petra checks nothing about it | The report's `waived` lines |
 | A key the card states | The signature of the person who states it. The kernel checks that the key is stated and signed, and not that it is true of the part. Every key is the card's unless the deck says the designer chooses it. Which lines a condition excuses and which rules answer turn on the card's keys, and on one thing that is the design's: the order in which it lists the parts of a join, which picks the part that stands under each name. Nothing checks that order | The card, and [deck.md](deck.md), "The grid" |
 | A key the designer chooses | The design's own word, for a key that the deck marks `chosen` with a reason. The kernel checks that the deck gives the reason, and not that it is true. Nothing checks that the name the design writes reaches the drawing and the parts list, or that what is built keeps it. A rule may take a limit from a table by such a key | The design, and [deck.md](deck.md), "A key the designer chooses" |
@@ -72,7 +74,7 @@ A PASS says that every cell is proved, waived or not applicable, and that at lea
 
 A PASS does not say that the grid lists every way the part can fail. A deck asks about the mechanisms its authors wrote down. [deck.md](deck.md) lists what the first deck covers and what it does not.
 
-A verdict is about the files the kernel was given. The report prints the hash of the card, the design and the deck, and [format.md](format.md) says how a reader ties a PASS to their own card and their own deck.
+A verdict is about the files the kernel was given. The report prints the hash of the card, the design, the deck and its run, and one hash of all six files the kernel read. The card names the deck, so a reader who ties a PASS to their own card ties it to the deck they asked for too. [format.md](format.md) says how.
 
 ## The old path
 

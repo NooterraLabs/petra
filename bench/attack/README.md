@@ -4,6 +4,10 @@ A program that attacks the checker with no model. It writes designs, cards and d
 
 The three readers are the kernel (`petra-verify`), the Python reader (`petra/grid.py`) and the clean-room reading (`bench/twin/verify.mjs`).
 
+The clean-room reading is asked by default, since it was brought up to the format of plan step 1.7 on 2026-11-16. `twin = None` in `Config` of [readers.py](readers.py) switches it off, and `--twin FILE` on `run` or `repro` names another reading for one run.
+
+A card names the deck it is checked against, and a deck is read with the record of its run ([format.md](../../docs/format.md), type rules 9 to 11). The attacker binds every deck as an honest exporter would: the shipped deck with the record beside it, and a deck it made up or changed with a record made up for it, whose `gate` says no gate ran ([bind.py](bind.py)).
+
 ## Run it
 
 ```
@@ -38,6 +42,7 @@ python3.11 -m bench.attack.repro bench/attack/found/KIND-SIG
 | json | The same files in another JSON spelling |
 | forge | The files with a number, a name, a dimension or a key changed to a value the pages refuse or read in a stated way |
 | syntax | One file with its JSON syntax changed |
+| bind | The binding attacked: a card that names another deck or none, a run of another deck or none, a gate or a run.json the pages refuse, a deck changed after its run, the same card under two decks, deck.json, an owner, a source or a kind changed. `BINDING` in [maker.py](maker.py) lists them |
 
 The decks it starts from are `petra/decks/aisc360.json` and the decks `bench/kernel_grid.py` and `tests/test_grid.py` make up.
 
@@ -46,6 +51,24 @@ The decks it starts from are `petra/decks/aisc360.json` and the decks `bench/ker
 Every input goes to the kernel and the third reading, and every pair of texts also to the Python reader. They must give one verdict and the same cells, and the kernel and the third reading the same waivers and completions, the same rules of the same files in their findings, and the same reasons where the pages give a reason its words ([format.md](../../docs/format.md), The verdict). Any other reason is each reader's own, and so is the order of the loads a case leaves out: `held` in [readers.py](readers.py) says which is which. The three comparisons are kept apart: `kernel/twin`, `kernel/grid` and `grid`. A crash, a missing verdict or more than 90 seconds is kept as a crash or a hang.
 
 The reasons of the grid and the kernel are compared for waived cells only, and there by the same rule: `petra check` words its other reasons itself.
+
+Of every verdict the attacker also holds the binding: the `hashes` and the `bundle` are of the files the kernel was handed, and no reader gives PASS for files whose card names another deck than the one that was read. A draft of the bind recipe also says what it expects, and the kernel and the grid must both meet it.
+
+| Binding | Must hold |
+|---|---|
+| card_hash, card_none, card_name | A card that names another hash, in upper-case hex, with no prefix, or none, or another name: both refuse, with type rule 9 |
+| run_other, run_none | The run of another deck, or none: both refuse, with type rule 11 |
+| gate | A gate with no letter a to z, or no text: both refuse. One letter is enough: the same verdict and cells as the honest run |
+| run_text | A run.json that is not JSON, of another format, with no `deck` or a `deck` that is no text: both refuse. Past a limit of nesting or of digits: both agree |
+| run_keys | Keys no reader reads: the same verdict and cells. The `deck` twice: the last is read |
+| changed | The rules changed after the bundle by one byte or a raised limit, nothing rebound: both refuse, with type rules 9 to 11 |
+| changed_stale_run | The card rebound to the changed rules and the run not: both refuse, with type rule 11 |
+| changed_rebound | Every file rebound: no finding of the binding, and a change of one space or one line end gives the same verdict and cells |
+| two_decks | The same card under the deck it names and under that deck in other bytes: read, and refused with type rule 9 |
+| name_escape | A deck named with a quote, a backslash or other letters, bound honestly: the same verdict and cells as under a plain name |
+| crlf | The deck's file with CR LF line ends, bound by its hash with LF line ends as Petra works it out: both agree |
+| deck_json | deck.json naming another hash or name, or none: the kernel refuses, with type rule 10. The grid writes deck.json and reads none |
+| card_json | card.json with its owner, or a source or a kind, left out or of the wrong kind: the kernel refuses, with type rule 5, and the language refuses an empty owner in the card's text. Another owner or source, or `measured`: the same verdict and cells |
 
 ## Metamorphic pairs
 

@@ -27,6 +27,8 @@ from pathlib import Path
 from typing import Any
 from unittest import mock
 
+from . import bind
+
 ROOT = Path(__file__).resolve().parents[2]
 TWIN = ROOT / "bench" / "twin" / "verify.mjs"
 SLOW = 90.0
@@ -53,6 +55,7 @@ class Judged:
     files: dict[str, str] = field(default_factory=dict)
     diffs: list[Diff] = field(default_factory=list)
     cells: list[tuple] = field(default_factory=list)            # the kernel's (subject, mechanism, entry, state, reason)
+    findings: list[dict] = field(default_factory=list)          # the kernel's findings
     seconds: float = 0.0
 
 
@@ -84,9 +87,14 @@ def alarm(seconds: float):
 
 
 class Config:
-    """Where the readers are. The defaults are this checkout's own; a run may name others."""
+    """Where the readers are. The defaults are this checkout's own; a run may name others.
+
+    `twin` is the third reading, or None for none: bench/twin/verify.mjs, which reads the
+    format of plan step 1.7 since 2026-11-16. `--twin PATH` of run.py and of repro.py names
+    another for one run, and `twin = None` here leaves the kernel and the Python reader
+    compared alone."""
     kernel: str | None = os.environ.get("PETRA_VERIFY")
-    twin: str = str(TWIN)
+    twin: str | None = str(TWIN)
     node: str = "node"
     cli_share: int = 8       # one pair in this many also goes through `petra check`
     jobs_hint: int = 1
@@ -125,9 +133,9 @@ def ask_both(files: dict[str, str]) -> tuple[dict | None, dict | None, list[Diff
             p.write_bytes(body.encode("utf-8", "surrogatepass") if isinstance(body, str) else body)
             args += [f"--{name}", str(p)]
         kernel = _spawn([Config.kernel or "petra-verify", *args])
-        twin = _spawn([Config.node, Config.twin, *args])
+        twin = _spawn([Config.node, Config.twin, *args]) if Config.twin else None
         k, kd = _collect(kernel, "kernel")
-        t, td = _collect(twin, "twin")
+        t, td = _collect(twin, "twin") if twin else (None, None)
     return k, t, [d for d in (kd, td) if d]
 
 
@@ -208,27 +216,66 @@ def _first_finding(said: dict) -> str:
 
 # --- the language path
 
-_DECKS: dict[str, Any] = {}
+_DECKS: dict[tuple, Any] = {}
 
 
-def read_deck(text: str):
-    """grid.read_deck, remembered: a worker reads one deck for many designs. A refusal is remembered as the exception."""
+def read_deck(text: str, run: str | None = bind.AUTO):
+    """grid.read_deck with the run the deck is bound to, remembered: a worker reads one deck for many designs.
+    `run` is the file of the run, bind.AUTO for the honest one (bind.run_for), or None for none. A refusal is
+    remembered as the exception."""
     from petra import grid
-    if text not in _DECKS:
+    run = bind.resolve(text, run)
+    key = (text, run)
+    if key not in _DECKS:
         if len(_DECKS) > 24:
             _DECKS.pop(next(iter(_DECKS)))
         try:
-            _DECKS[text] = grid.read_deck(text)
+            _DECKS[key] = grid.read_deck(text, run)
         except grid.DeckError as exc:
-            _DECKS[text] = exc
-    got = _DECKS[text]
+            _DECKS[key] = exc
+    got = _DECKS[key]
     if isinstance(got, Exception):
         raise got
     return got
 
 
-def judge(card: str, design: str, deck_text: str, base_text: str | None = None, cli: bool = False, extra: dict[str, str] | None = None) -> Judged:
-    """All three readers on a pair of texts against a deck. `base_text` is the deck the language parses the design with when `deck_text` does not load."""
+def honest_files(parsed: Any, base: Any, deck_text: str, run: str | None) -> dict[str, str]:
+    """The files an honest exporter writes for a pair it is handed with the deck of rules `deck_text` and the run
+    `run`, whether or not the grid takes them: the card as its owner wrote it, naming whatever deck it names, deck.json
+    naming the deck of rules that is handed over, the run as it is, or none, and the design naming the card's hash.
+    `base` is a deck that loads, of the design's types, which writes the rest of the files (grid.bundle)."""
+    import dataclasses
+    from petra import export, grid
+    if not base.run:
+        base = grid.read_deck(base.text, bind.run_for(base.text))
+    files = dict(grid.bundle(dataclasses.replace(parsed, rules=(base.name, base.hash)), base))
+    if parsed.rules != (base.name, base.hash):
+        card = json.loads(files["card"])
+        if parsed.rules is None:
+            card.pop("rules", None)
+        else:
+            card["rules"] = {"name": parsed.rules[0], "hash": parsed.rules[1]}
+        files["card"] = export.text(card)
+    if deck_text != base.text:
+        deck = json.loads(files["deck"])
+        deck["rules"] = dict(zip(("name", "hash"), bind.pin(deck_text)))
+        files["deck"] = export.text(deck)
+    files["rules"] = deck_text
+    if run is None:
+        files.pop("run", None)
+    else:
+        files["run"] = run
+    design = json.loads(files["design"])
+    if design.get("card") != export.sha256(files["card"]):
+        design["card"] = export.sha256(files["card"])
+        files["design"] = export.text(design)
+    return files
+
+
+def judge(card: str, design: str, deck_text: str, base_text: str | None = None, cli: bool = False, extra: dict[str, str] | None = None,
+          run: str | None = bind.AUTO) -> Judged:
+    """All three readers on a pair of texts against a deck, read with `run` (bind.AUTO: the honest run of the deck, None: no run).
+    `base_text` is the deck the language parses the design with when `deck_text` does not load."""
     from petra import grid, verify
     from petra.lang import parse_design
     from petra.files import ComponentError
@@ -236,10 +283,11 @@ def judge(card: str, design: str, deck_text: str, base_text: str | None = None, 
 
     t0 = time.time()
     j = Judged()
+    run = bind.resolve(deck_text, run)
     deck, refusal = None, ""
     try:
         with alarm(30):
-            deck = read_deck(deck_text)
+            deck = read_deck(deck_text, run)
     except grid.DeckError as exc:
         refusal = str(exc)
     except Timeout:
@@ -248,11 +296,12 @@ def judge(card: str, design: str, deck_text: str, base_text: str | None = None, 
         j.diffs.append(Diff("crash", "grid", f"grid.read_deck: {type(exc).__name__}: {exc}", key=f"read_deck|{type(exc).__name__}|{traceback.extract_tb(exc.__traceback__)[-1].lineno}"))
         refusal = f"crash {exc}"
     parse_with = deck
-    if parse_with is None:
-        try:
-            parse_with = read_deck(base_text) if base_text else None
-        except Exception:       # noqa: BLE001
-            parse_with = None
+    for text in (deck_text, base_text):         # a deck the run does not bind is read with its honest run, to read the design with
+        if parse_with is None and text:
+            try:
+                parse_with = read_deck(text)
+            except Exception:       # noqa: BLE001
+                parse_with = None
     if parse_with is None:
         j.outcome = "no deck to read the design with"
         j.seconds = time.time() - t0
@@ -278,13 +327,10 @@ def judge(card: str, design: str, deck_text: str, base_text: str | None = None, 
         report, grid_refuses, files = None, "", {}
         try:
             with alarm(60):
-                files = grid.bundle(parsed, parse_with)
                 if deck is not None:
                     report, files = grid.check(parsed, deck)
         except (ComponentError, grid.DeckError) as exc:
             grid_refuses = str(exc)
-            if deck is None:
-                grid_refuses = refusal
         except Timeout:
             j.diffs.append(Diff("hang", "grid", "grid.check took over 60 seconds", key="check"))
             return j
@@ -292,9 +338,19 @@ def judge(card: str, design: str, deck_text: str, base_text: str | None = None, 
             tb = traceback.extract_tb(exc.__traceback__)[-1]
             j.diffs.append(Diff("crash", "grid", f"grid.check: {type(exc).__name__}: {exc} ({Path(tb.filename).name}:{tb.lineno})", key=f"check|{type(exc).__name__}|{Path(tb.filename).name}:{tb.lineno}"))
             return j
+        if report is None:
+            try:
+                with alarm(60):
+                    files = honest_files(parsed, parse_with, deck_text, run)
+            except Timeout:
+                j.diffs.append(Diff("hang", "grid", "grid.bundle took over 60 seconds", key="bundle"))
+                return j
+            except Exception as exc:        # noqa: BLE001
+                tb = traceback.extract_tb(exc.__traceback__)[-1]
+                j.diffs.append(Diff("crash", "grid", f"grid.bundle: {type(exc).__name__}: {exc} ({Path(tb.filename).name}:{tb.lineno})", key=f"bundle|{type(exc).__name__}|{Path(tb.filename).name}:{tb.lineno}"))
+                return j
         if deck is None:
-            files = {**files, "rules": deck_text}
-            grid_refuses = grid_refuses or refusal
+            grid_refuses = refusal
         if extra:
             files = {**files, **extra}
     j.files = files
@@ -303,27 +359,39 @@ def judge(card: str, design: str, deck_text: str, base_text: str | None = None, 
     j.diffs += bad
     j.verdict = {"grid": "REFUSED" if report is None else report.verdict}
     if kernel:
-        j.verdict["kernel"] = kernel["verdict"]
-        j.settled = kernel["verdict"] != "ILL-FORMED"
-        j.outcome = kernel["verdict"] + (": " + str((kernel.get("findings") or [{}])[0].get("rule")) + " " + str((kernel.get("findings") or [{}])[0].get("why", ""))[:100] if kernel["verdict"] == "ILL-FORMED" else "")
-        j.cells = _cells(kernel)
+        _took(j, kernel)
     if twin:
         j.verdict["twin"] = twin["verdict"]
     if kernel and twin:
         j.diffs += compare_two(kernel, twin, "kernel/twin")
     if kernel:
         j.diffs += _against_grid(kernel, report, grid_refuses, deck, refusal)
+        j.diffs += bind.held_of(files, kernel)
+    if report is not None:
+        j.diffs += bind.held_by_grid(parsed, deck, report.verdict)
     if cli and kernel and report is not None and not j.diffs:
         j.diffs += _through_cli(card, design, deck_text, deck, report)
     j.seconds = time.time() - t0
     return j
 
 
+def _took(j: Judged, kernel: dict) -> None:
+    """What the kernel said, kept in the judged input."""
+    j.verdict["kernel"] = kernel["verdict"]
+    j.settled = kernel["verdict"] != "ILL-FORMED"
+    first = (kernel.get("findings") or [{}])[0]
+    j.outcome = kernel["verdict"] + (f": {first.get('rule')} {str(first.get('why', ''))[:100]}" if kernel["verdict"] == "ILL-FORMED" else "")
+    j.cells = _cells(kernel)
+    j.findings = [f for f in kernel.get("findings", []) if isinstance(f, dict)]
+
+
 def _against_grid(kernel: dict, report: Any, refuses: str, deck: Any, deck_refusal: str) -> list[Diff]:
     """The kernel's answer against the grid's: both refuse, or both give the same verdict and the same cells."""
     out: list[Diff] = []
     ill = kernel["verdict"] == "ILL-FORMED"
-    on_deck = any(f.get("file") == "rules" for f in kernel.get("findings", []))
+    findings = kernel.get("findings", [])
+    on_deck = (any(f.get("file") == "rules" for f in findings)       # the grid refuses a deck that does not hold, or one its run does not bind
+               or deck_refusal.startswith("run:") and any(f.get("file") == "run" or f.get("rule") == "types.11" for f in findings))
     if report is None:
         if not ill:
             out.append(Diff("refusal", "kernel/grid", f"the grid refuses ({refuses[:160]}) and the kernel gives {kernel['verdict']}", key=f"grid-refuses|{_shape(refuses)[:40]}"))
@@ -396,10 +464,9 @@ def judge_files(files: dict[str, str]) -> Judged:
     kernel, twin, bad = ask_both(files)
     j.diffs += bad
     if kernel:
-        j.verdict["kernel"] = kernel["verdict"]
-        j.settled = kernel["verdict"] != "ILL-FORMED"
+        _took(j, kernel)
         j.outcome = kernel["verdict"]
-        j.cells = _cells(kernel)
+        j.diffs += bind.held_of(files, kernel)
     if twin:
         j.verdict["twin"] = twin["verdict"]
     if kernel and twin:
@@ -424,6 +491,6 @@ def bundle_of(card: str, design: str, deck_text: str) -> dict[str, str] | None:
                 with alarm(60):
                     return grid.check(parsed, deck)[1]
             except ComponentError:
-                return grid.bundle(parsed, deck)
+                return honest_files(parsed, deck, deck_text, deck.run)
     except (*INPUT_ERRORS, grid.DeckError):
         return None

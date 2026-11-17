@@ -1,6 +1,6 @@
 # petra-verify
 
-The checker that decides a verdict. It reads four JSON files, and a fifth for a design checked against a deck of rules, and trusts none of them. [docs/format.md](../docs/format.md) describes the files, the rules and the verdict.
+The checker that decides a verdict. It reads four JSON files, and two more for a design checked against a deck of rules, and trusts none of them. [docs/format.md](../docs/format.md) describes the files, the rules and the verdict.
 
 ## Build
 
@@ -16,14 +16,14 @@ The binary is `.lake/build/bin/petra-verify`, or `petra-verify.exe` on Windows.
 
 ```bash
 python -m petra.export examples/deck/lap_pass.petra --out out
-kernel/.lake/build/bin/petra-verify --card out/card.json --design out/design.json --deck out/deck.json --rules out/rules.json --proofs out/proofs.json
+kernel/.lake/build/bin/petra-verify --card out/card.json --design out/design.json --deck out/deck.json --rules out/rules.json --run out/run.json --proofs out/proofs.json
 ```
 
-The first command writes the files of a design whose parts are of a deck of rules, `rules.json`, the deck's own file, among them. The second prints the verdict as JSON and exits 0 for PASS, 1 for FAIL, 2 for UNKNOWN and 3 for ILL-FORMED. The kernel works out every cell from the deck itself, and takes `proofs.json` as hints.
+The first command writes the files of a design whose parts are of a deck of rules, `rules.json`, the deck's own file, and `run.json`, the record of its acceptance run, among them. The second prints the verdict as JSON and exits 0 for PASS, 1 for FAIL, 2 for UNKNOWN and 3 for ILL-FORMED. The kernel works out every cell from the deck itself, and takes `proofs.json` as hints.
 
 The export writes nothing for a design none of whose parts is of a deck's type, and exits 2: there is no deck of rules to hand the kernel. The kernel still takes files with no `--rules`, checks the cells that `proofs.json` lists, and never passes them.
 
-The verdict says which of the two it did, in `cells_from`, and prints the hash of each file it read. A PASS is about a deck of rules only when `hashes.rules` is the hash of the deck the reader trusts, and about the asker's card only when `hashes.card` is the asker's. [docs/format.md](../docs/format.md) says how to check both, under "Reading a verdict" and "The asker's card".
+The verdict says which of the two it did, in `cells_from`, and prints the hash of each file it read and `bundle`, one hash of them all. The card names the deck of rules by its hash, and the kernel refuses a deck that is not the one the card names, or that comes without the record of its acceptance run. So a PASS is about the asker's card, and the deck it names, only when `hashes.card` is the asker's. [docs/format.md](../docs/format.md) says how to check it, under "Reading a verdict" and "The asker's card".
 
 ## With petra check
 

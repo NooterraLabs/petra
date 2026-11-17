@@ -3,10 +3,12 @@
 
 Writes the files of docs/format.md into DIR:
 
-    card.json     what the asker owns: the load cases, every bound, the claims, the waivers
+    card.json     what the asker owns: the owner, the deck of rules it names, the load cases,
+                  every bound with its signer, source and kind, the claims, the waivers
     design.json   what the designer owns: the parts as written, and every quantity in them
     deck.json     the domains of petra/decks/core.json, and the name and hash of the rules
     rules.json    the deck of rules whose types the parts are, as it ships
+    run.json      the record of the acceptance run that deck is bound to, as it ships
     proofs.json   the hints the Python reader found for the cells the kernel works out
 
 With --no-physics the design is written as it stands, with no proofs.json and without
@@ -36,7 +38,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any, Iterator
 
-from .ir import Bound, Component, Design, Fixed, Input, ParamRef, Ref, Stated, Text, Vec
+from .ir import Bound, Component, Design, Fixed, Input, InputKind, ParamRef, Ref, Stated, Text, Vec
 from .kernel import Interval
 from .units import Quantity, dimension_name
 
@@ -125,12 +127,18 @@ def card(design: Design, inputs: list[Input], placed: bool = False) -> dict[str,
                 for load in design.loads.values() for e in load.entries if isinstance(e.value, ParamRef)]
     if isinstance(design.ambient, ParamRef):
         unsigned.append(("ambient", {}, design.ambient))
+    def signed(item: Any) -> dict[str, str]:
+        # Who answers for the value, where it is from and how it was had: all three are the card's, under its hash.
+        return {"by": item.signature.owner, **({"source": item.signature.source, "kind": "measured" if item.kind is InputKind.MEASURED else "signed"} if placed else {})}
+
     return {"format": "petra-card/0", "name": design.name, "environment": design.environment, "cases": sorted(design.loads),
-            "inputs": [{"name": i.name, **cases.get(id(i), {}), "by": i.signature.owner, **_quantity(i.range)} for i in inputs]
+            **({"owner": design.owner} if placed else {}),
+            **({"rules": {"name": design.rules[0], "hash": design.rules[1]}} if placed and design.rules is not None else {}),
+            "inputs": [{"name": i.name, **cases.get(id(i), {}), **signed(i), **_quantity(i.range)} for i in inputs]
                       + [{"name": name, **case, **_quantity(design.params[ref.name].range)} for name, case, ref in unsigned],
             "claims": claims,
             **({"tests": sorted(design.tests), "probability_claims": [c.name for c in design.probability_claims]} if placed else {}),
-            **({"states": [{"name": s.name, "by": s.signature.owner, **({"key": s.key} if s.whole is None else {"whole": str(s.whole)})}
+            **({"states": [{"name": s.name, **signed(s), **({"key": s.key} if s.whole is None else {"whole": str(s.whole)})}
                            for _, s in sorted(design.states.items())]} if placed and design.states else {}),
             "waivers": [{"subject": ".".join(w.subject), "mechanism": w.mode, "by": w.owner, "reason": w.reason} for w in design.waivers]}
 
@@ -159,8 +167,8 @@ class NoDeck(ValueError):
 
 
 def export(path: str, out: Path, physics: bool = True, card_path: str | None = None) -> None:
-    """Write card.json, design.json, deck.json and rules.json of the design at `path` into
-    `out`, and proofs.json when `physics`. Raises NoDeck for a design none of whose parts is
+    """Write card.json, design.json, deck.json, rules.json and run.json of the design at
+    `path` into `out`, and proofs.json when `physics`. Raises NoDeck for a design none of whose parts is
     of a deck's type, and writes nothing."""
     from . import grid, verify
     from .lang import load_design
@@ -222,6 +230,7 @@ def _main(argv: list[str]) -> int:
     args = parser.parse_args(argv)
     if (args.file is None) == (args.card_only is None) or (args.card_only and (args.card or args.no_physics)):
         parser.error("give a design, or --card-only FILE with no design, no --card and no --no-physics")
+    from . import grid
     from .pipeline import INPUT_ERRORS
 
     try:
@@ -235,6 +244,9 @@ def _main(argv: list[str]) -> int:
     except (*INPUT_ERRORS, OSError) as exc:
         print(f"petra: {exc}", file=sys.stderr)
         return 3
+    except grid.DeckError as exc:      # a deck of the folder that does not hold together or has no run beside it: no file of the design
+        print(f"petra: nothing written: the decks of this Petra do not read: {exc}", file=sys.stderr)
+        return 4
     return 0
 
 

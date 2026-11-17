@@ -2,6 +2,7 @@ petra 0
 
 card "d22_weathering_at_14t" {
   owner "s.engineer@example.org"
+  rules "aisc360-22" "sha256:fb92c98c91e26573ff826e9983047dbd19142e2f26b3feb14723329aa6877d94"
 }
 
 given tab.Fy in [50 ksi, 50 ksi] signed "s.engineer@example.org" source "ASTM A588, specified minimum"

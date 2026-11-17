@@ -81,9 +81,10 @@ class StatedByTheCard(unittest.TestCase):
                                  ("b", "beam.end", "end"): "refuted", ("b", "beam.class", ""): "open"})
         deck, read = parsed(LIFTERS, text, card)
         body = export.card(read, export.read_inputs(read), placed=True)
-        self.assertEqual(body["states"], [{"name": "b.category", "by": "t@example.org", "key": "B"}, {"name": "b.end", "by": "t@example.org", "key": "straight"},
-                                          {"name": "b.lugs", "by": "t@example.org", "whole": "2"}, {"name": "b.service", "by": "t@example.org", "key": "1"}],
-                         "the end is the card's too, since the `unless` of a line reads it")
+        signed = {"by": "t@example.org", "source": "test", "kind": "signed"}
+        self.assertEqual(body["states"], [{"name": "b.category", **signed, "key": "B"}, {"name": "b.end", **signed, "key": "straight"},
+                                          {"name": "b.lugs", **signed, "whole": "2"}, {"name": "b.service", **signed, "key": "1"}],
+                         "the end is the card's too, since the `unless` of a line reads it, and each statement says who signed it, where it is from and how it was had")
         self.assertEqual([i["name"] for i in body["inputs"]], ["b.Fy"], "a statement is no bound, and is no input")
         lines = {line["field"]: line["args"] for line in json.loads(grid.bundle(read, deck)["design"])["parts"][0]["lines"]}
         self.assertEqual((lines["category"], lines["lugs"]), ([{"given": "b.category"}], [{"given": "b.lugs"}]))
@@ -96,7 +97,8 @@ class StatedByTheCard(unittest.TestCase):
         self.assertEqual(len(hashes), 4)
         text, card = beam()
         deck, read = parsed(LIFTERS, text, card)
-        self.assertNotIn("states", json.loads(grid.bundle(parsed(PACKS, *pack())[1], grid.read_deck(json.dumps(PACKS)))["card"]), "a card that states none has no such key")
+        packs, read = parsed(PACKS, *pack())
+        self.assertNotIn("states", json.loads(grid.bundle(read, packs)["card"]), "a card that states none has no such key")
 
     def test_whatever_reads_the_field_reads_it_the_same_whoever_stated_it(self):
         """A `when`, a `requires`, an `unless`, a key of a table, a rule on the count and a need: the cells of a beam whose card states the
@@ -166,7 +168,7 @@ class StatedByTheCard(unittest.TestCase):
             self.assertEqual((said["verdict"], findings(said)), ("ILL-FORMED", "parts.4 design b.category: the card states no b.category"))
             said = with_card(self, text, card, lambda body: body.pop("states"))
             self.assertEqual(findings(said).count("the card states no b."), 4)
-            said = with_card(self, text, card, lambda body: body["states"].__setitem__(2, {"name": "b.lugs", "by": "t@example.org", "key": "2"}))
+            said = with_card(self, text, card, lambda body: body["states"].__setitem__(2, {"name": "b.lugs", "by": "t@example.org", "source": "test", "kind": "signed", "key": "2"}))
             self.assertIn("parts.3 design b.lugs: the card states a name for b.lugs, and it is a count", findings(said))
 
     def test_a_card_states_one_of_the_names_and_a_count_within_its_floor(self):
@@ -213,7 +215,7 @@ class StatedByTheCard(unittest.TestCase):
                     parsed(LIFTERS, text, card.replace(says("b.category", "B"), line))
         measured = card.replace(says("b.category", "B"), 'given b.category is B measured "lab@example.org" source "a report"\n')
         (first, *_) = export.card(parsed(LIFTERS, text, measured)[1], [], placed=True)["states"]
-        self.assertEqual(first, {"name": "b.category", "by": "lab@example.org", "key": "B"})
+        self.assertEqual(first, {"name": "b.category", "by": "lab@example.org", "source": "a report", "kind": "measured", "key": "B"})
 
     def test_a_count_is_a_number_whose_value_is_whole_in_the_card_as_in_the_design(self):
         """The card and the design take the same spellings of a count: 3, +3, 3.0, 6/2 and 3/1 are each 3, and card.json holds the
@@ -224,7 +226,7 @@ class StatedByTheCard(unittest.TestCase):
                 by_design, same, _ = cells(self, lifters(False), *beam({}, **{**STATES, "lugs": spelled}, pins="3"))
                 self.assertEqual((by_card["b", "beam.lugs", "lugs"], by_card, verdict), ("proved", by_design, same))
                 deck, read = parsed(LIFTERS, *beam({**STATES, "lugs": spelled}, pins="3"))
-                self.assertIn({"name": "b.lugs", "by": "t@example.org", "whole": "3"}, export.card(read, export.read_inputs(read), placed=True)["states"])
+                self.assertIn({"name": "b.lugs", "by": "t@example.org", "source": "test", "kind": "signed", "whole": "3"}, export.card(read, export.read_inputs(read), placed=True)["states"])
         for spelled in ("5/2", "2.5"):
             with self.subTest(spelled):
                 with self.assertRaises(LolaSyntaxError):
@@ -248,13 +250,14 @@ class StatedByTheCard(unittest.TestCase):
     @KERNEL
     def test_a_card_json_that_states_what_no_part_reads_twice_or_under_an_inputs_name_is_refused(self):
         text, card = beam()
-        stray = {"name": "nobody.category", "by": "t@example.org", "key": "B"}
+        stray = {"name": "nobody.category", "by": "t@example.org", "source": "test", "kind": "signed", "key": "B"}
         for change, finding in ((lambda b: b["states"].append(stray), "parts.6 card nobody.category: is stated, and no part reads it"),
                                 (lambda b: b["states"].append({**stray, "name": "b.pins"}), "parts.6 card b.pins: is stated, and no part reads it"),
                                 (lambda b: b["states"].append(dict(b["states"][0])), "parts.6 card b.category: two statements have this name"),
                                 (lambda b: b["states"].append({**b["states"][0], "key": "C"}), "parts.4 design b.category: the card states b.category twice"),
-                                (lambda b: b["states"].append({"name": "b.Fy", "by": "t@example.org", "key": "B"}), "parts.6 card b.Fy: is the name of a statement and of an input"),
-                                (lambda b: b["inputs"].append({"name": "b.category", "dim": "dimensionless", "lo": "1", "hi": "1", "by": "x"}), "parts.6 card b.category: is the name of a statement and of an input"),
+                                (lambda b: b["states"].append({"name": "b.Fy", "by": "t@example.org", "source": "test", "kind": "signed", "key": "B"}), "parts.6 card b.Fy: is the name of a statement and of an input"),
+                                (lambda b: b["inputs"].append({"name": "b.category", "dim": "dimensionless", "lo": "1", "hi": "1", "by": "x", "source": "test", "kind": "signed"}),
+                                 "parts.6 card b.category: is the name of a statement and of an input"),
                                 (lambda b: b["states"][0].update(by=""), "types.5 card b.category: the statement names no by"),
                                 (lambda b: b["states"][0].pop("by"), "types.5 card b.category: the statement names no by"),
                                 (lambda b: b["states"][0].update(whole="2"), "shape card states[0]: a statement has one of key, a text, and whole"),
@@ -264,7 +267,7 @@ class StatedByTheCard(unittest.TestCase):
                                 (lambda b: b["states"][2].update(whole="5/2"), "shape card states[2]: whole is not a whole number"),
                                 (lambda b: b["states"][2].update(whole="02"), "shape card states[2]: whole: "),
                                 (lambda b: b["states"][2].update(whole=2), "shape card states[2]: a statement has one of key"),
-                                (lambda b: b["states"][0].update(case="x"), "shape card states[0]: a statement has name, by and one of key and whole, and no case"),
+                                (lambda b: b["states"][0].update(case="x"), "shape card states[0]: a statement has name, by, source, kind and one of key and whole, and no case"),
                                 (lambda b: b.update(states={}), "shape card : states is not a list")):
             with self.subTest(finding):
                 said = with_card(self, text, card, change)
@@ -532,7 +535,7 @@ class MoreUnits(unittest.TestCase):
         for value in ("3 m in", "3 mA h", "3 m A h"):
             with self.subTest(value):
                 with self.assertRaises((LolaSyntaxError, LoweringError, grid.ComponentError)):
-                    grid.check(parsed(MOTORS, design(part("motor", "m", **{**SPIN, "charge": value})))[1], grid.read_deck(json.dumps(MOTORS)))
+                    grid.check(*reversed(parsed(MOTORS, design(part("motor", "m", **{**SPIN, "charge": value})))))
 
     def test_k_is_a_name_of_a_key_and_no_unit(self):
         found, _, _ = cells(self, MOTORS, design(part("motor", "m", **SPIN)))
@@ -1269,21 +1272,24 @@ class Heaviest(unittest.TestCase):
         self.assertLess(peak, heavy.HALF_GB, "bytes held")
         return said
 
-    def test_a_card_that_states_a_key_and_a_count_for_each_of_4800_parts(self):
-        """4,800 parts that each read a key and a count from the card, and a card that states both for each: 9,600 statements, 1.0 MB.
+    def test_a_card_that_states_a_key_and_a_count_for_each_of_4000_parts(self):
+        """4,000 parts that each read a key and a count from the card, and a card that states both for each: 8,000 statements, 1.06 MB.
         A rule requires the key of each part, and nothing reads the count. Every look for a statement is by its name, in a table kept
-        in order. 0.5 processor seconds and 49 MB. With 2,000 statements that no part reads the design is refused in 0.2."""
+        in order. With 4,800 parts, 1.0 MB before a statement said where it is from, this took 0.5 processor seconds and 49 MB; since
+        each statement names its source and kind (type rule 5), 4,000 parts are what fits in the same size. With 2,000 statements that
+        no part reads the design is refused in 0.2."""
         from tests.test_kernel_attacks3 import empty_card, with_rules
 
         gate = kind("gate", {**key("k", "yes", "no"), "signed": True}, size("n", "dimensionless", whole=True, signed=True))
         deck = made_up([gate], [asks("gate.set", "gate")], [rule("set", "gate", "gate.set", requires=["is", "k", "yes"])])
-        names = [f"g{i:04d}" for i in range(4_800)]
-        card = {**empty_card(), "states": [s for name in names for s in ({"name": f"{name}.k", "by": "b", "key": "yes" if int(name[1:]) % 2 else "no"},
-                                                                         {"name": f"{name}.n", "by": "b", "whole": "3"})]}
+        names = [f"g{i:04d}" for i in range(4_000)]
+        source = {"source": "s", "kind": "signed"}
+        card = {**empty_card(), "states": [s for name in names for s in ({"name": f"{name}.k", "by": "b", **source, "key": "yes" if int(name[1:]) % 2 else "no"},
+                                                                         {"name": f"{name}.n", "by": "b", **source, "whole": "3"})]}
         parts = [{"name": name, "type": "gate", "lines": [{"field": "k", "args": [{"given": f"{name}.k"}]}, {"field": "n", "args": [{"given": f"{name}.n"}]}]} for name in names]
         said = self.bounded(with_rules(deck, card, parts))
-        self.assertEqual((said["verdict"], said["findings"], said["counts"]["proved"], said["counts"]["refuted"], said["counts"]["open"]), ("FAIL", [], 2_400, 2_400, 4_800))
-        stray = {**card, "states": card["states"][:6_000] + [{"name": f"x{i}.k", "by": "b", "key": "yes"} for i in range(2_000)]}
+        self.assertEqual((said["verdict"], said["findings"], said["counts"]["proved"], said["counts"]["refuted"], said["counts"]["open"]), ("FAIL", [], 2_000, 2_000, 4_000))
+        stray = {**card, "states": card["states"][:6_000] + [{"name": f"x{i}.k", "by": "b", **source, "key": "yes"} for i in range(2_000)]}
         parts = parts[:3_000]
         over = self.bounded(with_rules(deck, stray, parts))
         self.assertEqual((over["verdict"], len(over["findings"]), over["more_findings"]), ("ILL-FORMED", 100, 1_900), "a statement that no part reads is a finding, and they are counted past a hundred")
@@ -1328,17 +1334,20 @@ class Heaviest(unittest.TestCase):
         self.assertIn("more than 10000 cells", over["findings"][0]["why"])
 
     def test_bounds_under_their_floor_for_loads_that_may_be_negative_and_one_long_name(self):
-        """9,000 loads of a length under zero on parts whose type lets the load be negative, so that type rule 4 looks each one up and lets
-        it by, and one given whose name is 400,000 dots, which the rule splits at its last dot to find no part: 0.9 MB and 0.4 MB. 0.8 and 0.2 processor seconds, and at most 64 MB."""
+        """7,200 loads of a length under zero on parts whose type lets the load be negative, so that type rule 4 looks each one up and lets
+        it by, and one given whose name is 400,000 dots, which the rule splits at its last dot to find no part: 0.96 MB and 0.4 MB. With
+        9,000 loads, 0.9 MB before an input said where it is from, this took 0.8 and 0.2 processor seconds and at most 64 MB; since each
+        input names its source and kind (type rule 5), 7,200 are what fits in about the same size."""
         from tests.test_kernel_attacks3 import empty_card, with_rules
 
         deck = made_up([kind("t", size("f"), loads=[{"name": "shift", "dim": "length", "may_be": "negative", "what": "a shift"}])], [asks("t.m", "t")],
                        [rule("m", "t", "t.m", le=[["add", "f", ["load", "shift"]], ["q", "1", "m"]])])
         one = [{"number": {"dim": "length", "lo": "1/2", "hi": "1/2"}}]
         parts = [{"name": f"p{i:03d}", "type": "t", "lines": [{"field": "f", "args": one}]} for i in range(90)]
-        loads = [{"name": f"i{i}", "dim": "length", "lo": "-1", "hi": "1/4", "by": "b", "case": f"c{i // 90:02d}", "on": f"p{i % 90:03d}", "field": "shift"} for i in range(9_000)]
+        loads = [{"name": f"i{i}", "dim": "length", "lo": "-1", "hi": "1/4", "by": "b", "source": "s", "kind": "signed", "case": f"c{i // 90:02d}", "on": f"p{i % 90:03d}", "field": "shift"}
+                 for i in range(7_200)]
         said = self.bounded(with_rules(deck, empty_card(loads), parts))
-        self.assertEqual((said["verdict"], said["findings"], len(said["cells"])), ("UNKNOWN", [], 9_000), "no hint proves a cell, and none is refused for its floor")
+        self.assertEqual((said["verdict"], said["findings"], len(said["cells"])), ("UNKNOWN", [], 7_200), "no hint proves a cell, and none is refused for its floor")
         dots = {"name": "." * 400_000, "dim": "length", "lo": "-1", "hi": "1", "by": "b"}
         said = self.bounded(with_rules(deck, empty_card([*loads[:90], dots]), parts))
         self.assertEqual(sorted({f["rule"] for f in said["findings"]}), ["parts.6", "types.4"], "under the floor of a length, and read by no part")
@@ -1479,11 +1488,12 @@ class ConditionsReadSignedKeys(unittest.TestCase):
         """`grid.decks` read each file of its folder as JSON to see whether it was a deck, before `read_deck` looked at its
         depth: a file nested 5,000 deep ended in a RecursionError, and one that was a list in an AttributeError."""
         import tempfile
-        shipped = (grid.DECKS / "aisc360.json").read_text(encoding="utf-8")
+        shipped, run = [(grid.DECKS / name).read_text(encoding="utf-8") for name in ("aisc360.json", "aisc360.run.json")]
         for name, text, refused in (("deep", "[" * 5000 + "]" * 5000, "deep.json: nested deeper than 128"), ("list", "[1, 2]", None),
                                     ("broken", '{"format": ', "broken.json: not a deck (JSONDecodeError")):
             with self.subTest(name), tempfile.TemporaryDirectory() as tmp:
                 Path(tmp, "aisc360.json").write_text(shipped, encoding="utf-8")
+                Path(tmp, "aisc360.run.json").write_text(run, encoding="utf-8")
                 Path(tmp, f"{name}.json").write_text(text, encoding="utf-8")
                 grid.decks.cache_clear()
                 try:

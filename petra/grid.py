@@ -29,6 +29,7 @@ the reason, the ratio and the words.
 """
 from __future__ import annotations
 
+import hashlib
 import itertools
 import json
 import math
@@ -262,6 +263,7 @@ class Deck:
     asks: tuple[Ask, ...]
     rules: tuple[Rule, ...]
     text: str = ""
+    run: str = ""      # the file of the acceptance run the deck is bound to, as it was read, or nothing for a deck read with none
 
 
 def _anchor(a: Mapping[str, str]) -> str:
@@ -936,8 +938,15 @@ def _nesting(text: str) -> int:
 
 
 @_deep
-def read_deck(text: str) -> Deck:
-    """A deck from the text of its file. Raises DeckError for one that does not hold together."""
+def read_deck(text: str, run: str | None = None) -> Deck:
+    """A deck from the text of its file, and with `run` bound to the file of its acceptance
+    run (`bind`). A deck read with no run is one to look at or to run the acceptance check
+    on: no design is checked against it (`held`). Raises DeckError for one that does not
+    hold together, or that the run is not the run of. Each text is taken with a line feed in
+    place of each CR LF, once, and from there on it is hashed and handed to the kernel as it
+    is (`_hash`), so the bytes the kernel is handed are the bytes that were hashed whatever
+    line ends a checkout gave the file."""
+    text, run = text.replace("\r\n", "\n"), run if run is None else run.replace("\r\n", "\n")
     if _nesting(text) > MAX_NESTING:      # before the text is read: a reader of JSON that recurses has no depth to spare
         raise DeckError(f"nested deeper than {MAX_NESTING}")
     try:
@@ -1043,7 +1052,9 @@ def read_deck(text: str) -> Deck:
                     raise DeckError(f"rule {r.id}: " + ("its `when` holds for no combination of the names of its keys, so the rule answers for no part" if not answers
                                                         else f"what it requires holds for {'every' if holds else 'no'} combination of the names of its keys at which it answers, "
                                                              f"so no part can {'break' if holds else 'meet'} it"))
-        return Deck(str(body["name"]), export.sha256(text), deck_rows, types, tuple(asks), rules, text)
+        if run is not None:
+            bind(text, run)
+        return Deck(str(body["name"]), _hash(text), deck_rows, types, tuple(asks), rules, text, run or "")
     except (RowError, DeckError) as exc:
         raise DeckError(str(exc)) from None
     except (KeyError, TypeError, AttributeError, ValueError) as exc:
@@ -1052,9 +1063,67 @@ def read_deck(text: str) -> Deck:
         raise DeckError(f"not a deck ({type(exc).__name__}: {str(exc)[:200]})") from None
 
 
+def _numbered(text: str) -> str | None:
+    """What the kernel refuses of the numbers of a file before it reads it (docs/format.md,
+    "Limits"): one outside a string with a fraction, an exponent or more than 32 digits. A
+    run holds keys that no reader reads, so nothing else would refuse such a number in it."""
+    digits, quoted, escaped = 0, False, False
+    for c in text:
+        if quoted:
+            quoted, escaped = not (c == '"' and not escaped), c == "\\" and not escaped
+        else:
+            if c == "." or (digits and c in "eE"):
+                return "a number outside a string has a fraction or an exponent"
+            digits = digits + 1 if c in "0123456789" else 0
+            if digits > 32:
+                return "a number outside a string has more than 32 digits"
+            quoted = c == '"'
+    return None
+
+
+def _no_constant(name: str) -> Any:
+    raise ValueError(f"{name} is no value of JSON")
+
+
+def _hash(text: str) -> str:
+    """The hash of a text as the kernel hashes the file it is handed: of its bytes as they are."""
+    return "sha256:" + hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+RUN = "petra-run/0"
+NO_RUN = "a deck of rules is read with the acceptance run it is bound to"
+
+
+def bind(text: str, run: str) -> None:
+    """Hold a deck's file to the file of its acceptance run (docs/deck.md, "The run a deck is
+    bound to"), as the kernel does with type rule 11: the run is of the format RUN, its `deck`
+    is the hash of the deck's file, and its `gate` names the gate that ran in a text with a
+    letter in it. Neither reader reads another key of the run. Raises DeckError."""
+    try:
+        if _nesting(run) > MAX_NESTING:
+            raise DeckError(f"run: nested deeper than {MAX_NESTING}")
+        if _numbered(run):
+            raise DeckError(f"run: {_numbered(run)}")
+        body = json.loads(run, parse_constant=_no_constant)      # NaN and Infinity are no JSON, and the kernel reads neither
+    except ValueError as exc:
+        raise DeckError(f"run: not JSON ({type(exc).__name__}: {str(exc)[:200]})") from None
+    if not isinstance(body, dict) or body.get("format") != RUN:
+        raise DeckError(f"run: format is not {RUN}")
+    if replaced(body):
+        raise DeckError("run: a text or a key holds U+FFFD or half a surrogate pair")
+    if not isinstance(body.get("deck"), str) or not isinstance(body.get("gate"), str):
+        raise DeckError("run: " + ("deck" if not isinstance(body.get("deck"), str) else "gate") + " is not a string")
+    if body["deck"] != _hash(text):
+        raise DeckError(f"run: deck is not the hash of the deck of rules, {_hash(text)}")
+    if not _worded(body["gate"]):
+        raise DeckError("run: gate does not name the gate that ran, in a text with a letter in it")
+
+
 @lru_cache(maxsize=None)
 def decks() -> tuple[Deck, ...]:
-    """The decks that ship with Petra: each file of petra/decks whose format is FORMAT."""
+    """The decks that ship with Petra: each file of petra/decks whose format is FORMAT, with
+    the acceptance run beside it, NAME.run.json for NAME.json. A deck with no run beside it,
+    or with the run of another file, is refused: no design is checked against it."""
     found = []
     for path in sorted(DECKS.glob("*.json")):
         text = path.read_text(encoding="utf-8")
@@ -1063,7 +1132,10 @@ def decks() -> tuple[Deck, ...]:
                 raise DeckError(f"nested deeper than {MAX_NESTING}")
             body = json.loads(text)
             if isinstance(body, dict) and body.get("format") == FORMAT:
-                found.append(read_deck(text))
+                beside = path.with_name(path.stem + ".run.json")
+                if not beside.is_file():
+                    raise DeckError(f"{NO_RUN}, and {beside.name} is not beside it")
+                found.append(read_deck(text, beside.read_text(encoding="utf-8")))
         except DeckError as exc:
             raise DeckError(f"{path.name}: {exc}") from None
         except ValueError as exc:
@@ -2335,16 +2407,67 @@ def _unread(deck: Deck, found: Parts, fixed: Mapping[Any, Any] | None = None) ->
 # --- the files, the kernel and the report ------------------------------------------------------------
 
 
+_CARD_BLOCK = re.compile(r'^(card\s+"(?:[^"\\]|\\.)*"\s*\{[^\n]*\n)(.*?)(^\})', re.MULTILINE | re.DOTALL)
+_RULES_LINE = re.compile(r'^[ \t]*rules[ \t]+"(?:[^"\\\n]|\\.)*"[ \t]+"(?:[^"\\\n]|\\.)*"[ \t]*(?:#[^\n]*)?\n', re.MULTILINE)
+
+
+def rules_line(deck: Deck) -> str:
+    """The line a card writes in its card block to name the deck, with the two escapes a
+    text of a card has. A name with a line end in it has no such line, and none ships."""
+    return 'rules "{}" "{}"'.format(deck.name.replace("\\", "\\\\").replace('"', '\\"'), deck.hash)
+
+
+def pinned(card: str, deck: Deck) -> str:
+    """The text of a card with the deck named in its card block, in place of any deck it
+    named: the line `rules "NAME" "HASH"`. Whoever owns the card names the deck, so this is
+    for a card whose owner is the caller. What it writes is read back with the language's
+    own reader, and it raises ValueError unless the text then reads as a card that names
+    this deck and no other: for a text with no card block, for one laid out so that the
+    line does not land in the block, and for a deck whose name holds a line end."""
+    from .lang.lexer import LolaSyntaxError
+    from .lang.parser import parse
+
+    found = _CARD_BLOCK.search(card)
+    if found is None or "\n" in deck.name or "\r" in deck.name:
+        raise ValueError("the text has no card block that this can write the deck's name into")
+    head, body, close = found.groups()
+    out = card[:found.start()] + head + _RULES_LINE.sub("", body) + f"  {rules_line(deck)}\n" + close + card[found.end():]
+    try:
+        named = [tuple(arg.text for arg in item.args) for node in parse(out, "the card", True).decls if node.head == "card" for item in node.args[1] if item.head == "rules"]
+    except LolaSyntaxError:
+        named = []
+    if named != [(deck.name, deck.hash)]:
+        raise ValueError(f"the card's text is laid out so that this cannot write the line into its card block: its owner writes `{rules_line(deck)}` there")
+    return out
+
+
+def held(design: Design, deck: Deck) -> None:
+    """Refuse a pair that is not bound to the deck (docs/format.md, type rules 9 and 11): the
+    card names the deck by its name and the hash of its file, and the deck was read with its
+    acceptance run. The kernel refuses the same files. Raises ComponentError."""
+    line = rules_line(deck)
+    if not deck.run:
+        raise ComponentError((f"{design.path}: {NO_RUN}, and the deck {deck.name} was read with none",))
+    if design.rules is None:
+        raise ComponentError((f"{design.path}: the card names no deck of rules, so nothing says which rules its owner asked for: "
+                              f"its owner adds `{line}` to the card block, for the deck this Petra has",))
+    if design.rules != (deck.name, deck.hash):
+        raise ComponentError((f"{design.path}: the card names the deck of rules {_clip(design.rules[0])} {_clip(design.rules[1])}, and the deck this Petra has "
+                              f"for its parts is {deck.name} {deck.hash}: check it with the Petra that has the deck it names, or have its owner name this one",))
+
+
 def bundle(design: Design, deck: Deck, answers: list[Cell] | None = None) -> dict[str, str]:
     """The text of the files of docs/format.md: the card, the design with its parts as
-    written, the deck of domains, `rules`, which is the deck's own file, and with `answers`
-    the hints of proofs.json. None of the first four needs this module to have accepted
-    the design: the kernel reads the parts from them itself."""
+    written, the deck of domains, `rules`, which is the deck's own file, `run`, the file of
+    the acceptance run the deck is bound to, and with `answers` the hints of proofs.json.
+    None of the first five needs this module to have accepted the design: the kernel reads
+    the parts from them itself."""
+    held(design, deck)
     card = export.text(export.card(design, export.read_inputs(design), placed=True))
     core = json.loads(export.CORE.read_text(encoding="utf-8"))["domains"]
     return {"card": card, "design": export.text(export.design_file(design, export.sha256(card), deck=True)),
             "deck": export.text({"format": "petra-deck/0", "domains": core, "constants": [], "rules": {"name": deck.name, "hash": deck.hash}}),
-            "rules": deck.text,
+            "rules": deck.text, "run": deck.run,
             **({} if answers is None else {"proofs": export.text({"format": "petra-proofs/0",
                                                                   "cells": [h for c in answers for h in (c.hints if c.hints is not None else (c.body,))]})})}
 
@@ -2480,7 +2603,9 @@ class Checked:
     def text(self) -> str:
         proofs = sum(bool(c.proof) for c in self.report.cells)
         out = self.report.lines()
-        return "\n".join([*out[:2], f"card       {self.hashes['card']}  {self.card}", f"design     {self.hashes['design']}  {self.path}",
+        return "\n".join([*out[:2], f"run        {self.kernel['hashes']['run']}  the acceptance run the deck is bound to",
+                          f"card       {self.hashes['card']}  {self.card}", f"design     {self.hashes['design']}  {self.path}",
+                          f"bundle     {self.kernel['bundle']}  the six files the kernel read",
                           f"kernel     petra-verify gives {self.kernel['verdict']}: it checked {proofs} of {proofs} proofs",
                           "path       rules: the kernel worked out every cell from the rules deck", *out[2:]])
 
@@ -2503,7 +2628,7 @@ def checked(design: Design, deck: Deck, card: str, text: str, card_path: str) ->
         differ = f"the report would print {report.status}"
     if differ:
         raise verify.Disagreement(f"{design.path}: petra-verify gives {said['verdict']} and the grid {report.verdict}: {differ}")
-    said = {"verdict": said["verdict"], "checked": sum(bool(c.proof) for c in report.cells), "hashes": said["hashes"], "cells_from": said["cells_from"],
+    said = {"verdict": said["verdict"], "checked": sum(bool(c.proof) for c in report.cells), "hashes": said["hashes"], "bundle": said["bundle"], "cells_from": said["cells_from"],
             "waived": said["waived"]}
     return Checked(design.path, report, card_path, {"card": export.sha256(card), "design": export.sha256(text)}, said)
 
@@ -2514,6 +2639,7 @@ def check(design: Design, deck: Deck) -> tuple[Report, dict[str, str]]:
     Raises ComponentError for a design or a card the deck's types or the type rules refuse."""
     from . import wellformed
 
+    held(design, deck)
     found = read_parts(design, deck)
     answers = cells(design, deck, found)
     files = bundle(design, deck, answers)
